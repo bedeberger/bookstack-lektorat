@@ -1,0 +1,13 @@
+{
+  "name": "bookstack-lektorat",
+  "version": "1.0.0",
+  "description": "KI-Lektorat für BookStack – Der Amoklauf",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^3.0.0"
+  }
+}

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BookStack Lektorat</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #f5f4f0; color: #1a1a1a; min-height: 100vh; padding: 2rem; }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 0.25rem; }
+  .subtitle { font-size: 14px; color: #666; margin-bottom: 2rem; }
+  .card { background: white; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); padding: 1.25rem; margin-bottom: 1rem; }
+  label { font-size: 13px; color: #666; display: block; margin-bottom: 6px; }
+  input[type=text], input[type=password], select {
+    width: 100%; padding: 8px 10px; border: 0.5px solid rgba(0,0,0,0.2);
+    border-radius: 8px; font-size: 14px; background: white; color: #1a1a1a;
+  }
+  input:focus, select:focus { outline: none; border-color: rgba(0,0,0,0.4); }
+  button {
+    padding: 8px 16px; border: 0.5px solid rgba(0,0,0,0.2); border-radius: 8px;
+    background: transparent; font-size: 14px; cursor: pointer; color: #1a1a1a;
+  }
+  button:hover { background: rgba(0,0,0,0.05); }
+  button:active { transform: scale(0.98); }
+  button.primary { background: #1a1a1a; color: white; border-color: #1a1a1a; }
+  button.primary:hover { background: #333; }
+  button.success { background: #1D9E75; color: white; border-color: #1D9E75; }
+  button.success:hover { background: #0F6E56; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row > * { flex: 1; }
+  .row > button { flex: 0 0 auto; }
+  .badge { display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 6px; font-weight: 500; }
+  .badge-warn { background: #FAEEDA; color: #854F0B; }
+  .badge-ok   { background: #EAF3DE; color: #3B6D11; }
+  .badge-err  { background: #FCEBEB; color: #A32D2D; }
+  .finding { border-left: 2px solid rgba(0,0,0,0.1); padding: 8px 12px; margin: 8px 0; font-size: 14px; }
+  .finding.error { border-color: #E24B4A; }
+  .finding.style { border-color: #EF9F27; }
+  .finding.ok    { border-color: #639922; }
+  del { background: #FCEBEB; color: #A32D2D; text-decoration: none; padding: 0 2px; border-radius: 3px; }
+  ins { background: #EAF3DE; color: #3B6D11; text-decoration: none; padding: 0 2px; border-radius: 3px; }
+  #status { font-size: 13px; color: #666; min-height: 20px; }
+  .page-item {
+    padding: 10px 12px; border: 0.5px solid rgba(0,0,0,0.1); border-radius: 8px;
+    margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;
+  }
+  .page-item:hover { background: rgba(0,0,0,0.03); }
+  .page-item.selected { border-color: #1a1a1a; background: rgba(0,0,0,0.02); }
+  .tag { font-size: 11px; background: rgba(0,0,0,0.06); border-radius: 4px; padding: 2px 6px; color: #666; }
+  .config-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+  .config-row label { min-width: 90px; margin-bottom: 0; }
+  .config-row input { flex: 1; }
+  .spinner {
+    display: inline-block; width: 13px; height: 13px;
+    border: 2px solid rgba(0,0,0,0.1); border-top-color: #1a1a1a;
+    border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  code { font-family: monospace; background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .stilbox { margin-top: 16px; padding: 14px; background: #f5f4f0; border-radius: 8px; font-size: 14px; line-height: 1.7; }
+  .stilbox-title { font-weight: 500; margin-bottom: 6px; font-size: 14px; }
+  .fazit { margin-top: 8px; font-size: 13px; color: #666; font-style: italic; }
+</style>
+</head>
+<body>
+
+<h1>BookStack Lektorat</h1>
+<p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse</p>
+
+<div class="card" id="config-card">
+  <p style="font-size:13px;color:#666;margin-bottom:12px;">API-Zugangsdaten (einmalig, werden im Browser gespeichert)</p>
+  <div class="config-row">
+    <label>Token ID</label>
+    <input type="text" id="cfg-token-id" placeholder="Token ID">
+  </div>
+  <div class="config-row">
+    <label>Token Passwort</label>
+    <input type="password" id="cfg-token-pw" placeholder="Token Passwort">
+  </div>
+  <div style="margin-top:12px; display:flex; gap:8px;">
+    <button onclick="saveConfig()">Speichern</button>
+    <button class="primary" onclick="loadBooks()">Verbinden</button>
+  </div>
+</div>
+
+<div class="card" id="book-card" style="display:none">
+  <label>Buch</label>
+  <div class="row" style="margin-bottom:12px;">
+    <select id="book-select"></select>
+    <button onclick="loadPages()">Seiten laden</button>
+  </div>
+  <div id="pages-list"></div>
+</div>
+
+<div class="card" id="editor-card" style="display:none">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <div>
+      <span style="font-weight:500; font-size:15px;" id="page-title-label">–</span>
+      <span class="tag" id="page-id-tag" style="margin-left:6px;"></span>
+    </div>
+    <div style="display:flex; gap:6px;">
+      <button onclick="runCheck()" id="btn-check">Prüfen ↗</button>
+      <button class="success" onclick="saveCorrections()" id="btn-save" style="display:none">Korrekturen speichern</button>
+    </div>
+  </div>
+  <div id="status"></div>
+  <div id="analysis-out" style="margin-top:1rem;"></div>
+</div>
+
+<script>
+const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
+const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+
+let currentPage = null;
+let correctedHtml = null;
+
+function saveConfig() {
+  localStorage.setItem('bs_token_id', document.getElementById('cfg-token-id').value.trim());
+  localStorage.setItem('bs_token_pw', document.getElementById('cfg-token-pw').value.trim());
+  setStatus('Konfiguration gespeichert.');
+}
+
+function loadConfig() {
+  document.getElementById('cfg-token-id').value = localStorage.getItem('bs_token_id') || '';
+  document.getElementById('cfg-token-pw').value = localStorage.getItem('bs_token_pw') || '';
+}
+
+function getAuth() {
+  const id = localStorage.getItem('bs_token_id') || document.getElementById('cfg-token-id').value.trim();
+  const pw = localStorage.getItem('bs_token_pw') || document.getElementById('cfg-token-pw').value.trim();
+  return 'Token ' + id + ':' + pw;
+}
+
+function setStatus(msg, spinner) {
+  document.getElementById('status').innerHTML = spinner
+    ? `<span class="spinner"></span>${msg}` : msg;
+}
+
+async function bsGet(path) {
+  const r = await fetch('/api/' + path, { headers: { Authorization: getAuth() } });
+  if (!r.ok) throw new Error('BookStack API Fehler ' + r.status);
+  return r.json();
+}
+
+async function bsPut(path, body) {
+  const r = await fetch('/api/' + path, {
+    method: 'PUT',
+    headers: { Authorization: getAuth(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error('BookStack API Fehler ' + r.status);
+  return r.json();
+}
+
+async function loadBooks() {
+  try {
+    setStatus('Verbinde mit BookStack…', true);
+    const data = await bsGet('books');
+    const sel = document.getElementById('book-select');
+    sel.innerHTML = '';
+    data.data.forEach(b => {
+      const o = document.createElement('option');
+      o.value = b.id;
+      o.textContent = b.name;
+      sel.appendChild(o);
+    });
+    document.getElementById('book-card').style.display = '';
+    setStatus(data.data.length + ' Buch/Bücher gefunden.');
+    if (data.data.length === 1) loadPages();
+  } catch(e) {
+    setStatus('Fehler: ' + e.message);
+  }
+}
+
+async function loadPages() {
+  const bookId = document.getElementById('book-select').value;
+  try {
+    setStatus('Lade Seiten…', true);
+    const [chapters, pages] = await Promise.all([
+      bsGet('chapters?book_id=' + bookId),
+      bsGet('pages?book_id=' + bookId)
+    ]);
+    const chMap = {};
+    chapters.data.forEach(c => chMap[c.id] = c.name);
+
+    const list = document.getElementById('pages-list');
+    list.innerHTML = '';
+    pages.data.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'page-item';
+      div.innerHTML = `<span style="font-size:14px;">${p.name}</span><span class="tag">${p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : 'Direkt'}</span>`;
+      div.onclick = () => selectPage(p, div);
+      list.appendChild(div);
+    });
+    setStatus('');
+  } catch(e) {
+    setStatus('Fehler: ' + e.message);
+  }
+}
+
+function selectPage(p, el) {
+  document.querySelectorAll('.page-item').forEach(x => x.classList.remove('selected'));
+  el.classList.add('selected');
+  currentPage = p;
+  correctedHtml = null;
+  document.getElementById('editor-card').style.display = '';
+  document.getElementById('page-title-label').textContent = p.name;
+  document.getElementById('page-id-tag').textContent = 'ID ' + p.id;
+  document.getElementById('btn-save').style.display = 'none';
+  document.getElementById('analysis-out').innerHTML =
+    '<span style="color:#999;font-size:14px;">Seite ausgewählt. «Prüfen» starten.</span>';
+  setStatus('');
+}
+
+function htmlToText(html) {
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  return d.textContent || d.innerText || '';
+}
+
+async function runCheck() {
+  if (!currentPage) return;
+  const btn = document.getElementById('btn-check');
+  btn.disabled = true;
+  correctedHtml = null;
+  document.getElementById('btn-save').style.display = 'none';
+  document.getElementById('analysis-out').innerHTML = '';
+  setStatus('Lade Seiteninhalt…', true);
+
+  try {
+    const pageData = await bsGet('pages/' + currentPage.id);
+    const html = pageData.html;
+    const text = htmlToText(html);
+
+    setStatus('Claude analysiert…', true);
+
+    const prompt = `Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz (Helvetismen wie "grösseres", "Strasse" etc. sind korrekt und sollen NICHT geändert werden).
+
+Analysiere diesen Text auf:
+1. Rechtschreibfehler
+2. Grammatikfehler
+3. Stilistische Anmerkungen (nur wenn auffällig)
+
+Antworte NUR mit einem JSON-Objekt, kein Markdown, keine Erklärungen davor oder danach:
+{
+  "fehler": [
+    {
+      "typ": "rechtschreibung|grammatik|stil",
+      "original": "das fehlerhafte Wort oder die fehlerhafte Phrase",
+      "korrektur": "die korrekte Version",
+      "kontext": "der Satz in dem der Fehler vorkommt (gekürzt)",
+      "erklaerung": "kurze Erklärung auf Deutsch"
+    }
+  ],
+  "korrekturen_html": "vollständiges korrigiertes HTML – behalte ALLE Tags exakt bei, ändere nur fehlerhafte Textstellen",
+  "stilanalyse": "2-3 Sätze Stilanalyse",
+  "fazit": "ein Satz Gesamtfazit"
+}
+
+Originaltext:
+${text}
+
+Original-HTML (für korrekturen_html):
+${html}`;
+
+    const resp = await fetch(CLAUDE_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await resp.json();
+    const raw = (data.content || []).map(b => b.text || '').join('');
+    const clean = raw.replace(/```json\s*|```/g, '').trim();
+
+    let result;
+    try {
+      result = JSON.parse(clean);
+    } catch(e) {
+      throw new Error('Claude-Antwort konnte nicht geparst werden: ' + e.message);
+    }
+
+    correctedHtml = result.korrekturen_html || html;
+
+    const fehler = result.fehler || [];
+    const errors = fehler.filter(f => f.typ === 'rechtschreibung' || f.typ === 'grammatik');
+    const styles = fehler.filter(f => f.typ === 'stil');
+
+    let out = '';
+
+    if (errors.length === 0) {
+      out += `<div class="finding ok"><span class="badge badge-ok">✓ Fehlerfrei</span> &nbsp;Keine Rechtschreib- oder Grammatikfehler gefunden.</div>`;
+    } else {
+      out += `<div style="font-weight:500;font-size:14px;margin-bottom:8px;">${errors.length} Fehler gefunden</div>`;
+      errors.forEach(f => {
+        out += `<div class="finding error">
+          <span class="badge badge-err">${f.typ}</span>
+          &nbsp;<del>${escHtml(f.original)}</del> → <ins>${escHtml(f.korrektur)}</ins>
+          <div style="color:#555;font-size:13px;margin-top:5px;">«${escHtml(f.kontext)}»</div>
+          <div style="color:#777;font-size:13px;">${escHtml(f.erklaerung)}</div>
+        </div>`;
+      });
+    }
+
+    if (styles.length > 0) {
+      out += `<div style="font-weight:500;font-size:14px;margin:14px 0 8px;">Stilanmerkungen</div>`;
+      styles.forEach(f => {
+        out += `<div class="finding style">
+          <span class="badge badge-warn">Stil</span>
+          &nbsp;${escHtml(f.erklaerung)}
+          ${f.original ? `<div style="color:#777;font-size:13px;margin-top:4px;">«${escHtml(f.original)}»</div>` : ''}
+        </div>`;
+      });
+    }
+
+    if (result.stilanalyse) {
+      out += `<div class="stilbox"><div class="stilbox-title">Stilanalyse</div>${escHtml(result.stilanalyse)}</div>`;
+    }
+    if (result.fazit) {
+      out += `<div class="fazit">${escHtml(result.fazit)}</div>`;
+    }
+
+    document.getElementById('analysis-out').innerHTML = out;
+
+    if (errors.length > 0) {
+      document.getElementById('btn-save').style.display = '';
+    }
+
+    setStatus('Analyse abgeschlossen.');
+  } catch(e) {
+    document.getElementById('analysis-out').innerHTML =
+      `<span style="color:#A32D2D;font-size:14px;">Fehler: ${e.message}</span>`;
+    setStatus('');
+  }
+
+  btn.disabled = false;
+}
+
+async function saveCorrections() {
+  if (!correctedHtml || !currentPage) return;
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true;
+  setStatus('Speichere in BookStack…', true);
+  try {
+    await bsPut('pages/' + currentPage.id, { html: correctedHtml, name: currentPage.name });
+    setStatus('✓ Korrekturen gespeichert.');
+    btn.style.display = 'none';
+  } catch(e) {
+    setStatus('Fehler: ' + e.message);
+    btn.disabled = false;
+  }
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+loadConfig();
+if (localStorage.getItem('bs_token_id')) loadBooks();
+</script>
+</body>
+</html>

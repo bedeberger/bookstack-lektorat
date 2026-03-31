@@ -1,0 +1,18 @@
+[Unit]
+Description=BookStack Lektorat
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/lektorat
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=5
+Environment=PORT=3737
+Environment=BOOKSTACK_URL=http://localhost:80
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
