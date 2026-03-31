@@ -361,8 +361,20 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-loadConfig();
-if (localStorage.getItem('bs_token_id')) loadBooks();
+async function init() {
+  loadConfig();
+  try {
+    const cfg = await fetch('/config').then(r => r.json());
+    if (cfg.tokenId) document.getElementById('cfg-token-id').value = cfg.tokenId;
+    if (cfg.tokenPw) document.getElementById('cfg-token-pw').value = cfg.tokenPw;
+    if (cfg.tokenId || cfg.tokenPw) saveConfig();
+  } catch(_) {}
+  const id = document.getElementById('cfg-token-id').value.trim();
+  const pw = document.getElementById('cfg-token-pw').value.trim();
+  if (id && pw) loadBooks();
+}
+
+init();
 </script>
 </body>
 </html>

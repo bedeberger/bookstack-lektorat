@@ -90,6 +90,42 @@ Der Prompt instruiert Claude explizit, **Helvetismen nicht als Fehler zu werten*
 
 Der korrigierte HTML-String wird bei Bedarf per PUT direkt in BookStack gespeichert.
 
+## MCP Server (Claude Desktop)
+
+`mcp-server.mjs` ist ein MCP-Server für Claude Desktop, der direktes Chatten mit BookStack-Büchern ermöglicht.
+
+### Setup
+
+1. `ANTHROPIC_API_KEY` in `.env` eintragen (für das `lektorat_page`-Tool)
+2. In `~/Library/Application Support/Claude/claude_desktop_config.json` eintragen:
+
+```json
+{
+  "mcpServers": {
+    "bookstack": {
+      "command": "node",
+      "args": ["/Users/bd/ClaudeProjects/bookstack-lektorat/mcp-server.mjs"]
+    }
+  }
+}
+```
+
+3. Claude Desktop neu starten – im Hammer-Icon erscheinen die `bookstack`-Tools.
+
+### Verfügbare Tools
+
+| Tool | Beschreibung |
+|------|-------------|
+| `list_books` | Alle Bücher auflisten |
+| `list_chapters` | Kapitel eines Buchs |
+| `list_pages` | Seiten eines Buchs |
+| `get_page` | Seiteninhalt lesen (Text + HTML) |
+| `search` | Volltextsuche |
+| `update_page` | Seite speichern |
+| `lektorat_page` | Seite lektorieren (optional auto_save) |
+
+---
+
 ## Bekannte Einschränkungen
 
 - Kein Authentifizierungsschutz auf Port 3737 – nur im lokalen Netz verwenden

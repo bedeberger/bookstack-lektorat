@@ -1,10 +1,19 @@
+require('dotenv').config();
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3737;
-const BOOKSTACK_URL = process.env.BOOKSTACK_URL || 'http://localhost:80';
+const BOOKSTACK_URL = process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80';
+
+// Expose .env config to the frontend (credentials only, no secrets beyond what's needed)
+app.get('/config', (_req, res) => {
+  res.json({
+    tokenId: process.env.TOKEN_ID || '',
+    tokenPw: process.env.TOKEN_KENNWORT || ''
+  });
+});
 
 // Serve static files (the HTML app)
 app.use(express.static(path.join(__dirname, 'public')));
@@ -13,9 +22,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', createProxyMiddleware({
   target: BOOKSTACK_URL,
   changeOrigin: true,
-  pathRewrite: { '^/api': '/api' },
+  pathRewrite: { '^/': '/api/' },
   on: {
-    error: (err, req, res) => {
+    proxyRes: (proxyRes, _req, res) => {
+      if (proxyRes.statusCode === 301 || proxyRes.statusCode === 302) {
+        proxyRes.destroy();
+        res.status(401).json({ error: 'BookStack: Nicht authentifiziert – Token ungültig oder abgelaufen.' });
+      }
+    },
+    error: (err, _req, res) => {
       console.error('Proxy error:', err.message);
       res.status(502).json({ error: 'BookStack nicht erreichbar: ' + err.message });
     }
