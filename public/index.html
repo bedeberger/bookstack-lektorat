@@ -30,7 +30,6 @@
       <div class="page-item" :class="{ selected: currentPage?.id === page.id }" @click="selectPage(page)">
         <span style="font-size:14px;" x-text="page.name"></span>
         <span class="tag" x-text="page.chapterName || 'Direkt'"></span>
-        <a :href="page.url" target="_blank" rel="noopener" class="page-link" @click.stop title="In BookStack öffnen">↗</a>
       </div>
     </template>
   </div>

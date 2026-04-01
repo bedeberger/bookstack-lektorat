@@ -212,15 +212,6 @@ ins {
 }
 .page-item:hover { background: rgba(0, 0, 0, 0.03); }
 .page-item.selected { border-color: var(--color-text); background: rgba(0, 0, 0, 0.02); }
-.page-link {
-  font-size: var(--font-size-xs);
-  color: var(--color-muted);
-  text-decoration: none;
-  padding: 2px 5px;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-}
-.page-link:hover { color: var(--color-text); background: rgba(0,0,0,0.06); }
 
 /* === Tags === */
 .tag {

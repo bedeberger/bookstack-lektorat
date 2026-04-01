@@ -19,7 +19,6 @@ Der Express-Server übernimmt drei Aufgaben: er served die Single-Page-App unter
 ```
 bookstack-lektorat/
 ├── server.js            # Express-Server + http-proxy-middleware + /config-Endpoint
-├── mcp-server.mjs       # MCP-Server für Claude Desktop
 ├── package.json
 ├── .env                 # Credentials (nicht eingecheckt)
 ├── lektorat.service     # systemd unit
@@ -29,7 +28,9 @@ bookstack-lektorat/
 │   └── workflows/
 │       └── deploy.yml   # GitHub Actions Workflow (push → deploy)
 └── public/
-    └── index.html       # Single-Page-App (Vanilla JS, kein Build-Step)
+    ├── index.html       # Single-Page-App (Alpine.js, kein Build-Step)
+    ├── app.js           # Alpine-Komponente (Reaktivität, API-Calls, Claude-Integration)
+    └── style.css        # Zentrales Stylesheet
 ```
 
 ## Lokale Entwicklung
@@ -112,7 +113,7 @@ Die App nutzt folgende BookStack-Endpunkte (Token-Auth via `Authorization: Token
 | GET | `/api/pages?book_id=X` | Seiten eines Buchs |
 | GET | `/api/pages/:id` | Seiteninhalt (HTML) |
 | PUT | `/api/pages/:id` | Korrigierte Seite zurückschreiben |
-| GET | `/api/search?query=X&count=N` | Volltextsuche (MCP) |
+| GET | `/api/search?query=X&count=N` | Volltextsuche |
 
 Token-Credentials werden im `localStorage` des Browsers gespeichert oder via `/config` vom Server geliefert.
 
@@ -155,52 +156,18 @@ Lädt alle Seiten eines Buchs (max. 3000 Zeichen Text pro Seite), fasst sie zusa
 
 Wird als Sterne-Rating mit Stärken/Schwächen/Empfehlungen-Listen dargestellt.
 
-## MCP Server (Claude Desktop)
+## Frontend-Architektur
 
-`mcp-server.mjs` ist ein MCP-Server für Claude Desktop, der direktes Chatten mit BookStack-Büchern ermöglicht. Er liest Credentials aus `.env` (nicht aus dem Browser-LocalStorage).
+Die Single-Page-App besteht aus drei Dateien:
 
-### Setup
-
-1. `.env` im Projektverzeichnis anlegen:
-   ```
-   TOKEN_ID=...
-   TOKEN_KENNWORT=...
-   API_HOST=http://localhost:80    # oder BOOKSTACK_URL
-   ANTHROPIC_API_KEY=...           # nur für lektorat_page benötigt
-   ```
-2. In `~/Library/Application Support/Claude/claude_desktop_config.json` eintragen:
-
-```json
-{
-  "mcpServers": {
-    "bookstack": {
-      "command": "node",
-      "args": ["/Users/bd/ClaudeProjects/bookstack-lektorat/mcp-server.mjs"]
-    }
-  }
-}
-```
-
-3. Claude Desktop neu starten – im Hammer-Icon erscheinen die `bookstack`-Tools.
-
-### Verfügbare Tools
-
-| Tool | Parameter | Beschreibung |
-|------|-----------|-------------|
-| `list_books` | – | Alle Bücher auflisten |
-| `list_chapters` | `book_id` | Kapitel eines Buchs |
-| `list_pages` | `book_id` | Seiten eines Buchs |
-| `get_page` | `page_id` | Seiteninhalt lesen (Text + HTML) |
-| `search` | `query`, `count` (optional, default 20) | Volltextsuche |
-| `update_page` | `page_id`, `html`, `name` (optional) | Seite speichern |
-| `lektorat_page` | `page_id`, `auto_save` (optional) | Seite lektorieren; `max_tokens: 8000` |
-
----
+- **[public/index.html](public/index.html)** – HTML-Struktur mit Alpine.js-Direktiven (`x-data`, `x-model`, `@click` usw.). Alpine.js wird via CDN geladen (`cdn.jsdelivr.net/npm/alpinejs@3`).
+- **[public/app.js](public/app.js)** – Alpine-Komponente `lektorat`: reaktiver State, API-Calls gegen den lokalen Proxy, Claude-Integration.
+- **[public/style.css](public/style.css)** – Zentrales Stylesheet (alle Styles ausgelagert, kein Inline-CSS im HTML).
 
 ## Bekannte Einschränkungen
 
 - Kein Authentifizierungsschutz auf Port 3737 – nur im lokalen Netz verwenden
 - Frontend sendet keinen `x-api-key` an Claude – Claude-Aufrufe aus dem Browser scheitern ohne externen Key-Proxy
-- Sehr lange Seiten können das Claude-Token-Limit erreichen (Frontend: max_tokens 4000, MCP: 8000)
+- Sehr lange Seiten können das Claude-Token-Limit erreichen (`max_tokens: 8000`)
 - Kein Diff-View zwischen Original und korrigierter Version
 - Buchbewertung kürzt Seitentexte auf 3000 Zeichen – sehr lange Seiten werden unvollständig analysiert
