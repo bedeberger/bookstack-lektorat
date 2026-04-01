@@ -61,6 +61,16 @@
   .stilbox { margin-top: 16px; padding: 14px; background: #f5f4f0; border-radius: 8px; font-size: 14px; line-height: 1.7; }
   .stilbox-title { font-weight: 500; margin-bottom: 6px; font-size: 14px; }
   .fazit { margin-top: 8px; font-size: 13px; color: #666; font-style: italic; }
+  .bewertung-stars { font-size: 22px; letter-spacing: 2px; }
+  .bewertung-section { margin-top: 14px; }
+  .bewertung-section-title { font-weight: 500; font-size: 13px; color: #666; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .bullet-list { list-style: none; padding: 0; margin: 0; }
+  .bullet-list li { padding: 4px 0; font-size: 14px; padding-left: 16px; position: relative; line-height: 1.5; }
+  .bullet-list li::before { content: '–'; position: absolute; left: 0; color: #999; }
+  .bullet-list.pos li::before { content: '+'; color: #3B6D11; }
+  .bullet-list.neg li::before { content: '−'; color: #A32D2D; }
+  .progress-bar-wrap { height: 4px; background: rgba(0,0,0,0.06); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .progress-bar { height: 100%; background: #1a1a1a; border-radius: 2px; transition: width 0.3s; }
 </style>
 </head>
 <body>
@@ -89,8 +99,17 @@
   <div class="row" style="margin-bottom:12px;">
     <select id="book-select"></select>
     <button onclick="loadPages()">Seiten laden</button>
+    <button onclick="runBookReview()" id="btn-book-review">Buch bewerten</button>
   </div>
   <div id="pages-list"></div>
+</div>
+
+<div class="card" id="book-review-card" style="display:none">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <span style="font-weight:500; font-size:15px;" id="book-review-title">Buchbewertung</span>
+  </div>
+  <div id="book-review-status" style="font-size:13px;color:#666;"></div>
+  <div id="book-review-out"></div>
 </div>
 
 <div class="card" id="editor-card" style="display:none">
@@ -359,6 +378,168 @@ async function saveCorrections() {
 function escHtml(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function runBookReview() {
+  const bookId = document.getElementById('book-select').value;
+  const bookName = document.getElementById('book-select').selectedOptions[0]?.textContent || 'Buch';
+  const btn = document.getElementById('btn-book-review');
+  const card = document.getElementById('book-review-card');
+  const statusEl = document.getElementById('book-review-status');
+  const outEl = document.getElementById('book-review-out');
+
+  btn.disabled = true;
+  card.style.display = '';
+  document.getElementById('book-review-title').textContent = 'Buchbewertung: ' + bookName;
+  outEl.innerHTML = '';
+
+  const setReviewStatus = (msg, spinner) => {
+    statusEl.innerHTML = spinner ? `<span class="spinner"></span>${msg}` : msg;
+  };
+
+  try {
+    setReviewStatus('Lade Seiten…', true);
+    const [chaptersData, pagesData] = await Promise.all([
+      bsGet('chapters?book_id=' + bookId),
+      bsGet('pages?book_id=' + bookId)
+    ]);
+
+    const chMap = {};
+    chaptersData.data.forEach(c => chMap[c.id] = c.name);
+    const pages = pagesData.data;
+
+    if (pages.length === 0) {
+      setReviewStatus('Keine Seiten im Buch gefunden.');
+      btn.disabled = false;
+      return;
+    }
+
+    // Progress bar
+    outEl.innerHTML = `<div class="progress-bar-wrap"><div class="progress-bar" id="rev-progress" style="width:0%"></div></div>`;
+    setReviewStatus(`Lese ${pages.length} Seiten…`, true);
+
+    const pageContents = [];
+    for (let i = 0; i < pages.length; i++) {
+      const p = pages[i];
+      document.getElementById('rev-progress').style.width = Math.round((i / pages.length) * 80) + '%';
+      try {
+        const pd = await bsGet('pages/' + p.id);
+        const text = htmlToText(pd.html).trim();
+        if (text.length > 50) {
+          const chapter = p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : null;
+          pageContents.push({
+            title: p.name,
+            chapter,
+            text: text.length > 3000 ? text.slice(0, 3000) + ' […]' : text
+          });
+        }
+      } catch(_) {}
+    }
+
+    document.getElementById('rev-progress').style.width = '85%';
+    setReviewStatus('Claude analysiert das Buch…', true);
+
+    const bookText = pageContents.map(p =>
+      `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`
+    ).join('\n\n---\n\n');
+
+    const prompt = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. Helvetismen (grösseres, Strasse, gemäss, usw.) sind korrekt und werden nicht bemängelt.
+
+Bewerte das folgende Buch «${bookName}» kritisch und umfassend. Analysiere dabei:
+- Struktur und Aufbau (Kapitel, Übergänge, Logik)
+- Sprachstil und Konsistenz über alle Seiten hinweg
+- Stärken des Texts
+- Schwächen und Verbesserungspotenzial
+- Konkrete Empfehlungen für den Autor
+
+Antworte NUR mit einem JSON-Objekt, kein Markdown, keine Erklärungen davor oder danach:
+{
+  "gesamtnote": "Zahl von 1 (sehr schwach) bis 5 (ausgezeichnet)",
+  "gesamtnote_begruendung": "Ein Satz warum diese Note",
+  "zusammenfassung": "2-3 Sätze Gesamteindruck",
+  "struktur": "Analyse des Aufbaus und der Struktur (3-4 Sätze)",
+  "stil": "Analyse des Schreibstils und seiner Konsistenz (3-4 Sätze)",
+  "staerken": ["Stärke 1", "Stärke 2", "Stärke 3"],
+  "schwaechen": ["Schwäche 1", "Schwäche 2"],
+  "empfehlungen": ["Empfehlung 1", "Empfehlung 2", "Empfehlung 3"],
+  "fazit": "Abschliessendes Urteil in 1-2 Sätzen"
+}
+
+Buchinhalt (${pageContents.length} Seiten):
+
+${bookText}`;
+
+    const resp = await fetch(CLAUDE_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await resp.json();
+    const raw = (data.content || []).map(b => b.text || '').join('');
+    const clean = raw.replace(/```json\s*|```/g, '').trim();
+
+    let r;
+    try { r = JSON.parse(clean); }
+    catch(e) { throw new Error('Claude-Antwort konnte nicht geparst werden: ' + e.message); }
+
+    document.getElementById('rev-progress').style.width = '100%';
+    setTimeout(() => { if(outEl.querySelector('#rev-progress')) outEl.querySelector('.progress-bar-wrap').remove(); }, 400);
+
+    const note = parseInt(r.gesamtnote, 10) || 0;
+    const stars = '★'.repeat(Math.min(5, Math.max(0, note))) + '☆'.repeat(Math.max(0, 5 - note));
+
+    let html = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
+        <span class="bewertung-stars">${stars}</span>
+        <span style="font-size:14px;color:#666;">${escHtml(r.gesamtnote_begruendung || '')}</span>
+      </div>
+      <div class="stilbox" style="margin-bottom:14px;">${escHtml(r.zusammenfassung || '')}</div>`;
+
+    if (r.struktur) html += `
+      <div class="bewertung-section">
+        <div class="bewertung-section-title">Struktur &amp; Aufbau</div>
+        <p style="font-size:14px;line-height:1.6;">${escHtml(r.struktur)}</p>
+      </div>`;
+
+    if (r.stil) html += `
+      <div class="bewertung-section">
+        <div class="bewertung-section-title">Schreibstil</div>
+        <p style="font-size:14px;line-height:1.6;">${escHtml(r.stil)}</p>
+      </div>`;
+
+    if (r.staerken?.length) html += `
+      <div class="bewertung-section">
+        <div class="bewertung-section-title">Stärken</div>
+        <ul class="bullet-list pos">${r.staerken.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
+      </div>`;
+
+    if (r.schwaechen?.length) html += `
+      <div class="bewertung-section">
+        <div class="bewertung-section-title">Schwächen</div>
+        <ul class="bullet-list neg">${r.schwaechen.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
+      </div>`;
+
+    if (r.empfehlungen?.length) html += `
+      <div class="bewertung-section">
+        <div class="bewertung-section-title">Empfehlungen</div>
+        <ul class="bullet-list">${r.empfehlungen.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
+      </div>`;
+
+    if (r.fazit) html += `<div class="fazit" style="margin-top:16px;">${escHtml(r.fazit)}</div>`;
+
+    outEl.innerHTML = html;
+    setReviewStatus(`${pageContents.length} Seiten analysiert.`);
+  } catch(e) {
+    outEl.innerHTML = `<span style="color:#A32D2D;font-size:14px;">Fehler: ${e.message}</span>`;
+    setReviewStatus('');
+  }
+
+  btn.disabled = false;
 }
 
 async function init() {
