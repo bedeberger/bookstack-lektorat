@@ -1,4 +1,4 @@
-name: Deploy to LXC
+name: Deploy to LXC with bookstack
 
 on:
   push:
