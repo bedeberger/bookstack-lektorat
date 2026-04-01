@@ -20,8 +20,18 @@ rsync -a --exclude='.env' --exclude='node_modules' --exclude='.git' \
 cd "$INSTALL_DIR"
 npm install --omit=dev --quiet
 
-# Service neu starten
-systemctl restart "$SERVICE"
+# Service starten oder neu starten
+if systemctl is-enabled --quiet "$SERVICE" 2>/dev/null; then
+  systemctl restart "$SERVICE"
+else
+  # Service noch nicht registriert – Unit-Datei installieren und starten
+  if [ -f "$INSTALL_DIR/lektorat.service" ]; then
+    cp "$INSTALL_DIR/lektorat.service" /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl enable "$SERVICE"
+  fi
+  systemctl start "$SERVICE"
+fi
 
 sleep 1
 if systemctl is-active --quiet "$SERVICE"; then
