@@ -311,7 +311,7 @@ ${html}`;
 
     const resp = await fetch(CLAUDE_API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
         max_tokens: 8000,
@@ -320,6 +320,9 @@ ${html}`;
     });
 
     const data = await resp.json();
+    if (data.type === 'error') {
+      throw new Error('Claude API Fehler: ' + (data.error?.message || JSON.stringify(data.error)));
+    }
     const raw = (data.content || []).map(b => b.text || '').join('');
     const clean = raw.replace(/```json\s*|```/g, '').trim();
 
@@ -327,7 +330,7 @@ ${html}`;
     try {
       result = JSON.parse(clean);
     } catch(e) {
-      throw new Error('Claude-Antwort konnte nicht geparst werden: ' + e.message);
+      throw new Error('Claude-Antwort konnte nicht geparst werden: ' + e.message + '\n\nRohantwort: ' + raw.slice(0, 300));
     }
 
     correctedHtml = result.korrekturen_html || html;
@@ -499,7 +502,7 @@ ${bookText}`;
 
     const resp = await fetch(CLAUDE_API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
         max_tokens: 8000,
@@ -508,12 +511,15 @@ ${bookText}`;
     });
 
     const data = await resp.json();
+    if (data.type === 'error') {
+      throw new Error('Claude API Fehler: ' + (data.error?.message || JSON.stringify(data.error)));
+    }
     const raw = (data.content || []).map(b => b.text || '').join('');
     const clean = raw.replace(/```json\s*|```/g, '').trim();
 
     let r;
     try { r = JSON.parse(clean); }
-    catch(e) { throw new Error('Claude-Antwort konnte nicht geparst werden: ' + e.message); }
+    catch(e) { throw new Error('Claude-Antwort konnte nicht geparst werden: ' + e.message + '\n\nRohantwort: ' + raw.slice(0, 300)); }
 
     document.getElementById('rev-progress').style.width = '100%';
     setTimeout(() => { if(outEl.querySelector('#rev-progress')) outEl.querySelector('.progress-bar-wrap').remove(); }, 400);
