@@ -23,7 +23,11 @@ bookstack-lektorat/
 ├── package.json
 ├── .env                 # Credentials (nicht eingecheckt)
 ├── lektorat.service     # systemd unit
-├── install.sh           # Installer für den LXC
+├── install.sh           # Erstinstallation auf dem LXC
+├── deploy.sh            # CD-Update (wird von GitHub Actions aufgerufen)
+├── .github/
+│   └── workflows/
+│       └── deploy.yml   # GitHub Actions Workflow (push → deploy)
 └── public/
     └── index.html       # Single-Page-App (Vanilla JS, kein Build-Step)
 ```
@@ -51,6 +55,8 @@ Beim Start lädt die App via `GET /config` die Credentials aus der Server-`.env`
 
 ## Deployment auf dem LXC
 
+### Erstinstallation
+
 ```bash
 scp lektorat.tar.gz root@<lxc-ip>:/tmp/
 ssh root@<lxc-ip>
@@ -66,7 +72,29 @@ Der Installer:
 
 Nach dem Install erreichbar unter `http://<lxc-ip>:3737`.
 
-Nützliche Befehle auf dem LXC:
+### Automatisches Deployment via GitHub Actions
+
+Bei jedem Push auf `main` läuft der Workflow `.github/workflows/deploy.yml` – er führt `deploy.sh` auf dem LXC aus: synchronisiert die Dateien nach `/opt/lektorat` (`.env` bleibt unangetastet), aktualisiert npm-Abhängigkeiten und startet den Service neu.
+
+Voraussetzung: **Self-hosted GitHub Actions Runner** auf dem LXC (verbindet sich outbound zu GitHub, kein Port-Forward nötig).
+
+**Einmalige Runner-Einrichtung auf dem LXC:**
+
+```bash
+apt-get install -y rsync
+
+# Runner herunterladen – genaue URL + Token: GitHub → Repo → Settings → Actions → Runners → New self-hosted runner
+mkdir -p /opt/actions-runner && cd /opt/actions-runner
+curl -sL <runner-download-url> | tar xz
+./config.sh --url https://github.com/<user>/<repo> --token <TOKEN>
+
+# Als systemd-Service (root, damit systemctl restart funktioniert)
+./svc.sh install root
+./svc.sh start
+```
+
+### Nützliche Befehle auf dem LXC
+
 ```bash
 systemctl status lektorat
 journalctl -u lektorat -f
