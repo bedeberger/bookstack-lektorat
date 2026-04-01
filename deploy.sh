@@ -5,6 +5,8 @@
 
 set -e
 
+export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
+
 INSTALL_DIR="/opt/lektorat"
 SERVICE="lektorat"
 
