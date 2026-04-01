@@ -30,6 +30,7 @@
       <div class="page-item" :class="{ selected: currentPage?.id === page.id }" @click="selectPage(page)">
         <span style="font-size:14px;" x-text="page.name"></span>
         <span class="tag" x-text="page.chapterName || 'Direkt'"></span>
+        <a :href="page.url" target="_blank" rel="noopener" class="page-link" @click.stop title="In BookStack öffnen">↗</a>
       </div>
     </template>
   </div>
@@ -52,7 +53,7 @@
   <div class="card-header">
     <div>
       <span class="card-title" x-text="currentPage?.name || '–'"></span>
-      <span class="tag" style="margin-left:6px;" x-text="currentPage ? 'ID ' + currentPage.id : ''"></span>
+      <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag" style="margin-left:6px;text-decoration:none;" x-text="currentPage ? 'ID ' + currentPage.id + ' ↗' : ''"></a>
     </div>
     <div style="display:flex; gap:6px;">
       <button @click="runCheck()" :disabled="checkLoading">Prüfen ↗</button>
