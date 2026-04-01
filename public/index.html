@@ -48,9 +48,6 @@
   .page-item:hover { background: rgba(0,0,0,0.03); }
   .page-item.selected { border-color: #1a1a1a; background: rgba(0,0,0,0.02); }
   .tag { font-size: 11px; background: rgba(0,0,0,0.06); border-radius: 4px; padding: 2px 6px; color: #666; }
-  .config-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
-  .config-row label { min-width: 90px; margin-bottom: 0; }
-  .config-row input { flex: 1; }
   .spinner {
     display: inline-block; width: 13px; height: 13px;
     border: 2px solid rgba(0,0,0,0.1); border-top-color: #1a1a1a;
@@ -78,21 +75,6 @@
 <h1>BookStack Lektorat</h1>
 <p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse</p>
 
-<div class="card" id="config-card">
-  <p style="font-size:13px;color:#666;margin-bottom:12px;">API-Zugangsdaten (einmalig, werden im Browser gespeichert)</p>
-  <div class="config-row">
-    <label>Token ID</label>
-    <input type="text" id="cfg-token-id" placeholder="Token ID" autocomplete="off">
-  </div>
-  <div class="config-row">
-    <label>Token Passwort</label>
-    <input type="password" id="cfg-token-pw" placeholder="Token Passwort" autocomplete="off">
-  </div>
-  <div style="margin-top:12px; display:flex; gap:8px;">
-    <button onclick="saveConfig()">Speichern</button>
-    <button class="primary" onclick="loadBooks()">Verbinden</button>
-  </div>
-</div>
 
 <div class="card" id="book-card" style="display:none">
   <label>Buch</label>
@@ -133,22 +115,10 @@ const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 let currentPage = null;
 let correctedHtml = null;
-
-function saveConfig() {
-  localStorage.setItem('bs_token_id', document.getElementById('cfg-token-id').value.trim());
-  localStorage.setItem('bs_token_pw', document.getElementById('cfg-token-pw').value.trim());
-  setStatus('Konfiguration gespeichert.');
-}
-
-function loadConfig() {
-  document.getElementById('cfg-token-id').value = localStorage.getItem('bs_token_id') || '';
-  document.getElementById('cfg-token-pw').value = localStorage.getItem('bs_token_pw') || '';
-}
+let authToken = '';
 
 function getAuth() {
-  const id = localStorage.getItem('bs_token_id') || document.getElementById('cfg-token-id').value.trim();
-  const pw = localStorage.getItem('bs_token_pw') || document.getElementById('cfg-token-pw').value.trim();
-  return 'Token ' + id + ':' + pw;
+  return authToken;
 }
 
 function setStatus(msg, spinner) {
@@ -578,16 +548,17 @@ ${bookText}`;
 }
 
 async function init() {
-  loadConfig();
   try {
     const cfg = await fetch('/config').then(r => r.json());
-    if (cfg.tokenId) document.getElementById('cfg-token-id').value = cfg.tokenId;
-    if (cfg.tokenPw) document.getElementById('cfg-token-pw').value = cfg.tokenPw;
-    if (cfg.tokenId || cfg.tokenPw) saveConfig();
-  } catch(_) {}
-  const id = document.getElementById('cfg-token-id').value.trim();
-  const pw = document.getElementById('cfg-token-pw').value.trim();
-  if (id && pw) loadBooks();
+    if (cfg.tokenId && cfg.tokenPw) {
+      authToken = 'Token ' + cfg.tokenId + ':' + cfg.tokenPw;
+      loadBooks();
+    } else {
+      setStatus('Keine Zugangsdaten in .env konfiguriert.');
+    }
+  } catch(_) {
+    setStatus('Fehler beim Laden der Konfiguration.');
+  }
 }
 
 init();
