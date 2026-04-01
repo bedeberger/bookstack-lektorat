@@ -368,5 +368,37 @@ ins {
   transition: width 0.3s;
 }
 
+/* === Tree view === */
+.tree-chapter { margin-bottom: 2px; }
+
+.tree-chapter-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 500;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  user-select: none;
+}
+.tree-chapter-header:hover { background: var(--color-hover); }
+
+.tree-chevron {
+  display: inline-block;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--color-subtle);
+  transition: transform 0.15s;
+  transform: rotate(0deg);
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.tree-chevron.open { transform: rotate(90deg); }
+
+.page-item-indent { margin-left: 22px; }
+
 /* Alpine.js – verhindert Flash of unstyled content */
 [x-cloak] { display: none !important; }

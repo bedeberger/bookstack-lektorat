@@ -22,6 +22,7 @@ document.addEventListener('alpine:init', () => {
     books: [],
     selectedBookId: '',
     pages: [],
+    tree: [],
     currentPage: null,
     correctedHtml: null,
     hasErrors: false,
@@ -158,6 +159,17 @@ document.addEventListener('alpine:init', () => {
             ...p,
             chapterName: p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : null,
           }));
+
+        this.tree = sortedChapters.map(c => ({
+          id: c.id,
+          name: c.name,
+          open: true,
+          pages: this.pages.filter(p => p.chapter_id === c.id),
+        }));
+        const loosePages = this.pages.filter(p => !p.chapter_id);
+        if (loosePages.length) {
+          this.tree.unshift({ id: 'loose', name: 'Ohne Kapitel', open: true, pages: loosePages });
+        }
 
         this.setStatus('');
       } catch (e) {

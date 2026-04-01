@@ -25,11 +25,25 @@
     <button @click="loadPages()">Seiten laden</button>
     <button @click="runBookReview()" :disabled="bookReviewLoading">Buch bewerten</button>
   </div>
-  <div>
-    <template x-for="page in pages" :key="page.id">
-      <div class="page-item" :class="{ selected: currentPage?.id === page.id }" @click="selectPage(page)">
-        <span style="font-size:14px;" x-text="page.name"></span>
-        <span class="tag" x-text="page.chapterName || 'Direkt'"></span>
+  <div x-show="tree.length > 0">
+    <div style="display:flex; gap:6px; margin-bottom:10px;">
+      <button @click="tree.forEach(c => c.open = true)" style="font-size:12px; padding:4px 10px;">Alle ausklappen</button>
+      <button @click="tree.forEach(c => c.open = false)" style="font-size:12px; padding:4px 10px;">Alle einklappen</button>
+    </div>
+    <template x-for="chapter in tree" :key="chapter.id">
+      <div class="tree-chapter">
+        <div class="tree-chapter-header" @click="chapter.open = !chapter.open">
+          <span class="tree-chevron" :class="{ open: chapter.open }">›</span>
+          <span x-text="chapter.name"></span>
+          <span class="tag" x-text="chapter.pages.length + ' Seiten'"></span>
+        </div>
+        <div x-show="chapter.open">
+          <template x-for="page in chapter.pages" :key="page.id">
+            <div class="page-item page-item-indent" :class="{ selected: currentPage?.id === page.id }" @click="selectPage(page)">
+              <span style="font-size:14px;" x-text="page.name"></span>
+            </div>
+          </template>
+        </div>
       </div>
     </template>
   </div>
