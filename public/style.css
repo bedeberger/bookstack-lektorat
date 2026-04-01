@@ -1,0 +1,369 @@
+/* === Custom Properties === */
+:root {
+  --color-bg: #f5f4f0;
+  --color-surface: #ffffff;
+  --color-text: #1a1a1a;
+  --color-muted: #666;
+  --color-subtle: #999;
+  --color-border: rgba(0, 0, 0, 0.12);
+  --color-border-input: rgba(0, 0, 0, 0.2);
+  --color-border-focus: rgba(0, 0, 0, 0.4);
+  --color-hover: rgba(0, 0, 0, 0.05);
+  --color-tag-bg: rgba(0, 0, 0, 0.06);
+
+  --color-ok-bg: #EAF3DE;
+  --color-ok-text: #3B6D11;
+  --color-ok-border: #639922;
+  --color-warn-bg: #FAEEDA;
+  --color-warn-text: #854F0B;
+  --color-err-bg: #FCEBEB;
+  --color-err-text: #A32D2D;
+  --color-err-border: #E24B4A;
+  --color-style-border: #EF9F27;
+  --color-success: #1D9E75;
+  --color-success-hover: #0F6E56;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --font-size-xs: 11px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-md: 15px;
+  --font-size-lg: 22px;
+}
+
+/* === Reset === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* === Base === */
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+h1 {
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+code {
+  font-family: monospace;
+  background: var(--color-tag-bg);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
+/* === Layout === */
+.subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  margin-bottom: 2rem;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.row > * { flex: 1; }
+.row > button { flex: 0 0 auto; }
+
+/* === Card === */
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 0.5px solid var(--color-border);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.card-title {
+  font-weight: 500;
+  font-size: var(--font-size-md);
+}
+
+/* === Form elements === */
+label {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  display: block;
+  margin-bottom: 6px;
+}
+
+input[type=text],
+input[type=password],
+select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0.5px solid var(--color-border-input);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--color-border-focus);
+}
+
+/* === Buttons === */
+button {
+  padding: 8px 16px;
+  border: 0.5px solid var(--color-border-input);
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  color: var(--color-text);
+}
+button:hover { background: var(--color-hover); }
+button:active { transform: scale(0.98); }
+button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+button.primary {
+  background: var(--color-text);
+  color: var(--color-surface);
+  border-color: var(--color-text);
+}
+button.primary:hover { background: #333; }
+
+button.success {
+  background: var(--color-success);
+  color: var(--color-surface);
+  border-color: var(--color-success);
+}
+button.success:hover { background: var(--color-success-hover); }
+
+/* === Badges === */
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+.badge-warn { background: var(--color-warn-bg); color: var(--color-warn-text); }
+.badge-ok   { background: var(--color-ok-bg);   color: var(--color-ok-text); }
+.badge-err  { background: var(--color-err-bg);  color: var(--color-err-text); }
+
+/* === Findings === */
+.finding {
+  border-left: 2px solid var(--color-border);
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: var(--font-size-base);
+}
+.finding.error { border-color: var(--color-err-border); }
+.finding.style { border-color: var(--color-style-border); }
+.finding.ok    { border-color: var(--color-ok-border); }
+
+.finding-context {
+  color: #555;
+  font-size: var(--font-size-sm);
+  margin-top: 5px;
+}
+
+.finding-explanation {
+  color: #777;
+  font-size: var(--font-size-sm);
+}
+
+del {
+  background: var(--color-err-bg);
+  color: var(--color-err-text);
+  text-decoration: none;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+
+ins {
+  background: var(--color-ok-bg);
+  color: var(--color-ok-text);
+  text-decoration: none;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+
+/* === Page list === */
+.page-item {
+  padding: 10px 12px;
+  border: 0.5px solid rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-md);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+.page-item:hover { background: rgba(0, 0, 0, 0.03); }
+.page-item.selected { border-color: var(--color-text); background: rgba(0, 0, 0, 0.02); }
+
+/* === Tags === */
+.tag {
+  font-size: var(--font-size-xs);
+  background: var(--color-tag-bg);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  color: var(--color-muted);
+}
+
+/* === Status === */
+#status {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  min-height: 20px;
+}
+
+.muted-msg {
+  color: var(--color-subtle);
+  font-size: var(--font-size-base);
+}
+
+.error-msg {
+  color: var(--color-err-text);
+  font-size: var(--font-size-base);
+}
+
+/* === Spinner === */
+.spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-top-color: var(--color-text);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* === Stil-/Analyseboxen === */
+.stilbox {
+  margin-top: 16px;
+  padding: 14px;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  line-height: 1.7;
+}
+
+.stilbox-title {
+  font-weight: 500;
+  margin-bottom: 6px;
+  font-size: var(--font-size-base);
+}
+
+.fazit {
+  margin-top: 8px;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+/* === Buchbewertung === */
+.bewertung-stars {
+  font-size: var(--font-size-lg);
+  letter-spacing: 2px;
+}
+
+.bewertung-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.bewertung-header-note {
+  font-size: var(--font-size-base);
+  color: var(--color-muted);
+}
+
+.bewertung-section { margin-top: 14px; }
+
+.bewertung-section-title {
+  font-weight: 500;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bewertung-section-text {
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+}
+
+/* === Listen === */
+.bullet-list { list-style: none; padding: 0; margin: 0; }
+.bullet-list li {
+  padding: 4px 0 4px 16px;
+  font-size: var(--font-size-base);
+  position: relative;
+  line-height: 1.5;
+}
+.bullet-list li::before         { content: '–'; position: absolute; left: 0; color: var(--color-subtle); }
+.bullet-list.pos li::before     { content: '+'; color: var(--color-ok-text); }
+.bullet-list.neg li::before     { content: '−'; color: var(--color-err-text); }
+
+/* === Section headings (in JS-generated output) === */
+.section-heading {
+  font-weight: 500;
+  font-size: var(--font-size-base);
+  margin-bottom: 8px;
+}
+
+.section-heading-top {
+  font-weight: 500;
+  font-size: var(--font-size-base);
+  margin: 14px 0 8px;
+}
+
+/* === Preview === */
+.preview-text {
+  color: #444;
+  font-size: var(--font-size-base);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.preview-hint {
+  margin-top: 8px;
+  font-size: var(--font-size-sm);
+  color: var(--color-subtle);
+}
+
+/* === Progress bar === */
+.progress-bar-wrap {
+  height: 4px;
+  background: var(--color-tag-bg);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--color-text);
+  border-radius: 2px;
+  transition: width 0.3s;
+}

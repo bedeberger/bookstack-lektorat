@@ -4,71 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BookStack Lektorat</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, -apple-system, sans-serif; background: #f5f4f0; color: #1a1a1a; min-height: 100vh; padding: 2rem; }
-  h1 { font-size: 22px; font-weight: 500; margin-bottom: 0.25rem; }
-  .subtitle { font-size: 14px; color: #666; margin-bottom: 2rem; }
-  .card { background: white; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); padding: 1.25rem; margin-bottom: 1rem; }
-  label { font-size: 13px; color: #666; display: block; margin-bottom: 6px; }
-  input[type=text], input[type=password], select {
-    width: 100%; padding: 8px 10px; border: 0.5px solid rgba(0,0,0,0.2);
-    border-radius: 8px; font-size: 14px; background: white; color: #1a1a1a;
-  }
-  input:focus, select:focus { outline: none; border-color: rgba(0,0,0,0.4); }
-  button {
-    padding: 8px 16px; border: 0.5px solid rgba(0,0,0,0.2); border-radius: 8px;
-    background: transparent; font-size: 14px; cursor: pointer; color: #1a1a1a;
-  }
-  button:hover { background: rgba(0,0,0,0.05); }
-  button:active { transform: scale(0.98); }
-  button.primary { background: #1a1a1a; color: white; border-color: #1a1a1a; }
-  button.primary:hover { background: #333; }
-  button.success { background: #1D9E75; color: white; border-color: #1D9E75; }
-  button.success:hover { background: #0F6E56; }
-  button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-  .row { display: flex; gap: 8px; align-items: flex-end; }
-  .row > * { flex: 1; }
-  .row > button { flex: 0 0 auto; }
-  .badge { display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 6px; font-weight: 500; }
-  .badge-warn { background: #FAEEDA; color: #854F0B; }
-  .badge-ok   { background: #EAF3DE; color: #3B6D11; }
-  .badge-err  { background: #FCEBEB; color: #A32D2D; }
-  .finding { border-left: 2px solid rgba(0,0,0,0.1); padding: 8px 12px; margin: 8px 0; font-size: 14px; }
-  .finding.error { border-color: #E24B4A; }
-  .finding.style { border-color: #EF9F27; }
-  .finding.ok    { border-color: #639922; }
-  del { background: #FCEBEB; color: #A32D2D; text-decoration: none; padding: 0 2px; border-radius: 3px; }
-  ins { background: #EAF3DE; color: #3B6D11; text-decoration: none; padding: 0 2px; border-radius: 3px; }
-  #status { font-size: 13px; color: #666; min-height: 20px; }
-  .page-item {
-    padding: 10px 12px; border: 0.5px solid rgba(0,0,0,0.1); border-radius: 8px;
-    margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;
-  }
-  .page-item:hover { background: rgba(0,0,0,0.03); }
-  .page-item.selected { border-color: #1a1a1a; background: rgba(0,0,0,0.02); }
-  .tag { font-size: 11px; background: rgba(0,0,0,0.06); border-radius: 4px; padding: 2px 6px; color: #666; }
-  .spinner {
-    display: inline-block; width: 13px; height: 13px;
-    border: 2px solid rgba(0,0,0,0.1); border-top-color: #1a1a1a;
-    border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  code { font-family: monospace; background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
-  .stilbox { margin-top: 16px; padding: 14px; background: #f5f4f0; border-radius: 8px; font-size: 14px; line-height: 1.7; }
-  .stilbox-title { font-weight: 500; margin-bottom: 6px; font-size: 14px; }
-  .fazit { margin-top: 8px; font-size: 13px; color: #666; font-style: italic; }
-  .bewertung-stars { font-size: 22px; letter-spacing: 2px; }
-  .bewertung-section { margin-top: 14px; }
-  .bewertung-section-title { font-weight: 500; font-size: 13px; color: #666; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
-  .bullet-list { list-style: none; padding: 0; margin: 0; }
-  .bullet-list li { padding: 4px 0; font-size: 14px; padding-left: 16px; position: relative; line-height: 1.5; }
-  .bullet-list li::before { content: '–'; position: absolute; left: 0; color: #999; }
-  .bullet-list.pos li::before { content: '+'; color: #3B6D11; }
-  .bullet-list.neg li::before { content: '−'; color: #A32D2D; }
-  .progress-bar-wrap { height: 4px; background: rgba(0,0,0,0.06); border-radius: 2px; margin-top: 8px; overflow: hidden; }
-  .progress-bar { height: 100%; background: #1a1a1a; border-radius: 2px; transition: width 0.3s; }
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -87,17 +23,17 @@
 </div>
 
 <div class="card" id="book-review-card" style="display:none">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-    <span style="font-weight:500; font-size:15px;" id="book-review-title">Buchbewertung</span>
+  <div class="card-header">
+    <span class="card-title" id="book-review-title">Buchbewertung</span>
   </div>
-  <div id="book-review-status" style="font-size:13px;color:#666;"></div>
+  <div id="book-review-status" class="muted-msg"></div>
   <div id="book-review-out"></div>
 </div>
 
 <div class="card" id="editor-card" style="display:none">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+  <div class="card-header">
     <div>
-      <span style="font-weight:500; font-size:15px;" id="page-title-label">–</span>
+      <span class="card-title" id="page-title-label">–</span>
       <span class="tag" id="page-id-tag" style="margin-left:6px;"></span>
     </div>
     <div style="display:flex; gap:6px;">
@@ -212,19 +148,19 @@ async function selectPage(p, el) {
   document.getElementById('page-id-tag').textContent = 'ID ' + p.id;
   document.getElementById('btn-save').style.display = 'none';
   document.getElementById('analysis-out').innerHTML =
-    '<span style="color:#999;font-size:14px;"><span class="spinner"></span>Vorschau lädt…</span>';
+    '<span class="muted-msg"><span class="spinner"></span>Vorschau lädt…</span>';
   setStatus('');
   try {
     const pageData = await bsGet('pages/' + p.id);
     const text = htmlToText(pageData.html).trim();
     const preview = text.length > 600 ? text.slice(0, 600) + ' …' : text;
     document.getElementById('analysis-out').innerHTML = preview
-      ? `<div style="color:#444;font-size:14px;line-height:1.7;white-space:pre-wrap;background:#f5f4f0;border-radius:8px;padding:12px 14px;">${escHtml(preview)}</div><div style="margin-top:8px;font-size:13px;color:#999;">Vorschau · «Prüfen» starten für Lektorat</div>`
-      : '<span style="color:#999;font-size:14px;">Seite ist leer. «Prüfen» starten.</span>';
+      ? `<div class="preview-text">${escHtml(preview)}</div><div class="preview-hint">Vorschau · «Prüfen» starten für Lektorat</div>`
+      : '<span class="muted-msg">Seite ist leer. «Prüfen» starten.</span>';
   } catch(e) {
     console.error('[selectPage preview]', e);
     document.getElementById('analysis-out').innerHTML =
-      '<span style="color:#999;font-size:14px;">Seite ausgewählt. «Prüfen» starten.</span>';
+      '<span class="muted-msg">Seite ausgewählt. «Prüfen» starten.</span>';
   }
 }
 
@@ -314,24 +250,24 @@ ${html}`;
     if (errors.length === 0) {
       out += `<div class="finding ok"><span class="badge badge-ok">✓ Fehlerfrei</span> &nbsp;Keine Rechtschreib- oder Grammatikfehler gefunden.</div>`;
     } else {
-      out += `<div style="font-weight:500;font-size:14px;margin-bottom:8px;">${errors.length} Fehler gefunden</div>`;
+      out += `<div class="section-heading">${errors.length} Fehler gefunden</div>`;
       errors.forEach(f => {
         out += `<div class="finding error">
           <span class="badge badge-err">${f.typ}</span>
           &nbsp;<del>${escHtml(f.original)}</del> → <ins>${escHtml(f.korrektur)}</ins>
-          <div style="color:#555;font-size:13px;margin-top:5px;">«${escHtml(f.kontext)}»</div>
-          <div style="color:#777;font-size:13px;">${escHtml(f.erklaerung)}</div>
+          <div class="finding-context">«${escHtml(f.kontext)}»</div>
+          <div class="finding-explanation">${escHtml(f.erklaerung)}</div>
         </div>`;
       });
     }
 
     if (styles.length > 0) {
-      out += `<div style="font-weight:500;font-size:14px;margin:14px 0 8px;">Stilanmerkungen</div>`;
+      out += `<div class="section-heading-top">Stilanmerkungen</div>`;
       styles.forEach(f => {
         out += `<div class="finding style">
           <span class="badge badge-warn">Stil</span>
           &nbsp;${escHtml(f.erklaerung)}
-          ${f.original ? `<div style="color:#777;font-size:13px;margin-top:4px;">«${escHtml(f.original)}»</div>` : ''}
+          ${f.original ? `<div class="finding-explanation" style="margin-top:4px;">«${escHtml(f.original)}»</div>` : ''}
         </div>`;
       });
     }
@@ -353,7 +289,7 @@ ${html}`;
   } catch(e) {
     console.error('[runCheck]', e);
     document.getElementById('analysis-out').innerHTML =
-      `<span style="color:#A32D2D;font-size:14px;">Fehler: ${e.message}</span>`;
+      `<span class="error-msg">Fehler: ${e.message}</span>`;
     setStatus('');
   }
 
@@ -498,22 +434,22 @@ ${bookText}`;
     const stars = '★'.repeat(Math.min(5, Math.max(0, note))) + '☆'.repeat(Math.max(0, 5 - note));
 
     let html = `
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
+      <div class="bewertung-header">
         <span class="bewertung-stars">${stars}</span>
-        <span style="font-size:14px;color:#666;">${escHtml(r.gesamtnote_begruendung || '')}</span>
+        <span class="bewertung-header-note">${escHtml(r.gesamtnote_begruendung || '')}</span>
       </div>
       <div class="stilbox" style="margin-bottom:14px;">${escHtml(r.zusammenfassung || '')}</div>`;
 
     if (r.struktur) html += `
       <div class="bewertung-section">
         <div class="bewertung-section-title">Struktur &amp; Aufbau</div>
-        <p style="font-size:14px;line-height:1.6;">${escHtml(r.struktur)}</p>
+        <p class="bewertung-section-text">${escHtml(r.struktur)}</p>
       </div>`;
 
     if (r.stil) html += `
       <div class="bewertung-section">
         <div class="bewertung-section-title">Schreibstil</div>
-        <p style="font-size:14px;line-height:1.6;">${escHtml(r.stil)}</p>
+        <p class="bewertung-section-text">${escHtml(r.stil)}</p>
       </div>`;
 
     if (r.staerken?.length) html += `
@@ -540,7 +476,7 @@ ${bookText}`;
     setReviewStatus(`${pageContents.length} Seiten analysiert.`);
   } catch(e) {
     console.error('[runBookReview]', e);
-    outEl.innerHTML = `<span style="color:#A32D2D;font-size:14px;">Fehler: ${e.message}</span>`;
+    outEl.innerHTML = `<span class="error-msg">Fehler: ${e.message}</span>`;
     setReviewStatus('');
   }
 
