@@ -11,7 +11,8 @@ const BOOKSTACK_URL = process.env.API_HOST || process.env.BOOKSTACK_URL || 'http
 app.get('/config', (_req, res) => {
   res.json({
     tokenId: process.env.TOKEN_ID || '',
-    tokenPw: process.env.TOKEN_KENNWORT || ''
+    tokenPw: process.env.TOKEN_KENNWORT || '',
+    bookstackUrl: BOOKSTACK_URL.replace(/\/$/, '')
   });
 });
 

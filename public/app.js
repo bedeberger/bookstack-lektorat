@@ -19,6 +19,7 @@ function htmlToText(html) {
 document.addEventListener('alpine:init', () => {
   Alpine.data('lektorat', () => ({
     authToken: '',
+    bookstackUrl: '',
     books: [],
     selectedBookId: '',
     pages: [],
@@ -111,6 +112,7 @@ document.addEventListener('alpine:init', () => {
         const cfg = await fetch('/config').then(r => r.json());
         if (cfg.tokenId && cfg.tokenPw) {
           this.authToken = 'Token ' + cfg.tokenId + ':' + cfg.tokenPw;
+          this.bookstackUrl = cfg.bookstackUrl || '';
           await this.loadBooks();
         } else {
           this.setStatus('Keine Zugangsdaten in .env konfiguriert.');
@@ -158,6 +160,9 @@ document.addEventListener('alpine:init', () => {
           .map(p => ({
             ...p,
             chapterName: p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : null,
+            url: this.bookstackUrl && p.book_slug && p.slug
+              ? `${this.bookstackUrl}/books/${p.book_slug}/page/${p.slug}`
+              : null,
           }));
 
         this.tree = sortedChapters.map(c => ({
