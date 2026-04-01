@@ -367,3 +367,6 @@ ins {
   border-radius: 2px;
   transition: width 0.3s;
 }
+
+/* Alpine.js – verhindert Flash of unstyled content */
+[x-cloak] { display: none !important; }
