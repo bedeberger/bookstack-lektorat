@@ -15,7 +15,7 @@ const API_HOST   = process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://
 const TOKEN_ID   = process.env.TOKEN_ID   || '';
 const TOKEN_PW   = process.env.TOKEN_KENNWORT || '';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
-const CLAUDE_MODEL  = 'claude-sonnet-4-20250514';
+const CLAUDE_MODEL  = 'claude-sonnet-4-6';
 
 // --- BookStack helpers ---
 

@@ -5,18 +5,23 @@ KI-gestütztes Lektorat-Tool für BookStack. Läuft als eigenständiger Node.js-
 ## Architektur
 
 ```
-Browser → Express (Port 3737) → /api/* → BookStack (localhost:80)
-                              → /      → public/index.html
+Browser → Express (Port 3737) → /config      → .env-Credentials an Frontend
+                              → /api/*       → BookStack (localhost:80)
+                              → /            → public/index.html
 ```
 
-Der Express-Server übernimmt zwei Aufgaben: er served die Single-Page-App unter `/` und proxied alle `/api/*`-Requests an die lokale BookStack-Instanz. Da beides auf demselben Host läuft, gibt es kein CORS-Problem. Die HTML-App spricht Claude direkt über `api.anthropic.com` an (API-Key kommt aus der Anthropic-SDK-Konfiguration des Browsers, nicht vom Server).
+Der Express-Server übernimmt drei Aufgaben: er served die Single-Page-App unter `/`, proxied alle `/api/*`-Requests an die lokale BookStack-Instanz, und stellt unter `/config` die BookStack-Credentials aus `.env` dem Frontend bereit. Da alles auf demselben Host läuft, gibt es kein CORS-Problem.
+
+**Achtung:** Die HTML-App ruft `https://api.anthropic.com/v1/messages` direkt aus dem Browser auf, sendet aber **keinen `x-api-key`-Header** – der Claude-Aufruf funktioniert nur wenn der Browser oder ein Proxy den Key ergänzt.
 
 ## Projektstruktur
 
 ```
 bookstack-lektorat/
-├── server.js            # Express-Server + http-proxy-middleware
+├── server.js            # Express-Server + http-proxy-middleware + /config-Endpoint
+├── mcp-server.mjs       # MCP-Server für Claude Desktop
 ├── package.json
+├── .env                 # Credentials (nicht eingecheckt)
 ├── lektorat.service     # systemd unit
 ├── install.sh           # Installer für den LXC
 └── public/
@@ -34,6 +39,15 @@ node server.js
 Umgebungsvariablen (optional, defaults in Klammern):
 - `PORT` – Port des Express-Servers (`3737`)
 - `BOOKSTACK_URL` – Ziel für den API-Proxy (`http://localhost:80`)
+- `API_HOST` – Alternative zu `BOOKSTACK_URL` (hat Vorrang)
+- `TOKEN_ID` – BookStack Token ID (wird via `/config` an den Browser geliefert)
+- `TOKEN_KENNWORT` – BookStack Token Passwort (wird via `/config` an den Browser geliefert)
+
+Alle Variablen können in einer `.env`-Datei gesetzt werden (dotenv).
+
+### Credential-Flow
+
+Beim Start lädt die App via `GET /config` die Credentials aus der Server-`.env`. Falls dort nichts steht, können sie manuell im Browser eingegeben und im `localStorage` gespeichert werden. Die Reihenfolge: `.env` → `localStorage` → manuelle Eingabe.
 
 ## Deployment auf dem LXC
 
@@ -70,14 +84,17 @@ Die App nutzt folgende BookStack-Endpunkte (Token-Auth via `Authorization: Token
 | GET | `/api/pages?book_id=X` | Seiten eines Buchs |
 | GET | `/api/pages/:id` | Seiteninhalt (HTML) |
 | PUT | `/api/pages/:id` | Korrigierte Seite zurückschreiben |
+| GET | `/api/search?query=X&count=N` | Volltextsuche (MCP) |
 
-Token-Credentials werden im `localStorage` des Browsers gespeichert (einmalig einzugeben).
+Token-Credentials werden im `localStorage` des Browsers gespeichert oder via `/config` vom Server geliefert.
 
 ## Claude-Integration
 
-Die App ruft `https://api.anthropic.com/v1/messages` direkt aus dem Browser auf. Modell: `claude-sonnet-4-20250514`.
+Modell überall: `claude-sonnet-4-6`.
 
-Der Prompt instruiert Claude explizit, **Helvetismen nicht als Fehler zu werten** (grösseres, Strasse, gemäss usw.). Claude gibt strukturiertes JSON zurück:
+### Seitenlektorat (`runCheck`)
+
+Ruft Claude direkt aus dem Browser auf (`max_tokens: 8000`). Der Prompt instruiert Claude, **Helvetismen nicht als Fehler zu werten** (grösseres, Strasse, gemäss usw.). Claude gibt strukturiertes JSON zurück:
 
 ```json
 {
@@ -88,15 +105,41 @@ Der Prompt instruiert Claude explizit, **Helvetismen nicht als Fehler zu werten*
 }
 ```
 
-Der korrigierte HTML-String wird bei Bedarf per PUT direkt in BookStack gespeichert.
+Der korrigierte HTML-String wird bei Bedarf per PUT direkt in BookStack gespeichert. Der «Korrekturen speichern»-Button erscheint nur wenn Rechtschreib- oder Grammatikfehler gefunden wurden.
+
+### Buchbewertung (`runBookReview`)
+
+Lädt alle Seiten eines Buchs (max. 3000 Zeichen Text pro Seite), fasst sie zusammen und lässt Claude das ganze Buch kritisch bewerten (`max_tokens: 8000`). Ergebnis:
+
+```json
+{
+  "gesamtnote": "1–5",
+  "gesamtnote_begruendung": "...",
+  "zusammenfassung": "...",
+  "struktur": "...",
+  "stil": "...",
+  "staerken": ["..."],
+  "schwaechen": ["..."],
+  "empfehlungen": ["..."],
+  "fazit": "..."
+}
+```
+
+Wird als Sterne-Rating mit Stärken/Schwächen/Empfehlungen-Listen dargestellt.
 
 ## MCP Server (Claude Desktop)
 
-`mcp-server.mjs` ist ein MCP-Server für Claude Desktop, der direktes Chatten mit BookStack-Büchern ermöglicht.
+`mcp-server.mjs` ist ein MCP-Server für Claude Desktop, der direktes Chatten mit BookStack-Büchern ermöglicht. Er liest Credentials aus `.env` (nicht aus dem Browser-LocalStorage).
 
 ### Setup
 
-1. `ANTHROPIC_API_KEY` in `.env` eintragen (für das `lektorat_page`-Tool)
+1. `.env` im Projektverzeichnis anlegen:
+   ```
+   TOKEN_ID=...
+   TOKEN_KENNWORT=...
+   API_HOST=http://localhost:80    # oder BOOKSTACK_URL
+   ANTHROPIC_API_KEY=...           # nur für lektorat_page benötigt
+   ```
 2. In `~/Library/Application Support/Claude/claude_desktop_config.json` eintragen:
 
 ```json
@@ -114,21 +157,22 @@ Der korrigierte HTML-String wird bei Bedarf per PUT direkt in BookStack gespeich
 
 ### Verfügbare Tools
 
-| Tool | Beschreibung |
-|------|-------------|
-| `list_books` | Alle Bücher auflisten |
-| `list_chapters` | Kapitel eines Buchs |
-| `list_pages` | Seiten eines Buchs |
-| `get_page` | Seiteninhalt lesen (Text + HTML) |
-| `search` | Volltextsuche |
-| `update_page` | Seite speichern |
-| `lektorat_page` | Seite lektorieren (optional auto_save) |
+| Tool | Parameter | Beschreibung |
+|------|-----------|-------------|
+| `list_books` | – | Alle Bücher auflisten |
+| `list_chapters` | `book_id` | Kapitel eines Buchs |
+| `list_pages` | `book_id` | Seiten eines Buchs |
+| `get_page` | `page_id` | Seiteninhalt lesen (Text + HTML) |
+| `search` | `query`, `count` (optional, default 20) | Volltextsuche |
+| `update_page` | `page_id`, `html`, `name` (optional) | Seite speichern |
+| `lektorat_page` | `page_id`, `auto_save` (optional) | Seite lektorieren; `max_tokens: 8000` |
 
 ---
 
 ## Bekannte Einschränkungen
 
 - Kein Authentifizierungsschutz auf Port 3737 – nur im lokalen Netz verwenden
-- BookStack-Token wird im Browser-LocalStorage gespeichert, nicht server-seitig
-- Sehr lange Seiten können das Claude-Token-Limit erreichen (max_tokens: 4000)
+- Frontend sendet keinen `x-api-key` an Claude – Claude-Aufrufe aus dem Browser scheitern ohne externen Key-Proxy
+- Sehr lange Seiten können das Claude-Token-Limit erreichen (Frontend: max_tokens 4000, MCP: 8000)
 - Kein Diff-View zwischen Original und korrigierter Version
+- Buchbewertung kürzt Seitentexte auf 3000 Zeichen – sehr lange Seiten werden unvollständig analysiert

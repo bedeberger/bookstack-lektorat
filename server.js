@@ -18,6 +18,23 @@ app.get('/config', (_req, res) => {
 // Serve static files (the HTML app)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Proxy /claude → api.anthropic.com (avoids CORS, keeps API key server-side)
+app.use('/claude', createProxyMiddleware({
+  target: 'https://api.anthropic.com',
+  changeOrigin: true,
+  pathRewrite: { '^/': '/v1/messages' },
+  on: {
+    proxyReq: (proxyReq) => {
+      proxyReq.setHeader('x-api-key', process.env.ANTHROPIC_API_KEY || '');
+      proxyReq.setHeader('anthropic-version', '2023-06-01');
+    },
+    error: (err, _req, res) => {
+      console.error('Claude proxy error:', err.message);
+      res.status(502).json({ error: 'Claude nicht erreichbar: ' + err.message });
+    }
+  }
+}));
+
 // Proxy /api/* to BookStack (same server, no CORS issue)
 app.use('/api', createProxyMiddleware({
   target: BOOKSTACK_URL,

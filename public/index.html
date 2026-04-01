@@ -82,11 +82,11 @@
   <p style="font-size:13px;color:#666;margin-bottom:12px;">API-Zugangsdaten (einmalig, werden im Browser gespeichert)</p>
   <div class="config-row">
     <label>Token ID</label>
-    <input type="text" id="cfg-token-id" placeholder="Token ID">
+    <input type="text" id="cfg-token-id" placeholder="Token ID" autocomplete="off">
   </div>
   <div class="config-row">
     <label>Token Passwort</label>
-    <input type="password" id="cfg-token-pw" placeholder="Token Passwort">
+    <input type="password" id="cfg-token-pw" placeholder="Token Passwort" autocomplete="off">
   </div>
   <div style="margin-top:12px; display:flex; gap:8px;">
     <button onclick="saveConfig()">Speichern</button>
@@ -128,8 +128,8 @@
 </div>
 
 <script>
-const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+const CLAUDE_API = '/claude';
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 let currentPage = null;
 let correctedHtml = null;
@@ -188,6 +188,7 @@ async function loadBooks() {
     setStatus(data.data.length + ' Buch/Bücher gefunden.');
     if (data.data.length === 1) loadPages();
   } catch(e) {
+    console.error('[loadBooks]', e);
     setStatus('Fehler: ' + e.message);
   }
 }
@@ -201,11 +202,23 @@ async function loadPages() {
       bsGet('pages?book_id=' + bookId)
     ]);
     const chMap = {};
-    chapters.data.forEach(c => chMap[c.id] = c.name);
+    const sortedChapters = [...chapters.data].sort((a, b) => a.priority - b.priority);
+    sortedChapters.forEach(c => chMap[c.id] = c.name);
+
+    // Seiten nach Kapitel-Reihenfolge, dann nach priority innerhalb des Kapitels sortieren
+    const chapterOrder = {};
+    sortedChapters.forEach((c, i) => chapterOrder[c.id] = i);
+
+    const sortedPages = [...pages.data].sort((a, b) => {
+      const aChOrder = a.chapter_id ? (chapterOrder[a.chapter_id] ?? 999) : -1;
+      const bChOrder = b.chapter_id ? (chapterOrder[b.chapter_id] ?? 999) : -1;
+      if (aChOrder !== bChOrder) return aChOrder - bChOrder;
+      return a.priority - b.priority;
+    });
 
     const list = document.getElementById('pages-list');
     list.innerHTML = '';
-    pages.data.forEach(p => {
+    sortedPages.forEach(p => {
       const div = document.createElement('div');
       div.className = 'page-item';
       div.innerHTML = `<span style="font-size:14px;">${p.name}</span><span class="tag">${p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : 'Direkt'}</span>`;
@@ -214,11 +227,12 @@ async function loadPages() {
     });
     setStatus('');
   } catch(e) {
+    console.error('[loadPages]', e);
     setStatus('Fehler: ' + e.message);
   }
 }
 
-function selectPage(p, el) {
+async function selectPage(p, el) {
   document.querySelectorAll('.page-item').forEach(x => x.classList.remove('selected'));
   el.classList.add('selected');
   currentPage = p;
@@ -228,8 +242,20 @@ function selectPage(p, el) {
   document.getElementById('page-id-tag').textContent = 'ID ' + p.id;
   document.getElementById('btn-save').style.display = 'none';
   document.getElementById('analysis-out').innerHTML =
-    '<span style="color:#999;font-size:14px;">Seite ausgewählt. «Prüfen» starten.</span>';
+    '<span style="color:#999;font-size:14px;"><span class="spinner"></span>Vorschau lädt…</span>';
   setStatus('');
+  try {
+    const pageData = await bsGet('pages/' + p.id);
+    const text = htmlToText(pageData.html).trim();
+    const preview = text.length > 600 ? text.slice(0, 600) + ' …' : text;
+    document.getElementById('analysis-out').innerHTML = preview
+      ? `<div style="color:#444;font-size:14px;line-height:1.7;white-space:pre-wrap;background:#f5f4f0;border-radius:8px;padding:12px 14px;">${escHtml(preview)}</div><div style="margin-top:8px;font-size:13px;color:#999;">Vorschau · «Prüfen» starten für Lektorat</div>`
+      : '<span style="color:#999;font-size:14px;">Seite ist leer. «Prüfen» starten.</span>';
+  } catch(e) {
+    console.error('[selectPage preview]', e);
+    document.getElementById('analysis-out').innerHTML =
+      '<span style="color:#999;font-size:14px;">Seite ausgewählt. «Prüfen» starten.</span>';
+  }
 }
 
 function htmlToText(html) {
@@ -288,7 +314,7 @@ ${html}`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
-        max_tokens: 4000,
+        max_tokens: 8000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -352,6 +378,7 @@ ${html}`;
 
     setStatus('Analyse abgeschlossen.');
   } catch(e) {
+    console.error('[runCheck]', e);
     document.getElementById('analysis-out').innerHTML =
       `<span style="color:#A32D2D;font-size:14px;">Fehler: ${e.message}</span>`;
     setStatus('');
@@ -370,6 +397,7 @@ async function saveCorrections() {
     setStatus('✓ Korrekturen gespeichert.');
     btn.style.display = 'none';
   } catch(e) {
+    console.error('[saveCorrections]', e);
     setStatus('Fehler: ' + e.message);
     btn.disabled = false;
   }
@@ -433,7 +461,7 @@ async function runBookReview() {
             text: text.length > 3000 ? text.slice(0, 3000) + ' […]' : text
           });
         }
-      } catch(_) {}
+      } catch(e) { console.error('[runBookReview page]', p.id, e); }
     }
 
     document.getElementById('rev-progress').style.width = '85%';
@@ -474,7 +502,7 @@ ${bookText}`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
-        max_tokens: 4000,
+        max_tokens: 8000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -535,6 +563,7 @@ ${bookText}`;
     outEl.innerHTML = html;
     setReviewStatus(`${pageContents.length} Seiten analysiert.`);
   } catch(e) {
+    console.error('[runBookReview]', e);
     outEl.innerHTML = `<span style="color:#A32D2D;font-size:14px;">Fehler: ${e.message}</span>`;
     setReviewStatus('');
   }
