@@ -145,7 +145,7 @@ document.addEventListener('alpine:init', () => {
     // ── Seitenauswahl & View-Reset ───────────────────────────────────────────
     async selectPage(p) {
       if (this.currentPage && this.currentPage.id === p.id) {
-        this.resetView();
+        this.resetPage();
         return;
       }
       this.currentPage = p;
@@ -174,6 +174,22 @@ document.addEventListener('alpine:init', () => {
         this.analysisOut = '<span class="muted-msg">Seite ausgewählt. «Prüfen» starten.</span>';
       }
       await this.loadPageHistory(p.id);
+    },
+
+    resetPage() {
+      this.currentPage = null;
+      this.originalHtml = null;
+      this.correctedHtml = null;
+      this.hasErrors = false;
+      this.showDiff = false;
+      this.diffHtml = '';
+      this.showEditorCard = false;
+      this.analysisOut = '';
+      this.status = '';
+      this.statusSpinner = false;
+      this.lastCheckId = null;
+      this.pageHistory = [];
+      this.selectedHistoryId = null;
     },
 
     resetView() {
