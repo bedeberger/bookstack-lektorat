@@ -24,7 +24,7 @@
       </template>
     </select>
     <button @click="loadPages()">Seiten laden</button>
-    <button @click="runBookReview()" :disabled="bookReviewLoading">Buch bewerten</button>
+    <button @click="showBookReviewCard = true" :class="{ primary: showBookReviewCard }">Buch bewerten</button>
     <button @click="batchCheck()" :disabled="batchLoading || bookReviewLoading || !pages.length" title="Alle Seiten sequenziell prüfen und in History speichern">Alle prüfen</button>
     <button @click="toggleFiguresCard()" :class="{ primary: showFiguresCard }" title="Figurenübersicht anzeigen">Figuren</button>
   </div>
@@ -120,7 +120,13 @@
 <div class="card" x-show="showBookReviewCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="'Buchbewertung: ' + selectedBookName"></span>
-    <button class="btn-card-close" @click="showBookReviewCard = false" title="Schliessen">×</button>
+    <div class="card-actions">
+      <button @click="runBookReview()" :disabled="bookReviewLoading">
+        <span x-show="bookReviewLoading" class="spinner"></span>
+        <span x-text="bookReviewOut ? 'Neu bewerten' : 'Buch bewerten'"></span>
+      </button>
+      <button class="btn-card-close" @click="showBookReviewCard = false" title="Schliessen">×</button>
+    </div>
   </div>
   <div class="progress-bar-wrap" x-show="bookReviewProgress > 0">
     <div class="progress-bar" :style="'width:' + bookReviewProgress + '%'"></div>
