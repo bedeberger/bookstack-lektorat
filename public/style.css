@@ -845,6 +845,24 @@ ins {
   .card-actions button { flex: 1; min-width: 80px; }
 }
 
+/* === Close-Button in Card-Header === */
+.btn-card-close {
+  background: none;
+  border: none;
+  color: var(--color-muted);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+.btn-card-close:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
 /* === Button-Gruppe (Expand/Collapse) === */
 .btn-group {
   display: flex;

@@ -120,6 +120,7 @@
 <div class="card" x-show="showBookReviewCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="'Buchbewertung: ' + selectedBookName"></span>
+    <button class="btn-card-close" @click="showBookReviewCard = false" title="Schliessen">×</button>
   </div>
   <div class="progress-bar-wrap" x-show="bookReviewProgress > 0">
     <div class="progress-bar" :style="'width:' + bookReviewProgress + '%'"></div>
@@ -178,6 +179,7 @@
         <span x-show="figurenLoading" class="spinner"></span>
         <span x-text="figuren.length ? 'Neu ermitteln' : 'Figuren ermitteln'"></span>
       </button>
+      <button class="btn-card-close" @click="toggleFiguresCard()" title="Schliessen">×</button>
     </div>
   </div>
 
@@ -287,6 +289,7 @@
       <button @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? 'Seite ist leer' : 'Ctrl+Enter'">Prüfen ↗</button>
       <button @click="toggleDiff()" x-show="correctedHtml" :class="{ primary: showDiff }">Diff</button>
       <button class="success" @click="saveCorrections()" x-show="correctedHtml && (selectedErrors.some(v => v) || selectedStyles.some(v => v))">Korrekturen speichern</button>
+      <button class="btn-card-close" @click="resetPage()" title="Schliessen">×</button>
     </div>
   </div>
   <div id="status" x-html="statusHtml"></div>
