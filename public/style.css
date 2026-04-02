@@ -826,6 +826,41 @@ ins {
   border-color: var(--color-border-focus);
 }
 
+/* === Buchentwicklung (Zeitliniendiagramm) === */
+.book-stats-chart-wrap {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  margin: 12px 0 10px;
+}
+
+.book-stats-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  align-items: center;
+}
+
+.book-stats-current {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--color-border);
+}
+
+.book-stats-sync-status {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* === Batch-Check === */
 .batch-status {
   font-size: var(--font-size-sm);

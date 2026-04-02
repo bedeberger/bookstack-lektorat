@@ -80,6 +80,32 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_frel_book_id ON figure_relations(book_id);
 
+  -- Seiten-Stats-Cache (für schnelles UI-Laden; wird vom Sync-Job befüllt)
+  CREATE TABLE IF NOT EXISTS page_stats (
+    page_id    INTEGER PRIMARY KEY,
+    book_id    INTEGER NOT NULL,
+    tok        INTEGER,
+    words      INTEGER,
+    chars      INTEGER,
+    updated_at TEXT,
+    cached_at  TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_ps_book_id ON page_stats(book_id);
+
+  -- Tägliche Buchstatistik-Snapshots (für Zeitliniendiagramm)
+  CREATE TABLE IF NOT EXISTS book_stats_history (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id     INTEGER NOT NULL,
+    book_name   TEXT,
+    recorded_at TEXT NOT NULL,
+    page_count  INTEGER,
+    words       INTEGER,
+    chars       INTEGER,
+    tok         INTEGER
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_bsh_book_date ON book_stats_history(book_id, recorded_at);
+  CREATE INDEX IF NOT EXISTS idx_bsh_book_id ON book_stats_history(book_id);
+
   CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
   INSERT INTO schema_version SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
 `);

@@ -68,6 +68,17 @@ export const treeMethods = {
         })),
       ].sort((a, b) => a.priority - b.priority);
 
+      // Gecachte Stats aus DB laden und sofort anzeigen
+      try {
+        const cache = await fetch('/history/page-stats/' + bookId).then(r => r.json());
+        for (const p of this.pages) {
+          const c = cache[p.id];
+          if (c && c.updated_at === p.updated_at) {
+            this.tokEsts[p.id] = { tok: c.tok, words: c.words, chars: c.chars };
+          }
+        }
+      } catch { /* Cache-Fehler ignorieren, Fallback auf Live-Berechnung */ }
+
       this.setStatus('');
       await Promise.all([
         this.loadBookReviewHistory(bookId),
@@ -82,7 +93,10 @@ export const treeMethods = {
 
   async loadTokenEstimates(gen) {
     const BATCH = 5;
-    const pages = [...this.pages];
+    const pages = this.pages.filter(p => !this.tokEsts[p.id]); // gecachte überspringen
+    if (!pages.length) return;
+
+    const newStats = [];
     for (let i = 0; i < pages.length; i += BATCH) {
       if (this._tokenEstGen !== gen) return;
       const batch = pages.slice(i, i + BATCH);
@@ -91,7 +105,6 @@ export const treeMethods = {
           const pd = await this.bsGet('pages/' + p.id);
           const html = pd.html || '';
           const text = htmlToText(html);
-          // Volles Input: Systemprompt + gefüllter Prompt (Text + HTML)
           const fullInput = SYSTEM_LEKTORAT + buildLektoratPrompt(text, html);
           const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
           this.tokEsts[p.id] = {
@@ -99,8 +112,25 @@ export const treeMethods = {
             words,
             chars: text.length,
           };
+          newStats.push({
+            page_id: p.id,
+            book_id: parseInt(this.selectedBookId),
+            tok: this.tokEsts[p.id].tok,
+            words,
+            chars: text.length,
+            updated_at: p.updated_at || null,
+          });
         } catch { /* ignore */ }
       }));
+
+      // Neu berechnete Stats in DB persistieren
+      if (newStats.length && this._tokenEstGen === gen) {
+        fetch('/history/page-stats/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newStats.splice(0)),
+        }).catch(() => {});
+      }
     }
   },
 };

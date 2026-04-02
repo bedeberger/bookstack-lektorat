@@ -9,6 +9,7 @@ import { lektoratMethods } from './lektorat.js';
 import { reviewMethods } from './review.js';
 import { figurenMethods } from './figuren.js';
 import { graphMethods } from './graph.js';
+import { bookstatsMethods } from './bookstats.js';
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('lektorat', () => ({
@@ -66,6 +67,13 @@ document.addEventListener('alpine:init', () => {
     selectedFigurId: null,
     _figurenNetwork: null,
     _figurenHash: null,
+    showBookStatsCard: false,
+    bookStatsData: [],
+    bookStatsLoading: false,
+    bookStatsSyncStatus: '',
+    bookStatsMetric: 'words',
+    bookStatsRange: 0,
+    _statsChart: null,
 
     // ── Computed ─────────────────────────────────────────────────────────────
     get statusHtml() {
@@ -235,6 +243,10 @@ document.addEventListener('alpine:init', () => {
       this.figurenProgress = 0;
       this.selectedFigurId = null;
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
+      this.showBookStatsCard = false;
+      this.bookStatsData = [];
+      this.bookStatsSyncStatus = '';
+      if (this._statsChart) { this._statsChart.destroy(); this._statsChart = null; }
     },
 
     // ── Methoden aus Modulen ─────────────────────────────────────────────────
@@ -246,5 +258,6 @@ document.addEventListener('alpine:init', () => {
     ...reviewMethods,
     ...figurenMethods,
     ...graphMethods,
+    ...bookstatsMethods,
   }));
 });

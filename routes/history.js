@@ -78,4 +78,40 @@ router.get('/review/:book_id', (req, res) => {
   res.json(rows.map(r => ({ ...r, review_json: JSON.parse(r.review_json || 'null') })));
 });
 
+// Seiten-Stats-Cache: alle gecachten Stats für ein Buch
+router.get('/page-stats/:book_id', (req, res) => {
+  const rows = db.prepare(
+    'SELECT page_id, tok, words, chars, updated_at FROM page_stats WHERE book_id = ?'
+  ).all(parseInt(req.params.book_id));
+  const map = {};
+  for (const r of rows) map[r.page_id] = { tok: r.tok, words: r.words, chars: r.chars, updated_at: r.updated_at };
+  res.json(map);
+});
+
+// Seiten-Stats-Cache: Batch-Upsert (vom Frontend nach Token-Berechnung)
+router.post('/page-stats/batch', express.json(), (req, res) => {
+  const items = req.body;
+  if (!Array.isArray(items) || !items.length) return res.json({ ok: true, count: 0 });
+  const stmt = db.prepare(`
+    INSERT INTO page_stats (page_id, book_id, tok, words, chars, updated_at, cached_at)
+    VALUES (@page_id, @book_id, @tok, @words, @chars, @updated_at, @cached_at)
+    ON CONFLICT(page_id) DO UPDATE SET
+      tok=excluded.tok, words=excluded.words, chars=excluded.chars,
+      updated_at=excluded.updated_at, cached_at=excluded.cached_at
+  `);
+  const now = new Date().toISOString();
+  db.transaction(() => { for (const s of items) stmt.run({ ...s, cached_at: now }); })();
+  res.json({ ok: true, count: items.length });
+});
+
+// Buchstatistik-Verlauf für Zeitliniendiagramm
+router.get('/book-stats/:book_id', (req, res) => {
+  const rows = db.prepare(`
+    SELECT id, book_id, book_name, recorded_at, page_count, words, chars, tok
+    FROM book_stats_history WHERE book_id = ?
+    ORDER BY recorded_at ASC
+  `).all(parseInt(req.params.book_id));
+  res.json(rows);
+});
+
 module.exports = router;
