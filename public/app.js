@@ -3,6 +3,7 @@ const CLAUDE_API = '/claude';
 const SYSTEM_LEKTORAT = `Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz. Helvetismen (grösseres, Strasse, gemäss usw.) sind korrekt und werden nicht bemängelt. Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
 
 const SYSTEM_BUCHBEWERTUNG = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. Helvetismen (grösseres, Strasse, gemäss usw.) sind korrekt und werden nicht bemängelt. Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
+const SYSTEM_KAPITELANALYSE = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. Helvetismen sind korrekt und werden nicht bemängelt. Antworte ausschliesslich mit einem kompakten JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
 
 function escHtml(s) {
   if (!s) return '';
@@ -698,11 +699,11 @@ ${html}`;
 
         this.setReviewStatus(`Lese ${pages.length} Seiten…`, true);
 
-        // Paralleles Laden in Batches von 5
+        // Alle Seiten vollständig laden (keine Kürzung hier)
         const BATCH = 5;
         const pageContents = [];
         for (let i = 0; i < pages.length; i += BATCH) {
-          this.bookReviewProgress = Math.round((i / pages.length) * 80);
+          this.bookReviewProgress = Math.round((i / pages.length) * 60);
           const batch = pages.slice(i, i + BATCH);
           const results = await Promise.allSettled(batch.map(async p => {
             const pd = await this.bsGet('pages/' + p.id);
@@ -710,8 +711,9 @@ ${html}`;
             if (text.length < 50) return null;
             return {
               title: p.name,
+              chapter_id: p.chapter_id || null,
               chapter: p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : null,
-              text: this.cutAtSentence(text, 3000),
+              text,
             };
           }));
           for (const r of results) {
@@ -719,14 +721,22 @@ ${html}`;
           }
         }
 
-        this.bookReviewProgress = 85;
-        this.setReviewStatus('Claude analysiert das Buch…', true);
+        this.bookReviewProgress = 65;
 
-        const bookText = pageContents.map(p =>
-          `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`
-        ).join('\n\n---\n\n');
+        const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
+        const SINGLE_PASS_LIMIT = 60000;
 
-        const prompt = `Bewerte das folgende Buch «${bookName}» kritisch und umfassend. Analysiere:
+        let r;
+
+        if (totalChars <= SINGLE_PASS_LIMIT) {
+          // Single-pass: alle Seiten direkt an Claude
+          this.setReviewStatus('Claude analysiert das Buch…', true);
+
+          const bookText = pageContents.map(p =>
+            `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`
+          ).join('\n\n---\n\n');
+
+          const prompt = `Bewerte das folgende Buch «${bookName}» kritisch und umfassend. Analysiere:
 - Struktur und Aufbau (Kapitel, Übergänge, Logik)
 - Sprachstil und Konsistenz über alle Seiten hinweg
 - Stärken des Texts
@@ -750,9 +760,83 @@ Buchinhalt (${pageContents.length} Seiten):
 
 ${bookText}`;
 
-        const r = await this.callClaude(prompt, SYSTEM_BUCHBEWERTUNG, (chars) => {
-          this.setReviewStatus(`Claude analysiert… (${chars} Zeichen)`, true);
-        });
+          r = await this.callClaude(prompt, SYSTEM_BUCHBEWERTUNG, (chars) => {
+            this.setReviewStatus(`Claude analysiert… (${chars} Zeichen)`, true);
+          });
+
+        } else {
+          // Multi-pass: Kapitel einzeln analysieren, dann synthetisieren
+
+          // Seiten nach Kapitel gruppieren
+          const groupOrder = [];
+          const groups = new Map();
+          for (const p of pageContents) {
+            const key = p.chapter_id != null ? String(p.chapter_id) : '__ungrouped__';
+            if (!groups.has(key)) {
+              groupOrder.push(key);
+              groups.set(key, { name: p.chapter || 'Sonstige Seiten', pages: [] });
+            }
+            groups.get(key).pages.push(p);
+          }
+
+          const chapterAnalyses = [];
+          for (let gi = 0; gi < groupOrder.length; gi++) {
+            const group = groups.get(groupOrder[gi]);
+            this.bookReviewProgress = 65 + Math.round(((gi + 1) / groupOrder.length) * 25);
+            this.setReviewStatus(`Analysiere ${gi + 1}/${groupOrder.length}: «${group.name}»…`, true);
+
+            const chapterText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+
+            const chapterPrompt = `Analysiere das Kapitel «${group.name}» aus dem Buch «${bookName}».
+Lies den vollständigen Kapiteltext und gib eine kompakte Analyse als JSON zurück:
+{
+  "themen": "Hauptthemen und Inhalte in 2-3 Sätzen",
+  "stil": "Schreibstilbeobachtungen: Wortwahl, Satzbau, Ton in 2 Sätzen",
+  "qualitaet": "Allgemeiner Qualitätseindruck in 1-2 Sätzen",
+  "staerken": ["konkrete Stärke 1", "konkrete Stärke 2"],
+  "schwaechen": ["konkrete Schwäche 1", "konkrete Schwäche 2"]
+}
+
+Kapitelinhalt (${group.pages.length} Seiten):
+
+${chapterText}`;
+
+            const analysis = await this.callClaude(chapterPrompt, SYSTEM_KAPITELANALYSE);
+            chapterAnalyses.push({ name: group.name, pageCount: group.pages.length, ...analysis });
+          }
+
+          // Synthese aller Kapitelanalysen
+          this.bookReviewProgress = 90;
+          this.setReviewStatus('Claude erstellt Gesamtbewertung…', true);
+
+          const synthesisInput = chapterAnalyses.map((ca, i) =>
+            `## Kapitel ${i + 1}: ${ca.name} (${ca.pageCount} Seiten)\nThemen: ${ca.themen || '–'}\nStil: ${ca.stil || '–'}\nQualität: ${ca.qualitaet || '–'}\nStärken: ${(ca.staerken || []).join(' | ')}\nSchwächen: ${(ca.schwaechen || []).join(' | ')}`
+          ).join('\n\n');
+
+          const synthesisPrompt = `Bewerte das Buch «${bookName}» kritisch und umfassend.
+Grundlage sind die Analysen aller ${chapterAnalyses.length} Kapitel (insgesamt ${pageContents.length} Seiten).
+
+Kapitelanalysen:
+
+${synthesisInput}
+
+Antworte mit diesem JSON-Schema:
+{
+  "gesamtnote": "Zahl von 1 (sehr schwach) bis 5 (ausgezeichnet)",
+  "gesamtnote_begruendung": "Ein Satz warum diese Note",
+  "zusammenfassung": "2-3 Sätze Gesamteindruck",
+  "struktur": "Analyse des Aufbaus und der Struktur über alle Kapitel (3-4 Sätze)",
+  "stil": "Analyse des Schreibstils und seiner Konsistenz über das gesamte Buch (3-4 Sätze)",
+  "staerken": ["Stärke 1", "Stärke 2", "Stärke 3"],
+  "schwaechen": ["Schwäche 1", "Schwäche 2"],
+  "empfehlungen": ["Empfehlung 1", "Empfehlung 2", "Empfehlung 3"],
+  "fazit": "Abschliessendes Urteil in 1-2 Sätzen"
+}`;
+
+          r = await this.callClaude(synthesisPrompt, SYSTEM_BUCHBEWERTUNG, (chars) => {
+            this.setReviewStatus(`Claude synthetisiert… (${chars} Zeichen)`, true);
+          });
+        }
 
         this.bookReviewProgress = 100;
         setTimeout(() => { this.bookReviewProgress = 0; }, 400);
