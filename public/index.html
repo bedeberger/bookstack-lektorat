@@ -89,11 +89,39 @@
   <div x-show="pageHistory.length > 0" style="margin-top:20px; border-top: 0.5px solid var(--color-border); padding-top:14px;">
     <div class="history-heading">Verlauf</div>
     <template x-for="entry in pageHistory" :key="entry.id">
-      <div class="history-item">
-        <span class="history-date" x-text="formatDate(entry.checked_at)"></span>
-        <span class="badge" :class="entry.error_count > 0 ? 'badge-err' : 'badge-ok'" x-text="entry.error_count > 0 ? entry.error_count + ' Fehler' : 'fehlerfrei'"></span>
-        <span class="badge" :class="entry.saved ? 'badge-ok' : 'badge-warn'" x-text="entry.saved ? '✓ gespeichert' : 'verworfen'"></span>
-        <span class="tag" x-text="entry.model"></span>
+      <div>
+        <div class="history-item" @click="selectedHistoryId = selectedHistoryId === entry.id ? null : entry.id">
+          <span class="history-date" x-text="formatDate(entry.checked_at)"></span>
+          <span class="badge" :class="entry.error_count > 0 ? 'badge-err' : 'badge-ok'" x-text="entry.error_count > 0 ? entry.error_count + ' Fehler' : 'fehlerfrei'"></span>
+          <span class="badge" :class="entry.saved ? 'badge-ok' : 'badge-warn'" x-text="entry.saved ? '✓ in BookStack gespeichert' : 'nicht gespeichert'"></span>
+          <span class="tag" x-text="entry.model"></span>
+          <span class="history-chevron" :class="{ open: selectedHistoryId === entry.id }">›</span>
+        </div>
+        <div x-show="selectedHistoryId === entry.id" class="history-detail">
+          <div x-show="entry.saved" class="history-saved-notice history-saved-notice-ok">
+            Korrekturen am <span x-text="formatDate(entry.saved_at)"></span> in BookStack gespeichert.
+          </div>
+          <div x-show="!entry.saved && entry.error_count > 0" class="history-saved-notice history-saved-notice-warn">
+            Korrekturen wurden nicht in BookStack übernommen.
+          </div>
+          <template x-if="entry.errors_json && entry.errors_json.length > 0">
+            <div style="margin-top:10px;">
+              <template x-for="(f, i) in entry.errors_json" :key="i">
+                <div class="finding" :class="f.typ === 'stil' ? 'style' : 'error'">
+                  <span class="badge" :class="f.typ === 'stil' ? 'badge-warn' : 'badge-err'" x-text="f.typ"></span>
+                  &nbsp;<del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+                  <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>
+                  <div class="finding-explanation" x-text="f.erklaerung"></div>
+                </div>
+              </template>
+            </div>
+          </template>
+          <div x-show="entry.stilanalyse" class="stilbox" style="margin-top:12px;">
+            <div class="stilbox-title">Stilanalyse</div>
+            <span x-text="entry.stilanalyse"></span>
+          </div>
+          <div x-show="entry.fazit" class="fazit" x-text="entry.fazit"></div>
+        </div>
       </div>
     </template>
   </div>

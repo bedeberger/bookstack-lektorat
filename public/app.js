@@ -40,6 +40,7 @@ document.addEventListener('alpine:init', () => {
     bookReviewProgress: 0,
     lastCheckId: null,
     pageHistory: [],
+    selectedHistoryId: null,
 
     get statusHtml() {
       if (!this.status) return '';
@@ -214,6 +215,7 @@ document.addEventListener('alpine:init', () => {
       this.hasErrors = false;
       this.lastCheckId = null;
       this.pageHistory = [];
+      this.selectedHistoryId = null;
       this.showEditorCard = true;
       this.analysisOut = '<span class="muted-msg"><span class="spinner"></span>Vorschau lädt…</span>';
       this.setStatus('');

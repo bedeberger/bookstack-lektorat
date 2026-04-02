@@ -417,14 +417,43 @@ ins {
   padding: 6px 10px;
   border-radius: var(--radius-md);
   border: 0.5px solid var(--color-border);
-  margin-bottom: 5px;
+  margin-bottom: 2px;
+  cursor: pointer;
+  user-select: none;
 }
+.history-item:hover { background: var(--color-hover); }
 
 .history-date {
   font-size: var(--font-size-sm);
   color: var(--color-muted);
   flex: 1;
 }
+
+.history-chevron {
+  font-size: 16px;
+  color: var(--color-subtle);
+  transition: transform 0.15s;
+  display: inline-block;
+}
+.history-chevron.open { transform: rotate(90deg); }
+
+.history-detail {
+  border: 0.5px solid var(--color-border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  padding: 12px 14px 14px;
+  margin-bottom: 6px;
+  background: var(--color-bg);
+}
+
+.history-saved-notice {
+  font-size: var(--font-size-sm);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 4px;
+}
+.history-saved-notice-ok   { background: var(--color-ok-bg);   color: var(--color-ok-text); }
+.history-saved-notice-warn { background: var(--color-warn-bg);  color: var(--color-warn-text); }
 
 /* Alpine.js – verhindert Flash of unstyled content */
 [x-cloak] { display: none !important; }
