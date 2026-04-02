@@ -24,16 +24,17 @@ chown -R github-runner:github-runner "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 npm install --omit=dev --quiet
 
+# Service-Unit immer aktualisieren (User, Pfade etc. können sich ändern)
+if [ -f "$INSTALL_DIR/lektorat.service" ]; then
+  cp "$INSTALL_DIR/lektorat.service" /etc/systemd/system/
+  systemctl daemon-reload
+fi
+
 # Service starten oder neu starten
 if systemctl is-enabled --quiet "$SERVICE" 2>/dev/null; then
   systemctl restart "$SERVICE"
 else
-  # Service noch nicht registriert – Unit-Datei installieren und starten
-  if [ -f "$INSTALL_DIR/lektorat.service" ]; then
-    cp "$INSTALL_DIR/lektorat.service" /etc/systemd/system/
-    systemctl daemon-reload
-    systemctl enable "$SERVICE"
-  fi
+  systemctl enable "$SERVICE"
   systemctl start "$SERVICE"
 fi
 
