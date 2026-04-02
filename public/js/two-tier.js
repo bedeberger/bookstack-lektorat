@@ -4,6 +4,59 @@ export const SINGLE_PASS_LIMIT = 60000;
 const BATCH_SIZE = 5;
 
 /**
+ * Lädt die Beschreibungstexte aller Kapitel eines Buchs.
+ *
+ * @param {Function} bsGet     - BookStack-GET-Funktion (path → Promise<data>)
+ * @param {Array}    chapters  - Kapitel-Objekte aus der BookStack-API (mind. id, name)
+ * @param {number}   minLength - Mindestzeichenlänge; kürzere Einträge werden übersprungen
+ * @returns {Promise<Array>}   { title, chapter_id, chapter, text, isChapterDesc: true }[]
+ */
+export async function loadChapterContents(bsGet, chapters, minLength) {
+  const contents = [];
+  for (const c of chapters) {
+    try {
+      const cd = await bsGet('chapters/' + c.id);
+      const text = htmlToText(cd.description_html || '').trim();
+      if (text.length < minLength) continue;
+      contents.push({
+        title: c.name,
+        chapter_id: c.id,
+        chapter: c.name,
+        text,
+        isChapterDesc: true,
+      });
+    } catch { /* ignorieren */ }
+  }
+  return contents;
+}
+
+/**
+ * Fügt Kapitel-Beschreibungseinträge vor die Seiten des jeweiligen Kapitels ein.
+ *
+ * @param {Array} pageContents    - Ergebnis von loadPageContents
+ * @param {Array} chapterDescs    - Ergebnis von loadChapterContents
+ * @returns {Array}               Zusammengeführtes Array
+ */
+export function mergeWithChapterDescs(pageContents, chapterDescs) {
+  const descMap = new Map(chapterDescs.map(c => [c.chapter_id, c]));
+  const seen = new Set();
+  const merged = [];
+  for (const p of pageContents) {
+    const cid = p.chapter_id;
+    if (cid != null && !seen.has(cid) && descMap.has(cid)) {
+      merged.push(descMap.get(cid));
+      seen.add(cid);
+    }
+    merged.push(p);
+  }
+  // Kapitel ohne Seiten, die aber Text haben
+  for (const [cid, cd] of descMap) {
+    if (!seen.has(cid)) merged.push(cd);
+  }
+  return merged;
+}
+
+/**
  * Lädt alle Seiten eines Buchs als Textinhalt.
  *
  * @param {Function} bsGet        - BookStack-GET-Funktion (path → Promise<data>)

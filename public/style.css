@@ -457,6 +457,9 @@ ins {
 .tree-chapter-header:hover { background: var(--color-hover); }
 .tree-chapter-header.disabled { opacity: 0.4; cursor: not-allowed; }
 .tree-chapter-header.disabled:hover { background: none; }
+.tree-chapter-header.selected { background: rgba(0, 0, 0, 0.04); box-shadow: inset 2px 0 0 var(--color-text); }
+.chapter-selectable:hover { text-decoration: underline; }
+.invisible { visibility: hidden; }
 
 .tree-chevron {
   display: inline-block;

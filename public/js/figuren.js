@@ -1,6 +1,6 @@
 import { escHtml } from './utils.js';
 import { SYSTEM_FIGUREN } from './prompts.js';
-import { SINGLE_PASS_LIMIT, loadPageContents, groupByChapter } from './two-tier.js';
+import { SINGLE_PASS_LIMIT, loadPageContents, loadChapterContents, mergeWithChapterDescs, groupByChapter } from './two-tier.js';
 
 // Figurenübersicht-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -82,13 +82,18 @@ export const figurenMethods = {
 
       const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
 
-      const pageContents = await loadPageContents(
-        p => this.bsGet(p), pages, chMap, 30,
-        (i, total) => {
-          this.figurenProgress = Math.round((i / total) * 55);
-          this.figurenStatus = `<span class="spinner"></span>Lese ${i + 1}–${Math.min(i + 5, total)} von ${total} Seiten…`;
-        }
-      );
+      const [pageContentsRaw, chapterDescs] = await Promise.all([
+        loadPageContents(
+          p => this.bsGet(p), pages, chMap, 30,
+          (i, total) => {
+            this.figurenProgress = Math.round((i / total) * 50);
+            this.figurenStatus = `<span class="spinner"></span>Lese ${i + 1}–${Math.min(i + 5, total)} von ${total} Seiten…`;
+          }
+        ),
+        loadChapterContents(p => this.bsGet(p), chaptersData, 20),
+      ]);
+
+      const pageContents = mergeWithChapterDescs(pageContentsRaw, chapterDescs);
 
       const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
       let result;
@@ -97,9 +102,14 @@ export const figurenMethods = {
         // ── Single-Pass ──────────────────────────────────────────────────
         this.figurenProgress = 65;
         this.figurenStatus = '<span class="spinner"></span>Claude analysiert Figuren…';
-        const bookText = pageContents.map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`).join('\n\n---\n\n');
+        const bookText = pageContents.map(p =>
+          p.isChapterDesc
+            ? `## Kapiteleinleitung: ${p.title}\n${p.text}`
+            : `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`
+        ).join('\n\n---\n\n');
+        const pageCount = pageContents.filter(p => !p.isChapterDesc).length;
         result = await this.callClaude(
-          `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Figuren.\n\nAntworte mit diesem JSON-Schema:\n${FINAL_SCHEMA}\n\n${FINAL_RULES}\n\nBuchtext (${pageContents.length} Seiten):\n\n${bookText}`,
+          `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Figuren.\n\nAntworte mit diesem JSON-Schema:\n${FINAL_SCHEMA}\n\n${FINAL_RULES}\n\nBuchtext (${pageCount} Seiten):\n\n${bookText}`,
           SYSTEM_FIGUREN,
           (chars) => { this.figurenStatus = `<span class="spinner"></span>Claude analysiert… (${chars} Zeichen)`; }
         );
@@ -114,7 +124,11 @@ export const figurenMethods = {
           this.figurenProgress = 55 + Math.round(((gi + 1) / groupOrder.length) * 30);
           this.figurenStatus = `<span class="spinner"></span>Figuren in «${group.name}» (${gi + 1}/${groupOrder.length})…`;
 
-          const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+          const chText = group.pages.map(p =>
+            p.isChapterDesc
+              ? `## Kapiteleinleitung: ${p.title}\n${p.text}`
+              : `### ${p.title}\n${p.text}`
+          ).join('\n\n---\n\n');
           const chResult = await this.callClaude(
             `Extrahiere alle Figuren/Charaktere aus dem Kapitel «${group.name}» des Buchs «${bookName}».
 

@@ -149,7 +149,7 @@ document.addEventListener('alpine:init', () => {
 
     // ── Seitenauswahl & View-Reset ───────────────────────────────────────────
     async selectPage(p) {
-      if (this.currentPage && this.currentPage.id === p.id) {
+      if (this.currentPage && this.currentPage.id === p.id && !!this.currentPage._isChapter === !!p._isChapter) {
         this.resetPage();
         return;
       }
@@ -172,18 +172,26 @@ document.addEventListener('alpine:init', () => {
       this.analysisOut = '<span class="muted-msg"><span class="spinner"></span>Vorschau lädt…</span>';
       this.setStatus('');
       try {
-        const pageData = await this.bsGet('pages/' + p.id);
-        const text = htmlToText(pageData.html).trim();
+        let html;
+        if (p._isChapter) {
+          const chData = await this.bsGet('chapters/' + p.id);
+          html = chData.description_html || '';
+        } else {
+          const pageData = await this.bsGet('pages/' + p.id);
+          html = pageData.html;
+        }
+        const text = htmlToText(html).trim();
         const preview = text.length > PREVIEW_MAX_CHARS ? text.slice(0, PREVIEW_MAX_CHARS) + ' …' : text;
         this.currentPageEmpty = !preview;
         this.analysisOut = preview
           ? `<div class="preview-text">${escHtml(preview)}</div><div class="preview-hint">Vorschau · «Prüfen» starten für Lektorat</div>`
-          : '<span class="muted-msg">Seite ist leer.</span>';
+          : '<span class="muted-msg">Kapitel hat keinen Beschreibungstext.</span>';
       } catch (e) {
         console.error('[selectPage preview]', e);
-        this.analysisOut = '<span class="muted-msg">Seite ausgewählt. «Prüfen» starten.</span>';
+        this.analysisOut = '<span class="muted-msg">Ausgewählt. «Prüfen» starten.</span>';
       }
-      await this.loadPageHistory(p.id);
+      const historyId = p._isChapter ? -p.id : p.id;
+      await this.loadPageHistory(historyId);
     },
 
     resetPage() {
@@ -205,6 +213,13 @@ document.addEventListener('alpine:init', () => {
       this.selectedErrors = [];
       this.selectedStyles = [];
       this.checkDone = false;
+    },
+
+    async openBookReviewCard() {
+      this.showBookReviewCard = true;
+      this.bookReviewOut = '';
+      this.bookReviewStatus = '';
+      await this.loadBookReviewHistory(this.selectedBookId);
     },
 
     resetView() {
