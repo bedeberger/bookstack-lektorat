@@ -779,6 +779,13 @@ ins {
   flex-wrap: wrap;
 }
 
+.tok-total {
+  font-size: 11px;
+  color: #888;
+  margin-left: 4px;
+  align-self: center;
+}
+
 /* === Kleine Buttons === */
 .btn-sm {
   font-size: 12px;

@@ -45,6 +45,8 @@
     <div x-show="!pageSearch" class="btn-group">
       <button @click="tree.forEach(c => c.open = true)" class="btn-sm">Alle ausklappen</button>
       <button @click="tree.forEach(c => c.open = false)" class="btn-sm">Alle einklappen</button>
+      <span x-show="Object.keys(tokEsts).length > 0" class="tok-total"
+        x-text="'∑ ' + (Object.values(tokEsts).reduce((a,b)=>a+b,0) >= 1000 ? '~' + Math.round(Object.values(tokEsts).reduce((a,b)=>a+b,0)/1000) + 'k' : Object.values(tokEsts).reduce((a,b)=>a+b,0)) + ' Token'"></span>
     </div>
     <template x-for="item in filteredTree" :key="item.id">
       <div>
