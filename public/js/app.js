@@ -144,6 +144,10 @@ document.addEventListener('alpine:init', () => {
 
     // ── Seitenauswahl & View-Reset ───────────────────────────────────────────
     async selectPage(p) {
+      if (this.currentPage && this.currentPage.id === p.id) {
+        this.resetView();
+        return;
+      }
       this.currentPage = p;
       this.currentPageEmpty = false;
       this.originalHtml = null;
