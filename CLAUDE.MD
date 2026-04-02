@@ -50,6 +50,7 @@ Umgebungsvariablen (optional, defaults in Klammern):
 - `API_HOST` – Alternative zu `BOOKSTACK_URL` (hat Vorrang)
 - `TOKEN_ID` – BookStack Token ID (wird via `/config` an den Browser geliefert)
 - `TOKEN_KENNWORT` – BookStack Token Passwort (wird via `/config` an den Browser geliefert)
+- `MODEL_TOKEN` – Maximale Output-Tokens für Claude-Aufrufe (`64000`)
 
 Alle Variablen können in einer `.env`-Datei gesetzt werden (dotenv).
 

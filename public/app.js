@@ -20,6 +20,7 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('lektorat', () => ({
     authToken: '',
     bookstackUrl: '',
+    claudeMaxTokens: 64000,
     books: [],
     selectedBookId: '',
     pages: [],
@@ -98,7 +99,7 @@ document.addEventListener('alpine:init', () => {
         },
         body: JSON.stringify({
           model: CLAUDE_MODEL,
-          max_tokens: 8000,
+          max_tokens: this.claudeMaxTokens,
           messages: [{ role: 'user', content: prompt }],
         }),
       });
@@ -124,6 +125,7 @@ document.addEventListener('alpine:init', () => {
         if (cfg.tokenId && cfg.tokenPw) {
           this.authToken = 'Token ' + cfg.tokenId + ':' + cfg.tokenPw;
           this.bookstackUrl = cfg.bookstackUrl || '';
+          if (cfg.claudeMaxTokens) this.claudeMaxTokens = cfg.claudeMaxTokens;
           await this.loadBooks();
         } else {
           this.setStatus('Keine Zugangsdaten in .env konfiguriert.');
@@ -231,6 +233,23 @@ document.addEventListener('alpine:init', () => {
         this.analysisOut = '<span class="muted-msg">Seite ausgewählt. «Prüfen» starten.</span>';
       }
       await this.loadPageHistory(p.id);
+    },
+
+    resetView() {
+      this.currentPage = null;
+      this.correctedHtml = null;
+      this.hasErrors = false;
+      this.showEditorCard = false;
+      this.showBookReviewCard = false;
+      this.analysisOut = '';
+      this.bookReviewOut = '';
+      this.status = '';
+      this.statusSpinner = false;
+      this.bookReviewStatus = '';
+      this.lastCheckId = null;
+      this.pageHistory = [];
+      this.selectedHistoryId = null;
+      this.tree.forEach(c => { if (c.type === 'chapter') c.open = false; });
     },
 
     async runCheck() {

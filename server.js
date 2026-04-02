@@ -41,7 +41,8 @@ app.get('/config', (_req, res) => {
   res.json({
     tokenId: process.env.TOKEN_ID || '',
     tokenPw: process.env.TOKEN_KENNWORT || '',
-    bookstackUrl: BOOKSTACK_URL.replace(/\/$/, '')
+    bookstackUrl: BOOKSTACK_URL.replace(/\/$/, ''),
+    claudeMaxTokens: parseInt(process.env.MODEL_TOKEN, 10) || 64000
   });
 });
 
