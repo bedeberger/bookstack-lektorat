@@ -65,15 +65,22 @@
                 <div class="page-item page-item-indent" :class="{ selected: currentPage?.id === page.id }" @click="selectPage(page)">
                   <span style="font-size:14px;" x-text="page.name"></span>
                   <span x-show="tokEsts[page.id]" class="tok-stats">
-                    <span class="tok-badge"
-                      :class="tokEsts[page.id]?.tok > 16000 ? 'tok-high' : tokEsts[page.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
-                      x-text="tokEsts[page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[page.id].tok/1000) + 'k T' : '~' + tokEsts[page.id]?.tok + ' T'"
-                      @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
-                      @mouseleave.stop="showTokLegend=false"></span>
-                    <span class="tok-badge tok-neutral"
-                      x-text="tokEsts[page.id]?.words >= 1000 ? '~' + Math.round(tokEsts[page.id].words/1000) + 'k W' : tokEsts[page.id]?.words + ' W'"></span>
-                    <span class="tok-badge tok-neutral"
-                      x-text="tokEsts[page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[page.id].chars/1000) + 'k Z' : tokEsts[page.id]?.chars + ' Z'"></span>
+                    <template x-if="tokEsts[page.id]?.words > 0">
+                      <span style="display:contents">
+                        <span class="tok-badge"
+                          :class="tokEsts[page.id]?.tok > 16000 ? 'tok-high' : tokEsts[page.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
+                          x-text="tokEsts[page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[page.id].tok/1000) + 'k T' : '~' + tokEsts[page.id]?.tok + ' T'"
+                          @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
+                          @mouseleave.stop="showTokLegend=false"></span>
+                        <span class="tok-badge tok-neutral"
+                          x-text="tokEsts[page.id]?.words >= 1000 ? '~' + Math.round(tokEsts[page.id].words/1000) + 'k W' : tokEsts[page.id]?.words + ' W'"></span>
+                        <span class="tok-badge tok-neutral"
+                          x-text="tokEsts[page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[page.id].chars/1000) + 'k Z' : tokEsts[page.id]?.chars + ' Z'"></span>
+                      </span>
+                    </template>
+                    <template x-if="tokEsts[page.id] && tokEsts[page.id].words === 0">
+                      <span class="tok-badge tok-empty">leer</span>
+                    </template>
                   </span>
                 </div>
               </template>
@@ -84,15 +91,22 @@
           <div class="page-item" :class="{ selected: currentPage?.id === item.page.id }" @click="selectPage(item.page)">
             <span style="font-size:14px;" x-text="item.name"></span>
             <span x-show="tokEsts[item.page.id]" class="tok-stats">
-              <span class="tok-badge"
-                :class="tokEsts[item.page.id]?.tok > 16000 ? 'tok-high' : tokEsts[item.page.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
-                x-text="tokEsts[item.page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[item.page.id].tok/1000) + 'k T' : '~' + tokEsts[item.page.id]?.tok + ' T'"
-                @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
-                @mouseleave.stop="showTokLegend=false"></span>
-              <span class="tok-badge tok-neutral"
-                x-text="tokEsts[item.page.id]?.words >= 1000 ? '~' + Math.round(tokEsts[item.page.id].words/1000) + 'k W' : tokEsts[item.page.id]?.words + ' W'"></span>
-              <span class="tok-badge tok-neutral"
-                x-text="tokEsts[item.page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[item.page.id].chars/1000) + 'k Z' : tokEsts[item.page.id]?.chars + ' Z'"></span>
+              <template x-if="tokEsts[item.page.id]?.words > 0">
+                <span style="display:contents">
+                  <span class="tok-badge"
+                    :class="tokEsts[item.page.id]?.tok > 16000 ? 'tok-high' : tokEsts[item.page.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
+                    x-text="tokEsts[item.page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[item.page.id].tok/1000) + 'k T' : '~' + tokEsts[item.page.id]?.tok + ' T'"
+                    @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
+                    @mouseleave.stop="showTokLegend=false"></span>
+                  <span class="tok-badge tok-neutral"
+                    x-text="tokEsts[item.page.id]?.words >= 1000 ? '~' + Math.round(tokEsts[item.page.id].words/1000) + 'k W' : tokEsts[item.page.id]?.words + ' W'"></span>
+                  <span class="tok-badge tok-neutral"
+                    x-text="tokEsts[item.page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[item.page.id].chars/1000) + 'k Z' : tokEsts[item.page.id]?.chars + ' Z'"></span>
+                </span>
+              </template>
+              <template x-if="tokEsts[item.page.id] && tokEsts[item.page.id].words === 0">
+                <span class="tok-badge tok-empty">leer</span>
+              </template>
             </span>
           </div>
         </template>

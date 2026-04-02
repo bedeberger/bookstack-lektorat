@@ -45,7 +45,9 @@ export const claudeMethods = {
             fullText += ev.delta.text;
             if (onProgress) onProgress(fullText.length);
           }
-        } catch { /* SSE parse errors ignorieren */ }
+        } catch (e) {
+          console.error('[callClaude] SSE-Event konnte nicht geparst werden:', e, '\nRaw:', raw);
+        }
       }
     }
 
@@ -53,14 +55,15 @@ export const claudeMethods = {
     const clean = fullText.replace(/```json\s*|```/g, '').trim();
     try {
       return JSON.parse(clean);
-    } catch {
+    } catch (e1) {
+      console.error('[callClaude] Direktes JSON.parse fehlgeschlagen:', e1, '\nVolle Antwort:', fullText);
       const match = clean.match(/\{[\s\S]*\}/);
       if (match) {
-        try { return JSON.parse(match[0]); } catch {}
+        try { return JSON.parse(match[0]); } catch (e2) {
+          console.error('[callClaude] JSON.parse aus extrahiertem Block fehlgeschlagen:', e2, '\nExtrahierter Block:', match[0]);
+        }
       }
-      throw new Error(
-        'Claude-Antwort konnte nicht geparst werden.\n\nRohantwort: ' + fullText.slice(0, 500)
-      );
+      throw new Error('Claude-Antwort konnte nicht geparst werden (siehe Console für vollständige Rohantwort)');
     }
   },
 };

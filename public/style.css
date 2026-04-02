@@ -521,6 +521,7 @@ ins {
 .tok-med     { background: var(--color-warn-bg);  color: var(--color-warn-text); }
 .tok-high    { background: var(--color-err-bg);   color: var(--color-err-text); }
 .tok-neutral { background: #e8e8e8; color: #555; }
+.tok-empty   { background: #e8e8e8; color: #aaa; font-style: italic; }
 
 .tok-tooltip {
   position: fixed;
