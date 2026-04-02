@@ -1,5 +1,6 @@
-import { escHtml, htmlToText } from './utils.js';
+import { escHtml } from './utils.js';
 import { SYSTEM_FIGUREN } from './prompts.js';
+import { SINGLE_PASS_LIMIT, loadPageContents, groupByChapter } from './two-tier.js';
 
 // Figurenübersicht-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -81,26 +82,15 @@ export const figurenMethods = {
 
       const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
 
-      // Seiten laden (voller Text, keine Kürzung)
-      const BATCH = 5;
-      const pageContents = [];
-      for (let i = 0; i < pages.length; i += BATCH) {
-        this.figurenProgress = Math.round((i / pages.length) * 55);
-        this.figurenStatus = `<span class="spinner"></span>Lese ${i + 1}–${Math.min(i + BATCH, pages.length)} von ${pages.length} Seiten…`;
-        const batch = pages.slice(i, i + BATCH);
-        const results = await Promise.allSettled(batch.map(async p => {
-          const pd = await this.bsGet('pages/' + p.id);
-          const text = htmlToText(pd.html).trim();
-          if (text.length < 30) return null;
-          return { title: p.name, chapter_id: p.chapter_id || null, chapter: p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : null, text };
-        }));
-        for (const r of results) {
-          if (r.status === 'fulfilled' && r.value) pageContents.push(r.value);
+      const pageContents = await loadPageContents(
+        p => this.bsGet(p), pages, chMap, 30,
+        (i, total) => {
+          this.figurenProgress = Math.round((i / total) * 55);
+          this.figurenStatus = `<span class="spinner"></span>Lese ${i + 1}–${Math.min(i + 5, total)} von ${total} Seiten…`;
         }
-      }
+      );
 
       const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
-      const SINGLE_PASS_LIMIT = 60000;
       let result;
 
       if (totalChars <= SINGLE_PASS_LIMIT) {
@@ -116,13 +106,7 @@ export const figurenMethods = {
 
       } else {
         // ── Multi-Pass: pro Kapitel analysieren, dann konsolidieren ──────
-        const groupOrder = [];
-        const groups = new Map();
-        for (const p of pageContents) {
-          const key = p.chapter_id != null ? String(p.chapter_id) : '__ungrouped__';
-          if (!groups.has(key)) { groupOrder.push(key); groups.set(key, { name: p.chapter || 'Sonstige Seiten', pages: [] }); }
-          groups.get(key).pages.push(p);
-        }
+        const { groupOrder, groups } = groupByChapter(pageContents);
 
         const chapterFiguren = [];
         for (let gi = 0; gi < groupOrder.length; gi++) {

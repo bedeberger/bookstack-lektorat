@@ -495,27 +495,41 @@ ins {
 .tok-med  { background: var(--color-warn-bg);  color: var(--color-warn-text); }
 .tok-high { background: var(--color-err-bg);   color: var(--color-err-text); }
 
-.tok-legend {
-  margin-top: 8px;
+.tok-tooltip {
+  position: fixed;
+  transform: translateY(-100%);
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  padding: 8px 10px;
   font-size: 11px;
-  color: #777;
+  color: #555;
+  min-width: 200px;
+  pointer-events: auto;
+}
+.tok-tt-label {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 6px;
+}
+.tok-tt-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
+  margin-bottom: 3px;
 }
-.tok-legend .tok-badge { font-size: 10px; }
-.tok-legend-label {
-  font-weight: 500;
-  color: #555;
-  margin-right: 6px;
-  width: 100%;
-}
-.tok-legend-hint {
+.tok-tt-hint {
   color: #aaa;
   font-size: 10px;
-  margin-left: 4px;
+  margin-top: 6px;
+  border-top: 1px solid #eee;
+  padding-top: 5px;
 }
+.tok-tt-enter { transition: opacity 0.12s ease; }
+.tok-tt-hidden { opacity: 0; }
+.tok-tt-visible { opacity: 1; }
 
 /* === Figurenübersicht === */
 .figuren-graph-container {

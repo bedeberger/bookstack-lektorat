@@ -46,13 +46,6 @@
       <button @click="tree.forEach(c => c.open = true)" class="btn-sm">Alle ausklappen</button>
       <button @click="tree.forEach(c => c.open = false)" class="btn-sm">Alle einklappen</button>
     </div>
-    <div x-show="showTokLegend" class="tok-legend">
-      <span class="tok-legend-label">Geschätzte Input-Token pro Lektorat-Prüfung</span>
-      <span class="tok-badge tok-ok">≤ 4k</span> sparsam &nbsp;
-      <span class="tok-badge tok-med">≤ 16k</span> mittel &nbsp;
-      <span class="tok-badge tok-high">&gt; 16k</span> gross
-      <span class="tok-legend-hint">(Text + HTML + Prompt + Systemprompt, ~4 Zeichen pro Token)</span>
-    </div>
     <template x-for="item in filteredTree" :key="item.id">
       <div>
         <template x-if="item.type === 'chapter'">
@@ -69,7 +62,8 @@
                   <span x-show="tokEsts[page.id]" class="tok-badge"
                     :class="tokEsts[page.id] > 16000 ? 'tok-high' : tokEsts[page.id] > 4000 ? 'tok-med' : 'tok-ok'"
                     x-text="tokEsts[page.id] >= 1000 ? '~' + Math.round(tokEsts[page.id]/1000) + 'k' : '~' + tokEsts[page.id]"
-                    @mouseenter.stop="showTokLegend = true" @mouseleave.stop="showTokLegend = false"></span>
+                    @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
+                    @mouseleave.stop="showTokLegend=false"></span>
                 </div>
               </template>
             </div>
@@ -81,7 +75,8 @@
             <span x-show="tokEsts[item.page.id]" class="tok-badge"
               :class="tokEsts[item.page.id] > 16000 ? 'tok-high' : tokEsts[item.page.id] > 4000 ? 'tok-med' : 'tok-ok'"
               x-text="tokEsts[item.page.id] >= 1000 ? '~' + Math.round(tokEsts[item.page.id]/1000) + 'k' : '~' + tokEsts[item.page.id]"
-              @mouseenter.stop="showTokLegend = true" @mouseleave.stop="showTokLegend = false"></span>
+              @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
+              @mouseleave.stop="showTokLegend=false"></span>
           </div>
         </template>
       </div>
@@ -313,6 +308,20 @@
       </div>
     </template>
   </div>
+</div>
+
+<!-- Token-Legende Tooltip (fixed, kein Layout-Einfluss) -->
+<div x-show="showTokLegend"
+     x-transition:enter="tok-tt-enter" x-transition:enter-start="tok-tt-hidden" x-transition:enter-end="tok-tt-visible"
+     x-transition:leave="tok-tt-enter" x-transition:leave-start="tok-tt-visible" x-transition:leave-end="tok-tt-hidden"
+     :style="`left:${tokLegendPos.x}px; top:${tokLegendPos.y - 8}px`"
+     class="tok-tooltip"
+     @mouseenter="showTokLegend=true" @mouseleave="showTokLegend=false">
+  <div class="tok-tt-label">Geschätzte Input-Token pro Prüfung</div>
+  <div class="tok-tt-row"><span class="tok-badge tok-ok">≤ 4k</span> sparsam</div>
+  <div class="tok-tt-row"><span class="tok-badge tok-med">≤ 16k</span> mittel</div>
+  <div class="tok-tt-row"><span class="tok-badge tok-high">&gt; 16k</span> gross</div>
+  <div class="tok-tt-hint">Text + HTML + Prompt + System, ~4 Zeichen/Token</div>
 </div>
 
 </body>

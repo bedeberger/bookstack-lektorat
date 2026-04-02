@@ -52,7 +52,8 @@ bookstack-lektorat/
         ├── lektorat.js      # runCheck, saveCorrections, toggleDiff, batchCheck, computeDiff
         ├── review.js        # runBookReview
         ├── figuren.js       # runFigurExtraction, loadFiguren, saveFiguren, toggleFiguresCard
-        └── graph.js         # renderFigurGraph, _figTypColor
+        ├── graph.js         # renderFigurGraph, _figTypColor
+        └── two-tier.js      # loadPageContents(), groupByChapter(), SINGLE_PASS_LIMIT
 ```
 
 ## Lokale Entwicklung
@@ -343,7 +344,15 @@ Die Single-Page-App besteht aus `index.html`, `style.css` und ES-Modulen unter `
 
 ### Modul-Pattern
 
-Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das beim Aufruf auf die Alpine-Komponente zeigt – weil sie per `...spread` in das Alpine-Data-Objekt eingebettet sind. Neue Funktionalität: neues Modul anlegen, Methoden-Objekt exportieren, in `js/app.js` importieren und am Ende des Data-Objekts spreaden.
+Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`, `two-tier.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das beim Aufruf auf die Alpine-Komponente zeigt – weil sie per `...spread` in das Alpine-Data-Objekt eingebettet sind. Neue Funktionalität: neues Modul anlegen, Methoden-Objekt exportieren, in `js/app.js` importieren und am Ende des Data-Objekts spreaden.
+
+### Two-Tier-Analyse-Pattern
+
+`review.js` (Buchbewertung) und `figuren.js` (Figurenextraktion) teilen dasselbe Lade- und Analyse-Muster: alle Seiten eines Buchs laden → bei ≤ 60 000 Zeichen Single-Pass direkt an Claude, bei grösseren Büchern Multi-Pass pro Kapitel + Konsolidierungs-Call. Die gemeinsame Infrastruktur dafür lebt in `two-tier.js`:
+
+- `loadPageContents(bsGet, pages, chMap, minLength, onBatch)` – lädt Seiten batched, überspringt zu kurze
+- `groupByChapter(pageContents)` – gruppiert für den Multi-Pass nach Kapitel-ID
+- `SINGLE_PASS_LIMIT` – Grenzwert (60 000 Zeichen)
 
 ### Alpine-Komponente: State-Überblick
 

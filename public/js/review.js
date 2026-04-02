@@ -1,5 +1,6 @@
-import { escHtml, htmlToText } from './utils.js';
+import { escHtml } from './utils.js';
 import { SYSTEM_BUCHBEWERTUNG, SYSTEM_KAPITELANALYSE } from './prompts.js';
+import { SINGLE_PASS_LIMIT, loadPageContents, groupByChapter } from './two-tier.js';
 
 // Buchbewertungs-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -30,32 +31,14 @@ export const reviewMethods = {
 
       this.setReviewStatus(`Lese ${pages.length} Seiten…`, true);
 
-      const BATCH = 5;
-      const pageContents = [];
-      for (let i = 0; i < pages.length; i += BATCH) {
-        this.bookReviewProgress = Math.round((i / pages.length) * 60);
-        const batch = pages.slice(i, i + BATCH);
-        const results = await Promise.allSettled(batch.map(async p => {
-          const pd = await this.bsGet('pages/' + p.id);
-          const text = htmlToText(pd.html).trim();
-          if (text.length < 50) return null;
-          return {
-            title: p.name,
-            chapter_id: p.chapter_id || null,
-            chapter: p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : null,
-            text,
-          };
-        }));
-        for (const r of results) {
-          if (r.status === 'fulfilled' && r.value) pageContents.push(r.value);
-        }
-      }
+      const pageContents = await loadPageContents(
+        p => this.bsGet(p), pages, chMap, 50,
+        (i, total) => { this.bookReviewProgress = Math.round((i / total) * 60); }
+      );
 
       this.bookReviewProgress = 65;
 
       const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
-      const SINGLE_PASS_LIMIT = 60000;
-
       let r;
 
       if (totalChars <= SINGLE_PASS_LIMIT) {
@@ -96,16 +79,7 @@ ${bookText}`;
 
       } else {
         // Multi-pass: Kapitel einzeln analysieren, dann synthetisieren
-        const groupOrder = [];
-        const groups = new Map();
-        for (const p of pageContents) {
-          const key = p.chapter_id != null ? String(p.chapter_id) : '__ungrouped__';
-          if (!groups.has(key)) {
-            groupOrder.push(key);
-            groups.set(key, { name: p.chapter || 'Sonstige Seiten', pages: [] });
-          }
-          groups.get(key).pages.push(p);
-        }
+        const { groupOrder, groups } = groupByChapter(pageContents);
 
         const chapterAnalyses = [];
         for (let gi = 0; gi < groupOrder.length; gi++) {

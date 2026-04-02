@@ -50,6 +50,7 @@ document.addEventListener('alpine:init', () => {
     tokEsts: {},
     _tokenEstGen: 0,
     showTokLegend: false,
+    tokLegendPos: { x: 0, y: 0 },
     showFiguresCard: false,
     figuren: [],
     figurenLoading: false,
