@@ -85,15 +85,15 @@ db.exec(`
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
-  // Beispiel für zukünftige Migration auf Version 2:
-  // if (version < 2) {
-  //   db.exec('ALTER TABLE figures ADD COLUMN wohnort TEXT');
-  //   db.prepare('UPDATE schema_version SET version = 2').run();
-  //   logger.info('DB-Migration auf Version 2 abgeschlossen.');
-  // }
+  if (version < 2) {
+    db.exec('ALTER TABLE page_checks ADD COLUMN applied_errors_json TEXT');
+    db.prepare('UPDATE schema_version SET version = 2').run();
+    logger.info('DB-Migration auf Version 2 abgeschlossen.');
+  }
+  // Sicherstellen dass schema_version aktuell ist (Fallback)
   if (version < CURRENT_SCHEMA_VERSION) {
     db.prepare('UPDATE schema_version SET version = ?').run(CURRENT_SCHEMA_VERSION);
   }

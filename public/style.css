@@ -211,7 +211,8 @@ button.success:hover { background: var(--color-success-hover); }
 }
 .badge-warn { background: var(--color-warn-bg); color: var(--color-warn-text); }
 .badge-ok   { background: var(--color-ok-bg);   color: var(--color-ok-text); }
-.badge-err  { background: var(--color-err-bg);  color: var(--color-err-text); }
+.badge-err     { background: var(--color-err-bg);  color: var(--color-err-text); }
+.badge-skipped { background: #e8e8e8; color: #999; }
 
 /* === Findings === */
 .finding {
@@ -224,6 +225,7 @@ button.success:hover { background: var(--color-success-hover); }
 .finding.style { border-color: var(--color-style-border); }
 .finding.ok    { border-color: var(--color-ok-border); }
 .finding.finding-deselected { opacity: 0.35; }
+.finding.finding-skipped    { opacity: 0.45; }
 .finding-checkbox { flex-shrink: 0; margin-top: 2px; cursor: pointer; }
 .finding { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
 .finding > span { flex: 1; }
@@ -525,6 +527,19 @@ ins {
 }
 .history-saved-notice-ok   { background: var(--color-ok-bg);   color: var(--color-ok-text); }
 .history-saved-notice-warn { background: var(--color-warn-bg);  color: var(--color-warn-text); }
+
+.btn-toggle-saved {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-weight: 500;
+  transition: opacity 0.15s;
+}
+.btn-toggle-saved:hover { opacity: 0.75; }
+.btn-toggle-saved--on  { background: var(--color-ok-bg);   color: var(--color-ok-text);   border-color: var(--color-ok-text); }
+.btn-toggle-saved--off { background: var(--color-warn-bg); color: var(--color-warn-text); border-color: var(--color-warn-text); }
 
 .btn-delete-history {
   margin-top: 10px;

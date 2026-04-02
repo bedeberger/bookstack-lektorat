@@ -10,6 +10,21 @@ export const historyMethods = {
     }
   },
 
+  async toggleHistoryEntrySaved(entry) {
+    const newSaved = !entry.saved;
+    try {
+      await fetch('/history/check/' + entry.id + '/saved', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ saved: newSaved }),
+      });
+      entry.saved = newSaved;
+      entry.saved_at = newSaved ? new Date().toISOString() : null;
+    } catch (e) {
+      console.error('[toggleHistoryEntrySaved]', e);
+    }
+  },
+
   async deletePageCheck(id) {
     try {
       await fetch('/history/check/' + id, { method: 'DELETE' });

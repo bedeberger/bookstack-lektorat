@@ -2,9 +2,10 @@ export const CLAUDE_API = '/claude';
 
 // Superregeln – gelten für alle Prompts
 const BASE_RULES = `\
-Schweizer Kontext: Helvetismen (grösser, Strasse, gemäss, weiss, zerreisst usw.) sind korrekt und werden nicht bemängelt. \
-Der Gedankenstrich (–) gilt als akzeptable Schreibweise – keine Korrektur zu Halbgeviertstrich oder Bindestrich. \
-Etwas gilt nur dann als Fehler, wenn es eindeutig falsch ist. Fälle, die zwar abweichen, aber im Schweizer Kontext oder sonst vertretbar sind, werden nicht als Fehler gemeldet – auch keine «möglichen Fehler» mit relativierender Erklärung. Im Zweifel: kein Fehler. \
+SCHWEIZER KONTEXT – STRIKTE REGEL: Im Schweizer Schriftdeutsch wird kein ß verwendet. Deshalb sind alle ss-Schreibungen, die im Deutschen ß wären, korrekte Helvetismen: zerreisst, heisst, weiss, ausserdem, Strasse, gemäss, grösser usw. Diese Wörter sind KEIN FEHLER und dürfen NICHT ins «fehler»-Array. Auch «zerreisst» als Verbform von «zerreissen» ist korrekt. \
+Der Gedankenstrich (–) ist korrekte Schreibweise – NICHT ins «fehler»-Array. \
+Anführungszeichen-Regel: Die Wahl der Anführungszeichen («», „", "", '') ist kein Fehler und kein Stilproblem – NICHT ins «fehler»-Array, egal welche Variante verwendet wird. \
+GRUNDREGEL FÜR DAS «fehler»-ARRAY: Ein Eintrag kommt nur rein, wenn er eindeutig, zweifelsfrei und ohne Einschränkung falsch ist. Enthält die Erklärung Formulierungen wie «im Schweizer Kontext akzeptabel», «kein Fehler», «vertretbar», «könnte», «möglicherweise» – dann darf der Eintrag NICHT im Array stehen. Vor jedem Eintrag: Selbsttest – «Ist das im Schweizer Kontext wirklich falsch?» Wenn nein oder unsicher: weglassen. \
 Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
 
 export const SYSTEM_LEKTORAT = `Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz. ${BASE_RULES}`;
@@ -41,15 +42,17 @@ ${html}`;
 export function buildLektoratPrompt(text, html) {
   return `Analysiere diesen deutschsprachigen Text auf Rechtschreibfehler, Grammatikfehler und stilistische Auffälligkeiten.
 
+WICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen (z.B. ein Gallizismus und separate Anführungszeichen-Problematik), müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.
+
 Antworte mit diesem JSON-Schema:
 {
   "fehler": [
     {
       "typ": "rechtschreibung|grammatik|stil",
-      "original": "das fehlerhafte Wort oder die fehlerhafte Phrase",
+      "original": "das fehlerhafte Wort oder die fehlerhafte Phrase (genau eine Beanstandung pro Eintrag)",
       "korrektur": "die korrekte Version",
       "kontext": "der Satz in dem der Fehler vorkommt (gekürzt)",
-      "erklaerung": "kurze Erklärung auf Deutsch"
+      "erklaerung": "kurze Erklärung auf Deutsch (nur diesen einen Mangel beschreiben)"
     }
   ],
   "korrekturen_html": "vollständiges korrigiertes HTML – behalte ALLE Tags exakt bei, ändere nur fehlerhafte Textstellen",

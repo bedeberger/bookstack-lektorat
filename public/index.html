@@ -363,7 +363,7 @@
         <div class="history-item" @click="selectedHistoryId = selectedHistoryId === entry.id ? null : entry.id">
           <span class="history-date" x-text="formatDate(entry.checked_at)"></span>
           <span class="badge" :class="entry.error_count > 0 ? 'badge-err' : 'badge-ok'" x-text="entry.error_count > 0 ? entry.error_count + ' Fehler' : 'fehlerfrei'"></span>
-          <span class="badge" :class="entry.saved ? 'badge-ok' : 'badge-warn'" x-text="entry.saved ? '✓ gespeichert' : 'nicht gespeichert'"></span>
+          <button class="btn-toggle-saved" :class="entry.saved ? 'btn-toggle-saved--on' : 'btn-toggle-saved--off'" @click.stop="toggleHistoryEntrySaved(entry)" :title="entry.saved ? 'Als nicht umgesetzt markieren' : 'Als umgesetzt markieren'" x-text="entry.saved ? '✓ umgesetzt' : 'nicht umgesetzt'"></button>
           <span class="tag" x-text="entry.model"></span>
           <span class="history-chevron" :class="{ open: selectedHistoryId === entry.id }">›</span>
         </div>
@@ -377,8 +377,11 @@
           <template x-if="entry.errors_json && entry.errors_json.length > 0">
             <div style="margin-top:10px;">
               <template x-for="(f, i) in entry.errors_json" :key="i">
-                <div class="finding" :class="f.typ === 'stil' ? 'style' : 'error'">
+                <div class="finding" :class="[f.typ === 'stil' ? 'style' : 'error', entry.applied_errors_json && f.typ !== 'stil' && !entry.applied_errors_json.some(a => a.original === f.original) ? 'finding-skipped' : '']">
                   <span class="badge" :class="f.typ === 'stil' ? 'badge-warn' : 'badge-err'" x-text="f.typ"></span>
+                  <template x-if="entry.applied_errors_json !== null && f.typ !== 'stil'">
+                    <span class="badge" :class="entry.applied_errors_json.some(a => a.original === f.original) ? 'badge-ok' : 'badge-skipped'" :title="entry.applied_errors_json.some(a => a.original === f.original) ? 'übernommen' : 'übersprungen'" x-text="entry.applied_errors_json.some(a => a.original === f.original) ? '✓' : '–'"></span>
+                  </template>
                   &nbsp;<del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
                   <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>
                   <div class="finding-explanation" x-text="f.erklaerung"></div>

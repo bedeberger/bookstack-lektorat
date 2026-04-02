@@ -19,10 +19,15 @@ router.post('/check', jsonBody, (req, res) => {
   res.json({ id: result.lastInsertRowid });
 });
 
-// Lauf als «in BookStack gespeichert» markieren
+// Lauf als «in BookStack gespeichert» markieren (oder zurücksetzen)
 router.patch('/check/:id/saved', jsonBody, (req, res) => {
-  db.prepare('UPDATE page_checks SET saved = 1, saved_at = ? WHERE id = ?')
-    .run(new Date().toISOString(), parseInt(req.params.id));
+  const saved = req.body?.saved !== undefined ? (req.body.saved ? 1 : 0) : 1;
+  const saved_at = saved ? new Date().toISOString() : null;
+  const applied = req.body?.applied_errors_json !== undefined
+    ? JSON.stringify(req.body.applied_errors_json)
+    : null;
+  db.prepare('UPDATE page_checks SET saved = ?, saved_at = ?, applied_errors_json = COALESCE(?, applied_errors_json) WHERE id = ?')
+    .run(saved, saved_at, applied, parseInt(req.params.id));
   res.json({ ok: true });
 });
 
@@ -31,7 +36,12 @@ router.get('/page/:page_id', (req, res) => {
   const rows = db.prepare(`
     SELECT * FROM page_checks WHERE page_id = ?
     ORDER BY checked_at DESC LIMIT 20`).all(parseInt(req.params.page_id));
-  res.json(rows.map(r => ({ ...r, errors_json: JSON.parse(r.errors_json || '[]'), saved: !!r.saved })));
+  res.json(rows.map(r => ({
+    ...r,
+    errors_json: JSON.parse(r.errors_json || '[]'),
+    applied_errors_json: r.applied_errors_json ? JSON.parse(r.applied_errors_json) : null,
+    saved: !!r.saved,
+  })));
 });
 
 // Buchbewertung speichern
