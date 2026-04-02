@@ -6,6 +6,7 @@
   <title>BookStack Lektorat</title>
   <link rel="stylesheet" href="style.css">
   <script src="app.js"></script>
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
 <body x-data="lektorat" @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading) runCheck()">
@@ -25,6 +26,7 @@
     <button @click="loadPages()">Seiten laden</button>
     <button @click="runBookReview()" :disabled="bookReviewLoading">Buch bewerten</button>
     <button @click="batchCheck()" :disabled="batchLoading || bookReviewLoading || !pages.length" title="Alle Seiten sequenziell prüfen und in History speichern">Alle prüfen</button>
+    <button @click="toggleFiguresCard()" :class="{ primary: showFiguresCard }" title="Figurenübersicht anzeigen">Figuren</button>
   </div>
 
   <!-- Batch-Fortschritt -->
@@ -125,6 +127,113 @@
             </ul>
           </div>
           <div x-show="entry.review_json?.fazit" class="fazit" style="margin-top:10px;" x-text="entry.review_json?.fazit"></div>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>
+
+<!-- Figurenübersicht -->
+<div class="card" x-show="showFiguresCard" x-cloak>
+  <div class="card-header">
+    <span class="card-title" x-text="'Figuren: ' + selectedBookName"></span>
+    <div class="card-actions">
+      <button @click="runFigurExtraction()" :disabled="figurenLoading">
+        <span x-show="figurenLoading" class="spinner"></span>
+        <span x-text="figuren.length ? 'Neu ermitteln' : 'Figuren ermitteln'"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Fortschritt -->
+  <div x-show="figurenProgress > 0" class="progress-bar-wrap">
+    <div class="progress-bar" :style="'width:' + figurenProgress + '%'"></div>
+  </div>
+  <div x-show="figurenStatus" style="font-size:13px;color:#666;margin-top:6px;" x-html="figurenStatus"></div>
+
+  <!-- Graph -->
+  <div x-show="figuren.length > 0" style="margin-top:14px;">
+    <!-- Legende Knoten -->
+    <div class="figur-legend">
+      <span class="figur-legend-dot" style="background:#D4E8FF;border-color:#4A90D9;"></span>Hauptfigur
+      <span class="figur-legend-dot" style="background:#FFE0E0;border-color:#E24B4A;"></span>Antagonist
+      <span class="figur-legend-dot" style="background:#EAF3DE;border-color:#639922;"></span>Mentor
+      <span class="figur-legend-dot" style="background:#F0F0F0;border-color:#888;"></span>Nebenfigur
+      <span class="figur-legend-dot" style="background:#FFF5DC;border-color:#C4941A;"></span>Andere
+    </div>
+    <!-- Legende Kanten -->
+    <div class="figur-legend" style="margin-top:4px;">
+      <span style="display:inline-flex;align-items:center;gap:4px;"><span style="display:inline-block;width:18px;height:2px;background:#bbb;"></span>Eltern</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;"><span style="display:inline-block;width:18px;height:2px;background:#4A90D9;border-top:2px dashed #4A90D9;"></span>Geschwister</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;"><span style="display:inline-block;width:18px;height:2px;background:#639922;border-top:2px dashed #639922;"></span>Freund</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;"><span style="display:inline-block;width:18px;height:2px;background:#E24B4A;border-top:2px dashed #E24B4A;"></span>Feind</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;"><span style="display:inline-block;width:18px;height:2px;background:#D46EA0;border-top:2px dashed #D46EA0;"></span>Liebesbeziehung</span>
+    </div>
+    <div id="figuren-graph" class="figuren-graph-container"></div>
+  </div>
+
+  <!-- Figurenliste -->
+  <div x-show="figuren.length > 0" style="margin-top:16px; border-top: 0.5px solid var(--color-border); padding-top:14px;">
+    <div class="history-heading">Figuren (<span x-text="figuren.length"></span>)</div>
+    <template x-for="f in figuren" :key="f.id">
+      <div>
+        <div class="figur-item" @click="selectedFigurId = selectedFigurId === f.id ? null : f.id;">
+          <span class="figur-typ-dot" :style="'background:' + ({ hauptfigur:'#4A90D9', nebenfigur:'#888', antagonist:'#E24B4A', mentor:'#639922', andere:'#C4941A' }[f.typ] || '#ccc')"></span>
+          <span class="figur-name" x-text="f.name"></span>
+          <span class="tag" x-text="f.typ"></span>
+          <span x-show="f.geburtstag" class="tag" x-text="'* ' + f.geburtstag"></span>
+          <!-- Kapitel-Badges -->
+          <template x-if="f.kapitel?.length">
+            <span class="figur-kapitel-badges">
+              <span class="figur-kapitel-primary" x-text="f.kapitel[0].name"></span>
+              <template x-for="(k, ki) in (f.kapitel.slice(1))" :key="ki">
+                <span class="figur-kapitel-secondary" x-text="k.name"></span>
+              </template>
+            </span>
+          </template>
+          <span class="history-chevron" :class="{ open: selectedFigurId === f.id }">›</span>
+        </div>
+        <div x-show="selectedFigurId === f.id" class="figur-detail">
+          <p x-show="f.beschreibung" x-text="f.beschreibung" style="font-size:13px;line-height:1.6;margin-bottom:8px;"></p>
+          <!-- Beruf -->
+          <div x-show="f.beruf" style="margin-bottom:8px;">
+            <span class="bewertung-section-title" style="display:inline;">Beruf:&nbsp;</span>
+            <span style="font-size:13px;" x-text="f.beruf"></span>
+          </div>
+          <div x-show="f.eigenschaften?.length">
+            <div class="bewertung-section-title">Eigenschaften</div>
+            <ul class="bullet-list" style="margin-bottom:10px;">
+              <template x-for="(e, i) in (f.eigenschaften || [])" :key="i">
+                <li x-text="e"></li>
+              </template>
+            </ul>
+          </div>
+          <!-- Familie -->
+          <div x-show="f.eltern_ids?.length || f.geschwister_ids?.length">
+            <div class="bewertung-section-title">Familie</div>
+            <div style="font-size:13px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:4px;">
+              <template x-for="pid in (f.eltern_ids || [])" :key="'e'+pid">
+                <span class="tag figur-rel-tag" title="Elternteil" x-text="'↑ ' + (figuren.find(x => x.id === pid)?.name || pid)"></span>
+              </template>
+              <template x-for="sid in (f.geschwister_ids || [])" :key="'s'+sid">
+                <span class="tag figur-rel-tag" title="Geschwister" x-text="'⇔ ' + (figuren.find(x => x.id === sid)?.name || sid)"></span>
+              </template>
+            </div>
+          </div>
+          <!-- Beziehungen -->
+          <div x-show="f.beziehungen?.length">
+            <div class="bewertung-section-title">Beziehungen</div>
+            <div style="margin-bottom:10px;">
+              <template x-for="(bz, i) in (f.beziehungen || [])" :key="i">
+                <div class="figur-beziehung-item">
+                  <span class="figur-bz-typ" :class="'figur-bz-' + bz.typ" x-text="bz.typ"></span>
+                  <span style="font-size:13px;font-weight:500;" x-text="figuren.find(x => x.id === bz.figur_id)?.name || bz.figur_id"></span>
+                  <span x-show="bz.beschreibung" style="font-size:12px;color:var(--color-muted);" x-text="'– ' + bz.beschreibung"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+
         </div>
       </div>
     </template>

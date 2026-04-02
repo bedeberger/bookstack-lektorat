@@ -27,9 +27,11 @@ const HISTORY_FILE = path.join(__dirname, 'lektorat-history.json');
 
 function readHistory() {
   try {
-    return JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
+    const h = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
+    if (!h.book_figures) h.book_figures = {};
+    return h;
   } catch {
-    return { page_checks: [], book_reviews: [] };
+    return { page_checks: [], book_reviews: [], book_figures: {} };
   }
 }
 
@@ -133,6 +135,23 @@ app.get('/history/review/:book_id', (req, res) => {
     .sort((a, b) => b.reviewed_at.localeCompare(a.reviewed_at))
     .slice(0, 10);
   res.json(rows);
+});
+
+// --- Figuren ---
+app.get('/figures/:book_id', (req, res) => {
+  const h = readHistory();
+  const entry = h.book_figures[req.params.book_id] || null;
+  res.json(entry);
+});
+
+app.put('/figures/:book_id', jsonBody, (req, res) => {
+  const h = readHistory();
+  h.book_figures[req.params.book_id] = {
+    figuren: req.body.figuren || [],
+    updated_at: new Date().toISOString(),
+  };
+  writeHistory(h);
+  res.json({ ok: true });
 });
 
 // --- Static files ---

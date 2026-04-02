@@ -7,6 +7,7 @@ KI-gestütztes Lektorat-Tool für BookStack. Läuft als eigenständiger Node.js-
 ```
 Browser → Express (Port 3737) → /config         → .env-Credentials an Frontend
                               → /history/*      → JSON-History-Store (lektorat-history.json)
+                              → /figures/*      → Figuren-Store (lektorat-history.json, Feld book_figures)
                               → /claude         → api.anthropic.com (ANTHROPIC_API_KEY-Injection)
                               → /api/*          → BookStack (localhost:80)
                               → /               → public/index.html
@@ -64,7 +65,7 @@ Beim Start lädt die App via `GET /config` die Credentials aus der Server-`.env`
 
 `lektorat-history.json` wird beim ersten Lauf automatisch im Projektverzeichnis erstellt. Kein Setup nötig. Die Datei gehört nicht ins Git (analog zur `.env`). Beim Deploy bleibt sie unangetastet, weil `deploy.sh` sie nicht synchronisiert.
 
-Die JSON-Datei hat zwei Arrays: `page_checks` und `book_reviews`. IDs werden beim Serverstart aus dem bestehenden Maximum initialisiert (`nextId`) und monoton hochgezählt – kein DBMS, kein Schema, kein ORM. Bei sehr vielen Einträgen (tausende) wird synchrones Lesen/Schreiben langsamer; für den Einzelnutzer-Betrieb kein Problem.
+Die JSON-Datei hat zwei Arrays (`page_checks`, `book_reviews`) und ein Objekt (`book_figures`). IDs werden beim Serverstart aus dem bestehenden Maximum initialisiert (`nextId`) und monoton hochgezählt – kein DBMS, kein Schema, kein ORM. Bei sehr vielen Einträgen (tausende) wird synchrones Lesen/Schreiben langsamer; für den Einzelnutzer-Betrieb kein Problem.
 
 ## Deployment auf dem LXC
 
@@ -125,6 +126,8 @@ Der Server stellt folgende Endpunkte bereit (kein Auth nötig, da lokales Netz):
 | GET | `/history/page/:page_id` | Letzte 20 Läufe für eine Seite |
 | POST | `/history/review` | Buchbewertung speichern |
 | GET | `/history/review/:book_id` | Letzte 10 Bewertungen für ein Buch |
+| GET | `/figures/:book_id` | Gespeicherte Figuren eines Buchs laden |
+| PUT | `/figures/:book_id` | Figuren eines Buchs speichern (überschreibt) |
 
 Jeder `page_checks`-Eintrag enthält: `id`, `page_id`, `page_name`, `book_id`, `checked_at`, `error_count`, `errors_json` (komplettes Fehler-Array), `stilanalyse`, `fazit`, `model`, `saved`, `saved_at`.
 
@@ -185,6 +188,43 @@ Lädt alle Seiten eines Buchs sequenziell (max. 3000 Zeichen Text pro Seite, Sei
 
 Wird als Sterne-Rating mit Stärken/Schwächen/Empfehlungen-Listen dargestellt.
 
+### Figurenübersicht (`runFigurExtraction`)
+
+**Read-only** – die Figuren werden einmalig von Claude ermittelt und gecacht; kein manuelles Bearbeiten. «Neu ermitteln» überschreibt den Cache.
+
+Lädt alle Seiten batched (voller Text, keine Kürzung). Wie bei der Buchbewertung zwei Pfade:
+
+- **Single-Pass** (Gesamttext ≤ 60 000 Zeichen): alle Seiten direkt an Claude.
+- **Multi-Pass** (grössere Bücher): pro Kapitel eine Figuren-Analyse (vereinfachtes Schema, Beziehungen per Namen), dann ein Konsolidierungs-Call der dedupliziert, IDs vergibt und kapitelübergreifende Beziehungen zusammenführt.
+
+Ergebnis wird unter `/figures/:book_id` persistiert und beim nächsten Öffnen direkt geladen (kein erneuter Scan).
+
+```json
+{
+  "figuren": [
+    {
+      "id": "fig_1",
+      "name": "Vollständiger Name",
+      "kurzname": "Vorname oder Spitzname",
+      "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere",
+      "geburtstag": "JJJJ oder leer",
+      "geschlecht": "männlich|weiblich|divers|unbekannt",
+      "beruf": "Beruf oder Rolle",
+      "beschreibung": "2–3 Sätze",
+      "eigenschaften": ["..."],
+      "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
+      "beziehungen": [
+        { "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "..." }
+      ]
+    }
+  ]
+}
+```
+
+`kapitel` ist absteigend nach Häufigkeit sortiert – das erste Kapitel ist das Hauptkapitel der Figur (hervorgehobener Badge). Beziehungstypen decken Familie (`elternteil`, `kind`, `geschwister`) und soziale/berufliche Verbindungen ab; jede Beziehung wird nur einmal eingetragen.
+
+Die Figuren werden als interaktiver **vis-network**-Graph dargestellt (CDN: `unpkg.com/vis-network`). Kantentypen sind visuell unterscheidbar: Eltern-Kind-Pfeile (grau, gerichtet), Geschwister (blau gestrichelt), alle weiteren Beziehungstypen farbig gestrichelt. Hierarchisches Layout wird nur aktiviert wenn Eltern-Kind-Kanten vorhanden sind, sonst freies Force-Layout.
+
 ## Frontend-Architektur
 
 Die Single-Page-App besteht aus drei Dateien:
@@ -200,11 +240,13 @@ Die Single-Page-App besteht aus drei Dateien:
 | `books`, `selectedBookId` | Bücherliste und Auswahl |
 | `pages`, `tree` | Flache Seitenliste + hierarchische Kapitel/Seiten-Struktur für den Tree-View |
 | `currentPage`, `correctedHtml`, `hasErrors` | Aktive Seite und Lektorat-Ergebnis |
-| `showBookCard`, `showEditorCard`, `showBookReviewCard` | Sichtbarkeits-Flags der drei Karten |
+| `showBookCard`, `showEditorCard`, `showBookReviewCard`, `showFiguresCard` | Sichtbarkeits-Flags der Karten |
 | `status`, `statusSpinner` | Statuszeile (mit optionalem Spinner) |
 | `analysisOut`, `bookReviewOut` | HTML-Output der Analyse/Bewertung (via `x-html`) |
 | `checkLoading`, `bookReviewLoading`, `bookReviewProgress` | Lade-States und Progress-Bar (0–100) |
 | `lastCheckId`, `pageHistory`, `selectedHistoryId` | History-State: ID des letzten Checks, geladene Einträge, aufgeklappter Eintrag |
+| `figuren`, `figurenLoading`, `figurenProgress`, `figurenStatus` | Figurenübersicht: geladene Figuren, Lade-State, Fortschritt, Statuszeile |
+| `selectedFigurId` | Aufgeklappte Figur in der Detailliste |
 
 ### Tree-View
 
@@ -222,3 +264,5 @@ Beim Auswählen einer Seite (`selectPage`) wird sofort eine Textvorschau geladen
 - Buchbewertung kürzt Seitentexte auf 3000 Zeichen – sehr lange Seiten werden unvollständig analysiert
 - History-Store ist eine JSON-Datei (kein echtes DBMS) – synchrones Lesen/Schreiben, für Einzelnutzer ausreichend
 - History der Buchbewertungen wird im UI noch nicht angezeigt (nur serverseitig gespeichert)
+- Figurenübersicht ist read-only – keine manuelle Korrektur einzelner Figuren möglich, nur Neu-Ermittlung des gesamten Buchs
+- vis-network wird via CDN geladen; ohne Internetverbindung kein Graph (Figurenliste bleibt verfügbar)

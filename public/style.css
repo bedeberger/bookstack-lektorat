@@ -493,6 +493,131 @@ ins {
 .tok-med  { background: var(--color-warn-bg);  color: var(--color-warn-text); }
 .tok-high { background: var(--color-err-bg);   color: var(--color-err-text); }
 
+/* === Figurenübersicht === */
+.figuren-graph-container {
+  width: 100%;
+  height: 380px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.figur-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.figur-legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  border: 1.5px solid;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+.figur-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 2px;
+  cursor: pointer;
+  user-select: none;
+}
+.figur-item:hover { background: var(--color-hover); }
+
+.figur-typ-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.figur-name {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  flex: 1;
+}
+
+.figur-detail {
+  border: 0.5px solid var(--color-border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  padding: 12px 14px 14px;
+  margin-bottom: 6px;
+  background: var(--color-bg);
+}
+
+
+.figur-rel-tag {
+  font-size: var(--font-size-xs);
+}
+
+.figur-kapitel-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+}
+
+.figur-kapitel-primary {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 600;
+  background: var(--color-text);
+  color: var(--color-surface);
+  white-space: nowrap;
+}
+
+.figur-kapitel-secondary {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--color-tag-bg);
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.figur-beziehung-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 0.5px solid var(--color-border);
+  flex-wrap: wrap;
+}
+.figur-beziehung-item:last-child { border-bottom: none; }
+
+.figur-bz-typ {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: var(--color-tag-bg);
+  color: var(--color-muted);
+}
+.figur-bz-freund          { background: var(--color-ok-bg);   color: var(--color-ok-text); }
+.figur-bz-feind           { background: var(--color-err-bg);  color: var(--color-err-text); }
+.figur-bz-liebesbeziehung { background: #FDEAF3;              color: #8B3063; }
+.figur-bz-rivale          { background: #FFF0E0;              color: #7A3800; }
+.figur-bz-kollege         { background: var(--color-warn-bg); color: var(--color-warn-text); }
+.figur-bz-mentor          { background: #D4E8FF;              color: #1A4F8A; }
+.figur-bz-schuetzling     { background: #D4E8FF;              color: #1A4F8A; }
+.figur-bz-bekannt         { background: var(--color-tag-bg);  color: var(--color-muted); }
+
 /* Alpine.js – verhindert Flash of unstyled content */
 [x-cloak] { display: none !important; }
 

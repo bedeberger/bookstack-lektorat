@@ -5,6 +5,8 @@ const SYSTEM_LEKTORAT = `Du bist ein deutschsprachiger Lektor für literarische 
 const SYSTEM_BUCHBEWERTUNG = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. Helvetismen (grösseres, Strasse, gemäss usw.) sind korrekt und werden nicht bemängelt. Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
 const SYSTEM_KAPITELANALYSE = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. Helvetismen sind korrekt und werden nicht bemängelt. Antworte ausschliesslich mit einem kompakten JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
 
+const SYSTEM_FIGUREN = `Du bist ein Literaturanalytiker für deutschsprachige Texte. Du extrahierst und analysierst Figuren/Charaktere aus literarischen Werken präzise und strukturiert. Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
+
 function escHtml(s) {
   if (!s) return '';
   return String(s)
@@ -59,6 +61,13 @@ document.addEventListener('alpine:init', () => {
     selectedBookReviewId: null,
     tokEsts: {},
     _tokenEstGen: 0,
+    showFiguresCard: false,
+    figuren: [],
+    figurenLoading: false,
+    figurenProgress: 0,
+    figurenStatus: '',
+    selectedFigurId: null,
+    _figurenNetwork: null,
 
     get statusHtml() {
       if (!this.status) return '';
@@ -413,7 +422,10 @@ ${html}`;
         ].sort((a, b) => a.priority - b.priority);
 
         this.setStatus('');
-        await this.loadBookReviewHistory(bookId);
+        await Promise.all([
+          this.loadBookReviewHistory(bookId),
+          this.loadFiguren(bookId),
+        ]);
         this.loadTokenEstimates(this._tokenEstGen); // Hintergrund, kein await
       } catch (e) {
         console.error('[loadPages]', e);
@@ -482,6 +494,11 @@ ${html}`;
       this.pageHistory = [];
       this.selectedHistoryId = null;
       this.tree.forEach(c => { if (c.type === 'chapter') c.open = false; });
+      this.showFiguresCard = false;
+      this.figurenStatus = '';
+      this.figurenProgress = 0;
+      this.selectedFigurId = null;
+      if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
     },
 
     async runCheck() {
@@ -901,6 +918,290 @@ Antworte mit diesem JSON-Schema:
         this.setReviewStatus('');
       }
       this.bookReviewLoading = false;
+    },
+
+    // ── Figuren ──────────────────────────────────────────────────────────────
+
+    async loadFiguren(bookId) {
+      try {
+        const data = await fetch('/figures/' + bookId).then(r => r.json());
+        this.figuren = data?.figuren || [];
+      } catch (e) {
+        console.error('[loadFiguren]', e);
+      }
+    },
+
+    async saveFiguren() {
+      try {
+        await fetch('/figures/' + this.selectedBookId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ figuren: this.figuren }),
+        });
+      } catch (e) {
+        console.error('[saveFiguren]', e);
+      }
+    },
+
+    async toggleFiguresCard() {
+      this.showFiguresCard = !this.showFiguresCard;
+      if (this.showFiguresCard) {
+        await this.$nextTick();
+        this.renderFigurGraph();
+      }
+    },
+
+    async runFigurExtraction() {
+      const bookId = this.selectedBookId;
+      const bookName = this.selectedBookName;
+      this.figurenLoading = true;
+      this.figurenProgress = 0;
+      this.figurenStatus = '<span class="spinner"></span>Lade Seiten…';
+
+      const FINAL_SCHEMA = `{
+  "figuren": [
+    {
+      "id": "fig_1",
+      "name": "Vollständiger Name",
+      "kurzname": "Vorname oder Spitzname",
+      "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere",
+      "geburtstag": "JJJJ oder leer wenn unbekannt",
+      "geschlecht": "männlich|weiblich|divers|unbekannt",
+      "beruf": "Beruf oder Rolle oder leer",
+      "beschreibung": "2-3 Sätze zu Rolle, Persönlichkeit und Bedeutung",
+      "eigenschaften": ["Eigenschaft1", "Eigenschaft2"],
+      "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
+      "beziehungen": [{ "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "1 Satz" }]
+    }
+  ]
+}`;
+
+      const FINAL_RULES = `Regeln:
+- Eindeutige IDs (fig_1, fig_2, …)
+- beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
+- kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten
+- Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), übrige selbsterklärend
+- Nur echte Personen/Charaktere, keine Orte oder Objekte
+- Sortiert nach Wichtigkeit; maximal 20 Figuren`;
+
+      try {
+        const [chaptersData, pages] = await Promise.all([
+          this.bsGetAll('chapters?book_id=' + bookId),
+          this.bsGetAll('pages?book_id=' + bookId),
+        ]);
+        if (!pages.length) {
+          this.figurenStatus = 'Keine Seiten gefunden.';
+          this.figurenLoading = false;
+          return;
+        }
+
+        const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
+
+        // Seiten laden (voller Text, keine Kürzung)
+        const BATCH = 5;
+        const pageContents = [];
+        for (let i = 0; i < pages.length; i += BATCH) {
+          this.figurenProgress = Math.round((i / pages.length) * 55);
+          this.figurenStatus = `<span class="spinner"></span>Lese ${i + 1}–${Math.min(i + BATCH, pages.length)} von ${pages.length} Seiten…`;
+          const batch = pages.slice(i, i + BATCH);
+          const results = await Promise.allSettled(batch.map(async p => {
+            const pd = await this.bsGet('pages/' + p.id);
+            const text = htmlToText(pd.html).trim();
+            if (text.length < 30) return null;
+            return { title: p.name, chapter_id: p.chapter_id || null, chapter: p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : null, text };
+          }));
+          for (const r of results) {
+            if (r.status === 'fulfilled' && r.value) pageContents.push(r.value);
+          }
+        }
+
+        const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
+        const SINGLE_PASS_LIMIT = 60000;
+        let result;
+
+        if (totalChars <= SINGLE_PASS_LIMIT) {
+          // ── Single-Pass ──────────────────────────────────────────────────
+          this.figurenProgress = 65;
+          this.figurenStatus = '<span class="spinner"></span>Claude analysiert Figuren…';
+          const bookText = pageContents.map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`).join('\n\n---\n\n');
+          result = await this.callClaude(
+            `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Figuren.\n\nAntworte mit diesem JSON-Schema:\n${FINAL_SCHEMA}\n\n${FINAL_RULES}\n\nBuchtext (${pageContents.length} Seiten):\n\n${bookText}`,
+            SYSTEM_FIGUREN,
+            (chars) => { this.figurenStatus = `<span class="spinner"></span>Claude analysiert… (${chars} Zeichen)`; }
+          );
+
+        } else {
+          // ── Multi-Pass: pro Kapitel analysieren, dann konsolidieren ──────
+          const groupOrder = [];
+          const groups = new Map();
+          for (const p of pageContents) {
+            const key = p.chapter_id != null ? String(p.chapter_id) : '__ungrouped__';
+            if (!groups.has(key)) { groupOrder.push(key); groups.set(key, { name: p.chapter || 'Sonstige Seiten', pages: [] }); }
+            groups.get(key).pages.push(p);
+          }
+
+          const chapterFiguren = [];
+          for (let gi = 0; gi < groupOrder.length; gi++) {
+            const group = groups.get(groupOrder[gi]);
+            this.figurenProgress = 55 + Math.round(((gi + 1) / groupOrder.length) * 30);
+            this.figurenStatus = `<span class="spinner"></span>Figuren in «${group.name}» (${gi + 1}/${groupOrder.length})…`;
+
+            const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+            const chResult = await this.callClaude(
+              `Extrahiere alle Figuren/Charaktere aus dem Kapitel «${group.name}» des Buchs «${bookName}».
+
+Antworte mit:
+{
+  "figuren": [
+    { "name": "Vollständiger Name", "kurzname": "...", "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere", "beruf": "...", "geburtstag": "JJJJ oder leer", "geschlecht": "männlich|weiblich|divers|unbekannt", "beschreibung": "1-2 Sätze", "eigenschaften": ["..."], "beziehungen": [{ "name": "Name der anderen Figur", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "1 Satz" }] }
+  ]
+}
+
+Nur echte Personen. Beziehungen: nur Figuren die in diesem Kapitel vorkommen.
+
+Kapiteltext (${group.pages.length} Seiten):\n\n${chText}`,
+              SYSTEM_FIGUREN
+            );
+            chapterFiguren.push({ kapitel: group.name, figuren: chResult.figuren || [] });
+          }
+
+          // ── Konsolidierung ───────────────────────────────────────────────
+          this.figurenProgress = 88;
+          this.figurenStatus = '<span class="spinner"></span>Claude konsolidiert Figuren…';
+
+          const synthInput = chapterFiguren.map(cf =>
+            `## Kapitel: ${cf.kapitel}\n` + cf.figuren.map(f =>
+              `- ${f.name} (${f.typ})${f.beruf ? ', ' + f.beruf : ''}: ${f.beschreibung || ''}` +
+              (f.beziehungen?.length ? '\n  Beziehungen: ' + f.beziehungen.map(b => `${b.name} [${b.typ}]`).join(', ') : '')
+            ).join('\n')
+          ).join('\n\n');
+
+          result = await this.callClaude(
+            `Konsolidiere die folgenden Figurenanalysen aller Kapitel des Buchs «${bookName}» zu einer einheitlichen Gesamtliste. Dedupliziere Figuren (dieselbe Figur kann in mehreren Kapiteln auftreten), führe Informationen zusammen und vergib stabile IDs.
+
+Kapitelanalysen:
+
+${synthInput}
+
+Antworte mit diesem JSON-Schema:
+${FINAL_SCHEMA}
+
+${FINAL_RULES}`,
+            SYSTEM_FIGUREN,
+            (chars) => { this.figurenStatus = `<span class="spinner"></span>Claude konsolidiert… (${chars} Zeichen)`; }
+          );
+        }
+
+        this.figuren = (result.figuren || []).map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
+        this.figurenProgress = 100;
+        setTimeout(() => { this.figurenProgress = 0; }, 400);
+
+        await this.saveFiguren();
+        this.figurenStatus = `${this.figuren.length} Figuren ermittelt und gespeichert.`;
+        await this.$nextTick();
+        this.renderFigurGraph();
+      } catch (e) {
+        console.error('[runFigurExtraction]', e);
+        this.figurenStatus = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
+        this.figurenProgress = 0;
+      }
+      this.figurenLoading = false;
+    },
+
+    _figTypColor(typ) {
+      const colors = {
+        hauptfigur: { background: '#D4E8FF', border: '#4A90D9', highlight: { background: '#BDD8FF', border: '#2B6CB0' } },
+        nebenfigur:  { background: '#F0F0F0', border: '#888',    highlight: { background: '#E4E4E4', border: '#555' } },
+        antagonist:  { background: '#FFE0E0', border: '#E24B4A', highlight: { background: '#FFC7C7', border: '#B03030' } },
+        mentor:      { background: '#EAF3DE', border: '#639922', highlight: { background: '#D5EBBD', border: '#3B6D11' } },
+        andere:      { background: '#FFF5DC', border: '#C4941A', highlight: { background: '#FFEEBB', border: '#8A6800' } },
+      };
+      return colors[typ] || colors.andere;
+    },
+
+    renderFigurGraph() {
+      const container = document.getElementById('figuren-graph');
+      if (!container) return;
+      if (this._figurenNetwork) {
+        this._figurenNetwork.destroy();
+        this._figurenNetwork = null;
+      }
+      if (!this.figuren.length) {
+        container.innerHTML = '<span class="muted-msg" style="display:block;padding:20px;text-align:center;">Noch keine Figuren – «Figuren ermitteln» starten.</span>';
+        return;
+      }
+      if (typeof vis === 'undefined') {
+        container.innerHTML = '<span class="muted-msg" style="display:block;padding:20px;text-align:center;">vis-network wird geladen…</span>';
+        return;
+      }
+
+      const nodes = new vis.DataSet(this.figuren.map(f => ({
+        id: f.id,
+        label: (f.kurzname || f.name) + (f.geburtstag ? '\n* ' + f.geburtstag : ''),
+        title: `<b>${escHtml(f.name)}</b><br>${escHtml(f.typ)}<br>${escHtml(f.beschreibung || '')}`,
+        color: this._figTypColor(f.typ),
+        font: { size: 13, face: 'system-ui, -apple-system, sans-serif' },
+        shape: 'box',
+        margin: 10,
+        widthConstraint: { maximum: 160 },
+      })));
+
+      const BZ = {
+        elternteil:      { color: '#888',    highlight: '#555',    arrows: 'to',  dashes: false },
+        kind:            { color: '#888',    highlight: '#555',    arrows: 'from', dashes: false },
+        geschwister:     { color: '#4A90D9', highlight: '#2B6CB0', arrows: '',    dashes: [5,5] },
+        freund:          { color: '#639922', highlight: '#3B6D11', arrows: '',    dashes: [4,3] },
+        feind:           { color: '#E24B4A', highlight: '#B03030', arrows: '',    dashes: [4,3] },
+        kollege:         { color: '#C4941A', highlight: '#8A6800', arrows: '',    dashes: [4,3] },
+        bekannt:         { color: '#999',    highlight: '#555',    arrows: '',    dashes: [4,3] },
+        liebesbeziehung: { color: '#D46EA0', highlight: '#A0446E', arrows: '',    dashes: [4,3] },
+        rivale:          { color: '#9B4B00', highlight: '#6B3000', arrows: '',    dashes: [4,3] },
+        mentor:          { color: '#4A90D9', highlight: '#2B6CB0', arrows: 'to',  dashes: [4,3] },
+        schuetzling:     { color: '#4A90D9', highlight: '#2B6CB0', arrows: 'from', dashes: [4,3] },
+        andere:          { color: '#bbb',    highlight: '#888',    arrows: '',    dashes: [4,3] },
+      };
+
+      const edgeList = [];
+      const addedPairs = new Set();
+
+      for (const f of this.figuren) {
+        for (const bz of (f.beziehungen || [])) {
+          if (!this.figuren.find(x => x.id === bz.figur_id)) continue;
+          // Deduplizieren: geschwister + undirektionale Typen per sort-Key
+          const directed = ['elternteil', 'kind', 'mentor', 'schuetzling'];
+          const dedupeKey = directed.includes(bz.typ)
+            ? [f.id, bz.figur_id, bz.typ].join('|')
+            : [[f.id, bz.figur_id].sort().join('-'), bz.typ].join('|');
+          if (addedPairs.has(dedupeKey)) continue;
+          addedPairs.add(dedupeKey);
+
+          const s = BZ[bz.typ] || BZ.andere;
+          edgeList.push({
+            from: f.id, to: bz.figur_id,
+            label: bz.typ,
+            title: bz.beschreibung || bz.typ,
+            font: { size: 10, color: s.color },
+            color: { color: s.color, highlight: s.highlight },
+            arrows: s.arrows,
+            dashes: s.dashes,
+          });
+        }
+      }
+      const edges = new vis.DataSet(edgeList);
+
+      const hasFamilyEdges = edgeList.some(e => ['elternteil', 'kind'].includes(e.label));
+      const options = {
+        physics: hasFamilyEdges
+          ? { solver: 'hierarchicalRepulsion', hierarchicalRepulsion: { nodeDistance: 140 } }
+          : { solver: 'repulsion', repulsion: { nodeDistance: 160 } },
+        layout: hasFamilyEdges
+          ? { hierarchical: { direction: 'UD', sortMethod: 'directed', nodeSpacing: 160, levelSeparation: 120 } }
+          : { randomSeed: 42 },
+        interaction: { hover: true, tooltipDelay: 100 },
+        edges: { smooth: { type: 'cubicBezier' } },
+      };
+
+      this._figurenNetwork = new vis.Network(container, { nodes, edges }, options);
     },
   }));
 });
