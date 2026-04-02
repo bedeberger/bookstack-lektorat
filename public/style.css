@@ -37,12 +37,25 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* === Base === */
+html {
+  background: var(--color-bg);
+}
+
 body {
   font-family: system-ui, -apple-system, sans-serif;
-  background: var(--color-bg);
   color: var(--color-text);
   min-height: 100vh;
-  padding: 2rem;
+  padding: 1rem;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+@media (min-width: 600px) {
+  body { padding: 1.5rem; }
+}
+
+@media (min-width: 960px) {
+  body { padding: 2rem 0; }
 }
 
 h1 {
@@ -70,9 +83,16 @@ code {
   display: flex;
   gap: 8px;
   align-items: flex-end;
+  flex-wrap: wrap;
 }
 .row > * { flex: 1; }
 .row > button { flex: 0 0 auto; }
+
+@media (max-width: 480px) {
+  .row > select,
+  .row > input { flex: 1 0 100%; }
+  .row > button { flex: 1; }
+}
 
 /* === Card === */
 .card {
@@ -87,7 +107,13 @@ code {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+  .card-header { flex-direction: column; align-items: flex-start; }
 }
 
 .card-title {
@@ -490,6 +516,32 @@ ins {
   font-size: var(--font-size-sm);
   color: var(--color-muted);
   margin-top: 4px;
+}
+
+/* === Card-Actions (Button-Gruppe im card-header) === */
+.card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+  .card-actions { width: 100%; }
+  .card-actions button { flex: 1; min-width: 80px; }
+}
+
+/* === Button-Gruppe (Expand/Collapse) === */
+.btn-group {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+/* === Kleine Buttons === */
+.btn-sm {
+  font-size: 12px;
+  padding: 4px 10px;
 }
 
 /* === Diff-Ansicht === */

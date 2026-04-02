@@ -40,9 +40,9 @@
     <div style="margin-bottom:10px;">
       <input type="text" x-model="pageSearch" placeholder="Seite suchen…" class="page-search">
     </div>
-    <div x-show="!pageSearch" style="display:flex; gap:6px; margin-bottom:10px;">
-      <button @click="tree.forEach(c => c.open = true)" style="font-size:12px; padding:4px 10px;">Alle ausklappen</button>
-      <button @click="tree.forEach(c => c.open = false)" style="font-size:12px; padding:4px 10px;">Alle einklappen</button>
+    <div x-show="!pageSearch" class="btn-group">
+      <button @click="tree.forEach(c => c.open = true)" class="btn-sm">Alle ausklappen</button>
+      <button @click="tree.forEach(c => c.open = false)" class="btn-sm">Alle einklappen</button>
     </div>
     <template x-for="item in filteredTree" :key="item.id">
       <div>
@@ -138,7 +138,7 @@
       <span class="card-title" x-text="currentPage?.name || '–'"></span>
       <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag" style="margin-left:6px;text-decoration:none;" x-text="currentPage ? 'ID ' + currentPage.id + ' ↗' : ''"></a>
     </div>
-    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+    <div class="card-actions">
       <button @click="runCheck()" :disabled="checkLoading" title="Ctrl+Enter">Prüfen ↗</button>
       <button @click="toggleDiff()" x-show="correctedHtml" :class="{ primary: showDiff }">Diff</button>
       <button class="success" @click="saveCorrections()" x-show="correctedHtml && hasErrors">Korrekturen speichern</button>
