@@ -42,4 +42,14 @@ export const historyMethods = {
       console.error('[loadBookReviewHistory]', e);
     }
   },
+
+  async deleteBookReview(id) {
+    try {
+      await fetch('/history/review/' + id, { method: 'DELETE' });
+      this.bookReviewHistory = this.bookReviewHistory.filter(e => e.id !== id);
+      if (this.selectedBookReviewId === id) this.selectedBookReviewId = null;
+    } catch (e) {
+      console.error('[deleteBookReview]', e);
+    }
+  },
 };

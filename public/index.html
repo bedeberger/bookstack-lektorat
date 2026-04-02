@@ -162,6 +162,7 @@
             </ul>
           </div>
           <div x-show="entry.review_json?.fazit" class="fazit" style="margin-top:10px;" x-text="entry.review_json?.fazit"></div>
+          <button class="btn-delete-history" @click.stop="deleteBookReview(entry.id)" title="Eintrag löschen">Eintrag löschen</button>
         </div>
       </div>
     </template>

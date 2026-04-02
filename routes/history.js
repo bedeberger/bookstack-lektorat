@@ -64,6 +64,12 @@ router.delete('/check/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// Buchbewertung löschen
+router.delete('/review/:id', (req, res) => {
+  db.prepare('DELETE FROM book_reviews WHERE id = ?').run(parseInt(req.params.id));
+  res.json({ ok: true });
+});
+
 // Letzte 10 Bewertungen für ein Buch
 router.get('/review/:book_id', (req, res) => {
   const rows = db.prepare(`
