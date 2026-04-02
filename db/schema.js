@@ -1,0 +1,176 @@
+const path = require('path');
+const fs = require('fs');
+const Database = require('better-sqlite3');
+const logger = require('../logger');
+
+const DB_FILE = path.join(__dirname, '..', 'lektorat.db');
+const db = new Database(DB_FILE);
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS page_checks (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    page_id     INTEGER NOT NULL,
+    page_name   TEXT,
+    book_id     INTEGER,
+    checked_at  TEXT NOT NULL,
+    error_count INTEGER DEFAULT 0,
+    errors_json TEXT,
+    stilanalyse TEXT,
+    fazit       TEXT,
+    model       TEXT,
+    saved       INTEGER DEFAULT 0,
+    saved_at    TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_pc_page_id ON page_checks(page_id);
+  CREATE INDEX IF NOT EXISTS idx_pc_book_id ON page_checks(book_id);
+
+  CREATE TABLE IF NOT EXISTS book_reviews (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id     INTEGER NOT NULL,
+    book_name   TEXT,
+    reviewed_at TEXT NOT NULL,
+    review_json TEXT,
+    model       TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_br_book_id ON book_reviews(book_id);
+
+  -- Figuren: eine Zeile pro Figur, Kernfelder fix
+  -- Neue Felder: per ALTER TABLE ADD COLUMN oder via meta (JSON)
+  CREATE TABLE IF NOT EXISTS figures (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id      INTEGER NOT NULL,
+    fig_id       TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    kurzname     TEXT,
+    typ          TEXT,
+    geburtstag   TEXT,
+    geschlecht   TEXT,
+    beruf        TEXT,
+    beschreibung TEXT,
+    sort_order   INTEGER DEFAULT 0,
+    meta         TEXT,
+    updated_at   TEXT NOT NULL,
+    UNIQUE(book_id, fig_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_fig_book_id ON figures(book_id);
+
+  -- Eigenschaften/Tags: eine Zeile pro Eigenschaft
+  CREATE TABLE IF NOT EXISTS figure_tags (
+    figure_id  INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+    tag        TEXT NOT NULL
+  );
+
+  -- Kapitelauftritte: eine Zeile pro Figur + Kapitel
+  CREATE TABLE IF NOT EXISTS figure_appearances (
+    figure_id    INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+    chapter_name TEXT NOT NULL,
+    haeufigkeit  INTEGER DEFAULT 1
+  );
+
+  -- Beziehungen: flat, typ ist Freitext -> neue Typen ohne Schemaänderung
+  CREATE TABLE IF NOT EXISTS figure_relations (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id      INTEGER NOT NULL,
+    from_fig_id  TEXT NOT NULL,
+    to_fig_id    TEXT NOT NULL,
+    typ          TEXT NOT NULL,
+    beschreibung TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_frel_book_id ON figure_relations(book_id);
+
+  CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
+  INSERT INTO schema_version SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
+`);
+
+// Schema-Migrationen (versioniert)
+const CURRENT_SCHEMA_VERSION = 1;
+function runMigrations() {
+  const { version } = db.prepare('SELECT version FROM schema_version').get();
+  // Beispiel für zukünftige Migration auf Version 2:
+  // if (version < 2) {
+  //   db.exec('ALTER TABLE figures ADD COLUMN wohnort TEXT');
+  //   db.prepare('UPDATE schema_version SET version = 2').run();
+  //   logger.info('DB-Migration auf Version 2 abgeschlossen.');
+  // }
+  if (version < CURRENT_SCHEMA_VERSION) {
+    db.prepare('UPDATE schema_version SET version = ?').run(CURRENT_SCHEMA_VERSION);
+  }
+}
+runMigrations();
+
+// Figuren in DB schreiben (wird von PUT-Endpoint und JSON-Migration genutzt)
+function saveFigurenToDb(bookId, figuren) {
+  const now = new Date().toISOString();
+  db.transaction(() => {
+    db.prepare('DELETE FROM figures WHERE book_id = ?').run(bookId);
+    db.prepare('DELETE FROM figure_relations WHERE book_id = ?').run(bookId);
+
+    const insFig = db.prepare(`
+      INSERT INTO figures (book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sort_order, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    const insTag = db.prepare('INSERT INTO figure_tags (figure_id, tag) VALUES (?, ?)');
+    const insApp = db.prepare('INSERT INTO figure_appearances (figure_id, chapter_name, haeufigkeit) VALUES (?, ?, ?)');
+    const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung) VALUES (?, ?, ?, ?, ?)');
+
+    for (let i = 0; i < figuren.length; i++) {
+      const f = figuren[i];
+      const { lastInsertRowid: fid } = insFig.run(
+        bookId, f.id, f.name, f.kurzname || null, f.typ || null,
+        f.geburtstag || null, f.geschlecht || null, f.beruf || null,
+        f.beschreibung || null, i, now
+      );
+      for (const tag of (f.eigenschaften || [])) insTag.run(fid, tag);
+      for (const app of (f.kapitel || [])) insApp.run(fid, app.name, app.haeufigkeit || 1);
+      for (const bz of (f.beziehungen || [])) insRel.run(bookId, f.id, bz.figur_id, bz.typ, bz.beschreibung || null);
+    }
+  })();
+}
+
+// Einmalige Migration von lektorat-history.json
+function migrateFromJson() {
+  const HISTORY_FILE = path.join(__dirname, '..', 'lektorat-history.json');
+  if (!fs.existsSync(HISTORY_FILE)) return;
+
+  const existing = db.prepare('SELECT COUNT(*) as c FROM page_checks').get();
+  if (existing.c > 0) {
+    logger.info('lektorat-history.json vorhanden, aber DB hat bereits Daten – Migration übersprungen.');
+    return;
+  }
+
+  let h;
+  try { h = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8')); }
+  catch (e) { logger.error('Migration: JSON lesen fehlgeschlagen: ' + e.message); return; }
+
+  const insCheck = db.prepare(`
+    INSERT INTO page_checks (page_id, page_name, book_id, checked_at, error_count, errors_json, stilanalyse, fazit, model, saved, saved_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const insReview = db.prepare(`
+    INSERT INTO book_reviews (book_id, book_name, reviewed_at, review_json, model)
+    VALUES (?, ?, ?, ?, ?)`);
+
+  db.transaction(() => {
+    for (const r of (h.page_checks || [])) {
+      insCheck.run(r.page_id, r.page_name, r.book_id, r.checked_at,
+        r.error_count || 0, JSON.stringify(r.errors_json || []),
+        r.stilanalyse || null, r.fazit || null, r.model || null,
+        r.saved ? 1 : 0, r.saved_at || null);
+    }
+    for (const r of (h.book_reviews || [])) {
+      insReview.run(r.book_id, r.book_name, r.reviewed_at,
+        JSON.stringify(r.review_json || null), r.model || null);
+    }
+    for (const [bookId, entry] of Object.entries(h.book_figures || {})) {
+      if (entry?.figuren?.length) {
+        saveFigurenToDb(parseInt(bookId), entry.figuren);
+      }
+    }
+  })();
+
+  fs.renameSync(HISTORY_FILE, HISTORY_FILE + '.migrated');
+  logger.info('Migration von lektorat-history.json abgeschlossen (Datei umbenannt zu .migrated).');
+}
+migrateFromJson();
+
+module.exports = { db, saveFigurenToDb };

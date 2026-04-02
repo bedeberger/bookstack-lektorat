@@ -366,8 +366,11 @@ ${html}`;
         await Promise.allSettled(batch.map(async p => {
           try {
             const pd = await this.bsGet('pages/' + p.id);
-            const text = htmlToText(pd.html || '');
-            this.tokEsts[p.id] = Math.round(text.length / 4);
+            const html = pd.html || '';
+            const text = htmlToText(html);
+            // Volles Input: Systemprompt + gefüllter Prompt (Text + HTML)
+            const fullInput = SYSTEM_LEKTORAT + this._buildLektoratPrompt(text, html);
+            this.tokEsts[p.id] = Math.round(fullInput.length / 4);
           } catch { /* ignore */ }
         }));
       }

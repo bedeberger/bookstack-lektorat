@@ -321,7 +321,7 @@ Die Single-Page-App besteht aus drei Dateien:
 
 - **[public/index.html](public/index.html)** – HTML-Struktur mit Alpine.js-Direktiven (`x-data`, `x-model`, `@click`, `x-show`, `x-cloak`, `x-for`, `x-if`, `x-html`, `x-text`). Alpine.js wird via CDN geladen (`cdn.jsdelivr.net/npm/alpinejs@3`). Der `<body>` trägt `x-data="lektorat"` – die gesamte App ist eine einzige Alpine-Komponente.
 - **[public/app.js](public/app.js)** – Alpine-Komponente `lektorat`, registriert via `Alpine.data('lektorat', () => ({...}))` im `alpine:init`-Event. Enthält den gesamten reaktiven State, alle API-Calls, die Claude-Integration und die History-Verwaltung.
-- **[public/style.css](public/style.css)** – Zentrales Stylesheet (alle Styles ausgelagert, kein Inline-CSS im HTML ausser einzelnen Layout-Overrides).
+- **[public/style.css](public/style.css)** – Zentrales Stylesheet. **Alle Styles gehören ausschliesslich hierher** – weder Inline-`style`-Attribute noch `<style>`-Blöcke im HTML sind erlaubt. Neue visuelle Anforderungen immer als CSS-Klasse in `style.css` umsetzen.
 
 ### Alpine-Komponente: State-Überblick
 
