@@ -6,14 +6,14 @@ KI-gestütztes Lektorat-Tool für BookStack. Läuft als eigenständiger Node.js-
 
 ```
 Browser → Express (Port 3737) → /config         → .env-Credentials an Frontend
-                              → /history/*      → JSON-History-Store (lektorat-history.json)
-                              → /figures/*      → Figuren-Store (lektorat-history.json, Feld book_figures)
+                              → /history/*      → SQLite-DB (lektorat.db)
+                              → /figures/*      → SQLite-DB (lektorat.db)
                               → /claude         → api.anthropic.com (ANTHROPIC_API_KEY-Injection)
                               → /api/*          → BookStack (localhost:80)
                               → /               → public/index.html
 ```
 
-Der Express-Server übernimmt fünf Aufgaben: er served die Single-Page-App unter `/`, proxied alle `/api/*`-Requests an die lokale BookStack-Instanz, stellt unter `/config` die BookStack-Credentials aus `.env` dem Frontend bereit, proxied unter `/claude` alle Claude-Aufrufe mit serverseitiger Key-Injection, und persistiert unter `/history/*` alle Lektorat-Läufe in einer lokalen JSON-Datei. Da alles auf demselben Host läuft, gibt es kein CORS-Problem.
+Der Express-Server übernimmt fünf Aufgaben: er served die Single-Page-App unter `/`, proxied alle `/api/*`-Requests an die lokale BookStack-Instanz, stellt unter `/config` die BookStack-Credentials aus `.env` dem Frontend bereit, proxied unter `/claude` alle Claude-Aufrufe mit serverseitiger Key-Injection, und persistiert unter `/history/*` sowie `/figures/*` alle Daten in einer lokalen SQLite-Datei. Da alles auf demselben Host läuft, gibt es kein CORS-Problem.
 
 Der Claude-Aufruf läuft **nicht direkt aus dem Browser** gegen `api.anthropic.com`, sondern über `/claude` – der Server injiziert dabei den `ANTHROPIC_API_KEY` aus der `.env`.
 
@@ -21,10 +21,10 @@ Der Claude-Aufruf läuft **nicht direkt aus dem Browser** gegen `api.anthropic.c
 
 ```
 bookstack-lektorat/
-├── server.js                # Express-Server + Proxies + History-Endpoints
+├── server.js                # Express-Server + Proxies + DB-Endpoints
 ├── package.json
 ├── .env                     # Credentials (nicht eingecheckt)
-├── lektorat-history.json    # Persistierter History-Store (nicht eingecheckt, wird auto-erstellt)
+├── lektorat.db              # SQLite-Datenbank (nicht eingecheckt, wird auto-erstellt)
 ├── lektorat.service         # systemd unit
 ├── install.sh               # Erstinstallation auf dem LXC
 ├── deploy.sh                # CD-Update (wird von GitHub Actions aufgerufen)
@@ -61,11 +61,98 @@ Alle Variablen können in einer `.env`-Datei gesetzt werden (dotenv).
 
 Beim Start lädt die App via `GET /config` die Credentials aus der Server-`.env`. Sind `TOKEN_ID` und `TOKEN_KENNWORT` gesetzt, baut die App den Auth-Header automatisch auf und lädt die Bücher. Falls die Credentials fehlen, zeigt die App eine Fehlermeldung.
 
-### History-Store
+### Datenbank
 
-`lektorat-history.json` wird beim ersten Lauf automatisch im Projektverzeichnis erstellt. Kein Setup nötig. Die Datei gehört nicht ins Git (analog zur `.env`). Beim Deploy bleibt sie unangetastet, weil `deploy.sh` sie nicht synchronisiert.
+`lektorat.db` wird beim ersten Start automatisch im Projektverzeichnis erstellt. Kein Setup nötig. Die Datei gehört nicht ins Git (analog zur `.env`). Beim Deploy bleibt sie unangetastet, weil `deploy.sh` sie von rsync ausschliesst.
 
-Die JSON-Datei hat zwei Arrays (`page_checks`, `book_reviews`) und ein Objekt (`book_figures`). IDs werden beim Serverstart aus dem bestehenden Maximum initialisiert (`nextId`) und monoton hochgezählt – kein DBMS, kein Schema, kein ORM. Bei sehr vielen Einträgen (tausende) wird synchrones Lesen/Schreiben langsamer; für den Einzelnutzer-Betrieb kein Problem.
+**Einmalige Migration von JSON:** Existiert beim Start noch eine `lektorat-history.json`, wird sie automatisch in die SQLite-DB migriert und in `lektorat-history.json.migrated` umbenannt.
+
+## Datenbankschema
+
+```sql
+-- Lektorat-Checks pro Seite
+page_checks (id, page_id, page_name, book_id, checked_at, error_count,
+             errors_json TEXT,   -- JSON-Array der Fehler
+             stilanalyse, fazit, model, saved INTEGER, saved_at)
+
+-- Buchbewertungen
+book_reviews (id, book_id, book_name, reviewed_at,
+              review_json TEXT,  -- JSON-Objekt der Gesamtbewertung
+              model)
+
+-- Figuren: eine Zeile pro Figur, Kernfelder fix
+figures (id, book_id, fig_id TEXT,  -- "fig_1" etc., stabil über Saves
+         name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung,
+         sort_order INTEGER, meta TEXT,  -- JSON für zukünftige Zusatzfelder
+         updated_at)
+
+-- Eigenschaften/Tags einer Figur (eine Zeile pro Tag)
+figure_tags (figure_id → figures.id, tag TEXT)
+
+-- Kapitelauftritte (eine Zeile pro Figur + Kapitel)
+figure_appearances (figure_id → figures.id, chapter_name TEXT, haeufigkeit INTEGER)
+
+-- Beziehungen: flat, typ ist Freitext → neue Typen ohne Schemaänderung
+figure_relations (id, book_id, from_fig_id TEXT, to_fig_id TEXT,
+                  typ TEXT,          -- elternteil|freund|… oder beliebig neuer Typ
+                  beschreibung TEXT)
+
+-- Schemaversion für Migrationen
+schema_version (version INTEGER)
+```
+
+**Designprinzip Figuren:** Die vier Figuren-Tabellen sind bewusst flach gehalten. Neue Beziehungstypen entstehen einfach durch einen neuen `typ`-String – keine Schemaänderung nötig. Neue Figur-Eigenschaften, die noch nicht bekannt sind, kommen entweder als neue Spalte (via Migration, s.u.) oder als Einträge im `meta`-JSON-Feld.
+
+## Datenbankmigrationen
+
+### Wie Migrationen funktionieren
+
+`server.js` enthält die Funktion `runMigrations()` direkt nach dem Schema-Setup. Sie liest `schema_version` und führt alle noch ausstehenden `ALTER TABLE`-Statements sequenziell aus. Neue Migrationen werden dort als kommentiertes Block-Template vorbereitet.
+
+Das Muster für eine neue Migration in `server.js`:
+
+```js
+// In runMigrations():
+if (version < 2) {
+  db.exec('ALTER TABLE figures ADD COLUMN wohnort TEXT');
+  db.prepare('UPDATE schema_version SET version = 2').run();
+  logger.info('DB-Migration auf Version 2 abgeschlossen.');
+}
+// CURRENT_SCHEMA_VERSION oben auf 2 erhöhen
+```
+
+Beim nächsten Serverstart läuft die Migration einmalig durch – lokal wie auf dem LXC. Kein separater Deploy-Schritt nötig.
+
+### Neue Spalte zu einer bestehenden Tabelle hinzufügen
+
+1. `CURRENT_SCHEMA_VERSION` in `server.js` um 1 erhöhen (z.B. von `1` auf `2`).
+2. In `runMigrations()` den Block ergänzen:
+   ```js
+   if (version < 2) {
+     db.exec('ALTER TABLE figures ADD COLUMN wohnort TEXT');
+     db.prepare('UPDATE schema_version SET version = 2').run();
+   }
+   ```
+3. Im GET `/figures/:book_id` die neue Spalte ins zurückgegebene Objekt aufnehmen.
+4. Im PUT `/figures/:book_id` → `_saveFigurenToDb()` die neue Spalte im INSERT berücksichtigen.
+5. Pushen → beim nächsten Start auf dem LXC läuft die Migration automatisch.
+
+### Neue Tabelle anlegen
+
+Einfach ein weiteres `CREATE TABLE IF NOT EXISTS` im `db.exec()`-Block am Anfang von `server.js` ergänzen. Keine Versionierung nötig, da `IF NOT EXISTS` idempotent ist.
+
+### Neue Beziehungstypen für Figuren
+
+Keine Schemaänderung nötig. `figure_relations.typ` ist Freitext. Im Frontend (`app.js`) in der `BZ`-Konstante (Rendering) und im Claude-Prompt (`FINAL_SCHEMA`) den neuen Typ ergänzen.
+
+### Notfall: DB-Schema auf dem LXC prüfen
+
+```bash
+sqlite3 /opt/lektorat/lektorat.db
+.tables
+.schema figures
+SELECT * FROM schema_version;
+```
 
 ## Deployment auf dem LXC
 
@@ -84,11 +171,13 @@ Der Installer:
 3. Führt `npm install --omit=dev` aus
 4. Installiert und startet den systemd-Service `lektorat`
 
+`better-sqlite3` enthält Prebuilt-Binaries für Linux x64 / Node 20 – `npm install` kompiliert in der Regel nichts. Falls doch (anderer Node/Arch), braucht der LXC: `apt-get install -y python3 make g++`.
+
 Nach dem Install erreichbar unter `http://<lxc-ip>:3737`.
 
 ### Automatisches Deployment via GitHub Actions
 
-Bei jedem Push auf `main` läuft der Workflow `.github/workflows/deploy.yml` – er führt `deploy.sh` auf dem LXC aus: synchronisiert die Dateien nach `/opt/lektorat` (`.env` bleibt unangetastet), aktualisiert npm-Abhängigkeiten und startet den Service neu.
+Bei jedem Push auf `main` läuft der Workflow `.github/workflows/deploy.yml` – er führt `deploy.sh` auf dem LXC aus: synchronisiert die Dateien nach `/opt/lektorat` (`.env` und `lektorat.db` bleiben unangetastet), aktualisiert npm-Abhängigkeiten und startet den Service neu. Schema-Migrationen laufen automatisch beim Neustart.
 
 Voraussetzung: **Self-hosted GitHub Actions Runner** auf dem LXC (verbindet sich outbound zu GitHub, kein Port-Forward nötig).
 
@@ -113,6 +202,7 @@ curl -sL <runner-download-url> | tar xz
 systemctl status lektorat
 journalctl -u lektorat -f
 systemctl restart lektorat
+sqlite3 /opt/lektorat/lektorat.db "SELECT COUNT(*) FROM page_checks;"
 ```
 
 ## History-API
@@ -197,7 +287,7 @@ Lädt alle Seiten batched (voller Text, keine Kürzung). Wie bei der Buchbewertu
 - **Single-Pass** (Gesamttext ≤ 60 000 Zeichen): alle Seiten direkt an Claude.
 - **Multi-Pass** (grössere Bücher): pro Kapitel eine Figuren-Analyse (vereinfachtes Schema, Beziehungen per Namen), dann ein Konsolidierungs-Call der dedupliziert, IDs vergibt und kapitelübergreifende Beziehungen zusammenführt.
 
-Ergebnis wird unter `/figures/:book_id` persistiert und beim nächsten Öffnen direkt geladen (kein erneuter Scan).
+Ergebnis wird unter `/figures/:book_id` persistiert (SQLite) und beim nächsten Öffnen direkt geladen (kein erneuter Scan).
 
 ```json
 {
@@ -260,9 +350,7 @@ Beim Auswählen einer Seite (`selectPage`) wird sofort eine Textvorschau geladen
 
 - Kein Authentifizierungsschutz auf Port 3737 – nur im lokalen Netz verwenden
 - Sehr lange Seiten können das Claude-Token-Limit erreichen (konfigurierbar via `MODEL_TOKEN`, Default 64000)
-- Kein Diff-View zwischen Original und korrigierter Version
 - Buchbewertung kürzt Seitentexte auf 3000 Zeichen – sehr lange Seiten werden unvollständig analysiert
-- History-Store ist eine JSON-Datei (kein echtes DBMS) – synchrones Lesen/Schreiben, für Einzelnutzer ausreichend
 - History der Buchbewertungen wird im UI noch nicht angezeigt (nur serverseitig gespeichert)
 - Figurenübersicht ist read-only – keine manuelle Korrektur einzelner Figuren möglich, nur Neu-Ermittlung des gesamten Buchs
 - vis-network wird via CDN geladen; ohne Internetverbindung kein Graph (Figurenliste bleibt verfügbar)

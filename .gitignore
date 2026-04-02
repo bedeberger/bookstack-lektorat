@@ -3,5 +3,6 @@
 .env.*.local
 node_modules/
 lektorat-history.json
+lektorat.db
 lektorat.log
 lektorat.log.*

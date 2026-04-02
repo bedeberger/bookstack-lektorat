@@ -14,6 +14,7 @@ echo "=== Deploy lektorat ==="
 
 # Dateien synchronisieren (.env und node_modules bleiben unangetastet)
 rsync -a --exclude='.env' --exclude='node_modules' --exclude='.git' \
+  --exclude='lektorat.db' --exclude='lektorat.db-wal' --exclude='lektorat.db-shm' \
   ./ "$INSTALL_DIR/"
 
 # Ownership auf github-runner setzen

@@ -982,7 +982,8 @@ Antworte mit diesem JSON-Schema:
 - kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten
 - Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), übrige selbsterklärend
 - Nur echte Personen/Charaktere, keine Orte oder Objekte
-- Sortiert nach Wichtigkeit; maximal 20 Figuren`;
+- Sortiert nach Wichtigkeit; maximal 20 Figuren
+- KONSERVATIV: Nur Figuren und Beziehungen aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren. Keine Beziehungen erschliessen die nicht explizit genannt werden.`;
 
       try {
         const [chaptersData, pages] = await Promise.all([
@@ -1057,7 +1058,7 @@ Antworte mit:
   ]
 }
 
-Nur echte Personen. Beziehungen: nur Figuren die in diesem Kapitel vorkommen.
+Nur echte Personen. Sei konservativ: nur Figuren und Beziehungen die im Text eindeutig belegt sind – lieber weglassen als spekulieren. Bevorzugte Beziehungstypen: elternteil, kind, geschwister, liebesbeziehung, bekannt. Andere Typen (freund, feind, kollege etc.) nur wenn explizit im Text genannt.
 
 Kapiteltext (${group.pages.length} Seiten):\n\n${chText}`,
               SYSTEM_FIGUREN
