@@ -455,5 +455,56 @@ ins {
 .history-saved-notice-ok   { background: var(--color-ok-bg);   color: var(--color-ok-text); }
 .history-saved-notice-warn { background: var(--color-warn-bg);  color: var(--color-warn-text); }
 
+/* === Token-Schätzung === */
+.tok-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.tok-ok   { background: var(--color-ok-bg);   color: var(--color-ok-text); }
+.tok-med  { background: var(--color-warn-bg);  color: var(--color-warn-text); }
+.tok-high { background: var(--color-err-bg);   color: var(--color-err-text); }
+
 /* Alpine.js – verhindert Flash of unstyled content */
 [x-cloak] { display: none !important; }
+
+/* === Seitensuche === */
+.page-search {
+  width: 100%;
+  padding: 7px 10px;
+  border: 0.5px solid var(--color-border-input);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.page-search:focus {
+  outline: none;
+  border-color: var(--color-border-focus);
+}
+
+/* === Batch-Check === */
+.batch-status {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  margin-top: 4px;
+}
+
+/* === Diff-Ansicht === */
+.diff-view {
+  font-size: var(--font-size-base);
+  line-height: 1.9;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diff-unchanged {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  padding: 8px 0;
+}

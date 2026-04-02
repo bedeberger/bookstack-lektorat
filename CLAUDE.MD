@@ -51,6 +51,7 @@ Umgebungsvariablen (optional, defaults in Klammern):
 - `TOKEN_ID` – BookStack Token ID (wird via `/config` an den Browser geliefert)
 - `TOKEN_KENNWORT` – BookStack Token Passwort (wird via `/config` an den Browser geliefert)
 - `ANTHROPIC_API_KEY` – API-Key für Claude (wird serverseitig in `/claude`-Requests injiziert)
+- `MODEL_NAME` – Claude-Modell (`claude-sonnet-4-6`)
 - `MODEL_TOKEN` – Maximale Output-Tokens für Claude-Aufrufe (`64000`)
 
 Alle Variablen können in einer `.env`-Datei gesetzt werden (dotenv).

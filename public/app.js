@@ -1,5 +1,9 @@
 const CLAUDE_API = '/claude';
 
+const SYSTEM_LEKTORAT = `Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz. Helvetismen (grösseres, Strasse, gemäss usw.) sind korrekt und werden nicht bemängelt. Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
+
+const SYSTEM_BUCHBEWERTUNG = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. Helvetismen (grösseres, Strasse, gemäss usw.) sind korrekt und werden nicht bemängelt. Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
+
 function escHtml(s) {
   if (!s) return '';
   return String(s)
@@ -19,29 +23,41 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('lektorat', () => ({
     authToken: '',
     bookstackUrl: '',
+    claudeModel: 'claude-sonnet-4-6',
     claudeMaxTokens: 64000,
-    claudeModel: '',
     books: [],
     selectedBookId: '',
     pages: [],
     tree: [],
+    pageSearch: '',
     currentPage: null,
+    originalHtml: null,
     correctedHtml: null,
     hasErrors: false,
+    showDiff: false,
+    diffHtml: '',
     showBookCard: false,
     showEditorCard: false,
     showBookReviewCard: false,
     status: '',
     statusSpinner: false,
+    _statusTimer: null,
     analysisOut: '',
     bookReviewOut: '',
     bookReviewStatus: '',
     checkLoading: false,
     bookReviewLoading: false,
     bookReviewProgress: 0,
+    batchLoading: false,
+    batchProgress: 0,
+    batchStatus: '',
     lastCheckId: null,
     pageHistory: [],
     selectedHistoryId: null,
+    bookReviewHistory: [],
+    selectedBookReviewId: null,
+    tokEsts: {},
+    _tokenEstGen: 0,
 
     get statusHtml() {
       if (!this.status) return '';
@@ -55,9 +71,29 @@ document.addEventListener('alpine:init', () => {
       return book?.name || '';
     },
 
-    setStatus(msg, spinner = false) {
+    get filteredTree() {
+      if (!this.pageSearch) return this.tree;
+      const q = this.pageSearch.toLowerCase();
+      return this.tree.map(item => {
+        if (item.type === 'chapter') {
+          const pages = item.pages.filter(p => p.name.toLowerCase().includes(q));
+          if (!pages.length) return null;
+          return { ...item, pages, open: true };
+        }
+        return item.page?.name.toLowerCase().includes(q) ? item : null;
+      }).filter(Boolean);
+    },
+
+    setStatus(msg, spinner = false, duration = 0) {
       this.status = msg;
       this.statusSpinner = spinner;
+      clearTimeout(this._statusTimer);
+      if (duration > 0 && msg) {
+        this._statusTimer = setTimeout(() => {
+          this.status = '';
+          this.statusSpinner = false;
+        }, duration);
+      }
     },
 
     formatDate(iso) {
@@ -74,49 +110,209 @@ document.addEventListener('alpine:init', () => {
         : msg;
     },
 
+    cutAtSentence(text, maxLen) {
+      if (text.length <= maxLen) return text;
+      const sub = text.slice(0, maxLen);
+      const m = sub.match(/^([\s\S]*[.!?])\s/);
+      if (m) return m[1] + ' […]';
+      const wi = sub.lastIndexOf(' ');
+      return (wi > 0 ? sub.slice(0, wi) : sub) + ' […]';
+    },
+
+    computeDiff(originalHtml, correctedHtml) {
+      const aText = htmlToText(originalHtml);
+      const bText = htmlToText(correctedHtml);
+      if (aText === bText) {
+        return '<div class="diff-unchanged">Keine Textänderungen.</div>';
+      }
+      const tok = s => s.match(/[^\s]+|\s+/g) || [];
+      const a = tok(aText);
+      const b = tok(bText);
+      if (a.length * b.length > 400000) {
+        return `<div class="muted-msg">Text zu lang für Diff-Ansicht (${Math.round(a.length * b.length / 1000)}k Operationen).</div>`;
+      }
+      const m = a.length, n = b.length;
+      const dp = [];
+      for (let i = 0; i <= m; i++) dp[i] = new Uint32Array(n + 1);
+      for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+          dp[i][j] = a[i-1] === b[j-1]
+            ? dp[i-1][j-1] + 1
+            : Math.max(dp[i-1][j], dp[i][j-1]);
+        }
+      }
+      const ops = [];
+      let i = m, j = n;
+      while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && a[i-1] === b[j-1]) {
+          ops.push({ t: '=', s: a[i-1] }); i--; j--;
+        } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
+          ops.push({ t: '+', s: b[j-1] }); j--;
+        } else {
+          ops.push({ t: '-', s: a[i-1] }); i--;
+        }
+      }
+      ops.reverse();
+      let html = '';
+      for (const op of ops) {
+        const s = escHtml(op.s);
+        if (op.t === '=') html += s;
+        else if (op.t === '+') html += `<ins>${s}</ins>`;
+        else html += `<del>${s}</del>`;
+      }
+      return `<div class="diff-view">${html}</div>`;
+    },
+
     async bsGet(path) {
-      const r = await fetch('/api/' + path, { headers: { Authorization: this.authToken } });
-      if (!r.ok) throw new Error('BookStack API Fehler ' + r.status);
-      return r.json();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 30000);
+      try {
+        const r = await fetch('/api/' + path, {
+          headers: { Authorization: this.authToken },
+          signal: ctrl.signal,
+        });
+        if (!r.ok) throw new Error('BookStack API Fehler ' + r.status);
+        return r.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+
+    async bsGetAll(path) {
+      const COUNT = 500;
+      let offset = 0, all = [];
+      while (true) {
+        const sep = path.includes('?') ? '&' : '?';
+        const data = await this.bsGet(`${path}${sep}count=${COUNT}&offset=${offset}`);
+        all = all.concat(data.data);
+        if (all.length >= data.total) break;
+        offset += COUNT;
+      }
+      return all;
     },
 
     async bsPut(path, body) {
-      const r = await fetch('/api/' + path, {
-        method: 'PUT',
-        headers: { Authorization: this.authToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!r.ok) throw new Error('BookStack API Fehler ' + r.status);
-      return r.json();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(new Error('Timeout: BookStack hat nicht innerhalb von 90 Sekunden geantwortet')), 90000);
+      try {
+        const r = await fetch('/api/' + path, {
+          method: 'PUT',
+          headers: { Authorization: this.authToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: ctrl.signal,
+        });
+        if (!r.ok) {
+          let detail = '';
+          try { const e = await r.json(); detail = e.message || e.error || ''; } catch (_) {}
+          throw new Error(`BookStack API Fehler ${r.status}${detail ? ': ' + detail : ''}`);
+        }
+        return r.json();
+      } catch (e) {
+        if (e.name === 'AbortError') {
+          throw new Error(ctrl.signal.reason?.message || 'Timeout: Anfrage wurde abgebrochen');
+        }
+        throw e;
+      } finally {
+        clearTimeout(timer);
+      }
     },
 
-    async callClaude(prompt) {
+    _applyCorrections(html, fehler) {
+      let result = html;
+      for (const f of fehler) {
+        if (!f.original || !f.korrektur || f.original === f.korrektur) continue;
+        const idx = result.indexOf(f.original);
+        if (idx !== -1) {
+          result = result.slice(0, idx) + f.korrektur + result.slice(idx + f.original.length);
+        }
+      }
+      return result;
+    },
+
+    async callClaude(userPrompt, systemPrompt = null, onProgress = null) {
+      const body = {
+        model: this.claudeModel,
+        max_tokens: this.claudeMaxTokens,
+        temperature: 0.2,
+        messages: [{ role: 'user', content: userPrompt }],
+      };
+      if (systemPrompt) body.system = systemPrompt;
+
       const resp = await fetch(CLAUDE_API, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: this.claudeModel,
-          max_tokens: this.claudeMaxTokens,
-          messages: [{ role: 'user', content: prompt }],
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       });
-      const data = await resp.json();
-      if (data.type === 'error') {
-        throw new Error('Claude API Fehler: ' + (data.error?.message || JSON.stringify(data.error)));
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error('Claude API Fehler: ' + (err.error?.message || JSON.stringify(err)));
       }
-      const raw = (data.content || []).map(b => b.text || '').join('');
-      const clean = raw.replace(/```json\s*|```/g, '').trim();
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6);
+          if (raw === '[DONE]') break;
+          try {
+            const ev = JSON.parse(raw);
+            if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+              fullText += ev.delta.text;
+              if (onProgress) onProgress(fullText.length);
+            }
+          } catch { /* SSE parse errors ignorieren */ }
+        }
+      }
+
+      // JSON parsen: direkt versuchen, dann erstes {...}-Block extrahieren
+      const clean = fullText.replace(/```json\s*|```/g, '').trim();
       try {
         return JSON.parse(clean);
-      } catch (e) {
+      } catch {
+        const match = clean.match(/\{[\s\S]*\}/);
+        if (match) {
+          try { return JSON.parse(match[0]); } catch {}
+        }
         throw new Error(
-          'Claude-Antwort konnte nicht geparst werden: ' + e.message +
-          '\n\nRohantwort: ' + raw.slice(0, 300)
+          'Claude-Antwort konnte nicht geparst werden.\n\nRohantwort: ' + fullText.slice(0, 500)
         );
       }
+    },
+
+    _buildLektoratPrompt(text, html) {
+      return `Analysiere diesen deutschsprachigen Text auf Rechtschreibfehler, Grammatikfehler und stilistische Auffälligkeiten.
+
+Antworte mit diesem JSON-Schema:
+{
+  "fehler": [
+    {
+      "typ": "rechtschreibung|grammatik|stil",
+      "original": "das fehlerhafte Wort oder die fehlerhafte Phrase",
+      "korrektur": "die korrekte Version",
+      "kontext": "der Satz in dem der Fehler vorkommt (gekürzt)",
+      "erklaerung": "kurze Erklärung auf Deutsch"
+    }
+  ],
+  "korrekturen_html": "vollständiges korrigiertes HTML – behalte ALLE Tags exakt bei, ändere nur fehlerhafte Textstellen",
+  "stilanalyse": "2-3 Sätze Stilanalyse",
+  "fazit": "ein Satz Gesamtfazit"
+}
+
+Originaltext:
+${text}
+
+Original-HTML (für korrekturen_html):
+${html}`;
     },
 
     async init() {
@@ -125,13 +321,13 @@ document.addEventListener('alpine:init', () => {
         if (cfg.tokenId && cfg.tokenPw) {
           this.authToken = 'Token ' + cfg.tokenId + ':' + cfg.tokenPw;
           this.bookstackUrl = cfg.bookstackUrl || '';
-          if (cfg.claudeMaxTokens) this.claudeMaxTokens = cfg.claudeMaxTokens;
           if (cfg.claudeModel) this.claudeModel = cfg.claudeModel;
+          if (cfg.claudeMaxTokens) this.claudeMaxTokens = cfg.claudeMaxTokens;
           await this.loadBooks();
         } else {
           this.setStatus('Keine Zugangsdaten in .env konfiguriert.');
         }
-      } catch (_) {
+      } catch {
         this.setStatus('Fehler beim Laden der Konfiguration.');
       }
     },
@@ -139,11 +335,10 @@ document.addEventListener('alpine:init', () => {
     async loadBooks() {
       try {
         this.setStatus('Verbinde mit BookStack…', true);
-        const data = await this.bsGet('books');
-        this.books = data.data;
+        this.books = await this.bsGetAll('books');
         this.selectedBookId = String(this.books[0]?.id || '');
         this.showBookCard = true;
-        this.setStatus(this.books.length + ' Buch/Bücher gefunden.');
+        this.setStatus(this.books.length + ' Buch/Bücher gefunden.', false, 4000);
         if (this.books.length === 1) await this.loadPages();
       } catch (e) {
         console.error('[loadBooks]', e);
@@ -151,20 +346,39 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
+    async loadTokenEstimates(gen) {
+      const BATCH = 5;
+      const pages = [...this.pages];
+      for (let i = 0; i < pages.length; i += BATCH) {
+        if (this._tokenEstGen !== gen) return;
+        const batch = pages.slice(i, i + BATCH);
+        await Promise.allSettled(batch.map(async p => {
+          try {
+            const pd = await this.bsGet('pages/' + p.id);
+            const text = htmlToText(pd.html || '');
+            this.tokEsts[p.id] = Math.round(text.length / 4);
+          } catch { /* ignore */ }
+        }));
+      }
+    },
+
     async loadPages() {
       const bookId = this.selectedBookId;
       try {
         this.setStatus('Lade Seiten…', true);
-        const [chapters, pagesData] = await Promise.all([
-          this.bsGet('chapters?book_id=' + bookId),
-          this.bsGet('pages?book_id=' + bookId),
+        this.pageSearch = '';
+        this.tokEsts = {};
+        this._tokenEstGen++;
+        const [chapters, pages] = await Promise.all([
+          this.bsGetAll('chapters?book_id=' + bookId),
+          this.bsGetAll('pages?book_id=' + bookId),
         ]);
 
-        const sortedChapters = [...chapters.data].sort((a, b) => a.priority - b.priority);
+        const sortedChapters = [...chapters].sort((a, b) => a.priority - b.priority);
         const chMap = Object.fromEntries(sortedChapters.map(c => [c.id, c.name]));
         const chapterOrder = Object.fromEntries(sortedChapters.map((c, i) => [c.id, i]));
 
-        this.pages = [...pagesData.data]
+        this.pages = [...pages]
           .sort((a, b) => {
             const aO = a.chapter_id ? (chapterOrder[a.chapter_id] ?? 999) : -1;
             const bO = b.chapter_id ? (chapterOrder[b.chapter_id] ?? 999) : -1;
@@ -198,6 +412,8 @@ document.addEventListener('alpine:init', () => {
         ].sort((a, b) => a.priority - b.priority);
 
         this.setStatus('');
+        await this.loadBookReviewHistory(bookId);
+        this.loadTokenEstimates(this._tokenEstGen); // Hintergrund, kein await
       } catch (e) {
         console.error('[loadPages]', e);
         this.setStatus('Fehler: ' + e.message);
@@ -212,10 +428,21 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
+    async loadBookReviewHistory(bookId) {
+      try {
+        this.bookReviewHistory = await fetch('/history/review/' + bookId).then(r => r.json());
+      } catch (e) {
+        console.error('[loadBookReviewHistory]', e);
+      }
+    },
+
     async selectPage(p) {
       this.currentPage = p;
+      this.originalHtml = null;
       this.correctedHtml = null;
       this.hasErrors = false;
+      this.showDiff = false;
+      this.diffHtml = '';
       this.lastCheckId = null;
       this.pageHistory = [];
       this.selectedHistoryId = null;
@@ -238,8 +465,11 @@ document.addEventListener('alpine:init', () => {
 
     resetView() {
       this.currentPage = null;
+      this.originalHtml = null;
       this.correctedHtml = null;
       this.hasErrors = false;
+      this.showDiff = false;
+      this.diffHtml = '';
       this.showEditorCard = false;
       this.showBookReviewCard = false;
       this.analysisOut = '';
@@ -256,8 +486,11 @@ document.addEventListener('alpine:init', () => {
     async runCheck() {
       if (!this.currentPage) return;
       this.checkLoading = true;
+      this.originalHtml = null;
       this.correctedHtml = null;
       this.hasErrors = false;
+      this.showDiff = false;
+      this.diffHtml = '';
       this.analysisOut = '';
       this.setStatus('Lade Seiteninhalt…', true);
 
@@ -265,49 +498,32 @@ document.addEventListener('alpine:init', () => {
         const pageData = await this.bsGet('pages/' + this.currentPage.id);
         const html = pageData.html;
         const text = htmlToText(html);
+        this.originalHtml = html;
 
-        this.setStatus('Claude analysiert…', true);
+        this.setStatus('Claude analysiert… (0 Zeichen)', true);
 
-        const prompt = `Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz (Helvetismen wie "grösseres", "Strasse" etc. sind korrekt und sollen NICHT geändert werden).
+        const result = await this.callClaude(
+          this._buildLektoratPrompt(text, html),
+          SYSTEM_LEKTORAT,
+          (chars) => this.setStatus(`Claude analysiert… (${chars} Zeichen)`, true)
+        );
 
-Analysiere diesen Text auf:
-1. Rechtschreibfehler
-2. Grammatikfehler
-3. Stilistische Anmerkungen (nur wenn auffällig)
-
-Antworte NUR mit einem JSON-Objekt, kein Markdown, keine Erklärungen davor oder danach:
-{
-  "fehler": [
-    {
-      "typ": "rechtschreibung|grammatik|stil",
-      "original": "das fehlerhafte Wort oder die fehlerhafte Phrase",
-      "korrektur": "die korrekte Version",
-      "kontext": "der Satz in dem der Fehler vorkommt (gekürzt)",
-      "erklaerung": "kurze Erklärung auf Deutsch"
-    }
-  ],
-  "korrekturen_html": "vollständiges korrigiertes HTML – behalte ALLE Tags exakt bei, ändere nur fehlerhafte Textstellen",
-  "stilanalyse": "2-3 Sätze Stilanalyse",
-  "fazit": "ein Satz Gesamtfazit"
-}
-
-Originaltext:
-${text}
-
-Original-HTML (für korrekturen_html):
-${html}`;
-
-        const result = await this.callClaude(prompt);
-        this.correctedHtml = result.korrekturen_html || html;
+        const claudeHtml = result.korrekturen_html;
+        if (claudeHtml && claudeHtml.length >= html.length * 0.7) {
+          this.correctedHtml = claudeHtml;
+        } else {
+          // Claude hat das HTML weggelassen oder abgeschnitten → Korrekturen manuell einsetzen
+          const fixable = (result.fehler || []).filter(f => f.typ !== 'stil');
+          this.correctedHtml = fixable.length > 0 ? this._applyCorrections(html, fixable) : html;
+          if (claudeHtml) console.warn('[runCheck] korrekturen_html zu kurz, Korrekturen manuell angewandt');
+        }
 
         const fehler = result.fehler || [];
         const errors = fehler.filter(f => f.typ === 'rechtschreibung' || f.typ === 'grammatik');
         const styles = fehler.filter(f => f.typ === 'stil');
-
         this.hasErrors = errors.length > 0;
 
         let out = '';
-
         if (errors.length === 0) {
           out += `<div class="finding ok"><span class="badge badge-ok">✓ Fehlerfrei</span> &nbsp;Keine Rechtschreib- oder Grammatikfehler gefunden.</div>`;
         } else {
@@ -321,7 +537,6 @@ ${html}`;
             </div>`;
           });
         }
-
         if (styles.length > 0) {
           out += `<div class="section-heading-top">Stilanmerkungen</div>`;
           styles.forEach(f => {
@@ -332,17 +547,14 @@ ${html}`;
             </div>`;
           });
         }
-
         if (result.stilanalyse) {
           out += `<div class="stilbox"><div class="stilbox-title">Stilanalyse</div>${escHtml(result.stilanalyse)}</div>`;
         }
         if (result.fazit) {
           out += `<div class="fazit">${escHtml(result.fazit)}</div>`;
         }
-
         this.analysisOut = out;
 
-        // Analyse in History speichern
         try {
           const hr = await fetch('/history/check', {
             method: 'POST',
@@ -363,18 +575,22 @@ ${html}`;
           await this.loadPageHistory(this.currentPage.id);
         } catch (e) { console.error('[history check]', e); }
 
-        this.setStatus('Analyse abgeschlossen.');
+        this.setStatus('Analyse abgeschlossen.', false, 5000);
       } catch (e) {
         console.error('[runCheck]', e);
-        this.analysisOut = `<span class="error-msg">Fehler: ${e.message}</span>`;
+        this.analysisOut = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
         this.setStatus('');
       }
-
       this.checkLoading = false;
     },
 
     async saveCorrections() {
       if (!this.correctedHtml || !this.currentPage) return;
+      if (this.originalHtml && this.correctedHtml.length < this.originalHtml.length * 0.5) {
+        this.setStatus('Fehler: Korrigiertes HTML wirkt unvollständig – Speichern abgebrochen.');
+        console.error('[saveCorrections] correctedHtml zu kurz:', this.correctedHtml.length, 'vs original:', this.originalHtml.length);
+        return;
+      }
       this.setStatus('Speichere in BookStack…', true);
       try {
         await this.bsPut('pages/' + this.currentPage.id, {
@@ -387,13 +603,74 @@ ${html}`;
             await this.loadPageHistory(this.currentPage.id);
           } catch (e) { console.error('[history saved]', e); }
         }
-        this.setStatus('✓ Korrekturen gespeichert.');
+        this.setStatus('✓ Korrekturen gespeichert.', false, 5000);
         this.correctedHtml = null;
         this.hasErrors = false;
+        this.showDiff = false;
+        this.diffHtml = '';
       } catch (e) {
         console.error('[saveCorrections]', e);
         this.setStatus('Fehler: ' + e.message);
       }
+    },
+
+    toggleDiff() {
+      if (!this.correctedHtml || !this.originalHtml) return;
+      this.showDiff = !this.showDiff;
+      if (this.showDiff && !this.diffHtml) {
+        this.diffHtml = this.computeDiff(this.originalHtml, this.correctedHtml);
+      }
+    },
+
+    async batchCheck() {
+      if (!this.pages.length || this.batchLoading) return;
+      if (!confirm(`Alle ${this.pages.length} Seiten prüfen und Ergebnisse in der History speichern?\n\nDies kann bei grossen Büchern mehrere Minuten dauern.`)) return;
+      this.batchLoading = true;
+      this.batchProgress = 0;
+      this.batchStatus = '';
+      let done = 0, totalErrors = 0;
+      const pages = [...this.pages];
+
+      for (let i = 0; i < pages.length; i++) {
+        const p = pages[i];
+        this.batchProgress = Math.round((i / pages.length) * 100);
+        this.batchStatus = `${i + 1}/${pages.length}: ${p.name}`;
+
+        try {
+          const pageData = await this.bsGet('pages/' + p.id);
+          const html = pageData.html;
+          const text = htmlToText(html).trim();
+          if (!text) continue;
+
+          const result = await this.callClaude(this._buildLektoratPrompt(text, html), SYSTEM_LEKTORAT);
+          const fehler = result.fehler || [];
+          totalErrors += fehler.filter(f => f.typ !== 'stil').length;
+
+          await fetch('/history/check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              page_id: p.id,
+              page_name: p.name,
+              book_id: p.book_id || null,
+              error_count: fehler.length,
+              errors_json: fehler,
+              stilanalyse: result.stilanalyse || null,
+              fazit: result.fazit || null,
+              model: this.claudeModel,
+            }),
+          });
+          done++;
+        } catch (e) {
+          console.error('[batchCheck page]', p.id, e);
+        }
+      }
+
+      this.batchProgress = 100;
+      this.batchStatus = `Fertig: ${done}/${pages.length} Seiten geprüft, ${totalErrors} Rechtschreib-/Grammatikfehler.`;
+      this.batchLoading = false;
+
+      if (this.currentPage) await this.loadPageHistory(this.currentPage.id);
     },
 
     async runBookReview() {
@@ -406,15 +683,14 @@ ${html}`;
 
       try {
         this.setReviewStatus('Lade Seiten…', true);
-        const [chaptersData, pagesData] = await Promise.all([
-          this.bsGet('chapters?book_id=' + bookId),
-          this.bsGet('pages?book_id=' + bookId),
+        const [chaptersData, pages] = await Promise.all([
+          this.bsGetAll('chapters?book_id=' + bookId),
+          this.bsGetAll('pages?book_id=' + bookId),
         ]);
 
-        const chMap = Object.fromEntries(chaptersData.data.map(c => [c.id, c.name]));
-        const pages = pagesData.data;
+        const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
 
-        if (pages.length === 0) {
+        if (!pages.length) {
           this.setReviewStatus('Keine Seiten im Buch gefunden.');
           this.bookReviewLoading = false;
           return;
@@ -422,22 +698,25 @@ ${html}`;
 
         this.setReviewStatus(`Lese ${pages.length} Seiten…`, true);
 
+        // Paralleles Laden in Batches von 5
+        const BATCH = 5;
         const pageContents = [];
-        for (let i = 0; i < pages.length; i++) {
-          const p = pages[i];
+        for (let i = 0; i < pages.length; i += BATCH) {
           this.bookReviewProgress = Math.round((i / pages.length) * 80);
-          try {
+          const batch = pages.slice(i, i + BATCH);
+          const results = await Promise.allSettled(batch.map(async p => {
             const pd = await this.bsGet('pages/' + p.id);
             const text = htmlToText(pd.html).trim();
-            if (text.length > 50) {
-              const chapter = p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : null;
-              pageContents.push({
-                title: p.name,
-                chapter,
-                text: text.length > 3000 ? text.slice(0, 3000) + ' […]' : text,
-              });
-            }
-          } catch (e) { console.error('[runBookReview page]', p.id, e); }
+            if (text.length < 50) return null;
+            return {
+              title: p.name,
+              chapter: p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : null,
+              text: this.cutAtSentence(text, 3000),
+            };
+          }));
+          for (const r of results) {
+            if (r.status === 'fulfilled' && r.value) pageContents.push(r.value);
+          }
         }
 
         this.bookReviewProgress = 85;
@@ -447,16 +726,14 @@ ${html}`;
           `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`
         ).join('\n\n---\n\n');
 
-        const prompt = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. Helvetismen (grösseres, Strasse, gemäss, usw.) sind korrekt und werden nicht bemängelt.
-
-Bewerte das folgende Buch «${bookName}» kritisch und umfassend. Analysiere dabei:
+        const prompt = `Bewerte das folgende Buch «${bookName}» kritisch und umfassend. Analysiere:
 - Struktur und Aufbau (Kapitel, Übergänge, Logik)
 - Sprachstil und Konsistenz über alle Seiten hinweg
 - Stärken des Texts
 - Schwächen und Verbesserungspotenzial
 - Konkrete Empfehlungen für den Autor
 
-Antworte NUR mit einem JSON-Objekt, kein Markdown, keine Erklärungen davor oder danach:
+Antworte mit diesem JSON-Schema:
 {
   "gesamtnote": "Zahl von 1 (sehr schwach) bis 5 (ausgezeichnet)",
   "gesamtnote_begruendung": "Ein Satz warum diese Note",
@@ -473,7 +750,9 @@ Buchinhalt (${pageContents.length} Seiten):
 
 ${bookText}`;
 
-        const r = await this.callClaude(prompt);
+        const r = await this.callClaude(prompt, SYSTEM_BUCHBEWERTUNG, (chars) => {
+          this.setReviewStatus(`Claude analysiert… (${chars} Zeichen)`, true);
+        });
 
         this.bookReviewProgress = 100;
         setTimeout(() => { this.bookReviewProgress = 0; }, 400);
@@ -493,51 +772,50 @@ ${bookText}`;
             <div class="bewertung-section-title">Struktur &amp; Aufbau</div>
             <p class="bewertung-section-text">${escHtml(r.struktur)}</p>
           </div>`;
-
         if (r.stil) html += `
           <div class="bewertung-section">
             <div class="bewertung-section-title">Schreibstil</div>
             <p class="bewertung-section-text">${escHtml(r.stil)}</p>
           </div>`;
-
         if (r.staerken?.length) html += `
           <div class="bewertung-section">
             <div class="bewertung-section-title">Stärken</div>
             <ul class="bullet-list pos">${r.staerken.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
           </div>`;
-
         if (r.schwaechen?.length) html += `
           <div class="bewertung-section">
             <div class="bewertung-section-title">Schwächen</div>
             <ul class="bullet-list neg">${r.schwaechen.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
           </div>`;
-
         if (r.empfehlungen?.length) html += `
           <div class="bewertung-section">
             <div class="bewertung-section-title">Empfehlungen</div>
             <ul class="bullet-list">${r.empfehlungen.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
           </div>`;
-
         if (r.fazit) html += `<div class="fazit" style="margin-top:16px;">${escHtml(r.fazit)}</div>`;
 
         this.bookReviewOut = html;
 
-        // Buchbewertung in History speichern
         try {
           await fetch('/history/review', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName, review_json: r, model: this.claudeModel }),
+            body: JSON.stringify({
+              book_id: parseInt(bookId),
+              book_name: bookName,
+              review_json: r,
+              model: this.claudeModel,
+            }),
           });
+          await this.loadBookReviewHistory(bookId);
         } catch (e) { console.error('[history review]', e); }
 
         this.setReviewStatus(`${pageContents.length} Seiten analysiert.`);
       } catch (e) {
         console.error('[runBookReview]', e);
-        this.bookReviewOut = `<span class="error-msg">Fehler: ${e.message}</span>`;
+        this.bookReviewOut = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
         this.setReviewStatus('');
       }
-
       this.bookReviewLoading = false;
     },
   }));

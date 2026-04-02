@@ -34,7 +34,7 @@ function newId() { return nextId++; }
 
 // ---
 
-app.use(express.json());
+const jsonBody = express.json();
 
 // --- Config ---
 app.get('/config', (_req, res) => {
@@ -48,7 +48,7 @@ app.get('/config', (_req, res) => {
 });
 
 // --- History: Seitenlektorat ---
-app.post('/history/check', (req, res) => {
+app.post('/history/check', jsonBody, (req, res) => {
   const { page_id, page_name, book_id, error_count, errors_json, stilanalyse, fazit, model } = req.body;
   const h = readHistory();
   const entry = {
@@ -68,7 +68,7 @@ app.post('/history/check', (req, res) => {
   res.json({ id: entry.id });
 });
 
-app.patch('/history/check/:id/saved', (req, res) => {
+app.patch('/history/check/:id/saved', jsonBody, (req, res) => {
   const h = readHistory();
   const entry = h.page_checks.find(r => r.id === parseInt(req.params.id));
   if (entry) {
@@ -90,7 +90,7 @@ app.get('/history/page/:page_id', (req, res) => {
 });
 
 // --- History: Buchbewertung ---
-app.post('/history/review', (req, res) => {
+app.post('/history/review', jsonBody, (req, res) => {
   const { book_id, book_name, review_json, model } = req.body;
   const h = readHistory();
   const entry = {
@@ -118,8 +118,8 @@ app.get('/history/review/:book_id', (req, res) => {
 // --- Static files ---
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- Proxy /claude → api.anthropic.com ---
-app.post('/claude', async (req, res) => {
+// --- Proxy /claude → api.anthropic.com (SSE-Streaming) ---
+app.post('/claude', jsonBody, async (req, res) => {
   try {
     const upstream = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -128,13 +128,26 @@ app.post('/claude', async (req, res) => {
         'x-api-key': process.env.ANTHROPIC_API_KEY || '',
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify({ ...req.body, stream: true }),
     });
-    const data = await upstream.json();
-    res.status(upstream.status).json(data);
+    if (!upstream.ok) {
+      const err = await upstream.json();
+      return res.status(upstream.status).json(err);
+    }
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    const reader = upstream.body.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(value);
+    }
+    res.end();
   } catch (err) {
     console.error('Claude proxy error:', err.message);
-    res.status(502).json({ error: 'Claude nicht erreichbar: ' + err.message });
+    if (!res.headersSent) res.status(502).json({ error: 'Claude nicht erreichbar: ' + err.message });
+    else res.end();
   }
 });
 

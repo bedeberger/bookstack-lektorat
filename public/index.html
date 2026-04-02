@@ -8,7 +8,7 @@
   <script src="app.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
-<body x-data="lektorat">
+<body x-data="lektorat" @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading) runCheck()">
 
 <h1 @click="resetView()" style="cursor:pointer;" title="Ansicht zurücksetzen">BookStack Lektorat</h1>
 <p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse</p>
@@ -17,24 +17,38 @@
 <div class="card" x-show="showBookCard" x-cloak>
   <label>Buch</label>
   <div class="row" style="margin-bottom:12px;">
-    <select x-model="selectedBookId">
+    <select x-model="selectedBookId" @change="bookReviewHistory = []; selectedBookReviewId = null;">
       <template x-for="book in books" :key="book.id">
         <option :value="String(book.id)" x-text="book.name"></option>
       </template>
     </select>
     <button @click="loadPages()">Seiten laden</button>
     <button @click="runBookReview()" :disabled="bookReviewLoading">Buch bewerten</button>
+    <button @click="batchCheck()" :disabled="batchLoading || bookReviewLoading || !pages.length" title="Alle Seiten sequenziell prüfen und in History speichern">Alle prüfen</button>
   </div>
+
+  <!-- Batch-Fortschritt -->
+  <div x-show="batchLoading || batchStatus" style="margin-bottom:10px;">
+    <div class="progress-bar-wrap" x-show="batchLoading">
+      <div class="progress-bar" :style="'width:' + batchProgress + '%'"></div>
+    </div>
+    <div class="batch-status" x-text="batchStatus"></div>
+  </div>
+
   <div x-show="tree.length > 0">
-    <div style="display:flex; gap:6px; margin-bottom:10px;">
+    <!-- Suche -->
+    <div style="margin-bottom:10px;">
+      <input type="text" x-model="pageSearch" placeholder="Seite suchen…" class="page-search">
+    </div>
+    <div x-show="!pageSearch" style="display:flex; gap:6px; margin-bottom:10px;">
       <button @click="tree.forEach(c => c.open = true)" style="font-size:12px; padding:4px 10px;">Alle ausklappen</button>
       <button @click="tree.forEach(c => c.open = false)" style="font-size:12px; padding:4px 10px;">Alle einklappen</button>
     </div>
-    <template x-for="item in tree" :key="item.id">
+    <template x-for="item in filteredTree" :key="item.id">
       <div>
         <template x-if="item.type === 'chapter'">
           <div class="tree-chapter">
-            <div class="tree-chapter-header" @click="item.open = !item.open">
+            <div class="tree-chapter-header" @click="if (!pageSearch) item.open = !item.open">
               <span class="tree-chevron" :class="{ open: item.open }">›</span>
               <span x-text="item.name"></span>
               <span class="tag" x-text="item.pages.length + ' Seiten'"></span>
@@ -43,6 +57,9 @@
               <template x-for="page in item.pages" :key="page.id">
                 <div class="page-item page-item-indent" :class="{ selected: currentPage?.id === page.id }" @click="selectPage(page)">
                   <span style="font-size:14px;" x-text="page.name"></span>
+                  <span x-show="tokEsts[page.id]" class="tok-badge"
+                    :class="tokEsts[page.id] > 16000 ? 'tok-high' : tokEsts[page.id] > 4000 ? 'tok-med' : 'tok-ok'"
+                    x-text="tokEsts[page.id] >= 1000 ? '~' + Math.round(tokEsts[page.id]/1000) + 'k' : '~' + tokEsts[page.id]"></span>
                 </div>
               </template>
             </div>
@@ -51,10 +68,14 @@
         <template x-if="item.type === 'page'">
           <div class="page-item" :class="{ selected: currentPage?.id === item.page.id }" @click="selectPage(item.page)">
             <span style="font-size:14px;" x-text="item.name"></span>
+            <span x-show="tokEsts[item.page.id]" class="tok-badge"
+              :class="tokEsts[item.page.id] > 16000 ? 'tok-high' : tokEsts[item.page.id] > 4000 ? 'tok-med' : 'tok-ok'"
+              x-text="tokEsts[item.page.id] >= 1000 ? '~' + Math.round(tokEsts[item.page.id]/1000) + 'k' : '~' + tokEsts[item.page.id]"></span>
           </div>
         </template>
       </div>
     </template>
+    <div x-show="filteredTree.length === 0 && pageSearch" class="muted-msg" style="padding:8px 0; font-size:13px;">Keine Seiten gefunden.</div>
   </div>
 </div>
 
@@ -68,6 +89,46 @@
   </div>
   <div style="font-size:13px;color:#666;margin-top:8px;" x-html="bookReviewStatus"></div>
   <div x-html="bookReviewOut"></div>
+
+  <!-- Buchbewertungs-Verlauf -->
+  <div x-show="bookReviewHistory.length > 0" style="margin-top:20px; border-top: 0.5px solid var(--color-border); padding-top:14px;">
+    <div class="history-heading">Frühere Bewertungen</div>
+    <template x-for="entry in bookReviewHistory" :key="entry.id">
+      <div>
+        <div class="history-item" @click="selectedBookReviewId = selectedBookReviewId === entry.id ? null : entry.id">
+          <span class="history-date" x-text="formatDate(entry.reviewed_at)"></span>
+          <span x-show="entry.review_json?.gesamtnote" class="badge badge-ok"
+            x-text="'★'.repeat(Math.min(5, +(entry.review_json?.gesamtnote) || 0)) + '☆'.repeat(Math.max(0, 5 - (+(entry.review_json?.gesamtnote) || 0)))"
+            style="font-size:11px; letter-spacing:1px;"></span>
+          <span class="tag" x-text="entry.model"></span>
+          <span class="history-chevron" :class="{ open: selectedBookReviewId === entry.id }">›</span>
+        </div>
+        <div x-show="selectedBookReviewId === entry.id" class="history-detail">
+          <div x-show="entry.review_json?.zusammenfassung" class="stilbox" style="margin-bottom:10px;">
+            <div class="stilbox-title">Zusammenfassung</div>
+            <span x-text="entry.review_json?.zusammenfassung"></span>
+          </div>
+          <div x-show="entry.review_json?.staerken?.length" style="margin-top:10px;">
+            <div class="bewertung-section-title">Stärken</div>
+            <ul class="bullet-list pos">
+              <template x-for="(s, i) in (entry.review_json?.staerken || [])" :key="i">
+                <li x-text="s"></li>
+              </template>
+            </ul>
+          </div>
+          <div x-show="entry.review_json?.schwaechen?.length" style="margin-top:10px;">
+            <div class="bewertung-section-title">Schwächen</div>
+            <ul class="bullet-list neg">
+              <template x-for="(s, i) in (entry.review_json?.schwaechen || [])" :key="i">
+                <li x-text="s"></li>
+              </template>
+            </ul>
+          </div>
+          <div x-show="entry.review_json?.fazit" class="fazit" style="margin-top:10px;" x-text="entry.review_json?.fazit"></div>
+        </div>
+      </div>
+    </template>
+  </div>
 </div>
 
 <!-- Seiteneditor & Lektorat -->
@@ -77,13 +138,22 @@
       <span class="card-title" x-text="currentPage?.name || '–'"></span>
       <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag" style="margin-left:6px;text-decoration:none;" x-text="currentPage ? 'ID ' + currentPage.id + ' ↗' : ''"></a>
     </div>
-    <div style="display:flex; gap:6px;">
-      <button @click="runCheck()" :disabled="checkLoading">Prüfen ↗</button>
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      <button @click="runCheck()" :disabled="checkLoading" title="Ctrl+Enter">Prüfen ↗</button>
+      <button @click="toggleDiff()" x-show="correctedHtml" :class="{ primary: showDiff }">Diff</button>
       <button class="success" @click="saveCorrections()" x-show="correctedHtml && hasErrors">Korrekturen speichern</button>
     </div>
   </div>
   <div id="status" x-html="statusHtml"></div>
-  <div style="margin-top:1rem;" x-html="analysisOut"></div>
+
+  <!-- Diff-Ansicht -->
+  <div x-show="showDiff && diffHtml" style="margin-top:1rem;">
+    <div class="section-heading">Änderungen (Diff)</div>
+    <div x-html="diffHtml"></div>
+  </div>
+
+  <!-- Analyse-Ausgabe -->
+  <div x-show="!showDiff" style="margin-top:1rem;" x-html="analysisOut"></div>
 
   <!-- Verlauf dieser Seite -->
   <div x-show="pageHistory.length > 0" style="margin-top:20px; border-top: 0.5px solid var(--color-border); padding-top:14px;">
@@ -93,7 +163,7 @@
         <div class="history-item" @click="selectedHistoryId = selectedHistoryId === entry.id ? null : entry.id">
           <span class="history-date" x-text="formatDate(entry.checked_at)"></span>
           <span class="badge" :class="entry.error_count > 0 ? 'badge-err' : 'badge-ok'" x-text="entry.error_count > 0 ? entry.error_count + ' Fehler' : 'fehlerfrei'"></span>
-          <span class="badge" :class="entry.saved ? 'badge-ok' : 'badge-warn'" x-text="entry.saved ? '✓ in BookStack gespeichert' : 'nicht gespeichert'"></span>
+          <span class="badge" :class="entry.saved ? 'badge-ok' : 'badge-warn'" x-text="entry.saved ? '✓ gespeichert' : 'nicht gespeichert'"></span>
           <span class="tag" x-text="entry.model"></span>
           <span class="history-chevron" :class="{ open: selectedHistoryId === entry.id }">›</span>
         </div>
