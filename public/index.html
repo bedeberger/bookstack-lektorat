@@ -248,7 +248,7 @@
       <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag" style="margin-left:6px;text-decoration:none;" x-text="currentPage ? 'ID ' + currentPage.id + ' ↗' : ''"></a>
     </div>
     <div class="card-actions">
-      <button @click="runCheck()" :disabled="checkLoading" title="Ctrl+Enter">Prüfen ↗</button>
+      <button @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? 'Seite ist leer' : 'Ctrl+Enter'">Prüfen ↗</button>
       <button @click="toggleDiff()" x-show="correctedHtml" :class="{ primary: showDiff }">Diff</button>
       <button class="success" @click="saveCorrections()" x-show="correctedHtml && hasErrors">Korrekturen speichern</button>
     </div>

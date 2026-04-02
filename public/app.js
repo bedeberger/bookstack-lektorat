@@ -34,6 +34,7 @@ document.addEventListener('alpine:init', () => {
     tree: [],
     pageSearch: '',
     currentPage: null,
+    currentPageEmpty: false,
     originalHtml: null,
     correctedHtml: null,
     hasErrors: false,
@@ -451,6 +452,7 @@ ${html}`;
 
     async selectPage(p) {
       this.currentPage = p;
+      this.currentPageEmpty = false;
       this.originalHtml = null;
       this.correctedHtml = null;
       this.hasErrors = false;
@@ -466,9 +468,10 @@ ${html}`;
         const pageData = await this.bsGet('pages/' + p.id);
         const text = htmlToText(pageData.html).trim();
         const preview = text.length > 600 ? text.slice(0, 600) + ' …' : text;
+        this.currentPageEmpty = !preview;
         this.analysisOut = preview
           ? `<div class="preview-text">${escHtml(preview)}</div><div class="preview-hint">Vorschau · «Prüfen» starten für Lektorat</div>`
-          : '<span class="muted-msg">Seite ist leer. «Prüfen» starten.</span>';
+          : '<span class="muted-msg">Seite ist leer.</span>';
       } catch (e) {
         console.error('[selectPage preview]', e);
         this.analysisOut = '<span class="muted-msg">Seite ausgewählt. «Prüfen» starten.</span>';

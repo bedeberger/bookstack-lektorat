@@ -4,5 +4,6 @@
 node_modules/
 lektorat-history.json
 lektorat.db
+lektorat.db-*
 lektorat.log
 lektorat.log.*
