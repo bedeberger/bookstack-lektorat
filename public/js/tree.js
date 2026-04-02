@@ -93,7 +93,12 @@ export const treeMethods = {
           const text = htmlToText(html);
           // Volles Input: Systemprompt + gefüllter Prompt (Text + HTML)
           const fullInput = SYSTEM_LEKTORAT + buildLektoratPrompt(text, html);
-          this.tokEsts[p.id] = Math.round(fullInput.length / 4);
+          const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+          this.tokEsts[p.id] = {
+            tok: Math.round(fullInput.length / 4),
+            words,
+            chars: text.length,
+          };
         } catch { /* ignore */ }
       }));
     }

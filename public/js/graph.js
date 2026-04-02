@@ -18,6 +18,12 @@ export const graphMethods = {
   renderFigurGraph() {
     const container = document.getElementById('figuren-graph');
     if (!container) return;
+
+    // Caching: Graph nur neu aufbauen wenn sich die Figuren geändert haben
+    const hash = this.figuren.map(f => f.id).join(',');
+    if (this._figurenNetwork && this._figurenHash === hash) return;
+    this._figurenHash = hash;
+
     if (this._figurenNetwork) {
       this._figurenNetwork.destroy();
       this._figurenNetwork = null;

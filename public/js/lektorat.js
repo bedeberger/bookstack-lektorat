@@ -1,6 +1,11 @@
 import { escHtml, htmlToText } from './utils.js';
 import { SYSTEM_LEKTORAT, buildLektoratPrompt } from './prompts.js';
 
+// Mindestanteil: korrigiertes HTML muss >= 70 % des Originals sein, sonst Fallback
+const MIN_HTML_RATIO = 0.7;
+// Sicherheitscheck vor dem Speichern: < 50 % wirkt unvollständig → Abbruch
+const SAFETY_HTML_RATIO = 0.5;
+
 // Lektorat-Workflow-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 
@@ -82,8 +87,12 @@ export const lektoratMethods = {
         (chars) => this.setStatus(`Claude analysiert… (${chars} Zeichen)`, true)
       );
 
+      if (!Array.isArray(result?.fehler)) {
+        throw new Error('Claude-Antwort ungültig: fehler-Array fehlt');
+      }
+
       const claudeHtml = result.korrekturen_html;
-      if (claudeHtml && claudeHtml.length >= html.length * 0.7) {
+      if (claudeHtml && claudeHtml.length >= html.length * MIN_HTML_RATIO) {
         this.correctedHtml = claudeHtml;
       } else {
         // Claude hat das HTML weggelassen oder abgeschnitten → Korrekturen manuell einsetzen
@@ -160,7 +169,7 @@ export const lektoratMethods = {
 
   async saveCorrections() {
     if (!this.correctedHtml || !this.currentPage) return;
-    if (this.originalHtml && this.correctedHtml.length < this.originalHtml.length * 0.5) {
+    if (this.originalHtml && this.correctedHtml.length < this.originalHtml.length * SAFETY_HTML_RATIO) {
       this.setStatus('Fehler: Korrigiertes HTML wirkt unvollständig – Speichern abgebrochen.');
       console.error('[saveCorrections] correctedHtml zu kurz:', this.correctedHtml.length, 'vs original:', this.originalHtml.length);
       return;

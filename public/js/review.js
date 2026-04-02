@@ -140,6 +140,10 @@ Antworte mit diesem JSON-Schema:
         });
       }
 
+      if (typeof r?.gesamtnote === 'undefined') {
+        throw new Error('Claude-Antwort ungültig: gesamtnote fehlt');
+      }
+
       this.bookReviewProgress = 100;
       setTimeout(() => { this.bookReviewProgress = 0; }, 400);
 

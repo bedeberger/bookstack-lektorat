@@ -375,7 +375,14 @@ Die Seitenliste wird als Kapitel/Seiten-Baum dargestellt. `loadPages()` baut zwe
 
 ### Seitenvorschau
 
-Beim Auswählen einer Seite (`selectPage`) wird sofort eine Textvorschau geladen (max. 600 Zeichen) und angezeigt, bevor der Nutzer «Prüfen» startet.
+Beim Auswählen einer Seite (`selectPage`) wird sofort eine Textvorschau geladen (max. `PREVIEW_MAX_CHARS` = 600 Zeichen) und angezeigt, bevor der Nutzer «Prüfen» startet.
+
+### Robustheit
+
+- **Schema-Validierung**: Nach jedem Haupt-`callClaude`-Aufruf wird das Pflichtfeld geprüft (`fehler`-Array in `lektorat.js`, `gesamtnote` in `review.js`, `figuren`-Array in `figuren.js`). Fehlt das Feld, wirft die Funktion einen klaren Fehler statt still falsche Daten zu rendern.
+- **Timeout-Fehlerbehandlung**: Beide BookStack-Methoden (`bsGet` und `bsPut`) fangen `AbortError` mit einer sprechenden Meldung ab.
+- **Graph-Caching**: `renderFigurGraph()` baut den vis-network-Graph nur neu auf, wenn sich die Figuren-IDs geändert haben (`_figurenHash`). Wiederholtes Öffnen/Schliessen der Figurenkarte kostet keinen Neuaufbau.
+- **Benannte Limits**: Magic Numbers sind als Konstanten dokumentiert – `MIN_HTML_RATIO` / `SAFETY_HTML_RATIO` in `lektorat.js`, `PREVIEW_MAX_CHARS` in `app.js`, `SINGLE_PASS_LIMIT` / `BATCH_SIZE` in `two-tier.js`.
 
 ## Bekannte Einschränkungen
 

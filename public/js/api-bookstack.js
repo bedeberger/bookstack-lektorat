@@ -4,7 +4,7 @@
 export const bookstackMethods = {
   async bsGet(path) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 30000);
+    const timer = setTimeout(() => ctrl.abort(new Error('Timeout: BookStack hat nicht innerhalb von 30 Sekunden geantwortet')), 30000);
     try {
       const r = await fetch('/api/' + path, {
         headers: { Authorization: this.authToken },
@@ -12,6 +12,11 @@ export const bookstackMethods = {
       });
       if (!r.ok) throw new Error('BookStack API Fehler ' + r.status);
       return r.json();
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        throw new Error(ctrl.signal.reason?.message || 'Timeout: Anfrage wurde abgebrochen');
+      }
+      throw e;
     } finally {
       clearTimeout(timer);
     }

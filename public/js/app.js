@@ -1,4 +1,6 @@
 import { escHtml, htmlToText } from './utils.js';
+
+const PREVIEW_MAX_CHARS = 600;
 import { bookstackMethods } from './api-bookstack.js';
 import { claudeMethods } from './api-claude.js';
 import { historyMethods } from './history.js';
@@ -58,6 +60,7 @@ document.addEventListener('alpine:init', () => {
     figurenStatus: '',
     selectedFigurId: null,
     _figurenNetwork: null,
+    _figurenHash: null,
 
     // ── Computed ─────────────────────────────────────────────────────────────
     get statusHtml() {
@@ -157,7 +160,7 @@ document.addEventListener('alpine:init', () => {
       try {
         const pageData = await this.bsGet('pages/' + p.id);
         const text = htmlToText(pageData.html).trim();
-        const preview = text.length > 600 ? text.slice(0, 600) + ' …' : text;
+        const preview = text.length > PREVIEW_MAX_CHARS ? text.slice(0, PREVIEW_MAX_CHARS) + ' …' : text;
         this.currentPageEmpty = !preview;
         this.analysisOut = preview
           ? `<div class="preview-text">${escHtml(preview)}</div><div class="preview-hint">Vorschau · «Prüfen» starten für Lektorat</div>`

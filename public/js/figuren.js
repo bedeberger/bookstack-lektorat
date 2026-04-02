@@ -160,7 +160,11 @@ ${FINAL_RULES}`,
         );
       }
 
-      this.figuren = (result.figuren || []).map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
+      if (!Array.isArray(result?.figuren)) {
+        throw new Error('Claude-Antwort ungültig: figuren-Array fehlt');
+      }
+
+      this.figuren = result.figuren.map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
       this.figurenProgress = 100;
       setTimeout(() => { this.figurenProgress = 0; }, 400);
 

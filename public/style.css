@@ -491,9 +491,10 @@ ins {
   font-weight: 500;
   flex-shrink: 0;
 }
-.tok-ok   { background: var(--color-ok-bg);   color: var(--color-ok-text); }
-.tok-med  { background: var(--color-warn-bg);  color: var(--color-warn-text); }
-.tok-high { background: var(--color-err-bg);   color: var(--color-err-text); }
+.tok-ok      { background: var(--color-ok-bg);   color: var(--color-ok-text); }
+.tok-med     { background: var(--color-warn-bg);  color: var(--color-warn-text); }
+.tok-high    { background: var(--color-err-bg);   color: var(--color-err-text); }
+.tok-neutral { background: #e8e8e8; color: #555; }
 
 .tok-tooltip {
   position: fixed;
