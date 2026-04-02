@@ -48,6 +48,12 @@ router.post('/review', jsonBody, (req, res) => {
   res.json({ id: result.lastInsertRowid });
 });
 
+// Lektorat-Prüfung löschen
+router.delete('/check/:id', (req, res) => {
+  db.prepare('DELETE FROM page_checks WHERE id = ?').run(parseInt(req.params.id));
+  res.json({ ok: true });
+});
+
 // Letzte 10 Bewertungen für ein Buch
 router.get('/review/:book_id', (req, res) => {
   const rows = db.prepare(`

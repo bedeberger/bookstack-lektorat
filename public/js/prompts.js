@@ -8,6 +8,27 @@ export const SYSTEM_KAPITELANALYSE = `Du bist ein erfahrener Literaturkritiker u
 
 export const SYSTEM_FIGUREN = `Du bist ein Literaturanalytiker für deutschsprachige Texte. Du extrahierst und analysierst Figuren/Charaktere aus literarischen Werken präzise und strukturiert. Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
 
+export const SYSTEM_STILKORREKTUR = `Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz. Helvetismen (grösseres, Strasse, gemäss usw.) sind korrekt und werden nicht bemängelt. Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
+
+export function buildStilkorrekturPrompt(html, styles) {
+  const liste = styles.map((s, i) =>
+    `${i + 1}. Stelle: "${s.original}"\n   Empfehlung: "${s.korrektur}"\n   Begründung: ${s.erklaerung}\n   Kontext: ${s.kontext}`
+  ).join('\n\n');
+
+  return `Wende die folgenden stilistischen Verbesserungen auf den HTML-Text an. Du entscheidest selbst über die beste Formulierung – die Empfehlungen sind Hinweise, keine zwingenden Vorgaben. Behalte alle HTML-Tags exakt bei und ändere nur die betroffenen Textstellen.
+
+Stilistische Verbesserungen:
+${liste}
+
+Antworte mit diesem JSON-Schema:
+{
+  "html": "vollständiges überarbeitetes HTML – alle Tags unverändert, nur Textstellen angepasst"
+}
+
+Original-HTML:
+${html}`;
+}
+
 export function buildLektoratPrompt(text, html) {
   return `Analysiere diesen deutschsprachigen Text auf Rechtschreibfehler, Grammatikfehler und stilistische Auffälligkeiten.
 

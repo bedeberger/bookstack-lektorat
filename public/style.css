@@ -526,6 +526,19 @@ ins {
 .history-saved-notice-ok   { background: var(--color-ok-bg);   color: var(--color-ok-text); }
 .history-saved-notice-warn { background: var(--color-warn-bg);  color: var(--color-warn-text); }
 
+.btn-delete-history {
+  margin-top: 10px;
+  padding: 3px 10px;
+  font-size: 11px;
+  background: none;
+  border: 1px solid var(--color-err-text);
+  color: var(--color-err-text);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.btn-delete-history:hover { opacity: 1; }
+
 /* === Token-Schätzung === */
 .tok-badge {
   font-size: 10px;

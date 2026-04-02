@@ -1,5 +1,5 @@
 import { escHtml, htmlToText } from './utils.js';
-import { SYSTEM_LEKTORAT, buildLektoratPrompt } from './prompts.js';
+import { SYSTEM_LEKTORAT, buildLektoratPrompt, SYSTEM_STILKORREKTUR, buildStilkorrekturPrompt } from './prompts.js';
 
 // Mindestanteil: korrigiertes HTML muss >= 70 % des Originals sein, sonst Fallback
 const MIN_HTML_RATIO = 0.7;
@@ -79,6 +79,7 @@ export const lektoratMethods = {
 
   toggleStyle(i) {
     this.selectedStyles[i] = !this.selectedStyles[i];
+    this._recomputeCorrectedHtml();
   },
 
   selectAllErrors(val) {
@@ -88,6 +89,7 @@ export const lektoratMethods = {
 
   selectAllStyles(val) {
     this.selectedStyles = this.selectedStyles.map(() => val);
+    this._recomputeCorrectedHtml();
   },
 
   async runCheck() {
@@ -131,7 +133,7 @@ export const lektoratMethods = {
       this.lektoratErrors = errors;
       this.lektoratStyles = styles;
       this.selectedErrors = errors.map(() => true);
-      this.selectedStyles = styles.map(() => true);
+      this.selectedStyles = styles.map(() => false);
       this.hasErrors = errors.length > 0;
 
       // Korrekturen aus gewählten Fehlern berechnen
@@ -195,10 +197,33 @@ export const lektoratMethods = {
       console.error('[saveCorrections] correctedHtml zu kurz:', this.correctedHtml.length, 'vs original:', this.originalHtml.length);
       return;
     }
+
+    let finalHtml = this.correctedHtml;
+    const selectedStyles = this.lektoratStyles.filter((_, i) => this.selectedStyles[i]);
+    if (selectedStyles.length > 0) {
+      this.setStatus('Claude überarbeitet Stil… (0 Zeichen)', true);
+      try {
+        const result = await this.callClaude(
+          buildStilkorrekturPrompt(this.correctedHtml, selectedStyles),
+          SYSTEM_STILKORREKTUR,
+          (chars) => this.setStatus(`Claude überarbeitet Stil… (${chars} Zeichen)`, true)
+        );
+        if (result?.html && result.html.length >= this.correctedHtml.length * SAFETY_HTML_RATIO) {
+          finalHtml = result.html;
+        } else {
+          console.warn('[saveCorrections] Stil-HTML unvollständig, Stilkorrekturen übersprungen');
+        }
+      } catch (e) {
+        console.error('[saveCorrections] Stil-Call fehlgeschlagen:', e);
+        this.setStatus('Fehler bei Stilkorrektur: ' + e.message);
+        return;
+      }
+    }
+
     this.setStatus('Speichere in BookStack…', true);
     try {
       await this.bsPut('pages/' + this.currentPage.id, {
-        html: this.correctedHtml,
+        html: finalHtml,
         name: this.currentPage.name,
       });
       if (this.lastCheckId) {

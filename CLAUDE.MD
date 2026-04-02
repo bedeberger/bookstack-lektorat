@@ -283,7 +283,9 @@ Lädt den Seiteninhalt via BookStack-API, extrahiert den Plaintext und schickt b
 }
 ```
 
-Der korrigierte HTML-String wird bei Bedarf per PUT direkt in BookStack gespeichert. Der «Korrekturen speichern»-Button erscheint nur wenn Rechtschreib- oder Grammatikfehler gefunden wurden (Stilanmerkungen allein lösen ihn nicht aus).
+**Selektive Fehlerkorrektur:** Nach dem Check kann der Nutzer einzelne Fehler an- oder abwählen. `_recomputeCorrectedHtml()` wendet nur die selektierten Fehler (`selectedErrors`) via `_applyCorrections` auf `originalHtml` an – das Ergebnis landet in `correctedHtml`. Claudes `korrekturen_html` wird ignoriert (nur als Fallback-Referenz geprüft). Der «Korrekturen speichern»-Button erscheint nur wenn Rechtschreib- oder Grammatikfehler gefunden wurden (`hasErrors`); Stilanmerkungen allein lösen ihn nicht aus.
+
+**Stilanmerkungen werden nie ins HTML übernommen:** `selectedStyles` existiert als UI-State (an/abwählbar), aber `_recomputeCorrectedHtml()` berücksichtigt es nicht – Stil-Korrekturen fliessen nicht in `correctedHtml` ein, egal ob angehakt oder nicht. Stilanmerkungen sind rein informativ.
 
 ### Buchbewertung (`runBookReview`)
 

@@ -10,6 +10,16 @@ export const historyMethods = {
     }
   },
 
+  async deletePageCheck(id) {
+    try {
+      await fetch('/history/check/' + id, { method: 'DELETE' });
+      this.pageHistory = this.pageHistory.filter(e => e.id !== id);
+      if (this.selectedHistoryId === id) this.selectedHistoryId = null;
+    } catch (e) {
+      console.error('[deletePageCheck]', e);
+    }
+  },
+
   async loadBookReviewHistory(bookId) {
     try {
       this.bookReviewHistory = await fetch('/history/review/' + bookId).then(r => r.json());

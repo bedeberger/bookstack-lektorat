@@ -285,7 +285,7 @@
     <div class="card-actions">
       <button @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? 'Seite ist leer' : 'Ctrl+Enter'">Prüfen ↗</button>
       <button @click="toggleDiff()" x-show="correctedHtml" :class="{ primary: showDiff }">Diff</button>
-      <button class="success" @click="saveCorrections()" x-show="correctedHtml && selectedErrors.some(v => v)">Korrekturen speichern</button>
+      <button class="success" @click="saveCorrections()" x-show="correctedHtml && (selectedErrors.some(v => v) || selectedStyles.some(v => v))">Korrekturen speichern</button>
     </div>
   </div>
   <div id="status" x-html="statusHtml"></div>
@@ -391,6 +391,7 @@
             <span x-text="entry.stilanalyse"></span>
           </div>
           <div x-show="entry.fazit" class="fazit" x-text="entry.fazit"></div>
+          <button class="btn-delete-history" @click.stop="deletePageCheck(entry.id)" title="Eintrag löschen">Eintrag löschen</button>
         </div>
       </div>
     </template>
