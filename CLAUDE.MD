@@ -340,7 +340,7 @@ Die Single-Page-App besteht aus `index.html`, `style.css` und ES-Modulen unter `
 
 - **[public/index.html](public/index.html)** – HTML-Struktur mit Alpine.js-Direktiven (`x-data`, `x-model`, `@click`, `x-show`, `x-cloak`, `x-for`, `x-if`, `x-html`, `x-text`). Alpine.js via CDN (`cdn.jsdelivr.net/npm/alpinejs@3`). Der `<body>` trägt `x-data="lektorat"`. Script-Reihenfolge im `<head>`: erst `<script type="module" src="js/app.js">`, dann vis-network, dann Alpine mit `defer` – so ist der `alpine:init`-Listener garantiert vor Alpine registriert.
 - **[public/js/app.js](public/js/app.js)** – Einstiegspunkt der Alpine-Komponente. Importiert alle Modul-Objekte und spreaed sie ins Alpine-Data-Objekt. Enthält nur: State-Definitionen, Computed-Properties (`get`), und die wenigen UI-Methoden die `this.*` direkt brauchen (`init`, `selectPage`, `resetView`, `setStatus`, `formatDate`, `setReviewStatus`, `cutAtSentence`).
-- **[public/style.css](public/style.css)** – Zentrales Stylesheet. **Alle Styles gehören ausschliesslich hierher** – weder Inline-`style`-Attribute noch `<style>`-Blöcke im HTML sind erlaubt. Neue visuelle Anforderungen immer als CSS-Klasse in `style.css` umsetzen.
+- **[public/style.css](public/style.css)** – Zentrales Stylesheet. **Alle Styles gehören ausschliesslich hierher** – weder Inline-`style`-Attribute noch `<style>`-Blöcke im HTML sind erlaubt. Neue visuelle Anforderungen immer als CSS-Klasse in `style.css` umsetzen. Die Datei beginnt mit einem Table of Contents (19 Abschnitte) und jeder Abschnitt ist mit `/* === Name === */` markiert.
 
 ### Modul-Pattern
 

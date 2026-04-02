@@ -1,3 +1,29 @@
+/*
+ * STYLE.CSS – BookStack Lektorat
+ *
+ * TABLE OF CONTENTS
+ * =================
+ *  1.  Custom Properties ........... :root – Farben, Radien, Schriftgrössen
+ *  2.  Reset & Base ................ html, body, h1, code
+ *  3.  Layout ...................... .subtitle, .row, Breakpoints
+ *  4.  Cards ....................... .card, .card-header, .card-title, .card-actions
+ *  5.  Form Elements ............... input, select, label
+ *  6.  Buttons ..................... button, .btn-sm, .btn-group
+ *  7.  Badges ...................... .badge, .badge-*
+ *  8.  Findings .................... .finding, del, ins
+ *  9.  Page List & Tags ............ .page-item, .tag
+ * 10.  Status & Spinner ............ #status, .muted-msg, .error-msg, .spinner
+ * 11.  Analysis Output ............. .stilbox, .fazit, .bewertung-*, .bullet-list
+ * 12.  Section Headings ............ .section-heading*  (JS-generierter Output)
+ * 13.  Preview ..................... .preview-text, .preview-hint
+ * 14.  Progress Bar ................ .progress-bar-wrap, .progress-bar
+ * 15.  Tree View ................... .tree-chapter*, .tree-chevron, .page-item-indent
+ * 16.  History ..................... .history-*
+ * 17.  Token-Schätzung ............. .tok-badge, .tok-*, .tok-tooltip
+ * 18.  Figurenübersicht ............ .figuren-graph-container, .figur-*
+ * 19.  Batch-Check & Utilities ..... .batch-status, .page-search, .diff-view, [x-cloak]
+ */
+
 /* === Custom Properties === */
 :root {
   --color-bg: #f5f4f0;
@@ -735,6 +761,7 @@ ins {
   color: var(--color-muted);
 }
 
+/* === Utilities === */
 /* Alpine.js – verhindert Flash of unstyled content */
 [x-cloak] { display: none !important; }
 
@@ -780,11 +807,23 @@ ins {
   flex-wrap: wrap;
 }
 
-.tok-total {
-  font-size: 11px;
-  color: #888;
+/* Drei Badges (T/W/Z) rechts im page-item */
+.tok-stats {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Summen-Badges neben der Button-Gruppe (Buchebene) */
+.tok-totals {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
   margin-left: 4px;
-  align-self: center;
+  flex-wrap: wrap;
 }
 
 /* === Kleine Buttons === */
