@@ -826,6 +826,59 @@ ins {
   border-color: var(--color-border-focus);
 }
 
+/* === Feature-Tiles === */
+.feature-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.feature-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--color-border-input);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, border-color 0.1s;
+}
+.feature-tile:hover {
+  background: var(--color-hover);
+  border-color: var(--color-border-focus);
+}
+.feature-tile:active { transform: scale(0.98); }
+
+.feature-tile--active {
+  background: var(--color-text);
+  border-color: var(--color-text);
+  color: var(--color-surface);
+}
+.feature-tile--active:hover { background: #333; }
+
+.feature-tile-title {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.feature-tile-desc {
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  line-height: 1.2;
+}
+.feature-tile--active .feature-tile-desc {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+@media (max-width: 480px) {
+  .feature-tiles { grid-template-columns: 1fr; }
+}
+
 /* === Buchentwicklung (Zeitliniendiagramm) === */
 .book-stats-chart-wrap {
   position: relative;

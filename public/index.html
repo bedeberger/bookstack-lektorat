@@ -25,10 +25,23 @@
       </template>
     </select>
     <button @click="loadPages()">Seiten laden</button>
-    <button @click="showBookReviewCard = !showBookReviewCard" :class="{ primary: showBookReviewCard }">Buch bewerten</button>
     <button @click="batchCheck()" :disabled="batchLoading || bookReviewLoading || !pages.length" title="Alle Seiten sequenziell prüfen und in History speichern">Alle prüfen</button>
-    <button @click="toggleFiguresCard()" :class="{ primary: showFiguresCard }" title="Figurenübersicht anzeigen">Figuren</button>
-    <button @click="toggleBookStatsCard()" :class="{ primary: showBookStatsCard }" title="Buchschreibungsentwicklung anzeigen">Entwicklung</button>
+  </div>
+
+  <!-- Feature-Tiles: Buchanalyse -->
+  <div class="feature-tiles">
+    <button class="feature-tile" :class="{ 'feature-tile--active': showBookReviewCard }" @click="showBookReviewCard = !showBookReviewCard">
+      <span class="feature-tile-title">Bewertung</span>
+      <span class="feature-tile-desc">Note &amp; Analyse</span>
+    </button>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showFiguresCard }" @click="toggleFiguresCard()" title="Figurenübersicht anzeigen">
+      <span class="feature-tile-title">Figuren</span>
+      <span class="feature-tile-desc">Charakterkarte</span>
+    </button>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showBookStatsCard }" @click="toggleBookStatsCard()" title="Buchentwicklung anzeigen">
+      <span class="feature-tile-title">Entwicklung</span>
+      <span class="feature-tile-desc">Zeitverlauf</span>
+    </button>
   </div>
 
   <!-- Batch-Fortschritt -->
