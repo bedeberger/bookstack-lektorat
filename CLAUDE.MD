@@ -5,12 +5,14 @@ KI-gestütztes Lektorat-Tool für BookStack. Läuft als eigenständiger Node.js-
 ## Architektur
 
 ```
-Browser → Express (Port 3737) → /config      → .env-Credentials an Frontend
-                              → /api/*       → BookStack (localhost:80)
-                              → /            → public/index.html
+Browser → Express (Port 3737) → /config         → .env-Credentials an Frontend
+                              → /history/*      → JSON-History-Store (lektorat-history.json)
+                              → /claude         → api.anthropic.com (Key-Injection)
+                              → /api/*          → BookStack (localhost:80)
+                              → /               → public/index.html
 ```
 
-Der Express-Server übernimmt drei Aufgaben: er served die Single-Page-App unter `/`, proxied alle `/api/*`-Requests an die lokale BookStack-Instanz, und stellt unter `/config` die BookStack-Credentials aus `.env` dem Frontend bereit. Da alles auf demselben Host läuft, gibt es kein CORS-Problem.
+Der Express-Server übernimmt vier Aufgaben: er served die Single-Page-App unter `/`, proxied alle `/api/*`-Requests an die lokale BookStack-Instanz, stellt unter `/config` die BookStack-Credentials aus `.env` dem Frontend bereit, und persistiert unter `/history/*` alle Lektorat-Läufe in einer lokalen JSON-Datei. Da alles auf demselben Host läuft, gibt es kein CORS-Problem.
 
 **Achtung:** Die HTML-App ruft `https://api.anthropic.com/v1/messages` direkt aus dem Browser auf, sendet aber **keinen `x-api-key`-Header** – der Claude-Aufruf funktioniert nur wenn der Browser oder ein Proxy den Key ergänzt.
 
@@ -18,19 +20,20 @@ Der Express-Server übernimmt drei Aufgaben: er served die Single-Page-App unter
 
 ```
 bookstack-lektorat/
-├── server.js            # Express-Server + http-proxy-middleware + /config-Endpoint
+├── server.js                # Express-Server + Proxies + History-Endpoints
 ├── package.json
-├── .env                 # Credentials (nicht eingecheckt)
-├── lektorat.service     # systemd unit
-├── install.sh           # Erstinstallation auf dem LXC
-├── deploy.sh            # CD-Update (wird von GitHub Actions aufgerufen)
+├── .env                     # Credentials (nicht eingecheckt)
+├── lektorat-history.json    # Persistierter History-Store (nicht eingecheckt, wird auto-erstellt)
+├── lektorat.service         # systemd unit
+├── install.sh               # Erstinstallation auf dem LXC
+├── deploy.sh                # CD-Update (wird von GitHub Actions aufgerufen)
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml   # GitHub Actions Workflow (push → deploy)
+│       └── deploy.yml       # GitHub Actions Workflow (push → deploy)
 └── public/
-    ├── index.html       # Single-Page-App (Alpine.js, kein Build-Step)
-    ├── app.js           # Alpine-Komponente (Reaktivität, API-Calls, Claude-Integration)
-    └── style.css        # Zentrales Stylesheet
+    ├── index.html           # Single-Page-App (Alpine.js, kein Build-Step)
+    ├── app.js               # Alpine-Komponente (Reaktivität, API-Calls, Claude-Integration)
+    └── style.css            # Zentrales Stylesheet
 ```
 
 ## Lokale Entwicklung
@@ -53,6 +56,10 @@ Alle Variablen können in einer `.env`-Datei gesetzt werden (dotenv).
 ### Credential-Flow
 
 Beim Start lädt die App via `GET /config` die Credentials aus der Server-`.env`. Falls dort nichts steht, können sie manuell im Browser eingegeben und im `localStorage` gespeichert werden. Die Reihenfolge: `.env` → `localStorage` → manuelle Eingabe.
+
+### History-Store
+
+`lektorat-history.json` wird beim ersten Lauf automatisch im Projektverzeichnis erstellt. Kein Setup nötig. Die Datei gehört nicht ins Git (analog zur `.env`). Beim Deploy bleibt sie unangetastet, weil `deploy.sh` sie nicht synchronisiert.
 
 ## Deployment auf dem LXC
 
@@ -101,6 +108,24 @@ systemctl status lektorat
 journalctl -u lektorat -f
 systemctl restart lektorat
 ```
+
+## History-API
+
+Der Server stellt folgende Endpunkte bereit (kein Auth nötig, da lokales Netz):
+
+| Methode | Pfad | Zweck |
+|---------|------|-------|
+| POST | `/history/check` | Lektorat-Ergebnis speichern |
+| PATCH | `/history/check/:id/saved` | Lauf als «in BookStack gespeichert» markieren |
+| GET | `/history/page/:page_id` | Letzte 20 Läufe für eine Seite |
+| POST | `/history/review` | Buchbewertung speichern |
+| GET | `/history/review/:book_id` | Letzte 10 Bewertungen für ein Buch |
+
+Jeder `page_checks`-Eintrag enthält: `page_id`, `page_name`, `book_id`, `checked_at`, `error_count`, `errors_json` (komplettes Fehler-Array), `stilanalyse`, `fazit`, `model`, `saved`, `saved_at`.
+
+Jeder `book_reviews`-Eintrag enthält: `book_id`, `book_name`, `reviewed_at`, `review_json` (komplettes Review-Objekt), `model`.
+
+Das Frontend ruft die History automatisch auf: nach `runCheck`, nach `saveCorrections` und beim Wechsel auf eine Seite (`selectPage`). Im Seiteneditor wird der Verlauf als kompakte Liste angezeigt (Datum, Fehleranzahl, gespeichert/verworfen, Modell).
 
 ## BookStack API
 
@@ -171,3 +196,5 @@ Die Single-Page-App besteht aus drei Dateien:
 - Sehr lange Seiten können das Claude-Token-Limit erreichen (`max_tokens: 8000`)
 - Kein Diff-View zwischen Original und korrigierter Version
 - Buchbewertung kürzt Seitentexte auf 3000 Zeichen – sehr lange Seiten werden unvollständig analysiert
+- History-Store ist eine JSON-Datei (kein echtes DBMS) – bei sehr vielen Einträgen (tausende) wird das Lesen/Schreiben langsamer; für den Einzelnutzer-Betrieb kein Problem
+- History der Buchbewertungen wird im UI noch nicht angezeigt (nur gespeichert)

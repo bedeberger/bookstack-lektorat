@@ -38,6 +38,8 @@ document.addEventListener('alpine:init', () => {
     checkLoading: false,
     bookReviewLoading: false,
     bookReviewProgress: 0,
+    lastCheckId: null,
+    pageHistory: [],
 
     get statusHtml() {
       if (!this.status) return '';
@@ -54,6 +56,14 @@ document.addEventListener('alpine:init', () => {
     setStatus(msg, spinner = false) {
       this.status = msg;
       this.statusSpinner = spinner;
+    },
+
+    formatDate(iso) {
+      if (!iso) return '';
+      return new Date(iso).toLocaleString('de-CH', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
     },
 
     setReviewStatus(msg, spinner = false) {
@@ -190,10 +200,20 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
+    async loadPageHistory(pageId) {
+      try {
+        this.pageHistory = await fetch('/history/page/' + pageId).then(r => r.json());
+      } catch (e) {
+        console.error('[loadPageHistory]', e);
+      }
+    },
+
     async selectPage(p) {
       this.currentPage = p;
       this.correctedHtml = null;
       this.hasErrors = false;
+      this.lastCheckId = null;
+      this.pageHistory = [];
       this.showEditorCard = true;
       this.analysisOut = '<span class="muted-msg"><span class="spinner"></span>Vorschau lädt…</span>';
       this.setStatus('');
@@ -208,6 +228,7 @@ document.addEventListener('alpine:init', () => {
         console.error('[selectPage preview]', e);
         this.analysisOut = '<span class="muted-msg">Seite ausgewählt. «Prüfen» starten.</span>';
       }
+      await this.loadPageHistory(p.id);
     },
 
     async runCheck() {
@@ -298,6 +319,28 @@ ${html}`;
         }
 
         this.analysisOut = out;
+
+        // Analyse in History speichern
+        try {
+          const hr = await fetch('/history/check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              page_id: this.currentPage.id,
+              page_name: this.currentPage.name,
+              book_id: this.currentPage.book_id || null,
+              error_count: fehler.length,
+              errors_json: fehler,
+              stilanalyse: result.stilanalyse || null,
+              fazit: result.fazit || null,
+              model: CLAUDE_MODEL,
+            }),
+          });
+          const hd = await hr.json();
+          this.lastCheckId = hd.id;
+          await this.loadPageHistory(this.currentPage.id);
+        } catch (e) { console.error('[history check]', e); }
+
         this.setStatus('Analyse abgeschlossen.');
       } catch (e) {
         console.error('[runCheck]', e);
@@ -316,6 +359,12 @@ ${html}`;
           html: this.correctedHtml,
           name: this.currentPage.name,
         });
+        if (this.lastCheckId) {
+          try {
+            await fetch('/history/check/' + this.lastCheckId + '/saved', { method: 'PATCH' });
+            await this.loadPageHistory(this.currentPage.id);
+          } catch (e) { console.error('[history saved]', e); }
+        }
         this.setStatus('✓ Korrekturen gespeichert.');
         this.correctedHtml = null;
         this.hasErrors = false;
@@ -450,6 +499,16 @@ ${bookText}`;
         if (r.fazit) html += `<div class="fazit" style="margin-top:16px;">${escHtml(r.fazit)}</div>`;
 
         this.bookReviewOut = html;
+
+        // Buchbewertung in History speichern
+        try {
+          await fetch('/history/review', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName, review_json: r, model: CLAUDE_MODEL }),
+          });
+        } catch (e) { console.error('[history review]', e); }
+
         this.setReviewStatus(`${pageContents.length} Seiten analysiert.`);
       } catch (e) {
         console.error('[runBookReview]', e);

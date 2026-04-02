@@ -84,6 +84,19 @@
   </div>
   <div id="status" x-html="statusHtml"></div>
   <div style="margin-top:1rem;" x-html="analysisOut"></div>
+
+  <!-- Verlauf dieser Seite -->
+  <div x-show="pageHistory.length > 0" style="margin-top:20px; border-top: 0.5px solid var(--color-border); padding-top:14px;">
+    <div class="history-heading">Verlauf</div>
+    <template x-for="entry in pageHistory" :key="entry.id">
+      <div class="history-item">
+        <span class="history-date" x-text="formatDate(entry.checked_at)"></span>
+        <span class="badge" :class="entry.error_count > 0 ? 'badge-err' : 'badge-ok'" x-text="entry.error_count > 0 ? entry.error_count + ' Fehler' : 'fehlerfrei'"></span>
+        <span class="badge" :class="entry.saved ? 'badge-ok' : 'badge-warn'" x-text="entry.saved ? '✓ gespeichert' : 'verworfen'"></span>
+        <span class="tag" x-text="entry.model"></span>
+      </div>
+    </template>
+  </div>
 </div>
 
 </body>
