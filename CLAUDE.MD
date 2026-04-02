@@ -21,7 +21,14 @@ Der Claude-Aufruf läuft **nicht direkt aus dem Browser** gegen `api.anthropic.c
 
 ```
 bookstack-lektorat/
-├── server.js                # Express-Server + Proxies + DB-Endpoints
+├── server.js                # Express-Setup + Route-Mounting (Einstiegspunkt)
+├── logger.js                # Winston-Logger (Singleton, von allen Modulen importiert)
+├── db/
+│   └── schema.js            # DB-Setup, Schema, Migrationen, saveFigurenToDb()
+├── routes/
+│   ├── history.js           # /history/* Endpunkte (Lektorat-Checks + Buchbewertungen)
+│   ├── figures.js           # /figures/:book_id Endpunkte
+│   └── proxies.js           # /config, /claude (SSE-Proxy), /api/* (BookStack-Proxy)
 ├── package.json
 ├── .env                     # Credentials (nicht eingecheckt)
 ├── lektorat.db              # SQLite-Datenbank (nicht eingecheckt, wird auto-erstellt)
@@ -33,8 +40,19 @@ bookstack-lektorat/
 │       └── deploy.yml       # GitHub Actions Workflow (push → deploy)
 └── public/
     ├── index.html           # Single-Page-App (Alpine.js, kein Build-Step)
-    ├── app.js               # Alpine-Komponente (Reaktivität, API-Calls, Claude-Integration)
-    └── style.css            # Zentrales Stylesheet
+    ├── style.css            # Zentrales Stylesheet
+    └── js/                  # ES-Module (kein Build-Step, type="module")
+        ├── app.js           # Alpine-Komponente: State, Computed, init/selectPage/resetView
+        ├── utils.js         # escHtml(), htmlToText()
+        ├── prompts.js       # SYSTEM_*-Strings, CLAUDE_API, buildLektoratPrompt()
+        ├── api-bookstack.js # bsGet, bsGetAll, bsPut, _applyCorrections
+        ├── api-claude.js    # callClaude (SSE-Streaming)
+        ├── history.js       # loadPageHistory, loadBookReviewHistory
+        ├── tree.js          # loadBooks, loadPages, loadTokenEstimates
+        ├── lektorat.js      # runCheck, saveCorrections, toggleDiff, batchCheck, computeDiff
+        ├── review.js        # runBookReview
+        ├── figuren.js       # runFigurExtraction, loadFiguren, saveFiguren, toggleFiguresCard
+        └── graph.js         # renderFigurGraph, _figTypColor
 ```
 
 ## Lokale Entwicklung
@@ -317,11 +335,15 @@ Die Figuren werden als interaktiver **vis-network**-Graph dargestellt (CDN: `unp
 
 ## Frontend-Architektur
 
-Die Single-Page-App besteht aus drei Dateien:
+Die Single-Page-App besteht aus `index.html`, `style.css` und ES-Modulen unter `public/js/` – **kein Build-Step**, kein Bundler. Alpine.js und vis-network werden via CDN geladen.
 
-- **[public/index.html](public/index.html)** – HTML-Struktur mit Alpine.js-Direktiven (`x-data`, `x-model`, `@click`, `x-show`, `x-cloak`, `x-for`, `x-if`, `x-html`, `x-text`). Alpine.js wird via CDN geladen (`cdn.jsdelivr.net/npm/alpinejs@3`). Der `<body>` trägt `x-data="lektorat"` – die gesamte App ist eine einzige Alpine-Komponente.
-- **[public/app.js](public/app.js)** – Alpine-Komponente `lektorat`, registriert via `Alpine.data('lektorat', () => ({...}))` im `alpine:init`-Event. Enthält den gesamten reaktiven State, alle API-Calls, die Claude-Integration und die History-Verwaltung.
+- **[public/index.html](public/index.html)** – HTML-Struktur mit Alpine.js-Direktiven (`x-data`, `x-model`, `@click`, `x-show`, `x-cloak`, `x-for`, `x-if`, `x-html`, `x-text`). Alpine.js via CDN (`cdn.jsdelivr.net/npm/alpinejs@3`). Der `<body>` trägt `x-data="lektorat"`. Script-Reihenfolge im `<head>`: erst `<script type="module" src="js/app.js">`, dann vis-network, dann Alpine mit `defer` – so ist der `alpine:init`-Listener garantiert vor Alpine registriert.
+- **[public/js/app.js](public/js/app.js)** – Einstiegspunkt der Alpine-Komponente. Importiert alle Modul-Objekte und spreaed sie ins Alpine-Data-Objekt. Enthält nur: State-Definitionen, Computed-Properties (`get`), und die wenigen UI-Methoden die `this.*` direkt brauchen (`init`, `selectPage`, `resetView`, `setStatus`, `formatDate`, `setReviewStatus`, `cutAtSentence`).
 - **[public/style.css](public/style.css)** – Zentrales Stylesheet. **Alle Styles gehören ausschliesslich hierher** – weder Inline-`style`-Attribute noch `<style>`-Blöcke im HTML sind erlaubt. Neue visuelle Anforderungen immer als CSS-Klasse in `style.css` umsetzen.
+
+### Modul-Pattern
+
+Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das beim Aufruf auf die Alpine-Komponente zeigt – weil sie per `...spread` in das Alpine-Data-Objekt eingebettet sind. Neue Funktionalität: neues Modul anlegen, Methoden-Objekt exportieren, in `js/app.js` importieren und am Ende des Data-Objekts spreaden.
 
 ### Alpine-Komponente: State-Überblick
 
