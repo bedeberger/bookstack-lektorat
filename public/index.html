@@ -62,7 +62,7 @@
             </div>
             <div x-show="item.open">
               <template x-for="page in item.pages" :key="page.id">
-                <div class="page-item page-item-indent" :class="{ selected: currentPage?.id === page.id }" @click="selectPage(page)">
+                <div class="page-item page-item-indent" :class="{ selected: currentPage?.id === page.id, disabled: tokEsts[page.id] && tokEsts[page.id].words === 0 }" @click="if (!(tokEsts[page.id] && tokEsts[page.id].words === 0)) selectPage(page)">
                   <span style="font-size:14px;" x-text="page.name"></span>
                   <span x-show="tokEsts[page.id]" class="tok-stats">
                     <template x-if="tokEsts[page.id]?.words > 0">

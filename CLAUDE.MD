@@ -46,7 +46,7 @@ bookstack-lektorat/
         ├── utils.js         # escHtml(), htmlToText()
         ├── prompts.js       # SYSTEM_*-Strings, CLAUDE_API, buildLektoratPrompt()
         ├── api-bookstack.js # bsGet, bsGetAll, bsPut, _applyCorrections
-        ├── api-claude.js    # callClaude (SSE-Streaming)
+        ├── api-claude.js    # callClaude(userPrompt, systemPrompt?, onProgress?) → Promise<Object>
         ├── history.js       # loadPageHistory, loadBookReviewHistory
         ├── tree.js          # loadBooks, loadPages, loadTokenEstimates
         ├── lektorat.js      # runCheck, saveCorrections, toggleDiff, batchCheck, computeDiff
@@ -258,9 +258,17 @@ Die App nutzt folgende BookStack-Endpunkte (Token-Auth via `Authorization: Token
 
 Token-Credentials werden via `/config` vom Server geliefert und im `Authorization`-Header jedes Requests mitgeschickt.
 
+### `bsGet` / `bsGetAll` / `bsPut`
+
+`bsGet(path)` und `bsPut(path, body)` sind einfache Wrapper um `fetch('/api/...')`. **`bsGetAll(path)`** ist der wichtigste Helfer: BookStack paginiert Listenendpunkte (Standard: 20 Einträge pro Seite). `bsGetAll` iteriert automatisch alle Seiten und gibt ein flaches Array aller Einträge zurück. Immer `bsGetAll` verwenden wenn eine vollständige Liste benötigt wird (Bücher, Kapitel, Seiten).
+
 ## Claude-Integration
 
 Modell überall: `claude-sonnet-4-6`. Alle Claude-Calls laufen über den lokalen `/claude`-Proxy (kein direkter Browser-Zugriff auf `api.anthropic.com`).
+
+### `callClaude` – Wichtige Einschränkung
+
+`callClaude` gibt immer ein **geparstes JSON-Objekt** zurück. Ist die Antwort kein valides JSON, wirft die Funktion einen Fehler. Das bedeutet: jeder Systemprompt muss JSON-Only erzwingen (`Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach`). `callClaude` kann nicht für Free-Text-Antworten verwendet werden.
 
 ### Seitenlektorat (`runCheck`)
 
@@ -339,7 +347,7 @@ Die Figuren werden als interaktiver **vis-network**-Graph dargestellt (CDN: `unp
 Die Single-Page-App besteht aus `index.html`, `style.css` und ES-Modulen unter `public/js/` – **kein Build-Step**, kein Bundler. Alpine.js und vis-network werden via CDN geladen.
 
 - **[public/index.html](public/index.html)** – HTML-Struktur mit Alpine.js-Direktiven (`x-data`, `x-model`, `@click`, `x-show`, `x-cloak`, `x-for`, `x-if`, `x-html`, `x-text`). Alpine.js via CDN (`cdn.jsdelivr.net/npm/alpinejs@3`). Der `<body>` trägt `x-data="lektorat"`. Script-Reihenfolge im `<head>`: erst `<script type="module" src="js/app.js">`, dann vis-network, dann Alpine mit `defer` – so ist der `alpine:init`-Listener garantiert vor Alpine registriert.
-- **[public/js/app.js](public/js/app.js)** – Einstiegspunkt der Alpine-Komponente. Importiert alle Modul-Objekte und spreaed sie ins Alpine-Data-Objekt. Enthält nur: State-Definitionen, Computed-Properties (`get`), und die wenigen UI-Methoden die `this.*` direkt brauchen (`init`, `selectPage`, `resetView`, `setStatus`, `formatDate`, `setReviewStatus`, `cutAtSentence`).
+- **[public/js/app.js](public/js/app.js)** – Einstiegspunkt der Alpine-Komponente. Importiert alle Modul-Objekte und spreaed sie ins Alpine-Data-Objekt. Enthält nur: State-Definitionen, Computed-Properties (`get`), und die wenigen UI-Methoden die `this.*` direkt brauchen (`init`, `selectPage`, `resetPage`, `resetView`, `setStatus`, `formatDate`, `setReviewStatus`, `cutAtSentence`).
 - **[public/style.css](public/style.css)** – Zentrales Stylesheet. **Alle Styles gehören ausschliesslich hierher** – weder Inline-`style`-Attribute noch `<style>`-Blöcke im HTML sind erlaubt. Neue visuelle Anforderungen immer als CSS-Klasse in `style.css` umsetzen. Die Datei beginnt mit einem Table of Contents (19 Abschnitte) und jeder Abschnitt ist mit `/* === Name === */` markiert.
 
 ### Modul-Pattern
@@ -350,8 +358,8 @@ Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`, `two-ti
 
 `review.js` (Buchbewertung) und `figuren.js` (Figurenextraktion) teilen dasselbe Lade- und Analyse-Muster: alle Seiten eines Buchs laden → bei ≤ 60 000 Zeichen Single-Pass direkt an Claude, bei grösseren Büchern Multi-Pass pro Kapitel + Konsolidierungs-Call. Die gemeinsame Infrastruktur dafür lebt in `two-tier.js`:
 
-- `loadPageContents(bsGet, pages, chMap, minLength, onBatch)` – lädt Seiten batched, überspringt zu kurze
-- `groupByChapter(pageContents)` – gruppiert für den Multi-Pass nach Kapitel-ID
+- `loadPageContents(bsGet, pages, chMap, minLength, onBatch)` – lädt Seiten in 5er-Batches (`BATCH_SIZE = 5`), überspringt Seiten kürzer als `minLength` Zeichen. Gibt `{ title, chapter_id, chapter, text }[]` zurück.
+- `groupByChapter(pageContents)` – gruppiert für den Multi-Pass nach Kapitel-ID. Gibt `{ groupOrder: string[], groups: Map<key, {name, pages[]}> }` zurück.
 - `SINGLE_PASS_LIMIT` – Grenzwert (60 000 Zeichen)
 
 ### Alpine-Komponente: State-Überblick
@@ -360,18 +368,33 @@ Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`, `two-ti
 |----------|-------|
 | `books`, `selectedBookId` | Bücherliste und Auswahl |
 | `pages`, `tree` | Flache Seitenliste + hierarchische Kapitel/Seiten-Struktur für den Tree-View |
+| `pageSearch` | Suchfeld für den Tree-View (filtert `filteredTree` computed) |
 | `currentPage`, `correctedHtml`, `hasErrors` | Aktive Seite und Lektorat-Ergebnis |
+| `currentPageEmpty` | Flag: Seite hat keinen Text (leere Seite) |
+| `originalHtml` | Original-HTML der aktiven Seite vor Korrekturen |
+| `showDiff`, `diffHtml` | Diff-Ansicht: Toggle-Flag und gecachtes Diff-HTML (LCS-basiert, Wort-Ebene) |
 | `showBookCard`, `showEditorCard`, `showBookReviewCard`, `showFiguresCard` | Sichtbarkeits-Flags der Karten |
 | `status`, `statusSpinner` | Statuszeile (mit optionalem Spinner) |
 | `analysisOut`, `bookReviewOut` | HTML-Output der Analyse/Bewertung (via `x-html`) |
 | `checkLoading`, `bookReviewLoading`, `bookReviewProgress` | Lade-States und Progress-Bar (0–100) |
+| `batchLoading`, `batchProgress`, `batchStatus` | Batch-Check-Status (alle Seiten eines Buchs prüfen) |
 | `lastCheckId`, `pageHistory`, `selectedHistoryId` | History-State: ID des letzten Checks, geladene Einträge, aufgeklappter Eintrag |
+| `bookReviewHistory`, `selectedBookReviewId` | Buchbewertungs-History: geladene Einträge, aufgeklappter Eintrag |
+| `tokEsts`, `_tokenEstGen` | Token-Schätzungen pro Seite (Map `page_id → {tok, words, chars}`); `_tokenEstGen` verhindert veraltete Batches nach Buchwechsel |
+| `showTokLegend`, `tokLegendPos` | Token-Legende: Sichtbarkeit und Position `{x, y}` |
 | `figuren`, `figurenLoading`, `figurenProgress`, `figurenStatus` | Figurenübersicht: geladene Figuren, Lade-State, Fortschritt, Statuszeile |
 | `selectedFigurId` | Aufgeklappte Figur in der Detailliste |
+| `_figurenNetwork` | vis-network-Instanz (intern; `null` wenn Graph nicht aktiv) |
 
-### Tree-View
+### Tree-View und Token-Schätzung
 
 Die Seitenliste wird als Kapitel/Seiten-Baum dargestellt. `loadPages()` baut zwei Strukturen parallel auf: `pages` (flach, sortiert) und `tree` (hierarchisch: Kapitel mit `open`-Flag und `pages`-Array, plus kapitellose Seiten). Kapitel sind auf- und zuklappbar (`item.open`). Buttons «Alle ausklappen/einklappen» toggeln alle Kapitel auf einmal. Ein Klick auf `resetView()` (via H1-Klick) klappt alle Kapitel ein.
+
+Nach dem Laden startet `loadTokenEstimates()` im Hintergrund (kein `await`): lädt alle Seiten in 5er-Batches und schätzt den vollen Input-Token-Bedarf pro Seite (`(SYSTEM_LEKTORAT + buildLektoratPrompt(text, html)).length / 4`). Ergebnis landet in `tokEsts[page_id]` und wird im Tree als farbiger Indikator gezeigt. `_tokenEstGen` wird bei jedem Buchwechsel inkrementiert – läuft noch ein alter Batch, bricht er ab sobald er die veraltete Generation erkennt.
+
+### `resetPage()` vs. `resetView()`
+
+`resetPage()` deselektiert nur die aktuelle Seite und schliesst die Editorkarte – wird intern beim Toggle-Klick auf eine bereits gewählte Seite aufgerufen. `resetView()` setzt alles zurück (alle Karten, History, Figuren, Graph, Kapitel zugeklappt) und ist an den H1-Klick gebunden.
 
 ### Seitenvorschau
 
@@ -382,13 +405,12 @@ Beim Auswählen einer Seite (`selectPage`) wird sofort eine Textvorschau geladen
 - **Schema-Validierung**: Nach jedem Haupt-`callClaude`-Aufruf wird das Pflichtfeld geprüft (`fehler`-Array in `lektorat.js`, `gesamtnote` in `review.js`, `figuren`-Array in `figuren.js`). Fehlt das Feld, wirft die Funktion einen klaren Fehler statt still falsche Daten zu rendern.
 - **Timeout-Fehlerbehandlung**: Beide BookStack-Methoden (`bsGet` und `bsPut`) fangen `AbortError` mit einer sprechenden Meldung ab.
 - **Graph-Caching**: `renderFigurGraph()` baut den vis-network-Graph nur neu auf, wenn sich die Figuren-IDs geändert haben (`_figurenHash`). Wiederholtes Öffnen/Schliessen der Figurenkarte kostet keinen Neuaufbau.
-- **Benannte Limits**: Magic Numbers sind als Konstanten dokumentiert – `MIN_HTML_RATIO` / `SAFETY_HTML_RATIO` in `lektorat.js`, `PREVIEW_MAX_CHARS` in `app.js`, `SINGLE_PASS_LIMIT` / `BATCH_SIZE` in `two-tier.js`.
+- **Benannte Limits**: Magic Numbers sind als Konstanten dokumentiert – `MIN_HTML_RATIO` / `SAFETY_HTML_RATIO` in `lektorat.js`, `PREVIEW_MAX_CHARS` in `app.js`, `SINGLE_PASS_LIMIT` / `BATCH_SIZE` (nicht exportiert, intern) in `two-tier.js`.
 
 ## Bekannte Einschränkungen
 
 - Kein Authentifizierungsschutz auf Port 3737 – nur im lokalen Netz verwenden
 - Sehr lange Seiten können das Claude-Token-Limit erreichen (konfigurierbar via `MODEL_TOKEN`, Default 64000)
 - Buchbewertung kürzt Seitentexte auf 3000 Zeichen – sehr lange Seiten werden unvollständig analysiert
-- History der Buchbewertungen wird im UI noch nicht angezeigt (nur serverseitig gespeichert)
 - Figurenübersicht ist read-only – keine manuelle Korrektur einzelner Figuren möglich, nur Neu-Ermittlung des gesamten Buchs
 - vis-network wird via CDN geladen; ohne Internetverbindung kein Graph (Figurenliste bleibt verfügbar)

@@ -264,6 +264,8 @@ ins {
 }
 .page-item:hover { background: rgba(0, 0, 0, 0.03); }
 .page-item.selected { border-color: var(--color-text); background: rgba(0, 0, 0, 0.02); }
+.page-item.disabled { opacity: 0.4; cursor: not-allowed; }
+.page-item.disabled:hover { background: none; }
 
 /* === Tags === */
 .tag {
