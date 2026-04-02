@@ -1,31 +1,40 @@
 export const CLAUDE_API = '/claude';
 
-export const SYSTEM_LEKTORAT = `Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz. Helvetismen (grösseres, Strasse, gemäss usw.) sind korrekt und werden nicht bemängelt. Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
+// Superregeln – gelten für alle Prompts
+const BASE_RULES = `\
+Schweizer Kontext: Helvetismen (grösser, Strasse, gemäss, weiss, zerreisst usw.) sind korrekt und werden nicht bemängelt. \
+Der Gedankenstrich (–) gilt als akzeptable Schreibweise – keine Korrektur zu Halbgeviertstrich oder Bindestrich. \
+Etwas gilt nur dann als Fehler, wenn es eindeutig falsch ist. Fälle, die zwar abweichen, aber im Schweizer Kontext oder sonst vertretbar sind, werden nicht als Fehler gemeldet – auch keine «möglichen Fehler» mit relativierender Erklärung. Im Zweifel: kein Fehler. \
+Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
 
-export const SYSTEM_BUCHBEWERTUNG = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. Helvetismen (grösseres, Strasse, gemäss usw.) sind korrekt und werden nicht bemängelt. Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
+export const SYSTEM_LEKTORAT = `Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz. ${BASE_RULES}`;
 
-export const SYSTEM_KAPITELANALYSE = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. Helvetismen sind korrekt und werden nicht bemängelt. Antworte ausschliesslich mit einem kompakten JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
+export const SYSTEM_BUCHBEWERTUNG = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. ${BASE_RULES}`;
 
-export const SYSTEM_FIGUREN = `Du bist ein Literaturanalytiker für deutschsprachige Texte. Du extrahierst und analysierst Figuren/Charaktere aus literarischen Werken präzise und strukturiert. Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
+export const SYSTEM_KAPITELANALYSE = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. ${BASE_RULES}`;
 
-export const SYSTEM_STILKORREKTUR = `Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz. Helvetismen (grösseres, Strasse, gemäss usw.) sind korrekt und werden nicht bemängelt. Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
+export const SYSTEM_FIGUREN = `Du bist ein Literaturanalytiker für deutschsprachige Texte aus der Schweiz. ${BASE_RULES}`;
+
+export const SYSTEM_STILKORREKTUR = `Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz. ${BASE_RULES}`;
 
 export function buildStilkorrekturPrompt(html, styles) {
   const liste = styles.map((s, i) =>
-    `${i + 1}. Stelle: "${s.original}"\n   Empfehlung: "${s.korrektur}"\n   Begründung: ${s.erklaerung}\n   Kontext: ${s.kontext}`
+    `${i + 1}. Originalstelle: "${s.original}"\n   Empfehlung: "${s.korrektur}"\n   Begründung: ${s.erklaerung}\n   Kontext: ${s.kontext}`
   ).join('\n\n');
 
-  return `Wende die folgenden stilistischen Verbesserungen auf den HTML-Text an. Du entscheidest selbst über die beste Formulierung – die Empfehlungen sind Hinweise, keine zwingenden Vorgaben. Behalte alle HTML-Tags exakt bei und ändere nur die betroffenen Textstellen.
+  return `Du bekommst einen HTML-Text und eine Liste stilistischer Verbesserungsvorschläge. Für jede Stelle entscheidest du selbst, wie die beste Formulierung lautet – die Empfehlung ist ein Hinweis, keine Vorgabe. Gib für jede Stelle das exakte Original (wie es im HTML steht) und deine gewählte Ersatzformulierung zurück.
 
 Stilistische Verbesserungen:
 ${liste}
 
 Antworte mit diesem JSON-Schema:
 {
-  "html": "vollständiges überarbeitetes HTML – alle Tags unverändert, nur Textstellen angepasst"
+  "korrekturen": [
+    { "original": "exakter Originaltext wie im HTML", "ersatz": "deine gewählte Ersatzformulierung" }
+  ]
 }
 
-Original-HTML:
+HTML-Text:
 ${html}`;
 }
 

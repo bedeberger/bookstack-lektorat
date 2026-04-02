@@ -208,10 +208,10 @@ export const lektoratMethods = {
           SYSTEM_STILKORREKTUR,
           (chars) => this.setStatus(`Claude überarbeitet Stil… (${chars} Zeichen)`, true)
         );
-        if (result?.html && result.html.length >= this.correctedHtml.length * SAFETY_HTML_RATIO) {
-          finalHtml = result.html;
+        if (Array.isArray(result?.korrekturen) && result.korrekturen.length > 0) {
+          finalHtml = this._applyCorrections(this.correctedHtml, result.korrekturen.map(k => ({ original: k.original, korrektur: k.ersatz })));
         } else {
-          console.warn('[saveCorrections] Stil-HTML unvollständig, Stilkorrekturen übersprungen');
+          console.warn('[saveCorrections] Stil-Korrekturen leer oder ungültig, Stilkorrekturen übersprungen');
         }
       } catch (e) {
         console.error('[saveCorrections] Stil-Call fehlgeschlagen:', e);
