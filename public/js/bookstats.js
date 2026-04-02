@@ -8,11 +8,15 @@ const METRIC_LABELS = {
   tok:        'Tokens',
 };
 
+// Ausserhalb von Alpine gespeichert, damit die Chart.js-Instanz nicht durch
+// Alpines Reaktivitäts-Proxy beschädigt wird.
+let _statsChart = null;
+
 export const bookstatsMethods = {
   async toggleBookStatsCard() {
     if (this.showBookStatsCard) {
       this.showBookStatsCard = false;
-      if (this._statsChart) { this._statsChart.destroy(); this._statsChart = null; }
+      if (_statsChart) { _statsChart.destroy(); _statsChart = null; }
       return;
     }
     this.showBookStatsCard = true;
@@ -62,7 +66,7 @@ export const bookstatsMethods = {
     if (!canvas) return;
 
     if (!this.bookStatsData.length) {
-      if (this._statsChart) { this._statsChart.destroy(); this._statsChart = null; }
+      if (_statsChart) { _statsChart.destroy(); _statsChart = null; }
       return;
     }
 
@@ -81,22 +85,37 @@ export const bookstatsMethods = {
       return `${d}.${m}.${y.slice(2)}`;
     });
     const data = rows.map(r => r[metric]);
-    const label = METRIC_LABELS[metric] || metric;
+    const metricLabel = METRIC_LABELS[metric] || metric;
 
-    if (this._statsChart) {
-      this._statsChart.data.labels = labels;
-      this._statsChart.data.datasets[0].data = data;
-      this._statsChart.data.datasets[0].label = label;
-      this._statsChart.update();
+    // Ganzzahlige Achsenbeschriftung für Seiten; k-Formatierung für grosse Werte
+    const makeTick = m => v => {
+      if (m === 'page_count') return Number.isInteger(v) ? v : null;
+      return v >= 1000 ? '~' + Math.round(v / 1000) + 'k' : v;
+    };
+    const makeTooltip = m => ctx => {
+      const v = ctx.parsed.y;
+      const fmt = (m !== 'page_count' && v >= 1000)
+        ? '~' + Math.round(v / 1000) + 'k'
+        : String(Math.round(v));
+      return ` ${ctx.dataset.label}: ${fmt}`;
+    };
+
+    if (_statsChart) {
+      _statsChart.data.labels = labels;
+      _statsChart.data.datasets[0].data = data;
+      _statsChart.data.datasets[0].label = metricLabel;
+      _statsChart.options.scales.y.ticks.callback = makeTick(metric);
+      _statsChart.options.plugins.tooltip.callbacks.label = makeTooltip(metric);
+      _statsChart.update();
       return;
     }
 
-    this._statsChart = new Chart(canvas, {
+    _statsChart = new Chart(canvas, {
       type: 'line',
       data: {
         labels,
         datasets: [{
-          label,
+          label: metricLabel,
           data,
           borderColor: '#4A90D9',
           backgroundColor: 'rgba(74,144,217,0.07)',
@@ -115,11 +134,7 @@ export const bookstatsMethods = {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: ctx => {
-                const v = ctx.parsed.y;
-                const fmt = v >= 1000 ? '~' + Math.round(v / 1000) + 'k' : String(v);
-                return ` ${label}: ${fmt}`;
-              },
+              label: makeTooltip(metric),
             },
           },
         },
@@ -134,7 +149,7 @@ export const bookstatsMethods = {
             ticks: {
               font: { size: 11 },
               color: '#888',
-              callback: v => v >= 1000 ? '~' + Math.round(v / 1000) + 'k' : v,
+              callback: makeTick(metric),
             },
           },
         },
