@@ -16,6 +16,9 @@ echo "=== Deploy lektorat ==="
 rsync -a --exclude='.env' --exclude='node_modules' --exclude='.git' \
   ./ "$INSTALL_DIR/"
 
+# Ownership auf github-runner setzen
+chown -R github-runner:github-runner "$INSTALL_DIR"
+
 # Abhängigkeiten aktualisieren
 cd "$INSTALL_DIR"
 npm install --omit=dev --quiet
