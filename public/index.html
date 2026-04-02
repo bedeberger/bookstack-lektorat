@@ -30,20 +30,29 @@
       <button @click="tree.forEach(c => c.open = true)" style="font-size:12px; padding:4px 10px;">Alle ausklappen</button>
       <button @click="tree.forEach(c => c.open = false)" style="font-size:12px; padding:4px 10px;">Alle einklappen</button>
     </div>
-    <template x-for="chapter in tree" :key="chapter.id">
-      <div class="tree-chapter">
-        <div class="tree-chapter-header" @click="chapter.open = !chapter.open">
-          <span class="tree-chevron" :class="{ open: chapter.open }">›</span>
-          <span x-text="chapter.name"></span>
-          <span class="tag" x-text="chapter.pages.length + ' Seiten'"></span>
-        </div>
-        <div x-show="chapter.open">
-          <template x-for="page in chapter.pages" :key="page.id">
-            <div class="page-item page-item-indent" :class="{ selected: currentPage?.id === page.id }" @click="selectPage(page)">
-              <span style="font-size:14px;" x-text="page.name"></span>
+    <template x-for="item in tree" :key="item.id">
+      <div>
+        <template x-if="item.type === 'chapter'">
+          <div class="tree-chapter">
+            <div class="tree-chapter-header" @click="item.open = !item.open">
+              <span class="tree-chevron" :class="{ open: item.open }">›</span>
+              <span x-text="item.name"></span>
+              <span class="tag" x-text="item.pages.length + ' Seiten'"></span>
             </div>
-          </template>
-        </div>
+            <div x-show="item.open">
+              <template x-for="page in item.pages" :key="page.id">
+                <div class="page-item page-item-indent" :class="{ selected: currentPage?.id === page.id }" @click="selectPage(page)">
+                  <span style="font-size:14px;" x-text="page.name"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+        <template x-if="item.type === 'page'">
+          <div class="page-item" :class="{ selected: currentPage?.id === item.page.id }" @click="selectPage(item.page)">
+            <span style="font-size:14px;" x-text="item.name"></span>
+          </div>
+        </template>
       </div>
     </template>
   </div>

@@ -165,16 +165,23 @@ document.addEventListener('alpine:init', () => {
               : null,
           }));
 
-        this.tree = sortedChapters.map(c => ({
-          id: c.id,
-          name: c.name,
-          open: true,
-          pages: this.pages.filter(p => p.chapter_id === c.id),
-        }));
-        const loosePages = this.pages.filter(p => !p.chapter_id);
-        if (loosePages.length) {
-          this.tree.unshift({ id: 'loose', name: 'Ohne Kapitel', open: true, pages: loosePages });
-        }
+        this.tree = [
+          ...sortedChapters.map(c => ({
+            type: 'chapter',
+            id: c.id,
+            name: c.name,
+            priority: c.priority,
+            open: true,
+            pages: this.pages.filter(p => p.chapter_id === c.id),
+          })),
+          ...this.pages.filter(p => !p.chapter_id).map(p => ({
+            type: 'page',
+            id: p.id,
+            name: p.name,
+            priority: p.priority,
+            page: p,
+          })),
+        ].sort((a, b) => a.priority - b.priority);
 
         this.setStatus('');
       } catch (e) {
