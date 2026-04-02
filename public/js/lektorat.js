@@ -62,15 +62,48 @@ export const lektoratMethods = {
     }
   },
 
+  _recomputeCorrectedHtml() {
+    if (!this.originalHtml) return;
+    const selected = this.lektoratErrors.filter((_, i) => this.selectedErrors[i]);
+    this.correctedHtml = selected.length > 0
+      ? this._applyCorrections(this.originalHtml, selected)
+      : this.originalHtml;
+    this.diffHtml = '';
+    this.showDiff = false;
+  },
+
+  toggleError(i) {
+    this.selectedErrors[i] = !this.selectedErrors[i];
+    this._recomputeCorrectedHtml();
+  },
+
+  toggleStyle(i) {
+    this.selectedStyles[i] = !this.selectedStyles[i];
+  },
+
+  selectAllErrors(val) {
+    this.selectedErrors = this.selectedErrors.map(() => val);
+    this._recomputeCorrectedHtml();
+  },
+
+  selectAllStyles(val) {
+    this.selectedStyles = this.selectedStyles.map(() => val);
+  },
+
   async runCheck() {
     if (!this.currentPage) return;
     this.checkLoading = true;
+    this.checkDone = false;
     this.originalHtml = null;
     this.correctedHtml = null;
     this.hasErrors = false;
     this.showDiff = false;
     this.diffHtml = '';
     this.analysisOut = '';
+    this.lektoratErrors = [];
+    this.lektoratStyles = [];
+    this.selectedErrors = [];
+    this.selectedStyles = [];
     this.setStatus('Lade Seiteninhalt…', true);
 
     try {
@@ -91,45 +124,32 @@ export const lektoratMethods = {
         throw new Error('Claude-Antwort ungültig: fehler-Array fehlt');
       }
 
-      const claudeHtml = result.korrekturen_html;
-      if (claudeHtml && claudeHtml.length >= html.length * MIN_HTML_RATIO) {
-        this.correctedHtml = claudeHtml;
-      } else {
-        // Claude hat das HTML weggelassen oder abgeschnitten → Korrekturen manuell einsetzen
-        const fixable = (result.fehler || []).filter(f => f.typ !== 'stil');
-        this.correctedHtml = fixable.length > 0 ? this._applyCorrections(html, fixable) : html;
-        if (claudeHtml) console.warn('[runCheck] korrekturen_html zu kurz, Korrekturen manuell angewandt');
-      }
-
       const fehler = result.fehler || [];
       const errors = fehler.filter(f => f.typ === 'rechtschreibung' || f.typ === 'grammatik');
       const styles = fehler.filter(f => f.typ === 'stil');
+
+      this.lektoratErrors = errors;
+      this.lektoratStyles = styles;
+      this.selectedErrors = errors.map(() => true);
+      this.selectedStyles = styles.map(() => true);
       this.hasErrors = errors.length > 0;
 
+      // Korrekturen aus gewählten Fehlern berechnen
+      this.correctedHtml = errors.length > 0
+        ? this._applyCorrections(html, errors)
+        : html;
+
+      // Prüfen ob Claude-HTML vollständiger ist → dann als Basis nehmen
+      const claudeHtml = result.korrekturen_html;
+      if (claudeHtml && claudeHtml.length >= html.length * MIN_HTML_RATIO) {
+        // Claude-HTML ist vollständig – aber wir brauchen selektives Anwenden,
+        // daher immer _applyCorrections nutzen (Claude-HTML wird ignoriert)
+        if (errors.length === 0) this.correctedHtml = html;
+      } else if (claudeHtml) {
+        console.warn('[runCheck] korrekturen_html zu kurz, Korrekturen manuell angewandt');
+      }
+
       let out = '';
-      if (errors.length === 0) {
-        out += `<div class="finding ok"><span class="badge badge-ok">✓ Fehlerfrei</span> &nbsp;Keine Rechtschreib- oder Grammatikfehler gefunden.</div>`;
-      } else {
-        out += `<div class="section-heading">${errors.length} Fehler gefunden</div>`;
-        errors.forEach(f => {
-          out += `<div class="finding error">
-            <span class="badge badge-err">${f.typ}</span>
-            &nbsp;<del>${escHtml(f.original)}</del> → <ins>${escHtml(f.korrektur)}</ins>
-            <div class="finding-context">«${escHtml(f.kontext)}»</div>
-            <div class="finding-explanation">${escHtml(f.erklaerung)}</div>
-          </div>`;
-        });
-      }
-      if (styles.length > 0) {
-        out += `<div class="section-heading-top">Stilanmerkungen</div>`;
-        styles.forEach(f => {
-          out += `<div class="finding style">
-            <span class="badge badge-warn">Stil</span>
-            &nbsp;${escHtml(f.erklaerung)}
-            ${f.original ? `<div class="finding-context">«${escHtml(f.original)}»</div>` : ''}
-          </div>`;
-        });
-      }
       if (result.stilanalyse) {
         out += `<div class="stilbox"><div class="stilbox-title">Stilanalyse</div>${escHtml(result.stilanalyse)}</div>`;
       }
@@ -137,6 +157,7 @@ export const lektoratMethods = {
         out += `<div class="fazit">${escHtml(result.fazit)}</div>`;
       }
       this.analysisOut = out;
+      this.checkDone = true;
 
       try {
         const hr = await fetch('/history/check', {

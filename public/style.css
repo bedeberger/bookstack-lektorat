@@ -223,6 +223,10 @@ button.success:hover { background: var(--color-success-hover); }
 .finding.error { border-color: var(--color-err-border); }
 .finding.style { border-color: var(--color-style-border); }
 .finding.ok    { border-color: var(--color-ok-border); }
+.finding.finding-deselected { opacity: 0.35; }
+.finding-checkbox { flex-shrink: 0; margin-top: 2px; cursor: pointer; }
+.finding { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.finding > span { flex: 1; }
 
 .finding-context {
   color: #555;
@@ -387,6 +391,17 @@ ins {
   font-weight: 500;
   font-size: var(--font-size-base);
   margin: 14px 0 8px;
+}
+
+.finding-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.finding-toggle-group {
+  display: flex;
+  gap: 4px;
 }
 
 /* === Preview === */

@@ -38,6 +38,11 @@ document.addEventListener('alpine:init', () => {
     analysisOut: '',
     bookReviewOut: '',
     bookReviewStatus: '',
+    lektoratErrors: [],
+    lektoratStyles: [],
+    selectedErrors: [],
+    selectedStyles: [],
+    checkDone: false,
     checkLoading: false,
     bookReviewLoading: false,
     bookReviewProgress: 0,
@@ -158,6 +163,11 @@ document.addEventListener('alpine:init', () => {
       this.lastCheckId = null;
       this.pageHistory = [];
       this.selectedHistoryId = null;
+      this.lektoratErrors = [];
+      this.lektoratStyles = [];
+      this.selectedErrors = [];
+      this.selectedStyles = [];
+      this.checkDone = false;
       this.showEditorCard = true;
       this.analysisOut = '<span class="muted-msg"><span class="spinner"></span>Vorschau lädt…</span>';
       this.setStatus('');
@@ -190,6 +200,11 @@ document.addEventListener('alpine:init', () => {
       this.lastCheckId = null;
       this.pageHistory = [];
       this.selectedHistoryId = null;
+      this.lektoratErrors = [];
+      this.lektoratStyles = [];
+      this.selectedErrors = [];
+      this.selectedStyles = [];
+      this.checkDone = false;
     },
 
     resetView() {
@@ -210,6 +225,11 @@ document.addEventListener('alpine:init', () => {
       this.pageHistory = [];
       this.selectedHistoryId = null;
       this.tree.forEach(c => { if (c.type === 'chapter') c.open = false; });
+      this.lektoratErrors = [];
+      this.lektoratStyles = [];
+      this.selectedErrors = [];
+      this.selectedStyles = [];
+      this.checkDone = false;
       this.showFiguresCard = false;
       this.figurenStatus = '';
       this.figurenProgress = 0;
