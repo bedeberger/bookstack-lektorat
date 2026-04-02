@@ -24,7 +24,7 @@
       </template>
     </select>
     <button @click="loadPages()">Seiten laden</button>
-    <button @click="openBookReviewCard()" :class="{ primary: showBookReviewCard }">Buch bewerten</button>
+    <button @click="runBookReview()" :disabled="bookReviewLoading">Buch bewerten</button>
     <button @click="batchCheck()" :disabled="batchLoading || bookReviewLoading || !pages.length" title="Alle Seiten sequenziell prüfen und in History speichern">Alle prüfen</button>
     <button @click="toggleFiguresCard()" :class="{ primary: showFiguresCard }" title="Figurenübersicht anzeigen">Figuren</button>
   </div>
@@ -55,9 +55,9 @@
       <div>
         <template x-if="item.type === 'chapter'">
           <div class="tree-chapter">
-            <div class="tree-chapter-header" :class="{ selected: currentPage?._isChapter && currentPage?.id === item.id }">
-              <span class="tree-chevron" :class="{ open: item.open, invisible: item.pages.length === 0 }" @click.stop="if (!pageSearch) item.open = !item.open">›</span>
-              <span x-text="item.name" @click="item.chapterItem && selectPage(item.chapterItem)" :class="{ 'chapter-selectable': item.chapterItem }" style="flex:1;cursor:pointer;"></span>
+            <div class="tree-chapter-header" :class="{ disabled: item.pages.length === 0 }" @click="if (!pageSearch && item.pages.length > 0) item.open = !item.open">
+              <span class="tree-chevron" :class="{ open: item.open }" x-show="item.pages.length > 0">›</span>
+              <span x-text="item.name"></span>
               <span class="tag" x-text="item.pages.length + ' Seiten'"></span>
             </div>
             <div x-show="item.open">
@@ -120,13 +120,7 @@
 <div class="card" x-show="showBookReviewCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="'Buchbewertung: ' + selectedBookName"></span>
-    <div class="card-actions">
-      <button @click="runBookReview()" :disabled="bookReviewLoading">
-        <span x-show="bookReviewLoading" class="spinner"></span>
-        <span x-text="bookReviewHistory.length ? 'Neu bewerten' : 'Bewertung starten'"></span>
-      </button>
-      <button class="btn-card-close" @click="showBookReviewCard = false" title="Schliessen">×</button>
-    </div>
+    <button class="btn-card-close" @click="showBookReviewCard = false" title="Schliessen">×</button>
   </div>
   <div class="progress-bar-wrap" x-show="bookReviewProgress > 0">
     <div class="progress-bar" :style="'width:' + bookReviewProgress + '%'"></div>

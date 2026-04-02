@@ -109,14 +109,8 @@ export const lektoratMethods = {
     this.setStatus('Lade Seiteninhalt…', true);
 
     try {
-      let pageData, html;
-      if (this.currentPage._isChapter) {
-        pageData = await this.bsGet('chapters/' + this.currentPage.id);
-        html = pageData.description_html || '';
-      } else {
-        pageData = await this.bsGet('pages/' + this.currentPage.id);
-        html = pageData.html;
-      }
+      const pageData = await this.bsGet('pages/' + this.currentPage.id);
+      const html = pageData.html;
       const text = htmlToText(html);
       this.originalHtml = html;
 
@@ -172,8 +166,8 @@ export const lektoratMethods = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            page_id: this.currentPage._isChapter ? -this.currentPage.id : this.currentPage.id,
-            page_name: this.currentPage._isChapter ? this.currentPage.name + ' (Kapitel)' : this.currentPage.name,
+            page_id: this.currentPage.id,
+            page_name: this.currentPage.name,
             book_id: this.currentPage.book_id || null,
             error_count: fehler.length,
             errors_json: fehler,
@@ -228,17 +222,10 @@ export const lektoratMethods = {
 
     this.setStatus('Speichere in BookStack…', true);
     try {
-      if (this.currentPage._isChapter) {
-        await this.bsPut('chapters/' + this.currentPage.id, {
-          description_html: finalHtml,
-          name: this.currentPage.name,
-        });
-      } else {
-        await this.bsPut('pages/' + this.currentPage.id, {
-          html: finalHtml,
-          name: this.currentPage.name,
-        });
-      }
+      await this.bsPut('pages/' + this.currentPage.id, {
+        html: finalHtml,
+        name: this.currentPage.name,
+      });
       if (this.lastCheckId) {
         try {
           const appliedErrors = this.lektoratErrors.filter((_, i) => this.selectedErrors[i]);
@@ -263,9 +250,7 @@ export const lektoratMethods = {
 
   async batchCheck() {
     if (!this.pages.length || this.batchLoading) return;
-    const chapters = this.tree.filter(n => n.type === 'chapter' && n.chapterItem).map(n => n.chapterItem);
-    const totalItems = this.pages.length + chapters.length;
-    if (!confirm(`Alle ${this.pages.length} Seiten${chapters.length ? ' und ' + chapters.length + ' Kapitel' : ''} prüfen und Ergebnisse in der History speichern?\n\nDies kann bei grossen Büchern mehrere Minuten dauern.`)) return;
+    if (!confirm(`Alle ${this.pages.length} Seiten prüfen und Ergebnisse in der History speichern?\n\nDies kann bei grossen Büchern mehrere Minuten dauern.`)) return;
     this.batchLoading = true;
     this.batchProgress = 0;
     this.batchStatus = '';
@@ -274,8 +259,8 @@ export const lektoratMethods = {
 
     for (let i = 0; i < pages.length; i++) {
       const p = pages[i];
-      this.batchProgress = Math.round((i / totalItems) * 100);
-      this.batchStatus = `${i + 1}/${totalItems}: ${p.name}`;
+      this.batchProgress = Math.round((i / pages.length) * 100);
+      this.batchStatus = `${i + 1}/${pages.length}: ${p.name}`;
 
       try {
         const pageData = await this.bsGet('pages/' + p.id);
@@ -307,46 +292,10 @@ export const lektoratMethods = {
       }
     }
 
-    // Kapitel-Beschreibungen prüfen
-    for (let i = 0; i < chapters.length; i++) {
-      const c = chapters[i];
-      this.batchProgress = Math.round(((pages.length + i) / totalItems) * 100);
-      this.batchStatus = `${pages.length + i + 1}/${totalItems}: ${c.name} (Kapitel)`;
-
-      try {
-        const chData = await this.bsGet('chapters/' + c.id);
-        const html = chData.description_html || '';
-        const text = htmlToText(html).trim();
-        if (!text) continue;
-
-        const result = await this.callClaude(buildLektoratPrompt(text, html), SYSTEM_LEKTORAT);
-        const fehler = result.fehler || [];
-        totalErrors += fehler.filter(f => f.typ !== 'stil').length;
-
-        await fetch('/history/check', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            page_id: -c.id,
-            page_name: c.name + ' (Kapitel)',
-            book_id: c.book_id || null,
-            error_count: fehler.length,
-            errors_json: fehler,
-            stilanalyse: result.stilanalyse || null,
-            fazit: result.fazit || null,
-            model: this.claudeModel,
-          }),
-        });
-        done++;
-      } catch (e) {
-        console.error('[batchCheck chapter]', c.id, e);
-      }
-    }
-
     this.batchProgress = 100;
-    this.batchStatus = `Fertig: ${done}/${totalItems} Einträge geprüft, ${totalErrors} Rechtschreib-/Grammatikfehler.`;
+    this.batchStatus = `Fertig: ${done}/${pages.length} Seiten geprüft, ${totalErrors} Rechtschreib-/Grammatikfehler.`;
     this.batchLoading = false;
 
-    if (this.currentPage) await this.loadPageHistory(this.currentPage._isChapter ? -this.currentPage.id : this.currentPage.id);
+    if (this.currentPage) await this.loadPageHistory(this.currentPage.id);
   },
 };

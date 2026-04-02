@@ -58,15 +58,6 @@ export const treeMethods = {
           priority: c.priority,
           open: true,
           pages: this.pages.filter(p => p.chapter_id === c.id),
-          chapterItem: {
-            id: c.id,
-            name: c.name,
-            book_id: c.book_id || parseInt(bookId),
-            _isChapter: true,
-            url: this.bookstackUrl && c.book_slug && c.slug
-              ? `${this.bookstackUrl}/books/${c.book_slug}/chapter/${c.slug}`
-              : null,
-          },
         })),
         ...this.pages.filter(p => !p.chapter_id).map(p => ({
           type: 'page',

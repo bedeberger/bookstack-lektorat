@@ -1,6 +1,6 @@
 import { escHtml } from './utils.js';
 import { SYSTEM_BUCHBEWERTUNG, SYSTEM_KAPITELANALYSE } from './prompts.js';
-import { SINGLE_PASS_LIMIT, loadPageContents, loadChapterContents, mergeWithChapterDescs, groupByChapter } from './two-tier.js';
+import { SINGLE_PASS_LIMIT, loadPageContents, groupByChapter } from './two-tier.js';
 
 // Buchbewertungs-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -11,6 +11,7 @@ export const reviewMethods = {
     const bookName = this.selectedBookName;
     this.bookReviewLoading = true;
     this.bookReviewProgress = 0;
+    this.showBookReviewCard = true;
     this.bookReviewOut = '';
 
     try {
@@ -30,15 +31,10 @@ export const reviewMethods = {
 
       this.setReviewStatus(`Lese ${pages.length} Seiten…`, true);
 
-      const [pageContentsRaw, chapterDescs] = await Promise.all([
-        loadPageContents(
-          p => this.bsGet(p), pages, chMap, 50,
-          (i, total) => { this.bookReviewProgress = Math.round((i / total) * 55); }
-        ),
-        loadChapterContents(p => this.bsGet(p), chaptersData, 30),
-      ]);
-
-      const pageContents = mergeWithChapterDescs(pageContentsRaw, chapterDescs);
+      const pageContents = await loadPageContents(
+        p => this.bsGet(p), pages, chMap, 50,
+        (i, total) => { this.bookReviewProgress = Math.round((i / total) * 60); }
+      );
 
       this.bookReviewProgress = 65;
 
@@ -50,12 +46,9 @@ export const reviewMethods = {
         this.setReviewStatus('Claude analysiert das Buch…', true);
 
         const bookText = pageContents.map(p =>
-          p.isChapterDesc
-            ? `## Kapiteleinleitung: ${p.title}\n${p.text}`
-            : `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`
+          `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`
         ).join('\n\n---\n\n');
 
-        const pageCount = pageContents.filter(p => !p.isChapterDesc).length;
         const prompt = `Bewerte das folgende Buch «${bookName}» kritisch und umfassend. Analysiere:
 - Struktur und Aufbau (Kapitel, Übergänge, Logik)
 - Sprachstil und Konsistenz über alle Seiten hinweg
@@ -76,7 +69,7 @@ Antworte mit diesem JSON-Schema:
   "fazit": "Abschliessendes Urteil in 1-2 Sätzen"
 }
 
-Buchinhalt (${pageCount} Seiten):
+Buchinhalt (${pageContents.length} Seiten):
 
 ${bookText}`;
 
@@ -94,11 +87,7 @@ ${bookText}`;
           this.bookReviewProgress = 65 + Math.round(((gi + 1) / groupOrder.length) * 25);
           this.setReviewStatus(`Analysiere ${gi + 1}/${groupOrder.length}: «${group.name}»…`, true);
 
-          const chapterText = group.pages.map(p =>
-            p.isChapterDesc
-              ? `## Kapiteleinleitung: ${p.title}\n${p.text}`
-              : `### ${p.title}\n${p.text}`
-          ).join('\n\n---\n\n');
+          const chapterText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
 
           const chapterPrompt = `Analysiere das Kapitel «${group.name}» aus dem Buch «${bookName}».
 Lies den vollständigen Kapiteltext und gib eine kompakte Analyse als JSON zurück:
@@ -211,7 +200,7 @@ Antworte mit diesem JSON-Schema:
         await this.loadBookReviewHistory(bookId);
       } catch (e) { console.error('[history review]', e); }
 
-      this.setReviewStatus(`${pageContents.filter(p => !p.isChapterDesc).length} Seiten analysiert.`);
+      this.setReviewStatus(`${pageContents.length} Seiten analysiert.`);
     } catch (e) {
       console.error('[runBookReview]', e);
       this.bookReviewOut = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
