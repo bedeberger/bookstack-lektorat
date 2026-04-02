@@ -1,5 +1,4 @@
 const CLAUDE_API = '/claude';
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 function escHtml(s) {
   if (!s) return '';
@@ -21,6 +20,7 @@ document.addEventListener('alpine:init', () => {
     authToken: '',
     bookstackUrl: '',
     claudeMaxTokens: 64000,
+    claudeModel: '',
     books: [],
     selectedBookId: '',
     pages: [],
@@ -98,7 +98,7 @@ document.addEventListener('alpine:init', () => {
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model: CLAUDE_MODEL,
+          model: this.claudeModel,
           max_tokens: this.claudeMaxTokens,
           messages: [{ role: 'user', content: prompt }],
         }),
@@ -126,6 +126,7 @@ document.addEventListener('alpine:init', () => {
           this.authToken = 'Token ' + cfg.tokenId + ':' + cfg.tokenPw;
           this.bookstackUrl = cfg.bookstackUrl || '';
           if (cfg.claudeMaxTokens) this.claudeMaxTokens = cfg.claudeMaxTokens;
+          if (cfg.claudeModel) this.claudeModel = cfg.claudeModel;
           await this.loadBooks();
         } else {
           this.setStatus('Keine Zugangsdaten in .env konfiguriert.');
@@ -354,7 +355,7 @@ ${html}`;
               errors_json: fehler,
               stilanalyse: result.stilanalyse || null,
               fazit: result.fazit || null,
-              model: CLAUDE_MODEL,
+              model: this.claudeModel,
             }),
           });
           const hd = await hr.json();
@@ -526,7 +527,7 @@ ${bookText}`;
           await fetch('/history/review', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName, review_json: r, model: CLAUDE_MODEL }),
+            body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName, review_json: r, model: this.claudeModel }),
           });
         } catch (e) { console.error('[history review]', e); }
 

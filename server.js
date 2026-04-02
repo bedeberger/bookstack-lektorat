@@ -42,7 +42,8 @@ app.get('/config', (_req, res) => {
     tokenId: process.env.TOKEN_ID || '',
     tokenPw: process.env.TOKEN_KENNWORT || '',
     bookstackUrl: BOOKSTACK_URL.replace(/\/$/, ''),
-    claudeMaxTokens: parseInt(process.env.MODEL_TOKEN, 10) || 64000
+    claudeMaxTokens: parseInt(process.env.MODEL_TOKEN, 10) || 64000,
+    claudeModel: process.env.MODEL_NAME || 'claude-sonnet-4-6'
   });
 });
 

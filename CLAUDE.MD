@@ -7,14 +7,14 @@ KI-gestütztes Lektorat-Tool für BookStack. Läuft als eigenständiger Node.js-
 ```
 Browser → Express (Port 3737) → /config         → .env-Credentials an Frontend
                               → /history/*      → JSON-History-Store (lektorat-history.json)
-                              → /claude         → api.anthropic.com (Key-Injection)
+                              → /claude         → api.anthropic.com (ANTHROPIC_API_KEY-Injection)
                               → /api/*          → BookStack (localhost:80)
                               → /               → public/index.html
 ```
 
-Der Express-Server übernimmt vier Aufgaben: er served die Single-Page-App unter `/`, proxied alle `/api/*`-Requests an die lokale BookStack-Instanz, stellt unter `/config` die BookStack-Credentials aus `.env` dem Frontend bereit, und persistiert unter `/history/*` alle Lektorat-Läufe in einer lokalen JSON-Datei. Da alles auf demselben Host läuft, gibt es kein CORS-Problem.
+Der Express-Server übernimmt fünf Aufgaben: er served die Single-Page-App unter `/`, proxied alle `/api/*`-Requests an die lokale BookStack-Instanz, stellt unter `/config` die BookStack-Credentials aus `.env` dem Frontend bereit, proxied unter `/claude` alle Claude-Aufrufe mit serverseitiger Key-Injection, und persistiert unter `/history/*` alle Lektorat-Läufe in einer lokalen JSON-Datei. Da alles auf demselben Host läuft, gibt es kein CORS-Problem.
 
-**Achtung:** Die HTML-App ruft `https://api.anthropic.com/v1/messages` direkt aus dem Browser auf, sendet aber **keinen `x-api-key`-Header** – der Claude-Aufruf funktioniert nur wenn der Browser oder ein Proxy den Key ergänzt.
+Der Claude-Aufruf läuft **nicht direkt aus dem Browser** gegen `api.anthropic.com`, sondern über `/claude` – der Server injiziert dabei den `ANTHROPIC_API_KEY` aus der `.env`.
 
 ## Projektstruktur
 
@@ -50,17 +50,20 @@ Umgebungsvariablen (optional, defaults in Klammern):
 - `API_HOST` – Alternative zu `BOOKSTACK_URL` (hat Vorrang)
 - `TOKEN_ID` – BookStack Token ID (wird via `/config` an den Browser geliefert)
 - `TOKEN_KENNWORT` – BookStack Token Passwort (wird via `/config` an den Browser geliefert)
+- `ANTHROPIC_API_KEY` – API-Key für Claude (wird serverseitig in `/claude`-Requests injiziert)
 - `MODEL_TOKEN` – Maximale Output-Tokens für Claude-Aufrufe (`64000`)
 
 Alle Variablen können in einer `.env`-Datei gesetzt werden (dotenv).
 
 ### Credential-Flow
 
-Beim Start lädt die App via `GET /config` die Credentials aus der Server-`.env`. Falls dort nichts steht, können sie manuell im Browser eingegeben und im `localStorage` gespeichert werden. Die Reihenfolge: `.env` → `localStorage` → manuelle Eingabe.
+Beim Start lädt die App via `GET /config` die Credentials aus der Server-`.env`. Sind `TOKEN_ID` und `TOKEN_KENNWORT` gesetzt, baut die App den Auth-Header automatisch auf und lädt die Bücher. Falls die Credentials fehlen, zeigt die App eine Fehlermeldung.
 
 ### History-Store
 
 `lektorat-history.json` wird beim ersten Lauf automatisch im Projektverzeichnis erstellt. Kein Setup nötig. Die Datei gehört nicht ins Git (analog zur `.env`). Beim Deploy bleibt sie unangetastet, weil `deploy.sh` sie nicht synchronisiert.
+
+Die JSON-Datei hat zwei Arrays: `page_checks` und `book_reviews`. IDs werden beim Serverstart aus dem bestehenden Maximum initialisiert (`nextId`) und monoton hochgezählt – kein DBMS, kein Schema, kein ORM. Bei sehr vielen Einträgen (tausende) wird synchrones Lesen/Schreiben langsamer; für den Einzelnutzer-Betrieb kein Problem.
 
 ## Deployment auf dem LXC
 
@@ -122,11 +125,11 @@ Der Server stellt folgende Endpunkte bereit (kein Auth nötig, da lokales Netz):
 | POST | `/history/review` | Buchbewertung speichern |
 | GET | `/history/review/:book_id` | Letzte 10 Bewertungen für ein Buch |
 
-Jeder `page_checks`-Eintrag enthält: `page_id`, `page_name`, `book_id`, `checked_at`, `error_count`, `errors_json` (komplettes Fehler-Array), `stilanalyse`, `fazit`, `model`, `saved`, `saved_at`.
+Jeder `page_checks`-Eintrag enthält: `id`, `page_id`, `page_name`, `book_id`, `checked_at`, `error_count`, `errors_json` (komplettes Fehler-Array), `stilanalyse`, `fazit`, `model`, `saved`, `saved_at`.
 
-Jeder `book_reviews`-Eintrag enthält: `book_id`, `book_name`, `reviewed_at`, `review_json` (komplettes Review-Objekt), `model`.
+Jeder `book_reviews`-Eintrag enthält: `id`, `book_id`, `book_name`, `reviewed_at`, `review_json` (komplettes Review-Objekt), `model`.
 
-Das Frontend ruft die History automatisch auf: nach `runCheck`, nach `saveCorrections` und beim Wechsel auf eine Seite (`selectPage`). Im Seiteneditor wird der Verlauf als kompakte Liste angezeigt (Datum, Fehleranzahl, gespeichert/verworfen, Modell).
+Das Frontend ruft die History automatisch auf: nach `runCheck`, nach `saveCorrections` und beim Wechsel auf eine Seite (`selectPage`). Im Seiteneditor wird der Verlauf als kompakte, ausklappbare Liste angezeigt – jeder Eintrag zeigt Datum, Fehleranzahl, Gespeichert-Status und Modell. Beim Aufklappen erscheinen alle Fehlerdetails, Stilanalyse und Fazit des jeweiligen Laufs.
 
 ## BookStack API
 
@@ -139,17 +142,16 @@ Die App nutzt folgende BookStack-Endpunkte (Token-Auth via `Authorization: Token
 | GET | `/api/pages?book_id=X` | Seiten eines Buchs |
 | GET | `/api/pages/:id` | Seiteninhalt (HTML) |
 | PUT | `/api/pages/:id` | Korrigierte Seite zurückschreiben |
-| GET | `/api/search?query=X&count=N` | Volltextsuche |
 
-Token-Credentials werden im `localStorage` des Browsers gespeichert oder via `/config` vom Server geliefert.
+Token-Credentials werden via `/config` vom Server geliefert und im `Authorization`-Header jedes Requests mitgeschickt.
 
 ## Claude-Integration
 
-Modell überall: `claude-sonnet-4-6`.
+Modell überall: `claude-sonnet-4-6`. Alle Claude-Calls laufen über den lokalen `/claude`-Proxy (kein direkter Browser-Zugriff auf `api.anthropic.com`).
 
 ### Seitenlektorat (`runCheck`)
 
-Ruft Claude direkt aus dem Browser auf (`max_tokens: 8000`). Der Prompt instruiert Claude, **Helvetismen nicht als Fehler zu werten** (grösseres, Strasse, gemäss usw.). Claude gibt strukturiertes JSON zurück:
+Lädt den Seiteninhalt via BookStack-API, extrahiert den Plaintext und schickt beides (Text + Original-HTML) an Claude. Der Prompt instruiert Claude, **Helvetismen nicht als Fehler zu werten** (grösseres, Strasse, gemäss usw.). Claude gibt strukturiertes JSON zurück:
 
 ```json
 {
@@ -160,11 +162,11 @@ Ruft Claude direkt aus dem Browser auf (`max_tokens: 8000`). Der Prompt instruie
 }
 ```
 
-Der korrigierte HTML-String wird bei Bedarf per PUT direkt in BookStack gespeichert. Der «Korrekturen speichern»-Button erscheint nur wenn Rechtschreib- oder Grammatikfehler gefunden wurden.
+Der korrigierte HTML-String wird bei Bedarf per PUT direkt in BookStack gespeichert. Der «Korrekturen speichern»-Button erscheint nur wenn Rechtschreib- oder Grammatikfehler gefunden wurden (Stilanmerkungen allein lösen ihn nicht aus).
 
 ### Buchbewertung (`runBookReview`)
 
-Lädt alle Seiten eines Buchs (max. 3000 Zeichen Text pro Seite), fasst sie zusammen und lässt Claude das ganze Buch kritisch bewerten (`max_tokens: 8000`). Ergebnis:
+Lädt alle Seiten eines Buchs sequenziell (max. 3000 Zeichen Text pro Seite, Seiten unter 50 Zeichen werden übersprungen), zeigt eine Progress-Bar (0–85% beim Laden, 85–100% beim Claude-Call), und lässt Claude das ganze Buch kritisch bewerten. Ergebnis:
 
 ```json
 {
@@ -186,16 +188,36 @@ Wird als Sterne-Rating mit Stärken/Schwächen/Empfehlungen-Listen dargestellt.
 
 Die Single-Page-App besteht aus drei Dateien:
 
-- **[public/index.html](public/index.html)** – HTML-Struktur mit Alpine.js-Direktiven (`x-data`, `x-model`, `@click` usw.). Alpine.js wird via CDN geladen (`cdn.jsdelivr.net/npm/alpinejs@3`).
-- **[public/app.js](public/app.js)** – Alpine-Komponente `lektorat`: reaktiver State, API-Calls gegen den lokalen Proxy, Claude-Integration.
-- **[public/style.css](public/style.css)** – Zentrales Stylesheet (alle Styles ausgelagert, kein Inline-CSS im HTML).
+- **[public/index.html](public/index.html)** – HTML-Struktur mit Alpine.js-Direktiven (`x-data`, `x-model`, `@click`, `x-show`, `x-cloak`, `x-for`, `x-if`, `x-html`, `x-text`). Alpine.js wird via CDN geladen (`cdn.jsdelivr.net/npm/alpinejs@3`). Der `<body>` trägt `x-data="lektorat"` – die gesamte App ist eine einzige Alpine-Komponente.
+- **[public/app.js](public/app.js)** – Alpine-Komponente `lektorat`, registriert via `Alpine.data('lektorat', () => ({...}))` im `alpine:init`-Event. Enthält den gesamten reaktiven State, alle API-Calls, die Claude-Integration und die History-Verwaltung.
+- **[public/style.css](public/style.css)** – Zentrales Stylesheet (alle Styles ausgelagert, kein Inline-CSS im HTML ausser einzelnen Layout-Overrides).
+
+### Alpine-Komponente: State-Überblick
+
+| Property | Zweck |
+|----------|-------|
+| `books`, `selectedBookId` | Bücherliste und Auswahl |
+| `pages`, `tree` | Flache Seitenliste + hierarchische Kapitel/Seiten-Struktur für den Tree-View |
+| `currentPage`, `correctedHtml`, `hasErrors` | Aktive Seite und Lektorat-Ergebnis |
+| `showBookCard`, `showEditorCard`, `showBookReviewCard` | Sichtbarkeits-Flags der drei Karten |
+| `status`, `statusSpinner` | Statuszeile (mit optionalem Spinner) |
+| `analysisOut`, `bookReviewOut` | HTML-Output der Analyse/Bewertung (via `x-html`) |
+| `checkLoading`, `bookReviewLoading`, `bookReviewProgress` | Lade-States und Progress-Bar (0–100) |
+| `lastCheckId`, `pageHistory`, `selectedHistoryId` | History-State: ID des letzten Checks, geladene Einträge, aufgeklappter Eintrag |
+
+### Tree-View
+
+Die Seitenliste wird als Kapitel/Seiten-Baum dargestellt. `loadPages()` baut zwei Strukturen parallel auf: `pages` (flach, sortiert) und `tree` (hierarchisch: Kapitel mit `open`-Flag und `pages`-Array, plus kapitellose Seiten). Kapitel sind auf- und zuklappbar (`item.open`). Buttons «Alle ausklappen/einklappen» toggeln alle Kapitel auf einmal. Ein Klick auf `resetView()` (via H1-Klick) klappt alle Kapitel ein.
+
+### Seitenvorschau
+
+Beim Auswählen einer Seite (`selectPage`) wird sofort eine Textvorschau geladen (max. 600 Zeichen) und angezeigt, bevor der Nutzer «Prüfen» startet.
 
 ## Bekannte Einschränkungen
 
 - Kein Authentifizierungsschutz auf Port 3737 – nur im lokalen Netz verwenden
-- Frontend sendet keinen `x-api-key` an Claude – Claude-Aufrufe aus dem Browser scheitern ohne externen Key-Proxy
-- Sehr lange Seiten können das Claude-Token-Limit erreichen (`max_tokens: 8000`)
+- Sehr lange Seiten können das Claude-Token-Limit erreichen (konfigurierbar via `MODEL_TOKEN`, Default 64000)
 - Kein Diff-View zwischen Original und korrigierter Version
 - Buchbewertung kürzt Seitentexte auf 3000 Zeichen – sehr lange Seiten werden unvollständig analysiert
-- History-Store ist eine JSON-Datei (kein echtes DBMS) – bei sehr vielen Einträgen (tausende) wird das Lesen/Schreiben langsamer; für den Einzelnutzer-Betrieb kein Problem
-- History der Buchbewertungen wird im UI noch nicht angezeigt (nur gespeichert)
+- History-Store ist eine JSON-Datei (kein echtes DBMS) – synchrones Lesen/Schreiben, für Einzelnutzer ausreichend
+- History der Buchbewertungen wird im UI noch nicht angezeigt (nur serverseitig gespeichert)
