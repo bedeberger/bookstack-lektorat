@@ -46,7 +46,7 @@
       <button @click="tree.forEach(c => c.open = true)" class="btn-sm">Alle ausklappen</button>
       <button @click="tree.forEach(c => c.open = false)" class="btn-sm">Alle einklappen</button>
     </div>
-    <div x-show="Object.keys(tokEsts).length > 0" class="tok-legend">
+    <div x-show="showTokLegend" class="tok-legend">
       <span class="tok-legend-label">Geschätzte Input-Token pro Lektorat-Prüfung</span>
       <span class="tok-badge tok-ok">≤ 4k</span> sparsam &nbsp;
       <span class="tok-badge tok-med">≤ 16k</span> mittel &nbsp;
@@ -68,7 +68,8 @@
                   <span style="font-size:14px;" x-text="page.name"></span>
                   <span x-show="tokEsts[page.id]" class="tok-badge"
                     :class="tokEsts[page.id] > 16000 ? 'tok-high' : tokEsts[page.id] > 4000 ? 'tok-med' : 'tok-ok'"
-                    x-text="tokEsts[page.id] >= 1000 ? '~' + Math.round(tokEsts[page.id]/1000) + 'k' : '~' + tokEsts[page.id]"></span>
+                    x-text="tokEsts[page.id] >= 1000 ? '~' + Math.round(tokEsts[page.id]/1000) + 'k' : '~' + tokEsts[page.id]"
+                    @mouseenter.stop="showTokLegend = true" @mouseleave.stop="showTokLegend = false"></span>
                 </div>
               </template>
             </div>
@@ -79,7 +80,8 @@
             <span style="font-size:14px;" x-text="item.name"></span>
             <span x-show="tokEsts[item.page.id]" class="tok-badge"
               :class="tokEsts[item.page.id] > 16000 ? 'tok-high' : tokEsts[item.page.id] > 4000 ? 'tok-med' : 'tok-ok'"
-              x-text="tokEsts[item.page.id] >= 1000 ? '~' + Math.round(tokEsts[item.page.id]/1000) + 'k' : '~' + tokEsts[item.page.id]"></span>
+              x-text="tokEsts[item.page.id] >= 1000 ? '~' + Math.round(tokEsts[item.page.id]/1000) + 'k' : '~' + tokEsts[item.page.id]"
+              @mouseenter.stop="showTokLegend = true" @mouseleave.stop="showTokLegend = false"></span>
           </div>
         </template>
       </div>

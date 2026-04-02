@@ -49,6 +49,7 @@ document.addEventListener('alpine:init', () => {
     selectedBookReviewId: null,
     tokEsts: {},
     _tokenEstGen: 0,
+    showTokLegend: false,
     showFiguresCard: false,
     figuren: [],
     figurenLoading: false,
