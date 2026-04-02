@@ -410,6 +410,8 @@ ins {
   user-select: none;
 }
 .tree-chapter-header:hover { background: var(--color-hover); }
+.tree-chapter-header.disabled { opacity: 0.4; cursor: not-allowed; }
+.tree-chapter-header.disabled:hover { background: none; }
 
 .tree-chevron {
   display: inline-block;

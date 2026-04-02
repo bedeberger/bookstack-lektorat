@@ -50,8 +50,8 @@
       <div>
         <template x-if="item.type === 'chapter'">
           <div class="tree-chapter">
-            <div class="tree-chapter-header" @click="if (!pageSearch) item.open = !item.open">
-              <span class="tree-chevron" :class="{ open: item.open }">›</span>
+            <div class="tree-chapter-header" :class="{ disabled: item.pages.length === 0 }" @click="if (!pageSearch && item.pages.length > 0) item.open = !item.open">
+              <span class="tree-chevron" :class="{ open: item.open }" x-show="item.pages.length > 0">›</span>
               <span x-text="item.name"></span>
               <span class="tag" x-text="item.pages.length + ' Seiten'"></span>
             </div>
