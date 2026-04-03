@@ -245,8 +245,8 @@
           <template x-if="f.kapitel?.length">
             <span class="figur-kapitel-badges">
               <span class="figur-kapitel-primary" x-text="f.kapitel[0].name"></span>
-              <template x-for="(k, ki) in (f.kapitel.slice(1))" :key="ki">
-                <span class="figur-kapitel-secondary" x-text="k.name"></span>
+              <template x-if="f.kapitel.length > 1">
+                <span class="figur-kapitel-more" x-text="'+' + (f.kapitel.length - 1)"></span>
               </template>
             </span>
           </template>
@@ -258,6 +258,15 @@
           <div x-show="f.beruf" class="figur-detail-row">
             <span class="bewertung-section-title bewertung-section-title--inline">Beruf:&nbsp;</span>
             <span class="figur-detail-value" x-text="f.beruf"></span>
+          </div>
+          <!-- Kapitelauftritte -->
+          <div x-show="f.kapitel?.length > 1">
+            <div class="bewertung-section-title">Kapitelauftritte</div>
+            <div class="figur-tags-row">
+              <template x-for="(k, ki) in (f.kapitel || [])" :key="ki">
+                <span class="tag" x-text="ki === 0 ? k.name : k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
+              </template>
+            </div>
           </div>
           <div x-show="f.eigenschaften?.length">
             <div class="bewertung-section-title">Eigenschaften</div>

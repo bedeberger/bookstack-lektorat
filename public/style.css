@@ -701,6 +701,16 @@ ins {
   white-space: nowrap;
 }
 
+.figur-kapitel-more {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--color-tag-bg);
+  color: var(--color-muted);
+  white-space: nowrap;
+  font-weight: 600;
+}
+
 .figur-beziehung-item {
   display: flex;
   align-items: baseline;

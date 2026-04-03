@@ -88,8 +88,9 @@ export const bookstatsMethods = {
     const metricLabel = METRIC_LABELS[metric] || metric;
 
     // Ganzzahlige Achsenbeschriftung für Seiten; k-Formatierung für grosse Werte
+    const isPageCount = metric === 'page_count';
     const makeTick = m => v => {
-      if (m === 'page_count') return Number.isInteger(v) ? v : null;
+      if (m === 'page_count') return Math.round(v);
       return v >= 1000 ? '~' + Math.round(v / 1000) + 'k' : v;
     };
     const makeTooltip = m => ctx => {
@@ -105,6 +106,7 @@ export const bookstatsMethods = {
       _statsChart.data.datasets[0].data = data;
       _statsChart.data.datasets[0].label = metricLabel;
       _statsChart.options.scales.y.ticks.callback = makeTick(metric);
+      _statsChart.options.scales.y.ticks.stepSize = isPageCount ? 1 : undefined;
       _statsChart.options.plugins.tooltip.callbacks.label = makeTooltip(metric);
       _statsChart.update();
       return;
@@ -150,6 +152,7 @@ export const bookstatsMethods = {
               font: { size: 11 },
               color: '#888',
               callback: makeTick(metric),
+              stepSize: isPageCount ? 1 : undefined,
             },
           },
         },
