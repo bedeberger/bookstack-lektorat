@@ -36,6 +36,7 @@ export const figurenMethods = {
   async toggleFiguresCard() {
     this.showFiguresCard = !this.showFiguresCard;
     if (this.showFiguresCard) {
+      await this.loadFiguren(this.selectedBookId);
       await this.$nextTick();
       this.renderFigurGraph();
     }

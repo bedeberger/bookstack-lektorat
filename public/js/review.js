@@ -107,6 +107,13 @@ export const reviewMethods = {
     }, 2000);
   },
 
+  async toggleBookReviewCard() {
+    this.showBookReviewCard = !this.showBookReviewCard;
+    if (this.showBookReviewCard && this.selectedBookId) {
+      await this.loadBookReviewHistory(this.selectedBookId);
+    }
+  },
+
   async runBookReview() {
     const bookId = this.selectedBookId;
     const bookName = this.selectedBookName;
