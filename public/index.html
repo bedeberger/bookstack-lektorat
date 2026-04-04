@@ -205,6 +205,7 @@
 <div class="card" x-show="showFiguresCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="'Figuren: ' + selectedBookName"></span>
+    <span x-show="figurenUpdatedAt && !figurenLoading" class="figuren-updated-at" x-text="'Letzte Analyse: ' + formatDate(figurenUpdatedAt)"></span>
     <div class="card-actions">
       <button @click="runFigurExtraction()" :disabled="figurenLoading">
         <span x-show="figurenLoading" class="spinner"></span>

@@ -85,6 +85,7 @@ export const treeMethods = {
         this.loadBookReviewHistory(bookId),
         this.loadFiguren(bookId),
       ]);
+      this.checkPendingJobs(bookId); // Reconnect nach Tab-Schliessen, kein await
       this.loadTokenEstimates(this._tokenEstGen); // Hintergrund, kein await
     } catch (e) {
       console.error('[loadPages]', e);

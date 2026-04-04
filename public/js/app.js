@@ -2,7 +2,7 @@ import { escHtml, htmlToText } from './utils.js';
 
 const PREVIEW_MAX_CHARS = 600;
 import { bookstackMethods } from './api-bookstack.js';
-import { claudeMethods } from './api-claude.js';
+import { aiMethods } from './api-ai.js';
 import { historyMethods } from './history.js';
 import { treeMethods } from './tree.js';
 import { lektoratMethods } from './lektorat.js';
@@ -64,12 +64,15 @@ document.addEventListener('alpine:init', () => {
     tokLegendPos: { x: 0, y: 0 },
     showFiguresCard: false,
     figuren: [],
+    figurenUpdatedAt: null,
     figurenLoading: false,
     figurenProgress: 0,
     figurenStatus: '',
     selectedFigurId: null,
     _figurenNetwork: null,
     _figurenHash: null,
+    _reviewPollTimer: null,
+    _figuresPollTimer: null,
     showBookStatsCard: false,
     bookStatsData: [],
     bookStatsLoading: false,
@@ -199,6 +202,53 @@ document.addEventListener('alpine:init', () => {
       await this.loadPageHistory(p.id);
     },
 
+    // Prüft beim Laden eines Buchs ob noch ein Job aus einer früheren Session läuft
+    // (z.B. Tab versehentlich geschlossen während Analyse lief).
+    async checkPendingJobs(bookId) {
+      const reviewJobId = localStorage.getItem('lektorat_review_job_' + bookId);
+      if (reviewJobId) {
+        try {
+          const resp = await fetch('/jobs/' + reviewJobId);
+          if (resp.ok) {
+            const job = await resp.json();
+            if (job.status === 'running') {
+              this.bookReviewLoading = true;
+              this.bookReviewProgress = job.progress || 0;
+              this.showBookReviewCard = true;
+              this.bookReviewOut = '';
+              this.setReviewStatus(job.statusText || 'Analyse läuft…', true);
+              this.startReviewPoll(reviewJobId);
+            } else {
+              localStorage.removeItem('lektorat_review_job_' + bookId);
+            }
+          } else {
+            localStorage.removeItem('lektorat_review_job_' + bookId);
+          }
+        } catch { localStorage.removeItem('lektorat_review_job_' + bookId); }
+      }
+
+      const figuresJobId = localStorage.getItem('lektorat_figures_job_' + bookId);
+      if (figuresJobId) {
+        try {
+          const resp = await fetch('/jobs/' + figuresJobId);
+          if (resp.ok) {
+            const job = await resp.json();
+            if (job.status === 'running') {
+              this.figurenLoading = true;
+              this.figurenProgress = job.progress || 0;
+              this.showFiguresCard = true;
+              this.figurenStatus = job.statusText || 'Analyse läuft…';
+              this.startFiguresPoll(figuresJobId);
+            } else {
+              localStorage.removeItem('lektorat_figures_job_' + bookId);
+            }
+          } else {
+            localStorage.removeItem('lektorat_figures_job_' + bookId);
+          }
+        } catch { localStorage.removeItem('lektorat_figures_job_' + bookId); }
+      }
+    },
+
     resetPage() {
       this.currentPage = null;
       this.originalHtml = null;
@@ -247,6 +297,7 @@ document.addEventListener('alpine:init', () => {
       this.showFiguresCard = false;
       this.figurenStatus = '';
       this.figurenProgress = 0;
+      this.figurenUpdatedAt = null;
       this.selectedFigurId = null;
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
       this.showBookStatsCard = false;
@@ -257,7 +308,7 @@ document.addEventListener('alpine:init', () => {
 
     // ── Methoden aus Modulen ─────────────────────────────────────────────────
     ...bookstackMethods,
-    ...claudeMethods,
+    ...aiMethods,
     ...historyMethods,
     ...treeMethods,
     ...lektoratMethods,

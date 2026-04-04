@@ -116,7 +116,7 @@ export const lektoratMethods = {
 
       this.setStatus('KI analysiert… (0 Zeichen)', true);
 
-      const result = await this.callClaude(
+      const result = await this.callAI(
         buildLektoratPrompt(text, html),
         SYSTEM_LEKTORAT,
         (chars) => this.setStatus(`KI analysiert… (${chars} Zeichen)`, true)
@@ -203,7 +203,7 @@ export const lektoratMethods = {
     if (selectedStyles.length > 0) {
       this.setStatus('KI überarbeitet Stil… (0 Zeichen)', true);
       try {
-        const result = await this.callClaude(
+        const result = await this.callAI(
           buildStilkorrekturPrompt(this.correctedHtml, selectedStyles),
           SYSTEM_STILKORREKTUR,
           (chars) => this.setStatus(`KI überarbeitet Stil… (${chars} Zeichen)`, true)
@@ -268,7 +268,7 @@ export const lektoratMethods = {
         const text = htmlToText(html).trim();
         if (!text) continue;
 
-        const result = await this.callClaude(buildLektoratPrompt(text, html), SYSTEM_LEKTORAT);
+        const result = await this.callAI(buildLektoratPrompt(text, html), SYSTEM_LEKTORAT);
         const fehler = result.fehler || [];
         totalErrors += fehler.filter(f => f.typ !== 'stil').length;
 

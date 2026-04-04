@@ -8,6 +8,7 @@ require('./db/schema');
 
 const historyRouter = require('./routes/history');
 const figuresRouter = require('./routes/figures');
+const jobsRouter = require('./routes/jobs');
 const { router: proxiesRouter, bookstackProxy, BOOKSTACK_URL } = require('./routes/proxies');
 const { router: syncRouter, syncAllBooks } = require('./routes/sync');
 
@@ -22,6 +23,7 @@ app.use((req, _res, next) => {
 app.use(proxiesRouter);
 app.use('/history', historyRouter);
 app.use('/figures', figuresRouter);
+app.use('/jobs', jobsRouter);
 app.use('/sync', syncRouter);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', bookstackProxy);

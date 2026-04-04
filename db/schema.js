@@ -3,7 +3,7 @@ const fs = require('fs');
 const Database = require('better-sqlite3');
 const logger = require('../logger');
 
-const DB_FILE = path.join(__dirname, '..', 'lektorat.db');
+const DB_FILE = process.env.DB_PATH || path.join(__dirname, '..', 'lektorat.db');
 const db = new Database(DB_FILE);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');

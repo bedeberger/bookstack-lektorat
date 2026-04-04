@@ -611,6 +611,13 @@ ins {
 .tok-tt-visible { opacity: 1; }
 
 /* === Figurenübersicht === */
+.figuren-updated-at {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  margin-left: 0.75rem;
+  align-self: center;
+}
+
 .figuren-graph-container {
   width: 100%;
   height: 380px;

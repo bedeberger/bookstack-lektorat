@@ -1,6 +1,6 @@
-# bookstack-lektorat
+# bookstack-lektorat – Technische Referenz
 
-KI-gestütztes Lektorat-Tool für BookStack. Läuft als eigenständiger Node.js-Service auf demselben LXC wie BookStack und proxied die BookStack-API intern.
+KI-gestütztes Lektorat-Tool für BookStack. Deployment, Konfiguration und Docker-Setup: siehe [README.md](README.md).
 
 ## Architektur
 
@@ -13,8 +13,6 @@ Browser → Express (Port 3737) → /config         → .env-Credentials an Fron
                               → /api/*          → BookStack (localhost:80)
                               → /               → public/index.html
 ```
-
-Der Express-Server übernimmt sechs Aufgaben: er served die Single-Page-App unter `/`, proxied alle `/api/*`-Requests an die lokale BookStack-Instanz, stellt unter `/config` die Credentials und Provider-Konfiguration aus `.env` dem Frontend bereit, proxied unter `/claude` alle Claude-Aufrufe mit serverseitiger Key-Injection bzw. unter `/ollama` an eine lokale Ollama-Instanz, und persistiert unter `/history/*` sowie `/figures/*` alle Daten in einer lokalen SQLite-Datei. Da alles auf demselben Host läuft, gibt es kein CORS-Problem.
 
 KI-Aufrufe laufen **nicht direkt aus dem Browser**, sondern über den jeweiligen Proxy-Endpunkt – der Server hält alle Credentials. Welcher Provider aktiv ist, steuert `API_PROVIDER` in der `.env`.
 
@@ -29,25 +27,17 @@ bookstack-lektorat/
 ├── routes/
 │   ├── history.js           # /history/* Endpunkte (Lektorat-Checks + Buchbewertungen)
 │   ├── figures.js           # /figures/:book_id Endpunkte
-│   └── proxies.js           # /config, /claude (SSE-Proxy), /api/* (BookStack-Proxy)
-├── package.json
-├── .env                     # Credentials (nicht eingecheckt)
-├── lektorat.db              # SQLite-Datenbank (nicht eingecheckt, wird auto-erstellt)
-├── lektorat.service         # systemd unit
-├── install.sh               # Erstinstallation auf dem LXC
-├── deploy.sh                # CD-Update (wird von GitHub Actions aufgerufen)
-├── .github/
-│   └── workflows/
-│       └── deploy.yml       # GitHub Actions Workflow (push → deploy)
+│   ├── jobs.js              # /jobs/* Endpunkte (Hintergrund-Jobs)
+│   └── proxies.js           # /config, /claude (SSE-Proxy), /ollama, /api/* (BookStack-Proxy)
 └── public/
     ├── index.html           # Single-Page-App (Alpine.js, kein Build-Step)
     ├── style.css            # Zentrales Stylesheet
     └── js/                  # ES-Module (kein Build-Step, type="module")
         ├── app.js           # Alpine-Komponente: State, Computed, init/selectPage/resetView
         ├── utils.js         # escHtml(), htmlToText()
-        ├── prompts.js       # SYSTEM_*-Strings, CLAUDE_API, buildLektoratPrompt()
+        ├── prompts.js       # SYSTEM_*-Strings, buildLektoratPrompt()
         ├── api-bookstack.js # bsGet, bsGetAll, bsPut, _applyCorrections
-        ├── api-claude.js    # callClaude(userPrompt, systemPrompt?, onProgress?) → Promise<Object>
+        ├── api-ai.js        # callAI(userPrompt, systemPrompt?, onProgress?) → Promise<Object>
         ├── history.js       # loadPageHistory, loadBookReviewHistory
         ├── tree.js          # loadBooks, loadPages, loadTokenEstimates
         ├── lektorat.js      # runCheck, saveCorrections, toggleDiff, batchCheck, computeDiff
@@ -56,39 +46,6 @@ bookstack-lektorat/
         ├── graph.js         # renderFigurGraph, _figTypColor
         └── two-tier.js      # loadPageContents(), groupByChapter(), SINGLE_PASS_LIMIT
 ```
-
-## Lokale Entwicklung
-
-```bash
-npm install
-node server.js
-# App läuft auf http://localhost:3737
-```
-
-Umgebungsvariablen (optional, defaults in Klammern):
-- `PORT` – Port des Express-Servers (`3737`)
-- `BOOKSTACK_URL` – Ziel für den API-Proxy (`http://localhost:80`)
-- `API_HOST` – Alternative zu `BOOKSTACK_URL` (hat Vorrang)
-- `TOKEN_ID` – BookStack Token ID (wird via `/config` an den Browser geliefert)
-- `TOKEN_KENNWORT` – BookStack Token Passwort (wird via `/config` an den Browser geliefert)
-- `API_PROVIDER` – KI-Provider: `claude` (Standard) oder `ollama`
-- `ANTHROPIC_API_KEY` – API-Key für Claude (nur bei `API_PROVIDER=claude`; serverseitig injiziert)
-- `MODEL_NAME` – Claude-Modell (`claude-sonnet-4-6`; nur bei `API_PROVIDER=claude`)
-- `MODEL_TOKEN` – Maximale Output-Tokens für Claude-Aufrufe (`64000`; nur bei `API_PROVIDER=claude`)
-- `OLLAMA_HOST` – URL der Ollama-Instanz (`http://localhost:11434`; nur bei `API_PROVIDER=ollama`)
-- `OLLAMA_MODEL` – Ollama-Modell (`llama3.2`; nur bei `API_PROVIDER=ollama`)
-
-Alle Variablen können in einer `.env`-Datei gesetzt werden (dotenv).
-
-### Credential-Flow
-
-Beim Start lädt die App via `GET /config` die Credentials aus der Server-`.env`. Sind `TOKEN_ID` und `TOKEN_KENNWORT` gesetzt, baut die App den Auth-Header automatisch auf und lädt die Bücher. Falls die Credentials fehlen, zeigt die App eine Fehlermeldung.
-
-### Datenbank
-
-`lektorat.db` wird beim ersten Start automatisch im Projektverzeichnis erstellt. Kein Setup nötig. Die Datei gehört nicht ins Git (analog zur `.env`). Beim Deploy bleibt sie unangetastet, weil `deploy.sh` sie von rsync ausschliesst.
-
-**Einmalige Migration von JSON:** Existiert beim Start noch eine `lektorat-history.json`, wird sie automatisch in die SQLite-DB migriert und in `lektorat-history.json.migrated` umbenannt.
 
 ## Datenbankschema
 
@@ -124,52 +81,31 @@ figure_relations (id, book_id, from_fig_id TEXT, to_fig_id TEXT,
 schema_version (version INTEGER)
 ```
 
-**Designprinzip Figuren:** Die vier Figuren-Tabellen sind bewusst flach gehalten. Neue Beziehungstypen entstehen einfach durch einen neuen `typ`-String – keine Schemaänderung nötig. Neue Figur-Eigenschaften, die noch nicht bekannt sind, kommen entweder als neue Spalte (via Migration, s.u.) oder als Einträge im `meta`-JSON-Feld.
+**Designprinzip Figuren:** Die vier Figuren-Tabellen sind bewusst flach gehalten. Neue Beziehungstypen entstehen einfach durch einen neuen `typ`-String – keine Schemaänderung nötig. Neue Figur-Eigenschaften kommen entweder als neue Spalte (via Migration) oder als Einträge im `meta`-JSON-Feld.
 
 ## Datenbankmigrationen
 
-### Wie Migrationen funktionieren
+`db/schema.js` enthält `runMigrations()`. Sie liest `schema_version` und führt alle ausstehenden `ALTER TABLE`-Statements sequenziell aus.
 
-`server.js` enthält die Funktion `runMigrations()` direkt nach dem Schema-Setup. Sie liest `schema_version` und führt alle noch ausstehenden `ALTER TABLE`-Statements sequenziell aus. Neue Migrationen werden dort als kommentiertes Block-Template vorbereitet.
+**Neue Spalte hinzufügen:**
 
-Das Muster für eine neue Migration in `server.js`:
-
-```js
-// In runMigrations():
-if (version < 2) {
-  db.exec('ALTER TABLE figures ADD COLUMN wohnort TEXT');
-  db.prepare('UPDATE schema_version SET version = 2').run();
-  logger.info('DB-Migration auf Version 2 abgeschlossen.');
-}
-// CURRENT_SCHEMA_VERSION oben auf 2 erhöhen
-```
-
-Beim nächsten Serverstart läuft die Migration einmalig durch – lokal wie auf dem LXC. Kein separater Deploy-Schritt nötig.
-
-### Neue Spalte zu einer bestehenden Tabelle hinzufügen
-
-1. `CURRENT_SCHEMA_VERSION` in `server.js` um 1 erhöhen (z.B. von `1` auf `2`).
+1. `CURRENT_SCHEMA_VERSION` in `db/schema.js` um 1 erhöhen.
 2. In `runMigrations()` den Block ergänzen:
    ```js
    if (version < 2) {
      db.exec('ALTER TABLE figures ADD COLUMN wohnort TEXT');
      db.prepare('UPDATE schema_version SET version = 2').run();
+     logger.info('DB-Migration auf Version 2 abgeschlossen.');
    }
    ```
 3. Im GET `/figures/:book_id` die neue Spalte ins zurückgegebene Objekt aufnehmen.
-4. Im PUT `/figures/:book_id` → `_saveFigurenToDb()` die neue Spalte im INSERT berücksichtigen.
-5. Pushen → beim nächsten Start auf dem LXC läuft die Migration automatisch.
+4. Im `_saveFigurenToDb()` die neue Spalte im INSERT berücksichtigen.
 
-### Neue Tabelle anlegen
+**Neue Tabelle:** `CREATE TABLE IF NOT EXISTS` im Schema-Block – keine Versionierung nötig, da idempotent.
 
-Einfach ein weiteres `CREATE TABLE IF NOT EXISTS` im `db.exec()`-Block am Anfang von `server.js` ergänzen. Keine Versionierung nötig, da `IF NOT EXISTS` idempotent ist.
+**Neue Beziehungstypen:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Im Frontend in der `BZ`-Konstante (Rendering) und im Claude-Prompt (`FINAL_SCHEMA`) den neuen Typ ergänzen.
 
-### Neue Beziehungstypen für Figuren
-
-Keine Schemaänderung nötig. `figure_relations.typ` ist Freitext. Im Frontend (`app.js`) in der `BZ`-Konstante (Rendering) und im Claude-Prompt (`FINAL_SCHEMA`) den neuen Typ ergänzen.
-
-### Notfall: DB-Schema auf dem LXC prüfen
-
+**DB auf dem LXC prüfen:**
 ```bash
 sqlite3 /opt/lektorat/lektorat.db
 .tables
@@ -177,60 +113,7 @@ sqlite3 /opt/lektorat/lektorat.db
 SELECT * FROM schema_version;
 ```
 
-## Deployment auf dem LXC
-
-### Erstinstallation
-
-```bash
-scp lektorat.tar.gz root@<lxc-ip>:/tmp/
-ssh root@<lxc-ip>
-cd /tmp && tar -xzf lektorat.tar.gz && cd lektorat
-bash install.sh
-```
-
-Der Installer:
-1. Prüft Node.js (installiert v20 via NodeSource falls fehlend)
-2. Kopiert alles nach `/opt/lektorat`
-3. Führt `npm install --omit=dev` aus
-4. Installiert und startet den systemd-Service `lektorat`
-
-`better-sqlite3` enthält Prebuilt-Binaries für Linux x64 / Node 20 – `npm install` kompiliert in der Regel nichts. Falls doch (anderer Node/Arch), braucht der LXC: `apt-get install -y python3 make g++`.
-
-Nach dem Install erreichbar unter `http://<lxc-ip>:3737`.
-
-### Automatisches Deployment via GitHub Actions
-
-Bei jedem Push auf `main` läuft der Workflow `.github/workflows/deploy.yml` – er führt `deploy.sh` auf dem LXC aus: synchronisiert die Dateien nach `/opt/lektorat` (`.env` und `lektorat.db` bleiben unangetastet), aktualisiert npm-Abhängigkeiten und startet den Service neu. Schema-Migrationen laufen automatisch beim Neustart.
-
-Voraussetzung: **Self-hosted GitHub Actions Runner** auf dem LXC (verbindet sich outbound zu GitHub, kein Port-Forward nötig).
-
-**Einmalige Runner-Einrichtung auf dem LXC:**
-
-```bash
-apt-get install -y rsync
-
-# Runner herunterladen – genaue URL + Token: GitHub → Repo → Settings → Actions → Runners → New self-hosted runner
-mkdir -p /opt/actions-runner && cd /opt/actions-runner
-curl -sL <runner-download-url> | tar xz
-./config.sh --url https://github.com/<user>/<repo> --token <TOKEN>
-
-# Als systemd-Service (root, damit systemctl restart funktioniert)
-./svc.sh install root
-./svc.sh start
-```
-
-### Nützliche Befehle auf dem LXC
-
-```bash
-systemctl status lektorat
-journalctl -u lektorat -f
-systemctl restart lektorat
-sqlite3 /opt/lektorat/lektorat.db "SELECT COUNT(*) FROM page_checks;"
-```
-
 ## History-API
-
-Der Server stellt folgende Endpunkte bereit (kein Auth nötig, da lokales Netz):
 
 | Methode | Pfad | Zweck |
 |---------|------|-------|
@@ -242,15 +125,7 @@ Der Server stellt folgende Endpunkte bereit (kein Auth nötig, da lokales Netz):
 | GET | `/figures/:book_id` | Gespeicherte Figuren eines Buchs laden |
 | PUT | `/figures/:book_id` | Figuren eines Buchs speichern (überschreibt) |
 
-Jeder `page_checks`-Eintrag enthält: `id`, `page_id`, `page_name`, `book_id`, `checked_at`, `error_count`, `errors_json` (komplettes Fehler-Array), `stilanalyse`, `fazit`, `model`, `saved`, `saved_at`.
-
-Jeder `book_reviews`-Eintrag enthält: `id`, `book_id`, `book_name`, `reviewed_at`, `review_json` (komplettes Review-Objekt), `model`.
-
-Das Frontend ruft die History automatisch auf: nach `runCheck`, nach `saveCorrections` und beim Wechsel auf eine Seite (`selectPage`). Im Seiteneditor wird der Verlauf als kompakte, ausklappbare Liste angezeigt – jeder Eintrag zeigt Datum, Fehleranzahl, Gespeichert-Status und Modell. Beim Aufklappen erscheinen alle Fehlerdetails, Stilanalyse und Fazit des jeweiligen Laufs.
-
 ## BookStack API
-
-Die App nutzt folgende BookStack-Endpunkte (Token-Auth via `Authorization: Token id:secret`):
 
 | Methode | Pfad | Zweck |
 |---------|------|-------|
@@ -260,32 +135,26 @@ Die App nutzt folgende BookStack-Endpunkte (Token-Auth via `Authorization: Token
 | GET | `/api/pages/:id` | Seiteninhalt (HTML) |
 | PUT | `/api/pages/:id` | Korrigierte Seite zurückschreiben |
 
-Token-Credentials werden via `/config` vom Server geliefert und im `Authorization`-Header jedes Requests mitgeschickt.
-
-### `bsGet` / `bsGetAll` / `bsPut`
-
-`bsGet(path)` und `bsPut(path, body)` sind einfache Wrapper um `fetch('/api/...')`. **`bsGetAll(path)`** ist der wichtigste Helfer: BookStack paginiert Listenendpunkte (Standard: 20 Einträge pro Seite). `bsGetAll` iteriert automatisch alle Seiten und gibt ein flaches Array aller Einträge zurück. Immer `bsGetAll` verwenden wenn eine vollständige Liste benötigt wird (Bücher, Kapitel, Seiten).
+**`bsGetAll(path)`** ist der wichtigste Helfer: BookStack paginiert Listenendpunkte (Standard: 20 Einträge). `bsGetAll` iteriert automatisch alle Seiten und gibt ein flaches Array zurück. Immer `bsGetAll` statt `bsGet` verwenden wenn eine vollständige Liste benötigt wird.
 
 ## KI-Integration
 
-Alle KI-Calls laufen über den lokalen Proxy-Endpunkt – kein direkter Browser-Zugriff auf externe APIs. Welcher Provider verwendet wird, steuert `API_PROVIDER` in der `.env`. Das Frontend liest den aktiven Provider beim Start via `/config` und zeigt ihn als Badge in der Subtitle an.
+### `callAI` – Wichtige Einschränkung
 
-### Provider: Claude (Anthropic)
+`callAI` (in `api-ai.js`) gibt immer ein **geparstes JSON-Objekt** zurück. Ist die Antwort kein valides JSON, wirft die Funktion einen Fehler. Jeder Systemprompt muss JSON-Only erzwingen:
+```
+Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach
+```
+`callAI` kann nicht für Free-Text-Antworten verwendet werden.
 
-Endpunkt `/claude`. Der Server injiziert `ANTHROPIC_API_KEY`, leitet an `api.anthropic.com/v1/messages` weiter und streamt das Ergebnis als SSE zurück. Modell und Token-Limit via `MODEL_NAME` / `MODEL_TOKEN`.
+### Provider-Proxy
 
-### Provider: Ollama (lokal)
+- **`/claude`** – injiziert `ANTHROPIC_API_KEY`, leitet an `api.anthropic.com/v1/messages` weiter, streamt als SSE.
+- **`/ollama`** – konvertiert Anthropic-Request-Format → Ollama `/api/chat`-Format, normalisiert NDJSON → SSE. Frontend-Parser bleibt für beide Provider identisch.
 
-Endpunkt `/ollama`. Der Server konvertiert den Anthropic-Request-Format in das Ollama `/api/chat`-Format, ruft `OLLAMA_HOST` auf und normalisiert die NDJSON-Antwort zu demselben SSE-Format wie `/claude` – der Frontend-Parser bleibt unverändert. Modell via `OLLAMA_MODEL`.
+### KI-Rückgabeformate
 
-### `callClaude` – Wichtige Einschränkung
-
-`callClaude` gibt immer ein **geparstes JSON-Objekt** zurück. Ist die Antwort kein valides JSON, wirft die Funktion einen Fehler. Das bedeutet: jeder Systemprompt muss JSON-Only erzwingen (`Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach`). `callClaude` kann nicht für Free-Text-Antworten verwendet werden.
-
-### Seitenlektorat (`runCheck`)
-
-Lädt den Seiteninhalt via BookStack-API, extrahiert den Plaintext und schickt beides (Text + Original-HTML) an Claude. Der Prompt instruiert Claude, **Helvetismen nicht als Fehler zu werten** (grösseres, Strasse, gemäss usw.). Claude gibt strukturiertes JSON zurück:
-
+**Seitenlektorat (`runCheck`):**
 ```json
 {
   "fehler": [{ "typ": "rechtschreibung|grammatik|stil", "original": "", "korrektur": "", "kontext": "", "erklaerung": "" }],
@@ -295,14 +164,7 @@ Lädt den Seiteninhalt via BookStack-API, extrahiert den Plaintext und schickt b
 }
 ```
 
-**Selektive Fehlerkorrektur:** Nach dem Check kann der Nutzer einzelne Fehler an- oder abwählen. `_recomputeCorrectedHtml()` wendet nur die selektierten Fehler (`selectedErrors`) via `_applyCorrections` auf `originalHtml` an – das Ergebnis landet in `correctedHtml`. Claudes `korrekturen_html` wird ignoriert (nur als Fallback-Referenz geprüft). Der «Korrekturen speichern»-Button erscheint nur wenn Rechtschreib- oder Grammatikfehler gefunden wurden (`hasErrors`); Stilanmerkungen allein lösen ihn nicht aus.
-
-**Stilanmerkungen werden nie ins HTML übernommen:** `selectedStyles` existiert als UI-State (an/abwählbar), aber `_recomputeCorrectedHtml()` berücksichtigt es nicht – Stil-Korrekturen fliessen nicht in `correctedHtml` ein, egal ob angehakt oder nicht. Stilanmerkungen sind rein informativ.
-
-### Buchbewertung (`runBookReview`)
-
-Lädt alle Seiten eines Buchs sequenziell (max. 3000 Zeichen Text pro Seite, Seiten unter 50 Zeichen werden übersprungen), zeigt eine Progress-Bar (0–85% beim Laden, 85–100% beim Claude-Call), und lässt Claude das ganze Buch kritisch bewerten. Ergebnis:
-
+**Buchbewertung (`runBookReview`):**
 ```json
 {
   "gesamtnote": "1–5",
@@ -317,19 +179,7 @@ Lädt alle Seiten eines Buchs sequenziell (max. 3000 Zeichen Text pro Seite, Sei
 }
 ```
 
-Wird als Sterne-Rating mit Stärken/Schwächen/Empfehlungen-Listen dargestellt.
-
-### Figurenübersicht (`runFigurExtraction`)
-
-**Read-only** – die Figuren werden einmalig von Claude ermittelt und gecacht; kein manuelles Bearbeiten. «Neu ermitteln» überschreibt den Cache.
-
-Lädt alle Seiten batched (voller Text, keine Kürzung). Wie bei der Buchbewertung zwei Pfade:
-
-- **Single-Pass** (Gesamttext ≤ 60 000 Zeichen): alle Seiten direkt an Claude.
-- **Multi-Pass** (grössere Bücher): pro Kapitel eine Figuren-Analyse (vereinfachtes Schema, Beziehungen per Namen), dann ein Konsolidierungs-Call der dedupliziert, IDs vergibt und kapitelübergreifende Beziehungen zusammenführt.
-
-Ergebnis wird unter `/figures/:book_id` persistiert (SQLite) und beim nächsten Öffnen direkt geladen (kein erneuter Scan).
-
+**Figurenübersicht (`runFigurExtraction`):**
 ```json
 {
   "figuren": [
@@ -352,79 +202,66 @@ Ergebnis wird unter `/figures/:book_id` persistiert (SQLite) und beim nächsten 
 }
 ```
 
-`kapitel` ist absteigend nach Häufigkeit sortiert – das erste Kapitel ist das Hauptkapitel der Figur (hervorgehobener Badge). Beziehungstypen decken Familie (`elternteil`, `kind`, `geschwister`) und soziale/berufliche Verbindungen ab; jede Beziehung wird nur einmal eingetragen.
-
-Die Figuren werden als interaktiver **vis-network**-Graph dargestellt (CDN: `unpkg.com/vis-network`). Kantentypen sind visuell unterscheidbar: Eltern-Kind-Pfeile (grau, gerichtet), Geschwister (blau gestrichelt), alle weiteren Beziehungstypen farbig gestrichelt. Hierarchisches Layout wird nur aktiviert wenn Eltern-Kind-Kanten vorhanden sind, sonst freies Force-Layout.
-
 ## Frontend-Architektur
 
-Die Single-Page-App besteht aus `index.html`, `style.css` und ES-Modulen unter `public/js/` – **kein Build-Step**, kein Bundler. Alpine.js und vis-network werden via CDN geladen.
-
-- **[public/index.html](public/index.html)** – HTML-Struktur mit Alpine.js-Direktiven (`x-data`, `x-model`, `@click`, `x-show`, `x-cloak`, `x-for`, `x-if`, `x-html`, `x-text`). Alpine.js via CDN (`cdn.jsdelivr.net/npm/alpinejs@3`). Der `<body>` trägt `x-data="lektorat"`. Script-Reihenfolge im `<head>`: erst `<script type="module" src="js/app.js">`, dann vis-network, dann Alpine mit `defer` – so ist der `alpine:init`-Listener garantiert vor Alpine registriert.
-- **[public/js/app.js](public/js/app.js)** – Einstiegspunkt der Alpine-Komponente. Importiert alle Modul-Objekte und spreaed sie ins Alpine-Data-Objekt. Enthält nur: State-Definitionen, Computed-Properties (`get`), und die wenigen UI-Methoden die `this.*` direkt brauchen (`init`, `selectPage`, `resetPage`, `resetView`, `setStatus`, `formatDate`, `setReviewStatus`, `cutAtSentence`).
-- **[public/style.css](public/style.css)** – Zentrales Stylesheet. **Alle Styles gehören ausschliesslich hierher** – weder Inline-`style`-Attribute noch `<style>`-Blöcke im HTML sind erlaubt. Neue visuelle Anforderungen immer als CSS-Klasse in `style.css` umsetzen. Die Datei beginnt mit einem Table of Contents (19 Abschnitte) und jeder Abschnitt ist mit `/* === Name === */` markiert.
+SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein Bundler. Alpine.js und vis-network via CDN.
 
 ### Modul-Pattern
 
-Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`, `two-tier.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das beim Aufruf auf die Alpine-Komponente zeigt – weil sie per `...spread` in das Alpine-Data-Objekt eingebettet sind. Neue Funktionalität: neues Modul anlegen, Methoden-Objekt exportieren, in `js/app.js` importieren und am Ende des Data-Objekts spreaden.
+Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`, `two-tier.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das auf die Alpine-Komponente zeigt – per `...spread` in das Alpine-Data-Objekt eingebettet.
+
+**Neue Funktionalität:** Neues Modul anlegen → Methoden-Objekt exportieren → in `app.js` importieren und am Ende des Data-Objekts spreaden.
+
+### Script-Reihenfolge in `index.html`
+
+Erst `<script type="module" src="js/app.js">`, dann vis-network, dann Alpine mit `defer` – so ist der `alpine:init`-Listener garantiert vor Alpine registriert.
+
+### Style-Regel
+
+**Alle Styles ausschliesslich in `style.css`** – keine Inline-`style`-Attribute, keine `<style>`-Blöcke im HTML. Die Datei beginnt mit einem Table of Contents (Abschnitte mit `/* === Name === */`).
 
 ### Two-Tier-Analyse-Pattern
 
-`review.js` (Buchbewertung) und `figuren.js` (Figurenextraktion) teilen dasselbe Lade- und Analyse-Muster: alle Seiten eines Buchs laden → bei ≤ 60 000 Zeichen Single-Pass direkt an Claude, bei grösseren Büchern Multi-Pass pro Kapitel + Konsolidierungs-Call. Die gemeinsame Infrastruktur dafür lebt in `two-tier.js`:
+`review.js` und `figuren.js` teilen dasselbe Lade-Muster via `two-tier.js`:
 
-- `loadPageContents(bsGet, pages, chMap, minLength, onBatch)` – lädt Seiten in 5er-Batches (`BATCH_SIZE = 5`), überspringt Seiten kürzer als `minLength` Zeichen. Gibt `{ title, chapter_id, chapter, text }[]` zurück.
-- `groupByChapter(pageContents)` – gruppiert für den Multi-Pass nach Kapitel-ID. Gibt `{ groupOrder: string[], groups: Map<key, {name, pages[]}> }` zurück.
-- `SINGLE_PASS_LIMIT` – Grenzwert (60 000 Zeichen)
+- `loadPageContents(bsGet, pages, chMap, minLength, onBatch)` – lädt in 5er-Batches, überspringt Seiten kürzer als `minLength`. Gibt `{ title, chapter_id, chapter, text }[]` zurück.
+- `groupByChapter(pageContents)` – gruppiert für Multi-Pass nach Kapitel-ID.
+- `SINGLE_PASS_LIMIT` = 60 000 Zeichen: darunter Single-Pass direkt an Claude, darüber Multi-Pass pro Kapitel + Konsolidierungs-Call.
 
-### Alpine-Komponente: State-Überblick
+### Alpine State
 
 | Property | Zweck |
 |----------|-------|
 | `books`, `selectedBookId` | Bücherliste und Auswahl |
-| `pages`, `tree` | Flache Seitenliste + hierarchische Kapitel/Seiten-Struktur für den Tree-View |
-| `pageSearch` | Suchfeld für den Tree-View (filtert `filteredTree` computed) |
+| `pages`, `tree` | Flache Seitenliste + hierarchische Kapitel/Seiten-Struktur |
+| `pageSearch` | Suchfeld (filtert `filteredTree` computed) |
 | `currentPage`, `correctedHtml`, `hasErrors` | Aktive Seite und Lektorat-Ergebnis |
-| `currentPageEmpty` | Flag: Seite hat keinen Text (leere Seite) |
-| `originalHtml` | Original-HTML der aktiven Seite vor Korrekturen |
-| `showDiff`, `diffHtml` | Diff-Ansicht: Toggle-Flag und gecachtes Diff-HTML (LCS-basiert, Wort-Ebene) |
-| `showBookCard`, `showEditorCard`, `showBookReviewCard`, `showFiguresCard` | Sichtbarkeits-Flags der Karten |
-| `status`, `statusSpinner` | Statuszeile (mit optionalem Spinner) |
-| `analysisOut`, `bookReviewOut` | HTML-Output der Analyse/Bewertung (via `x-html`) |
-| `checkLoading`, `bookReviewLoading`, `bookReviewProgress` | Lade-States und Progress-Bar (0–100) |
-| `batchLoading`, `batchProgress`, `batchStatus` | Batch-Check-Status (alle Seiten eines Buchs prüfen) |
-| `lastCheckId`, `pageHistory`, `selectedHistoryId` | History-State: ID des letzten Checks, geladene Einträge, aufgeklappter Eintrag |
-| `bookReviewHistory`, `selectedBookReviewId` | Buchbewertungs-History: geladene Einträge, aufgeklappter Eintrag |
-| `tokEsts`, `_tokenEstGen` | Token-Schätzungen pro Seite (Map `page_id → {tok, words, chars}`); `_tokenEstGen` verhindert veraltete Batches nach Buchwechsel |
-| `showTokLegend`, `tokLegendPos` | Token-Legende: Sichtbarkeit und Position `{x, y}` |
-| `figuren`, `figurenLoading`, `figurenProgress`, `figurenStatus` | Figurenübersicht: geladene Figuren, Lade-State, Fortschritt, Statuszeile |
-| `selectedFigurId` | Aufgeklappte Figur in der Detailliste |
-| `_figurenNetwork` | vis-network-Instanz (intern; `null` wenn Graph nicht aktiv) |
+| `currentPageEmpty` | Flag: Seite hat keinen Text |
+| `originalHtml` | Original-HTML vor Korrekturen |
+| `showDiff`, `diffHtml` | Diff-Ansicht: Toggle + gecachtes HTML (LCS-basiert, Wort-Ebene) |
+| `showBookCard`, `showEditorCard`, `showBookReviewCard`, `showFiguresCard` | Sichtbarkeits-Flags |
+| `status`, `statusSpinner` | Statuszeile |
+| `analysisOut`, `bookReviewOut` | HTML-Output (via `x-html`) |
+| `checkLoading`, `bookReviewLoading`, `bookReviewProgress` | Lade-States |
+| `batchLoading`, `batchProgress`, `batchStatus` | Batch-Check-Status |
+| `lastCheckId`, `pageHistory`, `selectedHistoryId` | History-State |
+| `bookReviewHistory`, `selectedBookReviewId` | Buchbewertungs-History |
+| `tokEsts`, `_tokenEstGen` | Token-Schätzungen (Map `page_id → {tok, words, chars}`); `_tokenEstGen` bricht veraltete Batches ab |
+| `figuren`, `figurenLoading`, `figurenProgress`, `figurenStatus` | Figurenübersicht |
+| `selectedFigurId` | Aufgeklappte Figur |
+| `_figurenNetwork` | vis-network-Instanz (intern) |
 
-### Tree-View und Token-Schätzung
+### Wichtige Verhaltensdetails
 
-Die Seitenliste wird als Kapitel/Seiten-Baum dargestellt. `loadPages()` baut zwei Strukturen parallel auf: `pages` (flach, sortiert) und `tree` (hierarchisch: Kapitel mit `open`-Flag und `pages`-Array, plus kapitellose Seiten). Kapitel sind auf- und zuklappbar (`item.open`). Buttons «Alle ausklappen/einklappen» toggeln alle Kapitel auf einmal. Ein Klick auf `resetView()` (via H1-Klick) klappt alle Kapitel ein.
+**Selektive Fehlerkorrektur:** `_recomputeCorrectedHtml()` wendet nur `selectedErrors` via `_applyCorrections` auf `originalHtml` an. Claudes `korrekturen_html` wird ignoriert. Stilanmerkungen fliessen nie ins HTML – sie sind rein informativ.
 
-Nach dem Laden startet `loadTokenEstimates()` im Hintergrund (kein `await`): lädt alle Seiten in 5er-Batches und schätzt den vollen Input-Token-Bedarf pro Seite (`(SYSTEM_LEKTORAT + buildLektoratPrompt(text, html)).length / 4`). Ergebnis landet in `tokEsts[page_id]` und wird im Tree als farbiger Indikator gezeigt. `_tokenEstGen` wird bei jedem Buchwechsel inkrementiert – läuft noch ein alter Batch, bricht er ab sobald er die veraltete Generation erkennt.
+**`resetPage()` vs. `resetView()`:** `resetPage()` deselektiert nur die Seite. `resetView()` setzt alles zurück (Karten, History, Figuren, Graph, Kapitel) – gebunden an H1-Klick.
 
-### `resetPage()` vs. `resetView()`
+**Token-Schätzung:** Startet nach `loadPages()` im Hintergrund. `_tokenEstGen` wird bei Buchwechsel inkrementiert – veraltete Batches brechen ab.
 
-`resetPage()` deselektiert nur die aktuelle Seite und schliesst die Editorkarte – wird intern beim Toggle-Klick auf eine bereits gewählte Seite aufgerufen. `resetView()` setzt alles zurück (alle Karten, History, Figuren, Graph, Kapitel zugeklappt) und ist an den H1-Klick gebunden.
+## Robustheit – Patterns
 
-### Seitenvorschau
-
-Beim Auswählen einer Seite (`selectPage`) wird sofort eine Textvorschau geladen (max. `PREVIEW_MAX_CHARS` = 600 Zeichen) und angezeigt, bevor der Nutzer «Prüfen» startet.
-
-### Robustheit
-
-- **Schema-Validierung**: Nach jedem Haupt-`callClaude`-Aufruf wird das Pflichtfeld geprüft (`fehler`-Array in `lektorat.js`, `gesamtnote` in `review.js`, `figuren`-Array in `figuren.js`). Fehlt das Feld, wirft die Funktion einen klaren Fehler statt still falsche Daten zu rendern.
-- **Timeout-Fehlerbehandlung**: Beide BookStack-Methoden (`bsGet` und `bsPut`) fangen `AbortError` mit einer sprechenden Meldung ab.
-- **Graph-Caching**: `renderFigurGraph()` baut den vis-network-Graph nur neu auf, wenn sich die Figuren-IDs geändert haben (`_figurenHash`). Wiederholtes Öffnen/Schliessen der Figurenkarte kostet keinen Neuaufbau.
-- **Benannte Limits**: Magic Numbers sind als Konstanten dokumentiert – `MIN_HTML_RATIO` / `SAFETY_HTML_RATIO` in `lektorat.js`, `PREVIEW_MAX_CHARS` in `app.js`, `SINGLE_PASS_LIMIT` / `BATCH_SIZE` (nicht exportiert, intern) in `two-tier.js`.
-
-## Bekannte Einschränkungen
-
-- Kein Authentifizierungsschutz auf Port 3737 – nur im lokalen Netz verwenden
-- Sehr lange Seiten können das Claude-Token-Limit erreichen (konfigurierbar via `MODEL_TOKEN`, Default 64000)
-- Buchbewertung kürzt Seitentexte auf 3000 Zeichen – sehr lange Seiten werden unvollständig analysiert
-- Figurenübersicht ist read-only – keine manuelle Korrektur einzelner Figuren möglich, nur Neu-Ermittlung des gesamten Buchs
-- vis-network wird via CDN geladen; ohne Internetverbindung kein Graph (Figurenliste bleibt verfügbar)
+- **Schema-Validierung**: Nach jedem `callAI`-Aufruf wird das Pflichtfeld geprüft (`fehler` in `lektorat.js`, `gesamtnote` in `review.js`, `figuren` in `figuren.js`). Fehlt es, Fehler werfen statt falsche Daten rendern.
+- **Timeout-Fehlerbehandlung**: `bsGet` und `bsPut` fangen `AbortError` mit sprechender Meldung ab.
+- **Graph-Caching**: `renderFigurGraph()` baut vis-network nur neu auf wenn sich Figuren-IDs geändert haben (`_figurenHash`).
+- **Benannte Limits**: `MIN_HTML_RATIO` / `SAFETY_HTML_RATIO` in `lektorat.js`, `PREVIEW_MAX_CHARS` in `app.js`, `SINGLE_PASS_LIMIT` / `BATCH_SIZE` in `two-tier.js`.
