@@ -1061,6 +1061,24 @@ ins {
   color: var(--color-text);
 }
 
+.btn-bookstack-link {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-muted);
+  text-decoration: none;
+}
+.btn-bookstack-link:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
 /* === Button-Gruppe (Expand/Collapse) === */
 .btn-group {
   display: flex;

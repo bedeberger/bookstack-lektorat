@@ -85,7 +85,9 @@ async function bsGetAll(path) {
 // ── KI-Aufruf ─────────────────────────────────────────────────────────────────
 // Gibt { text, tokensIn, tokensOut } zurück.
 // tokensIn/tokensOut: aus Claude message_start/message_delta bzw. Ollama done-Chunk.
-// onProgress(chars): optionaler Callback während des Streamings – gibt akkumulierte Zeichenanzahl zurück
+// onProgress({ chars, tokIn }): optionaler Callback während des Streamings
+//   chars:  akkumulierte Ausgabe-Zeichenanzahl
+//   tokIn:  Input-Token-Zahl (bekannt ab message_start; 0 solange noch nicht bekannt)
 async function callAI(userPrompt, systemPrompt, onProgress) {
   const provider = process.env.API_PROVIDER || 'claude';
 
@@ -123,7 +125,7 @@ async function callAI(userPrompt, systemPrompt, onProgress) {
             tokensOut = chunk.eval_count || 0;
           } else {
             text += chunk.message?.content || '';
-            if (onProgress) onProgress(text.length);
+            if (onProgress) onProgress({ chars: text.length, tokIn: 0 });
           }
         } catch { }
       }
@@ -164,9 +166,10 @@ async function callAI(userPrompt, systemPrompt, onProgress) {
         if (raw === '[DONE]') break;
         try {
           const ev = JSON.parse(raw);
-          // message_start: Input-Token-Zahl
+          // message_start: Input-Token-Zahl (kommt gleich zu Beginn des Streams)
           if (ev.type === 'message_start' && ev.message?.usage) {
             tokensIn = ev.message.usage.input_tokens || 0;
+            if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
           }
           // message_delta: Output-Token-Zahl (finaler Wert)
           if (ev.type === 'message_delta' && ev.usage) {
@@ -174,7 +177,7 @@ async function callAI(userPrompt, systemPrompt, onProgress) {
           }
           if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
             text += ev.delta.text;
-            if (onProgress) onProgress(text.length);
+            if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
           }
         } catch { }
       }
@@ -243,13 +246,18 @@ const SYSTEM_FIGUREN = `Du bist ein Literaturanalytiker für deutschsprachige Te
 // fromPct/toPct: optionaler Fortschrittsbereich – während des Streamings wird der Balken
 // von fromPct auf toPct gefüllt (basierend auf akkumulierten Output-Zeichen vs. expectedChars).
 async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars = 3000) {
-  let onProgress;
-  if (fromPct != null && toPct != null) {
-    onProgress = (chars) => {
-      const frac = Math.min(1, chars / expectedChars);
-      updateJob(jobId, { progress: Math.round(fromPct + (toPct - fromPct) * frac) });
-    };
-  }
+  const onProgress = ({ chars, tokIn }) => {
+    const updates = {};
+    // Fortschrittsbalken auf Basis akkumulierter Zeichen
+    if (fromPct != null && toPct != null) {
+      updates.progress = Math.round(fromPct + (toPct - fromPct) * Math.min(1, chars / expectedChars));
+    }
+    // Live-Token-Anzeige: tok.in/tok.out = bisherige abgeschlossene Calls;
+    // aktueller Call: Input aus message_start, Output approximiert (chars / 4)
+    if (tokIn > 0) updates.tokensIn = tok.in + tokIn;
+    if (chars > 0) updates.tokensOut = tok.out + Math.floor(chars / 4);
+    if (Object.keys(updates).length) updateJob(jobId, updates);
+  };
   const { text, tokensIn, tokensOut } = await callAI(prompt, system, onProgress);
   tok.in += tokensIn;
   tok.out += tokensOut;

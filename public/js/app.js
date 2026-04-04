@@ -101,6 +101,13 @@ document.addEventListener('alpine:init', () => {
       return book?.name || '';
     },
 
+    get selectedBookUrl() {
+      const book = this.books.find(b => String(b.id) === String(this.selectedBookId));
+      return book?.slug && this.bookstackUrl
+        ? `${this.bookstackUrl}/books/${book.slug}`
+        : null;
+    },
+
     get filteredTree() {
       if (!this.pageSearch) return this.tree;
       const q = this.pageSearch.toLowerCase();
@@ -255,6 +262,22 @@ document.addEventListener('alpine:init', () => {
           }
         } catch { localStorage.removeItem('lektorat_figures_job_' + bookId); }
       }
+    },
+
+    // Schliesst alle vier Hauptkarten ausser der angegebenen.
+    // Beim Schliessen des Trees wird resetPage() aufgerufen.
+    _closeOtherMainCards(keep) {
+      if (keep !== 'tree' && this.showTreeCard) { this.showTreeCard = false; this.resetPage(); }
+      if (keep !== 'bookReview') this.showBookReviewCard = false;
+      if (keep !== 'figures') this.showFiguresCard = false;
+      if (keep !== 'bookStats') this.showBookStatsCard = false;
+    },
+
+    async toggleTreeCard() {
+      if (this.showTreeCard) { this.showTreeCard = false; this.resetPage(); return; }
+      this._closeOtherMainCards('tree');
+      this.showTreeCard = true;
+      if (!this.pages.length) await this.loadPages();
     },
 
     resetPage() {

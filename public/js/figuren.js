@@ -34,7 +34,9 @@ export const figurenMethods = {
   },
 
   async toggleFiguresCard() {
-    this.showFiguresCard = !this.showFiguresCard;
+    if (this.showFiguresCard) { this.showFiguresCard = false; return; }
+    this._closeOtherMainCards('figures');
+    this.showFiguresCard = true;
     if (this.showFiguresCard) {
       await this.loadFiguren(this.selectedBookId);
       await this.$nextTick();

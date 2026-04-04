@@ -11,22 +11,22 @@ router.get('/:book_id', (req, res) => {
 
   const figs = db.prepare(`
     SELECT * FROM figures
-    WHERE book_id = ? AND (user_email = ? OR (? IS NULL AND user_email IS NULL))
+    WHERE book_id = ? AND user_email = ?
     ORDER BY sort_order, id
-  `).all(bookId, userEmail, userEmail);
+  `).all(bookId, userEmail);
   if (!figs.length) return res.json(null);
 
   const tags = db.prepare(`
     SELECT ft.figure_id, ft.tag FROM figure_tags ft
     JOIN figures f ON f.id = ft.figure_id
-    WHERE f.book_id = ? AND (f.user_email = ? OR (? IS NULL AND f.user_email IS NULL))`).all(bookId, userEmail, userEmail);
+    WHERE f.book_id = ? AND f.user_email = ?`).all(bookId, userEmail);
   const apps = db.prepare(`
     SELECT fa.figure_id, fa.chapter_name, fa.haeufigkeit FROM figure_appearances fa
     JOIN figures f ON f.id = fa.figure_id
-    WHERE f.book_id = ? AND (f.user_email = ? OR (? IS NULL AND f.user_email IS NULL))`).all(bookId, userEmail, userEmail);
+    WHERE f.book_id = ? AND f.user_email = ?`).all(bookId, userEmail);
   const rels = db.prepare(
-    'SELECT from_fig_id, to_fig_id, typ, beschreibung FROM figure_relations WHERE book_id = ? AND (user_email = ? OR (? IS NULL AND user_email IS NULL))'
-  ).all(bookId, userEmail, userEmail);
+    'SELECT from_fig_id, to_fig_id, typ, beschreibung FROM figure_relations WHERE book_id = ? AND user_email = ?'
+  ).all(bookId, userEmail);
 
   const tagMap = {};
   for (const t of tags) (tagMap[t.figure_id] ??= []).push(t.tag);

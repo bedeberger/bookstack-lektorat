@@ -108,8 +108,10 @@ export const reviewMethods = {
   },
 
   async toggleBookReviewCard() {
-    this.showBookReviewCard = !this.showBookReviewCard;
-    if (this.showBookReviewCard && this.selectedBookId) {
+    if (this.showBookReviewCard) { this.showBookReviewCard = false; return; }
+    this._closeOtherMainCards('bookReview');
+    this.showBookReviewCard = true;
+    if (this.selectedBookId) {
       await this.loadBookReviewHistory(this.selectedBookId);
     }
   },

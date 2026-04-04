@@ -27,8 +27,9 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
   const applied = req.body?.applied_errors_json !== undefined
     ? JSON.stringify(req.body.applied_errors_json)
     : null;
-  db.prepare('UPDATE page_checks SET saved = ?, saved_at = ?, applied_errors_json = COALESCE(?, applied_errors_json) WHERE id = ?')
-    .run(saved, saved_at, applied, parseInt(req.params.id));
+  const user_email = req.session?.user?.email || null;
+  db.prepare('UPDATE page_checks SET saved = ?, saved_at = ?, applied_errors_json = COALESCE(?, applied_errors_json) WHERE id = ? AND user_email = ?')
+    .run(saved, saved_at, applied, parseInt(req.params.id), user_email);
   res.json({ ok: true });
 });
 
@@ -36,8 +37,8 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
 router.get('/page/:page_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
   const rows = db.prepare(`
-    SELECT * FROM page_checks WHERE page_id = ? AND (user_email = ? OR (? IS NULL AND user_email IS NULL))
-    ORDER BY checked_at DESC LIMIT 20`).all(parseInt(req.params.page_id), user_email, user_email);
+    SELECT * FROM page_checks WHERE page_id = ? AND user_email = ?
+    ORDER BY checked_at DESC LIMIT 20`).all(parseInt(req.params.page_id), user_email);
   res.json(rows.map(r => ({
     ...r,
     errors_json: JSON.parse(r.errors_json || '[]'),
@@ -63,13 +64,17 @@ router.post('/review', jsonBody, (req, res) => {
 
 // Lektorat-Prüfung löschen
 router.delete('/check/:id', (req, res) => {
-  db.prepare('DELETE FROM page_checks WHERE id = ?').run(parseInt(req.params.id));
+  const user_email = req.session?.user?.email || null;
+  db.prepare('DELETE FROM page_checks WHERE id = ? AND user_email = ?')
+    .run(parseInt(req.params.id), user_email);
   res.json({ ok: true });
 });
 
 // Buchbewertung löschen
 router.delete('/review/:id', (req, res) => {
-  db.prepare('DELETE FROM book_reviews WHERE id = ?').run(parseInt(req.params.id));
+  const user_email = req.session?.user?.email || null;
+  db.prepare('DELETE FROM book_reviews WHERE id = ? AND user_email = ?')
+    .run(parseInt(req.params.id), user_email);
   res.json({ ok: true });
 });
 
@@ -77,8 +82,8 @@ router.delete('/review/:id', (req, res) => {
 router.get('/review/:book_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
   const rows = db.prepare(`
-    SELECT * FROM book_reviews WHERE book_id = ? AND (user_email = ? OR (? IS NULL AND user_email IS NULL))
-    ORDER BY reviewed_at DESC LIMIT 10`).all(parseInt(req.params.book_id), user_email, user_email);
+    SELECT * FROM book_reviews WHERE book_id = ? AND user_email = ?
+    ORDER BY reviewed_at DESC LIMIT 10`).all(parseInt(req.params.book_id), user_email);
   res.json(rows.map(r => ({ ...r, review_json: JSON.parse(r.review_json || 'null') })));
 });
 

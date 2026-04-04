@@ -21,6 +21,7 @@ export const bookstatsMethods = {
       if (_statsChart) { _statsChart.destroy(); _statsChart = null; }
       return;
     }
+    this._closeOtherMainCards('bookStats');
     this.showBookStatsCard = true;
     await this.loadBookStats(this.selectedBookId);
   },

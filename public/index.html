@@ -65,13 +65,12 @@
         <option :value="String(book.id)" x-text="book.name"></option>
       </template>
     </select>
-    <button @click="loadPages()">Seiten laden</button>
-    <button @click="batchCheck()" :disabled="batchLoading || bookReviewLoading || !pages.length" title="Alle Seiten sequenziell prüfen und in History speichern">Alle prüfen</button>
+    <a x-show="selectedBookUrl" :href="selectedBookUrl" target="_blank" rel="noopener" class="btn-bookstack-link" title="Buch in BookStack öffnen">↗ BookStack</a>
   </div>
 
   <!-- Feature-Tiles: Buchanalyse -->
   <div class="feature-tiles">
-    <button class="feature-tile" :class="{ 'feature-tile--active': showTreeCard }" @click="if (showTreeCard) { showTreeCard = false; resetPage(); } else { showTreeCard = true; }" :disabled="!pages.length" title="Seitenbaum anzeigen">
+    <button class="feature-tile" :class="{ 'feature-tile--active': showTreeCard }" @click="toggleTreeCard()" :disabled="!pages.length" title="Seitenbaum anzeigen">
       <span class="feature-tile-title">Seiten</span>
       <span class="feature-tile-desc">Seitenbaum</span>
     </button>
@@ -89,21 +88,17 @@
     </button>
   </div>
 
-  <!-- Batch-Fortschritt -->
-  <div x-show="batchLoading || batchStatus" style="margin-bottom:10px;">
-    <div class="progress-bar-wrap" x-show="batchLoading">
-      <div class="progress-bar" :style="'width:' + batchProgress + '%'"></div>
-    </div>
-    <div class="batch-status" x-text="batchStatus"></div>
-  </div>
-
 </div>
 
 <!-- Seitenbaum -->
 <div class="card" x-show="showTreeCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="'Seiten: ' + selectedBookName"></span>
-    <button class="btn-card-close" @click="showTreeCard = false; resetPage()" title="Schliessen">×</button>
+    <div class="card-actions">
+      <button @click="loadPages()">Seiten laden</button>
+      <button @click="batchCheck()" :disabled="batchLoading || bookReviewLoading || !pages.length" title="Alle Seiten sequenziell prüfen und in History speichern">Alle prüfen</button>
+      <button class="btn-card-close" @click="showTreeCard = false; resetPage()" title="Schliessen">×</button>
+    </div>
   </div>
   <!-- Suche -->
   <div style="margin-bottom:10px;">
@@ -117,6 +112,13 @@
       <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.words,0).toLocaleString('de-CH') + ' W'"></span>
       <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.chars,0).toLocaleString('de-CH') + ' Z'"></span>
     </span>
+  </div>
+  <!-- Batch-Fortschritt -->
+  <div x-show="batchLoading || batchStatus" style="margin-bottom:10px;">
+    <div class="progress-bar-wrap" x-show="batchLoading">
+      <div class="progress-bar" :style="'width:' + batchProgress + '%'"></div>
+    </div>
+    <div class="batch-status" x-text="batchStatus"></div>
   </div>
   <template x-for="item in filteredTree" :key="item.id">
     <div>
