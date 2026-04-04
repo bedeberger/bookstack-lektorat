@@ -17,6 +17,7 @@ router.get('/config', (req, res) => {
     apiProvider: process.env.API_PROVIDER || 'claude',
     ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
     user: req.session?.user || null,
+    devMode: process.env.LOCAL_DEV_MODE === 'true',
   });
 });
 

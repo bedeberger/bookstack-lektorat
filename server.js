@@ -42,11 +42,13 @@ app.use(session({
   },
 }));
 
-if (!process.env.SESSION_SECRET) {
-  logger.warn('SESSION_SECRET nicht gesetzt – unsicher für Produktion!');
-}
-if (!process.env.ALLOWED_EMAILS) {
-  logger.warn('ALLOWED_EMAILS nicht gesetzt – ALLE Google-Konten haben Zugriff! Bitte in .env einschränken.');
+if (!LOCAL_DEV_MODE) {
+  if (!process.env.SESSION_SECRET) {
+    logger.warn('SESSION_SECRET nicht gesetzt – unsicher für Produktion!');
+  }
+  if (!process.env.ALLOWED_EMAILS) {
+    logger.warn('ALLOWED_EMAILS nicht gesetzt – ALLE Google-Konten haben Zugriff! Bitte in .env einschränken.');
+  }
 }
 
 // ── Auth-Routen (öffentlich) ──────────────────────────────────────────────────
@@ -56,8 +58,20 @@ app.use(authRouter);
 // API-Pfade → 401 JSON; HTML-Pfade → Redirect zu /auth/login
 const API_PREFIXES = ['/api/', '/history/', '/figures/', '/jobs/', '/sync/', '/config', '/claude', '/ollama'];
 
+const LOCAL_DEV_MODE = process.env.LOCAL_DEV_MODE === 'true';
+if (LOCAL_DEV_MODE) {
+  logger.warn('LOCAL_DEV_MODE aktiv – OAuth wird übersprungen, automatische Dev-Session!');
+}
+
 app.use((req, res, next) => {
   if (req.session?.user) return next();
+  if (LOCAL_DEV_MODE) {
+    req.session.user = { email: 'dev@local', name: 'Dev (lokal)' };
+    if (process.env.TOKEN_ID && process.env.TOKEN_KENNWORT) {
+      req.session.bookstackToken = { id: process.env.TOKEN_ID, pw: process.env.TOKEN_KENNWORT };
+    }
+    return next();
+  }
   if (API_PREFIXES.some(p => req.path.startsWith(p))) {
     return res.status(401).json({ error: 'Nicht angemeldet' });
   }

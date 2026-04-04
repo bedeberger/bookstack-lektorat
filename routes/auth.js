@@ -21,8 +21,11 @@ async function getClient() {
   return oidcClient;
 }
 
-// GET /auth/login → redirect zu Google
+// GET /auth/login → redirect zu Google (oder direkt zu / im LOCAL_DEV_MODE)
 router.get('/auth/login', async (req, res) => {
+  if (process.env.LOCAL_DEV_MODE === 'true') {
+    return res.redirect('/');
+  }
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
     return res.status(500).send(
       'Google OAuth nicht konfiguriert. Bitte GOOGLE_CLIENT_ID und GOOGLE_CLIENT_SECRET in der .env setzen.'

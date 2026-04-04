@@ -15,6 +15,7 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('lektorat', () => ({
     // ── State ────────────────────────────────────────────────────────────────
     currentUser: null,
+    devMode: false,
     bookstackUrl: '',
     showTokenSetup: false,
     tokenSetupId: '',
@@ -159,6 +160,7 @@ document.addEventListener('alpine:init', () => {
         if (cfg.apiProvider) this.apiProvider = cfg.apiProvider;
         if (cfg.ollamaModel) this.ollamaModel = cfg.ollamaModel;
         this.currentUser = cfg.user || null;
+        this.devMode = !!cfg.devMode;
         if (!cfg.bookstackTokenOk) {
           this.showTokenSetup = true;
           return;

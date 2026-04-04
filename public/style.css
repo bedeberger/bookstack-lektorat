@@ -115,6 +115,18 @@ code {
 }
 
 /* === Layout === */
+.dev-banner {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  padding: 0.2rem 0.7rem;
+  background: #f59e0b;
+  color: #1a1a1a;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  border-radius: var(--radius);
+  letter-spacing: 0.03em;
+}
+
 .site-header-row {
   display: flex;
   align-items: baseline;

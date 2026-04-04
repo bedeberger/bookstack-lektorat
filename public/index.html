@@ -18,6 +18,7 @@
   <img src="bookstack_lektorat_icon.svg" alt="" class="site-logo">
   BookStack Lektorat
 </h1>
+<div class="dev-banner" x-show="devMode" x-cloak>DEV-MODUS – lokale Session, kein OAuth</div>
 <div class="site-header-row">
   <p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : '· Claude: ' + claudeModel"></span></p>
   <div class="user-info" x-show="currentUser">
