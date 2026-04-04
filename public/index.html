@@ -475,9 +475,9 @@
         <template x-for="(f, i) in lektoratErrors" :key="i">
           <label class="finding error" :class="{ 'finding-deselected': !selectedErrors[i] }">
             <input type="checkbox" class="finding-checkbox" :checked="selectedErrors[i]" @change="toggleError(i)">
-            <span>
-              <span class="badge badge-err" x-text="f.typ"></span>
-              &nbsp;<del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+            <span class="badge badge-err" x-text="f.typ"></span>
+            <span class="finding-content">
+              <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
               <div class="finding-context" x-text="'«' + f.kontext + '»'"></div>
               <div class="finding-explanation" x-text="f.erklaerung"></div>
             </span>
@@ -499,9 +499,9 @@
         <template x-for="(f, i) in lektoratStyles" :key="i">
           <label class="finding style" :class="{ 'finding-deselected': !selectedStyles[i] }">
             <input type="checkbox" class="finding-checkbox" :checked="selectedStyles[i]" @change="toggleStyle(i)">
-            <span>
-              <span class="badge badge-warn">Stil</span>
-              &nbsp;<span x-text="f.erklaerung"></span>
+            <span class="badge badge-warn">Stil</span>
+            <span class="finding-content">
+              <span x-text="f.erklaerung"></span>
               <div class="finding-context" x-show="f.original" x-text="f.original ? '«' + f.original + '»' : ''"></div>
             </span>
           </label>
@@ -540,9 +540,11 @@
                   <template x-if="entry.selected_errors_json !== null">
                     <span class="badge" :class="entry.selected_errors_json.some(a => a.original === f.original) ? 'badge-ok' : 'badge-skipped'" :title="entry.selected_errors_json.some(a => a.original === f.original) ? 'selektiert' : 'nicht selektiert'" x-text="entry.selected_errors_json.some(a => a.original === f.original) ? '✓' : '–'"></span>
                   </template>
-                  &nbsp;<del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
-                  <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>
-                  <div class="finding-explanation" x-text="f.erklaerung"></div>
+                  <div class="finding-content">
+                    <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+                    <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>
+                    <div class="finding-explanation" x-text="f.erklaerung"></div>
+                  </div>
                 </div>
               </template>
             </div>
