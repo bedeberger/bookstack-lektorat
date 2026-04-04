@@ -46,8 +46,11 @@
   --color-err-text: #A32D2D;
   --color-err-border: #E24B4A;
   --color-style-border: #EF9F27;
-  --color-success: #1D9E75;
-  --color-success-hover: #0F6E56;
+  --color-primary: #2d6a9f;
+  --color-primary-hover: #245a87;
+  --color-accent: #c4a55a;
+  --color-success: #34d399;
+  --color-success-hover: #1D9E75;
 
   --radius-sm: 4px;
   --radius-md: 8px;
@@ -207,11 +210,11 @@ button:active { transform: scale(0.98); }
 button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
 button.primary {
-  background: var(--color-text);
+  background: var(--color-primary);
   color: var(--color-surface);
-  border-color: var(--color-text);
+  border-color: var(--color-primary);
 }
-button.primary:hover { background: #333; }
+button.primary:hover { background: var(--color-primary-hover); }
 
 button.success {
   background: var(--color-success);
@@ -761,16 +764,16 @@ ins {
 .figur-bz-liebesbeziehung { background: #FDEAF3;              color: #8B3063; }
 .figur-bz-rivale          { background: #FFF0E0;              color: #7A3800; }
 .figur-bz-kollege         { background: var(--color-warn-bg); color: var(--color-warn-text); }
-.figur-bz-mentor          { background: #D4E8FF;              color: #1A4F8A; }
-.figur-bz-schuetzling     { background: #D4E8FF;              color: #1A4F8A; }
+.figur-bz-mentor          { background: #D4E8FF;              color: #1d4b73; }
+.figur-bz-schuetzling     { background: #D4E8FF;              color: #1d4b73; }
 .figur-bz-bekannt         { background: var(--color-tag-bg);  color: var(--color-muted); }
 
 /* === Figuren: Knoten-Legende === */
-.figur-legend-dot--hauptfigur  { background: #D4E8FF; border-color: #4A90D9; }
+.figur-legend-dot--hauptfigur  { background: #D4E8FF; border-color: #2d6a9f; }
 .figur-legend-dot--antagonist  { background: #FFE0E0; border-color: #E24B4A; }
 .figur-legend-dot--mentor      { background: #EAF3DE; border-color: #639922; }
 .figur-legend-dot--nebenfigur  { background: #F0F0F0; border-color: #888; }
-.figur-legend-dot--andere      { background: #FFF5DC; border-color: #C4941A; }
+.figur-legend-dot--andere      { background: #FFF5DC; border-color: #c4a55a; }
 
 /* === Figuren: Kanten-Legende === */
 .figur-legend--edges { margin-top: 4px; }
@@ -787,7 +790,7 @@ ins {
   height: 2px;
 }
 .figur-edge-line--eltern        { background: #bbb; }
-.figur-edge-line--geschwister   { background: #4A90D9; border-top: 2px dashed #4A90D9; }
+.figur-edge-line--geschwister   { background: #2d6a9f; border-top: 2px dashed #2d6a9f; }
 .figur-edge-line--freund        { background: #639922; border-top: 2px dashed #639922; }
 .figur-edge-line--feind         { background: #E24B4A; border-top: 2px dashed #E24B4A; }
 .figur-edge-line--liebesbeziehung { background: #D46EA0; border-top: 2px dashed #D46EA0; }

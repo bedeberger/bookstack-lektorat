@@ -76,9 +76,9 @@
     <button @click="tree.forEach(c => c.open = true)" class="btn-sm">Alle ausklappen</button>
     <button @click="tree.forEach(c => c.open = false)" class="btn-sm">Alle einklappen</button>
     <span x-show="Object.keys(tokEsts).length > 0" class="tok-totals">
-      <span class="tok-badge tok-neutral" x-text="'∑ ' + (Object.values(tokEsts).reduce((a,b)=>a+b.tok,0) >= 1000 ? '~' + Math.round(Object.values(tokEsts).reduce((a,b)=>a+b.tok,0)/1000) + 'k' : Object.values(tokEsts).reduce((a,b)=>a+b.tok,0)) + ' T'"></span>
-      <span class="tok-badge tok-neutral" x-text="'∑ ' + (Object.values(tokEsts).reduce((a,b)=>a+b.words,0) >= 1000 ? '~' + Math.round(Object.values(tokEsts).reduce((a,b)=>a+b.words,0)/1000) + 'k' : Object.values(tokEsts).reduce((a,b)=>a+b.words,0)) + ' W'"></span>
-      <span class="tok-badge tok-neutral" x-text="'∑ ' + (Object.values(tokEsts).reduce((a,b)=>a+b.chars,0) >= 1000 ? '~' + Math.round(Object.values(tokEsts).reduce((a,b)=>a+b.chars,0)/1000) + 'k' : Object.values(tokEsts).reduce((a,b)=>a+b.chars,0)) + ' Z'"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.tok,0).toLocaleString('de-CH') + ' T'"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.words,0).toLocaleString('de-CH') + ' W'"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.chars,0).toLocaleString('de-CH') + ' Z'"></span>
     </span>
   </div>
   <template x-for="item in filteredTree" :key="item.id">
@@ -375,13 +375,13 @@
     <span class="muted-msg" style="font-size:12px;"
       x-text="'Stand: ' + (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '')"></span>
     <span class="tok-badge tok-neutral"
-      x-text="(bookStatsData[bookStatsData.length - 1]?.words >= 1000 ? '~' + Math.round(bookStatsData[bookStatsData.length - 1].words / 1000) + 'k' : bookStatsData[bookStatsData.length - 1]?.words) + ' W'"></span>
+      x-text="(bookStatsData[bookStatsData.length - 1]?.words ?? 0).toLocaleString('de-CH') + ' W'"></span>
     <span class="tok-badge tok-neutral"
-      x-text="(bookStatsData[bookStatsData.length - 1]?.chars >= 1000 ? '~' + Math.round(bookStatsData[bookStatsData.length - 1].chars / 1000) + 'k' : bookStatsData[bookStatsData.length - 1]?.chars) + ' Z'"></span>
+      x-text="(bookStatsData[bookStatsData.length - 1]?.chars ?? 0).toLocaleString('de-CH') + ' Z'"></span>
     <span class="tok-badge tok-neutral"
       x-text="bookStatsData[bookStatsData.length - 1]?.page_count + ' S'"></span>
     <span class="tok-badge tok-neutral"
-      x-text="(bookStatsData[bookStatsData.length - 1]?.tok >= 1000 ? '~' + Math.round(bookStatsData[bookStatsData.length - 1].tok / 1000) + 'k' : bookStatsData[bookStatsData.length - 1]?.tok) + ' T'"></span>
+      x-text="(bookStatsData[bookStatsData.length - 1]?.tok ?? 0).toLocaleString('de-CH') + ' T'"></span>
   </div>
 
   <!-- Leer-Zustand -->

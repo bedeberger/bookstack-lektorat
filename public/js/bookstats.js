@@ -1,6 +1,8 @@
 // Buchschreibungsentwicklung – Zeitliniendiagramm
 // `this` zeigt auf die Alpine-Komponente (via spread in app.js)
 
+const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
 const METRIC_LABELS = {
   words:      'Wörter',
   chars:      'Zeichen',
@@ -87,18 +89,12 @@ export const bookstatsMethods = {
     const data = rows.map(r => r[metric]);
     const metricLabel = METRIC_LABELS[metric] || metric;
 
-    // Ganzzahlige Achsenbeschriftung für Seiten; k-Formatierung für grosse Werte
+    // Ganzzahlige Achsenbeschriftung
     const isPageCount = metric === 'page_count';
-    const makeTick = m => v => {
-      if (m === 'page_count') return Math.round(v);
-      return v >= 1000 ? '~' + Math.round(v / 1000) + 'k' : v;
-    };
+    const makeTick = m => v => Math.round(v).toLocaleString('de-CH');
     const makeTooltip = m => ctx => {
       const v = ctx.parsed.y;
-      const fmt = (m !== 'page_count' && v >= 1000)
-        ? '~' + Math.round(v / 1000) + 'k'
-        : String(Math.round(v));
-      return ` ${ctx.dataset.label}: ${fmt}`;
+      return ` ${ctx.dataset.label}: ${Math.round(v).toLocaleString('de-CH')}`;
     };
 
     if (_statsChart) {
@@ -112,6 +108,10 @@ export const bookstatsMethods = {
       return;
     }
 
+    const primary  = cssVar('--color-primary');
+    const muted    = cssVar('--color-muted');
+    const gridLine = cssVar('--color-border');
+
     _statsChart = new Chart(canvas, {
       type: 'line',
       data: {
@@ -119,13 +119,13 @@ export const bookstatsMethods = {
         datasets: [{
           label: metricLabel,
           data,
-          borderColor: '#4A90D9',
-          backgroundColor: 'rgba(74,144,217,0.07)',
+          borderColor: primary,
+          backgroundColor: primary + '12',
           borderWidth: 2,
           tension: 0.35,
           pointRadius: 4,
           pointHoverRadius: 6,
-          pointBackgroundColor: '#4A90D9',
+          pointBackgroundColor: primary,
           fill: true,
         }],
       },
@@ -142,15 +142,15 @@ export const bookstatsMethods = {
         },
         scales: {
           x: {
-            grid: { color: 'rgba(0,0,0,0.05)' },
-            ticks: { font: { size: 11 }, color: '#888' },
+            grid: { color: gridLine },
+            ticks: { font: { size: 11 }, color: muted },
           },
           y: {
-            grid: { color: 'rgba(0,0,0,0.05)' },
+            grid: { color: gridLine },
             beginAtZero: false,
             ticks: {
               font: { size: 11 },
-              color: '#888',
+              color: muted,
               callback: makeTick(metric),
               stepSize: isPageCount ? 1 : undefined,
             },

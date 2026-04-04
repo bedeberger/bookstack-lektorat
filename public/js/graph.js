@@ -6,11 +6,11 @@ import { escHtml } from './utils.js';
 export const graphMethods = {
   _figTypColor(typ) {
     const colors = {
-      hauptfigur: { background: '#D4E8FF', border: '#4A90D9', highlight: { background: '#BDD8FF', border: '#2B6CB0' } },
+      hauptfigur: { background: '#D4E8FF', border: '#2d6a9f', highlight: { background: '#BDD8FF', border: '#1d4b73' } },
       nebenfigur:  { background: '#F0F0F0', border: '#888',    highlight: { background: '#E4E4E4', border: '#555' } },
       antagonist:  { background: '#FFE0E0', border: '#E24B4A', highlight: { background: '#FFC7C7', border: '#B03030' } },
       mentor:      { background: '#EAF3DE', border: '#639922', highlight: { background: '#D5EBBD', border: '#3B6D11' } },
-      andere:      { background: '#FFF5DC', border: '#C4941A', highlight: { background: '#FFEEBB', border: '#8A6800' } },
+      andere:      { background: '#FFF5DC', border: '#c4a55a', highlight: { background: '#FFEEBB', border: '#8a6a20' } },
     };
     return colors[typ] || colors.andere;
   },
@@ -51,15 +51,15 @@ export const graphMethods = {
     const BZ = {
       elternteil:      { color: '#888',    highlight: '#555',    arrows: 'to',   dashes: false },
       kind:            { color: '#888',    highlight: '#555',    arrows: 'from', dashes: false },
-      geschwister:     { color: '#4A90D9', highlight: '#2B6CB0', arrows: '',     dashes: [5,5] },
+      geschwister:     { color: '#2d6a9f', highlight: '#1d4b73', arrows: '',     dashes: [5,5] },
       freund:          { color: '#639922', highlight: '#3B6D11', arrows: '',     dashes: [4,3] },
       feind:           { color: '#E24B4A', highlight: '#B03030', arrows: '',     dashes: [4,3] },
-      kollege:         { color: '#C4941A', highlight: '#8A6800', arrows: '',     dashes: [4,3] },
+      kollege:         { color: '#c4a55a', highlight: '#8a6a20', arrows: '',     dashes: [4,3] },
       bekannt:         { color: '#999',    highlight: '#555',    arrows: '',     dashes: [4,3] },
       liebesbeziehung: { color: '#D46EA0', highlight: '#A0446E', arrows: '',     dashes: [4,3] },
       rivale:          { color: '#9B4B00', highlight: '#6B3000', arrows: '',     dashes: [4,3] },
-      mentor:          { color: '#4A90D9', highlight: '#2B6CB0', arrows: 'to',   dashes: [4,3] },
-      schuetzling:     { color: '#4A90D9', highlight: '#2B6CB0', arrows: 'from', dashes: [4,3] },
+      mentor:          { color: '#2d6a9f', highlight: '#1d4b73', arrows: 'to',   dashes: [4,3] },
+      schuetzling:     { color: '#2d6a9f', highlight: '#1d4b73', arrows: 'from', dashes: [4,3] },
       andere:          { color: '#bbb',    highlight: '#888',    arrows: '',     dashes: [4,3] },
     };
 

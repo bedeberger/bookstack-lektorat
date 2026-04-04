@@ -146,3 +146,19 @@ node server.js
 ## Sicherheitshinweis
 
 Port 3737 hat keinen Authentifizierungsschutz. Den Service nur im lokalen Netz oder hinter einem Reverse-Proxy mit Auth betreiben.
+
+---
+
+## Credits
+
+Dieses Projekt wurde mit Hilfe von [Claude Code](https://claude.ai/code) komplett **vibecoded** – entstanden durch iterative Zusammenarbeit mit KI, ohne klassische Planung auf dem Reißbrett.
+
+Die Anwendung steht auf den Schultern folgender grossartiger Open-Source-Projekte und Dienste:
+
+- **[BookStack](https://www.bookstackapp.com/)** – die offene, selbst hostbare Wiki-Plattform, um die sich alles dreht. Danke an Dan Brown und alle Contributors.
+- **[Ollama](https://ollama.com/)** – macht lokale LLMs auf eigener Hardware unkompliziert möglich. Kein Cloud-Zwang, volle Kontrolle.
+- **[Anthropic Claude](https://www.anthropic.com/)** – das KI-Modell hinter dem Cloud-Provider-Modus, und gleichzeitig das Werkzeug, mit dem diese App gebaut wurde.
+- **[Claude Code](https://claude.ai/code)** – der KI-Coding-Assistent, der dieses Projekt von der ersten Zeile bis zum letzten Fix begleitet hat.
+- **[Alpine.js](https://alpinejs.dev/)** – leichtgewichtiges reaktives Framework, das ohne Build-Step auskommt.
+- **[vis-network](https://visjs.github.io/vis-network/)** – die Bibliothek hinter dem interaktiven Figurenbeziehungsgraphen.
+- **[Chart.js](https://www.chartjs.org/)** – für die Diagramme in der Buchbewertung und den Statistiken.
