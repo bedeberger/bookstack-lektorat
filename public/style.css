@@ -579,7 +579,8 @@ ins {
 .history-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
   padding: 6px 10px;
   border-radius: var(--radius-md);
   border: 0.5px solid var(--color-border);
@@ -593,6 +594,12 @@ ins {
   font-size: var(--font-size-sm);
   color: var(--color-muted);
   flex: 1;
+  min-width: 120px;
+}
+
+@media (max-width: 480px) {
+  .history-date { flex: 1 0 100%; }
+  .history-chevron { margin-left: auto; }
 }
 
 .history-chevron {

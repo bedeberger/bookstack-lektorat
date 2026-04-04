@@ -232,10 +232,14 @@ export const lektoratMethods = {
       if (this.lastCheckId) {
         try {
           const appliedErrors = this.lektoratErrors.filter((_, i) => this.selectedErrors[i]);
+          const selectedErrors = [
+            ...this.lektoratErrors.filter((_, i) => this.selectedErrors[i]),
+            ...this.lektoratStyles.filter((_, i) => this.selectedStyles[i]),
+          ];
           await fetch('/history/check/' + this.lastCheckId + '/saved', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ applied_errors_json: appliedErrors }),
+            body: JSON.stringify({ applied_errors_json: appliedErrors, selected_errors_json: selectedErrors }),
           });
           await this.loadPageHistory(this.currentPage.id);
         } catch (e) { console.error('[history saved]', e); }

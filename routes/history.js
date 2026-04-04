@@ -27,9 +27,12 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
   const applied = req.body?.applied_errors_json !== undefined
     ? JSON.stringify(req.body.applied_errors_json)
     : null;
+  const selected = req.body?.selected_errors_json !== undefined
+    ? JSON.stringify(req.body.selected_errors_json)
+    : null;
   const user_email = req.session?.user?.email || null;
-  db.prepare('UPDATE page_checks SET saved = ?, saved_at = ?, applied_errors_json = COALESCE(?, applied_errors_json) WHERE id = ? AND user_email = ?')
-    .run(saved, saved_at, applied, parseInt(req.params.id), user_email);
+  db.prepare('UPDATE page_checks SET saved = ?, saved_at = ?, applied_errors_json = COALESCE(?, applied_errors_json), selected_errors_json = COALESCE(?, selected_errors_json) WHERE id = ? AND user_email = ?')
+    .run(saved, saved_at, applied, selected, parseInt(req.params.id), user_email);
   res.json({ ok: true });
 });
 
@@ -43,6 +46,7 @@ router.get('/page/:page_id', (req, res) => {
     ...r,
     errors_json: JSON.parse(r.errors_json || '[]'),
     applied_errors_json: r.applied_errors_json ? JSON.parse(r.applied_errors_json) : null,
+    selected_errors_json: r.selected_errors_json ? JSON.parse(r.selected_errors_json) : null,
     saved: !!r.saved,
   })));
 });

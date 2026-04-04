@@ -119,7 +119,7 @@ db.exec(`
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
   if (version < 2) {
@@ -172,6 +172,11 @@ function runMigrations() {
     db.pragma('foreign_keys = ON');
     db.prepare('UPDATE schema_version SET version = 4').run();
     logger.info('DB-Migration auf Version 4 abgeschlossen (figures UNIQUE-Constraint auf (book_id, fig_id, user_email) erweitert).');
+  }
+  if (version < 5) {
+    db.exec('ALTER TABLE page_checks ADD COLUMN selected_errors_json TEXT');
+    db.prepare('UPDATE schema_version SET version = 5').run();
+    logger.info('DB-Migration auf Version 5 abgeschlossen (selected_errors_json zu page_checks hinzugefügt).');
   }
   // Sicherstellen dass schema_version aktuell ist (Fallback)
   if (version < CURRENT_SCHEMA_VERSION) {

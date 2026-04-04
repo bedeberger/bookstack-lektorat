@@ -135,7 +135,7 @@ schema_version (version INTEGER)
 
 **Neue Beziehungstypen:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Im Frontend in der `BZ`-Konstante (Rendering) und im Claude-Prompt (`FINAL_SCHEMA`) den neuen Typ ergänzen.
 
-**User-Isolation:** Alle inhaltlichen Tabellen (`page_checks`, `book_reviews`, `figures`, `figure_relations`) enthalten eine `user_email`-Spalte. Queries in den Route-Handlern filtern grundsätzlich auf `req.session.user.email`. `page_stats` und `book_stats_history` sind geteilter Cache ohne User-Filter. Schema-Version 4 hat die UNIQUE-Constraint von `figures` auf `(book_id, fig_id, user_email)` angepasst.
+**User-Isolation:** Alle inhaltlichen Tabellen (`page_checks`, `book_reviews`, `figures`, `figure_relations`) enthalten eine `user_email`-Spalte. Queries in den Route-Handlern filtern grundsätzlich auf `req.session.user.email`. `page_stats` und `book_stats_history` sind geteilter Cache ohne User-Filter.
 
 **DB auf dem LXC prüfen:**
 ```bash
@@ -145,10 +145,15 @@ sqlite3 /opt/lektorat/lektorat.db
 SELECT * FROM schema_version;
 ```
 
-## History-API
+## Endpunkte
 
 | Methode | Pfad | Zweck |
 |---------|------|-------|
+| GET | `/api/books` | Alle Bücher laden |
+| GET | `/api/chapters?book_id=X` | Kapitel eines Buchs |
+| GET | `/api/pages?book_id=X` | Seiten eines Buchs |
+| GET | `/api/pages/:id` | Seiteninhalt (HTML) |
+| PUT | `/api/pages/:id` | Korrigierte Seite zurückschreiben |
 | POST | `/history/check` | Lektorat-Ergebnis speichern |
 | PATCH | `/history/check/:id/saved` | Lauf als «in BookStack gespeichert» markieren (inkl. `applied_errors_json`) |
 | DELETE | `/history/check/:id` | Check-Eintrag löschen |
@@ -170,64 +175,22 @@ SELECT * FROM schema_version;
 | GET | `/auth/token` | Ob ein BookStack-Token hinterlegt ist (`{ hasToken: bool }`) |
 | PUT | `/auth/token` | BookStack-Token speichern (`{ tokenId, tokenPw }` → DB + Session) |
 
+**`bsGetAll(path)`** ist der wichtigste Helfer: BookStack paginiert Listenendpunkte (Standard: 20 Einträge). `bsGetAll` iteriert automatisch alle Seiten und gibt ein flaches Array zurück. Immer `bsGetAll` statt `bsGet` verwenden wenn eine vollständige Liste benötigt wird.
+
 ## User-Token-Verwaltung
 
-BookStack-Tokens werden **pro User in der DB** gespeichert (Tabelle `user_tokens`, Schlüssel: Google-E-Mail). Kein gemeinsamer Service-Account-Token mehr in `.env`.
+BookStack-Tokens werden **pro User in der DB** gespeichert (Tabelle `user_tokens`, Schlüssel: Google-E-Mail).
 
-**Flow:**
-1. Google-Login → `getUserToken(email)` → falls vorhanden: `req.session.bookstackToken = { id, pw }`
-2. BookStack-Proxy liest Token aus `req.session.bookstackToken` (synchron, kein DB-Lookup pro Request)
-3. Cron-Sync: `getAnyUserToken()` → nimmt irgendeinen gespeicherten Token
-4. Kein Token → Token-Setup-Card im Frontend; `PUT /auth/token` speichert in DB + Session
+- Google-Login → `getUserToken(email)` → falls vorhanden: `req.session.bookstackToken = { id, pw }`
+- BookStack-Proxy liest Token aus der Session (synchron, kein DB-Lookup pro Request)
+- Cron-Sync: `getAnyUserToken()` → erster verfügbarer Token; `getAllUserTokens()` → alle
+- Kein Token → Token-Setup-Card im Frontend; `PUT /auth/token` speichert in DB + Session
 
-**Hilfsfunktionen** (exportiert aus `db/schema.js`):
-- `getUserToken(email)` → `{ token_id, token_pw }` oder `undefined`
-- `setUserToken(email, tokenId, tokenPw)` → UPSERT
-- `getAnyUserToken()` → erster verfügbarer Token (für Hintergrundprozesse)
-- `getAllUserTokens()` → Array aller gespeicherten Tokens – wird vom Sync-Job verwendet, um alle User-Bücher zu synchronisieren
+Hilfsfunktionen exportiert aus `db/schema.js`: `getUserToken`, `setUserToken`, `getAnyUserToken`, `getAllUserTokens`.
 
 ## Sync & Buchstatistik
 
-### Automatischer Cron-Sync
-
-`server.js` registriert via `node-cron` täglich um 02:00 einen Sync-Job:
-
-```js
-cron.schedule('0 2 * * *', () => syncAllBooks());
-```
-
-`syncAllBooks()` (exportiert aus `routes/sync.js`) iteriert alle gespeicherten User-Tokens via `getAllUserTokens()` und ruft für jedes gefundene Buch `syncBook(bookId, token)` auf.
-
-### `syncBook(bookId, token)`
-
-- Holt alle Seiten des Buchs via BookStack-API
-- Berechnet pro Seite: Token-Schätzung, Wortanzahl, Zeichenanzahl
-- Schreibt Ergebnisse in `page_stats` (Upsert, gecacht für schnelles UI-Laden)
-- Legt einen täglichen Snapshot in `book_stats_history` an (UNIQUE auf `book_id + recorded_at` → ein Eintrag pro Buch pro Tag)
-
-### `bookstats.js` (Frontend)
-
-Exportiert `bookstatsMethods` mit:
-- `toggleBookStatsCard()` – Statistik-Panel öffnen/schliessen + Daten nachladen
-- `loadBookStats(bookId)` – GET `/history/book-stats/:book_id`
-- `syncBookStats()` – POST `/sync/book/:book_id` → manueller Sync
-- `renderStatsChart()` – Chart.js-Zeitliniendiagramm mit konfigurierbarer Metrik (`words`, `chars`, `tok`, `page_count`) und Datumsbereich
-
-**Abhängigkeiten:** Chart.js via CDN in `index.html` eingebunden.
-
-**Relevante State-Properties:** `showBookStatsCard`, `bookStatsData`, `bookStatsLoading`, `bookStatsSyncStatus`, `bookStatsMetric`, `bookStatsRange`, `_statsChart` (Chart.js-Instanz, intern).
-
-## BookStack API
-
-| Methode | Pfad | Zweck |
-|---------|------|-------|
-| GET | `/api/books` | Alle Bücher laden |
-| GET | `/api/chapters?book_id=X` | Kapitel eines Buchs |
-| GET | `/api/pages?book_id=X` | Seiten eines Buchs |
-| GET | `/api/pages/:id` | Seiteninhalt (HTML) |
-| PUT | `/api/pages/:id` | Korrigierte Seite zurückschreiben |
-
-**`bsGetAll(path)`** ist der wichtigste Helfer: BookStack paginiert Listenendpunkte (Standard: 20 Einträge). `bsGetAll` iteriert automatisch alle Seiten und gibt ein flaches Array zurück. Immer `bsGetAll` statt `bsGet` verwenden wenn eine vollständige Liste benötigt wird.
+Täglich um 02:00 (`node-cron` in `server.js`) ruft `syncAllBooks()` für alle gespeicherten User-Tokens `syncBook(bookId, token)` auf. `syncBook` berechnet pro Seite Token-Schätzung, Wort- und Zeichenanzahl, schreibt in `page_stats` (Upsert) und legt einen täglichen Snapshot in `book_stats_history` an (ein Eintrag pro Buch pro Tag).
 
 ## Prompt-Konfiguration
 
@@ -248,18 +211,18 @@ Admins können die **inhaltlichen** Teile aller System-Prompts in `prompt-config
 }
 ```
 
-**Konfigurierbar:** `baseRules` (Schweizer-Kontext-Regeln, Superregeln) und die Rollenformulierung jedes System-Prompts.
+**Konfigurierbar:** `baseRules` und die Rollenformulierung jedes System-Prompts.
 
-**Hartkodiert (nicht konfigurierbar):** Die JSON-Only-Anweisung (`Antworte ausschliesslich mit einem JSON-Objekt…`), alle JSON-Schema-Definitionen und Feldnamen in den Build-Funktionen.
+**Hartkodiert:** Die JSON-Only-Anweisung, alle JSON-Schema-Definitionen und Feldnamen in den Build-Funktionen.
 
 **Ladereihenfolge:**
 - `routes/proxies.js` liest die Datei beim Serverstart (lazy singleton) und liefert sie über `/config` als `promptConfig` ans Frontend.
 - `public/js/app.js` ruft `configurePrompts(cfg.promptConfig)` in `init()` auf → aktualisiert die `export let SYSTEM_*`-Variablen in `prompts.js` via ESM-Live-Binding.
 - `routes/jobs.js` liest die Datei synchron beim Modulstart und ruft `configurePrompts()` einmalig nach dem dynamischen `import()` von `prompts.js` auf.
 
-Fehlt `prompt-config.json`, loggen beide Server-Module eine Warnung und `prompts.js` verwendet seine eingebauten Defaults – der Server startet normal.
+Fehlt `prompt-config.json`, verwendet `prompts.js` seine eingebauten Defaults – der Server startet normal.
 
-**Single Source of Truth:** Alle Prompts bleiben ausschliesslich in `public/js/prompts.js`. `prompt-config.json` überschreibt nur die konfigurierbaren Teile über `configurePrompts()`.
+**Single Source of Truth:** Alle Prompts (inkl. JSON-Schemas der KI-Antworten) ausschliesslich in `public/js/prompts.js`.
 
 ## KI-Integration
 
@@ -278,53 +241,7 @@ Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davo
 
 ### KI-Rückgabeformate
 
-**Seitenlektorat (`runCheck`):**
-```json
-{
-  "fehler": [{ "typ": "rechtschreibung|grammatik|stil", "original": "", "korrektur": "", "kontext": "", "erklaerung": "" }],
-  "korrekturen_html": "<vollständiges korrigiertes HTML>",
-  "stilanalyse": "...",
-  "fazit": "..."
-}
-```
-
-**Buchbewertung (`runBookReview`):**
-```json
-{
-  "gesamtnote": "1–5",
-  "gesamtnote_begruendung": "...",
-  "zusammenfassung": "...",
-  "struktur": "...",
-  "stil": "...",
-  "staerken": ["..."],
-  "schwaechen": ["..."],
-  "empfehlungen": ["..."],
-  "fazit": "..."
-}
-```
-
-**Figurenübersicht (`runFigurExtraction`):**
-```json
-{
-  "figuren": [
-    {
-      "id": "fig_1",
-      "name": "Vollständiger Name",
-      "kurzname": "Vorname oder Spitzname",
-      "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere",
-      "geburtstag": "JJJJ oder leer",
-      "geschlecht": "männlich|weiblich|divers|unbekannt",
-      "beruf": "Beruf oder Rolle",
-      "beschreibung": "2–3 Sätze",
-      "eigenschaften": ["..."],
-      "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
-      "beziehungen": [
-        { "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "..." }
-      ]
-    }
-  ]
-}
-```
+Die kanonischen JSON-Schemas stehen in `public/js/prompts.js` (Build-Funktionen). Pflichtfelder zur Schema-Validierung nach dem Call: `fehler` (Lektorat), `gesamtnote` (Buchbewertung), `figuren` (Figurenextraktion).
 
 ## Frontend-Architektur
 
@@ -332,13 +249,9 @@ SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein B
 
 ### Modul-Pattern
 
-Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`, `two-tier.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das auf die Alpine-Komponente zeigt – per `...spread` in das Alpine-Data-Objekt eingebettet. `bookstats.js` folgt demselben Pattern (`bookstatsMethods`).
+Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`, `two-tier.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das auf die Alpine-Komponente zeigt – per `...spread` in das Alpine-Data-Objekt eingebettet.
 
 **Neue Funktionalität:** Neues Modul anlegen → Methoden-Objekt exportieren → in `app.js` importieren und am Ende des Data-Objekts spreaden.
-
-### Script-Reihenfolge in `index.html`
-
-Erst `<script type="module" src="js/app.js">`, dann vis-network, dann Chart.js, dann Alpine mit `defer` – so ist der `alpine:init`-Listener garantiert vor Alpine registriert.
 
 ### Style-Regel
 
@@ -352,43 +265,11 @@ Erst `<script type="module" src="js/app.js">`, dann vis-network, dann Chart.js, 
 - `groupByChapter(pageContents)` – gruppiert für Multi-Pass nach Kapitel-ID.
 - `SINGLE_PASS_LIMIT` = 60 000 Zeichen: darunter Single-Pass direkt an Claude, darüber Multi-Pass pro Kapitel + Konsolidierungs-Call.
 
-### Alpine State
-
-| Property | Zweck |
-|----------|-------|
-| `currentUser` | Eingeloggter User `{ email, name }` aus `/config` (via Session) |
-| `books`, `selectedBookId` | Bücherliste und Auswahl |
-| `pages`, `tree` | Flache Seitenliste + hierarchische Kapitel/Seiten-Struktur |
-| `pageSearch` | Suchfeld (filtert `filteredTree` computed) |
-| `showTreeCard` | Sichtbarkeits-Flag für den Tree-Panel |
-| `currentPage`, `correctedHtml`, `hasErrors` | Aktive Seite und Lektorat-Ergebnis |
-| `currentPageEmpty` | Flag: Seite hat keinen Text |
-| `currentPageUpdatedAt` | Letztes Update-Datum der Seite (aus BookStack) |
-| `originalHtml` | Original-HTML vor Korrekturen |
-| `lektoratErrors`, `selectedErrors` | Alle Fehler aus dem letzten Check; davon selektierte (werden angewendet) |
-| `lektoratStyles`, `selectedStyles` | Stilanmerkungen; rein informativ, fliessen nie ins HTML |
-| `checkDone` | Flag: Lektorat-Check abgeschlossen |
-| `showDiff`, `diffHtml` | Diff-Ansicht: Toggle + gecachtes HTML (LCS-basiert, Wort-Ebene) |
-| `showBookCard`, `showEditorCard`, `showBookReviewCard`, `showFiguresCard` | Sichtbarkeits-Flags |
-| `showTokenSetup`, `tokenSetupId`, `tokenSetupPw`, `tokenSetupError`, `tokenSetupLoading` | Token-Setup-Card (kein BookStack-Token hinterlegt) |
-| `status`, `statusSpinner` | Statuszeile |
-| `analysisOut`, `bookReviewOut` | HTML-Output (via `x-html`) |
-| `checkLoading`, `bookReviewLoading`, `bookReviewProgress` | Lade-States |
-| `batchLoading`, `batchProgress`, `batchStatus` | Batch-Check-Status |
-| `lastCheckId`, `pageHistory`, `selectedHistoryId` | History-State |
-| `bookReviewHistory`, `selectedBookReviewId` | Buchbewertungs-History |
-| `tokEsts`, `_tokenEstGen` | Token-Schätzungen (Map `page_id → {tok, words, chars}`); `_tokenEstGen` bricht veraltete Batches ab |
-| `figuren`, `figurenLoading`, `figurenProgress`, `figurenStatus` | Figurenübersicht |
-| `selectedFigurId` | Aufgeklappte Figur |
-| `_figurenNetwork` | vis-network-Instanz (intern) |
-| `showBookStatsCard`, `bookStatsData` | Buchstatistik-Panel: Sichtbarkeit + geladene History-Daten |
-| `bookStatsLoading`, `bookStatsSyncStatus` | Lade-State + Sync-Statusmeldung |
-| `bookStatsMetric`, `bookStatsRange` | Angezeigte Metrik (`words`\|`chars`\|`tok`\|`page_count`) + Datumsbereich |
-| `_statsChart` | Chart.js-Instanz (intern) |
-
 ### Wichtige Verhaltensdetails
 
-**Selektive Fehlerkorrektur:** `_recomputeCorrectedHtml()` wendet nur `selectedErrors` via `_applyCorrections` auf `originalHtml` an. Claudes `korrekturen_html` wird ignoriert. Stilanmerkungen fliessen nie ins HTML – sie sind rein informativ.
+**Selektive Fehlerkorrektur:** `_recomputeCorrectedHtml()` wendet nur `selectedErrors` via `_applyCorrections` auf `originalHtml` an. Claudes `korrekturen_html` wird ignoriert.
+
+**Stilanmerkungen:** Werden separat verwaltet (`lektoratStyles`/`selectedStyles`). Beim Speichern (wenn selektierte Stile vorhanden) folgt ein zweiter AI-Call mit `buildStilkorrekturPrompt`, der die Stilkorrekturen auf `correctedHtml` anwendet bevor es in BookStack geschrieben wird.
 
 **`resetPage()` vs. `resetView()`:** `resetPage()` deselektiert nur die Seite. `resetView()` setzt alles zurück (Karten, History, Figuren, Graph, Kapitel) – gebunden an H1-Klick.
 

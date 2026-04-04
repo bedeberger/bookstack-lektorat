@@ -535,10 +535,10 @@
           <template x-if="entry.errors_json && entry.errors_json.length > 0">
             <div style="margin-top:10px;">
               <template x-for="(f, i) in entry.errors_json" :key="i">
-                <div class="finding" :class="[f.typ === 'stil' ? 'style' : 'error', entry.applied_errors_json && f.typ !== 'stil' && !entry.applied_errors_json.some(a => a.original === f.original) ? 'finding-skipped' : '']">
+                <div class="finding" :class="[f.typ === 'stil' ? 'style' : 'error', entry.selected_errors_json && !entry.selected_errors_json.some(a => a.original === f.original) ? 'finding-skipped' : '']">
                   <span class="badge" :class="f.typ === 'stil' ? 'badge-warn' : 'badge-err'" x-text="f.typ"></span>
-                  <template x-if="entry.applied_errors_json !== null && f.typ !== 'stil'">
-                    <span class="badge" :class="entry.applied_errors_json.some(a => a.original === f.original) ? 'badge-ok' : 'badge-skipped'" :title="entry.applied_errors_json.some(a => a.original === f.original) ? 'übernommen' : 'übersprungen'" x-text="entry.applied_errors_json.some(a => a.original === f.original) ? '✓' : '–'"></span>
+                  <template x-if="entry.selected_errors_json !== null">
+                    <span class="badge" :class="entry.selected_errors_json.some(a => a.original === f.original) ? 'badge-ok' : 'badge-skipped'" :title="entry.selected_errors_json.some(a => a.original === f.original) ? 'selektiert' : 'nicht selektiert'" x-text="entry.selected_errors_json.some(a => a.original === f.original) ? '✓' : '–'"></span>
                   </template>
                   &nbsp;<del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
                   <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>

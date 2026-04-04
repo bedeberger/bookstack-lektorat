@@ -5,6 +5,7 @@ KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). L�
 - **Seitenlektorat** – Rechtschreib-, Grammatik- und Stilprüfung einzelner Seiten mit selektiver Fehlerkorrektur
 - **Buchbewertung** – Gesamtbewertung mit Stärken, Schwächen und Empfehlungen
 - **Figurenübersicht** – Automatische Charakterextraktion mit interaktivem Beziehungsgraph
+- **Buchstatistik** – Tägliche Snapshots von Wortanzahl, Zeichenanzahl und Tokenverbrauch als Zeitliniendiagramm
 - **Zwei KI-Provider** – Anthropic Claude (Cloud) oder Ollama (lokal/offline)
 
 ---
@@ -76,6 +77,7 @@ Dann `.env` öffnen und alle Pflichtfelder setzen:
 | `MODEL_TOKEN` | Max. Output-Tokens (Standard: `64000`) | Nein |
 | `OLLAMA_HOST` | URL der Ollama-Instanz (nur bei `API_PROVIDER=ollama`) | Ja* |
 | `OLLAMA_MODEL` | Ollama-Modell, z.B. `llama3.2` (nur bei `API_PROVIDER=ollama`) | Ja* |
+| `DB_PATH` | Pfad zur SQLite-Datenbank (Standard: `./lektorat.db`; bei Docker via Compose gesetzt) | Nein |
 
 *Je nach gewähltem Provider.
 
@@ -247,6 +249,8 @@ Browser → NGINX (HTTPS, öffentlich)
             → /api/*          → BookStack (Token-Injection, serverseitig)
             → /history/*      → SQLite (lektorat.db)
             → /figures/*      → SQLite (lektorat.db)
+            → /jobs/*         → Hintergrund-Jobs (Buchbewertung, Figurenextraktion)
+            → /sync/*         → Buchstatistik-Sync (manuell + Cron täglich 02:00)
             → /               → Single-Page-App (Alpine.js)
 ```
 
@@ -256,11 +260,29 @@ Alle geschützten Routen erfordern eine gültige Session. KI-Calls und BookStack
 
 ## Lokale Entwicklung
 
+Google OAuth2 erfordert eine öffentlich erreichbare Callback-URL und funktioniert lokal nicht ohne Weiteres. Für die Entwicklung gibt es einen Dev-Modus, der den OAuth-Flow komplett überspringt und automatisch eine Dummy-Session anlegt.
+
+**Dev-Modus aktivieren:**
+
+```env
+# .env (lokal)
+LOCAL_DEV_MODE=true
+BOOKSTACK_URL=http://<host>:80
+
+# Optional: BookStack API-Token direkt in der .env setzen,
+# damit kein manuelles Token-Setup im Browser nötig ist
+TOKEN_ID=<token-id>
+TOKEN_KENNWORT=<token-secret>
+```
+
 ```bash
 npm install
 node server.js
 # App läuft auf http://localhost:3737
+# Session: dev@local / "Dev (lokal)" – kein Login nötig
 ```
+
+> **Achtung:** `LOCAL_DEV_MODE=true` niemals in Produktion setzen. Der Auth-Guard wird vollständig deaktiviert – jeder hat ohne Login Zugriff.
 
 ---
 

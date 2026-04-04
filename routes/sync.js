@@ -72,7 +72,7 @@ async function syncBook(bookId, token) {
   for (let i = 0; i < pages.length; i += BATCH) {
     const batch = pages.slice(i, i + BATCH);
     const results = await Promise.allSettled(batch.map(async p => {
-      const pd = await bsGet(`pages/${p.id}`);
+      const pd = await bsGet(`pages/${p.id}`, token);
       const { words, chars, tok } = computeStats(pd.html || '');
       return { page_id: p.id, book_id: bookId, tok, words, chars, updated_at: p.updated_at || null, cached_at: now };
     }));
