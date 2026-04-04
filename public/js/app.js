@@ -168,7 +168,7 @@ document.addEventListener('alpine:init', () => {
           if (!resp.ok) return;
           const job = await resp.json();
           if (config.progressProp) this[config.progressProp] = job.progress || 0;
-          if (job.status === 'running') { config.onProgress?.(job); return; }
+          if (job.status === 'running' || job.status === 'queued') { config.onProgress?.(job); return; }
           clearInterval(this[config.timerProp]);
           this[config.timerProp] = null;
           if (config.lsKey) localStorage.removeItem(config.lsKey);

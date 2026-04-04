@@ -77,6 +77,7 @@ Dann `.env` öffnen und alle Pflichtfelder setzen:
 | `MODEL_TOKEN` | Max. Output-Tokens (Standard: `64000`) | Nein |
 | `OLLAMA_HOST` | URL der Ollama-Instanz (nur bei `API_PROVIDER=ollama`) | Ja* |
 | `OLLAMA_MODEL` | Ollama-Modell, z.B. `llama3.2` (nur bei `API_PROVIDER=ollama`) | Ja* |
+| `MAX_CONCURRENT_JOBS` | Max. gleichzeitig laufende KI-Jobs über alle User (Standard: `2`). Bei einem einzelnen Modell (Ollama) empfiehlt sich `1`, um konkurrierende Anfragen zu vermeiden. | Nein |
 | `DB_PATH` | Pfad zur SQLite-Datenbank (Standard: `./lektorat.db`; bei Docker via Compose gesetzt) | Nein |
 
 *Je nach gewähltem Provider.

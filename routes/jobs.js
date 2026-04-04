@@ -31,8 +31,32 @@ const jsonBody = express.json();
 // ── Job store ─────────────────────────────────────────────────────────────────
 // key: jobId → { id, type, bookId, status, progress, statusText, result, error }
 const jobs = new Map();
-// key: `${type}:${bookId}` → jobId  (verhindert Doppel-Starts)
+// key: `${type}:${bookId}:${userEmail}` → jobId  (verhindert Doppel-Starts)
 const runningJobs = new Map();
+
+// ── Globale Queue ─────────────────────────────────────────────────────────────
+// Maximale Anzahl gleichzeitig laufender Jobs (über alle User)
+const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_JOBS, 10) || 2;
+let activeCount = 0;
+const jobQueue = []; // { jobId, fn }
+
+function drainQueue() {
+  while (activeCount < MAX_CONCURRENT && jobQueue.length > 0) {
+    const { jobId, fn } = jobQueue.shift();
+    const job = jobs.get(jobId);
+    if (!job) continue; // Job wurde zwischenzeitlich entfernt
+    activeCount++;
+    job.status = 'running';
+    fn()
+      .catch(e => logger.error(`Unkontrollierter Job-Fehler (${jobId}): ${e.message}`))
+      .finally(() => { activeCount--; drainQueue(); });
+  }
+}
+
+function enqueueJob(jobId, fn) {
+  jobQueue.push({ jobId, fn });
+  drainQueue();
+}
 
 function fmtTok(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
@@ -49,7 +73,7 @@ function createJob(type, bookId, userEmail) {
   const key = jobKey(type, bookId, userEmail);
   jobs.set(id, {
     id, type, bookId: String(bookId), userEmail: userEmail || null,
-    status: 'running', progress: 0, statusText: '',
+    status: 'queued', progress: 0, statusText: 'In Warteschlange…',
     tokensIn: 0, tokensOut: 0,
     maxTokensOut: parseInt(process.env.MODEL_TOKEN, 10) || 64000,
     result: null, error: null,
@@ -585,8 +609,7 @@ router.post('/check', jsonBody, (req, res) => {
   const existing = runningJobs.get(jobKey('check', page_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const jobId = createJob('check', page_id, userEmail);
-  runCheckJob(jobId, page_id, book_id || null, userEmail, userToken)
-    .catch(e => logger.error('Unkontrollierter check-Job-Fehler: ' + e.message));
+  enqueueJob(jobId, () => runCheckJob(jobId, page_id, book_id || null, userEmail, userToken));
   res.json({ jobId });
 });
 
@@ -594,12 +617,10 @@ router.post('/review', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
   const userEmail = req.session?.user?.email || null;
-  // Laufenden Job zurückgeben statt neu starten
   const existing = runningJobs.get(jobKey('review', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const jobId = createJob('review', book_id, userEmail);
-  runReviewJob(jobId, book_id, book_name || '', userEmail)
-    .catch(e => logger.error('Unkontrollierter review-Job-Fehler: ' + e.message));
+  enqueueJob(jobId, () => runReviewJob(jobId, book_id, book_name || '', userEmail));
   res.json({ jobId });
 });
 
@@ -610,8 +631,7 @@ router.post('/figures', jsonBody, (req, res) => {
   const existing = runningJobs.get(jobKey('figures', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const jobId = createJob('figures', book_id, userEmail);
-  runFiguresJob(jobId, book_id, book_name || '', userEmail)
-    .catch(e => logger.error('Unkontrollierter figures-Job-Fehler: ' + e.message));
+  enqueueJob(jobId, () => runFiguresJob(jobId, book_id, book_name || '', userEmail));
   res.json({ jobId });
 });
 
@@ -622,8 +642,7 @@ router.post('/batch-check', jsonBody, (req, res) => {
   const existing = runningJobs.get(jobKey('batch-check', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const jobId = createJob('batch-check', book_id, userEmail);
-  runBatchCheckJob(jobId, book_id, userEmail)
-    .catch(e => logger.error('Unkontrollierter batch-check-Job-Fehler: ' + e.message));
+  enqueueJob(jobId, () => runBatchCheckJob(jobId, book_id, userEmail));
   res.json({ jobId });
 });
 
@@ -640,9 +659,14 @@ router.get('/active', (req, res) => {
 router.get('/:id', (req, res) => {
   const job = jobs.get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Job nicht gefunden' });
+  let statusText = job.statusText;
+  if (job.status === 'queued') {
+    const pos = jobQueue.findIndex(e => e.jobId === job.id) + 1;
+    statusText = pos > 0 ? `In Warteschlange (Position ${pos})…` : 'In Warteschlange…';
+  }
   res.json({
     id: job.id, type: job.type, status: job.status,
-    progress: job.progress, statusText: job.statusText,
+    progress: job.progress, statusText,
     tokensIn: job.tokensIn, tokensOut: job.tokensOut,
     maxTokensOut: job.maxTokensOut,
     result: job.result, error: job.error,
