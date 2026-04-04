@@ -249,6 +249,12 @@ export const lektoratMethods = {
       this.hasErrors = false;
       this.showDiff = false;
       this.diffHtml = '';
+      this.lektoratErrors = [];
+      this.lektoratStyles = [];
+      this.selectedErrors = [];
+      this.selectedStyles = [];
+      this.analysisOut = '';
+      this.checkDone = false;
     } catch (e) {
       console.error('[saveCorrections]', e);
       this.setStatus('Fehler: ' + e.message);
