@@ -9,6 +9,40 @@ KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). L�
 
 ---
 
+## Voraussetzungen
+
+> **Die App muss öffentlich aus dem Internet erreichbar sein.**
+> Google OAuth2 benötigt eine HTTPS-Callback-URL, die Google nach dem Login ansteuern kann. Ein lokaler `localhost`-Betrieb reicht dafür nicht aus. Typisch: Reverse-Proxy (NGINX, Caddy, Traefik) mit öffentlicher Domain und TLS-Zertifikat.
+
+---
+
+## Google OAuth2 einrichten
+
+Die App verwendet Google als Login-Provider. Alle Benutzer müssen explizit in der `.env` freigegeben werden – es reicht nicht, ein Google-Konto zu besitzen.
+
+**Empfehlung:** Wenn BookStack bereits mit Google OAuth angebunden ist, nutze **dasselbe Google Cloud Projekt** – spart einen separaten OAuth-Consent-Screen.
+
+### Schritt-für-Schritt
+
+**1. Google Cloud Console öffnen:** [console.cloud.google.com](https://console.cloud.google.com)
+
+**2. Projekt auswählen** (bestehendes BookStack-Projekt oder neues erstellen)
+
+**3. OAuth 2.0 Credentials anlegen:**
+- *APIs & Dienste → Anmeldedaten → Anmeldedaten erstellen → OAuth 2.0-Client-ID*
+- Anwendungstyp: **Webanwendung**
+- Name: z.B. `bookstack-lektorat`
+- Autorisierte Weiterleitungs-URI: `https://deine-domain.ch/auth/callback`
+
+**4. Client-ID und Client-Secret kopieren** → in `.env` eintragen (s. unten)
+
+**5. OAuth-Consent-Screen prüfen:**
+- Wenn das Projekt bereits für BookStack konfiguriert ist, ist der Consent-Screen vorhanden
+- Ansonsten: *APIs & Dienste → OAuth-Zustimmungsbildschirm* → Benutzerdefiniert konfigurieren
+- Für interne Tools genügt «Intern» (nur Konten der eigenen Organisation) oder «Extern» mit manuell gepflegter Testnutzerliste
+
+---
+
 ## Deployment
 
 ### Option A: Docker Compose (empfohlen)
@@ -26,13 +60,16 @@ cd bookstack-lektorat
 cp .env.example .env
 ```
 
-Dann `.env` öffnen und mindestens diese Werte setzen:
+Dann `.env` öffnen und alle Pflichtfelder setzen:
 
 | Variable | Beschreibung | Pflicht |
 |----------|-------------|---------|
 | `BOOKSTACK_URL` | URL der BookStack-Instanz, z.B. `http://192.168.1.10:80` | Ja |
-| `TOKEN_ID` | BookStack API Token ID | Ja |
-| `TOKEN_KENNWORT` | BookStack API Token Secret | Ja |
+| `GOOGLE_CLIENT_ID` | OAuth 2.0 Client-ID aus der Google Cloud Console | Ja |
+| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 Client-Secret | Ja |
+| `APP_URL` | Öffentliche HTTPS-URL der App, z.B. `https://lektorat.example.ch` | Ja |
+| `SESSION_SECRET` | Zufälliger Schlüssel (min. 32 Zeichen) zur Session-Signierung | Ja |
+| `ALLOWED_EMAILS` | Kommaseparierte Liste erlaubter Google-Konten | **Ja** |
 | `ANTHROPIC_API_KEY` | Anthropic API Key (nur bei `API_PROVIDER=claude`) | Ja* |
 | `API_PROVIDER` | `claude` (Standard) oder `ollama` | Nein |
 | `MODEL_NAME` | Claude-Modell, z.B. `claude-sonnet-4-6` | Nein |
@@ -42,15 +79,79 @@ Dann `.env` öffnen und mindestens diese Werte setzen:
 
 *Je nach gewähltem Provider.
 
-BookStack API-Tokens erstellen: **BookStack → Profil → API-Tokens**.
+> **ALLOWED_EMAILS ist Pflicht.** Ohne diese Variable hat jedes Google-Konto Zugriff auf die App. Der Server warnt beim Start, falls die Variable fehlt.
 
-**3. Container starten**
+`SESSION_SECRET` generieren:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+**3. Reverse-Proxy konfigurieren**
+
+Die App läuft intern auf Port 3737. Ein Reverse-Proxy macht sie unter einer öffentlichen HTTPS-Domain erreichbar.
+
+> **Warum sind die Proxy-Einstellungen wichtig?**
+> Der KI-Streaming-Endpunkt `/claude` liefert Server-Sent Events (SSE). Ohne die richtigen Einstellungen puffert der Proxy die Chunks – der Fortschrittsbalken hängt, bis die KI komplett fertig ist.
+
+---
+
+#### Nginx Proxy Manager / NPMplus (empfohlen für Heimserver)
+
+NPM und NPMplus bieten eine Web-GUI zur Proxy-Verwaltung mit automatischem Let's-Encrypt-Zertifikat.
+
+**Proxy Host anlegen:**
+
+1. *Hosts → Proxy Hosts → Add Proxy Host*
+2. **Domain Names:** `lektorat.example.ch`
+3. **Scheme:** `http` · **Forward Hostname / IP:** `localhost` (oder Container-Name, z.B. `lektorat`) · **Forward Port:** `3737`
+4. **Cache Assets:** aus · **Block Common Exploits:** ein
+5. Tab **SSL** → *Request a new SSL Certificate* → *Force SSL* ein → speichern
+6. Tab **Advanced** → folgenden Block einfügen und speichern:
+
+```nginx
+proxy_buffering         off;
+proxy_cache             off;
+proxy_read_timeout      300s;
+proxy_send_timeout      300s;
+proxy_set_header        X-Real-IP          $remote_addr;
+proxy_set_header        X-Forwarded-For    $proxy_add_x_forwarded_for;
+proxy_set_header        X-Forwarded-Proto  $scheme;
+```
+
+> **Docker-Netzwerk:** Laufen NPM und die Lektorat-App im selben Docker-Compose-Stack, lautet der Forward-Hostname der **Service-Name** aus der `docker-compose.yml` (z.B. `lektorat`), nicht `localhost`.
+
+---
+
+#### Raw NGINX (ohne GUI)
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name lektorat.example.ch;
+
+    ssl_certificate     /etc/letsencrypt/live/lektorat.example.ch/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/lektorat.example.ch/privkey.pem;
+
+    location / {
+        proxy_pass              http://localhost:3737;
+        proxy_set_header        Host               $host;
+        proxy_set_header        X-Real-IP          $remote_addr;
+        proxy_set_header        X-Forwarded-For    $proxy_add_x_forwarded_for;
+        proxy_set_header        X-Forwarded-Proto  $scheme;
+        # SSE (KI-Streaming):
+        proxy_buffering         off;
+        proxy_cache             off;
+        proxy_read_timeout      300s;
+        proxy_send_timeout      300s;
+    }
+}
+```
+
+**4. Container starten**
 
 ```bash
 docker compose up -d
 ```
-
-Die App ist jetzt erreichbar unter `http://localhost:3737`.
 
 Die SQLite-Datenbank wird im Docker-Volume `lektorat_data` persistiert und bleibt bei Updates erhalten.
 
@@ -60,15 +161,10 @@ Die SQLite-Datenbank wird im Docker-Volume `lektorat_data` persistiert und bleib
 docker compose logs -f
 ```
 
-**Container stoppen:**
+**Container stoppen / Update:**
 
 ```bash
 docker compose down
-```
-
-**Update auf neue Version:**
-
-```bash
 git pull
 docker compose up -d --build
 ```
@@ -96,6 +192,26 @@ Für den Produktivbetrieb empfiehlt sich ein systemd-Service (siehe `lektorat.se
 
 Alle Einstellungen werden über `.env` gesteuert. Eine vollständig kommentierte Vorlage liegt unter [`.env.example`](.env.example).
 
+### Benutzer und BookStack-Tokens verwalten
+
+Wer sich einloggen darf, steuert `ALLOWED_EMAILS` in der `.env`. Nach dem ersten Login erscheint automatisch ein Formular zum Hinterlegen des persönlichen BookStack API-Tokens:
+
+1. In BookStack einloggen → **Profil → API-Tokens → Token erstellen**
+2. Token ID und Token Secret in das Formular der Lektorat-App eintragen
+3. Der Token wird in der Datenbank gespeichert und künftig automatisch geladen
+
+Jeder Nutzer hinterlegt seinen eigenen Token – die App nutzt damit die individuellen BookStack-Berechtigungen der jeweiligen Person.
+
+**Benutzer aus ALLOWED_EMAILS entfernen** → Server neu starten → Person kann sich nicht mehr einloggen. Der gespeicherte Token bleibt in der DB (kann manuell gelöscht werden: `DELETE FROM user_tokens WHERE email = 'person@example.com'`).
+
+`ALLOWED_EMAILS` in der `.env`:
+
+```env
+ALLOWED_EMAILS=alice@gmail.com,bob@example.com
+```
+
+Nach jeder Änderung muss der Server neu gestartet werden (`docker compose restart` oder `systemctl restart lektorat`).
+
 ### KI-Provider wählen
 
 **Claude (Standard):**
@@ -120,16 +236,21 @@ OLLAMA_MODEL=llama3.2
 ## Architektur
 
 ```
-Browser → Express (Port 3737) → /config         → .env-Credentials an Frontend
-                              → /claude         → api.anthropic.com (Key-Injection)
-                              → /ollama         → Ollama /api/chat
-                              → /api/*          → BookStack-Instanz
-                              → /history/*      → SQLite (lektorat.db)
-                              → /figures/*      → SQLite (lektorat.db)
-                              → /               → Single-Page-App (Alpine.js)
+Browser → NGINX (HTTPS, öffentlich)
+        → Express (Port 3737)
+            → /auth/login     → redirect zu Google
+            → /auth/callback  → Session anlegen, redirect /
+            → /auth/logout    → Session löschen
+            → /config         → Modell-Config + eingeloggter User (keine Credentials)
+            → /claude         → api.anthropic.com (Key-Injection, serverseitig)
+            → /ollama         → Ollama /api/chat
+            → /api/*          → BookStack (Token-Injection, serverseitig)
+            → /history/*      → SQLite (lektorat.db)
+            → /figures/*      → SQLite (lektorat.db)
+            → /               → Single-Page-App (Alpine.js)
 ```
 
-KI-Calls laufen **nicht direkt aus dem Browser**, sondern über den Server-Proxy – alle Credentials bleiben serverseitig.
+Alle geschützten Routen erfordern eine gültige Session. KI-Calls und BookStack-Credentials verlassen den Server nie – der Browser sieht weder API-Keys noch BookStack-Tokens.
 
 ---
 
@@ -143,9 +264,12 @@ node server.js
 
 ---
 
-## Sicherheitshinweis
+## Sicherheitshinweise
 
-Port 3737 hat keinen Authentifizierungsschutz. Den Service nur im lokalen Netz oder hinter einem Reverse-Proxy mit Auth betreiben.
+- Port 3737 darf **nicht direkt öffentlich** zugänglich sein – nur über den NGINX-Reverse-Proxy.
+- `ALLOWED_EMAILS` **immer setzen** – sonst haben alle Google-Konten Zugriff.
+- `SESSION_SECRET` mit einem zufällig generierten Wert belegen – nicht leer lassen.
+- Nach dem Entfernen eines Benutzers aus `ALLOWED_EMAILS` und Server-Restart kann die Person sich nicht mehr einloggen. Bestehende Sessions laufen nach 7 Tagen ab.
 
 ---
 

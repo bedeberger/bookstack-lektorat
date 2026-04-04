@@ -7,18 +7,26 @@ const jsonBody = express.json();
 // Gespeicherte Figuren eines Buchs laden
 router.get('/:book_id', (req, res) => {
   const bookId = parseInt(req.params.book_id);
-  const figs = db.prepare('SELECT * FROM figures WHERE book_id = ? ORDER BY sort_order, id').all(bookId);
+  const userEmail = req.session?.user?.email || null;
+
+  const figs = db.prepare(`
+    SELECT * FROM figures
+    WHERE book_id = ? AND (user_email = ? OR (? IS NULL AND user_email IS NULL))
+    ORDER BY sort_order, id
+  `).all(bookId, userEmail, userEmail);
   if (!figs.length) return res.json(null);
 
   const tags = db.prepare(`
     SELECT ft.figure_id, ft.tag FROM figure_tags ft
-    JOIN figures f ON f.id = ft.figure_id WHERE f.book_id = ?`).all(bookId);
+    JOIN figures f ON f.id = ft.figure_id
+    WHERE f.book_id = ? AND (f.user_email = ? OR (? IS NULL AND f.user_email IS NULL))`).all(bookId, userEmail, userEmail);
   const apps = db.prepare(`
     SELECT fa.figure_id, fa.chapter_name, fa.haeufigkeit FROM figure_appearances fa
-    JOIN figures f ON f.id = fa.figure_id WHERE f.book_id = ?`).all(bookId);
+    JOIN figures f ON f.id = fa.figure_id
+    WHERE f.book_id = ? AND (f.user_email = ? OR (? IS NULL AND f.user_email IS NULL))`).all(bookId, userEmail, userEmail);
   const rels = db.prepare(
-    'SELECT from_fig_id, to_fig_id, typ, beschreibung FROM figure_relations WHERE book_id = ?'
-  ).all(bookId);
+    'SELECT from_fig_id, to_fig_id, typ, beschreibung FROM figure_relations WHERE book_id = ? AND (user_email = ? OR (? IS NULL AND user_email IS NULL))'
+  ).all(bookId, userEmail, userEmail);
 
   const tagMap = {};
   for (const t of tags) (tagMap[t.figure_id] ??= []).push(t.tag);
@@ -46,7 +54,8 @@ router.get('/:book_id', (req, res) => {
 
 // Figuren eines Buchs speichern (überschreibt)
 router.put('/:book_id', jsonBody, (req, res) => {
-  saveFigurenToDb(parseInt(req.params.book_id), req.body.figuren || []);
+  const userEmail = req.session?.user?.email || null;
+  saveFigurenToDb(parseInt(req.params.book_id), req.body.figuren || [], userEmail);
   res.json({ ok: true });
 });
 

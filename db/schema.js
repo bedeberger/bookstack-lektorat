@@ -106,18 +106,36 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_bsh_book_date ON book_stats_history(book_id, recorded_at);
   CREATE INDEX IF NOT EXISTS idx_bsh_book_id ON book_stats_history(book_id);
 
+  -- BookStack API-Tokens pro User (verknüpft mit Google-E-Mail)
+  CREATE TABLE IF NOT EXISTS user_tokens (
+    email      TEXT PRIMARY KEY,
+    token_id   TEXT NOT NULL,
+    token_pw   TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
   INSERT INTO schema_version SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
   if (version < 2) {
     db.exec('ALTER TABLE page_checks ADD COLUMN applied_errors_json TEXT');
     db.prepare('UPDATE schema_version SET version = 2').run();
     logger.info('DB-Migration auf Version 2 abgeschlossen.');
+  }
+  if (version < 3) {
+    db.exec(`
+      ALTER TABLE page_checks      ADD COLUMN user_email TEXT;
+      ALTER TABLE book_reviews     ADD COLUMN user_email TEXT;
+      ALTER TABLE figures          ADD COLUMN user_email TEXT;
+      ALTER TABLE figure_relations ADD COLUMN user_email TEXT;
+    `);
+    db.prepare('UPDATE schema_version SET version = 3').run();
+    logger.info('DB-Migration auf Version 3 abgeschlossen (user_email zu allen Datentabellen hinzugefügt).');
   }
   // Sicherstellen dass schema_version aktuell ist (Fallback)
   if (version < CURRENT_SCHEMA_VERSION) {
@@ -127,29 +145,35 @@ function runMigrations() {
 runMigrations();
 
 // Figuren in DB schreiben (wird von PUT-Endpoint und JSON-Migration genutzt)
-function saveFigurenToDb(bookId, figuren) {
+function saveFigurenToDb(bookId, figuren, userEmail) {
   const now = new Date().toISOString();
   db.transaction(() => {
-    db.prepare('DELETE FROM figures WHERE book_id = ?').run(bookId);
-    db.prepare('DELETE FROM figure_relations WHERE book_id = ?').run(bookId);
+    if (userEmail) {
+      db.prepare('DELETE FROM figures WHERE book_id = ? AND user_email = ?').run(bookId, userEmail);
+      db.prepare('DELETE FROM figure_relations WHERE book_id = ? AND user_email = ?').run(bookId, userEmail);
+    } else {
+      // Legacy: kein User-Kontext (Migration)
+      db.prepare('DELETE FROM figures WHERE book_id = ? AND user_email IS NULL').run(bookId);
+      db.prepare('DELETE FROM figure_relations WHERE book_id = ? AND user_email IS NULL').run(bookId);
+    }
 
     const insFig = db.prepare(`
-      INSERT INTO figures (book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sort_order, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      INSERT INTO figures (book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sort_order, user_email, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insTag = db.prepare('INSERT INTO figure_tags (figure_id, tag) VALUES (?, ?)');
     const insApp = db.prepare('INSERT INTO figure_appearances (figure_id, chapter_name, haeufigkeit) VALUES (?, ?, ?)');
-    const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung) VALUES (?, ?, ?, ?, ?)');
+    const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, user_email) VALUES (?, ?, ?, ?, ?, ?)');
 
     for (let i = 0; i < figuren.length; i++) {
       const f = figuren[i];
       const { lastInsertRowid: fid } = insFig.run(
         bookId, f.id, f.name, f.kurzname || null, f.typ || null,
         f.geburtstag || null, f.geschlecht || null, f.beruf || null,
-        f.beschreibung || null, i, now
+        f.beschreibung || null, i, userEmail || null, now
       );
       for (const tag of (f.eigenschaften || [])) insTag.run(fid, tag);
       for (const app of (f.kapitel || [])) insApp.run(fid, app.name, app.haeufigkeit || 1);
-      for (const bz of (f.beziehungen || [])) insRel.run(bookId, f.id, bz.figur_id, bz.typ, bz.beschreibung || null);
+      for (const bz of (f.beziehungen || [])) insRel.run(bookId, f.id, bz.figur_id, bz.typ, bz.beschreibung || null, userEmail || null);
     }
   })();
 }
@@ -199,4 +223,28 @@ function migrateFromJson() {
 }
 migrateFromJson();
 
-module.exports = { db, saveFigurenToDb };
+// ── User-Token-Verwaltung ─────────────────────────────────────────────────────
+
+const _getToken = db.prepare('SELECT token_id, token_pw FROM user_tokens WHERE email = ?');
+const _upsertToken = db.prepare(`
+  INSERT INTO user_tokens (email, token_id, token_pw, updated_at)
+  VALUES (?, ?, ?, datetime('now'))
+  ON CONFLICT(email) DO UPDATE SET
+    token_id=excluded.token_id, token_pw=excluded.token_pw, updated_at=excluded.updated_at
+`);
+const _getAnyToken = db.prepare('SELECT token_id, token_pw FROM user_tokens LIMIT 1');
+const _getAllTokens = db.prepare('SELECT email, token_id, token_pw FROM user_tokens');
+
+/** Gibt { token_id, token_pw } für eine E-Mail zurück, oder undefined. */
+function getUserToken(email) { return _getToken.get(email); }
+
+/** Speichert/aktualisiert den BookStack-Token für eine E-Mail. */
+function setUserToken(email, tokenId, tokenPw) { _upsertToken.run(email, tokenId, tokenPw); }
+
+/** Gibt irgendeinen gespeicherten Token zurück (für Cron-Jobs ohne Session-Kontext). */
+function getAnyUserToken() { return _getAnyToken.get(); }
+
+/** Gibt alle gespeicherten Tokens zurück (für User-iterierenden Sync). */
+function getAllUserTokens() { return _getAllTokens.all(); }
+
+module.exports = { db, saveFigurenToDb, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens };

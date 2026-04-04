@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../db/schema');
+const { db, getAnyUserToken, getAllUserTokens } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
 const logger = require('../logger');
 
 const router = express.Router();
@@ -9,25 +9,25 @@ const BOOKSTACK_URL = (process.env.API_HOST || process.env.BOOKSTACK_URL || 'htt
 // ~4-Zeichen-Heuristik: SYSTEM_LEKTORAT + buildLektoratPrompt-Wrapper ≈ 3250 Zeichen Overhead
 const PROMPT_OVERHEAD = 3250;
 
-function authHeader() {
-  return `Token ${process.env.TOKEN_ID || ''}:${process.env.TOKEN_KENNWORT || ''}`;
+function authHeader(token) {
+  return token ? `Token ${token.token_id}:${token.token_pw}` : '';
 }
 
-async function bsGet(path) {
+async function bsGet(path, token) {
   const resp = await fetch(`${BOOKSTACK_URL}/api/${path}`, {
-    headers: { Authorization: authHeader() },
+    headers: { Authorization: authHeader(token) },
     signal: AbortSignal.timeout(30000),
   });
   if (!resp.ok) throw new Error(`BookStack /api/${path}: HTTP ${resp.status}`);
   return resp.json();
 }
 
-async function bsGetAll(path) {
+async function bsGetAll(path, token) {
   const sep = path.includes('?') ? '&' : '?';
-  const first = await bsGet(`${path}${sep}count=500&offset=0`);
+  const first = await bsGet(`${path}${sep}count=500&offset=0`, token);
   let all = first.data || [];
   while (all.length < first.total) {
-    const page = await bsGet(`${path}${sep}count=500&offset=${all.length}`);
+    const page = await bsGet(`${path}${sep}count=500&offset=${all.length}`, token);
     all = all.concat(page.data || []);
   }
   return all;
@@ -57,10 +57,10 @@ const upsertPageStatsMany = db.transaction((items) => {
   for (const item of items) upsertPageStats.run(item);
 });
 
-async function syncBook(bookId) {
+async function syncBook(bookId, token) {
   const [pages, book] = await Promise.all([
-    bsGetAll(`pages?book_id=${bookId}`),
-    bsGet(`books/${bookId}`),
+    bsGetAll(`pages?book_id=${bookId}`, token),
+    bsGet(`books/${bookId}`, token),
   ]);
 
   const bookName = book.name || '';
@@ -102,22 +102,53 @@ async function syncBook(bookId) {
 }
 
 async function syncAllBooks() {
-  const books = await bsGetAll('books');
-  logger.info(`Sync: ${books.length} Buch/Bücher`);
-  for (const book of books) {
+  const users = getAllUserTokens();
+  if (!users.length) {
+    logger.warn('Sync übersprungen: kein BookStack-Token in der Datenbank hinterlegt.');
+    return;
+  }
+
+  // Bücherliste einmalig mit dem ersten verfügbaren Token holen (gleiche BookStack-Instanz für alle User)
+  let books;
+  for (const u of users) {
     try {
-      await syncBook(book.id);
+      books = await bsGetAll('books', u);
+      break;
     } catch (e) {
-      logger.error(`Sync Buch ${book.id} fehlgeschlagen: ${e.message}`);
+      logger.warn(`Sync: Bücherliste mit Token von ${u.email} fehlgeschlagen – nächsten versuchen.`);
     }
+  }
+  if (!books) {
+    logger.error('Sync abgebrochen: kein gültiger Token für Bücherliste gefunden.');
+    return;
+  }
+
+  logger.info(`Sync: ${books.length} Buch/Bücher, ${users.length} User`);
+  for (const book of books) {
+    // Jeden User durchprobieren bis einer erfolgreich ist (Tokens können abgelaufen sein)
+    let synced = false;
+    for (const u of users) {
+      try {
+        await syncBook(book.id, u);
+        synced = true;
+        break;
+      } catch (e) {
+        logger.warn(`Sync Buch ${book.id} mit Token von ${u.email} fehlgeschlagen: ${e.message}`);
+      }
+    }
+    if (!synced) logger.error(`Sync Buch ${book.id}: alle User-Tokens fehlgeschlagen.`);
   }
   logger.info('Sync abgeschlossen.');
 }
 
 // POST /sync/book/:book_id – manueller Trigger für ein Buch
 router.post('/book/:book_id', async (req, res) => {
+  const token = req.session?.bookstackToken
+    ? { token_id: req.session.bookstackToken.id, token_pw: req.session.bookstackToken.pw }
+    : getAnyUserToken();
+  if (!token) return res.status(503).json({ error: 'Kein BookStack-Token verfügbar.' });
   try {
-    const result = await syncBook(parseInt(req.params.book_id));
+    const result = await syncBook(parseInt(req.params.book_id), token);
     res.json({ ok: true, ...result });
   } catch (e) {
     logger.error('Sync-Route Fehler: ' + e.message);

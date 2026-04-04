@@ -14,8 +14,13 @@ import { bookstatsMethods } from './bookstats.js';
 document.addEventListener('alpine:init', () => {
   Alpine.data('lektorat', () => ({
     // ── State ────────────────────────────────────────────────────────────────
-    authToken: '',
+    currentUser: null,
     bookstackUrl: '',
+    showTokenSetup: false,
+    tokenSetupId: '',
+    tokenSetupPw: '',
+    tokenSetupError: '',
+    tokenSetupLoading: false,
     claudeModel: 'claude-sonnet-4-6',
     claudeMaxTokens: 64000,
     apiProvider: 'claude',
@@ -27,6 +32,7 @@ document.addEventListener('alpine:init', () => {
     pageSearch: '',
     currentPage: null,
     currentPageEmpty: false,
+    currentPageUpdatedAt: null,
     originalHtml: null,
     correctedHtml: null,
     hasErrors: false,
@@ -147,17 +153,17 @@ document.addEventListener('alpine:init', () => {
     async init() {
       try {
         const cfg = await fetch('/config').then(r => r.json());
-        if (cfg.tokenId && cfg.tokenPw) {
-          this.authToken = 'Token ' + cfg.tokenId + ':' + cfg.tokenPw;
-          this.bookstackUrl = cfg.bookstackUrl || '';
-          if (cfg.claudeModel) this.claudeModel = cfg.claudeModel;
-          if (cfg.claudeMaxTokens) this.claudeMaxTokens = cfg.claudeMaxTokens;
-          if (cfg.apiProvider) this.apiProvider = cfg.apiProvider;
-          if (cfg.ollamaModel) this.ollamaModel = cfg.ollamaModel;
-          await this.loadBooks();
-        } else {
-          this.setStatus('Keine Zugangsdaten in .env konfiguriert.');
+        this.bookstackUrl = cfg.bookstackUrl || '';
+        if (cfg.claudeModel) this.claudeModel = cfg.claudeModel;
+        if (cfg.claudeMaxTokens) this.claudeMaxTokens = cfg.claudeMaxTokens;
+        if (cfg.apiProvider) this.apiProvider = cfg.apiProvider;
+        if (cfg.ollamaModel) this.ollamaModel = cfg.ollamaModel;
+        this.currentUser = cfg.user || null;
+        if (!cfg.bookstackTokenOk) {
+          this.showTokenSetup = true;
+          return;
         }
+        await this.loadBooks();
       } catch {
         this.setStatus('Fehler beim Laden der Konfiguration.');
       }
@@ -251,6 +257,7 @@ document.addEventListener('alpine:init', () => {
 
     resetPage() {
       this.currentPage = null;
+      this.currentPageUpdatedAt = null;
       this.originalHtml = null;
       this.correctedHtml = null;
       this.hasErrors = false;
@@ -304,6 +311,32 @@ document.addEventListener('alpine:init', () => {
       this.bookStatsData = [];
       this.bookStatsSyncStatus = '';
       if (this._statsChart) { this._statsChart.destroy(); this._statsChart = null; }
+    },
+
+    // ── BookStack Token Setup ────────────────────────────────────────────────
+    async saveBookstackToken() {
+      this.tokenSetupError = '';
+      if (!this.tokenSetupId.trim() || !this.tokenSetupPw.trim()) {
+        this.tokenSetupError = 'Bitte Token ID und Token Secret eingeben.';
+        return;
+      }
+      this.tokenSetupLoading = true;
+      try {
+        const r = await fetch('/auth/token', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tokenId: this.tokenSetupId.trim(), tokenPw: this.tokenSetupPw.trim() }),
+        });
+        if (!r.ok) throw new Error((await r.json()).error || 'Fehler beim Speichern');
+        this.showTokenSetup = false;
+        this.tokenSetupId = '';
+        this.tokenSetupPw = '';
+        await this.loadBooks();
+      } catch (e) {
+        this.tokenSetupError = e.message;
+      } finally {
+        this.tokenSetupLoading = false;
+      }
     },
 
     // ── Methoden aus Modulen ─────────────────────────────────────────────────

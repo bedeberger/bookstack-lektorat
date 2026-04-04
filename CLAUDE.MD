@@ -5,26 +5,34 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Konfiguration und Docke
 ## Architektur
 
 ```
-Browser → Express (Port 3737) → /config         → .env-Credentials an Frontend
+Browser → NGINX (HTTPS) → Express (Port 3737)
+                              → /auth/login     → redirect zu Google (OIDC)
+                              → /auth/callback  → Token validieren, Session anlegen
+                              → /auth/logout    → Session löschen
+                              → /auth/me        → aktueller User (JSON)
+                              → /config         → Modell-Config + User (keine Credentials)
                               → /history/*      → SQLite-DB (lektorat.db)
                               → /figures/*      → SQLite-DB (lektorat.db)
                               → /claude         → api.anthropic.com (ANTHROPIC_API_KEY-Injection)
                               → /ollama         → Ollama /api/chat (OLLAMA_HOST, lokales Modell)
-                              → /api/*          → BookStack (localhost:80)
+                              → /api/*          → BookStack (Token aus req.session.bookstackToken, serverseitig)
                               → /               → public/index.html
 ```
 
-KI-Aufrufe laufen **nicht direkt aus dem Browser**, sondern über den jeweiligen Proxy-Endpunkt – der Server hält alle Credentials. Welcher Provider aktiv ist, steuert `API_PROVIDER` in der `.env`.
+**Auth-Flow:** Alle Routen ausser `/auth/*` sind durch einen Session-Guard geschützt. Nicht authentifizierte Requests auf HTML-Pfade → Redirect `/auth/login` → Google → `/auth/callback` → Session → `/`. API-Pfade (JSON-Requests) → `401 JSON`.
+
+KI-Aufrufe laufen **nicht direkt aus dem Browser**, sondern über den jeweiligen Proxy-Endpunkt – der Server hält alle Credentials. Der BookStack-Proxy injiziert den per-User-Token aus `req.session.bookstackToken` serverseitig; das Frontend sendet keinen Authorization-Header.
 
 ## Projektstruktur
 
 ```
 bookstack-lektorat/
-├── server.js                # Express-Setup + Route-Mounting (Einstiegspunkt)
+├── server.js                # Express-Setup + Session + Auth-Guard + Route-Mounting
 ├── logger.js                # Winston-Logger (Singleton, von allen Modulen importiert)
 ├── db/
 │   └── schema.js            # DB-Setup, Schema, Migrationen, saveFigurenToDb()
 ├── routes/
+│   ├── auth.js              # /auth/* Endpunkte (Google OIDC: login, callback, logout, me)
 │   ├── history.js           # /history/* Endpunkte (Lektorat-Checks + Buchbewertungen)
 │   ├── figures.js           # /figures/:book_id Endpunkte
 │   ├── jobs.js              # /jobs/* Endpunkte (Hintergrund-Jobs)
@@ -50,10 +58,17 @@ bookstack-lektorat/
 ## Datenbankschema
 
 ```sql
+-- BookStack API-Tokens pro User (verknüpft mit Google-E-Mail)
+user_tokens (email TEXT PRIMARY KEY,
+             token_id TEXT, token_pw TEXT,  -- werden nie ans Frontend gesendet
+             updated_at TEXT)
+
 -- Lektorat-Checks pro Seite
 page_checks (id, page_id, page_name, book_id, checked_at, error_count,
-             errors_json TEXT,   -- JSON-Array der Fehler
-             stilanalyse, fazit, model, saved INTEGER, saved_at)
+             errors_json TEXT,          -- JSON-Array der Fehler
+             stilanalyse, fazit, model,
+             saved INTEGER, saved_at,
+             applied_errors_json TEXT)  -- welche Fehler tatsächlich ins BookStack gespeichert wurden
 
 -- Buchbewertungen
 book_reviews (id, book_id, book_name, reviewed_at,
@@ -76,6 +91,14 @@ figure_appearances (figure_id → figures.id, chapter_name TEXT, haeufigkeit INT
 figure_relations (id, book_id, from_fig_id TEXT, to_fig_id TEXT,
                   typ TEXT,          -- elternteil|freund|… oder beliebig neuer Typ
                   beschreibung TEXT)
+
+-- Seiten-Stats-Cache (befüllt vom Sync-Job, für schnelles UI-Laden)
+page_stats (page_id INTEGER PRIMARY KEY, book_id, tok, words, chars, updated_at, cached_at)
+
+-- Tägliche Buchstatistik-Snapshots (für Zeitliniendiagramm)
+book_stats_history (id, book_id, book_name, recorded_at,
+                    page_count, words, chars, tok)
+-- UNIQUE auf (book_id, recorded_at) → je Buch ein Snapshot pro Tag
 
 -- Schemaversion für Migrationen
 schema_version (version INTEGER)
@@ -124,6 +147,23 @@ SELECT * FROM schema_version;
 | GET | `/history/review/:book_id` | Letzte 10 Bewertungen für ein Buch |
 | GET | `/figures/:book_id` | Gespeicherte Figuren eines Buchs laden |
 | PUT | `/figures/:book_id` | Figuren eines Buchs speichern (überschreibt) |
+| GET | `/auth/token` | Ob ein BookStack-Token hinterlegt ist (`{ hasToken: bool }`) |
+| PUT | `/auth/token` | BookStack-Token speichern (`{ tokenId, tokenPw }` → DB + Session) |
+
+## User-Token-Verwaltung
+
+BookStack-Tokens werden **pro User in der DB** gespeichert (Tabelle `user_tokens`, Schlüssel: Google-E-Mail). Kein gemeinsamer Service-Account-Token mehr in `.env`.
+
+**Flow:**
+1. Google-Login → `getUserToken(email)` → falls vorhanden: `req.session.bookstackToken = { id, pw }`
+2. BookStack-Proxy liest Token aus `req.session.bookstackToken` (synchron, kein DB-Lookup pro Request)
+3. Cron-Sync: `getAnyUserToken()` → nimmt irgendeinen gespeicherten Token
+4. Kein Token → Token-Setup-Card im Frontend; `PUT /auth/token` speichert in DB + Session
+
+**Hilfsfunktionen** (exportiert aus `db/schema.js`):
+- `getUserToken(email)` → `{ token_id, token_pw }` oder `undefined`
+- `setUserToken(email, tokenId, tokenPw)` → UPSERT
+- `getAnyUserToken()` → erster verfügbarer Token (für Hintergrundprozesse)
 
 ## BookStack API
 
@@ -149,7 +189,7 @@ Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davo
 
 ### Provider-Proxy
 
-- **`/claude`** – injiziert `ANTHROPIC_API_KEY`, leitet an `api.anthropic.com/v1/messages` weiter, streamt als SSE.
+- **`/claude`** – injiziert `ANTHROPIC_API_KEY`, leitet an `api.anthropic.com/v1/messages` weiter, streamt als SSE. `model` und `max_tokens` werden aus `.env` (MODEL_NAME / MODEL_TOKEN) erzwungen – das Frontend kann diese Werte nicht übersteuern.
 - **`/ollama`** – konvertiert Anthropic-Request-Format → Ollama `/api/chat`-Format, normalisiert NDJSON → SSE. Frontend-Parser bleibt für beide Provider identisch.
 
 ### KI-Rückgabeformate
@@ -232,6 +272,7 @@ Erst `<script type="module" src="js/app.js">`, dann vis-network, dann Alpine mit
 
 | Property | Zweck |
 |----------|-------|
+| `currentUser` | Eingeloggter User `{ email, name }` aus `/config` (via Session) |
 | `books`, `selectedBookId` | Bücherliste und Auswahl |
 | `pages`, `tree` | Flache Seitenliste + hierarchische Kapitel/Seiten-Struktur |
 | `pageSearch` | Suchfeld (filtert `filteredTree` computed) |

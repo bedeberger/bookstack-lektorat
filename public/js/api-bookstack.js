@@ -1,15 +1,14 @@
 // Methoden für BookStack-API-Calls (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
+// Authorization-Header wird serverseitig vom Proxy injiziert.
 
 export const bookstackMethods = {
   async bsGet(path) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(new Error('Timeout: BookStack hat nicht innerhalb von 30 Sekunden geantwortet')), 30000);
     try {
-      const r = await fetch('/api/' + path, {
-        headers: { Authorization: this.authToken },
-        signal: ctrl.signal,
-      });
+      const r = await fetch('/api/' + path, { signal: ctrl.signal });
+      if (r.status === 401) { location.href = '/auth/login'; return; }
       if (!r.ok) throw new Error('BookStack API Fehler ' + r.status);
       return r.json();
     } catch (e) {
@@ -41,10 +40,11 @@ export const bookstackMethods = {
     try {
       const r = await fetch('/api/' + path, {
         method: 'PUT',
-        headers: { Authorization: this.authToken, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
         signal: ctrl.signal,
       });
+      if (r.status === 401) { location.href = '/auth/login'; return; }
       if (!r.ok) {
         let detail = '';
         try { const e = await r.json(); detail = e.message || e.error || ''; } catch (_) {}

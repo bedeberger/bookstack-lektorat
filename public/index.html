@@ -18,7 +18,42 @@
   <img src="bookstack_lektorat_icon.svg" alt="" class="site-logo">
   BookStack Lektorat
 </h1>
-<p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : '· Claude: ' + claudeModel"></span></p>
+<div class="site-header-row">
+  <p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : '· Claude: ' + claudeModel"></span></p>
+  <div class="user-info" x-show="currentUser">
+    <span class="user-email" x-text="currentUser?.name || currentUser?.email"></span>
+    <a href="/auth/logout" class="logout-link">Abmelden</a>
+  </div>
+</div>
+
+<!-- BookStack Token Setup -->
+<div class="card token-setup-card" x-show="showTokenSetup" x-cloak>
+  <div class="card-header">
+    <span class="card-title">BookStack API-Token einrichten</span>
+  </div>
+  <p class="token-setup-desc">
+    Erstelle einen persönlichen API-Token in BookStack und trage ihn hier ein.<br>
+    <a :href="bookstackUrl + '/my-account/api-tokens'" target="_blank" x-show="bookstackUrl">
+      BookStack öffnen → Profil → API-Tokens
+    </a>
+    <span x-show="!bookstackUrl">BookStack → Profil → API-Tokens</span>
+  </p>
+  <div class="token-setup-fields">
+    <label>Token ID
+      <input type="text" x-model="tokenSetupId" placeholder="Token ID" autocomplete="off" spellcheck="false">
+    </label>
+    <label>Token Secret
+      <input type="password" x-model="tokenSetupPw" placeholder="Token Secret" autocomplete="off">
+    </label>
+  </div>
+  <p class="token-setup-error" x-show="tokenSetupError" x-text="tokenSetupError"></p>
+  <div class="row">
+    <button @click="saveBookstackToken()" :disabled="tokenSetupLoading">
+      <span x-show="tokenSetupLoading" class="spinner"></span>
+      <span x-text="tokenSetupLoading ? 'Speichert…' : 'Speichern'"></span>
+    </button>
+  </div>
+</div>
 
 <!-- Bücherliste & Seitenauswahl -->
 <div class="card" x-show="showBookCard" x-cloak>

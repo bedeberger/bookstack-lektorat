@@ -113,6 +113,7 @@ export const lektoratMethods = {
       const html = pageData.html;
       const text = htmlToText(html);
       this.originalHtml = html;
+      this.currentPageUpdatedAt = pageData.updated_at || null;
 
       this.setStatus('KI analysiert… (0 Zeichen)', true);
 
@@ -218,6 +219,17 @@ export const lektoratMethods = {
         this.setStatus('Fehler bei Stilkorrektur: ' + e.message);
         return;
       }
+    }
+
+    this.setStatus('Prüfe auf Änderungen…', true);
+    try {
+      const current = await this.bsGet('pages/' + this.currentPage.id);
+      if (this.currentPageUpdatedAt && current.updated_at !== this.currentPageUpdatedAt) {
+        this.setStatus('Konflikt: Die Seite wurde zwischenzeitlich von jemand anderem geändert. Bitte Lektorat neu starten.');
+        return;
+      }
+    } catch (e) {
+      console.warn('[saveCorrections] Konfliktprüfung fehlgeschlagen, fahre fort:', e.message);
     }
 
     this.setStatus('Speichere in BookStack…', true);

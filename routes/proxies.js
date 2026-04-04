@@ -7,22 +7,25 @@ const BOOKSTACK_URL = process.env.API_HOST || process.env.BOOKSTACK_URL || 'http
 const router = express.Router();
 const jsonBody = express.json();
 
-// Credentials und Modell-Konfiguration ans Frontend liefern
-router.get('/config', (_req, res) => {
+// Modell-Konfiguration ans Frontend liefern (keine Credentials)
+router.get('/config', (req, res) => {
   res.json({
-    tokenId: process.env.TOKEN_ID || '',
-    tokenPw: process.env.TOKEN_KENNWORT || '',
     bookstackUrl: BOOKSTACK_URL.replace(/\/$/, ''),
+    bookstackTokenOk: !!req.session?.bookstackToken,
     claudeMaxTokens: parseInt(process.env.MODEL_TOKEN, 10) || 64000,
     claudeModel: process.env.MODEL_NAME || 'claude-sonnet-4-6',
     apiProvider: process.env.API_PROVIDER || 'claude',
     ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
+    user: req.session?.user || null,
   });
 });
 
 // Proxy /claude → api.anthropic.com (SSE-Streaming mit Key-Injection)
 router.post('/claude', jsonBody, async (req, res) => {
   try {
+    // Nur erlaubte Felder weitergeben – verhindert Model-Override durch das Frontend
+    const model = process.env.MODEL_NAME || 'claude-sonnet-4-6';
+    const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
     const upstream = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -30,15 +33,20 @@ router.post('/claude', jsonBody, async (req, res) => {
         'x-api-key': process.env.ANTHROPIC_API_KEY || '',
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify({ ...req.body, stream: true }),
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        system: req.body.system,
+        messages: req.body.messages,
+        stream: true,
+      }),
     });
-    const model = req.body.model || '?';
     if (!upstream.ok) {
       const err = await upstream.json();
       logger.error(`Claude upstream ${upstream.status} (model=${model}): ${JSON.stringify(err)}`);
       return res.status(upstream.status).json(err);
     }
-    logger.info(`Claude call model=${model} max_tokens=${req.body.max_tokens || '?'}`);
+    logger.info(`Claude call model=${model} max_tokens=${maxTokens}`);
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -119,12 +127,19 @@ router.post('/ollama', jsonBody, async (req, res) => {
   }
 });
 
-// Proxy /api/* → BookStack
+// Proxy /api/* → BookStack (Token kommt aus req.session.bookstackToken)
 const bookstackProxy = createProxyMiddleware({
   target: BOOKSTACK_URL,
   changeOrigin: true,
   pathRewrite: { '^/': '/api/' },
   on: {
+    proxyReq: (proxyReq, req) => {
+      proxyReq.removeHeader('Authorization');
+      const t = req.session?.bookstackToken;
+      if (t?.id && t?.pw) {
+        proxyReq.setHeader('Authorization', `Token ${t.id}:${t.pw}`);
+      }
+    },
     proxyRes: (proxyRes, _req, res) => {
       if (proxyRes.statusCode === 301 || proxyRes.statusCode === 302) {
         proxyRes.destroy();

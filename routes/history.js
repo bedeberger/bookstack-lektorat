@@ -7,14 +7,15 @@ const jsonBody = express.json();
 // Lektorat-Ergebnis speichern
 router.post('/check', jsonBody, (req, res) => {
   const { page_id, page_name, book_id, error_count, errors_json, stilanalyse, fazit, model } = req.body;
+  const user_email = req.session?.user?.email || null;
   const result = db.prepare(`
-    INSERT INTO page_checks (page_id, page_name, book_id, checked_at, error_count, errors_json, stilanalyse, fazit, model)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    INSERT INTO page_checks (page_id, page_name, book_id, checked_at, error_count, errors_json, stilanalyse, fazit, model, user_email)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     page_id, page_name, book_id,
     new Date().toISOString(),
     error_count || 0,
     JSON.stringify(errors_json || []),
-    stilanalyse || null, fazit || null, model || null
+    stilanalyse || null, fazit || null, model || null, user_email
   );
   res.json({ id: result.lastInsertRowid });
 });
@@ -33,9 +34,10 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
 
 // Letzte 20 Läufe für eine Seite
 router.get('/page/:page_id', (req, res) => {
+  const user_email = req.session?.user?.email || null;
   const rows = db.prepare(`
-    SELECT * FROM page_checks WHERE page_id = ?
-    ORDER BY checked_at DESC LIMIT 20`).all(parseInt(req.params.page_id));
+    SELECT * FROM page_checks WHERE page_id = ? AND (user_email = ? OR (? IS NULL AND user_email IS NULL))
+    ORDER BY checked_at DESC LIMIT 20`).all(parseInt(req.params.page_id), user_email, user_email);
   res.json(rows.map(r => ({
     ...r,
     errors_json: JSON.parse(r.errors_json || '[]'),
@@ -47,13 +49,14 @@ router.get('/page/:page_id', (req, res) => {
 // Buchbewertung speichern
 router.post('/review', jsonBody, (req, res) => {
   const { book_id, book_name, review_json, model } = req.body;
+  const user_email = req.session?.user?.email || null;
   const result = db.prepare(`
-    INSERT INTO book_reviews (book_id, book_name, reviewed_at, review_json, model)
-    VALUES (?, ?, ?, ?, ?)`).run(
+    INSERT INTO book_reviews (book_id, book_name, reviewed_at, review_json, model, user_email)
+    VALUES (?, ?, ?, ?, ?, ?)`).run(
     book_id, book_name,
     new Date().toISOString(),
     JSON.stringify(review_json || null),
-    model || null
+    model || null, user_email
   );
   res.json({ id: result.lastInsertRowid });
 });
@@ -72,13 +75,14 @@ router.delete('/review/:id', (req, res) => {
 
 // Letzte 10 Bewertungen für ein Buch
 router.get('/review/:book_id', (req, res) => {
+  const user_email = req.session?.user?.email || null;
   const rows = db.prepare(`
-    SELECT * FROM book_reviews WHERE book_id = ?
-    ORDER BY reviewed_at DESC LIMIT 10`).all(parseInt(req.params.book_id));
+    SELECT * FROM book_reviews WHERE book_id = ? AND (user_email = ? OR (? IS NULL AND user_email IS NULL))
+    ORDER BY reviewed_at DESC LIMIT 10`).all(parseInt(req.params.book_id), user_email, user_email);
   res.json(rows.map(r => ({ ...r, review_json: JSON.parse(r.review_json || 'null') })));
 });
 
-// Seiten-Stats-Cache: alle gecachten Stats für ein Buch
+// Seiten-Stats-Cache: alle gecachten Stats für ein Buch (geteilter Cache, nicht user-spezifisch)
 router.get('/page-stats/:book_id', (req, res) => {
   const rows = db.prepare(
     'SELECT page_id, tok, words, chars, updated_at FROM page_stats WHERE book_id = ?'
@@ -104,7 +108,7 @@ router.post('/page-stats/batch', express.json(), (req, res) => {
   res.json({ ok: true, count: items.length });
 });
 
-// Buchstatistik-Verlauf für Zeitliniendiagramm
+// Buchstatistik-Verlauf für Zeitliniendiagramm (geteilter Cache, nicht user-spezifisch)
 router.get('/book-stats/:book_id', (req, res) => {
   const rows = db.prepare(`
     SELECT id, book_id, book_name, recorded_at, page_count, words, chars, tok
