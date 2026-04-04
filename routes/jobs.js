@@ -25,6 +25,7 @@ function createJob(type, bookId) {
     id, type, bookId: String(bookId),
     status: 'running', progress: 0, statusText: '',
     tokensIn: 0, tokensOut: 0,
+    maxTokensOut: parseInt(process.env.MODEL_TOKEN, 10) || 64000,
     result: null, error: null,
   });
   runningJobs.set(`${type}:${bookId}`, id);
@@ -84,7 +85,8 @@ async function bsGetAll(path) {
 // ── KI-Aufruf ─────────────────────────────────────────────────────────────────
 // Gibt { text, tokensIn, tokensOut } zurück.
 // tokensIn/tokensOut: aus Claude message_start/message_delta bzw. Ollama done-Chunk.
-async function callAI(userPrompt, systemPrompt) {
+// onProgress(chars): optionaler Callback während des Streamings – gibt akkumulierte Zeichenanzahl zurück
+async function callAI(userPrompt, systemPrompt, onProgress) {
   const provider = process.env.API_PROVIDER || 'claude';
 
   if (provider === 'ollama') {
@@ -121,6 +123,7 @@ async function callAI(userPrompt, systemPrompt) {
             tokensOut = chunk.eval_count || 0;
           } else {
             text += chunk.message?.content || '';
+            if (onProgress) onProgress(text.length);
           }
         } catch { }
       }
@@ -171,6 +174,7 @@ async function callAI(userPrompt, systemPrompt) {
           }
           if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
             text += ev.delta.text;
+            if (onProgress) onProgress(text.length);
           }
         } catch { }
       }
@@ -235,9 +239,18 @@ const SYSTEM_BUCHBEWERTUNG = `Du bist ein erfahrener Literaturkritiker und Lekto
 const SYSTEM_KAPITELANALYSE = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. ${BASE_RULES}`;
 const SYSTEM_FIGUREN = `Du bist ein Literaturanalytiker für deutschsprachige Texte aus der Schweiz. ${BASE_RULES}`;
 
-// Hilfsfunktion: callAI aufrufen, Token-Zähler akkumulieren, Job aktualisieren
-async function aiCall(jobId, tok, prompt, system) {
-  const { text, tokensIn, tokensOut } = await callAI(prompt, system);
+// Hilfsfunktion: callAI aufrufen, Token-Zähler akkumulieren, Job aktualisieren.
+// fromPct/toPct: optionaler Fortschrittsbereich – während des Streamings wird der Balken
+// von fromPct auf toPct gefüllt (basierend auf akkumulierten Output-Zeichen vs. expectedChars).
+async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars = 3000) {
+  let onProgress;
+  if (fromPct != null && toPct != null) {
+    onProgress = (chars) => {
+      const frac = Math.min(1, chars / expectedChars);
+      updateJob(jobId, { progress: Math.round(fromPct + (toPct - fromPct) * frac) });
+    };
+  }
+  const { text, tokensIn, tokensOut } = await callAI(prompt, system, onProgress);
   tok.in += tokensIn;
   tok.out += tokensOut;
   updateJob(jobId, { tokensIn: tok.in, tokensOut: tok.out });
@@ -269,7 +282,7 @@ async function runReviewJob(jobId, bookId, bookName) {
     let r;
 
     if (totalChars <= SINGLE_PASS_LIMIT) {
-      updateJob(jobId, { statusText: 'KI analysiert das Buch…' });
+      updateJob(jobId, { progress: 65, statusText: 'KI analysiert das Buch…' });
       const bookText = pageContents
         .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
         .join('\n\n---\n\n');
@@ -299,6 +312,7 @@ Buchinhalt (${pageContents.length} Seiten):
 
 ${bookText}`,
         SYSTEM_BUCHBEWERTUNG,
+        65, 97, 5000,
       );
     } else {
       const { groupOrder, groups } = groupByChapter(pageContents);
@@ -306,9 +320,11 @@ ${bookText}`,
 
       for (let gi = 0; gi < groupOrder.length; gi++) {
         const group = groups.get(groupOrder[gi]);
-        const tokStr = tok.in + tok.out > 0 ? ` · ${fmtTok(tok.in + tok.out)} Tokens` : '';
+        const tokStr = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
+        const fromPct = 65 + Math.round((gi / groupOrder.length) * 25);
+        const toPct   = 65 + Math.round(((gi + 1) / groupOrder.length) * 25);
         updateJob(jobId, {
-          progress: 65 + Math.round(((gi + 1) / groupOrder.length) * 25),
+          progress: fromPct,
           statusText: `Analysiere ${gi + 1}/${groupOrder.length}: «${group.name}»…${tokStr}`,
         });
         const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
@@ -327,13 +343,14 @@ Kapitelinhalt (${group.pages.length} Seiten):
 
 ${chText}`,
           SYSTEM_KAPITELANALYSE,
+          fromPct, toPct, 1500,
         );
         chapterAnalyses.push({ name: group.name, pageCount: group.pages.length, ...ca });
       }
 
       updateJob(jobId, {
         progress: 90,
-        statusText: `KI erstellt Gesamtbewertung… · ${fmtTok(tok.in + tok.out)} Tokens`,
+        statusText: `KI erstellt Gesamtbewertung… · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens`,
       });
       const synthIn = chapterAnalyses.map((ca, i) =>
         `## Kapitel ${i + 1}: ${ca.name} (${ca.pageCount} Seiten)\nThemen: ${ca.themen || '–'}\nStil: ${ca.stil || '–'}\nQualität: ${ca.qualitaet || '–'}\nStärken: ${(ca.staerken || []).join(' | ')}\nSchwächen: ${(ca.schwaechen || []).join(' | ')}`
@@ -360,6 +377,7 @@ Antworte mit diesem JSON-Schema:
   "fazit": "Abschliessendes Urteil in 1-2 Sätzen"
 }`,
         SYSTEM_BUCHBEWERTUNG,
+        90, 97, 5000,
       );
     }
 
@@ -435,6 +453,7 @@ async function runFiguresJob(jobId, bookId, bookName) {
       result = await aiCall(jobId, tok,
         `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Figuren.\n\nAntworte mit diesem JSON-Schema:\n${FINAL_SCHEMA}\n\n${FINAL_RULES}\n\nBuchtext (${pageContents.length} Seiten):\n\n${bookText}`,
         SYSTEM_FIGUREN,
+        65, 96, 6000,
       );
     } else {
       const { groupOrder, groups } = groupByChapter(pageContents);
@@ -442,9 +461,11 @@ async function runFiguresJob(jobId, bookId, bookName) {
 
       for (let gi = 0; gi < groupOrder.length; gi++) {
         const group = groups.get(groupOrder[gi]);
-        const tokStr = tok.in + tok.out > 0 ? ` · ${fmtTok(tok.in + tok.out)} Tokens` : '';
+        const tokStr = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
+        const fromPct = 55 + Math.round((gi / groupOrder.length) * 30);
+        const toPct   = 55 + Math.round(((gi + 1) / groupOrder.length) * 30);
         updateJob(jobId, {
-          progress: 55 + Math.round(((gi + 1) / groupOrder.length) * 30),
+          progress: fromPct,
           statusText: `Figuren in «${group.name}» (${gi + 1}/${groupOrder.length})…${tokStr}`,
         });
         const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
@@ -461,13 +482,14 @@ Nur echte Personen. Sei konservativ: nur Figuren und Beziehungen die im Text ein
 
 Kapiteltext (${group.pages.length} Seiten):\n\n${chText}`,
           SYSTEM_FIGUREN,
+          fromPct, toPct, 2000,
         );
         chapterFiguren.push({ kapitel: group.name, figuren: chResult.figuren || [] });
       }
 
       updateJob(jobId, {
         progress: 88,
-        statusText: `KI konsolidiert Figuren… · ${fmtTok(tok.in + tok.out)} Tokens`,
+        statusText: `KI konsolidiert Figuren… · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens`,
       });
       const synthInput = chapterFiguren.map(cf =>
         `## Kapitel: ${cf.kapitel}\n` + cf.figuren.map(f =>
@@ -488,6 +510,7 @@ ${FINAL_SCHEMA}
 
 ${FINAL_RULES}`,
         SYSTEM_FIGUREN,
+        88, 96, 6000,
       );
     }
 
@@ -534,6 +557,7 @@ router.get('/:id', (req, res) => {
     id: job.id, type: job.type, status: job.status,
     progress: job.progress, statusText: job.statusText,
     tokensIn: job.tokensIn, tokensOut: job.tokensOut,
+    maxTokensOut: job.maxTokensOut,
     result: job.result, error: job.error,
   });
 });

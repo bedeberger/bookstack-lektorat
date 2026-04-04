@@ -252,7 +252,7 @@
     <template x-for="f in figuren" :key="f.id">
       <div>
         <div class="figur-item" @click="selectedFigurId = selectedFigurId === f.id ? null : f.id;">
-          <span class="figur-typ-dot" :style="'background:' + ({ hauptfigur:'#4A90D9', nebenfigur:'#888', antagonist:'#E24B4A', mentor:'#639922', andere:'#C4941A' }[f.typ] || '#ccc')"></span>
+          <span class="figur-typ-dot" :style="'background:' + ({ hauptfigur:'var(--color-primary)', nebenfigur:'var(--color-muted)', antagonist:'var(--color-err-border)', mentor:'var(--color-ok-border)', andere:'var(--color-accent)' }[f.typ] || 'var(--color-border)')"></span>
           <span class="figur-name" x-text="f.name"></span>
           <span class="tag" x-text="f.typ"></span>
           <span x-show="f.geburtstag" class="tag" x-text="'* ' + f.geburtstag"></span>

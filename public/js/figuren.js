@@ -2,7 +2,8 @@ import { escHtml } from './utils.js';
 
 function fmtTok(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  return n.toLocaleString('de-CH');
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(n);
 }
 
 // Figurenübersicht-Methoden (werden in die Alpine-Komponente gespreadet)
@@ -61,8 +62,13 @@ export const figurenMethods = {
         const job = await resp.json();
         this.figurenProgress = job.progress || 0;
         if (job.status === 'running') {
-          const total = (job.tokensIn || 0) + (job.tokensOut || 0);
-          const tokInfo = total > 0 ? ` · ${fmtTok(total)} Tokens` : '';
+          const tokIn = job.tokensIn || 0;
+          const tokOut = job.tokensOut || 0;
+          let tokInfo = '';
+          if (tokIn + tokOut > 0) {
+            const maxOut = job.maxTokensOut ? '/' + fmtTok(job.maxTokensOut) : '';
+            tokInfo = ` · ↑${fmtTok(tokIn)} ↓${fmtTok(tokOut)}${maxOut} Tokens`;
+          }
           this.figurenStatus = `<span class="spinner"></span>${escHtml(job.statusText || '…')}${tokInfo}`;
           return;
         }
