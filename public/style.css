@@ -90,6 +90,19 @@ h1 {
   margin-bottom: 0.25rem;
 }
 
+.site-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.site-logo {
+  width: 4rem;
+  height: 4rem;
+  flex-shrink: 0;
+}
+
 code {
   font-family: monospace;
   background: var(--color-tag-bg);

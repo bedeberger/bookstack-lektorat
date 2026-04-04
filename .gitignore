@@ -7,3 +7,4 @@ lektorat.db
 lektorat.db-*
 lektorat.log
 lektorat.log.*
+.DS_Store

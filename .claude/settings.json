@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"localhost\\\\|127\\\\.0\\\\.0\\\\.1\\\\|0\\\\.0\\\\.0\\\\.0\\\\|:80\\\\|:3737\\\\|:11434\" --include=\"*.js\" --include=\"*.json\" --include=\"*.md\" . ! -path \"./node_modules/*\" ! -path \"./.git/*\")",
+      "Bash(curl -s \"https://api.github.com/repos/bedeberger/bookstack-lektorat/commits/e12fe9df\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('commit',{}\\).get\\('message',''\\)\\); [print\\(f.get\\('filename'\\), f.get\\('status'\\)\\) for f in d.get\\('files',[]\\)]\")",
+      "Bash(curl -s \"https://api.github.com/repos/bedeberger/bookstack-lektorat/commits/03aeb636\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('commit',{}\\).get\\('message',''\\)\\); [print\\(f.get\\('filename'\\), f.get\\('status'\\), f.get\\('patch',''\\)[:300]\\) for f in d.get\\('files',[]\\)]\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(f.get\\('filename'\\), f.get\\('status'\\), f.get\\('patch',''\\)[:1000]\\) for f in d.get\\('files',[]\\)]\")",
+      "Bash(curl -s \"https://api.github.com/repos/bedeberger/bookstack-lektorat/commits/69085e8d\")",
+      "Bash(python3 -c ':*)",
+      "Bash(curl -s \"https://api.github.com/repos/bedeberger/bookstack-lektorat/commits/ae74b0cb\")",
+      "Bash(curl -s \"https://api.github.com/repos/bedeberger/bookstack-lektorat/commits/a588c555\")"
+    ]
+  }
+}

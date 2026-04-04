@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BookStack Lektorat</title>
+  <link rel="icon" href="bookstack_lektorat_icon.ico" type="image/x-icon">
   <link rel="stylesheet" href="style.css">
   <script type="module" src="js/app.js"></script>
   <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
@@ -12,7 +13,10 @@
 </head>
 <body x-data="lektorat" @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading) runCheck()">
 
-<h1 @click="resetView()" style="cursor:pointer;" title="Ansicht zurücksetzen">BookStack Lektorat</h1>
+<h1 @click="resetView()" class="site-title" title="Ansicht zurücksetzen">
+  <img src="bookstack_lektorat_icon.svg" alt="" class="site-logo">
+  BookStack Lektorat
+</h1>
 <p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : '· Claude: ' + claudeModel"></span></p>
 
 <!-- Bücherliste & Seitenauswahl -->
