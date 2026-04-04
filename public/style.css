@@ -52,9 +52,9 @@
   --color-success: #34d399;
   --color-success-hover: #1D9E75;
 
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
   --font-size-xs: 11px;
   --font-size-sm: 13px;
   --font-size-base: 14px;
@@ -71,7 +71,7 @@ html {
 }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: 'Lato', sans-serif;
   color: var(--color-text);
   min-height: 100vh;
   padding: 1rem;
@@ -228,7 +228,7 @@ button.success:hover { background: var(--color-success-hover); }
   display: inline-block;
   font-size: 12px;
   padding: 3px 10px;
-  border-radius: 6px;
+  border-radius: 0;
   font-weight: 500;
 }
 .badge-warn { background: var(--color-warn-bg); color: var(--color-warn-text); }
@@ -268,7 +268,7 @@ del {
   color: var(--color-err-text);
   text-decoration: none;
   padding: 0 2px;
-  border-radius: 3px;
+  border-radius: 0;
 }
 
 ins {
@@ -276,7 +276,7 @@ ins {
   color: var(--color-ok-text);
   text-decoration: none;
   padding: 0 2px;
-  border-radius: 3px;
+  border-radius: 0;
 }
 
 /* === Page list === */
@@ -449,7 +449,7 @@ ins {
 .progress-bar-wrap {
   height: 4px;
   background: var(--color-tag-bg);
-  border-radius: 2px;
+  border-radius: 0;
   margin-top: 8px;
   overflow: hidden;
 }
@@ -457,7 +457,7 @@ ins {
 .progress-bar {
   height: 100%;
   background: var(--color-text);
-  border-radius: 2px;
+  border-radius: 0;
   transition: width 0.3s;
 }
 
@@ -535,7 +535,7 @@ ins {
 .history-detail {
   border: 0.5px solid var(--color-border);
   border-top: none;
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  border-radius: 0;
   padding: 12px 14px 14px;
   margin-bottom: 6px;
   background: var(--color-bg);
@@ -553,7 +553,7 @@ ins {
 .btn-toggle-saved {
   font-size: 11px;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: 0;
   border: 1px solid transparent;
   cursor: pointer;
   font-weight: 500;
@@ -570,7 +570,7 @@ ins {
   background: none;
   border: 1px solid var(--color-err-text);
   color: var(--color-err-text);
-  border-radius: 4px;
+  border-radius: 0;
   cursor: pointer;
   opacity: 0.7;
 }
@@ -658,7 +658,7 @@ ins {
   display: inline-block;
   width: 10px;
   height: 10px;
-  border-radius: 3px;
+  border-radius: 0;
   border: 1.5px solid;
   margin-right: 3px;
   vertical-align: middle;
@@ -693,7 +693,7 @@ ins {
 .figur-detail {
   border: 0.5px solid var(--color-border);
   border-top: none;
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  border-radius: 0;
   padding: 12px 14px 14px;
   margin-bottom: 6px;
   background: var(--color-bg);
@@ -714,7 +714,7 @@ ins {
 .figur-kapitel-primary {
   font-size: 11px;
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: 0;
   font-weight: 600;
   background: var(--color-text);
   color: var(--color-surface);
@@ -724,7 +724,7 @@ ins {
 .figur-kapitel-secondary {
   font-size: 11px;
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--color-tag-bg);
   color: var(--color-muted);
   white-space: nowrap;
@@ -733,7 +733,7 @@ ins {
 .figur-kapitel-more {
   font-size: 11px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--color-tag-bg);
   color: var(--color-muted);
   white-space: nowrap;
@@ -754,7 +754,7 @@ ins {
   font-size: 11px;
   font-weight: 500;
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: 0;
   flex-shrink: 0;
   background: var(--color-tag-bg);
   color: var(--color-muted);
@@ -981,7 +981,7 @@ ins {
   line-height: 1;
   padding: 2px 6px;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 0;
   margin-left: 4px;
   flex-shrink: 0;
 }
