@@ -41,6 +41,20 @@ export const figurenMethods = {
       await this.loadFiguren(this.selectedBookId);
       await this.$nextTick();
       this.renderFigurGraph();
+      // Prüfen ob auf dem Server bereits ein Job für dieses Buch läuft
+      if (!this._figuresPollTimer && !this.figurenLoading) {
+        try {
+          const { jobId } = await fetch(`/jobs/active?type=figures&book_id=${this.selectedBookId}`).then(r => r.json());
+          if (jobId) {
+            this.figurenLoading = true;
+            this.figurenProgress = 0;
+            this.figurenStatus = 'Analyse läuft bereits…';
+            this.startFiguresPoll(jobId);
+          }
+        } catch (e) {
+          console.error('[toggleFiguresCard] active-job check:', e);
+        }
+      }
     }
   },
 

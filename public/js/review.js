@@ -113,6 +113,21 @@ export const reviewMethods = {
     this.showBookReviewCard = true;
     if (this.selectedBookId) {
       await this.loadBookReviewHistory(this.selectedBookId);
+      // Prüfen ob auf dem Server bereits ein Job für dieses Buch läuft
+      if (!this._reviewPollTimer && !this.bookReviewLoading) {
+        try {
+          const { jobId } = await fetch(`/jobs/active?type=review&book_id=${this.selectedBookId}`).then(r => r.json());
+          if (jobId) {
+            this.bookReviewLoading = true;
+            this.bookReviewProgress = 0;
+            this.bookReviewOut = '';
+            this.setReviewStatus('Analyse läuft bereits…', true);
+            this.startReviewPoll(jobId);
+          }
+        } catch (e) {
+          console.error('[toggleBookReviewCard] active-job check:', e);
+        }
+      }
     }
   },
 

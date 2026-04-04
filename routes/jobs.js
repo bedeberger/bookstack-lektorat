@@ -19,20 +19,25 @@ function fmtTok(n) {
   return String(n);
 }
 
-function createJob(type, bookId) {
+function jobKey(type, bookId, userEmail) {
+  return `${type}:${bookId}:${userEmail || ''}`;
+}
+
+function createJob(type, bookId, userEmail) {
   const id = randomUUID();
+  const key = jobKey(type, bookId, userEmail);
   jobs.set(id, {
-    id, type, bookId: String(bookId),
+    id, type, bookId: String(bookId), userEmail: userEmail || null,
     status: 'running', progress: 0, statusText: '',
     tokensIn: 0, tokensOut: 0,
     maxTokensOut: parseInt(process.env.MODEL_TOKEN, 10) || 64000,
     result: null, error: null,
   });
-  runningJobs.set(`${type}:${bookId}`, id);
+  runningJobs.set(key, id);
   // Auto-Cleanup nach 2 Stunden
   setTimeout(() => {
     jobs.delete(id);
-    if (runningJobs.get(`${type}:${bookId}`) === id) runningJobs.delete(`${type}:${bookId}`);
+    if (runningJobs.get(key) === id) runningJobs.delete(key);
   }, 7200000);
   return id;
 }
@@ -46,14 +51,14 @@ function completeJob(id, result) {
   const job = jobs.get(id);
   if (!job) return;
   Object.assign(job, { status: 'done', progress: 100, result });
-  runningJobs.delete(`${job.type}:${job.bookId}`);
+  runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
 }
 
 function failJob(id, err) {
   const job = jobs.get(id);
   if (!job) return;
   Object.assign(job, { status: 'error', error: err.message || String(err), progress: 0 });
-  runningJobs.delete(`${job.type}:${job.bookId}`);
+  runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
 }
 
 // ── BookStack-Helfer ──────────────────────────────────────────────────────────
@@ -538,11 +543,11 @@ ${FINAL_RULES}`,
 router.post('/review', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
-  // Laufenden Job zurückgeben statt neu starten
-  const existing = runningJobs.get(`review:${book_id}`);
-  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const userEmail = req.session?.user?.email || null;
-  const jobId = createJob('review', book_id);
+  // Laufenden Job zurückgeben statt neu starten
+  const existing = runningJobs.get(jobKey('review', book_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const jobId = createJob('review', book_id, userEmail);
   runReviewJob(jobId, book_id, book_name || '', userEmail)
     .catch(e => logger.error('Unkontrollierter review-Job-Fehler: ' + e.message));
   res.json({ jobId });
@@ -551,13 +556,23 @@ router.post('/review', jsonBody, (req, res) => {
 router.post('/figures', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
-  const existing = runningJobs.get(`figures:${book_id}`);
-  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const userEmail = req.session?.user?.email || null;
-  const jobId = createJob('figures', book_id);
+  const existing = runningJobs.get(jobKey('figures', book_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const jobId = createJob('figures', book_id, userEmail);
   runFiguresJob(jobId, book_id, book_name || '', userEmail)
     .catch(e => logger.error('Unkontrollierter figures-Job-Fehler: ' + e.message));
   res.json({ jobId });
+});
+
+router.get('/active', (req, res) => {
+  const { type, book_id } = req.query;
+  if (!type || !book_id) return res.status(400).json({ error: 'type und book_id erforderlich' });
+  const userEmail = req.session?.user?.email || null;
+  const jobId = runningJobs.get(jobKey(type, book_id, userEmail));
+  if (!jobId || !jobs.has(jobId)) return res.json({ jobId: null });
+  const job = jobs.get(jobId);
+  res.json({ jobId: job.id, status: job.status, progress: job.progress, statusText: job.statusText });
 });
 
 router.get('/:id', (req, res) => {
