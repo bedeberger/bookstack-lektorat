@@ -13,7 +13,7 @@
 <body x-data="lektorat" @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading) runCheck()">
 
 <h1 @click="resetView()" style="cursor:pointer;" title="Ansicht zurücksetzen">BookStack Lektorat</h1>
-<p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse</p>
+<p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : '· Claude: ' + claudeModel"></span></p>
 
 <!-- Bücherliste & Seitenauswahl -->
 <div class="card" x-show="showBookCard" x-cloak>
@@ -30,6 +30,10 @@
 
   <!-- Feature-Tiles: Buchanalyse -->
   <div class="feature-tiles">
+    <button class="feature-tile" :class="{ 'feature-tile--active': showTreeCard }" @click="if (showTreeCard) { showTreeCard = false; resetPage(); } else { showTreeCard = true; }" :disabled="!pages.length" title="Seitenbaum anzeigen">
+      <span class="feature-tile-title">Seiten</span>
+      <span class="feature-tile-desc">Seitenbaum</span>
+    </button>
     <button class="feature-tile" :class="{ 'feature-tile--active': showBookReviewCard }" @click="showBookReviewCard = !showBookReviewCard">
       <span class="feature-tile-title">Bewertung</span>
       <span class="feature-tile-desc">Note &amp; Analyse</span>
@@ -52,83 +56,89 @@
     <div class="batch-status" x-text="batchStatus"></div>
   </div>
 
-  <div x-show="tree.length > 0">
-    <!-- Suche -->
-    <div style="margin-bottom:10px;">
-      <input type="text" x-model="pageSearch" placeholder="Seite suchen…" class="page-search">
-    </div>
-    <div x-show="!pageSearch" class="btn-group">
-      <button @click="tree.forEach(c => c.open = true)" class="btn-sm">Alle ausklappen</button>
-      <button @click="tree.forEach(c => c.open = false)" class="btn-sm">Alle einklappen</button>
-      <span x-show="Object.keys(tokEsts).length > 0" class="tok-totals">
-        <span class="tok-badge tok-neutral" x-text="'∑ ' + (Object.values(tokEsts).reduce((a,b)=>a+b.tok,0) >= 1000 ? '~' + Math.round(Object.values(tokEsts).reduce((a,b)=>a+b.tok,0)/1000) + 'k' : Object.values(tokEsts).reduce((a,b)=>a+b.tok,0)) + ' T'"></span>
-        <span class="tok-badge tok-neutral" x-text="'∑ ' + (Object.values(tokEsts).reduce((a,b)=>a+b.words,0) >= 1000 ? '~' + Math.round(Object.values(tokEsts).reduce((a,b)=>a+b.words,0)/1000) + 'k' : Object.values(tokEsts).reduce((a,b)=>a+b.words,0)) + ' W'"></span>
-        <span class="tok-badge tok-neutral" x-text="'∑ ' + (Object.values(tokEsts).reduce((a,b)=>a+b.chars,0) >= 1000 ? '~' + Math.round(Object.values(tokEsts).reduce((a,b)=>a+b.chars,0)/1000) + 'k' : Object.values(tokEsts).reduce((a,b)=>a+b.chars,0)) + ' Z'"></span>
-      </span>
-    </div>
-    <template x-for="item in filteredTree" :key="item.id">
-      <div>
-        <template x-if="item.type === 'chapter'">
-          <div class="tree-chapter">
-            <div class="tree-chapter-header" :class="{ disabled: item.pages.length === 0 }" @click="if (!pageSearch && item.pages.length > 0) item.open = !item.open">
-              <span class="tree-chevron" :class="{ open: item.open }" x-show="item.pages.length > 0">›</span>
-              <span x-text="item.name"></span>
-              <span class="tag" x-text="item.pages.length + ' Seiten'"></span>
-            </div>
-            <div x-show="item.open">
-              <template x-for="page in item.pages" :key="page.id">
-                <div class="page-item page-item-indent" :class="{ selected: currentPage?.id === page.id, disabled: tokEsts[page.id] && tokEsts[page.id].words === 0 }" @click="if (!(tokEsts[page.id] && tokEsts[page.id].words === 0)) selectPage(page)">
-                  <span style="font-size:14px;" x-text="page.name"></span>
-                  <span x-show="tokEsts[page.id]" class="tok-stats">
-                    <template x-if="tokEsts[page.id]?.words > 0">
-                      <span style="display:contents">
-                        <span class="tok-badge"
-                          :class="tokEsts[page.id]?.tok > 16000 ? 'tok-high' : tokEsts[page.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
-                          x-text="tokEsts[page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[page.id].tok/1000) + 'k T' : '~' + tokEsts[page.id]?.tok + ' T'"
-                          @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
-                          @mouseleave.stop="showTokLegend=false"></span>
-                        <span class="tok-badge tok-neutral"
-                          x-text="tokEsts[page.id]?.words >= 1000 ? '~' + Math.round(tokEsts[page.id].words/1000) + 'k W' : tokEsts[page.id]?.words + ' W'"></span>
-                        <span class="tok-badge tok-neutral"
-                          x-text="tokEsts[page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[page.id].chars/1000) + 'k Z' : tokEsts[page.id]?.chars + ' Z'"></span>
-                      </span>
-                    </template>
-                    <template x-if="tokEsts[page.id] && tokEsts[page.id].words === 0">
-                      <span class="tok-badge tok-empty">leer</span>
-                    </template>
-                  </span>
-                </div>
-              </template>
-            </div>
-          </div>
-        </template>
-        <template x-if="item.type === 'page'">
-          <div class="page-item" :class="{ selected: currentPage?.id === item.page.id }" @click="selectPage(item.page)">
-            <span style="font-size:14px;" x-text="item.name"></span>
-            <span x-show="tokEsts[item.page.id]" class="tok-stats">
-              <template x-if="tokEsts[item.page.id]?.words > 0">
-                <span style="display:contents">
-                  <span class="tok-badge"
-                    :class="tokEsts[item.page.id]?.tok > 16000 ? 'tok-high' : tokEsts[item.page.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
-                    x-text="tokEsts[item.page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[item.page.id].tok/1000) + 'k T' : '~' + tokEsts[item.page.id]?.tok + ' T'"
-                    @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
-                    @mouseleave.stop="showTokLegend=false"></span>
-                  <span class="tok-badge tok-neutral"
-                    x-text="tokEsts[item.page.id]?.words >= 1000 ? '~' + Math.round(tokEsts[item.page.id].words/1000) + 'k W' : tokEsts[item.page.id]?.words + ' W'"></span>
-                  <span class="tok-badge tok-neutral"
-                    x-text="tokEsts[item.page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[item.page.id].chars/1000) + 'k Z' : tokEsts[item.page.id]?.chars + ' Z'"></span>
-                </span>
-              </template>
-              <template x-if="tokEsts[item.page.id] && tokEsts[item.page.id].words === 0">
-                <span class="tok-badge tok-empty">leer</span>
-              </template>
-            </span>
-          </div>
-        </template>
-      </div>
-    </template>
-    <div x-show="filteredTree.length === 0 && pageSearch" class="muted-msg" style="padding:8px 0; font-size:13px;">Keine Seiten gefunden.</div>
+</div>
+
+<!-- Seitenbaum -->
+<div class="card" x-show="showTreeCard" x-cloak>
+  <div class="card-header">
+    <span class="card-title" x-text="'Seiten: ' + selectedBookName"></span>
+    <button class="btn-card-close" @click="showTreeCard = false; resetPage()" title="Schliessen">×</button>
   </div>
+  <!-- Suche -->
+  <div style="margin-bottom:10px;">
+    <input type="text" x-model="pageSearch" placeholder="Seite suchen…" class="page-search">
+  </div>
+  <div x-show="!pageSearch" class="btn-group">
+    <button @click="tree.forEach(c => c.open = true)" class="btn-sm">Alle ausklappen</button>
+    <button @click="tree.forEach(c => c.open = false)" class="btn-sm">Alle einklappen</button>
+    <span x-show="Object.keys(tokEsts).length > 0" class="tok-totals">
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + (Object.values(tokEsts).reduce((a,b)=>a+b.tok,0) >= 1000 ? '~' + Math.round(Object.values(tokEsts).reduce((a,b)=>a+b.tok,0)/1000) + 'k' : Object.values(tokEsts).reduce((a,b)=>a+b.tok,0)) + ' T'"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + (Object.values(tokEsts).reduce((a,b)=>a+b.words,0) >= 1000 ? '~' + Math.round(Object.values(tokEsts).reduce((a,b)=>a+b.words,0)/1000) + 'k' : Object.values(tokEsts).reduce((a,b)=>a+b.words,0)) + ' W'"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + (Object.values(tokEsts).reduce((a,b)=>a+b.chars,0) >= 1000 ? '~' + Math.round(Object.values(tokEsts).reduce((a,b)=>a+b.chars,0)/1000) + 'k' : Object.values(tokEsts).reduce((a,b)=>a+b.chars,0)) + ' Z'"></span>
+    </span>
+  </div>
+  <template x-for="item in filteredTree" :key="item.id">
+    <div>
+      <template x-if="item.type === 'chapter'">
+        <div class="tree-chapter">
+          <div class="tree-chapter-header" :class="{ disabled: item.pages.length === 0 }" @click="if (!pageSearch && item.pages.length > 0) item.open = !item.open">
+            <span class="tree-chevron" :class="{ open: item.open }" x-show="item.pages.length > 0">›</span>
+            <span x-text="item.name"></span>
+            <span class="tag" x-text="item.pages.length + ' Seiten'"></span>
+          </div>
+          <div x-show="item.open">
+            <template x-for="page in item.pages" :key="page.id">
+              <div class="page-item page-item-indent" :class="{ selected: currentPage?.id === page.id, disabled: tokEsts[page.id] && tokEsts[page.id].words === 0 }" @click="if (!(tokEsts[page.id] && tokEsts[page.id].words === 0)) selectPage(page)">
+                <span style="font-size:14px;" x-text="page.name"></span>
+                <span x-show="tokEsts[page.id]" class="tok-stats">
+                  <template x-if="tokEsts[page.id]?.words > 0">
+                    <span style="display:contents">
+                      <span class="tok-badge"
+                        :class="tokEsts[page.id]?.tok > 16000 ? 'tok-high' : tokEsts[page.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
+                        x-text="tokEsts[page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[page.id].tok/1000) + 'k T' : '~' + tokEsts[page.id]?.tok + ' T'"
+                        @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
+                        @mouseleave.stop="showTokLegend=false"></span>
+                      <span class="tok-badge tok-neutral"
+                        x-text="tokEsts[page.id]?.words >= 1000 ? '~' + Math.round(tokEsts[page.id].words/1000) + 'k W' : tokEsts[page.id]?.words + ' W'"></span>
+                      <span class="tok-badge tok-neutral"
+                        x-text="tokEsts[page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[page.id].chars/1000) + 'k Z' : tokEsts[page.id]?.chars + ' Z'"></span>
+                    </span>
+                  </template>
+                  <template x-if="tokEsts[page.id] && tokEsts[page.id].words === 0">
+                    <span class="tok-badge tok-empty">leer</span>
+                  </template>
+                </span>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+      <template x-if="item.type === 'page'">
+        <div class="page-item" :class="{ selected: currentPage?.id === item.page.id }" @click="selectPage(item.page)">
+          <span style="font-size:14px;" x-text="item.name"></span>
+          <span x-show="tokEsts[item.page.id]" class="tok-stats">
+            <template x-if="tokEsts[item.page.id]?.words > 0">
+              <span style="display:contents">
+                <span class="tok-badge"
+                  :class="tokEsts[item.page.id]?.tok > 16000 ? 'tok-high' : tokEsts[item.page.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
+                  x-text="tokEsts[item.page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[item.page.id].tok/1000) + 'k T' : '~' + tokEsts[item.page.id]?.tok + ' T'"
+                  @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
+                  @mouseleave.stop="showTokLegend=false"></span>
+                <span class="tok-badge tok-neutral"
+                  x-text="tokEsts[item.page.id]?.words >= 1000 ? '~' + Math.round(tokEsts[item.page.id].words/1000) + 'k W' : tokEsts[item.page.id]?.words + ' W'"></span>
+                <span class="tok-badge tok-neutral"
+                  x-text="tokEsts[item.page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[item.page.id].chars/1000) + 'k Z' : tokEsts[item.page.id]?.chars + ' Z'"></span>
+              </span>
+            </template>
+            <template x-if="tokEsts[item.page.id] && tokEsts[item.page.id].words === 0">
+              <span class="tok-badge tok-empty">leer</span>
+            </template>
+          </span>
+        </div>
+      </template>
+    </div>
+  </template>
+  <div x-show="filteredTree.length === 0 && pageSearch" class="muted-msg" style="padding:8px 0; font-size:13px;">Keine Seiten gefunden.</div>
 </div>
 
 <!-- Buchbewertung -->

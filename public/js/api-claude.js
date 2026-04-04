@@ -1,19 +1,21 @@
-import { CLAUDE_API } from './prompts.js';
-
-// Methoden für Claude-API-Calls (werden in die Alpine-Komponente gespreadet)
+// Methoden für KI-API-Calls (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
+// Unterstützte Provider: 'claude' (Anthropic) und 'ollama' (lokales Modell).
 
 export const claudeMethods = {
   async callClaude(userPrompt, systemPrompt = null, onProgress = null) {
+    const isOllama = this.apiProvider === 'ollama';
+    const endpoint = isOllama ? '/ollama' : '/claude';
+
     const body = {
-      model: this.claudeModel,
+      model: isOllama ? this.ollamaModel : this.claudeModel,
       max_tokens: this.claudeMaxTokens,
-      temperature: 0.2,
+      temperature: isOllama ? 0.0 : 0.2,
       messages: [{ role: 'user', content: userPrompt }],
     };
     if (systemPrompt) body.system = systemPrompt;
 
-    const resp = await fetch(CLAUDE_API, {
+    const resp = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -21,7 +23,8 @@ export const claudeMethods = {
 
     if (!resp.ok) {
       const err = await resp.json();
-      throw new Error('Claude API Fehler: ' + (err.error?.message || JSON.stringify(err)));
+      const provider = isOllama ? 'Ollama' : 'Claude';
+      throw new Error(`${provider} API Fehler: ` + (err.error?.message || JSON.stringify(err)));
     }
 
     const reader = resp.body.getReader();

@@ -105,6 +105,12 @@ code {
   margin-bottom: 2rem;
 }
 
+.provider-badge {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  opacity: 0.7;
+}
+
 .row {
   display: flex;
   gap: 8px;
@@ -839,7 +845,7 @@ ins {
 /* === Feature-Tiles === */
 .feature-tiles {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -886,7 +892,7 @@ ins {
 }
 
 @media (max-width: 480px) {
-  .feature-tiles { grid-template-columns: 1fr; }
+  .feature-tiles { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* === Buchentwicklung (Zeitliniendiagramm) === */

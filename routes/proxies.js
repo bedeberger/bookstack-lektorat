@@ -7,14 +7,16 @@ const BOOKSTACK_URL = process.env.API_HOST || process.env.BOOKSTACK_URL || 'http
 const router = express.Router();
 const jsonBody = express.json();
 
-// Credentials und Claude-Konfiguration ans Frontend liefern
+// Credentials und Modell-Konfiguration ans Frontend liefern
 router.get('/config', (_req, res) => {
   res.json({
     tokenId: process.env.TOKEN_ID || '',
     tokenPw: process.env.TOKEN_KENNWORT || '',
     bookstackUrl: BOOKSTACK_URL.replace(/\/$/, ''),
     claudeMaxTokens: parseInt(process.env.MODEL_TOKEN, 10) || 64000,
-    claudeModel: process.env.MODEL_NAME || 'claude-sonnet-4-6'
+    claudeModel: process.env.MODEL_NAME || 'claude-sonnet-4-6',
+    apiProvider: process.env.API_PROVIDER || 'claude',
+    ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
   });
 });
 
@@ -50,6 +52,69 @@ router.post('/claude', jsonBody, async (req, res) => {
   } catch (err) {
     logger.error('Claude proxy error: ' + err.message);
     if (!res.headersSent) res.status(502).json({ error: 'Claude nicht erreichbar: ' + err.message });
+    else res.end();
+  }
+});
+
+// Proxy /ollama → Ollama /api/chat (NDJSON → Anthropic-kompatibles SSE)
+router.post('/ollama', jsonBody, async (req, res) => {
+  const ollamaHost = (process.env.OLLAMA_HOST || 'http://localhost:11434').replace(/\/$/, '');
+  const model = process.env.OLLAMA_MODEL || 'llama3.2';
+  try {
+    // Anthropic-Request-Format → Ollama-Format umwandeln
+    const messages = [];
+    if (req.body.system) messages.push({ role: 'system', content: req.body.system });
+    for (const m of (req.body.messages || [])) messages.push(m);
+
+    const upstream = await fetch(`${ollamaHost}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages, stream: true }),
+    });
+
+    if (!upstream.ok) {
+      const text = await upstream.text();
+      logger.error(`Ollama upstream ${upstream.status}: ${text}`);
+      return res.status(upstream.status).json({ error: { message: text } });
+    }
+
+    logger.info(`Ollama call model=${model}`);
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    // Ollama NDJSON → Anthropic-kompatibles SSE normalisieren
+    const reader = upstream.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const chunk = JSON.parse(line);
+          const text = chunk.message?.content || '';
+          if (text) {
+            const sse = JSON.stringify({
+              type: 'content_block_delta',
+              delta: { type: 'text_delta', text },
+            });
+            res.write(`data: ${sse}\n\n`);
+          }
+        } catch (e) {
+          logger.warn('Ollama NDJSON parse error: ' + e.message);
+        }
+      }
+    }
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (err) {
+    logger.error('Ollama proxy error: ' + err.message);
+    if (!res.headersSent) res.status(502).json({ error: { message: 'Ollama nicht erreichbar: ' + err.message } });
     else res.end();
   }
 });

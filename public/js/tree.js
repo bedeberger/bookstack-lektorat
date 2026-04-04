@@ -79,6 +79,7 @@ export const treeMethods = {
         }
       } catch { /* Cache-Fehler ignorieren, Fallback auf Live-Berechnung */ }
 
+      this.showTreeCard = true;
       this.setStatus('');
       await Promise.all([
         this.loadBookReviewHistory(bookId),

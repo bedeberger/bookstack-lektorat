@@ -18,6 +18,8 @@ document.addEventListener('alpine:init', () => {
     bookstackUrl: '',
     claudeModel: 'claude-sonnet-4-6',
     claudeMaxTokens: 64000,
+    apiProvider: 'claude',
+    ollamaModel: 'llama3.2',
     books: [],
     selectedBookId: '',
     pages: [],
@@ -31,6 +33,7 @@ document.addEventListener('alpine:init', () => {
     showDiff: false,
     diffHtml: '',
     showBookCard: false,
+    showTreeCard: false,
     showEditorCard: false,
     showBookReviewCard: false,
     status: '',
@@ -146,6 +149,8 @@ document.addEventListener('alpine:init', () => {
           this.bookstackUrl = cfg.bookstackUrl || '';
           if (cfg.claudeModel) this.claudeModel = cfg.claudeModel;
           if (cfg.claudeMaxTokens) this.claudeMaxTokens = cfg.claudeMaxTokens;
+          if (cfg.apiProvider) this.apiProvider = cfg.apiProvider;
+          if (cfg.ollamaModel) this.ollamaModel = cfg.ollamaModel;
           await this.loadBooks();
         } else {
           this.setStatus('Keine Zugangsdaten in .env konfiguriert.');
@@ -238,6 +243,7 @@ document.addEventListener('alpine:init', () => {
       this.selectedErrors = [];
       this.selectedStyles = [];
       this.checkDone = false;
+      this.showTreeCard = false;
       this.showFiguresCard = false;
       this.figurenStatus = '';
       this.figurenProgress = 0;

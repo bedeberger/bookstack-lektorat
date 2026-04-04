@@ -114,12 +114,12 @@ export const lektoratMethods = {
       const text = htmlToText(html);
       this.originalHtml = html;
 
-      this.setStatus('Claude analysiert… (0 Zeichen)', true);
+      this.setStatus('KI analysiert… (0 Zeichen)', true);
 
       const result = await this.callClaude(
         buildLektoratPrompt(text, html),
         SYSTEM_LEKTORAT,
-        (chars) => this.setStatus(`Claude analysiert… (${chars} Zeichen)`, true)
+        (chars) => this.setStatus(`KI analysiert… (${chars} Zeichen)`, true)
       );
 
       if (!Array.isArray(result?.fehler)) {
@@ -173,7 +173,7 @@ export const lektoratMethods = {
             errors_json: fehler,
             stilanalyse: result.stilanalyse || null,
             fazit: result.fazit || null,
-            model: this.claudeModel,
+            model: this.apiProvider === 'ollama' ? this.ollamaModel : this.claudeModel,
           }),
         });
         const hd = await hr.json();
@@ -201,12 +201,12 @@ export const lektoratMethods = {
     let finalHtml = this.correctedHtml;
     const selectedStyles = this.lektoratStyles.filter((_, i) => this.selectedStyles[i]);
     if (selectedStyles.length > 0) {
-      this.setStatus('Claude überarbeitet Stil… (0 Zeichen)', true);
+      this.setStatus('KI überarbeitet Stil… (0 Zeichen)', true);
       try {
         const result = await this.callClaude(
           buildStilkorrekturPrompt(this.correctedHtml, selectedStyles),
           SYSTEM_STILKORREKTUR,
-          (chars) => this.setStatus(`Claude überarbeitet Stil… (${chars} Zeichen)`, true)
+          (chars) => this.setStatus(`KI überarbeitet Stil… (${chars} Zeichen)`, true)
         );
         if (Array.isArray(result?.korrekturen) && result.korrekturen.length > 0) {
           finalHtml = this._applyCorrections(this.correctedHtml, result.korrekturen.map(k => ({ original: k.original, korrektur: k.ersatz })));
@@ -283,7 +283,7 @@ export const lektoratMethods = {
             errors_json: fehler,
             stilanalyse: result.stilanalyse || null,
             fazit: result.fazit || null,
-            model: this.claudeModel,
+            model: this.apiProvider === 'ollama' ? this.ollamaModel : this.claudeModel,
           }),
         });
         done++;

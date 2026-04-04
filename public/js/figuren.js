@@ -96,12 +96,12 @@ export const figurenMethods = {
       if (totalChars <= SINGLE_PASS_LIMIT) {
         // ── Single-Pass ──────────────────────────────────────────────────
         this.figurenProgress = 65;
-        this.figurenStatus = '<span class="spinner"></span>Claude analysiert Figuren…';
+        this.figurenStatus = '<span class="spinner"></span>KI analysiert Figuren…';
         const bookText = pageContents.map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`).join('\n\n---\n\n');
         result = await this.callClaude(
           `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Figuren.\n\nAntworte mit diesem JSON-Schema:\n${FINAL_SCHEMA}\n\n${FINAL_RULES}\n\nBuchtext (${pageContents.length} Seiten):\n\n${bookText}`,
           SYSTEM_FIGUREN,
-          (chars) => { this.figurenStatus = `<span class="spinner"></span>Claude analysiert… (${chars} Zeichen)`; }
+          (chars) => { this.figurenStatus = `<span class="spinner"></span>KI analysiert… (${chars} Zeichen)`; }
         );
 
       } else {
@@ -135,7 +135,7 @@ Kapiteltext (${group.pages.length} Seiten):\n\n${chText}`,
 
         // ── Konsolidierung ───────────────────────────────────────────────
         this.figurenProgress = 88;
-        this.figurenStatus = '<span class="spinner"></span>Claude konsolidiert Figuren…';
+        this.figurenStatus = '<span class="spinner"></span>KI konsolidiert Figuren…';
 
         const synthInput = chapterFiguren.map(cf =>
           `## Kapitel: ${cf.kapitel}\n` + cf.figuren.map(f =>
@@ -156,7 +156,7 @@ ${FINAL_SCHEMA}
 
 ${FINAL_RULES}`,
           SYSTEM_FIGUREN,
-          (chars) => { this.figurenStatus = `<span class="spinner"></span>Claude konsolidiert… (${chars} Zeichen)`; }
+          (chars) => { this.figurenStatus = `<span class="spinner"></span>KI konsolidiert… (${chars} Zeichen)`; }
         );
       }
 

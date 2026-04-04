@@ -43,7 +43,7 @@ export const reviewMethods = {
 
       if (totalChars <= SINGLE_PASS_LIMIT) {
         // Single-pass: alle Seiten direkt an Claude
-        this.setReviewStatus('Claude analysiert das Buch…', true);
+        this.setReviewStatus('KI analysiert das Buch…', true);
 
         const bookText = pageContents.map(p =>
           `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`
@@ -74,7 +74,7 @@ Buchinhalt (${pageContents.length} Seiten):
 ${bookText}`;
 
         r = await this.callClaude(prompt, SYSTEM_BUCHBEWERTUNG, (chars) => {
-          this.setReviewStatus(`Claude analysiert… (${chars} Zeichen)`, true);
+          this.setReviewStatus(`KI analysiert… (${chars} Zeichen)`, true);
         });
 
       } else {
@@ -109,7 +109,7 @@ ${chapterText}`;
 
         // Synthese aller Kapitelanalysen
         this.bookReviewProgress = 90;
-        this.setReviewStatus('Claude erstellt Gesamtbewertung…', true);
+        this.setReviewStatus('KI erstellt Gesamtbewertung…', true);
 
         const synthesisInput = chapterAnalyses.map((ca, i) =>
           `## Kapitel ${i + 1}: ${ca.name} (${ca.pageCount} Seiten)\nThemen: ${ca.themen || '–'}\nStil: ${ca.stil || '–'}\nQualität: ${ca.qualitaet || '–'}\nStärken: ${(ca.staerken || []).join(' | ')}\nSchwächen: ${(ca.schwaechen || []).join(' | ')}`
@@ -136,7 +136,7 @@ Antworte mit diesem JSON-Schema:
 }`;
 
         r = await this.callClaude(synthesisPrompt, SYSTEM_BUCHBEWERTUNG, (chars) => {
-          this.setReviewStatus(`Claude synthetisiert… (${chars} Zeichen)`, true);
+          this.setReviewStatus(`KI synthetisiert… (${chars} Zeichen)`, true);
         });
       }
 
@@ -194,7 +194,7 @@ Antworte mit diesem JSON-Schema:
             book_id: parseInt(bookId),
             book_name: bookName,
             review_json: r,
-            model: this.claudeModel,
+            model: this.apiProvider === 'ollama' ? this.ollamaModel : this.claudeModel,
           }),
         });
         await this.loadBookReviewHistory(bookId);

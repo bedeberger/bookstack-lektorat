@@ -9,13 +9,14 @@ Browser → Express (Port 3737) → /config         → .env-Credentials an Fron
                               → /history/*      → SQLite-DB (lektorat.db)
                               → /figures/*      → SQLite-DB (lektorat.db)
                               → /claude         → api.anthropic.com (ANTHROPIC_API_KEY-Injection)
+                              → /ollama         → Ollama /api/chat (OLLAMA_HOST, lokales Modell)
                               → /api/*          → BookStack (localhost:80)
                               → /               → public/index.html
 ```
 
-Der Express-Server übernimmt fünf Aufgaben: er served die Single-Page-App unter `/`, proxied alle `/api/*`-Requests an die lokale BookStack-Instanz, stellt unter `/config` die BookStack-Credentials aus `.env` dem Frontend bereit, proxied unter `/claude` alle Claude-Aufrufe mit serverseitiger Key-Injection, und persistiert unter `/history/*` sowie `/figures/*` alle Daten in einer lokalen SQLite-Datei. Da alles auf demselben Host läuft, gibt es kein CORS-Problem.
+Der Express-Server übernimmt sechs Aufgaben: er served die Single-Page-App unter `/`, proxied alle `/api/*`-Requests an die lokale BookStack-Instanz, stellt unter `/config` die Credentials und Provider-Konfiguration aus `.env` dem Frontend bereit, proxied unter `/claude` alle Claude-Aufrufe mit serverseitiger Key-Injection bzw. unter `/ollama` an eine lokale Ollama-Instanz, und persistiert unter `/history/*` sowie `/figures/*` alle Daten in einer lokalen SQLite-Datei. Da alles auf demselben Host läuft, gibt es kein CORS-Problem.
 
-Der Claude-Aufruf läuft **nicht direkt aus dem Browser** gegen `api.anthropic.com`, sondern über `/claude` – der Server injiziert dabei den `ANTHROPIC_API_KEY` aus der `.env`.
+KI-Aufrufe laufen **nicht direkt aus dem Browser**, sondern über den jeweiligen Proxy-Endpunkt – der Server hält alle Credentials. Welcher Provider aktiv ist, steuert `API_PROVIDER` in der `.env`.
 
 ## Projektstruktur
 
@@ -70,9 +71,12 @@ Umgebungsvariablen (optional, defaults in Klammern):
 - `API_HOST` – Alternative zu `BOOKSTACK_URL` (hat Vorrang)
 - `TOKEN_ID` – BookStack Token ID (wird via `/config` an den Browser geliefert)
 - `TOKEN_KENNWORT` – BookStack Token Passwort (wird via `/config` an den Browser geliefert)
-- `ANTHROPIC_API_KEY` – API-Key für Claude (wird serverseitig in `/claude`-Requests injiziert)
-- `MODEL_NAME` – Claude-Modell (`claude-sonnet-4-6`)
-- `MODEL_TOKEN` – Maximale Output-Tokens für Claude-Aufrufe (`64000`)
+- `API_PROVIDER` – KI-Provider: `claude` (Standard) oder `ollama`
+- `ANTHROPIC_API_KEY` – API-Key für Claude (nur bei `API_PROVIDER=claude`; serverseitig injiziert)
+- `MODEL_NAME` – Claude-Modell (`claude-sonnet-4-6`; nur bei `API_PROVIDER=claude`)
+- `MODEL_TOKEN` – Maximale Output-Tokens für Claude-Aufrufe (`64000`; nur bei `API_PROVIDER=claude`)
+- `OLLAMA_HOST` – URL der Ollama-Instanz (`http://localhost:11434`; nur bei `API_PROVIDER=ollama`)
+- `OLLAMA_MODEL` – Ollama-Modell (`llama3.2`; nur bei `API_PROVIDER=ollama`)
 
 Alle Variablen können in einer `.env`-Datei gesetzt werden (dotenv).
 
@@ -262,9 +266,17 @@ Token-Credentials werden via `/config` vom Server geliefert und im `Authorizatio
 
 `bsGet(path)` und `bsPut(path, body)` sind einfache Wrapper um `fetch('/api/...')`. **`bsGetAll(path)`** ist der wichtigste Helfer: BookStack paginiert Listenendpunkte (Standard: 20 Einträge pro Seite). `bsGetAll` iteriert automatisch alle Seiten und gibt ein flaches Array aller Einträge zurück. Immer `bsGetAll` verwenden wenn eine vollständige Liste benötigt wird (Bücher, Kapitel, Seiten).
 
-## Claude-Integration
+## KI-Integration
 
-Modell überall: `claude-sonnet-4-6`. Alle Claude-Calls laufen über den lokalen `/claude`-Proxy (kein direkter Browser-Zugriff auf `api.anthropic.com`).
+Alle KI-Calls laufen über den lokalen Proxy-Endpunkt – kein direkter Browser-Zugriff auf externe APIs. Welcher Provider verwendet wird, steuert `API_PROVIDER` in der `.env`. Das Frontend liest den aktiven Provider beim Start via `/config` und zeigt ihn als Badge in der Subtitle an.
+
+### Provider: Claude (Anthropic)
+
+Endpunkt `/claude`. Der Server injiziert `ANTHROPIC_API_KEY`, leitet an `api.anthropic.com/v1/messages` weiter und streamt das Ergebnis als SSE zurück. Modell und Token-Limit via `MODEL_NAME` / `MODEL_TOKEN`.
+
+### Provider: Ollama (lokal)
+
+Endpunkt `/ollama`. Der Server konvertiert den Anthropic-Request-Format in das Ollama `/api/chat`-Format, ruft `OLLAMA_HOST` auf und normalisiert die NDJSON-Antwort zu demselben SSE-Format wie `/claude` – der Frontend-Parser bleibt unverändert. Modell via `OLLAMA_MODEL`.
 
 ### `callClaude` – Wichtige Einschränkung
 
