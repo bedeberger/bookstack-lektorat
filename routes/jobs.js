@@ -1,15 +1,27 @@
 'use strict';
 const express = require('express');
 const { randomUUID } = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
 const { db, saveFigurenToDb } = require('../db/schema');
 
+// prompt-config.json synchron lesen (einmalig bei Modulstart)
+let _promptConfig;
+try {
+  _promptConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../prompt-config.json'), 'utf8'));
+} catch {
+  _promptConfig = null; // Fehlt die Datei, verwendet prompts.js seine Defaults
+}
+
 // System-Prompts aus dem Browser-Modul laden (Single Source of Truth: public/js/prompts.js)
 let _prompts = null;
 async function getPrompts() {
-  if (!_prompts) _prompts = await import(pathToFileURL(path.resolve(__dirname, '../public/js/prompts.js')).href);
+  if (!_prompts) {
+    _prompts = await import(pathToFileURL(path.resolve(__dirname, '../public/js/prompts.js')).href);
+    _prompts.configurePrompts(_promptConfig);
+  }
   return _prompts;
 }
 
@@ -120,6 +132,9 @@ async function callAI(userPrompt, systemPrompt, onProgress) {
     });
     if (!resp.ok) throw new Error(`Ollama ${resp.status}: ${await resp.text()}`);
 
+    // Input-Token-Schätzung aus Prompt-Länge (Ollama meldet prompt_eval_count erst im done-Chunk)
+    const estimatedTokIn = Math.ceil(messages.reduce((s, m) => s + (m.content?.length || 0), 0) / 4);
+
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
     let buf = '', text = '', tokensIn = 0, tokensOut = 0;
@@ -134,12 +149,13 @@ async function callAI(userPrompt, systemPrompt, onProgress) {
         try {
           const chunk = JSON.parse(line);
           if (chunk.done) {
-            // Letzter Chunk enthält Token-Statistiken
-            tokensIn = chunk.prompt_eval_count || 0;
+            // Letzter Chunk enthält Token-Statistiken (prompt_eval_count kann 0 sein bei Cache-Hit)
+            tokensIn = chunk.prompt_eval_count || estimatedTokIn;
             tokensOut = chunk.eval_count || 0;
+            if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
           } else {
             text += chunk.message?.content || '';
-            if (onProgress) onProgress({ chars: text.length, tokIn: 0 });
+            if (onProgress) onProgress({ chars: text.length, tokIn: estimatedTokIn });
           }
         } catch { }
       }

@@ -1,8 +1,25 @@
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const fs = require('fs');
+const path = require('path');
 const logger = require('../logger');
 
 const BOOKSTACK_URL = process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80';
+
+// prompt-config.json einmalig laden; fehlt die Datei, werden Defaults aus prompts.js verwendet.
+let _promptConfig = null;
+function getPromptConfig() {
+  if (_promptConfig !== null) return _promptConfig;
+  try {
+    const raw = fs.readFileSync(path.resolve(__dirname, '../prompt-config.json'), 'utf8');
+    _promptConfig = JSON.parse(raw);
+    logger.info('prompt-config.json geladen.');
+  } catch (e) {
+    logger.warn('prompt-config.json nicht gefunden oder ungültig – Prompt-Defaults werden verwendet. (' + e.message + ')');
+    _promptConfig = {};
+  }
+  return _promptConfig;
+}
 
 const router = express.Router();
 const jsonBody = express.json();
@@ -18,6 +35,7 @@ router.get('/config', (req, res) => {
     ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
     user: req.session?.user || null,
     devMode: process.env.LOCAL_DEV_MODE === 'true',
+    promptConfig: getPromptConfig(),
   });
 });
 

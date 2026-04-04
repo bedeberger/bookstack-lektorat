@@ -1,4 +1,5 @@
 import { escHtml, htmlToText, fmtTok } from './utils.js';
+import { configurePrompts } from './prompts.js';
 
 const PREVIEW_MAX_CHARS = 600;
 import { bookstackMethods } from './api-bookstack.js';
@@ -208,6 +209,7 @@ document.addEventListener('alpine:init', () => {
         if (cfg.ollamaModel) this.ollamaModel = cfg.ollamaModel;
         this.currentUser = cfg.user || null;
         this.devMode = !!cfg.devMode;
+        configurePrompts(cfg.promptConfig);
         if (!cfg.bookstackTokenOk) {
           this.showTokenSetup = true;
           return;

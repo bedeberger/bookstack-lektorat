@@ -1,22 +1,55 @@
 export const CLAUDE_API = '/claude';
 
-// Superregeln – gelten für alle Prompts
-const BASE_RULES = `\
+// Unveränderliche technische Pflicht-Anweisung – darf nicht konfiguriert werden,
+// da callAI() immer ein JSON-Objekt erwartet.
+const JSON_ONLY = 'Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach';
+
+// Standard-Werte (werden durch configurePrompts() überschrieben)
+const DEFAULT_BASE_RULES = `\
 SCHWEIZER KONTEXT – STRIKTE REGEL: Im Schweizer Schriftdeutsch wird kein ß verwendet. Deshalb sind alle ss-Schreibungen, die im Deutschen ß wären, korrekte Helvetismen: zerreisst, heisst, weiss, ausserdem, Strasse, gemäss, grösser usw. Diese Wörter sind KEIN FEHLER und dürfen NICHT ins «fehler»-Array. Auch «zerreisst» als Verbform von «zerreissen» ist korrekt. \
 Der Gedankenstrich (–) ist korrekte Schreibweise – NICHT ins «fehler»-Array. Der Bindestrich (-) als Ersatz für den Gedankenstrich ist ebenfalls kein Fehler – NICHT ins «fehler»-Array. \
 Anführungszeichen-Regel: Die Wahl der Anführungszeichen («», „", "", '') ist kein Fehler und kein Stilproblem – NICHT ins «fehler»-Array, egal welche Variante verwendet wird. \
-GRUNDREGEL FÜR DAS «fehler»-ARRAY: Ein Eintrag kommt nur rein, wenn er eindeutig, zweifelsfrei und ohne Einschränkung falsch ist. Enthält die Erklärung Formulierungen wie «im Schweizer Kontext akzeptabel», «kein Fehler», «vertretbar», «könnte», «möglicherweise» – dann darf der Eintrag NICHT im Array stehen. Vor jedem Eintrag: Selbsttest – «Ist das im Schweizer Kontext wirklich falsch?» Wenn nein oder unsicher: weglassen. \
-Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.`;
+GRUNDREGEL FÜR DAS «fehler»-ARRAY: Ein Eintrag kommt nur rein, wenn er eindeutig, zweifelsfrei und ohne Einschränkung falsch ist. Enthält die Erklärung Formulierungen wie «im Schweizer Kontext akzeptabel», «kein Fehler», «vertretbar», «könnte», «möglicherweise» – dann darf der Eintrag NICHT im Array stehen. Vor jedem Eintrag: Selbsttest – «Ist das im Schweizer Kontext wirklich falsch?» Wenn nein oder unsicher: weglassen.`;
 
-export const SYSTEM_LEKTORAT = `Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz. ${BASE_RULES}`;
+const DEFAULT_PREFIXES = {
+  lektorat:       'Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz.',
+  buchbewertung:  'Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz.',
+  kapitelanalyse: 'Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz.',
+  figuren:        'Du bist ein Literaturanalytiker für deutschsprachige Texte aus der Schweiz.',
+  stilkorrektur:  'Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz.',
+};
 
-export const SYSTEM_BUCHBEWERTUNG = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. ${BASE_RULES}`;
+function buildSystem(prefix, rules) {
+  return `${prefix} ${rules} ${JSON_ONLY}`;
+}
 
-export const SYSTEM_KAPITELANALYSE = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. ${BASE_RULES}`;
+const DEFAULT_ERKLAERUNG_RULE = `– ACHTUNG: Falls diese Erklärung Formulierungen enthält wie 'kein Fehler', 'korrekt', 'vertretbar', 'möglicherweise', 'im Schweizer Kontext akzeptabel' o.Ä., darf der Eintrag NICHT im Array stehen.`;
 
-export const SYSTEM_FIGUREN = `Du bist ein Literaturanalytiker für deutschsprachige Texte aus der Schweiz. ${BASE_RULES}`;
+// Live-Exports – werden durch configurePrompts() aktualisiert.
+// Alle importierenden Module erhalten via ESM-Live-Binding immer den aktuellen Wert.
+export let ERKLAERUNG_RULE      = DEFAULT_ERKLAERUNG_RULE;
+export let SYSTEM_LEKTORAT      = buildSystem(DEFAULT_PREFIXES.lektorat,       DEFAULT_BASE_RULES);
+export let SYSTEM_BUCHBEWERTUNG = buildSystem(DEFAULT_PREFIXES.buchbewertung,  DEFAULT_BASE_RULES);
+export let SYSTEM_KAPITELANALYSE= buildSystem(DEFAULT_PREFIXES.kapitelanalyse, DEFAULT_BASE_RULES);
+export let SYSTEM_FIGUREN       = buildSystem(DEFAULT_PREFIXES.figuren,        DEFAULT_BASE_RULES);
+export let SYSTEM_STILKORREKTUR = buildSystem(DEFAULT_PREFIXES.stilkorrektur,  DEFAULT_BASE_RULES);
 
-export const SYSTEM_STILKORREKTUR = `Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz. ${BASE_RULES}`;
+/**
+ * Überschreibt die konfigurierbaren Teile aller System-Prompts.
+ * Wird einmalig beim App-Start aus dem /config-Endpunkt befüllt.
+ * @param {Object} cfg  promptConfig-Objekt aus /config  (kann null/undefined sein → No-op)
+ */
+export function configurePrompts(cfg) {
+  if (!cfg) return;
+  const rules   = cfg.baseRules || DEFAULT_BASE_RULES;
+  const sp      = cfg.systemPrompts || {};
+  ERKLAERUNG_RULE = cfg.erklaerungRule || DEFAULT_ERKLAERUNG_RULE;
+  SYSTEM_LEKTORAT       = buildSystem(sp.lektorat       || DEFAULT_PREFIXES.lektorat,       rules);
+  SYSTEM_BUCHBEWERTUNG  = buildSystem(sp.buchbewertung  || DEFAULT_PREFIXES.buchbewertung,  rules);
+  SYSTEM_KAPITELANALYSE = buildSystem(sp.kapitelanalyse || DEFAULT_PREFIXES.kapitelanalyse, rules);
+  SYSTEM_FIGUREN        = buildSystem(sp.figuren        || DEFAULT_PREFIXES.figuren,        rules);
+  SYSTEM_STILKORREKTUR  = buildSystem(sp.stilkorrektur  || DEFAULT_PREFIXES.stilkorrektur,  rules);
+}
 
 export function buildStilkorrekturPrompt(html, styles) {
   const liste = styles.map((s, i) =>
@@ -53,7 +86,7 @@ Antworte mit diesem JSON-Schema:
       "original": "das fehlerhafte Wort oder die fehlerhafte Phrase (genau eine Beanstandung pro Eintrag)",
       "korrektur": "die korrekte Version",
       "kontext": "der Satz in dem der Fehler vorkommt (gekürzt)",
-      "erklaerung": "kurze Erklärung auf Deutsch (nur diesen einen Mangel beschreiben)"
+      "erklaerung": "kurze Erklärung auf Deutsch (nur diesen einen Mangel beschreiben) ${ERKLAERUNG_RULE}"
     }
   ],
   "stilanalyse": "2-3 Sätze Stilanalyse",
@@ -223,7 +256,7 @@ Antworte mit diesem JSON-Schema:
       "original": "das fehlerhafte Wort oder die fehlerhafte Phrase (genau eine Beanstandung pro Eintrag)",
       "korrektur": "die korrekte Version",
       "kontext": "der Satz in dem der Fehler vorkommt (gekürzt)",
-      "erklaerung": "kurze Erklärung auf Deutsch (nur diesen einen Mangel beschreiben)"
+      "erklaerung": "kurze Erklärung auf Deutsch (nur diesen einen Mangel beschreiben) ${ERKLAERUNG_RULE}"
     }
   ],
   "korrekturen_html": "vollständiges korrigiertes HTML – behalte ALLE Tags exakt bei, ändere nur fehlerhafte Textstellen",

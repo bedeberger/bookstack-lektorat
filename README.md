@@ -206,6 +206,31 @@ OLLAMA_MODEL=llama3.2
 
 > Bei Docker muss `localhost` durch `host.docker.internal` ersetzt werden, um den Ollama-Service auf dem Host zu erreichen.
 
+### Prompts anpassen (`prompt-config.json`)
+
+Die KI-Prompts können ohne Code-Änderung über `prompt-config.json` im Projektroot angepasst werden. Änderungen werden beim nächsten Serverstart aktiv.
+
+**Konfigurierbar:**
+- `baseRules` – kontextuelle Regeln für alle Analysen (Schweizer Schreibkonventionen, Fehlerentscheidungsregeln etc.)
+- `systemPrompts` – die Rollenformulierung für jeden der fünf KI-Einsatzbereiche (`lektorat`, `buchbewertung`, `kapitelanalyse`, `figuren`, `stilkorrektur`)
+
+**Nicht konfigurierbar** (hartkodiert): JSON-Schemata, Feldnamen, Formatanweisungen – diese sind technische Verträge zwischen Prompt und App-Logik.
+
+```json
+{
+  "baseRules": "SCHWEIZER KONTEXT – STRIKTE REGEL: …",
+  "systemPrompts": {
+    "lektorat":       "Du bist ein deutschsprachiger Lektor …",
+    "buchbewertung":  "Du bist ein erfahrener Literaturkritiker …",
+    "kapitelanalyse": "Du bist ein erfahrener Literaturkritiker …",
+    "figuren":        "Du bist ein Literaturanalytiker …",
+    "stilkorrektur":  "Du bist ein deutschsprachiger Lektor …"
+  }
+}
+```
+
+Fehlt die Datei oder ist sie ungültig, startet der Server normal und verwendet die eingebauten Defaults.
+
 ---
 
 ## Architektur

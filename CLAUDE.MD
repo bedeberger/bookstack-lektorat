@@ -229,6 +229,38 @@ Exportiert `bookstatsMethods` mit:
 
 **`bsGetAll(path)`** ist der wichtigste Helfer: BookStack paginiert Listenendpunkte (Standard: 20 Einträge). `bsGetAll` iteriert automatisch alle Seiten und gibt ein flaches Array zurück. Immer `bsGetAll` statt `bsGet` verwenden wenn eine vollständige Liste benötigt wird.
 
+## Prompt-Konfiguration
+
+### `prompt-config.json`
+
+Admins können die **inhaltlichen** Teile aller System-Prompts in `prompt-config.json` (Projektroot) anpassen – ohne Code-Änderung, nur Serverrestart nötig.
+
+```json
+{
+  "baseRules": "Freitext: Schweizer-Kontext-Regeln, Fehler-Entscheidungsregeln …",
+  "systemPrompts": {
+    "lektorat":       "Du bist …",
+    "buchbewertung":  "Du bist …",
+    "kapitelanalyse": "Du bist …",
+    "figuren":        "Du bist …",
+    "stilkorrektur":  "Du bist …"
+  }
+}
+```
+
+**Konfigurierbar:** `baseRules` (Schweizer-Kontext-Regeln, Superregeln) und die Rollenformulierung jedes System-Prompts.
+
+**Hartkodiert (nicht konfigurierbar):** Die JSON-Only-Anweisung (`Antworte ausschliesslich mit einem JSON-Objekt…`), alle JSON-Schema-Definitionen und Feldnamen in den Build-Funktionen.
+
+**Ladereihenfolge:**
+- `routes/proxies.js` liest die Datei beim Serverstart (lazy singleton) und liefert sie über `/config` als `promptConfig` ans Frontend.
+- `public/js/app.js` ruft `configurePrompts(cfg.promptConfig)` in `init()` auf → aktualisiert die `export let SYSTEM_*`-Variablen in `prompts.js` via ESM-Live-Binding.
+- `routes/jobs.js` liest die Datei synchron beim Modulstart und ruft `configurePrompts()` einmalig nach dem dynamischen `import()` von `prompts.js` auf.
+
+Fehlt `prompt-config.json`, loggen beide Server-Module eine Warnung und `prompts.js` verwendet seine eingebauten Defaults – der Server startet normal.
+
+**Single Source of Truth:** Alle Prompts bleiben ausschliesslich in `public/js/prompts.js`. `prompt-config.json` überschreibt nur die konfigurierbaren Teile über `configurePrompts()`.
+
 ## KI-Integration
 
 ### `callAI` – Wichtige Einschränkung
