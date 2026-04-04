@@ -1,11 +1,5 @@
 import { escHtml } from './utils.js';
 
-function fmtTok(n) {
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-  return String(n);
-}
-
 // Figurenübersicht-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 // Die eigentliche Extraktion läuft serverseitig als Hintergrundjob (POST /jobs/figures).
@@ -62,57 +56,35 @@ export const figurenMethods = {
   // Wird sowohl beim frischen Start als auch beim Reconnect nach Tab-Schliessen aufgerufen.
   startFiguresPoll(jobId) {
     const bookId = this.selectedBookId;
-    if (this._figuresPollTimer) clearInterval(this._figuresPollTimer);
-    this._figuresPollTimer = setInterval(async () => {
-      try {
-        const resp = await fetch('/jobs/' + jobId);
-        if (resp.status === 404) {
-          clearInterval(this._figuresPollTimer);
-          this._figuresPollTimer = null;
-          localStorage.removeItem('lektorat_figures_job_' + bookId);
-          this.figurenLoading = false;
-          this.figurenProgress = 0;
-          this.figurenStatus = 'Analyse unterbrochen (Server-Neustart). Bitte neu starten.';
-          return;
-        }
-        if (!resp.ok) return; // temporärer Fehler – beim nächsten Tick nochmal
-        const job = await resp.json();
-        this.figurenProgress = job.progress || 0;
-        if (job.status === 'running') {
-          const tokIn = job.tokensIn || 0;
-          const tokOut = job.tokensOut || 0;
-          let tokInfo = '';
-          if (tokIn + tokOut > 0) {
-            const maxOut = job.maxTokensOut ? '/' + fmtTok(job.maxTokensOut) : '';
-            tokInfo = ` · ↑${fmtTok(tokIn)} ↓${fmtTok(tokOut)}${maxOut} Tokens`;
-          }
-          this.figurenStatus = `<span class="spinner"></span>${escHtml(job.statusText || '…')}${tokInfo}`;
-          return;
-        }
-        // Job ist fertig (done oder error)
-        clearInterval(this._figuresPollTimer);
-        this._figuresPollTimer = null;
-        localStorage.removeItem('lektorat_figures_job_' + bookId);
+    this._startPoll({
+      timerProp: '_figuresPollTimer',
+      jobId,
+      lsKey: 'lektorat_figures_job_' + bookId,
+      progressProp: 'figurenProgress',
+      onProgress: (job) => {
+        this.figurenStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut);
+      },
+      onNotFound: () => {
         this.figurenLoading = false;
         this.figurenProgress = 0;
-
-        if (job.status === 'error') {
-          this.figurenStatus = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
-          return;
-        }
-        if (job.result?.empty) {
-          this.figurenStatus = 'Keine Seiten gefunden.';
-          return;
-        }
+        this.figurenStatus = 'Analyse unterbrochen (Server-Neustart). Bitte neu starten.';
+      },
+      onError: (job) => {
+        this.figurenLoading = false;
+        this.figurenProgress = 0;
+        this.figurenStatus = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
+      },
+      onDone: async (job) => {
+        this.figurenLoading = false;
+        this.figurenProgress = 0;
+        if (job.result?.empty) { this.figurenStatus = 'Keine Seiten gefunden.'; return; }
         await this.loadFiguren(bookId);
         this.figurenUpdatedAt = new Date().toISOString();
         this.figurenStatus = `${job.result?.count || this.figuren.length} Figuren ermittelt und gespeichert.`;
         await this.$nextTick();
         this.renderFigurGraph();
-      } catch (e) {
-        console.error('[figuren poll]', e);
-      }
-    }, 2000);
+      },
+    });
   },
 
   async runFigurExtraction() {

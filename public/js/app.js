@@ -1,4 +1,4 @@
-import { escHtml, htmlToText } from './utils.js';
+import { escHtml, htmlToText, fmtTok } from './utils.js';
 
 const PREVIEW_MAX_CHARS = 600;
 import { bookstackMethods } from './api-bookstack.js';
@@ -55,6 +55,7 @@ document.addEventListener('alpine:init', () => {
     selectedStyles: [],
     checkDone: false,
     checkLoading: false,
+    checkProgress: 0,
     bookReviewLoading: false,
     bookReviewProgress: 0,
     batchLoading: false,
@@ -78,6 +79,7 @@ document.addEventListener('alpine:init', () => {
     selectedFigurId: null,
     _figurenNetwork: null,
     _figurenHash: null,
+    _checkPollTimer: null,
     _reviewPollTimer: null,
     _figuresPollTimer: null,
     showBookStatsCard: false,
@@ -148,6 +150,44 @@ document.addEventListener('alpine:init', () => {
         : msg;
     },
 
+    // Generischer Job-Poller.
+    // config: { timerProp, jobId, lsKey?, progressProp?, onProgress, onNotFound, onError, onDone }
+    _startPoll(config) {
+      if (this[config.timerProp]) clearInterval(this[config.timerProp]);
+      this[config.timerProp] = setInterval(async () => {
+        try {
+          const resp = await fetch('/jobs/' + config.jobId);
+          if (resp.status === 404) {
+            clearInterval(this[config.timerProp]);
+            this[config.timerProp] = null;
+            if (config.lsKey) localStorage.removeItem(config.lsKey);
+            config.onNotFound?.();
+            return;
+          }
+          if (!resp.ok) return;
+          const job = await resp.json();
+          if (config.progressProp) this[config.progressProp] = job.progress || 0;
+          if (job.status === 'running') { config.onProgress?.(job); return; }
+          clearInterval(this[config.timerProp]);
+          this[config.timerProp] = null;
+          if (config.lsKey) localStorage.removeItem(config.lsKey);
+          if (job.status === 'error') await config.onError?.(job);
+          else await config.onDone?.(job);
+        } catch (e) { console.error('[poll ' + config.timerProp + ']', e); }
+      }, 2000);
+    },
+
+    // Generiertes Status-HTML für laufende Jobs: Spinner + statusText + Token-Info.
+    // Wird von review.js, figuren.js und lektorat.js (batchCheck) verwendet.
+    _runningJobStatus(statusText, tokIn, tokOut, maxTokOut) {
+      let tokInfo = '';
+      if ((tokIn || 0) + (tokOut || 0) > 0) {
+        const maxOut = maxTokOut ? '/' + fmtTok(maxTokOut) : '';
+        tokInfo = ` · ↑${fmtTok(tokIn || 0)} ↓${fmtTok(tokOut || 0)}${maxOut} Tokens`;
+      }
+      return `<span class="spinner"></span>${escHtml(statusText || '…')}${tokInfo}`;
+    },
+
     cutAtSentence(text, maxLen) {
       if (text.length <= maxLen) return text;
       const sub = text.slice(0, maxLen);
@@ -199,7 +239,27 @@ document.addEventListener('alpine:init', () => {
       this.selectedErrors = [];
       this.selectedStyles = [];
       this.checkDone = false;
+      this.checkProgress = 0;
       this.showEditorCard = true;
+      this.$nextTick(() => document.getElementById('editor-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+
+      // Prüfen ob ein Lektorat-Check-Job für diese Seite läuft (Server-seitig oder aus früherer Session)
+      try {
+        const { jobId: activeJobId } = await fetch(`/jobs/active?type=check&book_id=${p.id}`).then(r => r.json());
+        if (activeJobId) {
+          localStorage.setItem('lektorat_check_job_' + p.id, activeJobId);
+          this.checkLoading = true;
+          this.checkProgress = 0;
+          this.analysisOut = '';
+          this.setStatus('Lektorat läuft…', true);
+          this.startCheckPoll(activeJobId);
+          await this.loadPageHistory(p.id);
+          return;
+        }
+        // Kein aktiver Job → stale localStorage-Eintrag bereinigen
+        localStorage.removeItem('lektorat_check_job_' + p.id);
+      } catch (e) { console.error('[selectPage active-job check]', e); }
+
       this.analysisOut = '<span class="muted-msg"><span class="spinner"></span>Vorschau lädt…</span>';
       this.setStatus('');
       try {
@@ -262,6 +322,26 @@ document.addEventListener('alpine:init', () => {
           }
         } catch { localStorage.removeItem('lektorat_figures_job_' + bookId); }
       }
+
+      const batchJobId = localStorage.getItem('lektorat_batchcheck_job_' + bookId);
+      if (batchJobId) {
+        try {
+          const resp = await fetch('/jobs/' + batchJobId);
+          if (resp.ok) {
+            const job = await resp.json();
+            if (job.status === 'running') {
+              this.batchLoading = true;
+              this.batchProgress = job.progress || 0;
+              this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut);
+              this.startBatchPoll(batchJobId);
+            } else {
+              localStorage.removeItem('lektorat_batchcheck_job_' + bookId);
+            }
+          } else {
+            localStorage.removeItem('lektorat_batchcheck_job_' + bookId);
+          }
+        } catch { localStorage.removeItem('lektorat_batchcheck_job_' + bookId); }
+      }
     },
 
     // Schliesst alle vier Hauptkarten ausser der angegebenen.
@@ -278,9 +358,24 @@ document.addEventListener('alpine:init', () => {
       this._closeOtherMainCards('tree');
       this.showTreeCard = true;
       if (!this.pages.length) await this.loadPages();
+      // Prüfen ob bereits ein Batch-Check-Job für dieses Buch läuft
+      if (!this._batchPollTimer && !this.batchLoading && this.selectedBookId) {
+        try {
+          const { jobId } = await fetch(`/jobs/active?type=batch-check&book_id=${this.selectedBookId}`).then(r => r.json());
+          if (jobId) {
+            this.batchLoading = true;
+            this.batchProgress = 0;
+            this.batchStatus = this._runningJobStatus('Analyse läuft bereits…', 0, 0);
+            this.startBatchPoll(jobId);
+          }
+        } catch (e) {
+          console.error('[toggleTreeCard] active-job check:', e);
+        }
+      }
     },
 
     resetPage() {
+      if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
       this.currentPage = null;
       this.currentPageUpdatedAt = null;
       this.originalHtml = null;
@@ -300,6 +395,7 @@ document.addEventListener('alpine:init', () => {
       this.selectedErrors = [];
       this.selectedStyles = [];
       this.checkDone = false;
+      this.checkProgress = 0;
     },
 
     resetView() {
@@ -325,7 +421,13 @@ document.addEventListener('alpine:init', () => {
       this.selectedErrors = [];
       this.selectedStyles = [];
       this.checkDone = false;
+      this.checkProgress = 0;
       this.showTreeCard = false;
+      if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
+      if (this._batchPollTimer) { clearInterval(this._batchPollTimer); this._batchPollTimer = null; }
+      this.batchLoading = false;
+      this.batchProgress = 0;
+      this.batchStatus = '';
       this.showFiguresCard = false;
       this.figurenStatus = '';
       this.figurenProgress = 0;

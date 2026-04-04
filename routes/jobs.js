@@ -1,8 +1,17 @@
 'use strict';
 const express = require('express');
 const { randomUUID } = require('crypto');
+const path = require('path');
+const { pathToFileURL } = require('url');
 const logger = require('../logger');
 const { db, saveFigurenToDb } = require('../db/schema');
+
+// System-Prompts aus dem Browser-Modul laden (Single Source of Truth: public/js/prompts.js)
+let _prompts = null;
+async function getPrompts() {
+  if (!_prompts) _prompts = await import(pathToFileURL(path.resolve(__dirname, '../public/js/prompts.js')).href);
+  return _prompts;
+}
 
 const router = express.Router();
 const jsonBody = express.json();
@@ -241,11 +250,7 @@ function groupByChapter(pageContents) {
   return { groupOrder, groups };
 }
 
-// ── System-Prompts (gespiegelt von public/js/prompts.js) ─────────────────────
-const BASE_RULES = 'SCHWEIZER KONTEXT – STRIKTE REGEL: Im Schweizer Schriftdeutsch wird kein ß verwendet. Deshalb sind alle ss-Schreibungen, die im Deutschen ß wären, korrekte Helvetismen: zerreisst, heisst, weiss, ausserdem, Strasse, gemäss, grösser usw. Diese Wörter sind KEIN FEHLER und dürfen NICHT ins «fehler»-Array. Auch «zerreisst» als Verbform von «zerreissen» ist korrekt. Der Gedankenstrich (–) ist korrekte Schreibweise – NICHT ins «fehler»-Array. Anführungszeichen-Regel: Die Wahl der Anführungszeichen («», „", "", \'\') ist kein Fehler und kein Stilproblem – NICHT ins «fehler»-Array, egal welche Variante verwendet wird. GRUNDREGEL FÜR DAS «fehler»-ARRAY: Ein Eintrag kommt nur rein, wenn er eindeutig, zweifelsfrei und ohne Einschränkung falsch ist. Enthält die Erklärung Formulierungen wie «im Schweizer Kontext akzeptabel», «kein Fehler», «vertretbar», «könnte», «möglicherweise» – dann darf der Eintrag NICHT im Array stehen. Vor jedem Eintrag: Selbsttest – «Ist das im Schweizer Kontext wirklich falsch?» Wenn nein oder unsicher: weglassen. Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach.';
-const SYSTEM_BUCHBEWERTUNG = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. ${BASE_RULES}`;
-const SYSTEM_KAPITELANALYSE = `Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz. ${BASE_RULES}`;
-const SYSTEM_FIGUREN = `Du bist ein Literaturanalytiker für deutschsprachige Texte aus der Schweiz. ${BASE_RULES}`;
+
 
 // Hilfsfunktion: callAI aufrufen, Token-Zähler akkumulieren, Job aktualisieren.
 // fromPct/toPct: optionaler Fortschrittsbereich – während des Streamings wird der Balken
@@ -272,6 +277,7 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
 
 // ── Job: Buchbewertung ────────────────────────────────────────────────────────
 async function runReviewJob(jobId, bookId, bookName, userEmail) {
+  const { SYSTEM_BUCHBEWERTUNG, SYSTEM_KAPITELANALYSE, buildBookReviewSinglePassPrompt, buildChapterAnalysisPrompt, buildBookReviewMultiPassPrompt } = await getPrompts();
   try {
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
@@ -301,29 +307,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail) {
         .join('\n\n---\n\n');
 
       r = await aiCall(jobId, tok,
-        `Bewerte das folgende Buch «${bookName}» kritisch und umfassend. Analysiere:
-- Struktur und Aufbau (Kapitel, Übergänge, Logik)
-- Sprachstil und Konsistenz über alle Seiten hinweg
-- Stärken des Texts
-- Schwächen und Verbesserungspotenzial
-- Konkrete Empfehlungen für den Autor
-
-Antworte mit diesem JSON-Schema:
-{
-  "gesamtnote": "Zahl von 1 (sehr schwach) bis 5 (ausgezeichnet)",
-  "gesamtnote_begruendung": "Ein Satz warum diese Note",
-  "zusammenfassung": "2-3 Sätze Gesamteindruck",
-  "struktur": "Analyse des Aufbaus und der Struktur (3-4 Sätze)",
-  "stil": "Analyse des Schreibstils und seiner Konsistenz (3-4 Sätze)",
-  "staerken": ["Stärke 1", "Stärke 2", "Stärke 3"],
-  "schwaechen": ["Schwäche 1", "Schwäche 2"],
-  "empfehlungen": ["Empfehlung 1", "Empfehlung 2", "Empfehlung 3"],
-  "fazit": "Abschliessendes Urteil in 1-2 Sätzen"
-}
-
-Buchinhalt (${pageContents.length} Seiten):
-
-${bookText}`,
+        buildBookReviewSinglePassPrompt(bookName, pageContents.length, bookText),
         SYSTEM_BUCHBEWERTUNG,
         65, 97, 5000,
       );
@@ -342,19 +326,7 @@ ${bookText}`,
         });
         const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
         const ca = await aiCall(jobId, tok,
-          `Analysiere das Kapitel «${group.name}» aus dem Buch «${bookName}».
-Lies den vollständigen Kapiteltext und gib eine kompakte Analyse als JSON zurück:
-{
-  "themen": "Hauptthemen und Inhalte in 2-3 Sätzen",
-  "stil": "Schreibstilbeobachtungen: Wortwahl, Satzbau, Ton in 2 Sätzen",
-  "qualitaet": "Allgemeiner Qualitätseindruck in 1-2 Sätzen",
-  "staerken": ["konkrete Stärke 1", "konkrete Stärke 2"],
-  "schwaechen": ["konkrete Schwäche 1", "konkrete Schwäche 2"]
-}
-
-Kapitelinhalt (${group.pages.length} Seiten):
-
-${chText}`,
+          buildChapterAnalysisPrompt(group.name, bookName, group.pages.length, chText),
           SYSTEM_KAPITELANALYSE,
           fromPct, toPct, 1500,
         );
@@ -365,30 +337,8 @@ ${chText}`,
         progress: 90,
         statusText: `KI erstellt Gesamtbewertung… · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens`,
       });
-      const synthIn = chapterAnalyses.map((ca, i) =>
-        `## Kapitel ${i + 1}: ${ca.name} (${ca.pageCount} Seiten)\nThemen: ${ca.themen || '–'}\nStil: ${ca.stil || '–'}\nQualität: ${ca.qualitaet || '–'}\nStärken: ${(ca.staerken || []).join(' | ')}\nSchwächen: ${(ca.schwaechen || []).join(' | ')}`
-      ).join('\n\n');
-
       r = await aiCall(jobId, tok,
-        `Bewerte das Buch «${bookName}» kritisch und umfassend.
-Grundlage sind die Analysen aller ${chapterAnalyses.length} Kapitel (insgesamt ${pageContents.length} Seiten).
-
-Kapitelanalysen:
-
-${synthIn}
-
-Antworte mit diesem JSON-Schema:
-{
-  "gesamtnote": "Zahl von 1 (sehr schwach) bis 5 (ausgezeichnet)",
-  "gesamtnote_begruendung": "Ein Satz warum diese Note",
-  "zusammenfassung": "2-3 Sätze Gesamteindruck",
-  "struktur": "Analyse des Aufbaus und der Struktur über alle Kapitel (3-4 Sätze)",
-  "stil": "Analyse des Schreibstils und seiner Konsistenz über das gesamte Buch (3-4 Sätze)",
-  "staerken": ["Stärke 1", "Stärke 2", "Stärke 3"],
-  "schwaechen": ["Schwäche 1", "Schwäche 2"],
-  "empfehlungen": ["Empfehlung 1", "Empfehlung 2", "Empfehlung 3"],
-  "fazit": "Abschliessendes Urteil in 1-2 Sätzen"
-}`,
+        buildBookReviewMultiPassPrompt(bookName, chapterAnalyses, pageContents.length),
         SYSTEM_BUCHBEWERTUNG,
         90, 97, 5000,
       );
@@ -412,31 +362,7 @@ Antworte mit diesem JSON-Schema:
 
 // ── Job: Figurenextraktion ────────────────────────────────────────────────────
 async function runFiguresJob(jobId, bookId, bookName, userEmail) {
-  const FINAL_SCHEMA = `{
-  "figuren": [
-    {
-      "id": "fig_1",
-      "name": "Vollständiger Name",
-      "kurzname": "Vorname oder Spitzname",
-      "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere",
-      "geburtstag": "JJJJ oder leer wenn unbekannt",
-      "geschlecht": "männlich|weiblich|divers|unbekannt",
-      "beruf": "Beruf oder Rolle oder leer",
-      "beschreibung": "2-3 Sätze zu Rolle, Persönlichkeit und Bedeutung",
-      "eigenschaften": ["Eigenschaft1", "Eigenschaft2"],
-      "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
-      "beziehungen": [{ "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "1 Satz" }]
-    }
-  ]
-}`;
-  const FINAL_RULES = `Regeln:
-- Eindeutige IDs (fig_1, fig_2, …)
-- beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
-- kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten
-- Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), übrige selbsterklärend
-- Nur echte Personen/Charaktere, keine Orte oder Objekte
-- Sortiert nach Wichtigkeit; maximal 20 Figuren
-- KONSERVATIV: Nur Figuren und Beziehungen aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren.`;
+  const { SYSTEM_FIGUREN, buildFiguresSinglePassPrompt, buildFiguresChapterPrompt, buildFiguresConsolidationPrompt } = await getPrompts();
 
   try {
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
@@ -464,7 +390,7 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
         .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
         .join('\n\n---\n\n');
       result = await aiCall(jobId, tok,
-        `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Figuren.\n\nAntworte mit diesem JSON-Schema:\n${FINAL_SCHEMA}\n\n${FINAL_RULES}\n\nBuchtext (${pageContents.length} Seiten):\n\n${bookText}`,
+        buildFiguresSinglePassPrompt(bookName, pageContents.length, bookText),
         SYSTEM_FIGUREN,
         65, 96, 6000,
       );
@@ -483,17 +409,7 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
         });
         const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
         const chResult = await aiCall(jobId, tok,
-          `Extrahiere alle Figuren/Charaktere aus dem Kapitel «${group.name}» des Buchs «${bookName}».
-Antworte mit:
-{
-  "figuren": [
-    { "name": "Vollständiger Name", "kurzname": "...", "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere", "beruf": "...", "geburtstag": "JJJJ oder leer", "geschlecht": "männlich|weiblich|divers|unbekannt", "beschreibung": "1-2 Sätze", "eigenschaften": ["..."], "beziehungen": [{ "name": "Name der anderen Figur", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "1 Satz" }] }
-  ]
-}
-
-Nur echte Personen. Sei konservativ: nur Figuren und Beziehungen die im Text eindeutig belegt sind.
-
-Kapiteltext (${group.pages.length} Seiten):\n\n${chText}`,
+          buildFiguresChapterPrompt(group.name, bookName, group.pages.length, chText),
           SYSTEM_FIGUREN,
           fromPct, toPct, 2000,
         );
@@ -504,24 +420,8 @@ Kapiteltext (${group.pages.length} Seiten):\n\n${chText}`,
         progress: 88,
         statusText: `KI konsolidiert Figuren… · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens`,
       });
-      const synthInput = chapterFiguren.map(cf =>
-        `## Kapitel: ${cf.kapitel}\n` + cf.figuren.map(f =>
-          `- ${f.name} (${f.typ})${f.beruf ? ', ' + f.beruf : ''}: ${f.beschreibung || ''}` +
-          (f.beziehungen?.length ? '\n  Beziehungen: ' + f.beziehungen.map(b => `${b.name} [${b.typ}]`).join(', ') : '')
-        ).join('\n')
-      ).join('\n\n');
-
       result = await aiCall(jobId, tok,
-        `Konsolidiere die folgenden Figurenanalysen aller Kapitel des Buchs «${bookName}» zu einer einheitlichen Gesamtliste. Dedupliziere Figuren, führe Informationen zusammen und vergib stabile IDs.
-
-Kapitelanalysen:
-
-${synthInput}
-
-Antworte mit diesem JSON-Schema:
-${FINAL_SCHEMA}
-
-${FINAL_RULES}`,
+        buildFiguresConsolidationPrompt(bookName, chapterFiguren),
         SYSTEM_FIGUREN,
         88, 96, 6000,
       );
@@ -539,7 +439,141 @@ ${FINAL_RULES}`,
   }
 }
 
+// ── Job: Seiten-Lektorat ──────────────────────────────────────────────────────
+async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
+  const { SYSTEM_LEKTORAT, buildLektoratPrompt } = await getPrompts();
+  try {
+    updateJob(jobId, { statusText: 'Lade Seiteninhalt…', progress: 5 });
+
+    const authHeader = userToken
+      ? `Token ${userToken.id}:${userToken.pw}`
+      : `Token ${process.env.TOKEN_ID || ''}:${process.env.TOKEN_KENNWORT || ''}`;
+    const pdResp = await fetch(`${BS_URL}/api/pages/${pageId}`, {
+      headers: { Authorization: authHeader },
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!pdResp.ok) throw new Error(`BookStack ${pdResp.status}: ${await pdResp.text()}`);
+    const pd = await pdResp.json();
+
+    const html = pd.html;
+    const text = htmlToText(html);
+    if (!text.trim()) { completeJob(jobId, { empty: true }); return; }
+
+    const tok = { in: 0, out: 0 };
+    updateJob(jobId, { statusText: 'KI analysiert…', progress: 10 });
+
+    const result = await aiCall(jobId, tok,
+      buildLektoratPrompt(text, html),
+      SYSTEM_LEKTORAT,
+      10, 97, 5000,
+    );
+
+    if (!Array.isArray(result?.fehler)) throw new Error('fehler-Array fehlt');
+
+    const model = process.env.API_PROVIDER === 'ollama'
+      ? (process.env.OLLAMA_MODEL || 'llama3.2')
+      : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
+
+    const info = db.prepare(`INSERT INTO page_checks
+      (page_id, page_name, book_id, checked_at, error_count, errors_json, stilanalyse, fazit, model, user_email)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(parseInt(pageId), pd.name, parseInt(bookId) || null,
+        new Date().toISOString(), result.fehler.length, JSON.stringify(result.fehler),
+        result.stilanalyse || null, result.fazit || null, model, userEmail || null);
+
+    completeJob(jobId, {
+      fehler: result.fehler,
+      stilanalyse: result.stilanalyse || null,
+      fazit: result.fazit || null,
+      originalHtml: html,
+      updatedAt: pd.updated_at || null,
+      pageName: pd.name,
+      checkId: info.lastInsertRowid,
+      tokensIn: tok.in,
+      tokensOut: tok.out,
+    });
+    logger.info(`Job ${jobId}: Seiten-Check Seite ${pageId} abgeschlossen (${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+  } catch (e) {
+    logger.error(`Job ${jobId}: Seiten-Check Fehler: ${e.message}`);
+    failJob(jobId, e);
+  }
+}
+
+// ── Job: Batch-Lektorat ───────────────────────────────────────────────────────
+async function runBatchCheckJob(jobId, bookId, userEmail) {
+  const { SYSTEM_LEKTORAT, buildBatchLektoratPrompt } = await getPrompts();
+  try {
+    updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
+    const pages = await bsGetAll('pages?book_id=' + bookId);
+    if (!pages.length) { completeJob(jobId, { empty: true }); return; }
+
+    const tok = { in: 0, out: 0 };
+    const model = process.env.API_PROVIDER === 'ollama'
+      ? (process.env.OLLAMA_MODEL || 'llama3.2')
+      : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
+    let done = 0, totalErrors = 0;
+
+    for (let i = 0; i < pages.length; i++) {
+      const p = pages[i];
+      const fromPct = Math.round((i / pages.length) * 95);
+      const toPct   = Math.round(((i + 1) / pages.length) * 95);
+      const tokStr  = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
+      updateJob(jobId, {
+        progress: fromPct,
+        statusText: `${i + 1}/${pages.length}: ${p.name}…${tokStr}`,
+      });
+
+      try {
+        const pd = await bsGet('pages/' + p.id);
+        const text = htmlToText(pd.html).trim();
+        if (!text) continue;
+
+        const result = await aiCall(jobId, tok,
+          buildBatchLektoratPrompt(text),
+          SYSTEM_LEKTORAT,
+          fromPct, toPct, 2000,
+        );
+
+        if (!Array.isArray(result?.fehler)) throw new Error('fehler-Array fehlt');
+        const fehler = result.fehler;
+        totalErrors += fehler.filter(f => f.typ !== 'stil').length;
+
+        db.prepare(`INSERT INTO page_checks
+          (page_id, page_name, book_id, checked_at, error_count, errors_json, stilanalyse, fazit, model, user_email)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(p.id, p.name, parseInt(bookId), new Date().toISOString(),
+            fehler.length, JSON.stringify(fehler),
+            result.stilanalyse || null, result.fazit || null, model, userEmail || null);
+        done++;
+      } catch (e) {
+        logger.warn(`Job ${jobId}: Batch-Check Seite ${p.id} («${p.name}») übersprungen: ${e.message}`);
+      }
+    }
+
+    completeJob(jobId, { pageCount: pages.length, done, totalErrors, tokensIn: tok.in, tokensOut: tok.out });
+    logger.info(`Job ${jobId}: Batch-Check Buch ${bookId} abgeschlossen (${done}/${pages.length} Seiten, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+  } catch (e) {
+    logger.error(`Job ${jobId}: Batch-Check Fehler: ${e.message}`);
+    failJob(jobId, e);
+  }
+}
+
 // ── Routen ────────────────────────────────────────────────────────────────────
+router.post('/check', jsonBody, (req, res) => {
+  const { page_id, book_id } = req.body;
+  if (!page_id) return res.status(400).json({ error: 'page_id fehlt' });
+  const userEmail = req.session?.user?.email || null;
+  const userToken = req.session?.bookstackToken
+    ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw }
+    : null;
+  const existing = runningJobs.get(jobKey('check', page_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const jobId = createJob('check', page_id, userEmail);
+  runCheckJob(jobId, page_id, book_id || null, userEmail, userToken)
+    .catch(e => logger.error('Unkontrollierter check-Job-Fehler: ' + e.message));
+  res.json({ jobId });
+});
+
 router.post('/review', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
@@ -562,6 +596,18 @@ router.post('/figures', jsonBody, (req, res) => {
   const jobId = createJob('figures', book_id, userEmail);
   runFiguresJob(jobId, book_id, book_name || '', userEmail)
     .catch(e => logger.error('Unkontrollierter figures-Job-Fehler: ' + e.message));
+  res.json({ jobId });
+});
+
+router.post('/batch-check', jsonBody, (req, res) => {
+  const { book_id } = req.body;
+  if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
+  const userEmail = req.session?.user?.email || null;
+  const existing = runningJobs.get(jobKey('batch-check', book_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const jobId = createJob('batch-check', book_id, userEmail);
+  runBatchCheckJob(jobId, book_id, userEmail)
+    .catch(e => logger.error('Unkontrollierter batch-check-Job-Fehler: ' + e.message));
   res.json({ jobId });
 });
 

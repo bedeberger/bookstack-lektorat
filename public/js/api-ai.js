@@ -26,7 +26,9 @@ function _parseJson(fullText) {
 }
 
 export const aiMethods = {
-  async callAI(userPrompt, systemPrompt = null, onProgress = null) {
+  // onProgress(chars, tokIn) – wird während des Streamings aufgerufen (tokIn=0 bis message_start)
+  // onComplete({ tokensIn, tokensOut }) – optionaler Callback nach Abschluss des Streams
+  async callAI(userPrompt, systemPrompt = null, onProgress = null, onComplete = null) {
     const { endpoint, model, temperature, label } = _providerConfig(
       this.apiProvider, this.claudeModel, this.ollamaModel
     );
@@ -54,6 +56,7 @@ export const aiMethods = {
     const decoder = new TextDecoder();
     let fullText = '';
     let buffer = '';
+    let tokensIn = 0, tokensOut = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -67,9 +70,14 @@ export const aiMethods = {
         if (raw === '[DONE]') break;
         try {
           const ev = JSON.parse(raw);
-          if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+          if (ev.type === 'message_start' && ev.message?.usage) {
+            tokensIn = ev.message.usage.input_tokens || 0;
+            if (onProgress) onProgress(fullText.length, tokensIn);
+          } else if (ev.type === 'message_delta' && ev.usage) {
+            tokensOut = ev.usage.output_tokens || 0;
+          } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
             fullText += ev.delta.text;
-            if (onProgress) onProgress(fullText.length);
+            if (onProgress) onProgress(fullText.length, tokensIn);
           }
         } catch (e) {
           console.error('[callAI] SSE-Event konnte nicht geparst werden:', e, '\nRaw:', raw);
@@ -77,6 +85,7 @@ export const aiMethods = {
       }
     }
 
+    if (onComplete) onComplete({ tokensIn, tokensOut });
     return _parseJson(fullText);
   },
 };

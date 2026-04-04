@@ -811,6 +811,11 @@ ins {
   font-weight: 600;
 }
 
+@media (max-width: 480px) {
+  .figur-kapitel-badges { display: none; }
+  .figur-kapitelauftritte { display: none; }
+}
+
 .figur-beziehung-item {
   display: flex;
   align-items: baseline;

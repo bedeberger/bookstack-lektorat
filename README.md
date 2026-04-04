@@ -122,31 +122,6 @@ proxy_set_header        X-Forwarded-Proto  $scheme;
 
 ---
 
-#### Raw NGINX (ohne GUI)
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name lektorat.example.ch;
-
-    ssl_certificate     /etc/letsencrypt/live/lektorat.example.ch/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/lektorat.example.ch/privkey.pem;
-
-    location / {
-        proxy_pass              http://localhost:3737;
-        proxy_set_header        Host               $host;
-        proxy_set_header        X-Real-IP          $remote_addr;
-        proxy_set_header        X-Forwarded-For    $proxy_add_x_forwarded_for;
-        proxy_set_header        X-Forwarded-Proto  $scheme;
-        # SSE (KI-Streaming):
-        proxy_buffering         off;
-        proxy_cache             off;
-        proxy_read_timeout      300s;
-        proxy_send_timeout      300s;
-    }
-}
-```
-
 **4. Container starten**
 
 ```bash

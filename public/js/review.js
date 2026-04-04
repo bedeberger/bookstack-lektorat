@@ -1,11 +1,5 @@
 import { escHtml } from './utils.js';
 
-function fmtTok(n) {
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-  return String(n);
-}
-
 // Buchbewertungs-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 // Die eigentliche Analyse läuft serverseitig als Hintergrundjob (POST /jobs/review).
@@ -53,47 +47,26 @@ export const reviewMethods = {
   // Wird sowohl beim frischen Start als auch beim Reconnect nach Tab-Schliessen aufgerufen.
   startReviewPoll(jobId) {
     const bookId = this.selectedBookId;
-    if (this._reviewPollTimer) clearInterval(this._reviewPollTimer);
-    this._reviewPollTimer = setInterval(async () => {
-      try {
-        const resp = await fetch('/jobs/' + jobId);
-        if (resp.status === 404) {
-          clearInterval(this._reviewPollTimer);
-          this._reviewPollTimer = null;
-          localStorage.removeItem('lektorat_review_job_' + bookId);
-          this.bookReviewLoading = false;
-          this.setReviewStatus('Analyse unterbrochen (Server-Neustart). Bitte neu starten.');
-          return;
-        }
-        if (!resp.ok) return; // temporärer Fehler – beim nächsten Tick nochmal
-        const job = await resp.json();
-        this.bookReviewProgress = job.progress || 0;
-        if (job.status === 'running') {
-          const tokIn = job.tokensIn || 0;
-          const tokOut = job.tokensOut || 0;
-          let tokInfo = '';
-          if (tokIn + tokOut > 0) {
-            const maxOut = job.maxTokensOut ? '/' + fmtTok(job.maxTokensOut) : '';
-            tokInfo = ` · ↑${fmtTok(tokIn)} ↓${fmtTok(tokOut)}${maxOut} Tokens`;
-          }
-          this.setReviewStatus((job.statusText || '…') + tokInfo, true);
-          return;
-        }
-        // Job ist fertig (done oder error)
-        clearInterval(this._reviewPollTimer);
-        this._reviewPollTimer = null;
-        localStorage.removeItem('lektorat_review_job_' + bookId);
+    this._startPoll({
+      timerProp: '_reviewPollTimer',
+      jobId,
+      lsKey: 'lektorat_review_job_' + bookId,
+      progressProp: 'bookReviewProgress',
+      onProgress: (job) => {
+        this.bookReviewStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut);
+      },
+      onNotFound: () => {
         this.bookReviewLoading = false;
-
-        if (job.status === 'error') {
-          this.bookReviewOut = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
-          this.setReviewStatus('');
-          return;
-        }
-        if (job.result?.empty) {
-          this.setReviewStatus('Keine Seiten im Buch gefunden.');
-          return;
-        }
+        this.setReviewStatus('Analyse unterbrochen (Server-Neustart). Bitte neu starten.');
+      },
+      onError: (job) => {
+        this.bookReviewLoading = false;
+        this.bookReviewOut = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
+        this.setReviewStatus('');
+      },
+      onDone: async (job) => {
+        this.bookReviewLoading = false;
+        if (job.result?.empty) { this.setReviewStatus('Keine Seiten im Buch gefunden.'); return; }
         const r = job.result?.review;
         if (r) {
           this.bookReviewOut = this._renderReviewHtml(r);
@@ -101,10 +74,8 @@ export const reviewMethods = {
           this.setReviewStatus(`${job.result.pageCount || '?'} Seiten analysiert.`);
           await this.loadBookReviewHistory(bookId);
         }
-      } catch (e) {
-        console.error('[review poll]', e);
-      }
-    }, 2000);
+      },
+    });
   },
 
   async toggleBookReviewCard() {

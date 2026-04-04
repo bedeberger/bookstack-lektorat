@@ -118,7 +118,7 @@
     <div class="progress-bar-wrap" x-show="batchLoading">
       <div class="progress-bar" :style="'width:' + batchProgress + '%'"></div>
     </div>
-    <div class="batch-status" x-text="batchStatus"></div>
+    <div class="batch-status" x-html="batchStatus"></div>
   </div>
   <template x-for="item in filteredTree" :key="item.id">
     <div>
@@ -314,7 +314,7 @@
             <span class="figur-detail-value" x-text="f.beruf"></span>
           </div>
           <!-- Kapitelauftritte -->
-          <div x-show="f.kapitel?.length > 1">
+          <div class="figur-kapitelauftritte" x-show="f.kapitel?.length > 1">
             <div class="bewertung-section-title">Kapitelauftritte</div>
             <div class="figur-tags-row">
               <template x-for="(k, ki) in (f.kapitel || [])" :key="ki">
@@ -430,7 +430,7 @@
 </div>
 
 <!-- Seiteneditor & Lektorat -->
-<div class="card" x-show="showEditorCard" x-cloak>
+<div class="card" id="editor-card" x-show="showEditorCard" x-cloak>
   <div class="card-header">
     <div>
       <span class="card-title" x-text="currentPage?.name || '–'"></span>
@@ -442,6 +442,9 @@
       <button class="success" @click="saveCorrections()" x-show="correctedHtml && (selectedErrors.some(v => v) || selectedStyles.some(v => v))">Korrekturen speichern</button>
       <button class="btn-card-close" @click="resetPage()" title="Schliessen">×</button>
     </div>
+  </div>
+  <div class="progress-bar-wrap" x-show="checkProgress > 0">
+    <div class="progress-bar" :style="'width:' + checkProgress + '%'"></div>
   </div>
   <div id="status" x-html="statusHtml"></div>
 

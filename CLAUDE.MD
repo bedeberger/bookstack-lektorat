@@ -13,10 +13,14 @@ Browser → NGINX (HTTPS) → Express (Port 3737)
                               → /config         → Modell-Config + User (keine Credentials)
                               → /history/*      → SQLite-DB (lektorat.db)
                               → /figures/*      → SQLite-DB (lektorat.db)
+                              → /sync/*         → Buchstatistik-Sync (manuell + Cron)
+                              → /jobs/*         → Hintergrund-Jobs (Status-Polling)
                               → /claude         → api.anthropic.com (ANTHROPIC_API_KEY-Injection)
                               → /ollama         → Ollama /api/chat (OLLAMA_HOST, lokales Modell)
                               → /api/*          → BookStack (Token aus req.session.bookstackToken, serverseitig)
                               → /               → public/index.html
+
+Cron (täglich 02:00) → syncAllBooks() → getAllUserTokens() → page_stats + book_stats_history
 ```
 
 **Auth-Flow:** Alle Routen ausser `/auth/*` sind durch einen Session-Guard geschützt. Nicht authentifizierte Requests auf HTML-Pfade → Redirect `/auth/login` → Google → `/auth/callback` → Session → `/`. API-Pfade (JSON-Requests) → `401 JSON`.
@@ -27,15 +31,16 @@ KI-Aufrufe laufen **nicht direkt aus dem Browser**, sondern über den jeweiligen
 
 ```
 bookstack-lektorat/
-├── server.js                # Express-Setup + Session + Auth-Guard + Route-Mounting
+├── server.js                # Express-Setup + Session + Auth-Guard + Route-Mounting + Cron
 ├── logger.js                # Winston-Logger (Singleton, von allen Modulen importiert)
 ├── db/
-│   └── schema.js            # DB-Setup, Schema, Migrationen, saveFigurenToDb()
+│   └── schema.js            # DB-Setup, Schema, Migrationen, saveFigurenToDb(), Token-Helpers
 ├── routes/
-│   ├── auth.js              # /auth/* Endpunkte (Google OIDC: login, callback, logout, me)
-│   ├── history.js           # /history/* Endpunkte (Lektorat-Checks + Buchbewertungen)
-│   ├── figures.js           # /figures/:book_id Endpunkte
-│   ├── jobs.js              # /jobs/* Endpunkte (Hintergrund-Jobs)
+│   ├── auth.js              # /auth/* Endpunkte (Google OIDC: login, callback, logout, me, token)
+│   ├── history.js           # /history/* Endpunkte (Checks, Reviews, Page-Stats, Book-Stats)
+│   ├── figures.js           # /figures/:book_id Endpunkte (per-User)
+│   ├── jobs.js              # /jobs/* Endpunkte (Hintergrund-Jobs: Review, Figurenextraktion)
+│   ├── sync.js              # /sync/* Endpunkte + syncAllBooks() (Cron-Entry-Point)
 │   └── proxies.js           # /config, /claude (SSE-Proxy), /ollama, /api/* (BookStack-Proxy)
 └── public/
     ├── index.html           # Single-Page-App (Alpine.js, kein Build-Step)
@@ -43,7 +48,7 @@ bookstack-lektorat/
     └── js/                  # ES-Module (kein Build-Step, type="module")
         ├── app.js           # Alpine-Komponente: State, Computed, init/selectPage/resetView
         ├── utils.js         # escHtml(), htmlToText()
-        ├── prompts.js       # SYSTEM_*-Strings, buildLektoratPrompt()
+        ├── prompts.js       # SYSTEM_*-Strings, buildLektoratPrompt(), buildStilkorrekturPrompt() – EINZIGE QUELLE für alle Prompts. Server-seitiger Code (jobs.js) importiert diese Datei via dynamic import(). NIEMALS Prompts anderswo duplizieren.
         ├── api-bookstack.js # bsGet, bsGetAll, bsPut, _applyCorrections
         ├── api-ai.js        # callAI(userPrompt, systemPrompt?, onProgress?) → Promise<Object>
         ├── history.js       # loadPageHistory, loadBookReviewHistory
@@ -52,6 +57,7 @@ bookstack-lektorat/
         ├── review.js        # runBookReview
         ├── figuren.js       # runFigurExtraction, loadFiguren, saveFiguren, toggleFiguresCard
         ├── graph.js         # renderFigurGraph, _figTypColor
+        ├── bookstats.js     # toggleBookStatsCard, loadBookStats, syncBookStats, renderStatsChart
         └── two-tier.js      # loadPageContents(), groupByChapter(), SINGLE_PASS_LIMIT
 ```
 
@@ -75,11 +81,12 @@ book_reviews (id, book_id, book_name, reviewed_at,
               review_json TEXT,  -- JSON-Objekt der Gesamtbewertung
               model)
 
--- Figuren: eine Zeile pro Figur, Kernfelder fix
-figures (id, book_id, fig_id TEXT,  -- "fig_1" etc., stabil über Saves
+-- Figuren: eine Zeile pro Figur, Kernfelder fix (per-User via user_email)
+figures (id, book_id, user_email TEXT, fig_id TEXT,  -- "fig_1" etc., stabil über Saves
          name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung,
          sort_order INTEGER, meta TEXT,  -- JSON für zukünftige Zusatzfelder
          updated_at)
+-- UNIQUE auf (book_id, fig_id, user_email)
 
 -- Eigenschaften/Tags einer Figur (eine Zeile pro Tag)
 figure_tags (figure_id → figures.id, tag TEXT)
@@ -88,7 +95,7 @@ figure_tags (figure_id → figures.id, tag TEXT)
 figure_appearances (figure_id → figures.id, chapter_name TEXT, haeufigkeit INTEGER)
 
 -- Beziehungen: flat, typ ist Freitext → neue Typen ohne Schemaänderung
-figure_relations (id, book_id, from_fig_id TEXT, to_fig_id TEXT,
+figure_relations (id, book_id, user_email TEXT, from_fig_id TEXT, to_fig_id TEXT,
                   typ TEXT,          -- elternteil|freund|… oder beliebig neuer Typ
                   beschreibung TEXT)
 
@@ -128,6 +135,8 @@ schema_version (version INTEGER)
 
 **Neue Beziehungstypen:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Im Frontend in der `BZ`-Konstante (Rendering) und im Claude-Prompt (`FINAL_SCHEMA`) den neuen Typ ergänzen.
 
+**User-Isolation:** Alle inhaltlichen Tabellen (`page_checks`, `book_reviews`, `figures`, `figure_relations`) enthalten eine `user_email`-Spalte. Queries in den Route-Handlern filtern grundsätzlich auf `req.session.user.email`. `page_stats` und `book_stats_history` sind geteilter Cache ohne User-Filter. Schema-Version 4 hat die UNIQUE-Constraint von `figures` auf `(book_id, fig_id, user_email)` angepasst.
+
 **DB auf dem LXC prüfen:**
 ```bash
 sqlite3 /opt/lektorat/lektorat.db
@@ -141,12 +150,23 @@ SELECT * FROM schema_version;
 | Methode | Pfad | Zweck |
 |---------|------|-------|
 | POST | `/history/check` | Lektorat-Ergebnis speichern |
-| PATCH | `/history/check/:id/saved` | Lauf als «in BookStack gespeichert» markieren |
+| PATCH | `/history/check/:id/saved` | Lauf als «in BookStack gespeichert» markieren (inkl. `applied_errors_json`) |
+| DELETE | `/history/check/:id` | Check-Eintrag löschen |
 | GET | `/history/page/:page_id` | Letzte 20 Läufe für eine Seite |
 | POST | `/history/review` | Buchbewertung speichern |
 | GET | `/history/review/:book_id` | Letzte 10 Bewertungen für ein Buch |
-| GET | `/figures/:book_id` | Gespeicherte Figuren eines Buchs laden |
-| PUT | `/figures/:book_id` | Figuren eines Buchs speichern (überschreibt) |
+| DELETE | `/history/review/:id` | Review-Eintrag löschen |
+| GET | `/history/page-stats/:book_id` | Gecachte Seiten-Stats (Map `page_id → {tok, words, chars}`) |
+| POST | `/history/page-stats/batch` | Batch-Upsert für page_stats-Cache |
+| GET | `/history/book-stats/:book_id` | Tägliche Buchstatistik-Snapshots (für Zeitliniendiagramm) |
+| GET | `/figures/:book_id` | Gespeicherte Figuren eines Buchs laden (per-User) |
+| PUT | `/figures/:book_id` | Figuren eines Buchs speichern – überschreibt (per-User) |
+| POST | `/sync/book/:book_id` | Manueller Sync-Trigger für ein Buch |
+| POST | `/sync/all` | Manueller Sync aller Bücher (wird auch vom Cron aufgerufen) |
+| GET | `/jobs/active` | Alle laufenden/wartenden Jobs |
+| GET | `/jobs/:id` | Status + Details eines Jobs |
+| POST | `/jobs/review` | Buchbewertungs-Job starten |
+| POST | `/jobs/figures` | Figurenextraktions-Job starten |
 | GET | `/auth/token` | Ob ein BookStack-Token hinterlegt ist (`{ hasToken: bool }`) |
 | PUT | `/auth/token` | BookStack-Token speichern (`{ tokenId, tokenPw }` → DB + Session) |
 
@@ -164,6 +184,38 @@ BookStack-Tokens werden **pro User in der DB** gespeichert (Tabelle `user_tokens
 - `getUserToken(email)` → `{ token_id, token_pw }` oder `undefined`
 - `setUserToken(email, tokenId, tokenPw)` → UPSERT
 - `getAnyUserToken()` → erster verfügbarer Token (für Hintergrundprozesse)
+- `getAllUserTokens()` → Array aller gespeicherten Tokens – wird vom Sync-Job verwendet, um alle User-Bücher zu synchronisieren
+
+## Sync & Buchstatistik
+
+### Automatischer Cron-Sync
+
+`server.js` registriert via `node-cron` täglich um 02:00 einen Sync-Job:
+
+```js
+cron.schedule('0 2 * * *', () => syncAllBooks());
+```
+
+`syncAllBooks()` (exportiert aus `routes/sync.js`) iteriert alle gespeicherten User-Tokens via `getAllUserTokens()` und ruft für jedes gefundene Buch `syncBook(bookId, token)` auf.
+
+### `syncBook(bookId, token)`
+
+- Holt alle Seiten des Buchs via BookStack-API
+- Berechnet pro Seite: Token-Schätzung, Wortanzahl, Zeichenanzahl
+- Schreibt Ergebnisse in `page_stats` (Upsert, gecacht für schnelles UI-Laden)
+- Legt einen täglichen Snapshot in `book_stats_history` an (UNIQUE auf `book_id + recorded_at` → ein Eintrag pro Buch pro Tag)
+
+### `bookstats.js` (Frontend)
+
+Exportiert `bookstatsMethods` mit:
+- `toggleBookStatsCard()` – Statistik-Panel öffnen/schliessen + Daten nachladen
+- `loadBookStats(bookId)` – GET `/history/book-stats/:book_id`
+- `syncBookStats()` – POST `/sync/book/:book_id` → manueller Sync
+- `renderStatsChart()` – Chart.js-Zeitliniendiagramm mit konfigurierbarer Metrik (`words`, `chars`, `tok`, `page_count`) und Datumsbereich
+
+**Abhängigkeiten:** Chart.js via CDN in `index.html` eingebunden.
+
+**Relevante State-Properties:** `showBookStatsCard`, `bookStatsData`, `bookStatsLoading`, `bookStatsSyncStatus`, `bookStatsMetric`, `bookStatsRange`, `_statsChart` (Chart.js-Instanz, intern).
 
 ## BookStack API
 
@@ -248,13 +300,13 @@ SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein B
 
 ### Modul-Pattern
 
-Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`, `two-tier.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das auf die Alpine-Komponente zeigt – per `...spread` in das Alpine-Data-Objekt eingebettet.
+Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`, `two-tier.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das auf die Alpine-Komponente zeigt – per `...spread` in das Alpine-Data-Objekt eingebettet. `bookstats.js` folgt demselben Pattern (`bookstatsMethods`).
 
 **Neue Funktionalität:** Neues Modul anlegen → Methoden-Objekt exportieren → in `app.js` importieren und am Ende des Data-Objekts spreaden.
 
 ### Script-Reihenfolge in `index.html`
 
-Erst `<script type="module" src="js/app.js">`, dann vis-network, dann Alpine mit `defer` – so ist der `alpine:init`-Listener garantiert vor Alpine registriert.
+Erst `<script type="module" src="js/app.js">`, dann vis-network, dann Chart.js, dann Alpine mit `defer` – so ist der `alpine:init`-Listener garantiert vor Alpine registriert.
 
 ### Style-Regel
 
@@ -276,11 +328,17 @@ Erst `<script type="module" src="js/app.js">`, dann vis-network, dann Alpine mit
 | `books`, `selectedBookId` | Bücherliste und Auswahl |
 | `pages`, `tree` | Flache Seitenliste + hierarchische Kapitel/Seiten-Struktur |
 | `pageSearch` | Suchfeld (filtert `filteredTree` computed) |
+| `showTreeCard` | Sichtbarkeits-Flag für den Tree-Panel |
 | `currentPage`, `correctedHtml`, `hasErrors` | Aktive Seite und Lektorat-Ergebnis |
 | `currentPageEmpty` | Flag: Seite hat keinen Text |
+| `currentPageUpdatedAt` | Letztes Update-Datum der Seite (aus BookStack) |
 | `originalHtml` | Original-HTML vor Korrekturen |
+| `lektoratErrors`, `selectedErrors` | Alle Fehler aus dem letzten Check; davon selektierte (werden angewendet) |
+| `lektoratStyles`, `selectedStyles` | Stilanmerkungen; rein informativ, fliessen nie ins HTML |
+| `checkDone` | Flag: Lektorat-Check abgeschlossen |
 | `showDiff`, `diffHtml` | Diff-Ansicht: Toggle + gecachtes HTML (LCS-basiert, Wort-Ebene) |
 | `showBookCard`, `showEditorCard`, `showBookReviewCard`, `showFiguresCard` | Sichtbarkeits-Flags |
+| `showTokenSetup`, `tokenSetupId`, `tokenSetupPw`, `tokenSetupError`, `tokenSetupLoading` | Token-Setup-Card (kein BookStack-Token hinterlegt) |
 | `status`, `statusSpinner` | Statuszeile |
 | `analysisOut`, `bookReviewOut` | HTML-Output (via `x-html`) |
 | `checkLoading`, `bookReviewLoading`, `bookReviewProgress` | Lade-States |
@@ -291,6 +349,10 @@ Erst `<script type="module" src="js/app.js">`, dann vis-network, dann Alpine mit
 | `figuren`, `figurenLoading`, `figurenProgress`, `figurenStatus` | Figurenübersicht |
 | `selectedFigurId` | Aufgeklappte Figur |
 | `_figurenNetwork` | vis-network-Instanz (intern) |
+| `showBookStatsCard`, `bookStatsData` | Buchstatistik-Panel: Sichtbarkeit + geladene History-Daten |
+| `bookStatsLoading`, `bookStatsSyncStatus` | Lade-State + Sync-Statusmeldung |
+| `bookStatsMetric`, `bookStatsRange` | Angezeigte Metrik (`words`\|`chars`\|`tok`\|`page_count`) + Datumsbereich |
+| `_statsChart` | Chart.js-Instanz (intern) |
 
 ### Wichtige Verhaltensdetails
 
@@ -305,4 +367,5 @@ Erst `<script type="module" src="js/app.js">`, dann vis-network, dann Alpine mit
 - **Schema-Validierung**: Nach jedem `callAI`-Aufruf wird das Pflichtfeld geprüft (`fehler` in `lektorat.js`, `gesamtnote` in `review.js`, `figuren` in `figuren.js`). Fehlt es, Fehler werfen statt falsche Daten rendern.
 - **Timeout-Fehlerbehandlung**: `bsGet` und `bsPut` fangen `AbortError` mit sprechender Meldung ab.
 - **Graph-Caching**: `renderFigurGraph()` baut vis-network nur neu auf wenn sich Figuren-IDs geändert haben (`_figurenHash`).
+- **Chart-Caching**: `renderStatsChart()` zerstört die Chart.js-Instanz (`_statsChart.destroy()`) vor jedem Neuaufbau.
 - **Benannte Limits**: `MIN_HTML_RATIO` / `SAFETY_HTML_RATIO` in `lektorat.js`, `PREVIEW_MAX_CHARS` in `app.js`, `SINGLE_PASS_LIMIT` / `BATCH_SIZE` in `two-tier.js`.

@@ -1,8 +1,6 @@
 import { escHtml, htmlToText } from './utils.js';
-import { SYSTEM_LEKTORAT, buildLektoratPrompt, SYSTEM_STILKORREKTUR, buildStilkorrekturPrompt } from './prompts.js';
+import { SYSTEM_STILKORREKTUR, buildStilkorrekturPrompt } from './prompts.js';
 
-// Mindestanteil: korrigiertes HTML muss >= 70 % des Originals sein, sonst Fallback
-const MIN_HTML_RATIO = 0.7;
 // Sicherheitscheck vor dem Speichern: < 50 % wirkt unvollständig → Abbruch
 const SAFETY_HTML_RATIO = 0.5;
 
@@ -106,89 +104,82 @@ export const lektoratMethods = {
     this.lektoratStyles = [];
     this.selectedErrors = [];
     this.selectedStyles = [];
-    this.setStatus('Lade Seiteninhalt…', true);
+    this.checkProgress = 0;
+    this.setStatus('Starte Lektorat…', true);
 
     try {
-      const pageData = await this.bsGet('pages/' + this.currentPage.id);
-      const html = pageData.html;
-      const text = htmlToText(html);
-      this.originalHtml = html;
-      this.currentPageUpdatedAt = pageData.updated_at || null;
-
-      this.setStatus('KI analysiert… (0 Zeichen)', true);
-
-      const result = await this.callAI(
-        buildLektoratPrompt(text, html),
-        SYSTEM_LEKTORAT,
-        (chars) => this.setStatus(`KI analysiert… (${chars} Zeichen)`, true)
-      );
-
-      if (!Array.isArray(result?.fehler)) {
-        throw new Error('Claude-Antwort ungültig: fehler-Array fehlt');
-      }
-
-      const fehler = result.fehler || [];
-      const errors = fehler.filter(f => f.typ === 'rechtschreibung' || f.typ === 'grammatik');
-      const styles = fehler.filter(f => f.typ === 'stil');
-
-      this.lektoratErrors = errors;
-      this.lektoratStyles = styles;
-      this.selectedErrors = errors.map(() => true);
-      this.selectedStyles = styles.map(() => false);
-      this.hasErrors = errors.length > 0;
-
-      // Korrekturen aus gewählten Fehlern berechnen
-      this.correctedHtml = errors.length > 0
-        ? this._applyCorrections(html, errors)
-        : html;
-
-      // Prüfen ob Claude-HTML vollständiger ist → dann als Basis nehmen
-      const claudeHtml = result.korrekturen_html;
-      if (claudeHtml && claudeHtml.length >= html.length * MIN_HTML_RATIO) {
-        // Claude-HTML ist vollständig – aber wir brauchen selektives Anwenden,
-        // daher immer _applyCorrections nutzen (Claude-HTML wird ignoriert)
-        if (errors.length === 0) this.correctedHtml = html;
-      } else if (claudeHtml) {
-        console.warn('[runCheck] korrekturen_html zu kurz, Korrekturen manuell angewandt');
-      }
-
-      let out = '';
-      if (result.stilanalyse) {
-        out += `<div class="stilbox"><div class="stilbox-title">Stilanalyse</div>${escHtml(result.stilanalyse)}</div>`;
-      }
-      if (result.fazit) {
-        out += `<div class="fazit">${escHtml(result.fazit)}</div>`;
-      }
-      this.analysisOut = out;
-      this.checkDone = true;
-
-      try {
-        const hr = await fetch('/history/check', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            page_id: this.currentPage.id,
-            page_name: this.currentPage.name,
-            book_id: this.currentPage.book_id || null,
-            error_count: fehler.length,
-            errors_json: fehler,
-            stilanalyse: result.stilanalyse || null,
-            fazit: result.fazit || null,
-            model: this.apiProvider === 'ollama' ? this.ollamaModel : this.claudeModel,
-          }),
-        });
-        const hd = await hr.json();
-        this.lastCheckId = hd.id;
-        await this.loadPageHistory(this.currentPage.id);
-      } catch (e) { console.error('[history check]', e); }
-
-      this.setStatus('Analyse abgeschlossen.', false, 5000);
+      const { jobId } = await fetch('/jobs/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          page_id: this.currentPage.id,
+          book_id: this.currentPage.book_id || null,
+        }),
+      }).then(r => r.json());
+      localStorage.setItem('lektorat_check_job_' + this.currentPage.id, jobId);
+      this.startCheckPoll(jobId);
     } catch (e) {
       console.error('[runCheck]', e);
       this.analysisOut = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
       this.setStatus('');
+      this.checkLoading = false;
     }
-    this.checkLoading = false;
+  },
+
+  startCheckPoll(jobId) {
+    const pageId = this.currentPage?.id;
+    this._startPoll({
+      timerProp: '_checkPollTimer',
+      jobId,
+      lsKey: pageId != null ? 'lektorat_check_job_' + pageId : null,
+      progressProp: 'checkProgress',
+      onProgress: (job) => {
+        this.status = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut);
+        this.statusSpinner = false;
+      },
+      onNotFound: () => {
+        this.checkLoading = false;
+        this.analysisOut = '<span class="error-msg">Analyse unterbrochen (Server-Neustart). Bitte neu starten.</span>';
+        this.setStatus('');
+      },
+      onError: (job) => {
+        this.checkLoading = false;
+        setTimeout(() => { this.checkProgress = 0; }, 400);
+        this.analysisOut = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
+        this.setStatus('');
+      },
+      onDone: async (job) => {
+        this.checkLoading = false;
+        setTimeout(() => { this.checkProgress = 0; }, 400);
+        if (job.result?.empty) {
+          this.analysisOut = '<span class="muted-msg">Seite ist leer.</span>';
+          this.setStatus('');
+          return;
+        }
+        const r = job.result;
+        this.originalHtml = r.originalHtml;
+        this.currentPageUpdatedAt = r.updatedAt || null;
+        const fehler = r.fehler || [];
+        const errors = fehler.filter(f => f.typ === 'rechtschreibung' || f.typ === 'grammatik');
+        const styles = fehler.filter(f => f.typ === 'stil');
+        this.lektoratErrors = errors;
+        this.lektoratStyles = styles;
+        this.selectedErrors = errors.map(() => true);
+        this.selectedStyles = styles.map(() => false);
+        this.hasErrors = errors.length > 0;
+        this.correctedHtml = errors.length > 0
+          ? this._applyCorrections(r.originalHtml, errors)
+          : r.originalHtml;
+        let out = '';
+        if (r.stilanalyse) out += `<div class="stilbox"><div class="stilbox-title">Stilanalyse</div>${escHtml(r.stilanalyse)}</div>`;
+        if (r.fazit) out += `<div class="fazit">${escHtml(r.fazit)}</div>`;
+        this.analysisOut = out;
+        this.checkDone = true;
+        this.lastCheckId = r.checkId || null;
+        if (pageId != null) await this.loadPageHistory(pageId);
+        this.setStatus('Analyse abgeschlossen.', false, 5000);
+      },
+    });
   },
 
   async saveCorrections() {
@@ -265,49 +256,49 @@ export const lektoratMethods = {
     if (!confirm(`Alle ${this.pages.length} Seiten prüfen und Ergebnisse in der History speichern?\n\nDies kann bei grossen Büchern mehrere Minuten dauern.`)) return;
     this.batchLoading = true;
     this.batchProgress = 0;
-    this.batchStatus = '';
-    let done = 0, totalErrors = 0;
-    const pages = [...this.pages];
-
-    for (let i = 0; i < pages.length; i++) {
-      const p = pages[i];
-      this.batchProgress = Math.round((i / pages.length) * 100);
-      this.batchStatus = `${i + 1}/${pages.length}: ${p.name}`;
-
-      try {
-        const pageData = await this.bsGet('pages/' + p.id);
-        const html = pageData.html;
-        const text = htmlToText(html).trim();
-        if (!text) continue;
-
-        const result = await this.callAI(buildLektoratPrompt(text, html), SYSTEM_LEKTORAT);
-        const fehler = result.fehler || [];
-        totalErrors += fehler.filter(f => f.typ !== 'stil').length;
-
-        await fetch('/history/check', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            page_id: p.id,
-            page_name: p.name,
-            book_id: p.book_id || null,
-            error_count: fehler.length,
-            errors_json: fehler,
-            stilanalyse: result.stilanalyse || null,
-            fazit: result.fazit || null,
-            model: this.apiProvider === 'ollama' ? this.ollamaModel : this.claudeModel,
-          }),
-        });
-        done++;
-      } catch (e) {
-        console.error('[batchCheck page]', p.id, e);
-      }
+    this.batchStatus = this._runningJobStatus('Starte…', 0, 0);
+    try {
+      const { jobId } = await fetch('/jobs/batch-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ book_id: parseInt(this.selectedBookId) }),
+      }).then(r => r.json());
+      localStorage.setItem('lektorat_batchcheck_job_' + this.selectedBookId, jobId);
+      this.startBatchPoll(jobId);
+    } catch (e) {
+      console.error('[batchCheck]', e);
+      this.batchStatus = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
+      this.batchLoading = false;
     }
+  },
 
-    this.batchProgress = 100;
-    this.batchStatus = `Fertig: ${done}/${pages.length} Seiten geprüft, ${totalErrors} Rechtschreib-/Grammatikfehler.`;
-    this.batchLoading = false;
-
-    if (this.currentPage) await this.loadPageHistory(this.currentPage.id);
+  startBatchPoll(jobId) {
+    const bookId = this.selectedBookId;
+    this._startPoll({
+      timerProp: '_batchPollTimer',
+      jobId,
+      lsKey: 'lektorat_batchcheck_job_' + bookId,
+      progressProp: 'batchProgress',
+      onProgress: (job) => {
+        this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut);
+      },
+      onNotFound: () => {
+        this.batchLoading = false;
+        this.batchStatus = 'Analyse unterbrochen (Server-Neustart). Bitte neu starten.';
+      },
+      onError: (job) => {
+        this.batchLoading = false;
+        setTimeout(() => { this.batchProgress = 0; }, 400);
+        this.batchStatus = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
+      },
+      onDone: async (job) => {
+        this.batchLoading = false;
+        setTimeout(() => { this.batchProgress = 0; }, 400);
+        if (job.result?.empty) { this.batchStatus = 'Keine Seiten im Buch gefunden.'; return; }
+        const r = job.result;
+        this.batchStatus = `Fertig: ${r.done}/${r.pageCount} Seiten geprüft, ${r.totalErrors} Rechtschreib-/Grammatikfehler.`;
+        if (this.currentPage) await this.loadPageHistory(this.currentPage.id);
+      },
+    });
   },
 };
