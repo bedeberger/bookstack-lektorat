@@ -119,7 +119,7 @@ db.exec(`
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
   if (version < 2) {
@@ -136,6 +136,42 @@ function runMigrations() {
     `);
     db.prepare('UPDATE schema_version SET version = 3').run();
     logger.info('DB-Migration auf Version 3 abgeschlossen (user_email zu allen Datentabellen hinzugefügt).');
+  }
+  if (version < 4) {
+    // UNIQUE(book_id, fig_id) → UNIQUE(book_id, fig_id, user_email)
+    // SQLite erlaubt kein ALTER CONSTRAINT → Tabelle neu erstellen
+    db.pragma('foreign_keys = OFF');
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE figures_new (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          book_id      INTEGER NOT NULL,
+          fig_id       TEXT NOT NULL,
+          name         TEXT NOT NULL,
+          kurzname     TEXT,
+          typ          TEXT,
+          geburtstag   TEXT,
+          geschlecht   TEXT,
+          beruf        TEXT,
+          beschreibung TEXT,
+          sort_order   INTEGER DEFAULT 0,
+          meta         TEXT,
+          updated_at   TEXT NOT NULL,
+          user_email   TEXT,
+          UNIQUE(book_id, fig_id, user_email)
+        );
+        INSERT INTO figures_new
+          SELECT id, book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht,
+                 beruf, beschreibung, sort_order, meta, updated_at, user_email
+          FROM figures;
+        DROP TABLE figures;
+        ALTER TABLE figures_new RENAME TO figures;
+        CREATE INDEX IF NOT EXISTS idx_fig_book_id ON figures(book_id);
+      `);
+    })();
+    db.pragma('foreign_keys = ON');
+    db.prepare('UPDATE schema_version SET version = 4').run();
+    logger.info('DB-Migration auf Version 4 abgeschlossen (figures UNIQUE-Constraint auf (book_id, fig_id, user_email) erweitert).');
   }
   // Sicherstellen dass schema_version aktuell ist (Fallback)
   if (version < CURRENT_SCHEMA_VERSION) {
