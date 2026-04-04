@@ -42,7 +42,11 @@ app.use(session({
   },
 }));
 
-if (!LOCAL_DEV_MODE) {
+const LOCAL_DEV_MODE = process.env.LOCAL_DEV_MODE === 'true';
+
+if (LOCAL_DEV_MODE) {
+  logger.warn('LOCAL_DEV_MODE aktiv – OAuth wird übersprungen, automatische Dev-Session!');
+} else {
   if (!process.env.SESSION_SECRET) {
     logger.warn('SESSION_SECRET nicht gesetzt – unsicher für Produktion!');
   }
@@ -57,11 +61,6 @@ app.use(authRouter);
 // ── Auth-Guard ────────────────────────────────────────────────────────────────
 // API-Pfade → 401 JSON; HTML-Pfade → Redirect zu /auth/login
 const API_PREFIXES = ['/api/', '/history/', '/figures/', '/jobs/', '/sync/', '/config', '/claude', '/ollama'];
-
-const LOCAL_DEV_MODE = process.env.LOCAL_DEV_MODE === 'true';
-if (LOCAL_DEV_MODE) {
-  logger.warn('LOCAL_DEV_MODE aktiv – OAuth wird übersprungen, automatische Dev-Session!');
-}
 
 app.use((req, res, next) => {
   if (req.session?.user) return next();

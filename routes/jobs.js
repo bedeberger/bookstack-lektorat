@@ -258,7 +258,7 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
 }
 
 // ── Job: Buchbewertung ────────────────────────────────────────────────────────
-async function runReviewJob(jobId, bookId, bookName) {
+async function runReviewJob(jobId, bookId, bookName, userEmail) {
   try {
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
@@ -386,8 +386,8 @@ Antworte mit diesem JSON-Schema:
     const model = process.env.API_PROVIDER === 'ollama'
       ? (process.env.OLLAMA_MODEL || 'llama3.2')
       : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
-    db.prepare('INSERT INTO book_reviews (book_id, book_name, reviewed_at, review_json, model) VALUES (?, ?, ?, ?, ?)')
-      .run(parseInt(bookId), bookName, new Date().toISOString(), JSON.stringify(r), model);
+    db.prepare('INSERT INTO book_reviews (book_id, book_name, reviewed_at, review_json, model, user_email) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(parseInt(bookId), bookName, new Date().toISOString(), JSON.stringify(r), model, userEmail || null);
 
     completeJob(jobId, { review: r, pageCount: pageContents.length, tokensIn: tok.in, tokensOut: tok.out });
     logger.info(`Job ${jobId}: Buchbewertung Buch ${bookId} abgeschlossen (${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
@@ -398,7 +398,7 @@ Antworte mit diesem JSON-Schema:
 }
 
 // ── Job: Figurenextraktion ────────────────────────────────────────────────────
-async function runFiguresJob(jobId, bookId, bookName) {
+async function runFiguresJob(jobId, bookId, bookName, userEmail) {
   const FINAL_SCHEMA = `{
   "figuren": [
     {
@@ -517,7 +517,7 @@ ${FINAL_RULES}`,
     if (!Array.isArray(result?.figuren)) throw new Error('KI-Antwort ungültig: figuren-Array fehlt');
 
     const figuren = result.figuren.map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
-    saveFigurenToDb(parseInt(bookId), figuren);
+    saveFigurenToDb(parseInt(bookId), figuren, userEmail || null);
     completeJob(jobId, { count: figuren.length, tokensIn: tok.in, tokensOut: tok.out });
     logger.info(`Job ${jobId}: Figurenextraktion Buch ${bookId} abgeschlossen (${figuren.length} Figuren, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
@@ -533,8 +533,9 @@ router.post('/review', jsonBody, (req, res) => {
   // Laufenden Job zurückgeben statt neu starten
   const existing = runningJobs.get(`review:${book_id}`);
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const userEmail = req.session?.user?.email || null;
   const jobId = createJob('review', book_id);
-  runReviewJob(jobId, book_id, book_name || '')
+  runReviewJob(jobId, book_id, book_name || '', userEmail)
     .catch(e => logger.error('Unkontrollierter review-Job-Fehler: ' + e.message));
   res.json({ jobId });
 });
@@ -544,8 +545,9 @@ router.post('/figures', jsonBody, (req, res) => {
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
   const existing = runningJobs.get(`figures:${book_id}`);
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const userEmail = req.session?.user?.email || null;
   const jobId = createJob('figures', book_id);
-  runFiguresJob(jobId, book_id, book_name || '')
+  runFiguresJob(jobId, book_id, book_name || '', userEmail)
     .catch(e => logger.error('Unkontrollierter figures-Job-Fehler: ' + e.message));
   res.json({ jobId });
 });
