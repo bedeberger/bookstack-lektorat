@@ -1,5 +1,9 @@
+import { SYSTEM_STILKORREKTUR, buildStilkorrekturPrompt } from './prompts.js';
+
 // History-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
+
+const SAFETY_HTML_RATIO = 0.5;
 
 export const historyMethods = {
   async loadPageHistory(pageId) {
@@ -40,6 +44,104 @@ export const historyMethods = {
       this.bookReviewHistory = await fetch('/history/review/' + bookId).then(r => r.json());
     } catch (e) {
       console.error('[loadBookReviewHistory]', e);
+    }
+  },
+
+  // Selektionsstate für einen History-Eintrag initialisieren (beim Aufklappen).
+  initHistorySelection(entry) {
+    if (this.historySelections[entry.id]) return;
+    const errors = (entry.errors_json || []).filter(f => f.typ !== 'stil');
+    const styles = (entry.errors_json || []).filter(f => f.typ === 'stil');
+    this.historySelections[entry.id] = {
+      errors: errors.map(() => true),
+      styles: styles.map(() => false),
+    };
+  },
+
+  toggleHistoryError(entryId, i) {
+    const sel = this.historySelections[entryId];
+    if (!sel) return;
+    sel.errors[i] = !sel.errors[i];
+  },
+
+  toggleHistoryStyle(entryId, i) {
+    const sel = this.historySelections[entryId];
+    if (!sel) return;
+    sel.styles[i] = !sel.styles[i];
+  },
+
+  historyErrors(entry) {
+    return (entry.errors_json || []).filter(f => f.typ !== 'stil');
+  },
+
+  historyStyles(entry) {
+    return (entry.errors_json || []).filter(f => f.typ === 'stil');
+  },
+
+  async applyHistoryCheck(entry) {
+    if (!this.currentPage) return;
+    const sel = this.historySelections[entry.id];
+    if (!sel) return;
+
+    const errors = this.historyErrors(entry);
+    const styles = this.historyStyles(entry);
+    const selectedErrors = errors.filter((_, i) => sel.errors[i]);
+    const selectedStyles = styles.filter((_, i) => sel.styles[i]);
+    const allSelected = [...selectedErrors, ...selectedStyles];
+
+    if (allSelected.length === 0) {
+      this.setStatus('Keine Korrekturen ausgewählt.');
+      return;
+    }
+
+    this.setStatus('Lade aktuelle Seite…', true);
+    try {
+      const page = await this.bsGet('pages/' + this.currentPage.id);
+      let finalHtml = this._applyCorrections(page.html, selectedErrors);
+
+      if (selectedStyles.length > 0) {
+        this.setStatus('KI überarbeitet Stil… (0 Zeichen)', true);
+        try {
+          const result = await this.callAI(
+            buildStilkorrekturPrompt(finalHtml, selectedStyles),
+            SYSTEM_STILKORREKTUR,
+            (chars) => this.setStatus(`KI überarbeitet Stil… (${chars} Zeichen)`, true),
+          );
+          if (Array.isArray(result?.korrekturen) && result.korrekturen.length > 0) {
+            finalHtml = this._applyCorrections(finalHtml, result.korrekturen.map(k => ({ original: k.original, korrektur: k.ersatz })));
+          }
+        } catch (e) {
+          console.error('[applyHistoryCheck] Stil-Call fehlgeschlagen:', e);
+          this.setStatus('Fehler bei Stilkorrektur: ' + e.message);
+          return;
+        }
+      }
+
+      if (finalHtml.length < page.html.length * SAFETY_HTML_RATIO) {
+        this.setStatus('Fehler: Ergebnis wirkt unvollständig – Speichern abgebrochen.');
+        return;
+      }
+
+      this.setStatus('Speichere in BookStack…', true);
+      await this.bsPut('pages/' + this.currentPage.id, { html: finalHtml, name: this.currentPage.name });
+
+      await fetch('/history/check/' + entry.id + '/saved', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applied_errors_json: selectedErrors,
+          selected_errors_json: allSelected,
+        }),
+      });
+
+      entry.saved = true;
+      entry.saved_at = new Date().toISOString();
+      entry.applied_errors_json = selectedErrors;
+      entry.selected_errors_json = allSelected;
+      this.setStatus('✓ Korrekturen gespeichert.', false, 5000);
+    } catch (e) {
+      console.error('[applyHistoryCheck]', e);
+      this.setStatus('Fehler: ' + e.message);
     }
   },
 

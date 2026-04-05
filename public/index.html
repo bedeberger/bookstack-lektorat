@@ -518,7 +518,7 @@
     <div class="history-heading">Verlauf</div>
     <template x-for="entry in pageHistory" :key="entry.id">
       <div>
-        <div class="history-item" @click="selectedHistoryId = selectedHistoryId === entry.id ? null : entry.id">
+        <div class="history-item" @click="selectedHistoryId = selectedHistoryId === entry.id ? null : entry.id; if (selectedHistoryId === entry.id) initHistorySelection(entry)">
           <span class="history-date" x-text="formatDate(entry.checked_at)"></span>
           <span class="badge" :class="entry.error_count > 0 ? 'badge-err' : 'badge-ok'" x-text="entry.error_count > 0 ? entry.error_count + ' Fehler' : 'fehlerfrei'"></span>
           <button class="btn-toggle-saved" :class="entry.saved ? 'btn-toggle-saved--on' : 'btn-toggle-saved--off'" @click.stop="toggleHistoryEntrySaved(entry)" :title="entry.saved ? 'Als nicht umgesetzt markieren' : 'Als umgesetzt markieren'" x-text="entry.saved ? '✓ umgesetzt' : 'nicht umgesetzt'"></button>
@@ -532,7 +532,9 @@
           <div x-show="!entry.saved && entry.error_count > 0" class="history-saved-notice history-saved-notice-warn">
             Korrekturen wurden nicht in BookStack übernommen.
           </div>
-          <template x-if="entry.errors_json && entry.errors_json.length > 0">
+
+          <!-- Gespeicherte Einträge: readonly-Ansicht mit Markierung was angewendet wurde -->
+          <template x-if="entry.saved && entry.errors_json && entry.errors_json.length > 0">
             <div style="margin-top:10px;">
               <template x-for="(f, i) in entry.errors_json" :key="i">
                 <div class="finding" :class="[f.typ === 'stil' ? 'style' : 'error', entry.selected_errors_json && !entry.selected_errors_json.some(a => a.original === f.original) ? 'finding-skipped' : '']">
@@ -549,12 +551,64 @@
               </template>
             </div>
           </template>
+
+          <!-- Nicht gespeicherte Einträge: interaktive Selektion -->
+          <template x-if="!entry.saved && entry.errors_json && entry.errors_json.length > 0 && historySelections[entry.id]">
+            <div style="margin-top:10px;">
+              <!-- Fehler (rechtschreibung/grammatik) -->
+              <template x-if="historyErrors(entry).length > 0">
+                <div>
+                  <div class="findings-section-header">
+                    Fehler
+                    <button class="btn-sel-all" @click.stop="historySelections[entry.id].errors = historySelections[entry.id].errors.map(() => true)">alle</button>
+                    <button class="btn-sel-all" @click.stop="historySelections[entry.id].errors = historySelections[entry.id].errors.map(() => false)">keine</button>
+                  </div>
+                  <template x-for="(f, i) in historyErrors(entry)" :key="i">
+                    <div class="finding error" :class="historySelections[entry.id].errors[i] ? '' : 'finding-skipped'" @click.stop="toggleHistoryError(entry.id, i)" style="cursor:pointer;">
+                      <span class="badge badge-err" x-text="f.typ"></span>
+                      <span class="badge" :class="historySelections[entry.id].errors[i] ? 'badge-ok' : 'badge-skipped'" x-text="historySelections[entry.id].errors[i] ? '✓' : '–'"></span>
+                      <div class="finding-content">
+                        <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+                        <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>
+                        <div class="finding-explanation" x-text="f.erklaerung"></div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+              <!-- Stilanmerkungen -->
+              <template x-if="historyStyles(entry).length > 0">
+                <div style="margin-top:8px;">
+                  <div class="findings-section-header">
+                    Stilanmerkungen
+                    <button class="btn-sel-all" @click.stop="historySelections[entry.id].styles = historySelections[entry.id].styles.map(() => true)">alle</button>
+                    <button class="btn-sel-all" @click.stop="historySelections[entry.id].styles = historySelections[entry.id].styles.map(() => false)">keine</button>
+                  </div>
+                  <template x-for="(f, i) in historyStyles(entry)" :key="i">
+                    <div class="finding style" :class="historySelections[entry.id].styles[i] ? '' : 'finding-skipped'" @click.stop="toggleHistoryStyle(entry.id, i)" style="cursor:pointer;">
+                      <span class="badge badge-warn">stil</span>
+                      <span class="badge" :class="historySelections[entry.id].styles[i] ? 'badge-ok' : 'badge-skipped'" x-text="historySelections[entry.id].styles[i] ? '✓' : '–'"></span>
+                      <div class="finding-content">
+                        <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+                        <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>
+                        <div class="finding-explanation" x-text="f.erklaerung"></div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </template>
+
           <div x-show="entry.stilanalyse" class="stilbox" style="margin-top:12px;">
             <div class="stilbox-title">Stilanalyse</div>
             <span x-text="entry.stilanalyse"></span>
           </div>
           <div x-show="entry.fazit" class="fazit" x-text="entry.fazit"></div>
-          <button class="btn-delete-history" @click.stop="deletePageCheck(entry.id)" title="Eintrag löschen">Eintrag löschen</button>
+          <div class="history-actions">
+            <button x-show="!entry.saved && entry.error_count > 0 && currentPage" class="btn-apply-history" @click.stop="applyHistoryCheck(entry)">In BookStack übernehmen</button>
+            <button class="btn-delete-history" @click.stop="deletePageCheck(entry.id)" title="Eintrag löschen">Eintrag löschen</button>
+          </div>
         </div>
       </div>
     </template>

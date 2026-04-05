@@ -65,6 +65,7 @@ document.addEventListener('alpine:init', () => {
     lastCheckId: null,
     pageHistory: [],
     selectedHistoryId: null,
+    historySelections: {},
     bookReviewHistory: [],
     selectedBookReviewId: null,
     tokEsts: {},
@@ -236,6 +237,7 @@ document.addEventListener('alpine:init', () => {
       this.lastCheckId = null;
       this.pageHistory = [];
       this.selectedHistoryId = null;
+      this.historySelections = {};
       this.lektoratErrors = [];
       this.lektoratStyles = [];
       this.selectedErrors = [];
@@ -392,6 +394,7 @@ document.addEventListener('alpine:init', () => {
       this.lastCheckId = null;
       this.pageHistory = [];
       this.selectedHistoryId = null;
+      this.historySelections = {};
       this.lektoratErrors = [];
       this.lektoratStyles = [];
       this.selectedErrors = [];
@@ -417,6 +420,7 @@ document.addEventListener('alpine:init', () => {
       this.lastCheckId = null;
       this.pageHistory = [];
       this.selectedHistoryId = null;
+      this.historySelections = {};
       this.tree.forEach(c => { if (c.type === 'chapter') c.open = false; });
       this.lektoratErrors = [];
       this.lektoratStyles = [];
