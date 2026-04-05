@@ -639,15 +639,13 @@
 
     <template x-for="(msg, msgIdx) in chatMessages" :key="msgIdx">
       <div :class="'chat-msg chat-msg--' + msg.role">
-        <div class="chat-msg-bubble" :class="msg.streaming ? 'chat-msg-bubble--streaming' : ''">
+        <div class="chat-msg-bubble">
           <!-- User-Nachricht -->
           <div x-show="msg.role === 'user'" class="chat-msg-text" x-text="msg.content"></div>
           <!-- Assistant-Antwort (Markdown) -->
           <div x-show="msg.role === 'assistant'" class="chat-msg-text" x-html="_renderChatMarkdown(msg.content)"></div>
-          <!-- Streaming-Cursor -->
-          <span x-show="msg.role === 'assistant' && msg.streaming" class="chat-cursor">▍</span>
           <!-- Token-Info -->
-          <div x-show="msg.role === 'assistant' && !msg.streaming && _chatTokenInfo(msg)" class="chat-token-info" x-text="_chatTokenInfo(msg)"></div>
+          <div x-show="msg.role === 'assistant' && _chatTokenInfo(msg)" class="chat-token-info" x-text="_chatTokenInfo(msg)"></div>
         </div>
 
         <!-- Änderungsvorschläge -->
@@ -676,6 +674,12 @@
         </template>
       </div>
     </template>
+
+    <!-- Skeleton-Loader: erscheint direkt nach der letzten Nachricht während Job läuft -->
+    <div x-show="chatLoading" class="chat-skeleton-wrapper">
+      <div class="chat-skeleton-line" style="width:72%"></div>
+      <div class="chat-skeleton-line" style="width:48%"></div>
+    </div>
   </div>
 
   <!-- Eingabebereich -->

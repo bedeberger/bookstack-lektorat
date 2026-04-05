@@ -76,10 +76,6 @@ export const chatMethods = {
           const { jobId } = await fetch(`/jobs/active?type=chat&book_id=${sessionId}`).then(r => r.json());
           if (jobId) {
             this.chatLoading = true;
-            const lastMsg = this.chatMessages[this.chatMessages.length - 1];
-            if (lastMsg?.role === 'user') {
-              this.chatMessages.push({ role: 'assistant', content: '', vorschlaege: [], id: null, streaming: true });
-            }
             this.startChatPoll(jobId);
           }
         } catch (e) {
@@ -122,8 +118,6 @@ export const chatMethods = {
 
     // User-Nachricht sofort anzeigen (optimistisch)
     this.chatMessages.push({ role: 'user', content: msg, id: null });
-    // Placeholder für die Antwort (zeigt Spinner während Job läuft)
-    this.chatMessages.push({ role: 'assistant', content: '', vorschlaege: [], id: null, streaming: true });
     this.$nextTick(() => this._scrollChatToBottom());
 
     // Seiteninhalt holen (frisch laden für aktuelle Version)
@@ -147,8 +141,8 @@ export const chatMethods = {
       this.startChatPoll(jobId);
     } catch (e) {
       console.error('[sendChatMessage]', e);
-      // Optimistische Nachrichten entfernen
-      this.chatMessages = this.chatMessages.slice(0, -2);
+      // Optimistisch hinzugefügte User-Nachricht entfernen
+      this.chatMessages = this.chatMessages.slice(0, -1);
       this.chatStatus  = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
       this.chatLoading = false;
       this.$nextTick(() => this._scrollChatToBottom());
@@ -166,26 +160,22 @@ export const chatMethods = {
       onProgress: (job) => {
         const tokIn  = job.tokensIn  || 0;
         const tokOut = job.tokensOut || 0;
-        const tok = tokIn + tokOut > 0 ? ` · ↑${fmtTok(tokIn)} ↓${fmtTok(tokOut)}` : '';
-        this.chatStatus = `<span class="spinner"></span>${escHtml(job.statusText || 'KI antwortet…')}${tok}`;
+        this.chatStatus = tokIn + tokOut > 0
+          ? `<span class="muted-msg">↑${fmtTok(tokIn)} ↓${fmtTok(tokOut)} Tokens</span>`
+          : '';
       },
       onNotFound: async () => {
-        // Job weg (Server-Neustart) → Session aus DB neu laden
         this.chatLoading = false;
         this.chatStatus  = '';
-        this.chatMessages = this.chatMessages.filter(m => !m.streaming);
         await this.loadChatSession(sessionId);
       },
       onError: (job) => {
         this.chatLoading = false;
-        this.chatMessages = this.chatMessages.filter(m => !m.streaming);
         this.chatStatus = `<span class="error-msg">Fehler: ${escHtml(job.error || 'Unbekannter Fehler')}</span>`;
       },
       onDone: async () => {
         this.chatLoading = false;
-        this.chatMessages = this.chatMessages.filter(m => !m.streaming);
         this.chatStatus  = '';
-        // Finale Nachrichten (inkl. Vorschläge, Token-Counts) aus DB laden
         await this.loadChatSession(sessionId);
         if (this.currentPage) await this.loadChatSessions(this.currentPage.id);
       },

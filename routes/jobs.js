@@ -733,7 +733,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail) {
 }
 
 // ── Job: Chat ─────────────────────────────────────────────────────────────────
-async function runChatJob(jobId, sessionId, message, pageText, userEmail) {
+async function runChatJob(jobId, sessionId, userMsgId, message, pageText, userEmail) {
   const { buildChatSystemPrompt } = await getPrompts();
   try {
     updateJob(jobId, { statusText: 'Vorbereitung…', progress: 5 });
@@ -742,13 +742,7 @@ async function runChatJob(jobId, sessionId, message, pageText, userEmail) {
       .get(parseInt(sessionId), userEmail);
     if (!session) throw new Error('Session nicht gefunden');
 
-    const now = new Date().toISOString();
-
-    // User-Nachricht in DB speichern
-    const userMsgResult = db.prepare(`
-      INSERT INTO chat_messages (session_id, role, content, created_at) VALUES (?, 'user', ?, ?)
-    `).run(session.id, message, now);
-    db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(now, session.id);
+    // User-Nachricht wurde bereits im Route-Handler gespeichert (userMsgId)
 
     // Kontext aus DB laden
     const figuren = _chatGetFiguren(session.book_id, userEmail);
@@ -796,7 +790,7 @@ async function runChatJob(jobId, sessionId, message, pageText, userEmail) {
 
     completeJob(jobId, {
       session_id: session.id,
-      user_message_id: userMsgResult.lastInsertRowid,
+      user_message_id: userMsgId,
       assistant_message_id: asstMsgResult.lastInsertRowid,
       tokensIn, tokensOut,
     });
@@ -862,8 +856,21 @@ router.post('/chat', jsonBody, (req, res) => {
   if (!userEmail) return res.status(401).json({ error: 'Nicht eingeloggt' });
   const existing = runningJobs.get(jobKey('chat', session_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+
+  // User-Nachricht sofort in DB speichern – bevor der Job überhaupt startet,
+  // damit sie auch bei Tab-Schliessen oder Job-Fehler persistent ist.
+  const session = db.prepare('SELECT id FROM chat_sessions WHERE id = ? AND user_email = ?')
+    .get(parseInt(session_id), userEmail);
+  if (!session) return res.status(404).json({ error: 'Session nicht gefunden' });
+
+  const now = new Date().toISOString();
+  const userMsgResult = db.prepare(
+    `INSERT INTO chat_messages (session_id, role, content, created_at) VALUES (?, 'user', ?, ?)`
+  ).run(session.id, message.trim(), now);
+  db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(now, session.id);
+
   const jobId = createJob('chat', session_id, userEmail);
-  enqueueJob(jobId, () => runChatJob(jobId, session_id, message.trim(), page_text || '', userEmail));
+  enqueueJob(jobId, () => runChatJob(jobId, session_id, userMsgResult.lastInsertRowid, message.trim(), page_text || '', userEmail));
   res.json({ jobId });
 });
 
