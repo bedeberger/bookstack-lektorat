@@ -106,6 +106,33 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_bsh_book_date ON book_stats_history(book_id, recorded_at);
   CREATE INDEX IF NOT EXISTS idx_bsh_book_id ON book_stats_history(book_id);
 
+  -- Chat-Sessions: eine Session pro Seite + User (kann mehrere haben)
+  CREATE TABLE IF NOT EXISTS chat_sessions (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id          INTEGER NOT NULL,
+    book_name        TEXT,
+    page_id          INTEGER NOT NULL,
+    page_name        TEXT,
+    user_email       TEXT NOT NULL,
+    created_at       TEXT NOT NULL,
+    last_message_at  TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_cs_page_id  ON chat_sessions(page_id, user_email);
+  CREATE INDEX IF NOT EXISTS idx_cs_book_id  ON chat_sessions(book_id, user_email);
+
+  -- Chat-Nachrichten: eine Zeile pro Nachricht (user + assistant)
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   INTEGER NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    role         TEXT NOT NULL,   -- 'user' | 'assistant'
+    content      TEXT NOT NULL,   -- Freitext der Antwort
+    vorschlaege  TEXT,            -- JSON-Array | NULL (nur bei 'assistant')
+    tokens_in    INTEGER,
+    tokens_out   INTEGER,
+    created_at   TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_cm_session_id ON chat_messages(session_id);
+
   -- BookStack API-Tokens pro User (verknüpft mit Google-E-Mail)
   CREATE TABLE IF NOT EXISTS user_tokens (
     email      TEXT PRIMARY KEY,

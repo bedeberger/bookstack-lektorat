@@ -12,6 +12,7 @@ const authRouter = require('./routes/auth');
 const historyRouter = require('./routes/history');
 const figuresRouter = require('./routes/figures');
 const jobsRouter = require('./routes/jobs');
+const chatRouter = require('./routes/chat');
 const { router: proxiesRouter, bookstackProxy, BOOKSTACK_URL } = require('./routes/proxies');
 const { router: syncRouter, syncAllBooks } = require('./routes/sync');
 
@@ -60,7 +61,7 @@ app.use(authRouter);
 
 // ── Auth-Guard ────────────────────────────────────────────────────────────────
 // API-Pfade → 401 JSON; HTML-Pfade → Redirect zu /auth/login
-const API_PREFIXES = ['/api/', '/history/', '/figures/', '/jobs/', '/sync/', '/config', '/claude', '/ollama'];
+const API_PREFIXES = ['/api/', '/history/', '/figures/', '/jobs/', '/sync/', '/chat/', '/config', '/claude', '/ollama'];
 
 app.use((req, res, next) => {
   if (req.session?.user) return next();
@@ -82,6 +83,7 @@ app.use(proxiesRouter);
 app.use('/history', historyRouter);
 app.use('/figures', figuresRouter);
 app.use('/jobs', jobsRouter);
+app.use('/chat', chatRouter);
 app.use('/sync', syncRouter);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', bookstackProxy);

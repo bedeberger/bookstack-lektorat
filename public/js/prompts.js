@@ -17,6 +17,7 @@ const DEFAULT_PREFIXES = {
   kapitelanalyse: 'Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz.',
   figuren:        'Du bist ein Literaturanalytiker für deutschsprachige Texte aus der Schweiz.',
   stilkorrektur:  'Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz.',
+  chat:           'Du bist ein intelligenter literarischer Assistent für deutschsprachige Texte aus der Schweiz. Du hilfst dem Autor mit Fragen zu einer spezifischen Buchseite, gibst Feedback zu Inhalt und Stil, und kannst konkrete Textänderungen vorschlagen.',
 };
 
 function buildSystem(prefix, rules) {
@@ -33,6 +34,7 @@ export let SYSTEM_BUCHBEWERTUNG = buildSystem(DEFAULT_PREFIXES.buchbewertung,  D
 export let SYSTEM_KAPITELANALYSE= buildSystem(DEFAULT_PREFIXES.kapitelanalyse, DEFAULT_BASE_RULES);
 export let SYSTEM_FIGUREN       = buildSystem(DEFAULT_PREFIXES.figuren,        DEFAULT_BASE_RULES);
 export let SYSTEM_STILKORREKTUR = buildSystem(DEFAULT_PREFIXES.stilkorrektur,  DEFAULT_BASE_RULES);
+export let SYSTEM_CHAT          = DEFAULT_PREFIXES.chat; // Kein buildSystem – Chat hat eigenes JSON-Schema
 
 /**
  * Überschreibt die konfigurierbaren Teile aller System-Prompts.
@@ -49,6 +51,7 @@ export function configurePrompts(cfg) {
   SYSTEM_KAPITELANALYSE = buildSystem(sp.kapitelanalyse || DEFAULT_PREFIXES.kapitelanalyse, rules);
   SYSTEM_FIGUREN        = buildSystem(sp.figuren        || DEFAULT_PREFIXES.figuren,        rules);
   SYSTEM_STILKORREKTUR  = buildSystem(sp.stilkorrektur  || DEFAULT_PREFIXES.stilkorrektur,  rules);
+  SYSTEM_CHAT           = sp.chat || DEFAULT_PREFIXES.chat;
 }
 
 export function buildStilkorrekturPrompt(html, styles) {
@@ -241,6 +244,65 @@ Antworte mit diesem JSON-Schema:
 ${FIGUREN_SCHEMA}
 
 ${FIGUREN_RULES}`;
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Baut den vollständigen System-Prompt für den Seiten-Chat.
+ * @param {string}   pageName   Name der Seite
+ * @param {string}   pageText   Seiteninhalt als Plaintext
+ * @param {Array}    figuren    Figuren-Array aus der DB (kann leer sein)
+ * @param {Object}   review     Letzte Buchbewertung aus der DB (kann null sein)
+ */
+export function buildChatSystemPrompt(pageName, pageText, figuren, review) {
+  const parts = [
+    SYSTEM_CHAT,
+    '',
+    `Aktuelle Seite: «${pageName}»`,
+    '',
+    '=== SEITENINHALT ===',
+    pageText,
+    '',
+  ];
+
+  if (figuren && figuren.length > 0) {
+    parts.push('=== FIGUREN DES BUCHS ===');
+    parts.push(JSON.stringify(figuren, null, 2));
+    parts.push('');
+  }
+
+  if (review) {
+    parts.push('=== LETZTE BUCHBEWERTUNG ===');
+    parts.push(JSON.stringify({
+      gesamtnote:  review.gesamtnote,
+      fazit:       review.fazit,
+      staerken:    review.staerken,
+      schwaechen:  review.schwaechen,
+    }, null, 2));
+    parts.push('');
+  }
+
+  parts.push(
+    'Antworte immer im folgenden JSON-Format:',
+    '{',
+    '  "antwort": "Deine Antwort als Freitext (Markdown erlaubt)",',
+    '  "vorschlaege": [',
+    '    {',
+    '      "original": "exakter Originaltext aus der Seite (zeichengenau)",',
+    '      "ersatz": "Ersatztext",',
+    '      "begruendung": "kurze Begründung"',
+    '    }',
+    '  ]',
+    '}',
+    '',
+    'vorschlaege ist ein leeres Array wenn keine konkreten Textänderungen sinnvoll sind.',
+    'original muss zeichengenau mit dem Seitentext übereinstimmen.',
+    '',
+    JSON_ONLY,
+  );
+
+  return parts.join('\n');
 }
 
 export function buildLektoratPrompt(text, html) {

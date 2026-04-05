@@ -3,6 +3,7 @@
 KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). Läuft als eigenständiger Node.js-Service und bietet:
 
 - **Seitenlektorat** – Rechtschreib-, Grammatik- und Stilprüfung einzelner Seiten mit selektiver Fehlerkorrektur
+- **Seiten-Chat** – Freier KI-Dialog zu einer Seite inkl. Kontext (Figuren, Buchbewertung); Änderungsvorschläge direkt in BookStack übernehmen
 - **Buchbewertung** – Gesamtbewertung mit Stärken, Schwächen und Empfehlungen
 - **Figurenübersicht** – Automatische Charakterextraktion mit interaktivem Beziehungsgraph
 - **Buchstatistik** – Tägliche Snapshots von Wortanzahl, Zeichenanzahl und Tokenverbrauch als Zeitliniendiagramm
@@ -227,7 +228,8 @@ Die KI-Prompts können ohne Code-Änderung über `prompt-config.json` im Projekt
     "buchbewertung":  "Du bist ein erfahrener Literaturkritiker …",
     "kapitelanalyse": "Du bist ein erfahrener Literaturkritiker …",
     "figuren":        "Du bist ein Literaturanalytiker …",
-    "stilkorrektur":  "Du bist ein deutschsprachiger Lektor …"
+    "stilkorrektur":  "Du bist ein deutschsprachiger Lektor …",
+    "chat":           "Du bist ein intelligenter literarischer Assistent …"
   }
 }
 ```
@@ -250,6 +252,7 @@ Browser → NGINX (HTTPS, öffentlich)
             → /api/*          → BookStack (Token-Injection, serverseitig)
             → /history/*      → SQLite (lektorat.db)
             → /figures/*      → SQLite (lektorat.db)
+            → /chat/*         → SQLite (lektorat.db) + KI-Streaming (Seiten-Chat)
             → /jobs/*         → Hintergrund-Jobs (Buchbewertung, Figurenextraktion)
             → /sync/*         → Buchstatistik-Sync (manuell + Cron täglich 02:00)
             → /               → Single-Page-App (Alpine.js)
