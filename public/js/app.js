@@ -246,6 +246,8 @@ document.addEventListener('alpine:init', () => {
         this.resetPage();
         return;
       }
+      // Laufenden Poll stoppen – Seite wechselt, laufender Check gehört zur alten Seite
+      if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
       this.currentPage = p;
       this.currentPageEmpty = false;
       this.originalHtml = null;
@@ -262,6 +264,7 @@ document.addEventListener('alpine:init', () => {
       this.selectedErrors = [];
       this.selectedStyles = [];
       this.checkDone = false;
+      this.checkLoading = false;
       this.checkProgress = 0;
       this.showEditorCard = true;
       this.$nextTick(() => document.getElementById('editor-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));

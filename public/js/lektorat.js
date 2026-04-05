@@ -134,21 +134,25 @@ export const lektoratMethods = {
       lsKey: pageId != null ? 'lektorat_check_job_' + pageId : null,
       progressProp: 'checkProgress',
       onProgress: (job) => {
+        if (this.currentPage?.id !== pageId) return;
         this.status = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut);
         this.statusSpinner = false;
       },
       onNotFound: () => {
+        if (this.currentPage?.id !== pageId) return;
         this.checkLoading = false;
         this.analysisOut = '<span class="error-msg">Analyse unterbrochen (Server-Neustart). Bitte neu starten.</span>';
         this.setStatus('');
       },
       onError: (job) => {
+        if (this.currentPage?.id !== pageId) return;
         this.checkLoading = false;
         setTimeout(() => { this.checkProgress = 0; }, 400);
         this.analysisOut = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
         this.setStatus('');
       },
       onDone: async (job) => {
+        if (this.currentPage?.id !== pageId) return;
         this.checkLoading = false;
         setTimeout(() => { this.checkProgress = 0; }, 400);
         if (job.result?.empty) {
