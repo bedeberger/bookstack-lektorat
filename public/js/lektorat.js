@@ -266,7 +266,7 @@ export const lektoratMethods = {
   },
 
   async batchCheck() {
-    if (!this.pages.length || this.batchLoading) return;
+    if (!this.pages.length) return;
     if (!confirm(`Alle ${this.pages.length} Seiten prüfen und Ergebnisse in der History speichern?\n\nDies kann bei grossen Büchern mehrere Minuten dauern.`)) return;
     this.batchLoading = true;
     this.batchProgress = 0;

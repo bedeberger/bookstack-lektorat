@@ -96,7 +96,7 @@
     <span class="card-title" x-text="'Seiten: ' + selectedBookName"></span>
     <div class="card-actions">
       <button @click="loadPages()">Seiten laden</button>
-      <button @click="batchCheck()" :disabled="batchLoading || bookReviewLoading || !pages.length" title="Alle Seiten sequenziell prüfen und in History speichern">Alle prüfen</button>
+      <button @click="batchCheck()" :disabled="!pages.length" title="Alle Seiten sequenziell prüfen und in History speichern">Alle prüfen</button>
       <button @click="toggleBookChatCard()" :class="{ primary: showBookChatCard }" :disabled="!pages.length || bookChatLoading" title="Chat mit dem gesamten Buch">Buch-Chat</button>
       <button class="btn-card-close" @click="showTreeCard = false; resetPage()" title="Schliessen">×</button>
     </div>
