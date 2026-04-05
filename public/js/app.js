@@ -12,6 +12,7 @@ import { figurenMethods } from './figuren.js';
 import { graphMethods } from './graph.js';
 import { bookstatsMethods } from './bookstats.js';
 import { chatMethods } from './chat.js';
+import { bookChatMethods } from './book-chat.js';
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('lektorat', () => ({
@@ -100,6 +101,15 @@ document.addEventListener('alpine:init', () => {
     chatLoading: false,
     chatStatus: '',
     _chatPollTimer: null,
+    showBookChatCard: false,
+    bookChatSessions: [],
+    bookChatMessages: [],
+    bookChatSessionId: null,
+    bookChatInput: '',
+    bookChatLoading: false,
+    bookChatProgress: 0,
+    bookChatStatus: '',
+    _bookChatPollTimer: null,
 
     // ── Computed ─────────────────────────────────────────────────────────────
     get statusHtml() {
@@ -455,6 +465,7 @@ document.addEventListener('alpine:init', () => {
       this.bookStatsSyncStatus = '';
       if (this._statsChart) { this._statsChart.destroy(); this._statsChart = null; }
       this.resetChat();
+      this.resetBookChat();
     },
 
     // ── BookStack Token Setup ────────────────────────────────────────────────
@@ -494,5 +505,6 @@ document.addEventListener('alpine:init', () => {
     ...graphMethods,
     ...bookstatsMethods,
     ...chatMethods,
+    ...bookChatMethods,
   }));
 });

@@ -13,9 +13,9 @@ Browser → NGINX (HTTPS) → Express (Port 3737)
                               → /config         → Modell-Config + User (keine Credentials)
                               → /history/*      → SQLite-DB (lektorat.db)
                               → /figures/*      → SQLite-DB (lektorat.db)
-                              → /chat/*         → SQLite-DB (lektorat.db) + KI-Streaming (Seiten-Chat)
+                              → /chat/*         → SQLite-DB (lektorat.db) + KI-Streaming (Seiten-Chat) + Buch-Chat-Sessions
                               → /sync/*         → Buchstatistik-Sync (manuell + Cron)
-                              → /jobs/*         → Hintergrund-Jobs (Status-Polling)
+                              → /jobs/*         → Hintergrund-Jobs (Status-Polling, inkl. Buch-Chat)
                               → /claude         → api.anthropic.com (ANTHROPIC_API_KEY-Injection)
                               → /ollama         → Ollama /api/chat (OLLAMA_HOST, lokales Modell)
                               → /api/*          → BookStack (Token aus req.session.bookstackToken, serverseitig)
@@ -40,8 +40,8 @@ bookstack-lektorat/
 │   ├── auth.js              # /auth/* Endpunkte (Google OIDC: login, callback, logout, me, token)
 │   ├── history.js           # /history/* Endpunkte (Checks, Reviews, Page-Stats, Book-Stats)
 │   ├── figures.js           # /figures/:book_id Endpunkte (per-User)
-│   ├── jobs.js              # /jobs/* Endpunkte (Hintergrund-Jobs: Review, Figurenextraktion)
-│   ├── chat.js              # /chat/* Endpunkte (Sessions, Nachrichten, SSE-Streaming)
+│   ├── jobs.js              # /jobs/* Endpunkte (Hintergrund-Jobs: Review, Figurenextraktion, Buch-Chat)
+│   ├── chat.js              # /chat/* Endpunkte (Sessions, Nachrichten, SSE-Streaming, Buch-Chat-Sessions)
 │   ├── sync.js              # /sync/* Endpunkte + syncAllBooks() (Cron-Entry-Point)
 │   └── proxies.js           # /config, /claude (SSE-Proxy), /ollama, /api/* (BookStack-Proxy)
 └── public/
@@ -61,6 +61,7 @@ bookstack-lektorat/
         ├── graph.js         # renderFigurGraph, _figTypColor
         ├── bookstats.js     # toggleBookStatsCard, loadBookStats, syncBookStats, renderStatsChart
         ├── chat.js          # toggleChatCard, sendChatMessage (SSE-Streaming), applyChatVorschlag, Session-CRUD
+        ├── book-chat.js     # toggleBookChatCard, sendBookChatMessage (Job-Polling), Session-CRUD, resetBookChat
         └── two-tier.js      # loadPageContents(), groupByChapter(), SINGLE_PASS_LIMIT
 ```
 
@@ -111,6 +112,7 @@ book_stats_history (id, book_id, book_name, recorded_at,
 -- UNIQUE auf (book_id, recorded_at) → je Buch ein Snapshot pro Tag
 
 -- Chat-Sessions: eine Session pro Seite + User (mehrere möglich)
+-- Buch-Chat-Sessions: page_id=0, page_name='__book__'
 chat_sessions (id INTEGER PRIMARY KEY, book_id, book_name, page_id, page_name,
                user_email TEXT, created_at TEXT, last_message_at TEXT)
 
@@ -118,8 +120,9 @@ chat_sessions (id INTEGER PRIMARY KEY, book_id, book_name, page_id, page_name,
 chat_messages (id INTEGER PRIMARY KEY, session_id → chat_sessions.id,
                role TEXT,         -- 'user' | 'assistant'
                content TEXT,      -- Freitext der Antwort (antwort-Feld aus KI-JSON)
-               vorschlaege TEXT,  -- JSON-Array | NULL (nur bei 'assistant')
+               vorschlaege TEXT,  -- JSON-Array | NULL (nur Seiten-Chat, bei 'assistant')
                tokens_in INTEGER, tokens_out INTEGER,
+               context_info TEXT, -- JSON | NULL (nur Buch-Chat: {pages, totalPages, figuren, review})
                created_at TEXT)
 
 -- Schemaversion für Migrationen
@@ -187,11 +190,14 @@ SELECT * FROM schema_version;
 | GET | `/jobs/:id` | Status + Details eines Jobs |
 | POST | `/jobs/review` | Buchbewertungs-Job starten |
 | POST | `/jobs/figures` | Figurenextraktions-Job starten |
-| POST | `/chat/session` | Neue Chat-Session erstellen `{ book_id, book_name, page_id, page_name }` |
-| GET | `/chat/sessions/:page_id` | Alle Sessions einer Seite (neueste zuerst, max. 20) |
+| POST | `/jobs/book-chat` | Buch-Chat-Job starten; Body: `{ session_id, message }` |
+| POST | `/chat/session` | Neue Seiten-Chat-Session erstellen `{ book_id, book_name, page_id, page_name }` |
+| POST | `/chat/session/book` | Neue Buch-Chat-Session erstellen `{ book_id, book_name }` |
+| GET | `/chat/sessions/:page_id` | Alle Seiten-Chat-Sessions einer Seite (neueste zuerst, max. 20) |
+| GET | `/chat/sessions/book/:book_id` | Alle Buch-Chat-Sessions eines Buchs (neueste zuerst, max. 20) |
 | GET | `/chat/session/:id` | Session + alle Nachrichten laden |
 | DELETE | `/chat/session/:id` | Session löschen (kaskadiert auf Nachrichten) |
-| POST | `/chat/send` | Nachricht senden + KI-Antwort als SSE streamen; Body: `{ session_id, message, page_text }` |
+| POST | `/chat/send` | Seiten-Chat: Nachricht senden + KI-Antwort als SSE streamen; Body: `{ session_id, message, page_text }` |
 | GET | `/auth/token` | Ob ein BookStack-Token hinterlegt ist (`{ hasToken: bool }`) |
 | PUT | `/auth/token` | BookStack-Token speichern (`{ tokenId, tokenPw }` → DB + Session) |
 
@@ -227,7 +233,8 @@ Admins können die **inhaltlichen** Teile aller System-Prompts in `prompt-config
     "kapitelanalyse": "Du bist …",
     "figuren":        "Du bist …",
     "stilkorrektur":  "Du bist …",
-    "chat":           "Du bist …"
+    "chat":           "Du bist …",
+    "bookChat":       "Du bist …"
   }
 }
 ```
@@ -286,6 +293,26 @@ Der Chat funktioniert anders als Review/Figuren: kein Job-Queue, sondern **direk
 
 **Vorschläge übernehmen:** `applyChatVorschlag()` ersetzt `original` zeichengenau in `this.originalHtml` und ruft `bsPut` auf – identisch zum Lektorat-Flow. `this.originalHtml` wird beim ersten `sendChatMessage()` aus der API geladen falls noch nicht gesetzt.
 
+## Buch-Chat
+
+Der Buch-Chat unterscheidet sich vom Seiten-Chat in zwei wesentlichen Punkten: **kein Vorschläge-System** und **Job-Queue statt SSE-Streaming**.
+
+**Ablauf `POST /jobs/book-chat`:**
+1. Session validieren, User-Nachricht in `chat_messages` speichern
+2. Job in die Queue einreihen → sofort `{ jobId }` zurückgeben
+3. `runBookChatJob()` lädt alle Seiten des Buchs aus BookStack (in 5er-Batches)
+4. Relevanz-Scoring: jede Seite erhält einen Score basierend auf Stichwortübereinstimmung mit der User-Nachricht
+5. Budget-Kontrolle: Seiten nach Score sortiert bis zum Zeichenbudget (60 % von MODEL_TOKEN × 4) aufnehmen
+6. `buildBookChatSystemPrompt()` mit ausgewählten Seiten + Figuren + letzter Buchbewertung aufrufen
+7. KI-Call (Claude oder Ollama), Antwort parsen (nur `antwort`-Feld, keine `vorschlaege`)
+8. Assistant-Nachricht mit `context_info` (verwendete Seiten, total, Figuren-Flag, Review-Flag) in DB speichern
+
+**Sessions:** Buch-Chat-Sessions nutzen dieselbe `chat_sessions`-Tabelle, aber mit `page_id=0` und `page_name='__book__'`. Die Endpunkte `POST /chat/session/book` und `GET /chat/sessions/book/:book_id` filtern explizit auf `page_name = '__book__'`.
+
+**Frontend-Polling:** `sendBookChatMessage()` in `book-chat.js` startet den Job und pollt via `_startBookChatPoll()` (generisches `_startPoll()`-Muster aus `app.js`). Nach Job-Abschluss wird die Session neu geladen.
+
+**KI-Antwortformat (Buch-Chat):** `{ "antwort": "Freitext (Markdown)" }` – keine `vorschlaege`.
+
 ## Frontend-Architektur
 
 SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein Bundler. Alpine.js und vis-network via CDN.
@@ -314,7 +341,7 @@ Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`, `two-ti
 
 **Stilanmerkungen:** Werden separat verwaltet (`lektoratStyles`/`selectedStyles`). Beim Speichern (wenn selektierte Stile vorhanden) folgt ein zweiter AI-Call mit `buildStilkorrekturPrompt`, der die Stilkorrekturen auf `correctedHtml` anwendet bevor es in BookStack geschrieben wird.
 
-**`resetPage()` vs. `resetView()`:** `resetPage()` deselektiert nur die Seite. `resetView()` setzt alles zurück (Karten, History, Figuren, Graph, Kapitel) – gebunden an H1-Klick. Beide rufen `resetChat()` auf, damit Chat-State bei Seitenwechsel geleert wird.
+**`resetPage()` vs. `resetView()`:** `resetPage()` deselektiert nur die Seite. `resetView()` setzt alles zurück (Karten, History, Figuren, Graph, Kapitel) – gebunden an H1-Klick. Beide rufen `resetChat()` und `resetBookChat()` auf, damit Chat-State bei Seitenwechsel geleert wird.
 
 **Token-Schätzung:** Startet nach `loadPages()` im Hintergrund. `_tokenEstGen` wird bei Buchwechsel inkrementiert – veraltete Batches brechen ab.
 

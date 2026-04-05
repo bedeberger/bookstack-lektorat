@@ -4,6 +4,7 @@ KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). L�
 
 - **Seitenlektorat** – Rechtschreib-, Grammatik- und Stilprüfung einzelner Seiten mit selektiver Fehlerkorrektur
 - **Seiten-Chat** – Freier KI-Dialog zu einer Seite inkl. Kontext (Figuren, Buchbewertung); Änderungsvorschläge direkt in BookStack übernehmen
+- **Buch-Chat** – KI-Dialog über das gesamte Buch; relevante Seiten werden automatisch nach Thema ausgewählt und im Kontext bereitgestellt
 - **Buchbewertung** – Gesamtbewertung mit Stärken, Schwächen und Empfehlungen
 - **Figurenübersicht** – Automatische Charakterextraktion mit interaktivem Beziehungsgraph
 - **Buchstatistik** – Tägliche Snapshots von Wortanzahl, Zeichenanzahl und Tokenverbrauch als Zeitliniendiagramm
@@ -216,7 +217,7 @@ Die KI-Prompts können ohne Code-Änderung über `prompt-config.json` im Projekt
 
 **Konfigurierbar:**
 - `baseRules` – kontextuelle Regeln für alle Analysen (Schweizer Schreibkonventionen, Fehlerentscheidungsregeln etc.)
-- `systemPrompts` – die Rollenformulierung für jeden der fünf KI-Einsatzbereiche (`lektorat`, `buchbewertung`, `kapitelanalyse`, `figuren`, `stilkorrektur`)
+- `systemPrompts` – die Rollenformulierung für jeden der sechs KI-Einsatzbereiche (`lektorat`, `buchbewertung`, `kapitelanalyse`, `figuren`, `stilkorrektur`, `bookChat`)
 
 **Nicht konfigurierbar** (hartkodiert): JSON-Schemata, Feldnamen, Formatanweisungen – diese sind technische Verträge zwischen Prompt und App-Logik.
 
@@ -229,7 +230,8 @@ Die KI-Prompts können ohne Code-Änderung über `prompt-config.json` im Projekt
     "kapitelanalyse": "Du bist ein erfahrener Literaturkritiker …",
     "figuren":        "Du bist ein Literaturanalytiker …",
     "stilkorrektur":  "Du bist ein deutschsprachiger Lektor …",
-    "chat":           "Du bist ein intelligenter literarischer Assistent …"
+    "chat":           "Du bist ein intelligenter literarischer Assistent …",
+    "bookChat":       "Du bist ein intelligenter literarischer Assistent …"
   }
 }
 ```
@@ -252,8 +254,8 @@ Browser → NGINX (HTTPS, öffentlich)
             → /api/*          → BookStack (Token-Injection, serverseitig)
             → /history/*      → SQLite (lektorat.db)
             → /figures/*      → SQLite (lektorat.db)
-            → /chat/*         → SQLite (lektorat.db) + KI-Streaming (Seiten-Chat)
-            → /jobs/*         → Hintergrund-Jobs (Buchbewertung, Figurenextraktion)
+            → /chat/*         → SQLite (lektorat.db) + KI-Streaming (Seiten-Chat) + Buch-Chat-Sessions
+            → /jobs/*         → Hintergrund-Jobs (Buchbewertung, Figurenextraktion, Buch-Chat)
             → /sync/*         → Buchstatistik-Sync (manuell + Cron täglich 02:00)
             → /               → Single-Page-App (Alpine.js)
 ```

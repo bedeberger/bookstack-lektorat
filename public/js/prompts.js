@@ -18,10 +18,17 @@ const DEFAULT_PREFIXES = {
   figuren:        'Du bist ein Literaturanalytiker für deutschsprachige Texte aus der Schweiz.',
   stilkorrektur:  'Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz.',
   chat:           'Du bist ein intelligenter literarischer Assistent für deutschsprachige Texte aus der Schweiz. Du hilfst dem Autor mit Fragen zu einer spezifischen Buchseite, gibst Feedback zu Inhalt und Stil, und kannst konkrete Textänderungen vorschlagen.',
+  buchchat:       'Du bist ein intelligenter literarischer Assistent für deutschsprachige Texte aus der Schweiz. Du hilfst dem Autor mit übergreifenden Fragen zum gesamten Buch, gibst Feedback zu Themen, Figuren, Struktur und Stil, und gehst auf Textausschnitte aus mehreren Seiten ein.',
 };
 
 function buildSystem(prefix, rules) {
   return `${prefix}\n\n${rules}\n\n${JSON_ONLY}`;
+}
+
+// Für Chat-Prompts: Prefix + Rules, aber kein JSON_ONLY am Ende –
+// buildChatSystemPrompt/buildBookChatSystemPrompt hängen das Schema selbst an.
+function buildSystemNoJson(prefix, rules) {
+  return `${prefix}\n\n${rules}`;
 }
 
 const DEFAULT_ERKLAERUNG_RULE = `– ACHTUNG: Falls diese Erklärung Formulierungen enthält wie 'kein Fehler', 'korrekt', 'vertretbar', 'möglicherweise', 'im Schweizer Kontext akzeptabel' o.Ä., darf der Eintrag NICHT im Array stehen.`;
@@ -34,7 +41,8 @@ export let SYSTEM_BUCHBEWERTUNG = buildSystem(DEFAULT_PREFIXES.buchbewertung,  D
 export let SYSTEM_KAPITELANALYSE= buildSystem(DEFAULT_PREFIXES.kapitelanalyse, DEFAULT_BASE_RULES);
 export let SYSTEM_FIGUREN       = buildSystem(DEFAULT_PREFIXES.figuren,        DEFAULT_BASE_RULES);
 export let SYSTEM_STILKORREKTUR = buildSystem(DEFAULT_PREFIXES.stilkorrektur,  DEFAULT_BASE_RULES);
-export let SYSTEM_CHAT          = DEFAULT_PREFIXES.chat; // Kein buildSystem – Chat hat eigenes JSON-Schema
+export let SYSTEM_CHAT          = buildSystemNoJson(DEFAULT_PREFIXES.chat,     DEFAULT_BASE_RULES);
+export let SYSTEM_BOOK_CHAT     = buildSystemNoJson(DEFAULT_PREFIXES.buchchat, DEFAULT_BASE_RULES);
 
 /**
  * Überschreibt die konfigurierbaren Teile aller System-Prompts.
@@ -51,7 +59,8 @@ export function configurePrompts(cfg) {
   SYSTEM_KAPITELANALYSE = buildSystem(sp.kapitelanalyse || DEFAULT_PREFIXES.kapitelanalyse, rules);
   SYSTEM_FIGUREN        = buildSystem(sp.figuren        || DEFAULT_PREFIXES.figuren,        rules);
   SYSTEM_STILKORREKTUR  = buildSystem(sp.stilkorrektur  || DEFAULT_PREFIXES.stilkorrektur,  rules);
-  SYSTEM_CHAT           = sp.chat || DEFAULT_PREFIXES.chat;
+  SYSTEM_CHAT           = buildSystemNoJson(sp.chat     || DEFAULT_PREFIXES.chat,     rules);
+  SYSTEM_BOOK_CHAT      = buildSystemNoJson(sp.buchchat || DEFAULT_PREFIXES.buchchat, rules);
 }
 
 export function buildStilkorrekturPrompt(html, styles) {
@@ -310,6 +319,59 @@ export function buildChatSystemPrompt(pageName, pageText, figuren, review) {
     '',
     'vorschlaege ist ein leeres Array wenn keine konkreten Textänderungen sinnvoll sind.',
     'original muss zeichengenau mit dem Seitentext übereinstimmen.',
+    '',
+    JSON_ONLY,
+  );
+
+  return parts.join('\n');
+}
+
+/**
+ * Baut den vollständigen System-Prompt für den Buch-Chat (kein Vorschläge-System).
+ * @param {string}  bookName       Name des Buchs
+ * @param {Array}   relevantPages  Ausgewählte Seiten [{name, text}] (bereits auf Budget gekürzt)
+ * @param {Array}   figuren        Figuren-Array aus der DB (kann leer sein)
+ * @param {Object}  review         Letzte Buchbewertung aus der DB (kann null sein)
+ */
+export function buildBookChatSystemPrompt(bookName, relevantPages, figuren, review) {
+  const parts = [
+    SYSTEM_BOOK_CHAT,
+    '',
+    `Buch: «${bookName}»`,
+    '',
+  ];
+
+  if (relevantPages && relevantPages.length > 0) {
+    parts.push('=== RELEVANTE BUCHSEITEN ===');
+    for (const page of relevantPages) {
+      parts.push(`--- Seite: ${page.name} ---`);
+      parts.push(page.text);
+      parts.push('');
+    }
+  }
+
+  if (figuren && figuren.length > 0) {
+    parts.push('=== FIGUREN DES BUCHS ===');
+    parts.push(JSON.stringify(figuren, null, 2));
+    parts.push('');
+  }
+
+  if (review) {
+    parts.push('=== LETZTE BUCHBEWERTUNG ===');
+    parts.push(JSON.stringify({
+      gesamtnote:  review.gesamtnote,
+      fazit:       review.fazit,
+      staerken:    review.staerken,
+      schwaechen:  review.schwaechen,
+    }, null, 2));
+    parts.push('');
+  }
+
+  parts.push(
+    'Antworte immer im folgenden JSON-Format:',
+    '{',
+    '  "antwort": "Deine Antwort als Freitext (Markdown erlaubt)"',
+    '}',
     '',
     JSON_ONLY,
   );

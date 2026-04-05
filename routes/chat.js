@@ -28,6 +28,16 @@ const jsonBody = express.json();
 
 // ── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
+/**
+ * Normalisiert context_info aus der DB – ältere Einträge speicherten pages als
+ * String-Array, neue als Objekt-Array { name, id, slug, book_slug }.
+ */
+function normalizeContextInfo(ci) {
+  if (!ci || !Array.isArray(ci.pages)) return ci;
+  ci.pages = ci.pages.map(p => (typeof p === 'string' ? { name: p } : p));
+  return ci;
+}
+
 /** Letzte Buchbewertung für ein Buch (user-spezifisch) aus der DB. */
 function getLatestReview(bookId, userEmail) {
   const row = db.prepare(`
@@ -98,6 +108,35 @@ router.post('/session', jsonBody, (req, res) => {
   res.json({ id: result.lastInsertRowid });
 });
 
+/** Neue Buch-Chat-Session erstellen (ohne Seiten-Bezug) */
+router.post('/session/book', jsonBody, (req, res) => {
+  const { book_id, book_name } = req.body;
+  const userEmail = req.session?.user?.email || null;
+  if (!book_id || !userEmail) {
+    return res.status(400).json({ error: 'book_id und Login erforderlich.' });
+  }
+  const now = new Date().toISOString();
+  const result = db.prepare(`
+    INSERT INTO chat_sessions (book_id, book_name, page_id, page_name, user_email, created_at, last_message_at)
+    VALUES (?, ?, 0, '__book__', ?, ?, ?)
+  `).run(book_id, book_name || null, userEmail, now, now);
+  res.json({ id: result.lastInsertRowid });
+});
+
+/** Alle Buch-Chat-Sessions eines Buchs (neueste zuerst, max. 20) */
+router.get('/sessions/book/:book_id', (req, res) => {
+  const userEmail = req.session?.user?.email || null;
+  const rows = db.prepare(`
+    SELECT cs.id, cs.book_id, cs.book_name, cs.created_at, cs.last_message_at,
+           (SELECT content FROM chat_messages WHERE session_id = cs.id ORDER BY created_at ASC LIMIT 1) AS preview
+    FROM chat_sessions cs
+    WHERE cs.book_id = ? AND cs.page_name = '__book__' AND cs.user_email = ?
+    ORDER BY cs.last_message_at DESC
+    LIMIT 20
+  `).all(parseInt(req.params.book_id), userEmail);
+  res.json(rows);
+});
+
 /** Alle Sessions einer Seite (neueste zuerst, max. 20) */
 router.get('/sessions/:page_id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
@@ -121,7 +160,7 @@ router.get('/session/:id', (req, res) => {
   if (!session) return res.status(404).json({ error: 'Session nicht gefunden.' });
 
   const messages = db.prepare(`
-    SELECT id, role, content, vorschlaege, tokens_in, tokens_out, created_at
+    SELECT id, role, content, vorschlaege, tokens_in, tokens_out, context_info, created_at
     FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC
   `).all(session.id);
 
@@ -129,7 +168,8 @@ router.get('/session/:id', (req, res) => {
     ...session,
     messages: messages.map(m => ({
       ...m,
-      vorschlaege: m.vorschlaege ? JSON.parse(m.vorschlaege) : [],
+      vorschlaege:  m.vorschlaege  ? JSON.parse(m.vorschlaege)  : [],
+      context_info: m.context_info ? normalizeContextInfo(JSON.parse(m.context_info)) : null,
     })),
   });
 });

@@ -801,6 +801,157 @@ async function runChatJob(jobId, sessionId, userMsgId, message, pageText, userEm
   }
 }
 
+// ── Job: Buch-Chat ────────────────────────────────────────────────────────────
+
+const _BOOK_CHAT_STOPWORDS = new Set([
+  'und','die','der','das','ist','ein','eine','zu','in','mit','von','auf','für',
+  'den','dem','des','an','am','im','auch','nicht','als','wie','durch','über',
+  'bis','bei','nach','vor','aus','war','hat','sind','werden','wurde','haben',
+  'sein','aber','oder','wenn','dann','noch','schon','nur','kann','mehr','sehr',
+]);
+
+function _scorePageRelevance(query, text) {
+  const tokens = query.toLowerCase()
+    .split(/[\s,\.!?;:«»"'()\[\]{}]+/)
+    .filter(w => w.length >= 3 && !_BOOK_CHAT_STOPWORDS.has(w));
+  if (!tokens.length) return 0;
+  const textLow = text.toLowerCase();
+  let score = 0;
+  for (const tok of tokens) {
+    const re = new RegExp(tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    score += Math.min((textLow.match(re) || []).length, 5);
+  }
+  return score;
+}
+
+async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, userToken) {
+  const { buildBookChatSystemPrompt } = await getPrompts();
+  try {
+    updateJob(jobId, { statusText: 'Vorbereitung…', progress: 5 });
+
+    const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?')
+      .get(parseInt(sessionId), userEmail);
+    if (!session) throw new Error('Session nicht gefunden');
+
+    if (!userToken) throw new Error('Kein BookStack-Token in der Session – bitte neu einloggen.');
+
+    const authHeader = `Token ${userToken.id}:${userToken.pw}`;
+
+    // Alle Seiten des Buchs aus BookStack laden
+    updateJob(jobId, { statusText: 'Seitenliste laden…', progress: 8 });
+    const pagesListResp = await fetch(
+      `${BS_URL}/api/pages?filter[book_id]=${session.book_id}&count=500`,
+      { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(30000) }
+    );
+    if (!pagesListResp.ok) throw new Error(`BookStack Seitenliste ${pagesListResp.status}`);
+    const pages = (await pagesListResp.json()).data || [];
+
+    // Token-Budget dynamisch aus MODEL_TOKEN ableiten
+    const MODEL_TOKEN = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
+    // 60 % der Modell-Token für Seitentext reservieren (~4 Zeichen/Token)
+    const TEXT_CHAR_BUDGET = Math.floor(MODEL_TOKEN * 0.6) * 4;
+
+    // Seiteninhalt in Batches laden
+    const BATCH = 5;
+    const pageContents = [];
+    for (let i = 0; i < pages.length; i += BATCH) {
+      updateJob(jobId, {
+        statusText: `Seiten laden… ${Math.min(i + BATCH, pages.length)}/${pages.length}`,
+        progress: 10 + Math.round((i / Math.max(pages.length, 1)) * 30),
+      });
+      const batch = pages.slice(i, i + BATCH);
+      const results = await Promise.allSettled(batch.map(async p => {
+        const r = await fetch(`${BS_URL}/api/pages/${p.id}`, {
+          headers: { Authorization: authHeader },
+          signal: AbortSignal.timeout(30000),
+        });
+        if (!r.ok) return null;
+        const pd = await r.json();
+        const text = htmlToText(pd.html || '').trim();
+        return text ? { name: p.name, id: p.id, slug: p.slug, book_slug: p.book_slug, text } : null;
+      }));
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value) pageContents.push(r.value);
+      }
+    }
+
+    // Relevanz-Scoring – bei Score=0 überall bleibt die ursprüngliche Reihenfolge
+    updateJob(jobId, { statusText: 'Relevante Seiten auswählen…', progress: 42 });
+    const scored = pageContents.map(p => ({ ...p, score: _scorePageRelevance(message, p.text) }));
+    const anyScore = scored.some(p => p.score > 0);
+    if (anyScore) scored.sort((a, b) => b.score - a.score);
+
+    // Budget-Kontrolle: Seiten zufügen bis Zeichenbudget erschöpft
+    const selectedPages = [];
+    let usedChars = 0;
+    for (const p of scored) {
+      if (usedChars >= TEXT_CHAR_BUDGET) break;
+      const remaining = TEXT_CHAR_BUDGET - usedChars;
+      const text = p.text.slice(0, remaining);
+      selectedPages.push({ name: p.name, id: p.id, slug: p.slug, book_slug: p.book_slug, text });
+      usedChars += text.length;
+    }
+
+    logger.info(`Job ${jobId}: Buch-Chat – ${selectedPages.length}/${pageContents.length} Seiten im Kontext (${usedChars} / ${TEXT_CHAR_BUDGET} Zeichen).`);
+
+    // System-Prompt + Konversationshistorie
+    const figuren = _chatGetFiguren(session.book_id, userEmail);
+    const review  = _chatGetLatestReview(session.book_id, userEmail);
+    const systemPrompt = buildBookChatSystemPrompt(session.book_name || '', selectedPages, figuren, review);
+    const contextInfo = {
+      pages:      selectedPages.map(p => ({ name: p.name, id: p.id, slug: p.slug, book_slug: p.book_slug })),
+      totalPages: pageContents.length,
+      figuren:    figuren.length > 0,
+      review:     !!review,
+    };
+
+    const historyWithoutLast = _chatBuildMessageHistory(session.id).slice(0, -1);
+    const aiMessages = [...historyWithoutLast, { role: 'user', content: message }];
+
+    updateJob(jobId, { statusText: 'KI antwortet…', progress: 50 });
+
+    const onProgress = ({ chars, tokIn }) => {
+      const updates = { progress: Math.min(97, 50 + Math.round(chars / 50)) };
+      if (tokIn > 0)  updates.tokensIn  = tokIn;
+      if (chars > 0)  updates.tokensOut = Math.floor(chars / 4);
+      updateJob(jobId, updates);
+    };
+
+    const { text, tokensIn, tokensOut } = await callAIChat(aiMessages, systemPrompt, onProgress);
+
+    // Antwort parsen (nur "antwort"-Feld, kein vorschlaege)
+    let antwort = text;
+    try {
+      const clean = text.replace(/```json\s*|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      antwort = parsed.antwort ?? text;
+    } catch {
+      logger.warn(`Job ${jobId}: Buch-Chat-Antwort kein valides JSON – Rohtext wird gespeichert.`);
+    }
+
+    // Assistant-Nachricht in DB speichern (vorschlaege=NULL)
+    const assistantNow = new Date().toISOString();
+    const asstMsgResult = db.prepare(`
+      INSERT INTO chat_messages (session_id, role, content, tokens_in, tokens_out, context_info, created_at)
+      VALUES (?, 'assistant', ?, ?, ?, ?, ?)
+    `).run(session.id, antwort, tokensIn, tokensOut, JSON.stringify(contextInfo), assistantNow);
+    db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(assistantNow, session.id);
+
+    completeJob(jobId, {
+      session_id: session.id,
+      user_message_id: userMsgId,
+      assistant_message_id: asstMsgResult.lastInsertRowid,
+      tokensIn, tokensOut,
+      pagesUsed: selectedPages.length,
+      pagesTotal: pageContents.length,
+    });
+    logger.info(`Job ${jobId}: Buch-Chat session ${sessionId} abgeschlossen (${fmtTok(tokensIn)}↑ ${fmtTok(tokensOut)}↓, ${selectedPages.length}/${pageContents.length} Seiten).`);
+  } catch (e) {
+    logger.error(`Job ${jobId}: Buch-Chat Fehler: ${e.message}`);
+    failJob(jobId, e);
+  }
+}
+
 // ── Routen ────────────────────────────────────────────────────────────────────
 router.post('/check', jsonBody, (req, res) => {
   const { page_id, book_id } = req.body;
@@ -871,6 +1022,33 @@ router.post('/chat', jsonBody, (req, res) => {
 
   const jobId = createJob('chat', session_id, userEmail);
   enqueueJob(jobId, () => runChatJob(jobId, session_id, userMsgResult.lastInsertRowid, message.trim(), page_text || '', userEmail));
+  res.json({ jobId });
+});
+
+router.post('/book-chat', jsonBody, (req, res) => {
+  const { session_id, message } = req.body;
+  if (!session_id || !message?.trim()) return res.status(400).json({ error: 'session_id und message erforderlich' });
+  const userEmail = req.session?.user?.email || null;
+  if (!userEmail) return res.status(401).json({ error: 'Nicht eingeloggt' });
+  const existing = runningJobs.get(jobKey('book-chat', session_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+
+  const session = db.prepare('SELECT id FROM chat_sessions WHERE id = ? AND user_email = ?')
+    .get(parseInt(session_id), userEmail);
+  if (!session) return res.status(404).json({ error: 'Session nicht gefunden' });
+
+  const now = new Date().toISOString();
+  const userMsgResult = db.prepare(
+    `INSERT INTO chat_messages (session_id, role, content, created_at) VALUES (?, 'user', ?, ?)`
+  ).run(session.id, message.trim(), now);
+  db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(now, session.id);
+
+  const userToken = req.session?.bookstackToken
+    ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw }
+    : null;
+
+  const jobId = createJob('book-chat', session_id, userEmail);
+  enqueueJob(jobId, () => runBookChatJob(jobId, session_id, userMsgResult.lastInsertRowid, message.trim(), userEmail, userToken));
   res.json({ jobId });
 });
 

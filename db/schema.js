@@ -146,7 +146,7 @@ db.exec(`
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 7;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
   if (version < 2) {
@@ -204,6 +204,21 @@ function runMigrations() {
     db.exec('ALTER TABLE page_checks ADD COLUMN selected_errors_json TEXT');
     db.prepare('UPDATE schema_version SET version = 5').run();
     logger.info('DB-Migration auf Version 5 abgeschlossen (selected_errors_json zu page_checks hinzugefügt).');
+  }
+  if (version < 6) {
+    db.exec('ALTER TABLE chat_messages ADD COLUMN context_info TEXT');
+    db.prepare('UPDATE schema_version SET version = 6').run();
+    logger.info('DB-Migration auf Version 6 abgeschlossen (context_info zu chat_messages hinzugefügt).');
+  }
+  if (version < 7) {
+    // Spalte context_info ggf. nachrüsten (falls Version 6 via Fallback gesetzt wurde ohne ALTER TABLE)
+    const cols = db.pragma('table_info(chat_messages)').map(c => c.name);
+    if (!cols.includes('context_info')) {
+      db.exec('ALTER TABLE chat_messages ADD COLUMN context_info TEXT');
+      logger.info('DB-Migration auf Version 7: context_info-Spalte nachgerüstet.');
+    }
+    db.prepare('UPDATE schema_version SET version = 7').run();
+    logger.info('DB-Migration auf Version 7 abgeschlossen.');
   }
   // Sicherstellen dass schema_version aktuell ist (Fallback)
   if (version < CURRENT_SCHEMA_VERSION) {
