@@ -99,6 +99,7 @@ document.addEventListener('alpine:init', () => {
     chatInput: '',
     chatLoading: false,
     chatStatus: '',
+    _chatPollTimer: null,
 
     // ── Computed ─────────────────────────────────────────────────────────────
     get statusHtml() {

@@ -2,7 +2,7 @@ export const CLAUDE_API = '/claude';
 
 // Unveränderliche technische Pflicht-Anweisung – darf nicht konfiguriert werden,
 // da callAI() immer ein JSON-Objekt erwartet.
-const JSON_ONLY = 'Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach';
+const JSON_ONLY = 'Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach. Beginne deine Antwort direkt mit { und beende sie mit }.';
 
 // Standard-Werte (werden durch configurePrompts() überschrieben)
 const DEFAULT_BASE_RULES = `\
@@ -21,7 +21,7 @@ const DEFAULT_PREFIXES = {
 };
 
 function buildSystem(prefix, rules) {
-  return `${prefix} ${rules} ${JSON_ONLY}`;
+  return `${prefix}\n\n${rules}\n\n${JSON_ONLY}`;
 }
 
 const DEFAULT_ERKLAERUNG_RULE = `– ACHTUNG: Falls diese Erklärung Formulierungen enthält wie 'kein Fehler', 'korrekt', 'vertretbar', 'möglicherweise', 'im Schweizer Kontext akzeptabel' o.Ä., darf der Eintrag NICHT im Array stehen.`;
@@ -123,6 +123,8 @@ Antworte mit diesem JSON-Schema:
   "fazit": "Abschliessendes Urteil in 1-2 Sätzen"
 }
 
+${JSON_ONLY}
+
 Buchinhalt (${pageCount} Seiten):
 
 ${bookText}`;
@@ -131,6 +133,8 @@ ${bookText}`;
 export function buildChapterAnalysisPrompt(chapterName, bookName, pageCount, chText) {
   return `Analysiere das Kapitel «${chapterName}» aus dem Buch «${bookName}».
 Lies den vollständigen Kapiteltext und gib eine kompakte Analyse als JSON zurück:
+
+Antworte mit diesem JSON-Schema:
 {
   "themen": "Hauptthemen und Inhalte in 2-3 Sätzen",
   "stil": "Schreibstilbeobachtungen: Wortwahl, Satzbau, Ton in 2 Sätzen",
@@ -138,6 +142,8 @@ Lies den vollständigen Kapiteltext und gib eine kompakte Analyse als JSON zurü
   "staerken": ["konkrete Stärke 1", "konkrete Stärke 2"],
   "schwaechen": ["konkrete Schwäche 1", "konkrete Schwäche 2"]
 }
+
+${JSON_ONLY}
 
 Kapitelinhalt (${pageCount} Seiten):
 
@@ -154,6 +160,8 @@ Grundlage sind die Analysen aller ${chapterAnalyses.length} Kapitel (insgesamt $
 Kapitelanalysen:
 
 ${synthIn}
+
+${JSON_ONLY}
 
 Antworte mit diesem JSON-Schema:
 {
@@ -222,6 +230,8 @@ Antworte mit:
 
 Nur echte Personen. Sei konservativ: nur Figuren und Beziehungen die im Text eindeutig belegt sind.
 
+${JSON_ONLY}
+
 Kapiteltext (${pageCount} Seiten):
 
 ${chText}`;
@@ -239,6 +249,8 @@ export function buildFiguresConsolidationPrompt(bookName, chapterFiguren) {
 Kapitelanalysen:
 
 ${synthInput}
+
+${JSON_ONLY}
 
 Antworte mit diesem JSON-Schema:
 ${FIGUREN_SCHEMA}

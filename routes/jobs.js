@@ -257,6 +257,140 @@ function htmlToText(html) {
     .replace(/\s+/g, ' ').trim();
 }
 
+// ── Chat-Hilfsfunktionen ──────────────────────────────────────────────────────
+
+function _chatGetFiguren(bookId, userEmail) {
+  const rows = db.prepare(`
+    SELECT f.fig_id, f.name, f.kurzname, f.typ, f.beschreibung, f.beruf, f.geschlecht,
+           GROUP_CONCAT(DISTINCT ft.tag)         AS tags,
+           GROUP_CONCAT(DISTINCT fa.chapter_name) AS kapitel
+    FROM figures f
+    LEFT JOIN figure_tags        ft ON ft.figure_id = f.id
+    LEFT JOIN figure_appearances fa ON fa.figure_id = f.id
+    WHERE f.book_id = ? AND f.user_email = ?
+    GROUP BY f.id
+    ORDER BY f.sort_order
+  `).all(bookId, userEmail);
+  return rows.map(r => ({
+    id: r.fig_id, name: r.name, kurzname: r.kurzname, typ: r.typ,
+    beschreibung: r.beschreibung, beruf: r.beruf, geschlecht: r.geschlecht,
+    eigenschaften: r.tags ? r.tags.split(',') : [],
+    kapitel: r.kapitel ? r.kapitel.split(',') : [],
+  }));
+}
+
+function _chatGetLatestReview(bookId, userEmail) {
+  const row = db.prepare(`
+    SELECT review_json FROM book_reviews
+    WHERE book_id = ? AND user_email = ?
+    ORDER BY reviewed_at DESC LIMIT 1
+  `).get(bookId, userEmail);
+  if (!row) return null;
+  try { return JSON.parse(row.review_json); } catch { return null; }
+}
+
+function _chatBuildMessageHistory(sessionId) {
+  return db.prepare(`
+    SELECT role, content FROM chat_messages
+    WHERE session_id = ? ORDER BY created_at ASC
+  `).all(sessionId).map(r => ({ role: r.role, content: r.content }));
+}
+
+// ── callAIChat: Multi-Turn-Variante von callAI ────────────────────────────────
+// messages: Array von { role, content } – enthält die vollständige Konversation.
+// Entspricht _streamClaude/_streamOllama in chat.js, aber akkumuliert intern (kein SSE).
+async function callAIChat(messages, systemPrompt, onProgress) {
+  const provider = process.env.API_PROVIDER || 'claude';
+
+  if (provider === 'ollama') {
+    const host  = (process.env.OLLAMA_HOST || 'http://localhost:11434').replace(/\/$/, '');
+    const model = process.env.OLLAMA_MODEL || 'llama3.2';
+    const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
+    const ollamaMessages = [{ role: 'system', content: systemPrompt }, ...messages];
+    const estimatedTokIn = Math.ceil(ollamaMessages.reduce((s, m) => s + (m.content?.length || 0), 0) / 4);
+
+    const resp = await fetch(`${host}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages: ollamaMessages, stream: true, options: { num_ctx: maxTokens, think: false } }),
+    });
+    if (!resp.ok) throw new Error(`Ollama ${resp.status}: ${await resp.text()}`);
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '', text = '', tokensIn = 0, tokensOut = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const chunk = JSON.parse(line);
+          if (chunk.done) {
+            tokensIn  = chunk.prompt_eval_count || estimatedTokIn;
+            tokensOut = chunk.eval_count || 0;
+            if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
+          } else {
+            text += chunk.message?.content || '';
+            if (onProgress) onProgress({ chars: text.length, tokIn: estimatedTokIn });
+          }
+        } catch { }
+      }
+    }
+    return { text, tokensIn, tokensOut };
+  } else {
+    const model     = process.env.MODEL_NAME  || 'claude-sonnet-4-6';
+    const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
+    const body = { model, max_tokens: maxTokens, messages, stream: true };
+    if (systemPrompt) body.system = systemPrompt;
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(`Claude ${resp.status}: ${JSON.stringify(await resp.json())}`);
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let text = '', buf = '', tokensIn = 0, tokensOut = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6);
+        if (raw === '[DONE]') break;
+        try {
+          const ev = JSON.parse(raw);
+          if (ev.type === 'message_start' && ev.message?.usage) {
+            tokensIn = ev.message.usage.input_tokens || 0;
+            if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
+          }
+          if (ev.type === 'message_delta' && ev.usage) {
+            tokensOut = ev.usage.output_tokens || 0;
+          }
+          if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+            text += ev.delta.text;
+            if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
+          }
+        } catch { }
+      }
+    }
+    return { text, tokensIn, tokensOut };
+  }
+}
+
 const SINGLE_PASS_LIMIT = 60000;
 const BATCH_SIZE = 5;
 
@@ -598,6 +732,81 @@ async function runBatchCheckJob(jobId, bookId, userEmail) {
   }
 }
 
+// ── Job: Chat ─────────────────────────────────────────────────────────────────
+async function runChatJob(jobId, sessionId, message, pageText, userEmail) {
+  const { buildChatSystemPrompt } = await getPrompts();
+  try {
+    updateJob(jobId, { statusText: 'Vorbereitung…', progress: 5 });
+
+    const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?')
+      .get(parseInt(sessionId), userEmail);
+    if (!session) throw new Error('Session nicht gefunden');
+
+    const now = new Date().toISOString();
+
+    // User-Nachricht in DB speichern
+    const userMsgResult = db.prepare(`
+      INSERT INTO chat_messages (session_id, role, content, created_at) VALUES (?, 'user', ?, ?)
+    `).run(session.id, message, now);
+    db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(now, session.id);
+
+    // Kontext aus DB laden
+    const figuren = _chatGetFiguren(session.book_id, userEmail);
+    const review  = _chatGetLatestReview(session.book_id, userEmail);
+    const systemPrompt = buildChatSystemPrompt(session.page_name || 'Unbekannte Seite', pageText, figuren, review);
+
+    // Konversationshistorie aufbauen (identisch zu chat.js /send)
+    const historyWithoutLast = _chatBuildMessageHistory(session.id).slice(0, -1);
+    const aiMessages = [...historyWithoutLast, { role: 'user', content: message }];
+
+    updateJob(jobId, { statusText: 'KI antwortet…', progress: 10 });
+
+    const onProgress = ({ chars, tokIn }) => {
+      const updates = { progress: Math.min(97, 10 + Math.round(chars / 50)) };
+      if (tokIn > 0)  updates.tokensIn  = tokIn;
+      if (chars > 0)  updates.tokensOut = Math.floor(chars / 4);
+      updateJob(jobId, updates);
+    };
+
+    const { text, tokensIn, tokensOut } = await callAIChat(aiMessages, systemPrompt, onProgress);
+
+    // Antwort parsen
+    let antwort = text;
+    let vorschlaege = [];
+    try {
+      const clean = text.replace(/```json\s*|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      antwort     = parsed.antwort     ?? text;
+      vorschlaege = parsed.vorschlaege ?? [];
+    } catch {
+      logger.warn(`Job ${jobId}: Chat-Antwort kein valides JSON – Rohtext wird gespeichert.`);
+    }
+
+    // Assistant-Nachricht in DB speichern
+    const assistantNow = new Date().toISOString();
+    const asstMsgResult = db.prepare(`
+      INSERT INTO chat_messages (session_id, role, content, vorschlaege, tokens_in, tokens_out, created_at)
+      VALUES (?, 'assistant', ?, ?, ?, ?, ?)
+    `).run(
+      session.id, antwort,
+      vorschlaege.length > 0 ? JSON.stringify(vorschlaege) : null,
+      tokensIn, tokensOut, assistantNow
+    );
+    db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(assistantNow, session.id);
+
+    completeJob(jobId, {
+      session_id: session.id,
+      user_message_id: userMsgResult.lastInsertRowid,
+      assistant_message_id: asstMsgResult.lastInsertRowid,
+      tokensIn, tokensOut,
+    });
+    logger.info(`Job ${jobId}: Chat session ${sessionId} abgeschlossen (${fmtTok(tokensIn)}↑ ${fmtTok(tokensOut)}↓ Tokens).`);
+  } catch (e) {
+    logger.error(`Job ${jobId}: Chat Fehler: ${e.message}`);
+    failJob(jobId, e);
+  }
+}
+
 // ── Routen ────────────────────────────────────────────────────────────────────
 router.post('/check', jsonBody, (req, res) => {
   const { page_id, book_id } = req.body;
@@ -643,6 +852,18 @@ router.post('/batch-check', jsonBody, (req, res) => {
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const jobId = createJob('batch-check', book_id, userEmail);
   enqueueJob(jobId, () => runBatchCheckJob(jobId, book_id, userEmail));
+  res.json({ jobId });
+});
+
+router.post('/chat', jsonBody, (req, res) => {
+  const { session_id, message, page_text } = req.body;
+  if (!session_id || !message?.trim()) return res.status(400).json({ error: 'session_id und message erforderlich' });
+  const userEmail = req.session?.user?.email || null;
+  if (!userEmail) return res.status(401).json({ error: 'Nicht eingeloggt' });
+  const existing = runningJobs.get(jobKey('chat', session_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const jobId = createJob('chat', session_id, userEmail);
+  enqueueJob(jobId, () => runChatJob(jobId, session_id, message.trim(), page_text || '', userEmail));
   res.json({ jobId });
 });
 

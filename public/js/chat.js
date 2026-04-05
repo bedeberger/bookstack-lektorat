@@ -2,7 +2,7 @@ import { escHtml, htmlToText, fmtTok } from './utils.js';
 
 // Chat-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
-// Direkt-Streaming via fetch + ReadableStream – kein Job-Queue nötig.
+// Nachrichten laufen über den Job-Queue (/jobs/chat) – tab-resilient.
 
 export const chatMethods = {
 
@@ -69,6 +69,23 @@ export const chatMethods = {
       this.chatMessages  = data.messages || [];
       this.chatStatus    = '';
       this.$nextTick(() => this._scrollChatToBottom());
+
+      // Reconnect: prüfen ob ein Chat-Job für diese Session noch läuft
+      if (!this._chatPollTimer && !this.chatLoading) {
+        try {
+          const { jobId } = await fetch(`/jobs/active?type=chat&book_id=${sessionId}`).then(r => r.json());
+          if (jobId) {
+            this.chatLoading = true;
+            const lastMsg = this.chatMessages[this.chatMessages.length - 1];
+            if (lastMsg?.role === 'user') {
+              this.chatMessages.push({ role: 'assistant', content: '', vorschlaege: [], id: null, streaming: true });
+            }
+            this.startChatPoll(jobId);
+          }
+        } catch (e) {
+          console.error('[loadChatSession] active-job check:', e);
+        }
+      }
     } catch (e) {
       console.error('[loadChatSession]', e);
     }
@@ -93,7 +110,7 @@ export const chatMethods = {
     }
   },
 
-  // ── Nachricht senden (Streaming) ────────────────────────────────────────────
+  // ── Nachricht senden (Job-Queue) ────────────────────────────────────────────
 
   async sendChatMessage() {
     const msg = (this.chatInput || '').trim();
@@ -103,13 +120,10 @@ export const chatMethods = {
     this.chatLoading = true;
     this.chatStatus  = '';
 
-    // User-Nachricht sofort anzeigen
+    // User-Nachricht sofort anzeigen (optimistisch)
     this.chatMessages.push({ role: 'user', content: msg, id: null });
-
-    // Placeholder für Assistant-Antwort (progressiv befüllt)
-    const placeholderIdx = this.chatMessages.length;
+    // Placeholder für die Antwort (zeigt Spinner während Job läuft)
     this.chatMessages.push({ role: 'assistant', content: '', vorschlaege: [], id: null, streaming: true });
-
     this.$nextTick(() => this._scrollChatToBottom());
 
     // Seiteninhalt holen (frisch laden für aktuelle Version)
@@ -117,98 +131,65 @@ export const chatMethods = {
     try {
       const pageData = await this.bsGet('pages/' + this.currentPage.id);
       pageText = htmlToText(pageData.html || '');
-      // originalHtml für spätere Vorschlags-Übernahme sichern
       if (!this.originalHtml) this.originalHtml = pageData.html || '';
     } catch (e) {
       console.warn('[sendChatMessage] Seiteninhalt konnte nicht geladen werden:', e.message);
     }
 
     try {
-      const resp = await fetch('/chat/send', {
+      const { jobId } = await fetch('/jobs/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: this.chatSessionId,
-          message:    msg,
-          page_text:  pageText,
-        }),
-      });
+        body: JSON.stringify({ session_id: this.chatSessionId, message: msg, page_text: pageText }),
+      }).then(r => r.json());
 
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${resp.status}`);
-      }
-
-      // SSE-Stream lesen
-      const reader  = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-      let streamError = null; // Fehler aus Server-SSE-Event merken
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop(); // unvollständige letzte Zeile aufheben
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const raw = line.slice(6);
-          if (raw === '[DONE]') continue;
-
-          let ev;
-          try { ev = JSON.parse(raw); } catch { continue; } // JSON-Parse-Fehler ignorieren
-
-          if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
-            this.chatMessages[placeholderIdx].content += ev.delta.text;
-            this.$nextTick(() => this._scrollChatToBottom());
-          }
-
-          if (ev.type === 'error') {
-            streamError = new Error(ev.error || 'KI-Fehler');
-          }
-
-          if (ev.type === 'meta') {
-            this.chatMessages[placeholderIdx].id          = ev.assistant_message_id;
-            this.chatMessages[placeholderIdx].vorschlaege = ev.vorschlaege || [];
-            this.chatMessages[placeholderIdx].tokens_in   = ev.tokens_in;
-            this.chatMessages[placeholderIdx].tokens_out  = ev.tokens_out;
-            if (placeholderIdx > 0) {
-              this.chatMessages[placeholderIdx - 1].id = ev.user_message_id;
-            }
-          }
-        }
-      }
-
-      // Server-seitigen Fehler jetzt werfen (nach Stream-Ende)
-      if (streamError) throw streamError;
-
-      // JSON parsen: nur antwort-Text anzeigen, rohen JSON einklappen
-      try {
-        const clean = this.chatMessages[placeholderIdx].content.replace(/```json\s*|```/g, '').trim();
-        const parsed = JSON.parse(clean);
-        if (parsed.antwort !== undefined) {
-          this.chatMessages[placeholderIdx].content = parsed.antwort;
-        }
-      } catch { /* Rohtext behalten wenn kein valides JSON */ }
-
-      // Streaming-Marker entfernen → Rendering wechselt auf finalen Modus
-      this.chatMessages[placeholderIdx].streaming = false;
-
-      // Session-Liste aktualisieren (Preview + last_message_at)
-      if (this.currentPage) await this.loadChatSessions(this.currentPage.id);
-
+      localStorage.setItem('lektorat_chat_job_' + this.chatSessionId, jobId);
+      this.startChatPoll(jobId);
     } catch (e) {
       console.error('[sendChatMessage]', e);
-      this.chatMessages[placeholderIdx].content  = '';
-      this.chatMessages[placeholderIdx].streaming = false;
-      this.chatStatus = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
-    } finally {
+      // Optimistische Nachrichten entfernen
+      this.chatMessages = this.chatMessages.slice(0, -2);
+      this.chatStatus  = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
       this.chatLoading = false;
       this.$nextTick(() => this._scrollChatToBottom());
     }
+  },
+
+  // Pollt einen laufenden Chat-Job und aktualisiert den UI-State.
+  // Wird beim frischen Start und beim Reconnect nach Tab-Schliessen aufgerufen.
+  startChatPoll(jobId) {
+    const sessionId = this.chatSessionId;
+    this._startPoll({
+      timerProp: '_chatPollTimer',
+      jobId,
+      lsKey: 'lektorat_chat_job_' + sessionId,
+      onProgress: (job) => {
+        const tokIn  = job.tokensIn  || 0;
+        const tokOut = job.tokensOut || 0;
+        const tok = tokIn + tokOut > 0 ? ` · ↑${fmtTok(tokIn)} ↓${fmtTok(tokOut)}` : '';
+        this.chatStatus = `<span class="spinner"></span>${escHtml(job.statusText || 'KI antwortet…')}${tok}`;
+      },
+      onNotFound: async () => {
+        // Job weg (Server-Neustart) → Session aus DB neu laden
+        this.chatLoading = false;
+        this.chatStatus  = '';
+        this.chatMessages = this.chatMessages.filter(m => !m.streaming);
+        await this.loadChatSession(sessionId);
+      },
+      onError: (job) => {
+        this.chatLoading = false;
+        this.chatMessages = this.chatMessages.filter(m => !m.streaming);
+        this.chatStatus = `<span class="error-msg">Fehler: ${escHtml(job.error || 'Unbekannter Fehler')}</span>`;
+      },
+      onDone: async () => {
+        this.chatLoading = false;
+        this.chatMessages = this.chatMessages.filter(m => !m.streaming);
+        this.chatStatus  = '';
+        // Finale Nachrichten (inkl. Vorschläge, Token-Counts) aus DB laden
+        await this.loadChatSession(sessionId);
+        if (this.currentPage) await this.loadChatSessions(this.currentPage.id);
+      },
+    });
   },
 
   // ── Vorschlag übernehmen ────────────────────────────────────────────────────
@@ -285,6 +266,7 @@ export const chatMethods = {
 
   /** Wird beim Seitenwechsel (selectPage / resetPage) aufgerufen. */
   resetChat() {
+    if (this._chatPollTimer) { clearInterval(this._chatPollTimer); this._chatPollTimer = null; }
     this.showChatCard  = false;
     this.chatSessions  = [];
     this.chatMessages  = [];
