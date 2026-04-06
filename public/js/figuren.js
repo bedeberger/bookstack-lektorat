@@ -20,8 +20,10 @@ export const figurenMethods = {
     const allEvents = [];
     for (const f of (this.figuren || [])) {
       for (const ev of (f.lebensereignisse || [])) {
+        const year = parseInt(ev.datum);
+        if (!year) continue; // Events ohne errechenbare Jahreszahl ignorieren
         allEvents.push({
-          datum: ev.datum || '',
+          datum: String(year),
           ereignis: ev.ereignis || '',
           typ: ev.typ || 'persoenlich',
           bedeutung: ev.bedeutung || '',
@@ -30,7 +32,7 @@ export const figurenMethods = {
       }
     }
 
-    // Externe Events mit identischem datum+ereignis zusammenführen
+    // Events mit identischem datum+ereignis zusammenführen (alle Typen)
     const groups = [];
     const used = new Set();
     for (let i = 0; i < allEvents.length; i++) {
@@ -43,29 +45,20 @@ export const figurenMethods = {
         bedeutung: ev.bedeutung,
         figuren: [ev.figur],
       };
-      if (ev.typ === 'extern') {
-        for (let j = i + 1; j < allEvents.length; j++) {
-          if (used.has(j)) continue;
-          const ev2 = allEvents[j];
-          if (ev2.typ === 'extern' && ev2.datum === ev.datum && ev2.ereignis === ev.ereignis) {
-            group.figuren.push(ev2.figur);
-            used.add(j);
-          }
+      for (let j = i + 1; j < allEvents.length; j++) {
+        if (used.has(j)) continue;
+        const ev2 = allEvents[j];
+        if (ev2.datum === ev.datum && ev2.ereignis === ev.ereignis) {
+          group.figuren.push(ev2.figur);
+          used.add(j);
         }
       }
       used.add(i);
       groups.push(group);
     }
 
-    // Chronologisch sortieren: Jahrzahl wenn parsebar, sonst String
-    groups.sort((a, b) => {
-      const ya = parseInt(a.datum) || 0;
-      const yb = parseInt(b.datum) || 0;
-      if (ya && yb) return ya - yb;
-      if (ya) return -1;
-      if (yb) return 1;
-      return a.datum.localeCompare(b.datum, 'de');
-    });
+    // Chronologisch sortieren
+    groups.sort((a, b) => parseInt(a.datum) - parseInt(b.datum));
 
     this.globalZeitstrahl = groups;
   },
