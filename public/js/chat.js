@@ -185,9 +185,20 @@ export const chatMethods = {
   // ── Vorschlag übernehmen ────────────────────────────────────────────────────
 
   async applyChatVorschlag(vorschlag, msgIdx, vIdx) {
-    if (!this.currentPage || !this.originalHtml) {
+    if (!this.currentPage) {
       this.chatStatus = '<span class="error-msg">Seiteninhalt nicht geladen – bitte Seite neu auswählen.</span>';
       return;
+    }
+
+    // originalHtml nachladen falls nicht vorhanden (z.B. nach Seitenwechsel)
+    if (!this.originalHtml) {
+      try {
+        const pageData = await this.bsGet('pages/' + this.currentPage.id);
+        this.originalHtml = pageData.html || '';
+      } catch (e) {
+        this.chatStatus = '<span class="error-msg">Seiteninhalt konnte nicht geladen werden.</span>';
+        return;
+      }
     }
 
     // Direkte String-Ersetzung (zeichengenau, wie _applyCorrections)
