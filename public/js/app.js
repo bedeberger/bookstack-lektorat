@@ -13,6 +13,7 @@ import { graphMethods } from './graph.js';
 import { bookstatsMethods } from './bookstats.js';
 import { chatMethods } from './chat.js';
 import { bookChatMethods } from './book-chat.js';
+import { synonymeMethods } from './synonyme.js';
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('lektorat', () => ({
@@ -112,6 +113,13 @@ document.addEventListener('alpine:init', () => {
     bookChatProgress: 0,
     bookChatStatus: '',
     _bookChatPollTimer: null,
+    showSynonymeCard: false,
+    synonymeLoading: false,
+    synonymeProgress: 0,
+    synonymeResult: null,
+    synonymeStatus: '',
+    synonymeHtml: null,
+    _synonymePollTimer: null,
 
     // ── Computed ─────────────────────────────────────────────────────────────
     get statusHtml() {
@@ -250,6 +258,7 @@ document.addEventListener('alpine:init', () => {
       }
       // Laufenden Poll stoppen – Seite wechselt, laufender Check gehört zur alten Seite
       if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
+      this.resetSynonymeCard();
       this.currentPage = p;
       this.currentPageEmpty = false;
       this.originalHtml = null;
@@ -405,6 +414,7 @@ document.addEventListener('alpine:init', () => {
     resetPage() {
       if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
       this.resetChat();
+      this.resetSynonymeCard();
       this.currentPage = null;
       this.currentPageUpdatedAt = null;
       this.originalHtml = null;
@@ -471,6 +481,7 @@ document.addEventListener('alpine:init', () => {
       if (this._statsChart) { this._statsChart.destroy(); this._statsChart = null; }
       this.resetChat();
       this.resetBookChat();
+      this.resetSynonymeCard();
     },
 
     // ── BookStack Token Setup ────────────────────────────────────────────────
@@ -511,5 +522,6 @@ document.addEventListener('alpine:init', () => {
     ...bookstatsMethods,
     ...chatMethods,
     ...bookChatMethods,
+    ...synonymeMethods,
   }));
 });

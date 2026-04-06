@@ -18,6 +18,7 @@ function buildSystemNoJson(prefix, rules) {
 // Live-Exports – werden durch configurePrompts() gesetzt (Pflicht vor erstem Prompt-Aufruf).
 // Alle importierenden Module erhalten via ESM-Live-Binding immer den aktuellen Wert.
 export let ERKLAERUNG_RULE      = null;
+export let STOPWORDS            = [];
 export let SYSTEM_LEKTORAT      = null;
 export let SYSTEM_BUCHBEWERTUNG = null;
 export let SYSTEM_KAPITELANALYSE= null;
@@ -25,6 +26,7 @@ export let SYSTEM_FIGUREN       = null;
 export let SYSTEM_STILKORREKTUR = null;
 export let SYSTEM_CHAT          = null;
 export let SYSTEM_BOOK_CHAT     = null;
+export let SYSTEM_SYNONYME      = null;
 
 /**
  * Setzt alle System-Prompts aus dem promptConfig-Objekt (geladen aus prompt-config.json).
@@ -37,6 +39,7 @@ export function configurePrompts(cfg) {
   if (!rules) throw new Error('prompt-config.json: Pflichtfeld "baseRules" fehlt.');
   const sp = cfg.systemPrompts || {};
   ERKLAERUNG_RULE       = cfg.erklaerungRule || '';
+  STOPWORDS             = Array.isArray(cfg.stopwords) ? cfg.stopwords : [];
   SYSTEM_LEKTORAT       = buildSystem(sp.lektorat       || '', rules);
   SYSTEM_BUCHBEWERTUNG  = buildSystem(sp.buchbewertung  || '', rules);
   SYSTEM_KAPITELANALYSE = buildSystem(sp.kapitelanalyse || '', rules);
@@ -44,6 +47,7 @@ export function configurePrompts(cfg) {
   SYSTEM_STILKORREKTUR  = buildSystem(sp.stilkorrektur  || '', rules);
   SYSTEM_CHAT           = buildSystemNoJson(sp.chat     || '', rules);
   SYSTEM_BOOK_CHAT      = buildSystemNoJson(sp.buchchat || '', rules);
+  SYSTEM_SYNONYME       = buildSystem(sp.synonyme       || '', rules);
 }
 
 export function buildStilkorrekturPrompt(html, styles) {
@@ -160,12 +164,12 @@ Antworte mit diesem JSON-Schema:
   "gesamtnote": "Zahl von 1 (sehr schwach) bis 5 (ausgezeichnet)",
   "gesamtnote_begruendung": "Ein Satz warum diese Note",
   "zusammenfassung": "2-3 Sätze Gesamteindruck",
-  "struktur": "Analyse des Aufbaus und der Struktur über alle Kapitel (3-4 Sätze)",
-  "stil": "Analyse des Schreibstils und seiner Konsistenz über das gesamte Buch (3-4 Sätze)",
+  "struktur": "Analyse des Aufbaus und der Struktur über alle Kapitel (3-5 Sätze)",
+  "stil": "Analyse des Schreibstils und seiner Konsistenz über das gesamte Buch (3-5 Sätze)",
   "staerken": ["Stärke 1", "Stärke 2", "Stärke 3"],
   "schwaechen": ["Schwäche 1", "Schwäche 2"],
   "empfehlungen": ["Empfehlung 1", "Empfehlung 2", "Empfehlung 3"],
-  "fazit": "Abschliessendes Urteil in 1-2 Sätzen"
+  "fazit": "Abschliessendes Urteil in 1-3 Sätzen"
 }`;
 }
 
@@ -360,6 +364,55 @@ export function buildBookChatSystemPrompt(bookName, relevantPages, figuren, revi
   );
 
   return parts.join('\n');
+}
+
+// ── Synonymanalyse ────────────────────────────────────────────────────────────
+
+export function buildSynonymPrompt(text) {
+  const stopwordsBlock = STOPWORDS.length > 0
+    ? `\nSTOPWÖRTER – ABSOLUTE AUSSCHLUSSLISTE (Pflicht-Prüfung vor jedem Eintrag):\nDiese Wörter dürfen unter keinen Umständen im «woerter»-Array erscheinen, egal wie oft sie im Text vorkommen. Prüfe auch Großschreibung und flektierte Formen – ist der Wortstamm auf der Liste, gehört das Wort nicht ins Ergebnis:\n${STOPWORDS.join(', ')}\nSelbsttest (MUSS für jeden Eintrag durchgeführt werden): «Ist dieses Wort oder sein Stamm auf der Ausschlussliste?» – Wenn ja oder unsicher: weglassen und das nächste Wort prüfen.\n`
+    : '';
+  return `Analysiere diesen deutschsprachigen Prosatext und identifiziere Wörter oder kurze Phrasen, die stilistisch störend oft wiederholt werden.
+${stopwordsBlock}
+Kriterien:
+- Mindestens 3 Vorkommen im Text ODER mindestens 2 Vorkommen in enger Nähe (innerhalb von 5 Sätzen)
+- Zähle LEMMA-basiert: flektierte Formen desselben Worts zählen zusammen. «lief», «läuft», «gelaufen» → alle zählen für das Lemma «laufen». Im «wort»-Feld die häufigste oder auffälligste Form im Text eintragen.
+- Nur stilistisch ersetzbare Inhaltswörter – keine Pronomen, keine Hilfsverben, keine Artikel, keine Konjunktionen, keine Präpositionen, keine Eigennamen, keine grammatisch erzwungenen Formen, keine inhaltlich unvermeidlichen Begriffe
+- Sortiere nach Dringlichkeit (auffälligste Wiederholungen zuerst)
+- Maximal 8 Wörter; pro Wort maximal 6 Vorkommen
+- Wenn keine geeigneten Wörter gefunden werden: «woerter» als leeres Array zurückgeben
+
+Für jedes Wort: Liste jede Textstelle einzeln auf. Gib den vollständigen Satz als Passage an (zeichengenau wie im Text). Schlage pro Stelle 2–4 Synonyme vor.
+
+WICHTIG – Kontext-Selbsttest pro Vorkommen: Bevor du ein Synonym einträgst, setze es gedanklich in den genauen Satz ein. Klingt der Satz danach natürliches Deutsch? Bleibt die Bedeutung exakt erhalten? Nur dann eintragen. Wenn kein Synonym diesen Test besteht: das Vorkommen weglassen (nicht ins vorkommen-Array aufnehmen).
+
+WICHTIG – Grammatische Form: Die Synonyme müssen exakt dieselbe Konjugation (bei Verben) bzw. Deklination (bei Nomen/Adjektiven) wie das Originalwort haben. Beispiel: steht im Text «sah» (Präteritum, 3. Person Singular), muss das Synonym ebenfalls im Präteritum stehen («erblickte», nicht «erblicken»).
+
+WICHTIG – Semantische Funktion: Das Verb «sein» hat viele verschiedene Verwendungen, die unterschiedliche Alternativen erfordern:
+- Adjektivprädikat («war unberührt», «ist entzaubert») → «blieb», «zeigte sich», «wirkte», «galt als» (NICHT «verlief», «befindet sich», «gestaltete sich»)
+- Gleichsetzungsnominativ («waren eine behütete Zeit», «waren eine andere Schweiz») → «galten als», «stellten … dar», «wirkten wie» (NICHT «verliefen», «existierten»)
+- Zeitangabe / Zustandsaussage («das war noch vor …», «war unberührt») → je nach Kontext «lag», «stammte», «befand sich» oder Adjektivalternative
+Generische Füllalternativen wie «existierte», «verlief», «gestaltete sich» nur verwenden, wenn sie im konkreten Satz tatsächlich funktionieren.
+
+WICHTIG – Passage: muss eine zeichengenaue Kopie des Satzes aus dem Text sein – kein Kürzen, kein Umformulieren.
+
+Antworte mit diesem JSON-Schema:
+{
+  "woerter": [
+    {
+      "wort": "exakte Wortform wie im Text",
+      "vorkommen": [
+        {
+          "passage": "Vollständiger Satz zeichengenau aus dem Text",
+          "synonyme": ["Alternative1", "Alternative2", "Alternative3"]
+        }
+      ]
+    }
+  ]
+}
+
+Text:
+${text}`;
 }
 
 export function buildLektoratPrompt(text, html) {

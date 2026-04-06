@@ -608,6 +608,48 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
   }
 }
 
+// ── Job: Synonymanalyse ───────────────────────────────────────────────────────
+async function runSynonymJob(jobId, pageId, userEmail, userToken) {
+  const { SYSTEM_SYNONYME, buildSynonymPrompt } = await getPrompts();
+  try {
+    updateJob(jobId, { statusText: 'Lade Seiteninhalt…', progress: 5 });
+
+    const authHeader = userToken
+      ? `Token ${userToken.id}:${userToken.pw}`
+      : `Token ${process.env.TOKEN_ID || ''}:${process.env.TOKEN_KENNWORT || ''}`;
+    const pdResp = await fetch(`${BS_URL}/api/pages/${pageId}`, {
+      headers: { Authorization: authHeader },
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!pdResp.ok) throw new Error(`BookStack ${pdResp.status}: ${await pdResp.text()}`);
+    const pd = await pdResp.json();
+
+    const html = pd.html || '';
+    const text = htmlToText(html);
+    if (!text.trim()) { completeJob(jobId, { empty: true }); return; }
+
+    const tok = { in: 0, out: 0 };
+    updateJob(jobId, { statusText: 'KI analysiert…', progress: 10 });
+
+    const result = await aiCall(jobId, tok,
+      buildSynonymPrompt(text),
+      SYSTEM_SYNONYME,
+      10, 97, 4000,
+    );
+
+    if (!Array.isArray(result?.woerter)) throw new Error('woerter-Array fehlt');
+
+    const stopwordSet = new Set((_promptConfig.stopwords || []).map(w => w.toLowerCase()));
+    const woerter = result.woerter.filter(w => !stopwordSet.has((w.wort || '').toLowerCase()));
+
+    completeJob(jobId, { woerter, pageHtml: html, tokensIn: tok.in, tokensOut: tok.out });
+    logger.info(`Job ${jobId}: Synonymanalyse Seite ${pageId} (${userEmail}) abgeschlossen (${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+  } catch (e) {
+    logger.error(`Job ${jobId}: Synonymanalyse Fehler: ${e.message}`);
+    failJob(jobId, e);
+  }
+}
+
 // ── Job: Seiten-Lektorat ──────────────────────────────────────────────────────
 async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
   const { SYSTEM_LEKTORAT, buildLektoratPrompt } = await getPrompts();
@@ -798,12 +840,7 @@ async function runChatJob(jobId, sessionId, userMsgId, message, pageText, userEm
 
 // ── Job: Buch-Chat ────────────────────────────────────────────────────────────
 
-const _BOOK_CHAT_STOPWORDS = new Set([
-  'und','die','der','das','ist','ein','eine','zu','in','mit','von','auf','für',
-  'den','dem','des','an','am','im','auch','nicht','als','wie','durch','über',
-  'bis','bei','nach','vor','aus','war','hat','sind','werden','wurde','haben',
-  'sein','aber','oder','wenn','dann','noch','schon','nur','kann','mehr','sehr',
-]);
+const _BOOK_CHAT_STOPWORDS = new Set(_promptConfig.stopwords || []);
 
 function _scorePageRelevance(query, text) {
   const tokens = query.toLowerCase()
@@ -959,6 +996,20 @@ router.post('/check', jsonBody, (req, res) => {
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const jobId = createJob('check', page_id, userEmail);
   enqueueJob(jobId, () => runCheckJob(jobId, page_id, book_id || null, userEmail, userToken));
+  res.json({ jobId });
+});
+
+router.post('/synonyme', jsonBody, (req, res) => {
+  const { page_id } = req.body;
+  if (!page_id) return res.status(400).json({ error: 'page_id fehlt' });
+  const userEmail = req.session?.user?.email || null;
+  const userToken = req.session?.bookstackToken
+    ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw }
+    : null;
+  const existing = runningJobs.get(jobKey('synonyme', page_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const jobId = createJob('synonyme', page_id, userEmail);
+  enqueueJob(jobId, () => runSynonymJob(jobId, page_id, userEmail, userToken));
   res.json({ jobId });
 });
 

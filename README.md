@@ -7,6 +7,7 @@ KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). L�
 - **Buch-Chat** – KI-Dialog über das gesamte Buch; relevante Seiten werden automatisch nach Thema ausgewählt und im Kontext bereitgestellt
 - **Buchbewertung** – Gesamtbewertung mit Stärken, Schwächen und Empfehlungen
 - **Figurenübersicht** – Automatische Charakterextraktion mit interaktivem Beziehungsgraph
+- **Synonymanalyse** – Erkennung häufig wiederholter Wörter pro Seite mit direkter Ersetzung durch KI-generierte Synonymvorschläge
 - **Buchstatistik** – Tägliche Snapshots von Wortanzahl, Zeichenanzahl und Tokenverbrauch als Zeitliniendiagramm
 - **Zwei KI-Provider** – Anthropic Claude (Cloud) oder Ollama (lokal/offline)
 
@@ -79,6 +80,7 @@ Dann `.env` öffnen und alle Pflichtfelder setzen:
 | `MODEL_TOKEN` | Max. Output-Tokens (Standard: `64000`) | Nein |
 | `OLLAMA_HOST` | URL der Ollama-Instanz (nur bei `API_PROVIDER=ollama`) | Ja* |
 | `OLLAMA_MODEL` | Ollama-Modell, z.B. `llama3.2` (nur bei `API_PROVIDER=ollama`) | Ja* |
+| `OLLAMA_TEMPERATURE` | Temperatur für Ollama-Aufrufe (Standard: `0.1`) | Nein |
 | `MAX_CONCURRENT_JOBS` | Max. gleichzeitig laufende KI-Jobs über alle User (Standard: `2`). Bei einem einzelnen Modell (Ollama) empfiehlt sich `1`, um konkurrierende Anfragen zu vermeiden. | Nein |
 | `DB_PATH` | Pfad zur SQLite-Datenbank (Standard: `./lektorat.db`; bei Docker via Compose gesetzt) | Nein |
 

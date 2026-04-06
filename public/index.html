@@ -450,7 +450,7 @@
 <div class="card" id="editor-card" x-show="showEditorCard" x-cloak>
   <div class="card-header">
     <div>
-      <span class="card-title" x-text="currentPage?.name || '–'"></span>
+      <span class="card-title" x-text="'Lektorat: ' + (currentPage?.name || '–')"></span>
       <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag" style="margin-left:6px;text-decoration:none;" x-text="currentPage ? 'ID ' + currentPage.id + ' ↗' : ''"></a>
     </div>
     <div class="card-actions">
@@ -458,6 +458,7 @@
       <button @click="toggleDiff()" x-show="correctedHtml" :class="{ primary: showDiff }">Diff</button>
       <button class="success" @click="saveCorrections()" x-show="correctedHtml && (selectedErrors.some(v => v) || selectedStyles.some(v => v))">Korrekturen speichern</button>
       <button @click="toggleChatCard()" :class="{ primary: showChatCard }" :disabled="currentPageEmpty" title="Chat mit dieser Seite">Chat</button>
+      <button @click="toggleSynonymeCard()" :class="{ primary: showSynonymeCard }" :disabled="currentPageEmpty" title="Synonymanalyse für diese Seite">Synonyme</button>
       <button class="btn-card-close" @click="resetPage()" title="Schliessen">×</button>
     </div>
   </div>
@@ -730,6 +731,67 @@
         <button class="chat-session-delete btn-card-close" @click.stop="deleteChatSession(s.id)" title="Löschen">×</button>
       </div>
     </template>
+  </div>
+</div>
+
+<!-- Synonyme -->
+<div class="card" id="synonyme-card" x-show="showSynonymeCard" x-cloak>
+  <div class="card-header">
+    <span class="card-title" x-text="'Synonyme: ' + (currentPage?.name || '–')"></span>
+    <div class="card-actions">
+      <button @click="runSynonymanalyse()" :disabled="synonymeLoading">
+        <span x-show="synonymeLoading" class="spinner"></span>
+        <span x-show="!synonymeLoading">Analysieren ↗</span>
+      </button>
+      <button class="btn-card-close" @click="showSynonymeCard = false" title="Schliessen">×</button>
+    </div>
+  </div>
+
+  <!-- Fortschritt -->
+  <div class="progress-bar-wrap" x-show="synonymeProgress > 0">
+    <div class="progress-bar" :style="'width:' + synonymeProgress + '%'"></div>
+  </div>
+  <div x-show="synonymeStatus" class="figur-progress-status" x-html="synonymeStatus"></div>
+
+  <!-- Ergebnisliste -->
+  <div x-show="synonymeResult && synonymeResult.woerter.length > 0" class="syn-list">
+    <template x-for="(w, wIdx) in (synonymeResult?.woerter || [])" :key="wIdx">
+      <div class="syn-entry">
+        <!-- Wort-Header -->
+        <div class="syn-entry-header">
+          <span class="syn-wort" x-text="w.wort"></span>
+          <span class="badge" x-text="(w.vorkommen?.length || 0) + '×'"></span>
+        </div>
+        <!-- Vorkommen -->
+        <div class="syn-vorkommen-list">
+          <template x-for="(v, vIdx) in (w.vorkommen || [])" :key="vIdx">
+            <div class="syn-vorkommen" :class="v._applied ? 'syn-vorkommen--applied' : ''">
+              <!-- Passage mit Wort hervorgehoben -->
+              <div class="syn-passage" x-html="_highlightWord(v.passage, w.wort)"></div>
+              <!-- Synonym-Buttons oder Erledigt-Badge -->
+              <div x-show="v._applied" class="syn-applied-inline">
+                <span class="syn-applied-badge" x-text="'✓ ' + v._applied"></span>
+              </div>
+              <div x-show="!v._applied" class="syn-buttons">
+                <template x-for="(syn, sIdx) in v.synonyme" :key="sIdx">
+                  <button
+                    class="syn-btn"
+                    :disabled="synonymeLoading"
+                    @click="applySynonym(w.wort, syn, v.passage, v._htmlIdx, wIdx, vIdx)"
+                    x-text="syn"
+                  ></button>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- Leerzustand -->
+  <div x-show="!synonymeResult && !synonymeLoading && !synonymeStatus" class="muted-msg" style="font-size:13px;">
+    «Analysieren» starten um häufig wiederholte Wörter zu finden.
   </div>
 </div>
 
