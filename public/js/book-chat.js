@@ -1,4 +1,4 @@
-import { escHtml } from './utils.js';
+import { escHtml, renderChatMarkdown } from './utils.js';
 
 
 // Buch-Chat-Methoden (werden in die Alpine-Komponente gespreadet).
@@ -165,6 +165,8 @@ export const bookChatMethods = {
   },
 
   // ── Hilfsmethoden ───────────────────────────────────────────────────────────
+
+  _renderChatMarkdown(text) { return renderChatMarkdown(text); },
 
   _scrollBookChatToBottom() {
     const el = document.getElementById('book-chat-messages');

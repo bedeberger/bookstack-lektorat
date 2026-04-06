@@ -1,4 +1,4 @@
-import { escHtml, htmlToText, fmtTok } from './utils.js';
+import { escHtml, htmlToText, fmtTok, renderChatMarkdown } from './utils.js';
 
 // Chat-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -220,33 +220,7 @@ export const chatMethods = {
     if (el) el.scrollTop = el.scrollHeight;
   },
 
-  /**
-   * Einfaches Markdown → HTML für Chat-Antworten.
-   * Unterstützt: **fett**, *kursiv*, `code`, Zeilenumbrüche, Listen.
-   */
-  _renderChatMarkdown(text) {
-    if (!text) return '';
-    let html = escHtml(text);
-
-    // Blockebene: Leerzeile → Absatz-Trenner
-    html = html.replace(/\n\n+/g, '\n<br>\n');
-
-    // Listen: Zeilen die mit «- » oder «* » beginnen
-    html = html.replace(/^([-*]) (.+)$/gm, '<li>$2</li>');
-    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul class="chat-list">$&</ul>');
-
-    // Inline: **fett**
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    // Inline: *kursiv*
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    // Inline: `code`
-    html = html.replace(/`([^`]+)`/g, '<code class="chat-code">$1</code>');
-
-    // Einfacher Zeilenumbruch → <br>
-    html = html.replace(/\n/g, '<br>');
-
-    return html;
-  },
+  _renderChatMarkdown(text) { return renderChatMarkdown(text); },
 
   /** Formatiert Token-Info für eine Assistant-Nachricht. */
   _chatTokenInfo(msg) {
