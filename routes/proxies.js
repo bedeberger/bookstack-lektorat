@@ -96,7 +96,7 @@ router.post('/ollama', jsonBody, async (req, res) => {
     const upstream = await fetch(`${ollamaHost}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages, stream: true, options: { num_ctx: req.body.max_tokens || 65536, think: false } }),
+      body: JSON.stringify({ model, messages, stream: true, options: { num_ctx: req.body.max_tokens || 65536, think: false, temperature: parseFloat(process.env.OLLAMA_TEMPERATURE ?? '0.1') } }),
     });
 
     if (!upstream.ok) {

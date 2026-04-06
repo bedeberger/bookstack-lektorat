@@ -9,13 +9,49 @@ function _providerConfig(provider, claudeModel, ollamaModel) {
   return { endpoint: '/claude', model: claudeModel, temperature: 0.2, label: 'Claude' };
 }
 
+function _repairJson(text) {
+  // Lokale Modelle geben oft "fast-JSON" aus. Diese Funktion repariert häufige Abweichungen.
+  // Python-Booleans / None
+  text = text.replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false').replace(/\bNone\b/g, 'null');
+  // Trailing Commas vor } oder ]
+  text = text.replace(/,(\s*[}\]])/g, '$1');
+  // Unquotete Objekt-Keys: { key: oder , key:
+  text = text.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":');
+  return text;
+}
+
+function _sanitizeControlChars(text) {
+  // Lokale Modelle (z.B. Gemma) geben manchmal Literal-Steuerzeichen innerhalb
+  // von JSON-String-Values aus. JSON.parse lehnt das ab. Diese Funktion ersetzt
+  // Steuerzeichen in JSON-Strings durch gültige Escape-Sequenzen.
+  return text.replace(/"((?:[^"\\]|\\.)*)"/g, (match, content) => {
+    const escaped = content.replace(/[\x00-\x1f]/g, c => {
+      const code = c.charCodeAt(0);
+      if (code === 0x08) return '\\b';
+      if (code === 0x09) return '\\t';
+      if (code === 0x0a) return '\\n';
+      if (code === 0x0c) return '\\f';
+      if (code === 0x0d) return '\\r';
+      return '\\u' + code.toString(16).padStart(4, '0');
+    });
+    return '"' + escaped + '"';
+  });
+}
+
 function _parseJson(fullText) {
   const clean = fullText.replace(/```json\s*|```/g, '').trim();
   try {
     return JSON.parse(clean);
   } catch (e1) {
     console.error('[callAI] Direktes JSON.parse fehlgeschlagen:', e1, '\nVolle Antwort:', fullText);
-    const match = clean.match(/\{[\s\S]*\}/);
+    // Zweiter Versuch: Steuerzeichen bereinigen
+    const sanitized = _sanitizeControlChars(clean);
+    try { return JSON.parse(sanitized); } catch (_) {}
+    // Dritter Versuch: Struktur reparieren (unquotete Keys, Trailing Commas, Python-Booleans)
+    const repaired = _repairJson(sanitized);
+    try { return JSON.parse(repaired); } catch (_) {}
+    // Vierter Versuch: JSON-Block extrahieren
+    const match = repaired.match(/\{[\s\S]*\}/);
     if (match) {
       try { return JSON.parse(match[0]); } catch (e2) {
         console.error('[callAI] JSON.parse aus extrahiertem Block fehlgeschlagen:', e2, '\nExtrahierter Block:', match[0]);
