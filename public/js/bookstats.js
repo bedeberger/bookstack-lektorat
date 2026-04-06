@@ -4,10 +4,14 @@
 const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 const METRIC_LABELS = {
-  words:      'Wörter',
-  chars:      'Zeichen',
-  page_count: 'Seiten',
-  tok:        'Tokens',
+  words:             'Wörter',
+  chars:             'Zeichen',
+  page_count:        'Seiten',
+  tok:               'Tokens',
+  unique_words:      'Einzigartige Wörter',
+  delta_words:       'Δ Wörter/Tag',
+  avg_sentence_len:  'Ø Satzlänge (Wörter)',
+  pages_per_chapter: 'Ø Seiten/Kapitel',
 };
 
 // Ausserhalb von Alpine gespeichert, damit die Chart.js-Instanz nicht durch
@@ -28,8 +32,15 @@ export const bookstatsMethods = {
 
   async loadBookStats(bookId) {
     try {
-      const rows = await fetch('/history/book-stats/' + bookId).then(r => r.json());
+      const [rows, coverage] = await Promise.all([
+        fetch('/history/book-stats/' + bookId).then(r => r.json()),
+        fetch('/history/coverage/' + bookId).then(r => r.json()),
+      ]);
       this.bookStatsData = rows;
+      this.bookStatsCoverage = coverage;
+      const last = rows[rows.length - 1];
+      const prev = rows[rows.length - 2];
+      this.bookStatsDelta = (last && prev) ? last.words - prev.words : null;
       this.$nextTick(() => this.renderStatsChart());
     } catch (e) {
       console.error('[loadBookStats]', e);
@@ -87,24 +98,35 @@ export const bookstatsMethods = {
       const [y, m, d] = r.recorded_at.split('-');
       return `${d}.${m}.${y.slice(2)}`;
     });
-    const data = rows.map(r => r[metric]);
+
+    const isDelta = metric === 'delta_words';
+    const isPpc   = metric === 'pages_per_chapter';
+    const data = isDelta ? rows.map((r, i) => i === 0 ? null : r.words - rows[i - 1].words)
+      : isPpc  ? rows.map(r => r.chapter_count > 0 ? Math.round((r.page_count / r.chapter_count) * 10) / 10 : null)
+      : rows.map(r => r[metric] ?? null);
+
     const metricLabel = METRIC_LABELS[metric] || metric;
 
-    // Ganzzahlige Achsenbeschriftung
-    const isPageCount = metric === 'page_count';
-    const makeTick = m => v => Math.round(v).toLocaleString('de-CH');
-    const makeTooltip = m => ctx => {
+    const isDecimal = isPpc || metric === 'avg_sentence_len';
+    const fmt = v => isDecimal ? v.toLocaleString('de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+      : Math.round(v).toLocaleString('de-CH');
+    const makeTick = () => v => {
+      if (v === null) return '';
+      return (isDelta && v >= 0 ? '+' : '') + fmt(v);
+    };
+    const makeTooltip = () => ctx => {
       const v = ctx.parsed.y;
-      return ` ${ctx.dataset.label}: ${Math.round(v).toLocaleString('de-CH')}`;
+      if (v === null) return '';
+      return ` ${ctx.dataset.label}: ${isDelta && v >= 0 ? '+' : ''}${fmt(v)}`;
     };
 
     if (_statsChart) {
       _statsChart.data.labels = labels;
       _statsChart.data.datasets[0].data = data;
       _statsChart.data.datasets[0].label = metricLabel;
-      _statsChart.options.scales.y.ticks.callback = makeTick(metric);
-      _statsChart.options.scales.y.ticks.stepSize = isPageCount ? 1 : undefined;
-      _statsChart.options.plugins.tooltip.callbacks.label = makeTooltip(metric);
+      _statsChart.options.scales.y.ticks.callback = makeTick();
+      _statsChart.options.scales.y.ticks.stepSize = metric === 'page_count' ? 1 : undefined;
+      _statsChart.options.plugins.tooltip.callbacks.label = makeTooltip();
       _statsChart.update();
       return;
     }
@@ -128,6 +150,7 @@ export const bookstatsMethods = {
           pointHoverRadius: 6,
           pointBackgroundColor: primary,
           fill: true,
+          spanGaps: false,
         }],
       },
       options: {
@@ -137,7 +160,7 @@ export const bookstatsMethods = {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: makeTooltip(metric),
+              label: makeTooltip(),
             },
           },
         },
@@ -152,8 +175,8 @@ export const bookstatsMethods = {
             ticks: {
               font: { size: 11 },
               color: muted,
-              callback: makeTick(metric),
-              stepSize: isPageCount ? 1 : undefined,
+              callback: makeTick(),
+              stepSize: metric === 'page_count' ? 1 : undefined,
             },
           },
         },

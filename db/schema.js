@@ -146,7 +146,7 @@ db.exec(`
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 7;
+const CURRENT_SCHEMA_VERSION = 9;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
   if (version < 2) {
@@ -220,9 +220,38 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 7').run();
     logger.info('DB-Migration auf Version 7 abgeschlossen.');
   }
+  if (version < 8) {
+    db.exec('ALTER TABLE book_stats_history ADD COLUMN unique_words INTEGER');
+    db.prepare('UPDATE schema_version SET version = 8').run();
+    logger.info('DB-Migration auf Version 8 abgeschlossen (unique_words zu book_stats_history hinzugefügt).');
+  }
+  if (version < 9) {
+    // Spalten ggf. nachrüsten (falls Fallback Version bereits auf 9 gesetzt hat)
+    const bshCols = db.pragma('table_info(book_stats_history)').map(c => c.name);
+    if (!bshCols.includes('chapter_count')) {
+      db.exec('ALTER TABLE book_stats_history ADD COLUMN chapter_count INTEGER');
+      logger.info('DB-Migration auf Version 9: chapter_count nachgerüstet.');
+    }
+    if (!bshCols.includes('avg_sentence_len')) {
+      db.exec('ALTER TABLE book_stats_history ADD COLUMN avg_sentence_len REAL');
+      logger.info('DB-Migration auf Version 9: avg_sentence_len nachgerüstet.');
+    }
+    db.prepare('UPDATE schema_version SET version = 9').run();
+    logger.info('DB-Migration auf Version 9 abgeschlossen.');
+  }
   // Sicherstellen dass schema_version aktuell ist (Fallback)
   if (version < CURRENT_SCHEMA_VERSION) {
     db.prepare('UPDATE schema_version SET version = ?').run(CURRENT_SCHEMA_VERSION);
+  }
+  // Unbedingter Spalten-Check für v9 (falls Fallback Version gesetzt hat bevor Migration lief)
+  const bshColsCheck = db.pragma('table_info(book_stats_history)').map(c => c.name);
+  if (!bshColsCheck.includes('chapter_count')) {
+    db.exec('ALTER TABLE book_stats_history ADD COLUMN chapter_count INTEGER');
+    logger.info('book_stats_history.chapter_count nachgerüstet.');
+  }
+  if (!bshColsCheck.includes('avg_sentence_len')) {
+    db.exec('ALTER TABLE book_stats_history ADD COLUMN avg_sentence_len REAL');
+    logger.info('book_stats_history.avg_sentence_len nachgerüstet.');
   }
 }
 runMigrations();

@@ -92,6 +92,8 @@ document.addEventListener('alpine:init', () => {
     bookStatsSyncStatus: '',
     bookStatsMetric: 'words',
     bookStatsRange: 0,
+    bookStatsCoverage: null,
+    bookStatsDelta: null,
     _statsChart: null,
     showChatCard: false,
     chatSessions: [],

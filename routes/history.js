@@ -120,11 +120,23 @@ router.post('/page-stats/batch', express.json(), (req, res) => {
 // Buchstatistik-Verlauf für Zeitliniendiagramm (geteilter Cache, nicht user-spezifisch)
 router.get('/book-stats/:book_id', (req, res) => {
   const rows = db.prepare(`
-    SELECT id, book_id, book_name, recorded_at, page_count, words, chars, tok
+    SELECT id, book_id, book_name, recorded_at, page_count, words, chars, tok, unique_words, chapter_count, avg_sentence_len
     FROM book_stats_history WHERE book_id = ?
     ORDER BY recorded_at ASC
   `).all(parseInt(req.params.book_id));
   res.json(rows);
+});
+
+// Lektorat-Abdeckung: wie viele Seiten eines Buchs wurden schon geprüft (user-spezifisch)
+router.get('/coverage/:book_id', (req, res) => {
+  const user_email = req.session?.user?.email || null;
+  const bookId = parseInt(req.params.book_id);
+  const { total } = db.prepare('SELECT COUNT(*) as total FROM page_stats WHERE book_id = ?').get(bookId);
+  const { checked } = db.prepare(
+    'SELECT COUNT(DISTINCT page_id) as checked FROM page_checks WHERE book_id = ? AND user_email = ?'
+  ).get(bookId, user_email);
+  const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+  res.json({ checked_pages: checked, total_pages: total, pct });
 });
 
 module.exports = router;

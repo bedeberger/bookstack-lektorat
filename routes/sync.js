@@ -39,10 +39,12 @@ function htmlToText(html) {
 
 function computeStats(html) {
   const text = htmlToText(html);
-  const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+  const wordList = text.trim() === '' ? [] : text.trim().split(/\s+/);
+  const words = wordList.length;
   const chars = text.length;
   const tok = Math.round((PROMPT_OVERHEAD + chars + html.length) / 4);
-  return { words, chars, tok };
+  const sentences = text.trim() === '' ? 0 : text.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
+  return { words, chars, tok, wordList, sentences };
 }
 
 const upsertPageStats = db.prepare(`
@@ -58,47 +60,57 @@ const upsertPageStatsMany = db.transaction((items) => {
 });
 
 async function syncBook(bookId, token) {
-  const [pages, book] = await Promise.all([
+  const [pages, book, chapters] = await Promise.all([
     bsGetAll(`pages?book_id=${bookId}`, token),
     bsGet(`books/${bookId}`, token),
+    bsGetAll(`chapters?book_id=${bookId}`, token),
   ]);
+  const chapterCount = chapters.length;
 
   const bookName = book.name || '';
   const now = new Date().toISOString();
   const BATCH = 5;
   const statsItems = [];
-  let totalWords = 0, totalChars = 0, totalTok = 0;
+  const globalWordSet = new Set();
+  let totalWords = 0, totalChars = 0, totalTok = 0, totalSentences = 0;
 
   for (let i = 0; i < pages.length; i += BATCH) {
     const batch = pages.slice(i, i + BATCH);
     const results = await Promise.allSettled(batch.map(async p => {
       const pd = await bsGet(`pages/${p.id}`, token);
-      const { words, chars, tok } = computeStats(pd.html || '');
-      return { page_id: p.id, book_id: bookId, tok, words, chars, updated_at: p.updated_at || null, cached_at: now };
+      const { words, chars, tok, wordList, sentences } = computeStats(pd.html || '');
+      return { page_id: p.id, book_id: bookId, tok, words, chars, updated_at: p.updated_at || null, cached_at: now, wordList, sentences };
     }));
     for (const r of results) {
       if (r.status === 'fulfilled') {
-        statsItems.push(r.value);
+        const { wordList, sentences, ...statsItem } = r.value;
+        statsItems.push(statsItem);
         totalWords += r.value.words;
         totalChars += r.value.chars;
         totalTok += r.value.tok;
+        totalSentences += sentences;
+        for (const w of wordList) globalWordSet.add(w.toLowerCase());
       }
     }
   }
+  const uniqueWords = globalWordSet.size;
+  const avgSentenceLen = totalSentences > 0 ? Math.round((totalWords / totalSentences) * 10) / 10 : null;
 
   upsertPageStatsMany(statsItems);
 
   const today = new Date().toISOString().slice(0, 10);
   db.prepare(`
-    INSERT INTO book_stats_history (book_id, book_name, recorded_at, page_count, words, chars, tok)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO book_stats_history (book_id, book_name, recorded_at, page_count, words, chars, tok, unique_words, chapter_count, avg_sentence_len)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(book_id, recorded_at) DO UPDATE SET
       book_name=excluded.book_name, page_count=excluded.page_count,
-      words=excluded.words, chars=excluded.chars, tok=excluded.tok
-  `).run(bookId, bookName, today, pages.length, totalWords, totalChars, totalTok);
+      words=excluded.words, chars=excluded.chars, tok=excluded.tok,
+      unique_words=excluded.unique_words, chapter_count=excluded.chapter_count,
+      avg_sentence_len=excluded.avg_sentence_len
+  `).run(bookId, bookName, today, pages.length, totalWords, totalChars, totalTok, uniqueWords, chapterCount, avgSentenceLen);
 
-  logger.info(`Sync Buch ${bookId} (${bookName}): ${pages.length} Seiten, ${totalWords} Wörter, ${totalChars} Zeichen`);
-  return { page_count: pages.length, words: totalWords, chars: totalChars, tok: totalTok };
+  logger.info(`Sync Buch ${bookId} (${bookName}): ${pages.length} Seiten, ${chapterCount} Kapitel, ${totalWords} Wörter, ${uniqueWords} einzigartige, Ø ${avgSentenceLen} W/Satz`);
+  return { page_count: pages.length, words: totalWords, chars: totalChars, tok: totalTok, unique_words: uniqueWords, chapter_count: chapterCount, avg_sentence_len: avgSentenceLen };
 }
 
 async function syncAllBooks() {

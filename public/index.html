@@ -390,6 +390,14 @@
         @click="bookStatsMetric = 'page_count'; renderStatsChart()">Seiten</button>
       <button class="btn-sm" :class="{ primary: bookStatsMetric === 'tok' }"
         @click="bookStatsMetric = 'tok'; renderStatsChart()">Tokens</button>
+      <button class="btn-sm" :class="{ primary: bookStatsMetric === 'unique_words' }"
+        @click="bookStatsMetric = 'unique_words'; renderStatsChart()">Einzigartige W.</button>
+      <button class="btn-sm" :class="{ primary: bookStatsMetric === 'delta_words' }"
+        @click="bookStatsMetric = 'delta_words'; renderStatsChart()">Δ Wörter/T</button>
+      <button class="btn-sm" :class="{ primary: bookStatsMetric === 'avg_sentence_len' }"
+        @click="bookStatsMetric = 'avg_sentence_len'; renderStatsChart()">Ø Satzlänge</button>
+      <button class="btn-sm" :class="{ primary: bookStatsMetric === 'pages_per_chapter' }"
+        @click="bookStatsMetric = 'pages_per_chapter'; renderStatsChart()">S./Kap.</button>
     </div>
     <div class="btn-group">
       <button class="btn-sm" :class="{ primary: bookStatsRange === 7 }"
@@ -422,6 +430,14 @@
       x-text="bookStatsData[bookStatsData.length - 1]?.page_count + ' S'"></span>
     <span class="tok-badge tok-neutral"
       x-text="(bookStatsData[bookStatsData.length - 1]?.tok ?? 0).toLocaleString('de-CH') + ' T'"></span>
+    <span class="tok-badge tok-neutral" x-show="bookStatsDelta !== null"
+      x-text="(bookStatsDelta >= 0 ? '+' : '') + (bookStatsDelta ?? 0).toLocaleString('de-CH') + ' Δ'"></span>
+    <span class="tok-badge tok-neutral" x-show="bookStatsCoverage !== null"
+      x-text="(bookStatsCoverage?.pct ?? 0) + '% geprüft (' + (bookStatsCoverage?.checked_pages ?? 0) + '/' + (bookStatsCoverage?.total_pages ?? 0) + ')'"></span>
+    <span class="tok-badge tok-neutral" x-show="bookStatsData[bookStatsData.length - 1]?.avg_sentence_len != null"
+      x-text="'Ø ' + (bookStatsData[bookStatsData.length - 1]?.avg_sentence_len ?? 0).toLocaleString('de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' W/Satz'"></span>
+    <span class="tok-badge tok-neutral" x-show="bookStatsData[bookStatsData.length - 1]?.chapter_count > 0"
+      x-text="'Ø ' + ((bookStatsData[bookStatsData.length - 1]?.page_count / bookStatsData[bookStatsData.length - 1]?.chapter_count) || 0).toLocaleString('de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' S/Kap.'"></span>
   </div>
 
   <!-- Leer-Zustand -->
