@@ -1324,6 +1324,11 @@ ins {
 }
 .chat-list--ol { list-style-type: decimal; }
 .chat-list li { margin-bottom: 2px; }
+.chat-hr {
+  border: none;
+  border-top: 1px solid var(--border-color, #ddd);
+  margin: 0.9em 0;
+}
 .chat-code {
   font-family: monospace;
   font-size: 0.9em;
