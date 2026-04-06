@@ -39,6 +39,9 @@ export function renderChatMarkdown(text) {
     m.replace(/<oli>/g, '<li>').replace(/<\/oli>\n{0,2}/g, '</li>') +
     '</ol>');
 
+  // Horizontale Linie
+  html = html.replace(/^---$/gm, '<hr class="chat-hr">');
+
   // Ungeordnete Listen: Zeilen mit «- » oder «* » → temporäres <uli>-Tag
   html = html.replace(/^[-*] (.+)$/gm, '<uli>$1</uli>');
   html = html.replace(/(<uli>.*?<\/uli>\n{0,2})+/g, m =>
@@ -53,14 +56,14 @@ export function renderChatMarkdown(text) {
   // Inline: `code`
   html = html.replace(/`([^`]+)`/g, '<code class="chat-code">$1</code>');
 
-  // Leerzeile → <br>
-  html = html.replace(/\n\n+/g, '\n<br>\n');
+  // Leerzeile → <br><br> (direkt, ohne weitere \n die nochmals zu <br> werden)
+  html = html.replace(/\n\n+/g, '<br><br>');
   // Einfacher Zeilenumbruch → <br>
   html = html.replace(/\n/g, '<br>');
 
   // Überschüssige <br> direkt vor/nach Block-Elementen entfernen
-  html = html.replace(/(<br>\s*)+(<(?:ol|ul|h[2-4])\b)/gi, '$2');
-  html = html.replace(/(\/(?:ol|ul|h[2-4])>)(\s*<br>)+/gi, '$1');
+  html = html.replace(/(<br>\s*)+(<(?:ol|ul|h[2-4]|hr)\b)/gi, '$2');
+  html = html.replace(/(\/(?:ol|ul|h[2-4])>|<hr[^>]*>)(\s*<br>)+/gi, '$1');
 
   return html;
 }
