@@ -50,7 +50,7 @@ bookstack-lektorat/
     └── js/                  # ES-Module (kein Build-Step, type="module")
         ├── app.js           # Alpine-Komponente: State, Computed, init/selectPage/resetView
         ├── utils.js         # escHtml(), htmlToText()
-        ├── prompts.js       # SYSTEM_*-Strings, buildLektoratPrompt(), buildStilkorrekturPrompt() – EINZIGE QUELLE für alle Prompts. Server-seitiger Code (jobs.js) importiert diese Datei via dynamic import(). NIEMALS Prompts anderswo duplizieren.
+        ├── prompts.js       # SYSTEM_*-Strings, Build-Funktionen – EINZIGE QUELLE für Prompt-Schemas und Build-Logik. Server-seitiger Code importiert via dynamic import(). NIEMALS Prompts anderswo duplizieren.
         ├── api-bookstack.js # bsGet, bsGetAll, bsPut, _applyCorrections
         ├── api-ai.js        # callAI(userPrompt, systemPrompt?, onProgress?) → Promise<Object>
         ├── history.js       # loadPageHistory, loadBookReviewHistory
@@ -131,6 +131,16 @@ schema_version (version INTEGER)
 
 **Designprinzip Figuren:** Die vier Figuren-Tabellen sind bewusst flach gehalten. Neue Beziehungstypen entstehen einfach durch einen neuen `typ`-String – keine Schemaänderung nötig. Neue Figur-Eigenschaften kommen entweder als neue Spalte (via Migration) oder als Einträge im `meta`-JSON-Feld.
 
+**User-Isolation:** Alle inhaltlichen Tabellen enthalten eine `user_email`-Spalte (bei `chat_messages` indirekt über `session_id`). Queries filtern grundsätzlich auf `req.session.user.email`. `page_stats` und `book_stats_history` sind geteilter Cache ohne User-Filter.
+
+**DB auf dem LXC prüfen:**
+```bash
+sqlite3 /opt/lektorat/lektorat.db
+.tables
+.schema figures
+SELECT * FROM schema_version;
+```
+
 ## Datenbankmigrationen
 
 `db/schema.js` enthält `runMigrations()`. Sie liest `schema_version` und führt alle ausstehenden `ALTER TABLE`-Statements sequenziell aus.
@@ -153,202 +163,49 @@ schema_version (version INTEGER)
 
 **Neue Beziehungstypen:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Im Frontend in der `BZ`-Konstante (Rendering) und im Claude-Prompt (`FINAL_SCHEMA`) den neuen Typ ergänzen.
 
-**User-Isolation:** Alle inhaltlichen Tabellen (`page_checks`, `book_reviews`, `figures`, `figure_relations`, `chat_sessions`, `chat_messages`) enthalten eine `user_email`-Spalte (bei `chat_messages` indirekt über `session_id`). Queries in den Route-Handlern filtern grundsätzlich auf `req.session.user.email`. `page_stats` und `book_stats_history` sind geteilter Cache ohne User-Filter.
-
-**DB auf dem LXC prüfen:**
-```bash
-sqlite3 /opt/lektorat/lektorat.db
-.tables
-.schema figures
-SELECT * FROM schema_version;
-```
-
-## Endpunkte
-
-| Methode | Pfad | Zweck |
-|---------|------|-------|
-| GET | `/api/books` | Alle Bücher laden |
-| GET | `/api/chapters?book_id=X` | Kapitel eines Buchs |
-| GET | `/api/pages?book_id=X` | Seiten eines Buchs |
-| GET | `/api/pages/:id` | Seiteninhalt (HTML) |
-| PUT | `/api/pages/:id` | Korrigierte Seite zurückschreiben |
-| POST | `/history/check` | Lektorat-Ergebnis speichern |
-| PATCH | `/history/check/:id/saved` | Lauf als «in BookStack gespeichert» markieren (inkl. `applied_errors_json`) |
-| DELETE | `/history/check/:id` | Check-Eintrag löschen |
-| GET | `/history/page/:page_id` | Letzte 20 Läufe für eine Seite |
-| POST | `/history/review` | Buchbewertung speichern |
-| GET | `/history/review/:book_id` | Letzte 10 Bewertungen für ein Buch |
-| DELETE | `/history/review/:id` | Review-Eintrag löschen |
-| GET | `/history/page-stats/:book_id` | Gecachte Seiten-Stats (Map `page_id → {tok, words, chars}`) |
-| POST | `/history/page-stats/batch` | Batch-Upsert für page_stats-Cache |
-| GET | `/history/book-stats/:book_id` | Tägliche Buchstatistik-Snapshots (für Zeitliniendiagramm) |
-| GET | `/figures/:book_id` | Gespeicherte Figuren eines Buchs laden (per-User) |
-| PUT | `/figures/:book_id` | Figuren eines Buchs speichern – überschreibt (per-User) |
-| POST | `/sync/book/:book_id` | Manueller Sync-Trigger für ein Buch |
-| POST | `/sync/all` | Manueller Sync aller Bücher (wird auch vom Cron aufgerufen) |
-| GET | `/jobs/active` | Alle laufenden/wartenden Jobs |
-| GET | `/jobs/:id` | Status + Details eines Jobs |
-| POST | `/jobs/review` | Buchbewertungs-Job starten |
-| POST | `/jobs/figures` | Figurenextraktions-Job starten |
-| POST | `/jobs/book-chat` | Buch-Chat-Job starten; Body: `{ session_id, message }` |
-| POST | `/chat/session` | Neue Seiten-Chat-Session erstellen `{ book_id, book_name, page_id, page_name }` |
-| POST | `/chat/session/book` | Neue Buch-Chat-Session erstellen `{ book_id, book_name }` |
-| GET | `/chat/sessions/:page_id` | Alle Seiten-Chat-Sessions einer Seite (neueste zuerst, max. 20) |
-| GET | `/chat/sessions/book/:book_id` | Alle Buch-Chat-Sessions eines Buchs (neueste zuerst, max. 20) |
-| GET | `/chat/session/:id` | Session + alle Nachrichten laden |
-| DELETE | `/chat/session/:id` | Session löschen (kaskadiert auf Nachrichten) |
-| POST | `/chat/send` | Seiten-Chat: Nachricht senden + KI-Antwort als SSE streamen; Body: `{ session_id, message, page_text }` |
-| GET | `/auth/token` | Ob ein BookStack-Token hinterlegt ist (`{ hasToken: bool }`) |
-| PUT | `/auth/token` | BookStack-Token speichern (`{ tokenId, tokenPw }` → DB + Session) |
-
-**`bsGetAll(path)`** ist der wichtigste Helfer: BookStack paginiert Listenendpunkte (Standard: 20 Einträge). `bsGetAll` iteriert automatisch alle Seiten und gibt ein flaches Array zurück. Immer `bsGetAll` statt `bsGet` verwenden wenn eine vollständige Liste benötigt wird.
-
-## User-Token-Verwaltung
-
-BookStack-Tokens werden **pro User in der DB** gespeichert (Tabelle `user_tokens`, Schlüssel: Google-E-Mail).
-
-- Google-Login → `getUserToken(email)` → falls vorhanden: `req.session.bookstackToken = { id, pw }`
-- BookStack-Proxy liest Token aus der Session (synchron, kein DB-Lookup pro Request)
-- Cron-Sync: `getAnyUserToken()` → erster verfügbarer Token; `getAllUserTokens()` → alle
-- Kein Token → Token-Setup-Card im Frontend; `PUT /auth/token` speichert in DB + Session
-
-Hilfsfunktionen exportiert aus `db/schema.js`: `getUserToken`, `setUserToken`, `getAnyUserToken`, `getAllUserTokens`.
-
-## Sync & Buchstatistik
-
-Täglich um 02:00 (`node-cron` in `server.js`) ruft `syncAllBooks()` für alle gespeicherten User-Tokens `syncBook(bookId, token)` auf. `syncBook` berechnet pro Seite Token-Schätzung, Wort- und Zeichenanzahl, schreibt in `page_stats` (Upsert) und legt einen täglichen Snapshot in `book_stats_history` an (ein Eintrag pro Buch pro Tag).
-
 ## Prompt-Konfiguration
 
-### `prompt-config.json`
+**Pflichtdatei:** `prompt-config.json` (Projektroot) muss vorhanden sein. Fehlt sie, wirft der Server beim Start einen Fehler – es gibt keine eingebauten Defaults. Struktur und Inhalt: siehe `prompt-config.json`.
 
-Admins können die **inhaltlichen** Teile aller System-Prompts in `prompt-config.json` (Projektroot) anpassen – ohne Code-Änderung, nur Serverrestart nötig.
-
-```json
-{
-  "baseRules": "Freitext: Schweizer-Kontext-Regeln, Fehler-Entscheidungsregeln …",
-  "systemPrompts": {
-    "lektorat":       "Du bist …",
-    "buchbewertung":  "Du bist …",
-    "kapitelanalyse": "Du bist …",
-    "figuren":        "Du bist …",
-    "stilkorrektur":  "Du bist …",
-    "chat":           "Du bist …",
-    "bookChat":       "Du bist …"
-  }
-}
-```
-
-**Konfigurierbar:** `baseRules` und die Rollenformulierung jedes System-Prompts.
-
-**Hartkodiert:** Die JSON-Only-Anweisung, alle JSON-Schema-Definitionen und Feldnamen in den Build-Funktionen.
+**Hartkodiert in `prompts.js`:** Die JSON-Only-Anweisung, alle JSON-Schema-Definitionen und Feldnamen in den Build-Funktionen.
 
 **Ladereihenfolge:**
-- `routes/proxies.js` liest die Datei beim Serverstart (lazy singleton) und liefert sie über `/config` als `promptConfig` ans Frontend.
-- `public/js/app.js` ruft `configurePrompts(cfg.promptConfig)` in `init()` auf → aktualisiert die `export let SYSTEM_*`-Variablen in `prompts.js` via ESM-Live-Binding.
-- `routes/jobs.js` und `routes/chat.js` lesen die Datei beim Modulstart und rufen `configurePrompts()` einmalig nach dem dynamischen `import()` von `prompts.js` auf.
+- `routes/proxies.js` liest die Datei beim ersten `/config`-Aufruf (lazy singleton) und liefert sie als `promptConfig` ans Frontend.
+- `routes/jobs.js` und `routes/chat.js` lesen die Datei beim Modulstart (synchron) und rufen `configurePrompts()` einmalig nach dem dynamischen `import()` von `prompts.js` auf.
+- `public/js/app.js` ruft `configurePrompts(cfg.promptConfig)` in `init()` auf → setzt die `export let SYSTEM_*`-Variablen in `prompts.js` via ESM-Live-Binding.
 
-Fehlt `prompt-config.json`, verwendet `prompts.js` seine eingebauten Defaults – der Server startet normal.
-
-**Single Source of Truth:** Alle Prompts (inkl. JSON-Schemas der KI-Antworten) ausschliesslich in `public/js/prompts.js`.
+**Single Source of Truth:** Rollenformulierungen und Basisregeln in `prompt-config.json`; JSON-Schemas und Build-Logik aller Prompts ausschliesslich in `public/js/prompts.js`.
 
 ## KI-Integration
 
-### `callAI` – Wichtige Einschränkung
+**`callAI`** (in `api-ai.js`) gibt immer ein **geparstes JSON-Objekt** zurück – kann nicht für Freitext-Antworten verwendet werden. Jeder Systemprompt muss JSON-Only erzwingen (die `JSON_ONLY`-Konstante in `prompts.js`).
 
-`callAI` (in `api-ai.js`) gibt immer ein **geparstes JSON-Objekt** zurück. Ist die Antwort kein valides JSON, wirft die Funktion einen Fehler. Jeder Systemprompt muss JSON-Only erzwingen:
-```
-Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach
-```
-`callAI` kann nicht für Free-Text-Antworten verwendet werden.
+**Schema-Validierung:** Nach jedem `callAI`-Aufruf wird das Pflichtfeld geprüft (`fehler` in `lektorat.js`, `gesamtnote` in `review.js`, `figuren` in `figuren.js`). Fehlt es, Fehler werfen statt falsche Daten rendern.
 
-### Provider-Proxy
-
-- **`/claude`** – injiziert `ANTHROPIC_API_KEY`, leitet an `api.anthropic.com/v1/messages` weiter, streamt als SSE. `model` und `max_tokens` werden aus `.env` (MODEL_NAME / MODEL_TOKEN) erzwungen – das Frontend kann diese Werte nicht übersteuern.
+**Provider-Proxy:**
+- **`/claude`** – injiziert `ANTHROPIC_API_KEY`, leitet an `api.anthropic.com/v1/messages` weiter, streamt als SSE. `model` und `max_tokens` werden aus `.env` (MODEL_NAME / MODEL_TOKEN) erzwungen.
 - **`/ollama`** – konvertiert Anthropic-Request-Format → Ollama `/api/chat`-Format, normalisiert NDJSON → SSE. Frontend-Parser bleibt für beide Provider identisch.
 
-### KI-Rückgabeformate
+## Chat
 
-Die kanonischen JSON-Schemas stehen in `public/js/prompts.js` (Build-Funktionen). Pflichtfelder zur Schema-Validierung nach dem Call: `fehler` (Lektorat), `gesamtnote` (Buchbewertung), `figuren` (Figurenextraktion).
+**Seiten-Chat** (`/chat/send`): Direktes SSE-Streaming, kein Job-Queue. KI-Antwortformat: `{ "antwort": "Markdown", "vorschlaege": [{ "original", "ersatz", "begruendung" }] }`. `original` muss zeichengenau im Seitentext vorkommen. `applyChatVorschlag()` ersetzt es identisch zum Lektorat-Flow via `_applyCorrections`.
 
-## Seiten-Chat
+**Buch-Chat** (`/jobs/book-chat`): Job-Queue statt SSE, kein Vorschläge-System. Buch-Chat-Sessions nutzen `page_id=0` und `page_name='__book__'` in der `chat_sessions`-Tabelle. KI-Antwortformat: `{ "antwort": "Markdown" }`.
 
-Der Chat funktioniert anders als Review/Figuren: kein Job-Queue, sondern **direktes SSE-Streaming** über `/chat/send`.
+**SSE-Fehlerbehandlung:** Das Flag `sseStarted` trennt Fehler vor dem Stream-Start (→ JSON 502) von Fehlern während des Streams (→ SSE `{ type: 'error' }` + `[DONE]`). Express 4 fängt Fehler aus `async`-Handlern nicht automatisch – ohne den try/catch-Wrapper schliesst Node die Verbindung ohne HTTP-Antwort.
 
-**Ablauf `/chat/send`:**
-1. Session + User-Berechtigung validieren
-2. User-Nachricht in `chat_messages` speichern
-3. Kontext server-seitig aufbauen: Figuren + letzte Buchbewertung aus DB, Seitentext aus dem Request
-4. `buildChatSystemPrompt()` aus `prompts.js` aufrufen (via dynamischem `import()`)
-5. Konversationshistorie der Session laden (alle bisherigen Nachrichten)
-6. SSE-Headers setzen, KI-Stream starten und direkt an den Browser durchleiten
-7. Nach Stream-Ende: Antwort-JSON parsen (`antwort` + `vorschlaege`), Assistant-Nachricht in DB speichern
-8. `meta`-SSE-Event mit IDs, Token-Counts und `vorschlaege` senden, dann `[DONE]`
-
-**KI-Antwortformat (Chat):** `{ "antwort": "Freitext (Markdown)", "vorschlaege": [{ "original", "ersatz", "begruendung" }] }`. `original` muss zeichengenau im Seitentext vorkommen – dasselbe Prinzip wie `_applyCorrections` im Lektorat.
-
-**Fehlerbehandlung:** Der gesamte Handler ist in einem einzigen try/catch. Das Flag `sseStarted` trennt Fehler vor dem Stream-Start (→ JSON 502) von Fehlern während des Streams (→ SSE `{ type: 'error' }` + `[DONE]`). Express 4 fängt Fehler aus `async`-Handlern nicht automatisch – ohne diesen Wrapper schliesst Node die Verbindung ohne HTTP-Antwort, was im Browser als `fetch failed` erscheint.
-
-**Frontend-Streaming:** `sendChatMessage()` in `chat.js` liest den SSE-Stream mit `fetch` + `ReadableStream`. JSON-Parse-Fehler einzelner Chunks werden ignoriert (`continue`). Server-Fehler-Events werden in `streamError` gemerkt und erst nach dem Stream-Ende geworfen.
-
-**Vorschläge übernehmen:** `applyChatVorschlag()` ersetzt `original` zeichengenau in `this.originalHtml` und ruft `bsPut` auf – identisch zum Lektorat-Flow. `this.originalHtml` wird beim ersten `sendChatMessage()` aus der API geladen falls noch nicht gesetzt.
-
-## Buch-Chat
-
-Der Buch-Chat unterscheidet sich vom Seiten-Chat in zwei wesentlichen Punkten: **kein Vorschläge-System** und **Job-Queue statt SSE-Streaming**.
-
-**Ablauf `POST /jobs/book-chat`:**
-1. Session validieren, User-Nachricht in `chat_messages` speichern
-2. Job in die Queue einreihen → sofort `{ jobId }` zurückgeben
-3. `runBookChatJob()` lädt alle Seiten des Buchs aus BookStack (in 5er-Batches)
-4. Relevanz-Scoring: jede Seite erhält einen Score basierend auf Stichwortübereinstimmung mit der User-Nachricht
-5. Budget-Kontrolle: Seiten nach Score sortiert bis zum Zeichenbudget (60 % von MODEL_TOKEN × 4) aufnehmen
-6. `buildBookChatSystemPrompt()` mit ausgewählten Seiten + Figuren + letzter Buchbewertung aufrufen
-7. KI-Call (Claude oder Ollama), Antwort parsen (nur `antwort`-Feld, keine `vorschlaege`)
-8. Assistant-Nachricht mit `context_info` (verwendete Seiten, total, Figuren-Flag, Review-Flag) in DB speichern
-
-**Sessions:** Buch-Chat-Sessions nutzen dieselbe `chat_sessions`-Tabelle, aber mit `page_id=0` und `page_name='__book__'`. Die Endpunkte `POST /chat/session/book` und `GET /chat/sessions/book/:book_id` filtern explizit auf `page_name = '__book__'`.
-
-**Frontend-Polling:** `sendBookChatMessage()` in `book-chat.js` startet den Job und pollt via `_startBookChatPoll()` (generisches `_startPoll()`-Muster aus `app.js`). Nach Job-Abschluss wird die Session neu geladen.
-
-**KI-Antwortformat (Buch-Chat):** `{ "antwort": "Freitext (Markdown)" }` – keine `vorschlaege`.
+**`bsGetAll(path)`:** BookStack paginiert Listenendpunkte (Standard: 20 Einträge). `bsGetAll` iteriert automatisch alle Seiten. Immer `bsGetAll` statt `bsGet` verwenden wenn eine vollständige Liste benötigt wird.
 
 ## Frontend-Architektur
 
 SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein Bundler. Alpine.js und vis-network via CDN.
 
-### Modul-Pattern
+**Modul-Pattern:** Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`, `two-tier.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das auf die Alpine-Komponente zeigt – per `...spread` in das Alpine-Data-Objekt eingebettet. Neue Funktionalität: Modul anlegen → exportieren → in `app.js` spreaden.
 
-Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`, `two-tier.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das auf die Alpine-Komponente zeigt – per `...spread` in das Alpine-Data-Objekt eingebettet.
+**Style-Regel:** Alle Styles ausschliesslich in `style.css` – keine Inline-`style`-Attribute, keine `<style>`-Blöcke im HTML.
 
-**Neue Funktionalität:** Neues Modul anlegen → Methoden-Objekt exportieren → in `app.js` importieren und am Ende des Data-Objekts spreaden.
-
-### Style-Regel
-
-**Alle Styles ausschliesslich in `style.css`** – keine Inline-`style`-Attribute, keine `<style>`-Blöcke im HTML. Die Datei beginnt mit einem Table of Contents (Abschnitte mit `/* === Name === */`).
-
-### Two-Tier-Analyse-Pattern
-
-`review.js` und `figuren.js` teilen dasselbe Lade-Muster via `two-tier.js`:
-
-- `loadPageContents(bsGet, pages, chMap, minLength, onBatch)` – lädt in 5er-Batches, überspringt Seiten kürzer als `minLength`. Gibt `{ title, chapter_id, chapter, text }[]` zurück.
-- `groupByChapter(pageContents)` – gruppiert für Multi-Pass nach Kapitel-ID.
-- `SINGLE_PASS_LIMIT` = 60 000 Zeichen: darunter Single-Pass direkt an Claude, darüber Multi-Pass pro Kapitel + Konsolidierungs-Call.
-
-### Wichtige Verhaltensdetails
+**Two-Tier-Analyse-Pattern:** `review.js` und `figuren.js` laden via `two-tier.js`. `SINGLE_PASS_LIMIT` = 60 000 Zeichen: darunter Single-Pass direkt an Claude, darüber Multi-Pass pro Kapitel + Konsolidierungs-Call.
 
 **Selektive Fehlerkorrektur:** `_recomputeCorrectedHtml()` wendet nur `selectedErrors` via `_applyCorrections` auf `originalHtml` an. Claudes `korrekturen_html` wird ignoriert.
 
-**Stilanmerkungen:** Werden separat verwaltet (`lektoratStyles`/`selectedStyles`). Beim Speichern (wenn selektierte Stile vorhanden) folgt ein zweiter AI-Call mit `buildStilkorrekturPrompt`, der die Stilkorrekturen auf `correctedHtml` anwendet bevor es in BookStack geschrieben wird.
-
-**`resetPage()` vs. `resetView()`:** `resetPage()` deselektiert nur die Seite. `resetView()` setzt alles zurück (Karten, History, Figuren, Graph, Kapitel) – gebunden an H1-Klick. Beide rufen `resetChat()` und `resetBookChat()` auf, damit Chat-State bei Seitenwechsel geleert wird.
-
-**Token-Schätzung:** Startet nach `loadPages()` im Hintergrund. `_tokenEstGen` wird bei Buchwechsel inkrementiert – veraltete Batches brechen ab.
-
-## Robustheit – Patterns
-
-- **Schema-Validierung**: Nach jedem `callAI`-Aufruf wird das Pflichtfeld geprüft (`fehler` in `lektorat.js`, `gesamtnote` in `review.js`, `figuren` in `figuren.js`). Fehlt es, Fehler werfen statt falsche Daten rendern.
-- **Timeout-Fehlerbehandlung**: `bsGet` und `bsPut` fangen `AbortError` mit sprechender Meldung ab.
-- **Graph-Caching**: `renderFigurGraph()` baut vis-network nur neu auf wenn sich Figuren-IDs geändert haben (`_figurenHash`).
-- **Chart-Caching**: `renderStatsChart()` zerstört die Chart.js-Instanz (`_statsChart.destroy()`) vor jedem Neuaufbau.
-- **Benannte Limits**: `MIN_HTML_RATIO` / `SAFETY_HTML_RATIO` in `lektorat.js`, `PREVIEW_MAX_CHARS` in `app.js`, `SINGLE_PASS_LIMIT` / `BATCH_SIZE` in `two-tier.js`.
+**Stilanmerkungen:** Beim Speichern (wenn selektierte Stile vorhanden) folgt ein zweiter AI-Call mit `buildStilkorrekturPrompt`, der die Stilkorrekturen auf `correctedHtml` anwendet bevor es in BookStack geschrieben wird.

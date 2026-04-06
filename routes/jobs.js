@@ -7,13 +7,8 @@ const { pathToFileURL } = require('url');
 const logger = require('../logger');
 const { db, saveFigurenToDb } = require('../db/schema');
 
-// prompt-config.json synchron lesen (einmalig bei Modulstart)
-let _promptConfig;
-try {
-  _promptConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../prompt-config.json'), 'utf8'));
-} catch {
-  _promptConfig = null; // Fehlt die Datei, verwendet prompts.js seine Defaults
-}
+// prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
+const _promptConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../prompt-config.json'), 'utf8'));
 
 // System-Prompts aus dem Browser-Modul laden (Single Source of Truth: public/js/prompts.js)
 let _prompts = null;

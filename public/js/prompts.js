@@ -4,23 +4,6 @@ export const CLAUDE_API = '/claude';
 // da callAI() immer ein JSON-Objekt erwartet.
 const JSON_ONLY = 'Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach. Beginne deine Antwort direkt mit { und beende sie mit }.';
 
-// Standard-Werte (werden durch configurePrompts() überschrieben)
-const DEFAULT_BASE_RULES = `\
-SCHWEIZER KONTEXT – STRIKTE REGEL: Im Schweizer Schriftdeutsch wird kein ß verwendet. Deshalb sind alle ss-Schreibungen, die im Deutschen ß wären, korrekte Helvetismen: zerreisst, heisst, weiss, ausserdem, Strasse, gemäss, grösser usw. Diese Wörter sind KEIN FEHLER und dürfen NICHT ins «fehler»-Array. Auch «zerreisst» als Verbform von «zerreissen» ist korrekt. Gleiches gilt für unregelmässige Verben im Präteritum: «frass» (Schweizer Schreibung von standard-dt. «fraß», Präteritum von «fressen») ist korrekt und KEIN FEHLER – NICHT ins «fehler»-Array. DOPPEL-S-REGEL: Jede Wortform, die im Standard-Deutschen mit ß geschrieben wird, wird im Schweizer Schriftdeutsch mit ss geschrieben. Das gilt ausnahmslos für alle Wortarten, Flexionsformen, Komposita und Präterita (Beispiele: frass, sass, mass, ass, vergass, genoss, schloss, floss, schoss). Eine ss-Schreibung anstelle von ß ist IMMER korrekt und darf NICHT ins «fehler»-Array – auch dann nicht, wenn die Erklärung lautet, die «korrekte» Form sei die ß-Schreibung. \
-Der Gedankenstrich (–) ist korrekte Schreibweise – NICHT ins «fehler»-Array. Der Bindestrich (-) als Ersatz für den Gedankenstrich ist ebenfalls kein Fehler – NICHT ins «fehler»-Array. \
-Anführungszeichen-Regel: Die Wahl der Anführungszeichen («», „", "", '') ist kein Fehler und kein Stilproblem – NICHT ins «fehler»-Array, egal welche Variante verwendet wird. \
-GRUNDREGEL FÜR DAS «fehler»-ARRAY: Ein Eintrag kommt nur rein, wenn er eindeutig, zweifelsfrei und ohne Einschränkung falsch ist. Enthält die Erklärung Formulierungen wie «im Schweizer Kontext akzeptabel», «kein Fehler», «vertretbar», «könnte», «möglicherweise» – dann darf der Eintrag NICHT im Array stehen. Vor jedem Eintrag: Selbsttest – «Ist das im Schweizer Kontext wirklich falsch?» Wenn nein oder unsicher: weglassen. \
-KORREKTUR-EINDEUTIGKEIT (gilt für typ «rechtschreibung» und «grammatik»): Das Feld «korrektur» muss genau eine Formulierung enthalten – keine Alternativen mit Schrägstrich (z.B. NICHT «leben würde / lebe»). Wenn mehrere Varianten möglich sind, die beste wählen und nur diese angeben. Einträge mit typ «stil» sind davon ausgenommen, da sie durch einen separaten KI-Schritt weiterverarbeitet werden.`;
-
-const DEFAULT_PREFIXES = {
-  lektorat:       'Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz.',
-  buchbewertung:  'Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz.',
-  kapitelanalyse: 'Du bist ein erfahrener Literaturkritiker und Lektor für deutschsprachige Texte aus der Schweiz.',
-  figuren:        'Du bist ein Literaturanalytiker für deutschsprachige Texte aus der Schweiz.',
-  stilkorrektur:  'Du bist ein deutschsprachiger Lektor für literarische Texte aus der Schweiz.',
-  chat:           'Du bist ein intelligenter literarischer Assistent für deutschsprachige Texte aus der Schweiz. Du hilfst dem Autor mit Fragen zu einer spezifischen Buchseite, gibst Feedback zu Inhalt und Stil, und kannst konkrete Textänderungen vorschlagen.',
-  buchchat:       'Du bist ein intelligenter literarischer Assistent für deutschsprachige Texte aus der Schweiz. Du hilfst dem Autor mit übergreifenden Fragen zum gesamten Buch, gibst Feedback zu Themen, Figuren, Struktur und Stil, und gehst auf Textausschnitte aus mehreren Seiten ein.',
-};
 
 function buildSystem(prefix, rules) {
   return `${prefix}\n\n${rules}\n\n${JSON_ONLY}`;
@@ -32,36 +15,35 @@ function buildSystemNoJson(prefix, rules) {
   return `${prefix}\n\n${rules}`;
 }
 
-const DEFAULT_ERKLAERUNG_RULE = `– ACHTUNG: Falls diese Erklärung Formulierungen enthält wie 'kein Fehler', 'korrekt', 'vertretbar', 'möglicherweise', 'im Schweizer Kontext akzeptabel' o.Ä., darf der Eintrag NICHT im Array stehen.`;
-
-// Live-Exports – werden durch configurePrompts() aktualisiert.
+// Live-Exports – werden durch configurePrompts() gesetzt (Pflicht vor erstem Prompt-Aufruf).
 // Alle importierenden Module erhalten via ESM-Live-Binding immer den aktuellen Wert.
-export let ERKLAERUNG_RULE      = DEFAULT_ERKLAERUNG_RULE;
-export let SYSTEM_LEKTORAT      = buildSystem(DEFAULT_PREFIXES.lektorat,       DEFAULT_BASE_RULES);
-export let SYSTEM_BUCHBEWERTUNG = buildSystem(DEFAULT_PREFIXES.buchbewertung,  DEFAULT_BASE_RULES);
-export let SYSTEM_KAPITELANALYSE= buildSystem(DEFAULT_PREFIXES.kapitelanalyse, DEFAULT_BASE_RULES);
-export let SYSTEM_FIGUREN       = buildSystem(DEFAULT_PREFIXES.figuren,        DEFAULT_BASE_RULES);
-export let SYSTEM_STILKORREKTUR = buildSystem(DEFAULT_PREFIXES.stilkorrektur,  DEFAULT_BASE_RULES);
-export let SYSTEM_CHAT          = buildSystemNoJson(DEFAULT_PREFIXES.chat,     DEFAULT_BASE_RULES);
-export let SYSTEM_BOOK_CHAT     = buildSystemNoJson(DEFAULT_PREFIXES.buchchat, DEFAULT_BASE_RULES);
+export let ERKLAERUNG_RULE      = null;
+export let SYSTEM_LEKTORAT      = null;
+export let SYSTEM_BUCHBEWERTUNG = null;
+export let SYSTEM_KAPITELANALYSE= null;
+export let SYSTEM_FIGUREN       = null;
+export let SYSTEM_STILKORREKTUR = null;
+export let SYSTEM_CHAT          = null;
+export let SYSTEM_BOOK_CHAT     = null;
 
 /**
- * Überschreibt die konfigurierbaren Teile aller System-Prompts.
- * Wird einmalig beim App-Start aus dem /config-Endpunkt befüllt.
- * @param {Object} cfg  promptConfig-Objekt aus /config  (kann null/undefined sein → No-op)
+ * Setzt alle System-Prompts aus dem promptConfig-Objekt (geladen aus prompt-config.json).
+ * Pflichtaufruf beim App-Start – wirft einen Fehler wenn cfg fehlt.
+ * @param {Object} cfg  promptConfig-Objekt aus /config
  */
 export function configurePrompts(cfg) {
-  if (!cfg) return;
-  const rules   = cfg.baseRules || DEFAULT_BASE_RULES;
-  const sp      = cfg.systemPrompts || {};
-  ERKLAERUNG_RULE = cfg.erklaerungRule || DEFAULT_ERKLAERUNG_RULE;
-  SYSTEM_LEKTORAT       = buildSystem(sp.lektorat       || DEFAULT_PREFIXES.lektorat,       rules);
-  SYSTEM_BUCHBEWERTUNG  = buildSystem(sp.buchbewertung  || DEFAULT_PREFIXES.buchbewertung,  rules);
-  SYSTEM_KAPITELANALYSE = buildSystem(sp.kapitelanalyse || DEFAULT_PREFIXES.kapitelanalyse, rules);
-  SYSTEM_FIGUREN        = buildSystem(sp.figuren        || DEFAULT_PREFIXES.figuren,        rules);
-  SYSTEM_STILKORREKTUR  = buildSystem(sp.stilkorrektur  || DEFAULT_PREFIXES.stilkorrektur,  rules);
-  SYSTEM_CHAT           = buildSystemNoJson(sp.chat     || DEFAULT_PREFIXES.chat,     rules);
-  SYSTEM_BOOK_CHAT      = buildSystemNoJson(sp.buchchat || DEFAULT_PREFIXES.buchchat, rules);
+  if (!cfg) throw new Error('prompt-config.json fehlt oder ist ungültig – Prompts können nicht konfiguriert werden.');
+  const rules = cfg.baseRules;
+  if (!rules) throw new Error('prompt-config.json: Pflichtfeld "baseRules" fehlt.');
+  const sp = cfg.systemPrompts || {};
+  ERKLAERUNG_RULE       = cfg.erklaerungRule || '';
+  SYSTEM_LEKTORAT       = buildSystem(sp.lektorat       || '', rules);
+  SYSTEM_BUCHBEWERTUNG  = buildSystem(sp.buchbewertung  || '', rules);
+  SYSTEM_KAPITELANALYSE = buildSystem(sp.kapitelanalyse || '', rules);
+  SYSTEM_FIGUREN        = buildSystem(sp.figuren        || '', rules);
+  SYSTEM_STILKORREKTUR  = buildSystem(sp.stilkorrektur  || '', rules);
+  SYSTEM_CHAT           = buildSystemNoJson(sp.chat     || '', rules);
+  SYSTEM_BOOK_CHAT      = buildSystemNoJson(sp.buchchat || '', rules);
 }
 
 export function buildStilkorrekturPrompt(html, styles) {

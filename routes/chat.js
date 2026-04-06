@@ -5,13 +5,8 @@ const { pathToFileURL } = require('url');
 const { db } = require('../db/schema');
 const logger = require('../logger');
 
-// prompt-config.json einmalig laden (identisches Pattern wie jobs.js)
-let _promptConfig = null;
-try {
-  _promptConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../prompt-config.json'), 'utf8'));
-} catch {
-  _promptConfig = null;
-}
+// prompt-config.json einmalig laden; fehlt die Datei, bricht der Server ab.
+const _promptConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../prompt-config.json'), 'utf8'));
 
 // prompts.js (ESM) lazy laden – Single Source of Truth für alle Prompts
 let _prompts = null;

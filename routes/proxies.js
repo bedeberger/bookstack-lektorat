@@ -6,18 +6,13 @@ const logger = require('../logger');
 
 const BOOKSTACK_URL = process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80';
 
-// prompt-config.json einmalig laden; fehlt die Datei, werden Defaults aus prompts.js verwendet.
+// prompt-config.json einmalig laden; fehlt die Datei, wird ein Fehler geworfen.
 let _promptConfig = null;
 function getPromptConfig() {
   if (_promptConfig !== null) return _promptConfig;
-  try {
-    const raw = fs.readFileSync(path.resolve(__dirname, '../prompt-config.json'), 'utf8');
-    _promptConfig = JSON.parse(raw);
-    logger.info('prompt-config.json geladen.');
-  } catch (e) {
-    logger.warn('prompt-config.json nicht gefunden oder ungültig – Prompt-Defaults werden verwendet. (' + e.message + ')');
-    _promptConfig = {};
-  }
+  const raw = fs.readFileSync(path.resolve(__dirname, '../prompt-config.json'), 'utf8');
+  _promptConfig = JSON.parse(raw);
+  logger.info('prompt-config.json geladen.');
   return _promptConfig;
 }
 
