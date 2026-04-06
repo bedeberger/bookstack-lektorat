@@ -210,11 +210,12 @@ document.addEventListener('alpine:init', () => {
 
     // Generiertes Status-HTML für laufende Jobs: Spinner + statusText + Token-Info.
     // Wird von review.js, figuren.js und lektorat.js (batchCheck) verwendet.
-    _runningJobStatus(statusText, tokIn, tokOut, maxTokOut) {
+    _runningJobStatus(statusText, tokIn, tokOut, maxTokOut, progress) {
       let tokInfo = '';
       if ((tokIn || 0) + (tokOut || 0) > 0) {
-        const maxOut = maxTokOut ? '/' + fmtTok(maxTokOut) : '';
-        tokInfo = ` · ↑${fmtTok(tokIn || 0)} ↓${fmtTok(tokOut || 0)}${maxOut} Tokens`;
+        const pctPart = (progress > 0 && progress < 100) ? ` ~${progress}%` : '';
+        const maxPart = maxTokOut ? ` (max. ${fmtTok(maxTokOut)})` : '';
+        tokInfo = ` · ↑${fmtTok(tokIn || 0)} ↓${fmtTok(tokOut || 0)} Tokens${pctPart}${maxPart}`;
       }
       return `<span class="spinner"></span>${escHtml(statusText || '…')}${tokInfo}`;
     },
@@ -369,7 +370,7 @@ document.addEventListener('alpine:init', () => {
             if (job.status === 'running') {
               this.batchLoading = true;
               this.batchProgress = job.progress || 0;
-              this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut);
+              this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
               this.startBatchPoll(batchJobId);
             } else {
               localStorage.removeItem('lektorat_batchcheck_job_' + bookId);

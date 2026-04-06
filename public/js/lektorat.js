@@ -135,7 +135,7 @@ export const lektoratMethods = {
       progressProp: 'checkProgress',
       onProgress: (job) => {
         if (this.currentPage?.id !== pageId) return;
-        this.status = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut);
+        this.status = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
         this.statusSpinner = false;
       },
       onNotFound: () => {
@@ -294,7 +294,7 @@ export const lektoratMethods = {
       lsKey: 'lektorat_batchcheck_job_' + bookId,
       progressProp: 'batchProgress',
       onProgress: (job) => {
-        this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut);
+        this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
       },
       onNotFound: () => {
         this.batchLoading = false;

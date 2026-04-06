@@ -53,7 +53,7 @@ export const reviewMethods = {
       lsKey: 'lektorat_review_job_' + bookId,
       progressProp: 'bookReviewProgress',
       onProgress: (job) => {
-        this.bookReviewStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut);
+        this.bookReviewStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
       },
       onNotFound: () => {
         this.bookReviewLoading = false;

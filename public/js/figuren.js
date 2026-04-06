@@ -62,7 +62,7 @@ export const figurenMethods = {
       lsKey: 'lektorat_figures_job_' + bookId,
       progressProp: 'figurenProgress',
       onProgress: (job) => {
-        this.figurenStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut);
+        this.figurenStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
       },
       onNotFound: () => {
         this.figurenLoading = false;

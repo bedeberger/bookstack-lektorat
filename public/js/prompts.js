@@ -27,6 +27,7 @@ export let SYSTEM_STILKORREKTUR = null;
 export let SYSTEM_CHAT          = null;
 export let SYSTEM_BOOK_CHAT     = null;
 export let SYSTEM_SYNONYME      = null;
+export let SYSTEM_SYNONYM_CHECK = null;
 
 /**
  * Setzt alle System-Prompts aus dem promptConfig-Objekt (geladen aus prompt-config.json).
@@ -48,6 +49,7 @@ export function configurePrompts(cfg) {
   SYSTEM_CHAT           = buildSystemNoJson(sp.chat     || '', rules);
   SYSTEM_BOOK_CHAT      = buildSystemNoJson(sp.buchchat || '', rules);
   SYSTEM_SYNONYME       = buildSystem(sp.synonyme       || '', rules);
+  SYSTEM_SYNONYM_CHECK  = buildSystem(sp.synonymeCheck  || '', rules);
 }
 
 export function buildStilkorrekturPrompt(html, styles) {
@@ -413,6 +415,30 @@ Antworte mit diesem JSON-Schema:
 
 Text:
 ${text}`;
+}
+
+export function buildSynonymCheckPrompt(passage, passageNach, wort, synonym) {
+  return `Prüfe ob die folgende Synonym-Ersetzung im Satz korrekt ist.
+
+Originalsatz:       «${passage}»
+Satz nach Ersetzung: «${passageNach}»
+(Ersetzt: «${wort}» → «${synonym}»)
+
+Prüfkriterien:
+- Grammatisch vollständig: Gibt es verwaiste Satzteile? (Typisches Beispiel: abgetrennte Verbpräfixe – z.B. «aufwachsen» → nur «wuchsen» ersetzt, aber «auf» bleibt fälschlicherweise stehen.)
+- Bedeutung erhalten?
+- Natürliches Deutsch?
+
+Antworte mit diesem JSON-Schema:
+{
+  "ok": true,
+  "begruendung": null
+}
+oder wenn ein Problem besteht:
+{
+  "ok": false,
+  "begruendung": "Kurze Erklärung des Problems (ein Satz)"
+}`;
 }
 
 export function buildLektoratPrompt(text, html) {

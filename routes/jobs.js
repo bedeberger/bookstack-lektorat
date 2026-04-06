@@ -423,13 +423,23 @@ function groupByChapter(pageContents) {
 
 // Hilfsfunktion: callAI aufrufen, Token-Zähler akkumulieren, Job aktualisieren.
 // fromPct/toPct: optionaler Fortschrittsbereich – während des Streamings wird der Balken
-// von fromPct auf toPct gefüllt (basierend auf akkumulierten Output-Zeichen vs. expectedChars).
-async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars = 3000) {
+// von fromPct auf toPct gefüllt (basierend auf akkumulierten Output-Zeichen vs. dynExpectedChars).
+// outputRatio: erwartetes Output/Input-Verhältnis für dynamische Recalibrierung (Default 0.2).
+//   Sobald tokIn bekannt ist (Claude: message_start; Ollama: erster Chunk), wird dynExpectedChars
+//   auf max(staticFallback, tokIn * 4 * outputRatio) gesetzt.
+async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars = 3000, outputRatio = 0.2) {
+  let dynExpectedChars = expectedChars;
+  let calibrated = false;
   const onProgress = ({ chars, tokIn }) => {
     const updates = {};
+    // Einmalige Recalibrierung sobald tokIn bekannt ist
+    if (!calibrated && tokIn > 0) {
+      dynExpectedChars = Math.max(expectedChars, Math.round(tokIn * 4 * outputRatio));
+      calibrated = true;
+    }
     // Fortschrittsbalken auf Basis akkumulierter Zeichen
     if (fromPct != null && toPct != null) {
-      updates.progress = Math.round(fromPct + (toPct - fromPct) * Math.min(1, chars / expectedChars));
+      updates.progress = Math.round(fromPct + (toPct - fromPct) * Math.min(1, chars / dynExpectedChars));
     }
     // Live-Token-Anzeige: tok.in/tok.out = bisherige abgeschlossene Calls;
     // aktueller Call: Input aus message_start, Output approximiert (chars / 4)

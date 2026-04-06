@@ -1,4 +1,5 @@
 import { escHtml } from './utils.js';
+import { SYSTEM_SYNONYM_CHECK, buildSynonymCheckPrompt } from './prompts.js';
 
 // Synonymanalyse-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -63,7 +64,7 @@ export const synonymeMethods = {
       jobId,
       lsKey: null,
       onProgress: (job) => {
-        this.synonymeStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut);
+        this.synonymeStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
       },
       onNotFound: () => {
         this.synonymeLoading  = false;
@@ -147,6 +148,31 @@ export const synonymeMethods = {
     }
 
     try {
+      // Plausibilitätsprüfung: KI prüft ob das Synonym im Kontext korrekt ist.
+      // passageNach = tatsächlicher Satz nach Ersetzung (Plaintext), damit der
+      // Check den Ergebnis-Satz explizit sieht (z.B. verwaiste Verbpräfixe).
+      this.synonymeStatus = `<span class="muted-msg">Plausibilisiere…</span>`;
+      const escapedWort = wort.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const wortRe = new RegExp(`(?<![a-zA-ZäöüÄÖÜß0-9])${escapedWort}(?![a-zA-ZäöüÄÖÜß0-9])`);
+      const passageNach = passage.replace(wortRe, synonym);
+      let checkOk = true;
+      let checkBegruendung = null;
+      try {
+        const check = await this.callAI(
+          buildSynonymCheckPrompt(passage, passageNach, wort, synonym),
+          SYSTEM_SYNONYM_CHECK
+        );
+        checkOk = check?.ok !== false;
+        checkBegruendung = check?.begruendung || null;
+      } catch (e) {
+        console.warn('[applySynonym] Plausibilitätsprüfung fehlgeschlagen, fahre fort:', e.message);
+      }
+
+      if (!checkOk) {
+        this.synonymeStatus = `<span class="error-msg">Synonym nicht passend: ${escHtml(checkBegruendung || 'Bitte anderen Vorschlag wählen.')}</span>`;
+        return;
+      }
+
       await this.bsPut('pages/' + this.currentPage.id, { html: newHtml });
       this.synonymeHtml = newHtml;
       // Vorkommen als erledigt markieren und alle Indizes neu berechnen,
