@@ -708,7 +708,7 @@
       placeholder="Frage oder Kommentar…"
       rows="2"
       :disabled="chatLoading"
-      @keydown.enter="if(!$event.isComposing && !$event.shiftKey && !$event.ctrlKey && !$event.metaKey) { $event.preventDefault(); sendChatMessage(); }"
+      @keydown.enter="if(!$event.isComposing && $event.keyCode !== 229 && !$event.shiftKey && !$event.ctrlKey && !$event.metaKey) { $event.preventDefault(); sendChatMessage(); }"
     ></textarea>
     <button class="chat-send-btn" @click="sendChatMessage()" :disabled="chatLoading || !chatInput.trim()">
       <span x-show="chatLoading" class="spinner"></span>
@@ -870,7 +870,7 @@
       placeholder="Frage zum Buch…"
       rows="2"
       :disabled="bookChatLoading"
-      @keydown.enter="if(!$event.isComposing && !$event.shiftKey && !$event.ctrlKey && !$event.metaKey) { $event.preventDefault(); sendBookChatMessage(); }"
+      @keydown.enter="if(!$event.isComposing && $event.keyCode !== 229 && !$event.shiftKey && !$event.ctrlKey && !$event.metaKey) { $event.preventDefault(); sendBookChatMessage(); }"
     ></textarea>
     <button class="chat-send-btn" @click="sendBookChatMessage()" :disabled="bookChatLoading || !bookChatInput.trim()">
       <span x-show="bookChatLoading" class="spinner"></span>
