@@ -976,6 +976,79 @@ ins {
   color: var(--color-muted);
 }
 
+/* === Figuren: Zeitstrahl === */
+.figur-zeitstrahl {
+  position: relative;
+  margin: 4px 0 10px 10px;
+  padding-left: 20px;
+  border-left: 2px solid var(--color-border);
+}
+
+.figur-zeitstrahl-item {
+  position: relative;
+  padding-bottom: 12px;
+}
+
+.figur-zeitstrahl-item:last-child { padding-bottom: 0; }
+
+.figur-zeitstrahl-marker {
+  position: absolute;
+  left: -27px;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 0 1.5px var(--color-border);
+}
+
+.figur-zeitstrahl-marker--extern {
+  background: var(--color-err-border);
+  box-shadow: 0 0 0 1.5px var(--color-err-border);
+  border-radius: 2px;
+}
+
+.figur-zeitstrahl-item--extern .figur-zeitstrahl-ereignis {
+  color: var(--color-err-text);
+}
+
+.figur-zeitstrahl-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.figur-zeitstrahl-datum {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.figur-zeitstrahl-extern-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 0;
+  background: var(--color-err-bg);
+  color: var(--color-err-text);
+  letter-spacing: 0;
+}
+
+.figur-zeitstrahl-ereignis {
+  font-size: var(--font-size-sm);
+}
+
+.figur-zeitstrahl-bedeutung {
+  font-size: 12px;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
 /* === Utilities === */
 /* Alpine.js – verhindert Flash of unstyled content */
 [x-cloak] { display: none !important; }

@@ -356,6 +356,25 @@
               </template>
             </div>
           </div>
+          <!-- Lebensereignisse / Zeitstrahl -->
+          <div x-show="f.lebensereignisse?.length">
+            <div class="bewertung-section-title">Zeitstrahl</div>
+            <div class="figur-zeitstrahl">
+              <template x-for="(ev, i) in (f.lebensereignisse || [])" :key="i">
+                <div class="figur-zeitstrahl-item" :class="ev.typ === 'extern' ? 'figur-zeitstrahl-item--extern' : ''">
+                  <div class="figur-zeitstrahl-marker" :class="ev.typ === 'extern' ? 'figur-zeitstrahl-marker--extern' : ''"></div>
+                  <div class="figur-zeitstrahl-content">
+                    <span class="figur-zeitstrahl-datum">
+                      <span x-text="ev.datum"></span>
+                      <span x-show="ev.typ === 'extern'" class="figur-zeitstrahl-extern-badge">extern</span>
+                    </span>
+                    <span class="figur-zeitstrahl-ereignis" x-text="ev.ereignis"></span>
+                    <span x-show="ev.bedeutung" class="figur-zeitstrahl-bedeutung" x-text="ev.bedeutung"></span>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
 
         </div>
       </div>

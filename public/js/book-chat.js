@@ -34,6 +34,8 @@ export const bookChatMethods = {
   async startNewBookChatSession() {
     if (!this.selectedBookId) return;
     try {
+      // Cache invalidieren damit die neue Session frische Seiteninhalte sieht
+      await fetch('/jobs/book-chat-cache?book_id=' + this.selectedBookId, { method: 'DELETE' });
       const { id } = await fetch('/chat/session/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

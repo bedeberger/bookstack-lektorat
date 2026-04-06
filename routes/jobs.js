@@ -291,6 +291,31 @@ function _chatBuildMessageHistory(sessionId) {
   `).all(sessionId).map(r => ({ role: r.role, content: r.content }));
 }
 
+/**
+ * Rolling-Window für den Buch-Chat: erste user+assistant-Runde als Kontext-Anker
+ * + die letzten tailMessages Nachrichten. Verhindert unbegrenztes Historien-Wachstum.
+ */
+function _bookChatBuildHistory(sessionId, tailMessages = 10) {
+  const all = db.prepare(`
+    SELECT role, content FROM chat_messages
+    WHERE session_id = ? ORDER BY created_at ASC
+  `).all(sessionId).map(r => ({ role: r.role, content: r.content }));
+
+  if (all.length <= tailMessages + 2) return all;
+
+  // Erste vollständige Runde sichern (Kontext-Anker)
+  const anchor = [];
+  if (all[0]?.role === 'user')      anchor.push(all[0]);
+  if (all[1]?.role === 'assistant') anchor.push(all[1]);
+
+  // Letzte tailMessages Nachrichten
+  const tail = all.slice(-tailMessages);
+
+  // Überschneidung: wenn Anchor bereits im Tail liegt, nur Tail zurückgeben
+  const anchorInTail = anchor.length > 0 && all.length - tailMessages <= 0;
+  return anchorInTail ? tail : [...anchor, ...tail];
+}
+
 // ── callAIChat: Multi-Turn-Variante von callAI ────────────────────────────────
 // messages: Array von { role, content } – enthält die vollständige Konversation.
 // Entspricht _streamClaude/_streamOllama in chat.js, aber akkumuliert intern (kein SSE).
@@ -852,6 +877,11 @@ async function runChatJob(jobId, sessionId, userMsgId, message, pageText, userEm
 
 const _BOOK_CHAT_STOPWORDS = new Set(_promptConfig.stopwords || []);
 
+// Seiten-Cache: Key `${bookId}:${userEmail}` → { pages: [{name, id, slug, book_slug, text}], loadedAt }
+// TTL 10 Minuten – verhindert, dass jede Nachricht alle BookStack-API-Calls wiederholt.
+const _bookPageCache = new Map();
+const _BOOK_PAGE_CACHE_TTL_MS = 10 * 60 * 1000;
+
 function _scorePageRelevance(query, text) {
   const tokens = query.toLowerCase()
     .split(/[\s,\.!?;:«»"'()\[\]{}]+/)
@@ -878,65 +908,101 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     if (!userToken) throw new Error('Kein BookStack-Token in der Session – bitte neu einloggen.');
 
     const authHeader = `Token ${userToken.id}:${userToken.pw}`;
+    const cacheKey = `${session.book_id}:${userEmail}`;
 
-    // Alle Seiten des Buchs aus BookStack laden
-    updateJob(jobId, { statusText: 'Seitenliste laden…', progress: 8 });
-    const pagesListResp = await fetch(
-      `${BS_URL}/api/pages?filter[book_id]=${session.book_id}&count=500`,
-      { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(30000) }
-    );
-    if (!pagesListResp.ok) throw new Error(`BookStack Seitenliste ${pagesListResp.status}`);
-    const pages = (await pagesListResp.json()).data || [];
+    // ── Schritt 1: Seiten aus Cache oder frisch von BookStack laden ─────────────
+    let pageContents;
+    const cached = _bookPageCache.get(cacheKey);
+    if (cached && Date.now() - cached.loadedAt < _BOOK_PAGE_CACHE_TTL_MS) {
+      pageContents = cached.pages;
+      updateJob(jobId, { statusText: 'Seiten aus Cache…', progress: 40 });
+    } else {
+      updateJob(jobId, { statusText: 'Seitenliste laden…', progress: 8 });
+      const pagesListResp = await fetch(
+        `${BS_URL}/api/pages?filter[book_id]=${session.book_id}&count=500`,
+        { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(30000) }
+      );
+      if (!pagesListResp.ok) throw new Error(`BookStack Seitenliste ${pagesListResp.status}`);
+      const pages = (await pagesListResp.json()).data || [];
 
-    // Token-Budget dynamisch aus MODEL_TOKEN ableiten
-    const MODEL_TOKEN = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
-    // 60 % der Modell-Token für Seitentext reservieren (~4 Zeichen/Token)
-    const TEXT_CHAR_BUDGET = Math.floor(MODEL_TOKEN * 0.6) * 4;
-
-    // Seiteninhalt in Batches laden
-    const BATCH = 5;
-    const pageContents = [];
-    for (let i = 0; i < pages.length; i += BATCH) {
-      updateJob(jobId, {
-        statusText: `Seiten laden… ${Math.min(i + BATCH, pages.length)}/${pages.length}`,
-        progress: 10 + Math.round((i / Math.max(pages.length, 1)) * 30),
-      });
-      const batch = pages.slice(i, i + BATCH);
-      const results = await Promise.allSettled(batch.map(async p => {
-        const r = await fetch(`${BS_URL}/api/pages/${p.id}`, {
-          headers: { Authorization: authHeader },
-          signal: AbortSignal.timeout(30000),
+      const BATCH = 5;
+      pageContents = [];
+      for (let i = 0; i < pages.length; i += BATCH) {
+        updateJob(jobId, {
+          statusText: `Seiten laden… ${Math.min(i + BATCH, pages.length)}/${pages.length}`,
+          progress: 10 + Math.round((i / Math.max(pages.length, 1)) * 30),
         });
-        if (!r.ok) return null;
-        const pd = await r.json();
-        const text = htmlToText(pd.html || '').trim();
-        return text ? { name: p.name, id: p.id, slug: p.slug, book_slug: p.book_slug, text } : null;
-      }));
-      for (const r of results) {
-        if (r.status === 'fulfilled' && r.value) pageContents.push(r.value);
+        const batch = pages.slice(i, i + BATCH);
+        const results = await Promise.allSettled(batch.map(async p => {
+          const r = await fetch(`${BS_URL}/api/pages/${p.id}`, {
+            headers: { Authorization: authHeader },
+            signal: AbortSignal.timeout(30000),
+          });
+          if (!r.ok) return null;
+          const pd = await r.json();
+          const text = htmlToText(pd.html || '').trim();
+          return text ? { name: p.name, id: p.id, slug: p.slug, book_slug: p.book_slug, text } : null;
+        }));
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value) pageContents.push(r.value);
+        }
       }
+      _bookPageCache.set(cacheKey, { pages: pageContents, loadedAt: Date.now() });
     }
 
-    // Relevanz-Scoring – bei Score=0 überall bleibt die ursprüngliche Reihenfolge
+    // ── Schritt 2: Historien-Rolling-Window (Anker + letzte 10 Nachrichten) ─────
+    const historyWithoutLast = _bookChatBuildHistory(session.id).slice(0, -1);
+    const historyChars = historyWithoutLast.reduce((s, m) => s + (m.content?.length || 0), 0);
+
+    // ── Schritt 3: Dynamisches Text-Budget ──────────────────────────────────────
+    const MODEL_TOKEN = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
+    const TOTAL_CHAR_BUDGET     = MODEL_TOKEN * 4;
+    const SYSTEM_OVERHEAD_CHARS = 8000;   // ~2k Tokens für System-Prompt-Overhead
+    const ANSWER_RESERVE_CHARS  = 8000;   // ~2k Tokens Reserve für Antwort
+    const TEXT_CHAR_BUDGET = Math.max(
+      20000,
+      Math.floor((TOTAL_CHAR_BUDGET - historyChars - SYSTEM_OVERHEAD_CHARS - ANSWER_RESERVE_CHARS) * 0.98)
+    );
+
+    // ── Schritt 4: Relevanz-Scoring + Seitenauswahl ─────────────────────────────
     updateJob(jobId, { statusText: 'Relevante Seiten auswählen…', progress: 42 });
     const scored = pageContents.map(p => ({ ...p, score: _scorePageRelevance(message, p.text) }));
     const anyScore = scored.some(p => p.score > 0);
     if (anyScore) scored.sort((a, b) => b.score - a.score);
 
-    // Budget-Kontrolle: Seiten zufügen bis Zeichenbudget erschöpft
     const selectedPages = [];
     let usedChars = 0;
-    for (const p of scored) {
-      if (usedChars >= TEXT_CHAR_BUDGET) break;
-      const remaining = TEXT_CHAR_BUDGET - usedChars;
-      const text = p.text.slice(0, remaining);
-      selectedPages.push({ name: p.name, id: p.id, slug: p.slug, book_slug: p.book_slug, text });
-      usedChars += text.length;
+    if (!anyScore && scored.length > 0) {
+      // Gleichmässige Verteilung: jede Seite bekommt denselben Anteil → Querschnitt durch das Buch
+      const perPage = Math.floor(TEXT_CHAR_BUDGET / scored.length);
+      for (const p of scored) {
+        const text = p.text.slice(0, perPage);
+        if (text.length >= 100) {
+          selectedPages.push({ name: p.name, id: p.id, slug: p.slug, book_slug: p.book_slug, text });
+          usedChars += text.length;
+        }
+      }
+    } else {
+      // Relevanz-sortiert: Top-Seiten zuerst bis Budget erschöpft
+      for (const p of scored) {
+        if (usedChars >= TEXT_CHAR_BUDGET) break;
+        const remaining = TEXT_CHAR_BUDGET - usedChars;
+        const text = p.text.slice(0, remaining);
+        selectedPages.push({ name: p.name, id: p.id, slug: p.slug, book_slug: p.book_slug, text });
+        usedChars += text.length;
+      }
     }
 
-    logger.info(`Job ${jobId}: Buch-Chat – ${selectedPages.length}/${pageContents.length} Seiten im Kontext (${usedChars} / ${TEXT_CHAR_BUDGET} Zeichen).`);
+    const cacheAge = _bookPageCache.has(cacheKey)
+      ? Math.round((Date.now() - _bookPageCache.get(cacheKey).loadedAt) / 1000) + 's'
+      : 'MISS';
+    logger.info(
+      `Job ${jobId}: Buch-Chat – ${selectedPages.length}/${pageContents.length} Seiten im Kontext ` +
+      `(${usedChars}/${TEXT_CHAR_BUDGET} Zeichen, Hist ${Math.round(historyChars / 1000)}k Zeichen, ` +
+      `${anyScore ? 'Keyword-Scoring' : 'Gleichverteilung'}, Cache ${cacheAge}).`
+    );
 
-    // System-Prompt + Konversationshistorie
+    // ── System-Prompt + KI-Aufruf ───────────────────────────────────────────────
     const figuren = _chatGetFiguren(session.book_id, userEmail);
     const review  = _chatGetLatestReview(session.book_id, userEmail);
     const systemPrompt = buildBookChatSystemPrompt(session.book_name || '', selectedPages, figuren, review);
@@ -947,7 +1013,6 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
       review:     !!review,
     };
 
-    const historyWithoutLast = _chatBuildMessageHistory(session.id).slice(0, -1);
     const aiMessages = [...historyWithoutLast, { role: 'user', content: message }];
 
     updateJob(jobId, { statusText: 'KI antwortet…', progress: 50 });
@@ -1106,6 +1171,15 @@ router.post('/book-chat', jsonBody, (req, res) => {
   const jobId = createJob('book-chat', session_id, userEmail);
   enqueueJob(jobId, () => runBookChatJob(jobId, session_id, userMsgResult.lastInsertRowid, message.trim(), userEmail, userToken));
   res.json({ jobId });
+});
+
+router.delete('/book-chat-cache', (req, res) => {
+  const { book_id } = req.query;
+  if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
+  const userEmail = req.session?.user?.email || null;
+  const key = `${book_id}:${userEmail}`;
+  _bookPageCache.delete(key);
+  res.json({ ok: true });
 });
 
 router.get('/active', (req, res) => {

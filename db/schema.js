@@ -69,6 +69,16 @@ db.exec(`
     haeufigkeit  INTEGER DEFAULT 1
   );
 
+  -- Lebensereignisse / Zeitstrahl: eine Zeile pro Ereignis
+  CREATE TABLE IF NOT EXISTS figure_events (
+    figure_id  INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+    datum      TEXT NOT NULL,
+    ereignis   TEXT NOT NULL,
+    bedeutung  TEXT,
+    typ        TEXT DEFAULT 'persoenlich',
+    sort_order INTEGER DEFAULT 0
+  );
+
   -- Beziehungen: flat, typ ist Freitext -> neue Typen ohne Schemaänderung
   CREATE TABLE IF NOT EXISTS figure_relations (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,7 +156,7 @@ db.exec(`
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 9;
+const CURRENT_SCHEMA_VERSION = 10;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
   if (version < 2) {
@@ -239,9 +249,25 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 9').run();
     logger.info('DB-Migration auf Version 9 abgeschlossen.');
   }
+  if (version < 10) {
+    // figure_events.typ nachrüsten (Tabelle existiert ggf. bereits ohne diese Spalte)
+    const feCols = db.pragma('table_info(figure_events)').map(c => c.name);
+    if (!feCols.includes('typ')) {
+      db.exec("ALTER TABLE figure_events ADD COLUMN typ TEXT DEFAULT 'persoenlich'");
+      logger.info('DB-Migration auf Version 10: figure_events.typ nachgerüstet.');
+    }
+    db.prepare('UPDATE schema_version SET version = 10').run();
+    logger.info('DB-Migration auf Version 10 abgeschlossen.');
+  }
   // Sicherstellen dass schema_version aktuell ist (Fallback)
   if (version < CURRENT_SCHEMA_VERSION) {
     db.prepare('UPDATE schema_version SET version = ?').run(CURRENT_SCHEMA_VERSION);
+  }
+  // Unbedingter Spalten-Check für figure_events.typ
+  const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
+  if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {
+    db.exec("ALTER TABLE figure_events ADD COLUMN typ TEXT DEFAULT 'persoenlich'");
+    logger.info('figure_events.typ nachgerüstet.');
   }
   // Unbedingter Spalten-Check für v9 (falls Fallback Version gesetzt hat bevor Migration lief)
   const bshColsCheck = db.pragma('table_info(book_stats_history)').map(c => c.name);
@@ -274,6 +300,7 @@ function saveFigurenToDb(bookId, figuren, userEmail) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insTag = db.prepare('INSERT INTO figure_tags (figure_id, tag) VALUES (?, ?)');
     const insApp = db.prepare('INSERT INTO figure_appearances (figure_id, chapter_name, haeufigkeit) VALUES (?, ?, ?)');
+    const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
     const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, user_email) VALUES (?, ?, ?, ?, ?, ?)');
 
     for (let i = 0; i < figuren.length; i++) {
@@ -285,6 +312,10 @@ function saveFigurenToDb(bookId, figuren, userEmail) {
       );
       for (const tag of (f.eigenschaften || [])) insTag.run(fid, tag);
       for (const app of (f.kapitel || [])) insApp.run(fid, app.name, app.haeufigkeit || 1);
+      for (let j = 0; j < (f.lebensereignisse || []).length; j++) {
+        const ev = f.lebensereignisse[j];
+        insEvt.run(fid, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', j);
+      }
       for (const bz of (f.beziehungen || [])) insRel.run(bookId, f.id, bz.figur_id, bz.typ, bz.beschreibung || null, userEmail || null);
     }
   })();

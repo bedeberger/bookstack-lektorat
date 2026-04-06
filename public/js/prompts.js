@@ -189,6 +189,7 @@ const FIGUREN_SCHEMA = `{
       "beruf": "Beruf oder Rolle oder leer",
       "beschreibung": "2-3 Sätze zu Rolle, Persönlichkeit und Bedeutung",
       "eigenschaften": ["Eigenschaft1", "Eigenschaft2"],
+      "lebensereignisse": [{ "datum": "JJJJ oder Zeitraum wie 'Kindheit', 'vor dem Krieg'", "ereignis": "Was passierte (1 Satz)", "typ": "persoenlich|extern", "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)" }],
       "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
       "beziehungen": [{ "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "1 Satz" }]
     }
@@ -199,10 +200,11 @@ const FIGUREN_RULES = `Regeln:
 - Eindeutige IDs (fig_1, fig_2, …)
 - beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
 - kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten
+- lebensereignisse: chronologisch sortiert; nur im Text klar belegte Ereignisse; leer wenn nichts belegt; typ='extern' für gesellschaftliche/historische Ereignisse (Katastrophen, Kriege, Massaker u.ä.) die die Figur betreffen, sonst 'persoenlich'
 - Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), übrige selbsterklärend
 - Nur echte Personen/Charaktere, keine Orte oder Objekte
 - Sortiert nach Wichtigkeit; maximal 20 Figuren
-- KONSERVATIV: Nur Figuren und Beziehungen aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren.`;
+- KONSERVATIV: Nur Figuren, Beziehungen und Ereignisse aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren.`;
 
 export function buildFiguresSinglePassPrompt(bookName, pageCount, bookText) {
   return `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Figuren.
@@ -222,7 +224,7 @@ export function buildFiguresChapterPrompt(chapterName, bookName, pageCount, chTe
 Antworte mit:
 {
   "figuren": [
-    { "name": "Vollständiger Name", "kurzname": "...", "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere", "beruf": "...", "geburtstag": "JJJJ oder leer", "geschlecht": "männlich|weiblich|divers|unbekannt", "beschreibung": "1-2 Sätze", "eigenschaften": ["..."], "beziehungen": [{ "name": "Name der anderen Figur", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "1 Satz" }] }
+    { "name": "Vollständiger Name", "kurzname": "...", "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere", "beruf": "...", "geburtstag": "JJJJ oder leer", "geschlecht": "männlich|weiblich|divers|unbekannt", "beschreibung": "1-2 Sätze", "eigenschaften": ["..."], "lebensereignisse": [{ "datum": "JJJJ oder Zeitraum", "ereignis": "Was passierte", "typ": "persoenlich|extern", "bedeutung": "Bedeutung oder leer" }], "beziehungen": [{ "name": "Name der anderen Figur", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "1 Satz" }] }
   ]
 }
 

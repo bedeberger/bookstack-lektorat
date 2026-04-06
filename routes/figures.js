@@ -24,6 +24,11 @@ router.get('/:book_id', (req, res) => {
     SELECT fa.figure_id, fa.chapter_name, fa.haeufigkeit FROM figure_appearances fa
     JOIN figures f ON f.id = fa.figure_id
     WHERE f.book_id = ? AND f.user_email = ?`).all(bookId, userEmail);
+  const evts = db.prepare(`
+    SELECT fe.figure_id, fe.datum, fe.ereignis, fe.bedeutung, fe.typ FROM figure_events fe
+    JOIN figures f ON f.id = fe.figure_id
+    WHERE f.book_id = ? AND f.user_email = ?
+    ORDER BY fe.figure_id, fe.sort_order`).all(bookId, userEmail);
   const rels = db.prepare(
     'SELECT from_fig_id, to_fig_id, typ, beschreibung FROM figure_relations WHERE book_id = ? AND user_email = ?'
   ).all(bookId, userEmail);
@@ -32,6 +37,8 @@ router.get('/:book_id', (req, res) => {
   for (const t of tags) (tagMap[t.figure_id] ??= []).push(t.tag);
   const appMap = {};
   for (const a of apps) (appMap[a.figure_id] ??= []).push({ name: a.chapter_name, haeufigkeit: a.haeufigkeit });
+  const evtMap = {};
+  for (const e of evts) (evtMap[e.figure_id] ??= []).push({ datum: e.datum, ereignis: e.ereignis, bedeutung: e.bedeutung, typ: e.typ || 'persoenlich' });
   const relMap = {};
   for (const r of rels) (relMap[r.from_fig_id] ??= []).push({ figur_id: r.to_fig_id, typ: r.typ, beschreibung: r.beschreibung });
 
@@ -46,6 +53,7 @@ router.get('/:book_id', (req, res) => {
     beschreibung: f.beschreibung,
     eigenschaften: tagMap[f.id] || [],
     kapitel: appMap[f.id] || [],
+    lebensereignisse: evtMap[f.id] || [],
     beziehungen: relMap[f.fig_id] || [],
   }));
 
