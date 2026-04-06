@@ -86,18 +86,24 @@
       <span class="feature-tile-title">Entwicklung</span>
       <span class="feature-tile-desc">Zeitverlauf</span>
     </button>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showBookChatCard }" @click="toggleBookChatCard()" :disabled="!pages.length || bookChatLoading" title="Chat mit dem gesamten Buch">
+      <span class="feature-tile-title">Buch-Chat</span>
+      <span class="feature-tile-desc">Fragen &amp; Antworten</span>
+    </button>
   </div>
 
 </div>
 
+<div class="layout">
+<div class="layout-sidebar">
+
 <!-- Seitenbaum -->
-<div class="card" x-show="showTreeCard" x-cloak>
+<div class="card" x-show="showTreeCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Seiten: ' + selectedBookName"></span>
     <div class="card-actions">
       <button @click="loadPages()">Seiten laden</button>
       <button @click="batchCheck()" :disabled="!pages.length" title="Alle Seiten sequenziell prüfen und in History speichern">Alle prüfen</button>
-      <button @click="toggleBookChatCard()" :class="{ primary: showBookChatCard }" :disabled="!pages.length || bookChatLoading" title="Chat mit dem gesamten Buch">Buch-Chat</button>
       <button class="btn-card-close" @click="showTreeCard = false; resetPage()" title="Schliessen">×</button>
     </div>
   </div>
@@ -142,9 +148,9 @@
                         x-text="tokEsts[page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[page.id].tok/1000) + 'k T' : '~' + tokEsts[page.id]?.tok + ' T'"
                         @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
                         @mouseleave.stop="showTokLegend=false"></span>
-                      <span class="tok-badge tok-neutral"
+                      <span class="tok-badge tok-neutral tok-tree-words"
                         x-text="tokEsts[page.id]?.words >= 1000 ? '~' + Math.round(tokEsts[page.id].words/1000) + 'k W' : tokEsts[page.id]?.words + ' W'"></span>
-                      <span class="tok-badge tok-neutral"
+                      <span class="tok-badge tok-neutral tok-tree-chars"
                         x-text="tokEsts[page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[page.id].chars/1000) + 'k Z' : tokEsts[page.id]?.chars + ' Z'"></span>
                     </span>
                   </template>
@@ -168,9 +174,9 @@
                   x-text="tokEsts[item.page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[item.page.id].tok/1000) + 'k T' : '~' + tokEsts[item.page.id]?.tok + ' T'"
                   @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
                   @mouseleave.stop="showTokLegend=false"></span>
-                <span class="tok-badge tok-neutral"
+                <span class="tok-badge tok-neutral tok-tree-words"
                   x-text="tokEsts[item.page.id]?.words >= 1000 ? '~' + Math.round(tokEsts[item.page.id].words/1000) + 'k W' : tokEsts[item.page.id]?.words + ' W'"></span>
-                <span class="tok-badge tok-neutral"
+                <span class="tok-badge tok-neutral tok-tree-chars"
                   x-text="tokEsts[item.page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[item.page.id].chars/1000) + 'k Z' : tokEsts[item.page.id]?.chars + ' Z'"></span>
               </span>
             </template>
@@ -185,8 +191,11 @@
   <div x-show="filteredTree.length === 0 && pageSearch" class="muted-msg" style="padding:8px 0; font-size:13px;">Keine Seiten gefunden.</div>
 </div>
 
+</div><!-- end layout-sidebar -->
+<div class="layout-main">
+
 <!-- Buchbewertung -->
-<div class="card" x-show="showBookReviewCard" x-cloak>
+<div class="card" x-show="showBookReviewCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Buchbewertung: ' + selectedBookName"></span>
     <div class="card-actions">
@@ -200,11 +209,11 @@
   <div class="progress-bar-wrap" x-show="bookReviewProgress > 0">
     <div class="progress-bar" :style="'width:' + bookReviewProgress + '%'"></div>
   </div>
-  <div style="font-size:13px;color:#666;margin-top:8px;" x-html="bookReviewStatus"></div>
+  <div class="review-status-text" x-html="bookReviewStatus"></div>
   <div x-html="bookReviewOut"></div>
 
   <!-- Buchbewertungs-Verlauf -->
-  <div x-show="bookReviewHistory.length > 0" style="margin-top:20px; border-top: 0.5px solid var(--color-border); padding-top:14px;">
+  <div x-show="bookReviewHistory.length > 0" class="card-history-section">
     <div class="history-heading">Frühere Bewertungen</div>
     <template x-for="entry in bookReviewHistory" :key="entry.id">
       <div>
@@ -246,7 +255,7 @@
 </div>
 
 <!-- Figurenübersicht -->
-<div class="card" x-show="showFiguresCard" x-cloak>
+<div class="card" x-show="showFiguresCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Figuren: ' + selectedBookName"></span>
     <span x-show="figurenUpdatedAt && !figurenLoading" class="figuren-updated-at" x-text="'Letzte Analyse: ' + formatDate(figurenUpdatedAt)"></span>
@@ -380,10 +389,41 @@
       </div>
     </template>
   </div>
+
+  <!-- Globale Zeitleiste -->
+  <div x-show="globalZeitstrahl.length > 0" class="global-zeitstrahl-section">
+    <div class="global-zeitstrahl-header" @click="showGlobalZeitstrahl = !showGlobalZeitstrahl">
+      <span class="history-heading global-zeitstrahl-heading">Globale Zeitleiste</span>
+      <span class="global-zeitstrahl-meta" x-text="globalZeitstrahl.length + ' Ereignisse'"></span>
+      <span class="history-chevron" :class="{ open: showGlobalZeitstrahl }">›</span>
+    </div>
+    <div x-show="showGlobalZeitstrahl" class="global-zeitstrahl-body">
+      <template x-for="(ev, i) in globalZeitstrahl" :key="i">
+        <div class="gz-item" :class="ev.typ === 'extern' ? 'gz-item--extern' : ''">
+          <div class="gz-marker" :class="ev.typ === 'extern' ? 'gz-marker--extern' : ''"></div>
+          <div class="gz-content">
+            <div class="gz-datum-row">
+              <span class="gz-datum" x-text="ev.datum"></span>
+              <template x-if="ev.typ === 'extern'">
+                <span class="gz-extern-badge">Weltgeschehen</span>
+              </template>
+            </div>
+            <div class="gz-ereignis" x-text="ev.ereignis"></div>
+            <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
+            <div class="gz-figuren-row">
+              <template x-for="(fref, fi) in ev.figuren" :key="fi">
+                <span class="gz-figur-badge" :class="'gz-figur-badge--' + (fref.typ || 'andere')" x-text="fref.name"></span>
+              </template>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
 </div>
 
 <!-- Buchentwicklung -->
-<div class="card" x-show="showBookStatsCard" x-cloak>
+<div class="card" x-show="showBookStatsCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Buchentwicklung: ' + selectedBookName"></span>
     <div class="card-actions">
@@ -400,24 +440,16 @@
 
   <!-- Metrik- & Zeitraum-Umschalter -->
   <div x-show="bookStatsData.length > 0" class="book-stats-controls">
-    <div class="btn-group">
-      <button class="btn-sm" :class="{ primary: bookStatsMetric === 'words' }"
-        @click="bookStatsMetric = 'words'; renderStatsChart()">Wörter</button>
-      <button class="btn-sm" :class="{ primary: bookStatsMetric === 'chars' }"
-        @click="bookStatsMetric = 'chars'; renderStatsChart()">Zeichen</button>
-      <button class="btn-sm" :class="{ primary: bookStatsMetric === 'page_count' }"
-        @click="bookStatsMetric = 'page_count'; renderStatsChart()">Seiten</button>
-      <button class="btn-sm" :class="{ primary: bookStatsMetric === 'tok' }"
-        @click="bookStatsMetric = 'tok'; renderStatsChart()">Tokens</button>
-      <button class="btn-sm" :class="{ primary: bookStatsMetric === 'unique_words' }"
-        @click="bookStatsMetric = 'unique_words'; renderStatsChart()">Einzigartige W.</button>
-      <button class="btn-sm" :class="{ primary: bookStatsMetric === 'delta_words' }"
-        @click="bookStatsMetric = 'delta_words'; renderStatsChart()">Δ Wörter/T</button>
-      <button class="btn-sm" :class="{ primary: bookStatsMetric === 'avg_sentence_len' }"
-        @click="bookStatsMetric = 'avg_sentence_len'; renderStatsChart()">Ø Satzlänge</button>
-      <button class="btn-sm" :class="{ primary: bookStatsMetric === 'pages_per_chapter' }"
-        @click="bookStatsMetric = 'pages_per_chapter'; renderStatsChart()">S./Kap.</button>
-    </div>
+    <select x-model="bookStatsMetric" @change="renderStatsChart()" class="book-stats-metric-select">
+      <option value="words">Wörter</option>
+      <option value="chars">Zeichen</option>
+      <option value="page_count">Seiten</option>
+      <option value="tok">Tokens</option>
+      <option value="unique_words">Einzigartige W.</option>
+      <option value="delta_words">Δ Wörter/T</option>
+      <option value="avg_sentence_len">Ø Satzlänge</option>
+      <option value="pages_per_chapter">S./Kap.</option>
+    </select>
     <div class="btn-group">
       <button class="btn-sm" :class="{ primary: bookStatsRange === 7 }"
         @click="bookStatsRange = 7; renderStatsChart()">7 T</button>
@@ -466,18 +498,18 @@
 </div>
 
 <!-- Seiteneditor & Lektorat -->
-<div class="card" id="editor-card" x-show="showEditorCard" x-cloak>
+<div class="card" id="editor-card" x-show="showEditorCard" x-cloak x-transition>
   <div class="card-header">
     <div>
       <span class="card-title" x-text="'Lektorat: ' + (currentPage?.name || '–')"></span>
-      <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag" style="margin-left:6px;text-decoration:none;" x-text="currentPage ? 'ID ' + currentPage.id + ' ↗' : ''"></a>
+      <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag tag--link" x-text="currentPage ? 'ID ' + currentPage.id + ' ↗' : ''"></a>
     </div>
     <div class="card-actions">
       <button @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? 'Seite ist leer' : 'Ctrl+Enter'">Prüfen ↗</button>
-      <button @click="toggleDiff()" x-show="correctedHtml" :class="{ primary: showDiff }">Diff</button>
+      <button class="btn-icon" @click="toggleDiff()" x-show="correctedHtml" :class="{ primary: showDiff }" title="Diff anzeigen">⇄</button>
       <button class="success" @click="saveCorrections()" x-show="correctedHtml && (selectedErrors.some(v => v) || selectedStyles.some(v => v))">Korrekturen speichern</button>
       <button @click="toggleChatCard()" :class="{ primary: showChatCard }" :disabled="currentPageEmpty" title="Chat mit dieser Seite">Chat</button>
-      <button @click="toggleSynonymeCard()" :class="{ primary: showSynonymeCard }" :disabled="currentPageEmpty" title="Synonymanalyse für diese Seite">Synonyme</button>
+      <button @click="toggleSynonymeCard()" :class="{ primary: showSynonymeCard }" :disabled="currentPageEmpty" title="Synonymanalyse">Syn.</button>
       <button class="btn-card-close" @click="resetPage()" title="Schliessen">×</button>
     </div>
   </div>
@@ -552,7 +584,7 @@
   </div>
 
   <!-- Verlauf dieser Seite -->
-  <div x-show="pageHistory.length > 0" style="margin-top:20px; border-top: 0.5px solid var(--color-border); padding-top:14px;">
+  <div x-show="pageHistory.length > 0" class="card-history-section">
     <div class="history-heading">Verlauf</div>
     <template x-for="entry in pageHistory" :key="entry.id">
       <div>
@@ -654,7 +686,7 @@
 </div>
 
 <!-- Chat -->
-<div class="card" id="chat-card" x-show="showChatCard" x-cloak>
+<div class="card" id="chat-card" x-show="showChatCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Chat: ' + (currentPage?.name || '–')"></span>
     <div class="card-actions">
@@ -737,7 +769,7 @@
   <div class="chat-input-hint">Enter senden &nbsp;·&nbsp; Shift+Enter Zeilenumbruch</div>
 
   <!-- Session-History (nur wenn > 1 Session) -->
-  <div x-show="chatSessions.length > 1" style="margin-top:16px; border-top: 0.5px solid var(--color-border); padding-top:12px;">
+  <div x-show="chatSessions.length > 1" class="card-history-section">
     <div class="chat-history-title">Frühere Gespräche</div>
     <template x-for="s in chatSessions" :key="s.id">
       <div
@@ -754,7 +786,7 @@
 </div>
 
 <!-- Synonyme -->
-<div class="card" id="synonyme-card" x-show="showSynonymeCard" x-cloak>
+<div class="card" id="synonyme-card" x-show="showSynonymeCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Synonyme: ' + (currentPage?.name || '–')"></span>
     <div class="card-actions">
@@ -815,7 +847,7 @@
 </div>
 
 <!-- Buch-Chat -->
-<div class="card" id="book-chat-card" x-show="showBookChatCard" x-cloak>
+<div class="card" id="book-chat-card" x-show="showBookChatCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Buch-Chat: ' + selectedBookName"></span>
     <div class="card-actions">
@@ -899,7 +931,7 @@
   <div class="chat-input-hint">Enter senden &nbsp;·&nbsp; Shift+Enter Zeilenumbruch</div>
 
   <!-- Session-History -->
-  <div x-show="bookChatSessions.length > 1" style="margin-top:16px; border-top: 0.5px solid var(--color-border); padding-top:12px;">
+  <div x-show="bookChatSessions.length > 1" class="card-history-section">
     <div class="chat-history-title">Frühere Gespräche</div>
     <template x-for="s in bookChatSessions" :key="s.id">
       <div
@@ -914,6 +946,9 @@
     </template>
   </div>
 </div>
+
+</div><!-- end layout-main -->
+</div><!-- end layout -->
 
 <!-- Token-Legende Tooltip (fixed, kein Layout-Einfluss) -->
 <div x-show="showTokLegend"

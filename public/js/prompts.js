@@ -200,7 +200,7 @@ const FIGUREN_RULES = `Regeln:
 - Eindeutige IDs (fig_1, fig_2, …)
 - beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
 - kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten
-- lebensereignisse: chronologisch sortiert; nur im Text klar belegte Ereignisse; leer wenn nichts belegt; typ='extern' für gesellschaftliche/historische Ereignisse (Katastrophen, Kriege, Massaker u.ä.) die die Figur betreffen, sonst 'persoenlich'
+- lebensereignisse: chronologisch sortiert; typ='persoenlich' nur für echte biografische Wendepunkte (neue Beziehung, Trennung, Jobwechsel, Verlust einer nahestehenden Person, Pubertät/Reifung, Umzug, Trauma, wichtige Entscheidung) – keine Alltagshandlungen oder Szenen die keine bleibende Wirkung haben; typ='extern' für gesellschaftliche/historische Ereignisse (Katastrophen, Massaker, Kriege, politische Umbrüche u.ä.) die die Figur direkt betreffen – hier grosszügig sein, auch erwähnte Ereignisse aufnehmen die nur indirekt wirken
 - Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), übrige selbsterklärend
 - Nur echte Personen/Charaktere, keine Orte oder Objekte
 - Sortiert nach Wichtigkeit; maximal 20 Figuren

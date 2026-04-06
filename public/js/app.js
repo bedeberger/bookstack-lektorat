@@ -44,7 +44,7 @@ document.addEventListener('alpine:init', () => {
     showDiff: false,
     diffHtml: '',
     showBookCard: false,
-    showTreeCard: false,
+    showTreeCard: true,
     showEditorCard: false,
     showBookReviewCard: false,
     status: '',
@@ -82,6 +82,8 @@ document.addEventListener('alpine:init', () => {
     figurenProgress: 0,
     figurenStatus: '',
     selectedFigurId: null,
+    globalZeitstrahl: [],
+    showGlobalZeitstrahl: false,
     _figurenNetwork: null,
     _figurenHash: null,
     _checkPollTimer: null,
@@ -257,6 +259,11 @@ document.addEventListener('alpine:init', () => {
         this.resetPage();
         return;
       }
+      // Buchkarten schliessen – nur eine Ebene (Buch oder Seite) aktiv
+      this.showBookReviewCard = false;
+      this.showFiguresCard = false;
+      this.showBookStatsCard = false;
+      this.showBookChatCard = false;
       // Laufenden Poll stoppen – Seite wechselt, laufender Check gehört zur alten Seite
       if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
       this.resetSynonymeCard();
@@ -279,7 +286,6 @@ document.addEventListener('alpine:init', () => {
       this.checkLoading = false;
       this.checkProgress = 0;
       this.showEditorCard = true;
-      this.$nextTick(() => document.getElementById('editor-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
 
       // Prüfen ob ein Lektorat-Check-Job für diese Seite läuft (Server-seitig oder aus früherer Session)
       try {
@@ -382,13 +388,15 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    // Schliesst alle vier Hauptkarten ausser der angegebenen.
-    // Beim Schliessen des Trees wird resetPage() aufgerufen.
+    // Schliesst die anderen Hauptkarten (nicht Tree – der bleibt immer aktiv).
+    // Bewertung, Figuren, Entwicklung und Buch-Chat sind exklusiv.
+    // Beim Öffnen einer Buchkarte wird auch die offene Seite geschlossen.
     _closeOtherMainCards(keep) {
-      if (keep !== 'tree' && this.showTreeCard) { this.showTreeCard = false; this.resetPage(); }
       if (keep !== 'bookReview') this.showBookReviewCard = false;
       if (keep !== 'figures') this.showFiguresCard = false;
       if (keep !== 'bookStats') this.showBookStatsCard = false;
+      if (keep !== 'bookChat') this.showBookChatCard = false;
+      this.resetPage();
     },
 
     async toggleTreeCard() {
@@ -464,7 +472,7 @@ document.addEventListener('alpine:init', () => {
       this.selectedStyles = [];
       this.checkDone = false;
       this.checkProgress = 0;
-      this.showTreeCard = false;
+      this.showTreeCard = true;
       if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
       if (this._batchPollTimer) { clearInterval(this._batchPollTimer); this._batchPollTimer = null; }
       this.batchLoading = false;
@@ -475,6 +483,8 @@ document.addEventListener('alpine:init', () => {
       this.figurenProgress = 0;
       this.figurenUpdatedAt = null;
       this.selectedFigurId = null;
+      this.globalZeitstrahl = [];
+      this.showGlobalZeitstrahl = false;
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
       this.showBookStatsCard = false;
       this.bookStatsData = [];

@@ -12,7 +12,7 @@ export const treeMethods = {
       this.selectedBookId = String(this.books[0]?.id || '');
       this.showBookCard = true;
       this.setStatus(this.books.length + ' Buch/Bücher gefunden.', false, 4000);
-      if (this.books.length === 1) await this.loadPages();
+      await this.loadPages();
     } catch (e) {
       console.error('[loadBooks]', e);
       this.setStatus('Fehler: ' + e.message);

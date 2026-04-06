@@ -24,10 +24,7 @@ export const chatMethods = {
       // Neueste Session laden
       await this.loadChatSession(this.chatSessions[0].id);
     }
-    this.$nextTick(() => {
-      document.getElementById('chat-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      this._scrollChatToBottom();
-    });
+    this.$nextTick(() => this._scrollChatToBottom());
   },
 
   // ── Session-Verwaltung ──────────────────────────────────────────────────────

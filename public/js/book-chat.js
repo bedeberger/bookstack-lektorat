@@ -15,6 +15,7 @@ export const bookChatMethods = {
       return;
     }
     if (!this.selectedBookId) return;
+    this._closeOtherMainCards('bookChat');
     this.showBookChatCard = true;
     await this.loadBookChatSessions();
 
@@ -23,10 +24,7 @@ export const bookChatMethods = {
     } else if (!this.bookChatSessionId) {
       await this.loadBookChatSession(this.bookChatSessions[0].id);
     }
-    this.$nextTick(() => {
-      document.getElementById('book-chat-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      this._scrollBookChatToBottom();
-    });
+    this.$nextTick(() => this._scrollBookChatToBottom());
   },
 
   // ── Session-Verwaltung ──────────────────────────────────────────────────────

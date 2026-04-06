@@ -15,9 +15,6 @@ export const synonymeMethods = {
     }
     if (!this.currentPage) return;
     this.showSynonymeCard = true;
-    this.$nextTick(() => {
-      document.getElementById('synonyme-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
 
     // Prüfen ob ein Synonymanalyse-Job für diese Seite noch läuft
     if (!this._synonymePollTimer && !this.synonymeLoading) {
