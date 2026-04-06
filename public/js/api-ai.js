@@ -11,6 +11,8 @@ function _providerConfig(provider, claudeModel, ollamaModel) {
 
 function _repairJson(text) {
   // Lokale Modelle geben oft "fast-JSON" aus. Diese Funktion repariert häufige Abweichungen.
+  // JS-Kommentare entfernen (// bis Zeilenende und /* ... */)
+  text = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n"]*/g, '');
   // Python-Booleans / None
   text = text.replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false').replace(/\bNone\b/g, 'null');
   // Trailing Commas vor } oder ]
