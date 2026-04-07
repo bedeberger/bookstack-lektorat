@@ -297,6 +297,7 @@
       <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--liebesbeziehung"></span>Liebesbeziehung</span>
     </div>
     <div id="figuren-graph" class="figuren-graph-container"></div>
+    <div id="figur-tooltip" class="figur-tooltip"></div>
   </div>
 
   <!-- Figurenliste -->
@@ -382,6 +383,7 @@
                       <span x-show="ev.typ === 'extern'" class="figur-zeitstrahl-extern-badge">extern</span>
                     </span>
                     <span class="figur-zeitstrahl-ereignis" x-text="ev.ereignis"></span>
+                    <span x-show="ev.kapitel" class="figur-zeitstrahl-kapitel" x-text="ev.kapitel"></span>
                     <span x-show="ev.bedeutung" class="figur-zeitstrahl-bedeutung" x-text="ev.bedeutung"></span>
                   </div>
                 </div>
@@ -423,6 +425,7 @@
               </template>
             </div>
             <div class="gz-ereignis" x-text="ev.ereignis"></div>
+            <div x-show="ev.kapitel" class="gz-kapitel" x-text="ev.kapitel"></div>
             <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
             <div class="gz-figuren-row">
               <template x-for="(fref, fi) in ev.figuren" :key="fi">

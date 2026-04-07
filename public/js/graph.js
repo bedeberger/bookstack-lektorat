@@ -40,7 +40,6 @@ export const graphMethods = {
     const nodes = new vis.DataSet(this.figuren.map(f => ({
       id: f.id,
       label: (f.kurzname || f.name) + (f.geburtstag ? '\n* ' + f.geburtstag : ''),
-      title: `<b>${escHtml(f.name)}</b><br>${escHtml(f.typ)}<br>${escHtml(f.beschreibung || '')}`,
       color: this._figTypColor(f.typ),
       font: { size: 13, face: 'system-ui, -apple-system, sans-serif' },
       shape: 'box',
@@ -104,5 +103,26 @@ export const graphMethods = {
     };
 
     this._figurenNetwork = new vis.Network(container, { nodes, edges }, options);
+
+    const tip = document.getElementById('figur-tooltip');
+    this._figurenNetwork.on('hoverNode', ({ node, event }) => {
+      const f = this.figuren.find(x => x.id === node);
+      if (!f || !tip) return;
+      tip.innerHTML = `<strong>${escHtml(f.name)}</strong>`
+        + `<em>${escHtml(f.typ)}</em>`
+        + (f.beschreibung ? `<p>${escHtml(f.beschreibung)}</p>` : '');
+      const rect = container.getBoundingClientRect();
+      const tipRect = tip.getBoundingClientRect();
+      let left = event.clientX - rect.left + 14;
+      let top  = event.clientY - rect.top  + 14;
+      // Tooltip nicht über den rechten Rand schieben
+      if (left + 240 > container.offsetWidth) left = Math.max(0, container.offsetWidth - 250);
+      tip.style.left = left + 'px';
+      tip.style.top  = top  + 'px';
+      tip.classList.add('visible');
+    });
+    this._figurenNetwork.on('blurNode', () => {
+      if (tip) tip.classList.remove('visible');
+    });
   },
 };

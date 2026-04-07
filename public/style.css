@@ -440,6 +440,7 @@ ins {
 
 .fazit {
   margin-top: 8px;
+  margin-bottom: 16px;
   font-size: var(--font-size-sm);
   color: var(--color-muted);
   font-style: italic;
@@ -936,7 +937,26 @@ ins {
 .figur-edge-line--liebesbeziehung { background: #D46EA0; border-top: 2px dashed #D46EA0; }
 
 /* === Figuren: Graph-Bereich === */
-.figur-graph-section { margin-top: 14px; }
+.figur-graph-section { margin-top: 14px; position: relative; }
+
+.figur-tooltip {
+  display: none;
+  position: absolute;
+  z-index: 100;
+  pointer-events: none;
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  padding: 8px 10px;
+  font-size: var(--font-size-sm);
+  max-width: 240px;
+  line-height: 1.4;
+}
+.figur-tooltip.visible { display: block; }
+.figur-tooltip strong { display: block; margin-bottom: 2px; }
+.figur-tooltip em { color: var(--color-muted); font-style: normal; font-size: var(--font-size-xs); }
+.figur-tooltip p { margin: 4px 0 0; color: var(--color-text); white-space: pre-wrap; }
 
 /* === Figuren: Listen-Bereich === */
 .figur-list-section {
@@ -1051,6 +1071,15 @@ ins {
 
 .figur-zeitstrahl-ereignis {
   font-size: var(--font-size-sm);
+}
+
+.figur-zeitstrahl-kapitel {
+  font-size: 11px;
+  color: var(--color-muted);
+  background: var(--color-bg-hover);
+  border-radius: 3px;
+  padding: 1px 5px;
+  align-self: flex-start;
 }
 
 .figur-zeitstrahl-bedeutung {
@@ -1174,6 +1203,16 @@ ins {
 .gz-item--extern .gz-ereignis {
   font-weight: 500;
   color: var(--color-err-text);
+}
+
+.gz-kapitel {
+  font-size: 11px;
+  color: var(--color-muted);
+  background: var(--color-bg-hover);
+  border-radius: 3px;
+  padding: 1px 5px;
+  display: inline-block;
+  margin-bottom: 2px;
 }
 
 .gz-bedeutung {
@@ -1373,6 +1412,7 @@ ins {
   display: flex;
   gap: 6px;
   margin-bottom: 10px;
+  align-items: center;
   flex-wrap: wrap;
 }
 

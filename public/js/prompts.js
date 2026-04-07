@@ -189,7 +189,7 @@ const FIGUREN_SCHEMA = `{
       "beruf": "Beruf oder Rolle oder leer",
       "beschreibung": "2-3 Sätze zu Rolle, Persönlichkeit und Bedeutung",
       "eigenschaften": ["Eigenschaft1", "Eigenschaft2"],
-      "lebensereignisse": [{ "datum": "JJJJ (nur Jahreszahl; falls nicht direkt genannt aus Kontext errechnen – z.B. Geburtsjahr + damaliges Alter, oder bekannte historische Jahreszahl; leer lassen wenn nicht errechenbar)", "ereignis": "Was passierte (1 Satz)", "typ": "persoenlich|extern", "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)" }],
+      "lebensereignisse": [{ "datum": "JJJJ (nur Jahreszahl; falls nicht direkt genannt aus Kontext errechnen – z.B. Geburtsjahr + damaliges Alter, oder bekannte historische Jahreszahl; leer lassen wenn nicht errechenbar)", "ereignis": "Was passierte (1 Satz)", "typ": "persoenlich|extern", "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)", "kapitel": "Kapitelname wo dieses Ereignis erwähnt wird (leer wenn unklar)" }],
       "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
       "beziehungen": [{ "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "1 Satz" }]
     }
@@ -200,7 +200,7 @@ const FIGUREN_RULES = `Regeln:
 - Eindeutige IDs (fig_1, fig_2, …)
 - beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
 - kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten
-- lebensereignisse: chronologisch sortiert; datum immer als vierstellige Jahreszahl (JJJJ) – falls nicht direkt erwähnt, aus Kontext errechnen (Geburtsjahr der Figur + genannte Altersangabe, bekannte historische Jahreszahlen u.ä.); Events ohne errechenbare Jahreszahl weglassen; typ='persoenlich' nur für echte biografische Wendepunkte (neue Beziehung, Trennung, Jobwechsel, Verlust einer nahestehenden Person, Pubertät/Reifung, Umzug, Trauma, wichtige Entscheidung) – keine Alltagshandlungen oder Szenen die keine bleibende Wirkung haben; typ='extern' für gesellschaftliche/historische Ereignisse (Katastrophen, Massaker, Kriege, politische Umbrüche u.ä.) die die Figur direkt betreffen – hier grosszügig sein, auch erwähnte Ereignisse aufnehmen die nur indirekt wirken
+- lebensereignisse: chronologisch sortiert; kapitel = Kapitelname aus dem der Textbeleg stammt (leer wenn unklar); datum immer als vierstellige Jahreszahl (JJJJ) – falls nicht direkt erwähnt, aus Kontext errechnen (Geburtsjahr der Figur + genannte Altersangabe, bekannte historische Jahreszahlen u.ä.); Events ohne errechenbare Jahreszahl weglassen; typ='persoenlich' nur für echte biografische Wendepunkte (neue Beziehung, Trennung, Jobwechsel, Verlust einer nahestehenden Person, Pubertät/Reifung, Umzug, Trauma, wichtige Entscheidung) – keine Alltagshandlungen oder Szenen die keine bleibende Wirkung haben; typ='extern' für gesellschaftliche/historische Ereignisse (Katastrophen, Massaker, Kriege, politische Umbrüche u.ä.) die die Figur direkt betreffen – hier grosszügig sein, auch erwähnte Ereignisse aufnehmen die nur indirekt wirken
 - Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), übrige selbsterklärend
 - Nur echte Personen/Charaktere, keine Orte oder Objekte
 - Sortiert nach Wichtigkeit; maximal 20 Figuren
@@ -224,7 +224,7 @@ export function buildFiguresChapterPrompt(chapterName, bookName, pageCount, chTe
 Antworte mit:
 {
   "figuren": [
-    { "name": "Vollständiger Name", "kurzname": "...", "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere", "beruf": "...", "geburtstag": "JJJJ oder leer", "geschlecht": "männlich|weiblich|divers|unbekannt", "beschreibung": "1-2 Sätze", "eigenschaften": ["..."], "lebensereignisse": [{ "datum": "JJJJ (nur Jahreszahl; aus Kontext errechnen wenn nötig; leer lassen wenn nicht errechenbar)", "ereignis": "Was passierte", "typ": "persoenlich|extern", "bedeutung": "Bedeutung oder leer" }], "beziehungen": [{ "name": "Name der anderen Figur", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "1 Satz" }] }
+    { "name": "Vollständiger Name", "kurzname": "...", "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere", "beruf": "...", "geburtstag": "JJJJ oder leer", "geschlecht": "männlich|weiblich|divers|unbekannt", "beschreibung": "1-2 Sätze", "eigenschaften": ["..."], "lebensereignisse": [{ "datum": "JJJJ (nur Jahreszahl; aus Kontext errechnen wenn nötig; leer lassen wenn nicht errechenbar)", "ereignis": "Was passierte", "typ": "persoenlich|extern", "bedeutung": "Bedeutung oder leer", "kapitel": "${chapterName}" }], "beziehungen": [{ "name": "Name der anderen Figur", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "1 Satz" }] }
   ]
 }
 
@@ -271,6 +271,7 @@ Antworte mit diesem JSON-Schema:
       "ereignis": "kanonische Formulierung",
       "typ": "persoenlich|extern",
       "bedeutung": "zusammengeführte Bedeutung oder leer",
+      "kapitel": "Kapitelname (bei zusammengeführten Ereignissen: erstes/relevantestes Kapitel)",
       "figuren": [{ "id": "fig_1", "name": "Name", "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere" }]
     }
   ]

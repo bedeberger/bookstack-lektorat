@@ -27,6 +27,7 @@ export const figurenMethods = {
           ereignis: ev.ereignis || '',
           typ: ev.typ || 'persoenlich',
           bedeutung: ev.bedeutung || '',
+          kapitel: ev.kapitel || '',
           figur: { id: f.id, name: f.kurzname || f.name, typ: f.typ },
         });
       }
@@ -43,6 +44,7 @@ export const figurenMethods = {
         ereignis: ev.ereignis,
         typ: ev.typ,
         bedeutung: ev.bedeutung,
+        kapitel: ev.kapitel,
         figuren: [ev.figur],
       };
       for (let j = i + 1; j < allEvents.length; j++) {
