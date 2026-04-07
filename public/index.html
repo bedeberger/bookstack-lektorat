@@ -466,25 +466,71 @@
     Für die Szenenanalyse werden zuerst Figuren benötigt. Bitte zuerst die Figuren-Karte öffnen und Figuren ermitteln.
   </div>
 
-  <!-- Szenen-Zähler pro Figur -->
-  <div x-show="szenen.length > 0" class="szenen-figur-uebersicht">
-    <div class="bewertung-section-title">Szenen pro Figur</div>
-    <div class="szenen-figur-counts szenen-figur-counts--standalone">
-      <template x-for="f in figuren" :key="f.id">
-        <span x-show="szenen.some(s => s.fig_ids.includes(f.id))"
-          class="szenen-figur-count-badge"
-          :class="szenen.filter(s => s.fig_ids.includes(f.id)).length < 3 ? 'szenen-figur-count-badge--wenig' : ''"
-          x-text="(f.kurzname || f.name) + ' · ' + szenen.filter(s => s.fig_ids.includes(f.id)).length">
-        </span>
-      </template>
+  <!-- Szenen-Übersicht: Figuren / Kapitel / Seiten -->
+  <div x-show="szenen.length > 0" class="szenen-uebersicht-grid">
+    <!-- Pro Figur -->
+    <div class="szenen-uebersicht-block">
+      <div class="bewertung-section-title">Pro Figur</div>
+      <div class="szenen-count-badges">
+        <template x-for="f in figuren" :key="f.id">
+          <span x-show="szenen.some(s => s.fig_ids.includes(f.id))"
+            class="szenen-figur-count-badge"
+            :class="szenen.filter(s => s.fig_ids.includes(f.id)).length < 3 ? 'szenen-figur-count-badge--wenig' : ''"
+            x-text="(f.kurzname || f.name) + ' · ' + szenen.filter(s => s.fig_ids.includes(f.id)).length">
+          </span>
+        </template>
+      </div>
+    </div>
+    <!-- Pro Kapitel -->
+    <div class="szenen-uebersicht-block">
+      <div class="bewertung-section-title">Pro Kapitel</div>
+      <div class="szenen-count-badges">
+        <template x-for="k in szenenNachKapitel" :key="k.name">
+          <span class="szenen-kapitel-count-badge" :title="'stark: ' + k.stark + ' · mittel: ' + k.mittel + ' · schwach: ' + k.schwach">
+            <span class="szenen-kapitel-name" x-text="k.name"></span>
+            <span class="szenen-kapitel-dots">
+              <template x-for="n in k.stark"   :key="'s'+n"><span class="szenen-dot szenen-dot--stark"></span></template>
+              <template x-for="n in k.mittel"  :key="'m'+n"><span class="szenen-dot szenen-dot--mittel"></span></template>
+              <template x-for="n in k.schwach" :key="'w'+n"><span class="szenen-dot szenen-dot--schwach"></span></template>
+            </span>
+            <span class="szenen-kapitel-total" x-text="k.total"></span>
+          </span>
+        </template>
+      </div>
+    </div>
+    <!-- Pro Seite -->
+    <div class="szenen-uebersicht-block" x-show="szenenNachSeite.length > 0">
+      <div class="bewertung-section-title">Pro Seite</div>
+      <div class="szenen-count-badges">
+        <template x-for="p in szenenNachSeite" :key="p.name">
+          <span class="szenen-seite-count-badge" :title="p.kapitel" x-text="p.name + ' · ' + p.total"></span>
+        </template>
+      </div>
     </div>
   </div>
 
   <!-- Alle Szenen -->
   <div x-show="szenen.length > 0" class="szenen-liste-section">
-    <div class="bewertung-section-title" x-text="szenen.length + ' Szenen'"></div>
+    <!-- Filter-Leiste -->
+    <div class="szenen-filter-bar">
+      <div class="szenen-filter-group">
+        <button class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenFilterWertung === '' }" @click="szenenFilterWertung = ''">Alle</button>
+        <button class="szenen-filter-btn szenen-filter-btn--stark"   :class="{ 'szenen-filter-btn--active': szenenFilterWertung === 'stark' }"   @click="szenenFilterWertung = szenenFilterWertung === 'stark'   ? '' : 'stark'">stark</button>
+        <button class="szenen-filter-btn szenen-filter-btn--mittel"  :class="{ 'szenen-filter-btn--active': szenenFilterWertung === 'mittel' }"  @click="szenenFilterWertung = szenenFilterWertung === 'mittel'  ? '' : 'mittel'">mittel</button>
+        <button class="szenen-filter-btn szenen-filter-btn--schwach" :class="{ 'szenen-filter-btn--active': szenenFilterWertung === 'schwach' }" @click="szenenFilterWertung = szenenFilterWertung === 'schwach' ? '' : 'schwach'">schwach</button>
+      </div>
+      <select class="szenen-filter-select" x-model="szenenFilterFigurId">
+        <option value="">Alle Figuren</option>
+        <template x-for="f in figuren.filter(f => szenen.some(s => s.fig_ids.includes(f.id)))" :key="f.id">
+          <option :value="f.id" x-text="f.kurzname || f.name"></option>
+        </template>
+      </select>
+      <span class="szenen-filter-count"
+        x-text="szenen.filter(s => (!szenenFilterWertung || s.wertung === szenenFilterWertung) && (!szenenFilterFigurId || s.fig_ids.includes(szenenFilterFigurId))).length + ' / ' + szenen.length">
+      </span>
+    </div>
     <div class="szenen-liste">
-      <template x-for="(s, i) in szenen" :key="i">
+      <template x-for="(s, i) in szenen.filter(s => (!szenenFilterWertung || s.wertung === szenenFilterWertung) && (!szenenFilterFigurId || s.fig_ids.includes(szenenFilterFigurId)))" :key="i">
         <div class="szene-card" :class="'szene-card--' + (s.wertung || 'mittel')">
           <div class="szene-card-header">
             <span class="szene-card-wertung" :class="'figur-szene-wertung--' + (s.wertung || 'mittel')" x-text="s.wertung || '–'"></span>

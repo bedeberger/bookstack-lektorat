@@ -93,6 +93,8 @@ document.addEventListener('alpine:init', () => {
     szenenLoading: false,
     szenenProgress: 0,
     szenenStatus: '',
+    szenenFilterWertung: '',
+    szenenFilterFigurId: '',
     _consolidatePollTimer: null,
     _szenenPollTimer: null,
     _figurenNetwork: null,
@@ -137,6 +139,28 @@ document.addEventListener('alpine:init', () => {
     _jobQueueTimer: null,
 
     // ── Computed ─────────────────────────────────────────────────────────────
+    get szenenNachKapitel() {
+      const map = new Map();
+      for (const s of this.szenen) {
+        if (!map.has(s.kapitel)) map.set(s.kapitel, { total: 0, stark: 0, mittel: 0, schwach: 0 });
+        const e = map.get(s.kapitel);
+        e.total++;
+        if (s.wertung === 'stark')        e.stark++;
+        else if (s.wertung === 'mittel')  e.mittel++;
+        else if (s.wertung === 'schwach') e.schwach++;
+      }
+      return [...map.entries()].map(([name, c]) => ({ name, ...c }));
+    },
+    get szenenNachSeite() {
+      const map = new Map();
+      for (const s of this.szenen) {
+        if (!s.seite) continue;
+        if (!map.has(s.seite)) map.set(s.seite, { total: 0, kapitel: s.kapitel });
+        map.get(s.seite).total++;
+      }
+      return [...map.entries()].map(([name, d]) => ({ name, total: d.total, kapitel: d.kapitel }));
+    },
+
     get statusHtml() {
       if (!this.status) return '';
       return this.statusSpinner
@@ -275,7 +299,7 @@ document.addEventListener('alpine:init', () => {
         } catch { /* ignorieren */ }
       };
       poll();
-      this._jobQueueTimer = setInterval(poll, 3000);
+      this._jobQueueTimer = setInterval(poll, 5000);
     },
 
     // ── Seitenauswahl & View-Reset ───────────────────────────────────────────
@@ -519,6 +543,8 @@ document.addEventListener('alpine:init', () => {
       this.szenenStatus = '';
       this.szenenProgress = 0;
       this.szenenLoading = false;
+      this.szenenFilterWertung = '';
+      this.szenenFilterFigurId = '';
       if (this._consolidatePollTimer) { clearInterval(this._consolidatePollTimer); this._consolidatePollTimer = null; }
       if (this._szenenPollTimer) { clearInterval(this._szenenPollTimer); this._szenenPollTimer = null; }
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }

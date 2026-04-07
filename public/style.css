@@ -1325,9 +1325,69 @@ ins {
   margin: 8px 0;
 }
 
-/* === Szenen-Karte: Figur-Übersicht === */
-.szenen-figur-uebersicht { padding: 8px 0 4px; }
-.szenen-figur-counts--standalone { margin: 6px 0 10px; gap: 6px; }
+/* === Szenen-Karte: Übersichts-Grid (Figur / Kapitel / Seite) === */
+.szenen-uebersicht-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 4px;
+}
+@media (max-width: 700px) {
+  .szenen-uebersicht-grid { grid-template-columns: 1fr; }
+}
+
+.szenen-uebersicht-block {}
+
+.szenen-count-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+/* Kapitel-Badge mit Qualitäts-Dots */
+.szenen-kapitel-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 3px 7px 3px 7px;
+  border-radius: 10px;
+  background: var(--color-tag-bg);
+  color: var(--color-text);
+  cursor: default;
+}
+.szenen-kapitel-name {
+  font-weight: 500;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.szenen-kapitel-dots { display: flex; gap: 2px; align-items: center; }
+.szenen-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.szenen-dot--stark   { background: #3a8f3e; }
+.szenen-dot--mittel  { background: #b38600; }
+.szenen-dot--schwach { background: var(--color-err-border); }
+.szenen-kapitel-total { font-size: 10px; color: var(--color-muted); }
+
+/* Seiten-Badge */
+.szenen-seite-count-badge {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--color-tag-bg);
+  color: var(--color-muted);
+  white-space: nowrap;
+  cursor: default;
+}
 
 /* === Szenen-Karte: Szenen-Liste === */
 .szenen-liste-section { padding: 4px 0; }
@@ -1363,6 +1423,53 @@ ins {
 .szene-card-ort      { font-size: 11px; color: var(--color-muted); }
 .szene-card-titel    { font-size: var(--font-size-sm); font-weight: 500; margin-bottom: 3px; }
 .szene-card-kommentar { font-size: 12px; color: var(--color-muted); margin-bottom: 6px; }
+
+/* === Szenen-Karte: Filter-Leiste === */
+.szenen-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+.szenen-filter-group { display: flex; gap: 4px; }
+
+.szenen-filter-btn {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+.szenen-filter-btn:hover { background: var(--color-hover); }
+.szenen-filter-btn--active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-surface);
+}
+.szenen-filter-btn--stark   { border-color: #3a8f3e; color: #1e5c23; }
+.szenen-filter-btn--mittel  { border-color: #b38600; color: #6b4c00; }
+.szenen-filter-btn--schwach { border-color: var(--color-err-border); color: #8B1E1E; }
+.szenen-filter-btn--stark.szenen-filter-btn--active   { background: #3a8f3e;  border-color: #3a8f3e;  color: #fff; }
+.szenen-filter-btn--mittel.szenen-filter-btn--active  { background: #b38600;  border-color: #b38600;  color: #fff; }
+.szenen-filter-btn--schwach.szenen-filter-btn--active { background: var(--color-err-border); border-color: var(--color-err-border); color: #fff; }
+
+.szenen-filter-select {
+  font-size: 12px;
+  padding: 3px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.szenen-filter-count { font-size: 11px; color: var(--color-muted); margin-left: auto; }
 
 /* === Szenen-Übersicht: Zähler pro Figur === */
 .szenen-figur-counts {
