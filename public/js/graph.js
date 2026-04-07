@@ -111,15 +111,26 @@ export const graphMethods = {
       tip.innerHTML = `<strong>${escHtml(f.name)}</strong>`
         + `<em>${escHtml(f.typ)}</em>`
         + (f.beschreibung ? `<p>${escHtml(f.beschreibung)}</p>` : '');
-      const rect = container.getBoundingClientRect();
-      const tipRect = tip.getBoundingClientRect();
-      let left = event.clientX - rect.left + 14;
-      let top  = event.clientY - rect.top  + 14;
-      // Tooltip nicht über den rechten Rand schieben
-      if (left + 240 > container.offsetWidth) left = Math.max(0, container.offsetWidth - 250);
+      // Zuerst einblenden (damit offsetWidth/Height messbar sind), dann positionieren
+      tip.style.left = '0px';
+      tip.style.top  = '0px';
+      tip.classList.add('visible');
+      const rect  = container.getBoundingClientRect();
+      const tipW  = tip.offsetWidth;
+      const tipH  = tip.offsetHeight;
+      const cW    = container.offsetWidth;
+      const cH    = container.offsetHeight;
+      const cx    = event.clientX - rect.left;
+      const cy    = event.clientY - rect.top;
+      // Rechts vom Cursor, aber nach links spiegeln wenn kein Platz
+      let left = cx + 14;
+      let top  = cy + 14;
+      if (left + tipW > cW) left = Math.max(0, cx - tipW - 14);
+      if (top  + tipH > cH) top  = Math.max(0, cy - tipH - 14);
+      if (left < 0) left = 0;
+      if (top  < 0) top  = 0;
       tip.style.left = left + 'px';
       tip.style.top  = top  + 'px';
-      tip.classList.add('visible');
     });
     this._figurenNetwork.on('blurNode', () => {
       if (tip) tip.classList.remove('visible');
