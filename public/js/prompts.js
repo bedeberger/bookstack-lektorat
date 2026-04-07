@@ -253,7 +253,8 @@ export function buildFiguresConsolidationPrompt(bookName, chapterFiguren) {
   const synthInput = chapterFiguren.map(cf =>
     `## Kapitel: ${cf.kapitel}\n` + cf.figuren.map(f =>
       `- ${f.name} (${f.typ})${f.beruf ? ', ' + f.beruf : ''}: ${f.beschreibung || ''}` +
-      (f.beziehungen?.length ? '\n  Beziehungen: ' + f.beziehungen.map(b => `${b.name} [${b.typ}]`).join(', ') : '')
+      (f.beziehungen?.length ? '\n  Beziehungen: ' + f.beziehungen.map(b => `${b.name} [${b.typ}]`).join(', ') : '') +
+      (f.lebensereignisse?.length ? '\n  Lebensereignisse: ' + f.lebensereignisse.map(e => `[${e.datum || '?'}] ${e.ereignis} (${e.typ || 'persoenlich'})`).join(' | ') : '')
     ).join('\n')
   ).join('\n\n');
   return `Konsolidiere die folgenden Figurenanalysen aller Kapitel des Buchs «${bookName}» zu einer einheitlichen Gesamtliste. Dedupliziere Figuren, führe Informationen zusammen und vergib stabile IDs.

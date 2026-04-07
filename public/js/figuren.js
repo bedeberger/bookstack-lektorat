@@ -1,8 +1,8 @@
-import { escHtml } from './utils.js';
-
 // Figurenübersicht-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 // Die eigentliche Extraktion läuft serverseitig als Hintergrundjob (POST /jobs/figures).
+
+import { escHtml } from './utils.js';
 
 export const figurenMethods = {
   async loadFiguren(bookId) {
@@ -14,105 +14,6 @@ export const figurenMethods = {
     } catch (e) {
       console.error('[loadFiguren]', e);
     }
-  },
-
-  _buildGlobalZeitstrahl() {
-    const allEvents = [];
-    for (const f of (this.figuren || [])) {
-      for (const ev of (f.lebensereignisse || [])) {
-        const year = parseInt(ev.datum);
-        if (!year) continue; // Events ohne errechenbare Jahreszahl ignorieren
-        allEvents.push({
-          datum: String(year),
-          ereignis: ev.ereignis || '',
-          typ: ev.typ || 'persoenlich',
-          bedeutung: ev.bedeutung || '',
-          kapitel: ev.kapitel || '',
-          figur: { id: f.id, name: f.kurzname || f.name, typ: f.typ },
-        });
-      }
-    }
-
-    // Events mit identischem datum+ereignis zusammenführen (alle Typen)
-    const groups = [];
-    const used = new Set();
-    for (let i = 0; i < allEvents.length; i++) {
-      if (used.has(i)) continue;
-      const ev = allEvents[i];
-      const group = {
-        datum: ev.datum,
-        ereignis: ev.ereignis,
-        typ: ev.typ,
-        bedeutung: ev.bedeutung,
-        kapitel: ev.kapitel,
-        figuren: [ev.figur],
-      };
-      for (let j = i + 1; j < allEvents.length; j++) {
-        if (used.has(j)) continue;
-        const ev2 = allEvents[j];
-        if (ev2.datum === ev.datum && ev2.ereignis === ev.ereignis) {
-          group.figuren.push(ev2.figur);
-          used.add(j);
-        }
-      }
-      used.add(i);
-      groups.push(group);
-    }
-
-    // Chronologisch sortieren
-    groups.sort((a, b) => parseInt(a.datum) - parseInt(b.datum));
-
-    this.globalZeitstrahl = groups;
-  },
-
-  async consolidateZeitstrahl() {
-    if (!this.globalZeitstrahl.length || this.zeitstrahlConsolidating) return;
-    this.zeitstrahlConsolidating = true;
-    this.zeitstrahlProgress = 0;
-    this.zeitstrahlStatus = 'Starte Konsolidierung…';
-    try {
-      const { jobId, empty } = await fetch('/jobs/consolidate-zeitstrahl', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ book_id: parseInt(this.selectedBookId), book_name: this.selectedBookName || null, events: this.globalZeitstrahl }),
-      }).then(r => r.json());
-      if (empty) { this.zeitstrahlConsolidating = false; this.zeitstrahlStatus = ''; return; }
-      this.startConsolidatePoll(jobId);
-    } catch (e) {
-      console.error('[consolidateZeitstrahl]', e);
-      this.zeitstrahlConsolidating = false;
-      this.zeitstrahlProgress = 0;
-      this.zeitstrahlStatus = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
-    }
-  },
-
-  startConsolidatePoll(jobId) {
-    this._startPoll({
-      timerProp: '_consolidatePollTimer',
-      jobId,
-      progressProp: 'zeitstrahlProgress',
-      onProgress: (job) => {
-        this.zeitstrahlStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
-      },
-      onNotFound: () => {
-        this.zeitstrahlConsolidating = false;
-        this.zeitstrahlProgress = 0;
-        this.zeitstrahlStatus = 'Konsolidierung unterbrochen (Server-Neustart). Bitte neu starten.';
-      },
-      onError: (job) => {
-        this.zeitstrahlConsolidating = false;
-        this.zeitstrahlProgress = 0;
-        this.zeitstrahlStatus = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
-      },
-      onDone: (job) => {
-        this.zeitstrahlConsolidating = false;
-        this.zeitstrahlProgress = 0;
-        if (Array.isArray(job.result?.ereignisse)) {
-          this.globalZeitstrahl = job.result.ereignisse;
-          this.zeitstrahlStatus = `${job.result.ereignisse.length} Ereignisse konsolidiert.`;
-        }
-      },
-    });
   },
 
   async saveFiguren() {
@@ -149,16 +50,6 @@ export const figurenMethods = {
           console.error('[toggleFiguresCard] active-job check:', e);
         }
       }
-    }
-  },
-
-  async toggleEreignisseCard() {
-    if (this.showEreignisseCard) { this.showEreignisseCard = false; return; }
-    this._closeOtherMainCards('ereignisse');
-    this.showEreignisseCard = true;
-    // Figuren laden falls noch nicht geschehen (Zeitstrahl braucht sie)
-    if (!this.figuren.length) {
-      await this.loadFiguren(this.selectedBookId);
     }
   },
 

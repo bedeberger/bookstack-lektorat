@@ -9,6 +9,7 @@ import { treeMethods } from './tree.js';
 import { lektoratMethods } from './lektorat.js';
 import { reviewMethods } from './review.js';
 import { figurenMethods } from './figuren.js';
+import { zeitstrahlMethods } from './zeitstrahl.js';
 import { graphMethods } from './graph.js';
 import { bookstatsMethods } from './bookstats.js';
 import { chatMethods } from './chat.js';
@@ -634,6 +635,7 @@ document.addEventListener('alpine:init', () => {
     ...lektoratMethods,
     ...reviewMethods,
     ...figurenMethods,
+    ...zeitstrahlMethods,
     ...graphMethods,
     ...bookstatsMethods,
     ...chatMethods,
