@@ -311,15 +311,23 @@
   <!-- Figurenliste -->
   <div x-show="figuren.length > 0" class="figur-list-section">
     <div class="figur-list-header">
-      <div class="history-heading">Figuren (<span x-text="filteredFiguren().length"></span><template x-if="figurenKapitelFilter"><span x-text="' von ' + figuren.length"></span></template>)</div>
+      <div class="history-heading">Figuren (<span x-text="filteredFiguren().length"></span><template x-if="figurenKapitelFilter || figurenSeitenFilter"><span x-text="' von ' + figuren.length"></span></template>)</div>
       <template x-if="figurenKapitelListe().length > 0">
         <div class="figur-kapitel-filter">
-          <select x-model="figurenKapitelFilter" @change="selectedFigurId = null">
+          <select x-model="figurenKapitelFilter" @change="figurenSeitenFilter = ''; selectedFigurId = null">
             <option value="">Alle Kapitel</option>
             <template x-for="k in figurenKapitelListe()" :key="k">
               <option :value="k" x-text="k"></option>
             </template>
           </select>
+          <template x-if="figurenKapitelFilter && figurenSeitenListe().length > 0">
+            <select x-model="figurenSeitenFilter" @change="selectedFigurId = null">
+              <option value="">Alle Seiten</option>
+              <template x-for="s in figurenSeitenListe()" :key="s">
+                <option :value="s" x-text="s"></option>
+              </template>
+            </select>
+          </template>
         </div>
       </template>
     </div>

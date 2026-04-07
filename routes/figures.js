@@ -75,6 +75,21 @@ router.get('/:book_id', (req, res) => {
   const relMap = {};
   for (const r of rels) (relMap[r.from_fig_id] ??= []).push({ figur_id: r.to_fig_id, typ: r.typ, beschreibung: r.beschreibung });
 
+  const scenes = db.prepare(
+    'SELECT kapitel, seite, fig_ids FROM figure_scenes WHERE book_id = ? AND user_email = ?'
+  ).all(bookId, userEmail);
+  const seitenMap = {};
+  for (const sc of scenes) {
+    let ids; try { ids = JSON.parse(sc.fig_ids); } catch { ids = []; }
+    for (const figId of ids) {
+      if (!seitenMap[figId]) seitenMap[figId] = [];
+      const key = sc.kapitel + '::' + (sc.seite || '');
+      if (!seitenMap[figId].some(x => x.kapitel + '::' + x.seite === key)) {
+        seitenMap[figId].push({ kapitel: sc.kapitel, seite: sc.seite || '' });
+      }
+    }
+  }
+
   const figuren = figs.map(f => ({
     id: f.fig_id,
     name: f.name,
@@ -86,6 +101,7 @@ router.get('/:book_id', (req, res) => {
     beschreibung: f.beschreibung,
     eigenschaften: tagMap[f.id] || [],
     kapitel: appMap[f.id] || [],
+    seiten: seitenMap[f.fig_id] || [],
     lebensereignisse: evtMap[f.id] || [],
     beziehungen: relMap[f.fig_id] || [],
   }));

@@ -84,6 +84,7 @@ document.addEventListener('alpine:init', () => {
     figurenStatus: '',
     selectedFigurId: null,
     figurenKapitelFilter: '',
+    figurenSeitenFilter: '',
     globalZeitstrahl: [],
     showGlobalZeitstrahl: false,
     zeitstrahlConsolidating: false,
@@ -217,11 +218,30 @@ document.addEventListener('alpine:init', () => {
       return [...names].sort();
     },
 
+    figurenSeitenListe() {
+      if (!this.figurenKapitelFilter) return [];
+      const names = new Set();
+      for (const f of this.figuren) {
+        for (const s of (f.seiten || [])) {
+          if (s.kapitel === this.figurenKapitelFilter && s.seite) names.add(s.seite);
+        }
+      }
+      return [...names].sort();
+    },
+
     filteredFiguren() {
-      if (!this.figurenKapitelFilter) return this.figuren;
-      return this.figuren.filter(f =>
-        (f.kapitel || []).some(k => k.name === this.figurenKapitelFilter)
-      );
+      let result = this.figuren;
+      if (this.figurenKapitelFilter) {
+        result = result.filter(f =>
+          (f.kapitel || []).some(k => k.name === this.figurenKapitelFilter)
+        );
+      }
+      if (this.figurenSeitenFilter) {
+        result = result.filter(f =>
+          (f.seiten || []).some(s => s.kapitel === this.figurenKapitelFilter && s.seite === this.figurenSeitenFilter)
+        );
+      }
+      return result;
     },
 
     formatDate(iso) {
@@ -553,6 +573,7 @@ document.addEventListener('alpine:init', () => {
       this.figurenUpdatedAt = null;
       this.selectedFigurId = null;
       this.figurenKapitelFilter = '';
+      this.figurenSeitenFilter = '';
       this.globalZeitstrahl = [];
       this.showGlobalZeitstrahl = false;
       this.zeitstrahlConsolidating = false;
