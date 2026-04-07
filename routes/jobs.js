@@ -6,6 +6,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
 const { db, saveFigurenToDb } = require('../db/schema');
+const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
 const _promptConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../prompt-config.json'), 'utf8'));
@@ -127,122 +128,7 @@ async function bsGetAll(path) {
   return all;
 }
 
-// ── KI-Aufruf ─────────────────────────────────────────────────────────────────
-// Gibt { text, tokensIn, tokensOut } zurück.
-// tokensIn/tokensOut: aus Claude message_start/message_delta bzw. Ollama done-Chunk.
-// onProgress({ chars, tokIn }): optionaler Callback während des Streamings
-//   chars:  akkumulierte Ausgabe-Zeichenanzahl
-//   tokIn:  Input-Token-Zahl (bekannt ab message_start; 0 solange noch nicht bekannt)
-async function callAI(userPrompt, systemPrompt, onProgress) {
-  const provider = process.env.API_PROVIDER || 'claude';
-
-  if (provider === 'ollama') {
-    const host = (process.env.OLLAMA_HOST || 'http://localhost:11434').replace(/\/$/, '');
-    const model = process.env.OLLAMA_MODEL || 'llama3.2';
-    const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
-    const messages = [];
-    if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
-    messages.push({ role: 'user', content: userPrompt });
-
-    const resp = await fetch(`${host}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages, stream: true, options: { num_ctx: maxTokens } }),
-    });
-    if (!resp.ok) throw new Error(`Ollama ${resp.status}: ${await resp.text()}`);
-
-    // Input-Token-Schätzung aus Prompt-Länge (Ollama meldet prompt_eval_count erst im done-Chunk)
-    const estimatedTokIn = Math.ceil(messages.reduce((s, m) => s + (m.content?.length || 0), 0) / 4);
-
-    const reader = resp.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '', text = '', tokensIn = 0, tokensOut = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const chunk = JSON.parse(line);
-          if (chunk.done) {
-            // Letzter Chunk enthält Token-Statistiken (prompt_eval_count kann 0 sein bei Cache-Hit)
-            tokensIn = chunk.prompt_eval_count || estimatedTokIn;
-            tokensOut = chunk.eval_count || 0;
-            if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
-          } else {
-            text += chunk.message?.content || '';
-            if (onProgress) onProgress({ chars: text.length, tokIn: estimatedTokIn });
-          }
-        } catch { }
-      }
-    }
-    return { text, tokensIn, tokensOut };
-  } else {
-    const model = process.env.MODEL_NAME || 'claude-sonnet-4-6';
-    const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
-    const body = {
-      model, max_tokens: maxTokens, temperature: 0.2,
-      messages: [{ role: 'user', content: userPrompt }], stream: true,
-    };
-    if (systemPrompt) body.system = systemPrompt;
-
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY || '',
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) throw new Error(`Claude ${resp.status}: ${JSON.stringify(await resp.json())}`);
-
-    const reader = resp.body.getReader();
-    const dec = new TextDecoder();
-    let text = '', buf = '', tokensIn = 0, tokensOut = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const raw = line.slice(6);
-        if (raw === '[DONE]') break;
-        try {
-          const ev = JSON.parse(raw);
-          // message_start: Input-Token-Zahl (kommt gleich zu Beginn des Streams)
-          if (ev.type === 'message_start' && ev.message?.usage) {
-            tokensIn = ev.message.usage.input_tokens || 0;
-            if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
-          }
-          // message_delta: Output-Token-Zahl (finaler Wert)
-          if (ev.type === 'message_delta' && ev.usage) {
-            tokensOut = ev.usage.output_tokens || 0;
-          }
-          if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
-            text += ev.delta.text;
-            if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
-          }
-        } catch { }
-      }
-    }
-    return { text, tokensIn, tokensOut };
-  }
-}
-
-function parseJSON(text) {
-  const clean = text.replace(/```json\s*|```/g, '').trim();
-  try { return JSON.parse(clean); } catch {
-    const m = clean.match(/\{[\s\S]*\}/);
-    if (m) return JSON.parse(m[0]);
-    throw new Error('KI-Antwort konnte nicht als JSON geparst werden');
-  }
-}
+// callAI und parseJSON werden aus lib/ai.js importiert
 
 function htmlToText(html) {
   return (html || '')
@@ -639,6 +525,26 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
     logger.info(`Job ${jobId}: Figurenextraktion Buch ${bookId} abgeschlossen (${figuren.length} Figuren, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Figurenextraktion Fehler: ${e.message}`);
+    failJob(jobId, e);
+  }
+}
+
+// ── Job: Zeitstrahl-Konsolidierung ────────────────────────────────────────────
+async function runConsolidateZeitstrahlJob(jobId, events, bookId, userEmail) {
+  const { SYSTEM_FIGUREN, buildZeitstrahlConsolidationPrompt } = await getPrompts();
+  try {
+    updateJob(jobId, { statusText: 'Konsolidiere Zeitstrahl…', progress: 5 });
+    const tok = { in: 0, out: 0 };
+    const result = await aiCall(jobId, tok,
+      buildZeitstrahlConsolidationPrompt(events),
+      SYSTEM_FIGUREN,
+      5, 97, 3000,
+    );
+    if (!Array.isArray(result?.ereignisse)) throw new Error('KI-Antwort ungültig: ereignisse-Array fehlt');
+    completeJob(jobId, { ereignisse: result.ereignisse, tokensIn: tok.in, tokensOut: tok.out });
+    logger.info(`Job ${jobId}: Zeitstrahl-Konsolidierung Buch ${bookId} abgeschlossen (${result.ereignisse.length} Ereignisse, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+  } catch (e) {
+    logger.error(`Job ${jobId}: Zeitstrahl-Konsolidierung Fehler: ${e.message}`);
     failJob(jobId, e);
   }
 }
@@ -1107,6 +1013,18 @@ router.post('/figures', jsonBody, (req, res) => {
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const jobId = createJob('figures', book_id, userEmail);
   enqueueJob(jobId, () => runFiguresJob(jobId, book_id, book_name || '', userEmail));
+  res.json({ jobId });
+});
+
+router.post('/consolidate-zeitstrahl', jsonBody, (req, res) => {
+  const { book_id, events } = req.body;
+  if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
+  if (!Array.isArray(events) || !events.length) return res.json({ jobId: null, empty: true });
+  const userEmail = req.session?.user?.email || null;
+  const existing = runningJobs.get(jobKey('consolidate-zeitstrahl', book_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const jobId = createJob('consolidate-zeitstrahl', book_id, userEmail);
+  enqueueJob(jobId, () => runConsolidateZeitstrahlJob(jobId, events, book_id, userEmail));
   res.json({ jobId });
 });
 

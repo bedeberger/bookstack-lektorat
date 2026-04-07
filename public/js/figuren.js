@@ -63,6 +63,56 @@ export const figurenMethods = {
     this.globalZeitstrahl = groups;
   },
 
+  async consolidateZeitstrahl() {
+    if (!this.globalZeitstrahl.length || this.zeitstrahlConsolidating) return;
+    this.zeitstrahlConsolidating = true;
+    this.zeitstrahlProgress = 0;
+    this.zeitstrahlStatus = 'Starte Konsolidierung…';
+    try {
+      const { jobId, empty } = await fetch('/jobs/consolidate-zeitstrahl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ book_id: parseInt(this.selectedBookId), events: this.globalZeitstrahl }),
+      }).then(r => r.json());
+      if (empty) { this.zeitstrahlConsolidating = false; this.zeitstrahlStatus = ''; return; }
+      this.startConsolidatePoll(jobId);
+    } catch (e) {
+      console.error('[consolidateZeitstrahl]', e);
+      this.zeitstrahlConsolidating = false;
+      this.zeitstrahlProgress = 0;
+      this.zeitstrahlStatus = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
+    }
+  },
+
+  startConsolidatePoll(jobId) {
+    this._startPoll({
+      timerProp: '_consolidatePollTimer',
+      jobId,
+      progressProp: 'zeitstrahlProgress',
+      onProgress: (job) => {
+        this.zeitstrahlStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
+      },
+      onNotFound: () => {
+        this.zeitstrahlConsolidating = false;
+        this.zeitstrahlProgress = 0;
+        this.zeitstrahlStatus = 'Konsolidierung unterbrochen (Server-Neustart). Bitte neu starten.';
+      },
+      onError: (job) => {
+        this.zeitstrahlConsolidating = false;
+        this.zeitstrahlProgress = 0;
+        this.zeitstrahlStatus = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
+      },
+      onDone: (job) => {
+        this.zeitstrahlConsolidating = false;
+        this.zeitstrahlProgress = 0;
+        if (Array.isArray(job.result?.ereignisse)) {
+          this.globalZeitstrahl = job.result.ereignisse;
+          this.zeitstrahlStatus = `${job.result.ereignisse.length} Ereignisse konsolidiert.`;
+        }
+      },
+    });
+  },
+
   async saveFiguren() {
     try {
       await fetch('/figures/' + this.selectedBookId, {

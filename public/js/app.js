@@ -84,6 +84,10 @@ document.addEventListener('alpine:init', () => {
     selectedFigurId: null,
     globalZeitstrahl: [],
     showGlobalZeitstrahl: false,
+    zeitstrahlConsolidating: false,
+    zeitstrahlProgress: 0,
+    zeitstrahlStatus: '',
+    _consolidatePollTimer: null,
     _figurenNetwork: null,
     _figurenHash: null,
     _checkPollTimer: null,
@@ -485,6 +489,10 @@ document.addEventListener('alpine:init', () => {
       this.selectedFigurId = null;
       this.globalZeitstrahl = [];
       this.showGlobalZeitstrahl = false;
+      this.zeitstrahlConsolidating = false;
+      this.zeitstrahlProgress = 0;
+      this.zeitstrahlStatus = '';
+      if (this._consolidatePollTimer) { clearInterval(this._consolidatePollTimer); this._consolidatePollTimer = null; }
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
       this.showBookStatsCard = false;
       this.bookStatsData = [];

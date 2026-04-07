@@ -178,7 +178,9 @@ SELECT * FROM schema_version;
 
 ## KI-Integration
 
-**`callAI`** (in `api-ai.js`) gibt immer ein **geparstes JSON-Objekt** zurück – kann nicht für Freitext-Antworten verwendet werden. Jeder Systemprompt muss JSON-Only erzwingen (die `JSON_ONLY`-Konstante in `prompts.js`).
+**Regel: Alle serverseitigen KI-Calls laufen über die Job-Queue (`/jobs/*`).** Neue Features die einen KI-Call benötigen, implementieren einen Job-Typ in `routes/jobs.js` (Funktion `runXxxJob` + `router.post('/xxx', ...)`). Direkte synchrone KI-Calls aus Route-Handlern (ohne Job-Queue) sind nicht erlaubt – auch nicht für kurze/einfache Operationen. Das Frontend pollt den Job-Status via `_startPoll()`. Ausnahme: Seiten-Chat (`/chat/send`) nutzt bewusst SSE-Streaming statt Jobs.
+
+**`callAI`** (in `lib/ai.js`, importiert von `routes/jobs.js`) gibt immer ein **geparstes JSON-Objekt** zurück – kann nicht für Freitext-Antworten verwendet werden. Jeder Systemprompt muss JSON-Only erzwingen (die `JSON_ONLY`-Konstante in `prompts.js`).
 
 **Schema-Validierung:** Nach jedem `callAI`-Aufruf wird das Pflichtfeld geprüft (`fehler` in `lektorat.js`, `gesamtnote` in `review.js`, `figuren` in `figuren.js`). Fehlt es, Fehler werfen statt falsche Daten rendern.
 

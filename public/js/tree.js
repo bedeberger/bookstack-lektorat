@@ -1,5 +1,5 @@
 import { htmlToText } from './utils.js';
-import { SYSTEM_LEKTORAT, buildLektoratPrompt } from './prompts.js';
+import { buildLektoratPrompt } from './prompts.js';
 
 // Buch-/Seiten-Lade-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -107,10 +107,10 @@ export const treeMethods = {
           const pd = await this.bsGet('pages/' + p.id);
           const html = pd.html || '';
           const text = htmlToText(html);
-          const fullInput = SYSTEM_LEKTORAT + buildLektoratPrompt(text, html);
+          const userPrompt = buildLektoratPrompt(text, html);
           const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
           this.tokEsts[p.id] = {
-            tok: Math.round(fullInput.length / 4),
+            tok: Math.round(userPrompt.length / 4),
             words,
             chars: text.length,
           };

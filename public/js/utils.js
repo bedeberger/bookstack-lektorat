@@ -42,6 +42,18 @@ export function renderChatMarkdown(text) {
   // Horizontale Linie
   html = html.replace(/^---$/gm, '<hr class="chat-hr">');
 
+  // Markdown-Tabellen: Block aus Zeilen die mit | beginnen
+  html = html.replace(/((?:\|[^\n]+\n)+)/g, (block) => {
+    const lines = block.trimEnd().split('\n');
+    if (lines.length < 3) return block;
+    if (!/^\|[\s\-:|]+\|$/.test(lines[1])) return block;
+    const headers = lines[0].split('|').slice(1, -1).map(h => h.trim());
+    const rows = lines.slice(2).map(row => row.split('|').slice(1, -1).map(c => c.trim()));
+    const thead = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+    const tbody = rows.map(row => `<tr>${row.map(c => `<td>${c}</td>`).join('')}</tr>`).join('');
+    return `<table class="chat-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+  });
+
   // Ungeordnete Listen: Zeilen mit «- » oder «* » → temporäres <uli>-Tag
   html = html.replace(/^[-*] (.+)$/gm, '<uli>$1</uli>');
   html = html.replace(/(<uli>.*?<\/uli>\n{0,2})+/g, m =>

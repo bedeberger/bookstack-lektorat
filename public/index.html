@@ -226,27 +226,31 @@
           <span class="history-chevron" :class="{ open: selectedBookReviewId === entry.id }">›</span>
         </div>
         <div x-show="selectedBookReviewId === entry.id" class="history-detail">
-          <div x-show="entry.review_json?.zusammenfassung" class="stilbox" style="margin-bottom:10px;">
+          <div x-show="entry.review_json?.zusammenfassung" class="stilbox">
             <div class="stilbox-title">Zusammenfassung</div>
             <span x-text="entry.review_json?.zusammenfassung"></span>
           </div>
-          <div x-show="entry.review_json?.staerken?.length" style="margin-top:10px;">
-            <div class="bewertung-section-title">Stärken</div>
-            <ul class="bullet-list pos">
-              <template x-for="(s, i) in (entry.review_json?.staerken || [])" :key="i">
-                <li x-text="s"></li>
-              </template>
-            </ul>
+          <div x-show="entry.review_json?.staerken?.length">
+            <div class="stilbox">
+              <div class="bewertung-section-title">Stärken</div>
+              <ul class="bullet-list pos">
+                <template x-for="(s, i) in (entry.review_json?.staerken || [])" :key="i">
+                  <li x-text="s"></li>
+                </template>
+              </ul>
+            </div>
           </div>
-          <div x-show="entry.review_json?.schwaechen?.length" style="margin-top:10px;">
-            <div class="bewertung-section-title">Schwächen</div>
-            <ul class="bullet-list neg">
-              <template x-for="(s, i) in (entry.review_json?.schwaechen || [])" :key="i">
-                <li x-text="s"></li>
-              </template>
-            </ul>
+          <div x-show="entry.review_json?.schwaechen?.length">
+            <div class="stilbox">
+              <div class="bewertung-section-title">Schwächen</div>
+              <ul class="bullet-list neg">
+                <template x-for="(s, i) in (entry.review_json?.schwaechen || [])" :key="i">
+                  <li x-text="s"></li>
+                </template>
+              </ul>
+            </div>
           </div>
-          <div x-show="entry.review_json?.fazit" class="fazit" style="margin-top:10px;" x-text="entry.review_json?.fazit"></div>
+          <div x-show="entry.review_json?.fazit" class="fazit" x-text="entry.review_json?.fazit"></div>
           <button class="btn-delete-history" @click.stop="deleteBookReview(entry.id)" title="Eintrag löschen">Eintrag löschen</button>
         </div>
       </div>
@@ -395,7 +399,17 @@
     <div class="global-zeitstrahl-header" @click="showGlobalZeitstrahl = !showGlobalZeitstrahl">
       <span class="history-heading global-zeitstrahl-heading">Globale Zeitleiste</span>
       <span class="global-zeitstrahl-meta" x-text="globalZeitstrahl.length + ' Ereignisse'"></span>
+      <button class="gz-consolidate-btn" :disabled="zeitstrahlConsolidating" @click.stop="consolidateZeitstrahl()">
+        <span x-show="zeitstrahlConsolidating" class="spinner"></span>
+        <span x-text="zeitstrahlConsolidating ? '' : 'Konsolidieren'"></span>
+      </button>
       <span class="history-chevron" :class="{ open: showGlobalZeitstrahl }">›</span>
+    </div>
+    <div x-show="zeitstrahlConsolidating || zeitstrahlStatus" class="gz-status-row">
+      <div x-show="zeitstrahlConsolidating && zeitstrahlProgress > 0" class="progress-bar-wrap">
+        <div class="progress-bar-fill" :style="'width:' + zeitstrahlProgress + '%'"></div>
+      </div>
+      <div x-show="zeitstrahlStatus" class="gz-status-text" x-html="zeitstrahlStatus"></div>
     </div>
     <div x-show="showGlobalZeitstrahl" class="global-zeitstrahl-body">
       <template x-for="(ev, i) in globalZeitstrahl" :key="i">
@@ -503,6 +517,24 @@
     <div>
       <span class="card-title" x-text="'Lektorat: ' + (currentPage?.name || '–')"></span>
       <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag tag--link" x-text="currentPage ? 'ID ' + currentPage.id + ' ↗' : ''"></a>
+      <span x-show="currentPage && tokEsts[currentPage.id]" class="tok-stats">
+        <template x-if="tokEsts[currentPage?.id]?.words > 0">
+          <span style="display:contents">
+            <span class="tok-badge"
+              :class="tokEsts[currentPage.id]?.tok > 16000 ? 'tok-high' : tokEsts[currentPage.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
+              x-text="tokEsts[currentPage.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].tok/1000) + 'k T' : '~' + tokEsts[currentPage.id]?.tok + ' T'"
+              @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
+              @mouseleave.stop="showTokLegend=false"></span>
+            <span class="tok-badge tok-neutral"
+              x-text="tokEsts[currentPage.id]?.words >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].words/1000) + 'k W' : tokEsts[currentPage.id]?.words + ' W'"></span>
+            <span class="tok-badge tok-neutral"
+              x-text="tokEsts[currentPage.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].chars/1000) + 'k Z' : tokEsts[currentPage.id]?.chars + ' Z'"></span>
+          </span>
+        </template>
+        <template x-if="tokEsts[currentPage?.id] && tokEsts[currentPage.id].words === 0">
+          <span class="tok-badge tok-empty">leer</span>
+        </template>
+      </span>
     </div>
     <div class="card-actions">
       <button @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? 'Seite ist leer' : 'Ctrl+Enter'">Prüfen ↗</button>

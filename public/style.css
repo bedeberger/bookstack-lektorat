@@ -419,12 +419,17 @@ ins {
 
 /* === Stil-/Analyseboxen === */
 .stilbox {
-  margin-top: 16px;
+  margin-top: 12px;
   padding: 14px;
   background: var(--color-bg);
   border-radius: var(--radius-md);
   font-size: var(--font-size-base);
   line-height: 1.7;
+}
+
+.history-detail > .stilbox:first-child,
+.history-detail > div > .stilbox:only-child {
+  margin-top: 0;
 }
 
 .stilbox-title {
@@ -1074,6 +1079,25 @@ ins {
 
 .global-zeitstrahl-heading { margin: 0; }
 
+.gz-consolidate-btn {
+  margin-left: auto;
+  font-size: 0.78rem;
+  padding: 2px 10px;
+  min-width: 110px;
+}
+
+.gz-status-row {
+  padding: 4px 0 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gz-status-text {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
 .global-zeitstrahl-meta {
   font-size: var(--font-size-xs);
   color: var(--color-muted);
@@ -1541,6 +1565,22 @@ ins {
   background: rgba(0,0,0,0.07);
   padding: 1px 5px;
   border-radius: 2px;
+}
+
+.chat-table {
+  border-collapse: collapse;
+  font-size: 0.9em;
+  margin: 6px 0;
+}
+.chat-table th,
+.chat-table td {
+  border: 1px solid var(--border-color, #ddd);
+  padding: 3px 8px;
+  text-align: left;
+}
+.chat-table thead th {
+  background: rgba(0,0,0,0.05);
+  font-weight: 600;
 }
 
 /* Änderungsvorschläge */

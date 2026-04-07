@@ -258,6 +258,35 @@ ${FIGUREN_SCHEMA}
 ${FIGUREN_RULES}`;
 }
 
+export function buildZeitstrahlConsolidationPrompt(events) {
+  return `Du erhältst eine Liste von Lebensereignissen verschiedener Figuren aus einem Buch. Erkenne semantisch identische oder sehr ähnliche Ereignisse (gleicher realer Vorfall, nur unterschiedlich formuliert) und fasse sie zu einem einzigen Eintrag zusammen. Führe die Figurenlisten zusammen und wähle die präziseste Formulierung.
+
+Ereignisse die sich inhaltlich unterscheiden, bleiben getrennt – auch wenn sie im selben Jahr stattfanden.
+
+Antworte mit diesem JSON-Schema:
+{
+  "ereignisse": [
+    {
+      "datum": "JJJJ",
+      "ereignis": "kanonische Formulierung",
+      "typ": "persoenlich|extern",
+      "bedeutung": "zusammengeführte Bedeutung oder leer",
+      "figuren": [{ "id": "fig_1", "name": "Name", "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere" }]
+    }
+  ]
+}
+
+Regeln:
+- Behalte die chronologische Reihenfolge (aufsteigend nach Jahreszahl)
+- Dedupliziere figuren (gleiche id nur einmal pro Ereignis)
+- Im Zweifel getrennt lassen – nur eindeutige Übereinstimmungen zusammenführen
+
+${JSON_ONLY}
+
+Ereignisse:
+${JSON.stringify(events, null, 2)}`;
+}
+
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
 /**
