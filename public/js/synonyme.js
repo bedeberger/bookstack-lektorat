@@ -154,6 +154,7 @@ export const synonymeMethods = {
       const passageNach = passage.replace(wortRe, synonym);
       let checkOk = true;
       let checkBegruendung = null;
+      let satzNeu = null;
       try {
         const check = await this.callAI(
           buildSynonymCheckPrompt(passage, passageNach, wort, synonym),
@@ -161,6 +162,7 @@ export const synonymeMethods = {
         );
         checkOk = check?.ok !== false;
         checkBegruendung = check?.begruendung || null;
+        if (check?.ok === 'angepasst') satzNeu = check?.satzNeu || null;
       } catch (e) {
         console.warn('[applySynonym] Plausibilitätsprüfung fehlgeschlagen, fahre fort:', e.message);
       }
@@ -168,6 +170,12 @@ export const synonymeMethods = {
       if (!checkOk) {
         this.synonymeStatus = `<span class="error-msg">Synonym nicht passend: ${escHtml(checkBegruendung || 'Bitte anderen Vorschlag wählen.')}</span>`;
         return;
+      }
+
+      // Wenn die KI eine Satzanpassung liefert, den ganzen Satz ersetzen statt nur das Wort.
+      if (satzNeu) {
+        const adjusted = this._applyPassageReplacement(this.synonymeHtml, passage, satzNeu, htmlIdx, htmlLen);
+        if (adjusted !== null) newHtml = adjusted;
       }
 
       await this.bsPut('pages/' + this.currentPage.id, { html: newHtml });
@@ -219,6 +227,31 @@ export const synonymeMethods = {
     if (newPassage === htmlPassage) return null; // Wort nicht in HTML-Passage gefunden
 
     return html.slice(0, idx) + newPassage + html.slice(idx + len);
+  },
+
+  // Ersetzt im HTML die komplette `passage` durch `satzNeu` (Plaintext).
+  // Findet die Passage über gespeicherte Position oder tag-toleranten Regex,
+  // übernimmt vorhandene Inline-Tags aus der Original-HTML-Passage soweit möglich.
+  _applyPassageReplacement(html, passage, satzNeu, htmlIdx, htmlLen) {
+    let idx = -1;
+    let len = passage.length;
+
+    if (htmlIdx >= 0 && htmlLen > 0) {
+      const candidate = html.slice(htmlIdx, htmlIdx + htmlLen);
+      const stripped = candidate.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (stripped === passage.trim()) { idx = htmlIdx; len = htmlLen; }
+    }
+
+    if (idx === -1) {
+      const match = new RegExp(this._passageToHtmlRegex(passage)).exec(html);
+      if (match) { idx = match.index; len = match[0].length; }
+    }
+
+    if (idx === -1) return null;
+
+    // Inline-Tags aus der Original-HTML-Passage werden verworfen – der neue Satz
+    // ersetzt den gesamten Textteil ohne Tags (sichere Lösung, da Satzbau sich ändern kann).
+    return html.slice(0, idx) + escHtml(satzNeu) + html.slice(idx + len);
   },
 
   // Hebt `wort` in `passage` mit <mark> hervor (für die UI-Darstellung).

@@ -461,16 +461,28 @@ Prüfkriterien:
 - Bedeutung erhalten?
 - Natürliches Deutsch?
 
-Antworte mit diesem JSON-Schema:
+Mögliche Antworten:
+
+1. Ersetzung ist korrekt wie sie ist:
 {
   "ok": true,
   "begruendung": null
 }
-oder wenn ein Problem besteht:
+
+2. Ersetzung ist grundsätzlich unbrauchbar (falsches Synonym, Bedeutung verfälscht):
 {
   "ok": false,
   "begruendung": "Kurze Erklärung des Problems (ein Satz)"
-}`;
+}
+
+3. Ersetzung ist inhaltlich passend, erfordert aber grammatikalische Anpassungen am Restsatz (z.B. andere Pronomen, geänderte Deklination, angepasste Artikelform, Satzumstellung):
+{
+  "ok": "angepasst",
+  "satzNeu": "Der vollständig überarbeitete Satz – zeichengenau wie der Originalsatz, aber mit dem Synonym und allen nötigen grammatikalischen Anpassungen",
+  "begruendung": "Kurze Erklärung warum eine Anpassung nötig war (ein Satz)"
+}
+
+Verwende «angepasst» wenn das Synonym gut passt, aber der Satz drumherum leicht angepasst werden muss, damit er korrekt klingt.`;
 }
 
 export function buildLektoratPrompt(text, html) {
