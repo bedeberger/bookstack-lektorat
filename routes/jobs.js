@@ -64,11 +64,12 @@ function jobKey(type, bookId, userEmail) {
   return `${type}:${bookId}:${userEmail || ''}`;
 }
 
-function createJob(type, bookId, userEmail) {
+function createJob(type, bookId, userEmail, label) {
   const id = randomUUID();
   const key = jobKey(type, bookId, userEmail);
   jobs.set(id, {
     id, type, bookId: String(bookId), userEmail: userEmail || null,
+    label: label || null,
     status: 'queued', progress: 0, statusText: 'In Warteschlange…',
     tokensIn: 0, tokensOut: 0,
     maxTokensOut: parseInt(process.env.MODEL_TOKEN, 10) || 64000,
@@ -529,6 +530,90 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
   }
 }
 
+// ── Job: Szenenanalyse ────────────────────────────────────────────────────────
+async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
+  const { SYSTEM_FIGUREN, buildSzenenAnalysePrompt } = await getPrompts();
+  try {
+    updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
+    const [chaptersData, pages] = await Promise.all([
+      bsGetAll('chapters?book_id=' + bookId),
+      bsGetAll('pages?book_id=' + bookId),
+    ]);
+    if (!pages.length) { completeJob(jobId, { empty: true }); return; }
+
+    const figRows = db.prepare(
+      'SELECT fig_id, name, typ FROM figures WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+    ).all(parseInt(bookId), userEmail || null);
+    if (!figRows.length) {
+      failJob(jobId, new Error('Keine Figuren gefunden – bitte zuerst Figuren ermitteln.'));
+      return;
+    }
+    const figurenKompakt = figRows.map(f => ({ id: f.fig_id, name: f.name, typ: f.typ || 'andere' }));
+
+    const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
+    const tok = { in: 0, out: 0 };
+    const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
+      updateJob(jobId, {
+        progress: Math.round((i / total) * 40),
+        statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
+      });
+    });
+
+    const { groupOrder, groups } = groupByChapter(pageContents);
+    const allSzenen = [];
+
+    for (let gi = 0; gi < groupOrder.length; gi++) {
+      const group = groups.get(groupOrder[gi]);
+      const tokStr = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
+      const fromPct = 40 + Math.round((gi / groupOrder.length) * 55);
+      const toPct   = 40 + Math.round(((gi + 1) / groupOrder.length) * 55);
+      updateJob(jobId, {
+        progress: fromPct,
+        statusText: `Szenen in «${group.name}» (${gi + 1}/${groupOrder.length})…${tokStr}`,
+      });
+      const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+      let chResult;
+      try {
+        chResult = await aiCall(jobId, tok,
+          buildSzenenAnalysePrompt(group.name, figurenKompakt, chText),
+          SYSTEM_FIGUREN,
+          fromPct, toPct, 2000,
+        );
+      } catch (e) {
+        logger.warn(`Job ${jobId}: Szenenanalyse Kapitel «${group.name}» übersprungen: ${e.message}`);
+        continue;
+      }
+      for (const s of (chResult.szenen || [])) {
+        allSzenen.push({
+          kapitel: group.name,
+          seite:     s.seite     || null,
+          titel:     s.titel     || '(unbekannt)',
+          wertung:   s.wertung   || null,
+          kommentar: s.kommentar || null,
+          fig_ids:   JSON.stringify(Array.isArray(s.figuren) ? s.figuren : []),
+          sort_order: allSzenen.length,
+        });
+      }
+    }
+
+    db.transaction(() => {
+      db.prepare('DELETE FROM figure_scenes WHERE book_id = ? AND user_email = ?').run(parseInt(bookId), userEmail || null);
+      const ins = db.prepare(`INSERT INTO figure_scenes
+        (book_id, user_email, kapitel, seite, titel, wertung, kommentar, fig_ids, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      for (const s of allSzenen) {
+        ins.run(parseInt(bookId), userEmail || null, s.kapitel, s.seite, s.titel, s.wertung, s.kommentar, s.fig_ids, s.sort_order);
+      }
+    })();
+
+    completeJob(jobId, { count: allSzenen.length, tokensIn: tok.in, tokensOut: tok.out });
+    logger.info(`Job ${jobId}: Szenenanalyse Buch ${bookId} abgeschlossen (${allSzenen.length} Szenen, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+  } catch (e) {
+    logger.error(`Job ${jobId}: Szenenanalyse Fehler: ${e.message}`);
+    failJob(jobId, e);
+  }
+}
+
 // ── Job: Zeitstrahl-Konsolidierung ────────────────────────────────────────────
 async function runConsolidateZeitstrahlJob(jobId, events, bookId, userEmail) {
   const { SYSTEM_FIGUREN, buildZeitstrahlConsolidationPrompt } = await getPrompts();
@@ -973,7 +1058,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
 
 // ── Routen ────────────────────────────────────────────────────────────────────
 router.post('/check', jsonBody, (req, res) => {
-  const { page_id, book_id } = req.body;
+  const { page_id, book_id, page_name } = req.body;
   if (!page_id) return res.status(400).json({ error: 'page_id fehlt' });
   const userEmail = req.session?.user?.email || null;
   const userToken = req.session?.bookstackToken
@@ -981,13 +1066,14 @@ router.post('/check', jsonBody, (req, res) => {
     : null;
   const existing = runningJobs.get(jobKey('check', page_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
-  const jobId = createJob('check', page_id, userEmail);
+  const label = page_name ? `Lektorat · ${page_name}` : `Lektorat · Seite #${page_id}`;
+  const jobId = createJob('check', page_id, userEmail, label);
   enqueueJob(jobId, () => runCheckJob(jobId, page_id, book_id || null, userEmail, userToken));
   res.json({ jobId });
 });
 
 router.post('/synonyme', jsonBody, (req, res) => {
-  const { page_id } = req.body;
+  const { page_id, page_name } = req.body;
   if (!page_id) return res.status(400).json({ error: 'page_id fehlt' });
   const userEmail = req.session?.user?.email || null;
   const userToken = req.session?.bookstackToken
@@ -995,7 +1081,8 @@ router.post('/synonyme', jsonBody, (req, res) => {
     : null;
   const existing = runningJobs.get(jobKey('synonyme', page_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
-  const jobId = createJob('synonyme', page_id, userEmail);
+  const label = page_name ? `Synonyme · ${page_name}` : `Synonyme · Seite #${page_id}`;
+  const jobId = createJob('synonyme', page_id, userEmail, label);
   enqueueJob(jobId, () => runSynonymJob(jobId, page_id, userEmail, userToken));
   res.json({ jobId });
 });
@@ -1006,7 +1093,8 @@ router.post('/review', jsonBody, (req, res) => {
   const userEmail = req.session?.user?.email || null;
   const existing = runningJobs.get(jobKey('review', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
-  const jobId = createJob('review', book_id, userEmail);
+  const label = book_name ? `Buchbewertung · ${book_name}` : `Buchbewertung`;
+  const jobId = createJob('review', book_id, userEmail, label);
   enqueueJob(jobId, () => runReviewJob(jobId, book_id, book_name || '', userEmail));
   res.json({ jobId });
 });
@@ -1017,30 +1105,45 @@ router.post('/figures', jsonBody, (req, res) => {
   const userEmail = req.session?.user?.email || null;
   const existing = runningJobs.get(jobKey('figures', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
-  const jobId = createJob('figures', book_id, userEmail);
+  const label = book_name ? `Figuren · ${book_name}` : `Figuren`;
+  const jobId = createJob('figures', book_id, userEmail, label);
   enqueueJob(jobId, () => runFiguresJob(jobId, book_id, book_name || '', userEmail));
   res.json({ jobId });
 });
 
+router.post('/szenen', jsonBody, (req, res) => {
+  const { book_id, book_name } = req.body;
+  if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
+  const userEmail = req.session?.user?.email || null;
+  const existing = runningJobs.get(jobKey('szenen', book_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const label = book_name ? `Szenenanalyse · ${book_name}` : `Szenenanalyse`;
+  const jobId = createJob('szenen', book_id, userEmail, label);
+  enqueueJob(jobId, () => runSzenenAnalyseJob(jobId, book_id, book_name || '', userEmail));
+  res.json({ jobId });
+});
+
 router.post('/consolidate-zeitstrahl', jsonBody, (req, res) => {
-  const { book_id, events } = req.body;
+  const { book_id, events, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
   if (!Array.isArray(events) || !events.length) return res.json({ jobId: null, empty: true });
   const userEmail = req.session?.user?.email || null;
   const existing = runningJobs.get(jobKey('consolidate-zeitstrahl', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
-  const jobId = createJob('consolidate-zeitstrahl', book_id, userEmail);
+  const label = book_name ? `Zeitstrahl · ${book_name}` : `Zeitstrahl`;
+  const jobId = createJob('consolidate-zeitstrahl', book_id, userEmail, label);
   enqueueJob(jobId, () => runConsolidateZeitstrahlJob(jobId, events, book_id, userEmail));
   res.json({ jobId });
 });
 
 router.post('/batch-check', jsonBody, (req, res) => {
-  const { book_id } = req.body;
+  const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
   const userEmail = req.session?.user?.email || null;
   const existing = runningJobs.get(jobKey('batch-check', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
-  const jobId = createJob('batch-check', book_id, userEmail);
+  const label = book_name ? `Serien-Lektorat · ${book_name}` : `Serien-Lektorat`;
+  const jobId = createJob('batch-check', book_id, userEmail, label);
   enqueueJob(jobId, () => runBatchCheckJob(jobId, book_id, userEmail));
   res.json({ jobId });
 });
@@ -1055,7 +1158,7 @@ router.post('/chat', jsonBody, (req, res) => {
 
   // User-Nachricht sofort in DB speichern – bevor der Job überhaupt startet,
   // damit sie auch bei Tab-Schliessen oder Job-Fehler persistent ist.
-  const session = db.prepare('SELECT id FROM chat_sessions WHERE id = ? AND user_email = ?')
+  const session = db.prepare('SELECT id, page_name, book_name FROM chat_sessions WHERE id = ? AND user_email = ?')
     .get(parseInt(session_id), userEmail);
   if (!session) return res.status(404).json({ error: 'Session nicht gefunden' });
 
@@ -1065,7 +1168,8 @@ router.post('/chat', jsonBody, (req, res) => {
   ).run(session.id, message.trim(), now);
   db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(now, session.id);
 
-  const jobId = createJob('chat', session_id, userEmail);
+  const chatLabel = session.page_name ? `Chat · ${session.page_name}` : `Chat`;
+  const jobId = createJob('chat', session_id, userEmail, chatLabel);
   enqueueJob(jobId, () => runChatJob(jobId, session_id, userMsgResult.lastInsertRowid, message.trim(), page_text || '', userEmail));
   res.json({ jobId });
 });
@@ -1078,7 +1182,7 @@ router.post('/book-chat', jsonBody, (req, res) => {
   const existing = runningJobs.get(jobKey('book-chat', session_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
 
-  const session = db.prepare('SELECT id FROM chat_sessions WHERE id = ? AND user_email = ?')
+  const session = db.prepare('SELECT id, book_name FROM chat_sessions WHERE id = ? AND user_email = ?')
     .get(parseInt(session_id), userEmail);
   if (!session) return res.status(404).json({ error: 'Session nicht gefunden' });
 
@@ -1092,7 +1196,8 @@ router.post('/book-chat', jsonBody, (req, res) => {
     ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw }
     : null;
 
-  const jobId = createJob('book-chat', session_id, userEmail);
+  const bookChatLabel = session.book_name ? `Buch-Chat · ${session.book_name}` : `Buch-Chat`;
+  const jobId = createJob('book-chat', session_id, userEmail, bookChatLabel);
   enqueueJob(jobId, () => runBookChatJob(jobId, session_id, userMsgResult.lastInsertRowid, message.trim(), userEmail, userToken));
   res.json({ jobId });
 });
@@ -1104,6 +1209,29 @@ router.delete('/book-chat-cache', (req, res) => {
   const key = `${book_id}:${userEmail}`;
   _bookPageCache.delete(key);
   res.json({ ok: true });
+});
+
+router.get('/queue', (req, res) => {
+  const userEmail = req.session?.user?.email || null;
+  const result = [];
+  for (const [, job] of jobs) {
+    if (job.userEmail !== userEmail) continue;
+    if (job.status !== 'queued' && job.status !== 'running') continue;
+    let statusText = job.statusText;
+    if (job.status === 'queued') {
+      const pos = jobQueue.findIndex(e => e.jobId === job.id) + 1;
+      statusText = pos > 0 ? `Warteschlange #${pos}` : 'Warteschlange';
+    }
+    result.push({
+      id: job.id,
+      type: job.type,
+      label: job.label || job.type,
+      status: job.status,
+      progress: job.progress,
+      statusText,
+    });
+  }
+  res.json(result);
 });
 
 router.get('/active', (req, res) => {

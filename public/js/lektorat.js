@@ -114,6 +114,7 @@ export const lektoratMethods = {
         body: JSON.stringify({
           page_id: this.currentPage.id,
           book_id: this.currentPage.book_id || null,
+          page_name: this.currentPage.name || null,
         }),
       }).then(r => r.json());
       localStorage.setItem('lektorat_check_job_' + this.currentPage.id, jobId);
@@ -290,7 +291,7 @@ export const lektoratMethods = {
       const { jobId } = await fetch('/jobs/batch-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ book_id: parseInt(this.selectedBookId) }),
+        body: JSON.stringify({ book_id: parseInt(this.selectedBookId), book_name: this.selectedBookName || null }),
       }).then(r => r.json());
       localStorage.setItem('lektorat_batchcheck_job_' + this.selectedBookId, jobId);
       this.startBatchPoll(jobId);

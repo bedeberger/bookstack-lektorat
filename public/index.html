@@ -82,6 +82,10 @@
       <span class="feature-tile-title">Figuren</span>
       <span class="feature-tile-desc">Charakterkarte</span>
     </button>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showSzenenCard }" @click="toggleSzenenCard()" title="Szenenanalyse anzeigen">
+      <span class="feature-tile-title">Szenen</span>
+      <span class="feature-tile-desc">Szenenanalyse</span>
+    </button>
     <button class="feature-tile" :class="{ 'feature-tile--active': showBookStatsCard }" @click="toggleBookStatsCard()" title="Buchentwicklung anzeigen">
       <span class="feature-tile-title">Entwicklung</span>
       <span class="feature-tile-desc">Zeitverlauf</span>
@@ -390,7 +394,6 @@
               </template>
             </div>
           </div>
-
         </div>
       </div>
     </template>
@@ -432,6 +435,70 @@
                 <span class="gz-figur-badge" :class="'gz-figur-badge--' + (fref.typ || 'andere')" x-text="fref.name"></span>
               </template>
             </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+</div>
+
+<!-- Szenenanalyse -->
+<div class="card" x-show="showSzenenCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title" x-text="'Szenen: ' + selectedBookName"></span>
+    <div class="card-actions">
+      <button @click="runSzenenAnalyse()" :disabled="szenenLoading">
+        <span x-show="szenenLoading" class="spinner"></span>
+        <span x-text="szenenLoading ? '' : (szenen.length ? 'Neu analysieren' : 'Szenen analysieren')"></span>
+      </button>
+      <button class="btn-card-close" @click="toggleSzenenCard()" title="Schliessen">×</button>
+    </div>
+  </div>
+
+  <!-- Fortschritt -->
+  <div x-show="szenenProgress > 0" class="progress-bar-wrap">
+    <div class="progress-bar" :style="'width:' + szenenProgress + '%'"></div>
+  </div>
+  <div x-show="szenenStatus" class="figur-progress-status" x-html="szenenStatus"></div>
+
+  <!-- Hinweis wenn keine Figuren vorhanden -->
+  <div x-show="!figuren.length && !szenenLoading && !szenen.length" class="szenen-empty-hint">
+    Für die Szenenanalyse werden zuerst Figuren benötigt. Bitte zuerst die Figuren-Karte öffnen und Figuren ermitteln.
+  </div>
+
+  <!-- Szenen-Zähler pro Figur -->
+  <div x-show="szenen.length > 0" class="szenen-figur-uebersicht">
+    <div class="bewertung-section-title">Szenen pro Figur</div>
+    <div class="szenen-figur-counts szenen-figur-counts--standalone">
+      <template x-for="f in figuren" :key="f.id">
+        <span x-show="szenen.some(s => s.fig_ids.includes(f.id))"
+          class="szenen-figur-count-badge"
+          :class="szenen.filter(s => s.fig_ids.includes(f.id)).length < 3 ? 'szenen-figur-count-badge--wenig' : ''"
+          x-text="(f.kurzname || f.name) + ' · ' + szenen.filter(s => s.fig_ids.includes(f.id)).length">
+        </span>
+      </template>
+    </div>
+  </div>
+
+  <!-- Alle Szenen -->
+  <div x-show="szenen.length > 0" class="szenen-liste-section">
+    <div class="bewertung-section-title" x-text="szenen.length + ' Szenen'"></div>
+    <div class="szenen-liste">
+      <template x-for="(s, i) in szenen" :key="i">
+        <div class="szene-card" :class="'szene-card--' + (s.wertung || 'mittel')">
+          <div class="szene-card-header">
+            <span class="szene-card-wertung" :class="'figur-szene-wertung--' + (s.wertung || 'mittel')" x-text="s.wertung || '–'"></span>
+            <span class="szene-card-ort" x-text="s.kapitel + (s.seite ? ' · ' + s.seite : '')"></span>
+          </div>
+          <div class="szene-card-titel" x-text="s.titel"></div>
+          <div x-show="s.kommentar" class="szene-card-kommentar" x-text="s.kommentar"></div>
+          <div class="gz-figuren-row">
+            <template x-for="(figId, fi) in (s.fig_ids || [])" :key="fi">
+              <span class="gz-figur-badge"
+                :class="'gz-figur-badge--' + (figuren.find(f => f.id === figId)?.typ || 'andere')"
+                x-text="figuren.find(f => f.id === figId)?.kurzname || figuren.find(f => f.id === figId)?.name || figId">
+              </span>
+            </template>
           </div>
         </div>
       </template>
@@ -1011,6 +1078,20 @@
   <div class="tok-tt-row"><span class="tok-badge tok-med">≤ 16k</span> mittel</div>
   <div class="tok-tt-row"><span class="tok-badge tok-high">&gt; 16k</span> gross</div>
   <div class="tok-tt-hint">Text + HTML + Prompt + System, ~4 Zeichen/Token</div>
+</div>
+
+<!-- Job-Queue Footer -->
+<div class="job-queue-bar" x-show="jobQueueItems.length > 0" x-cloak>
+  <span class="job-queue-label">Jobs:</span>
+  <template x-for="job in jobQueueItems" :key="job.id">
+    <div class="job-queue-pill" :class="'job-queue-pill--' + job.status">
+      <span class="job-queue-pill-label" x-text="job.label"></span>
+      <span class="job-queue-pill-status" x-text="job.statusText"></span>
+      <template x-if="job.status === 'running' && job.progress > 0">
+        <span class="job-queue-pill-progress" x-text="job.progress + '%'"></span>
+      </template>
+    </div>
+  </template>
 </div>
 
 </body>

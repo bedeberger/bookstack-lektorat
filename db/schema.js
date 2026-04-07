@@ -151,12 +151,27 @@ db.exec(`
     updated_at TEXT NOT NULL
   );
 
+  -- Szenen: eine Zeile pro Szene (per-User, per-Buch, per-Kapitel)
+  CREATE TABLE IF NOT EXISTS figure_scenes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id    INTEGER NOT NULL,
+    user_email TEXT,
+    kapitel    TEXT NOT NULL,
+    seite      TEXT,
+    titel      TEXT NOT NULL,
+    wertung    TEXT,
+    kommentar  TEXT,
+    fig_ids    TEXT NOT NULL DEFAULT '[]',
+    sort_order INTEGER DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_fscene_book ON figure_scenes(book_id, user_email);
+
   CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
   INSERT INTO schema_version SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 11;
+const CURRENT_SCHEMA_VERSION = 12;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
   if (version < 2) {
@@ -263,6 +278,23 @@ function runMigrations() {
     db.exec('ALTER TABLE page_checks ADD COLUMN szenen_json TEXT');
     db.prepare('UPDATE schema_version SET version = 11').run();
     logger.info('DB-Migration auf Version 11 abgeschlossen (szenen_json zu page_checks hinzugefügt).');
+  }
+  if (version < 12) {
+    db.exec(`CREATE TABLE IF NOT EXISTS figure_scenes (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      book_id    INTEGER NOT NULL,
+      user_email TEXT,
+      kapitel    TEXT NOT NULL,
+      seite      TEXT,
+      titel      TEXT NOT NULL,
+      wertung    TEXT,
+      kommentar  TEXT,
+      fig_ids    TEXT NOT NULL DEFAULT '[]',
+      sort_order INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_fscene_book ON figure_scenes(book_id, user_email);`);
+    db.prepare('UPDATE schema_version SET version = 12').run();
+    logger.info('DB-Migration auf Version 12 abgeschlossen (figure_scenes Tabelle hinzugefügt).');
   }
   // Sicherstellen dass schema_version aktuell ist (Fallback)
   if (version < CURRENT_SCHEMA_VERSION) {

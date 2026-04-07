@@ -4,6 +4,38 @@ const { db, saveFigurenToDb } = require('../db/schema');
 const router = express.Router();
 const jsonBody = express.json();
 
+// Szenen eines Buchs laden (vor /:book_id definiert um Konflikte zu vermeiden)
+router.get('/scenes/:book_id', (req, res) => {
+  const bookId = parseInt(req.params.book_id);
+  const userEmail = req.session?.user?.email || null;
+
+  const rows = db.prepare(`
+    SELECT kapitel, seite, titel, wertung, kommentar, fig_ids
+    FROM figure_scenes
+    WHERE book_id = ? AND user_email = ?
+    ORDER BY sort_order
+  `).all(bookId, userEmail);
+
+  const szenen = rows.map(s => ({
+    kapitel:   s.kapitel,
+    seite:     s.seite,
+    titel:     s.titel,
+    wertung:   s.wertung,
+    kommentar: s.kommentar,
+    fig_ids:   (() => { try { return JSON.parse(s.fig_ids); } catch { return []; } })(),
+  }));
+
+  res.json({ szenen });
+});
+
+// Szenen eines Buchs löschen
+router.delete('/scenes/:book_id', (req, res) => {
+  const bookId = parseInt(req.params.book_id);
+  const userEmail = req.session?.user?.email || null;
+  db.prepare('DELETE FROM figure_scenes WHERE book_id = ? AND user_email = ?').run(bookId, userEmail);
+  res.json({ ok: true });
+});
+
 // Gespeicherte Figuren eines Buchs laden
 router.get('/:book_id', (req, res) => {
   const bookId = parseInt(req.params.book_id);

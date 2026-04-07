@@ -14,6 +14,7 @@ import { bookstatsMethods } from './bookstats.js';
 import { chatMethods } from './chat.js';
 import { bookChatMethods } from './book-chat.js';
 import { synonymeMethods } from './synonyme.js';
+import { szenenMethods } from './szenen.js';
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('lektorat', () => ({
@@ -87,7 +88,13 @@ document.addEventListener('alpine:init', () => {
     zeitstrahlConsolidating: false,
     zeitstrahlProgress: 0,
     zeitstrahlStatus: '',
+    showSzenenCard: false,
+    szenen: [],
+    szenenLoading: false,
+    szenenProgress: 0,
+    szenenStatus: '',
     _consolidatePollTimer: null,
+    _szenenPollTimer: null,
     _figurenNetwork: null,
     _figurenHash: null,
     _checkPollTimer: null,
@@ -126,6 +133,8 @@ document.addEventListener('alpine:init', () => {
     synonymeStatus: '',
     synonymeHtml: null,
     _synonymePollTimer: null,
+    jobQueueItems: [],
+    _jobQueueTimer: null,
 
     // ── Computed ─────────────────────────────────────────────────────────────
     get statusHtml() {
@@ -252,9 +261,21 @@ document.addEventListener('alpine:init', () => {
           return;
         }
         await this.loadBooks();
+        this._startJobQueuePoll();
       } catch {
         this.setStatus('Fehler beim Laden der Konfiguration.');
       }
+    },
+
+    _startJobQueuePoll() {
+      if (this._jobQueueTimer) clearInterval(this._jobQueueTimer);
+      const poll = async () => {
+        try {
+          this.jobQueueItems = await fetch('/jobs/queue').then(r => r.json());
+        } catch { /* ignorieren */ }
+      };
+      poll();
+      this._jobQueueTimer = setInterval(poll, 3000);
     },
 
     // ── Seitenauswahl & View-Reset ───────────────────────────────────────────
@@ -398,6 +419,7 @@ document.addEventListener('alpine:init', () => {
     _closeOtherMainCards(keep) {
       if (keep !== 'bookReview') this.showBookReviewCard = false;
       if (keep !== 'figures') this.showFiguresCard = false;
+      if (keep !== 'szenen') this.showSzenenCard = false;
       if (keep !== 'bookStats') this.showBookStatsCard = false;
       if (keep !== 'bookChat') this.showBookChatCard = false;
       this.resetPage();
@@ -492,7 +514,13 @@ document.addEventListener('alpine:init', () => {
       this.zeitstrahlConsolidating = false;
       this.zeitstrahlProgress = 0;
       this.zeitstrahlStatus = '';
+      this.showSzenenCard = false;
+      this.szenen = [];
+      this.szenenStatus = '';
+      this.szenenProgress = 0;
+      this.szenenLoading = false;
       if (this._consolidatePollTimer) { clearInterval(this._consolidatePollTimer); this._consolidatePollTimer = null; }
+      if (this._szenenPollTimer) { clearInterval(this._szenenPollTimer); this._szenenPollTimer = null; }
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
       this.showBookStatsCard = false;
       this.bookStatsData = [];
@@ -542,5 +570,6 @@ document.addEventListener('alpine:init', () => {
     ...chatMethods,
     ...bookChatMethods,
     ...synonymeMethods,
+    ...szenenMethods,
   }));
 });

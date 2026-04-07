@@ -74,7 +74,7 @@ export const figurenMethods = {
       const { jobId, empty } = await fetch('/jobs/consolidate-zeitstrahl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ book_id: parseInt(this.selectedBookId), events: this.globalZeitstrahl }),
+        body: JSON.stringify({ book_id: parseInt(this.selectedBookId), book_name: this.selectedBookName || null, events: this.globalZeitstrahl }),
       }).then(r => r.json());
       if (empty) { this.zeitstrahlConsolidating = false; this.zeitstrahlStatus = ''; return; }
       this.startConsolidatePoll(jobId);

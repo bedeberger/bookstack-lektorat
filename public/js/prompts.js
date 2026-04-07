@@ -270,6 +270,41 @@ ${FIGUREN_SCHEMA}
 ${FIGUREN_RULES}`;
 }
 
+export function buildSzenenAnalysePrompt(kapitel, figurenKompakt, chText) {
+  const figurenStr = figurenKompakt.length
+    ? figurenKompakt.map(f => `${f.id}: ${f.name} (${f.typ})`).join('\n')
+    : '(keine Figuren bekannt)';
+  return `Analysiere die Szenen im Kapitel «${kapitel}».
+
+Bekannte Figuren (nur diese IDs in «figuren» verwenden):
+${figurenStr}
+
+Antworte mit diesem JSON-Schema:
+{
+  "szenen": [
+    {
+      "seite": "Name der Seite/des Abschnitts aus dem die Szene stammt (leer wenn unklar)",
+      "titel": "Kurze Szenenbezeichnung (1 Satz)",
+      "wertung": "stark|mittel|schwach",
+      "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)",
+      "figuren": ["fig_1", "fig_2"]
+    }
+  ]
+}
+
+Regeln:
+- Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
+- figuren: nur IDs aus der obigen Liste; leer lassen wenn keine bekannte Figur aktiv beteiligt ist
+- wertung: «stark» = spannend/überzeugend, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
+- Wenn ein Abschnitt keine erkennbaren Szenen enthält (reine Exposition, Beschreibung): «szenen» als leeres Array
+- Maximal 10 Szenen pro Kapitel; konservativ – lieber weniger, aber treffende Einträge
+
+${JSON_ONLY}
+
+Kapiteltext:
+${chText}`;
+}
+
 export function buildZeitstrahlConsolidationPrompt(events) {
   return `Du erhältst eine Liste von Lebensereignissen verschiedener Figuren aus einem Buch. Erkenne semantisch identische oder sehr ähnliche Ereignisse (gleicher realer Vorfall, nur unterschiedlich formuliert) und fasse sie zu einem einzigen Eintrag zusammen. Führe die Figurenlisten zusammen und wähle die präziseste Formulierung.
 

@@ -43,7 +43,7 @@ export const synonymeMethods = {
       const { jobId } = await fetch('/jobs/synonyme', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ page_id: this.currentPage.id }),
+        body: JSON.stringify({ page_id: this.currentPage.id, page_name: this.currentPage.name || null }),
       }).then(r => r.json());
 
       this._startSynonymPoll(jobId);
