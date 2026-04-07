@@ -94,6 +94,10 @@
       <span class="feature-tile-title">Buch-Chat</span>
       <span class="feature-tile-desc">Fragen &amp; Antworten</span>
     </button>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showEreignisseCard }" @click="toggleEreignisseCard()" title="Globale Zeitleiste anzeigen">
+      <span class="feature-tile-title">Ereignisse</span>
+      <span class="feature-tile-desc">Globale Zeitleiste</span>
+    </button>
   </div>
 
 </div>
@@ -306,8 +310,20 @@
 
   <!-- Figurenliste -->
   <div x-show="figuren.length > 0" class="figur-list-section">
-    <div class="history-heading">Figuren (<span x-text="figuren.length"></span>)</div>
-    <template x-for="f in figuren" :key="f.id">
+    <div class="figur-list-header">
+      <div class="history-heading">Figuren (<span x-text="filteredFiguren().length"></span><template x-if="figurenKapitelFilter"><span x-text="' von ' + figuren.length"></span></template>)</div>
+      <template x-if="figurenKapitelListe().length > 0">
+        <div class="figur-kapitel-filter">
+          <select x-model="figurenKapitelFilter" @change="selectedFigurId = null">
+            <option value="">Alle Kapitel</option>
+            <template x-for="k in figurenKapitelListe()" :key="k">
+              <option :value="k" x-text="k"></option>
+            </template>
+          </select>
+        </div>
+      </template>
+    </div>
+    <template x-for="f in filteredFiguren()" :key="f.id">
       <div>
         <div class="figur-item" @click="selectedFigurId = selectedFigurId === f.id ? null : f.id;">
           <span class="figur-typ-dot" :style="'background:' + ({ hauptfigur:'var(--color-primary)', nebenfigur:'var(--color-muted)', antagonist:'var(--color-err-border)', mentor:'var(--color-ok-border)', andere:'var(--color-accent)' }[f.typ] || 'var(--color-border)')"></span>
@@ -399,53 +415,13 @@
     </template>
   </div>
 
-  <!-- Globale Zeitleiste -->
-  <div x-show="globalZeitstrahl.length > 0" class="global-zeitstrahl-section">
-    <div class="global-zeitstrahl-header" @click="showGlobalZeitstrahl = !showGlobalZeitstrahl">
-      <span class="history-heading global-zeitstrahl-heading">Globale Zeitleiste</span>
-      <span class="global-zeitstrahl-meta" x-text="globalZeitstrahl.length + ' Ereignisse'"></span>
-      <button class="gz-consolidate-btn" :disabled="zeitstrahlConsolidating" @click.stop="consolidateZeitstrahl()">
-        <span x-show="zeitstrahlConsolidating" class="spinner"></span>
-        <span x-text="zeitstrahlConsolidating ? '' : 'Konsolidieren'"></span>
-      </button>
-      <span class="history-chevron" :class="{ open: showGlobalZeitstrahl }">›</span>
-    </div>
-    <div x-show="zeitstrahlConsolidating || zeitstrahlStatus" class="gz-status-row">
-      <div x-show="zeitstrahlConsolidating && zeitstrahlProgress > 0" class="progress-bar-wrap">
-        <div class="progress-bar-fill" :style="'width:' + zeitstrahlProgress + '%'"></div>
-      </div>
-      <div x-show="zeitstrahlStatus" class="gz-status-text" x-html="zeitstrahlStatus"></div>
-    </div>
-    <div x-show="showGlobalZeitstrahl" class="global-zeitstrahl-body">
-      <template x-for="(ev, i) in globalZeitstrahl" :key="i">
-        <div class="gz-item" :class="ev.typ === 'extern' ? 'gz-item--extern' : ''">
-          <div class="gz-marker" :class="ev.typ === 'extern' ? 'gz-marker--extern' : ''"></div>
-          <div class="gz-content">
-            <div class="gz-datum-row">
-              <span class="gz-datum" x-text="ev.datum"></span>
-              <template x-if="ev.typ === 'extern'">
-                <span class="gz-extern-badge">Weltgeschehen</span>
-              </template>
-            </div>
-            <div class="gz-ereignis" x-text="ev.ereignis"></div>
-            <div x-show="ev.kapitel" class="gz-kapitel" x-text="ev.kapitel"></div>
-            <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
-            <div class="gz-figuren-row">
-              <template x-for="(fref, fi) in ev.figuren" :key="fi">
-                <span class="gz-figur-badge" :class="'gz-figur-badge--' + (fref.typ || 'andere')" x-text="fref.name"></span>
-              </template>
-            </div>
-          </div>
-        </div>
-      </template>
-    </div>
-  </div>
 </div>
 
 <!-- Szenenanalyse -->
 <div class="card" x-show="showSzenenCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Szenen: ' + selectedBookName"></span>
+    <span x-show="szenenUpdatedAt && !szenenLoading" class="figuren-updated-at" x-text="'Letzte Analyse: ' + formatDate(szenenUpdatedAt)"></span>
     <div class="card-actions">
       <button @click="runSzenenAnalyse()" :disabled="szenenLoading">
         <span x-show="szenenLoading" class="spinner"></span>
@@ -552,10 +528,62 @@
   </div>
 </div>
 
+<!-- Globale Ereignisse -->
+<div class="card" x-show="showEreignisseCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title" x-text="'Ereignisse: ' + selectedBookName"></span>
+    <span x-show="globalZeitstrahl.length > 0 && !zeitstrahlConsolidating" class="figuren-updated-at" x-text="globalZeitstrahl.length + ' Ereignisse'"></span>
+    <div class="card-actions">
+      <button @click="consolidateZeitstrahl()" :disabled="zeitstrahlConsolidating || globalZeitstrahl.length === 0">
+        <span x-show="zeitstrahlConsolidating" class="spinner"></span>
+        <span x-text="zeitstrahlConsolidating ? '' : 'Konsolidieren'"></span>
+      </button>
+      <button class="btn-card-close" @click="toggleEreignisseCard()" title="Schliessen">×</button>
+    </div>
+  </div>
+
+  <!-- Fortschritt -->
+  <div x-show="zeitstrahlConsolidating && zeitstrahlProgress > 0" class="progress-bar-wrap">
+    <div class="progress-bar" :style="'width:' + zeitstrahlProgress + '%'"></div>
+  </div>
+  <div x-show="zeitstrahlStatus" class="gz-status-text" x-html="zeitstrahlStatus"></div>
+
+  <!-- Leer-Hinweis -->
+  <div x-show="globalZeitstrahl.length === 0 && !zeitstrahlConsolidating" class="figur-progress-status">
+    Keine Ereignisse vorhanden. Zuerst die <strong>Figuren</strong> analysieren lassen – die Zeitleiste wird aus den Figur-Lebensläufen aufgebaut.
+  </div>
+
+  <!-- Zeitleiste -->
+  <div x-show="globalZeitstrahl.length > 0" class="global-zeitstrahl-body global-zeitstrahl-body--card">
+    <template x-for="(ev, i) in globalZeitstrahl" :key="i">
+      <div class="gz-item" :class="ev.typ === 'extern' ? 'gz-item--extern' : ''">
+        <div class="gz-marker" :class="ev.typ === 'extern' ? 'gz-marker--extern' : ''"></div>
+        <div class="gz-content">
+          <div class="gz-datum-row">
+            <span class="gz-datum" x-text="ev.datum"></span>
+            <template x-if="ev.typ === 'extern'">
+              <span class="gz-extern-badge">Weltgeschehen</span>
+            </template>
+          </div>
+          <div class="gz-ereignis" x-text="ev.ereignis"></div>
+          <div x-show="ev.kapitel" class="gz-kapitel" x-text="ev.kapitel"></div>
+          <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
+          <div class="gz-figuren-row">
+            <template x-for="(fref, fi) in ev.figuren" :key="fi">
+              <span class="gz-figur-badge" :class="'gz-figur-badge--' + (fref.typ || 'andere')" x-text="fref.name"></span>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>
+
 <!-- Buchentwicklung -->
 <div class="card" x-show="showBookStatsCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Buchentwicklung: ' + selectedBookName"></span>
+    <span x-show="bookStatsData.length > 0 && !bookStatsLoading" class="figuren-updated-at" x-text="'Letzter Snapshot: ' + (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '')"></span>
     <div class="card-actions">
       <button @click="syncBookStats()" :disabled="bookStatsLoading">
         <span x-show="bookStatsLoading" class="spinner"></span>
@@ -601,8 +629,6 @@
 
   <!-- Aktuelle Stats (letzter Snapshot) -->
   <div x-show="bookStatsData.length > 0" class="book-stats-current">
-    <span class="muted-msg" style="font-size:12px;"
-      x-text="'Stand: ' + (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '')"></span>
     <span class="tok-badge tok-neutral"
       x-text="(bookStatsData[bookStatsData.length - 1]?.words ?? 0).toLocaleString('de-CH') + ' W'"></span>
     <span class="tok-badge tok-neutral"

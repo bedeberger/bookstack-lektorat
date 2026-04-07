@@ -10,7 +10,7 @@ router.get('/scenes/:book_id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
 
   const rows = db.prepare(`
-    SELECT kapitel, seite, titel, wertung, kommentar, fig_ids
+    SELECT kapitel, seite, titel, wertung, kommentar, fig_ids, updated_at
     FROM figure_scenes
     WHERE book_id = ? AND user_email = ?
     ORDER BY sort_order
@@ -25,7 +25,8 @@ router.get('/scenes/:book_id', (req, res) => {
     fig_ids:   (() => { try { return JSON.parse(s.fig_ids); } catch { return []; } })(),
   }));
 
-  res.json({ szenen });
+  const updated_at = rows.length ? rows[0].updated_at : null;
+  res.json({ szenen, updated_at });
 });
 
 // Szenen eines Buchs löschen

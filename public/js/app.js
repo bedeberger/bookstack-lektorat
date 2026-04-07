@@ -83,13 +83,16 @@ document.addEventListener('alpine:init', () => {
     figurenProgress: 0,
     figurenStatus: '',
     selectedFigurId: null,
+    figurenKapitelFilter: '',
     globalZeitstrahl: [],
     showGlobalZeitstrahl: false,
     zeitstrahlConsolidating: false,
     zeitstrahlProgress: 0,
     zeitstrahlStatus: '',
+    showEreignisseCard: false,
     showSzenenCard: false,
     szenen: [],
+    szenenUpdatedAt: null,
     szenenLoading: false,
     szenenProgress: 0,
     szenenStatus: '',
@@ -204,6 +207,21 @@ document.addEventListener('alpine:init', () => {
           this.statusSpinner = false;
         }, duration);
       }
+    },
+
+    figurenKapitelListe() {
+      const names = new Set();
+      for (const f of (this.figuren || [])) {
+        for (const k of (f.kapitel || [])) { if (k.name) names.add(k.name); }
+      }
+      return [...names].sort();
+    },
+
+    filteredFiguren() {
+      if (!this.figurenKapitelFilter) return this.figuren;
+      return this.figuren.filter(f =>
+        (f.kapitel || []).some(k => k.name === this.figurenKapitelFilter)
+      );
     },
 
     formatDate(iso) {
@@ -444,6 +462,7 @@ document.addEventListener('alpine:init', () => {
       if (keep !== 'bookReview') this.showBookReviewCard = false;
       if (keep !== 'figures') this.showFiguresCard = false;
       if (keep !== 'szenen') this.showSzenenCard = false;
+      if (keep !== 'ereignisse') this.showEreignisseCard = false;
       if (keep !== 'bookStats') this.showBookStatsCard = false;
       if (keep !== 'bookChat') this.showBookChatCard = false;
       this.resetPage();
@@ -533,13 +552,16 @@ document.addEventListener('alpine:init', () => {
       this.figurenProgress = 0;
       this.figurenUpdatedAt = null;
       this.selectedFigurId = null;
+      this.figurenKapitelFilter = '';
       this.globalZeitstrahl = [];
       this.showGlobalZeitstrahl = false;
       this.zeitstrahlConsolidating = false;
       this.zeitstrahlProgress = 0;
       this.zeitstrahlStatus = '';
+      this.showEreignisseCard = false;
       this.showSzenenCard = false;
       this.szenen = [];
+      this.szenenUpdatedAt = null;
       this.szenenStatus = '';
       this.szenenProgress = 0;
       this.szenenLoading = false;

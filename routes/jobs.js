@@ -598,11 +598,12 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
 
     db.transaction(() => {
       db.prepare('DELETE FROM figure_scenes WHERE book_id = ? AND user_email = ?').run(parseInt(bookId), userEmail || null);
+      const now = new Date().toISOString();
       const ins = db.prepare(`INSERT INTO figure_scenes
-        (book_id, user_email, kapitel, seite, titel, wertung, kommentar, fig_ids, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        (book_id, user_email, kapitel, seite, titel, wertung, kommentar, fig_ids, sort_order, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
       for (const s of allSzenen) {
-        ins.run(parseInt(bookId), userEmail || null, s.kapitel, s.seite, s.titel, s.wertung, s.kommentar, s.fig_ids, s.sort_order);
+        ins.run(parseInt(bookId), userEmail || null, s.kapitel, s.seite, s.titel, s.wertung, s.kommentar, s.fig_ids, s.sort_order, now);
       }
     })();
 

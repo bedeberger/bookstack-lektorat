@@ -152,6 +152,16 @@ export const figurenMethods = {
     }
   },
 
+  async toggleEreignisseCard() {
+    if (this.showEreignisseCard) { this.showEreignisseCard = false; return; }
+    this._closeOtherMainCards('ereignisse');
+    this.showEreignisseCard = true;
+    // Figuren laden falls noch nicht geschehen (Zeitstrahl braucht sie)
+    if (!this.figuren.length) {
+      await this.loadFiguren(this.selectedBookId);
+    }
+  },
+
   // Pollt einen laufenden Figuren-Job und aktualisiert den UI-State.
   // Wird sowohl beim frischen Start als auch beim Reconnect nach Tab-Schliessen aufgerufen.
   startFiguresPoll(jobId) {

@@ -32,6 +32,7 @@ export const szenenMethods = {
     try {
       const data = await fetch('/figures/scenes/' + bookId).then(r => r.json());
       this.szenen = data?.szenen || [];
+      this.szenenUpdatedAt = data?.updated_at || null;
     } catch (e) {
       console.error('[loadSzenen]', e);
     }

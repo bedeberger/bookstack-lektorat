@@ -987,6 +987,26 @@ ins {
   border-top: 0.5px solid var(--color-border);
   padding-top: 14px;
 }
+.figur-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.figur-list-header .history-heading {
+  margin-bottom: 0;
+}
+.figur-kapitel-filter select {
+  font-size: 0.82rem;
+  padding: 3px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+}
 
 /* === Figuren: Detail-Inhalte === */
 .figur-progress-status {
@@ -1354,7 +1374,7 @@ ins {
   gap: 4px;
   font-size: 11px;
   padding: 3px 7px 3px 7px;
-  border-radius: 10px;
+  border-radius: 0;
   background: var(--color-tag-bg);
   color: var(--color-text);
   cursor: default;
@@ -1382,7 +1402,7 @@ ins {
 .szenen-seite-count-badge {
   font-size: 11px;
   padding: 2px 7px;
-  border-radius: 10px;
+  border-radius: 0;
   background: var(--color-tag-bg);
   color: var(--color-muted);
   white-space: nowrap;
@@ -1416,7 +1436,7 @@ ins {
   font-size: 10px;
   font-weight: 600;
   padding: 1px 6px;
-  border-radius: 10px;
+  border-radius: 0;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -1484,7 +1504,7 @@ ins {
   font-size: 10px;
   font-weight: 500;
   padding: 1px 7px;
-  border-radius: 10px;
+  border-radius: 0;
   background: var(--color-tag-bg);
   color: var(--color-muted);
   white-space: nowrap;
@@ -1504,7 +1524,7 @@ ins {
   font-size: 10px;
   font-weight: 600;
   padding: 1px 6px;
-  border-radius: 10px;
+  border-radius: 0;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -1534,7 +1554,7 @@ ins {
 /* === Feature-Tiles === */
 .feature-tiles {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 6px;
   margin-bottom: 14px;
 }
@@ -1544,7 +1564,7 @@ ins {
   flex-direction: column;
   align-items: flex-start;
   gap: 1px;
-  padding: 7px 9px;
+  padding: 7px 7px;
   border: 0.5px solid var(--color-border-input);
   border-radius: var(--radius-md);
   background: var(--color-bg);
@@ -1580,11 +1600,11 @@ ins {
   color: rgba(255, 255, 255, 0.65);
 }
 
-@media (max-width: 700px) {
-  .feature-tiles { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 900px) {
+  .feature-tiles { grid-template-columns: repeat(4, 1fr); }
 }
-@media (max-width: 400px) {
-  .feature-tiles { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 500px) {
+  .feature-tiles { grid-template-columns: repeat(3, 1fr); }
 }
 
 /* === Buchentwicklung (Zeitliniendiagramm) === */
