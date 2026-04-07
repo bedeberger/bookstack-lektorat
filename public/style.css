@@ -1192,7 +1192,7 @@ ins {
 
 .gz-marker {
   position: absolute;
-  left: -35px;
+  left: -33px;
   top: 4px;
   width: 8px;
   height: 8px;
@@ -1208,7 +1208,7 @@ ins {
   border-radius: 2px;
   width: 10px;
   height: 10px;
-  left: -36px;
+  left: -34px;
 }
 
 .gz-content {
