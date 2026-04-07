@@ -75,7 +75,7 @@ ${html}`;
 
 // Batch-Variante ohne korrekturen_html (spart Output-Tokens, für Server-Side-Jobs)
 export function buildBatchLektoratPrompt(text) {
-  return `Analysiere diesen deutschsprachigen Text auf Rechtschreibfehler, Grammatikfehler und stilistische Auffälligkeiten.
+  return `Analysiere diesen deutschsprachigen Text auf Rechtschreibfehler, Grammatikfehler und stilistische Auffälligkeiten. Bewerte ausserdem die Szenen der Seite.
 
 WICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen, müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.
 
@@ -90,9 +90,21 @@ Antworte mit diesem JSON-Schema:
       "erklaerung": "kurze Erklärung auf Deutsch (nur diesen einen Mangel beschreiben) ${ERKLAERUNG_RULE}"
     }
   ],
+  "szenen": [
+    {
+      "titel": "Kurze Szenenbezeichnung (1 Satz)",
+      "wertung": "stark|mittel|schwach",
+      "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)"
+    }
+  ],
   "stilanalyse": "2-3 Sätze Stilanalyse",
   "fazit": "ein Satz Gesamtfazit"
 }
+
+Szenen-Regeln:
+- Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
+- Wenn die Seite keine erkennbaren Szenen enthält (z.B. rein beschreibender Text, Exposition): «szenen» als leeres Array zurückgeben
+- wertung: «stark» = funktioniert gut, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
 
 Text:
 ${text}`;
@@ -486,7 +498,7 @@ Verwende «angepasst» wenn das Synonym gut passt, aber der Satz drumherum leich
 }
 
 export function buildLektoratPrompt(text, html) {
-  return `Analysiere diesen deutschsprachigen Text auf Rechtschreibfehler, Grammatikfehler und stilistische Auffälligkeiten.
+  return `Analysiere diesen deutschsprachigen Text auf Rechtschreibfehler, Grammatikfehler und stilistische Auffälligkeiten. Bewerte ausserdem die Szenen der Seite.
 
 WICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen (z.B. ein Gallizismus und separate Anführungszeichen-Problematik), müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.
 
@@ -502,9 +514,21 @@ Antworte mit diesem JSON-Schema:
     }
   ],
   "korrekturen_html": "vollständiges korrigiertes HTML – behalte ALLE Tags exakt bei, ändere nur fehlerhafte Textstellen",
+  "szenen": [
+    {
+      "titel": "Kurze Szenenbezeichnung (1 Satz)",
+      "wertung": "stark|mittel|schwach",
+      "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)"
+    }
+  ],
   "stilanalyse": "2-3 Sätze Stilanalyse",
   "fazit": "ein Satz Gesamtfazit"
 }
+
+Szenen-Regeln:
+- Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
+- Wenn die Seite keine erkennbaren Szenen enthält (z.B. rein beschreibender Text, Exposition): «szenen» als leeres Array zurückgeben
+- wertung: «stark» = funktioniert gut, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
 
 Originaltext:
 ${text}

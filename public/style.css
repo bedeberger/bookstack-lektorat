@@ -446,6 +446,27 @@ ins {
   font-style: italic;
 }
 
+.szene-item {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.szene-item:last-child { border-bottom: none; }
+
+.szene-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.szene-titel {
+  font-weight: 500;
+  font-size: var(--font-size-sm);
+}
+.szene-kommentar {
+  margin-top: 3px;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
 /* === Buchbewertung === */
 .bewertung-stars {
   font-size: var(--font-size-lg);

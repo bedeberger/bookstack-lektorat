@@ -47,6 +47,7 @@ router.get('/page/:page_id', (req, res) => {
     errors_json: JSON.parse(r.errors_json || '[]'),
     applied_errors_json: r.applied_errors_json ? JSON.parse(r.applied_errors_json) : null,
     selected_errors_json: r.selected_errors_json ? JSON.parse(r.selected_errors_json) : null,
+    szenen_json: r.szenen_json ? JSON.parse(r.szenen_json) : null,
     saved: !!r.saved,
   })));
 });

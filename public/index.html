@@ -705,6 +705,20 @@
             </div>
           </template>
 
+          <template x-if="entry.szenen_json && entry.szenen_json.length > 0">
+            <div class="stilbox" style="margin-top:12px;">
+              <div class="stilbox-title">Szenen</div>
+              <template x-for="(s, si) in entry.szenen_json" :key="si">
+                <div class="szene-item">
+                  <div class="szene-header">
+                    <span class="badge" :class="s.wertung === 'stark' ? 'badge-ok' : s.wertung === 'schwach' ? 'badge-err' : 'badge-warn'" x-text="s.wertung"></span>
+                    <span class="szene-titel" x-text="s.titel"></span>
+                  </div>
+                  <div class="szene-kommentar" x-show="s.kommentar" x-text="s.kommentar"></div>
+                </div>
+              </template>
+            </div>
+          </template>
           <div x-show="entry.stilanalyse" class="stilbox" style="margin-top:12px;">
             <div class="stilbox-title">Stilanalyse</div>
             <span x-text="entry.stilanalyse"></span>

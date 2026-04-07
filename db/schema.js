@@ -156,7 +156,7 @@ db.exec(`
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 10;
+const CURRENT_SCHEMA_VERSION = 11;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
   if (version < 2) {
@@ -258,6 +258,11 @@ function runMigrations() {
     }
     db.prepare('UPDATE schema_version SET version = 10').run();
     logger.info('DB-Migration auf Version 10 abgeschlossen.');
+  }
+  if (version < 11) {
+    db.exec('ALTER TABLE page_checks ADD COLUMN szenen_json TEXT');
+    db.prepare('UPDATE schema_version SET version = 11').run();
+    logger.info('DB-Migration auf Version 11 abgeschlossen (szenen_json zu page_checks hinzugefügt).');
   }
   // Sicherstellen dass schema_version aktuell ist (Fallback)
   if (version < CURRENT_SCHEMA_VERSION) {

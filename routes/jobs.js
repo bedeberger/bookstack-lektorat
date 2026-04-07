@@ -626,15 +626,19 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
       ? (process.env.OLLAMA_MODEL || 'llama3.2')
       : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
 
+    const szenen = Array.isArray(result?.szenen) ? result.szenen : [];
+
     const info = db.prepare(`INSERT INTO page_checks
-      (page_id, page_name, book_id, checked_at, error_count, errors_json, stilanalyse, fazit, model, user_email)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      (page_id, page_name, book_id, checked_at, error_count, errors_json, szenen_json, stilanalyse, fazit, model, user_email)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(parseInt(pageId), pd.name, parseInt(bookId) || null,
         new Date().toISOString(), result.fehler.length, JSON.stringify(result.fehler),
+        szenen.length > 0 ? JSON.stringify(szenen) : null,
         result.stilanalyse || null, result.fazit || null, model, userEmail || null);
 
     completeJob(jobId, {
       fehler: result.fehler,
+      szenen,
       stilanalyse: result.stilanalyse || null,
       fazit: result.fazit || null,
       originalHtml: html,
@@ -690,11 +694,13 @@ async function runBatchCheckJob(jobId, bookId, userEmail) {
         const fehler = result.fehler;
         totalErrors += fehler.filter(f => f.typ !== 'stil').length;
 
+        const szenenBatch = Array.isArray(result?.szenen) ? result.szenen : [];
         db.prepare(`INSERT INTO page_checks
-          (page_id, page_name, book_id, checked_at, error_count, errors_json, stilanalyse, fazit, model, user_email)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          (page_id, page_name, book_id, checked_at, error_count, errors_json, szenen_json, stilanalyse, fazit, model, user_email)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
           .run(p.id, p.name, parseInt(bookId), new Date().toISOString(),
             fehler.length, JSON.stringify(fehler),
+            szenenBatch.length > 0 ? JSON.stringify(szenenBatch) : null,
             result.stilanalyse || null, result.fazit || null, model, userEmail || null);
         done++;
       } catch (e) {

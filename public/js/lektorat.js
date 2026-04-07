@@ -175,6 +175,21 @@ export const lektoratMethods = {
           ? this._applyCorrections(r.originalHtml, errors)
           : r.originalHtml;
         let out = '';
+        const szenen = r.szenen || [];
+        if (szenen.length > 0) {
+          const wertungBadge = w => {
+            if (w === 'stark')   return '<span class="badge badge-ok">stark</span>';
+            if (w === 'schwach') return '<span class="badge badge-err">schwach</span>';
+            return '<span class="badge badge-warn">mittel</span>';
+          };
+          const rows = szenen.map(s =>
+            `<div class="szene-item">
+              <div class="szene-header">${wertungBadge(s.wertung)} <span class="szene-titel">${escHtml(s.titel)}</span></div>
+              ${s.kommentar ? `<div class="szene-kommentar">${escHtml(s.kommentar)}</div>` : ''}
+            </div>`
+          ).join('');
+          out += `<div class="stilbox"><div class="stilbox-title">Szenen</div>${rows}</div>`;
+        }
         if (r.stilanalyse) out += `<div class="stilbox"><div class="stilbox-title">Stilanalyse</div>${escHtml(r.stilanalyse)}</div>`;
         if (r.fazit) out += `<div class="fazit">${escHtml(r.fazit)}</div>`;
         this.analysisOut = out;
