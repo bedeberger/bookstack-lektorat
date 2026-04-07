@@ -254,7 +254,11 @@ export function buildFiguresConsolidationPrompt(bookName, chapterFiguren) {
     `## Kapitel: ${cf.kapitel}\n` + cf.figuren.map(f =>
       `- ${f.name} (${f.typ})${f.beruf ? ', ' + f.beruf : ''}: ${f.beschreibung || ''}` +
       (f.beziehungen?.length ? '\n  Beziehungen: ' + f.beziehungen.map(b => `${b.name} [${b.typ}]`).join(', ') : '') +
-      (f.lebensereignisse?.length ? '\n  Lebensereignisse: ' + f.lebensereignisse.map(e => `[${e.datum || '?'}] ${e.ereignis} (${e.typ || 'persoenlich'})`).join(' | ') : '')
+      (f.lebensereignisse?.length ? '\n  Lebensereignisse:\n' + f.lebensereignisse.map(e =>
+        `    - datum: ${e.datum || ''}, typ: ${e.typ || 'persoenlich'}, ereignis: ${e.ereignis || ''}` +
+        (e.bedeutung ? `, bedeutung: ${e.bedeutung}` : '') +
+        (e.kapitel ? `, kapitel: ${e.kapitel}` : '')
+      ).join('\n') : '')
     ).join('\n')
   ).join('\n\n');
   return `Konsolidiere die folgenden Figurenanalysen aller Kapitel des Buchs «${bookName}» zu einer einheitlichen Gesamtliste. Dedupliziere Figuren, führe Informationen zusammen und vergib stabile IDs.
