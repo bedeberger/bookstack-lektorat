@@ -1,0 +1,217 @@
+<!-- Seiteneditor & Lektorat -->
+<div class="card" id="editor-card" x-show="showEditorCard" x-cloak x-transition>
+  <div class="card-header">
+    <div>
+      <span class="card-title" x-text="'Lektorat: ' + (currentPage?.name || '–')"></span>
+      <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag tag--link" x-text="currentPage ? 'ID ' + currentPage.id + ' ↗' : ''"></a>
+      <span x-show="currentPage && tokEsts[currentPage.id]" class="tok-stats">
+        <template x-if="tokEsts[currentPage?.id]?.words > 0">
+          <span style="display:contents">
+            <span class="tok-badge"
+              :class="tokEsts[currentPage.id]?.tok > 16000 ? 'tok-high' : tokEsts[currentPage.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
+              x-text="tokEsts[currentPage.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].tok/1000) + 'k T' : '~' + tokEsts[currentPage.id]?.tok + ' T'"
+              @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
+              @mouseleave.stop="showTokLegend=false"></span>
+            <span class="tok-badge tok-neutral"
+              x-text="tokEsts[currentPage.id]?.words >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].words/1000) + 'k W' : tokEsts[currentPage.id]?.words + ' W'"></span>
+            <span class="tok-badge tok-neutral"
+              x-text="tokEsts[currentPage.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].chars/1000) + 'k Z' : tokEsts[currentPage.id]?.chars + ' Z'"></span>
+          </span>
+        </template>
+        <template x-if="tokEsts[currentPage?.id] && tokEsts[currentPage.id].words === 0">
+          <span class="tok-badge tok-empty">leer</span>
+        </template>
+      </span>
+    </div>
+    <div class="card-actions">
+      <button @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? 'Seite ist leer' : 'Ctrl+Enter'">Prüfen ↗</button>
+      <button class="btn-icon" @click="toggleDiff()" x-show="correctedHtml" :class="{ primary: showDiff }" title="Diff anzeigen">⇄</button>
+      <button class="success" @click="saveCorrections()" x-show="correctedHtml && (selectedErrors.some(v => v) || selectedStyles.some(v => v))">Korrekturen speichern</button>
+      <button @click="toggleChatCard()" :class="{ primary: showChatCard }" :disabled="currentPageEmpty" title="Chat mit dieser Seite">Chat</button>
+    </div>
+  </div>
+  <div class="progress-bar-wrap" x-show="checkProgress > 0">
+    <div class="progress-bar" :style="'width:' + checkProgress + '%'"></div>
+  </div>
+  <div id="status" x-html="statusHtml"></div>
+
+  <!-- Diff-Ansicht -->
+  <div x-show="showDiff && diffHtml" style="margin-top:1rem;">
+    <div class="section-heading">Änderungen (Diff)</div>
+    <div x-html="diffHtml"></div>
+  </div>
+
+  <!-- Analyse-Ausgabe -->
+  <div x-show="!showDiff" style="margin-top:1rem;">
+
+    <!-- Fehlerfrei -->
+    <div x-show="checkDone && lektoratErrors.length === 0" class="finding ok">
+      <span class="badge badge-ok">✓ Fehlerfrei</span> &nbsp;Keine Rechtschreib- oder Grammatikfehler gefunden.
+    </div>
+
+    <!-- Fehler-Sektion -->
+    <template x-if="lektoratErrors.length > 0">
+      <div>
+        <div class="section-heading finding-header">
+          <span x-text="lektoratErrors.length + ' Fehler gefunden'"></span>
+          <div class="finding-toggle-group">
+            <button class="btn-sm" @click="selectAllErrors(true)">Alle</button>
+            <button class="btn-sm" @click="selectAllErrors(false)">Keine</button>
+          </div>
+        </div>
+        <template x-for="(f, i) in lektoratErrors" :key="i">
+          <label class="finding error" :class="{ 'finding-deselected': !selectedErrors[i] }">
+            <input type="checkbox" class="finding-checkbox" :checked="selectedErrors[i]" @change="toggleError(i)">
+            <span class="badge" :class="f.typ === 'wiederholung' ? 'badge-warn' : 'badge-err'" x-text="f.typ === 'wiederholung' ? 'Wdh.' : f.typ"></span>
+            <span class="finding-content">
+              <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+              <div class="finding-context" x-text="'«' + f.kontext + '»'"></div>
+              <div class="finding-explanation" x-text="f.erklaerung"></div>
+            </span>
+          </label>
+        </template>
+      </div>
+    </template>
+
+    <!-- Stilanmerkungen-Sektion -->
+    <template x-if="lektoratStyles.length > 0">
+      <div>
+        <div class="section-heading-top finding-header">
+          <span>Stilanmerkungen</span>
+          <div class="finding-toggle-group">
+            <button class="btn-sm" @click="selectAllStyles(true)">Alle</button>
+            <button class="btn-sm" @click="selectAllStyles(false)">Keine</button>
+          </div>
+        </div>
+        <template x-for="(f, i) in lektoratStyles" :key="i">
+          <label class="finding style" :class="{ 'finding-deselected': !selectedStyles[i] }">
+            <input type="checkbox" class="finding-checkbox" :checked="selectedStyles[i]" @change="toggleStyle(i)">
+            <span class="badge badge-warn">Stil</span>
+            <span class="finding-content">
+              <span x-text="f.erklaerung"></span>
+              <div class="finding-context" x-show="f.original" x-text="f.original ? '«' + f.original + '»' : ''"></div>
+            </span>
+          </label>
+        </template>
+      </div>
+    </template>
+
+    <!-- Stilanalyse & Fazit + Vorschau -->
+    <div x-html="analysisOut"></div>
+  </div>
+
+  <!-- Verlauf dieser Seite -->
+  <div x-show="pageHistory.length > 0" class="card-history-section">
+    <div class="history-heading">Verlauf</div>
+    <template x-for="entry in pageHistory" :key="entry.id">
+      <div>
+        <div class="history-item" @click="selectedHistoryId = selectedHistoryId === entry.id ? null : entry.id; if (selectedHistoryId === entry.id) initHistorySelection(entry)">
+          <span class="history-date" x-text="formatDate(entry.checked_at)"></span>
+          <span class="badge" :class="entry.error_count > 0 ? 'badge-err' : 'badge-ok'" x-text="entry.error_count > 0 ? entry.error_count + ' Fehler' : 'fehlerfrei'"></span>
+          <button class="btn-toggle-saved" :class="entry.saved ? 'btn-toggle-saved--on' : 'btn-toggle-saved--off'" @click.stop="toggleHistoryEntrySaved(entry)" :title="entry.saved ? 'Als nicht umgesetzt markieren' : 'Als umgesetzt markieren'" x-text="entry.saved ? '✓ umgesetzt' : 'nicht umgesetzt'"></button>
+          <span class="tag" x-text="entry.model"></span>
+          <span class="history-chevron" :class="{ open: selectedHistoryId === entry.id }">›</span>
+        </div>
+        <div x-show="selectedHistoryId === entry.id" class="history-detail">
+          <div x-show="entry.saved" class="history-saved-notice history-saved-notice-ok">
+            Korrekturen am <span x-text="formatDate(entry.saved_at)"></span> in BookStack gespeichert.
+          </div>
+          <div x-show="!entry.saved && entry.error_count > 0" class="history-saved-notice history-saved-notice-warn">
+            Korrekturen wurden nicht in BookStack übernommen.
+          </div>
+
+          <!-- Gespeicherte Einträge: readonly-Ansicht mit Markierung was angewendet wurde -->
+          <template x-if="entry.saved && entry.errors_json && entry.errors_json.length > 0">
+            <div style="margin-top:10px;">
+              <template x-for="(f, i) in entry.errors_json" :key="i">
+                <div class="finding" :class="[f.typ === 'stil' ? 'style' : 'error', entry.selected_errors_json && !entry.selected_errors_json.some(a => a.original === f.original) ? 'finding-skipped' : '']">
+                  <span class="badge" :class="f.typ === 'stil' ? 'badge-warn' : 'badge-err'" x-text="f.typ"></span>
+                  <template x-if="entry.selected_errors_json !== null">
+                    <span class="badge" :class="entry.selected_errors_json.some(a => a.original === f.original) ? 'badge-ok' : 'badge-skipped'" :title="entry.selected_errors_json.some(a => a.original === f.original) ? 'selektiert' : 'nicht selektiert'" x-text="entry.selected_errors_json.some(a => a.original === f.original) ? '✓' : '–'"></span>
+                  </template>
+                  <div class="finding-content">
+                    <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+                    <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>
+                    <div class="finding-explanation" x-text="f.erklaerung"></div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <!-- Nicht gespeicherte Einträge: interaktive Selektion -->
+          <template x-if="!entry.saved && entry.errors_json && entry.errors_json.length > 0 && historySelections[entry.id]">
+            <div style="margin-top:10px;">
+              <!-- Fehler (rechtschreibung/grammatik) -->
+              <template x-if="historyErrors(entry).length > 0">
+                <div>
+                  <div class="findings-section-header">
+                    Fehler
+                    <button class="btn-sel-all" @click.stop="historySelections[entry.id].errors = historySelections[entry.id].errors.map(() => true)">alle</button>
+                    <button class="btn-sel-all" @click.stop="historySelections[entry.id].errors = historySelections[entry.id].errors.map(() => false)">keine</button>
+                  </div>
+                  <template x-for="(f, i) in historyErrors(entry)" :key="i">
+                    <div class="finding error" :class="historySelections[entry.id].errors[i] ? '' : 'finding-skipped'" @click.stop="toggleHistoryError(entry.id, i)" style="cursor:pointer;">
+                      <span class="badge badge-err" x-text="f.typ"></span>
+                      <span class="badge" :class="historySelections[entry.id].errors[i] ? 'badge-ok' : 'badge-skipped'" x-text="historySelections[entry.id].errors[i] ? '✓' : '–'"></span>
+                      <div class="finding-content">
+                        <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+                        <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>
+                        <div class="finding-explanation" x-text="f.erklaerung"></div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+              <!-- Stilanmerkungen -->
+              <template x-if="historyStyles(entry).length > 0">
+                <div style="margin-top:8px;">
+                  <div class="findings-section-header">
+                    Stilanmerkungen
+                    <button class="btn-sel-all" @click.stop="historySelections[entry.id].styles = historySelections[entry.id].styles.map(() => true)">alle</button>
+                    <button class="btn-sel-all" @click.stop="historySelections[entry.id].styles = historySelections[entry.id].styles.map(() => false)">keine</button>
+                  </div>
+                  <template x-for="(f, i) in historyStyles(entry)" :key="i">
+                    <div class="finding style" :class="historySelections[entry.id].styles[i] ? '' : 'finding-skipped'" @click.stop="toggleHistoryStyle(entry.id, i)" style="cursor:pointer;">
+                      <span class="badge badge-warn">stil</span>
+                      <span class="badge" :class="historySelections[entry.id].styles[i] ? 'badge-ok' : 'badge-skipped'" x-text="historySelections[entry.id].styles[i] ? '✓' : '–'"></span>
+                      <div class="finding-content">
+                        <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+                        <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>
+                        <div class="finding-explanation" x-text="f.erklaerung"></div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <template x-if="entry.szenen_json && entry.szenen_json.length > 0">
+            <div class="stilbox" style="margin-top:12px;">
+              <div class="stilbox-title">Szenen</div>
+              <template x-for="(s, si) in entry.szenen_json" :key="si">
+                <div class="szene-item">
+                  <div class="szene-header">
+                    <span class="badge" :class="s.wertung === 'stark' ? 'badge-ok' : s.wertung === 'schwach' ? 'badge-err' : 'badge-warn'" x-text="s.wertung"></span>
+                    <span class="szene-titel" x-text="s.titel"></span>
+                  </div>
+                  <div class="szene-kommentar" x-show="s.kommentar" x-text="s.kommentar"></div>
+                </div>
+              </template>
+            </div>
+          </template>
+          <div x-show="entry.stilanalyse" class="stilbox" style="margin-top:12px;">
+            <div class="stilbox-title">Stilanalyse</div>
+            <span x-text="entry.stilanalyse"></span>
+          </div>
+          <div x-show="entry.fazit" class="fazit" x-text="entry.fazit"></div>
+          <div class="history-actions">
+            <button x-show="!entry.saved && entry.error_count > 0 && currentPage" class="btn-apply-history" @click.stop="applyHistoryCheck(entry)">In BookStack übernehmen</button>
+            <button class="btn-delete-history" @click.stop="deletePageCheck(entry.id)" title="Eintrag löschen">Eintrag löschen</button>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>

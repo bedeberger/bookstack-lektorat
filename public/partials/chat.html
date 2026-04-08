@@ -1,0 +1,98 @@
+<!-- Chat -->
+<div class="card" id="chat-card" x-show="showChatCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title" x-text="'Chat: ' + (currentPage?.name || '–')"></span>
+    <div class="card-actions">
+      <button @click="startNewChatSession()" :disabled="chatLoading" title="Neues Gespräch starten">+ Neu</button>
+    </div>
+  </div>
+
+  <!-- Status / Fehlermeldungen -->
+  <div x-show="chatStatus" x-html="chatStatus" style="margin-bottom:8px; font-size:13px;"></div>
+
+  <!-- Nachrichtenliste -->
+  <div id="chat-messages" class="chat-messages">
+
+    <!-- Leerer Zustand -->
+    <div x-show="chatMessages.length === 0" class="chat-empty">
+      Starte das Gespräch mit einer Frage zur Seite &laquo;<span x-text="currentPage?.name"></span>&raquo;.
+    </div>
+
+    <template x-for="(msg, msgIdx) in chatMessages" :key="msgIdx">
+      <div :class="'chat-msg chat-msg--' + msg.role">
+        <div class="chat-msg-bubble">
+          <!-- User-Nachricht -->
+          <div x-show="msg.role === 'user'" class="chat-msg-text" x-text="msg.content"></div>
+          <!-- Assistant-Antwort (Markdown) -->
+          <div x-show="msg.role === 'assistant'" class="chat-msg-text" x-html="_renderChatMarkdown(msg.content)"></div>
+          <!-- Token-Info -->
+          <div x-show="msg.role === 'assistant' && _chatTokenInfo(msg)" class="chat-token-info" x-text="_chatTokenInfo(msg)"></div>
+        </div>
+
+        <!-- Änderungsvorschläge -->
+        <template x-if="msg.role === 'assistant' && msg.vorschlaege && msg.vorschlaege.length > 0">
+          <div class="chat-vorschlaege">
+            <template x-for="(v, vIdx) in msg.vorschlaege" :key="vIdx">
+              <div class="chat-vorschlag" :class="v._applied ? 'chat-vorschlag--applied' : ''">
+                <div class="chat-vorschlag-header">
+                  <span class="chat-vorschlag-label">Vorschlag</span>
+                  <button
+                    class="chat-vorschlag-btn"
+                    @click="applyChatVorschlag(v, msgIdx, vIdx)"
+                    :disabled="!!v._applied || chatLoading"
+                    x-text="v._applied ? '✓ Übernommen' : 'Übernehmen'"
+                  ></button>
+                </div>
+                <div class="chat-vorschlag-diff">
+                  <del x-text="v.original"></del>
+                  <span class="chat-vorschlag-arrow">→</span>
+                  <ins x-text="v.ersatz"></ins>
+                </div>
+                <div x-show="v.begruendung" class="chat-vorschlag-begruendung" x-text="v.begruendung"></div>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <!-- Skeleton-Loader: erscheint direkt nach der letzten Nachricht während Job läuft -->
+    <div x-show="chatLoading" class="chat-skeleton-wrapper">
+      <div class="chat-skeleton-line" style="width:72%"></div>
+      <div class="chat-skeleton-line" style="width:48%"></div>
+    </div>
+  </div>
+
+  <!-- Eingabebereich -->
+  <div class="chat-input-row">
+    <textarea
+      class="chat-input"
+      x-model="chatInput"
+      placeholder="Frage oder Kommentar…"
+      rows="2"
+      :disabled="chatLoading"
+      @keydown.enter="if(!$event.isComposing && $event.keyCode !== 229 && !$event.shiftKey && !$event.ctrlKey && !$event.metaKey) { $event.preventDefault(); sendChatMessage(); }"
+    ></textarea>
+    <button class="chat-send-btn" @click="sendChatMessage()" :disabled="chatLoading || !chatInput.trim()">
+      <span x-show="chatLoading" class="spinner"></span>
+      <span x-show="!chatLoading">↑</span>
+    </button>
+  </div>
+  <div class="chat-input-hint">Enter senden &nbsp;·&nbsp; Shift+Enter Zeilenumbruch</div>
+
+  <!-- Session-History (nur wenn > 1 Session) -->
+  <div x-show="chatSessions.length > 1" class="card-history-section">
+    <div class="chat-history-title">Frühere Gespräche</div>
+    <template x-for="s in chatSessions" :key="s.id">
+      <div
+        class="chat-session-item"
+        :class="s.id === chatSessionId ? 'chat-session-item--active' : ''"
+        @click="loadChatSession(s.id)"
+      >
+        <div class="chat-session-preview" x-text="(s.preview || '(leer)').slice(0, 80)"></div>
+        <div class="chat-session-meta" x-text="formatDate(s.last_message_at)"></div>
+        <button class="chat-session-delete btn-card-close" @click.stop="deleteChatSession(s.id)" title="Löschen">×</button>
+      </div>
+    </template>
+  </div>
+</div>

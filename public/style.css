@@ -1438,7 +1438,7 @@ ins {
   background: var(--color-tag-bg);
   color: var(--color-muted);
   white-space: nowrap;
-  display: inline-block;
+  align-self: flex-start;
   margin-bottom: 2px;
 }
 

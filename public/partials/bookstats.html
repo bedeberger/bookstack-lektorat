@@ -1,0 +1,69 @@
+<!-- Buchentwicklung -->
+<div class="card" x-show="showBookStatsCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title" x-text="'Buchentwicklung: ' + selectedBookName"></span>
+    <span x-show="bookStatsData.length > 0 && !bookStatsLoading" class="figuren-updated-at" x-text="'Letzter Snapshot: ' + (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '')"></span>
+    <div class="card-actions">
+      <button @click="syncBookStats()" :disabled="bookStatsLoading">
+        <span x-show="bookStatsLoading" class="spinner"></span>
+        <span x-text="bookStatsLoading ? '' : 'Synchronisieren'"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Sync-Status -->
+  <div x-show="bookStatsSyncStatus" class="book-stats-sync-status" x-html="bookStatsSyncStatus"></div>
+
+  <!-- Metrik- & Zeitraum-Umschalter -->
+  <div x-show="bookStatsData.length > 0" class="book-stats-controls">
+    <div x-data="combobox('Metrik…')"
+         x-modelable="value" x-model="bookStatsMetric"
+         x-effect="options = [{value:'words',label:'Wörter'},{value:'chars',label:'Zeichen'},{value:'page_count',label:'Seiten'},{value:'tok',label:'Tokens'},{value:'unique_words',label:'Einzigartige W.'},{value:'delta_words',label:'Δ Wörter/T'},{value:'avg_sentence_len',label:'Ø Satzlänge'},{value:'pages_per_chapter',label:'S./Kap.'}]"
+         @combobox-change="$nextTick(() => renderStatsChart())"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact combobox-wrap--metric">
+    </div>
+    <div class="btn-group">
+      <button class="btn-sm" :class="{ primary: bookStatsRange === 7 }"
+        @click="bookStatsRange = 7; renderStatsChart()">7 T</button>
+      <button class="btn-sm" :class="{ primary: bookStatsRange === 30 }"
+        @click="bookStatsRange = 30; renderStatsChart()">30 T</button>
+      <button class="btn-sm" :class="{ primary: bookStatsRange === 90 }"
+        @click="bookStatsRange = 90; renderStatsChart()">90 T</button>
+      <button class="btn-sm" :class="{ primary: bookStatsRange === 365 }"
+        @click="bookStatsRange = 365; renderStatsChart()">1 J</button>
+      <button class="btn-sm" :class="{ primary: bookStatsRange === 0 }"
+        @click="bookStatsRange = 0; renderStatsChart()">Alles</button>
+    </div>
+  </div>
+
+  <!-- Diagramm -->
+  <div x-show="bookStatsData.length > 0" class="book-stats-chart-wrap">
+    <canvas id="book-stats-chart"></canvas>
+  </div>
+
+  <!-- Aktuelle Stats (letzter Snapshot) -->
+  <div x-show="bookStatsData.length > 0" class="book-stats-current">
+    <span class="tok-badge tok-neutral"
+      x-text="(bookStatsData[bookStatsData.length - 1]?.words ?? 0).toLocaleString('de-CH') + ' W'"></span>
+    <span class="tok-badge tok-neutral"
+      x-text="(bookStatsData[bookStatsData.length - 1]?.chars ?? 0).toLocaleString('de-CH') + ' Z'"></span>
+    <span class="tok-badge tok-neutral"
+      x-text="bookStatsData[bookStatsData.length - 1]?.page_count + ' S'"></span>
+    <span class="tok-badge tok-neutral"
+      x-text="(bookStatsData[bookStatsData.length - 1]?.tok ?? 0).toLocaleString('de-CH') + ' T'"></span>
+    <span class="tok-badge tok-neutral" x-show="bookStatsDelta !== null"
+      x-text="(bookStatsDelta >= 0 ? '+' : '') + (bookStatsDelta ?? 0).toLocaleString('de-CH') + ' Δ'"></span>
+    <span class="tok-badge tok-neutral" x-show="bookStatsCoverage !== null"
+      x-text="(bookStatsCoverage?.pct ?? 0) + '% geprüft (' + (bookStatsCoverage?.checked_pages ?? 0) + '/' + (bookStatsCoverage?.total_pages ?? 0) + ')'"></span>
+    <span class="tok-badge tok-neutral" x-show="bookStatsData[bookStatsData.length - 1]?.avg_sentence_len != null"
+      x-text="'Ø ' + (bookStatsData[bookStatsData.length - 1]?.avg_sentence_len ?? 0).toLocaleString('de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' W/Satz'"></span>
+    <span class="tok-badge tok-neutral" x-show="bookStatsData[bookStatsData.length - 1]?.chapter_count > 0"
+      x-text="'Ø ' + ((bookStatsData[bookStatsData.length - 1]?.page_count / bookStatsData[bookStatsData.length - 1]?.chapter_count) || 0).toLocaleString('de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' S/Kap.'"></span>
+  </div>
+
+  <!-- Leer-Zustand -->
+  <div x-show="!bookStatsData.length && !bookStatsLoading" class="muted-msg" style="margin-top:14px;">
+    Noch keine Daten vorhanden. Klicke «Synchronisieren» um den ersten Snapshot zu erfassen.
+  </div>
+</div>

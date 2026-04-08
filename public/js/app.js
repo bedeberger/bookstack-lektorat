@@ -508,8 +508,22 @@ document.addEventListener('alpine:init', () => {
       return (wi > 0 ? sub.slice(0, wi) : sub) + ' […]';
     },
 
+    // ── Partials laden ───────────────────────────────────────────────────────
+    async _loadPartials() {
+      const names = [
+        'buchreview', 'figuren', 'szenen', 'ereignisse', 'orte',
+        'kontinuitaet', 'bookstats', 'editor', 'chat', 'book-chat',
+      ];
+      await Promise.all(names.map(async name => {
+        const html = await fetch(`/partials/${name}.html`).then(r => r.text());
+        const el = document.getElementById(`partial-${name}`);
+        if (el) { el.innerHTML = html; Alpine.initTree(el); }
+      }));
+    },
+
     // ── Initialisierung ──────────────────────────────────────────────────────
     async init() {
+      await this._loadPartials();
       try {
         const cfg = await fetch('/config').then(r => r.json());
         this.bookstackUrl = cfg.bookstackUrl || '';

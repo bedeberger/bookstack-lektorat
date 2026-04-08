@@ -1,0 +1,89 @@
+<!-- Globale Ereignisse -->
+<div class="card" x-show="showEreignisseCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title" x-text="'Ereignisse: ' + selectedBookName"></span>
+    <span x-show="globalZeitstrahl.length > 0 && !zeitstrahlConsolidating && !ereignisseLoading" class="figuren-updated-at" x-text="globalZeitstrahl.length + ' Ereignisse'"></span>
+    <div class="card-actions">
+      <button @click="runEreignisseExtraction()" :disabled="ereignisseLoading || zeitstrahlConsolidating">
+        <span x-show="ereignisseLoading" class="spinner"></span>
+        <span x-text="ereignisseLoading ? '' : 'Neu ermitteln'"></span>
+      </button>
+      <button @click="consolidateZeitstrahl()" :disabled="zeitstrahlConsolidating || ereignisseLoading || globalZeitstrahl.length === 0">
+        <span x-show="zeitstrahlConsolidating" class="spinner"></span>
+        <span x-text="zeitstrahlConsolidating ? '' : 'Konsolidieren'"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Fortschritt Ermittlung -->
+  <div x-show="ereignisseLoading && ereignisseProgress > 0" class="progress-bar-wrap">
+    <div class="progress-bar" :style="'width:' + ereignisseProgress + '%'"></div>
+  </div>
+  <div x-show="ereignisseStatus && !zeitstrahlConsolidating" class="gz-status-text" x-html="ereignisseStatus"></div>
+
+  <!-- Fortschritt Konsolidierung -->
+  <div x-show="zeitstrahlConsolidating && zeitstrahlProgress > 0" class="progress-bar-wrap">
+    <div class="progress-bar" :style="'width:' + zeitstrahlProgress + '%'"></div>
+  </div>
+  <div x-show="zeitstrahlStatus && !ereignisseLoading" class="gz-status-text" x-html="zeitstrahlStatus"></div>
+
+  <!-- Leer-Hinweis -->
+  <div x-show="globalZeitstrahl.length === 0 && !zeitstrahlConsolidating && !ereignisseLoading" class="figur-progress-status">
+    Keine Ereignisse vorhanden. Zuerst <strong>Neu ermitteln</strong>
+  </div>
+
+  <!-- Filter -->
+  <div x-show="globalZeitstrahl.length > 0" class="szenen-filter-bar">
+    <div x-data="combobox('Figur…', 'Alle Figuren')"
+         x-modelable="value" x-model="ereignisseFilterFigurId"
+         x-effect="options = figuren.filter(f => globalZeitstrahl.some(ev => ev.figuren.some(fr => fr.id === f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact">
+    </div>
+    <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
+         x-modelable="value" x-model="ereignisseFilterKapitel"
+         x-effect="options = ereignisseKapitelListe().map(k => ({value: k, label: k}))"
+         @combobox-change="ereignisseFilterSeite = ''"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact">
+    </div>
+    <div x-data="combobox('Seite…', 'Alle Seiten')"
+         x-modelable="value" x-model="ereignisseFilterSeite"
+         x-effect="_disabled = !ereignisseFilterKapitel || ereignisseSeitenListe().length === 0; options = ereignisseSeitenListe().map(s => ({value: s, label: s}))"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         :class="{'combobox-wrap--disabled': _disabled}"
+         class="combobox-wrap combobox-wrap--compact">
+    </div>
+    <span class="szenen-filter-count" x-text="filteredEreignisse().length + ' / ' + globalZeitstrahl.length"></span>
+  </div>
+
+  <!-- Zeitleiste -->
+  <div x-show="globalZeitstrahl.length > 0" class="global-zeitstrahl-body global-zeitstrahl-body--card">
+    <template x-for="(ev, i) in filteredEreignisse()" :key="i">
+      <div class="gz-item" :class="ev.typ === 'extern' ? 'gz-item--extern' : ''">
+        <div class="gz-marker" :class="ev.typ === 'extern' ? 'gz-marker--extern' : ''"></div>
+        <div class="gz-content">
+          <div class="gz-datum-row">
+            <span class="gz-datum" x-text="ev.datum"></span>
+            <template x-if="ev.typ === 'extern'">
+              <span class="gz-extern-badge">Weltgeschehen</span>
+            </template>
+          </div>
+          <div class="gz-ereignis" x-text="ev.ereignis"></div>
+          <div x-show="Array.isArray(ev.kapitel) ? ev.kapitel.length : ev.kapitel" class="gz-kapitel">
+            <template x-for="(kap, ki) in (Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []))" :key="ki">
+              <span class="gz-kapitel-link internal-link" x-text="kap" @click="openEreignisseMitKapitel(kap)"></span>
+            </template>
+          </div>
+          <div x-show="Array.isArray(ev.seiten) ? ev.seiten.length : ev.seite" class="gz-seite" x-text="Array.isArray(ev.seiten) ? ev.seiten.join(' · ') : ev.seite"></div>
+          <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
+          <div class="gz-figuren-row">
+            <template x-for="(fref, fi) in ev.figuren" :key="fi">
+              <span class="gz-figur-badge internal-link" :class="'gz-figur-badge--' + (fref.typ || 'andere')" x-text="fref.name" @click="openFigurById(fref.id)"></span>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>

@@ -1,0 +1,80 @@
+<!-- Schauplätze -->
+<div class="card" x-show="showOrteCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title" x-text="'Schauplätze: ' + selectedBookName"></span>
+    <span x-show="orteUpdatedAt && !orteLoading" class="figuren-updated-at" x-text="'Letzte Analyse: ' + formatDate(orteUpdatedAt)"></span>
+    <div class="card-actions">
+      <button @click="runOrteExtraction()" :disabled="orteLoading">
+        <span x-show="orteLoading" class="spinner"></span>
+        <span x-text="orte.length ? 'Neu ermitteln' : 'Schauplätze ermitteln'"></span>
+      </button>
+    </div>
+  </div>
+
+  <div x-show="orteProgress > 0" class="progress-bar-wrap">
+    <div class="progress-bar" :style="'width:' + orteProgress + '%'"></div>
+  </div>
+  <div x-show="orteStatus" class="figur-progress-status" x-html="orteStatus"></div>
+
+  <div x-show="orte.length === 0 && !orteLoading && !orteStatus" class="figur-progress-status">
+    Noch keine Schauplätze ermittelt. Klicke auf «Schauplätze ermitteln» um alle Orte des Buchs zu extrahieren.
+  </div>
+
+  <!-- Filter-Leiste -->
+  <div x-show="orte.length > 0" class="szenen-filter-bar">
+    <div x-data="combobox('Figur…', 'Alle Figuren')"
+         x-modelable="value" x-model="orteFilterFigurId"
+         x-effect="options = figuren.filter(f => orte.some(o => (o.figuren || []).includes(f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact">
+    </div>
+    <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
+         x-modelable="value" x-model="orteFilterKapitel"
+         x-effect="options = orteKapitelListe().map(k => ({value: k, label: k}))"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact">
+    </div>
+    <span class="szenen-filter-count" x-text="orteFiltered.length + ' / ' + orte.length"></span>
+  </div>
+
+  <!-- Ortsliste -->
+  <div x-show="orte.length > 0" class="ort-list">
+    <template x-for="o in orteFiltered" :key="o.id">
+      <div>
+        <div class="ort-item" @click="selectedOrtId = selectedOrtId === o.id ? null : o.id">
+          <span class="tag ort-typ-tag" x-text="o.typ || 'andere'"></span>
+          <span class="ort-name" x-text="o.name"></span>
+          <span x-show="o.stimmung" class="ort-stimmung" x-text="o.stimmung"></span>
+          <template x-if="o.kapitel?.length">
+            <span class="figur-kapitel-badges">
+              <span class="figur-kapitel-primary" x-text="o.kapitel[0].name"></span>
+              <template x-if="o.kapitel.length > 1">
+                <span class="figur-kapitel-more" x-text="'+' + (o.kapitel.length - 1)"></span>
+              </template>
+            </span>
+          </template>
+          <span class="history-chevron" :class="{ open: selectedOrtId === o.id }">›</span>
+        </div>
+        <div x-show="selectedOrtId === o.id" class="ort-detail">
+          <p x-show="o.beschreibung" x-text="o.beschreibung" class="ort-beschreibung"></p>
+          <div x-show="o.erste_erwaehnung" class="ort-meta-row">
+            <span class="ort-meta-label">Erste Erwähnung:</span>
+            <span x-text="o.erste_erwaehnung"></span>
+          </div>
+          <div x-show="o.figuren?.length > 0" class="ort-meta-row">
+            <span class="ort-meta-label">Figuren:</span>
+            <template x-for="figId in o.figuren" :key="figId">
+              <span class="tag" x-text="figuren.find(f => f.id === figId)?.kurzname || figuren.find(f => f.id === figId)?.name || figId"></span>
+            </template>
+          </div>
+          <div x-show="o.kapitel?.length > 1" class="ort-meta-row">
+            <span class="ort-meta-label">Kapitel:</span>
+            <template x-for="k in o.kapitel" :key="k.name">
+              <span class="tag" x-text="k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>
