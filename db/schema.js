@@ -197,12 +197,23 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_cc_book_id ON continuity_checks(book_id, user_email);
 
+  -- Checkpoint-Cache für unterbrechbare Multi-Pass-Jobs (Resume nach Server-Neustart)
+  CREATE TABLE IF NOT EXISTS job_checkpoints (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_type   TEXT NOT NULL,
+    book_id    INTEGER NOT NULL,
+    user_email TEXT NOT NULL DEFAULT '',
+    data       TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(job_type, book_id, user_email)
+  );
+
   CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
   INSERT INTO schema_version SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 15;
+const CURRENT_SCHEMA_VERSION = 16;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
   if (version < 2) {
@@ -371,6 +382,21 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 15').run();
     logger.info('DB-Migration auf Version 15 abgeschlossen (continuity_checks Tabelle hinzugefügt).');
   }
+  if (version < 16) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS job_checkpoints (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_type   TEXT NOT NULL,
+        book_id    INTEGER NOT NULL,
+        user_email TEXT NOT NULL DEFAULT '',
+        data       TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(job_type, book_id, user_email)
+      )
+    `);
+    db.prepare('UPDATE schema_version SET version = 16').run();
+    logger.info('DB-Migration auf Version 16 abgeschlossen (job_checkpoints Tabelle hinzugefügt).');
+  }
   // Sicherstellen dass schema_version aktuell ist (Fallback)
   if (version < CURRENT_SCHEMA_VERSION) {
     db.prepare('UPDATE schema_version SET version = ?').run(CURRENT_SCHEMA_VERSION);
@@ -528,4 +554,34 @@ function saveOrteToDb(bookId, orte, userEmail) {
   })();
 }
 
-module.exports = { db, saveFigurenToDb, saveOrteToDb, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens };
+// ── Job-Checkpoint-Verwaltung ─────────────────────────────────────────────────
+// Speichert Zwischenergebnisse für Multi-Pass-Jobs, damit diese nach einem
+// Server-Neustart fortgesetzt werden können statt von vorne zu beginnen.
+// user_email wird als '' (Leerstring) gespeichert wenn null, damit der
+// UNIQUE-Constraint über (job_type, book_id, user_email) korrekt greift.
+
+const _saveCheckpoint = db.prepare(`
+  INSERT INTO job_checkpoints (job_type, book_id, user_email, data, updated_at)
+  VALUES (?, ?, ?, ?, datetime('now'))
+  ON CONFLICT(job_type, book_id, user_email) DO UPDATE SET
+    data = excluded.data, updated_at = excluded.updated_at
+`);
+const _loadCheckpoint = db.prepare(
+  'SELECT data FROM job_checkpoints WHERE job_type = ? AND book_id = ? AND user_email = ?'
+);
+const _deleteCheckpoint = db.prepare(
+  'DELETE FROM job_checkpoints WHERE job_type = ? AND book_id = ? AND user_email = ?'
+);
+
+function saveCheckpoint(jobType, bookId, userEmail, data) {
+  _saveCheckpoint.run(jobType, parseInt(bookId), userEmail || '', JSON.stringify(data));
+}
+function loadCheckpoint(jobType, bookId, userEmail) {
+  const row = _loadCheckpoint.get(jobType, parseInt(bookId), userEmail || '');
+  return row ? JSON.parse(row.data) : null;
+}
+function deleteCheckpoint(jobType, bookId, userEmail) {
+  _deleteCheckpoint.run(jobType, parseInt(bookId), userEmail || '');
+}
+
+module.exports = { db, saveFigurenToDb, saveOrteToDb, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint };

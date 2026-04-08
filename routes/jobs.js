@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
-const { db, saveFigurenToDb, saveOrteToDb } = require('../db/schema');
+const { db, saveFigurenToDb, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint } = require('../db/schema');
 const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -339,7 +339,8 @@ function groupByChapter(pageContents) {
 // outputRatio: erwartetes Output/Input-Verhältnis für dynamische Recalibrierung (Default 0.2).
 //   Sobald tokIn bekannt ist (Claude: message_start; Ollama: erster Chunk), wird dynExpectedChars
 //   auf max(staticFallback, tokIn * 4 * outputRatio) gesetzt.
-async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars = 3000, outputRatio = 0.2) {
+// maxTokens: explizites Token-Limit (überschreibt die expectedChars-Formel). null = globalMax.
+async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars = 3000, outputRatio = 0.2, maxTokens = null) {
   let dynExpectedChars = expectedChars;
   let calibrated = false;
   const onProgress = ({ chars, tokIn }) => {
@@ -360,11 +361,14 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
     if (Object.keys(updates).length) updateJob(jobId, updates);
   };
   const globalMax = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
-  const maxTokensOverride = Math.min(Math.ceil(expectedChars / 4 * 2), globalMax);
-  const { text, tokensIn, tokensOut } = await callAI(prompt, system, onProgress, maxTokensOverride);
+  const maxTokensOverride = maxTokens != null
+    ? Math.min(maxTokens, globalMax)
+    : Math.min(Math.ceil(expectedChars / 4 * 2), globalMax);
+  const { text, truncated, tokensIn, tokensOut } = await callAI(prompt, system, onProgress, maxTokensOverride);
   tok.in += tokensIn;
   tok.out += tokensOut;
   updateJob(jobId, { tokensIn: tok.in, tokensOut: tok.out });
+  if (truncated) throw new Error(`KI-Antwort wurde bei ${maxTokensOverride} Tokens abgeschnitten (stop_reason: max_tokens). JSON ist unvollständig.`);
   return parseJSON(text);
 }
 
@@ -402,7 +406,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail) {
       r = await aiCall(jobId, tok,
         buildBookReviewSinglePassPrompt(bookName, pageContents.length, bookText),
         SYSTEM_BUCHBEWERTUNG,
-        65, 97, 5000,
+        65, 97, 5000, 0.2, null,
       );
     } else {
       const { groupOrder, groups } = groupByChapter(pageContents);
@@ -421,7 +425,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail) {
         const ca = await aiCall(jobId, tok,
           buildChapterAnalysisPrompt(group.name, bookName, group.pages.length, chText),
           SYSTEM_KAPITELANALYSE,
-          fromPct, toPct, 1500,
+          fromPct, toPct, 1500, 0.2, null,
         );
         chapterAnalyses.push({ name: group.name, pageCount: group.pages.length, ...ca });
       }
@@ -433,7 +437,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail) {
       r = await aiCall(jobId, tok,
         buildBookReviewMultiPassPrompt(bookName, chapterAnalyses, pageContents.length),
         SYSTEM_BUCHBEWERTUNG,
-        90, 97, 5000,
+        90, 97, 5000, 0.2, null,
       );
     }
 
@@ -458,6 +462,9 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
   const { SYSTEM_FIGUREN, buildFiguresSinglePassPrompt, buildFiguresChapterEventsPrompt, buildFiguresChapterWithEventsPrompt, buildFiguresConsolidationPrompt } = await getPrompts();
 
   try {
+    const cp = loadCheckpoint('figures', bookId, userEmail);
+    if (cp) logger.info(`Job ${jobId}: Figurenextraktion Buch ${bookId} – Checkpoint gefunden (Phase: ${cp.phase}, Kapitel: ${cp.nextGi ?? '–'}), setze fort.`);
+
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
       bsGetAll('chapters?book_id=' + bookId),
@@ -496,32 +503,47 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
         return { group, chText: group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n') };
       });
 
-      // Phase 1: Events aller Kapitel parallel extrahieren (keine gegenseitigen Abhängigkeiten)
-      updateJob(jobId, {
-        progress: 55,
-        statusText: `Events in ${groupOrder.length} Kapiteln parallel extrahieren…`,
-      });
-      const eventsSettled = await Promise.allSettled(
-        chapterTexts.map(({ group, chText }) =>
-          aiCall(jobId, tok,
-            buildFiguresChapterEventsPrompt(group.name, bookName, group.pages.length, chText),
-            SYSTEM_FIGUREN,
-            55, 70, 1500,
+      // Phase 1: Events extrahieren – aus Checkpoint laden oder neu berechnen
+      let allChapterEvents;
+      if (cp?.phase === 'phase1_done' || cp?.phase === 'phase2') {
+        allChapterEvents = cp.allChapterEvents;
+        updateJob(jobId, { progress: 70, statusText: 'Phase 1 aus Checkpoint geladen…' });
+      } else {
+        updateJob(jobId, {
+          progress: 55,
+          statusText: `Events in ${groupOrder.length} Kapiteln parallel extrahieren…`,
+        });
+        const eventsSettled = await Promise.allSettled(
+          chapterTexts.map(({ group, chText }) =>
+            aiCall(jobId, tok,
+              buildFiguresChapterEventsPrompt(group.name, bookName, group.pages.length, chText),
+              SYSTEM_FIGUREN,
+              55, 70, 1500,
+            )
           )
-        )
-      );
-      const allChapterEvents = eventsSettled.map((r, gi) => {
-        if (r.status === 'fulfilled') return r.value?.events || [];
-        logger.warn(`Job ${jobId}: Events-Extraktion Kapitel «${chapterTexts[gi].group.name}» fehlgeschlagen – fahre ohne Events fort. ${r.reason?.message}`);
-        return [];
-      });
+        );
+        allChapterEvents = eventsSettled.map((r, gi) => {
+          if (r.status === 'fulfilled') return r.value?.events || [];
+          logger.warn(`Job ${jobId}: Events-Extraktion Kapitel «${chapterTexts[gi].group.name}» fehlgeschlagen – fahre ohne Events fort. ${r.reason?.message}`);
+          return [];
+        });
+        saveCheckpoint('figures', bookId, userEmail, { phase: 'phase1_done', allChapterEvents });
+      }
 
-      // Phase 2: Figuren sequenziell (braucht akkumuliertes Vorwissen aus Vorkapiteln)
-      const chapterFiguren = [];
-      const accumulatedFiguren = [];
+      // Phase 2: Figuren sequenziell – ggf. aus Checkpoint fortsetzen
+      let chapterFiguren = cp?.phase === 'phase2' ? cp.chapterFiguren : [];
+      let accumulatedFiguren = cp?.phase === 'phase2' ? cp.accumulatedFiguren : [];
+      const startGi = cp?.phase === 'phase2' ? (cp.nextGi ?? 0) : 0;
       const tokStr = () => tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
 
-      for (let gi = 0; gi < groupOrder.length; gi++) {
+      if (startGi > 0) {
+        updateJob(jobId, {
+          progress: 70 + Math.round((startGi / groupOrder.length) * 15),
+          statusText: `Setze Figurenanalyse fort (${startGi}/${groupOrder.length} Kapitel bereits fertig)…`,
+        });
+      }
+
+      for (let gi = startGi; gi < groupOrder.length; gi++) {
         const { group, chText } = chapterTexts[gi];
         const fromPct = 70 + Math.round((gi / groupOrder.length) * 15);
         const toPct   = 70 + Math.round(((gi + 1) / groupOrder.length) * 15);
@@ -546,6 +568,7 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
           logger.warn(`Job ${jobId}: Figurenextraktion Kapitel «${group.name}» fehlgeschlagen – Kapitel wird übersprungen. ${e.message}`);
           chapterFiguren.push({ kapitel: group.name, figuren: [] });
         }
+        saveCheckpoint('figures', bookId, userEmail, { phase: 'phase2', allChapterEvents, chapterFiguren, accumulatedFiguren, nextGi: gi + 1 });
       }
 
       updateJob(jobId, {
@@ -563,6 +586,7 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
 
     const figuren = result.figuren.map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
     saveFigurenToDb(parseInt(bookId), figuren, userEmail || null);
+    deleteCheckpoint('figures', bookId, userEmail);
     completeJob(jobId, { count: figuren.length, tokensIn: tok.in, tokensOut: tok.out });
     logger.info(`Job ${jobId}: Figurenextraktion Buch ${bookId} abgeschlossen (${figuren.length} Figuren, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
@@ -570,11 +594,13 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
     failJob(jobId, e);
   }
 }
-
 // ── Job: Szenenanalyse ────────────────────────────────────────────────────────
 async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
   const { SYSTEM_FIGUREN, buildSzenenAnalysePrompt } = await getPrompts();
   try {
+    const cp = loadCheckpoint('szenen', bookId, userEmail);
+    if (cp) logger.info(`Job ${jobId}: Szenenanalyse Buch ${bookId} – Checkpoint gefunden (${cp.nextGi} Kapitel bereits fertig), setze fort.`);
+
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
       bsGetAll('chapters?book_id=' + bookId),
@@ -601,9 +627,18 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
     });
 
     const { groupOrder, groups } = groupByChapter(pageContents);
-    const allSzenen = [];
 
-    for (let gi = 0; gi < groupOrder.length; gi++) {
+    let allSzenen = cp?.allSzenen ?? [];
+    const startGi = cp?.nextGi ?? 0;
+
+    if (startGi > 0) {
+      updateJob(jobId, {
+        progress: 40 + Math.round((startGi / groupOrder.length) * 55),
+        statusText: `Setze Szenenanalyse fort (${startGi}/${groupOrder.length} Kapitel bereits fertig)…`,
+      });
+    }
+
+    for (let gi = startGi; gi < groupOrder.length; gi++) {
       const group = groups.get(groupOrder[gi]);
       const tokStr = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
       const fromPct = 40 + Math.round((gi / groupOrder.length) * 55);
@@ -622,6 +657,7 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
         );
       } catch (e) {
         logger.warn(`Job ${jobId}: Szenenanalyse Kapitel «${group.name}» übersprungen: ${e.message}`);
+        saveCheckpoint('szenen', bookId, userEmail, { allSzenen, nextGi: gi + 1 });
         continue;
       }
       for (const s of (chResult.szenen || [])) {
@@ -635,6 +671,7 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
           sort_order: allSzenen.length,
         });
       }
+      saveCheckpoint('szenen', bookId, userEmail, { allSzenen, nextGi: gi + 1 });
     }
 
     db.transaction(() => {
@@ -648,6 +685,7 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
       }
     })();
 
+    deleteCheckpoint('szenen', bookId, userEmail);
     completeJob(jobId, { count: allSzenen.length, tokensIn: tok.in, tokensOut: tok.out });
     logger.info(`Job ${jobId}: Szenenanalyse Buch ${bookId} abgeschlossen (${allSzenen.length} Szenen, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
@@ -655,7 +693,6 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
     failJob(jobId, e);
   }
 }
-
 // ── Job: Zeitstrahl-Konsolidierung ────────────────────────────────────────────
 async function runConsolidateZeitstrahlJob(jobId, events, bookId, userEmail) {
   const { SYSTEM_FIGUREN, buildZeitstrahlConsolidationPrompt } = await getPrompts();
@@ -665,7 +702,7 @@ async function runConsolidateZeitstrahlJob(jobId, events, bookId, userEmail) {
     const result = await aiCall(jobId, tok,
       buildZeitstrahlConsolidationPrompt(events),
       SYSTEM_FIGUREN,
-      5, 97, 3000,
+      5, 97, 3000, 0.2, null,
     );
     if (!Array.isArray(result?.ereignisse)) throw new Error('KI-Antwort ungültig: ereignisse-Array fehlt');
     completeJob(jobId, { ereignisse: result.ereignisse, tokensIn: tok.in, tokensOut: tok.out });
@@ -1249,6 +1286,9 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
   const { SYSTEM_ORTE, buildLocationsSinglePassPrompt, buildLocationsChapterPrompt, buildLocationsConsolidationPrompt } = await getPrompts();
 
   try {
+    const cp = loadCheckpoint('locations', bookId, userEmail);
+    if (cp) logger.info(`Job ${jobId}: Schauplatz-Extraktion Buch ${bookId} – Checkpoint gefunden (${cp.nextGi} Kapitel bereits fertig), setze fort.`);
+
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
       bsGetAll('chapters?book_id=' + bookId),
@@ -1287,9 +1327,18 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
       );
     } else {
       const { groupOrder, groups } = groupByChapter(pageContents);
-      const chapterOrte = [];
 
-      for (let gi = 0; gi < groupOrder.length; gi++) {
+      let chapterOrte = cp?.chapterOrte ?? [];
+      const startGi = cp?.nextGi ?? 0;
+
+      if (startGi > 0) {
+        updateJob(jobId, {
+          progress: 55 + Math.round((startGi / groupOrder.length) * 30),
+          statusText: `Setze Schauplatz-Analyse fort (${startGi}/${groupOrder.length} Kapitel bereits fertig)…`,
+        });
+      }
+
+      for (let gi = startGi; gi < groupOrder.length; gi++) {
         const group = groups.get(groupOrder[gi]);
         const tokStr = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
         const fromPct = 55 + Math.round((gi / groupOrder.length) * 30);
@@ -1306,11 +1355,11 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
             SYSTEM_ORTE,
             fromPct, toPct, 2000,
           );
+          chapterOrte.push({ kapitel: group.name, orte: chResult.orte || [] });
         } catch (e) {
           logger.warn(`Job ${jobId}: Schauplatz-Analyse Kapitel «${group.name}» übersprungen: ${e.message}`);
-          continue;
         }
-        chapterOrte.push({ kapitel: group.name, orte: chResult.orte || [] });
+        saveCheckpoint('locations', bookId, userEmail, { chapterOrte, nextGi: gi + 1 });
       }
 
       updateJob(jobId, {
@@ -1328,6 +1377,7 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
 
     const orte = result.orte.map((o, i) => ({ ...o, id: o.id || ('ort_' + (i + 1)) }));
     saveOrteToDb(parseInt(bookId), orte, userEmail || null);
+    deleteCheckpoint('locations', bookId, userEmail);
     completeJob(jobId, { count: orte.length, tokensIn: tok.in, tokensOut: tok.out });
     logger.info(`Job ${jobId}: Schauplatz-Extraktion Buch ${bookId} abgeschlossen (${orte.length} Orte, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
@@ -1335,12 +1385,14 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
     failJob(jobId, e);
   }
 }
-
 // ── Job: Kontinuitätsprüfung ──────────────────────────────────────────────────
 async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
   const { SYSTEM_KONTINUITAET, buildKontinuitaetSinglePassPrompt, buildKontinuitaetChapterFactsPrompt, buildKontinuitaetCheckPrompt } = await getPrompts();
 
   try {
+    const cp = loadCheckpoint('kontinuitaet', bookId, userEmail);
+    if (cp) logger.info(`Job ${jobId}: Kontinuitätsprüfung Buch ${bookId} – Checkpoint gefunden (${cp.nextGi} Kapitel bereits fertig), setze fort.`);
+
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
       bsGetAll('chapters?book_id=' + bookId),
@@ -1384,11 +1436,20 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
         60, 97, 5000,
       );
     } else {
-      // Multi-Pass: Fakten pro Kapitel extrahieren, dann Widersprüche prüfen
+      // Multi-Pass: Fakten pro Kapitel extrahieren – ggf. aus Checkpoint fortsetzen
       const { groupOrder, groups } = groupByChapter(pageContents);
-      const chapterFacts = [];
 
-      for (let gi = 0; gi < groupOrder.length; gi++) {
+      let chapterFacts = cp?.chapterFacts ?? [];
+      const startGi = cp?.nextGi ?? 0;
+
+      if (startGi > 0) {
+        updateJob(jobId, {
+          progress: 50 + Math.round((startGi / groupOrder.length) * 35),
+          statusText: `Setze Fakten-Extraktion fort (${startGi}/${groupOrder.length} Kapitel bereits fertig)…`,
+        });
+      }
+
+      for (let gi = startGi; gi < groupOrder.length; gi++) {
         const group = groups.get(groupOrder[gi]);
         const tokStr = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
         const fromPct = 50 + Math.round((gi / groupOrder.length) * 35);
@@ -1405,11 +1466,11 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
             SYSTEM_KONTINUITAET,
             fromPct, toPct, 1500,
           );
+          chapterFacts.push({ kapitel: group.name, fakten: chResult.fakten || [] });
         } catch (e) {
           logger.warn(`Job ${jobId}: Fakten-Extraktion Kapitel «${group.name}» übersprungen: ${e.message}`);
-          continue;
         }
-        chapterFacts.push({ kapitel: group.name, fakten: chResult.fakten || [] });
+        saveCheckpoint('kontinuitaet', bookId, userEmail, { chapterFacts, nextGi: gi + 1 });
       }
 
       updateJob(jobId, {
@@ -1434,6 +1495,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
       .run(parseInt(bookId), userEmail || null, new Date().toISOString(),
         JSON.stringify(result.probleme || []), result.zusammenfassung || '', model);
 
+    deleteCheckpoint('kontinuitaet', bookId, userEmail);
     completeJob(jobId, {
       count: (result.probleme || []).length,
       issues: result.probleme || [],
@@ -1446,7 +1508,6 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
     failJob(jobId, e);
   }
 }
-
 router.post('/locations', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
