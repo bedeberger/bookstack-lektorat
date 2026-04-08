@@ -226,7 +226,6 @@ db.exec(`
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 20;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
   if (version < 2) {
@@ -446,21 +445,36 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 20').run();
     logger.info('DB-Migration auf Version 20 abgeschlossen (pages: preview_text hinzugefügt).');
   }
-  // Sicherstellen dass schema_version aktuell ist (Fallback)
-  if (version < CURRENT_SCHEMA_VERSION) {
-    db.prepare('UPDATE schema_version SET version = ?').run(CURRENT_SCHEMA_VERSION);
-  }
   // Unbedingter Spalten-Check für figure_events.typ
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {
     db.exec("ALTER TABLE figure_events ADD COLUMN typ TEXT DEFAULT 'persoenlich'");
     logger.info('figure_events.typ nachgerüstet.');
   }
-  // Unbedingter Spalten-Check für v20 (falls Fallback Version gesetzt hat bevor Migration lief)
+  // Unbedingter Spalten-Check für v19 + v20 (falls Fallback Version gesetzt hat bevor Migration lief)
   const pagesCols20Check = db.pragma('table_info(pages)').map(c => c.name);
+  if (pagesCols20Check.length > 0 && !pagesCols20Check.includes('chapter_id')) {
+    db.exec('ALTER TABLE pages ADD COLUMN chapter_id INTEGER');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_pages_chapter_id ON pages(chapter_id)');
+    logger.info('pages.chapter_id nachgerüstet.');
+  }
+  if (pagesCols20Check.length > 0 && !pagesCols20Check.includes('chapter_name')) {
+    db.exec('ALTER TABLE pages ADD COLUMN chapter_name TEXT');
+    logger.info('pages.chapter_name nachgerüstet.');
+  }
   if (pagesCols20Check.length > 0 && !pagesCols20Check.includes('preview_text')) {
     db.exec('ALTER TABLE pages ADD COLUMN preview_text TEXT');
     logger.info('pages.preview_text nachgerüstet.');
+  }
+  // Unbedingter Spalten-Check für v18 figure_scenes (falls Fallback Version gesetzt hat bevor Migration lief)
+  const fsColsCheck = db.pragma('table_info(figure_scenes)').map(c => c.name);
+  if (fsColsCheck.length > 0 && !fsColsCheck.includes('chapter_id')) {
+    db.exec('ALTER TABLE figure_scenes ADD COLUMN chapter_id INTEGER');
+    logger.info('figure_scenes.chapter_id nachgerüstet.');
+  }
+  if (fsColsCheck.length > 0 && !fsColsCheck.includes('page_id')) {
+    db.exec('ALTER TABLE figure_scenes ADD COLUMN page_id INTEGER');
+    logger.info('figure_scenes.page_id nachgerüstet.');
   }
   // Unbedingter Spalten-Check für v9 (falls Fallback Version gesetzt hat bevor Migration lief)
   const bshColsCheck = db.pragma('table_info(book_stats_history)').map(c => c.name);
