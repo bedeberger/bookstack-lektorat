@@ -350,7 +350,7 @@ const FIGUREN_BASIS_SCHEMA = `{
 const FIGUREN_BASIS_RULES = `Regeln:
 - Eindeutige IDs (fig_1, fig_2, …)
 - beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
-- kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten
+- kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten; name = immer der Kapitelname (aus dem Prompt-Kontext oder dem [Kapitelname]-Teil der Überschrift) – NIEMALS Seitentitel als Kapitelnamen verwenden
 - Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), übrige selbsterklärend
 - Nur fiktive Charaktere oder Figuren die aktiv an der Buchhandlung teilnehmen – keine Orte oder Objekte
 - KEINE historischen oder realen Personen die nur erwähnt, zitiert oder als Referenz genannt werden (z.B. Napoleon, Einstein, ein Politiker, eine Künstlerin)
@@ -380,6 +380,8 @@ Antworte mit diesem JSON-Schema:
 ${FIGUREN_BASIS_SCHEMA}
 
 ${FIGUREN_BASIS_RULES}
+
+Wichtig: Für kapitel[].name aller Figuren in diesem Kapitel immer genau «${chapterName}» verwenden – die ### Überschriften im Text sind Seitentitel, keine Kapitelnamen.
 
 ${JSON_ONLY}
 
@@ -415,7 +417,7 @@ ${FIGUREN_BASIS_RULES}`;
 
 export function buildFiguresEventAssignmentPrompt(chapterName, bookName, pageCount, figurenList, chText) {
   const figurenStr = figurenList.map(f => `${f.id}: ${f.name} (${f.typ || 'andere'})`).join('\n');
-  return `Extrahiere alle Lebensereignisse aus dem Kapitel «${chapterName}» des Buchs «${bookName}» und weise sie den bekannten Figuren zu.
+  return `Durchforste den Kapiteltext «${chapterName}» des Buchs «${bookName}» systematisch nach Ereignissen – persönliche Wendepunkte UND externe Ereignisse – und verknüpfe sie mit den betroffenen Figuren.
 
 Bekannte Figuren (nur diese IDs in «fig_id» verwenden):
 ${figurenStr}
@@ -439,13 +441,18 @@ Antworte mit diesem JSON-Schema:
 }
 
 Regeln:
-- typ='persoenlich': echte biografische Wendepunkte (Geburt, Tod, Trauma, neue/beendete Beziehung, Jobwechsel, Umzug, wichtige Entscheidung) – keine flüchtigen Szenen ohne bleibende Wirkung
-- typ='extern': gesellschaftliche/historische Ereignisse (Kriege, Katastrophen, Massaker, politische Umbrüche) – GROSSZÜGIG: auch Ereignisse aufnehmen die nur erwähnt werden oder nur indirekt wirken
-- datum: immer als vierstellige Jahreszahl (JJJJ) – falls nicht direkt erwähnt, aus Kontext errechnen; Events ohne errechenbare Jahreszahl weglassen
+- typ='persoenlich': echte biografische Wendepunkte (Geburt, Tod, Trauma, neue/beendete Beziehung, Jobwechsel, Umzug, wichtige Entscheidung) – nur aufnehmen wenn tatsächlich im Text belegt
+- typ='extern': gesellschaftliche/historische Ereignisse – SEHR GROSSZÜGIG erfassen:
+  • Kriege, Konflikte, Terroranschläge, Attentate, Amokläufe
+  • Politische Umbrüche (Mauerfall, Revolutionen, Regierungswechsel, gesellschaftliche Umwälzungen)
+  • Sport- und Kulturereignisse (WM, Olympia, Großveranstaltungen)
+  • Wirtschaftskrisen, Seuchen, Naturkatastrophen, Umweltereignisse
+  • Auch wenn nur kurz erwähnt, nur angedeutet oder nur indirekt auf Figuren wirkt
+  • Jedes externe Ereignis ALLEN Figuren zuweisen die dabei waren, davon betroffen waren oder im Zusammenhang erwähnt werden
+- datum: immer als vierstellige Jahreszahl (JJJJ) – falls nicht direkt erwähnt, aus Kontext errechnen (Geburtsjahr + Alter, bekannte historische Jahreszahl); Events ohne errechenbare Jahreszahl weglassen
 - Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden
 - Nur fig_id-Werte aus der obigen Liste verwenden
 - Chronologisch sortiert nach Datum innerhalb jeder Figur
-- KONSERVATIV: nur Ereignisse aufnehmen die im Text eindeutig belegt sind
 
 ${JSON_ONLY}
 
@@ -502,7 +509,7 @@ Antworte mit diesem JSON-Schema:
       "ereignis": "kanonische Formulierung",
       "typ": "persoenlich|extern",
       "bedeutung": "zusammengeführte Bedeutung oder leer",
-      "kapitel": "Kapitelname (bei zusammengeführten Ereignissen: erstes/relevantestes Kapitel)",
+      "kapitel": ["Kapitelname1", "Kapitelname2"],
       "figuren": [{ "id": "fig_1", "name": "Name", "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere" }]
     }
   ]
@@ -511,6 +518,7 @@ Antworte mit diesem JSON-Schema:
 Regeln:
 - Behalte die chronologische Reihenfolge (aufsteigend nach Jahreszahl)
 - Dedupliziere figuren (gleiche id nur einmal pro Ereignis)
+- kapitel: Alle Kapitel der zusammengeführten Ereignisse beibehalten (Union der Arrays, Duplikate entfernen)
 - Im Zweifel getrennt lassen – nur eindeutige Übereinstimmungen zusammenführen
 
 ${JSON_ONLY}

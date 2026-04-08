@@ -32,7 +32,7 @@ export const zeitstrahlMethods = {
         ereignis: ev.ereignis,
         typ: ev.typ,
         bedeutung: ev.bedeutung,
-        kapitel: ev.kapitel,
+        kapitel: ev.kapitel ? [ev.kapitel] : [],
         figuren: [ev.figur],
       };
       for (let j = i + 1; j < allEvents.length; j++) {
@@ -40,6 +40,7 @@ export const zeitstrahlMethods = {
         const ev2 = allEvents[j];
         if (ev2.datum === ev.datum && ev2.ereignis === ev.ereignis) {
           group.figuren.push(ev2.figur);
+          if (ev2.kapitel && !group.kapitel.includes(ev2.kapitel)) group.kapitel.push(ev2.kapitel);
           used.add(j);
         }
       }

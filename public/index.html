@@ -765,7 +765,7 @@
             </template>
           </div>
           <div class="gz-ereignis" x-text="ev.ereignis"></div>
-          <div x-show="ev.kapitel" class="gz-kapitel" x-text="ev.kapitel"></div>
+          <div x-show="Array.isArray(ev.kapitel) ? ev.kapitel.length : ev.kapitel" class="gz-kapitel" x-text="Array.isArray(ev.kapitel) ? ev.kapitel.join(' · ') : ev.kapitel"></div>
           <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
           <div class="gz-figuren-row">
             <template x-for="(fref, fi) in ev.figuren" :key="fi">
