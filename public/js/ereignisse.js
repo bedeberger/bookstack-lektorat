@@ -169,17 +169,19 @@ export const ereignisseMethods = {
     if (!this.figuren.length) {
       await this.loadFiguren(this.selectedBookId);
     }
-    // Zeitstrahl laden: zuerst persistierte Konsolidierung aus DB, sonst aus figuren aufbauen
-    if (!this.globalZeitstrahl.length) {
+    // Zeitstrahl laden: zuerst persistierte Konsolidierung aus DB, sonst aus figuren aufbauen.
+    // Kein Cache-Check (!length) hier – loadFiguren() setzt globalZeitstrahl aus Figuren-Ereignissen,
+    // DB-Daten müssen das überschreiben können.
+    if (!this.zeitstrahlConsolidating) {
       try {
         const { ereignisse } = await fetch(`/figures/zeitstrahl/${this.selectedBookId}`).then(r => r.json());
         if (ereignisse) {
           this.globalZeitstrahl = ereignisse;
-        } else {
+        } else if (!this.globalZeitstrahl.length) {
           this._buildGlobalZeitstrahl();
         }
       } catch {
-        this._buildGlobalZeitstrahl();
+        if (!this.globalZeitstrahl.length) this._buildGlobalZeitstrahl();
       }
     }
     // Prüfen ob auf dem Server bereits ein Ereignis-Ermittlungsjob läuft
