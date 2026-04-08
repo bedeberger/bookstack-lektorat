@@ -213,7 +213,7 @@ db.exec(`
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 16;
+const CURRENT_SCHEMA_VERSION = 17;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
   if (version < 2) {
@@ -397,6 +397,13 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 16').run();
     logger.info('DB-Migration auf Version 16 abgeschlossen (job_checkpoints Tabelle hinzugefügt).');
   }
+  if (version < 17) {
+    const feCols17 = db.pragma('table_info(figure_events)').map(c => c.name);
+    if (!feCols17.includes('kapitel')) db.exec('ALTER TABLE figure_events ADD COLUMN kapitel TEXT');
+    if (!feCols17.includes('seite'))   db.exec('ALTER TABLE figure_events ADD COLUMN seite TEXT');
+    db.prepare('UPDATE schema_version SET version = 17').run();
+    logger.info('DB-Migration auf Version 17 abgeschlossen (figure_events kapitel + seite hinzugefügt).');
+  }
   // Sicherstellen dass schema_version aktuell ist (Fallback)
   if (version < CURRENT_SCHEMA_VERSION) {
     db.prepare('UPDATE schema_version SET version = ?').run(CURRENT_SCHEMA_VERSION);
@@ -438,7 +445,7 @@ function saveFigurenToDb(bookId, figuren, userEmail) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insTag = db.prepare('INSERT INTO figure_tags (figure_id, tag) VALUES (?, ?)');
     const insApp = db.prepare('INSERT INTO figure_appearances (figure_id, chapter_name, haeufigkeit) VALUES (?, ?, ?)');
-    const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
+    const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, kapitel, seite, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, user_email) VALUES (?, ?, ?, ?, ?, ?)');
 
     for (let i = 0; i < figuren.length; i++) {
@@ -452,7 +459,7 @@ function saveFigurenToDb(bookId, figuren, userEmail) {
       for (const app of (f.kapitel || [])) insApp.run(fid, app.name, app.haeufigkeit || 1);
       for (let j = 0; j < (f.lebensereignisse || []).length; j++) {
         const ev = f.lebensereignisse[j];
-        insEvt.run(fid, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', j);
+        insEvt.run(fid, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', ev.kapitel || null, ev.seite || null, j);
       }
       for (const bz of (f.beziehungen || [])) insRel.run(bookId, f.id, bz.figur_id, bz.typ, bz.beschreibung || null, userEmail || null);
     }
@@ -472,13 +479,13 @@ function updateFigurenEvents(bookId, assignments, userEmail) {
     const delEvt = db.prepare('DELETE FROM figure_events WHERE figure_id = ?');
     for (const row of figRows) delEvt.run(row.id);
 
-    const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
+    const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, kapitel, seite, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     for (const assignment of assignments) {
       const rowId = figIdToRowId[assignment.fig_id];
       if (!rowId) continue;
       for (let j = 0; j < (assignment.lebensereignisse || []).length; j++) {
         const ev = assignment.lebensereignisse[j];
-        insEvt.run(rowId, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', j);
+        insEvt.run(rowId, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', ev.kapitel || null, ev.seite || null, j);
       }
     }
   })();

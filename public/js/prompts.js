@@ -433,7 +433,8 @@ Antworte mit diesem JSON-Schema:
           "ereignis": "Was passierte (1 Satz)",
           "typ": "persoenlich|extern",
           "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)",
-          "kapitel": "${chapterName}"
+          "kapitel": "${chapterName}",
+          "seite": "Name der Seite/des Abschnitts (aus ### Überschrift; leer wenn unklar)"
         }
       ]
     }
@@ -510,6 +511,7 @@ Antworte mit diesem JSON-Schema:
       "typ": "persoenlich|extern",
       "bedeutung": "zusammengeführte Bedeutung oder leer",
       "kapitel": ["Kapitelname1", "Kapitelname2"],
+      "seiten": ["Seite1", "Seite2"],
       "figuren": [{ "id": "fig_1", "name": "Name", "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere" }]
     }
   ]
@@ -519,6 +521,7 @@ Regeln:
 - Behalte die chronologische Reihenfolge (aufsteigend nach Jahreszahl)
 - Dedupliziere figuren (gleiche id nur einmal pro Ereignis)
 - kapitel: Alle Kapitel der zusammengeführten Ereignisse beibehalten (Union der Arrays, Duplikate entfernen)
+- seiten: Alle Seiten der zusammengeführten Ereignisse beibehalten (Union der Arrays, Duplikate entfernen)
 - Im Zweifel getrennt lassen – nur eindeutige Übereinstimmungen zusammenführen
 
 ${JSON_ONLY}

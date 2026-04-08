@@ -392,7 +392,7 @@
     </div>
     <template x-for="f in filteredFiguren()" :key="f.id">
       <div>
-        <div class="figur-item" @click="selectedFigurId = selectedFigurId === f.id ? null : f.id;">
+        <div class="figur-item" :data-figid="f.id" @click="selectedFigurId = selectedFigurId === f.id ? null : f.id;">
           <span class="figur-typ-dot" :style="'background:' + ({ hauptfigur:'var(--color-primary)', nebenfigur:'var(--color-muted)', antagonist:'var(--color-err-border)', mentor:'var(--color-ok-border)', andere:'var(--color-accent)' }[f.typ] || 'var(--color-border)')"></span>
           <span class="figur-name" x-text="f.name"></span>
           <span class="tag" x-text="f.typ"></span>
@@ -400,7 +400,7 @@
           <!-- Kapitel-Badges -->
           <template x-if="f.kapitel?.length">
             <span class="figur-kapitel-badges">
-              <span class="figur-kapitel-primary" x-text="f.kapitel[0].name"></span>
+              <span class="figur-kapitel-primary internal-link" x-text="f.kapitel[0].name" @click.stop="figurenKapitelFilter = f.kapitel[0].name; figurenSeitenFilter = ''"></span>
               <template x-if="f.kapitel.length > 1">
                 <span class="figur-kapitel-more" x-text="'+' + (f.kapitel.length - 1)"></span>
               </template>
@@ -420,7 +420,7 @@
             <div class="bewertung-section-title">Kapitelauftritte</div>
             <div class="figur-tags-row">
               <template x-for="(k, ki) in (f.kapitel || [])" :key="ki">
-                <span class="tag" x-text="ki === 0 ? k.name : k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
+                <span class="tag internal-link" @click="figurenKapitelFilter = k.name; figurenSeitenFilter = ''" x-text="ki === 0 ? k.name : k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
               </template>
             </div>
           </div>
@@ -437,10 +437,10 @@
             <div class="bewertung-section-title">Familie</div>
             <div class="figur-tags-row">
               <template x-for="pid in (f.eltern_ids || [])" :key="'e'+pid">
-                <span class="tag figur-rel-tag" title="Elternteil" x-text="'↑ ' + (figuren.find(x => x.id === pid)?.name || pid)"></span>
+                <span class="tag figur-rel-tag internal-link" title="Elternteil" @click.stop="openFigurById(pid)" x-text="'↑ ' + (figuren.find(x => x.id === pid)?.name || pid)"></span>
               </template>
               <template x-for="sid in (f.geschwister_ids || [])" :key="'s'+sid">
-                <span class="tag figur-rel-tag" title="Geschwister" x-text="'⇔ ' + (figuren.find(x => x.id === sid)?.name || sid)"></span>
+                <span class="tag figur-rel-tag internal-link" title="Geschwister" @click.stop="openFigurById(sid)" x-text="'⇔ ' + (figuren.find(x => x.id === sid)?.name || sid)"></span>
               </template>
             </div>
           </div>
@@ -451,7 +451,7 @@
               <template x-for="(bz, i) in (f.beziehungen || [])" :key="i">
                 <div class="figur-beziehung-item">
                   <span class="figur-bz-typ" :class="'figur-bz-' + bz.typ" x-text="bz.typ"></span>
-                  <span class="figur-bz-name" x-text="figuren.find(x => x.id === bz.figur_id)?.name || bz.figur_id"></span>
+                  <span class="figur-bz-name internal-link" @click.stop="openFigurById(bz.figur_id)" x-text="figuren.find(x => x.id === bz.figur_id)?.name || bz.figur_id"></span>
                   <span x-show="bz.beschreibung" class="figur-bz-hint" x-text="'– ' + bz.beschreibung"></span>
                 </div>
               </template>
@@ -470,7 +470,7 @@
                       <span x-show="ev.typ === 'extern'" class="figur-zeitstrahl-extern-badge">extern</span>
                     </span>
                     <span class="figur-zeitstrahl-ereignis" x-text="ev.ereignis"></span>
-                    <span x-show="ev.kapitel" class="figur-zeitstrahl-kapitel" x-text="ev.kapitel"></span>
+                    <span x-show="ev.kapitel" class="figur-zeitstrahl-kapitel internal-link" x-text="ev.kapitel" @click="openEreignisseMitKapitel(ev.kapitel)"></span>
                     <span x-show="ev.bedeutung" class="figur-zeitstrahl-bedeutung" x-text="ev.bedeutung"></span>
                   </div>
                 </div>
@@ -659,24 +659,34 @@
 <div class="card" x-show="showEreignisseCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Ereignisse: ' + selectedBookName"></span>
-    <span x-show="globalZeitstrahl.length > 0 && !zeitstrahlConsolidating" class="figuren-updated-at" x-text="globalZeitstrahl.length + ' Ereignisse'"></span>
+    <span x-show="globalZeitstrahl.length > 0 && !zeitstrahlConsolidating && !ereignisseLoading" class="figuren-updated-at" x-text="globalZeitstrahl.length + ' Ereignisse'"></span>
     <div class="card-actions">
-      <button @click="consolidateZeitstrahl()" :disabled="zeitstrahlConsolidating || globalZeitstrahl.length === 0">
+      <button @click="runEreignisseExtraction()" :disabled="ereignisseLoading || zeitstrahlConsolidating">
+        <span x-show="ereignisseLoading" class="spinner"></span>
+        <span x-text="ereignisseLoading ? '' : 'Neu ermitteln'"></span>
+      </button>
+      <button @click="consolidateZeitstrahl()" :disabled="zeitstrahlConsolidating || ereignisseLoading || globalZeitstrahl.length === 0">
         <span x-show="zeitstrahlConsolidating" class="spinner"></span>
         <span x-text="zeitstrahlConsolidating ? '' : 'Konsolidieren'"></span>
       </button>
     </div>
   </div>
 
-  <!-- Fortschritt -->
+  <!-- Fortschritt Ermittlung -->
+  <div x-show="ereignisseLoading && ereignisseProgress > 0" class="progress-bar-wrap">
+    <div class="progress-bar" :style="'width:' + ereignisseProgress + '%'"></div>
+  </div>
+  <div x-show="ereignisseStatus && !zeitstrahlConsolidating" class="gz-status-text" x-html="ereignisseStatus"></div>
+
+  <!-- Fortschritt Konsolidierung -->
   <div x-show="zeitstrahlConsolidating && zeitstrahlProgress > 0" class="progress-bar-wrap">
     <div class="progress-bar" :style="'width:' + zeitstrahlProgress + '%'"></div>
   </div>
-  <div x-show="zeitstrahlStatus" class="gz-status-text" x-html="zeitstrahlStatus"></div>
+  <div x-show="zeitstrahlStatus && !ereignisseLoading" class="gz-status-text" x-html="zeitstrahlStatus"></div>
 
   <!-- Leer-Hinweis -->
-  <div x-show="globalZeitstrahl.length === 0 && !zeitstrahlConsolidating" class="figur-progress-status">
-    Keine Ereignisse vorhanden. Zuerst die <strong>Figuren</strong> analysieren lassen – die Zeitleiste wird aus den Figur-Lebensläufen aufgebaut.
+  <div x-show="globalZeitstrahl.length === 0 && !zeitstrahlConsolidating && !ereignisseLoading" class="figur-progress-status">
+    Keine Ereignisse vorhanden. Zuerst <strong>Neu ermitteln</strong> – oder zuerst die <strong>Figuren</strong> analysieren lassen.
   </div>
 
   <!-- Filter -->
@@ -765,11 +775,16 @@
             </template>
           </div>
           <div class="gz-ereignis" x-text="ev.ereignis"></div>
-          <div x-show="Array.isArray(ev.kapitel) ? ev.kapitel.length : ev.kapitel" class="gz-kapitel" x-text="Array.isArray(ev.kapitel) ? ev.kapitel.join(' · ') : ev.kapitel"></div>
+          <div x-show="Array.isArray(ev.kapitel) ? ev.kapitel.length : ev.kapitel" class="gz-kapitel">
+            <template x-for="(kap, ki) in (Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []))" :key="ki">
+              <span class="gz-kapitel-link" x-text="kap" @click="openEreignisseMitKapitel(kap)"></span>
+            </template>
+          </div>
+          <div x-show="Array.isArray(ev.seiten) ? ev.seiten.length : ev.seite" class="gz-seite" x-text="Array.isArray(ev.seiten) ? ev.seiten.join(' · ') : ev.seite"></div>
           <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
           <div class="gz-figuren-row">
             <template x-for="(fref, fi) in ev.figuren" :key="fi">
-              <span class="gz-figur-badge" :class="'gz-figur-badge--' + (fref.typ || 'andere')" x-text="fref.name"></span>
+              <span class="gz-figur-badge internal-link" :class="'gz-figur-badge--' + (fref.typ || 'andere')" x-text="fref.name" @click="openFigurById(fref.id)"></span>
             </template>
           </div>
         </div>

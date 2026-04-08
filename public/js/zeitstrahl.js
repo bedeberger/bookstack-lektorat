@@ -16,6 +16,7 @@ export const zeitstrahlMethods = {
           typ: ev.typ || 'persoenlich',
           bedeutung: ev.bedeutung || '',
           kapitel: ev.kapitel || '',
+          seite: ev.seite || '',
           figur: { id: f.id, name: f.kurzname || f.name, typ: f.typ },
         });
       }
@@ -33,6 +34,7 @@ export const zeitstrahlMethods = {
         typ: ev.typ,
         bedeutung: ev.bedeutung,
         kapitel: ev.kapitel ? [ev.kapitel] : [],
+        seiten: ev.seite ? [ev.seite] : [],
         figuren: [ev.figur],
       };
       for (let j = i + 1; j < allEvents.length; j++) {
@@ -41,6 +43,7 @@ export const zeitstrahlMethods = {
         if (ev2.datum === ev.datum && ev2.ereignis === ev.ereignis) {
           group.figuren.push(ev2.figur);
           if (ev2.kapitel && !group.kapitel.includes(ev2.kapitel)) group.kapitel.push(ev2.kapitel);
+          if (ev2.seite && !group.seiten.includes(ev2.seite)) group.seiten.push(ev2.seite);
           used.add(j);
         }
       }
@@ -104,13 +107,79 @@ export const zeitstrahlMethods = {
     });
   },
 
+  async runEreignisseExtraction() {
+    if (this.ereignisseLoading) return;
+    const bookId = this.selectedBookId;
+    this.ereignisseLoading = true;
+    this.ereignisseProgress = 0;
+    this.ereignisseStatus = 'Starte Ermittlung…';
+    try {
+      const { jobId } = await fetch('/jobs/figure-events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ book_id: parseInt(bookId), book_name: this.selectedBookName }),
+      }).then(r => r.json());
+      localStorage.setItem('lektorat_figure_events_job_' + bookId, jobId);
+      this.startEreignisseExtractPoll(jobId);
+    } catch (e) {
+      console.error('[runEreignisseExtraction]', e);
+      this.ereignisseLoading = false;
+      this.ereignisseProgress = 0;
+      this.ereignisseStatus = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
+    }
+  },
+
+  startEreignisseExtractPoll(jobId) {
+    const bookId = this.selectedBookId;
+    this._startPoll({
+      timerProp: '_ereignisseExtractPollTimer',
+      jobId,
+      lsKey: 'lektorat_figure_events_job_' + bookId,
+      onProgress: (job) => {
+        this.ereignisseProgress = job.progress || 0;
+        this.ereignisseStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, this.ereignisseProgress);
+      },
+      onNotFound: () => {
+        this.ereignisseLoading = false;
+        this.ereignisseProgress = 0;
+        this.ereignisseStatus = 'Ermittlung unterbrochen (Server-Neustart). Bitte neu starten.';
+      },
+      onError: (job) => {
+        this.ereignisseLoading = false;
+        this.ereignisseProgress = 0;
+        this.ereignisseStatus = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
+      },
+      onDone: async (job) => {
+        this.ereignisseLoading = false;
+        this.ereignisseProgress = 0;
+        await this.loadFiguren(bookId);
+        const evCount = job.result?.eventCount ?? '?';
+        this.ereignisseStatus = `${evCount} Ereignisse ermittelt und gespeichert.`;
+        this._buildGlobalZeitstrahl();
+      },
+    });
+  },
+
   async toggleEreignisseCard() {
     if (this.showEreignisseCard) { this.showEreignisseCard = false; return; }
     this._closeOtherMainCards('ereignisse');
     this.showEreignisseCard = true;
-    // Figuren laden falls noch nicht geschehen (Zeitstrahl braucht sie)
     if (!this.figuren.length) {
       await this.loadFiguren(this.selectedBookId);
+    }
+    // Prüfen ob auf dem Server bereits ein Ereignis-Ermittlungsjob läuft
+    if (!this._ereignisseExtractPollTimer && !this.ereignisseLoading) {
+      try {
+        const { jobId } = await fetch(`/jobs/active?type=figure-events&book_id=${this.selectedBookId}`).then(r => r.json());
+        if (jobId) {
+          this.ereignisseLoading = true;
+          this.ereignisseProgress = 0;
+          this.ereignisseStatus = 'Ermittlung läuft bereits…';
+          this.startEreignisseExtractPoll(jobId);
+        }
+      } catch (e) {
+        console.error('[toggleEreignisseCard] active-job check:', e);
+      }
     }
   },
 };

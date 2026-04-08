@@ -681,7 +681,8 @@ ins {
   height: 4px;
   background: var(--color-tag-bg);
   border-radius: 0;
-  margin-top: 8px;
+  margin-top: 12px;
+  margin-bottom: 12px;
   overflow: hidden;
 }
 
@@ -1193,6 +1194,14 @@ ins {
   font-weight: 500;
 }
 
+.internal-link {
+  cursor: pointer;
+}
+.internal-link:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
 .figur-bz-hint {
   font-size: 12px;
   color: var(--color-muted);
@@ -1317,6 +1326,8 @@ ins {
 .gz-status-text {
   font-size: 0.8rem;
   color: var(--color-muted);
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .global-zeitstrahl-meta {
@@ -1403,7 +1414,31 @@ ins {
   background: var(--color-bg-hover);
   border-radius: 3px;
   padding: 1px 5px;
-  display: inline-block;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.gz-kapitel-link {
+  cursor: pointer;
+}
+.gz-kapitel-link:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+.gz-kapitel-link + .gz-kapitel-link::before {
+  content: ' · ';
+  white-space: pre;
+  color: var(--color-muted);
+  cursor: default;
+  text-decoration: none;
+}
+
+.gz-seite {
+  font-size: 11px;
+  color: var(--color-muted);
   margin-bottom: 2px;
 }
 
@@ -2599,3 +2634,4 @@ ins {
   font-size: 12px;
   font-style: italic;
 }
+

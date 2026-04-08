@@ -167,6 +167,9 @@ document.addEventListener('alpine:init', () => {
     zeitstrahlProgress: 0,
     zeitstrahlStatus: '',
     showEreignisseCard: false,
+    ereignisseLoading: false,
+    ereignisseProgress: 0,
+    ereignisseStatus: '',
     ereignisseFilterFigurId: '',
     ereignisseFilterKapitel: '',
     ereignisseFilterSeite: '',
@@ -187,7 +190,7 @@ document.addEventListener('alpine:init', () => {
     _checkPollTimer: null,
     _reviewPollTimer: null,
     _figuresPollTimer: null,
-    _figureEventsPollTimer: null,
+    _ereignisseExtractPollTimer: null,
     showBookStatsCard: false,
     bookStatsData: [],
     bookStatsLoading: false,
@@ -324,6 +327,25 @@ document.addEventListener('alpine:init', () => {
       }).filter(Boolean);
     },
 
+    // ── Interne Navigation ───────────────────────────────────────────────────
+    async openFigurById(figId) {
+      this.figurenKapitelFilter = '';
+      this.figurenSeitenFilter = '';
+      if (!this.showFiguresCard) {
+        await this.toggleFiguresCard();
+      }
+      this.selectedFigurId = figId;
+      await this.$nextTick();
+      document.querySelector(`.figur-item[data-figid="${figId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    },
+
+    async openEreignisseMitKapitel(kapitel) {
+      if (!this.showEreignisseCard) {
+        await this.toggleEreignisseCard();
+      }
+      this.ereignisseFilterKapitel = kapitel;
+    },
+
     // ── UI-Hilfsmethoden ─────────────────────────────────────────────────────
     setStatus(msg, spinner = false, duration = 0) {
       this.status = msg;
@@ -374,7 +396,8 @@ document.addEventListener('alpine:init', () => {
     ereignisseKapitelListe() {
       const names = new Set();
       for (const ev of this.globalZeitstrahl) {
-        if (ev.kapitel) names.add(ev.kapitel);
+        if (Array.isArray(ev.kapitel)) { for (const k of ev.kapitel) if (k) names.add(k); }
+        else if (ev.kapitel) names.add(ev.kapitel);
       }
       return [...names].sort();
     },
@@ -382,10 +405,11 @@ document.addEventListener('alpine:init', () => {
     ereignisseSeitenListe() {
       if (!this.ereignisseFilterKapitel) return [];
       const names = new Set();
-      for (const f of this.figuren) {
-        for (const s of (f.seiten || [])) {
-          if (s.kapitel === this.ereignisseFilterKapitel && s.seite) names.add(s.seite);
-        }
+      for (const ev of this.globalZeitstrahl) {
+        const kap = Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []);
+        if (!kap.includes(this.ereignisseFilterKapitel)) continue;
+        const seiten = Array.isArray(ev.seiten) ? ev.seiten : (ev.seite ? [ev.seite] : []);
+        for (const s of seiten) if (s) names.add(s);
       }
       return [...names].sort();
     },
@@ -396,15 +420,16 @@ document.addEventListener('alpine:init', () => {
         result = result.filter(ev => ev.figuren.some(f => f.id === this.ereignisseFilterFigurId));
       }
       if (this.ereignisseFilterKapitel) {
-        result = result.filter(ev => ev.kapitel === this.ereignisseFilterKapitel);
+        result = result.filter(ev => {
+          const kap = Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []);
+          return kap.includes(this.ereignisseFilterKapitel);
+        });
       }
       if (this.ereignisseFilterSeite && this.ereignisseFilterKapitel) {
-        const figurenOnPage = new Set(
-          this.figuren
-            .filter(f => (f.seiten || []).some(s => s.kapitel === this.ereignisseFilterKapitel && s.seite === this.ereignisseFilterSeite))
-            .map(f => f.id)
-        );
-        result = result.filter(ev => ev.figuren.some(f => figurenOnPage.has(f.id)));
+        result = result.filter(ev => {
+          const seiten = Array.isArray(ev.seiten) ? ev.seiten : (ev.seite ? [ev.seite] : []);
+          return seiten.includes(this.ereignisseFilterSeite);
+        });
       }
       return result;
     },
@@ -751,9 +776,13 @@ document.addEventListener('alpine:init', () => {
       this.zeitstrahlProgress = 0;
       this.zeitstrahlStatus = '';
       this.showEreignisseCard = false;
+      this.ereignisseLoading = false;
+      this.ereignisseProgress = 0;
+      this.ereignisseStatus = '';
       this.ereignisseFilterFigurId = '';
       this.ereignisseFilterKapitel = '';
       this.ereignisseFilterSeite = '';
+      if (this._ereignisseExtractPollTimer) { clearInterval(this._ereignisseExtractPollTimer); this._ereignisseExtractPollTimer = null; }
       this.showSzenenCard = false;
       this.szenen = [];
       this.szenenUpdatedAt = null;
