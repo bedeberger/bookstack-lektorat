@@ -777,7 +777,7 @@
           <div class="gz-ereignis" x-text="ev.ereignis"></div>
           <div x-show="Array.isArray(ev.kapitel) ? ev.kapitel.length : ev.kapitel" class="gz-kapitel">
             <template x-for="(kap, ki) in (Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []))" :key="ki">
-              <span class="gz-kapitel-link" x-text="kap" @click="openEreignisseMitKapitel(kap)"></span>
+              <span class="gz-kapitel-link internal-link" x-text="kap" @click="openEreignisseMitKapitel(kap)"></span>
             </template>
           </div>
           <div x-show="Array.isArray(ev.seiten) ? ev.seiten.length : ev.seite" class="gz-seite" x-text="Array.isArray(ev.seiten) ? ev.seiten.join(' · ') : ev.seite"></div>

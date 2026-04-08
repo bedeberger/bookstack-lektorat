@@ -26,8 +26,6 @@ export let SYSTEM_FIGUREN       = null;
 export let SYSTEM_STILKORREKTUR = null;
 export let SYSTEM_CHAT          = null;
 export let SYSTEM_BOOK_CHAT     = null;
-export let SYSTEM_SYNONYME      = null;
-export let SYSTEM_SYNONYM_CHECK = null;
 export let SYSTEM_ORTE          = null;
 export let SYSTEM_KONTINUITAET  = null;
 
@@ -50,8 +48,6 @@ export function configurePrompts(cfg) {
   SYSTEM_STILKORREKTUR  = buildSystem(sp.stilkorrektur  || '', rules);
   SYSTEM_CHAT           = buildSystemNoJson(sp.chat     || '', rules);
   SYSTEM_BOOK_CHAT      = buildSystemNoJson(sp.buchchat || '', rules);
-  SYSTEM_SYNONYME       = buildSystem(sp.synonyme       || '', rules);
-  SYSTEM_SYNONYM_CHECK  = buildSystem(sp.synonymeCheck  || '', rules);
   SYSTEM_ORTE           = buildSystem(sp.orte           || 'Du bist ein Literaturanalytiker für deutschsprachige Texte. Du identifizierst Schauplätze und Orte präzise und konservativ – nur was im Text eindeutig belegt ist.', rules);
   SYSTEM_KONTINUITAET   = buildSystem(sp.kontinuitaet   || 'Du bist ein sorgfältiger Literaturlektor für deutschsprachige Texte. Du prüfst einen Roman auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.', rules);
 }
@@ -77,9 +73,23 @@ HTML-Text:
 ${html}`;
 }
 
+// Wiederholung-Regeln für Lektorat-Prompts (beide Varianten)
+function _buildWiederholungBlock() {
+  const sw = STOPWORDS.length > 0
+    ? `\n- Stoppwörter nie melden (auch flektierte Formen): ${STOPWORDS.join(', ')}`
+    : '';
+  return `
+Wiederholung-Regeln (typ: «wiederholung»):
+- Nur Inhaltswörter, die auffällig oft vorkommen: mind. 3× im Text ODER 2× in enger Nähe (5 Sätze)
+- Keine Pronomen, Hilfsverben, Artikel, Konjunktionen, Präpositionen, Eigennamen${sw}
+- «original»: vollständiger Satz zeichengenau aus dem Text (damit die Textstelle eindeutig auffindbar ist)
+- «korrektur»: derselbe Satz mit dem besten Synonym – exakt gleiche grammatische Form (Kasus, Numerus, Tempus)
+- Synonym-Selbsttest vor jedem Eintrag: Klingt der Satz danach natürlich? Bedeutung erhalten? Passt zum Autorenstil?`;
+}
+
 // Batch-Variante ohne korrekturen_html (spart Output-Tokens, für Server-Side-Jobs)
 export function buildBatchLektoratPrompt(text) {
-  return `Analysiere diesen deutschsprachigen Text auf Rechtschreibfehler, Grammatikfehler und stilistische Auffälligkeiten. Bewerte ausserdem die Szenen der Seite.
+  return `Analysiere diesen deutschsprachigen Text auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
 
 WICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen, müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.
 
@@ -87,10 +97,10 @@ Antworte mit diesem JSON-Schema:
 {
   "fehler": [
     {
-      "typ": "rechtschreibung|grammatik|stil",
-      "original": "das fehlerhafte Wort oder die fehlerhafte Phrase (genau eine Beanstandung pro Eintrag)",
-      "korrektur": "die korrekte Version",
-      "kontext": "der Satz in dem der Fehler vorkommt (gekürzt)",
+      "typ": "rechtschreibung|grammatik|stil|wiederholung",
+      "original": "das fehlerhafte Wort oder die fehlerhafte Phrase – bei «wiederholung»: vollständiger Satz zeichengenau aus dem Text",
+      "korrektur": "die korrekte Version – bei «wiederholung»: derselbe Satz mit Synonym",
+      "kontext": "der Satz in dem der Fehler vorkommt (bei «wiederholung» gleich wie «original»)",
       "erklaerung": "kurze Erklärung auf Deutsch (nur diesen einen Mangel beschreiben) ${ERKLAERUNG_RULE}"
     }
   ],
@@ -109,6 +119,7 @@ Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
 - Wenn die Seite keine erkennbaren Szenen enthält (z.B. rein beschreibender Text, Exposition): «szenen» als leeres Array zurückgeben
 - wertung: «stark» = funktioniert gut, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
+${_buildWiederholungBlock()}
 
 Text:
 ${text}`;
@@ -642,91 +653,6 @@ export function buildBookChatSystemPrompt(bookName, relevantPages, figuren, revi
   return parts.join('\n');
 }
 
-// ── Synonymanalyse ────────────────────────────────────────────────────────────
-
-export function buildSynonymPrompt(text) {
-  const stopwordsBlock = STOPWORDS.length > 0
-    ? `\nSTOPWÖRTER – ABSOLUTE AUSSCHLUSSLISTE (Pflicht-Prüfung vor jedem Eintrag):\nDiese Wörter dürfen unter keinen Umständen im «woerter»-Array erscheinen, egal wie oft sie im Text vorkommen. Prüfe auch Großschreibung und flektierte Formen – ist der Wortstamm auf der Liste, gehört das Wort nicht ins Ergebnis:\n${STOPWORDS.join(', ')}\nSelbsttest (MUSS für jeden Eintrag durchgeführt werden): «Ist dieses Wort oder sein Stamm auf der Ausschlussliste?» – Wenn ja oder unsicher: weglassen und das nächste Wort prüfen.\n`
-    : '';
-  return `Analysiere diesen deutschsprachigen Prosatext und identifiziere Wörter oder kurze Phrasen, die stilistisch störend oft wiederholt werden.
-${stopwordsBlock}
-Kriterien:
-- Mindestens 3 Vorkommen im Text ODER mindestens 2 Vorkommen in enger Nähe (innerhalb von 5 Sätzen)
-- Zähle LEMMA-basiert: flektierte Formen desselben Worts zählen zusammen. «lief», «läuft», «gelaufen» → alle zählen für das Lemma «laufen». Im «wort»-Feld die häufigste oder auffälligste Form im Text eintragen.
-- Nur stilistisch ersetzbare Inhaltswörter – keine Pronomen, keine Hilfsverben, keine Artikel, keine Konjunktionen, keine Präpositionen, keine Eigennamen, keine grammatisch erzwungenen Formen, keine inhaltlich unvermeidlichen Begriffe
-- Sortiere nach Dringlichkeit (auffälligste Wiederholungen zuerst)
-- Maximal 8 Wörter; pro Wort maximal 6 Vorkommen
-- Wenn keine geeigneten Wörter gefunden werden: «woerter» als leeres Array zurückgeben
-
-Für jedes Wort: Liste jede Textstelle einzeln auf. Gib den vollständigen Satz als Passage an (zeichengenau wie im Text). Schlage pro Stelle 2–4 Synonyme vor.
-
-WICHTIG – Kontext-Selbsttest pro Vorkommen: Bevor du ein Synonym einträgst, setze es gedanklich in den genauen Satz ein. Klingt der Satz danach natürliches Deutsch? Bleibt die Bedeutung exakt erhalten? Nur dann eintragen. Wenn kein Synonym diesen Test besteht: das Vorkommen weglassen (nicht ins vorkommen-Array aufnehmen).
-
-WICHTIG – Grammatische Form: Die Synonyme müssen exakt dieselbe Konjugation (bei Verben) bzw. Deklination (bei Nomen/Adjektiven) wie das Originalwort haben. Beispiel: steht im Text «sah» (Präteritum, 3. Person Singular), muss das Synonym ebenfalls im Präteritum stehen («erblickte», nicht «erblicken»).
-
-WICHTIG – Semantische Funktion: Das Verb «sein» hat viele verschiedene Verwendungen, die unterschiedliche Alternativen erfordern:
-- Adjektivprädikat («war unberührt», «ist entzaubert») → «blieb», «zeigte sich», «wirkte», «galt als» (NICHT «verlief», «befindet sich», «gestaltete sich»)
-- Gleichsetzungsnominativ («waren eine behütete Zeit», «waren eine andere Schweiz») → «galten als», «stellten … dar», «wirkten wie» (NICHT «verliefen», «existierten»)
-- Zeitangabe / Zustandsaussage («das war noch vor …», «war unberührt») → je nach Kontext «lag», «stammte», «befand sich» oder Adjektivalternative
-Generische Füllalternativen wie «existierte», «verlief», «gestaltete sich» nur verwenden, wenn sie im konkreten Satz tatsächlich funktionieren.
-
-WICHTIG – Passage: muss eine zeichengenaue Kopie des Satzes aus dem Text sein – kein Kürzen, kein Umformulieren.
-
-Antworte mit diesem JSON-Schema:
-{
-  "woerter": [
-    {
-      "wort": "exakte Wortform wie im Text",
-      "vorkommen": [
-        {
-          "passage": "Vollständiger Satz zeichengenau aus dem Text",
-          "synonyme": ["Alternative1", "Alternative2", "Alternative3"]
-        }
-      ]
-    }
-  ]
-}
-
-Text:
-${text}`;
-}
-
-export function buildSynonymCheckPrompt(passage, passageNach, wort, synonym) {
-  return `Prüfe ob die folgende Synonym-Ersetzung im Satz korrekt ist.
-
-Originalsatz:       «${passage}»
-Satz nach Ersetzung: «${passageNach}»
-(Ersetzt: «${wort}» → «${synonym}»)
-
-Prüfkriterien:
-- Grammatisch vollständig: Gibt es verwaiste Satzteile? (Typisches Beispiel: abgetrennte Verbpräfixe – z.B. «aufwachsen» → nur «wuchsen» ersetzt, aber «auf» bleibt fälschlicherweise stehen.)
-- Bedeutung erhalten?
-- Natürliches Deutsch?
-
-Mögliche Antworten:
-
-1. Ersetzung ist korrekt wie sie ist:
-{
-  "ok": true,
-  "begruendung": null
-}
-
-2. Ersetzung ist grundsätzlich unbrauchbar (falsches Synonym, Bedeutung verfälscht):
-{
-  "ok": false,
-  "begruendung": "Kurze Erklärung des Problems (ein Satz)"
-}
-
-3. Ersetzung ist inhaltlich passend, erfordert aber grammatikalische Anpassungen am Restsatz (z.B. andere Pronomen, geänderte Deklination, angepasste Artikelform, Satzumstellung):
-{
-  "ok": "angepasst",
-  "satzNeu": "Der vollständig überarbeitete Satz – zeichengenau wie der Originalsatz, aber mit dem Synonym und allen nötigen grammatikalischen Anpassungen",
-  "begruendung": "Kurze Erklärung warum eine Anpassung nötig war (ein Satz)"
-}
-
-Verwende «angepasst» wenn das Synonym gut passt, aber der Satz drumherum leicht angepasst werden muss, damit er korrekt klingt.`;
-}
-
 // ── Schauplatz-Extraktion ─────────────────────────────────────────────────────
 
 const ORTE_SCHEMA = `{
@@ -927,7 +853,7 @@ ${JSON_ONLY}`;
 }
 
 export function buildLektoratPrompt(text, html) {
-  return `Analysiere diesen deutschsprachigen Text auf Rechtschreibfehler, Grammatikfehler und stilistische Auffälligkeiten. Bewerte ausserdem die Szenen der Seite.
+  return `Analysiere diesen deutschsprachigen Text auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
 
 WICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen (z.B. ein Gallizismus und separate Anführungszeichen-Problematik), müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.
 
@@ -935,10 +861,10 @@ Antworte mit diesem JSON-Schema:
 {
   "fehler": [
     {
-      "typ": "rechtschreibung|grammatik|stil",
-      "original": "das fehlerhafte Wort oder die fehlerhafte Phrase (genau eine Beanstandung pro Eintrag)",
-      "korrektur": "die korrekte Version",
-      "kontext": "der Satz in dem der Fehler vorkommt (gekürzt)",
+      "typ": "rechtschreibung|grammatik|stil|wiederholung",
+      "original": "das fehlerhafte Wort oder die fehlerhafte Phrase – bei «wiederholung»: vollständiger Satz zeichengenau aus dem Text",
+      "korrektur": "die korrekte Version – bei «wiederholung»: derselbe Satz mit Synonym",
+      "kontext": "der Satz in dem der Fehler vorkommt (bei «wiederholung» gleich wie «original»)",
       "erklaerung": "kurze Erklärung auf Deutsch (nur diesen einen Mangel beschreiben) ${ERKLAERUNG_RULE}"
     }
   ],
@@ -958,6 +884,7 @@ Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
 - Wenn die Seite keine erkennbaren Szenen enthält (z.B. rein beschreibender Text, Exposition): «szenen» als leeres Array zurückgeben
 - wertung: «stark» = funktioniert gut, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
+${_buildWiederholungBlock()}
 
 Originaltext:
 ${text}

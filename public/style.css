@@ -1201,6 +1201,13 @@ ins {
   opacity: 0.65;
   text-decoration: underline;
 }
+/* Dark-badge links: hover via background-shift instead of opacity (contrast: ~5.7:1) */
+.figur-kapitel-primary.internal-link:hover,
+.gz-kapitel-link.internal-link:hover {
+  opacity: 1;
+  background: var(--color-muted);
+  text-decoration: underline;
+}
 
 .figur-bz-hint {
   font-size: 12px;
@@ -1409,36 +1416,29 @@ ins {
 }
 
 .gz-kapitel {
-  font-size: 11px;
-  color: var(--color-muted);
-  background: var(--color-bg-hover);
-  border-radius: 3px;
-  padding: 1px 5px;
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 0;
+  gap: 3px;
   align-items: center;
   margin-bottom: 2px;
 }
 
 .gz-kapitel-link {
-  cursor: pointer;
-}
-.gz-kapitel-link:hover {
-  opacity: 0.65;
-  text-decoration: underline;
-}
-.gz-kapitel-link + .gz-kapitel-link::before {
-  content: ' · ';
-  white-space: pre;
-  color: var(--color-muted);
-  cursor: default;
-  text-decoration: none;
+  font-size: 11px;
+  padding: 2px 7px;
+  font-weight: 600;
+  background: var(--color-text);
+  color: var(--color-surface);
+  white-space: nowrap;
 }
 
 .gz-seite {
   font-size: 11px;
+  padding: 2px 7px;
+  background: var(--color-tag-bg);
   color: var(--color-muted);
+  white-space: nowrap;
+  display: inline-block;
   margin-bottom: 2px;
 }
 
