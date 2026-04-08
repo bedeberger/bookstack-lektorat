@@ -23,6 +23,7 @@ async function getPrompts() {
 
 const router = express.Router();
 const jsonBody = express.json();
+const jsonBodyLarge = express.json({ limit: '5mb' });
 
 // ── Job store ─────────────────────────────────────────────────────────────────
 // key: jobId → { id, type, bookId, status, progress, statusText, result, error }
@@ -1260,12 +1261,13 @@ router.post('/szenen', jsonBody, (req, res) => {
   const existing = runningJobs.get(jobKey('szenen', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = book_name ? `Szenenanalyse · ${book_name}` : `Szenenanalyse`;
+  deleteCheckpoint('szenen', book_id, userEmail);
   const jobId = createJob('szenen', book_id, userEmail, label);
   enqueueJob(jobId, () => runSzenenAnalyseJob(jobId, book_id, book_name || '', userEmail));
   res.json({ jobId });
 });
 
-router.post('/consolidate-zeitstrahl', jsonBody, (req, res) => {
+router.post('/consolidate-zeitstrahl', jsonBodyLarge, (req, res) => {
   const { book_id, events, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
   if (!Array.isArray(events) || !events.length) return res.json({ jobId: null, empty: true });

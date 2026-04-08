@@ -481,7 +481,7 @@ Regeln:
 - figuren: nur IDs aus der obigen Liste; leer lassen wenn keine bekannte Figur aktiv beteiligt ist
 - wertung: «stark» = spannend/überzeugend, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
 - Wenn ein Abschnitt keine erkennbaren Szenen enthält (reine Exposition, Beschreibung): «szenen» als leeres Array
-- Maximal 10 Szenen pro Kapitel; konservativ – lieber weniger, aber treffende Einträge
+- Jede erkennbare Szene erfassen; konservativ – lieber weniger, aber treffende Einträge
 
 ${JSON_ONLY}
 
