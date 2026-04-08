@@ -453,7 +453,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail) {
 
 // ── Job: Figurenextraktion ────────────────────────────────────────────────────
 async function runFiguresJob(jobId, bookId, bookName, userEmail) {
-  const { SYSTEM_FIGUREN, buildFiguresSinglePassPrompt, buildFiguresChapterPrompt, buildFiguresConsolidationPrompt } = await getPrompts();
+  const { SYSTEM_FIGUREN, buildFiguresSinglePassPrompt, buildFiguresChapterEventsPrompt, buildFiguresChapterWithEventsPrompt, buildFiguresConsolidationPrompt } = await getPrompts();
 
   try {
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
@@ -488,33 +488,57 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
     } else {
       const { groupOrder, groups } = groupByChapter(pageContents);
       const chapterFiguren = [];
+      const accumulatedFiguren = []; // kompakte Figurenliste aus allen Vorkapiteln
 
       for (let gi = 0; gi < groupOrder.length; gi++) {
         const group = groups.get(groupOrder[gi]);
-        const tokStr = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
+        const tokStr = () => tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
         const fromPct = 55 + Math.round((gi / groupOrder.length) * 30);
+        const midPct  = 55 + Math.round(((gi + 0.5) / groupOrder.length) * 30);
         const toPct   = 55 + Math.round(((gi + 1) / groupOrder.length) * 30);
+        const chText  = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+
+        // Phase 1: Events dieses Kapitels extrahieren
         updateJob(jobId, {
           progress: fromPct,
-          statusText: `Figuren in «${group.name}» (${gi + 1}/${groupOrder.length})…${tokStr}`,
+          statusText: `Events in «${group.name}» (${gi + 1}/${groupOrder.length})…${tokStr()}`,
         });
-        const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
-        const chResult = await aiCall(jobId, tok,
-          buildFiguresChapterPrompt(group.name, bookName, group.pages.length, chText),
+        const eventsResult = await aiCall(jobId, tok,
+          buildFiguresChapterEventsPrompt(group.name, bookName, group.pages.length, chText),
           SYSTEM_FIGUREN,
-          fromPct, toPct, 2000,
+          fromPct, midPct, 1500,
         );
-        chapterFiguren.push({ kapitel: group.name, figuren: chResult.figuren || [] });
+        const chapterEvents = eventsResult.events || [];
+
+        // Phase 2: Figuren mit Event-Kontext und Vorwissen aus Vorkapiteln
+        updateJob(jobId, {
+          progress: midPct,
+          statusText: `Figuren in «${group.name}» (${gi + 1}/${groupOrder.length})…${tokStr()}`,
+        });
+        const chResult = await aiCall(jobId, tok,
+          buildFiguresChapterWithEventsPrompt(group.name, bookName, group.pages.length, chText, chapterEvents, accumulatedFiguren),
+          SYSTEM_FIGUREN,
+          midPct, toPct, 2500,
+        );
+        const chFiguren = chResult.figuren || [];
+        chapterFiguren.push({ kapitel: group.name, figuren: chFiguren });
+
+        // Akkumulierte Liste für nächstes Kapitel aktualisieren (kompakt, dedupliziert nach Name)
+        for (const f of chFiguren) {
+          if (!accumulatedFiguren.some(a => a.name === f.name)) {
+            accumulatedFiguren.push({ name: f.name, kurzname: f.kurzname, typ: f.typ, beschreibung: f.beschreibung });
+          }
+        }
       }
 
       updateJob(jobId, {
-        progress: 88,
+        progress: 85,
         statusText: `KI konsolidiert Figuren… · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens`,
       });
       result = await aiCall(jobId, tok,
         buildFiguresConsolidationPrompt(bookName, chapterFiguren),
         SYSTEM_FIGUREN,
-        88, 96, 6000,
+        85, 96, 6000,
       );
     }
 

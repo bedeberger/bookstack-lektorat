@@ -236,16 +236,62 @@ Buchtext (${pageCount} Seiten):
 ${bookText}`;
 }
 
-export function buildFiguresChapterPrompt(chapterName, bookName, pageCount, chText) {
-  return `Extrahiere alle Figuren/Charaktere aus dem Kapitel «${chapterName}» des Buchs «${bookName}».
+export function buildFiguresChapterEventsPrompt(chapterName, bookName, pageCount, chText) {
+  return `Extrahiere alle Ereignisse aus dem Kapitel «${chapterName}» des Buchs «${bookName}».
+
 Antworte mit:
 {
-  "figuren": [
-    { "name": "Vollständiger Name", "kurzname": "...", "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere", "beruf": "...", "geburtstag": "JJJJ oder leer", "geschlecht": "männlich|weiblich|divers|unbekannt", "beschreibung": "1-2 Sätze", "eigenschaften": ["..."], "lebensereignisse": [{ "datum": "JJJJ (nur Jahreszahl; aus Kontext errechnen wenn nötig; leer lassen wenn nicht errechenbar)", "ereignis": "Was passierte", "typ": "persoenlich|extern", "bedeutung": "Bedeutung oder leer", "kapitel": "${chapterName}" }], "beziehungen": [{ "name": "Name der anderen Figur", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "1 Satz" }] }
+  "events": [
+    {
+      "datum": "JJJJ (nur Jahreszahl; aus Kontext errechnen wenn nötig – Geburtsjahr + Altersangabe, bekannte historische Jahreszahl; leer lassen wenn nicht errechenbar)",
+      "ereignis": "Was passierte – präzise in 1 Satz (bei historischen Events: offizieller Name falls bekannt)",
+      "typ": "persoenlich|extern",
+      "beteiligte": ["Name der beteiligten Person (leer wenn rein gesellschaftliches Ereignis)"],
+      "bedeutung": "Warum wichtig für Handlung oder Figur (1 Satz, leer wenn unklar)"
+    }
   ]
 }
 
-Nur echte Personen. Sei konservativ: nur Figuren und Beziehungen die im Text eindeutig belegt sind.
+Regeln:
+- typ='persoenlich': echte biografische Wendepunkte (Geburt, Tod, Trauma, neue/beendete Beziehung, Jobwechsel, Umzug, wichtige Entscheidung) – keine flüchtigen Szenen ohne bleibende Wirkung
+- typ='extern': gesellschaftliche/historische Ereignisse (Kriege, Katastrophen, Massaker, politische Umbrüche, gesellschaftliche Veränderungen) – GROSSZÜGIG: auch Ereignisse aufnehmen die nur erwähnt werden oder nur indirekt wirken; so präzise wie möglich benennen (offizieller historischer Name bevorzugt)
+- Chronologisch sortiert nach Datum (falls kein Datum: Reihenfolge im Text beibehalten)
+- 'beteiligte': nur bei persoenlichen Events oder wenn eine Figur namentlich in Bezug zum Ereignis steht
+
+${JSON_ONLY}
+
+Kapiteltext (${pageCount} Seiten):
+
+${chText}`;
+}
+
+export function buildFiguresChapterWithEventsPrompt(chapterName, bookName, pageCount, chText, events, bekanntefiguren) {
+  const eventsStr = events.length
+    ? events.map(e =>
+        `- [${e.typ}] ${e.datum ? e.datum + ': ' : ''}${e.ereignis}` +
+        (e.beteiligte?.length ? ` (Beteiligt: ${e.beteiligte.join(', ')})` : '') +
+        (e.bedeutung ? ` → ${e.bedeutung}` : '')
+      ).join('\n')
+    : '(keine Ereignisse extrahiert)';
+
+  const bekannteStr = bekanntefiguren.length
+    ? '\n\nBekannte Figuren aus Vorkapiteln (diese nicht duplizieren; nur aufführen wenn sie in diesem Kapitel aktiv auftreten):\n' +
+      bekanntefiguren.map(f => `- ${f.name}${f.kurzname && f.kurzname !== f.name ? ` («${f.kurzname}»)` : ''} (${f.typ || 'andere'}): ${f.beschreibung || ''}`).join('\n')
+    : '';
+
+  return `Extrahiere alle Figuren aus dem Kapitel «${chapterName}» des Buchs «${bookName}».
+
+Bekannte Ereignisse dieses Kapitels – ordne sie den Figuren als lebensereignisse zu:
+${eventsStr}${bekannteStr}
+
+Antworte mit diesem JSON-Schema:
+${FIGUREN_SCHEMA}
+
+${FIGUREN_RULES}
+
+Zusätzliche Hinweise:
+- Ordne die oben gelisteten Ereignisse den passenden Figuren als lebensereignisse zu; ergänze weitere Events die im Text belegt sind
+- Figuren aus Vorkapiteln: nur aufführen wenn sie in diesem Kapitel aktiv auftreten
 
 ${JSON_ONLY}
 
