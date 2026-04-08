@@ -415,12 +415,11 @@ async function runReviewJob(jobId, bookId, bookName, userEmail) {
 
       for (let gi = 0; gi < groupOrder.length; gi++) {
         const group = groups.get(groupOrder[gi]);
-        const tokStr = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
         const fromPct = 65 + Math.round((gi / groupOrder.length) * 25);
         const toPct   = 65 + Math.round(((gi + 1) / groupOrder.length) * 25);
         updateJob(jobId, {
           progress: fromPct,
-          statusText: `Analysiere ${gi + 1}/${groupOrder.length}: «${group.name}»…${tokStr}`,
+          statusText: `Analysiere ${gi + 1}/${groupOrder.length}: «${group.name}»…`,
         });
         const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
         const ca = await aiCall(jobId, tok,
@@ -433,7 +432,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail) {
 
       updateJob(jobId, {
         progress: 90,
-        statusText: `KI erstellt Gesamtbewertung… · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens`,
+        statusText: `KI erstellt Gesamtbewertung…`,
       });
       r = await aiCall(jobId, tok,
         buildBookReviewMultiPassPrompt(bookName, chapterAnalyses, pageContents.length),
@@ -530,8 +529,7 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
       }
 
       // Phase 2: Konsolidierung
-      const tokStr = ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens`;
-      updateJob(jobId, { progress: 85, statusText: `KI konsolidiert Figuren…${tokStr}` });
+      updateJob(jobId, { progress: 85, statusText: `KI konsolidiert Figuren…` });
       result = await aiCall(jobId, tok,
         buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren),
         SYSTEM_FIGUREN,
@@ -692,12 +690,11 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
 
     for (let gi = startGi; gi < groupOrder.length; gi++) {
       const group = groups.get(groupOrder[gi]);
-      const tokStr = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
       const fromPct = 40 + Math.round((gi / groupOrder.length) * 55);
       const toPct   = 40 + Math.round(((gi + 1) / groupOrder.length) * 55);
       updateJob(jobId, {
         progress: fromPct,
-        statusText: `Szenen in «${group.name}» (${gi + 1}/${groupOrder.length})…${tokStr}`,
+        statusText: `Szenen in «${group.name}» (${gi + 1}/${groupOrder.length})…`,
       });
       const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
       let chResult;
@@ -889,10 +886,9 @@ async function runBatchCheckJob(jobId, bookId, userEmail) {
       const p = pages[i];
       const fromPct = Math.round((i / pages.length) * 95);
       const toPct   = Math.round(((i + 1) / pages.length) * 95);
-      const tokStr  = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
       updateJob(jobId, {
         progress: fromPct,
-        statusText: `${i + 1}/${pages.length}: ${p.name}…${tokStr}`,
+        statusText: `${i + 1}/${pages.length}: ${p.name}…`,
       });
 
       try {
@@ -1405,12 +1401,11 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
 
       for (let gi = startGi; gi < groupOrder.length; gi++) {
         const group = groups.get(groupOrder[gi]);
-        const tokStr = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
         const fromPct = 55 + Math.round((gi / groupOrder.length) * 30);
         const toPct   = 55 + Math.round(((gi + 1) / groupOrder.length) * 30);
         updateJob(jobId, {
           progress: fromPct,
-          statusText: `Schauplätze in «${group.name}» (${gi + 1}/${groupOrder.length})…${tokStr}`,
+          statusText: `Schauplätze in «${group.name}» (${gi + 1}/${groupOrder.length})…`,
         });
         const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
         let chResult;
@@ -1430,7 +1425,7 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
 
       updateJob(jobId, {
         progress: 88,
-        statusText: `KI konsolidiert Schauplätze… · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens`,
+        statusText: `KI konsolidiert Schauplätze…`,
       });
       result = await aiCall(jobId, tok,
         buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt),
@@ -1517,12 +1512,11 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
 
       for (let gi = startGi; gi < groupOrder.length; gi++) {
         const group = groups.get(groupOrder[gi]);
-        const tokStr = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
         const fromPct = 50 + Math.round((gi / groupOrder.length) * 35);
         const toPct   = 50 + Math.round(((gi + 1) / groupOrder.length) * 35);
         updateJob(jobId, {
           progress: fromPct,
-          statusText: `Fakten in «${group.name}» (${gi + 1}/${groupOrder.length})…${tokStr}`,
+          statusText: `Fakten in «${group.name}» (${gi + 1}/${groupOrder.length})…`,
         });
         const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
         let chResult;
@@ -1541,7 +1535,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
 
       updateJob(jobId, {
         progress: 88,
-        statusText: `KI prüft Widersprüche… · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens`,
+        statusText: `KI prüft Widersprüche…`,
       });
       result = await aiCall(jobId, tok,
         buildKontinuitaetCheckPrompt(bookName, chapterFacts, figurenKompakt, orteKompakt),
