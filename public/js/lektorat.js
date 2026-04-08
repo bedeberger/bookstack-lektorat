@@ -165,15 +165,16 @@ export const lektoratMethods = {
         this.originalHtml = r.originalHtml;
         this.currentPageUpdatedAt = r.updatedAt || null;
         const fehler = r.fehler || [];
-        const errors = fehler.filter(f => f.typ === 'rechtschreibung' || f.typ === 'grammatik');
+        const errors = fehler.filter(f => f.typ === 'rechtschreibung' || f.typ === 'grammatik' || f.typ === 'wiederholung');
         const styles = fehler.filter(f => f.typ === 'stil');
         this.lektoratErrors = errors;
         this.lektoratStyles = styles;
-        this.selectedErrors = errors.map(() => true);
+        this.selectedErrors = errors.map(f => f.typ !== 'wiederholung');
         this.selectedStyles = styles.map(() => false);
-        this.hasErrors = errors.length > 0;
-        this.correctedHtml = errors.length > 0
-          ? this._applyCorrections(r.originalHtml, errors)
+        const hardErrors = errors.filter(f => f.typ !== 'wiederholung');
+        this.hasErrors = hardErrors.length > 0;
+        this.correctedHtml = hardErrors.length > 0
+          ? this._applyCorrections(r.originalHtml, hardErrors)
           : r.originalHtml;
         let out = '';
         const szenen = r.szenen || [];

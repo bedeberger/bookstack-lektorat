@@ -14,7 +14,6 @@ import { graphMethods } from './graph.js';
 import { bookstatsMethods } from './bookstats.js';
 import { chatMethods } from './chat.js';
 import { bookChatMethods } from './book-chat.js';
-import { synonymeMethods } from './synonyme.js';
 import { szenenMethods } from './szenen.js';
 import { orteMethods } from './orte.js';
 import { kontinuitaetMethods } from './kontinuitaet.js';
@@ -90,6 +89,26 @@ document.addEventListener('alpine:init', () => {
         const item = list?.children[this.highlighted];
         item?.scrollIntoView({ block: 'nearest' });
       });
+    },
+    init() {
+      this.$el.innerHTML = `
+        <button type="button" class="combobox-trigger" @click="toggle()">
+          <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
+          <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="combobox-dropdown" x-show="open" x-cloak>
+          <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
+          <ul class="combobox-list">
+            <template x-for="(opt, i) in filtered" :key="opt.value">
+              <li class="combobox-option"
+                  :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
+                  @click="select(opt.value)" @mouseenter="highlighted = i"
+                  x-text="opt.label"></li>
+            </template>
+            <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+          </ul>
+        </div>
+      `;
     },
   }));
 
@@ -217,13 +236,6 @@ document.addEventListener('alpine:init', () => {
     bookChatProgress: 0,
     bookChatStatus: '',
     _bookChatPollTimer: null,
-    showSynonymeCard: false,
-    synonymeLoading: false,
-    synonymeProgress: 0,
-    synonymeResult: null,
-    synonymeStatus: '',
-    synonymeHtml: null,
-    _synonymePollTimer: null,
     showOrteCard: false,
     orte: [],
     orteUpdatedAt: null,
@@ -856,7 +868,6 @@ document.addEventListener('alpine:init', () => {
     ...bookstatsMethods,
     ...chatMethods,
     ...bookChatMethods,
-    ...synonymeMethods,
     ...szenenMethods,
     ...orteMethods,
     ...kontinuitaetMethods,

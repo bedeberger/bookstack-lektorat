@@ -1157,21 +1157,6 @@ router.post('/check', jsonBody, (req, res) => {
   res.json({ jobId });
 });
 
-router.post('/synonyme', jsonBody, (req, res) => {
-  const { page_id, page_name } = req.body;
-  if (!page_id) return res.status(400).json({ error: 'page_id fehlt' });
-  const userEmail = req.session?.user?.email || null;
-  const userToken = req.session?.bookstackToken
-    ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw }
-    : null;
-  const existing = runningJobs.get(jobKey('synonyme', page_id, userEmail));
-  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
-  const label = page_name ? `Synonyme · ${page_name}` : `Synonyme · Seite #${page_id}`;
-  const jobId = createJob('synonyme', page_id, userEmail, label);
-  enqueueJob(jobId, () => runSynonymJob(jobId, page_id, userEmail, userToken));
-  res.json({ jobId });
-});
-
 router.post('/review', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
