@@ -363,7 +363,7 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
   const globalMax = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
   const maxTokensOverride = maxTokens != null
     ? Math.min(maxTokens, globalMax)
-    : Math.min(Math.ceil(expectedChars / 4 * 2), globalMax);
+    : globalMax;
   const { text, truncated, tokensIn, tokensOut } = await callAI(prompt, system, onProgress, maxTokensOverride);
   tok.in += tokensIn;
   tok.out += tokensOut;

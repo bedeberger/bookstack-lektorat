@@ -78,17 +78,17 @@ body {
   color: var(--color-text);
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 1rem;
+  padding: 1rem 1rem 56px;
   max-width: 860px;
   margin: 0 auto;
 }
 
 @media (min-width: 600px) {
-  body { padding: 1.5rem; }
+  body { padding: 1.5rem 1.5rem 56px; }
 }
 
 @media (min-width: 960px) {
-  body { padding: 2rem 1.5rem; max-width: 1320px; }
+  body { padding: 2rem 1.5rem 56px; max-width: 1320px; }
 }
 
 h1 {
@@ -1048,9 +1048,13 @@ ins {
   font-weight: 600;
 }
 
+@media (max-width: 600px) {
+  .ort-item .figur-kapitel-badges { display: none; }
+}
 @media (max-width: 480px) {
   .figur-kapitel-badges { display: none; }
   .figur-kapitelauftritte { display: none; }
+  .ort-stimmung { display: none; }
 }
 
 .figur-beziehung-item {
@@ -1501,7 +1505,6 @@ ins {
   .szenen-uebersicht-grid { grid-template-columns: 1fr; }
 }
 
-.szenen-uebersicht-block {}
 
 .szenen-count-badges {
   display: flex;
@@ -2471,11 +2474,18 @@ ins {
   font-weight: 600;
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ort-stimmung {
   font-style: italic;
   color: var(--color-muted);
   font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 30%;
 }
 .ort-typ-tag {
   font-size: 11px;
