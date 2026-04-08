@@ -142,18 +142,22 @@
           <!-- Lebensereignisse / Zeitstrahl -->
           <div x-show="f.lebensereignisse?.length">
             <div class="bewertung-section-title">Zeitstrahl</div>
-            <div class="figur-zeitstrahl">
+            <div class="global-zeitstrahl-body">
               <template x-for="(ev, i) in (f.lebensereignisse || [])" :key="i">
-                <div class="figur-zeitstrahl-item" :class="ev.typ === 'extern' ? 'figur-zeitstrahl-item--extern' : ''">
-                  <div class="figur-zeitstrahl-marker" :class="ev.typ === 'extern' ? 'figur-zeitstrahl-marker--extern' : ''"></div>
-                  <div class="figur-zeitstrahl-content">
-                    <span class="figur-zeitstrahl-datum">
-                      <span x-text="ev.datum"></span>
-                      <span x-show="ev.typ === 'extern'" class="figur-zeitstrahl-extern-badge">extern</span>
-                    </span>
-                    <span class="figur-zeitstrahl-ereignis" x-text="ev.ereignis"></span>
-                    <span x-show="ev.kapitel" class="figur-zeitstrahl-kapitel internal-link" x-text="ev.kapitel" @click="openEreignisseMitKapitel(ev.kapitel)"></span>
-                    <span x-show="ev.bedeutung" class="figur-zeitstrahl-bedeutung" x-text="ev.bedeutung"></span>
+                <div class="gz-item" :class="ev.typ === 'extern' ? 'gz-item--extern' : ''">
+                  <div class="gz-marker" :class="ev.typ === 'extern' ? 'gz-marker--extern' : ''"></div>
+                  <div class="gz-content">
+                    <div class="gz-datum-row">
+                      <span class="gz-datum" x-text="ev.datum"></span>
+                      <template x-if="ev.typ === 'extern'">
+                        <span class="gz-extern-badge">extern</span>
+                      </template>
+                    </div>
+                    <div class="gz-ereignis" x-text="ev.ereignis"></div>
+                    <div x-show="ev.kapitel" class="gz-kapitel">
+                      <span class="gz-kapitel-link internal-link" x-text="ev.kapitel" @click="openEreignisseMitKapitel(ev.kapitel)"></span>
+                    </div>
+                    <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
                   </div>
                 </div>
               </template>
