@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, getAnyUserToken, getAllUserTokens } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
+const { db, getAnyUserToken, getAllUserTokens, reconcilePageIds } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
 const logger = require('../logger');
 
 const router = express.Router();
@@ -59,6 +59,64 @@ const upsertPageStatsMany = db.transaction((items) => {
   for (const item of items) upsertPageStats.run(item);
 });
 
+const _upsertPageCacheStmt = db.prepare(`
+  INSERT INTO pages (page_id, book_id, page_name, chapter_id, chapter_name, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?)
+  ON CONFLICT(page_id) DO UPDATE SET
+    book_id=excluded.book_id, page_name=excluded.page_name,
+    chapter_id=excluded.chapter_id, chapter_name=excluded.chapter_name,
+    updated_at=excluded.updated_at
+`);
+
+// Leichtgewichtiger pages-Cache-Update (ohne Seiten-Inhalte laden).
+// Wird sowohl von syncBook() als auch vom /sync/pages/:book_id-Endpunkt genutzt.
+function _upsertPagesCache(bookId, pages, chapters) {
+  const chMap = Object.fromEntries(chapters.map(c => [c.id, c.name]));
+  db.transaction(() => {
+    for (const p of pages) {
+      _upsertPageCacheStmt.run(
+        p.id, bookId, p.name,
+        p.chapter_id || null,
+        p.chapter_id ? (chMap[p.chapter_id] || null) : null,
+        p.updated_at || null
+      );
+    }
+  })();
+  reconcilePageIds();
+}
+
+const PREVIEW_CHARS = 800;
+
+async function syncPagesCache(bookId, token) {
+  const [pages, chapters] = await Promise.all([
+    bsGetAll(`pages?book_id=${bookId}`, token),
+    bsGetAll(`chapters?book_id=${bookId}`, token),
+  ]);
+  _upsertPagesCache(bookId, pages, chapters);
+
+  // Vorschautexte nur für Seiten ohne gecachten Preview laden (neue Seiten oder nach Migration)
+  const needsPreview = new Set(
+    db.prepare('SELECT page_id FROM pages WHERE book_id = ? AND preview_text IS NULL')
+      .all(bookId).map(r => r.page_id)
+  );
+  const toFetch = pages.filter(p => needsPreview.has(p.id));
+  if (toFetch.length) {
+    const stmtPrev = db.prepare('UPDATE pages SET preview_text = ? WHERE page_id = ?');
+    const BATCH = 5;
+    for (let i = 0; i < toFetch.length; i += BATCH) {
+      await Promise.allSettled(toFetch.slice(i, i + BATCH).map(async p => {
+        try {
+          const pd = await bsGet(`pages/${p.id}`, token);
+          const text = htmlToText(pd.html || '').trim();
+          stmtPrev.run(text ? text.slice(0, PREVIEW_CHARS) : null, p.id);
+        } catch { /* einzelne Seite überspringen */ }
+      }));
+    }
+  }
+
+  logger.info(`pages-Cache Buch ${bookId}: ${pages.length} Seiten, ${toFetch.length} Vorschau(en) nachgeladen.`);
+}
+
 async function syncBook(bookId, token) {
   const [pages, book, chapters] = await Promise.all([
     bsGetAll(`pages?book_id=${bookId}`, token),
@@ -74,17 +132,20 @@ async function syncBook(bookId, token) {
   const globalWordSet = new Set();
   let totalWords = 0, totalChars = 0, totalTok = 0, totalSentences = 0;
 
+  const previewItems = [];
   for (let i = 0; i < pages.length; i += BATCH) {
     const batch = pages.slice(i, i + BATCH);
     const results = await Promise.allSettled(batch.map(async p => {
       const pd = await bsGet(`pages/${p.id}`, token);
       const { words, chars, tok, wordList, sentences } = computeStats(pd.html || '');
-      return { page_id: p.id, book_id: bookId, tok, words, chars, updated_at: p.updated_at || null, cached_at: now, wordList, sentences };
+      const preview = htmlToText(pd.html || '').trim().slice(0, 800);
+      return { page_id: p.id, book_id: bookId, tok, words, chars, updated_at: p.updated_at || null, cached_at: now, wordList, sentences, preview };
     }));
     for (const r of results) {
       if (r.status === 'fulfilled') {
-        const { wordList, sentences, ...statsItem } = r.value;
+        const { wordList, sentences, preview, ...statsItem } = r.value;
         statsItems.push(statsItem);
+        previewItems.push({ page_id: r.value.page_id, preview_text: preview || null });
         totalWords += r.value.words;
         totalChars += r.value.chars;
         totalTok += r.value.tok;
@@ -97,6 +158,12 @@ async function syncBook(bookId, token) {
   const avgSentenceLen = totalSentences > 0 ? Math.round((totalWords / totalSentences) * 10) / 10 : null;
 
   upsertPageStatsMany(statsItems);
+  _upsertPagesCache(bookId, pages, chapters);
+
+  if (previewItems.length) {
+    const stmtPrev = db.prepare('UPDATE pages SET preview_text = ? WHERE page_id = ?');
+    db.transaction(() => { for (const item of previewItems) stmtPrev.run(item.preview_text, item.page_id); })();
+  }
 
   const today = new Date().toISOString().slice(0, 10);
   db.prepare(`
@@ -153,6 +220,31 @@ async function syncAllBooks() {
   logger.info('Sync abgeschlossen.');
 }
 
+// GET /sync/pages/:book_id – gecachte Seiten-Vorschautexte liefern
+router.get('/pages/:book_id', (req, res) => {
+  const rows = db.prepare(
+    'SELECT page_id, preview_text, updated_at FROM pages WHERE book_id = ?'
+  ).all(parseInt(req.params.book_id));
+  const result = {};
+  for (const r of rows) result[r.page_id] = { preview_text: r.preview_text, updated_at: r.updated_at };
+  res.json(result);
+});
+
+// POST /sync/pages/:book_id – leichtgewichtiger pages-Cache-Update (ohne Seiten-Inhalte)
+router.post('/pages/:book_id', async (req, res) => {
+  const token = req.session?.bookstackToken
+    ? { token_id: req.session.bookstackToken.id, token_pw: req.session.bookstackToken.pw }
+    : getAnyUserToken();
+  if (!token) return res.status(503).json({ error: 'Kein BookStack-Token verfügbar.' });
+  try {
+    await syncPagesCache(parseInt(req.params.book_id), token);
+    res.json({ ok: true });
+  } catch (e) {
+    logger.error('pages-Cache Sync Fehler: ' + e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /sync/book/:book_id – manueller Trigger für ein Buch
 router.post('/book/:book_id', async (req, res) => {
   const token = req.session?.bookstackToken
@@ -174,4 +266,4 @@ router.post('/all', async (_req, res) => {
   res.json({ ok: true, message: 'Sync gestartet' });
 });
 
-module.exports = { router, syncAllBooks, syncBook };
+module.exports = { router, syncAllBooks, syncBook, syncPagesCache };

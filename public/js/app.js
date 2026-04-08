@@ -610,19 +610,27 @@ document.addEventListener('alpine:init', () => {
         localStorage.removeItem('lektorat_check_job_' + p.id);
       } catch (e) { console.error('[selectPage active-job check]', e); }
 
-      this.analysisOut = '<span class="muted-msg"><span class="spinner"></span>Vorschau lädt…</span>';
-      this.setStatus('');
-      try {
-        const pageData = await this.bsGet('pages/' + p.id);
-        const text = htmlToText(pageData.html).trim();
-        const preview = text.length > PREVIEW_MAX_CHARS ? text.slice(0, PREVIEW_MAX_CHARS) + ' …' : text;
+      if (p.previewText) {
+        const preview = p.previewText.length > PREVIEW_MAX_CHARS ? p.previewText.slice(0, PREVIEW_MAX_CHARS) + ' …' : p.previewText;
         this.currentPageEmpty = !preview;
         this.analysisOut = preview
           ? `<div class="preview-text">${escHtml(preview)}</div><div class="preview-hint">Vorschau · «Prüfen» starten für Lektorat</div>`
           : '<span class="muted-msg">Seite ist leer.</span>';
-      } catch (e) {
-        console.error('[selectPage preview]', e);
-        this.analysisOut = '<span class="muted-msg">Seite ausgewählt. «Prüfen» starten.</span>';
+      } else {
+        this.analysisOut = '<span class="muted-msg"><span class="spinner"></span>Vorschau lädt…</span>';
+        this.setStatus('');
+        try {
+          const pageData = await this.bsGet('pages/' + p.id);
+          const text = htmlToText(pageData.html).trim();
+          const preview = text.length > PREVIEW_MAX_CHARS ? text.slice(0, PREVIEW_MAX_CHARS) + ' …' : text;
+          this.currentPageEmpty = !preview;
+          this.analysisOut = preview
+            ? `<div class="preview-text">${escHtml(preview)}</div><div class="preview-hint">Vorschau · «Prüfen» starten für Lektorat</div>`
+            : '<span class="muted-msg">Seite ist leer.</span>';
+        } catch (e) {
+          console.error('[selectPage preview]', e);
+          this.analysisOut = '<span class="muted-msg">Seite ausgewählt. «Prüfen» starten.</span>';
+        }
       }
       await this.loadPageHistory(p.id);
     },

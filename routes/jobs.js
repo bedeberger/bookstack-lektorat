@@ -540,7 +540,11 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
     if (!Array.isArray(result?.figuren)) throw new Error('KI-Antwort ungültig: figuren-Array fehlt');
 
     const figuren = result.figuren.map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
-    saveFigurenToDb(parseInt(bookId), figuren, userEmail || null);
+    const idMapsFig = {
+      chNameToId:   Object.fromEntries(chaptersData.map(c => [c.name, c.id])),
+      pageNameToId: Object.fromEntries(pages.map(p => [p.name, p.id])),
+    };
+    saveFigurenToDb(parseInt(bookId), figuren, userEmail || null, idMapsFig);
     deleteCheckpoint('figures', bookId, userEmail);
     completeJob(jobId, { count: figuren.length, tokensIn: tok.in, tokensOut: tok.out });
     logger.info(`Job ${jobId}: Figurenextraktion Buch ${bookId} abgeschlossen (${figuren.length} Figuren, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
@@ -634,7 +638,11 @@ async function runFigureEventsJob(jobId, bookId, bookName, userEmail) {
     }
 
     updateJob(jobId, { progress: 92, statusText: 'Ereignisse speichern…' });
-    updateFigurenEvents(parseInt(bookId), allAssignments, userEmail || null);
+    const idMapsEvt = {
+      chNameToId:   Object.fromEntries(chaptersData.map(c => [c.name, c.id])),
+      pageNameToId: Object.fromEntries(pages.map(p => [p.name, p.id])),
+    };
+    updateFigurenEvents(parseInt(bookId), allAssignments, userEmail || null, idMapsEvt);
     const eventCount = allAssignments.reduce((s, a) => s + (a.lebensereignisse?.length || 0), 0);
     deleteCheckpoint('figure-events', bookId, userEmail);
     completeJob(jobId, { eventCount, tokensIn: tok.in, tokensOut: tok.out });
@@ -723,14 +731,22 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
       saveCheckpoint('szenen', bookId, userEmail, { allSzenen, nextGi: gi + 1 });
     }
 
+    const chNameToIdSz   = Object.fromEntries(chaptersData.map(c => [c.name, c.id]));
+    const pageNameToIdSz = Object.fromEntries(pages.map(p => [p.name, p.id]));
     db.transaction(() => {
       db.prepare('DELETE FROM figure_scenes WHERE book_id = ? AND user_email = ?').run(parseInt(bookId), userEmail || null);
       const now = new Date().toISOString();
       const ins = db.prepare(`INSERT INTO figure_scenes
-        (book_id, user_email, kapitel, seite, titel, wertung, kommentar, fig_ids, sort_order, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        (book_id, user_email, kapitel, seite, titel, wertung, kommentar, fig_ids, chapter_id, page_id, sort_order, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
       for (const s of allSzenen) {
-        ins.run(parseInt(bookId), userEmail || null, s.kapitel, s.seite, s.titel, s.wertung, s.kommentar, s.fig_ids, s.sort_order, now);
+        ins.run(
+          parseInt(bookId), userEmail || null,
+          s.kapitel, s.seite, s.titel, s.wertung, s.kommentar, s.fig_ids,
+          chNameToIdSz[s.kapitel] ?? null,
+          s.seite ? (pageNameToIdSz[s.seite] ?? null) : null,
+          s.sort_order, now
+        );
       }
     })();
 

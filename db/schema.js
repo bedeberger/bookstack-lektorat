@@ -208,12 +208,25 @@ db.exec(`
     UNIQUE(job_type, book_id, user_email)
   );
 
+  -- Seiten-Cache: stabile IDs für Kapiteln und Seiten (wird vom Sync befüllt)
+  CREATE TABLE IF NOT EXISTS pages (
+    page_id      INTEGER PRIMARY KEY,
+    book_id      INTEGER NOT NULL,
+    page_name    TEXT,
+    chapter_id   INTEGER,
+    chapter_name TEXT,
+    updated_at   TEXT,
+    preview_text TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_pages_book_id    ON pages(book_id);
+  CREATE INDEX IF NOT EXISTS idx_pages_chapter_id ON pages(chapter_id);
+
   CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
   INSERT INTO schema_version SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 17;
+const CURRENT_SCHEMA_VERSION = 20;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
   if (version < 2) {
@@ -404,6 +417,35 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 17').run();
     logger.info('DB-Migration auf Version 17 abgeschlossen (figure_events kapitel + seite hinzugefügt).');
   }
+  if (version < 18) {
+    // figure_appearances: chapter_id für stabile Kapitel-Referenz
+    const faCols = db.pragma('table_info(figure_appearances)').map(c => c.name);
+    if (!faCols.includes('chapter_id')) db.exec('ALTER TABLE figure_appearances ADD COLUMN chapter_id INTEGER');
+    // figure_events: chapter_id + page_id
+    const feCols18 = db.pragma('table_info(figure_events)').map(c => c.name);
+    if (!feCols18.includes('chapter_id')) db.exec('ALTER TABLE figure_events ADD COLUMN chapter_id INTEGER');
+    if (!feCols18.includes('page_id'))    db.exec('ALTER TABLE figure_events ADD COLUMN page_id INTEGER');
+    // figure_scenes: chapter_id + page_id
+    const fsCols = db.pragma('table_info(figure_scenes)').map(c => c.name);
+    if (!fsCols.includes('chapter_id')) db.exec('ALTER TABLE figure_scenes ADD COLUMN chapter_id INTEGER');
+    if (!fsCols.includes('page_id'))    db.exec('ALTER TABLE figure_scenes ADD COLUMN page_id INTEGER');
+    db.prepare('UPDATE schema_version SET version = 18').run();
+    logger.info('DB-Migration auf Version 18 abgeschlossen (chapter_id/page_id zu figure_appearances, figure_events, figure_scenes hinzugefügt).');
+  }
+  if (version < 19) {
+    const pagesCols = db.pragma('table_info(pages)').map(c => c.name);
+    if (!pagesCols.includes('chapter_id'))   db.exec('ALTER TABLE pages ADD COLUMN chapter_id INTEGER');
+    if (!pagesCols.includes('chapter_name')) db.exec('ALTER TABLE pages ADD COLUMN chapter_name TEXT');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_pages_chapter_id ON pages(chapter_id)');
+    db.prepare('UPDATE schema_version SET version = 19').run();
+    logger.info('DB-Migration auf Version 19 abgeschlossen (pages: chapter_id + chapter_name hinzugefügt).');
+  }
+  if (version < 20) {
+    const pagesCols20 = db.pragma('table_info(pages)').map(c => c.name);
+    if (!pagesCols20.includes('preview_text')) db.exec('ALTER TABLE pages ADD COLUMN preview_text TEXT');
+    db.prepare('UPDATE schema_version SET version = 20').run();
+    logger.info('DB-Migration auf Version 20 abgeschlossen (pages: preview_text hinzugefügt).');
+  }
   // Sicherstellen dass schema_version aktuell ist (Fallback)
   if (version < CURRENT_SCHEMA_VERSION) {
     db.prepare('UPDATE schema_version SET version = ?').run(CURRENT_SCHEMA_VERSION);
@@ -413,6 +455,12 @@ function runMigrations() {
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {
     db.exec("ALTER TABLE figure_events ADD COLUMN typ TEXT DEFAULT 'persoenlich'");
     logger.info('figure_events.typ nachgerüstet.');
+  }
+  // Unbedingter Spalten-Check für v20 (falls Fallback Version gesetzt hat bevor Migration lief)
+  const pagesCols20Check = db.pragma('table_info(pages)').map(c => c.name);
+  if (pagesCols20Check.length > 0 && !pagesCols20Check.includes('preview_text')) {
+    db.exec('ALTER TABLE pages ADD COLUMN preview_text TEXT');
+    logger.info('pages.preview_text nachgerüstet.');
   }
   // Unbedingter Spalten-Check für v9 (falls Fallback Version gesetzt hat bevor Migration lief)
   const bshColsCheck = db.pragma('table_info(book_stats_history)').map(c => c.name);
@@ -428,7 +476,7 @@ function runMigrations() {
 runMigrations();
 
 // Figuren in DB schreiben (wird von PUT-Endpoint und JSON-Migration genutzt)
-function saveFigurenToDb(bookId, figuren, userEmail) {
+function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
   const now = new Date().toISOString();
   db.transaction(() => {
     if (userEmail) {
@@ -444,8 +492,8 @@ function saveFigurenToDb(bookId, figuren, userEmail) {
       INSERT INTO figures (book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sort_order, user_email, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insTag = db.prepare('INSERT INTO figure_tags (figure_id, tag) VALUES (?, ?)');
-    const insApp = db.prepare('INSERT INTO figure_appearances (figure_id, chapter_name, haeufigkeit) VALUES (?, ?, ?)');
-    const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, kapitel, seite, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const insApp = db.prepare('INSERT INTO figure_appearances (figure_id, chapter_name, chapter_id, haeufigkeit) VALUES (?, ?, ?, ?)');
+    const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, kapitel, seite, chapter_id, page_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, user_email) VALUES (?, ?, ?, ?, ?, ?)');
 
     for (let i = 0; i < figuren.length; i++) {
@@ -456,10 +504,10 @@ function saveFigurenToDb(bookId, figuren, userEmail) {
         f.beschreibung || null, i, userEmail || null, now
       );
       for (const tag of (f.eigenschaften || [])) insTag.run(fid, tag);
-      for (const app of (f.kapitel || [])) insApp.run(fid, app.name, app.haeufigkeit || 1);
+      for (const app of (f.kapitel || [])) insApp.run(fid, app.name, idMaps?.chNameToId?.[app.name] ?? null, app.haeufigkeit || 1);
       for (let j = 0; j < (f.lebensereignisse || []).length; j++) {
         const ev = f.lebensereignisse[j];
-        insEvt.run(fid, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', ev.kapitel || null, ev.seite || null, j);
+        insEvt.run(fid, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', ev.kapitel || null, ev.seite || null, idMaps?.chNameToId?.[ev.kapitel] ?? null, idMaps?.pageNameToId?.[ev.seite] ?? null, j);
       }
       for (const bz of (f.beziehungen || [])) insRel.run(bookId, f.id, bz.figur_id, bz.typ, bz.beschreibung || null, userEmail || null);
     }
@@ -468,7 +516,7 @@ function saveFigurenToDb(bookId, figuren, userEmail) {
 
 // Ersetzt alle Lebensereignisse für ein Buch/User anhand von fig_id-basierten Assignments.
 // assignments: [{ fig_id: "fig_1", lebensereignisse: [...] }]
-function updateFigurenEvents(bookId, assignments, userEmail) {
+function updateFigurenEvents(bookId, assignments, userEmail, idMaps) {
   db.transaction(() => {
     const figRows = db.prepare(
       'SELECT id, fig_id FROM figures WHERE book_id = ? AND user_email = ?'
@@ -479,13 +527,13 @@ function updateFigurenEvents(bookId, assignments, userEmail) {
     const delEvt = db.prepare('DELETE FROM figure_events WHERE figure_id = ?');
     for (const row of figRows) delEvt.run(row.id);
 
-    const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, kapitel, seite, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, kapitel, seite, chapter_id, page_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     for (const assignment of assignments) {
       const rowId = figIdToRowId[assignment.fig_id];
       if (!rowId) continue;
       for (let j = 0; j < (assignment.lebensereignisse || []).length; j++) {
         const ev = assignment.lebensereignisse[j];
-        insEvt.run(rowId, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', ev.kapitel || null, ev.seite || null, j);
+        insEvt.run(rowId, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', ev.kapitel || null, ev.seite || null, idMaps?.chNameToId?.[ev.kapitel] ?? null, idMaps?.pageNameToId?.[ev.seite] ?? null, j);
       }
     }
   })();
@@ -535,6 +583,138 @@ function migrateFromJson() {
   logger.info('Migration von lektorat-history.json abgeschlossen (Datei umbenannt zu .migrated).');
 }
 migrateFromJson();
+
+// ── Seiten-ID-Reconciliation ──────────────────────────────────────────────────
+// Wird nach jedem syncBook()-Aufruf aufgerufen. Befüllt chapter_id/page_id
+// in den Figuren-Tabellen anhand der pages-Cache-Tabelle und heilt veraltete
+// Namen bei Kapitel-/Seiten-Umbenennungen in BookStack.
+function reconcilePageIds() {
+  // 1. figure_appearances: chapter_id aus chapter_name befüllen (neue Einträge ohne ID)
+  db.prepare(`
+    UPDATE figure_appearances
+    SET chapter_id = (
+      SELECT DISTINCT p.chapter_id FROM pages p
+      JOIN figures f ON f.book_id = p.book_id
+      WHERE f.id = figure_appearances.figure_id
+        AND p.chapter_name = figure_appearances.chapter_name
+        AND p.chapter_id IS NOT NULL
+      LIMIT 1
+    )
+    WHERE chapter_id IS NULL AND chapter_name IS NOT NULL
+  `).run();
+
+  // 2. figure_appearances: chapter_name per ID aktualisieren (Umbenennungen heilen)
+  db.prepare(`
+    UPDATE figure_appearances
+    SET chapter_name = (
+      SELECT DISTINCT p.chapter_name FROM pages p
+      JOIN figures f ON f.book_id = p.book_id
+      WHERE f.id = figure_appearances.figure_id
+        AND p.chapter_id = figure_appearances.chapter_id
+      LIMIT 1
+    )
+    WHERE chapter_id IS NOT NULL
+  `).run();
+
+  // 3. figure_events: chapter_id aus kapitel befüllen
+  db.prepare(`
+    UPDATE figure_events
+    SET chapter_id = (
+      SELECT DISTINCT p.chapter_id FROM pages p
+      JOIN figures f ON f.book_id = p.book_id
+      WHERE f.id = figure_events.figure_id
+        AND p.chapter_name = figure_events.kapitel
+        AND p.chapter_id IS NOT NULL
+      LIMIT 1
+    )
+    WHERE chapter_id IS NULL AND kapitel IS NOT NULL
+  `).run();
+
+  // 4. figure_events: page_id aus seite befüllen
+  db.prepare(`
+    UPDATE figure_events
+    SET page_id = (
+      SELECT p.page_id FROM pages p
+      JOIN figures f ON f.book_id = p.book_id
+      WHERE f.id = figure_events.figure_id
+        AND p.page_name = figure_events.seite
+      LIMIT 1
+    )
+    WHERE page_id IS NULL AND seite IS NOT NULL
+  `).run();
+
+  // 5. figure_events: kapitel per chapter_id aktualisieren
+  db.prepare(`
+    UPDATE figure_events
+    SET kapitel = (
+      SELECT DISTINCT p.chapter_name FROM pages p
+      JOIN figures f ON f.book_id = p.book_id
+      WHERE f.id = figure_events.figure_id
+        AND p.chapter_id = figure_events.chapter_id
+      LIMIT 1
+    )
+    WHERE chapter_id IS NOT NULL
+  `).run();
+
+  // 6. figure_events: seite per page_id aktualisieren
+  db.prepare(`
+    UPDATE figure_events
+    SET seite = (
+      SELECT p.page_name FROM pages p
+      WHERE p.page_id = figure_events.page_id
+      LIMIT 1
+    )
+    WHERE page_id IS NOT NULL
+  `).run();
+
+  // 7. figure_scenes: chapter_id aus kapitel befüllen
+  db.prepare(`
+    UPDATE figure_scenes
+    SET chapter_id = (
+      SELECT DISTINCT chapter_id FROM pages
+      WHERE book_id = figure_scenes.book_id
+        AND chapter_name = figure_scenes.kapitel
+        AND chapter_id IS NOT NULL
+      LIMIT 1
+    )
+    WHERE chapter_id IS NULL AND kapitel IS NOT NULL
+  `).run();
+
+  // 8. figure_scenes: page_id aus seite befüllen
+  db.prepare(`
+    UPDATE figure_scenes
+    SET page_id = (
+      SELECT page_id FROM pages
+      WHERE book_id = figure_scenes.book_id
+        AND page_name = figure_scenes.seite
+      LIMIT 1
+    )
+    WHERE page_id IS NULL AND seite IS NOT NULL
+  `).run();
+
+  // 9. figure_scenes: kapitel per chapter_id aktualisieren
+  db.prepare(`
+    UPDATE figure_scenes
+    SET kapitel = (
+      SELECT DISTINCT chapter_name FROM pages
+      WHERE book_id = figure_scenes.book_id
+        AND chapter_id = figure_scenes.chapter_id
+      LIMIT 1
+    )
+    WHERE chapter_id IS NOT NULL
+  `).run();
+
+  // 10. figure_scenes: seite per page_id aktualisieren
+  db.prepare(`
+    UPDATE figure_scenes
+    SET seite = (
+      SELECT page_name FROM pages
+      WHERE page_id = figure_scenes.page_id
+      LIMIT 1
+    )
+    WHERE page_id IS NOT NULL
+  `).run();
+}
 
 // ── User-Token-Verwaltung ─────────────────────────────────────────────────────
 
@@ -616,4 +796,4 @@ function deleteCheckpoint(jobType, bookId, userEmail) {
   _deleteCheckpoint.run(jobType, parseInt(bookId), userEmail || '');
 }
 
-module.exports = { db, saveFigurenToDb, updateFigurenEvents, saveOrteToDb, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint };
+module.exports = { db, saveFigurenToDb, updateFigurenEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint };

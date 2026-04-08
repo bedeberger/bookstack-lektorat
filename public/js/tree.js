@@ -31,6 +31,9 @@ export const treeMethods = {
         this.bsGetAll('pages?book_id=' + bookId),
       ]);
 
+      // pages-Cache im Hintergrund aktualisieren (fire-and-forget)
+      fetch('/sync/pages/' + bookId, { method: 'POST' }).catch(() => {});
+
       const sortedChapters = [...chapters].sort((a, b) => a.priority - b.priority);
       const chMap = Object.fromEntries(sortedChapters.map(c => [c.id, c.name]));
       const chapterOrder = Object.fromEntries(sortedChapters.map((c, i) => [c.id, i]));
@@ -68,13 +71,20 @@ export const treeMethods = {
         })),
       ].sort((a, b) => a.priority - b.priority);
 
-      // Gecachte Stats aus DB laden und sofort anzeigen
+      // Gecachte Stats + Vorschautexte aus DB laden und sofort anzeigen
       try {
-        const cache = await fetch('/history/page-stats/' + bookId).then(r => r.json());
+        const [statsCache, previewCache] = await Promise.all([
+          fetch('/history/page-stats/' + bookId).then(r => r.json()),
+          fetch('/sync/pages/' + bookId).then(r => r.json()),
+        ]);
         for (const p of this.pages) {
-          const c = cache[p.id];
+          const c = statsCache[p.id];
           if (c && c.updated_at === p.updated_at) {
             this.tokEsts[p.id] = { tok: c.tok, words: c.words, chars: c.chars };
+          }
+          const pc = previewCache[p.id];
+          if (pc?.preview_text && pc.updated_at === p.updated_at) {
+            p.previewText = pc.preview_text;
           }
         }
       } catch { /* Cache-Fehler ignorieren, Fallback auf Live-Berechnung */ }
