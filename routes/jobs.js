@@ -533,7 +533,7 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
           const chResult = await aiCall(jobId, tok,
             buildFiguresChapterWithEventsPrompt(group.name, bookName, group.pages.length, chText, allChapterEvents[gi], accumulatedFiguren),
             SYSTEM_FIGUREN,
-            fromPct, toPct, 2500,
+            fromPct, toPct, 8000,
           );
           const chFiguren = chResult.figuren || [];
           chapterFiguren.push({ kapitel: group.name, figuren: chFiguren });
@@ -555,7 +555,7 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
       result = await aiCall(jobId, tok,
         buildFiguresConsolidationPrompt(bookName, chapterFiguren),
         SYSTEM_FIGUREN,
-        85, 96, 6000,
+        85, 96, 16000,
       );
     }
 
