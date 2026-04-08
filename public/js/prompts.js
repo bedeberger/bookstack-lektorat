@@ -218,8 +218,9 @@ const FIGUREN_RULES = `Regeln:
 - kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten
 - lebensereignisse: chronologisch sortiert; kapitel = Kapitelname aus dem der Textbeleg stammt (leer wenn unklar); datum immer als vierstellige Jahreszahl (JJJJ) – falls nicht direkt erwähnt, aus Kontext errechnen (Geburtsjahr der Figur + genannte Altersangabe, bekannte historische Jahreszahlen u.ä.); Events ohne errechenbare Jahreszahl weglassen; typ='persoenlich' nur für echte biografische Wendepunkte (neue Beziehung, Trennung, Jobwechsel, Verlust einer nahestehenden Person, Pubertät/Reifung, Umzug, Trauma, wichtige Entscheidung) – keine Alltagshandlungen oder Szenen die keine bleibende Wirkung haben; typ='extern' für gesellschaftliche/historische Ereignisse (Katastrophen, Massaker, Kriege, politische Umbrüche u.ä.) die die Figur direkt betreffen – hier grosszügig sein, auch erwähnte Ereignisse aufnehmen die nur indirekt wirken
 - Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), übrige selbsterklärend
-- Nur echte Personen/Charaktere, keine Orte oder Objekte
-- Sortiert nach Wichtigkeit; maximal 20 Figuren
+- Nur fiktive Charaktere oder Figuren die aktiv an der Buchhandlung teilnehmen – keine Orte oder Objekte
+- KEINE historischen oder realen Personen die nur erwähnt, zitiert oder als Referenz genannt werden (z.B. Napoleon, Einstein, ein Politiker, eine Künstlerin); solche Personen gehören höchstens als lebensereignis.typ='extern' zu einer Figur, aber nicht als eigene Figur in diese Liste
+- Sortiert nach Wichtigkeit
 - KONSERVATIV: Nur Figuren, Beziehungen und Ereignisse aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren.
 - DEDUPLIZIERUNG NUR BEI EINDEUTIGER NAMENSGLEICHHEIT: Zwei Figuren nur zusammenführen wenn ihre Namen klar übereinstimmen (gleicher Vor- und Nachname, oder ein Name ist bestätigter Spitzname/Alias des anderen). Namensähnlichkeit allein reicht nicht – im Zweifel als separate Figuren behalten. Figuren ohne oder mit wenig Informationen NICHT mit anderen zusammenführen.`;
 
