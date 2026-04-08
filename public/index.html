@@ -160,12 +160,8 @@
                       <span class="tok-badge"
                         :class="tokEsts[page.id]?.tok > 16000 ? 'tok-high' : tokEsts[page.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
                         x-text="tokEsts[page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[page.id].tok/1000) + 'k T' : '~' + tokEsts[page.id]?.tok + ' T'"
-                        @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
-                        @mouseleave.stop="showTokLegend=false"></span>
-                      <span class="tok-badge tok-neutral tok-tree-words"
-                        x-text="tokEsts[page.id]?.words >= 1000 ? '~' + Math.round(tokEsts[page.id].words/1000) + 'k W' : tokEsts[page.id]?.words + ' W'"></span>
-                      <span class="tok-badge tok-neutral tok-tree-chars"
-                        x-text="tokEsts[page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[page.id].chars/1000) + 'k Z' : tokEsts[page.id]?.chars + ' Z'"></span>
+                        @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; tokTooltipData=tokEsts[page.id]; showTokLegend=true"
+                        @mouseleave.stop="showTokLegend=false; tokTooltipData=null"></span>
                     </span>
                   </template>
                   <template x-if="tokEsts[page.id] && tokEsts[page.id].words === 0">
@@ -186,12 +182,8 @@
                 <span class="tok-badge"
                   :class="tokEsts[item.page.id]?.tok > 16000 ? 'tok-high' : tokEsts[item.page.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
                   x-text="tokEsts[item.page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[item.page.id].tok/1000) + 'k T' : '~' + tokEsts[item.page.id]?.tok + ' T'"
-                  @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
-                  @mouseleave.stop="showTokLegend=false"></span>
-                <span class="tok-badge tok-neutral tok-tree-words"
-                  x-text="tokEsts[item.page.id]?.words >= 1000 ? '~' + Math.round(tokEsts[item.page.id].words/1000) + 'k W' : tokEsts[item.page.id]?.words + ' W'"></span>
-                <span class="tok-badge tok-neutral tok-tree-chars"
-                  x-text="tokEsts[item.page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[item.page.id].chars/1000) + 'k Z' : tokEsts[item.page.id]?.chars + ' Z'"></span>
+                  @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; tokTooltipData=tokEsts[item.page.id]; showTokLegend=true"
+                  @mouseleave.stop="showTokLegend=false; tokTooltipData=null"></span>
               </span>
             </template>
             <template x-if="tokEsts[item.page.id] && tokEsts[item.page.id].words === 0">
@@ -221,18 +213,16 @@
 </div><!-- end layout-main -->
 </div><!-- end layout -->
 
-<!-- Token-Legende Tooltip (fixed, kein Layout-Einfluss) -->
+<!-- Token-Badge Tooltip (fixed, kein Layout-Einfluss) -->
 <div x-show="showTokLegend"
      x-transition:enter="tok-tt-enter" x-transition:enter-start="tok-tt-hidden" x-transition:enter-end="tok-tt-visible"
      x-transition:leave="tok-tt-enter" x-transition:leave-start="tok-tt-visible" x-transition:leave-end="tok-tt-hidden"
      :style="`left:${tokLegendPos.x}px; top:${tokLegendPos.y - 8}px`"
      class="tok-tooltip"
-     @mouseenter="showTokLegend=true" @mouseleave="showTokLegend=false">
-  <div class="tok-tt-label">Geschätzte Input-Token pro Prüfung</div>
-  <div class="tok-tt-row"><span class="tok-badge tok-ok">≤ 4k</span> sparsam</div>
-  <div class="tok-tt-row"><span class="tok-badge tok-med">≤ 16k</span> mittel</div>
-  <div class="tok-tt-row"><span class="tok-badge tok-high">&gt; 16k</span> gross</div>
-  <div class="tok-tt-hint">Text + HTML + Prompt + System, ~4 Zeichen/Token</div>
+     @mouseenter="showTokLegend=true" @mouseleave="showTokLegend=false; tokTooltipData=null">
+  <div class="tok-tt-row" x-text="(tokTooltipData?.words >= 1000 ? '~' + Math.round(tokTooltipData.words/1000) + 'k' : tokTooltipData?.words) + ' Wörter'"></div>
+  <div class="tok-tt-row" x-text="(tokTooltipData?.chars >= 1000 ? '~' + Math.round(tokTooltipData.chars/1000) + 'k' : tokTooltipData?.chars) + ' Zeichen'"></div>
+  <div class="tok-tt-hint">~4 Zeichen/Token</div>
 </div>
 
 <!-- Job-Queue Footer -->

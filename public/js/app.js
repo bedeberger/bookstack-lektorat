@@ -171,6 +171,7 @@ document.addEventListener('alpine:init', () => {
     _tokenEstGen: 0,
     showTokLegend: false,
     tokLegendPos: { x: 0, y: 0 },
+    tokTooltipData: null,
     showFiguresCard: false,
     figuren: [],
     figurenUpdatedAt: null,
