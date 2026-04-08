@@ -11,6 +11,7 @@ require('./db/schema');
 const authRouter = require('./routes/auth');
 const historyRouter = require('./routes/history');
 const figuresRouter = require('./routes/figures');
+const locationsRouter = require('./routes/locations');
 const jobsRouter = require('./routes/jobs');
 const chatRouter = require('./routes/chat');
 const { router: proxiesRouter, bookstackProxy, BOOKSTACK_URL } = require('./routes/proxies');
@@ -61,7 +62,7 @@ app.use(authRouter);
 
 // ── Auth-Guard ────────────────────────────────────────────────────────────────
 // API-Pfade → 401 JSON; HTML-Pfade → Redirect zu /auth/login
-const API_PREFIXES = ['/api/', '/history/', '/figures/', '/jobs/', '/sync/', '/chat/', '/config', '/claude', '/ollama'];
+const API_PREFIXES = ['/api/', '/history/', '/figures/', '/locations/', '/jobs/', '/sync/', '/chat/', '/config', '/claude', '/ollama'];
 
 app.use((req, res, next) => {
   if (req.session?.user) return next();
@@ -82,6 +83,7 @@ app.use((req, res, next) => {
 app.use(proxiesRouter);
 app.use('/history', historyRouter);
 app.use('/figures', figuresRouter);
+app.use('/locations', locationsRouter);
 app.use('/jobs', jobsRouter);
 app.use('/chat', chatRouter);
 app.use('/sync', syncRouter);

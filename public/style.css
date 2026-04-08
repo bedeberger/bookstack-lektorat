@@ -77,6 +77,7 @@ body {
   font-family: 'Lato', sans-serif;
   color: var(--color-text);
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 1rem;
   max-width: 860px;
   margin: 0 auto;
@@ -266,6 +267,14 @@ select {
   font-size: var(--font-size-base);
   background: var(--color-surface);
   color: var(--color-text);
+}
+/* iOS: font-size >= 16px verhindert automatisches Zoom-in beim Fokus */
+@media (max-width: 768px) {
+  input[type=text],
+  input[type=password],
+  select {
+    font-size: 16px;
+  }
 }
 
 input:focus,
@@ -2274,11 +2283,13 @@ ins {
   border-top: 1px solid rgba(255,255,255,0.08);
   border-radius: 0;
   padding: 6px 16px;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   font-size: 12px;
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
 }
 .job-queue-label {
@@ -2324,4 +2335,145 @@ ins {
   color: #63b3ed;
   font-size: 11px;
   font-weight: 600;
+}
+
+/* === Schauplätze === */
+.ort-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 1rem 1rem;
+}
+.ort-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.5rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+}
+.ort-item:hover { background: var(--color-hover); }
+.ort-name {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+.ort-stimmung {
+  font-style: italic;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.ort-typ-tag {
+  font-size: 11px;
+  min-width: 72px;
+  text-align: center;
+}
+.ort-detail {
+  padding: 0.6rem 0.5rem 0.8rem 1rem;
+  background: var(--color-hover);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+}
+.ort-beschreibung {
+  margin: 0 0 0.4rem;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+.ort-meta-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+.ort-meta-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/* === Kontinuitätsprüfung === */
+.kontinuitaet-result {
+  padding: 0.75rem 1rem 1rem;
+}
+.kontinuitaet-summary {
+  font-size: 13px;
+  color: var(--color-muted);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--color-border);
+}
+.kontinuitaet-ok {
+  color: var(--color-ok-text);
+  background: var(--color-ok-bg);
+  border: 1px solid var(--color-ok-border);
+  padding: 0.5rem 0.75rem;
+  font-size: 13px;
+}
+.kontinuitaet-group-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.4rem 0;
+  margin-top: 0.75rem;
+  border-bottom: 2px solid;
+}
+.kontinuitaet-group-header--kritisch {
+  color: var(--color-err-text);
+  border-color: var(--color-err-border);
+}
+.kontinuitaet-group-header--mittel {
+  color: var(--color-warn-text);
+  border-color: var(--color-style-border);
+}
+.kontinuitaet-group-header--niedrig {
+  color: var(--color-muted);
+  border-color: var(--color-border);
+}
+.kontinuitaet-issue {
+  padding: 0.55rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+}
+.kontinuitaet-issue--kritisch { border-left: 3px solid var(--color-err-border); padding-left: 0.6rem; }
+.kontinuitaet-issue--mittel   { border-left: 3px solid var(--color-style-border); padding-left: 0.6rem; }
+.kontinuitaet-issue--niedrig  { border-left: 3px solid var(--color-border); padding-left: 0.6rem; }
+.kontinuitaet-issue-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.3rem;
+}
+.kontinuitaet-typ-tag {
+  font-size: 11px;
+  min-width: 68px;
+  text-align: center;
+}
+.kontinuitaet-stellen {
+  font-size: 12px;
+  color: var(--color-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+.kontinuitaet-arrow {
+  color: var(--color-subtle);
+}
+.kontinuitaet-desc {
+  margin: 0 0 0.25rem;
+  line-height: 1.5;
+}
+.kontinuitaet-empfehlung {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-style: italic;
 }

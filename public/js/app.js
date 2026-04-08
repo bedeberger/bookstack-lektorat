@@ -16,6 +16,8 @@ import { chatMethods } from './chat.js';
 import { bookChatMethods } from './book-chat.js';
 import { synonymeMethods } from './synonyme.js';
 import { szenenMethods } from './szenen.js';
+import { orteMethods } from './orte.js';
+import { kontinuitaetMethods } from './kontinuitaet.js';
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('lektorat', () => ({
@@ -140,6 +142,20 @@ document.addEventListener('alpine:init', () => {
     synonymeStatus: '',
     synonymeHtml: null,
     _synonymePollTimer: null,
+    showOrteCard: false,
+    orte: [],
+    orteUpdatedAt: null,
+    orteLoading: false,
+    orteProgress: 0,
+    orteStatus: '',
+    selectedOrtId: null,
+    _ortePollTimer: null,
+    showKontinuitaetCard: false,
+    kontinuitaetLoading: false,
+    kontinuitaetProgress: 0,
+    kontinuitaetStatus: '',
+    kontinuitaetResult: null,
+    _kontinuitaetPollTimer: null,
     jobQueueItems: [],
     _jobQueueTimer: null,
 
@@ -486,6 +502,8 @@ document.addEventListener('alpine:init', () => {
       if (keep !== 'ereignisse') this.showEreignisseCard = false;
       if (keep !== 'bookStats') this.showBookStatsCard = false;
       if (keep !== 'bookChat') this.showBookChatCard = false;
+      if (keep !== 'orte') this.showOrteCard = false;
+      if (keep !== 'kontinuitaet') this.showKontinuitaetCard = false;
       this.resetPage();
     },
 
@@ -596,6 +614,18 @@ document.addEventListener('alpine:init', () => {
       this.bookStatsData = [];
       this.bookStatsSyncStatus = '';
       if (this._statsChart) { this._statsChart.destroy(); this._statsChart = null; }
+      this.showOrteCard = false;
+      this.orte = [];
+      this.orteStatus = '';
+      this.orteProgress = 0;
+      this.orteLoading = false;
+      if (this._ortePollTimer) { clearInterval(this._ortePollTimer); this._ortePollTimer = null; }
+      this.showKontinuitaetCard = false;
+      this.kontinuitaetResult = null;
+      this.kontinuitaetStatus = '';
+      this.kontinuitaetProgress = 0;
+      this.kontinuitaetLoading = false;
+      if (this._kontinuitaetPollTimer) { clearInterval(this._kontinuitaetPollTimer); this._kontinuitaetPollTimer = null; }
       this.resetChat();
       this.resetBookChat();
       this.resetSynonymeCard();
@@ -642,5 +672,7 @@ document.addEventListener('alpine:init', () => {
     ...bookChatMethods,
     ...synonymeMethods,
     ...szenenMethods,
+    ...orteMethods,
+    ...kontinuitaetMethods,
   }));
 });

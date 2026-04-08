@@ -166,12 +166,43 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_fscene_book ON figure_scenes(book_id, user_email);
 
+  -- Schauplätze: eine Zeile pro Ort (per-User, per-Buch)
+  CREATE TABLE IF NOT EXISTS locations (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id          INTEGER NOT NULL,
+    loc_id           TEXT NOT NULL,
+    name             TEXT NOT NULL,
+    typ              TEXT,
+    beschreibung     TEXT,
+    erste_erwaehnung TEXT,
+    stimmung         TEXT,
+    figuren_json     TEXT,
+    kapitel_json     TEXT,
+    sort_order       INTEGER DEFAULT 0,
+    user_email       TEXT,
+    updated_at       TEXT NOT NULL,
+    UNIQUE(book_id, loc_id, user_email)
+  );
+  CREATE INDEX IF NOT EXISTS idx_loc_book_id ON locations(book_id, user_email);
+
+  -- Kontinuitätsprüfung-Ergebnisse
+  CREATE TABLE IF NOT EXISTS continuity_checks (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id     INTEGER NOT NULL,
+    user_email  TEXT,
+    checked_at  TEXT NOT NULL,
+    issues_json TEXT,
+    summary     TEXT,
+    model       TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_cc_book_id ON continuity_checks(book_id, user_email);
+
   CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
   INSERT INTO schema_version SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
 `);
 
 // Schema-Migrationen (versioniert)
-const CURRENT_SCHEMA_VERSION = 13;
+const CURRENT_SCHEMA_VERSION = 15;
 function runMigrations() {
   const { version } = db.prepare('SELECT version FROM schema_version').get();
   if (version < 2) {
@@ -300,6 +331,45 @@ function runMigrations() {
     db.exec('ALTER TABLE figure_scenes ADD COLUMN updated_at TEXT');
     db.prepare('UPDATE schema_version SET version = 13').run();
     logger.info('DB-Migration auf Version 13 abgeschlossen (updated_at zu figure_scenes hinzugefügt).');
+  }
+  if (version < 14) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS locations (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id          INTEGER NOT NULL,
+        loc_id           TEXT NOT NULL,
+        name             TEXT NOT NULL,
+        typ              TEXT,
+        beschreibung     TEXT,
+        erste_erwaehnung TEXT,
+        stimmung         TEXT,
+        figuren_json     TEXT,
+        kapitel_json     TEXT,
+        sort_order       INTEGER DEFAULT 0,
+        user_email       TEXT,
+        updated_at       TEXT NOT NULL,
+        UNIQUE(book_id, loc_id, user_email)
+      );
+      CREATE INDEX IF NOT EXISTS idx_loc_book_id ON locations(book_id, user_email);
+    `);
+    db.prepare('UPDATE schema_version SET version = 14').run();
+    logger.info('DB-Migration auf Version 14 abgeschlossen (locations Tabelle hinzugefügt).');
+  }
+  if (version < 15) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS continuity_checks (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id     INTEGER NOT NULL,
+        user_email  TEXT,
+        checked_at  TEXT NOT NULL,
+        issues_json TEXT,
+        summary     TEXT,
+        model       TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_cc_book_id ON continuity_checks(book_id, user_email);
+    `);
+    db.prepare('UPDATE schema_version SET version = 15').run();
+    logger.info('DB-Migration auf Version 15 abgeschlossen (continuity_checks Tabelle hinzugefügt).');
   }
   // Sicherstellen dass schema_version aktuell ist (Fallback)
   if (version < CURRENT_SCHEMA_VERSION) {
@@ -432,4 +502,30 @@ function getAnyUserToken() { return _getAnyToken.get(); }
 /** Gibt alle gespeicherten Tokens zurück (für User-iterierenden Sync). */
 function getAllUserTokens() { return _getAllTokens.all(); }
 
-module.exports = { db, saveFigurenToDb, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens };
+// Orte in DB schreiben (wird von PUT-Endpoint und Job genutzt)
+function saveOrteToDb(bookId, orte, userEmail) {
+  const now = new Date().toISOString();
+  db.transaction(() => {
+    if (userEmail) {
+      db.prepare('DELETE FROM locations WHERE book_id = ? AND user_email = ?').run(bookId, userEmail);
+    } else {
+      db.prepare('DELETE FROM locations WHERE book_id = ? AND user_email IS NULL').run(bookId);
+    }
+    const ins = db.prepare(`
+      INSERT INTO locations (book_id, loc_id, name, typ, beschreibung, erste_erwaehnung, stimmung,
+        figuren_json, kapitel_json, sort_order, user_email, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    for (let i = 0; i < orte.length; i++) {
+      const o = orte[i];
+      ins.run(
+        bookId, o.id, o.name, o.typ || null, o.beschreibung || null,
+        o.erste_erwaehnung || null, o.stimmung || null,
+        JSON.stringify(o.figuren || []),
+        JSON.stringify(o.kapitel || []),
+        i, userEmail || null, now
+      );
+    }
+  })();
+}
+
+module.exports = { db, saveFigurenToDb, saveOrteToDb, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens };

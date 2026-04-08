@@ -28,6 +28,8 @@ export let SYSTEM_CHAT          = null;
 export let SYSTEM_BOOK_CHAT     = null;
 export let SYSTEM_SYNONYME      = null;
 export let SYSTEM_SYNONYM_CHECK = null;
+export let SYSTEM_ORTE          = null;
+export let SYSTEM_KONTINUITAET  = null;
 
 /**
  * Setzt alle System-Prompts aus dem promptConfig-Objekt (geladen aus prompt-config.json).
@@ -50,6 +52,8 @@ export function configurePrompts(cfg) {
   SYSTEM_BOOK_CHAT      = buildSystemNoJson(sp.buchchat || '', rules);
   SYSTEM_SYNONYME       = buildSystem(sp.synonyme       || '', rules);
   SYSTEM_SYNONYM_CHECK  = buildSystem(sp.synonymeCheck  || '', rules);
+  SYSTEM_ORTE           = buildSystem(sp.orte           || 'Du bist ein Literaturanalytiker für deutschsprachige Texte. Du identifizierst Schauplätze und Orte präzise und konservativ – nur was im Text eindeutig belegt ist.', rules);
+  SYSTEM_KONTINUITAET   = buildSystem(sp.kontinuitaet   || 'Du bist ein sorgfältiger Literaturlektor für deutschsprachige Texte. Du prüfst einen Roman auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.', rules);
 }
 
 export function buildStilkorrekturPrompt(html, styles) {
@@ -216,7 +220,8 @@ const FIGUREN_RULES = `Regeln:
 - Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), übrige selbsterklärend
 - Nur echte Personen/Charaktere, keine Orte oder Objekte
 - Sortiert nach Wichtigkeit; maximal 20 Figuren
-- KONSERVATIV: Nur Figuren, Beziehungen und Ereignisse aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren.`;
+- KONSERVATIV: Nur Figuren, Beziehungen und Ereignisse aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren.
+- DEDUPLIZIERUNG NUR BEI EINDEUTIGER NAMENSGLEICHHEIT: Zwei Figuren nur zusammenführen wenn ihre Namen klar übereinstimmen (gleicher Vor- und Nachname, oder ein Name ist bestätigter Spitzname/Alias des anderen). Namensähnlichkeit allein reicht nicht – im Zweifel als separate Figuren behalten. Figuren ohne oder mit wenig Informationen NICHT mit anderen zusammenführen.`;
 
 export function buildFiguresSinglePassPrompt(bookName, pageCount, bookText) {
   return `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Figuren.
@@ -537,6 +542,205 @@ Mögliche Antworten:
 }
 
 Verwende «angepasst» wenn das Synonym gut passt, aber der Satz drumherum leicht angepasst werden muss, damit er korrekt klingt.`;
+}
+
+// ── Schauplatz-Extraktion ─────────────────────────────────────────────────────
+
+const ORTE_SCHEMA = `{
+  "orte": [
+    {
+      "id": "ort_1",
+      "name": "Name des Schauplatz",
+      "typ": "stadt|gebaeude|raum|landschaft|region|andere",
+      "beschreibung": "2-3 Sätze zu Erscheinungsbild, Atmosphäre, Bedeutung für die Handlung",
+      "erste_erwaehnung": "Kapitelname oder Seitenname der ersten Erwähnung (leer wenn unklar)",
+      "stimmung": "Grundatmosphäre in 2-3 Worten (z.B. bedrohlich, heimelig, verlassen, belebt)",
+      "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
+      "figuren": ["fig_1", "fig_2"]
+    }
+  ]
+}`;
+
+const ORTE_RULES = `Regeln:
+- Eindeutige IDs (ort_1, ort_2, …)
+- Nur Schauplätze, die im Text eindeutig beschrieben oder mehrfach genannt werden – keine einmaligen, flüchtigen Erwähnungen
+- figuren: nur IDs aus der gelieferten Figurenliste (leer lassen wenn keine Figuren bekannt)
+- kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte in denen der Ort aktiv vorkommt
+- KONSERVATIV: Lieber weglassen als spekulieren; maximal 20 Orte`;
+
+export function buildLocationsSinglePassPrompt(bookName, pageCount, bookText, figurenKompakt) {
+  const figurenStr = figurenKompakt && figurenKompakt.length
+    ? '\n\nBekannte Figuren (nur diese IDs in «figuren» verwenden):\n' + figurenKompakt.map(f => `${f.id}: ${f.name}`).join('\n')
+    : '';
+  return `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Schauplätze und Orte.${figurenStr}
+
+Antworte mit diesem JSON-Schema:
+${ORTE_SCHEMA}
+
+${ORTE_RULES}
+
+${JSON_ONLY}
+
+Buchtext (${pageCount} Seiten):
+
+${bookText}`;
+}
+
+export function buildLocationsChapterPrompt(chapterName, bookName, pageCount, chText, figurenKompakt) {
+  const figurenStr = figurenKompakt && figurenKompakt.length
+    ? '\n\nBekannte Figuren (nur diese IDs in «figuren» verwenden):\n' + figurenKompakt.map(f => `${f.id}: ${f.name}`).join('\n')
+    : '';
+  return `Extrahiere alle Schauplätze aus dem Kapitel «${chapterName}» des Buchs «${bookName}».${figurenStr}
+
+Antworte mit:
+{ "orte": [{ "name": "Name", "typ": "stadt|gebaeude|raum|landschaft|region|andere", "beschreibung": "1-2 Sätze", "erste_erwaehnung": "${chapterName}", "stimmung": "Atmosphäre", "kapitel": [{"name": "${chapterName}", "haeufigkeit": 1}], "figuren": [] }] }
+
+Nur Schauplätze die im Text eindeutig beschrieben sind. Sei konservativ.
+
+${JSON_ONLY}
+
+Kapiteltext (${pageCount} Seiten):
+
+${chText}`;
+}
+
+export function buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt) {
+  const synthInput = chapterOrte.map(co =>
+    `## Kapitel: ${co.kapitel}\n` + co.orte.map(o =>
+      `- ${o.name} (${o.typ || 'andere'}): ${o.beschreibung || ''}` +
+      (o.stimmung ? ` | Stimmung: ${o.stimmung}` : '')
+    ).join('\n')
+  ).join('\n\n');
+  const figurenStr = figurenKompakt && figurenKompakt.length
+    ? '\n\nBekannte Figuren (nur diese IDs in «figuren» verwenden):\n' + figurenKompakt.map(f => `${f.id}: ${f.name}`).join('\n')
+    : '';
+  return `Konsolidiere die folgenden Schauplatz-Analysen aller Kapitel des Buchs «${bookName}» zu einer einheitlichen Gesamtliste. Dedupliziere, führe Informationen zusammen und vergib stabile IDs.${figurenStr}
+
+Kapitelanalysen:
+
+${synthInput}
+
+${JSON_ONLY}
+
+Antworte mit diesem JSON-Schema:
+${ORTE_SCHEMA}
+
+${ORTE_RULES}`;
+}
+
+// ── Kontinuitätsprüfung ───────────────────────────────────────────────────────
+
+export function buildKontinuitaetChapterFactsPrompt(chapterName, chText) {
+  return `Extrahiere alle konkreten Fakten und Behauptungen aus dem Kapitel «${chapterName}» die für die Kontinuitätsprüfung relevant sind: Figuren-Zustände (lebendig/tot, Verletzungen, Wissen, Beziehungen), Ortsbeschreibungen, Zeitangaben, Objekte und deren Besitz/Zustand, sowie wichtige Handlungsereignisse.
+
+Antworte mit diesem JSON-Schema:
+{
+  "fakten": [
+    {
+      "kategorie": "figur|ort|objekt|zeit|ereignis|sonstiges",
+      "subjekt": "Über wen/was geht es (Name oder Bezeichnung)",
+      "fakt": "Was genau behauptet wird (1 Satz, so präzise wie möglich)",
+      "seite": "Seitenname oder Abschnittsname (leer wenn unklar)"
+    }
+  ]
+}
+
+Regeln:
+- Nur konkrete, prüfbare Aussagen – keine Interpretationen
+- Figuren-Zustände besonders genau erfassen (Wissen, Können, körperlicher Zustand, Wohnort, Beruf)
+- Objekte: Wer besitzt was, wo liegt was, in welchem Zustand
+- Zeitangaben: Relative («am nächsten Morgen») und absolute («1943») erfassen
+- Maximal 30 Fakten pro Kapitel; lieber weniger, dafür präzise
+
+${JSON_ONLY}
+
+Kapiteltext:
+
+${chText}`;
+}
+
+export function buildKontinuitaetCheckPrompt(bookName, chapterFacts, figurenKompakt, orteKompakt) {
+  const factsText = chapterFacts.map(cf =>
+    `## ${cf.kapitel}\n` + cf.fakten.map(f => `[${f.kategorie}] ${f.subjekt}: ${f.fakt}${f.seite ? ` (${f.seite})` : ''}`).join('\n')
+  ).join('\n\n');
+
+  const figurenStr = figurenKompakt && figurenKompakt.length
+    ? '\n\n## Bekannte Figuren\n' + figurenKompakt.map(f => `${f.name} (${f.typ}): ${f.beschreibung || ''}`).join('\n')
+    : '';
+  const orteStr = orteKompakt && orteKompakt.length
+    ? '\n\n## Bekannte Schauplätze\n' + orteKompakt.map(o => `${o.name} (${o.typ || 'andere'}): ${o.beschreibung || ''}`).join('\n')
+    : '';
+
+  return `Prüfe das Buch «${bookName}» auf Kontinuitätsfehler und Widersprüche. Dir liegen die extrahierten Fakten aller Kapitel vor.${figurenStr}${orteStr}
+
+## Extrahierte Fakten nach Kapitel:
+
+${factsText}
+
+Suche nach Widersprüchen: Fakten, die sich gegenseitig ausschliessen oder nicht vereinbar sind. Beispiele: Figur stirbt in Kapitel 3 aber erscheint in Kapitel 7; Ort wird in Kap. 2 als verlassen beschrieben, in Kap. 5 als belebt; Figur weiss etwas, das sie noch nicht wissen konnte.
+
+Antworte mit diesem JSON-Schema:
+{
+  "probleme": [
+    {
+      "schwere": "kritisch|mittel|niedrig",
+      "typ": "figur|zeitlinie|ort|objekt|verhalten|sonstiges",
+      "beschreibung": "Was genau widerspricht sich (1-2 Sätze)",
+      "stelle_a": "Erste Textstelle (Kapitel: Seite oder Abschnitt)",
+      "stelle_b": "Zweite Textstelle (Kapitel: Seite oder Abschnitt)",
+      "empfehlung": "Wie könnte das aufgelöst werden (1 Satz)"
+    }
+  ],
+  "zusammenfassung": "Gesamteinschätzung der Konsistenz des Buchs in 2-3 Sätzen"
+}
+
+Regeln:
+- Nur echte Widersprüche – keine stilistischen oder inhaltlichen Anmerkungen
+- schwere: «kritisch» = klarer Logikfehler der auffällt; «mittel» = wahrscheinlicher Fehler; «niedrig» = mögliche Inkonsistenz
+- Wenn keine Widersprüche gefunden: «probleme» als leeres Array, «zusammenfassung» = positive Einschätzung
+- Konservativ: Im Zweifel weglassen
+
+${JSON_ONLY}`;
+}
+
+export function buildKontinuitaetSinglePassPrompt(bookName, bookText, figurenKompakt, orteKompakt) {
+  const figurenStr = figurenKompakt && figurenKompakt.length
+    ? '\n\n## Bekannte Figuren\n' + figurenKompakt.map(f => `${f.name} (${f.typ || ''}): ${f.beschreibung || ''}`).join('\n')
+    : '';
+  const orteStr = orteKompakt && orteKompakt.length
+    ? '\n\n## Bekannte Schauplätze\n' + orteKompakt.map(o => `${o.name} (${o.typ || 'andere'}): ${o.beschreibung || ''}`).join('\n')
+    : '';
+
+  return `Prüfe das Buch «${bookName}» auf Kontinuitätsfehler und Widersprüche.${figurenStr}${orteStr}
+
+Suche aktiv nach: Figuren die nach ihrem Tod wieder auftauchen; Orte die sich widersprüchlich beschrieben werden; Zeitangaben die nicht vereinbar sind; Objekte die falsch verwendet werden; Figuren die Wissen haben das sie noch nicht haben könnten; Charakterverhalten das ihrer etablierten Persönlichkeit widerspricht.
+
+Buchtext:
+
+${bookText}
+
+Antworte mit diesem JSON-Schema:
+{
+  "probleme": [
+    {
+      "schwere": "kritisch|mittel|niedrig",
+      "typ": "figur|zeitlinie|ort|objekt|verhalten|sonstiges",
+      "beschreibung": "Was genau widerspricht sich (1-2 Sätze)",
+      "stelle_a": "Erste Textstelle (Kapitel: Seite oder Abschnitt)",
+      "stelle_b": "Zweite Textstelle (Kapitel: Seite oder Abschnitt)",
+      "empfehlung": "Wie könnte das aufgelöst werden (1 Satz)"
+    }
+  ],
+  "zusammenfassung": "Gesamteinschätzung der Konsistenz des Buchs in 2-3 Sätzen"
+}
+
+Regeln:
+- Nur echte Widersprüche
+- schwere: «kritisch» = klarer Logikfehler; «mittel» = wahrscheinlicher Fehler; «niedrig» = mögliche Inkonsistenz
+- Wenn keine Widersprüche: «probleme» als leeres Array
+- Konservativ: Im Zweifel weglassen
+
+${JSON_ONLY}`;
 }
 
 export function buildLektoratPrompt(text, html) {

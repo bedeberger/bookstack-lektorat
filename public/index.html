@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>BookStack Lektorat</title>
   <link rel="icon" href="bookstack_lektorat_icon.ico" type="image/x-icon">
   <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
@@ -97,6 +97,14 @@
     <button class="feature-tile" :class="{ 'feature-tile--active': showEreignisseCard }" @click="toggleEreignisseCard()" title="Globale Zeitleiste anzeigen">
       <span class="feature-tile-title">Ereignisse</span>
       <span class="feature-tile-desc">Globale Zeitleiste</span>
+    </button>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showOrteCard }" @click="toggleOrteCard()" title="Schauplätze und Orte des Buchs">
+      <span class="feature-tile-title">Schauplätze</span>
+      <span class="feature-tile-desc">Orte &amp; Atmosphäre</span>
+    </button>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showKontinuitaetCard }" @click="toggleKontinuitaetCard()" title="Kontinuitätsprüfung: Widersprüche im Buch finden">
+      <span class="feature-tile-title">Kontinuität</span>
+      <span class="feature-tile-desc">Widersprüche prüfen</span>
     </button>
   </div>
 
@@ -585,6 +593,179 @@
       </div>
     </template>
   </div>
+</div>
+
+<!-- Schauplätze -->
+<div class="card" x-show="showOrteCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title" x-text="'Schauplätze: ' + selectedBookName"></span>
+    <span x-show="orteUpdatedAt && !orteLoading" class="figuren-updated-at" x-text="'Letzte Analyse: ' + formatDate(orteUpdatedAt)"></span>
+    <div class="card-actions">
+      <button @click="runOrteExtraction()" :disabled="orteLoading">
+        <span x-show="orteLoading" class="spinner"></span>
+        <span x-text="orte.length ? 'Neu ermitteln' : 'Schauplätze ermitteln'"></span>
+      </button>
+      <button class="btn-card-close" @click="toggleOrteCard()" title="Schliessen">×</button>
+    </div>
+  </div>
+
+  <div x-show="orteProgress > 0" class="progress-bar-wrap">
+    <div class="progress-bar" :style="'width:' + orteProgress + '%'"></div>
+  </div>
+  <div x-show="orteStatus" class="figur-progress-status" x-html="orteStatus"></div>
+
+  <div x-show="orte.length === 0 && !orteLoading && !orteStatus" class="figur-progress-status">
+    Noch keine Schauplätze ermittelt. Klicke auf «Schauplätze ermitteln» um alle Orte des Buchs zu extrahieren.
+  </div>
+
+  <!-- Ortsliste -->
+  <div x-show="orte.length > 0" class="ort-list">
+    <template x-for="o in orte" :key="o.id">
+      <div>
+        <div class="ort-item" @click="selectedOrtId = selectedOrtId === o.id ? null : o.id">
+          <span class="tag ort-typ-tag" x-text="o.typ || 'andere'"></span>
+          <span class="ort-name" x-text="o.name"></span>
+          <span x-show="o.stimmung" class="ort-stimmung" x-text="o.stimmung"></span>
+          <template x-if="o.kapitel?.length">
+            <span class="figur-kapitel-badges">
+              <span class="figur-kapitel-primary" x-text="o.kapitel[0].name"></span>
+              <template x-if="o.kapitel.length > 1">
+                <span class="figur-kapitel-more" x-text="'+' + (o.kapitel.length - 1)"></span>
+              </template>
+            </span>
+          </template>
+          <span class="figur-chevron" x-text="selectedOrtId === o.id ? '▲' : '▼'"></span>
+        </div>
+        <div x-show="selectedOrtId === o.id" class="ort-detail">
+          <p x-show="o.beschreibung" x-text="o.beschreibung" class="ort-beschreibung"></p>
+          <div x-show="o.erste_erwaehnung" class="ort-meta-row">
+            <span class="ort-meta-label">Erste Erwähnung:</span>
+            <span x-text="o.erste_erwaehnung"></span>
+          </div>
+          <div x-show="o.figuren?.length > 0" class="ort-meta-row">
+            <span class="ort-meta-label">Figuren:</span>
+            <template x-for="figId in o.figuren" :key="figId">
+              <span class="tag" x-text="figuren.find(f => f.id === figId)?.kurzname || figuren.find(f => f.id === figId)?.name || figId"></span>
+            </template>
+          </div>
+          <div x-show="o.kapitel?.length > 1" class="ort-meta-row">
+            <span class="ort-meta-label">Kapitel:</span>
+            <template x-for="k in o.kapitel" :key="k.name">
+              <span class="tag" x-text="k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>
+
+<!-- Kontinuitätsprüfung -->
+<div class="card" x-show="showKontinuitaetCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title" x-text="'Kontinuität: ' + selectedBookName"></span>
+    <span x-show="kontinuitaetResult && !kontinuitaetLoading" class="figuren-updated-at" x-text="'Letzte Prüfung: ' + formatDate(kontinuitaetResult?.checked_at)"></span>
+    <div class="card-actions">
+      <button @click="runKontinuitaetCheck()" :disabled="kontinuitaetLoading">
+        <span x-show="kontinuitaetLoading" class="spinner"></span>
+        <span x-text="kontinuitaetResult ? 'Neu prüfen' : 'Prüfen'"></span>
+      </button>
+      <button class="btn-card-close" @click="toggleKontinuitaetCard()" title="Schliessen">×</button>
+    </div>
+  </div>
+
+  <div x-show="kontinuitaetProgress > 0" class="progress-bar-wrap">
+    <div class="progress-bar" :style="'width:' + kontinuitaetProgress + '%'"></div>
+  </div>
+  <div x-show="kontinuitaetStatus" class="figur-progress-status" x-html="kontinuitaetStatus"></div>
+
+  <div x-show="!kontinuitaetResult && !kontinuitaetLoading && !kontinuitaetStatus" class="figur-progress-status">
+    Noch keine Prüfung durchgeführt. Klicke auf «Prüfen» um das Buch auf Widersprüche und Kontinuitätsfehler zu untersuchen.
+  </div>
+
+  <!-- Ergebnisse -->
+  <template x-if="kontinuitaetResult">
+    <div class="kontinuitaet-result">
+
+      <!-- Zusammenfassung -->
+      <div class="kontinuitaet-summary" x-text="kontinuitaetResult.summary"></div>
+
+      <!-- Keine Probleme -->
+      <div x-show="kontinuitaetResult.issues?.length === 0" class="kontinuitaet-ok">
+        Keine Kontinuitätsprobleme gefunden.
+      </div>
+
+      <!-- Kritische Probleme -->
+      <template x-if="kontinuitaetIssuesBySwere().kritisch.length > 0">
+        <div>
+          <div class="kontinuitaet-group-header kontinuitaet-group-header--kritisch">
+            Kritisch (<span x-text="kontinuitaetIssuesBySwere().kritisch.length"></span>)
+          </div>
+          <template x-for="(issue, i) in kontinuitaetIssuesBySwere().kritisch" :key="'k' + i">
+            <div class="kontinuitaet-issue kontinuitaet-issue--kritisch">
+              <div class="kontinuitaet-issue-header">
+                <span class="tag kontinuitaet-typ-tag" x-text="issue.typ"></span>
+                <span class="kontinuitaet-stellen">
+                  <span x-text="issue.stelle_a"></span>
+                  <span class="kontinuitaet-arrow">↔</span>
+                  <span x-text="issue.stelle_b"></span>
+                </span>
+              </div>
+              <p class="kontinuitaet-desc" x-text="issue.beschreibung"></p>
+              <p x-show="issue.empfehlung" class="kontinuitaet-empfehlung" x-text="'→ ' + issue.empfehlung"></p>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <!-- Mittlere Probleme -->
+      <template x-if="kontinuitaetIssuesBySwere().mittel.length > 0">
+        <div>
+          <div class="kontinuitaet-group-header kontinuitaet-group-header--mittel">
+            Mittel (<span x-text="kontinuitaetIssuesBySwere().mittel.length"></span>)
+          </div>
+          <template x-for="(issue, i) in kontinuitaetIssuesBySwere().mittel" :key="'m' + i">
+            <div class="kontinuitaet-issue kontinuitaet-issue--mittel">
+              <div class="kontinuitaet-issue-header">
+                <span class="tag kontinuitaet-typ-tag" x-text="issue.typ"></span>
+                <span class="kontinuitaet-stellen">
+                  <span x-text="issue.stelle_a"></span>
+                  <span class="kontinuitaet-arrow">↔</span>
+                  <span x-text="issue.stelle_b"></span>
+                </span>
+              </div>
+              <p class="kontinuitaet-desc" x-text="issue.beschreibung"></p>
+              <p x-show="issue.empfehlung" class="kontinuitaet-empfehlung" x-text="'→ ' + issue.empfehlung"></p>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <!-- Niedrige Probleme -->
+      <template x-if="kontinuitaetIssuesBySwere().niedrig.length > 0">
+        <div>
+          <div class="kontinuitaet-group-header kontinuitaet-group-header--niedrig">
+            Niedrig (<span x-text="kontinuitaetIssuesBySwere().niedrig.length"></span>)
+          </div>
+          <template x-for="(issue, i) in kontinuitaetIssuesBySwere().niedrig" :key="'n' + i">
+            <div class="kontinuitaet-issue kontinuitaet-issue--niedrig">
+              <div class="kontinuitaet-issue-header">
+                <span class="tag kontinuitaet-typ-tag" x-text="issue.typ"></span>
+                <span class="kontinuitaet-stellen">
+                  <span x-text="issue.stelle_a"></span>
+                  <span class="kontinuitaet-arrow">↔</span>
+                  <span x-text="issue.stelle_b"></span>
+                </span>
+              </div>
+              <p class="kontinuitaet-desc" x-text="issue.beschreibung"></p>
+              <p x-show="issue.empfehlung" class="kontinuitaet-empfehlung" x-text="'→ ' + issue.empfehlung"></p>
+            </div>
+          </template>
+        </div>
+      </template>
+
+    </div>
+  </template>
 </div>
 
 <!-- Buchentwicklung -->

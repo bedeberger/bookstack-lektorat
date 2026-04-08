@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
-const { db, saveFigurenToDb } = require('../db/schema');
+const { db, saveFigurenToDb, saveOrteToDb } = require('../db/schema');
 const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -1201,6 +1201,248 @@ router.post('/book-chat', jsonBody, (req, res) => {
   const jobId = createJob('book-chat', session_id, userEmail, bookChatLabel);
   enqueueJob(jobId, () => runBookChatJob(jobId, session_id, userMsgResult.lastInsertRowid, message.trim(), userEmail, userToken));
   res.json({ jobId });
+});
+
+// ── Job: Schauplatz-Extraktion ────────────────────────────────────────────────
+async function runLocationsJob(jobId, bookId, bookName, userEmail) {
+  const { SYSTEM_ORTE, buildLocationsSinglePassPrompt, buildLocationsChapterPrompt, buildLocationsConsolidationPrompt } = await getPrompts();
+
+  try {
+    updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
+    const [chaptersData, pages] = await Promise.all([
+      bsGetAll('chapters?book_id=' + bookId),
+      bsGetAll('pages?book_id=' + bookId),
+    ]);
+    if (!pages.length) { completeJob(jobId, { empty: true }); return; }
+
+    const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
+    const tok = { in: 0, out: 0 };
+
+    // Bekannte Figuren für ID-Referenzen laden
+    const figRows = db.prepare(
+      'SELECT fig_id, name, typ FROM figures WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+    ).all(parseInt(bookId), userEmail || null);
+    const figurenKompakt = figRows.map(f => ({ id: f.fig_id, name: f.name, typ: f.typ || 'andere' }));
+
+    const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
+      updateJob(jobId, {
+        progress: Math.round((i / total) * 55),
+        statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
+      });
+    });
+
+    const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
+    let result;
+
+    if (totalChars <= SINGLE_PASS_LIMIT) {
+      updateJob(jobId, { progress: 65, statusText: 'KI analysiert Schauplätze…' });
+      const bookText = pageContents
+        .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
+        .join('\n\n---\n\n');
+      result = await aiCall(jobId, tok,
+        buildLocationsSinglePassPrompt(bookName, pageContents.length, bookText, figurenKompakt),
+        SYSTEM_ORTE,
+        65, 96, 4000,
+      );
+    } else {
+      const { groupOrder, groups } = groupByChapter(pageContents);
+      const chapterOrte = [];
+
+      for (let gi = 0; gi < groupOrder.length; gi++) {
+        const group = groups.get(groupOrder[gi]);
+        const tokStr = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
+        const fromPct = 55 + Math.round((gi / groupOrder.length) * 30);
+        const toPct   = 55 + Math.round(((gi + 1) / groupOrder.length) * 30);
+        updateJob(jobId, {
+          progress: fromPct,
+          statusText: `Schauplätze in «${group.name}» (${gi + 1}/${groupOrder.length})…${tokStr}`,
+        });
+        const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+        let chResult;
+        try {
+          chResult = await aiCall(jobId, tok,
+            buildLocationsChapterPrompt(group.name, bookName, group.pages.length, chText, figurenKompakt),
+            SYSTEM_ORTE,
+            fromPct, toPct, 2000,
+          );
+        } catch (e) {
+          logger.warn(`Job ${jobId}: Schauplatz-Analyse Kapitel «${group.name}» übersprungen: ${e.message}`);
+          continue;
+        }
+        chapterOrte.push({ kapitel: group.name, orte: chResult.orte || [] });
+      }
+
+      updateJob(jobId, {
+        progress: 88,
+        statusText: `KI konsolidiert Schauplätze… · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens`,
+      });
+      result = await aiCall(jobId, tok,
+        buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt),
+        SYSTEM_ORTE,
+        88, 96, 4000,
+      );
+    }
+
+    if (!Array.isArray(result?.orte)) throw new Error('KI-Antwort ungültig: orte-Array fehlt');
+
+    const orte = result.orte.map((o, i) => ({ ...o, id: o.id || ('ort_' + (i + 1)) }));
+    saveOrteToDb(parseInt(bookId), orte, userEmail || null);
+    completeJob(jobId, { count: orte.length, tokensIn: tok.in, tokensOut: tok.out });
+    logger.info(`Job ${jobId}: Schauplatz-Extraktion Buch ${bookId} abgeschlossen (${orte.length} Orte, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+  } catch (e) {
+    logger.error(`Job ${jobId}: Schauplatz-Extraktion Fehler: ${e.message}`);
+    failJob(jobId, e);
+  }
+}
+
+// ── Job: Kontinuitätsprüfung ──────────────────────────────────────────────────
+async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
+  const { SYSTEM_KONTINUITAET, buildKontinuitaetSinglePassPrompt, buildKontinuitaetChapterFactsPrompt, buildKontinuitaetCheckPrompt } = await getPrompts();
+
+  try {
+    updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
+    const [chaptersData, pages] = await Promise.all([
+      bsGetAll('chapters?book_id=' + bookId),
+      bsGetAll('pages?book_id=' + bookId),
+    ]);
+    if (!pages.length) { completeJob(jobId, { empty: true }); return; }
+
+    const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
+    const tok = { in: 0, out: 0 };
+
+    // Bekannte Figuren + Orte aus DB laden
+    const figRows = db.prepare(`
+      SELECT f.name, f.typ, f.beschreibung FROM figures f
+      WHERE f.book_id = ? AND f.user_email = ? ORDER BY f.sort_order
+    `).all(parseInt(bookId), userEmail || null);
+    const figurenKompakt = figRows.map(f => ({ name: f.name, typ: f.typ || 'andere', beschreibung: f.beschreibung || '' }));
+
+    const ortRows = db.prepare(
+      'SELECT name, typ, beschreibung FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+    ).all(parseInt(bookId), userEmail || null);
+    const orteKompakt = ortRows.map(o => ({ name: o.name, typ: o.typ, beschreibung: o.beschreibung || '' }));
+
+    const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
+      updateJob(jobId, {
+        progress: Math.round((i / total) * 50),
+        statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
+      });
+    });
+
+    const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
+    let result;
+
+    if (totalChars <= SINGLE_PASS_LIMIT) {
+      updateJob(jobId, { progress: 60, statusText: 'KI prüft Kontinuität…' });
+      const bookText = pageContents
+        .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
+        .join('\n\n---\n\n');
+      result = await aiCall(jobId, tok,
+        buildKontinuitaetSinglePassPrompt(bookName, bookText, figurenKompakt, orteKompakt),
+        SYSTEM_KONTINUITAET,
+        60, 97, 5000,
+      );
+    } else {
+      // Multi-Pass: Fakten pro Kapitel extrahieren, dann Widersprüche prüfen
+      const { groupOrder, groups } = groupByChapter(pageContents);
+      const chapterFacts = [];
+
+      for (let gi = 0; gi < groupOrder.length; gi++) {
+        const group = groups.get(groupOrder[gi]);
+        const tokStr = tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
+        const fromPct = 50 + Math.round((gi / groupOrder.length) * 35);
+        const toPct   = 50 + Math.round(((gi + 1) / groupOrder.length) * 35);
+        updateJob(jobId, {
+          progress: fromPct,
+          statusText: `Fakten in «${group.name}» (${gi + 1}/${groupOrder.length})…${tokStr}`,
+        });
+        const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+        let chResult;
+        try {
+          chResult = await aiCall(jobId, tok,
+            buildKontinuitaetChapterFactsPrompt(group.name, chText),
+            SYSTEM_KONTINUITAET,
+            fromPct, toPct, 1500,
+          );
+        } catch (e) {
+          logger.warn(`Job ${jobId}: Fakten-Extraktion Kapitel «${group.name}» übersprungen: ${e.message}`);
+          continue;
+        }
+        chapterFacts.push({ kapitel: group.name, fakten: chResult.fakten || [] });
+      }
+
+      updateJob(jobId, {
+        progress: 88,
+        statusText: `KI prüft Widersprüche… · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens`,
+      });
+      result = await aiCall(jobId, tok,
+        buildKontinuitaetCheckPrompt(bookName, chapterFacts, figurenKompakt, orteKompakt),
+        SYSTEM_KONTINUITAET,
+        88, 97, 5000,
+      );
+    }
+
+    if (typeof result?.zusammenfassung === 'undefined') throw new Error('KI-Antwort ungültig: zusammenfassung fehlt');
+
+    const model = process.env.API_PROVIDER === 'ollama'
+      ? (process.env.OLLAMA_MODEL || 'llama3.2')
+      : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
+
+    db.prepare(`INSERT INTO continuity_checks (book_id, user_email, checked_at, issues_json, summary, model)
+      VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(parseInt(bookId), userEmail || null, new Date().toISOString(),
+        JSON.stringify(result.probleme || []), result.zusammenfassung || '', model);
+
+    completeJob(jobId, {
+      count: (result.probleme || []).length,
+      issues: result.probleme || [],
+      zusammenfassung: result.zusammenfassung,
+      tokensIn: tok.in, tokensOut: tok.out,
+    });
+    logger.info(`Job ${jobId}: Kontinuitätsprüfung Buch ${bookId} abgeschlossen (${(result.probleme || []).length} Probleme, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+  } catch (e) {
+    logger.error(`Job ${jobId}: Kontinuitätsprüfung Fehler: ${e.message}`);
+    failJob(jobId, e);
+  }
+}
+
+router.post('/locations', jsonBody, (req, res) => {
+  const { book_id, book_name } = req.body;
+  if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
+  const userEmail = req.session?.user?.email || null;
+  const existing = runningJobs.get(jobKey('locations', book_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const label = book_name ? `Schauplätze · ${book_name}` : `Schauplätze`;
+  const jobId = createJob('locations', book_id, userEmail, label);
+  enqueueJob(jobId, () => runLocationsJob(jobId, book_id, book_name || '', userEmail));
+  res.json({ jobId });
+});
+
+router.post('/kontinuitaet', jsonBody, (req, res) => {
+  const { book_id, book_name } = req.body;
+  if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
+  const userEmail = req.session?.user?.email || null;
+  const existing = runningJobs.get(jobKey('kontinuitaet', book_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const label = book_name ? `Kontinuität · ${book_name}` : `Kontinuität`;
+  const jobId = createJob('kontinuitaet', book_id, userEmail, label);
+  enqueueJob(jobId, () => runKontinuitaetJob(jobId, book_id, book_name || '', userEmail));
+  res.json({ jobId });
+});
+
+router.get('/kontinuitaet/:book_id', (req, res) => {
+  const bookId = parseInt(req.params.book_id);
+  const userEmail = req.session?.user?.email || null;
+  const row = db.prepare(`
+    SELECT id, checked_at, issues_json, summary, model
+    FROM continuity_checks
+    WHERE book_id = ? AND user_email = ?
+    ORDER BY checked_at DESC LIMIT 1
+  `).get(bookId, userEmail);
+  if (!row) return res.json(null);
+  let issues = [];
+  try { issues = JSON.parse(row.issues_json); } catch { /* ignore */ }
+  res.json({ id: row.id, checked_at: row.checked_at, issues, summary: row.summary, model: row.model });
 });
 
 router.delete('/book-chat-cache', (req, res) => {
