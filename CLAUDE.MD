@@ -30,138 +30,28 @@ KI-Aufrufe laufen **nicht direkt aus dem Browser**, sondern über den jeweiligen
 
 ## Projektstruktur
 
-```
-bookstack-lektorat/
-├── server.js                # Express-Setup + Session + Auth-Guard + Route-Mounting + Cron
-├── logger.js                # Winston-Logger (Singleton, von allen Modulen importiert)
-├── db/
-│   └── schema.js            # DB-Setup, Schema, Migrationen, saveFigurenToDb(), Token-Helpers
-├── routes/
-│   ├── auth.js              # /auth/* Endpunkte (Google OIDC: login, callback, logout, me, token)
-│   ├── history.js           # /history/* Endpunkte (Checks, Reviews, Page-Stats, Book-Stats)
-│   ├── figures.js           # /figures/:book_id Endpunkte (per-User)
-│   ├── jobs.js              # /jobs/* Endpunkte (Hintergrund-Jobs: Review, Figurenextraktion, Buch-Chat)
-│   ├── chat.js              # /chat/* Endpunkte (Sessions, Nachrichten, SSE-Streaming, Buch-Chat-Sessions)
-│   ├── sync.js              # /sync/* Endpunkte + syncAllBooks() (Cron-Entry-Point)
-│   └── proxies.js           # /config, /claude (SSE-Proxy), /ollama, /api/* (BookStack-Proxy)
-└── public/
-    ├── index.html           # Single-Page-App (Alpine.js, kein Build-Step)
-    ├── style.css            # Zentrales Stylesheet
-    └── js/                  # ES-Module (kein Build-Step, type="module")
-        ├── app.js           # Alpine-Komponente: State, Computed, init/selectPage/resetView
-        ├── utils.js         # escHtml(), htmlToText()
-        ├── prompts.js       # SYSTEM_*-Strings, Build-Funktionen – EINZIGE QUELLE für Prompt-Schemas und Build-Logik. Server-seitiger Code importiert via dynamic import(). NIEMALS Prompts anderswo duplizieren.
-        ├── api-bookstack.js # bsGet, bsGetAll, bsPut, _applyCorrections
-        ├── api-ai.js        # callAI(userPrompt, systemPrompt?, onProgress?) → Promise<Object>
-        ├── history.js       # loadPageHistory, loadBookReviewHistory
-        ├── tree.js          # loadBooks, loadPages, loadTokenEstimates
-        ├── lektorat.js      # runCheck, saveCorrections, toggleDiff, batchCheck, computeDiff
-        ├── review.js        # runBookReview
-        ├── figuren.js       # runFigurExtraction, loadFiguren, saveFiguren, toggleFiguresCard
-        ├── graph.js         # renderFigurGraph, _figTypColor
-        ├── bookstats.js     # toggleBookStatsCard, loadBookStats, syncBookStats, renderStatsChart
-        ├── chat.js          # toggleChatCard, sendChatMessage (SSE-Streaming), applyChatVorschlag, Session-CRUD
-        ├── book-chat.js     # toggleBookChatCard, sendBookChatMessage (Job-Polling), Session-CRUD, resetBookChat
-        └── two-tier.js      # loadPageContents(), groupByChapter(), SINGLE_PASS_LIMIT
-```
+`server.js`, `logger.js`, `db/`, `routes/`, `public/` – Struktur folgt dem Architekturdiagramm oben.
 
-## Datenbankschema
+Nicht-offensichtliche Dateien:
 
-```sql
--- BookStack API-Tokens pro User (verknüpft mit Google-E-Mail)
-user_tokens (email TEXT PRIMARY KEY,
-             token_id TEXT, token_pw TEXT,  -- werden nie ans Frontend gesendet
-             updated_at TEXT)
+- `public/js/prompts.js` – EINZIGE QUELLE für alle Prompt-Schemas und Build-Logik. Server importiert via dynamic `import()`. NIEMALS Prompts anderswo duplizieren.
+- `public/js/two-tier.js` – Exportiert `loadPageContents`, `groupByChapter`, `SINGLE_PASS_LIMIT` (wird aktuell nicht importiert; gleiche Logik lebt dupliziert in `routes/jobs.js`).
+- `public/js/app.js` – Alpine-Root; alle Feature-Module per `...spread` eingebunden.
 
--- Lektorat-Checks pro Seite
-page_checks (id, page_id, page_name, book_id, checked_at, error_count,
-             errors_json TEXT,          -- JSON-Array der Fehler
-             stilanalyse, fazit, model,
-             saved INTEGER, saved_at,
-             applied_errors_json TEXT)  -- welche Fehler tatsächlich ins BookStack gespeichert wurden
+## Datenbank
 
--- Buchbewertungen
-book_reviews (id, book_id, book_name, reviewed_at,
-              review_json TEXT,  -- JSON-Objekt der Gesamtbewertung
-              model)
+Schema, Tabellen und Migrationslogik: siehe [db/schema.js](db/schema.js).
 
--- Figuren: eine Zeile pro Figur, Kernfelder fix (per-User via user_email)
-figures (id, book_id, user_email TEXT, fig_id TEXT,  -- "fig_1" etc., stabil über Saves
-         name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung,
-         sort_order INTEGER, meta TEXT,  -- JSON für zukünftige Zusatzfelder
-         updated_at)
--- UNIQUE auf (book_id, fig_id, user_email)
+**Migrationen:** `CURRENT_SCHEMA_VERSION` erhöhen, `if (version < N)`-Block in `runMigrations()` ergänzen. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` – keine Versionierung nötig.
 
--- Eigenschaften/Tags einer Figur (eine Zeile pro Tag)
-figure_tags (figure_id → figures.id, tag TEXT)
-
--- Kapitelauftritte (eine Zeile pro Figur + Kapitel)
-figure_appearances (figure_id → figures.id, chapter_name TEXT, haeufigkeit INTEGER)
-
--- Beziehungen: flat, typ ist Freitext → neue Typen ohne Schemaänderung
-figure_relations (id, book_id, user_email TEXT, from_fig_id TEXT, to_fig_id TEXT,
-                  typ TEXT,          -- elternteil|freund|… oder beliebig neuer Typ
-                  beschreibung TEXT)
-
--- Seiten-Stats-Cache (befüllt vom Sync-Job, für schnelles UI-Laden)
-page_stats (page_id INTEGER PRIMARY KEY, book_id, tok, words, chars, updated_at, cached_at)
-
--- Tägliche Buchstatistik-Snapshots (für Zeitliniendiagramm)
-book_stats_history (id, book_id, book_name, recorded_at,
-                    page_count, words, chars, tok)
--- UNIQUE auf (book_id, recorded_at) → je Buch ein Snapshot pro Tag
-
--- Chat-Sessions: eine Session pro Seite + User (mehrere möglich)
--- Buch-Chat-Sessions: page_id=0, page_name='__book__'
-chat_sessions (id INTEGER PRIMARY KEY, book_id, book_name, page_id, page_name,
-               user_email TEXT, created_at TEXT, last_message_at TEXT)
-
--- Chat-Nachrichten: eine Zeile pro Nachricht (user + assistant)
-chat_messages (id INTEGER PRIMARY KEY, session_id → chat_sessions.id,
-               role TEXT,         -- 'user' | 'assistant'
-               content TEXT,      -- Freitext der Antwort (antwort-Feld aus KI-JSON)
-               vorschlaege TEXT,  -- JSON-Array | NULL (nur Seiten-Chat, bei 'assistant')
-               tokens_in INTEGER, tokens_out INTEGER,
-               context_info TEXT, -- JSON | NULL (nur Buch-Chat: {pages, totalPages, figuren, review})
-               created_at TEXT)
-
--- Schemaversion für Migrationen
-schema_version (version INTEGER)
-```
-
-**Designprinzip Figuren:** Die vier Figuren-Tabellen sind bewusst flach gehalten. Neue Beziehungstypen entstehen einfach durch einen neuen `typ`-String – keine Schemaänderung nötig. Neue Figur-Eigenschaften kommen entweder als neue Spalte (via Migration) oder als Einträge im `meta`-JSON-Feld.
-
-**User-Isolation:** Alle inhaltlichen Tabellen enthalten eine `user_email`-Spalte (bei `chat_messages` indirekt über `session_id`). Queries filtern grundsätzlich auf `req.session.user.email`. `page_stats` und `book_stats_history` sind geteilter Cache ohne User-Filter.
+**Neue Beziehungstypen:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Im Frontend in der `BZ`-Konstante (Rendering) und im Claude-Prompt (`FINAL_SCHEMA`) den neuen Typ ergänzen.
 
 **DB auf dem LXC prüfen:**
 ```bash
 sqlite3 /opt/lektorat/lektorat.db
 .tables
-.schema figures
 SELECT * FROM schema_version;
 ```
-
-## Datenbankmigrationen
-
-`db/schema.js` enthält `runMigrations()`. Sie liest `schema_version` und führt alle ausstehenden `ALTER TABLE`-Statements sequenziell aus.
-
-**Neue Spalte hinzufügen:**
-
-1. `CURRENT_SCHEMA_VERSION` in `db/schema.js` um 1 erhöhen.
-2. In `runMigrations()` den Block ergänzen:
-   ```js
-   if (version < 2) {
-     db.exec('ALTER TABLE figures ADD COLUMN wohnort TEXT');
-     db.prepare('UPDATE schema_version SET version = 2').run();
-     logger.info('DB-Migration auf Version 2 abgeschlossen.');
-   }
-   ```
-3. Im GET `/figures/:book_id` die neue Spalte ins zurückgegebene Objekt aufnehmen.
-4. Im `_saveFigurenToDb()` die neue Spalte im INSERT berücksichtigen.
-
-**Neue Tabelle:** `CREATE TABLE IF NOT EXISTS` im Schema-Block – keine Versionierung nötig, da idempotent.
-
-**Neue Beziehungstypen:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Im Frontend in der `BZ`-Konstante (Rendering) und im Claude-Prompt (`FINAL_SCHEMA`) den neuen Typ ergänzen.
 
 ## Prompt-Konfiguration
 
@@ -208,7 +98,7 @@ SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein B
 
 **Feature-Exklusivität (Standardverhalten):** Features überschreiben sich gegenseitig – es ist immer nur eine Hauptansicht aktiv. Buchebenen-Features (Figuren, Szenen, Ereignisse, Orte, Kontinuität, Buchbewertung, Buchstatistik, Buch-Chat) und Seitenebenen-Features (Lektorat-Editor) sind gegenseitig exklusiv. Jedes Buchebenen-Toggle ruft `_closeOtherMainCards(keep)` in `app.js` auf – das schliesst alle anderen Buchkarten und ruft `resetPage()` auf (schliesst Editor + Seiten-Features). `selectPage()` schliesst seinerseits alle Buchkarten bevor es den Editor öffnet. Neues Feature-Toggle immer nach diesem Muster implementieren.
 
-**Two-Tier-Analyse-Pattern:** `review.js` und `figuren.js` laden via `two-tier.js`. `SINGLE_PASS_LIMIT` = 60 000 Zeichen: darunter Single-Pass direkt an Claude, darüber Multi-Pass pro Kapitel + Konsolidierungs-Call.
+**Two-Tier-Analyse-Pattern:** `routes/jobs.js` implementiert für Review, Figurenextraktion und Buch-Chat ein Two-Tier-Muster: `SINGLE_PASS_LIMIT` = 60 000 Zeichen – darunter Single-Pass direkt an Claude, darüber Multi-Pass pro Kapitel + Konsolidierungs-Call.
 
 **Selektive Fehlerkorrektur:** `_recomputeCorrectedHtml()` wendet nur `selectedErrors` via `_applyCorrections` auf `originalHtml` an. Claudes `korrekturen_html` wird ignoriert.
 

@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
-const { db, saveFigurenToDb, updateFigurenEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint } = require('../db/schema');
+const { db, saveFigurenToDb, updateFigurenEvents, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint } = require('../db/schema');
 const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -632,8 +632,15 @@ async function runFigureEventsJob(jobId, bookId, bookName, userEmail) {
       });
       allAssignments = [];
       for (const [fig_id, events] of mergedMap) {
-        events.sort((a, b) => (parseInt(a.datum) || 0) - (parseInt(b.datum) || 0));
-        allAssignments.push({ fig_id, lebensereignisse: events });
+        // Deduplizierung: Events mit identischem datum + ereignis-Text (aus parallelen Kapitel-Passes) entfernen
+        const seen = new Set();
+        const deduped = [];
+        for (const ev of events) {
+          const key = (ev.datum || '') + '||' + (ev.ereignis || '').trim().toLowerCase();
+          if (!seen.has(key)) { seen.add(key); deduped.push(ev); }
+        }
+        deduped.sort((a, b) => (parseInt(a.datum) || 0) - (parseInt(b.datum) || 0));
+        allAssignments.push({ fig_id, lebensereignisse: deduped });
       }
     }
 
@@ -643,6 +650,8 @@ async function runFigureEventsJob(jobId, bookId, bookName, userEmail) {
       pageNameToId: Object.fromEntries(pages.map(p => [p.name, p.id])),
     };
     updateFigurenEvents(parseInt(bookId), allAssignments, userEmail || null, idMapsEvt);
+    // Konsolidierten Zeitstrahl invalidieren – neue Extraktion macht alte Konsolidierung ungültig
+    saveZeitstrahlEvents(parseInt(bookId), userEmail || null, []);
     const eventCount = allAssignments.reduce((s, a) => s + (a.lebensereignisse?.length || 0), 0);
     deleteCheckpoint('figure-events', bookId, userEmail);
     completeJob(jobId, { eventCount, tokensIn: tok.in, tokensOut: tok.out });
@@ -770,6 +779,7 @@ async function runConsolidateZeitstrahlJob(jobId, events, bookId, userEmail) {
       5, 97, 3000, 0.2, null,
     );
     if (!Array.isArray(result?.ereignisse)) throw new Error('KI-Antwort ungültig: ereignisse-Array fehlt');
+    saveZeitstrahlEvents(parseInt(bookId), userEmail || null, result.ereignisse);
     completeJob(jobId, { ereignisse: result.ereignisse, tokensIn: tok.in, tokensOut: tok.out });
     logger.info(`Job ${jobId}: Zeitstrahl-Konsolidierung Buch ${bookId} abgeschlossen (${result.ereignisse.length} Ereignisse, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {

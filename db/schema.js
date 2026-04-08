@@ -197,6 +197,23 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_cc_book_id ON continuity_checks(book_id, user_email);
 
+  -- Konsolidierter Zeitstrahl (persistiertes Ergebnis der KI-Konsolidierung)
+  CREATE TABLE IF NOT EXISTS zeitstrahl_events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id    INTEGER NOT NULL,
+    user_email TEXT NOT NULL DEFAULT '',
+    datum      TEXT NOT NULL,
+    ereignis   TEXT NOT NULL,
+    typ        TEXT DEFAULT 'persoenlich',
+    bedeutung  TEXT,
+    kapitel    TEXT,    -- JSON-Array der Kapitelnamen
+    seiten     TEXT,    -- JSON-Array der Seitennamen
+    figuren    TEXT,    -- JSON-Array [{id, name, typ}]
+    sort_order INTEGER DEFAULT 0,
+    updated_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_ze_book_id ON zeitstrahl_events(book_id, user_email);
+
   -- Checkpoint-Cache für unterbrechbare Multi-Pass-Jobs (Resume nach Server-Neustart)
   CREATE TABLE IF NOT EXISTS job_checkpoints (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -431,6 +448,27 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 18').run();
     logger.info('DB-Migration auf Version 18 abgeschlossen (chapter_id/page_id zu figure_appearances, figure_events, figure_scenes hinzugefügt).');
   }
+  if (version < 21) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS zeitstrahl_events (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id    INTEGER NOT NULL,
+        user_email TEXT NOT NULL DEFAULT '',
+        datum      TEXT NOT NULL,
+        ereignis   TEXT NOT NULL,
+        typ        TEXT DEFAULT 'persoenlich',
+        bedeutung  TEXT,
+        kapitel    TEXT,
+        seiten     TEXT,
+        figuren    TEXT,
+        sort_order INTEGER DEFAULT 0,
+        updated_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_ze_book_id ON zeitstrahl_events(book_id, user_email);
+    `);
+    db.prepare('UPDATE schema_version SET version = 21').run();
+    logger.info('DB-Migration auf Version 21 abgeschlossen (zeitstrahl_events Tabelle hinzugefügt).');
+  }
   if (version < 19) {
     const pagesCols = db.pragma('table_info(pages)').map(c => c.name);
     if (!pagesCols.includes('chapter_id'))   db.exec('ALTER TABLE pages ADD COLUMN chapter_id INTEGER');
@@ -549,6 +587,29 @@ function updateFigurenEvents(bookId, assignments, userEmail, idMaps) {
         const ev = assignment.lebensereignisse[j];
         insEvt.run(rowId, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', ev.kapitel || null, ev.seite || null, idMaps?.chNameToId?.[ev.kapitel] ?? null, idMaps?.pageNameToId?.[ev.seite] ?? null, j);
       }
+    }
+  })();
+}
+
+// Konsolidierten Zeitstrahl persistieren (ersetzt den gesamten Bestand für book/user).
+// ereignisse: Array aus KI-Antwort [{datum, ereignis, typ, bedeutung, kapitel[], seiten[], figuren[]}]
+function saveZeitstrahlEvents(bookId, userEmail, ereignisse) {
+  const now = new Date().toISOString();
+  db.transaction(() => {
+    db.prepare('DELETE FROM zeitstrahl_events WHERE book_id = ? AND user_email = ?').run(bookId, userEmail || '');
+    const ins = db.prepare(`INSERT INTO zeitstrahl_events
+      (book_id, user_email, datum, ereignis, typ, bedeutung, kapitel, seiten, figuren, sort_order, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    for (let i = 0; i < ereignisse.length; i++) {
+      const ev = ereignisse[i];
+      ins.run(
+        bookId, userEmail || '',
+        ev.datum || '', ev.ereignis || '', ev.typ || 'persoenlich', ev.bedeutung || null,
+        Array.isArray(ev.kapitel) ? JSON.stringify(ev.kapitel) : (ev.kapitel ? JSON.stringify([ev.kapitel]) : null),
+        Array.isArray(ev.seiten)  ? JSON.stringify(ev.seiten)  : null,
+        ev.figuren ? JSON.stringify(ev.figuren) : null,
+        i, now
+      );
     }
   })();
 }
@@ -810,4 +871,4 @@ function deleteCheckpoint(jobType, bookId, userEmail) {
   _deleteCheckpoint.run(jobType, parseInt(bookId), userEmail || '');
 }
 
-module.exports = { db, saveFigurenToDb, updateFigurenEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint };
+module.exports = { db, saveFigurenToDb, updateFigurenEvents, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint };
