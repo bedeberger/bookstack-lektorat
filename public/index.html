@@ -517,12 +517,16 @@
           <option :value="f.id" x-text="f.kurzname || f.name"></option>
         </template>
       </select>
-      <span class="szenen-filter-count"
-        x-text="szenen.filter(s => (!szenenFilterWertung || s.wertung === szenenFilterWertung) && (!szenenFilterFigurId || s.fig_ids.includes(szenenFilterFigurId))).length + ' / ' + szenen.length">
-      </span>
+      <div class="szenen-filter-group szenen-sort-group">
+        <button class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenSortBy === '' }" @click="szenenSortBy = ''">Reihenfolge</button>
+        <button class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenSortBy === 'figur' }"   @click="szenenSortBy = szenenSortBy === 'figur'   ? '' : 'figur'">Figur</button>
+        <button class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenSortBy === 'kapitel' }" @click="szenenSortBy = szenenSortBy === 'kapitel' ? '' : 'kapitel'">Kapitel</button>
+        <button class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenSortBy === 'seite' }"   @click="szenenSortBy = szenenSortBy === 'seite'   ? '' : 'seite'">Seite</button>
+      </div>
+      <span class="szenen-filter-count" x-text="szenenFiltered.length + ' / ' + szenen.length"></span>
     </div>
     <div class="szenen-liste">
-      <template x-for="(s, i) in szenen.filter(s => (!szenenFilterWertung || s.wertung === szenenFilterWertung) && (!szenenFilterFigurId || s.fig_ids.includes(szenenFilterFigurId)))" :key="i">
+      <template x-for="(s, i) in szenenFiltered" :key="i">
         <div class="szene-card" :class="'szene-card--' + (s.wertung || 'mittel')">
           <div class="szene-card-header">
             <span class="szene-card-wertung" :class="'figur-szene-wertung--' + (s.wertung || 'mittel')" x-text="s.wertung || '–'"></span>
@@ -569,9 +573,32 @@
     Keine Ereignisse vorhanden. Zuerst die <strong>Figuren</strong> analysieren lassen – die Zeitleiste wird aus den Figur-Lebensläufen aufgebaut.
   </div>
 
+  <!-- Filter -->
+  <div x-show="globalZeitstrahl.length > 0" class="szenen-filter-bar">
+    <select class="szenen-filter-select" x-model="ereignisseFilterFigurId">
+      <option value="">Alle Figuren</option>
+      <template x-for="f in figuren.filter(f => globalZeitstrahl.some(ev => ev.figuren.some(fr => fr.id === f.id)))" :key="f.id">
+        <option :value="f.id" x-text="f.kurzname || f.name"></option>
+      </template>
+    </select>
+    <select class="szenen-filter-select" x-model="ereignisseFilterKapitel" @change="ereignisseFilterSeite = ''">
+      <option value="">Alle Kapitel</option>
+      <template x-for="k in ereignisseKapitelListe()" :key="k">
+        <option :value="k" x-text="k"></option>
+      </template>
+    </select>
+    <select class="szenen-filter-select" x-model="ereignisseFilterSeite" :disabled="!ereignisseFilterKapitel || ereignisseSeitenListe().length === 0">
+      <option value="">Alle Seiten</option>
+      <template x-for="s in ereignisseSeitenListe()" :key="s">
+        <option :value="s" x-text="s"></option>
+      </template>
+    </select>
+    <span class="szenen-filter-count" x-text="filteredEreignisse().length + ' / ' + globalZeitstrahl.length"></span>
+  </div>
+
   <!-- Zeitleiste -->
   <div x-show="globalZeitstrahl.length > 0" class="global-zeitstrahl-body global-zeitstrahl-body--card">
-    <template x-for="(ev, i) in globalZeitstrahl" :key="i">
+    <template x-for="(ev, i) in filteredEreignisse()" :key="i">
       <div class="gz-item" :class="ev.typ === 'extern' ? 'gz-item--extern' : ''">
         <div class="gz-marker" :class="ev.typ === 'extern' ? 'gz-marker--extern' : ''"></div>
         <div class="gz-content">

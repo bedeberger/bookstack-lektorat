@@ -94,6 +94,9 @@ document.addEventListener('alpine:init', () => {
     zeitstrahlProgress: 0,
     zeitstrahlStatus: '',
     showEreignisseCard: false,
+    ereignisseFilterFigurId: '',
+    ereignisseFilterKapitel: '',
+    ereignisseFilterSeite: '',
     showSzenenCard: false,
     szenen: [],
     szenenUpdatedAt: null,
@@ -102,6 +105,7 @@ document.addEventListener('alpine:init', () => {
     szenenStatus: '',
     szenenFilterWertung: '',
     szenenFilterFigurId: '',
+    szenenSortBy: '',
     _consolidatePollTimer: null,
     _szenenPollTimer: null,
     _figurenNetwork: null,
@@ -181,6 +185,26 @@ document.addEventListener('alpine:init', () => {
       }
       return [...map.entries()].map(([name, d]) => ({ name, total: d.total, kapitel: d.kapitel }));
     },
+    get szenenFiltered() {
+      let list = this.szenen.filter(s =>
+        (!this.szenenFilterWertung || s.wertung === this.szenenFilterWertung) &&
+        (!this.szenenFilterFigurId || (s.fig_ids || []).includes(this.szenenFilterFigurId))
+      );
+      if (this.szenenSortBy === 'kapitel') {
+        list = [...list].sort((a, b) => (a.kapitel || '').localeCompare(b.kapitel || '', 'de'));
+      } else if (this.szenenSortBy === 'seite') {
+        list = [...list].sort((a, b) => (a.seite || '').localeCompare(b.seite || '', 'de'));
+      } else if (this.szenenSortBy === 'figur') {
+        list = [...list].sort((a, b) => {
+          const fa = (a.fig_ids || [])[0];
+          const fb = (b.fig_ids || [])[0];
+          const na = this.figuren.find(f => f.id === fa)?.kurzname || this.figuren.find(f => f.id === fa)?.name || '';
+          const nb = this.figuren.find(f => f.id === fb)?.kurzname || this.figuren.find(f => f.id === fb)?.name || '';
+          return na.localeCompare(nb, 'de');
+        });
+      }
+      return list;
+    },
 
     get statusHtml() {
       if (!this.status) return '';
@@ -257,6 +281,44 @@ document.addEventListener('alpine:init', () => {
         result = result.filter(f =>
           (f.seiten || []).some(s => s.kapitel === this.figurenKapitelFilter && s.seite === this.figurenSeitenFilter)
         );
+      }
+      return result;
+    },
+
+    ereignisseKapitelListe() {
+      const names = new Set();
+      for (const ev of this.globalZeitstrahl) {
+        if (ev.kapitel) names.add(ev.kapitel);
+      }
+      return [...names].sort();
+    },
+
+    ereignisseSeitenListe() {
+      if (!this.ereignisseFilterKapitel) return [];
+      const names = new Set();
+      for (const f of this.figuren) {
+        for (const s of (f.seiten || [])) {
+          if (s.kapitel === this.ereignisseFilterKapitel && s.seite) names.add(s.seite);
+        }
+      }
+      return [...names].sort();
+    },
+
+    filteredEreignisse() {
+      let result = this.globalZeitstrahl;
+      if (this.ereignisseFilterFigurId) {
+        result = result.filter(ev => ev.figuren.some(f => f.id === this.ereignisseFilterFigurId));
+      }
+      if (this.ereignisseFilterKapitel) {
+        result = result.filter(ev => ev.kapitel === this.ereignisseFilterKapitel);
+      }
+      if (this.ereignisseFilterSeite && this.ereignisseFilterKapitel) {
+        const figurenOnPage = new Set(
+          this.figuren
+            .filter(f => (f.seiten || []).some(s => s.kapitel === this.ereignisseFilterKapitel && s.seite === this.ereignisseFilterSeite))
+            .map(f => f.id)
+        );
+        result = result.filter(ev => ev.figuren.some(f => figurenOnPage.has(f.id)));
       }
       return result;
     },
@@ -599,6 +661,9 @@ document.addEventListener('alpine:init', () => {
       this.zeitstrahlProgress = 0;
       this.zeitstrahlStatus = '';
       this.showEreignisseCard = false;
+      this.ereignisseFilterFigurId = '';
+      this.ereignisseFilterKapitel = '';
+      this.ereignisseFilterSeite = '';
       this.showSzenenCard = false;
       this.szenen = [];
       this.szenenUpdatedAt = null;
@@ -607,6 +672,7 @@ document.addEventListener('alpine:init', () => {
       this.szenenLoading = false;
       this.szenenFilterWertung = '';
       this.szenenFilterFigurId = '';
+      this.szenenSortBy = '';
       if (this._consolidatePollTimer) { clearInterval(this._consolidatePollTimer); this._consolidatePollTimer = null; }
       if (this._szenenPollTimer) { clearInterval(this._szenenPollTimer); this._szenenPollTimer = null; }
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
