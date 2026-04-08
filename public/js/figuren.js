@@ -37,14 +37,22 @@ export const figurenMethods = {
       await this.$nextTick();
       this.renderFigurGraph();
       // Prüfen ob auf dem Server bereits ein Job für dieses Buch läuft
-      if (!this._figuresPollTimer && !this.figurenLoading) {
+      if (!this._figuresPollTimer && !this._figureEventsPollTimer && !this.figurenLoading) {
         try {
-          const { jobId } = await fetch(`/jobs/active?type=figures&book_id=${this.selectedBookId}`).then(r => r.json());
-          if (jobId) {
+          const [{ jobId: figJobId }, { jobId: evJobId }] = await Promise.all([
+            fetch(`/jobs/active?type=figures&book_id=${this.selectedBookId}`).then(r => r.json()),
+            fetch(`/jobs/active?type=figure-events&book_id=${this.selectedBookId}`).then(r => r.json()),
+          ]);
+          if (figJobId) {
             this.figurenLoading = true;
             this.figurenProgress = 0;
-            this.figurenStatus = 'Analyse läuft bereits…';
-            this.startFiguresPoll(jobId);
+            this.figurenStatus = 'Figuren-Analyse läuft bereits…';
+            this.startFiguresPoll(figJobId);
+          } else if (evJobId) {
+            this.figurenLoading = true;
+            this.figurenProgress = 50;
+            this.figurenStatus = 'Ereignis-Analyse läuft bereits…';
+            this.startFigureEventsPoll(evJobId);
           }
         } catch (e) {
           console.error('[toggleFiguresCard] active-job check:', e);
@@ -53,17 +61,16 @@ export const figurenMethods = {
     }
   },
 
-  // Pollt einen laufenden Figuren-Job und aktualisiert den UI-State.
-  // Wird sowohl beim frischen Start als auch beim Reconnect nach Tab-Schliessen aufgerufen.
+  // Pollt den Figuren-Job (0–50 %) und startet danach automatisch den Ereignis-Job.
   startFiguresPoll(jobId) {
     const bookId = this.selectedBookId;
     this._startPoll({
       timerProp: '_figuresPollTimer',
       jobId,
       lsKey: 'lektorat_figures_job_' + bookId,
-      progressProp: 'figurenProgress',
       onProgress: (job) => {
-        this.figurenStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
+        this.figurenProgress = Math.round((job.progress || 0) / 2);
+        this.figurenStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, this.figurenProgress);
       },
       onNotFound: () => {
         this.figurenLoading = false;
@@ -76,12 +83,66 @@ export const figurenMethods = {
         this.figurenStatus = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
       },
       onDone: async (job) => {
+        if (job.result?.empty) {
+          this.figurenLoading = false;
+          this.figurenProgress = 0;
+          this.figurenStatus = 'Keine Seiten gefunden.';
+          return;
+        }
+        // Direkt zum Ereignis-Job weiterleiten
+        this.figurenProgress = 50;
+        this.figurenStatus = '<span class="spinner"></span>Figuren ermittelt – starte Ereignis-Analyse…';
+        try {
+          const { jobId: evJobId } = await fetch('/jobs/figure-events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ book_id: parseInt(bookId), book_name: this.selectedBookName }),
+          }).then(r => r.json());
+          localStorage.setItem('lektorat_figure_events_job_' + bookId, evJobId);
+          this.startFigureEventsPoll(evJobId);
+        } catch (e) {
+          // Figuren sind da, aber Ereignis-Start schlug fehl
+          this.figurenLoading = false;
+          this.figurenProgress = 0;
+          await this.loadFiguren(bookId);
+          this.figurenStatus = `${job.result?.count || this.figuren.length} Figuren gespeichert. Ereignis-Analyse konnte nicht gestartet werden: ${escHtml(e.message)}`;
+          this._buildGlobalZeitstrahl();
+          await this.$nextTick();
+          this.renderFigurGraph();
+        }
+      },
+    });
+  },
+
+  // Pollt den Ereignis-Job (50–100 %).
+  startFigureEventsPoll(jobId) {
+    const bookId = this.selectedBookId;
+    this._startPoll({
+      timerProp: '_figureEventsPollTimer',
+      jobId,
+      lsKey: 'lektorat_figure_events_job_' + bookId,
+      onProgress: (job) => {
+        this.figurenProgress = 50 + Math.round((job.progress || 0) / 2);
+        this.figurenStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, this.figurenProgress);
+      },
+      onNotFound: () => {
         this.figurenLoading = false;
         this.figurenProgress = 0;
-        if (job.result?.empty) { this.figurenStatus = 'Keine Seiten gefunden.'; return; }
+        this.figurenStatus = 'Ereignis-Analyse unterbrochen (Server-Neustart). Bitte neu starten.';
+      },
+      onError: (job) => {
+        this.figurenLoading = false;
+        this.figurenProgress = 0;
+        this.figurenStatus = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
+      },
+      onDone: async (job) => {
+        this.figurenLoading = false;
+        this.figurenProgress = 0;
         await this.loadFiguren(bookId);
         this.figurenUpdatedAt = new Date().toISOString();
-        this.figurenStatus = `${job.result?.count || this.figuren.length} Figuren ermittelt und gespeichert.`;
+        const figCount = this.figuren.length;
+        const evCount = job.result?.eventCount ?? '?';
+        this.figurenStatus = `${figCount} Figuren · ${evCount} Ereignisse ermittelt und gespeichert.`;
         this._buildGlobalZeitstrahl();
         await this.$nextTick();
         this.renderFigurGraph();

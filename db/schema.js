@@ -459,6 +459,31 @@ function saveFigurenToDb(bookId, figuren, userEmail) {
   })();
 }
 
+// Ersetzt alle Lebensereignisse für ein Buch/User anhand von fig_id-basierten Assignments.
+// assignments: [{ fig_id: "fig_1", lebensereignisse: [...] }]
+function updateFigurenEvents(bookId, assignments, userEmail) {
+  db.transaction(() => {
+    const figRows = db.prepare(
+      'SELECT id, fig_id FROM figures WHERE book_id = ? AND user_email = ?'
+    ).all(bookId, userEmail || null);
+    if (!figRows.length) return;
+
+    const figIdToRowId = Object.fromEntries(figRows.map(r => [r.fig_id, r.id]));
+    const delEvt = db.prepare('DELETE FROM figure_events WHERE figure_id = ?');
+    for (const row of figRows) delEvt.run(row.id);
+
+    const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
+    for (const assignment of assignments) {
+      const rowId = figIdToRowId[assignment.fig_id];
+      if (!rowId) continue;
+      for (let j = 0; j < (assignment.lebensereignisse || []).length; j++) {
+        const ev = assignment.lebensereignisse[j];
+        insEvt.run(rowId, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', j);
+      }
+    }
+  })();
+}
+
 // Einmalige Migration von lektorat-history.json
 function migrateFromJson() {
   const HISTORY_FILE = path.join(__dirname, '..', 'lektorat-history.json');
@@ -584,4 +609,4 @@ function deleteCheckpoint(jobType, bookId, userEmail) {
   _deleteCheckpoint.run(jobType, parseInt(bookId), userEmail || '');
 }
 
-module.exports = { db, saveFigurenToDb, saveOrteToDb, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint };
+module.exports = { db, saveFigurenToDb, updateFigurenEvents, saveOrteToDb, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint };

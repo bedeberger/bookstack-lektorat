@@ -188,6 +188,7 @@ document.addEventListener('alpine:init', () => {
     _checkPollTimer: null,
     _reviewPollTimer: null,
     _figuresPollTimer: null,
+    _figureEventsPollTimer: null,
     showBookStatsCard: false,
     bookStatsData: [],
     bookStatsLoading: false,

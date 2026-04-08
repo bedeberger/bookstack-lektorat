@@ -327,6 +327,133 @@ ${FIGUREN_SCHEMA}
 ${FIGUREN_RULES}`;
 }
 
+// ── Figurenextraktion (Basis – ohne Lebensereignisse) ─────────────────────────
+
+const FIGUREN_BASIS_SCHEMA = `{
+  "figuren": [
+    {
+      "id": "fig_1",
+      "name": "Vollständiger Name",
+      "kurzname": "Vorname oder Spitzname",
+      "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere",
+      "geburtstag": "JJJJ oder leer wenn unbekannt",
+      "geschlecht": "männlich|weiblich|divers|unbekannt",
+      "beruf": "Beruf oder Rolle oder leer",
+      "beschreibung": "2-3 Sätze zu Rolle, Persönlichkeit und Bedeutung",
+      "eigenschaften": ["Eigenschaft1", "Eigenschaft2"],
+      "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
+      "beziehungen": [{ "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|andere", "beschreibung": "1 Satz" }]
+    }
+  ]
+}`;
+
+const FIGUREN_BASIS_RULES = `Regeln:
+- Eindeutige IDs (fig_1, fig_2, …)
+- beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
+- kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten
+- Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), übrige selbsterklärend
+- Nur fiktive Charaktere oder Figuren die aktiv an der Buchhandlung teilnehmen – keine Orte oder Objekte
+- KEINE historischen oder realen Personen die nur erwähnt, zitiert oder als Referenz genannt werden (z.B. Napoleon, Einstein, ein Politiker, eine Künstlerin)
+- Sortiert nach Wichtigkeit
+- KONSERVATIV: Nur Figuren und Beziehungen aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren.
+- DEDUPLIZIERUNG NUR BEI EINDEUTIGER NAMENSGLEICHHEIT: Zwei Figuren nur zusammenführen wenn ihre Namen klar übereinstimmen (gleicher Vor- und Nachname, oder ein Name ist bestätigter Spitzname/Alias des anderen). Namensähnlichkeit allein reicht nicht – im Zweifel als separate Figuren behalten. Figuren ohne oder mit wenig Informationen NICHT mit anderen zusammenführen.`;
+
+export function buildFiguresBasisSinglePassPrompt(bookName, pageCount, bookText) {
+  return `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Figuren.
+
+Antworte mit diesem JSON-Schema:
+${FIGUREN_BASIS_SCHEMA}
+
+${FIGUREN_BASIS_RULES}
+
+${JSON_ONLY}
+
+Buchtext (${pageCount} Seiten):
+
+${bookText}`;
+}
+
+export function buildFiguresBasisChapterPrompt(chapterName, bookName, pageCount, chText) {
+  return `Extrahiere alle Figuren aus dem Kapitel «${chapterName}» des Buchs «${bookName}».
+
+Antworte mit diesem JSON-Schema:
+${FIGUREN_BASIS_SCHEMA}
+
+${FIGUREN_BASIS_RULES}
+
+${JSON_ONLY}
+
+Kapiteltext (${pageCount} Seiten):
+
+${chText}`;
+}
+
+export function buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren) {
+  const synthInput = chapterFiguren.map(cf =>
+    `## Kapitel: ${cf.kapitel}\n` + (cf.figuren || []).map(f => {
+      const meta = [f.typ, f.beruf, f.geburtstag ? `*${f.geburtstag}` : '', f.geschlecht].filter(Boolean).join(', ');
+      return `- ${f.name}${f.kurzname && f.kurzname !== f.name ? ` («${f.kurzname}»)` : ''} (${meta}): ${f.beschreibung || ''}` +
+        (f.eigenschaften?.length ? '\n  Eigenschaften: ' + f.eigenschaften.join(', ') : '') +
+        (f.beziehungen?.length ? '\n  Beziehungen: ' + f.beziehungen.map(b => `${b.figur_id || b.name} [${b.typ}]`).join(', ') : '');
+    }).join('\n')
+  ).join('\n\n');
+  return `Konsolidiere die folgenden Figurenanalysen aller Kapitel des Buchs «${bookName}» zu einer einheitlichen Gesamtliste. Dedupliziere Figuren, führe Informationen zusammen und vergib stabile IDs.
+
+Kapitelanalysen:
+
+${synthInput}
+
+${JSON_ONLY}
+
+Antworte mit diesem JSON-Schema:
+${FIGUREN_BASIS_SCHEMA}
+
+${FIGUREN_BASIS_RULES}`;
+}
+
+// ── Lebensereignisse-Zuordnung ────────────────────────────────────────────────
+
+export function buildFiguresEventAssignmentPrompt(chapterName, bookName, pageCount, figurenList, chText) {
+  const figurenStr = figurenList.map(f => `${f.id}: ${f.name} (${f.typ || 'andere'})`).join('\n');
+  return `Extrahiere alle Lebensereignisse aus dem Kapitel «${chapterName}» des Buchs «${bookName}» und weise sie den bekannten Figuren zu.
+
+Bekannte Figuren (nur diese IDs in «fig_id» verwenden):
+${figurenStr}
+
+Antworte mit diesem JSON-Schema:
+{
+  "assignments": [
+    {
+      "fig_id": "fig_1",
+      "lebensereignisse": [
+        {
+          "datum": "JJJJ (nur Jahreszahl; aus Kontext errechnen wenn nötig – Geburtsjahr + Altersangabe, bekannte historische Jahreszahl; leer lassen wenn nicht errechenbar)",
+          "ereignis": "Was passierte (1 Satz)",
+          "typ": "persoenlich|extern",
+          "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)",
+          "kapitel": "${chapterName}"
+        }
+      ]
+    }
+  ]
+}
+
+Regeln:
+- typ='persoenlich': echte biografische Wendepunkte (Geburt, Tod, Trauma, neue/beendete Beziehung, Jobwechsel, Umzug, wichtige Entscheidung) – keine flüchtigen Szenen ohne bleibende Wirkung
+- typ='extern': gesellschaftliche/historische Ereignisse (Kriege, Katastrophen, Massaker, politische Umbrüche) – GROSSZÜGIG: auch Ereignisse aufnehmen die nur erwähnt werden oder nur indirekt wirken
+- datum: immer als vierstellige Jahreszahl (JJJJ) – falls nicht direkt erwähnt, aus Kontext errechnen; Events ohne errechenbare Jahreszahl weglassen
+- Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden
+- Nur fig_id-Werte aus der obigen Liste verwenden
+- Chronologisch sortiert nach Datum innerhalb jeder Figur
+- KONSERVATIV: nur Ereignisse aufnehmen die im Text eindeutig belegt sind
+
+${JSON_ONLY}
+
+Kapiteltext (${pageCount} Seiten):
+
+${chText}`;
+}
+
 export function buildSzenenAnalysePrompt(kapitel, figurenKompakt, chText) {
   const figurenStr = figurenKompakt.length
     ? figurenKompakt.map(f => `${f.id}: ${f.name} (${f.typ})`).join('\n')

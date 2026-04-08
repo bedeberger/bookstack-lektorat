@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
-const { db, saveFigurenToDb, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint } = require('../db/schema');
+const { db, saveFigurenToDb, updateFigurenEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint } = require('../db/schema');
 const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -457,13 +457,13 @@ async function runReviewJob(jobId, bookId, bookName, userEmail) {
   }
 }
 
-// ── Job: Figurenextraktion ────────────────────────────────────────────────────
+// ── Job: Figurenextraktion (Basis – ohne Lebensereignisse) ───────────────────
 async function runFiguresJob(jobId, bookId, bookName, userEmail) {
-  const { SYSTEM_FIGUREN, buildFiguresSinglePassPrompt, buildFiguresChapterEventsPrompt, buildFiguresChapterWithEventsPrompt, buildFiguresConsolidationPrompt } = await getPrompts();
+  const { SYSTEM_FIGUREN, buildFiguresBasisSinglePassPrompt, buildFiguresBasisChapterPrompt, buildFiguresBasisConsolidationPrompt } = await getPrompts();
 
   try {
     const cp = loadCheckpoint('figures', bookId, userEmail);
-    if (cp) logger.info(`Job ${jobId}: Figurenextraktion Buch ${bookId} – Checkpoint gefunden (Phase: ${cp.phase}, Kapitel: ${cp.nextGi ?? '–'}), setze fort.`);
+    if (cp) logger.info(`Job ${jobId}: Figurenextraktion Buch ${bookId} – Checkpoint gefunden (Phase: ${cp.phase}), setze fort.`);
 
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
@@ -490,95 +490,51 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
         .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
         .join('\n\n---\n\n');
       result = await aiCall(jobId, tok,
-        buildFiguresSinglePassPrompt(bookName, pageContents.length, bookText),
+        buildFiguresBasisSinglePassPrompt(bookName, pageContents.length, bookText),
         SYSTEM_FIGUREN,
-        65, 96, 6000,
+        65, 96, 4000,
       );
     } else {
       const { groupOrder, groups } = groupByChapter(pageContents);
-
-      // Kapiteltexte einmal aufbauen – werden in beiden Phasen verwendet
       const chapterTexts = groupOrder.map(key => {
         const group = groups.get(key);
         return { group, chText: group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n') };
       });
 
-      // Phase 1: Events extrahieren – aus Checkpoint laden oder neu berechnen
-      let allChapterEvents;
-      if (cp?.phase === 'phase1_done' || cp?.phase === 'phase2') {
-        allChapterEvents = cp.allChapterEvents;
-        updateJob(jobId, { progress: 70, statusText: 'Phase 1 aus Checkpoint geladen…' });
+      // Phase 1: Figuren parallel pro Kapitel extrahieren
+      let chapterFiguren;
+      if (cp?.phase === 'phase1_done') {
+        chapterFiguren = cp.chapterFiguren;
+        updateJob(jobId, { progress: 82, statusText: 'Phase 1 aus Checkpoint geladen…' });
       } else {
         updateJob(jobId, {
           progress: 55,
-          statusText: `Events in ${groupOrder.length} Kapiteln parallel extrahieren…`,
+          statusText: `Figuren in ${groupOrder.length} Kapiteln parallel analysieren…`,
         });
-        const eventsSettled = await Promise.allSettled(
+        const settled = await Promise.allSettled(
           chapterTexts.map(({ group, chText }) =>
             aiCall(jobId, tok,
-              buildFiguresChapterEventsPrompt(group.name, bookName, group.pages.length, chText),
+              buildFiguresBasisChapterPrompt(group.name, bookName, group.pages.length, chText),
               SYSTEM_FIGUREN,
-              55, 70, 1500,
+              55, 82, 4000,
             )
           )
         );
-        allChapterEvents = eventsSettled.map((r, gi) => {
-          if (r.status === 'fulfilled') return r.value?.events || [];
-          logger.warn(`Job ${jobId}: Events-Extraktion Kapitel «${chapterTexts[gi].group.name}» fehlgeschlagen – fahre ohne Events fort. ${r.reason?.message}`);
-          return [];
-        });
-        saveCheckpoint('figures', bookId, userEmail, { phase: 'phase1_done', allChapterEvents });
+        chapterFiguren = settled.map((r, gi) => ({
+          kapitel: chapterTexts[gi].group.name,
+          figuren: r.status === 'fulfilled' ? (r.value?.figuren || []) : [],
+          ...(r.status === 'rejected' && logger.warn(`Job ${jobId}: Kapitel «${chapterTexts[gi].group.name}» übersprungen: ${r.reason?.message}`) && {}),
+        }));
+        saveCheckpoint('figures', bookId, userEmail, { phase: 'phase1_done', chapterFiguren });
       }
 
-      // Phase 2: Figuren sequenziell – ggf. aus Checkpoint fortsetzen
-      let chapterFiguren = cp?.phase === 'phase2' ? cp.chapterFiguren : [];
-      let accumulatedFiguren = cp?.phase === 'phase2' ? cp.accumulatedFiguren : [];
-      const startGi = cp?.phase === 'phase2' ? (cp.nextGi ?? 0) : 0;
-      const tokStr = () => tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
-
-      if (startGi > 0) {
-        updateJob(jobId, {
-          progress: 70 + Math.round((startGi / groupOrder.length) * 15),
-          statusText: `Setze Figurenanalyse fort (${startGi}/${groupOrder.length} Kapitel bereits fertig)…`,
-        });
-      }
-
-      for (let gi = startGi; gi < groupOrder.length; gi++) {
-        const { group, chText } = chapterTexts[gi];
-        const fromPct = 70 + Math.round((gi / groupOrder.length) * 15);
-        const toPct   = 70 + Math.round(((gi + 1) / groupOrder.length) * 15);
-        updateJob(jobId, {
-          progress: fromPct,
-          statusText: `Figuren in «${group.name}» (${gi + 1}/${groupOrder.length})…${tokStr()}`,
-        });
-        try {
-          const chResult = await aiCall(jobId, tok,
-            buildFiguresChapterWithEventsPrompt(group.name, bookName, group.pages.length, chText, allChapterEvents[gi], accumulatedFiguren),
-            SYSTEM_FIGUREN,
-            fromPct, toPct, 8000,
-          );
-          const chFiguren = chResult.figuren || [];
-          chapterFiguren.push({ kapitel: group.name, figuren: chFiguren });
-          for (const f of chFiguren) {
-            if (!accumulatedFiguren.some(a => a.name === f.name)) {
-              accumulatedFiguren.push({ name: f.name, kurzname: f.kurzname, typ: f.typ, beschreibung: f.beschreibung });
-            }
-          }
-        } catch (e) {
-          logger.warn(`Job ${jobId}: Figurenextraktion Kapitel «${group.name}» fehlgeschlagen – Kapitel wird übersprungen. ${e.message}`);
-          chapterFiguren.push({ kapitel: group.name, figuren: [] });
-        }
-        saveCheckpoint('figures', bookId, userEmail, { phase: 'phase2', allChapterEvents, chapterFiguren, accumulatedFiguren, nextGi: gi + 1 });
-      }
-
-      updateJob(jobId, {
-        progress: 85,
-        statusText: `KI konsolidiert Figuren… · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens`,
-      });
+      // Phase 2: Konsolidierung
+      const tokStr = ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens`;
+      updateJob(jobId, { progress: 85, statusText: `KI konsolidiert Figuren…${tokStr}` });
       result = await aiCall(jobId, tok,
-        buildFiguresConsolidationPrompt(bookName, chapterFiguren),
+        buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren),
         SYSTEM_FIGUREN,
-        85, 96, 16000,
+        85, 96, 8000,
       );
     }
 
@@ -591,6 +547,101 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
     logger.info(`Job ${jobId}: Figurenextraktion Buch ${bookId} abgeschlossen (${figuren.length} Figuren, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Figurenextraktion Fehler: ${e.message}`);
+    failJob(jobId, e);
+  }
+}
+
+// ── Job: Lebensereignisse-Zuordnung ──────────────────────────────────────────
+async function runFigureEventsJob(jobId, bookId, bookName, userEmail) {
+  const { SYSTEM_FIGUREN, buildFiguresEventAssignmentPrompt } = await getPrompts();
+
+  try {
+    updateJob(jobId, { statusText: 'Lade Figuren und Seiten…', progress: 0 });
+
+    const figRows = db.prepare(
+      'SELECT fig_id, name, typ FROM figures WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+    ).all(parseInt(bookId), userEmail || null);
+    if (!figRows.length) {
+      failJob(jobId, new Error('Keine Figuren gefunden – bitte zuerst Figuren ermitteln.'));
+      return;
+    }
+    const figurenList = figRows.map(f => ({ id: f.fig_id, name: f.name, typ: f.typ || 'andere' }));
+
+    const [chaptersData, pages] = await Promise.all([
+      bsGetAll('chapters?book_id=' + bookId),
+      bsGetAll('pages?book_id=' + bookId),
+    ]);
+    if (!pages.length) { completeJob(jobId, { eventCount: 0 }); return; }
+
+    const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
+    const tok = { in: 0, out: 0 };
+    const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
+      updateJob(jobId, {
+        progress: Math.round((i / total) * 35),
+        statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
+      });
+    });
+
+    const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
+    let allAssignments;
+
+    if (totalChars <= SINGLE_PASS_LIMIT) {
+      updateJob(jobId, { progress: 45, statusText: 'KI analysiert Ereignisse…' });
+      const bookText = pageContents
+        .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
+        .join('\n\n---\n\n');
+      const result = await aiCall(jobId, tok,
+        buildFiguresEventAssignmentPrompt('Gesamtbuch', bookName, pageContents.length, figurenList, bookText),
+        SYSTEM_FIGUREN,
+        45, 90, 6000,
+      );
+      allAssignments = result?.assignments || [];
+    } else {
+      const { groupOrder, groups } = groupByChapter(pageContents);
+      updateJob(jobId, {
+        progress: 35,
+        statusText: `Ereignisse in ${groupOrder.length} Kapiteln parallel analysieren…`,
+      });
+
+      const settled = await Promise.allSettled(
+        groupOrder.map(key => {
+          const group = groups.get(key);
+          const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+          return aiCall(jobId, tok,
+            buildFiguresEventAssignmentPrompt(group.name, bookName, group.pages.length, figurenList, chText),
+            SYSTEM_FIGUREN,
+            35, 88, 3000,
+          );
+        })
+      );
+
+      // Merge: alle lebensereignisse pro fig_id sammeln und nach datum sortieren
+      const mergedMap = new Map();
+      settled.forEach((r, gi) => {
+        if (r.status === 'rejected') {
+          logger.warn(`Job ${jobId}: Ereignis-Analyse Kapitel «${groups.get(groupOrder[gi]).name}» übersprungen: ${r.reason?.message}`);
+          return;
+        }
+        for (const assignment of (r.value?.assignments || [])) {
+          if (!mergedMap.has(assignment.fig_id)) mergedMap.set(assignment.fig_id, []);
+          for (const ev of (assignment.lebensereignisse || [])) mergedMap.get(assignment.fig_id).push(ev);
+        }
+      });
+      allAssignments = [];
+      for (const [fig_id, events] of mergedMap) {
+        events.sort((a, b) => (parseInt(a.datum) || 0) - (parseInt(b.datum) || 0));
+        allAssignments.push({ fig_id, lebensereignisse: events });
+      }
+    }
+
+    updateJob(jobId, { progress: 92, statusText: 'Ereignisse speichern…' });
+    updateFigurenEvents(parseInt(bookId), allAssignments, userEmail || null);
+    const eventCount = allAssignments.reduce((s, a) => s + (a.lebensereignisse?.length || 0), 0);
+    deleteCheckpoint('figure-events', bookId, userEmail);
+    completeJob(jobId, { eventCount, tokensIn: tok.in, tokensOut: tok.out });
+    logger.info(`Job ${jobId}: Ereignis-Zuordnung Buch ${bookId} abgeschlossen (${eventCount} Ereignisse, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+  } catch (e) {
+    logger.error(`Job ${jobId}: Ereignis-Zuordnung Fehler: ${e.message}`);
     failJob(jobId, e);
   }
 }
@@ -1187,6 +1238,18 @@ router.post('/figures', jsonBody, (req, res) => {
   const label = book_name ? `Figuren · ${book_name}` : `Figuren`;
   const jobId = createJob('figures', book_id, userEmail, label);
   enqueueJob(jobId, () => runFiguresJob(jobId, book_id, book_name || '', userEmail));
+  res.json({ jobId });
+});
+
+router.post('/figure-events', jsonBody, (req, res) => {
+  const { book_id, book_name } = req.body;
+  if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
+  const userEmail = req.session?.user?.email || null;
+  const existing = runningJobs.get(jobKey('figure-events', book_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const label = book_name ? `Ereignisse · ${book_name}` : `Ereignisse`;
+  const jobId = createJob('figure-events', book_id, userEmail, label);
+  enqueueJob(jobId, () => runFigureEventsJob(jobId, book_id, book_name || '', userEmail));
   res.json({ jobId });
 });
 
