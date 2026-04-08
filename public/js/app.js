@@ -559,7 +559,6 @@ document.addEventListener('alpine:init', () => {
       this.showKontinuitaetCard = false;
       // Laufenden Poll stoppen – Seite wechselt, laufender Check gehört zur alten Seite
       if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
-      this.resetSynonymeCard();
       this.currentPage = p;
       this.currentPageEmpty = false;
       this.originalHtml = null;
@@ -720,7 +719,6 @@ document.addEventListener('alpine:init', () => {
     resetPage() {
       if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
       this.resetChat();
-      this.resetSynonymeCard();
       this.currentPage = null;
       this.currentPageUpdatedAt = null;
       this.originalHtml = null;
@@ -826,7 +824,6 @@ document.addEventListener('alpine:init', () => {
       if (this._kontinuitaetPollTimer) { clearInterval(this._kontinuitaetPollTimer); this._kontinuitaetPollTimer = null; }
       this.resetChat();
       this.resetBookChat();
-      this.resetSynonymeCard();
     },
 
     // ── BookStack Token Setup ────────────────────────────────────────────────
