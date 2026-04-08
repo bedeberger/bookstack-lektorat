@@ -44,31 +44,34 @@
     <div id="figur-tooltip" class="figur-tooltip"></div>
   </div>
 
+ 
+
   <!-- Figurenliste -->
   <div x-show="figuren.length > 0" class="figur-list-section">
     <div class="figur-list-header">
-      <div class="history-heading">Figuren (<span x-text="filteredFiguren().length"></span><template x-if="figurenKapitelFilter || figurenSeitenFilter"><span x-text="' von ' + figuren.length"></span></template>)</div>
-      <template x-if="figurenKapitelListe().length > 0">
-        <div class="figur-kapitel-filter">
-          <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
-               x-modelable="value" x-model="figurenKapitelFilter"
-               x-effect="options = figurenKapitelListe().map(k => ({value: k, label: k}))"
-               @combobox-change="figurenSeitenFilter = ''; selectedFigurId = null"
-               @click.outside="close()" @keydown="onKeydown($event)"
-               class="combobox-wrap combobox-wrap--compact">
-          </div>
-          <template x-if="figurenKapitelFilter && figurenSeitenListe().length > 0">
-            <div x-data="combobox('Seite…', 'Alle Seiten')"
-                 x-modelable="value" x-model="figurenSeitenFilter"
-                 x-effect="options = figurenSeitenListe().map(s => ({value: s, label: s}))"
-                 @combobox-change="selectedFigurId = null"
-                 @click.outside="close()" @keydown="onKeydown($event)"
-                 class="combobox-wrap combobox-wrap--compact">
-            </div>
-          </template>
-        </div>
-      </template>
+      <div class="history-heading">Figuren</div>
     </div>
+
+     <!-- Filter -->
+    <div x-show="figuren.length > 0 && figurenKapitelListe().length > 0" class="szenen-filter-bar">
+      <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
+          x-modelable="value" x-model="figurenKapitelFilter"
+          x-effect="options = figurenKapitelListe().map(k => ({value: k, label: k}))"
+          @combobox-change="figurenSeitenFilter = ''; selectedFigurId = null"
+          @click.outside="close()" @keydown="onKeydown($event)"
+          class="combobox-wrap combobox-wrap--compact">
+      </div>
+      <div x-data="combobox('Seite…', 'Alle Seiten')"
+          x-modelable="value" x-model="figurenSeitenFilter"
+          x-effect="_disabled = !figurenKapitelFilter || figurenSeitenListe().length === 0; options = figurenSeitenListe().map(s => ({value: s, label: s}))"
+          @combobox-change="selectedFigurId = null"
+          @click.outside="close()" @keydown="onKeydown($event)"
+          :class="{'combobox-wrap--disabled': _disabled}"
+          class="combobox-wrap combobox-wrap--compact">
+      </div>
+      <span class="szenen-filter-count" x-text="filteredFiguren().length + ' / ' + figuren.length"></span>
+    </div>
+
     <template x-for="f in filteredFiguren()" :key="f.id">
       <div>
         <div class="figur-item" :data-figid="f.id" @click="selectedFigurId = selectedFigurId === f.id ? null : f.id;">
