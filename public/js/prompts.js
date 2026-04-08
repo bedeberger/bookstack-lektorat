@@ -293,8 +293,6 @@ Zusätzliche Hinweise:
 - Ordne die oben gelisteten Ereignisse den passenden Figuren als lebensereignisse zu; ergänze weitere Events die im Text belegt sind
 - Figuren aus Vorkapiteln: nur aufführen wenn sie in diesem Kapitel aktiv auftreten
 
-${JSON_ONLY}
-
 Kapiteltext (${pageCount} Seiten):
 
 ${chText}`;

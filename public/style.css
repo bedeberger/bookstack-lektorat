@@ -213,6 +213,7 @@ code {
 
 @media (max-width: 480px) {
   .row > select,
+  .row > .combobox-wrap,
   .row > input { flex: 1 0 100%; }
   .row > button { flex: 1; }
 }
@@ -282,6 +283,116 @@ select:focus {
   outline: none;
   border-color: var(--color-border-focus);
 }
+
+/* === Combobox (Searchable Select) === */
+.combobox-wrap {
+  position: relative;
+}
+.combobox-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0.5px solid var(--color-border-input);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  gap: 6px;
+}
+.combobox-trigger:hover { background: var(--color-hover); }
+.combobox-trigger:focus { outline: none; border-color: var(--color-border-focus); }
+.combobox-wrap:has(.combobox-dropdown[style*="display"]:not([style*="display: none"])) .combobox-trigger,
+.combobox-trigger:focus-within { border-color: var(--color-border-focus); }
+.combobox-value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.combobox-chevron {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: transform 0.15s ease;
+}
+.combobox-chevron--open { transform: rotate(180deg); }
+.combobox-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border-focus);
+  border-top: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+}
+.combobox-search {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-bottom: 0.5px solid var(--color-border);
+  background: var(--color-bg);
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+  box-sizing: border-box;
+}
+.combobox-search:focus { outline: none; }
+.combobox-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.combobox-option {
+  padding: 7px 10px;
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.combobox-option:hover,
+.combobox-option--hl { background: var(--color-hover); }
+.combobox-option--selected { font-weight: 500; color: var(--color-accent); }
+.combobox-option--selected.combobox-option--hl,
+.combobox-option--selected:hover { background: rgba(196, 165, 90, 0.1); }
+.combobox-empty {
+  list-style: none;
+  padding: 7px 10px;
+  font-size: var(--font-size-base);
+  color: var(--color-muted);
+  font-style: italic;
+}
+.combobox-wrap--disabled .combobox-trigger {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+/* Compact variant */
+.combobox-wrap--compact .combobox-trigger {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-color: var(--color-border);
+  background: var(--color-bg);
+}
+.combobox-wrap--compact .combobox-dropdown {
+  right: auto;
+  min-width: 180px;
+}
+.combobox-wrap--compact .combobox-search { font-size: 12px; padding: 5px 8px; }
+.combobox-wrap--compact .combobox-option { font-size: 12px; padding: 5px 8px; }
+.combobox-wrap--compact .combobox-empty { font-size: 12px; padding: 5px 8px; }
+/* Metric variant (auto-width) */
+.combobox-wrap--metric { width: auto; flex-shrink: 0; }
+.combobox-wrap--metric .combobox-trigger { min-width: 130px; }
+.combobox-wrap--metric .combobox-dropdown { right: 0; min-width: 160px; }
 
 /* === Buttons === */
 button {
@@ -802,6 +913,36 @@ ins {
   align-self: center;
 }
 
+.figuren-graph-toolbar {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.graph-tool-btn {
+  background: var(--color-bg);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 3px 9px;
+  min-width: 28px;
+  transition: background 0.1s, color 0.1s;
+}
+
+.graph-tool-btn:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.graph-tool-btn--reset {
+  font-size: 13px;
+}
+
 .figuren-graph-container {
   width: 100%;
   height: 380px;
@@ -809,7 +950,6 @@ ins {
   border-radius: var(--radius-md);
   background: var(--color-bg);
   overflow: hidden;
-  margin-top: 8px;
 }
 
 .figur-legend {
@@ -1007,14 +1147,10 @@ ins {
 .figur-list-header .history-heading {
   margin-bottom: 0;
 }
-.figur-kapitel-filter select {
-  font-size: 0.82rem;
-  padding: 3px 6px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: var(--color-bg);
-  color: var(--color-text);
-  cursor: pointer;
+.figur-kapitel-filter {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 
 /* === Figuren: Detail-Inhalte === */
@@ -1487,15 +1623,6 @@ ins {
 .szenen-filter-btn--mittel.szenen-filter-btn--active  { background: #b38600;  border-color: #b38600;  color: #fff; }
 .szenen-filter-btn--schwach.szenen-filter-btn--active { background: var(--color-err-border); border-color: var(--color-err-border); color: #fff; }
 
-.szenen-filter-select {
-  font-size: 12px;
-  padding: 3px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
-  cursor: pointer;
-}
 .szenen-filter-count { font-size: 11px; color: var(--color-muted); margin-left: auto; }
 
 /* === Szenen-Übersicht: Zähler pro Figur === */
@@ -2244,21 +2371,6 @@ ins {
   min-width: 36px;
 }
 
-/* === Buchstatistik: Metrik-Select === */
-.book-stats-metric-select {
-  width: auto;
-  padding: 4px 28px 4px 10px;
-  font-size: var(--font-size-sm);
-  border: 0.5px solid var(--color-border-input);
-  background: var(--color-surface);
-  color: var(--color-text);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.book-stats-metric-select:focus {
-  outline: none;
-  border-color: var(--color-border-focus);
-}
 
 /* === Utility-Klassen für ehemals Inline-Styles === */
 .review-status-text {

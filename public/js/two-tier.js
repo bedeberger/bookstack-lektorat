@@ -1,6 +1,6 @@
 import { htmlToText } from './utils.js';
 
-export const SINGLE_PASS_LIMIT = 60000;
+export const SINGLE_PASS_LIMIT = 30000;
 const BATCH_SIZE = 5;
 
 /**

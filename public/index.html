@@ -60,20 +60,35 @@
 <div class="card" x-show="showBookCard" x-cloak>
   <label>Buch</label>
   <div class="row" style="margin-bottom:12px;">
-    <select x-model="selectedBookId" @change="bookReviewHistory = []; selectedBookReviewId = null;">
-      <template x-for="book in books" :key="book.id">
-        <option :value="String(book.id)" x-text="book.name"></option>
-      </template>
-    </select>
+    <div x-data="combobox('Buch wählen…')"
+         x-modelable="value" x-model="selectedBookId"
+         x-effect="options = books.map(b => ({value: String(b.id), label: b.name}))"
+         @combobox-change="bookReviewHistory = []; selectedBookReviewId = null;"
+         @click.outside="close()"
+         @keydown="onKeydown($event)"
+         class="combobox-wrap">
+      <button type="button" class="combobox-trigger" @click="toggle()">
+        <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
+        <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="combobox-dropdown" x-show="open" x-cloak>
+        <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
+        <ul class="combobox-list">
+          <template x-for="(opt, i) in filtered" :key="opt.value">
+            <li class="combobox-option"
+                :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
+                @click="select(opt.value)" @mouseenter="highlighted = i"
+                x-text="opt.label"></li>
+          </template>
+          <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+        </ul>
+      </div>
+    </div>
     <a x-show="selectedBookUrl" :href="selectedBookUrl" target="_blank" rel="noopener" class="btn-bookstack-link" title="Buch in BookStack öffnen">↗ BookStack</a>
   </div>
 
   <!-- Feature-Tiles: Buchanalyse -->
   <div class="feature-tiles">
-    <button class="feature-tile" :class="{ 'feature-tile--active': showTreeCard }" @click="toggleTreeCard()" :disabled="!pages.length" title="Seitenbaum anzeigen">
-      <span class="feature-tile-title">Seiten</span>
-      <span class="feature-tile-desc">Seitenbaum</span>
-    </button>
     <button class="feature-tile" :class="{ 'feature-tile--active': showBookReviewCard }" @click="toggleBookReviewCard()">
       <span class="feature-tile-title">Bewertung</span>
       <span class="feature-tile-desc">Note &amp; Analyse</span>
@@ -114,13 +129,12 @@
 <div class="layout-sidebar">
 
 <!-- Seitenbaum -->
-<div class="card" x-show="showTreeCard" x-cloak x-transition>
+<div class="card">
   <div class="card-header">
     <span class="card-title" x-text="'Seiten: ' + selectedBookName"></span>
     <div class="card-actions">
       <button @click="loadPages()">Seiten laden</button>
       <button @click="batchCheck()" :disabled="!pages.length" title="Alle Seiten sequenziell prüfen und in History speichern">Alle prüfen</button>
-      <button class="btn-card-close" @click="showTreeCard = false; resetPage()" title="Schliessen">×</button>
     </div>
   </div>
   <!-- Suche -->
@@ -312,6 +326,11 @@
       <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--feind"></span>Feind</span>
       <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--liebesbeziehung"></span>Liebesbeziehung</span>
     </div>
+    <div class="figuren-graph-toolbar">
+      <button class="graph-tool-btn" title="Zoom in" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 1.3, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">+</button>
+      <button class="graph-tool-btn" title="Zoom out" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 0.77, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">−</button>
+      <button class="graph-tool-btn graph-tool-btn--reset" title="Ansicht zurücksetzen" @click="_figurenNetwork && _figurenNetwork.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } })">&#x26F6;</button>
+    </div>
     <div id="figuren-graph" class="figuren-graph-container"></div>
     <div id="figur-tooltip" class="figur-tooltip"></div>
   </div>
@@ -322,19 +341,53 @@
       <div class="history-heading">Figuren (<span x-text="filteredFiguren().length"></span><template x-if="figurenKapitelFilter || figurenSeitenFilter"><span x-text="' von ' + figuren.length"></span></template>)</div>
       <template x-if="figurenKapitelListe().length > 0">
         <div class="figur-kapitel-filter">
-          <select x-model="figurenKapitelFilter" @change="figurenSeitenFilter = ''; selectedFigurId = null">
-            <option value="">Alle Kapitel</option>
-            <template x-for="k in figurenKapitelListe()" :key="k">
-              <option :value="k" x-text="k"></option>
-            </template>
-          </select>
+          <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
+               x-modelable="value" x-model="figurenKapitelFilter"
+               x-effect="options = figurenKapitelListe().map(k => ({value: k, label: k}))"
+               @combobox-change="figurenSeitenFilter = ''; selectedFigurId = null"
+               @click.outside="close()" @keydown="onKeydown($event)"
+               class="combobox-wrap combobox-wrap--compact">
+            <button type="button" class="combobox-trigger" @click="toggle()">
+              <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
+              <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="combobox-dropdown" x-show="open" x-cloak>
+              <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
+              <ul class="combobox-list">
+                <template x-for="(opt, i) in filtered" :key="opt.value">
+                  <li class="combobox-option"
+                      :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
+                      @click="select(opt.value)" @mouseenter="highlighted = i"
+                      x-text="opt.label"></li>
+                </template>
+                <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+              </ul>
+            </div>
+          </div>
           <template x-if="figurenKapitelFilter && figurenSeitenListe().length > 0">
-            <select x-model="figurenSeitenFilter" @change="selectedFigurId = null">
-              <option value="">Alle Seiten</option>
-              <template x-for="s in figurenSeitenListe()" :key="s">
-                <option :value="s" x-text="s"></option>
-              </template>
-            </select>
+            <div x-data="combobox('Seite…', 'Alle Seiten')"
+                 x-modelable="value" x-model="figurenSeitenFilter"
+                 x-effect="options = figurenSeitenListe().map(s => ({value: s, label: s}))"
+                 @combobox-change="selectedFigurId = null"
+                 @click.outside="close()" @keydown="onKeydown($event)"
+                 class="combobox-wrap combobox-wrap--compact">
+              <button type="button" class="combobox-trigger" @click="toggle()">
+                <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
+                <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="combobox-dropdown" x-show="open" x-cloak>
+                <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
+                <ul class="combobox-list">
+                  <template x-for="(opt, i) in filtered" :key="opt.value">
+                    <li class="combobox-option"
+                        :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
+                        @click="select(opt.value)" @mouseenter="highlighted = i"
+                        x-text="opt.label"></li>
+                  </template>
+                  <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+                </ul>
+              </div>
+            </div>
           </template>
         </div>
       </template>
@@ -511,12 +564,75 @@
         <button class="szenen-filter-btn szenen-filter-btn--mittel"  :class="{ 'szenen-filter-btn--active': szenenFilterWertung === 'mittel' }"  @click="szenenFilterWertung = szenenFilterWertung === 'mittel'  ? '' : 'mittel'">mittel</button>
         <button class="szenen-filter-btn szenen-filter-btn--schwach" :class="{ 'szenen-filter-btn--active': szenenFilterWertung === 'schwach' }" @click="szenenFilterWertung = szenenFilterWertung === 'schwach' ? '' : 'schwach'">schwach</button>
       </div>
-      <select class="szenen-filter-select" x-model="szenenFilterFigurId">
-        <option value="">Alle Figuren</option>
-        <template x-for="f in figuren.filter(f => szenen.some(s => s.fig_ids.includes(f.id)))" :key="f.id">
-          <option :value="f.id" x-text="f.kurzname || f.name"></option>
-        </template>
-      </select>
+      <div x-data="combobox('Figur…', 'Alle Figuren')"
+           x-modelable="value" x-model="szenenFilterFigurId"
+           x-effect="options = figuren.filter(f => szenen.some(s => s.fig_ids.includes(f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
+           @click.outside="close()" @keydown="onKeydown($event)"
+           class="combobox-wrap combobox-wrap--compact">
+        <button type="button" class="combobox-trigger" @click="toggle()">
+          <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
+          <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="combobox-dropdown" x-show="open" x-cloak>
+          <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
+          <ul class="combobox-list">
+            <template x-for="(opt, i) in filtered" :key="opt.value">
+              <li class="combobox-option"
+                  :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
+                  @click="select(opt.value)" @mouseenter="highlighted = i"
+                  x-text="opt.label"></li>
+            </template>
+            <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+          </ul>
+        </div>
+      </div>
+      <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
+           x-modelable="value" x-model="szenenFilterKapitel"
+           x-effect="options = szenenKapitelListe().map(k => ({value: k, label: k}))"
+           @combobox-change="szenenFilterSeite = ''"
+           @click.outside="close()" @keydown="onKeydown($event)"
+           class="combobox-wrap combobox-wrap--compact">
+        <button type="button" class="combobox-trigger" @click="toggle()">
+          <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
+          <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="combobox-dropdown" x-show="open" x-cloak>
+          <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
+          <ul class="combobox-list">
+            <template x-for="(opt, i) in filtered" :key="opt.value">
+              <li class="combobox-option"
+                  :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
+                  @click="select(opt.value)" @mouseenter="highlighted = i"
+                  x-text="opt.label"></li>
+            </template>
+            <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+          </ul>
+        </div>
+      </div>
+      <template x-if="szenenFilterKapitel && szenenSeitenListe().length > 0">
+        <div x-data="combobox('Seite…', 'Alle Seiten')"
+             x-modelable="value" x-model="szenenFilterSeite"
+             x-effect="options = szenenSeitenListe().map(s => ({value: s, label: s}))"
+             @click.outside="close()" @keydown="onKeydown($event)"
+             class="combobox-wrap combobox-wrap--compact">
+          <button type="button" class="combobox-trigger" @click="toggle()">
+            <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
+            <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="combobox-dropdown" x-show="open" x-cloak>
+            <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
+            <ul class="combobox-list">
+              <template x-for="(opt, i) in filtered" :key="opt.value">
+                <li class="combobox-option"
+                    :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
+                    @click="select(opt.value)" @mouseenter="highlighted = i"
+                    x-text="opt.label"></li>
+              </template>
+              <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+            </ul>
+          </div>
+        </div>
+      </template>
       <div class="szenen-filter-group szenen-sort-group">
         <button class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenSortBy === '' }" @click="szenenSortBy = ''">Reihenfolge</button>
         <button class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenSortBy === 'figur' }"   @click="szenenSortBy = szenenSortBy === 'figur'   ? '' : 'figur'">Figur</button>
@@ -575,24 +691,74 @@
 
   <!-- Filter -->
   <div x-show="globalZeitstrahl.length > 0" class="szenen-filter-bar">
-    <select class="szenen-filter-select" x-model="ereignisseFilterFigurId">
-      <option value="">Alle Figuren</option>
-      <template x-for="f in figuren.filter(f => globalZeitstrahl.some(ev => ev.figuren.some(fr => fr.id === f.id)))" :key="f.id">
-        <option :value="f.id" x-text="f.kurzname || f.name"></option>
-      </template>
-    </select>
-    <select class="szenen-filter-select" x-model="ereignisseFilterKapitel" @change="ereignisseFilterSeite = ''">
-      <option value="">Alle Kapitel</option>
-      <template x-for="k in ereignisseKapitelListe()" :key="k">
-        <option :value="k" x-text="k"></option>
-      </template>
-    </select>
-    <select class="szenen-filter-select" x-model="ereignisseFilterSeite" :disabled="!ereignisseFilterKapitel || ereignisseSeitenListe().length === 0">
-      <option value="">Alle Seiten</option>
-      <template x-for="s in ereignisseSeitenListe()" :key="s">
-        <option :value="s" x-text="s"></option>
-      </template>
-    </select>
+    <div x-data="combobox('Figur…', 'Alle Figuren')"
+         x-modelable="value" x-model="ereignisseFilterFigurId"
+         x-effect="options = figuren.filter(f => globalZeitstrahl.some(ev => ev.figuren.some(fr => fr.id === f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact">
+      <button type="button" class="combobox-trigger" @click="toggle()">
+        <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
+        <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="combobox-dropdown" x-show="open" x-cloak>
+        <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
+        <ul class="combobox-list">
+          <template x-for="(opt, i) in filtered" :key="opt.value">
+            <li class="combobox-option"
+                :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
+                @click="select(opt.value)" @mouseenter="highlighted = i"
+                x-text="opt.label"></li>
+          </template>
+          <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+        </ul>
+      </div>
+    </div>
+    <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
+         x-modelable="value" x-model="ereignisseFilterKapitel"
+         x-effect="options = ereignisseKapitelListe().map(k => ({value: k, label: k}))"
+         @combobox-change="ereignisseFilterSeite = ''"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact">
+      <button type="button" class="combobox-trigger" @click="toggle()">
+        <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
+        <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="combobox-dropdown" x-show="open" x-cloak>
+        <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
+        <ul class="combobox-list">
+          <template x-for="(opt, i) in filtered" :key="opt.value">
+            <li class="combobox-option"
+                :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
+                @click="select(opt.value)" @mouseenter="highlighted = i"
+                x-text="opt.label"></li>
+          </template>
+          <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+        </ul>
+      </div>
+    </div>
+    <div x-data="combobox('Seite…', 'Alle Seiten')"
+         x-modelable="value" x-model="ereignisseFilterSeite"
+         x-effect="_disabled = !ereignisseFilterKapitel || ereignisseSeitenListe().length === 0; options = ereignisseSeitenListe().map(s => ({value: s, label: s}))"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         :class="{'combobox-wrap--disabled': _disabled}"
+         class="combobox-wrap combobox-wrap--compact">
+      <button type="button" class="combobox-trigger" @click="toggle()">
+        <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
+        <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="combobox-dropdown" x-show="open" x-cloak>
+        <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
+        <ul class="combobox-list">
+          <template x-for="(opt, i) in filtered" :key="opt.value">
+            <li class="combobox-option"
+                :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
+                @click="select(opt.value)" @mouseenter="highlighted = i"
+                x-text="opt.label"></li>
+          </template>
+          <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+        </ul>
+      </div>
+    </div>
     <span class="szenen-filter-count" x-text="filteredEreignisse().length + ' / ' + globalZeitstrahl.length"></span>
   </div>
 
@@ -645,9 +811,58 @@
     Noch keine Schauplätze ermittelt. Klicke auf «Schauplätze ermitteln» um alle Orte des Buchs zu extrahieren.
   </div>
 
+  <!-- Filter-Leiste -->
+  <div x-show="orte.length > 0" class="szenen-filter-bar">
+    <div x-data="combobox('Figur…', 'Alle Figuren')"
+         x-modelable="value" x-model="orteFilterFigurId"
+         x-effect="options = figuren.filter(f => orte.some(o => (o.figuren || []).includes(f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact">
+      <button type="button" class="combobox-trigger" @click="toggle()">
+        <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
+        <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="combobox-dropdown" x-show="open" x-cloak>
+        <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
+        <ul class="combobox-list">
+          <template x-for="(opt, i) in filtered" :key="opt.value">
+            <li class="combobox-option"
+                :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
+                @click="select(opt.value)" @mouseenter="highlighted = i"
+                x-text="opt.label"></li>
+          </template>
+          <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+        </ul>
+      </div>
+    </div>
+    <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
+         x-modelable="value" x-model="orteFilterKapitel"
+         x-effect="options = orteKapitelListe().map(k => ({value: k, label: k}))"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact">
+      <button type="button" class="combobox-trigger" @click="toggle()">
+        <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
+        <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="combobox-dropdown" x-show="open" x-cloak>
+        <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
+        <ul class="combobox-list">
+          <template x-for="(opt, i) in filtered" :key="opt.value">
+            <li class="combobox-option"
+                :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
+                @click="select(opt.value)" @mouseenter="highlighted = i"
+                x-text="opt.label"></li>
+          </template>
+          <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+        </ul>
+      </div>
+    </div>
+    <span class="szenen-filter-count" x-text="orteFiltered.length + ' / ' + orte.length"></span>
+  </div>
+
   <!-- Ortsliste -->
   <div x-show="orte.length > 0" class="ort-list">
-    <template x-for="o in orte" :key="o.id">
+    <template x-for="o in orteFiltered" :key="o.id">
       <div>
         <div class="ort-item" @click="selectedOrtId = selectedOrtId === o.id ? null : o.id">
           <span class="tag ort-typ-tag" x-text="o.typ || 'andere'"></span>
@@ -814,16 +1029,29 @@
 
   <!-- Metrik- & Zeitraum-Umschalter -->
   <div x-show="bookStatsData.length > 0" class="book-stats-controls">
-    <select x-model="bookStatsMetric" @change="renderStatsChart()" class="book-stats-metric-select">
-      <option value="words">Wörter</option>
-      <option value="chars">Zeichen</option>
-      <option value="page_count">Seiten</option>
-      <option value="tok">Tokens</option>
-      <option value="unique_words">Einzigartige W.</option>
-      <option value="delta_words">Δ Wörter/T</option>
-      <option value="avg_sentence_len">Ø Satzlänge</option>
-      <option value="pages_per_chapter">S./Kap.</option>
-    </select>
+    <div x-data="combobox('Metrik…')"
+         x-modelable="value" x-model="bookStatsMetric"
+         x-effect="options = [{value:'words',label:'Wörter'},{value:'chars',label:'Zeichen'},{value:'page_count',label:'Seiten'},{value:'tok',label:'Tokens'},{value:'unique_words',label:'Einzigartige W.'},{value:'delta_words',label:'Δ Wörter/T'},{value:'avg_sentence_len',label:'Ø Satzlänge'},{value:'pages_per_chapter',label:'S./Kap.'}]"
+         @combobox-change="renderStatsChart()"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact combobox-wrap--metric">
+      <button type="button" class="combobox-trigger" @click="toggle()">
+        <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
+        <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="combobox-dropdown" x-show="open" x-cloak>
+        <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
+        <ul class="combobox-list">
+          <template x-for="(opt, i) in filtered" :key="opt.value">
+            <li class="combobox-option"
+                :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
+                @click="select(opt.value)" @mouseenter="highlighted = i"
+                x-text="opt.label"></li>
+          </template>
+          <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+        </ul>
+      </div>
+    </div>
     <div class="btn-group">
       <button class="btn-sm" :class="{ primary: bookStatsRange === 7 }"
         @click="bookStatsRange = 7; renderStatsChart()">7 T</button>

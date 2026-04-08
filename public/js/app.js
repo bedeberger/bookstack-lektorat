@@ -20,6 +20,79 @@ import { orteMethods } from './orte.js';
 import { kontinuitaetMethods } from './kontinuitaet.js';
 
 document.addEventListener('alpine:init', () => {
+  Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
+    open: false,
+    query: '',
+    value: null,
+    options: [],
+    _disabled: false,
+    placeholder,
+    emptyLabel,
+    highlighted: -1,
+
+    get _allOptions() {
+      return this.emptyLabel
+        ? [{ value: '', label: this.emptyLabel }, ...this.options]
+        : this.options;
+    },
+    get filtered() {
+      if (!this.query) return this._allOptions;
+      const q = this.query.toLowerCase();
+      return this._allOptions.filter(o => String(o.label).toLowerCase().includes(q));
+    },
+    get selectedLabel() {
+      if (this.value === '' || this.value === null || this.value === undefined) return this.emptyLabel || '';
+      const opt = this._allOptions.find(o => String(o.value) === String(this.value));
+      return opt ? opt.label : '';
+    },
+
+    toggle() {
+      if (this._disabled) return;
+      if (this.open) { this.close(); return; }
+      this.open = true;
+      this.query = '';
+      this.highlighted = this._allOptions.findIndex(o => String(o.value) === String(this.value));
+      this.$nextTick(() => this.$refs.cbInput?.focus());
+    },
+    close() {
+      this.open = false;
+      this.query = '';
+      this.highlighted = -1;
+    },
+    select(val) {
+      this.value = val;
+      this.close();
+      this.$dispatch('combobox-change', val);
+    },
+    onKeydown(e) {
+      if (!this.open) {
+        if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); this.toggle(); }
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        this.highlighted = Math.min(this.highlighted + 1, this.filtered.length - 1);
+        this._scrollHl();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        this.highlighted = Math.max(this.highlighted - 1, 0);
+        this._scrollHl();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (this.highlighted >= 0 && this.filtered[this.highlighted]) this.select(this.filtered[this.highlighted].value);
+      } else if (e.key === 'Escape') {
+        e.preventDefault(); this.close();
+      }
+    },
+    _scrollHl() {
+      this.$nextTick(() => {
+        const list = this.$el.querySelector('.combobox-list');
+        const item = list?.children[this.highlighted];
+        item?.scrollIntoView({ block: 'nearest' });
+      });
+    },
+  }));
+
   Alpine.data('lektorat', () => ({
     // ── State ────────────────────────────────────────────────────────────────
     currentUser: null,
@@ -105,6 +178,8 @@ document.addEventListener('alpine:init', () => {
     szenenStatus: '',
     szenenFilterWertung: '',
     szenenFilterFigurId: '',
+    szenenFilterKapitel: '',
+    szenenFilterSeite: '',
     szenenSortBy: '',
     _consolidatePollTimer: null,
     _szenenPollTimer: null,
@@ -153,6 +228,8 @@ document.addEventListener('alpine:init', () => {
     orteProgress: 0,
     orteStatus: '',
     selectedOrtId: null,
+    orteFilterFigurId: '',
+    orteFilterKapitel: '',
     _ortePollTimer: null,
     showKontinuitaetCard: false,
     kontinuitaetLoading: false,
@@ -185,10 +262,32 @@ document.addEventListener('alpine:init', () => {
       }
       return [...map.entries()].map(([name, d]) => ({ name, total: d.total, kapitel: d.kapitel }));
     },
+    szenenKapitelListe() {
+      return [...new Set(this.szenen.map(s => s.kapitel).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+    },
+    szenenSeitenListe() {
+      if (!this.szenenFilterKapitel) return [];
+      return [...new Set(this.szenen.filter(s => s.kapitel === this.szenenFilterKapitel && s.seite).map(s => s.seite))].sort((a, b) => a.localeCompare(b, 'de'));
+    },
+    orteKapitelListe() {
+      const names = new Set();
+      for (const o of this.orte) {
+        for (const k of (o.kapitel || [])) { if (k.name) names.add(k.name); }
+      }
+      return [...names].sort((a, b) => a.localeCompare(b, 'de'));
+    },
+    get orteFiltered() {
+      return this.orte.filter(o =>
+        (!this.orteFilterFigurId || (o.figuren || []).includes(this.orteFilterFigurId)) &&
+        (!this.orteFilterKapitel || (o.kapitel || []).some(k => k.name === this.orteFilterKapitel))
+      );
+    },
     get szenenFiltered() {
       let list = this.szenen.filter(s =>
         (!this.szenenFilterWertung || s.wertung === this.szenenFilterWertung) &&
-        (!this.szenenFilterFigurId || (s.fig_ids || []).includes(this.szenenFilterFigurId))
+        (!this.szenenFilterFigurId || (s.fig_ids || []).includes(this.szenenFilterFigurId)) &&
+        (!this.szenenFilterKapitel || s.kapitel === this.szenenFilterKapitel) &&
+        (!this.szenenFilterSeite || s.seite === this.szenenFilterSeite)
       );
       if (this.szenenSortBy === 'kapitel') {
         list = [...list].sort((a, b) => (a.kapitel || '').localeCompare(b.kapitel || '', 'de'));
@@ -430,6 +529,10 @@ document.addEventListener('alpine:init', () => {
       this.showFiguresCard = false;
       this.showBookStatsCard = false;
       this.showBookChatCard = false;
+      this.showEreignisseCard = false;
+      this.showSzenenCard = false;
+      this.showOrteCard = false;
+      this.showKontinuitaetCard = false;
       // Laufenden Poll stoppen – Seite wechselt, laufender Check gehört zur alten Seite
       if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
       this.resetSynonymeCard();
@@ -685,6 +788,8 @@ document.addEventListener('alpine:init', () => {
       this.orteStatus = '';
       this.orteProgress = 0;
       this.orteLoading = false;
+      this.orteFilterFigurId = '';
+      this.orteFilterKapitel = '';
       if (this._ortePollTimer) { clearInterval(this._ortePollTimer); this._ortePollTimer = null; }
       this.showKontinuitaetCard = false;
       this.kontinuitaetResult = null;

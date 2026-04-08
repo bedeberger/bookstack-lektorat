@@ -359,7 +359,9 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
     if (chars > 0) updates.tokensOut = tok.out + Math.floor(chars / 4);
     if (Object.keys(updates).length) updateJob(jobId, updates);
   };
-  const { text, tokensIn, tokensOut } = await callAI(prompt, system, onProgress);
+  const globalMax = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
+  const maxTokensOverride = Math.min(Math.ceil(expectedChars / 4 * 2), globalMax);
+  const { text, tokensIn, tokensOut } = await callAI(prompt, system, onProgress, maxTokensOverride);
   tok.in += tokensIn;
   tok.out += tokensOut;
   updateJob(jobId, { tokensIn: tok.in, tokensOut: tok.out });
@@ -487,47 +489,62 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
       );
     } else {
       const { groupOrder, groups } = groupByChapter(pageContents);
+
+      // Kapiteltexte einmal aufbauen – werden in beiden Phasen verwendet
+      const chapterTexts = groupOrder.map(key => {
+        const group = groups.get(key);
+        return { group, chText: group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n') };
+      });
+
+      // Phase 1: Events aller Kapitel parallel extrahieren (keine gegenseitigen Abhängigkeiten)
+      updateJob(jobId, {
+        progress: 55,
+        statusText: `Events in ${groupOrder.length} Kapiteln parallel extrahieren…`,
+      });
+      const eventsSettled = await Promise.allSettled(
+        chapterTexts.map(({ group, chText }) =>
+          aiCall(jobId, tok,
+            buildFiguresChapterEventsPrompt(group.name, bookName, group.pages.length, chText),
+            SYSTEM_FIGUREN,
+            55, 70, 1500,
+          )
+        )
+      );
+      const allChapterEvents = eventsSettled.map((r, gi) => {
+        if (r.status === 'fulfilled') return r.value?.events || [];
+        logger.warn(`Job ${jobId}: Events-Extraktion Kapitel «${chapterTexts[gi].group.name}» fehlgeschlagen – fahre ohne Events fort. ${r.reason?.message}`);
+        return [];
+      });
+
+      // Phase 2: Figuren sequenziell (braucht akkumuliertes Vorwissen aus Vorkapiteln)
       const chapterFiguren = [];
-      const accumulatedFiguren = []; // kompakte Figurenliste aus allen Vorkapiteln
+      const accumulatedFiguren = [];
+      const tokStr = () => tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
 
       for (let gi = 0; gi < groupOrder.length; gi++) {
-        const group = groups.get(groupOrder[gi]);
-        const tokStr = () => tok.in + tok.out > 0 ? ` · ↑${fmtTok(tok.in)} ↓${fmtTok(tok.out)} Tokens` : '';
-        const fromPct = 55 + Math.round((gi / groupOrder.length) * 30);
-        const midPct  = 55 + Math.round(((gi + 0.5) / groupOrder.length) * 30);
-        const toPct   = 55 + Math.round(((gi + 1) / groupOrder.length) * 30);
-        const chText  = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
-
-        // Phase 1: Events dieses Kapitels extrahieren
+        const { group, chText } = chapterTexts[gi];
+        const fromPct = 70 + Math.round((gi / groupOrder.length) * 15);
+        const toPct   = 70 + Math.round(((gi + 1) / groupOrder.length) * 15);
         updateJob(jobId, {
           progress: fromPct,
-          statusText: `Events in «${group.name}» (${gi + 1}/${groupOrder.length})…${tokStr()}`,
-        });
-        const eventsResult = await aiCall(jobId, tok,
-          buildFiguresChapterEventsPrompt(group.name, bookName, group.pages.length, chText),
-          SYSTEM_FIGUREN,
-          fromPct, midPct, 1500,
-        );
-        const chapterEvents = eventsResult.events || [];
-
-        // Phase 2: Figuren mit Event-Kontext und Vorwissen aus Vorkapiteln
-        updateJob(jobId, {
-          progress: midPct,
           statusText: `Figuren in «${group.name}» (${gi + 1}/${groupOrder.length})…${tokStr()}`,
         });
-        const chResult = await aiCall(jobId, tok,
-          buildFiguresChapterWithEventsPrompt(group.name, bookName, group.pages.length, chText, chapterEvents, accumulatedFiguren),
-          SYSTEM_FIGUREN,
-          midPct, toPct, 2500,
-        );
-        const chFiguren = chResult.figuren || [];
-        chapterFiguren.push({ kapitel: group.name, figuren: chFiguren });
-
-        // Akkumulierte Liste für nächstes Kapitel aktualisieren (kompakt, dedupliziert nach Name)
-        for (const f of chFiguren) {
-          if (!accumulatedFiguren.some(a => a.name === f.name)) {
-            accumulatedFiguren.push({ name: f.name, kurzname: f.kurzname, typ: f.typ, beschreibung: f.beschreibung });
+        try {
+          const chResult = await aiCall(jobId, tok,
+            buildFiguresChapterWithEventsPrompt(group.name, bookName, group.pages.length, chText, allChapterEvents[gi], accumulatedFiguren),
+            SYSTEM_FIGUREN,
+            fromPct, toPct, 2500,
+          );
+          const chFiguren = chResult.figuren || [];
+          chapterFiguren.push({ kapitel: group.name, figuren: chFiguren });
+          for (const f of chFiguren) {
+            if (!accumulatedFiguren.some(a => a.name === f.name)) {
+              accumulatedFiguren.push({ name: f.name, kurzname: f.kurzname, typ: f.typ, beschreibung: f.beschreibung });
+            }
           }
+        } catch (e) {
+          logger.warn(`Job ${jobId}: Figurenextraktion Kapitel «${group.name}» fehlgeschlagen – Kapitel wird übersprungen. ${e.message}`);
+          chapterFiguren.push({ kapitel: group.name, figuren: [] });
         }
       }
 
