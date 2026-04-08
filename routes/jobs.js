@@ -1421,6 +1421,7 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
           chapterOrte.push({ kapitel: group.name, orte: chResult.orte || [] });
         } catch (e) {
           logger.warn(`Job ${jobId}: Schauplatz-Analyse Kapitel «${group.name}» übersprungen: ${e.message}`);
+          chapterOrte.push({ kapitel: group.name, orte: [] });
         }
         saveCheckpoint('locations', bookId, userEmail, { chapterOrte, nextGi: gi + 1 });
       }

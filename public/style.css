@@ -1600,7 +1600,6 @@ ins {
   border-bottom: 1px solid var(--color-border);
 }
 .szenen-filter-group { display: flex; gap: 4px; }
-.szenen-sort-group { margin-left: auto; }
 
 .szenen-filter-btn {
   font-size: 11px;

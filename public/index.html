@@ -233,7 +233,6 @@
         <span x-show="bookReviewLoading" class="spinner"></span>
         <span x-text="bookReviewOut ? 'Neu bewerten' : 'Buch bewerten'"></span>
       </button>
-      <button class="btn-card-close" @click="showBookReviewCard = false" title="Schliessen">×</button>
     </div>
   </div>
   <div class="progress-bar-wrap" x-show="bookReviewProgress > 0">
@@ -298,7 +297,6 @@
         <span x-show="figurenLoading" class="spinner"></span>
         <span x-text="figuren.length ? 'Neu ermitteln' : 'Figuren ermitteln'"></span>
       </button>
-      <button class="btn-card-close" @click="toggleFiguresCard()" title="Schliessen">×</button>
     </div>
   </div>
 
@@ -496,7 +494,6 @@
         <span x-show="szenenLoading" class="spinner"></span>
         <span x-text="szenenLoading ? '' : (szenen.length ? 'Neu analysieren' : 'Szenen analysieren')"></span>
       </button>
-      <button class="btn-card-close" @click="toggleSzenenCard()" title="Schliessen">×</button>
     </div>
   </div>
 
@@ -633,12 +630,6 @@
           </div>
         </div>
       </template>
-      <div class="szenen-filter-group szenen-sort-group">
-        <button class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenSortBy === '' }" @click="szenenSortBy = ''">Reihenfolge</button>
-        <button class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenSortBy === 'figur' }"   @click="szenenSortBy = szenenSortBy === 'figur'   ? '' : 'figur'">Figur</button>
-        <button class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenSortBy === 'kapitel' }" @click="szenenSortBy = szenenSortBy === 'kapitel' ? '' : 'kapitel'">Kapitel</button>
-        <button class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenSortBy === 'seite' }"   @click="szenenSortBy = szenenSortBy === 'seite'   ? '' : 'seite'">Seite</button>
-      </div>
       <span class="szenen-filter-count" x-text="szenenFiltered.length + ' / ' + szenen.length"></span>
     </div>
     <div class="szenen-liste">
@@ -674,7 +665,6 @@
         <span x-show="zeitstrahlConsolidating" class="spinner"></span>
         <span x-text="zeitstrahlConsolidating ? '' : 'Konsolidieren'"></span>
       </button>
-      <button class="btn-card-close" @click="toggleEreignisseCard()" title="Schliessen">×</button>
     </div>
   </div>
 
@@ -798,7 +788,6 @@
         <span x-show="orteLoading" class="spinner"></span>
         <span x-text="orte.length ? 'Neu ermitteln' : 'Schauplätze ermitteln'"></span>
       </button>
-      <button class="btn-card-close" @click="toggleOrteCard()" title="Schliessen">×</button>
     </div>
   </div>
 
@@ -876,7 +865,7 @@
               </template>
             </span>
           </template>
-          <span class="figur-chevron" x-text="selectedOrtId === o.id ? '▲' : '▼'"></span>
+          <span class="history-chevron" :class="{ open: selectedOrtId === o.id }">›</span>
         </div>
         <div x-show="selectedOrtId === o.id" class="ort-detail">
           <p x-show="o.beschreibung" x-text="o.beschreibung" class="ort-beschreibung"></p>
@@ -912,7 +901,6 @@
         <span x-show="kontinuitaetLoading" class="spinner"></span>
         <span x-text="kontinuitaetResult ? 'Neu prüfen' : 'Prüfen'"></span>
       </button>
-      <button class="btn-card-close" @click="toggleKontinuitaetCard()" title="Schliessen">×</button>
     </div>
   </div>
 
@@ -1020,7 +1008,6 @@
         <span x-show="bookStatsLoading" class="spinner"></span>
         <span x-text="bookStatsLoading ? '' : 'Synchronisieren'"></span>
       </button>
-      <button class="btn-card-close" @click="toggleBookStatsCard()" title="Schliessen">×</button>
     </div>
   </div>
 
@@ -1128,7 +1115,6 @@
       <button class="success" @click="saveCorrections()" x-show="correctedHtml && (selectedErrors.some(v => v) || selectedStyles.some(v => v))">Korrekturen speichern</button>
       <button @click="toggleChatCard()" :class="{ primary: showChatCard }" :disabled="currentPageEmpty" title="Chat mit dieser Seite">Chat</button>
       <button @click="toggleSynonymeCard()" :class="{ primary: showSynonymeCard }" :disabled="currentPageEmpty" title="Synonymanalyse">Syn.</button>
-      <button class="btn-card-close" @click="resetPage()" title="Schliessen">×</button>
     </div>
   </div>
   <div class="progress-bar-wrap" x-show="checkProgress > 0">
@@ -1323,7 +1309,6 @@
     <span class="card-title" x-text="'Chat: ' + (currentPage?.name || '–')"></span>
     <div class="card-actions">
       <button @click="startNewChatSession()" :disabled="chatLoading" title="Neues Gespräch starten">+ Neu</button>
-      <button class="btn-card-close" @click="showChatCard = false" title="Schliessen">×</button>
     </div>
   </div>
 
@@ -1426,7 +1411,6 @@
         <span x-show="synonymeLoading" class="spinner"></span>
         <span x-show="!synonymeLoading">Analysieren ↗</span>
       </button>
-      <button class="btn-card-close" @click="showSynonymeCard = false" title="Schliessen">×</button>
     </div>
   </div>
 
@@ -1484,7 +1468,6 @@
     <span class="card-title" x-text="'Buch-Chat: ' + selectedBookName"></span>
     <div class="card-actions">
       <button @click="startNewBookChatSession()" :disabled="bookChatLoading" title="Neues Gespräch starten">+ Neu</button>
-      <button class="btn-card-close" @click="showBookChatCard = false" title="Schliessen">×</button>
     </div>
   </div>
 

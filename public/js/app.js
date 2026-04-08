@@ -180,7 +180,6 @@ document.addEventListener('alpine:init', () => {
     szenenFilterFigurId: '',
     szenenFilterKapitel: '',
     szenenFilterSeite: '',
-    szenenSortBy: '',
     _consolidatePollTimer: null,
     _szenenPollTimer: null,
     _figurenNetwork: null,
@@ -290,19 +289,6 @@ document.addEventListener('alpine:init', () => {
         (!this.szenenFilterKapitel || s.kapitel === this.szenenFilterKapitel) &&
         (!this.szenenFilterSeite || s.seite === this.szenenFilterSeite)
       );
-      if (this.szenenSortBy === 'kapitel') {
-        list = [...list].sort((a, b) => (a.kapitel || '').localeCompare(b.kapitel || '', 'de'));
-      } else if (this.szenenSortBy === 'seite') {
-        list = [...list].sort((a, b) => (a.seite || '').localeCompare(b.seite || '', 'de'));
-      } else if (this.szenenSortBy === 'figur') {
-        list = [...list].sort((a, b) => {
-          const fa = (a.fig_ids || [])[0];
-          const fb = (b.fig_ids || [])[0];
-          const na = this.figuren.find(f => f.id === fa)?.kurzname || this.figuren.find(f => f.id === fa)?.name || '';
-          const nb = this.figuren.find(f => f.id === fb)?.kurzname || this.figuren.find(f => f.id === fb)?.name || '';
-          return na.localeCompare(nb, 'de');
-        });
-      }
       return list;
     },
 
@@ -776,7 +762,6 @@ document.addEventListener('alpine:init', () => {
       this.szenenLoading = false;
       this.szenenFilterWertung = '';
       this.szenenFilterFigurId = '';
-      this.szenenSortBy = '';
       if (this._consolidatePollTimer) { clearInterval(this._consolidatePollTimer); this._consolidatePollTimer = null; }
       if (this._szenenPollTimer) { clearInterval(this._szenenPollTimer); this._szenenPollTimer = null; }
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
