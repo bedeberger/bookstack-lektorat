@@ -1158,11 +1158,12 @@ ins {
   align-items: center;
 }
 
-/* === Figuren: Detail-Inhalte === */
+/* === Progress-Status (alle Buchebenen-Features) === */
 .figur-progress-status {
   font-size: var(--font-size-sm);
   color: var(--color-muted);
-  margin-top: 6px;
+  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .figur-beschreibung {
