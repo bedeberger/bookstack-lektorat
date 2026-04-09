@@ -592,11 +592,13 @@ document.addEventListener('alpine:init', () => {
       this.checkDone = false;
       this.checkLoading = false;
       this.checkProgress = 0;
+      this.analysisOut = '';
+      this.setStatus('');
       this.showEditorCard = true;
 
       // Prüfen ob ein Lektorat-Check-Job für diese Seite läuft (Server-seitig oder aus früherer Session)
       try {
-        const { jobId: activeJobId } = await fetch(`/jobs/active?type=check&book_id=${p.id}`).then(r => r.json());
+        const { jobId: activeJobId } = await fetch(`/jobs/active?type=check&page_id=${p.id}`).then(r => r.json());
         if (activeJobId) {
           localStorage.setItem('lektorat_check_job_' + p.id, activeJobId);
           this.checkLoading = true;
@@ -617,21 +619,6 @@ document.addEventListener('alpine:init', () => {
         this.analysisOut = preview
           ? `<div class="preview-text">${escHtml(preview)}</div><div class="preview-hint">Vorschau · «Prüfen» starten für Lektorat</div>`
           : '<span class="muted-msg">Seite ist leer.</span>';
-      } else {
-        this.analysisOut = '<span class="muted-msg"><span class="spinner"></span>Vorschau lädt…</span>';
-        this.setStatus('');
-        try {
-          const pageData = await this.bsGet('pages/' + p.id);
-          const text = htmlToText(pageData.html).trim();
-          const preview = text.length > PREVIEW_MAX_CHARS ? text.slice(0, PREVIEW_MAX_CHARS) + ' …' : text;
-          this.currentPageEmpty = !preview;
-          this.analysisOut = preview
-            ? `<div class="preview-text">${escHtml(preview)}</div><div class="preview-hint">Vorschau · «Prüfen» starten für Lektorat</div>`
-            : '<span class="muted-msg">Seite ist leer.</span>';
-        } catch (e) {
-          console.error('[selectPage preview]', e);
-          this.analysisOut = '<span class="muted-msg">Seite ausgewählt. «Prüfen» starten.</span>';
-        }
       }
       await this.loadPageHistory(p.id);
     },

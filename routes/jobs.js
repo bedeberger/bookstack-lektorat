@@ -44,6 +44,7 @@ function drainQueue() {
     if (!job) continue; // Job wurde zwischenzeitlich entfernt
     activeCount++;
     job.status = 'running';
+    job.startedAt = new Date().toISOString();
     fn()
       .catch(e => logger.error(`Unkontrollierter Job-Fehler (${jobId}): ${e.message}`))
       .finally(() => { activeCount--; drainQueue(); });
@@ -75,6 +76,7 @@ function createJob(type, bookId, userEmail, label) {
     tokensIn: 0, tokensOut: 0,
     maxTokensOut: parseInt(process.env.MODEL_TOKEN, 10) || 64000,
     result: null, error: null,
+    startedAt: null, endedAt: null,
   });
   runningJobs.set(key, id);
   // Auto-Cleanup nach 2 Stunden
@@ -93,14 +95,14 @@ function updateJob(id, updates) {
 function completeJob(id, result) {
   const job = jobs.get(id);
   if (!job) return;
-  Object.assign(job, { status: 'done', progress: 100, result });
+  Object.assign(job, { status: 'done', progress: 100, result, endedAt: new Date().toISOString() });
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
 }
 
 function failJob(id, err) {
   const job = jobs.get(id);
   if (!job) return;
-  Object.assign(job, { status: 'error', error: err.message || String(err), progress: 0 });
+  Object.assign(job, { status: 'error', error: err.message || String(err), progress: 0, endedAt: new Date().toISOString() });
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
 }
 
@@ -1609,10 +1611,11 @@ router.get('/queue', (req, res) => {
 });
 
 router.get('/active', (req, res) => {
-  const { type, book_id } = req.query;
-  if (!type || !book_id) return res.status(400).json({ error: 'type und book_id erforderlich' });
+  const { type, book_id, page_id } = req.query;
+  const entityId = page_id || book_id;
+  if (!type || !entityId) return res.status(400).json({ error: 'type und book_id (oder page_id) erforderlich' });
   const userEmail = req.session?.user?.email || null;
-  const jobId = runningJobs.get(jobKey(type, book_id, userEmail));
+  const jobId = runningJobs.get(jobKey(type, entityId, userEmail));
   if (!jobId || !jobs.has(jobId)) return res.json({ jobId: null });
   const job = jobs.get(jobId);
   res.json({ jobId: job.id, status: job.status, progress: job.progress, statusText: job.statusText });

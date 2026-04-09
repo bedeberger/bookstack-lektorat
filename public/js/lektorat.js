@@ -92,6 +92,7 @@ export const lektoratMethods = {
 
   async runCheck() {
     if (!this.currentPage) return;
+    const pageIdAtStart = this.currentPage.id;
     this.checkLoading = true;
     this.checkDone = false;
     this.originalHtml = null;
@@ -117,10 +118,12 @@ export const lektoratMethods = {
           page_name: this.currentPage.name || null,
         }),
       }).then(r => r.json());
+      if (this.currentPage?.id !== pageIdAtStart) return;
       localStorage.setItem('lektorat_check_job_' + this.currentPage.id, jobId);
       this.startCheckPoll(jobId);
     } catch (e) {
       console.error('[runCheck]', e);
+      if (this.currentPage?.id !== pageIdAtStart) return;
       this.analysisOut = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
       this.setStatus('');
       this.checkLoading = false;
@@ -133,9 +136,9 @@ export const lektoratMethods = {
       timerProp: '_checkPollTimer',
       jobId,
       lsKey: pageId != null ? 'lektorat_check_job_' + pageId : null,
-      progressProp: 'checkProgress',
       onProgress: (job) => {
         if (this.currentPage?.id !== pageId) return;
+        this.checkProgress = job.progress || 0;
         this.status = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
         this.statusSpinner = false;
       },

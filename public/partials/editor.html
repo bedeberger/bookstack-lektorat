@@ -10,8 +10,7 @@
             <span class="tok-badge"
               :class="tokEsts[currentPage.id]?.tok > 16000 ? 'tok-high' : tokEsts[currentPage.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
               x-text="tokEsts[currentPage.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].tok/1000) + 'k T' : '~' + tokEsts[currentPage.id]?.tok + ' T'"
-              @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; showTokLegend=true"
-              @mouseleave.stop="showTokLegend=false"></span>
+              ></span>
             <span class="tok-badge tok-neutral"
               x-text="tokEsts[currentPage.id]?.words >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].words/1000) + 'k W' : tokEsts[currentPage.id]?.words + ' W'"></span>
             <span class="tok-badge tok-neutral"

@@ -219,7 +219,7 @@
      x-transition:leave="tok-tt-enter" x-transition:leave-start="tok-tt-visible" x-transition:leave-end="tok-tt-hidden"
      :style="`left:${tokLegendPos.x}px; top:${tokLegendPos.y - 8}px`"
      class="tok-tooltip"
-     @mouseenter="showTokLegend=true" @mouseleave="showTokLegend=false; tokTooltipData=null">
+     @mouseleave="showTokLegend=false; tokTooltipData=null">
   <div class="tok-tt-row" x-text="(tokTooltipData?.words >= 1000 ? '~' + Math.round(tokTooltipData.words/1000) + 'k' : tokTooltipData?.words) + ' Wörter'"></div>
   <div class="tok-tt-row" x-text="(tokTooltipData?.chars >= 1000 ? '~' + Math.round(tokTooltipData.chars/1000) + 'k' : tokTooltipData?.chars) + ' Zeichen'"></div>
   <div class="tok-tt-hint">~4 Zeichen/Token</div>
