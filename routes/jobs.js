@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
-const { db, saveFigurenToDb, updateFigurenEvents, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint } = require('../db/schema');
+const { db, saveFigurenToDb, updateFigurenEvents, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun } = require('../db/schema');
 const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -45,6 +45,7 @@ function drainQueue() {
     activeCount++;
     job.status = 'running';
     job.startedAt = new Date().toISOString();
+    try { startJobRun(jobId, job.startedAt); } catch (e) { logger.error(`startJobRun: ${e.message}`); }
     fn()
       .catch(e => logger.error(`Unkontrollierter Job-Fehler (${jobId}): ${e.message}`))
       .finally(() => { activeCount--; drainQueue(); });
@@ -78,6 +79,7 @@ function createJob(type, bookId, userEmail, label) {
     result: null, error: null,
     startedAt: null, endedAt: null,
   });
+  try { insertJobRun({ id, type, bookId: String(bookId), userEmail, label }); } catch (e) { logger.error(`insertJobRun: ${e.message}`); }
   runningJobs.set(key, id);
   // Auto-Cleanup nach 2 Stunden
   setTimeout(() => {
@@ -96,6 +98,7 @@ function completeJob(id, result) {
   const job = jobs.get(id);
   if (!job) return;
   Object.assign(job, { status: 'done', progress: 100, result, endedAt: new Date().toISOString() });
+  try { endJobRun(id, 'done', job.endedAt, job.tokensIn, job.tokensOut, null); } catch (e) { logger.error(`endJobRun: ${e.message}`); }
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
 }
 
@@ -103,6 +106,7 @@ function failJob(id, err) {
   const job = jobs.get(id);
   if (!job) return;
   Object.assign(job, { status: 'error', error: err.message || String(err), progress: 0, endedAt: new Date().toISOString() });
+  try { endJobRun(id, 'error', job.endedAt, job.tokensIn, job.tokensOut, job.error); } catch (e) { logger.error(`endJobRun: ${e.message}`); }
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
 }
 

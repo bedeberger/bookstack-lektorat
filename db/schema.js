@@ -238,6 +238,25 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_pages_book_id    ON pages(book_id);
   CREATE INDEX IF NOT EXISTS idx_pages_chapter_id ON pages(chapter_id);
 
+  -- Job-Laufzeiten: persistente Aufzeichnung aller Job-Durchläufe
+  CREATE TABLE IF NOT EXISTS job_runs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id      TEXT NOT NULL UNIQUE,
+    type        TEXT NOT NULL,
+    book_id     TEXT,
+    user_email  TEXT,
+    label       TEXT,
+    status      TEXT NOT NULL DEFAULT 'queued',
+    queued_at   TEXT NOT NULL,
+    started_at  TEXT,
+    ended_at    TEXT,
+    tokens_in   INTEGER DEFAULT 0,
+    tokens_out  INTEGER DEFAULT 0,
+    error       TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_jr_book ON job_runs(book_id);
+  CREATE INDEX IF NOT EXISTS idx_jr_user ON job_runs(user_email);
+
   CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
   INSERT INTO schema_version SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
 `);
@@ -526,6 +545,28 @@ function runMigrations() {
   }
 }
 runMigrations();
+
+// ── Job-Laufzeiten ────────────────────────────────────────────────────────────
+const _stmtInsJobRun = db.prepare(
+  `INSERT INTO job_runs (job_id, type, book_id, user_email, label, status, queued_at)
+   VALUES (?, ?, ?, ?, ?, 'queued', ?)`
+);
+const _stmtStartJobRun = db.prepare(
+  `UPDATE job_runs SET status = 'running', started_at = ? WHERE job_id = ?`
+);
+const _stmtEndJobRun = db.prepare(
+  `UPDATE job_runs SET status = ?, ended_at = ?, tokens_in = ?, tokens_out = ?, error = ? WHERE job_id = ?`
+);
+
+function insertJobRun(job) {
+  _stmtInsJobRun.run(job.id, job.type, job.bookId || null, job.userEmail || null, job.label || null, new Date().toISOString());
+}
+function startJobRun(jobId, startedAt) {
+  _stmtStartJobRun.run(startedAt, jobId);
+}
+function endJobRun(jobId, status, endedAt, tokensIn, tokensOut, error) {
+  _stmtEndJobRun.run(status, endedAt, tokensIn || 0, tokensOut || 0, error || null, jobId);
+}
 
 // Figuren in DB schreiben (wird von PUT-Endpoint und JSON-Migration genutzt)
 function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
@@ -871,4 +912,4 @@ function deleteCheckpoint(jobType, bookId, userEmail) {
   _deleteCheckpoint.run(jobType, parseInt(bookId), userEmail || '');
 }
 
-module.exports = { db, saveFigurenToDb, updateFigurenEvents, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint };
+module.exports = { db, saveFigurenToDb, updateFigurenEvents, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun };
