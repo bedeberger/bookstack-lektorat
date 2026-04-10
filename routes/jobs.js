@@ -162,21 +162,24 @@ function cancelJob(id, userEmail) {
 // ── BookStack-Helfer ──────────────────────────────────────────────────────────
 const BS_URL = (process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80').replace(/\/$/, '');
 
-async function bsGet(path) {
+async function bsGet(path, userToken) {
+  const auth = userToken
+    ? `Token ${userToken.id}:${userToken.pw}`
+    : `Token ${process.env.TOKEN_ID || ''}:${process.env.TOKEN_KENNWORT || ''}`;
   const resp = await fetch(`${BS_URL}/api/${path}`, {
-    headers: { Authorization: `Token ${process.env.TOKEN_ID || ''}:${process.env.TOKEN_KENNWORT || ''}` },
+    headers: { Authorization: auth },
     signal: AbortSignal.timeout(30000),
   });
   if (!resp.ok) throw new Error(`BookStack ${resp.status}: ${await resp.text()}`);
   return resp.json();
 }
 
-async function bsGetAll(path) {
+async function bsGetAll(path, userToken) {
   let offset = 0;
   const all = [];
   while (true) {
     const sep = path.includes('?') ? '&' : '?';
-    const data = await bsGet(`${path}${sep}count=500&offset=${offset}`);
+    const data = await bsGet(`${path}${sep}count=500&offset=${offset}`, userToken);
     const items = data.data || [];
     all.push(...items);
     if (all.length >= (data.total || 0) || !items.length) break;
@@ -365,12 +368,12 @@ async function callAIChat(messages, systemPrompt, onProgress, signal) {
 const SINGLE_PASS_LIMIT = 60000;
 const BATCH_SIZE = 5;
 
-async function loadPageContents(pages, chMap, minLength, onBatch) {
+async function loadPageContents(pages, chMap, minLength, onBatch, userToken) {
   const contents = [];
   for (let i = 0; i < pages.length; i += BATCH_SIZE) {
     if (onBatch) onBatch(i, pages.length);
     const results = await Promise.allSettled(pages.slice(i, i + BATCH_SIZE).map(async p => {
-      const pd = await bsGet('pages/' + p.id);
+      const pd = await bsGet('pages/' + p.id, userToken);
       const text = htmlToText(pd.html).trim();
       if (text.length < minLength) return null;
       return {
@@ -439,14 +442,14 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
 }
 
 // ── Job: Buchbewertung ────────────────────────────────────────────────────────
-async function runReviewJob(jobId, bookId, bookName, userEmail) {
+async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
   const { buildBookReviewSinglePassPrompt, buildChapterAnalysisPrompt, buildBookReviewMultiPassPrompt } = await getPrompts();
   const { SYSTEM_BUCHBEWERTUNG, SYSTEM_KAPITELANALYSE } = await getBookPrompts(bookId);
   try {
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
-      bsGetAll('chapters?book_id=' + bookId),
-      bsGetAll('pages?book_id=' + bookId),
+      bsGetAll('chapters?book_id=' + bookId, userToken),
+      bsGetAll('pages?book_id=' + bookId, userToken),
     ]);
 
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
@@ -458,7 +461,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail) {
         progress: Math.round((i / total) * 60),
         statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
       });
-    });
+    }, userToken);
 
     updateJob(jobId, { progress: 65 });
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
@@ -524,7 +527,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail) {
 }
 
 // ── Job: Figurenextraktion (Basis – ohne Lebensereignisse) ───────────────────
-async function runFiguresJob(jobId, bookId, bookName, userEmail) {
+async function runFiguresJob(jobId, bookId, bookName, userEmail, userToken) {
   const { buildFiguresBasisSinglePassPrompt, buildFiguresBasisChapterPrompt, buildFiguresBasisConsolidationPrompt } = await getPrompts();
   const { SYSTEM_FIGUREN } = await getBookPrompts(bookId);
 
@@ -534,8 +537,8 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
 
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
-      bsGetAll('chapters?book_id=' + bookId),
-      bsGetAll('pages?book_id=' + bookId),
+      bsGetAll('chapters?book_id=' + bookId, userToken),
+      bsGetAll('pages?book_id=' + bookId, userToken),
     ]);
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
@@ -546,7 +549,7 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
         progress: Math.round((i / total) * 55),
         statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
       });
-    });
+    }, userToken);
 
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
     let result;
@@ -622,7 +625,7 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
 }
 
 // ── Job: Lebensereignisse-Zuordnung ──────────────────────────────────────────
-async function runFigureEventsJob(jobId, bookId, bookName, userEmail) {
+async function runFigureEventsJob(jobId, bookId, bookName, userEmail, userToken) {
   const { buildFiguresEventAssignmentPrompt } = await getPrompts();
   const { SYSTEM_FIGUREN } = await getBookPrompts(bookId);
 
@@ -639,8 +642,8 @@ async function runFigureEventsJob(jobId, bookId, bookName, userEmail) {
     const figurenList = figRows.map(f => ({ id: f.fig_id, name: f.name, typ: f.typ || 'andere' }));
 
     const [chaptersData, pages] = await Promise.all([
-      bsGetAll('chapters?book_id=' + bookId),
-      bsGetAll('pages?book_id=' + bookId),
+      bsGetAll('chapters?book_id=' + bookId, userToken),
+      bsGetAll('pages?book_id=' + bookId, userToken),
     ]);
     if (!pages.length) { completeJob(jobId, { eventCount: 0 }); return; }
 
@@ -651,7 +654,7 @@ async function runFigureEventsJob(jobId, bookId, bookName, userEmail) {
         progress: Math.round((i / total) * 35),
         statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
       });
-    });
+    }, userToken);
 
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
     let allAssignments;
@@ -730,7 +733,7 @@ async function runFigureEventsJob(jobId, bookId, bookName, userEmail) {
   }
 }
 // ── Job: Szenenanalyse ────────────────────────────────────────────────────────
-async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
+async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail, userToken) {
   const { buildSzenenAnalysePrompt } = await getPrompts();
   const { SYSTEM_FIGUREN } = await getBookPrompts(bookId);
   try {
@@ -739,8 +742,8 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
 
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
-      bsGetAll('chapters?book_id=' + bookId),
-      bsGetAll('pages?book_id=' + bookId),
+      bsGetAll('chapters?book_id=' + bookId, userToken),
+      bsGetAll('pages?book_id=' + bookId, userToken),
     ]);
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
@@ -766,7 +769,7 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
         progress: Math.round((i / total) * 40),
         statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
       });
-    });
+    }, userToken);
 
     const { groupOrder, groups } = groupByChapter(pageContents);
 
@@ -945,10 +948,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
   const { SYSTEM_LEKTORAT, STOPWORDS: batchStopwords, ERKLAERUNG_RULE: batchErklaerungRule } = await getBookPrompts(bookId);
   try {
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
-    const authHeader = userToken
-      ? `Token ${userToken.id}:${userToken.pw}`
-      : `Token ${process.env.TOKEN_ID || ''}:${process.env.TOKEN_KENNWORT || ''}`;
-    const pages = await bsGetAll('pages?book_id=' + bookId);
+    const pages = await bsGetAll('pages?book_id=' + bookId, userToken);
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
     const tok = { in: 0, out: 0, ms: 0 };
@@ -1315,11 +1315,12 @@ router.post('/review', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
   const userEmail = req.session?.user?.email || null;
+  const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
   const existing = runningJobs.get(jobKey('review', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = book_name ? `Buchbewertung · ${book_name}` : `Buchbewertung`;
   const jobId = createJob('review', book_id, userEmail, label);
-  enqueueJob(jobId, () => runReviewJob(jobId, book_id, book_name || '', userEmail));
+  enqueueJob(jobId, () => runReviewJob(jobId, book_id, book_name || '', userEmail, userToken));
   res.json({ jobId });
 });
 
@@ -1327,11 +1328,12 @@ router.post('/figures', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
   const userEmail = req.session?.user?.email || null;
+  const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
   const existing = runningJobs.get(jobKey('figures', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = book_name ? `Figuren · ${book_name}` : `Figuren`;
   const jobId = createJob('figures', book_id, userEmail, label);
-  enqueueJob(jobId, () => runFiguresJob(jobId, book_id, book_name || '', userEmail));
+  enqueueJob(jobId, () => runFiguresJob(jobId, book_id, book_name || '', userEmail, userToken));
   res.json({ jobId });
 });
 
@@ -1339,11 +1341,12 @@ router.post('/figure-events', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
   const userEmail = req.session?.user?.email || null;
+  const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
   const existing = runningJobs.get(jobKey('figure-events', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = book_name ? `Ereignisse · ${book_name}` : `Ereignisse`;
   const jobId = createJob('figure-events', book_id, userEmail, label);
-  enqueueJob(jobId, () => runFigureEventsJob(jobId, book_id, book_name || '', userEmail));
+  enqueueJob(jobId, () => runFigureEventsJob(jobId, book_id, book_name || '', userEmail, userToken));
   res.json({ jobId });
 });
 
@@ -1351,12 +1354,13 @@ router.post('/szenen', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
   const userEmail = req.session?.user?.email || null;
+  const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
   const existing = runningJobs.get(jobKey('szenen', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = book_name ? `Szenenanalyse · ${book_name}` : `Szenenanalyse`;
   deleteCheckpoint('szenen', book_id, userEmail);
   const jobId = createJob('szenen', book_id, userEmail, label);
-  enqueueJob(jobId, () => runSzenenAnalyseJob(jobId, book_id, book_name || '', userEmail));
+  enqueueJob(jobId, () => runSzenenAnalyseJob(jobId, book_id, book_name || '', userEmail, userToken));
   res.json({ jobId });
 });
 
@@ -1447,7 +1451,7 @@ router.post('/book-chat', jsonBody, (req, res) => {
 });
 
 // ── Job: Schauplatz-Extraktion ────────────────────────────────────────────────
-async function runLocationsJob(jobId, bookId, bookName, userEmail) {
+async function runLocationsJob(jobId, bookId, bookName, userEmail, userToken) {
   const { buildLocationsSinglePassPrompt, buildLocationsChapterPrompt, buildLocationsConsolidationPrompt } = await getPrompts();
   const { SYSTEM_ORTE } = await getBookPrompts(bookId);
 
@@ -1457,8 +1461,8 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
 
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
-      bsGetAll('chapters?book_id=' + bookId),
-      bsGetAll('pages?book_id=' + bookId),
+      bsGetAll('chapters?book_id=' + bookId, userToken),
+      bsGetAll('pages?book_id=' + bookId, userToken),
     ]);
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
@@ -1476,7 +1480,7 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
         progress: Math.round((i / total) * 55),
         statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
       });
-    });
+    }, userToken);
 
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
     let result;
@@ -1553,7 +1557,7 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
   }
 }
 // ── Job: Kontinuitätsprüfung ──────────────────────────────────────────────────
-async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
+async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken) {
   const { buildKontinuitaetSinglePassPrompt, buildKontinuitaetChapterFactsPrompt, buildKontinuitaetCheckPrompt } = await getPrompts();
   const { SYSTEM_KONTINUITAET } = await getBookPrompts(bookId);
 
@@ -1563,8 +1567,8 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
 
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
-      bsGetAll('chapters?book_id=' + bookId),
-      bsGetAll('pages?book_id=' + bookId),
+      bsGetAll('chapters?book_id=' + bookId, userToken),
+      bsGetAll('pages?book_id=' + bookId, userToken),
     ]);
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
@@ -1588,7 +1592,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
         progress: Math.round((i / total) * 50),
         statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
       });
-    });
+    }, userToken);
 
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
     let result;
@@ -1680,11 +1684,12 @@ router.post('/locations', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
   const userEmail = req.session?.user?.email || null;
+  const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
   const existing = runningJobs.get(jobKey('locations', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = book_name ? `Schauplätze · ${book_name}` : `Schauplätze`;
   const jobId = createJob('locations', book_id, userEmail, label);
-  enqueueJob(jobId, () => runLocationsJob(jobId, book_id, book_name || '', userEmail));
+  enqueueJob(jobId, () => runLocationsJob(jobId, book_id, book_name || '', userEmail, userToken));
   res.json({ jobId });
 });
 
@@ -1692,11 +1697,12 @@ router.post('/kontinuitaet', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
   const userEmail = req.session?.user?.email || null;
+  const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
   const existing = runningJobs.get(jobKey('kontinuitaet', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = book_name ? `Kontinuität · ${book_name}` : `Kontinuität`;
   const jobId = createJob('kontinuitaet', book_id, userEmail, label);
-  enqueueJob(jobId, () => runKontinuitaetJob(jobId, book_id, book_name || '', userEmail));
+  enqueueJob(jobId, () => runKontinuitaetJob(jobId, book_id, book_name || '', userEmail, userToken));
   res.json({ jobId });
 });
 

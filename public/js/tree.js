@@ -37,6 +37,9 @@ export const treeMethods = {
         this.bsGetAll('pages?book_id=' + bookId),
       ]);
 
+      // Buch wurde gewechselt während die Anfrage lief → veraltete Daten verwerfen.
+      if (this.selectedBookId !== bookId) return;
+
       // pages-Cache im Hintergrund aktualisieren (fire-and-forget)
       fetch('/sync/pages/' + bookId, { method: 'POST' }).catch(() => {});
 
