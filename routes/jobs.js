@@ -41,6 +41,8 @@ const jsonBodyLarge = express.json({ limit: '5mb' });
 const jobs = new Map();
 // key: `${type}:${bookId}:${userEmail}` → jobId  (verhindert Doppel-Starts)
 const runningJobs = new Map();
+// key: jobId → AbortController  (für Job-Abbruch)
+const jobAbortControllers = new Map();
 
 // ── Globale Queue ─────────────────────────────────────────────────────────────
 // Maximale Anzahl gleichzeitig laufender Jobs (über alle User)
@@ -89,7 +91,9 @@ function createJob(type, bookId, userEmail, label) {
     maxTokensOut: parseInt(process.env.MODEL_TOKEN, 10) || 64000,
     result: null, error: null,
     startedAt: null, endedAt: null,
+    cancelled: false,
   });
+  jobAbortControllers.set(id, new AbortController());
   try { insertJobRun({ id, type, bookId: String(bookId), userEmail, label }); } catch (e) { logger.error(`insertJobRun: ${e.message}`); }
   runningJobs.set(key, id);
   // Auto-Cleanup nach 2 Stunden
@@ -115,14 +119,44 @@ function completeJob(id, result, tokensPerSec = null) {
   Object.assign(job, { status: 'done', progress: 100, result, tokensPerSec, endedAt: new Date().toISOString() });
   try { endJobRun(id, 'done', job.endedAt, job.tokensIn, job.tokensOut, tokensPerSec, null); } catch (e) { logger.error(`endJobRun: ${e.message}`); }
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
+  jobAbortControllers.delete(id);
 }
 
 function failJob(id, err) {
   const job = jobs.get(id);
   if (!job) return;
-  Object.assign(job, { status: 'error', error: err.message || String(err), progress: 0, endedAt: new Date().toISOString() });
-  try { endJobRun(id, 'error', job.endedAt, job.tokensIn, job.tokensOut, null, job.error); } catch (e) { logger.error(`endJobRun: ${e.message}`); }
+  const isCancelled = job.cancelled || err?.name === 'AbortError';
+  const status = isCancelled ? 'cancelled' : 'error';
+  const errorMsg = isCancelled ? 'Abgebrochen' : (err.message || String(err));
+  Object.assign(job, { status, error: errorMsg, progress: isCancelled ? job.progress : 0, endedAt: new Date().toISOString() });
+  try { endJobRun(id, status, job.endedAt, job.tokensIn, job.tokensOut, null, errorMsg); } catch (e) { logger.error(`endJobRun: ${e.message}`); }
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
+  jobAbortControllers.delete(id);
+}
+
+function cancelJob(id, userEmail) {
+  const job = jobs.get(id);
+  if (!job) return false;
+  if (job.userEmail !== (userEmail || null)) return false;
+  if (job.status === 'queued') {
+    const idx = jobQueue.findIndex(e => e.jobId === id);
+    if (idx !== -1) jobQueue.splice(idx, 1);
+    const endedAt = new Date().toISOString();
+    Object.assign(job, { status: 'cancelled', error: 'Abgebrochen', endedAt });
+    try { endJobRun(id, 'cancelled', endedAt, 0, 0, null, 'Abgebrochen'); } catch (e) { logger.error(`endJobRun: ${e.message}`); }
+    runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
+    jobAbortControllers.delete(id);
+    logger.info(`Job ${id} (${job.type}) aus Warteschlange entfernt und abgebrochen.`);
+    return true;
+  }
+  if (job.status === 'running') {
+    job.cancelled = true;
+    const ctrl = jobAbortControllers.get(id);
+    if (ctrl) ctrl.abort();
+    logger.info(`Job ${id} (${job.type}) Abbruch signalisiert.`);
+    return true;
+  }
+  return false;
 }
 
 // ── BookStack-Helfer ──────────────────────────────────────────────────────────
@@ -228,7 +262,7 @@ function _bookChatBuildHistory(sessionId, tailMessages = 10) {
 // ── callAIChat: Multi-Turn-Variante von callAI ────────────────────────────────
 // messages: Array von { role, content } – enthält die vollständige Konversation.
 // Entspricht _streamClaude/_streamOllama in chat.js, aber akkumuliert intern (kein SSE).
-async function callAIChat(messages, systemPrompt, onProgress) {
+async function callAIChat(messages, systemPrompt, onProgress, signal) {
   const provider = process.env.API_PROVIDER || 'claude';
 
   if (provider === 'ollama') {
@@ -242,6 +276,7 @@ async function callAIChat(messages, systemPrompt, onProgress) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, messages: ollamaMessages, stream: true, options: { num_ctx: maxTokens, think: false } }),
+      signal,
     });
     if (!resp.ok) throw new Error(`Ollama ${resp.status}: ${await resp.text()}`);
 
@@ -285,6 +320,7 @@ async function callAIChat(messages, systemPrompt, onProgress) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(body),
+      signal,
     });
     if (!resp.ok) throw new Error(`Claude ${resp.status}: ${JSON.stringify(await resp.json())}`);
 
@@ -392,7 +428,8 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
   const maxTokensOverride = maxTokens != null
     ? Math.min(maxTokens, globalMax)
     : globalMax;
-  const { text, truncated, tokensIn, tokensOut, genDurationMs } = await callAI(prompt, system, onProgress, maxTokensOverride);
+  const signal = jobAbortControllers.get(jobId)?.signal;
+  const { text, truncated, tokensIn, tokensOut, genDurationMs } = await callAI(prompt, system, onProgress, maxTokensOverride, signal);
   tok.in += tokensIn;
   tok.out += tokensOut;
   if (genDurationMs != null) tok.ms += genDurationMs;
@@ -760,6 +797,7 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
           fromPct, toPct, 2000,
         );
       } catch (e) {
+        if (e.name === 'AbortError') throw e;
         logger.warn(`Job ${jobId}: Szenenanalyse Kapitel «${group.name}» übersprungen: ${e.message}`);
         saveCheckpoint('szenen', bookId, userEmail, { allSzenen, nextGi: gi + 1 });
         continue;
@@ -902,11 +940,14 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
 }
 
 // ── Job: Batch-Lektorat ───────────────────────────────────────────────────────
-async function runBatchCheckJob(jobId, bookId, userEmail) {
+async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
   const { buildBatchLektoratPrompt } = await getPrompts();
   const { SYSTEM_LEKTORAT, STOPWORDS: batchStopwords, ERKLAERUNG_RULE: batchErklaerungRule } = await getBookPrompts(bookId);
   try {
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
+    const authHeader = userToken
+      ? `Token ${userToken.id}:${userToken.pw}`
+      : `Token ${process.env.TOKEN_ID || ''}:${process.env.TOKEN_KENNWORT || ''}`;
     const pages = await bsGetAll('pages?book_id=' + bookId);
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
@@ -926,7 +967,12 @@ async function runBatchCheckJob(jobId, bookId, userEmail) {
       });
 
       try {
-        const pd = await bsGet('pages/' + p.id);
+        const pdResp = await fetch(`${BS_URL}/api/pages/${p.id}`, {
+          headers: { Authorization: authHeader },
+          signal: AbortSignal.timeout(30000),
+        });
+        if (!pdResp.ok) throw new Error(`BookStack ${pdResp.status}: ${await pdResp.text()}`);
+        const pd = await pdResp.json();
         const text = htmlToText(pd.html).trim();
         if (!text) continue;
 
@@ -950,6 +996,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail) {
             result.stilanalyse || null, result.fazit || null, model, userEmail || null);
         done++;
       } catch (e) {
+        if (e.name === 'AbortError') throw e;
         logger.warn(`Job ${jobId}: Batch-Check Seite ${p.id} («${p.name}») übersprungen: ${e.message}`);
       }
     }
@@ -1012,7 +1059,7 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
       updateJob(jobId, updates);
     };
 
-    const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress);
+    const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress, jobAbortControllers.get(jobId)?.signal);
 
     // Antwort parsen
     let antwort = text;
@@ -1212,7 +1259,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
       updateJob(jobId, updates);
     };
 
-    const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress);
+    const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress, jobAbortControllers.get(jobId)?.signal);
 
     // Antwort parsen (nur "antwort"-Feld, kein vorschlaege)
     let antwort = text;
@@ -1330,11 +1377,14 @@ router.post('/batch-check', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
   const userEmail = req.session?.user?.email || null;
+  const userToken = req.session?.bookstackToken
+    ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw }
+    : null;
   const existing = runningJobs.get(jobKey('batch-check', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = book_name ? `Serien-Lektorat · ${book_name}` : `Serien-Lektorat`;
   const jobId = createJob('batch-check', book_id, userEmail, label);
-  enqueueJob(jobId, () => runBatchCheckJob(jobId, book_id, userEmail));
+  enqueueJob(jobId, () => runBatchCheckJob(jobId, book_id, userEmail, userToken));
   res.json({ jobId });
 });
 
@@ -1472,6 +1522,7 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
           );
           chapterOrte.push({ kapitel: group.name, orte: chResult.orte || [] });
         } catch (e) {
+          if (e.name === 'AbortError') throw e;
           logger.warn(`Job ${jobId}: Schauplatz-Analyse Kapitel «${group.name}» übersprungen: ${e.message}`);
           chapterOrte.push({ kapitel: group.name, orte: [] });
         }
@@ -1584,6 +1635,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
           );
           chapterFacts.push({ kapitel: group.name, fakten: chResult.fakten || [] });
         } catch (e) {
+          if (e.name === 'AbortError') throw e;
           logger.warn(`Job ${jobId}: Fakten-Extraktion Kapitel «${group.name}» übersprungen: ${e.message}`);
         }
         saveCheckpoint('kontinuitaet', bookId, userEmail, { chapterFacts, nextGi: gi + 1 });
@@ -1690,6 +1742,7 @@ router.get('/queue', (req, res) => {
       status: job.status,
       progress: job.progress,
       statusText,
+      canCancel: true,
     });
   }
   res.json(result);
@@ -1772,6 +1825,15 @@ router.get('/active', (req, res) => {
   if (!jobId || !jobs.has(jobId)) return res.json({ jobId: null });
   const job = jobs.get(jobId);
   res.json({ jobId: job.id, status: job.status, progress: job.progress, statusText: job.statusText });
+});
+
+router.delete('/:id', (req, res) => {
+  const userEmail = req.session?.user?.email || null;
+  const job = jobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Job nicht gefunden' });
+  const ok = cancelJob(req.params.id, userEmail);
+  if (!ok) return res.status(400).json({ error: `Job kann nicht abgebrochen werden (Status: ${job.status})` });
+  res.json({ ok: true });
 });
 
 router.get('/:id', (req, res) => {

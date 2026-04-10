@@ -277,6 +277,7 @@
       <template x-if="job.status === 'running' && job.progress > 0">
         <span class="job-queue-pill-progress" x-text="job.progress + '%'"></span>
       </template>
+      <button class="job-queue-cancel-btn" @click.stop="cancelJob(job.id)" title="Abbrechen">&#x2715;</button>
     </div>
   </template>
 </div>

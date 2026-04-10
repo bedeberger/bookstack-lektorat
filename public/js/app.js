@@ -497,6 +497,7 @@ document.addEventListener('alpine:init', () => {
           clearInterval(this[config.timerProp]);
           this[config.timerProp] = null;
           if (config.lsKey) localStorage.removeItem(config.lsKey);
+          if (job.status === 'cancelled') { await config.onError?.(job); return; }
           if (job.status === 'error') await config.onError?.(job);
           else await config.onDone?.(job);
         } catch (e) { console.error('[poll ' + config.timerProp + ']', e); }
@@ -670,6 +671,13 @@ document.addEventListener('alpine:init', () => {
       };
       poll();
       this._jobQueueTimer = setInterval(poll, 5000);
+    },
+
+    async cancelJob(jobId) {
+      try {
+        await fetch('/jobs/' + jobId, { method: 'DELETE' });
+        this.jobQueueItems = this.jobQueueItems.filter(j => j.id !== jobId);
+      } catch { /* ignorieren */ }
     },
 
     // ── Seitenauswahl & View-Reset ───────────────────────────────────────────

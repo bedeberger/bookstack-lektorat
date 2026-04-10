@@ -21,6 +21,12 @@ export const treeMethods = {
 
   async loadPages() {
     const bookId = this.selectedBookId;
+    // Laufenden Figuren-Job-Poll abbrechen (Buch könnte gewechselt haben).
+    // checkPendingJobs am Ende reconnectet korrekt für das neue Buch.
+    if (this._figuresPollTimer) { clearInterval(this._figuresPollTimer); this._figuresPollTimer = null; }
+    this.figurenLoading = false;
+    this.figurenProgress = 0;
+    this.figurenStatus = '';
     try {
       this.setStatus('Lade Seiten…', true);
       this.pageSearch = '';

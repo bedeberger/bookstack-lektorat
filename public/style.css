@@ -2483,6 +2483,21 @@ ins {
   font-size: 11px;
   font-weight: 600;
 }
+.job-queue-cancel-btn {
+  background: none;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0 0 0 4px;
+  opacity: 0.5;
+  transition: opacity 0.15s, color 0.15s;
+}
+.job-queue-cancel-btn:hover {
+  color: #fc8181;
+  opacity: 1;
+}
 
 /* === Schauplätze === */
 .ort-list {
