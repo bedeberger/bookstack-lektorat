@@ -119,8 +119,8 @@
             Korrekturen wurden nicht in BookStack übernommen.
           </div>
 
-          <!-- Gespeicherte Einträge: readonly-Ansicht mit Markierung was angewendet wurde -->
-          <template x-if="entry.saved && entry.errors_json && entry.errors_json.length > 0">
+          <!-- Gespeicherte Einträge: readonly-Ansicht mit Markierung was angewendet wurde (nur wenn alles umgesetzt) -->
+          <template x-if="entry.saved && !historyHasUnapplied(entry) && entry.errors_json && entry.errors_json.length > 0">
             <div style="margin-top:10px;">
               <template x-for="(f, i) in entry.errors_json" :key="i">
                 <div class="finding" :class="[f.typ === 'stil' ? 'style' : 'error', entry.selected_errors_json && !entry.selected_errors_json.some(a => a.original === f.original) ? 'finding-skipped' : '']">
@@ -138,8 +138,8 @@
             </div>
           </template>
 
-          <!-- Nicht gespeicherte Einträge: interaktive Selektion -->
-          <template x-if="!entry.saved && entry.errors_json && entry.errors_json.length > 0 && historySelections[entry.id]">
+          <!-- Interaktive Selektion: solange noch nicht umgesetzte Korrekturen vorhanden -->
+          <template x-if="historyHasUnapplied(entry) && entry.errors_json && entry.errors_json.length > 0 && historySelections[entry.id]">
             <div style="margin-top:10px;">
               <!-- Fehler (rechtschreibung/grammatik) -->
               <template x-if="historyErrors(entry).length > 0">
@@ -206,7 +206,7 @@
           </div>
           <div x-show="entry.fazit" class="fazit" x-text="entry.fazit"></div>
           <div class="history-actions">
-            <button x-show="!entry.saved && entry.error_count > 0 && currentPage" class="btn-apply-history" @click.stop="applyHistoryCheck(entry)">In BookStack übernehmen</button>
+            <button x-show="historyHasUnapplied(entry) && entry.error_count > 0 && currentPage" class="btn-apply-history" @click.stop="applyHistoryCheck(entry)">In BookStack übernehmen</button>
             <button class="btn-delete-history" @click.stop="deletePageCheck(entry.id)" title="Eintrag löschen">Eintrag löschen</button>
           </div>
         </div>

@@ -47,15 +47,37 @@ export const historyMethods = {
     }
   },
 
+  // Prüft ob noch nicht umgesetzte Korrekturen für einen Eintrag vorhanden sind.
+  historyHasUnapplied(entry) {
+    if (!entry.saved) return entry.error_count > 0;
+    // Wenn saved aber keine Tracking-Daten → unklar, alles als offen behandeln
+    if (!entry.applied_errors_json && !entry.selected_errors_json) return entry.error_count > 0;
+    const errors = this.historyErrors(entry);
+    const styles = this.historyStyles(entry);
+    const appliedSet = new Set((entry.applied_errors_json || []).map(e => e.original));
+    const selectedSet = new Set((entry.selected_errors_json || []).map(e => e.original));
+    return errors.some(e => !appliedSet.has(e.original)) || styles.some(s => !selectedSet.has(s.original));
+  },
+
   // Selektionsstate für einen History-Eintrag initialisieren (beim Aufklappen).
   initHistorySelection(entry) {
     if (this.historySelections[entry.id]) return;
     const errors = (entry.errors_json || []).filter(f => f.typ !== 'stil');
     const styles = (entry.errors_json || []).filter(f => f.typ === 'stil');
-    this.historySelections[entry.id] = {
-      errors: errors.map(() => true),
-      styles: styles.map(() => false),
-    };
+    if (entry.saved && (entry.applied_errors_json || entry.selected_errors_json)) {
+      // Nur noch nicht angewandte Korrekturen vorauswählen
+      const appliedSet = new Set((entry.applied_errors_json || []).map(e => e.original));
+      const selectedSet = new Set((entry.selected_errors_json || []).map(e => e.original));
+      this.historySelections[entry.id] = {
+        errors: errors.map(e => !appliedSet.has(e.original)),
+        styles: styles.map(s => !selectedSet.has(s.original)),
+      };
+    } else {
+      this.historySelections[entry.id] = {
+        errors: errors.map(() => true),
+        styles: styles.map(() => false),
+      };
+    }
   },
 
   toggleHistoryError(entryId, i) {
@@ -125,19 +147,28 @@ export const historyMethods = {
       this.setStatus('Speichere in BookStack…', true);
       await this.bsPut('pages/' + this.currentPage.id, { html: finalHtml, name: this.currentPage.name });
 
+      const mergeByOriginal = (existing, newItems) => {
+        const set = new Set((existing || []).map(e => e.original));
+        return [...(existing || []), ...newItems.filter(e => !set.has(e.original))];
+      };
+      const mergedApplied = mergeByOriginal(entry.applied_errors_json, selectedErrors);
+      const mergedSelected = mergeByOriginal(entry.selected_errors_json, allSelected);
+
       await fetch('/history/check/' + entry.id + '/saved', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          applied_errors_json: selectedErrors,
-          selected_errors_json: allSelected,
+          applied_errors_json: mergedApplied,
+          selected_errors_json: mergedSelected,
         }),
       });
 
       entry.saved = true;
       entry.saved_at = new Date().toISOString();
-      entry.applied_errors_json = selectedErrors;
-      entry.selected_errors_json = allSelected;
+      entry.applied_errors_json = mergedApplied;
+      entry.selected_errors_json = mergedSelected;
+      delete this.historySelections[entry.id];
+      this.initHistorySelection(entry);
       this.setStatus('✓ Korrekturen gespeichert.', false, 5000);
     } catch (e) {
       console.error('[applyHistoryCheck]', e);
