@@ -1,4 +1,4 @@
-import { escHtml, htmlToText, fmtTok, renderChatMarkdown } from './utils.js';
+import { escHtml, fmtTok, renderChatMarkdown } from './utils.js';
 
 // Chat-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -117,21 +117,21 @@ export const chatMethods = {
     this.chatMessages.push({ role: 'user', content: msg, id: null });
     this.$nextTick(() => this._scrollChatToBottom());
 
-    // Seiteninhalt holen (frisch laden für aktuelle Version)
-    let pageText = '';
-    try {
-      const pageData = await this.bsGet('pages/' + this.currentPage.id);
-      pageText = htmlToText(pageData.html || '');
-      if (!this.originalHtml) this.originalHtml = pageData.html || '';
-    } catch (e) {
-      console.warn('[sendChatMessage] Seiteninhalt konnte nicht geladen werden:', e.message);
+    // originalHtml vorladen falls noch nicht gesetzt (wird für Vorschläge-Anwenden benötigt)
+    if (!this.originalHtml) {
+      try {
+        const pageData = await this.bsGet('pages/' + this.currentPage.id);
+        this.originalHtml = pageData.html || '';
+      } catch (e) {
+        console.warn('[sendChatMessage] Seiteninhalt konnte nicht geladen werden:', e.message);
+      }
     }
 
     try {
       const { jobId } = await fetch('/jobs/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: this.chatSessionId, message: msg, page_text: pageText }),
+        body: JSON.stringify({ session_id: this.chatSessionId, message: msg }),
       }).then(r => r.json());
 
       localStorage.setItem('lektorat_chat_job_' + this.chatSessionId, jobId);

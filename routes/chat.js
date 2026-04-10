@@ -395,6 +395,7 @@ async function _streamOllama(messages, systemPrompt, res, onText, onTokens) {
   const reader  = upstream.body.getReader();
   const decoder = new TextDecoder();
   let buf = '';
+  let accumulated = '';
   let promptTokens = 0;
   let evalTokens   = 0;
 
@@ -411,12 +412,13 @@ async function _streamOllama(messages, systemPrompt, res, onText, onTokens) {
         const chunk = JSON.parse(line);
         const text  = chunk.message?.content || '';
         if (text) {
+          accumulated += text;
           onText(text);
           res.write(`data: ${JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text } })}\n\n`);
         }
         if (chunk.done) {
           promptTokens = chunk.prompt_eval_count || 0;
-          evalTokens   = chunk.eval_count        || 0;
+          evalTokens   = chunk.eval_count        || Math.ceil(accumulated.length / 4);
         }
       } catch { /* ignorieren */ }
     }

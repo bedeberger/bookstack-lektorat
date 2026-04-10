@@ -74,7 +74,7 @@ function createJob(type, bookId, userEmail, label) {
     id, type, bookId: String(bookId), userEmail: userEmail || null,
     label: label || null,
     status: 'queued', progress: 0, statusText: 'In Warteschlange…',
-    tokensIn: 0, tokensOut: 0,
+    tokensIn: 0, tokensOut: 0, tokensPerSec: null,
     maxTokensOut: parseInt(process.env.MODEL_TOKEN, 10) || 64000,
     result: null, error: null,
     startedAt: null, endedAt: null,
@@ -94,11 +94,15 @@ function updateJob(id, updates) {
   if (job && job.status === 'running') Object.assign(job, updates);
 }
 
-function completeJob(id, result) {
+function tps(tok) {
+  return tok.ms > 0 ? tok.out / (tok.ms / 1000) : null;
+}
+
+function completeJob(id, result, tokensPerSec = null) {
   const job = jobs.get(id);
   if (!job) return;
-  Object.assign(job, { status: 'done', progress: 100, result, endedAt: new Date().toISOString() });
-  try { endJobRun(id, 'done', job.endedAt, job.tokensIn, job.tokensOut, null); } catch (e) { logger.error(`endJobRun: ${e.message}`); }
+  Object.assign(job, { status: 'done', progress: 100, result, tokensPerSec, endedAt: new Date().toISOString() });
+  try { endJobRun(id, 'done', job.endedAt, job.tokensIn, job.tokensOut, tokensPerSec, null); } catch (e) { logger.error(`endJobRun: ${e.message}`); }
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
 }
 
@@ -106,7 +110,7 @@ function failJob(id, err) {
   const job = jobs.get(id);
   if (!job) return;
   Object.assign(job, { status: 'error', error: err.message || String(err), progress: 0, endedAt: new Date().toISOString() });
-  try { endJobRun(id, 'error', job.endedAt, job.tokensIn, job.tokensOut, job.error); } catch (e) { logger.error(`endJobRun: ${e.message}`); }
+  try { endJobRun(id, 'error', job.endedAt, job.tokensIn, job.tokensOut, null, job.error); } catch (e) { logger.error(`endJobRun: ${e.message}`); }
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
 }
 
@@ -232,7 +236,7 @@ async function callAIChat(messages, systemPrompt, onProgress) {
 
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
-    let buf = '', text = '', tokensIn = 0, tokensOut = 0;
+    let buf = '', text = '', tokensIn = 0, tokensOut = 0, genDurationMs = null;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -245,7 +249,8 @@ async function callAIChat(messages, systemPrompt, onProgress) {
           const chunk = JSON.parse(line);
           if (chunk.done) {
             tokensIn  = chunk.prompt_eval_count || estimatedTokIn;
-            tokensOut = chunk.eval_count || 0;
+            tokensOut = chunk.eval_count || Math.ceil(text.length / 4);
+            if (chunk.eval_duration) genDurationMs = Math.round(chunk.eval_duration / 1e6);
             if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
           } else {
             text += chunk.message?.content || '';
@@ -254,7 +259,7 @@ async function callAIChat(messages, systemPrompt, onProgress) {
         } catch { }
       }
     }
-    return { text, tokensIn, tokensOut };
+    return { text, tokensIn, tokensOut, genDurationMs };
   } else {
     const model     = process.env.MODEL_NAME  || 'claude-sonnet-4-6';
     const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
@@ -275,6 +280,7 @@ async function callAIChat(messages, systemPrompt, onProgress) {
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
     let text = '', buf = '', tokensIn = 0, tokensOut = 0;
+    let t_first = 0, t_last = 0;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -295,13 +301,17 @@ async function callAIChat(messages, systemPrompt, onProgress) {
             tokensOut = ev.usage.output_tokens || 0;
           }
           if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+            const now = Date.now();
+            if (!t_first) t_first = now;
+            t_last = now;
             text += ev.delta.text;
             if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
           }
         } catch { }
       }
     }
-    return { text, tokensIn, tokensOut };
+    const genDurationMs = (t_first && t_last > t_first) ? t_last - t_first : null;
+    return { text, tokensIn, tokensOut, genDurationMs };
   }
 }
 
@@ -371,9 +381,10 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
   const maxTokensOverride = maxTokens != null
     ? Math.min(maxTokens, globalMax)
     : globalMax;
-  const { text, truncated, tokensIn, tokensOut } = await callAI(prompt, system, onProgress, maxTokensOverride);
+  const { text, truncated, tokensIn, tokensOut, genDurationMs } = await callAI(prompt, system, onProgress, maxTokensOverride);
   tok.in += tokensIn;
   tok.out += tokensOut;
+  if (genDurationMs != null) tok.ms += genDurationMs;
   updateJob(jobId, { tokensIn: tok.in, tokensOut: tok.out });
   if (truncated) throw new Error(`KI-Antwort wurde bei ${maxTokensOverride} Tokens abgeschnitten (stop_reason: max_tokens). JSON ist unvollständig.`);
   return parseJSON(text);
@@ -392,7 +403,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail) {
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
     const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
-    const tok = { in: 0, out: 0 }; // akkumulierte Token über alle KI-Calls
+    const tok = { in: 0, out: 0, ms: 0 }; // akkumulierte Token über alle KI-Calls
     const pageContents = await loadPageContents(pages, chMap, 50, (i, total) => {
       updateJob(jobId, {
         progress: Math.round((i / total) * 60),
@@ -455,7 +466,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail) {
     db.prepare('INSERT INTO book_reviews (book_id, book_name, reviewed_at, review_json, model, user_email) VALUES (?, ?, ?, ?, ?, ?)')
       .run(parseInt(bookId), bookName, new Date().toISOString(), JSON.stringify(r), model, userEmail || null);
 
-    completeJob(jobId, { review: r, pageCount: pageContents.length, tokensIn: tok.in, tokensOut: tok.out });
+    completeJob(jobId, { review: r, pageCount: pageContents.length, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`Job ${jobId}: Buchbewertung Buch ${bookId} abgeschlossen (${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Buchbewertung Fehler: ${e.message}`);
@@ -479,7 +490,7 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
     const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
-    const tok = { in: 0, out: 0 };
+    const tok = { in: 0, out: 0, ms: 0 };
     const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
       updateJob(jobId, {
         progress: Math.round((i / total) * 55),
@@ -552,7 +563,7 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
     };
     saveFigurenToDb(parseInt(bookId), figuren, userEmail || null, idMapsFig);
     deleteCheckpoint('figures', bookId, userEmail);
-    completeJob(jobId, { count: figuren.length, tokensIn: tok.in, tokensOut: tok.out });
+    completeJob(jobId, { count: figuren.length, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`Job ${jobId}: Figurenextraktion Buch ${bookId} abgeschlossen (${figuren.length} Figuren, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Figurenextraktion Fehler: ${e.message}`);
@@ -583,7 +594,7 @@ async function runFigureEventsJob(jobId, bookId, bookName, userEmail) {
     if (!pages.length) { completeJob(jobId, { eventCount: 0 }); return; }
 
     const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
-    const tok = { in: 0, out: 0 };
+    const tok = { in: 0, out: 0, ms: 0 };
     const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
       updateJob(jobId, {
         progress: Math.round((i / total) * 35),
@@ -660,7 +671,7 @@ async function runFigureEventsJob(jobId, bookId, bookName, userEmail) {
     saveZeitstrahlEvents(parseInt(bookId), userEmail || null, []);
     const eventCount = allAssignments.reduce((s, a) => s + (a.lebensereignisse?.length || 0), 0);
     deleteCheckpoint('figure-events', bookId, userEmail);
-    completeJob(jobId, { eventCount, tokensIn: tok.in, tokensOut: tok.out });
+    completeJob(jobId, { eventCount, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`Job ${jobId}: Ereignis-Zuordnung Buch ${bookId} abgeschlossen (${eventCount} Ereignisse, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Ereignis-Zuordnung Fehler: ${e.message}`);
@@ -697,7 +708,7 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
     const locIdToDbId = Object.fromEntries(locRows.map(r => [r.loc_id, r.id]));
 
     const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
-    const tok = { in: 0, out: 0 };
+    const tok = { in: 0, out: 0, ms: 0 };
     const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
       updateJob(jobId, {
         progress: Math.round((i / total) * 40),
@@ -781,7 +792,7 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
     })();
 
     deleteCheckpoint('szenen', bookId, userEmail);
-    completeJob(jobId, { count: allSzenen.length, tokensIn: tok.in, tokensOut: tok.out });
+    completeJob(jobId, { count: allSzenen.length, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`Job ${jobId}: Szenenanalyse Buch ${bookId} abgeschlossen (${allSzenen.length} Szenen, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Szenenanalyse Fehler: ${e.message}`);
@@ -793,7 +804,7 @@ async function runConsolidateZeitstrahlJob(jobId, events, bookId, userEmail) {
   const { SYSTEM_FIGUREN, buildZeitstrahlConsolidationPrompt } = await getPrompts();
   try {
     updateJob(jobId, { statusText: 'Konsolidiere Zeitstrahl…', progress: 5 });
-    const tok = { in: 0, out: 0 };
+    const tok = { in: 0, out: 0, ms: 0 };
     const result = await aiCall(jobId, tok,
       buildZeitstrahlConsolidationPrompt(events),
       SYSTEM_FIGUREN,
@@ -801,7 +812,7 @@ async function runConsolidateZeitstrahlJob(jobId, events, bookId, userEmail) {
     );
     if (!Array.isArray(result?.ereignisse)) throw new Error('KI-Antwort ungültig: ereignisse-Array fehlt');
     saveZeitstrahlEvents(parseInt(bookId), userEmail || null, result.ereignisse);
-    completeJob(jobId, { ereignisse: result.ereignisse, tokensIn: tok.in, tokensOut: tok.out });
+    completeJob(jobId, { ereignisse: result.ereignisse, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`Job ${jobId}: Zeitstrahl-Konsolidierung Buch ${bookId} abgeschlossen (${result.ereignisse.length} Ereignisse, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Zeitstrahl-Konsolidierung Fehler: ${e.message}`);
@@ -829,7 +840,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     const text = htmlToText(html);
     if (!text.trim()) { completeJob(jobId, { empty: true }); return; }
 
-    const tok = { in: 0, out: 0 };
+    const tok = { in: 0, out: 0, ms: 0 };
     updateJob(jobId, { statusText: 'KI analysiert…', progress: 10 });
 
     const result = await aiCall(jobId, tok,
@@ -865,7 +876,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
       checkId: info.lastInsertRowid,
       tokensIn: tok.in,
       tokensOut: tok.out,
-    });
+    }, tps(tok));
     logger.info(`Job ${jobId}: Seiten-Check Seite ${pageId} abgeschlossen (${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Seiten-Check Fehler: ${e.message}`);
@@ -881,7 +892,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail) {
     const pages = await bsGetAll('pages?book_id=' + bookId);
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
-    const tok = { in: 0, out: 0 };
+    const tok = { in: 0, out: 0, ms: 0 };
     const model = process.env.API_PROVIDER === 'ollama'
       ? (process.env.OLLAMA_MODEL || 'llama3.2')
       : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
@@ -925,7 +936,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail) {
       }
     }
 
-    completeJob(jobId, { pageCount: pages.length, done, totalErrors, tokensIn: tok.in, tokensOut: tok.out });
+    completeJob(jobId, { pageCount: pages.length, done, totalErrors, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`Job ${jobId}: Batch-Check Buch ${bookId} abgeschlossen (${done}/${pages.length} Seiten, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Batch-Check Fehler: ${e.message}`);
@@ -934,7 +945,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail) {
 }
 
 // ── Job: Chat ─────────────────────────────────────────────────────────────────
-async function runChatJob(jobId, sessionId, userMsgId, message, pageText, userEmail) {
+async function runChatJob(jobId, sessionId, userMsgId, message, userEmail) {
   const { buildChatSystemPrompt } = await getPrompts();
   try {
     updateJob(jobId, { statusText: 'Vorbereitung…', progress: 5 });
@@ -944,6 +955,17 @@ async function runChatJob(jobId, sessionId, userMsgId, message, pageText, userEm
     if (!session) throw new Error('Session nicht gefunden');
 
     // User-Nachricht wurde bereits im Route-Handler gespeichert (userMsgId)
+
+    // Seiteninhalt frisch aus BookStack laden
+    let pageText = '';
+    if (session.page_id && session.page_id > 0) {
+      try {
+        const pd = await bsGet('pages/' + session.page_id);
+        pageText = htmlToText(pd.html || '');
+      } catch (e) {
+        logger.warn(`Job ${jobId}: Seiteninhalt konnte nicht geladen werden: ${e.message}`);
+      }
+    }
 
     // Kontext aus DB laden
     const figuren = _chatGetFiguren(session.book_id, userEmail);
@@ -963,7 +985,7 @@ async function runChatJob(jobId, sessionId, userMsgId, message, pageText, userEm
       updateJob(jobId, updates);
     };
 
-    const { text, tokensIn, tokensOut } = await callAIChat(aiMessages, systemPrompt, onProgress);
+    const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress);
 
     // Antwort parsen
     let antwort = text;
@@ -989,12 +1011,13 @@ async function runChatJob(jobId, sessionId, userMsgId, message, pageText, userEm
     );
     db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(assistantNow, session.id);
 
+    const chatTps = (genDurationMs != null && tokensOut > 0) ? tokensOut / (genDurationMs / 1000) : null;
     completeJob(jobId, {
       session_id: session.id,
       user_message_id: userMsgId,
       assistant_message_id: asstMsgResult.lastInsertRowid,
       tokensIn, tokensOut,
-    });
+    }, chatTps);
     logger.info(`Job ${jobId}: Chat session ${sessionId} abgeschlossen (${fmtTok(tokensIn)}↑ ${fmtTok(tokensOut)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Chat Fehler: ${e.message}`);
@@ -1153,7 +1176,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
       updateJob(jobId, updates);
     };
 
-    const { text, tokensIn, tokensOut } = await callAIChat(aiMessages, systemPrompt, onProgress);
+    const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress);
 
     // Antwort parsen (nur "antwort"-Feld, kein vorschlaege)
     let antwort = text;
@@ -1173,6 +1196,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     `).run(session.id, antwort, tokensIn, tokensOut, JSON.stringify(contextInfo), assistantNow);
     db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(assistantNow, session.id);
 
+    const bookChatTps = (genDurationMs != null && tokensOut > 0) ? tokensOut / (genDurationMs / 1000) : null;
     completeJob(jobId, {
       session_id: session.id,
       user_message_id: userMsgId,
@@ -1180,7 +1204,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
       tokensIn, tokensOut,
       pagesUsed: selectedPages.length,
       pagesTotal: pageContents.length,
-    });
+    }, bookChatTps);
     logger.info(`Job ${jobId}: Buch-Chat session ${sessionId} abgeschlossen (${fmtTok(tokensIn)}↑ ${fmtTok(tokensOut)}↓, ${selectedPages.length}/${pageContents.length} Seiten).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Buch-Chat Fehler: ${e.message}`);
@@ -1300,7 +1324,7 @@ router.post('/chat', jsonBody, (req, res) => {
 
   const chatLabel = session.page_name ? `Chat · ${session.page_name}` : `Chat`;
   const jobId = createJob('chat', session_id, userEmail, chatLabel);
-  enqueueJob(jobId, () => runChatJob(jobId, session_id, userMsgResult.lastInsertRowid, message.trim(), page_text || '', userEmail));
+  enqueueJob(jobId, () => runChatJob(jobId, session_id, userMsgResult.lastInsertRowid, message.trim(), userEmail));
   res.json({ jobId });
 });
 
@@ -1348,7 +1372,7 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
     const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
-    const tok = { in: 0, out: 0 };
+    const tok = { in: 0, out: 0, ms: 0 };
 
     // Bekannte Figuren für ID-Referenzen laden
     const figRows = db.prepare(
@@ -1429,7 +1453,7 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
     const orte = result.orte.map((o, i) => ({ ...o, id: o.id || ('ort_' + (i + 1)) }));
     saveOrteToDb(parseInt(bookId), orte, userEmail || null);
     deleteCheckpoint('locations', bookId, userEmail);
-    completeJob(jobId, { count: orte.length, tokensIn: tok.in, tokensOut: tok.out });
+    completeJob(jobId, { count: orte.length, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`Job ${jobId}: Schauplatz-Extraktion Buch ${bookId} abgeschlossen (${orte.length} Orte, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Schauplatz-Extraktion Fehler: ${e.message}`);
@@ -1452,7 +1476,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
     const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
-    const tok = { in: 0, out: 0 };
+    const tok = { in: 0, out: 0, ms: 0 };
 
     // Bekannte Figuren + Orte aus DB laden
     const figRows = db.prepare(`
@@ -1551,7 +1575,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
       issues: result.probleme || [],
       zusammenfassung: result.zusammenfassung,
       tokensIn: tok.in, tokensOut: tok.out,
-    });
+    }, tps(tok));
     logger.info(`Job ${jobId}: Kontinuitätsprüfung Buch ${bookId} abgeschlossen (${(result.probleme || []).length} Probleme, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Kontinuitätsprüfung Fehler: ${e.message}`);
@@ -1721,6 +1745,7 @@ router.get('/:id', (req, res) => {
     progress: job.progress, statusText,
     tokensIn: job.tokensIn, tokensOut: job.tokensOut,
     maxTokensOut: job.maxTokensOut,
+    tokensPerSec: job.tokensPerSec,
     result: job.result, error: job.error,
   });
 });

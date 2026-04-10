@@ -761,6 +761,11 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 28').run();
     logger.info('DB-Migration auf Version 28 abgeschlossen (chat_messages.role CHECK-Constraint hinzugefügt).');
   }
+  if (version < 29) {
+    db.exec('ALTER TABLE job_runs ADD COLUMN tokens_per_sec REAL');
+    db.prepare('UPDATE schema_version SET version = 29').run();
+    logger.info('DB-Migration auf Version 29 abgeschlossen (job_runs.tokens_per_sec hinzugefügt).');
+  }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).
@@ -814,7 +819,7 @@ const _stmtStartJobRun = db.prepare(
   `UPDATE job_runs SET status = 'running', started_at = ? WHERE job_id = ?`
 );
 const _stmtEndJobRun = db.prepare(
-  `UPDATE job_runs SET status = ?, ended_at = ?, tokens_in = ?, tokens_out = ?, error = ? WHERE job_id = ?`
+  `UPDATE job_runs SET status = ?, ended_at = ?, tokens_in = ?, tokens_out = ?, tokens_per_sec = ?, error = ? WHERE job_id = ?`
 );
 
 function insertJobRun(job) {
@@ -823,8 +828,8 @@ function insertJobRun(job) {
 function startJobRun(jobId, startedAt) {
   _stmtStartJobRun.run(startedAt, jobId);
 }
-function endJobRun(jobId, status, endedAt, tokensIn, tokensOut, error) {
-  _stmtEndJobRun.run(status, endedAt, tokensIn || 0, tokensOut || 0, error || null, jobId);
+function endJobRun(jobId, status, endedAt, tokensIn, tokensOut, tokensPerSec, error) {
+  _stmtEndJobRun.run(status, endedAt, tokensIn || 0, tokensOut || 0, tokensPerSec ?? null, error || null, jobId);
 }
 
 // Figuren in DB schreiben (wird von PUT-Endpoint und JSON-Migration genutzt)
