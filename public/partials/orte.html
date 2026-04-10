@@ -34,6 +34,13 @@
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
+    <div x-show="szenen.length > 0"
+         x-data="combobox('Szene…', 'Alle Szenen')"
+         x-modelable="value" x-model="orteFilterSzeneId"
+         x-effect="options = szenen.map(s => ({value: String(s.id), label: s.titel}))"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact">
+    </div>
     <span class="szenen-filter-count" x-text="orteFiltered.length + ' / ' + orte.length"></span>
   </div>
 
@@ -71,6 +78,12 @@
             <span class="ort-meta-label">Kapitel:</span>
             <template x-for="k in o.kapitel" :key="k.name">
               <span class="tag" x-text="k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
+            </template>
+          </div>
+          <div x-show="szenen.some(s => (s.ort_ids||[]).includes(o.id))" class="ort-meta-row">
+            <span class="ort-meta-label">Szenen:</span>
+            <template x-for="s in szenen.filter(s => (s.ort_ids||[]).includes(o.id))" :key="s.id">
+              <span class="tag" x-text="s.titel"></span>
             </template>
           </div>
         </div>

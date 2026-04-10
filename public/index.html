@@ -23,6 +23,43 @@
   <p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : '· Claude: ' + claudeModel"></span></p>
   <div class="user-info" x-show="currentUser">
     <span class="user-email" x-text="currentUser?.name || currentUser?.email"></span>
+    <button class="job-stats-btn" @click="alleAktualisieren()" :disabled="alleAktualisierenLoading || !selectedBookId" :title="alleAktualisierenStatus || 'Figuren, Schauplätze, Szenen, Ereignisse und Zeitstrahl neu ermitteln'">
+      <span x-show="alleAktualisierenLoading" class="spinner"></span>
+      <span x-text="alleAktualisierenLoading ? alleAktualisierenStatus : 'Alle aktualisieren'"></span>
+    </button>
+    <div class="job-stats-wrap" @click.outside="showJobStats = false">
+      <button class="job-stats-btn" :class="{ 'job-stats-btn--active': showJobStats }" @click="toggleJobStats()" title="Job-Zeiten &amp; Token-Verbrauch">Zeiten</button>
+      <div class="job-stats-panel" x-show="showJobStats" x-cloak>
+        <div class="job-stats-title">Job-Statistiken</div>
+        <div x-show="!jobStats" class="job-stats-loading">Laden…</div>
+        <div x-show="jobStats && jobStats.length === 0" class="job-stats-empty">Noch keine Jobs gelaufen.</div>
+        <table x-show="jobStats && jobStats.length > 0" class="job-stats-table">
+          <thead>
+            <tr>
+              <th>Typ</th>
+              <th title="Durchschnittliche Laufzeit (start bis ende)">Ø Dauer</th>
+              <th title="Durchschnittlicher KI-Tokenverbrauch (Eingabe + Ausgabe)">Ø Tokens</th>
+              <th>Letzter Lauf</th>
+              <th title="Erfolgreiche Läufe / Fehler">Läufe</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="row in jobStats" :key="row.type">
+              <tr>
+                <td x-text="row.typeLabel"></td>
+                <td x-text="row.avgDurationFmt"></td>
+                <td x-text="row.avgTokensFmt"></td>
+                <td x-text="row.lastRunFmt"></td>
+                <td>
+                  <span x-text="row.count"></span>
+                  <span x-show="row.errorCount > 0" class="job-stats-errors" x-text="' / ' + row.errorCount + ' ✕'"></span>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
     <a href="/auth/logout" class="logout-link">Abmelden</a>
   </div>
 </div>

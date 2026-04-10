@@ -96,6 +96,13 @@
              class="combobox-wrap combobox-wrap--compact">
         </div>
       </template>
+      <div x-show="orte.length > 0"
+           x-data="combobox('Ort…', 'Alle Orte')"
+           x-modelable="value" x-model="szenenFilterOrtId"
+           x-effect="options = orte.filter(o => szenen.some(s => (s.ort_ids||[]).includes(o.id))).map(o => ({value: o.id, label: o.name}))"
+           @click.outside="close()" @keydown="onKeydown($event)"
+           class="combobox-wrap combobox-wrap--compact">
+      </div>
       <span class="szenen-filter-count" x-text="szenenFiltered.length + ' / ' + szenen.length"></span>
     </div>
     <div class="szenen-liste">
@@ -113,6 +120,9 @@
                 :class="'gz-figur-badge--' + (figuren.find(f => f.id === figId)?.typ || 'andere')"
                 x-text="figuren.find(f => f.id === figId)?.kurzname || figuren.find(f => f.id === figId)?.name || figId">
               </span>
+            </template>
+            <template x-for="ortId in (s.ort_ids || [])" :key="'o'+ortId">
+              <span class="tag ort-typ-tag figur-szene-ort" x-text="orte.find(o => o.id === ortId)?.name || ortId"></span>
             </template>
           </div>
         </div>

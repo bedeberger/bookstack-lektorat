@@ -690,6 +690,12 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
     }
     const figurenKompakt = figRows.map(f => ({ id: f.fig_id, name: f.name, typ: f.typ || 'andere' }));
 
+    const locRows = db.prepare(
+      'SELECT id, loc_id, name FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+    ).all(parseInt(bookId), userEmail || null);
+    const orteKompakt = locRows.map(r => ({ id: r.loc_id, name: r.name }));
+    const locIdToDbId = Object.fromEntries(locRows.map(r => [r.loc_id, r.id]));
+
     const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
     const tok = { in: 0, out: 0 };
     const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
@@ -723,7 +729,7 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
       let chResult;
       try {
         chResult = await aiCall(jobId, tok,
-          buildSzenenAnalysePrompt(group.name, figurenKompakt, chText),
+          buildSzenenAnalysePrompt(group.name, figurenKompakt, orteKompakt, chText),
           SYSTEM_FIGUREN,
           fromPct, toPct, 2000,
         );
@@ -739,7 +745,8 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
           titel:     s.titel     || '(unbekannt)',
           wertung:   s.wertung   || null,
           kommentar: s.kommentar || null,
-          fig_ids:   JSON.stringify(Array.isArray(s.figuren) ? s.figuren : []),
+          fig_ids:   Array.isArray(s.figuren) ? s.figuren : [],
+          ort_ids:   Array.isArray(s.orte) ? s.orte : [],
           sort_order: allSzenen.length,
         });
       }
@@ -752,16 +759,24 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
       db.prepare('DELETE FROM figure_scenes WHERE book_id = ? AND user_email = ?').run(parseInt(bookId), userEmail || null);
       const now = new Date().toISOString();
       const ins = db.prepare(`INSERT INTO figure_scenes
-        (book_id, user_email, kapitel, seite, titel, wertung, kommentar, fig_ids, chapter_id, page_id, sort_order, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        (book_id, user_email, kapitel, seite, titel, wertung, kommentar, chapter_id, page_id, sort_order, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      const insSf = db.prepare('INSERT INTO scene_figures (scene_id, fig_id) VALUES (?, ?)');
+      const insSl = db.prepare('INSERT OR IGNORE INTO scene_locations (scene_id, location_id) VALUES (?, ?)');
       for (const s of allSzenen) {
-        ins.run(
+        const { lastInsertRowid: sceneId } = ins.run(
           parseInt(bookId), userEmail || null,
-          s.kapitel, s.seite, s.titel, s.wertung, s.kommentar, s.fig_ids,
+          s.kapitel, s.seite, s.titel, s.wertung, s.kommentar,
           chNameToIdSz[s.kapitel] ?? null,
           s.seite ? (pageNameToIdSz[s.seite] ?? null) : null,
           s.sort_order, now
         );
+        const figIds = Array.isArray(s.fig_ids) ? s.fig_ids : (() => { try { return JSON.parse(s.fig_ids); } catch { return []; } })();
+        for (const fid of figIds) insSf.run(sceneId, fid);
+        for (const locIdStr of s.ort_ids) {
+          const dbLocId = locIdToDbId[locIdStr];
+          if (dbLocId) insSl.run(sceneId, dbLocId);
+        }
       }
     })();
 
@@ -1611,6 +1626,74 @@ router.get('/queue', (req, res) => {
       statusText,
     });
   }
+  res.json(result);
+});
+
+const JOB_TYPE_LABELS = {
+  'check':                  'Lektorat',
+  'batch-check':            'Stapel-Check',
+  'review':                 'Buchbewertung',
+  'figures':                'Figuren',
+  'figure-events':          'Figuren-Ereignisse',
+  'szenen':                 'Szenen',
+  'consolidate-zeitstrahl': 'Zeitleiste',
+  'book-chat':              'Buch-Chat',
+  'chat':                   'Seiten-Chat',
+  'locations':              'Schauplätze',
+  'kontinuitaet':           'Kontinuität',
+};
+
+function fmtDuration(seconds) {
+  if (seconds == null) return '—';
+  const s = Math.round(seconds);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem > 0 ? `${m}m ${rem}s` : `${m}m`;
+}
+
+function fmtLastRun(isoStr) {
+  if (!isoStr) return '—';
+  const d = new Date(isoStr);
+  const now = new Date();
+  const diffDays = Math.floor((now - d) / 86400000);
+  if (diffDays === 0) return 'heute';
+  if (diffDays === 1) return 'gestern';
+  if (diffDays < 7) return `vor ${diffDays} Tagen`;
+  return d.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
+}
+
+router.get('/stats', (req, res) => {
+  const userEmail = req.session?.user?.email || null;
+  const rows = db.prepare(`
+    SELECT
+      type,
+      SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS count,
+      AVG(CASE WHEN status = 'done' AND started_at IS NOT NULL AND ended_at IS NOT NULL
+          THEN (julianday(ended_at) - julianday(started_at)) * 86400 ELSE NULL END) AS avgDuration,
+      MAX(CASE WHEN status = 'done' THEN ended_at ELSE NULL END) AS lastRun,
+      AVG(CASE WHEN status = 'done' THEN tokens_in  ELSE NULL END) AS avgTokensIn,
+      AVG(CASE WHEN status = 'done' THEN tokens_out ELSE NULL END) AS avgTokensOut,
+      SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS errorCount
+    FROM job_runs
+    WHERE user_email = ?
+    GROUP BY type
+    ORDER BY lastRun IS NULL, lastRun DESC
+  `).all(userEmail);
+
+  const result = rows.map(r => ({
+    type:         r.type,
+    typeLabel:    JOB_TYPE_LABELS[r.type] || r.type,
+    count:        r.count || 0,
+    errorCount:   r.errorCount || 0,
+    avgDurationFmt: fmtDuration(r.avgDuration),
+    lastRunFmt:   fmtLastRun(r.lastRun),
+    avgTokensIn:  r.avgTokensIn != null ? Math.round(r.avgTokensIn) : null,
+    avgTokensOut: r.avgTokensOut != null ? Math.round(r.avgTokensOut) : null,
+    avgTokensFmt: r.avgTokensIn != null
+      ? fmtTok(Math.round((r.avgTokensIn || 0) + (r.avgTokensOut || 0)))
+      : '—',
+  }));
   res.json(result);
 });
 

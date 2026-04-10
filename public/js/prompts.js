@@ -411,15 +411,27 @@ Kapiteltext (${pageCount} Seiten):
 ${chText}`;
 }
 
-export function buildSzenenAnalysePrompt(kapitel, figurenKompakt, chText) {
+export function buildSzenenAnalysePrompt(kapitel, figurenKompakt, orteKompakt, chText) {
   const figurenStr = figurenKompakt.length
     ? figurenKompakt.map(f => `${f.id}: ${f.name} (${f.typ})`).join('\n')
     : '(keine Figuren bekannt)';
+  const orteStr = orteKompakt.length
+    ? orteKompakt.map(o => `${o.id}: ${o.name}`).join('\n')
+    : '';
+  const orteSection = orteStr
+    ? `\nBekannte Schauplätze (nur diese IDs in «orte» verwenden):\n${orteStr}\n`
+    : '';
+  const orteField = orteStr
+    ? `\n      "orte": [${orteKompakt.slice(0, 2).map(o => `"${o.id}"`).join(', ')}],`
+    : '';
+  const orteRule = orteStr
+    ? '\n- orte: IDs der Schauplätze wo die Szene spielt; leer lassen wenn kein passender Ort bekannt'
+    : '';
   return `Analysiere die Szenen im Kapitel «${kapitel}».
 
 Bekannte Figuren (nur diese IDs in «figuren» verwenden):
 ${figurenStr}
-
+${orteSection}
 Antworte mit diesem JSON-Schema:
 {
   "szenen": [
@@ -428,7 +440,7 @@ Antworte mit diesem JSON-Schema:
       "titel": "Kurze Szenenbezeichnung (1 Satz)",
       "wertung": "stark|mittel|schwach",
       "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)",
-      "figuren": ["fig_1", "fig_2"]
+      "figuren": ["fig_1", "fig_2"]${orteField}
     }
   ]
 }
@@ -438,7 +450,7 @@ Regeln:
 - figuren: nur IDs aus der obigen Liste; leer lassen wenn keine bekannte Figur aktiv beteiligt ist
 - wertung: «stark» = spannend/überzeugend, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
 - Wenn ein Abschnitt keine erkennbaren Szenen enthält (reine Exposition, Beschreibung): «szenen» als leeres Array
-- Jede erkennbare Szene erfassen; konservativ – lieber weniger, aber treffende Einträge
+- Jede erkennbare Szene erfassen; konservativ – lieber weniger, aber treffende Einträge${orteRule}
 
 ${JSON_ONLY}
 

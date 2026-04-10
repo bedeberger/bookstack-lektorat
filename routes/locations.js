@@ -11,8 +11,8 @@ router.get('/:book_id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
 
   const rows = db.prepare(`
-    SELECT loc_id, name, typ, beschreibung, erste_erwaehnung, stimmung,
-           figuren_json, kapitel_json, updated_at
+    SELECT id, loc_id, name, typ, beschreibung, erste_erwaehnung, erste_erwaehnung_page_id, stimmung,
+           updated_at
     FROM locations
     WHERE book_id = ? AND user_email = ?
     ORDER BY sort_order, id
@@ -20,17 +20,27 @@ router.get('/:book_id', (req, res) => {
 
   if (!rows.length) return res.json(null);
 
-  const parseJson = (s) => { try { return JSON.parse(s); } catch { return []; } };
+  const locIds = rows.map(r => r.id);
+  const ph = locIds.map(() => '?').join(',');
+
+  const lfRows = db.prepare(`SELECT location_id, fig_id FROM location_figures WHERE location_id IN (${ph})`).all(...locIds);
+  const figMap = {};
+  for (const lf of lfRows) (figMap[lf.location_id] ??= []).push(lf.fig_id);
+
+  const lcRows = db.prepare(`SELECT location_id, chapter_name, haeufigkeit FROM location_chapters WHERE location_id IN (${ph}) ORDER BY haeufigkeit DESC`).all(...locIds);
+  const kapMap = {};
+  for (const lc of lcRows) (kapMap[lc.location_id] ??= []).push({ name: lc.chapter_name, haeufigkeit: lc.haeufigkeit });
 
   const orte = rows.map(r => ({
-    id:               r.loc_id,
-    name:             r.name,
-    typ:              r.typ,
-    beschreibung:     r.beschreibung,
-    erste_erwaehnung: r.erste_erwaehnung,
-    stimmung:         r.stimmung,
-    figuren:          parseJson(r.figuren_json),
-    kapitel:          parseJson(r.kapitel_json),
+    id:                       r.loc_id,
+    name:                     r.name,
+    typ:                      r.typ,
+    beschreibung:             r.beschreibung,
+    erste_erwaehnung:         r.erste_erwaehnung,
+    erste_erwaehnung_page_id: r.erste_erwaehnung_page_id || null,
+    stimmung:                 r.stimmung,
+    figuren:                  figMap[r.id] || [],
+    kapitel:                  kapMap[r.id] || [],
   }));
 
   res.json({ orte, updated_at: rows[0]?.updated_at || null });

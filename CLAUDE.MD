@@ -99,7 +99,3 @@ SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein B
 **Feature-Exklusivität (Standardverhalten):** Features überschreiben sich gegenseitig – es ist immer nur eine Hauptansicht aktiv. Buchebenen-Features (Figuren, Szenen, Ereignisse, Orte, Kontinuität, Buchbewertung, Buchstatistik, Buch-Chat) und Seitenebenen-Features (Lektorat-Editor) sind gegenseitig exklusiv. Jedes Buchebenen-Toggle ruft `_closeOtherMainCards(keep)` in `app.js` auf – das schliesst alle anderen Buchkarten und ruft `resetPage()` auf (schliesst Editor + Seiten-Features). `selectPage()` schliesst seinerseits alle Buchkarten bevor es den Editor öffnet. Neues Feature-Toggle immer nach diesem Muster implementieren.
 
 **Two-Tier-Analyse-Pattern:** `routes/jobs.js` implementiert für Review, Figurenextraktion und Buch-Chat ein Two-Tier-Muster: `SINGLE_PASS_LIMIT` = 60 000 Zeichen – darunter Single-Pass direkt an Claude, darüber Multi-Pass pro Kapitel + Konsolidierungs-Call.
-
-**Selektive Fehlerkorrektur:** `_recomputeCorrectedHtml()` wendet nur `selectedErrors` via `_applyCorrections` auf `originalHtml` an. Claudes `korrekturen_html` wird ignoriert.
-
-**Stilanmerkungen:** Beim Speichern (wenn selektierte Stile vorhanden) folgt ein zweiter AI-Call mit `buildStilkorrekturPrompt`, der die Stilkorrekturen auf `correctedHtml` anwendet bevor es in BookStack geschrieben wird.

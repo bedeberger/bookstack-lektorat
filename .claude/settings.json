@@ -10,7 +10,16 @@
       "Bash(curl -s \"https://api.github.com/repos/bedeberger/bookstack-lektorat/commits/69085e8d\")",
       "Bash(python3 -c ':*)",
       "Bash(curl -s \"https://api.github.com/repos/bedeberger/bookstack-lektorat/commits/ae74b0cb\")",
-      "Bash(curl -s \"https://api.github.com/repos/bedeberger/bookstack-lektorat/commits/a588c555\")"
+      "Bash(curl -s \"https://api.github.com/repos/bedeberger/bookstack-lektorat/commits/a588c555\")",
+      "Bash(sqlite3 lektorat.db \"SELECT * FROM locations LIMIT 5; SELECT '---'; SELECT * FROM scene_locations LIMIT 10;\")",
+      "Bash(sqlite3 lektorat.db ':*)",
+      "Bash(node -e ':*)",
+      "Bash(sqlite3 lektorat.db \"PRAGMA table_info\\(figure_scenes\\); SELECT '---'; PRAGMA table_info\\(scene_locations\\); SELECT '---'; SELECT COUNT\\(*\\) FROM figure_scenes; SELECT COUNT\\(*\\) FROM scene_locations; SELECT COUNT\\(*\\) FROM scene_figures;\")",
+      "Bash(curl -s http://localhost:3737/ -o /dev/null -w \"%{http_code}\")",
+      "Bash(curl -s \"http://localhost:3737/figures/scenes/1\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const j=JSON.parse\\(d\\); console.log\\('Scene count:', j.szenen?.length\\); console.log\\('First scene ort_ids:', j.szenen?.[0]?.ort_ids\\); console.log\\('Scenes with ort_ids:', j.szenen?.filter\\(s => s.ort_ids?.length > 0\\).length\\);\")",
+      "Bash(curl -s \"http://localhost:3737/locations/1\")",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const j=JSON.parse\\(d\\); console.log\\('Orte count:', j.orte?.length\\); console.log\\('First ort id:', j.orte?.[0]?.id, 'name:', j.orte?.[0]?.name\\);\")"
     ]
   }
 }

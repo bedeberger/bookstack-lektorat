@@ -58,15 +58,18 @@ db.exec(`
 
   -- Eigenschaften/Tags: eine Zeile pro Eigenschaft
   CREATE TABLE IF NOT EXISTS figure_tags (
-    figure_id  INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
-    tag        TEXT NOT NULL
+    figure_id INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+    tag       TEXT NOT NULL,
+    PRIMARY KEY (figure_id, tag)
   );
 
   -- Kapitelauftritte: eine Zeile pro Figur + Kapitel
   CREATE TABLE IF NOT EXISTS figure_appearances (
     figure_id    INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
     chapter_name TEXT NOT NULL,
-    haeufigkeit  INTEGER DEFAULT 1
+    haeufigkeit  INTEGER DEFAULT 1,
+    chapter_id   INTEGER,
+    UNIQUE(figure_id, chapter_name)
   );
 
   -- Lebensereignisse / Zeitstrahl: eine Zeile pro Ereignis
@@ -134,12 +137,13 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS chat_messages (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id   INTEGER NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
-    role         TEXT NOT NULL,   -- 'user' | 'assistant'
+    role         TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
     content      TEXT NOT NULL,   -- Freitext der Antwort
     vorschlaege  TEXT,            -- JSON-Array | NULL (nur bei 'assistant')
     tokens_in    INTEGER,
     tokens_out   INTEGER,
-    created_at   TEXT NOT NULL
+    created_at   TEXT NOT NULL,
+    context_info TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_cm_session_id ON chat_messages(session_id);
 
@@ -161,29 +165,60 @@ db.exec(`
     titel      TEXT NOT NULL,
     wertung    TEXT,
     kommentar  TEXT,
-    fig_ids    TEXT NOT NULL DEFAULT '[]',
-    sort_order INTEGER DEFAULT 0
+    sort_order INTEGER DEFAULT 0,
+    chapter_id INTEGER,
+    page_id    INTEGER,
+    updated_at TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_fscene_book ON figure_scenes(book_id, user_email);
 
   -- Schauplätze: eine Zeile pro Ort (per-User, per-Buch)
   CREATE TABLE IF NOT EXISTS locations (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    book_id          INTEGER NOT NULL,
-    loc_id           TEXT NOT NULL,
-    name             TEXT NOT NULL,
-    typ              TEXT,
-    beschreibung     TEXT,
-    erste_erwaehnung TEXT,
-    stimmung         TEXT,
-    figuren_json     TEXT,
-    kapitel_json     TEXT,
-    sort_order       INTEGER DEFAULT 0,
-    user_email       TEXT,
-    updated_at       TEXT NOT NULL,
+    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id                  INTEGER NOT NULL,
+    loc_id                   TEXT NOT NULL,
+    name                     TEXT NOT NULL,
+    typ                      TEXT,
+    beschreibung             TEXT,
+    erste_erwaehnung         TEXT,
+    erste_erwaehnung_page_id INTEGER,
+    stimmung                 TEXT,
+    sort_order               INTEGER DEFAULT 0,
+    user_email               TEXT,
+    updated_at               TEXT NOT NULL,
     UNIQUE(book_id, loc_id, user_email)
   );
   CREATE INDEX IF NOT EXISTS idx_loc_book_id ON locations(book_id, user_email);
+
+  -- Junction: Figuren in Szenen (ersetzt figure_scenes.fig_ids JSON)
+  CREATE TABLE IF NOT EXISTS scene_figures (
+    scene_id INTEGER NOT NULL REFERENCES figure_scenes(id) ON DELETE CASCADE,
+    fig_id   TEXT NOT NULL,
+    PRIMARY KEY (scene_id, fig_id)
+  );
+
+  -- Junction: Figuren an Schauplätzen (ersetzt locations.figuren_json)
+  CREATE TABLE IF NOT EXISTS location_figures (
+    location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+    fig_id      TEXT NOT NULL,
+    PRIMARY KEY (location_id, fig_id)
+  );
+
+  -- Junction: Szenen an Schauplätzen (neue Relation)
+  CREATE TABLE IF NOT EXISTS scene_locations (
+    scene_id    INTEGER NOT NULL REFERENCES figure_scenes(id) ON DELETE CASCADE,
+    location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+    PRIMARY KEY (scene_id, location_id)
+  );
+
+  -- Junction: Kapitel eines Schauplatzs (ersetzt locations.kapitel_json, enthält chapter_id für Stabilität)
+  CREATE TABLE IF NOT EXISTS location_chapters (
+    location_id  INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+    chapter_id   INTEGER,
+    chapter_name TEXT NOT NULL,
+    haeufigkeit  INTEGER DEFAULT 1,
+    PRIMARY KEY (location_id, chapter_name)
+  );
 
   -- Kontinuitätsprüfung-Ergebnisse
   CREATE TABLE IF NOT EXISTS continuity_checks (
@@ -243,7 +278,7 @@ db.exec(`
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id      TEXT NOT NULL UNIQUE,
     type        TEXT NOT NULL,
-    book_id     TEXT,
+    book_id     INTEGER,
     user_email  TEXT,
     label       TEXT,
     status      TEXT NOT NULL DEFAULT 'queued',
@@ -387,7 +422,8 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 12 abgeschlossen (figure_scenes Tabelle hinzugefügt).');
   }
   if (version < 13) {
-    db.exec('ALTER TABLE figure_scenes ADD COLUMN updated_at TEXT');
+    const fsCols13 = db.pragma('table_info(figure_scenes)').map(c => c.name);
+    if (!fsCols13.includes('updated_at')) db.exec('ALTER TABLE figure_scenes ADD COLUMN updated_at TEXT');
     db.prepare('UPDATE schema_version SET version = 13').run();
     logger.info('DB-Migration auf Version 13 abgeschlossen (updated_at zu figure_scenes hinzugefügt).');
   }
@@ -467,6 +503,20 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 18').run();
     logger.info('DB-Migration auf Version 18 abgeschlossen (chapter_id/page_id zu figure_appearances, figure_events, figure_scenes hinzugefügt).');
   }
+  if (version < 19) {
+    const pagesCols = db.pragma('table_info(pages)').map(c => c.name);
+    if (!pagesCols.includes('chapter_id'))   db.exec('ALTER TABLE pages ADD COLUMN chapter_id INTEGER');
+    if (!pagesCols.includes('chapter_name')) db.exec('ALTER TABLE pages ADD COLUMN chapter_name TEXT');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_pages_chapter_id ON pages(chapter_id)');
+    db.prepare('UPDATE schema_version SET version = 19').run();
+    logger.info('DB-Migration auf Version 19 abgeschlossen (pages: chapter_id + chapter_name hinzugefügt).');
+  }
+  if (version < 20) {
+    const pagesCols20 = db.pragma('table_info(pages)').map(c => c.name);
+    if (!pagesCols20.includes('preview_text')) db.exec('ALTER TABLE pages ADD COLUMN preview_text TEXT');
+    db.prepare('UPDATE schema_version SET version = 20').run();
+    logger.info('DB-Migration auf Version 20 abgeschlossen (pages: preview_text hinzugefügt).');
+  }
   if (version < 21) {
     db.exec(`
       CREATE TABLE IF NOT EXISTS zeitstrahl_events (
@@ -488,27 +538,238 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 21').run();
     logger.info('DB-Migration auf Version 21 abgeschlossen (zeitstrahl_events Tabelle hinzugefügt).');
   }
-  if (version < 19) {
-    const pagesCols = db.pragma('table_info(pages)').map(c => c.name);
-    if (!pagesCols.includes('chapter_id'))   db.exec('ALTER TABLE pages ADD COLUMN chapter_id INTEGER');
-    if (!pagesCols.includes('chapter_name')) db.exec('ALTER TABLE pages ADD COLUMN chapter_name TEXT');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_pages_chapter_id ON pages(chapter_id)');
-    db.prepare('UPDATE schema_version SET version = 19').run();
-    logger.info('DB-Migration auf Version 19 abgeschlossen (pages: chapter_id + chapter_name hinzugefügt).');
+  if (version < 22) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS scene_figures (
+        scene_id INTEGER NOT NULL REFERENCES figure_scenes(id) ON DELETE CASCADE,
+        fig_id   TEXT NOT NULL,
+        PRIMARY KEY (scene_id, fig_id)
+      );
+      CREATE TABLE IF NOT EXISTS location_figures (
+        location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+        fig_id      TEXT NOT NULL,
+        PRIMARY KEY (location_id, fig_id)
+      );
+      CREATE TABLE IF NOT EXISTS scene_locations (
+        scene_id    INTEGER NOT NULL REFERENCES figure_scenes(id) ON DELETE CASCADE,
+        location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+        PRIMARY KEY (scene_id, location_id)
+      );
+    `);
+    // Bestandsdaten: scene_figures aus figure_scenes.fig_ids befüllen (Spalte ggf. nicht mehr vorhanden)
+    const fsCols22 = db.pragma('table_info(figure_scenes)').map(c => c.name);
+    if (fsCols22.includes('fig_ids')) {
+      const sceneRows22 = db.prepare('SELECT id, fig_ids FROM figure_scenes WHERE fig_ids IS NOT NULL').all();
+      const insSf22 = db.prepare('INSERT OR IGNORE INTO scene_figures (scene_id, fig_id) VALUES (?, ?)');
+      db.transaction(() => {
+        for (const sc of sceneRows22) {
+          let ids; try { ids = JSON.parse(sc.fig_ids); } catch { ids = []; }
+          if (Array.isArray(ids)) for (const fid of ids) if (fid) insSf22.run(sc.id, fid);
+        }
+      })();
+    }
+    // Bestandsdaten: location_figures aus locations.figuren_json befüllen (Spalte ggf. nicht mehr vorhanden)
+    const locCols22 = db.pragma('table_info(locations)').map(c => c.name);
+    if (locCols22.includes('figuren_json')) {
+      const locRows22 = db.prepare('SELECT id, figuren_json FROM locations WHERE figuren_json IS NOT NULL').all();
+      const insLf22 = db.prepare('INSERT OR IGNORE INTO location_figures (location_id, fig_id) VALUES (?, ?)');
+      db.transaction(() => {
+        for (const loc of locRows22) {
+          let fids; try { fids = JSON.parse(loc.figuren_json); } catch { fids = []; }
+          if (Array.isArray(fids)) for (const fid of fids) if (fid) insLf22.run(loc.id, fid);
+        }
+      })();
+    }
+    db.prepare('UPDATE schema_version SET version = 22').run();
+    logger.info('DB-Migration auf Version 22 abgeschlossen (scene_figures, location_figures, scene_locations + Datenmigration).');
   }
-  if (version < 20) {
-    const pagesCols20 = db.pragma('table_info(pages)').map(c => c.name);
-    if (!pagesCols20.includes('preview_text')) db.exec('ALTER TABLE pages ADD COLUMN preview_text TEXT');
-    db.prepare('UPDATE schema_version SET version = 20').run();
-    logger.info('DB-Migration auf Version 20 abgeschlossen (pages: preview_text hinzugefügt).');
+
+  if (version < 23) {
+    // erste_erwaehnung_page_id zu locations hinzufügen
+    const locCols23 = db.pragma('table_info(locations)').map(c => c.name);
+    if (!locCols23.includes('erste_erwaehnung_page_id')) {
+      db.exec('ALTER TABLE locations ADD COLUMN erste_erwaehnung_page_id INTEGER');
+    }
+    // location_chapters Junction-Tabelle anlegen
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS location_chapters (
+        location_id  INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+        chapter_id   INTEGER,
+        chapter_name TEXT NOT NULL,
+        haeufigkeit  INTEGER DEFAULT 1,
+        PRIMARY KEY (location_id, chapter_name)
+      );
+    `);
+    // Bestandsdaten: location_chapters aus locations.kapitel_json befüllen (Spalte ggf. nicht mehr vorhanden)
+    const locColsKap = db.pragma('table_info(locations)').map(c => c.name);
+    if (locColsKap.includes('kapitel_json')) {
+      const locRows23 = db.prepare('SELECT id, kapitel_json FROM locations WHERE kapitel_json IS NOT NULL').all();
+      const insLc23 = db.prepare('INSERT OR IGNORE INTO location_chapters (location_id, chapter_name, haeufigkeit) VALUES (?, ?, ?)');
+      db.transaction(() => {
+        for (const loc of locRows23) {
+          let kaps; try { kaps = JSON.parse(loc.kapitel_json); } catch { kaps = []; }
+          if (Array.isArray(kaps)) {
+            for (const k of kaps) {
+              const name = typeof k === 'string' ? k : k?.name;
+              const hf   = typeof k === 'object' ? (k?.haeufigkeit || 1) : 1;
+              if (name) insLc23.run(loc.id, name, hf);
+            }
+          }
+        }
+      })();
+    }
+    // Bestandsdaten: erste_erwaehnung_page_id aus pages-Cache befüllen
+    db.prepare(`
+      UPDATE locations
+      SET erste_erwaehnung_page_id = (
+        SELECT p.page_id FROM pages p
+        WHERE p.book_id = locations.book_id
+          AND p.page_name = locations.erste_erwaehnung
+        LIMIT 1
+      )
+      WHERE erste_erwaehnung_page_id IS NULL AND erste_erwaehnung IS NOT NULL
+    `).run();
+    db.prepare('UPDATE schema_version SET version = 23').run();
+    logger.info('DB-Migration auf Version 23 abgeschlossen (location_chapters + erste_erwaehnung_page_id).');
   }
-  // Unbedingter Spalten-Check für figure_events.typ
+
+  if (version < 24) {
+    // figure_tags: PRIMARY KEY (figure_id, tag) hinzufügen – verhindert doppelte Tags
+    const hasTagPK = db.pragma('table_info(figure_tags)').some(c => c.pk > 0);
+    if (!hasTagPK) {
+      db.pragma('foreign_keys = OFF');
+      db.transaction(() => {
+        db.exec(`
+          CREATE TABLE figure_tags_new (
+            figure_id INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+            tag       TEXT NOT NULL,
+            PRIMARY KEY (figure_id, tag)
+          );
+          INSERT OR IGNORE INTO figure_tags_new SELECT figure_id, tag FROM figure_tags;
+          DROP TABLE figure_tags;
+          ALTER TABLE figure_tags_new RENAME TO figure_tags;
+        `);
+      })();
+      db.pragma('foreign_keys = ON');
+    }
+    db.prepare('UPDATE schema_version SET version = 24').run();
+    logger.info('DB-Migration auf Version 24 abgeschlossen (figure_tags PRIMARY KEY hinzugefügt).');
+  }
+
+  if (version < 25) {
+    // figure_appearances: UNIQUE(figure_id, chapter_name) – verhindert Duplikate, ermöglicht INSERT OR REPLACE
+    const hasAppUnique = db.pragma('index_list(figure_appearances)').some(i => i.unique === 1);
+    if (!hasAppUnique) {
+      db.pragma('foreign_keys = OFF');
+      db.transaction(() => {
+        db.exec(`
+          CREATE TABLE figure_appearances_new (
+            figure_id    INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+            chapter_name TEXT NOT NULL,
+            haeufigkeit  INTEGER DEFAULT 1,
+            chapter_id   INTEGER,
+            UNIQUE(figure_id, chapter_name)
+          );
+          INSERT OR IGNORE INTO figure_appearances_new (figure_id, chapter_name, haeufigkeit, chapter_id)
+            SELECT figure_id, chapter_name, SUM(haeufigkeit), MAX(chapter_id)
+            FROM figure_appearances
+            GROUP BY figure_id, chapter_name;
+          DROP TABLE figure_appearances;
+          ALTER TABLE figure_appearances_new RENAME TO figure_appearances;
+        `);
+      })();
+      db.pragma('foreign_keys = ON');
+    }
+    db.prepare('UPDATE schema_version SET version = 25').run();
+    logger.info('DB-Migration auf Version 25 abgeschlossen (figure_appearances UNIQUE-Constraint hinzugefügt).');
+  }
+
+  if (version < 26) {
+    // Veraltete JSON-Spalten entfernen – Daten leben jetzt ausschliesslich in den Junction-Tabellen
+    const fsCols26  = db.pragma('table_info(figure_scenes)').map(c => c.name);
+    const locCols26 = db.pragma('table_info(locations)').map(c => c.name);
+    if (fsCols26.includes('fig_ids'))       db.exec('ALTER TABLE figure_scenes DROP COLUMN fig_ids');
+    if (locCols26.includes('figuren_json')) db.exec('ALTER TABLE locations DROP COLUMN figuren_json');
+    if (locCols26.includes('kapitel_json')) db.exec('ALTER TABLE locations DROP COLUMN kapitel_json');
+    db.prepare('UPDATE schema_version SET version = 26').run();
+    logger.info('DB-Migration auf Version 26 abgeschlossen (veraltete JSON-Spalten fig_ids / figuren_json / kapitel_json entfernt).');
+  }
+
+  if (version < 27) {
+    // job_runs.book_id: TEXT → INTEGER (war Tippfehler, alle anderen book_id-Spalten sind INTEGER)
+    db.pragma('foreign_keys = OFF');
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE job_runs_new (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          job_id      TEXT NOT NULL UNIQUE,
+          type        TEXT NOT NULL,
+          book_id     INTEGER,
+          user_email  TEXT,
+          label       TEXT,
+          status      TEXT NOT NULL DEFAULT 'queued',
+          queued_at   TEXT NOT NULL,
+          started_at  TEXT,
+          ended_at    TEXT,
+          tokens_in   INTEGER DEFAULT 0,
+          tokens_out  INTEGER DEFAULT 0,
+          error       TEXT
+        );
+        INSERT INTO job_runs_new
+          SELECT id, job_id, type, CAST(book_id AS INTEGER), user_email, label, status,
+                 queued_at, started_at, ended_at, tokens_in, tokens_out, error
+          FROM job_runs;
+        DROP TABLE job_runs;
+        ALTER TABLE job_runs_new RENAME TO job_runs;
+        CREATE INDEX IF NOT EXISTS idx_jr_book ON job_runs(book_id);
+        CREATE INDEX IF NOT EXISTS idx_jr_user ON job_runs(user_email);
+      `);
+    })();
+    db.pragma('foreign_keys = ON');
+    db.prepare('UPDATE schema_version SET version = 27').run();
+    logger.info('DB-Migration auf Version 27 abgeschlossen (job_runs.book_id TEXT → INTEGER).');
+  }
+
+  if (version < 28) {
+    // chat_messages.role: CHECK-Constraint hinzufügen
+    const cmSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='chat_messages'").get()?.sql || '';
+    if (!cmSql.includes('CHECK')) {
+      db.pragma('foreign_keys = OFF');
+      db.transaction(() => {
+        db.exec(`
+          CREATE TABLE chat_messages_new (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id   INTEGER NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+            role         TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+            content      TEXT NOT NULL,
+            vorschlaege  TEXT,
+            tokens_in    INTEGER,
+            tokens_out   INTEGER,
+            created_at   TEXT NOT NULL,
+            context_info TEXT
+          );
+          INSERT INTO chat_messages_new
+            SELECT id, session_id, role, content, vorschlaege, tokens_in, tokens_out, created_at, context_info
+            FROM chat_messages;
+          DROP TABLE chat_messages;
+          ALTER TABLE chat_messages_new RENAME TO chat_messages;
+          CREATE INDEX IF NOT EXISTS idx_cm_session_id ON chat_messages(session_id);
+        `);
+      })();
+      db.pragma('foreign_keys = ON');
+    }
+    db.prepare('UPDATE schema_version SET version = 28').run();
+    logger.info('DB-Migration auf Version 28 abgeschlossen (chat_messages.role CHECK-Constraint hinzugefügt).');
+  }
+
+  // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
+  //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).
+  //    Diese Checks sind idempotent und laufen bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {
     db.exec("ALTER TABLE figure_events ADD COLUMN typ TEXT DEFAULT 'persoenlich'");
     logger.info('figure_events.typ nachgerüstet.');
   }
-  // Unbedingter Spalten-Check für v19 + v20 (falls Fallback Version gesetzt hat bevor Migration lief)
   const pagesCols20Check = db.pragma('table_info(pages)').map(c => c.name);
   if (pagesCols20Check.length > 0 && !pagesCols20Check.includes('chapter_id')) {
     db.exec('ALTER TABLE pages ADD COLUMN chapter_id INTEGER');
@@ -523,7 +784,6 @@ function runMigrations() {
     db.exec('ALTER TABLE pages ADD COLUMN preview_text TEXT');
     logger.info('pages.preview_text nachgerüstet.');
   }
-  // Unbedingter Spalten-Check für v18 figure_scenes (falls Fallback Version gesetzt hat bevor Migration lief)
   const fsColsCheck = db.pragma('table_info(figure_scenes)').map(c => c.name);
   if (fsColsCheck.length > 0 && !fsColsCheck.includes('chapter_id')) {
     db.exec('ALTER TABLE figure_scenes ADD COLUMN chapter_id INTEGER');
@@ -533,7 +793,6 @@ function runMigrations() {
     db.exec('ALTER TABLE figure_scenes ADD COLUMN page_id INTEGER');
     logger.info('figure_scenes.page_id nachgerüstet.');
   }
-  // Unbedingter Spalten-Check für v9 (falls Fallback Version gesetzt hat bevor Migration lief)
   const bshColsCheck = db.pragma('table_info(book_stats_history)').map(c => c.name);
   if (!bshColsCheck.includes('chapter_count')) {
     db.exec('ALTER TABLE book_stats_history ADD COLUMN chapter_count INTEGER');
@@ -584,8 +843,8 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
     const insFig = db.prepare(`
       INSERT INTO figures (book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sort_order, user_email, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    const insTag = db.prepare('INSERT INTO figure_tags (figure_id, tag) VALUES (?, ?)');
-    const insApp = db.prepare('INSERT INTO figure_appearances (figure_id, chapter_name, chapter_id, haeufigkeit) VALUES (?, ?, ?, ?)');
+    const insTag = db.prepare('INSERT OR IGNORE INTO figure_tags (figure_id, tag) VALUES (?, ?)');
+    const insApp = db.prepare('INSERT OR IGNORE INTO figure_appearances (figure_id, chapter_name, chapter_id, haeufigkeit) VALUES (?, ?, ?, ?)');
     const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, kapitel, seite, chapter_id, page_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, user_email) VALUES (?, ?, ?, ?, ?, ?)');
 
@@ -830,6 +1089,45 @@ function reconcilePageIds() {
     )
     WHERE page_id IS NOT NULL
   `).run();
+
+  // 11. location_chapters: chapter_id aus chapter_name befüllen
+  db.prepare(`
+    UPDATE location_chapters
+    SET chapter_id = (
+      SELECT DISTINCT p.chapter_id FROM pages p
+      JOIN locations l ON l.id = location_chapters.location_id
+      WHERE p.book_id = l.book_id
+        AND p.chapter_name = location_chapters.chapter_name
+        AND p.chapter_id IS NOT NULL
+      LIMIT 1
+    )
+    WHERE chapter_id IS NULL AND chapter_name IS NOT NULL
+  `).run();
+
+  // 12. location_chapters: chapter_name per chapter_id aktualisieren (Umbenennungen heilen)
+  db.prepare(`
+    UPDATE location_chapters
+    SET chapter_name = (
+      SELECT DISTINCT p.chapter_name FROM pages p
+      JOIN locations l ON l.id = location_chapters.location_id
+      WHERE p.book_id = l.book_id
+        AND p.chapter_id = location_chapters.chapter_id
+      LIMIT 1
+    )
+    WHERE chapter_id IS NOT NULL
+  `).run();
+
+  // 13. locations: erste_erwaehnung_page_id aus erste_erwaehnung befüllen / aktualisieren
+  db.prepare(`
+    UPDATE locations
+    SET erste_erwaehnung_page_id = (
+      SELECT p.page_id FROM pages p
+      WHERE p.book_id = locations.book_id
+        AND p.page_name = locations.erste_erwaehnung
+      LIMIT 1
+    )
+    WHERE erste_erwaehnung IS NOT NULL
+  `).run();
 }
 
 // ── User-Token-Verwaltung ─────────────────────────────────────────────────────
@@ -856,28 +1154,64 @@ function getAnyUserToken() { return _getAnyToken.get(); }
 /** Gibt alle gespeicherten Tokens zurück (für User-iterierenden Sync). */
 function getAllUserTokens() { return _getAllTokens.all(); }
 
-// Orte in DB schreiben (wird von PUT-Endpoint und Job genutzt)
+// Orte in DB schreiben (wird von PUT-Endpoint und Job genutzt).
+// Verwendet UPSERT by loc_id statt Delete+Re-Insert, damit bestehende
+// scene_locations-Einträge (ON DELETE CASCADE) erhalten bleiben.
 function saveOrteToDb(bookId, orte, userEmail) {
   const now = new Date().toISOString();
+  const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
+  const emailVal  = userEmail ? [userEmail] : [];
+
   db.transaction(() => {
-    if (userEmail) {
-      db.prepare('DELETE FROM locations WHERE book_id = ? AND user_email = ?').run(bookId, userEmail);
-    } else {
-      db.prepare('DELETE FROM locations WHERE book_id = ? AND user_email IS NULL').run(bookId);
+    // Bestehende loc_ids (mit ihren integer IDs) holen
+    const existing = db.prepare(
+      `SELECT id, loc_id FROM locations WHERE book_id = ? AND ${emailCond}`
+    ).all(bookId, ...emailVal);
+    const existingMap = Object.fromEntries(existing.map(r => [r.loc_id, r.id]));
+
+    const newLocIds = new Set(orte.map(o => o.id));
+
+    // Entfernte Orte löschen (CASCADE entfernt location_figures, location_chapters, scene_locations)
+    for (const { id, loc_id } of existing) {
+      if (!newLocIds.has(loc_id)) {
+        db.prepare('DELETE FROM locations WHERE id = ?').run(id);
+      }
     }
+
+    const upd = db.prepare(`
+      UPDATE locations SET name=?, typ=?, beschreibung=?, erste_erwaehnung=?, stimmung=?,
+        sort_order=?, updated_at=?
+      WHERE id=?`);
     const ins = db.prepare(`
       INSERT INTO locations (book_id, loc_id, name, typ, beschreibung, erste_erwaehnung, stimmung,
-        figuren_json, kapitel_json, sort_order, user_email, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        sort_order, user_email, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    const delLf = db.prepare('DELETE FROM location_figures WHERE location_id = ?');
+    const delLc = db.prepare('DELETE FROM location_chapters WHERE location_id = ?');
+    const insLf = db.prepare('INSERT INTO location_figures (location_id, fig_id) VALUES (?, ?)');
+    const insLc = db.prepare('INSERT INTO location_chapters (location_id, chapter_name, haeufigkeit) VALUES (?, ?, ?)');
+
     for (let i = 0; i < orte.length; i++) {
       const o = orte[i];
-      ins.run(
-        bookId, o.id, o.name, o.typ || null, o.beschreibung || null,
-        o.erste_erwaehnung || null, o.stimmung || null,
-        JSON.stringify(o.figuren || []),
-        JSON.stringify(o.kapitel || []),
-        i, userEmail || null, now
-      );
+      let locDbId = existingMap[o.id];
+      if (locDbId !== undefined) {
+        // Existierende Zeile aktualisieren – integer id (und scene_locations) bleibt erhalten
+        upd.run(o.name, o.typ || null, o.beschreibung || null,
+          o.erste_erwaehnung || null, o.stimmung || null,
+          i, now, locDbId);
+        delLf.run(locDbId);
+        delLc.run(locDbId);
+      } else {
+        // Neue Zeile einfügen
+        const { lastInsertRowid } = ins.run(
+          bookId, o.id, o.name, o.typ || null, o.beschreibung || null,
+          o.erste_erwaehnung || null, o.stimmung || null,
+          i, userEmail || null, now
+        );
+        locDbId = lastInsertRowid;
+      }
+      for (const fid of (o.figuren || [])) insLf.run(locDbId, fid);
+      for (const k of (o.kapitel || [])) insLc.run(locDbId, k.name, k.haeufigkeit || 1);
     }
   })();
 }

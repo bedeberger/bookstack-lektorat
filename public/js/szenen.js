@@ -9,8 +9,9 @@ export const szenenMethods = {
     if (this.showSzenenCard) { this.showSzenenCard = false; return; }
     this._closeOtherMainCards('szenen');
     this.showSzenenCard = true;
-    // Figuren laden falls noch nicht vorhanden (für Figurennamen in Szenen)
+    // Figuren und Orte laden falls noch nicht vorhanden (für Namen in Szenen)
     if (!this.figuren.length) await this.loadFiguren(this.selectedBookId);
+    if (!this.orte.length) await this.loadOrte(this.selectedBookId);
     await this.loadSzenen(this.selectedBookId);
     // Prüfen ob bereits ein Job für dieses Buch läuft
     if (!this._szenenPollTimer && !this.szenenLoading) {

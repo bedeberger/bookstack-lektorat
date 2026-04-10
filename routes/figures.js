@@ -38,19 +38,34 @@ router.get('/scenes/:book_id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
 
   const rows = db.prepare(`
-    SELECT kapitel, seite, titel, wertung, kommentar, fig_ids, updated_at
+    SELECT id, kapitel, seite, titel, wertung, kommentar, updated_at
     FROM figure_scenes
     WHERE book_id = ? AND user_email = ?
     ORDER BY sort_order
   `).all(bookId, userEmail);
 
+  const sceneIds = rows.map(r => r.id);
+  const sfRows = sceneIds.length
+    ? db.prepare(`SELECT scene_id, fig_id FROM scene_figures WHERE scene_id IN (${sceneIds.map(() => '?').join(',')})`).all(...sceneIds)
+    : [];
+  const sfMap = {};
+  for (const sf of sfRows) (sfMap[sf.scene_id] ??= []).push(sf.fig_id);
+
+  const slRows = sceneIds.length
+    ? db.prepare(`SELECT sl.scene_id, l.loc_id FROM scene_locations sl JOIN locations l ON sl.location_id = l.id WHERE sl.scene_id IN (${sceneIds.map(() => '?').join(',')})`).all(...sceneIds)
+    : [];
+  const slMap = {};
+  for (const sl of slRows) (slMap[sl.scene_id] ??= []).push(sl.loc_id);
+
   const szenen = rows.map(s => ({
+    id:        s.id,
     kapitel:   s.kapitel,
     seite:     s.seite,
     titel:     s.titel,
     wertung:   s.wertung,
     kommentar: s.kommentar,
-    fig_ids:   (() => { try { return JSON.parse(s.fig_ids); } catch { return []; } })(),
+    fig_ids:   sfMap[s.id] || [],
+    ort_ids:   slMap[s.id] || [],
   }));
 
   const updated_at = rows.length ? rows[0].updated_at : null;
@@ -103,18 +118,15 @@ router.get('/:book_id', (req, res) => {
   const relMap = {};
   for (const r of rels) (relMap[r.from_fig_id] ??= []).push({ figur_id: r.to_fig_id, typ: r.typ, beschreibung: r.beschreibung });
 
-  const scenes = db.prepare(
-    'SELECT kapitel, seite, fig_ids FROM figure_scenes WHERE book_id = ? AND user_email = ?'
+  const sceneFigRows = db.prepare(
+    'SELECT fs.kapitel, fs.seite, sf.fig_id FROM figure_scenes fs JOIN scene_figures sf ON sf.scene_id = fs.id WHERE fs.book_id = ? AND fs.user_email = ?'
   ).all(bookId, userEmail);
   const seitenMap = {};
-  for (const sc of scenes) {
-    let ids; try { ids = JSON.parse(sc.fig_ids); } catch { ids = []; }
-    for (const figId of ids) {
-      if (!seitenMap[figId]) seitenMap[figId] = [];
-      const key = sc.kapitel + '::' + (sc.seite || '');
-      if (!seitenMap[figId].some(x => x.kapitel + '::' + x.seite === key)) {
-        seitenMap[figId].push({ kapitel: sc.kapitel, seite: sc.seite || '' });
-      }
+  for (const sc of sceneFigRows) {
+    if (!seitenMap[sc.fig_id]) seitenMap[sc.fig_id] = [];
+    const key = sc.kapitel + '::' + (sc.seite || '');
+    if (!seitenMap[sc.fig_id].some(x => x.kapitel + '::' + x.seite === key)) {
+      seitenMap[sc.fig_id].push({ kapitel: sc.kapitel, seite: sc.seite || '' });
     }
   }
 

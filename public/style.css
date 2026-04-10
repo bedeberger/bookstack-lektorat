@@ -172,6 +172,78 @@ code {
   color: var(--color-text);
 }
 
+/* ── Job-Stats Panel ──────────────────────────────────────────────────────── */
+.job-stats-wrap {
+  position: relative;
+}
+.job-stats-btn {
+  font: inherit;
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.job-stats-btn:hover,
+.job-stats-btn--active {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.job-stats-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem 1rem;
+  min-width: 440px;
+  z-index: 200;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  animation: cardFadeIn 0.12s ease both;
+}
+.job-stats-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 0.6rem;
+}
+.job-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.job-stats-table th {
+  text-align: left;
+  color: var(--color-muted);
+  font-weight: 500;
+  padding: 2px 12px 5px 0;
+  border-bottom: 0.5px solid var(--color-border);
+  white-space: nowrap;
+}
+.job-stats-table td {
+  padding: 4px 12px 4px 0;
+  border-bottom: 0.5px solid rgba(255,255,255,0.04);
+  white-space: nowrap;
+}
+.job-stats-table tr:last-child td {
+  border-bottom: none;
+}
+.job-stats-errors {
+  color: #fc8181;
+  font-size: 11px;
+}
+.job-stats-empty,
+.job-stats-loading {
+  color: var(--color-muted);
+  font-size: 12px;
+  padding: 4px 0;
+}
+
 .token-setup-card {
   max-width: 480px;
 }
@@ -1375,11 +1447,17 @@ ins {
 }
 
 .gz-figur-badge {
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
-  padding: 1px 7px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
   background: var(--color-tag-bg);
   color: var(--color-muted);
+}
+
+.gz-figuren-row .ort-typ-tag {
+  min-width: 0;
+  text-align: left;
 }
 
 .gz-figur-badge--hauptfigur { background: #D4E8FF; color: #1d4b73; }

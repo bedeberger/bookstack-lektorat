@@ -203,6 +203,7 @@ document.addEventListener('alpine:init', () => {
     szenenFilterFigurId: '',
     szenenFilterKapitel: '',
     szenenFilterSeite: '',
+    szenenFilterOrtId: '',
     _consolidatePollTimer: null,
     _szenenPollTimer: null,
     _figurenNetwork: null,
@@ -246,6 +247,7 @@ document.addEventListener('alpine:init', () => {
     selectedOrtId: null,
     orteFilterFigurId: '',
     orteFilterKapitel: '',
+    orteFilterSzeneId: '',
     _ortePollTimer: null,
     showKontinuitaetCard: false,
     kontinuitaetLoading: false,
@@ -255,6 +257,10 @@ document.addEventListener('alpine:init', () => {
     _kontinuitaetPollTimer: null,
     jobQueueItems: [],
     _jobQueueTimer: null,
+    showJobStats: false,
+    jobStats: null,
+    alleAktualisierenLoading: false,
+    alleAktualisierenStatus: '',
 
     // ── Computed ─────────────────────────────────────────────────────────────
     get szenenNachKapitel() {
@@ -295,17 +301,18 @@ document.addEventListener('alpine:init', () => {
     get orteFiltered() {
       return this.orte.filter(o =>
         (!this.orteFilterFigurId || (o.figuren || []).includes(this.orteFilterFigurId)) &&
-        (!this.orteFilterKapitel || (o.kapitel || []).some(k => k.name === this.orteFilterKapitel))
+        (!this.orteFilterKapitel || (o.kapitel || []).some(k => k.name === this.orteFilterKapitel)) &&
+        (!this.orteFilterSzeneId || this.szenen.some(s => String(s.id) === String(this.orteFilterSzeneId) && (s.ort_ids || []).includes(o.id)))
       );
     },
     get szenenFiltered() {
-      let list = this.szenen.filter(s =>
+      return this.szenen.filter(s =>
         (!this.szenenFilterWertung || s.wertung === this.szenenFilterWertung) &&
         (!this.szenenFilterFigurId || (s.fig_ids || []).includes(this.szenenFilterFigurId)) &&
         (!this.szenenFilterKapitel || s.kapitel === this.szenenFilterKapitel) &&
-        (!this.szenenFilterSeite || s.seite === this.szenenFilterSeite)
+        (!this.szenenFilterSeite || s.seite === this.szenenFilterSeite) &&
+        (!this.szenenFilterOrtId || (s.ort_ids || []).includes(this.szenenFilterOrtId))
       );
-      return list;
     },
 
     get statusHtml() {
@@ -488,6 +495,95 @@ document.addEventListener('alpine:init', () => {
       }, 2000);
     },
 
+    _waitForJob(jobId) {
+      return new Promise((resolve) => {
+        const timer = setInterval(async () => {
+          try {
+            const resp = await fetch('/jobs/' + jobId);
+            if (!resp.ok) return;
+            const job = await resp.json();
+            if (job.status === 'running' || job.status === 'queued') return;
+            clearInterval(timer);
+            resolve(job);
+          } catch (e) {
+            console.error('[_waitForJob]', e);
+          }
+        }, 2000);
+      });
+    },
+
+    async alleAktualisieren() {
+      if (!this.selectedBookId || this.alleAktualisierenLoading) return;
+      this.alleAktualisierenLoading = true;
+      const bookId = this.selectedBookId;
+      const bookName = this.selectedBookName;
+      try {
+        // 1) Figuren
+        this.alleAktualisierenStatus = '1/5 Figuren…';
+        const { jobId: figJobId } = await fetch('/jobs/figures', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName }),
+        }).then(r => r.json());
+        await this._waitForJob(figJobId);
+        await this.loadFiguren(bookId);
+
+        // 2) Schauplätze
+        this.alleAktualisierenStatus = '2/5 Schauplätze…';
+        const { jobId: orteJobId } = await fetch('/jobs/locations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName }),
+        }).then(r => r.json());
+        await this._waitForJob(orteJobId);
+        await this.loadOrte(bookId);
+
+        // 3) Szenen
+        this.alleAktualisierenStatus = '3/5 Szenen…';
+        const { jobId: szenenJobId } = await fetch('/jobs/szenen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName }),
+        }).then(r => r.json());
+        await this._waitForJob(szenenJobId);
+        await this.loadSzenen(bookId);
+
+        // 4) Ereignisse
+        this.alleAktualisierenStatus = '4/5 Ereignisse…';
+        const { jobId: ereignisseJobId } = await fetch('/jobs/figure-events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName }),
+        }).then(r => r.json());
+        await this._waitForJob(ereignisseJobId);
+        this.globalZeitstrahl = [];
+        await this.loadFiguren(bookId);
+
+        // 5) Konsolidieren
+        this.alleAktualisierenStatus = '5/5 Konsolidieren…';
+        if (this.globalZeitstrahl.length) {
+          const { jobId: consJobId, empty } = await fetch('/jobs/consolidate-zeitstrahl', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName, events: this.globalZeitstrahl }),
+          }).then(r => r.json());
+          if (!empty) {
+            const consJob = await this._waitForJob(consJobId);
+            if (Array.isArray(consJob.result?.ereignisse)) {
+              this.globalZeitstrahl = consJob.result.ereignisse;
+            }
+          }
+        }
+        this.alleAktualisierenStatus = 'Fertig.';
+        setTimeout(() => { if (this.alleAktualisierenStatus === 'Fertig.') this.alleAktualisierenStatus = ''; }, 4000);
+      } catch (e) {
+        console.error('[alleAktualisieren]', e);
+        this.alleAktualisierenStatus = `Fehler: ${e.message}`;
+      } finally {
+        this.alleAktualisierenLoading = false;
+      }
+    },
+
     // Generiertes Status-HTML für laufende Jobs: Spinner + statusText + Token-Info.
     // Wird von review.js, figuren.js und lektorat.js (batchCheck) verwendet.
     _runningJobStatus(statusText, tokIn, tokOut, maxTokOut, progress) {
@@ -543,6 +639,17 @@ document.addEventListener('alpine:init', () => {
         this._startJobQueuePoll();
       } catch {
         this.setStatus('Fehler beim Laden der Konfiguration.');
+      }
+    },
+
+    async toggleJobStats() {
+      this.showJobStats = !this.showJobStats;
+      if (this.showJobStats && !this.jobStats) {
+        try {
+          this.jobStats = await fetch('/jobs/stats').then(r => r.json());
+        } catch {
+          this.jobStats = [];
+        }
       }
     },
 
@@ -811,6 +918,9 @@ document.addEventListener('alpine:init', () => {
       this.szenenLoading = false;
       this.szenenFilterWertung = '';
       this.szenenFilterFigurId = '';
+      this.szenenFilterKapitel = '';
+      this.szenenFilterSeite = '';
+      this.szenenFilterOrtId = '';
       if (this._consolidatePollTimer) { clearInterval(this._consolidatePollTimer); this._consolidatePollTimer = null; }
       if (this._szenenPollTimer) { clearInterval(this._szenenPollTimer); this._szenenPollTimer = null; }
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
@@ -825,6 +935,7 @@ document.addEventListener('alpine:init', () => {
       this.orteLoading = false;
       this.orteFilterFigurId = '';
       this.orteFilterKapitel = '';
+      this.orteFilterSzeneId = '';
       if (this._ortePollTimer) { clearInterval(this._ortePollTimer); this._ortePollTimer = null; }
       this.showKontinuitaetCard = false;
       this.kontinuitaetResult = null;

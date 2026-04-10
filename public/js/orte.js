@@ -30,6 +30,7 @@ export const orteMethods = {
     if (this.showOrteCard) { this.showOrteCard = false; return; }
     this._closeOtherMainCards('orte');
     this.showOrteCard = true;
+    if (!this.szenen.length) await this.loadSzenen(this.selectedBookId);
     await this.loadOrte(this.selectedBookId);
     // Prüfen ob bereits ein Job läuft
     if (!this._ortePollTimer && !this.orteLoading) {
