@@ -720,8 +720,16 @@ document.addEventListener('alpine:init', () => {
         localStorage.removeItem('lektorat_check_job_' + p.id);
       } catch (e) { console.error('[selectPage active-job check]', e); }
 
-      if (p.previewText) {
-        const preview = p.previewText.length > PREVIEW_MAX_CHARS ? p.previewText.slice(0, PREVIEW_MAX_CHARS) + ' …' : p.previewText;
+      let rawPreview = p.previewText;
+      if (!rawPreview) {
+        try {
+          const pd = await this.bsGet('pages/' + p.id);
+          rawPreview = htmlToText(pd.html || '').trim() || null;
+          p.previewText = rawPreview;
+        } catch (e) { console.error('[selectPage live-preview]', e); }
+      }
+      if (rawPreview) {
+        const preview = rawPreview.length > PREVIEW_MAX_CHARS ? rawPreview.slice(0, PREVIEW_MAX_CHARS) + ' …' : rawPreview;
         this.currentPageEmpty = !preview;
         this.analysisOut = preview
           ? `<div class="preview-text">${escHtml(preview)}</div><div class="preview-hint">Vorschau · «Prüfen» starten für Lektorat</div>`

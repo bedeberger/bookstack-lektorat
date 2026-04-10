@@ -19,7 +19,8 @@
       "Bash(curl -s \"http://localhost:3737/figures/scenes/1\")",
       "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const j=JSON.parse\\(d\\); console.log\\('Scene count:', j.szenen?.length\\); console.log\\('First scene ort_ids:', j.szenen?.[0]?.ort_ids\\); console.log\\('Scenes with ort_ids:', j.szenen?.filter\\(s => s.ort_ids?.length > 0\\).length\\);\")",
       "Bash(curl -s \"http://localhost:3737/locations/1\")",
-      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const j=JSON.parse\\(d\\); console.log\\('Orte count:', j.orte?.length\\); console.log\\('First ort id:', j.orte?.[0]?.id, 'name:', j.orte?.[0]?.name\\);\")"
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const j=JSON.parse\\(d\\); console.log\\('Orte count:', j.orte?.length\\); console.log\\('First ort id:', j.orte?.[0]?.id, 'name:', j.orte?.[0]?.name\\);\")",
+      "Bash(grep -n \"previewText\\\\|preview_text\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/*.js)"
     ]
   }
 }
