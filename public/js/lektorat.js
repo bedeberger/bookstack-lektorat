@@ -231,8 +231,8 @@ export const lektoratMethods = {
         }
       } catch (e) {
         console.error('[saveCorrections] Stil-Call fehlgeschlagen:', e);
-        this.setStatus('Fehler bei Stilkorrektur: ' + e.message);
-        return;
+        this.setStatus('Stilkorrektur fehlgeschlagen – speichere übrige Korrekturen…', true);
+        // finalHtml bleibt ohne Stilkorrekturen, der Rest wird trotzdem gespeichert
       }
     }
 
