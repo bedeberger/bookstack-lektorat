@@ -100,7 +100,7 @@
     <div x-data="combobox('Buch wählen…')"
          x-modelable="value" x-model="selectedBookId"
          x-effect="options = books.map(b => ({value: String(b.id), label: b.name}))"
-         @combobox-change="bookReviewHistory = []; selectedBookReviewId = null;"
+         @combobox-change="bookReviewHistory = []; selectedBookReviewId = null; loadPages();"
          @click.outside="close()"
          @keydown="onKeydown($event)"
          class="combobox-wrap">
