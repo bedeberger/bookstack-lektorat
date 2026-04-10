@@ -1,0 +1,65 @@
+<!-- Buch-Einstellungen -->
+<div class="card" x-show="showBookSettingsCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title" x-text="'Einstellungen: ' + selectedBookName"></span>
+    <div class="card-actions">
+      <button @click="saveBookSettings()" :disabled="bookSettingsSaving || bookSettingsLoading">
+        <span x-show="bookSettingsSaving" class="spinner"></span>
+        <span x-text="bookSettingsSaving ? 'Speichert…' : 'Speichern'"></span>
+      </button>
+    </div>
+  </div>
+
+  <div x-show="bookSettingsLoading" class="muted-msg">Einstellungen werden geladen…</div>
+
+  <div x-show="!bookSettingsLoading" class="book-settings-form">
+    <div class="book-settings-row">
+      <label class="book-settings-label">Sprache</label>
+      <div class="book-settings-options">
+        <label class="book-settings-option">
+          <input type="radio" name="bs-lang" value="de" x-model="bookSettingsLanguage" @change="bookSettingsRegion = (bookSettingsLanguage === 'de' ? 'CH' : 'US')">
+          Deutsch
+        </label>
+        <label class="book-settings-option">
+          <input type="radio" name="bs-lang" value="en" x-model="bookSettingsLanguage" @change="bookSettingsRegion = (bookSettingsLanguage === 'de' ? 'CH' : 'US')">
+          English
+        </label>
+      </div>
+    </div>
+
+    <div class="book-settings-row">
+      <label class="book-settings-label">Region</label>
+      <div class="book-settings-options">
+        <template x-if="bookSettingsLanguage === 'de'">
+          <div class="book-settings-options">
+            <label class="book-settings-option">
+              <input type="radio" name="bs-region" value="CH" x-model="bookSettingsRegion">
+              Schweiz (de-CH)
+            </label>
+            <label class="book-settings-option">
+              <input type="radio" name="bs-region" value="DE" x-model="bookSettingsRegion">
+              Deutschland (de-DE)
+            </label>
+          </div>
+        </template>
+        <template x-if="bookSettingsLanguage === 'en'">
+          <div class="book-settings-options">
+            <label class="book-settings-option">
+              <input type="radio" name="bs-region" value="US" x-model="bookSettingsRegion">
+              USA (en-US)
+            </label>
+            <label class="book-settings-option">
+              <input type="radio" name="bs-region" value="GB" x-model="bookSettingsRegion">
+              United Kingdom (en-GB)
+            </label>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <p class="book-settings-locale-display" x-text="'Aktive Locale: ' + bookSettingsLocaleDisplay()"></p>
+
+    <p class="book-settings-saved" x-show="bookSettingsSaved">Einstellungen gespeichert.</p>
+    <p class="book-settings-error" x-show="bookSettingsError" x-text="bookSettingsError"></p>
+  </div>
+</div>

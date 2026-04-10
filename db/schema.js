@@ -294,6 +294,14 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
   INSERT INTO schema_version SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
+
+  -- Sprach- und Regionkonfiguration pro Buch
+  CREATE TABLE IF NOT EXISTS book_settings (
+    book_id    INTEGER PRIMARY KEY,
+    language   TEXT NOT NULL DEFAULT 'de',
+    region     TEXT NOT NULL DEFAULT 'CH',
+    updated_at TEXT NOT NULL
+  );
 `);
 
 // Schema-Migrationen (versioniert)
@@ -765,6 +773,18 @@ function runMigrations() {
     db.exec('ALTER TABLE job_runs ADD COLUMN tokens_per_sec REAL');
     db.prepare('UPDATE schema_version SET version = 29').run();
     logger.info('DB-Migration auf Version 29 abgeschlossen (job_runs.tokens_per_sec hinzugefügt).');
+  }
+  if (version < 30) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS book_settings (
+        book_id    INTEGER PRIMARY KEY,
+        language   TEXT NOT NULL DEFAULT 'de',
+        region     TEXT NOT NULL DEFAULT 'CH',
+        updated_at TEXT NOT NULL
+      )
+    `);
+    db.prepare('UPDATE schema_version SET version = 30').run();
+    logger.info('DB-Migration auf Version 30 abgeschlossen (book_settings Tabelle hinzugefügt).');
   }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
@@ -1251,4 +1271,30 @@ function deleteCheckpoint(jobType, bookId, userEmail) {
   _deleteCheckpoint.run(jobType, parseInt(bookId), userEmail || '');
 }
 
-module.exports = { db, saveFigurenToDb, updateFigurenEvents, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun };
+// ── Buch-Einstellungen (Sprache + Region) ─────────────────────────────────────
+
+const _getBookSettings = db.prepare('SELECT language, region FROM book_settings WHERE book_id = ?');
+const _upsertBookSettings = db.prepare(`
+  INSERT INTO book_settings (book_id, language, region, updated_at)
+  VALUES (?, ?, ?, ?)
+  ON CONFLICT(book_id) DO UPDATE SET
+    language=excluded.language, region=excluded.region, updated_at=excluded.updated_at
+`);
+
+/** Gibt {language, region} für ein Buch zurück. Default: de / CH. */
+function getBookSettings(bookId) {
+  return _getBookSettings.get(parseInt(bookId)) || { language: 'de', region: 'CH' };
+}
+
+/** Locale-Key für ein Buch: z.B. "de-CH", "en-US". */
+function getBookLocale(bookId) {
+  const { language, region } = getBookSettings(bookId);
+  return `${language}-${region}`;
+}
+
+/** Speichert/aktualisiert Sprache und Region für ein Buch. */
+function saveBookSettings(bookId, language, region) {
+  _upsertBookSettings.run(parseInt(bookId), language, region, new Date().toISOString());
+}
+
+module.exports = { db, saveFigurenToDb, updateFigurenEvents, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings };

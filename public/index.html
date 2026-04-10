@@ -142,6 +142,10 @@
       <span class="feature-tile-title">Kontinuität</span>
       <span class="feature-tile-desc">Widersprüche prüfen</span>
     </button>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showBookSettingsCard }" @click="toggleBookSettingsCard()" title="Sprache und Region für dieses Buch konfigurieren">
+      <span class="feature-tile-title">Einstellungen</span>
+      <span class="feature-tile-desc">Sprache &amp; Region</span>
+    </button>
   </div>
 
 </div>
@@ -246,6 +250,7 @@
 <div id="partial-editor"></div>
 <div id="partial-chat"></div>
 <div id="partial-book-chat"></div>
+<div id="partial-book-settings"></div>
 
 </div><!-- end layout-main -->
 </div><!-- end layout -->

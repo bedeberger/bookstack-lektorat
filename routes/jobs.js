@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
-const { db, saveFigurenToDb, updateFigurenEvents, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun } = require('../db/schema');
+const { db, saveFigurenToDb, updateFigurenEvents, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale } = require('../db/schema');
 const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -19,6 +19,17 @@ async function getPrompts() {
     _prompts.configurePrompts(_promptConfig);
   }
   return _prompts;
+}
+
+/**
+ * Gibt das Locale-Prompts-Objekt für ein Buch zurück.
+ * Liest Sprache+Region aus book_settings, fällt auf de-CH zurück wenn nicht konfiguriert.
+ * @param {number|string} bookId
+ */
+async function getBookPrompts(bookId) {
+  const { getLocalePrompts } = await getPrompts();
+  const locale = bookId ? getBookLocale(bookId) : 'de-CH';
+  return getLocalePrompts(locale);
 }
 
 const router = express.Router();
@@ -392,7 +403,8 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
 
 // ── Job: Buchbewertung ────────────────────────────────────────────────────────
 async function runReviewJob(jobId, bookId, bookName, userEmail) {
-  const { SYSTEM_BUCHBEWERTUNG, SYSTEM_KAPITELANALYSE, buildBookReviewSinglePassPrompt, buildChapterAnalysisPrompt, buildBookReviewMultiPassPrompt } = await getPrompts();
+  const { buildBookReviewSinglePassPrompt, buildChapterAnalysisPrompt, buildBookReviewMultiPassPrompt } = await getPrompts();
+  const { SYSTEM_BUCHBEWERTUNG, SYSTEM_KAPITELANALYSE } = await getBookPrompts(bookId);
   try {
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
@@ -476,7 +488,8 @@ async function runReviewJob(jobId, bookId, bookName, userEmail) {
 
 // ── Job: Figurenextraktion (Basis – ohne Lebensereignisse) ───────────────────
 async function runFiguresJob(jobId, bookId, bookName, userEmail) {
-  const { SYSTEM_FIGUREN, buildFiguresBasisSinglePassPrompt, buildFiguresBasisChapterPrompt, buildFiguresBasisConsolidationPrompt } = await getPrompts();
+  const { buildFiguresBasisSinglePassPrompt, buildFiguresBasisChapterPrompt, buildFiguresBasisConsolidationPrompt } = await getPrompts();
+  const { SYSTEM_FIGUREN } = await getBookPrompts(bookId);
 
   try {
     const cp = loadCheckpoint('figures', bookId, userEmail);
@@ -573,7 +586,8 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail) {
 
 // ── Job: Lebensereignisse-Zuordnung ──────────────────────────────────────────
 async function runFigureEventsJob(jobId, bookId, bookName, userEmail) {
-  const { SYSTEM_FIGUREN, buildFiguresEventAssignmentPrompt } = await getPrompts();
+  const { buildFiguresEventAssignmentPrompt } = await getPrompts();
+  const { SYSTEM_FIGUREN } = await getBookPrompts(bookId);
 
   try {
     updateJob(jobId, { statusText: 'Lade Figuren und Seiten…', progress: 0 });
@@ -680,7 +694,8 @@ async function runFigureEventsJob(jobId, bookId, bookName, userEmail) {
 }
 // ── Job: Szenenanalyse ────────────────────────────────────────────────────────
 async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
-  const { SYSTEM_FIGUREN, buildSzenenAnalysePrompt } = await getPrompts();
+  const { buildSzenenAnalysePrompt } = await getPrompts();
+  const { SYSTEM_FIGUREN } = await getBookPrompts(bookId);
   try {
     const cp = loadCheckpoint('szenen', bookId, userEmail);
     if (cp) logger.info(`Job ${jobId}: Szenenanalyse Buch ${bookId} – Checkpoint gefunden (${cp.nextGi} Kapitel bereits fertig), setze fort.`);
@@ -801,7 +816,8 @@ async function runSzenenAnalyseJob(jobId, bookId, bookName, userEmail) {
 }
 // ── Job: Zeitstrahl-Konsolidierung ────────────────────────────────────────────
 async function runConsolidateZeitstrahlJob(jobId, events, bookId, userEmail) {
-  const { SYSTEM_FIGUREN, buildZeitstrahlConsolidationPrompt } = await getPrompts();
+  const { buildZeitstrahlConsolidationPrompt } = await getPrompts();
+  const { SYSTEM_FIGUREN } = await getBookPrompts(bookId);
   try {
     updateJob(jobId, { statusText: 'Konsolidiere Zeitstrahl…', progress: 5 });
     const tok = { in: 0, out: 0, ms: 0 };
@@ -822,7 +838,8 @@ async function runConsolidateZeitstrahlJob(jobId, events, bookId, userEmail) {
 
 // ── Job: Seiten-Lektorat ──────────────────────────────────────────────────────
 async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
-  const { SYSTEM_LEKTORAT, buildLektoratPrompt } = await getPrompts();
+  const { buildLektoratPrompt } = await getPrompts();
+  const { SYSTEM_LEKTORAT, STOPWORDS: lektoratStopwords, ERKLAERUNG_RULE: lektoratErklaerungRule } = await getBookPrompts(bookId);
   try {
     updateJob(jobId, { statusText: 'Lade Seiteninhalt…', progress: 5 });
 
@@ -844,7 +861,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     updateJob(jobId, { statusText: 'KI analysiert…', progress: 10 });
 
     const result = await aiCall(jobId, tok,
-      buildLektoratPrompt(text, html),
+      buildLektoratPrompt(text, html, { stopwords: lektoratStopwords, erklaerungRule: lektoratErklaerungRule }),
       SYSTEM_LEKTORAT,
       10, 97, 5000,
     );
@@ -886,7 +903,8 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
 
 // ── Job: Batch-Lektorat ───────────────────────────────────────────────────────
 async function runBatchCheckJob(jobId, bookId, userEmail) {
-  const { SYSTEM_LEKTORAT, buildBatchLektoratPrompt } = await getPrompts();
+  const { buildBatchLektoratPrompt } = await getPrompts();
+  const { SYSTEM_LEKTORAT, STOPWORDS: batchStopwords, ERKLAERUNG_RULE: batchErklaerungRule } = await getBookPrompts(bookId);
   try {
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const pages = await bsGetAll('pages?book_id=' + bookId);
@@ -913,7 +931,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail) {
         if (!text) continue;
 
         const result = await aiCall(jobId, tok,
-          buildBatchLektoratPrompt(text),
+          buildBatchLektoratPrompt(text, { stopwords: batchStopwords, erklaerungRule: batchErklaerungRule }),
           SYSTEM_LEKTORAT,
           fromPct, toPct, 2000,
         );
@@ -970,7 +988,8 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail) {
     // Kontext aus DB laden
     const figuren = _chatGetFiguren(session.book_id, userEmail);
     const review  = _chatGetLatestReview(session.book_id, userEmail);
-    const systemPrompt = buildChatSystemPrompt(session.page_name || 'Unbekannte Seite', pageText, figuren, review);
+    const { SYSTEM_CHAT: chatSysPrompt } = await getBookPrompts(session.book_id);
+    const systemPrompt = buildChatSystemPrompt(session.page_name || 'Unbekannte Seite', pageText, figuren, review, chatSysPrompt);
 
     // Konversationshistorie aufbauen (identisch zu chat.js /send)
     const historyWithoutLast = _chatBuildMessageHistory(session.id).slice(0, -1);
@@ -1027,17 +1046,23 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail) {
 
 // ── Job: Buch-Chat ────────────────────────────────────────────────────────────
 
-const _BOOK_CHAT_STOPWORDS = new Set(_promptConfig.stopwords || []);
+// Fallback-Stoppwörter für Book-Chat (Default-Locale); wird pro Job locale-spezifisch überschrieben
+const _BOOK_CHAT_STOPWORDS = new Set(
+  (() => {
+    const def = _promptConfig.defaultLocale || 'de-CH';
+    return (_promptConfig.locales?.[def]?.stopwords) || _promptConfig.stopwords || [];
+  })()
+);
 
 // Seiten-Cache: Key `${bookId}:${userEmail}` → { pages: [{name, id, slug, book_slug, text}], loadedAt }
 // TTL 10 Minuten – verhindert, dass jede Nachricht alle BookStack-API-Calls wiederholt.
 const _bookPageCache = new Map();
 const _BOOK_PAGE_CACHE_TTL_MS = 10 * 60 * 1000;
 
-function _scorePageRelevance(query, text) {
+function _scorePageRelevance(query, text, stopwords = _BOOK_CHAT_STOPWORDS) {
   const tokens = query.toLowerCase()
     .split(/[\s,\.!?;:«»"'()\[\]{}]+/)
-    .filter(w => w.length >= 3 && !_BOOK_CHAT_STOPWORDS.has(w));
+    .filter(w => w.length >= 3 && !stopwords.has(w));
   if (!tokens.length) return 0;
   const textLow = text.toLowerCase();
   let score = 0;
@@ -1056,6 +1081,9 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?')
       .get(parseInt(sessionId), userEmail);
     if (!session) throw new Error('Session nicht gefunden');
+
+    const { SYSTEM_BOOK_CHAT: bookChatSys, STOPWORDS: bookChatSW } = await getBookPrompts(session.book_id);
+    const bookChatStopwords = new Set(bookChatSW || []);
 
     if (!userToken) throw new Error('Kein BookStack-Token in der Session – bitte neu einloggen.');
 
@@ -1118,7 +1146,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
 
     // ── Schritt 4: Relevanz-Scoring + Seitenauswahl ─────────────────────────────
     updateJob(jobId, { statusText: 'Relevante Seiten auswählen…', progress: 42 });
-    const scored = pageContents.map(p => ({ ...p, score: _scorePageRelevance(message, p.text) }));
+    const scored = pageContents.map(p => ({ ...p, score: _scorePageRelevance(message, p.text, bookChatStopwords) }));
     const anyScore = scored.some(p => p.score > 0);
     if (anyScore) scored.sort((a, b) => b.score - a.score);
 
@@ -1157,7 +1185,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     // ── System-Prompt + KI-Aufruf ───────────────────────────────────────────────
     const figuren = _chatGetFiguren(session.book_id, userEmail);
     const review  = _chatGetLatestReview(session.book_id, userEmail);
-    const systemPrompt = buildBookChatSystemPrompt(session.book_name || '', selectedPages, figuren, review);
+    const systemPrompt = buildBookChatSystemPrompt(session.book_name || '', selectedPages, figuren, review, bookChatSys);
     const contextInfo = {
       pages:      selectedPages.map(p => ({ name: p.name, id: p.id, slug: p.slug, book_slug: p.book_slug })),
       totalPages: pageContents.length,
@@ -1358,7 +1386,8 @@ router.post('/book-chat', jsonBody, (req, res) => {
 
 // ── Job: Schauplatz-Extraktion ────────────────────────────────────────────────
 async function runLocationsJob(jobId, bookId, bookName, userEmail) {
-  const { SYSTEM_ORTE, buildLocationsSinglePassPrompt, buildLocationsChapterPrompt, buildLocationsConsolidationPrompt } = await getPrompts();
+  const { buildLocationsSinglePassPrompt, buildLocationsChapterPrompt, buildLocationsConsolidationPrompt } = await getPrompts();
+  const { SYSTEM_ORTE } = await getBookPrompts(bookId);
 
   try {
     const cp = loadCheckpoint('locations', bookId, userEmail);
@@ -1462,7 +1491,8 @@ async function runLocationsJob(jobId, bookId, bookName, userEmail) {
 }
 // ── Job: Kontinuitätsprüfung ──────────────────────────────────────────────────
 async function runKontinuitaetJob(jobId, bookId, bookName, userEmail) {
-  const { SYSTEM_KONTINUITAET, buildKontinuitaetSinglePassPrompt, buildKontinuitaetChapterFactsPrompt, buildKontinuitaetCheckPrompt } = await getPrompts();
+  const { buildKontinuitaetSinglePassPrompt, buildKontinuitaetChapterFactsPrompt, buildKontinuitaetCheckPrompt } = await getPrompts();
+  const { SYSTEM_KONTINUITAET } = await getBookPrompts(bookId);
 
   try {
     const cp = loadCheckpoint('kontinuitaet', bookId, userEmail);

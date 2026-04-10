@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
-const { db } = require('../db/schema');
+const { db, getBookLocale } = require('../db/schema');
 const logger = require('../logger');
 
 // prompt-config.json einmalig laden; fehlt die Datei, bricht der Server ab.
@@ -16,6 +16,12 @@ async function getPrompts() {
     _prompts.configurePrompts(_promptConfig);
   }
   return _prompts;
+}
+
+async function getBookPrompts(bookId) {
+  const { getLocalePrompts } = await getPrompts();
+  const locale = bookId ? getBookLocale(bookId) : 'de-CH';
+  return getLocalePrompts(locale);
 }
 
 const router = express.Router();
@@ -222,11 +228,13 @@ router.post('/send', jsonBody, async (req, res) => {
 
     // System-Prompt aus prompts.js (Single Source of Truth)
     const { buildChatSystemPrompt } = await getPrompts();
+    const { SYSTEM_CHAT: chatSys } = await getBookPrompts(session.book_id);
     const systemPrompt = buildChatSystemPrompt(
       session.page_name || 'Unbekannte Seite',
       page_text || '',
       figuren,
-      review
+      review,
+      chatSys
     );
 
     // Konversationshistorie aufbauen (aktuelle User-Nachricht nicht doppelt senden)

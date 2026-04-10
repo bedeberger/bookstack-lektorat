@@ -15,8 +15,33 @@ function buildSystemNoJson(prefix, rules) {
   return `${prefix}\n\n${rules}`;
 }
 
+// ── Interne Locale-Map ────────────────────────────────────────────────────────
+// Key: localeKey (z.B. 'de-CH') → { SYSTEM_LEKTORAT, ..., STOPWORDS, ERKLAERUNG_RULE }
+let _localeMap = new Map();
+let _defaultLocale = 'de-CH';
+
+/** Baut ein Locale-Prompts-Objekt aus einer Locale-Config (aus prompt-config.json). */
+function _buildLocalePrompts(localeConfig, globalErklaerungRule) {
+  const rules = localeConfig.baseRules || '';
+  const sp    = localeConfig.systemPrompts || {};
+  return {
+    ERKLAERUNG_RULE:      globalErklaerungRule || '',
+    STOPWORDS:            Array.isArray(localeConfig.stopwords) ? localeConfig.stopwords : [],
+    SYSTEM_LEKTORAT:      buildSystem(sp.lektorat       || '', rules),
+    SYSTEM_BUCHBEWERTUNG: buildSystem(sp.buchbewertung  || '', rules),
+    SYSTEM_KAPITELANALYSE:buildSystem(sp.kapitelanalyse || '', rules),
+    SYSTEM_FIGUREN:       buildSystem(sp.figuren        || '', rules),
+    SYSTEM_STILKORREKTUR: buildSystem(sp.stilkorrektur  || '', rules),
+    SYSTEM_CHAT:          buildSystemNoJson(sp.chat     || '', rules),
+    SYSTEM_BOOK_CHAT:     buildSystemNoJson(sp.buchchat || '', rules),
+    SYSTEM_ORTE:          buildSystem(sp.orte           || 'Du bist ein Literaturanalytiker. Du identifizierst Schauplätze und Orte präzise und konservativ – nur was im Text eindeutig belegt ist.', rules),
+    SYSTEM_KONTINUITAET:  buildSystem(sp.kontinuitaet   || 'Du bist ein sorgfältiger Literaturlektor. Du prüfst einen Roman auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.', rules),
+  };
+}
+
 // Live-Exports – werden durch configurePrompts() gesetzt (Pflicht vor erstem Prompt-Aufruf).
 // Alle importierenden Module erhalten via ESM-Live-Binding immer den aktuellen Wert.
+// Diese Globals entsprechen stets dem defaultLocale und dienen der Rückwärtskompatibilität.
 export let ERKLAERUNG_RULE      = null;
 export let STOPWORDS            = [];
 export let SYSTEM_LEKTORAT      = null;
@@ -31,25 +56,61 @@ export let SYSTEM_KONTINUITAET  = null;
 
 /**
  * Setzt alle System-Prompts aus dem promptConfig-Objekt (geladen aus prompt-config.json).
+ * Unterstützt sowohl das neue Locales-Format (cfg.locales) als auch das alte Flat-Format
+ * (cfg.baseRules direkt) für Rückwärtskompatibilität.
  * Pflichtaufruf beim App-Start – wirft einen Fehler wenn cfg fehlt.
  * @param {Object} cfg  promptConfig-Objekt aus /config
  */
 export function configurePrompts(cfg) {
   if (!cfg) throw new Error('prompt-config.json fehlt oder ist ungültig – Prompts können nicht konfiguriert werden.');
-  const rules = cfg.baseRules;
-  if (!rules) throw new Error('prompt-config.json: Pflichtfeld "baseRules" fehlt.');
-  const sp = cfg.systemPrompts || {};
-  ERKLAERUNG_RULE       = cfg.erklaerungRule || '';
-  STOPWORDS             = Array.isArray(cfg.stopwords) ? cfg.stopwords : [];
-  SYSTEM_LEKTORAT       = buildSystem(sp.lektorat       || '', rules);
-  SYSTEM_BUCHBEWERTUNG  = buildSystem(sp.buchbewertung  || '', rules);
-  SYSTEM_KAPITELANALYSE = buildSystem(sp.kapitelanalyse || '', rules);
-  SYSTEM_FIGUREN        = buildSystem(sp.figuren        || '', rules);
-  SYSTEM_STILKORREKTUR  = buildSystem(sp.stilkorrektur  || '', rules);
-  SYSTEM_CHAT           = buildSystemNoJson(sp.chat     || '', rules);
-  SYSTEM_BOOK_CHAT      = buildSystemNoJson(sp.buchchat || '', rules);
-  SYSTEM_ORTE           = buildSystem(sp.orte           || 'Du bist ein Literaturanalytiker für deutschsprachige Texte. Du identifizierst Schauplätze und Orte präzise und konservativ – nur was im Text eindeutig belegt ist.', rules);
-  SYSTEM_KONTINUITAET   = buildSystem(sp.kontinuitaet   || 'Du bist ein sorgfältiger Literaturlektor für deutschsprachige Texte. Du prüfst einen Roman auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.', rules);
+
+  _localeMap.clear();
+
+  if (cfg.locales && typeof cfg.locales === 'object') {
+    // ── Neues Format: locales-Map ─────────────────────────────────────────────
+    _defaultLocale = cfg.defaultLocale || 'de-CH';
+    for (const [key, localeCfg] of Object.entries(cfg.locales)) {
+      _localeMap.set(key, _buildLocalePrompts(localeCfg, cfg.erklaerungRule));
+    }
+    // Fallback: Falls defaultLocale nicht in der Map → ersten Eintrag nehmen
+    if (!_localeMap.has(_defaultLocale) && _localeMap.size > 0) {
+      _defaultLocale = _localeMap.keys().next().value;
+    }
+  } else {
+    // ── Altes Flat-Format (Rückwärtskompatibilität) ───────────────────────────
+    const rules = cfg.baseRules;
+    if (!rules) throw new Error('prompt-config.json: Pflichtfeld "baseRules" oder "locales" fehlt.');
+    _defaultLocale = 'de-CH';
+    _localeMap.set('de-CH', _buildLocalePrompts({
+      baseRules:     cfg.baseRules,
+      stopwords:     cfg.stopwords,
+      systemPrompts: cfg.systemPrompts || {},
+    }, cfg.erklaerungRule));
+  }
+
+  // Globale Exports auf Default-Locale setzen (ESM-Live-Binding für Client-Code)
+  const def = _localeMap.get(_defaultLocale) || {};
+  ERKLAERUNG_RULE       = def.ERKLAERUNG_RULE       ?? '';
+  STOPWORDS             = def.STOPWORDS             ?? [];
+  SYSTEM_LEKTORAT       = def.SYSTEM_LEKTORAT       ?? null;
+  SYSTEM_BUCHBEWERTUNG  = def.SYSTEM_BUCHBEWERTUNG  ?? null;
+  SYSTEM_KAPITELANALYSE = def.SYSTEM_KAPITELANALYSE ?? null;
+  SYSTEM_FIGUREN        = def.SYSTEM_FIGUREN        ?? null;
+  SYSTEM_STILKORREKTUR  = def.SYSTEM_STILKORREKTUR  ?? null;
+  SYSTEM_CHAT           = def.SYSTEM_CHAT           ?? null;
+  SYSTEM_BOOK_CHAT      = def.SYSTEM_BOOK_CHAT      ?? null;
+  SYSTEM_ORTE           = def.SYSTEM_ORTE           ?? null;
+  SYSTEM_KONTINUITAET   = def.SYSTEM_KONTINUITAET   ?? null;
+}
+
+/**
+ * Gibt das Locale-Prompts-Objekt für einen gegebenen Locale-Key zurück.
+ * Fällt auf den Default-Locale zurück wenn der Key unbekannt ist.
+ * @param {string} localeKey  z.B. 'de-CH', 'en-US'
+ * @returns {{ SYSTEM_LEKTORAT, SYSTEM_BUCHBEWERTUNG, ..., STOPWORDS, ERKLAERUNG_RULE }}
+ */
+export function getLocalePrompts(localeKey) {
+  return _localeMap.get(localeKey) ?? _localeMap.get(_defaultLocale) ?? {};
 }
 
 export function buildStilkorrekturPrompt(html, styles) {
@@ -74,21 +135,23 @@ ${html}`;
 }
 
 // Wiederholung-Regeln für Lektorat-Prompts (beide Varianten)
-function _buildWiederholungBlock() {
-  const sw = STOPWORDS.length > 0
-    ? `\n- Stoppwörter nie melden (auch flektierte Formen): ${STOPWORDS.join(', ')}`
+// sw: explizite Stoppwort-Liste; fällt auf globales STOPWORDS zurück (Default-Locale)
+function _buildWiederholungBlock(sw = STOPWORDS) {
+  const swNote = sw.length > 0
+    ? `\n- Stoppwörter nie melden (auch flektierte Formen): ${sw.join(', ')}`
     : '';
   return `
 Wiederholung-Regeln (typ: «wiederholung»):
 - Nur Inhaltswörter, die auffällig oft vorkommen: mind. 3× im Text ODER 2× in enger Nähe (5 Sätze)
-- Keine Pronomen, Hilfsverben, Artikel, Konjunktionen, Präpositionen, Eigennamen${sw}
+- Keine Pronomen, Hilfsverben, Artikel, Konjunktionen, Präpositionen, Eigennamen${swNote}
 - «original»: vollständiger Satz zeichengenau aus dem Text (damit die Textstelle eindeutig auffindbar ist)
 - «korrektur»: derselbe Satz mit dem besten Synonym – exakt gleiche grammatische Form (Kasus, Numerus, Tempus)
 - Synonym-Selbsttest vor jedem Eintrag: Klingt der Satz danach natürlich? Bedeutung erhalten? Passt zum Autorenstil?`;
 }
 
 // Batch-Variante ohne korrekturen_html (spart Output-Tokens, für Server-Side-Jobs)
-export function buildBatchLektoratPrompt(text) {
+// opts.stopwords / opts.erklaerungRule überschreiben die globalen Defaults (für locale-aware Aufrufe)
+export function buildBatchLektoratPrompt(text, { stopwords = STOPWORDS, erklaerungRule = ERKLAERUNG_RULE } = {}) {
   return `Analysiere diesen deutschsprachigen Text auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
 
 WICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen, müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.
@@ -101,7 +164,7 @@ Antworte mit diesem JSON-Schema:
       "original": "das fehlerhafte Wort oder die fehlerhafte Phrase – bei «wiederholung»: vollständiger Satz zeichengenau aus dem Text",
       "korrektur": "die korrekte Version – bei «wiederholung»: derselbe Satz mit Synonym",
       "kontext": "der Satz in dem der Fehler vorkommt (bei «wiederholung» gleich wie «original»)",
-      "erklaerung": "kurze Erklärung auf Deutsch (nur diesen einen Mangel beschreiben) ${ERKLAERUNG_RULE}"
+      "erklaerung": "kurze Erklärung (nur diesen einen Mangel beschreiben) ${erklaerungRule}"
     }
   ],
   "szenen": [
@@ -119,7 +182,7 @@ Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
 - Wenn die Seite keine erkennbaren Szenen enthält (z.B. rein beschreibender Text, Exposition): «szenen» als leeres Array zurückgeben
 - wertung: «stark» = funktioniert gut, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
-${_buildWiederholungBlock()}
+${_buildWiederholungBlock(stopwords)}
 
 Text:
 ${text}`;
@@ -500,9 +563,9 @@ ${JSON.stringify(events, null, 2)}`;
  * @param {Array}    figuren    Figuren-Array aus der DB (kann leer sein)
  * @param {Object}   review     Letzte Buchbewertung aus der DB (kann null sein)
  */
-export function buildChatSystemPrompt(pageName, pageText, figuren, review) {
+export function buildChatSystemPrompt(pageName, pageText, figuren, review, systemOverride = null) {
   const parts = [
-    SYSTEM_CHAT,
+    systemOverride ?? SYSTEM_CHAT,
     '',
     `Aktuelle Seite: «${pageName}»`,
     '',
@@ -557,9 +620,9 @@ export function buildChatSystemPrompt(pageName, pageText, figuren, review) {
  * @param {Array}   figuren        Figuren-Array aus der DB (kann leer sein)
  * @param {Object}  review         Letzte Buchbewertung aus der DB (kann null sein)
  */
-export function buildBookChatSystemPrompt(bookName, relevantPages, figuren, review) {
+export function buildBookChatSystemPrompt(bookName, relevantPages, figuren, review, systemOverride = null) {
   const parts = [
-    SYSTEM_BOOK_CHAT,
+    systemOverride ?? SYSTEM_BOOK_CHAT,
     '',
     `Buch: «${bookName}»`,
     '',
@@ -802,8 +865,8 @@ Regeln:
 ${JSON_ONLY}`;
 }
 
-export function buildLektoratPrompt(text, html) {
-  return `Analysiere diesen deutschsprachigen Text auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
+export function buildLektoratPrompt(text, html, { stopwords = STOPWORDS, erklaerungRule = ERKLAERUNG_RULE } = {}) {
+  return `Analysiere diesen Text auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
 
 WICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen (z.B. ein Gallizismus und separate Anführungszeichen-Problematik), müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.
 
@@ -815,7 +878,7 @@ Antworte mit diesem JSON-Schema:
       "original": "das fehlerhafte Wort oder die fehlerhafte Phrase – bei «wiederholung»: vollständiger Satz zeichengenau aus dem Text",
       "korrektur": "die korrekte Version – bei «wiederholung»: derselbe Satz mit Synonym",
       "kontext": "der Satz in dem der Fehler vorkommt (bei «wiederholung» gleich wie «original»)",
-      "erklaerung": "kurze Erklärung auf Deutsch (nur diesen einen Mangel beschreiben) ${ERKLAERUNG_RULE}"
+      "erklaerung": "kurze Erklärung (nur diesen einen Mangel beschreiben) ${erklaerungRule}"
     }
   ],
   "korrekturen_html": "vollständiges korrigiertes HTML – behalte ALLE Tags exakt bei, ändere nur fehlerhafte Textstellen",
@@ -834,7 +897,7 @@ Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
 - Wenn die Seite keine erkennbaren Szenen enthält (z.B. rein beschreibender Text, Exposition): «szenen» als leeres Array zurückgeben
 - wertung: «stark» = funktioniert gut, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
-${_buildWiederholungBlock()}
+${_buildWiederholungBlock(stopwords)}
 
 Originaltext:
 ${text}

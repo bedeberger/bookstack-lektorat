@@ -17,6 +17,7 @@ import { bookChatMethods } from './book-chat.js';
 import { szenenMethods } from './szenen.js';
 import { orteMethods } from './orte.js';
 import { kontinuitaetMethods } from './kontinuitaet.js';
+import { bookSettingsMethods } from './book-settings.js';
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
@@ -261,6 +262,13 @@ document.addEventListener('alpine:init', () => {
     jobStats: null,
     alleAktualisierenLoading: false,
     alleAktualisierenStatus: '',
+    showBookSettingsCard: false,
+    bookSettingsLanguage: 'de',
+    bookSettingsRegion: 'CH',
+    bookSettingsLoading: false,
+    bookSettingsSaving: false,
+    bookSettingsSaved: false,
+    bookSettingsError: '',
 
     // ── Computed ─────────────────────────────────────────────────────────────
     get szenenNachKapitel() {
@@ -609,7 +617,7 @@ document.addEventListener('alpine:init', () => {
     async _loadPartials() {
       const names = [
         'buchreview', 'figuren', 'szenen', 'ereignisse', 'orte',
-        'kontinuitaet', 'bookstats', 'editor', 'chat', 'book-chat',
+        'kontinuitaet', 'bookstats', 'editor', 'chat', 'book-chat', 'book-settings',
       ];
       await Promise.all(names.map(async name => {
         const html = await fetch(`/partials/${name}.html`).then(r => r.text());
@@ -678,6 +686,7 @@ document.addEventListener('alpine:init', () => {
       this.showEreignisseCard = false;
       this.showSzenenCard = false;
       this.showOrteCard = false;
+      this.showBookSettingsCard = false;
       this.showKontinuitaetCard = false;
       // Laufenden Poll stoppen – Seite wechselt, laufender Check gehört zur alten Seite
       if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
@@ -818,6 +827,7 @@ document.addEventListener('alpine:init', () => {
       if (keep !== 'bookChat') this.showBookChatCard = false;
       if (keep !== 'orte') this.showOrteCard = false;
       if (keep !== 'kontinuitaet') this.showKontinuitaetCard = false;
+      if (keep !== 'bookSettings') this.showBookSettingsCard = false;
       this.resetPage();
     },
 
@@ -952,6 +962,9 @@ document.addEventListener('alpine:init', () => {
       this.kontinuitaetProgress = 0;
       this.kontinuitaetLoading = false;
       if (this._kontinuitaetPollTimer) { clearInterval(this._kontinuitaetPollTimer); this._kontinuitaetPollTimer = null; }
+      this.showBookSettingsCard = false;
+      this.bookSettingsSaved = false;
+      this.bookSettingsError = '';
       this.resetChat();
       this.resetBookChat();
     },
@@ -998,5 +1011,6 @@ document.addEventListener('alpine:init', () => {
     ...szenenMethods,
     ...orteMethods,
     ...kontinuitaetMethods,
+    ...bookSettingsMethods,
   }));
 });
