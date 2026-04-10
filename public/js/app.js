@@ -681,6 +681,7 @@ document.addEventListener('alpine:init', () => {
       this.showKontinuitaetCard = false;
       // Laufenden Poll stoppen – Seite wechselt, laufender Check gehört zur alten Seite
       if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
+      this.resetChat();
       this.currentPage = p;
       this.currentPageEmpty = false;
       this.originalHtml = null;
