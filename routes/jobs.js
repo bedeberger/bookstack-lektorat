@@ -963,7 +963,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail) {
 }
 
 // ── Job: Chat ─────────────────────────────────────────────────────────────────
-async function runChatJob(jobId, sessionId, userMsgId, message, userEmail) {
+async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userToken) {
   const { buildChatSystemPrompt } = await getPrompts();
   try {
     updateJob(jobId, { statusText: 'Vorbereitung…', progress: 5 });
@@ -974,11 +974,19 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail) {
 
     // User-Nachricht wurde bereits im Route-Handler gespeichert (userMsgId)
 
-    // Seiteninhalt frisch aus BookStack laden
+    // Seiteninhalt frisch aus BookStack laden (User-Token bevorzugt, analog zu runCheckJob)
     let pageText = '';
     if (session.page_id && session.page_id > 0) {
       try {
-        const pd = await bsGet('pages/' + session.page_id);
+        const authHeader = userToken
+          ? `Token ${userToken.id}:${userToken.pw}`
+          : `Token ${process.env.TOKEN_ID || ''}:${process.env.TOKEN_KENNWORT || ''}`;
+        const pdResp = await fetch(`${BS_URL}/api/pages/${session.page_id}`, {
+          headers: { Authorization: authHeader },
+          signal: AbortSignal.timeout(30000),
+        });
+        if (!pdResp.ok) throw new Error(`BookStack ${pdResp.status}: ${await pdResp.text()}`);
+        const pd = await pdResp.json();
         pageText = htmlToText(pd.html || '');
       } catch (e) {
         logger.warn(`Job ${jobId}: Seiteninhalt konnte nicht geladen werden: ${e.message}`);
@@ -1350,9 +1358,13 @@ router.post('/chat', jsonBody, (req, res) => {
   ).run(session.id, message.trim(), now);
   db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(now, session.id);
 
+  const userToken = req.session?.bookstackToken
+    ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw }
+    : null;
+
   const chatLabel = session.page_name ? `Chat · ${session.page_name}` : `Chat`;
   const jobId = createJob('chat', session_id, userEmail, chatLabel);
-  enqueueJob(jobId, () => runChatJob(jobId, session_id, userMsgResult.lastInsertRowid, message.trim(), userEmail));
+  enqueueJob(jobId, () => runChatJob(jobId, session_id, userMsgResult.lastInsertRowid, message.trim(), userEmail, userToken));
   res.json({ jobId });
 });
 
