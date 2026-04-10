@@ -230,6 +230,7 @@ document.addEventListener('alpine:init', () => {
     chatLoading: false,
     chatStatus: '',
     _chatPollTimer: null,
+    _chatPendingRefresh: false,
     showBookChatCard: false,
     bookChatSessions: [],
     bookChatMessages: [],

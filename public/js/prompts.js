@@ -198,9 +198,11 @@ export function buildBookReviewSinglePassPrompt(bookName, pageCount, bookText) {
 - Schwächen und Verbesserungspotenzial
 - Konkrete Empfehlungen für den Autor
 
+GEWICHTUNG: Stil, Sprache und literarische Qualität sind die zentralen Bewertungskriterien und fliessen stärker in die Gesamtnote ein als Rechtschreib- oder Grammatikfehler.
+
 Antworte mit diesem JSON-Schema:
 {
-  "gesamtnote": "Zahl von 1 (sehr schwach) bis 5 (ausgezeichnet)",
+  "gesamtnote": "Zahl von 1 (sehr schwach) bis 6 (ausgezeichnet)",
   "gesamtnote_begruendung": "Ein Satz warum diese Note",
   "zusammenfassung": "2-3 Sätze Gesamteindruck",
   "struktur": "Analyse des Aufbaus und der Struktur (3-4 Sätze)",
@@ -245,6 +247,8 @@ export function buildBookReviewMultiPassPrompt(bookName, chapterAnalyses, totalP
   return `Bewerte das Buch «${bookName}» kritisch und umfassend.
 Grundlage sind die Analysen aller ${chapterAnalyses.length} Kapitel (insgesamt ${totalPageCount} Seiten).
 
+GEWICHTUNG: Stil, Sprache und literarische Qualität sind die zentralen Bewertungskriterien und fliessen stärker in die Gesamtnote ein als Rechtschreib- oder Grammatikfehler.
+
 Kapitelanalysen:
 
 ${synthIn}
@@ -253,7 +257,7 @@ ${JSON_ONLY}
 
 Antworte mit diesem JSON-Schema:
 {
-  "gesamtnote": "Zahl von 1 (sehr schwach) bis 5 (ausgezeichnet)",
+  "gesamtnote": "Zahl von 1 (sehr schwach) bis 6 (ausgezeichnet)",
   "gesamtnote_begruendung": "Ein Satz warum diese Note",
   "zusammenfassung": "2-3 Sätze Gesamteindruck",
   "struktur": "Analyse des Aufbaus und der Struktur über alle Kapitel (3-5 Sätze)",

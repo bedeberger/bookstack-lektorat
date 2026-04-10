@@ -2160,6 +2160,11 @@ ins {
   font-size: var(--font-size-xs);
   font-style: italic;
 }
+.chat-vorschlag-error {
+  color: var(--color-err-text);
+  font-size: var(--font-size-xs);
+  margin-top: 4px;
+}
 
 /* Eingabebereich */
 .chat-input-row {

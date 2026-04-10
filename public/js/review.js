@@ -7,7 +7,7 @@ import { escHtml } from './utils.js';
 export const reviewMethods = {
   _renderReviewHtml(r) {
     const note = parseInt(r.gesamtnote, 10) || 0;
-    const stars = '★'.repeat(Math.min(5, Math.max(0, note))) + '☆'.repeat(Math.max(0, 5 - note));
+    const stars = '★'.repeat(Math.min(6, Math.max(0, note))) + '☆'.repeat(Math.max(0, 6 - note));
     let html = `
         <div class="bewertung-header">
           <span class="bewertung-stars">${stars}</span>

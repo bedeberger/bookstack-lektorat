@@ -117,11 +117,12 @@ export const chatMethods = {
     this.chatMessages.push({ role: 'user', content: msg, id: null });
     this.$nextTick(() => this._scrollChatToBottom());
 
-    // originalHtml vorladen falls noch nicht gesetzt (wird für Vorschläge-Anwenden benötigt)
-    if (!this.originalHtml) {
+    // originalHtml vorladen falls nicht gesetzt – oder neu laden wenn Änderungen übernommen wurden
+    if (!this.originalHtml || this._chatPendingRefresh) {
       try {
         const pageData = await this.bsGet('pages/' + this.currentPage.id);
         this.originalHtml = pageData.html || '';
+        this._chatPendingRefresh = false;
       } catch (e) {
         console.warn('[sendChatMessage] Seiteninhalt konnte nicht geladen werden:', e.message);
       }
@@ -182,8 +183,10 @@ export const chatMethods = {
   // ── Vorschlag übernehmen ────────────────────────────────────────────────────
 
   async applyChatVorschlag(vorschlag, msgIdx, vIdx) {
+    const setErr = (msg) => { this.chatMessages[msgIdx].vorschlaege[vIdx]._error = msg; };
+
     if (!this.currentPage) {
-      this.chatStatus = '<span class="error-msg">Seiteninhalt nicht geladen – bitte Seite neu auswählen.</span>';
+      setErr('Seiteninhalt nicht geladen – bitte Seite neu auswählen.');
       return;
     }
 
@@ -193,7 +196,7 @@ export const chatMethods = {
         const pageData = await this.bsGet('pages/' + this.currentPage.id);
         this.originalHtml = pageData.html || '';
       } catch (e) {
-        this.chatStatus = '<span class="error-msg">Seiteninhalt konnte nicht geladen werden.</span>';
+        setErr('Seiteninhalt konnte nicht geladen werden.');
         return;
       }
     }
@@ -201,7 +204,7 @@ export const chatMethods = {
     // Direkte String-Ersetzung (zeichengenau, wie _applyCorrections)
     const idx = this.originalHtml.indexOf(vorschlag.original);
     if (idx === -1) {
-      this.chatStatus = `<span class="error-msg">Originaltext «${escHtml(vorschlag.original.slice(0, 40))}…» nicht mehr in der Seite gefunden.</span>`;
+      setErr('Originaltext nicht mehr in der Seite gefunden.');
       return;
     }
 
@@ -209,14 +212,16 @@ export const chatMethods = {
 
     try {
       await this.bsPut('pages/' + this.currentPage.id, { html: newHtml });
-      this.originalHtml = newHtml; // lokal aktualisieren für weitere Vorschläge
+      this.originalHtml = newHtml;    // lokal aktualisieren für weitere Vorschläge derselben Antwort
+      this._chatPendingRefresh = true; // beim nächsten Senden frisch aus BookStack laden
       // Vorschlag als übernommen markieren
       this.chatMessages[msgIdx].vorschlaege[vIdx]._applied = true;
+      this.chatMessages[msgIdx].vorschlaege[vIdx]._error = null;
       this.chatStatus = '<span class="success-msg">Änderung in BookStack gespeichert.</span>';
       setTimeout(() => { if (this.chatStatus.includes('gespeichert')) this.chatStatus = ''; }, 3000);
     } catch (e) {
       console.error('[applyChatVorschlag]', e);
-      this.chatStatus = `<span class="error-msg">Fehler beim Speichern: ${escHtml(e.message)}</span>`;
+      setErr('Fehler beim Speichern: ' + e.message);
     }
   },
 
@@ -239,12 +244,13 @@ export const chatMethods = {
   /** Wird beim Seitenwechsel (selectPage / resetPage) aufgerufen. */
   resetChat() {
     if (this._chatPollTimer) { clearInterval(this._chatPollTimer); this._chatPollTimer = null; }
-    this.showChatCard  = false;
-    this.chatSessions  = [];
-    this.chatMessages  = [];
-    this.chatSessionId = null;
-    this.chatInput     = '';
-    this.chatLoading   = false;
-    this.chatStatus    = '';
+    this.showChatCard       = false;
+    this.chatSessions       = [];
+    this.chatMessages       = [];
+    this.chatSessionId      = null;
+    this.chatInput          = '';
+    this.chatLoading        = false;
+    this.chatStatus         = '';
+    this._chatPendingRefresh = false;
   },
 };
