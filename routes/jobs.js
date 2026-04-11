@@ -550,9 +550,10 @@ async function callAIChat(messages, systemPrompt, onProgress, signal) {
 const SINGLE_PASS_LIMIT = 60000;
 const BATCH_SIZE = 5;
 
-async function loadPageContents(pages, chMap, minLength, onBatch, userToken) {
+async function loadPageContents(pages, chMap, minLength, onBatch, userToken, signal = null) {
   const contents = [];
   for (let i = 0; i < pages.length; i += BATCH_SIZE) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (onBatch) onBatch(i, pages.length);
     const results = await Promise.allSettled(pages.slice(i, i + BATCH_SIZE).map(async p => {
       const pd = await bsGet('pages/' + p.id, userToken);
@@ -661,7 +662,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
         progress: Math.round((i / total) * 60),
         statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
       });
-    }, userToken);
+    }, userToken, jobAbortControllers.get(jobId)?.signal);
 
     updateJob(jobId, { progress: 65 });
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
@@ -783,7 +784,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         progress: Math.round((i / total) * 12),
         statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
       });
-    }, userToken);
+    }, userToken, jobAbortControllers.get(jobId)?.signal);
 
     const idMaps = {
       chNameToId:   Object.fromEntries(chaptersData.map(c => [c.name, c.id])),
@@ -1836,7 +1837,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken)
         progress: Math.round((i / total) * 50),
         statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
       });
-    }, userToken);
+    }, userToken, jobAbortControllers.get(jobId)?.signal);
 
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
     let result;
