@@ -108,12 +108,12 @@ try {
   });
   logger.info('Cron-Job registriert: Buchstatistik-Sync täglich 02:00 Uhr');
 
-  // 03:00 – Nacht-Komplettanalyse für alle Bücher × alle User
-  cron.schedule('0 3 * * *', () => {
-    logger.info('Cron: Starte nächtliche Komplettanalyse…');
-    runKomplettAnalyseAll().catch(e => logger.error('Cron-Komplettanalyse Fehler: ' + e.message));
-  });
-  logger.info('Cron-Job registriert: Komplettanalyse täglich 03:00 Uhr');
+  // 03:00 – Nacht-Komplettanalyse für alle Bücher × alle User (deaktiviert)
+  // cron.schedule('0 3 * * *', () => {
+  //   logger.info('Cron: Starte nächtliche Komplettanalyse…');
+  //   runKomplettAnalyseAll().catch(e => logger.error('Cron-Komplettanalyse Fehler: ' + e.message));
+  // });
+  // logger.info('Cron-Job registriert: Komplettanalyse täglich 03:00 Uhr');
 } catch {
   logger.warn('node-cron nicht verfügbar – keine automatischen Cron-Jobs (npm install ausführen)');
 }
