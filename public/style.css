@@ -248,11 +248,20 @@ code {
 .komplett-status-wrap {
   position: relative;
 }
-.komplett-last-run {
+.komplett-status-wrap[data-lastrun]:hover::after {
+  content: attr(data-lastrun);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm, 4px);
   font-size: 10px;
   color: var(--color-muted);
-  text-align: center;
-  margin-top: 2px;
+  padding: 3px 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 20;
 }
 .komplett-status-panel {
   position: absolute;

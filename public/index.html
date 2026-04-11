@@ -23,12 +23,11 @@
   <p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : '· Claude: ' + claudeModel"></span></p>
   <div class="user-info" x-show="currentUser">
     <span class="user-email" x-text="currentUser?.name || currentUser?.email"></span>
-    <div class="komplett-status-wrap" @click.outside="showKomplettStatus = false" @mouseenter="if (alleAktualisierenLoading) showKomplettStatus = true">
+    <div class="komplett-status-wrap" @click.outside="showKomplettStatus = false" @mouseenter="if (alleAktualisierenLoading) showKomplettStatus = true" :data-lastrun="(!alleAktualisierenLoading && alleAktualisierenLastRun) ? 'Stand: ' + alleAktualisierenLastRun : null">
       <button class="job-stats-btn" @click="alleAktualisieren()" :disabled="alleAktualisierenLoading || !selectedBookId" title="Figuren, Soziogramm, Schauplätze, Szenenanalyse, Ereignisse, Zeitstrahl und Entwicklungsbögen neu ermitteln">
         <span x-show="alleAktualisierenLoading" class="spinner"></span>
         Alle aktualisieren
       </button>
-      <div class="komplett-last-run" x-show="!alleAktualisierenLoading && alleAktualisierenLastRun" x-text="'Stand: ' + alleAktualisierenLastRun" x-cloak></div>
       <div class="komplett-status-panel" x-show="showKomplettStatus" x-cloak>
         <div class="komplett-status-title">Komplettanalyse</div>
         <div class="progress-bar-wrap komplett-progress-bar-wrap">

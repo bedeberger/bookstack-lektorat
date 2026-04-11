@@ -393,7 +393,10 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 5 abgeschlossen (selected_errors_json zu page_checks hinzugefügt).');
   }
   if (version < 6) {
-    db.exec('ALTER TABLE chat_messages ADD COLUMN context_info TEXT');
+    const cols6 = db.pragma('table_info(chat_messages)').map(c => c.name);
+    if (!cols6.includes('context_info')) {
+      db.exec('ALTER TABLE chat_messages ADD COLUMN context_info TEXT');
+    }
     db.prepare('UPDATE schema_version SET version = 6').run();
     logger.info('DB-Migration auf Version 6 abgeschlossen (context_info zu chat_messages hinzugefügt).');
   }
@@ -856,7 +859,10 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 32 abgeschlossen (character_arcs + arc_stages Tabellen hinzugefügt).');
   }
   if (version < 33) {
-    db.exec('ALTER TABLE arc_stages ADD COLUMN chapter_id INTEGER');
+    const cols33 = db.pragma('table_info(arc_stages)').map(c => c.name);
+    if (!cols33.includes('chapter_id')) {
+      db.exec('ALTER TABLE arc_stages ADD COLUMN chapter_id INTEGER');
+    }
     db.prepare('UPDATE schema_version SET version = 33').run();
     logger.info('DB-Migration auf Version 33 abgeschlossen (arc_stages.chapter_id hinzugefügt).');
   }
