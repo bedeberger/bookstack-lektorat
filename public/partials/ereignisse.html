@@ -2,11 +2,7 @@
 <div class="card" x-show="showEreignisseCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Ereignisse: ' + selectedBookName"></span>
-    <span x-show="alleAktualisierenLastRun && !ereignisseLoading && !zeitstrahlConsolidating" class="figuren-updated-at" x-text="'Superjob: ' + alleAktualisierenLastRun"></span>
-    <div class="card-actions">
-      <button :disabled="true" title="Wird durch «Alle aktualisieren» ausgelöst">Neu ermitteln</button>
-      <button :disabled="true" title="Wird durch «Alle aktualisieren» ausgelöst">Konsolidieren</button>
-    </div>
+    <span x-show="alleAktualisierenLastRun && !ereignisseLoading && !zeitstrahlConsolidating" class="figuren-updated-at" x-text="'Stand: ' + alleAktualisierenLastRun"></span>
   </div>
 
   <!-- Fortschritt Ermittlung -->

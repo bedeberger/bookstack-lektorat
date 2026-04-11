@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
-const { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveCharacterArcs, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale } = require('../db/schema');
+const { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveCharacterArcs, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale, getAllUserTokens } = require('../db/schema');
 const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -2646,4 +2646,46 @@ router.get('/:id', (req, res) => {
   });
 });
 
-module.exports = router;
+// ── Nacht-Cron: Komplettanalyse für alle Bücher × alle User ──────────────────
+async function runKomplettAnalyseAll() {
+  const users = getAllUserTokens();
+  if (!users.length) {
+    logger.warn('Nacht-Analyse übersprungen: kein BookStack-Token in der Datenbank.');
+    return;
+  }
+
+  // Bücherliste mit erstem verfügbaren Token holen
+  let books;
+  for (const u of users) {
+    try {
+      books = await bsGetAll('books', { id: u.token_id, pw: u.token_pw });
+      break;
+    } catch (e) {
+      logger.warn(`Nacht-Analyse: Bücherliste mit Token von ${u.email} fehlgeschlagen – nächsten versuchen.`);
+    }
+  }
+  if (!books) {
+    logger.error('Nacht-Analyse abgebrochen: kein gültiger Token für Bücherliste gefunden.');
+    return;
+  }
+
+  logger.info(`Nacht-Analyse: ${books.length} Buch/Bücher × ${users.length} User`);
+  let queued = 0;
+  for (const book of books) {
+    for (const u of users) {
+      const key = jobKey('komplett-analyse', book.id, u.email);
+      if (runningJobs.has(key)) {
+        logger.info(`Nacht-Analyse: Buch ${book.id} / ${u.email} läuft bereits – überspringe.`);
+        continue;
+      }
+      const label = `Nacht · ${book.name}`;
+      const userToken = { id: u.token_id, pw: u.token_pw };
+      const jobId = createJob('komplett-analyse', book.id, u.email, label);
+      enqueueJob(jobId, () => runKomplettAnalyseJob(jobId, book.id, book.name, u.email, userToken));
+      queued++;
+    }
+  }
+  logger.info(`Nacht-Analyse: ${queued} Job(s) in Warteschlange eingereiht.`);
+}
+
+module.exports = { router, runKomplettAnalyseAll };

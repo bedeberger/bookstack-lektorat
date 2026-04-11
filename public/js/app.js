@@ -604,44 +604,47 @@ document.addEventListener('alpine:init', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName }),
         }).then(r => r.json());
-
-        // Fortschritt via Polling anzeigen
-        await new Promise((resolve, reject) => {
-          const timer = setInterval(async () => {
-            try {
-              const resp = await fetch('/jobs/' + jobId);
-              if (!resp.ok) return;
-              const job = await resp.json();
-              if (job.statusText) this.alleAktualisierenStatus = job.statusText;
-              if (job.progress != null) this.alleAktualisierenProgress = job.progress;
-              if (job.tokensIn != null) this.alleAktualisierenTokIn = job.tokensIn;
-              if (job.tokensOut != null) this.alleAktualisierenTokOut = job.tokensOut;
-              if (job.status === 'done') { clearInterval(timer); resolve(job); }
-              else if (job.status === 'error' || job.status === 'cancelled') {
-                clearInterval(timer);
-                reject(new Error(job.error || 'Job fehlgeschlagen'));
-              }
-            } catch (e) { console.error('[alleAktualisieren poll]', e); }
-          }, 2000);
-        });
-
-        // UI nach Abschluss aktualisieren
-        await Promise.all([
-          this.loadFiguren(bookId),
-          this.loadOrte(bookId),
-          this.loadSzenen(bookId),
-          this.loadCharacterArcs(),
-          this._loadKontinuitaetHistory(),
-          this.loadLastKomplettRun(bookId),
-        ]);
-        this.alleAktualisierenStatus = 'Fertig.';
-        setTimeout(() => { if (this.alleAktualisierenStatus === 'Fertig.') this.alleAktualisierenStatus = ''; }, 4000);
+        await this._pollKomplettJob(jobId, bookId);
       } catch (e) {
         console.error('[alleAktualisieren]', e);
         this.alleAktualisierenStatus = `Fehler: ${e.message}`;
       } finally {
         this.alleAktualisierenLoading = false;
       }
+    },
+
+    // Verbindet sich mit einem laufenden komplett-analyse Job und aktualisiert
+    // den Status bis der Job abgeschlossen ist. Wirft bei Fehler/Abbruch.
+    async _pollKomplettJob(jobId, bookId) {
+      await new Promise((resolve, reject) => {
+        const timer = setInterval(async () => {
+          try {
+            const resp = await fetch('/jobs/' + jobId);
+            if (!resp.ok) return;
+            const job = await resp.json();
+            if (job.statusText) this.alleAktualisierenStatus = job.statusText;
+            if (job.progress != null) this.alleAktualisierenProgress = job.progress;
+            if (job.tokensIn != null) this.alleAktualisierenTokIn = job.tokensIn;
+            if (job.tokensOut != null) this.alleAktualisierenTokOut = job.tokensOut;
+            if (job.status === 'done') { clearInterval(timer); resolve(job); }
+            else if (job.status === 'error' || job.status === 'cancelled') {
+              clearInterval(timer);
+              reject(new Error(job.error || 'Job fehlgeschlagen'));
+            }
+          } catch (e) { console.error('[_pollKomplettJob]', e); }
+        }, 2000);
+      });
+      // UI nach Abschluss aktualisieren
+      await Promise.all([
+        this.loadFiguren(bookId),
+        this.loadOrte(bookId),
+        this.loadSzenen(bookId),
+        this.loadCharacterArcs(),
+        this._loadKontinuitaetHistory(),
+        this.loadLastKomplettRun(bookId),
+      ]);
+      this.alleAktualisierenStatus = 'Fertig.';
+      setTimeout(() => { if (this.alleAktualisierenStatus === 'Fertig.') this.alleAktualisierenStatus = ''; }, 4000);
     },
 
     async loadLastKomplettRun(bookId) {
@@ -902,6 +905,29 @@ document.addEventListener('alpine:init', () => {
             localStorage.removeItem('lektorat_batchcheck_job_' + bookId);
           }
         } catch { localStorage.removeItem('lektorat_batchcheck_job_' + bookId); }
+      }
+
+      // Prüfen ob ein komplett-analyse Job vom Server noch läuft (z.B. Tab geschlossen)
+      if (!this.alleAktualisierenLoading) {
+        try {
+          const { jobId, status, progress, statusText } = await fetch(
+            `/jobs/active?type=komplett-analyse&book_id=${bookId}`
+          ).then(r => r.json());
+          if (jobId && (status === 'running' || status === 'queued')) {
+            this.alleAktualisierenLoading = true;
+            this.alleAktualisierenProgress = progress || 0;
+            this.alleAktualisierenTokIn = 0;
+            this.alleAktualisierenTokOut = 0;
+            this.alleAktualisierenStatus = statusText || 'Komplettanalyse läuft…';
+            this.showKomplettStatus = true;
+            this._pollKomplettJob(jobId, bookId)
+              .catch(e => {
+                console.error('[checkPendingJobs komplett]', e);
+                this.alleAktualisierenStatus = `Fehler: ${e.message}`;
+              })
+              .finally(() => { this.alleAktualisierenLoading = false; });
+          }
+        } catch (e) { console.error('[checkPendingJobs komplett-active]', e); }
       }
     },
 

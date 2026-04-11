@@ -35,7 +35,11 @@
       "Bash(grep -n \"szenenFilterFigurId\\\\|szenenFilterKapitel\\\\|szenenFilterSeite\\\\|szenenFilterOrtId\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/*.js)",
       "Bash(grep \"\\\\.js$\")",
       "Bash(grep -E \"^d|\\\\.js$|\\\\.json$|\\\\.html$\")",
-      "Bash(grep -n \"toggleFiguresCard\\\\|toggleSzenenCard\\\\|toggleOrteCard\\\\|toggleEreignisseCard\\\\|toggleCharacterArcsCard\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/*.js)"
+      "Bash(grep -n \"toggleFiguresCard\\\\|toggleSzenenCard\\\\|toggleOrteCard\\\\|toggleEreignisseCard\\\\|toggleCharacterArcsCard\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/*.js)",
+      "Bash(grep -n \"consolidate-zeitstrahl\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/*.js)",
+      "Bash(grep -E \"'/jobs/\\(stats|queue|active|last-run|book-chat-cache\\)'\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/*.js)",
+      "Bash(grep -n \"jobs/figures\\\\|jobs/locations\\\\|jobs/szenen\\\\|jobs/soziogramm\\\\|jobs/figure-events\\\\|jobs/consolidate-zeitstrahl\\\\|jobs/character-arcs\\\\|/jobs/review\\\\|loadFiguren\\\\|loadOrte\\\\|loadSzenen\\\\|loadEreignisse\\\\|runFiguren\\\\|runOrte\\\\|runSzenen\\\\|startFiguren\\\\|startOrte\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/partials/*.html)",
+      "Bash(grep -n \"Aktualisieren\\\\|aktualisieren\\\\|Neu ermitteln\\\\|neu ermitteln\\\\|startJob\\\\|_startPoll\\\\|fetch.*jobs\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/partials/*.html)"
     ]
   }
 }

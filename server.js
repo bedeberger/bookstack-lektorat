@@ -12,7 +12,7 @@ const authRouter = require('./routes/auth');
 const historyRouter = require('./routes/history');
 const figuresRouter = require('./routes/figures');
 const locationsRouter = require('./routes/locations');
-const jobsRouter = require('./routes/jobs');
+const { router: jobsRouter, runKomplettAnalyseAll } = require('./routes/jobs');
 const chatRouter = require('./routes/chat');
 const bookSettingsRouter = require('./routes/booksettings');
 const { router: proxiesRouter, bookstackProxy, BOOKSTACK_URL } = require('./routes/proxies');
@@ -97,14 +97,23 @@ app.listen(PORT, '0.0.0.0', () => {
   logger.info(`BookStack Ziel: ${BOOKSTACK_URL}`);
 });
 
-// Täglicher Sync um 02:00 Uhr (node-cron)
+// Tägliche Cron-Jobs (node-cron)
 try {
   const cron = require('node-cron');
+
+  // 02:00 – Buchstatistik-Sync
   cron.schedule('0 2 * * *', () => {
     logger.info('Cron: Starte täglichen Buchstatistik-Sync…');
     syncAllBooks().catch(e => logger.error('Cron-Sync Fehler: ' + e.message));
   });
   logger.info('Cron-Job registriert: Buchstatistik-Sync täglich 02:00 Uhr');
+
+  // 03:00 – Nacht-Komplettanalyse für alle Bücher × alle User
+  cron.schedule('0 3 * * *', () => {
+    logger.info('Cron: Starte nächtliche Komplettanalyse…');
+    runKomplettAnalyseAll().catch(e => logger.error('Cron-Komplettanalyse Fehler: ' + e.message));
+  });
+  logger.info('Cron-Job registriert: Komplettanalyse täglich 03:00 Uhr');
 } catch {
-  logger.warn('node-cron nicht verfügbar – kein automatischer Sync (npm install ausführen)');
+  logger.warn('node-cron nicht verfügbar – keine automatischen Cron-Jobs (npm install ausführen)');
 }

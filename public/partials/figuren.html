@@ -2,12 +2,7 @@
 <div class="card" x-show="showFiguresCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Figuren: ' + selectedBookName"></span>
-    <span x-show="alleAktualisierenLastRun && !figurenLoading" class="figuren-updated-at" x-text="'Superjob: ' + alleAktualisierenLastRun"></span>
-    <div class="card-actions">
-      <button :disabled="true" title="Wird durch «Alle aktualisieren» ausgelöst">
-        <span x-text="figuren.length ? 'Neu ermitteln' : 'Figuren ermitteln'"></span>
-      </button>
-    </div>
+    <span x-show="alleAktualisierenLastRun && !figurenLoading" class="figuren-updated-at" x-text="'Stand: ' + alleAktualisierenLastRun"></span>
   </div>
 
   <!-- Fortschritt -->
@@ -62,12 +57,7 @@
         <div class="figur-soziogramm-hint">
           Pfeilstärke = Machtasymmetrie · Knotenzeilen = Gesellschaftsschicht · Pfeilrichtung = Mächtiger → Schwächerer
         </div>
-        <div class="figur-soziogramm-actions">
-          <button :disabled="true" title="Wird durch «Alle aktualisieren» ausgelöst">
-            Sozialschichten analysieren
-          </button>
-          <span x-show="soziogrammStatus" class="figur-sozio-status" x-html="soziogrammStatus"></span>
-        </div>
+        <span x-show="soziogrammStatus" class="figur-sozio-status" x-html="soziogrammStatus"></span>
         <div x-show="soziogrammProgress > 0" class="progress-bar-wrap">
           <div class="progress-bar" :style="'width:' + soziogrammProgress + '%'"></div>
         </div>
