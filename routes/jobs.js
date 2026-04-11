@@ -941,10 +941,15 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         deduped.sort((a, b) => (parseInt(a.datum) || 0) - (parseInt(b.datum) || 0));
         allAssignments.push({ fig_id, lebensereignisse: deduped });
       }
-      logger.info(`Job ${jobId}: Speichere ${allAssignments.length} Figur-Ereignis-Sets…`);
-      saveZeitstrahlEvents(parseInt(bookId), userEmail || null, []);
-      updateFigurenEvents(parseInt(bookId), allAssignments, userEmail || null, idMaps);
-      logger.info(`Job ${jobId}: ${allSzenen.length} Szenen und ${allAssignments.reduce((s, a) => s + a.lebensereignisse.length, 0)} Ereignisse gespeichert.`);
+      const totalEvents = allAssignments.reduce((s, a) => s + (a.lebensereignisse?.length || 0), 0);
+      logger.info(`Job ${jobId}: Speichere ${allAssignments.length} Figur-Ereignis-Sets (${totalEvents} Ereignisse)…`);
+      if (totalEvents > 0) {
+        saveZeitstrahlEvents(parseInt(bookId), userEmail || null, []);
+        updateFigurenEvents(parseInt(bookId), allAssignments, userEmail || null, idMaps);
+        logger.info(`Job ${jobId}: ${allSzenen.length} Szenen und ${totalEvents} Ereignisse gespeichert.`);
+      } else {
+        logger.info(`Job ${jobId}: ${allSzenen.length} Szenen gespeichert – Szenen-Extraktion lieferte keine Ereignisse, Phase-2-Ereignisse bleiben erhalten.`);
+      }
     }
 
     // Hilfsfunktion: P6 Zeitstrahl konsolidieren (identisch für beide Pfade).
