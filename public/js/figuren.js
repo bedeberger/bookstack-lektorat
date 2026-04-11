@@ -29,7 +29,12 @@ export const figurenMethods = {
   },
 
   async toggleFiguresCard() {
-    if (this.showFiguresCard) { this.showFiguresCard = false; return; }
+    if (this.showFiguresCard) {
+      await this.loadFiguren(this.selectedBookId);
+      await this.$nextTick();
+      this.renderFigurGraph();
+      return;
+    }
     this._closeOtherMainCards('figures');
     this.showFiguresCard = true;
     await this.loadFiguren(this.selectedBookId);

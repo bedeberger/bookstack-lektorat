@@ -3,6 +3,7 @@
   <div class="card-header">
     <span class="card-title" x-text="'Figuren: ' + selectedBookName"></span>
     <span x-show="alleAktualisierenLastRun && !figurenLoading" class="figuren-updated-at" x-text="'Stand: ' + alleAktualisierenLastRun"></span>
+    <button class="btn-card-close" @click="showFiguresCard = false" title="Schliessen">×</button>
   </div>
 
   <!-- Fortschritt -->

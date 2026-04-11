@@ -1,10 +1,7 @@
 export const bookSettingsMethods = {
 
   async toggleBookSettingsCard() {
-    if (this.showBookSettingsCard) {
-      this.showBookSettingsCard = false;
-      return;
-    }
+    if (this.showBookSettingsCard) { await this.loadBookSettings(); return; }
     this._closeOtherMainCards('bookSettings');
     this.showBookSettingsCard = true;
     await this.loadBookSettings();

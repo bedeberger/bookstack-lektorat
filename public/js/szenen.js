@@ -3,7 +3,7 @@
 
 export const szenenMethods = {
   async toggleSzenenCard() {
-    if (this.showSzenenCard) { this.showSzenenCard = false; return; }
+    if (this.showSzenenCard) { await this.loadSzenen(this.selectedBookId); return; }
     this._closeOtherMainCards('szenen');
     this.showSzenenCard = true;
     if (!this.figuren.length) await this.loadFiguren(this.selectedBookId);

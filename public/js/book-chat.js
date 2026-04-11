@@ -10,10 +10,7 @@ export const bookChatMethods = {
   // ── Karte öffnen/schliessen ─────────────────────────────────────────────────
 
   async toggleBookChatCard() {
-    if (this.showBookChatCard) {
-      this.showBookChatCard = false;
-      return;
-    }
+    if (this.showBookChatCard) { await this.loadBookChatSessions(); return; }
     if (!this.selectedBookId) return;
     this._closeOtherMainCards('bookChat');
     this.showBookChatCard = true;

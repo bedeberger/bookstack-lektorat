@@ -525,7 +525,7 @@ function groupByChapter(pageContents) {
 //   Sobald tokIn bekannt ist (Claude: message_start; Ollama: erster Chunk), wird dynExpectedChars
 //   auf max(staticFallback, tokIn * 4 * outputRatio) gesetzt.
 // maxTokens: explizites Token-Limit (überschreibt die expectedChars-Formel). null = globalMax.
-async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars = 3000, outputRatio = 0.2, maxTokens = null) {
+async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars = 3000, outputRatio = 0.2, maxTokens = null, provider = undefined) {
   let dynExpectedChars = expectedChars;
   let calibrated = false;
   // Eindeutige ID für diesen Call – wird in tok.inflight eingetragen wenn vorhanden
@@ -566,7 +566,7 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
     ? Math.min(maxTokens, globalMax)
     : globalMax;
   const signal = jobAbortControllers.get(jobId)?.signal;
-  const { text, truncated, tokensIn, tokensOut, genDurationMs } = await callAI(prompt, system, onProgress, maxTokensOverride, signal);
+  const { text, truncated, tokensIn, tokensOut, genDurationMs } = await callAI(prompt, system, onProgress, maxTokensOverride, signal, provider);
   tok.inflight?.delete(callId);
   tok.in += tokensIn;
   tok.out += tokensOut;
@@ -666,7 +666,8 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
 //   P1 (Figuren+Orte, parallel/Kapitel) → P2 (Figuren konsolidieren)
 //   Block 1 [P3 Orte · P4 Soziogramm · P7-Kapitel] parallel
 //   Block 2 [P5+P6 Szenen/Zeitstrahl · P7-Konsol · P8 Kontinuität] parallel
-async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userToken) {
+async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userToken, provider = undefined) {
+  const call = (...args) => aiCall(...args, provider);
   const {
     buildExtraktionFigurenOrteKontinuitaetChapterPrompt,
     buildExtraktionSzenenEreignisseChapterPrompt,
@@ -746,7 +747,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         const bookText = pageContents
           .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
           .join('\n\n---\n\n');
-        const r = await aiCall(jobId, tok,
+        const r = await call(jobId, tok,
           buildExtraktionFigurenOrteKontinuitaetChapterPrompt('Gesamtbuch', bookName, pageContents.length, bookText),
           SYSTEM_FIGUREN, 12, 28, 10000,
         );
@@ -760,7 +761,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         });
         const settled = await settledAll(
           chapterTexts.map(({ group, chText }) => () =>
-            aiCall(jobId, tok,
+            call(jobId, tok,
               buildExtraktionFigurenOrteKontinuitaetChapterPrompt(group.name, bookName, group.pages.length, chText),
               SYSTEM_FIGUREN, 12, 28, 10000,
             )
@@ -785,7 +786,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
 
     // ── Phase 2: Figuren konsolidieren ────────────────────────────────────────
     updateJob(jobId, { progress: 30, statusText: 'KI konsolidiert Figuren…' });
-    const figResult = await aiCall(jobId, tok,
+    const figResult = await call(jobId, tok,
       buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren),
       SYSTEM_FIGUREN, 30, 43, 8000,
     );
@@ -829,7 +830,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     const [orteResultRaw] = await Promise.all([
 
       // P3: Orte konsolidieren
-      aiCall(jobId, tok,
+      call(jobId, tok,
         buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt),
         SYSTEM_ORTE, 43, 55, 6000,
       ),
@@ -842,7 +843,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         const relRows = db.prepare(
           'SELECT from_fig_id, to_fig_id, typ, beschreibung FROM figure_relations WHERE book_id = ? AND user_email IS ?'
         ).all(parseInt(bookId), userEmail || null);
-        const sozResult = await aiCall(jobId, tok,
+        const sozResult = await call(jobId, tok,
           buildFigurSoziogrammEnrichmentPrompt(bookName, figRowsForSoz, relRows, SOZIOGRAMM_KONTEXT),
           SYSTEM_FIGUREN, 43, 55, 2000,
         );
@@ -967,7 +968,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         if (row.seite   && !ev.seiten.includes(row.seite))   ev.seiten.push(row.seite);
       }
       const zeitstrahlEvents = [...evtGroupMap.values()].sort((a, b) => parseInt(a.datum) - parseInt(b.datum));
-      const ztResult = await aiCall(jobId, tok,
+      const ztResult = await call(jobId, tok,
         buildZeitstrahlConsolidationPrompt(zeitstrahlEvents),
         SYSTEM_ZEITSTRAHL, 83, 89, 3000, 0.2, null,
       );
@@ -994,7 +995,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
               groupOrder.map(key => () => {
                 const group = groups.get(key);
                 const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
-                return aiCall(jobId, tok,
+                return call(jobId, tok,
                   buildExtraktionSzenenEreignisseEntwicklungsbogenChapterPrompt(
                     group.name, bookName, group.pages.length, figurenList, orteKompakt, chText
                   ),
@@ -1018,7 +1019,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
               (async () => {
                 if (!figRowsForArcs.length || !etappenPerChapter.length) return;
                 updateJob(jobId, { progress: 94, statusText: 'Konsolidiere Entwicklungsbögen…' });
-                const arcConsolidation = await aiCall(jobId, tok,
+                const arcConsolidation = await call(jobId, tok,
                   buildEntwicklungsbogenConsolidationPrompt(bookName, figurenKontextForArcs, etappenPerChapter),
                   SYSTEM_ENTWICKLUNGSBOGEN, 94, 97, 4000, 0.2, null,
                 );
@@ -1042,7 +1043,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
                 groupOrder.map(key => () => {
                   const group = groups.get(key);
                   const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
-                  return aiCall(jobId, tok,
+                  return call(jobId, tok,
                     buildExtraktionSzenenEreignisseChapterPrompt(group.name, bookName, group.pages.length, figurenList, orteKompakt, chText),
                     SYSTEM_SZENEN, 63, 80, 4000,
                   );
@@ -1058,7 +1059,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
               const bookText = pageContents
                 .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
                 .join('\n\n---\n\n');
-              const arcResult = await aiCall(jobId, tok,
+              const arcResult = await call(jobId, tok,
                 buildEntwicklungsbogenSinglePassPrompt(bookName, figurenKontextForArcs, pageContents.length, bookText),
                 SYSTEM_ENTWICKLUNGSBOGEN, 89, 95, 4000, 0.2, null,
               );
@@ -1086,14 +1087,14 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           const bookText = pageContents
             .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
             .join('\n\n---\n\n');
-          kontResult = await aiCall(jobId, tok,
+          kontResult = await call(jobId, tok,
             buildKontinuitaetSinglePassPrompt(bookName, bookText, figKompaktForKont, orteKompaktForKont),
             SYSTEM_KONTINUITAET, 97, 99, 5000,
           );
         } else if (chapterFakten?.length) {
           // Normal-Pfad multi-pass: Fakten aus Phase 1 – kein zusätzlicher API-Call
           updateJob(jobId, { progress: 98, statusText: 'KI prüft Widersprüche…' });
-          kontResult = await aiCall(jobId, tok,
+          kontResult = await call(jobId, tok,
             buildKontinuitaetCheckPrompt(bookName, chapterFakten, figKompaktForKont, orteKompaktForKont),
             SYSTEM_KONTINUITAET, 98, 99, 5000,
           );
@@ -1104,7 +1105,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
             groupOrder.map(key => () => {
               const group = groups.get(key);
               const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
-              return aiCall(jobId, tok,
+              return call(jobId, tok,
                 buildKontinuitaetChapterFactsPrompt(group.name, chText),
                 SYSTEM_KONTINUITAET, 97, 98, 1500,
               );
@@ -1119,7 +1120,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
             return { kapitel: group.name, fakten: r.value?.fakten || [] };
           });
           updateJob(jobId, { progress: 98, statusText: 'KI prüft Widersprüche…' });
-          kontResult = await aiCall(jobId, tok,
+          kontResult = await call(jobId, tok,
             buildKontinuitaetCheckPrompt(bookName, chFacts, figKompaktForKont, orteKompaktForKont),
             SYSTEM_KONTINUITAET, 98, 99, 5000,
           );
@@ -1131,7 +1132,8 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
             fig_ids:     (issue.figuren  || []).map(n => figNameToId[n]).filter(Boolean),
             chapter_ids: (issue.kapitel  || []).map(n => idMaps.chNameToId[n]).filter(Boolean),
           }));
-          const model = process.env.API_PROVIDER === 'ollama'
+          const effectiveProvider = provider || process.env.API_PROVIDER || 'claude';
+          const model = effectiveProvider === 'ollama'
             ? (process.env.OLLAMA_MODEL || 'llama3.2')
             : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
           db.prepare(`INSERT INTO continuity_checks (book_id, user_email, checked_at, issues_json, summary, model)
@@ -2015,6 +2017,11 @@ router.get('/:id', (req, res) => {
 
 // ── Nacht-Cron: Komplettanalyse für alle Bücher × alle User ──────────────────
 async function runKomplettAnalyseAll() {
+  if (!process.env.OLLAMA_HOST) {
+    logger.info('Nacht-Analyse übersprungen: OLLAMA_HOST nicht konfiguriert.');
+    return;
+  }
+
   const users = getAllUserTokens();
   if (!users.length) {
     logger.warn('Nacht-Analyse übersprungen: kein BookStack-Token in der Datenbank.');
@@ -2048,7 +2055,7 @@ async function runKomplettAnalyseAll() {
       const label = `Nacht · ${book.name}`;
       const userToken = { id: u.token_id, pw: u.token_pw };
       const jobId = createJob('komplett-analyse', book.id, u.email, label);
-      enqueueJob(jobId, () => runKomplettAnalyseJob(jobId, book.id, book.name, u.email, userToken));
+      enqueueJob(jobId, () => runKomplettAnalyseJob(jobId, book.id, book.name, u.email, userToken, 'ollama'));
       queued++;
     }
   }

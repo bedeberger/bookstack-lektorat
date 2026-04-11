@@ -20,14 +20,15 @@ let _statsChart = null;
 
 export const bookstatsMethods = {
   async toggleBookStatsCard() {
-    if (this.showBookStatsCard) {
-      this.showBookStatsCard = false;
-      if (_statsChart) { _statsChart.destroy(); _statsChart = null; }
-      return;
-    }
+    if (this.showBookStatsCard) { await this.loadBookStats(this.selectedBookId); return; }
     this._closeOtherMainCards('bookStats');
     this.showBookStatsCard = true;
     await this.loadBookStats(this.selectedBookId);
+  },
+
+  closeBookStatsCard() {
+    this.showBookStatsCard = false;
+    if (_statsChart) { _statsChart.destroy(); _statsChart = null; }
   },
 
   async loadBookStats(bookId) {

@@ -27,7 +27,7 @@ export const orteMethods = {
   },
 
   async toggleOrteCard() {
-    if (this.showOrteCard) { this.showOrteCard = false; return; }
+    if (this.showOrteCard) { await this.loadOrte(this.selectedBookId); return; }
     this._closeOtherMainCards('orte');
     this.showOrteCard = true;
     if (!this.szenen.length) await this.loadSzenen(this.selectedBookId);

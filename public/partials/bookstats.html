@@ -8,6 +8,7 @@
         <span x-show="bookStatsLoading" class="spinner"></span>
         <span x-text="bookStatsLoading ? '' : 'Synchronisieren'"></span>
       </button>
+      <button class="btn-card-close" @click="closeBookStatsCard()" title="Schliessen">×</button>
     </div>
   </div>
 

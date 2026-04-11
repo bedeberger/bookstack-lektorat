@@ -3,6 +3,7 @@
   <div class="card-header">
     <span class="card-title" x-text="'Ereignisse: ' + selectedBookName"></span>
     <span x-show="alleAktualisierenLastRun && !ereignisseLoading && !zeitstrahlConsolidating" class="figuren-updated-at" x-text="'Stand: ' + alleAktualisierenLastRun"></span>
+    <button class="btn-card-close" @click="showEreignisseCard = false" title="Schliessen">×</button>
   </div>
 
   <!-- Fortschritt Ermittlung -->

@@ -3,7 +3,7 @@
 
 export const charakterentwicklungMethods = {
   async toggleCharacterArcsCard() {
-    if (this.showCharacterArcsCard) { this.showCharacterArcsCard = false; return; }
+    if (this.showCharacterArcsCard) { await this.loadCharacterArcs(); return; }
     this._closeOtherMainCards('characterArcs');
     this.showCharacterArcsCard = true;
     if (!this.figuren?.length) await this.loadFiguren(this.selectedBookId);

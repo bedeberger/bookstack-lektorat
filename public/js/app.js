@@ -347,21 +347,42 @@ document.addEventListener('alpine:init', () => {
     },
 
     kontinuitaetKapitelListe() {
-      const chapterNames = new Set(
-        (this.tree || []).filter(t => t.type === 'chapter').map(t => t.name)
+      const chapterById = new Map(
+        (this.tree || []).filter(t => t.type === 'chapter').map(t => [t.id, t.name])
       );
+      const chapterNames = new Set(chapterById.values());
+      // Extract chapter name from stelle text like "Kapitel 3: Seite 45" → "Kapitel 3"
+      const fromStelle = (s) => {
+        if (!s) return null;
+        const ci = s.indexOf(':');
+        const c = ci > 0 ? s.substring(0, ci).trim() : s.trim();
+        return chapterNames.has(c) ? c : null;
+      };
       const names = new Set();
       for (const issue of (this.kontinuitaetResult?.issues || [])) {
+        // Primary: chapter_ids – authoritative server-side mapping
+        if (issue.chapter_ids?.length) {
+          for (const id of issue.chapter_ids) { const n = chapterById.get(id); if (n) names.add(n); }
+        }
+        // Secondary: kapitel names validated against tree
         if (issue.kapitel?.length) {
           for (const k of issue.kapitel) if (k && chapterNames.has(k)) names.add(k);
-        } else {
-          if (issue.stelle_a && chapterNames.has(issue.stelle_a)) names.add(issue.stelle_a);
-          if (issue.stelle_b && chapterNames.has(issue.stelle_b)) names.add(issue.stelle_b);
         }
+        // Tertiary: extract from stelle_a / stelle_b (covers empty-kapitel cases)
+        const a = fromStelle(issue.stelle_a); if (a) names.add(a);
+        const b = fromStelle(issue.stelle_b); if (b) names.add(b);
       }
       return [...names].sort((a, b) => a.localeCompare(b, 'de'));
     },
     get kontinuitaetIssuesFiltered() {
+      const chapters = (this.tree || []).filter(t => t.type === 'chapter');
+      const chapterNames = new Set(chapters.map(t => t.name));
+      const fromStelle = (s) => {
+        if (!s) return null;
+        const ci = s.indexOf(':');
+        const c = ci > 0 ? s.substring(0, ci).trim() : s.trim();
+        return chapterNames.has(c) ? c : null;
+      };
       return (this.kontinuitaetResult?.issues || []).filter(issue => {
         if (this.kontinuitaetFilterFigurId) {
           if (issue.fig_ids?.length) {
@@ -372,10 +393,12 @@ document.addEventListener('alpine:init', () => {
           }
         }
         if (this.kontinuitaetFilterKapitel) {
-          const kapitel = issue.kapitel?.length
-            ? issue.kapitel
-            : [issue.stelle_a, issue.stelle_b].filter(Boolean);
-          if (!kapitel.includes(this.kontinuitaetFilterKapitel)) return false;
+          const f = this.kontinuitaetFilterKapitel;
+          const selectedId = chapters.find(t => t.name === f)?.id;
+          const idMatch    = selectedId !== undefined && issue.chapter_ids?.includes(selectedId);
+          const nameMatch  = (issue.kapitel || []).includes(f);
+          const stelleMatch = fromStelle(issue.stelle_a) === f || fromStelle(issue.stelle_b) === f;
+          if (!idMatch && !nameMatch && !stelleMatch) return false;
         }
         return true;
       });
@@ -662,6 +685,7 @@ document.addEventListener('alpine:init', () => {
         this.loadCharacterArcs(),
         this._loadKontinuitaetHistory(),
         this.loadLastKomplettRun(bookId),
+        this._reloadZeitstrahl(),
       ]);
       this.alleAktualisierenStatus = 'Fertig.';
       setTimeout(() => { if (this.alleAktualisierenStatus === 'Fertig.') this.alleAktualisierenStatus = ''; }, 4000);

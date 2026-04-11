@@ -57,8 +57,22 @@ export const ereignisseMethods = {
     this.globalZeitstrahl = groups;
   },
 
+  async _reloadZeitstrahl() {
+    if (this.zeitstrahlConsolidating) return;
+    try {
+      const { ereignisse } = await fetch(`/figures/zeitstrahl/${this.selectedBookId}`).then(r => r.json());
+      if (ereignisse) {
+        this.globalZeitstrahl = ereignisse;
+      } else if (!this.globalZeitstrahl.length) {
+        this._buildGlobalZeitstrahl();
+      }
+    } catch {
+      if (!this.globalZeitstrahl.length) this._buildGlobalZeitstrahl();
+    }
+  },
+
   async toggleEreignisseCard() {
-    if (this.showEreignisseCard) { this.showEreignisseCard = false; return; }
+    if (this.showEreignisseCard) { await this._reloadZeitstrahl(); return; }
     this._closeOtherMainCards('ereignisse');
     this.showEreignisseCard = true;
     if (!this.figuren.length) {
@@ -67,17 +81,6 @@ export const ereignisseMethods = {
     // Zeitstrahl laden: zuerst persistierte Konsolidierung aus DB, sonst aus figuren aufbauen.
     // Kein Cache-Check (!length) hier – loadFiguren() setzt globalZeitstrahl aus Figuren-Ereignissen,
     // DB-Daten müssen das überschreiben können.
-    if (!this.zeitstrahlConsolidating) {
-      try {
-        const { ereignisse } = await fetch(`/figures/zeitstrahl/${this.selectedBookId}`).then(r => r.json());
-        if (ereignisse) {
-          this.globalZeitstrahl = ereignisse;
-        } else if (!this.globalZeitstrahl.length) {
-          this._buildGlobalZeitstrahl();
-        }
-      } catch {
-        if (!this.globalZeitstrahl.length) this._buildGlobalZeitstrahl();
-      }
-    }
+    await this._reloadZeitstrahl();
   },
 };

@@ -3,6 +3,7 @@
   <div class="card-header">
     <span class="card-title" x-text="'Entwicklungsbögen: ' + selectedBookName"></span>
     <span x-show="alleAktualisierenLastRun && !characterArcsLoading" class="figuren-updated-at" x-text="'Stand: ' + alleAktualisierenLastRun"></span>
+    <button class="btn-card-close" @click="showCharacterArcsCard = false" title="Schliessen">×</button>
   </div>
 
   <div x-show="characterArcsProgress > 0" class="progress-bar-wrap">

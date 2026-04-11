@@ -5,7 +5,7 @@ import { escHtml } from './utils.js';
 
 export const kontinuitaetMethods = {
   async toggleKontinuitaetCard() {
-    if (this.showKontinuitaetCard) { this.showKontinuitaetCard = false; return; }
+    if (this.showKontinuitaetCard) { await this._loadKontinuitaetHistory(); return; }
     this._closeOtherMainCards('kontinuitaet');
     this.showKontinuitaetCard = true;
     await this.loadPages();
