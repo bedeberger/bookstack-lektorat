@@ -116,18 +116,25 @@ export const historyMethods = {
       return;
     }
 
+    this.historyApplying = { ...this.historyApplying, [entry.id]: 25 };
     this.setStatus('Lade aktuelle Seite…', true);
     try {
       const page = await this.bsGet('pages/' + this.currentPage.id);
       let finalHtml = this._applyCorrections(page.html, selectedErrors);
 
       if (selectedStyles.length > 0) {
+        this.historyApplying = { ...this.historyApplying, [entry.id]: 45 };
         this.setStatus('KI überarbeitet Stil… (0 Zeichen)', true);
         try {
+          const aiBase = finalHtml.length || 1;
           const result = await this.callAI(
             buildStilkorrekturPrompt(finalHtml, selectedStyles),
             SYSTEM_STILKORREKTUR,
-            (chars) => this.setStatus(`KI überarbeitet Stil… (${chars} Zeichen)`, true),
+            (chars) => {
+              this.setStatus(`KI überarbeitet Stil… (${chars} Zeichen)`, true);
+              const p = Math.min(75, 45 + Math.round((chars / aiBase) * 30));
+              this.historyApplying = { ...this.historyApplying, [entry.id]: p };
+            },
           );
           if (Array.isArray(result?.korrekturen) && result.korrekturen.length > 0) {
             finalHtml = this._applyCorrections(finalHtml, result.korrekturen.map(k => ({ original: k.original, korrektur: k.ersatz })));
@@ -140,10 +147,14 @@ export const historyMethods = {
       }
 
       if (finalHtml.length < page.html.length * SAFETY_HTML_RATIO) {
+        const _h = { ...this.historyApplying };
+        delete _h[entry.id];
+        this.historyApplying = _h;
         this.setStatus('Fehler: Ergebnis wirkt unvollständig – Speichern abgebrochen.');
         return;
       }
 
+      this.historyApplying = { ...this.historyApplying, [entry.id]: 85 };
       this.setStatus('Speichere in BookStack…', true);
       await this.bsPut('pages/' + this.currentPage.id, { html: finalHtml, name: this.currentPage.name });
 
@@ -169,9 +180,15 @@ export const historyMethods = {
       entry.selected_errors_json = mergedSelected;
       delete this.historySelections[entry.id];
       this.initHistorySelection(entry);
+      const _h = { ...this.historyApplying };
+      delete _h[entry.id];
+      this.historyApplying = _h;
       this.setStatus('✓ Korrekturen gespeichert.', false, 5000);
     } catch (e) {
       console.error('[applyHistoryCheck]', e);
+      const _h = { ...this.historyApplying };
+      delete _h[entry.id];
+      this.historyApplying = _h;
       this.setStatus('Fehler: ' + e.message);
     }
   },

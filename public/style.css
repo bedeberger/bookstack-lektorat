@@ -1046,6 +1046,11 @@ ins {
 }
 .btn-delete-history:hover { opacity: 1; }
 
+.progress-bar-wrap--history {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
 /* === Token-Schätzung === */
 .tok-badge {
   font-size: 10px;

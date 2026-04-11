@@ -206,8 +206,13 @@
           </div>
           <div x-show="entry.fazit" class="fazit" x-text="entry.fazit"></div>
           <div class="history-actions">
-            <button x-show="historyHasUnapplied(entry) && entry.error_count > 0 && currentPage" class="btn-apply-history" @click.stop="applyHistoryCheck(entry)">In BookStack übernehmen</button>
-            <button class="btn-delete-history" @click.stop="deletePageCheck(entry.id)" title="Eintrag löschen">Eintrag löschen</button>
+            <button x-show="historyHasUnapplied(entry) && entry.error_count > 0 && currentPage" class="btn-apply-history" :disabled="historyApplying[entry.id] != null" @click.stop="applyHistoryCheck(entry)">
+              <span x-show="historyApplying[entry.id] != null" class="spinner"></span><span x-text="historyApplying[entry.id] != null ? 'Wird übernommen…' : 'In BookStack übernehmen'"></span>
+            </button>
+            <button class="btn-delete-history" :disabled="historyApplying[entry.id] != null" @click.stop="deletePageCheck(entry.id)" title="Eintrag löschen">Eintrag löschen</button>
+          </div>
+          <div class="progress-bar-wrap progress-bar-wrap--history" x-show="historyApplying[entry.id] != null">
+            <div class="progress-bar" :style="'width:' + (historyApplying[entry.id] || 0) + '%'"></div>
           </div>
         </div>
       </div>
