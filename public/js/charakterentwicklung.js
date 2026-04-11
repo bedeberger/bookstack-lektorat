@@ -8,6 +8,7 @@ export const charakterentwicklungMethods = {
     if (this.showCharacterArcsCard) { this.showCharacterArcsCard = false; return; }
     this._closeOtherMainCards('characterArcs');
     this.showCharacterArcsCard = true;
+    if (!this.figuren?.length) await this.loadFiguren();
     await this.loadCharacterArcs();
     // Prüfen ob bereits ein Job läuft
     if (!this._characterArcsPollTimer && !this.characterArcsLoading) {
@@ -121,11 +122,11 @@ export const charakterentwicklungMethods = {
     return (this.figuren || []).find(f => f.id === figId) || null;
   },
 
-  // Entwicklungsbögen sortiert nach arc_typ + fig-Wichtigkeit
+  // Entwicklungsbögen gefiltert + sortiert
   characterArcsSorted() {
     if (!this.characterArcs) return [];
     const typOrder = ['Reifebogen', 'Verfallsbogen', 'Erlösungsbogen', 'Tragischer Bogen', 'Wandlungsbogen', 'Stasis'];
-    return [...this.characterArcs].sort((a, b) => {
+    return [...this.characterArcsFiltered].sort((a, b) => {
       const ta = typOrder.indexOf(a.arc_typ);
       const tb = typOrder.indexOf(b.arc_typ);
       return (ta === -1 ? 99 : ta) - (tb === -1 ? 99 : tb);

@@ -269,6 +269,9 @@ document.addEventListener('alpine:init', () => {
     characterArcsStatus: '',
     _characterArcsPollTimer: null,
     _arcDetailKey: null,
+    arcFilterFigurId: '',
+    arcFilterKapitel: '',
+    arcFilterSeite: '',
     jobQueueItems: [],
     _jobQueueTimer: null,
     showJobStats: false,
@@ -334,6 +337,35 @@ document.addEventListener('alpine:init', () => {
         (!this.szenenFilterSeite || s.seite === this.szenenFilterSeite) &&
         (!this.szenenFilterOrtId || (s.ort_ids || []).includes(this.szenenFilterOrtId))
       );
+    },
+
+    arcKapitelListe() {
+      const names = new Set();
+      for (const arc of (this.characterArcs || [])) {
+        for (const e of (arc.etappen || [])) if (e.kapitel) names.add(e.kapitel);
+      }
+      return [...names].sort((a, b) => a.localeCompare(b, 'de'));
+    },
+    arcSeitenListe() {
+      if (!this.arcFilterKapitel) return [];
+      const names = new Set();
+      for (const f of (this.figuren || [])) {
+        for (const s of (f.seiten || [])) {
+          if (s.kapitel === this.arcFilterKapitel && s.seite) names.add(s.seite);
+        }
+      }
+      return [...names].sort((a, b) => a.localeCompare(b, 'de'));
+    },
+    get characterArcsFiltered() {
+      return (this.characterArcs || []).filter(arc => {
+        if (this.arcFilterFigurId && arc.fig_id !== this.arcFilterFigurId) return false;
+        if (this.arcFilterKapitel && !arc.etappen?.some(e => e.kapitel === this.arcFilterKapitel)) return false;
+        if (this.arcFilterSeite) {
+          const fig = (this.figuren || []).find(f => f.id === arc.fig_id);
+          if (!fig || !fig.seiten?.some(s => s.kapitel === this.arcFilterKapitel && s.seite === this.arcFilterSeite)) return false;
+        }
+        return true;
+      });
     },
 
     get statusHtml() {
@@ -993,6 +1025,9 @@ document.addEventListener('alpine:init', () => {
       this.characterArcsProgress = 0;
       this.characterArcsLoading = false;
       this._arcDetailKey = null;
+      this.arcFilterFigurId = '';
+      this.arcFilterKapitel = '';
+      this.arcFilterSeite = '';
       if (this._characterArcsPollTimer) { clearInterval(this._characterArcsPollTimer); this._characterArcsPollTimer = null; }
       this.showBookSettingsCard = false;
       this.bookSettingsSaved = false;

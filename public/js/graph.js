@@ -208,6 +208,99 @@ export const graphMethods = {
     this._figurenNetwork.once('stabilizationIterationsDone', () => {
       this._figurenNetwork.setOptions({ physics: false });
     });
+
+    // Welche Schichten sind wirklich belegt? level → schicht
+    const levelToSchicht = {};
+    for (const f of this.figuren) {
+      const lev = SCHICHT_LEVEL[f.sozialschicht] ?? SCHICHT_LEVEL.andere;
+      if (!levelToSchicht[lev]) levelToSchicht[lev] = f.sozialschicht || 'andere';
+    }
+
+    const SCHICHT_LABEL_MAP = {
+      adel:            'Adel',
+      klerus:          'Klerus',
+      grossbuergertum: 'Großbürgertum',
+      buergertum:      'Bürgertum',
+      kleinbuergertum: 'Kleinbürgertum',
+      arbeiterklasse:  'Arbeiterklasse',
+      unterwelt:       'Unterwelt',
+      andere:          'Weitere',
+    };
+    const SCHICHT_BAND_COLOR = {
+      adel:            'rgba(255,243,204,0.40)',
+      klerus:          'rgba(237,224,248,0.40)',
+      grossbuergertum: 'rgba(212,232,255,0.35)',
+      buergertum:      'rgba(232,244,232,0.35)',
+      kleinbuergertum: 'rgba(240,240,240,0.30)',
+      arbeiterklasse:  'rgba(245,234,212,0.38)',
+      unterwelt:       'rgba(40,40,40,0.22)',
+      andere:          'rgba(255,245,220,0.25)',
+    };
+    const SCHICHT_LABEL_COLOR = {
+      adel:            '#8B6A00',
+      klerus:          '#6A1F8A',
+      grossbuergertum: '#1d4b73',
+      buergertum:      '#275927',
+      kleinbuergertum: '#555',
+      arbeiterklasse:  '#6B3F0D',
+      unterwelt:       '#ccc',
+      andere:          '#888',
+    };
+    const BAND_H      = LEVEL_Y_GAP * 0.90;
+    const BAND_HALF   = BAND_H / 2;
+    const BAND_EXTENT = 9000;
+    const network     = this._figurenNetwork;
+
+    network.on('beforeDrawing', (ctx) => {
+      // 1) Farbige Streifen + Trennlinien in Netzwerk-Koordinaten
+      ctx.save();
+      for (const [levStr, schicht] of Object.entries(levelToSchicht)) {
+        const y = Number(levStr) * LEVEL_Y_GAP;
+        ctx.fillStyle = SCHICHT_BAND_COLOR[schicht] || 'rgba(200,200,200,0.18)';
+        ctx.fillRect(-BAND_EXTENT, y - BAND_HALF, BAND_EXTENT * 2, BAND_H);
+        // Trennlinie unten
+        ctx.strokeStyle = 'rgba(0,0,0,0.07)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(-BAND_EXTENT, y + BAND_HALF);
+        ctx.lineTo( BAND_EXTENT, y + BAND_HALF);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+
+      // 2) Schicht-Labels: linke Kante des Canvas, in Bildschirm-Koordinaten
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
+      ctx.textBaseline = 'middle';
+      for (const [levStr, schicht] of Object.entries(levelToSchicht)) {
+        const domY = network.canvasToDOM({ x: 0, y: Number(levStr) * LEVEL_Y_GAP }).y;
+        if (domY < -16 || domY > ctx.canvas.height + 16) continue;
+        // Hintergrund-Pill (rounded rect, compat-safe)
+        const label = SCHICHT_LABEL_MAP[schicht] || schicht;
+        const tw    = ctx.measureText(label).width;
+        const px = 6, py = domY - 9, pw = tw + 12, ph = 18, pr = 4;
+        ctx.fillStyle = 'rgba(255,255,255,0.80)';
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(px, py, pw, ph, pr);
+        } else {
+          ctx.moveTo(px + pr, py);
+          ctx.lineTo(px + pw - pr, py);     ctx.arcTo(px+pw, py,    px+pw, py+pr,    pr);
+          ctx.lineTo(px + pw, py+ph-pr);    ctx.arcTo(px+pw, py+ph, px+pw-pr, py+ph, pr);
+          ctx.lineTo(px + pr, py+ph);       ctx.arcTo(px,    py+ph, px,      py+ph-pr,pr);
+          ctx.lineTo(px, py+pr);            ctx.arcTo(px,    py,    px+pr,   py,      pr);
+          ctx.closePath();
+        }
+        ctx.fill();
+        ctx.fillStyle = SCHICHT_LABEL_COLOR[schicht] || '#666';
+        ctx.fillText(label, 12, domY);
+      }
+      ctx.restore();
+    });
+
     this._attachTooltip(container);
   },
 
