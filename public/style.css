@@ -1827,8 +1827,8 @@ ins {
 .szene-card-titel    { font-size: var(--font-size-sm); font-weight: 500; margin-bottom: 3px; }
 .szene-card-kommentar { font-size: 12px; color: var(--color-muted); margin-bottom: 6px; }
 
-/* === Szenen-Karte: Filter-Leiste === */
-.szenen-filter-bar {
+/* === Filter-Leiste (alle Features) === */
+.filter-bar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2912,14 +2912,6 @@ ins {
 }
 
 /* ── Figurenentwicklungsbögen ────────────────────────────────────────────────── */
-.carc-filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 8px 12px 6px;
-  border-bottom: 1px solid var(--color-border);
-}
 .carc-list {
   padding: 0.5rem 0.75rem 1rem;
   display: flex;

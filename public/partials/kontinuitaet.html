@@ -15,7 +15,7 @@
   </div>
 
   <!-- Filter-Leiste (ausserhalb x-if, damit Alpine x-effect die Parent-Reaktivität korrekt trackt) -->
-  <div x-show="kontinuitaetResult?.issues?.length > 0" class="szenen-filter-bar">
+  <div x-show="kontinuitaetResult?.issues?.length > 0" class="filter-bar">
     <div x-data="combobox('Figur…', 'Alle Figuren')"
          x-modelable="value" x-model="kontinuitaetFilterFigurId"
          x-effect="options = figuren.filter(f => (kontinuitaetResult?.issues||[]).some(i => i.fig_ids?.length ? i.fig_ids.includes(f.id) : (i.figuren||[]).includes(f.name))).map(f => ({value: f.id, label: f.kurzname || f.name}))"

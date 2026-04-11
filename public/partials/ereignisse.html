@@ -23,7 +23,7 @@
   </div>
 
   <!-- Filter -->
-  <div x-show="globalZeitstrahl.length > 0" class="szenen-filter-bar">
+  <div x-show="globalZeitstrahl.length > 0" class="filter-bar">
     <div x-data="combobox('Figur…', 'Alle Figuren')"
          x-modelable="value" x-model="ereignisseFilterFigurId"
          x-effect="options = figuren.filter(f => globalZeitstrahl.some(ev => ev.figuren.some(fr => fr.id === f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"

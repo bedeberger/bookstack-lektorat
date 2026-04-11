@@ -15,7 +15,7 @@
   </div>
 
   <!-- Filter-Leiste -->
-  <div x-show="characterArcs && characterArcs.length > 0" class="carc-filter-bar">
+  <div x-show="characterArcs && characterArcs.length > 0" class="filter-bar">
     <div x-data="combobox('Figur…', 'Alle Figuren')"
          x-modelable="value" x-model="arcFilterFigurId"
          x-effect="options = figuren.filter(f => characterArcs.some(a => a.fig_id === f.id)).map(f => ({value: f.id, label: f.kurzname || f.name}))"
