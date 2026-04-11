@@ -419,14 +419,19 @@ ${chText}`;
 }
 
 export function buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren) {
-  const synthInput = chapterFiguren.map(cf =>
-    `## Kapitel: ${cf.kapitel}\n` + (cf.figuren || []).map(f => {
+  const synthInput = chapterFiguren.map(cf => {
+    // Kapitel-lokale IDs → Namen auflösen, damit Beziehungen kapitelübergreifend eindeutig sind
+    const nameById = Object.fromEntries((cf.figuren || []).map(f => [f.id, f.name]));
+    return `## Kapitel: ${cf.kapitel}\n` + (cf.figuren || []).map(f => {
       const meta = [f.typ, f.beruf, f.geburtstag ? `*${f.geburtstag}` : '', f.geschlecht].filter(Boolean).join(', ');
       return `- ${f.name}${f.kurzname && f.kurzname !== f.name ? ` («${f.kurzname}»)` : ''} (${meta}): ${f.beschreibung || ''}` +
         (f.eigenschaften?.length ? '\n  Eigenschaften: ' + f.eigenschaften.join(', ') : '') +
-        (f.beziehungen?.length ? '\n  Beziehungen: ' + f.beziehungen.map(b => `${b.figur_id || b.name} [${b.typ}]`).join(', ') : '');
-    }).join('\n')
-  ).join('\n\n');
+        (f.beziehungen?.length ? '\n  Beziehungen: ' + f.beziehungen.map(b => {
+          const relName = nameById[b.figur_id] || b.name || b.figur_id;
+          return `${relName} [${b.typ}]${b.beschreibung ? ': ' + b.beschreibung : ''}`;
+        }).join(', ') : '');
+    }).join('\n');
+  }).join('\n\n');
   return `Konsolidiere die folgenden Figurenanalysen aller Kapitel des Buchs «${bookName}» zu einer einheitlichen Gesamtliste. Dedupliziere Figuren, führe Informationen zusammen und vergib stabile IDs.
 
 Kapitelanalysen:
