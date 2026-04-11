@@ -8,6 +8,7 @@ export const kontinuitaetMethods = {
     if (this.showKontinuitaetCard) { this.showKontinuitaetCard = false; return; }
     this._closeOtherMainCards('kontinuitaet');
     this.showKontinuitaetCard = true;
+    await this.loadPages();
     if (!this.figuren?.length) await this.loadFiguren(this.selectedBookId);
     await this._loadKontinuitaetHistory();
     // Prüfen ob bereits ein Job läuft

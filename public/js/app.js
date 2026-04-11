@@ -347,13 +347,16 @@ document.addEventListener('alpine:init', () => {
     },
 
     kontinuitaetKapitelListe() {
+      const chapterNames = new Set(
+        (this.tree || []).filter(t => t.type === 'chapter').map(t => t.name)
+      );
       const names = new Set();
       for (const issue of (this.kontinuitaetResult?.issues || [])) {
         if (issue.kapitel?.length) {
-          for (const k of issue.kapitel) if (k) names.add(k);
+          for (const k of issue.kapitel) if (k && chapterNames.has(k)) names.add(k);
         } else {
-          if (issue.stelle_a) names.add(issue.stelle_a);
-          if (issue.stelle_b) names.add(issue.stelle_b);
+          if (issue.stelle_a && chapterNames.has(issue.stelle_a)) names.add(issue.stelle_a);
+          if (issue.stelle_b && chapterNames.has(issue.stelle_b)) names.add(issue.stelle_b);
         }
       }
       return [...names].sort((a, b) => a.localeCompare(b, 'de'));

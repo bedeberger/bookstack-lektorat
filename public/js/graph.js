@@ -273,15 +273,17 @@ export const graphMethods = {
       // 2) Schicht-Labels: linke Kante des Canvas, in Bildschirm-Koordinaten
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
+      const dpr = window.devicePixelRatio || 1;
+      ctx.font = `bold ${10 * dpr}px system-ui, -apple-system, sans-serif`;
       ctx.textBaseline = 'middle';
       for (const [levStr, schicht] of Object.entries(levelToSchicht)) {
         const domY = network.canvasToDOM({ x: 0, y: Number(levStr) * LEVEL_Y_GAP }).y;
-        if (domY < -16 || domY > ctx.canvas.height + 16) continue;
-        // Hintergrund-Pill (rounded rect, compat-safe)
+        if (domY < -16 || domY > ctx.canvas.height / dpr + 16) continue;
+        // Hintergrund-Pill (rounded rect, compat-safe) – Koordinaten in Canvas-Pixeln (× dpr)
         const label = SCHICHT_LABEL_MAP[schicht] || schicht;
         const tw    = ctx.measureText(label).width;
-        const px = 6, py = domY - 9, pw = tw + 12, ph = 18, pr = 4;
+        const cY = domY * dpr;
+        const px = 6 * dpr, py = cY - 9 * dpr, pw = tw + 12 * dpr, ph = 18 * dpr, pr = 4 * dpr;
         ctx.fillStyle = 'rgba(255,255,255,0.80)';
         ctx.beginPath();
         if (ctx.roundRect) {
@@ -296,7 +298,7 @@ export const graphMethods = {
         }
         ctx.fill();
         ctx.fillStyle = SCHICHT_LABEL_COLOR[schicht] || '#666';
-        ctx.fillText(label, 12, domY);
+        ctx.fillText(label, 12 * dpr, cY);
       }
       ctx.restore();
     });
