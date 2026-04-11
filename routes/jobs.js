@@ -200,7 +200,8 @@ function htmlToText(html) {
 
 // ── Chat-Hilfsfunktionen ──────────────────────────────────────────────────────
 
-function _chatGetFiguren(bookId, userEmail) {
+function _chatGetFiguren(bookId, userEmail, chapterName = null) {
+  const figParams = chapterName ? [bookId, userEmail, chapterName] : [bookId, userEmail];
   const rows = db.prepare(`
     SELECT f.fig_id, f.name, f.kurzname, f.typ, f.beschreibung, f.beruf, f.geschlecht,
            GROUP_CONCAT(DISTINCT ft.tag)         AS tags,
@@ -209,9 +210,10 @@ function _chatGetFiguren(bookId, userEmail) {
     LEFT JOIN figure_tags        ft ON ft.figure_id = f.id
     LEFT JOIN figure_appearances fa ON fa.figure_id = f.id
     WHERE f.book_id = ? AND f.user_email = ?
+    ${chapterName ? 'AND EXISTS (SELECT 1 FROM figure_appearances fa2 WHERE fa2.figure_id = f.id AND fa2.chapter_name = ?)' : ''}
     GROUP BY f.id
     ORDER BY f.sort_order
-  `).all(bookId, userEmail);
+  `).all(...figParams);
 
   const evtRows = db.prepare(`
     SELECT f.fig_id, fe.datum, fe.ereignis, fe.bedeutung, fe.typ, fe.kapitel
@@ -249,13 +251,21 @@ function _chatGetFiguren(bookId, userEmail) {
     relsByFigId[r.to_fig_id].push({ mit: r.from_fig_id, ...entry });
   }
 
-  const locRows = db.prepare(`
+  const locParams = chapterName ? [chapterName, bookId, userEmail] : [bookId, userEmail];
+  const locRows = db.prepare(chapterName ? `
+    SELECT lf.fig_id, l.name, l.typ, l.beschreibung, l.stimmung
+    FROM location_figures lf
+    JOIN locations l ON l.id = lf.location_id
+    JOIN location_chapters lc ON lc.location_id = l.id AND lc.chapter_name = ?
+    WHERE l.book_id = ? AND l.user_email = ?
+    ORDER BY l.sort_order
+  ` : `
     SELECT lf.fig_id, l.name, l.typ, l.beschreibung, l.stimmung
     FROM location_figures lf
     JOIN locations l ON l.id = lf.location_id
     WHERE l.book_id = ? AND l.user_email = ?
     ORDER BY l.sort_order
-  `).all(bookId, userEmail);
+  `).all(...locParams);
   const locsByFigId = {};
   for (const l of locRows) {
     if (!locsByFigId[l.fig_id]) locsByFigId[l.fig_id] = [];
@@ -267,14 +277,40 @@ function _chatGetFiguren(bookId, userEmail) {
     });
   }
 
+  const sceneParams = chapterName ? [bookId, userEmail, chapterName] : [bookId, userEmail];
+  const sceneRows = db.prepare(chapterName ? `
+    SELECT sf.fig_id, fs.titel, fs.kapitel, fs.wertung, fs.kommentar
+    FROM scene_figures sf
+    JOIN figure_scenes fs ON fs.id = sf.scene_id
+    WHERE fs.book_id = ? AND fs.user_email = ? AND fs.kapitel = ?
+    ORDER BY fs.sort_order
+  ` : `
+    SELECT sf.fig_id, fs.titel, fs.kapitel, fs.wertung, fs.kommentar
+    FROM scene_figures sf
+    JOIN figure_scenes fs ON fs.id = sf.scene_id
+    WHERE fs.book_id = ? AND fs.user_email = ?
+    ORDER BY fs.sort_order
+  `).all(...sceneParams);
+  const scenesByFigId = {};
+  for (const s of sceneRows) {
+    if (!scenesByFigId[s.fig_id]) scenesByFigId[s.fig_id] = [];
+    scenesByFigId[s.fig_id].push({
+      titel: s.titel,
+      ...(s.kapitel   ? { kapitel:   s.kapitel   } : {}),
+      ...(s.wertung  != null ? { wertung:  s.wertung  } : {}),
+      ...(s.kommentar ? { kommentar: s.kommentar } : {}),
+    });
+  }
+
   return rows.map(r => ({
     id: r.fig_id, name: r.name, kurzname: r.kurzname, typ: r.typ,
     beschreibung: r.beschreibung, beruf: r.beruf, geschlecht: r.geschlecht,
     eigenschaften: r.tags ? r.tags.split(',') : [],
     kapitel: r.kapitel ? r.kapitel.split(',') : [],
-    ...(eventsByFigId[r.fig_id]?.length ? { lebensereignisse: eventsByFigId[r.fig_id] } : {}),
-    ...(relsByFigId[r.fig_id]?.length   ? { beziehungen:      relsByFigId[r.fig_id]   } : {}),
-    ...(locsByFigId[r.fig_id]?.length   ? { schauplätze:      locsByFigId[r.fig_id]   } : {}),
+    ...(eventsByFigId[r.fig_id]?.length  ? { lebensereignisse: eventsByFigId[r.fig_id]  } : {}),
+    ...(relsByFigId[r.fig_id]?.length    ? { beziehungen:      relsByFigId[r.fig_id]    } : {}),
+    ...(locsByFigId[r.fig_id]?.length    ? { schauplätze:      locsByFigId[r.fig_id]    } : {}),
+    ...(scenesByFigId[r.fig_id]?.length  ? { szenen:           scenesByFigId[r.fig_id]  } : {}),
   }));
 }
 
@@ -1012,15 +1048,32 @@ async function runCharacterArcJob(jobId, bookId, bookName, userEmail, userToken)
 
     // Figuren laden – Voraussetzung
     const figRows = db.prepare(
-      'SELECT fig_id, name, typ, beschreibung FROM figures WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+      'SELECT id, fig_id, name, typ, beschreibung FROM figures WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
     ).all(parseInt(bookId), userEmail || null);
     if (!figRows.length) {
       failJob(jobId, new Error('Keine Figuren gefunden – bitte zuerst Figuren ermitteln.'));
       return;
     }
-    const figurenKontext = figRows.map(f =>
-      `${f.fig_id}: ${f.name} (${f.typ || 'andere'})${f.beschreibung ? ' – ' + f.beschreibung : ''}`
-    ).join('\n');
+
+    // Lebensereignisse laden (falls vorhanden) – geben der KI chronologischen Kontext
+    const evtRows = db.prepare(`
+      SELECT fe.figure_id, fe.datum, fe.ereignis, fe.typ
+      FROM figure_events fe
+      WHERE fe.figure_id IN (${figRows.map(() => '?').join(',')})
+      ORDER BY fe.figure_id, fe.sort_order
+    `).all(...figRows.map(f => f.id));
+    const evtMap = {};
+    for (const ev of evtRows) (evtMap[ev.figure_id] ??= []).push(ev);
+
+    const figurenKontext = figRows.map(f => {
+      let line = `${f.fig_id}: ${f.name} (${f.typ || 'andere'})${f.beschreibung ? ' – ' + f.beschreibung : ''}`;
+      const evts = evtMap[f.id];
+      if (evts?.length) {
+        const evtStr = evts.map(e => `  • ${e.datum || '?'}: ${e.ereignis}${e.typ === 'extern' ? ' [extern]' : ''}`).join('\n');
+        line += `\n  Lebensereignisse:\n${evtStr}`;
+      }
+      return line;
+    }).join('\n\n');
 
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 5 });
     const [chaptersData, pages] = await Promise.all([
@@ -1279,14 +1332,11 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
       }
     }
 
-    // Kontext aus DB laden – nur Figuren des aktuellen Kapitels
-    const alleFiguren = _chatGetFiguren(session.book_id, userEmail);
+    // Kontext aus DB laden – nur Figuren/Szenen/Orte des aktuellen Kapitels
     const pageRow = session.page_id
       ? db.prepare('SELECT chapter_name FROM pages WHERE page_id = ?').get(session.page_id)
       : null;
-    const figuren = pageRow?.chapter_name
-      ? alleFiguren.filter(f => f.kapitel.includes(pageRow.chapter_name))
-      : alleFiguren;
+    const figuren = _chatGetFiguren(session.book_id, userEmail, pageRow?.chapter_name ?? null);
     const review  = _chatGetLatestReview(session.book_id, userEmail);
     const { SYSTEM_CHAT: chatSysPrompt } = await getBookPrompts(session.book_id);
     const systemPrompt = buildChatSystemPrompt(session.page_name || 'Unbekannte Seite', pageText, figuren, review, chatSysPrompt);

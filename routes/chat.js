@@ -51,7 +51,8 @@ function getLatestReview(bookId, userEmail) {
 }
 
 /** Alle Figuren eines Buchs (user-spezifisch) als kompaktes Objekt-Array. */
-function getFiguren(bookId, userEmail) {
+function getFiguren(bookId, userEmail, chapterName = null) {
+  const figParams = chapterName ? [bookId, userEmail, chapterName] : [bookId, userEmail];
   const rows = db.prepare(`
     SELECT f.fig_id, f.name, f.kurzname, f.typ, f.beschreibung, f.beruf, f.geschlecht,
            GROUP_CONCAT(DISTINCT ft.tag)         AS tags,
@@ -60,19 +61,107 @@ function getFiguren(bookId, userEmail) {
     LEFT JOIN figure_tags        ft ON ft.figure_id = f.id
     LEFT JOIN figure_appearances fa ON fa.figure_id = f.id
     WHERE f.book_id = ? AND f.user_email = ?
+    ${chapterName ? 'AND EXISTS (SELECT 1 FROM figure_appearances fa2 WHERE fa2.figure_id = f.id AND fa2.chapter_name = ?)' : ''}
     GROUP BY f.id
     ORDER BY f.sort_order
+  `).all(...figParams);
+
+  const evtRows = db.prepare(`
+    SELECT f.fig_id, fe.datum, fe.ereignis, fe.bedeutung, fe.typ, fe.kapitel
+    FROM figure_events fe
+    JOIN figures f ON f.id = fe.figure_id
+    WHERE f.book_id = ? AND f.user_email = ?
+    ORDER BY fe.sort_order
   `).all(bookId, userEmail);
+  const eventsByFigId = {};
+  for (const e of evtRows) {
+    if (!eventsByFigId[e.fig_id]) eventsByFigId[e.fig_id] = [];
+    eventsByFigId[e.fig_id].push({
+      datum: e.datum, ereignis: e.ereignis,
+      ...(e.bedeutung ? { bedeutung: e.bedeutung } : {}),
+      typ: e.typ,
+      ...(e.kapitel  ? { kapitel: e.kapitel }     : {}),
+    });
+  }
+
+  const relRows = db.prepare(`
+    SELECT from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis
+    FROM figure_relations
+    WHERE book_id = ? AND user_email = ?
+  `).all(bookId, userEmail);
+  const relsByFigId = {};
+  for (const r of relRows) {
+    const entry = {
+      typ: r.typ,
+      ...(r.beschreibung    ? { beschreibung: r.beschreibung }       : {}),
+      ...(r.machtverhaltnis != null ? { machtverhaltnis: r.machtverhaltnis } : {}),
+    };
+    if (!relsByFigId[r.from_fig_id]) relsByFigId[r.from_fig_id] = [];
+    relsByFigId[r.from_fig_id].push({ mit: r.to_fig_id, ...entry });
+    if (!relsByFigId[r.to_fig_id]) relsByFigId[r.to_fig_id] = [];
+    relsByFigId[r.to_fig_id].push({ mit: r.from_fig_id, ...entry });
+  }
+
+  const locParams = chapterName ? [chapterName, bookId, userEmail] : [bookId, userEmail];
+  const locRows = db.prepare(chapterName ? `
+    SELECT lf.fig_id, l.name, l.typ, l.beschreibung, l.stimmung
+    FROM location_figures lf
+    JOIN locations l ON l.id = lf.location_id
+    JOIN location_chapters lc ON lc.location_id = l.id AND lc.chapter_name = ?
+    WHERE l.book_id = ? AND l.user_email = ?
+    ORDER BY l.sort_order
+  ` : `
+    SELECT lf.fig_id, l.name, l.typ, l.beschreibung, l.stimmung
+    FROM location_figures lf
+    JOIN locations l ON l.id = lf.location_id
+    WHERE l.book_id = ? AND l.user_email = ?
+    ORDER BY l.sort_order
+  `).all(...locParams);
+  const locsByFigId = {};
+  for (const l of locRows) {
+    if (!locsByFigId[l.fig_id]) locsByFigId[l.fig_id] = [];
+    locsByFigId[l.fig_id].push({
+      name: l.name,
+      ...(l.typ         ? { typ:         l.typ         } : {}),
+      ...(l.beschreibung? { beschreibung: l.beschreibung} : {}),
+      ...(l.stimmung    ? { stimmung:     l.stimmung    } : {}),
+    });
+  }
+
+  const sceneParams = chapterName ? [bookId, userEmail, chapterName] : [bookId, userEmail];
+  const sceneRows = db.prepare(chapterName ? `
+    SELECT sf.fig_id, fs.titel, fs.kapitel, fs.wertung, fs.kommentar
+    FROM scene_figures sf
+    JOIN figure_scenes fs ON fs.id = sf.scene_id
+    WHERE fs.book_id = ? AND fs.user_email = ? AND fs.kapitel = ?
+    ORDER BY fs.sort_order
+  ` : `
+    SELECT sf.fig_id, fs.titel, fs.kapitel, fs.wertung, fs.kommentar
+    FROM scene_figures sf
+    JOIN figure_scenes fs ON fs.id = sf.scene_id
+    WHERE fs.book_id = ? AND fs.user_email = ?
+    ORDER BY fs.sort_order
+  `).all(...sceneParams);
+  const scenesByFigId = {};
+  for (const s of sceneRows) {
+    if (!scenesByFigId[s.fig_id]) scenesByFigId[s.fig_id] = [];
+    scenesByFigId[s.fig_id].push({
+      titel: s.titel,
+      ...(s.kapitel   ? { kapitel:   s.kapitel   } : {}),
+      ...(s.wertung  != null ? { wertung:  s.wertung  } : {}),
+      ...(s.kommentar ? { kommentar: s.kommentar } : {}),
+    });
+  }
+
   return rows.map(r => ({
-    id: r.fig_id,
-    name: r.name,
-    kurzname: r.kurzname,
-    typ: r.typ,
-    beschreibung: r.beschreibung,
-    beruf: r.beruf,
-    geschlecht: r.geschlecht,
+    id: r.fig_id, name: r.name, kurzname: r.kurzname, typ: r.typ,
+    beschreibung: r.beschreibung, beruf: r.beruf, geschlecht: r.geschlecht,
     eigenschaften: r.tags ? r.tags.split(',') : [],
     kapitel: r.kapitel ? r.kapitel.split(',') : [],
+    ...(eventsByFigId[r.fig_id]?.length  ? { lebensereignisse: eventsByFigId[r.fig_id]  } : {}),
+    ...(relsByFigId[r.fig_id]?.length    ? { beziehungen:      relsByFigId[r.fig_id]    } : {}),
+    ...(locsByFigId[r.fig_id]?.length    ? { schauplätze:      locsByFigId[r.fig_id]    } : {}),
+    ...(scenesByFigId[r.fig_id]?.length  ? { szenen:           scenesByFigId[r.fig_id]  } : {}),
   }));
 }
 
@@ -222,14 +311,11 @@ router.post('/send', jsonBody, async (req, res) => {
 
     db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(now, session.id);
 
-    // Kontext aus DB laden
-    const alleFiguren = getFiguren(session.book_id, userEmail);
+    // Kontext aus DB laden – nur Figuren/Szenen/Orte des aktuellen Kapitels
     const pageRow = session.page_id
       ? db.prepare('SELECT chapter_name FROM pages WHERE page_id = ?').get(session.page_id)
       : null;
-    const figuren = pageRow?.chapter_name
-      ? alleFiguren.filter(f => f.kapitel.includes(pageRow.chapter_name))
-      : alleFiguren;
+    const figuren = getFiguren(session.book_id, userEmail, pageRow?.chapter_name ?? null);
     const review  = getLatestReview(session.book_id, userEmail);
 
     // System-Prompt aus prompts.js (Single Source of Truth)
