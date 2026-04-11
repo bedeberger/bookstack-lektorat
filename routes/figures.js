@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, saveFigurenToDb, saveZeitstrahlEvents, saveCharacterArcs } = require('../db/schema');
+const { db, saveFigurenToDb, saveZeitstrahlEvents } = require('../db/schema');
 
 const router = express.Router();
 const jsonBody = express.json();
@@ -77,69 +77,6 @@ router.delete('/scenes/:book_id', (req, res) => {
   const bookId = parseInt(req.params.book_id);
   const userEmail = req.session?.user?.email || null;
   db.prepare('DELETE FROM figure_scenes WHERE book_id = ? AND user_email = ?').run(bookId, userEmail);
-  res.json({ ok: true });
-});
-
-// Figurenentwicklungsbögen laden (vor /:book_id definiert um Konflikte zu vermeiden)
-router.get('/character-arcs/:book_id', (req, res) => {
-  const bookId = parseInt(req.params.book_id);
-  const userEmail = req.session?.user?.email || null;
-
-  const arcRows = db.prepare(`
-    SELECT id, fig_id, arc_typ, ausgangszustand, endzustand, gesamtbogen, updated_at
-    FROM character_arcs
-    WHERE book_id = ? AND user_email = ?
-    ORDER BY rowid
-  `).all(bookId, userEmail);
-
-  if (!arcRows.length) return res.json(null);
-
-  const arcIds = arcRows.map(r => r.id);
-  const stageRows = arcIds.length
-    ? db.prepare(
-        `SELECT arc_id, sort_order, kapitel, chapter_id, soziale_position, innere_haltung, beziehungsstatus, wendepunkt
-         FROM arc_stages WHERE arc_id IN (${arcIds.map(() => '?').join(',')})
-         ORDER BY arc_id, sort_order`
-      ).all(...arcIds)
-    : [];
-
-  const stageMap = {};
-  for (const s of stageRows) {
-    (stageMap[s.arc_id] ??= []).push({
-      sort_order:       s.sort_order,
-      kapitel:          s.kapitel,
-      chapter_id:       s.chapter_id,
-      soziale_position: s.soziale_position,
-      innere_haltung:   s.innere_haltung,
-      beziehungsstatus: s.beziehungsstatus,
-      wendepunkt:       s.wendepunkt,
-    });
-  }
-
-  const entwicklungsboegen = arcRows.map(a => ({
-    fig_id:          a.fig_id,
-    arc_typ:         a.arc_typ,
-    ausgangszustand: a.ausgangszustand,
-    endzustand:      a.endzustand,
-    gesamtbogen:     a.gesamtbogen,
-    etappen:         stageMap[a.id] || [],
-  }));
-
-  res.json({ entwicklungsboegen, updated_at: arcRows[0]?.updated_at || null });
-});
-
-// Figurenentwicklungsbögen speichern (manuelle Bearbeitungen)
-router.put('/character-arcs/:book_id', jsonBody, (req, res) => {
-  const userEmail = req.session?.user?.email || null;
-  saveCharacterArcs(parseInt(req.params.book_id), userEmail, req.body.entwicklungsboegen || []);
-  res.json({ ok: true });
-});
-
-// Figurenentwicklungsbögen löschen
-router.delete('/character-arcs/:book_id', (req, res) => {
-  const bookId = parseInt(req.params.book_id);
-  const userEmail = req.session?.user?.email || null;
-  db.prepare('DELETE FROM character_arcs WHERE book_id = ? AND user_email = ?').run(bookId, userEmail);
   res.json({ ok: true });
 });
 

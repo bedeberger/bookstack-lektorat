@@ -102,7 +102,7 @@ SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein B
 
 ## Komplettanalyse-Job (`komplett-analyse`)
 
-Der Button **«Alles aktualisieren»** startet den einzigen serverseitigen Job `/jobs/komplett-analyse`. Jeder Kapiteltext wird nur **zweimal** an die API gesendet (Phase 1 + Block 2), was ~75 % weniger Kapiteltext-Token gegenüber der früheren 7-Jobs-Sequenz ergibt.
+Der Button **«Alles aktualisieren»** startet den einzigen serverseitigen Job `/jobs/komplett-analyse`.
 
 **Pipeline (intern, ein einziger Job):**
 
@@ -123,29 +123,20 @@ Block 1 [parallel] –
             buildFigurSoziogrammEnrichmentPrompt()
 
 Block 2 [parallel] –
-  Multi-Pass (>60k Zeichen):
-    Phase 5+7 – Szenen + Ereignisse + Entwicklungsbögen kombiniert (parallel pro Kapitel)
-                buildExtraktionSzenenEreignisseEntwicklungsbogenChapterPrompt()
-                ← Compositor: Szenen-Schema + Assignments-Schema + Etappen-Schema
-                → figure_scenes + updateFigurenEvents() + etappenPerChapter gesammelt
-    Danach [parallel]:
-      Phase 6 – Zeitstrahl konsolidieren   buildZeitstrahlConsolidationPrompt()
-      Phase 7-Kons – Entwicklungsbögen     buildEntwicklungsbogenConsolidationPrompt()
-    Phase 8 – Kontinuitätscheck (Fakten aus Phase 1, kein neuer API-Call)
-              buildKontinuitaetCheckPrompt()
-
-  Single-Pass (≤60k Zeichen):
-    Phase 5 – Szenen + Ereignisse (per Kapitel) → Phase 6 Zeitstrahl  [parallel mit]
-    Phase 7 – Entwicklungsbögen Single-Pass
-              buildEntwicklungsbogenSinglePassPrompt()
-    Phase 8 – Kontinuität Single-Pass
-              buildKontinuitaetSinglePassPrompt()
+  Phase 5 – Szenen + Ereignisse (parallel pro Kapitel)
+            buildExtraktionSzenenEreignisseChapterPrompt()
+            → figure_scenes + updateFigurenEvents()
+  Phase 6 – Zeitstrahl konsolidieren
+            buildZeitstrahlConsolidationPrompt()
+  Phase 8 – Kontinuitätscheck
+            Multi-Pass: buildKontinuitaetCheckPrompt() (Fakten aus Phase 1)
+            Single-Pass: buildKontinuitaetSinglePassPrompt()
 ```
 
-**Prompt-Komposition ohne Duplikation:** Alle kombinierten Funktionen (`buildExtraktionFigurenOrteKontinuitaetChapterPrompt`, `buildExtraktionSzenenEreignisseEntwicklungsbogenChapterPrompt`) leben in `public/js/prompts.js` und referenzieren die bestehenden Schema-Konstanten via `_schemaBody()`. Einzelne Jobs (figuren, locations, szenen etc.) bleiben unverändert.
+**Prompt-Komposition ohne Duplikation:** Die kombinierte Funktion `buildExtraktionFigurenOrteKontinuitaetChapterPrompt` lebt in `public/js/prompts.js` und referenziert die bestehenden Schema-Konstanten via `_schemaBody()`.
 
-**Prompt Caching:** `lib/ai.js` setzt `cache_control: { type: 'ephemeral' }` auf allen Systemprompts und sendet den Header `anthropic-beta: prompt-caching-2024-07-31`. Innerhalb eines parallelen Kapitel-Batches (Phase 1, Block 2) trifft jeder Folge-Call den Cache des Systemprompts (~10 % des normalen Input-Preises).
+**Prompt Caching:** `lib/ai.js` setzt `cache_control: { type: 'ephemeral' }` auf allen Systemprompts und sendet den Header `anthropic-beta: prompt-caching-2024-07-31`. Innerhalb eines parallelen Kapitel-Batches (Phase 1) trifft jeder Folge-Call den Cache des Systemprompts (~10 % des normalen Input-Preises).
 
 **Checkpoint:** `phase: 'p1_done'` speichert `chapterFiguren`, `chapterOrte` und `chapterFakten`. Alte Checkpoints ohne `chapterFakten` lösen im P8-Pfad eine Fallback-Extraktion aus (kein Datenverlust).
 
-**UI:** `alleAktualisieren()` in `app.js` startet nur `/jobs/komplett-analyse` und pollt den Fortschritt. Nach Abschluss werden `loadFiguren`, `loadOrte`, `loadSzenen` und `loadCharacterArcs` parallel neu geladen.
+**UI:** `alleAktualisieren()` in `app.js` startet nur `/jobs/komplett-analyse` und pollt den Fortschritt. Nach Abschluss werden `loadFiguren`, `loadOrte`, `loadSzenen` und `_loadKontinuitaetHistory` parallel neu geladen.

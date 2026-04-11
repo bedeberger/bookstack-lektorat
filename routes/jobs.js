@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
-const { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveCharacterArcs, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale, getAllUserTokens } = require('../db/schema');
+const { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale, getAllUserTokens } = require('../db/schema');
 const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -737,20 +737,17 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
   const {
     buildExtraktionFigurenOrteKontinuitaetChapterPrompt,
     buildExtraktionSzenenEreignisseChapterPrompt,
-    buildExtraktionSzenenEreignisseEntwicklungsbogenChapterPrompt,
     buildFiguresBasisConsolidationPrompt,
     buildLocationsConsolidationPrompt,
     buildZeitstrahlConsolidationPrompt,
     buildFigurSoziogrammEnrichmentPrompt,
-    buildEntwicklungsbogenSinglePassPrompt,
-    buildEntwicklungsbogenConsolidationPrompt,
     buildKontinuitaetSinglePassPrompt,
     buildKontinuitaetChapterFactsPrompt,
     buildKontinuitaetCheckPrompt,
   } = await getPrompts();
   const {
     SYSTEM_FIGUREN, SYSTEM_ORTE, SYSTEM_KONTINUITAET,
-    SYSTEM_SZENEN, SYSTEM_ZEITSTRAHL, SYSTEM_ENTWICKLUNGSBOGEN,
+    SYSTEM_SZENEN, SYSTEM_ZEITSTRAHL,
     SOZIOGRAMM_KONTEXT,
   } = await getBookPrompts(bookId);
 
@@ -866,33 +863,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
 
     // ── P7-Kontext vorbereiten ──────────────────────────────────────────────────
     // figurenKompakt: nur Name+Typ für Kapitel-Calls – spart ~15–20k Input-Tokens.
-    // buildFigurenKontext(): vollständig (mit Ereignissen) – muss NACH processSzenenEreignisse
-    // aufgerufen werden, damit die Lebensereignisse aus Phase 5/7 bereits in der DB stehen.
     const figurenKompakt = figuren.map(f => ({ id: f.id, name: f.name, typ: f.typ || 'andere' }));
-    const figRowsForArcs = db.prepare(
-      'SELECT id, fig_id, name, typ, beschreibung FROM figures WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
-    ).all(parseInt(bookId), userEmail || null);
-    const buildFigurenKontext = () => {
-      if (!figRowsForArcs.length) return '';
-      const evtRows = db.prepare(`
-        SELECT fe.figure_id, fe.datum, fe.ereignis, fe.typ
-        FROM figure_events fe
-        WHERE fe.figure_id IN (${figRowsForArcs.map(() => '?').join(',')})
-        ORDER BY fe.figure_id, fe.sort_order
-      `).all(...figRowsForArcs.map(f => f.id));
-      const evtMap = {};
-      for (const ev of evtRows) (evtMap[ev.figure_id] ??= []).push(ev);
-      return figRowsForArcs.map(f => {
-        let line = `${f.fig_id}: ${f.name} (${f.typ || 'andere'})${f.beschreibung ? ' – ' + f.beschreibung : ''}`;
-        const evts = evtMap[f.id];
-        if (evts?.length) {
-          line += `\n  Lebensereignisse:\n` + evts.map(e =>
-            `  • ${e.datum || '?'}: ${e.ereignis}${e.typ === 'extern' ? ' [extern]' : ''}`
-          ).join('\n');
-        }
-        return line;
-      }).join('\n\n');
-    };
 
     // ── Parallel-Block 1: P3 (Orte) + P4 (Soziogramm) ───────────────────────
     // P7-Kapitel wurde in Block 2 verschoben (kombiniert mit P5 Szenen+Ereignisse).
@@ -1072,102 +1043,28 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
 
     await Promise.all([
 
-      // ── P5+P7 (multi-pass) oder P5+P7 separat (single-pass) ─────────────
-      totalChars > SINGLE_PASS_LIMIT
-        ? (async () => {
-            // Multi-Pass: ein kombinierter Call pro Kapitel für Szenen + Entwicklungsbögen
-            const orteKompakt = orte.map(o => ({ id: o.id, name: o.name }));
-            const figurenList = figuren.map(f => ({ id: f.id, name: f.name, typ: f.typ || 'andere' }));
-            updateJob(jobId, { progress: 63, statusText: `Szenen + Entwicklungsbögen in ${groupOrder.length} Kapiteln…` });
-            const locRows = db.prepare(
-              'SELECT id, loc_id FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
-            ).all(parseInt(bookId), userEmail || null);
-            const locIdToDbId = Object.fromEntries(locRows.map(r => [r.loc_id, r.id]));
-
-            const kombinedSettled = await settledAll(
-              groupOrder.map(key => () => {
-                const group = groups.get(key);
-                const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
-                return call(jobId, tok,
-                  buildExtraktionSzenenEreignisseEntwicklungsbogenChapterPrompt(
-                    group.name, bookName, group.pages.length, figurenList, orteKompakt, chText
-                  ),
-                  SYSTEM_SZENEN, 63, 80, 6000,
-                );
-              })
+      // ── P5+P6: Szenen + Ereignisse + Zeitstrahl ──────────────────────────
+      (async () => {
+        const orteKompakt = orte.map(o => ({ id: o.id, name: o.name }));
+        const figurenList = figuren.map(f => ({ id: f.id, name: f.name, typ: f.typ || 'andere' }));
+        updateJob(jobId, { progress: 63, statusText: `Szenen + Ereignisse in ${groupOrder.length} Kapiteln extrahieren…` });
+        const locRows = db.prepare(
+          'SELECT id, loc_id FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+        ).all(parseInt(bookId), userEmail || null);
+        const locIdToDbId = Object.fromEntries(locRows.map(r => [r.loc_id, r.id]));
+        const szEvtSettled = await settledAll(
+          groupOrder.map(key => () => {
+            const group = groups.get(key);
+            const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+            return call(jobId, tok,
+              buildExtraktionSzenenEreignisseChapterPrompt(group.name, bookName, group.pages.length, figurenList, orteKompakt, chText),
+              SYSTEM_SZENEN, 63, 80, 4000,
             );
-
-            // Etappen für P7-Kons sammeln; Szenen + Events wie gehabt verarbeiten
-            const etappenPerChapter = [];
-            kombinedSettled.forEach((r, gi) => {
-              if (r.status === 'fulfilled' && Array.isArray(r.value?.etappen) && r.value.etappen.length)
-                etappenPerChapter.push({ kapitel: groups.get(groupOrder[gi]).name, etappen: r.value.etappen });
-            });
-            await processSzenenEreignisse(kombinedSettled, locIdToDbId);
-            const figurenKontextForArcs = buildFigurenKontext();
-
-            // P6 + P7-Kons parallel (keine gegenseitige Abhängigkeit)
-            await Promise.all([
-              runZeitstrahlKonsolidierung(),
-
-              (async () => {
-                if (!figRowsForArcs.length || !etappenPerChapter.length) return;
-                updateJob(jobId, { progress: 94, statusText: 'Konsolidiere Entwicklungsbögen…' });
-                const arcConsolidation = await call(jobId, tok,
-                  buildEntwicklungsbogenConsolidationPrompt(bookName, figurenKontextForArcs, etappenPerChapter),
-                  SYSTEM_ENTWICKLUNGSBOGEN, 94, 97, 4000, 0.2, null,
-                );
-                logger.info(`Job ${jobId}: arcConsolidation Keys: [${Object.keys(arcConsolidation || {}).join(', ')}] – entwicklungsboegen: ${arcConsolidation?.entwicklungsboegen?.length ?? 'FEHLT'}`);
-                if (!Array.isArray(arcConsolidation?.entwicklungsboegen)) throw new Error('Entwicklungsbögen-Konsolidierung ungültig: entwicklungsboegen-Array fehlt');
-                logger.info(`Job ${jobId}: Speichere ${arcConsolidation.entwicklungsboegen.length} Entwicklungsbögen (Konsolidierung)…`);
-                saveCharacterArcs(parseInt(bookId), userEmail || null, arcConsolidation.entwicklungsboegen, idMaps.chNameToId);
-                logger.info(`Job ${jobId}: ${arcConsolidation.entwicklungsboegen.length} Entwicklungsbögen gespeichert.`);
-              })(),
-            ]);
-          })()
-        : Promise.all([
-            // Single-Pass: P5 (per-Kapitel) + P7 (Single-Pass) parallel
-            (async () => {
-              const orteKompakt = orte.map(o => ({ id: o.id, name: o.name }));
-              const figurenList = figuren.map(f => ({ id: f.id, name: f.name, typ: f.typ || 'andere' }));
-              updateJob(jobId, { progress: 63, statusText: `Szenen + Ereignisse in ${groupOrder.length} Kapiteln extrahieren…` });
-              const locRows = db.prepare(
-                'SELECT id, loc_id FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
-              ).all(parseInt(bookId), userEmail || null);
-              const locIdToDbId = Object.fromEntries(locRows.map(r => [r.loc_id, r.id]));
-              const szEvtSettled = await settledAll(
-                groupOrder.map(key => () => {
-                  const group = groups.get(key);
-                  const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
-                  return call(jobId, tok,
-                    buildExtraktionSzenenEreignisseChapterPrompt(group.name, bookName, group.pages.length, figurenList, orteKompakt, chText),
-                    SYSTEM_SZENEN, 63, 80, 4000,
-                  );
-                })
-              );
-              await processSzenenEreignisse(szEvtSettled, locIdToDbId);
-              await runZeitstrahlKonsolidierung();
-            })(),
-
-            (async () => {
-              if (!figRowsForArcs.length) return;
-              // Single-Pass: Events noch nicht in DB (läuft parallel zu P5) – bookText liefert den Vollkontext
-              const figurenKontextForArcs = buildFigurenKontext();
-              updateJob(jobId, { progress: 89, statusText: 'Entwicklungsbögen analysieren…' });
-              const bookText = pageContents
-                .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
-                .join('\n\n---\n\n');
-              const arcResult = await call(jobId, tok,
-                buildEntwicklungsbogenSinglePassPrompt(bookName, figurenKontextForArcs, pageContents.length, bookText),
-                SYSTEM_ENTWICKLUNGSBOGEN, 89, 95, 4000, 0.2, null,
-              );
-              logger.info(`Job ${jobId}: arcResult Keys: [${Object.keys(arcResult || {}).join(', ')}] – entwicklungsboegen: ${arcResult?.entwicklungsboegen?.length ?? 'FEHLT'}`);
-              if (!Array.isArray(arcResult?.entwicklungsboegen)) throw new Error('Entwicklungsbögen-Analyse ungültig: entwicklungsboegen-Array fehlt');
-              logger.info(`Job ${jobId}: Speichere ${arcResult.entwicklungsboegen.length} Entwicklungsbögen (Single-Pass)…`);
-              saveCharacterArcs(parseInt(bookId), userEmail || null, arcResult.entwicklungsboegen, idMaps.chNameToId);
-              logger.info(`Job ${jobId}: ${arcResult.entwicklungsboegen.length} Entwicklungsbögen gespeichert.`);
-            })(),
-          ]),
+          })
+        );
+        await processSzenenEreignisse(szEvtSettled, locIdToDbId);
+        await runZeitstrahlKonsolidierung();
+      })(),
 
       // ── P8: Kontinuitätsprüfung ───────────────────────────────────────────
       // Multi-Pass: chapterFakten aus Phase 1 – kein separater Extraktions-Call.
@@ -2004,7 +1901,6 @@ const JOB_TYPE_LABELS = {
   'locations':              'Schauplätze',
   'kontinuitaet':           'Kontinuität',
   'soziogramm':             'Soziogramm',
-  'character-arcs':         'Entwicklungsbögen',
 };
 
 function fmtDuration(seconds) {
@@ -2028,7 +1924,7 @@ function fmtLastRun(isoStr) {
 }
 
 // Job-Typen, die vom Superjob (komplett-analyse) abgedeckt werden und nicht in der Statistik erscheinen sollen
-const STATS_EXCLUDED_TYPES = ['figures', 'soziogramm', 'szenen', 'locations', 'character-arcs', 'figure-events', 'consolidate-zeitstrahl', 'kontinuitaet'];
+const STATS_EXCLUDED_TYPES = ['figures', 'soziogramm', 'szenen', 'locations', 'figure-events', 'consolidate-zeitstrahl', 'kontinuitaet'];
 
 router.get('/stats', (req, res) => {
   const userEmail = req.session?.user?.email || null;

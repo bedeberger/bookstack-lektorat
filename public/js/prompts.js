@@ -39,7 +39,6 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule) {
     SYSTEM_KONTINUITAET:     buildSystem(sp.kontinuitaet      || 'Du bist ein sorgfältiger Literaturlektor. Du prüfst einen Roman auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.', rules),
     SYSTEM_SZENEN:           buildSystem(sp.szenen            || '', rules),
     SYSTEM_ZEITSTRAHL:       buildSystem(sp.zeitstrahl        || '', rules),
-    SYSTEM_ENTWICKLUNGSBOGEN:buildSystem(sp.entwicklungsbogen || '', rules),
   };
 }
 
@@ -60,7 +59,6 @@ export let SYSTEM_ORTE              = null;
 export let SYSTEM_KONTINUITAET      = null;
 export let SYSTEM_SZENEN            = null;
 export let SYSTEM_ZEITSTRAHL        = null;
-export let SYSTEM_ENTWICKLUNGSBOGEN = null;
 
 /**
  * Setzt alle System-Prompts aus dem promptConfig-Objekt (geladen aus prompt-config.json).
@@ -112,7 +110,6 @@ export function configurePrompts(cfg) {
   SYSTEM_KONTINUITAET      = def.SYSTEM_KONTINUITAET      ?? null;
   SYSTEM_SZENEN            = def.SYSTEM_SZENEN            ?? null;
   SYSTEM_ZEITSTRAHL        = def.SYSTEM_ZEITSTRAHL        ?? null;
-  SYSTEM_ENTWICKLUNGSBOGEN = def.SYSTEM_ENTWICKLUNGSBOGEN ?? null;
 }
 
 /**
@@ -758,92 +755,6 @@ Kapiteltext (${pageCount} Seiten):
 ${chText}`;
 }
 
-/**
- * Kombinierter Kapitel-Pass (P5+P7): Szenen + Lebensereignisse + Figurenentwicklungen.
- * Ersetzt buildExtraktionSzenenEreignisseChapterPrompt + buildEntwicklungsbogenChapterPrompt
- * im komplett-analyse-Job (Multi-Pass). Setzt konsolidierte Figuren + Orte voraus (nach P2+P3).
- * Wird ausschliesslich vom komplett-analyse-Job verwendet.
- */
-export function buildExtraktionSzenenEreignisseEntwicklungsbogenChapterPrompt(chapterName, bookName, pageCount, figurenKompakt, orteKompakt, chText) {
-  const figurenStr = figurenKompakt.length
-    ? figurenKompakt.map(f => `${f.id}: ${f.name} (${f.typ || 'andere'})`).join('\n')
-    : '(keine Figuren bekannt)';
-  const orteStr = orteKompakt.length
-    ? orteKompakt.map(o => `${o.id}: ${o.name}`).join('\n')
-    : '(keine Schauplätze bekannt)';
-  return `Analysiere das Kapitel «${chapterName}» des Buchs «${bookName}» und extrahiere gleichzeitig: Szenen, Lebensereignisse und Figurenentwicklungen.
-
-Bekannte Figuren (nur diese IDs verwenden):
-${figurenStr}
-
-Bekannte Schauplätze (nur diese IDs in «orte» verwenden):
-${orteStr}
-
-Antworte mit diesem JSON-Schema:
-{
-  "szenen": [
-    {
-      "seite": "Name der Seite/des Abschnitts (leer wenn unklar)",
-      "titel": "Kurze Szenenbezeichnung (1 Satz)",
-      "wertung": "stark|mittel|schwach",
-      "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)",
-      "figuren": ["fig_1", "fig_2"],
-      "orte": ["ort_1"]
-    }
-  ],
-  "assignments": [
-    {
-      "fig_id": "fig_1",
-      "lebensereignisse": [
-        {
-          "datum": "JJJJ (nur Jahreszahl; aus Kontext errechnen wenn nötig; leer wenn nicht errechenbar)",
-          "ereignis": "Was passierte (1 Satz)",
-          "typ": "persoenlich|extern",
-          "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)",
-          "kapitel": "${chapterName}",
-          "seite": "Name der Seite/des Abschnitts (leer wenn unklar)"
-        }
-      ]
-    }
-  ],
-  "etappen": [
-    {
-      "fig_id": "fig_1",
-      "kapitel": "${chapterName}",
-      "soziale_position": "Gesellschaftliche Rolle, Rang, Stellung in diesem Kapitel",
-      "innere_haltung": "Psychologie, Weltbild, Motivation, dominantes Gefühl in diesem Kapitel",
-      "beziehungsstatus": "Schlüsselbeziehungen und ihr Zustand in diesem Kapitel",
-      "wendepunkt": "Ob und wie sich die Figur gegenüber dem Vorkapitel verändert hat (leer wenn keine relevante Veränderung)"
-    }
-  ]
-}
-
-Szenen-Regeln:
-- Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
-- figuren: nur IDs aus der obigen Figurenliste; leer wenn keine bekannte Figur aktiv beteiligt
-- orte: nur IDs aus der Schauplatzliste; leer wenn kein passender Ort bekannt
-- wertung: «stark» = überzeugend, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
-- Wenn ein Abschnitt keine erkennbaren Szenen enthält (reine Exposition, Beschreibung): «szenen» als leeres Array
-
-Ereignis-Regeln:
-- typ='persoenlich': echte biografische Wendepunkte (Geburt, Tod, Trauma, neue/beendete Beziehung, Jobwechsel, Umzug, wichtige Entscheidung) – nur wenn tatsächlich im Text belegt
-- typ='extern': gesellschaftliche/historische Ereignisse – SEHR GROSSZÜGIG erfassen; jedes externe Ereignis ALLEN betroffenen Figuren zuweisen
-- datum: immer als vierstellige Jahreszahl (JJJJ) – aus Kontext errechnen wenn nötig; Events ohne errechenbare Jahreszahl weglassen
-- Nur fig_id-Werte aus der obigen Figurenliste verwenden
-- Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden
-
-Entwicklungsbogen-Regeln:
-- Nur Figuren die in diesem Kapitel aktiv auftreten oder deren Zustand sich verändert
-- Nur fig_id-Werte aus der obigen Figurenliste verwenden
-- Kurze, präzise Beschreibungen (je 1-2 Sätze); leeres etappen-Array wenn keine relevanten Figuren im Kapitel
-
-${JSON_ONLY}
-
-Kapiteltext (${pageCount} Seiten):
-
-${chText}`;
-}
-
 export function buildZeitstrahlConsolidationPrompt(events) {
   return `Du erhältst eine Liste von Lebensereignissen verschiedener Figuren aus einem Buch. Erkenne semantisch identische oder sehr ähnliche Ereignisse (gleicher realer Vorfall, nur unterschiedlich formuliert) und fasse sie zu einem einzigen Eintrag zusammen. Führe die Figurenlisten zusammen und wähle die präziseste Formulierung.
 
@@ -1175,129 +1086,6 @@ Regeln:
 - kapitel: PFLICHTFELD – immer angeben, mindestens []; exakte Kapitelnamen aus stelle_a/stelle_b; wenn beide Stellen im selben Kapitel nur einmal; [] nur wenn der Text keine Kapitelinformation enthält
 - Wenn keine Widersprüche: «probleme» als leeres Array
 - Konservativ: Im Zweifel weglassen
-
-${JSON_ONLY}`;
-}
-
-// ── Figurenentwicklungsbögen ──────────────────────────────────────────────────
-
-const ENTWICKLUNGSBOGEN_SCHEMA = `{
-  "entwicklungsboegen": [
-    {
-      "fig_id": "fig_1",
-      "arc_typ": "Reifebogen|Verfallsbogen|Erlösungsbogen|Tragischer Bogen|Wandlungsbogen|Stasis",
-      "ausgangszustand": "1 Satz: Wer die Figur zu Beginn des Buchs ist",
-      "endzustand": "1 Satz: Wer die Figur am Ende ist",
-      "gesamtbogen": "2-3 Sätze: Gesamtverlauf der Entwicklung",
-      "etappen": [
-        {
-          "sort_order": 1,
-          "kapitel": "Kapitelname",
-          "soziale_position": "Gesellschaftliche Rolle, Rang, Stellung zu diesem Zeitpunkt",
-          "innere_haltung": "Psychologie, Weltbild, Motivation, dominantes Gefühl",
-          "beziehungsstatus": "Schlüsselbeziehungen und ihr Zustand zu diesem Zeitpunkt",
-          "wendepunkt": "Was sich zur vorigen Etappe hin verändert hat (leer bei der ersten Etappe)"
-        }
-      ]
-    }
-  ]
-}`;
-
-const ENTWICKLUNGSBOGEN_RULES = `Regeln:
-- Nur Figuren aus der gelieferten Liste; fig_id muss exakt übereinstimmen
-- arc_typ: Reifebogen=Figur wächst/reift; Verfallsbogen=Figur verliert/degradiert; Erlösungsbogen=Figur überwindet innere Schuld/Schwäche; Tragischer Bogen=Figur scheitert trotz Bestrebens; Wandlungsbogen=fundamentale Identitätsänderung; Stasis=Figur verändert sich nicht wesentlich
-- etappen: 2-5 Etappen pro Figur, chronologisch nach Kapiteln geordnet; lieber weniger, dafür aussagekräftige Wendepunkte
-- kapitel: zwingend angeben; exakten Kapitelnamen aus der Buchstruktur übernehmen (Single-Pass: «[Kapitel]»-Markierung im Text; Konsolidierung: «## Kapitel:»-Einträge der Eingabe) – niemals «Anfang/Mitte/Ende» oder eigene Bezeichnungen erfinden
-- soziale_position: Konkreter gesellschaftlicher Zustand (Beruf, Rang, Besitz, Ruf) – nicht wiederholen was in innere_haltung steht
-- innere_haltung: Psychologischer Zustand, Überzeugungen, Ziele, Ängste – 1-2 Sätze
-- beziehungsstatus: Die 1-3 wichtigsten Beziehungen zu diesem Zeitpunkt und ihr emotionaler Zustand
-- wendepunkt: Konkrete Veränderung zur vorigen Etappe – was hat sich wodurch verändert? (leer bei Etappe 1)
-- KONSERVATIV: Nur was eindeutig aus dem Text belegbar ist; Nebenfiguren können weniger Etappen haben
-- Figuren die sich im Text kaum entwickeln, bekommen arc_typ «Stasis» und 2 Etappen (Anfang + Ende)`;
-
-/**
- * Einzelner KI-Call für kleine Bücher: alle Figuren + ganzer Text auf einmal.
- */
-export function buildEntwicklungsbogenSinglePassPrompt(bookName, figurenKontext, pageCount, bookText) {
-  return `Analysiere den Entwicklungsbogen jeder Figur im Buch «${bookName}».
-
-Bekannte Figuren (nur diese fig_id-Werte verwenden):
-${figurenKontext}
-
-Antworte mit diesem JSON-Schema:
-${ENTWICKLUNGSBOGEN_SCHEMA}
-
-${ENTWICKLUNGSBOGEN_RULES}
-
-${JSON_ONLY}
-
-Buchtext (${pageCount} Seiten):
-
-${bookText}`;
-}
-
-/**
- * Kapitel-Pass: extrahiert Figurenzustände aus einem einzelnen Kapitel.
- * Ergebnis wird später in der Konsolidierung zusammengeführt.
- */
-export function buildEntwicklungsbogenChapterPrompt(chapterName, bookName, figurenKontext, pageCount, chText) {
-  return `Beschreibe den Zustand jeder Figur im Kapitel «${chapterName}» des Buchs «${bookName}».
-
-Bekannte Figuren (nur diese fig_id-Werte verwenden):
-${figurenKontext}
-
-Antworte mit diesem JSON-Schema:
-{
-  "etappen": [
-    {
-      "fig_id": "fig_1",
-      "kapitel": "${chapterName}",
-      "soziale_position": "Gesellschaftliche Rolle, Rang, Stellung in diesem Kapitel",
-      "innere_haltung": "Psychologie, Weltbild, Motivation, dominantes Gefühl in diesem Kapitel",
-      "beziehungsstatus": "Schlüsselbeziehungen und ihr Zustand in diesem Kapitel",
-      "wendepunkt": "Ob und wie sich die Figur gegenüber dem Vorkapitel verändert hat (leer wenn keine relevante Veränderung)"
-    }
-  ]
-}
-
-Regeln:
-- Nur Figuren die in diesem Kapitel aktiv auftreten oder deren Zustand sich verändert
-- Nur fig_id-Werte aus der obigen Liste verwenden
-- Kurze, präzise Beschreibungen (je 1-2 Sätze); Leeres etappen-Array wenn keine relevanten Figuren im Kapitel
-
-${JSON_ONLY}
-
-Kapiteltext (${pageCount} Seiten):
-
-${chText}`;
-}
-
-/**
- * Konsolidierungs-Call: fasst kapitelweise Etappen zu kohärenten Bögen zusammen.
- * perChapterResults: [{ kapitel: "Name", etappen: [{ fig_id, ... }] }]
- */
-export function buildEntwicklungsbogenConsolidationPrompt(bookName, figurenKontext, perChapterResults) {
-  const kapitelText = perChapterResults.map(cr =>
-    `## Kapitel: ${cr.kapitel}\n` +
-    (cr.etappen || []).map(e =>
-      `- ${e.fig_id}: [sozial] ${e.soziale_position || '–'} | [innen] ${e.innere_haltung || '–'} | [beziehung] ${e.beziehungsstatus || '–'}` +
-      (e.wendepunkt ? ` | [wendepunkt] ${e.wendepunkt}` : '')
-    ).join('\n')
-  ).join('\n\n');
-
-  return `Fasse die kapitelweisen Figurenzustände des Buchs «${bookName}» zu vollständigen Entwicklungsbögen zusammen.
-
-Bekannte Figuren (nur diese fig_id-Werte verwenden):
-${figurenKontext}
-
-Kapitelweise Figurenzustände:
-
-${kapitelText}
-
-Antworte mit diesem JSON-Schema:
-${ENTWICKLUNGSBOGEN_SCHEMA}
-
-${ENTWICKLUNGSBOGEN_RULES}
 
 ${JSON_ONLY}`;
 }

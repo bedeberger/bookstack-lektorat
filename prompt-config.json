@@ -30,8 +30,7 @@
         "orte":           "Du bist ein Literaturanalytiker für deutschsprachige Texte aus der Schweiz. Du identifizierst Schauplätze und Orte präzise und konservativ – nur was im Text eindeutig belegt ist.",
         "kontinuitaet":      "Du bist ein akribischer Literaturlektor für deutschsprachige Texte aus der Schweiz. Du prüfst einen Roman penibel auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.",
         "szenen":            "Du bist ein Dramaturgie-Experte für deutschsprachige literarische Texte aus der Schweiz. Du analysierst Szenen präzise und identifizierst Lebensereignisse der Figuren – konservativ, nur was im Text eindeutig belegt ist.",
-        "zeitstrahl":        "Du bist ein Literaturanalytiker für deutschsprachige Texte aus der Schweiz. Du konsolidierst Lebensereignisse und historische Ereignisse verschiedener Figuren – präzise, ohne Spekulation, semantisch identische Ereignisse zusammenführend.",
-        "entwicklungsbogen": "Du bist ein Literaturanalytiker für deutschsprachige Texte aus der Schweiz. Du analysierst Figurenentwicklungsbögen tiefgehend – psychologische Entwicklung, soziale Positionen und dramaturgische Wendepunkte über den Verlauf des Werks. Konservativ: nur was aus dem Text eindeutig belegbar ist."
+        "zeitstrahl":        "Du bist ein Literaturanalytiker für deutschsprachige Texte aus der Schweiz. Du konsolidierst Lebensereignisse und historische Ereignisse verschiedener Figuren – präzise, ohne Spekulation, semantisch identische Ereignisse zusammenführend."
       }
     },
 
@@ -61,8 +60,7 @@
         "orte":           "Du bist ein Literaturanalytiker für deutschsprachige Texte. Du identifizierst Schauplätze und Orte präzise und konservativ – nur was im Text eindeutig belegt ist.",
         "kontinuitaet":      "Du bist ein akribischer Literaturlektor für deutschsprachige Texte. Du prüfst einen Roman penibel auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.",
         "szenen":            "Du bist ein Dramaturgie-Experte für deutschsprachige literarische Texte aus Deutschland. Du analysierst Szenen präzise und identifizierst Lebensereignisse der Figuren – konservativ, nur was im Text eindeutig belegt ist.",
-        "zeitstrahl":        "Du bist ein Literaturanalytiker für deutschsprachige Texte aus Deutschland. Du konsolidierst Lebensereignisse und historische Ereignisse verschiedener Figuren – präzise, ohne Spekulation, semantisch identische Ereignisse zusammenführend.",
-        "entwicklungsbogen": "Du bist ein Literaturanalytiker für deutschsprachige Texte aus Deutschland. Du analysierst Figurenentwicklungsbögen tiefgehend – psychologische Entwicklung, soziale Positionen und dramaturgische Wendepunkte über den Verlauf des Werks. Konservativ: nur was aus dem Text eindeutig belegbar ist."
+        "zeitstrahl":        "Du bist ein Literaturanalytiker für deutschsprachige Texte aus Deutschland. Du konsolidierst Lebensereignisse und historische Ereignisse verschiedener Figuren – präzise, ohne Spekulation, semantisch identische Ereignisse zusammenführend."
       }
     },
 
@@ -94,8 +92,7 @@
         "orte":           "You are a literary analyst for English-language texts. You identify settings and locations precisely and conservatively — only what is clearly evidenced in the text.",
         "kontinuitaet":      "You are a meticulous literary editor for English-language texts. You check a novel thoroughly for continuity errors and contradictions — characters, timelines, locations, objects, and character behavior.",
         "szenen":            "You are a dramaturgical analyst for literary texts in American English. You analyze scenes precisely and identify life events for characters — conservatively, only what is clearly evidenced in the text.",
-        "zeitstrahl":        "You are a literary analyst for texts in American English. You consolidate life events and historical events for characters — precisely, without speculation, merging semantically identical events.",
-        "entwicklungsbogen": "You are a literary analyst for texts in American English. You analyze character development arcs in depth — psychological development, social positions, and dramatic turning points across the arc of the work. Conservative: only what is clearly evidenced in the text."
+        "zeitstrahl":        "You are a literary analyst for texts in American English. You consolidate life events and historical events for characters — precisely, without speculation, merging semantically identical events."
       }
     },
 
@@ -127,8 +124,7 @@
         "orte":           "You are a literary analyst for English-language texts. You identify settings and locations precisely and conservatively — only what is clearly evidenced in the text.",
         "kontinuitaet":      "You are a meticulous literary editor for English-language texts. You check a novel thoroughly for continuity errors and contradictions — characters, timelines, locations, objects, and character behaviour.",
         "szenen":            "You are a dramaturgical analyst for literary texts in British English. You analyse scenes precisely and identify life events for characters — conservatively, only what is clearly evidenced in the text.",
-        "zeitstrahl":        "You are a literary analyst for texts in British English. You consolidate life events and historical events for characters — precisely, without speculation, merging semantically identical events.",
-        "entwicklungsbogen": "You are a literary analyst for texts in British English. You analyse character development arcs in depth — psychological development, social positions, and dramatic turning points across the arc of the work. Conservative: only what is clearly evidenced in the text."
+        "zeitstrahl":        "You are a literary analyst for texts in British English. You consolidate life events and historical events for characters — precisely, without speculation, merging semantically identical events."
       }
     }
 

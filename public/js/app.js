@@ -17,7 +17,6 @@ import { bookChatMethods } from './book-chat.js';
 import { szenenMethods } from './szenen.js';
 import { orteMethods } from './orte.js';
 import { kontinuitaetMethods } from './kontinuitaet.js';
-import { charakterentwicklungMethods } from './charakterentwicklung.js';
 import { bookSettingsMethods } from './book-settings.js';
 
 document.addEventListener('alpine:init', () => {
@@ -266,16 +265,6 @@ document.addEventListener('alpine:init', () => {
     kontinuitaetFilterFigurId: '',
     kontinuitaetFilterKapitel: '',
     _kontinuitaetPollTimer: null,
-    showCharacterArcsCard: false,
-    characterArcs: null,
-    characterArcsUpdatedAt: null,
-    characterArcsLoading: false,
-    characterArcsProgress: 0,
-    characterArcsStatus: '',
-    _characterArcsPollTimer: null,
-    _arcDetailKey: null,
-    arcFilterFigurId: '',
-    arcFilterKapitel: '',
     jobQueueItems: [],
     _jobQueueTimer: null,
     showJobStats: false,
@@ -403,21 +392,6 @@ document.addEventListener('alpine:init', () => {
           const stelleMatch = fromStelle(issue.stelle_a) === f || fromStelle(issue.stelle_b) === f;
           if (!idMatch && !nameMatch && !stelleMatch) return false;
         }
-        return true;
-      });
-    },
-
-    arcKapitelListe() {
-      const names = new Set();
-      for (const arc of (this.characterArcs || [])) {
-        for (const e of (arc.etappen || [])) if (e.kapitel) names.add(e.kapitel);
-      }
-      return [...names].sort((a, b) => a.localeCompare(b, 'de'));
-    },
-    get characterArcsFiltered() {
-      return (this.characterArcs || []).filter(arc => {
-        if (this.arcFilterFigurId && arc.fig_id !== this.arcFilterFigurId) return false;
-        if (this.arcFilterKapitel && !arc.etappen?.some(e => e.kapitel === this.arcFilterKapitel)) return false;
         return true;
       });
     },
@@ -673,7 +647,6 @@ document.addEventListener('alpine:init', () => {
         this.loadFiguren(bookId),
         this.loadOrte(bookId),
         this.loadSzenen(bookId),
-        this.loadCharacterArcs(),
         this._loadKontinuitaetHistory(),
         this.loadLastKomplettRun(bookId),
         this._reloadZeitstrahl(),
@@ -702,7 +675,6 @@ document.addEventListener('alpine:init', () => {
         { label: 'Soziogramm',            threshold: 63  },
         { label: 'Szenen + Ereignisse',   threshold: 83  },
         { label: 'Zeitstrahl',            threshold: 89  },
-        { label: 'Entwicklungsbögen',     threshold: 97  },
         { label: 'Kontinuität',           threshold: 100 },
       ];
       return phases.map((ph, i) => {
@@ -739,7 +711,7 @@ document.addEventListener('alpine:init', () => {
     async _loadPartials() {
       const names = [
         'buchreview', 'figuren', 'szenen', 'ereignisse', 'orte',
-        'kontinuitaet', 'character-arcs', 'bookstats', 'editor', 'chat', 'book-chat', 'book-settings',
+        'kontinuitaet', 'bookstats', 'editor', 'chat', 'book-chat', 'book-settings',
       ];
       await Promise.all(names.map(async name => {
         const html = await fetch(`/partials/${name}.html`).then(r => r.text());
@@ -982,7 +954,6 @@ document.addEventListener('alpine:init', () => {
       if (keep !== 'bookChat') this.showBookChatCard = false;
       if (keep !== 'orte') this.showOrteCard = false;
       if (keep !== 'kontinuitaet') this.showKontinuitaetCard = false;
-      if (keep !== 'characterArcs') this.showCharacterArcsCard = false;
       if (keep !== 'bookSettings') this.showBookSettingsCard = false;
       this.resetPage();
     },
@@ -1125,15 +1096,6 @@ document.addEventListener('alpine:init', () => {
       this.kontinuitaetFilterFigurId = '';
       this.kontinuitaetFilterKapitel = '';
       if (this._kontinuitaetPollTimer) { clearInterval(this._kontinuitaetPollTimer); this._kontinuitaetPollTimer = null; }
-      this.showCharacterArcsCard = false;
-      this.characterArcs = null;
-      this.characterArcsStatus = '';
-      this.characterArcsProgress = 0;
-      this.characterArcsLoading = false;
-      this._arcDetailKey = null;
-      this.arcFilterFigurId = '';
-      this.arcFilterKapitel = '';
-      if (this._characterArcsPollTimer) { clearInterval(this._characterArcsPollTimer); this._characterArcsPollTimer = null; }
       this.showBookSettingsCard = false;
       this.bookSettingsSaved = false;
       this.bookSettingsError = '';
@@ -1189,7 +1151,6 @@ document.addEventListener('alpine:init', () => {
     ...szenenMethods,
     ...orteMethods,
     ...kontinuitaetMethods,
-    ...charakterentwicklungMethods,
     ...bookSettingsMethods,
   }));
 });

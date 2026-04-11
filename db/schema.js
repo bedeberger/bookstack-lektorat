@@ -1004,44 +1004,6 @@ function updateFigurenEvents(bookId, assignments, userEmail, idMaps) {
   })();
 }
 
-// Figurenentwicklungsbögen persistieren (ersetzt den gesamten Bestand für book/user).
-// entwicklungsboegen: Array aus KI-Antwort [{ fig_id, arc_typ, ausgangszustand, endzustand, gesamtbogen, etappen[] }]
-// chNameToId: optionale Map { "Kapitelname" → chapter_id } für FK-Referenz
-function saveCharacterArcs(bookId, userEmail, entwicklungsboegen, chNameToId = {}) {
-  const now = new Date().toISOString();
-  db.transaction(() => {
-    // Alle bestehenden Bögen für dieses Buch/User löschen (CASCADE löscht arc_stages mit)
-    db.prepare('DELETE FROM character_arcs WHERE book_id = ? AND user_email = ?').run(bookId, userEmail || null);
-
-    const insArc = db.prepare(`
-      INSERT INTO character_arcs (book_id, fig_id, user_email, arc_typ, ausgangszustand, endzustand, gesamtbogen, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-    const insStage = db.prepare(`
-      INSERT INTO arc_stages (arc_id, sort_order, kapitel, chapter_id, soziale_position, innere_haltung, beziehungsstatus, wendepunkt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-
-    for (const arc of entwicklungsboegen) {
-      const { lastInsertRowid: arcId } = insArc.run(
-        bookId, arc.fig_id, userEmail || null,
-        arc.arc_typ || null, arc.ausgangszustand || null,
-        arc.endzustand || null, arc.gesamtbogen || null, now
-      );
-      for (let i = 0; i < (arc.etappen || []).length; i++) {
-        const s = arc.etappen[i];
-        insStage.run(
-          arcId, i,
-          s.kapitel || null,
-          (s.kapitel && chNameToId[s.kapitel]) ? chNameToId[s.kapitel] : null,
-          s.soziale_position || null,
-          s.innere_haltung || null,
-          s.beziehungsstatus || null,
-          s.wendepunkt || null
-        );
-      }
-    }
-  })();
-}
-
 // Konsolidierten Zeitstrahl persistieren (ersetzt den gesamten Bestand für book/user).
 // ereignisse: Array aus KI-Antwort [{datum, ereignis, typ, bedeutung, kapitel[], seiten[], figuren[]}]
 function saveZeitstrahlEvents(bookId, userEmail, ereignisse) {
@@ -1443,4 +1405,4 @@ function updateFigurenSoziogramm(bookId, figurenSoziogramm, beziehungenMacht, us
   })();
 }
 
-module.exports = { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveCharacterArcs, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings };
+module.exports = { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings };

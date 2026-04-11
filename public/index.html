@@ -24,7 +24,7 @@
   <div class="user-info" x-show="currentUser">
     <span class="user-email" x-text="currentUser?.name || currentUser?.email"></span>
     <div class="komplett-status-wrap" @click.outside="showKomplettStatus = false" @mouseenter="if (alleAktualisierenLoading) showKomplettStatus = true" :data-lastrun="(!alleAktualisierenLoading && alleAktualisierenLastRun) ? 'Stand: ' + alleAktualisierenLastRun : null">
-      <button class="job-stats-btn" @click="alleAktualisieren()" :disabled="alleAktualisierenLoading || !selectedBookId" title="Figuren, Soziogramm, Schauplätze, Szenenanalyse, Ereignisse, Zeitstrahl und Entwicklungsbögen neu ermitteln">
+      <button class="job-stats-btn" @click="alleAktualisieren()" :disabled="alleAktualisierenLoading || !selectedBookId" title="Figuren, Soziogramm, Schauplätze, Szenenanalyse, Ereignisse und Zeitstrahl neu ermitteln">
         <span x-show="alleAktualisierenLoading" class="spinner"></span>
         Alle aktualisieren
       </button>
@@ -162,10 +162,6 @@
       <span class="feature-tile-title">Kontinuität</span>
       <span class="feature-tile-desc">Widersprüche prüfen</span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showCharacterArcsCard }" @click="toggleCharacterArcsCard()" title="Figurenentwicklungsbögen: soziale Position, innere Haltung und Beziehungsstatus im Verlauf">
-      <span class="feature-tile-title">Entwicklungsbögen</span>
-      <span class="feature-tile-desc">Figurenarcs</span>
-    </button>
     <button class="feature-tile" :class="{ 'feature-tile--active': showBookSettingsCard }" @click="toggleBookSettingsCard()" title="Sprache und Region für dieses Buch konfigurieren">
       <span class="feature-tile-title">Einstellungen</span>
       <span class="feature-tile-desc">Sprache &amp; Region</span>
@@ -270,7 +266,6 @@
 <div id="partial-ereignisse"></div>
 <div id="partial-orte"></div>
 <div id="partial-kontinuitaet"></div>
-<div id="partial-character-arcs"></div>
 <div id="partial-bookstats"></div>
 <div id="partial-editor"></div>
 <div id="partial-chat"></div>
