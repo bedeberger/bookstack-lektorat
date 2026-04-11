@@ -145,11 +145,22 @@ export const graphMethods = {
     };
 
     this._figurenNetwork = new vis.Network(container, { nodes, edges }, options);
+    this._figurenNetwork.once('stabilizationIterationsDone', () => {
+      this._figurenNetwork.setOptions({ physics: false });
+    });
     this._attachTooltip(container);
   },
 
   // ── Soziogramm (nach Sozialschicht gefärbt, Schicht-Rows, Machtpfeile) ──────
   _renderSoziogramm(container) {
+    // Guard: noch keine Sozialschichten vorhanden → Placeholder statt leerem Graph
+    const hasSchicht = this.figuren.some(f => f.sozialschicht && f.sozialschicht !== 'andere');
+    if (!hasSchicht) {
+      if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
+      container.innerHTML = '<span class="muted-msg soziogramm-placeholder">Noch keine Sozialschichten analysiert.<br>Klicke auf «Sozialschichten analysieren» um Schichtzugehörigkeit und Machtstrukturen zu ermitteln.</span>';
+      return;
+    }
+
     const LEVEL_Y_GAP = 190;
     const NODE_X_GAP  = 210;
 
@@ -194,6 +205,9 @@ export const graphMethods = {
     };
 
     this._figurenNetwork = new vis.Network(container, { nodes, edges }, options);
+    this._figurenNetwork.once('stabilizationIterationsDone', () => {
+      this._figurenNetwork.setOptions({ physics: false });
+    });
     this._attachTooltip(container);
   },
 

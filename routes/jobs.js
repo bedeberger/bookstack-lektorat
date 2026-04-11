@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
-const { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale } = require('../db/schema');
+const { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveCharacterArcs, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale } = require('../db/schema');
 const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -212,11 +212,69 @@ function _chatGetFiguren(bookId, userEmail) {
     GROUP BY f.id
     ORDER BY f.sort_order
   `).all(bookId, userEmail);
+
+  const evtRows = db.prepare(`
+    SELECT f.fig_id, fe.datum, fe.ereignis, fe.bedeutung, fe.typ, fe.kapitel
+    FROM figure_events fe
+    JOIN figures f ON f.id = fe.figure_id
+    WHERE f.book_id = ? AND f.user_email = ?
+    ORDER BY fe.sort_order
+  `).all(bookId, userEmail);
+  const eventsByFigId = {};
+  for (const e of evtRows) {
+    if (!eventsByFigId[e.fig_id]) eventsByFigId[e.fig_id] = [];
+    eventsByFigId[e.fig_id].push({
+      datum: e.datum, ereignis: e.ereignis,
+      ...(e.bedeutung ? { bedeutung: e.bedeutung } : {}),
+      typ: e.typ,
+      ...(e.kapitel  ? { kapitel: e.kapitel }     : {}),
+    });
+  }
+
+  const relRows = db.prepare(`
+    SELECT from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis
+    FROM figure_relations
+    WHERE book_id = ? AND user_email = ?
+  `).all(bookId, userEmail);
+  const relsByFigId = {};
+  for (const r of relRows) {
+    const entry = {
+      typ: r.typ,
+      ...(r.beschreibung    ? { beschreibung: r.beschreibung }       : {}),
+      ...(r.machtverhaltnis != null ? { machtverhaltnis: r.machtverhaltnis } : {}),
+    };
+    if (!relsByFigId[r.from_fig_id]) relsByFigId[r.from_fig_id] = [];
+    relsByFigId[r.from_fig_id].push({ mit: r.to_fig_id, ...entry });
+    if (!relsByFigId[r.to_fig_id]) relsByFigId[r.to_fig_id] = [];
+    relsByFigId[r.to_fig_id].push({ mit: r.from_fig_id, ...entry });
+  }
+
+  const locRows = db.prepare(`
+    SELECT lf.fig_id, l.name, l.typ, l.beschreibung, l.stimmung
+    FROM location_figures lf
+    JOIN locations l ON l.id = lf.location_id
+    WHERE l.book_id = ? AND l.user_email = ?
+    ORDER BY l.sort_order
+  `).all(bookId, userEmail);
+  const locsByFigId = {};
+  for (const l of locRows) {
+    if (!locsByFigId[l.fig_id]) locsByFigId[l.fig_id] = [];
+    locsByFigId[l.fig_id].push({
+      name: l.name,
+      ...(l.typ         ? { typ:         l.typ         } : {}),
+      ...(l.beschreibung? { beschreibung: l.beschreibung} : {}),
+      ...(l.stimmung    ? { stimmung:     l.stimmung    } : {}),
+    });
+  }
+
   return rows.map(r => ({
     id: r.fig_id, name: r.name, kurzname: r.kurzname, typ: r.typ,
     beschreibung: r.beschreibung, beruf: r.beruf, geschlecht: r.geschlecht,
     eigenschaften: r.tags ? r.tags.split(',') : [],
     kapitel: r.kapitel ? r.kapitel.split(',') : [],
+    ...(eventsByFigId[r.fig_id]?.length ? { lebensereignisse: eventsByFigId[r.fig_id] } : {}),
+    ...(relsByFigId[r.fig_id]?.length   ? { beziehungen:      relsByFigId[r.fig_id]   } : {}),
+    ...(locsByFigId[r.fig_id]?.length   ? { schauplätze:      locsByFigId[r.fig_id]   } : {}),
   }));
 }
 
@@ -934,6 +992,126 @@ async function runConsolidateZeitstrahlJob(jobId, events, bookId, userEmail) {
     logger.info(`Job ${jobId}: Zeitstrahl-Konsolidierung Buch ${bookId} abgeschlossen (${result.ereignisse.length} Ereignisse, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Zeitstrahl-Konsolidierung Fehler: ${e.message}`);
+    failJob(jobId, e);
+  }
+}
+
+// ── Job: Figurenentwicklungsbögen ─────────────────────────────────────────────
+async function runCharacterArcJob(jobId, bookId, bookName, userEmail, userToken) {
+  const {
+    buildEntwicklungsbogenSinglePassPrompt,
+    buildEntwicklungsbogenChapterPrompt,
+    buildEntwicklungsbogenConsolidationPrompt,
+  } = await getPrompts();
+  const { SYSTEM_FIGUREN } = await getBookPrompts(bookId);
+  try {
+    const cp = loadCheckpoint('character-arcs', bookId, userEmail);
+    if (cp) logger.info(`Job ${jobId}: Entwicklungsbögen Buch ${bookId} – Checkpoint gefunden (${cp.nextGi} Kapitel bereits fertig), setze fort.`);
+
+    updateJob(jobId, { statusText: 'Lade Figuren…', progress: 0 });
+
+    // Figuren laden – Voraussetzung
+    const figRows = db.prepare(
+      'SELECT fig_id, name, typ, beschreibung FROM figures WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+    ).all(parseInt(bookId), userEmail || null);
+    if (!figRows.length) {
+      failJob(jobId, new Error('Keine Figuren gefunden – bitte zuerst Figuren ermitteln.'));
+      return;
+    }
+    const figurenKontext = figRows.map(f =>
+      `${f.fig_id}: ${f.name} (${f.typ || 'andere'})${f.beschreibung ? ' – ' + f.beschreibung : ''}`
+    ).join('\n');
+
+    updateJob(jobId, { statusText: 'Lade Seiten…', progress: 5 });
+    const [chaptersData, pages] = await Promise.all([
+      bsGetAll('chapters?book_id=' + bookId, userToken),
+      bsGetAll('pages?book_id=' + bookId, userToken),
+    ]);
+    if (!pages.length) { completeJob(jobId, { empty: true }); return; }
+
+    const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
+    const tok = { in: 0, out: 0, ms: 0 };
+    const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
+      updateJob(jobId, {
+        progress: Math.round(5 + (i / total) * 35),
+        statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
+      });
+    }, userToken);
+
+    const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
+    let entwicklungsboegen;
+
+    if (totalChars <= SINGLE_PASS_LIMIT) {
+      updateJob(jobId, { progress: 45, statusText: 'KI analysiert Entwicklungsbögen…' });
+      const bookText = pageContents
+        .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
+        .join('\n\n---\n\n');
+      const result = await aiCall(jobId, tok,
+        buildEntwicklungsbogenSinglePassPrompt(bookName, figurenKontext, pageContents.length, bookText),
+        SYSTEM_FIGUREN,
+        45, 97, 4000, 0.2, null,
+      );
+      if (!Array.isArray(result?.entwicklungsboegen)) throw new Error('KI-Antwort ungültig: entwicklungsboegen-Array fehlt');
+      entwicklungsboegen = result.entwicklungsboegen;
+    } else {
+      // Multi-Pass: Kapitelweise Etappen sammeln, dann konsolidieren
+      const { groupOrder, groups } = groupByChapter(pageContents);
+
+      let perChapterResults = cp?.perChapterResults ?? [];
+      const startGi = cp?.nextGi ?? 0;
+
+      if (startGi > 0) {
+        updateJob(jobId, {
+          progress: 40 + Math.round((startGi / groupOrder.length) * 45),
+          statusText: `Setze Analyse fort (${startGi}/${groupOrder.length} Kapitel bereits fertig)…`,
+        });
+      }
+
+      for (let gi = startGi; gi < groupOrder.length; gi++) {
+        const group = groups.get(groupOrder[gi]);
+        const fromPct = 40 + Math.round((gi / groupOrder.length) * 45);
+        const toPct   = 40 + Math.round(((gi + 1) / groupOrder.length) * 45);
+        updateJob(jobId, {
+          progress: fromPct,
+          statusText: `Analysiere «${group.name}» (${gi + 1}/${groupOrder.length})…`,
+        });
+        const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+        let chResult;
+        try {
+          chResult = await aiCall(jobId, tok,
+            buildEntwicklungsbogenChapterPrompt(group.name, bookName, figurenKontext, group.pages.length, chText),
+            SYSTEM_FIGUREN,
+            fromPct, toPct, 2000,
+          );
+        } catch (e) {
+          if (e.name === 'AbortError') throw e;
+          logger.warn(`Job ${jobId}: Entwicklungsbogen Kapitel «${group.name}» übersprungen: ${e.message}`);
+          saveCheckpoint('character-arcs', bookId, userEmail, { perChapterResults, nextGi: gi + 1 });
+          continue;
+        }
+        if (Array.isArray(chResult?.etappen) && chResult.etappen.length) {
+          perChapterResults.push({ kapitel: group.name, etappen: chResult.etappen });
+        }
+        saveCheckpoint('character-arcs', bookId, userEmail, { perChapterResults, nextGi: gi + 1 });
+      }
+
+      // Konsolidierungs-Call
+      updateJob(jobId, { progress: 87, statusText: 'Konsolidiere Entwicklungsbögen…' });
+      const consolidationResult = await aiCall(jobId, tok,
+        buildEntwicklungsbogenConsolidationPrompt(bookName, figurenKontext, perChapterResults),
+        SYSTEM_FIGUREN,
+        87, 97, 4000, 0.2, null,
+      );
+      if (!Array.isArray(consolidationResult?.entwicklungsboegen)) throw new Error('KI-Konsolidierung ungültig: entwicklungsboegen-Array fehlt');
+      entwicklungsboegen = consolidationResult.entwicklungsboegen;
+    }
+
+    saveCharacterArcs(parseInt(bookId), userEmail || null, entwicklungsboegen);
+    deleteCheckpoint('character-arcs', bookId, userEmail);
+    completeJob(jobId, { count: entwicklungsboegen.length, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
+    logger.info(`Job ${jobId}: Entwicklungsbögen Buch ${bookId} abgeschlossen (${entwicklungsboegen.length} Bögen, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+  } catch (e) {
+    logger.error(`Job ${jobId}: Entwicklungsbögen Fehler: ${e.message}`);
     failJob(jobId, e);
   }
 }
@@ -1763,6 +1941,20 @@ router.post('/locations', jsonBody, (req, res) => {
   const label = book_name ? `Schauplätze · ${book_name}` : `Schauplätze`;
   const jobId = createJob('locations', book_id, userEmail, label);
   enqueueJob(jobId, () => runLocationsJob(jobId, book_id, book_name || '', userEmail, userToken));
+  res.json({ jobId });
+});
+
+router.post('/character-arcs', jsonBody, (req, res) => {
+  const { book_id, book_name } = req.body;
+  if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
+  const userEmail = req.session?.user?.email || null;
+  const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
+  const existing = runningJobs.get(jobKey('character-arcs', book_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const label = book_name ? `Entwicklungsbögen · ${book_name}` : `Entwicklungsbögen`;
+  deleteCheckpoint('character-arcs', book_id, userEmail);
+  const jobId = createJob('character-arcs', book_id, userEmail, label);
+  enqueueJob(jobId, () => runCharacterArcJob(jobId, book_id, book_name || '', userEmail, userToken));
   res.json({ jobId });
 });
 

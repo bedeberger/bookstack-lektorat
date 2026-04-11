@@ -915,6 +915,128 @@ Regeln:
 ${JSON_ONLY}`;
 }
 
+// ── Figurenentwicklungsbögen ──────────────────────────────────────────────────
+
+const ENTWICKLUNGSBOGEN_SCHEMA = `{
+  "entwicklungsboegen": [
+    {
+      "fig_id": "fig_1",
+      "arc_typ": "Reifebogen|Verfallsbogen|Erlösungsbogen|Tragischer Bogen|Wandlungsbogen|Stasis",
+      "ausgangszustand": "1 Satz: Wer die Figur zu Beginn des Buchs ist",
+      "endzustand": "1 Satz: Wer die Figur am Ende ist",
+      "gesamtbogen": "2-3 Sätze: Gesamtverlauf der Entwicklung",
+      "etappen": [
+        {
+          "sort_order": 1,
+          "kapitel": "Kapitelname",
+          "soziale_position": "Gesellschaftliche Rolle, Rang, Stellung zu diesem Zeitpunkt",
+          "innere_haltung": "Psychologie, Weltbild, Motivation, dominantes Gefühl",
+          "beziehungsstatus": "Schlüsselbeziehungen und ihr Zustand zu diesem Zeitpunkt",
+          "wendepunkt": "Was sich zur vorigen Etappe hin verändert hat (leer bei der ersten Etappe)"
+        }
+      ]
+    }
+  ]
+}`;
+
+const ENTWICKLUNGSBOGEN_RULES = `Regeln:
+- Nur Figuren aus der gelieferten Liste; fig_id muss exakt übereinstimmen
+- arc_typ: Reifebogen=Figur wächst/reift; Verfallsbogen=Figur verliert/degradiert; Erlösungsbogen=Figur überwindet innere Schuld/Schwäche; Tragischer Bogen=Figur scheitert trotz Bestrebens; Wandlungsbogen=fundamentale Identitätsänderung; Stasis=Figur verändert sich nicht wesentlich
+- etappen: 2-5 Etappen pro Figur, chronologisch nach Kapiteln geordnet; lieber weniger, dafür aussagekräftige Wendepunkte
+- soziale_position: Konkreter gesellschaftlicher Zustand (Beruf, Rang, Besitz, Ruf) – nicht wiederholen was in innere_haltung steht
+- innere_haltung: Psychologischer Zustand, Überzeugungen, Ziele, Ängste – 1-2 Sätze
+- beziehungsstatus: Die 1-3 wichtigsten Beziehungen zu diesem Zeitpunkt und ihr emotionaler Zustand
+- wendepunkt: Konkrete Veränderung zur vorigen Etappe – was hat sich wodurch verändert? (leer bei Etappe 1)
+- KONSERVATIV: Nur was eindeutig aus dem Text belegbar ist; Nebenfiguren können weniger Etappen haben
+- Figuren die sich im Text kaum entwickeln, bekommen arc_typ «Stasis» und 2 Etappen (Anfang + Ende)`;
+
+/**
+ * Einzelner KI-Call für kleine Bücher: alle Figuren + ganzer Text auf einmal.
+ */
+export function buildEntwicklungsbogenSinglePassPrompt(bookName, figurenKontext, pageCount, bookText) {
+  return `Analysiere den Entwicklungsbogen jeder Figur im Buch «${bookName}».
+
+Bekannte Figuren (nur diese fig_id-Werte verwenden):
+${figurenKontext}
+
+Antworte mit diesem JSON-Schema:
+${ENTWICKLUNGSBOGEN_SCHEMA}
+
+${ENTWICKLUNGSBOGEN_RULES}
+
+${JSON_ONLY}
+
+Buchtext (${pageCount} Seiten):
+
+${bookText}`;
+}
+
+/**
+ * Kapitel-Pass: extrahiert Figurenzustände aus einem einzelnen Kapitel.
+ * Ergebnis wird später in der Konsolidierung zusammengeführt.
+ */
+export function buildEntwicklungsbogenChapterPrompt(chapterName, bookName, figurenKontext, pageCount, chText) {
+  return `Beschreibe den Zustand jeder Figur im Kapitel «${chapterName}» des Buchs «${bookName}».
+
+Bekannte Figuren (nur diese fig_id-Werte verwenden):
+${figurenKontext}
+
+Antworte mit diesem JSON-Schema:
+{
+  "etappen": [
+    {
+      "fig_id": "fig_1",
+      "kapitel": "${chapterName}",
+      "soziale_position": "Gesellschaftliche Rolle, Rang, Stellung in diesem Kapitel",
+      "innere_haltung": "Psychologie, Weltbild, Motivation, dominantes Gefühl in diesem Kapitel",
+      "beziehungsstatus": "Schlüsselbeziehungen und ihr Zustand in diesem Kapitel",
+      "wendepunkt": "Ob und wie sich die Figur gegenüber dem Vorkapitel verändert hat (leer wenn keine relevante Veränderung)"
+    }
+  ]
+}
+
+Regeln:
+- Nur Figuren die in diesem Kapitel aktiv auftreten oder deren Zustand sich verändert
+- Nur fig_id-Werte aus der obigen Liste verwenden
+- Kurze, präzise Beschreibungen (je 1-2 Sätze); Leeres etappen-Array wenn keine relevanten Figuren im Kapitel
+
+${JSON_ONLY}
+
+Kapiteltext (${pageCount} Seiten):
+
+${chText}`;
+}
+
+/**
+ * Konsolidierungs-Call: fasst kapitelweise Etappen zu kohärenten Bögen zusammen.
+ * perChapterResults: [{ kapitel: "Name", etappen: [{ fig_id, ... }] }]
+ */
+export function buildEntwicklungsbogenConsolidationPrompt(bookName, figurenKontext, perChapterResults) {
+  const kapitelText = perChapterResults.map(cr =>
+    `## Kapitel: ${cr.kapitel}\n` +
+    (cr.etappen || []).map(e =>
+      `- ${e.fig_id}: [sozial] ${e.soziale_position || '–'} | [innen] ${e.innere_haltung || '–'} | [beziehung] ${e.beziehungsstatus || '–'}` +
+      (e.wendepunkt ? ` | [wendepunkt] ${e.wendepunkt}` : '')
+    ).join('\n')
+  ).join('\n\n');
+
+  return `Fasse die kapitelweisen Figurenzustände des Buchs «${bookName}» zu vollständigen Entwicklungsbögen zusammen.
+
+Bekannte Figuren (nur diese fig_id-Werte verwenden):
+${figurenKontext}
+
+Kapitelweise Figurenzustände:
+
+${kapitelText}
+
+Antworte mit diesem JSON-Schema:
+${ENTWICKLUNGSBOGEN_SCHEMA}
+
+${ENTWICKLUNGSBOGEN_RULES}
+
+${JSON_ONLY}`;
+}
+
 export function buildLektoratPrompt(text, html, { stopwords = STOPWORDS, erklaerungRule = ERKLAERUNG_RULE } = {}) {
   return `Analysiere diesen Text auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
 

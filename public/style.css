@@ -1233,8 +1233,16 @@ ins {
   font-weight: 600;
 }
 .figur-modus-btn:hover:not(.figur-modus-btn--active) { background: var(--color-hover); }
+.figur-modus-btn--active:hover { background: var(--color-primary); color: #fff; }
 
 /* === Figuren: Soziogramm-Hint + Actions === */
+.soziogramm-placeholder {
+  display: block;
+  padding: 32px 20px;
+  text-align: center;
+  line-height: 1.6;
+}
+
 .figur-soziogramm-hint {
   font-size: var(--font-size-xs);
   color: var(--color-muted);
@@ -1730,6 +1738,7 @@ ins {
   border-color: var(--color-primary);
   color: var(--color-surface);
 }
+.szenen-filter-btn--active:hover { background: var(--color-primary); color: var(--color-surface); }
 .szenen-filter-btn--stark   { border-color: #3a8f3e; color: #1e5c23; }
 .szenen-filter-btn--mittel  { border-color: #b38600; color: #6b4c00; }
 .szenen-filter-btn--schwach { border-color: var(--color-err-border); color: #8B1E1E; }
@@ -2782,5 +2791,154 @@ ins {
   margin: 8px 0 0;
   font-size: 12px;
   color: var(--color-danger, #dc2626);
+}
+
+/* ── Figurenentwicklungsbögen ────────────────────────────────────────────────── */
+.carc-list {
+  padding: 0.5rem 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.carc-card {
+  border: 1px solid var(--color-border);
+  padding: 0.75rem;
+}
+.carc-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+  flex-wrap: wrap;
+}
+.carc-figur-name {
+  font-weight: 700;
+  font-size: 14px;
+}
+.carc-arc-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  letter-spacing: 0.04em;
+}
+.arc-reife     { background: #e0f2e9; color: #276140; }
+.arc-verfall   { background: #fcebeb; color: #a32d2d; }
+.arc-erloesung { background: #e8f4fb; color: #1a5c80; }
+.arc-tragik    { background: #f3ece8; color: #7a3a1e; }
+.arc-wandlung  { background: #f0ebfa; color: #5a3688; }
+.arc-stasis    { background: var(--color-tag-bg); color: var(--color-muted); }
+.arc-andere    { background: var(--color-tag-bg); color: var(--color-muted); }
+
+.carc-gesamtbogen {
+  font-size: 13px;
+  color: var(--color-muted);
+  line-height: 1.5;
+  margin-bottom: 0.6rem;
+  padding: 0.35rem 0.6rem;
+  border-left: 3px solid var(--color-border);
+}
+.carc-stages-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 0.5rem;
+}
+.carc-stage-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.carc-stage-chip {
+  font-size: 12px;
+  padding: 3px 10px;
+  background: var(--color-tag-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s;
+}
+.carc-stage-chip:hover {
+  background: var(--color-hover);
+  border-color: var(--color-border-input);
+}
+.carc-stage-chip--active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+.carc-stage-chip--active:hover { background: var(--color-primary); color: #fff; }
+.carc-stage-arrow {
+  font-size: 12px;
+  color: var(--color-muted);
+  flex-shrink: 0;
+}
+.carc-stage-detail {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 13px;
+}
+.carc-detail-kapitel {
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+  margin-bottom: 0.4rem;
+}
+.carc-detail-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 0.4rem;
+  padding: 0.25rem 0;
+  border-top: 1px solid var(--color-border);
+  line-height: 1.4;
+}
+.carc-detail-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding-top: 1px;
+}
+.carc-detail-wendepunkt {
+  background: #faf7ee;
+  margin: 0 -0.75rem 0.3rem;
+  padding: 0.3rem 0.75rem;
+  border-top: none;
+}
+.carc-zustaende {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--color-border);
+  font-size: 12px;
+}
+.carc-zustand-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  color: var(--color-muted);
+}
+.carc-zustand-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-subtle);
+}
+.carc-zustand-sep {
+  padding-top: 14px;
+  color: var(--color-border-input);
+  flex-shrink: 0;
 }
 

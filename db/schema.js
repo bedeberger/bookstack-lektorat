@@ -302,6 +302,34 @@ db.exec(`
     region     TEXT NOT NULL DEFAULT 'CH',
     updated_at TEXT NOT NULL
   );
+
+  -- Figurenentwicklungsbögen: ein Eintrag pro Figur pro Buch pro User
+  CREATE TABLE IF NOT EXISTS character_arcs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id         INTEGER NOT NULL,
+    fig_id          TEXT NOT NULL,
+    user_email      TEXT,
+    arc_typ         TEXT,
+    ausgangszustand TEXT,
+    endzustand      TEXT,
+    gesamtbogen     TEXT,
+    updated_at      TEXT NOT NULL,
+    UNIQUE(book_id, fig_id, user_email)
+  );
+  CREATE INDEX IF NOT EXISTS idx_carc_book ON character_arcs(book_id, user_email);
+
+  -- Etappen eines Entwicklungsbogens (mehrere pro Figur)
+  CREATE TABLE IF NOT EXISTS arc_stages (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    arc_id           INTEGER NOT NULL REFERENCES character_arcs(id) ON DELETE CASCADE,
+    sort_order       INTEGER DEFAULT 0,
+    kapitel          TEXT,
+    soziale_position TEXT,
+    innere_haltung   TEXT,
+    beziehungsstatus TEXT,
+    wendepunkt       TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_astage_arc ON arc_stages(arc_id);
 `);
 
 // Schema-Migrationen (versioniert)
@@ -796,6 +824,37 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 31 abgeschlossen (figures.sozialschicht + figure_relations.machtverhaltnis hinzugefügt).');
   }
 
+  if (version < 32) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS character_arcs (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id         INTEGER NOT NULL,
+        fig_id          TEXT NOT NULL,
+        user_email      TEXT,
+        arc_typ         TEXT,
+        ausgangszustand TEXT,
+        endzustand      TEXT,
+        gesamtbogen     TEXT,
+        updated_at      TEXT NOT NULL,
+        UNIQUE(book_id, fig_id, user_email)
+      );
+      CREATE INDEX IF NOT EXISTS idx_carc_book ON character_arcs(book_id, user_email);
+      CREATE TABLE IF NOT EXISTS arc_stages (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        arc_id           INTEGER NOT NULL REFERENCES character_arcs(id) ON DELETE CASCADE,
+        sort_order       INTEGER DEFAULT 0,
+        kapitel          TEXT,
+        soziale_position TEXT,
+        innere_haltung   TEXT,
+        beziehungsstatus TEXT,
+        wendepunkt       TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_astage_arc ON arc_stages(arc_id);
+    `);
+    db.prepare('UPDATE schema_version SET version = 32').run();
+    logger.info('DB-Migration auf Version 32 abgeschlossen (character_arcs + arc_stages Tabellen hinzugefügt).');
+  }
+
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).
   //    Diese Checks sind idempotent und laufen bei jedem Start.
@@ -920,6 +979,42 @@ function updateFigurenEvents(bookId, assignments, userEmail, idMaps) {
       for (let j = 0; j < (assignment.lebensereignisse || []).length; j++) {
         const ev = assignment.lebensereignisse[j];
         insEvt.run(rowId, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', ev.kapitel || null, ev.seite || null, idMaps?.chNameToId?.[ev.kapitel] ?? null, idMaps?.pageNameToId?.[ev.seite] ?? null, j);
+      }
+    }
+  })();
+}
+
+// Figurenentwicklungsbögen persistieren (ersetzt den gesamten Bestand für book/user).
+// entwicklungsboegen: Array aus KI-Antwort [{ fig_id, arc_typ, ausgangszustand, endzustand, gesamtbogen, etappen[] }]
+function saveCharacterArcs(bookId, userEmail, entwicklungsboegen) {
+  const now = new Date().toISOString();
+  db.transaction(() => {
+    // Alle bestehenden Bögen für dieses Buch/User löschen (CASCADE löscht arc_stages mit)
+    db.prepare('DELETE FROM character_arcs WHERE book_id = ? AND user_email = ?').run(bookId, userEmail || null);
+
+    const insArc = db.prepare(`
+      INSERT INTO character_arcs (book_id, fig_id, user_email, arc_typ, ausgangszustand, endzustand, gesamtbogen, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+    const insStage = db.prepare(`
+      INSERT INTO arc_stages (arc_id, sort_order, kapitel, soziale_position, innere_haltung, beziehungsstatus, wendepunkt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`);
+
+    for (const arc of entwicklungsboegen) {
+      const { lastInsertRowid: arcId } = insArc.run(
+        bookId, arc.fig_id, userEmail || null,
+        arc.arc_typ || null, arc.ausgangszustand || null,
+        arc.endzustand || null, arc.gesamtbogen || null, now
+      );
+      for (let i = 0; i < (arc.etappen || []).length; i++) {
+        const s = arc.etappen[i];
+        insStage.run(
+          arcId, i,
+          s.kapitel || null,
+          s.soziale_position || null,
+          s.innere_haltung || null,
+          s.beziehungsstatus || null,
+          s.wendepunkt || null
+        );
       }
     }
   })();
@@ -1326,4 +1421,4 @@ function updateFigurenSoziogramm(bookId, figurenSoziogramm, beziehungenMacht, us
   })();
 }
 
-module.exports = { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings };
+module.exports = { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveCharacterArcs, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings };

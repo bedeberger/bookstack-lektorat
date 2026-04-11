@@ -142,6 +142,10 @@
       <span class="feature-tile-title">Kontinuität</span>
       <span class="feature-tile-desc">Widersprüche prüfen</span>
     </button>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showCharacterArcsCard }" @click="toggleCharacterArcsCard()" title="Figurenentwicklungsbögen: soziale Position, innere Haltung und Beziehungsstatus im Verlauf">
+      <span class="feature-tile-title">Entwicklungsbögen</span>
+      <span class="feature-tile-desc">Figurenarcs</span>
+    </button>
     <button class="feature-tile" :class="{ 'feature-tile--active': showBookSettingsCard }" @click="toggleBookSettingsCard()" title="Sprache und Region für dieses Buch konfigurieren">
       <span class="feature-tile-title">Einstellungen</span>
       <span class="feature-tile-desc">Sprache &amp; Region</span>
@@ -246,6 +250,7 @@
 <div id="partial-ereignisse"></div>
 <div id="partial-orte"></div>
 <div id="partial-kontinuitaet"></div>
+<div id="partial-character-arcs"></div>
 <div id="partial-bookstats"></div>
 <div id="partial-editor"></div>
 <div id="partial-chat"></div>
