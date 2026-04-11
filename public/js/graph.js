@@ -146,7 +146,11 @@ export const graphMethods = {
 
     this._figurenNetwork = new vis.Network(container, { nodes, edges }, options);
     this._figurenNetwork.once('stabilizationIterationsDone', () => {
-      this._figurenNetwork.setOptions({ physics: false });
+      // Positionen einfrieren bevor hierarchischer Modus deaktiviert wird –
+      // sonst zieht vis-network beim Drag den ganzen Teilbaum mit.
+      const positions = this._figurenNetwork.getPositions();
+      nodes.update(Object.entries(positions).map(([id, { x, y }]) => ({ id: +id, x, y })));
+      this._figurenNetwork.setOptions({ physics: false, layout: { hierarchical: { enabled: false } } });
     });
     this._attachTooltip(container);
   },
@@ -190,7 +194,7 @@ export const graphMethods = {
         margin: 10,
         widthConstraint: { maximum: 160 },
         x, y,
-        fixed: { x: false, y: true },
+        fixed: { x: false, y: true }, // Schicht-Zeile fixieren; horizontal löst Physics Überlappungen
       };
     }));
 

@@ -826,17 +826,18 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
 
     // ── Parallel-Block 1: P3 (Orte) + P4 (Soziogramm) ───────────────────────
     // P7-Kapitel wurde in Block 2 verschoben (kombiniert mit P5 Szenen+Ereignisse).
+    // settledAll serialisiert für Ollama (VRAM-Schutz); für Claude bleibt es parallel.
     updateJob(jobId, { progress: 43, statusText: 'Schauplätze und Soziogramm analysieren…' });
-    const [orteResultRaw] = await Promise.all([
+    const block1Settled = await settledAll([
 
       // P3: Orte konsolidieren
-      call(jobId, tok,
+      () => call(jobId, tok,
         buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt),
         SYSTEM_ORTE, 43, 55, 6000,
       ),
 
       // P4: Soziogramm – nicht-fatal: Fehler werden geloggt, Job läuft weiter
-      (async () => {
+      () => (async () => {
         const figRowsForSoz = db.prepare(
           'SELECT fig_id, name, typ, beruf, beschreibung FROM figures WHERE book_id = ? AND user_email IS ? ORDER BY sort_order'
         ).all(parseInt(bookId), userEmail || null);
@@ -855,6 +856,8 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         logger.warn(`Job ${jobId}: Soziogramm übersprungen: ${e.message}`);
       }),
     ]);
+    if (block1Settled[0].status === 'rejected') throw block1Settled[0].reason;
+    const orteResultRaw = block1Settled[0].value;
 
     if (!Array.isArray(orteResultRaw?.orte)) throw new Error('Orte-Konsolidierung ungültig: orte-Array fehlt');
     const orte = orteResultRaw.orte.map((o, i) => ({ ...o, id: o.id || ('ort_' + (i + 1)) }));
