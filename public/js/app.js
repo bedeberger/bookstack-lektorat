@@ -280,6 +280,11 @@ document.addEventListener('alpine:init', () => {
     jobStats: null,
     alleAktualisierenLoading: false,
     alleAktualisierenStatus: '',
+    alleAktualisierenLastRun: null,
+    alleAktualisierenProgress: 0,
+    alleAktualisierenTokIn: 0,
+    alleAktualisierenTokOut: 0,
+    showKomplettStatus: false,
     showBookSettingsCard: false,
     bookSettingsLanguage: 'de',
     bookSettingsRegion: 'CH',
@@ -586,6 +591,10 @@ document.addEventListener('alpine:init', () => {
     async alleAktualisieren() {
       if (!this.selectedBookId || this.alleAktualisierenLoading) return;
       this.alleAktualisierenLoading = true;
+      this.alleAktualisierenProgress = 0;
+      this.alleAktualisierenTokIn = 0;
+      this.alleAktualisierenTokOut = 0;
+      this.showKomplettStatus = true;
       const bookId = this.selectedBookId;
       const bookName = this.selectedBookName;
       try {
@@ -604,6 +613,9 @@ document.addEventListener('alpine:init', () => {
               if (!resp.ok) return;
               const job = await resp.json();
               if (job.statusText) this.alleAktualisierenStatus = job.statusText;
+              if (job.progress != null) this.alleAktualisierenProgress = job.progress;
+              if (job.tokensIn != null) this.alleAktualisierenTokIn = job.tokensIn;
+              if (job.tokensOut != null) this.alleAktualisierenTokOut = job.tokensOut;
               if (job.status === 'done') { clearInterval(timer); resolve(job); }
               else if (job.status === 'error' || job.status === 'cancelled') {
                 clearInterval(timer);
@@ -619,6 +631,8 @@ document.addEventListener('alpine:init', () => {
           this.loadOrte(bookId),
           this.loadSzenen(bookId),
           this.loadCharacterArcs(),
+          this._loadKontinuitaetHistory(),
+          this.loadLastKomplettRun(bookId),
         ]);
         this.alleAktualisierenStatus = 'Fertig.';
         setTimeout(() => { if (this.alleAktualisierenStatus === 'Fertig.') this.alleAktualisierenStatus = ''; }, 4000);
@@ -628,6 +642,37 @@ document.addEventListener('alpine:init', () => {
       } finally {
         this.alleAktualisierenLoading = false;
       }
+    },
+
+    async loadLastKomplettRun(bookId) {
+      if (!bookId) return;
+      try {
+        const { lastRunFmt } = await fetch(`/jobs/last-run?type=komplett-analyse&book_id=${bookId}`).then(r => r.json());
+        this.alleAktualisierenLastRun = lastRunFmt || null;
+      } catch { this.alleAktualisierenLastRun = null; }
+    },
+
+    _fmtTok(n) { return fmtTok(n || 0); },
+
+    _komplettPhasen() {
+      const p = this.alleAktualisierenProgress;
+      const phases = [
+        { label: 'Seiten laden',          threshold: 12  },
+        { label: 'Figuren + Orte',        threshold: 30  },
+        { label: 'Figuren konsolidieren', threshold: 45  },
+        { label: 'Orte konsolidieren',    threshold: 56  },
+        { label: 'Soziogramm',            threshold: 63  },
+        { label: 'Szenen + Ereignisse',   threshold: 83  },
+        { label: 'Zeitstrahl',            threshold: 89  },
+        { label: 'Entwicklungsbögen',     threshold: 97  },
+        { label: 'Kontinuität',           threshold: 100 },
+      ];
+      return phases.map((ph, i) => {
+        const done = p >= ph.threshold;
+        const prevThreshold = i === 0 ? 0 : phases[i - 1].threshold;
+        const active = !done && p >= prevThreshold;
+        return { label: ph.label, done, active };
+      });
     },
 
     // Generiertes Status-HTML für laufende Jobs: Spinner + statusText + Token-Info.
@@ -1026,6 +1071,11 @@ document.addEventListener('alpine:init', () => {
       this.showBookSettingsCard = false;
       this.bookSettingsSaved = false;
       this.bookSettingsError = '';
+      this.alleAktualisierenLastRun = null;
+      this.alleAktualisierenProgress = 0;
+      this.alleAktualisierenTokIn = 0;
+      this.alleAktualisierenTokOut = 0;
+      this.showKomplettStatus = false;
       this.resetChat();
       this.resetBookChat();
     },

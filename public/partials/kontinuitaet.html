@@ -2,10 +2,9 @@
 <div class="card" x-show="showKontinuitaetCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Kontinuität: ' + selectedBookName"></span>
-    <span x-show="kontinuitaetResult && !kontinuitaetLoading" class="figuren-updated-at" x-text="'Letzte Prüfung: ' + formatDate(kontinuitaetResult?.checked_at)"></span>
+    <span x-show="alleAktualisierenLastRun && !kontinuitaetLoading" class="figuren-updated-at" x-text="'Superjob: ' + alleAktualisierenLastRun"></span>
     <div class="card-actions">
-      <button @click="runKontinuitaetCheck()" :disabled="kontinuitaetLoading">
-        <span x-show="kontinuitaetLoading" class="spinner"></span>
+      <button :disabled="true" title="Wird durch «Alle aktualisieren» ausgelöst">
         <span x-text="kontinuitaetResult ? 'Neu prüfen' : 'Prüfen'"></span>
       </button>
     </div>

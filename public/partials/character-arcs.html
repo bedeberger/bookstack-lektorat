@@ -2,12 +2,9 @@
 <div class="card" x-show="showCharacterArcsCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Entwicklungsbögen: ' + selectedBookName"></span>
-    <span x-show="characterArcs && !characterArcsLoading" class="figuren-updated-at"
-          x-text="characterArcsUpdatedAt ? 'Ermittelt: ' + formatDate(characterArcsUpdatedAt) : ''"></span>
+    <span x-show="alleAktualisierenLastRun && !characterArcsLoading" class="figuren-updated-at" x-text="'Superjob: ' + alleAktualisierenLastRun"></span>
     <div class="card-actions">
-      <button @click="runCharacterArcsExtraction()" :disabled="characterArcsLoading || !figuren.length"
-              :title="!figuren.length ? 'Bitte zuerst Figuren ermitteln' : 'Entwicklungsbögen neu analysieren'">
-        <span x-show="characterArcsLoading" class="spinner"></span>
+      <button :disabled="true" title="Wird durch «Alle aktualisieren» ausgelöst">
         <span x-text="characterArcs ? 'Neu analysieren' : 'Analysieren'"></span>
       </button>
     </div>

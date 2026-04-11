@@ -2,11 +2,10 @@
 <div class="card" x-show="showSzenenCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Szenen: ' + selectedBookName"></span>
-    <span x-show="szenenUpdatedAt && !szenenLoading" class="figuren-updated-at" x-text="'Letzte Analyse: ' + formatDate(szenenUpdatedAt)"></span>
+    <span x-show="alleAktualisierenLastRun && !szenenLoading" class="figuren-updated-at" x-text="'Superjob: ' + alleAktualisierenLastRun"></span>
     <div class="card-actions">
-      <button @click="runSzenenAnalyse()" :disabled="szenenLoading">
-        <span x-show="szenenLoading" class="spinner"></span>
-        <span x-text="szenenLoading ? '' : (szenen.length ? 'Neu analysieren' : 'Szenen analysieren')"></span>
+      <button :disabled="true" title="Wird durch «Alle aktualisieren» ausgelöst">
+        <span x-text="szenen.length ? 'Neu analysieren' : 'Szenen analysieren'"></span>
       </button>
     </div>
   </div>

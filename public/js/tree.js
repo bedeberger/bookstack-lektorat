@@ -103,6 +103,7 @@ export const treeMethods = {
       await Promise.all([
         this.loadBookReviewHistory(bookId),
         this.loadFiguren(bookId),
+        this.loadLastKomplettRun(bookId),
       ]);
       this.checkPendingJobs(bookId); // Reconnect nach Tab-Schliessen, kein await
       this.loadTokenEstimates(this._tokenEstGen); // Hintergrund, kein await

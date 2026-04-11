@@ -159,6 +159,23 @@ function cancelJob(id, userEmail) {
   return false;
 }
 
+// ── Ollama-kompatibler Promise.allSettled-Ersatz ──────────────────────────────
+// Ollama verarbeitet Requests sequenziell. Bei parallelen Calls mit grossem
+// num_ctx läuft der VRAM voll → fetch failed. Für Ollama daher serialisieren.
+async function settledAll(thunks) {
+  if ((process.env.API_PROVIDER || 'claude') !== 'ollama')
+    return Promise.allSettled(thunks.map(fn => fn()));
+  const results = [];
+  for (const fn of thunks) {
+    try { results.push({ status: 'fulfilled', value: await fn() }); }
+    catch (e) {
+      if (e.name === 'AbortError') throw e;
+      results.push({ status: 'rejected', reason: e });
+    }
+  }
+  return results;
+}
+
 // ── BookStack-Helfer ──────────────────────────────────────────────────────────
 const BS_URL = (process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80').replace(/\/$/, '');
 
@@ -675,8 +692,8 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail, userToken) {
           progress: 55,
           statusText: `Figuren in ${groupOrder.length} Kapiteln parallel analysieren…`,
         });
-        const settled = await Promise.allSettled(
-          chapterTexts.map(({ group, chText }) =>
+        const settled = await settledAll(
+          chapterTexts.map(({ group, chText }) => () =>
             aiCall(jobId, tok,
               buildFiguresBasisChapterPrompt(group.name, bookName, group.pages.length, chText),
               SYSTEM_FIGUREN,
@@ -832,8 +849,8 @@ async function runFigureEventsJob(jobId, bookId, bookName, userEmail, userToken)
         statusText: `Ereignisse in ${groupOrder.length} Kapiteln parallel analysieren…`,
       });
 
-      const settled = await Promise.allSettled(
-        groupOrder.map(key => {
+      const settled = await settledAll(
+        groupOrder.map(key => () => {
           const group = groups.get(key);
           const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
           return aiCall(jobId, tok,
@@ -1046,8 +1063,11 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     buildEntwicklungsbogenSinglePassPrompt,
     buildEntwicklungsbogenChapterPrompt,
     buildEntwicklungsbogenConsolidationPrompt,
+    buildKontinuitaetSinglePassPrompt,
+    buildKontinuitaetChapterFactsPrompt,
+    buildKontinuitaetCheckPrompt,
   } = await getPrompts();
-  const { SYSTEM_FIGUREN, SYSTEM_ORTE } = await getBookPrompts(bookId);
+  const { SYSTEM_FIGUREN, SYSTEM_ORTE, SYSTEM_KONTINUITAET } = await getBookPrompts(bookId);
 
   try {
     const cp = loadCheckpoint('komplett-analyse', bookId, userEmail);
@@ -1106,8 +1126,8 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           const group = groups.get(key);
           return { group, chText: group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n') };
         });
-        const settled = await Promise.allSettled(
-          chapterTexts.map(({ group, chText }) =>
+        const settled = await settledAll(
+          chapterTexts.map(({ group, chText }) => () =>
             aiCall(jobId, tok,
               buildExtraktionFigurenOrteChapterPrompt(group.name, bookName, group.pages.length, chText),
               SYSTEM_FIGUREN, 12, 28, 8000,
@@ -1173,8 +1193,8 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       progress: 63,
       statusText: `Szenen + Ereignisse in ${groupOrder.length} Kapiteln extrahieren…`,
     });
-    const szEvtSettled = await Promise.allSettled(
-      groupOrder.map(key => {
+    const szEvtSettled = await settledAll(
+      groupOrder.map(key => () => {
         const group = groups.get(key);
         const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
         return aiCall(jobId, tok,
@@ -1299,7 +1319,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     }
 
     // ── Phase 7: Entwicklungsbögen ────────────────────────────────────────────
-    updateJob(jobId, { progress: 90, statusText: 'Entwicklungsbögen analysieren…' });
+    updateJob(jobId, { progress: 89, statusText: 'Entwicklungsbögen analysieren…' });
     const figRowsForArcs = db.prepare(
       'SELECT id, fig_id, name, typ, beschreibung FROM figures WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
     ).all(parseInt(bookId), userEmail || null);
@@ -1332,7 +1352,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           .join('\n\n---\n\n');
         const arcResult = await aiCall(jobId, tok,
           buildEntwicklungsbogenSinglePassPrompt(bookName, figurenKontextForArcs, pageContents.length, bookText),
-          SYSTEM_FIGUREN, 90, 97, 4000, 0.2, null,
+          SYSTEM_FIGUREN, 89, 95, 4000, 0.2, null,
         );
         if (!Array.isArray(arcResult?.entwicklungsboegen)) throw new Error('Entwicklungsbögen-Analyse ungültig: entwicklungsboegen-Array fehlt');
         entwicklungsboegen = arcResult.entwicklungsboegen;
@@ -1340,8 +1360,8 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         const perChapterResults = [];
         for (let gi = 0; gi < groupOrder.length; gi++) {
           const group = groups.get(groupOrder[gi]);
-          const fromPct = 90 + Math.round((gi / groupOrder.length) * 6);
-          const toPct   = 90 + Math.round(((gi + 1) / groupOrder.length) * 6);
+          const fromPct = 89 + Math.round((gi / groupOrder.length) * 5);
+          const toPct   = 89 + Math.round(((gi + 1) / groupOrder.length) * 5);
           updateJob(jobId, {
             progress: fromPct,
             statusText: `Entwicklungsbögen «${group.name}» (${gi + 1}/${groupOrder.length})…`,
@@ -1359,16 +1379,76 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
             logger.warn(`Job ${jobId}: Entwicklungsbogen «${group.name}» übersprungen: ${e.message}`);
           }
         }
-        updateJob(jobId, { progress: 96, statusText: 'Konsolidiere Entwicklungsbögen…' });
+        updateJob(jobId, { progress: 94, statusText: 'Konsolidiere Entwicklungsbögen…' });
         const arcConsolidation = await aiCall(jobId, tok,
           buildEntwicklungsbogenConsolidationPrompt(bookName, figurenKontextForArcs, perChapterResults),
-          SYSTEM_FIGUREN, 96, 99, 4000, 0.2, null,
+          SYSTEM_FIGUREN, 94, 97, 4000, 0.2, null,
         );
         if (!Array.isArray(arcConsolidation?.entwicklungsboegen)) throw new Error('Entwicklungsbögen-Konsolidierung ungültig: entwicklungsboegen-Array fehlt');
         entwicklungsboegen = arcConsolidation.entwicklungsboegen;
       }
       saveCharacterArcs(parseInt(bookId), userEmail || null, entwicklungsboegen);
       logger.info(`Job ${jobId}: ${entwicklungsboegen.length} Entwicklungsbögen gespeichert.`);
+    }
+
+    // ── Phase 8: Kontinuitätsprüfung ──────────────────────────────────────────
+    updateJob(jobId, { progress: 97, statusText: 'Kontinuität prüfen…' });
+    {
+      const figRowsForKont = db.prepare(
+        'SELECT name, typ, beschreibung FROM figures WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+      ).all(parseInt(bookId), userEmail || null);
+      const ortRowsForKont = db.prepare(
+        'SELECT name, typ, beschreibung FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+      ).all(parseInt(bookId), userEmail || null);
+      const figKompaktForKont = figRowsForKont.map(f => ({ name: f.name, typ: f.typ || 'andere', beschreibung: f.beschreibung || '' }));
+      const orteKompaktForKont = ortRowsForKont.map(o => ({ name: o.name, typ: o.typ, beschreibung: o.beschreibung || '' }));
+
+      let kontResult;
+      if (totalChars <= SINGLE_PASS_LIMIT) {
+        const bookText = pageContents
+          .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
+          .join('\n\n---\n\n');
+        kontResult = await aiCall(jobId, tok,
+          buildKontinuitaetSinglePassPrompt(bookName, bookText, figKompaktForKont, orteKompaktForKont),
+          SYSTEM_KONTINUITAET, 97, 99, 5000,
+        );
+      } else {
+        const chapterFacts = [];
+        for (let gi = 0; gi < groupOrder.length; gi++) {
+          const group = groups.get(groupOrder[gi]);
+          updateJob(jobId, {
+            progress: 97,
+            statusText: `Kontinuität – Fakten in «${group.name}» (${gi + 1}/${groupOrder.length})…`,
+          });
+          const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+          try {
+            const chResult = await aiCall(jobId, tok,
+              buildKontinuitaetChapterFactsPrompt(group.name, chText),
+              SYSTEM_KONTINUITAET, 97, 98, 1500,
+            );
+            chapterFacts.push({ kapitel: group.name, fakten: chResult.fakten || [] });
+          } catch (e) {
+            if (e.name === 'AbortError') throw e;
+            logger.warn(`Job ${jobId}: Kontinuität-Fakten «${group.name}» übersprungen: ${e.message}`);
+          }
+        }
+        updateJob(jobId, { progress: 98, statusText: 'KI prüft Widersprüche…' });
+        kontResult = await aiCall(jobId, tok,
+          buildKontinuitaetCheckPrompt(bookName, chapterFacts, figKompaktForKont, orteKompaktForKont),
+          SYSTEM_KONTINUITAET, 98, 99, 5000,
+        );
+      }
+
+      if (typeof kontResult?.zusammenfassung !== 'undefined') {
+        const model = process.env.API_PROVIDER === 'ollama'
+          ? (process.env.OLLAMA_MODEL || 'llama3.2')
+          : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
+        db.prepare(`INSERT INTO continuity_checks (book_id, user_email, checked_at, issues_json, summary, model)
+          VALUES (?, ?, ?, ?, ?, ?)`)
+          .run(parseInt(bookId), userEmail || null, new Date().toISOString(),
+            JSON.stringify(kontResult.probleme || []), kontResult.zusammenfassung || '', model);
+        logger.info(`Job ${jobId}: Kontinuitätsprüfung abgeschlossen (${(kontResult.probleme || []).length} Probleme).`);
+      }
     }
 
     deleteCheckpoint('komplett-analyse', bookId, userEmail);
@@ -2454,6 +2534,8 @@ const JOB_TYPE_LABELS = {
   'chat':                   'Seiten-Chat',
   'locations':              'Schauplätze',
   'kontinuitaet':           'Kontinuität',
+  'soziogramm':             'Soziogramm',
+  'character-arcs':         'Entwicklungsbögen',
 };
 
 function fmtDuration(seconds) {
@@ -2476,8 +2558,12 @@ function fmtLastRun(isoStr) {
   return d.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
 }
 
+// Job-Typen, die vom Superjob (komplett-analyse) abgedeckt werden und nicht in der Statistik erscheinen sollen
+const STATS_EXCLUDED_TYPES = ['figures', 'soziogramm', 'szenen', 'locations', 'character-arcs', 'figure-events', 'consolidate-zeitstrahl', 'kontinuitaet'];
+
 router.get('/stats', (req, res) => {
   const userEmail = req.session?.user?.email || null;
+  const placeholders = STATS_EXCLUDED_TYPES.map(() => '?').join(',');
   const rows = db.prepare(`
     SELECT
       type,
@@ -2489,10 +2575,10 @@ router.get('/stats', (req, res) => {
       AVG(CASE WHEN status = 'done' THEN tokens_out ELSE NULL END) AS avgTokensOut,
       SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS errorCount
     FROM job_runs
-    WHERE user_email = ?
+    WHERE user_email = ? AND type NOT IN (${placeholders})
     GROUP BY type
     ORDER BY lastRun IS NULL, lastRun DESC
-  `).all(userEmail);
+  `).all(userEmail, ...STATS_EXCLUDED_TYPES);
 
   const result = rows.map(r => ({
     type:         r.type,
@@ -2508,6 +2594,18 @@ router.get('/stats', (req, res) => {
       : '—',
   }));
   res.json(result);
+});
+
+router.get('/last-run', (req, res) => {
+  const { type, book_id } = req.query;
+  if (!type || !book_id) return res.status(400).json({ error: 'type und book_id erforderlich' });
+  const userEmail = req.session?.user?.email || null;
+  const row = db.prepare(`
+    SELECT ended_at FROM job_runs
+    WHERE type = ? AND book_id = ? AND user_email = ? AND status = 'done'
+    ORDER BY ended_at DESC LIMIT 1
+  `).get(type, parseInt(book_id), userEmail);
+  res.json({ lastRun: row?.ended_at || null, lastRunFmt: row ? fmtLastRun(row.ended_at) : null });
 });
 
 router.get('/active', (req, res) => {

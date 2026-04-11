@@ -2,10 +2,9 @@
 <div class="card" x-show="showOrteCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Schauplätze: ' + selectedBookName"></span>
-    <span x-show="orteUpdatedAt && !orteLoading" class="figuren-updated-at" x-text="'Letzte Analyse: ' + formatDate(orteUpdatedAt)"></span>
+    <span x-show="alleAktualisierenLastRun && !orteLoading" class="figuren-updated-at" x-text="'Superjob: ' + alleAktualisierenLastRun"></span>
     <div class="card-actions">
-      <button @click="runOrteExtraction()" :disabled="orteLoading">
-        <span x-show="orteLoading" class="spinner"></span>
+      <button :disabled="true" title="Wird durch «Alle aktualisieren» ausgelöst">
         <span x-text="orte.length ? 'Neu ermitteln' : 'Schauplätze ermitteln'"></span>
       </button>
     </div>

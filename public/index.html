@@ -23,10 +23,31 @@
   <p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : '· Claude: ' + claudeModel"></span></p>
   <div class="user-info" x-show="currentUser">
     <span class="user-email" x-text="currentUser?.name || currentUser?.email"></span>
-    <button class="job-stats-btn" @click="alleAktualisieren()" :disabled="alleAktualisierenLoading || !selectedBookId" :title="alleAktualisierenStatus || 'Figuren, Soziogramm, Schauplätze, Szenenanalyse, Ereignisse, Zeitstrahl und Entwicklungsbögen neu ermitteln'">
-      <span x-show="alleAktualisierenLoading" class="spinner"></span>
-      <span x-text="alleAktualisierenLoading ? alleAktualisierenStatus : 'Alle aktualisieren'"></span>
-    </button>
+    <div class="komplett-status-wrap" @click.outside="showKomplettStatus = false">
+      <button class="job-stats-btn" @click="alleAktualisieren()" :disabled="alleAktualisierenLoading || !selectedBookId" title="Figuren, Soziogramm, Schauplätze, Szenenanalyse, Ereignisse, Zeitstrahl und Entwicklungsbögen neu ermitteln">
+        <span x-show="alleAktualisierenLoading" class="spinner"></span>
+        Alle aktualisieren
+      </button>
+      <div class="komplett-last-run" x-show="!alleAktualisierenLoading && alleAktualisierenLastRun" x-text="'Stand: ' + alleAktualisierenLastRun" x-cloak></div>
+      <div class="komplett-status-panel" x-show="showKomplettStatus" x-cloak>
+        <div class="komplett-status-title">Komplettanalyse</div>
+        <div class="progress-bar-wrap komplett-progress-bar-wrap">
+          <div class="progress-bar" :style="`width: ${alleAktualisierenProgress}%`"></div>
+        </div>
+        <div class="komplett-progress-label">
+          <span x-text="alleAktualisierenStatus || 'Abgeschlossen'"></span>
+          <span x-show="alleAktualisierenTokIn > 0 || alleAktualisierenTokOut > 0" class="komplett-tokens" x-text="`↑${_fmtTok(alleAktualisierenTokIn)} ↓${_fmtTok(alleAktualisierenTokOut)}`"></span>
+        </div>
+        <ul class="komplett-phase-list">
+          <template x-for="phase in _komplettPhasen()">
+            <li class="komplett-phase-item" :class="{ 'is-done': phase.done, 'is-active': phase.active }">
+              <span class="komplett-phase-icon" x-text="phase.done ? '✓' : (phase.active ? '→' : '○')"></span>
+              <span x-text="phase.label"></span>
+            </li>
+          </template>
+        </ul>
+      </div>
+    </div>
     <div class="job-stats-wrap" @click.outside="showJobStats = false">
       <button class="job-stats-btn" :class="{ 'job-stats-btn--active': showJobStats }" @click="toggleJobStats()" title="Job-Zeiten &amp; Token-Verbrauch">Zeiten</button>
       <div class="job-stats-panel" x-show="showJobStats" x-cloak>

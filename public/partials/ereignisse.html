@@ -2,16 +2,10 @@
 <div class="card" x-show="showEreignisseCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Ereignisse: ' + selectedBookName"></span>
-    <span x-show="globalZeitstrahl.length > 0 && !zeitstrahlConsolidating && !ereignisseLoading" class="figuren-updated-at" x-text="globalZeitstrahl.length + ' Ereignisse'"></span>
+    <span x-show="alleAktualisierenLastRun && !ereignisseLoading && !zeitstrahlConsolidating" class="figuren-updated-at" x-text="'Superjob: ' + alleAktualisierenLastRun"></span>
     <div class="card-actions">
-      <button @click="runEreignisseExtraction()" :disabled="ereignisseLoading || zeitstrahlConsolidating">
-        <span x-show="ereignisseLoading" class="spinner"></span>
-        <span x-text="ereignisseLoading ? '' : 'Neu ermitteln'"></span>
-      </button>
-      <button @click="consolidateZeitstrahl()" :disabled="zeitstrahlConsolidating || ereignisseLoading || globalZeitstrahl.length === 0">
-        <span x-show="zeitstrahlConsolidating" class="spinner"></span>
-        <span x-text="zeitstrahlConsolidating ? '' : 'Konsolidieren'"></span>
-      </button>
+      <button :disabled="true" title="Wird durch «Alle aktualisieren» ausgelöst">Neu ermitteln</button>
+      <button :disabled="true" title="Wird durch «Alle aktualisieren» ausgelöst">Konsolidieren</button>
     </div>
   </div>
 
