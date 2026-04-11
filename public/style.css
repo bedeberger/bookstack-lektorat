@@ -338,6 +338,30 @@ code {
   color: var(--color-primary);
 }
 
+@media (max-width: 600px) {
+  .user-info {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    white-space: normal;
+  }
+  .user-email {
+    width: 100%;
+    text-align: right;
+  }
+  .job-stats-panel,
+  .komplett-status-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    min-width: 0;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+}
+
 .token-setup-card {
   max-width: 480px;
 }

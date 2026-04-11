@@ -15,32 +15,30 @@
   </div>
 
   <!-- Filter-Leiste -->
-  <template x-if="characterArcs && characterArcs.length > 0">
-    <div class="carc-filter-bar">
-      <div x-data="combobox('Figur…', 'Alle Figuren')"
-           x-modelable="value" x-model="arcFilterFigurId"
-           x-effect="options = figuren.filter(f => characterArcs.some(a => a.fig_id === f.id)).map(f => ({value: f.id, label: f.kurzname || f.name}))"
-           @click.outside="close()" @keydown="onKeydown($event)"
-           class="combobox-wrap combobox-wrap--compact">
-      </div>
-      <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
-           x-modelable="value" x-model="arcFilterKapitel"
-           x-effect="options = arcKapitelListe().map(k => ({value: k, label: k}))"
-           @combobox-change="arcFilterSeite = ''"
-           @click.outside="close()" @keydown="onKeydown($event)"
-           class="combobox-wrap combobox-wrap--compact">
-      </div>
-      <template x-if="arcFilterKapitel && arcSeitenListe().length > 0">
-        <div x-data="combobox('Seite…', 'Alle Seiten')"
-             x-modelable="value" x-model="arcFilterSeite"
-             x-effect="options = arcSeitenListe().map(s => ({value: s, label: s}))"
-             @click.outside="close()" @keydown="onKeydown($event)"
-             class="combobox-wrap combobox-wrap--compact">
-        </div>
-      </template>
-      <span class="szenen-filter-count" x-text="characterArcsFiltered.length + ' / ' + characterArcs.length"></span>
+  <div x-show="characterArcs && characterArcs.length > 0" class="carc-filter-bar">
+    <div x-data="combobox('Figur…', 'Alle Figuren')"
+         x-modelable="value" x-model="arcFilterFigurId"
+         x-effect="options = figuren.filter(f => characterArcs.some(a => a.fig_id === f.id)).map(f => ({value: f.id, label: f.kurzname || f.name}))"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact">
     </div>
-  </template>
+    <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
+         x-modelable="value" x-model="arcFilterKapitel"
+         x-effect="options = arcKapitelListe().map(k => ({value: k, label: k}))"
+         @combobox-change="arcFilterSeite = ''"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact">
+    </div>
+    <template x-if="arcFilterKapitel && arcSeitenListe().length > 0">
+      <div x-data="combobox('Seite…', 'Alle Seiten')"
+           x-modelable="value" x-model="arcFilterSeite"
+           x-effect="options = arcSeitenListe().map(s => ({value: s, label: s}))"
+           @click.outside="close()" @keydown="onKeydown($event)"
+           class="combobox-wrap combobox-wrap--compact">
+      </div>
+    </template>
+    <span class="szenen-filter-count" x-text="characterArcs ? characterArcsFiltered.length + ' / ' + characterArcs.length : ''"></span>
+  </div>
 
   <!-- Bögen-Matrix -->
   <template x-if="characterArcs && characterArcs.length > 0">

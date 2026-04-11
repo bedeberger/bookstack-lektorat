@@ -14,26 +14,26 @@
     Noch keine Daten vorhanden. Bitte auf «Alle aktualisieren» klicken.
   </div>
 
+  <!-- Filter-Leiste (ausserhalb x-if, damit Alpine x-effect die Parent-Reaktivität korrekt trackt) -->
+  <div x-show="kontinuitaetResult?.issues?.length > 0" class="szenen-filter-bar">
+    <div x-data="combobox('Figur…', 'Alle Figuren')"
+         x-modelable="value" x-model="kontinuitaetFilterFigurId"
+         x-effect="options = figuren.filter(f => (kontinuitaetResult?.issues||[]).some(i => i.fig_ids?.length ? i.fig_ids.includes(f.id) : (i.figuren||[]).includes(f.name))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact">
+    </div>
+    <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
+         x-modelable="value" x-model="kontinuitaetFilterKapitel"
+         x-effect="options = kontinuitaetKapitelListe().map(k => ({value: k, label: k}))"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact">
+    </div>
+    <span class="szenen-filter-count" x-text="kontinuitaetResult ? kontinuitaetIssuesFiltered.length + ' / ' + kontinuitaetResult.issues.length : ''"></span>
+  </div>
+
   <!-- Ergebnisse -->
   <template x-if="kontinuitaetResult">
     <div class="kontinuitaet-result">
-
-      <!-- Filter-Leiste -->
-      <div x-show="kontinuitaetResult.issues?.length > 0" class="szenen-filter-bar">
-        <div x-data="combobox('Figur…', 'Alle Figuren')"
-             x-modelable="value" x-model="kontinuitaetFilterFigurId"
-             x-effect="options = figuren.filter(f => kontinuitaetResult.issues.some(i => i.fig_ids?.length ? i.fig_ids.includes(f.id) : (i.figuren||[]).includes(f.name))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
-             @click.outside="close()" @keydown="onKeydown($event)"
-             class="combobox-wrap combobox-wrap--compact">
-        </div>
-        <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
-             x-modelable="value" x-model="kontinuitaetFilterKapitel"
-             x-effect="options = kontinuitaetKapitelListe().map(k => ({value: k, label: k}))"
-             @click.outside="close()" @keydown="onKeydown($event)"
-             class="combobox-wrap combobox-wrap--compact">
-        </div>
-        <span class="szenen-filter-count" x-text="kontinuitaetIssuesFiltered.length + ' / ' + kontinuitaetResult.issues.length"></span>
-      </div>
 
       <!-- Zusammenfassung -->
       <div class="kontinuitaet-summary" x-text="kontinuitaetResult.summary"></div>

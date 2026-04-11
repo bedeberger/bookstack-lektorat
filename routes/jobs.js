@@ -106,7 +106,14 @@ function createJob(type, bookId, userEmail, label) {
 
 function updateJob(id, updates) {
   const job = jobs.get(id);
-  if (job && job.status === 'running') Object.assign(job, updates);
+  if (!job || job.status !== 'running') return;
+  if (updates.progress != null && updates.progress < (job.progress || 0)) {
+    // Parallel-Branch mit niedrigerem Fortschritt darf weder progress noch statusText überschreiben
+    const { progress: _, statusText: __, ...rest } = updates;
+    Object.assign(job, rest);
+  } else {
+    Object.assign(job, updates);
+  }
 }
 
 function tps(tok) {

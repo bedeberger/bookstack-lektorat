@@ -102,40 +102,50 @@ SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein B
 
 ## Komplettanalyse-Job (`komplett-analyse`)
 
-Der Button **«Alles aktualisieren»** ruft seit der Umstellung nicht mehr einzelne Jobs nacheinander auf, sondern einen einzigen serverseitigen Job `/jobs/komplett-analyse`. Dieser ersetzt die frühere frontend-gesteuerte Sequenz aus 7 Jobs und ist ~50 % token-effizienter, weil jeder Kapiteltext nur zweimal statt fünfmal an die API gesendet wird.
+Der Button **«Alles aktualisieren»** startet den einzigen serverseitigen Job `/jobs/komplett-analyse`. Jeder Kapiteltext wird nur **zweimal** an die API gesendet (Phase 1 + Block 2), was ~75 % weniger Kapiteltext-Token gegenüber der früheren 7-Jobs-Sequenz ergibt.
 
 **Pipeline (intern, ein einziger Job):**
 
 ```
-Phase 1 – Figuren + Schauplätze kombiniert (parallel pro Kapitel)
-          buildExtraktionFigurenOrteChapterPrompt()  ← Compositor über FIGUREN_BASIS_SCHEMA + ORTE_SCHEMA
-          → Checkpoint 'p1_done' nach Abschluss
+Phase 1 – Figuren + Schauplätze + Kontinuitätsfakten kombiniert (parallel pro Kapitel)
+          buildExtraktionFigurenOrteKontinuitaetChapterPrompt()
+          ← Compositor: FIGUREN_BASIS_SCHEMA + ORTE_SCHEMA + Fakten-Schema
+          → Checkpoint 'p1_done' (chapterFiguren + chapterOrte + chapterFakten)
 
 Phase 2 – Figuren konsolidieren
-          buildFiguresBasisConsolidationPrompt()     ← bestehend, unverändert
+          buildFiguresBasisConsolidationPrompt()
           → saveFigurenToDb()
 
-Phase 3 – Schauplätze konsolidieren
-          buildLocationsConsolidationPrompt()        ← bestehend, unverändert
-          → saveOrteToDb()
+Block 1 [parallel] –
+  Phase 3 – Schauplätze konsolidieren
+            buildLocationsConsolidationPrompt() → saveOrteToDb()
+  Phase 4 – Soziogramm
+            buildFigurSoziogrammEnrichmentPrompt()
 
-Phase 4 – Soziogramm
-          buildFigurSoziogrammEnrichmentPrompt()     ← bestehend, unverändert
+Block 2 [parallel] –
+  Multi-Pass (>60k Zeichen):
+    Phase 5+7 – Szenen + Ereignisse + Entwicklungsbögen kombiniert (parallel pro Kapitel)
+                buildExtraktionSzenenEreignisseEntwicklungsbogenChapterPrompt()
+                ← Compositor: Szenen-Schema + Assignments-Schema + Etappen-Schema
+                → figure_scenes + updateFigurenEvents() + etappenPerChapter gesammelt
+    Danach [parallel]:
+      Phase 6 – Zeitstrahl konsolidieren   buildZeitstrahlConsolidationPrompt()
+      Phase 7-Kons – Entwicklungsbögen     buildEntwicklungsbogenConsolidationPrompt()
+    Phase 8 – Kontinuitätscheck (Fakten aus Phase 1, kein neuer API-Call)
+              buildKontinuitaetCheckPrompt()
 
-Phase 5 – Szenen + Ereignisse kombiniert (parallel pro Kapitel, konsolidierte Figuren als Kontext)
-          buildExtraktionSzenenEreignisseChapterPrompt()  ← Compositor, dynamisch
-          → figure_scenes speichern + updateFigurenEvents()
-
-Phase 6 – Zeitstrahl konsolidieren
-          buildZeitstrahlConsolidationPrompt()       ← bestehend, unverändert
-
-Phase 7 – Entwicklungsbögen
-          buildEntwicklungsbogenChapterPrompt() + buildEntwicklungsbogenConsolidationPrompt()
-          ← bestehend, unverändert
+  Single-Pass (≤60k Zeichen):
+    Phase 5 – Szenen + Ereignisse (per Kapitel) → Phase 6 Zeitstrahl  [parallel mit]
+    Phase 7 – Entwicklungsbögen Single-Pass
+              buildEntwicklungsbogenSinglePassPrompt()
+    Phase 8 – Kontinuität Single-Pass
+              buildKontinuitaetSinglePassPrompt()
 ```
 
-**Prompt-Komposition ohne Duplikation:** `buildExtraktionFigurenOrteChapterPrompt()` und `buildExtraktionSzenenEreignisseChapterPrompt()` leben in `public/js/prompts.js` und referenzieren die bestehenden Schema-Konstanten (`FIGUREN_BASIS_SCHEMA`, `ORTE_SCHEMA` etc.) via `_schemaBody()`. Einzelne Jobs (figuren, locations, szenen, etc.) bleiben unverändert und teilen dieselben Schema-Konstanten.
+**Prompt-Komposition ohne Duplikation:** Alle kombinierten Funktionen (`buildExtraktionFigurenOrteKontinuitaetChapterPrompt`, `buildExtraktionSzenenEreignisseEntwicklungsbogenChapterPrompt`) leben in `public/js/prompts.js` und referenzieren die bestehenden Schema-Konstanten via `_schemaBody()`. Einzelne Jobs (figuren, locations, szenen etc.) bleiben unverändert.
 
-**Checkpoint:** Der Job setzt nach Phase 1 einen Checkpoint (`phase: 'p1_done'` mit `chapterFiguren` + `chapterOrte`). Bei einem Neustart nach Fehler wird Phase 1 übersprungen und direkt mit der Konsolidierung fortgefahren.
+**Prompt Caching:** `lib/ai.js` setzt `cache_control: { type: 'ephemeral' }` auf allen Systemprompts und sendet den Header `anthropic-beta: prompt-caching-2024-07-31`. Innerhalb eines parallelen Kapitel-Batches (Phase 1, Block 2) trifft jeder Folge-Call den Cache des Systemprompts (~10 % des normalen Input-Preises).
 
-**UI:** `alleAktualisieren()` in `app.js` startet nur noch `/jobs/komplett-analyse` und pollt den Fortschritt. Nach Abschluss werden `loadFiguren`, `loadOrte`, `loadSzenen` und `loadCharacterArcs` parallel neu geladen.
+**Checkpoint:** `phase: 'p1_done'` speichert `chapterFiguren`, `chapterOrte` und `chapterFakten`. Alte Checkpoints ohne `chapterFakten` lösen im P8-Pfad eine Fallback-Extraktion aus (kein Datenverlust).
+
+**UI:** `alleAktualisieren()` in `app.js` startet nur `/jobs/komplett-analyse` und pollt den Fortschritt. Nach Abschluss werden `loadFiguren`, `loadOrte`, `loadSzenen` und `loadCharacterArcs` parallel neu geladen.
