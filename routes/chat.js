@@ -223,7 +223,13 @@ router.post('/send', jsonBody, async (req, res) => {
     db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(now, session.id);
 
     // Kontext aus DB laden
-    const figuren = getFiguren(session.book_id, userEmail);
+    const alleFiguren = getFiguren(session.book_id, userEmail);
+    const pageRow = session.page_id
+      ? db.prepare('SELECT chapter_name FROM pages WHERE page_id = ?').get(session.page_id)
+      : null;
+    const figuren = pageRow?.chapter_name
+      ? alleFiguren.filter(f => f.kapitel.includes(pageRow.chapter_name))
+      : alleFiguren;
     const review  = getLatestReview(session.book_id, userEmail);
 
     // System-Prompt aus prompts.js (Single Source of Truth)

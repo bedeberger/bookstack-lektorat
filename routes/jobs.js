@@ -1279,8 +1279,14 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
       }
     }
 
-    // Kontext aus DB laden
-    const figuren = _chatGetFiguren(session.book_id, userEmail);
+    // Kontext aus DB laden – nur Figuren des aktuellen Kapitels
+    const alleFiguren = _chatGetFiguren(session.book_id, userEmail);
+    const pageRow = session.page_id
+      ? db.prepare('SELECT chapter_name FROM pages WHERE page_id = ?').get(session.page_id)
+      : null;
+    const figuren = pageRow?.chapter_name
+      ? alleFiguren.filter(f => f.kapitel.includes(pageRow.chapter_name))
+      : alleFiguren;
     const review  = _chatGetLatestReview(session.book_id, userEmail);
     const { SYSTEM_CHAT: chatSysPrompt } = await getBookPrompts(session.book_id);
     const systemPrompt = buildChatSystemPrompt(session.page_name || 'Unbekannte Seite', pageText, figuren, review, chatSysPrompt);
