@@ -450,7 +450,8 @@ ${FIGUREN_BASIS_RULES}`;
 
 export function buildFigurSoziogrammEnrichmentPrompt(bookName, figurenList, beziehungenList, kontext = SOZIOGRAMM_KONTEXT) {
   const figurenStr = figurenList.map(f =>
-    `- ${f.fig_id}: ${f.name} (${f.typ || 'andere'}${f.beruf ? ', ' + f.beruf : ''}) – ${f.beschreibung || '(keine Beschreibung)'}`
+    `- ${f.fig_id}: ${f.name} (${f.typ || 'andere'}${f.beruf ? ', ' + f.beruf : ''}) – ${f.beschreibung || '(keine Beschreibung)'}` +
+    (f.eigenschaften?.length ? `\n  Eigenschaften: ${f.eigenschaften.join(', ')}` : '')
   ).join('\n');
   const beziehungenStr = beziehungenList.map(bz =>
     `- ${bz.from_fig_id} → ${bz.to_fig_id} [${bz.typ}]${bz.beschreibung ? ': ' + bz.beschreibung : ''}`

@@ -862,26 +862,27 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     saveFigurenToDb(parseInt(bookId), figuren, userEmail || null, idMaps);
     logger.info(`Job ${jobId}: ${figuren.length} Figuren gespeichert.`);
 
-    // ── P7-Kontext aufbauen (direkt nach saveFigurenToDb, noch vor dem Parallel-Block) ──
-    // figurenKompaktForArcsChapter: nur Name+Typ für Kapitel-Calls – spart ~15–20k Input-Tokens.
-    // figurenKontextForArcs: vollständig (mit Ereignissen) nur für den Konsolidierungs-Call.
+    // ── P7-Kontext vorbereiten ──────────────────────────────────────────────────
+    // figurenKompakt: nur Name+Typ für Kapitel-Calls – spart ~15–20k Input-Tokens.
+    // buildFigurenKontext(): vollständig (mit Ereignissen) – muss NACH processSzenenEreignisse
+    // aufgerufen werden, damit die Lebensereignisse aus Phase 5/7 bereits in der DB stehen.
     const figurenKompakt = figuren.map(f => ({ id: f.id, name: f.name, typ: f.typ || 'andere' }));
     const figRowsForArcs = db.prepare(
       'SELECT id, fig_id, name, typ, beschreibung FROM figures WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
     ).all(parseInt(bookId), userEmail || null);
-    let figurenKontextForArcs = '';
-    if (figRowsForArcs.length) {
-      const evtRowsForArcs = db.prepare(`
+    const buildFigurenKontext = () => {
+      if (!figRowsForArcs.length) return '';
+      const evtRows = db.prepare(`
         SELECT fe.figure_id, fe.datum, fe.ereignis, fe.typ
         FROM figure_events fe
         WHERE fe.figure_id IN (${figRowsForArcs.map(() => '?').join(',')})
         ORDER BY fe.figure_id, fe.sort_order
       `).all(...figRowsForArcs.map(f => f.id));
-      const evtMapForArcs = {};
-      for (const ev of evtRowsForArcs) (evtMapForArcs[ev.figure_id] ??= []).push(ev);
-      figurenKontextForArcs = figRowsForArcs.map(f => {
+      const evtMap = {};
+      for (const ev of evtRows) (evtMap[ev.figure_id] ??= []).push(ev);
+      return figRowsForArcs.map(f => {
         let line = `${f.fig_id}: ${f.name} (${f.typ || 'andere'})${f.beschreibung ? ' – ' + f.beschreibung : ''}`;
-        const evts = evtMapForArcs[f.id];
+        const evts = evtMap[f.id];
         if (evts?.length) {
           line += `\n  Lebensereignisse:\n` + evts.map(e =>
             `  • ${e.datum || '?'}: ${e.ereignis}${e.typ === 'extern' ? ' [extern]' : ''}`
@@ -889,7 +890,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         }
         return line;
       }).join('\n\n');
-    }
+    };
 
     // ── Parallel-Block 1: P3 (Orte) + P4 (Soziogramm) ───────────────────────
     // P7-Kapitel wurde in Block 2 verschoben (kombiniert mit P5 Szenen+Ereignisse).
@@ -906,8 +907,16 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       // P4: Soziogramm – nicht-fatal: Fehler werden geloggt, Job läuft weiter
       () => (async () => {
         const figRowsForSoz = db.prepare(
-          'SELECT fig_id, name, typ, beruf, beschreibung FROM figures WHERE book_id = ? AND user_email IS ? ORDER BY sort_order'
+          'SELECT id, fig_id, name, typ, beruf, beschreibung FROM figures WHERE book_id = ? AND user_email IS ? ORDER BY sort_order'
         ).all(parseInt(bookId), userEmail || null);
+        if (figRowsForSoz.length) {
+          const tagRows = db.prepare(
+            `SELECT figure_id, tag FROM figure_tags WHERE figure_id IN (${figRowsForSoz.map(() => '?').join(',')}) ORDER BY figure_id`
+          ).all(...figRowsForSoz.map(f => f.id));
+          const tagMap = {};
+          for (const t of tagRows) (tagMap[t.figure_id] ??= []).push(t.tag);
+          for (const f of figRowsForSoz) f.eigenschaften = tagMap[f.id] || [];
+        }
         const relRows = db.prepare(
           'SELECT from_fig_id, to_fig_id, typ, beschreibung FROM figure_relations WHERE book_id = ? AND user_email IS ?'
         ).all(parseInt(bookId), userEmail || null);
@@ -1093,6 +1102,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
                 etappenPerChapter.push({ kapitel: groups.get(groupOrder[gi]).name, etappen: r.value.etappen });
             });
             await processSzenenEreignisse(kombinedSettled, locIdToDbId);
+            const figurenKontextForArcs = buildFigurenKontext();
 
             // P6 + P7-Kons parallel (keine gegenseitige Abhängigkeit)
             await Promise.all([
@@ -1139,6 +1149,8 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
 
             (async () => {
               if (!figRowsForArcs.length) return;
+              // Single-Pass: Events noch nicht in DB (läuft parallel zu P5) – bookText liefert den Vollkontext
+              const figurenKontextForArcs = buildFigurenKontext();
               updateJob(jobId, { progress: 89, statusText: 'Entwicklungsbögen analysieren…' });
               const bookText = pageContents
                 .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
