@@ -7,7 +7,9 @@ KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). L�
 - **Buch-Chat** – KI-Dialog über das gesamte Buch; relevante Seiten werden automatisch nach Thema ausgewählt und im Kontext bereitgestellt
 - **Buchbewertung** – Gesamtbewertung mit Stärken, Schwächen und Empfehlungen
 - **Figurenübersicht** – Automatische Charakterextraktion mit interaktivem Beziehungsgraph
-- **Synonymanalyse** – Erkennung häufig wiederholter Wörter pro Seite mit direkter Ersetzung durch KI-generierte Synonymvorschläge
+- **Ereignisse** - Automatische Übersicht aller Ereignisse pro Kapitel und Figuren
+- **Schauplätze** - Automatische Übersicht der wichtigsten Schauplätze pro Kapitel und Figuren
+- **Szenen** - Analyse aller Szenen im Buch
 - **Buchstatistik** – Tägliche Snapshots von Wortanzahl, Zeichenanzahl und Tokenverbrauch als Zeitliniendiagramm
 - **Zwei KI-Provider** – Anthropic Claude (Cloud) oder Ollama (lokal/offline)
 

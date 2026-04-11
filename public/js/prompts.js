@@ -763,7 +763,7 @@ Antworte mit diesem JSON-Schema:
 {
   "fakten": [
     {
-      "kategorie": "figur|ort|objekt|zeit|ereignis|sonstiges",
+      "kategorie": "figur|ort|objekt|zeit|ereignis|soziolekt|sonstiges",
       "subjekt": "Über wen/was geht es (Name oder Bezeichnung)",
       "fakt": "Was genau behauptet wird (1 Satz, so präzise wie möglich)",
       "seite": "Seitenname oder Abschnittsname (leer wenn unklar)"
@@ -774,6 +774,7 @@ Antworte mit diesem JSON-Schema:
 Regeln:
 - Nur konkrete, prüfbare Aussagen – keine Interpretationen
 - Figuren-Zustände besonders genau erfassen (Wissen, Können, körperlicher Zustand, Wohnort, Beruf)
+- Soziolekt: Wenn eine Figur hier erstmals oder markant spricht, ein Faktum erfassen das ihr Sprachregister beschreibt (z.B. «spricht formell-gebildet», «verwendet Dialekt und Umgangssprache», «benutzt Fachjargon aus Bereich X»). Kategorie «soziolekt» verwenden.
 - Objekte: Wer besitzt was, wo liegt was, in welchem Zustand
 - Zeitangaben: Relative («am nächsten Morgen») und absolute («1943») erfassen
 - Maximal 30 Fakten pro Kapitel; lieber weniger, dafür präzise
@@ -805,12 +806,14 @@ ${factsText}
 
 Suche nach Widersprüchen: Fakten, die sich gegenseitig ausschliessen oder nicht vereinbar sind. Beispiele: Figur stirbt in Kapitel 3 aber erscheint in Kapitel 7; Ort wird in Kap. 2 als verlassen beschrieben, in Kap. 5 als belebt; Figur weiss etwas, das sie noch nicht wissen konnte.
 
+Prüfe zusätzlich die Soziolekt-Kohärenz: Spricht jede Figur konsistent mit der Herkunft, Bildung und sozialen Schicht, die in früheren Kapiteln durch ihren Soziolekt etabliert wurde? Registerwechsel (z.B. plötzlich formal statt umgangssprachlich, plötzlich Dialekt statt Hochsprache) die sich nicht durch die Situation oder dramaturgischen Kontext erklären lassen, sind Kontinuitätsfehler. Typ «soziolekt» verwenden.
+
 Antworte mit diesem JSON-Schema:
 {
   "probleme": [
     {
       "schwere": "kritisch|mittel|niedrig",
-      "typ": "figur|zeitlinie|ort|objekt|verhalten|sonstiges",
+      "typ": "figur|zeitlinie|ort|objekt|verhalten|soziolekt|sonstiges",
       "beschreibung": "Was genau widerspricht sich (1-2 Sätze)",
       "stelle_a": "Erste Textstelle (Kapitel: Seite oder Abschnitt)",
       "stelle_b": "Zweite Textstelle (Kapitel: Seite oder Abschnitt)",
@@ -823,6 +826,7 @@ Antworte mit diesem JSON-Schema:
 Regeln:
 - Nur echte Widersprüche – keine stilistischen oder inhaltlichen Anmerkungen
 - schwere: «kritisch» = klarer Logikfehler der auffällt; «mittel» = wahrscheinlicher Fehler; «niedrig» = mögliche Inkonsistenz
+- Soziolekt-Probleme: nur wenn klar ein Sprachmuster etabliert wurde und dann ohne Begründung bricht – nicht melden wenn Figur wenig Dialoganteil hat
 - Wenn keine Widersprüche gefunden: «probleme» als leeres Array, «zusammenfassung» = positive Einschätzung
 - Konservativ: Im Zweifel weglassen
 
@@ -839,7 +843,7 @@ export function buildKontinuitaetSinglePassPrompt(bookName, bookText, figurenKom
 
   return `Prüfe das Buch «${bookName}» auf Kontinuitätsfehler und Widersprüche.${figurenStr}${orteStr}
 
-Suche aktiv nach: Figuren die nach ihrem Tod wieder auftauchen; Orte die sich widersprüchlich beschrieben werden; Zeitangaben die nicht vereinbar sind; Objekte die falsch verwendet werden; Figuren die Wissen haben das sie noch nicht haben könnten; Charakterverhalten das ihrer etablierten Persönlichkeit widerspricht.
+Suche aktiv nach: Figuren die nach ihrem Tod wieder auftauchen; Orte die sich widersprüchlich beschrieben werden; Zeitangaben die nicht vereinbar sind; Objekte die falsch verwendet werden; Figuren die Wissen haben das sie noch nicht haben könnten; Charakterverhalten das ihrer etablierten Persönlichkeit widerspricht; Soziolekt-Brüche: Figuren die plötzlich anders sprechen als durch ihre Herkunft, Bildung und soziale Schicht etabliert (Registerwechsel ohne dramaturgische Begründung).
 
 Buchtext:
 
@@ -850,7 +854,7 @@ Antworte mit diesem JSON-Schema:
   "probleme": [
     {
       "schwere": "kritisch|mittel|niedrig",
-      "typ": "figur|zeitlinie|ort|objekt|verhalten|sonstiges",
+      "typ": "figur|zeitlinie|ort|objekt|verhalten|soziolekt|sonstiges",
       "beschreibung": "Was genau widerspricht sich (1-2 Sätze)",
       "stelle_a": "Erste Textstelle (Kapitel: Seite oder Abschnitt)",
       "stelle_b": "Zweite Textstelle (Kapitel: Seite oder Abschnitt)",
@@ -863,6 +867,7 @@ Antworte mit diesem JSON-Schema:
 Regeln:
 - Nur echte Widersprüche
 - schwere: «kritisch» = klarer Logikfehler; «mittel» = wahrscheinlicher Fehler; «niedrig» = mögliche Inkonsistenz
+- Soziolekt-Brüche: nur wenn ein Sprachmuster klar etabliert wurde und dann ohne Begründung bricht
 - Wenn keine Widersprüche: «probleme» als leeres Array
 - Konservativ: Im Zweifel weglassen
 
