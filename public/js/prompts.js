@@ -300,7 +300,7 @@ const FIGUREN_RULES = `Regeln:
 - KEINE historischen oder realen Personen die nur erwähnt, zitiert oder als Referenz genannt werden (z.B. Napoleon, Einstein, ein Politiker, eine Künstlerin); solche Personen gehören höchstens als lebensereignis.typ='extern' zu einer Figur, aber nicht als eigene Figur in diese Liste
 - Sortiert nach Wichtigkeit
 - KONSERVATIV: Nur Figuren, Beziehungen und Ereignisse aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren.
-- DEDUPLIZIERUNG NUR BEI EINDEUTIGER NAMENSGLEICHHEIT: Zwei Figuren nur zusammenführen wenn ihre Namen klar übereinstimmen (gleicher Vor- und Nachname, oder ein Name ist bestätigter Spitzname/Alias des anderen). Namensähnlichkeit allein reicht nicht – im Zweifel als separate Figuren behalten. Figuren ohne oder mit wenig Informationen NICHT mit anderen zusammenführen.`;
+- DEDUPLIZIERUNG MIT KONTEXTABGLEICH: Figuren zusammenführen wenn der Name übereinstimmt (gleicher Vor- und Nachname) ODER ein Teilname (nur Vorname oder nur Nachname) mit mindestens einem inhaltlichen Indiz zusammenpasst – z.B. gleicher Beruf, überschneidende Fachkenntnisse, konsistente Charakterzüge oder übereinstimmendes Verhalten kapitelübergreifend. Beispiel: «Maria» die in Kapitel 1 als Kräuterkundige gilt und «Maria Huber» die in Kapitel 3 Naturheilkunde beherrscht – zusammenführen. Widersprechen sich Eigenschaften eindeutig, getrennt behalten. Gibt es nur Namensähnlichkeit ohne inhaltliche Überschneidung: getrennt behalten.`;
 
 export function buildFiguresSinglePassPrompt(bookName, pageCount, bookText) {
   return `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Figuren.
@@ -372,7 +372,7 @@ const FIGUREN_BASIS_RULES = `Regeln:
 - KEINE historischen oder realen Personen die nur erwähnt, zitiert oder als Referenz genannt werden (z.B. Napoleon, Einstein, ein Politiker, eine Künstlerin)
 - Sortiert nach Wichtigkeit
 - KONSERVATIV: Nur Figuren und Beziehungen aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren.
-- DEDUPLIZIERUNG NUR BEI EINDEUTIGER NAMENSGLEICHHEIT: Zwei Figuren nur zusammenführen wenn ihre Namen klar übereinstimmen (gleicher Vor- und Nachname, oder ein Name ist bestätigter Spitzname/Alias des anderen). Namensähnlichkeit allein reicht nicht – im Zweifel als separate Figuren behalten. Figuren ohne oder mit wenig Informationen NICHT mit anderen zusammenführen.`;
+- DEDUPLIZIERUNG MIT KONTEXTABGLEICH: Figuren zusammenführen wenn der Name übereinstimmt (gleicher Vor- und Nachname) ODER ein Teilname (nur Vorname oder nur Nachname) mit mindestens einem inhaltlichen Indiz zusammenpasst – z.B. gleicher Beruf, überschneidende Fachkenntnisse, konsistente Charakterzüge oder übereinstimmendes Verhalten kapitelübergreifend. Beispiel: «Maria» die in Kapitel 1 als Kräuterkundige gilt und «Maria Huber» die in Kapitel 3 Naturheilkunde beherrscht – zusammenführen. Widersprechen sich Eigenschaften eindeutig, getrennt behalten. Gibt es nur Namensähnlichkeit ohne inhaltliche Überschneidung: getrennt behalten.`;
 
 export function buildFiguresBasisSinglePassPrompt(bookName, pageCount, bookText) {
   return `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Figuren.

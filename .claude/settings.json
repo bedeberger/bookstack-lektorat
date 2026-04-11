@@ -25,7 +25,8 @@
       "Bash(node -e \"const s = require\\('fs'\\).readFileSync\\('/Users/bd/ClaudeProjects/bookstack-lektorat/prompt-config.json','utf8'\\); console.log\\(JSON.stringify\\(s.slice\\(1060, 1160\\)\\)\\);\")",
       "Bash(node -e \"try { const c = JSON.parse\\(require\\('fs'\\).readFileSync\\('/Users/bd/ClaudeProjects/bookstack-lektorat/prompt-config.json','utf8'\\)\\); console.log\\('OK – Locales:', Object.keys\\(c.locales\\).join\\(', '\\)\\); } catch\\(e\\) { console.log\\('Error:', e.message\\); }\")",
       "Bash(awk '/^[[:space:]]*loadPages[[:space:]]*\\\\\\(/,/^[[:space:]]*\\\\}[[:space:]]*,?[[:space:]]*$/' /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/app.js)",
-      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('/Users/bd/ClaudeProjects/bookstack-lektorat/prompt-config.json','utf8'\\)\\); console.log\\('OK'\\)\")"
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('/Users/bd/ClaudeProjects/bookstack-lektorat/prompt-config.json','utf8'\\)\\); console.log\\('OK'\\)\")",
+      "Bash(grep -n \"saveFigurenToDb\\\\|saveOrteToDb\" /Users/bd/ClaudeProjects/bookstack-lektorat/routes/*.js)"
     ]
   }
 }

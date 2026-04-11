@@ -614,7 +614,26 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail, userToken) {
       chNameToId:   Object.fromEntries(chaptersData.map(c => [c.name, c.id])),
       pageNameToId: Object.fromEntries(pages.map(p => [p.name, p.id])),
     };
+
+    // Bestehende Ereignisse sichern: saveFigurenToDb löscht figures + events per CASCADE
+    const existingEvtRows = db.prepare(`
+      SELECT f.fig_id, fe.datum, fe.ereignis, fe.bedeutung, fe.typ, fe.kapitel, fe.seite, fe.sort_order
+      FROM figure_events fe JOIN figures f ON f.id = fe.figure_id
+      WHERE f.book_id = ? AND f.user_email = ?
+      ORDER BY fe.figure_id, fe.sort_order
+    `).all(parseInt(bookId), userEmail || null);
+    const savedEvtMap = {};
+    for (const ev of existingEvtRows) {
+      (savedEvtMap[ev.fig_id] ??= []).push({ datum: ev.datum, ereignis: ev.ereignis, bedeutung: ev.bedeutung, typ: ev.typ, kapitel: ev.kapitel, seite: ev.seite });
+    }
+
     saveFigurenToDb(parseInt(bookId), figuren, userEmail || null, idMapsFig);
+
+    // Gesicherte Ereignisse wiederherstellen (Basis-Job extrahiert keine Events)
+    const savedAssignments = Object.entries(savedEvtMap).map(([fig_id, lebensereignisse]) => ({ fig_id, lebensereignisse }));
+    if (savedAssignments.length) {
+      updateFigurenEvents(parseInt(bookId), savedAssignments, userEmail || null, idMapsFig);
+    }
     deleteCheckpoint('figures', bookId, userEmail);
     completeJob(jobId, { count: figuren.length, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`Job ${jobId}: Figurenextraktion Buch ${bookId} abgeschlossen (${figuren.length} Figuren, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
