@@ -1,5 +1,3 @@
-import { SYSTEM_STILKORREKTUR, buildStilkorrekturPrompt } from './prompts.js';
-
 // History-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 
@@ -124,26 +122,14 @@ export const historyMethods = {
 
       if (selectedStyles.length > 0) {
         this.historyApplying = { ...this.historyApplying, [entry.id]: 45 };
-        this.setStatus('KI überarbeitet Stil… (0 Zeichen)', true);
-        try {
-          const aiBase = finalHtml.length || 1;
-          const result = await this.callAI(
-            buildStilkorrekturPrompt(finalHtml, selectedStyles),
-            SYSTEM_STILKORREKTUR,
-            (chars) => {
-              this.setStatus(`KI überarbeitet Stil… (${chars} Zeichen)`, true);
-              const p = Math.min(75, 45 + Math.round((chars / aiBase) * 30));
-              this.historyApplying = { ...this.historyApplying, [entry.id]: p };
-            },
-          );
-          if (Array.isArray(result?.korrekturen) && result.korrekturen.length > 0) {
-            finalHtml = this._applyCorrections(finalHtml, result.korrekturen.map(k => ({ original: k.original, korrektur: k.ersatz })));
+        finalHtml = await this._applyStilkorrektur(
+          finalHtml,
+          selectedStyles,
+          (chars, aiBase) => {
+            const p = Math.min(75, 45 + Math.round((chars / aiBase) * 30));
+            this.historyApplying = { ...this.historyApplying, [entry.id]: p };
           }
-        } catch (e) {
-          console.error('[applyHistoryCheck] Stil-Call fehlgeschlagen:', e);
-          this.setStatus('Stilkorrektur fehlgeschlagen – speichere übrige Korrekturen…', true);
-          // finalHtml bleibt ohne Stilkorrekturen, der Rest wird trotzdem gespeichert
-        }
+        );
       }
 
       if (finalHtml.length < page.html.length * SAFETY_HTML_RATIO) {

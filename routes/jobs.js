@@ -661,7 +661,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
       .run(parseInt(bookId), bookName, new Date().toISOString(), JSON.stringify(r), model, userEmail || null);
 
     completeJob(jobId, { review: r, pageCount: pageContents.length, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
-    logger.info(`Job ${jobId}: Buchbewertung Buch ${bookId} abgeschlossen (${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+    logger.info(`Job ${jobId}: Buchbewertung «${bookName}» abgeschlossen (${pageContents.length} Seiten, Note ${r.gesamtnote}, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Buchbewertung Fehler: ${e.message}`);
     failJob(jobId, e);
@@ -1254,7 +1254,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
       tokensIn: tok.in,
       tokensOut: tok.out,
     }, tps(tok));
-    logger.info(`Job ${jobId}: Seiten-Check Seite ${pageId} abgeschlossen (${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+    logger.info(`Job ${jobId}: Seiten-Check «${pd.name}» abgeschlossen (${result.fehler.length} Fehler, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Seiten-Check Fehler: ${e.message}`);
     failJob(jobId, e);
@@ -1322,7 +1322,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
     }
 
     completeJob(jobId, { pageCount: pages.length, done, totalErrors, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
-    logger.info(`Job ${jobId}: Batch-Check Buch ${bookId} abgeschlossen (${done}/${pages.length} Seiten, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+    logger.info(`Job ${jobId}: Batch-Check abgeschlossen (${done}/${pages.length} Seiten, ${totalErrors} Fehler, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Batch-Check Fehler: ${e.message}`);
     failJob(jobId, e);
@@ -1416,7 +1416,7 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
       assistant_message_id: asstMsgResult.lastInsertRowid,
       tokensIn, tokensOut,
     }, chatTps);
-    logger.info(`Job ${jobId}: Chat session ${sessionId} abgeschlossen (${fmtTok(tokensIn)}↑ ${fmtTok(tokensOut)}↓ Tokens).`);
+    logger.info(`Job ${jobId}: Chat «${session.page_name || '-'}» session ${sessionId} abgeschlossen (${fmtTok(tokensIn)}↑ ${fmtTok(tokensOut)}↓ Tokens, ${vorschlaege.length} Vorschläge).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Chat Fehler: ${e.message}`);
     failJob(jobId, e);
@@ -1613,7 +1613,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
       pagesUsed: selectedPages.length,
       pagesTotal: pageContents.length,
     }, bookChatTps);
-    logger.info(`Job ${jobId}: Buch-Chat session ${sessionId} abgeschlossen (${fmtTok(tokensIn)}↑ ${fmtTok(tokensOut)}↓, ${selectedPages.length}/${pageContents.length} Seiten).`);
+    logger.info(`Job ${jobId}: Buch-Chat «${session.book_name || '-'}» session ${sessionId} abgeschlossen (${fmtTok(tokensIn)}↑ ${fmtTok(tokensOut)}↓, ${selectedPages.length}/${pageContents.length} Seiten).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Buch-Chat Fehler: ${e.message}`);
     failJob(jobId, e);

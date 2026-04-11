@@ -2093,6 +2093,8 @@ ins {
   align-items: center;
   flex-shrink: 0;
   margin-left: auto;
+  margin-top: 4px;
+  margin-bottom: 4px;
 }
 
 /* Summen-Badges neben der Button-Gruppe (Buchebene) */

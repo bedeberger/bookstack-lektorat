@@ -158,6 +158,7 @@ document.addEventListener('alpine:init', () => {
     checkDone: false,
     checkLoading: false,
     checkProgress: 0,
+    saveApplying: null,
     bookReviewLoading: false,
     bookReviewProgress: 0,
     batchLoading: false,

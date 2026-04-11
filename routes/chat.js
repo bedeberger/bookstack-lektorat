@@ -299,6 +299,7 @@ router.post('/send', jsonBody, async (req, res) => {
       'SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?'
     ).get(parseInt(session_id), userEmail);
     if (!session) return res.status(404).json({ error: 'Session nicht gefunden.' });
+    logger.info(`[chat/send] «${session.page_name}» session=${session_id} user=${userEmail} book=${session.book_id}`);
 
     const now = new Date().toISOString();
 
@@ -366,7 +367,7 @@ router.post('/send', jsonBody, async (req, res) => {
       antwort     = parsed.antwort     ?? fullText;
       vorschlaege = parsed.vorschlaege ?? [];
     } catch {
-      logger.warn('[chat/send] KI-Antwort kein valides JSON – Rohtext wird gespeichert.');
+      logger.warn(`[chat/send] «${session.page_name}» session=${session_id} KI-Antwort kein valides JSON – Rohtext wird gespeichert.`);
     }
 
     // Assistant-Nachricht in DB speichern
@@ -393,11 +394,12 @@ router.post('/send', jsonBody, async (req, res) => {
       tokens_out: tokensOut,
       vorschlaege,
     })}\n\n`);
+    logger.info(`[chat/send] «${session.page_name}» session=${session_id} abgeschlossen (${tokensIn}↑ ${tokensOut}↓, ${vorschlaege.length} Vorschläge).`);
     res.write('data: [DONE]\n\n');
     res.end();
 
   } catch (err) {
-    logger.error('[chat/send] Fehler: ' + err.message, { stack: err.stack });
+    logger.error(`[chat/send] session=${session_id} user=${userEmail} Fehler: ${err.message}`, { stack: err.stack });
     if (!sseStarted) {
       // Noch keine SSE-Headers gesendet → normale JSON-Fehlerantwort
       return res.status(502).json({ error: err.message });

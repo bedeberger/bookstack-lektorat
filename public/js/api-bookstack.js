@@ -1,3 +1,5 @@
+import { SYSTEM_STILKORREKTUR, buildStilkorrekturPrompt } from './prompts.js';
+
 // Methoden für BookStack-API-Calls (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 // Authorization-Header wird serverseitig vom Proxy injiziert.
@@ -71,5 +73,29 @@ export const bookstackMethods = {
       }
     }
     return result;
+  },
+
+  // Ruft den Stil-KI-Call auf und wendet Korrekturen an. Gibt das (ggf. korrigierte) HTML zurück.
+  // onProgress(chars, aiBase) – optional, für zusätzliches Fortschritts-Tracking beim Aufrufer.
+  async _applyStilkorrektur(html, selectedStyles, onProgress) {
+    const aiBase = html.length || 1;
+    this.setStatus('KI überarbeitet Stil… (0 Zeichen)', true);
+    try {
+      const result = await this.callAI(
+        buildStilkorrekturPrompt(html, selectedStyles),
+        SYSTEM_STILKORREKTUR,
+        (chars) => {
+          this.setStatus(`KI überarbeitet Stil… (${chars} Zeichen)`, true);
+          if (onProgress) onProgress(chars, aiBase);
+        }
+      );
+      if (Array.isArray(result?.korrekturen) && result.korrekturen.length > 0) {
+        return this._applyCorrections(html, result.korrekturen.map(k => ({ original: k.original, korrektur: k.ersatz })));
+      }
+    } catch (e) {
+      console.error('[_applyStilkorrektur]', e);
+      this.setStatus('Stilkorrektur fehlgeschlagen – speichere übrige Korrekturen…', true);
+    }
+    return html;
   },
 };

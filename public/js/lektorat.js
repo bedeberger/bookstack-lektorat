@@ -1,5 +1,4 @@
 import { escHtml, htmlToText } from './utils.js';
-import { SYSTEM_STILKORREKTUR, buildStilkorrekturPrompt } from './prompts.js';
 
 // Sicherheitscheck vor dem Speichern: < 50 % wirkt unvollständig → Abbruch
 const SAFETY_HTML_RATIO = 0.5;
@@ -214,32 +213,25 @@ export const lektoratMethods = {
       return;
     }
 
+    this.saveApplying = 10;
     let finalHtml = this.correctedHtml;
     const selectedStyles = this.lektoratStyles.filter((_, i) => this.selectedStyles[i]);
+
     if (selectedStyles.length > 0) {
-      this.setStatus('KI überarbeitet Stil… (0 Zeichen)', true);
-      try {
-        const result = await this.callAI(
-          buildStilkorrekturPrompt(this.correctedHtml, selectedStyles),
-          SYSTEM_STILKORREKTUR,
-          (chars) => this.setStatus(`KI überarbeitet Stil… (${chars} Zeichen)`, true)
-        );
-        if (Array.isArray(result?.korrekturen) && result.korrekturen.length > 0) {
-          finalHtml = this._applyCorrections(this.correctedHtml, result.korrekturen.map(k => ({ original: k.original, korrektur: k.ersatz })));
-        } else {
-          console.warn('[saveCorrections] Stil-Korrekturen leer oder ungültig, Stilkorrekturen übersprungen');
-        }
-      } catch (e) {
-        console.error('[saveCorrections] Stil-Call fehlgeschlagen:', e);
-        this.setStatus('Stilkorrektur fehlgeschlagen – speichere übrige Korrekturen…', true);
-        // finalHtml bleibt ohne Stilkorrekturen, der Rest wird trotzdem gespeichert
-      }
+      this.saveApplying = 30;
+      finalHtml = await this._applyStilkorrektur(
+        this.correctedHtml,
+        selectedStyles,
+        (chars, aiBase) => { this.saveApplying = Math.min(70, 30 + Math.round((chars / aiBase) * 40)); }
+      );
     }
 
+    this.saveApplying = 75;
     this.setStatus('Prüfe auf Änderungen…', true);
     try {
       const current = await this.bsGet('pages/' + this.currentPage.id);
       if (this.currentPageUpdatedAt && current.updated_at !== this.currentPageUpdatedAt) {
+        this.saveApplying = null;
         this.setStatus('Konflikt: Die Seite wurde zwischenzeitlich von jemand anderem geändert. Bitte Lektorat neu starten.');
         return;
       }
@@ -247,6 +239,7 @@ export const lektoratMethods = {
       console.warn('[saveCorrections] Konfliktprüfung fehlgeschlagen, fahre fort:', e.message);
     }
 
+    this.saveApplying = 85;
     this.setStatus('Speichere in BookStack…', true);
     try {
       await this.bsPut('pages/' + this.currentPage.id, {
@@ -255,6 +248,7 @@ export const lektoratMethods = {
       });
       if (this.lastCheckId) {
         try {
+          this.saveApplying = 95;
           const appliedErrors = this.lektoratErrors.filter((_, i) => this.selectedErrors[i]);
           const selectedErrors = [
             ...this.lektoratErrors.filter((_, i) => this.selectedErrors[i]),
@@ -268,6 +262,7 @@ export const lektoratMethods = {
           await this.loadPageHistory(this.currentPage.id);
         } catch (e) { console.error('[history saved]', e); }
       }
+      this.saveApplying = null;
       this.setStatus('✓ Korrekturen gespeichert.', false, 5000);
       this.correctedHtml = null;
       this.hasErrors = false;
@@ -281,6 +276,7 @@ export const lektoratMethods = {
       this.checkDone = false;
     } catch (e) {
       console.error('[saveCorrections]', e);
+      this.saveApplying = null;
       this.setStatus('Fehler: ' + e.message);
     }
   },
