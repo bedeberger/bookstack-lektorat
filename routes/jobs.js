@@ -44,6 +44,12 @@ const runningJobs = new Map();
 // key: jobId → AbortController  (für Job-Abbruch)
 const jobAbortControllers = new Map();
 
+function makeJobLogger(jobId) {
+  const j = jobs.get(jobId);
+  if (!j) return logger;
+  return logger.child({ job: j.type, user: j.userEmail || '-', book: j.bookId });
+}
+
 // ── Globale Queue ─────────────────────────────────────────────────────────────
 // Maximale Anzahl gleichzeitig laufender Jobs (über alle User)
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_JOBS, 10) || 2;
@@ -58,9 +64,9 @@ function drainQueue() {
     activeCount++;
     job.status = 'running';
     job.startedAt = new Date().toISOString();
-    try { startJobRun(jobId, job.startedAt); } catch (e) { logger.error(`startJobRun: ${e.message}`); }
+    try { startJobRun(jobId, job.startedAt); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] startJobRun: ${e.message}`); }
     fn()
-      .catch(e => logger.error(`Unkontrollierter Job-Fehler (${jobId}): ${e.message}`))
+      .catch(e => logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] Unkontrollierter Job-Fehler (${jobId}): ${e.message}`))
       .finally(() => { activeCount--; drainQueue(); });
   }
 }
@@ -94,7 +100,7 @@ function createJob(type, bookId, userEmail, label) {
     cancelled: false,
   });
   jobAbortControllers.set(id, new AbortController());
-  try { insertJobRun({ id, type, bookId: String(bookId), userEmail, label }); } catch (e) { logger.error(`insertJobRun: ${e.message}`); }
+  try { insertJobRun({ id, type, bookId: String(bookId), userEmail, label }); } catch (e) { logger.error(`[${type}|${userEmail || '-'}|${bookId}] insertJobRun: ${e.message}`); }
   runningJobs.set(key, id);
   // Auto-Cleanup nach 2 Stunden
   setTimeout(() => {
@@ -124,7 +130,7 @@ function completeJob(id, result, tokensPerSec = null) {
   const job = jobs.get(id);
   if (!job) return;
   Object.assign(job, { status: 'done', progress: 100, result, tokensPerSec, endedAt: new Date().toISOString() });
-  try { endJobRun(id, 'done', job.endedAt, job.tokensIn, job.tokensOut, tokensPerSec, null); } catch (e) { logger.error(`endJobRun: ${e.message}`); }
+  try { endJobRun(id, 'done', job.endedAt, job.tokensIn, job.tokensOut, tokensPerSec, null); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
   jobAbortControllers.delete(id);
 }
@@ -136,7 +142,7 @@ function failJob(id, err) {
   const status = isCancelled ? 'cancelled' : 'error';
   const errorMsg = isCancelled ? 'Abgebrochen' : (err.message || String(err));
   Object.assign(job, { status, error: errorMsg, progress: isCancelled ? job.progress : 0, endedAt: new Date().toISOString() });
-  try { endJobRun(id, status, job.endedAt, job.tokensIn, job.tokensOut, null, errorMsg); } catch (e) { logger.error(`endJobRun: ${e.message}`); }
+  try { endJobRun(id, status, job.endedAt, job.tokensIn, job.tokensOut, null, errorMsg); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
   jobAbortControllers.delete(id);
 }
@@ -150,17 +156,17 @@ function cancelJob(id, userEmail) {
     if (idx !== -1) jobQueue.splice(idx, 1);
     const endedAt = new Date().toISOString();
     Object.assign(job, { status: 'cancelled', error: 'Abgebrochen', endedAt });
-    try { endJobRun(id, 'cancelled', endedAt, 0, 0, null, 'Abgebrochen'); } catch (e) { logger.error(`endJobRun: ${e.message}`); }
+    try { endJobRun(id, 'cancelled', endedAt, 0, 0, null, 'Abgebrochen'); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
     runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
     jobAbortControllers.delete(id);
-    logger.info(`Job ${id} (${job.type}) aus Warteschlange entfernt und abgebrochen.`);
+    logger.info(`Job ${id} (${job.type}|${job.userEmail || '-'}|${job.bookId}) aus Warteschlange entfernt und abgebrochen.`);
     return true;
   }
   if (job.status === 'running') {
     job.cancelled = true;
     const ctrl = jobAbortControllers.get(id);
     if (ctrl) ctrl.abort();
-    logger.info(`Job ${id} (${job.type}) Abbruch signalisiert.`);
+    logger.info(`Job ${id} (${job.type}|${job.userEmail || '-'}|${job.bookId}) Abbruch signalisiert.`);
     return true;
   }
   return false;
@@ -578,6 +584,7 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
 
 // ── Job: Buchbewertung ────────────────────────────────────────────────────────
 async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
+  const logger = makeJobLogger(jobId);
   const { buildBookReviewSinglePassPrompt, buildChapterAnalysisPrompt, buildBookReviewMultiPassPrompt } = await getPrompts();
   const { SYSTEM_BUCHBEWERTUNG, SYSTEM_KAPITELANALYSE } = await getBookPrompts(bookId);
   try {
@@ -667,6 +674,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
 //   Block 1 [P3 Orte · P4 Soziogramm · P7-Kapitel] parallel
 //   Block 2 [P5+P6 Szenen/Zeitstrahl · P7-Konsol · P8 Kontinuität] parallel
 async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userToken, provider = undefined) {
+  const logger = makeJobLogger(jobId);
   const call = (...args) => aiCall(...args, provider);
   const {
     buildExtraktionFigurenOrteKontinuitaetChapterPrompt,
@@ -1189,6 +1197,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
 
 // ── Job: Seiten-Lektorat ──────────────────────────────────────────────────────
 async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
+  const logger = makeJobLogger(jobId);
   const { buildLektoratPrompt } = await getPrompts();
   const { SYSTEM_LEKTORAT, STOPWORDS: lektoratStopwords, ERKLAERUNG_RULE: lektoratErklaerungRule } = await getBookPrompts(bookId);
   try {
@@ -1254,6 +1263,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
 
 // ── Job: Batch-Lektorat ───────────────────────────────────────────────────────
 async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
+  const logger = makeJobLogger(jobId);
   const { buildBatchLektoratPrompt } = await getPrompts();
   const { SYSTEM_LEKTORAT, STOPWORDS: batchStopwords, ERKLAERUNG_RULE: batchErklaerungRule } = await getBookPrompts(bookId);
   try {
@@ -1321,6 +1331,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
 
 // ── Job: Chat ─────────────────────────────────────────────────────────────────
 async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userToken) {
+  const logger = makeJobLogger(jobId);
   const { buildChatSystemPrompt } = await getPrompts();
   try {
     updateJob(jobId, { statusText: 'Vorbereitung…', progress: 5 });
@@ -1442,6 +1453,7 @@ function _scorePageRelevance(query, text, stopwords = _BOOK_CHAT_STOPWORDS) {
 }
 
 async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, userToken) {
+  const logger = makeJobLogger(jobId);
   const { buildBookChatSystemPrompt } = await getPrompts();
   try {
     updateJob(jobId, { statusText: 'Vorbereitung…', progress: 5 });
@@ -1725,6 +1737,7 @@ router.post('/book-chat', jsonBody, (req, res) => {
 
 // ── Job: Kontinuitätsprüfung ──────────────────────────────────────────────────
 async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken) {
+  const logger = makeJobLogger(jobId);
   const { buildKontinuitaetSinglePassPrompt, buildKontinuitaetChapterFactsPrompt, buildKontinuitaetCheckPrompt } = await getPrompts();
   const { SYSTEM_KONTINUITAET } = await getBookPrompts(bookId);
 

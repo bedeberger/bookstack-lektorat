@@ -117,15 +117,14 @@ export const chatMethods = {
     this.chatMessages.push({ role: 'user', content: msg, id: null });
     this.$nextTick(() => this._scrollChatToBottom());
 
-    // originalHtml vorladen falls nicht gesetzt – oder neu laden wenn Änderungen übernommen wurden
-    if (!this.originalHtml || this._chatPendingRefresh) {
-      try {
-        const pageData = await this.bsGet('pages/' + this.currentPage.id);
-        this.originalHtml = pageData.html || '';
-        this._chatPendingRefresh = false;
-      } catch (e) {
-        console.warn('[sendChatMessage] Seiteninhalt konnte nicht geladen werden:', e.message);
-      }
+    // Seiteninhalt immer frisch aus BookStack laden – der Job-Server macht dasselbe,
+    // und nur wenn beide dieselbe Version sehen, stimmen die Vorschlag-Texte überein.
+    try {
+      const pageData = await this.bsGet('pages/' + this.currentPage.id);
+      this.originalHtml = pageData.html || '';
+      this._chatPendingRefresh = false;
+    } catch (e) {
+      console.warn('[sendChatMessage] Seiteninhalt konnte nicht geladen werden:', e.message);
     }
 
     try {
@@ -190,15 +189,14 @@ export const chatMethods = {
       return;
     }
 
-    // originalHtml nachladen falls nicht vorhanden (z.B. nach Seitenwechsel)
-    if (!this.originalHtml) {
-      try {
-        const pageData = await this.bsGet('pages/' + this.currentPage.id);
-        this.originalHtml = pageData.html || '';
-      } catch (e) {
-        setErr('Seiteninhalt konnte nicht geladen werden.');
-        return;
-      }
+    // Seiteninhalt immer frisch aus BookStack laden – verhindert "nicht gefunden"-Fehler
+    // wenn die Seite seit dem letzten Senden verändert wurde.
+    try {
+      const pageData = await this.bsGet('pages/' + this.currentPage.id);
+      this.originalHtml = pageData.html || '';
+    } catch (e) {
+      setErr('Seiteninhalt konnte nicht geladen werden.');
+      return;
     }
 
     // Direkte String-Ersetzung (zeichengenau, wie _applyCorrections)

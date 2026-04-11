@@ -7,7 +7,10 @@ const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level.toUpperCase()}] ${message}`)
+    winston.format.printf(({ timestamp, level, message, job, user, book }) => {
+      const ctx = job ? ` [${job}|${user || '-'}|${book || '-'}]` : '';
+      return `${timestamp} [${level.toUpperCase()}]${ctx} ${message}`;
+    })
   ),
   transports: [
     new winston.transports.File({ filename: LOG_FILE, maxsize: 5 * 1024 * 1024, maxFiles: 3 }),
