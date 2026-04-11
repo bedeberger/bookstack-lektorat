@@ -22,7 +22,7 @@
       <div x-show="kontinuitaetResult.issues?.length > 0" class="szenen-filter-bar">
         <div x-data="combobox('Figur…', 'Alle Figuren')"
              x-modelable="value" x-model="kontinuitaetFilterFigurId"
-             x-effect="options = figuren.filter(f => kontinuitaetResult.issues.some(i => (i.figuren||[]).includes(f.name))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
+             x-effect="options = figuren.filter(f => kontinuitaetResult.issues.some(i => i.fig_ids?.length ? i.fig_ids.includes(f.id) : (i.figuren||[]).includes(f.name))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
              @click.outside="close()" @keydown="onKeydown($event)"
              class="combobox-wrap combobox-wrap--compact">
         </div>

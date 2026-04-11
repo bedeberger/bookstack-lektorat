@@ -359,9 +359,15 @@ document.addEventListener('alpine:init', () => {
       return [...names].sort((a, b) => a.localeCompare(b, 'de'));
     },
     get kontinuitaetIssuesFiltered() {
-      const selectedName = this.figuren.find(f => f.id === this.kontinuitaetFilterFigurId)?.name || '';
       return (this.kontinuitaetResult?.issues || []).filter(issue => {
-        if (selectedName && !(issue.figuren || []).includes(selectedName)) return false;
+        if (this.kontinuitaetFilterFigurId) {
+          if (issue.fig_ids?.length) {
+            if (!issue.fig_ids.includes(this.kontinuitaetFilterFigurId)) return false;
+          } else {
+            const selectedName = this.figuren.find(f => f.id === this.kontinuitaetFilterFigurId)?.name || '';
+            if (selectedName && !(issue.figuren || []).includes(selectedName)) return false;
+          }
+        }
         if (this.kontinuitaetFilterKapitel) {
           const kapitel = issue.kapitel?.length
             ? issue.kapitel

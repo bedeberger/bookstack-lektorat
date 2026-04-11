@@ -521,6 +521,10 @@ function groupByChapter(pageContents) {
 async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars = 3000, outputRatio = 0.2, maxTokens = null) {
   let dynExpectedChars = expectedChars;
   let calibrated = false;
+  // Eindeutige ID für diesen Call – wird in tok.inflight eingetragen wenn vorhanden
+  // (tok.inflight ist ein Map, der nur vom komplett-analyse-Job gesetzt wird, damit
+  // bei parallelen Kapitel-Calls die Live-Anzeige alle in-flight-Tokens summiert.)
+  const callId = Symbol();
   const onProgress = ({ chars, tokIn }) => {
     const updates = {};
     // Einmalige Recalibrierung sobald tokIn bekannt ist
@@ -532,10 +536,22 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
     if (fromPct != null && toPct != null) {
       updates.progress = Math.round(fromPct + (toPct - fromPct) * Math.min(1, chars / dynExpectedChars));
     }
-    // Live-Token-Anzeige: tok.in/tok.out = bisherige abgeschlossene Calls;
-    // aktueller Call: Input aus message_start, Output approximiert (chars / 4)
-    if (tokIn > 0) updates.tokensIn = tok.in + tokIn;
-    if (chars > 0) updates.tokensOut = tok.out + Math.floor(chars / 4);
+    // Live-Token-Anzeige: tok.in/tok.out = bisherige abgeschlossene Calls.
+    // Wenn tok.inflight vorhanden (parallele Calls), werden alle in-flight-Tokens
+    // aller laufenden Calls summiert – sonst nur der aktuelle Call.
+    if (tok.inflight) {
+      const entry = tok.inflight.get(callId) || { tokIn: 0, outEst: 0 };
+      tok.inflight.set(callId, {
+        tokIn:   tokIn > 0  ? tokIn              : entry.tokIn,
+        outEst:  chars > 0  ? Math.floor(chars / 4) : entry.outEst,
+      });
+      const vals = [...tok.inflight.values()];
+      if (tokIn > 0) updates.tokensIn  = tok.in  + vals.reduce((s, v) => s + v.tokIn,  0);
+      if (chars > 0) updates.tokensOut = tok.out + vals.reduce((s, v) => s + v.outEst, 0);
+    } else {
+      if (tokIn > 0) updates.tokensIn  = tok.in  + tokIn;
+      if (chars > 0) updates.tokensOut = tok.out + Math.floor(chars / 4);
+    }
     if (Object.keys(updates).length) updateJob(jobId, updates);
   };
   const globalMax = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
@@ -544,6 +560,7 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
     : globalMax;
   const signal = jobAbortControllers.get(jobId)?.signal;
   const { text, truncated, tokensIn, tokensOut, genDurationMs } = await callAI(prompt, system, onProgress, maxTokensOverride, signal);
+  tok.inflight?.delete(callId);
   tok.in += tokensIn;
   tok.out += tokensOut;
   if (genDurationMs != null) tok.ms += genDurationMs;
@@ -655,11 +672,27 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     buildKontinuitaetChapterFactsPrompt,
     buildKontinuitaetCheckPrompt,
   } = await getPrompts();
-  const { SYSTEM_FIGUREN, SYSTEM_ORTE, SYSTEM_KONTINUITAET } = await getBookPrompts(bookId);
+  const {
+    SYSTEM_FIGUREN, SYSTEM_ORTE, SYSTEM_KONTINUITAET,
+    SYSTEM_SZENEN, SYSTEM_ZEITSTRAHL, SYSTEM_ENTWICKLUNGSBOGEN,
+    SOZIOGRAMM_KONTEXT,
+  } = await getBookPrompts(bookId);
 
   try {
-    const cp = loadCheckpoint('komplett-analyse', bookId, userEmail);
+    let cp = loadCheckpoint('komplett-analyse', bookId, userEmail);
     if (cp) logger.info(`Job ${jobId}: Komplettanalyse Buch ${bookId} – Checkpoint (Phase: ${cp.phase}), setze fort.`);
+
+    // Checkpoint-Validierung: p1_done ohne tatsächliche Figuren-Daten verwirft den Checkpoint.
+    // Passiert z.B. wenn ein vorheriger Ollama-Lauf alle Kapitel mit leeren Arrays gespeichert hat.
+    if (cp?.phase === 'p1_done') {
+      const hasFiguren = Array.isArray(cp.chapterFiguren) && cp.chapterFiguren.length > 0
+        && cp.chapterFiguren.some(c => Array.isArray(c.figuren) && c.figuren.length > 0);
+      if (!hasFiguren) {
+        logger.warn(`Job ${jobId}: Checkpoint p1_done enthält keine Figuren-Daten – Phase 1 wird neu ausgeführt.`);
+        deleteCheckpoint('komplett-analyse', bookId, userEmail);
+        cp = null;
+      }
+    }
 
     // ── Seiten laden ──────────────────────────────────────────────────────────
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
@@ -670,7 +703,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
     const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
-    const tok = { in: 0, out: 0, ms: 0 };
+    const tok = { in: 0, out: 0, ms: 0, inflight: new Map() };
     const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
       updateJob(jobId, {
         progress: Math.round((i / total) * 12),
@@ -690,7 +723,8 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
 
     if (cp?.phase === 'p1_done') {
       ({ chapterFiguren, chapterOrte } = cp);
-      updateJob(jobId, { progress: 28, statusText: 'Phase 1 aus Checkpoint geladen…' });
+      if (cp.tokIn != null) { tok.in = cp.tokIn; tok.out = cp.tokOut || 0; tok.ms = cp.tokMs || 0; }
+      updateJob(jobId, { progress: 28, statusText: 'Phase 1 aus Checkpoint geladen…', tokensIn: tok.in, tokensOut: tok.out });
     } else {
       updateJob(jobId, {
         progress: 12,
@@ -732,7 +766,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           orte: r.status === 'fulfilled' ? (r.value?.orte || []) : [],
         }));
       }
-      saveCheckpoint('komplett-analyse', bookId, userEmail, { phase: 'p1_done', chapterFiguren, chapterOrte });
+      saveCheckpoint('komplett-analyse', bookId, userEmail, { phase: 'p1_done', chapterFiguren, chapterOrte, tokIn: tok.in, tokOut: tok.out, tokMs: tok.ms });
     }
 
     // ── Phase 2: Figuren konsolidieren ────────────────────────────────────────
@@ -767,7 +801,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       'SELECT from_fig_id, to_fig_id, typ, beschreibung FROM figure_relations WHERE book_id = ? AND user_email IS ?'
     ).all(parseInt(bookId), userEmail || null);
     const sozResult = await aiCall(jobId, tok,
-      buildFigurSoziogrammEnrichmentPrompt(bookName, figRowsForSoz, relRows),
+      buildFigurSoziogrammEnrichmentPrompt(bookName, figRowsForSoz, relRows, SOZIOGRAMM_KONTEXT),
       SYSTEM_FIGUREN, 56, 62, 2000,
     );
     if (Array.isArray(sozResult?.figuren)) {
@@ -787,7 +821,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
         return aiCall(jobId, tok,
           buildExtraktionSzenenEreignisseChapterPrompt(group.name, bookName, group.pages.length, figurenList, orteKompakt, chText),
-          SYSTEM_FIGUREN, 63, 80, 4000,
+          SYSTEM_SZENEN, 63, 80, 4000,
         );
       })
     );
@@ -899,7 +933,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       const zeitstrahlEvents = [...evtGroupMap.values()].sort((a, b) => parseInt(a.datum) - parseInt(b.datum));
       const ztResult = await aiCall(jobId, tok,
         buildZeitstrahlConsolidationPrompt(zeitstrahlEvents),
-        SYSTEM_FIGUREN, 83, 89, 3000, 0.2, null,
+        SYSTEM_ZEITSTRAHL, 83, 89, 3000, 0.2, null,
       );
       if (Array.isArray(ztResult?.ereignisse)) {
         saveZeitstrahlEvents(parseInt(bookId), userEmail || null, ztResult.ereignisse);
@@ -940,7 +974,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           .join('\n\n---\n\n');
         const arcResult = await aiCall(jobId, tok,
           buildEntwicklungsbogenSinglePassPrompt(bookName, figurenKontextForArcs, pageContents.length, bookText),
-          SYSTEM_FIGUREN, 89, 95, 4000, 0.2, null,
+          SYSTEM_ENTWICKLUNGSBOGEN, 89, 95, 4000, 0.2, null,
         );
         if (!Array.isArray(arcResult?.entwicklungsboegen)) throw new Error('Entwicklungsbögen-Analyse ungültig: entwicklungsboegen-Array fehlt');
         entwicklungsboegen = arcResult.entwicklungsboegen;
@@ -958,7 +992,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           try {
             const chResult = await aiCall(jobId, tok,
               buildEntwicklungsbogenChapterPrompt(group.name, bookName, figurenKontextForArcs, group.pages.length, chText),
-              SYSTEM_FIGUREN, fromPct, toPct, 2000,
+              SYSTEM_ENTWICKLUNGSBOGEN, fromPct, toPct, 2000,
             );
             if (Array.isArray(chResult?.etappen) && chResult.etappen.length)
               perChapterResults.push({ kapitel: group.name, etappen: chResult.etappen });
@@ -970,25 +1004,24 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         updateJob(jobId, { progress: 94, statusText: 'Konsolidiere Entwicklungsbögen…' });
         const arcConsolidation = await aiCall(jobId, tok,
           buildEntwicklungsbogenConsolidationPrompt(bookName, figurenKontextForArcs, perChapterResults),
-          SYSTEM_FIGUREN, 94, 97, 4000, 0.2, null,
+          SYSTEM_ENTWICKLUNGSBOGEN, 94, 97, 4000, 0.2, null,
         );
         if (!Array.isArray(arcConsolidation?.entwicklungsboegen)) throw new Error('Entwicklungsbögen-Konsolidierung ungültig: entwicklungsboegen-Array fehlt');
         entwicklungsboegen = arcConsolidation.entwicklungsboegen;
       }
-      saveCharacterArcs(parseInt(bookId), userEmail || null, entwicklungsboegen);
+      saveCharacterArcs(parseInt(bookId), userEmail || null, entwicklungsboegen, idMaps.chNameToId);
       logger.info(`Job ${jobId}: ${entwicklungsboegen.length} Entwicklungsbögen gespeichert.`);
     }
 
     // ── Phase 8: Kontinuitätsprüfung ──────────────────────────────────────────
     updateJob(jobId, { progress: 97, statusText: 'Kontinuität prüfen…' });
     {
-      const figRowsForKont = db.prepare(
-        'SELECT name, typ, beschreibung FROM figures WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
-      ).all(parseInt(bookId), userEmail || null);
+      // figuren ist aus Phase 2 verfügbar: { id: fig_id, name, typ, beschreibung, ... }
+      const figKompaktForKont = figuren.map(f => ({ name: f.name, typ: f.typ || 'andere', beschreibung: f.beschreibung || '' }));
+      const figNameToId = Object.fromEntries(figuren.map(f => [f.name, f.id]));
       const ortRowsForKont = db.prepare(
         'SELECT name, typ, beschreibung FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
       ).all(parseInt(bookId), userEmail || null);
-      const figKompaktForKont = figRowsForKont.map(f => ({ name: f.name, typ: f.typ || 'andere', beschreibung: f.beschreibung || '' }));
       const orteKompaktForKont = ortRowsForKont.map(o => ({ name: o.name, typ: o.typ, beschreibung: o.beschreibung || '' }));
 
       let kontResult;
@@ -1028,14 +1061,19 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       }
 
       if (typeof kontResult?.zusammenfassung !== 'undefined') {
+        const normalizedProbleme = (kontResult.probleme || []).map(issue => ({
+          ...issue,
+          fig_ids:     (issue.figuren  || []).map(n => figNameToId[n]).filter(Boolean),
+          chapter_ids: (issue.kapitel  || []).map(n => idMaps.chNameToId[n]).filter(Boolean),
+        }));
         const model = process.env.API_PROVIDER === 'ollama'
           ? (process.env.OLLAMA_MODEL || 'llama3.2')
           : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
         db.prepare(`INSERT INTO continuity_checks (book_id, user_email, checked_at, issues_json, summary, model)
           VALUES (?, ?, ?, ?, ?, ?)`)
           .run(parseInt(bookId), userEmail || null, new Date().toISOString(),
-            JSON.stringify(kontResult.probleme || []), kontResult.zusammenfassung || '', model);
-        logger.info(`Job ${jobId}: Kontinuitätsprüfung abgeschlossen (${(kontResult.probleme || []).length} Probleme).`);
+            JSON.stringify(normalizedProbleme), kontResult.zusammenfassung || '', model);
+        logger.info(`Job ${jobId}: Kontinuitätsprüfung abgeschlossen (${normalizedProbleme.length} Probleme).`);
       }
     }
 
@@ -1606,14 +1644,16 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken)
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
     const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
+    const chNameToId = Object.fromEntries(chaptersData.map(c => [c.name, c.id]));
     const tok = { in: 0, out: 0, ms: 0 };
 
     // Bekannte Figuren + Orte aus DB laden
     const figRows = db.prepare(`
-      SELECT f.name, f.typ, f.beschreibung FROM figures f
+      SELECT f.fig_id, f.name, f.typ, f.beschreibung FROM figures f
       WHERE f.book_id = ? AND f.user_email = ? ORDER BY f.sort_order
     `).all(parseInt(bookId), userEmail || null);
     const figurenKompakt = figRows.map(f => ({ name: f.name, typ: f.typ || 'andere', beschreibung: f.beschreibung || '' }));
+    const figNameToId = Object.fromEntries(figRows.map(r => [r.name, r.fig_id]));
 
     const ortRows = db.prepare(
       'SELECT name, typ, beschreibung FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
@@ -1691,6 +1731,12 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken)
 
     if (typeof result?.zusammenfassung === 'undefined') throw new Error('KI-Antwort ungültig: zusammenfassung fehlt');
 
+    const normalizedProbleme = (result.probleme || []).map(issue => ({
+      ...issue,
+      fig_ids:     (issue.figuren || []).map(n => figNameToId[n]).filter(Boolean),
+      chapter_ids: (issue.kapitel || []).map(n => chNameToId[n]).filter(Boolean),
+    }));
+
     const model = process.env.API_PROVIDER === 'ollama'
       ? (process.env.OLLAMA_MODEL || 'llama3.2')
       : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
@@ -1698,12 +1744,12 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken)
     db.prepare(`INSERT INTO continuity_checks (book_id, user_email, checked_at, issues_json, summary, model)
       VALUES (?, ?, ?, ?, ?, ?)`)
       .run(parseInt(bookId), userEmail || null, new Date().toISOString(),
-        JSON.stringify(result.probleme || []), result.zusammenfassung || '', model);
+        JSON.stringify(normalizedProbleme), result.zusammenfassung || '', model);
 
     deleteCheckpoint('kontinuitaet', bookId, userEmail);
     completeJob(jobId, {
-      count: (result.probleme || []).length,
-      issues: result.probleme || [],
+      count: normalizedProbleme.length,
+      issues: normalizedProbleme,
       zusammenfassung: result.zusammenfassung,
       tokensIn: tok.in, tokensOut: tok.out,
     }, tps(tok));

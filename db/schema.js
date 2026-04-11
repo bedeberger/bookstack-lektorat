@@ -324,6 +324,7 @@ db.exec(`
     arc_id           INTEGER NOT NULL REFERENCES character_arcs(id) ON DELETE CASCADE,
     sort_order       INTEGER DEFAULT 0,
     kapitel          TEXT,
+    chapter_id       INTEGER,
     soziale_position TEXT,
     innere_haltung   TEXT,
     beziehungsstatus TEXT,
@@ -854,6 +855,11 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 32').run();
     logger.info('DB-Migration auf Version 32 abgeschlossen (character_arcs + arc_stages Tabellen hinzugefügt).');
   }
+  if (version < 33) {
+    db.exec('ALTER TABLE arc_stages ADD COLUMN chapter_id INTEGER');
+    db.prepare('UPDATE schema_version SET version = 33').run();
+    logger.info('DB-Migration auf Version 33 abgeschlossen (arc_stages.chapter_id hinzugefügt).');
+  }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).
@@ -986,7 +992,8 @@ function updateFigurenEvents(bookId, assignments, userEmail, idMaps) {
 
 // Figurenentwicklungsbögen persistieren (ersetzt den gesamten Bestand für book/user).
 // entwicklungsboegen: Array aus KI-Antwort [{ fig_id, arc_typ, ausgangszustand, endzustand, gesamtbogen, etappen[] }]
-function saveCharacterArcs(bookId, userEmail, entwicklungsboegen) {
+// chNameToId: optionale Map { "Kapitelname" → chapter_id } für FK-Referenz
+function saveCharacterArcs(bookId, userEmail, entwicklungsboegen, chNameToId = {}) {
   const now = new Date().toISOString();
   db.transaction(() => {
     // Alle bestehenden Bögen für dieses Buch/User löschen (CASCADE löscht arc_stages mit)
@@ -996,8 +1003,8 @@ function saveCharacterArcs(bookId, userEmail, entwicklungsboegen) {
       INSERT INTO character_arcs (book_id, fig_id, user_email, arc_typ, ausgangszustand, endzustand, gesamtbogen, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
     const insStage = db.prepare(`
-      INSERT INTO arc_stages (arc_id, sort_order, kapitel, soziale_position, innere_haltung, beziehungsstatus, wendepunkt)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`);
+      INSERT INTO arc_stages (arc_id, sort_order, kapitel, chapter_id, soziale_position, innere_haltung, beziehungsstatus, wendepunkt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
 
     for (const arc of entwicklungsboegen) {
       const { lastInsertRowid: arcId } = insArc.run(
@@ -1010,6 +1017,7 @@ function saveCharacterArcs(bookId, userEmail, entwicklungsboegen) {
         insStage.run(
           arcId, i,
           s.kapitel || null,
+          (s.kapitel && chNameToId[s.kapitel]) ? chNameToId[s.kapitel] : null,
           s.soziale_position || null,
           s.innere_haltung || null,
           s.beziehungsstatus || null,

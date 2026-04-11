@@ -25,34 +25,42 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule) {
   const rules = localeConfig.baseRules || '';
   const sp    = localeConfig.systemPrompts || {};
   return {
-    ERKLAERUNG_RULE:      globalErklaerungRule || '',
-    STOPWORDS:            Array.isArray(localeConfig.stopwords) ? localeConfig.stopwords : [],
-    SYSTEM_LEKTORAT:      buildSystem(sp.lektorat       || '', rules),
-    SYSTEM_BUCHBEWERTUNG: buildSystem(sp.buchbewertung  || '', rules),
-    SYSTEM_KAPITELANALYSE:buildSystem(sp.kapitelanalyse || '', rules),
-    SYSTEM_FIGUREN:       buildSystem(sp.figuren        || '', rules),
-    SYSTEM_STILKORREKTUR: buildSystem(sp.stilkorrektur  || '', rules),
-    SYSTEM_CHAT:          buildSystemNoJson(sp.chat     || '', rules),
-    SYSTEM_BOOK_CHAT:     buildSystemNoJson(sp.buchchat || '', rules),
-    SYSTEM_ORTE:          buildSystem(sp.orte           || 'Du bist ein Literaturanalytiker. Du identifizierst Schauplätze und Orte präzise und konservativ – nur was im Text eindeutig belegt ist.', rules),
-    SYSTEM_KONTINUITAET:  buildSystem(sp.kontinuitaet   || 'Du bist ein sorgfältiger Literaturlektor. Du prüfst einen Roman auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.', rules),
+    ERKLAERUNG_RULE:         globalErklaerungRule || '',
+    STOPWORDS:               Array.isArray(localeConfig.stopwords) ? localeConfig.stopwords : [],
+    SOZIOGRAMM_KONTEXT:      localeConfig.soziogrammKontext || '',
+    SYSTEM_LEKTORAT:         buildSystem(sp.lektorat          || '', rules),
+    SYSTEM_BUCHBEWERTUNG:    buildSystem(sp.buchbewertung     || '', rules),
+    SYSTEM_KAPITELANALYSE:   buildSystem(sp.kapitelanalyse    || '', rules),
+    SYSTEM_FIGUREN:          buildSystem(sp.figuren           || '', rules),
+    SYSTEM_STILKORREKTUR:    buildSystem(sp.stilkorrektur     || '', rules),
+    SYSTEM_CHAT:             buildSystemNoJson(sp.chat        || '', rules),
+    SYSTEM_BOOK_CHAT:        buildSystemNoJson(sp.buchchat    || '', rules),
+    SYSTEM_ORTE:             buildSystem(sp.orte              || 'Du bist ein Literaturanalytiker. Du identifizierst Schauplätze und Orte präzise und konservativ – nur was im Text eindeutig belegt ist.', rules),
+    SYSTEM_KONTINUITAET:     buildSystem(sp.kontinuitaet      || 'Du bist ein sorgfältiger Literaturlektor. Du prüfst einen Roman auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.', rules),
+    SYSTEM_SZENEN:           buildSystem(sp.szenen            || '', rules),
+    SYSTEM_ZEITSTRAHL:       buildSystem(sp.zeitstrahl        || '', rules),
+    SYSTEM_ENTWICKLUNGSBOGEN:buildSystem(sp.entwicklungsbogen || '', rules),
   };
 }
 
 // Live-Exports – werden durch configurePrompts() gesetzt (Pflicht vor erstem Prompt-Aufruf).
 // Alle importierenden Module erhalten via ESM-Live-Binding immer den aktuellen Wert.
 // Diese Globals entsprechen stets dem defaultLocale und dienen der Rückwärtskompatibilität.
-export let ERKLAERUNG_RULE      = null;
-export let STOPWORDS            = [];
-export let SYSTEM_LEKTORAT      = null;
-export let SYSTEM_BUCHBEWERTUNG = null;
-export let SYSTEM_KAPITELANALYSE= null;
-export let SYSTEM_FIGUREN       = null;
-export let SYSTEM_STILKORREKTUR = null;
-export let SYSTEM_CHAT          = null;
-export let SYSTEM_BOOK_CHAT     = null;
-export let SYSTEM_ORTE          = null;
-export let SYSTEM_KONTINUITAET  = null;
+export let ERKLAERUNG_RULE          = null;
+export let STOPWORDS                = [];
+export let SOZIOGRAMM_KONTEXT       = '';
+export let SYSTEM_LEKTORAT          = null;
+export let SYSTEM_BUCHBEWERTUNG     = null;
+export let SYSTEM_KAPITELANALYSE    = null;
+export let SYSTEM_FIGUREN           = null;
+export let SYSTEM_STILKORREKTUR     = null;
+export let SYSTEM_CHAT              = null;
+export let SYSTEM_BOOK_CHAT         = null;
+export let SYSTEM_ORTE              = null;
+export let SYSTEM_KONTINUITAET      = null;
+export let SYSTEM_SZENEN            = null;
+export let SYSTEM_ZEITSTRAHL        = null;
+export let SYSTEM_ENTWICKLUNGSBOGEN = null;
 
 /**
  * Setzt alle System-Prompts aus dem promptConfig-Objekt (geladen aus prompt-config.json).
@@ -90,17 +98,21 @@ export function configurePrompts(cfg) {
 
   // Globale Exports auf Default-Locale setzen (ESM-Live-Binding für Client-Code)
   const def = _localeMap.get(_defaultLocale) || {};
-  ERKLAERUNG_RULE       = def.ERKLAERUNG_RULE       ?? '';
-  STOPWORDS             = def.STOPWORDS             ?? [];
-  SYSTEM_LEKTORAT       = def.SYSTEM_LEKTORAT       ?? null;
-  SYSTEM_BUCHBEWERTUNG  = def.SYSTEM_BUCHBEWERTUNG  ?? null;
-  SYSTEM_KAPITELANALYSE = def.SYSTEM_KAPITELANALYSE ?? null;
-  SYSTEM_FIGUREN        = def.SYSTEM_FIGUREN        ?? null;
-  SYSTEM_STILKORREKTUR  = def.SYSTEM_STILKORREKTUR  ?? null;
-  SYSTEM_CHAT           = def.SYSTEM_CHAT           ?? null;
-  SYSTEM_BOOK_CHAT      = def.SYSTEM_BOOK_CHAT      ?? null;
-  SYSTEM_ORTE           = def.SYSTEM_ORTE           ?? null;
-  SYSTEM_KONTINUITAET   = def.SYSTEM_KONTINUITAET   ?? null;
+  ERKLAERUNG_RULE          = def.ERKLAERUNG_RULE          ?? '';
+  STOPWORDS                = def.STOPWORDS                ?? [];
+  SOZIOGRAMM_KONTEXT       = def.SOZIOGRAMM_KONTEXT       ?? '';
+  SYSTEM_LEKTORAT          = def.SYSTEM_LEKTORAT          ?? null;
+  SYSTEM_BUCHBEWERTUNG     = def.SYSTEM_BUCHBEWERTUNG     ?? null;
+  SYSTEM_KAPITELANALYSE    = def.SYSTEM_KAPITELANALYSE    ?? null;
+  SYSTEM_FIGUREN           = def.SYSTEM_FIGUREN           ?? null;
+  SYSTEM_STILKORREKTUR     = def.SYSTEM_STILKORREKTUR     ?? null;
+  SYSTEM_CHAT              = def.SYSTEM_CHAT              ?? null;
+  SYSTEM_BOOK_CHAT         = def.SYSTEM_BOOK_CHAT         ?? null;
+  SYSTEM_ORTE              = def.SYSTEM_ORTE              ?? null;
+  SYSTEM_KONTINUITAET      = def.SYSTEM_KONTINUITAET      ?? null;
+  SYSTEM_SZENEN            = def.SYSTEM_SZENEN            ?? null;
+  SYSTEM_ZEITSTRAHL        = def.SYSTEM_ZEITSTRAHL        ?? null;
+  SYSTEM_ENTWICKLUNGSBOGEN = def.SYSTEM_ENTWICKLUNGSBOGEN ?? null;
 }
 
 /**
@@ -213,8 +225,6 @@ Antworte mit diesem JSON-Schema:
   "fazit": "Abschliessendes Urteil in 1-2 Sätzen"
 }
 
-${JSON_ONLY}
-
 Buchinhalt (${pageCount} Seiten):
 
 ${bookText}`;
@@ -233,8 +243,6 @@ Antworte mit diesem JSON-Schema:
   "schwaechen": ["konkrete Schwäche 1", "konkrete Schwäche 2"]
 }
 
-${JSON_ONLY}
-
 Kapitelinhalt (${pageCount} Seiten):
 
 ${chText}`;
@@ -252,8 +260,6 @@ GEWICHTUNG: Stil, Sprache und literarische Qualität sind die zentralen Bewertun
 Kapitelanalysen:
 
 ${synthIn}
-
-${JSON_ONLY}
 
 Antworte mit diesem JSON-Schema:
 {
@@ -437,7 +443,7 @@ ${FIGUREN_BASIS_RULES}`;
 
 // ── Soziogramm-Anreicherung (Sozialschicht + Machtverhältnis) ─────────────────
 
-export function buildFigurSoziogrammEnrichmentPrompt(bookName, figurenList, beziehungenList) {
+export function buildFigurSoziogrammEnrichmentPrompt(bookName, figurenList, beziehungenList, kontext = SOZIOGRAMM_KONTEXT) {
   const figurenStr = figurenList.map(f =>
     `- ${f.fig_id}: ${f.name} (${f.typ || 'andere'}${f.beruf ? ', ' + f.beruf : ''}) – ${f.beschreibung || '(keine Beschreibung)'}`
   ).join('\n');
@@ -463,7 +469,7 @@ Antworte mit diesem JSON-Schema:
 }
 
 Regeln:
-- sozialschicht: gesellschaftliche Schicht basierend auf Beschreibung und Beruf der Figur (Kontext: Schweiz, Mittelland, 1990er–2010er); wirtschaftselite=Unternehmerfamilien, Direktoren, sehr wohlhabende Geschäftsleute; gehobenes_buergertum=Akademiker in freien Berufen (Ärzte, Anwälte, Architekten), obere Kader, etablierte Kaufleute; mittelschicht=Angestellte, Beamte, mittlere Kader, Handwerker mit eigenem Betrieb, Lehrer; arbeiterschicht=Fabrik-/Bauarbeiter, Servicepersonal, einfache Angestellte, Pflegepersonal; migrantenmilieu=Zugewanderte und ihre Familien (Saisonniers, Niedergelassene, zweite/dritte Generation – unabhängig von Beruf, wenn kulturell-ethnische Zugehörigkeit relevant ist); prekariat=Sozialhilfeempfänger, Obdachlose, Randständige, Langzeitarbeitslose, Drogenabhängige; unterwelt=kriminelles Milieu; «andere» nur wenn wirklich unbestimmbar
+- sozialschicht: gesellschaftliche Schicht basierend auf Beschreibung und Beruf der Figur${kontext ? ` (${kontext})` : ''}; wirtschaftselite=Unternehmerfamilien, Direktoren, sehr wohlhabende Geschäftsleute; gehobenes_buergertum=Akademiker in freien Berufen (Ärzte, Anwälte, Architekten), obere Kader, etablierte Kaufleute; mittelschicht=Angestellte, Beamte, mittlere Kader, Handwerker mit eigenem Betrieb, Lehrer; arbeiterschicht=Fabrik-/Bauarbeiter, Servicepersonal, einfache Angestellte, Pflegepersonal; migrantenmilieu=Zugewanderte und ihre Familien (Saisonniers, Niedergelassene, zweite/dritte Generation – unabhängig von Beruf, wenn kulturell-ethnische Zugehörigkeit relevant ist); prekariat=Sozialhilfeempfänger, Obdachlose, Randständige, Langzeitarbeitslose, Drogenabhängige; unterwelt=kriminelles Milieu; «andere» nur wenn wirklich unbestimmbar
 - machtverhaltnis: Machtasymmetrie aus Perspektive von from_fig_id gegenüber to_fig_id; +2=from_fig dominiert klar (Herr/Knecht, Arbeitgeber/Angestellter, Patron/Klient), +1=from_fig hat leichten strukturellen Vorteil, 0=symmetrisch oder unklar, -1=to_fig hat leichten Vorteil, -2=to_fig dominiert klar; nur vergeben wenn aus Kontext ableitbar, sonst 0
 - Jede Figur aus der Liste mit einer sozialschicht belegen (nie weglassen)
 - Nur Beziehungen mit machtverhaltnis ≠ 0 in «beziehungen» aufführen – symmetrische Beziehungen weglassen
@@ -565,6 +571,30 @@ ${JSON_ONLY}
 Kapiteltext:
 ${chText}`;
 }
+
+// ── Schauplatz-Schemata (auch verwendet in Komplett-Analyse) ─────────────────
+
+const ORTE_SCHEMA = `{
+  "orte": [
+    {
+      "id": "ort_1",
+      "name": "Name des Schauplatz",
+      "typ": "stadt|gebaeude|raum|landschaft|region|andere",
+      "beschreibung": "2-3 Sätze zu Erscheinungsbild, Atmosphäre, Bedeutung für die Handlung",
+      "erste_erwaehnung": "Kapitelname oder Seitenname der ersten Erwähnung (leer wenn unklar)",
+      "stimmung": "Grundatmosphäre in 2-3 Worten (z.B. bedrohlich, heimelig, verlassen, belebt)",
+      "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
+      "figuren": ["fig_1", "fig_2"]
+    }
+  ]
+}`;
+
+const ORTE_RULES = `Regeln:
+- Eindeutige IDs (ort_1, ort_2, …)
+- Nur Schauplätze, die im Text eindeutig beschrieben oder mehrfach genannt werden – keine einmaligen, flüchtigen Erwähnungen
+- figuren: nur IDs aus der gelieferten Figurenliste (leer lassen wenn keine Figuren bekannt)
+- kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte in denen der Ort aktiv vorkommt
+- KONSERVATIV: Lieber weglassen als spekulieren; maximal 20 Orte`;
 
 // ── Komplett-Analyse (kombinierte Extraktion) ─────────────────────────────────
 // Hilfsfunktion: Extrahiert den Inhalt des äussersten Objekts aus einem Schema-String.
@@ -820,28 +850,6 @@ export function buildBookChatSystemPrompt(bookName, relevantPages, figuren, revi
 }
 
 // ── Schauplatz-Extraktion ─────────────────────────────────────────────────────
-
-const ORTE_SCHEMA = `{
-  "orte": [
-    {
-      "id": "ort_1",
-      "name": "Name des Schauplatz",
-      "typ": "stadt|gebaeude|raum|landschaft|region|andere",
-      "beschreibung": "2-3 Sätze zu Erscheinungsbild, Atmosphäre, Bedeutung für die Handlung",
-      "erste_erwaehnung": "Kapitelname oder Seitenname der ersten Erwähnung (leer wenn unklar)",
-      "stimmung": "Grundatmosphäre in 2-3 Worten (z.B. bedrohlich, heimelig, verlassen, belebt)",
-      "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
-      "figuren": ["fig_1", "fig_2"]
-    }
-  ]
-}`;
-
-const ORTE_RULES = `Regeln:
-- Eindeutige IDs (ort_1, ort_2, …)
-- Nur Schauplätze, die im Text eindeutig beschrieben oder mehrfach genannt werden – keine einmaligen, flüchtigen Erwähnungen
-- figuren: nur IDs aus der gelieferten Figurenliste (leer lassen wenn keine Figuren bekannt)
-- kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte in denen der Ort aktiv vorkommt
-- KONSERVATIV: Lieber weglassen als spekulieren; maximal 20 Orte`;
 
 export function buildLocationsSinglePassPrompt(bookName, pageCount, bookText, figurenKompakt) {
   const figurenStr = figurenKompakt && figurenKompakt.length

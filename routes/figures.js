@@ -97,7 +97,7 @@ router.get('/character-arcs/:book_id', (req, res) => {
   const arcIds = arcRows.map(r => r.id);
   const stageRows = arcIds.length
     ? db.prepare(
-        `SELECT arc_id, sort_order, kapitel, soziale_position, innere_haltung, beziehungsstatus, wendepunkt
+        `SELECT arc_id, sort_order, kapitel, chapter_id, soziale_position, innere_haltung, beziehungsstatus, wendepunkt
          FROM arc_stages WHERE arc_id IN (${arcIds.map(() => '?').join(',')})
          ORDER BY arc_id, sort_order`
       ).all(...arcIds)
@@ -108,6 +108,7 @@ router.get('/character-arcs/:book_id', (req, res) => {
     (stageMap[s.arc_id] ??= []).push({
       sort_order:       s.sort_order,
       kapitel:          s.kapitel,
+      chapter_id:       s.chapter_id,
       soziale_position: s.soziale_position,
       innere_haltung:   s.innere_haltung,
       beziehungsstatus: s.beziehungsstatus,
