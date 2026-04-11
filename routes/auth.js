@@ -41,7 +41,13 @@ router.get('/auth/login', async (req, res) => {
     const rawReturn = req.query.returnTo || '/';
     req.session.returnTo = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : '/';
     const url = client.authorizationUrl({ scope: 'openid email profile', state, nonce });
-    res.redirect(url);
+    req.session.save((saveErr) => {
+      if (saveErr) {
+        logger.error('Session save error: ' + saveErr.message);
+        return res.status(500).send('Session-Fehler: ' + saveErr.message);
+      }
+      res.redirect(url);
+    });
   } catch (err) {
     logger.error('Auth login error: ' + err.message);
     res.status(500).send('Anmeldung fehlgeschlagen: ' + err.message);

@@ -978,8 +978,8 @@ Regeln:
 - Nur echte Widersprüche – keine stilistischen oder inhaltlichen Anmerkungen
 - schwere: «kritisch» = klarer Logikfehler der auffällt; «mittel» = wahrscheinlicher Fehler; «niedrig» = mögliche Inkonsistenz
 - Soziolekt-Probleme: nur wenn klar ein Sprachmuster etabliert wurde und dann ohne Begründung bricht – nicht melden wenn Figur wenig Dialoganteil hat
-- figuren: Namen exakt wie in der Figurenliste; leeres Array wenn keine Figur direkt betroffen (z.B. rein ortsbezogene Widersprüche)
-- kapitel: exakte Kapitelnamen aus dem Text; wenn beide Stellen im selben Kapitel: nur einmal; leeres Array wenn unklar
+- figuren: PFLICHTFELD – immer angeben, mindestens []; Namen exakt wie in der Figurenliste; [] nur wenn wirklich keine Figur betroffen (rein ortsbezogene Widersprüche)
+- kapitel: PFLICHTFELD – immer angeben, mindestens []; exakte Kapitelnamen aus stelle_a/stelle_b; wenn beide Stellen im selben Kapitel nur einmal; [] nur wenn der Text keine Kapitelinformation enthält
 - Wenn keine Widersprüche gefunden: «probleme» als leeres Array, «zusammenfassung» = positive Einschätzung
 - Konservativ: Im Zweifel weglassen
 
@@ -1023,8 +1023,8 @@ Regeln:
 - Nur echte Widersprüche
 - schwere: «kritisch» = klarer Logikfehler; «mittel» = wahrscheinlicher Fehler; «niedrig» = mögliche Inkonsistenz
 - Soziolekt-Brüche: nur wenn ein Sprachmuster klar etabliert wurde und dann ohne Begründung bricht
-- figuren: Namen exakt wie in der Figurenliste; leeres Array wenn keine Figur direkt betroffen
-- kapitel: exakte Kapitelnamen aus dem Text; wenn beide Stellen im selben Kapitel: nur einmal; leeres Array wenn unklar
+- figuren: PFLICHTFELD – immer angeben, mindestens []; Namen exakt wie in der Figurenliste; [] nur wenn wirklich keine Figur betroffen
+- kapitel: PFLICHTFELD – immer angeben, mindestens []; exakte Kapitelnamen aus stelle_a/stelle_b; wenn beide Stellen im selben Kapitel nur einmal; [] nur wenn der Text keine Kapitelinformation enthält
 - Wenn keine Widersprüche: «probleme» als leeres Array
 - Konservativ: Im Zweifel weglassen
 

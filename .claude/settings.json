@@ -39,7 +39,16 @@
       "Bash(grep -n \"consolidate-zeitstrahl\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/*.js)",
       "Bash(grep -E \"'/jobs/\\(stats|queue|active|last-run|book-chat-cache\\)'\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/*.js)",
       "Bash(grep -n \"jobs/figures\\\\|jobs/locations\\\\|jobs/szenen\\\\|jobs/soziogramm\\\\|jobs/figure-events\\\\|jobs/consolidate-zeitstrahl\\\\|jobs/character-arcs\\\\|/jobs/review\\\\|loadFiguren\\\\|loadOrte\\\\|loadSzenen\\\\|loadEreignisse\\\\|runFiguren\\\\|runOrte\\\\|runSzenen\\\\|startFiguren\\\\|startOrte\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/partials/*.html)",
-      "Bash(grep -n \"Aktualisieren\\\\|aktualisieren\\\\|Neu ermitteln\\\\|neu ermitteln\\\\|startJob\\\\|_startPoll\\\\|fetch.*jobs\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/partials/*.html)"
+      "Bash(grep -n \"Aktualisieren\\\\|aktualisieren\\\\|Neu ermitteln\\\\|neu ermitteln\\\\|startJob\\\\|_startPoll\\\\|fetch.*jobs\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/partials/*.html)",
+      "Bash(grep -r \"@click\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/partials/*.html)",
+      "Bash(grep \"runFigurExtraction\\\\|runOrteExtraction\\\\|runSzenenAnalyse\\\\|runEreignisseExtraction\\\\|consolidateZeitstrahl\\\\|runCharacterArcsExtraction\\\\|runSoziogrammEnrichment\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/*.js)",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT issues_json FROM continuity_checks ORDER BY checked_at DESC LIMIT 1;\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(i.get\\('figuren'\\), '|', i.get\\('kapitel'\\)\\) for i in d[:5]]\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d[0], ensure_ascii=False, indent=2\\)\\)\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT ca.fig_id, f.fig_id as f_fig_id, f.name FROM character_arcs ca LEFT JOIN figures f ON f.fig_id = ca.fig_id AND f.book_id = ca.book_id LIMIT 5;\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \".tables\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT COUNT\\(*\\) FROM character_arcs; SELECT COUNT\\(*\\) FROM arc_stages; SELECT arc_id, kapitel FROM arc_stages LIMIT 5;\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT COUNT\\(*\\) FROM figures; SELECT COUNT\\(*\\) FROM continuity_checks; SELECT fig_id, name FROM figures LIMIT 5;\")"
     ]
   }
 }

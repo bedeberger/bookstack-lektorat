@@ -349,16 +349,27 @@ document.addEventListener('alpine:init', () => {
     kontinuitaetKapitelListe() {
       const names = new Set();
       for (const issue of (this.kontinuitaetResult?.issues || [])) {
-        for (const k of (issue.kapitel || [])) if (k) names.add(k);
+        if (issue.kapitel?.length) {
+          for (const k of issue.kapitel) if (k) names.add(k);
+        } else {
+          if (issue.stelle_a) names.add(issue.stelle_a);
+          if (issue.stelle_b) names.add(issue.stelle_b);
+        }
       }
       return [...names].sort((a, b) => a.localeCompare(b, 'de'));
     },
     get kontinuitaetIssuesFiltered() {
       const selectedName = this.figuren.find(f => f.id === this.kontinuitaetFilterFigurId)?.name || '';
-      return (this.kontinuitaetResult?.issues || []).filter(issue =>
-        (!selectedName || (issue.figuren || []).includes(selectedName)) &&
-        (!this.kontinuitaetFilterKapitel || (issue.kapitel || []).includes(this.kontinuitaetFilterKapitel))
-      );
+      return (this.kontinuitaetResult?.issues || []).filter(issue => {
+        if (selectedName && !(issue.figuren || []).includes(selectedName)) return false;
+        if (this.kontinuitaetFilterKapitel) {
+          const kapitel = issue.kapitel?.length
+            ? issue.kapitel
+            : [issue.stelle_a, issue.stelle_b].filter(Boolean);
+          if (!kapitel.includes(this.kontinuitaetFilterKapitel)) return false;
+        }
+        return true;
+      });
     },
 
     arcKapitelListe() {
