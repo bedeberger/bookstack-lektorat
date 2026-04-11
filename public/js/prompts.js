@@ -1296,7 +1296,7 @@ ${ENTWICKLUNGSBOGEN_RULES}
 ${JSON_ONLY}`;
 }
 
-export function buildLektoratPrompt(text, html, { stopwords = STOPWORDS, erklaerungRule = ERKLAERUNG_RULE } = {}) {
+export function buildLektoratPrompt(text, _html, { stopwords = STOPWORDS, erklaerungRule = ERKLAERUNG_RULE } = {}) {
   return `Analysiere diesen Text auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
 
 WICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen (z.B. ein Gallizismus und separate Anführungszeichen-Problematik), müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.
@@ -1312,7 +1312,6 @@ Antworte mit diesem JSON-Schema:
       "erklaerung": "kurze Erklärung (nur diesen einen Mangel beschreiben) ${erklaerungRule}"
     }
   ],
-  "korrekturen_html": "vollständiges korrigiertes HTML – behalte ALLE Tags exakt bei, ändere nur fehlerhafte Textstellen",
   "szenen": [
     {
       "titel": "Kurze Szenenbezeichnung (1 Satz)",
@@ -1331,8 +1330,5 @@ Szenen-Regeln:
 ${_buildWiederholungBlock(stopwords)}
 
 Originaltext:
-${text}
-
-Original-HTML (für korrekturen_html):
-${html}`;
+${text}`;
 }
