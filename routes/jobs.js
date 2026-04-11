@@ -780,6 +780,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           kapitel: chapterTexts[gi].group.name,
           fakten: r.status === 'fulfilled' ? (r.value?.fakten || []) : [],
         }));
+        logger.info(`Job ${jobId}: Phase 1 – ${settled.filter(r => r.status === 'fulfilled').length}/${settled.length} Kapitel OK. Figuren/Kap: [${chapterFiguren.map(c => c.figuren.length).join(', ')}], Orte/Kap: [${chapterOrte.map(c => c.orte.length).join(', ')}]`);
       }
       saveCheckpoint('komplett-analyse', bookId, userEmail, { phase: 'p1_done', chapterFiguren, chapterOrte, chapterFakten, tokIn: tok.in, tokOut: tok.out, tokMs: tok.ms });
     }
@@ -790,10 +791,12 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren),
       SYSTEM_FIGUREN, 30, 43, 8000,
     );
+    logger.info(`Job ${jobId}: figResult Keys: [${Object.keys(figResult || {}).join(', ')}] – figuren: ${figResult?.figuren?.length ?? 'FEHLT'}`);
     if (!Array.isArray(figResult?.figuren)) throw new Error('Figuren-Konsolidierung ungültig: figuren-Array fehlt');
     const figuren = figResult.figuren.map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
+    logger.info(`Job ${jobId}: Speichere ${figuren.length} Figuren…`);
     saveFigurenToDb(parseInt(bookId), figuren, userEmail || null, idMaps);
-    logger.info(`Job ${jobId}: ${figuren.length} Figuren konsolidiert und gespeichert.`);
+    logger.info(`Job ${jobId}: ${figuren.length} Figuren gespeichert.`);
 
     // ── P7-Kontext aufbauen (direkt nach saveFigurenToDb, noch vor dem Parallel-Block) ──
     // figurenKompaktForArcsChapter: nur Name+Typ für Kapitel-Calls – spart ~15–20k Input-Tokens.
@@ -859,10 +862,12 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     if (block1Settled[0].status === 'rejected') throw block1Settled[0].reason;
     const orteResultRaw = block1Settled[0].value;
 
+    logger.info(`Job ${jobId}: orteResult Keys: [${Object.keys(orteResultRaw || {}).join(', ')}] – orte: ${orteResultRaw?.orte?.length ?? 'FEHLT'}`);
     if (!Array.isArray(orteResultRaw?.orte)) throw new Error('Orte-Konsolidierung ungültig: orte-Array fehlt');
     const orte = orteResultRaw.orte.map((o, i) => ({ ...o, id: o.id || ('ort_' + (i + 1)) }));
+    logger.info(`Job ${jobId}: Speichere ${orte.length} Schauplätze…`);
     saveOrteToDb(parseInt(bookId), orte, userEmail || null);
-    logger.info(`Job ${jobId}: ${orte.length} Schauplätze konsolidiert und gespeichert.`);
+    logger.info(`Job ${jobId}: ${orte.length} Schauplätze gespeichert.`);
 
     // ── Parallel-Block 2: Szenen/Zeitstrahl/Entwicklungsbögen + Kontinuität ──
     // Multi-Pass: kombinierter P5+P7-Kap-Call pro Kapitel → P6 + P7-Kons parallel.
@@ -899,6 +904,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         }
       });
 
+      logger.info(`Job ${jobId}: Speichere ${allSzenen.length} Szenen (${mergedEvtMap.size} Figuren mit Ereignissen)…`);
       updateJob(jobId, { progress: 81, statusText: 'Szenen speichern…' });
       db.transaction(() => {
         db.prepare('DELETE FROM figure_scenes WHERE book_id = ? AND user_email = ?').run(parseInt(bookId), userEmail || null);
@@ -935,6 +941,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         deduped.sort((a, b) => (parseInt(a.datum) || 0) - (parseInt(b.datum) || 0));
         allAssignments.push({ fig_id, lebensereignisse: deduped });
       }
+      logger.info(`Job ${jobId}: Speichere ${allAssignments.length} Figur-Ereignis-Sets…`);
       saveZeitstrahlEvents(parseInt(bookId), userEmail || null, []);
       updateFigurenEvents(parseInt(bookId), allAssignments, userEmail || null, idMaps);
       logger.info(`Job ${jobId}: ${allSzenen.length} Szenen und ${allAssignments.reduce((s, a) => s + a.lebensereignisse.length, 0)} Ereignisse gespeichert.`);
@@ -975,8 +982,11 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         buildZeitstrahlConsolidationPrompt(zeitstrahlEvents),
         SYSTEM_ZEITSTRAHL, 83, 89, 3000, 0.2, null,
       );
+      logger.info(`Job ${jobId}: ztResult Keys: [${Object.keys(ztResult || {}).join(', ')}] – ereignisse: ${ztResult?.ereignisse?.length ?? 'FEHLT'}`);
       if (Array.isArray(ztResult?.ereignisse)) {
+        logger.info(`Job ${jobId}: Speichere ${ztResult.ereignisse.length} Zeitstrahl-Ereignisse…`);
         saveZeitstrahlEvents(parseInt(bookId), userEmail || null, ztResult.ereignisse);
+        logger.info(`Job ${jobId}: ${ztResult.ereignisse.length} Zeitstrahl-Ereignisse gespeichert.`);
       }
     }
 
@@ -1026,7 +1036,9 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
                   buildEntwicklungsbogenConsolidationPrompt(bookName, figurenKontextForArcs, etappenPerChapter),
                   SYSTEM_ENTWICKLUNGSBOGEN, 94, 97, 4000, 0.2, null,
                 );
+                logger.info(`Job ${jobId}: arcConsolidation Keys: [${Object.keys(arcConsolidation || {}).join(', ')}] – entwicklungsboegen: ${arcConsolidation?.entwicklungsboegen?.length ?? 'FEHLT'}`);
                 if (!Array.isArray(arcConsolidation?.entwicklungsboegen)) throw new Error('Entwicklungsbögen-Konsolidierung ungültig: entwicklungsboegen-Array fehlt');
+                logger.info(`Job ${jobId}: Speichere ${arcConsolidation.entwicklungsboegen.length} Entwicklungsbögen (Konsolidierung)…`);
                 saveCharacterArcs(parseInt(bookId), userEmail || null, arcConsolidation.entwicklungsboegen, idMaps.chNameToId);
                 logger.info(`Job ${jobId}: ${arcConsolidation.entwicklungsboegen.length} Entwicklungsbögen gespeichert.`);
               })(),
@@ -1066,7 +1078,9 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
                 buildEntwicklungsbogenSinglePassPrompt(bookName, figurenKontextForArcs, pageContents.length, bookText),
                 SYSTEM_ENTWICKLUNGSBOGEN, 89, 95, 4000, 0.2, null,
               );
+              logger.info(`Job ${jobId}: arcResult Keys: [${Object.keys(arcResult || {}).join(', ')}] – entwicklungsboegen: ${arcResult?.entwicklungsboegen?.length ?? 'FEHLT'}`);
               if (!Array.isArray(arcResult?.entwicklungsboegen)) throw new Error('Entwicklungsbögen-Analyse ungültig: entwicklungsboegen-Array fehlt');
+              logger.info(`Job ${jobId}: Speichere ${arcResult.entwicklungsboegen.length} Entwicklungsbögen (Single-Pass)…`);
               saveCharacterArcs(parseInt(bookId), userEmail || null, arcResult.entwicklungsboegen, idMaps.chNameToId);
               logger.info(`Job ${jobId}: ${arcResult.entwicklungsboegen.length} Entwicklungsbögen gespeichert.`);
             })(),
@@ -1090,6 +1104,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           const bookText = pageContents
             .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
             .join('\n\n---\n\n');
+          logger.info(`Job ${jobId}: Kontinuität Single-Pass: ${bookText.length} Zeichen Buchtext, ${figKompaktForKont.length} Figuren, ${orteKompaktForKont.length} Orte`);
           kontResult = await call(jobId, tok,
             buildKontinuitaetSinglePassPrompt(bookName, bookText, figKompaktForKont, orteKompaktForKont),
             SYSTEM_KONTINUITAET, 97, 99, 5000,
@@ -1097,6 +1112,8 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         } else if (chapterFakten?.length) {
           // Normal-Pfad multi-pass: Fakten aus Phase 1 – kein zusätzlicher API-Call
           updateJob(jobId, { progress: 98, statusText: 'KI prüft Widersprüche…' });
+          const totalFaktenChars = chapterFakten.reduce((s, c) => s + JSON.stringify(c.fakten).length, 0);
+          logger.info(`Job ${jobId}: Kontinuität Multi-Pass: ${chapterFakten.length} Kapitel, ~${totalFaktenChars} Zeichen Fakten, ${figKompaktForKont.length} Figuren`);
           kontResult = await call(jobId, tok,
             buildKontinuitaetCheckPrompt(bookName, chapterFakten, figKompaktForKont, orteKompaktForKont),
             SYSTEM_KONTINUITAET, 98, 99, 5000,
@@ -1129,6 +1146,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           );
         }
 
+        logger.info(`Job ${jobId}: kontResult Keys: [${Object.keys(kontResult || {}).join(', ')}] – probleme: ${kontResult?.probleme?.length ?? '?'}, zusammenfassung: ${kontResult?.zusammenfassung?.length ?? '?'} Zeichen`);
         if (typeof kontResult?.zusammenfassung !== 'undefined') {
           const normalizedProbleme = (kontResult.probleme || []).map(issue => ({
             ...issue,
@@ -1139,6 +1157,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           const model = effectiveProvider === 'ollama'
             ? (process.env.OLLAMA_MODEL || 'llama3.2')
             : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
+          logger.info(`Job ${jobId}: Speichere Kontinuitätsprüfung (${normalizedProbleme.length} Probleme)…`);
           db.prepare(`INSERT INTO continuity_checks (book_id, user_email, checked_at, issues_json, summary, model)
             VALUES (?, ?, ?, ?, ?, ?)`)
             .run(parseInt(bookId), userEmail || null, new Date().toISOString(),
