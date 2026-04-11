@@ -573,7 +573,7 @@ document.addEventListener('alpine:init', () => {
       const bookName = this.selectedBookName;
       try {
         // 1) Figuren
-        this.alleAktualisierenStatus = '1/5 Figuren…';
+        this.alleAktualisierenStatus = '1/7 Figuren…';
         const { jobId: figJobId } = await fetch('/jobs/figures', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -582,8 +582,18 @@ document.addEventListener('alpine:init', () => {
         await this._waitForJob(figJobId);
         await this.loadFiguren(bookId);
 
-        // 2) Schauplätze
-        this.alleAktualisierenStatus = '2/5 Schauplätze…';
+        // 2) Soziogramm
+        this.alleAktualisierenStatus = '2/7 Soziogramm…';
+        const { jobId: sozJobId } = await fetch('/jobs/soziogramm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName }),
+        }).then(r => r.json());
+        await this._waitForJob(sozJobId);
+        await this.loadFiguren(bookId);
+
+        // 3) Schauplätze
+        this.alleAktualisierenStatus = '3/7 Schauplätze…';
         const { jobId: orteJobId } = await fetch('/jobs/locations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -592,8 +602,8 @@ document.addEventListener('alpine:init', () => {
         await this._waitForJob(orteJobId);
         await this.loadOrte(bookId);
 
-        // 3) Szenen
-        this.alleAktualisierenStatus = '3/5 Szenen…';
+        // 4) Szenenanalyse
+        this.alleAktualisierenStatus = '4/7 Szenenanalyse…';
         const { jobId: szenenJobId } = await fetch('/jobs/szenen', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -602,8 +612,8 @@ document.addEventListener('alpine:init', () => {
         await this._waitForJob(szenenJobId);
         await this.loadSzenen(bookId);
 
-        // 4) Ereignisse
-        this.alleAktualisierenStatus = '4/5 Ereignisse…';
+        // 5) Ereignisse
+        this.alleAktualisierenStatus = '5/7 Ereignisse…';
         const { jobId: ereignisseJobId } = await fetch('/jobs/figure-events', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -613,8 +623,8 @@ document.addEventListener('alpine:init', () => {
         this.globalZeitstrahl = [];
         await this.loadFiguren(bookId);
 
-        // 5) Konsolidieren
-        this.alleAktualisierenStatus = '5/5 Konsolidieren…';
+        // 6) Zeitstrahl konsolidieren
+        this.alleAktualisierenStatus = '6/7 Zeitstrahl…';
         if (this.globalZeitstrahl.length) {
           const { jobId: consJobId, empty } = await fetch('/jobs/consolidate-zeitstrahl', {
             method: 'POST',
@@ -628,6 +638,17 @@ document.addEventListener('alpine:init', () => {
             }
           }
         }
+
+        // 7) Entwicklungsbögen
+        this.alleAktualisierenStatus = '7/7 Entwicklungsbögen…';
+        const { jobId: arcJobId } = await fetch('/jobs/character-arcs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName }),
+        }).then(r => r.json());
+        await this._waitForJob(arcJobId);
+        await this.loadCharacterArcs();
+
         this.alleAktualisierenStatus = 'Fertig.';
         setTimeout(() => { if (this.alleAktualisierenStatus === 'Fertig.') this.alleAktualisierenStatus = ''; }, 4000);
       } catch (e) {

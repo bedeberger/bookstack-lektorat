@@ -23,7 +23,7 @@
   <p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : '· Claude: ' + claudeModel"></span></p>
   <div class="user-info" x-show="currentUser">
     <span class="user-email" x-text="currentUser?.name || currentUser?.email"></span>
-    <button class="job-stats-btn" @click="alleAktualisieren()" :disabled="alleAktualisierenLoading || !selectedBookId" :title="alleAktualisierenStatus || 'Figuren, Schauplätze, Szenen, Ereignisse und Zeitstrahl neu ermitteln'">
+    <button class="job-stats-btn" @click="alleAktualisieren()" :disabled="alleAktualisierenLoading || !selectedBookId" :title="alleAktualisierenStatus || 'Figuren, Soziogramm, Schauplätze, Szenenanalyse, Ereignisse, Zeitstrahl und Entwicklungsbögen neu ermitteln'">
       <span x-show="alleAktualisierenLoading" class="spinner"></span>
       <span x-text="alleAktualisierenLoading ? alleAktualisierenStatus : 'Alle aktualisieren'"></span>
     </button>

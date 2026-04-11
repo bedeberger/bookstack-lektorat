@@ -52,12 +52,12 @@
     <template x-if="figurenGraphModus === 'soziogramm'">
       <div>
         <div class="figur-legend figur-legend--soziogramm">
-          <span class="figur-legend-dot figur-legend-dot--adel"></span>Adel
-          <span class="figur-legend-dot figur-legend-dot--klerus"></span>Klerus
-          <span class="figur-legend-dot figur-legend-dot--grossbuergertum"></span>Großbürgertum
-          <span class="figur-legend-dot figur-legend-dot--buergertum"></span>Bürgertum
-          <span class="figur-legend-dot figur-legend-dot--kleinbuergertum"></span>Kleinbürgertum
-          <span class="figur-legend-dot figur-legend-dot--arbeiterklasse"></span>Arbeiterklasse
+          <span class="figur-legend-dot figur-legend-dot--wirtschaftselite"></span>Wirtschaftselite
+          <span class="figur-legend-dot figur-legend-dot--gehobenes_buergertum"></span>Geh. Bürgertum
+          <span class="figur-legend-dot figur-legend-dot--mittelschicht"></span>Mittelschicht
+          <span class="figur-legend-dot figur-legend-dot--arbeiterschicht"></span>Arbeiterschicht
+          <span class="figur-legend-dot figur-legend-dot--migrantenmilieu"></span>Migrantenmilieu
+          <span class="figur-legend-dot figur-legend-dot--prekariat"></span>Prekariat
           <span class="figur-legend-dot figur-legend-dot--unterwelt"></span>Unterwelt
         </div>
         <div class="figur-soziogramm-hint">
@@ -137,7 +137,7 @@
           <div x-show="f.beruf || f.sozialschicht" class="figur-detail-row">
             <span x-show="f.beruf" class="bewertung-section-title bewertung-section-title--inline">Beruf:&nbsp;</span>
             <span x-show="f.beruf" class="figur-detail-value" x-text="f.beruf"></span>
-            <span x-show="f.sozialschicht" class="tag figur-sozialschicht-badge" :class="'figur-schicht-' + f.sozialschicht" x-text="({ adel:'Adel', klerus:'Klerus', grossbuergertum:'Großbürgertum', buergertum:'Bürgertum', kleinbuergertum:'Kleinbürgertum', arbeiterklasse:'Arbeiterklasse', unterwelt:'Unterwelt', andere:'—' })[f.sozialschicht] || f.sozialschicht"></span>
+            <span x-show="f.sozialschicht" class="tag figur-sozialschicht-badge" :class="'figur-schicht-' + f.sozialschicht" x-text="({ wirtschaftselite:'Wirtschaftselite', gehobenes_buergertum:'Geh. Bürgertum', mittelschicht:'Mittelschicht', arbeiterschicht:'Arbeiterschicht', migrantenmilieu:'Migrantenmilieu', prekariat:'Prekariat', unterwelt:'Unterwelt', andere:'—' })[f.sozialschicht] || f.sozialschicht"></span>
           </div>
           <!-- Kapitelauftritte -->
           <div class="figur-kapitelauftritte" x-show="f.kapitel?.length > 1">

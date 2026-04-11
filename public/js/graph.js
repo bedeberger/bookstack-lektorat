@@ -3,29 +3,29 @@ import { escHtml } from './utils.js';
 // Graph-Render-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 
-// ── Sozialschicht-Palette ────────────────────────────────────────────────────
+// ── Sozialschicht-Palette (Schweiz, Mittelland, 1990er–2010er) ───────────────
 const SCHICHT_COLOR = {
-  adel:            { background: '#FFF3CC', border: '#A07800', highlight: { background: '#FFE566', border: '#7A5A00' } },
-  klerus:          { background: '#EDE0F8', border: '#7B3FA0', highlight: { background: '#DBC3F5', border: '#5A1F80' } },
-  grossbuergertum: { background: '#D4E8FF', border: '#2d6a9f', highlight: { background: '#BDD8FF', border: '#1d4b73' } },
-  buergertum:      { background: '#E8F4E8', border: '#3a7a3a', highlight: { background: '#D0EBD0', border: '#275927' } },
-  kleinbuergertum: { background: '#F0F0F0', border: '#666',    highlight: { background: '#E4E4E4', border: '#444'    } },
-  arbeiterklasse:  { background: '#F5EAD4', border: '#8B5E26', highlight: { background: '#EDD9A8', border: '#6B3F0D' } },
-  unterwelt:       { background: '#3A3A3A', border: '#111',    highlight: { background: '#505050', border: '#000'    },
-                     font: { color: '#fff', size: 13, face: 'system-ui, -apple-system, sans-serif' } },
-  andere:          { background: '#FFF5DC', border: '#c4a55a', highlight: { background: '#FFEEBB', border: '#8a6a20' } },
+  wirtschaftselite:    { background: '#FFF3CC', border: '#A07800', highlight: { background: '#FFE566', border: '#7A5A00' } },
+  gehobenes_buergertum:{ background: '#D4E8FF', border: '#2d6a9f', highlight: { background: '#BDD8FF', border: '#1d4b73' } },
+  mittelschicht:       { background: '#E8F4E8', border: '#3a7a3a', highlight: { background: '#D0EBD0', border: '#275927' } },
+  arbeiterschicht:     { background: '#F5EAD4', border: '#8B5E26', highlight: { background: '#EDD9A8', border: '#6B3F0D' } },
+  migrantenmilieu:     { background: '#FDEBD0', border: '#C0602A', highlight: { background: '#FAD5A8', border: '#9A4010' } },
+  prekariat:           { background: '#F5EDED', border: '#8B3A3A', highlight: { background: '#EDD5D5', border: '#6B1A1A' } },
+  unterwelt:           { background: '#3A3A3A', border: '#111',    highlight: { background: '#505050', border: '#000'    },
+                         font: { color: '#fff', size: 13, face: 'system-ui, -apple-system, sans-serif' } },
+  andere:              { background: '#FFF5DC', border: '#c4a55a', highlight: { background: '#FFEEBB', border: '#8a6a20' } },
 };
 
 // Vertikale Ebene pro Schicht (0 = oben)
 const SCHICHT_LEVEL = {
-  adel:            0,
-  klerus:          1,
-  grossbuergertum: 2,
-  buergertum:      3,
-  kleinbuergertum: 4,
-  arbeiterklasse:  5,
-  unterwelt:       6,
-  andere:          3,
+  wirtschaftselite:    0,
+  gehobenes_buergertum:1,
+  mittelschicht:       2,
+  arbeiterschicht:     3,
+  migrantenmilieu:     4,
+  prekariat:           5,
+  unterwelt:           6,
+  andere:              2,
 };
 
 // ── Beziehungstyp-Styling (Figurengraph) ─────────────────────────────────────
@@ -217,34 +217,34 @@ export const graphMethods = {
     }
 
     const SCHICHT_LABEL_MAP = {
-      adel:            'Adel',
-      klerus:          'Klerus',
-      grossbuergertum: 'Großbürgertum',
-      buergertum:      'Bürgertum',
-      kleinbuergertum: 'Kleinbürgertum',
-      arbeiterklasse:  'Arbeiterklasse',
-      unterwelt:       'Unterwelt',
-      andere:          'Weitere',
+      wirtschaftselite:    'Wirtschaftselite',
+      gehobenes_buergertum:'Geh. Bürgertum',
+      mittelschicht:       'Mittelschicht',
+      arbeiterschicht:     'Arbeiterschicht',
+      migrantenmilieu:     'Migrantenmilieu',
+      prekariat:           'Prekariat',
+      unterwelt:           'Unterwelt',
+      andere:              'Weitere',
     };
     const SCHICHT_BAND_COLOR = {
-      adel:            'rgba(255,243,204,0.40)',
-      klerus:          'rgba(237,224,248,0.40)',
-      grossbuergertum: 'rgba(212,232,255,0.35)',
-      buergertum:      'rgba(232,244,232,0.35)',
-      kleinbuergertum: 'rgba(240,240,240,0.30)',
-      arbeiterklasse:  'rgba(245,234,212,0.38)',
-      unterwelt:       'rgba(40,40,40,0.22)',
-      andere:          'rgba(255,245,220,0.25)',
+      wirtschaftselite:    'rgba(255,243,204,0.40)',
+      gehobenes_buergertum:'rgba(212,232,255,0.35)',
+      mittelschicht:       'rgba(232,244,232,0.35)',
+      arbeiterschicht:     'rgba(245,234,212,0.38)',
+      migrantenmilieu:     'rgba(253,235,208,0.40)',
+      prekariat:           'rgba(245,237,237,0.40)',
+      unterwelt:           'rgba(40,40,40,0.22)',
+      andere:              'rgba(255,245,220,0.25)',
     };
     const SCHICHT_LABEL_COLOR = {
-      adel:            '#8B6A00',
-      klerus:          '#6A1F8A',
-      grossbuergertum: '#1d4b73',
-      buergertum:      '#275927',
-      kleinbuergertum: '#555',
-      arbeiterklasse:  '#6B3F0D',
-      unterwelt:       '#ccc',
-      andere:          '#888',
+      wirtschaftselite:    '#8B6A00',
+      gehobenes_buergertum:'#1d4b73',
+      mittelschicht:       '#275927',
+      arbeiterschicht:     '#6B3F0D',
+      migrantenmilieu:     '#9A4010',
+      prekariat:           '#6B1A1A',
+      unterwelt:           '#ccc',
+      andere:              '#888',
     };
     const BAND_H      = LEVEL_Y_GAP * 0.90;
     const BAND_HALF   = BAND_H / 2;
@@ -366,9 +366,10 @@ export const graphMethods = {
       const f = this.figuren.find(x => x.id === node);
       if (!f || !tip) return;
       const schichtLabel = {
-        adel: 'Adel', klerus: 'Klerus', grossbuergertum: 'Großbürgertum',
-        buergertum: 'Bürgertum', kleinbuergertum: 'Kleinbürgertum',
-        arbeiterklasse: 'Arbeiterklasse', unterwelt: 'Unterwelt',
+        wirtschaftselite: 'Wirtschaftselite', gehobenes_buergertum: 'Geh. Bürgertum',
+        mittelschicht: 'Mittelschicht', arbeiterschicht: 'Arbeiterschicht',
+        migrantenmilieu: 'Migrantenmilieu', prekariat: 'Prekariat',
+        unterwelt: 'Unterwelt',
       }[f.sozialschicht] || '';
       tip.innerHTML = `<strong>${escHtml(f.name)}</strong>`
         + `<em>${escHtml(f.typ)}${schichtLabel ? ' · ' + escHtml(schichtLabel) : ''}</em>`

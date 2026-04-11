@@ -282,7 +282,7 @@ const FIGUREN_SCHEMA = `{
       "geschlecht": "männlich|weiblich|divers|unbekannt",
       "beruf": "Beruf oder Rolle oder leer",
       "beschreibung": "2-3 Sätze zu Rolle, Persönlichkeit und Bedeutung",
-      "sozialschicht": "adel|klerus|grossbuergertum|buergertum|kleinbuergertum|arbeiterklasse|unterwelt|andere",
+      "sozialschicht": "wirtschaftselite|gehobenes_buergertum|mittelschicht|arbeiterschicht|migrantenmilieu|prekariat|unterwelt|andere",
       "eigenschaften": ["Eigenschaft1", "Eigenschaft2"],
       "lebensereignisse": [{ "datum": "JJJJ (nur Jahreszahl; falls nicht direkt genannt aus Kontext errechnen – z.B. Geburtsjahr + damaliges Alter, oder bekannte historische Jahreszahl; leer lassen wenn nicht errechenbar)", "ereignis": "Was passierte (1 Satz)", "typ": "persoenlich|extern", "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)", "kapitel": "Kapitelname wo dieses Ereignis erwähnt wird (leer wenn unklar)" }],
       "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
@@ -296,7 +296,7 @@ const FIGUREN_RULES = `Regeln:
 - beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
 - kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten
 - lebensereignisse: chronologisch sortiert; kapitel = Kapitelname aus dem der Textbeleg stammt (leer wenn unklar); datum immer als vierstellige Jahreszahl (JJJJ) – falls nicht direkt erwähnt, aus Kontext errechnen (Geburtsjahr der Figur + genannte Altersangabe, bekannte historische Jahreszahlen u.ä.); Events ohne errechenbare Jahreszahl weglassen; typ='persoenlich' nur für echte biografische Wendepunkte (neue Beziehung, Trennung, Jobwechsel, Verlust einer nahestehenden Person, Pubertät/Reifung, Umzug, Trauma, wichtige Entscheidung) – keine Alltagshandlungen oder Szenen die keine bleibende Wirkung haben; typ='extern' für gesellschaftliche/historische Ereignisse (Katastrophen, Massaker, Kriege, politische Umbrüche u.ä.) die die Figur direkt betreffen – hier grosszügig sein, auch erwähnte Ereignisse aufnehmen die nur indirekt wirken
-- sozialschicht: gesellschaftliche Schicht der Figur – nur vergeben wenn im Text eindeutig belegt; adel=Adel/Aristokratie, klerus=Geistlichkeit, grossbuergertum=Großbürgertum (Bankiers, Industrielle, Großgrundbesitzer), buergertum=Bürgertum (Akademiker, freie Berufe, Händler), kleinbuergertum=Kleinbürgertum (Handwerker, kleine Händler, Angestellte), arbeiterklasse=Arbeiterklasse, unterwelt=Kriminelles Milieu, andere=nicht eindeutig zuordenbar
+- sozialschicht: gesellschaftliche Schicht der Figur – nur vergeben wenn im Text eindeutig belegt; wirtschaftselite=Unternehmerfamilien, Direktoren, Bankiers (sehr wohlhabend), gehobenes_buergertum=Akademiker in freien Berufen, Ärzte, Anwälte, obere Kader, mittelschicht=Angestellte, Beamte, mittlere Kader, Handwerker mit eigenem Betrieb, arbeiterschicht=Fabrik-/Bauarbeiter, Servicepersonal, einfache Angestellte, migrantenmilieu=Zugewanderte (Saisonniers, Niedergelassene, zweite Generation), prekariat=Sozialhilfeempfänger, Randständige, Langzeitarbeitslose, unterwelt=kriminelles Milieu, andere=nicht eindeutig zuordenbar
 - beziehungen.machtverhaltnis: Machtasymmetrie aus Perspektive von figur_id→ «fig_2» als Bezugspunkt: +2=fig_2 dominiert klar, +1=fig_2 hat leichten Vorteil, 0=symmetrisch, -1=fig_1 hat leichten Vorteil, -2=fig_1 dominiert klar; weglassen oder 0 wenn unklar; patronage=Schutzherrschaft/Klientelverhältnis, geschaeft=geschäftliche/wirtschaftliche Beziehung
 - Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), übrige selbsterklärend
 - Nur fiktive Charaktere oder Figuren die aktiv an der Buchhandlung teilnehmen – keine Orte oder Objekte
@@ -359,7 +359,7 @@ const FIGUREN_BASIS_SCHEMA = `{
       "geschlecht": "männlich|weiblich|divers|unbekannt",
       "beruf": "Beruf oder Rolle oder leer",
       "beschreibung": "2-3 Sätze zu Rolle, Persönlichkeit und Bedeutung",
-      "sozialschicht": "adel|klerus|grossbuergertum|buergertum|kleinbuergertum|arbeiterklasse|unterwelt|andere",
+      "sozialschicht": "wirtschaftselite|gehobenes_buergertum|mittelschicht|arbeiterschicht|migrantenmilieu|prekariat|unterwelt|andere",
       "eigenschaften": ["Eigenschaft1", "Eigenschaft2"],
       "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
       "beziehungen": [{ "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|patronage|geschaeft|andere", "machtverhaltnis": 0, "beschreibung": "1 Satz" }]
@@ -371,7 +371,7 @@ const FIGUREN_BASIS_RULES = `Regeln:
 - Eindeutige IDs (fig_1, fig_2, …)
 - beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
 - kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten; name = immer der Kapitelname (aus dem Prompt-Kontext oder dem [Kapitelname]-Teil der Überschrift) – NIEMALS Seitentitel als Kapitelnamen verwenden
-- sozialschicht: gesellschaftliche Schicht der Figur – nur vergeben wenn eindeutig belegt; adel=Adel, klerus=Geistlichkeit, grossbuergertum=Großbürgertum, buergertum=Bürgertum, kleinbuergertum=Kleinbürgertum, arbeiterklasse=Arbeiterklasse, unterwelt=kriminelles Milieu, andere=nicht eindeutig
+- sozialschicht: gesellschaftliche Schicht der Figur – nur vergeben wenn eindeutig belegt; wirtschaftselite=Unternehmerfamilien/Direktoren, gehobenes_buergertum=Akademiker/freie Berufe/obere Kader, mittelschicht=Angestellte/Beamte/mittlere Kader, arbeiterschicht=Fabrik-/Bauarbeiter/Servicepersonal, migrantenmilieu=Zugewanderte/zweite Generation, prekariat=Sozialhilfe/Randständige/Langzeitarbeitslose, unterwelt=kriminelles Milieu, andere=nicht eindeutig
 - beziehungen.machtverhaltnis: Machtasymmetrie aus Perspektive der beschriebenen Figur → Bezugspunkt «figur_id»: +2=figur_id dominiert klar, +1=leichter Vorteil, 0=symmetrisch, -1=Bezugsfigur hat leichten Vorteil, -2=Bezugsfigur dominiert; weglassen oder 0 wenn unklar
 - Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), patronage=Schutzherrschaft, geschaeft=wirtschaftliche Beziehung, übrige selbsterklärend
 - Nur fiktive Charaktere oder Figuren die aktiv an der Buchhandlung teilnehmen – keine Orte oder Objekte
@@ -455,7 +455,7 @@ ${beziehungenStr}
 Antworte mit diesem JSON-Schema:
 {
   "figuren": [
-    { "fig_id": "fig_1", "sozialschicht": "adel|klerus|grossbuergertum|buergertum|kleinbuergertum|arbeiterklasse|unterwelt|andere" }
+    { "fig_id": "fig_1", "sozialschicht": "wirtschaftselite|gehobenes_buergertum|mittelschicht|arbeiterschicht|migrantenmilieu|prekariat|unterwelt|andere" }
   ],
   "beziehungen": [
     { "from_fig_id": "fig_1", "to_fig_id": "fig_2", "machtverhaltnis": 0 }
@@ -463,7 +463,7 @@ Antworte mit diesem JSON-Schema:
 }
 
 Regeln:
-- sozialschicht: gesellschaftliche Schicht basierend auf Beschreibung und Beruf der Figur; adel=Adel/Aristokratie, klerus=Geistlichkeit/Kirche, grossbuergertum=Großbürgertum (Bankiers, Industrielle, Großgrundbesitzer), buergertum=Bürgertum (Akademiker, freie Berufe, Händler, Offiziere), kleinbuergertum=Kleinbürgertum (Handwerker, kleine Händler, niedrige Beamte, Angestellte), arbeiterklasse=Arbeiterklasse (Fabrikarbeiter, Tagelöhner, Dienstboten), unterwelt=kriminelles Milieu; «andere» nur wenn wirklich unbestimmbar
+- sozialschicht: gesellschaftliche Schicht basierend auf Beschreibung und Beruf der Figur (Kontext: Schweiz, Mittelland, 1990er–2010er); wirtschaftselite=Unternehmerfamilien, Direktoren, sehr wohlhabende Geschäftsleute; gehobenes_buergertum=Akademiker in freien Berufen (Ärzte, Anwälte, Architekten), obere Kader, etablierte Kaufleute; mittelschicht=Angestellte, Beamte, mittlere Kader, Handwerker mit eigenem Betrieb, Lehrer; arbeiterschicht=Fabrik-/Bauarbeiter, Servicepersonal, einfache Angestellte, Pflegepersonal; migrantenmilieu=Zugewanderte und ihre Familien (Saisonniers, Niedergelassene, zweite/dritte Generation – unabhängig von Beruf, wenn kulturell-ethnische Zugehörigkeit relevant ist); prekariat=Sozialhilfeempfänger, Obdachlose, Randständige, Langzeitarbeitslose, Drogenabhängige; unterwelt=kriminelles Milieu; «andere» nur wenn wirklich unbestimmbar
 - machtverhaltnis: Machtasymmetrie aus Perspektive von from_fig_id gegenüber to_fig_id; +2=from_fig dominiert klar (Herr/Knecht, Arbeitgeber/Angestellter, Patron/Klient), +1=from_fig hat leichten strukturellen Vorteil, 0=symmetrisch oder unklar, -1=to_fig hat leichten Vorteil, -2=to_fig dominiert klar; nur vergeben wenn aus Kontext ableitbar, sonst 0
 - Jede Figur aus der Liste mit einer sozialschicht belegen (nie weglassen)
 - Nur Beziehungen mit machtverhaltnis ≠ 0 in «beziehungen» aufführen – symmetrische Beziehungen weglassen
