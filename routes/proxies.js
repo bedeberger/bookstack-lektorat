@@ -28,6 +28,7 @@ router.get('/config', (req, res) => {
     claudeModel: process.env.MODEL_NAME || 'claude-sonnet-4-6',
     apiProvider: process.env.API_PROVIDER || 'claude',
     ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
+    llamaModel:  process.env.LLAMA_MODEL  || 'llama3.2',
     user: req.session?.user || null,
     devMode: process.env.LOCAL_DEV_MODE === 'true',
     promptConfig: getPromptConfig(),
@@ -137,6 +138,78 @@ router.post('/ollama', jsonBody, async (req, res) => {
   } catch (err) {
     logger.error('Ollama proxy error: ' + err.message);
     if (!res.headersSent) res.status(502).json({ error: { message: 'Ollama nicht erreichbar: ' + err.message } });
+    else res.end();
+  }
+});
+
+// Proxy /llama → OpenAI-kompatibler Endpunkt (Anthropic-Format → OpenAI-Format → Anthropic-SSE)
+router.post('/llama', jsonBody, async (req, res) => {
+  const llamaHost = (process.env.LLAMA_HOST || 'http://localhost:8080').replace(/\/$/, '');
+  const model = process.env.LLAMA_MODEL || 'llama3.2';
+  try {
+    // Anthropic-Request-Format → OpenAI-Format umwandeln
+    const messages = [];
+    if (req.body.system) messages.push({ role: 'system', content: req.body.system });
+    for (const m of (req.body.messages || [])) messages.push(m);
+
+    const upstream = await fetch(`${llamaHost}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: true,
+        stream_options: { include_usage: true },
+        temperature: parseFloat(process.env.LLAMA_TEMPERATURE ?? '0.1'),
+        max_tokens: req.body.max_tokens || 65536,
+      }),
+    });
+
+    if (!upstream.ok) {
+      const text = await upstream.text();
+      logger.error(`Llama upstream ${upstream.status}: ${text}`);
+      return res.status(upstream.status).json({ error: { message: text } });
+    }
+
+    logger.info(`Llama call model=${model}`);
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    // OpenAI-SSE → Anthropic-kompatibles SSE normalisieren
+    const reader = upstream.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6);
+        if (raw === '[DONE]') continue;
+        try {
+          const chunk = JSON.parse(raw);
+          const text = chunk.choices?.[0]?.delta?.content || '';
+          if (text) {
+            const sse = JSON.stringify({
+              type: 'content_block_delta',
+              delta: { type: 'text_delta', text },
+            });
+            res.write(`data: ${sse}\n\n`);
+          }
+        } catch (e) {
+          logger.warn('Llama SSE parse error: ' + e.message);
+        }
+      }
+    }
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (err) {
+    logger.error('Llama proxy error: ' + err.message);
+    if (!res.headersSent) res.status(502).json({ error: { message: 'Llama nicht erreichbar: ' + err.message } });
     else res.end();
   }
 });

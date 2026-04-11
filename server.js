@@ -63,7 +63,7 @@ app.use(authRouter);
 
 // ── Auth-Guard ────────────────────────────────────────────────────────────────
 // API-Pfade → 401 JSON; HTML-Pfade → Redirect zu /auth/login
-const API_PREFIXES = ['/api/', '/history/', '/figures/', '/locations/', '/jobs/', '/sync/', '/chat/', '/booksettings/', '/config', '/claude', '/ollama'];
+const API_PREFIXES = ['/api/', '/history/', '/figures/', '/locations/', '/jobs/', '/sync/', '/chat/', '/booksettings/', '/config', '/claude', '/ollama', '/llama'];
 
 app.use((req, res, next) => {
   if (req.session?.user) return next();

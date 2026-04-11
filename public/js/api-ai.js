@@ -1,10 +1,13 @@
 // Generische KI-API-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
-// Unterstützte Provider: 'claude' (Anthropic) und 'ollama' (lokales Modell).
+// Unterstützte Provider: 'claude' (Anthropic), 'ollama' (Ollama), 'llama' (OpenAI-kompatibel).
 
-function _providerConfig(provider, claudeModel, ollamaModel) {
+function _providerConfig(provider, claudeModel, ollamaModel, llamaModel) {
   if (provider === 'ollama') {
     return { endpoint: '/ollama', model: ollamaModel, temperature: 0.0, label: 'Ollama' };
+  }
+  if (provider === 'llama') {
+    return { endpoint: '/llama', model: llamaModel, temperature: 0.0, label: 'Llama' };
   }
   return { endpoint: '/claude', model: claudeModel, temperature: 0.2, label: 'Claude' };
 }
@@ -68,7 +71,7 @@ export const aiMethods = {
   // onComplete({ tokensIn, tokensOut }) – optionaler Callback nach Abschluss des Streams
   async callAI(userPrompt, systemPrompt = null, onProgress = null, onComplete = null) {
     const { endpoint, model, temperature, label } = _providerConfig(
-      this.apiProvider, this.claudeModel, this.ollamaModel
+      this.apiProvider, this.claudeModel, this.ollamaModel, this.llamaModel
     );
 
     const body = {

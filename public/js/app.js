@@ -128,6 +128,7 @@ document.addEventListener('alpine:init', () => {
     claudeMaxTokens: 64000,
     apiProvider: 'claude',
     ollamaModel: 'llama3.2',
+    llamaModel:  'llama3.2',
     books: [],
     selectedBookId: '',
     pages: [],
@@ -753,6 +754,7 @@ document.addEventListener('alpine:init', () => {
         if (cfg.claudeMaxTokens) this.claudeMaxTokens = cfg.claudeMaxTokens;
         if (cfg.apiProvider) this.apiProvider = cfg.apiProvider;
         if (cfg.ollamaModel) this.ollamaModel = cfg.ollamaModel;
+        if (cfg.llamaModel)  this.llamaModel  = cfg.llamaModel;
         this.currentUser = cfg.user || null;
         this.devMode = !!cfg.devMode;
         configurePrompts(cfg.promptConfig);

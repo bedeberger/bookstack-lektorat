@@ -20,7 +20,7 @@
 </h1>
 <div class="dev-banner" x-show="devMode" x-cloak>DEV-MODUS – lokale Session, kein OAuth</div>
 <div class="site-header-row">
-  <p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : '· Claude: ' + claudeModel"></span></p>
+  <p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : apiProvider === 'llama' ? '· Llama: ' + llamaModel : '· Claude: ' + claudeModel"></span></p>
   <div class="user-info" x-show="currentUser">
     <span class="user-email" x-text="currentUser?.name || currentUser?.email"></span>
     <div class="komplett-status-wrap" @click.outside="showKomplettStatus = false" @mouseenter="if (alleAktualisierenLoading) showKomplettStatus = true" :data-lastrun="(!alleAktualisierenLoading && alleAktualisierenLastRun) ? 'Stand: ' + alleAktualisierenLastRun : null">

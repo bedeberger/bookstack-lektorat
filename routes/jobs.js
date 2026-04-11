@@ -172,11 +172,18 @@ function cancelJob(id, userEmail) {
   return false;
 }
 
-// ── Ollama-kompatibler Promise.allSettled-Ersatz ──────────────────────────────
-// Ollama verarbeitet Requests sequenziell. Bei parallelen Calls mit grossem
-// num_ctx läuft der VRAM voll → fetch failed. Für Ollama daher serialisieren.
+// Gibt den konfigurierten Modellnamen für den angegebenen Provider zurück.
+function _modelName(prov) {
+  if (prov === 'ollama') return process.env.OLLAMA_MODEL || 'llama3.2';
+  if (prov === 'llama')  return process.env.LLAMA_MODEL  || 'llama3.2';
+  return process.env.MODEL_NAME || 'claude-sonnet-4-6';
+}
+
+// ── Lokaler-Provider-kompatibler Promise.allSettled-Ersatz ────────────────────
+// Ollama und Llama verarbeiten Requests sequenziell. Bei parallelen Calls mit
+// grossem Kontext läuft der VRAM voll → fetch failed. Daher serialisieren.
 async function settledAll(thunks) {
-  if ((process.env.API_PROVIDER || 'claude') !== 'ollama')
+  if ((process.env.API_PROVIDER || 'claude') === 'claude')
     return Promise.allSettled(thunks.map(fn => fn()));
   const results = [];
   for (const fn of thunks) {
@@ -433,6 +440,57 @@ async function callAIChat(messages, systemPrompt, onProgress, signal) {
       }
     }
     return { text, tokensIn, tokensOut, genDurationMs };
+  } else if (provider === 'llama') {
+    const host  = (process.env.LLAMA_HOST || 'http://localhost:8080').replace(/\/$/, '');
+    const model = process.env.LLAMA_MODEL || 'llama3.2';
+    const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
+    const llamaMessages = [{ role: 'system', content: systemPrompt }, ...messages];
+    const estimatedTokIn = Math.ceil(llamaMessages.reduce((s, m) => s + (m.content?.length || 0), 0) / 3);
+
+    const resp = await fetch(`${host}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages: llamaMessages, stream: true, stream_options: { include_usage: true }, temperature: parseFloat(process.env.LLAMA_TEMPERATURE || '0.1'), max_tokens: maxTokens }),
+      signal,
+    });
+    if (!resp.ok) throw new Error(`Llama ${resp.status}: ${await resp.text()}`);
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '', text = '', tokensIn = 0, tokensOut = 0, genDurationMs = null;
+    let t_first = 0, t_last = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6);
+        if (raw === '[DONE]') continue;
+        try {
+          const chunk = JSON.parse(raw);
+          const delta = chunk.choices?.[0]?.delta?.content || '';
+          if (delta) {
+            const now = Date.now();
+            if (!t_first) t_first = now;
+            t_last = now;
+            text += delta;
+            if (onProgress) onProgress({ chars: text.length, tokIn: estimatedTokIn });
+          }
+          if (chunk.usage) {
+            tokensIn  = chunk.usage.prompt_tokens     || estimatedTokIn;
+            tokensOut = chunk.usage.completion_tokens || Math.ceil(text.length / 3);
+            if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
+          }
+        } catch { }
+      }
+    }
+    if (!tokensIn)  tokensIn  = estimatedTokIn;
+    if (!tokensOut) tokensOut = Math.ceil(text.length / 3);
+    if (t_first && t_last > t_first) genDurationMs = t_last - t_first;
+    return { text, tokensIn, tokensOut, genDurationMs };
   } else {
     const model     = process.env.MODEL_NAME  || 'claude-sonnet-4-6';
     const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
@@ -654,9 +712,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
 
     if (typeof r?.gesamtnote === 'undefined') throw new Error('KI-Antwort ungültig: gesamtnote fehlt');
 
-    const model = process.env.API_PROVIDER === 'ollama'
-      ? (process.env.OLLAMA_MODEL || 'llama3.2')
-      : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
+    const model = _modelName(process.env.API_PROVIDER || 'claude');
     db.prepare('INSERT INTO book_reviews (book_id, book_name, reviewed_at, review_json, model, user_email) VALUES (?, ?, ?, ?, ?, ?)')
       .run(parseInt(bookId), bookName, new Date().toISOString(), JSON.stringify(r), model, userEmail || null);
 
@@ -1167,9 +1223,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
             chapter_ids: (issue.kapitel  || []).map(n => idMaps.chNameToId[n]).filter(Boolean),
           }));
           const effectiveProvider = provider || process.env.API_PROVIDER || 'claude';
-          const model = effectiveProvider === 'ollama'
-            ? (process.env.OLLAMA_MODEL || 'llama3.2')
-            : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
+          const model = _modelName(effectiveProvider);
           logger.info(`Job ${jobId}: Speichere Kontinuitätsprüfung (${normalizedProbleme.length} Probleme)…`);
           db.prepare(`INSERT INTO continuity_checks (book_id, user_email, checked_at, issues_json, summary, model)
             VALUES (?, ?, ?, ?, ?, ?)`)
@@ -1228,9 +1282,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
 
     if (!Array.isArray(result?.fehler)) throw new Error('fehler-Array fehlt');
 
-    const model = process.env.API_PROVIDER === 'ollama'
-      ? (process.env.OLLAMA_MODEL || 'llama3.2')
-      : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
+    const model = _modelName(process.env.API_PROVIDER || 'claude');
 
     const szenen = Array.isArray(result?.szenen) ? result.szenen : [];
 
@@ -1272,9 +1324,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
     const tok = { in: 0, out: 0, ms: 0 };
-    const model = process.env.API_PROVIDER === 'ollama'
-      ? (process.env.OLLAMA_MODEL || 'llama3.2')
-      : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
+    const model = _modelName(process.env.API_PROVIDER || 'claude');
     let done = 0, totalErrors = 0;
 
     for (let i = 0; i < pages.length; i++) {
@@ -1846,9 +1896,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken)
       chapter_ids: (issue.kapitel || []).map(n => chNameToId[n]).filter(Boolean),
     }));
 
-    const model = process.env.API_PROVIDER === 'ollama'
-      ? (process.env.OLLAMA_MODEL || 'llama3.2')
-      : (process.env.MODEL_NAME || 'claude-sonnet-4-6');
+    const model = _modelName(process.env.API_PROVIDER || 'claude');
 
     db.prepare(`INSERT INTO continuity_checks (book_id, user_email, checked_at, issues_json, summary, model)
       VALUES (?, ?, ?, ?, ?, ?)`)
@@ -2057,8 +2105,12 @@ router.get('/:id', (req, res) => {
 
 // ── Nacht-Cron: Komplettanalyse für alle Bücher × alle User ──────────────────
 async function runKomplettAnalyseAll() {
-  if (!process.env.OLLAMA_HOST) {
-    logger.info('Nacht-Analyse übersprungen: OLLAMA_HOST nicht konfiguriert.');
+  const cronProvider = process.env.API_PROVIDER || 'llama';
+  const cronHostOk = cronProvider === 'llama'  ? !!process.env.LLAMA_HOST
+                   : cronProvider === 'ollama' ? !!process.env.OLLAMA_HOST
+                   : true; // claude braucht keinen lokalen Host
+  if (!cronHostOk) {
+    logger.info(`Nacht-Analyse übersprungen: ${cronProvider.toUpperCase()}_HOST nicht konfiguriert.`);
     return;
   }
 
@@ -2095,7 +2147,7 @@ async function runKomplettAnalyseAll() {
       const label = `Nacht · ${book.name}`;
       const userToken = { id: u.token_id, pw: u.token_pw };
       const jobId = createJob('komplett-analyse', book.id, u.email, label);
-      enqueueJob(jobId, () => runKomplettAnalyseJob(jobId, book.id, book.name, u.email, userToken, 'ollama'));
+      enqueueJob(jobId, () => runKomplettAnalyseJob(jobId, book.id, book.name, u.email, userToken, cronProvider));
       queued++;
     }
   }

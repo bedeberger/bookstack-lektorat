@@ -352,6 +352,10 @@ router.post('/send', jsonBody, async (req, res) => {
       await _streamOllama(messages, systemPrompt, res,
         (text) => { fullText += text; },
         (tIn, tOut) => { tokensIn = tIn; tokensOut = tOut; });
+    } else if (provider === 'llama') {
+      await _streamLlama(messages, systemPrompt, res,
+        (text) => { fullText += text; },
+        (tIn, tOut) => { tokensIn = tIn; tokensOut = tOut; });
     } else {
       await _streamClaude(messages, systemPrompt, res,
         (text) => { fullText += text; },
@@ -470,6 +474,68 @@ async function _streamClaude(messages, systemPrompt, res, onText, onTokens) {
     }
   }
   onTokens(tokIn, tokOut);
+}
+
+async function _streamLlama(messages, systemPrompt, res, onText, onTokens) {
+  const llamaHost = (process.env.LLAMA_HOST || 'http://localhost:8080').replace(/\/$/, '');
+  const model     = process.env.LLAMA_MODEL || 'llama3.2';
+
+  const llamaMessages = [
+    { role: 'system', content: systemPrompt },
+    ...messages,
+  ];
+
+  const upstream = await fetch(`${llamaHost}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: llamaMessages,
+      stream: true,
+      stream_options: { include_usage: true },
+      temperature: parseFloat(process.env.LLAMA_TEMPERATURE || '0.1'),
+    }),
+  });
+
+  if (!upstream.ok) {
+    const text = await upstream.text();
+    throw new Error(`Llama ${upstream.status}: ${text}`);
+  }
+
+  logger.info(`[chat] Llama call model=${model}`);
+
+  const reader  = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let promptTokens = 0;
+  let evalTokens   = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop();
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const raw = line.slice(6);
+      if (raw === '[DONE]') continue;
+      try {
+        const chunk = JSON.parse(raw);
+        const text  = chunk.choices?.[0]?.delta?.content || '';
+        if (text) {
+          onText(text);
+          res.write(`data: ${JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text } })}\n\n`);
+        }
+        if (chunk.usage) {
+          promptTokens = chunk.usage.prompt_tokens     || 0;
+          evalTokens   = chunk.usage.completion_tokens || 0;
+        }
+      } catch { /* ignorieren */ }
+    }
+  }
+  onTokens(promptTokens, evalTokens);
 }
 
 async function _streamOllama(messages, systemPrompt, res, onText, onTokens) {
