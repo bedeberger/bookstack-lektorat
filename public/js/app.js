@@ -755,7 +755,7 @@ document.addEventListener('alpine:init', () => {
 
     async toggleJobStats() {
       this.showJobStats = !this.showJobStats;
-      if (this.showJobStats && !this.jobStats) {
+      if (this.showJobStats) {
         try {
           this.jobStats = await fetch('/jobs/stats').then(r => r.json());
         } catch {
