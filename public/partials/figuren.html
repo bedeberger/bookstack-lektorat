@@ -11,6 +11,11 @@
   </div>
   <div x-show="figurenStatus" class="figur-progress-status" x-html="figurenStatus"></div>
 
+  <!-- Leer-Hinweis -->
+  <div x-show="figuren.length === 0 && !figurenLoading && !figurenStatus" class="figur-progress-status">
+    Noch keine Daten vorhanden. Bitte auf «Alle aktualisieren» klicken.
+  </div>
+
   <!-- Graph -->
   <div x-show="figuren.length > 0" class="figur-graph-section">
 

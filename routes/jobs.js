@@ -661,14 +661,14 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
 //   Block 2 [P5+P6 Szenen/Zeitstrahl · P7-Konsol · P8 Kontinuität] parallel
 async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userToken) {
   const {
-    buildExtraktionFigurenOrteChapterPrompt,
+    buildExtraktionFigurenOrteKontinuitaetChapterPrompt,
     buildExtraktionSzenenEreignisseChapterPrompt,
+    buildExtraktionSzenenEreignisseEntwicklungsbogenChapterPrompt,
     buildFiguresBasisConsolidationPrompt,
     buildLocationsConsolidationPrompt,
     buildZeitstrahlConsolidationPrompt,
     buildFigurSoziogrammEnrichmentPrompt,
     buildEntwicklungsbogenSinglePassPrompt,
-    buildEntwicklungsbogenChapterPrompt,
     buildEntwicklungsbogenConsolidationPrompt,
     buildKontinuitaetSinglePassPrompt,
     buildKontinuitaetChapterFactsPrompt,
@@ -720,19 +720,19 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
     const { groupOrder, groups } = groupByChapter(pageContents);
 
-    // ── Phase 1: Figuren + Orte kombiniert (parallel pro Kapitel) ─────────────
-    let chapterFiguren, chapterOrte;
+    // ── Phase 1: Figuren + Orte + Kontinuitätsfakten kombiniert (parallel pro Kapitel) ──
+    let chapterFiguren, chapterOrte, chapterFakten;
 
     if (cp?.phase === 'p1_done') {
-      ({ chapterFiguren, chapterOrte } = cp);
+      ({ chapterFiguren, chapterOrte, chapterFakten } = cp);
       if (cp.tokIn != null) { tok.in = cp.tokIn; tok.out = cp.tokOut || 0; tok.ms = cp.tokMs || 0; }
       updateJob(jobId, { progress: 28, statusText: 'Phase 1 aus Checkpoint geladen…', tokensIn: tok.in, tokensOut: tok.out });
     } else {
       updateJob(jobId, {
         progress: 12,
         statusText: totalChars <= SINGLE_PASS_LIMIT
-          ? 'KI extrahiert Figuren und Schauplätze…'
-          : `Figuren + Schauplätze in ${groupOrder.length} Kapiteln extrahieren…`,
+          ? 'KI extrahiert Figuren, Schauplätze und Fakten…'
+          : `Figuren + Schauplätze + Fakten in ${groupOrder.length} Kapiteln extrahieren…`,
       });
 
       if (totalChars <= SINGLE_PASS_LIMIT) {
@@ -740,11 +740,12 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
           .join('\n\n---\n\n');
         const r = await aiCall(jobId, tok,
-          buildExtraktionFigurenOrteChapterPrompt('Gesamtbuch', bookName, pageContents.length, bookText),
-          SYSTEM_FIGUREN, 12, 28, 8000,
+          buildExtraktionFigurenOrteKontinuitaetChapterPrompt('Gesamtbuch', bookName, pageContents.length, bookText),
+          SYSTEM_FIGUREN, 12, 28, 10000,
         );
         chapterFiguren = [{ kapitel: 'Gesamtbuch', figuren: r?.figuren || [] }];
         chapterOrte    = [{ kapitel: 'Gesamtbuch', orte:    r?.orte    || [] }];
+        chapterFakten  = [{ kapitel: 'Gesamtbuch', fakten:  r?.fakten  || [] }];
       } else {
         const chapterTexts = groupOrder.map(key => {
           const group = groups.get(key);
@@ -753,22 +754,26 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         const settled = await settledAll(
           chapterTexts.map(({ group, chText }) => () =>
             aiCall(jobId, tok,
-              buildExtraktionFigurenOrteChapterPrompt(group.name, bookName, group.pages.length, chText),
-              SYSTEM_FIGUREN, 12, 28, 8000,
+              buildExtraktionFigurenOrteKontinuitaetChapterPrompt(group.name, bookName, group.pages.length, chText),
+              SYSTEM_FIGUREN, 12, 28, 10000,
             )
           )
         );
         chapterFiguren = settled.map((r, gi) => ({
           kapitel: chapterTexts[gi].group.name,
           figuren: r.status === 'fulfilled' ? (r.value?.figuren || []) : [],
-          ...(r.status === 'rejected' && logger.warn(`Job ${jobId}: Figuren/Orte «${chapterTexts[gi].group.name}» übersprungen: ${r.reason?.message}`) && {}),
+          ...(r.status === 'rejected' && logger.warn(`Job ${jobId}: Figuren/Orte/Fakten «${chapterTexts[gi].group.name}» übersprungen: ${r.reason?.message}`) && {}),
         }));
         chapterOrte = settled.map((r, gi) => ({
           kapitel: chapterTexts[gi].group.name,
           orte: r.status === 'fulfilled' ? (r.value?.orte || []) : [],
         }));
+        chapterFakten = settled.map((r, gi) => ({
+          kapitel: chapterTexts[gi].group.name,
+          fakten: r.status === 'fulfilled' ? (r.value?.fakten || []) : [],
+        }));
       }
-      saveCheckpoint('komplett-analyse', bookId, userEmail, { phase: 'p1_done', chapterFiguren, chapterOrte, tokIn: tok.in, tokOut: tok.out, tokMs: tok.ms });
+      saveCheckpoint('komplett-analyse', bookId, userEmail, { phase: 'p1_done', chapterFiguren, chapterOrte, chapterFakten, tokIn: tok.in, tokOut: tok.out, tokMs: tok.ms });
     }
 
     // ── Phase 2: Figuren konsolidieren ────────────────────────────────────────
@@ -790,7 +795,6 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       'SELECT id, fig_id, name, typ, beschreibung FROM figures WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
     ).all(parseInt(bookId), userEmail || null);
     let figurenKontextForArcs = '';
-    let figurenKompaktForArcsChapter = '';
     if (figRowsForArcs.length) {
       const evtRowsForArcs = db.prepare(`
         SELECT fe.figure_id, fe.datum, fe.ereignis, fe.typ
@@ -800,9 +804,6 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       `).all(...figRowsForArcs.map(f => f.id));
       const evtMapForArcs = {};
       for (const ev of evtRowsForArcs) (evtMapForArcs[ev.figure_id] ??= []).push(ev);
-      figurenKompaktForArcsChapter = figRowsForArcs
-        .map(f => `${f.fig_id}: ${f.name} (${f.typ || 'andere'})`)
-        .join('\n');
       figurenKontextForArcs = figRowsForArcs.map(f => {
         let line = `${f.fig_id}: ${f.name} (${f.typ || 'andere'})${f.beschreibung ? ' – ' + f.beschreibung : ''}`;
         const evts = evtMapForArcs[f.id];
@@ -815,12 +816,10 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       }).join('\n\n');
     }
 
-    // ── Parallel-Block 1: P3 (Orte) + P4 (Soziogramm) + P7-Kapitel ──────────
-    // Alle drei sind nach P2 unabhängig voneinander und starten gleichzeitig.
-    // P7-Kapitel-Calls: kompakter Kontext spart Input-Tokens; vollständiger Kontext
-    // (mit Ereignissen) folgt erst beim Konsolidierungs-Call in Block 2.
-    updateJob(jobId, { progress: 43, statusText: 'Schauplätze, Soziogramm und Entwicklungsbögen analysieren…' });
-    const [orteResultRaw, , p7SettledChapters] = await Promise.all([
+    // ── Parallel-Block 1: P3 (Orte) + P4 (Soziogramm) ───────────────────────
+    // P7-Kapitel wurde in Block 2 verschoben (kombiniert mit P5 Szenen+Ereignisse).
+    updateJob(jobId, { progress: 43, statusText: 'Schauplätze und Soziogramm analysieren…' });
+    const [orteResultRaw] = await Promise.all([
 
       // P3: Orte konsolidieren
       aiCall(jobId, tok,
@@ -847,18 +846,6 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         if (e.name === 'AbortError') throw e;
         logger.warn(`Job ${jobId}: Soziogramm übersprungen: ${e.message}`);
       }),
-
-      // P7-Kapitel: parallel pro Kapitel, nur im Multi-Pass-Modus mit bekannten Figuren
-      (totalChars > SINGLE_PASS_LIMIT && figRowsForArcs.length > 0)
-        ? settledAll(groupOrder.map(key => () => {
-            const group = groups.get(key);
-            const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
-            return aiCall(jobId, tok,
-              buildEntwicklungsbogenChapterPrompt(group.name, bookName, figurenKompaktForArcsChapter, group.pages.length, chText),
-              SYSTEM_ENTWICKLUNGSBOGEN, 43, 55, 2000,
-            );
-          }))
-        : Promise.resolve(null),
     ]);
 
     if (!Array.isArray(orteResultRaw?.orte)) throw new Error('Orte-Konsolidierung ungültig: orte-Array fehlt');
@@ -866,194 +853,219 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     saveOrteToDb(parseInt(bookId), orte, userEmail || null);
     logger.info(`Job ${jobId}: ${orte.length} Schauplätze konsolidiert und gespeichert.`);
 
-    // ── Parallel-Block 2: P5+P6 · P7-Konsolidierung · P8 ────────────────────
-    // P5 (Szenen+Ereignisse) → P6 (Zeitstrahl) laufen als interne Kette.
-    // P7-Konsolidierung und P8 haben keine Abhängigkeit auf P5/P6 und starten
-    // gleichzeitig. Die SQLite-Schreibvorgänge überschneiden sich nicht.
+    // ── Parallel-Block 2: Szenen/Zeitstrahl/Entwicklungsbögen + Kontinuität ──
+    // Multi-Pass: kombinierter P5+P7-Kap-Call pro Kapitel → P6 + P7-Kons parallel.
+    //             P8 nutzt chapterFakten aus Phase 1 – kein separater Extraktions-Call.
+    // Single-Pass: P5 (per-Kapitel) + P7 (Single-Pass) parallel; P8 Buchtext-Pfad.
     let allSzenen = [];
     updateJob(jobId, { progress: 56, statusText: 'Szenen, Entwicklungsbögen und Kontinuität analysieren…' });
+
+    // Hilfsfunktion: Szenen + Events aus settled-Ergebnissen extrahieren und speichern.
+    // Wird von beiden Pfaden (multi-pass + single-pass) verwendet.
+    async function processSzenenEreignisse(settled, locIdToDbId) {
+      const mergedEvtMap = new Map();
+      settled.forEach((r, gi) => {
+        const group = groups.get(groupOrder[gi]);
+        if (r.status === 'rejected') {
+          logger.warn(`Job ${jobId}: Szenen/Ereignisse «${group.name}» übersprungen: ${r.reason?.message}`);
+          return;
+        }
+        for (const s of (r.value?.szenen || [])) {
+          allSzenen.push({
+            kapitel:    group.name,
+            seite:      s.seite     || null,
+            titel:      s.titel     || '(unbekannt)',
+            wertung:    s.wertung   || null,
+            kommentar:  s.kommentar || null,
+            fig_ids:    Array.isArray(s.figuren) ? s.figuren : [],
+            ort_ids:    Array.isArray(s.orte)    ? s.orte    : [],
+            sort_order: allSzenen.length,
+          });
+        }
+        for (const assignment of (r.value?.assignments || [])) {
+          if (!mergedEvtMap.has(assignment.fig_id)) mergedEvtMap.set(assignment.fig_id, []);
+          for (const ev of (assignment.lebensereignisse || [])) mergedEvtMap.get(assignment.fig_id).push(ev);
+        }
+      });
+
+      updateJob(jobId, { progress: 81, statusText: 'Szenen speichern…' });
+      db.transaction(() => {
+        db.prepare('DELETE FROM figure_scenes WHERE book_id = ? AND user_email = ?').run(parseInt(bookId), userEmail || null);
+        const now = new Date().toISOString();
+        const ins = db.prepare(`INSERT INTO figure_scenes
+          (book_id, user_email, kapitel, seite, titel, wertung, kommentar, chapter_id, page_id, sort_order, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        const insSf = db.prepare('INSERT INTO scene_figures (scene_id, fig_id) VALUES (?, ?)');
+        const insSl = db.prepare('INSERT OR IGNORE INTO scene_locations (scene_id, location_id) VALUES (?, ?)');
+        for (const s of allSzenen) {
+          const { lastInsertRowid: sceneId } = ins.run(
+            parseInt(bookId), userEmail || null,
+            s.kapitel, s.seite, s.titel, s.wertung, s.kommentar,
+            idMaps.chNameToId[s.kapitel]  ?? null,
+            s.seite ? (idMaps.pageNameToId[s.seite] ?? null) : null,
+            s.sort_order, now,
+          );
+          for (const fid of s.fig_ids) insSf.run(sceneId, fid);
+          for (const locIdStr of s.ort_ids) {
+            const dbLocId = locIdToDbId[locIdStr];
+            if (dbLocId) insSl.run(sceneId, dbLocId);
+          }
+        }
+      })();
+
+      const allAssignments = [];
+      for (const [fig_id, events] of mergedEvtMap) {
+        const seen = new Set();
+        const deduped = [];
+        for (const ev of events) {
+          const key = (ev.datum || '') + '||' + (ev.ereignis || '').trim().toLowerCase();
+          if (!seen.has(key)) { seen.add(key); deduped.push(ev); }
+        }
+        deduped.sort((a, b) => (parseInt(a.datum) || 0) - (parseInt(b.datum) || 0));
+        allAssignments.push({ fig_id, lebensereignisse: deduped });
+      }
+      saveZeitstrahlEvents(parseInt(bookId), userEmail || null, []);
+      updateFigurenEvents(parseInt(bookId), allAssignments, userEmail || null, idMaps);
+      logger.info(`Job ${jobId}: ${allSzenen.length} Szenen und ${allAssignments.reduce((s, a) => s + a.lebensereignisse.length, 0)} Ereignisse gespeichert.`);
+    }
+
+    // Hilfsfunktion: P6 Zeitstrahl konsolidieren (identisch für beide Pfade).
+    async function runZeitstrahlKonsolidierung() {
+      updateJob(jobId, { progress: 83, statusText: 'Zeitstrahl konsolidieren…' });
+      const rawEvtRows = db.prepare(`
+        SELECT f.fig_id, f.name AS fig_name, f.typ AS fig_typ,
+               fe.datum, fe.ereignis, fe.typ AS evt_typ, fe.bedeutung, fe.kapitel, fe.seite
+        FROM figure_events fe
+        JOIN figures f ON f.id = fe.figure_id
+        WHERE f.book_id = ? AND f.user_email IS ?
+        ORDER BY fe.datum, f.sort_order
+      `).all(parseInt(bookId), userEmail || null);
+      if (!rawEvtRows.length) return;
+      const evtGroupMap = new Map();
+      for (const row of rawEvtRows) {
+        const key = `${row.datum}||${(row.ereignis || '').trim().toLowerCase()}`;
+        if (!evtGroupMap.has(key)) {
+          evtGroupMap.set(key, {
+            datum: row.datum, ereignis: row.ereignis, typ: row.evt_typ,
+            bedeutung: row.bedeutung || '',
+            kapitel: row.kapitel ? [row.kapitel] : [],
+            seiten:  row.seite   ? [row.seite]   : [],
+            figuren: [],
+          });
+        }
+        const ev = evtGroupMap.get(key);
+        if (!ev.figuren.some(f => f.id === row.fig_id))
+          ev.figuren.push({ id: row.fig_id, name: row.fig_name, typ: row.fig_typ || 'andere' });
+        if (row.kapitel && !ev.kapitel.includes(row.kapitel)) ev.kapitel.push(row.kapitel);
+        if (row.seite   && !ev.seiten.includes(row.seite))   ev.seiten.push(row.seite);
+      }
+      const zeitstrahlEvents = [...evtGroupMap.values()].sort((a, b) => parseInt(a.datum) - parseInt(b.datum));
+      const ztResult = await aiCall(jobId, tok,
+        buildZeitstrahlConsolidationPrompt(zeitstrahlEvents),
+        SYSTEM_ZEITSTRAHL, 83, 89, 3000, 0.2, null,
+      );
+      if (Array.isArray(ztResult?.ereignisse)) {
+        saveZeitstrahlEvents(parseInt(bookId), userEmail || null, ztResult.ereignisse);
+      }
+    }
+
     await Promise.all([
 
-      // ── P5 → P6: Szenen + Ereignisse + Zeitstrahl ────────────────────────
-      (async () => {
-        const orteKompakt  = orte.map(o => ({ id: o.id, name: o.name }));
-        const figurenList  = figuren.map(f => ({ id: f.id, name: f.name, typ: f.typ || 'andere' }));
-        updateJob(jobId, {
-          progress: 63,
-          statusText: `Szenen + Ereignisse in ${groupOrder.length} Kapiteln extrahieren…`,
-        });
-        const szEvtSettled = await settledAll(
-          groupOrder.map(key => () => {
-            const group = groups.get(key);
-            const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
-            return aiCall(jobId, tok,
-              buildExtraktionSzenenEreignisseChapterPrompt(group.name, bookName, group.pages.length, figurenList, orteKompakt, chText),
-              SYSTEM_SZENEN, 63, 80, 4000,
+      // ── P5+P7 (multi-pass) oder P5+P7 separat (single-pass) ─────────────
+      totalChars > SINGLE_PASS_LIMIT
+        ? (async () => {
+            // Multi-Pass: ein kombinierter Call pro Kapitel für Szenen + Entwicklungsbögen
+            const orteKompakt = orte.map(o => ({ id: o.id, name: o.name }));
+            const figurenList = figuren.map(f => ({ id: f.id, name: f.name, typ: f.typ || 'andere' }));
+            updateJob(jobId, { progress: 63, statusText: `Szenen + Entwicklungsbögen in ${groupOrder.length} Kapiteln…` });
+            const locRows = db.prepare(
+              'SELECT id, loc_id FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+            ).all(parseInt(bookId), userEmail || null);
+            const locIdToDbId = Object.fromEntries(locRows.map(r => [r.loc_id, r.id]));
+
+            const kombinedSettled = await settledAll(
+              groupOrder.map(key => () => {
+                const group = groups.get(key);
+                const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+                return aiCall(jobId, tok,
+                  buildExtraktionSzenenEreignisseEntwicklungsbogenChapterPrompt(
+                    group.name, bookName, group.pages.length, figurenList, orteKompakt, chText
+                  ),
+                  SYSTEM_SZENEN, 63, 80, 6000,
+                );
+              })
             );
-          })
-        );
 
-        const mergedEvtMap = new Map();
-        const locRows = db.prepare(
-          'SELECT id, loc_id FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
-        ).all(parseInt(bookId), userEmail || null);
-        const locIdToDbId = Object.fromEntries(locRows.map(r => [r.loc_id, r.id]));
-
-        szEvtSettled.forEach((r, gi) => {
-          const group = groups.get(groupOrder[gi]);
-          if (r.status === 'rejected') {
-            logger.warn(`Job ${jobId}: Szenen/Ereignisse «${group.name}» übersprungen: ${r.reason?.message}`);
-            return;
-          }
-          for (const s of (r.value?.szenen || [])) {
-            allSzenen.push({
-              kapitel:    group.name,
-              seite:      s.seite     || null,
-              titel:      s.titel     || '(unbekannt)',
-              wertung:    s.wertung   || null,
-              kommentar:  s.kommentar || null,
-              fig_ids:    Array.isArray(s.figuren) ? s.figuren : [],
-              ort_ids:    Array.isArray(s.orte)    ? s.orte    : [],
-              sort_order: allSzenen.length,
+            // Etappen für P7-Kons sammeln; Szenen + Events wie gehabt verarbeiten
+            const etappenPerChapter = [];
+            kombinedSettled.forEach((r, gi) => {
+              if (r.status === 'fulfilled' && Array.isArray(r.value?.etappen) && r.value.etappen.length)
+                etappenPerChapter.push({ kapitel: groups.get(groupOrder[gi]).name, etappen: r.value.etappen });
             });
-          }
-          for (const assignment of (r.value?.assignments || [])) {
-            if (!mergedEvtMap.has(assignment.fig_id)) mergedEvtMap.set(assignment.fig_id, []);
-            for (const ev of (assignment.lebensereignisse || [])) mergedEvtMap.get(assignment.fig_id).push(ev);
-          }
-        });
+            await processSzenenEreignisse(kombinedSettled, locIdToDbId);
 
-        updateJob(jobId, { progress: 81, statusText: 'Szenen speichern…' });
-        db.transaction(() => {
-          db.prepare('DELETE FROM figure_scenes WHERE book_id = ? AND user_email = ?').run(parseInt(bookId), userEmail || null);
-          const now = new Date().toISOString();
-          const ins = db.prepare(`INSERT INTO figure_scenes
-            (book_id, user_email, kapitel, seite, titel, wertung, kommentar, chapter_id, page_id, sort_order, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-          const insSf = db.prepare('INSERT INTO scene_figures (scene_id, fig_id) VALUES (?, ?)');
-          const insSl = db.prepare('INSERT OR IGNORE INTO scene_locations (scene_id, location_id) VALUES (?, ?)');
-          for (const s of allSzenen) {
-            const { lastInsertRowid: sceneId } = ins.run(
-              parseInt(bookId), userEmail || null,
-              s.kapitel, s.seite, s.titel, s.wertung, s.kommentar,
-              idMaps.chNameToId[s.kapitel]  ?? null,
-              s.seite ? (idMaps.pageNameToId[s.seite] ?? null) : null,
-              s.sort_order, now,
-            );
-            for (const fid of s.fig_ids) insSf.run(sceneId, fid);
-            for (const locIdStr of s.ort_ids) {
-              const dbLocId = locIdToDbId[locIdStr];
-              if (dbLocId) insSl.run(sceneId, dbLocId);
-            }
-          }
-        })();
+            // P6 + P7-Kons parallel (keine gegenseitige Abhängigkeit)
+            await Promise.all([
+              runZeitstrahlKonsolidierung(),
 
-        const allAssignments = [];
-        for (const [fig_id, events] of mergedEvtMap) {
-          const seen = new Set();
-          const deduped = [];
-          for (const ev of events) {
-            const key = (ev.datum || '') + '||' + (ev.ereignis || '').trim().toLowerCase();
-            if (!seen.has(key)) { seen.add(key); deduped.push(ev); }
-          }
-          deduped.sort((a, b) => (parseInt(a.datum) || 0) - (parseInt(b.datum) || 0));
-          allAssignments.push({ fig_id, lebensereignisse: deduped });
-        }
-        saveZeitstrahlEvents(parseInt(bookId), userEmail || null, []);
-        updateFigurenEvents(parseInt(bookId), allAssignments, userEmail || null, idMaps);
-        logger.info(`Job ${jobId}: ${allSzenen.length} Szenen und ${allAssignments.reduce((s, a) => s + a.lebensereignisse.length, 0)} Ereignisse gespeichert.`);
+              (async () => {
+                if (!figRowsForArcs.length || !etappenPerChapter.length) return;
+                updateJob(jobId, { progress: 94, statusText: 'Konsolidiere Entwicklungsbögen…' });
+                const arcConsolidation = await aiCall(jobId, tok,
+                  buildEntwicklungsbogenConsolidationPrompt(bookName, figurenKontextForArcs, etappenPerChapter),
+                  SYSTEM_ENTWICKLUNGSBOGEN, 94, 97, 4000, 0.2, null,
+                );
+                if (!Array.isArray(arcConsolidation?.entwicklungsboegen)) throw new Error('Entwicklungsbögen-Konsolidierung ungültig: entwicklungsboegen-Array fehlt');
+                saveCharacterArcs(parseInt(bookId), userEmail || null, arcConsolidation.entwicklungsboegen, idMaps.chNameToId);
+                logger.info(`Job ${jobId}: ${arcConsolidation.entwicklungsboegen.length} Entwicklungsbögen gespeichert.`);
+              })(),
+            ]);
+          })()
+        : Promise.all([
+            // Single-Pass: P5 (per-Kapitel) + P7 (Single-Pass) parallel
+            (async () => {
+              const orteKompakt = orte.map(o => ({ id: o.id, name: o.name }));
+              const figurenList = figuren.map(f => ({ id: f.id, name: f.name, typ: f.typ || 'andere' }));
+              updateJob(jobId, { progress: 63, statusText: `Szenen + Ereignisse in ${groupOrder.length} Kapiteln extrahieren…` });
+              const locRows = db.prepare(
+                'SELECT id, loc_id FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+              ).all(parseInt(bookId), userEmail || null);
+              const locIdToDbId = Object.fromEntries(locRows.map(r => [r.loc_id, r.id]));
+              const szEvtSettled = await settledAll(
+                groupOrder.map(key => () => {
+                  const group = groups.get(key);
+                  const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+                  return aiCall(jobId, tok,
+                    buildExtraktionSzenenEreignisseChapterPrompt(group.name, bookName, group.pages.length, figurenList, orteKompakt, chText),
+                    SYSTEM_SZENEN, 63, 80, 4000,
+                  );
+                })
+              );
+              await processSzenenEreignisse(szEvtSettled, locIdToDbId);
+              await runZeitstrahlKonsolidierung();
+            })(),
 
-        // P6: Zeitstrahl (nach P5, innerhalb dieser Kette)
-        updateJob(jobId, { progress: 83, statusText: 'Zeitstrahl konsolidieren…' });
-        const rawEvtRows = db.prepare(`
-          SELECT f.fig_id, f.name AS fig_name, f.typ AS fig_typ,
-                 fe.datum, fe.ereignis, fe.typ AS evt_typ, fe.bedeutung, fe.kapitel, fe.seite
-          FROM figure_events fe
-          JOIN figures f ON f.id = fe.figure_id
-          WHERE f.book_id = ? AND f.user_email IS ?
-          ORDER BY fe.datum, f.sort_order
-        `).all(parseInt(bookId), userEmail || null);
-        if (rawEvtRows.length) {
-          const evtGroupMap = new Map();
-          for (const row of rawEvtRows) {
-            const key = `${row.datum}||${(row.ereignis || '').trim().toLowerCase()}`;
-            if (!evtGroupMap.has(key)) {
-              evtGroupMap.set(key, {
-                datum: row.datum, ereignis: row.ereignis, typ: row.evt_typ,
-                bedeutung: row.bedeutung || '',
-                kapitel: row.kapitel ? [row.kapitel] : [],
-                seiten:  row.seite   ? [row.seite]   : [],
-                figuren: [],
-              });
-            }
-            const ev = evtGroupMap.get(key);
-            if (!ev.figuren.some(f => f.id === row.fig_id))
-              ev.figuren.push({ id: row.fig_id, name: row.fig_name, typ: row.fig_typ || 'andere' });
-            if (row.kapitel && !ev.kapitel.includes(row.kapitel)) ev.kapitel.push(row.kapitel);
-            if (row.seite   && !ev.seiten.includes(row.seite))   ev.seiten.push(row.seite);
-          }
-          const zeitstrahlEvents = [...evtGroupMap.values()].sort((a, b) => parseInt(a.datum) - parseInt(b.datum));
-          const ztResult = await aiCall(jobId, tok,
-            buildZeitstrahlConsolidationPrompt(zeitstrahlEvents),
-            SYSTEM_ZEITSTRAHL, 83, 89, 3000, 0.2, null,
-          );
-          if (Array.isArray(ztResult?.ereignisse)) {
-            saveZeitstrahlEvents(parseInt(bookId), userEmail || null, ztResult.ereignisse);
-          }
-        }
-      })(),
-
-      // ── P7: Entwicklungsbögen konsolidieren ──────────────────────────────
-      // Kapitel-Ergebnisse liegen aus Parallel-Block 1 vor; nur der Konsolidierungs-Call
-      // läuft noch. Im Single-Pass-Modus: ein einziger Gesamt-Call mit vollem Buchtext.
-      (async () => {
-        if (!figRowsForArcs.length) return;
-        let entwicklungsboegen;
-        if (totalChars <= SINGLE_PASS_LIMIT) {
-          updateJob(jobId, { progress: 89, statusText: 'Entwicklungsbögen analysieren…' });
-          const bookText = pageContents
-            .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
-            .join('\n\n---\n\n');
-          const arcResult = await aiCall(jobId, tok,
-            buildEntwicklungsbogenSinglePassPrompt(bookName, figurenKontextForArcs, pageContents.length, bookText),
-            SYSTEM_ENTWICKLUNGSBOGEN, 89, 95, 4000, 0.2, null,
-          );
-          if (!Array.isArray(arcResult?.entwicklungsboegen)) throw new Error('Entwicklungsbögen-Analyse ungültig: entwicklungsboegen-Array fehlt');
-          entwicklungsboegen = arcResult.entwicklungsboegen;
-        } else {
-          // Kapitel-Ergebnisse (p7SettledChapters) wurden in Block 1 parallel gesammelt
-          const perChapterResults = [];
-          if (p7SettledChapters) {
-            for (const [gi, r] of p7SettledChapters.entries()) {
-              const group = groups.get(groupOrder[gi]);
-              if (r.status === 'rejected') {
-                if (r.reason?.name === 'AbortError') throw r.reason;
-                logger.warn(`Job ${jobId}: Entwicklungsbogen «${group.name}» übersprungen: ${r.reason?.message}`);
-                continue;
-              }
-              if (Array.isArray(r.value?.etappen) && r.value.etappen.length)
-                perChapterResults.push({ kapitel: group.name, etappen: r.value.etappen });
-            }
-          }
-          updateJob(jobId, { progress: 94, statusText: 'Konsolidiere Entwicklungsbögen…' });
-          const arcConsolidation = await aiCall(jobId, tok,
-            buildEntwicklungsbogenConsolidationPrompt(bookName, figurenKontextForArcs, perChapterResults),
-            SYSTEM_ENTWICKLUNGSBOGEN, 94, 97, 4000, 0.2, null,
-          );
-          if (!Array.isArray(arcConsolidation?.entwicklungsboegen)) throw new Error('Entwicklungsbögen-Konsolidierung ungültig: entwicklungsboegen-Array fehlt');
-          entwicklungsboegen = arcConsolidation.entwicklungsboegen;
-        }
-        saveCharacterArcs(parseInt(bookId), userEmail || null, entwicklungsboegen, idMaps.chNameToId);
-        logger.info(`Job ${jobId}: ${entwicklungsboegen.length} Entwicklungsbögen gespeichert.`);
-      })(),
+            (async () => {
+              if (!figRowsForArcs.length) return;
+              updateJob(jobId, { progress: 89, statusText: 'Entwicklungsbögen analysieren…' });
+              const bookText = pageContents
+                .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
+                .join('\n\n---\n\n');
+              const arcResult = await aiCall(jobId, tok,
+                buildEntwicklungsbogenSinglePassPrompt(bookName, figurenKontextForArcs, pageContents.length, bookText),
+                SYSTEM_ENTWICKLUNGSBOGEN, 89, 95, 4000, 0.2, null,
+              );
+              if (!Array.isArray(arcResult?.entwicklungsboegen)) throw new Error('Entwicklungsbögen-Analyse ungültig: entwicklungsboegen-Array fehlt');
+              saveCharacterArcs(parseInt(bookId), userEmail || null, arcResult.entwicklungsboegen, idMaps.chNameToId);
+              logger.info(`Job ${jobId}: ${arcResult.entwicklungsboegen.length} Entwicklungsbögen gespeichert.`);
+            })(),
+          ]),
 
       // ── P8: Kontinuitätsprüfung ───────────────────────────────────────────
-      // Kapitel-Fakten werden mit settledAll parallel extrahiert, dann ein einziger
-      // Konsistenz-Check-Call. figuren/orte aus dem Outer-Scope (beide vor diesem
-      // Block bereits in der DB persistiert).
+      // Multi-Pass: chapterFakten aus Phase 1 – kein separater Extraktions-Call.
+      // Single-Pass: Buchtext direkt (besserer Kontext für kleine Bücher).
+      // Fallback: alter Checkpoint ohne chapterFakten → Extraktion nachholen.
       (async () => {
-        updateJob(jobId, { progress: 97, statusText: 'Kontinuität prüfen…' });
-        // figuren ist aus Phase 2 verfügbar: { id: fig_id, name, typ, beschreibung, ... }
         const figKompaktForKont  = figuren.map(f => ({ name: f.name, typ: f.typ || 'andere', beschreibung: f.beschreibung || '' }));
         const figNameToId        = Object.fromEntries(figuren.map(f => [f.name, f.id]));
         const ortRowsForKont     = db.prepare(
@@ -1063,6 +1075,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
 
         let kontResult;
         if (totalChars <= SINGLE_PASS_LIMIT) {
+          updateJob(jobId, { progress: 97, statusText: 'Kontinuität prüfen…' });
           const bookText = pageContents
             .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
             .join('\n\n---\n\n');
@@ -1070,7 +1083,15 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
             buildKontinuitaetSinglePassPrompt(bookName, bookText, figKompaktForKont, orteKompaktForKont),
             SYSTEM_KONTINUITAET, 97, 99, 5000,
           );
+        } else if (chapterFakten?.length) {
+          // Normal-Pfad multi-pass: Fakten aus Phase 1 – kein zusätzlicher API-Call
+          updateJob(jobId, { progress: 98, statusText: 'KI prüft Widersprüche…' });
+          kontResult = await aiCall(jobId, tok,
+            buildKontinuitaetCheckPrompt(bookName, chapterFakten, figKompaktForKont, orteKompaktForKont),
+            SYSTEM_KONTINUITAET, 98, 99, 5000,
+          );
         } else {
+          // Fallback: alter Checkpoint ohne chapterFakten – Extraktion nachholen
           updateJob(jobId, { progress: 97, statusText: `Kontinuität – Fakten in ${groupOrder.length} Kapiteln extrahieren…` });
           const factsSettled = await settledAll(
             groupOrder.map(key => () => {
@@ -1082,7 +1103,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
               );
             })
           );
-          const chapterFacts = factsSettled.map((r, gi) => {
+          const chFacts = factsSettled.map((r, gi) => {
             const group = groups.get(groupOrder[gi]);
             if (r.status === 'rejected') {
               logger.warn(`Job ${jobId}: Kontinuität-Fakten «${group.name}» übersprungen: ${r.reason?.message}`);
@@ -1092,7 +1113,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           });
           updateJob(jobId, { progress: 98, statusText: 'KI prüft Widersprüche…' });
           kontResult = await aiCall(jobId, tok,
-            buildKontinuitaetCheckPrompt(bookName, chapterFacts, figKompaktForKont, orteKompaktForKont),
+            buildKontinuitaetCheckPrompt(bookName, chFacts, figKompaktForKont, orteKompaktForKont),
             SYSTEM_KONTINUITAET, 98, 99, 5000,
           );
         }

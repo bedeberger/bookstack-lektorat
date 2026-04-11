@@ -636,6 +636,54 @@ ${chText}`;
 }
 
 /**
+ * Kombinierter Kapitel-Pass (P1+P8f): Figuren + Schauplätze + Kontinuitätsfakten in einem Call.
+ * Ersetzt buildExtraktionFigurenOrteChapterPrompt + buildKontinuitaetChapterFactsPrompt
+ * im komplett-analyse-Job. Wird ausschliesslich dort verwendet.
+ */
+export function buildExtraktionFigurenOrteKontinuitaetChapterPrompt(chapterName, bookName, pageCount, chText) {
+  const isSinglePass = chapterName === 'Gesamtbuch';
+  const kapitelNote = isSinglePass
+    ? 'Für kapitel[].name der Figuren den jeweiligen Kapitelnamen aus dem [Kapitelname]-Teil der ### Überschriften verwenden.'
+    : `Für kapitel[].name aller Figuren immer genau «${chapterName}» verwenden – die ### Überschriften im Text sind Seitentitel, keine Kapitelnamen.`;
+  return `Extrahiere aus ${isSinglePass ? `dem Buch «${bookName}»` : `dem Kapitel «${chapterName}» des Buchs «${bookName}»`} in einem Durchgang: alle Figuren, alle Schauplätze und alle kontinuitätsrelevanten Fakten.
+
+Antworte mit diesem JSON-Schema:
+{
+  ${_schemaBody(FIGUREN_BASIS_SCHEMA)},
+  ${_schemaBody(ORTE_SCHEMA)},
+  "fakten": [
+    {
+      "kategorie": "figur|ort|objekt|zeit|ereignis|soziolekt|sonstiges",
+      "subjekt": "Über wen/was geht es (Name oder Bezeichnung)",
+      "fakt": "Was genau behauptet wird (1 Satz, so präzise wie möglich)",
+      "seite": "Seitenname oder Abschnittsname (leer wenn unklar)"
+    }
+  ]
+}
+
+Figuren-Regeln:
+${FIGUREN_BASIS_RULES}
+${kapitelNote}
+
+Schauplatz-Regeln:
+${ORTE_RULES}
+
+Fakten-Regeln:
+- Nur konkrete, prüfbare Aussagen – keine Interpretationen
+- Figuren-Zustände besonders genau erfassen (Wissen, Können, körperlicher Zustand, Wohnort, Beruf)
+- Soziolekt: Wenn eine Figur erstmals oder markant spricht, ein Faktum erfassen das ihr Sprachregister beschreibt (z.B. «spricht formell-gebildet», «verwendet Dialekt»). Kategorie «soziolekt» verwenden.
+- Objekte: Wer besitzt was, wo liegt was, in welchem Zustand
+- Zeitangaben: Relative («am nächsten Morgen») und absolute («1943») erfassen
+- Maximal 30 Fakten${isSinglePass ? '' : ' pro Kapitel'}; lieber weniger, dafür präzise
+
+${JSON_ONLY}
+
+${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} Seiten)`}:
+
+${chText}`;
+}
+
+/**
  * Kombinierter Kapitel-Extraktions-Prompt: Szenen + Lebensereignisse in einem einzigen Call.
  * Setzt konsolidierte Figuren und Orte aus der DB voraus (nach Phase 1+2 der Komplettanalyse).
  */
@@ -696,6 +744,92 @@ Ereignis-Regeln:
 - datum: immer als vierstellige Jahreszahl (JJJJ) – aus Kontext errechnen wenn nötig; Events ohne errechenbare Jahreszahl weglassen
 - Nur fig_id-Werte aus der obigen Figurenliste verwenden
 - Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden
+
+${JSON_ONLY}
+
+Kapiteltext (${pageCount} Seiten):
+
+${chText}`;
+}
+
+/**
+ * Kombinierter Kapitel-Pass (P5+P7): Szenen + Lebensereignisse + Figurenentwicklungen.
+ * Ersetzt buildExtraktionSzenenEreignisseChapterPrompt + buildEntwicklungsbogenChapterPrompt
+ * im komplett-analyse-Job (Multi-Pass). Setzt konsolidierte Figuren + Orte voraus (nach P2+P3).
+ * Wird ausschliesslich vom komplett-analyse-Job verwendet.
+ */
+export function buildExtraktionSzenenEreignisseEntwicklungsbogenChapterPrompt(chapterName, bookName, pageCount, figurenKompakt, orteKompakt, chText) {
+  const figurenStr = figurenKompakt.length
+    ? figurenKompakt.map(f => `${f.id}: ${f.name} (${f.typ || 'andere'})`).join('\n')
+    : '(keine Figuren bekannt)';
+  const orteStr = orteKompakt.length
+    ? orteKompakt.map(o => `${o.id}: ${o.name}`).join('\n')
+    : '(keine Schauplätze bekannt)';
+  return `Analysiere das Kapitel «${chapterName}» des Buchs «${bookName}» und extrahiere gleichzeitig: Szenen, Lebensereignisse und Figurenentwicklungen.
+
+Bekannte Figuren (nur diese IDs verwenden):
+${figurenStr}
+
+Bekannte Schauplätze (nur diese IDs in «orte» verwenden):
+${orteStr}
+
+Antworte mit diesem JSON-Schema:
+{
+  "szenen": [
+    {
+      "seite": "Name der Seite/des Abschnitts (leer wenn unklar)",
+      "titel": "Kurze Szenenbezeichnung (1 Satz)",
+      "wertung": "stark|mittel|schwach",
+      "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)",
+      "figuren": ["fig_1", "fig_2"],
+      "orte": ["ort_1"]
+    }
+  ],
+  "assignments": [
+    {
+      "fig_id": "fig_1",
+      "lebensereignisse": [
+        {
+          "datum": "JJJJ (nur Jahreszahl; aus Kontext errechnen wenn nötig; leer wenn nicht errechenbar)",
+          "ereignis": "Was passierte (1 Satz)",
+          "typ": "persoenlich|extern",
+          "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)",
+          "kapitel": "${chapterName}",
+          "seite": "Name der Seite/des Abschnitts (leer wenn unklar)"
+        }
+      ]
+    }
+  ],
+  "etappen": [
+    {
+      "fig_id": "fig_1",
+      "kapitel": "${chapterName}",
+      "soziale_position": "Gesellschaftliche Rolle, Rang, Stellung in diesem Kapitel",
+      "innere_haltung": "Psychologie, Weltbild, Motivation, dominantes Gefühl in diesem Kapitel",
+      "beziehungsstatus": "Schlüsselbeziehungen und ihr Zustand in diesem Kapitel",
+      "wendepunkt": "Ob und wie sich die Figur gegenüber dem Vorkapitel verändert hat (leer wenn keine relevante Veränderung)"
+    }
+  ]
+}
+
+Szenen-Regeln:
+- Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
+- figuren: nur IDs aus der obigen Figurenliste; leer wenn keine bekannte Figur aktiv beteiligt
+- orte: nur IDs aus der Schauplatzliste; leer wenn kein passender Ort bekannt
+- wertung: «stark» = überzeugend, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
+- Wenn ein Abschnitt keine erkennbaren Szenen enthält (reine Exposition, Beschreibung): «szenen» als leeres Array
+
+Ereignis-Regeln:
+- typ='persoenlich': echte biografische Wendepunkte (Geburt, Tod, Trauma, neue/beendete Beziehung, Jobwechsel, Umzug, wichtige Entscheidung) – nur wenn tatsächlich im Text belegt
+- typ='extern': gesellschaftliche/historische Ereignisse – SEHR GROSSZÜGIG erfassen; jedes externe Ereignis ALLEN betroffenen Figuren zuweisen
+- datum: immer als vierstellige Jahreszahl (JJJJ) – aus Kontext errechnen wenn nötig; Events ohne errechenbare Jahreszahl weglassen
+- Nur fig_id-Werte aus der obigen Figurenliste verwenden
+- Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden
+
+Entwicklungsbogen-Regeln:
+- Nur Figuren die in diesem Kapitel aktiv auftreten oder deren Zustand sich verändert
+- Nur fig_id-Werte aus der obigen Figurenliste verwenden
+- Kurze, präzise Beschreibungen (je 1-2 Sätze); leeres etappen-Array wenn keine relevanten Figuren im Kapitel
 
 ${JSON_ONLY}
 

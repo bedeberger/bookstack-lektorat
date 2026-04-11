@@ -11,9 +11,9 @@
   </div>
   <div x-show="szenenStatus" class="figur-progress-status" x-html="szenenStatus"></div>
 
-  <!-- Hinweis wenn keine Figuren vorhanden -->
-  <div x-show="!figuren.length && !szenenLoading && !szenen.length" class="szenen-empty-hint">
-    Für die Szenenanalyse werden zuerst Figuren benötigt. Bitte zuerst die Figuren-Karte öffnen und Figuren ermitteln.
+  <!-- Leer-Hinweis -->
+  <div x-show="!szenen.length && !szenenLoading && !szenenStatus" class="figur-progress-status">
+    Noch keine Daten vorhanden. Bitte auf «Alle aktualisieren» klicken.
   </div>
 
   <!-- Szenen-Übersicht: Figuren / Kapitel / Seiten -->

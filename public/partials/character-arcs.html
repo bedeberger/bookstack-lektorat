@@ -11,10 +11,7 @@
   <div x-show="characterArcsStatus" class="figur-progress-status" x-html="characterArcsStatus"></div>
 
   <div x-show="!characterArcs && !characterArcsLoading && !characterArcsStatus" class="figur-progress-status">
-    Noch keine Analyse durchgeführt. Klicke auf «Analysieren» um Entwicklungsbögen aller Figuren zu ermitteln.
-    <template x-if="!figuren.length">
-      <span> Bitte zuerst Figuren laden.</span>
-    </template>
+    Noch keine Daten vorhanden. Bitte auf «Alle aktualisieren» klicken.
   </div>
 
   <!-- Filter-Leiste -->
