@@ -728,9 +728,9 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
 
 // ── Job: Komplettanalyse ───────────────────────────────────────────────────────
 // Pipeline (optimiert, zwei parallele Blöcke nach P2):
-//   P1 (Figuren+Orte, parallel/Kapitel) → P2 (Figuren konsolidieren)
-//   Block 1 [P3 Orte · P4 Soziogramm · P7-Kapitel] parallel
-//   Block 2 [P5+P6 Szenen/Zeitstrahl · P7-Konsol · P8 Kontinuität] parallel
+//   P1 (Figuren+Orte+Fakten, parallel/Kapitel) → P2 (Figuren konsolidieren)
+//   Block 1 [P3 Orte · P4 Soziogramm] parallel
+//   Block 2 [P5+P6 Szenen/Zeitstrahl · P8 Kontinuität] parallel
 async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userToken, provider = undefined) {
   const logger = makeJobLogger(jobId);
   const call = (...args) => aiCall(...args, provider);
@@ -861,12 +861,10 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     saveFigurenToDb(parseInt(bookId), figuren, userEmail || null, idMaps);
     logger.info(`Job ${jobId}: ${figuren.length} Figuren gespeichert.`);
 
-    // ── P7-Kontext vorbereiten ──────────────────────────────────────────────────
     // figurenKompakt: nur Name+Typ für Kapitel-Calls – spart ~15–20k Input-Tokens.
     const figurenKompakt = figuren.map(f => ({ id: f.id, name: f.name, typ: f.typ || 'andere' }));
 
     // ── Parallel-Block 1: P3 (Orte) + P4 (Soziogramm) ───────────────────────
-    // P7-Kapitel wurde in Block 2 verschoben (kombiniert mit P5 Szenen+Ereignisse).
     // settledAll serialisiert für Ollama (VRAM-Schutz); für Claude bleibt es parallel.
     updateJob(jobId, { progress: 43, statusText: 'Schauplätze und Soziogramm analysieren…' });
     const block1Settled = await settledAll([
@@ -915,12 +913,11 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     saveOrteToDb(parseInt(bookId), orte, userEmail || null);
     logger.info(`Job ${jobId}: ${orte.length} Schauplätze gespeichert.`);
 
-    // ── Parallel-Block 2: Szenen/Zeitstrahl/Entwicklungsbögen + Kontinuität ──
-    // Multi-Pass: kombinierter P5+P7-Kap-Call pro Kapitel → P6 + P7-Kons parallel.
-    //             P8 nutzt chapterFakten aus Phase 1 – kein separater Extraktions-Call.
-    // Single-Pass: P5 (per-Kapitel) + P7 (Single-Pass) parallel; P8 Buchtext-Pfad.
+    // ── Parallel-Block 2: Szenen/Zeitstrahl + Kontinuität ──
+    // P5+P6 (Szenen→Zeitstrahl) und P8 (Kontinuität) laufen parallel.
+    // P8 nutzt chapterFakten aus Phase 1 – kein separater Extraktions-Call.
     let allSzenen = [];
-    updateJob(jobId, { progress: 56, statusText: 'Szenen, Entwicklungsbögen und Kontinuität analysieren…' });
+    updateJob(jobId, { progress: 56, statusText: 'Szenen und Kontinuität analysieren…' });
 
     // Hilfsfunktion: Szenen + Events aus settled-Ergebnissen extrahieren und speichern.
     // Wird von beiden Pfaden (multi-pass + single-pass) verwendet.
