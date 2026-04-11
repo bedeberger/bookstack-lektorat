@@ -636,7 +636,7 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
   tok.out += tokensOut;
   if (genDurationMs != null) tok.ms += genDurationMs;
   updateJob(jobId, { tokensIn: tok.in, tokensOut: tok.out });
-  if (truncated) throw new Error(`KI-Antwort wurde bei ${maxTokensOverride} Tokens abgeschnitten (stop_reason: max_tokens). JSON ist unvollständig.`);
+  if (truncated) throw new Error(`KI-Antwort wurde bei ${maxTokensOverride} max_tokens abgeschnitten (tokIn=${tokensIn}, tokOut=${tokensOut}, total=${tokensIn + tokensOut}). JSON ist unvollständig.`);
   return parseJSON(text);
 }
 
