@@ -273,7 +273,6 @@ document.addEventListener('alpine:init', () => {
     _arcDetailKey: null,
     arcFilterFigurId: '',
     arcFilterKapitel: '',
-    arcFilterSeite: '',
     jobQueueItems: [],
     _jobQueueTimer: null,
     showJobStats: false,
@@ -411,24 +410,10 @@ document.addEventListener('alpine:init', () => {
       }
       return [...names].sort((a, b) => a.localeCompare(b, 'de'));
     },
-    arcSeitenListe() {
-      if (!this.arcFilterKapitel) return [];
-      const names = new Set();
-      for (const f of (this.figuren || [])) {
-        for (const s of (f.seiten || [])) {
-          if (s.kapitel === this.arcFilterKapitel && s.seite) names.add(s.seite);
-        }
-      }
-      return [...names].sort((a, b) => a.localeCompare(b, 'de'));
-    },
     get characterArcsFiltered() {
       return (this.characterArcs || []).filter(arc => {
         if (this.arcFilterFigurId && arc.fig_id !== this.arcFilterFigurId) return false;
         if (this.arcFilterKapitel && !arc.etappen?.some(e => e.kapitel === this.arcFilterKapitel)) return false;
-        if (this.arcFilterSeite) {
-          const fig = (this.figuren || []).find(f => f.id === arc.fig_id);
-          if (!fig || !fig.seiten?.some(s => s.kapitel === this.arcFilterKapitel && s.seite === this.arcFilterSeite)) return false;
-        }
         return true;
       });
     },
@@ -1136,7 +1121,6 @@ document.addEventListener('alpine:init', () => {
       this._arcDetailKey = null;
       this.arcFilterFigurId = '';
       this.arcFilterKapitel = '';
-      this.arcFilterSeite = '';
       if (this._characterArcsPollTimer) { clearInterval(this._characterArcsPollTimer); this._characterArcsPollTimer = null; }
       this.showBookSettingsCard = false;
       this.bookSettingsSaved = false;
