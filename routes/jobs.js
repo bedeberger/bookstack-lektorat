@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
-const { db, saveFigurenToDb, updateFigurenEvents, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale } = require('../db/schema');
+const { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale } = require('../db/schema');
 const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -639,6 +639,48 @@ async function runFiguresJob(jobId, bookId, bookName, userEmail, userToken) {
     logger.info(`Job ${jobId}: Figurenextraktion Buch ${bookId} abgeschlossen (${figuren.length} Figuren, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
     logger.error(`Job ${jobId}: Figurenextraktion Fehler: ${e.message}`);
+    failJob(jobId, e);
+  }
+}
+
+// ── Job: Soziogramm-Anreicherung (Sozialschicht + Machtverhältnis) ───────────
+async function runSoziogrammJob(jobId, bookId, bookName, userEmail) {
+  const { buildFigurSoziogrammEnrichmentPrompt } = await getPrompts();
+  const { SYSTEM_FIGUREN } = await getBookPrompts(bookId);
+
+  try {
+    updateJob(jobId, { statusText: 'Lade Figuren und Beziehungen…', progress: 5 });
+
+    const figRows = db.prepare(
+      'SELECT fig_id, name, typ, beruf, beschreibung FROM figures WHERE book_id = ? AND user_email IS ? ORDER BY sort_order'
+    ).all(parseInt(bookId), userEmail || null);
+
+    if (!figRows.length) {
+      failJob(jobId, new Error('Keine Figuren gefunden – bitte zuerst Figuren ermitteln.'));
+      return;
+    }
+
+    const relRows = db.prepare(
+      'SELECT from_fig_id, to_fig_id, typ, beschreibung FROM figure_relations WHERE book_id = ? AND user_email IS ?'
+    ).all(parseInt(bookId), userEmail || null);
+
+    updateJob(jobId, { statusText: 'KI analysiert gesellschaftliche Strukturen…', progress: 20 });
+
+    const tok = { in: 0, out: 0, ms: 0 };
+    const result = await aiCall(jobId, tok,
+      buildFigurSoziogrammEnrichmentPrompt(bookName, figRows, relRows),
+      SYSTEM_FIGUREN,
+      20, 95, 2000,
+    );
+
+    if (!Array.isArray(result?.figuren)) throw new Error('KI-Antwort ungültig: figuren-Array fehlt');
+
+    updateFigurenSoziogramm(parseInt(bookId), result.figuren, result.beziehungen || [], userEmail || null);
+
+    completeJob(jobId, { count: result.figuren.length, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
+    logger.info(`Job ${jobId}: Soziogramm-Anreicherung Buch ${bookId} abgeschlossen (${result.figuren.length} Figuren, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+  } catch (e) {
+    logger.error(`Job ${jobId}: Soziogramm-Anreicherung Fehler: ${e.message}`);
     failJob(jobId, e);
   }
 }
@@ -1353,6 +1395,18 @@ router.post('/figures', jsonBody, (req, res) => {
   const label = book_name ? `Figuren · ${book_name}` : `Figuren`;
   const jobId = createJob('figures', book_id, userEmail, label);
   enqueueJob(jobId, () => runFiguresJob(jobId, book_id, book_name || '', userEmail, userToken));
+  res.json({ jobId });
+});
+
+router.post('/soziogramm', jsonBody, (req, res) => {
+  const { book_id, book_name } = req.body;
+  if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
+  const userEmail = req.session?.user?.email || null;
+  const existing = runningJobs.get(jobKey('soziogramm', book_id, userEmail));
+  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const label = book_name ? `Soziogramm · ${book_name}` : 'Soziogramm';
+  const jobId = createJob('soziogramm', book_id, userEmail, label);
+  enqueueJob(jobId, () => runSoziogrammJob(jobId, book_id, book_name || '', userEmail));
   res.json({ jobId });
 });
 

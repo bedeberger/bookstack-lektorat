@@ -179,6 +179,9 @@ document.addEventListener('alpine:init', () => {
     figurenLoading: false,
     figurenProgress: 0,
     figurenStatus: '',
+    soziogrammLoading: false,
+    soziogrammProgress: 0,
+    soziogrammStatus: '',
     selectedFigurId: null,
     figurenKapitelFilter: '',
     figurenSeitenFilter: '',
@@ -922,6 +925,9 @@ document.addEventListener('alpine:init', () => {
       this.figurenStatus = '';
       this.figurenProgress = 0;
       this.figurenUpdatedAt = null;
+      this.soziogrammLoading = false;
+      this.soziogrammProgress = 0;
+      this.soziogrammStatus = '';
       this.selectedFigurId = null;
       this.figurenKapitelFilter = '';
       this.figurenSeitenFilter = '';

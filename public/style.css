@@ -1157,6 +1157,17 @@ ins {
 .figur-bz-mentor          { background: #D4E8FF;              color: #1d4b73; }
 .figur-bz-schuetzling     { background: #D4E8FF;              color: #1d4b73; }
 .figur-bz-bekannt         { background: var(--color-tag-bg);  color: var(--color-muted); }
+.figur-bz-patronage       { background: #EDE0F8;              color: #5A1F80; }
+.figur-bz-geschaeft       { background: #FFF8DC;              color: #7A5A00; }
+
+.figur-bz-macht {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-left: 2px;
+}
+.figur-bz-macht--positiv { color: #2d6a9f; }
+.figur-bz-macht--negativ { color: #E24B4A; }
 
 /* === Figuren: Knoten-Legende === */
 .figur-legend-dot--hauptfigur  { background: #D4E8FF; border-color: #2d6a9f; }
@@ -1165,8 +1176,18 @@ ins {
 .figur-legend-dot--nebenfigur  { background: #F0F0F0; border-color: #888; }
 .figur-legend-dot--andere      { background: #FFF5DC; border-color: #c4a55a; }
 
+/* Sozialschicht-Legende (Soziogramm-Modus) */
+.figur-legend-dot--adel            { background: #FFF3CC; border-color: #A07800; }
+.figur-legend-dot--klerus          { background: #EDE0F8; border-color: #7B3FA0; }
+.figur-legend-dot--grossbuergertum { background: #D4E8FF; border-color: #2d6a9f; }
+.figur-legend-dot--buergertum      { background: #E8F4E8; border-color: #3a7a3a; }
+.figur-legend-dot--kleinbuergertum { background: #F0F0F0; border-color: #666; }
+.figur-legend-dot--arbeiterklasse  { background: #F5EAD4; border-color: #8B5E26; }
+.figur-legend-dot--unterwelt       { background: #3A3A3A; border-color: #111; }
+
 /* === Figuren: Kanten-Legende === */
 .figur-legend--edges { margin-top: 4px; }
+.figur-legend--soziogramm { flex-wrap: wrap; row-gap: 4px; }
 
 .figur-legend-entry {
   display: inline-flex;
@@ -1184,6 +1205,61 @@ ins {
 .figur-edge-line--freund        { background: #639922; border-top: 2px dashed #639922; }
 .figur-edge-line--feind         { background: #E24B4A; border-top: 2px dashed #E24B4A; }
 .figur-edge-line--liebesbeziehung { background: #D46EA0; border-top: 2px dashed #D46EA0; }
+.figur-edge-line--patronage       { background: #7B3FA0; height: 3px; }
+.figur-edge-line--geschaeft       { background: #B8860B; border-top: 2px dashed #B8860B; }
+
+/* === Figuren: Modus-Toggle === */
+.figur-modus-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 10px;
+}
+.figur-modus-btn {
+  flex: 1;
+  padding: 5px 10px;
+  font-size: var(--font-size-sm);
+  border: 0.5px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.figur-modus-btn:first-child { border-radius: var(--radius-md) 0 0 var(--radius-md); }
+.figur-modus-btn:last-child  { border-radius: 0 var(--radius-md) var(--radius-md) 0; border-left: none; }
+.figur-modus-btn--active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+  font-weight: 600;
+}
+.figur-modus-btn:hover:not(.figur-modus-btn--active) { background: var(--color-hover); }
+
+/* === Figuren: Soziogramm-Hint + Actions === */
+.figur-soziogramm-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  margin: 4px 0 8px;
+}
+.figur-soziogramm-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.figur-sozio-status {
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+}
+
+/* === Figuren: Sozialschicht-Badge in Detail === */
+.figur-sozialschicht-badge { font-size: 11px; margin-left: 6px; }
+.figur-schicht-adel            { background: #FFF3CC; color: #7A5A00; border-color: #A07800; }
+.figur-schicht-klerus          { background: #EDE0F8; color: #5A1F80; border-color: #7B3FA0; }
+.figur-schicht-grossbuergertum { background: #D4E8FF; color: #1d4b73; border-color: #2d6a9f; }
+.figur-schicht-buergertum      { background: #E8F4E8; color: #275927; border-color: #3a7a3a; }
+.figur-schicht-kleinbuergertum { background: #F0F0F0; color: #444;    border-color: #666; }
+.figur-schicht-arbeiterklasse  { background: #F5EAD4; color: #6B3F0D; border-color: #8B5E26; }
+.figur-schicht-unterwelt       { background: #3A3A3A; color: #eee;    border-color: #111; }
 
 /* === Figuren: Graph-Bereich === */
 .figur-graph-section { margin-top: 14px; position: relative; }
@@ -1339,6 +1415,10 @@ ins {
   margin-top: 14px;
   padding-left: 28px;
   border-left: 2px solid var(--color-border);
+}
+
+.figur-detail .global-zeitstrahl-body {
+  margin-left: 14px;
 }
 
 .gz-item {

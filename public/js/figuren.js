@@ -90,6 +90,60 @@ export const figurenMethods = {
     });
   },
 
+  async runSoziogrammEnrichment() {
+    const bookId   = this.selectedBookId;
+    const bookName = this.selectedBookName;
+    this.soziogrammLoading  = true;
+    this.soziogrammProgress = 0;
+    this.soziogrammStatus   = 'Starte Soziogramm-Analyse…';
+    try {
+      const { jobId } = await fetch('/jobs/soziogramm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName }),
+      }).then(r => r.json());
+      localStorage.setItem('lektorat_soziogramm_job_' + bookId, jobId);
+      this.startSoziogrammPoll(jobId);
+    } catch (e) {
+      console.error('[runSoziogrammEnrichment]', e);
+      this.soziogrammStatus   = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
+      this.soziogrammLoading  = false;
+      this.soziogrammProgress = 0;
+    }
+  },
+
+  startSoziogrammPoll(jobId) {
+    const bookId = this.selectedBookId;
+    this._startPoll({
+      timerProp: '_soziogrammPollTimer',
+      jobId,
+      lsKey: 'lektorat_soziogramm_job_' + bookId,
+      onProgress: (job) => {
+        this.soziogrammProgress = job.progress || 0;
+        this.soziogrammStatus   = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, this.soziogrammProgress);
+      },
+      onNotFound: () => {
+        this.soziogrammLoading  = false;
+        this.soziogrammProgress = 0;
+        this.soziogrammStatus   = 'Analyse unterbrochen (Server-Neustart). Bitte neu starten.';
+      },
+      onError: (job) => {
+        this.soziogrammLoading  = false;
+        this.soziogrammProgress = 0;
+        this.soziogrammStatus   = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
+      },
+      onDone: async () => {
+        this.soziogrammLoading  = false;
+        this.soziogrammProgress = 0;
+        await this.loadFiguren(bookId);
+        this.soziogrammStatus   = 'Sozialschichten und Machtstrukturen gespeichert.';
+        this._figurenHash = null; // Graph-Cache invalidieren
+        await this.$nextTick();
+        this.renderFigurGraph();
+      },
+    });
+  },
+
   async runFigurExtraction() {
     const bookId = this.selectedBookId;
     const bookName = this.selectedBookName;

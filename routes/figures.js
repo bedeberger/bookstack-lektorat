@@ -106,7 +106,7 @@ router.get('/:book_id', (req, res) => {
     WHERE f.book_id = ? AND f.user_email = ?
     ORDER BY fe.figure_id, fe.sort_order`).all(bookId, userEmail);
   const rels = db.prepare(
-    'SELECT from_fig_id, to_fig_id, typ, beschreibung FROM figure_relations WHERE book_id = ? AND user_email = ?'
+    'SELECT from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis FROM figure_relations WHERE book_id = ? AND user_email = ?'
   ).all(bookId, userEmail);
 
   const tagMap = {};
@@ -116,7 +116,7 @@ router.get('/:book_id', (req, res) => {
   const evtMap = {};
   for (const e of evts) (evtMap[e.figure_id] ??= []).push({ datum: e.datum, ereignis: e.ereignis, bedeutung: e.bedeutung, typ: e.typ || 'persoenlich', kapitel: e.kapitel || null, seite: e.seite || null });
   const relMap = {};
-  for (const r of rels) (relMap[r.from_fig_id] ??= []).push({ figur_id: r.to_fig_id, typ: r.typ, beschreibung: r.beschreibung });
+  for (const r of rels) (relMap[r.from_fig_id] ??= []).push({ figur_id: r.to_fig_id, typ: r.typ, beschreibung: r.beschreibung, machtverhaltnis: r.machtverhaltnis ?? null });
 
   const sceneFigRows = db.prepare(
     'SELECT fs.kapitel, fs.seite, sf.fig_id FROM figure_scenes fs JOIN scene_figures sf ON sf.scene_id = fs.id WHERE fs.book_id = ? AND fs.user_email = ?'
@@ -139,6 +139,7 @@ router.get('/:book_id', (req, res) => {
     geschlecht: f.geschlecht,
     beruf: f.beruf,
     beschreibung: f.beschreibung,
+    sozialschicht: f.sozialschicht || null,
     eigenschaften: tagMap[f.id] || [],
     kapitel: appMap[f.id] || [],
     seiten: seitenMap[f.fig_id] || [],

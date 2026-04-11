@@ -19,22 +19,63 @@
 
   <!-- Graph -->
   <div x-show="figuren.length > 0" class="figur-graph-section">
-    <!-- Legende Knoten -->
-    <div class="figur-legend">
-      <span class="figur-legend-dot figur-legend-dot--hauptfigur"></span>Hauptfigur
-      <span class="figur-legend-dot figur-legend-dot--antagonist"></span>Antagonist
-      <span class="figur-legend-dot figur-legend-dot--mentor"></span>Mentor
-      <span class="figur-legend-dot figur-legend-dot--nebenfigur"></span>Nebenfigur
-      <span class="figur-legend-dot figur-legend-dot--andere"></span>Andere
+
+    <!-- Modus-Toggle -->
+    <div class="figur-modus-toggle">
+      <button class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'figur' }" @click="figurenGraphModus !== 'figur' && toggleFigurenGraphModus()">Figurengraph</button>
+      <button class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'soziogramm' }" @click="figurenGraphModus !== 'soziogramm' && toggleFigurenGraphModus()">Soziogramm</button>
     </div>
-    <!-- Legende Kanten -->
-    <div class="figur-legend figur-legend--edges">
-      <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--eltern"></span>Eltern</span>
-      <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschwister"></span>Geschwister</span>
-      <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--freund"></span>Freund</span>
-      <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--feind"></span>Feind</span>
-      <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--liebesbeziehung"></span>Liebesbeziehung</span>
-    </div>
+
+    <!-- Legende Figurengraph -->
+    <template x-if="figurenGraphModus === 'figur'">
+      <div>
+        <div class="figur-legend">
+          <span class="figur-legend-dot figur-legend-dot--hauptfigur"></span>Hauptfigur
+          <span class="figur-legend-dot figur-legend-dot--antagonist"></span>Antagonist
+          <span class="figur-legend-dot figur-legend-dot--mentor"></span>Mentor
+          <span class="figur-legend-dot figur-legend-dot--nebenfigur"></span>Nebenfigur
+          <span class="figur-legend-dot figur-legend-dot--andere"></span>Andere
+        </div>
+        <div class="figur-legend figur-legend--edges">
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--eltern"></span>Eltern</span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschwister"></span>Geschwister</span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--freund"></span>Freund</span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--feind"></span>Feind</span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--liebesbeziehung"></span>Liebesbeziehung</span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--patronage"></span>Patronage</span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschaeft"></span>Geschäft</span>
+        </div>
+      </div>
+    </template>
+
+    <!-- Legende Soziogramm -->
+    <template x-if="figurenGraphModus === 'soziogramm'">
+      <div>
+        <div class="figur-legend figur-legend--soziogramm">
+          <span class="figur-legend-dot figur-legend-dot--adel"></span>Adel
+          <span class="figur-legend-dot figur-legend-dot--klerus"></span>Klerus
+          <span class="figur-legend-dot figur-legend-dot--grossbuergertum"></span>Großbürgertum
+          <span class="figur-legend-dot figur-legend-dot--buergertum"></span>Bürgertum
+          <span class="figur-legend-dot figur-legend-dot--kleinbuergertum"></span>Kleinbürgertum
+          <span class="figur-legend-dot figur-legend-dot--arbeiterklasse"></span>Arbeiterklasse
+          <span class="figur-legend-dot figur-legend-dot--unterwelt"></span>Unterwelt
+        </div>
+        <div class="figur-soziogramm-hint">
+          Pfeilstärke = Machtasymmetrie · Knotenzeilen = Gesellschaftsschicht · Pfeilrichtung = Mächtiger → Schwächerer
+        </div>
+        <div class="figur-soziogramm-actions">
+          <button @click="runSoziogrammEnrichment()" :disabled="soziogrammLoading || !figuren.length">
+            <span x-show="soziogrammLoading" class="spinner"></span>
+            Sozialschichten analysieren
+          </button>
+          <span x-show="soziogrammStatus" class="figur-sozio-status" x-html="soziogrammStatus"></span>
+        </div>
+        <div x-show="soziogrammProgress > 0" class="progress-bar-wrap">
+          <div class="progress-bar" :style="'width:' + soziogrammProgress + '%'"></div>
+        </div>
+      </div>
+    </template>
+
     <div class="figuren-graph-toolbar">
       <button class="graph-tool-btn" title="Zoom in" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 1.3, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">+</button>
       <button class="graph-tool-btn" title="Zoom out" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 0.77, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">−</button>
@@ -92,10 +133,11 @@
         </div>
         <div x-show="selectedFigurId === f.id" class="figur-detail">
           <p x-show="f.beschreibung" x-text="f.beschreibung" class="figur-beschreibung"></p>
-          <!-- Beruf -->
-          <div x-show="f.beruf" class="figur-detail-row">
-            <span class="bewertung-section-title bewertung-section-title--inline">Beruf:&nbsp;</span>
-            <span class="figur-detail-value" x-text="f.beruf"></span>
+          <!-- Beruf + Sozialschicht -->
+          <div x-show="f.beruf || f.sozialschicht" class="figur-detail-row">
+            <span x-show="f.beruf" class="bewertung-section-title bewertung-section-title--inline">Beruf:&nbsp;</span>
+            <span x-show="f.beruf" class="figur-detail-value" x-text="f.beruf"></span>
+            <span x-show="f.sozialschicht" class="tag figur-sozialschicht-badge" :class="'figur-schicht-' + f.sozialschicht" x-text="({ adel:'Adel', klerus:'Klerus', grossbuergertum:'Großbürgertum', buergertum:'Bürgertum', kleinbuergertum:'Kleinbürgertum', arbeiterklasse:'Arbeiterklasse', unterwelt:'Unterwelt', andere:'—' })[f.sozialschicht] || f.sozialschicht"></span>
           </div>
           <!-- Kapitelauftritte -->
           <div class="figur-kapitelauftritte" x-show="f.kapitel?.length > 1">
@@ -134,6 +176,7 @@
                 <div class="figur-beziehung-item">
                   <span class="figur-bz-typ" :class="'figur-bz-' + bz.typ" x-text="bz.typ"></span>
                   <span class="figur-bz-name internal-link" @click.stop="openFigurById(bz.figur_id)" x-text="figuren.find(x => x.id === bz.figur_id)?.name || bz.figur_id"></span>
+                  <span x-show="bz.machtverhaltnis && bz.machtverhaltnis !== 0" class="figur-bz-macht" :class="bz.machtverhaltnis > 0 ? 'figur-bz-macht--positiv' : 'figur-bz-macht--negativ'" x-text="bz.machtverhaltnis > 0 ? '↑'.repeat(Math.abs(bz.machtverhaltnis)) : '↓'.repeat(Math.abs(bz.machtverhaltnis))"></span>
                   <span x-show="bz.beschreibung" class="figur-bz-hint" x-text="'– ' + bz.beschreibung"></span>
                 </div>
               </template>

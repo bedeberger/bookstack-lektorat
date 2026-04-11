@@ -10,6 +10,7 @@ KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). L�
 - **Ereignisse** - Automatische Übersicht aller Ereignisse pro Kapitel und Figuren
 - **Schauplätze** - Automatische Übersicht der wichtigsten Schauplätze pro Kapitel und Figuren
 - **Szenen** - Analyse aller Szenen im Buch
+- **Kontinuitätsprüfer** - Gibt es irgendwo Widersprüche?
 - **Buchstatistik** – Tägliche Snapshots von Wortanzahl, Zeichenanzahl und Tokenverbrauch als Zeitliniendiagramm
 - **Zwei KI-Provider** – Anthropic Claude (Cloud) oder Ollama (lokal/offline)
 

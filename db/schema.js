@@ -787,6 +787,15 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 30 abgeschlossen (book_settings Tabelle hinzugefügt).');
   }
 
+  if (version < 31) {
+    const figCols31  = db.pragma('table_info(figures)').map(c => c.name);
+    const frelCols31 = db.pragma('table_info(figure_relations)').map(c => c.name);
+    if (!figCols31.includes('sozialschicht'))    db.exec('ALTER TABLE figures ADD COLUMN sozialschicht TEXT');
+    if (!frelCols31.includes('machtverhaltnis')) db.exec('ALTER TABLE figure_relations ADD COLUMN machtverhaltnis INTEGER');
+    db.prepare('UPDATE schema_version SET version = 31').run();
+    logger.info('DB-Migration auf Version 31 abgeschlossen (figures.sozialschicht + figure_relations.machtverhaltnis hinzugefügt).');
+  }
+
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).
   //    Diese Checks sind idempotent und laufen bei jedem Start.
@@ -866,19 +875,19 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
     }
 
     const insFig = db.prepare(`
-      INSERT INTO figures (book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sort_order, user_email, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      INSERT INTO figures (book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sozialschicht, sort_order, user_email, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insTag = db.prepare('INSERT OR IGNORE INTO figure_tags (figure_id, tag) VALUES (?, ?)');
     const insApp = db.prepare('INSERT OR IGNORE INTO figure_appearances (figure_id, chapter_name, chapter_id, haeufigkeit) VALUES (?, ?, ?, ?)');
     const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, kapitel, seite, chapter_id, page_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-    const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, user_email) VALUES (?, ?, ?, ?, ?, ?)');
+    const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, user_email) VALUES (?, ?, ?, ?, ?, ?, ?)');
 
     for (let i = 0; i < figuren.length; i++) {
       const f = figuren[i];
       const { lastInsertRowid: fid } = insFig.run(
         bookId, f.id, f.name, f.kurzname || null, f.typ || null,
         f.geburtstag || null, f.geschlecht || null, f.beruf || null,
-        f.beschreibung || null, i, userEmail || null, now
+        f.beschreibung || null, f.sozialschicht || null, i, userEmail || null, now
       );
       for (const tag of (f.eigenschaften || [])) insTag.run(fid, tag);
       for (const app of (f.kapitel || [])) insApp.run(fid, app.name, idMaps?.chNameToId?.[app.name] ?? null, app.haeufigkeit || 1);
@@ -886,7 +895,7 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
         const ev = f.lebensereignisse[j];
         insEvt.run(fid, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', ev.kapitel || null, ev.seite || null, idMaps?.chNameToId?.[ev.kapitel] ?? null, idMaps?.pageNameToId?.[ev.seite] ?? null, j);
       }
-      for (const bz of (f.beziehungen || [])) insRel.run(bookId, f.id, bz.figur_id, bz.typ, bz.beschreibung || null, userEmail || null);
+      for (const bz of (f.beziehungen || [])) insRel.run(bookId, f.id, bz.figur_id, bz.typ, bz.beschreibung || null, bz.machtverhaltnis ?? null, userEmail || null);
     }
   })();
 }
@@ -1297,4 +1306,24 @@ function saveBookSettings(bookId, language, region) {
   _upsertBookSettings.run(parseInt(bookId), language, region, new Date().toISOString());
 }
 
-module.exports = { db, saveFigurenToDb, updateFigurenEvents, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings };
+// Sozialschicht + Machtverhältnis für bestehende Figuren/Beziehungen nachträglich setzen.
+// figurenSoziogramm: [{ fig_id, sozialschicht }]
+// beziehungenMacht:  [{ from_fig_id, to_fig_id, machtverhaltnis }]
+function updateFigurenSoziogramm(bookId, figurenSoziogramm, beziehungenMacht, userEmail) {
+  db.transaction(() => {
+    const updFig = db.prepare(
+      'UPDATE figures SET sozialschicht = ? WHERE book_id = ? AND fig_id = ? AND user_email IS ?'
+    );
+    for (const f of (figurenSoziogramm || [])) {
+      updFig.run(f.sozialschicht || null, bookId, f.fig_id, userEmail || null);
+    }
+    const updRel = db.prepare(
+      'UPDATE figure_relations SET machtverhaltnis = ? WHERE book_id = ? AND from_fig_id = ? AND to_fig_id = ? AND user_email IS ?'
+    );
+    for (const bz of (beziehungenMacht || [])) {
+      updRel.run(bz.machtverhaltnis ?? null, bookId, bz.from_fig_id, bz.to_fig_id, userEmail || null);
+    }
+  })();
+}
+
+module.exports = { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings };
