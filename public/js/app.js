@@ -286,6 +286,7 @@ document.addEventListener('alpine:init', () => {
     alleAktualisierenProgress: 0,
     alleAktualisierenTokIn: 0,
     alleAktualisierenTokOut: 0,
+    alleAktualisierenTps: null,
     showKomplettStatus: false,
     showBookSettingsCard: false,
     bookSettingsLanguage: 'de',
@@ -625,6 +626,7 @@ document.addEventListener('alpine:init', () => {
       this.alleAktualisierenProgress = 0;
       this.alleAktualisierenTokIn = 0;
       this.alleAktualisierenTokOut = 0;
+      this.alleAktualisierenTps = null;
       this.showKomplettStatus = true;
       const bookId = this.selectedBookId;
       const bookName = this.selectedBookName;
@@ -657,6 +659,7 @@ document.addEventListener('alpine:init', () => {
             if (job.progress != null) this.alleAktualisierenProgress = job.progress;
             if (job.tokensIn != null) this.alleAktualisierenTokIn = job.tokensIn;
             if (job.tokensOut != null) this.alleAktualisierenTokOut = job.tokensOut;
+            if (job.tokensPerSec != null) this.alleAktualisierenTps = job.tokensPerSec;
             if (job.status === 'done') { clearInterval(timer); resolve(job); }
             else if (job.status === 'error' || job.status === 'cancelled') {
               clearInterval(timer);
@@ -712,12 +715,13 @@ document.addEventListener('alpine:init', () => {
 
     // Generiertes Status-HTML für laufende Jobs: Spinner + statusText + Token-Info.
     // Wird von review.js, figuren.js und lektorat.js (batchCheck) verwendet.
-    _runningJobStatus(statusText, tokIn, tokOut, maxTokOut, progress) {
+    _runningJobStatus(statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec) {
       let tokInfo = '';
       if ((tokIn || 0) + (tokOut || 0) > 0) {
         const pctPart = (progress > 0 && progress < 100) ? ` ~${progress}%` : '';
         const maxPart = maxTokOut ? ` (max. ${fmtTok(maxTokOut)})` : '';
-        tokInfo = ` · ↑${fmtTok(tokIn || 0)} ↓${fmtTok(tokOut || 0)} Tokens${pctPart}${maxPart}`;
+        const tpsPart = tokPerSec ? ` · ${Math.round(tokPerSec)} tok/s` : '';
+        tokInfo = ` · ↑${fmtTok(tokIn || 0)} ↓${fmtTok(tokOut || 0)} Tokens${pctPart}${maxPart}${tpsPart}`;
       }
       return `<span class="spinner"></span>${escHtml(statusText || '…')}${tokInfo}`;
     },
@@ -930,7 +934,7 @@ document.addEventListener('alpine:init', () => {
             if (job.status === 'running') {
               this.batchLoading = true;
               this.batchProgress = job.progress || 0;
-              this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
+              this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec);
               this.startBatchPoll(batchJobId);
             } else {
               localStorage.removeItem('lektorat_batchcheck_job_' + bookId);
@@ -952,6 +956,7 @@ document.addEventListener('alpine:init', () => {
             this.alleAktualisierenProgress = progress || 0;
             this.alleAktualisierenTokIn = 0;
             this.alleAktualisierenTokOut = 0;
+            this.alleAktualisierenTps = null;
             this.alleAktualisierenStatus = statusText || 'Komplettanalyse läuft…';
             this.showKomplettStatus = true;
             this._pollKomplettJob(jobId, bookId)
@@ -1136,6 +1141,7 @@ document.addEventListener('alpine:init', () => {
       this.alleAktualisierenProgress = 0;
       this.alleAktualisierenTokIn = 0;
       this.alleAktualisierenTokOut = 0;
+      this.alleAktualisierenTps = null;
       this.showKomplettStatus = false;
       this.resetChat();
       this.resetBookChat();

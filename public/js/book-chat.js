@@ -138,7 +138,7 @@ export const bookChatMethods = {
       jobId,
       lsKey: null,
       onProgress: (job) => {
-        this.bookChatStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
+        this.bookChatStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec);
       },
       onNotFound: async () => {
         this.bookChatLoading   = false;

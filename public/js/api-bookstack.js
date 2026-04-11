@@ -81,14 +81,19 @@ export const bookstackMethods = {
     const aiBase = html.length || 1;
     this.setStatus('KI überarbeitet Stil… (0 Zeichen)', true);
     try {
+      let completionInfo = null;
       const result = await this.callAI(
         buildStilkorrekturPrompt(html, selectedStyles),
         SYSTEM_STILKORREKTUR,
         (chars) => {
           this.setStatus(`KI überarbeitet Stil… (${chars} Zeichen)`, true);
           if (onProgress) onProgress(chars, aiBase);
-        }
+        },
+        ({ tokensIn, tokensOut, tokPerSec }) => { completionInfo = { tokensIn, tokensOut, tokPerSec }; }
       );
+      if (completionInfo?.tokPerSec) {
+        this.setStatus(`KI überarbeitet Stil… (${completionInfo.tokPerSec} tok/s)`, true);
+      }
       if (Array.isArray(result?.korrekturen) && result.korrekturen.length > 0) {
         return this._applyCorrections(html, result.korrekturen.map(k => ({ original: k.original, korrektur: k.ersatz })));
       }

@@ -157,9 +157,12 @@ export const chatMethods = {
       onProgress: (job) => {
         const tokIn  = job.tokensIn  || 0;
         const tokOut = job.tokensOut || 0;
-        this.chatStatus = tokIn + tokOut > 0
-          ? `<span class="muted-msg">↑${fmtTok(tokIn)} ↓${fmtTok(tokOut)} Tokens</span>`
-          : '';
+        if (tokIn + tokOut > 0) {
+          const tpsPart = job.tokensPerSec ? ` · ${Math.round(job.tokensPerSec)} tok/s` : '';
+          this.chatStatus = `<span class="muted-msg">↑${fmtTok(tokIn)} ↓${fmtTok(tokOut)} Tokens${tpsPart}</span>`;
+        } else {
+          this.chatStatus = '';
+        }
       },
       onNotFound: async () => {
         this.chatLoading = false;
@@ -236,7 +239,8 @@ export const chatMethods = {
   /** Formatiert Token-Info für eine Assistant-Nachricht. */
   _chatTokenInfo(msg) {
     if (!msg.tokens_in && !msg.tokens_out) return '';
-    return `↑${fmtTok(msg.tokens_in || 0)} ↓${fmtTok(msg.tokens_out || 0)}`;
+    const tpsPart = msg.tps ? ` · ${Math.round(msg.tps)} tok/s` : '';
+    return `↑${fmtTok(msg.tokens_in || 0)} ↓${fmtTok(msg.tokens_out || 0)}${tpsPart}`;
   },
 
   /** Wird beim Seitenwechsel (selectPage / resetPage) aufgerufen. */

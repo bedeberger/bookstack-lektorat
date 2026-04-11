@@ -636,7 +636,8 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
   tok.in += tokensIn;
   tok.out += tokensOut;
   if (genDurationMs != null) tok.ms += genDurationMs;
-  updateJob(jobId, { tokensIn: tok.in, tokensOut: tok.out });
+  const liveTps = tok.ms > 0 ? tok.out / (tok.ms / 1000) : null;
+  updateJob(jobId, { tokensIn: tok.in, tokensOut: tok.out, tokensPerSec: liveTps });
   if (truncated) throw new Error(`KI-Antwort wurde bei ${maxTokensOverride} max_tokens abgeschnitten (tokIn=${tokensIn}, tokOut=${tokensOut}, total=${tokensIn + tokensOut}). JSON ist unvollständig.`);
   return parseJSON(text);
 }
@@ -1462,17 +1463,16 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
 
     // Assistant-Nachricht in DB speichern
     const assistantNow = new Date().toISOString();
+    const chatTps = (genDurationMs != null && tokensOut > 0) ? tokensOut / (genDurationMs / 1000) : null;
     const asstMsgResult = db.prepare(`
-      INSERT INTO chat_messages (session_id, role, content, vorschlaege, tokens_in, tokens_out, created_at)
-      VALUES (?, 'assistant', ?, ?, ?, ?, ?)
+      INSERT INTO chat_messages (session_id, role, content, vorschlaege, tokens_in, tokens_out, tps, created_at)
+      VALUES (?, 'assistant', ?, ?, ?, ?, ?, ?)
     `).run(
       session.id, antwort,
       vorschlaege.length > 0 ? JSON.stringify(vorschlaege) : null,
-      tokensIn, tokensOut, assistantNow
+      tokensIn, tokensOut, chatTps, assistantNow
     );
     db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(assistantNow, session.id);
-
-    const chatTps = (genDurationMs != null && tokensOut > 0) ? tokensOut / (genDurationMs / 1000) : null;
     completeJob(jobId, {
       session_id: session.id,
       user_message_id: userMsgId,
@@ -1661,13 +1661,12 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
 
     // Assistant-Nachricht in DB speichern (vorschlaege=NULL)
     const assistantNow = new Date().toISOString();
-    const asstMsgResult = db.prepare(`
-      INSERT INTO chat_messages (session_id, role, content, tokens_in, tokens_out, context_info, created_at)
-      VALUES (?, 'assistant', ?, ?, ?, ?, ?)
-    `).run(session.id, antwort, tokensIn, tokensOut, JSON.stringify(contextInfo), assistantNow);
-    db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(assistantNow, session.id);
-
     const bookChatTps = (genDurationMs != null && tokensOut > 0) ? tokensOut / (genDurationMs / 1000) : null;
+    const asstMsgResult = db.prepare(`
+      INSERT INTO chat_messages (session_id, role, content, tokens_in, tokens_out, tps, context_info, created_at)
+      VALUES (?, 'assistant', ?, ?, ?, ?, ?, ?)
+    `).run(session.id, antwort, tokensIn, tokensOut, bookChatTps, JSON.stringify(contextInfo), assistantNow);
+    db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(assistantNow, session.id);
     completeJob(jobId, {
       session_id: session.id,
       user_message_id: userMsgId,

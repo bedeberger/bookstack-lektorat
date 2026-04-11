@@ -35,7 +35,7 @@
         </div>
         <div class="komplett-progress-label">
           <span x-text="alleAktualisierenStatus || 'Abgeschlossen'"></span>
-          <span x-show="alleAktualisierenTokIn > 0 || alleAktualisierenTokOut > 0" class="komplett-tokens" x-text="`↑${_fmtTok(alleAktualisierenTokIn)} ↓${_fmtTok(alleAktualisierenTokOut)}`"></span>
+          <span x-show="alleAktualisierenTokIn > 0 || alleAktualisierenTokOut > 0" class="komplett-tokens" x-text="`↑${_fmtTok(alleAktualisierenTokIn)} ↓${_fmtTok(alleAktualisierenTokOut)}${alleAktualisierenTps ? ' · ' + Math.round(alleAktualisierenTps) + ' tok/s' : ''}`"></span>
         </div>
         <ul class="komplett-phase-list">
           <template x-for="phase in _komplettPhasen()">

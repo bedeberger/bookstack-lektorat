@@ -250,7 +250,7 @@ router.get('/session/:id', (req, res) => {
   if (!session) return res.status(404).json({ error: 'Session nicht gefunden.' });
 
   const messages = db.prepare(`
-    SELECT id, role, content, vorschlaege, tokens_in, tokens_out, context_info, created_at
+    SELECT id, role, content, vorschlaege, tokens_in, tokens_out, tps, context_info, created_at
     FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC
   `).all(session.id);
 

@@ -138,7 +138,7 @@ export const lektoratMethods = {
       onProgress: (job) => {
         if (this.currentPage?.id !== pageId) return;
         this.checkProgress = job.progress || 0;
-        this.status = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
+        this.status = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec);
         this.statusSpinner = false;
       },
       onNotFound: () => {
@@ -310,7 +310,7 @@ export const lektoratMethods = {
       lsKey: 'lektorat_batchcheck_job_' + bookId,
       progressProp: 'batchProgress',
       onProgress: (job) => {
-        this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
+        this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec);
       },
       onNotFound: () => {
         this.batchLoading = false;

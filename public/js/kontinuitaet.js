@@ -8,7 +8,6 @@ export const kontinuitaetMethods = {
     if (this.showKontinuitaetCard) { await this._loadKontinuitaetHistory(); return; }
     this._closeOtherMainCards('kontinuitaet');
     this.showKontinuitaetCard = true;
-    await this.loadPages();
     if (!this.figuren?.length) await this.loadFiguren(this.selectedBookId);
     await this._loadKontinuitaetHistory();
     // Prüfen ob bereits ein Job läuft
@@ -44,7 +43,7 @@ export const kontinuitaetMethods = {
       lsKey: 'lektorat_kontinuitaet_job_' + bookId,
       progressProp: 'kontinuitaetProgress',
       onProgress: (job) => {
-        this.kontinuitaetStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress);
+        this.kontinuitaetStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec);
       },
       onNotFound: () => {
         this.kontinuitaetLoading = false;

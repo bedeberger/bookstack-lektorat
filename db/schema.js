@@ -866,6 +866,14 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 33').run();
     logger.info('DB-Migration auf Version 33 abgeschlossen (arc_stages.chapter_id hinzugefügt).');
   }
+  if (version < 34) {
+    const cols34 = db.pragma('table_info(chat_messages)').map(c => c.name);
+    if (!cols34.includes('tps')) {
+      db.exec('ALTER TABLE chat_messages ADD COLUMN tps REAL');
+    }
+    db.prepare('UPDATE schema_version SET version = 34').run();
+    logger.info('DB-Migration auf Version 34 abgeschlossen (chat_messages.tps hinzugefügt).');
+  }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).

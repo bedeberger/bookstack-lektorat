@@ -98,6 +98,7 @@ export const aiMethods = {
     let fullText = '';
     let buffer = '';
     let tokensIn = 0, tokensOut = 0;
+    let t_first = 0, t_last = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -117,6 +118,9 @@ export const aiMethods = {
           } else if (ev.type === 'message_delta' && ev.usage) {
             tokensOut = ev.usage.output_tokens || 0;
           } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+            const now = Date.now();
+            if (!t_first) t_first = now;
+            t_last = now;
             fullText += ev.delta.text;
             if (onProgress) onProgress(fullText.length, tokensIn);
           }
@@ -126,7 +130,9 @@ export const aiMethods = {
       }
     }
 
-    if (onComplete) onComplete({ tokensIn, tokensOut });
+    const genDurationMs = (t_first && t_last > t_first) ? t_last - t_first : null;
+    const tokPerSec = (genDurationMs && tokensOut > 0) ? Math.round(tokensOut / (genDurationMs / 1000)) : null;
+    if (onComplete) onComplete({ tokensIn, tokensOut, tokPerSec });
     return _parseJson(fullText);
   },
 };
