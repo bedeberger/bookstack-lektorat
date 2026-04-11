@@ -8,7 +8,7 @@ export const charakterentwicklungMethods = {
     if (this.showCharacterArcsCard) { this.showCharacterArcsCard = false; return; }
     this._closeOtherMainCards('characterArcs');
     this.showCharacterArcsCard = true;
-    if (!this.figuren?.length) await this.loadFiguren();
+    if (!this.figuren?.length) await this.loadFiguren(this.selectedBookId);
     await this.loadCharacterArcs();
     // Prüfen ob bereits ein Job läuft
     if (!this._characterArcsPollTimer && !this.characterArcsLoading) {

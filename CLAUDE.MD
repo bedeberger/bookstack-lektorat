@@ -99,3 +99,43 @@ SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein B
 **Feature-Exklusivität (Standardverhalten):** Features überschreiben sich gegenseitig – es ist immer nur eine Hauptansicht aktiv. Buchebenen-Features (Figuren, Szenen, Ereignisse, Orte, Kontinuität, Buchbewertung, Buchstatistik, Buch-Chat) und Seitenebenen-Features (Lektorat-Editor) sind gegenseitig exklusiv. Jedes Buchebenen-Toggle ruft `_closeOtherMainCards(keep)` in `app.js` auf – das schliesst alle anderen Buchkarten und ruft `resetPage()` auf (schliesst Editor + Seiten-Features). `selectPage()` schliesst seinerseits alle Buchkarten bevor es den Editor öffnet. Neues Feature-Toggle immer nach diesem Muster implementieren.
 
 **Two-Tier-Analyse-Pattern:** `routes/jobs.js` implementiert für Review, Figurenextraktion und Buch-Chat ein Two-Tier-Muster: `SINGLE_PASS_LIMIT` = 60 000 Zeichen – darunter Single-Pass direkt an Claude, darüber Multi-Pass pro Kapitel + Konsolidierungs-Call.
+
+## Komplettanalyse-Job (`komplett-analyse`)
+
+Der Button **«Alles aktualisieren»** ruft seit der Umstellung nicht mehr einzelne Jobs nacheinander auf, sondern einen einzigen serverseitigen Job `/jobs/komplett-analyse`. Dieser ersetzt die frühere frontend-gesteuerte Sequenz aus 7 Jobs und ist ~50 % token-effizienter, weil jeder Kapiteltext nur zweimal statt fünfmal an die API gesendet wird.
+
+**Pipeline (intern, ein einziger Job):**
+
+```
+Phase 1 – Figuren + Schauplätze kombiniert (parallel pro Kapitel)
+          buildExtraktionFigurenOrteChapterPrompt()  ← Compositor über FIGUREN_BASIS_SCHEMA + ORTE_SCHEMA
+          → Checkpoint 'p1_done' nach Abschluss
+
+Phase 2 – Figuren konsolidieren
+          buildFiguresBasisConsolidationPrompt()     ← bestehend, unverändert
+          → saveFigurenToDb()
+
+Phase 3 – Schauplätze konsolidieren
+          buildLocationsConsolidationPrompt()        ← bestehend, unverändert
+          → saveOrteToDb()
+
+Phase 4 – Soziogramm
+          buildFigurSoziogrammEnrichmentPrompt()     ← bestehend, unverändert
+
+Phase 5 – Szenen + Ereignisse kombiniert (parallel pro Kapitel, konsolidierte Figuren als Kontext)
+          buildExtraktionSzenenEreignisseChapterPrompt()  ← Compositor, dynamisch
+          → figure_scenes speichern + updateFigurenEvents()
+
+Phase 6 – Zeitstrahl konsolidieren
+          buildZeitstrahlConsolidationPrompt()       ← bestehend, unverändert
+
+Phase 7 – Entwicklungsbögen
+          buildEntwicklungsbogenChapterPrompt() + buildEntwicklungsbogenConsolidationPrompt()
+          ← bestehend, unverändert
+```
+
+**Prompt-Komposition ohne Duplikation:** `buildExtraktionFigurenOrteChapterPrompt()` und `buildExtraktionSzenenEreignisseChapterPrompt()` leben in `public/js/prompts.js` und referenzieren die bestehenden Schema-Konstanten (`FIGUREN_BASIS_SCHEMA`, `ORTE_SCHEMA` etc.) via `_schemaBody()`. Einzelne Jobs (figuren, locations, szenen, etc.) bleiben unverändert und teilen dieselben Schema-Konstanten.
+
+**Checkpoint:** Der Job setzt nach Phase 1 einen Checkpoint (`phase: 'p1_done'` mit `chapterFiguren` + `chapterOrte`). Bei einem Neustart nach Fehler wird Phase 1 übersprungen und direkt mit der Konsolidierung fortgefahren.
+
+**UI:** `alleAktualisieren()` in `app.js` startet nur noch `/jobs/komplett-analyse` und pollt den Fortschritt. Nach Abschluss werden `loadFiguren`, `loadOrte`, `loadSzenen` und `loadCharacterArcs` parallel neu geladen.

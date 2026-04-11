@@ -93,7 +93,7 @@ export const kontinuitaetMethods = {
   kontinuitaetIssuesBySwere() {
     if (!this.kontinuitaetResult?.issues) return { kritisch: [], mittel: [], niedrig: [] };
     const groups = { kritisch: [], mittel: [], niedrig: [] };
-    for (const issue of this.kontinuitaetResult.issues) {
+    for (const issue of this.kontinuitaetIssuesFiltered) {
       const s = issue.schwere || 'niedrig';
       if (groups[s]) groups[s].push(issue);
       else groups.niedrig.push(issue);

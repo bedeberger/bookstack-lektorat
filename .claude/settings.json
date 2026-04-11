@@ -31,7 +31,8 @@
       "Bash(node -e \"require\\('./db/schema'\\)\")",
       "Bash(node -e \"require\\('./routes/figures'\\)\")",
       "Bash(node -e \"require\\('./routes/jobs'\\)\")",
-      "Bash(node --input-type=module)"
+      "Bash(node --input-type=module)",
+      "Bash(grep -n \"szenenFilterFigurId\\\\|szenenFilterKapitel\\\\|szenenFilterSeite\\\\|szenenFilterOrtId\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/*.js)"
     ]
   }
 }

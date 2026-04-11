@@ -566,6 +566,114 @@ Kapiteltext:
 ${chText}`;
 }
 
+// ── Komplett-Analyse (kombinierte Extraktion) ─────────────────────────────────
+// Hilfsfunktion: Extrahiert den Inhalt des äussersten Objekts aus einem Schema-String.
+// Ermöglicht das Zusammensetzen von Schemas ohne Duplikation der Felddefinitionen.
+function _schemaBody(schemaStr) {
+  return schemaStr.trim().replace(/^\s*\{\s*/, '').replace(/\s*\}\s*$/, '').trim();
+}
+
+/**
+ * Kombinierter Kapitel-Extraktions-Prompt: Figuren + Schauplätze in einem einzigen Call.
+ * Referenziert FIGUREN_BASIS_SCHEMA, FIGUREN_BASIS_RULES, ORTE_SCHEMA, ORTE_RULES direkt –
+ * keine Duplikation. Wird ausschliesslich vom komplett-analyse-Job verwendet.
+ */
+export function buildExtraktionFigurenOrteChapterPrompt(chapterName, bookName, pageCount, chText) {
+  const isSinglePass = chapterName === 'Gesamtbuch';
+  const kapitelNote = isSinglePass
+    ? 'Für kapitel[].name der Figuren den jeweiligen Kapitelnamen aus dem [Kapitelname]-Teil der ### Überschriften verwenden.'
+    : `Für kapitel[].name aller Figuren immer genau «${chapterName}» verwenden – die ### Überschriften im Text sind Seitentitel, keine Kapitelnamen.`;
+  return `Extrahiere alle Figuren und Schauplätze aus ${isSinglePass ? `dem Buch «${bookName}»` : `dem Kapitel «${chapterName}» des Buchs «${bookName}»`}.
+
+Antworte mit diesem JSON-Schema:
+{
+  ${_schemaBody(FIGUREN_BASIS_SCHEMA)},
+  ${_schemaBody(ORTE_SCHEMA)}
+}
+
+Figuren-Regeln:
+${FIGUREN_BASIS_RULES}
+${kapitelNote}
+
+Schauplatz-Regeln:
+${ORTE_RULES}
+
+${JSON_ONLY}
+
+${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} Seiten)`}:
+
+${chText}`;
+}
+
+/**
+ * Kombinierter Kapitel-Extraktions-Prompt: Szenen + Lebensereignisse in einem einzigen Call.
+ * Setzt konsolidierte Figuren und Orte aus der DB voraus (nach Phase 1+2 der Komplettanalyse).
+ */
+export function buildExtraktionSzenenEreignisseChapterPrompt(chapterName, bookName, pageCount, figurenKompakt, orteKompakt, chText) {
+  const figurenStr = figurenKompakt.length
+    ? figurenKompakt.map(f => `${f.id}: ${f.name} (${f.typ || 'andere'})`).join('\n')
+    : '(keine Figuren bekannt)';
+  const orteStr = orteKompakt.length
+    ? orteKompakt.map(o => `${o.id}: ${o.name}`).join('\n')
+    : '(keine Schauplätze bekannt)';
+  return `Analysiere das Kapitel «${chapterName}» des Buchs «${bookName}» und extrahiere gleichzeitig Szenen und Lebensereignisse der Figuren.
+
+Bekannte Figuren (nur diese IDs verwenden):
+${figurenStr}
+
+Bekannte Schauplätze (nur diese IDs in «orte» verwenden):
+${orteStr}
+
+Antworte mit diesem JSON-Schema:
+{
+  "szenen": [
+    {
+      "seite": "Name der Seite/des Abschnitts (leer wenn unklar)",
+      "titel": "Kurze Szenenbezeichnung (1 Satz)",
+      "wertung": "stark|mittel|schwach",
+      "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)",
+      "figuren": ["fig_1", "fig_2"],
+      "orte": ["ort_1"]
+    }
+  ],
+  "assignments": [
+    {
+      "fig_id": "fig_1",
+      "lebensereignisse": [
+        {
+          "datum": "JJJJ (nur Jahreszahl; aus Kontext errechnen wenn nötig; leer wenn nicht errechenbar)",
+          "ereignis": "Was passierte (1 Satz)",
+          "typ": "persoenlich|extern",
+          "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)",
+          "kapitel": "${chapterName}",
+          "seite": "Name der Seite/des Abschnitts (aus ### Überschrift; leer wenn unklar)"
+        }
+      ]
+    }
+  ]
+}
+
+Szenen-Regeln:
+- Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
+- figuren: nur IDs aus der obigen Figurenliste; leer wenn keine bekannte Figur aktiv beteiligt
+- orte: nur IDs aus der Schauplatzliste; leer wenn kein passender Ort bekannt
+- wertung: «stark» = überzeugend, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
+- Wenn ein Abschnitt keine erkennbaren Szenen enthält (reine Exposition, Beschreibung): «szenen» als leeres Array
+
+Ereignis-Regeln:
+- typ='persoenlich': echte biografische Wendepunkte (Geburt, Tod, Trauma, neue/beendete Beziehung, Jobwechsel, Umzug, wichtige Entscheidung) – nur wenn tatsächlich im Text belegt
+- typ='extern': gesellschaftliche/historische Ereignisse – SEHR GROSSZÜGIG erfassen: Kriege, politische Umbrüche, Sport- und Kulturereignisse, Wirtschaftskrisen, Seuchen, Naturkatastrophen; auch wenn nur kurz erwähnt; jedes externe Ereignis ALLEN betroffenen Figuren zuweisen
+- datum: immer als vierstellige Jahreszahl (JJJJ) – aus Kontext errechnen wenn nötig; Events ohne errechenbare Jahreszahl weglassen
+- Nur fig_id-Werte aus der obigen Figurenliste verwenden
+- Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden
+
+${JSON_ONLY}
+
+Kapiteltext (${pageCount} Seiten):
+
+${chText}`;
+}
+
 export function buildZeitstrahlConsolidationPrompt(events) {
   return `Du erhältst eine Liste von Lebensereignissen verschiedener Figuren aus einem Buch. Erkenne semantisch identische oder sehr ähnliche Ereignisse (gleicher realer Vorfall, nur unterschiedlich formuliert) und fasse sie zu einem einzigen Eintrag zusammen. Führe die Figurenlisten zusammen und wähle die präziseste Formulierung.
 
@@ -858,6 +966,8 @@ Antworte mit diesem JSON-Schema:
       "beschreibung": "Was genau widerspricht sich (1-2 Sätze)",
       "stelle_a": "Erste Textstelle (Kapitel: Seite oder Abschnitt)",
       "stelle_b": "Zweite Textstelle (Kapitel: Seite oder Abschnitt)",
+      "figuren": ["Name der direkt betroffenen Figur"],
+      "kapitel": ["Exakter Kapitelname A", "Exakter Kapitelname B"],
       "empfehlung": "Wie könnte das aufgelöst werden (1 Satz)"
     }
   ],
@@ -868,6 +978,8 @@ Regeln:
 - Nur echte Widersprüche – keine stilistischen oder inhaltlichen Anmerkungen
 - schwere: «kritisch» = klarer Logikfehler der auffällt; «mittel» = wahrscheinlicher Fehler; «niedrig» = mögliche Inkonsistenz
 - Soziolekt-Probleme: nur wenn klar ein Sprachmuster etabliert wurde und dann ohne Begründung bricht – nicht melden wenn Figur wenig Dialoganteil hat
+- figuren: Namen exakt wie in der Figurenliste; leeres Array wenn keine Figur direkt betroffen (z.B. rein ortsbezogene Widersprüche)
+- kapitel: exakte Kapitelnamen aus dem Text; wenn beide Stellen im selben Kapitel: nur einmal; leeres Array wenn unklar
 - Wenn keine Widersprüche gefunden: «probleme» als leeres Array, «zusammenfassung» = positive Einschätzung
 - Konservativ: Im Zweifel weglassen
 
@@ -899,6 +1011,8 @@ Antworte mit diesem JSON-Schema:
       "beschreibung": "Was genau widerspricht sich (1-2 Sätze)",
       "stelle_a": "Erste Textstelle (Kapitel: Seite oder Abschnitt)",
       "stelle_b": "Zweite Textstelle (Kapitel: Seite oder Abschnitt)",
+      "figuren": ["Name der direkt betroffenen Figur"],
+      "kapitel": ["Exakter Kapitelname A", "Exakter Kapitelname B"],
       "empfehlung": "Wie könnte das aufgelöst werden (1 Satz)"
     }
   ],
@@ -909,6 +1023,8 @@ Regeln:
 - Nur echte Widersprüche
 - schwere: «kritisch» = klarer Logikfehler; «mittel» = wahrscheinlicher Fehler; «niedrig» = mögliche Inkonsistenz
 - Soziolekt-Brüche: nur wenn ein Sprachmuster klar etabliert wurde und dann ohne Begründung bricht
+- figuren: Namen exakt wie in der Figurenliste; leeres Array wenn keine Figur direkt betroffen
+- kapitel: exakte Kapitelnamen aus dem Text; wenn beide Stellen im selben Kapitel: nur einmal; leeres Array wenn unklar
 - Wenn keine Widersprüche: «probleme» als leeres Array
 - Konservativ: Im Zweifel weglassen
 
@@ -943,6 +1059,7 @@ const ENTWICKLUNGSBOGEN_RULES = `Regeln:
 - Nur Figuren aus der gelieferten Liste; fig_id muss exakt übereinstimmen
 - arc_typ: Reifebogen=Figur wächst/reift; Verfallsbogen=Figur verliert/degradiert; Erlösungsbogen=Figur überwindet innere Schuld/Schwäche; Tragischer Bogen=Figur scheitert trotz Bestrebens; Wandlungsbogen=fundamentale Identitätsänderung; Stasis=Figur verändert sich nicht wesentlich
 - etappen: 2-5 Etappen pro Figur, chronologisch nach Kapiteln geordnet; lieber weniger, dafür aussagekräftige Wendepunkte
+- kapitel: zwingend angeben; exakten Kapitelnamen aus der Buchstruktur übernehmen (Single-Pass: «[Kapitel]»-Markierung im Text; Konsolidierung: «## Kapitel:»-Einträge der Eingabe) – niemals «Anfang/Mitte/Ende» oder eigene Bezeichnungen erfinden
 - soziale_position: Konkreter gesellschaftlicher Zustand (Beruf, Rang, Besitz, Ruf) – nicht wiederholen was in innere_haltung steht
 - innere_haltung: Psychologischer Zustand, Überzeugungen, Ziele, Ängste – 1-2 Sätze
 - beziehungsstatus: Die 1-3 wichtigsten Beziehungen zu diesem Zeitpunkt und ihr emotionaler Zustand
