@@ -44,6 +44,13 @@
           <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--patronage"></span>Patronage</span>
           <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschaeft"></span>Geschäft</span>
         </div>
+        <!-- Kapitel-Filter -->
+        <div x-show="figurenKapitelListe().length > 0" class="figuren-graph-filter">
+          <button class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': !figurenGraphKapitel }" @click="_figurenGraphSetKapitel(null)">Alle</button>
+          <template x-for="ch in figurenKapitelListe()" :key="ch">
+            <button class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': figurenGraphKapitel === ch }" @click="_figurenGraphSetKapitel(ch)" x-text="ch"></button>
+          </template>
+        </div>
       </div>
     </template>
 

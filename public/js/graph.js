@@ -70,6 +70,7 @@ const DIRECTED_TYPES = ['elternteil', 'kind', 'mentor', 'schuetzling', 'patronag
 export const graphMethods = {
   // Reaktiver Modus-State (spread in Alpine-Data)
   figurenGraphModus: 'figur',
+  figurenGraphKapitel: null,   // aktiver Kapitel-Filter (null = alle)
 
   _figTypColor(typ) {
     const colors = {
@@ -144,7 +145,7 @@ export const graphMethods = {
       chapPos[ch] = { x: R * Math.cos(angle), y: R * Math.sin(angle) };
     });
 
-    const nodes = new vis.DataSet(this.figuren.map(f => {
+    this._figurenNodes = new vis.DataSet(this.figuren.map(f => {
       let x = 0, y = 0;
       const kaps = (f.kapitel || []).filter(k => chapPos[k.name]);
       if (kaps.length) {
@@ -166,9 +167,11 @@ export const graphMethods = {
         x, y,
       };
     }));
+    const nodes = this._figurenNodes;
 
     const { edgeList } = this._buildEdges(/* soziogrammModus */ false);
-    const edges = new vis.DataSet(edgeList);
+    this._figurenEdges = new vis.DataSet(edgeList);
+    const edges = this._figurenEdges;
 
     const hasFamilyEdges = edgeList.some(e => ['elternteil', 'kind'].includes(e.label));
     const options = {
@@ -238,8 +241,46 @@ export const graphMethods = {
       const positions = this._figurenNetwork.getPositions();
       nodes.update(Object.entries(positions).map(([id, { x, y }]) => ({ id, x, y })));
       this._figurenNetwork.setOptions({ physics: false, layout: { hierarchical: { enabled: false } } });
+      // Aktiven Filter nach Neurender wiederherstellen
+      if (this.figurenGraphKapitel) this._figurenGraphSetKapitel(this.figurenGraphKapitel);
     });
     this._attachTooltip(container);
+  },
+
+  // ── Kapitel-Filter im Figurengraph ──────────────────────────────────────────
+  _figurenGraphSetKapitel(ch) {
+    this.figurenGraphKapitel = ch;
+    if (!this._figurenNodes || !this._figurenEdges) return;
+
+    const activeIds = new Set(
+      ch ? this.figuren.filter(f => (f.kapitel || []).some(k => k.name === ch)).map(f => f.id)
+         : this.figuren.map(f => f.id)
+    );
+
+    // Nodes: aktive = Originalfarbe, inaktive = ausgegraut
+    this._figurenNodes.update(this.figuren.map(f => {
+      if (!ch || activeIds.has(f.id)) {
+        return {
+          id: f.id,
+          color: this._figTypColor(f.typ),
+          font: { color: '#333', size: 13, face: 'system-ui,-apple-system,sans-serif' },
+        };
+      }
+      return {
+        id: f.id,
+        color: { background: '#efefef', border: '#ccc', highlight: { background: '#efefef', border: '#ccc' } },
+        font: { color: '#bbb', size: 13, face: 'system-ui,-apple-system,sans-serif' },
+      };
+    }));
+
+    // Edges: sichtbar wenn mind. ein Endpoint aktiv, sonst ausgegraut
+    this._figurenEdges.update(this._figurenEdges.get().map(e => {
+      if (!ch || activeIds.has(e.from) || activeIds.has(e.to)) {
+        const s = BZ[e.label] || BZ.andere;
+        return { id: e.id, color: { color: s.color, highlight: s.highlight }, font: { color: s.color, size: 10 } };
+      }
+      return { id: e.id, color: { color: '#ddd', highlight: '#ddd' }, font: { color: '#ddd', size: 10 } };
+    }));
   },
 
   // ── Soziogramm (nach Sozialschicht gefärbt, Schicht-Rows, Machtpfeile) ──────

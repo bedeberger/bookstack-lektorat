@@ -27,6 +27,7 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule) {
   return {
     ERKLAERUNG_RULE:             globalErklaerungRule || '',
     STOPWORDS:                   Array.isArray(localeConfig.stopwords) ? localeConfig.stopwords : [],
+    SOZIOGRAMM_KONTEXT:          localeConfig.soziogrammKontext || '',
     SYSTEM_LEKTORAT:             buildSystem(sp.lektorat          || '', rules),
     SYSTEM_BUCHBEWERTUNG:        buildSystem(sp.buchbewertung     || '', rules),
     SYSTEM_KAPITELANALYSE:       buildSystem(sp.kapitelanalyse    || '', rules),
@@ -40,7 +41,7 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule) {
     SYSTEM_ZEITSTRAHL:           buildSystem(sp.zeitstrahl        || '', rules),
     // Kombinierter System-Prompt für buildExtraktionKomplettChapterPrompt (P1+P5 merged).
     // Schema und Regeln sind im System-Prompt → werden gecacht; User-Message enthält nur Kapiteltext.
-    SYSTEM_KOMPLETT_EXTRAKTION:  buildSystemKomplett(sp.figuren   || '', rules),
+    SYSTEM_KOMPLETT_EXTRAKTION:  buildSystemKomplett(sp.figuren   || '', rules, localeConfig.soziogrammKontext || ''),
   };
 }
 
@@ -49,6 +50,7 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule) {
 // Diese Globals entsprechen stets dem defaultLocale und dienen der Rückwärtskompatibilität.
 export let ERKLAERUNG_RULE              = null;
 export let STOPWORDS                    = [];
+export let SOZIOGRAMM_KONTEXT           = '';
 export let SYSTEM_LEKTORAT              = null;
 export let SYSTEM_BUCHBEWERTUNG         = null;
 export let SYSTEM_KAPITELANALYSE        = null;
@@ -100,6 +102,7 @@ export function configurePrompts(cfg) {
   const def = _localeMap.get(_defaultLocale) || {};
   ERKLAERUNG_RULE              = def.ERKLAERUNG_RULE              ?? '';
   STOPWORDS                    = def.STOPWORDS                    ?? [];
+  SOZIOGRAMM_KONTEXT           = def.SOZIOGRAMM_KONTEXT           ?? '';
   SYSTEM_LEKTORAT              = def.SYSTEM_LEKTORAT              ?? null;
   SYSTEM_BUCHBEWERTUNG         = def.SYSTEM_BUCHBEWERTUNG         ?? null;
   SYSTEM_KAPITELANALYSE        = def.SYSTEM_KAPITELANALYSE        ?? null;
@@ -372,11 +375,11 @@ const FIGUREN_BASIS_SCHEMA = `{
   ]
 }`;
 
-const FIGUREN_BASIS_RULES = `Regeln:
+const figurenBasisRules = (kontext = '') => `Regeln:
 - Eindeutige IDs (fig_1, fig_2, …)
 - beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
 - kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten; name = immer der Kapitelname (aus dem ## Kapitel-Header über dem Abschnitt oder aus dem Prompt-Kontext) – NIEMALS Seitentitel als Kapitelnamen verwenden
-- sozialschicht: gesellschaftliche Schicht der Figur – nur vergeben wenn eindeutig belegt; wirtschaftselite=Unternehmerfamilien/Direktoren, gehobenes_buergertum=Akademiker/freie Berufe/obere Kader, mittelschicht=Angestellte/Beamte/mittlere Kader, arbeiterschicht=Fabrik-/Bauarbeiter/Servicepersonal, migrantenmilieu=Zugewanderte/zweite Generation, prekariat=Sozialhilfe/Randständige/Langzeitarbeitslose, unterwelt=kriminelles Milieu, andere=nicht eindeutig
+- sozialschicht: gesellschaftliche Schicht der Figur${kontext ? ` (${kontext})` : ''} – nur vergeben wenn eindeutig belegt; wirtschaftselite=Unternehmerfamilien/Direktoren, gehobenes_buergertum=Akademiker/freie Berufe/obere Kader, mittelschicht=Angestellte/Beamte/mittlere Kader, arbeiterschicht=Fabrik-/Bauarbeiter/Servicepersonal, migrantenmilieu=Zugewanderte/zweite Generation, prekariat=Sozialhilfe/Randständige/Langzeitarbeitslose, unterwelt=kriminelles Milieu, andere=nicht eindeutig
 - beziehungen.machtverhaltnis: Machtasymmetrie aus Perspektive der beschriebenen Figur → Bezugspunkt «figur_id»: +2=figur_id dominiert klar, +1=leichter Vorteil, 0=symmetrisch, -1=Bezugsfigur hat leichten Vorteil, -2=Bezugsfigur dominiert; weglassen oder 0 wenn unklar
 - Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), patronage=Schutzherrschaft, geschaeft=wirtschaftliche Beziehung, übrige selbsterklärend
 - Nur fiktive Charaktere oder Figuren die aktiv an der Buchhandlung teilnehmen – keine Orte oder Objekte
@@ -391,7 +394,7 @@ export function buildFiguresBasisSinglePassPrompt(bookName, pageCount, bookText)
 Antworte mit diesem JSON-Schema:
 ${FIGUREN_BASIS_SCHEMA}
 
-${FIGUREN_BASIS_RULES}
+${figurenBasisRules(SOZIOGRAMM_KONTEXT)}
 
 ${JSON_ONLY}
 
@@ -406,7 +409,7 @@ export function buildFiguresBasisChapterPrompt(chapterName, bookName, pageCount,
 Antworte mit diesem JSON-Schema:
 ${FIGUREN_BASIS_SCHEMA}
 
-${FIGUREN_BASIS_RULES}
+${figurenBasisRules(SOZIOGRAMM_KONTEXT)}
 
 Wichtig: Für kapitel[].name aller Figuren in diesem Kapitel immer genau «${chapterName}» verwenden – die ### Überschriften im Text sind Seitentitel, keine Kapitelnamen.
 
@@ -443,7 +446,7 @@ ${JSON_ONLY}
 Antworte mit diesem JSON-Schema:
 ${FIGUREN_BASIS_SCHEMA}
 
-${FIGUREN_BASIS_RULES}`;
+${figurenBasisRules(SOZIOGRAMM_KONTEXT)}`;
 }
 
 // ── Lebensereignisse-Zuordnung ────────────────────────────────────────────────
@@ -574,11 +577,11 @@ function _schemaBody(schemaStr) {
 }
 
 // ── Kombiniertes Schema für Komplett-Extraktion (P1+P5 merged) ───────────────
-// Statisch – wird zur Ladezeit initialisiert, nachdem alle Abhängigkeiten definiert sind.
 // buildSystemKomplett() bettet es in den System-Prompt ein → Caching über alle Kapitel-Calls.
 // figuren_namen / orte_namen / figur_name: Klarnamen statt IDs, da konsolidierte IDs
 // erst nach P2/P3 bekannt sind. Remapping nach der Konsolidierung in jobs.js.
-const KOMPLETT_SCHEMA_STATIC = `Antworte mit diesem JSON-Schema:
+// kontext kommt aus localeConfig.soziogrammKontext, wird von buildSystemKomplett durchgereicht.
+function buildKomplettSchemaStatic(kontext = '') { return `Antworte mit diesem JSON-Schema:
 {
   ${_schemaBody(FIGUREN_BASIS_SCHEMA)},
   ${_schemaBody(ORTE_SCHEMA)},
@@ -619,7 +622,7 @@ const KOMPLETT_SCHEMA_STATIC = `Antworte mit diesem JSON-Schema:
 }
 
 Figuren-Regeln:
-${FIGUREN_BASIS_RULES}
+${figurenBasisRules(kontext)}
 
 Schauplatz-Regeln:
 ${ORTE_RULES}
@@ -644,20 +647,19 @@ Ereignis-Regeln:
 - typ='extern': gesellschaftliche/historische Ereignisse – SEHR GROSSZÜGIG erfassen: Kriege, politische Umbrüche, Sport- und Kulturereignisse, Wirtschaftskrisen, Seuchen, Naturkatastrophen; auch wenn nur kurz erwähnt; jedes externe Ereignis ALLEN betroffenen Figuren zuweisen
 - datum: immer als vierstellige Jahreszahl (JJJJ) – aus Kontext errechnen wenn nötig; Events ohne errechenbare Jahreszahl weglassen
 - figur_name: exakt wie in figuren[].name dieser Antwort (kanonischen Namen aus der Figurenliste verwenden, KEINE Textvariante, kein Titel, kein Spitzname der dort nicht steht)
-- Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden`;
+- Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden`; }
 
-// buildSystemKomplett: wie buildSystem, aber mit eingebettetem KOMPLETT_SCHEMA_STATIC.
+// buildSystemKomplett: wie buildSystem, aber mit eingebettetem Schema+Regeln-Block.
 // Der Schema-Block wird so gecacht (cache_control: ephemeral in lib/ai.js) – spart bei
 // ~20 Kapitel-Calls ~19 × Schema-Tokens (statt in jeder User-Message wiederholen).
-// Hinweis: KOMPLETT_SCHEMA_STATIC ist zur Ladezeit verfügbar (const, nach _schemaBody definiert);
-// buildSystemKomplett wird erst nach Modul-Initialisierung aufgerufen (via configurePrompts).
-function buildSystemKomplett(prefix, rules) {
-  return `${prefix}\n\n${rules}\n\n${KOMPLETT_SCHEMA_STATIC}\n\n${JSON_ONLY}`;
+// kontext kommt aus localeConfig.soziogrammKontext (via _buildLocaleMap → configurePrompts).
+function buildSystemKomplett(prefix, rules, kontext) {
+  return `${prefix}\n\n${rules}\n\n${buildKomplettSchemaStatic(kontext)}\n\n${JSON_ONLY}`;
 }
 
 /**
  * Kombinierter Kapitel-Extraktions-Prompt: Figuren + Schauplätze in einem einzigen Call.
- * Referenziert FIGUREN_BASIS_SCHEMA, FIGUREN_BASIS_RULES, ORTE_SCHEMA, ORTE_RULES direkt –
+ * Referenziert FIGUREN_BASIS_SCHEMA, figurenBasisRules(), ORTE_SCHEMA, ORTE_RULES direkt –
  * keine Duplikation. Wird ausschliesslich vom komplett-analyse-Job verwendet.
  */
 export function buildExtraktionFigurenOrteChapterPrompt(chapterName, bookName, pageCount, chText) {
@@ -674,7 +676,7 @@ Antworte mit diesem JSON-Schema:
 }
 
 Figuren-Regeln:
-${FIGUREN_BASIS_RULES}
+${figurenBasisRules(SOZIOGRAMM_KONTEXT)}
 ${kapitelNote}
 
 Schauplatz-Regeln:
@@ -714,7 +716,7 @@ Antworte mit diesem JSON-Schema:
 }
 
 Figuren-Regeln:
-${FIGUREN_BASIS_RULES}
+${figurenBasisRules(SOZIOGRAMM_KONTEXT)}
 ${kapitelNote}
 
 Schauplatz-Regeln:
