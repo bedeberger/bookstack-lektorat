@@ -283,8 +283,8 @@
      :style="`left:${tokLegendPos.x}px; top:${tokLegendPos.y - 8}px`"
      class="tok-tooltip"
      @mouseleave="showTokLegend=false; tokTooltipData=null">
-  <div class="tok-tt-row" x-text="(tokTooltipData?.words >= 1000 ? '~' + Math.round(tokTooltipData.words/1000) + 'k' : tokTooltipData?.words) + ' Wörter'"></div>
-  <div class="tok-tt-row" x-text="'~' + (tokTooltipData?.tok >= 1000 ? Math.round(tokTooltipData.tok/1000) + 'k' : tokTooltipData?.tok) + ' Tokens'"></div>
+  <div class="tok-tt-row" x-text="tokTooltipData ? ((tokTooltipData.words >= 1000 ? '~' + Math.round(tokTooltipData.words/1000) + 'k' : tokTooltipData.words) + ' Wörter') : ''"></div>
+  <div class="tok-tt-row" x-text="tokTooltipData ? ('~' + (tokTooltipData.tok >= 1000 ? Math.round(tokTooltipData.tok/1000) + 'k' : tokTooltipData.tok) + ' Tokens') : ''"></div>
 </div>
 
 <!-- Job-Queue Footer -->

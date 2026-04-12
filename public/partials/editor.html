@@ -89,8 +89,9 @@
             <input type="checkbox" class="finding-checkbox" :checked="selectedStyles[i]" @change="toggleStyle(i)">
             <span class="badge badge-warn">Stil</span>
             <span class="finding-content">
-              <span x-text="f.erklaerung"></span>
-              <div class="finding-context" x-show="f.original" x-text="f.original ? '«' + f.original + '»' : ''"></div>
+              <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+              <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>
+              <div class="finding-explanation" x-text="f.erklaerung"></div>
             </span>
           </label>
         </template>

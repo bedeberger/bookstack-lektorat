@@ -35,7 +35,6 @@ KI-Aufrufe laufen **nicht direkt aus dem Browser**, sondern über den jeweiligen
 Nicht-offensichtliche Dateien:
 
 - `public/js/prompts.js` – EINZIGE QUELLE für alle Prompt-Schemas und Build-Logik. Server importiert via dynamic `import()`. NIEMALS Prompts anderswo duplizieren.
-- `public/js/two-tier.js` – Exportiert `loadPageContents`, `groupByChapter`, `SINGLE_PASS_LIMIT` (wird aktuell nicht importiert; gleiche Logik lebt dupliziert in `routes/jobs.js`).
 - `public/js/app.js` – Alpine-Root; alle Feature-Module per `...spread` eingebunden.
 
 ## Datenbank
@@ -92,7 +91,7 @@ SELECT * FROM schema_version;
 
 SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein Bundler. Alpine.js und vis-network via CDN.
 
-**Modul-Pattern:** Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`, `two-tier.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das auf die Alpine-Komponente zeigt – per `...spread` in das Alpine-Data-Objekt eingebettet. Neue Funktionalität: Modul anlegen → exportieren → in `app.js` spreaden.
+**Modul-Pattern:** Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das auf die Alpine-Komponente zeigt – per `...spread` in das Alpine-Data-Objekt eingebettet. Neue Funktionalität: Modul anlegen → exportieren → in `app.js` spreaden.
 
 **Style-Regel:** Alle Styles ausschliesslich in `style.css` – keine Inline-`style`-Attribute, keine `<style>`-Blöcke im HTML.
 

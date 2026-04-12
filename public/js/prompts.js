@@ -1,5 +1,3 @@
-export const CLAUDE_API = '/claude';
-
 // Unveränderliche technische Pflicht-Anweisung – darf nicht konfiguriert werden,
 // da callAI() immer ein JSON-Objekt erwartet.
 const JSON_ONLY = 'Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach. Beginne deine Antwort direkt mit { und beende sie mit }.';

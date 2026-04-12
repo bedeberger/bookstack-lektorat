@@ -707,15 +707,6 @@ document.addEventListener('alpine:init', () => {
       return `<span class="spinner"></span>${escHtml(statusText || '…')}${tokInfo}`;
     },
 
-    cutAtSentence(text, maxLen) {
-      if (text.length <= maxLen) return text;
-      const sub = text.slice(0, maxLen);
-      const m = sub.match(/^([\s\S]*[.!?])\s/);
-      if (m) return m[1] + ' […]';
-      const wi = sub.lastIndexOf(' ');
-      return (wi > 0 ? sub.slice(0, wi) : sub) + ' […]';
-    },
-
     // ── Partials laden ───────────────────────────────────────────────────────
     async _loadPartials() {
       const names = [
