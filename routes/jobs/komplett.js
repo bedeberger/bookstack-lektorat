@@ -33,9 +33,9 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
   const call = (...args) => aiCall(...args, provider);
   const effectiveProvider = provider || process.env.API_PROVIDER || 'claude';
   // Claude hat 200K Token Kontextfenster (~600K deutsche Zeichen) – Single-Pass für fast alle Bücher.
-  // Llama/Ollama: ctx-size 131072 (~390K deutsche Zeichen bei ~3 Zeichen/Token).
-  // Single-Pass-Budget: 150K Zeichen Input (~50K Tokens) + ~4K System-Prompt + 16K Output ≈ 70K Tokens → sicher unter 131K.
-  // Für grössere Bücher (>150K Zeichen) greift automatisch der Multi-Pass-Pfad.
+  // ollama: bewusst 60K Limit → Multi-Pass mit Delta-Cache (unveränderte Kapitel überspringen den KI-Call;
+  //   wichtig auf langsamer Hardware). Kapitel-Calls sind je ~13K Tokens → weit unter 131K ctx-Fenster.
+  // llama (llama.cpp, direkt): 150K – Single-Pass sicher (50K Input + 4K System + 16K Output ≈ 70K Token).
   const singlePassLimit = effectiveProvider === 'claude' ? 250_000
     : (effectiveProvider === 'ollama' ? SINGLE_PASS_LIMIT : 150_000);
   const {
@@ -493,22 +493,23 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         // Claude: Single-Pass für kleine Bücher (voller Buchtext, besserer Kontext).
         // Llama/Ollama: immer facts-basiert (chapterFakten aus Phase 1) – voller Buchtext
         // wäre ein zweiter 50K-Token-Call der auf langsamer Hardware Stunden dauert.
+        // P8 läuft parallel zu P5+P6 (Szenen/Zeitstrahl) – kein updateJob mit statusText hier,
+        // sonst überschreibt P8 den Status von P5+P6 während der Zeitstrahl-Konsolidierung.
+        // Fortschritts-Callbacks (fromPct/toPct) ebenfalls deaktiviert um Progress-Sprünge zu vermeiden.
         if (totalChars <= singlePassLimit && effectiveProvider === 'claude') {
-          updateJob(jobId, { progress: 97, statusText: 'Kontinuität prüfen…' });
           const bookText = buildSinglePassBookText(groups, groupOrder);
           logger.info(`Job ${jobId}: Kontinuität Single-Pass: ${bookText.length} Zeichen Buchtext, ${figKompaktForKont.length} Figuren, ${orteKompaktForKont.length} Orte`);
           kontResult = await call(jobId, tok,
             buildKontinuitaetSinglePassPrompt(bookName, bookText, figKompaktForKont, orteKompaktForKont),
-            SYSTEM_KONTINUITAET, 97, 99, 5000,
+            SYSTEM_KONTINUITAET, null, null, 5000,
           );
         } else {
           // Facts-basiert: chapterFakten aus Phase 1 – immer verfügbar (single- und multi-pass).
-          updateJob(jobId, { progress: 98, statusText: 'KI prüft Widersprüche…' });
           const totalFaktenChars = chapterFakten.reduce((s, c) => s + JSON.stringify(c.fakten).length, 0);
           logger.info(`Job ${jobId}: Kontinuität facts-basiert: ${chapterFakten.length} Kapitel, ~${totalFaktenChars} Zeichen Fakten, ${figKompaktForKont.length} Figuren`);
           kontResult = await call(jobId, tok,
             buildKontinuitaetCheckPrompt(bookName, chapterFakten, figKompaktForKont, orteKompaktForKont),
-            SYSTEM_KONTINUITAET, 98, 99, effectiveProvider === 'claude' ? 5000 : 2500,
+            SYSTEM_KONTINUITAET, null, null, effectiveProvider === 'claude' ? 5000 : 2500,
           );
         }
 

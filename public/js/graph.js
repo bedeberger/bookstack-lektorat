@@ -146,16 +146,28 @@ export const graphMethods = {
       chapPos[ch] = { x: R * Math.cos(angle), y: R * Math.sin(angle) };
     });
 
-    this._figurenNodes = new vis.DataSet(this.figuren.map(f => {
+    this._figurenNodes = new vis.DataSet(this.figuren.map((f, figIdx) => {
       let x = 0, y = 0;
       const kaps = (f.kapitel || []).filter(k => chapPos[k.name]);
-      if (kaps.length) {
+      // Gewichtete Kapitel-Position nur wenn N > 1: bei N <= 1 liegen alle
+      // chapPos auf (0,0) (R=0), was zu identischen Startpositionen und damit
+      // zur Linien-Degeneration des barnesHut-Physics führt.
+      if (kaps.length && N > 1) {
         const total = kaps.reduce((s, k) => s + (k.haeufigkeit || 1), 0);
         for (const k of kaps) {
           const w = (k.haeufigkeit || 1) / total;
           x += chapPos[k.name].x * w;
           y += chapPos[k.name].y * w;
         }
+      }
+      // Fallback: (0,0) als Startposition führt bei barnesHut zur Linien-Degeneration.
+      // Tritt auf wenn: kein Kapitel, N<=1, oder Figur erscheint gleichmässig in allen
+      // Kapiteln (Schwerpunkt eines symmetrischen Kreises = Zentrum).
+      if (Math.abs(x) < 1 && Math.abs(y) < 1) {
+        const startR = Math.max(200, this.figuren.length * 28);
+        const angle  = (2 * Math.PI * figIdx / Math.max(1, this.figuren.length)) - Math.PI / 2;
+        x = startR * Math.cos(angle);
+        y = startR * Math.sin(angle);
       }
       return {
         id: f.id,
