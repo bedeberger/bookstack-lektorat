@@ -1439,8 +1439,14 @@ ins {
 .figur-tooltip p { margin: 4px 0 0; color: var(--color-text); white-space: pre-wrap; }
 
 /* === Figuren: Listen-Bereich === */
-.figur-list-section {
+/* Verhindert Scroll-Anchoring im Listen-Bereich: wenn figur-detail aufklappt,
+   soll kein figur-item als Anchor gewählt und die Scroll-Position nicht
+   angepasst werden (was die sticky Sidebar verschiebt). */
+.figur-list-section,
+.figur-list-section * {
   overflow-anchor: none;
+}
+.figur-list-section {
   margin-top: 16px;
   border-top: 0.5px solid var(--color-border);
   padding-top: 14px;

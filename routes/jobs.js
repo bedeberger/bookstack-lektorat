@@ -751,8 +751,11 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
   const call = (...args) => aiCall(...args, provider);
   const effectiveProvider = provider || process.env.API_PROVIDER || 'claude';
   // Claude hat 200K Token Kontextfenster (~600K deutsche Zeichen) – Single-Pass für fast alle Bücher.
-  // Ollama/Llama: konservatives Limit wegen kleinerer Kontextfenster.
-  const singlePassLimit = effectiveProvider === 'claude' ? 250_000 : SINGLE_PASS_LIMIT;
+  // Llama/Ollama: ctx-size 131072 (~390K deutsche Zeichen bei ~3 Zeichen/Token).
+  // Single-Pass-Budget: 150K Zeichen Input (~50K Tokens) + ~4K System-Prompt + 16K Output ≈ 70K Tokens → sicher unter 131K.
+  // Für grössere Bücher (>150K Zeichen) greift automatisch der Multi-Pass-Pfad.
+  const singlePassLimit = effectiveProvider === 'claude' ? 250_000
+    : (effectiveProvider === 'ollama' ? SINGLE_PASS_LIMIT : 150_000);
   const {
     buildExtraktionKomplettChapterPrompt,
     buildFiguresBasisConsolidationPrompt,
