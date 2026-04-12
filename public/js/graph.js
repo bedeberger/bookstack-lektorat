@@ -136,10 +136,10 @@ export const graphMethods = {
     const options = {
       physics: hasFamilyEdges
         ? { solver: 'hierarchicalRepulsion', hierarchicalRepulsion: { nodeDistance: 140 } }
-        : { solver: 'repulsion', repulsion: { nodeDistance: 160 } },
+        : { solver: 'barnesHut', barnesHut: { gravitationalConstant: -2000, centralGravity: 0.3, springLength: 120, springConstant: 0.04, damping: 0.09, avoidOverlap: 0.5 }, stabilization: { iterations: 200 } },
       layout: hasFamilyEdges
         ? { hierarchical: { direction: 'UD', sortMethod: 'directed', nodeSpacing: 160, levelSeparation: 120 } }
-        : { randomSeed: 42 },
+        : { improvedLayout: true },
       interaction: { hover: true, tooltipDelay: 100 },
       edges: { smooth: { type: 'cubicBezier' } },
     };
@@ -317,7 +317,7 @@ export const graphMethods = {
 
     for (const f of this.figuren) {
       for (const bz of (f.beziehungen || [])) {
-        if (!this.figuren.find(x => x.id === bz.figur_id)) continue;
+        if (!this.figuren.find(x => +x.id === +bz.figur_id)) continue;
 
         // Deduplizierung: gerichtete Typen per [from, to, typ]; undirektionale per sortiertem Paar
         const dedupeKey = DIRECTED_TYPES.includes(bz.typ)
