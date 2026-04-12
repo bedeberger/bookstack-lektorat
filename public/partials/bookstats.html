@@ -2,8 +2,8 @@
 <div class="card" x-show="showBookStatsCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Buchentwicklung: ' + selectedBookName"></span>
-    <span x-show="bookStatsData.length > 0 && !bookStatsLoading" class="figuren-updated-at" x-text="'Letzter Snapshot: ' + (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '')"></span>
     <div class="card-actions">
+      <span x-show="bookStatsData.length > 0 && !bookStatsLoading" class="figuren-updated-at" x-text="'Letzter Snapshot: ' + (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '')"></span>
       <button @click="syncBookStats()" :disabled="bookStatsLoading">
         <span x-show="bookStatsLoading" class="spinner"></span>
         <span x-text="bookStatsLoading ? '' : 'Synchronisieren'"></span>

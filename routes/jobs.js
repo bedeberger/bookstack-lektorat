@@ -976,7 +976,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
             ortNameToId[n] || null
           ).filter(Boolean);
           allSzenen.push({
-            kapitel,
+            kapitel: s.kapitel || kapitel,
             seite:      s.seite     || null,
             titel:      s.titel     || '(unbekannt)',
             wertung:    s.wertung   || null,
@@ -996,7 +996,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           if (!figId) continue;
           if (!mergedEvtMap.has(figId)) mergedEvtMap.set(figId, []);
           for (const ev of (assignment.lebensereignisse || [])) {
-            mergedEvtMap.get(figId).push({ ...ev, kapitel });
+            mergedEvtMap.get(figId).push({ ...ev, kapitel: ev.kapitel || kapitel });
           }
         }
       }

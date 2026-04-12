@@ -428,6 +428,7 @@ export function buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren) {
       const meta = [f.typ, f.beruf, f.geburtstag ? `*${f.geburtstag}` : '', f.geschlecht].filter(Boolean).join(', ');
       return `- ${f.name}${f.kurzname && f.kurzname !== f.name ? ` («${f.kurzname}»)` : ''} (${meta}): ${f.beschreibung || ''}` +
         (f.eigenschaften?.length ? '\n  Eigenschaften: ' + f.eigenschaften.join(', ') : '') +
+        (f.kapitel?.length ? '\n  Kapitel: ' + f.kapitel.map(k => k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')).join(', ') : '') +
         (f.beziehungen?.length ? '\n  Beziehungen: ' + f.beziehungen.map(b => {
           const relName = nameById[b.figur_id] || b.name || b.figur_id;
           return `${relName} [${b.typ}]${b.beschreibung ? ': ' + b.beschreibung : ''}`;
@@ -631,6 +632,7 @@ const KOMPLETT_SCHEMA_STATIC = `Antworte mit diesem JSON-Schema:
   "szenen": [
     {
       "seite": "Name der Seite/des Abschnitts (leer wenn unklar)",
+      "kapitel": "Kapitelname (aus [Kapitelname]-Teil der Überschrift; leer wenn unklar)",
       "titel": "Kurze Szenenbezeichnung (1 Satz)",
       "wertung": "stark|mittel|schwach",
       "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)",
@@ -647,7 +649,8 @@ const KOMPLETT_SCHEMA_STATIC = `Antworte mit diesem JSON-Schema:
           "ereignis": "Was passierte (1 Satz)",
           "typ": "persoenlich|extern",
           "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)",
-          "seite": "Name der Seite/des Abschnitts (leer wenn unklar)"
+          "seite": "Name der Seite/des Abschnitts (leer wenn unklar)",
+          "kapitel": "Kapitelname (aus [Kapitelname]-Teil der Überschrift; leer wenn unklar)"
         }
       ]
     }
@@ -786,8 +789,8 @@ export function buildExtraktionKomplettChapterPrompt(chapterName, bookName, page
   const isSinglePass = chapterName === 'Gesamtbuch';
   const scope = isSinglePass ? `dem Buch «${bookName}»` : `dem Kapitel «${chapterName}» des Buchs «${bookName}»`;
   const kapitelNote = isSinglePass
-    ? 'Für kapitel[].name der Figuren und Orte: jeweiligen Kapitelnamen aus dem [Kapitelname]-Teil der ### Überschriften verwenden.'
-    : `Für kapitel[].name aller Figuren und Orte: immer genau «${chapterName}» verwenden – die ### Überschriften im Text sind Seitentitel, keine Kapitelnamen.`;
+    ? 'Für alle Kapitel-Felder (kapitel[].name der Figuren und Orte, szenen[].kapitel, lebensereignisse[].kapitel): jeweiligen Kapitelnamen aus dem [Kapitelname]-Teil der ### Überschriften verwenden (z.B. aus «### [Kapitel 1] Seitentitel» → «Kapitel 1»).'
+    : `Für alle Kapitel-Felder (kapitel[].name der Figuren und Orte, szenen[].kapitel, lebensereignisse[].kapitel): immer genau «${chapterName}» verwenden – die ### Überschriften im Text sind Seitentitel, keine Kapitelnamen.`;
   return `Extrahiere aus ${scope} in einem Durchgang: alle Figuren, alle Schauplätze, alle kontinuitätsrelevanten Fakten, alle Szenen und alle Lebensereignisse der Figuren.
 
 ${kapitelNote}
@@ -1054,7 +1057,8 @@ export function buildLocationsConsolidationPrompt(bookName, chapterOrte, figuren
   const synthInput = chapterOrte.map(co =>
     `## Kapitel: ${co.kapitel}\n` + co.orte.map(o =>
       `- ${o.name} (${o.typ || 'andere'}): ${o.beschreibung || ''}` +
-      (o.stimmung ? ` | Stimmung: ${o.stimmung}` : '')
+      (o.stimmung ? ` | Stimmung: ${o.stimmung}` : '') +
+      (o.kapitel?.length ? ` | Kapitel: ` + o.kapitel.map(k => k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')).join(', ') : '')
     ).join('\n')
   ).join('\n\n');
   const figurenStr = figurenKompakt && figurenKompakt.length

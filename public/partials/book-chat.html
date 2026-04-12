@@ -24,34 +24,35 @@
         <div class="chat-msg-bubble">
           <div x-show="msg.role === 'user'" class="chat-msg-text" x-text="msg.content"></div>
           <div x-show="msg.role === 'assistant'" class="chat-msg-text" x-html="_renderChatMarkdown(msg.content)"></div>
-          <div x-show="msg.role === 'assistant' && msg.context_info"
-               x-data="{ expanded: false }"
-               class="chat-context-info">
-            <span class="chat-context-label">Kontext: </span>
-            <template x-for="(p, pi) in (expanded ? msg.context_info.pages : msg.context_info.pages.slice(0, 3))" :key="pi">
-              <span>
-                <template x-if="pi > 0"><span class="chat-context-sep">, </span></template>
-                <a x-show="bookstackUrl && p.book_slug && p.slug"
-                   :href="bookstackUrl + '/books/' + p.book_slug + '/page/' + p.slug"
-                   target="_blank" rel="noopener"
-                   class="chat-context-link" x-text="p.name"></a>
-                <span x-show="!(bookstackUrl && p.book_slug && p.slug)" x-text="p.name"></span>
-              </span>
-            </template>
-            <button x-show="msg.context_info.pages.length > 3"
-                    class="chat-context-toggle"
-                    @click.stop="expanded = !expanded"
-                    x-text="expanded ? '▲' : '+' + (msg.context_info.pages.length - 3)"></button>
-            <template x-if="msg.context_info.totalPages > msg.context_info.pages.length">
-              <span class="chat-context-total" x-text="' von ' + msg.context_info.totalPages + ' Seiten'"></span>
-            </template>
-            <template x-if="msg.context_info.figuren">
-              <span class="chat-context-badge">Figuren</span>
-            </template>
-            <template x-if="msg.context_info.review">
-              <span class="chat-context-badge">Buchbewertung</span>
-            </template>
-          </div>
+          <template x-if="msg.role === 'assistant' && msg.context_info">
+            <div x-data="{ expanded: false }"
+                 class="chat-context-info">
+              <span class="chat-context-label">Kontext: </span>
+              <template x-for="(p, pi) in (expanded ? msg.context_info.pages : msg.context_info.pages.slice(0, 3))" :key="pi">
+                <span>
+                  <template x-if="pi > 0"><span class="chat-context-sep">, </span></template>
+                  <a x-show="bookstackUrl && p.book_slug && p.slug"
+                     :href="bookstackUrl + '/books/' + p.book_slug + '/page/' + p.slug"
+                     target="_blank" rel="noopener"
+                     class="chat-context-link" x-text="p.name"></a>
+                  <span x-show="!(bookstackUrl && p.book_slug && p.slug)" x-text="p.name"></span>
+                </span>
+              </template>
+              <button x-show="msg.context_info.pages.length > 3"
+                      class="chat-context-toggle"
+                      @click.stop="expanded = !expanded"
+                      x-text="expanded ? '▲' : '+' + (msg.context_info.pages.length - 3)"></button>
+              <template x-if="msg.context_info.totalPages > msg.context_info.pages.length">
+                <span class="chat-context-total" x-text="' von ' + msg.context_info.totalPages + ' Seiten'"></span>
+              </template>
+              <template x-if="msg.context_info.figuren">
+                <span class="chat-context-badge">Figuren</span>
+              </template>
+              <template x-if="msg.context_info.review">
+                <span class="chat-context-badge">Buchbewertung</span>
+              </template>
+            </div>
+          </template>
           <div x-show="msg.role === 'assistant' && _chatTokenInfo(msg)" class="chat-token-info" x-text="_chatTokenInfo(msg)"></div>
         </div>
       </div>

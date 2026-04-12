@@ -596,6 +596,7 @@ document.addEventListener('alpine:init', () => {
 
     async alleAktualisieren() {
       if (!this.selectedBookId || this.alleAktualisierenLoading) return;
+      if (!confirm('Komplettanalyse starten?\n\nFiguren, Soziogramm, Schauplätze, Szenen, Ereignisse und Zeitstrahl werden neu ermittelt. Bei grossen Büchern kann das mehrere Minuten dauern.')) return;
       this.alleAktualisierenLoading = true;
       this.alleAktualisierenProgress = 0;
       this.alleAktualisierenTokIn = 0;
@@ -1024,7 +1025,7 @@ document.addEventListener('alpine:init', () => {
       this.selectedHistoryId = null;
       this.historySelections = {};
       this.historyApplying = {};
-      this.tree.forEach(c => { if (c.type === 'chapter') c.open = false; });
+      // Kapitel in der Sidebar bleiben geöffnet (kein c.open = false)
       this.lektoratErrors = [];
       this.lektoratStyles = [];
       this.selectedErrors = [];

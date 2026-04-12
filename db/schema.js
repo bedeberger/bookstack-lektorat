@@ -315,34 +315,6 @@ db.exec(`
     updated_at TEXT NOT NULL
   );
 
-  -- Figurenentwicklungsbögen: ein Eintrag pro Figur pro Buch pro User
-  CREATE TABLE IF NOT EXISTS character_arcs (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    book_id         INTEGER NOT NULL,
-    fig_id          TEXT NOT NULL,
-    user_email      TEXT,
-    arc_typ         TEXT,
-    ausgangszustand TEXT,
-    endzustand      TEXT,
-    gesamtbogen     TEXT,
-    updated_at      TEXT NOT NULL,
-    UNIQUE(book_id, fig_id, user_email)
-  );
-  CREATE INDEX IF NOT EXISTS idx_carc_book ON character_arcs(book_id, user_email);
-
-  -- Etappen eines Entwicklungsbogens (mehrere pro Figur)
-  CREATE TABLE IF NOT EXISTS arc_stages (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    arc_id           INTEGER NOT NULL REFERENCES character_arcs(id) ON DELETE CASCADE,
-    sort_order       INTEGER DEFAULT 0,
-    kapitel          TEXT,
-    chapter_id       INTEGER,
-    soziale_position TEXT,
-    innere_haltung   TEXT,
-    beziehungsstatus TEXT,
-    wendepunkt       TEXT
-  );
-  CREATE INDEX IF NOT EXISTS idx_astage_arc ON arc_stages(arc_id);
 `);
 
 // Schema-Migrationen (versioniert)
@@ -885,6 +857,14 @@ function runMigrations() {
     }
     db.prepare('UPDATE schema_version SET version = 34').run();
     logger.info('DB-Migration auf Version 34 abgeschlossen (chat_messages.tps hinzugefügt).');
+  }
+  if (version < 35) {
+    db.exec(`
+      DROP TABLE IF EXISTS arc_stages;
+      DROP TABLE IF EXISTS character_arcs;
+    `);
+    db.prepare('UPDATE schema_version SET version = 35').run();
+    logger.info('DB-Migration auf Version 35 abgeschlossen (character_arcs + arc_stages entfernt).');
   }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
