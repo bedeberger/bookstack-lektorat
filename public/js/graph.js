@@ -133,8 +133,8 @@ export const graphMethods = {
       this.figuren.flatMap(f => (f.kapitel || []).map(k => k.name))
     )];
     const N = allChapters.length;
-    // Radius so wählen dass benachbarte Cluster-Mittelpunkte ≥ 300px auseinander liegen
-    const R = N <= 1 ? 0 : Math.max(200, Math.ceil(300 / (2 * Math.sin(Math.PI / N))));
+    // Radius so wählen dass benachbarte Cluster-Mittelpunkte ≥ 180px auseinander liegen
+    const R = N <= 1 ? 0 : Math.max(120, Math.ceil(180 / (2 * Math.sin(Math.PI / N))));
     // Cluster-Radius = ~85% des halben Abstands zu Nachbar-Kapiteln
     const clusterR = N <= 1 ? Math.max(280, R)
       : Math.min(R * Math.sin(Math.PI / N) * 0.85, 280);
