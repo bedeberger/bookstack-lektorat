@@ -317,12 +317,14 @@ export const graphMethods = {
 
     for (const f of this.figuren) {
       for (const bz of (f.beziehungen || [])) {
-        if (!this.figuren.find(x => +x.id === +bz.figur_id)) continue;
+        const targetFigur = this.figuren.find(x => x.id == bz.figur_id);
+        if (!targetFigur) continue;
+        const toId = targetFigur.id;
 
         // Deduplizierung: gerichtete Typen per [from, to, typ]; undirektionale per sortiertem Paar
         const dedupeKey = DIRECTED_TYPES.includes(bz.typ)
-          ? [f.id, bz.figur_id, bz.typ].join('|')
-          : [[f.id, bz.figur_id].sort().join('-'), bz.typ].join('|');
+          ? [f.id, toId, bz.typ].join('|')
+          : [[f.id, toId].sort().join('-'), bz.typ].join('|');
         if (addedPairs.has(dedupeKey)) continue;
         addedPairs.add(dedupeKey);
 
@@ -338,7 +340,7 @@ export const graphMethods = {
           else if (DIRECTED_TYPES.includes(bz.typ)) arrows = BZ[bz.typ]?.arrows || '';
 
           edgeList.push({
-            from: f.id, to: bz.figur_id,
+            from: f.id, to: toId,
             label: bz.typ,
             title: bz.beschreibung || bz.typ,
             font: { size: 10, color },
@@ -351,7 +353,7 @@ export const graphMethods = {
           // Figurengraph: klassisches Styling
           const s = BZ[bz.typ] || BZ.andere;
           edgeList.push({
-            from: f.id, to: bz.figur_id,
+            from: f.id, to: toId,
             label: bz.typ,
             title: bz.beschreibung || bz.typ,
             font: { size: 10, color: s.color },
