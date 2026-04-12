@@ -762,12 +762,6 @@ ins {
   margin-top: 0;
 }
 
-.stilbox-title {
-  font-weight: 500;
-  margin-bottom: 6px;
-  font-size: var(--font-size-base);
-}
-
 .fazit {
   margin-top: 8px;
   margin-bottom: 16px;

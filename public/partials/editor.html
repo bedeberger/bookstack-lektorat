@@ -191,7 +191,7 @@
 
           <template x-if="entry.szenen_json && entry.szenen_json.length > 0">
             <div class="stilbox" style="margin-top:12px;">
-              <div class="stilbox-title">Szenen</div>
+              <div class="bewertung-section-title">Szenen</div>
               <template x-for="(s, si) in entry.szenen_json" :key="si">
                 <div class="szene-item">
                   <div class="szene-header">
@@ -204,7 +204,7 @@
             </div>
           </template>
           <div x-show="entry.stilanalyse" class="stilbox" style="margin-top:12px;">
-            <div class="stilbox-title">Stilanalyse</div>
+            <div class="bewertung-section-title">Stilanalyse</div>
             <span x-text="entry.stilanalyse"></span>
           </div>
           <div x-show="entry.fazit" class="fazit" x-text="entry.fazit"></div>

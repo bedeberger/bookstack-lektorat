@@ -192,9 +192,9 @@ export const lektoratMethods = {
               ${s.kommentar ? `<div class="szene-kommentar">${escHtml(s.kommentar)}</div>` : ''}
             </div>`
           ).join('');
-          out += `<div class="stilbox"><div class="stilbox-title">Szenen</div>${rows}</div>`;
+          out += `<div class="stilbox"><div class="bewertung-section-title">Szenen</div>${rows}</div>`;
         }
-        if (r.stilanalyse) out += `<div class="stilbox"><div class="stilbox-title">Stilanalyse</div>${escHtml(r.stilanalyse)}</div>`;
+        if (r.stilanalyse) out += `<div class="stilbox"><div class="bewertung-section-title">Stilanalyse</div>${escHtml(r.stilanalyse)}</div>`;
         if (r.fazit) out += `<div class="fazit">${escHtml(r.fazit)}</div>`;
         this.analysisOut = out;
         this.checkDone = true;
