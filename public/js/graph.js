@@ -119,16 +119,28 @@ export const graphMethods = {
 
   // ── Figurengraph (nach Figurentyp gefärbt) ──────────────────────────────────
   _renderFigurengraph(container) {
+    // Tableau-10-Palette für Kapitel-Cluster
+    const CHAP_PALETTE = [
+      [78,121,167],[242,142,43],[225,87,89],[118,183,178],[89,161,79],
+      [237,201,72],[176,122,161],[255,157,167],[156,117,95],[186,176,172],
+    ];
+
     // Kapitel-Clustering: Startposition jeder Figur = gewichtetes Mittel
-    // der Kapitel-Positionen (gewichtet nach Auftritts-Häufigkeit).
-    // Figuren die in denselben Kapiteln vorkommen, starten nahe beieinander.
+    // der Kapitel-Positionen. Figuren die in denselben Kapiteln vorkommen,
+    // starten nahe beieinander.
     const allChapters = [...new Set(
       this.figuren.flatMap(f => (f.kapitel || []).map(k => k.name))
     )];
-    const R = Math.max(280, Math.min(allChapters.length * 60, 720));
+    const N = allChapters.length;
+    // Radius so wählen dass benachbarte Cluster-Mittelpunkte ≥ 420px auseinander liegen
+    const R = N <= 1 ? 0 : Math.max(320, Math.ceil(420 / (2 * Math.sin(Math.PI / N))));
+    // Cluster-Radius = ~85% des halben Abstands zu Nachbar-Kapiteln
+    const clusterR = N <= 1 ? Math.max(280, R)
+      : Math.min(R * Math.sin(Math.PI / N) * 0.85, 280);
+
     const chapPos = {};
     allChapters.forEach((ch, i) => {
-      const angle = (2 * Math.PI * i / allChapters.length) - Math.PI / 2;
+      const angle = (2 * Math.PI * i / N) - Math.PI / 2;
       chapPos[ch] = { x: R * Math.cos(angle), y: R * Math.sin(angle) };
     });
 
@@ -162,7 +174,7 @@ export const graphMethods = {
     const options = {
       physics: hasFamilyEdges
         ? { solver: 'hierarchicalRepulsion', hierarchicalRepulsion: { nodeDistance: 140 } }
-        : { solver: 'barnesHut', barnesHut: { gravitationalConstant: -1200, centralGravity: 0.02, springLength: 100, springConstant: 0.06, damping: 0.15, avoidOverlap: 0.8 }, stabilization: { iterations: 200 } },
+        : { solver: 'barnesHut', barnesHut: { gravitationalConstant: -1500, centralGravity: 0, springLength: 80, springConstant: 0.08, damping: 0.2, avoidOverlap: 1.0 }, stabilization: { iterations: 250 } },
       layout: hasFamilyEdges
         ? { hierarchical: { direction: 'UD', sortMethod: 'directed', nodeSpacing: 160, levelSeparation: 120 } }
         : { improvedLayout: false },
@@ -171,6 +183,36 @@ export const graphMethods = {
     };
 
     this._figurenNetwork = new vis.Network(container, { nodes, edges }, options);
+
+    // Kapitel-Cluster-Kreise im Hintergrund zeichnen
+    if (!hasFamilyEdges && N > 0) {
+      this._figurenNetwork.on('beforeDrawing', ctx => {
+        ctx.save();
+        allChapters.forEach((ch, i) => {
+          const [r, g, b] = CHAP_PALETTE[i % CHAP_PALETTE.length];
+          const { x, y } = chapPos[ch];
+          // Gefüllter Kreis
+          ctx.beginPath();
+          ctx.arc(x, y, clusterR, 0, 2 * Math.PI);
+          ctx.fillStyle = `rgba(${r},${g},${b},0.07)`;
+          ctx.fill();
+          // Gestrichelter Rand
+          ctx.strokeStyle = `rgba(${r},${g},${b},0.30)`;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([7, 5]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          // Kapitel-Label unterhalb des Kreises
+          ctx.font = 'bold 13px system-ui,-apple-system,sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillStyle = `rgba(${r},${g},${b},0.75)`;
+          ctx.fillText(ch, x, y + clusterR + 8);
+        });
+        ctx.restore();
+      });
+    }
+
     this._figurenNetwork.once('stabilizationIterationsDone', () => {
       // Positionen einfrieren bevor hierarchischer Modus deaktiviert wird –
       // sonst zieht vis-network beim Drag den ganzen Teilbaum mit.
