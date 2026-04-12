@@ -1282,6 +1282,9 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
     const pages = await bsGetAll('pages?book_id=' + bookId, userToken);
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
 
+    const authHeader = userToken
+      ? `Token ${userToken.id}:${userToken.pw}`
+      : `Token ${process.env.TOKEN_ID || ''}:${process.env.TOKEN_KENNWORT || ''}`;
     const tok = { in: 0, out: 0, ms: 0 };
     const model = _modelName(process.env.API_PROVIDER || 'claude');
     let done = 0, totalErrors = 0;
