@@ -193,8 +193,15 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           const ok = r.status === 'fulfilled';
           return `${ct.group.name}: fig=${ok ? (r.value?.figuren?.length ?? 0) : 'ERR'} orte=${ok ? (r.value?.orte?.length ?? 0) : 'ERR'} sz=${ok ? (r.value?.szenen?.length ?? 0) : 'ERR'} ass=${ok ? (r.value?.assignments?.length ?? 0) : 'ERR'}`;
         });
+        const failedChapters = settled.filter(r => r.status === 'rejected');
         logger.info(`Job ${jobId}: Phase 1 Multi-Pass – ${settled.filter(r => r.status === 'fulfilled').length}/${settled.length} Kapitel OK (${cacheHits} Cache-Hits), total: figuren=${chapterFiguren.reduce((s,c)=>s+c.figuren.length,0)}, orte=${chapterOrte.reduce((s,c)=>s+c.orte.length,0)}, szenen=${chapterSzenen.reduce((s,c)=>s+c.szenen.length,0)}, assignments=${chapterAssignments.reduce((s,c)=>s+c.assignments.length,0)} (${totalEvents1mp} Ereignisse)`);
         for (const line of kapDetail) logger.info(`Job ${jobId}:   ${line}`);
+        if (failedChapters.length > 0) {
+          // Kapitel fehlgeschlagen → kein Checkpoint speichern; Delta-Cache schützt erfolgreiche Kapitel.
+          // Beim Retry versucht Phase 1 die fehlgeschlagenen Kapitel erneut (Delta-Cache liefert
+          // erfolgreiche Kapitel sofort zurück, ohne KI-Call).
+          throw new Error(`Phase 1 unvollständig: ${failedChapters.length} Kapitel fehlgeschlagen (${chapterTexts.filter((_, gi) => settled[gi].status === 'rejected').map(ct => ct.group.name).join(', ')})`);
+        }
       }
       saveCheckpoint('komplett-analyse', bookId, userEmail, {
         phase: 'p1_full_done',
@@ -541,7 +548,8 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     }, tps(tok));
     logger.info(`Job ${jobId}: Komplettanalyse Buch ${bookId} abgeschlossen (${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
   } catch (e) {
-    logger.error(`Job ${jobId}: Komplettanalyse Fehler: ${e.message}`);
+    const cause = e.cause?.message || e.cause?.code || '';
+    logger.error(`Job ${jobId}: Komplettanalyse Fehler: ${e.message}${cause ? ' (cause: ' + cause + ')' : ''}`);
     failJob(jobId, e);
   }
 }
