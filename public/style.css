@@ -1440,6 +1440,7 @@ ins {
 
 /* === Figuren: Listen-Bereich === */
 .figur-list-section {
+  overflow-anchor: none;
   margin-top: 16px;
   border-top: 0.5px solid var(--color-border);
   padding-top: 14px;
@@ -2658,8 +2659,6 @@ ins {
   .layout-sidebar {
     position: sticky;
     top: 1.5rem;
-    max-height: calc(100vh - 3rem);
-    overflow-y: auto;
   }
 }
 
