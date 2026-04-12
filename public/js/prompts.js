@@ -481,7 +481,7 @@ Fakten-Regeln:
 - Soziolekt: Wenn eine Figur erstmals oder markant spricht, ein Faktum erfassen das ihr Sprachregister beschreibt. Kategorie «soziolekt» verwenden.
 - Objekte: Wer besitzt was, wo liegt was, in welchem Zustand
 - Zeitangaben: Relative («am nächsten Morgen») und absolute («1943») erfassen
-- Maximal 30 Fakten pro Kapitel; lieber weniger, dafür präzise
+- Maximal 50 Fakten pro Kapitel; lieber weniger, dafür präzise
 
 Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
@@ -725,7 +725,7 @@ Regeln:
 - Soziolekt: Wenn eine Figur hier erstmals oder markant spricht, ein Faktum erfassen das ihr Sprachregister beschreibt (z.B. «spricht formell-gebildet», «verwendet Dialekt und Umgangssprache», «benutzt Fachjargon aus Bereich X»). Kategorie «soziolekt» verwenden.
 - Objekte: Wer besitzt was, wo liegt was, in welchem Zustand
 - Zeitangaben: Relative («am nächsten Morgen») und absolute («1943») erfassen
-- Maximal 30 Fakten pro Kapitel; lieber weniger, dafür präzise
+- Maximal 50 Fakten pro Kapitel; lieber weniger, dafür präzise
 
 ${JSON_ONLY}
 
