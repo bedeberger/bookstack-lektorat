@@ -149,7 +149,7 @@ export const graphMethods = {
       // Positionen einfrieren bevor hierarchischer Modus deaktiviert wird –
       // sonst zieht vis-network beim Drag den ganzen Teilbaum mit.
       const positions = this._figurenNetwork.getPositions();
-      nodes.update(Object.entries(positions).map(([id, { x, y }]) => ({ id: +id, x, y })));
+      nodes.update(Object.entries(positions).map(([id, { x, y }]) => ({ id, x, y })));
       this._figurenNetwork.setOptions({ physics: false, layout: { hierarchical: { enabled: false } } });
     });
     this._attachTooltip(container);
