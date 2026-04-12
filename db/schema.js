@@ -873,6 +873,11 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 36').run();
     logger.info('DB-Migration auf Version 36 abgeschlossen (book_settings.buchtyp + buch_kontext hinzugefügt).');
   }
+  if (version < 37) {
+    db.exec('ALTER TABLE page_checks ADD COLUMN chapter_id INTEGER');
+    db.prepare('UPDATE schema_version SET version = 37').run();
+    logger.info('DB-Migration auf Version 37 abgeschlossen (page_checks.chapter_id hinzugefügt).');
+  }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).

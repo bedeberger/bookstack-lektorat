@@ -55,9 +55,9 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     const szenen = Array.isArray(result?.szenen) ? result.szenen : [];
 
     const info = db.prepare(`INSERT INTO page_checks
-      (page_id, page_name, book_id, checked_at, error_count, errors_json, szenen_json, stilanalyse, fazit, model, user_email)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(parseInt(pageId), pd.name, parseInt(bookId) || null,
+      (page_id, page_name, book_id, chapter_id, checked_at, error_count, errors_json, szenen_json, stilanalyse, fazit, model, user_email)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(parseInt(pageId), pd.name, parseInt(bookId) || null, pd.chapter_id || null,
         new Date().toISOString(), result.fehler.length, JSON.stringify(result.fehler),
         szenen.length > 0 ? JSON.stringify(szenen) : null,
         result.stilanalyse || null, result.fazit || null, model, userEmail || null);
@@ -135,9 +135,9 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
 
         const szenenBatch = Array.isArray(result?.szenen) ? result.szenen : [];
         db.prepare(`INSERT INTO page_checks
-          (page_id, page_name, book_id, checked_at, error_count, errors_json, szenen_json, stilanalyse, fazit, model, user_email)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-          .run(p.id, p.name, parseInt(bookId), new Date().toISOString(),
+          (page_id, page_name, book_id, chapter_id, checked_at, error_count, errors_json, szenen_json, stilanalyse, fazit, model, user_email)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(p.id, p.name, parseInt(bookId), p.chapter_id || null, new Date().toISOString(),
             fehler.length, JSON.stringify(fehler),
             szenenBatch.length > 0 ? JSON.stringify(szenenBatch) : null,
             result.stilanalyse || null, result.fazit || null, model, userEmail || null);

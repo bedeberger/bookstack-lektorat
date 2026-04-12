@@ -12,8 +12,8 @@ const {
 const {
   makeJobLogger, updateJob, completeJob, failJob,
   aiCall, getPrompts, getBookPrompts,
-  loadPageContents, groupByChapter, buildSinglePassBookText,
-  bsGetAll, SINGLE_PASS_LIMIT, BATCH_SIZE, jobAbortControllers,
+  loadPageContents, groupByChapter, buildSinglePassBookText, splitGroupsIntoChunks,
+  bsGetAll, SINGLE_PASS_LIMIT, PER_CHUNK_LIMIT, BATCH_SIZE, jobAbortControllers,
   _modelName, fmtTok, tps, settledAll,
   jobs, runningJobs, createJob, enqueueJob, jobKey,
   jsonBody,
@@ -85,18 +85,6 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
     const tok = { in: 0, out: 0, ms: 0, inflight: new Map() };
 
-    // Cache-Signatur pro Kapitel: sortierter String aus "page_id:updated_at"-Paaren.
-    // Ändert sich eine Seite, ändert sich die Signatur → Cache-Miss → Neu-Extraktion.
-    const chapterPagesSig = {};
-    for (const p of pages) {
-      const key = p.chapter_id != null ? String(p.chapter_id) : '__ungrouped__';
-      if (!chapterPagesSig[key]) chapterPagesSig[key] = [];
-      chapterPagesSig[key].push(`${p.id}:${p.updated_at || ''}`);
-    }
-    for (const key of Object.keys(chapterPagesSig)) {
-      chapterPagesSig[key] = chapterPagesSig[key].sort().join('|');
-    }
-
     const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
       updateJob(jobId, {
         progress: Math.round((i / total) * 12),
@@ -122,14 +110,20 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       if (cp.tokIn != null) { tok.in = cp.tokIn; tok.out = cp.tokOut || 0; tok.ms = cp.tokMs || 0; }
       updateJob(jobId, { progress: 28, statusText: 'Phase 1 aus Checkpoint geladen…', tokensIn: tok.in, tokensOut: tok.out });
     } else {
+      // Für lokale Modelle: Kapitel die PER_CHUNK_LIMIT überschreiten, werden in Seiten-Untergruppen
+      // aufgeteilt. Jeder Chunk bekommt einen eigenen KI-Call mit eigenem Delta-Cache-Eintrag.
+      // Claude nutzt singlePassLimit (250K) als Chunk-Grenze → kein Splitting in der Praxis.
+      const perChunkLimit = effectiveProvider === 'claude' ? singlePassLimit : PER_CHUNK_LIMIT;
+      const { chunkOrder, chunks } = splitGroupsIntoChunks(groups, groupOrder, perChunkLimit);
+
       updateJob(jobId, {
         progress: 12,
         statusText: totalChars <= singlePassLimit
           ? 'KI extrahiert Figuren, Schauplätze, Fakten, Szenen…'
-          : `Vollextraktion in ${groupOrder.length} Kapiteln…`,
+          : `Vollextraktion in ${chunkOrder.length} Chunks…`,
       });
 
-      logger.info(`Job ${jobId}: Phase 1 – ${totalChars} Zeichen, ${effectiveProvider}, Limit ${singlePassLimit} → ${totalChars <= singlePassLimit ? 'Single-Pass' : `Multi-Pass (${groupOrder.length} Kapitel)`}`);
+      logger.info(`Job ${jobId}: Phase 1 – ${totalChars} Zeichen, ${effectiveProvider}, singlePassLimit=${singlePassLimit}, perChunkLimit=${perChunkLimit} → ${totalChars <= singlePassLimit ? 'Single-Pass' : `Multi-Pass (${groupOrder.length} Kapitel → ${chunkOrder.length} Chunks)`}`);
       if (totalChars <= singlePassLimit) {
         const bookText = buildSinglePassBookText(groups, groupOrder);
         const r = await call(jobId, tok,
@@ -144,68 +138,71 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         const totalEvents1 = (r?.assignments || []).reduce((s, a) => s + (a.lebensereignisse?.length || 0), 0);
         logger.info(`Job ${jobId}: Phase 1 Single-Pass OK – figuren=${chapterFiguren[0].figuren.length}, orte=${chapterOrte[0].orte.length}, fakten=${chapterFakten[0].fakten.length}, szenen=${chapterSzenen[0].szenen.length}, assignments=${chapterAssignments[0].assignments.length} (${totalEvents1} Ereignisse). Kapitel: [${groupOrder.map(k => groups.get(k).name).join(', ')}]`);
       } else {
-        const chapterTexts = groupOrder.map(key => {
-          const group = groups.get(key);
+        // Cache-Signatur pro Chunk: sortierter String aus "page_id:updated_at"-Paaren der Chunk-Seiten.
+        // pageContents enthält id+updated_at aus der BookStack-API (via loadPageContents).
+        const chunkTexts = chunkOrder.map(chunkKey => {
+          const chunk = chunks.get(chunkKey);
+          const pagesSig = chunk.pages.map(p => `${p.id}:${p.updated_at}`).sort().join('|');
           return {
-            group, key,
-            pagesSig: chapterPagesSig[key] || '',
-            chText: group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n'),
+            chunk, key: chunkKey,
+            pagesSig,
+            chText: chunk.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n'),
           };
         });
         let cacheHits = 0;
         const settled = await settledAll(
-          chapterTexts.map(({ group, key, pagesSig, chText }) => async () => {
+          chunkTexts.map(({ chunk, key, pagesSig, chText }) => async () => {
             // Delta-Cache: Cache-Hit → kein KI-Call nötig
             const cached = loadChapterExtractCache(bookId, userEmail, key, pagesSig);
             if (cached) {
               cacheHits++;
-              logger.info(`Job ${jobId}: Kapitel «${group.name}» – Cache-Hit, KI-Call übersprungen.`);
+              logger.info(`Job ${jobId}: Chunk «${chunk.name}» – Cache-Hit, KI-Call übersprungen.`);
               return cached;
             }
             const result = await call(jobId, tok,
-              buildExtraktionKomplettChapterPrompt(group.name, bookName, group.pages.length, chText),
+              buildExtraktionKomplettChapterPrompt(chunk.name, bookName, chunk.pages.length, chText),
               SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 14000,
             );
-            logger.info(`Job ${jobId}: Kapitel «${group.name}» extrahiert – fig=${result?.figuren?.length ?? 0} orte=${result?.orte?.length ?? 0} sz=${result?.szenen?.length ?? 0} ass=${result?.assignments?.length ?? 0}`);
+            logger.info(`Job ${jobId}: Chunk «${chunk.name}» extrahiert – fig=${result?.figuren?.length ?? 0} orte=${result?.orte?.length ?? 0} sz=${result?.szenen?.length ?? 0} ass=${result?.assignments?.length ?? 0}`);
             saveChapterExtractCache(bookId, userEmail, key, pagesSig, result);
             return result;
           })
         );
         chapterFiguren = settled.map((r, gi) => ({
-          kapitel: chapterTexts[gi].group.name,
+          kapitel: chunkTexts[gi].chunk.name,
           figuren: r.status === 'fulfilled' ? (r.value?.figuren || []) : [],
-          ...(r.status === 'rejected' && logger.warn(`Job ${jobId}: Vollextraktion «${chapterTexts[gi].group.name}» übersprungen: ${r.reason?.message}`) && {}),
+          ...(r.status === 'rejected' && logger.warn(`Job ${jobId}: Vollextraktion «${chunkTexts[gi].chunk.name}» übersprungen: ${r.reason?.message}`) && {}),
         }));
         chapterOrte = settled.map((r, gi) => ({
-          kapitel: chapterTexts[gi].group.name,
+          kapitel: chunkTexts[gi].chunk.name,
           orte: r.status === 'fulfilled' ? (r.value?.orte || []) : [],
         }));
         chapterFakten = settled.map((r, gi) => ({
-          kapitel: chapterTexts[gi].group.name,
+          kapitel: chunkTexts[gi].chunk.name,
           fakten: r.status === 'fulfilled' ? (r.value?.fakten || []) : [],
         }));
         chapterSzenen = settled.map((r, gi) => ({
-          kapitel: chapterTexts[gi].group.name,
+          kapitel: chunkTexts[gi].chunk.name,
           szenen: r.status === 'fulfilled' ? (r.value?.szenen || []) : [],
         }));
         chapterAssignments = settled.map((r, gi) => ({
-          kapitel: chapterTexts[gi].group.name,
+          kapitel: chunkTexts[gi].chunk.name,
           assignments: r.status === 'fulfilled' ? (r.value?.assignments || []) : [],
         }));
         const totalEvents1mp = chapterAssignments.reduce((s, c) => s + c.assignments.reduce((ss, a) => ss + (a.lebensereignisse?.length || 0), 0), 0);
-        const kapDetail = chapterTexts.map((ct, gi) => {
+        const kapDetail = chunkTexts.map((ct, gi) => {
           const r = settled[gi];
           const ok = r.status === 'fulfilled';
-          return `${ct.group.name}: fig=${ok ? (r.value?.figuren?.length ?? 0) : 'ERR'} orte=${ok ? (r.value?.orte?.length ?? 0) : 'ERR'} sz=${ok ? (r.value?.szenen?.length ?? 0) : 'ERR'} ass=${ok ? (r.value?.assignments?.length ?? 0) : 'ERR'}`;
+          return `${ct.chunk.name}: fig=${ok ? (r.value?.figuren?.length ?? 0) : 'ERR'} orte=${ok ? (r.value?.orte?.length ?? 0) : 'ERR'} sz=${ok ? (r.value?.szenen?.length ?? 0) : 'ERR'} ass=${ok ? (r.value?.assignments?.length ?? 0) : 'ERR'}`;
         });
-        const failedChapters = settled.filter(r => r.status === 'rejected');
-        logger.info(`Job ${jobId}: Phase 1 Multi-Pass – ${settled.filter(r => r.status === 'fulfilled').length}/${settled.length} Kapitel OK (${cacheHits} Cache-Hits), total: figuren=${chapterFiguren.reduce((s,c)=>s+c.figuren.length,0)}, orte=${chapterOrte.reduce((s,c)=>s+c.orte.length,0)}, szenen=${chapterSzenen.reduce((s,c)=>s+c.szenen.length,0)}, assignments=${chapterAssignments.reduce((s,c)=>s+c.assignments.length,0)} (${totalEvents1mp} Ereignisse)`);
+        const failedChunks = settled.filter(r => r.status === 'rejected');
+        logger.info(`Job ${jobId}: Phase 1 Multi-Pass – ${settled.filter(r => r.status === 'fulfilled').length}/${settled.length} Chunks OK (${cacheHits} Cache-Hits), total: figuren=${chapterFiguren.reduce((s,c)=>s+c.figuren.length,0)}, orte=${chapterOrte.reduce((s,c)=>s+c.orte.length,0)}, szenen=${chapterSzenen.reduce((s,c)=>s+c.szenen.length,0)}, assignments=${chapterAssignments.reduce((s,c)=>s+c.assignments.length,0)} (${totalEvents1mp} Ereignisse)`);
         for (const line of kapDetail) logger.info(`Job ${jobId}:   ${line}`);
-        if (failedChapters.length > 0) {
-          // Kapitel fehlgeschlagen → kein Checkpoint speichern; Delta-Cache schützt erfolgreiche Kapitel.
-          // Beim Retry versucht Phase 1 die fehlgeschlagenen Kapitel erneut (Delta-Cache liefert
-          // erfolgreiche Kapitel sofort zurück, ohne KI-Call).
-          throw new Error(`Phase 1 unvollständig: ${failedChapters.length} Kapitel fehlgeschlagen (${chapterTexts.filter((_, gi) => settled[gi].status === 'rejected').map(ct => ct.group.name).join(', ')})`);
+        if (failedChunks.length > 0) {
+          // Chunk fehlgeschlagen → kein Checkpoint speichern; Delta-Cache schützt erfolgreiche Chunks.
+          // Beim Retry versucht Phase 1 die fehlgeschlagenen Chunks erneut (Delta-Cache liefert
+          // erfolgreiche Chunks sofort zurück, ohne KI-Call).
+          throw new Error(`Phase 1 unvollständig: ${failedChunks.length} Chunks fehlgeschlagen (${chunkTexts.filter((_, gi) => settled[gi].status === 'rejected').map(ct => ct.chunk.name).join(', ')})`);
         }
       }
       saveCheckpoint('komplett-analyse', bookId, userEmail, {

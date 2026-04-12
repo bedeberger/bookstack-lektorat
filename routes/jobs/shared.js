@@ -235,6 +235,11 @@ function htmlToText(html) {
 }
 
 const SINGLE_PASS_LIMIT = 60000;
+// Maximale Zeichenzahl pro KI-Call im Multi-Pass für lokale Modelle.
+// Kleinere Modelle (Mistral Small u.ä.) verlieren bei langen Inputs massiv an
+// Extraktionsqualität. 20K Zeichen ≈ 5K Token Eingabetext – zusammen mit
+// System-Prompt (~4K) und Output-Reserve (14K) bleibt man bei ~23K Token pro Call.
+const PER_CHUNK_LIMIT = 20000;
 const BATCH_SIZE = 15;
 
 async function loadPageContents(pages, chMap, minLength, onBatch, userToken, signal = null) {
@@ -247,6 +252,8 @@ async function loadPageContents(pages, chMap, minLength, onBatch, userToken, sig
       const text = htmlToText(pd.html).trim();
       if (text.length < minLength) return null;
       return {
+        id: p.id,
+        updated_at: p.updated_at || '',
         title: p.name,
         chapter_id: p.chapter_id || null,
         chapter: p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : null,
@@ -266,6 +273,43 @@ function groupByChapter(pageContents) {
     groups.get(key).pages.push(p);
   }
   return { groupOrder, groups };
+}
+
+/**
+ * Teilt Kapitel-Gruppen in kleinere Chunks auf, wenn sie perChunkLimit überschreiten.
+ * Nicht aufzuteilende Kapitel behalten ihren Original-Key (bestehende Cache-Einträge bleiben gültig).
+ * Sub-Chunks erhalten den Key "${chapterKey}__sub${idx}".
+ * Gibt { chunkOrder, chunks } zurück – gleiche Struktur wie groupByChapter, drop-in verwendbar.
+ */
+function splitGroupsIntoChunks(groups, groupOrder, perChunkLimit) {
+  const chunkOrder = [], chunks = new Map();
+  for (const key of groupOrder) {
+    const group = groups.get(key);
+    const totalChars = group.pages.reduce((s, p) => s + p.text.length, 0);
+    if (totalChars <= perChunkLimit) {
+      chunkOrder.push(key);
+      chunks.set(key, group);
+      continue;
+    }
+    let currentPages = [], currentChars = 0, subIdx = 0;
+    for (const page of group.pages) {
+      if (currentChars + page.text.length > perChunkLimit && currentPages.length > 0) {
+        chunkOrder.push(`${key}__sub${subIdx}`);
+        chunks.set(`${key}__sub${subIdx}`, { name: `${group.name} (Teil ${subIdx + 1})`, pages: currentPages });
+        currentPages = []; currentChars = 0; subIdx++;
+      }
+      currentPages.push(page);
+      currentChars += page.text.length;
+    }
+    if (currentPages.length > 0) {
+      chunkOrder.push(`${key}__sub${subIdx}`);
+      chunks.set(`${key}__sub${subIdx}`, {
+        name: subIdx === 0 ? group.name : `${group.name} (Teil ${subIdx + 1})`,
+        pages: currentPages,
+      });
+    }
+  }
+  return { chunkOrder, chunks };
 }
 
 // Formatiert den Buchtext für Single-Pass-KI-Calls mit klarer Kapitelstruktur:
@@ -498,10 +542,10 @@ module.exports = {
   _modelName, settledAll,
   BS_URL, bsGet, bsGetAll,
   htmlToText,
-  loadPageContents, groupByChapter, buildSinglePassBookText,
+  loadPageContents, groupByChapter, buildSinglePassBookText, splitGroupsIntoChunks,
   aiCall,
   getPrompts, getBookPrompts,
-  SINGLE_PASS_LIMIT, BATCH_SIZE,
+  SINGLE_PASS_LIMIT, PER_CHUNK_LIMIT, BATCH_SIZE,
   jsonBody, jsonBodyLarge,
   sharedRouter,
 };

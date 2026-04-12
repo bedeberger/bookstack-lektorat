@@ -1,5 +1,6 @@
 const express = require('express');
 const { db } = require('../db/schema');
+const logger = require('../logger');
 
 const router = express.Router();
 const jsonBody = express.json();
@@ -33,6 +34,20 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
   const user_email = req.session?.user?.email || null;
   db.prepare('UPDATE page_checks SET saved = ?, saved_at = ?, applied_errors_json = COALESCE(?, applied_errors_json), selected_errors_json = COALESCE(?, selected_errors_json) WHERE id = ? AND user_email = ?')
     .run(saved, saved_at, applied, selected, parseInt(req.params.id), user_email);
+
+  if (saved) {
+    const row = db.prepare('SELECT page_id, page_name, book_id, chapter_id FROM page_checks WHERE id = ?').get(parseInt(req.params.id));
+    const appliedErrors = req.body?.applied_errors_json;
+    if (row && Array.isArray(appliedErrors)) {
+      const counts = { rechtschreibung: 0, grammatik: 0, wiederholung: 0, stil: 0 };
+      for (const f of appliedErrors) if (f.typ && counts[f.typ] !== undefined) counts[f.typ]++;
+      const total = appliedErrors.length;
+      logger.info(
+        `Lektorat gespeichert: «${row.page_name}» (user=${user_email || '-'}, book=${row.book_id || '-'}, chap=${row.chapter_id || '-'}, page=${row.page_id}, ${total} Korrekturen: R=${counts.rechtschreibung} G=${counts.grammatik} W=${counts.wiederholung} S=${counts.stil})`
+      );
+    }
+  }
+
   res.json({ ok: true });
 });
 
