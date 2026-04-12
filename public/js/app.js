@@ -669,10 +669,9 @@ document.addEventListener('alpine:init', () => {
       const p = this.alleAktualisierenProgress;
       const phases = [
         { label: 'Seiten laden',          threshold: 12  },
-        { label: 'Figuren + Orte',        threshold: 30  },
+        { label: 'Vollextraktion',        threshold: 30  },
         { label: 'Figuren konsolidieren', threshold: 45  },
         { label: 'Orte konsolidieren',    threshold: 56  },
-        { label: 'Soziogramm',            threshold: 63  },
         { label: 'Szenen + Ereignisse',   threshold: 83  },
         { label: 'Zeitstrahl',            threshold: 89  },
         { label: 'Kontinuität',           threshold: 100 },
