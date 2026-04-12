@@ -1129,10 +1129,16 @@ ins {
 
 .figuren-graph-toolbar {
   display: flex;
-  gap: 4px;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-top: 8px;
   margin-bottom: 4px;
+}
+.figuren-graph-toolbar-zoom {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .graph-tool-btn {
@@ -1460,15 +1466,13 @@ ins {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--color-border);
+  align-items: center;
 }
 .figuren-graph-filter-btn {
   padding: 2px 9px;
   font-size: var(--font-size-sm);
   border: 1px solid var(--color-border);
-  border-radius: 99px;
+  border-radius: var(--radius-sm);
   background: var(--color-bg);
   color: var(--color-muted);
   cursor: pointer;
@@ -1484,6 +1488,10 @@ ins {
   color: #fff;
   border-color: var(--color-primary);
   font-weight: 600;
+}
+.figuren-graph-filter-btn--active:hover {
+  background: var(--color-primary);
+  color: #fff;
 }
 
 /* === Progress-Status (alle Buchebenen-Features) === */
