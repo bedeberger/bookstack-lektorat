@@ -42,7 +42,7 @@ function computeStats(html) {
   const wordList = text.trim() === '' ? [] : text.trim().split(/\s+/);
   const words = wordList.length;
   const chars = text.length;
-  const tok = Math.round((PROMPT_OVERHEAD + chars + html.length) / 4);
+  const tok = Math.round((PROMPT_OVERHEAD + chars) / 4);
   const sentences = text.trim() === '' ? 0 : text.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
   return { words, chars, tok, wordList, sentences };
 }

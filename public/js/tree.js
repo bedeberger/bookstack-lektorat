@@ -115,7 +115,7 @@ export const treeMethods = {
 
   async loadTokenEstimates(gen) {
     const BATCH = 5;
-    const pages = this.pages.filter(p => !this.tokEsts[p.id]); // gecachte überspringen
+    const pages = this.pages;
     if (!pages.length) return;
 
     const newStats = [];

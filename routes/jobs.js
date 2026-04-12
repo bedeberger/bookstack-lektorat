@@ -114,8 +114,9 @@ function updateJob(id, updates) {
   const job = jobs.get(id);
   if (!job || job.status !== 'running') return;
   if (updates.progress != null && updates.progress < (job.progress || 0)) {
-    // Parallel-Branch mit niedrigerem Fortschritt darf weder progress noch statusText überschreiben
-    const { progress: _, statusText: __, ...rest } = updates;
+    // Parallel-Branch mit niedrigerem Fortschritt darf progress nicht zurücksetzen,
+    // statusText darf aber aktualisiert werden – der User sieht so, was gerade läuft.
+    const { progress: _, ...rest } = updates;
     Object.assign(job, rest);
   } else {
     Object.assign(job, updates);
@@ -847,6 +848,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           : `Vollextraktion in ${groupOrder.length} Kapiteln…`,
       });
 
+      logger.info(`Job ${jobId}: Phase 1 – ${totalChars} Zeichen, ${effectiveProvider}, Limit ${singlePassLimit} → ${totalChars <= singlePassLimit ? 'Single-Pass' : `Multi-Pass (${groupOrder.length} Kapitel)`}`);
       if (totalChars <= singlePassLimit) {
         const bookText = buildSinglePassBookText(groups, groupOrder);
         const r = await call(jobId, tok,
@@ -858,6 +860,8 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         chapterFakten      = [{ kapitel: 'Gesamtbuch', fakten:      r?.fakten      || [] }];
         chapterSzenen      = [{ kapitel: 'Gesamtbuch', szenen:      r?.szenen      || [] }];
         chapterAssignments = [{ kapitel: 'Gesamtbuch', assignments: r?.assignments || [] }];
+        const totalEvents1 = (r?.assignments || []).reduce((s, a) => s + (a.lebensereignisse?.length || 0), 0);
+        logger.info(`Job ${jobId}: Phase 1 Single-Pass OK – figuren=${chapterFiguren[0].figuren.length}, orte=${chapterOrte[0].orte.length}, fakten=${chapterFakten[0].fakten.length}, szenen=${chapterSzenen[0].szenen.length}, assignments=${chapterAssignments[0].assignments.length} (${totalEvents1} Ereignisse). Kapitel: [${groupOrder.map(k => groups.get(k).name).join(', ')}]`);
       } else {
         const chapterTexts = groupOrder.map(key => {
           const group = groups.get(key);
@@ -902,7 +906,14 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           kapitel: chapterTexts[gi].group.name,
           assignments: r.status === 'fulfilled' ? (r.value?.assignments || []) : [],
         }));
-        logger.info(`Job ${jobId}: Phase 1 – ${settled.filter(r => r.status === 'fulfilled').length}/${settled.length} Kapitel OK (${cacheHits} Cache-Hits). Figuren/Kap: [${chapterFiguren.map(c => c.figuren.length).join(', ')}], Orte/Kap: [${chapterOrte.map(c => c.orte.length).join(', ')}], Szenen/Kap: [${chapterSzenen.map(c => c.szenen.length).join(', ')}]`);
+        const totalEvents1mp = chapterAssignments.reduce((s, c) => s + c.assignments.reduce((ss, a) => ss + (a.lebensereignisse?.length || 0), 0), 0);
+        const kapDetail = chapterTexts.map((ct, gi) => {
+          const r = settled[gi];
+          const ok = r.status === 'fulfilled';
+          return `${ct.group.name}: fig=${ok ? (r.value?.figuren?.length ?? 0) : 'ERR'} orte=${ok ? (r.value?.orte?.length ?? 0) : 'ERR'} sz=${ok ? (r.value?.szenen?.length ?? 0) : 'ERR'} ass=${ok ? (r.value?.assignments?.length ?? 0) : 'ERR'}`;
+        });
+        logger.info(`Job ${jobId}: Phase 1 Multi-Pass – ${settled.filter(r => r.status === 'fulfilled').length}/${settled.length} Kapitel OK (${cacheHits} Cache-Hits), total: figuren=${chapterFiguren.reduce((s,c)=>s+c.figuren.length,0)}, orte=${chapterOrte.reduce((s,c)=>s+c.orte.length,0)}, szenen=${chapterSzenen.reduce((s,c)=>s+c.szenen.length,0)}, assignments=${chapterAssignments.reduce((s,c)=>s+c.assignments.length,0)} (${totalEvents1mp} Ereignisse)`);
+        for (const line of kapDetail) logger.info(`Job ${jobId}:   ${line}`);
       }
       saveCheckpoint('komplett-analyse', bookId, userEmail, {
         phase: 'p1_full_done',
@@ -938,32 +949,34 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       Object.entries(figNameToId).map(([k, v]) => [k.toLowerCase(), v])
     );
 
-    // Fallback: Phase-1-Figurennamen aus chapterFiguren nachträglich mappen.
-    // Wenn Claude in assignments figur_name != Phase-2-Kanonname verwendet (z.B. nur Nachname,
+    // Fallback: Phase-1-Namen (aus figuren + assignments) auf konsolidierte IDs mappen.
+    // Wenn das Modell in assignments figur_name != Phase-2-Kanonname verwendet (z.B. nur Nachname,
     // Titel+Name, Zweitname), wird per Token-Matching die eindeutig passende Phase-2-Figur gesucht.
+    // Auch Namen die nur in assignments vorkommen (nicht in chapterFiguren) werden abgedeckt.
     // Nur eingetragen wenn die Zuordnung eindeutig ist (genau eine Phase-2-Figur trifft zu).
-    for (const { figuren: chFigs } of (chapterFiguren || [])) {
-      for (const f1 of (chFigs || [])) {
-        if (!f1.name) continue;
-        if (figNameToId[f1.name] || figNameToIdLower[f1.name.toLowerCase()]) continue;
-        const f1Tokens = new Set(
-          f1.name.toLowerCase().split(/[\s\-\.]+/).filter(t => t.length > 2)
-        );
-        const seen = new Set();
-        const matches = [];
-        for (const [canon, fid] of Object.entries(figNameToId)) {
-          if (seen.has(fid)) continue;
-          const overlap = canon.toLowerCase().split(/[\s\-\.]+/)
-            .filter(t => t.length > 2 && f1Tokens.has(t)).length;
-          if (overlap > 0) { seen.add(fid); matches.push(fid); }
-        }
-        if (matches.length === 1) {
-          figNameToId[f1.name] = matches[0];
-          figNameToIdLower[f1.name.toLowerCase()] = matches[0];
-          logger.info(`Job ${jobId}: Phase-1-Name «${f1.name}» → ${matches[0]} (Token-Fallback)`);
-        }
+    function tokenFallback(name) {
+      if (!name) return;
+      if (figNameToId[name] || figNameToIdLower[name.toLowerCase()]) return;
+      const tokens = new Set(name.toLowerCase().split(/[\s\-\.]+/).filter(t => t.length > 2));
+      if (!tokens.size) return;
+      const seen = new Set();
+      const matches = [];
+      for (const [canon, fid] of Object.entries(figNameToId)) {
+        if (seen.has(fid)) continue;
+        const overlap = canon.toLowerCase().split(/[\s\-\.]+/)
+          .filter(t => t.length > 2 && tokens.has(t)).length;
+        if (overlap > 0) { seen.add(fid); matches.push(fid); }
+      }
+      if (matches.length === 1) {
+        figNameToId[name] = matches[0];
+        figNameToIdLower[name.toLowerCase()] = matches[0];
+        logger.info(`Job ${jobId}: Phase-1-Name «${name}» → ${matches[0]} (Token-Fallback)`);
       }
     }
+    for (const { figuren: chFigs } of (chapterFiguren || []))
+      for (const f1 of (chFigs || [])) tokenFallback(f1.name);
+    for (const { assignments: chAss } of (chapterAssignments || []))
+      for (const a of (chAss || [])) tokenFallback(a?.figur_name);
 
     // Soziogramm aus P2-Ergebnis übernehmen – kein separater API-Call.
     // FIGUREN_BASIS_SCHEMA enthält bereits sozialschicht und beziehungen[].machtverhaltnis.
@@ -1064,12 +1077,13 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         }
       }
 
+      let droppedAssignments = 0;
       for (const { kapitel, assignments: chAss } of (chAssignments || [])) {
         for (const assignment of (chAss || [])) {
           const figId = figNameToId[assignment.figur_name]
             || figNameToIdLower[assignment.figur_name?.toLowerCase()]
             || null;
-          if (!figId) continue;
+          if (!figId) { droppedAssignments++; logger.warn(`Job ${jobId}: Assignment «${assignment.figur_name}» (${assignment.lebensereignisse?.length || 0} Ereignisse) – keine Figuren-ID gefunden, wird ignoriert.`); continue; }
           if (!mergedEvtMap.has(figId)) mergedEvtMap.set(figId, []);
           for (const ev of (assignment.lebensereignisse || [])) {
             mergedEvtMap.get(figId).push({ ...ev, kapitel: ev.kapitel || kapitel });
@@ -1077,6 +1091,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         }
       }
 
+      if (droppedAssignments > 0) logger.warn(`Job ${jobId}: ${droppedAssignments} Assignments ohne Figuren-ID ignoriert (Namens-Mismatch zwischen Phase 1 und Phase 2).`);
       logger.info(`Job ${jobId}: Speichere ${allSzenen.length} Szenen (${mergedEvtMap.size} Figuren mit Ereignissen)…`);
       updateJob(jobId, { progress: 81, statusText: 'Szenen speichern…' });
       db.transaction(() => {
