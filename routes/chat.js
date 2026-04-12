@@ -4,7 +4,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const { db, getBookLocale } = require('../db/schema');
 const logger = require('../logger');
-const { CHARS_PER_TOKEN } = require('../lib/ai');
+const { CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../lib/ai');
 
 // prompt-config.json einmalig laden; fehlt die Datei, bricht der Server ab.
 const _promptConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../prompt-config.json'), 'utf8'));
@@ -422,7 +422,7 @@ router.post('/send', jsonBody, async (req, res) => {
 
 async function _streamClaude(messages, systemPrompt, res, onText, onTokens) {
   const model     = process.env.MODEL_NAME  || 'claude-sonnet-4-6';
-  const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
+  const maxTokens = MAX_TOKENS_OUT;
 
   const upstream = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',

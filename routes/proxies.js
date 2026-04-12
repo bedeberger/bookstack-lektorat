@@ -3,6 +3,7 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const fs = require('fs');
 const path = require('path');
 const logger = require('../logger');
+const { MAX_TOKENS_OUT } = require('../lib/ai');
 
 const BOOKSTACK_URL = process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80';
 
@@ -24,7 +25,7 @@ router.get('/config', (req, res) => {
   res.json({
     bookstackUrl: BOOKSTACK_URL.replace(/\/$/, ''),
     bookstackTokenOk: !!req.session?.bookstackToken,
-    claudeMaxTokens: parseInt(process.env.MODEL_TOKEN, 10) || 64000,
+    claudeMaxTokens: MAX_TOKENS_OUT,
     claudeModel: process.env.MODEL_NAME || 'claude-sonnet-4-6',
     apiProvider: process.env.API_PROVIDER || 'claude',
     ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
@@ -40,7 +41,7 @@ router.post('/claude', jsonBody, async (req, res) => {
   try {
     // Nur erlaubte Felder weitergeben – verhindert Model-Override durch das Frontend
     const model = process.env.MODEL_NAME || 'claude-sonnet-4-6';
-    const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
+    const maxTokens = MAX_TOKENS_OUT;
     const upstream = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {

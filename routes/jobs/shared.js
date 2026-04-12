@@ -6,7 +6,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../../logger');
 const { db, insertJobRun, startJobRun, endJobRun, getBookLocale, getAllUserTokens } = require('../../db/schema');
-const { callAI, parseJSON, CHARS_PER_TOKEN } = require('../../lib/ai');
+const { callAI, parseJSON, CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
 const _promptConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../prompt-config.json'), 'utf8'));
@@ -93,7 +93,7 @@ function createJob(type, bookId, userEmail, label) {
     label: label || null,
     status: 'queued', progress: 0, statusText: 'In Warteschlange…',
     tokensIn: 0, tokensOut: 0, tokensPerSec: null,
-    maxTokensOut: parseInt(process.env.MODEL_TOKEN, 10) || 64000,
+    maxTokensOut: MAX_TOKENS_OUT,
     result: null, error: null,
     startedAt: null, endedAt: null,
     cancelled: false,
@@ -323,10 +323,9 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
     }
     if (Object.keys(updates).length) updateJob(jobId, updates);
   };
-  const globalMax = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
   const maxTokensOverride = maxTokens != null
-    ? Math.min(maxTokens, globalMax)
-    : globalMax;
+    ? Math.min(maxTokens, MAX_TOKENS_OUT)
+    : MAX_TOKENS_OUT;
   const signal = jobAbortControllers.get(jobId)?.signal;
   const { text, truncated, tokensIn, tokensOut, genDurationMs } = await callAI(prompt, system, onProgress, maxTokensOverride, signal, provider);
   tok.inflight?.delete(callId);

@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const { db } = require('../../db/schema');
-const { CHARS_PER_TOKEN } = require('../../lib/ai');
+const { CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../../lib/ai');
 const {
   _promptConfig,
   makeJobLogger, updateJob, completeJob, failJob,
@@ -181,7 +181,7 @@ async function callAIChat(messages, systemPrompt, onProgress, signal) {
   if (provider === 'ollama') {
     const host  = (process.env.OLLAMA_HOST || 'http://localhost:11434').replace(/\/$/, '');
     const model = process.env.OLLAMA_MODEL || 'llama3.2';
-    const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
+    const maxTokens = MAX_TOKENS_OUT;
     const ollamaMessages = [{ role: 'system', content: systemPrompt }, ...messages];
     const estimatedTokIn = Math.ceil(ollamaMessages.reduce((s, m) => s + (m.content?.length || 0), 0) / CHARS_PER_TOKEN);
 
@@ -222,7 +222,7 @@ async function callAIChat(messages, systemPrompt, onProgress, signal) {
   } else if (provider === 'llama') {
     const host  = (process.env.LLAMA_HOST || 'http://localhost:8080').replace(/\/$/, '');
     const model = process.env.LLAMA_MODEL || 'llama3.2';
-    const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
+    const maxTokens = MAX_TOKENS_OUT;
     const llamaMessages = [{ role: 'system', content: systemPrompt }, ...messages];
     const estimatedTokIn = Math.ceil(llamaMessages.reduce((s, m) => s + (m.content?.length || 0), 0) / CHARS_PER_TOKEN);
 
@@ -272,7 +272,7 @@ async function callAIChat(messages, systemPrompt, onProgress, signal) {
     return { text, tokensIn, tokensOut, genDurationMs };
   } else {
     const model     = process.env.MODEL_NAME  || 'claude-sonnet-4-6';
-    const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
+    const maxTokens = MAX_TOKENS_OUT;
     const body = { model, max_tokens: maxTokens, messages, stream: true };
     if (systemPrompt) body.system = systemPrompt;
 
@@ -511,7 +511,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     const historyChars = historyWithoutLast.reduce((s, m) => s + (m.content?.length || 0), 0);
 
     // ── Schritt 3: Dynamisches Text-Budget ──────────────────────────────────────
-    const MODEL_TOKEN = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
+    const MODEL_TOKEN = MAX_TOKENS_OUT;
     const TOTAL_CHAR_BUDGET     = MODEL_TOKEN * 4;
     const SYSTEM_OVERHEAD_CHARS = 8000;   // ~2k Tokens für System-Prompt-Overhead
     const ANSWER_RESERVE_CHARS  = 8000;   // ~2k Tokens Reserve für Antwort
