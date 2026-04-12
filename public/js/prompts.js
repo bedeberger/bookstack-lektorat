@@ -340,6 +340,49 @@ ${figurenBasisRules(SOZIOGRAMM_KONTEXT)}`;
 }
 
 
+// ── Kapitelübergreifende Beziehungen ──────────────────────────────────────────
+export function buildKapiteluebergreifendeBeziehungenPrompt(bookName, figurenList, bookText) {
+  const idToName = Object.fromEntries(figurenList.map(f => [f.id, f.name]));
+  const figInfo = figurenList.map(f => {
+    const kap = (f.kapitel || []).map(k => k.name).join(', ') || '(kein Kapitel)';
+    const bzStr = (f.beziehungen || [])
+      .map(b => `${idToName[b.figur_id] || b.figur_id} [${b.typ}]`)
+      .join(', ');
+    return `- **${f.id}** ${f.name}${f.kurzname && f.kurzname !== f.name ? ` («${f.kurzname}»)` : ''} | ${f.typ} | Kapitel: ${kap}` +
+      (f.beschreibung ? `\n  ${f.beschreibung}` : '') +
+      (bzStr ? `\n  Bekannte Beziehungen: ${bzStr}` : '');
+  }).join('\n');
+
+  return `Buchname: «${bookName}»
+
+Analysiere die folgende Figurenliste und den Buchtext. Identifiziere Beziehungen zwischen Figuren aus VERSCHIEDENEN Kapiteln, die noch NICHT in «Bekannte Beziehungen» aufgeführt sind.
+
+Figurenliste:
+${figInfo}
+
+Buchtext:
+${bookText}
+
+${JSON_ONLY}
+
+Antworte mit diesem JSON-Schema:
+{
+  "beziehungen": [
+    { "von": "fig_1", "zu": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|patronage|geschaeft|andere", "machtverhaltnis": 0, "beschreibung": "1 Satz" }
+  ]
+}
+
+Regeln:
+- Nur Beziehungen zwischen Figuren aus VERSCHIEDENEN Kapiteln
+- Nur Beziehungen die im Buchtext eindeutig belegt sind – KONSERVATIV, lieber weglassen als spekulieren
+- von/zu: nur IDs aus der obigen Figurenliste
+- Jede Beziehung nur einmal eintragen (nicht von→zu UND zu→von für denselben Typ)
+- Keine Beziehungen die bereits in «Bekannte Beziehungen» stehen
+- machtverhaltnis aus Perspektive von «von» bezüglich «zu»: +2=zu dominiert klar, +1=leichter Vorteil von zu, 0=symmetrisch, -1=von hat leichten Vorteil, -2=von dominiert klar; weglassen oder 0 wenn unklar
+- Leeres Array wenn keine neuen kapitelübergreifenden Beziehungen eindeutig belegt sind`;
+}
+
+
 // ── Schauplatz-Schemata (auch verwendet in Komplett-Analyse) ─────────────────
 
 const ORTE_SCHEMA = `{

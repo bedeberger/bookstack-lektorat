@@ -1429,6 +1429,30 @@ function updateFigurenSoziogramm(bookId, figurenSoziogramm, beziehungenMacht, us
   })();
 }
 
+/** Fügt kapitelübergreifende Beziehungen zur figure_relations-Tabelle hinzu,
+ *  ohne bestehende zu löschen. Dedupliziert: überspringe wenn identisches Paar
+ *  (from_fig_id, to_fig_id, typ) oder die umgekehrte Richtung bereits existiert. */
+function addFigurenBeziehungen(bookId, beziehungen, userEmail) {
+  const DIRECTED = new Set(['elternteil', 'kind', 'mentor', 'schuetzling', 'patronage']);
+  const check = db.prepare(
+    'SELECT COUNT(*) as cnt FROM figure_relations WHERE book_id = ? AND from_fig_id = ? AND to_fig_id = ? AND typ = ? AND user_email IS ?'
+  );
+  const ins = db.prepare(
+    'INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, user_email) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  );
+  db.transaction(() => {
+    for (const bz of beziehungen) {
+      if (!bz.von || !bz.zu || !bz.typ) continue;
+      const em = userEmail || null;
+      const fwd = check.get(bookId, bz.von, bz.zu, bz.typ, em)?.cnt > 0;
+      const bwd = !DIRECTED.has(bz.typ) && check.get(bookId, bz.zu, bz.von, bz.typ, em)?.cnt > 0;
+      if (!fwd && !bwd) {
+        ins.run(bookId, bz.von, bz.zu, bz.typ, bz.beschreibung || null, bz.machtverhaltnis ?? null, em);
+      }
+    }
+  })();
+}
+
 /** Setzt alle hängenden job_runs (status 'running' oder 'queued') auf 'error'.
  *  Gibt die Anzahl bereinigter Einträge zurück. */
 function cleanupStuckJobRuns() {
@@ -1440,4 +1464,4 @@ function cleanupStuckJobRuns() {
   return result.changes;
 }
 
-module.exports = { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings, loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache, cleanupStuckJobRuns };
+module.exports = { db, saveFigurenToDb, addFigurenBeziehungen, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings, loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache, cleanupStuckJobRuns };

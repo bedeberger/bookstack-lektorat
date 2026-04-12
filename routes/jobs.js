@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
-const { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale, getAllUserTokens, loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache } = require('../db/schema');
+const { db, saveFigurenToDb, addFigurenBeziehungen, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale, getAllUserTokens, loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache } = require('../db/schema');
 const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -759,6 +759,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
   const {
     buildExtraktionKomplettChapterPrompt,
     buildFiguresBasisConsolidationPrompt,
+    buildKapiteluebergreifendeBeziehungenPrompt,
     buildLocationsConsolidationPrompt,
     buildZeitstrahlConsolidationPrompt,
     buildKontinuitaetSinglePassPrompt,
@@ -994,6 +995,36 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     // ortNameToId: Klarnamen → konsolidierte ID (für Szenen-Remapping in Block 2).
     const ortNameToId = {};
     for (const o of orte) ortNameToId[o.name] = o.id;
+
+    // ── Phase 3b: Kapitelübergreifende Beziehungen (nur Multi-Pass) ───────────
+    // Single-Pass: Phase 1 hat den vollständigen Text gesehen → Beziehungen bereits erfasst.
+    // Multi-Pass: Kapitel wurden isoliert analysiert → Beziehungen zwischen Figuren
+    // verschiedener Kapitel wurden in Phase 1 nicht erkannt. Hier werden sie nachträglich
+    // aus dem Volltext identifiziert und zu figure_relations hinzugefügt.
+    if (chapterFiguren.length > 1 && figuren.length >= 2) {
+      updateJob(jobId, { progress: 55, statusText: 'Kapitelübergreifende Beziehungen suchen…' });
+      try {
+        const fullText = buildSinglePassBookText(groups, groupOrder);
+        // Text ggf. kürzen – singlePassLimit gilt auch hier als Kontextbudget
+        const textForPrompt = fullText.length <= singlePassLimit
+          ? fullText
+          : fullText.slice(0, singlePassLimit);
+        const bzResult = await call(jobId, tok,
+          buildKapiteluebergreifendeBeziehungenPrompt(bookName, figuren, textForPrompt),
+          SYSTEM_FIGUREN, 55, 57, 2000,
+        );
+        const newBz = Array.isArray(bzResult?.beziehungen) ? bzResult.beziehungen : [];
+        if (newBz.length > 0) {
+          addFigurenBeziehungen(parseInt(bookId), newBz, userEmail || null);
+          logger.info(`Job ${jobId}: Phase 3b – ${newBz.length} kapitelübergreifende Beziehungen gespeichert.`);
+        } else {
+          logger.info(`Job ${jobId}: Phase 3b – keine kapitelübergreifenden Beziehungen gefunden.`);
+        }
+      } catch (e) {
+        // Nicht-kritisch: Job läuft weiter, nur diese Phase schlägt fehl
+        logger.warn(`Job ${jobId}: Phase 3b kapitelübergreifende Beziehungen fehlgeschlagen (ignoriert): ${e.message}`);
+      }
+    }
 
     // ── Parallel-Block 2: Szenen/Zeitstrahl + Kontinuität ──
     // Szenen + Events stammen aus Phase 1 (kein separater P5-Call mehr).
