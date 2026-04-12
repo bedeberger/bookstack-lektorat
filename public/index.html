@@ -221,9 +221,8 @@
                 <span x-show="tokEsts[page.id]" class="tok-stats">
                   <template x-if="tokEsts[page.id]?.words > 0">
                     <span style="display:contents">
-                      <span class="tok-badge"
-                        :class="tokEsts[page.id]?.tok > 16000 ? 'tok-high' : tokEsts[page.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
-                        x-text="tokEsts[page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[page.id].tok/1000) + 'k T' : '~' + tokEsts[page.id]?.tok + ' T'"
+                      <span class="tok-badge tok-neutral"
+                        x-text="tokEsts[page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[page.id].chars/1000) + 'k Z' : tokEsts[page.id]?.chars + ' Z'"
                         @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; tokTooltipData=tokEsts[page.id]; showTokLegend=true"
                         @mouseleave.stop="showTokLegend=false; tokTooltipData=null"></span>
                     </span>
@@ -243,9 +242,8 @@
           <span x-show="tokEsts[item.page.id]" class="tok-stats">
             <template x-if="tokEsts[item.page.id]?.words > 0">
               <span style="display:contents">
-                <span class="tok-badge"
-                  :class="tokEsts[item.page.id]?.tok > 16000 ? 'tok-high' : tokEsts[item.page.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
-                  x-text="tokEsts[item.page.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[item.page.id].tok/1000) + 'k T' : '~' + tokEsts[item.page.id]?.tok + ' T'"
+                <span class="tok-badge tok-neutral"
+                  x-text="tokEsts[item.page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[item.page.id].chars/1000) + 'k Z' : tokEsts[item.page.id]?.chars + ' Z'"
                   @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; tokTooltipData=tokEsts[item.page.id]; showTokLegend=true"
                   @mouseleave.stop="showTokLegend=false; tokTooltipData=null"></span>
               </span>
@@ -286,8 +284,7 @@
      class="tok-tooltip"
      @mouseleave="showTokLegend=false; tokTooltipData=null">
   <div class="tok-tt-row" x-text="(tokTooltipData?.words >= 1000 ? '~' + Math.round(tokTooltipData.words/1000) + 'k' : tokTooltipData?.words) + ' Wörter'"></div>
-  <div class="tok-tt-row" x-text="(tokTooltipData?.chars >= 1000 ? '~' + Math.round(tokTooltipData.chars/1000) + 'k' : tokTooltipData?.chars) + ' Zeichen'"></div>
-  <div class="tok-tt-hint">~4 Zeichen/Token</div>
+  <div class="tok-tt-row" x-text="'~' + (tokTooltipData?.tok >= 1000 ? Math.round(tokTooltipData.tok/1000) + 'k' : tokTooltipData?.tok) + ' Tokens'"></div>
 </div>
 
 <!-- Job-Queue Footer -->

@@ -1,3 +1,6 @@
+// Zeichenanzahl pro Token für deutschen Text (Komposita, Umlaute → dichter als Englisch).
+export const CHARS_PER_TOKEN = 3;
+
 export function fmtTok(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';

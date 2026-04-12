@@ -4,6 +4,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const { db, getBookLocale } = require('../db/schema');
 const logger = require('../logger');
+const { CHARS_PER_TOKEN } = require('../lib/ai');
 
 // prompt-config.json einmalig laden; fehlt die Datei, bricht der Server ab.
 const _promptConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../prompt-config.json'), 'utf8'));
@@ -586,7 +587,7 @@ async function _streamOllama(messages, systemPrompt, res, onText, onTokens) {
         }
         if (chunk.done) {
           promptTokens = chunk.prompt_eval_count || 0;
-          evalTokens   = chunk.eval_count        || Math.ceil(accumulated.length / 4);
+          evalTokens   = chunk.eval_count        || Math.ceil(accumulated.length / CHARS_PER_TOKEN);
         }
       } catch { /* ignorieren */ }
     }

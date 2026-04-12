@@ -6,7 +6,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
 const { db, saveFigurenToDb, addFigurenBeziehungen, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale, getAllUserTokens, loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache } = require('../db/schema');
-const { callAI, parseJSON } = require('../lib/ai');
+const { callAI, parseJSON, CHARS_PER_TOKEN } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
 const _promptConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../prompt-config.json'), 'utf8'));
@@ -405,7 +405,7 @@ async function callAIChat(messages, systemPrompt, onProgress, signal) {
     const model = process.env.OLLAMA_MODEL || 'llama3.2';
     const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
     const ollamaMessages = [{ role: 'system', content: systemPrompt }, ...messages];
-    const estimatedTokIn = Math.ceil(ollamaMessages.reduce((s, m) => s + (m.content?.length || 0), 0) / 4);
+    const estimatedTokIn = Math.ceil(ollamaMessages.reduce((s, m) => s + (m.content?.length || 0), 0) / CHARS_PER_TOKEN);
 
     const resp = await fetch(`${host}/api/chat`, {
       method: 'POST',
@@ -430,7 +430,7 @@ async function callAIChat(messages, systemPrompt, onProgress, signal) {
           const chunk = JSON.parse(line);
           if (chunk.done) {
             tokensIn  = chunk.prompt_eval_count || estimatedTokIn;
-            tokensOut = chunk.eval_count || Math.ceil(text.length / 4);
+            tokensOut = chunk.eval_count || Math.ceil(text.length / CHARS_PER_TOKEN);
             if (chunk.eval_duration) genDurationMs = Math.round(chunk.eval_duration / 1e6);
             if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
           } else {
@@ -446,7 +446,7 @@ async function callAIChat(messages, systemPrompt, onProgress, signal) {
     const model = process.env.LLAMA_MODEL || 'llama3.2';
     const maxTokens = parseInt(process.env.MODEL_TOKEN, 10) || 64000;
     const llamaMessages = [{ role: 'system', content: systemPrompt }, ...messages];
-    const estimatedTokIn = Math.ceil(llamaMessages.reduce((s, m) => s + (m.content?.length || 0), 0) / 3);
+    const estimatedTokIn = Math.ceil(llamaMessages.reduce((s, m) => s + (m.content?.length || 0), 0) / CHARS_PER_TOKEN);
 
     const resp = await fetch(`${host}/v1/chat/completions`, {
       method: 'POST',
@@ -482,14 +482,14 @@ async function callAIChat(messages, systemPrompt, onProgress, signal) {
           }
           if (chunk.usage) {
             tokensIn  = chunk.usage.prompt_tokens     || estimatedTokIn;
-            tokensOut = chunk.usage.completion_tokens || Math.ceil(text.length / 3);
+            tokensOut = chunk.usage.completion_tokens || Math.ceil(text.length / CHARS_PER_TOKEN);
             if (onProgress) onProgress({ chars: text.length, tokIn: tokensIn });
           }
         } catch { }
       }
     }
     if (!tokensIn)  tokensIn  = estimatedTokIn;
-    if (!tokensOut) tokensOut = Math.ceil(text.length / 3);
+    if (!tokensOut) tokensOut = Math.ceil(text.length / CHARS_PER_TOKEN);
     if (t_first && t_last > t_first) genDurationMs = t_last - t_first;
     return { text, tokensIn, tokensOut, genDurationMs };
   } else {
@@ -629,14 +629,14 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
       const entry = tok.inflight.get(callId) || { tokIn: 0, outEst: 0 };
       tok.inflight.set(callId, {
         tokIn:   tokIn > 0  ? tokIn              : entry.tokIn,
-        outEst:  chars > 0  ? Math.floor(chars / 4) : entry.outEst,
+        outEst:  chars > 0  ? Math.floor(chars / CHARS_PER_TOKEN) : entry.outEst,
       });
       const vals = [...tok.inflight.values()];
       if (tokIn > 0) updates.tokensIn  = tok.in  + vals.reduce((s, v) => s + v.tokIn,  0);
       if (chars > 0) updates.tokensOut = tok.out + vals.reduce((s, v) => s + v.outEst, 0);
     } else {
       if (tokIn > 0) updates.tokensIn  = tok.in  + tokIn;
-      if (chars > 0) updates.tokensOut = tok.out + Math.floor(chars / 4);
+      if (chars > 0) updates.tokensOut = tok.out + Math.floor(chars / CHARS_PER_TOKEN);
     }
     if (Object.keys(updates).length) updateJob(jobId, updates);
   };
@@ -1447,7 +1447,7 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
     const onProgress = ({ chars, tokIn }) => {
       const updates = { progress: Math.min(97, 10 + Math.round(chars / 50)) };
       if (tokIn > 0)  updates.tokensIn  = tokIn;
-      if (chars > 0)  updates.tokensOut = Math.floor(chars / 4);
+      if (chars > 0)  updates.tokensOut = Math.floor(chars / CHARS_PER_TOKEN);
       updateJob(jobId, updates);
     };
 
@@ -1647,7 +1647,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     const onProgress = ({ chars, tokIn }) => {
       const updates = { progress: Math.min(97, 50 + Math.round(chars / 50)) };
       if (tokIn > 0)  updates.tokensIn  = tokIn;
-      if (chars > 0)  updates.tokensOut = Math.floor(chars / 4);
+      if (chars > 0)  updates.tokensOut = Math.floor(chars / CHARS_PER_TOKEN);
       updateJob(jobId, updates);
     };
 

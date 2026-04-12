@@ -1,4 +1,4 @@
-import { htmlToText } from './utils.js';
+import { htmlToText, CHARS_PER_TOKEN } from './utils.js';
 import { buildLektoratPrompt } from './prompts.js';
 
 // Buch-/Seiten-Lade-Methoden (werden in die Alpine-Komponente gespreadet)
@@ -130,7 +130,7 @@ export const treeMethods = {
           const userPrompt = buildLektoratPrompt(text, html);
           const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
           this.tokEsts[p.id] = {
-            tok: Math.round(userPrompt.length / 4),
+            tok: Math.round(userPrompt.length / CHARS_PER_TOKEN),
             words,
             chars: text.length,
           };

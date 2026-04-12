@@ -1,13 +1,13 @@
 const express = require('express');
 const { db, getAnyUserToken, getAllUserTokens, reconcilePageIds } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
 const logger = require('../logger');
+const { CHARS_PER_TOKEN } = require('../lib/ai');
 
 const router = express.Router();
 
 const BOOKSTACK_URL = (process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80').replace(/\/$/, '');
 
-// ~4-Zeichen-Heuristik: SYSTEM_LEKTORAT + buildLektoratPrompt-Wrapper ≈ 3250 Zeichen Overhead
-const PROMPT_OVERHEAD = 3250;
+const PROMPT_OVERHEAD = 3250; // SYSTEM_LEKTORAT + buildLektoratPrompt-Wrapper ≈ 3250 Zeichen Overhead
 
 function authHeader(token) {
   return token ? `Token ${token.token_id}:${token.token_pw}` : '';
@@ -42,7 +42,7 @@ function computeStats(html) {
   const wordList = text.trim() === '' ? [] : text.trim().split(/\s+/);
   const words = wordList.length;
   const chars = text.length;
-  const tok = Math.round((PROMPT_OVERHEAD + chars) / 4);
+  const tok = Math.round((PROMPT_OVERHEAD + chars) / CHARS_PER_TOKEN);
   const sentences = text.trim() === '' ? 0 : text.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
   return { words, chars, tok, wordList, sentences };
 }
