@@ -145,6 +145,14 @@ HTML-Text:
 ${html}`;
 }
 
+// Stil-Regeln für Lektorat-Prompts
+function _buildStilBlock() {
+  return `
+Stil-Regeln (typ: «stil»):
+- Die gesamte Seite von Anfang bis Ende auf stilistische Auffälligkeiten scannen – nicht nur lokale Abschnitte oder die letzten Sätze
+- Nur melden, falls das Problem nicht bereits als anderer Typ (wiederholung, grammatik, rechtschreibung) erfasst wurde`;
+}
+
 // Wiederholung-Regeln für Lektorat-Prompts (beide Varianten)
 // sw: explizite Stoppwort-Liste; fällt auf globales STOPWORDS zurück (Default-Locale)
 function _buildWiederholungBlock(sw = STOPWORDS) {
@@ -153,7 +161,8 @@ function _buildWiederholungBlock(sw = STOPWORDS) {
     : '';
   return `
 Wiederholung-Regeln (typ: «wiederholung»):
-- Nur Inhaltswörter, die auffällig oft vorkommen: mind. 3× im Text ODER 2× in enger Nähe (5 Sätze)
+- Die gesamte Seite von Anfang bis Ende scannen – nicht nur lokale Abschnitte oder die letzten Sätze
+- Nur Inhaltswörter, die auffällig oft vorkommen: mind. 3× auf der gesamten Seite ODER 2× in enger Nähe (innerhalb eines Absatzes oder 5 Sätze)
 - Keine Pronomen, Hilfsverben, Artikel, Konjunktionen, Präpositionen, Eigennamen${swNote}
 - «original»: vollständiger Satz zeichengenau aus dem Text (damit die Textstelle eindeutig auffindbar ist)
 - «korrektur»: derselbe Satz mit dem besten Synonym – exakt gleiche grammatische Form (Kasus, Numerus, Tempus)
@@ -193,6 +202,7 @@ Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
 - Wenn die Seite keine erkennbaren Szenen enthält (z.B. rein beschreibender Text, Exposition): «szenen» als leeres Array zurückgeben
 - wertung: «stark» = funktioniert gut, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
+${_buildStilBlock()}
 ${_buildWiederholungBlock(stopwords)}
 
 Text:
@@ -851,6 +861,7 @@ Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
 - Wenn die Seite keine erkennbaren Szenen enthält (z.B. rein beschreibender Text, Exposition): «szenen» als leeres Array zurückgeben
 - wertung: «stark» = funktioniert gut, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
+${_buildStilBlock()}
 ${_buildWiederholungBlock(stopwords)}
 
 Originaltext:
