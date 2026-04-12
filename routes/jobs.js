@@ -1190,7 +1190,10 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         const orteKompaktForKont = ortRowsForKont.map(o => ({ name: o.name, typ: o.typ, beschreibung: o.beschreibung || '' }));
 
         let kontResult;
-        if (totalChars <= singlePassLimit) {
+        // Claude: Single-Pass für kleine Bücher (voller Buchtext, besserer Kontext).
+        // Llama/Ollama: immer facts-basiert (chapterFakten aus Phase 1) – voller Buchtext
+        // wäre ein zweiter 50K-Token-Call der auf langsamer Hardware Stunden dauert.
+        if (totalChars <= singlePassLimit && effectiveProvider === 'claude') {
           updateJob(jobId, { progress: 97, statusText: 'Kontinuität prüfen…' });
           const bookText = buildSinglePassBookText(groups, groupOrder);
           logger.info(`Job ${jobId}: Kontinuität Single-Pass: ${bookText.length} Zeichen Buchtext, ${figKompaktForKont.length} Figuren, ${orteKompaktForKont.length} Orte`);
@@ -1199,13 +1202,13 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
             SYSTEM_KONTINUITAET, 97, 99, 5000,
           );
         } else {
-          // Multi-Pass: Fakten aus Phase 1 – kein zusätzlicher API-Call
+          // Facts-basiert: chapterFakten aus Phase 1 – immer verfügbar (single- und multi-pass).
           updateJob(jobId, { progress: 98, statusText: 'KI prüft Widersprüche…' });
           const totalFaktenChars = chapterFakten.reduce((s, c) => s + JSON.stringify(c.fakten).length, 0);
-          logger.info(`Job ${jobId}: Kontinuität Multi-Pass: ${chapterFakten.length} Kapitel, ~${totalFaktenChars} Zeichen Fakten, ${figKompaktForKont.length} Figuren`);
+          logger.info(`Job ${jobId}: Kontinuität facts-basiert: ${chapterFakten.length} Kapitel, ~${totalFaktenChars} Zeichen Fakten, ${figKompaktForKont.length} Figuren`);
           kontResult = await call(jobId, tok,
             buildKontinuitaetCheckPrompt(bookName, chapterFakten, figKompaktForKont, orteKompaktForKont),
-            SYSTEM_KONTINUITAET, 98, 99, 5000,
+            SYSTEM_KONTINUITAET, 98, 99, effectiveProvider === 'claude' ? 5000 : 2500,
           );
         }
 
