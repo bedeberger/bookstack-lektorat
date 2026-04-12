@@ -581,6 +581,19 @@ function groupByChapter(pageContents) {
   return { groupOrder, groups };
 }
 
+// Formatiert den Buchtext für Single-Pass-KI-Calls mit klarer Kapitelstruktur:
+// ## Kapitelname als Abschnittsmarker, ### Seitentitel innerhalb.
+// Die KI kann so kapitel-Felder zuverlässig aus dem ## Header ableiten.
+function buildSinglePassBookText(groups, groupOrder) {
+  return groupOrder
+    .map(key => {
+      const group = groups.get(key);
+      return `## ${group.name}\n\n` +
+        group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
+    })
+    .join('\n\n===\n\n');
+}
+
 
 
 // Hilfsfunktion: callAI aufrufen, Token-Zähler akkumulieren, Job aktualisieren.
@@ -831,9 +844,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       });
 
       if (totalChars <= singlePassLimit) {
-        const bookText = pageContents
-          .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
-          .join('\n\n---\n\n');
+        const bookText = buildSinglePassBookText(groups, groupOrder);
         const r = await call(jobId, tok,
           buildExtraktionKomplettChapterPrompt('Gesamtbuch', bookName, pageContents.length, bookText),
           SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 16000,
@@ -1120,9 +1131,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         let kontResult;
         if (totalChars <= singlePassLimit) {
           updateJob(jobId, { progress: 97, statusText: 'Kontinuität prüfen…' });
-          const bookText = pageContents
-            .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
-            .join('\n\n---\n\n');
+          const bookText = buildSinglePassBookText(groups, groupOrder);
           logger.info(`Job ${jobId}: Kontinuität Single-Pass: ${bookText.length} Zeichen Buchtext, ${figKompaktForKont.length} Figuren, ${orteKompaktForKont.length} Orte`);
           kontResult = await call(jobId, tok,
             buildKontinuitaetSinglePassPrompt(bookName, bookText, figKompaktForKont, orteKompaktForKont),
@@ -1748,13 +1757,12 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken)
     }, userToken, jobAbortControllers.get(jobId)?.signal);
 
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
+    const { groupOrder, groups } = groupByChapter(pageContents);
     let result;
 
     if (totalChars <= SINGLE_PASS_LIMIT) {
       updateJob(jobId, { progress: 60, statusText: 'KI prüft Kontinuität…' });
-      const bookText = pageContents
-        .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
-        .join('\n\n---\n\n');
+      const bookText = buildSinglePassBookText(groups, groupOrder);
       result = await aiCall(jobId, tok,
         buildKontinuitaetSinglePassPrompt(bookName, bookText, figurenKompakt, orteKompakt),
         SYSTEM_KONTINUITAET,
@@ -1762,7 +1770,6 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken)
       );
     } else {
       // Multi-Pass: Fakten pro Kapitel extrahieren – ggf. aus Checkpoint fortsetzen
-      const { groupOrder, groups } = groupByChapter(pageContents);
 
       let chapterFacts = cp?.chapterFacts ?? [];
       const startGi = cp?.nextGi ?? 0;

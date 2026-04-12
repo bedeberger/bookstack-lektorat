@@ -378,7 +378,7 @@ const FIGUREN_BASIS_SCHEMA = `{
 const FIGUREN_BASIS_RULES = `Regeln:
 - Eindeutige IDs (fig_1, fig_2, …)
 - beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
-- kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten; name = immer der Kapitelname (aus dem Prompt-Kontext oder dem [Kapitelname]-Teil der Überschrift) – NIEMALS Seitentitel als Kapitelnamen verwenden
+- kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten; name = immer der Kapitelname (aus dem ## Kapitel-Header über dem Abschnitt oder aus dem Prompt-Kontext) – NIEMALS Seitentitel als Kapitelnamen verwenden
 - sozialschicht: gesellschaftliche Schicht der Figur – nur vergeben wenn eindeutig belegt; wirtschaftselite=Unternehmerfamilien/Direktoren, gehobenes_buergertum=Akademiker/freie Berufe/obere Kader, mittelschicht=Angestellte/Beamte/mittlere Kader, arbeiterschicht=Fabrik-/Bauarbeiter/Servicepersonal, migrantenmilieu=Zugewanderte/zweite Generation, prekariat=Sozialhilfe/Randständige/Langzeitarbeitslose, unterwelt=kriminelles Milieu, andere=nicht eindeutig
 - beziehungen.machtverhaltnis: Machtasymmetrie aus Perspektive der beschriebenen Figur → Bezugspunkt «figur_id»: +2=figur_id dominiert klar, +1=leichter Vorteil, 0=symmetrisch, -1=Bezugsfigur hat leichten Vorteil, -2=Bezugsfigur dominiert; weglassen oder 0 wenn unklar
 - Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), patronage=Schutzherrschaft, geschaeft=wirtschaftliche Beziehung, übrige selbsterklärend
@@ -632,7 +632,7 @@ const KOMPLETT_SCHEMA_STATIC = `Antworte mit diesem JSON-Schema:
   "szenen": [
     {
       "seite": "Name der Seite/des Abschnitts (leer wenn unklar)",
-      "kapitel": "Kapitelname (aus [Kapitelname]-Teil der Überschrift; leer wenn unklar)",
+      "kapitel": "Kapitelname (aus dem ## Kapitel-Header über diesem Abschnitt; leer wenn unklar)",
       "titel": "Kurze Szenenbezeichnung (1 Satz)",
       "wertung": "stark|mittel|schwach",
       "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)",
@@ -650,7 +650,7 @@ const KOMPLETT_SCHEMA_STATIC = `Antworte mit diesem JSON-Schema:
           "typ": "persoenlich|extern",
           "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)",
           "seite": "Name der Seite/des Abschnitts (leer wenn unklar)",
-          "kapitel": "Kapitelname (aus [Kapitelname]-Teil der Überschrift; leer wenn unklar)"
+          "kapitel": "Kapitelname (aus dem ## Kapitel-Header über diesem Abschnitt; leer wenn unklar)"
         }
       ]
     }
@@ -789,7 +789,7 @@ export function buildExtraktionKomplettChapterPrompt(chapterName, bookName, page
   const isSinglePass = chapterName === 'Gesamtbuch';
   const scope = isSinglePass ? `dem Buch «${bookName}»` : `dem Kapitel «${chapterName}» des Buchs «${bookName}»`;
   const kapitelNote = isSinglePass
-    ? 'Für alle Kapitel-Felder (kapitel[].name der Figuren und Orte, szenen[].kapitel, lebensereignisse[].kapitel): jeweiligen Kapitelnamen aus dem [Kapitelname]-Teil der ### Überschriften verwenden (z.B. aus «### [Kapitel 1] Seitentitel» → «Kapitel 1»).'
+    ? 'Der Text ist in Kapitel-Sektionen gegliedert (## Kapitelname) mit Seiten darunter (### Seitentitel). Für alle Kapitel-Felder (kapitel[].name der Figuren und Orte, szenen[].kapitel, lebensereignisse[].kapitel): den Kapitelnamen exakt aus dem ## Header entnehmen, unter dem der jeweilige Abschnitt steht.'
     : `Für alle Kapitel-Felder (kapitel[].name der Figuren und Orte, szenen[].kapitel, lebensereignisse[].kapitel): immer genau «${chapterName}» verwenden – die ### Überschriften im Text sind Seitentitel, keine Kapitelnamen.`;
   return `Extrahiere aus ${scope} in einem Durchgang: alle Figuren, alle Schauplätze, alle kontinuitätsrelevanten Fakten, alle Szenen und alle Lebensereignisse der Figuren.
 
