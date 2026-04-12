@@ -1906,10 +1906,11 @@ function fmtLastRun(isoStr) {
   const d = new Date(isoStr);
   const now = new Date();
   const diffDays = Math.floor((now - d) / 86400000);
-  if (diffDays === 0) return 'heute';
-  if (diffDays === 1) return 'gestern';
-  if (diffDays < 7) return `vor ${diffDays} Tagen`;
-  return d.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
+  const time = d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+  if (diffDays === 0) return `heute, ${time}`;
+  if (diffDays === 1) return `gestern, ${time}`;
+  if (diffDays < 7) return `vor ${diffDays} Tagen, ${time}`;
+  return d.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }) + `, ${time}`;
 }
 
 // Job-Typen, die vom Superjob (komplett-analyse) abgedeckt werden und nicht in der Statistik erscheinen sollen
