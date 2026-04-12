@@ -186,7 +186,8 @@ function _buildStilBlock() {
   return `
 Stil-Regeln (typ: «stil»):
 - Die gesamte Seite von Anfang bis Ende auf stilistische Auffälligkeiten scannen – nicht nur lokale Abschnitte oder die letzten Sätze
-- Nur melden, falls das Problem nicht bereits als anderer Typ (wiederholung, grammatik, rechtschreibung) erfasst wurde`;
+- Nur melden, falls das Problem nicht bereits als anderer Typ (wiederholung, grammatik, rechtschreibung) erfasst wurde
+- PFLICHT: «korrektur» muss immer eine konkrete Umformulierung enthalten – nicht leer lassen, nicht dasselbe wie «original». Keine Stilanmerkung ohne konkreten Verbesserungsvorschlag.`;
 }
 
 // Wiederholung-Regeln für Lektorat-Prompts (beide Varianten)
@@ -229,7 +230,7 @@ Antworte mit diesem JSON-Schema:
       "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)"
     }
   ],
-  "stilanalyse": "2-3 Sätze Stilanalyse – ohne Rechtschreib- und Grammatikmängel (diese sind im «fehler»-Array erfasst); fokussiert auf literarischen Stil, Rhythmus, Bildsprache und Wirkung",
+  "stilanalyse": "4-5 Sätze Stilanalyse – ohne Rechtschreib- und Grammatikmängel (diese sind im «fehler»-Array erfasst); fokussiert auf literarischen Stil, Rhythmus, Bildsprache und Wirkung",
   "fazit": "ein Satz Gesamtfazit zur literarischen Qualität – ohne Rechtschreib-/Grammatikhinweise"
 }
 

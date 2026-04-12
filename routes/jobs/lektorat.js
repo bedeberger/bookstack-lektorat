@@ -46,7 +46,10 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
 
     if (!Array.isArray(result?.fehler)) throw new Error('fehler-Array fehlt');
     const _validTypen = new Set(['rechtschreibung', 'grammatik', 'stil', 'wiederholung']);
-    result.fehler = result.fehler.map(f => ({ ...f, typ: f.typ?.toLowerCase?.() })).filter(f => _validTypen.has(f.typ));
+    result.fehler = result.fehler
+      .map(f => ({ ...f, typ: f.typ?.toLowerCase?.() }))
+      .filter(f => _validTypen.has(f.typ))
+      .filter(f => f.typ !== 'stil' || (f.korrektur?.trim() && f.korrektur.trim() !== f.original?.trim()));
 
     const model = _modelName(process.env.API_PROVIDER || 'claude');
     const szenen = Array.isArray(result?.szenen) ? result.szenen : [];
@@ -124,7 +127,10 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
 
         if (!Array.isArray(result?.fehler)) throw new Error('fehler-Array fehlt');
         const _validTypen = new Set(['rechtschreibung', 'grammatik', 'stil', 'wiederholung']);
-        const fehler = result.fehler.map(f => ({ ...f, typ: f.typ?.toLowerCase?.() })).filter(f => _validTypen.has(f.typ));
+        const fehler = result.fehler
+          .map(f => ({ ...f, typ: f.typ?.toLowerCase?.() }))
+          .filter(f => _validTypen.has(f.typ))
+          .filter(f => f.typ !== 'stil' || (f.korrektur?.trim() && f.korrektur.trim() !== f.original?.trim()));
         totalErrors += fehler.length;
 
         const szenenBatch = Array.isArray(result?.szenen) ? result.szenen : [];
