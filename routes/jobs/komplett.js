@@ -33,11 +33,11 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
   const call = (...args) => aiCall(...args, provider);
   const effectiveProvider = provider || process.env.API_PROVIDER || 'claude';
   // Claude hat 200K Token Kontextfenster (~600K deutsche Zeichen) – Single-Pass für fast alle Bücher.
-  // ollama: bewusst 60K Limit → Multi-Pass mit Delta-Cache (unveränderte Kapitel überspringen den KI-Call;
-  //   wichtig auf langsamer Hardware). Kapitel-Calls sind je ~13K Tokens → weit unter 131K ctx-Fenster.
-  // llama (llama.cpp, direkt): 150K – Single-Pass sicher (50K Input + 4K System + 16K Output ≈ 70K Token).
-  const singlePassLimit = effectiveProvider === 'claude' ? 250_000
-    : (effectiveProvider === 'ollama' ? SINGLE_PASS_LIMIT : 150_000);
+  // ollama / llama: bewusst 60K Limit → Multi-Pass mit Delta-Cache (unveränderte Kapitel überspringen den KI-Call).
+  // Kleinere Modelle (Mistral Small u.ä.) verlieren bei langen Inputs massiv an Extraktionsqualität und
+  // weisen Figuren fälschlicherweise allen Kapiteln zu, statt nur den tatsächlich relevanten. Kapitel-Calls
+  // sind je ~13K Tokens → weit unter typischen 131K ctx-Fenstern dieser Modelle.
+  const singlePassLimit = effectiveProvider === 'claude' ? 250_000 : SINGLE_PASS_LIMIT;
   const {
     buildExtraktionKomplettChapterPrompt,
     buildFiguresBasisConsolidationPrompt,
@@ -551,8 +551,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
   const logger = makeJobLogger(jobId);
   const call = (...args) => aiCall(...args, provider);
   const effectiveProvider = provider || process.env.API_PROVIDER || 'claude';
-  const singlePassLimit = effectiveProvider === 'claude' ? 250_000
-    : (effectiveProvider === 'ollama' ? SINGLE_PASS_LIMIT : 150_000);
+  const singlePassLimit = effectiveProvider === 'claude' ? 250_000 : SINGLE_PASS_LIMIT;
   const { buildKontinuitaetSinglePassPrompt, buildKontinuitaetChapterFactsPrompt, buildKontinuitaetCheckPrompt } = await getPrompts();
   const { SYSTEM_KONTINUITAET } = await getBookPrompts(bookId);
 
