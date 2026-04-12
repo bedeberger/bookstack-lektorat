@@ -25,40 +25,44 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule) {
   const rules = localeConfig.baseRules || '';
   const sp    = localeConfig.systemPrompts || {};
   return {
-    ERKLAERUNG_RULE:         globalErklaerungRule || '',
-    STOPWORDS:               Array.isArray(localeConfig.stopwords) ? localeConfig.stopwords : [],
-    SOZIOGRAMM_KONTEXT:      localeConfig.soziogrammKontext || '',
-    SYSTEM_LEKTORAT:         buildSystem(sp.lektorat          || '', rules),
-    SYSTEM_BUCHBEWERTUNG:    buildSystem(sp.buchbewertung     || '', rules),
-    SYSTEM_KAPITELANALYSE:   buildSystem(sp.kapitelanalyse    || '', rules),
-    SYSTEM_FIGUREN:          buildSystem(sp.figuren           || '', rules),
-    SYSTEM_STILKORREKTUR:    buildSystem(sp.stilkorrektur     || '', rules),
-    SYSTEM_CHAT:             buildSystemNoJson(sp.chat        || '', rules),
-    SYSTEM_BOOK_CHAT:        buildSystemNoJson(sp.buchchat    || '', rules),
-    SYSTEM_ORTE:             buildSystem(sp.orte              || 'Du bist ein Literaturanalytiker. Du identifizierst Schauplätze und Orte präzise und konservativ – nur was im Text eindeutig belegt ist.', rules),
-    SYSTEM_KONTINUITAET:     buildSystem(sp.kontinuitaet      || 'Du bist ein sorgfältiger Literaturlektor. Du prüfst einen Roman auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.', rules),
-    SYSTEM_SZENEN:           buildSystem(sp.szenen            || '', rules),
-    SYSTEM_ZEITSTRAHL:       buildSystem(sp.zeitstrahl        || '', rules),
+    ERKLAERUNG_RULE:             globalErklaerungRule || '',
+    STOPWORDS:                   Array.isArray(localeConfig.stopwords) ? localeConfig.stopwords : [],
+    SOZIOGRAMM_KONTEXT:          localeConfig.soziogrammKontext || '',
+    SYSTEM_LEKTORAT:             buildSystem(sp.lektorat          || '', rules),
+    SYSTEM_BUCHBEWERTUNG:        buildSystem(sp.buchbewertung     || '', rules),
+    SYSTEM_KAPITELANALYSE:       buildSystem(sp.kapitelanalyse    || '', rules),
+    SYSTEM_FIGUREN:              buildSystem(sp.figuren           || '', rules),
+    SYSTEM_STILKORREKTUR:        buildSystem(sp.stilkorrektur     || '', rules),
+    SYSTEM_CHAT:                 buildSystemNoJson(sp.chat        || '', rules),
+    SYSTEM_BOOK_CHAT:            buildSystemNoJson(sp.buchchat    || '', rules),
+    SYSTEM_ORTE:                 buildSystem(sp.orte              || 'Du bist ein Literaturanalytiker. Du identifizierst Schauplätze und Orte präzise und konservativ – nur was im Text eindeutig belegt ist.', rules),
+    SYSTEM_KONTINUITAET:         buildSystem(sp.kontinuitaet      || 'Du bist ein sorgfältiger Literaturlektor. Du prüfst einen Roman auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.', rules),
+    SYSTEM_SZENEN:               buildSystem(sp.szenen            || '', rules),
+    SYSTEM_ZEITSTRAHL:           buildSystem(sp.zeitstrahl        || '', rules),
+    // Kombinierter System-Prompt für buildExtraktionKomplettChapterPrompt (P1+P5 merged).
+    // Schema und Regeln sind im System-Prompt → werden gecacht; User-Message enthält nur Kapiteltext.
+    SYSTEM_KOMPLETT_EXTRAKTION:  buildSystemKomplett(sp.figuren   || '', rules),
   };
 }
 
 // Live-Exports – werden durch configurePrompts() gesetzt (Pflicht vor erstem Prompt-Aufruf).
 // Alle importierenden Module erhalten via ESM-Live-Binding immer den aktuellen Wert.
 // Diese Globals entsprechen stets dem defaultLocale und dienen der Rückwärtskompatibilität.
-export let ERKLAERUNG_RULE          = null;
-export let STOPWORDS                = [];
-export let SOZIOGRAMM_KONTEXT       = '';
-export let SYSTEM_LEKTORAT          = null;
-export let SYSTEM_BUCHBEWERTUNG     = null;
-export let SYSTEM_KAPITELANALYSE    = null;
-export let SYSTEM_FIGUREN           = null;
-export let SYSTEM_STILKORREKTUR     = null;
-export let SYSTEM_CHAT              = null;
-export let SYSTEM_BOOK_CHAT         = null;
-export let SYSTEM_ORTE              = null;
-export let SYSTEM_KONTINUITAET      = null;
-export let SYSTEM_SZENEN            = null;
-export let SYSTEM_ZEITSTRAHL        = null;
+export let ERKLAERUNG_RULE              = null;
+export let STOPWORDS                    = [];
+export let SOZIOGRAMM_KONTEXT           = '';
+export let SYSTEM_LEKTORAT              = null;
+export let SYSTEM_BUCHBEWERTUNG         = null;
+export let SYSTEM_KAPITELANALYSE        = null;
+export let SYSTEM_FIGUREN               = null;
+export let SYSTEM_STILKORREKTUR         = null;
+export let SYSTEM_CHAT                  = null;
+export let SYSTEM_BOOK_CHAT             = null;
+export let SYSTEM_ORTE                  = null;
+export let SYSTEM_KONTINUITAET          = null;
+export let SYSTEM_SZENEN                = null;
+export let SYSTEM_ZEITSTRAHL            = null;
+export let SYSTEM_KOMPLETT_EXTRAKTION   = null;
 
 /**
  * Setzt alle System-Prompts aus dem promptConfig-Objekt (geladen aus prompt-config.json).
@@ -96,20 +100,21 @@ export function configurePrompts(cfg) {
 
   // Globale Exports auf Default-Locale setzen (ESM-Live-Binding für Client-Code)
   const def = _localeMap.get(_defaultLocale) || {};
-  ERKLAERUNG_RULE          = def.ERKLAERUNG_RULE          ?? '';
-  STOPWORDS                = def.STOPWORDS                ?? [];
-  SOZIOGRAMM_KONTEXT       = def.SOZIOGRAMM_KONTEXT       ?? '';
-  SYSTEM_LEKTORAT          = def.SYSTEM_LEKTORAT          ?? null;
-  SYSTEM_BUCHBEWERTUNG     = def.SYSTEM_BUCHBEWERTUNG     ?? null;
-  SYSTEM_KAPITELANALYSE    = def.SYSTEM_KAPITELANALYSE    ?? null;
-  SYSTEM_FIGUREN           = def.SYSTEM_FIGUREN           ?? null;
-  SYSTEM_STILKORREKTUR     = def.SYSTEM_STILKORREKTUR     ?? null;
-  SYSTEM_CHAT              = def.SYSTEM_CHAT              ?? null;
-  SYSTEM_BOOK_CHAT         = def.SYSTEM_BOOK_CHAT         ?? null;
-  SYSTEM_ORTE              = def.SYSTEM_ORTE              ?? null;
-  SYSTEM_KONTINUITAET      = def.SYSTEM_KONTINUITAET      ?? null;
-  SYSTEM_SZENEN            = def.SYSTEM_SZENEN            ?? null;
-  SYSTEM_ZEITSTRAHL        = def.SYSTEM_ZEITSTRAHL        ?? null;
+  ERKLAERUNG_RULE              = def.ERKLAERUNG_RULE              ?? '';
+  STOPWORDS                    = def.STOPWORDS                    ?? [];
+  SOZIOGRAMM_KONTEXT           = def.SOZIOGRAMM_KONTEXT           ?? '';
+  SYSTEM_LEKTORAT              = def.SYSTEM_LEKTORAT              ?? null;
+  SYSTEM_BUCHBEWERTUNG         = def.SYSTEM_BUCHBEWERTUNG         ?? null;
+  SYSTEM_KAPITELANALYSE        = def.SYSTEM_KAPITELANALYSE        ?? null;
+  SYSTEM_FIGUREN               = def.SYSTEM_FIGUREN               ?? null;
+  SYSTEM_STILKORREKTUR         = def.SYSTEM_STILKORREKTUR         ?? null;
+  SYSTEM_CHAT                  = def.SYSTEM_CHAT                  ?? null;
+  SYSTEM_BOOK_CHAT             = def.SYSTEM_BOOK_CHAT             ?? null;
+  SYSTEM_ORTE                  = def.SYSTEM_ORTE                  ?? null;
+  SYSTEM_KONTINUITAET          = def.SYSTEM_KONTINUITAET          ?? null;
+  SYSTEM_SZENEN                = def.SYSTEM_SZENEN                ?? null;
+  SYSTEM_ZEITSTRAHL            = def.SYSTEM_ZEITSTRAHL            ?? null;
+  SYSTEM_KOMPLETT_EXTRAKTION   = def.SYSTEM_KOMPLETT_EXTRAKTION   ?? null;
 }
 
 /**
@@ -606,6 +611,86 @@ function _schemaBody(schemaStr) {
   return schemaStr.trim().replace(/^\s*\{\s*/, '').replace(/\s*\}\s*$/, '').trim();
 }
 
+// ── Kombiniertes Schema für Komplett-Extraktion (P1+P5 merged) ───────────────
+// Statisch – wird zur Ladezeit initialisiert, nachdem alle Abhängigkeiten definiert sind.
+// buildSystemKomplett() bettet es in den System-Prompt ein → Caching über alle Kapitel-Calls.
+// figuren_namen / orte_namen / figur_name: Klarnamen statt IDs, da konsolidierte IDs
+// erst nach P2/P3 bekannt sind. Remapping nach der Konsolidierung in jobs.js.
+const KOMPLETT_SCHEMA_STATIC = `Antworte mit diesem JSON-Schema:
+{
+  ${_schemaBody(FIGUREN_BASIS_SCHEMA)},
+  ${_schemaBody(ORTE_SCHEMA)},
+  "fakten": [
+    {
+      "kategorie": "figur|ort|objekt|zeit|ereignis|soziolekt|sonstiges",
+      "subjekt": "Über wen/was geht es (Name oder Bezeichnung)",
+      "fakt": "Was genau behauptet wird (1 Satz, so präzise wie möglich)",
+      "seite": "Seitenname oder Abschnittsname (leer wenn unklar)"
+    }
+  ],
+  "szenen": [
+    {
+      "seite": "Name der Seite/des Abschnitts (leer wenn unklar)",
+      "titel": "Kurze Szenenbezeichnung (1 Satz)",
+      "wertung": "stark|mittel|schwach",
+      "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)",
+      "figuren_namen": ["Figurenname exakt wie im Text"],
+      "orte_namen": ["Schauplatzname exakt wie im Text"]
+    }
+  ],
+  "assignments": [
+    {
+      "figur_name": "Figurenname exakt wie im Text",
+      "lebensereignisse": [
+        {
+          "datum": "JJJJ (nur Jahreszahl; aus Kontext errechnen wenn nötig; leer wenn nicht errechenbar)",
+          "ereignis": "Was passierte (1 Satz)",
+          "typ": "persoenlich|extern",
+          "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)",
+          "seite": "Name der Seite/des Abschnitts (leer wenn unklar)"
+        }
+      ]
+    }
+  ]
+}
+
+Figuren-Regeln:
+${FIGUREN_BASIS_RULES}
+
+Schauplatz-Regeln:
+${ORTE_RULES}
+
+Fakten-Regeln:
+- Nur konkrete, prüfbare Aussagen – keine Interpretationen
+- Figuren-Zustände besonders genau erfassen (Wissen, Können, körperlicher Zustand, Wohnort, Beruf)
+- Soziolekt: Wenn eine Figur erstmals oder markant spricht, ein Faktum erfassen das ihr Sprachregister beschreibt. Kategorie «soziolekt» verwenden.
+- Objekte: Wer besitzt was, wo liegt was, in welchem Zustand
+- Zeitangaben: Relative («am nächsten Morgen») und absolute («1943») erfassen
+- Maximal 30 Fakten pro Kapitel; lieber weniger, dafür präzise
+
+Szenen-Regeln:
+- Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
+- figuren_namen: aktiv beteiligte Figuren – Namen exakt wie im Text (vollständiger Name oder Spitzname); leeres Array wenn keine Figur beteiligt
+- orte_namen: Schauplatz der Szene – exakter Name wie im Text; leeres Array wenn kein konkreter Ort erwähnt
+- wertung: «stark» = überzeugend/spannend, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
+- Wenn ein Abschnitt keine erkennbaren Szenen enthält (reine Exposition, Beschreibung): «szenen» als leeres Array
+
+Ereignis-Regeln:
+- typ='persoenlich': echte biografische Wendepunkte (Geburt, Tod, Trauma, neue/beendete Beziehung, Jobwechsel, Umzug, wichtige Entscheidung) – nur wenn tatsächlich im Text belegt
+- typ='extern': gesellschaftliche/historische Ereignisse – SEHR GROSSZÜGIG erfassen: Kriege, politische Umbrüche, Sport- und Kulturereignisse, Wirtschaftskrisen, Seuchen, Naturkatastrophen; auch wenn nur kurz erwähnt; jedes externe Ereignis ALLEN betroffenen Figuren zuweisen
+- datum: immer als vierstellige Jahreszahl (JJJJ) – aus Kontext errechnen wenn nötig; Events ohne errechenbare Jahreszahl weglassen
+- figur_name: exakter Name wie im Text (vollständiger Name oder etablierter Spitzname)
+- Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden`;
+
+// buildSystemKomplett: wie buildSystem, aber mit eingebettetem KOMPLETT_SCHEMA_STATIC.
+// Der Schema-Block wird so gecacht (cache_control: ephemeral in lib/ai.js) – spart bei
+// ~20 Kapitel-Calls ~19 × Schema-Tokens (statt in jeder User-Message wiederholen).
+// Hinweis: KOMPLETT_SCHEMA_STATIC ist zur Ladezeit verfügbar (const, nach _schemaBody definiert);
+// buildSystemKomplett wird erst nach Modul-Initialisierung aufgerufen (via configurePrompts).
+function buildSystemKomplett(prefix, rules) {
+  return `${prefix}\n\n${rules}\n\n${KOMPLETT_SCHEMA_STATIC}\n\n${JSON_ONLY}`;
+}
+
 /**
  * Kombinierter Kapitel-Extraktions-Prompt: Figuren + Schauplätze in einem einzigen Call.
  * Referenziert FIGUREN_BASIS_SCHEMA, FIGUREN_BASIS_RULES, ORTE_SCHEMA, ORTE_RULES direkt –
@@ -687,8 +772,35 @@ ${chText}`;
 }
 
 /**
+ * Kombinierter Vollextraktion-Prompt (P1 + P5 in einem Call):
+ * Figuren + Schauplätze + Kontinuitätsfakten + Szenen + Lebensereignisse.
+ *
+ * Schema und Regeln leben im System-Prompt (SYSTEM_KOMPLETT_EXTRAKTION) – diese User-Message
+ * enthält nur den Kapiteltext und den chapter-spezifischen Kapitelnamen-Hinweis.
+ * Szenen und Assignments verwenden Klarnamen (figuren_namen / orte_namen / figur_name)
+ * statt IDs – das Remapping auf konsolidierte IDs erfolgt in jobs.js nach P2/P3.
+ *
+ * Ersetzt buildExtraktionFigurenOrteKontinuitaetChapterPrompt + buildExtraktionSzenenEreignisseChapterPrompt.
+ */
+export function buildExtraktionKomplettChapterPrompt(chapterName, bookName, pageCount, chText) {
+  const isSinglePass = chapterName === 'Gesamtbuch';
+  const scope = isSinglePass ? `dem Buch «${bookName}»` : `dem Kapitel «${chapterName}» des Buchs «${bookName}»`;
+  const kapitelNote = isSinglePass
+    ? 'Für kapitel[].name der Figuren und Orte: jeweiligen Kapitelnamen aus dem [Kapitelname]-Teil der ### Überschriften verwenden.'
+    : `Für kapitel[].name aller Figuren und Orte: immer genau «${chapterName}» verwenden – die ### Überschriften im Text sind Seitentitel, keine Kapitelnamen.`;
+  return `Extrahiere aus ${scope} in einem Durchgang: alle Figuren, alle Schauplätze, alle kontinuitätsrelevanten Fakten, alle Szenen und alle Lebensereignisse der Figuren.
+
+${kapitelNote}
+
+${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} Seiten)`}:
+
+${chText}`;
+}
+
+/**
  * Kombinierter Kapitel-Extraktions-Prompt: Szenen + Lebensereignisse in einem einzigen Call.
  * Setzt konsolidierte Figuren und Orte aus der DB voraus (nach Phase 1+2 der Komplettanalyse).
+ * @deprecated Ersetzt durch buildExtraktionKomplettChapterPrompt (P1+P5 merged).
  */
 export function buildExtraktionSzenenEreignisseChapterPrompt(chapterName, bookName, pageCount, figurenKompakt, orteKompakt, chText) {
   const figurenStr = figurenKompakt.length

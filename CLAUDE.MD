@@ -107,24 +107,26 @@ Der Button **«Alles aktualisieren»** startet den einzigen serverseitigen Job `
 **Pipeline (intern, ein einziger Job):**
 
 ```
-Phase 1 – Figuren + Schauplätze + Kontinuitätsfakten kombiniert (parallel pro Kapitel)
-          buildExtraktionFigurenOrteKontinuitaetChapterPrompt()
-          ← Compositor: FIGUREN_BASIS_SCHEMA + ORTE_SCHEMA + Fakten-Schema
-          → Checkpoint 'p1_done' (chapterFiguren + chapterOrte + chapterFakten)
+Phase 1 – Vollextraktion kombiniert (parallel pro Kapitel) – KEIN separater P5-Call
+          buildExtraktionKomplettChapterPrompt()
+          System-Prompt: SYSTEM_KOMPLETT_EXTRAKTION (Schema darin eingebettet → gecacht)
+          Output: figuren + orte + fakten + szenen(Namen) + assignments(Namen)
+          → Checkpoint 'p1_full_done' (alle 5 Arrays)
 
 Phase 2 – Figuren konsolidieren
           buildFiguresBasisConsolidationPrompt()
-          → saveFigurenToDb()
+          → saveFigurenToDb() → figNameToId aufbauen
 
 Block 1 [parallel] –
   Phase 3 – Schauplätze konsolidieren
-            buildLocationsConsolidationPrompt() → saveOrteToDb()
-  Phase 4 – Soziogramm
+            buildLocationsConsolidationPrompt() → saveOrteToDb() → ortNameToId aufbauen
+  Phase 4 – Soziogramm (nur wenn ≥ 4 Figuren)
             buildFigurSoziogrammEnrichmentPrompt()
 
 Block 2 [parallel] –
-  Phase 5 – Szenen + Ereignisse (parallel pro Kapitel)
-            buildExtraktionSzenenEreignisseChapterPrompt()
+  Phase 5 – Szenen remappen (kein API-Call)
+            chapterSzenen/chapterAssignments aus Phase 1
+            Namen → IDs via figNameToId / ortNameToId
             → figure_scenes + updateFigurenEvents()
   Phase 6 – Zeitstrahl konsolidieren
             buildZeitstrahlConsolidationPrompt()
@@ -133,10 +135,10 @@ Block 2 [parallel] –
             Single-Pass: buildKontinuitaetSinglePassPrompt()
 ```
 
-**Prompt-Komposition ohne Duplikation:** Die kombinierte Funktion `buildExtraktionFigurenOrteKontinuitaetChapterPrompt` lebt in `public/js/prompts.js` und referenziert die bestehenden Schema-Konstanten via `_schemaBody()`.
+**Token-Optimierungen:** Phase 1 und 5 sind zu einem einzigen Kapitel-Call zusammengeführt. Schema und Regeln leben in `SYSTEM_KOMPLETT_EXTRAKTION` (System-Prompt) und werden gecacht – spart ~19/20 Schema-Tokens pro Kapitel-Call. Szenen/Events nutzen Klarnamen; das ID-Remapping erfolgt in `processSzenenEreignisseFromMerged` nach der Konsolidierung.
 
-**Prompt Caching:** `lib/ai.js` setzt `cache_control: { type: 'ephemeral' }` auf allen Systemprompts und sendet den Header `anthropic-beta: prompt-caching-2024-07-31`. Innerhalb eines parallelen Kapitel-Batches (Phase 1) trifft jeder Folge-Call den Cache des Systemprompts (~10 % des normalen Input-Preises).
+**Prompt Caching:** `lib/ai.js` setzt `cache_control: { type: 'ephemeral' }` auf allen Systemprompts und sendet den Header `anthropic-beta: prompt-caching-2024-07-31`. Innerhalb eines parallelen Kapitel-Batches (Phase 1) trifft jeder Folge-Call den Cache des Systemprompts inkl. Schema (~10 % des normalen Input-Preises).
 
-**Checkpoint:** `phase: 'p1_done'` speichert `chapterFiguren`, `chapterOrte` und `chapterFakten`. Alte Checkpoints ohne `chapterFakten` lösen im P8-Pfad eine Fallback-Extraktion aus (kein Datenverlust).
+**Checkpoint:** `phase: 'p1_full_done'` speichert alle 5 Arrays (`chapterFiguren`, `chapterOrte`, `chapterFakten`, `chapterSzenen`, `chapterAssignments`). Alte Checkpoints mit Phase `p1_done` werden verworfen und der Job neu gestartet.
 
 **UI:** `alleAktualisieren()` in `app.js` startet nur `/jobs/komplett-analyse` und pollt den Fortschritt. Nach Abschluss werden `loadFiguren`, `loadOrte`, `loadSzenen` und `_loadKontinuitaetHistory` parallel neu geladen.

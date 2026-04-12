@@ -727,16 +727,17 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
 }
 
 // ── Job: Komplettanalyse ───────────────────────────────────────────────────────
-// Pipeline (optimiert, zwei parallele Blöcke nach P2):
-//   P1 (Figuren+Orte+Fakten, parallel/Kapitel) → P2 (Figuren konsolidieren)
-//   Block 1 [P3 Orte · P4 Soziogramm] parallel
-//   Block 2 [P5+P6 Szenen/Zeitstrahl · P8 Kontinuität] parallel
+// Pipeline (token-optimiert):
+//   P1 (Vollextraktion: Figuren+Orte+Fakten+Szenen+Events, parallel/Kapitel, SYSTEM_KOMPLETT_EXTRAKTION)
+//      → Schema im System-Prompt gecacht; Szenen/Events mit Klarnamen (kein ID-Lookup nötig)
+//   P2 (Figuren konsolidieren) → figNameToId aufbauen
+//   Block 1 [P3 Orte · P4 Soziogramm≥4 Figuren] parallel → ortNameToId aufbauen
+//   Block 2 [P5 Szenen remappen (kein API-Call) + P6 Zeitstrahl · P8 Kontinuität] parallel
 async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userToken, provider = undefined) {
   const logger = makeJobLogger(jobId);
   const call = (...args) => aiCall(...args, provider);
   const {
-    buildExtraktionFigurenOrteKontinuitaetChapterPrompt,
-    buildExtraktionSzenenEreignisseChapterPrompt,
+    buildExtraktionKomplettChapterPrompt,
     buildFiguresBasisConsolidationPrompt,
     buildLocationsConsolidationPrompt,
     buildZeitstrahlConsolidationPrompt,
@@ -747,7 +748,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
   } = await getPrompts();
   const {
     SYSTEM_FIGUREN, SYSTEM_ORTE, SYSTEM_KONTINUITAET,
-    SYSTEM_SZENEN, SYSTEM_ZEITSTRAHL,
+    SYSTEM_ZEITSTRAHL, SYSTEM_KOMPLETT_EXTRAKTION,
     SOZIOGRAMM_KONTEXT,
   } = await getBookPrompts(bookId);
 
@@ -755,13 +756,19 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     let cp = loadCheckpoint('komplett-analyse', bookId, userEmail);
     if (cp) logger.info(`Job ${jobId}: Komplettanalyse Buch ${bookId} – Checkpoint (Phase: ${cp.phase}), setze fort.`);
 
-    // Checkpoint-Validierung: p1_done ohne tatsächliche Figuren-Daten verwirft den Checkpoint.
-    // Passiert z.B. wenn ein vorheriger Ollama-Lauf alle Kapitel mit leeren Arrays gespeichert hat.
-    if (cp?.phase === 'p1_done') {
+    // Checkpoint-Validierung: p1_full_done ohne tatsächliche Figuren-Daten verwirft den Checkpoint.
+    // Alte Checkpoints mit Phase 'p1_done' (ohne chapterSzenen/chapterAssignments) werden ignoriert
+    // und lösen eine vollständige Neuausführung aus.
+    if (cp && cp.phase !== 'p1_full_done') {
+      logger.info(`Job ${jobId}: Checkpoint Phase «${cp.phase}» wird ignoriert (altes Format) – Neustart.`);
+      deleteCheckpoint('komplett-analyse', bookId, userEmail);
+      cp = null;
+    }
+    if (cp?.phase === 'p1_full_done') {
       const hasFiguren = Array.isArray(cp.chapterFiguren) && cp.chapterFiguren.length > 0
         && cp.chapterFiguren.some(c => Array.isArray(c.figuren) && c.figuren.length > 0);
       if (!hasFiguren) {
-        logger.warn(`Job ${jobId}: Checkpoint p1_done enthält keine Figuren-Daten – Phase 1 wird neu ausgeführt.`);
+        logger.warn(`Job ${jobId}: Checkpoint p1_full_done enthält keine Figuren-Daten – Phase 1 wird neu ausgeführt.`);
         deleteCheckpoint('komplett-analyse', bookId, userEmail);
         cp = null;
       }
@@ -791,19 +798,22 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
     const { groupOrder, groups } = groupByChapter(pageContents);
 
-    // ── Phase 1: Figuren + Orte + Kontinuitätsfakten kombiniert (parallel pro Kapitel) ──
-    let chapterFiguren, chapterOrte, chapterFakten;
+    // ── Phase 1: Vollextraktion kombiniert (P1+P5 merged, parallel pro Kapitel) ──
+    // Ein einziger Call pro Kapitel extrahiert: Figuren + Orte + Fakten + Szenen + Lebensereignisse.
+    // Schema und Regeln im System-Prompt (SYSTEM_KOMPLETT_EXTRAKTION) → gecacht über alle Kapitel.
+    // Szenen/Assignments verwenden Klarnamen statt IDs; Remapping nach P2/P3-Konsolidierung.
+    let chapterFiguren, chapterOrte, chapterFakten, chapterSzenen, chapterAssignments;
 
-    if (cp?.phase === 'p1_done') {
-      ({ chapterFiguren, chapterOrte, chapterFakten } = cp);
+    if (cp?.phase === 'p1_full_done') {
+      ({ chapterFiguren, chapterOrte, chapterFakten, chapterSzenen, chapterAssignments } = cp);
       if (cp.tokIn != null) { tok.in = cp.tokIn; tok.out = cp.tokOut || 0; tok.ms = cp.tokMs || 0; }
       updateJob(jobId, { progress: 28, statusText: 'Phase 1 aus Checkpoint geladen…', tokensIn: tok.in, tokensOut: tok.out });
     } else {
       updateJob(jobId, {
         progress: 12,
         statusText: totalChars <= SINGLE_PASS_LIMIT
-          ? 'KI extrahiert Figuren, Schauplätze und Fakten…'
-          : `Figuren + Schauplätze + Fakten in ${groupOrder.length} Kapiteln extrahieren…`,
+          ? 'KI extrahiert Figuren, Schauplätze, Fakten, Szenen…'
+          : `Vollextraktion in ${groupOrder.length} Kapiteln…`,
       });
 
       if (totalChars <= SINGLE_PASS_LIMIT) {
@@ -811,12 +821,14 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
           .join('\n\n---\n\n');
         const r = await call(jobId, tok,
-          buildExtraktionFigurenOrteKontinuitaetChapterPrompt('Gesamtbuch', bookName, pageContents.length, bookText),
-          SYSTEM_FIGUREN, 12, 28, 10000,
+          buildExtraktionKomplettChapterPrompt('Gesamtbuch', bookName, pageContents.length, bookText),
+          SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 16000,
         );
-        chapterFiguren = [{ kapitel: 'Gesamtbuch', figuren: r?.figuren || [] }];
-        chapterOrte    = [{ kapitel: 'Gesamtbuch', orte:    r?.orte    || [] }];
-        chapterFakten  = [{ kapitel: 'Gesamtbuch', fakten:  r?.fakten  || [] }];
+        chapterFiguren     = [{ kapitel: 'Gesamtbuch', figuren:     r?.figuren     || [] }];
+        chapterOrte        = [{ kapitel: 'Gesamtbuch', orte:        r?.orte        || [] }];
+        chapterFakten      = [{ kapitel: 'Gesamtbuch', fakten:      r?.fakten      || [] }];
+        chapterSzenen      = [{ kapitel: 'Gesamtbuch', szenen:      r?.szenen      || [] }];
+        chapterAssignments = [{ kapitel: 'Gesamtbuch', assignments: r?.assignments || [] }];
       } else {
         const chapterTexts = groupOrder.map(key => {
           const group = groups.get(key);
@@ -825,15 +837,15 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         const settled = await settledAll(
           chapterTexts.map(({ group, chText }) => () =>
             call(jobId, tok,
-              buildExtraktionFigurenOrteKontinuitaetChapterPrompt(group.name, bookName, group.pages.length, chText),
-              SYSTEM_FIGUREN, 12, 28, 10000,
+              buildExtraktionKomplettChapterPrompt(group.name, bookName, group.pages.length, chText),
+              SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 14000,
             )
           )
         );
         chapterFiguren = settled.map((r, gi) => ({
           kapitel: chapterTexts[gi].group.name,
           figuren: r.status === 'fulfilled' ? (r.value?.figuren || []) : [],
-          ...(r.status === 'rejected' && logger.warn(`Job ${jobId}: Figuren/Orte/Fakten «${chapterTexts[gi].group.name}» übersprungen: ${r.reason?.message}`) && {}),
+          ...(r.status === 'rejected' && logger.warn(`Job ${jobId}: Vollextraktion «${chapterTexts[gi].group.name}» übersprungen: ${r.reason?.message}`) && {}),
         }));
         chapterOrte = settled.map((r, gi) => ({
           kapitel: chapterTexts[gi].group.name,
@@ -843,9 +855,21 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           kapitel: chapterTexts[gi].group.name,
           fakten: r.status === 'fulfilled' ? (r.value?.fakten || []) : [],
         }));
-        logger.info(`Job ${jobId}: Phase 1 – ${settled.filter(r => r.status === 'fulfilled').length}/${settled.length} Kapitel OK. Figuren/Kap: [${chapterFiguren.map(c => c.figuren.length).join(', ')}], Orte/Kap: [${chapterOrte.map(c => c.orte.length).join(', ')}]`);
+        chapterSzenen = settled.map((r, gi) => ({
+          kapitel: chapterTexts[gi].group.name,
+          szenen: r.status === 'fulfilled' ? (r.value?.szenen || []) : [],
+        }));
+        chapterAssignments = settled.map((r, gi) => ({
+          kapitel: chapterTexts[gi].group.name,
+          assignments: r.status === 'fulfilled' ? (r.value?.assignments || []) : [],
+        }));
+        logger.info(`Job ${jobId}: Phase 1 – ${settled.filter(r => r.status === 'fulfilled').length}/${settled.length} Kapitel OK. Figuren/Kap: [${chapterFiguren.map(c => c.figuren.length).join(', ')}], Orte/Kap: [${chapterOrte.map(c => c.orte.length).join(', ')}], Szenen/Kap: [${chapterSzenen.map(c => c.szenen.length).join(', ')}]`);
       }
-      saveCheckpoint('komplett-analyse', bookId, userEmail, { phase: 'p1_done', chapterFiguren, chapterOrte, chapterFakten, tokIn: tok.in, tokOut: tok.out, tokMs: tok.ms });
+      saveCheckpoint('komplett-analyse', bookId, userEmail, {
+        phase: 'p1_full_done',
+        chapterFiguren, chapterOrte, chapterFakten, chapterSzenen, chapterAssignments,
+        tokIn: tok.in, tokOut: tok.out, tokMs: tok.ms,
+      });
     }
 
     // ── Phase 2: Figuren konsolidieren ────────────────────────────────────────
@@ -861,8 +885,19 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     saveFigurenToDb(parseInt(bookId), figuren, userEmail || null, idMaps);
     logger.info(`Job ${jobId}: ${figuren.length} Figuren gespeichert.`);
 
-    // figurenKompakt: nur Name+Typ für Kapitel-Calls – spart ~15–20k Input-Tokens.
+    // figurenKompakt: nur Name+Typ (für Orte-Konsolidierung P3 und Soziogramm P4).
     const figurenKompakt = figuren.map(f => ({ id: f.id, name: f.name, typ: f.typ || 'andere' }));
+
+    // figNameToId: Klarnamen → konsolidierte ID (für Szenen/Events-Remapping nach P3).
+    // Enthält kanonischen Name UND kurzname wenn vorhanden.
+    const figNameToId = {};
+    for (const f of figuren) {
+      figNameToId[f.name] = f.id;
+      if (f.kurzname && f.kurzname !== f.name) figNameToId[f.kurzname] = f.id;
+    }
+    const figNameToIdLower = Object.fromEntries(
+      Object.entries(figNameToId).map(([k, v]) => [k.toLowerCase(), v])
+    );
 
     // ── Parallel-Block 1: P3 (Orte) + P4 (Soziogramm) ───────────────────────
     // settledAll serialisiert für Ollama (VRAM-Schutz); für Claude bleibt es parallel.
@@ -875,11 +910,16 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         SYSTEM_ORTE, 43, 55, 6000,
       ),
 
-      // P4: Soziogramm – nicht-fatal: Fehler werden geloggt, Job läuft weiter
+      // P4: Soziogramm – nicht-fatal: Fehler werden geloggt, Job läuft weiter.
+      // Wird übersprungen wenn weniger als 4 Figuren vorhanden (Soziogramm sinnlos bei wenig Figuren).
       () => (async () => {
         const figRowsForSoz = db.prepare(
           'SELECT id, fig_id, name, typ, beruf, beschreibung FROM figures WHERE book_id = ? AND user_email IS ? ORDER BY sort_order'
         ).all(parseInt(bookId), userEmail || null);
+        if (figRowsForSoz.length < 4) {
+          logger.info(`Job ${jobId}: Soziogramm übersprungen (nur ${figRowsForSoz.length} Figuren < 4).`);
+          return;
+        }
         if (figRowsForSoz.length) {
           const tagRows = db.prepare(
             `SELECT figure_id, tag FROM figure_tags WHERE figure_id IN (${figRowsForSoz.map(() => '?').join(',')}) ORDER BY figure_id`
@@ -913,39 +953,56 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     saveOrteToDb(parseInt(bookId), orte, userEmail || null);
     logger.info(`Job ${jobId}: ${orte.length} Schauplätze gespeichert.`);
 
+    // ortNameToId: Klarnamen → konsolidierte ID (für Szenen-Remapping in Block 2).
+    const ortNameToId = {};
+    for (const o of orte) ortNameToId[o.name] = o.id;
+
     // ── Parallel-Block 2: Szenen/Zeitstrahl + Kontinuität ──
-    // P5+P6 (Szenen→Zeitstrahl) und P8 (Kontinuität) laufen parallel.
+    // Szenen + Events stammen aus Phase 1 (kein separater P5-Call mehr).
     // P8 nutzt chapterFakten aus Phase 1 – kein separater Extraktions-Call.
     let allSzenen = [];
-    updateJob(jobId, { progress: 56, statusText: 'Szenen und Kontinuität analysieren…' });
+    updateJob(jobId, { progress: 56, statusText: 'Szenen verarbeiten und Kontinuität prüfen…' });
 
-    // Hilfsfunktion: Szenen + Events aus settled-Ergebnissen extrahieren und speichern.
-    // Wird von beiden Pfaden (multi-pass + single-pass) verwendet.
-    async function processSzenenEreignisse(settled, locIdToDbId) {
+    // Hilfsfunktion: Szenen + Events aus P1-Checkpoint (namensbasiert) speichern.
+    // figNameToId / figNameToIdLower: kanonischer Name → fig_id (inkl. Kurzname).
+    // ortNameToId: Schauplatzname → ort_id.
+    // locIdToDbId: ort_id ('ort_1') → DB-Rowid der locations-Tabelle.
+    async function processSzenenEreignisseFromMerged(chSzenen, chAssignments, locIdToDbId) {
       const mergedEvtMap = new Map();
-      settled.forEach((r, gi) => {
-        const group = groups.get(groupOrder[gi]);
-        if (r.status === 'rejected') {
-          logger.warn(`Job ${jobId}: Szenen/Ereignisse «${group.name}» übersprungen: ${r.reason?.message}`);
-          return;
-        }
-        for (const s of (r.value?.szenen || [])) {
+
+      for (const { kapitel, szenen: chSz } of (chSzenen || [])) {
+        for (const s of (chSz || [])) {
+          const fig_ids = (s.figuren_namen || []).map(n =>
+            figNameToId[n] || figNameToIdLower[n?.toLowerCase()] || null
+          ).filter(Boolean);
+          const ort_ids = (s.orte_namen || []).map(n =>
+            ortNameToId[n] || null
+          ).filter(Boolean);
           allSzenen.push({
-            kapitel:    group.name,
+            kapitel,
             seite:      s.seite     || null,
             titel:      s.titel     || '(unbekannt)',
             wertung:    s.wertung   || null,
             kommentar:  s.kommentar || null,
-            fig_ids:    Array.isArray(s.figuren) ? s.figuren : [],
-            ort_ids:    Array.isArray(s.orte)    ? s.orte    : [],
+            fig_ids,
+            ort_ids,
             sort_order: allSzenen.length,
           });
         }
-        for (const assignment of (r.value?.assignments || [])) {
-          if (!mergedEvtMap.has(assignment.fig_id)) mergedEvtMap.set(assignment.fig_id, []);
-          for (const ev of (assignment.lebensereignisse || [])) mergedEvtMap.get(assignment.fig_id).push(ev);
+      }
+
+      for (const { kapitel, assignments: chAss } of (chAssignments || [])) {
+        for (const assignment of (chAss || [])) {
+          const figId = figNameToId[assignment.figur_name]
+            || figNameToIdLower[assignment.figur_name?.toLowerCase()]
+            || null;
+          if (!figId) continue;
+          if (!mergedEvtMap.has(figId)) mergedEvtMap.set(figId, []);
+          for (const ev of (assignment.lebensereignisse || [])) {
+            mergedEvtMap.get(figId).push({ ...ev, kapitel });
+          }
         }
-      });
+      }
 
       logger.info(`Job ${jobId}: Speichere ${allSzenen.length} Szenen (${mergedEvtMap.size} Figuren mit Ereignissen)…`);
       updateJob(jobId, { progress: 81, statusText: 'Szenen speichern…' });
@@ -991,7 +1048,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         updateFigurenEvents(parseInt(bookId), allAssignments, userEmail || null, idMaps);
         logger.info(`Job ${jobId}: ${allSzenen.length} Szenen und ${totalEvents} Ereignisse gespeichert.`);
       } else {
-        logger.info(`Job ${jobId}: ${allSzenen.length} Szenen gespeichert – Szenen-Extraktion lieferte keine Ereignisse, Phase-2-Ereignisse bleiben erhalten.`);
+        logger.info(`Job ${jobId}: ${allSzenen.length} Szenen gespeichert – keine Ereignisse gefunden.`);
       }
     }
 
@@ -1040,26 +1097,15 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
 
     await Promise.all([
 
-      // ── P5+P6: Szenen + Ereignisse + Zeitstrahl ──────────────────────────
+      // ── P5+P6: Szenen aus P1 übernehmen + Zeitstrahl konsolidieren ──────────
+      // Kein separater API-Call: chapterSzenen und chapterAssignments kommen aus Phase 1.
       (async () => {
-        const orteKompakt = orte.map(o => ({ id: o.id, name: o.name }));
-        const figurenList = figuren.map(f => ({ id: f.id, name: f.name, typ: f.typ || 'andere' }));
-        updateJob(jobId, { progress: 63, statusText: `Szenen + Ereignisse in ${groupOrder.length} Kapiteln extrahieren…` });
+        updateJob(jobId, { progress: 63, statusText: 'Szenen aus Extraktion verarbeiten…' });
         const locRows = db.prepare(
           'SELECT id, loc_id FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
         ).all(parseInt(bookId), userEmail || null);
         const locIdToDbId = Object.fromEntries(locRows.map(r => [r.loc_id, r.id]));
-        const szEvtSettled = await settledAll(
-          groupOrder.map(key => () => {
-            const group = groups.get(key);
-            const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
-            return call(jobId, tok,
-              buildExtraktionSzenenEreignisseChapterPrompt(group.name, bookName, group.pages.length, figurenList, orteKompakt, chText),
-              SYSTEM_SZENEN, 63, 80, 4000,
-            );
-          })
-        );
-        await processSzenenEreignisse(szEvtSettled, locIdToDbId);
+        await processSzenenEreignisseFromMerged(chapterSzenen, chapterAssignments, locIdToDbId);
         await runZeitstrahlKonsolidierung();
       })(),
 
@@ -1069,7 +1115,6 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       // Fallback: alter Checkpoint ohne chapterFakten → Extraktion nachholen.
       (async () => {
         const figKompaktForKont  = figuren.map(f => ({ name: f.name, typ: f.typ || 'andere', beschreibung: f.beschreibung || '' }));
-        const figNameToId        = Object.fromEntries(figuren.map(f => [f.name, f.id]));
         const ortRowsForKont     = db.prepare(
           'SELECT name, typ, beschreibung FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
         ).all(parseInt(bookId), userEmail || null);
