@@ -1935,8 +1935,11 @@ function fmtLastRun(isoStr) {
   if (!isoStr) return '—';
   const d = new Date(isoStr);
   const now = new Date();
-  const diffDays = Math.floor((now - d) / 86400000);
   const time = d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+  // Mitternacht in lokaler Zeitzone vergleichen, nicht rohe ms-Differenz
+  const dDay  = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((today - dDay) / 86400000);
   if (diffDays === 0) return `heute, ${time}`;
   if (diffDays === 1) return `gestern, ${time}`;
   if (diffDays < 7) return `vor ${diffDays} Tagen, ${time}`;
