@@ -37,7 +37,6 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule) {
     SYSTEM_BOOK_CHAT:            buildSystemNoJson(sp.buchchat    || '', rules),
     SYSTEM_ORTE:                 buildSystem(sp.orte              || 'Du bist ein Literaturanalytiker. Du identifizierst Schauplätze und Orte präzise und konservativ – nur was im Text eindeutig belegt ist.', rules),
     SYSTEM_KONTINUITAET:         buildSystem(sp.kontinuitaet      || 'Du bist ein sorgfältiger Literaturlektor. Du prüfst einen Roman auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.', rules),
-    SYSTEM_SZENEN:               buildSystem(sp.szenen            || '', rules),
     SYSTEM_ZEITSTRAHL:           buildSystem(sp.zeitstrahl        || '', rules),
     // Kombinierter System-Prompt für buildExtraktionKomplettChapterPrompt (P1+P5 merged).
     // Schema und Regeln sind im System-Prompt → werden gecacht; User-Message enthält nur Kapiteltext.
@@ -60,7 +59,6 @@ export let SYSTEM_CHAT                  = null;
 export let SYSTEM_BOOK_CHAT             = null;
 export let SYSTEM_ORTE                  = null;
 export let SYSTEM_KONTINUITAET          = null;
-export let SYSTEM_SZENEN                = null;
 export let SYSTEM_ZEITSTRAHL            = null;
 export let SYSTEM_KOMPLETT_EXTRAKTION   = null;
 
@@ -112,7 +110,6 @@ export function configurePrompts(cfg) {
   SYSTEM_BOOK_CHAT             = def.SYSTEM_BOOK_CHAT             ?? null;
   SYSTEM_ORTE                  = def.SYSTEM_ORTE                  ?? null;
   SYSTEM_KONTINUITAET          = def.SYSTEM_KONTINUITAET          ?? null;
-  SYSTEM_SZENEN                = def.SYSTEM_SZENEN                ?? null;
   SYSTEM_ZEITSTRAHL            = def.SYSTEM_ZEITSTRAHL            ?? null;
   SYSTEM_KOMPLETT_EXTRAKTION   = def.SYSTEM_KOMPLETT_EXTRAKTION   ?? null;
 }
@@ -277,82 +274,6 @@ Antworte mit diesem JSON-Schema:
 }`;
 }
 
-// ── Figurenextraktion ─────────────────────────────────────────────────────────
-
-const FIGUREN_SCHEMA = `{
-  "figuren": [
-    {
-      "id": "fig_1",
-      "name": "Vollständiger Name",
-      "kurzname": "Vorname oder Spitzname",
-      "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere",
-      "geburtstag": "JJJJ oder leer wenn unbekannt",
-      "geschlecht": "männlich|weiblich|divers|unbekannt",
-      "beruf": "Beruf oder Rolle oder leer",
-      "beschreibung": "2-3 Sätze zu Rolle, Persönlichkeit und Bedeutung",
-      "sozialschicht": "wirtschaftselite|gehobenes_buergertum|mittelschicht|arbeiterschicht|migrantenmilieu|prekariat|unterwelt|andere",
-      "eigenschaften": ["Eigenschaft1", "Eigenschaft2"],
-      "lebensereignisse": [{ "datum": "JJJJ (nur Jahreszahl; falls nicht direkt genannt aus Kontext errechnen – z.B. Geburtsjahr + damaliges Alter, oder bekannte historische Jahreszahl; leer lassen wenn nicht errechenbar)", "ereignis": "Was passierte (1 Satz)", "typ": "persoenlich|extern", "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)", "kapitel": "Kapitelname wo dieses Ereignis erwähnt wird (leer wenn unklar)" }],
-      "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
-      "beziehungen": [{ "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|patronage|geschaeft|andere", "machtverhaltnis": 0, "beschreibung": "1 Satz" }]
-    }
-  ]
-}`;
-
-const FIGUREN_RULES = `Regeln:
-- Eindeutige IDs (fig_1, fig_2, …)
-- beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
-- kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten
-- lebensereignisse: chronologisch sortiert; kapitel = Kapitelname aus dem der Textbeleg stammt (leer wenn unklar); datum immer als vierstellige Jahreszahl (JJJJ) – falls nicht direkt erwähnt, aus Kontext errechnen (Geburtsjahr der Figur + genannte Altersangabe, bekannte historische Jahreszahlen u.ä.); Events ohne errechenbare Jahreszahl weglassen; typ='persoenlich' nur für echte biografische Wendepunkte (neue Beziehung, Trennung, Jobwechsel, Verlust einer nahestehenden Person, Pubertät/Reifung, Umzug, Trauma, wichtige Entscheidung) – keine Alltagshandlungen oder Szenen die keine bleibende Wirkung haben; typ='extern' für gesellschaftliche/historische Ereignisse (Katastrophen, Massaker, Kriege, politische Umbrüche u.ä.) die die Figur direkt betreffen – hier grosszügig sein, auch erwähnte Ereignisse aufnehmen die nur indirekt wirken
-- sozialschicht: gesellschaftliche Schicht der Figur – nur vergeben wenn im Text eindeutig belegt; wirtschaftselite=Unternehmerfamilien, Direktoren, Bankiers (sehr wohlhabend), gehobenes_buergertum=Akademiker in freien Berufen, Ärzte, Anwälte, obere Kader, mittelschicht=Angestellte, Beamte, mittlere Kader, Handwerker mit eigenem Betrieb, arbeiterschicht=Fabrik-/Bauarbeiter, Servicepersonal, einfache Angestellte, migrantenmilieu=Zugewanderte (Saisonniers, Niedergelassene, zweite Generation), prekariat=Sozialhilfeempfänger, Randständige, Langzeitarbeitslose, unterwelt=kriminelles Milieu, andere=nicht eindeutig zuordenbar
-- beziehungen.machtverhaltnis: Machtasymmetrie aus Perspektive von figur_id→ «fig_2» als Bezugspunkt: +2=fig_2 dominiert klar, +1=fig_2 hat leichten Vorteil, 0=symmetrisch, -1=fig_1 hat leichten Vorteil, -2=fig_1 dominiert klar; weglassen oder 0 wenn unklar; patronage=Schutzherrschaft/Klientelverhältnis, geschaeft=geschäftliche/wirtschaftliche Beziehung
-- Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), übrige selbsterklärend
-- Nur fiktive Charaktere oder Figuren die aktiv an der Buchhandlung teilnehmen – keine Orte oder Objekte
-- KEINE historischen oder realen Personen die nur erwähnt, zitiert oder als Referenz genannt werden (z.B. Napoleon, Einstein, ein Politiker, eine Künstlerin); solche Personen gehören höchstens als lebensereignis.typ='extern' zu einer Figur, aber nicht als eigene Figur in diese Liste
-- Sortiert nach Wichtigkeit
-- KONSERVATIV: Nur Figuren, Beziehungen und Ereignisse aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren.
-- DEDUPLIZIERUNG MIT KONTEXTABGLEICH: Figuren zusammenführen wenn der Name übereinstimmt (gleicher Vor- und Nachname) ODER ein Teilname (nur Vorname oder nur Nachname) mit mindestens einem inhaltlichen Indiz zusammenpasst – z.B. gleicher Beruf, überschneidende Fachkenntnisse, konsistente Charakterzüge oder übereinstimmendes Verhalten kapitelübergreifend. Beispiel: «Maria» die in Kapitel 1 als Kräuterkundige gilt und «Maria Huber» die in Kapitel 3 Naturheilkunde beherrscht – zusammenführen. Widersprechen sich Eigenschaften eindeutig, getrennt behalten. Gibt es nur Namensähnlichkeit ohne inhaltliche Überschneidung: getrennt behalten.`;
-
-export function buildFiguresSinglePassPrompt(bookName, pageCount, bookText) {
-  return `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Figuren.
-
-Antworte mit diesem JSON-Schema:
-${FIGUREN_SCHEMA}
-
-${FIGUREN_RULES}
-
-Buchtext (${pageCount} Seiten):
-
-${bookText}`;
-}
-
-export function buildFiguresConsolidationPrompt(bookName, chapterFiguren) {
-  const synthInput = chapterFiguren.map(cf =>
-    `## Kapitel: ${cf.kapitel}\n` + cf.figuren.map(f => {
-      const meta = [f.typ, f.beruf, f.geburtstag ? `*${f.geburtstag}` : '', f.geschlecht].filter(Boolean).join(', ');
-      return `- ${f.name}${f.kurzname && f.kurzname !== f.name ? ` («${f.kurzname}»)` : ''} (${meta}): ${f.beschreibung || ''}` +
-        (f.eigenschaften?.length ? '\n  Eigenschaften: ' + f.eigenschaften.join(', ') : '') +
-        (f.beziehungen?.length ? '\n  Beziehungen: ' + f.beziehungen.map(b => `${b.name} [${b.typ}]`).join(', ') : '') +
-        (f.lebensereignisse?.length ? '\n  Lebensereignisse:\n' + f.lebensereignisse.map(e =>
-          `    - datum: ${e.datum || ''}, typ: ${e.typ || 'persoenlich'}, ereignis: ${e.ereignis || ''}` +
-          (e.bedeutung ? `, bedeutung: ${e.bedeutung}` : '') +
-          (e.kapitel ? `, kapitel: ${e.kapitel}` : '')
-        ).join('\n') : '');
-    }).join('\n')
-  ).join('\n\n');
-  return `Konsolidiere die folgenden Figurenanalysen aller Kapitel des Buchs «${bookName}» zu einer einheitlichen Gesamtliste. Dedupliziere Figuren, führe Informationen zusammen und vergib stabile IDs.
-
-Kapitelanalysen:
-
-${synthInput}
-
-${JSON_ONLY}
-
-Antworte mit diesem JSON-Schema:
-${FIGUREN_SCHEMA}
-
-${FIGUREN_RULES}`;
-}
 
 // ── Figurenextraktion (Basis – ohne Lebensereignisse) ─────────────────────────
 
@@ -388,37 +309,6 @@ const figurenBasisRules = (kontext = '') => `Regeln:
 - KONSERVATIV: Nur Figuren und Beziehungen aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren.
 - DEDUPLIZIERUNG MIT KONTEXTABGLEICH: Figuren zusammenführen wenn der Name übereinstimmt (gleicher Vor- und Nachname) ODER ein Teilname (nur Vorname oder nur Nachname) mit mindestens einem inhaltlichen Indiz zusammenpasst – z.B. gleicher Beruf, überschneidende Fachkenntnisse, konsistente Charakterzüge oder übereinstimmendes Verhalten kapitelübergreifend. Beispiel: «Maria» die in Kapitel 1 als Kräuterkundige gilt und «Maria Huber» die in Kapitel 3 Naturheilkunde beherrscht – zusammenführen. Widersprechen sich Eigenschaften eindeutig, getrennt behalten. Gibt es nur Namensähnlichkeit ohne inhaltliche Überschneidung: getrennt behalten.`;
 
-export function buildFiguresBasisSinglePassPrompt(bookName, pageCount, bookText) {
-  return `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Figuren.
-
-Antworte mit diesem JSON-Schema:
-${FIGUREN_BASIS_SCHEMA}
-
-${figurenBasisRules(SOZIOGRAMM_KONTEXT)}
-
-${JSON_ONLY}
-
-Buchtext (${pageCount} Seiten):
-
-${bookText}`;
-}
-
-export function buildFiguresBasisChapterPrompt(chapterName, bookName, pageCount, chText) {
-  return `Extrahiere alle Figuren aus dem Kapitel «${chapterName}» des Buchs «${bookName}».
-
-Antworte mit diesem JSON-Schema:
-${FIGUREN_BASIS_SCHEMA}
-
-${figurenBasisRules(SOZIOGRAMM_KONTEXT)}
-
-Wichtig: Für kapitel[].name aller Figuren in diesem Kapitel immer genau «${chapterName}» verwenden – die ### Überschriften im Text sind Seitentitel, keine Kapitelnamen.
-
-${JSON_ONLY}
-
-Kapiteltext (${pageCount} Seiten):
-
-${chText}`;
-}
 
 export function buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren) {
   const synthInput = chapterFiguren.map(cf => {
@@ -449,101 +339,6 @@ ${FIGUREN_BASIS_SCHEMA}
 ${figurenBasisRules(SOZIOGRAMM_KONTEXT)}`;
 }
 
-// ── Lebensereignisse-Zuordnung ────────────────────────────────────────────────
-
-export function buildFiguresEventAssignmentPrompt(chapterName, bookName, pageCount, figurenList, chText) {
-  const figurenStr = figurenList.map(f => `${f.id}: ${f.name} (${f.typ || 'andere'})`).join('\n');
-  return `Durchforste den Kapiteltext «${chapterName}» des Buchs «${bookName}» systematisch nach Ereignissen – persönliche Wendepunkte UND externe Ereignisse – und verknüpfe sie mit den betroffenen Figuren.
-
-Bekannte Figuren (nur diese IDs in «fig_id» verwenden):
-${figurenStr}
-
-Antworte mit diesem JSON-Schema:
-{
-  "assignments": [
-    {
-      "fig_id": "fig_1",
-      "lebensereignisse": [
-        {
-          "datum": "JJJJ (nur Jahreszahl; aus Kontext errechnen wenn nötig – Geburtsjahr + Altersangabe, bekannte historische Jahreszahl; leer lassen wenn nicht errechenbar)",
-          "ereignis": "Was passierte (1 Satz)",
-          "typ": "persoenlich|extern",
-          "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)",
-          "kapitel": "${chapterName}",
-          "seite": "Name der Seite/des Abschnitts (aus ### Überschrift; leer wenn unklar)"
-        }
-      ]
-    }
-  ]
-}
-
-Regeln:
-- typ='persoenlich': echte biografische Wendepunkte (Geburt, Tod, Trauma, neue/beendete Beziehung, Jobwechsel, Umzug, wichtige Entscheidung) – nur aufnehmen wenn tatsächlich im Text belegt
-- typ='extern': gesellschaftliche/historische Ereignisse – SEHR GROSSZÜGIG erfassen:
-  • Kriege, Konflikte, Terroranschläge, Attentate, Amokläufe
-  • Politische Umbrüche (Mauerfall, Revolutionen, Regierungswechsel, gesellschaftliche Umwälzungen)
-  • Sport- und Kulturereignisse (WM, Olympia, Großveranstaltungen)
-  • Wirtschaftskrisen, Seuchen, Naturkatastrophen, Umweltereignisse
-  • Auch wenn nur kurz erwähnt, nur angedeutet oder nur indirekt auf Figuren wirkt
-  • Jedes externe Ereignis ALLEN Figuren zuweisen die dabei waren, davon betroffen waren oder im Zusammenhang erwähnt werden
-- datum: immer als vierstellige Jahreszahl (JJJJ) – falls nicht direkt erwähnt, aus Kontext errechnen (Geburtsjahr + Alter, bekannte historische Jahreszahl); Events ohne errechenbare Jahreszahl weglassen
-- Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden
-- Nur fig_id-Werte aus der obigen Liste verwenden
-- Chronologisch sortiert nach Datum innerhalb jeder Figur
-
-${JSON_ONLY}
-
-Kapiteltext (${pageCount} Seiten):
-
-${chText}`;
-}
-
-export function buildSzenenAnalysePrompt(kapitel, figurenKompakt, orteKompakt, chText) {
-  const figurenStr = figurenKompakt.length
-    ? figurenKompakt.map(f => `${f.id}: ${f.name} (${f.typ})`).join('\n')
-    : '(keine Figuren bekannt)';
-  const orteStr = orteKompakt.length
-    ? orteKompakt.map(o => `${o.id}: ${o.name}`).join('\n')
-    : '';
-  const orteSection = orteStr
-    ? `\nBekannte Schauplätze (nur diese IDs in «orte» verwenden):\n${orteStr}\n`
-    : '';
-  const orteField = orteStr
-    ? `\n      "orte": [${orteKompakt.slice(0, 2).map(o => `"${o.id}"`).join(', ')}],`
-    : '';
-  const orteRule = orteStr
-    ? '\n- orte: IDs der Schauplätze wo die Szene spielt; leer lassen wenn kein passender Ort bekannt'
-    : '';
-  return `Analysiere die Szenen im Kapitel «${kapitel}».
-
-Bekannte Figuren (nur diese IDs in «figuren» verwenden):
-${figurenStr}
-${orteSection}
-Antworte mit diesem JSON-Schema:
-{
-  "szenen": [
-    {
-      "seite": "Name der Seite/des Abschnitts aus dem die Szene stammt (leer wenn unklar)",
-      "titel": "Kurze Szenenbezeichnung (1 Satz)",
-      "wertung": "stark|mittel|schwach",
-      "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)",
-      "figuren": ["fig_1", "fig_2"]${orteField}
-    }
-  ]
-}
-
-Regeln:
-- Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
-- figuren: nur IDs aus der obigen Liste; leer lassen wenn keine bekannte Figur aktiv beteiligt ist
-- wertung: «stark» = spannend/überzeugend, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
-- Wenn ein Abschnitt keine erkennbaren Szenen enthält (reine Exposition, Beschreibung): «szenen» als leeres Array
-- Jede erkennbare Szene erfassen; konservativ – lieber weniger, aber treffende Einträge${orteRule}
-
-${JSON_ONLY}
-
-Kapiteltext:
-${chText}`;
-}
 
 // ── Schauplatz-Schemata (auch verwendet in Komplett-Analyse) ─────────────────
 
@@ -657,85 +452,6 @@ function buildSystemKomplett(prefix, rules, kontext) {
   return `${prefix}\n\n${rules}\n\n${buildKomplettSchemaStatic(kontext)}\n\n${JSON_ONLY}`;
 }
 
-/**
- * Kombinierter Kapitel-Extraktions-Prompt: Figuren + Schauplätze in einem einzigen Call.
- * Referenziert FIGUREN_BASIS_SCHEMA, figurenBasisRules(), ORTE_SCHEMA, ORTE_RULES direkt –
- * keine Duplikation. Wird ausschliesslich vom komplett-analyse-Job verwendet.
- */
-export function buildExtraktionFigurenOrteChapterPrompt(chapterName, bookName, pageCount, chText) {
-  const isSinglePass = chapterName === 'Gesamtbuch';
-  const kapitelNote = isSinglePass
-    ? 'Für kapitel[].name der Figuren den jeweiligen Kapitelnamen aus dem [Kapitelname]-Teil der ### Überschriften verwenden.'
-    : `Für kapitel[].name aller Figuren immer genau «${chapterName}» verwenden – die ### Überschriften im Text sind Seitentitel, keine Kapitelnamen.`;
-  return `Extrahiere alle Figuren und Schauplätze aus ${isSinglePass ? `dem Buch «${bookName}»` : `dem Kapitel «${chapterName}» des Buchs «${bookName}»`}.
-
-Antworte mit diesem JSON-Schema:
-{
-  ${_schemaBody(FIGUREN_BASIS_SCHEMA)},
-  ${_schemaBody(ORTE_SCHEMA)}
-}
-
-Figuren-Regeln:
-${figurenBasisRules(SOZIOGRAMM_KONTEXT)}
-${kapitelNote}
-
-Schauplatz-Regeln:
-${ORTE_RULES}
-
-${JSON_ONLY}
-
-${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} Seiten)`}:
-
-${chText}`;
-}
-
-/**
- * Kombinierter Kapitel-Pass (P1+P8f): Figuren + Schauplätze + Kontinuitätsfakten in einem Call.
- * Ersetzt buildExtraktionFigurenOrteChapterPrompt + buildKontinuitaetChapterFactsPrompt
- * im komplett-analyse-Job. Wird ausschliesslich dort verwendet.
- */
-export function buildExtraktionFigurenOrteKontinuitaetChapterPrompt(chapterName, bookName, pageCount, chText) {
-  const isSinglePass = chapterName === 'Gesamtbuch';
-  const kapitelNote = isSinglePass
-    ? 'Für kapitel[].name der Figuren den jeweiligen Kapitelnamen aus dem [Kapitelname]-Teil der ### Überschriften verwenden.'
-    : `Für kapitel[].name aller Figuren immer genau «${chapterName}» verwenden – die ### Überschriften im Text sind Seitentitel, keine Kapitelnamen.`;
-  return `Extrahiere aus ${isSinglePass ? `dem Buch «${bookName}»` : `dem Kapitel «${chapterName}» des Buchs «${bookName}»`} in einem Durchgang: alle Figuren, alle Schauplätze und alle kontinuitätsrelevanten Fakten.
-
-Antworte mit diesem JSON-Schema:
-{
-  ${_schemaBody(FIGUREN_BASIS_SCHEMA)},
-  ${_schemaBody(ORTE_SCHEMA)},
-  "fakten": [
-    {
-      "kategorie": "figur|ort|objekt|zeit|ereignis|soziolekt|sonstiges",
-      "subjekt": "Über wen/was geht es (Name oder Bezeichnung)",
-      "fakt": "Was genau behauptet wird (1 Satz, so präzise wie möglich)",
-      "seite": "Seitenname oder Abschnittsname (leer wenn unklar)"
-    }
-  ]
-}
-
-Figuren-Regeln:
-${figurenBasisRules(SOZIOGRAMM_KONTEXT)}
-${kapitelNote}
-
-Schauplatz-Regeln:
-${ORTE_RULES}
-
-Fakten-Regeln:
-- Nur konkrete, prüfbare Aussagen – keine Interpretationen
-- Figuren-Zustände besonders genau erfassen (Wissen, Können, körperlicher Zustand, Wohnort, Beruf)
-- Soziolekt: Wenn eine Figur erstmals oder markant spricht, ein Faktum erfassen das ihr Sprachregister beschreibt (z.B. «spricht formell-gebildet», «verwendet Dialekt»). Kategorie «soziolekt» verwenden.
-- Objekte: Wer besitzt was, wo liegt was, in welchem Zustand
-- Zeitangaben: Relative («am nächsten Morgen») und absolute («1943») erfassen
-- Maximal 30 Fakten${isSinglePass ? '' : ' pro Kapitel'}; lieber weniger, dafür präzise
-
-${JSON_ONLY}
-
-${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} Seiten)`}:
-
-${chText}`;
-}
 
 /**
  * Kombinierter Vollextraktion-Prompt (P1 + P5 in einem Call):
@@ -745,8 +461,6 @@ ${chText}`;
  * enthält nur den Kapiteltext und den chapter-spezifischen Kapitelnamen-Hinweis.
  * Szenen und Assignments verwenden Klarnamen (figuren_namen / orte_namen / figur_name)
  * statt IDs – das Remapping auf konsolidierte IDs erfolgt in jobs.js nach P2/P3.
- *
- * Ersetzt buildExtraktionFigurenOrteKontinuitaetChapterPrompt + buildExtraktionSzenenEreignisseChapterPrompt.
  */
 export function buildExtraktionKomplettChapterPrompt(chapterName, bookName, pageCount, chText) {
   const isSinglePass = chapterName === 'Gesamtbuch';
@@ -763,75 +477,6 @@ ${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} S
 ${chText}`;
 }
 
-/**
- * Kombinierter Kapitel-Extraktions-Prompt: Szenen + Lebensereignisse in einem einzigen Call.
- * Setzt konsolidierte Figuren und Orte aus der DB voraus (nach Phase 1+2 der Komplettanalyse).
- * @deprecated Ersetzt durch buildExtraktionKomplettChapterPrompt (P1+P5 merged).
- */
-export function buildExtraktionSzenenEreignisseChapterPrompt(chapterName, bookName, pageCount, figurenKompakt, orteKompakt, chText) {
-  const figurenStr = figurenKompakt.length
-    ? figurenKompakt.map(f => `${f.id}: ${f.name} (${f.typ || 'andere'})`).join('\n')
-    : '(keine Figuren bekannt)';
-  const orteStr = orteKompakt.length
-    ? orteKompakt.map(o => `${o.id}: ${o.name}`).join('\n')
-    : '(keine Schauplätze bekannt)';
-  return `Analysiere das Kapitel «${chapterName}» des Buchs «${bookName}» und extrahiere gleichzeitig Szenen und Lebensereignisse der Figuren.
-
-Bekannte Figuren (nur diese IDs verwenden):
-${figurenStr}
-
-Bekannte Schauplätze (nur diese IDs in «orte» verwenden):
-${orteStr}
-
-Antworte mit diesem JSON-Schema:
-{
-  "szenen": [
-    {
-      "seite": "Name der Seite/des Abschnitts (leer wenn unklar)",
-      "titel": "Kurze Szenenbezeichnung (1 Satz)",
-      "wertung": "stark|mittel|schwach",
-      "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)",
-      "figuren": ["fig_1", "fig_2"],
-      "orte": ["ort_1"]
-    }
-  ],
-  "assignments": [
-    {
-      "fig_id": "fig_1",
-      "lebensereignisse": [
-        {
-          "datum": "JJJJ (nur Jahreszahl; aus Kontext errechnen wenn nötig; leer wenn nicht errechenbar)",
-          "ereignis": "Was passierte (1 Satz)",
-          "typ": "persoenlich|extern",
-          "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)",
-          "kapitel": "${chapterName}",
-          "seite": "Name der Seite/des Abschnitts (aus ### Überschrift; leer wenn unklar)"
-        }
-      ]
-    }
-  ]
-}
-
-Szenen-Regeln:
-- Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
-- figuren: nur IDs aus der obigen Figurenliste; leer wenn keine bekannte Figur aktiv beteiligt
-- orte: nur IDs aus der Schauplatzliste; leer wenn kein passender Ort bekannt
-- wertung: «stark» = überzeugend, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
-- Wenn ein Abschnitt keine erkennbaren Szenen enthält (reine Exposition, Beschreibung): «szenen» als leeres Array
-
-Ereignis-Regeln:
-- typ='persoenlich': echte biografische Wendepunkte (Geburt, Tod, Trauma, neue/beendete Beziehung, Jobwechsel, Umzug, wichtige Entscheidung) – nur wenn tatsächlich im Text belegt
-- typ='extern': gesellschaftliche/historische Ereignisse – SEHR GROSSZÜGIG erfassen: Kriege, politische Umbrüche, Sport- und Kulturereignisse, Wirtschaftskrisen, Seuchen, Naturkatastrophen; auch wenn nur kurz erwähnt; jedes externe Ereignis ALLEN betroffenen Figuren zuweisen
-- datum: immer als vierstellige Jahreszahl (JJJJ) – aus Kontext errechnen wenn nötig; Events ohne errechenbare Jahreszahl weglassen
-- Nur fig_id-Werte aus der obigen Figurenliste verwenden
-- Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden
-
-${JSON_ONLY}
-
-Kapiteltext (${pageCount} Seiten):
-
-${chText}`;
-}
 
 export function buildZeitstrahlConsolidationPrompt(events) {
   return `Du erhältst eine Liste von Lebensereignissen verschiedener Figuren aus einem Buch. Erkenne semantisch identische oder sehr ähnliche Ereignisse (gleicher realer Vorfall, nur unterschiedlich formuliert) und fasse sie zu einem einzigen Eintrag zusammen. Führe die Figurenlisten zusammen und wähle die präziseste Formulierung.
@@ -978,43 +623,6 @@ export function buildBookChatSystemPrompt(bookName, relevantPages, figuren, revi
   return parts.join('\n');
 }
 
-// ── Schauplatz-Extraktion ─────────────────────────────────────────────────────
-
-export function buildLocationsSinglePassPrompt(bookName, pageCount, bookText, figurenKompakt) {
-  const figurenStr = figurenKompakt && figurenKompakt.length
-    ? '\n\nBekannte Figuren (nur diese IDs in «figuren» verwenden):\n' + figurenKompakt.map(f => `${f.id}: ${f.name}`).join('\n')
-    : '';
-  return `Analysiere das Buch «${bookName}» und extrahiere alle wichtigen Schauplätze und Orte.${figurenStr}
-
-Antworte mit diesem JSON-Schema:
-${ORTE_SCHEMA}
-
-${ORTE_RULES}
-
-${JSON_ONLY}
-
-Buchtext (${pageCount} Seiten):
-
-${bookText}`;
-}
-
-export function buildLocationsChapterPrompt(chapterName, bookName, pageCount, chText, figurenKompakt) {
-  const figurenStr = figurenKompakt && figurenKompakt.length
-    ? '\n\nBekannte Figuren (nur diese IDs in «figuren» verwenden):\n' + figurenKompakt.map(f => `${f.id}: ${f.name}`).join('\n')
-    : '';
-  return `Extrahiere alle Schauplätze aus dem Kapitel «${chapterName}» des Buchs «${bookName}».${figurenStr}
-
-Antworte mit:
-{ "orte": [{ "name": "Name", "typ": "stadt|gebaeude|raum|landschaft|region|andere", "beschreibung": "1-2 Sätze", "erste_erwaehnung": "${chapterName}", "stimmung": "Atmosphäre", "kapitel": [{"name": "${chapterName}", "haeufigkeit": 1}], "figuren": [] }] }
-
-Nur Schauplätze die im Text eindeutig beschrieben sind. Sei konservativ.
-
-${JSON_ONLY}
-
-Kapiteltext (${pageCount} Seiten):
-
-${chText}`;
-}
 
 export function buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt) {
   const synthInput = chapterOrte.map(co =>
