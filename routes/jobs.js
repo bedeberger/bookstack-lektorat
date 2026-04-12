@@ -934,6 +934,33 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       Object.entries(figNameToId).map(([k, v]) => [k.toLowerCase(), v])
     );
 
+    // Fallback: Phase-1-Figurennamen aus chapterFiguren nachträglich mappen.
+    // Wenn Claude in assignments figur_name != Phase-2-Kanonname verwendet (z.B. nur Nachname,
+    // Titel+Name, Zweitname), wird per Token-Matching die eindeutig passende Phase-2-Figur gesucht.
+    // Nur eingetragen wenn die Zuordnung eindeutig ist (genau eine Phase-2-Figur trifft zu).
+    for (const { figuren: chFigs } of (chapterFiguren || [])) {
+      for (const f1 of (chFigs || [])) {
+        if (!f1.name) continue;
+        if (figNameToId[f1.name] || figNameToIdLower[f1.name.toLowerCase()]) continue;
+        const f1Tokens = new Set(
+          f1.name.toLowerCase().split(/[\s\-\.]+/).filter(t => t.length > 2)
+        );
+        const seen = new Set();
+        const matches = [];
+        for (const [canon, fid] of Object.entries(figNameToId)) {
+          if (seen.has(fid)) continue;
+          const overlap = canon.toLowerCase().split(/[\s\-\.]+/)
+            .filter(t => t.length > 2 && f1Tokens.has(t)).length;
+          if (overlap > 0) { seen.add(fid); matches.push(fid); }
+        }
+        if (matches.length === 1) {
+          figNameToId[f1.name] = matches[0];
+          figNameToIdLower[f1.name.toLowerCase()] = matches[0];
+          logger.info(`Job ${jobId}: Phase-1-Name «${f1.name}» → ${matches[0]} (Token-Fallback)`);
+        }
+      }
+    }
+
     // Soziogramm aus P2-Ergebnis übernehmen – kein separater API-Call.
     // FIGUREN_BASIS_SCHEMA enthält bereits sozialschicht und beziehungen[].machtverhaltnis.
     if (figuren.length >= 4) {
