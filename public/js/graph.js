@@ -179,35 +179,54 @@ export const graphMethods = {
         ? { hierarchical: { direction: 'UD', sortMethod: 'directed', nodeSpacing: 160, levelSeparation: 120 } }
         : { improvedLayout: false },
       interaction: { hover: true, tooltipDelay: 100 },
-      edges: { smooth: { type: 'cubicBezier' } },
+      // dynamic: vis-network setzt virtuelle Stützpunkte auf jede Edge, die an der
+      // Physics teilnehmen → Kanten biegen sich natürlich um Nodes herum.
+      // cubicBezier bleibt für hierarchisches Layout (Familienbaum), da dynamic
+      // dort mit dem hierarchical-Solver interferiert.
+      edges: { smooth: hasFamilyEdges ? { type: 'cubicBezier' } : { type: 'dynamic', roundness: 0.5 } },
     };
 
     this._figurenNetwork = new vis.Network(container, { nodes, edges }, options);
 
-    // Kapitel-Cluster-Kreise im Hintergrund zeichnen
+    // Kapitel-Cluster-Kreise + Labels im Hintergrund zeichnen
     if (!hasFamilyEdges && N > 0) {
-      this._figurenNetwork.on('beforeDrawing', ctx => {
+      const network = this._figurenNetwork;
+      network.on('beforeDrawing', ctx => {
+        const dpr = window.devicePixelRatio || 1;
+
+        // 1) Kreise in Netzwerk-Koordinaten (skalieren mit Zoom/Pan)
         ctx.save();
         allChapters.forEach((ch, i) => {
           const [r, g, b] = CHAP_PALETTE[i % CHAP_PALETTE.length];
           const { x, y } = chapPos[ch];
-          // Gefüllter Kreis
           ctx.beginPath();
           ctx.arc(x, y, clusterR, 0, 2 * Math.PI);
-          ctx.fillStyle = `rgba(${r},${g},${b},0.07)`;
+          ctx.fillStyle = `rgba(${r},${g},${b},0.12)`;
           ctx.fill();
-          // Gestrichelter Rand
-          ctx.strokeStyle = `rgba(${r},${g},${b},0.30)`;
-          ctx.lineWidth = 1.5;
-          ctx.setLineDash([7, 5]);
+          ctx.strokeStyle = `rgba(${r},${g},${b},0.50)`;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([8, 6]);
           ctx.stroke();
           ctx.setLineDash([]);
-          // Kapitel-Label unterhalb des Kreises
-          ctx.font = 'bold 13px system-ui,-apple-system,sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'top';
-          ctx.fillStyle = `rgba(${r},${g},${b},0.75)`;
-          ctx.fillText(ch, x, y + clusterR + 8);
+        });
+        ctx.restore();
+
+        // 2) Labels in Screen-Koordinaten (feste Lesegrösse unabhängig vom Zoom)
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.font = `bold ${11 * dpr}px system-ui,-apple-system,sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        allChapters.forEach((ch, i) => {
+          const [r, g, b] = CHAP_PALETTE[i % CHAP_PALETTE.length];
+          const { x, y } = chapPos[ch];
+          // Unterkante des Kreises → DOM-Koordinaten → Canvas-Pixel
+          const domBot = network.canvasToDOM({ x, y: y + clusterR });
+          if (domBot.y < -20 || domBot.y > ctx.canvas.height / dpr + 20) return;
+          const cX = domBot.x * dpr;
+          const cY = domBot.y * dpr + 5 * dpr;
+          ctx.fillStyle = `rgba(${r},${g},${b},0.85)`;
+          ctx.fillText(ch, cX, cY);
         });
         ctx.restore();
       });

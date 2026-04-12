@@ -27,7 +27,6 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule) {
   return {
     ERKLAERUNG_RULE:             globalErklaerungRule || '',
     STOPWORDS:                   Array.isArray(localeConfig.stopwords) ? localeConfig.stopwords : [],
-    SOZIOGRAMM_KONTEXT:          localeConfig.soziogrammKontext || '',
     SYSTEM_LEKTORAT:             buildSystem(sp.lektorat          || '', rules),
     SYSTEM_BUCHBEWERTUNG:        buildSystem(sp.buchbewertung     || '', rules),
     SYSTEM_KAPITELANALYSE:       buildSystem(sp.kapitelanalyse    || '', rules),
@@ -50,7 +49,6 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule) {
 // Diese Globals entsprechen stets dem defaultLocale und dienen der Rückwärtskompatibilität.
 export let ERKLAERUNG_RULE              = null;
 export let STOPWORDS                    = [];
-export let SOZIOGRAMM_KONTEXT           = '';
 export let SYSTEM_LEKTORAT              = null;
 export let SYSTEM_BUCHBEWERTUNG         = null;
 export let SYSTEM_KAPITELANALYSE        = null;
@@ -102,7 +100,6 @@ export function configurePrompts(cfg) {
   const def = _localeMap.get(_defaultLocale) || {};
   ERKLAERUNG_RULE              = def.ERKLAERUNG_RULE              ?? '';
   STOPWORDS                    = def.STOPWORDS                    ?? [];
-  SOZIOGRAMM_KONTEXT           = def.SOZIOGRAMM_KONTEXT           ?? '';
   SYSTEM_LEKTORAT              = def.SYSTEM_LEKTORAT              ?? null;
   SYSTEM_BUCHBEWERTUNG         = def.SYSTEM_BUCHBEWERTUNG         ?? null;
   SYSTEM_KAPITELANALYSE        = def.SYSTEM_KAPITELANALYSE        ?? null;
@@ -447,42 +444,6 @@ Antworte mit diesem JSON-Schema:
 ${FIGUREN_BASIS_SCHEMA}
 
 ${FIGUREN_BASIS_RULES}`;
-}
-
-// ── Soziogramm-Anreicherung (Sozialschicht + Machtverhältnis) ─────────────────
-
-export function buildFigurSoziogrammEnrichmentPrompt(bookName, figurenList, beziehungenList, kontext = SOZIOGRAMM_KONTEXT) {
-  const figurenStr = figurenList.map(f =>
-    `- ${f.fig_id}: ${f.name} (${f.typ || 'andere'}${f.beruf ? ', ' + f.beruf : ''}) – ${f.beschreibung || '(keine Beschreibung)'}` +
-    (f.eigenschaften?.length ? `\n  Eigenschaften: ${f.eigenschaften.join(', ')}` : '')
-  ).join('\n');
-  const beziehungenStr = beziehungenList.map(bz =>
-    `- ${bz.from_fig_id} → ${bz.to_fig_id} [${bz.typ}]${bz.beschreibung ? ': ' + bz.beschreibung : ''}`
-  ).join('\n');
-  return `Analysiere die gesellschaftliche Stellung und Machtstrukturen im Buch «${bookName}».
-
-Figuren:
-${figurenStr}
-
-Bestehende Beziehungen:
-${beziehungenStr}
-
-Antworte mit diesem JSON-Schema:
-{
-  "figuren": [
-    { "fig_id": "fig_1", "sozialschicht": "wirtschaftselite|gehobenes_buergertum|mittelschicht|arbeiterschicht|migrantenmilieu|prekariat|unterwelt|andere" }
-  ],
-  "beziehungen": [
-    { "from_fig_id": "fig_1", "to_fig_id": "fig_2", "machtverhaltnis": 0 }
-  ]
-}
-
-Regeln:
-- sozialschicht: gesellschaftliche Schicht basierend auf Beschreibung und Beruf der Figur${kontext ? ` (${kontext})` : ''}; wirtschaftselite=Unternehmerfamilien, Direktoren, sehr wohlhabende Geschäftsleute; gehobenes_buergertum=Akademiker in freien Berufen (Ärzte, Anwälte, Architekten), obere Kader, etablierte Kaufleute; mittelschicht=Angestellte, Beamte, mittlere Kader, Handwerker mit eigenem Betrieb, Lehrer; arbeiterschicht=Fabrik-/Bauarbeiter, Servicepersonal, einfache Angestellte, Pflegepersonal; migrantenmilieu=Zugewanderte und ihre Familien (Saisonniers, Niedergelassene, zweite/dritte Generation – unabhängig von Beruf, wenn kulturell-ethnische Zugehörigkeit relevant ist); prekariat=Sozialhilfeempfänger, Obdachlose, Randständige, Langzeitarbeitslose, Drogenabhängige; unterwelt=kriminelles Milieu; «andere» nur wenn wirklich unbestimmbar
-- machtverhaltnis: Machtasymmetrie aus Perspektive von from_fig_id gegenüber to_fig_id; +2=from_fig dominiert klar (Herr/Knecht, Arbeitgeber/Angestellter, Patron/Klient), +1=from_fig hat leichten strukturellen Vorteil, 0=symmetrisch oder unklar, -1=to_fig hat leichten Vorteil, -2=to_fig dominiert klar; nur vergeben wenn aus Kontext ableitbar, sonst 0
-- Jede Figur aus der Liste mit einer sozialschicht belegen (nie weglassen)
-- Nur Beziehungen mit machtverhaltnis ≠ 0 in «beziehungen» aufführen – symmetrische Beziehungen weglassen
-- KONSERVATIV: Lieber 0 als spekulieren`;
 }
 
 // ── Lebensereignisse-Zuordnung ────────────────────────────────────────────────
