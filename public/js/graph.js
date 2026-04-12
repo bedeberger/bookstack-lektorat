@@ -133,6 +133,7 @@ export const graphMethods = {
       this.figuren.flatMap(f => (f.kapitel || []).map(k => k.name))
     )];
     const N = allChapters.length;
+    console.debug('[graph] allChapters:', N, allChapters);
     // Radius so wählen dass benachbarte Cluster-Mittelpunkte ≥ 180px auseinander liegen
     const R = N <= 1 ? 0 : Math.max(120, Math.ceil(180 / (2 * Math.sin(Math.PI / N))));
     // Cluster-Radius = ~85% des halben Abstands zu Nachbar-Kapiteln
@@ -174,6 +175,7 @@ export const graphMethods = {
     const edges = this._figurenEdges;
 
     const hasFamilyEdges = edgeList.some(e => ['elternteil', 'kind'].includes(e.label));
+    console.debug('[graph] hasFamilyEdges:', hasFamilyEdges, '→ circles:', !hasFamilyEdges && N > 0);
     const options = {
       physics: hasFamilyEdges
         ? { solver: 'hierarchicalRepulsion', hierarchicalRepulsion: { nodeDistance: 140 } }
