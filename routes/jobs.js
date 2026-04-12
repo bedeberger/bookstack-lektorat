@@ -736,20 +736,21 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
 async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userToken, provider = undefined) {
   const logger = makeJobLogger(jobId);
   const call = (...args) => aiCall(...args, provider);
+  const effectiveProvider = provider || process.env.API_PROVIDER || 'claude';
+  // Claude hat 200K Token Kontextfenster (~600K deutsche Zeichen) – Single-Pass für fast alle Bücher.
+  // Ollama/Llama: konservatives Limit wegen kleinerer Kontextfenster.
+  const singlePassLimit = effectiveProvider === 'claude' ? 250_000 : SINGLE_PASS_LIMIT;
   const {
     buildExtraktionKomplettChapterPrompt,
     buildFiguresBasisConsolidationPrompt,
     buildLocationsConsolidationPrompt,
     buildZeitstrahlConsolidationPrompt,
-    buildFigurSoziogrammEnrichmentPrompt,
     buildKontinuitaetSinglePassPrompt,
-    buildKontinuitaetChapterFactsPrompt,
     buildKontinuitaetCheckPrompt,
   } = await getPrompts();
   const {
     SYSTEM_FIGUREN, SYSTEM_ORTE, SYSTEM_KONTINUITAET,
     SYSTEM_ZEITSTRAHL, SYSTEM_KOMPLETT_EXTRAKTION,
-    SOZIOGRAMM_KONTEXT,
   } = await getBookPrompts(bookId);
 
   try {
@@ -811,12 +812,12 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     } else {
       updateJob(jobId, {
         progress: 12,
-        statusText: totalChars <= SINGLE_PASS_LIMIT
+        statusText: totalChars <= singlePassLimit
           ? 'KI extrahiert Figuren, Schauplätze, Fakten, Szenen…'
           : `Vollextraktion in ${groupOrder.length} Kapiteln…`,
       });
 
-      if (totalChars <= SINGLE_PASS_LIMIT) {
+      if (totalChars <= singlePassLimit) {
         const bookText = pageContents
           .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
           .join('\n\n---\n\n');
@@ -885,7 +886,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     saveFigurenToDb(parseInt(bookId), figuren, userEmail || null, idMaps);
     logger.info(`Job ${jobId}: ${figuren.length} Figuren gespeichert.`);
 
-    // figurenKompakt: nur Name+Typ (für Orte-Konsolidierung P3 und Soziogramm P4).
+    // figurenKompakt: nur Name+Typ (für Orte-Konsolidierung P3).
     const figurenKompakt = figuren.map(f => ({ id: f.id, name: f.name, typ: f.typ || 'andere' }));
 
     // figNameToId: Klarnamen → konsolidierte ID (für Szenen/Events-Remapping nach P3).
@@ -899,52 +900,25 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       Object.entries(figNameToId).map(([k, v]) => [k.toLowerCase(), v])
     );
 
-    // ── Parallel-Block 1: P3 (Orte) + P4 (Soziogramm) ───────────────────────
-    // settledAll serialisiert für Ollama (VRAM-Schutz); für Claude bleibt es parallel.
-    updateJob(jobId, { progress: 43, statusText: 'Schauplätze und Soziogramm analysieren…' });
-    const block1Settled = await settledAll([
+    // Soziogramm aus P2-Ergebnis übernehmen – kein separater API-Call.
+    // FIGUREN_BASIS_SCHEMA enthält bereits sozialschicht und beziehungen[].machtverhaltnis.
+    if (figuren.length >= 4) {
+      const sozFiguren = figuren.map(f => ({ fig_id: f.id, sozialschicht: f.sozialschicht || 'andere' }));
+      const sozBeziehungen = figuren.flatMap(f =>
+        (f.beziehungen || [])
+          .filter(bz => bz.machtverhaltnis && bz.figur_id)
+          .map(bz => ({ from_fig_id: f.id, to_fig_id: bz.figur_id, machtverhaltnis: bz.machtverhaltnis }))
+      );
+      updateFigurenSoziogramm(parseInt(bookId), sozFiguren, sozBeziehungen, userEmail || null);
+      logger.info(`Job ${jobId}: Soziogramm aus P2: ${sozFiguren.length} Figuren, ${sozBeziehungen.length} Machtbeziehungen.`);
+    }
 
-      // P3: Orte konsolidieren
-      () => call(jobId, tok,
-        buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt),
-        SYSTEM_ORTE, 43, 55, 6000,
-      ),
-
-      // P4: Soziogramm – nicht-fatal: Fehler werden geloggt, Job läuft weiter.
-      // Wird übersprungen wenn weniger als 4 Figuren vorhanden (Soziogramm sinnlos bei wenig Figuren).
-      () => (async () => {
-        const figRowsForSoz = db.prepare(
-          'SELECT id, fig_id, name, typ, beruf, beschreibung FROM figures WHERE book_id = ? AND user_email IS ? ORDER BY sort_order'
-        ).all(parseInt(bookId), userEmail || null);
-        if (figRowsForSoz.length < 4) {
-          logger.info(`Job ${jobId}: Soziogramm übersprungen (nur ${figRowsForSoz.length} Figuren < 4).`);
-          return;
-        }
-        if (figRowsForSoz.length) {
-          const tagRows = db.prepare(
-            `SELECT figure_id, tag FROM figure_tags WHERE figure_id IN (${figRowsForSoz.map(() => '?').join(',')}) ORDER BY figure_id`
-          ).all(...figRowsForSoz.map(f => f.id));
-          const tagMap = {};
-          for (const t of tagRows) (tagMap[t.figure_id] ??= []).push(t.tag);
-          for (const f of figRowsForSoz) f.eigenschaften = tagMap[f.id] || [];
-        }
-        const relRows = db.prepare(
-          'SELECT from_fig_id, to_fig_id, typ, beschreibung FROM figure_relations WHERE book_id = ? AND user_email IS ?'
-        ).all(parseInt(bookId), userEmail || null);
-        const sozResult = await call(jobId, tok,
-          buildFigurSoziogrammEnrichmentPrompt(bookName, figRowsForSoz, relRows, SOZIOGRAMM_KONTEXT),
-          SYSTEM_FIGUREN, 43, 55, 2000,
-        );
-        if (Array.isArray(sozResult?.figuren)) {
-          updateFigurenSoziogramm(parseInt(bookId), sozResult.figuren, sozResult.beziehungen || [], userEmail || null);
-        }
-      })().catch(e => {
-        if (e.name === 'AbortError') throw e;
-        logger.warn(`Job ${jobId}: Soziogramm übersprungen: ${e.message}`);
-      }),
-    ]);
-    if (block1Settled[0].status === 'rejected') throw block1Settled[0].reason;
-    const orteResultRaw = block1Settled[0].value;
+    // ── Phase 3: Orte konsolidieren ───────────────────────────────────────────
+    updateJob(jobId, { progress: 43, statusText: 'Schauplätze konsolidieren…' });
+    const orteResultRaw = await call(jobId, tok,
+      buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt),
+      SYSTEM_ORTE, 43, 55, 6000,
+    );
 
     logger.info(`Job ${jobId}: orteResult Keys: [${Object.keys(orteResultRaw || {}).join(', ')}] – orte: ${orteResultRaw?.orte?.length ?? 'FEHLT'}`);
     if (!Array.isArray(orteResultRaw?.orte)) throw new Error('Orte-Konsolidierung ungültig: orte-Array fehlt');
@@ -1121,7 +1095,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         const orteKompaktForKont = ortRowsForKont.map(o => ({ name: o.name, typ: o.typ, beschreibung: o.beschreibung || '' }));
 
         let kontResult;
-        if (totalChars <= SINGLE_PASS_LIMIT) {
+        if (totalChars <= singlePassLimit) {
           updateJob(jobId, { progress: 97, statusText: 'Kontinuität prüfen…' });
           const bookText = pageContents
             .map(p => `### ${p.chapter ? '[' + p.chapter + '] ' : ''}${p.title}\n${p.text}`)
@@ -1131,39 +1105,13 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
             buildKontinuitaetSinglePassPrompt(bookName, bookText, figKompaktForKont, orteKompaktForKont),
             SYSTEM_KONTINUITAET, 97, 99, 5000,
           );
-        } else if (chapterFakten?.length) {
-          // Normal-Pfad multi-pass: Fakten aus Phase 1 – kein zusätzlicher API-Call
+        } else {
+          // Multi-Pass: Fakten aus Phase 1 – kein zusätzlicher API-Call
           updateJob(jobId, { progress: 98, statusText: 'KI prüft Widersprüche…' });
           const totalFaktenChars = chapterFakten.reduce((s, c) => s + JSON.stringify(c.fakten).length, 0);
           logger.info(`Job ${jobId}: Kontinuität Multi-Pass: ${chapterFakten.length} Kapitel, ~${totalFaktenChars} Zeichen Fakten, ${figKompaktForKont.length} Figuren`);
           kontResult = await call(jobId, tok,
             buildKontinuitaetCheckPrompt(bookName, chapterFakten, figKompaktForKont, orteKompaktForKont),
-            SYSTEM_KONTINUITAET, 98, 99, 5000,
-          );
-        } else {
-          // Fallback: alter Checkpoint ohne chapterFakten – Extraktion nachholen
-          updateJob(jobId, { progress: 97, statusText: `Kontinuität – Fakten in ${groupOrder.length} Kapiteln extrahieren…` });
-          const factsSettled = await settledAll(
-            groupOrder.map(key => () => {
-              const group = groups.get(key);
-              const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
-              return call(jobId, tok,
-                buildKontinuitaetChapterFactsPrompt(group.name, chText),
-                SYSTEM_KONTINUITAET, 97, 98, 1500,
-              );
-            })
-          );
-          const chFacts = factsSettled.map((r, gi) => {
-            const group = groups.get(groupOrder[gi]);
-            if (r.status === 'rejected') {
-              logger.warn(`Job ${jobId}: Kontinuität-Fakten «${group.name}» übersprungen: ${r.reason?.message}`);
-              return { kapitel: group.name, fakten: [] };
-            }
-            return { kapitel: group.name, fakten: r.value?.fakten || [] };
-          });
-          updateJob(jobId, { progress: 98, statusText: 'KI prüft Widersprüche…' });
-          kontResult = await call(jobId, tok,
-            buildKontinuitaetCheckPrompt(bookName, chFacts, figKompaktForKont, orteKompaktForKont),
             SYSTEM_KONTINUITAET, 98, 99, 5000,
           );
         }
@@ -1175,7 +1123,6 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
             fig_ids:     (issue.figuren  || []).map(n => figNameToId[n]).filter(Boolean),
             chapter_ids: (issue.kapitel  || []).map(n => idMaps.chNameToId[n]).filter(Boolean),
           }));
-          const effectiveProvider = provider || process.env.API_PROVIDER || 'claude';
           const model = _modelName(effectiveProvider);
           logger.info(`Job ${jobId}: Speichere Kontinuitätsprüfung (${normalizedProbleme.length} Probleme)…`);
           db.prepare(`INSERT INTO continuity_checks (book_id, user_email, checked_at, issues_json, summary, model)

@@ -98,7 +98,7 @@ SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein B
 
 **Feature-Exklusivität (Standardverhalten):** Features überschreiben sich gegenseitig – es ist immer nur eine Hauptansicht aktiv. Buchebenen-Features (Figuren, Szenen, Ereignisse, Orte, Kontinuität, Buchbewertung, Buchstatistik, Buch-Chat) und Seitenebenen-Features (Lektorat-Editor) sind gegenseitig exklusiv. Jedes Buchebenen-Toggle ruft `_closeOtherMainCards(keep)` in `app.js` auf – das schliesst alle anderen Buchkarten und ruft `resetPage()` auf (schliesst Editor + Seiten-Features). `selectPage()` schliesst seinerseits alle Buchkarten bevor es den Editor öffnet. Neues Feature-Toggle immer nach diesem Muster implementieren.
 
-**Two-Tier-Analyse-Pattern:** `routes/jobs.js` implementiert für Review, Figurenextraktion und Buch-Chat ein Two-Tier-Muster: `SINGLE_PASS_LIMIT` = 60 000 Zeichen – darunter Single-Pass direkt an Claude, darüber Multi-Pass pro Kapitel + Konsolidierungs-Call.
+**Two-Tier-Analyse-Pattern:** `routes/jobs.js` implementiert für Review, Figurenextraktion und Buch-Chat ein Two-Tier-Muster. `SINGLE_PASS_LIMIT` = 60 000 Zeichen (global für alle Jobs ausser komplett-analyse). Für `komplett-analyse` gilt provider-abhängig: Claude 250 000 Zeichen (~60K Tokens, passt in das 200K-Token-Kontextfenster), Ollama/Llama 60 000 Zeichen.
 
 ## Komplettanalyse-Job (`komplett-analyse`)
 
@@ -107,21 +107,21 @@ Der Button **«Alles aktualisieren»** startet den einzigen serverseitigen Job `
 **Pipeline (intern, ein einziger Job):**
 
 ```
-Phase 1 – Vollextraktion kombiniert (parallel pro Kapitel) – KEIN separater P5-Call
+Phase 1 – Vollextraktion kombiniert (parallel pro Kapitel, oder Single-Pass für Claude ≤250K Zeichen)
           buildExtraktionKomplettChapterPrompt()
           System-Prompt: SYSTEM_KOMPLETT_EXTRAKTION (Schema darin eingebettet → gecacht)
           Output: figuren + orte + fakten + szenen(Namen) + assignments(Namen)
           → Checkpoint 'p1_full_done' (alle 5 Arrays)
 
-Phase 2 – Figuren konsolidieren
+Phase 2 – Figuren konsolidieren + Soziogramm (kein separater API-Call)
           buildFiguresBasisConsolidationPrompt()
           → saveFigurenToDb() → figNameToId aufbauen
+          → Soziogramm: sozialschicht + machtverhaltnis direkt aus P2-Output extrahieren
+            (FIGUREN_BASIS_SCHEMA enthält beide Felder bereits)
+            → updateFigurenSoziogramm() wenn ≥ 4 Figuren
 
-Block 1 [parallel] –
-  Phase 3 – Schauplätze konsolidieren
-            buildLocationsConsolidationPrompt() → saveOrteToDb() → ortNameToId aufbauen
-  Phase 4 – Soziogramm (nur wenn ≥ 4 Figuren)
-            buildFigurSoziogrammEnrichmentPrompt()
+Phase 3 – Schauplätze konsolidieren
+          buildLocationsConsolidationPrompt() → saveOrteToDb() → ortNameToId aufbauen
 
 Block 2 [parallel] –
   Phase 5 – Szenen remappen (kein API-Call)
@@ -131,11 +131,11 @@ Block 2 [parallel] –
   Phase 6 – Zeitstrahl konsolidieren
             buildZeitstrahlConsolidationPrompt()
   Phase 8 – Kontinuitätscheck
-            Multi-Pass: buildKontinuitaetCheckPrompt() (Fakten aus Phase 1)
-            Single-Pass: buildKontinuitaetSinglePassPrompt()
+            Single-Pass (Claude ≤250K Zeichen): buildKontinuitaetSinglePassPrompt() – voller Buchtext
+            Multi-Pass (grössere Bücher): buildKontinuitaetCheckPrompt() (Fakten aus Phase 1)
 ```
 
-**Token-Optimierungen:** Phase 1 und 5 sind zu einem einzigen Kapitel-Call zusammengeführt. Schema und Regeln leben in `SYSTEM_KOMPLETT_EXTRAKTION` (System-Prompt) und werden gecacht – spart ~19/20 Schema-Tokens pro Kapitel-Call. Szenen/Events nutzen Klarnamen; das ID-Remapping erfolgt in `processSzenenEreignisseFromMerged` nach der Konsolidierung.
+**Token-Optimierungen:** Phase 1 und 5 sind zu einem einzigen Kapitel-Call zusammengeführt. Schema und Regeln leben in `SYSTEM_KOMPLETT_EXTRAKTION` (System-Prompt) und werden gecacht – spart ~19/20 Schema-Tokens pro Kapitel-Call. Szenen/Events nutzen Klarnamen; das ID-Remapping erfolgt in `processSzenenEreignisseFromMerged` nach der Konsolidierung. Soziogramm (Phase 4) existiert nicht mehr als separater API-Call – die Daten werden aus dem P2-Result gelesen.
 
 **Prompt Caching:** `lib/ai.js` setzt `cache_control: { type: 'ephemeral' }` auf allen Systemprompts und sendet den Header `anthropic-beta: prompt-caching-2024-07-31`. Innerhalb eines parallelen Kapitel-Batches (Phase 1) trifft jeder Folge-Call den Cache des Systemprompts inkl. Schema (~10 % des normalen Input-Preises).
 
