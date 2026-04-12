@@ -148,8 +148,7 @@ function _buildStilBlock() {
   return `
 Stil-Regeln (typ: «stil»):
 - Die gesamte Seite von Anfang bis Ende auf stilistische Auffälligkeiten scannen – nicht nur lokale Abschnitte oder die letzten Sätze
-- Nur melden, falls das Problem nicht bereits als anderer Typ (wiederholung, grammatik, rechtschreibung) erfasst wurde
-- Typische Stilschwächen: blasse Verben (sein, haben, machen, gehen) wo ein präziseres Verb besser wäre; überflüssige Adverbien/Adjektive die nichts leisten; Klischees und abgedroschene Wendungen; «Telling» statt «Showing» bei Emotionen (z.B. «er war wütend» statt Handlung/Geste/Körpersprache); monotone Satzstruktur (viele Sätze gleicher Länge/Form in Folge)`;
+- Nur melden, falls das Problem nicht bereits als anderer Typ (wiederholung, grammatik, rechtschreibung) erfasst wurde`;
 }
 
 // Wiederholung-Regeln für Lektorat-Prompts (beide Varianten)
@@ -173,7 +172,7 @@ function _buildLektoratPromptBody(text, textLabel, { stopwords = STOPWORDS, erkl
   return `Analysiere diesen Text auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
 
 WICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen (z.B. ein Gallizismus und separate Anführungszeichen-Problematik), müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.
-
+${erklaerungRule ? `\nFILTER-PFLICHT: ${erklaerungRule}\n` : ''}
 Antworte mit diesem JSON-Schema:
 {
   "fehler": [
@@ -182,7 +181,7 @@ Antworte mit diesem JSON-Schema:
       "original": "das fehlerhafte Wort oder die fehlerhafte Phrase – bei «wiederholung»: vollständiger Satz zeichengenau aus dem Text",
       "korrektur": "die korrekte Version – bei «wiederholung»: derselbe Satz mit Synonym",
       "kontext": "der Satz in dem der Fehler vorkommt (bei «wiederholung» gleich wie «original»)",
-      "erklaerung": "kurze Erklärung (nur diesen einen Mangel beschreiben) ${erklaerungRule}"
+      "erklaerung": "kurze Erklärung – nur diesen einen Mangel beschreiben"
     }
   ],
   "szenen": [
@@ -834,6 +833,6 @@ Regeln:
 ${JSON_ONLY}`;
 }
 
-export function buildLektoratPrompt(text, _html, opts = {}) {
+export function buildLektoratPrompt(text, opts = {}) {
   return _buildLektoratPromptBody(text, 'Originaltext:', opts);
 }

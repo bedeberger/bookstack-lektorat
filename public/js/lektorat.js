@@ -332,7 +332,7 @@ export const lektoratMethods = {
         setTimeout(() => { this.batchProgress = 0; }, 400);
         if (job.result?.empty) { this.batchStatus = 'Keine Seiten im Buch gefunden.'; return; }
         const r = job.result;
-        this.batchStatus = `Fertig: ${r.done}/${r.pageCount} Seiten geprüft, ${r.totalErrors} Rechtschreib-/Grammatikfehler.`;
+        this.batchStatus = `Fertig: ${r.done}/${r.pageCount} Seiten geprüft, ${r.totalErrors} Beanstandungen.`;
         if (this.currentPage) await this.loadPageHistory(this.currentPage.id);
       },
     });

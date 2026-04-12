@@ -77,6 +77,8 @@ SELECT * FROM schema_version;
 - **`/claude`** – injiziert `ANTHROPIC_API_KEY`, leitet an `api.anthropic.com/v1/messages` weiter, streamt als SSE. `model` und `max_tokens` werden aus `.env` (MODEL_NAME / MODEL_TOKEN) erzwungen.
 - **`/ollama`** – konvertiert Anthropic-Request-Format → Ollama `/api/chat`-Format, normalisiert NDJSON → SSE. Frontend-Parser bleibt für beide Provider identisch.
 
+**`MODEL_TOKEN` (`.env`):** Einzige Quelle für `MAX_TOKENS_OUT` in `lib/ai.js` (Default: 64 000). Dieser Wert ist der globale Hard-Cap für alle KI-Calls über alle drei Provider. Ein `maxTokensOverride` aus einzelnen Jobs wird immer per `Math.min(override, MAX_TOKENS_OUT)` gedeckelt und kann den Wert nie überschreiten. Bei Ollama fliesst er zusätzlich in die dynamische `num_ctx`-Berechnung ein (`estimatedTokIn + maxTokens + 1000`): ist `MODEL_TOKEN` zu klein, kürzt Ollama stillschweigend den Input-Prompt – ohne Fehler, aber mit weniger extrahierten Figuren/Szenen als Resultat.
+
 ## Chat
 
 **Seiten-Chat** (`/chat/send`): Direktes SSE-Streaming, kein Job-Queue. KI-Antwortformat: `{ "antwort": "Markdown", "vorschlaege": [{ "original", "ersatz", "begruendung" }] }`. `original` muss zeichengenau im Seitentext vorkommen. `applyChatVorschlag()` ersetzt es identisch zum Lektorat-Flow via `_applyCorrections`.

@@ -127,7 +127,7 @@ export const treeMethods = {
           const pd = await this.bsGet('pages/' + p.id);
           const html = pd.html || '';
           const text = htmlToText(html);
-          const userPrompt = buildLektoratPrompt(text, html);
+          const userPrompt = buildLektoratPrompt(text);
           const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
           this.tokEsts[p.id] = {
             tok: Math.round(userPrompt.length / CHARS_PER_TOKEN),

@@ -38,12 +38,14 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     updateJob(jobId, { statusText: 'KI analysiert…', progress: 10 });
 
     const result = await aiCall(jobId, tok,
-      buildLektoratPrompt(text, html, { stopwords: lektoratStopwords, erklaerungRule: lektoratErklaerungRule }),
+      buildLektoratPrompt(text, { stopwords: lektoratStopwords, erklaerungRule: lektoratErklaerungRule }),
       SYSTEM_LEKTORAT,
       10, 97, 5000,
     );
 
     if (!Array.isArray(result?.fehler)) throw new Error('fehler-Array fehlt');
+    const _validTypen = new Set(['rechtschreibung', 'grammatik', 'stil', 'wiederholung']);
+    result.fehler = result.fehler.map(f => ({ ...f, typ: f.typ?.toLowerCase?.() })).filter(f => _validTypen.has(f.typ));
 
     const model = _modelName(process.env.API_PROVIDER || 'claude');
     const szenen = Array.isArray(result?.szenen) ? result.szenen : [];
@@ -93,6 +95,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
     let done = 0, totalErrors = 0;
 
     for (let i = 0; i < pages.length; i++) {
+      if (jobAbortControllers.get(jobId)?.signal.aborted) throw new DOMException('Aborted', 'AbortError');
       const p = pages[i];
       const fromPct = Math.round((i / pages.length) * 95);
       const toPct   = Math.round(((i + 1) / pages.length) * 95);
@@ -118,8 +121,9 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
         );
 
         if (!Array.isArray(result?.fehler)) throw new Error('fehler-Array fehlt');
-        const fehler = result.fehler;
-        totalErrors += fehler.filter(f => f.typ !== 'stil').length;
+        const _validTypen = new Set(['rechtschreibung', 'grammatik', 'stil', 'wiederholung']);
+        const fehler = result.fehler.map(f => ({ ...f, typ: f.typ?.toLowerCase?.() })).filter(f => _validTypen.has(f.typ));
+        totalErrors += fehler.length;
 
         const szenenBatch = Array.isArray(result?.szenen) ? result.szenen : [];
         db.prepare(`INSERT INTO page_checks

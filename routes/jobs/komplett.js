@@ -157,11 +157,16 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           chapterTexts.map(({ group, key, pagesSig, chText }) => async () => {
             // Delta-Cache: Cache-Hit → kein KI-Call nötig
             const cached = loadChapterExtractCache(bookId, userEmail, key, pagesSig);
-            if (cached) { cacheHits++; return cached; }
+            if (cached) {
+              cacheHits++;
+              logger.info(`Job ${jobId}: Kapitel «${group.name}» – Cache-Hit, KI-Call übersprungen.`);
+              return cached;
+            }
             const result = await call(jobId, tok,
               buildExtraktionKomplettChapterPrompt(group.name, bookName, group.pages.length, chText),
               SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 14000,
             );
+            logger.info(`Job ${jobId}: Kapitel «${group.name}» extrahiert – fig=${result?.figuren?.length ?? 0} orte=${result?.orte?.length ?? 0} sz=${result?.szenen?.length ?? 0} ass=${result?.assignments?.length ?? 0}`);
             saveChapterExtractCache(bookId, userEmail, key, pagesSig, result);
             return result;
           })
