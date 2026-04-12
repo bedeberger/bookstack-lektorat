@@ -1011,7 +1011,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           : fullText.slice(0, singlePassLimit);
         const bzResult = await call(jobId, tok,
           buildKapiteluebergreifendeBeziehungenPrompt(bookName, figuren, textForPrompt),
-          SYSTEM_FIGUREN, 55, 57, 2000,
+          SYSTEM_FIGUREN, 55, 58, 2000,
         );
         const newBz = Array.isArray(bzResult?.beziehungen) ? bzResult.beziehungen : [];
         if (newBz.length > 0) {
@@ -1030,7 +1030,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     // Szenen + Events stammen aus Phase 1 (kein separater P5-Call mehr).
     // P8 nutzt chapterFakten aus Phase 1 – kein separater Extraktions-Call.
     let allSzenen = [];
-    updateJob(jobId, { progress: 56, statusText: 'Szenen verarbeiten und Kontinuität prüfen…' });
+    updateJob(jobId, { progress: 58, statusText: 'Szenen verarbeiten und Kontinuität prüfen…' });
 
     // Hilfsfunktion: Szenen + Events aus P1-Checkpoint (namensbasiert) speichern.
     // figNameToId / figNameToIdLower: kanonischer Name → fig_id (inkl. Kurzname).

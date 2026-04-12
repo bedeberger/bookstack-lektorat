@@ -125,6 +125,14 @@ Phase 2 – Figuren konsolidieren + Soziogramm (kein separater API-Call)
 Phase 3 – Schauplätze konsolidieren
           buildLocationsConsolidationPrompt() → saveOrteToDb() → ortNameToId aufbauen
 
+Phase 3b – Kapitelübergreifende Beziehungen (nur Multi-Pass, d.h. chapterFiguren.length > 1)
+          buildKapiteluebergreifendeBeziehungenPrompt()
+          Input: konsolidierte Figurenliste + Buchtext (bis singlePassLimit gekürzt)
+          Output: neue figure_relations Einträge via addFigurenBeziehungen() (ohne DELETE)
+          Deduplizierung: prüft beide Richtungen für undirektionale Typen
+          Non-critical: Fehler werden geloggt, Job läuft weiter
+          Single-Pass übersprungen: Phase 1 hat den vollständigen Text gesehen → Beziehungen bereits erfasst
+
 Block 2 [parallel] –
   Phase 5 – Szenen remappen (kein API-Call)
             chapterSzenen/chapterAssignments aus Phase 1

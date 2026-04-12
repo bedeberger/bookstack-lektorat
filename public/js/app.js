@@ -681,6 +681,7 @@ document.addEventListener('alpine:init', () => {
         { label: 'Vollextraktion',        threshold: 30  },
         { label: 'Figuren konsolidieren', threshold: 45  },
         { label: 'Orte konsolidieren',    threshold: 56  },
+        { label: 'Kap. Beziehungen',      threshold: 58  },
         { label: 'Szenen + Ereignisse',   threshold: 83  },
         { label: 'Zeitstrahl',            threshold: 89  },
         { label: 'Kontinuität',           threshold: 100 },
