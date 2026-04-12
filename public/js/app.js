@@ -845,7 +845,7 @@ document.addEventListener('alpine:init', () => {
         const preview = rawPreview.length > PREVIEW_MAX_CHARS ? rawPreview.slice(0, PREVIEW_MAX_CHARS) + ' …' : rawPreview;
         this.currentPageEmpty = !preview;
         this.analysisOut = preview
-          ? `<div class="preview-text">${escHtml(preview)}</div><div class="preview-hint">Vorschau · «Prüfen» starten für Lektorat</div>`
+          ? `<div class="preview-text">${escHtml(preview)}</div>`
           : '<span class="muted-msg">Seite ist leer.</span>';
       }
       await this.loadPageHistory(p.id);

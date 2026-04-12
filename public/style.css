@@ -874,6 +874,7 @@ ins {
   line-height: 1.7;
   white-space: pre-wrap;
   background: var(--color-bg);
+  margin: 12px 0;
   border-radius: var(--radius-md);
   padding: 12px 14px;
 }

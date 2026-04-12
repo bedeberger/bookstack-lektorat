@@ -272,8 +272,14 @@ export const lektoratMethods = {
       this.lektoratStyles = [];
       this.selectedErrors = [];
       this.selectedStyles = [];
-      this.analysisOut = '';
       this.checkDone = false;
+      // Vorschau aus dem gerade gespeicherten HTML neu aufbauen
+      const rawPreview = htmlToText(finalHtml).trim() || null;
+      if (this.currentPage) this.currentPage.previewText = rawPreview;
+      const PREVIEW_MAX_CHARS = 600;
+      this.analysisOut = rawPreview
+        ? `<div class="preview-text">${escHtml(rawPreview.length > PREVIEW_MAX_CHARS ? rawPreview.slice(0, PREVIEW_MAX_CHARS) + ' …' : rawPreview)}</div>`
+        : '<span class="muted-msg">Seite ist leer.</span>';
     } catch (e) {
       console.error('[saveCorrections]', e);
       this.saveApplying = null;
