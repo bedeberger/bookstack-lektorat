@@ -994,7 +994,11 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
 
     // ortNameToId: Klarnamen → konsolidierte ID (für Szenen-Remapping in Block 2).
     const ortNameToId = {};
-    for (const o of orte) ortNameToId[o.name] = o.id;
+    const ortNameToIdLower = {};
+    for (const o of orte) {
+      ortNameToId[o.name] = o.id;
+      ortNameToIdLower[o.name.toLowerCase()] = o.id;
+    }
 
     // ── Phase 3b: Kapitelübergreifende Beziehungen (nur Multi-Pass) ───────────
     // Single-Pass: Phase 1 hat den vollständigen Text gesehen → Beziehungen bereits erfasst.
@@ -1045,7 +1049,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
             figNameToId[n] || figNameToIdLower[n?.toLowerCase()] || null
           ).filter(Boolean);
           const ort_ids = (s.orte_namen || []).map(n =>
-            ortNameToId[n] || null
+            ortNameToId[n] || ortNameToIdLower[n?.toLowerCase()] || null
           ).filter(Boolean);
           allSzenen.push({
             kapitel: s.kapitel || kapitel,
