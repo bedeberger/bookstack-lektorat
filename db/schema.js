@@ -249,6 +249,18 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_ze_book_id ON zeitstrahl_events(book_id, user_email);
 
+  -- Delta-Cache: Phase-1-Extraktionsergebnisse pro Kapitel (komplett-analyse).
+  -- Ungültig sobald sich updated_at einer Seite im Kapitel ändert (pages_sig-Vergleich).
+  CREATE TABLE IF NOT EXISTS chapter_extract_cache (
+    book_id     INTEGER NOT NULL,
+    user_email  TEXT NOT NULL DEFAULT '',
+    chapter_key TEXT NOT NULL,
+    pages_sig   TEXT NOT NULL,
+    extract_json TEXT NOT NULL,
+    cached_at   TEXT NOT NULL,
+    PRIMARY KEY (book_id, user_email, chapter_key)
+  );
+
   -- Checkpoint-Cache für unterbrechbare Multi-Pass-Jobs (Resume nach Server-Neustart)
   CREATE TABLE IF NOT EXISTS job_checkpoints (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1359,6 +1371,34 @@ function deleteCheckpoint(jobType, bookId, userEmail) {
   _deleteCheckpoint.run(jobType, parseInt(bookId), userEmail || '');
 }
 
+// ── Delta-Cache: Phase-1-Extraktion pro Kapitel ───────────────────────────────
+// Cache-Key: (book_id, user_email, chapter_key, pages_sig).
+// pages_sig: sortierter String aus "page_id:updated_at"-Paaren aller Seiten des Kapitels.
+// Ändert sich irgendeine Seite, ändert sich die Signatur → Cache-Miss → Neu-Extraktion.
+
+const _loadChapterCache = db.prepare(
+  `SELECT extract_json FROM chapter_extract_cache
+   WHERE book_id = ? AND user_email = ? AND chapter_key = ? AND pages_sig = ?`
+);
+const _saveChapterCache = db.prepare(
+  `INSERT OR REPLACE INTO chapter_extract_cache
+   (book_id, user_email, chapter_key, pages_sig, extract_json, cached_at)
+   VALUES (?, ?, ?, ?, ?, ?)`
+);
+
+function loadChapterExtractCache(bookId, userEmail, chapterKey, pagesSig) {
+  const row = _loadChapterCache.get(parseInt(bookId), userEmail || '', chapterKey, pagesSig);
+  if (!row) return null;
+  try { return JSON.parse(row.extract_json); } catch { return null; }
+}
+
+function saveChapterExtractCache(bookId, userEmail, chapterKey, pagesSig, extract) {
+  _saveChapterCache.run(
+    parseInt(bookId), userEmail || '', chapterKey, pagesSig,
+    JSON.stringify(extract), new Date().toISOString(),
+  );
+}
+
 // ── Buch-Einstellungen (Sprache + Region) ─────────────────────────────────────
 
 const _getBookSettings = db.prepare('SELECT language, region FROM book_settings WHERE book_id = ?');
@@ -1405,4 +1445,15 @@ function updateFigurenSoziogramm(bookId, figurenSoziogramm, beziehungenMacht, us
   })();
 }
 
-module.exports = { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings };
+/** Setzt alle hängenden job_runs (status 'running' oder 'queued') auf 'error'.
+ *  Gibt die Anzahl bereinigter Einträge zurück. */
+function cleanupStuckJobRuns() {
+  const now = new Date().toISOString();
+  const result = db.prepare(
+    `UPDATE job_runs SET status = 'error', ended_at = ?, error = 'Job-Prozess gestorben (Server-Neustart oder Absturz)'
+     WHERE status IN ('running', 'queued')`
+  ).run(now);
+  return result.changes;
+}
+
+module.exports = { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings, loadChapterExtractCache, saveChapterExtractCache, cleanupStuckJobRuns };

@@ -6,7 +6,7 @@ const path = require('path');
 const logger = require('./logger');
 
 // DB-Setup + Migrationen laufen beim Import
-require('./db/schema');
+const { cleanupStuckJobRuns } = require('./db/schema');
 
 const authRouter = require('./routes/auth');
 const historyRouter = require('./routes/history');
@@ -95,18 +95,26 @@ app.use('/api', bookstackProxy);
 app.listen(PORT, '0.0.0.0', () => {
   logger.info(`Lektorat läuft auf http://0.0.0.0:${PORT}`);
   logger.info(`BookStack Ziel: ${BOOKSTACK_URL}`);
+
+  // Hängende Job-Runs aus dem letzten Server-Leben bereinigen
+  const stuck = cleanupStuckJobRuns();
+  if (stuck > 0) logger.warn(`Startup: ${stuck} hängender Job-Run(s) auf 'error' gesetzt.`);
 });
 
 // Tägliche Cron-Jobs (node-cron)
 try {
   const cron = require('node-cron');
 
-  // 02:00 – Buchstatistik-Sync
+  // 02:00 – Buchstatistik-Sync + hängende Jobs bereinigen
   cron.schedule('0 2 * * *', () => {
     logger.info('Cron: Starte täglichen Buchstatistik-Sync…');
     syncAllBooks().catch(e => logger.error('Cron-Sync Fehler: ' + e.message));
+
+    const stuck = cleanupStuckJobRuns();
+    if (stuck > 0) logger.warn(`Cron: ${stuck} hängender Job-Run(s) auf 'error' gesetzt.`);
+    else logger.info('Cron: Keine hängenden Job-Runs gefunden.');
   });
-  logger.info('Cron-Job registriert: Buchstatistik-Sync täglich 02:00 Uhr');
+  logger.info('Cron-Job registriert: Buchstatistik-Sync + Job-Cleanup täglich 02:00 Uhr');
 
   // 03:00 – Nacht-Komplettanalyse für alle Bücher × alle User (deaktiviert)
   // cron.schedule('0 3 * * *', () => {

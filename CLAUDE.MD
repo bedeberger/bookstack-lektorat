@@ -100,6 +100,8 @@ SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein B
 
 **Two-Tier-Analyse-Pattern:** `routes/jobs.js` implementiert für Review, Figurenextraktion und Buch-Chat ein Two-Tier-Muster. `SINGLE_PASS_LIMIT` = 60 000 Zeichen (global für alle Jobs ausser komplett-analyse). Für `komplett-analyse` gilt provider-abhängig: Claude 250 000 Zeichen (~60K Tokens, passt in das 200K-Token-Kontextfenster), Ollama/Llama 60 000 Zeichen.
 
+**`BATCH_SIZE` = 15:** Anzahl Seiten die parallel aus BookStack geladen werden (HTTP I/O-bound). Gilt für alle Jobs die `loadPageContents` verwenden.
+
 ## Komplettanalyse-Job (`komplett-analyse`)
 
 Der Button **«Alles aktualisieren»** startet den einzigen serverseitigen Job `/jobs/komplett-analyse`.
@@ -136,6 +138,8 @@ Block 2 [parallel] –
 ```
 
 **Token-Optimierungen:** Phase 1 und 5 sind zu einem einzigen Kapitel-Call zusammengeführt. Schema und Regeln leben in `SYSTEM_KOMPLETT_EXTRAKTION` (System-Prompt) und werden gecacht – spart ~19/20 Schema-Tokens pro Kapitel-Call. Szenen/Events nutzen Klarnamen; das ID-Remapping erfolgt in `processSzenenEreignisseFromMerged` nach der Konsolidierung. Soziogramm (Phase 4) existiert nicht mehr als separater API-Call – die Daten werden aus dem P2-Result gelesen.
+
+**Delta-Cache (inkrementelles Processing):** Phase 1 (Multi-Pass) prüft vor jedem Kapitel-Call den `chapter_extract_cache` in der DB. Cache-Schlüssel: `(book_id, user_email, chapter_key, pages_sig)`. `pages_sig` = sortierter String aus `page_id:updated_at`-Paaren aller Seiten des Kapitels (aus BookStack-API). Ändert sich eine Seite → Cache-Miss → Neu-Extraktion + Cache-Update. Unveränderte Kapitel überspringen den KI-Call vollständig. Gilt nur für den Multi-Pass-Pfad (Bücher > singlePassLimit); Single-Pass wird nicht gecacht. Funktionen: `loadChapterExtractCache` / `saveChapterExtractCache` in `db/schema.js`.
 
 **Prompt Caching:** `lib/ai.js` setzt `cache_control: { type: 'ephemeral' }` auf allen Systemprompts und sendet den Header `anthropic-beta: prompt-caching-2024-07-31`. Innerhalb eines parallelen Kapitel-Batches (Phase 1) trifft jeder Folge-Call den Cache des Systemprompts inkl. Schema (~10 % des normalen Input-Preises).
 

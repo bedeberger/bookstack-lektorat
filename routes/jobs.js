@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
-const { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale, getAllUserTokens } = require('../db/schema');
+const { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale, getAllUserTokens, loadChapterExtractCache, saveChapterExtractCache } = require('../db/schema');
 const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -548,7 +548,7 @@ async function callAIChat(messages, systemPrompt, onProgress, signal) {
 }
 
 const SINGLE_PASS_LIMIT = 60000;
-const BATCH_SIZE = 5;
+const BATCH_SIZE = 15;
 
 async function loadPageContents(pages, chMap, minLength, onBatch, userToken, signal = null) {
   const contents = [];
@@ -785,6 +785,19 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
 
     const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
     const tok = { in: 0, out: 0, ms: 0, inflight: new Map() };
+
+    // Cache-Signatur pro Kapitel: sortierter String aus "page_id:updated_at"-Paaren.
+    // Ändert sich eine Seite, ändert sich die Signatur → Cache-Miss → Neu-Extraktion.
+    const chapterPagesSig = {};
+    for (const p of pages) {
+      const key = p.chapter_id != null ? String(p.chapter_id) : '__ungrouped__';
+      if (!chapterPagesSig[key]) chapterPagesSig[key] = [];
+      chapterPagesSig[key].push(`${p.id}:${p.updated_at || ''}`);
+    }
+    for (const key of Object.keys(chapterPagesSig)) {
+      chapterPagesSig[key] = chapterPagesSig[key].sort().join('|');
+    }
+
     const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
       updateJob(jobId, {
         progress: Math.round((i / total) * 12),
@@ -833,15 +846,25 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       } else {
         const chapterTexts = groupOrder.map(key => {
           const group = groups.get(key);
-          return { group, chText: group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n') };
+          return {
+            group, key,
+            pagesSig: chapterPagesSig[key] || '',
+            chText: group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n'),
+          };
         });
+        let cacheHits = 0;
         const settled = await settledAll(
-          chapterTexts.map(({ group, chText }) => () =>
-            call(jobId, tok,
+          chapterTexts.map(({ group, key, pagesSig, chText }) => async () => {
+            // Delta-Cache: Cache-Hit → kein KI-Call nötig
+            const cached = loadChapterExtractCache(bookId, userEmail, key, pagesSig);
+            if (cached) { cacheHits++; return cached; }
+            const result = await call(jobId, tok,
               buildExtraktionKomplettChapterPrompt(group.name, bookName, group.pages.length, chText),
               SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 14000,
-            )
-          )
+            );
+            saveChapterExtractCache(bookId, userEmail, key, pagesSig, result);
+            return result;
+          })
         );
         chapterFiguren = settled.map((r, gi) => ({
           kapitel: chapterTexts[gi].group.name,
@@ -864,7 +887,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           kapitel: chapterTexts[gi].group.name,
           assignments: r.status === 'fulfilled' ? (r.value?.assignments || []) : [],
         }));
-        logger.info(`Job ${jobId}: Phase 1 – ${settled.filter(r => r.status === 'fulfilled').length}/${settled.length} Kapitel OK. Figuren/Kap: [${chapterFiguren.map(c => c.figuren.length).join(', ')}], Orte/Kap: [${chapterOrte.map(c => c.orte.length).join(', ')}], Szenen/Kap: [${chapterSzenen.map(c => c.szenen.length).join(', ')}]`);
+        logger.info(`Job ${jobId}: Phase 1 – ${settled.filter(r => r.status === 'fulfilled').length}/${settled.length} Kapitel OK (${cacheHits} Cache-Hits). Figuren/Kap: [${chapterFiguren.map(c => c.figuren.length).join(', ')}], Orte/Kap: [${chapterOrte.map(c => c.orte.length).join(', ')}], Szenen/Kap: [${chapterSzenen.map(c => c.szenen.length).join(', ')}]`);
       }
       saveCheckpoint('komplett-analyse', bookId, userEmail, {
         phase: 'p1_full_done',
