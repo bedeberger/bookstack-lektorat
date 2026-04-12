@@ -3,7 +3,6 @@
   <div class="card-header">
     <span class="card-title" x-text="'Kontinuität: ' + selectedBookName"></span>
     <span x-show="alleAktualisierenLastRun && !kontinuitaetLoading" class="figuren-updated-at" x-text="'Stand: ' + alleAktualisierenLastRun"></span>
-    <button class="btn-card-close" @click="showKontinuitaetCard = false" title="Schliessen">×</button>
   </div>
 
   <div x-show="kontinuitaetProgress > 0" class="progress-bar-wrap">
