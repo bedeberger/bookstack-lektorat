@@ -119,15 +119,41 @@ export const graphMethods = {
 
   // ── Figurengraph (nach Figurentyp gefärbt) ──────────────────────────────────
   _renderFigurengraph(container) {
-    const nodes = new vis.DataSet(this.figuren.map(f => ({
-      id: f.id,
-      label: (f.kurzname || f.name) + (f.geburtstag ? '\n* ' + f.geburtstag : ''),
-      color: this._figTypColor(f.typ),
-      font: { size: 13, face: 'system-ui, -apple-system, sans-serif' },
-      shape: 'box',
-      margin: 10,
-      widthConstraint: { maximum: 160 },
-    })));
+    // Kapitel-Clustering: Startposition jeder Figur = gewichtetes Mittel
+    // der Kapitel-Positionen (gewichtet nach Auftritts-Häufigkeit).
+    // Figuren die in denselben Kapiteln vorkommen, starten nahe beieinander.
+    const allChapters = [...new Set(
+      this.figuren.flatMap(f => (f.kapitel || []).map(k => k.name))
+    )];
+    const R = Math.max(280, Math.min(allChapters.length * 60, 720));
+    const chapPos = {};
+    allChapters.forEach((ch, i) => {
+      const angle = (2 * Math.PI * i / allChapters.length) - Math.PI / 2;
+      chapPos[ch] = { x: R * Math.cos(angle), y: R * Math.sin(angle) };
+    });
+
+    const nodes = new vis.DataSet(this.figuren.map(f => {
+      let x = 0, y = 0;
+      const kaps = (f.kapitel || []).filter(k => chapPos[k.name]);
+      if (kaps.length) {
+        const total = kaps.reduce((s, k) => s + (k.haeufigkeit || 1), 0);
+        for (const k of kaps) {
+          const w = (k.haeufigkeit || 1) / total;
+          x += chapPos[k.name].x * w;
+          y += chapPos[k.name].y * w;
+        }
+      }
+      return {
+        id: f.id,
+        label: (f.kurzname || f.name) + (f.geburtstag ? '\n* ' + f.geburtstag : ''),
+        color: this._figTypColor(f.typ),
+        font: { size: 13, face: 'system-ui, -apple-system, sans-serif' },
+        shape: 'box',
+        margin: 10,
+        widthConstraint: { maximum: 160 },
+        x, y,
+      };
+    }));
 
     const { edgeList } = this._buildEdges(/* soziogrammModus */ false);
     const edges = new vis.DataSet(edgeList);
@@ -136,10 +162,10 @@ export const graphMethods = {
     const options = {
       physics: hasFamilyEdges
         ? { solver: 'hierarchicalRepulsion', hierarchicalRepulsion: { nodeDistance: 140 } }
-        : { solver: 'barnesHut', barnesHut: { gravitationalConstant: -2000, centralGravity: 0.3, springLength: 120, springConstant: 0.04, damping: 0.09, avoidOverlap: 0.5 }, stabilization: { iterations: 200 } },
+        : { solver: 'barnesHut', barnesHut: { gravitationalConstant: -1200, centralGravity: 0.02, springLength: 100, springConstant: 0.06, damping: 0.15, avoidOverlap: 0.8 }, stabilization: { iterations: 200 } },
       layout: hasFamilyEdges
         ? { hierarchical: { direction: 'UD', sortMethod: 'directed', nodeSpacing: 160, levelSeparation: 120 } }
-        : { improvedLayout: true },
+        : { improvedLayout: false },
       interaction: { hover: true, tooltipDelay: 100 },
       edges: { smooth: { type: 'cubicBezier' } },
     };

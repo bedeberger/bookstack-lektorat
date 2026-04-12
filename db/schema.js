@@ -1379,6 +1379,15 @@ function saveChapterExtractCache(bookId, userEmail, chapterKey, pagesSig, extrac
   );
 }
 
+const _deleteChapterCache = db.prepare(
+  `DELETE FROM chapter_extract_cache WHERE book_id = ? AND user_email = ?`
+);
+
+function deleteChapterExtractCache(bookId, userEmail) {
+  const result = _deleteChapterCache.run(parseInt(bookId), userEmail || '');
+  return result.changes;
+}
+
 // ── Buch-Einstellungen (Sprache + Region) ─────────────────────────────────────
 
 const _getBookSettings = db.prepare('SELECT language, region FROM book_settings WHERE book_id = ?');
@@ -1436,4 +1445,4 @@ function cleanupStuckJobRuns() {
   return result.changes;
 }
 
-module.exports = { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings, loadChapterExtractCache, saveChapterExtractCache, cleanupStuckJobRuns };
+module.exports = { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings, loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache, cleanupStuckJobRuns };

@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../logger');
-const { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale, getAllUserTokens, loadChapterExtractCache, saveChapterExtractCache } = require('../db/schema');
+const { db, saveFigurenToDb, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookLocale, getAllUserTokens, loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache } = require('../db/schema');
 const { callAI, parseJSON } = require('../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -1898,6 +1898,13 @@ router.get('/kontinuitaet/:book_id', (req, res) => {
   let issues = [];
   try { issues = JSON.parse(row.issues_json); } catch { /* ignore */ }
   res.json({ id: row.id, checked_at: row.checked_at, issues, summary: row.summary, model: row.model });
+});
+
+router.delete('/chapter-cache/:book_id', (req, res) => {
+  const bookId = req.params.book_id;
+  const userEmail = req.session?.user?.email || '';
+  const deleted = deleteChapterExtractCache(bookId, userEmail);
+  res.json({ ok: true, deleted });
 });
 
 router.delete('/book-chat-cache', (req, res) => {

@@ -191,6 +191,24 @@ code {
   background: var(--color-hover);
   color: var(--color-text);
 }
+.cache-clear-btn {
+  font: inherit;
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.cache-clear-btn:hover:not(:disabled) {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.cache-clear-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 .job-stats-panel {
   position: absolute;
   right: 0;

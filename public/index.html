@@ -28,6 +28,9 @@
         <span x-show="alleAktualisierenLoading" class="spinner"></span>
         Alle aktualisieren
       </button>
+      <button class="cache-clear-btn" @click="clearChapterCache()" :disabled="alleAktualisierenLoading || !selectedBookId" title="Delta-Cache für dieses Buch leeren – nächste Analyse extrahiert alle Kapitel neu">
+        Cache leeren
+      </button>
       <div class="komplett-status-panel" x-show="showKomplettStatus" x-cloak>
         <div class="komplett-status-title">Komplettanalyse</div>
         <div class="progress-bar-wrap komplett-progress-bar-wrap">

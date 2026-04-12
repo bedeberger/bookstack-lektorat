@@ -594,6 +594,14 @@ document.addEventListener('alpine:init', () => {
       });
     },
 
+    async clearChapterCache() {
+      if (!this.selectedBookId) return;
+      if (!confirm('Delta-Cache für dieses Buch leeren?\n\nDie nächste Komplettanalyse extrahiert alle Kapitel neu – auch unveränderte. Das erhöht die KI-Kosten und Laufzeit.')) return;
+      const res = await fetch(`/jobs/chapter-cache/${this.selectedBookId}`, { method: 'DELETE' });
+      const { deleted } = await res.json();
+      alert(`Cache geleert: ${deleted} Kapitel-Einträge entfernt.`);
+    },
+
     async alleAktualisieren() {
       if (!this.selectedBookId || this.alleAktualisierenLoading) return;
       if (!confirm('Komplettanalyse starten?\n\nFiguren, Soziogramm, Schauplätze, Szenen, Ereignisse und Zeitstrahl werden neu ermittelt. Bei grossen Büchern kann das mehrere Minuten dauern.')) return;
