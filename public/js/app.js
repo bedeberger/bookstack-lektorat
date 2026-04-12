@@ -118,6 +118,7 @@ document.addEventListener('alpine:init', () => {
     currentUser: null,
     devMode: false,
     bookstackUrl: '',
+    promptConfig: {},
     showTokenSetup: false,
     tokenSetupId: '',
     tokenSetupPw: '',
@@ -280,6 +281,8 @@ document.addEventListener('alpine:init', () => {
     showBookSettingsCard: false,
     bookSettingsLanguage: 'de',
     bookSettingsRegion: 'CH',
+    bookSettingsBuchtyp: '',
+    bookSettingsBuchKontext: '',
     bookSettingsLoading: false,
     bookSettingsSaving: false,
     bookSettingsSaved: false,
@@ -733,6 +736,7 @@ document.addEventListener('alpine:init', () => {
         if (cfg.llamaModel)  this.llamaModel  = cfg.llamaModel;
         this.currentUser = cfg.user || null;
         this.devMode = !!cfg.devMode;
+        this.promptConfig = cfg.promptConfig || {};
         configurePrompts(cfg.promptConfig);
         if (!cfg.bookstackTokenOk) {
           this.showTokenSetup = true;

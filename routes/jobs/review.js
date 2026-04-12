@@ -29,6 +29,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
 
     const chMap = Object.fromEntries(chaptersData.map(c => [c.id, c.name]));
     const tok = { in: 0, out: 0, ms: 0 }; // akkumulierte Token über alle KI-Calls
+    logger.info(`Start: «${bookName}» (book=${bookId}, ${pages.length} Seiten)`);
     const pageContents = await loadPageContents(pages, chMap, 50, (i, total) => {
       updateJob(jobId, {
         progress: Math.round((i / total) * 60),
@@ -70,6 +71,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
           fromPct, toPct, 1500, 0.2, null,
         );
         chapterAnalyses.push({ name: group.name, pageCount: group.pages.length, ...ca });
+        logger.info(`[${gi + 1}/${groupOrder.length}] «${group.name}» analysiert (${group.pages.length} Seiten)`);
       }
 
       updateJob(jobId, {
@@ -90,9 +92,9 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
       .run(parseInt(bookId), bookName, new Date().toISOString(), JSON.stringify(r), model, userEmail || null);
 
     completeJob(jobId, { review: r, pageCount: pageContents.length, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
-    logger.info(`Job ${jobId}: Buchbewertung «${bookName}» abgeschlossen (${pageContents.length} Seiten, Note ${r.gesamtnote}, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+    logger.info(`«${bookName}» fertig (book=${bookId}, ${pageContents.length} Seiten, Note ${r.gesamtnote}, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens)`);
   } catch (e) {
-    logger.error(`Job ${jobId}: Buchbewertung Fehler: ${e.message}`);
+    logger.error(`Fehler (book=${bookId}): ${e.message}`);
     failJob(jobId, e);
   }
 }

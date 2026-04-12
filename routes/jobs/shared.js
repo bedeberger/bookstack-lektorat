@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const logger = require('../../logger');
-const { db, insertJobRun, startJobRun, endJobRun, getBookLocale, getAllUserTokens } = require('../../db/schema');
+const { db, insertJobRun, startJobRun, endJobRun, getBookSettings } = require('../../db/schema');
 const { callAI, parseJSON, CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../../lib/ai');
 
 // prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
@@ -22,14 +22,15 @@ async function getPrompts() {
 }
 
 /**
- * Gibt das Locale-Prompts-Objekt für ein Buch zurück.
- * Liest Sprache+Region aus book_settings, fällt auf de-CH zurück wenn nicht konfiguriert.
+ * Gibt das Locale-Prompts-Objekt für ein Buch zurück – augmentiert mit Buchtyp und Buchkontext.
+ * Liest Sprache, Region, Buchtyp und Buchkontext aus book_settings.
  * @param {number|string} bookId
  */
 async function getBookPrompts(bookId) {
-  const { getLocalePrompts } = await getPrompts();
-  const locale = bookId ? getBookLocale(bookId) : 'de-CH';
-  return getLocalePrompts(locale);
+  const { getLocalePromptsForBook } = await getPrompts();
+  const settings = bookId ? getBookSettings(bookId) : { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null };
+  const locale   = `${settings.language}-${settings.region}`;
+  return getLocalePromptsForBook(locale, settings.buchtyp || null, settings.buch_kontext || null);
 }
 
 const jsonBody = express.json();

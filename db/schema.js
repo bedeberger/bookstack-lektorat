@@ -866,6 +866,13 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 35').run();
     logger.info('DB-Migration auf Version 35 abgeschlossen (character_arcs + arc_stages entfernt).');
   }
+  if (version < 36) {
+    const bsCols36 = db.pragma('table_info(book_settings)').map(c => c.name);
+    if (!bsCols36.includes('buchtyp'))     db.exec('ALTER TABLE book_settings ADD COLUMN buchtyp TEXT');
+    if (!bsCols36.includes('buch_kontext')) db.exec('ALTER TABLE book_settings ADD COLUMN buch_kontext TEXT');
+    db.prepare('UPDATE schema_version SET version = 36').run();
+    logger.info('DB-Migration auf Version 36 abgeschlossen (book_settings.buchtyp + buch_kontext hinzugefügt).');
+  }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).
@@ -1385,17 +1392,19 @@ function deleteChapterExtractCache(bookId, userEmail) {
 
 // ── Buch-Einstellungen (Sprache + Region) ─────────────────────────────────────
 
-const _getBookSettings = db.prepare('SELECT language, region FROM book_settings WHERE book_id = ?');
+const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext FROM book_settings WHERE book_id = ?');
 const _upsertBookSettings = db.prepare(`
-  INSERT INTO book_settings (book_id, language, region, updated_at)
-  VALUES (?, ?, ?, ?)
+  INSERT INTO book_settings (book_id, language, region, buchtyp, buch_kontext, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?)
   ON CONFLICT(book_id) DO UPDATE SET
-    language=excluded.language, region=excluded.region, updated_at=excluded.updated_at
+    language=excluded.language, region=excluded.region,
+    buchtyp=excluded.buchtyp, buch_kontext=excluded.buch_kontext,
+    updated_at=excluded.updated_at
 `);
 
-/** Gibt {language, region} für ein Buch zurück. Default: de / CH. */
+/** Gibt {language, region, buchtyp, buch_kontext} für ein Buch zurück. */
 function getBookSettings(bookId) {
-  return _getBookSettings.get(parseInt(bookId)) || { language: 'de', region: 'CH' };
+  return _getBookSettings.get(parseInt(bookId)) || { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null };
 }
 
 /** Locale-Key für ein Buch: z.B. "de-CH", "en-US". */
@@ -1404,9 +1413,13 @@ function getBookLocale(bookId) {
   return `${language}-${region}`;
 }
 
-/** Speichert/aktualisiert Sprache und Region für ein Buch. */
-function saveBookSettings(bookId, language, region) {
-  _upsertBookSettings.run(parseInt(bookId), language, region, new Date().toISOString());
+/** Speichert/aktualisiert Sprache, Region, Buchtyp und Buchkontext für ein Buch. */
+function saveBookSettings(bookId, language, region, buchtyp, buchKontext) {
+  _upsertBookSettings.run(
+    parseInt(bookId), language, region,
+    buchtyp || null, buchKontext || null,
+    new Date().toISOString()
+  );
 }
 
 // Sozialschicht + Machtverhältnis für bestehende Figuren/Beziehungen nachträglich setzen.

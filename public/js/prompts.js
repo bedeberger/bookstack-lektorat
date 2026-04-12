@@ -13,19 +13,26 @@ function buildSystemNoJson(prefix, rules) {
   return `${prefix}\n\n${rules}`;
 }
 
-// ── Interne Locale-Map ────────────────────────────────────────────────────────
-// Key: localeKey (z.B. 'de-CH') → { SYSTEM_LEKTORAT, ..., STOPWORDS, ERKLAERUNG_RULE }
-let _localeMap = new Map();
+// ── Interne Locale-Maps ───────────────────────────────────────────────────────
+// _localeMap:  Key: localeKey (z.B. 'de-CH') → vorgebautes Prompts-Objekt (Default ohne Buchkontext)
+// _rawLocales: Key: localeKey → roher Locale-Config (baseRules, systemPrompts, stopwords)
+//              Wird von getLocalePromptsForBook() benötigt um per-Buch-Prompts zu bauen.
+let _localeMap  = new Map();
+let _rawLocales = new Map();
+let _buchtypen  = {};        // cfg.buchtypen aus prompt-config.json
+let _erklaerungRule = '';    // cfg.erklaerungRule
 let _defaultLocale = 'de-CH';
 
-/** Baut ein Locale-Prompts-Objekt aus einer Locale-Config (aus prompt-config.json). */
-function _buildLocalePrompts(localeConfig, globalErklaerungRule) {
+/** Baut ein Locale-Prompts-Objekt aus einer Locale-Config (aus prompt-config.json).
+ *  buchKontext: optionaler per-Buch-Kontext (Freitext), wird als soziogramm-Kontext weitergegeben.
+ */
+function _buildLocalePrompts(localeConfig, globalErklaerungRule, buchKontext = '') {
   const rules = localeConfig.baseRules || '';
   const sp    = localeConfig.systemPrompts || {};
   return {
     ERKLAERUNG_RULE:             globalErklaerungRule || '',
     STOPWORDS:                   Array.isArray(localeConfig.stopwords) ? localeConfig.stopwords : [],
-    SOZIOGRAMM_KONTEXT:          localeConfig.soziogrammKontext || '',
+    BUCH_KONTEXT:                buchKontext,
     SYSTEM_LEKTORAT:             buildSystem(sp.lektorat          || '', rules),
     SYSTEM_BUCHBEWERTUNG:        buildSystem(sp.buchbewertung     || '', rules),
     SYSTEM_KAPITELANALYSE:       buildSystem(sp.kapitelanalyse    || '', rules),
@@ -38,7 +45,8 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule) {
     SYSTEM_ZEITSTRAHL:           buildSystem(sp.zeitstrahl        || '', rules),
     // Kombinierter System-Prompt für buildExtraktionKomplettChapterPrompt (P1+P5 merged).
     // Schema und Regeln sind im System-Prompt → werden gecacht; User-Message enthält nur Kapiteltext.
-    SYSTEM_KOMPLETT_EXTRAKTION:  buildSystemKomplett(sp.figuren   || '', rules, localeConfig.soziogrammKontext || ''),
+    // buchKontext dient als soziogramm-Kontext für die Sozialschicht-Klassifikation der Figuren.
+    SYSTEM_KOMPLETT_EXTRAKTION:  buildSystemKomplett(sp.figuren   || '', rules, buchKontext),
   };
 }
 
@@ -47,7 +55,6 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule) {
 // Diese Globals entsprechen stets dem defaultLocale und dienen der Rückwärtskompatibilität.
 export let ERKLAERUNG_RULE              = null;
 export let STOPWORDS                    = [];
-export let SOZIOGRAMM_KONTEXT           = '';
 export let SYSTEM_LEKTORAT              = null;
 export let SYSTEM_BUCHBEWERTUNG         = null;
 export let SYSTEM_KAPITELANALYSE        = null;
@@ -71,11 +78,15 @@ export function configurePrompts(cfg) {
   if (!cfg) throw new Error('prompt-config.json fehlt oder ist ungültig – Prompts können nicht konfiguriert werden.');
 
   _localeMap.clear();
+  _rawLocales.clear();
+  _buchtypen     = cfg.buchtypen || {};
+  _erklaerungRule = cfg.erklaerungRule || '';
 
   if (cfg.locales && typeof cfg.locales === 'object') {
     // ── Neues Format: locales-Map ─────────────────────────────────────────────
     _defaultLocale = cfg.defaultLocale || 'de-CH';
     for (const [key, localeCfg] of Object.entries(cfg.locales)) {
+      _rawLocales.set(key, localeCfg);
       _localeMap.set(key, _buildLocalePrompts(localeCfg, cfg.erklaerungRule));
     }
     // Fallback: Falls defaultLocale nicht in der Map → ersten Eintrag nehmen
@@ -87,18 +98,15 @@ export function configurePrompts(cfg) {
     const rules = cfg.baseRules;
     if (!rules) throw new Error('prompt-config.json: Pflichtfeld "baseRules" oder "locales" fehlt.');
     _defaultLocale = 'de-CH';
-    _localeMap.set('de-CH', _buildLocalePrompts({
-      baseRules:     cfg.baseRules,
-      stopwords:     cfg.stopwords,
-      systemPrompts: cfg.systemPrompts || {},
-    }, cfg.erklaerungRule));
+    const flatCfg = { baseRules: cfg.baseRules, stopwords: cfg.stopwords, systemPrompts: cfg.systemPrompts || {} };
+    _rawLocales.set('de-CH', flatCfg);
+    _localeMap.set('de-CH', _buildLocalePrompts(flatCfg, cfg.erklaerungRule));
   }
 
   // Globale Exports auf Default-Locale setzen (ESM-Live-Binding für Client-Code)
   const def = _localeMap.get(_defaultLocale) || {};
   ERKLAERUNG_RULE              = def.ERKLAERUNG_RULE              ?? '';
   STOPWORDS                    = def.STOPWORDS                    ?? [];
-  SOZIOGRAMM_KONTEXT           = def.SOZIOGRAMM_KONTEXT           ?? '';
   SYSTEM_LEKTORAT              = def.SYSTEM_LEKTORAT              ?? null;
   SYSTEM_BUCHBEWERTUNG         = def.SYSTEM_BUCHBEWERTUNG         ?? null;
   SYSTEM_KAPITELANALYSE        = def.SYSTEM_KAPITELANALYSE        ?? null;
@@ -115,11 +123,41 @@ export function configurePrompts(cfg) {
 /**
  * Gibt das Locale-Prompts-Objekt für einen gegebenen Locale-Key zurück.
  * Fällt auf den Default-Locale zurück wenn der Key unbekannt ist.
+ * Kein Buchkontext – für generische Verwendung ohne Buch-Bezug.
  * @param {string} localeKey  z.B. 'de-CH', 'en-US'
  * @returns {{ SYSTEM_LEKTORAT, SYSTEM_BUCHBEWERTUNG, ..., STOPWORDS, ERKLAERUNG_RULE }}
  */
 export function getLocalePrompts(localeKey) {
   return _localeMap.get(localeKey) ?? _localeMap.get(_defaultLocale) ?? {};
+}
+
+/**
+ * Gibt ein Locale-Prompts-Objekt zurück, das mit dem per-Buch-Kontext augmentiert ist.
+ * Baut die baseRules dynamisch auf (Buchtyp-Block + Freitext-Block) und übergibt
+ * buchKontext als soziogramm-Kontext an SYSTEM_KOMPLETT_EXTRAKTION / figurenBasisRules.
+ * @param {string} localeKey   z.B. 'de-CH', 'en-US'
+ * @param {string|null} buchtyp     Key aus prompt-config.json buchtypen (z.B. 'roman')
+ * @param {string|null} buchKontext Freitext des Users (Schauplatz, Epoche, …)
+ * @returns {{ SYSTEM_LEKTORAT, ..., BUCH_KONTEXT }}
+ */
+export function getLocalePromptsForBook(localeKey, buchtyp, buchKontext) {
+  const rawLocale = _rawLocales.get(localeKey) || _rawLocales.get(_defaultLocale) || {};
+  const kontext   = (buchKontext || '').trim();
+
+  // Augmentierte baseRules: Original + Buchtyp-Block + Freitext-Block
+  const langCode    = (localeKey || _defaultLocale).split('-')[0];
+  const buchtypDef  = buchtyp && _buchtypen?.[langCode]?.[buchtyp];
+  let augRules = rawLocale.baseRules || '';
+  if (buchtypDef?.zusatz) {
+    augRules += `\n\nBUCHTYP-KONTEXT: ${buchtypDef.zusatz}`;
+  }
+  if (kontext) {
+    augRules += `\n\nWEITERE ANGABEN DES AUTORS: ${kontext}`;
+  }
+
+  const augLocale = { ...rawLocale, baseRules: augRules };
+  // buchKontext als soziogramm-Kontext weitergeben (figurenBasisRules / SYSTEM_KOMPLETT_EXTRAKTION)
+  return _buildLocalePrompts(augLocale, _erklaerungRule, kontext);
 }
 
 export function buildStilkorrekturPrompt(html, styles) {
@@ -191,8 +229,8 @@ Antworte mit diesem JSON-Schema:
       "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)"
     }
   ],
-  "stilanalyse": "2-3 Sätze Stilanalyse",
-  "fazit": "ein Satz Gesamtfazit"
+  "stilanalyse": "2-3 Sätze Stilanalyse – ohne Rechtschreib- und Grammatikmängel (diese sind im «fehler»-Array erfasst); fokussiert auf literarischen Stil, Rhythmus, Bildsprache und Wirkung",
+  "fazit": "ein Satz Gesamtfazit zur literarischen Qualität – ohne Rechtschreib-/Grammatikhinweise"
 }
 
 Szenen-Regeln:
@@ -323,7 +361,7 @@ const figurenBasisRules = (kontext = '') => `Regeln:
 - DEDUPLIZIERUNG MIT KONTEXTABGLEICH: Figuren zusammenführen wenn der Name übereinstimmt (gleicher Vor- und Nachname) ODER ein Teilname (nur Vorname oder nur Nachname) mit mindestens einem inhaltlichen Indiz zusammenpasst – z.B. gleicher Beruf, überschneidende Fachkenntnisse, konsistente Charakterzüge oder übereinstimmendes Verhalten kapitelübergreifend. Beispiel: «Maria» die in Kapitel 1 als Kräuterkundige gilt und «Maria Huber» die in Kapitel 3 Naturheilkunde beherrscht – zusammenführen. Widersprechen sich Eigenschaften eindeutig, getrennt behalten. Gibt es nur Namensähnlichkeit ohne inhaltliche Überschneidung: getrennt behalten.`;
 
 
-export function buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren) {
+export function buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren, buchKontext = '') {
   const synthInput = chapterFiguren.map(cf => {
     // Kapitel-lokale IDs → Namen auflösen, damit Beziehungen kapitelübergreifend eindeutig sind
     const nameById = Object.fromEntries((cf.figuren || []).map(f => [f.id, f.name]));
@@ -349,7 +387,7 @@ ${JSON_ONLY}
 Antworte mit diesem JSON-Schema:
 ${FIGUREN_BASIS_SCHEMA}
 
-${figurenBasisRules(SOZIOGRAMM_KONTEXT)}`;
+${figurenBasisRules(buchKontext)}`;
 }
 
 
@@ -431,7 +469,7 @@ function _schemaBody(schemaStr) {
 // buildSystemKomplett() bettet es in den System-Prompt ein → Caching über alle Kapitel-Calls.
 // figuren_namen / orte_namen / figur_name: Klarnamen statt IDs, da konsolidierte IDs
 // erst nach P2/P3 bekannt sind. Remapping nach der Konsolidierung in jobs.js.
-// kontext kommt aus localeConfig.soziogrammKontext, wird von buildSystemKomplett durchgereicht.
+// kontext kommt aus book_settings.buch_kontext (per-Buch-Freitext), wird von buildSystemKomplett durchgereicht.
 function buildKomplettSchemaStatic(kontext = '') { return `Antworte mit diesem JSON-Schema:
 {
   ${_schemaBody(FIGUREN_BASIS_SCHEMA)},
@@ -503,7 +541,7 @@ Ereignis-Regeln:
 // buildSystemKomplett: wie buildSystem, aber mit eingebettetem Schema+Regeln-Block.
 // Der Schema-Block wird so gecacht (cache_control: ephemeral in lib/ai.js) – spart bei
 // ~20 Kapitel-Calls ~19 × Schema-Tokens (statt in jeder User-Message wiederholen).
-// kontext kommt aus localeConfig.soziogrammKontext (via _buildLocaleMap → configurePrompts).
+// kontext kommt aus book_settings.buch_kontext (per-Buch-Freitext, via getLocalePromptsForBook).
 function buildSystemKomplett(prefix, rules, kontext) {
   return `${prefix}\n\n${rules}\n\n${buildKomplettSchemaStatic(kontext)}\n\n${JSON_ONLY}`;
 }

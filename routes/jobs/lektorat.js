@@ -18,6 +18,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
   const { buildLektoratPrompt } = await getPrompts();
   const { SYSTEM_LEKTORAT, STOPWORDS: lektoratStopwords, ERKLAERUNG_RULE: lektoratErklaerungRule } = await getBookPrompts(bookId);
   try {
+    logger.info(`Start: Seite #${pageId} (book=${bookId || '-'})`);
     updateJob(jobId, { statusText: 'Lade Seiteninhalt…', progress: 5 });
 
     const authHeader = userToken
@@ -70,9 +71,9 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
       tokensIn: tok.in,
       tokensOut: tok.out,
     }, tps(tok));
-    logger.info(`Job ${jobId}: Seiten-Check «${pd.name}» abgeschlossen (${result.fehler.length} Fehler, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+    logger.info(`«${pd.name}» fertig (page=${pageId}, book=${bookId || '-'}, chap=${pd.chapter_id || '-'}, ${result.fehler.length} Beanstandungen, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens)`);
   } catch (e) {
-    logger.error(`Job ${jobId}: Seiten-Check Fehler: ${e.message}`);
+    logger.error(`Fehler (page=${pageId}, book=${bookId || '-'}): ${e.message}`);
     failJob(jobId, e);
   }
 }
@@ -86,6 +87,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const pages = await bsGetAll('pages?book_id=' + bookId, userToken);
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
+    logger.info(`Start: ${pages.length} Seiten (book=${bookId})`);
 
     const authHeader = userToken
       ? `Token ${userToken.id}:${userToken.pw}`
@@ -133,17 +135,18 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
             fehler.length, JSON.stringify(fehler),
             szenenBatch.length > 0 ? JSON.stringify(szenenBatch) : null,
             result.stilanalyse || null, result.fazit || null, model, userEmail || null);
+        logger.info(`[${i + 1}/${pages.length}] «${pd.name}» fertig (page=${p.id}, chap=${p.chapter_id || '-'}, ${fehler.length} Beanstandungen)`);
         done++;
       } catch (e) {
         if (e.name === 'AbortError') throw e;
-        logger.warn(`Job ${jobId}: Batch-Check Seite ${p.id} («${p.name}») übersprungen: ${e.message}`);
+        logger.warn(`[${i + 1}/${pages.length}] «${p.name}» übersprungen (page=${p.id}, chap=${p.chapter_id || '-'}): ${e.message}`);
       }
     }
 
     completeJob(jobId, { pageCount: pages.length, done, totalErrors, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
-    logger.info(`Job ${jobId}: Batch-Check abgeschlossen (${done}/${pages.length} Seiten, ${totalErrors} Fehler, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens).`);
+    logger.info(`Fertig: ${done}/${pages.length} Seiten (book=${bookId}), ${totalErrors} Beanstandungen, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens`);
   } catch (e) {
-    logger.error(`Job ${jobId}: Batch-Check Fehler: ${e.message}`);
+    logger.error(`Fehler (book=${bookId}): ${e.message}`);
     failJob(jobId, e);
   }
 }

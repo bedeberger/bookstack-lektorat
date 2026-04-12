@@ -49,7 +49,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
   } = await getPrompts();
   const {
     SYSTEM_FIGUREN, SYSTEM_ORTE, SYSTEM_KONTINUITAET,
-    SYSTEM_ZEITSTRAHL, SYSTEM_KOMPLETT_EXTRAKTION,
+    SYSTEM_ZEITSTRAHL, SYSTEM_KOMPLETT_EXTRAKTION, BUCH_KONTEXT,
   } = await getBookPrompts(bookId);
 
   try {
@@ -218,7 +218,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     // ── Phase 2: Figuren konsolidieren ────────────────────────────────────────
     updateJob(jobId, { progress: 30, statusText: 'KI konsolidiert Figuren…' });
     const figResult = await call(jobId, tok,
-      buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren),
+      buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren, BUCH_KONTEXT || ''),
       SYSTEM_FIGUREN, 30, 43, 8000,
     );
     logger.info(`Job ${jobId}: figResult Keys: [${Object.keys(figResult || {}).join(', ')}] – figuren: ${figResult?.figuren?.length ?? 'FEHLT'}`);

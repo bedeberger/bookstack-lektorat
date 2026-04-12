@@ -2982,5 +2982,42 @@ ins {
   font-size: 12px;
   color: var(--color-danger, #dc2626);
 }
+.book-settings-select {
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  min-width: 220px;
+}
+.book-settings-row--top {
+  align-items: flex-start;
+}
+.book-settings-kontext-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.book-settings-textarea {
+  width: 100%;
+  font-size: 13px;
+  font-family: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  resize: vertical;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+.book-settings-hint {
+  font-size: 11px;
+  color: var(--color-muted);
+  text-align: right;
+  margin: 0;
+}
 
 

@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
-const { db, getBookLocale } = require('../db/schema');
+const { db, getBookSettings } = require('../db/schema');
 const logger = require('../logger');
 const { CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../lib/ai');
 
@@ -20,9 +20,10 @@ async function getPrompts() {
 }
 
 async function getBookPrompts(bookId) {
-  const { getLocalePrompts } = await getPrompts();
-  const locale = bookId ? getBookLocale(bookId) : 'de-CH';
-  return getLocalePrompts(locale);
+  const { getLocalePromptsForBook } = await getPrompts();
+  const settings = bookId ? getBookSettings(bookId) : { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null };
+  const locale   = `${settings.language}-${settings.region}`;
+  return getLocalePromptsForBook(locale, settings.buchtyp || null, settings.buch_kontext || null);
 }
 
 const router = express.Router();

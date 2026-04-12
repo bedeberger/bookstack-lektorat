@@ -13,15 +13,16 @@
   <div x-show="bookSettingsLoading" class="muted-msg">Einstellungen werden geladen…</div>
 
   <div x-show="!bookSettingsLoading" class="book-settings-form">
+
     <div class="book-settings-row">
       <label class="book-settings-label">Sprache</label>
       <div class="book-settings-options">
         <label class="book-settings-option">
-          <input type="radio" name="bs-lang" value="de" x-model="bookSettingsLanguage" @change="bookSettingsRegion = (bookSettingsLanguage === 'de' ? 'CH' : 'US')">
+          <input type="radio" name="bs-lang" value="de" x-model="bookSettingsLanguage" @change="bookSettingsRegion = (bookSettingsLanguage === 'de' ? 'CH' : 'US'); bookSettingsBuchtyp = ''">
           Deutsch
         </label>
         <label class="book-settings-option">
-          <input type="radio" name="bs-lang" value="en" x-model="bookSettingsLanguage" @change="bookSettingsRegion = (bookSettingsLanguage === 'de' ? 'CH' : 'US')">
+          <input type="radio" name="bs-lang" value="en" x-model="bookSettingsLanguage" @change="bookSettingsRegion = (bookSettingsLanguage === 'de' ? 'CH' : 'US'); bookSettingsBuchtyp = ''">
           English
         </label>
       </div>
@@ -57,7 +58,30 @@
       </div>
     </div>
 
-    <p class="book-settings-locale-display" x-text="'Aktive Locale: ' + bookSettingsLocaleDisplay()"></p>
+    <div class="book-settings-row">
+      <label class="book-settings-label" for="bs-buchtyp">Buchtyp</label>
+      <select id="bs-buchtyp" class="book-settings-select" x-model="bookSettingsBuchtyp">
+        <option value="">— nicht klassifiziert —</option>
+        <template x-for="typ in bookSettingsBuchtypen()" :key="typ.key">
+          <option :value="typ.key" x-text="typ.label"></option>
+        </template>
+      </select>
+    </div>
+
+    <div class="book-settings-row book-settings-row--top">
+      <label class="book-settings-label" for="bs-buchkontext">Weiterer Kontext</label>
+      <div class="book-settings-kontext-wrap">
+        <textarea
+          id="bs-buchkontext"
+          class="book-settings-textarea"
+          x-model="bookSettingsBuchKontext"
+          placeholder="z.B. Schauplatz: Zürich, 1970er Jahre. Atmosphäre: dunkel, melancholisch. Besonderheiten: Die Hauptfigur leidet an Amnesie – Erinnerungslücken sind absichtlich."
+          rows="4"
+          maxlength="1000"
+        ></textarea>
+        <p class="book-settings-hint" x-text="(bookSettingsBuchKontext || '').length + ' / 1000'"></p>
+      </div>
+    </div>
 
     <p class="book-settings-saved" x-show="bookSettingsSaved">Einstellungen gespeichert.</p>
     <p class="book-settings-error" x-show="bookSettingsError" x-text="bookSettingsError"></p>

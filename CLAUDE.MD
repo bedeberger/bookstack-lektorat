@@ -65,6 +65,10 @@ SELECT * FROM schema_version;
 
 **Single Source of Truth:** Rollenformulierungen und Basisregeln in `prompt-config.json`; JSON-Schemas und Build-Logik aller Prompts ausschliesslich in `public/js/prompts.js`.
 
+**Buchtypen (`prompt-config.json`):** Top-Level-Abschnitt `buchtypen`, aufgeteilt nach Sprachcode (`de`, `en`). Jeder Buchtyp-Key (z.B. `roman`, `kurzgeschichten`) hat `label` (für die UI) und `zusatz` (KI-Kontext-Text). de-CH und de-DE teilen sich denselben deutschen Text. Neue Typen: Key + `label` + `zusatz` in beiden Sprachen ergänzen.
+
+**Per-Buch-Kontext (`book_settings.buchtyp` + `buch_kontext`):** Beim Start eines KI-Jobs lädt `getBookPrompts(bookId)` → `getLocalePromptsForBook(locale, buchtyp, buchKontext)` aus `prompts.js`. Diese Funktion augmentiert die `baseRules` dynamisch: Buchtyp-Zusatztext + Freitext des Users werden als eigene Blöcke (`BUCHTYP-KONTEXT:` / `WEITERE ANGABEN DES AUTORS:`) an die `baseRules` angehängt. `buchKontext` wird ausserdem als Sozialschicht-Kontext in `SYSTEM_KOMPLETT_EXTRAKTION` / `figurenBasisRules` eingesetzt (ersetzt den früheren statischen `soziogrammKontext`). Das Ergebnis-Objekt enthält zusätzlich `BUCH_KONTEXT` (der rohe Freitext) für User-Message-Builder wie `buildFiguresBasisConsolidationPrompt`.
+
 ## KI-Integration
 
 **Regel: Alle serverseitigen KI-Calls laufen über die Job-Queue (`/jobs/*`).** Neue Features die einen KI-Call benötigen, implementieren einen Job-Typ in `routes/jobs.js` (Funktion `runXxxJob` + `router.post('/xxx', ...)`). Direkte synchrone KI-Calls aus Route-Handlern (ohne Job-Queue) sind nicht erlaubt – auch nicht für kurze/einfache Operationen. Das Frontend pollt den Job-Status via `_startPoll()`. Ausnahme: Seiten-Chat (`/chat/send`) nutzt bewusst SSE-Streaming statt Jobs.
