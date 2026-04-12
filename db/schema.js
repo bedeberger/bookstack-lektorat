@@ -950,7 +950,6 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insTag = db.prepare('INSERT OR IGNORE INTO figure_tags (figure_id, tag) VALUES (?, ?)');
     const insApp = db.prepare('INSERT OR IGNORE INTO figure_appearances (figure_id, chapter_name, chapter_id, haeufigkeit) VALUES (?, ?, ?, ?)');
-    const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, kapitel, seite, chapter_id, page_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, user_email) VALUES (?, ?, ?, ?, ?, ?, ?)');
 
     for (let i = 0; i < figuren.length; i++) {
@@ -962,10 +961,6 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
       );
       for (const tag of (f.eigenschaften || [])) insTag.run(fid, tag);
       for (const app of (f.kapitel || [])) insApp.run(fid, app.name, idMaps?.chNameToId?.[app.name] ?? null, app.haeufigkeit || 1);
-      for (let j = 0; j < (f.lebensereignisse || []).length; j++) {
-        const ev = f.lebensereignisse[j];
-        insEvt.run(fid, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', ev.kapitel || null, ev.seite || null, idMaps?.chNameToId?.[ev.kapitel] ?? null, idMaps?.pageNameToId?.[ev.seite] ?? null, j);
-      }
       for (const bz of (f.beziehungen || [])) insRel.run(bookId, f.id, bz.figur_id, bz.typ, bz.beschreibung || null, bz.machtverhaltnis ?? null, userEmail || null);
     }
   })();
