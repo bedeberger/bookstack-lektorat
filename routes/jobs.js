@@ -1941,19 +1941,12 @@ router.get('/queue', (req, res) => {
 });
 
 const JOB_TYPE_LABELS = {
-  'check':                  'Lektorat',
-  'batch-check':            'Stapel-Check',
-  'komplett-analyse':       'Komplettanalyse',
-  'review':                 'Buchbewertung',
-  'figures':                'Figuren',
-  'figure-events':          'Figuren-Ereignisse',
-  'szenen':                 'Szenen',
-  'consolidate-zeitstrahl': 'Zeitleiste',
-  'book-chat':              'Buch-Chat',
-  'chat':                   'Seiten-Chat',
-  'locations':              'Schauplätze',
-  'kontinuitaet':           'Kontinuität',
-  'soziogramm':             'Soziogramm',
+  'check':            'Lektorat',
+  'batch-check':      'Stapel-Check',
+  'komplett-analyse': 'Komplettanalyse',
+  'review':           'Buchbewertung',
+  'book-chat':        'Buch-Chat',
+  'chat':             'Seiten-Chat',
 };
 
 function fmtDuration(seconds) {

@@ -1,6 +1,6 @@
 // Figurenübersicht-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
-// Die eigentliche Extraktion läuft serverseitig als Hintergrundjob (POST /jobs/figures).
+// Die eigentliche Extraktion läuft als Teil von POST /jobs/komplett-analyse.
 
 import { escHtml } from './utils.js';
 
