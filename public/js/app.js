@@ -719,9 +719,8 @@ document.addEventListener('alpine:init', () => {
       let tokInfo = '';
       if ((tokIn || 0) + (tokOut || 0) > 0) {
         const pctPart = (progress > 0 && progress < 100) ? ` ~${progress}%` : '';
-        const maxPart = maxTokOut ? ` (max. ${fmtTok(maxTokOut)})` : '';
         const tpsPart = tokPerSec ? ` · ${Math.round(tokPerSec)} tok/s` : '';
-        tokInfo = ` · ↑${fmtTok(tokIn || 0)} ↓${fmtTok(tokOut || 0)} Tokens${pctPart}${maxPart}${tpsPart}`;
+        tokInfo = ` · ↑${fmtTok(tokIn || 0)} ↓${fmtTok(tokOut || 0)} Tokens${pctPart}${tpsPart}`;
       }
       return `<span class="spinner"></span>${escHtml(statusText || '…')}${tokInfo}`;
     },

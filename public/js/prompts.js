@@ -500,9 +500,9 @@ function buildKomplettSchemaStatic(kontext = '') { return `Antworte mit diesem J
       "lebensereignisse": [
         {
           "datum": "JJJJ (nur Jahreszahl; aus Kontext errechnen wenn nötig; leer wenn nicht errechenbar)",
-          "ereignis": "Was passierte (1 Satz)",
+          "ereignis": "Was passierte – neutral und kanonisch formuliert, NICHT aus der Figurenperspektive. Ereignisse die mehrere Figuren betreffen MÜSSEN bei allen beteiligten Figuren identisch formuliert sein (z.B. 'Geburt von Maria' für Vater, Mutter und Kind – nicht 'Geburt seiner Tochter' oder 'Eigene Geburt').",
           "typ": "persoenlich|extern",
-          "bedeutung": "Bedeutung für die Figur (1 Satz, leer wenn nicht klar)",
+          "bedeutung": "Bedeutung für diese Figur (1 Satz, leer wenn nicht klar)",
           "seite": "Name der Seite/des Abschnitts (leer wenn unklar)",
           "kapitel": "Kapitelname (aus dem ## Kapitel-Header über diesem Abschnitt; leer wenn unklar)"
         }
@@ -598,7 +598,8 @@ Regeln:
 - Dedupliziere figuren (gleiche id nur einmal pro Ereignis)
 - kapitel: Alle Kapitel der zusammengeführten Ereignisse beibehalten (Union der Arrays, Duplikate entfernen)
 - seiten: Alle Seiten der zusammengeführten Ereignisse beibehalten (Union der Arrays, Duplikate entfernen)
-- Im Zweifel getrennt lassen – nur eindeutige Übereinstimmungen zusammenführen
+- Ereignisse verschiedener Figuren zum gleichen Datum die denselben realen Vorfall beschreiben (z.B. Geburt, Heirat, Tod, Unfall, Krieg) MÜSSEN zusammengeführt werden – auch wenn die Formulierungen leicht abweichen. Führe alle beteiligten Figuren im figuren-Array zusammen.
+- Nur bei inhaltlich klar verschiedenen Vorfällen trennen
 
 ${JSON_ONLY}
 

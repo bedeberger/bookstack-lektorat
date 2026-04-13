@@ -75,10 +75,25 @@ const _upsertChapterStmt = db.prepare(`
     chapter_name=excluded.chapter_name, updated_at=excluded.updated_at
 `);
 
+const _delChapterCacheByKey = db.prepare(
+  'DELETE FROM chapter_extract_cache WHERE book_id = ? AND chapter_key = ?'
+);
+
 // Leichtgewichtiger pages-Cache-Update (ohne Seiten-Inhalte laden).
 // Wird sowohl von syncBook() als auch vom /sync/pages/:book_id-Endpunkt genutzt.
 function _upsertPagesCache(bookId, pages, chapters) {
   const chMap = Object.fromEntries(chapters.map(c => [c.id, c.name]));
+
+  // Kapitel-Umbenennungen erkennen → Extrakt-Cache für alle User invalidieren.
+  const storedChapters = db.prepare('SELECT chapter_id, chapter_name FROM chapters WHERE book_id = ?').all(bookId);
+  const storedChMap = Object.fromEntries(storedChapters.map(c => [c.chapter_id, c.chapter_name]));
+  for (const c of chapters) {
+    if (storedChMap[c.id] !== undefined && storedChMap[c.id] !== c.name) {
+      logger.info(`Kapitel ${c.id} (Buch ${bookId}) umbenannt: «${storedChMap[c.id]}» → «${c.name}» – Extrakt-Cache invalidiert.`);
+      _delChapterCacheByKey.run(bookId, String(c.id));
+    }
+  }
+
   db.transaction(() => {
     for (const p of pages) {
       _upsertPageCacheStmt.run(

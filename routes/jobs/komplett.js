@@ -96,6 +96,21 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       chNameToId:   Object.fromEntries(chaptersData.map(c => [c.name, c.id])),
       pageNameToId: Object.fromEntries(pages.map(p => [p.name, p.id])),
     };
+
+    // Kapitel-Umbenennungen erkennen → Cache-Einträge löschen (für alle User dieses Buchs).
+    // Sicherheitsnetz: greift auch wenn «Seiten laden» vor dem Job nicht aufgerufen wurde.
+    {
+      const stored = db.prepare('SELECT chapter_id, chapter_name FROM chapters WHERE book_id = ?').all(parseInt(bookId));
+      const storedChMap = Object.fromEntries(stored.map(r => [r.chapter_id, r.chapter_name]));
+      const delCacheByKey = db.prepare('DELETE FROM chapter_extract_cache WHERE book_id = ? AND chapter_key = ?');
+      for (const c of chaptersData) {
+        if (storedChMap[c.id] !== undefined && storedChMap[c.id] !== c.name) {
+          logger.info(`Job ${jobId}: Kapitel ${c.id} umbenannt («${storedChMap[c.id]}» → «${c.name}») – Extrakt-Cache invalidiert.`);
+          delCacheByKey.run(parseInt(bookId), String(c.id));
+        }
+      }
+    }
+
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
     const { groupOrder, groups } = groupByChapter(pageContents);
 
@@ -377,7 +392,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
             ortNameToId[n] || ortNameToIdLower[n?.toLowerCase()] || null
           ).filter(Boolean);
           allSzenen.push({
-            kapitel: s.kapitel || kapitel,
+            kapitel: (s.kapitel && idMaps.chNameToId[s.kapitel] != null) ? s.kapitel : kapitel,
             seite:      s.seite     || null,
             titel:      s.titel     || '(unbekannt)',
             wertung:    s.wertung   || null,
@@ -398,7 +413,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           if (!figId) { droppedAssignments++; logger.warn(`Job ${jobId}: Assignment «${assignment.figur_name}» (${assignment.lebensereignisse?.length || 0} Ereignisse) – keine Figuren-ID gefunden, wird ignoriert.`); continue; }
           if (!mergedEvtMap.has(figId)) mergedEvtMap.set(figId, []);
           for (const ev of (assignment.lebensereignisse || [])) {
-            mergedEvtMap.get(figId).push({ ...ev, kapitel: ev.kapitel || kapitel });
+            mergedEvtMap.get(figId).push({ ...ev, kapitel: (ev.kapitel && idMaps.chNameToId[ev.kapitel] != null) ? ev.kapitel : kapitel });
           }
         }
       }
