@@ -314,7 +314,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     if (!Array.isArray(orteResultRaw?.orte)) throw new Error('Orte-Konsolidierung ungültig: orte-Array fehlt');
     const orte = orteResultRaw.orte.map((o, i) => ({ ...o, id: o.id || ('ort_' + (i + 1)) }));
     logger.info(`Job ${jobId}: Speichere ${orte.length} Schauplätze…`);
-    saveOrteToDb(parseInt(bookId), orte, userEmail || null);
+    saveOrteToDb(parseInt(bookId), orte, userEmail || null, idMaps.chNameToId);
     logger.info(`Job ${jobId}: ${orte.length} Schauplätze gespeichert.`);
 
     // ortNameToId: Klarnamen → konsolidierte ID (für Szenen-Remapping in Block 2).
@@ -490,7 +490,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       logger.info(`Job ${jobId}: ztResult Keys: [${Object.keys(ztResult || {}).join(', ')}] – ereignisse: ${ztResult?.ereignisse?.length ?? 'FEHLT'}`);
       if (Array.isArray(ztResult?.ereignisse)) {
         logger.info(`Job ${jobId}: Speichere ${ztResult.ereignisse.length} Zeitstrahl-Ereignisse…`);
-        saveZeitstrahlEvents(parseInt(bookId), userEmail || null, ztResult.ereignisse);
+        saveZeitstrahlEvents(parseInt(bookId), userEmail || null, ztResult.ereignisse, idMaps.chNameToId);
         logger.info(`Job ${jobId}: ${ztResult.ereignisse.length} Zeitstrahl-Ereignisse gespeichert.`);
       }
       // Sicherstellen dass Zeitstrahl-Threshold (89) zuverlässig erreicht wird,

@@ -63,13 +63,13 @@ db.exec(`
     PRIMARY KEY (figure_id, tag)
   );
 
-  -- Kapitelauftritte: eine Zeile pro Figur + Kapitel
+  -- Kapitelauftritte: eine Zeile pro Figur + Kapitel (chapter_id ist Primärschlüssel, chapter_name Label)
   CREATE TABLE IF NOT EXISTS figure_appearances (
     figure_id    INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
-    chapter_name TEXT NOT NULL,
+    chapter_id   INTEGER NOT NULL,
+    chapter_name TEXT,
     haeufigkeit  INTEGER DEFAULT 1,
-    chapter_id   INTEGER,
-    UNIQUE(figure_id, chapter_name)
+    UNIQUE(figure_id, chapter_id)
   );
 
   -- Lebensereignisse / Zeitstrahl: eine Zeile pro Ereignis
@@ -211,13 +211,13 @@ db.exec(`
     PRIMARY KEY (scene_id, location_id)
   );
 
-  -- Junction: Kapitel eines Schauplatzs (ersetzt locations.kapitel_json, enthält chapter_id für Stabilität)
+  -- Junction: Kapitel eines Schauplatzs (chapter_id ist Primärschlüssel, chapter_name Label)
   CREATE TABLE IF NOT EXISTS location_chapters (
     location_id  INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
-    chapter_id   INTEGER,
-    chapter_name TEXT NOT NULL,
+    chapter_id   INTEGER NOT NULL,
+    chapter_name TEXT,
     haeufigkeit  INTEGER DEFAULT 1,
-    PRIMARY KEY (location_id, chapter_name)
+    PRIMARY KEY (location_id, chapter_id)
   );
 
   -- Kontinuitätsprüfung-Ergebnisse
@@ -241,11 +241,12 @@ db.exec(`
     ereignis   TEXT NOT NULL,
     typ        TEXT DEFAULT 'persoenlich',
     bedeutung  TEXT,
-    kapitel    TEXT,    -- JSON-Array der Kapitelnamen
-    seiten     TEXT,    -- JSON-Array der Seitennamen
-    figuren    TEXT,    -- JSON-Array [{id, name, typ}]
-    sort_order INTEGER DEFAULT 0,
-    updated_at TEXT
+    kapitel     TEXT,    -- JSON-Array der Kapitelnamen (Label)
+    chapter_ids TEXT,    -- JSON-Array der chapter_ids (stabile Referenz)
+    seiten      TEXT,    -- JSON-Array der Seitennamen
+    figuren     TEXT,    -- JSON-Array [{id, name, typ}]
+    sort_order  INTEGER DEFAULT 0,
+    updated_at  TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_ze_book_id ON zeitstrahl_events(book_id, user_email);
 
@@ -898,6 +899,75 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 38').run();
     logger.info('DB-Migration auf Version 38 abgeschlossen (chapters-Tabelle hinzugefügt).');
   }
+  if (version < 39) {
+    // Schritt 1: chapter_id in figure_appearances befüllen (Bestandsdaten)
+    db.exec(`
+      UPDATE figure_appearances
+      SET chapter_id = (
+        SELECT DISTINCT p.chapter_id FROM pages p
+        JOIN figures f ON f.book_id = p.book_id
+        WHERE f.id = figure_appearances.figure_id
+          AND p.chapter_name = figure_appearances.chapter_name
+          AND p.chapter_id IS NOT NULL
+        LIMIT 1
+      )
+      WHERE chapter_id IS NULL AND chapter_name IS NOT NULL
+    `);
+    // Schritt 2: chapter_id in location_chapters befüllen (Bestandsdaten)
+    db.exec(`
+      UPDATE location_chapters
+      SET chapter_id = (
+        SELECT DISTINCT p.chapter_id FROM pages p
+        JOIN locations l ON l.id = location_chapters.location_id
+        WHERE p.book_id = l.book_id
+          AND p.chapter_name = location_chapters.chapter_name
+          AND p.chapter_id IS NOT NULL
+        LIMIT 1
+      )
+      WHERE chapter_id IS NULL AND chapter_name IS NOT NULL
+    `);
+    // Schritt 3: figure_appearances neu anlegen – UNIQUE auf chapter_id statt chapter_name
+    db.pragma('foreign_keys = OFF');
+    db.exec(`
+      CREATE TABLE figure_appearances_v39 (
+        figure_id    INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+        chapter_id   INTEGER NOT NULL,
+        chapter_name TEXT,
+        haeufigkeit  INTEGER DEFAULT 1,
+        UNIQUE(figure_id, chapter_id)
+      );
+      INSERT OR IGNORE INTO figure_appearances_v39 (figure_id, chapter_id, chapter_name, haeufigkeit)
+        SELECT figure_id, chapter_id, chapter_name, haeufigkeit
+        FROM figure_appearances WHERE chapter_id IS NOT NULL;
+      DROP TABLE figure_appearances;
+      ALTER TABLE figure_appearances_v39 RENAME TO figure_appearances;
+    `);
+    db.pragma('foreign_keys = ON');
+    // Schritt 4: location_chapters neu anlegen – PRIMARY KEY auf chapter_id statt chapter_name
+    db.pragma('foreign_keys = OFF');
+    db.exec(`
+      CREATE TABLE location_chapters_v39 (
+        location_id  INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+        chapter_id   INTEGER NOT NULL,
+        chapter_name TEXT,
+        haeufigkeit  INTEGER DEFAULT 1,
+        PRIMARY KEY (location_id, chapter_id)
+      );
+      INSERT OR IGNORE INTO location_chapters_v39 (location_id, chapter_id, chapter_name, haeufigkeit)
+        SELECT location_id, chapter_id, chapter_name, haeufigkeit
+        FROM location_chapters WHERE chapter_id IS NOT NULL;
+      DROP TABLE location_chapters;
+      ALTER TABLE location_chapters_v39 RENAME TO location_chapters;
+    `);
+    db.pragma('foreign_keys = ON');
+    // Schritt 5: chapter_ids-Spalte zu zeitstrahl_events hinzufügen
+    const zeCols = db.pragma('table_info(zeitstrahl_events)').map(c => c.name);
+    if (!zeCols.includes('chapter_ids')) {
+      db.exec('ALTER TABLE zeitstrahl_events ADD COLUMN chapter_ids TEXT');
+    }
+    db.prepare('UPDATE schema_version SET version = 39').run();
+    logger.info('DB-Migration auf Version 39 abgeschlossen (chapter_id als PK in figure_appearances + location_chapters; chapter_ids in zeitstrahl_events).');
+  }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).
@@ -981,7 +1051,7 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
       INSERT INTO figures (book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sozialschicht, sort_order, user_email, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insTag = db.prepare('INSERT OR IGNORE INTO figure_tags (figure_id, tag) VALUES (?, ?)');
-    const insApp = db.prepare('INSERT OR IGNORE INTO figure_appearances (figure_id, chapter_name, chapter_id, haeufigkeit) VALUES (?, ?, ?, ?)');
+    const insApp = db.prepare('INSERT OR IGNORE INTO figure_appearances (figure_id, chapter_id, chapter_name, haeufigkeit) VALUES (?, ?, ?, ?)');
     const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, user_email) VALUES (?, ?, ?, ?, ?, ?, ?)');
 
     for (let i = 0; i < figuren.length; i++) {
@@ -992,7 +1062,10 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
         f.beschreibung || null, f.sozialschicht || null, i, userEmail || null, now
       );
       for (const tag of (f.eigenschaften || [])) insTag.run(fid, tag);
-      for (const app of (f.kapitel || [])) insApp.run(fid, app.name, idMaps?.chNameToId?.[app.name] ?? null, app.haeufigkeit || 1);
+      for (const app of (f.kapitel || [])) {
+        const chapId = idMaps?.chNameToId?.[app.name] ?? null;
+        if (chapId != null) insApp.run(fid, chapId, app.name, app.haeufigkeit || 1);
+      }
       for (const bz of (f.beziehungen || [])) insRel.run(bookId, f.id, bz.figur_id, bz.typ, bz.beschreibung || null, bz.machtverhaltnis ?? null, userEmail || null);
     }
   })();
@@ -1025,20 +1098,24 @@ function updateFigurenEvents(bookId, assignments, userEmail, idMaps) {
 
 // Konsolidierten Zeitstrahl persistieren (ersetzt den gesamten Bestand für book/user).
 // ereignisse: Array aus KI-Antwort [{datum, ereignis, typ, bedeutung, kapitel[], seiten[], figuren[]}]
-function saveZeitstrahlEvents(bookId, userEmail, ereignisse) {
+// chNameToId: optionaler Map Kapitelname → chapter_id für stabile ID-Referenzen.
+function saveZeitstrahlEvents(bookId, userEmail, ereignisse, chNameToId = {}) {
   const now = new Date().toISOString();
   db.transaction(() => {
     db.prepare('DELETE FROM zeitstrahl_events WHERE book_id = ? AND user_email = ?').run(bookId, userEmail || '');
     const ins = db.prepare(`INSERT INTO zeitstrahl_events
-      (book_id, user_email, datum, ereignis, typ, bedeutung, kapitel, seiten, figuren, sort_order, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      (book_id, user_email, datum, ereignis, typ, bedeutung, kapitel, chapter_ids, seiten, figuren, sort_order, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     for (let i = 0; i < ereignisse.length; i++) {
       const ev = ereignisse[i];
+      const kapitelArr = Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []);
+      const chapIds = kapitelArr.map(n => chNameToId?.[n] ?? null).filter(id => id != null);
       ins.run(
         bookId, userEmail || '',
         ev.datum || '', ev.ereignis || '', ev.typ || 'persoenlich', ev.bedeutung || null,
-        Array.isArray(ev.kapitel) ? JSON.stringify(ev.kapitel) : (ev.kapitel ? JSON.stringify([ev.kapitel]) : null),
-        Array.isArray(ev.seiten)  ? JSON.stringify(ev.seiten)  : null,
+        kapitelArr.length ? JSON.stringify(kapitelArr) : null,
+        chapIds.length    ? JSON.stringify(chapIds)    : null,
+        Array.isArray(ev.seiten) ? JSON.stringify(ev.seiten) : null,
         ev.figuren ? JSON.stringify(ev.figuren) : null,
         i, now
       );
@@ -1289,7 +1366,13 @@ function getAllUserTokens() { return _getAllTokens.all(); }
 // Orte in DB schreiben (wird von PUT-Endpoint und Job genutzt).
 // Verwendet UPSERT by loc_id statt Delete+Re-Insert, damit bestehende
 // scene_locations-Einträge (ON DELETE CASCADE) erhalten bleiben.
-function saveOrteToDb(bookId, orte, userEmail) {
+// chNameToId: optionaler Map Kapitelname → chapter_id. Wird nicht übergeben,
+// wird er aus der chapters-Tabelle aufgebaut (für UI-Endpunkt ohne Job-Kontext).
+function saveOrteToDb(bookId, orte, userEmail, chNameToId = null) {
+  if (chNameToId == null) {
+    const rows = db.prepare('SELECT chapter_id, chapter_name FROM chapters WHERE book_id = ?').all(bookId);
+    chNameToId = Object.fromEntries(rows.map(r => [r.chapter_name, r.chapter_id]));
+  }
   const now = new Date().toISOString();
   const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
   const emailVal  = userEmail ? [userEmail] : [];
@@ -1321,7 +1404,7 @@ function saveOrteToDb(bookId, orte, userEmail) {
     const delLf = db.prepare('DELETE FROM location_figures WHERE location_id = ?');
     const delLc = db.prepare('DELETE FROM location_chapters WHERE location_id = ?');
     const insLf = db.prepare('INSERT INTO location_figures (location_id, fig_id) VALUES (?, ?)');
-    const insLc = db.prepare('INSERT INTO location_chapters (location_id, chapter_name, haeufigkeit) VALUES (?, ?, ?)');
+    const insLc = db.prepare('INSERT INTO location_chapters (location_id, chapter_id, chapter_name, haeufigkeit) VALUES (?, ?, ?, ?)');
 
     for (let i = 0; i < orte.length; i++) {
       const o = orte[i];
@@ -1343,7 +1426,10 @@ function saveOrteToDb(bookId, orte, userEmail) {
         locDbId = lastInsertRowid;
       }
       for (const fid of (o.figuren || [])) insLf.run(locDbId, fid);
-      for (const k of (o.kapitel || [])) insLc.run(locDbId, k.name, k.haeufigkeit || 1);
+      for (const k of (o.kapitel || [])) {
+        const chapId = chNameToId?.[k.name] ?? null;
+        if (chapId != null) insLc.run(locDbId, chapId, k.name, k.haeufigkeit || 1);
+      }
     }
   })();
 }
