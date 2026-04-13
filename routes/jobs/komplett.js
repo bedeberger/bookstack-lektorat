@@ -202,7 +202,11 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           // Chunk fehlgeschlagen → kein Checkpoint speichern; Delta-Cache schützt erfolgreiche Chunks.
           // Beim Retry versucht Phase 1 die fehlgeschlagenen Chunks erneut (Delta-Cache liefert
           // erfolgreiche Chunks sofort zurück, ohne KI-Call).
-          throw new Error(`Phase 1 unvollständig: ${failedChunks.length} Chunks fehlgeschlagen (${chunkTexts.filter((_, gi) => settled[gi].status === 'rejected').map(ct => ct.chunk.name).join(', ')})`);
+          const failedDetails = chunkTexts
+            .map((ct, gi) => ({ ct, r: settled[gi] }))
+            .filter(({ r }) => r.status === 'rejected')
+            .map(({ ct, r }) => `${ct.chunk.name}: ${r.reason?.message || 'unbekannt'}`);
+          throw new Error(`Phase 1 unvollständig: ${failedChunks.length} Chunks fehlgeschlagen (${failedDetails.join('; ')})`);
         }
       }
       saveCheckpoint('komplett-analyse', bookId, userEmail, {
