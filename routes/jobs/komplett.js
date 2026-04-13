@@ -108,6 +108,10 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     if (cp?.phase === 'p1_full_done') {
       ({ chapterFiguren, chapterOrte, chapterFakten, chapterSzenen, chapterAssignments } = cp);
       if (cp.tokIn != null) { tok.in = cp.tokIn; tok.out = cp.tokOut || 0; tok.ms = cp.tokMs || 0; }
+      const cpFigTotal = (chapterFiguren || []).reduce((s, c) => s + (c.figuren?.length || 0), 0);
+      const cpOrteTotal = (chapterOrte || []).reduce((s, c) => s + (c.orte?.length || 0), 0);
+      const cpSzTotal = (chapterSzenen || []).reduce((s, c) => s + (c.szenen?.length || 0), 0);
+      logger.info(`Job ${jobId}: Phase 1 aus Checkpoint – ${chapterFiguren.length} Kapitel, fig=${cpFigTotal}, orte=${cpOrteTotal}, sz=${cpSzTotal} (Tokens: ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓)`);
       updateJob(jobId, { progress: 28, statusText: 'Phase 1 aus Checkpoint geladen…', tokensIn: tok.in, tokensOut: tok.out });
     } else {
       // Für lokale Modelle: Kapitel die PER_CHUNK_LIMIT überschreiten, werden in Seiten-Untergruppen
@@ -125,6 +129,8 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
 
       logger.info(`Job ${jobId}: Phase 1 – ${totalChars} Zeichen, ${effectiveProvider}, singlePassLimit=${singlePassLimit}, perChunkLimit=${perChunkLimit} → ${totalChars <= singlePassLimit ? 'Single-Pass' : `Multi-Pass (${groupOrder.length} Kapitel → ${chunkOrder.length} Chunks)`}`);
       if (totalChars <= singlePassLimit) {
+        const pageListShort = pageContents.map(p => p.title).join(', ');
+        logger.info(`Job ${jobId}: Phase 1 Single-Pass – ${pageContents.length} Seiten, ${groupOrder.length} Kapitel [${groupOrder.map(k => groups.get(k).name).join(', ')}], Seiten: [${pageListShort}]`);
         const bookText = buildSinglePassBookText(groups, groupOrder);
         const r = await call(jobId, tok,
           buildExtraktionKomplettChapterPrompt('Gesamtbuch', bookName, pageContents.length, bookText),
@@ -150,21 +156,33 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           };
         });
         let cacheHits = 0;
+        const totalChunks = chunkTexts.length;
         const settled = await settledAll(
-          chunkTexts.map(({ chunk, key, pagesSig, chText }) => async () => {
+          chunkTexts.map(({ chunk, key, pagesSig, chText }, chunkIdx) => async () => {
+            const chunkLabel = `Chunk ${chunkIdx + 1}/${totalChunks} «${chunk.name}»`;
+            const pageNames = chunk.pages.map(p => p.title).join(', ');
+            const sigShort = pagesSig.length > 80 ? pagesSig.slice(0, 80) + '…' : pagesSig;
+            logger.info(`Job ${jobId}: ${chunkLabel} – ${chunk.pages.length} Seiten [${pageNames}], sig=${sigShort}`);
             // Delta-Cache: Cache-Hit → kein KI-Call nötig
             const cached = loadChapterExtractCache(bookId, userEmail, key, pagesSig);
             if (cached) {
               cacheHits++;
-              logger.info(`Job ${jobId}: Chunk «${chunk.name}» – Cache-Hit, KI-Call übersprungen.`);
+              const cachedFig = cached?.figuren?.length ?? 0;
+              const cachedOrte = cached?.orte?.length ?? 0;
+              const cachedSz = cached?.szenen?.length ?? 0;
+              logger.info(`Job ${jobId}: ${chunkLabel} – Cache-HIT (key=${key}), KI-Call übersprungen. Gecacht: fig=${cachedFig} orte=${cachedOrte} sz=${cachedSz}`);
               return cached;
             }
+            logger.info(`Job ${jobId}: ${chunkLabel} – Cache-MISS (key=${key}), starte KI-Call…`);
+            const tokBefore = { in: tok.in, out: tok.out };
             const result = await call(jobId, tok,
               buildExtraktionKomplettChapterPrompt(chunk.name, bookName, chunk.pages.length, chText),
               SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 14000,
             );
-            logger.info(`Job ${jobId}: Chunk «${chunk.name}» extrahiert – fig=${result?.figuren?.length ?? 0} orte=${result?.orte?.length ?? 0} sz=${result?.szenen?.length ?? 0} ass=${result?.assignments?.length ?? 0}`);
+            const tokDelta = { in: tok.in - tokBefore.in, out: tok.out - tokBefore.out };
+            logger.info(`Job ${jobId}: ${chunkLabel} – KI-Call abgeschlossen. fig=${result?.figuren?.length ?? 0} orte=${result?.orte?.length ?? 0} sz=${result?.szenen?.length ?? 0} ass=${result?.assignments?.length ?? 0} | Tokens: ${fmtTok(tokDelta.in)}↑ ${fmtTok(tokDelta.out)}↓`);
             saveChapterExtractCache(bookId, userEmail, key, pagesSig, result);
+            logger.info(`Job ${jobId}: ${chunkLabel} – Cache gespeichert (key=${key}).`);
             return result;
           })
         );
