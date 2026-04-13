@@ -307,6 +307,15 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
   INSERT INTO schema_version SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
 
+  -- Kanonische Kapitel-Tabelle: eine Zeile pro Kapitel pro Buch
+  CREATE TABLE IF NOT EXISTS chapters (
+    chapter_id   INTEGER NOT NULL,
+    book_id      INTEGER NOT NULL,
+    chapter_name TEXT    NOT NULL,
+    updated_at   TEXT,
+    PRIMARY KEY (chapter_id, book_id)
+  );
+
   -- Sprach- und Regionkonfiguration pro Buch
   CREATE TABLE IF NOT EXISTS book_settings (
     book_id    INTEGER PRIMARY KEY,
@@ -877,6 +886,17 @@ function runMigrations() {
     db.exec('ALTER TABLE page_checks ADD COLUMN chapter_id INTEGER');
     db.prepare('UPDATE schema_version SET version = 37').run();
     logger.info('DB-Migration auf Version 37 abgeschlossen (page_checks.chapter_id hinzugefügt).');
+  }
+  if (version < 38) {
+    db.exec(`CREATE TABLE IF NOT EXISTS chapters (
+      chapter_id   INTEGER NOT NULL,
+      book_id      INTEGER NOT NULL,
+      chapter_name TEXT    NOT NULL,
+      updated_at   TEXT,
+      PRIMARY KEY (chapter_id, book_id)
+    )`);
+    db.prepare('UPDATE schema_version SET version = 38').run();
+    logger.info('DB-Migration auf Version 38 abgeschlossen (chapters-Tabelle hinzugefügt).');
   }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs

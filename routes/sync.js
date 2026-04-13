@@ -68,6 +68,13 @@ const _upsertPageCacheStmt = db.prepare(`
     updated_at=excluded.updated_at
 `);
 
+const _upsertChapterStmt = db.prepare(`
+  INSERT INTO chapters (chapter_id, book_id, chapter_name, updated_at)
+  VALUES (?, ?, ?, ?)
+  ON CONFLICT(chapter_id, book_id) DO UPDATE SET
+    chapter_name=excluded.chapter_name, updated_at=excluded.updated_at
+`);
+
 // Leichtgewichtiger pages-Cache-Update (ohne Seiten-Inhalte laden).
 // Wird sowohl von syncBook() als auch vom /sync/pages/:book_id-Endpunkt genutzt.
 function _upsertPagesCache(bookId, pages, chapters) {
@@ -80,6 +87,9 @@ function _upsertPagesCache(bookId, pages, chapters) {
         p.chapter_id ? (chMap[p.chapter_id] || null) : null,
         p.updated_at || null
       );
+    }
+    for (const c of chapters) {
+      _upsertChapterStmt.run(c.id, bookId, c.name, c.updated_at || null);
     }
   })();
   reconcilePageIds();

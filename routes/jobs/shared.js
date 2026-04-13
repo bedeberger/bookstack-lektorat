@@ -295,7 +295,7 @@ function splitGroupsIntoChunks(groups, groupOrder, perChunkLimit) {
     for (const page of group.pages) {
       if (currentChars + page.text.length > perChunkLimit && currentPages.length > 0) {
         chunkOrder.push(`${key}__sub${subIdx}`);
-        chunks.set(`${key}__sub${subIdx}`, { name: `${group.name} (Teil ${subIdx + 1})`, pages: currentPages });
+        chunks.set(`${key}__sub${subIdx}`, { name: group.name, pages: currentPages });
         currentPages = []; currentChars = 0; subIdx++;
       }
       currentPages.push(page);
@@ -303,10 +303,7 @@ function splitGroupsIntoChunks(groups, groupOrder, perChunkLimit) {
     }
     if (currentPages.length > 0) {
       chunkOrder.push(`${key}__sub${subIdx}`);
-      chunks.set(`${key}__sub${subIdx}`, {
-        name: subIdx === 0 ? group.name : `${group.name} (Teil ${subIdx + 1})`,
-        pages: currentPages,
-      });
+      chunks.set(`${key}__sub${subIdx}`, { name: group.name, pages: currentPages });
     }
   }
   return { chunkOrder, chunks };
