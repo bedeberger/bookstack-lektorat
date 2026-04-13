@@ -189,6 +189,7 @@ document.addEventListener('alpine:init', () => {
     selectedFigurId: null,
     figurenKapitelFilter: '',
     figurenSeitenFilter: '',
+    figurenSuche: '',
     globalZeitstrahl: [],
     showGlobalZeitstrahl: false,
     zeitstrahlConsolidating: false,
@@ -201,6 +202,7 @@ document.addEventListener('alpine:init', () => {
     ereignisseFilterFigurId: '',
     ereignisseFilterKapitel: '',
     ereignisseFilterSeite: '',
+    ereignisseSuche: '',
     showSzenenCard: false,
     szenen: [],
     szenenUpdatedAt: null,
@@ -212,6 +214,7 @@ document.addEventListener('alpine:init', () => {
     szenenFilterKapitel: '',
     szenenFilterSeite: '',
     szenenFilterOrtId: '',
+    szenenSuche: '',
     _consolidatePollTimer: null,
     _szenenPollTimer: null,
     _figurenNetwork: null,
@@ -257,6 +260,7 @@ document.addEventListener('alpine:init', () => {
     orteFilterFigurId: '',
     orteFilterKapitel: '',
     orteFilterSzeneId: '',
+    orteSuche: '',
     _ortePollTimer: null,
     showKontinuitaetCard: false,
     kontinuitaetLoading: false,
@@ -325,14 +329,18 @@ document.addEventListener('alpine:init', () => {
       return [...names].sort((a, b) => a.localeCompare(b, 'de'));
     },
     get orteFiltered() {
+      const q = this.orteSuche ? this.orteSuche.toLowerCase() : '';
       return this.orte.filter(o =>
+        (!q || (o.name || '').toLowerCase().includes(q)) &&
         (!this.orteFilterFigurId || (o.figuren || []).includes(this.orteFilterFigurId)) &&
         (!this.orteFilterKapitel || (o.kapitel || []).some(k => k.name === this.orteFilterKapitel)) &&
         (!this.orteFilterSzeneId || this.szenen.some(s => String(s.id) === String(this.orteFilterSzeneId) && (s.ort_ids || []).includes(o.id)))
       );
     },
     get szenenFiltered() {
+      const q = this.szenenSuche ? this.szenenSuche.toLowerCase() : '';
       return this.szenen.filter(s =>
+        (!q || (s.titel || '').toLowerCase().includes(q)) &&
         (!this.szenenFilterWertung || s.wertung === this.szenenFilterWertung) &&
         (!this.szenenFilterFigurId || (s.fig_ids || []).includes(this.szenenFilterFigurId)) &&
         (!this.szenenFilterKapitel || s.kapitel === this.szenenFilterKapitel) &&
@@ -484,6 +492,10 @@ document.addEventListener('alpine:init', () => {
 
     filteredFiguren() {
       let result = this.figuren;
+      if (this.figurenSuche) {
+        const q = this.figurenSuche.toLowerCase();
+        result = result.filter(f => f.name.toLowerCase().includes(q));
+      }
       if (this.figurenKapitelFilter) {
         result = result.filter(f =>
           (f.kapitel || []).some(k => k.name === this.figurenKapitelFilter)
@@ -520,6 +532,10 @@ document.addEventListener('alpine:init', () => {
 
     filteredEreignisse() {
       let result = this.globalZeitstrahl;
+      if (this.ereignisseSuche) {
+        const q = this.ereignisseSuche.toLowerCase();
+        result = result.filter(ev => (ev.ereignis || '').toLowerCase().includes(q));
+      }
       if (this.ereignisseFilterFigurId) {
         result = result.filter(ev => ev.figuren.some(f => f.id === this.ereignisseFilterFigurId));
       }
@@ -682,12 +698,12 @@ document.addEventListener('alpine:init', () => {
       const phases = [
         { label: 'Seiten laden',          threshold: 12  },
         { label: 'Vollextraktion',        threshold: 30  },
-        { label: 'Figuren konsolidieren', threshold: 45  },
+        { label: 'Figuren konsolidieren', threshold: 43  },
         { label: 'Orte konsolidieren',    threshold: 56  },
         { label: 'Kap. Beziehungen',      threshold: 58  },
         { label: 'Szenen + Ereignisse',   threshold: 83  },
         { label: 'Zeitstrahl',            threshold: 89  },
-        { label: 'Kontinuität',           threshold: 100 },
+        { label: 'Kontinuität',           threshold: 97  },
       ];
       return phases.map((ph, i) => {
         const done = p >= ph.threshold;

@@ -1929,6 +1929,18 @@ ins {
 .szenen-filter-btn--schwach.szenen-filter-btn--active { background: var(--color-err-border); border-color: var(--color-err-border); color: #fff; }
 
 .szenen-filter-count { font-size: 11px; color: var(--color-muted); margin-left: auto; }
+.filter-search-input {
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 3px 8px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  width: 120px;
+  box-sizing: border-box;
+}
+.filter-search-input:focus { outline: none; border-color: var(--color-border-focus); }
 
 /* === Szenen-Übersicht: Zähler pro Figur === */
 .szenen-figur-counts {

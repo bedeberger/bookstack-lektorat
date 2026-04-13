@@ -493,6 +493,9 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         saveZeitstrahlEvents(parseInt(bookId), userEmail || null, ztResult.ereignisse);
         logger.info(`Job ${jobId}: ${ztResult.ereignisse.length} Zeitstrahl-Ereignisse gespeichert.`);
       }
+      // Sicherstellen dass Zeitstrahl-Threshold (89) zuverlässig erreicht wird,
+      // falls der letzte Streaming-Tick < 89 war (chars < dynExpectedChars).
+      updateJob(jobId, { progress: 89 });
     }
 
     await Promise.all([
@@ -524,15 +527,15 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         // Claude: Single-Pass für kleine Bücher (voller Buchtext, besserer Kontext).
         // Llama/Ollama: immer facts-basiert (chapterFakten aus Phase 1) – voller Buchtext
         // wäre ein zweiter 50K-Token-Call der auf langsamer Hardware Stunden dauert.
-        // P8 läuft parallel zu P5+P6 (Szenen/Zeitstrahl) – kein updateJob mit statusText hier,
-        // sonst überschreibt P8 den Status von P5+P6 während der Zeitstrahl-Konsolidierung.
-        // Fortschritts-Callbacks (fromPct/toPct) ebenfalls deaktiviert um Progress-Sprünge zu vermeiden.
+        // P8 läuft parallel zu P5+P6 (Szenen/Zeitstrahl). Segment 89→97: da updateJob nur
+        // aufsteigt, übernimmt P8 die Bar nahtlos nach P6 (Zeitstrahl endet bei 89).
+        // Kein statusText-Update hier, damit P5+P6-Labels während Zeitstrahl nicht überschrieben werden.
         if (totalChars <= singlePassLimit && effectiveProvider === 'claude') {
           const bookText = buildSinglePassBookText(groups, groupOrder);
           logger.info(`Job ${jobId}: Kontinuität Single-Pass: ${bookText.length} Zeichen Buchtext, ${figKompaktForKont.length} Figuren, ${orteKompaktForKont.length} Orte`);
           kontResult = await call(jobId, tok,
             buildKontinuitaetSinglePassPrompt(bookName, bookText, figKompaktForKont, orteKompaktForKont),
-            SYSTEM_KONTINUITAET, null, null, 5000,
+            SYSTEM_KONTINUITAET, 89, 97, 5000,
           );
         } else {
           // Facts-basiert: chapterFakten aus Phase 1 – immer verfügbar (single- und multi-pass).
@@ -540,7 +543,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           logger.info(`Job ${jobId}: Kontinuität facts-basiert: ${chapterFakten.length} Kapitel, ~${totalFaktenChars} Zeichen Fakten, ${figKompaktForKont.length} Figuren`);
           kontResult = await call(jobId, tok,
             buildKontinuitaetCheckPrompt(bookName, chapterFakten, figKompaktForKont, orteKompaktForKont),
-            SYSTEM_KONTINUITAET, null, null, effectiveProvider === 'claude' ? 5000 : 2500,
+            SYSTEM_KONTINUITAET, 89, 97, effectiveProvider === 'claude' ? 5000 : 2500,
           );
         }
 

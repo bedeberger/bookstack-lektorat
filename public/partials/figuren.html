@@ -97,6 +97,7 @@
 
      <!-- Filter -->
     <div x-show="figuren.length > 0 && figurenKapitelListe().length > 0" class="filter-bar">
+      <input type="text" x-model="figurenSuche" placeholder="Suche…" class="filter-search-input">
       <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
           x-modelable="value" x-model="figurenKapitelFilter"
           x-effect="options = figurenKapitelListe().map(k => ({value: k, label: k}))"

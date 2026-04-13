@@ -63,6 +63,7 @@
   <div x-show="szenen.length > 0" class="szenen-liste-section">
     <!-- Filter-Leiste -->
     <div class="filter-bar">
+      <input type="text" x-model="szenenSuche" placeholder="Suche…" class="filter-search-input">
       <div class="szenen-filter-group">
         <button class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenFilterWertung === '' }" @click="szenenFilterWertung = ''">Alle</button>
         <button class="szenen-filter-btn szenen-filter-btn--stark"   :class="{ 'szenen-filter-btn--active': szenenFilterWertung === 'stark' }"   @click="szenenFilterWertung = szenenFilterWertung === 'stark'   ? '' : 'stark'">stark</button>

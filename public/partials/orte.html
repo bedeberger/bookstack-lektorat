@@ -16,6 +16,7 @@
 
   <!-- Filter-Leiste -->
   <div x-show="orte.length > 0" class="filter-bar">
+    <input type="text" x-model="orteSuche" placeholder="Suche…" class="filter-search-input">
     <div x-data="combobox('Figur…', 'Alle Figuren')"
          x-modelable="value" x-model="orteFilterFigurId"
          x-effect="options = figuren.filter(f => orte.some(o => (o.figuren || []).includes(f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
