@@ -51,7 +51,7 @@ Immer nur eine Hauptansicht aktiv. Buchebenen-Features und Seitenebenen-Features
 
 Schema, Tabellen und Migrationslogik: siehe [db/schema.js](db/schema.js).
 
-**Migration hinzufügen:** `CURRENT_SCHEMA_VERSION` erhöhen → `if (version < N)`-Block in `runMigrations()` ergänzen. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` — keine Versionierung nötig.
+**Migration hinzufügen:** Neuen `if (version < N)`-Block in `runMigrations()` ergänzen (N = nächste fortlaufende Nummer, aktuell bei 39) + `UPDATE schema_version SET version = N`. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` — keine Versionierung nötig.
 
 **Neuer Beziehungstyp:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Neuen Typ in der `BZ`-Konstante (Frontend-Rendering) und im Claude-Prompt (`FINAL_SCHEMA` in `prompts.js`) ergänzen.
 
@@ -115,6 +115,8 @@ Block 2 [parallel]:
   Phase 8 – Kontinuitätscheck (Single-Pass: voller Text, Multi-Pass: Fakten)
 ```
 
+**Standalone-Kontinuitätscheck:** `POST /jobs/kontinuitaet` — läuft Phase 8 einzeln, ohne die volle Pipeline. Exportiert `runKontinuitaetJob` aus `routes/jobs/komplett.js`.
+
 **Wichtige Mechanismen:**
 - **Delta-Cache:** Phase 1 (Multi-Pass) prüft `chapter_extract_cache` in der DB. Cache-Key enthält `pages_sig` (sortierte `page_id:updated_at`-Paare). Ändert sich eine Seite → Cache-Miss → Neu-Extraktion. Single-Pass wird nicht gecacht.
 - **Prompt-Caching:** System-Prompt mit eingebettetem Schema wird bei parallelen Kapitel-Calls gecacht (~10% des Input-Preises für Folge-Calls).
@@ -161,6 +163,7 @@ public/
   js/app.js            – Alpine-Root, Feature-Module per ...spread
   js/prompts.js        – Prompt-Schemas + Build-Logik (shared Server/Frontend)
   js/utils.js          – Gemeinsame Hilfsfunktionen
+  js/chat-base.js      – Geteilte Chat-Infrastruktur (Seiten- + Buch-Chat)
   js/*.js              – Feature-Module (lektorat, review, figuren, chat, etc.)
 ```
 

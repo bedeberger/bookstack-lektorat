@@ -20,6 +20,8 @@ import { kontinuitaetMethods } from './kontinuitaet.js';
 import { bookSettingsMethods } from './book-settings.js';
 import { pageViewMethods } from './page-view.js';
 
+const FIGUR_TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, andere: 4 };
+
 document.addEventListener('alpine:init', () => {
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
     open: false,
@@ -134,6 +136,9 @@ document.addEventListener('alpine:init', () => {
     selectedBookId: '',
     pages: [],
     tree: [],
+    _chapterOrderMap: null,
+    _pageOrderMap: null,
+    _pageIdOrderMap: null,
     pageSearch: '',
     currentPage: null,
     currentPageEmpty: false,
@@ -303,7 +308,8 @@ document.addEventListener('alpine:init', () => {
         else if (s.wertung === 'mittel')  e.mittel++;
         else if (s.wertung === 'schwach') e.schwach++;
       }
-      return [...map.entries()].map(([name, c]) => ({ name, ...c }));
+      return [...map.entries()].map(([name, c]) => ({ name, ...c }))
+        .sort((a, b) => this._chapterIdx(a.name) - this._chapterIdx(b.name));
     },
     get szenenNachSeite() {
       const map = new Map();
@@ -312,21 +318,25 @@ document.addEventListener('alpine:init', () => {
         if (!map.has(s.seite)) map.set(s.seite, { total: 0, kapitel: s.kapitel });
         map.get(s.seite).total++;
       }
-      return [...map.entries()].map(([name, d]) => ({ name, total: d.total, kapitel: d.kapitel }));
+      return [...map.entries()].map(([name, d]) => ({ name, total: d.total, kapitel: d.kapitel }))
+        .sort((a, b) => {
+          const c = this._chapterIdx(a.kapitel) - this._chapterIdx(b.kapitel);
+          return c !== 0 ? c : this._pageIdx(a.name) - this._pageIdx(b.name);
+        });
     },
     szenenKapitelListe() {
-      return [...new Set(this.szenen.map(s => s.kapitel).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+      return this._sortByChapterOrder([...new Set(this.szenen.map(s => s.kapitel).filter(Boolean))]);
     },
     szenenSeitenListe() {
       if (!this.szenenFilterKapitel) return [];
-      return [...new Set(this.szenen.filter(s => s.kapitel === this.szenenFilterKapitel && s.seite).map(s => s.seite))].sort((a, b) => a.localeCompare(b, 'de'));
+      return this._sortByPageOrder([...new Set(this.szenen.filter(s => s.kapitel === this.szenenFilterKapitel && s.seite).map(s => s.seite))]);
     },
     orteKapitelListe() {
       const names = new Set();
       for (const o of this.orte) {
         for (const k of (o.kapitel || [])) { if (k.name) names.add(k.name); }
       }
-      return [...names].sort((a, b) => a.localeCompare(b, 'de'));
+      return this._sortByChapterOrder([...names]);
     },
     get orteFiltered() {
       const q = this.orteSuche ? this.orteSuche.toLowerCase() : '';
@@ -335,7 +345,15 @@ document.addEventListener('alpine:init', () => {
         (!this.orteFilterFigurId || (o.figuren || []).includes(this.orteFilterFigurId)) &&
         (!this.orteFilterKapitel || (o.kapitel || []).some(k => k.name === this.orteFilterKapitel)) &&
         (!this.orteFilterSzeneId || this.szenen.some(s => String(s.id) === String(this.orteFilterSzeneId) && (s.ort_ids || []).includes(o.id)))
-      );
+      ).sort((a, b) => {
+        const aK = Math.min(...(a.kapitel || []).map(k => this._chapterIdx(k.name)), 9999);
+        const bK = Math.min(...(b.kapitel || []).map(k => this._chapterIdx(k.name)), 9999);
+        if (aK !== bK) return aK - bK;
+        const aP = this._pageIdIdx(a.erste_erwaehnung_page_id);
+        const bP = this._pageIdIdx(b.erste_erwaehnung_page_id);
+        if (aP !== bP) return aP - bP;
+        return (a.name || '').localeCompare(b.name || '', 'de');
+      });
     },
     get szenenFiltered() {
       const q = this.szenenSuche ? this.szenenSuche.toLowerCase() : '';
@@ -346,7 +364,13 @@ document.addEventListener('alpine:init', () => {
         (!this.szenenFilterKapitel || s.kapitel === this.szenenFilterKapitel) &&
         (!this.szenenFilterSeite || s.seite === this.szenenFilterSeite) &&
         (!this.szenenFilterOrtId || (s.ort_ids || []).includes(this.szenenFilterOrtId))
-      );
+      ).sort((a, b) => {
+        const c = this._chapterIdx(a.kapitel) - this._chapterIdx(b.kapitel);
+        if (c !== 0) return c;
+        const p = this._pageIdx(a.seite) - this._pageIdx(b.seite);
+        if (p !== 0) return p;
+        return (a.titel || '').localeCompare(b.titel || '', 'de');
+      });
     },
 
     kontinuitaetKapitelListe() {
@@ -375,7 +399,7 @@ document.addEventListener('alpine:init', () => {
         const a = fromStelle(issue.stelle_a); if (a) names.add(a);
         const b = fromStelle(issue.stelle_b); if (b) names.add(b);
       }
-      return [...names].sort((a, b) => a.localeCompare(b, 'de'));
+      return this._sortByChapterOrder([...names]);
     },
     get kontinuitaetIssuesFiltered() {
       const chapters = (this.tree || []).filter(t => t.type === 'chapter');
@@ -471,12 +495,23 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
+    // ── Sort helpers (use persistent order maps from loadPages) ─────────────
+    _chapterIdx(name) { return this._chapterOrderMap?.get(name) ?? 9999; },
+    _pageIdx(name) { return this._pageOrderMap?.get(name) ?? 9999; },
+    _pageIdIdx(id) { return this._pageIdOrderMap?.get(id) ?? 9999; },
+    _sortByChapterOrder(names) {
+      return [...names].sort((a, b) => this._chapterIdx(a) - this._chapterIdx(b));
+    },
+    _sortByPageOrder(names) {
+      return [...names].sort((a, b) => this._pageIdx(a) - this._pageIdx(b));
+    },
+
     figurenKapitelListe() {
       const names = new Set();
       for (const f of (this.figuren || [])) {
         for (const k of (f.kapitel || [])) { if (k.name) names.add(k.name); }
       }
-      return [...names].sort();
+      return this._sortByChapterOrder([...names]);
     },
 
     figurenSeitenListe() {
@@ -487,7 +522,7 @@ document.addEventListener('alpine:init', () => {
           if (s.kapitel === this.figurenKapitelFilter && s.seite) names.add(s.seite);
         }
       }
-      return [...names].sort();
+      return this._sortByPageOrder([...names]);
     },
 
     filteredFiguren() {
@@ -506,7 +541,15 @@ document.addEventListener('alpine:init', () => {
           (f.seiten || []).some(s => s.kapitel === this.figurenKapitelFilter && s.seite === this.figurenSeitenFilter)
         );
       }
-      return result;
+      return [...result].sort((a, b) => {
+        const aK = Math.min(...(a.kapitel || []).map(k => this._chapterIdx(k.name)), 9999);
+        const bK = Math.min(...(b.kapitel || []).map(k => this._chapterIdx(k.name)), 9999);
+        if (aK !== bK) return aK - bK;
+        const aT = FIGUR_TYP_ORDER[a.typ] ?? 99;
+        const bT = FIGUR_TYP_ORDER[b.typ] ?? 99;
+        if (aT !== bT) return aT - bT;
+        return (a.name || '').localeCompare(b.name || '', 'de');
+      });
     },
 
     ereignisseKapitelListe() {
@@ -515,7 +558,7 @@ document.addEventListener('alpine:init', () => {
         if (Array.isArray(ev.kapitel)) { for (const k of ev.kapitel) if (k) names.add(k); }
         else if (ev.kapitel) names.add(ev.kapitel);
       }
-      return [...names].sort();
+      return this._sortByChapterOrder([...names]);
     },
 
     ereignisseSeitenListe() {
@@ -527,7 +570,7 @@ document.addEventListener('alpine:init', () => {
         const seiten = Array.isArray(ev.seiten) ? ev.seiten : (ev.seite ? [ev.seite] : []);
         for (const s of seiten) if (s) names.add(s);
       }
-      return [...names].sort();
+      return this._sortByPageOrder([...names]);
     },
 
     filteredEreignisse() {

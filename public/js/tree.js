@@ -89,6 +89,20 @@ export const treeMethods = {
         })),
       ].sort((a, b) => a.priority - b.priority);
 
+      // Persistent sort maps – built once per book load, used by all filter sorting
+      this._chapterOrderMap = new Map();
+      let chIdx = 0;
+      for (const item of this.tree) {
+        if (item.type === 'chapter') this._chapterOrderMap.set(item.name, chIdx++);
+      }
+      this._pageOrderMap = new Map();
+      this._pageIdOrderMap = new Map();
+      for (let i = 0; i < this.pages.length; i++) {
+        const p = this.pages[i];
+        if (!this._pageOrderMap.has(p.name)) this._pageOrderMap.set(p.name, i);
+        this._pageIdOrderMap.set(p.id, i);
+      }
+
       // Gecachte Stats + Vorschautexte aus DB laden und sofort anzeigen
       try {
         const [statsCache, previewCache] = await Promise.all([

@@ -87,6 +87,7 @@
 /* === Base === */
 html {
   background: var(--color-bg);
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -2829,10 +2830,6 @@ ins {
     grid-template-columns: 340px 1fr;
     gap: 0 1.5rem;
     align-items: start;
-  }
-  .layout-sidebar {
-    position: sticky;
-    top: 1.5rem;
   }
 }
 
