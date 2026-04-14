@@ -5,6 +5,15 @@ import { buildLektoratPrompt } from './prompts.js';
 // `this` bezieht sich auf die Alpine-Komponente.
 
 export const treeMethods = {
+  chapterStats(item) {
+    let words = 0, chars = 0, tok = 0, count = 0;
+    for (const p of item.pages) {
+      const e = this.tokEsts[p.id];
+      if (e) { words += e.words; chars += e.chars; tok += e.tok; count++; }
+    }
+    return count ? { words, chars, tok } : null;
+  },
+
   async loadBooks() {
     try {
       this.setStatus('Verbinde mit BookStack…', true);

@@ -7,14 +7,14 @@
       <span x-show="currentPage && tokEsts[currentPage.id]" class="tok-stats">
         <template x-if="tokEsts[currentPage?.id]?.words > 0">
           <span class="display-contents">
+            <span class="tok-badge tok-neutral"
+              x-text="tokEsts[currentPage.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].chars/1000) + 'k Z' : tokEsts[currentPage.id]?.chars + ' Z'"></span>
+            <span class="tok-badge tok-neutral"
+              x-text="tokEsts[currentPage.id]?.words >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].words/1000) + 'k W' : tokEsts[currentPage.id]?.words + ' W'"></span>
             <span class="tok-badge"
               :class="tokEsts[currentPage.id]?.tok > 16000 ? 'tok-high' : tokEsts[currentPage.id]?.tok > 4000 ? 'tok-med' : 'tok-ok'"
               x-text="tokEsts[currentPage.id]?.tok >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].tok/1000) + 'k T' : '~' + tokEsts[currentPage.id]?.tok + ' T'"
               ></span>
-            <span class="tok-badge tok-neutral"
-              x-text="tokEsts[currentPage.id]?.words >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].words/1000) + 'k W' : tokEsts[currentPage.id]?.words + ' W'"></span>
-            <span class="tok-badge tok-neutral"
-              x-text="tokEsts[currentPage.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].chars/1000) + 'k Z' : tokEsts[currentPage.id]?.chars + ' Z'"></span>
           </span>
         </template>
         <template x-if="tokEsts[currentPage?.id] && tokEsts[currentPage.id].words === 0">

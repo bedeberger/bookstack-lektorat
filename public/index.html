@@ -212,7 +212,15 @@
           <div class="tree-chapter-header" :class="{ disabled: item.pages.length === 0 }" @click="if (!pageSearch && item.pages.length > 0) item.open = !item.open">
             <span class="tree-chevron" :class="{ open: item.open }" x-show="item.pages.length > 0">›</span>
             <span x-text="item.name"></span>
-            <span class="tag" x-text="item.pages.length + ' Seiten'"></span>
+            <span class="tree-chapter-meta">
+              <span class="tag" x-show="item.pages.length > 1" x-text="item.pages.length + ' Seiten'"></span>
+              <template x-if="item.pages.length > 1 && chapterStats(item)">
+                <span class="tok-badge tok-neutral"
+                  x-text="(() => { const s = chapterStats(item); return s.chars >= 1000 ? '~' + Math.round(s.chars/1000) + 'k Z' : s.chars + ' Z'; })()"
+                  @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; tokTooltipData={...chapterStats(item), _chapterOnly: true}; showTokLegend=true"
+                  @mouseleave.stop="showTokLegend=false; tokTooltipData=null"></span>
+              </template>
+            </span>
           </div>
           <div x-show="item.open">
             <template x-for="page in item.pages" :key="page.id">
@@ -285,7 +293,7 @@
      class="tok-tooltip"
      @mouseleave="showTokLegend=false; tokTooltipData=null">
   <div class="tok-tt-row" x-text="tokTooltipData ? ((tokTooltipData.words >= 1000 ? '~' + Math.round(tokTooltipData.words/1000) + 'k' : tokTooltipData.words) + ' Wörter') : ''"></div>
-  <div class="tok-tt-row" x-text="tokTooltipData ? ('~' + (tokTooltipData.tok >= 1000 ? Math.round(tokTooltipData.tok/1000) + 'k' : tokTooltipData.tok) + ' Tokens') : ''"></div>
+  <div class="tok-tt-row" x-show="tokTooltipData && !tokTooltipData._chapterOnly" x-text="tokTooltipData ? ('~' + (tokTooltipData.tok >= 1000 ? Math.round(tokTooltipData.tok/1000) + 'k' : tokTooltipData.tok) + ' Tokens') : ''"></div>
 </div>
 
 <!-- Job-Queue Footer -->
