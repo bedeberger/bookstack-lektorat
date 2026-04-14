@@ -2649,6 +2649,23 @@ ins {
   }
 }
 
+/* === Editor + Chat side-by-side === */
+@media (min-width: 1280px) {
+  .editor-chat-split {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 0 1rem;
+    align-items: start;
+  }
+  .editor-chat-split #chat-card {
+    position: sticky;
+    top: 1.5rem;
+  }
+  .editor-chat-split .chat-messages {
+    max-height: 60vh;
+  }
+}
+
 /* === History-Section (sekundäres Panel am Kartenende) === */
 .card-history-section {
   margin: 16px -1.25rem -1.25rem;

@@ -301,7 +301,10 @@ async function _streamClaude(messages, systemPrompt, res, onText, onTokens) {
       try {
         const ev = JSON.parse(raw);
         if (ev.type === 'message_start' && ev.message?.usage) {
-          tokIn = ev.message.usage.input_tokens || 0;
+          const u = ev.message.usage;
+          tokIn = (u.input_tokens || 0)
+                + (u.cache_creation_input_tokens || 0)
+                + (u.cache_read_input_tokens || 0);
         }
         if (ev.type === 'message_delta' && ev.usage) {
           tokOut = ev.usage.output_tokens || 0;

@@ -700,8 +700,11 @@ export function buildChatSystemPrompt(pageName, pageText, figuren, review, syste
     '  ]',
     '}',
     '',
-    'vorschlaege ist ein leeres Array wenn keine konkreten Textänderungen sinnvoll sind.',
-    'original muss zeichengenau mit dem Seitentext übereinstimmen.',
+    'VORSCHLÄGE-REGELN:',
+    '- Wenn du stilistische, inhaltliche oder sprachliche Schwächen erkennst oder der Autor nach Verbesserungen fragt: liefere mindestens einen konkreten Vorschlag mit original und ersatz.',
+    '- original muss zeichengenau mit dem Seitentext übereinstimmen.',
+    '- ersatz muss den Stil des Autors beibehalten.',
+    '- vorschlaege ist nur dann ein leeres Array, wenn die Frage rein inhaltlich/konzeptionell ist und keine Textstelle betrifft (z.B. Plotfragen, Figurenmotivation).',
     '',
     JSON_ONLY,
   );

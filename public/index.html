@@ -268,8 +268,10 @@
 <div id="partial-orte"></div>
 <div id="partial-kontinuitaet"></div>
 <div id="partial-bookstats"></div>
-<div id="partial-editor"></div>
-<div id="partial-chat"></div>
+<div class="editor-chat-wrap" :class="{ 'editor-chat-split': showEditorCard && showChatCard }">
+  <div id="partial-editor"></div>
+  <div id="partial-chat"></div>
+</div>
 <div id="partial-book-settings"></div>
 
 </div><!-- end layout-main -->
