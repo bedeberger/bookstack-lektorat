@@ -1,161 +1,169 @@
-# bookstack-lektorat – Technische Referenz
+# bookstack-lektorat
 
-KI-gestütztes Lektorat-Tool für BookStack. Deployment, Konfiguration und Docker-Setup: siehe [README.md](README.md).
+KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Variablen: siehe [README.md](README.md).
 
-## Architektur
+## Harte Regeln
 
-```
-Browser → NGINX (HTTPS) → Express (Port 3737)
-                              → /auth/login     → redirect zu Google (OIDC)
-                              → /auth/callback  → Token validieren, Session anlegen
-                              → /auth/logout    → Session löschen
-                              → /auth/me        → aktueller User (JSON)
-                              → /config         → Modell-Config + User (keine Credentials)
-                              → /history/*      → SQLite-DB (lektorat.db)
-                              → /figures/*      → SQLite-DB (lektorat.db)
-                              → /chat/*         → SQLite-DB (lektorat.db) + KI-Streaming (Seiten-Chat) + Buch-Chat-Sessions
-                              → /sync/*         → Buchstatistik-Sync (manuell + Cron)
-                              → /jobs/*         → Hintergrund-Jobs (Status-Polling, inkl. Buch-Chat)
-                              → /claude         → api.anthropic.com (ANTHROPIC_API_KEY-Injection)
-                              → /ollama         → Ollama /api/chat (OLLAMA_HOST, lokales Modell)
-                              → /api/*          → BookStack (Token aus req.session.bookstackToken, serverseitig)
-                              → /               → public/index.html
+- **Prompts nur in `public/js/prompts.js`** — einzige Quelle für alle Prompt-Schemas und Build-Logik. Server importiert via dynamic `import()`. NIEMALS Prompts in Route-Handlern, Config-Dateien oder anderswo duplizieren.
+- **KI-Calls nur via Job-Queue** — neue Features implementieren einen Job-Typ in `routes/jobs/` (Funktion `runXxxJob` + `router.post`). Direkte synchrone KI-Calls aus Route-Handlern sind verboten. Einzige Ausnahme: Seiten-Chat (`/chat/send`) nutzt bewusst SSE-Streaming.
+- **`callAI` gibt nur JSON zurück** — jeder Systemprompt muss JSON-Only erzwingen (`JSON_ONLY`-Konstante in `prompts.js`). Nach jedem `callAI`-Aufruf Pflichtfeld prüfen (z.B. `fehler`, `gesamtnote`, `figuren`). Fehler werfen statt falsche Daten rendern.
+- **Styles nur in `style.css`** — keine Inline-`style`-Attribute, keine `<style>`-Blöcke im HTML.
+- **`bsGetAll` statt `bsGet` für Listen** — BookStack paginiert (Standard 20 Einträge). `bsGetAll` iteriert alle Seiten automatisch.
 
-Cron (täglich 02:00) → syncAllBooks() → getAllUserTokens() → page_stats + book_stats_history
-```
+## Neues Feature hinzufügen
 
-**Auth-Flow:** Alle Routen ausser `/auth/*` sind durch einen Session-Guard geschützt. Nicht authentifizierte Requests auf HTML-Pfade → Redirect `/auth/login` → Google → `/auth/callback` → Session → `/`. API-Pfade (JSON-Requests) → `401 JSON`.
+### Backend (KI-Job)
 
-KI-Aufrufe laufen **nicht direkt aus dem Browser**, sondern über den jeweiligen Proxy-Endpunkt – der Server hält alle Credentials. Der BookStack-Proxy injiziert den per-User-Token aus `req.session.bookstackToken` serverseitig; das Frontend sendet keinen Authorization-Header.
+1. Job-Datei in `routes/jobs/` anlegen (Pattern: siehe `routes/jobs/review.js`)
+2. `runXxxJob`-Funktion + `router.post('/xxx', ...)` implementieren
+3. Router in `routes/jobs.js` mounten
+4. Prompt-Builder in `public/js/prompts.js` ergänzen
+5. Schema-Validierung nach `callAI` nicht vergessen
 
-## Projektstruktur
+### Frontend
 
-`server.js`, `logger.js`, `db/`, `routes/`, `public/` – Struktur folgt dem Architekturdiagramm oben.
+1. Neues Modul in `public/js/` → Methoden-Objekt exportieren (z.B. `export const xxxMethods = { ... }`)
+2. Methoden verwenden `this` (zeigt auf Alpine-Komponente)
+3. In `public/js/app.js` per `...spread` einbinden
 
-Nicht-offensichtliche Dateien:
+### Feature-Toggle (Exklusivität)
 
-- `public/js/prompts.js` – EINZIGE QUELLE für alle Prompt-Schemas und Build-Logik. Server importiert via dynamic `import()`. NIEMALS Prompts anderswo duplizieren.
-- `public/js/app.js` – Alpine-Root; alle Feature-Module per `...spread` eingebunden.
+Immer nur eine Hauptansicht aktiv. Buchebenen-Features und Seitenebenen-Features (Editor) sind gegenseitig exklusiv.
+- Jedes Buchebenen-Toggle ruft `_closeOtherMainCards(keep)` auf (schliesst alle anderen Karten + Editor)
+- `selectPage()` schliesst alle Buchkarten bevor der Editor öffnet
+- Neues Feature-Toggle immer nach diesem Muster implementieren
+
+## Prompt-System
+
+**Zwei Dateien, klare Trennung:**
+- `prompt-config.json` (Projektroot, Pflichtdatei) — Rollenformulierungen, Basisregeln, Buchtypen pro Sprache. Fehlt sie → Server-Crash beim Start.
+- `public/js/prompts.js` — JSON-Schemas, Build-Logik, `configurePrompts()`. Wird sowohl vom Server (dynamic `import()`) als auch vom Frontend (ESM) geladen.
+
+**Ladereihenfolge:**
+- Server: `routes/jobs.js` und `routes/chat.js` lesen `prompt-config.json` synchron beim Modulstart → `configurePrompts()` einmalig. `routes/proxies.js` liefert die Config lazy beim ersten `/config`-Call ans Frontend.
+- Frontend: `app.js` → `init()` → `configurePrompts(cfg.promptConfig)` → setzt `SYSTEM_*`-Variablen via ESM-Live-Binding.
+
+**Buchtypen:** In `prompt-config.json` unter `buchtypen`, aufgeteilt nach Sprachcode (`de`, `en`). Jeder Key hat `label` + `zusatz`. Neuer Typ: in beiden Sprachen ergänzen.
+
+**Per-Buch-Kontext:** `getBookPrompts(bookId)` → `getLocalePromptsForBook()` augmentiert `baseRules` dynamisch mit Buchtyp-Zusatztext und Freitext des Users (`BUCHTYP-KONTEXT:` / `WEITERE ANGABEN DES AUTORS:`).
 
 ## Datenbank
 
 Schema, Tabellen und Migrationslogik: siehe [db/schema.js](db/schema.js).
 
-**Migrationen:** `CURRENT_SCHEMA_VERSION` erhöhen, `if (version < N)`-Block in `runMigrations()` ergänzen. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` – keine Versionierung nötig.
+**Migration hinzufügen:** `CURRENT_SCHEMA_VERSION` erhöhen → `if (version < N)`-Block in `runMigrations()` ergänzen. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` — keine Versionierung nötig.
 
-**Neue Beziehungstypen:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Im Frontend in der `BZ`-Konstante (Rendering) und im Claude-Prompt (`FINAL_SCHEMA`) den neuen Typ ergänzen.
+**Neuer Beziehungstyp:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Neuen Typ in der `BZ`-Konstante (Frontend-Rendering) und im Claude-Prompt (`FINAL_SCHEMA` in `prompts.js`) ergänzen.
 
-**DB auf dem LXC prüfen:**
-```bash
-sqlite3 /opt/lektorat/lektorat.db
-.tables
-SELECT * FROM schema_version;
+## Architektur-Überblick
+
+```
+Browser → NGINX (HTTPS) → Express (Port 3737)
+  /auth/*    → Google OIDC (Login/Callback/Logout/Me)
+  /config    → Modell-Config + User (keine Credentials)
+  /api/*     → BookStack-Proxy (Token aus Session, serverseitig)
+  /claude    → api.anthropic.com (ANTHROPIC_API_KEY-Injection, SSE)
+  /ollama    → Ollama /api/chat (NDJSON → SSE normalisiert)
+  /jobs/*    → Hintergrund-Jobs (Status-Polling, alle KI-Analysen)
+  /chat/*    → Seiten-Chat (SSE-Streaming) + Buch-Chat-Sessions
+  /history/* → Job-Verlauf (SQLite)
+  /figures/* → Figuren-CRUD (SQLite)
+  /sync/*    → Buchstatistik-Sync (manuell + Cron)
+  /          → public/index.html (SPA)
+
+Cron (täglich 02:00) → syncAllBooks() → page_stats + book_stats_history
 ```
 
-## Prompt-Konfiguration
+**Auth:** Alle Routen ausser `/auth/*` sind durch Session-Guard geschützt. HTML-Requests → Redirect auf Login. API-Requests → `401 JSON`.
 
-**Pflichtdatei:** `prompt-config.json` (Projektroot) muss vorhanden sein. Fehlt sie, wirft der Server beim Start einen Fehler – es gibt keine eingebauten Defaults. Struktur und Inhalt: siehe `prompt-config.json`.
+**Credentials:** KI-Aufrufe laufen über Server-Proxies — der Server hält alle API-Keys. Der BookStack-Proxy injiziert `req.session.bookstackToken` serverseitig.
 
-**Hartkodiert in `prompts.js`:** Die JSON-Only-Anweisung, alle JSON-Schema-Definitionen und Feldnamen in den Build-Funktionen.
+## KI-Provider
 
-**Ladereihenfolge:**
-- `routes/proxies.js` liest die Datei beim ersten `/config`-Aufruf (lazy singleton) und liefert sie als `promptConfig` ans Frontend.
-- `routes/jobs.js` und `routes/chat.js` lesen die Datei beim Modulstart (synchron) und rufen `configurePrompts()` einmalig nach dem dynamischen `import()` von `prompts.js` auf.
-- `public/js/app.js` ruft `configurePrompts(cfg.promptConfig)` in `init()` auf → setzt die `export let SYSTEM_*`-Variablen in `prompts.js` via ESM-Live-Binding.
+Drei Provider, konfiguriert via `API_PROVIDER` in `.env`:
 
-**Single Source of Truth:** Rollenformulierungen und Basisregeln in `prompt-config.json`; JSON-Schemas und Build-Logik aller Prompts ausschliesslich in `public/js/prompts.js`.
+| Provider | Env-Vars | Besonderheit |
+|----------|----------|--------------|
+| `claude` | `ANTHROPIC_API_KEY`, `MODEL_NAME` | Prompt-Caching (`cache_control: ephemeral`), grosses Kontextfenster |
+| `ollama` | `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_TEMPERATURE` | Mutex-Serialisierung (VRAM-Schutz), dynamische `num_ctx`-Berechnung |
+| `llama` | `LLAMA_HOST`, `LLAMA_MODEL`, `LLAMA_TEMPERATURE` | LM Studio, ebenfalls Mutex-serialisiert |
 
-**Buchtypen (`prompt-config.json`):** Top-Level-Abschnitt `buchtypen`, aufgeteilt nach Sprachcode (`de`, `en`). Jeder Buchtyp-Key (z.B. `roman`, `kurzgeschichten`) hat `label` (für die UI) und `zusatz` (KI-Kontext-Text). de-CH und de-DE teilen sich denselben deutschen Text. Neue Typen: Key + `label` + `zusatz` in beiden Sprachen ergänzen.
+**`MODEL_TOKEN`** setzt den globalen Output-Token-Cap (`MAX_TOKENS_OUT` in `lib/ai.js`, Default 64 000). Job-spezifische Overrides werden per `Math.min` gedeckelt.
 
-**Per-Buch-Kontext (`book_settings.buchtyp` + `buch_kontext`):** Beim Start eines KI-Jobs lädt `getBookPrompts(bookId)` → `getLocalePromptsForBook(locale, buchtyp, buchKontext)` aus `prompts.js`. Diese Funktion augmentiert die `baseRules` dynamisch: Buchtyp-Zusatztext + Freitext des Users werden als eigene Blöcke (`BUCHTYP-KONTEXT:` / `WEITERE ANGABEN DES AUTORS:`) an die `baseRules` angehängt. `buchKontext` wird ausserdem als Sozialschicht-Kontext in `SYSTEM_KOMPLETT_EXTRAKTION` / `figurenBasisRules` eingesetzt (ersetzt den früheren statischen `soziogrammKontext`). Das Ergebnis-Objekt enthält zusätzlich `BUCH_KONTEXT` (der rohe Freitext) für User-Message-Builder wie `buildFiguresBasisConsolidationPrompt`.
+**JSON-Parsing:** `lib/ai.js` hat mehrstufigen Fallback: `JSON.parse()` → `extractBalancedJson()` → `jsonrepair()`.
 
-## KI-Integration
+## Two-Tier-Analyse
 
-**Regel: Alle serverseitigen KI-Calls laufen über die Job-Queue (`/jobs/*`).** Neue Features die einen KI-Call benötigen, implementieren einen Job-Typ in `routes/jobs.js` (Funktion `runXxxJob` + `router.post('/xxx', ...)`). Direkte synchrone KI-Calls aus Route-Handlern (ohne Job-Queue) sind nicht erlaubt – auch nicht für kurze/einfache Operationen. Das Frontend pollt den Job-Status via `_startPoll()`. Ausnahme: Seiten-Chat (`/chat/send`) nutzt bewusst SSE-Streaming statt Jobs.
+Jobs in `routes/jobs/` verwenden ein Single-Pass/Multi-Pass-Muster. Limits und Batch-Grössen sind als Konstanten in `routes/jobs/shared.js` definiert — dort nachschlagen statt hier. Für `komplett-analyse` gilt ein höheres Limit bei Claude (passt ins 200K-Token-Kontextfenster).
 
-**`callAI`** (in `lib/ai.js`, importiert von `routes/jobs.js`) gibt immer ein **geparstes JSON-Objekt** zurück – kann nicht für Freitext-Antworten verwendet werden. Jeder Systemprompt muss JSON-Only erzwingen (die `JSON_ONLY`-Konstante in `prompts.js`).
+## Komplettanalyse-Job
 
-**Schema-Validierung:** Nach jedem `callAI`-Aufruf wird das Pflichtfeld geprüft (`fehler` in `lektorat.js`, `gesamtnote` in `review.js`, `figuren` in `figuren.js`). Fehlt es, Fehler werfen statt falsche Daten rendern.
+**Pipeline-Phasen und Abhängigkeiten:**
 
-**Provider-Proxy:**
-- **`/claude`** – injiziert `ANTHROPIC_API_KEY`, leitet an `api.anthropic.com/v1/messages` weiter, streamt als SSE. `model` und `max_tokens` werden aus `.env` (MODEL_NAME / MODEL_TOKEN) erzwungen.
-- **`/ollama`** – konvertiert Anthropic-Request-Format → Ollama `/api/chat`-Format, normalisiert NDJSON → SSE. Frontend-Parser bleibt für beide Provider identisch.
+```
+Phase 1 – Vollextraktion (parallel pro Kapitel oder Single-Pass)
+          → figuren, orte, fakten, szenen(Namen), assignments(Namen)
+          → Checkpoint 'p1_full_done'
+                    ↓
+Phase 2 – Figuren konsolidieren + Soziogramm (aus P2-Output, kein Extra-Call)
+Phase 3 – Schauplätze konsolidieren
+Phase 3b – Kapitelübergreifende Beziehungen (nur Multi-Pass, non-critical)
+                    ↓
+Block 2 [parallel]:
+  Phase 5 – Szenen remappen (kein API-Call, Namen → IDs)
+  Phase 6 – Zeitstrahl konsolidieren
+  Phase 8 – Kontinuitätscheck (Single-Pass: voller Text, Multi-Pass: Fakten)
+```
 
-**`MODEL_TOKEN` (`.env`):** Einzige Quelle für `MAX_TOKENS_OUT` in `lib/ai.js` (Default: 64 000). Dieser Wert ist der globale Hard-Cap für alle KI-Calls über alle drei Provider. Ein `maxTokensOverride` aus einzelnen Jobs wird immer per `Math.min(override, MAX_TOKENS_OUT)` gedeckelt und kann den Wert nie überschreiten. Bei Ollama fliesst er zusätzlich in die dynamische `num_ctx`-Berechnung ein (`estimatedTokIn + maxTokens + 1000`): ist `MODEL_TOKEN` zu klein, kürzt Ollama stillschweigend den Input-Prompt – ohne Fehler, aber mit weniger extrahierten Figuren/Szenen als Resultat.
+**Wichtige Mechanismen:**
+- **Delta-Cache:** Phase 1 (Multi-Pass) prüft `chapter_extract_cache` in der DB. Cache-Key enthält `pages_sig` (sortierte `page_id:updated_at`-Paare). Ändert sich eine Seite → Cache-Miss → Neu-Extraktion. Single-Pass wird nicht gecacht.
+- **Prompt-Caching:** System-Prompt mit eingebettetem Schema wird bei parallelen Kapitel-Calls gecacht (~10% des Input-Preises für Folge-Calls).
+- **Checkpoint-Wiederaufnahme:** `p1_full_done` speichert alle 5 Arrays. Alte `p1_done`-Checkpoints werden verworfen → Job-Neustart.
 
 ## Chat
 
-**Seiten-Chat** (`/chat/send`): Direktes SSE-Streaming, kein Job-Queue. KI-Antwortformat: `{ "antwort": "Markdown", "vorschlaege": [{ "original", "ersatz", "begruendung" }] }`. `original` muss zeichengenau im Seitentext vorkommen. `applyChatVorschlag()` ersetzt es identisch zum Lektorat-Flow via `_applyCorrections`.
+- **Seiten-Chat** (`/chat/send`): SSE-Streaming, kein Job-Queue. Antwortformat enthält `vorschlaege` mit zeichengenauem `original` für Textersetzung.
+- **Buch-Chat** (`/jobs/book-chat`): Job-Queue, kein Vorschläge-System. Sessions nutzen `page_id=0`, `page_name='__book__'`.
+- **SSE-Fehler:** `sseStarted`-Flag trennt Pre-Stream-Fehler (→ JSON 502) von Mid-Stream-Fehler (→ SSE `{ type: 'error' }` + `[DONE]`).
 
-**Buch-Chat** (`/jobs/book-chat`): Job-Queue statt SSE, kein Vorschläge-System. Buch-Chat-Sessions nutzen `page_id=0` und `page_name='__book__'` in der `chat_sessions`-Tabelle. KI-Antwortformat: `{ "antwort": "Markdown" }`.
+## Fehlerbehandlung
 
-**SSE-Fehlerbehandlung:** Das Flag `sseStarted` trennt Fehler vor dem Stream-Start (→ JSON 502) von Fehlern während des Streams (→ SSE `{ type: 'error' }` + `[DONE]`). Express 4 fängt Fehler aus `async`-Handlern nicht automatisch – ohne den try/catch-Wrapper schliesst Node die Verbindung ohne HTTP-Antwort.
+- **Jobs:** `try/catch` → `failJob(id, err)` setzt Status auf `'error'` oder `'cancelled'` (bei `AbortError`). Fehler werden in `job.error` gespeichert und geloggt.
+- **API-Routen:** Fehlende Parameter → `400 JSON`, unauthentifiziert → `401 JSON`.
+- **JSON-Parsing:** Mehrstufiger Fallback in `lib/ai.js` (siehe KI-Provider).
+- **DB-Fehler:** Geloggt, blockieren nicht den Request.
 
-**`bsGetAll(path)`:** BookStack paginiert Listenendpunkte (Standard: 20 Einträge). `bsGetAll` iteriert automatisch alle Seiten. Immer `bsGetAll` statt `bsGet` verwenden wenn eine vollständige Liste benötigt wird.
+## Logging
 
-## Frontend-Architektur
+Winston (`logger.js`): Level `info`, Ausgabe in `lektorat.log` (5 MB, 3 Dateien rotiert) + Console. Jobs nutzen Child-Logger mit Kontext: `logger.child({ job, user, book })` → Format: `[INFO][lektorat|user@mail.com|42] Nachricht`.
 
-SPA aus `index.html`, `style.css` und ES-Modulen – **kein Build-Step**, kein Bundler. Alpine.js und vis-network via CDN.
-
-**Modul-Pattern:** Alle `public/js/*.js`-Module (ausser `app.js`, `utils.js`, `prompts.js`) exportieren ein Methoden-Objekt (z.B. `export const lektoratMethods = { ... }`). Die Methoden verwenden `this`, das auf die Alpine-Komponente zeigt – per `...spread` in das Alpine-Data-Objekt eingebettet. Neue Funktionalität: Modul anlegen → exportieren → in `app.js` spreaden.
-
-**Style-Regel:** Alle Styles ausschliesslich in `style.css` – keine Inline-`style`-Attribute, keine `<style>`-Blöcke im HTML.
-
-**Feature-Exklusivität (Standardverhalten):** Features überschreiben sich gegenseitig – es ist immer nur eine Hauptansicht aktiv. Buchebenen-Features (Figuren, Szenen, Ereignisse, Orte, Kontinuität, Buchbewertung, Buchstatistik, Buch-Chat) und Seitenebenen-Features (Lektorat-Editor) sind gegenseitig exklusiv. Jedes Buchebenen-Toggle ruft `_closeOtherMainCards(keep)` in `app.js` auf – das schliesst alle anderen Buchkarten und ruft `resetPage()` auf (schliesst Editor + Seiten-Features). `selectPage()` schliesst seinerseits alle Buchkarten bevor es den Editor öffnet. Neues Feature-Toggle immer nach diesem Muster implementieren.
-
-**Two-Tier-Analyse-Pattern:** `routes/jobs.js` implementiert für Review, Figurenextraktion und Buch-Chat ein Two-Tier-Muster. `SINGLE_PASS_LIMIT` = 60 000 Zeichen (global für alle Jobs ausser komplett-analyse). Für `komplett-analyse` gilt provider-abhängig: Claude 250 000 Zeichen (~60K Tokens, passt in das 200K-Token-Kontextfenster), Ollama/Llama 60 000 Zeichen.
-
-**`BATCH_SIZE` = 15:** Anzahl Seiten die parallel aus BookStack geladen werden (HTTP I/O-bound). Gilt für alle Jobs die `loadPageContents` verwenden.
-
-## Komplettanalyse-Job (`komplett-analyse`)
-
-Der Button **«Alles aktualisieren»** startet den einzigen serverseitigen Job `/jobs/komplett-analyse`.
-
-**Pipeline (intern, ein einziger Job):**
+## Projektstruktur
 
 ```
-Phase 1 – Vollextraktion kombiniert (parallel pro Kapitel, oder Single-Pass für Claude ≤250K Zeichen)
-          buildExtraktionKomplettChapterPrompt()
-          System-Prompt: SYSTEM_KOMPLETT_EXTRAKTION (Schema darin eingebettet → gecacht)
-          Output: figuren + orte + fakten + szenen(Namen) + assignments(Namen)
-          → Checkpoint 'p1_full_done' (alle 5 Arrays)
-
-Phase 2 – Figuren konsolidieren + Soziogramm (kein separater API-Call)
-          buildFiguresBasisConsolidationPrompt()
-          → saveFigurenToDb() → figNameToId aufbauen
-          → Soziogramm: sozialschicht + machtverhaltnis direkt aus P2-Output extrahieren
-            (FIGUREN_BASIS_SCHEMA enthält beide Felder bereits)
-            → updateFigurenSoziogramm() wenn ≥ 4 Figuren
-
-Phase 3 – Schauplätze konsolidieren
-          buildLocationsConsolidationPrompt() → saveOrteToDb() → ortNameToId aufbauen
-
-Phase 3b – Kapitelübergreifende Beziehungen (nur Multi-Pass, d.h. chapterFiguren.length > 1)
-          buildKapiteluebergreifendeBeziehungenPrompt()
-          Input: konsolidierte Figurenliste + Buchtext (bis singlePassLimit gekürzt)
-          Output: neue figure_relations Einträge via addFigurenBeziehungen() (ohne DELETE)
-          Deduplizierung: prüft beide Richtungen für undirektionale Typen
-          Non-critical: Fehler werden geloggt, Job läuft weiter
-          Single-Pass übersprungen: Phase 1 hat den vollständigen Text gesehen → Beziehungen bereits erfasst
-
-Block 2 [parallel] –
-  Phase 5 – Szenen remappen (kein API-Call)
-            chapterSzenen/chapterAssignments aus Phase 1
-            Namen → IDs via figNameToId / ortNameToId
-            → figure_scenes + updateFigurenEvents()
-  Phase 6 – Zeitstrahl konsolidieren
-            buildZeitstrahlConsolidationPrompt()
-  Phase 8 – Kontinuitätscheck
-            Single-Pass (Claude ≤250K Zeichen): buildKontinuitaetSinglePassPrompt() – voller Buchtext
-            Multi-Pass (grössere Bücher): buildKontinuitaetCheckPrompt() (Fakten aus Phase 1)
+server.js              – Express-Setup, Auth-Guard, Cron, Route-Mounting
+logger.js              – Winston-Config
+lib/ai.js              – callAI(), Provider-Dispatch, JSON-Parsing
+db/schema.js           – SQLite-Schema, Migrationen, alle DB-Funktionen
+routes/
+  auth.js              – Google OIDC
+  proxies.js           – KI-Provider-Proxies + BookStack-Proxy
+  jobs.js              – Job-Router (mountet Feature-Router)
+  jobs/shared.js       – Job-Queue, Limits, loadPageContents, Hilfsfunktionen
+  jobs/lektorat.js     – Seiten-Lektorat
+  jobs/review.js       – Buchbewertung
+  jobs/komplett.js     – Komplettanalyse-Pipeline
+  jobs/chat.js         – Buch-Chat
+  chat.js              – Seiten-Chat (SSE)
+  figures.js, locations.js, history.js, sync.js, booksettings.js
+public/
+  index.html           – SPA-Shell
+  style.css            – Alle Styles (einzige Quelle)
+  js/app.js            – Alpine-Root, Feature-Module per ...spread
+  js/prompts.js        – Prompt-Schemas + Build-Logik (shared Server/Frontend)
+  js/utils.js          – Gemeinsame Hilfsfunktionen
+  js/*.js              – Feature-Module (lektorat, review, figuren, chat, etc.)
 ```
 
-**Token-Optimierungen:** Phase 1 und 5 sind zu einem einzigen Kapitel-Call zusammengeführt. Schema und Regeln leben in `SYSTEM_KOMPLETT_EXTRAKTION` (System-Prompt) und werden gecacht – spart ~19/20 Schema-Tokens pro Kapitel-Call. Szenen/Events nutzen Klarnamen; das ID-Remapping erfolgt in `processSzenenEreignisseFromMerged` nach der Konsolidierung. Soziogramm (Phase 4) existiert nicht mehr als separater API-Call – die Daten werden aus dem P2-Result gelesen.
+## Keine Tests
 
-**Delta-Cache (inkrementelles Processing):** Phase 1 (Multi-Pass) prüft vor jedem Kapitel-Call den `chapter_extract_cache` in der DB. Cache-Schlüssel: `(book_id, user_email, chapter_key, pages_sig)`. `pages_sig` = sortierter String aus `page_id:updated_at`-Paaren aller Seiten des Kapitels (aus BookStack-API). Ändert sich eine Seite → Cache-Miss → Neu-Extraktion + Cache-Update. Unveränderte Kapitel überspringen den KI-Call vollständig. Gilt nur für den Multi-Pass-Pfad (Bücher > singlePassLimit); Single-Pass wird nicht gecacht. Funktionen: `loadChapterExtractCache` / `saveChapterExtractCache` in `db/schema.js`.
-
-**Prompt Caching:** `lib/ai.js` setzt `cache_control: { type: 'ephemeral' }` auf allen Systemprompts und sendet den Header `anthropic-beta: prompt-caching-2024-07-31`. Innerhalb eines parallelen Kapitel-Batches (Phase 1) trifft jeder Folge-Call den Cache des Systemprompts inkl. Schema (~10 % des normalen Input-Preises).
-
-**Checkpoint:** `phase: 'p1_full_done'` speichert alle 5 Arrays (`chapterFiguren`, `chapterOrte`, `chapterFakten`, `chapterSzenen`, `chapterAssignments`). Alte Checkpoints mit Phase `p1_done` werden verworfen und der Job neu gestartet.
-
-**UI:** `alleAktualisieren()` in `app.js` startet nur `/jobs/komplett-analyse` und pollt den Fortschritt. Nach Abschluss werden `loadFiguren`, `loadOrte`, `loadSzenen` und `_loadKontinuitaetHistory` parallel neu geladen.
+Das Projekt hat keine automatisierten Tests. Validierung erfolgt manuell.

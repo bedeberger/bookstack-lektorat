@@ -31,6 +31,7 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule, buchKontext = '
   const sp    = localeConfig.systemPrompts || {};
   return {
     ERKLAERUNG_RULE:             globalErklaerungRule || '',
+    KORREKTUR_REGELN:            localeConfig.korrekturRegeln || '',
     STOPWORDS:                   Array.isArray(localeConfig.stopwords) ? localeConfig.stopwords : [],
     BUCH_KONTEXT:                buchKontext,
     SYSTEM_LEKTORAT:             buildSystem(sp.lektorat          || '', rules),
@@ -54,6 +55,7 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule, buchKontext = '
 // Alle importierenden Module erhalten via ESM-Live-Binding immer den aktuellen Wert.
 // Diese Globals entsprechen stets dem defaultLocale und dienen der Rückwärtskompatibilität.
 export let ERKLAERUNG_RULE              = null;
+export let KORREKTUR_REGELN             = '';
 export let STOPWORDS                    = [];
 export let SYSTEM_LEKTORAT              = null;
 export let SYSTEM_BUCHBEWERTUNG         = null;
@@ -106,6 +108,7 @@ export function configurePrompts(cfg) {
   // Globale Exports auf Default-Locale setzen (ESM-Live-Binding für Client-Code)
   const def = _localeMap.get(_defaultLocale) || {};
   ERKLAERUNG_RULE              = def.ERKLAERUNG_RULE              ?? '';
+  KORREKTUR_REGELN             = def.KORREKTUR_REGELN             ?? '';
   STOPWORDS                    = def.STOPWORDS                    ?? [];
   SYSTEM_LEKTORAT              = def.SYSTEM_LEKTORAT              ?? null;
   SYSTEM_BUCHBEWERTUNG         = def.SYSTEM_BUCHBEWERTUNG         ?? null;
@@ -199,7 +202,7 @@ function _buildWiederholungBlock(sw = STOPWORDS) {
   return `
 Wiederholung-Regeln (typ: «wiederholung»):
 - Die gesamte Seite von Anfang bis Ende scannen – nicht nur lokale Abschnitte oder die letzten Sätze
-- Nur Inhaltswörter, die auffällig oft vorkommen: mind. 3× auf der gesamten Seite ODER 2× in enger Nähe (innerhalb eines Absatzes oder 5 Sätze)
+- Nur Inhaltswörter, die auffällig oft vorkommen: mind. 3× auf der gesamten Seite ODER 2× im selben oder direkt aufeinanderfolgenden Absatz
 - Keine Pronomen, Hilfsverben, Artikel, Konjunktionen, Präpositionen, Eigennamen${swNote}
 - «original»: vollständiger Satz zeichengenau aus dem Text (damit die Textstelle eindeutig auffindbar ist)
 - «korrektur»: derselbe Satz mit dem besten Synonym – exakt gleiche grammatische Form (Kasus, Numerus, Tempus)
@@ -207,11 +210,11 @@ Wiederholung-Regeln (typ: «wiederholung»):
 }
 
 // Gemeinsamer Rumpf für Einzel- und Batch-Lektorat-Prompts
-function _buildLektoratPromptBody(text, textLabel, { stopwords = STOPWORDS, erklaerungRule = ERKLAERUNG_RULE } = {}) {
+function _buildLektoratPromptBody(text, textLabel, { stopwords = STOPWORDS, erklaerungRule = ERKLAERUNG_RULE, korrekturRegeln = KORREKTUR_REGELN } = {}) {
   return `Analysiere diesen Text auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
 
 WICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen (z.B. ein Gallizismus und separate Anführungszeichen-Problematik), müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.
-${erklaerungRule ? `\nFILTER-PFLICHT: ${erklaerungRule}\n` : ''}
+${erklaerungRule ? `\nFILTER-PFLICHT: ${erklaerungRule}\n` : ''}${korrekturRegeln ? `\n${korrekturRegeln}\n` : ''}
 Antworte mit diesem JSON-Schema:
 {
   "fehler": [
@@ -233,6 +236,11 @@ Antworte mit diesem JSON-Schema:
   "stilanalyse": "4-5 Sätze Stilanalyse – ohne Rechtschreib- und Grammatikmängel (diese sind im «fehler»-Array erfasst); fokussiert auf literarischen Stil, Rhythmus, Bildsprache und Wirkung",
   "fazit": "ein Satz Gesamtfazit zur literarischen Qualität – ohne Rechtschreib-/Grammatikhinweise"
 }
+
+Beispiel eines GUTEN Eintrags:
+{ "typ": "grammatik", "original": "wegen dem Regen", "korrektur": "wegen des Regens", "kontext": "Er blieb wegen dem Regen zu Hause.", "erklaerung": "«wegen» verlangt den Genitiv." }
+Beispiel eines VERWORFENEN Eintrags (NICHT aufnehmen):
+{ "typ": "rechtschreibung", "original": "heisst", "korrektur": "heißt", "erklaerung": "Könnte im Standarddeutschen mit ß geschrieben werden." } → Erklärung enthält Unsicherheit → Selbsttest nicht bestanden → weglassen.
 
 Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
@@ -265,8 +273,8 @@ GEWICHTUNG: Stil, Sprache und literarische Qualität sind die zentralen Bewertun
 
 Antworte mit diesem JSON-Schema:
 {
-  "gesamtnote": "Zahl von 1 (sehr schwach) bis 6 (ausgezeichnet)",
-  "gesamtnote_begruendung": "Ein Satz warum diese Note",
+  "gesamtnote": 4.5,
+  "gesamtnote_begruendung": "Ein Satz warum diese Note (gesamtnote als Dezimalzahl von 1.0=sehr schwach bis 6.0=ausgezeichnet, Halbschritte erlaubt)",
   "zusammenfassung": "2-3 Sätze Gesamteindruck",
   "struktur": "Analyse des Aufbaus und der Struktur (3-4 Sätze)",
   "stil": "Analyse des Schreibstils und seiner Konsistenz (3-4 Sätze)",
@@ -314,8 +322,8 @@ ${synthIn}
 
 Antworte mit diesem JSON-Schema:
 {
-  "gesamtnote": "Zahl von 1 (sehr schwach) bis 6 (ausgezeichnet)",
-  "gesamtnote_begruendung": "Ein Satz warum diese Note",
+  "gesamtnote": 4.5,
+  "gesamtnote_begruendung": "Ein Satz warum diese Note (gesamtnote als Dezimalzahl von 1.0=sehr schwach bis 6.0=ausgezeichnet, Halbschritte erlaubt)",
   "zusammenfassung": "2-3 Sätze Gesamteindruck",
   "struktur": "Analyse des Aufbaus und der Struktur über alle Kapitel (3-5 Sätze)",
   "stil": "Analyse des Schreibstils und seiner Konsistenz über das gesamte Buch (3-5 Sätze)",
@@ -353,7 +361,7 @@ const figurenBasisRules = (kontext = '') => `Regeln:
 - beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
 - kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten; name = immer der Kapitelname (aus dem ## Kapitel-Header über dem Abschnitt oder aus dem Prompt-Kontext) – NIEMALS Seitentitel als Kapitelnamen verwenden
 - sozialschicht: gesellschaftliche Schicht der Figur${kontext ? ` (${kontext})` : ''} – nur vergeben wenn eindeutig belegt; wirtschaftselite=Unternehmerfamilien/Direktoren, gehobenes_buergertum=Akademiker/freie Berufe/obere Kader, mittelschicht=Angestellte/Beamte/mittlere Kader, arbeiterschicht=Fabrik-/Bauarbeiter/Servicepersonal, migrantenmilieu=Zugewanderte/zweite Generation, prekariat=Sozialhilfe/Randständige/Langzeitarbeitslose, unterwelt=kriminelles Milieu, andere=nicht eindeutig
-- beziehungen.machtverhaltnis: Machtasymmetrie aus Perspektive der beschriebenen Figur → Bezugspunkt «figur_id»: +2=figur_id dominiert klar, +1=leichter Vorteil, 0=symmetrisch, -1=Bezugsfigur hat leichten Vorteil, -2=Bezugsfigur dominiert; weglassen oder 0 wenn unklar
+- beziehungen.machtverhaltnis: Machtasymmetrie: +2=Gegenüber (figur_id) dominiert klar, +1=Gegenüber hat leichten Vorteil, 0=symmetrisch, -1=diese Figur hat leichten Vorteil, -2=diese Figur dominiert klar; weglassen oder 0 wenn unklar
 - Beziehungstypen: elternteil/kind (gerichtet), geschwister (undirektional), patronage=Schutzherrschaft, geschaeft=wirtschaftliche Beziehung, übrige selbsterklärend
 - Nur fiktive Charaktere oder Figuren die aktiv an der Buchhandlung teilnehmen – keine Orte oder Objekte
 - KEINE historischen oder realen Personen die nur erwähnt, zitiert oder als Referenz genannt werden (z.B. Napoleon, Einstein, ein Politiker, eine Künstlerin)
@@ -383,12 +391,12 @@ Kapitelanalysen:
 
 ${synthInput}
 
-${JSON_ONLY}
-
 Antworte mit diesem JSON-Schema:
 ${FIGUREN_BASIS_SCHEMA}
 
-${figurenBasisRules(buchKontext)}`;
+${figurenBasisRules(buchKontext)}
+
+${JSON_ONLY}`;
 }
 
 
@@ -415,8 +423,6 @@ ${figInfo}
 Buchtext:
 ${bookText}
 
-${JSON_ONLY}
-
 Antworte mit diesem JSON-Schema:
 {
   "beziehungen": [
@@ -430,8 +436,10 @@ Regeln:
 - von/zu: nur IDs aus der obigen Figurenliste
 - Jede Beziehung nur einmal eintragen (nicht von→zu UND zu→von für denselben Typ)
 - Keine Beziehungen die bereits in «Bekannte Beziehungen» stehen
-- machtverhaltnis aus Perspektive von «von» bezüglich «zu»: +2=zu dominiert klar, +1=leichter Vorteil von zu, 0=symmetrisch, -1=von hat leichten Vorteil, -2=von dominiert klar; weglassen oder 0 wenn unklar
-- Leeres Array wenn keine neuen kapitelübergreifenden Beziehungen eindeutig belegt sind`;
+- machtverhaltnis: Machtasymmetrie: +2=Gegenüber («zu») dominiert klar, +1=Gegenüber hat leichten Vorteil, 0=symmetrisch, -1=diese Figur («von») hat leichten Vorteil, -2=diese Figur dominiert klar; weglassen oder 0 wenn unklar
+- Leeres Array wenn keine neuen kapitelübergreifenden Beziehungen eindeutig belegt sind
+
+${JSON_ONLY}`;
 }
 
 
@@ -459,6 +467,52 @@ const ORTE_RULES = `Regeln:
 - kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte in denen der Ort aktiv vorkommt
 - KONSERVATIV: Lieber weglassen als spekulieren; maximal 20 Orte`;
 
+// ── Fakten-Schema (verwendet in Komplett-Analyse und Kontinuität) ────────────
+
+const FAKTEN_SCHEMA = `"fakten": [
+    {
+      "kategorie": "figur|ort|objekt|zeit|ereignis|soziolekt|sonstiges",
+      "subjekt": "Über wen/was geht es (Name oder Bezeichnung)",
+      "fakt": "Was genau behauptet wird (1 Satz, so präzise wie möglich)",
+      "seite": "Seitenname oder Abschnittsname (leer wenn unklar)"
+    }
+  ]`;
+
+const FAKTEN_RULES = `Fakten-Regeln:
+- Nur konkrete, prüfbare Aussagen – keine Interpretationen
+- Figuren-Zustände besonders genau erfassen (Wissen, Können, körperlicher Zustand, Wohnort, Beruf)
+- Soziolekt: Wenn eine Figur erstmals oder markant spricht, ein Faktum erfassen das ihr Sprachregister beschreibt. Kategorie «soziolekt» verwenden.
+- Objekte: Wer besitzt was, wo liegt was, in welchem Zustand
+- Zeitangaben: Relative («am nächsten Morgen») und absolute («1943») erfassen
+- Maximal 50 Fakten pro Kapitel; lieber weniger, dafür präzise`;
+
+// ── Kontinuitäts-Probleme-Schema (verwendet in Check und SinglePass) ─────────
+
+const PROBLEME_SCHEMA = `{
+  "probleme": [
+    {
+      "schwere": "kritisch|mittel|niedrig",
+      "typ": "figur|zeitlinie|ort|objekt|verhalten|soziolekt|sonstiges",
+      "beschreibung": "Was genau widerspricht sich (1-2 Sätze)",
+      "stelle_a": "Erste Textstelle (Kapitel: Seite oder Abschnitt)",
+      "stelle_b": "Zweite Textstelle (Kapitel: Seite oder Abschnitt)",
+      "figuren": ["Name der direkt betroffenen Figur"],
+      "kapitel": ["Exakter Kapitelname A", "Exakter Kapitelname B"],
+      "empfehlung": "Wie könnte das aufgelöst werden (1 Satz)"
+    }
+  ],
+  "zusammenfassung": "Gesamteinschätzung der Konsistenz des Buchs in 2-3 Sätzen"
+}`;
+
+const PROBLEME_RULES = `Regeln:
+- Nur echte Widersprüche – keine stilistischen oder inhaltlichen Anmerkungen
+- schwere: «kritisch» = klarer Logikfehler der auffällt; «mittel» = wahrscheinlicher Fehler; «niedrig» = mögliche Inkonsistenz
+- Soziolekt-Probleme: nur wenn klar ein Sprachmuster etabliert wurde und dann ohne Begründung bricht – nicht melden wenn Figur wenig Dialoganteil hat
+- figuren: PFLICHTFELD – immer angeben, mindestens []; Namen exakt wie in der Figurenliste; [] nur wenn wirklich keine Figur betroffen (rein ortsbezogene Widersprüche)
+- kapitel: PFLICHTFELD – immer angeben, mindestens []; exakte Kapitelnamen aus stelle_a/stelle_b; wenn beide Stellen im selben Kapitel nur einmal; [] nur wenn der Text keine Kapitelinformation enthält
+- Wenn keine Widersprüche gefunden: «probleme» als leeres Array, «zusammenfassung» = positive Einschätzung
+- Konservativ: Im Zweifel weglassen`;
+
 // ── Komplett-Analyse (kombinierte Extraktion) ─────────────────────────────────
 // Hilfsfunktion: Extrahiert den Inhalt des äussersten Objekts aus einem Schema-String.
 // Ermöglicht das Zusammensetzen von Schemas ohne Duplikation der Felddefinitionen.
@@ -471,18 +525,13 @@ function _schemaBody(schemaStr) {
 // figuren_namen / orte_namen / figur_name: Klarnamen statt IDs, da konsolidierte IDs
 // erst nach P2/P3 bekannt sind. Remapping nach der Konsolidierung in jobs.js.
 // kontext kommt aus book_settings.buch_kontext (per-Buch-Freitext), wird von buildSystemKomplett durchgereicht.
-function buildKomplettSchemaStatic(kontext = '') { return `Antworte mit diesem JSON-Schema:
+function buildKomplettSchemaStatic(kontext = '') { return `Priorität: Figuren und deren Beziehungen sind am wichtigsten. Im Zweifel lieber weniger Fakten/Szenen und dafür korrekte Figurenanalyse.
+
+Antworte mit diesem JSON-Schema:
 {
   ${_schemaBody(FIGUREN_BASIS_SCHEMA)},
   ${_schemaBody(ORTE_SCHEMA)},
-  "fakten": [
-    {
-      "kategorie": "figur|ort|objekt|zeit|ereignis|soziolekt|sonstiges",
-      "subjekt": "Über wen/was geht es (Name oder Bezeichnung)",
-      "fakt": "Was genau behauptet wird (1 Satz, so präzise wie möglich)",
-      "seite": "Seitenname oder Abschnittsname (leer wenn unklar)"
-    }
-  ],
+  ${FAKTEN_SCHEMA},
   "szenen": [
     {
       "seite": "Name der Seite/des Abschnitts (leer wenn unklar)",
@@ -517,13 +566,7 @@ ${figurenBasisRules(kontext)}
 Schauplatz-Regeln:
 ${ORTE_RULES}
 
-Fakten-Regeln:
-- Nur konkrete, prüfbare Aussagen – keine Interpretationen
-- Figuren-Zustände besonders genau erfassen (Wissen, Können, körperlicher Zustand, Wohnort, Beruf)
-- Soziolekt: Wenn eine Figur erstmals oder markant spricht, ein Faktum erfassen das ihr Sprachregister beschreibt. Kategorie «soziolekt» verwenden.
-- Objekte: Wer besitzt was, wo liegt was, in welchem Zustand
-- Zeitangaben: Relative («am nächsten Morgen») und absolute («1943») erfassen
-- Maximal 50 Fakten pro Kapitel; lieber weniger, dafür präzise
+${FAKTEN_RULES}
 
 Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
@@ -737,12 +780,12 @@ Kapitelanalysen:
 
 ${synthInput}
 
-${JSON_ONLY}
-
 Antworte mit diesem JSON-Schema:
 ${ORTE_SCHEMA}
 
-${ORTE_RULES}`;
+${ORTE_RULES}
+
+${JSON_ONLY}`;
 }
 
 // ── Kontinuitätsprüfung ───────────────────────────────────────────────────────
@@ -752,23 +795,10 @@ export function buildKontinuitaetChapterFactsPrompt(chapterName, chText) {
 
 Antworte mit diesem JSON-Schema:
 {
-  "fakten": [
-    {
-      "kategorie": "figur|ort|objekt|zeit|ereignis|soziolekt|sonstiges",
-      "subjekt": "Über wen/was geht es (Name oder Bezeichnung)",
-      "fakt": "Was genau behauptet wird (1 Satz, so präzise wie möglich)",
-      "seite": "Seitenname oder Abschnittsname (leer wenn unklar)"
-    }
-  ]
+  ${FAKTEN_SCHEMA}
 }
 
-Regeln:
-- Nur konkrete, prüfbare Aussagen – keine Interpretationen
-- Figuren-Zustände besonders genau erfassen (Wissen, Können, körperlicher Zustand, Wohnort, Beruf)
-- Soziolekt: Wenn eine Figur hier erstmals oder markant spricht, ein Faktum erfassen das ihr Sprachregister beschreibt (z.B. «spricht formell-gebildet», «verwendet Dialekt und Umgangssprache», «benutzt Fachjargon aus Bereich X»). Kategorie «soziolekt» verwenden.
-- Objekte: Wer besitzt was, wo liegt was, in welchem Zustand
-- Zeitangaben: Relative («am nächsten Morgen») und absolute («1943») erfassen
-- Maximal 50 Fakten pro Kapitel; lieber weniger, dafür präzise
+${FAKTEN_RULES}
 
 ${JSON_ONLY}
 
@@ -800,30 +830,9 @@ Suche nach Widersprüchen: Fakten, die sich gegenseitig ausschliessen oder nicht
 Prüfe zusätzlich die Soziolekt-Kohärenz: Spricht jede Figur konsistent mit der Herkunft, Bildung und sozialen Schicht, die in früheren Kapiteln durch ihren Soziolekt etabliert wurde? Registerwechsel (z.B. plötzlich formal statt umgangssprachlich, plötzlich Dialekt statt Hochsprache) die sich nicht durch die Situation oder dramaturgischen Kontext erklären lassen, sind Kontinuitätsfehler. Typ «soziolekt» verwenden.
 
 Antworte mit diesem JSON-Schema:
-{
-  "probleme": [
-    {
-      "schwere": "kritisch|mittel|niedrig",
-      "typ": "figur|zeitlinie|ort|objekt|verhalten|soziolekt|sonstiges",
-      "beschreibung": "Was genau widerspricht sich (1-2 Sätze)",
-      "stelle_a": "Erste Textstelle (Kapitel: Seite oder Abschnitt)",
-      "stelle_b": "Zweite Textstelle (Kapitel: Seite oder Abschnitt)",
-      "figuren": ["Name der direkt betroffenen Figur"],
-      "kapitel": ["Exakter Kapitelname A", "Exakter Kapitelname B"],
-      "empfehlung": "Wie könnte das aufgelöst werden (1 Satz)"
-    }
-  ],
-  "zusammenfassung": "Gesamteinschätzung der Konsistenz des Buchs in 2-3 Sätzen"
-}
+${PROBLEME_SCHEMA}
 
-Regeln:
-- Nur echte Widersprüche – keine stilistischen oder inhaltlichen Anmerkungen
-- schwere: «kritisch» = klarer Logikfehler der auffällt; «mittel» = wahrscheinlicher Fehler; «niedrig» = mögliche Inkonsistenz
-- Soziolekt-Probleme: nur wenn klar ein Sprachmuster etabliert wurde und dann ohne Begründung bricht – nicht melden wenn Figur wenig Dialoganteil hat
-- figuren: PFLICHTFELD – immer angeben, mindestens []; Namen exakt wie in der Figurenliste; [] nur wenn wirklich keine Figur betroffen (rein ortsbezogene Widersprüche)
-- kapitel: PFLICHTFELD – immer angeben, mindestens []; exakte Kapitelnamen aus stelle_a/stelle_b; wenn beide Stellen im selben Kapitel nur einmal; [] nur wenn der Text keine Kapitelinformation enthält
-- Wenn keine Widersprüche gefunden: «probleme» als leeres Array, «zusammenfassung» = positive Einschätzung
-- Konservativ: Im Zweifel weglassen
+${PROBLEME_RULES}
 
 ${JSON_ONLY}`;
 }
@@ -845,30 +854,9 @@ Buchtext:
 ${bookText}
 
 Antworte mit diesem JSON-Schema:
-{
-  "probleme": [
-    {
-      "schwere": "kritisch|mittel|niedrig",
-      "typ": "figur|zeitlinie|ort|objekt|verhalten|soziolekt|sonstiges",
-      "beschreibung": "Was genau widerspricht sich (1-2 Sätze)",
-      "stelle_a": "Erste Textstelle (Kapitel: Seite oder Abschnitt)",
-      "stelle_b": "Zweite Textstelle (Kapitel: Seite oder Abschnitt)",
-      "figuren": ["Name der direkt betroffenen Figur"],
-      "kapitel": ["Exakter Kapitelname A", "Exakter Kapitelname B"],
-      "empfehlung": "Wie könnte das aufgelöst werden (1 Satz)"
-    }
-  ],
-  "zusammenfassung": "Gesamteinschätzung der Konsistenz des Buchs in 2-3 Sätzen"
-}
+${PROBLEME_SCHEMA}
 
-Regeln:
-- Nur echte Widersprüche
-- schwere: «kritisch» = klarer Logikfehler; «mittel» = wahrscheinlicher Fehler; «niedrig» = mögliche Inkonsistenz
-- Soziolekt-Brüche: nur wenn ein Sprachmuster klar etabliert wurde und dann ohne Begründung bricht
-- figuren: PFLICHTFELD – immer angeben, mindestens []; Namen exakt wie in der Figurenliste; [] nur wenn wirklich keine Figur betroffen
-- kapitel: PFLICHTFELD – immer angeben, mindestens []; exakte Kapitelnamen aus stelle_a/stelle_b; wenn beide Stellen im selben Kapitel nur einmal; [] nur wenn der Text keine Kapitelinformation enthält
-- Wenn keine Widersprüche: «probleme» als leeres Array
-- Konservativ: Im Zweifel weglassen
+${PROBLEME_RULES}
 
 ${JSON_ONLY}`;
 }

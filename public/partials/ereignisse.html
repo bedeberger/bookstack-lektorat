@@ -9,16 +9,16 @@
   <div x-show="ereignisseLoading && ereignisseProgress > 0" class="progress-bar-wrap">
     <div class="progress-bar" :style="'width:' + ereignisseProgress + '%'"></div>
   </div>
-  <div x-show="ereignisseStatus && !zeitstrahlConsolidating" class="gz-status-text" x-html="ereignisseStatus"></div>
+  <div x-show="ereignisseStatus && !zeitstrahlConsolidating" class="card-status" x-html="ereignisseStatus"></div>
 
   <!-- Fortschritt Konsolidierung -->
   <div x-show="zeitstrahlConsolidating && zeitstrahlProgress > 0" class="progress-bar-wrap">
     <div class="progress-bar" :style="'width:' + zeitstrahlProgress + '%'"></div>
   </div>
-  <div x-show="zeitstrahlStatus && !ereignisseLoading" class="gz-status-text" x-html="zeitstrahlStatus"></div>
+  <div x-show="zeitstrahlStatus && !ereignisseLoading" class="card-status" x-html="zeitstrahlStatus"></div>
 
   <!-- Leer-Hinweis -->
-  <div x-show="globalZeitstrahl.length === 0 && !zeitstrahlConsolidating && !ereignisseLoading" class="figur-progress-status">
+  <div x-show="globalZeitstrahl.length === 0 && !zeitstrahlConsolidating && !ereignisseLoading" class="card-status">
     Noch keine Daten vorhanden. Bitte auf «Alle aktualisieren» klicken.
   </div>
 
@@ -45,7 +45,7 @@
          :class="{'combobox-wrap--disabled': _disabled}"
          class="combobox-wrap combobox-wrap--compact">
     </div>
-    <span class="szenen-filter-count" x-text="filteredEreignisse().length + ' / ' + globalZeitstrahl.length"></span>
+    <span class="filter-count" x-text="filteredEreignisse().length + ' / ' + globalZeitstrahl.length"></span>
   </div>
 
   <!-- Zeitleiste -->

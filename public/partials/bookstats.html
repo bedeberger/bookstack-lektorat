@@ -12,7 +12,7 @@
   </div>
 
   <!-- Sync-Status -->
-  <div x-show="bookStatsSyncStatus" class="book-stats-sync-status" x-html="bookStatsSyncStatus"></div>
+  <div x-show="bookStatsSyncStatus" class="card-status" x-html="bookStatsSyncStatus"></div>
 
   <!-- Metrik- & Zeitraum-Umschalter -->
   <div x-show="bookStatsData.length > 0" class="book-stats-controls">
@@ -63,7 +63,7 @@
   </div>
 
   <!-- Leer-Zustand -->
-  <div x-show="!bookStatsData.length && !bookStatsLoading" class="muted-msg" style="margin-top:14px;">
+  <div x-show="!bookStatsData.length && !bookStatsLoading" class="muted-msg muted-msg--spaced">
     Noch keine Daten vorhanden. Klicke «Synchronisieren» um den ersten Snapshot zu erfassen.
   </div>
 </div>

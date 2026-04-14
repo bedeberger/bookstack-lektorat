@@ -48,7 +48,9 @@
       "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT ca.fig_id, f.fig_id as f_fig_id, f.name FROM character_arcs ca LEFT JOIN figures f ON f.fig_id = ca.fig_id AND f.book_id = ca.book_id LIMIT 5;\")",
       "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \".tables\")",
       "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT COUNT\\(*\\) FROM character_arcs; SELECT COUNT\\(*\\) FROM arc_stages; SELECT arc_id, kapitel FROM arc_stages LIMIT 5;\")",
-      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT COUNT\\(*\\) FROM figures; SELECT COUNT\\(*\\) FROM continuity_checks; SELECT fig_id, name FROM figures LIMIT 5;\")"
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT COUNT\\(*\\) FROM figures; SELECT COUNT\\(*\\) FROM continuity_checks; SELECT fig_id, name FROM figures LIMIT 5;\")",
+      "Bash(node --check public/js/history.js)",
+      "Bash(md5 /Users/bd/ClaudeProjects/bookstack-lektorat/public/style.css)"
     ]
   }
 }

@@ -1,7 +1,7 @@
+import { SAFETY_HTML_RATIO } from './utils.js';
+
 // History-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
-
-const SAFETY_HTML_RATIO = 0.5;
 
 export const historyMethods = {
   async loadPageHistory(pageId) {

@@ -1,14 +1,42 @@
 'use strict';
 const express = require('express');
-const { db } = require('../../db/schema');
+const { db, getBookLocale } = require('../../db/schema');
 const {
   makeJobLogger, updateJob, completeJob, failJob,
   aiCall, getPrompts, getBookPrompts,
-  htmlToText, bsGetAll, jobAbortControllers,
-  _modelName, fmtTok, tps, BS_URL,
+  htmlToText, bsGet, bsGetAll, jobAbortControllers,
+  _modelName, fmtTok, tps,
   jobs, runningJobs, createJob, enqueueJob, jobKey,
   jsonBody,
 } = require('./shared');
+
+// Gültige Fehlertypen und Validierung für Lektorat-Ergebnisse
+const VALID_TYPEN = new Set(['rechtschreibung', 'grammatik', 'stil', 'wiederholung']);
+
+// Erklärungs-Phrasen die darauf hindeuten, dass der Eintrag kein echter Fehler ist.
+// Lokale Modelle (Ollama/Llama) ignorieren die FILTER-PFLICHT im Prompt häufig
+// und liefern Einträge mit «Korrektur entfällt – Satz ist korrekt» o.Ä. als Erklärung.
+const NON_ERROR_RE = /korrektur entfällt|kein fehler|kein mangel|ist korrekt\b|nicht falsch|eintrag entfällt|im schweizer kontext|vertretbar|akzeptabel|möglicherweise/i;
+
+function validateLektoratFehler(fehler, locale) {
+  const isCH = locale === 'de-CH';
+  return fehler
+    .map(f => ({ ...f, typ: f.typ?.toLowerCase?.() }))
+    .filter(f => VALID_TYPEN.has(f.typ))
+    .filter(f => f.typ !== 'stil' || (f.korrektur?.trim() && f.korrektur.trim() !== f.original?.trim()))
+    // Einträge deren Erklärung verrät, dass es kein echter Fehler ist
+    .filter(f => !NON_ERROR_RE.test(f.erklaerung || ''))
+    // de-CH: Einträge filtern, deren einziger Unterschied ss↔ß ist
+    .filter(f => {
+      if (!isCH || !f.original || !f.korrektur) return true;
+      return f.original.replace(/ß/g, 'ss') !== f.korrektur.replace(/ß/g, 'ss');
+    })
+    // de-CH: verbleibende Korrekturen bereinigen – ß→ss
+    .map(f => {
+      if (isCH && f.korrektur) f.korrektur = f.korrektur.replace(/ß/g, 'ss');
+      return f;
+    });
+}
 
 const lektoratRouter = express.Router();
 
@@ -16,20 +44,13 @@ const lektoratRouter = express.Router();
 async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
   const { buildLektoratPrompt } = await getPrompts();
-  const { SYSTEM_LEKTORAT, STOPWORDS: lektoratStopwords, ERKLAERUNG_RULE: lektoratErklaerungRule } = await getBookPrompts(bookId);
+  const { SYSTEM_LEKTORAT, STOPWORDS: lektoratStopwords, ERKLAERUNG_RULE: lektoratErklaerungRule, KORREKTUR_REGELN: lektoratKorrekturRegeln } = await getBookPrompts(bookId);
+  const locale = bookId ? getBookLocale(bookId) : 'de-CH';
   try {
     logger.info(`Start: Seite #${pageId} (book=${bookId || '-'})`);
     updateJob(jobId, { statusText: 'Lade Seiteninhalt…', progress: 5 });
 
-    const authHeader = userToken
-      ? `Token ${userToken.id}:${userToken.pw}`
-      : `Token ${process.env.TOKEN_ID || ''}:${process.env.TOKEN_KENNWORT || ''}`;
-    const pdResp = await fetch(`${BS_URL}/api/pages/${pageId}`, {
-      headers: { Authorization: authHeader },
-      signal: AbortSignal.timeout(30000),
-    });
-    if (!pdResp.ok) throw new Error(`BookStack ${pdResp.status}: ${await pdResp.text()}`);
-    const pd = await pdResp.json();
+    const pd = await bsGet('pages/' + pageId, userToken);
 
     const html = pd.html;
     const text = htmlToText(html);
@@ -39,17 +60,13 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     updateJob(jobId, { statusText: 'KI analysiert…', progress: 10 });
 
     const result = await aiCall(jobId, tok,
-      buildLektoratPrompt(text, { stopwords: lektoratStopwords, erklaerungRule: lektoratErklaerungRule }),
+      buildLektoratPrompt(text, { stopwords: lektoratStopwords, erklaerungRule: lektoratErklaerungRule, korrekturRegeln: lektoratKorrekturRegeln }),
       SYSTEM_LEKTORAT,
       10, 97, 5000,
     );
 
     if (!Array.isArray(result?.fehler)) throw new Error('fehler-Array fehlt');
-    const _validTypen = new Set(['rechtschreibung', 'grammatik', 'stil', 'wiederholung']);
-    result.fehler = result.fehler
-      .map(f => ({ ...f, typ: f.typ?.toLowerCase?.() }))
-      .filter(f => _validTypen.has(f.typ))
-      .filter(f => f.typ !== 'stil' || (f.korrektur?.trim() && f.korrektur.trim() !== f.original?.trim()));
+    result.fehler = validateLektoratFehler(result.fehler, locale);
 
     const model = _modelName(process.env.API_PROVIDER || 'claude');
     const szenen = Array.isArray(result?.szenen) ? result.szenen : [];
@@ -85,16 +102,14 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
 async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
   const { buildBatchLektoratPrompt } = await getPrompts();
-  const { SYSTEM_LEKTORAT, STOPWORDS: batchStopwords, ERKLAERUNG_RULE: batchErklaerungRule } = await getBookPrompts(bookId);
+  const { SYSTEM_LEKTORAT, STOPWORDS: batchStopwords, ERKLAERUNG_RULE: batchErklaerungRule, KORREKTUR_REGELN: batchKorrekturRegeln } = await getBookPrompts(bookId);
+  const locale = getBookLocale(bookId);
   try {
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
     const pages = await bsGetAll('pages?book_id=' + bookId, userToken);
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
     logger.info(`Start: ${pages.length} Seiten (book=${bookId})`);
 
-    const authHeader = userToken
-      ? `Token ${userToken.id}:${userToken.pw}`
-      : `Token ${process.env.TOKEN_ID || ''}:${process.env.TOKEN_KENNWORT || ''}`;
     const tok = { in: 0, out: 0, ms: 0 };
     const model = _modelName(process.env.API_PROVIDER || 'claude');
     let done = 0, totalErrors = 0;
@@ -110,27 +125,18 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
       });
 
       try {
-        const pdResp = await fetch(`${BS_URL}/api/pages/${p.id}`, {
-          headers: { Authorization: authHeader },
-          signal: AbortSignal.timeout(30000),
-        });
-        if (!pdResp.ok) throw new Error(`BookStack ${pdResp.status}: ${await pdResp.text()}`);
-        const pd = await pdResp.json();
+        const pd = await bsGet('pages/' + p.id, userToken);
         const text = htmlToText(pd.html).trim();
         if (!text) continue;
 
         const result = await aiCall(jobId, tok,
-          buildBatchLektoratPrompt(text, { stopwords: batchStopwords, erklaerungRule: batchErklaerungRule }),
+          buildBatchLektoratPrompt(text, { stopwords: batchStopwords, erklaerungRule: batchErklaerungRule, korrekturRegeln: batchKorrekturRegeln }),
           SYSTEM_LEKTORAT,
           fromPct, toPct, 2000,
         );
 
         if (!Array.isArray(result?.fehler)) throw new Error('fehler-Array fehlt');
-        const _validTypen = new Set(['rechtschreibung', 'grammatik', 'stil', 'wiederholung']);
-        const fehler = result.fehler
-          .map(f => ({ ...f, typ: f.typ?.toLowerCase?.() }))
-          .filter(f => _validTypen.has(f.typ))
-          .filter(f => f.typ !== 'stil' || (f.korrektur?.trim() && f.korrektur.trim() !== f.original?.trim()));
+        const fehler = validateLektoratFehler(result.fehler, locale);
         totalErrors += fehler.length;
 
         const szenenBatch = Array.isArray(result?.szenen) ? result.szenen : [];

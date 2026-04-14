@@ -8,9 +8,9 @@
   <div x-show="kontinuitaetProgress > 0" class="progress-bar-wrap">
     <div class="progress-bar" :style="'width:' + kontinuitaetProgress + '%'"></div>
   </div>
-  <div x-show="kontinuitaetStatus" class="figur-progress-status" x-html="kontinuitaetStatus"></div>
+  <div x-show="kontinuitaetStatus" class="card-status" x-html="kontinuitaetStatus"></div>
 
-  <div x-show="!kontinuitaetResult && !kontinuitaetLoading && !kontinuitaetStatus" class="figur-progress-status">
+  <div x-show="!kontinuitaetResult && !kontinuitaetLoading && !kontinuitaetStatus" class="card-status">
     Noch keine Daten vorhanden. Bitte auf «Alle aktualisieren» klicken.
   </div>
 
@@ -28,7 +28,7 @@
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
-    <span class="szenen-filter-count" x-text="kontinuitaetResult ? kontinuitaetIssuesFiltered.length + ' / ' + kontinuitaetResult.issues.length : ''"></span>
+    <span class="filter-count" x-text="kontinuitaetResult ? kontinuitaetIssuesFiltered.length + ' / ' + kontinuitaetResult.issues.length : ''"></span>
   </div>
 
   <!-- Ergebnisse -->
@@ -47,60 +47,14 @@
         Keine Probleme für den gewählten Filter.
       </div>
 
-      <!-- Kritische Probleme -->
-      <template x-if="kontinuitaetIssuesBySwere().kritisch.length > 0">
+      <!-- Probleme nach Schwere -->
+      <template x-for="[severity, issues] in Object.entries(kontinuitaetIssuesBySwere()).filter(([,v]) => v.length > 0)" :key="severity">
         <div>
-          <div class="kontinuitaet-group-header kontinuitaet-group-header--kritisch">
-            Kritisch (<span x-text="kontinuitaetIssuesBySwere().kritisch.length"></span>)
+          <div class="kontinuitaet-group-header" :class="'kontinuitaet-group-header--' + severity">
+            <span x-text="severity.charAt(0).toUpperCase() + severity.slice(1)"></span> (<span x-text="issues.length"></span>)
           </div>
-          <template x-for="(issue, i) in kontinuitaetIssuesBySwere().kritisch" :key="'k' + i">
-            <div class="kontinuitaet-issue kontinuitaet-issue--kritisch">
-              <div class="kontinuitaet-issue-header">
-                <span class="tag kontinuitaet-typ-tag" x-text="issue.typ"></span>
-                <span class="kontinuitaet-stellen">
-                  <span x-text="issue.stelle_a"></span>
-                  <span class="kontinuitaet-arrow">↔</span>
-                  <span x-text="issue.stelle_b"></span>
-                </span>
-              </div>
-              <p class="kontinuitaet-desc" x-text="issue.beschreibung"></p>
-              <p x-show="issue.empfehlung" class="kontinuitaet-empfehlung" x-text="'→ ' + issue.empfehlung"></p>
-            </div>
-          </template>
-        </div>
-      </template>
-
-      <!-- Mittlere Probleme -->
-      <template x-if="kontinuitaetIssuesBySwere().mittel.length > 0">
-        <div>
-          <div class="kontinuitaet-group-header kontinuitaet-group-header--mittel">
-            Mittel (<span x-text="kontinuitaetIssuesBySwere().mittel.length"></span>)
-          </div>
-          <template x-for="(issue, i) in kontinuitaetIssuesBySwere().mittel" :key="'m' + i">
-            <div class="kontinuitaet-issue kontinuitaet-issue--mittel">
-              <div class="kontinuitaet-issue-header">
-                <span class="tag kontinuitaet-typ-tag" x-text="issue.typ"></span>
-                <span class="kontinuitaet-stellen">
-                  <span x-text="issue.stelle_a"></span>
-                  <span class="kontinuitaet-arrow">↔</span>
-                  <span x-text="issue.stelle_b"></span>
-                </span>
-              </div>
-              <p class="kontinuitaet-desc" x-text="issue.beschreibung"></p>
-              <p x-show="issue.empfehlung" class="kontinuitaet-empfehlung" x-text="'→ ' + issue.empfehlung"></p>
-            </div>
-          </template>
-        </div>
-      </template>
-
-      <!-- Niedrige Probleme -->
-      <template x-if="kontinuitaetIssuesBySwere().niedrig.length > 0">
-        <div>
-          <div class="kontinuitaet-group-header kontinuitaet-group-header--niedrig">
-            Niedrig (<span x-text="kontinuitaetIssuesBySwere().niedrig.length"></span>)
-          </div>
-          <template x-for="(issue, i) in kontinuitaetIssuesBySwere().niedrig" :key="'n' + i">
-            <div class="kontinuitaet-issue kontinuitaet-issue--niedrig">
+          <template x-for="(issue, i) in issues" :key="severity + i">
+            <div class="kontinuitaet-issue" :class="'kontinuitaet-issue--' + severity">
               <div class="kontinuitaet-issue-header">
                 <span class="tag kontinuitaet-typ-tag" x-text="issue.typ"></span>
                 <span class="kontinuitaet-stellen">

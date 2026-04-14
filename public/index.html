@@ -270,7 +270,6 @@
 <div id="partial-bookstats"></div>
 <div id="partial-editor"></div>
 <div id="partial-chat"></div>
-<div id="partial-book-chat"></div>
 <div id="partial-book-settings"></div>
 
 </div><!-- end layout-main -->
@@ -291,7 +290,7 @@
 <div class="job-queue-bar" x-show="jobQueueItems.length > 0" x-cloak>
   <span class="job-queue-label">Jobs:</span>
   <template x-for="job in jobQueueItems" :key="job.id">
-    <div class="job-queue-pill" :class="'job-queue-pill--' + job.status">
+    <div class="job-queue-pill" :class="'job-queue-pill--' + job.status" @click="navigateToJob(job)" title="Zum Feature">
       <span class="job-queue-pill-label" x-text="job.label"></span>
       <span class="job-queue-pill-status" x-text="job.statusText"></span>
       <template x-if="job.status === 'running' && job.progress > 0">

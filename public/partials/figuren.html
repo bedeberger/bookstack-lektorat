@@ -9,10 +9,10 @@
   <div x-show="figurenProgress > 0" class="progress-bar-wrap">
     <div class="progress-bar" :style="'width:' + figurenProgress + '%'"></div>
   </div>
-  <div x-show="figurenStatus" class="figur-progress-status" x-html="figurenStatus"></div>
+  <div x-show="figurenStatus" class="card-status" x-html="figurenStatus"></div>
 
   <!-- Leer-Hinweis -->
-  <div x-show="figuren.length === 0 && !figurenLoading && !figurenStatus" class="figur-progress-status">
+  <div x-show="figuren.length === 0 && !figurenLoading && !figurenStatus" class="card-status">
     Noch keine Daten vorhanden. Bitte auf «Alle aktualisieren» klicken.
   </div>
 
@@ -113,7 +113,7 @@
           :class="{'combobox-wrap--disabled': _disabled}"
           class="combobox-wrap combobox-wrap--compact">
       </div>
-      <span class="szenen-filter-count" x-text="filteredFiguren().length + ' / ' + figuren.length"></span>
+      <span class="filter-count" x-text="filteredFiguren().length + ' / ' + figuren.length"></span>
     </div>
 
     <template x-for="f in filteredFiguren()" :key="f.id">

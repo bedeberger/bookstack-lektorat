@@ -12,7 +12,7 @@
   <div class="progress-bar-wrap" x-show="bookReviewProgress > 0">
     <div class="progress-bar" :style="'width:' + bookReviewProgress + '%'"></div>
   </div>
-  <div class="review-status-text" x-html="bookReviewStatus"></div>
+  <div class="card-status" x-html="bookReviewStatus"></div>
   <div x-html="bookReviewOut"></div>
 
   <!-- Buchbewertungs-Verlauf -->
@@ -22,9 +22,8 @@
       <div>
         <div class="history-item" @click="selectedBookReviewId = selectedBookReviewId === entry.id ? null : entry.id">
           <span class="history-date" x-text="formatDate(entry.reviewed_at)"></span>
-          <span x-show="entry.review_json?.gesamtnote" class="badge badge-ok"
-            x-text="'★'.repeat(Math.min(6, +(entry.review_json?.gesamtnote) || 0)) + '☆'.repeat(Math.max(0, 6 - (+(entry.review_json?.gesamtnote) || 0)))"
-            style="font-size:11px; letter-spacing:1px;"></span>
+          <span x-show="entry.review_json?.gesamtnote" class="badge badge-ok review-stars"
+            x-text="'★'.repeat(Math.min(6, +(entry.review_json?.gesamtnote) || 0)) + '☆'.repeat(Math.max(0, 6 - (+(entry.review_json?.gesamtnote) || 0)))"></span>
           <span class="tag" x-text="entry.model"></span>
           <span class="history-chevron" :class="{ open: selectedBookReviewId === entry.id }">›</span>
         </div>

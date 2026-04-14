@@ -1,7 +1,4 @@
-import { escHtml, htmlToText } from './utils.js';
-
-// Sicherheitscheck vor dem Speichern: < 50 % wirkt unvollständig → Abbruch
-const SAFETY_HTML_RATIO = 0.5;
+import { escHtml, htmlToText, SAFETY_HTML_RATIO } from './utils.js';
 
 // Lektorat-Workflow-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.

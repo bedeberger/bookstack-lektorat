@@ -238,6 +238,7 @@ document.addEventListener('alpine:init', () => {
     chatSessionId: null,
     chatInput: '',
     chatLoading: false,
+    chatProgress: 0,
     chatStatus: '',
     _chatPollTimer: null,
     _chatPendingRefresh: false,
@@ -596,23 +597,6 @@ document.addEventListener('alpine:init', () => {
       }, 2000);
     },
 
-    _waitForJob(jobId) {
-      return new Promise((resolve) => {
-        const timer = setInterval(async () => {
-          try {
-            const resp = await fetch('/jobs/' + jobId);
-            if (!resp.ok) return;
-            const job = await resp.json();
-            if (job.status === 'running' || job.status === 'queued') return;
-            clearInterval(timer);
-            resolve(job);
-          } catch (e) {
-            console.error('[_waitForJob]', e);
-          }
-        }, 2000);
-      });
-    },
-
     async clearChapterCache() {
       if (!this.selectedBookId) return;
       if (!confirm('Delta-Cache für dieses Buch leeren?\n\nDie nächste Komplettanalyse extrahiert alle Kapitel neu – auch unveränderte. Das erhöht die KI-Kosten und Laufzeit.')) return;
@@ -639,48 +623,48 @@ document.addEventListener('alpine:init', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName }),
         }).then(r => r.json());
-        await this._pollKomplettJob(jobId, bookId);
+        this._startKomplettPoll(jobId, bookId);
       } catch (e) {
         console.error('[alleAktualisieren]', e);
         this.alleAktualisierenStatus = `Fehler: ${e.message}`;
-      } finally {
         this.alleAktualisierenLoading = false;
       }
     },
 
-    // Verbindet sich mit einem laufenden komplett-analyse Job und aktualisiert
-    // den Status bis der Job abgeschlossen ist. Wirft bei Fehler/Abbruch.
-    async _pollKomplettJob(jobId, bookId) {
-      await new Promise((resolve, reject) => {
-        const timer = setInterval(async () => {
-          try {
-            const resp = await fetch('/jobs/' + jobId);
-            if (!resp.ok) return;
-            const job = await resp.json();
-            if (job.statusText) this.alleAktualisierenStatus = job.statusText;
-            if (job.progress != null) this.alleAktualisierenProgress = job.progress;
-            if (job.tokensIn != null) this.alleAktualisierenTokIn = job.tokensIn;
-            if (job.tokensOut != null) this.alleAktualisierenTokOut = job.tokensOut;
-            if (job.tokensPerSec != null) this.alleAktualisierenTps = job.tokensPerSec;
-            if (job.status === 'done') { clearInterval(timer); resolve(job); }
-            else if (job.status === 'error' || job.status === 'cancelled') {
-              clearInterval(timer);
-              reject(new Error(job.error || 'Job fehlgeschlagen'));
-            }
-          } catch (e) { console.error('[_pollKomplettJob]', e); }
-        }, 2000);
+    _startKomplettPoll(jobId, bookId) {
+      this._startPoll({
+        timerProp: '_komplettPollTimer',
+        progressProp: 'alleAktualisierenProgress',
+        jobId,
+        lsKey: null,
+        onProgress: (job) => {
+          if (job.statusText) this.alleAktualisierenStatus = job.statusText;
+          if (job.tokensIn != null) this.alleAktualisierenTokIn = job.tokensIn;
+          if (job.tokensOut != null) this.alleAktualisierenTokOut = job.tokensOut;
+          if (job.tokensPerSec != null) this.alleAktualisierenTps = job.tokensPerSec;
+        },
+        onNotFound: () => {
+          this.alleAktualisierenLoading = false;
+          this.alleAktualisierenStatus = 'Analyse unterbrochen (Server-Neustart).';
+        },
+        onError: (job) => {
+          this.alleAktualisierenLoading = false;
+          this.alleAktualisierenStatus = `Fehler: ${job.error || 'Job fehlgeschlagen'}`;
+        },
+        onDone: async () => {
+          await Promise.all([
+            this.loadFiguren(bookId),
+            this.loadOrte(bookId),
+            this.loadSzenen(bookId),
+            this._loadKontinuitaetHistory(),
+            this.loadLastKomplettRun(bookId),
+            this._reloadZeitstrahl(),
+          ]);
+          this.alleAktualisierenLoading = false;
+          this.alleAktualisierenStatus = 'Fertig.';
+          setTimeout(() => { if (this.alleAktualisierenStatus === 'Fertig.') this.alleAktualisierenStatus = ''; }, 4000);
+        },
       });
-      // UI nach Abschluss aktualisieren
-      await Promise.all([
-        this.loadFiguren(bookId),
-        this.loadOrte(bookId),
-        this.loadSzenen(bookId),
-        this._loadKontinuitaetHistory(),
-        this.loadLastKomplettRun(bookId),
-        this._reloadZeitstrahl(),
-      ]);
-      this.alleAktualisierenStatus = 'Fertig.';
-      setTimeout(() => { if (this.alleAktualisierenStatus === 'Fertig.') this.alleAktualisierenStatus = ''; }, 4000);
     },
 
     async loadLastKomplettRun(bookId) {
@@ -729,7 +713,7 @@ document.addEventListener('alpine:init', () => {
     async _loadPartials() {
       const names = [
         'buchreview', 'figuren', 'szenen', 'ereignisse', 'orte',
-        'kontinuitaet', 'bookstats', 'editor', 'chat', 'book-chat', 'book-settings',
+        'kontinuitaet', 'bookstats', 'editor', 'chat', 'book-settings',
       ];
       await Promise.all(names.map(async name => {
         const html = await fetch(`/partials/${name}.html`).then(r => r.text());
@@ -793,6 +777,23 @@ document.addEventListener('alpine:init', () => {
       } catch { /* ignorieren */ }
     },
 
+    navigateToJob(job) {
+      const map = {
+        'review':           'toggleBookReviewCard',
+        'komplett-analyse': 'toggleFiguresCard',
+        'kontinuitaet':     'toggleKontinuitaetCard',
+        'batch-check':      'toggleTreeCard',
+        'book-chat':        'toggleBookChatCard',
+      };
+      if (job.type === 'check') {
+        const page = this.pages.find(p => String(p.id) === String(job.bookId));
+        if (page) this.selectPage(page);
+        return;
+      }
+      const method = map[job.type];
+      if (method && this[method]) this[method]();
+    },
+
     // ── Seitenauswahl & View-Reset ───────────────────────────────────────────
     async selectPage(p) {
       if (this.currentPage && this.currentPage.id === p.id) {
@@ -809,30 +810,9 @@ document.addEventListener('alpine:init', () => {
       this.showOrteCard = false;
       this.showBookSettingsCard = false;
       this.showKontinuitaetCard = false;
-      // Laufenden Poll stoppen – Seite wechselt, laufender Check gehört zur alten Seite
-      if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
-      this.resetChat();
+
+      this.resetPage();
       this.currentPage = p;
-      this.currentPageEmpty = false;
-      this.originalHtml = null;
-      this.correctedHtml = null;
-      this.hasErrors = false;
-      this.showDiff = false;
-      this.diffHtml = '';
-      this.lastCheckId = null;
-      this.pageHistory = [];
-      this.selectedHistoryId = null;
-      this.historySelections = {};
-      this.historyApplying = {};
-      this.lektoratErrors = [];
-      this.lektoratStyles = [];
-      this.selectedErrors = [];
-      this.selectedStyles = [];
-      this.checkDone = false;
-      this.checkLoading = false;
-      this.checkProgress = 0;
-      this.analysisOut = '';
-      this.setStatus('');
       this.showEditorCard = true;
 
       // Prüfen ob ein Lektorat-Check-Job für diese Seite läuft (Server-seitig oder aus früherer Session)
@@ -870,71 +850,47 @@ document.addEventListener('alpine:init', () => {
       await this.loadPageHistory(p.id);
     },
 
+    // Prüft ob ein gespeicherter Job noch läuft und reconnected ggf.
+    // onRunning(job, jobId) wird aufgerufen wenn der Job aktiv ist.
+    async _reconnectJob(lsKey, onRunning) {
+      const jobId = localStorage.getItem(lsKey);
+      if (!jobId) return;
+      try {
+        const resp = await fetch('/jobs/' + jobId);
+        if (resp.ok) {
+          const job = await resp.json();
+          if (job.status === 'running') { onRunning(job, jobId); return; }
+        }
+      } catch { /* ignore */ }
+      localStorage.removeItem(lsKey);
+    },
+
     // Prüft beim Laden eines Buchs ob noch ein Job aus einer früheren Session läuft
     // (z.B. Tab versehentlich geschlossen während Analyse lief).
     async checkPendingJobs(bookId) {
-      const reviewJobId = localStorage.getItem('lektorat_review_job_' + bookId);
-      if (reviewJobId) {
-        try {
-          const resp = await fetch('/jobs/' + reviewJobId);
-          if (resp.ok) {
-            const job = await resp.json();
-            if (job.status === 'running') {
-              this.bookReviewLoading = true;
-              this.bookReviewProgress = job.progress || 0;
-              this.showBookReviewCard = true;
-              this.bookReviewOut = '';
-              this.setReviewStatus(job.statusText || 'Analyse läuft…', true);
-              this.startReviewPoll(reviewJobId);
-            } else {
-              localStorage.removeItem('lektorat_review_job_' + bookId);
-            }
-          } else {
-            localStorage.removeItem('lektorat_review_job_' + bookId);
-          }
-        } catch { localStorage.removeItem('lektorat_review_job_' + bookId); }
-      }
+      await this._reconnectJob('lektorat_review_job_' + bookId, (job, jobId) => {
+        this.bookReviewLoading = true;
+        this.bookReviewProgress = job.progress || 0;
+        this.showBookReviewCard = true;
+        this.bookReviewOut = '';
+        this.setReviewStatus(job.statusText || 'Analyse läuft…', true);
+        this.startReviewPoll(jobId);
+      });
 
-      const figuresJobId = localStorage.getItem('lektorat_figures_job_' + bookId);
-      if (figuresJobId) {
-        try {
-          const resp = await fetch('/jobs/' + figuresJobId);
-          if (resp.ok) {
-            const job = await resp.json();
-            if (job.status === 'running') {
-              this.figurenLoading = true;
-              this.figurenProgress = job.progress || 0;
-              this.showFiguresCard = true;
-              this.figurenStatus = job.statusText || 'Analyse läuft…';
-              this.startFiguresPoll(figuresJobId);
-            } else {
-              localStorage.removeItem('lektorat_figures_job_' + bookId);
-            }
-          } else {
-            localStorage.removeItem('lektorat_figures_job_' + bookId);
-          }
-        } catch { localStorage.removeItem('lektorat_figures_job_' + bookId); }
-      }
+      await this._reconnectJob('lektorat_figures_job_' + bookId, (job, jobId) => {
+        this.figurenLoading = true;
+        this.figurenProgress = job.progress || 0;
+        this.showFiguresCard = true;
+        this.figurenStatus = job.statusText || 'Analyse läuft…';
+        this.startFiguresPoll(jobId);
+      });
 
-      const batchJobId = localStorage.getItem('lektorat_batchcheck_job_' + bookId);
-      if (batchJobId) {
-        try {
-          const resp = await fetch('/jobs/' + batchJobId);
-          if (resp.ok) {
-            const job = await resp.json();
-            if (job.status === 'running') {
-              this.batchLoading = true;
-              this.batchProgress = job.progress || 0;
-              this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec);
-              this.startBatchPoll(batchJobId);
-            } else {
-              localStorage.removeItem('lektorat_batchcheck_job_' + bookId);
-            }
-          } else {
-            localStorage.removeItem('lektorat_batchcheck_job_' + bookId);
-          }
-        } catch { localStorage.removeItem('lektorat_batchcheck_job_' + bookId); }
-      }
+      await this._reconnectJob('lektorat_batchcheck_job_' + bookId, (job, jobId) => {
+        this.batchLoading = true;
+        this.batchProgress = job.progress || 0;
+        this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec);
+        this.startBatchPoll(jobId);
+      });
 
       // Prüfen ob ein komplett-analyse Job vom Server noch läuft (z.B. Tab geschlossen)
       if (!this.alleAktualisierenLoading) {
@@ -950,12 +906,7 @@ document.addEventListener('alpine:init', () => {
             this.alleAktualisierenTps = null;
             this.alleAktualisierenStatus = statusText || 'Komplettanalyse läuft…';
             this.showKomplettStatus = true;
-            this._pollKomplettJob(jobId, bookId)
-              .catch(e => {
-                console.error('[checkPendingJobs komplett]', e);
-                this.alleAktualisierenStatus = `Fehler: ${e.message}`;
-              })
-              .finally(() => { this.alleAktualisierenLoading = false; });
+            this._startKomplettPoll(jobId, bookId);
           }
         } catch (e) { console.error('[checkPendingJobs komplett-active]', e); }
       }
@@ -998,11 +949,13 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
+    // Setzt allen Seiten-Level-State zurück (Editor, Lektorat, Chat, History).
     resetPage() {
       if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
       this.resetChat();
       this.currentPage = null;
       this.currentPageUpdatedAt = null;
+      this.currentPageEmpty = false;
       this.originalHtml = null;
       this.correctedHtml = null;
       this.hasErrors = false;
@@ -1022,37 +975,18 @@ document.addEventListener('alpine:init', () => {
       this.selectedErrors = [];
       this.selectedStyles = [];
       this.checkDone = false;
+      this.checkLoading = false;
       this.checkProgress = 0;
     },
 
+    // Setzt alles zurück: Seiten-Level (via resetPage) + Buch-Level.
     resetView() {
-      this.currentPage = null;
-      this.originalHtml = null;
-      this.correctedHtml = null;
-      this.hasErrors = false;
-      this.showDiff = false;
-      this.diffHtml = '';
-      this.showEditorCard = false;
-      this.showBookReviewCard = false;
-      this.analysisOut = '';
-      this.bookReviewOut = '';
-      this.status = '';
-      this.statusSpinner = false;
-      this.bookReviewStatus = '';
-      this.lastCheckId = null;
-      this.pageHistory = [];
-      this.selectedHistoryId = null;
-      this.historySelections = {};
-      this.historyApplying = {};
+      this.resetPage();
       // Kapitel in der Sidebar bleiben geöffnet (kein c.open = false)
-      this.lektoratErrors = [];
-      this.lektoratStyles = [];
-      this.selectedErrors = [];
-      this.selectedStyles = [];
-      this.checkDone = false;
-      this.checkProgress = 0;
       this.showTreeCard = true;
-      if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
+      this.showBookReviewCard = false;
+      this.bookReviewOut = '';
+      this.bookReviewStatus = '';
       if (this._batchPollTimer) { clearInterval(this._batchPollTimer); this._batchPollTimer = null; }
       this.batchLoading = false;
       this.batchProgress = 0;
@@ -1115,6 +1049,7 @@ document.addEventListener('alpine:init', () => {
       this.kontinuitaetFilterFigurId = '';
       this.kontinuitaetFilterKapitel = '';
       if (this._kontinuitaetPollTimer) { clearInterval(this._kontinuitaetPollTimer); this._kontinuitaetPollTimer = null; }
+      if (this._komplettPollTimer) { clearInterval(this._komplettPollTimer); this._komplettPollTimer = null; }
       this.showBookSettingsCard = false;
       this.bookSettingsSaved = false;
       this.bookSettingsError = '';
@@ -1124,7 +1059,6 @@ document.addEventListener('alpine:init', () => {
       this.alleAktualisierenTokOut = 0;
       this.alleAktualisierenTps = null;
       this.showKomplettStatus = false;
-      this.resetChat();
       this.resetBookChat();
     },
 

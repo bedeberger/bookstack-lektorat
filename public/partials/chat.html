@@ -1,4 +1,4 @@
-<!-- Chat -->
+<!-- Seiten-Chat -->
 <div class="card" id="chat-card" x-show="showChatCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="'Chat: ' + (currentPage?.name || '–')"></span>
@@ -7,13 +7,12 @@
     </div>
   </div>
 
-  <!-- Status / Fehlermeldungen -->
-  <div x-show="chatStatus" x-html="chatStatus" style="margin-bottom:8px; font-size:13px;"></div>
+  <div class="progress-bar-wrap" x-show="chatProgress > 0">
+    <div class="progress-bar" :style="'width:' + chatProgress + '%'"></div>
+  </div>
+  <div x-show="chatStatus" class="card-status" x-html="chatStatus"></div>
 
-  <!-- Nachrichtenliste -->
   <div id="chat-messages" class="chat-messages">
-
-    <!-- Leerer Zustand -->
     <div x-show="chatMessages.length === 0" class="chat-empty">
       Starte das Gespräch mit einer Frage zur Seite &laquo;<span x-text="currentPage?.name"></span>&raquo;.
     </div>
@@ -21,15 +20,12 @@
     <template x-for="(msg, msgIdx) in chatMessages" :key="msgIdx">
       <div :class="'chat-msg chat-msg--' + msg.role">
         <div class="chat-msg-bubble">
-          <!-- User-Nachricht -->
           <div x-show="msg.role === 'user'" class="chat-msg-text" x-text="msg.content"></div>
-          <!-- Assistant-Antwort (Markdown) -->
           <div x-show="msg.role === 'assistant'" class="chat-msg-text" x-html="_renderChatMarkdown(msg.content)"></div>
-          <!-- Token-Info -->
           <div x-show="msg.role === 'assistant' && _chatTokenInfo(msg)" class="chat-token-info" x-text="_chatTokenInfo(msg)"></div>
         </div>
 
-        <!-- Änderungsvorschläge -->
+        <!-- Änderungsvorschläge (nur Seiten-Chat) -->
         <template x-if="msg.role === 'assistant' && msg.vorschlaege && msg.vorschlaege.length > 0">
           <div class="chat-vorschlaege">
             <template x-for="(v, vIdx) in msg.vorschlaege" :key="vIdx">
@@ -57,14 +53,12 @@
       </div>
     </template>
 
-    <!-- Skeleton-Loader: erscheint direkt nach der letzten Nachricht während Job läuft -->
     <div x-show="chatLoading" class="chat-skeleton-wrapper">
-      <div class="chat-skeleton-line" style="width:72%"></div>
-      <div class="chat-skeleton-line" style="width:48%"></div>
+      <div class="chat-skeleton-line chat-skeleton-line--wide"></div>
+      <div class="chat-skeleton-line chat-skeleton-line--narrow"></div>
     </div>
   </div>
 
-  <!-- Eingabebereich -->
   <div class="chat-input-row">
     <textarea
       class="chat-input"
@@ -81,7 +75,6 @@
   </div>
   <div class="chat-input-hint">Enter senden &nbsp;·&nbsp; Shift+Enter Zeilenumbruch</div>
 
-  <!-- Session-History (nur wenn > 1 Session) -->
   <div x-show="chatSessions.length > 1" class="card-history-section">
     <div class="chat-history-title">Frühere Gespräche</div>
     <template x-for="s in chatSessions" :key="s.id">
@@ -93,6 +86,103 @@
         <div class="chat-session-preview" x-text="(s.preview || '(leer)').slice(0, 80)"></div>
         <div class="chat-session-meta" x-text="formatDate(s.last_message_at)"></div>
         <button class="chat-session-delete btn-card-close" @click.stop="deleteChatSession(s.id)" title="Löschen">×</button>
+      </div>
+    </template>
+  </div>
+</div>
+
+<!-- Buch-Chat -->
+<div class="card" id="book-chat-card" x-show="showBookChatCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title" x-text="'Buch-Chat: ' + selectedBookName"></span>
+    <div class="card-actions">
+      <button @click="startNewBookChatSession()" :disabled="bookChatLoading" title="Neues Gespräch starten">+ Neu</button>
+    </div>
+  </div>
+
+  <div class="progress-bar-wrap" x-show="bookChatProgress > 0">
+    <div class="progress-bar" :style="'width:' + bookChatProgress + '%'"></div>
+  </div>
+  <div x-show="bookChatStatus" class="card-status" x-html="bookChatStatus"></div>
+
+  <div id="book-chat-messages" class="chat-messages">
+    <div x-show="bookChatMessages.length === 0" class="chat-empty">
+      Stelle eine Frage zum gesamten Buch &laquo;<span x-text="selectedBookName"></span>&raquo;. Relevante Seiten werden automatisch in den Kontext geladen.
+    </div>
+
+    <template x-for="(msg, msgIdx) in bookChatMessages" :key="msgIdx">
+      <div :class="'chat-msg chat-msg--' + msg.role">
+        <div class="chat-msg-bubble">
+          <div x-show="msg.role === 'user'" class="chat-msg-text" x-text="msg.content"></div>
+          <div x-show="msg.role === 'assistant'" class="chat-msg-text" x-html="_renderChatMarkdown(msg.content)"></div>
+          <!-- Kontext-Info (nur Buch-Chat) -->
+          <template x-if="msg.role === 'assistant' && msg.context_info">
+            <div x-data="{ expanded: false }"
+                 class="chat-context-info">
+              <span class="chat-context-label">Kontext: </span>
+              <template x-for="(p, pi) in (expanded ? msg.context_info.pages : msg.context_info.pages.slice(0, 3))" :key="pi">
+                <span>
+                  <template x-if="pi > 0"><span class="chat-context-sep">, </span></template>
+                  <a x-show="bookstackUrl && p.book_slug && p.slug"
+                     :href="bookstackUrl + '/books/' + p.book_slug + '/page/' + p.slug"
+                     target="_blank" rel="noopener"
+                     class="chat-context-link" x-text="p.name"></a>
+                  <span x-show="!(bookstackUrl && p.book_slug && p.slug)" x-text="p.name"></span>
+                </span>
+              </template>
+              <button x-show="msg.context_info.pages.length > 3"
+                      class="chat-context-toggle"
+                      @click.stop="expanded = !expanded"
+                      x-text="expanded ? '▲' : '+' + (msg.context_info.pages.length - 3)"></button>
+              <template x-if="msg.context_info.totalPages > msg.context_info.pages.length">
+                <span class="chat-context-total" x-text="' von ' + msg.context_info.totalPages + ' Seiten'"></span>
+              </template>
+              <template x-if="msg.context_info.figuren">
+                <span class="chat-context-badge">Figuren</span>
+              </template>
+              <template x-if="msg.context_info.review">
+                <span class="chat-context-badge">Buchbewertung</span>
+              </template>
+            </div>
+          </template>
+          <div x-show="msg.role === 'assistant' && _chatTokenInfo(msg)" class="chat-token-info" x-text="_chatTokenInfo(msg)"></div>
+        </div>
+      </div>
+    </template>
+
+    <div x-show="bookChatLoading" class="chat-skeleton-wrapper">
+      <div class="chat-skeleton-line chat-skeleton-line--wide"></div>
+      <div class="chat-skeleton-line chat-skeleton-line--narrow"></div>
+    </div>
+  </div>
+
+  <div class="chat-input-row">
+    <textarea
+      class="chat-input"
+      x-model="bookChatInput"
+      placeholder="Frage zum Buch…"
+      rows="2"
+      :disabled="bookChatLoading"
+      @keydown.enter="if(!$event.isComposing && $event.keyCode !== 229 && !$event.shiftKey && !$event.ctrlKey && !$event.metaKey) { $event.preventDefault(); sendBookChatMessage(); }"
+    ></textarea>
+    <button class="chat-send-btn" @click="sendBookChatMessage()" :disabled="bookChatLoading || !bookChatInput.trim()">
+      <span x-show="bookChatLoading" class="spinner"></span>
+      <span x-show="!bookChatLoading">↑</span>
+    </button>
+  </div>
+  <div class="chat-input-hint">Enter senden &nbsp;·&nbsp; Shift+Enter Zeilenumbruch</div>
+
+  <div x-show="bookChatSessions.length > 1" class="card-history-section">
+    <div class="chat-history-title">Frühere Gespräche</div>
+    <template x-for="s in bookChatSessions" :key="s.id">
+      <div
+        class="chat-session-item"
+        :class="s.id === bookChatSessionId ? 'chat-session-item--active' : ''"
+        @click="loadBookChatSession(s.id)"
+      >
+        <div class="chat-session-preview" x-text="(s.preview || '(leer)').slice(0, 80)"></div>
+        <div class="chat-session-meta" x-text="formatDate(s.last_message_at)"></div>
+        <button class="chat-session-delete btn-card-close" @click.stop="deleteBookChatSession(s.id)" title="Löschen">×</button>
       </div>
     </template>
   </div>

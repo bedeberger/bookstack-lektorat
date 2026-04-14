@@ -8,9 +8,9 @@
   <div x-show="orteProgress > 0" class="progress-bar-wrap">
     <div class="progress-bar" :style="'width:' + orteProgress + '%'"></div>
   </div>
-  <div x-show="orteStatus" class="figur-progress-status" x-html="orteStatus"></div>
+  <div x-show="orteStatus" class="card-status" x-html="orteStatus"></div>
 
-  <div x-show="orte.length === 0 && !orteLoading && !orteStatus" class="figur-progress-status">
+  <div x-show="orte.length === 0 && !orteLoading && !orteStatus" class="card-status">
     Noch keine Daten vorhanden. Bitte auf «Alle aktualisieren» klicken.
   </div>
 
@@ -36,7 +36,7 @@
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
-    <span class="szenen-filter-count" x-text="orteFiltered.length + ' / ' + orte.length"></span>
+    <span class="filter-count" x-text="orteFiltered.length + ' / ' + orte.length"></span>
   </div>
 
   <!-- Ortsliste -->
