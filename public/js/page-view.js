@@ -119,6 +119,16 @@ function hideTip() {
   activeMark = null;
 }
 
+// ── Split-Modus: Hover-Sync ───────────────────────────────────────────────
+
+const splitMQ = window.matchMedia('(min-width: 1100px)');
+
+function flashEl(el) {
+  el.classList.remove('hover-sync-flash');
+  void el.offsetWidth; // reflow → Animation neu starten
+  el.classList.add('hover-sync-flash');
+}
+
 // ── Exportierte Methoden ───────────────────────────────────────────────────
 
 export const pageViewMethods = {
@@ -187,20 +197,44 @@ export const pageViewMethods = {
     }
   },
 
-  /** Pointer-Handler auf page-content-view: Tooltip zeigen/verstecken */
+  /** Pointer-Handler auf page-content-view: Im Split → Hover-Sync, sonst → Tooltip */
   handleMarkPointer(e) {
     if (e.pointerType !== 'mouse') return;
     const mark = e.target.closest('.lektorat-mark');
     if (mark === activeMark) return;
     if (!mark) { hideTip(); return; }
-    const allErrors = [...(this.lektoratErrors || []), ...(this.lektoratStyles || [])];
-    showTip(mark, allErrors);
+
+    if (splitMQ.matches && this.checkDone) {
+      // Split-Modus: Finding-Panel mitscrollen
+      activeMark = mark;
+      const idx = parseInt(mark.dataset.errorIdx);
+      if (isNaN(idx)) return;
+      const finding = document.querySelector(`.lektorat-split-findings [data-finding-idx="${idx}"]`);
+      if (finding) {
+        finding.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        flashEl(finding);
+      }
+    } else {
+      // Kein Split: Tooltip wie bisher
+      const allErrors = [...(this.lektoratErrors || []), ...(this.lektoratStyles || [])];
+      showTip(mark, allErrors);
+    }
   },
 
   handleMarkPointerLeave(e) {
-    // Nicht schliessen wenn die Maus in den Tooltip wandert
+    if (splitMQ.matches && this.checkDone) return;
     const related = e.relatedTarget;
     if (related && tipEl?.contains(related)) return;
     hideTip();
+  },
+
+  /** Hover auf Finding → Preview-Panel zur entsprechenden Markierung scrollen */
+  handleFindingPointer(idx) {
+    if (!splitMQ.matches || !this.checkDone) return;
+    const mark = document.querySelector(`.lektorat-split-preview .lektorat-mark[data-error-idx="${idx}"]`);
+    if (mark) {
+      mark.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      flashEl(mark);
+    }
   },
 };

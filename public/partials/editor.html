@@ -62,70 +62,72 @@
     </div>
   </template>
 
-  <!-- Formatierte Seitenansicht -->
+  <!-- Formatierte Seitenansicht (vor Check) -->
   <div x-show="renderedPageHtml && !checkDone" class="page-content-view" x-html="renderedPageHtml" @click="handleMarkClick($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>
 
-  <!-- Analyse-Ausgabe -->
-  <div class="editor-section">
-
-    <!-- Formatierte Seitenansicht mit Inline-Highlights (nach Check) -->
-    <div x-show="renderedPageHtml && checkDone" class="page-content-view" x-html="renderedPageHtml" @click="handleMarkClick($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>
-
-    <!-- Fehlerfrei -->
-    <div x-show="checkDone && lektoratErrors.length === 0" class="finding ok">
-      <span class="badge badge-ok">✓ Fehlerfrei</span> &nbsp;Keine Rechtschreib- oder Grammatikfehler gefunden.
+  <!-- Nach Check: Split-Layout (Preview links, Befunde rechts) -->
+  <div x-show="checkDone" class="lektorat-split">
+    <div class="lektorat-split-preview">
+      <div x-show="renderedPageHtml" class="page-content-view" x-html="renderedPageHtml" @click="handleMarkClick($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>
     </div>
+    <div class="lektorat-split-findings">
 
-    <!-- Fehler-Sektion -->
-    <template x-if="lektoratErrors.length > 0">
-      <div>
-        <div class="section-heading finding-header">
-          <span x-text="lektoratErrors.length + ' Fehler gefunden'"></span>
-          <div class="finding-toggle-group">
-            <button class="btn-sm" @click="selectAllErrors(true)">Alle</button>
-            <button class="btn-sm" @click="selectAllErrors(false)">Keine</button>
-          </div>
-        </div>
-        <template x-for="(f, i) in lektoratErrors" :key="i">
-          <label class="finding error" :class="{ 'finding-deselected': !selectedErrors[i] }">
-            <input type="checkbox" class="finding-checkbox" :checked="selectedErrors[i]" @change="toggleError(i)">
-            <span class="badge" :class="({'rechtschreibung':1,'grammatik':1,'tempuswechsel':1}[f.typ]) ? 'badge-err' : 'badge-warn'" x-text="({'wiederholung':'Wdh.','schwaches_verb':'schw. Verb','fuellwort':'Füllwort','show_vs_tell':'Show/Tell','passiv':'Passiv','perspektivbruch':'Perspektive','tempuswechsel':'Tempus'})[f.typ] || f.typ"></span>
-            <span class="finding-content">
-              <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
-              <div class="finding-context" x-text="'«' + f.kontext + '»'"></div>
-              <div class="finding-explanation" x-text="f.erklaerung"></div>
-            </span>
-          </label>
-        </template>
+      <!-- Fehlerfrei -->
+      <div x-show="lektoratErrors.length === 0 && lektoratStyles.length === 0" class="finding ok">
+        <span class="badge badge-ok">✓ Fehlerfrei</span> &nbsp;Keine Beanstandungen gefunden.
       </div>
-    </template>
 
-    <!-- Stilanmerkungen-Sektion -->
-    <template x-if="lektoratStyles.length > 0">
-      <div>
-        <div class="section-heading-top finding-header">
-          <span>Stilanmerkungen</span>
-          <div class="finding-toggle-group">
-            <button class="btn-sm" @click="selectAllStyles(true)">Alle</button>
-            <button class="btn-sm" @click="selectAllStyles(false)">Keine</button>
+      <!-- Fehler-Sektion -->
+      <template x-if="lektoratErrors.length > 0">
+        <div>
+          <div class="section-heading finding-header">
+            <span x-text="lektoratErrors.length + ' Fehler gefunden'"></span>
+            <div class="finding-toggle-group">
+              <button class="btn-sm" @click="selectAllErrors(true)">Alle</button>
+              <button class="btn-sm" @click="selectAllErrors(false)">Keine</button>
+            </div>
           </div>
+          <template x-for="(f, i) in lektoratErrors" :key="i">
+            <label class="finding error" :class="{ 'finding-deselected': !selectedErrors[i] }" :data-finding-idx="i" @pointerenter="handleFindingPointer(i)">
+              <input type="checkbox" class="finding-checkbox" :checked="selectedErrors[i]" @change="toggleError(i)">
+              <span class="badge" :class="({'rechtschreibung':1,'grammatik':1,'tempuswechsel':1}[f.typ]) ? 'badge-err' : 'badge-warn'" x-text="({'wiederholung':'Wdh.','schwaches_verb':'schw. Verb','fuellwort':'Füllwort','show_vs_tell':'Show/Tell','passiv':'Passiv','perspektivbruch':'Perspektive','tempuswechsel':'Tempus'})[f.typ] || f.typ"></span>
+              <span class="finding-content">
+                <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+                <div class="finding-context" x-text="'«' + f.kontext + '»'"></div>
+                <div class="finding-explanation" x-text="f.erklaerung"></div>
+              </span>
+            </label>
+          </template>
         </div>
-        <template x-for="(f, i) in lektoratStyles" :key="i">
-          <label class="finding style" :class="{ 'finding-deselected': !selectedStyles[i] }">
-            <input type="checkbox" class="finding-checkbox" :checked="selectedStyles[i]" @change="toggleStyle(i)">
-            <span class="badge badge-warn">Stil</span>
-            <span class="finding-content">
-              <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
-              <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>
-              <div class="finding-explanation" x-text="f.erklaerung"></div>
-            </span>
-          </label>
-        </template>
-      </div>
-    </template>
+      </template>
 
-    <!-- Stilanalyse & Fazit + Vorschau -->
-    <div x-html="analysisOut"></div>
+      <!-- Stilanmerkungen-Sektion -->
+      <template x-if="lektoratStyles.length > 0">
+        <div>
+          <div class="section-heading-top finding-header">
+            <span>Stilanmerkungen</span>
+            <div class="finding-toggle-group">
+              <button class="btn-sm" @click="selectAllStyles(true)">Alle</button>
+              <button class="btn-sm" @click="selectAllStyles(false)">Keine</button>
+            </div>
+          </div>
+          <template x-for="(f, i) in lektoratStyles" :key="i">
+            <label class="finding style" :class="{ 'finding-deselected': !selectedStyles[i] }" :data-finding-idx="lektoratErrors.length + i" @pointerenter="handleFindingPointer(lektoratErrors.length + i)">
+              <input type="checkbox" class="finding-checkbox" :checked="selectedStyles[i]" @change="toggleStyle(i)">
+              <span class="badge badge-warn">Stil</span>
+              <span class="finding-content">
+                <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+                <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>
+                <div class="finding-explanation" x-text="f.erklaerung"></div>
+              </span>
+            </label>
+          </template>
+        </div>
+      </template>
+
+      <!-- Stilanalyse & Fazit -->
+      <div x-html="analysisOut"></div>
+    </div>
   </div>
 
   <!-- Verlauf dieser Seite (kompakte Leiste) -->

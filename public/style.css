@@ -915,6 +915,39 @@ ins {
 .page-content-view code { background: var(--color-bg); padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
 .page-content-view pre code { background: none; padding: 0; }
 
+/* === Lektorat Split Layout (Preview links, Befunde rechts) === */
+.lektorat-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin-top: 1rem;
+}
+
+@media (min-width: 1100px) {
+  .lektorat-split {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    height: 75vh;
+    min-height: 300px;
+    max-height: 900px;
+  }
+  .lektorat-split-preview {
+    overflow-y: auto;
+    height: 100%;
+  }
+  .lektorat-split-preview .page-content-view {
+    max-height: none;
+    height: 100%;
+    margin: 0;
+    border-radius: var(--radius-md);
+  }
+  .lektorat-split-findings {
+    overflow-y: auto;
+    height: 100%;
+    padding-right: 4px;
+  }
+}
+
 /* Inline-Fehlermarkierung */
 .lektorat-mark {
   position: relative;
@@ -933,6 +966,15 @@ ins {
   color: #999;
 }
 .lektorat-mark--selected:hover { background: rgba(220, 60, 60, 0.18); }
+
+/* Hover-Sync: Flash-Animation beim Hover-Scrollen im Split-Modus */
+@keyframes hoverSyncFlash {
+  0%   { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+  100% { outline: 2px solid transparent; outline-offset: 1px; }
+}
+.hover-sync-flash {
+  animation: hoverSyncFlash 0.8s ease-out;
+}
 
 /* Inline-Korrekturvorschlag neben durchgestrichenem Original */
 .lektorat-ins {
