@@ -118,6 +118,7 @@ export const historyMethods = {
       : this.originalHtml;
 
     this.checkDone = true;
+    if (this.showChatCard) { this.showChatCard = false; this._checkDoneBeforeChat = false; }
     this.lastCheckId = entry.id;
     this.activeHistoryEntryId = entry.id;
 

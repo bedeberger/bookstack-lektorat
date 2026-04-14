@@ -92,6 +92,9 @@ html {
 body {
   font-family: 'Lato', sans-serif;
   color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   min-height: 100vh;
   min-height: 100dvh;
   padding: 1rem 1rem 56px;
@@ -109,7 +112,7 @@ body {
 
 h1 {
   font-size: var(--font-size-lg);
-  font-weight: 500;
+  font-weight: 400;
   margin-bottom: 0.25rem;
 }
 
@@ -142,7 +145,7 @@ code {
   background: #f59e0b;
   color: #1a1a1a;
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: 700;
   border-radius: var(--radius-sm);
   letter-spacing: 0.03em;
 }
@@ -228,7 +231,7 @@ code {
 }
 .job-stats-title {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -242,7 +245,7 @@ code {
 .job-stats-table th {
   text-align: left;
   color: var(--color-muted);
-  font-weight: 500;
+  font-weight: 400;
   padding: 2px 12px 5px 0;
   border-bottom: 0.5px solid var(--color-border);
   white-space: nowrap;
@@ -300,7 +303,7 @@ code {
 }
 .komplett-status-title {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -345,7 +348,7 @@ code {
 }
 .komplett-phase-item.is-active {
   color: var(--color-text);
-  font-weight: 500;
+  font-weight: 400;
 }
 .komplett-phase-icon {
   width: 14px;
@@ -458,7 +461,7 @@ code {
 }
 
 .card-title {
-  font-weight: 500;
+  font-weight: 400;
   font-size: var(--font-size-md);
 }
 
@@ -572,7 +575,7 @@ select:focus {
 }
 .combobox-option:hover,
 .combobox-option--hl { background: var(--color-hover); }
-.combobox-option--selected { font-weight: 500; color: var(--color-accent); }
+.combobox-option--selected { font-weight: 400; color: var(--color-accent); }
 .combobox-option--selected.combobox-option--hl,
 .combobox-option--selected:hover { background: rgba(196, 165, 90, 0.1); }
 .combobox-empty {
@@ -640,7 +643,7 @@ button.success:hover { background: var(--color-success-hover); }
   font-size: 12px;
   padding: 3px 10px;
   border-radius: 0;
-  font-weight: 500;
+  font-weight: 400;
 }
 .badge-warn { background: var(--color-warn-bg); color: var(--color-warn-text); }
 .badge-ok   { background: var(--color-ok-bg);   color: var(--color-ok-text); }
@@ -706,6 +709,7 @@ ins {
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
+  font-size: var(--font-size-base);
 }
 .page-item:hover { background: rgba(0, 0, 0, 0.03); }
 .page-item.selected { border-color: var(--color-accent); background: rgba(196, 165, 90, 0.07); }
@@ -731,6 +735,10 @@ ins {
 .muted-msg {
   color: var(--color-subtle);
   font-size: var(--font-size-base);
+}
+.muted-msg--sm {
+  font-size: var(--font-size-sm);
+  padding: 8px 0;
 }
 
 .error-msg {
@@ -783,7 +791,7 @@ ins {
   gap: 8px;
 }
 .szene-titel {
-  font-weight: 500;
+  font-weight: 400;
   font-size: var(--font-size-sm);
 }
 .szene-kommentar {
@@ -813,7 +821,7 @@ ins {
 .bewertung-section { margin-top: 14px; }
 
 .bewertung-section-title {
-  font-weight: 500;
+  font-weight: 400;
   font-size: var(--font-size-sm);
   color: var(--color-muted);
   margin-bottom: 6px;
@@ -840,13 +848,13 @@ ins {
 
 /* === Section headings (in JS-generated output) === */
 .section-heading {
-  font-weight: 500;
+  font-weight: 400;
   font-size: var(--font-size-base);
   margin-bottom: 8px;
 }
 
 .section-heading-top {
-  font-weight: 500;
+  font-weight: 400;
   font-size: var(--font-size-base);
   margin: 14px 0 8px;
 }
@@ -893,10 +901,10 @@ ins {
   font-size: 15px;
   color: #333;
 }
-.page-content-view h1 { font-size: 1.5em; margin: 0.6em 0 0.3em; font-weight: 600; }
-.page-content-view h2 { font-size: 1.3em; margin: 0.5em 0 0.3em; font-weight: 600; }
-.page-content-view h3 { font-size: 1.15em; margin: 0.4em 0 0.2em; font-weight: 600; }
-.page-content-view h4 { font-size: 1.05em; margin: 0.3em 0 0.2em; font-weight: 600; }
+.page-content-view h1 { font-size: 1.5em; margin: 0.6em 0 0.3em; font-weight: 700; }
+.page-content-view h2 { font-size: 1.3em; margin: 0.5em 0 0.3em; font-weight: 700; }
+.page-content-view h3 { font-size: 1.15em; margin: 0.4em 0 0.2em; font-weight: 700; }
+.page-content-view h4 { font-size: 1.05em; margin: 0.3em 0 0.2em; font-weight: 700; }
 .page-content-view p { margin: 0.4em 0; }
 .page-content-view blockquote {
   border-left: 3px solid var(--color-border);
@@ -907,7 +915,7 @@ ins {
 }
 .page-content-view table { border-collapse: collapse; margin: 0.6em 0; width: 100%; }
 .page-content-view th, .page-content-view td { border: 1px solid var(--color-border); padding: 6px 10px; text-align: left; }
-.page-content-view th { background: var(--color-bg); font-weight: 600; }
+.page-content-view th { background: var(--color-bg); font-weight: 700; }
 .page-content-view ul, .page-content-view ol { padding-left: 1.5em; margin: 0.4em 0; }
 .page-content-view img { max-width: 100%; height: auto; border-radius: var(--radius-md); }
 .page-content-view hr { border: none; border-top: 1px solid var(--color-border); margin: 1em 0; }
@@ -980,7 +988,7 @@ ins {
 .lektorat-ins {
   text-decoration: none;
   color: #1a7f37;
-  font-weight: 600;
+  font-weight: 700;
   background: rgba(34, 170, 90, 0.13);
   border-radius: 2px;
   padding: 0 2px;
@@ -1013,7 +1021,7 @@ ins {
 }
 .lektorat-tip--visible { display: flex; }
 .lektorat-tip .badge { align-self: flex-start; }
-.lektorat-tip-korrektur { font-weight: 600; color: #1a7f37; }
+.lektorat-tip-korrektur { font-weight: 700; color: #1a7f37; }
 .lektorat-tip-erkl { color: #666; }
 
 /* Flash-Animation beim Scrollen zur Fehlerliste */
@@ -1041,7 +1049,7 @@ ins {
   user-select: none;
 }
 .figure-context-header:hover { background: rgba(0,0,0,0.03); }
-.figure-context-title { display: flex; align-items: center; gap: 6px; font-size: var(--font-size-sm); font-weight: 500; }
+.figure-context-title { display: flex; align-items: center; gap: 6px; font-size: var(--font-size-sm); font-weight: 400; }
 .figure-context-icon { font-size: 11px; font-weight: 700; background: var(--color-accent-bg); color: var(--color-accent-text); width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
 .figure-context-body { padding: 4px 12px 10px; display: flex; flex-wrap: wrap; gap: 6px; }
 .figure-context-chip {
@@ -1074,9 +1082,9 @@ ins {
   line-height: 1.5;
   color: #444;
 }
-.figure-context-tooltip-name { font-weight: 600; margin-bottom: 4px; }
+.figure-context-tooltip-name { font-weight: 700; margin-bottom: 4px; }
 .figure-context-tooltip-row { margin-bottom: 2px; }
-.figure-context-label { font-weight: 500; color: #666; }
+.figure-context-label { font-weight: 400; color: #666; }
 .figure-context-tooltip-desc {
   margin-top: 4px;
   color: #555;
@@ -1110,7 +1118,7 @@ ins {
   padding: 7px 10px;
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 400;
   font-size: var(--font-size-sm);
   color: var(--color-muted);
   user-select: none;
@@ -1143,7 +1151,7 @@ ins {
 
 /* === History === */
 .history-heading {
-  font-weight: 500;
+  font-weight: 400;
   font-size: var(--font-size-xs);
   color: var(--color-muted);
   text-transform: uppercase;
@@ -1216,7 +1224,7 @@ ins {
   border-radius: 0;
   border: 1px solid transparent;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 400;
   transition: opacity 0.15s;
 }
 .btn-toggle-saved:hover { opacity: 0.75; }
@@ -1248,7 +1256,7 @@ ins {
   color: var(--color-err-text);
   border-radius: 0;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 400;
   opacity: 0.7;
 }
 .btn-delete-history:hover { opacity: 1; }
@@ -1258,7 +1266,7 @@ ins {
   font-size: 10px;
   padding: 2px 6px;
   border-radius: var(--radius-sm);
-  font-weight: 500;
+  font-weight: 400;
   flex-shrink: 0;
 }
 .tok-ok      { background: var(--color-ok-bg);   color: var(--color-ok-text); }
@@ -1282,7 +1290,7 @@ ins {
   pointer-events: none;
 }
 .tok-tt-label {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-text);
   margin-bottom: 6px;
 }
@@ -1398,7 +1406,7 @@ ins {
 
 .figur-name {
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: 400;
   flex: 1;
 }
 
@@ -1418,7 +1426,7 @@ ins {
   font-size: 11px;
   padding: 2px 7px;
   border-radius: 0;
-  font-weight: 600;
+  font-weight: 700;
   background: var(--color-text);
   color: var(--color-surface);
   white-space: nowrap;
@@ -1440,7 +1448,7 @@ ins {
   background: var(--color-tag-bg);
   color: var(--color-muted);
   white-space: nowrap;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 @media (max-width: 600px) {
@@ -1464,7 +1472,7 @@ ins {
 
 .figur-bz-typ {
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   padding: 2px 7px;
   border-radius: 0;
   flex-shrink: 0;
@@ -1484,7 +1492,7 @@ ins {
 
 .figur-bz-macht {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 1px;
   margin-left: 2px;
 }
@@ -1552,7 +1560,7 @@ ins {
   background: var(--color-primary);
   color: var(--color-surface);
   border-color: var(--color-primary);
-  font-weight: 600;
+  font-weight: 700;
 }
 .figur-modus-btn:hover:not(.figur-modus-btn--active) { background: var(--color-hover); }
 .figur-modus-btn--active:hover { background: var(--color-primary); color: var(--color-surface); }
@@ -1669,7 +1677,7 @@ ins {
   background: var(--color-primary);
   color: var(--color-surface);
   border-color: var(--color-primary);
-  font-weight: 600;
+  font-weight: 700;
 }
 .figuren-graph-filter-btn--active:hover {
   background: var(--color-primary);
@@ -1713,7 +1721,7 @@ ins {
 
 .figur-bz-name {
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .internal-link {
@@ -1837,7 +1845,7 @@ ins {
 
 .gz-extern-badge {
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 400;
   padding: 1px 6px;
   background: var(--color-err-bg);
   color: var(--color-err-text);
@@ -1849,7 +1857,7 @@ ins {
 }
 
 .gz-item--extern .gz-ereignis {
-  font-weight: 500;
+  font-weight: 400;
   color: var(--color-err-text);
 }
 
@@ -1864,7 +1872,7 @@ ins {
 .gz-kapitel-link {
   font-size: 11px;
   padding: 2px 7px;
-  font-weight: 600;
+  font-weight: 700;
   background: var(--color-text);
   color: var(--color-surface);
   white-space: nowrap;
@@ -1895,7 +1903,7 @@ ins {
 
 .gz-figur-badge {
   font-size: var(--font-size-xs);
-  font-weight: 500;
+  font-weight: 400;
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   background: var(--color-tag-bg);
@@ -1938,7 +1946,7 @@ ins {
 .szene-card-wertung,
 .gz-szene-wertung-badge {
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   padding: 1px 6px;
   border-radius: 0;
   text-transform: uppercase;
@@ -1955,7 +1963,7 @@ ins {
 
 .figur-szene-titel {
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .figur-szene-kommentar {
@@ -2007,7 +2015,7 @@ ins {
   cursor: default;
 }
 .szenen-kapitel-name {
-  font-weight: 500;
+  font-weight: 400;
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2059,7 +2067,7 @@ ins {
 .szene-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 
 .szene-card-ort      { font-size: 11px; color: var(--color-muted); }
-.szene-card-titel    { font-size: var(--font-size-sm); font-weight: 500; margin-bottom: 3px; }
+.szene-card-titel    { font-size: var(--font-size-sm); font-weight: 400; margin-bottom: 3px; }
 .szene-card-kommentar { font-size: 12px; color: var(--color-muted); margin-bottom: 6px; }
 
 /* === Filter-Leiste (alle Features) === */
@@ -2076,7 +2084,7 @@ ins {
 
 .szenen-filter-btn {
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   padding: 3px 9px;
   border-radius: 0;
   border: 1px solid var(--color-border);
@@ -2124,7 +2132,7 @@ ins {
 
 .szenen-figur-count-badge {
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 400;
   padding: 1px 7px;
   border-radius: 0;
   background: var(--color-tag-bg);
@@ -2149,6 +2157,11 @@ ins {
 /* === Utilities === */
 /* Alpine.js – verhindert Flash of unstyled content */
 [x-cloak] { display: none !important; }
+
+.book-selector-row { margin-bottom: 12px; }
+.search-wrap { margin-bottom: 10px; }
+.batch-wrap { margin-bottom: 10px; }
+.tok-stats-wrap { display: contents; }
 
 /* === Seitensuche === */
 .page-search {
@@ -2201,7 +2214,7 @@ ins {
 
 .feature-tile-title {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.2;
 }
 
@@ -2425,7 +2438,7 @@ ins {
   line-height: 1.6;
 }
 .chat-context-label {
-  font-weight: 600;
+  font-weight: 700;
   opacity: 0.7;
 }
 .chat-context-link {
@@ -2473,7 +2486,7 @@ ins {
 /* Markdown in Antworten */
 .chat-heading {
   margin: 8px 0 4px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.3;
 }
 .chat-heading--1 { font-size: 1.1em; }
@@ -2511,7 +2524,7 @@ ins {
 }
 .chat-table thead th {
   background: rgba(0,0,0,0.05);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* Änderungsvorschläge */
@@ -2542,7 +2555,7 @@ ins {
 }
 .chat-vorschlag-label {
   font-size: var(--font-size-xs);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--color-primary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2645,7 +2658,7 @@ ins {
 /* Session-History */
 .chat-history-title {
   font-size: var(--font-size-xs);
-  font-weight: 500;
+  font-weight: 400;
   color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2734,7 +2747,7 @@ ins {
 .syn-passage mark {
   background: #fff3b0;
   color: inherit;
-  font-weight: 600;
+  font-weight: 700;
   padding: 0 1px;
 }
 
@@ -2750,7 +2763,7 @@ ins {
 }
 
 .syn-wort {
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--font-size-base);
   background: var(--color-accent-bg);
   color: var(--color-accent-text);
@@ -2763,7 +2776,7 @@ ins {
   color: var(--color-ok-text);
   background: var(--color-ok-bg);
   padding: 1px 7px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .syn-begruendung {
@@ -2786,7 +2799,7 @@ ins {
   color: var(--color-primary);
   background: color-mix(in srgb, var(--color-primary) 8%, transparent);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .syn-btn:hover:not(:disabled) {
@@ -2898,7 +2911,7 @@ ins {
 }
 .job-queue-label {
   color: var(--color-muted);
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
   margin-right: 2px;
 }
@@ -2926,7 +2939,7 @@ ins {
 }
 .job-queue-pill-label {
   color: #e2e8f0;
-  font-weight: 500;
+  font-weight: 400;
 }
 .job-queue-pill-status {
   color: var(--color-muted);
@@ -2942,7 +2955,7 @@ ins {
 .job-queue-pill-progress {
   color: var(--color-running);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
 }
 .job-queue-cancel-btn {
   background: none;
@@ -2978,7 +2991,7 @@ ins {
 }
 .ort-item:hover { background: var(--color-hover); }
 .ort-name {
-  font-weight: 600;
+  font-weight: 700;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -3019,7 +3032,7 @@ ins {
 }
 .ort-meta-label {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -3120,7 +3133,7 @@ ins {
 }
 .book-settings-label {
   min-width: 72px;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 13px;
   padding-top: 3px;
   color: var(--color-text);
@@ -3152,7 +3165,7 @@ ins {
   margin: 8px 0 0;
   font-size: 12px;
   color: var(--color-success);
-  font-weight: 500;
+  font-weight: 400;
 }
 .book-settings-error {
   margin: 8px 0 0;

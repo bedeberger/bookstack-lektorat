@@ -114,10 +114,16 @@ export function makeChatMethods(cfg) {
     if (this[p.show]) {
       if (cfg.onReopen) await cfg.onReopen.call(this);
       else this[p.show] = false;
+      if (this._checkDoneBeforeChat && this.lektoratErrors?.length + this.lektoratStyles?.length > 0) {
+        this.checkDone = true;
+        this._checkDoneBeforeChat = false;
+      }
       return;
     }
     if (!cfg.canOpen(this)) return;
     if (cfg.closeOtherCards) this._closeOtherMainCards(cfg.closeOtherCards);
+    this._checkDoneBeforeChat = this.checkDone;
+    this.checkDone = false;
     this[p.show] = true;
     await loadSessions.call(this);
     if (this[p.sessions].length === 0) {
