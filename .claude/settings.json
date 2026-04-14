@@ -50,7 +50,9 @@
       "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT COUNT\\(*\\) FROM character_arcs; SELECT COUNT\\(*\\) FROM arc_stages; SELECT arc_id, kapitel FROM arc_stages LIMIT 5;\")",
       "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT COUNT\\(*\\) FROM figures; SELECT COUNT\\(*\\) FROM continuity_checks; SELECT fig_id, name FROM figures LIMIT 5;\")",
       "Bash(node --check public/js/history.js)",
-      "Bash(md5 /Users/bd/ClaudeProjects/bookstack-lektorat/public/style.css)"
+      "Bash(md5 /Users/bd/ClaudeProjects/bookstack-lektorat/public/style.css)",
+      "Bash(node -e \"require\\('./lib/crypto'\\); console.log\\('crypto OK'\\)\")",
+      "Bash(node --input-type=module -e ':*)"
     ]
   }
 }

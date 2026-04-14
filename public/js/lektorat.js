@@ -1,4 +1,4 @@
-import { escHtml, htmlToText, SAFETY_HTML_RATIO } from './utils.js';
+import { escHtml, htmlToText } from './utils.js';
 
 // Lektorat-Workflow-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -162,15 +162,15 @@ export const lektoratMethods = {
         }
         const r = job.result;
         this.originalHtml = r.originalHtml;
-        this.currentPageUpdatedAt = r.updatedAt || null;
         const fehler = r.fehler || [];
-        const errors = fehler.filter(f => f.typ === 'rechtschreibung' || f.typ === 'grammatik' || f.typ === 'wiederholung');
+        const SOFT_TYPEN = new Set(['wiederholung', 'schwaches_verb', 'fuellwort', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel']);
+        const errors = fehler.filter(f => f.typ !== 'stil');
         const styles = fehler.filter(f => f.typ === 'stil');
         this.lektoratErrors = errors;
         this.lektoratStyles = styles;
-        this.selectedErrors = errors.map(f => f.typ !== 'wiederholung');
+        this.selectedErrors = errors.map(f => !SOFT_TYPEN.has(f.typ));
         this.selectedStyles = styles.map(() => false);
-        const hardErrors = errors.filter(f => f.typ !== 'wiederholung');
+        const hardErrors = errors.filter(f => !SOFT_TYPEN.has(f.typ));
         this.hasErrors = hardErrors.length > 0;
         this.correctedHtml = hardErrors.length > 0
           ? this._applyCorrections(r.originalHtml, hardErrors)
@@ -203,58 +203,24 @@ export const lektoratMethods = {
   },
 
   async saveCorrections() {
-    if (!this.correctedHtml || !this.currentPage) return;
-    if (this.originalHtml && this.correctedHtml.length < this.originalHtml.length * SAFETY_HTML_RATIO) {
-      this.setStatus('Fehler: Korrigiertes HTML wirkt unvollständig – Speichern abgebrochen.');
-      console.error('[saveCorrections] correctedHtml zu kurz:', this.correctedHtml.length, 'vs original:', this.originalHtml.length);
-      return;
-    }
-
-    this.saveApplying = 10;
-    let finalHtml = this.correctedHtml;
+    if (!this.currentPage) return;
+    const selectedErrors = this.lektoratErrors.filter((_, i) => this.selectedErrors[i]);
     const selectedStyles = this.lektoratStyles.filter((_, i) => this.selectedStyles[i]);
+    if (selectedErrors.length === 0 && selectedStyles.length === 0) return;
 
-    if (selectedStyles.length > 0) {
-      this.saveApplying = 30;
-      finalHtml = await this._applyStilkorrektur(
-        this.correctedHtml,
-        selectedStyles,
-        (chars, aiBase) => { this.saveApplying = Math.min(70, 30 + Math.round((chars / aiBase) * 40)); }
-      );
-    }
-
-    this.saveApplying = 75;
-    this.setStatus('Prüfe auf Änderungen…', true);
     try {
-      const current = await this.bsGet('pages/' + this.currentPage.id);
-      if (this.currentPageUpdatedAt && current.updated_at !== this.currentPageUpdatedAt) {
-        this.saveApplying = null;
-        this.setStatus('Konflikt: Die Seite wurde zwischenzeitlich von jemand anderem geändert. Bitte Lektorat neu starten.');
-        return;
-      }
-    } catch (e) {
-      console.warn('[saveCorrections] Konfliktprüfung fehlgeschlagen, fahre fort:', e.message);
-    }
-
-    this.saveApplying = 85;
-    this.setStatus('Speichere in BookStack…', true);
-    try {
-      await this.bsPut('pages/' + this.currentPage.id, {
-        html: finalHtml,
-        name: this.currentPage.name,
+      const finalHtml = await this._loadApplyAndSave(selectedErrors, selectedStyles, (pct, text) => {
+        this.saveApplying = pct;
+        if (text) this.setStatus(text, true);
       });
+
       if (this.lastCheckId) {
         try {
           this.saveApplying = 95;
-          const appliedErrors = this.lektoratErrors.filter((_, i) => this.selectedErrors[i]);
-          const selectedErrors = [
-            ...this.lektoratErrors.filter((_, i) => this.selectedErrors[i]),
-            ...this.lektoratStyles.filter((_, i) => this.selectedStyles[i]),
-          ];
           await fetch('/history/check/' + this.lastCheckId + '/saved', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ applied_errors_json: appliedErrors, selected_errors_json: selectedErrors }),
+            body: JSON.stringify({ applied_errors_json: selectedErrors, selected_errors_json: [...selectedErrors, ...selectedStyles] }),
           });
           await this.loadPageHistory(this.currentPage.id);
         } catch (e) { console.error('[history saved]', e); }

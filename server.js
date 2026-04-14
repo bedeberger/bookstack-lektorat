@@ -51,7 +51,8 @@ if (LOCAL_DEV_MODE) {
   logger.warn('LOCAL_DEV_MODE aktiv – OAuth wird übersprungen, automatische Dev-Session!');
 } else {
   if (!process.env.SESSION_SECRET) {
-    logger.warn('SESSION_SECRET nicht gesetzt – unsicher für Produktion!');
+    logger.error('SESSION_SECRET nicht gesetzt – Server wird gestoppt. Bitte in .env setzen.');
+    process.exit(1);
   }
   if (!process.env.ALLOWED_EMAILS) {
     logger.warn('ALLOWED_EMAILS nicht gesetzt – ALLE Google-Konten haben Zugriff! Bitte in .env einschränken.');

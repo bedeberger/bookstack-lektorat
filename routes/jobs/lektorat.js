@@ -1,6 +1,6 @@
 'use strict';
 const express = require('express');
-const { db, getBookLocale } = require('../../db/schema');
+const { db, getBookLocale, getChapterFigures } = require('../../db/schema');
 const {
   makeJobLogger, updateJob, completeJob, failJob,
   aiCall, getPrompts, getBookPrompts,
@@ -11,7 +11,7 @@ const {
 } = require('./shared');
 
 // Gültige Fehlertypen und Validierung für Lektorat-Ergebnisse
-const VALID_TYPEN = new Set(['rechtschreibung', 'grammatik', 'stil', 'wiederholung']);
+const VALID_TYPEN = new Set(['rechtschreibung', 'grammatik', 'stil', 'wiederholung', 'schwaches_verb', 'fuellwort', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel']);
 
 // Erklärungs-Phrasen die darauf hindeuten, dass der Eintrag kein echter Fehler ist.
 // Lokale Modelle (Ollama/Llama) ignorieren die FILTER-PFLICHT im Prompt häufig
@@ -56,11 +56,14 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     const text = htmlToText(html);
     if (!text.trim()) { completeJob(jobId, { empty: true }); return; }
 
+    // Figuren des Kapitels laden (falls Komplettanalyse gelaufen ist)
+    const figuren = getChapterFigures(bookId, pd.chapter_id, userEmail);
+
     const tok = { in: 0, out: 0, ms: 0 };
     updateJob(jobId, { statusText: 'KI analysiert…', progress: 10 });
 
     const result = await aiCall(jobId, tok,
-      buildLektoratPrompt(text, { stopwords: lektoratStopwords, erklaerungRule: lektoratErklaerungRule, korrekturRegeln: lektoratKorrekturRegeln }),
+      buildLektoratPrompt(text, { stopwords: lektoratStopwords, erklaerungRule: lektoratErklaerungRule, korrekturRegeln: lektoratKorrekturRegeln, figuren }),
       SYSTEM_LEKTORAT,
       10, 97, 5000,
     );
@@ -129,8 +132,9 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
         const text = htmlToText(pd.html).trim();
         if (!text) continue;
 
+        const batchFiguren = getChapterFigures(bookId, pd.chapter_id, userEmail);
         const result = await aiCall(jobId, tok,
-          buildBatchLektoratPrompt(text, { stopwords: batchStopwords, erklaerungRule: batchErklaerungRule, korrekturRegeln: batchKorrekturRegeln }),
+          buildBatchLektoratPrompt(text, { stopwords: batchStopwords, erklaerungRule: batchErklaerungRule, korrekturRegeln: batchKorrekturRegeln, figuren: batchFiguren }),
           SYSTEM_LEKTORAT,
           fromPct, toPct, 2000,
         );

@@ -136,7 +136,6 @@ document.addEventListener('alpine:init', () => {
     pageSearch: '',
     currentPage: null,
     currentPageEmpty: false,
-    currentPageUpdatedAt: null,
     originalHtml: null,
     correctedHtml: null,
     hasErrors: false,
@@ -954,7 +953,6 @@ document.addEventListener('alpine:init', () => {
       if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
       this.resetChat();
       this.currentPage = null;
-      this.currentPageUpdatedAt = null;
       this.currentPageEmpty = false;
       this.originalHtml = null;
       this.correctedHtml = null;

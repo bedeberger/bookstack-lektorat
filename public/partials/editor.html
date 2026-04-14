@@ -63,7 +63,7 @@
         <template x-for="(f, i) in lektoratErrors" :key="i">
           <label class="finding error" :class="{ 'finding-deselected': !selectedErrors[i] }">
             <input type="checkbox" class="finding-checkbox" :checked="selectedErrors[i]" @change="toggleError(i)">
-            <span class="badge" :class="f.typ === 'wiederholung' ? 'badge-warn' : 'badge-err'" x-text="f.typ === 'wiederholung' ? 'Wdh.' : f.typ"></span>
+            <span class="badge" :class="({'rechtschreibung':1,'grammatik':1,'tempuswechsel':1}[f.typ]) ? 'badge-err' : 'badge-warn'" x-text="({'wiederholung':'Wdh.','schwaches_verb':'schw. Verb','fuellwort':'Füllwort','show_vs_tell':'Show/Tell','passiv':'Passiv','perspektivbruch':'Perspektive','tempuswechsel':'Tempus'})[f.typ] || f.typ"></span>
             <span class="finding-content">
               <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
               <div class="finding-context" x-text="'«' + f.kontext + '»'"></div>
@@ -127,7 +127,7 @@
             <div class="history-detail-block">
               <template x-for="(f, i) in entry.errors_json" :key="i">
                 <div class="finding" :class="[f.typ === 'stil' ? 'style' : 'error', entry.selected_errors_json && !entry.selected_errors_json.some(a => a.original === f.original) ? 'finding-skipped' : '']">
-                  <span class="badge" :class="f.typ === 'stil' ? 'badge-warn' : 'badge-err'" x-text="f.typ"></span>
+                  <span class="badge" :class="({'rechtschreibung':1,'grammatik':1,'tempuswechsel':1}[f.typ]) ? 'badge-err' : 'badge-warn'" x-text="({'wiederholung':'Wdh.','schwaches_verb':'schw. Verb','fuellwort':'Füllwort','show_vs_tell':'Show/Tell','passiv':'Passiv','perspektivbruch':'Perspektive','tempuswechsel':'Tempus','stil':'Stil'})[f.typ] || f.typ"></span>
                   <template x-if="entry.selected_errors_json !== null">
                     <span class="badge" :class="entry.selected_errors_json.some(a => a.original === f.original) ? 'badge-ok' : 'badge-skipped'" :title="entry.selected_errors_json.some(a => a.original === f.original) ? 'selektiert' : 'nicht selektiert'" x-text="entry.selected_errors_json.some(a => a.original === f.original) ? '✓' : '–'"></span>
                   </template>
@@ -154,7 +154,7 @@
                   </div>
                   <template x-for="(f, i) in historyErrors(entry)" :key="i">
                     <div class="finding error finding--clickable" :class="historySelections[entry.id].errors[i] ? '' : 'finding-skipped'" @click.stop="toggleHistoryError(entry.id, i)">
-                      <span class="badge badge-err" x-text="f.typ"></span>
+                      <span class="badge" :class="({'rechtschreibung':1,'grammatik':1,'tempuswechsel':1}[f.typ]) ? 'badge-err' : 'badge-warn'" x-text="({'wiederholung':'Wdh.','schwaches_verb':'schw. Verb','fuellwort':'Füllwort','show_vs_tell':'Show/Tell','passiv':'Passiv','perspektivbruch':'Perspektive','tempuswechsel':'Tempus'})[f.typ] || f.typ"></span>
                       <span class="badge" :class="historySelections[entry.id].errors[i] ? 'badge-ok' : 'badge-skipped'" x-text="historySelections[entry.id].errors[i] ? '✓' : '–'"></span>
                       <div class="finding-content">
                         <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>

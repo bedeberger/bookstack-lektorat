@@ -209,8 +209,90 @@ Wiederholung-Regeln (typ: «wiederholung»):
 - Synonym-Selbsttest vor jedem Eintrag: Klingt der Satz danach natürlich? Bedeutung erhalten? Passt zum Autorenstil?`;
 }
 
+// Schwache-Verben-Regeln für Lektorat-Prompts
+function _buildSchwacheVerbenBlock() {
+  return `
+Schwache-Verben-Regeln (typ: «schwaches_verb»):
+- Die gesamte Seite scannen und schwache, blasse oder nichtssagende Verben identifizieren
+- Typische schwache Verben: machen, tun, sein, haben, geben, gehen, kommen, bringen, stehen, liegen, sagen, meinen, finden u.ä.
+- Nur melden, wenn ein ausdrucksstärkeres Verb den Satz spürbar verbessert — keine Pedanterie bei idiomatischen Wendungen oder Hilfsverb-Konstruktionen
+- «original»: vollständiger Satz zeichengenau aus dem Text (damit die Textstelle eindeutig auffindbar ist)
+- «korrektur»: derselbe Satz mit dem stärkeren Verb — exakt gleiche grammatische Form und Tempus
+- Selbsttest vor jedem Eintrag: Ist das Ersatzverb wirklich präziser und bildstärker? Passt es zum Stil und Ton des Textes?`;
+}
+
+// Füllwort-Regeln für Lektorat-Prompts
+function _buildFuellwortBlock() {
+  return `
+Füllwort-Regeln (typ: «fuellwort»):
+- Die gesamte Seite scannen und überflüssige Füllwörter identifizieren, die den Text verwässern
+- Typische Füllwörter: eigentlich, irgendwie, quasi, halt, eben, wohl, ja, doch, mal, nun, also, natürlich, gewissermassen, sozusagen, durchaus, ziemlich, etwas, ein wenig, ein bisschen u.ä.
+- Nur melden, wenn das Streichen oder Ersetzen den Satz strafft, ohne Bedeutung oder Stimme zu verlieren — in Dialogen können Füllwörter bewusst eingesetzt sein
+- «original»: vollständiger Satz zeichengenau aus dem Text
+- «korrektur»: derselbe Satz ohne das Füllwort (oder mit knapperer Formulierung)
+- Selbsttest: Verliert der Satz durch die Streichung an Rhythmus, Stimme oder Bedeutungsnuance? Dann weglassen.`;
+}
+
+// Show-vs-Tell-Regeln für Lektorat-Prompts
+function _buildShowVsTellBlock() {
+  return `
+Show-vs-Tell-Regeln (typ: «show_vs_tell»):
+- Stellen identifizieren, an denen Emotionen, Eigenschaften oder Zustände abstrakt benannt statt szenisch gezeigt werden
+- Typische Muster: «Er war wütend», «Sie fühlte sich traurig», «Das Haus war alt», «Er war nervös»
+- «original»: vollständiger Satz zeichengenau aus dem Text
+- «korrektur»: derselbe Satz umformuliert mit konkreten Sinneseindrücken, Handlungen oder Details, die das Gleiche zeigen
+- Nur melden, wenn eine szenische Darstellung den Text spürbar lebendiger macht — nicht jede abstrakte Aussage muss umgeschrieben werden (z.B. in Zusammenfassungen, Rückblenden oder schnellen Übergängen ist Telling erlaubt)
+- Selbsttest: Passt die szenische Variante zum Erzähltempo und zur Szene? Nicht aufblähen.`;
+}
+
+// Passiv-Regeln für Lektorat-Prompts
+function _buildPassivBlock() {
+  return `
+Passivkonstruktionen-Regeln (typ: «passiv»):
+- Vermeidbare Passivkonstruktionen identifizieren, die den Text schwerfällig oder unpersönlich machen
+- «original»: vollständiger Satz zeichengenau aus dem Text
+- «korrektur»: derselbe Satz in aktiver Formulierung — das handelnde Subjekt klar benennen
+- Nicht melden, wenn das Passiv bewusst eingesetzt wird (Täter unbekannt/unwichtig, wissenschaftlicher Stil, Betonung auf dem Objekt) oder die aktive Variante gezwungen klingt
+- Selbsttest: Ist die aktive Formulierung wirklich klarer und lebendiger? Klingt sie natürlich im Kontext?`;
+}
+
+// Perspektivbruch-Regeln für Lektorat-Prompts
+function _buildPerspektivbruchBlock() {
+  return `
+Perspektivbruch-Regeln (typ: «perspektivbruch»):
+- Stellen identifizieren, an denen die Erzählperspektive innerhalb einer Szene unbeabsichtigt wechselt
+- Typische Brüche: Wissen oder Gedanken einer Figur beschreiben, die nicht die aktuelle Perspektivfigur ist; plötzlicher Wechsel zwischen Ich-Erzähler und auktorialem Erzähler; Informationen, die der Perspektivfigur nicht zugänglich sind
+- «original»: vollständiger Satz zeichengenau aus dem Text
+- «korrektur»: derselbe Satz so umformuliert, dass er zur etablierten Perspektive der Szene passt
+- «erklaerung»: benennen, welche Perspektive etabliert ist und worin der Bruch besteht
+- Nicht melden bei bewusst auktorialer Erzählweise oder bei expliziten Perspektivwechseln (z.B. nach Szenenumbruch)`;
+}
+
+// Tempuswechsel-Regeln für Lektorat-Prompts
+function _buildTempuswechselBlock() {
+  return `
+Tempuswechsel-Regeln (typ: «tempuswechsel»):
+- Unbeabsichtigte Wechsel der Erzählzeit innerhalb einer Szene oder eines Abschnitts identifizieren
+- Typisch: Erzählung im Präteritum mit plötzlichem Wechsel ins Präsens (oder umgekehrt), ohne dass ein Stilmittel erkennbar ist
+- «original»: vollständiger Satz zeichengenau aus dem Text
+- «korrektur»: derselbe Satz im korrekten Tempus der umgebenden Passage
+- «erklaerung»: benennen, welches Tempus in der Passage etabliert ist und welches im Satz verwendet wird
+- Nicht melden bei: Plusquamperfekt für Rückblenden, historischem Präsens als bewusstem Stilmittel, Tempuswechsel in direkter Rede, Wechsel an Szenen-/Kapitelgrenzen`;
+}
+
 // Gemeinsamer Rumpf für Einzel- und Batch-Lektorat-Prompts
-function _buildLektoratPromptBody(text, textLabel, { stopwords = STOPWORDS, erklaerungRule = ERKLAERUNG_RULE, korrekturRegeln = KORREKTUR_REGELN } = {}) {
+function _buildLektoratPromptBody(text, textLabel, { stopwords = STOPWORDS, erklaerungRule = ERKLAERUNG_RULE, korrekturRegeln = KORREKTUR_REGELN, figuren = [] } = {}) {
+  const figurenBlock = figuren.length > 0
+    ? `\nBekannte Figuren in diesem Kapitel (Kontext für Namenskonsistenz und Perspektivprüfung):\n${figuren.map(f => {
+        const parts = [f.name];
+        if (f.kurzname) parts.push(`Kurzname: ${f.kurzname}`);
+        if (f.geschlecht) parts.push(f.geschlecht);
+        if (f.beruf) parts.push(f.beruf);
+        if (f.typ) parts.push(`Typ: ${f.typ}`);
+        if (f.beschreibung) parts.push(f.beschreibung);
+        return '- ' + parts.join(' | ');
+      }).join('\n')}\nHinweis: Figurennamen und deren Varianten sind KEINE Rechtschreibfehler.\n`
+    : '';
   return `Analysiere diesen Text auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
 
 WICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen (z.B. ein Gallizismus und separate Anführungszeichen-Problematik), müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.
@@ -219,7 +301,7 @@ Antworte mit diesem JSON-Schema:
 {
   "fehler": [
     {
-      "typ": "rechtschreibung|grammatik|stil|wiederholung",
+      "typ": "rechtschreibung|grammatik|stil|wiederholung|schwaches_verb|fuellwort|show_vs_tell|passiv|perspektivbruch|tempuswechsel",
       "original": "das fehlerhafte Wort oder die fehlerhafte Phrase – bei «wiederholung»: vollständiger Satz zeichengenau aus dem Text",
       "korrektur": "die korrekte Version – bei «wiederholung»: derselbe Satz mit Synonym",
       "kontext": "der Satz in dem der Fehler vorkommt (bei «wiederholung» gleich wie «original»)",
@@ -248,7 +330,13 @@ Szenen-Regeln:
 - wertung: «stark» = funktioniert gut, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
 ${_buildStilBlock()}
 ${_buildWiederholungBlock(stopwords)}
-
+${_buildSchwacheVerbenBlock()}
+${_buildFuellwortBlock()}
+${_buildShowVsTellBlock()}
+${_buildPassivBlock()}
+${_buildPerspektivbruchBlock()}
+${_buildTempuswechselBlock()}
+${figurenBlock}
 ${textLabel}
 ${text}`;
 }

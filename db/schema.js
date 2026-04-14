@@ -1341,6 +1341,8 @@ function reconcilePageIds() {
 
 // ── User-Token-Verwaltung ─────────────────────────────────────────────────────
 
+const { encrypt, decrypt, isEncrypted } = require('../lib/crypto');
+
 const _getToken = db.prepare('SELECT token_id, token_pw FROM user_tokens WHERE email = ?');
 const _upsertToken = db.prepare(`
   INSERT INTO user_tokens (email, token_id, token_pw, updated_at)
@@ -1351,17 +1353,38 @@ const _upsertToken = db.prepare(`
 const _getAnyToken = db.prepare('SELECT token_id, token_pw FROM user_tokens LIMIT 1');
 const _getAllTokens = db.prepare('SELECT email, token_id, token_pw FROM user_tokens');
 
-/** Gibt { token_id, token_pw } für eine E-Mail zurück, oder undefined. */
-function getUserToken(email) { return _getToken.get(email); }
+/** Entschlüsselt ein Token-Row-Objekt. Migriert Klartext automatisch zu verschlüsselt. */
+function _decryptRow(row, email) {
+  if (!row) return row;
+  const needsMigration = !isEncrypted(row.token_id) || !isEncrypted(row.token_pw);
+  const plainId = decrypt(row.token_id);
+  const plainPw = decrypt(row.token_pw);
+  if (needsMigration && email) {
+    _upsertToken.run(email, encrypt(plainId), encrypt(plainPw));
+  }
+  return { token_id: plainId, token_pw: plainPw };
+}
 
-/** Speichert/aktualisiert den BookStack-Token für eine E-Mail. */
-function setUserToken(email, tokenId, tokenPw) { _upsertToken.run(email, tokenId, tokenPw); }
+/** Gibt { token_id, token_pw } für eine E-Mail zurück, oder undefined. */
+function getUserToken(email) { return _decryptRow(_getToken.get(email), email); }
+
+/** Speichert/aktualisiert den BookStack-Token für eine E-Mail (verschlüsselt). */
+function setUserToken(email, tokenId, tokenPw) { _upsertToken.run(email, encrypt(tokenId), encrypt(tokenPw)); }
 
 /** Gibt irgendeinen gespeicherten Token zurück (für Cron-Jobs ohne Session-Kontext). */
-function getAnyUserToken() { return _getAnyToken.get(); }
+function getAnyUserToken() {
+  const row = _getAnyToken.get();
+  return row ? { token_id: decrypt(row.token_id), token_pw: decrypt(row.token_pw) } : undefined;
+}
 
 /** Gibt alle gespeicherten Tokens zurück (für User-iterierenden Sync). */
-function getAllUserTokens() { return _getAllTokens.all(); }
+function getAllUserTokens() {
+  return _getAllTokens.all().map(row => ({
+    email: row.email,
+    token_id: decrypt(row.token_id),
+    token_pw: decrypt(row.token_pw),
+  }));
+}
 
 // Orte in DB schreiben (wird von PUT-Endpoint und Job genutzt).
 // Verwendet UPSERT by loc_id statt Delete+Re-Insert, damit bestehende
@@ -1577,6 +1600,30 @@ function addFigurenBeziehungen(bookId, beziehungen, userEmail) {
   })();
 }
 
+/** Figuren eines Kapitels laden (via figure_appearances).
+ *  Fallback: alle Buchfiguren, wenn keine Kapitelzuordnung existiert.
+ *  Gibt kompakte Objekte zurück: { name, kurzname, geschlecht, beruf, beschreibung, typ } */
+function getChapterFigures(bookId, chapterId, userEmail) {
+  if (!bookId) return [];
+  const cols = 'f.name, f.kurzname, f.geschlecht, f.beruf, f.beschreibung, f.typ';
+  // Versuch 1: Figuren mit Kapitelauftritt
+  if (chapterId) {
+    const rows = db.prepare(`
+      SELECT ${cols} FROM figures f
+      JOIN figure_appearances fa ON fa.figure_id = f.id
+      WHERE f.book_id = ? AND fa.chapter_id = ? AND f.user_email IS ?
+      ORDER BY fa.haeufigkeit DESC, f.sort_order, f.id
+    `).all(bookId, chapterId, userEmail || null);
+    if (rows.length > 0) return rows;
+  }
+  // Fallback: alle Buchfiguren
+  return db.prepare(`
+    SELECT ${cols} FROM figures f
+    WHERE f.book_id = ? AND f.user_email IS ?
+    ORDER BY f.sort_order, f.id
+  `).all(bookId, userEmail || null);
+}
+
 /** Setzt alle hängenden job_runs (status 'running' oder 'queued') auf 'error'.
  *  Gibt die Anzahl bereinigter Einträge zurück. */
 function cleanupStuckJobRuns() {
@@ -1588,4 +1635,4 @@ function cleanupStuckJobRuns() {
   return result.changes;
 }
 
-module.exports = { db, saveFigurenToDb, addFigurenBeziehungen, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings, loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache, cleanupStuckJobRuns };
+module.exports = { db, saveFigurenToDb, addFigurenBeziehungen, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings, loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache, cleanupStuckJobRuns, getChapterFigures };

@@ -1,4 +1,5 @@
 import { SYSTEM_STILKORREKTUR, buildStilkorrekturPrompt } from './prompts.js';
+import { SAFETY_HTML_RATIO } from './utils.js';
 
 // Methoden für BookStack-API-Calls (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -102,5 +103,35 @@ export const bookstackMethods = {
       this.setStatus('Stilkorrektur fehlgeschlagen – speichere übrige Korrekturen…', true);
     }
     return html;
+  },
+
+  // Gemeinsamer Kern für Lektorat-Save und History-Apply:
+  // Seite frisch laden → Korrekturen anwenden → Stilkorrektur → Safety-Check → Speichern.
+  // onProgress(pct, statusText) – Fortschritt (10–85), statusText nur bei Phasenwechsel.
+  // Gibt das gespeicherte HTML zurück. Wirft bei Fehler.
+  async _loadApplyAndSave(selectedErrors, selectedStyles, onProgress) {
+    onProgress(10, 'Lade aktuelle Seite…');
+    const page = await this.bsGet('pages/' + this.currentPage.id);
+
+    let finalHtml = selectedErrors.length > 0
+      ? this._applyCorrections(page.html, selectedErrors)
+      : page.html;
+
+    if (selectedStyles.length > 0) {
+      onProgress(30, null);
+      finalHtml = await this._applyStilkorrektur(
+        finalHtml,
+        selectedStyles,
+        (chars, aiBase) => onProgress(Math.min(70, 30 + Math.round((chars / aiBase) * 40)), null),
+      );
+    }
+
+    if (finalHtml.length < page.html.length * SAFETY_HTML_RATIO) {
+      throw new Error('Korrigiertes HTML wirkt unvollständig – Speichern abgebrochen.');
+    }
+
+    onProgress(85, 'Speichere in BookStack…');
+    await this.bsPut('pages/' + this.currentPage.id, { html: finalHtml, name: this.currentPage.name });
+    return finalHtml;
   },
 };

@@ -1,5 +1,3 @@
-import { SAFETY_HTML_RATIO } from './utils.js';
-
 // History-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 
@@ -114,56 +112,30 @@ export const historyMethods = {
       return;
     }
 
-    this.historyApplying = { ...this.historyApplying, [entry.id]: 25 };
-    this.setStatus('Lade aktuelle Seite…', true);
     try {
-      const page = await this.bsGet('pages/' + this.currentPage.id);
-      let finalHtml = this._applyCorrections(page.html, selectedErrors);
-
-      if (selectedStyles.length > 0) {
-        this.historyApplying = { ...this.historyApplying, [entry.id]: 45 };
-        finalHtml = await this._applyStilkorrektur(
-          finalHtml,
-          selectedStyles,
-          (chars, aiBase) => {
-            const p = Math.min(75, 45 + Math.round((chars / aiBase) * 30));
-            this.historyApplying = { ...this.historyApplying, [entry.id]: p };
-          }
-        );
-      }
-
-      if (finalHtml.length < page.html.length * SAFETY_HTML_RATIO) {
-        const _h = { ...this.historyApplying };
-        delete _h[entry.id];
-        this.historyApplying = _h;
-        this.setStatus('Fehler: Ergebnis wirkt unvollständig – Speichern abgebrochen.');
-        return;
-      }
-
-      this.historyApplying = { ...this.historyApplying, [entry.id]: 85 };
-      this.setStatus('Speichere in BookStack…', true);
-      await this.bsPut('pages/' + this.currentPage.id, { html: finalHtml, name: this.currentPage.name });
+      await this._loadApplyAndSave(selectedErrors, selectedStyles, (pct, text) => {
+        this.historyApplying = { ...this.historyApplying, [entry.id]: pct };
+        if (text) this.setStatus(text, true);
+      });
 
       const mergeByOriginal = (existing, newItems) => {
         const set = new Set((existing || []).map(e => e.original));
         return [...(existing || []), ...newItems.filter(e => !set.has(e.original))];
       };
-      const mergedApplied = mergeByOriginal(entry.applied_errors_json, selectedErrors);
-      const mergedSelected = mergeByOriginal(entry.selected_errors_json, allSelected);
 
       await fetch('/history/check/' + entry.id + '/saved', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          applied_errors_json: mergedApplied,
-          selected_errors_json: mergedSelected,
+          applied_errors_json: mergeByOriginal(entry.applied_errors_json, selectedErrors),
+          selected_errors_json: mergeByOriginal(entry.selected_errors_json, allSelected),
         }),
       });
 
       entry.saved = true;
       entry.saved_at = new Date().toISOString();
-      entry.applied_errors_json = mergedApplied;
-      entry.selected_errors_json = mergedSelected;
+      entry.applied_errors_json = mergeByOriginal(entry.applied_errors_json, selectedErrors);
+      entry.selected_errors_json = mergeByOriginal(entry.selected_errors_json, allSelected);
       delete this.historySelections[entry.id];
       this.initHistorySelection(entry);
       const _h = { ...this.historyApplying };
