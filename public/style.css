@@ -886,7 +886,7 @@ ins {
 
 /* === Page Content View === */
 .page-content-view {
-  max-height: 60vh;
+  max-height: var(--pcv-max-h, 60vh);
   overflow-y: auto;
   padding: 16px 18px;
   background: #fff;
@@ -897,7 +897,6 @@ ins {
   font-size: 15px;
   color: #333;
 }
-.page-content-view--compact { max-height: 40vh; }
 .page-content-view h1 { font-size: 1.5em; margin: 0.6em 0 0.3em; font-weight: 600; }
 .page-content-view h2 { font-size: 1.3em; margin: 0.5em 0 0.3em; font-weight: 600; }
 .page-content-view h3 { font-size: 1.15em; margin: 0.4em 0 0.2em; font-weight: 600; }
@@ -931,12 +930,24 @@ ins {
 }
 .lektorat-mark:hover { background: rgba(255, 200, 50, 0.55); }
 .lektorat-mark--selected {
-  background: rgba(52, 211, 153, 0.25);
-  border-bottom-color: var(--color-success);
+  background: rgba(220, 60, 60, 0.10);
+  border-bottom-color: #d33;
   text-decoration: line-through;
-  text-decoration-color: rgba(52, 211, 153, 0.6);
+  text-decoration-color: rgba(200, 50, 50, 0.5);
+  color: #999;
 }
-.lektorat-mark--selected:hover { background: rgba(52, 211, 153, 0.40); }
+.lektorat-mark--selected:hover { background: rgba(220, 60, 60, 0.18); }
+
+/* Inline-Korrekturvorschlag neben durchgestrichenem Original */
+.lektorat-ins {
+  text-decoration: none;
+  color: #1a7f37;
+  font-weight: 600;
+  background: rgba(34, 170, 90, 0.13);
+  border-radius: 2px;
+  padding: 0 2px;
+  margin-left: 2px;
+}
 
 /* Korrektur-Tooltip auf Inline-Mark (positioniert per JS) */
 .lektorat-tip {

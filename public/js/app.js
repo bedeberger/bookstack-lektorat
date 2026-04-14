@@ -839,6 +839,7 @@ document.addEventListener('alpine:init', () => {
         const html = pd.html || '';
         this.originalHtml = html;
         this.renderedPageHtml = html;
+        this._updatePageViewHeight();
         const rawPreview = htmlToText(html).trim() || null;
         if (rawPreview) p.previewText = rawPreview;
         this.currentPageEmpty = !rawPreview;

@@ -69,7 +69,7 @@
   <div class="editor-section">
 
     <!-- Formatierte Seitenansicht mit Inline-Highlights (nach Check) -->
-    <div x-show="renderedPageHtml && checkDone" class="page-content-view page-content-view--compact" x-html="renderedPageHtml" @click="handleMarkClick($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>
+    <div x-show="renderedPageHtml && checkDone" class="page-content-view" x-html="renderedPageHtml" @click="handleMarkClick($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>
 
     <!-- Fehlerfrei -->
     <div x-show="checkDone && lektoratErrors.length === 0" class="finding ok">
@@ -258,7 +258,7 @@
           </div>
           <div x-show="entry.fazit" class="fazit" x-text="entry.fazit"></div>
           <div class="history-actions">
-            <button x-show="entry.error_count > 0 && currentPage" @click.stop="showHistoryInEditor(entry)" title="Fehler im Seitentext hervorheben">Im Text anzeigen</button>
+            <button x-show="entry.error_count > 0 && currentPage" @click.stop="showHistoryInEditor(entry)" title="Fehler als Inline-Highlights im Editor anzeigen">Vorschau im Editor</button>
             <button x-show="historyHasUnapplied(entry) && entry.error_count > 0 && currentPage" class="btn-apply-history" :disabled="historyApplying[entry.id] != null" @click.stop="applyHistoryCheck(entry)">
               <span x-show="historyApplying[entry.id] != null" class="spinner"></span><span x-text="historyApplying[entry.id] != null ? 'Wird übernommen…' : 'In BookStack übernehmen'"></span>
             </button>

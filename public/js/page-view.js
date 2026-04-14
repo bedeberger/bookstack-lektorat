@@ -35,10 +35,13 @@ export function buildHighlightedHtml(html, errors, selected) {
 
   let result = html;
   for (const p of unique) {
-    const sel = selected[p.errIdx] ? ' lektorat-mark--selected' : '';
+    const f = errors[p.errIdx];
+    const isSel = selected[p.errIdx];
+    const sel = isSel ? ' lektorat-mark--selected' : '';
     const originalText = result.slice(p.idx, p.idx + p.len);
     const markOpen = `<mark class="lektorat-mark${sel}" data-error-idx="${p.errIdx}">`;
-    result = result.slice(0, p.idx) + markOpen + originalText + '</mark>' + result.slice(p.idx + p.len);
+    const ins = isSel && f.korrektur ? `<ins class="lektorat-ins">${escHtml(f.korrektur)}</ins>` : '';
+    result = result.slice(0, p.idx) + markOpen + originalText + '</mark>' + ins + result.slice(p.idx + p.len);
   }
 
   return result;
@@ -74,7 +77,6 @@ function showTip(mark, errors) {
   const badgeCls = isHard ? 'badge-err' : 'badge-warn';
   tip.innerHTML =
     `<span class="badge ${badgeCls}">${escHtml(typLabel)}</span>`
-    + `<span class="lektorat-tip-korrektur">${escHtml(f.korrektur)}</span>`
     + (f.erklaerung ? `<span class="lektorat-tip-erkl">${escHtml(f.erklaerung)}</span>` : '');
 
   // Positionierung: erst messen, dann platzieren
@@ -112,6 +114,15 @@ export const pageViewMethods = {
   // renderedPageHtml: '',
   // chapterFigures: [],
   // showChapterFigures: false,
+
+  /** Berechnet max-height für die Seitenansicht basierend auf Textlänge */
+  _updatePageViewHeight() {
+    const words = this.tokEsts?.[this.currentPage?.id]?.words || 0;
+    // ~12 Wörter pro Zeile, ~1.8em Zeilenhöhe ≈ 28px
+    const estLines = Math.ceil(words / 12);
+    const vh = Math.min(75, Math.max(15, Math.round(estLines * 28 / window.innerHeight * 100)));
+    document.documentElement.style.setProperty('--pcv-max-h', vh + 'vh');
+  },
 
   /** Aktualisiert die gerenderte Seitenansicht (mit oder ohne Highlights) */
   updatePageView() {
@@ -163,8 +174,9 @@ export const pageViewMethods = {
 
   /** Pointer-Handler auf page-content-view: Tooltip zeigen/verstecken */
   handleMarkPointer(e) {
+    if (e.pointerType !== 'mouse') return;
     const mark = e.target.closest('.lektorat-mark');
-    if (mark === activeMark) return; // gleiche Mark, nichts tun
+    if (mark === activeMark) return;
     if (!mark) { hideTip(); return; }
     const allErrors = [...(this.lektoratErrors || []), ...(this.lektoratStyles || [])];
     showTip(mark, allErrors);

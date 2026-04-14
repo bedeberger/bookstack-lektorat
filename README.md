@@ -9,6 +9,7 @@ KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). L�
 - **Figurenübersicht** – Automatische Charakterextraktion mit interaktivem Beziehungsgraph
 - **Ereignisse / Schauplätze / Szenen** – Automatische Übersichten pro Kapitel
 - **Kontinuitätsprüfer** – Findet Widersprüche im Buch
+- **Lektorat-Verlauf mit Vorschau** – Alle bisherigen Prüfungen einer Seite chronologisch einsehbar; vergangene Korrekturen per Klick als Inline-Highlights im Editor anzeigen und selektiv nachträglich übernehmen
 - **Buchstatistik** – Tägliche Snapshots (Wortanzahl, Tokens) als Zeitliniendiagramm
 - **Bucheinstellungen** – Sprache, Buchtyp und freier Kontext werden in alle KI-Prompts eingebettet
 
