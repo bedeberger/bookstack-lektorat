@@ -18,6 +18,7 @@ import { szenenMethods } from './szenen.js';
 import { orteMethods } from './orte.js';
 import { kontinuitaetMethods } from './kontinuitaet.js';
 import { bookSettingsMethods } from './book-settings.js';
+import { pageViewMethods } from './page-view.js';
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
@@ -136,11 +137,12 @@ document.addEventListener('alpine:init', () => {
     pageSearch: '',
     currentPage: null,
     currentPageEmpty: false,
+    renderedPageHtml: '',
+    chapterFigures: [],
+    showChapterFigures: false,
     originalHtml: null,
     correctedHtml: null,
     hasErrors: false,
-    showDiff: false,
-    diffHtml: '',
     showBookCard: false,
     showTreeCard: true,
     showEditorCard: false,
@@ -831,21 +833,31 @@ document.addEventListener('alpine:init', () => {
         localStorage.removeItem('lektorat_check_job_' + p.id);
       } catch (e) { console.error('[selectPage active-job check]', e); }
 
-      let rawPreview = p.previewText;
-      if (!rawPreview) {
-        try {
-          const pd = await this.bsGet('pages/' + p.id);
-          rawPreview = htmlToText(pd.html || '').trim() || null;
-          p.previewText = rawPreview;
-        } catch (e) { console.error('[selectPage live-preview]', e); }
+      // Seiteninhalt laden und als formatiertes HTML rendern
+      try {
+        const pd = await this.bsGet('pages/' + p.id);
+        const html = pd.html || '';
+        this.originalHtml = html;
+        this.renderedPageHtml = html;
+        const rawPreview = htmlToText(html).trim() || null;
+        if (rawPreview) p.previewText = rawPreview;
+        this.currentPageEmpty = !rawPreview;
+        this.analysisOut = '';
+      } catch (e) {
+        console.error('[selectPage load-page]', e);
+        // Fallback: cached Preview-Text verwenden
+        const rawPreview = p.previewText;
+        if (rawPreview) {
+          const preview = rawPreview.length > PREVIEW_MAX_CHARS ? rawPreview.slice(0, PREVIEW_MAX_CHARS) + ' …' : rawPreview;
+          this.currentPageEmpty = !preview;
+          this.analysisOut = preview
+            ? `<div class="preview-text">${escHtml(preview)}</div>`
+            : '<span class="muted-msg">Seite ist leer.</span>';
+        }
       }
-      if (rawPreview) {
-        const preview = rawPreview.length > PREVIEW_MAX_CHARS ? rawPreview.slice(0, PREVIEW_MAX_CHARS) + ' …' : rawPreview;
-        this.currentPageEmpty = !preview;
-        this.analysisOut = preview
-          ? `<div class="preview-text">${escHtml(preview)}</div>`
-          : '<span class="muted-msg">Seite ist leer.</span>';
-      }
+
+      // Figurenkontext für dieses Kapitel laden (parallel zur History)
+      this.loadChapterFigures();
       await this.loadPageHistory(p.id);
     },
 
@@ -954,11 +966,12 @@ document.addEventListener('alpine:init', () => {
       this.resetChat();
       this.currentPage = null;
       this.currentPageEmpty = false;
+      this.renderedPageHtml = '';
+      this.chapterFigures = [];
+      this.showChapterFigures = false;
       this.originalHtml = null;
       this.correctedHtml = null;
       this.hasErrors = false;
-      this.showDiff = false;
-      this.diffHtml = '';
       this.showEditorCard = false;
       this.analysisOut = '';
       this.status = '';
@@ -1103,5 +1116,6 @@ document.addEventListener('alpine:init', () => {
     ...orteMethods,
     ...kontinuitaetMethods,
     ...bookSettingsMethods,
+    ...pageViewMethods,
   }));
 });

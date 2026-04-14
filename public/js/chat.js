@@ -80,6 +80,7 @@ export const chatMethods = {
     try {
       await this.bsPut('pages/' + this.currentPage.id, { html: newHtml });
       this.originalHtml = newHtml;
+      this.renderedPageHtml = newHtml;
       this._chatPendingRefresh = true;
       this.chatMessages[msgIdx].vorschlaege[vIdx]._applied = true;
       this.chatMessages[msgIdx].vorschlaege[vIdx]._error = null;

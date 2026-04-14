@@ -1,6 +1,8 @@
 // History-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 
+import { escHtml } from './utils.js';
+
 export const historyMethods = {
   async loadPageHistory(pageId) {
     try {
@@ -113,10 +115,15 @@ export const historyMethods = {
     }
 
     try {
-      await this._loadApplyAndSave(selectedErrors, selectedStyles, (pct, text) => {
+      const finalHtml = await this._loadApplyAndSave(selectedErrors, selectedStyles, (pct, text) => {
         this.historyApplying = { ...this.historyApplying, [entry.id]: pct };
         if (text) this.setStatus(text, true);
       });
+      // Seitenansicht mit gespeichertem HTML aktualisieren
+      if (finalHtml) {
+        this.originalHtml = finalHtml;
+        this.renderedPageHtml = finalHtml;
+      }
 
       const mergeByOriginal = (existing, newItems) => {
         const set = new Set((existing || []).map(e => e.original));
@@ -149,6 +156,75 @@ export const historyMethods = {
       this.historyApplying = _h;
       this.setStatus('Fehler: ' + e.message);
     }
+  },
+
+  /** History-Fehler in der Seitenansicht mit Inline-Highlights anzeigen */
+  async showHistoryInEditor(entry) {
+    if (!this.currentPage || !entry.errors_json?.length) return;
+
+    // Aktuelles Seiten-HTML laden falls nötig
+    if (!this.originalHtml) {
+      try {
+        const pd = await this.bsGet('pages/' + this.currentPage.id);
+        this.originalHtml = pd.html || '';
+      } catch (e) {
+        this.setStatus('Seiteninhalt konnte nicht geladen werden.');
+        return;
+      }
+    }
+
+    const SOFT_TYPEN = new Set(['wiederholung', 'schwaches_verb', 'fuellwort', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel']);
+    const errors = entry.errors_json.filter(f => f.typ !== 'stil');
+    const styles = entry.errors_json.filter(f => f.typ === 'stil');
+
+    this.lektoratErrors = errors;
+    this.lektoratStyles = styles;
+
+    // Selektion aus History-State übernehmen (falls vorhanden)
+    const sel = this.historySelections[entry.id];
+    if (sel) {
+      this.selectedErrors = sel.errors;
+      this.selectedStyles = sel.styles;
+    } else {
+      this.selectedErrors = errors.map(f => !SOFT_TYPEN.has(f.typ));
+      this.selectedStyles = styles.map(() => false);
+    }
+
+    const hardErrors = errors.filter(f => !SOFT_TYPEN.has(f.typ));
+    this.hasErrors = hardErrors.length > 0;
+    this.correctedHtml = hardErrors.length > 0
+      ? this._applyCorrections(this.originalHtml, hardErrors)
+      : this.originalHtml;
+
+    this.checkDone = true;
+    this.lastCheckId = entry.id;
+    // Szenen, Stilanalyse, Fazit in analysisOut rendern
+    let out = '';
+    const szenen = entry.szenen_json || [];
+    if (szenen.length > 0) {
+      const wertungBadge = w => {
+        if (w === 'stark')   return '<span class="badge badge-ok">stark</span>';
+        if (w === 'schwach') return '<span class="badge badge-err">schwach</span>';
+        return '<span class="badge badge-warn">mittel</span>';
+      };
+      const rows = szenen.map(s =>
+        `<div class="szene-item">
+          <div class="szene-header">${wertungBadge(s.wertung)} <span class="szene-titel">${escHtml(s.titel)}</span></div>
+          ${s.kommentar ? `<div class="szene-kommentar">${escHtml(s.kommentar)}</div>` : ''}
+        </div>`
+      ).join('');
+      out += `<div class="stilbox"><div class="bewertung-section-title">Szenen</div>${rows}</div>`;
+    }
+    if (entry.stilanalyse) out += `<div class="stilbox"><div class="bewertung-section-title">Stilanalyse</div>${escHtml(entry.stilanalyse)}</div>`;
+    if (entry.fazit) out += `<div class="fazit">${escHtml(entry.fazit)}</div>`;
+    this.analysisOut = out;
+
+    this.updatePageView();
+    this.selectedHistoryId = null;
+    this.setStatus(`Verlaufseintrag vom ${this.formatDate(entry.checked_at)} angezeigt.`, false, 4000);
+
+    // Nach oben zur Seitenansicht scrollen
+    document.getElementById('editor-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   },
 
   async deleteBookReview(id) {

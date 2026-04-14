@@ -4,66 +4,13 @@ import { escHtml, htmlToText } from './utils.js';
 // `this` bezieht sich auf die Alpine-Komponente.
 
 export const lektoratMethods = {
-  computeDiff(originalHtml, correctedHtml) {
-    const aText = htmlToText(originalHtml);
-    const bText = htmlToText(correctedHtml);
-    if (aText === bText) {
-      return '<div class="diff-unchanged">Keine Textänderungen.</div>';
-    }
-    const tok = s => s.match(/[^\s]+|\s+/g) || [];
-    const a = tok(aText);
-    const b = tok(bText);
-    if (a.length * b.length > 400000) {
-      return `<div class="muted-msg">Text zu lang für Diff-Ansicht (${Math.round(a.length * b.length / 1000)}k Operationen).</div>`;
-    }
-    const m = a.length, n = b.length;
-    const dp = [];
-    for (let i = 0; i <= m; i++) dp[i] = new Uint32Array(n + 1);
-    for (let i = 1; i <= m; i++) {
-      for (let j = 1; j <= n; j++) {
-        dp[i][j] = a[i-1] === b[j-1]
-          ? dp[i-1][j-1] + 1
-          : Math.max(dp[i-1][j], dp[i][j-1]);
-      }
-    }
-    const ops = [];
-    let i = m, j = n;
-    while (i > 0 || j > 0) {
-      if (i > 0 && j > 0 && a[i-1] === b[j-1]) {
-        ops.push({ t: '=', s: a[i-1] }); i--; j--;
-      } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
-        ops.push({ t: '+', s: b[j-1] }); j--;
-      } else {
-        ops.push({ t: '-', s: a[i-1] }); i--;
-      }
-    }
-    ops.reverse();
-    let html = '';
-    for (const op of ops) {
-      const s = escHtml(op.s);
-      if (op.t === '=') html += s;
-      else if (op.t === '+') html += `<ins>${s}</ins>`;
-      else html += `<del>${s}</del>`;
-    }
-    return `<div class="diff-view">${html}</div>`;
-  },
-
-  toggleDiff() {
-    if (!this.correctedHtml || !this.originalHtml) return;
-    this.showDiff = !this.showDiff;
-    if (this.showDiff && !this.diffHtml) {
-      this.diffHtml = this.computeDiff(this.originalHtml, this.correctedHtml);
-    }
-  },
-
   _recomputeCorrectedHtml() {
     if (!this.originalHtml) return;
     const selected = this.lektoratErrors.filter((_, i) => this.selectedErrors[i]);
     this.correctedHtml = selected.length > 0
       ? this._applyCorrections(this.originalHtml, selected)
       : this.originalHtml;
-    this.diffHtml = '';
-    this.showDiff = false;
+    this.updatePageView();
   },
 
   toggleError(i) {
@@ -91,11 +38,9 @@ export const lektoratMethods = {
     const pageIdAtStart = this.currentPage.id;
     this.checkLoading = true;
     this.checkDone = false;
-    this.originalHtml = null;
+    // originalHtml und renderedPageHtml beibehalten → Seitenansicht bleibt sichtbar
     this.correctedHtml = null;
     this.hasErrors = false;
-    this.showDiff = false;
-    this.diffHtml = '';
     this.analysisOut = '';
     this.lektoratErrors = [];
     this.lektoratStyles = [];
@@ -175,6 +120,7 @@ export const lektoratMethods = {
         this.correctedHtml = hardErrors.length > 0
           ? this._applyCorrections(r.originalHtml, hardErrors)
           : r.originalHtml;
+        this.updatePageView();
         let out = '';
         const szenen = r.szenen || [];
         if (szenen.length > 0) {
@@ -229,20 +175,17 @@ export const lektoratMethods = {
       this.setStatus('✓ Korrekturen gespeichert.', false, 5000);
       this.correctedHtml = null;
       this.hasErrors = false;
-      this.showDiff = false;
-      this.diffHtml = '';
       this.lektoratErrors = [];
       this.lektoratStyles = [];
       this.selectedErrors = [];
       this.selectedStyles = [];
       this.checkDone = false;
-      // Vorschau aus dem gerade gespeicherten HTML neu aufbauen
+      // Seitenansicht aus dem gerade gespeicherten HTML neu aufbauen
+      this.originalHtml = finalHtml;
+      this.renderedPageHtml = finalHtml;
       const rawPreview = htmlToText(finalHtml).trim() || null;
       if (this.currentPage) this.currentPage.previewText = rawPreview;
-      const PREVIEW_MAX_CHARS = 600;
-      this.analysisOut = rawPreview
-        ? `<div class="preview-text">${escHtml(rawPreview.length > PREVIEW_MAX_CHARS ? rawPreview.slice(0, PREVIEW_MAX_CHARS) + ' …' : rawPreview)}</div>`
-        : '<span class="muted-msg">Seite ist leer.</span>';
+      this.analysisOut = '';
     } catch (e) {
       console.error('[saveCorrections]', e);
       this.saveApplying = null;

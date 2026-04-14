@@ -52,7 +52,14 @@
       "Bash(node --check public/js/history.js)",
       "Bash(md5 /Users/bd/ClaudeProjects/bookstack-lektorat/public/style.css)",
       "Bash(node -e \"require\\('./lib/crypto'\\); console.log\\('crypto OK'\\)\")",
-      "Bash(node --input-type=module -e ':*)"
+      "Bash(node --input-type=module -e ':*)",
+      "Bash(grep -n \"_loadApplyAndSave\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/*.js)",
+      "Bash(grep -n \"loadPages\\\\|pages/\" public/js/*.js)",
+      "Bash(grep -n \"GET.*page\\\\|/:page\\\\|/page\" /Users/bd/ClaudeProjects/bookstack-lektorat/routes/*.js)",
+      "Bash(grep -rn \"markdown\\\\|editor\\\\|html\\\\|content\" public/js/*.js)",
+      "Bash(grep -rn \"\\\\.html\\\\|\\\\.markdown\\\\|\\\\.editor_type\\\\|editor\" public/js/*.js)",
+      "Bash(grep -n \"loadPages\\(\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/*.js)",
+      "Bash(grep -rn \"bsPost\\\\|bsDelete\" public/js/*.js)"
     ]
   }
 }

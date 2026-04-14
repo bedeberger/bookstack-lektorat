@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, saveFigurenToDb, saveZeitstrahlEvents } = require('../db/schema');
+const { db, saveFigurenToDb, saveZeitstrahlEvents, getChapterFigures } = require('../db/schema');
 
 const router = express.Router();
 const jsonBody = express.json();
@@ -78,6 +78,15 @@ router.delete('/scenes/:book_id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
   db.prepare('DELETE FROM figure_scenes WHERE book_id = ? AND user_email = ?').run(bookId, userEmail);
   res.json({ ok: true });
+});
+
+// Figuren eines Kapitels laden (für Kontext-Panel im Editor)
+router.get('/chapter/:book_id/:chapter_id', (req, res) => {
+  const bookId = parseInt(req.params.book_id);
+  const chapterId = parseInt(req.params.chapter_id);
+  const userEmail = req.session?.user?.email || null;
+  const figuren = getChapterFigures(bookId, chapterId, userEmail);
+  res.json({ figuren });
 });
 
 // Gespeicherte Figuren eines Buchs laden
