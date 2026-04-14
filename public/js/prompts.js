@@ -315,8 +315,8 @@ Antworte mit diesem JSON-Schema:
       "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)"
     }
   ],
-  "stilanalyse": "4-5 Sätze Stilanalyse – ohne Rechtschreib- und Grammatikmängel (diese sind im «fehler»-Array erfasst); fokussiert auf literarischen Stil, Rhythmus, Bildsprache und Wirkung",
-  "fazit": "ein Satz Gesamtfazit zur literarischen Qualität – ohne Rechtschreib-/Grammatikhinweise"
+  "stilanalyse": "4-5 Sätze Stilanalyse – KEINE konkreten Fehler erwähnen, die bereits im «fehler»-Array stehen (weder Rechtschreibung, Grammatik, Stil, Wiederholungen noch andere Typen). Fokus ausschliesslich auf übergreifende Beobachtungen zu literarischem Stil, Rhythmus, Bildsprache und Wirkung, die nicht als Einzelfehler erfasst sind.",
+  "fazit": "ein Satz Gesamtfazit zur literarischen Qualität – KEINE Fehler aus dem «fehler»-Array wiederholen oder zusammenfassen, da diese separat behoben werden"
 }
 
 Beispiel eines GUTEN Eintrags:

@@ -1,4 +1,5 @@
 import { escHtml, htmlToText } from './utils.js';
+import { sortByPosition } from './page-view.js';
 
 // Lektorat-Workflow-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -38,6 +39,7 @@ export const lektoratMethods = {
     const pageIdAtStart = this.currentPage.id;
     this.checkLoading = true;
     this.checkDone = false;
+    this.activeHistoryEntryId = null;
     // originalHtml und renderedPageHtml beibehalten → Seitenansicht bleibt sichtbar
     this.correctedHtml = null;
     this.hasErrors = false;
@@ -109,8 +111,8 @@ export const lektoratMethods = {
         this.originalHtml = r.originalHtml;
         const fehler = r.fehler || [];
         const SOFT_TYPEN = new Set(['wiederholung', 'schwaches_verb', 'fuellwort', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel']);
-        const errors = fehler.filter(f => f.typ !== 'stil');
-        const styles = fehler.filter(f => f.typ === 'stil');
+        const errors = sortByPosition(r.originalHtml, fehler.filter(f => f.typ !== 'stil'));
+        const styles = sortByPosition(r.originalHtml, fehler.filter(f => f.typ === 'stil'));
         this.lektoratErrors = errors;
         this.lektoratStyles = styles;
         this.selectedErrors = errors.map(f => !SOFT_TYPEN.has(f.typ));
@@ -142,6 +144,7 @@ export const lektoratMethods = {
         this.analysisOut = out;
         this.checkDone = true;
         this.lastCheckId = r.checkId || null;
+        this.activeHistoryEntryId = r.checkId || null;
         if (pageId != null) await this.loadPageHistory(pageId);
         this.setStatus('Analyse abgeschlossen.', false, 5000);
       },
@@ -163,10 +166,24 @@ export const lektoratMethods = {
       if (this.lastCheckId) {
         try {
           this.saveApplying = 95;
+          let applied = selectedErrors;
+          let selected = [...selectedErrors, ...selectedStyles];
+          // Bei History-Einträgen: mit bereits angewendeten Korrekturen mergen
+          if (this.activeHistoryEntryId) {
+            const entry = this.pageHistory.find(e => e.id === this.activeHistoryEntryId);
+            if (entry) {
+              const merge = (existing, items) => {
+                const set = new Set((existing || []).map(e => e.original));
+                return [...(existing || []), ...items.filter(e => !set.has(e.original))];
+              };
+              applied = merge(entry.applied_errors_json, selectedErrors);
+              selected = merge(entry.selected_errors_json, [...selectedErrors, ...selectedStyles]);
+            }
+          }
           await fetch('/history/check/' + this.lastCheckId + '/saved', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ applied_errors_json: selectedErrors, selected_errors_json: [...selectedErrors, ...selectedStyles] }),
+            body: JSON.stringify({ applied_errors_json: applied, selected_errors_json: selected }),
           });
           await this.loadPageHistory(this.currentPage.id);
         } catch (e) { console.error('[history saved]', e); }
@@ -180,6 +197,7 @@ export const lektoratMethods = {
       this.selectedErrors = [];
       this.selectedStyles = [];
       this.checkDone = false;
+      this.activeHistoryEntryId = null;
       // Seitenansicht aus dem gerade gespeicherten HTML neu aufbauen
       this.originalHtml = finalHtml;
       this.renderedPageHtml = finalHtml;

@@ -5,6 +5,18 @@ import { escHtml } from './utils.js';
 
 const TYP_LABELS = { rechtschreibung:'Rechtschreibung', grammatik:'Grammatik', wiederholung:'Wdh.', schwaches_verb:'schw. Verb', fuellwort:'Füllwort', show_vs_tell:'Show/Tell', passiv:'Passiv', perspektivbruch:'Perspektive', tempuswechsel:'Tempus', stil:'Stil' };
 
+/** Sortiert Fehler nach Position im HTML. Nicht gefundene ans Ende. */
+export function sortByPosition(html, fehler) {
+  return [...fehler].sort((a, b) => {
+    const posA = a.original ? html.indexOf(a.original) : -1;
+    const posB = b.original ? html.indexOf(b.original) : -1;
+    if (posA === -1 && posB === -1) return 0;
+    if (posA === -1) return 1;
+    if (posB === -1) return -1;
+    return posA - posB;
+  });
+}
+
 /**
  * Baut eine HTML-Version mit <mark>-Tags um Fehlerstellen.
  * Iteriert von hinten nach vorne, damit Offsets stabil bleiben.
@@ -139,9 +151,15 @@ export const pageViewMethods = {
     }
   },
 
-  /** Lädt Figurenkontext für das aktuelle Kapitel */
+  /** Lädt Figurenkontext für das aktuelle Kapitel (nur bei >1 Seite im Kapitel) */
   async loadChapterFigures() {
     if (!this.currentPage?.chapter_id || !this.selectedBookId) {
+      this.chapterFigures = [];
+      return;
+    }
+    // Bei nur einer Seite pro Kapitel liefert der Endpoint alle Buchfiguren → nicht hilfreich
+    const chapter = this.tree?.find(c => c.id === this.currentPage.chapter_id);
+    if (chapter && chapter.pages?.length <= 1) {
       this.chapterFigures = [];
       return;
     }
@@ -154,21 +172,18 @@ export const pageViewMethods = {
     }
   },
 
-  /** Click-Handler für Inline-Marks → scrollt zur Fehlerliste */
+  /** Click-Handler für Inline-Marks → togglet Selektion */
   handleMarkClick(e) {
     const mark = e.target.closest('.lektorat-mark');
     if (!mark) return;
     const idx = parseInt(mark.dataset.errorIdx);
     if (isNaN(idx)) return;
 
-    const checkboxes = document.querySelectorAll('#editor-card .finding-checkbox');
-    if (checkboxes[idx]) {
-      checkboxes[idx].closest('.finding')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      const finding = checkboxes[idx].closest('.finding');
-      if (finding) {
-        finding.classList.add('finding--flash');
-        setTimeout(() => finding.classList.remove('finding--flash'), 1500);
-      }
+    const errCount = this.lektoratErrors?.length || 0;
+    if (idx < errCount) {
+      this.toggleError(idx);
+    } else {
+      this.toggleStyle(idx - errCount);
     }
   },
 

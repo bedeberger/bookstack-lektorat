@@ -168,9 +168,7 @@ document.addEventListener('alpine:init', () => {
     batchStatus: '',
     lastCheckId: null,
     pageHistory: [],
-    selectedHistoryId: null,
-    historySelections: {},
-    historyApplying: {},
+    activeHistoryEntryId: null,
     bookReviewHistory: [],
     selectedBookReviewId: null,
     tokEsts: {},
@@ -979,9 +977,7 @@ document.addEventListener('alpine:init', () => {
       this.statusSpinner = false;
       this.lastCheckId = null;
       this.pageHistory = [];
-      this.selectedHistoryId = null;
-      this.historySelections = {};
-      this.historyApplying = {};
+      this.activeHistoryEntryId = null;
       this.lektoratErrors = [];
       this.lektoratStyles = [];
       this.selectedErrors = [];
