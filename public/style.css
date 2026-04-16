@@ -108,7 +108,7 @@ body {
 }
 
 @media (min-width: 960px) {
-  body { padding: 2rem 1.5rem 56px; max-width: 1320px; }
+  body { padding: 2rem 1.5rem 56px; max-width: 1600px; }
 }
 
 h1 {
