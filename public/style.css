@@ -151,6 +151,36 @@ code {
   letter-spacing: 0.03em;
 }
 
+.session-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.6rem 1rem;
+  background: var(--color-err-bg);
+  color: var(--color-err-text);
+  border-bottom: 2px solid var(--color-err-border);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.session-banner-text { flex: 0 1 auto; }
+.session-banner-btn {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.9rem;
+  background: var(--color-err-text);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  font-weight: 700;
+}
+.session-banner-btn:hover { background: #7a1f1f; }
+
 .site-header-row {
   display: flex;
   align-items: baseline;

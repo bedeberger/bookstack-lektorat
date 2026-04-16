@@ -22,6 +22,19 @@ import { pageViewMethods } from './page-view.js';
 
 const FIGUR_TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, andere: 4 };
 
+// Globaler fetch-Wrapper: fängt 401-Antworten ab und signalisiert Session-Ablauf
+// via 'session-expired'-Event. Alpine zeigt daraufhin einen Banner. Kein Auto-
+// Redirect – User soll ungespeicherte Änderungen (Editor, Chat) retten können.
+const __origFetch = window.fetch.bind(window);
+window.fetch = async function(...args) {
+  const res = await __origFetch(...args);
+  if (res.status === 401 && !window.__sessionExpiredNotified) {
+    window.__sessionExpiredNotified = true;
+    window.dispatchEvent(new CustomEvent('session-expired'));
+  }
+  return res;
+};
+
 document.addEventListener('alpine:init', () => {
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
     open: false,
@@ -120,6 +133,7 @@ document.addEventListener('alpine:init', () => {
     // ── State ────────────────────────────────────────────────────────────────
     currentUser: null,
     devMode: false,
+    sessionExpired: false,
     bookstackUrl: '',
     promptConfig: {},
     showTokenSetup: false,
@@ -766,6 +780,7 @@ document.addEventListener('alpine:init', () => {
 
     // ── Initialisierung ──────────────────────────────────────────────────────
     async init() {
+      window.addEventListener('session-expired', () => { this.sessionExpired = true; });
       await this._loadPartials();
       try {
         const cfg = await fetch('/config').then(r => r.json());

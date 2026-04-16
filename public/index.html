@@ -16,6 +16,11 @@
 </head>
 <body x-data="lektorat" @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading) runCheck()">
 
+<div class="session-banner" x-show="sessionExpired" x-cloak>
+  <span class="session-banner-text">Sitzung abgelaufen – bitte neu anmelden. Nicht gespeicherte Änderungen im Editor gehen beim Neuladen verloren.</span>
+  <a class="session-banner-btn" :href="'/auth/login?returnTo=' + encodeURIComponent(location.pathname + location.search)">Neu anmelden</a>
+</div>
+
 <h1 @click="resetView()" class="site-title" title="Ansicht zurücksetzen">
   <img src="bookstack_lektorat_icon.svg" alt="" class="site-logo">
   BookStack Lektorat

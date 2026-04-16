@@ -9,6 +9,7 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Va
 - **`callAI` gibt nur JSON zurück** — jeder Systemprompt muss JSON-Only erzwingen (`JSON_ONLY`-Konstante in `prompts.js`). Nach jedem `callAI`-Aufruf Pflichtfeld prüfen (z.B. `fehler`, `gesamtnote`, `figuren`). Fehler werfen statt falsche Daten rendern.
 - **Styles nur in `style.css`** — keine Inline-`style`-Attribute, keine `<style>`-Blöcke im HTML.
 - **`bsGetAll` statt `bsGet` für Listen** — BookStack paginiert (Standard 20 Einträge). `bsGetAll` iteriert alle Seiten automatisch.
+- **401-Handling zentral** — ein globaler `window.fetch`-Wrapper in `public/js/app.js` fängt alle 401-Antworten ab und dispatcht `session-expired`; Alpine zeigt daraufhin den Session-Banner. Feature-Module prüfen 401 nicht selbst und dürfen das Event nicht unterdrücken. Kein Auto-Redirect – User soll ungespeicherte Inhalte retten können.
 
 ## Neues Feature hinzufügen
 
