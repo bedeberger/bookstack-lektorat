@@ -1,5 +1,5 @@
 import { escHtml, htmlToText } from './utils.js';
-import { sortByPosition } from './page-view.js';
+import { sortByPosition, SOFT_TYPEN } from './page-view.js';
 
 // Lektorat-Workflow-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -7,30 +7,21 @@ import { sortByPosition } from './page-view.js';
 export const lektoratMethods = {
   _recomputeCorrectedHtml() {
     if (!this.originalHtml) return;
-    const selected = this.lektoratErrors.filter((_, i) => this.selectedErrors[i]);
+    // Nur Nicht-Stil-Korrekturen können direkt angewendet werden (Stil läuft über KI-Reformulierung erst beim Speichern)
+    const selected = this.lektoratFindings.filter((f, i) => this.selectedFindings[i] && f.typ !== 'stil');
     this.correctedHtml = selected.length > 0
       ? this._applyCorrections(this.originalHtml, selected)
       : this.originalHtml;
     this.updatePageView();
   },
 
-  toggleError(i) {
-    this.selectedErrors[i] = !this.selectedErrors[i];
+  toggleFinding(i) {
+    this.selectedFindings[i] = !this.selectedFindings[i];
     this._recomputeCorrectedHtml();
   },
 
-  toggleStyle(i) {
-    this.selectedStyles[i] = !this.selectedStyles[i];
-    this._recomputeCorrectedHtml();
-  },
-
-  selectAllErrors(val) {
-    this.selectedErrors = this.selectedErrors.map(() => val);
-    this._recomputeCorrectedHtml();
-  },
-
-  selectAllStyles(val) {
-    this.selectedStyles = this.selectedStyles.map(() => val);
+  selectAllFindings(val) {
+    this.selectedFindings = this.selectedFindings.map(() => val);
     this._recomputeCorrectedHtml();
   },
 
@@ -44,10 +35,8 @@ export const lektoratMethods = {
     this.correctedHtml = null;
     this.hasErrors = false;
     this.analysisOut = '';
-    this.lektoratErrors = [];
-    this.lektoratStyles = [];
-    this.selectedErrors = [];
-    this.selectedStyles = [];
+    this.lektoratFindings = [];
+    this.selectedFindings = [];
     this.appliedOriginals = [];
     this.checkProgress = 0;
     this.setStatus('Starte Lektorat…', true);
@@ -111,15 +100,12 @@ export const lektoratMethods = {
         const r = job.result;
         this.originalHtml = r.originalHtml;
         const fehler = r.fehler || [];
-        const SOFT_TYPEN = new Set(['wiederholung', 'schwaches_verb', 'fuellwort', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel']);
-        const errors = sortByPosition(r.originalHtml, fehler.filter(f => f.typ !== 'stil'));
-        const styles = sortByPosition(r.originalHtml, fehler.filter(f => f.typ === 'stil'));
-        this.lektoratErrors = errors;
-        this.lektoratStyles = styles;
-        this.selectedErrors = errors.map(f => !SOFT_TYPEN.has(f.typ));
-        this.selectedStyles = styles.map(() => false);
+        const findings = sortByPosition(r.originalHtml, fehler);
+        this.lektoratFindings = findings;
+        // Default selected: nur „harte" Typen (rechtschreibung, grammatik). Weiche Typen und Stil default unselected.
+        this.selectedFindings = findings.map(f => !SOFT_TYPEN.has(f.typ) && f.typ !== 'stil');
         this.appliedOriginals = [];
-        const hardErrors = errors.filter(f => !SOFT_TYPEN.has(f.typ));
+        const hardErrors = findings.filter(f => !SOFT_TYPEN.has(f.typ) && f.typ !== 'stil');
         this.hasErrors = hardErrors.length > 0;
         this.correctedHtml = hardErrors.length > 0
           ? this._applyCorrections(r.originalHtml, hardErrors)
@@ -155,12 +141,14 @@ export const lektoratMethods = {
 
   async saveCorrections() {
     if (!this.currentPage) return;
-    const selectedErrors = this.lektoratErrors.filter((_, i) => this.selectedErrors[i]);
-    const selectedStyles = this.lektoratStyles.filter((_, i) => this.selectedStyles[i]);
-    if (selectedErrors.length === 0 && selectedStyles.length === 0) return;
+    const selected = this.lektoratFindings.filter((_, i) => this.selectedFindings[i]);
+    if (selected.length === 0) return;
+    // Split: Stil-Typ läuft über KI-Reformulierung, Rest über direkte Textersetzung
+    const selectedHard   = selected.filter(f => f.typ !== 'stil');
+    const selectedStyles = selected.filter(f => f.typ === 'stil');
 
     try {
-      const finalHtml = await this._loadApplyAndSave(selectedErrors, selectedStyles, (pct, text) => {
+      const finalHtml = await this._loadApplyAndSave(selectedHard, selectedStyles, (pct, text) => {
         this.saveApplying = pct;
         if (text) this.setStatus(text, true);
       });
@@ -168,8 +156,8 @@ export const lektoratMethods = {
       if (this.lastCheckId) {
         try {
           this.saveApplying = 95;
-          let applied = selectedErrors;
-          let selected = [...selectedErrors, ...selectedStyles];
+          let applied = selectedHard;
+          let selectedAll = selected;
           // Bei History-Einträgen: mit bereits angewendeten Korrekturen mergen
           if (this.activeHistoryEntryId) {
             const entry = this.pageHistory.find(e => e.id === this.activeHistoryEntryId);
@@ -178,14 +166,14 @@ export const lektoratMethods = {
                 const set = new Set((existing || []).map(e => e.original));
                 return [...(existing || []), ...items.filter(e => !set.has(e.original))];
               };
-              applied = merge(entry.applied_errors_json, selectedErrors);
-              selected = merge(entry.selected_errors_json, [...selectedErrors, ...selectedStyles]);
+              applied = merge(entry.applied_errors_json, selectedHard);
+              selectedAll = merge(entry.selected_errors_json, selected);
             }
           }
           await fetch('/history/check/' + this.lastCheckId + '/saved', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ applied_errors_json: applied, selected_errors_json: selected }),
+            body: JSON.stringify({ applied_errors_json: applied, selected_errors_json: selectedAll }),
           });
           await this.loadPageHistory(this.currentPage.id);
         } catch (e) { console.error('[history saved]', e); }
@@ -194,10 +182,8 @@ export const lektoratMethods = {
       this.setStatus('✓ Korrekturen gespeichert.', false, 5000);
       this.correctedHtml = null;
       this.hasErrors = false;
-      this.lektoratErrors = [];
-      this.lektoratStyles = [];
-      this.selectedErrors = [];
-      this.selectedStyles = [];
+      this.lektoratFindings = [];
+      this.selectedFindings = [];
       this.appliedOriginals = [];
       this.checkDone = false;
       this.activeHistoryEntryId = null;

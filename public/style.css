@@ -1007,7 +1007,14 @@ ins {
   100% { outline: 2px solid transparent; outline-offset: 1px; }
 }
 .hover-sync-flash {
-  animation: hoverSyncFlash 0.8s ease-out;
+  animation: hoverSyncFlash 1.8s ease-out;
+}
+
+/* Hover-Sync: Scroll-Abstand oben/unten, damit Kontext um das Ziel sichtbar bleibt */
+.finding,
+.lektorat-mark {
+  scroll-margin-top: 60px;
+  scroll-margin-bottom: 60px;
 }
 
 /* Inline-Korrekturvorschlag neben durchgestrichenem Original */

@@ -5,6 +5,9 @@ import { escHtml } from './utils.js';
 
 const TYP_LABELS = { rechtschreibung:'Rechtschreibung', grammatik:'Grammatik', wiederholung:'Wdh.', schwaches_verb:'schw. Verb', fuellwort:'Füllwort', show_vs_tell:'Show/Tell', passiv:'Passiv', perspektivbruch:'Perspektive', tempuswechsel:'Tempus', stil:'Stil' };
 
+// Weiche Typen: standardmässig nicht vorausgewählt (User entscheidet pro Finding)
+export const SOFT_TYPEN = new Set(['wiederholung', 'schwaches_verb', 'fuellwort', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel']);
+
 /** Sortiert Fehler nach Position im HTML. Nicht gefundene ans Ende. */
 export function sortByPosition(html, fehler) {
   return [...fehler].sort((a, b) => {
@@ -169,8 +172,8 @@ export const pageViewMethods = {
       this.renderedPageHtml = '';
       return;
     }
-    const allErrors = [...(this.lektoratErrors || []), ...(this.lektoratStyles || [])];
-    const allSelected = [...(this.selectedErrors || []), ...(this.selectedStyles || [])];
+    const allErrors = this.lektoratFindings || [];
+    const allSelected = this.selectedFindings || [];
     const chatProposals = [];
     const msgs = this.chatMessages || [];
     for (let mi = 0; mi < msgs.length; mi++) {
@@ -216,13 +219,7 @@ export const pageViewMethods = {
     if (!mark) return;
     const idx = parseInt(mark.dataset.errorIdx);
     if (isNaN(idx)) return;
-
-    const errCount = this.lektoratErrors?.length || 0;
-    if (idx < errCount) {
-      this.toggleError(idx);
-    } else {
-      this.toggleStyle(idx - errCount);
-    }
+    this.toggleFinding(idx);
   },
 
   /** Pointer-Handler auf page-content-view: Im Split → Hover-Sync, sonst → Tooltip */
@@ -244,8 +241,7 @@ export const pageViewMethods = {
       }
     } else {
       // Kein Split: Tooltip wie bisher
-      const allErrors = [...(this.lektoratErrors || []), ...(this.lektoratStyles || [])];
-      showTip(mark, allErrors);
+      showTip(mark, this.lektoratFindings || []);
     }
   },
 

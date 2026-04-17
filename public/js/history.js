@@ -2,7 +2,7 @@
 // `this` bezieht sich auf die Alpine-Komponente.
 
 import { escHtml } from './utils.js';
-import { sortByPosition } from './page-view.js';
+import { sortByPosition, SOFT_TYPEN } from './page-view.js';
 
 export const historyMethods = {
   async loadPageHistory(pageId) {
@@ -35,10 +35,8 @@ export const historyMethods = {
       // Aktiven Eintrag gelöscht → Vorschau zurücksetzen
       if (this.activeHistoryEntryId === id) {
         this.activeHistoryEntryId = null;
-        this.lektoratErrors = [];
-        this.lektoratStyles = [];
-        this.selectedErrors = [];
-        this.selectedStyles = [];
+        this.lektoratFindings = [];
+        this.selectedFindings = [];
         this.appliedOriginals = [];
         this.correctedHtml = null;
         this.hasErrors = false;
@@ -65,10 +63,8 @@ export const historyMethods = {
     // Toggle: Klick auf aktiven Eintrag → Vorschau zurücksetzen
     if (this.activeHistoryEntryId === entry.id) {
       this.activeHistoryEntryId = null;
-      this.lektoratErrors = [];
-      this.lektoratStyles = [];
-      this.selectedErrors = [];
-      this.selectedStyles = [];
+      this.lektoratFindings = [];
+      this.selectedFindings = [];
       this.appliedOriginals = [];
       this.correctedHtml = null;
       this.hasErrors = false;
@@ -92,12 +88,8 @@ export const historyMethods = {
       }
     }
 
-    const SOFT_TYPEN = new Set(['wiederholung', 'schwaches_verb', 'fuellwort', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel']);
-    const errors = sortByPosition(this.originalHtml, (entry.errors_json || []).filter(f => f.typ !== 'stil'));
-    const styles = sortByPosition(this.originalHtml, (entry.errors_json || []).filter(f => f.typ === 'stil'));
-
-    this.lektoratErrors = errors;
-    this.lektoratStyles = styles;
+    const findings = sortByPosition(this.originalHtml, entry.errors_json || []);
+    this.lektoratFindings = findings;
 
     // Vereinigung aller übernommenen Originals (Fehler + Stil) für Per-Vorschlag-Status
     const appliedUnion = entry.saved
@@ -106,11 +98,10 @@ export const historyMethods = {
     this.appliedOriginals = [...new Set(appliedUnion)];
     const appliedSet = new Set(this.appliedOriginals);
 
-    // Selection: bereits angewendete Korrekturen abwählen
-    this.selectedErrors = errors.map(f => !appliedSet.has(f.original) && !SOFT_TYPEN.has(f.typ));
-    this.selectedStyles = styles.map(s => !appliedSet.has(s.original));
+    // Selection: bereits angewendete Korrekturen + weiche Typen + Stil default unselected
+    this.selectedFindings = findings.map(f => !appliedSet.has(f.original) && !SOFT_TYPEN.has(f.typ) && f.typ !== 'stil');
 
-    const hardErrors = errors.filter(f => !SOFT_TYPEN.has(f.typ));
+    const hardErrors = findings.filter(f => !SOFT_TYPEN.has(f.typ) && f.typ !== 'stil');
     this.hasErrors = hardErrors.length > 0;
     this.correctedHtml = hardErrors.length > 0
       ? this._applyCorrections(this.originalHtml, hardErrors)

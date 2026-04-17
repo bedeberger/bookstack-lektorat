@@ -172,10 +172,8 @@ document.addEventListener('alpine:init', () => {
     analysisOut: '',
     bookReviewOut: '',
     bookReviewStatus: '',
-    lektoratErrors: [],
-    lektoratStyles: [],
-    selectedErrors: [],
-    selectedStyles: [],
+    lektoratFindings: [],
+    selectedFindings: [],
     appliedOriginals: [],
     checkDone: false,
     checkLoading: false,
@@ -1037,10 +1035,8 @@ document.addEventListener('alpine:init', () => {
       this.lastCheckId = null;
       this.pageHistory = [];
       this.activeHistoryEntryId = null;
-      this.lektoratErrors = [];
-      this.lektoratStyles = [];
-      this.selectedErrors = [];
-      this.selectedStyles = [];
+      this.lektoratFindings = [];
+      this.selectedFindings = [];
       this.appliedOriginals = [];
       this.checkDone = false;
       this.checkLoading = false;

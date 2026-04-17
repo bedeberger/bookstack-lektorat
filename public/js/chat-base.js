@@ -115,7 +115,7 @@ export function makeChatMethods(cfg) {
     if (this[p.show]) {
       if (cfg.onReopen) await cfg.onReopen.call(this);
       else this[p.show] = false;
-      if (this._checkDoneBeforeChat && this.lektoratErrors?.length + this.lektoratStyles?.length > 0) {
+      if (this._checkDoneBeforeChat && this.lektoratFindings?.length > 0) {
         this.checkDone = true;
         this._checkDoneBeforeChat = false;
       }
