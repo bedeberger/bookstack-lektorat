@@ -695,6 +695,8 @@ button.success:hover { background: var(--color-success-hover); }
 .finding.style { border-color: var(--color-style-border); }
 .finding.ok    { border-color: var(--color-ok-border); }
 .finding.finding-deselected { opacity: 0.35; }
+.finding.finding--applied { opacity: 0.3; }
+.finding.finding--applied .finding-checkbox { cursor: not-allowed; }
 .finding-checkbox { flex-shrink: 0; margin-top: 2px; cursor: pointer; }
 .finding > .badge { flex-shrink: 0; }
 .finding-content { flex: 1; min-width: 0; overflow-x: auto; }
@@ -1403,6 +1405,10 @@ ins {
   font-size: 13px;
 }
 
+.figuren-graph-wrap {
+  position: relative;
+}
+
 .figuren-graph-container {
   width: 100%;
   height: 600px;
@@ -1410,6 +1416,34 @@ ins {
   border-radius: var(--radius-md);
   background: var(--color-bg);
   overflow: hidden;
+}
+
+/* Mobile: Einfinger-Vertikalwisch scrollt die Seite, nicht den Graph;
+   Pinch (zwei Finger) bleibt für vis-network nutzbar. */
+@media (max-width: 700px) {
+  .figuren-graph-container {
+    height: 380px;
+    touch-action: pan-y;
+  }
+}
+
+/* Vollbild-Modus: überlagert die Seite, Toolbar oben, Graph nimmt Rest. */
+.figuren-graph-wrap.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  gap: 6px;
+}
+.figuren-graph-wrap.is-fullscreen .figuren-graph-container {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  border-radius: var(--radius-sm);
+  touch-action: none;
 }
 
 .figur-legend {

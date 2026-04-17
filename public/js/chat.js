@@ -48,6 +48,11 @@ const baseMethods = makeChatMethods({
     this.updatePageView();
   },
   onAfterSessionLoad: function () {
+    for (const m of this.chatMessages) {
+      if (Array.isArray(m.vorschlaege)) {
+        for (const v of m.vorschlaege) if (v.applied) v._applied = true;
+      }
+    }
     this.updatePageView();
   },
   onReset: function () {
@@ -99,6 +104,18 @@ export const chatMethods = {
       this._chatPendingRefresh = true;
       v()._applied = true;
       this.updatePageView();
+      const msgId = this.chatMessages[msgIdx]?.id;
+      if (msgId) {
+        try {
+          await fetch(`/chat/message/${msgId}/vorschlag/${vIdx}/applied`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          v().applied = true;
+        } catch (e) {
+          console.warn('[applyChatVorschlag] Markierung nicht persistiert:', e.message);
+        }
+      }
       this.chatStatus = '<span class="success-msg">Änderung in BookStack gespeichert.</span>';
       setTimeout(() => { if (this.chatStatus.includes('gespeichert')) this.chatStatus = ''; }, 3000);
     } catch (e) {

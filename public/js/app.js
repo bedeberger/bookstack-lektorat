@@ -176,6 +176,7 @@ document.addEventListener('alpine:init', () => {
     lektoratStyles: [],
     selectedErrors: [],
     selectedStyles: [],
+    appliedOriginals: [],
     checkDone: false,
     checkLoading: false,
     checkProgress: 0,
@@ -1040,6 +1041,7 @@ document.addEventListener('alpine:init', () => {
       this.lektoratStyles = [];
       this.selectedErrors = [];
       this.selectedStyles = [];
+      this.appliedOriginals = [];
       this.checkDone = false;
       this.checkLoading = false;
       this.checkProgress = 0;

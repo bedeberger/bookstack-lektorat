@@ -39,6 +39,7 @@ export const historyMethods = {
         this.lektoratStyles = [];
         this.selectedErrors = [];
         this.selectedStyles = [];
+        this.appliedOriginals = [];
         this.correctedHtml = null;
         this.hasErrors = false;
         this.checkDone = false;
@@ -68,6 +69,7 @@ export const historyMethods = {
       this.lektoratStyles = [];
       this.selectedErrors = [];
       this.selectedStyles = [];
+      this.appliedOriginals = [];
       this.correctedHtml = null;
       this.hasErrors = false;
       this.checkDone = false;
@@ -97,19 +99,16 @@ export const historyMethods = {
     this.lektoratErrors = errors;
     this.lektoratStyles = styles;
 
+    // Vereinigung aller übernommenen Originals (Fehler + Stil) für Per-Vorschlag-Status
+    const appliedUnion = entry.saved
+      ? [...(entry.applied_errors_json || []), ...(entry.selected_errors_json || [])].map(e => e.original)
+      : [];
+    this.appliedOriginals = [...new Set(appliedUnion)];
+    const appliedSet = new Set(this.appliedOriginals);
+
     // Selection: bereits angewendete Korrekturen abwählen
-    if (entry.saved && entry.applied_errors_json) {
-      const appliedSet = new Set(entry.applied_errors_json.map(e => e.original));
-      this.selectedErrors = errors.map(f => !appliedSet.has(f.original) && !SOFT_TYPEN.has(f.typ));
-    } else {
-      this.selectedErrors = errors.map(f => !SOFT_TYPEN.has(f.typ));
-    }
-    if (entry.saved && entry.selected_errors_json) {
-      const selectedSet = new Set(entry.selected_errors_json.map(e => e.original));
-      this.selectedStyles = styles.map(s => !selectedSet.has(s.original));
-    } else {
-      this.selectedStyles = styles.map(() => false);
-    }
+    this.selectedErrors = errors.map(f => !appliedSet.has(f.original) && !SOFT_TYPEN.has(f.typ));
+    this.selectedStyles = styles.map(s => !appliedSet.has(s.original));
 
     const hardErrors = errors.filter(f => !SOFT_TYPEN.has(f.typ));
     this.hasErrors = hardErrors.length > 0;

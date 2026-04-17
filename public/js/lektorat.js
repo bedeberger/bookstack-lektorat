@@ -48,6 +48,7 @@ export const lektoratMethods = {
     this.lektoratStyles = [];
     this.selectedErrors = [];
     this.selectedStyles = [];
+    this.appliedOriginals = [];
     this.checkProgress = 0;
     this.setStatus('Starte Lektorat…', true);
 
@@ -117,6 +118,7 @@ export const lektoratMethods = {
         this.lektoratStyles = styles;
         this.selectedErrors = errors.map(f => !SOFT_TYPEN.has(f.typ));
         this.selectedStyles = styles.map(() => false);
+        this.appliedOriginals = [];
         const hardErrors = errors.filter(f => !SOFT_TYPEN.has(f.typ));
         this.hasErrors = hardErrors.length > 0;
         this.correctedHtml = hardErrors.length > 0
@@ -196,6 +198,7 @@ export const lektoratMethods = {
       this.lektoratStyles = [];
       this.selectedErrors = [];
       this.selectedStyles = [];
+      this.appliedOriginals = [];
       this.checkDone = false;
       this.activeHistoryEntryId = null;
       // Seitenansicht aus dem gerade gespeicherten HTML neu aufbauen

@@ -59,7 +59,10 @@
       "Bash(grep -rn \"markdown\\\\|editor\\\\|html\\\\|content\" public/js/*.js)",
       "Bash(grep -rn \"\\\\.html\\\\|\\\\.markdown\\\\|\\\\.editor_type\\\\|editor\" public/js/*.js)",
       "Bash(grep -n \"loadPages\\(\" /Users/bd/ClaudeProjects/bookstack-lektorat/public/js/*.js)",
-      "Bash(grep -rn \"bsPost\\\\|bsDelete\" public/js/*.js)"
+      "Bash(grep -rn \"bsPost\\\\|bsDelete\" public/js/*.js)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.bookstackapp.com)"
     ]
   }
 }

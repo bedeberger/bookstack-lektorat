@@ -113,6 +113,36 @@ router.delete('/session/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+/** Einzelnen Vorschlag einer Assistant-Nachricht als übernommen markieren (oder zurücksetzen) */
+router.patch('/message/:id/vorschlag/:idx/applied', jsonBody, (req, res) => {
+  const userEmail = req.session?.user?.email || null;
+  const msgId = parseInt(req.params.id);
+  const idx = parseInt(req.params.idx);
+  const applied = req.body?.applied !== false;
+
+  const row = db.prepare(`
+    SELECT cm.vorschlaege FROM chat_messages cm
+    JOIN chat_sessions cs ON cs.id = cm.session_id
+    WHERE cm.id = ? AND cs.user_email = ?
+  `).get(msgId, userEmail);
+  if (!row) return res.status(404).json({ error: 'Nachricht nicht gefunden.' });
+
+  const vorschlaege = row.vorschlaege ? JSON.parse(row.vorschlaege) : [];
+  if (!vorschlaege[idx]) return res.status(400).json({ error: 'Vorschlag-Index ungültig.' });
+
+  if (applied) {
+    vorschlaege[idx].applied = true;
+    vorschlaege[idx].applied_at = new Date().toISOString();
+  } else {
+    delete vorschlaege[idx].applied;
+    delete vorschlaege[idx].applied_at;
+  }
+
+  db.prepare('UPDATE chat_messages SET vorschlaege = ? WHERE id = ?')
+    .run(JSON.stringify(vorschlaege), msgId);
+  res.json({ ok: true });
+});
+
 /**
  * Nachricht senden + KI-Antwort als SSE streamen.
  * Body: { session_id, message, page_text }

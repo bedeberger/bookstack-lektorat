@@ -3,6 +3,24 @@ import { escHtml } from './utils.js';
 // Graph-Render-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 
+// Gemeinsamer Font für alle vis-Nodes.
+const DEFAULT_FONT = { size: 13, face: 'system-ui, -apple-system, sans-serif' };
+
+// Anzeige-Label pro Sozialschicht (Soziogramm-Bänder + Figur-Tooltip).
+const SCHICHT_LABEL = {
+  wirtschaftselite:    'Wirtschaftselite',
+  gehobenes_buergertum:'Geh. Bürgertum',
+  mittelschicht:       'Mittelschicht',
+  arbeiterschicht:     'Arbeiterschicht',
+  migrantenmilieu:     'Migrantenmilieu',
+  prekariat:           'Prekariat',
+  unterwelt:           'Unterwelt',
+  andere:              'Weitere',
+};
+
+// Node-Label aus einer Figur: Kurzname + optionales Geburtsdatum in zweiter Zeile.
+const nodeLabel = f => (f.kurzname || f.name) + (f.geburtstag ? '\n* ' + f.geburtstag : '');
+
 // ── Sozialschicht-Palette (Schweiz, Mittelland, 1990er–2010er) ───────────────
 const SCHICHT_COLOR = {
   wirtschaftselite:    { background: '#FFF3CC', border: '#A07800', highlight: { background: '#FFE566', border: '#7A5A00' } },
@@ -11,8 +29,8 @@ const SCHICHT_COLOR = {
   arbeiterschicht:     { background: '#F5EAD4', border: '#8B5E26', highlight: { background: '#EDD9A8', border: '#6B3F0D' } },
   migrantenmilieu:     { background: '#FDEBD0', border: '#C0602A', highlight: { background: '#FAD5A8', border: '#9A4010' } },
   prekariat:           { background: '#F5EDED', border: '#8B3A3A', highlight: { background: '#EDD5D5', border: '#6B1A1A' } },
-  unterwelt:           { background: '#3A3A3A', border: '#111',    highlight: { background: '#505050', border: '#000'    },
-                         font: { color: '#fff', size: 13, face: 'system-ui, -apple-system, sans-serif' } },
+  unterwelt:           { background: '#3A3A3A', border: '#111',    highlight: { background: '#505050', border: '#000' },
+                         font: { ...DEFAULT_FONT, color: '#fff' } },
   andere:              { background: '#FFF5DC', border: '#c4a55a', highlight: { background: '#FFEEBB', border: '#8a6a20' } },
 };
 
@@ -71,6 +89,7 @@ export const graphMethods = {
   // Reaktiver Modus-State (spread in Alpine-Data)
   figurenGraphModus: 'figur',
   figurenGraphKapitel: null,   // aktiver Kapitel-Filter (null = alle)
+  figurenGraphFullscreen: false,
 
   _figTypColor(typ) {
     const colors = {
@@ -87,6 +106,19 @@ export const graphMethods = {
     this.figurenGraphModus = this.figurenGraphModus === 'figur' ? 'soziogramm' : 'figur';
     this._figurenHash = null; // Cache ungültig machen → erzwingt Neurender
     this.$nextTick(() => this.renderFigurGraph());
+  },
+
+  toggleFigurenGraphFullscreen() {
+    this.figurenGraphFullscreen = !this.figurenGraphFullscreen;
+    const net = this._figurenNetwork;
+    if (!net) return;
+    this.$nextTick(() => {
+      // vis-network reagiert auf window.resize und passt Canvas an neue Container-Grösse an.
+      window.dispatchEvent(new Event('resize'));
+      if (this.figurenGraphFullscreen) {
+        net.fit({ animation: { duration: 200, easingFunction: 'easeInOutQuad' } });
+      }
+    });
   },
 
   renderFigurGraph() {
@@ -171,9 +203,9 @@ export const graphMethods = {
       }
       return {
         id: f.id,
-        label: (f.kurzname || f.name) + (f.geburtstag ? '\n* ' + f.geburtstag : ''),
+        label: nodeLabel(f),
         color: this._figTypColor(f.typ),
-        font: { size: 13, face: 'system-ui, -apple-system, sans-serif' },
+        font: DEFAULT_FONT,
         shape: 'box',
         margin: 10,
         widthConstraint: { maximum: 160 },
@@ -277,13 +309,13 @@ export const graphMethods = {
         return {
           id: f.id,
           color: this._figTypColor(f.typ),
-          font: { color: '#333', size: 13, face: 'system-ui,-apple-system,sans-serif' },
+          font: { ...DEFAULT_FONT, color: '#333' },
         };
       }
       return {
         id: f.id,
         color: { background: '#efefef', border: '#ccc', highlight: { background: '#efefef', border: '#ccc' } },
-        font: { color: '#bbb', size: 13, face: 'system-ui,-apple-system,sans-serif' },
+        font: { ...DEFAULT_FONT, color: '#bbb' },
       };
     }));
 
@@ -329,9 +361,9 @@ export const graphMethods = {
       const schichtStyle = SCHICHT_COLOR[f.sozialschicht] || SCHICHT_COLOR.andere;
       return {
         id: f.id,
-        label: (f.kurzname || f.name) + (f.geburtstag ? '\n* ' + f.geburtstag : ''),
+        label: nodeLabel(f),
         color: { background: schichtStyle.background, border: schichtStyle.border, highlight: schichtStyle.highlight },
-        font: schichtStyle.font || { size: 13, face: 'system-ui, -apple-system, sans-serif' },
+        font: schichtStyle.font || DEFAULT_FONT,
         shape: 'box',
         margin: 10,
         widthConstraint: { maximum: 160 },
@@ -362,16 +394,6 @@ export const graphMethods = {
       if (!levelToSchicht[lev]) levelToSchicht[lev] = f.sozialschicht || 'andere';
     }
 
-    const SCHICHT_LABEL_MAP = {
-      wirtschaftselite:    'Wirtschaftselite',
-      gehobenes_buergertum:'Geh. Bürgertum',
-      mittelschicht:       'Mittelschicht',
-      arbeiterschicht:     'Arbeiterschicht',
-      migrantenmilieu:     'Migrantenmilieu',
-      prekariat:           'Prekariat',
-      unterwelt:           'Unterwelt',
-      andere:              'Weitere',
-    };
     const SCHICHT_BAND_COLOR = {
       wirtschaftselite:    'rgba(255,243,204,0.40)',
       gehobenes_buergertum:'rgba(212,232,255,0.35)',
@@ -426,7 +448,7 @@ export const graphMethods = {
         const domY = network.canvasToDOM({ x: 0, y: Number(levStr) * LEVEL_Y_GAP }).y;
         if (domY < -16 || domY > ctx.canvas.height / dpr + 16) continue;
         // Hintergrund-Pill (rounded rect, compat-safe) – Koordinaten in Canvas-Pixeln (× dpr)
-        const label = SCHICHT_LABEL_MAP[schicht] || schicht;
+        const label = SCHICHT_LABEL[schicht] || schicht;
         const tw    = ctx.measureText(label).width;
         const cY = domY * dpr;
         const px = 6 * dpr, py = cY - 9 * dpr, pw = tw + 12 * dpr, ph = 18 * dpr, pr = 4 * dpr;
@@ -515,12 +537,10 @@ export const graphMethods = {
     this._figurenNetwork.on('hoverNode', ({ node, event }) => {
       const f = this.figuren.find(x => x.id === node);
       if (!f || !tip) return;
-      const schichtLabel = {
-        wirtschaftselite: 'Wirtschaftselite', gehobenes_buergertum: 'Geh. Bürgertum',
-        mittelschicht: 'Mittelschicht', arbeiterschicht: 'Arbeiterschicht',
-        migrantenmilieu: 'Migrantenmilieu', prekariat: 'Prekariat',
-        unterwelt: 'Unterwelt',
-      }[f.sozialschicht] || '';
+      // „Weitere" im Tooltip unterdrücken – der Tooltip blendet die Schichtzeile
+      // nur ein, wenn es eine echte Zuordnung gibt.
+      const schichtLabel = f.sozialschicht && f.sozialschicht !== 'andere'
+        ? (SCHICHT_LABEL[f.sozialschicht] || '') : '';
       tip.innerHTML = `<strong>${escHtml(f.name)}</strong>`
         + `<em>${escHtml(f.typ)}${schichtLabel ? ' · ' + escHtml(schichtLabel) : ''}</em>`
         + (f.beschreibung ? `<p>${escHtml(f.beschreibung)}</p>` : '');

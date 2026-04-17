@@ -88,9 +88,10 @@
             </div>
           </div>
           <template x-for="(f, i) in lektoratErrors" :key="i">
-            <label class="finding error" :class="{ 'finding-deselected': !selectedErrors[i] }" :data-finding-idx="i" @pointerenter="handleFindingPointer(i)">
-              <input type="checkbox" class="finding-checkbox" :checked="selectedErrors[i]" @change="toggleError(i)">
+            <label class="finding error" :class="{ 'finding-deselected': !selectedErrors[i], 'finding--applied': appliedOriginals.includes(f.original) }" :data-finding-idx="i" @pointerenter="handleFindingPointer(i)">
+              <input type="checkbox" class="finding-checkbox" :checked="selectedErrors[i]" :disabled="appliedOriginals.includes(f.original)" @change="toggleError(i)">
               <span class="badge" :class="({'rechtschreibung':1,'grammatik':1,'tempuswechsel':1}[f.typ]) ? 'badge-err' : 'badge-warn'" x-text="({'wiederholung':'Wdh.','schwaches_verb':'schw. Verb','fuellwort':'Füllwort','show_vs_tell':'Show/Tell','passiv':'Passiv','perspektivbruch':'Perspektive','tempuswechsel':'Tempus'})[f.typ] || f.typ"></span>
+              <span x-show="appliedOriginals.includes(f.original)" class="tag">✓ übernommen</span>
               <span class="finding-content">
                 <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
                 <div class="finding-explanation" x-text="f.erklaerung"></div>
@@ -111,9 +112,10 @@
             </div>
           </div>
           <template x-for="(f, i) in lektoratStyles" :key="i">
-            <label class="finding style" :class="{ 'finding-deselected': !selectedStyles[i] }" :data-finding-idx="lektoratErrors.length + i" @pointerenter="handleFindingPointer(lektoratErrors.length + i)">
-              <input type="checkbox" class="finding-checkbox" :checked="selectedStyles[i]" @change="toggleStyle(i)">
+            <label class="finding style" :class="{ 'finding-deselected': !selectedStyles[i], 'finding--applied': appliedOriginals.includes(f.original) }" :data-finding-idx="lektoratErrors.length + i" @pointerenter="handleFindingPointer(lektoratErrors.length + i)">
+              <input type="checkbox" class="finding-checkbox" :checked="selectedStyles[i]" :disabled="appliedOriginals.includes(f.original)" @change="toggleStyle(i)">
               <span class="badge badge-warn">Stil</span>
+              <span x-show="appliedOriginals.includes(f.original)" class="tag">✓ übernommen</span>
               <span class="finding-content">
                 <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
                 <div class="finding-explanation" x-text="f.erklaerung"></div>

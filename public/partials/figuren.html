@@ -69,22 +69,25 @@
       </div>
     </template>
 
-    <div class="figuren-graph-toolbar">
-      <!-- Kapitel-Filter (nur Figurengraph) -->
-      <div x-show="figurenGraphModus === 'figur' && figurenKapitelListe().length > 0" class="figuren-graph-filter">
-        <button class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': !figurenGraphKapitel }" @click="_figurenGraphSetKapitel(null)">Alle</button>
-        <template x-for="ch in figurenKapitelListe()" :key="ch">
-          <button class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': figurenGraphKapitel === ch }" @click="_figurenGraphSetKapitel(ch)" x-text="ch"></button>
-        </template>
+    <div class="figuren-graph-wrap" :class="{ 'is-fullscreen': figurenGraphFullscreen }" @keydown.escape.window="figurenGraphFullscreen && toggleFigurenGraphFullscreen()">
+      <div class="figuren-graph-toolbar">
+        <!-- Kapitel-Filter (nur Figurengraph) -->
+        <div x-show="figurenGraphModus === 'figur' && figurenKapitelListe().length > 0" class="figuren-graph-filter">
+          <button class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': !figurenGraphKapitel }" @click="_figurenGraphSetKapitel(null)">Alle</button>
+          <template x-for="ch in figurenKapitelListe()" :key="ch">
+            <button class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': figurenGraphKapitel === ch }" @click="_figurenGraphSetKapitel(ch)" x-text="ch"></button>
+          </template>
+        </div>
+        <div class="figuren-graph-toolbar-zoom">
+          <button class="graph-tool-btn" title="Zoom in" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 1.3, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">+</button>
+          <button class="graph-tool-btn" title="Zoom out" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 0.77, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">−</button>
+          <button class="graph-tool-btn graph-tool-btn--reset" title="Ansicht zurücksetzen" @click="_figurenNetwork && _figurenNetwork.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } })">&#x26F6;</button>
+          <button class="graph-tool-btn" :title="figurenGraphFullscreen ? 'Vollbild schliessen' : 'Vollbild'" @click="toggleFigurenGraphFullscreen()" x-text="figurenGraphFullscreen ? '✕' : '⤢'"></button>
+        </div>
       </div>
-      <div class="figuren-graph-toolbar-zoom">
-        <button class="graph-tool-btn" title="Zoom in" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 1.3, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">+</button>
-        <button class="graph-tool-btn" title="Zoom out" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 0.77, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">−</button>
-        <button class="graph-tool-btn graph-tool-btn--reset" title="Ansicht zurücksetzen" @click="_figurenNetwork && _figurenNetwork.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } })">&#x26F6;</button>
-      </div>
+      <div id="figuren-graph" class="figuren-graph-container"></div>
+      <div id="figur-tooltip" class="figur-tooltip"></div>
     </div>
-    <div id="figuren-graph" class="figuren-graph-container"></div>
-    <div id="figur-tooltip" class="figur-tooltip"></div>
   </div>
 
  
