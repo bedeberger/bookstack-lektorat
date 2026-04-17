@@ -62,7 +62,8 @@
       "Bash(grep -rn \"bsPost\\\\|bsDelete\" public/js/*.js)",
       "WebSearch",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:www.bookstackapp.com)"
+      "WebFetch(domain:www.bookstackapp.com)",
+      "Bash(git pull *)"
     ]
   }
 }
