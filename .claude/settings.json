@@ -63,7 +63,9 @@
       "WebSearch",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:www.bookstackapp.com)",
-      "Bash(git pull *)"
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(git push *)"
     ]
   }
 }
