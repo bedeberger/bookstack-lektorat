@@ -19,6 +19,7 @@ import { orteMethods } from './orte.js';
 import { kontinuitaetMethods } from './kontinuitaet.js';
 import { bookSettingsMethods } from './book-settings.js';
 import { pageViewMethods } from './page-view.js';
+import { editorEditMethods } from './editor-edit.js';
 
 const FIGUR_TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, andere: 4 };
 
@@ -162,6 +163,9 @@ document.addEventListener('alpine:init', () => {
     originalHtml: null,
     correctedHtml: null,
     hasErrors: false,
+    editMode: false,
+    editDirty: false,
+    editSaving: false,
     showBookCard: false,
     showTreeCard: true,
     showEditorCard: false,
@@ -783,6 +787,9 @@ document.addEventListener('alpine:init', () => {
     // ── Initialisierung ──────────────────────────────────────────────────────
     async init() {
       window.addEventListener('session-expired', () => { this.sessionExpired = true; });
+      window.addEventListener('beforeunload', (e) => {
+        if (this.editMode && this.editDirty) { e.preventDefault(); e.returnValue = ''; }
+      });
       await this._loadPartials();
       try {
         const cfg = await fetch('/config').then(r => r.json());
@@ -858,6 +865,9 @@ document.addEventListener('alpine:init', () => {
       if (this.currentPage && this.currentPage.id === p.id) {
         this.resetPage();
         return;
+      }
+      if (this.editMode && this.editDirty) {
+        if (!confirm('Ungespeicherte Bearbeitung verwerfen und Seite wechseln?')) return;
       }
       // Buchkarten schliessen – nur eine Ebene (Buch oder Seite) aktiv
       this.showBookReviewCard = false;
@@ -1031,6 +1041,9 @@ document.addEventListener('alpine:init', () => {
       this.originalHtml = null;
       this.correctedHtml = null;
       this.hasErrors = false;
+      this.editMode = false;
+      this.editDirty = false;
+      this.editSaving = false;
       this.showEditorCard = false;
       this.analysisOut = '';
       this.status = '';
@@ -1173,5 +1186,6 @@ document.addEventListener('alpine:init', () => {
     ...kontinuitaetMethods,
     ...bookSettingsMethods,
     ...pageViewMethods,
+    ...editorEditMethods,
   }));
 });

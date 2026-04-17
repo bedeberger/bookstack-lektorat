@@ -58,9 +58,21 @@
               <div class="kontinuitaet-issue-header">
                 <span class="tag kontinuitaet-typ-tag" x-text="issue.typ"></span>
                 <span class="kontinuitaet-stellen">
-                  <span x-text="issue.stelle_a"></span>
+                  <template x-if="kontinuitaetResolveStelle(issue.stelle_a)">
+                    <span class="internal-link" :title="'Zur Stelle springen: ' + kontinuitaetResolveStelle(issue.stelle_a).name"
+                          @click="kontinuitaetGotoStelle(issue.stelle_a)" x-text="issue.stelle_a"></span>
+                  </template>
+                  <template x-if="!kontinuitaetResolveStelle(issue.stelle_a)">
+                    <span x-text="issue.stelle_a"></span>
+                  </template>
                   <span class="kontinuitaet-arrow">↔</span>
-                  <span x-text="issue.stelle_b"></span>
+                  <template x-if="kontinuitaetResolveStelle(issue.stelle_b)">
+                    <span class="internal-link" :title="'Zur Stelle springen: ' + kontinuitaetResolveStelle(issue.stelle_b).name"
+                          @click="kontinuitaetGotoStelle(issue.stelle_b)" x-text="issue.stelle_b"></span>
+                  </template>
+                  <template x-if="!kontinuitaetResolveStelle(issue.stelle_b)">
+                    <span x-text="issue.stelle_b"></span>
+                  </template>
                 </span>
               </div>
               <p class="kontinuitaet-desc" x-text="issue.beschreibung"></p>

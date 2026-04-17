@@ -23,11 +23,24 @@
       </span>
     </div>
     <div class="card-actions">
-      <button @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? 'Seite ist leer' : 'Ctrl+Enter'">Prüfen</button>
-      <button class="success" @click="saveCorrections()" :disabled="saveApplying != null" x-show="(correctedHtml && selectedFindings.some(v => v)) || saveApplying != null">
-        <span x-show="saveApplying != null" class="spinner"></span><span x-text="saveApplying != null ? 'Wird gespeichert…' : 'Korrekturen speichern'"></span>
-      </button>
-      <button @click="toggleChatCard()" :class="{ primary: showChatCard }" :disabled="currentPageEmpty" title="Chat mit dieser Seite">Chat</button>
+      <template x-if="!editMode">
+        <span class="display-contents">
+          <button @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? 'Seite ist leer' : 'Ctrl+Enter'">Prüfen</button>
+          <button @click="startEdit()" :disabled="checkLoading || saveApplying != null || !originalHtml" title="Text manuell bearbeiten">Bearbeiten</button>
+          <button class="success" @click="saveCorrections()" :disabled="saveApplying != null" x-show="(correctedHtml && selectedFindings.some(v => v)) || saveApplying != null">
+            <span x-show="saveApplying != null" class="spinner"></span><span x-text="saveApplying != null ? 'Wird gespeichert…' : 'Korrekturen speichern'"></span>
+          </button>
+          <button @click="toggleChatCard()" :class="{ primary: showChatCard }" :disabled="currentPageEmpty" title="Chat mit dieser Seite">Chat</button>
+        </span>
+      </template>
+      <template x-if="editMode">
+        <span class="display-contents">
+          <button class="success" @click="saveEdit()" :disabled="editSaving">
+            <span x-show="editSaving" class="spinner"></span><span x-text="editSaving ? 'Speichere…' : 'Speichern'"></span>
+          </button>
+          <button @click="cancelEdit()" :disabled="editSaving">Abbrechen</button>
+        </span>
+      </template>
     </div>
   </div>
   <div class="progress-bar-wrap" x-show="checkProgress > 0 || saveApplying != null">
@@ -62,11 +75,14 @@
     </div>
   </template>
 
+  <!-- Manuelle Bearbeitung (contenteditable) -->
+  <div x-show="editMode" x-ref="editArea" class="page-content-view page-content-view--editing" contenteditable="true" spellcheck="true" @input="_markEditDirty()"></div>
+
   <!-- Formatierte Seitenansicht (vor Check) -->
-  <div x-show="renderedPageHtml && !checkDone" class="page-content-view" x-html="renderedPageHtml" @click="handleMarkClick($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>
+  <div x-show="renderedPageHtml && !checkDone && !editMode" class="page-content-view" x-html="renderedPageHtml" @click="handleMarkClick($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>
 
   <!-- Nach Check: Split-Layout (Preview links, Befunde rechts) -->
-  <div x-show="checkDone" class="lektorat-split">
+  <div x-show="checkDone && !editMode" class="lektorat-split">
     <div class="lektorat-split-preview">
       <div x-show="renderedPageHtml" class="page-content-view" x-html="renderedPageHtml" @click="handleMarkClick($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>
     </div>

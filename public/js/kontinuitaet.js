@@ -101,4 +101,34 @@ export const kontinuitaetMethods = {
     }
     return groups;
   },
+
+  // Löst eine Stelle wie "Kapitel X: Seite Y" zu einem Page-Objekt aus this.tree auf.
+  // Exakter Seitenname bevorzugt, sonst Teilstring-Match, sonst erste Seite des Kapitels.
+  kontinuitaetResolveStelle(stelle) {
+    if (!stelle) return null;
+    const chapters = (this.tree || []).filter(t => t.type === 'chapter');
+    const ci = stelle.indexOf(':');
+    const chName = (ci > 0 ? stelle.slice(0, ci) : stelle).trim();
+    const rest = ci > 0 ? stelle.slice(ci + 1).trim() : '';
+    const chapter = chapters.find(c => c.name === chName);
+    const pages = chapter?.pages || [];
+    if (!pages.length) return null;
+    if (rest) {
+      const restLower = rest.toLowerCase();
+      const exact = pages.find(p => p.name === rest)
+        || pages.find(p => p.name.toLowerCase() === restLower);
+      if (exact) return exact;
+      const sub = pages.find(p => {
+        const n = p.name.toLowerCase();
+        return n && (n.includes(restLower) || restLower.includes(n));
+      });
+      if (sub) return sub;
+    }
+    return pages[0];
+  },
+
+  kontinuitaetGotoStelle(stelle) {
+    const page = this.kontinuitaetResolveStelle(stelle);
+    if (page) this.selectPage(page);
+  },
 };

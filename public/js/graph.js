@@ -341,23 +341,40 @@ export const graphMethods = {
 
     const LEVEL_Y_GAP = 190;
     const NODE_X_GAP  = 210;
+    const BAND_H_INNER = LEVEL_Y_GAP * 0.60; // Nutzbare Höhe innerhalb eines Schicht-Bands für Machtstaffelung
 
-    // Knoten nach Schicht-Ebene gruppieren (für X-Positionierung)
+    // Machtscore pro Figur: `machtverhaltnis > 0` bedeutet das Gegenüber dominiert,
+    // also zählt der negierte Wert als Macht der Figur selbst.
+    const powerScore = f => {
+      const bz = Array.isArray(f.beziehungen) ? f.beziehungen : [];
+      return bz.reduce((s, b) => s - (Number(b.machtverhaltnis) || 0), 0);
+    };
+
+    // Knoten nach Schicht-Ebene gruppieren, innerhalb jeder Gruppe nach Macht sortieren (absteigend).
     const levelGroups = {};
     for (const f of this.figuren) {
       const lev = SCHICHT_LEVEL[f.sozialschicht] ?? SCHICHT_LEVEL.andere;
       (levelGroups[lev] ??= []).push(f);
     }
-    const levelCounters = {};
+    for (const group of Object.values(levelGroups)) {
+      group.sort((a, b) => powerScore(b) - powerScore(a));
+    }
+
+    // Pro Figur x/y-Position bestimmen (Rang innerhalb der Schicht → vertikaler Offset im Band).
+    const posById = new Map();
+    for (const [levStr, group] of Object.entries(levelGroups)) {
+      const lev = Number(levStr);
+      const cnt = group.length;
+      const dy = cnt > 1 ? Math.max(12, Math.min(34, BAND_H_INNER / (cnt - 1))) : 0;
+      group.forEach((f, idx) => {
+        const x = (idx - (cnt - 1) / 2) * NODE_X_GAP;
+        const yOffset = (idx - (cnt - 1) / 2) * dy; // idx 0 = mächtigste → negativer Offset → weiter oben
+        posById.set(f.id, { x, y: lev * LEVEL_Y_GAP + yOffset });
+      });
+    }
 
     const nodes = new vis.DataSet(this.figuren.map(f => {
-      const lev = SCHICHT_LEVEL[f.sozialschicht] ?? SCHICHT_LEVEL.andere;
-      const cnt = levelGroups[lev].length;
-      levelCounters[lev] = (levelCounters[lev] ?? 0);
-      const idx = levelCounters[lev]++;
-      const x = (idx - (cnt - 1) / 2) * NODE_X_GAP;
-      const y = lev * LEVEL_Y_GAP;
-
+      const { x, y } = posById.get(f.id);
       const schichtStyle = SCHICHT_COLOR[f.sozialschicht] || SCHICHT_COLOR.andere;
       return {
         id: f.id,
