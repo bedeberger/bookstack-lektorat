@@ -1,5 +1,6 @@
 const express = require('express');
-const { db, saveFigurenToDb, saveZeitstrahlEvents, getChapterFigures } = require('../db/schema');
+const { db, saveFigurenToDb, saveZeitstrahlEvents, getChapterFigures, cleanupDuplicateFiguren } = require('../db/schema');
+const logger = require('../logger');
 
 const router = express.Router();
 const jsonBody = express.json();
@@ -164,6 +165,21 @@ router.put('/:book_id', jsonBody, (req, res) => {
   const userEmail = req.session?.user?.email || null;
   saveFigurenToDb(parseInt(req.params.book_id), req.body.figuren || [], userEmail);
   res.json({ ok: true });
+});
+
+// Post-Hoc-Cleanup: Namens-Duplikate mergen, Relations deduplizieren,
+// verdächtige Beziehungs-Beschreibungen entfernen. Idempotent.
+router.post('/cleanup/:book_id', (req, res) => {
+  const bookId = parseInt(req.params.book_id);
+  const userEmail = req.session?.user?.email || null;
+  try {
+    const stats = cleanupDuplicateFiguren(bookId, userEmail);
+    logger.info(`Figuren-Cleanup Buch ${bookId} (${userEmail || 'legacy'}): ${stats.figurenMerged} Figuren gemergt, ${stats.relationsRemoved} Beziehungen entfernt, ${stats.descriptionsCleared} Beschreibungen geleert.`);
+    res.json({ ok: true, ...stats });
+  } catch (e) {
+    logger.error(`Figuren-Cleanup fehlgeschlagen: ${e.message}`);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = router;

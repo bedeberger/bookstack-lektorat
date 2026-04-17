@@ -65,7 +65,26 @@
       "WebFetch(domain:www.bookstackapp.com)",
       "Bash(git pull *)",
       "Bash(git stash *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT id, book_id, name, rolle FROM figures WHERE name LIKE '%Robert%';\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \".schema figures\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT id, book_id, fig_id, name, kurzname, typ, beruf, substr\\(beschreibung,1,200\\) FROM figures WHERE name LIKE '%Robert%';\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT id, book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, sozialschicht, beschreibung FROM figures WHERE id=61;\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT id, book_id, fig_id, name, typ FROM figures WHERE book_id=1 ORDER BY sort_order, id;\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT page_id, fig_id FROM figure_appearances WHERE fig_id='fig_13' AND book_id=1;\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \".schema scene_figures\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT fs.kapitel, fs.seite, fs.titel, substr\\(fs.kommentar,1,400\\) FROM figure_scenes fs JOIN scene_figures sf ON fs.id=sf.scene_id WHERE fs.book_id=1 AND sf.fig_id='fig_13';\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \".schema pages\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT COUNT\\(*\\) FROM pages WHERE book_id=1;\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \".schema figure_relations\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \"SELECT r.from_fig_id, f1.name AS from_name, r.to_fig_id, f2.name AS to_name, r.typ, r.beschreibung, r.machtverhaltnis FROM figure_relations r LEFT JOIN figures f1 ON f1.fig_id=r.from_fig_id AND f1.book_id=r.book_id LEFT JOIN figures f2 ON f2.fig_id=r.to_fig_id AND f2.book_id=r.book_id WHERE r.book_id=1 AND \\(r.from_fig_id='fig_13' OR r.to_fig_id='fig_13'\\);\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \".schema location_figures\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \".schema figure_events\")",
+      "Bash(sqlite3 /Users/bd/ClaudeProjects/bookstack-lektorat/lektorat.db \".schema figure_tags\")",
+      "Bash(node -c db/schema.js)",
+      "Bash(node -c routes/figures.js)",
+      "Bash(node -e \"import\\('./public/js/prompts.js'\\).then\\(m => { console.log\\('prompts.js loaded, SCHEMA_FIGUREN_KONSOL ok:', typeof m.SCHEMA_FIGUREN_KONSOL\\); }\\).catch\\(e => { console.error\\('ERR:', e.message\\); process.exit\\(1\\); }\\)\")",
+      "Bash(node -e ' *)"
     ]
   }
 }

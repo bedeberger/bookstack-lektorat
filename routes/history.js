@@ -98,6 +98,31 @@ router.delete('/review/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// Kompletter History-Reset für ein Buch: löscht page_checks, book_reviews und
+// chat_sessions (inkl. Nachrichten via ON DELETE CASCADE) des eingeloggten Users.
+router.delete('/book/:book_id', (req, res) => {
+  const user_email = req.session?.user?.email || null;
+  if (!user_email) return res.status(401).json({ error: 'unauthenticated' });
+  const book_id = parseInt(req.params.book_id);
+  if (!Number.isFinite(book_id)) return res.status(400).json({ error: 'invalid book_id' });
+
+  const delChecks   = db.prepare('DELETE FROM page_checks    WHERE book_id = ? AND user_email = ?');
+  const delReviews  = db.prepare('DELETE FROM book_reviews   WHERE book_id = ? AND user_email = ?');
+  const delSessions = db.prepare('DELETE FROM chat_sessions  WHERE book_id = ? AND user_email = ?');
+
+  const result = db.transaction(() => ({
+    page_checks:    delChecks.run(book_id, user_email).changes,
+    book_reviews:   delReviews.run(book_id, user_email).changes,
+    chat_sessions:  delSessions.run(book_id, user_email).changes,
+  }))();
+
+  logger.info(
+    `History-Reset: book=${book_id} user=${user_email} ` +
+    `page_checks=${result.page_checks} book_reviews=${result.book_reviews} chat_sessions=${result.chat_sessions}`
+  );
+  res.json({ ok: true, deleted: result });
+});
+
 // Letzte 10 Bewertungen für ein Buch
 router.get('/review/:book_id', (req, res) => {
   const user_email = req.session?.user?.email || null;

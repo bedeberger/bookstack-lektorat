@@ -85,5 +85,23 @@
 
     <p class="book-settings-saved" x-show="bookSettingsSaved">Einstellungen gespeichert.</p>
     <p class="book-settings-error" x-show="bookSettingsError" x-text="bookSettingsError"></p>
+
+    <div class="book-settings-danger-zone">
+      <div class="book-settings-danger-title">Gefahrenzone</div>
+      <div class="book-settings-danger-row">
+        <div class="book-settings-danger-text">
+          Löscht alle deine Lektorate, Buchbewertungen und Chats zu diesem Buch. Andere Nutzer sind nicht betroffen. Nicht rückgängig zu machen.
+        </div>
+        <button
+          class="book-settings-btn-danger"
+          @click="resetBookHistory()"
+          :disabled="bookHistoryResetLoading">
+          <span x-show="bookHistoryResetLoading" class="spinner"></span>
+          <span x-text="bookHistoryResetLoading ? 'Löscht…' : 'Historie für dieses Buch löschen'"></span>
+        </button>
+      </div>
+      <p class="book-settings-saved" x-show="bookHistoryResetMessage" x-text="bookHistoryResetMessage"></p>
+      <p class="book-settings-error" x-show="bookHistoryResetError" x-text="bookHistoryResetError"></p>
+    </div>
   </div>
 </div>

@@ -85,6 +85,88 @@ function buildFigNameLookup(figuren, chapterFiguren, chapterAssignments, log, jo
   return { figNameToId: nameToId, figNameToIdLower: nameToIdLower };
 }
 
+/** Mergt duplizierte Figuren anhand des normalisierten Namens (case-insensitive).
+ *  Fängt Fälle ab, in denen kleine Modelle (Ollama/llama) die Dedup-Regel in
+ *  Phase 2 nicht befolgen. Verschmilzt Kapitel, Eigenschaften und Beziehungen.
+ *  Remappt beziehungen.figur_id auf die kanonische ID und entfernt Selbst-Referenzen. */
+function mergeDuplicateFiguren(figuren) {
+  const normalize = s => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+  const groups = new Map();
+  for (const f of figuren) {
+    const key = normalize(f.name);
+    if (!key) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
+  }
+
+  const idRemap = {};
+  const merged = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) { merged.push(group[0]); continue; }
+    group.sort((a, b) => (b.beschreibung?.length || 0) - (a.beschreibung?.length || 0));
+    const canon = { ...group[0] };
+    const kapByName = new Map();
+    for (const k of (canon.kapitel || [])) kapByName.set(k.name, k.haeufigkeit || 1);
+    const eigSet = new Set(canon.eigenschaften || []);
+    const bzByFig = new Map();
+    for (const b of (canon.beziehungen || [])) bzByFig.set(b.figur_id, b);
+
+    for (const other of group.slice(1)) {
+      idRemap[other.id] = canon.id;
+      for (const field of ['kurzname', 'typ', 'geburtstag', 'geschlecht', 'beruf', 'sozialschicht']) {
+        if (!canon[field] && other[field]) canon[field] = other[field];
+      }
+      for (const k of (other.kapitel || [])) {
+        kapByName.set(k.name, (kapByName.get(k.name) || 0) + (k.haeufigkeit || 1));
+      }
+      for (const t of (other.eigenschaften || [])) eigSet.add(t);
+      for (const b of (other.beziehungen || [])) {
+        if (!bzByFig.has(b.figur_id)) bzByFig.set(b.figur_id, b);
+      }
+    }
+    canon.kapitel = [...kapByName.entries()].map(([name, haeufigkeit]) => ({ name, haeufigkeit }));
+    canon.eigenschaften = [...eigSet];
+    canon.beziehungen = [...bzByFig.values()];
+    merged.push(canon);
+  }
+
+  const validIds = new Set(merged.map(f => f.id));
+  for (const f of merged) {
+    const seen = new Map();
+    for (const b of (f.beziehungen || [])) {
+      const mappedId = idRemap[b.figur_id] || b.figur_id;
+      if (mappedId === f.id || !validIds.has(mappedId)) continue;
+      if (!seen.has(mappedId)) seen.set(mappedId, { ...b, figur_id: mappedId });
+    }
+    f.beziehungen = [...seen.values()];
+  }
+
+  return { figuren: merged, mergedCount: figuren.length - merged.length };
+}
+
+/** Sanity-Check für Beziehungs-Beschreibungen (nur Lokal-KI).
+ *  Lokale Modelle verrutschen oft Beschreibungen zwischen Beziehungen (z.B.
+ *  «Sebastian ist Roberts Freund» auf der Relation Robert→Herr Koch). Heuristik:
+ *  Beschreibung muss den Namen oder Kurznamen der Zielfigur enthalten – sonst
+ *  wird nur die Beschreibung geleert (typ + Paar bleiben erhalten).
+ *  Gibt die Anzahl entfernter Beschreibungen zurück. */
+function validateBeziehungenDescriptions(figuren) {
+  const idToNames = Object.fromEntries(
+    figuren.map(f => [f.id, [f.name, f.kurzname].filter(Boolean).map(s => s.toLowerCase())])
+  );
+  let cleared = 0;
+  for (const f of figuren) {
+    for (const bz of (f.beziehungen || [])) {
+      if (!bz.beschreibung) continue;
+      const names = idToNames[bz.figur_id] || [];
+      if (!names.length) continue;
+      const text = bz.beschreibung.toLowerCase();
+      if (!names.some(n => text.includes(n))) { bz.beschreibung = null; cleared++; }
+    }
+  }
+  return cleared;
+}
+
 /** Mappt Szenen-Klarnamen (aus Phase 1) auf konsolidierte Figuren-/Ort-IDs. */
 function remapSzenen(chSzenen, figNameToId, figNameToIdLower, ortNameToId, ortNameToIdLower, chNameToId) {
   const szenen = [];
@@ -348,7 +430,7 @@ async function runPhase1(ctx) {
 
 /** Phase 2: Figuren konsolidieren + Soziogramm + Name→ID Lookup. */
 async function runPhase2(ctx, chapterFiguren, chapterAssignments) {
-  const { jobId, bookIdInt, bookName, email, call, tok, log, prompts, sys, idMaps } = ctx;
+  const { jobId, bookIdInt, bookName, email, call, tok, log, prompts, sys, idMaps, effectiveProvider } = ctx;
 
   updateJob(jobId, { progress: 30, statusText: 'KI konsolidiert Figuren…' });
   const figResult = await call(jobId, tok,
@@ -356,7 +438,14 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments) {
     sys.SYSTEM_FIGUREN, 30, 43, 8000, 0.2, null, prompts.SCHEMA_FIGUREN_KONSOL,
   );
   if (!Array.isArray(figResult?.figuren)) throw new Error('Figuren-Konsolidierung ungültig: figuren-Array fehlt');
-  const figuren = figResult.figuren.map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
+  let figuren = figResult.figuren.map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
+  const { figuren: mergedFiguren, mergedCount } = mergeDuplicateFiguren(figuren);
+  if (mergedCount > 0) log.info(`Job ${jobId}: ${mergedCount} Figuren-Duplikate nach Namen zusammengeführt.`);
+  figuren = mergedFiguren;
+  if (effectiveProvider && effectiveProvider !== 'claude') {
+    const cleaned = validateBeziehungenDescriptions(figuren);
+    if (cleaned > 0) log.info(`Job ${jobId}: ${cleaned} Beziehungs-Beschreibungen entfernt (Lokal-KI: Zielfigur nicht erwähnt).`);
+  }
   saveFigurenToDb(bookIdInt, figuren, email, idMaps);
   log.info(`Job ${jobId}: ${figuren.length} Figuren gespeichert.`);
 

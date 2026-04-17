@@ -309,6 +309,9 @@ document.addEventListener('alpine:init', () => {
     bookSettingsSaving: false,
     bookSettingsSaved: false,
     bookSettingsError: '',
+    bookHistoryResetLoading: false,
+    bookHistoryResetMessage: '',
+    bookHistoryResetError: '',
 
     // ── Computed ─────────────────────────────────────────────────────────────
     get szenenNachKapitel() {
