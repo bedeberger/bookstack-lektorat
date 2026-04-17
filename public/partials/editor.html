@@ -93,7 +93,6 @@
               <span class="badge" :class="({'rechtschreibung':1,'grammatik':1,'tempuswechsel':1}[f.typ]) ? 'badge-err' : 'badge-warn'" x-text="({'wiederholung':'Wdh.','schwaches_verb':'schw. Verb','fuellwort':'Füllwort','show_vs_tell':'Show/Tell','passiv':'Passiv','perspektivbruch':'Perspektive','tempuswechsel':'Tempus'})[f.typ] || f.typ"></span>
               <span class="finding-content">
                 <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
-                <div class="finding-context" x-text="'«' + f.kontext + '»'"></div>
                 <div class="finding-explanation" x-text="f.erklaerung"></div>
               </span>
             </label>
@@ -117,7 +116,6 @@
               <span class="badge badge-warn">Stil</span>
               <span class="finding-content">
                 <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
-                <div class="finding-context" x-show="f.kontext" x-text="'«' + f.kontext + '»'"></div>
                 <div class="finding-explanation" x-text="f.erklaerung"></div>
               </span>
             </label>

@@ -7,4 +7,5 @@ lektorat.db
 lektorat.db-*
 lektorat.log
 lektorat.log.*
+ai_parse_fails/
 .DS_Store

@@ -200,7 +200,7 @@ export function getLocalePromptsForBook(localeKey, buchtyp, buchKontext) {
 
 export function buildStilkorrekturPrompt(html, styles) {
   const liste = styles.map((s, i) =>
-    `${i + 1}. Originalstelle: "${s.original}"\n   Empfehlung: "${s.korrektur}"\n   Begründung: ${s.erklaerung}\n   Kontext: ${s.kontext}`
+    `${i + 1}. Originalstelle: "${s.original}"\n   Empfehlung: "${s.korrektur}"\n   Begründung: ${s.erklaerung}`
   ).join('\n\n');
 
   return `Du bekommst einen HTML-Text und eine Liste stilistischer Verbesserungsvorschläge. Für jede Stelle entscheidest du selbst, wie die beste Formulierung lautet – die Empfehlung ist ein Hinweis, keine Vorgabe. Gib für jede Stelle das exakte Original (wie es im HTML steht) und deine gewählte Ersatzformulierung zurück.
@@ -344,7 +344,7 @@ function _buildLektoratPromptBody(text, textLabel, { stopwords = STOPWORDS, erkl
 
   const beispielBlock = _isLocal ? '' : `
 Beispiel eines GUTEN Eintrags:
-{ "typ": "grammatik", "original": "wegen dem Regen", "korrektur": "wegen des Regens", "kontext": "Er blieb wegen dem Regen zu Hause.", "erklaerung": "«wegen» verlangt den Genitiv." }
+{ "typ": "grammatik", "original": "wegen dem Regen", "korrektur": "wegen des Regens", "erklaerung": "«wegen» verlangt den Genitiv." }
 Beispiel eines VERWORFENEN Eintrags (NICHT aufnehmen):
 { "typ": "rechtschreibung", "original": "heisst", "korrektur": "heißt", "erklaerung": "Könnte im Standarddeutschen mit ß geschrieben werden." } → Erklärung enthält Unsicherheit → Selbsttest nicht bestanden → weglassen.
 `;
@@ -366,7 +366,6 @@ Antworte mit diesem JSON-Schema:
       "typ": "${typEnum}",
       "original": "das fehlerhafte Wort oder die fehlerhafte Phrase – bei «wiederholung»: vollständiger Satz zeichengenau aus dem Text",
       "korrektur": "die korrekte Version – bei «wiederholung»: derselbe Satz mit Synonym",
-      "kontext": "der Satz in dem der Fehler vorkommt (bei «wiederholung» gleich wie «original»)",
       "erklaerung": "kurze Erklärung – nur diesen einen Mangel beschreiben"
     }
   ],
