@@ -133,7 +133,7 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
     }, chatTps);
     logger.info(`Job ${jobId}: Chat «${session.page_name || '-'}» session ${sessionId} abgeschlossen (${fmtTok(tokensIn)}↑ ${fmtTok(tokensOut)}↓ Tokens, ${vorschlaege.length} Vorschläge).`);
   } catch (e) {
-    logger.error(`Job ${jobId}: Chat Fehler: ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Job ${jobId}: Chat Fehler: ${e.message}`);
     failJob(jobId, e);
   }
 }
@@ -334,7 +334,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     }, bookChatTps);
     logger.info(`Job ${jobId}: Buch-Chat «${session.book_name || '-'}» session ${sessionId} abgeschlossen (${fmtTok(tokensIn)}↑ ${fmtTok(tokensOut)}↓, ${selectedPages.length}/${pageContents.length} Seiten).`);
   } catch (e) {
-    logger.error(`Job ${jobId}: Buch-Chat Fehler: ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Job ${jobId}: Buch-Chat Fehler: ${e.message}`);
     failJob(jobId, e);
   }
 }

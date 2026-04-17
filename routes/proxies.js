@@ -216,98 +216,93 @@ router.post('/llama', jsonBody, async (req, res) => {
   }
 });
 
-// Scrape dict.wortschatz-leipzig.de (HTML), da der dokumentierte REST-Endpunkt
-// /wordrelations in den verfügbaren Corpora leer/404 ist. Nur für deutsche Bücher.
-// Leipzig kennt nur Lemmata – flektierte Formen ("ging", "schöne") liefern 0 Treffer.
-// Fallback: bei Leerergebnis Suffix-Stripping und Umlaut-Auflösung probieren.
-const LEIPZIG_SUFFIXES = ['sten', 'ster', 'stes', 'sten', 'ten', 'test', 'ere', 'eren', 'erer', 'eres', 'erem', 'en', 'em', 'es', 'er', 'te', 'st', 'e', 't', 'n', 's'];
-function leipzigLemmaGuesses(word) {
-  const out = [];
-  const seen = new Set([word.toLowerCase()]);
-  const push = (w) => { const k = w.toLowerCase(); if (w.length >= 3 && !seen.has(k)) { seen.add(k); out.push(w); } };
-  // 1) Suffix-Stripping (Adjektiv- und Verbendungen)
-  for (const s of LEIPZIG_SUFFIXES) {
-    if (word.length - s.length >= 3 && word.toLowerCase().endsWith(s)) {
-      push(word.slice(0, -s.length));
-    }
-  }
-  // 2) Umlaut-Auflösung (Plural: Häuser → Hauser, Bücher → Bucher – plus anschliessendes Suffix-Stripping)
-  const noUmlaut = word.replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/Ä/g, 'A').replace(/Ö/g, 'O').replace(/Ü/g, 'U');
-  if (noUmlaut !== word) {
-    push(noUmlaut);
-    for (const s of LEIPZIG_SUFFIXES) {
-      if (noUmlaut.length - s.length >= 3 && noUmlaut.toLowerCase().endsWith(s)) {
-        push(noUmlaut.slice(0, -s.length));
-      }
-    }
-  }
-  return out.slice(0, 6);
+// OpenThesaurus (openthesaurus.de) — deutscher Community-Thesaurus von Daniel Naber.
+// JSON-API liefert Bedeutungsgruppen (synsets) mit stilistischem Level; nur für deutsche Bücher.
+// Terme können Kontext in Klammern enthalten ("(sich) identifizieren (mit)") — wird fürs Ersetzen gestrippt.
+function cleanThesTerm(term) {
+  return String(term || '').replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-// Einzelner Scrape-Call; bei Timeout/Fehler still leer zurück, damit der Fallback weitermachen kann.
-async function fetchLeipzig(word, corpus, budgetSignal) {
-  const url = `https://dict.wortschatz-leipzig.de/de/res?corpusId=${encodeURIComponent(corpus)}&word=${encodeURIComponent(word)}`;
+async function fetchOpenThesaurusRaw(word, budgetSignal) {
+  const url = `https://www.openthesaurus.de/synonyme/search?q=${encodeURIComponent(word)}&format=application/json&baseform=true`;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8000);
+  const timer = setTimeout(() => ctrl.abort(), 6000);
   const onBudget = () => ctrl.abort();
   budgetSignal?.addEventListener?.('abort', onBudget);
   try {
-    const upstream = await fetch(url, { signal: ctrl.signal, headers: { 'Accept': 'text/html', 'User-Agent': 'bookstack-lektorat/1.0' } });
-    if (!upstream.ok) return [];
-    const html = await upstream.text();
-    const blockMatch = html.match(/<b>\s*Synonym:\s*<\/b>([\s\S]*?)(?:<br\s*\/?>|<\/p>)/i);
-    if (!blockMatch) return [];
-    const out = [];
-    const seen = new Set([word.toLowerCase()]);
-    const re = /<a[^>]*>\s*([^<]+?)\s*<\/a>/g;
-    let m;
-    while ((m = re.exec(blockMatch[1])) !== null) {
-      const w = m[1].trim();
-      if (!w) continue;
-      const key = w.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(w);
-    }
-    return out;
+    const upstream = await fetch(url, { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+    if (!upstream.ok) return null;
+    return await upstream.json();
   } catch (err) {
-    if (err.name !== 'AbortError') logger.warn(`Leipzig fetch «${word}»: ${err.message}`);
-    return [];
+    if (err.name !== 'AbortError') logger.warn(`OpenThesaurus fetch «${word}»: ${err.message}`);
+    return null;
   } finally {
     clearTimeout(timer);
     budgetSignal?.removeEventListener?.('abort', onBudget);
   }
 }
 
-router.get('/leipzig/synonyms', async (req, res) => {
+function extractThesSynonyms(data, queryWord) {
+  const synsets = Array.isArray(data?.synsets) ? data.synsets : [];
+  const normQuery = queryWord.toLowerCase();
+  const out = [];
+  const seen = new Set([normQuery]);
+  for (const synset of synsets) {
+    const terms = Array.isArray(synset?.terms) ? synset.terms : [];
+    for (const t of terms) {
+      const clean = cleanThesTerm(t?.term);
+      if (!clean) continue;
+      const key = clean.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ wort: clean, hinweis: (t?.level || '').trim() });
+    }
+  }
+  return out;
+}
+
+// Liefert Synonyme; fällt bei flektierten Formen ("ging") automatisch auf die Grundform zurück.
+async function fetchOpenThesaurus(word, budgetSignal) {
+  const first = await fetchOpenThesaurusRaw(word, budgetSignal);
+  if (!first) return { synonyme: [], lemma: null };
+  const direct = extractThesSynonyms(first, word);
+  if (direct.length > 0) return { synonyme: direct, lemma: null };
+  const baseforms = Array.isArray(first?.baseforms) ? first.baseforms : [];
+  for (const lemma of baseforms) {
+    if (!lemma || lemma.toLowerCase() === word.toLowerCase()) continue;
+    if (budgetSignal?.aborted) break;
+    const second = await fetchOpenThesaurusRaw(lemma, budgetSignal);
+    if (!second) continue;
+    const hits = extractThesSynonyms(second, lemma);
+    if (hits.length > 0) {
+      const hinweis = `Grundform: ${lemma}`;
+      return {
+        synonyme: hits.map(h => ({ wort: h.wort, hinweis: h.hinweis || hinweis })),
+        lemma,
+      };
+    }
+  }
+  return { synonyme: [], lemma: null };
+}
+
+router.get('/openthesaurus/synonyms', async (req, res) => {
   const word = (req.query.word || '').trim();
   const bookId = parseInt(req.query.book_id, 10) || null;
+  const log = logger.child({ job: 'thesaurus', user: req.session?.user?.email || '-', book: bookId || '-' });
   if (!word) return res.json({ synonyme: [], disabled: false });
   const locale = bookId ? getBookLocale(bookId) : 'de-CH';
   if (!locale || !locale.toLowerCase().startsWith('de')) {
-    logger.info(`Leipzig call word=«${word}» skipped (locale=${locale})`);
+    log.info(`word=«${word}» skipped (locale=${locale})`);
     return res.json({ synonyme: [], disabled: true });
   }
-  const corpus = process.env.LEIPZIG_CORPUS || 'deu_news_2025';
   const budget = new AbortController();
-  const budgetTimer = setTimeout(() => budget.abort(), 12000);
+  const budgetTimer = setTimeout(() => budget.abort(), 10000);
   const t0 = Date.now();
-  let tries = 1;
   try {
-    let words = await fetchLeipzig(word, corpus, budget.signal);
-    let lemma = null;
-    if (words.length === 0) {
-      for (const guess of leipzigLemmaGuesses(word)) {
-        if (budget.signal.aborted) break;
-        tries++;
-        const hits = await fetchLeipzig(guess, corpus, budget.signal);
-        if (hits.length > 0) { words = hits; lemma = guess; break; }
-      }
-    }
+    const { synonyme, lemma } = await fetchOpenThesaurus(word, budget.signal);
     const ms = Date.now() - t0;
-    logger.info(`Leipzig call word=«${word}»${lemma ? ` lemma=«${lemma}»` : ''} corpus=${corpus} tries=${tries} hits=${words.length} ${ms}ms`);
-    const hinweis = lemma ? `Lemma: ${lemma}` : '';
-    res.json({ synonyme: words.map(w => ({ wort: w, hinweis })), disabled: false, lemma });
+    log.info(`word=«${word}»${lemma ? ` lemma=«${lemma}»` : ''} hits=${synonyme.length} ${ms}ms`);
+    res.json({ synonyme, disabled: false, lemma });
   } finally {
     clearTimeout(budgetTimer);
   }

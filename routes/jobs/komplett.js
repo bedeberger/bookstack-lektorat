@@ -698,8 +698,10 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     }, tps(tok));
     log.info(`Job ${jobId}: Komplettanalyse Buch ${bookIdInt} abgeschlossen (${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓).`);
   } catch (e) {
-    const cause = e.cause?.message || e.cause?.code || '';
-    log.error(`Job ${jobId}: Komplettanalyse Fehler: ${e.message}${cause ? ' (cause: ' + cause + ')' : ''}`);
+    if (e.name !== 'AbortError') {
+      const cause = e.cause?.message || e.cause?.code || '';
+      log.error(`Job ${jobId}: Komplettanalyse Fehler: ${e.message}${cause ? ' (cause: ' + cause + ')' : ''}`);
+    }
     failJob(jobId, e);
   }
 }
@@ -809,7 +811,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
     }, tps(tok));
     log.info(`Job ${jobId}: Kontinuitätsprüfung abgeschlossen (${normalizedProbleme.length} Probleme, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓).`);
   } catch (e) {
-    log.error(`Job ${jobId}: Kontinuitätsprüfung Fehler: ${e.message}`);
+    if (e.name !== 'AbortError') log.error(`Job ${jobId}: Kontinuitätsprüfung Fehler: ${e.message}`);
     failJob(jobId, e);
   }
 }

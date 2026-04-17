@@ -96,7 +96,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     }, tps(tok));
     logger.info(`«${pd.name}» fertig (page=${pageId}, book=${bookId || '-'}, chap=${pd.chapter_id || '-'}, ${result.fehler.length} Beanstandungen, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens)`);
   } catch (e) {
-    logger.error(`Fehler (page=${pageId}, book=${bookId || '-'}): ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Fehler (page=${pageId}, book=${bookId || '-'}): ${e.message}`);
     failJob(jobId, e);
   }
 }
@@ -162,7 +162,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
     completeJob(jobId, { pageCount: pages.length, done, totalErrors, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`Fertig: ${done}/${pages.length} Seiten (book=${bookId}), ${totalErrors} Beanstandungen, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens`);
   } catch (e) {
-    logger.error(`Fehler (book=${bookId}): ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Fehler (book=${bookId}): ${e.message}`);
     failJob(jobId, e);
   }
 }

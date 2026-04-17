@@ -13,7 +13,7 @@ const synonymeRouter = express.Router();
 async function runSynonymJob(jobId, wort, satz, bookId) {
   const logger = makeJobLogger(jobId);
   const { buildSynonymPrompt, SCHEMA_SYNONYM } = await getPrompts();
-  const { SYSTEM_LEKTORAT } = await getBookPrompts(bookId);
+  const { SYSTEM_SYNONYM } = await getBookPrompts(bookId);
   try {
     logger.info(`Start: Synonym für «${wort}» (book=${bookId || '-'})`);
     updateJob(jobId, { statusText: 'KI sucht Synonyme…', progress: 10 });
@@ -21,7 +21,7 @@ async function runSynonymJob(jobId, wort, satz, bookId) {
     const tok = { in: 0, out: 0, ms: 0 };
     const result = await aiCall(jobId, tok,
       buildSynonymPrompt(wort, satz),
-      SYSTEM_LEKTORAT,
+      SYSTEM_SYNONYM,
       10, 95, 800, 0.3, 2000, undefined, SCHEMA_SYNONYM,
     );
 
@@ -42,7 +42,7 @@ async function runSynonymJob(jobId, wort, satz, bookId) {
     completeJob(jobId, { synonyme, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`Synonym «${wort}» fertig (${synonyme.length} Vorschläge, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens)`);
   } catch (e) {
-    logger.error(`Fehler Synonym «${wort}»: ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Fehler Synonym «${wort}»: ${e.message}`);
     failJob(jobId, e);
   }
 }

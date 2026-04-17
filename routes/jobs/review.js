@@ -101,7 +101,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
     completeJob(jobId, { review: r, pageCount: pageContents.length, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`«${bookName}» fertig (book=${bookId}, ${pageContents.length} Seiten, Note ${r.gesamtnote}, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens)`);
   } catch (e) {
-    logger.error(`Fehler (book=${bookId}): ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Fehler (book=${bookId}): ${e.message}`);
     failJob(jobId, e);
   }
 }

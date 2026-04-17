@@ -12,11 +12,19 @@ let _isLocal = false;
 function _jsonOnly() { return _isLocal ? '' : `\n\n${JSON_ONLY}`; }
 
 // Kompakte Ersatzregeln für commonRules[langCode] im Lokal-Modus.
-// Behält nur Kernregel + Stilimitation – keine Aufzählung «WAS GEMELDET WERDEN SOLL»
-// (die ist redundant mit den typ-spezifischen Rule-Blöcken in den Prompts selbst).
+// Behält nur die Kernregel – WAS GEMELDET WERDEN SOLL ist redundant mit den typ-spezifischen
+// Rule-Blöcken, AUTORENSTIL wird separat über SLIM_AUTORENSTIL_RULE nur an Lektorat/Chat/
+// Stilkorrektur angehängt (nicht an Analyse-Prompts wie figuren/buchbewertung).
 const SLIM_COMMON_RULES = {
-  de: 'GRUNDREGEL: Nur eindeutig, zweifelsfrei falsche Stellen melden. Im Zweifel weglassen.\n\nAUTORENSTIL: Alle Korrekturen und Vorschläge müssen sich in den Stil des vorliegenden Textes einfügen (Satzbau, Rhythmus, Wortwahl, Ton) – als wären sie vom Autor selbst geschrieben.',
-  en: 'BASIC RULE: Only flag what is clearly and unambiguously wrong. When in doubt, leave it out.\n\nAUTHOR STYLE: All corrections and suggestions must fit the style of the given text (sentence structure, rhythm, word choice, tone) — as if written by the author themselves.',
+  de: 'GRUNDREGEL: Nur eindeutig, zweifelsfrei falsche Stellen melden. Im Zweifel weglassen.',
+  en: 'BASIC RULE: Only flag what is clearly and unambiguously wrong. When in doubt, leave it out.',
+};
+
+// Kompakte Autorenstil-Regel für Lokal-Modus (pendant zu cfg.autorenstilRule).
+// Wird nur an Prompts angehängt, die Textvorschläge erzeugen (Lektorat, Seiten-Chat, Stilkorrektur).
+const SLIM_AUTORENSTIL_RULE = {
+  de: 'AUTORENSTIL: Korrekturen und Textvorschläge müssen sich in den Stil des vorliegenden Textes einfügen (Satzbau, Rhythmus, Wortwahl, Ton) – als wären sie vom Autor selbst geschrieben. Dein Urteil über Schwächen bleibt davon unberührt: direkt und schonungslos.',
+  en: 'AUTHOR STYLE: Corrections and suggested text must fit the style of the given text (sentence structure, rhythm, word choice, tone) — as if written by the author themselves. Your judgment on weaknesses is unaffected: direct and uncompromising.',
 };
 
 function buildSystem(prefix, rules) {
@@ -29,33 +37,55 @@ function buildSystemNoJson(prefix, rules) {
   return `${prefix}\n\n${rules}`;
 }
 
+// Schlanker System-Prompt für die Synonym-Suche:
+// Rolle + Locale-Norm (korrekturRegeln) + optionaler Autor-Kontext + JSON_ONLY.
+// Bewusst ohne baseRules/commonRules, da die Aufgabe eng umrissen ist
+// und volle Lektoratsregeln ~650 Input-Tokens kosten würden.
+function buildSystemSynonym(prefix, korrekturRegeln, buchKontext) {
+  const parts = [prefix || ''];
+  if (korrekturRegeln) parts.push(korrekturRegeln);
+  const k = (buchKontext || '').trim();
+  if (k) parts.push(`AUTOR-KONTEXT: ${k}`);
+  return parts.filter(Boolean).join('\n\n') + _jsonOnly();
+}
+
 // ── Interne Locale-Maps ───────────────────────────────────────────────────────
 // _localeMap:  Key: localeKey (z.B. 'de-CH') → vorgebautes Prompts-Objekt (Default ohne Buchkontext)
 // _rawLocales: Key: localeKey → roher Locale-Config (baseRules, systemPrompts, stopwords)
 //              Wird von getLocalePromptsForBook() benötigt um per-Buch-Prompts zu bauen.
 let _localeMap  = new Map();
 let _rawLocales = new Map();
+let _autorenstilByLocale = new Map(); // localeKey → autorenstil-String (bereits Slim/Full gewählt)
 let _buchtypen  = {};        // cfg.buchtypen aus prompt-config.json
 let _erklaerungRule = '';    // cfg.erklaerungRule
 let _defaultLocale = 'de-CH';
 
 /** Baut ein Locale-Prompts-Objekt aus einer Locale-Config (aus prompt-config.json).
  *  buchKontext: optionaler per-Buch-Kontext (Freitext), wird als soziogramm-Kontext weitergegeben.
+ *  autorenstilRule: wird NUR an Prompts angehängt, die Textvorschläge erzeugen
+ *  (Lektorat, Seiten-Chat, Stilkorrektur). Analyse-Prompts (buchbewertung, figuren, …)
+ *  bleiben davon unberührt – dort soll die Kritik nicht durch Autorenstil-Imitation
+ *  abgemildert werden.
  */
-function _buildLocalePrompts(localeConfig, globalErklaerungRule, buchKontext = '') {
+function _buildLocalePrompts(localeConfig, globalErklaerungRule, buchKontext = '', autorenstilRule = '') {
   const rules = localeConfig.baseRules || '';
+  const rulesWithAutorenstil = autorenstilRule ? `${rules}\n\n${autorenstilRule}` : rules;
   const sp    = localeConfig.systemPrompts || {};
   return {
     ERKLAERUNG_RULE:             globalErklaerungRule || '',
     KORREKTUR_REGELN:            localeConfig.korrekturRegeln || '',
     STOPWORDS:                   Array.isArray(localeConfig.stopwords) ? localeConfig.stopwords : [],
     BUCH_KONTEXT:                buchKontext,
-    SYSTEM_LEKTORAT:             buildSystem(sp.lektorat          || '', rules),
+    SYSTEM_LEKTORAT:             buildSystem(sp.lektorat          || '', rulesWithAutorenstil),
     SYSTEM_BUCHBEWERTUNG:        buildSystem(sp.buchbewertung     || '', rules),
     SYSTEM_KAPITELANALYSE:       buildSystem(sp.kapitelanalyse    || '', rules),
     SYSTEM_FIGUREN:              buildSystem(sp.figuren           || '', rules),
-    SYSTEM_STILKORREKTUR:        buildSystem(sp.stilkorrektur     || '', rules),
-    SYSTEM_CHAT:                 buildSystemNoJson(sp.chat        || '', rules),
+    SYSTEM_STILKORREKTUR:        buildSystem(sp.stilkorrektur     || '', rulesWithAutorenstil),
+    // Synonym-Suche: schlanker System-Prompt – nur Rolle + Locale-Norm (korrekturRegeln)
+    // + optionaler Autor-Kontext. Ohne baseRules/commonRules, da die Synonym-Aufgabe
+    // klein und eng umrissen ist (Kontextmenü im Editor).
+    SYSTEM_SYNONYM:              buildSystemSynonym(sp.synonym    || '', localeConfig.korrekturRegeln || '', buchKontext),
+    SYSTEM_CHAT:                 buildSystemNoJson(sp.chat        || '', rulesWithAutorenstil),
     SYSTEM_BOOK_CHAT:            buildSystemNoJson(sp.buchchat    || '', rules),
     SYSTEM_ORTE:                 buildSystem(sp.orte              || 'Du bist ein Literaturanalytiker. Du identifizierst Schauplätze und Orte präzise und konservativ – nur was im Text eindeutig belegt ist.', rules),
     SYSTEM_KONTINUITAET:         buildSystem(sp.kontinuitaet      || 'Du bist ein sorgfältiger Literaturlektor. Du prüfst einen Roman auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.', rules),
@@ -78,6 +108,7 @@ export let SYSTEM_BUCHBEWERTUNG         = null;
 export let SYSTEM_KAPITELANALYSE        = null;
 export let SYSTEM_FIGUREN               = null;
 export let SYSTEM_STILKORREKTUR         = null;
+export let SYSTEM_SYNONYM               = null;
 export let SYSTEM_CHAT                  = null;
 export let SYSTEM_BOOK_CHAT             = null;
 export let SYSTEM_ORTE                  = null;
@@ -101,30 +132,35 @@ export function configurePrompts(cfg, provider = 'claude') {
 
   _localeMap.clear();
   _rawLocales.clear();
+  _autorenstilByLocale.clear();
   _buchtypen     = cfg.buchtypen || {};
   _erklaerungRule = cfg.erklaerungRule || '';
 
   if (cfg.locales && typeof cfg.locales === 'object') {
     // ── Neues Format: locales-Map ─────────────────────────────────────────────
     _defaultLocale = cfg.defaultLocale || 'de-CH';
-    const commonRules = cfg.commonRules || {};
+    const commonRules    = cfg.commonRules    || {};
+    const autorenstilRaw = cfg.autorenstilRule || {};
     for (const [key, localeCfg] of Object.entries(cfg.locales)) {
       const langCode = key.split('-')[0];
       // Für lokale Modelle wird commonRules durch eine Slim-Version ersetzt.
-      // Das Original enthält den grossen Meta-Block (GRUNDREGEL + WAS GEMELDET WERDEN SOLL +
-      // AUTORENSTIL IMITIEREN) – ~600 Wörter, die kleine Modelle überfordern.
-      // Slim behält nur Kernregel + Stilimitation. Der locale-eigene baseRules-Block
-      // (Orthografienorm) bleibt in beiden Modi – er ist essentiell.
+      // Das Original enthält den grossen Meta-Block (GRUNDREGEL + WAS GEMELDET WERDEN SOLL)
+      // – kleine Modelle werden davon überfordert. AUTORENSTIL wird separat gehandhabt
+      // und nur an Lektorat/Chat/Stilkorrektur angehängt (nicht an Analyse-Prompts).
       const common = _isLocal
         ? (SLIM_COMMON_RULES[langCode] || '')
         : (commonRules[langCode] || '');
+      const autorenstil = _isLocal
+        ? (SLIM_AUTORENSTIL_RULE[langCode] || '')
+        : (autorenstilRaw[langCode] || '');
       const base = localeCfg.baseRules || '';
       const mergedCfg = {
         ...localeCfg,
         baseRules: common ? `${base}\n\n${common}` : base,
       };
       _rawLocales.set(key, mergedCfg);
-      _localeMap.set(key, _buildLocalePrompts(mergedCfg, cfg.erklaerungRule));
+      _autorenstilByLocale.set(key, autorenstil);
+      _localeMap.set(key, _buildLocalePrompts(mergedCfg, cfg.erklaerungRule, '', autorenstil));
     }
     // Fallback: Falls defaultLocale nicht in der Map → ersten Eintrag nehmen
     if (!_localeMap.has(_defaultLocale) && _localeMap.size > 0) {
@@ -150,6 +186,7 @@ export function configurePrompts(cfg, provider = 'claude') {
   SYSTEM_KAPITELANALYSE        = def.SYSTEM_KAPITELANALYSE        ?? null;
   SYSTEM_FIGUREN               = def.SYSTEM_FIGUREN               ?? null;
   SYSTEM_STILKORREKTUR         = def.SYSTEM_STILKORREKTUR         ?? null;
+  SYSTEM_SYNONYM               = def.SYSTEM_SYNONYM               ?? null;
   SYSTEM_CHAT                  = def.SYSTEM_CHAT                  ?? null;
   SYSTEM_BOOK_CHAT             = def.SYSTEM_BOOK_CHAT             ?? null;
   SYSTEM_ORTE                  = def.SYSTEM_ORTE                  ?? null;
@@ -184,7 +221,9 @@ export function getLocalePromptsForBook(localeKey, buchtyp, buchKontext) {
 
   const augLocale = { ...rawLocale, baseRules: augRules };
   // buchKontext als soziogramm-Kontext weitergeben (figurenBasisRules / SYSTEM_KOMPLETT_EXTRAKTION)
-  return _buildLocalePrompts(augLocale, _erklaerungRule, kontext);
+  // autorenstilRule wird nur an Lektorat/Chat/Stilkorrektur angehängt (siehe _buildLocalePrompts).
+  const autorenstil = _autorenstilByLocale.get(localeKey) || _autorenstilByLocale.get(_defaultLocale) || '';
+  return _buildLocalePrompts(augLocale, _erklaerungRule, kontext, autorenstil);
 }
 
 export function buildStilkorrekturPrompt(html, styles) {
@@ -1004,7 +1043,7 @@ export function buildLektoratPrompt(text, opts = {}) {
 
 // ── Synonym-Suche (Kontextmenü im Editor) ────────────────────────────────────
 export function buildSynonymPrompt(wort, satz) {
-  return `Schlage 5 bis 8 Synonyme für das Wort «${wort}» vor, die im gegebenen Satzkontext passen. Nur einzelne Ersatzwörter, keine Umschreibungen oder Satzumbauten.
+  return `Schlage bis zu 11 Synonyme für das Wort «${wort}» vor, die im gegebenen Satzkontext passen. Nur einzelne Ersatzwörter, keine Umschreibungen oder Satzumbauten.
 
 Regeln:
 - Exakt gleiche Wortart und grammatische Form (Kasus, Numerus, Tempus, Geschlecht) wie das Originalwort im Satz

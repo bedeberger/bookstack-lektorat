@@ -11,7 +11,7 @@ const WORD_RE = /^[\p{L}\p{N}][\p{L}\p{N}\-']*$/u;
 export const synonymMethods = {
   // ── State (wird in der Alpine-Komponente via Spread ergänzt) ─────────────
   // showSynonymMenu, synonymMenuX, synonymMenuY, showSynonymPicker
-  // synonymLeipzigList / synonymLeipzigLoading / synonymLeipzigError / synonymLeipzigDisabled
+  // synonymThesList / synonymThesLoading / synonymThesError / synonymThesDisabled
   // synonymKiList / synonymKiLoading / synonymKiError
   // _synonymRange, _synonymWord, _synonymPollTimer
 
@@ -34,9 +34,9 @@ export const synonymMethods = {
     this._synonymRange = range.cloneRange();
     this._synonymWord  = text.trim();
     this.showSynonymPicker = false;
-    this.synonymLeipzigList = [];
-    this.synonymLeipzigError = '';
-    this.synonymLeipzigDisabled = false;
+    this.synonymThesList = [];
+    this.synonymThesError = '';
+    this.synonymThesDisabled = false;
     this.synonymKiList = [];
     this.synonymKiError = '';
     this.showSynonymMenu = true;
@@ -95,9 +95,9 @@ export const synonymMethods = {
     this.showSynonymPicker = false;
     const wasLoading = this.synonymKiLoading;
     const jobId = this._synonymJobId;
-    this.synonymLeipzigList = [];
-    this.synonymLeipzigError = '';
-    this.synonymLeipzigDisabled = false;
+    this.synonymThesList = [];
+    this.synonymThesError = '';
+    this.synonymThesDisabled = false;
     this.synonymKiList = [];
     this.synonymKiError = '';
     this.synonymKiLoading = false;
@@ -146,10 +146,10 @@ export const synonymMethods = {
     const satz = this._extractSentence(this._synonymRange, wort);
     const bookId = this.currentPage?.book_id || null;
     this.showSynonymMenu = false;
-    this.synonymLeipzigLoading = true;
-    this.synonymLeipzigError = '';
-    this.synonymLeipzigDisabled = false;
-    this.synonymLeipzigList = [];
+    this.synonymThesLoading = true;
+    this.synonymThesError = '';
+    this.synonymThesDisabled = false;
+    this.synonymThesList = [];
     this.synonymKiLoading = true;
     this.synonymKiError = '';
     this.synonymKiList = [];
@@ -157,20 +157,20 @@ export const synonymMethods = {
     this._attachSynonymScroll();
     this.$nextTick(() => this._positionSynonymUI());
 
-    // Leipzig: paralleler Sync-Call, keine Job-Queue
-    const leipzigUrl = `/leipzig/synonyms?word=${encodeURIComponent(wort)}` + (bookId ? `&book_id=${bookId}` : '');
-    fetch(leipzigUrl)
+    // OpenThesaurus: paralleler Sync-Call, keine Job-Queue
+    const thesUrl = `/openthesaurus/synonyms?word=${encodeURIComponent(wort)}` + (bookId ? `&book_id=${bookId}` : '');
+    fetch(thesUrl)
       .then(r => r.json())
       .then(d => {
-        this.synonymLeipzigDisabled = !!d.disabled;
-        this.synonymLeipzigList = Array.isArray(d.synonyme) ? d.synonyme : [];
-        if (!this.synonymLeipzigDisabled && this.synonymLeipzigList.length === 0) {
-          this.synonymLeipzigError = 'Keine Treffer.';
+        this.synonymThesDisabled = !!d.disabled;
+        this.synonymThesList = Array.isArray(d.synonyme) ? d.synonyme : [];
+        if (!this.synonymThesDisabled && this.synonymThesList.length === 0) {
+          this.synonymThesError = 'Keine Treffer.';
         }
       })
-      .catch(e => { this.synonymLeipzigError = e.message || 'Fehler.'; })
+      .catch(e => { this.synonymThesError = e.message || 'Fehler.'; })
       .finally(() => {
-        this.synonymLeipzigLoading = false;
+        this.synonymThesLoading = false;
         this.$nextTick(() => this._positionSynonymUI());
       });
 

@@ -105,14 +105,14 @@
       </div>
 
       <div class="synonym-picker-body">
-        <div class="synonym-picker-section" x-show="!synonymLeipzigDisabled">
-          <div class="synonym-picker-subheader">Wortschatz Leipzig</div>
-          <div x-show="synonymLeipzigLoading" class="synonym-picker-loading">
+        <div class="synonym-picker-section" x-show="!synonymThesDisabled">
+          <div class="synonym-picker-subheader">OpenThesaurus</div>
+          <div x-show="synonymThesLoading" class="synonym-picker-loading">
             <span class="spinner"></span> Lade…
           </div>
-          <div x-show="!synonymLeipzigLoading && synonymLeipzigError" class="synonym-picker-error" x-text="synonymLeipzigError"></div>
-          <div x-show="!synonymLeipzigLoading && !synonymLeipzigError && synonymLeipzigList.length > 0" class="synonym-picker-list">
-            <template x-for="(s, i) in synonymLeipzigList" :key="'l'+i">
+          <div x-show="!synonymThesLoading && synonymThesError" class="synonym-picker-error" x-text="synonymThesError"></div>
+          <div x-show="!synonymThesLoading && !synonymThesError && synonymThesList.length > 0" class="synonym-picker-list">
+            <template x-for="(s, i) in synonymThesList" :key="'t'+i">
               <button class="synonym-entry" @click="applySynonym(s)">
                 <span class="synonym-word" x-text="s.wort"></span>
                 <span x-show="s.hinweis" class="synonym-hint" x-text="s.hinweis"></span>
