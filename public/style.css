@@ -1224,6 +1224,24 @@ ins {
   }
 }
 
+@media (max-width: 1099px) {
+  .lektorat-split {
+    display: block;
+  }
+  .lektorat-split-preview,
+  .lektorat-split-findings {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .lektorat-split-preview .page-content-view,
+  .lektorat-split-preview > .page-content-view {
+    max-height: none;
+    overflow: visible;
+  }
+  .lektorat-split-findings { margin-top: 1rem; }
+}
+
 /* Inline-Fehlermarkierung */
 .lektorat-mark {
   position: relative;

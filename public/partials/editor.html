@@ -29,6 +29,7 @@
         <span class="display-contents">
           <button @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? 'Seite ist leer' : 'Ctrl+Enter'">Prüfen</button>
           <button @click="startEdit()" :disabled="checkLoading || saveApplying != null || !originalHtml" title="Text manuell bearbeiten">Bearbeiten</button>
+          <button @click="closeFindings()" x-show="checkDone" title="Befunde ausblenden, Vollansicht wiederherstellen">Prüfmodus verlassen</button>
           <button class="success" @click="saveCorrections()" :disabled="saveApplying != null" x-show="(correctedHtml && selectedFindings.some(v => v)) || saveApplying != null">
             <span x-show="saveApplying != null" class="spinner"></span><span x-text="saveApplying != null ? 'Wird gespeichert…' : 'Korrekturen speichern'"></span>
           </button>
@@ -41,6 +42,7 @@
             <span x-show="editSaving" class="spinner"></span><span x-text="editSaving ? 'Speichere…' : 'Speichern'"></span>
           </button>
           <button @click="cancelEdit()" :disabled="editSaving">Abbrechen</button>
+          <button @click="closeFindings()" x-show="checkDone" title="Befunde ausblenden, Vollansicht wiederherstellen">Prüfmodus verlassen</button>
         </span>
       </template>
     </div>
@@ -76,9 +78,6 @@
       </div>
     </div>
   </template>
-
-  <!-- Manuelle Bearbeitung (contenteditable) -->
-  <div x-show="editMode" x-ref="editArea" class="page-content-view page-content-view--editing" contenteditable="true" spellcheck="true" @input="_markEditDirty()" @contextmenu="_onEditContextMenu($event)"></div>
 
   <!-- Synonym-Kontextmenü (an body teleportiert, damit position:fixed
        nicht vom card-Transform-Context eingefangen wird) -->
@@ -140,15 +139,14 @@
     </div>
   </template>
 
-  <!-- Formatierte Seitenansicht (vor Check) -->
-  <div x-show="renderedPageHtml && !checkDone && !editMode" class="page-content-view" x-html="renderedPageHtml" @click="handleMarkClick($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>
-
-  <!-- Nach Check: Split-Layout (Preview links, Befunde rechts) -->
-  <div x-show="checkDone && !editMode" class="lektorat-split">
-    <div class="lektorat-split-preview">
-      <div x-show="renderedPageHtml" class="page-content-view" x-html="renderedPageHtml" @click="handleMarkClick($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>
+  <!-- Preview + optional Befunde: Layout wird zum Split, sobald geprüft wurde.
+       editMode zeigt contenteditable statt Preview (Findings bleiben rechts sichtbar). -->
+  <div :class="checkDone ? 'lektorat-split' : ''">
+    <div :class="checkDone ? 'lektorat-split-preview' : ''">
+      <div x-show="editMode" x-ref="editArea" class="page-content-view page-content-view--editing" contenteditable="true" spellcheck="true" @input="_markEditDirty()" @contextmenu="_onEditContextMenu($event)"></div>
+      <div x-show="!editMode && renderedPageHtml" class="page-content-view" x-html="renderedPageHtml" @click="handleMarkClick($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>
     </div>
-    <div class="lektorat-split-findings">
+    <div x-show="checkDone" class="lektorat-split-findings">
 
       <!-- Fehlerfrei -->
       <div x-show="lektoratFindings.length === 0" class="finding ok">

@@ -25,6 +25,18 @@ export const lektoratMethods = {
     this._recomputeCorrectedHtml();
   },
 
+  closeFindings() {
+    this.checkDone = false;
+    this.lektoratFindings = [];
+    this.selectedFindings = [];
+    this.appliedOriginals = [];
+    this.correctedHtml = null;
+    this.hasErrors = false;
+    this.analysisOut = '';
+    this.activeHistoryEntryId = null;
+    this.updatePageView();
+  },
+
   async runCheck() {
     if (!this.currentPage) return;
     const pageIdAtStart = this.currentPage.id;
