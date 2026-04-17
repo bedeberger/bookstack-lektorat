@@ -1026,6 +1026,26 @@ ins {
   margin-left: 2px;
 }
 
+/* Chat-Änderungsvorschläge im Preview (blau, optisch getrennt vom Lektorat-Gelb) */
+.chat-mark {
+  position: relative;
+  background: rgba(70, 150, 230, 0.18);
+  border-bottom: 2px solid #2b74c7;
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+.chat-mark:hover { background: rgba(70, 150, 230, 0.32); }
+
+.chat-mark-ins {
+  text-decoration: none;
+  color: #2b74c7;
+  font-weight: 700;
+  background: rgba(70, 150, 230, 0.13);
+  border-radius: 2px;
+  padding: 0 2px;
+  margin-left: 2px;
+}
+
 /* Korrektur-Tooltip auf Inline-Mark (positioniert per JS) */
 .lektorat-tip {
   display: none;

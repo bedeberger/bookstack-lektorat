@@ -23,8 +23,8 @@ db.exec(`
     saved       INTEGER DEFAULT 0,
     saved_at    TEXT
   );
-  CREATE INDEX IF NOT EXISTS idx_pc_page_id ON page_checks(page_id);
-  CREATE INDEX IF NOT EXISTS idx_pc_book_id ON page_checks(book_id);
+  CREATE INDEX IF NOT EXISTS idx_pc_page_user_date ON page_checks(page_id, user_email, checked_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_pc_book_user      ON page_checks(book_id, user_email);
 
   CREATE TABLE IF NOT EXISTS book_reviews (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,7 +34,7 @@ db.exec(`
     review_json TEXT,
     model       TEXT
   );
-  CREATE INDEX IF NOT EXISTS idx_br_book_id ON book_reviews(book_id);
+  CREATE INDEX IF NOT EXISTS idx_br_book_user_date ON book_reviews(book_id, user_email, reviewed_at DESC);
 
   -- Figuren: eine Zeile pro Figur, Kernfelder fix
   -- Neue Felder: per ALTER TABLE ADD COLUMN oder via meta (JSON)
@@ -145,7 +145,7 @@ db.exec(`
     created_at   TEXT NOT NULL,
     context_info TEXT
   );
-  CREATE INDEX IF NOT EXISTS idx_cm_session_id ON chat_messages(session_id);
+  CREATE INDEX IF NOT EXISTS idx_cm_session_created ON chat_messages(session_id, created_at);
 
   -- BookStack API-Tokens pro User (verknüpft mit Google-E-Mail)
   CREATE TABLE IF NOT EXISTS user_tokens (
@@ -967,6 +967,22 @@ function runMigrations() {
     }
     db.prepare('UPDATE schema_version SET version = 39').run();
     logger.info('DB-Migration auf Version 39 abgeschlossen (chapter_id als PK in figure_appearances + location_chapters; chapter_ids in zeitstrahl_events).');
+  }
+  if (version < 40) {
+    // Composite-Indizes für häufige Query-Muster (page_checks History, book_reviews History,
+    // chat_messages-Sortierung). Alte Single-Column-Indizes werden durch die neuen ersetzt.
+    db.exec(`
+      DROP INDEX IF EXISTS idx_pc_page_id;
+      DROP INDEX IF EXISTS idx_pc_book_id;
+      DROP INDEX IF EXISTS idx_br_book_id;
+      DROP INDEX IF EXISTS idx_cm_session_id;
+      CREATE INDEX IF NOT EXISTS idx_pc_page_user_date  ON page_checks(page_id, user_email, checked_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_pc_book_user       ON page_checks(book_id, user_email);
+      CREATE INDEX IF NOT EXISTS idx_br_book_user_date  ON book_reviews(book_id, user_email, reviewed_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_cm_session_created ON chat_messages(session_id, created_at);
+    `);
+    db.prepare('UPDATE schema_version SET version = 40').run();
+    logger.info('DB-Migration auf Version 40 abgeschlossen (Composite-Indizes für page_checks, book_reviews, chat_messages).');
   }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs

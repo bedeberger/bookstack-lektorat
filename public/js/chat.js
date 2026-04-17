@@ -1,4 +1,4 @@
-import { escHtml, fmtTok } from './utils.js';
+import { escHtml, fmtTok, SAFETY_HTML_RATIO } from './utils.js';
 import { makeChatMethods } from './chat-base.js';
 
 // Seiten-Chat-Methoden (werden in die Alpine-Komponente gespreadet).
@@ -45,6 +45,13 @@ const baseMethods = makeChatMethods({
   },
   onPollDone: async function () {
     if (this.currentPage) await this.loadChatSessions();
+    this.updatePageView();
+  },
+  onAfterSessionLoad: function () {
+    this.updatePageView();
+  },
+  onReset: function () {
+    this.updatePageView();
   },
 });
 
@@ -62,28 +69,24 @@ export const chatMethods = {
     }
 
     try {
-      const pageData = await this.bsGet('pages/' + this.currentPage.id);
-      this.originalHtml = pageData.html || '';
-    } catch (e) {
-      setErr('Seiteninhalt konnte nicht geladen werden.');
-      return;
-    }
-
-    const idx = this.originalHtml.indexOf(vorschlag.original);
-    if (idx === -1) {
-      setErr('Originaltext nicht mehr in der Seite gefunden.');
-      return;
-    }
-
-    const newHtml = this.originalHtml.slice(0, idx) + vorschlag.ersatz + this.originalHtml.slice(idx + vorschlag.original.length);
-
-    try {
-      await this.bsPut('pages/' + this.currentPage.id, { html: newHtml });
+      const page = await this.bsGet('pages/' + this.currentPage.id);
+      if (page.html.indexOf(vorschlag.original) === -1) {
+        setErr('Originaltext nicht mehr in der Seite gefunden.');
+        return;
+      }
+      const newHtml = this._applyCorrections(page.html, [
+        { original: vorschlag.original, korrektur: vorschlag.ersatz },
+      ]);
+      if (newHtml.length < page.html.length * SAFETY_HTML_RATIO) {
+        setErr('Korrigiertes HTML wirkt unvollständig – Speichern abgebrochen.');
+        return;
+      }
+      await this.bsPut('pages/' + this.currentPage.id, { html: newHtml, name: this.currentPage.name });
       this.originalHtml = newHtml;
-      this.renderedPageHtml = newHtml;
       this._chatPendingRefresh = true;
       this.chatMessages[msgIdx].vorschlaege[vIdx]._applied = true;
       this.chatMessages[msgIdx].vorschlaege[vIdx]._error = null;
+      this.updatePageView();
       this.chatStatus = '<span class="success-msg">Änderung in BookStack gespeichert.</span>';
       setTimeout(() => { if (this.chatStatus.includes('gespeichert')) this.chatStatus = ''; }, 3000);
     } catch (e) {

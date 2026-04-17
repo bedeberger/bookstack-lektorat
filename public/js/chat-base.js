@@ -24,6 +24,7 @@ export function makeChatMethods(cfg) {
       this[p.sessionId] = data.id;
       this[p.messages] = data.messages || [];
       this[p.status] = '';
+      if (cfg.onAfterSessionLoad) cfg.onAfterSessionLoad.call(this);
       this.$nextTick(() => scrollToBottom.call(this));
 
       // Reconnect: prüfen ob ein Chat-Job für diese Session noch läuft
@@ -197,6 +198,7 @@ export function makeChatMethods(cfg) {
     if (p.progress) this[p.progress] = 0;
     this[p.status] = '';
     if (p.pendingRefresh) this[p.pendingRefresh] = false;
+    if (cfg.onReset) cfg.onReset.call(this);
   };
 
   return m;

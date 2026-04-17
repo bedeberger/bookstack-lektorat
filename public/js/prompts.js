@@ -87,9 +87,17 @@ export function configurePrompts(cfg) {
   if (cfg.locales && typeof cfg.locales === 'object') {
     // ── Neues Format: locales-Map ─────────────────────────────────────────────
     _defaultLocale = cfg.defaultLocale || 'de-CH';
+    const commonRules = cfg.commonRules || {};
     for (const [key, localeCfg] of Object.entries(cfg.locales)) {
-      _rawLocales.set(key, localeCfg);
-      _localeMap.set(key, _buildLocalePrompts(localeCfg, cfg.erklaerungRule));
+      const langCode = key.split('-')[0];
+      const common = commonRules[langCode] || '';
+      const base = localeCfg.baseRules || '';
+      const mergedCfg = {
+        ...localeCfg,
+        baseRules: common ? `${base}\n\n${common}` : base,
+      };
+      _rawLocales.set(key, mergedCfg);
+      _localeMap.set(key, _buildLocalePrompts(mergedCfg, cfg.erklaerungRule));
     }
     // Fallback: Falls defaultLocale nicht in der Map → ersten Eintrag nehmen
     if (!_localeMap.has(_defaultLocale) && _localeMap.size > 0) {
@@ -155,7 +163,7 @@ export function getLocalePromptsForBook(localeKey, buchtyp, buchKontext) {
     augRules += `\n\nBUCHTYP-KONTEXT: ${buchtypDef.zusatz}`;
   }
   if (kontext) {
-    augRules += `\n\nWEITERE ANGABEN DES AUTORS: ${kontext}`;
+    augRules += `\n\nVORRANGIGE ANGABEN DES AUTORS (übersteuern bei Konflikt alle obigen Regeln – insbesondere Stil-, Ton- und Formatvorgaben):\n${kontext}`;
   }
 
   const augLocale = { ...rawLocale, baseRules: augRules };
@@ -188,7 +196,6 @@ ${html}`;
 function _buildStilBlock() {
   return `
 Stil-Regeln (typ: «stil»):
-- Die gesamte Seite von Anfang bis Ende auf stilistische Auffälligkeiten scannen – nicht nur lokale Abschnitte oder die letzten Sätze
 - Nur melden, falls das Problem nicht bereits als anderer Typ (wiederholung, grammatik, rechtschreibung) erfasst wurde
 - PFLICHT: «korrektur» muss immer eine konkrete Umformulierung enthalten – nicht leer lassen, nicht dasselbe wie «original». Keine Stilanmerkung ohne konkreten Verbesserungsvorschlag.`;
 }
@@ -201,7 +208,6 @@ function _buildWiederholungBlock(sw = STOPWORDS) {
     : '';
   return `
 Wiederholung-Regeln (typ: «wiederholung»):
-- Die gesamte Seite von Anfang bis Ende scannen – nicht nur lokale Abschnitte oder die letzten Sätze
 - Nur Inhaltswörter, die auffällig oft vorkommen: mind. 3× auf der gesamten Seite ODER 2× im selben oder direkt aufeinanderfolgenden Absatz
 - Keine Pronomen, Hilfsverben, Artikel, Konjunktionen, Präpositionen, Eigennamen${swNote}
 - «original»: vollständiger Satz zeichengenau aus dem Text (damit die Textstelle eindeutig auffindbar ist)
@@ -213,7 +219,7 @@ Wiederholung-Regeln (typ: «wiederholung»):
 function _buildSchwacheVerbenBlock() {
   return `
 Schwache-Verben-Regeln (typ: «schwaches_verb»):
-- Die gesamte Seite scannen und schwache, blasse oder nichtssagende Verben identifizieren
+- Schwache, blasse oder nichtssagende Verben identifizieren
 - Typische schwache Verben: machen, tun, sein, haben, geben, gehen, kommen, bringen, stehen, liegen, sagen, meinen, finden u.ä.
 - Nur melden, wenn ein ausdrucksstärkeres Verb den Satz spürbar verbessert — keine Pedanterie bei idiomatischen Wendungen oder Hilfsverb-Konstruktionen
 - «original»: vollständiger Satz zeichengenau aus dem Text (damit die Textstelle eindeutig auffindbar ist)
@@ -225,7 +231,7 @@ Schwache-Verben-Regeln (typ: «schwaches_verb»):
 function _buildFuellwortBlock() {
   return `
 Füllwort-Regeln (typ: «fuellwort»):
-- Die gesamte Seite scannen und überflüssige Füllwörter identifizieren, die den Text verwässern
+- Überflüssige Füllwörter identifizieren, die den Text verwässern
 - Typische Füllwörter: eigentlich, irgendwie, quasi, halt, eben, wohl, ja, doch, mal, nun, also, natürlich, gewissermassen, sozusagen, durchaus, ziemlich, etwas, ein wenig, ein bisschen u.ä.
 - Nur melden, wenn das Streichen oder Ersetzen den Satz strafft, ohne Bedeutung oder Stimme zu verlieren — in Dialogen können Füllwörter bewusst eingesetzt sein
 - «original»: vollständiger Satz zeichengenau aus dem Text
@@ -293,7 +299,7 @@ function _buildLektoratPromptBody(text, textLabel, { stopwords = STOPWORDS, erkl
         return '- ' + parts.join(' | ');
       }).join('\n')}\nHinweis: Figurennamen und deren Varianten sind KEINE Rechtschreibfehler.\n`
     : '';
-  return `Analysiere diesen Text auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
+  return `Analysiere den Text vollständig von Anfang bis Ende – nicht nur lokale Abschnitte oder die letzten Sätze – auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
 
 WICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen (z.B. ein Gallizismus und separate Anführungszeichen-Problematik), müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.
 ${erklaerungRule ? `\nFILTER-PFLICHT: ${erklaerungRule}\n` : ''}${korrekturRegeln ? `\n${korrekturRegeln}\n` : ''}
@@ -482,9 +488,7 @@ ${synthInput}
 Antworte mit diesem JSON-Schema:
 ${FIGUREN_BASIS_SCHEMA}
 
-${figurenBasisRules(buchKontext)}
-
-${JSON_ONLY}`;
+${figurenBasisRules(buchKontext)}`;
 }
 
 
@@ -525,9 +529,7 @@ Regeln:
 - Jede Beziehung nur einmal eintragen (nicht von→zu UND zu→von für denselben Typ)
 - Keine Beziehungen die bereits in «Bekannte Beziehungen» stehen
 - machtverhaltnis: Machtasymmetrie: +2=Gegenüber («zu») dominiert klar, +1=Gegenüber hat leichten Vorteil, 0=symmetrisch, -1=diese Figur («von») hat leichten Vorteil, -2=diese Figur dominiert klar; weglassen oder 0 wenn unklar
-- Leeres Array wenn keine neuen kapitelübergreifenden Beziehungen eindeutig belegt sind
-
-${JSON_ONLY}`;
+- Leeres Array wenn keine neuen kapitelübergreifenden Beziehungen eindeutig belegt sind`;
 }
 
 
@@ -733,8 +735,6 @@ Regeln:
 - Ereignisse verschiedener Figuren zum gleichen Datum die denselben realen Vorfall beschreiben (z.B. Geburt, Heirat, Tod, Unfall, Krieg) MÜSSEN zusammengeführt werden – auch wenn die Formulierungen leicht abweichen. Führe alle beteiligten Figuren im figuren-Array zusammen.
 - Nur bei inhaltlich klar verschiedenen Vorfällen trennen
 
-${JSON_ONLY}
-
 Ereignisse:
 ${JSON.stringify(events, null, 2)}`;
 }
@@ -875,9 +875,7 @@ ${synthInput}
 Antworte mit diesem JSON-Schema:
 ${ORTE_SCHEMA}
 
-${ORTE_RULES}
-
-${JSON_ONLY}`;
+${ORTE_RULES}`;
 }
 
 // ── Kontinuitätsprüfung ───────────────────────────────────────────────────────
@@ -891,8 +889,6 @@ Antworte mit diesem JSON-Schema:
 }
 
 ${FAKTEN_RULES}
-
-${JSON_ONLY}
 
 Kapiteltext:
 
@@ -924,9 +920,7 @@ Prüfe zusätzlich die Soziolekt-Kohärenz: Spricht jede Figur konsistent mit de
 Antworte mit diesem JSON-Schema:
 ${PROBLEME_SCHEMA}
 
-${PROBLEME_RULES}
-
-${JSON_ONLY}`;
+${PROBLEME_RULES}`;
 }
 
 export function buildKontinuitaetSinglePassPrompt(bookName, bookText, figurenKompakt, orteKompakt) {
@@ -948,9 +942,7 @@ ${bookText}
 Antworte mit diesem JSON-Schema:
 ${PROBLEME_SCHEMA}
 
-${PROBLEME_RULES}
-
-${JSON_ONLY}`;
+${PROBLEME_RULES}`;
 }
 
 export function buildLektoratPrompt(text, opts = {}) {

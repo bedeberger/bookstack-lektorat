@@ -18,19 +18,29 @@ export function sortByPosition(html, fehler) {
 }
 
 /**
- * Baut eine HTML-Version mit <mark>-Tags um Fehlerstellen.
- * Iteriert von hinten nach vorne, damit Offsets stabil bleiben.
+ * Baut eine HTML-Version mit <mark>-Tags um Fehlerstellen und optional
+ * Chat-Änderungsvorschläge. Iteriert von hinten nach vorne, damit Offsets
+ * stabil bleiben. Bei Überschneidung gewinnt die höhere Position; Lektorat
+ * und Chat teilen sich denselben Overlap-Filter.
  */
-export function buildHighlightedHtml(html, errors, selected) {
-  if (!html || !errors?.length) return html || '';
+export function buildHighlightedHtml(html, errors, selected, chatProposals = []) {
+  if (!html || (!errors?.length && !chatProposals.length)) return html || '';
 
   const positions = [];
-  for (let i = 0; i < errors.length; i++) {
+  for (let i = 0; i < (errors?.length || 0); i++) {
     const f = errors[i];
     if (!f.original) continue;
     const idx = html.indexOf(f.original);
     if (idx !== -1) {
-      positions.push({ idx, len: f.original.length, errIdx: i });
+      positions.push({ idx, len: f.original.length, kind: 'lektorat', errIdx: i });
+    }
+  }
+  for (let i = 0; i < chatProposals.length; i++) {
+    const p = chatProposals[i];
+    if (!p.original) continue;
+    const idx = html.indexOf(p.original);
+    if (idx !== -1) {
+      positions.push({ idx, len: p.original.length, kind: 'chat', propIdx: i });
     }
   }
 
@@ -47,13 +57,20 @@ export function buildHighlightedHtml(html, errors, selected) {
 
   let result = html;
   for (const p of unique) {
-    const f = errors[p.errIdx];
-    const isSel = selected[p.errIdx];
-    const sel = isSel ? ' lektorat-mark--selected' : '';
     const originalText = result.slice(p.idx, p.idx + p.len);
-    const markOpen = `<mark class="lektorat-mark${sel}" data-error-idx="${p.errIdx}">`;
-    const ins = isSel && f.korrektur ? `<ins class="lektorat-ins">${escHtml(f.korrektur)}</ins>` : '';
-    result = result.slice(0, p.idx) + markOpen + originalText + '</mark>' + ins + result.slice(p.idx + p.len);
+    if (p.kind === 'lektorat') {
+      const f = errors[p.errIdx];
+      const isSel = selected[p.errIdx];
+      const sel = isSel ? ' lektorat-mark--selected' : '';
+      const markOpen = `<mark class="lektorat-mark${sel}" data-error-idx="${p.errIdx}">`;
+      const ins = isSel && f.korrektur ? `<ins class="lektorat-ins">${escHtml(f.korrektur)}</ins>` : '';
+      result = result.slice(0, p.idx) + markOpen + originalText + '</mark>' + ins + result.slice(p.idx + p.len);
+    } else {
+      const prop = chatProposals[p.propIdx];
+      const markOpen = `<mark class="chat-mark" data-chat-msg-idx="${prop.msgIdx}" data-chat-v-idx="${prop.vIdx}">`;
+      const ins = `<ins class="chat-mark-ins">${escHtml(prop.ersatz)}</ins>`;
+      result = result.slice(0, p.idx) + markOpen + originalText + '</mark>' + ins + result.slice(p.idx + p.len);
+    }
   }
 
   return result;
@@ -154,8 +171,19 @@ export const pageViewMethods = {
     }
     const allErrors = [...(this.lektoratErrors || []), ...(this.lektoratStyles || [])];
     const allSelected = [...(this.selectedErrors || []), ...(this.selectedStyles || [])];
-    if (allErrors.length > 0) {
-      this.renderedPageHtml = buildHighlightedHtml(this.originalHtml, allErrors, allSelected);
+    const chatProposals = [];
+    const msgs = this.chatMessages || [];
+    for (let mi = 0; mi < msgs.length; mi++) {
+      const msg = msgs[mi];
+      if (msg.role !== 'assistant' || !Array.isArray(msg.vorschlaege)) continue;
+      for (let vi = 0; vi < msg.vorschlaege.length; vi++) {
+        const v = msg.vorschlaege[vi];
+        if (v._applied || !v.original || !v.ersatz) continue;
+        chatProposals.push({ msgIdx: mi, vIdx: vi, original: v.original, ersatz: v.ersatz });
+      }
+    }
+    if (allErrors.length > 0 || chatProposals.length > 0) {
+      this.renderedPageHtml = buildHighlightedHtml(this.originalHtml, allErrors, allSelected, chatProposals);
     } else {
       this.renderedPageHtml = this.originalHtml;
     }

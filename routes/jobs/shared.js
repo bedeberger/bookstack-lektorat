@@ -508,12 +508,28 @@ function getFiguren(bookId, userEmail, chapterName = null) {
   }));
 }
 
-/** Konversationshistorie einer Session als Messages-Array für die KI. */
+/**
+ * Konversationshistorie einer Session als Messages-Array für die KI.
+ * Fasst aufeinanderfolgende Messages derselben Rolle zusammen, damit die
+ * user/assistant-Alternation strikt bleibt (LM-Studio-Chat-Templates werfen
+ * sonst eine Jinja-Exception). Das passiert z.B. nach einem abgebrochenen
+ * Job, der eine User-Message ohne Antwort in der DB hinterlassen hat.
+ */
 function buildChatMessageHistory(sessionId) {
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT role, content FROM chat_messages
     WHERE session_id = ? ORDER BY created_at ASC
-  `).all(sessionId).map(r => ({ role: r.role, content: r.content }));
+  `).all(sessionId);
+  const out = [];
+  for (const r of rows) {
+    const last = out[out.length - 1];
+    if (last && last.role === r.role) {
+      last.content += '\n\n' + r.content;
+    } else {
+      out.push({ role: r.role, content: r.content });
+    }
+  }
+  return out;
 }
 
 // ── Statistik-Konfiguration ───────────────────────────────────────────────────
