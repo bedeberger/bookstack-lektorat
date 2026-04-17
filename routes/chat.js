@@ -161,7 +161,7 @@ router.post('/send', jsonBody, async (req, res) => {
     const review  = getLatestReview(session.book_id, userEmail);
 
     // System-Prompt aus prompts.js (Single Source of Truth)
-    const { buildChatSystemPrompt } = await getPrompts();
+    const { buildChatSystemPrompt, SCHEMA_CHAT } = await getPrompts();
     const { SYSTEM_CHAT: chatSys } = await getBookPrompts(session.book_id);
     const systemPrompt = buildChatSystemPrompt(
       session.page_name || 'Unbekannte Seite',
@@ -192,11 +192,13 @@ router.post('/send', jsonBody, async (req, res) => {
     if (provider === 'ollama') {
       await _streamOllama(messages, systemPrompt, res,
         (text) => { fullText += text; },
-        (tIn, tOut) => { tokensIn = tIn; tokensOut = tOut; });
+        (tIn, tOut) => { tokensIn = tIn; tokensOut = tOut; },
+        SCHEMA_CHAT);
     } else if (provider === 'llama') {
       await _streamLlama(messages, systemPrompt, res,
         (text) => { fullText += text; },
-        (tIn, tOut) => { tokensIn = tIn; tokensOut = tOut; });
+        (tIn, tOut) => { tokensIn = tIn; tokensOut = tOut; },
+        SCHEMA_CHAT);
     } else {
       await _streamClaude(messages, systemPrompt, res,
         (text) => { fullText += text; },
@@ -320,7 +322,7 @@ async function _streamClaude(messages, systemPrompt, res, onText, onTokens) {
   onTokens(tokIn, tokOut);
 }
 
-async function _streamLlama(messages, systemPrompt, res, onText, onTokens) {
+async function _streamLlama(messages, systemPrompt, res, onText, onTokens, jsonSchema) {
   const llamaHost = (process.env.LLAMA_HOST || 'http://localhost:8080').replace(/\/$/, '');
   const model     = process.env.LLAMA_MODEL || 'llama3.2';
 
@@ -328,6 +330,12 @@ async function _streamLlama(messages, systemPrompt, res, onText, onTokens) {
     { role: 'system', content: systemPrompt },
     ...messages,
   ];
+
+  // Mit Schema → strict json_schema (GBNF-Grammar-Constrained, fixt unescaped-Quote-Bug).
+  // Ohne Schema → json_object-Hint als Fallback.
+  const responseFormat = jsonSchema
+    ? { type: 'json_schema', json_schema: { name: 'response', strict: true, schema: jsonSchema } }
+    : { type: 'json_object' };
 
   const upstream = await fetch(`${llamaHost}/v1/chat/completions`, {
     method: 'POST',
@@ -338,7 +346,7 @@ async function _streamLlama(messages, systemPrompt, res, onText, onTokens) {
       stream: true,
       stream_options: { include_usage: true },
       temperature: parseFloat(process.env.LLAMA_TEMPERATURE || '0.1'),
-      response_format: { type: 'json_object' },
+      response_format: responseFormat,
     }),
   });
 
@@ -383,7 +391,7 @@ async function _streamLlama(messages, systemPrompt, res, onText, onTokens) {
   onTokens(promptTokens, evalTokens);
 }
 
-async function _streamOllama(messages, systemPrompt, res, onText, onTokens) {
+async function _streamOllama(messages, systemPrompt, res, onText, onTokens, jsonSchema) {
   const ollamaHost = (process.env.OLLAMA_HOST || 'http://localhost:11434').replace(/\/$/, '');
   const model      = process.env.OLLAMA_MODEL || 'llama3.2';
 
@@ -392,10 +400,13 @@ async function _streamOllama(messages, systemPrompt, res, onText, onTokens) {
     ...messages,
   ];
 
+  // Schema → strikte GBNF-Grammatik; sonst 'json' als Hint-Fallback.
+  const fmt = jsonSchema || 'json';
+
   const upstream = await fetch(`${ollamaHost}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: ollamaMessages, stream: true, format: 'json', options: { think: false } }),
+    body: JSON.stringify({ model, messages: ollamaMessages, stream: true, format: fmt, options: { think: false } }),
   });
 
   if (!upstream.ok) {

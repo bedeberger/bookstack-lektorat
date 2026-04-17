@@ -159,17 +159,6 @@ export function configurePrompts(cfg, provider = 'claude') {
 }
 
 /**
- * Gibt das Locale-Prompts-Objekt für einen gegebenen Locale-Key zurück.
- * Fällt auf den Default-Locale zurück wenn der Key unbekannt ist.
- * Kein Buchkontext – für generische Verwendung ohne Buch-Bezug.
- * @param {string} localeKey  z.B. 'de-CH', 'en-US'
- * @returns {{ SYSTEM_LEKTORAT, SYSTEM_BUCHBEWERTUNG, ..., STOPWORDS, ERKLAERUNG_RULE }}
- */
-export function getLocalePrompts(localeKey) {
-  return _localeMap.get(localeKey) ?? _localeMap.get(_defaultLocale) ?? {};
-}
-
-/**
  * Gibt ein Locale-Prompts-Objekt zurück, das mit dem per-Buch-Kontext augmentiert ist.
  * Baut die baseRules dynamisch auf (Buchtyp-Block + Freitext-Block) und übergibt
  * buchKontext als soziogramm-Kontext an SYSTEM_KOMPLETT_EXTRAKTION / figurenBasisRules.
@@ -1011,3 +1000,207 @@ ${PROBLEME_RULES}`;
 export function buildLektoratPrompt(text, opts = {}) {
   return _buildLektoratPromptBody(text, 'Originaltext:', opts);
 }
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+// JSON-Schemas für Grammar-Constrained Decoding (nur lokale Provider)
+// ═════════════════════════════════════════════════════════════════════════════
+// Werden als `format: <schema>` (Ollama) bzw. `response_format: { type: 'json_schema', ... }`
+// (LM Studio/llama.cpp) an den Server übergeben. llama.cpp baut daraus eine GBNF-Grammatik,
+// die während des Samplings erzwingt: gültiges JSON, korrekt escapete Strings, Typ-Einhaltung.
+//
+// Strict-Regeln (LM Studio json_schema mit strict:true):
+// - `additionalProperties: false` auf jedem object-Level
+// - Jedes object-Property im `required`-Array
+// - Enums nur wo Werte stabil und klein sind
+//
+// Claude verwendet keine Schemas – callAI ignoriert das Argument für Claude.
+//
+// Hilfsfunktion: schlankes Objekt-Schema mit strict-Defaults.
+function _obj(properties, { addl = false } = {}) {
+  return {
+    type: 'object',
+    additionalProperties: addl,
+    required: Object.keys(properties),
+    properties,
+  };
+}
+const _str = { type: 'string' };
+const _num = { type: 'number' };
+
+// ── Lektorat (check + batch-check) ───────────────────────────────────────────
+// Enum-Werte müssen mit typEnum in _buildLektoratPromptBody (Slim-Variante) übereinstimmen.
+export const SCHEMA_LEKTORAT = _obj({
+  fehler: {
+    type: 'array',
+    items: _obj({
+      typ: { type: 'string', enum: ['rechtschreibung', 'grammatik', 'stil', 'wiederholung', 'schwaches_verb', 'fuellwort'] },
+      original: _str,
+      korrektur: _str,
+      kontext: _str,
+      erklaerung: _str,
+    }),
+  },
+  szenen: {
+    type: 'array',
+    items: _obj({
+      titel: _str,
+      wertung: { type: 'string', enum: ['stark', 'mittel', 'schwach'] },
+      kommentar: _str,
+    }),
+  },
+  stilanalyse: _str,
+  fazit: _str,
+});
+
+// ── Komplett-Extraktion (pro Kapitel) ────────────────────────────────────────
+// Typ-Enums bewusst permissiv (type: string ohne enum), weil das Modell hier
+// freiere Bezeichnungen produziert und strikte Enums das Sampling blockieren
+// könnten. Wichtig ist die Grammatik-Struktur, nicht die Feld-Werte.
+const _figurSchema = _obj({
+  id: _str,
+  name: _str,
+  kurzname: _str,
+  typ: _str,
+  geburtstag: _str,
+  geschlecht: _str,
+  beruf: _str,
+  beschreibung: _str,
+  sozialschicht: _str,
+  eigenschaften: { type: 'array', items: _str },
+  kapitel: { type: 'array', items: _obj({ name: _str, haeufigkeit: _num }) },
+  beziehungen: {
+    type: 'array',
+    items: _obj({ figur_id: _str, typ: _str, machtverhaltnis: _num, beschreibung: _str }),
+  },
+});
+const _ortSchema = _obj({
+  id: _str,
+  name: _str,
+  typ: _str,
+  beschreibung: _str,
+  erste_erwaehnung: _str,
+  stimmung: _str,
+  kapitel: { type: 'array', items: _obj({ name: _str, haeufigkeit: _num }) },
+  figuren: { type: 'array', items: _str },
+});
+const _faktSchema = _obj({ kategorie: _str, subjekt: _str, fakt: _str, seite: _str });
+export const SCHEMA_KOMPLETT_EXTRAKTION = _obj({
+  figuren: { type: 'array', items: _figurSchema },
+  orte: { type: 'array', items: _ortSchema },
+  fakten: { type: 'array', items: _faktSchema },
+  szenen: {
+    type: 'array',
+    items: _obj({
+      seite: _str,
+      kapitel: _str,
+      titel: _str,
+      wertung: { type: 'string', enum: ['stark', 'mittel', 'schwach'] },
+      kommentar: _str,
+      figuren_namen: { type: 'array', items: _str },
+      orte_namen: { type: 'array', items: _str },
+    }),
+  },
+  assignments: {
+    type: 'array',
+    items: _obj({
+      figur_name: _str,
+      lebensereignisse: {
+        type: 'array',
+        items: _obj({
+          datum: _str,
+          ereignis: _str,
+          typ: { type: 'string', enum: ['persoenlich', 'extern'] },
+          bedeutung: _str,
+          seite: _str,
+          kapitel: _str,
+        }),
+      },
+    }),
+  },
+});
+
+// ── Konsolidierungen (Komplett-Pipeline) ─────────────────────────────────────
+export const SCHEMA_FIGUREN_KONSOL = _obj({ figuren: { type: 'array', items: _figurSchema } });
+export const SCHEMA_ORTE_KONSOL    = _obj({ orte:    { type: 'array', items: _ortSchema } });
+
+export const SCHEMA_BEZIEHUNGEN = _obj({
+  beziehungen: {
+    type: 'array',
+    items: _obj({ von: _str, zu: _str, typ: _str, machtverhaltnis: _num, beschreibung: _str }),
+  },
+});
+
+export const SCHEMA_ZEITSTRAHL = _obj({
+  ereignisse: {
+    type: 'array',
+    items: _obj({
+      datum: _str,
+      ereignis: _str,
+      typ: { type: 'string', enum: ['persoenlich', 'extern'] },
+      bedeutung: _str,
+      kapitel: { type: 'array', items: _str },
+      seiten: { type: 'array', items: _str },
+      figuren: { type: 'array', items: _obj({ id: _str, name: _str, typ: _str }) },
+    }),
+  },
+});
+
+// ── Kontinuitätsprüfung ──────────────────────────────────────────────────────
+export const SCHEMA_KONTINUITAET_FAKTEN = _obj({
+  fakten: { type: 'array', items: _faktSchema },
+});
+export const SCHEMA_KONTINUITAET_PROBLEME = _obj({
+  probleme: {
+    type: 'array',
+    items: _obj({
+      schwere: { type: 'string', enum: ['kritisch', 'mittel', 'niedrig'] },
+      typ: _str,
+      beschreibung: _str,
+      stelle_a: _str,
+      stelle_b: _str,
+      figuren: { type: 'array', items: _str },
+      kapitel: { type: 'array', items: _str },
+      empfehlung: _str,
+    }),
+  },
+  zusammenfassung: _str,
+});
+
+// ── Review ───────────────────────────────────────────────────────────────────
+export const SCHEMA_REVIEW = _obj({
+  gesamtnote: _num,
+  gesamtnote_begruendung: _str,
+  zusammenfassung: _str,
+  struktur: _str,
+  stil: _str,
+  staerken: { type: 'array', items: _str },
+  schwaechen: { type: 'array', items: _str },
+  empfehlungen: { type: 'array', items: _str },
+  fazit: _str,
+});
+export const SCHEMA_CHAPTER_ANALYSIS = _obj({
+  themen: _str,
+  stil: _str,
+  qualitaet: _str,
+  staerken: { type: 'array', items: _str },
+  schwaechen: { type: 'array', items: _str },
+});
+
+// ── Chat ─────────────────────────────────────────────────────────────────────
+export const SCHEMA_CHAT = _obj({
+  antwort: _str,
+  vorschlaege: {
+    type: 'array',
+    items: _obj({ original: _str, ersatz: _str, begruendung: _str }),
+  },
+});
+export const SCHEMA_BOOK_CHAT = _obj({ antwort: _str });
+
+// ── Stilkorrektur ────────────────────────────────────────────────────────────
+export const SCHEMA_STILKORREKTUR = _obj({
+  korrekturen: {
+    type: 'array',
+    items: _obj({ original: _str, ersatz: _str }),
+  },
+});

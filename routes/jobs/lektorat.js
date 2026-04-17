@@ -43,7 +43,7 @@ const lektoratRouter = express.Router();
 // ── Job: Seiten-Lektorat ──────────────────────────────────────────────────────
 async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
-  const { buildLektoratPrompt } = await getPrompts();
+  const { buildLektoratPrompt, SCHEMA_LEKTORAT } = await getPrompts();
   const { SYSTEM_LEKTORAT, STOPWORDS: lektoratStopwords, ERKLAERUNG_RULE: lektoratErklaerungRule, KORREKTUR_REGELN: lektoratKorrekturRegeln } = await getBookPrompts(bookId);
   const locale = bookId ? getBookLocale(bookId) : 'de-CH';
   try {
@@ -65,7 +65,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     const result = await aiCall(jobId, tok,
       buildLektoratPrompt(text, { stopwords: lektoratStopwords, erklaerungRule: lektoratErklaerungRule, korrekturRegeln: lektoratKorrekturRegeln, figuren }),
       SYSTEM_LEKTORAT,
-      10, 97, 5000,
+      10, 97, 5000, 0.2, null, undefined, SCHEMA_LEKTORAT,
     );
 
     if (!Array.isArray(result?.fehler)) throw new Error('fehler-Array fehlt');
@@ -104,7 +104,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
 // ── Job: Batch-Lektorat ───────────────────────────────────────────────────────
 async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
-  const { buildBatchLektoratPrompt } = await getPrompts();
+  const { buildBatchLektoratPrompt, SCHEMA_LEKTORAT } = await getPrompts();
   const { SYSTEM_LEKTORAT, STOPWORDS: batchStopwords, ERKLAERUNG_RULE: batchErklaerungRule, KORREKTUR_REGELN: batchKorrekturRegeln } = await getBookPrompts(bookId);
   const locale = getBookLocale(bookId);
   try {
@@ -136,7 +136,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
         const result = await aiCall(jobId, tok,
           buildBatchLektoratPrompt(text, { stopwords: batchStopwords, erklaerungRule: batchErklaerungRule, korrekturRegeln: batchKorrekturRegeln, figuren: batchFiguren }),
           SYSTEM_LEKTORAT,
-          fromPct, toPct, 2000,
+          fromPct, toPct, 2000, 0.2, null, undefined, SCHEMA_LEKTORAT,
         );
 
         if (!Array.isArray(result?.fehler)) throw new Error('fehler-Array fehlt');

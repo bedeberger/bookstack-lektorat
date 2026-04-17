@@ -16,7 +16,7 @@ const reviewRouter = express.Router();
 // ── Job: Buchbewertung ────────────────────────────────────────────────────────
 async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
-  const { buildBookReviewSinglePassPrompt, buildChapterAnalysisPrompt, buildBookReviewMultiPassPrompt } = await getPrompts();
+  const { buildBookReviewSinglePassPrompt, buildChapterAnalysisPrompt, buildBookReviewMultiPassPrompt, SCHEMA_REVIEW, SCHEMA_CHAPTER_ANALYSIS } = await getPrompts();
   const { SYSTEM_BUCHBEWERTUNG, SYSTEM_KAPITELANALYSE } = await getBookPrompts(bookId);
   try {
     updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
@@ -49,7 +49,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
       r = await aiCall(jobId, tok,
         buildBookReviewSinglePassPrompt(bookName, pageContents.length, bookText),
         SYSTEM_BUCHBEWERTUNG,
-        65, 97, 5000, 0.2, null,
+        65, 97, 5000, 0.2, null, undefined, SCHEMA_REVIEW,
       );
     } else {
       const chapterAnalyses = [];
@@ -68,7 +68,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
         const ca = await aiCall(jobId, tok,
           buildChapterAnalysisPrompt(group.name, bookName, group.pages.length, chText),
           SYSTEM_KAPITELANALYSE,
-          fromPct, toPct, 1500, 0.2, null,
+          fromPct, toPct, 1500, 0.2, null, undefined, SCHEMA_CHAPTER_ANALYSIS,
         );
         completed++;
         logger.info(`[${completed}/${groupOrder.length}] «${group.name}» analysiert (${group.pages.length} Seiten)`);
@@ -88,7 +88,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
       r = await aiCall(jobId, tok,
         buildBookReviewMultiPassPrompt(bookName, chapterAnalyses, pageContents.length),
         SYSTEM_BUCHBEWERTUNG,
-        90, 97, 5000, 0.2, null,
+        90, 97, 5000, 0.2, null, undefined, SCHEMA_REVIEW,
       );
     }
 

@@ -54,7 +54,7 @@ function _bookChatBuildHistory(sessionId, tailMessages = 10) {
 // ── Job: Chat ─────────────────────────────────────────────────────────────────
 async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
-  const { buildChatSystemPrompt } = await getPrompts();
+  const { buildChatSystemPrompt, SCHEMA_CHAT } = await getPrompts();
   try {
     updateJob(jobId, { statusText: 'Vorbereitung…', progress: 5 });
 
@@ -106,7 +106,7 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
     };
 
     const signal = jobAbortControllers.get(jobId)?.signal;
-    const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress, null, signal);
+    const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress, null, signal, undefined, SCHEMA_CHAT);
 
     const { antwort, vorschlaege } = _parseChatResponse(text);
     if (antwort === text && vorschlaege.length === 0) {
@@ -170,7 +170,7 @@ function _scorePageRelevance(query, text, stopwords = _BOOK_CHAT_STOPWORDS) {
 
 async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
-  const { buildBookChatSystemPrompt } = await getPrompts();
+  const { buildBookChatSystemPrompt, SCHEMA_BOOK_CHAT } = await getPrompts();
   try {
     updateJob(jobId, { statusText: 'Vorbereitung…', progress: 5 });
 
@@ -309,7 +309,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
       updateJob(jobId, updates);
     };
 
-    const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress, null, jobSignal);
+    const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress, null, jobSignal, undefined, SCHEMA_BOOK_CHAT);
 
     const { antwort } = _parseChatResponse(text);
     if (antwort === text) {

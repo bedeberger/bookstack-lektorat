@@ -269,7 +269,7 @@ async function runPhase1(ctx) {
     updateJob(jobId, { progress: 12, statusText: 'KI extrahiert Figuren, Schauplätze, Fakten, Szenen…' });
     const r = await call(jobId, tok,
       prompts.buildExtraktionKomplettChapterPrompt('Gesamtbuch', bookName, pageContents.length, fullBookText),
-      sys.SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 16000,
+      sys.SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 16000, 0.2, null, prompts.SCHEMA_KOMPLETT_EXTRAKTION,
     );
     chapterFiguren     = [{ kapitel: 'Gesamtbuch', figuren:     r?.figuren     || [] }];
     chapterOrte        = [{ kapitel: 'Gesamtbuch', orte:        r?.orte        || [] }];
@@ -306,7 +306,7 @@ async function runPhase1(ctx) {
         log.info(`Job ${jobId}: ${chunkLabel} – Cache-MISS, KI-Call…`);
         const result = await call(jobId, tok,
           prompts.buildExtraktionKomplettChapterPrompt(chunk.name, bookName, chunk.pages.length, chText),
-          sys.SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 14000,
+          sys.SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 14000, 0.2, null, prompts.SCHEMA_KOMPLETT_EXTRAKTION,
         );
         saveChapterExtractCache(bookIdInt, email, key, pagesSig, result);
         log.info(`Job ${jobId}: ${chunkLabel} – OK (fig=${result?.figuren?.length ?? 0} orte=${result?.orte?.length ?? 0} sz=${result?.szenen?.length ?? 0}).`);
@@ -353,7 +353,7 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments) {
   updateJob(jobId, { progress: 30, statusText: 'KI konsolidiert Figuren…' });
   const figResult = await call(jobId, tok,
     prompts.buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren, sys.BUCH_KONTEXT || ''),
-    sys.SYSTEM_FIGUREN, 30, 43, 8000,
+    sys.SYSTEM_FIGUREN, 30, 43, 8000, 0.2, null, prompts.SCHEMA_FIGUREN_KONSOL,
   );
   if (!Array.isArray(figResult?.figuren)) throw new Error('Figuren-Konsolidierung ungültig: figuren-Array fehlt');
   const figuren = figResult.figuren.map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
@@ -385,7 +385,7 @@ async function runPhase3(ctx, chapterOrte, figurenKompakt) {
   updateJob(jobId, { progress: 43, statusText: 'Schauplätze konsolidieren…' });
   const orteResultRaw = await call(jobId, tok,
     prompts.buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt),
-    sys.SYSTEM_ORTE, 43, 55, 6000,
+    sys.SYSTEM_ORTE, 43, 55, 6000, 0.2, null, prompts.SCHEMA_ORTE_KONSOL,
   );
   if (!Array.isArray(orteResultRaw?.orte)) throw new Error('Orte-Konsolidierung ungültig: orte-Array fehlt');
   const orte = orteResultRaw.orte.map((o, i) => ({ ...o, id: o.id || ('ort_' + (i + 1)) }));
@@ -415,7 +415,7 @@ async function runPhase3b(ctx, figuren) {
     : fullBookText.slice(0, singlePassLimit);
   const bzResult = await call(jobId, tok,
     prompts.buildKapiteluebergreifendeBeziehungenPrompt(bookName, figuren, textForPrompt),
-    sys.SYSTEM_FIGUREN, 55, 58, 2000,
+    sys.SYSTEM_FIGUREN, 55, 58, 2000, 0.2, null, prompts.SCHEMA_BEZIEHUNGEN,
   );
   const newBz = Array.isArray(bzResult?.beziehungen) ? bzResult.beziehungen : [];
   if (newBz.length > 0) addFigurenBeziehungen(bookIdInt, newBz, email);
@@ -459,7 +459,7 @@ async function runZeitstrahl(ctx) {
   const zeitstrahlEvents = [...evtGroupMap.values()].sort((a, b) => parseInt(a.datum) - parseInt(b.datum));
   const ztResult = await call(jobId, tok,
     prompts.buildZeitstrahlConsolidationPrompt(zeitstrahlEvents),
-    sys.SYSTEM_ZEITSTRAHL, 83, 89, 3000, 0.2, null,
+    sys.SYSTEM_ZEITSTRAHL, 83, 89, 3000, 0.2, null, prompts.SCHEMA_ZEITSTRAHL,
   );
   if (Array.isArray(ztResult?.ereignisse)) {
     saveZeitstrahlEvents(bookIdInt, email, ztResult.ereignisse, idMaps.chNameToId);
@@ -481,7 +481,10 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
   const bookIdInt = parseInt(bookId);
   const email = userEmail || null;
   const log = makeJobLogger(jobId);
-  const call = (...args) => aiCall(...args, provider);
+  // call akzeptiert optional ein JSON-Schema als letztes Argument (11. Position in aiCall).
+  // Schemas werden nur von lokalen Providern (ollama/llama) verwendet – Claude ignoriert sie.
+  const call = (jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, schema) =>
+    aiCall(jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, provider, schema);
   const effectiveProvider = provider || process.env.API_PROVIDER || 'claude';
   // Claude hat 200K Token Kontextfenster (~600K deutsche Zeichen) – Single-Pass für fast alle Bücher.
   // ollama / llama: bewusst 60K Limit → Multi-Pass mit Delta-Cache.
@@ -583,13 +586,13 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
           log.info(`Job ${jobId}: Kontinuität Single-Pass: ${fullBookText.length} Zeichen, ${figKompakt.length} Figuren, ${orteKompakt.length} Orte`);
           kontResult = await call(jobId, tok,
             prompts.buildKontinuitaetSinglePassPrompt(bookName, fullBookText, figKompakt, orteKompakt),
-            sys.SYSTEM_KONTINUITAET, 89, 97, 5000,
+            sys.SYSTEM_KONTINUITAET, 89, 97, 5000, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
           );
         } else {
           log.info(`Job ${jobId}: Kontinuität facts-basiert: ${chapterFakten.length} Kapitel, ${figKompakt.length} Figuren`);
           kontResult = await call(jobId, tok,
             prompts.buildKontinuitaetCheckPrompt(bookName, chapterFakten, figKompakt, orteKompakt),
-            sys.SYSTEM_KONTINUITAET, 89, 97, effectiveProvider === 'claude' ? 5000 : 2500,
+            sys.SYSTEM_KONTINUITAET, 89, 97, effectiveProvider === 'claude' ? 5000 : 2500, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
           );
         }
         saveKontinuitaetResult(bookIdInt, email, kontResult, figNameToId, idMaps.chNameToId, effectiveProvider, log, jobId);
@@ -617,7 +620,8 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
   const bookIdInt = parseInt(bookId);
   const email = userEmail || null;
   const log = makeJobLogger(jobId);
-  const call = (...args) => aiCall(...args, provider);
+  const call = (jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, schema) =>
+    aiCall(jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, provider, schema);
   const effectiveProvider = provider || process.env.API_PROVIDER || 'claude';
   const singlePassLimit = effectiveProvider === 'claude' ? 250_000 : SINGLE_PASS_LIMIT;
   const prompts = await getPrompts();
@@ -667,7 +671,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
       const bookText = buildSinglePassBookText(groups, groupOrder);
       result = await call(jobId, tok,
         prompts.buildKontinuitaetSinglePassPrompt(bookName, bookText, figurenKompakt, orteKompakt),
-        sys.SYSTEM_KONTINUITAET, 60, 97, 5000,
+        sys.SYSTEM_KONTINUITAET, 60, 97, 5000, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
       );
     } else {
       // Multi-Pass: Fakten pro Kapitel extrahieren – ggf. aus Checkpoint fortsetzen
@@ -688,7 +692,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
         try {
           const chResult = await call(jobId, tok,
             prompts.buildKontinuitaetChapterFactsPrompt(group.name, chText),
-            sys.SYSTEM_KONTINUITAET, fromPct, toPct, 1500,
+            sys.SYSTEM_KONTINUITAET, fromPct, toPct, 1500, 0.2, null, prompts.SCHEMA_KONTINUITAET_FAKTEN,
           );
           chapterFacts.push({ kapitel: group.name, fakten: chResult.fakten || [] });
         } catch (e) {
@@ -701,7 +705,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
       updateJob(jobId, { progress: 88, statusText: 'KI prüft Widersprüche…' });
       result = await call(jobId, tok,
         prompts.buildKontinuitaetCheckPrompt(bookName, chapterFacts, figurenKompakt, orteKompakt),
-        sys.SYSTEM_KONTINUITAET, 88, 97, 5000,
+        sys.SYSTEM_KONTINUITAET, 88, 97, 5000, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
       );
     }
 
