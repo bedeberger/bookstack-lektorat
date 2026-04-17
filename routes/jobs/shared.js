@@ -543,6 +543,7 @@ const JOB_TYPE_LABELS = {
   'review':           'Buchbewertung',
   'book-chat':        'Buch-Chat',
   'chat':             'Seiten-Chat',
+  'synonym':          'Synonymsuche',
 };
 
 function fmtDuration(seconds) {

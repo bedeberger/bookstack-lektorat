@@ -27,6 +27,8 @@ export const editorEditMethods = {
     this.editMode = false;
     this.editDirty = false;
     this.editSaving = false;
+    this.closeSynonymMenu?.();
+    this.closeSynonymPicker?.();
   },
 
   async saveEdit() {
@@ -84,6 +86,8 @@ export const editorEditMethods = {
 
       this.editMode = false;
       this.editDirty = false;
+      this.closeSynonymMenu?.();
+      this.closeSynonymPicker?.();
       this.updatePageView();
       this.setStatus('✓ Änderungen gespeichert.', false, 5000);
     } catch (e) {

@@ -1002,6 +1002,28 @@ export function buildLektoratPrompt(text, opts = {}) {
   return _buildLektoratPromptBody(text, 'Originaltext:', opts);
 }
 
+// ── Synonym-Suche (Kontextmenü im Editor) ────────────────────────────────────
+export function buildSynonymPrompt(wort, satz) {
+  return `Schlage 5 bis 8 Synonyme für das Wort «${wort}» vor, die im gegebenen Satzkontext passen. Nur einzelne Ersatzwörter, keine Umschreibungen oder Satzumbauten.
+
+Regeln:
+- Exakt gleiche Wortart und grammatische Form (Kasus, Numerus, Tempus, Geschlecht) wie das Originalwort im Satz
+- Bedeutung im Kontext muss erhalten bleiben
+- Stil, Ton und Register des Autors berücksichtigen
+- Keine offensichtlich unpassenden oder weit entfernten Begriffe
+- Duplikate und das Originalwort selbst vermeiden
+
+Antworte mit diesem JSON-Schema:
+{
+  "synonyme": [
+    { "wort": "das Ersatzwort", "hinweis": "kurze Note zu Register/Konnotation, z.B. «gehoben», «umgangssprachlich», «stärker» – darf leer sein" }
+  ]
+}
+
+Satz: ${satz}
+Wort: ${wort}`;
+}
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 // JSON-Schemas für Grammar-Constrained Decoding (nur lokale Provider)
@@ -1203,5 +1225,13 @@ export const SCHEMA_STILKORREKTUR = _obj({
   korrekturen: {
     type: 'array',
     items: _obj({ original: _str, ersatz: _str }),
+  },
+});
+
+// ── Synonym-Suche ────────────────────────────────────────────────────────────
+export const SCHEMA_SYNONYM = _obj({
+  synonyme: {
+    type: 'array',
+    items: _obj({ wort: _str, hinweis: _str }),
   },
 });

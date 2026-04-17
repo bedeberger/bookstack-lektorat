@@ -7,6 +7,7 @@ const { lektoratRouter } = require('./jobs/lektorat');
 const { reviewRouter } = require('./jobs/review');
 const { komplettRouter, runKomplettAnalyseAll } = require('./jobs/komplett');
 const { chatRouter } = require('./jobs/chat');
+const { synonymeRouter } = require('./jobs/synonyme');
 
 // Feature-Router zuerst mounten – sharedRouter zuletzt, weil GET /:id und DELETE /:id
 // als Catch-All wirken und sonst spezifischere Routen (z.B. DELETE /book-chat-cache,
@@ -15,6 +16,7 @@ router.use('/', lektoratRouter);
 router.use('/', reviewRouter);
 router.use('/', komplettRouter);
 router.use('/', chatRouter);
+router.use('/', synonymeRouter);
 router.use('/', sharedRouter);
 
 module.exports = { router, runKomplettAnalyseAll };

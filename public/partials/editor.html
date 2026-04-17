@@ -3,7 +3,9 @@
   <div class="card-header">
     <div>
       <span class="card-title" x-text="'Lektorat: ' + (currentPage?.name || '–')"></span>
-      <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag tag--link" x-text="currentPage ? 'ID ' + currentPage.id + ' ↗' : ''"></a>
+      <span class="mode-pill" :class="editMode ? 'mode-pill--edit' : 'mode-pill--read'"
+            x-text="editMode ? 'Bearbeiten' : 'Lesen'"></span>
+      <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag tag--link">In BookStack öffnen</a>
       <span x-show="currentPage && tokEsts[currentPage.id]" class="tok-stats">
         <template x-if="tokEsts[currentPage?.id]?.words > 0">
           <span class="display-contents">
@@ -76,7 +78,67 @@
   </template>
 
   <!-- Manuelle Bearbeitung (contenteditable) -->
-  <div x-show="editMode" x-ref="editArea" class="page-content-view page-content-view--editing" contenteditable="true" spellcheck="true" @input="_markEditDirty()"></div>
+  <div x-show="editMode" x-ref="editArea" class="page-content-view page-content-view--editing" contenteditable="true" spellcheck="true" @input="_markEditDirty()" @contextmenu="_onEditContextMenu($event)"></div>
+
+  <!-- Synonym-Kontextmenü (an body teleportiert, damit position:fixed
+       nicht vom card-Transform-Context eingefangen wird) -->
+  <template x-teleport="body">
+    <div x-show="showSynonymMenu" x-cloak class="synonym-menu"
+         :style="{ left: synonymMenuX + 'px', top: synonymMenuY + 'px' }"
+         @click.outside="closeSynonymMenu()"
+         @keydown.escape.window="closeSynonymMenu()">
+      <button class="synonym-menu-btn" @click="requestSynonyms()">
+        Synonym suchen für «<span x-text="_synonymWord"></span>»
+      </button>
+    </div>
+  </template>
+
+  <!-- Synonym-Picker -->
+  <template x-teleport="body">
+    <div x-show="showSynonymPicker" x-cloak class="synonym-picker"
+         :style="{ left: synonymMenuX + 'px', top: synonymMenuY + 'px' }"
+         @click.outside="closeSynonymPicker()"
+         @keydown.escape.window="closeSynonymPicker()">
+      <div class="synonym-picker-header">
+        <span>Synonyme für «<span x-text="_synonymWord"></span>»</span>
+        <button class="synonym-picker-close" @click="closeSynonymPicker()" title="Schliessen">×</button>
+      </div>
+
+      <div class="synonym-picker-body">
+        <div class="synonym-picker-section" x-show="!synonymLeipzigDisabled">
+          <div class="synonym-picker-subheader">Wortschatz Leipzig</div>
+          <div x-show="synonymLeipzigLoading" class="synonym-picker-loading">
+            <span class="spinner"></span> Lade…
+          </div>
+          <div x-show="!synonymLeipzigLoading && synonymLeipzigError" class="synonym-picker-error" x-text="synonymLeipzigError"></div>
+          <div x-show="!synonymLeipzigLoading && !synonymLeipzigError && synonymLeipzigList.length > 0" class="synonym-picker-list">
+            <template x-for="(s, i) in synonymLeipzigList" :key="'l'+i">
+              <button class="synonym-entry" @click="applySynonym(s)">
+                <span class="synonym-word" x-text="s.wort"></span>
+                <span x-show="s.hinweis" class="synonym-hint" x-text="s.hinweis"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <div class="synonym-picker-section">
+          <div class="synonym-picker-subheader">KI-Vorschläge</div>
+          <div x-show="synonymKiLoading" class="synonym-picker-loading">
+            <span class="spinner"></span> KI sucht…
+          </div>
+          <div x-show="!synonymKiLoading && synonymKiError" class="synonym-picker-error" x-text="synonymKiError"></div>
+          <div x-show="!synonymKiLoading && !synonymKiError && synonymKiList.length > 0" class="synonym-picker-list">
+            <template x-for="(s, i) in synonymKiList" :key="'k'+i">
+              <button class="synonym-entry" @click="applySynonym(s)">
+                <span class="synonym-word" x-text="s.wort"></span>
+                <span x-show="s.hinweis" class="synonym-hint" x-text="s.hinweis"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
 
   <!-- Formatierte Seitenansicht (vor Check) -->
   <div x-show="renderedPageHtml && !checkDone && !editMode" class="page-content-view" x-html="renderedPageHtml" @click="handleMarkClick($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>

@@ -20,6 +20,7 @@ import { kontinuitaetMethods } from './kontinuitaet.js';
 import { bookSettingsMethods } from './book-settings.js';
 import { pageViewMethods } from './page-view.js';
 import { editorEditMethods } from './editor-edit.js';
+import { synonymMethods } from './editor-synonyme.js';
 
 const FIGUR_TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, andere: 4 };
 
@@ -166,6 +167,21 @@ document.addEventListener('alpine:init', () => {
     editMode: false,
     editDirty: false,
     editSaving: false,
+    showSynonymMenu: false,
+    synonymMenuX: 0,
+    synonymMenuY: 0,
+    showSynonymPicker: false,
+    synonymLeipzigList: [],
+    synonymLeipzigLoading: false,
+    synonymLeipzigError: '',
+    synonymLeipzigDisabled: false,
+    synonymKiList: [],
+    synonymKiLoading: false,
+    synonymKiError: '',
+    _synonymRange: null,
+    _synonymWord: '',
+    _synonymPollTimer: null,
+    _synonymScrollHandler: null,
     showBookCard: false,
     showTreeCard: true,
     showEditorCard: false,
@@ -1032,6 +1048,9 @@ document.addEventListener('alpine:init', () => {
     // Setzt allen Seiten-Level-State zurück (Editor, Lektorat, Chat, History).
     resetPage() {
       if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
+      if (this._synonymPollTimer) { clearInterval(this._synonymPollTimer); this._synonymPollTimer = null; }
+      this.showSynonymMenu = false;
+      this.showSynonymPicker = false;
       this.resetChat();
       this.currentPage = null;
       this.currentPageEmpty = false;
@@ -1187,5 +1206,6 @@ document.addEventListener('alpine:init', () => {
     ...bookSettingsMethods,
     ...pageViewMethods,
     ...editorEditMethods,
+    ...synonymMethods,
   }));
 });
