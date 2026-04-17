@@ -16,7 +16,10 @@ let _prompts = null;
 async function getPrompts() {
   if (!_prompts) {
     _prompts = await import(pathToFileURL(path.resolve(__dirname, '../../public/js/prompts.js')).href);
-    _prompts.configurePrompts(_promptConfig);
+    // Provider mitgeben, damit prompts.js für ollama/llama die Slim-Variante baut
+    // (kompaktere commonRules, keine Beispiele, JSON_ONLY entfällt – Grammar-Constrained
+    // JSON-Output von lib/ai.js erzwingt valides JSON ohne explizite Anweisung).
+    _prompts.configurePrompts(_promptConfig, process.env.API_PROVIDER || 'claude');
   }
   return _prompts;
 }

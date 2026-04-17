@@ -1026,21 +1026,25 @@ ins {
   margin-left: 2px;
 }
 
-/* Chat-Änderungsvorschläge im Preview (blau, optisch getrennt vom Lektorat-Gelb) */
+/* Chat-Änderungsvorschläge im Preview – gleicher Look wie Lektorat-Korrekturen:
+   rötliches Durchstreichen für den Originaltext + grünes Insert für den Vorschlag. */
 .chat-mark {
   position: relative;
-  background: rgba(70, 150, 230, 0.18);
-  border-bottom: 2px solid #2b74c7;
+  background: rgba(220, 60, 60, 0.10);
+  border-bottom: 2px solid #d33;
   border-radius: 2px;
+  text-decoration: line-through;
+  text-decoration-color: rgba(200, 50, 50, 0.5);
+  color: #999;
   transition: background 0.2s;
 }
-.chat-mark:hover { background: rgba(70, 150, 230, 0.32); }
+.chat-mark:hover { background: rgba(220, 60, 60, 0.18); }
 
 .chat-mark-ins {
   text-decoration: none;
-  color: #2b74c7;
+  color: #1a7f37;
   font-weight: 700;
-  background: rgba(70, 150, 230, 0.13);
+  background: rgba(34, 170, 90, 0.13);
   border-radius: 2px;
   padding: 0 2px;
   margin-left: 2px;

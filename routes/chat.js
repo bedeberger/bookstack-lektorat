@@ -338,6 +338,7 @@ async function _streamLlama(messages, systemPrompt, res, onText, onTokens) {
       stream: true,
       stream_options: { include_usage: true },
       temperature: parseFloat(process.env.LLAMA_TEMPERATURE || '0.1'),
+      response_format: { type: 'json_object' },
     }),
   });
 
@@ -394,7 +395,7 @@ async function _streamOllama(messages, systemPrompt, res, onText, onTokens) {
   const upstream = await fetch(`${ollamaHost}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: ollamaMessages, stream: true, options: { think: false } }),
+    body: JSON.stringify({ model, messages: ollamaMessages, stream: true, format: 'json', options: { think: false } }),
   });
 
   if (!upstream.ok) {

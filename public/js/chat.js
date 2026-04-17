@@ -1,4 +1,4 @@
-import { escHtml, fmtTok, SAFETY_HTML_RATIO } from './utils.js';
+import { escHtml, fmtTok } from './utils.js';
 import { makeChatMethods } from './chat-base.js';
 
 // Seiten-Chat-Methoden (werden in die Alpine-Komponente gespreadet).
@@ -61,37 +61,53 @@ export const chatMethods = {
   // ── Seiten-Chat-spezifisch: Vorschlag übernehmen ──────────────────────────
 
   async applyChatVorschlag(vorschlag, msgIdx, vIdx) {
-    const setErr = (msg) => { this.chatMessages[msgIdx].vorschlaege[vIdx]._error = msg; };
+    const v = () => this.chatMessages[msgIdx].vorschlaege[vIdx];
+    const setErr = (msg) => { v()._error = msg; };
 
     if (!this.currentPage) {
       setErr('Seiteninhalt nicht geladen – bitte Seite neu auswählen.');
       return;
     }
 
+    // Vorab prüfen ob der Originaltext noch existiert – sonst meldet _loadApplyAndSave
+    // nur einen No-Op, was sich fälschlich wie ein Erfolg anfühlt.
     try {
       const page = await this.bsGet('pages/' + this.currentPage.id);
       if (page.html.indexOf(vorschlag.original) === -1) {
         setErr('Originaltext nicht mehr in der Seite gefunden.');
         return;
       }
-      const newHtml = this._applyCorrections(page.html, [
-        { original: vorschlag.original, korrektur: vorschlag.ersatz },
-      ]);
-      if (newHtml.length < page.html.length * SAFETY_HTML_RATIO) {
-        setErr('Korrigiertes HTML wirkt unvollständig – Speichern abgebrochen.');
-        return;
-      }
-      await this.bsPut('pages/' + this.currentPage.id, { html: newHtml, name: this.currentPage.name });
-      this.originalHtml = newHtml;
+    } catch {
+      setErr('Seiteninhalt konnte nicht geladen werden.');
+      return;
+    }
+
+    v()._applying = true;
+    v()._error = null;
+    try {
+      // Gleiche Pipeline wie beim Lektorat: laden → anwenden → Safety-Check → speichern.
+      // onProgress setzt saveApplying (→ Editor-Progressbar) und chatStatus.
+      const finalHtml = await this._loadApplyAndSave(
+        [{ original: vorschlag.original, korrektur: vorschlag.ersatz }],
+        [],
+        (pct, text) => {
+          this.saveApplying = pct;
+          if (text) this.chatStatus = `<span class="spinner"></span>${escHtml(text)}`;
+        },
+      );
+      this.originalHtml = finalHtml;
       this._chatPendingRefresh = true;
-      this.chatMessages[msgIdx].vorschlaege[vIdx]._applied = true;
-      this.chatMessages[msgIdx].vorschlaege[vIdx]._error = null;
+      v()._applied = true;
       this.updatePageView();
       this.chatStatus = '<span class="success-msg">Änderung in BookStack gespeichert.</span>';
       setTimeout(() => { if (this.chatStatus.includes('gespeichert')) this.chatStatus = ''; }, 3000);
     } catch (e) {
       console.error('[applyChatVorschlag]', e);
       setErr('Fehler beim Speichern: ' + e.message);
+      this.chatStatus = '';
+    } finally {
+      v()._applying = false;
+      this.saveApplying = null;
     }
   },
 

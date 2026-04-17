@@ -793,7 +793,7 @@ document.addEventListener('alpine:init', () => {
         this.currentUser = cfg.user || null;
         this.devMode = !!cfg.devMode;
         this.promptConfig = cfg.promptConfig || {};
-        configurePrompts(cfg.promptConfig);
+        configurePrompts(cfg.promptConfig, cfg.apiProvider || 'claude');
         if (!cfg.bookstackTokenOk) {
           this.showTokenSetup = true;
           return;

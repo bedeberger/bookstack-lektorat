@@ -2,9 +2,25 @@
 // da callAI() immer ein JSON-Objekt erwartet.
 const JSON_ONLY = 'Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach. Beginne deine Antwort direkt mit { und beende sie mit }.';
 
+// Provider-Flag – wird durch configurePrompts() gesetzt.
+// Für lokale Provider (ollama, llama) werden Prompts abgespeckt:
+// - JSON_ONLY entfällt, weil lib/ai.js Grammar-Constrained JSON-Output erzwingt (format: 'json' / response_format).
+// - commonRules wird durch eine kompakte Slim-Version ersetzt (Kernregel + Stilimitation statt ~600 Wörter Aufzählung).
+// - Lektorat-Prompts droppen Beispiele, WICHTIG-Paragrafen und spezialisierte Fehler-Typen.
+// - Komplett-Extraktions-Schema droppt lange Regeln (Schema bleibt, einzeilige Regeln statt Paragrafen).
+let _isLocal = false;
+function _jsonOnly() { return _isLocal ? '' : `\n\n${JSON_ONLY}`; }
+
+// Kompakte Ersatzregeln für commonRules[langCode] im Lokal-Modus.
+// Behält nur Kernregel + Stilimitation – keine Aufzählung «WAS GEMELDET WERDEN SOLL»
+// (die ist redundant mit den typ-spezifischen Rule-Blöcken in den Prompts selbst).
+const SLIM_COMMON_RULES = {
+  de: 'GRUNDREGEL: Nur eindeutig, zweifelsfrei falsche Stellen melden. Im Zweifel weglassen.\n\nAUTORENSTIL: Alle Korrekturen und Vorschläge müssen sich in den Stil des vorliegenden Textes einfügen (Satzbau, Rhythmus, Wortwahl, Ton) – als wären sie vom Autor selbst geschrieben.',
+  en: 'BASIC RULE: Only flag what is clearly and unambiguously wrong. When in doubt, leave it out.\n\nAUTHOR STYLE: All corrections and suggestions must fit the style of the given text (sentence structure, rhythm, word choice, tone) — as if written by the author themselves.',
+};
 
 function buildSystem(prefix, rules) {
-  return `${prefix}\n\n${rules}\n\n${JSON_ONLY}`;
+  return `${prefix}\n\n${rules}${_jsonOnly()}`;
 }
 
 // Für Chat-Prompts: Prefix + Rules, aber kein JSON_ONLY am Ende –
@@ -74,10 +90,14 @@ export let SYSTEM_KOMPLETT_EXTRAKTION   = null;
  * Unterstützt sowohl das neue Locales-Format (cfg.locales) als auch das alte Flat-Format
  * (cfg.baseRules direkt) für Rückwärtskompatibilität.
  * Pflichtaufruf beim App-Start – wirft einen Fehler wenn cfg fehlt.
- * @param {Object} cfg  promptConfig-Objekt aus /config
+ * @param {Object} cfg        promptConfig-Objekt aus /config
+ * @param {string} [provider] 'claude' | 'ollama' | 'llama' – Default: 'claude'.
+ *   Bei 'ollama'/'llama' werden die Prompts abgespeckt (siehe _isLocal oben).
  */
-export function configurePrompts(cfg) {
+export function configurePrompts(cfg, provider = 'claude') {
   if (!cfg) throw new Error('prompt-config.json fehlt oder ist ungültig – Prompts können nicht konfiguriert werden.');
+
+  _isLocal = provider === 'ollama' || provider === 'llama';
 
   _localeMap.clear();
   _rawLocales.clear();
@@ -90,7 +110,14 @@ export function configurePrompts(cfg) {
     const commonRules = cfg.commonRules || {};
     for (const [key, localeCfg] of Object.entries(cfg.locales)) {
       const langCode = key.split('-')[0];
-      const common = commonRules[langCode] || '';
+      // Für lokale Modelle wird commonRules durch eine Slim-Version ersetzt.
+      // Das Original enthält den grossen Meta-Block (GRUNDREGEL + WAS GEMELDET WERDEN SOLL +
+      // AUTORENSTIL IMITIEREN) – ~600 Wörter, die kleine Modelle überfordern.
+      // Slim behält nur Kernregel + Stilimitation. Der locale-eigene baseRules-Block
+      // (Orthografienorm) bleibt in beiden Modi – er ist essentiell.
+      const common = _isLocal
+        ? (SLIM_COMMON_RULES[langCode] || '')
+        : (commonRules[langCode] || '');
       const base = localeCfg.baseRules || '';
       const mergedCfg = {
         ...localeCfg,
@@ -299,15 +326,44 @@ function _buildLektoratPromptBody(text, textLabel, { stopwords = STOPWORDS, erkl
         return '- ' + parts.join(' | ');
       }).join('\n')}\nHinweis: Figurennamen und deren Varianten sind KEINE Rechtschreibfehler.\n`
     : '';
-  return `Analysiere den Text vollständig von Anfang bis Ende – nicht nur lokale Abschnitte oder die letzten Sätze – auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
 
-WICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen (z.B. ein Gallizismus und separate Anführungszeichen-Problematik), müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.
-${erklaerungRule ? `\nFILTER-PFLICHT: ${erklaerungRule}\n` : ''}${korrekturRegeln ? `\n${korrekturRegeln}\n` : ''}
+  // Lokaler Modus: kleinere Typ-Enum, keine Beispiele, keine spezialisierten Rule-Blöcke
+  // (show_vs_tell, passiv, perspektivbruch, tempuswechsel). Diese Typen verlangen nuanciertes
+  // Textverständnis, an dem kleine Modelle häufig scheitern oder in Wiederholungsloops geraten.
+  const typEnum = _isLocal
+    ? 'rechtschreibung|grammatik|stil|wiederholung|schwaches_verb|fuellwort'
+    : 'rechtschreibung|grammatik|stil|wiederholung|schwaches_verb|fuellwort|show_vs_tell|passiv|perspektivbruch|tempuswechsel';
+
+  const wichtigBlock = _isLocal
+    ? ''
+    : '\nWICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen (z.B. ein Gallizismus und separate Anführungszeichen-Problematik), müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.\n';
+
+  const filterBlock = _isLocal
+    ? ''
+    : `${erklaerungRule ? `\nFILTER-PFLICHT: ${erklaerungRule}\n` : ''}${korrekturRegeln ? `\n${korrekturRegeln}\n` : ''}`;
+
+  const beispielBlock = _isLocal ? '' : `
+Beispiel eines GUTEN Eintrags:
+{ "typ": "grammatik", "original": "wegen dem Regen", "korrektur": "wegen des Regens", "kontext": "Er blieb wegen dem Regen zu Hause.", "erklaerung": "«wegen» verlangt den Genitiv." }
+Beispiel eines VERWORFENEN Eintrags (NICHT aufnehmen):
+{ "typ": "rechtschreibung", "original": "heisst", "korrektur": "heißt", "erklaerung": "Könnte im Standarddeutschen mit ß geschrieben werden." } → Erklärung enthält Unsicherheit → Selbsttest nicht bestanden → weglassen.
+`;
+
+  const spezialBlocks = _isLocal
+    ? ''
+    : `${_buildShowVsTellBlock()}
+${_buildPassivBlock()}
+${_buildPerspektivbruchBlock()}
+${_buildTempuswechselBlock()}
+`;
+
+  return `Analysiere den Text vollständig von Anfang bis Ende – nicht nur lokale Abschnitte oder die letzten Sätze – auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
+${wichtigBlock}${filterBlock}
 Antworte mit diesem JSON-Schema:
 {
   "fehler": [
     {
-      "typ": "rechtschreibung|grammatik|stil|wiederholung|schwaches_verb|fuellwort|show_vs_tell|passiv|perspektivbruch|tempuswechsel",
+      "typ": "${typEnum}",
       "original": "das fehlerhafte Wort oder die fehlerhafte Phrase – bei «wiederholung»: vollständiger Satz zeichengenau aus dem Text",
       "korrektur": "die korrekte Version – bei «wiederholung»: derselbe Satz mit Synonym",
       "kontext": "der Satz in dem der Fehler vorkommt (bei «wiederholung» gleich wie «original»)",
@@ -324,12 +380,7 @@ Antworte mit diesem JSON-Schema:
   "stilanalyse": "4-5 Sätze Stilanalyse – KEINE konkreten Fehler erwähnen, die bereits im «fehler»-Array stehen (weder Rechtschreibung, Grammatik, Stil, Wiederholungen noch andere Typen). Fokus ausschliesslich auf übergreifende Beobachtungen zu literarischem Stil, Rhythmus, Bildsprache und Wirkung, die nicht als Einzelfehler erfasst sind.",
   "fazit": "ein Satz Gesamtfazit zur literarischen Qualität – KEINE Fehler aus dem «fehler»-Array wiederholen oder zusammenfassen, da diese separat behoben werden"
 }
-
-Beispiel eines GUTEN Eintrags:
-{ "typ": "grammatik", "original": "wegen dem Regen", "korrektur": "wegen des Regens", "kontext": "Er blieb wegen dem Regen zu Hause.", "erklaerung": "«wegen» verlangt den Genitiv." }
-Beispiel eines VERWORFENEN Eintrags (NICHT aufnehmen):
-{ "typ": "rechtschreibung", "original": "heisst", "korrektur": "heißt", "erklaerung": "Könnte im Standarddeutschen mit ß geschrieben werden." } → Erklärung enthält Unsicherheit → Selbsttest nicht bestanden → weglassen.
-
+${beispielBlock}
 Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
 - Wenn die Seite keine erkennbaren Szenen enthält (z.B. rein beschreibender Text, Exposition): «szenen» als leeres Array zurückgeben
@@ -338,11 +389,7 @@ ${_buildStilBlock()}
 ${_buildWiederholungBlock(stopwords)}
 ${_buildSchwacheVerbenBlock()}
 ${_buildFuellwortBlock()}
-${_buildShowVsTellBlock()}
-${_buildPassivBlock()}
-${_buildPerspektivbruchBlock()}
-${_buildTempuswechselBlock()}
-${figurenBlock}
+${spezialBlocks}${figurenBlock}
 ${textLabel}
 ${text}`;
 }
@@ -616,7 +663,8 @@ function _schemaBody(schemaStr) {
 // figuren_namen / orte_namen / figur_name: Klarnamen statt IDs, da konsolidierte IDs
 // erst nach P2/P3 bekannt sind. Remapping nach der Konsolidierung in jobs.js.
 // kontext kommt aus book_settings.buch_kontext (per-Buch-Freitext), wird von buildSystemKomplett durchgereicht.
-function buildKomplettSchemaStatic(kontext = '') { return `Priorität: Figuren und deren Beziehungen sind am wichtigsten. Im Zweifel lieber weniger Fakten/Szenen und dafür korrekte Figurenanalyse.
+function buildKomplettSchemaStatic(kontext = '') {
+  const schemaPart = `Priorität: Figuren und deren Beziehungen sind am wichtigsten. Im Zweifel lieber weniger Fakten/Szenen und dafür korrekte Figurenanalyse.
 
 Antworte mit diesem JSON-Schema:
 {
@@ -649,7 +697,24 @@ Antworte mit diesem JSON-Schema:
       ]
     }
   ]
-}
+}`;
+
+  // Lokaler Modus: einzeilige Kernregeln statt ausführlicher Rule-Paragrafen.
+  // Schema oben bleibt identisch (sonst würde der Remapping-Code in jobs.js brechen).
+  if (_isLocal) {
+    return `${schemaPart}
+
+Kernregeln:
+- IDs eindeutig (fig_1, ort_1, …); Beziehungen nur zwischen IDs aus dieser Liste.
+- KONSERVATIV: Nur aufnehmen was im Text eindeutig belegt ist. Im Zweifel weglassen.
+- Keine historischen/realen Personen die nur erwähnt werden.
+- kapitel[].name: immer der Kapitelname (aus dem ## Header oder dem Prompt-Kontext), niemals Seitentitel.
+- figuren_namen / orte_namen / figur_name: Klarnamen exakt wie im Text.
+- Ereignisse: datum als JJJJ; ohne errechenbares Jahr weglassen. Gleiches Ereignis bei allen beteiligten Figuren identisch formulieren.
+- Leere Arrays wenn nichts gefunden.`;
+  }
+
+  return `${schemaPart}
 
 Figuren-Regeln:
 ${figurenBasisRules(kontext)}
@@ -671,14 +736,15 @@ Ereignis-Regeln:
 - typ='extern': gesellschaftliche/historische Ereignisse – SEHR GROSSZÜGIG erfassen: Kriege, politische Umbrüche, Sport- und Kulturereignisse, Wirtschaftskrisen, Seuchen, Naturkatastrophen; auch wenn nur kurz erwähnt; jedes externe Ereignis ALLEN betroffenen Figuren zuweisen
 - datum: immer als vierstellige Jahreszahl (JJJJ) – aus Kontext errechnen wenn nötig; Events ohne errechenbare Jahreszahl weglassen
 - figur_name: exakt wie in figuren[].name dieser Antwort (kanonischen Namen aus der Figurenliste verwenden, KEINE Textvariante, kein Titel, kein Spitzname der dort nicht steht)
-- Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden`; }
+- Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden`;
+}
 
 // buildSystemKomplett: wie buildSystem, aber mit eingebettetem Schema+Regeln-Block.
 // Der Schema-Block wird so gecacht (cache_control: ephemeral in lib/ai.js) – spart bei
 // ~20 Kapitel-Calls ~19 × Schema-Tokens (statt in jeder User-Message wiederholen).
 // kontext kommt aus book_settings.buch_kontext (per-Buch-Freitext, via getLocalePromptsForBook).
 function buildSystemKomplett(prefix, rules, kontext) {
-  return `${prefix}\n\n${rules}\n\n${buildKomplettSchemaStatic(kontext)}\n\n${JSON_ONLY}`;
+  return `${prefix}\n\n${rules}\n\n${buildKomplettSchemaStatic(kontext)}${_jsonOnly()}`;
 }
 
 
@@ -794,8 +860,7 @@ export function buildChatSystemPrompt(pageName, pageText, figuren, review, syste
     '- original muss zeichengenau mit dem Seitentext übereinstimmen.',
     '- ersatz muss den Stil des Autors beibehalten.',
     '- vorschlaege ist nur dann ein leeres Array, wenn die Frage rein inhaltlich/konzeptionell ist und keine Textstelle betrifft (z.B. Plotfragen, Figurenmotivation).',
-    '',
-    JSON_ONLY,
+    ...(_isLocal ? [] : ['', JSON_ONLY]),
   );
 
   return parts.join('\n');
@@ -847,8 +912,7 @@ export function buildBookChatSystemPrompt(bookName, relevantPages, figuren, revi
     '{',
     '  "antwort": "Deine Antwort als Freitext (Markdown erlaubt)"',
     '}',
-    '',
-    JSON_ONLY,
+    ...(_isLocal ? [] : ['', JSON_ONLY]),
   );
 
   return parts.join('\n');

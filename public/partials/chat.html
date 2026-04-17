@@ -35,9 +35,11 @@
                   <button
                     class="chat-vorschlag-btn"
                     @click="applyChatVorschlag(v, msgIdx, vIdx)"
-                    :disabled="!!v._applied || chatLoading"
-                    x-text="v._applied ? '✓ Übernommen' : 'Übernehmen'"
-                  ></button>
+                    :disabled="!!v._applied || !!v._applying || chatLoading"
+                  >
+                    <span x-show="v._applying" class="spinner"></span>
+                    <span x-text="v._applied ? '✓ Übernommen' : v._applying ? 'Speichert…' : 'Übernehmen'"></span>
+                  </button>
                 </div>
                 <div class="chat-vorschlag-diff">
                   <del x-text="v.original"></del>
