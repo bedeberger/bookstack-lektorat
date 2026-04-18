@@ -432,6 +432,7 @@
   "chat.ofTotalPages":           " of {n} pages",
   "chat.ctxFiguren":             "Characters",
   "chat.ctxReview":              "Book review",
+  "chat.ctxSeitentext":          "Page text",
   "chat.errors.contextExceeded": "The response was cut short due to context limits. Please narrow your question.",
   "chat.errors.maxIterReached":  "I've exhausted the tool calls without reaching a final answer. Please phrase the question more concretely.",
 

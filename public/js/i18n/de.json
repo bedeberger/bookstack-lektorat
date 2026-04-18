@@ -432,6 +432,7 @@
   "chat.ofTotalPages":           " von {n} Seiten",
   "chat.ctxFiguren":             "Figuren",
   "chat.ctxReview":              "Buchbewertung",
+  "chat.ctxSeitentext":          "Seitentext",
   "chat.errors.contextExceeded": "Die Antwort wurde wegen Kontext-Begrenzung vorzeitig beendet. Bitte präzisiere deine Frage.",
   "chat.errors.maxIterReached":  "Ich habe die Werkzeugaufrufe ausgeschöpft, ohne zu einer abschliessenden Antwort zu kommen. Bitte formuliere die Frage konkreter.",
 

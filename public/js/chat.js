@@ -1,4 +1,4 @@
-import { escHtml, fmtTok } from './utils.js';
+import { escHtml, fmtTok, findInHtml } from './utils.js';
 import { makeChatMethods } from './chat-base.js';
 
 // Seiten-Chat-Methoden (werden in die Alpine-Komponente gespreadet).
@@ -76,9 +76,13 @@ export const chatMethods = {
 
     // Vorab prüfen ob der Originaltext noch existiert – sonst meldet _loadApplyAndSave
     // nur einen No-Op, was sich fälschlich wie ein Erfolg anfühlt.
+    // Tolerant suchen: die KI sieht die Seite als Plaintext, im HTML stecken aber
+    // Tags und Entities (z.B. `das <em>magische</em> Wort` vs Plaintext
+    // `das magische Wort`). Ohne Tolerant-Match würde die Mehrheit realistischer
+    // KI-Vorschläge fälschlich abgelehnt.
     try {
       const page = await this.bsGet('pages/' + this.currentPage.id);
-      if (page.html.indexOf(vorschlag.original) === -1) {
+      if (!findInHtml(page.html, vorschlag.original)) {
         setErr(this.t('chat.originalNotFound'));
         return;
       }

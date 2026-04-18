@@ -150,6 +150,9 @@
                   <template x-if="msg.context_info.totalPages > (msg.context_info.pages || []).length">
                     <span class="chat-context-total" x-text="t('chat.ofTotalPages', { n: msg.context_info.totalPages })"></span>
                   </template>
+                  <template x-if="(msg.context_info.pages || []).length > 0">
+                    <span class="chat-context-badge" x-text="t('chat.ctxSeitentext')"></span>
+                  </template>
                   <template x-if="msg.context_info.figuren">
                     <span class="chat-context-badge" x-text="t('chat.ctxFiguren')"></span>
                   </template>

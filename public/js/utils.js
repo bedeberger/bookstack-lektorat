@@ -25,6 +25,105 @@ export function htmlToText(html) {
   return d.textContent || d.innerText || '';
 }
 
+// Dekodiert eine einzelne HTML-Entity (z.B. &bdquo;) via Browser-Parser.
+// Gibt null zurück, wenn sich die Entity nicht auflöst.
+const _entityDecoder = typeof document !== 'undefined' ? document.createElement('textarea') : null;
+function _decodeHtmlEntity(entity) {
+  if (!_entityDecoder) return null;
+  _entityDecoder.innerHTML = entity;
+  const decoded = _entityDecoder.value;
+  return decoded === entity ? null : decoded;
+}
+
+/**
+ * Baut eine Text-View von `html` mit Positions-Map zurück ins Original-HTML.
+ * - Tags werden entfernt; Tag-Grenzen wirken wie Whitespace.
+ * - Aufeinanderfolgender Whitespace wird auf einzelne Spaces kollabiert.
+ * - Entities werden via Browser-Parser dekodiert.
+ * - Pro Text-Zeichen `text[i]` gilt: es stammt aus dem HTML-Bereich [starts[i], ends[i]).
+ */
+function _buildHtmlTextMap(html) {
+  const chars = [];
+  const starts = [];
+  const ends = [];
+  let pendingSpace = false;
+  let emittedNonSpace = false;
+  let i = 0;
+
+  const markSpace = () => { if (emittedNonSpace) pendingSpace = true; };
+
+  const pushChar = (ch, start, end) => {
+    if (pendingSpace) {
+      chars.push(' ');
+      starts.push(start);
+      ends.push(start);
+      pendingSpace = false;
+    }
+    chars.push(ch);
+    starts.push(start);
+    ends.push(end);
+    emittedNonSpace = true;
+  };
+
+  while (i < html.length) {
+    const c = html[i];
+    if (c === '<') {
+      const gt = html.indexOf('>', i);
+      if (gt === -1) break;
+      markSpace();
+      i = gt + 1;
+      continue;
+    }
+    if (c === '&') {
+      const semi = html.indexOf(';', i);
+      if (semi !== -1 && semi - i <= 10) {
+        const entity = html.slice(i, semi + 1);
+        const decoded = _decodeHtmlEntity(entity);
+        if (decoded != null) {
+          for (const dc of decoded) {
+            if (/\s/.test(dc)) markSpace();
+            else pushChar(dc, i, semi + 1);
+          }
+          i = semi + 1;
+          continue;
+        }
+      }
+    }
+    if (/\s/.test(c)) {
+      markSpace();
+      i++;
+      continue;
+    }
+    pushChar(c, i, i + 1);
+    i++;
+  }
+  return { text: chars.join(''), starts, ends };
+}
+
+/**
+ * Sucht `needle` in `html`. Exakter Substring-Match hat Vorrang; sonst
+ * toleranter Match über die Text-View (Tags ignorieren, Entities dekodieren,
+ * Whitespace kollabieren). Gibt { htmlStart, htmlEnd } zurück oder null.
+ *
+ * Typischer Fall: Chat-/Lektorat-KI sieht die Seite als Plaintext und
+ * liefert `Er sagte das magische Wort.`, im HTML steht aber
+ * `Er sagte <em>das magische</em> Wort.`. Der Tolerant-Match findet die
+ * Stelle trotzdem; die `<em>`-Tags fallen beim Ersatz weg, was akzeptabel
+ * ist, weil die KI ohnehin eine neue Formulierung vorschlägt.
+ */
+export function findInHtml(html, needle) {
+  if (!html || !needle) return null;
+  const exact = html.indexOf(needle);
+  if (exact !== -1) return { htmlStart: exact, htmlEnd: exact + needle.length };
+
+  const normalized = needle.replace(/\s+/g, ' ').trim();
+  if (!normalized) return null;
+  const { text, starts, ends } = _buildHtmlTextMap(html);
+  const idx = text.indexOf(normalized);
+  if (idx === -1) return null;
+  return { htmlStart: starts[idx], htmlEnd: ends[idx + normalized.length - 1] };
+}
+
 /**
  * Einfaches Markdown → HTML für Chat-Antworten.
  * Unterstützt: # Überschriften, **fett**, *kursiv*, `code`, Zeilenumbrüche, Listen (- und 1.).

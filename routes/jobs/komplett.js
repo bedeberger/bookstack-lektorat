@@ -799,7 +799,8 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
     const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
       updateJob(jobId, {
         progress: Math.round((i / total) * 50),
-        statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
+        statusText: 'job.phase.readingPages',
+        statusParams: { from: i + 1, to: Math.min(i + BATCH_SIZE, total), total },
       });
     }, userToken, jobAbortControllers.get(jobId)?.signal);
 

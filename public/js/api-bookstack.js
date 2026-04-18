@@ -1,5 +1,5 @@
 import { SYSTEM_STILKORREKTUR, buildStilkorrekturPrompt } from './prompts.js';
-import { SAFETY_HTML_RATIO } from './utils.js';
+import { SAFETY_HTML_RATIO, findInHtml } from './utils.js';
 
 // Methoden für BookStack-API-Calls (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -70,10 +70,8 @@ export const bookstackMethods = {
     let result = html;
     for (const f of fehler) {
       if (!f.original || !f.korrektur || f.original === f.korrektur) continue;
-      const idx = result.indexOf(f.original);
-      if (idx !== -1) {
-        result = result.slice(0, idx) + f.korrektur + result.slice(idx + f.original.length);
-      }
+      const m = findInHtml(result, f.original);
+      if (m) result = result.slice(0, m.htmlStart) + f.korrektur + result.slice(m.htmlEnd);
     }
     return result;
   },
