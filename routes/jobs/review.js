@@ -2,7 +2,7 @@
 const express = require('express');
 const { db } = require('../../db/schema');
 const {
-  makeJobLogger, updateJob, completeJob, failJob,
+  makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
   loadPageContents, groupByChapter, buildSinglePassBookText,
   bsGetAll, SINGLE_PASS_LIMIT, BATCH_SIZE, jobAbortControllers, settledAll,
@@ -94,7 +94,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
       );
     }
 
-    if (r?.gesamtnote == null) throw new Error('KI-Antwort ungültig: gesamtnote fehlt');
+    if (r?.gesamtnote == null) throw i18nError('job.error.gesamtnoteMissing');
 
     const model = _modelName(process.env.API_PROVIDER || 'claude');
     db.prepare('INSERT INTO book_reviews (book_id, book_name, reviewed_at, review_json, model, user_email) VALUES (?, ?, ?, ?, ?, ?)')

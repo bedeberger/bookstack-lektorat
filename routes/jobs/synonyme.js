@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const {
-  makeJobLogger, updateJob, completeJob, failJob,
+  makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
   fmtTok, tps,
   jobs, runningJobs, createJob, enqueueJob, jobKey,
@@ -25,7 +25,7 @@ async function runSynonymJob(jobId, wort, satz, bookId) {
       10, 95, 800, 0.3, 2000, undefined, SCHEMA_SYNONYM,
     );
 
-    if (!Array.isArray(result?.synonyme)) throw new Error('synonyme-Array fehlt');
+    if (!Array.isArray(result?.synonyme)) throw i18nError('job.error.synonymeArrayMissing');
     const normWort = wort.trim().toLowerCase();
     const seen = new Set();
     const synonyme = result.synonyme

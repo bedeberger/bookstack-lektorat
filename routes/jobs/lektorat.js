@@ -2,7 +2,7 @@
 const express = require('express');
 const { db, getBookLocale, getChapterFigures } = require('../../db/schema');
 const {
-  makeJobLogger, updateJob, completeJob, failJob,
+  makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
   htmlToText, bsGet, bsGetAll, jobAbortControllers,
   _modelName, fmtTok, tps,
@@ -68,7 +68,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
       10, 97, 5000, 0.2, null, undefined, SCHEMA_LEKTORAT,
     );
 
-    if (!Array.isArray(result?.fehler)) throw new Error('fehler-Array fehlt');
+    if (!Array.isArray(result?.fehler)) throw i18nError('job.error.fehlerArrayMissing');
     result.fehler = validateLektoratFehler(result.fehler, locale);
 
     const model = _modelName(process.env.API_PROVIDER || 'claude');

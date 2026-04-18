@@ -1086,7 +1086,7 @@ document.addEventListener('alpine:init', () => {
         },
         onError: (job) => {
           this.alleAktualisierenLoading = false;
-          this.alleAktualisierenStatus = `${this.t('common.errorColon')}${job.error ? this.t(job.error) : this.t('app.jobFailed')}`;
+          this.alleAktualisierenStatus = `${this.t('common.errorColon')}${job.error ? this.t(job.error, job.errorParams) : this.t('app.jobFailed')}`;
         },
         onDone: async () => {
           await Promise.all([

@@ -203,7 +203,7 @@ export const synonymMethods = {
       },
       onError: (job) => {
         this.synonymKiLoading = false;
-        this.synonymKiError = job.error || this.t('synonym.kiFailed');
+        this.synonymKiError = job.error ? this.t(job.error, job.errorParams) : this.t('synonym.kiFailed');
         this._synonymJobId = null;
       },
       onDone: (job) => {

@@ -89,6 +89,17 @@ function jobKey(type, bookId, userEmail) {
   return `${type}:${bookId}:${userEmail || ''}`;
 }
 
+/**
+ * Baut einen Error, dessen `message` ein i18n-Key ist und der optionale Params trägt.
+ * `failJob` liest diese Params und stellt sie dem Frontend als `errorParams` zur Verfügung,
+ * damit `t(key, params)` die Meldung in der User-Locale rendern kann.
+ */
+function i18nError(key, params = null) {
+  const err = new Error(key);
+  if (params) err.i18nParams = params;
+  return err;
+}
+
 function createJob(type, bookId, userEmail, label, labelParams = null) {
   const id = randomUUID();
   const key = jobKey(type, bookId, userEmail);
@@ -99,7 +110,7 @@ function createJob(type, bookId, userEmail, label, labelParams = null) {
     status: 'queued', progress: 0, statusText: 'job.queued', statusParams: null,
     tokensIn: 0, tokensOut: 0, tokensPerSec: null,
     maxTokensOut: MAX_TOKENS_OUT,
-    result: null, error: null,
+    result: null, error: null, errorParams: null,
     startedAt: null, endedAt: null,
     cancelled: false,
   });
@@ -152,7 +163,8 @@ function failJob(id, err) {
   const isCancelled = job.cancelled || err?.name === 'AbortError';
   const status = isCancelled ? 'cancelled' : 'error';
   const errorMsg = isCancelled ? 'job.cancelled' : (err.message || String(err));
-  Object.assign(job, { status, error: errorMsg, progress: isCancelled ? job.progress : 0, endedAt: new Date().toISOString() });
+  const errorParams = isCancelled ? null : (err?.i18nParams || null);
+  Object.assign(job, { status, error: errorMsg, errorParams, progress: isCancelled ? job.progress : 0, endedAt: new Date().toISOString() });
   try { endJobRun(id, status, job.endedAt, job.tokensIn, job.tokensOut, null, errorMsg); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
   jobAbortControllers.delete(id);
@@ -166,7 +178,7 @@ function cancelJob(id, userEmail) {
     const idx = jobQueue.findIndex(e => e.jobId === id);
     if (idx !== -1) jobQueue.splice(idx, 1);
     const endedAt = new Date().toISOString();
-    Object.assign(job, { status: 'cancelled', error: 'job.cancelled', endedAt });
+    Object.assign(job, { status: 'cancelled', error: 'job.cancelled', errorParams: null, endedAt });
     try { endJobRun(id, 'cancelled', endedAt, 0, 0, null, 'Abgebrochen'); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
     runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
     jobAbortControllers.delete(id);
@@ -218,7 +230,7 @@ async function bsGet(path, userToken) {
     headers: { Authorization: auth },
     signal: AbortSignal.timeout(30000),
   });
-  if (!resp.ok) throw new Error(`BookStack ${resp.status}: ${await resp.text()}`);
+  if (!resp.ok) throw i18nError('job.error.bookstack', { status: resp.status, text: await resp.text() });
   return resp.json();
 }
 
@@ -386,7 +398,7 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
   if (genDurationMs != null) tok.ms += genDurationMs;
   const liveTps = tok.ms > 0 ? tok.out / (tok.ms / 1000) : null;
   updateJob(jobId, { tokensIn: tok.in, tokensOut: tok.out, tokensPerSec: liveTps });
-  if (truncated) throw new Error(`KI-Antwort wurde bei ${maxTokensOverride} max_tokens abgeschnitten (tokIn=${tokensIn}, tokOut=${tokensOut}, total=${tokensIn + tokensOut}). JSON ist unvollständig.`);
+  if (truncated) throw i18nError('job.error.aiTruncated', { max: maxTokensOverride, tokIn: tokensIn, tokOut: tokensOut, total: tokensIn + tokensOut });
   return parseJSON(text);
 }
 
@@ -699,7 +711,7 @@ sharedRouter.get('/:id', (req, res) => {
     tokensIn: job.tokensIn, tokensOut: job.tokensOut,
     maxTokensOut: job.maxTokensOut,
     tokensPerSec: job.tokensPerSec,
-    result: job.result, error: job.error,
+    result: job.result, error: job.error, errorParams: job.errorParams,
   });
 });
 
@@ -707,7 +719,7 @@ module.exports = {
   _promptConfig,
   jobs, runningJobs, jobAbortControllers, jobQueue,
   makeJobLogger, enqueueJob, createJob, updateJob,
-  tps, completeJob, failJob, cancelJob, jobKey, fmtTok,
+  tps, completeJob, failJob, cancelJob, jobKey, fmtTok, i18nError,
   _modelName, settledAll,
   BS_URL, bsGet, bsGetAll,
   htmlToText,

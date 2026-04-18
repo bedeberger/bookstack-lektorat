@@ -21,6 +21,9 @@ async function getClient() {
   return oidcClient;
 }
 
+// Maximal parallele offene Login-Flows pro Session (ältere werden verworfen)
+const MAX_PENDING_FLOWS = 5;
+
 // GET /auth/login → redirect zu Google (oder direkt zu / im LOCAL_DEV_MODE)
 router.get('/auth/login', async (req, res) => {
   if (process.env.LOCAL_DEV_MODE === 'true') {
@@ -35,11 +38,14 @@ router.get('/auth/login', async (req, res) => {
     const client = await getClient();
     const state = generators.state();
     const nonce = generators.nonce();
-    req.session.oidcState = state;
-    req.session.oidcNonce = nonce;
-    // Ursprüngliche Ziel-URL merken – nur relative Pfade erlaubt (kein Open Redirect)
     const rawReturn = req.query.returnTo || '/';
-    req.session.returnTo = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : '/';
+    const returnTo = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : '/';
+    // Mehrere parallele Login-Flows (z.B. mehrere Tabs) nebeneinander erlauben:
+    // State → { nonce, returnTo } ablegen, im Callback gezielt nachschlagen.
+    const pending = Array.isArray(req.session.oidcPending) ? req.session.oidcPending : [];
+    pending.push({ state, nonce, returnTo, ts: Date.now() });
+    while (pending.length > MAX_PENDING_FLOWS) pending.shift();
+    req.session.oidcPending = pending;
     const url = client.authorizationUrl({ scope: 'openid email profile', state, nonce });
     req.session.save((saveErr) => {
       if (saveErr) {

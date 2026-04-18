@@ -61,7 +61,7 @@ export const reviewMethods = {
       },
       onError: (job) => {
         this.bookReviewLoading = false;
-        this.bookReviewOut = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(this.t(job.error))}</span>`;
+        this.bookReviewOut = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(this.t(job.error, job.errorParams))}</span>`;
         this.setReviewStatus('');
       },
       onDone: async (job) => {

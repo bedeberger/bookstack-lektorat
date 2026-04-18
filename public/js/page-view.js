@@ -182,14 +182,21 @@ export const pageViewMethods = {
     const allErrors = this.lektoratFindings || [];
     const allSelected = this.selectedFindings || [];
     const chatProposals = [];
+    // Nur die letzte Assistant-Nachricht als Quelle für Inline-Marks: sonst
+    // mischen sich frische Vorschläge mit denen aus der Historie und das
+    // Ergebnis ist unübersichtlich. Ältere Vorschläge bleiben in den
+    // Chat-Bubbles sichtbar.
     const msgs = this.chatMessages || [];
-    for (let mi = 0; mi < msgs.length; mi++) {
-      const msg = msgs[mi];
-      if (msg.role !== 'assistant' || !Array.isArray(msg.vorschlaege)) continue;
-      for (let vi = 0; vi < msg.vorschlaege.length; vi++) {
-        const v = msg.vorschlaege[vi];
+    let lastAsstIdx = -1;
+    for (let mi = msgs.length - 1; mi >= 0; mi--) {
+      if (msgs[mi].role === 'assistant') { lastAsstIdx = mi; break; }
+    }
+    if (lastAsstIdx !== -1 && Array.isArray(msgs[lastAsstIdx].vorschlaege)) {
+      const lastMsg = msgs[lastAsstIdx];
+      for (let vi = 0; vi < lastMsg.vorschlaege.length; vi++) {
+        const v = lastMsg.vorschlaege[vi];
         if (v._applied || !v.original || !v.ersatz) continue;
-        chatProposals.push({ msgIdx: mi, vIdx: vi, original: v.original, ersatz: v.ersatz });
+        chatProposals.push({ msgIdx: lastAsstIdx, vIdx: vi, original: v.original, ersatz: v.ersatz });
       }
     }
     if (allErrors.length > 0 || chatProposals.length > 0) {

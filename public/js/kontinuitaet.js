@@ -53,7 +53,7 @@ export const kontinuitaetMethods = {
       onError: (job) => {
         this.kontinuitaetLoading = false;
         this.kontinuitaetProgress = 0;
-        this.kontinuitaetStatus = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(this.t(job.error))}</span>`;
+        this.kontinuitaetStatus = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(this.t(job.error, job.errorParams))}</span>`;
       },
       onDone: async (job) => {
         this.kontinuitaetLoading = false;

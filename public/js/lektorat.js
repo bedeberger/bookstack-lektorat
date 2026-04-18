@@ -97,7 +97,7 @@ export const lektoratMethods = {
         if (this.currentPage?.id !== pageId) return;
         this.checkLoading = false;
         setTimeout(() => { this.checkProgress = 0; }, 400);
-        this.analysisOut = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(this.t(job.error))}</span>`;
+        this.analysisOut = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(this.t(job.error, job.errorParams))}</span>`;
         this.setStatus('');
       },
       onDone: async (job) => {
@@ -250,7 +250,7 @@ export const lektoratMethods = {
       onError: (job) => {
         this.batchLoading = false;
         setTimeout(() => { this.batchProgress = 0; }, 400);
-        this.batchStatus = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(this.t(job.error))}</span>`;
+        this.batchStatus = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(this.t(job.error, job.errorParams))}</span>`;
       },
       onDone: async (job) => {
         this.batchLoading = false;

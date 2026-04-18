@@ -11,7 +11,7 @@ const {
 } = require('../../db/schema');
 const { recomputeBookFigureMentions } = require('../../lib/page-index');
 const {
-  makeJobLogger, updateJob, completeJob, failJob,
+  makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
   loadPageContents, groupByChapter, buildSinglePassBookText, splitGroupsIntoChunks,
   bsGetAll, SINGLE_PASS_LIMIT, PER_CHUNK_LIMIT, BATCH_SIZE, jobAbortControllers,
@@ -422,7 +422,7 @@ async function runPhase1(ctx) {
         .map((ct, i) => ({ ct, r: settled[i] }))
         .filter(({ r }) => r.status === 'rejected')
         .map(({ ct, r }) => `${ct.chunk.name}: ${r.reason?.message || 'unbekannt'}`);
-      throw new Error(`Phase 1 unvollständig: ${failedChunks.length} Chunks fehlgeschlagen (${failedDetails.join('; ')})`);
+      throw i18nError('job.error.phase1Incomplete', { count: failedChunks.length, details: failedDetails.join('; ') });
     }
   }
 
@@ -444,7 +444,7 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments) {
     prompts.buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren, sys.BUCH_KONTEXT || ''),
     sys.SYSTEM_FIGUREN, 30, figProgressEnd, 8000, 0.2, null, prompts.SCHEMA_FIGUREN_KONSOL,
   );
-  if (!Array.isArray(figResult?.figuren)) throw new Error('Figuren-Konsolidierung ungültig: figuren-Array fehlt');
+  if (!Array.isArray(figResult?.figuren)) throw i18nError('job.error.figurenMissing');
   let figuren = figResult.figuren.map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
   const { figuren: mergedFiguren, mergedCount } = mergeDuplicateFiguren(figuren);
   if (mergedCount > 0) log.info(`Job ${jobId}: ${mergedCount} Figuren-Duplikate nach Namen zusammengeführt.`);
@@ -525,7 +525,7 @@ async function runPhase3(ctx, chapterOrte, figurenKompakt) {
     prompts.buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt),
     sys.SYSTEM_ORTE, 43, 55, 6000, 0.2, null, prompts.SCHEMA_ORTE_KONSOL,
   );
-  if (!Array.isArray(orteResultRaw?.orte)) throw new Error('Orte-Konsolidierung ungültig: orte-Array fehlt');
+  if (!Array.isArray(orteResultRaw?.orte)) throw i18nError('job.error.orteMissing');
   const orte = orteResultRaw.orte.map((o, i) => ({ ...o, id: o.id || ('ort_' + (i + 1)) }));
   saveOrteToDb(bookIdInt, orte, email, idMaps.chNameToId);
   log.info(`Job ${jobId}: ${orte.length} Schauplätze gespeichert.`);
@@ -852,7 +852,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
       );
     }
 
-    if (typeof result?.zusammenfassung === 'undefined') throw new Error('KI-Antwort ungültig: zusammenfassung fehlt');
+    if (typeof result?.zusammenfassung === 'undefined') throw i18nError('job.error.zusammenfassungMissing');
     const normalizedProbleme = saveKontinuitaetResult(bookIdInt, email, result, figNameToId, chNameToId, effectiveProvider, log, jobId);
     deleteCheckpoint('kontinuitaet', bookIdInt, email);
     completeJob(jobId, {

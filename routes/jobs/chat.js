@@ -4,7 +4,7 @@ const { db } = require('../../db/schema');
 const { callAIChat, callAIWithTools, parseJSON, chatTemperature, CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../../lib/ai');
 const {
   _promptConfig,
-  makeJobLogger, updateJob, completeJob, failJob,
+  makeJobLogger, updateJob, completeJob, failJob, i18nError,
   getPrompts, getBookPrompts,
   htmlToText, jobAbortControllers,
   fmtTok, BS_URL,
@@ -60,7 +60,7 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
 
     const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?')
       .get(parseInt(sessionId), userEmail);
-    if (!session) throw new Error('Session nicht gefunden');
+    if (!session) throw i18nError('job.error.sessionNotFound');
 
     // Seiteninhalt frisch aus BookStack laden
     let pageText = '';
@@ -180,12 +180,12 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
 
     const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?')
       .get(parseInt(sessionId), userEmail);
-    if (!session) throw new Error('Session nicht gefunden');
+    if (!session) throw i18nError('job.error.sessionNotFound');
 
     const { SYSTEM_BOOK_CHAT: bookChatSys, STOPWORDS: bookChatSW } = await getBookPrompts(session.book_id);
     const bookChatStopwords = new Set(bookChatSW || []);
 
-    if (!userToken) throw new Error('Kein BookStack-Token in der Session – bitte neu einloggen.');
+    if (!userToken) throw i18nError('job.error.noBookstackToken');
 
     const authHeader = `Token ${userToken.id}:${userToken.pw}`;
     const cacheKey = `${session.book_id}:${userEmail}`;
@@ -204,7 +204,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
         `${BS_URL}/api/pages?filter[book_id]=${session.book_id}&count=500`,
         { headers: { Authorization: authHeader }, signal: fetchSignal }
       );
-      if (!pagesListResp.ok) throw new Error(`BookStack Seitenliste ${pagesListResp.status}`);
+      if (!pagesListResp.ok) throw i18nError('job.error.bookstackPageList', { status: pagesListResp.status });
       const pages = (await pagesListResp.json()).data || [];
 
       const BATCH = 5;
@@ -403,7 +403,7 @@ async function runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEma
 
     const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?')
       .get(parseInt(sessionId), userEmail);
-    if (!session) throw new Error('Session nicht gefunden');
+    if (!session) throw i18nError('job.error.sessionNotFound');
 
     const figuren = getFiguren(session.book_id, userEmail);
     const review  = getLatestReview(session.book_id, userEmail);
