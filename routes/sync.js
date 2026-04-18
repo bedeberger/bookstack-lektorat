@@ -238,35 +238,42 @@ async function syncAllBooks() {
     return;
   }
 
-  // Bücherliste einmalig mit dem ersten verfügbaren Token holen (gleiche BookStack-Instanz für alle User)
-  let books;
+  // Pro User die für ihn sichtbaren Bücher holen und nach book_id deduplizieren.
+  // BookStack filtert /api/books per Permissions – ein einzelner Token sieht nicht
+  // zwingend alle Bücher der Instanz. Union über alle User stellt sicher, dass
+  // jedes Buch erfasst wird, an dem mindestens ein User mitarbeitet.
+  const bookOwners = new Map(); // bookId → { name, tokens: [user, ...] }
   for (const u of users) {
     try {
-      books = await bsGetAll('books', u);
-      break;
+      const books = await bsGetAll('books', u);
+      for (const b of books) {
+        const entry = bookOwners.get(b.id);
+        if (entry) entry.tokens.push(u);
+        else bookOwners.set(b.id, { name: b.name, tokens: [u] });
+      }
     } catch (e) {
-      logger.warn(`Sync: Bücherliste mit Token von ${u.email} fehlgeschlagen – nächsten versuchen.`);
+      logger.warn(`Sync: Bücherliste mit Token von ${u.email} fehlgeschlagen: ${e.message}`);
     }
   }
-  if (!books) {
-    logger.error('Sync abgebrochen: kein gültiger Token für Bücherliste gefunden.');
+
+  if (!bookOwners.size) {
+    logger.error('Sync abgebrochen: kein User-Token konnte eine Bücherliste laden.');
     return;
   }
 
-  logger.info(`Sync: ${books.length} Buch/Bücher, ${users.length} User`);
-  for (const book of books) {
-    // Jeden User durchprobieren bis einer erfolgreich ist (Tokens können abgelaufen sein)
+  logger.info(`Sync: ${bookOwners.size} Buch/Bücher (dedupliziert), ${users.length} User`);
+  for (const [bookId, { tokens }] of bookOwners) {
     let synced = false;
-    for (const u of users) {
+    for (const u of tokens) {
       try {
-        await syncBook(book.id, u);
+        await syncBook(bookId, u);
         synced = true;
         break;
       } catch (e) {
-        logger.warn(`Sync Buch ${book.id} mit Token von ${u.email} fehlgeschlagen: ${e.message}`);
+        logger.warn(`Sync Buch ${bookId} mit Token von ${u.email} fehlgeschlagen: ${e.message}`);
       }
     }
-    if (!synced) logger.error(`Sync Buch ${book.id}: alle User-Tokens fehlgeschlagen.`);
+    if (!synced) logger.error(`Sync Buch ${bookId}: alle berechtigten User-Tokens fehlgeschlagen.`);
   }
   logger.info('Sync abgeschlossen.');
 }
