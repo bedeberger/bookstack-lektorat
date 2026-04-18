@@ -166,7 +166,7 @@ export const graphMethods = {
     const chapIdx = {};
     chapterOrder.forEach((c, i) => { chapIdx[c] = i; });
 
-    const COL_W           = 320;  // Spaltenbreite – breit genug für horizontale Binnen-Verteilung
+    const COL_W           = 440;  // Spaltenbreite – breit genug für horizontale Binnen-Verteilung
     const COL_INNER_FRAC  = 0.85; // Anteil der Spaltenbreite, innerhalb dessen Figuren verteilt werden
     const ROW_H           = 50;   // Vertikaler Abstand, falls Bin eine Zeile umbrechen muss
     const TIER_BASE_GAP   = 80;   // Zusatz-Luft zwischen zwei Tiers
