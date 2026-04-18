@@ -41,13 +41,24 @@ function setActiveBlock(container, block) {
   }
 }
 
-function typewriterScroll(container, block) {
-  if (!container || !block) return;
+function getCaretRect(container) {
+  const sel = document.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  if (!container.contains(range.startContainer)) return null;
+  const rects = range.getClientRects();
+  if (rects.length > 0 && rects[0].height > 0) return rects[0];
+  const rect = range.getBoundingClientRect();
+  if (rect.height > 0) return rect;
+  return null;
+}
+
+function typewriterScroll(container, targetRect) {
+  if (!container || !targetRect) return;
   const cRect = container.getBoundingClientRect();
-  const bRect = block.getBoundingClientRect();
-  const blockCenter = bRect.top + bRect.height / 2;
+  const targetCenter = targetRect.top + targetRect.height / 2;
   const containerCenter = cRect.top + cRect.height / 2;
-  const delta = blockCenter - containerCenter;
+  const delta = targetCenter - containerCenter;
   if (Math.abs(delta) < 2) return;
   container.scrollBy({ top: delta, behavior: 'smooth' });
 }
@@ -120,14 +131,21 @@ export const focusMethods = {
         }
       };
 
-      // Mobile-Tastatur: visualViewport schrumpft → CSS-Var --focus-vh
-      // treibt sowohl Card-Höhe als auch Typewriter-Padding, danach recentern.
+      // Mobile-Tastatur: visualViewport schrumpft UND kann scrollen
+      // (Android Chrome: offsetTop wird non-zero, wenn die KB den fixed
+      // Container nach oben schiebt). --focus-vh treibt die Card-Höhe,
+      // --focus-vh-top hält die Card am sichtbaren Viewport-Rand.
       const syncViewport = () => {
         const vv = window.visualViewport;
         const h = vv ? vv.height : window.innerHeight;
+        const top = vv ? vv.offsetTop : 0;
         document.documentElement.style.setProperty('--focus-vh', h + 'px');
+        document.documentElement.style.setProperty('--focus-vh-top', top + 'px');
         if (this.focusMode) this._focusUpdateActive(true);
       };
+      // Sicherheitsnetz: beim Eintritt Dokument-Scroll zurücksetzen, damit
+      // position:fixed mit visualViewport nicht auseinanderdriftet.
+      window.scrollTo(0, 0);
       syncViewport();
 
       document.addEventListener('selectionchange', onSelection);
@@ -136,6 +154,7 @@ export const focusMethods = {
       container.addEventListener('pointerup', onPointerUp);
       window.addEventListener('keydown', onKey);
       window.visualViewport?.addEventListener('resize', syncViewport);
+      window.visualViewport?.addEventListener('scroll', syncViewport);
       this._focusListeners = { onSelection, onScroll, onPointerDown, onPointerUp, onKey, syncViewport, container };
 
       this._focusUpdateActive(true);
@@ -149,6 +168,7 @@ export const focusMethods = {
     this.focusMode = false;
     document.body.classList.remove('focus-mode');
     document.documentElement.style.removeProperty('--focus-vh');
+    document.documentElement.style.removeProperty('--focus-vh-top');
 
     const L = this._focusListeners;
     if (L) {
@@ -159,6 +179,7 @@ export const focusMethods = {
       window.removeEventListener('keydown', L.onKey);
       if (L.syncViewport) {
         window.visualViewport?.removeEventListener('resize', L.syncViewport);
+        window.visualViewport?.removeEventListener('scroll', L.syncViewport);
       }
       this._focusListeners = null;
     }
@@ -190,8 +211,12 @@ export const focusMethods = {
       setActiveBlock(container, block);
 
       if (scroll && block) {
+        // Cursor-Zeile bevorzugen (echter Typewriter-Scroll). Nur wenn keine
+        // Caret-Rect ermittelbar ist (z.B. leerer Absatz, kein Fokus), auf
+        // Block-Mitte zurückfallen.
+        const targetRect = getCaretRect(container) || block.getBoundingClientRect();
         this._focusSuppressScroll = 2;
-        typewriterScroll(container, block);
+        typewriterScroll(container, targetRect);
       }
     });
   },

@@ -1207,7 +1207,10 @@ body.focus-mode { overflow: hidden; overscroll-behavior: contain; }
 
 body.focus-mode #editor-card {
   position: fixed;
-  inset: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: var(--focus-vh-top, 0px);
   height: var(--focus-vh, 100dvh);
   max-height: var(--focus-vh, 100dvh);
   z-index: 1000;
