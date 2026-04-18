@@ -374,7 +374,10 @@ function _handleChatPost(req, res, { jobType, sessionSelect, labelFn, runFn }) {
 // Der Agent ruft Tools aus routes/jobs/book-chat-tools.js auf, um Fragen
 // über den gesamten Buchindex zu beantworten, statt alle Seiten vorab zu laden.
 const BOOK_CHAT_MAX_TOOL_ITER = parseInt(process.env.BOOK_CHAT_MAX_TOOL_ITER, 10) || 6;
-const BOOK_CHAT_TOKEN_BUDGET   = parseInt(process.env.BOOK_CHAT_TOKEN_BUDGET, 10) || 100000;
+// Per-Iteration-Limit für Input-Tokens (Context-Window-Schutz, nicht kumulativ).
+// Claude Sonnet/Opus: 200K Kontext → 150K lässt Platz für Output + eine weitere Tool-Runde.
+// Prompt-Caching macht wiederholte Tokens ohnehin billig, deshalb kein Summen-Budget.
+const BOOK_CHAT_TOKEN_BUDGET   = parseInt(process.env.BOOK_CHAT_TOKEN_BUDGET, 10) || 150000;
 
 function _bookChatUseAgent() {
   const provider = process.env.API_PROVIDER || 'claude';
@@ -442,8 +445,12 @@ async function runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEma
       totalTokOut += result.tokensOut;
       if (result.genDurationMs) genMs += result.genDurationMs;
 
-      if (totalTokIn > BOOK_CHAT_TOKEN_BUDGET) {
-        logger.warn(`Job ${jobId}: Token-Budget überschritten (${totalTokIn}/${BOOK_CHAT_TOKEN_BUDGET}) – Loop abgebrochen.`);
+      // UI mit echten Claude-Zahlen nachziehen (onProgress liefert nur chars-basierte Schätzung,
+      // die bei reinen Tool-Use-Iterationen ohne Text-Stream 0 bleibt).
+      updateJob(jobId, { tokensIn: totalTokIn, tokensOut: totalTokOut });
+
+      if (result.tokensIn > BOOK_CHAT_TOKEN_BUDGET) {
+        logger.warn(`Job ${jobId}: Context-Budget überschritten (${result.tokensIn}/${BOOK_CHAT_TOKEN_BUDGET} Input-Tokens) – Loop abgebrochen.`);
         finalText = result.text || JSON.stringify({ antwort: 'Die Antwort wurde wegen Kontext-Begrenzung vorzeitig beendet. Bitte präzisiere deine Frage.' });
         break;
       }
