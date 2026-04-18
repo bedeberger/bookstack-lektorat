@@ -2971,6 +2971,11 @@ body.focus-mode .page-content-view--editing .focus-paragraph-active {
   background: var(--color-border);
   color: var(--color-text);
 }
+.btn-bookstack-link--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+.row > .btn-bookstack-link { flex: 0 0 auto; }
 
 /* === Button-Gruppe (Expand/Collapse) === */
 .btn-group {

@@ -62,6 +62,25 @@ if (LOCAL_DEV_MODE) {
 // ── Auth-Routen (öffentlich) ──────────────────────────────────────────────────
 app.use(authRouter);
 
+// ── Öffentliche PWA-Assets (vor Auth-Guard) ──────────────────────────────────
+// Browser holen manifest.webmanifest und sw.js ohne Credentials; hinter dem
+// Auth-Guard würde das in einen Google-OIDC-Redirect laufen und CORS-Fehler werfen.
+const PUBLIC_ASSETS = new Set([
+  '/manifest.webmanifest',
+  '/sw.js',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/bookstack_lektorat_icon.svg',
+  '/bookstack_lektorat_icon.ico',
+  '/favicon.ico',
+]);
+app.use((req, res, next) => {
+  if (req.method === 'GET' && PUBLIC_ASSETS.has(req.path)) {
+    return express.static(path.join(__dirname, 'public'))(req, res, next);
+  }
+  next();
+});
+
 // ── Auth-Guard ────────────────────────────────────────────────────────────────
 // API-Pfade → 401 JSON; HTML-Pfade → Redirect zu /auth/login
 const API_PREFIXES = ['/api/', '/history/', '/figures/', '/locations/', '/jobs/', '/sync/', '/chat/', '/booksettings/', '/config', '/claude', '/ollama', '/llama'];

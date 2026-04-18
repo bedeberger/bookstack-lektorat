@@ -162,6 +162,11 @@ document.addEventListener('alpine:init', () => {
     selectedBookId: '',
     pages: [],
     tree: [],
+    _applyingHash: false,
+    _hashInitialized: false,
+    _hashUpdatePending: false,
+    _navDepth: 0,
+    _inHashApply: false,
     _chapterOrderMap: null,
     _pageOrderMap: null,
     _pageIdOrderMap: null,
@@ -514,21 +519,306 @@ document.addEventListener('alpine:init', () => {
 
     // ── Interne Navigation ───────────────────────────────────────────────────
     async openFigurById(figId) {
-      this.figurenKapitelFilter = '';
-      this.figurenSeitenFilter = '';
-      if (!this.showFiguresCard) {
-        await this.toggleFiguresCard();
+      this._beginNavigation();
+      try {
+        this.figurenKapitelFilter = '';
+        this.figurenSeitenFilter = '';
+        if (!this.showFiguresCard) {
+          await this.toggleFiguresCard();
+        }
+        this.selectedFigurId = figId;
+        await this.$nextTick();
+        document.querySelector(`.figur-item[data-figid="${figId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } finally {
+        this._endNavigation();
       }
-      this.selectedFigurId = figId;
-      await this.$nextTick();
-      document.querySelector(`.figur-item[data-figid="${figId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    },
+
+    async openOrtById(ortId) {
+      this._beginNavigation();
+      try {
+        this.orteSuche = '';
+        this.orteFilterFigurId = '';
+        this.orteFilterKapitel = '';
+        this.orteFilterSzeneId = '';
+        if (!this.showOrteCard) {
+          await this.toggleOrteCard();
+        }
+        this.selectedOrtId = ortId;
+        await this.$nextTick();
+        document.querySelector(`.ort-item[data-ortid="${ortId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } finally {
+        this._endNavigation();
+      }
     },
 
     async openEreignisseMitKapitel(kapitel) {
-      if (!this.showEreignisseCard) {
-        await this.toggleEreignisseCard();
+      this._beginNavigation();
+      try {
+        if (!this.showEreignisseCard) {
+          await this.toggleEreignisseCard();
+        }
+        this.ereignisseFilterKapitel = kapitel;
+      } finally {
+        this._endNavigation();
       }
-      this.ereignisseFilterKapitel = kapitel;
+    },
+
+    async openEreignisseMitFigur(figurId) {
+      this._beginNavigation();
+      try {
+        if (!this.showEreignisseCard) {
+          await this.toggleEreignisseCard();
+        }
+        this.ereignisseFilterFigurId = figurId;
+        this.ereignisseFilterKapitel = '';
+        this.ereignisseFilterSeite = '';
+        this.ereignisseSuche = '';
+      } finally {
+        this._endNavigation();
+      }
+    },
+
+    // Löst Kapitel+Seite (Namen) zu einem Page-Objekt auf. Mehrdeutigkeit in
+    // dieser Reihenfolge: Kapitel exakt → exakte Seite → Teilstring-Seite →
+    // erste Kapitelseite; ohne Kapitel: globaler Seiten-Fallback.
+    _resolvePage(kapitel, seite) {
+      const kName = Array.isArray(kapitel) ? kapitel[0] : kapitel;
+      if (!kName && !seite) return null;
+      const chapters = (this.tree || []).filter(t => t.type === 'chapter');
+      const sLower = seite ? String(seite).toLowerCase() : '';
+      if (!kName) {
+        return this.pages.find(p => p.name === seite)
+          || this.pages.find(p => p.name.toLowerCase() === sLower)
+          || null;
+      }
+      const chapter = chapters.find(c => c.name === kName);
+      const pages = chapter?.pages || [];
+      if (!pages.length) return null;
+      if (seite) {
+        const exact = pages.find(p => p.name === seite)
+          || pages.find(p => p.name.toLowerCase() === sLower);
+        if (exact) return exact;
+        const sub = pages.find(p => {
+          const n = p.name.toLowerCase();
+          return n && (n.includes(sLower) || sLower.includes(n));
+        });
+        if (sub) return sub;
+      }
+      return pages[0];
+    },
+
+    gotoStelle(kapitel, seite) {
+      const page = this._resolvePage(kapitel, seite);
+      if (page) this.selectPage(page);
+    },
+
+    gotoPageById(pageId) {
+      if (!pageId) return;
+      const page = this.pages.find(p => String(p.id) === String(pageId));
+      if (page) this.selectPage(page);
+    },
+
+    // ── URL-Hash-Permalinks ─────────────────────────────────────────────────
+    // Schema: #book/:bookId[/page/:pageId|/figur/:figId|/ort/:ortId|/<view>]
+    // Views: figuren, orte, szenen, ereignisse, kontinuitaet, bewertung, chat, stats, einstellungen
+    _computeHash() {
+      if (!this.selectedBookId) return '';
+      const parts = ['book', this.selectedBookId];
+      if (this.showEditorCard && this.currentPage?.id) {
+        parts.push('page', String(this.currentPage.id));
+      } else if (this.showFiguresCard && this.selectedFigurId) {
+        parts.push('figur', String(this.selectedFigurId));
+      } else if (this.showOrteCard && this.selectedOrtId) {
+        parts.push('ort', String(this.selectedOrtId));
+      } else if (this.showFiguresCard) parts.push('figuren');
+      else if (this.showOrteCard) parts.push('orte');
+      else if (this.showSzenenCard) parts.push('szenen');
+      else if (this.showEreignisseCard) parts.push('ereignisse');
+      else if (this.showKontinuitaetCard) parts.push('kontinuitaet');
+      else if (this.showBookReviewCard) parts.push('bewertung');
+      else if (this.showBookChatCard) parts.push('chat');
+      else if (this.showBookStatsCard) parts.push('stats');
+      else if (this.showBookSettingsCard) parts.push('einstellungen');
+      return '#' + parts.join('/');
+    },
+
+    // Liefert die Navigations-Kategorie eines Hashes als "<bookId>:<kind>".
+    // Dient zur Entscheidung push vs. replace: bleibt die Kategorie gleich
+    // (Seite↔Seite, Figur↔Figur, Ort↔Ort), wird der History-Eintrag ersetzt
+    // statt zusätzlich gepusht. `figur`/`figuren` und `ort`/`orte` gelten
+    // jeweils als dieselbe Kategorie.
+    _hashCategory(hash) {
+      if (!hash) return null;
+      const parts = hash.replace(/^#/, '').split('/').filter(Boolean);
+      if (parts[0] !== 'book' || !parts[1]) return null;
+      const bookId = parts[1];
+      const view = parts[2] || 'book';
+      const kind = view === 'figur' ? 'figuren' : view === 'ort' ? 'orte' : view;
+      return bookId + ':' + kind;
+    },
+
+    // Schreibt `newHash` in die URL. Wählt push vs. replace basierend auf
+    // Kategorie-Wechsel. Bei erstem Aufruf immer replace (initialer Sync).
+    _writeHash(newHash) {
+      const cleanUrl = location.pathname + location.search;
+      const firstWrite = !this._hashInitialized;
+      this._hashInitialized = true;
+      if (!newHash) {
+        if (location.hash) history.replaceState(null, '', cleanUrl);
+        return;
+      }
+      if (location.hash === newHash) return;
+      if (firstWrite) { history.replaceState(null, '', newHash); return; }
+      const oldCat = this._hashCategory(location.hash);
+      const newCat = this._hashCategory(newHash);
+      if (oldCat && oldCat === newCat) {
+        history.replaceState(null, '', newHash);
+      } else {
+        history.pushState(null, '', newHash);
+      }
+    },
+
+    // Zusammengesetzte Navigationen (z.B. openFigurById → toggleFiguresCard
+    // → loadFiguren) erzeugen sonst mehrere History-Einträge. Mit diesem
+    // Wrapper werden Zwischen-States unterdrückt, am Ende genau einmal gepusht.
+    // Inside _applyHash: unterdrückt alles, URL wird nicht angefasst (Hash
+    // hat bereits den Zielzustand vorgegeben).
+    _beginNavigation() {
+      this._navDepth += 1;
+      this._applyingHash = true;
+    },
+    _endNavigation() {
+      this._navDepth = Math.max(0, this._navDepth - 1);
+      if (this._navDepth > 0) return;
+      if (this._inHashApply) return;
+      this._applyingHash = false;
+      this._writeHash(this._computeHash());
+    },
+
+    // Synchroner URL-Sync ohne neuen History-Eintrag (initial + nach Hash-Apply).
+    _syncUrlNow() {
+      const newHash = this._computeHash();
+      const cleanUrl = location.pathname + location.search;
+      if (!newHash) {
+        if (location.hash) history.replaceState(null, '', cleanUrl);
+      } else if (location.hash !== newHash) {
+        history.replaceState(null, '', newHash);
+      }
+      this._hashInitialized = true;
+    },
+
+    // Mehrere synchrone State-Änderungen werden per Microtask zu einem
+    // einzigen URL-Update zusammengefasst.
+    _updateHash() {
+      if (this._applyingHash) return;
+      if (this._hashUpdatePending) return;
+      this._hashUpdatePending = true;
+      queueMicrotask(() => {
+        this._hashUpdatePending = false;
+        if (this._applyingHash) return;
+        this._writeHash(this._computeHash());
+      });
+    },
+
+    async _applyHash() {
+      const hash = (location.hash || '').replace(/^#/, '');
+      if (!hash) return;
+      const parts = hash.split('/').filter(Boolean);
+      if (parts[0] !== 'book' || !parts[1]) return;
+      const targetBookId = parts[1];
+      if (!this.books.some(b => String(b.id) === targetBookId)) return;
+
+      this._applyingHash = true;
+      this._inHashApply = true;
+      try {
+        if (String(this.selectedBookId) !== targetBookId) {
+          this.selectedBookId = targetBookId;
+          this.bookReviewHistory = [];
+          this.selectedBookReviewId = null;
+          await this.loadPages();
+        }
+
+        const view = parts[2];
+        const arg = parts[3];
+        if (!view) {
+          this._closeOtherMainCards('none');
+          return;
+        }
+
+        switch (view) {
+          case 'page':
+            if (arg) {
+              const page = this.pages.find(p => String(p.id) === arg);
+              if (page) await this.selectPage(page);
+            }
+            break;
+          case 'figur':
+            if (arg) await this.openFigurById(arg);
+            else {
+              this.selectedFigurId = null;
+              if (!this.showFiguresCard) await this.toggleFiguresCard();
+              else this._closeOtherMainCards('figures');
+            }
+            break;
+          case 'ort':
+            if (arg) await this.openOrtById(arg);
+            else {
+              this.selectedOrtId = null;
+              if (!this.showOrteCard) await this.toggleOrteCard();
+              else this._closeOtherMainCards('orte');
+            }
+            break;
+          case 'figuren':
+            this.selectedFigurId = null;
+            if (!this.showFiguresCard) await this.toggleFiguresCard();
+            else this._closeOtherMainCards('figures');
+            break;
+          case 'orte':
+            this.selectedOrtId = null;
+            if (!this.showOrteCard) await this.toggleOrteCard();
+            else this._closeOtherMainCards('orte');
+            break;
+          case 'szenen':
+            if (!this.showSzenenCard) await this.toggleSzenenCard();
+            break;
+          case 'ereignisse':
+            if (!this.showEreignisseCard) await this.toggleEreignisseCard();
+            break;
+          case 'kontinuitaet':
+            if (!this.showKontinuitaetCard) await this.toggleKontinuitaetCard();
+            break;
+          case 'bewertung':
+            if (!this.showBookReviewCard) await this.toggleBookReviewCard();
+            break;
+          case 'chat':
+            if (!this.showBookChatCard) await this.toggleBookChatCard();
+            break;
+          case 'stats':
+            if (!this.showBookStatsCard) await this.toggleBookStatsCard();
+            break;
+          case 'einstellungen':
+            if (!this.showBookSettingsCard) await this.toggleBookSettingsCard();
+            break;
+        }
+      } finally {
+        this._applyingHash = false;
+        this._inHashApply = false;
+      }
+    },
+
+    _setupHashRouting() {
+      const watchers = [
+        'selectedBookId', 'currentPage', 'showEditorCard',
+        'selectedFigurId', 'selectedOrtId',
+        'showFiguresCard', 'showOrteCard', 'showSzenenCard', 'showEreignisseCard',
+        'showKontinuitaetCard', 'showBookReviewCard', 'showBookChatCard',
+        'showBookStatsCard', 'showBookSettingsCard',
+      ];
+      for (const prop of watchers) {
+        this.$watch(prop, () => this._updateHash());
+      }
+      window.addEventListener('hashchange', () => this._applyHash());
     },
 
     // ── UI-Hilfsmethoden ─────────────────────────────────────────────────────
@@ -883,7 +1173,19 @@ document.addEventListener('alpine:init', () => {
           this.showTokenSetup = true;
           return;
         }
+
+        // Hash vorab auswerten, damit loadBooks das gewünschte Buch wählt.
+        // _applyingHash unterdrückt Watcher/URL-Writes während der Initialisierung.
+        this._applyingHash = true;
+        const hashParts = (location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
+        if (hashParts[0] === 'book' && hashParts[1]) {
+          this.selectedBookId = hashParts[1];
+        }
         await this.loadBooks();
+        await this._applyHash();
+        this._syncUrlNow();
+        this._applyingHash = false;
+        this._setupHashRouting();
         this._startJobQueuePoll();
       } catch {
         this.setStatus('Fehler beim Laden der Konfiguration.');

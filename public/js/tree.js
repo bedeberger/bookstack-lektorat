@@ -18,7 +18,9 @@ export const treeMethods = {
     try {
       this.setStatus('Verbinde mit BookStack…', true);
       this.books = await this.bsGetAll('books');
-      this.selectedBookId = String(this.books[0]?.id || '');
+      if (!this.selectedBookId || !this.books.some(b => String(b.id) === String(this.selectedBookId))) {
+        this.selectedBookId = String(this.books[0]?.id || '');
+      }
       this.showBookCard = true;
       this.setStatus(this.books.length + ' Buch/Bücher gefunden.', false, 4000);
       await this.loadPages();

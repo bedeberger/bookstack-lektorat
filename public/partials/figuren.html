@@ -198,9 +198,12 @@
                         <span class="gz-extern-badge">extern</span>
                       </template>
                     </div>
-                    <div class="gz-ereignis" x-text="ev.ereignis"></div>
+                    <div class="gz-ereignis internal-link" @click="openEreignisseMitFigur(f.id)" x-text="ev.ereignis"></div>
                     <div x-show="ev.kapitel" class="gz-kapitel">
-                      <span class="gz-kapitel-link internal-link" x-text="ev.kapitel" @click="openEreignisseMitKapitel(ev.kapitel)"></span>
+                      <span class="gz-kapitel-link internal-link" @click="gotoStelle(ev.kapitel, null)" x-text="ev.kapitel"></span>
+                    </div>
+                    <div x-show="ev.seite" class="gz-seite">
+                      <span class="internal-link" @click="gotoStelle(ev.kapitel, ev.seite)" x-text="ev.seite"></span>
                     </div>
                     <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
                   </div>

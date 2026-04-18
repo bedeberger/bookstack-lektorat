@@ -43,7 +43,7 @@
   <div x-show="orte.length > 0" class="ort-list">
     <template x-for="o in orteFiltered" :key="o.id">
       <div>
-        <div class="ort-item" @click="selectedOrtId = selectedOrtId === o.id ? null : o.id">
+        <div class="ort-item" :data-ortid="o.id" @click="selectedOrtId = selectedOrtId === o.id ? null : o.id">
           <span class="tag ort-typ-tag" x-text="o.typ || 'andere'"></span>
           <span class="ort-name" x-text="o.name"></span>
           <span x-show="o.stimmung" class="ort-stimmung" x-text="o.stimmung"></span>
@@ -61,12 +61,17 @@
           <p x-show="o.beschreibung" x-text="o.beschreibung" class="ort-beschreibung"></p>
           <div x-show="o.erste_erwaehnung" class="ort-meta-row">
             <span class="ort-meta-label">Erste Erwähnung:</span>
-            <span x-text="o.erste_erwaehnung"></span>
+            <template x-if="o.erste_erwaehnung_page_id">
+              <span class="internal-link" @click.stop="gotoPageById(o.erste_erwaehnung_page_id)" x-text="o.erste_erwaehnung"></span>
+            </template>
+            <template x-if="!o.erste_erwaehnung_page_id">
+              <span x-text="o.erste_erwaehnung"></span>
+            </template>
           </div>
           <div x-show="o.figuren?.length > 0" class="ort-meta-row">
             <span class="ort-meta-label">Figuren:</span>
             <template x-for="figId in o.figuren" :key="figId">
-              <span class="tag" x-text="figuren.find(f => f.id === figId)?.kurzname || figuren.find(f => f.id === figId)?.name || figId"></span>
+              <span class="tag internal-link" @click.stop="openFigurById(figId)" x-text="figuren.find(f => f.id === figId)?.kurzname || figuren.find(f => f.id === figId)?.name || figId"></span>
             </template>
           </div>
           <div x-show="o.kapitel?.length > 1" class="ort-meta-row">

@@ -105,19 +105,20 @@
         <div class="szene-card" :class="'szene-card--' + (s.wertung || 'mittel')">
           <div class="szene-card-header">
             <span class="szene-card-wertung" :class="'figur-szene-wertung--' + (s.wertung || 'mittel')" x-text="s.wertung || '–'"></span>
-            <span class="szene-card-ort" x-text="s.kapitel + (s.seite ? ' · ' + s.seite : '')"></span>
+            <span class="szene-card-ort internal-link" @click="gotoStelle(s.kapitel, s.seite)" x-text="s.kapitel + (s.seite ? ' · ' + s.seite : '')"></span>
           </div>
           <div class="szene-card-titel" x-text="s.titel"></div>
           <div x-show="s.kommentar" class="szene-card-kommentar" x-text="s.kommentar"></div>
           <div class="gz-figuren-row">
             <template x-for="(figId, fi) in (s.fig_ids || [])" :key="fi">
-              <span class="gz-figur-badge"
+              <span class="gz-figur-badge internal-link"
                 :class="'gz-figur-badge--' + (figuren.find(f => f.id === figId)?.typ || 'andere')"
+                @click="openFigurById(figId)"
                 x-text="figuren.find(f => f.id === figId)?.kurzname || figuren.find(f => f.id === figId)?.name || figId">
               </span>
             </template>
             <template x-for="ortId in (s.ort_ids || [])" :key="'o'+ortId">
-              <span class="tag ort-typ-tag figur-szene-ort" x-text="orte.find(o => o.id === ortId)?.name || ortId"></span>
+              <span class="tag ort-typ-tag figur-szene-ort internal-link" @click="openOrtById(ortId)" x-text="orte.find(o => o.id === ortId)?.name || ortId"></span>
             </template>
           </div>
         </div>

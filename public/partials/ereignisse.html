@@ -63,10 +63,17 @@
           <div class="gz-ereignis" x-text="ev.ereignis"></div>
           <div x-show="Array.isArray(ev.kapitel) ? ev.kapitel.length : ev.kapitel" class="gz-kapitel">
             <template x-for="(kap, ki) in (Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []))" :key="ki">
-              <span class="gz-kapitel-link internal-link" x-text="kap" @click="openEreignisseMitKapitel(kap)"></span>
+              <span class="gz-kapitel-link internal-link" x-text="kap" @click="gotoStelle(kap, null)"></span>
             </template>
           </div>
-          <div x-show="Array.isArray(ev.seiten) ? ev.seiten.length : ev.seite" class="gz-seite" x-text="Array.isArray(ev.seiten) ? ev.seiten.join(' · ') : ev.seite"></div>
+          <div x-show="Array.isArray(ev.seiten) ? ev.seiten.length : ev.seite" class="gz-seite">
+            <template x-for="(s, si) in (Array.isArray(ev.seiten) ? ev.seiten : (ev.seite ? [ev.seite] : []))" :key="si">
+              <span>
+                <template x-if="si > 0"><span> · </span></template>
+                <span class="internal-link" @click="gotoStelle(Array.isArray(ev.kapitel) ? ev.kapitel[0] : ev.kapitel, s)" x-text="s"></span>
+              </span>
+            </template>
+          </div>
           <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
           <div class="gz-figuren-row">
             <template x-for="(fref, fi) in ev.figuren" :key="fi">

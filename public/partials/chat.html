@@ -125,11 +125,11 @@
               <template x-for="(p, pi) in (expanded ? msg.context_info.pages : msg.context_info.pages.slice(0, 3))" :key="pi">
                 <span>
                   <template x-if="pi > 0"><span class="chat-context-sep">, </span></template>
-                  <a x-show="bookstackUrl && p.book_slug && p.slug"
-                     :href="bookstackUrl + '/books/' + p.book_slug + '/page/' + p.slug"
-                     target="_blank" rel="noopener"
+                  <a x-show="p.id"
+                     :href="'#book/' + selectedBookId + '/page/' + p.id"
+                     @click.prevent="gotoPageById(p.id)"
                      class="chat-context-link" x-text="p.name"></a>
-                  <span x-show="!(bookstackUrl && p.book_slug && p.slug)" x-text="p.name"></span>
+                  <span x-show="!p.id" x-text="p.name"></span>
                 </span>
               </template>
               <button x-show="msg.context_info.pages.length > 3"

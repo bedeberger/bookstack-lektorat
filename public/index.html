@@ -161,7 +161,7 @@
          @keydown="onKeydown($event)"
          class="combobox-wrap">
     </div>
-    <a x-show="selectedBookUrl" :href="selectedBookUrl" target="_blank" rel="noopener" class="btn-bookstack-link" title="Buch in BookStack öffnen">BookStack</a>
+    <a :href="selectedBookUrl || '#'" target="_blank" rel="noopener" class="btn-bookstack-link" :class="{ 'btn-bookstack-link--hidden': !selectedBookUrl }" :tabindex="selectedBookUrl ? 0 : -1" :aria-hidden="!selectedBookUrl" title="Buch in BookStack öffnen">BookStack</a>
   </div>
 
   <!-- Feature-Tiles: Buchanalyse -->

@@ -23,8 +23,6 @@ db.exec(`
     saved       INTEGER DEFAULT 0,
     saved_at    TEXT
   );
-  CREATE INDEX IF NOT EXISTS idx_pc_page_user_date ON page_checks(page_id, user_email, checked_at DESC);
-  CREATE INDEX IF NOT EXISTS idx_pc_book_user      ON page_checks(book_id, user_email);
 
   CREATE TABLE IF NOT EXISTS book_reviews (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,7 +32,6 @@ db.exec(`
     review_json TEXT,
     model       TEXT
   );
-  CREATE INDEX IF NOT EXISTS idx_br_book_user_date ON book_reviews(book_id, user_email, reviewed_at DESC);
 
   -- Figuren: eine Zeile pro Figur, Kernfelder fix
   -- Neue Felder: per ALTER TABLE ADD COLUMN oder via meta (JSON)
@@ -341,6 +338,9 @@ function runMigrations() {
       ALTER TABLE book_reviews     ADD COLUMN user_email TEXT;
       ALTER TABLE figures          ADD COLUMN user_email TEXT;
       ALTER TABLE figure_relations ADD COLUMN user_email TEXT;
+      CREATE INDEX IF NOT EXISTS idx_pc_page_user_date ON page_checks(page_id, user_email, checked_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_pc_book_user      ON page_checks(book_id, user_email);
+      CREATE INDEX IF NOT EXISTS idx_br_book_user_date ON book_reviews(book_id, user_email, reviewed_at DESC);
     `);
     db.prepare('UPDATE schema_version SET version = 3').run();
     logger.info('DB-Migration auf Version 3 abgeschlossen (user_email zu allen Datentabellen hinzugefügt).');

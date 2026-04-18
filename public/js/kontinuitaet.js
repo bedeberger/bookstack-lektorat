@@ -102,33 +102,38 @@ export const kontinuitaetMethods = {
     return groups;
   },
 
-  // Löst eine Stelle wie "Kapitel X: Seite Y" zu einem Page-Objekt aus this.tree auf.
-  // Exakter Seitenname bevorzugt, sonst Teilstring-Match, sonst erste Seite des Kapitels.
-  kontinuitaetResolveStelle(stelle) {
+  // Löst "Kapitel X: Seite Y" zu einem Page-Objekt auf. Fallback über
+  // issue.chapter_ids (serverseitig gemappte Kapitel), damit mindestens
+  // das Kapitel angesprungen wird, wenn die AI den Kapitelnamen nicht
+  // wortwörtlich trifft oder nur eine Seitennummer nennt.
+  kontinuitaetResolveStelle(stelle, issue, side) {
     if (!stelle) return null;
-    const chapters = (this.tree || []).filter(t => t.type === 'chapter');
     const ci = stelle.indexOf(':');
-    const chName = (ci > 0 ? stelle.slice(0, ci) : stelle).trim();
-    const rest = ci > 0 ? stelle.slice(ci + 1).trim() : '';
-    const chapter = chapters.find(c => c.name === chName);
-    const pages = chapter?.pages || [];
-    if (!pages.length) return null;
-    if (rest) {
-      const restLower = rest.toLowerCase();
-      const exact = pages.find(p => p.name === rest)
-        || pages.find(p => p.name.toLowerCase() === restLower);
-      if (exact) return exact;
-      const sub = pages.find(p => {
-        const n = p.name.toLowerCase();
-        return n && (n.includes(restLower) || restLower.includes(n));
-      });
-      if (sub) return sub;
+    const kapitelName = (ci > 0 ? stelle.slice(0, ci) : stelle).trim();
+    const seite = ci > 0 ? stelle.slice(ci + 1).trim() : '';
+    const direct = this._resolvePage(kapitelName, seite);
+    if (direct) return direct;
+    const chIds = issue?.chapter_ids || [];
+    if (!chIds.length) return null;
+    const chapters = (this.tree || []).filter(t => t.type === 'chapter');
+    const idx = side === 'b' && chIds.length > 1 ? 1 : 0;
+    const chapter = chapters.find(c => c.id === chIds[idx]);
+    if (!chapter?.pages?.length) return null;
+    if (seite) {
+      const sLower = seite.toLowerCase();
+      const match = chapter.pages.find(p => p.name === seite)
+        || chapter.pages.find(p => p.name.toLowerCase() === sLower)
+        || chapter.pages.find(p => {
+          const n = p.name.toLowerCase();
+          return n && (n.includes(sLower) || sLower.includes(n));
+        });
+      if (match) return match;
     }
-    return pages[0];
+    return chapter.pages[0];
   },
 
-  kontinuitaetGotoStelle(stelle) {
-    const page = this.kontinuitaetResolveStelle(stelle);
+  kontinuitaetGotoStelle(stelle, issue, side) {
+    const page = this.kontinuitaetResolveStelle(stelle, issue, side);
     if (page) this.selectPage(page);
   },
 };

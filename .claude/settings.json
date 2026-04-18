@@ -149,7 +149,14 @@
       "Bash(node -e \"import\\('./public/js/prompts.js'\\).then\\(m => { console.log\\('soz prompt:', typeof m.buildSoziogrammConsolidationPrompt\\); console.log\\('soz schema:', typeof m.SCHEMA_SOZIOGRAMM_KONSOL\\); console.log\\('sample:', m.buildSoziogrammConsolidationPrompt\\('Test', [{id:'fig_1', name:'A', beziehungen:[{figur_id:'fig_2',typ:'freund',machtverhaltnis:1}]},{id:'fig_2',name:'B',sozialschicht:'mittelschicht'}], 'Kontext'\\).slice\\(0,300\\)\\); }\\).catch\\(e => { console.error\\('ERR:', e.message\\); process.exit\\(1\\); }\\)\")",
       "Bash(node -c /Users/bd/ClaudeProjects/bookstack-lektorat/routes/jobs/komplett.js)",
       "Bash(rsvg-convert -w 192 -h 192 bookstack_lektorat_icon.svg -o icon-192.png)",
-      "Bash(rsvg-convert -w 512 -h 512 bookstack_lektorat_icon.svg -o icon-512.png)"
+      "Bash(rsvg-convert -w 512 -h 512 bookstack_lektorat_icon.svg -o icon-512.png)",
+      "Bash(node --check public/js/kontinuitaet.js)",
+      "Bash(node --check public/js/tree.js)",
+      "Bash(xargs -I{} node --check {})",
+      "Bash(node /Users/bd/ClaudeProjects/bookstack-lektorat/scripts/validate-prompt-config.js)",
+      "Bash(node scripts/boot-smoke.js)",
+      "Bash(rm -f freshtest.db)",
+      "Bash(node -e \"const Database=require\\('/Users/bd/ClaudeProjects/bookstack-lektorat/node_modules/better-sqlite3'\\);const db=new Database\\('freshtest.db'\\);try{db.exec\\('CREATE TABLE IF NOT EXISTS t \\(id INTEGER\\); CREATE INDEX IF NOT EXISTS i ON t\\(user_email\\);'\\);console.log\\('OK'\\);}catch\\(e\\){console.log\\('BUG:',e.message\\);}\")"
     ]
   }
 }
