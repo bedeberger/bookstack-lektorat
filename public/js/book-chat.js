@@ -36,7 +36,7 @@ export const bookChatMethods = {
       await this.loadBookChatSessions();
     },
     onPollProgress: function (job) {
-      this.bookChatStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec);
+      this.bookChatStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec, job.statusParams);
     },
     onPollDone: async function () {
       await this.loadBookChatSessions();

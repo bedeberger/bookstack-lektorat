@@ -99,7 +99,7 @@
           <tbody>
             <template x-for="row in jobStats" :key="row.type">
               <tr>
-                <td x-text="row.typeLabel"></td>
+                <td x-text="t(row.typeLabel)"></td>
                 <td x-text="row.avgDurationFmt"></td>
                 <td x-text="row.avgTokensFmt"></td>
                 <td x-text="row.lastRunFmt"></td>
@@ -225,9 +225,9 @@
     <button @click="tree.forEach(c => c.open = true)" class="btn-sm" x-text="t('sidebar.expandAll')"></button>
     <button @click="tree.forEach(c => c.open = false)" class="btn-sm" x-text="t('sidebar.collapseAll')"></button>
     <span x-show="Object.keys(tokEsts).length > 0" class="tok-totals">
-      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.tok,0).toLocaleString('de-CH') + ' T'"></span>
-      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.words,0).toLocaleString('de-CH') + ' W'"></span>
-      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.chars,0).toLocaleString('de-CH') + ' Z'"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.tok,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.t')"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.words,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.w')"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.chars,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.z')"></span>
     </span>
   </div>
   <!-- Batch-Fortschritt -->
@@ -334,8 +334,8 @@
   <span class="job-queue-label" x-text="t('jobQueue.label')"></span>
   <template x-for="job in jobQueueItems" :key="job.id">
     <div class="job-queue-pill" :class="'job-queue-pill--' + job.status" @click="navigateToJob(job)" :title="t('jobQueue.jumpTo')">
-      <span class="job-queue-pill-label" x-text="job.label"></span>
-      <span class="job-queue-pill-status" x-text="job.statusText"></span>
+      <span class="job-queue-pill-label" x-text="t(job.label, job.labelParams)"></span>
+      <span class="job-queue-pill-status" x-text="t(job.statusText, job.statusParams)"></span>
       <template x-if="job.status === 'running' && job.progress > 0">
         <span class="job-queue-pill-progress" x-text="job.progress + '%'"></span>
       </template>

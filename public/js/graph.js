@@ -153,12 +153,24 @@ export const graphMethods = {
       this.figuren.flatMap(f => (f.kapitel || []).map(k => k.name))
     )];
     const N = allChapters.length;
-    console.debug('[graph] allChapters:', N, allChapters);
-    // Radius so wählen dass benachbarte Cluster-Mittelpunkte ≥ 180px auseinander liegen
-    const R = N <= 1 ? 0 : Math.max(120, Math.ceil(180 / (2 * Math.sin(Math.PI / N))));
-    // Cluster-Radius = ~85% des halben Abstands zu Nachbar-Kapiteln
-    const clusterR = N <= 1 ? Math.max(280, R)
-      : Math.min(R * Math.sin(Math.PI / N) * 0.85, 280);
+
+    // Cluster- und Ring-Radius aus tatsächlicher Figurenzahl ableiten, damit
+    // jeder Kreis seine Figuren auch wirklich aufnehmen kann. Ohne diese
+    // Skalierung überlappen Ringe bei >3 Figuren/Kapitel und der Post-Pass
+    // drückt Figuren nach aussen, weg von ihrem Kreis.
+    const NODE_SPACING = 120;
+    const figurenPerChapter = {};
+    for (const f of this.figuren) for (const k of (f.kapitel || [])) {
+      figurenPerChapter[k.name] = (figurenPerChapter[k.name] || 0) + 1;
+    }
+    const maxFigs = Math.max(1, ...Object.values(figurenPerChapter));
+    // Packungsformel: clusterR ≈ 0.65 · spacing · √(m) reicht für m Figuren pro Disk
+    const clusterR = N <= 1
+      ? Math.max(280, 0.65 * NODE_SPACING * Math.sqrt(maxFigs))
+      : Math.max(140, 0.65 * NODE_SPACING * Math.sqrt(maxFigs));
+    // Ring so gross, dass benachbarte Cluster-Disks mit 10% Puffer nicht überlappen
+    const R = N <= 1 ? 0 : Math.max(180, clusterR / Math.sin(Math.PI / N) * 1.1);
+    console.debug('[graph] allChapters:', N, 'maxFigs:', maxFigs, 'R:', Math.round(R), 'clusterR:', Math.round(clusterR));
 
     const chapPos = {};
     allChapters.forEach((ch, i) => {
@@ -172,10 +184,14 @@ export const graphMethods = {
       // Gewichtete Kapitel-Position nur wenn N > 1: bei N <= 1 liegen alle
       // chapPos auf (0,0) (R=0), was zu identischen Startpositionen und damit
       // zur Linien-Degeneration des barnesHut-Physics führt.
+      // Häufigkeit hoch 1.5 gewichten, damit Figuren mit klarem Hauptkapitel
+      // dort angesiedelt werden statt zwischen mehreren Kapiteln im Zentrum
+      // zu landen.
       if (kaps.length && N > 1) {
-        const total = kaps.reduce((s, k) => s + (k.haeufigkeit || 1), 0);
+        const weight = k => Math.pow(k.haeufigkeit || 1, 1.5);
+        const total = kaps.reduce((s, k) => s + weight(k), 0);
         for (const k of kaps) {
-          const w = (k.haeufigkeit || 1) / total;
+          const w = weight(k) / total;
           x += chapPos[k.name].x * w;
           y += chapPos[k.name].y * w;
         }
@@ -206,7 +222,7 @@ export const graphMethods = {
     this._figurenEdges = new vis.DataSet(edgeList);
     const edges = this._figurenEdges;
 
-    const hasFamilyEdges = edgeList.some(e => ['elternteil', 'kind'].includes(e.label));
+    const hasFamilyEdges = edgeList.some(e => ['elternteil', 'kind'].includes(e.typ));
     console.debug('[graph] hasFamilyEdges:', hasFamilyEdges, '→ circles:', !hasFamilyEdges && N > 0);
     const options = {
       physics: hasFamilyEdges
@@ -270,15 +286,81 @@ export const graphMethods = {
     }
 
     this._figurenNetwork.once('stabilizationIterationsDone', () => {
-      // Positionen einfrieren bevor hierarchischer Modus deaktiviert wird –
+      // Positionen einfrieren bevor Physics/hierarchisches Layout deaktiviert wird –
       // sonst zieht vis-network beim Drag den ganzen Teilbaum mit.
       const positions = this._figurenNetwork.getPositions();
       nodes.update(Object.entries(positions).map(([id, { x, y }]) => ({ id, x, y })));
       this._figurenNetwork.setOptions({ physics: false, layout: { hierarchical: { enabled: false } } });
+      // Chapter-Attract: Nodes Richtung ihres Kapitel-Zentroids ziehen, damit die
+      // Cluster-Struktur nach der Spring-Simulation erkennbar wird. Nur im
+      // barnesHut-Modus (kein Familienbaum) und wenn es ≥ 2 Kapitel gibt.
+      if (!hasFamilyEdges && N > 1) this._chapterAttractPostPass(chapPos, nodes);
       // Aktiven Filter nach Neurender wiederherstellen
       if (this.figurenGraphKapitel) this._figurenGraphSetKapitel(this.figurenGraphKapitel);
     });
     this._attachTooltip(container);
+  },
+
+  // ── Chapter-Attract Post-Pass (Variante 2) ───────────────────────────────────
+  // Zieht jede Figur anteilig in den gewichteten Mittelpunkt ihrer Kapitel und
+  // löst Überlappungen per einfacher pairwise-Repulsion auf. Läuft geometrisch
+  // (kein vis-Physics), damit die Edges nicht direkt zurückziehen.
+  _chapterAttractPostPass(chapPos, nodes) {
+    const ALPHA = 0.6;      // Anteil Richtung Zentroid pro Pass (1.0 = hart snappen)
+    const MIN_DIST = 120;   // Ziel-Mindestabstand zwischen Node-Mittelpunkten
+    const REPULSION_ITER = 25;
+
+    const pos = this._figurenNetwork.getPositions();
+    const next = {};
+    // Gleiche Gewichtung wie Startposition: Hauptkapitel (höchste Häufigkeit)
+    // dominiert deutlich, damit Mehrfach-Kapitel-Figuren nicht im Zentrum landen.
+    const weight = k => Math.pow(k.haeufigkeit || 1, 1.5);
+
+    for (const f of this.figuren) {
+      const cur = pos[f.id];
+      if (!cur) continue;
+      const kaps = (f.kapitel || []).filter(k => chapPos[k.name]);
+      if (!kaps.length) { next[f.id] = { x: cur.x, y: cur.y }; continue; }
+      const total = kaps.reduce((s, k) => s + weight(k), 0);
+      let tx = 0, ty = 0;
+      for (const k of kaps) {
+        const w = weight(k) / total;
+        tx += chapPos[k.name].x * w;
+        ty += chapPos[k.name].y * w;
+      }
+      next[f.id] = {
+        x: cur.x + ALPHA * (tx - cur.x),
+        y: cur.y + ALPHA * (ty - cur.y),
+      };
+    }
+
+    // Pairwise-Repulsion: schiebt sich überlappende Nodes auseinander, ohne die
+    // Cluster-Zugehörigkeit zu zerstören (Aufwand O(N² · iter), N typ. < 50).
+    const ids = Object.keys(next);
+    for (let iter = 0; iter < REPULSION_ITER; iter++) {
+      let moved = false;
+      for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          const a = next[ids[i]], b = next[ids[j]];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const d = Math.hypot(dx, dy);
+          if (d < MIN_DIST && d > 0.01) {
+            const push = (MIN_DIST - d) / 2;
+            const nx = dx / d, ny = dy / d;
+            a.x -= nx * push; a.y -= ny * push;
+            b.x += nx * push; b.y += ny * push;
+            moved = true;
+          } else if (d <= 0.01) {
+            // exakt gleiche Position → minimal auseinanderstossen
+            a.x -= 1; b.x += 1;
+            moved = true;
+          }
+        }
+      }
+      if (!moved) break;
+    }
+
+    nodes.update(ids.map(id => ({ id, x: next[id].x, y: next[id].y })));
   },
 
   // ── Kapitel-Filter im Figurengraph ──────────────────────────────────────────
@@ -310,10 +392,10 @@ export const graphMethods = {
     // Edges: sichtbar wenn mind. ein Endpoint aktiv, sonst ausgegraut
     this._figurenEdges.update(this._figurenEdges.get().map(e => {
       if (!ch || activeIds.has(e.from) || activeIds.has(e.to)) {
-        const s = BZ[e.label] || BZ.andere;
-        return { id: e.id, color: { color: s.color, highlight: s.highlight }, font: { color: s.color, size: 10 } };
+        const s = BZ[e.typ] || BZ.andere;
+        return { id: e.id, color: { color: s.color, highlight: s.highlight } };
       }
-      return { id: e.id, color: { color: '#ddd', highlight: '#ddd' }, font: { color: '#ddd', size: 10 } };
+      return { id: e.id, color: { color: '#ddd', highlight: '#ddd' } };
     }));
   },
 

@@ -966,7 +966,8 @@ document.addEventListener('alpine:init', () => {
 
     formatDate(iso) {
       if (!iso) return '';
-      return new Date(iso).toLocaleString('de-CH', {
+      const tag = this.uiLocale === 'en' ? 'en-US' : 'de-CH';
+      return new Date(iso).toLocaleString(tag, {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
       });
@@ -988,11 +989,12 @@ document.addEventListener('alpine:init', () => {
     _formatSaveTs(ts) {
       if (!ts) return '';
       const d = new Date(ts);
+      const tag = this.uiLocale === 'en' ? 'en-US' : 'de-CH';
       const sameDay = d.toDateString() === new Date().toDateString();
       if (sameDay) {
-        return d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+        return d.toLocaleTimeString(tag, { hour: '2-digit', minute: '2-digit' });
       }
-      return d.toLocaleString('de-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleString(tag, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     },
 
     lastSavedLabel() { return this._formatSaveTs(this._saveStatus().ts); },
@@ -1073,7 +1075,7 @@ document.addEventListener('alpine:init', () => {
         jobId,
         lsKey: null,
         onProgress: (job) => {
-          if (job.statusText) this.alleAktualisierenStatus = job.statusText;
+          if (job.statusText) this.alleAktualisierenStatus = this.t(job.statusText, job.statusParams);
           if (job.tokensIn != null) this.alleAktualisierenTokIn = job.tokensIn;
           if (job.tokensOut != null) this.alleAktualisierenTokOut = job.tokensOut;
           if (job.tokensPerSec != null) this.alleAktualisierenTps = job.tokensPerSec;
@@ -1084,7 +1086,7 @@ document.addEventListener('alpine:init', () => {
         },
         onError: (job) => {
           this.alleAktualisierenLoading = false;
-          this.alleAktualisierenStatus = `${this.t('common.errorColon')}${job.error || this.t('app.jobFailed')}`;
+          this.alleAktualisierenStatus = `${this.t('common.errorColon')}${job.error ? this.t(job.error) : this.t('app.jobFailed')}`;
         },
         onDone: async () => {
           await Promise.all([
@@ -1135,14 +1137,17 @@ document.addEventListener('alpine:init', () => {
 
     // Generiertes Status-HTML für laufende Jobs: Spinner + statusText + Token-Info.
     // Wird von review.js, figuren.js und lektorat.js (batchCheck) verwendet.
-    _runningJobStatus(statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec) {
+    _runningJobStatus(statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams) {
       let tokInfo = '';
       if ((tokIn || 0) + (tokOut || 0) > 0) {
         const pctPart = (progress > 0 && progress < 100) ? ` ~${progress}%` : '';
         const tpsPart = tokPerSec ? ` · ${Math.round(tokPerSec)} tok/s` : '';
         tokInfo = ` · ↑${fmtTok(tokIn || 0)} ↓${fmtTok(tokOut || 0)} Tokens${pctPart}${tpsPart}`;
       }
-      return `<span class="spinner"></span>${escHtml(statusText || '…')}${tokInfo}`;
+      // statusText kann ein i18n-Key sein (z.B. 'job.phase.extracting') oder freier Text.
+      // tRaw gibt unbekannte Keys 1:1 zurück, damit Legacy-Text pass-through funktioniert.
+      const label = statusText ? this.t(statusText, statusParams) : '…';
+      return `<span class="spinner"></span>${escHtml(label)}${tokInfo}`;
     },
 
     // ── Partials laden ───────────────────────────────────────────────────────
@@ -1386,7 +1391,7 @@ document.addEventListener('alpine:init', () => {
         this.bookReviewProgress = job.progress || 0;
         this.showBookReviewCard = true;
         this.bookReviewOut = '';
-        this.setReviewStatus(job.statusText || this.t('common.analysisRunning'), true);
+        this.setReviewStatus(job.statusText ? this.t(job.statusText, job.statusParams) : this.t('common.analysisRunning'), true);
         this.startReviewPoll(jobId);
       });
 
@@ -1394,21 +1399,21 @@ document.addEventListener('alpine:init', () => {
         this.figurenLoading = true;
         this.figurenProgress = job.progress || 0;
         this.showFiguresCard = true;
-        this.figurenStatus = job.statusText || this.t('common.analysisRunning');
+        this.figurenStatus = job.statusText ? this.t(job.statusText, job.statusParams) : this.t('common.analysisRunning');
         this.startFiguresPoll(jobId);
       });
 
       await this._reconnectJob('lektorat_batchcheck_job_' + bookId, (job, jobId) => {
         this.batchLoading = true;
         this.batchProgress = job.progress || 0;
-        this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec);
+        this.batchStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec, job.statusParams);
         this.startBatchPoll(jobId);
       });
 
       // Prüfen ob ein komplett-analyse Job vom Server noch läuft (z.B. Tab geschlossen)
       if (!this.alleAktualisierenLoading) {
         try {
-          const { jobId, status, progress, statusText } = await fetch(
+          const { jobId, status, progress, statusText, statusParams } = await fetch(
             `/jobs/active?type=komplett-analyse&book_id=${bookId}`
           ).then(r => r.json());
           if (jobId && (status === 'running' || status === 'queued')) {
@@ -1417,7 +1422,7 @@ document.addEventListener('alpine:init', () => {
             this.alleAktualisierenTokIn = 0;
             this.alleAktualisierenTokOut = 0;
             this.alleAktualisierenTps = null;
-            this.alleAktualisierenStatus = statusText || this.t('komplett.running');
+            this.alleAktualisierenStatus = statusText ? this.t(statusText, statusParams) : this.t('komplett.running');
             this.showKomplettStatus = true;
             this._startKomplettPoll(jobId, bookId);
           }

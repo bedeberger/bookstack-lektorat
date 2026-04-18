@@ -19,7 +19,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
   const { buildBookReviewSinglePassPrompt, buildChapterAnalysisPrompt, buildBookReviewMultiPassPrompt, SCHEMA_REVIEW, SCHEMA_CHAPTER_ANALYSIS } = await getPrompts();
   const { SYSTEM_BUCHBEWERTUNG, SYSTEM_KAPITELANALYSE } = await getBookPrompts(bookId);
   try {
-    updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
+    updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
       bsGetAll('chapters?book_id=' + bookId, userToken),
       bsGetAll('pages?book_id=' + bookId, userToken),
@@ -33,7 +33,8 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
     const pageContents = await loadPageContents(pages, chMap, 50, (i, total) => {
       updateJob(jobId, {
         progress: Math.round((i / total) * 60),
-        statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
+        statusText: 'job.phase.readingPages',
+        statusParams: { from: i + 1, to: Math.min(i + BATCH_SIZE, total), total },
       });
     }, userToken, jobAbortControllers.get(jobId)?.signal);
 
@@ -43,7 +44,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
     let r;
 
     if (totalChars <= SINGLE_PASS_LIMIT) {
-      updateJob(jobId, { progress: 65, statusText: 'KI analysiert das Buch…' });
+      updateJob(jobId, { progress: 65, statusText: 'job.phase.aiBookReview' });
       const bookText = buildSinglePassBookText(groups, groupOrder);
 
       r = await aiCall(jobId, tok,
@@ -62,7 +63,8 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
         const toPct   = 65 + Math.round(((gi + 1) / groupOrder.length) * 25);
         updateJob(jobId, {
           progress: fromPct,
-          statusText: `Analysiere ${gi + 1}/${groupOrder.length}: «${group.name}»…`,
+          statusText: 'job.phase.analyzing',
+          statusParams: { current: gi + 1, total: groupOrder.length, name: group.name },
         });
         const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
         const ca = await aiCall(jobId, tok,
@@ -83,7 +85,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
 
       updateJob(jobId, {
         progress: 90,
-        statusText: `KI erstellt Gesamtbewertung…`,
+        statusText: 'job.phase.finalReview',
       });
       r = await aiCall(jobId, tok,
         buildBookReviewMultiPassPrompt(bookName, chapterAnalyses, pageContents.length),
@@ -114,8 +116,9 @@ reviewRouter.post('/review', jsonBody, (req, res) => {
   const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
   const existing = runningJobs.get(jobKey('review', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
-  const label = book_name ? `Buchbewertung · ${book_name}` : `Buchbewertung`;
-  const jobId = createJob('review', book_id, userEmail, label);
+  const label = book_name ? 'job.label.reviewBook' : 'job.label.review';
+  const labelParams = book_name ? { name: book_name } : null;
+  const jobId = createJob('review', book_id, userEmail, label, labelParams);
   enqueueJob(jobId, () => runReviewJob(jobId, book_id, book_name || '', userEmail, userToken));
   res.json({ jobId });
 });

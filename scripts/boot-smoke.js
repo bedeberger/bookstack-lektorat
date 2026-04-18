@@ -80,7 +80,7 @@ function waitForReady(child) {
     if (cfg.status !== 401) throw new Error(`/config ohne Session: erwarte 401, bekam ${cfg.status}`);
     try {
       const j = JSON.parse(cfg.body);
-      if (!j.error) throw new Error('/config 401 enthält kein error-Feld');
+      if (j.error_code !== 'NOT_LOGGED_IN') throw new Error(`/config 401 erwartet error_code NOT_LOGGED_IN, bekam ${JSON.stringify(j)}`);
     } catch (e) {
       throw new Error(`/config 401 body ist kein JSON: ${e.message}`);
     }

@@ -1003,6 +1003,29 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 41').run();
     logger.info('DB-Migration auf Version 41 abgeschlossen (users-Tabelle).');
   }
+  if (version < 42) {
+    // Index-Felder für Agentic Buch-Chat: Pronomen-Counts, Dialoganteil, Sätze + Content-Signatur.
+    // metrics_version erzwingt Neuberechnung nach Algorithmus-Änderungen (idempotent).
+    const psCols42 = db.pragma('table_info(page_stats)').map(c => c.name);
+    if (!psCols42.includes('sentences'))       db.exec('ALTER TABLE page_stats ADD COLUMN sentences INTEGER');
+    if (!psCols42.includes('dialog_chars'))    db.exec('ALTER TABLE page_stats ADD COLUMN dialog_chars INTEGER');
+    if (!psCols42.includes('pronoun_counts'))  db.exec('ALTER TABLE page_stats ADD COLUMN pronoun_counts TEXT');
+    if (!psCols42.includes('metrics_version')) db.exec('ALTER TABLE page_stats ADD COLUMN metrics_version INTEGER DEFAULT 0');
+    if (!psCols42.includes('content_sig'))     db.exec('ALTER TABLE page_stats ADD COLUMN content_sig TEXT');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS page_figure_mentions (
+        page_id      INTEGER NOT NULL,
+        figure_id    INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+        count        INTEGER NOT NULL DEFAULT 0,
+        first_offset INTEGER,
+        PRIMARY KEY (page_id, figure_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_pfm_figure ON page_figure_mentions(figure_id);
+      CREATE INDEX IF NOT EXISTS idx_pfm_page   ON page_figure_mentions(page_id);
+    `);
+    db.prepare('UPDATE schema_version SET version = 42').run();
+    logger.info('DB-Migration auf Version 42 abgeschlossen (page_stats-Index-Felder + page_figure_mentions).');
+  }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).

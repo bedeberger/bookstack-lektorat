@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const { db } = require('../../db/schema');
-const { callAIChat, parseJSON, CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../../lib/ai');
+const { callAIChat, callAIWithTools, parseJSON, CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../../lib/ai');
 const {
   _promptConfig,
   makeJobLogger, updateJob, completeJob, failJob,
@@ -12,6 +12,7 @@ const {
   jsonBody,
   getFiguren, getLatestReview, buildChatMessageHistory,
 } = require('./shared');
+const { executeTool } = require('./book-chat-tools');
 
 const chatRouter = express.Router();
 
@@ -55,7 +56,7 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
   const logger = makeJobLogger(jobId);
   const { buildChatSystemPrompt, SCHEMA_CHAT } = await getPrompts();
   try {
-    updateJob(jobId, { statusText: 'Vorbereitung…', progress: 5 });
+    updateJob(jobId, { statusText: 'job.phase.preparing', progress: 5 });
 
     const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?')
       .get(parseInt(sessionId), userEmail);
@@ -95,7 +96,7 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
     const historyWithoutLast = buildChatMessageHistory(session.id).slice(0, -1);
     const aiMessages = [...historyWithoutLast, { role: 'user', content: message }];
 
-    updateJob(jobId, { statusText: 'KI antwortet…', progress: 10 });
+    updateJob(jobId, { statusText: 'job.phase.aiReply', progress: 10 });
 
     const onProgress = ({ chars, tokIn }) => {
       const updates = { progress: Math.min(97, 10 + Math.round(chars / 50)) };
@@ -171,7 +172,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
   const logger = makeJobLogger(jobId);
   const { buildBookChatSystemPrompt, SCHEMA_BOOK_CHAT } = await getPrompts();
   try {
-    updateJob(jobId, { statusText: 'Vorbereitung…', progress: 5 });
+    updateJob(jobId, { statusText: 'job.phase.preparing', progress: 5 });
 
     const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?')
       .get(parseInt(sessionId), userEmail);
@@ -191,9 +192,9 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     const cached = _bookPageCache.get(cacheKey);
     if (cached && Date.now() - cached.loadedAt < _BOOK_PAGE_CACHE_TTL_MS) {
       pageContents = cached.pages;
-      updateJob(jobId, { statusText: 'Seiten aus Cache…', progress: 40 });
+      updateJob(jobId, { statusText: 'job.phase.pagesFromCache', progress: 40 });
     } else {
-      updateJob(jobId, { statusText: 'Seitenliste laden…', progress: 8 });
+      updateJob(jobId, { statusText: 'job.phase.pageListLoading', progress: 8 });
       const fetchSignal = jobSignal ? AbortSignal.any([jobSignal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000);
       const pagesListResp = await fetch(
         `${BS_URL}/api/pages?filter[book_id]=${session.book_id}&count=500`,
@@ -207,7 +208,8 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
       for (let i = 0; i < pages.length; i += BATCH) {
         if (jobSignal?.aborted) throw new DOMException('Aborted', 'AbortError');
         updateJob(jobId, {
-          statusText: `Seiten laden… ${Math.min(i + BATCH, pages.length)}/${pages.length}`,
+          statusText: 'job.phase.loadingPagesBatch',
+          statusParams: { loaded: Math.min(i + BATCH, pages.length), total: pages.length },
           progress: 10 + Math.round((i / Math.max(pages.length, 1)) * 30),
         });
         const batch = pages.slice(i, i + BATCH);
@@ -249,7 +251,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     );
 
     // ── Schritt 4: Relevanz-Scoring + Seitenauswahl ─────────────────────────────
-    updateJob(jobId, { statusText: 'Relevante Seiten auswählen…', progress: 42 });
+    updateJob(jobId, { statusText: 'job.phase.selectingPages', progress: 42 });
     const scored = pageContents.map(p => ({ ...p, score: _scorePageRelevance(message, p.text, bookChatStopwords) }));
     const anyScore = scored.some(p => p.score > 0);
     if (anyScore) scored.sort((a, b) => b.score - a.score);
@@ -299,7 +301,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
 
     const aiMessages = [...historyWithoutLast, { role: 'user', content: message }];
 
-    updateJob(jobId, { statusText: 'KI antwortet…', progress: 50 });
+    updateJob(jobId, { statusText: 'job.phase.aiReply', progress: 50 });
 
     const onProgress = ({ chars, tokIn }) => {
       const updates = { progress: Math.min(97, 50 + Math.round(chars / 50)) };
@@ -361,10 +363,168 @@ function _handleChatPost(req, res, { jobType, sessionSelect, labelFn, runFn }) {
     ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw }
     : null;
 
-  const label = labelFn(session);
-  const jobId = createJob(jobType, session_id, userEmail, label);
+  const { key: label, params: labelParams } = labelFn(session);
+  const jobId = createJob(jobType, session_id, userEmail, label, labelParams);
   enqueueJob(jobId, () => runFn(jobId, session_id, userMsgResult.lastInsertRowid, message.trim(), userEmail, userToken));
   res.json({ jobId });
+}
+
+// ── Job: Agentic Buch-Chat (Tool-Use) ─────────────────────────────────────────
+// Ersetzt runBookChatJob bei API_PROVIDER=claude (und BOOK_CHAT_MODE != 'classic').
+// Der Agent ruft Tools aus routes/jobs/book-chat-tools.js auf, um Fragen
+// über den gesamten Buchindex zu beantworten, statt alle Seiten vorab zu laden.
+const BOOK_CHAT_MAX_TOOL_ITER = parseInt(process.env.BOOK_CHAT_MAX_TOOL_ITER, 10) || 6;
+const BOOK_CHAT_TOKEN_BUDGET   = parseInt(process.env.BOOK_CHAT_TOKEN_BUDGET, 10) || 100000;
+
+function _bookChatUseAgent() {
+  const provider = process.env.API_PROVIDER || 'claude';
+  const mode = (process.env.BOOK_CHAT_MODE || 'auto').toLowerCase();
+  if (mode === 'classic') return false;
+  if (mode === 'agent')   return provider === 'claude';
+  return provider === 'claude'; // 'auto'
+}
+
+async function runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEmail, userToken) {
+  const logger = makeJobLogger(jobId);
+  const { buildBookChatAgentSystemPrompt, BOOK_CHAT_TOOLS } = await getPrompts();
+  try {
+    updateJob(jobId, { statusText: 'Vorbereitung…', progress: 5 });
+
+    const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?')
+      .get(parseInt(sessionId), userEmail);
+    if (!session) throw new Error('Session nicht gefunden');
+
+    const figuren = getFiguren(session.book_id, userEmail);
+    const review  = getLatestReview(session.book_id, userEmail);
+    const { SYSTEM_BOOK_CHAT: bookChatSys } = await getBookPrompts(session.book_id);
+    const systemPrompt = buildBookChatAgentSystemPrompt(
+      session.book_name || '', figuren, review, bookChatSys
+    );
+
+    const jobSignal = jobAbortControllers.get(jobId)?.signal;
+    const ctx = {
+      bookId: session.book_id,
+      userEmail,
+      userToken,
+      jobSignal,
+      logger,
+    };
+
+    // Historien-Rolling-Window (Anker + letzte 10 Nachrichten)
+    const historyWithoutLast = _bookChatBuildHistory(session.id).slice(0, -1);
+    let messages = [...historyWithoutLast, { role: 'user', content: message }];
+
+    let totalTokIn = 0, totalTokOut = 0;
+    let finalText = null;
+    let genMs = 0;
+    const toolLog = []; // für context_info
+    let iter = 0;
+
+    for (iter = 0; iter < BOOK_CHAT_MAX_TOOL_ITER; iter++) {
+      if (jobSignal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      updateJob(jobId, {
+        statusText: `Werkzeuge ${iter + 1}/${BOOK_CHAT_MAX_TOOL_ITER}…`,
+        progress: Math.min(90, 10 + iter * 12),
+      });
+
+      const onProgress = ({ chars, tokIn }) => {
+        const updates = {};
+        if (tokIn > 0)  updates.tokensIn  = totalTokIn + tokIn;
+        if (chars > 0)  updates.tokensOut = totalTokOut + Math.floor(chars / CHARS_PER_TOKEN);
+        if (Object.keys(updates).length) updateJob(jobId, updates);
+      };
+
+      const result = await callAIWithTools(
+        messages, systemPrompt, BOOK_CHAT_TOOLS, onProgress,
+        undefined, jobSignal, undefined
+      );
+      totalTokIn  += result.tokensIn;
+      totalTokOut += result.tokensOut;
+      if (result.genDurationMs) genMs += result.genDurationMs;
+
+      if (totalTokIn > BOOK_CHAT_TOKEN_BUDGET) {
+        logger.warn(`Job ${jobId}: Token-Budget überschritten (${totalTokIn}/${BOOK_CHAT_TOKEN_BUDGET}) – Loop abgebrochen.`);
+        finalText = result.text || JSON.stringify({ antwort: 'Die Antwort wurde wegen Kontext-Begrenzung vorzeitig beendet. Bitte präzisiere deine Frage.' });
+        break;
+      }
+
+      if (result.stopReason !== 'tool_use') {
+        // Finale Antwort
+        finalText = result.text;
+        break;
+      }
+
+      // Tool-Use: alle tool_uses ausführen und als user-tool_result an messages anhängen.
+      messages.push({ role: 'assistant', content: result.rawContentBlocks });
+      const toolResults = [];
+      for (const tu of result.toolUses) {
+        if (jobSignal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        let out;
+        try {
+          out = await executeTool(tu.name, tu.input, ctx);
+          toolLog.push({ name: tu.name, input: tu.input, ok: true });
+        } catch (e) {
+          if (e.name === 'AbortError') throw e;
+          logger.warn(`Job ${jobId}: Tool «${tu.name}» Fehler: ${e.message}`);
+          out = { error: e.message };
+          toolLog.push({ name: tu.name, input: tu.input, ok: false, error: e.message });
+        }
+        const content = JSON.stringify(out);
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: tu.id,
+          content: content.length > 8000 ? content.slice(0, 8000) + '…' : content,
+          ...(out && out.error ? { is_error: true } : {}),
+        });
+      }
+      messages.push({ role: 'user', content: toolResults });
+    }
+
+    if (finalText == null) {
+      logger.warn(`Job ${jobId}: Max-Iterationen (${BOOK_CHAT_MAX_TOOL_ITER}) erreicht ohne finale Antwort.`);
+      finalText = JSON.stringify({ antwort: 'Ich habe die Werkzeugaufrufe ausgeschöpft, ohne zu einer abschliessenden Antwort zu kommen. Bitte formuliere die Frage konkreter.' });
+    }
+
+    const { antwort } = _parseChatResponse(finalText);
+    if (antwort === finalText) {
+      logger.warn(`Job ${jobId}: Agent-Antwort kein valides JSON – Rohtext wird gespeichert.`);
+    }
+
+    // Assistant-Nachricht in DB speichern
+    const assistantNow = new Date().toISOString();
+    const tpsVal = (genMs > 0 && totalTokOut > 0) ? totalTokOut / (genMs / 1000) : null;
+    const contextInfo = {
+      mode: 'agent',
+      tool_calls: toolLog,
+      iterations: iter + 1,
+    };
+    const asstMsgResult = db.prepare(`
+      INSERT INTO chat_messages (session_id, role, content, tokens_in, tokens_out, tps, context_info, created_at)
+      VALUES (?, 'assistant', ?, ?, ?, ?, ?, ?)
+    `).run(session.id, antwort, totalTokIn, totalTokOut, tpsVal, JSON.stringify(contextInfo), assistantNow);
+    db.prepare('UPDATE chat_sessions SET last_message_at = ? WHERE id = ?').run(assistantNow, session.id);
+
+    completeJob(jobId, {
+      session_id: session.id,
+      user_message_id: userMsgId,
+      assistant_message_id: asstMsgResult.lastInsertRowid,
+      tokensIn: totalTokIn, tokensOut: totalTokOut,
+      toolCalls: toolLog.length,
+      iterations: iter + 1,
+    }, tpsVal);
+    logger.info(`Job ${jobId}: Agent-Buch-Chat session ${sessionId} abgeschlossen (${fmtTok(totalTokIn)}↑ ${fmtTok(totalTokOut)}↓, ${toolLog.length} Tool-Calls, ${iter + 1} Iter).`);
+  } catch (e) {
+    if (e.name !== 'AbortError') logger.error(`Job ${jobId}: Agent-Buch-Chat Fehler: ${e.message}`);
+    failJob(jobId, e);
+  }
+}
+
+// Dispatcher: wählt zwischen Agent-Pfad und klassischem Pfad.
+function runBookChatJobDispatch(jobId, sessionId, userMsgId, message, userEmail, userToken) {
+  if (_bookChatUseAgent()) {
+    return runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEmail, userToken);
+  }
+  return runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, userToken);
 }
 
 // ── Routen ────────────────────────────────────────────────────────────────────
@@ -372,15 +532,19 @@ function _handleChatPost(req, res, { jobType, sessionSelect, labelFn, runFn }) {
 chatRouter.post('/chat', jsonBody, (req, res) => _handleChatPost(req, res, {
   jobType: 'chat',
   sessionSelect: 'SELECT id, page_name, book_name FROM chat_sessions WHERE id = ? AND user_email = ?',
-  labelFn: s => s.page_name ? `Chat · ${s.page_name}` : 'Chat',
+  labelFn: s => s.page_name
+    ? { key: 'job.label.chatPage', params: { name: s.page_name } }
+    : { key: 'job.label.chat', params: null },
   runFn: runChatJob,
 }));
 
 chatRouter.post('/book-chat', jsonBody, (req, res) => _handleChatPost(req, res, {
   jobType: 'book-chat',
   sessionSelect: 'SELECT id, book_name FROM chat_sessions WHERE id = ? AND user_email = ?',
-  labelFn: s => s.book_name ? `Buch-Chat · ${s.book_name}` : 'Buch-Chat',
-  runFn: runBookChatJob,
+  labelFn: s => s.book_name
+    ? { key: 'job.label.bookChatBook', params: { name: s.book_name } }
+    : { key: 'job.label.bookChat', params: null },
+  runFn: runBookChatJobDispatch,
 }));
 
 chatRouter.delete('/book-chat-cache', (req, res) => {

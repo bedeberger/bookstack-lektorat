@@ -9,6 +9,7 @@ const {
   loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache,
   getAllUserTokens,
 } = require('../../db/schema');
+const { recomputeBookFigureMentions } = require('../../lib/page-index');
 const {
   makeJobLogger, updateJob, completeJob, failJob,
   aiCall, getPrompts, getBookPrompts,
@@ -327,7 +328,7 @@ function restorePhase1FromCheckpoint(cp, tok, log, jobId) {
   const orteTotal = (chapterOrte || []).reduce((s, c) => s + (c.orte?.length || 0), 0);
   const szTotal = (chapterSzenen || []).reduce((s, c) => s + (c.szenen?.length || 0), 0);
   log.info(`Job ${jobId}: Phase 1 aus Checkpoint – ${chapterFiguren.length} Kapitel, fig=${figTotal} orte=${orteTotal} sz=${szTotal} (${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓)`);
-  updateJob(jobId, { progress: 28, statusText: 'Phase 1 aus Checkpoint geladen…', tokensIn: tok.in, tokensOut: tok.out });
+  updateJob(jobId, { progress: 28, statusText: 'job.phase.checkpointLoaded', tokensIn: tok.in, tokensOut: tok.out });
   return { chapterFiguren, chapterOrte, chapterFakten, chapterSzenen, chapterAssignments };
 }
 
@@ -353,7 +354,7 @@ async function runPhase1(ctx) {
 
   if (totalChars <= singlePassLimit) {
     // ── Single-Pass ──
-    updateJob(jobId, { progress: 12, statusText: 'KI extrahiert Figuren, Schauplätze, Fakten, Szenen…' });
+    updateJob(jobId, { progress: 12, statusText: 'job.phase.extracting' });
     const r = await call(jobId, tok,
       prompts.buildExtraktionKomplettChapterPrompt('Gesamtbuch', bookName, pageContents.length, fullBookText),
       sys.SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 16000, 0.2, null, prompts.SCHEMA_KOMPLETT_EXTRAKTION,
@@ -370,7 +371,7 @@ async function runPhase1(ctx) {
     // Für lokale Modelle: Kapitel die PER_CHUNK_LIMIT überschreiten, werden in Seiten-Untergruppen
     // aufgeteilt. Jeder Chunk bekommt einen eigenen KI-Call mit eigenem Delta-Cache-Eintrag.
     // Claude nutzt singlePassLimit (250K) als Chunk-Grenze → kein Splitting in der Praxis.
-    updateJob(jobId, { progress: 12, statusText: `Vollextraktion in ${chunkOrder.length} Chunks…` });
+    updateJob(jobId, { progress: 12, statusText: 'job.phase.extractingChunks', statusParams: { n: chunkOrder.length } });
     const chunkTexts = chunkOrder.map(chunkKey => {
       const chunk = chunks.get(chunkKey);
       return {
@@ -437,7 +438,7 @@ async function runPhase1(ctx) {
 async function runPhase2(ctx, chapterFiguren, chapterAssignments) {
   const { jobId, bookIdInt, bookName, email, call, tok, log, prompts, sys, idMaps, effectiveProvider } = ctx;
 
-  updateJob(jobId, { progress: 30, statusText: 'KI konsolidiert Figuren…' });
+  updateJob(jobId, { progress: 30, statusText: 'job.phase.consolidatingFiguren' });
   const figProgressEnd = effectiveProvider === 'claude' ? 40 : 43;
   const figResult = await call(jobId, tok,
     prompts.buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren, sys.BUCH_KONTEXT || ''),
@@ -454,6 +455,13 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments) {
   }
   saveFigurenToDb(bookIdInt, figuren, email, idMaps);
   log.info(`Job ${jobId}: ${figuren.length} Figuren gespeichert.`);
+  // Figuren-Mentions für den Buch-Chat-Index aktualisieren (non-critical)
+  try {
+    const { figures: figCount, pagesProcessed } = recomputeBookFigureMentions(bookIdInt, email);
+    log.info(`Job ${jobId}: Figuren-Mentions aktualisiert (${figCount} Figuren × ${pagesProcessed} Seiten).`);
+  } catch (e) {
+    log.warn(`Job ${jobId}: Figuren-Mentions-Neuberechnung fehlgeschlagen: ${e.message}`);
+  }
 
   // Soziogramm: preliminary-Werte aus P2-Ergebnis als Fallback
   if (figuren.length >= 4) {
@@ -467,7 +475,7 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments) {
     // Claude-only: holistische Soziogramm-Konsolidierung (sozialschicht + machtverhaltnis)
     // Non-critical – bei Fehler fallen wir auf die preliminary-Werte zurück.
     if (effectiveProvider === 'claude') {
-      updateJob(jobId, { progress: 40, statusText: 'KI verfeinert Soziogramm…' });
+      updateJob(jobId, { progress: 40, statusText: 'job.phase.refiningSoziogramm' });
       try {
         const sozResult = await call(jobId, tok,
           prompts.buildSoziogrammConsolidationPrompt(bookName, figuren, sys.BUCH_KONTEXT || ''),
@@ -512,7 +520,7 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments) {
 async function runPhase3(ctx, chapterOrte, figurenKompakt) {
   const { jobId, bookIdInt, bookName, email, call, tok, log, prompts, sys, idMaps } = ctx;
 
-  updateJob(jobId, { progress: 43, statusText: 'Schauplätze konsolidieren…' });
+  updateJob(jobId, { progress: 43, statusText: 'job.phase.consolidatingOrte' });
   const orteResultRaw = await call(jobId, tok,
     prompts.buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt),
     sys.SYSTEM_ORTE, 43, 55, 6000, 0.2, null, prompts.SCHEMA_ORTE_KONSOL,
@@ -539,7 +547,7 @@ async function runPhase3(ctx, chapterOrte, figurenKompakt) {
 async function runPhase3b(ctx, figuren) {
   const { jobId, bookIdInt, email, call, tok, log, prompts, sys, singlePassLimit, bookName, fullBookText } = ctx;
 
-  updateJob(jobId, { progress: 55, statusText: 'Kapitelübergreifende Beziehungen suchen…' });
+  updateJob(jobId, { progress: 55, statusText: 'job.phase.crossChapterRelations' });
   const textForPrompt = fullBookText.length <= singlePassLimit
     ? fullBookText
     : fullBookText.slice(0, singlePassLimit);
@@ -556,7 +564,7 @@ async function runPhase3b(ctx, figuren) {
 async function runZeitstrahl(ctx) {
   const { jobId, bookIdInt, email, call, tok, log, prompts, sys, idMaps } = ctx;
 
-  updateJob(jobId, { progress: 83, statusText: 'Zeitstrahl konsolidieren…' });
+  updateJob(jobId, { progress: 83, statusText: 'job.phase.consolidatingTimeline' });
   const rawEvtRows = db.prepare(`
     SELECT f.fig_id, f.name AS fig_name, f.typ AS fig_typ,
            fe.datum, fe.ereignis, fe.typ AS evt_typ, fe.bedeutung, fe.kapitel, fe.seite
@@ -627,7 +635,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     const cp = loadAndValidateCheckpoint(bookIdInt, email, log, jobId);
 
     // ── Seiten laden ──────────────────────────────────────────────────────────
-    updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
+    updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
       bsGetAll('chapters?book_id=' + bookId, userToken),
       bsGetAll('pages?book_id=' + bookId, userToken),
@@ -638,7 +646,8 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     const pageContents = await loadPageContents(pages, chMap, 30, (i, total) => {
       updateJob(jobId, {
         progress: Math.round((i / total) * 12),
-        statusText: `Lese ${i + 1}–${Math.min(i + BATCH_SIZE, total)} von ${total} Seiten…`,
+        statusText: 'job.phase.readingPages',
+        statusParams: { from: i + 1, to: Math.min(i + BATCH_SIZE, total), total },
       });
     }, userToken, jobAbortControllers.get(jobId)?.signal);
 
@@ -680,13 +689,13 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     }
 
     // ── Block 2: Szenen/Zeitstrahl + Kontinuität parallel ─────────────────────
-    updateJob(jobId, { progress: 58, statusText: 'Szenen verarbeiten und Kontinuität prüfen…' });
+    updateJob(jobId, { progress: 58, statusText: 'job.phase.processingScenesContinuity' });
 
     const [szenenResult] = await Promise.all([
 
       // P5+P6: Szenen aus P1 remappen + Zeitstrahl konsolidieren
       (async () => {
-        updateJob(jobId, { progress: 63, statusText: 'Szenen aus Extraktion verarbeiten…' });
+        updateJob(jobId, { progress: 63, statusText: 'job.phase.processingScenes' });
         const locRows = db.prepare(
           'SELECT id, loc_id FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
         ).all(bookIdInt, email);
@@ -694,7 +703,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
 
         const szenen = remapSzenen(chapterSzenen, figNameToId, figNameToIdLower, ortNameToId, ortNameToIdLower, idMaps.chNameToId);
         const assignments = remapAssignments(chapterAssignments, figNameToId, figNameToIdLower, idMaps.chNameToId, log, jobId);
-        updateJob(jobId, { progress: 81, statusText: 'Szenen speichern…' });
+        updateJob(jobId, { progress: 81, statusText: 'job.phase.savingScenes' });
         const result = saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId, idMaps, log, jobId);
         await runZeitstrahl(ctx);
         return result;
@@ -763,7 +772,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
     const cp = loadCheckpoint('kontinuitaet', bookIdInt, email);
     if (cp) log.info(`Job ${jobId}: Checkpoint gefunden (${cp.nextGi} Kapitel fertig).`);
 
-    updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
+    updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
       bsGetAll('chapters?book_id=' + bookId, userToken),
       bsGetAll('pages?book_id=' + bookId, userToken),
@@ -799,7 +808,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
     let result;
 
     if (totalChars <= singlePassLimit) {
-      updateJob(jobId, { progress: 60, statusText: 'KI prüft Kontinuität…' });
+      updateJob(jobId, { progress: 60, statusText: 'job.phase.checkContinuity' });
       const bookText = buildSinglePassBookText(groups, groupOrder);
       result = await call(jobId, tok,
         prompts.buildKontinuitaetSinglePassPrompt(bookName, bookText, figurenKompakt, orteKompakt),
@@ -812,14 +821,15 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
       if (startGi > 0) {
         updateJob(jobId, {
           progress: 50 + Math.round((startGi / groupOrder.length) * 35),
-          statusText: `Setze Fakten-Extraktion fort (${startGi}/${groupOrder.length})…`,
+          statusText: 'job.phase.resumeFacts',
+          statusParams: { current: startGi, total: groupOrder.length },
         });
       }
       for (let gi = startGi; gi < groupOrder.length; gi++) {
         const group = groups.get(groupOrder[gi]);
         const fromPct = 50 + Math.round((gi / groupOrder.length) * 35);
         const toPct   = 50 + Math.round(((gi + 1) / groupOrder.length) * 35);
-        updateJob(jobId, { progress: fromPct, statusText: `Fakten in «${group.name}» (${gi + 1}/${groupOrder.length})…` });
+        updateJob(jobId, { progress: fromPct, statusText: 'job.phase.factsInGroup', statusParams: { name: group.name, current: gi + 1, total: groupOrder.length } });
         const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
         try {
           const chResult = await call(jobId, tok,
@@ -834,7 +844,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
         saveCheckpoint('kontinuitaet', bookIdInt, email, { chapterFacts, nextGi: gi + 1 });
       }
 
-      updateJob(jobId, { progress: 88, statusText: 'KI prüft Widersprüche…' });
+      updateJob(jobId, { progress: 88, statusText: 'job.phase.checkContradictions' });
       result = await call(jobId, tok,
         prompts.buildKontinuitaetCheckPrompt(bookName, chapterFacts, figurenKompakt, orteKompakt),
         sys.SYSTEM_KONTINUITAET, 88, 97, 5000, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
@@ -916,8 +926,9 @@ komplettRouter.post('/komplett-analyse', jsonBody, (req, res) => {
   const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
   const existing = runningJobs.get(jobKey('komplett-analyse', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
-  const label = book_name ? `Komplettanalyse · ${book_name}` : 'Komplettanalyse';
-  const jobId = createJob('komplett-analyse', book_id, userEmail, label);
+  const label = book_name ? 'job.label.komplettBook' : 'job.label.komplett';
+  const labelParams = book_name ? { name: book_name } : null;
+  const jobId = createJob('komplett-analyse', book_id, userEmail, label, labelParams);
   enqueueJob(jobId, () => runKomplettAnalyseJob(jobId, book_id, book_name || '', userEmail, userToken));
   res.json({ jobId });
 });
@@ -929,8 +940,9 @@ komplettRouter.post('/kontinuitaet', jsonBody, (req, res) => {
   const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
   const existing = runningJobs.get(jobKey('kontinuitaet', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
-  const label = book_name ? `Kontinuität · ${book_name}` : `Kontinuität`;
-  const jobId = createJob('kontinuitaet', book_id, userEmail, label);
+  const label = book_name ? 'job.label.kontinuitaetBook' : 'job.label.kontinuitaet';
+  const labelParams = book_name ? { name: book_name } : null;
+  const jobId = createJob('kontinuitaet', book_id, userEmail, label, labelParams);
   enqueueJob(jobId, () => runKontinuitaetJob(jobId, book_id, book_name || '', userEmail, userToken));
   res.json({ jobId });
 });

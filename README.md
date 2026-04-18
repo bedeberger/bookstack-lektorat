@@ -7,7 +7,7 @@ KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). L�
 - **Fokusmodus** – Ablenkungsfreier Vollbild-Schreibmodus mit Absatz-Hervorhebung und Typewriter-Scroll (F11)
 - **Synonym-Finder** – Im Bearbeitungsmodus: Wort markieren → Rechtsklick → kombinierte Vorschläge aus [OpenThesaurus](https://www.openthesaurus.de/) (deutsch) und der KI mit Satzkontext; Klick ersetzt direkt im Text
 - **Seiten-Chat** – Freier KI-Dialog zu einer Seite inkl. Kontext (Figuren, Buchbewertung); Änderungsvorschläge direkt in BookStack übernehmen
-- **Buch-Chat** – KI-Dialog über das gesamte Buch; relevante Seiten werden automatisch nach Thema ausgewählt
+- **Buch-Chat** – KI-Dialog über das gesamte Buch. Der Assistent nutzt Werkzeuge (Pronomen-Zählung, Figurenverteilung, Volltextsuche, Seitenabruf), die auf einen vorberechneten Index zugreifen, und kann so auch Häufigkeits- und Verteilungsfragen über das ganze Buch präzise beantworten (z.B. „Kommt der Ich-Erzähler häufiger vor?"). Index wird beim täglichen Sync (02:00) aktualisiert
 - **Buchbewertung** – Gesamtbewertung mit Stärken, Schwächen und Empfehlungen
 - **Figurenübersicht** – Automatische Charakterextraktion mit interaktivem Beziehungsgraph; Figurenkontext-Panel auch während des Lektorats einer Seite einblendbar
 - **Ereignisse / Schauplätze / Szenen** – Automatische Übersichten pro Kapitel

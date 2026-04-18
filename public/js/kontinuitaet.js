@@ -43,7 +43,7 @@ export const kontinuitaetMethods = {
       lsKey: 'lektorat_kontinuitaet_job_' + bookId,
       progressProp: 'kontinuitaetProgress',
       onProgress: (job) => {
-        this.kontinuitaetStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec);
+        this.kontinuitaetStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec, job.statusParams);
       },
       onNotFound: () => {
         this.kontinuitaetLoading = false;
@@ -53,7 +53,7 @@ export const kontinuitaetMethods = {
       onError: (job) => {
         this.kontinuitaetLoading = false;
         this.kontinuitaetProgress = 0;
-        this.kontinuitaetStatus = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(job.error)}</span>`;
+        this.kontinuitaetStatus = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(this.t(job.error))}</span>`;
       },
       onDone: async (job) => {
         this.kontinuitaetLoading = false;

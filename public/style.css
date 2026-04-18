@@ -1263,23 +1263,31 @@ body.focus-mode #editor-card .history-bar,
 body.focus-mode #editor-card .progress-bar-wrap,
 body.focus-mode #editor-card #status { display: none; }
 
+/* Safari resolved height:100% über eine block-Kette nicht zuverlässig in
+   Flex-Kontexten — deshalb die Wrapper explizit als flex-column, damit die
+   Scroll-Fläche eine definierte Höhe bekommt und overflow-y greift. */
 body.focus-mode #editor-card .lektorat-split,
 body.focus-mode #editor-card > div:has(.page-content-view) {
-  display: block;
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
-  overflow: hidden;
   min-height: 0;
+  overflow: hidden;
 }
 body.focus-mode #editor-card .lektorat-split-preview,
 body.focus-mode #editor-card > div:has(.page-content-view) > div:has(.page-content-view) {
-  height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
 }
 
 body.focus-mode .page-content-view,
 body.focus-mode .page-content-view--editing {
   max-height: none;
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   max-width: 60ch;
   margin: 0 auto;
   /* Oben/unten fast halbe Viewporthöhe als Puffer, damit der aktive Absatz

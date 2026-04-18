@@ -16,7 +16,7 @@ async function runSynonymJob(jobId, wort, satz, bookId) {
   const { SYSTEM_SYNONYM } = await getBookPrompts(bookId);
   try {
     logger.info(`Start: Synonym für «${wort}» (book=${bookId || '-'})`);
-    updateJob(jobId, { statusText: 'KI sucht Synonyme…', progress: 10 });
+    updateJob(jobId, { statusText: 'job.phase.searchingSynonyms', progress: 10 });
 
     const tok = { in: 0, out: 0, ms: 0 };
     const result = await aiCall(jobId, tok,
@@ -55,8 +55,9 @@ synonymeRouter.post('/synonym', jsonBody, (req, res) => {
   const entityKey = `${wort.trim().toLowerCase()}|${satz.trim().slice(0, 60)}`;
   const existing = runningJobs.get(jobKey('synonym', entityKey, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
-  const label = `Synonym · ${wort.trim()}`;
-  const jobId = createJob('synonym', entityKey, userEmail, label);
+  const label = 'job.label.synonymWord';
+  const labelParams = { word: wort.trim() };
+  const jobId = createJob('synonym', entityKey, userEmail, label, labelParams);
   enqueueJob(jobId, () => runSynonymJob(jobId, wort.trim(), satz.trim(), book_id || null));
   res.json({ jobId });
 });

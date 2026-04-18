@@ -54,21 +54,21 @@
   <!-- Aktuelle Stats (letzter Snapshot) -->
   <div x-show="bookStatsData.length > 0" class="book-stats-current">
     <span class="tok-badge tok-neutral"
-      x-text="(bookStatsData[bookStatsData.length - 1]?.words ?? 0).toLocaleString('de-CH') + ' ' + t('bookstats.unit.w')"></span>
+      x-text="(bookStatsData[bookStatsData.length - 1]?.words ?? 0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.w')"></span>
     <span class="tok-badge tok-neutral"
-      x-text="(bookStatsData[bookStatsData.length - 1]?.chars ?? 0).toLocaleString('de-CH') + ' ' + t('bookstats.unit.z')"></span>
+      x-text="(bookStatsData[bookStatsData.length - 1]?.chars ?? 0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.z')"></span>
     <span class="tok-badge tok-neutral"
       x-text="bookStatsData[bookStatsData.length - 1]?.page_count + ' ' + t('bookstats.unit.s')"></span>
     <span class="tok-badge tok-neutral"
-      x-text="(bookStatsData[bookStatsData.length - 1]?.tok ?? 0).toLocaleString('de-CH') + ' ' + t('bookstats.unit.t')"></span>
+      x-text="(bookStatsData[bookStatsData.length - 1]?.tok ?? 0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.t')"></span>
     <span class="tok-badge tok-neutral" x-show="bookStatsDelta !== null"
-      x-text="(bookStatsDelta >= 0 ? '+' : '') + (bookStatsDelta ?? 0).toLocaleString('de-CH') + ' ' + t('bookstats.unit.delta')"></span>
+      x-text="(bookStatsDelta >= 0 ? '+' : '') + (bookStatsDelta ?? 0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.delta')"></span>
     <span class="tok-badge tok-neutral" x-show="bookStatsCoverage !== null"
       x-text="t('bookstats.coverage', { pct: (bookStatsCoverage?.pct ?? 0), checked: (bookStatsCoverage?.checked_pages ?? 0), total: (bookStatsCoverage?.total_pages ?? 0) })"></span>
     <span class="tok-badge tok-neutral" x-show="bookStatsData[bookStatsData.length - 1]?.avg_sentence_len != null"
-      x-text="t('bookstats.avgSentenceBadge', { n: (bookStatsData[bookStatsData.length - 1]?.avg_sentence_len ?? 0).toLocaleString('de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
+      x-text="t('bookstats.avgSentenceBadge', { n: (bookStatsData[bookStatsData.length - 1]?.avg_sentence_len ?? 0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
     <span class="tok-badge tok-neutral" x-show="bookStatsData[bookStatsData.length - 1]?.chapter_count > 0"
-      x-text="t('bookstats.pagesPerChapterBadge', { n: ((bookStatsData[bookStatsData.length - 1]?.page_count / bookStatsData[bookStatsData.length - 1]?.chapter_count) || 0).toLocaleString('de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
+      x-text="t('bookstats.pagesPerChapterBadge', { n: ((bookStatsData[bookStatsData.length - 1]?.page_count / bookStatsData[bookStatsData.length - 1]?.chapter_count) || 0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
   </div>
 
   <!-- Leer-Zustand -->

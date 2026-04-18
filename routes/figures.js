@@ -1,5 +1,6 @@
 const express = require('express');
 const { db, saveFigurenToDb, saveZeitstrahlEvents, getChapterFigures, cleanupDuplicateFiguren } = require('../db/schema');
+const { recomputeBookFigureMentions } = require('../lib/page-index');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -163,7 +164,15 @@ router.get('/:book_id', (req, res) => {
 // Figuren eines Buchs speichern (überschreibt)
 router.put('/:book_id', jsonBody, (req, res) => {
   const userEmail = req.session?.user?.email || null;
-  saveFigurenToDb(parseInt(req.params.book_id), req.body.figuren || [], userEmail);
+  const bookId = parseInt(req.params.book_id);
+  saveFigurenToDb(bookId, req.body.figuren || [], userEmail);
+  // Figuren-Mentions für den Buch-Chat-Index aktualisieren (synchron, pro Buch ~Sekundenbruchteil)
+  try {
+    const { figures, pagesProcessed } = recomputeBookFigureMentions(bookId, userEmail);
+    logger.info(`Figuren-Mentions aktualisiert: Buch ${bookId}, ${figures} Figuren × ${pagesProcessed} Seiten.`);
+  } catch (e) {
+    logger.warn(`Figuren-Mentions-Neuberechnung für Buch ${bookId} fehlgeschlagen: ${e.message}`);
+  }
   res.json({ ok: true });
 });
 

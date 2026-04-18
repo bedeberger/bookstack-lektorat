@@ -48,7 +48,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
   const locale = bookId ? getBookLocale(bookId) : 'de-CH';
   try {
     logger.info(`Start: Seite #${pageId} (book=${bookId || '-'})`);
-    updateJob(jobId, { statusText: 'Lade Seiteninhalt…', progress: 5 });
+    updateJob(jobId, { statusText: 'job.phase.loadingPageContent', progress: 5 });
 
     const pd = await bsGet('pages/' + pageId, userToken);
 
@@ -60,7 +60,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     const figuren = getChapterFigures(bookId, pd.chapter_id, userEmail);
 
     const tok = { in: 0, out: 0, ms: 0 };
-    updateJob(jobId, { statusText: 'KI analysiert…', progress: 10 });
+    updateJob(jobId, { statusText: 'job.phase.aiAnalyzing', progress: 10 });
 
     const result = await aiCall(jobId, tok,
       buildLektoratPrompt(text, { stopwords: lektoratStopwords, erklaerungRule: lektoratErklaerungRule, korrekturRegeln: lektoratKorrekturRegeln, figuren }),
@@ -108,7 +108,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
   const { SYSTEM_LEKTORAT, STOPWORDS: batchStopwords, ERKLAERUNG_RULE: batchErklaerungRule, KORREKTUR_REGELN: batchKorrekturRegeln } = await getBookPrompts(bookId);
   const locale = getBookLocale(bookId);
   try {
-    updateJob(jobId, { statusText: 'Lade Seiten…', progress: 0 });
+    updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     const pages = await bsGetAll('pages?book_id=' + bookId, userToken);
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
     logger.info(`Start: ${pages.length} Seiten (book=${bookId})`);
@@ -124,7 +124,8 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
       const toPct   = Math.round(((i + 1) / pages.length) * 95);
       updateJob(jobId, {
         progress: fromPct,
-        statusText: `${i + 1}/${pages.length}: ${p.name}…`,
+        statusText: 'job.phase.pageProgress',
+        statusParams: { current: i + 1, total: pages.length, name: p.name },
       });
 
       try {
@@ -177,8 +178,9 @@ lektoratRouter.post('/check', jsonBody, (req, res) => {
     : null;
   const existing = runningJobs.get(jobKey('check', page_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
-  const label = page_name ? `Lektorat · ${page_name}` : `Lektorat · Seite #${page_id}`;
-  const jobId = createJob('check', page_id, userEmail, label);
+  const label = 'job.label.checkPage';
+  const labelParams = { name: page_name || `#${page_id}` };
+  const jobId = createJob('check', page_id, userEmail, label, labelParams);
   enqueueJob(jobId, () => runCheckJob(jobId, page_id, book_id || null, userEmail, userToken));
   res.json({ jobId });
 });
@@ -192,8 +194,9 @@ lektoratRouter.post('/batch-check', jsonBody, (req, res) => {
     : null;
   const existing = runningJobs.get(jobKey('batch-check', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
-  const label = book_name ? `Serien-Lektorat · ${book_name}` : `Serien-Lektorat`;
-  const jobId = createJob('batch-check', book_id, userEmail, label);
+  const label = book_name ? 'job.label.batchCheckBook' : 'job.label.batchCheck';
+  const labelParams = book_name ? { name: book_name } : null;
+  const jobId = createJob('batch-check', book_id, userEmail, label, labelParams);
   enqueueJob(jobId, () => runBatchCheckJob(jobId, book_id, userEmail, userToken));
   res.json({ jobId });
 });

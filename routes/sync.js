@@ -2,6 +2,7 @@ const express = require('express');
 const { db, getAnyUserToken, getAllUserTokens, reconcilePageIds } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
 const logger = require('../logger');
 const { CHARS_PER_TOKEN } = require('../lib/ai');
+const { computePageIndex, writePageIndex, writeFigureMentionsForPageAllUsers, METRICS_VERSION } = require('../lib/page-index');
 
 const router = express.Router();
 
@@ -157,18 +158,27 @@ async function syncBook(bookId, token) {
   const globalWordSet = new Set();
   let totalWords = 0, totalChars = 0, totalTok = 0, totalSentences = 0;
 
+  // Bestehende content_sigs laden, um Seiten ohne inhaltliche Änderung zu überspringen
+  // (Index-Berechnung ist teuer bei vielen Seiten, nur neu laufen lassen wenn nötig).
+  const existingIndex = Object.fromEntries(
+    db.prepare('SELECT page_id, content_sig, metrics_version FROM page_stats WHERE book_id = ?')
+      .all(bookId).map(r => [r.page_id, r])
+  );
+
   const previewItems = [];
+  const indexItems = [];
   for (let i = 0; i < pages.length; i += BATCH) {
     const batch = pages.slice(i, i + BATCH);
     const results = await Promise.allSettled(batch.map(async p => {
       const pd = await bsGet(`pages/${p.id}`, token);
+      const text = htmlToText(pd.html || '');
       const { words, chars, tok, wordList, sentences } = computeStats(pd.html || '');
-      const preview = htmlToText(pd.html || '').trim().slice(0, 800);
-      return { page_id: p.id, book_id: bookId, tok, words, chars, updated_at: p.updated_at || null, cached_at: now, wordList, sentences, preview };
+      const preview = text.trim().slice(0, 800);
+      return { page_id: p.id, book_id: bookId, tok, words, chars, updated_at: p.updated_at || null, cached_at: now, wordList, sentences, preview, fullText: text };
     }));
     for (const r of results) {
       if (r.status === 'fulfilled') {
-        const { wordList, sentences, preview, ...statsItem } = r.value;
+        const { wordList, sentences, preview, fullText, ...statsItem } = r.value;
         statsItems.push(statsItem);
         previewItems.push({ page_id: r.value.page_id, preview_text: preview || null });
         totalWords += r.value.words;
@@ -176,6 +186,9 @@ async function syncBook(bookId, token) {
         totalTok += r.value.tok;
         totalSentences += sentences;
         for (const w of wordList) globalWordSet.add(w.toLowerCase());
+
+        const indexResult = computePageIndex(fullText);
+        indexItems.push({ page_id: r.value.page_id, index: indexResult, fullText });
       }
     }
   }
@@ -188,6 +201,19 @@ async function syncBook(bookId, token) {
   if (previewItems.length) {
     const stmtPrev = db.prepare('UPDATE pages SET preview_text = ? WHERE page_id = ?');
     db.transaction(() => { for (const item of previewItems) stmtPrev.run(item.preview_text, item.page_id); })();
+  }
+
+  // Index-Felder (Pronomen, Dialog, Sätze, Content-Sig) schreiben —
+  // muss nach upsertPageStatsMany laufen, weil es UPDATE auf existierende Rows nutzt.
+  if (indexItems.length) {
+    db.transaction(() => { for (const item of indexItems) writePageIndex(item.page_id, item.index); })();
+  }
+
+  // Figuren-Mentions mit Volltext neu berechnen (präziser als preview_text-Hook in saveFigurenToDb).
+  // Läuft über alle User, die Figuren für dieses Buch haben (figure_id ist eindeutig pro User).
+  for (const item of indexItems) {
+    try { writeFigureMentionsForPageAllUsers(item.page_id, bookId, item.fullText); }
+    catch (e) { logger.warn(`Figuren-Mentions für Seite ${item.page_id} fehlgeschlagen: ${e.message}`); }
   }
 
   const today = new Date().toISOString().slice(0, 10);

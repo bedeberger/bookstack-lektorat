@@ -90,7 +90,7 @@ export function makeChatMethods(cfg) {
       onError: (job) => {
         this[p.loading] = false;
         if (p.progress) this[p.progress] = 0;
-        this[p.status] = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(job.error || this.t('common.unknownError'))}</span>`;
+        this[p.status] = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(job.error ? this.t(job.error) : this.t('common.unknownError'))}</span>`;
       },
       onDone: async () => {
         this[p.loading] = false;

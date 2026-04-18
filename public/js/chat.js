@@ -32,7 +32,7 @@ const baseMethods = makeChatMethods({
   sendUrl: '/jobs/chat',
   lsKeyFn: (sessionId) => 'lektorat_chat_job_' + sessionId,
   onPollProgress: function (job) {
-    this.chatStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec);
+    this.chatStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec, job.statusParams);
   },
   onBeforeSend: async function () {
     try {

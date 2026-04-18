@@ -89,13 +89,14 @@ function jobKey(type, bookId, userEmail) {
   return `${type}:${bookId}:${userEmail || ''}`;
 }
 
-function createJob(type, bookId, userEmail, label) {
+function createJob(type, bookId, userEmail, label, labelParams = null) {
   const id = randomUUID();
   const key = jobKey(type, bookId, userEmail);
   jobs.set(id, {
     id, type, bookId: String(bookId), userEmail: userEmail || null,
     label: label || null,
-    status: 'queued', progress: 0, statusText: 'In Warteschlange…',
+    labelParams: labelParams || null,
+    status: 'queued', progress: 0, statusText: 'job.queued', statusParams: null,
     tokensIn: 0, tokensOut: 0, tokensPerSec: null,
     maxTokensOut: MAX_TOKENS_OUT,
     result: null, error: null,
@@ -116,6 +117,12 @@ function createJob(type, bookId, userEmail, label) {
 function updateJob(id, updates) {
   const job = jobs.get(id);
   if (!job || job.status !== 'running') return;
+  // statusText-Setzer dürfen statusParams gezielt zurücksetzen: wenn nur
+  // statusText gesetzt wird, wird ein evtl. alter statusParams geleert,
+  // damit Platzhalter aus älteren Meldungen nicht nachwirken.
+  if ('statusText' in updates && !('statusParams' in updates)) {
+    updates = { ...updates, statusParams: null };
+  }
   if (updates.progress != null && updates.progress < (job.progress || 0)) {
     // Parallel-Branch mit niedrigerem Fortschritt darf progress nicht zurücksetzen,
     // statusText darf aber aktualisiert werden – der User sieht so, was gerade läuft.
@@ -144,7 +151,7 @@ function failJob(id, err) {
   if (!job) return;
   const isCancelled = job.cancelled || err?.name === 'AbortError';
   const status = isCancelled ? 'cancelled' : 'error';
-  const errorMsg = isCancelled ? 'Abgebrochen' : (err.message || String(err));
+  const errorMsg = isCancelled ? 'job.cancelled' : (err.message || String(err));
   Object.assign(job, { status, error: errorMsg, progress: isCancelled ? job.progress : 0, endedAt: new Date().toISOString() });
   try { endJobRun(id, status, job.endedAt, job.tokensIn, job.tokensOut, null, errorMsg); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
@@ -159,7 +166,7 @@ function cancelJob(id, userEmail) {
     const idx = jobQueue.findIndex(e => e.jobId === id);
     if (idx !== -1) jobQueue.splice(idx, 1);
     const endedAt = new Date().toISOString();
-    Object.assign(job, { status: 'cancelled', error: 'Abgebrochen', endedAt });
+    Object.assign(job, { status: 'cancelled', error: 'job.cancelled', endedAt });
     try { endJobRun(id, 'cancelled', endedAt, 0, 0, null, 'Abgebrochen'); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
     runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
     jobAbortControllers.delete(id);
@@ -536,14 +543,15 @@ function buildChatMessageHistory(sessionId) {
 }
 
 // ── Statistik-Konfiguration ───────────────────────────────────────────────────
+// Werte sind i18n-Keys; Frontend übersetzt über t().
 const JOB_TYPE_LABELS = {
-  'check':            'Lektorat',
-  'batch-check':      'Stapel-Check',
-  'komplett-analyse': 'Komplettanalyse',
-  'review':           'Buchbewertung',
-  'book-chat':        'Buch-Chat',
-  'chat':             'Seiten-Chat',
-  'synonym':          'Synonymsuche',
+  'check':            'job.label.check',
+  'batch-check':      'job.label.batchCheck',
+  'komplett-analyse': 'job.label.komplett',
+  'review':           'job.label.review',
+  'book-chat':        'job.label.bookChat',
+  'chat':             'job.label.chat',
+  'synonym':          'job.label.synonym',
 };
 
 function fmtDuration(seconds) {
@@ -585,18 +593,22 @@ sharedRouter.get('/queue', (req, res) => {
     if (job.userEmail !== userEmail) continue;
     if (job.status !== 'queued' && job.status !== 'running') continue;
     let statusText = job.statusText;
+    let statusParams = job.statusParams;
     if (job.status === 'queued') {
       const pos = jobQueue.findIndex(e => e.jobId === job.id) + 1;
-      statusText = pos > 0 ? `Warteschlange #${pos}` : 'Warteschlange';
+      statusText = pos > 0 ? 'job.queuedPos' : 'job.queued';
+      statusParams = pos > 0 ? { pos } : null;
     }
     result.push({
       id: job.id,
       type: job.type,
       bookId: job.bookId,
       label: job.label || job.type,
+      labelParams: job.labelParams || null,
       status: job.status,
       progress: job.progress,
       statusText,
+      statusParams,
       canCancel: true,
     });
   }
@@ -658,7 +670,7 @@ sharedRouter.get('/active', (req, res) => {
   const jobId = runningJobs.get(jobKey(type, entityId, userEmail));
   if (!jobId || !jobs.has(jobId)) return res.json({ jobId: null });
   const job = jobs.get(jobId);
-  res.json({ jobId: job.id, status: job.status, progress: job.progress, statusText: job.statusText });
+  res.json({ jobId: job.id, status: job.status, progress: job.progress, statusText: job.statusText, statusParams: job.statusParams });
 });
 
 sharedRouter.delete('/:id', (req, res) => {
@@ -674,13 +686,16 @@ sharedRouter.get('/:id', (req, res) => {
   const job = jobs.get(req.params.id);
   if (!job) return res.status(404).json({ error_code: 'JOB_NOT_FOUND' });
   let statusText = job.statusText;
+  let statusParams = job.statusParams;
   if (job.status === 'queued') {
     const pos = jobQueue.findIndex(e => e.jobId === job.id) + 1;
-    statusText = pos > 0 ? `In Warteschlange (Position ${pos})…` : 'In Warteschlange…';
+    statusText = pos > 0 ? 'job.queuedPos' : 'job.queued';
+    statusParams = pos > 0 ? { pos } : null;
   }
   res.json({
     id: job.id, type: job.type, status: job.status,
-    progress: job.progress, statusText,
+    progress: job.progress, statusText, statusParams,
+    label: job.label, labelParams: job.labelParams,
     tokensIn: job.tokensIn, tokensOut: job.tokensOut,
     maxTokensOut: job.maxTokensOut,
     tokensPerSec: job.tokensPerSec,
