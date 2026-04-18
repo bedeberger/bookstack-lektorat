@@ -17,6 +17,21 @@ const METRIC_LABELS = {
 // Ausserhalb von Alpine gespeichert, damit die Chart.js-Instanz nicht durch
 // Alpines Reaktivitäts-Proxy beschädigt wird.
 let _statsChart = null;
+let _themeObserver = null;
+
+function _ensureThemeObserver(component) {
+  if (_themeObserver) return;
+  _themeObserver = new MutationObserver(() => {
+    if (!_statsChart || !component.showBookStatsCard) return;
+    _statsChart.destroy();
+    _statsChart = null;
+    component.renderStatsChart();
+  });
+  _themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  });
+}
 
 export const bookstatsMethods = {
   async toggleBookStatsCard() {
@@ -135,6 +150,8 @@ export const bookstatsMethods = {
     const primary  = cssVar('--color-primary');
     const muted    = cssVar('--color-muted');
     const gridLine = cssVar('--color-border');
+
+    _ensureThemeObserver(this);
 
     _statsChart = new Chart(canvas, {
       type: 'line',
