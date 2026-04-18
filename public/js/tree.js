@@ -30,7 +30,10 @@ export const treeMethods = {
     }
   },
 
-  async loadPages() {
+  async loadPages(overrideBookId) {
+    if (overrideBookId !== undefined && overrideBookId !== null && overrideBookId !== '') {
+      this.selectedBookId = String(overrideBookId);
+    }
     const bookId = this.selectedBookId;
     // Laufenden Figuren-Job-Poll abbrechen (Buch könnte gewechselt haben).
     // checkPendingJobs am Ende reconnectet korrekt für das neue Buch.
@@ -42,6 +45,8 @@ export const treeMethods = {
       this.setStatus(this.t('tree.loadingPages'), true);
       this.pageSearch = '';
       this.tokEsts = {};
+      this.tree = [];
+      this.pages = [];
       this._tokenEstGen++;
       const [chapters, pages] = await Promise.all([
         this.bsGetAll('chapters?book_id=' + bookId),
