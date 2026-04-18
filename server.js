@@ -6,7 +6,7 @@ const path = require('path');
 const logger = require('./logger');
 
 // DB-Setup + Migrationen laufen beim Import
-const { cleanupStuckJobRuns } = require('./db/schema');
+const { cleanupStuckJobRuns, upsertUserLogin } = require('./db/schema');
 
 const authRouter = require('./routes/auth');
 const historyRouter = require('./routes/history');
@@ -15,6 +15,7 @@ const locationsRouter = require('./routes/locations');
 const { router: jobsRouter, runKomplettAnalyseAll } = require('./routes/jobs');
 const chatRouter = require('./routes/chat');
 const bookSettingsRouter = require('./routes/booksettings');
+const userSettingsRouter = require('./routes/usersettings');
 const { router: proxiesRouter, bookstackProxy, BOOKSTACK_URL } = require('./routes/proxies');
 const { router: syncRouter, syncAllBooks } = require('./routes/sync');
 
@@ -83,12 +84,13 @@ app.use((req, res, next) => {
 
 // ── Auth-Guard ────────────────────────────────────────────────────────────────
 // API-Pfade → 401 JSON; HTML-Pfade → Redirect zu /auth/login
-const API_PREFIXES = ['/api/', '/history/', '/figures/', '/locations/', '/jobs/', '/sync/', '/chat/', '/booksettings/', '/config', '/claude', '/ollama', '/llama'];
+const API_PREFIXES = ['/api/', '/history/', '/figures/', '/locations/', '/jobs/', '/sync/', '/chat/', '/booksettings/', '/me/', '/config', '/claude', '/ollama', '/llama'];
 
 app.use((req, res, next) => {
   if (req.session?.user) return next();
   if (LOCAL_DEV_MODE) {
     req.session.user = { email: 'dev@local', name: 'Dev (lokal)' };
+    upsertUserLogin('dev@local', 'Dev (lokal)');
     if (process.env.TOKEN_ID && process.env.TOKEN_KENNWORT) {
       req.session.bookstackToken = { id: process.env.TOKEN_ID, pw: process.env.TOKEN_KENNWORT };
     }
@@ -108,6 +110,7 @@ app.use('/locations', locationsRouter);
 app.use('/jobs', jobsRouter);
 app.use('/chat', chatRouter);
 app.use('/booksettings', bookSettingsRouter);
+app.use('/me', userSettingsRouter);
 app.use('/sync', syncRouter);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', bookstackProxy);

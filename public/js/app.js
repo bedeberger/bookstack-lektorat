@@ -18,6 +18,7 @@ import { szenenMethods } from './szenen.js';
 import { orteMethods } from './orte.js';
 import { kontinuitaetMethods } from './kontinuitaet.js';
 import { bookSettingsMethods } from './book-settings.js';
+import { userSettingsMethods } from './user-settings.js';
 import { pageViewMethods } from './page-view.js';
 import { editorEditMethods } from './editor-edit.js';
 import { focusMethods } from './editor-focus.js';
@@ -350,6 +351,16 @@ document.addEventListener('alpine:init', () => {
     bookHistoryResetLoading: false,
     bookHistoryResetMessage: '',
     bookHistoryResetError: '',
+    showUserSettingsCard: false,
+    userSettingsProfile: null,
+    userSettingsDefaultLanguage: '',
+    userSettingsDefaultRegion: '',
+    userSettingsDefaultBuchtyp: '',
+    userSettingsDangerBookId: '',
+    userSettingsLoading: false,
+    userSettingsSaving: false,
+    userSettingsSaved: false,
+    userSettingsError: '',
 
     // ── Computed ─────────────────────────────────────────────────────────────
     get szenenNachKapitel() {
@@ -620,9 +631,10 @@ document.addEventListener('alpine:init', () => {
     },
 
     // ── URL-Hash-Permalinks ─────────────────────────────────────────────────
-    // Schema: #book/:bookId[/page/:pageId|/figur/:figId|/ort/:ortId|/<view>]
+    // Schema: #profil | #book/:bookId[/page/:pageId|/figur/:figId|/ort/:ortId|/<view>]
     // Views: figuren, orte, szenen, ereignisse, kontinuitaet, bewertung, chat, stats, einstellungen
     _computeHash() {
+      if (this.showUserSettingsCard) return '#profil';
       if (!this.selectedBookId) return '';
       const parts = ['book', this.selectedBookId];
       if (this.showEditorCard && this.currentPage?.id) {
@@ -651,6 +663,7 @@ document.addEventListener('alpine:init', () => {
     _hashCategory(hash) {
       if (!hash) return null;
       const parts = hash.replace(/^#/, '').split('/').filter(Boolean);
+      if (parts[0] === 'profil') return 'profil';
       if (parts[0] !== 'book' || !parts[1]) return null;
       const bookId = parts[1];
       const view = parts[2] || 'book';
@@ -725,6 +738,19 @@ document.addEventListener('alpine:init', () => {
       const hash = (location.hash || '').replace(/^#/, '');
       if (!hash) return;
       const parts = hash.split('/').filter(Boolean);
+
+      if (parts[0] === 'profil') {
+        this._applyingHash = true;
+        this._inHashApply = true;
+        try {
+          if (!this.showUserSettingsCard) await this.toggleUserSettingsCard();
+        } finally {
+          this._applyingHash = false;
+          this._inHashApply = false;
+        }
+        return;
+      }
+
       if (parts[0] !== 'book' || !parts[1]) return;
       const targetBookId = parts[1];
       if (!this.books.some(b => String(b.id) === targetBookId)) return;
@@ -813,7 +839,7 @@ document.addEventListener('alpine:init', () => {
         'selectedFigurId', 'selectedOrtId',
         'showFiguresCard', 'showOrteCard', 'showSzenenCard', 'showEreignisseCard',
         'showKontinuitaetCard', 'showBookReviewCard', 'showBookChatCard',
-        'showBookStatsCard', 'showBookSettingsCard',
+        'showBookStatsCard', 'showBookSettingsCard', 'showUserSettingsCard',
       ];
       for (const prop of watchers) {
         this.$watch(prop, () => this._updateHash());
@@ -1121,6 +1147,7 @@ document.addEventListener('alpine:init', () => {
       const names = [
         'buchreview', 'figuren', 'szenen', 'ereignisse', 'orte',
         'kontinuitaet', 'bookstats', 'editor', 'chat', 'book-settings',
+        'user-settings',
       ];
       await Promise.all(names.map(async name => {
         const html = await fetch(`/partials/${name}.html`).then(r => r.text());
@@ -1141,6 +1168,11 @@ document.addEventListener('alpine:init', () => {
       this.themePref = order[(order.indexOf(this.themePref) + 1) % order.length];
       try { localStorage.setItem('theme', this.themePref); } catch (e) {}
       this._applyTheme();
+      fetch('/me/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: this.themePref }),
+      }).catch(e => console.error('[theme] Persist fehlgeschlagen:', e));
     },
     _themeLabel() {
       return { auto: 'Auto', light: 'Hell', dark: 'Dunkel' }[this.themePref] || 'Auto';
@@ -1168,6 +1200,11 @@ document.addEventListener('alpine:init', () => {
         this.currentUser = cfg.user || null;
         this.devMode = !!cfg.devMode;
         this.promptConfig = cfg.promptConfig || {};
+        if (cfg.userSettings?.theme && cfg.userSettings.theme !== this.themePref) {
+          this.themePref = cfg.userSettings.theme;
+          try { localStorage.setItem('theme', this.themePref); } catch (e) {}
+          this._applyTheme();
+        }
         configurePrompts(cfg.promptConfig, cfg.apiProvider || 'claude');
         if (!cfg.bookstackTokenOk) {
           this.showTokenSetup = true;
@@ -1257,6 +1294,7 @@ document.addEventListener('alpine:init', () => {
       this.showOrteCard = false;
       this.showBookSettingsCard = false;
       this.showKontinuitaetCard = false;
+      this.showUserSettingsCard = false;
 
       this.resetPage();
       this.currentPage = p;
@@ -1383,6 +1421,7 @@ document.addEventListener('alpine:init', () => {
       if (keep !== 'orte') this.showOrteCard = false;
       if (keep !== 'kontinuitaet') this.showKontinuitaetCard = false;
       if (keep !== 'bookSettings') this.showBookSettingsCard = false;
+      if (keep !== 'userSettings') this.showUserSettingsCard = false;
       this.resetPage();
     },
 
@@ -1516,6 +1555,9 @@ document.addEventListener('alpine:init', () => {
       this.showBookSettingsCard = false;
       this.bookSettingsSaved = false;
       this.bookSettingsError = '';
+      this.showUserSettingsCard = false;
+      this.userSettingsSaved = false;
+      this.userSettingsError = '';
       this.alleAktualisierenLastRun = null;
       this.alleAktualisierenProgress = 0;
       this.alleAktualisierenTokIn = 0;
@@ -1568,6 +1610,7 @@ document.addEventListener('alpine:init', () => {
     ...orteMethods,
     ...kontinuitaetMethods,
     ...bookSettingsMethods,
+    ...userSettingsMethods,
     ...pageViewMethods,
     ...editorEditMethods,
     ...focusMethods,

@@ -50,37 +50,6 @@ export const bookSettingsMethods = {
     }
   },
 
-  async resetBookHistory() {
-    if (!this.selectedBookId) return;
-    const name = this.selectedBookName || 'dieses Buch';
-    if (!confirm(
-      `Alle deine Lektorate, Buchbewertungen und Chats zu «${name}» löschen?\n\n` +
-      `Andere Nutzer sind nicht betroffen. Diese Aktion ist nicht rückgängig zu machen.`
-    )) return;
-
-    this.bookHistoryResetLoading = true;
-    this.bookHistoryResetMessage = '';
-    this.bookHistoryResetError   = '';
-    try {
-      const r = await fetch(`/history/book/${this.selectedBookId}`, { method: 'DELETE' });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Löschen fehlgeschlagen');
-      const d = data.deleted || {};
-      this.bookHistoryResetMessage =
-        `Gelöscht: ${d.page_checks || 0} Lektorate, ${d.book_reviews || 0} Bewertungen, ${d.chat_sessions || 0} Chats.`;
-      this.pageHistory      = [];
-      this.bookReviewHistory = [];
-      this.chatSessions     = [];
-      this.chatMessages     = [];
-      this.chatSessionId    = null;
-      setTimeout(() => { this.bookHistoryResetMessage = ''; }, 6000);
-    } catch (e) {
-      this.bookHistoryResetError = e.message;
-    } finally {
-      this.bookHistoryResetLoading = false;
-    }
-  },
-
   bookSettingsLocaleDisplay() {
     const map = {
       'de-CH': 'Deutsch (Schweiz)',

@@ -116,6 +116,7 @@
       </div>
     </div>
     <button class="theme-toggle" @click="cycleTheme()" :title="'Design wechseln (aktuell: ' + _themeLabel() + ')'" x-text="_themeLabel()"></button>
+    <button class="theme-toggle" :class="{ 'theme-toggle--active': showUserSettingsCard }" @click="toggleUserSettingsCard()" title="Profil &amp; Einstellungen">Profil</button>
     <a href="/auth/logout" class="logout-link">Abmelden</a>
   </div>
 </div>
@@ -314,6 +315,7 @@
   <div id="partial-chat"></div>
 </div>
 <div id="partial-book-settings"></div>
+<div id="partial-user-settings"></div>
 
 </div><!-- end layout-main -->
 </div><!-- end layout -->

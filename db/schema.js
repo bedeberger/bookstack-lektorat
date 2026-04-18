@@ -984,6 +984,25 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 40').run();
     logger.info('DB-Migration auf Version 40 abgeschlossen (Composite-Indizes für page_checks, book_reviews, chat_messages).');
   }
+  if (version < 41) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        email            TEXT PRIMARY KEY,
+        name             TEXT,
+        created_at       TEXT NOT NULL,
+        last_login_at    TEXT,
+        locale           TEXT,
+        theme            TEXT,
+        default_buchtyp  TEXT,
+        default_language TEXT,
+        default_region   TEXT
+      );
+      INSERT OR IGNORE INTO users (email, created_at)
+      SELECT email, datetime('now') FROM user_tokens;
+    `);
+    db.prepare('UPDATE schema_version SET version = 41').run();
+    logger.info('DB-Migration auf Version 41 abgeschlossen (users-Tabelle).');
+  }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).
@@ -1570,6 +1589,46 @@ function deleteChapterExtractCache(bookId, userEmail) {
   return result.changes;
 }
 
+// ── User-Profile & Einstellungen ──────────────────────────────────────────────
+
+const _upsertUserLogin = db.prepare(`
+  INSERT INTO users (email, name, created_at, last_login_at)
+  VALUES (?, ?, datetime('now'), datetime('now'))
+  ON CONFLICT(email) DO UPDATE SET
+    name          = excluded.name,
+    last_login_at = excluded.last_login_at
+`);
+const _getUser = db.prepare(
+  'SELECT email, name, created_at, last_login_at, locale, theme, default_buchtyp, default_language, default_region FROM users WHERE email = ?'
+);
+const _updateUserSettings = db.prepare(`
+  UPDATE users
+  SET locale = ?, theme = ?, default_buchtyp = ?, default_language = ?, default_region = ?
+  WHERE email = ?
+`);
+
+/** Upsert User bei Login – aktualisiert name + last_login_at. */
+function upsertUserLogin(email, name) {
+  _upsertUserLogin.run(email, name || email);
+}
+
+/** Gibt User-Profil zurück oder null. */
+function getUser(email) {
+  return _getUser.get(email) || null;
+}
+
+/** Aktualisiert alle Settings-Felder. Null-Werte setzen die Spalte zurück. */
+function updateUserSettings(email, settings) {
+  _updateUserSettings.run(
+    settings.locale ?? null,
+    settings.theme ?? null,
+    settings.default_buchtyp ?? null,
+    settings.default_language ?? null,
+    settings.default_region ?? null,
+    email
+  );
+}
+
 // ── Buch-Einstellungen (Sprache + Region) ─────────────────────────────────────
 
 const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext FROM book_settings WHERE book_id = ?');
@@ -1829,4 +1888,4 @@ function cleanupStuckJobRuns() {
   return result.changes;
 }
 
-module.exports = { db, saveFigurenToDb, addFigurenBeziehungen, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings, loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache, cleanupStuckJobRuns, getChapterFigures, cleanupDuplicateFiguren };
+module.exports = { db, saveFigurenToDb, addFigurenBeziehungen, updateFigurenEvents, updateFigurenSoziogramm, saveZeitstrahlEvents, saveOrteToDb, reconcilePageIds, getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, upsertUserLogin, getUser, updateUserSettings, saveCheckpoint, loadCheckpoint, deleteCheckpoint, insertJobRun, startJobRun, endJobRun, getBookSettings, getBookLocale, saveBookSettings, loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache, cleanupStuckJobRuns, getChapterFigures, cleanupDuplicateFiguren };

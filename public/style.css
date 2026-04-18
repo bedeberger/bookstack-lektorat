@@ -446,6 +446,27 @@ code {
   background: var(--color-hover);
   color: var(--color-text);
 }
+.theme-toggle--active {
+  background: var(--color-primary);
+  color: var(--color-surface);
+  border-color: var(--color-primary);
+}
+.theme-toggle--active:hover {
+  background: var(--color-primary-hover);
+  color: var(--color-surface);
+}
+
+.user-settings-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+.user-settings-section-note {
+  color: var(--color-muted);
+  font-size: 12px;
+  margin: 4px 0 12px;
+}
 
 /* ── Job-Stats Panel ──────────────────────────────────────────────────────── */
 .job-stats-wrap {
@@ -3911,6 +3932,12 @@ body.focus-mode .page-content-view--editing .focus-paragraph-active {
 .book-settings-btn-danger:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+.book-settings-danger-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 

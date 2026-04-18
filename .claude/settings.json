@@ -156,7 +156,11 @@
       "Bash(node /Users/bd/ClaudeProjects/bookstack-lektorat/scripts/validate-prompt-config.js)",
       "Bash(node scripts/boot-smoke.js)",
       "Bash(rm -f freshtest.db)",
-      "Bash(node -e \"const Database=require\\('/Users/bd/ClaudeProjects/bookstack-lektorat/node_modules/better-sqlite3'\\);const db=new Database\\('freshtest.db'\\);try{db.exec\\('CREATE TABLE IF NOT EXISTS t \\(id INTEGER\\); CREATE INDEX IF NOT EXISTS i ON t\\(user_email\\);'\\);console.log\\('OK'\\);}catch\\(e\\){console.log\\('BUG:',e.message\\);}\")"
+      "Bash(node -e \"const Database=require\\('/Users/bd/ClaudeProjects/bookstack-lektorat/node_modules/better-sqlite3'\\);const db=new Database\\('freshtest.db'\\);try{db.exec\\('CREATE TABLE IF NOT EXISTS t \\(id INTEGER\\); CREATE INDEX IF NOT EXISTS i ON t\\(user_email\\);'\\);console.log\\('OK'\\);}catch\\(e\\){console.log\\('BUG:',e.message\\);}\")",
+      "Bash(node -c routes/usersettings.js)",
+      "Bash(node -c routes/auth.js)",
+      "Bash(node -c server.js)",
+      "Bash(node --input-type=module -e \"import\\('./public/js/user-settings.js'\\).then\\(m => console.log\\(Object.keys\\(m.userSettingsMethods\\)\\)\\)\")"
     ]
   }
 }

@@ -158,18 +158,21 @@ export const editorEditMethods = {
       }
 
       clearDraft(this.currentPage.id);
-      this._stopAutosave();
-      this._uninstallOnlineRetry();
       this.lastAutosaveAt = Date.now();
       this.lastDraftSavedAt = null;
-      this.editMode = false;
       this.editDirty = false;
       this.saveOffline = false;
-      this.closeSynonymMenu?.();
-      this.closeSynonymPicker?.();
-      if (this.focusMode) this.exitFocusMode();
-      this.updatePageView();
-      this.setStatus('✓ Änderungen gespeichert.', false, 5000);
+      if (this.focusMode) {
+        this.setStatus('✓ Änderungen gespeichert.', false, 3000);
+      } else {
+        this._stopAutosave();
+        this._uninstallOnlineRetry();
+        this.editMode = false;
+        this.closeSynonymMenu?.();
+        this.closeSynonymPicker?.();
+        this.updatePageView();
+        this.setStatus('✓ Änderungen gespeichert.', false, 5000);
+      }
     } catch (e) {
       console.error('[saveEdit]', e);
       // Netzwerkfehler → Draft behalten, Offline-Modus aktivieren, Auto-Retry.

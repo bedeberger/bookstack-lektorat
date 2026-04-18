@@ -1,7 +1,7 @@
 const express = require('express');
 const { Issuer, generators } = require('openid-client');
 const logger = require('../logger');
-const { getUserToken, setUserToken } = require('../db/schema');
+const { getUserToken, setUserToken, upsertUserLogin } = require('../db/schema');
 
 const router = express.Router();
 
@@ -86,6 +86,7 @@ router.get('/auth/callback', async (req, res) => {
     delete req.session.oidcNonce;
     delete req.session.returnTo;
     req.session.user = { email, name: claims.name || email };
+    upsertUserLogin(email, claims.name || email);
     // Gespeicherten BookStack-Token in Session laden (falls vorhanden)
     const stored = getUserToken(email);
     if (stored) req.session.bookstackToken = { id: stored.token_id, pw: stored.token_pw };

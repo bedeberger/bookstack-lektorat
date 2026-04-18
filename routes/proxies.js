@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../logger');
 const { MAX_TOKENS_OUT } = require('../lib/ai');
-const { getBookLocale } = require('../db/schema');
+const { getBookLocale, getUser } = require('../db/schema');
 
 const BOOKSTACK_URL = process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80';
 
@@ -23,6 +23,7 @@ const jsonBody = express.json();
 
 // Modell-Konfiguration ans Frontend liefern (keine Credentials)
 router.get('/config', (req, res) => {
+  const user = req.session?.user || null;
   res.json({
     bookstackUrl: BOOKSTACK_URL.replace(/\/$/, ''),
     bookstackTokenOk: !!req.session?.bookstackToken,
@@ -31,7 +32,8 @@ router.get('/config', (req, res) => {
     apiProvider: process.env.API_PROVIDER || 'claude',
     ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
     llamaModel:  process.env.LLAMA_MODEL  || 'llama3.2',
-    user: req.session?.user || null,
+    user,
+    userSettings: user ? getUser(user.email) : null,
     devMode: process.env.LOCAL_DEV_MODE === 'true',
     promptConfig: getPromptConfig(),
   });

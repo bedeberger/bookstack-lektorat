@@ -1,0 +1,116 @@
+<!-- Benutzer-Einstellungen -->
+<div class="card" x-show="showUserSettingsCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title">Profil &amp; Einstellungen</span>
+    <div class="card-actions">
+      <button @click="saveUserSettings()" :disabled="userSettingsSaving || userSettingsLoading">
+        <span x-show="userSettingsSaving" class="spinner"></span>
+        <span x-text="userSettingsSaving ? 'Speichert…' : 'Speichern'"></span>
+      </button>
+    </div>
+  </div>
+
+  <div x-show="userSettingsLoading" class="muted-msg">Einstellungen werden geladen…</div>
+
+  <div x-show="!userSettingsLoading" class="book-settings-form">
+
+    <div class="book-settings-row">
+      <label class="book-settings-label">Konto</label>
+      <div class="user-settings-profile">
+        <div><strong x-text="userSettingsProfile?.name || '—'"></strong></div>
+        <div class="muted-msg muted-msg--sm" x-text="userSettingsProfile?.email || ''"></div>
+      </div>
+    </div>
+
+    <p class="user-settings-section-note">
+      Diese Standardwerte werden für neu angelegte Bücher als Vorschlag verwendet. Bereits konfigurierte Bücher bleiben unverändert.
+    </p>
+
+    <div class="book-settings-row">
+      <label class="book-settings-label">Standardsprache</label>
+      <div class="book-settings-options">
+        <label class="book-settings-option">
+          <input type="radio" name="us-lang" value="" x-model="userSettingsDefaultLanguage" @change="userSettingsDefaultRegion = ''; userSettingsDefaultBuchtyp = ''">
+          — nicht gesetzt —
+        </label>
+        <label class="book-settings-option">
+          <input type="radio" name="us-lang" value="de" x-model="userSettingsDefaultLanguage" @change="userSettingsDefaultRegion = 'CH'; userSettingsDefaultBuchtyp = ''">
+          Deutsch
+        </label>
+        <label class="book-settings-option">
+          <input type="radio" name="us-lang" value="en" x-model="userSettingsDefaultLanguage" @change="userSettingsDefaultRegion = 'US'; userSettingsDefaultBuchtyp = ''">
+          English
+        </label>
+      </div>
+    </div>
+
+    <div class="book-settings-row" x-show="userSettingsDefaultLanguage">
+      <label class="book-settings-label">Standardregion</label>
+      <div class="book-settings-options">
+        <template x-if="userSettingsDefaultLanguage === 'de'">
+          <div class="book-settings-options">
+            <label class="book-settings-option">
+              <input type="radio" name="us-region" value="CH" x-model="userSettingsDefaultRegion">
+              Schweiz (de-CH)
+            </label>
+            <label class="book-settings-option">
+              <input type="radio" name="us-region" value="DE" x-model="userSettingsDefaultRegion">
+              Deutschland (de-DE)
+            </label>
+          </div>
+        </template>
+        <template x-if="userSettingsDefaultLanguage === 'en'">
+          <div class="book-settings-options">
+            <label class="book-settings-option">
+              <input type="radio" name="us-region" value="US" x-model="userSettingsDefaultRegion">
+              USA (en-US)
+            </label>
+            <label class="book-settings-option">
+              <input type="radio" name="us-region" value="GB" x-model="userSettingsDefaultRegion">
+              United Kingdom (en-GB)
+            </label>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <div class="book-settings-row" x-show="userSettingsDefaultLanguage">
+      <label class="book-settings-label" for="us-buchtyp">Standard-Buchtyp</label>
+      <select id="us-buchtyp" class="book-settings-select" x-model="userSettingsDefaultBuchtyp">
+        <option value="">— nicht gesetzt —</option>
+        <template x-for="typ in userSettingsBuchtypen()" :key="typ.key">
+          <option :value="typ.key" x-text="typ.label"></option>
+        </template>
+      </select>
+    </div>
+
+    <p class="book-settings-saved" x-show="userSettingsSaved">Einstellungen gespeichert.</p>
+    <p class="book-settings-error" x-show="userSettingsError" x-text="userSettingsError"></p>
+
+    <div class="book-settings-danger-zone">
+      <div class="book-settings-danger-title">Gefahrenzone</div>
+      <div class="book-settings-danger-row">
+        <div class="book-settings-danger-text">
+          Löscht alle deine Lektorate, Buchbewertungen und Chats zum gewählten Buch. Andere Nutzer sind nicht betroffen. Nicht rückgängig zu machen.
+        </div>
+        <div class="book-settings-danger-actions">
+          <select class="book-settings-select" x-model="userSettingsDangerBookId">
+            <option value="">— Buch wählen —</option>
+            <template x-for="b in books" :key="b.id">
+              <option :value="b.id" x-text="b.name"></option>
+            </template>
+          </select>
+          <button
+            class="book-settings-btn-danger"
+            @click="resetBookHistory()"
+            :disabled="bookHistoryResetLoading || !userSettingsDangerBookId">
+            <span x-show="bookHistoryResetLoading" class="spinner"></span>
+            <span x-text="bookHistoryResetLoading ? 'Löscht…' : 'Historie für dieses Buch löschen'"></span>
+          </button>
+        </div>
+      </div>
+      <p class="book-settings-saved" x-show="bookHistoryResetMessage" x-text="bookHistoryResetMessage"></p>
+      <p class="book-settings-error" x-show="bookHistoryResetError" x-text="bookHistoryResetError"></p>
+    </div>
+  </div>
+</div>
