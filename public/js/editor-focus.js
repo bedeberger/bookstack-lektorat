@@ -73,6 +73,18 @@ export const focusMethods = {
   enterFocusMode() {
     if (this.focusMode) return;
     if (!this.showEditorCard || !this.editMode) return;
+    if (this.checkDone) {
+      this.closeFindings?.();
+      const editEl = document.querySelector('#editor-card .page-content-view--editing');
+      if (editEl) {
+        editEl.querySelectorAll('mark.lektorat-mark').forEach(m => {
+          const parent = m.parentNode;
+          while (m.firstChild) parent.insertBefore(m.firstChild, m);
+          parent.removeChild(m);
+        });
+        editEl.normalize();
+      }
+    }
     this.focusMode = true;
     document.body.classList.add('focus-mode');
 
@@ -108,12 +120,23 @@ export const focusMethods = {
         }
       };
 
+      // Mobile-Tastatur: visualViewport schrumpft → CSS-Var --focus-vh
+      // treibt sowohl Card-Höhe als auch Typewriter-Padding, danach recentern.
+      const syncViewport = () => {
+        const vv = window.visualViewport;
+        const h = vv ? vv.height : window.innerHeight;
+        document.documentElement.style.setProperty('--focus-vh', h + 'px');
+        if (this.focusMode) this._focusUpdateActive(true);
+      };
+      syncViewport();
+
       document.addEventListener('selectionchange', onSelection);
       container.addEventListener('scroll', onScroll, { passive: true });
       container.addEventListener('pointerdown', onPointerDown);
       container.addEventListener('pointerup', onPointerUp);
       window.addEventListener('keydown', onKey);
-      this._focusListeners = { onSelection, onScroll, onPointerDown, onPointerUp, onKey, container };
+      window.visualViewport?.addEventListener('resize', syncViewport);
+      this._focusListeners = { onSelection, onScroll, onPointerDown, onPointerUp, onKey, syncViewport, container };
 
       this._focusUpdateActive(true);
       const editEl = document.querySelector('.page-content-view--editing');
@@ -125,6 +148,7 @@ export const focusMethods = {
     if (!this.focusMode) return;
     this.focusMode = false;
     document.body.classList.remove('focus-mode');
+    document.documentElement.style.removeProperty('--focus-vh');
 
     const L = this._focusListeners;
     if (L) {
@@ -133,6 +157,9 @@ export const focusMethods = {
       L.container?.removeEventListener('pointerdown', L.onPointerDown);
       L.container?.removeEventListener('pointerup', L.onPointerUp);
       window.removeEventListener('keydown', L.onKey);
+      if (L.syncViewport) {
+        window.visualViewport?.removeEventListener('resize', L.syncViewport);
+      }
       this._focusListeners = null;
     }
     this._focusPointerActive = false;

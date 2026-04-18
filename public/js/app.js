@@ -38,6 +38,14 @@ window.fetch = async function(...args) {
   return res;
 };
 
+// Service Worker: cached SPA-Shell für Offline/Zug-Modus. Nur über HTTPS bzw.
+// localhost registrierbar. Fehler schlucken – SW ist Progressive Enhancement.
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
 document.addEventListener('alpine:init', () => {
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
     open: false,

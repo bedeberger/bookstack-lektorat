@@ -908,8 +908,23 @@ button.success:hover { background: var(--color-success-hover); }
 .finding.error { border-color: var(--color-err-border); }
 .finding.style { border-color: var(--color-style-border); }
 .finding.ok    { border-color: var(--color-ok-border); }
-.finding.finding-deselected { opacity: 0.35; }
-.finding.finding--applied { opacity: 0.3; }
+.finding.finding-deselected,
+.finding.finding--applied {
+  color: var(--color-muted);
+  border-left-color: var(--color-border);
+}
+.finding.finding-deselected .finding-explanation,
+.finding.finding--applied .finding-explanation {
+  color: var(--color-muted);
+}
+.finding.finding-deselected del,
+.finding.finding-deselected ins,
+.finding.finding--applied del,
+.finding.finding--applied ins {
+  background: transparent;
+  color: var(--color-muted);
+}
+.finding.finding--applied { text-decoration: line-through; text-decoration-color: var(--color-muted); }
 .finding.finding--applied .finding-checkbox { cursor: not-allowed; }
 .finding-checkbox { flex-shrink: 0; margin-top: 2px; cursor: pointer; }
 .finding > .badge { flex-shrink: 0; }
@@ -1175,11 +1190,15 @@ ins {
 .page-content-view--editing:focus { outline-color: var(--color-primary); }
 
 /* === Fokus-Modus (Vollbild, Serif, Absatz-Spotlight, Typewriter-Scroll) === */
-body.focus-mode { overflow: hidden; }
+/* --focus-vh wird in editor-focus.js aus visualViewport.height gesetzt und
+   folgt der iOS-Tastatur (fallback: 100dvh, dann 100vh). */
+body.focus-mode { overflow: hidden; overscroll-behavior: contain; }
 
 body.focus-mode #editor-card {
   position: fixed;
   inset: 0;
+  height: var(--focus-vh, 100dvh);
+  max-height: var(--focus-vh, 100dvh);
   z-index: 1000;
   margin: 0;
   border-radius: 0;
@@ -1193,7 +1212,7 @@ body.focus-mode #editor-card {
 
 body.focus-mode #editor-card .card-header {
   flex: 0 0 auto;
-  padding: 14px 24px;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 24px 14px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg);
   opacity: 0.35;
@@ -1229,7 +1248,12 @@ body.focus-mode .page-content-view--editing {
   height: 100%;
   max-width: 60ch;
   margin: 0 auto;
-  padding: 45vh 2rem;
+  /* Oben/unten fast halbe Viewporthöhe als Puffer, damit der aktive Absatz
+     mittig stehen kann. --focus-vh folgt der Tastatur, Fallback dvh/vh. */
+  padding-top: calc(var(--focus-vh, 100dvh) * 0.45);
+  padding-bottom: calc(var(--focus-vh, 100dvh) * 0.45 + env(safe-area-inset-bottom, 0px));
+  padding-left: max(2rem, env(safe-area-inset-left, 0px));
+  padding-right: max(2rem, env(safe-area-inset-right, 0px));
   background: transparent;
   border: none;
   outline: none;
@@ -1239,15 +1263,35 @@ body.focus-mode .page-content-view--editing {
   line-height: 1.85;
   color: var(--color-text);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
   scrollbar-width: none;
   text-rendering: optimizeLegibility;
   font-feature-settings: "kern", "liga";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
   hyphens: auto;
   -webkit-hyphens: auto;
   caret-color: var(--color-primary);
+}
+
+/* Auf schmalen Screens: kompaktere Schrift, weniger Puffer oben */
+@media (max-width: 600px) {
+  body.focus-mode .page-content-view,
+  body.focus-mode .page-content-view--editing {
+    font-size: 1.15rem;
+    line-height: 1.7;
+    padding-top: calc(var(--focus-vh, 100dvh) * 0.25);
+    padding-bottom: calc(var(--focus-vh, 100dvh) * 0.55 + env(safe-area-inset-bottom, 0px));
+    padding-left: max(1.1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1.1rem, env(safe-area-inset-right, 0px));
+  }
+  body.focus-mode #editor-card .card-header {
+    padding: 8px 12px;
+    opacity: 0.6;
+  }
 }
 body.focus-mode .page-content-view::-webkit-scrollbar,
 body.focus-mode .page-content-view--editing::-webkit-scrollbar {
@@ -2865,6 +2909,7 @@ body.focus-mode .page-content-view--editing .focus-paragraph-active {
   gap: 6px;
   flex-wrap: wrap;
   align-items: center;
+  margin-left: auto;
 }
 
 .card-actions button {

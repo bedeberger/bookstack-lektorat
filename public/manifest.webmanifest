@@ -1,0 +1,32 @@
+{
+  "name": "BookStack Lektorat",
+  "short_name": "Lektorat",
+  "description": "KI-gestützte Rechtschreibprüfung und Stilanalyse für BookStack.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "lang": "de",
+  "background_color": "#f7f7f5",
+  "theme_color": "#f7f7f5",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/bookstack_lektorat_icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
