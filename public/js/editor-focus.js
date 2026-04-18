@@ -263,7 +263,10 @@ export const focusMethods = {
 
       setActiveBlock(container, block);
 
-      if (scroll && block) {
+      // Aktive Textmarkierung: nicht recentern, sonst springt der Viewport
+      // während der User die Auswahl aufzieht oder an ihr arbeitet.
+      const hasSelection = sel && sel.rangeCount > 0 && !sel.isCollapsed;
+      if (scroll && block && !hasSelection) {
         // Cursor-Zeile bevorzugen (echter Typewriter-Scroll). Nur wenn keine
         // Caret-Rect ermittelbar ist (z.B. leerer Absatz, kein Fokus), auf
         // Block-Mitte zurückfallen.

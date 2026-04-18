@@ -112,7 +112,16 @@ export const editorEditMethods = {
     const el = this._getEditEl();
     if (!el) return;
     const newHtml = stripLektoratMarks(el.innerHTML);
-    if (newHtml === this.originalHtml) { this.cancelEdit(); return; }
+    if (newHtml === this.originalHtml) {
+      // Im Fokusmodus nicht aus Edit-/Fokusmodus herausfallen, wenn
+      // der User ein zweites Mal Speichern klickt (nichts geändert).
+      if (this.focusMode) {
+        this.setStatus(this.t('edit.changesSaved'), false, 2000);
+        return;
+      }
+      this.cancelEdit();
+      return;
+    }
 
     const newText = htmlToText(newHtml).trim();
     if (!newText) {
