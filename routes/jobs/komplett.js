@@ -89,8 +89,13 @@ function buildFigNameLookup(figuren, chapterFiguren, chapterAssignments, log, jo
  *  Fängt Fälle ab, in denen kleine Modelle (Ollama/llama) die Dedup-Regel in
  *  Phase 2 nicht befolgen. Verschmilzt Kapitel, Eigenschaften und Beziehungen.
  *  Remappt beziehungen.figur_id auf die kanonische ID und entfernt Selbst-Referenzen. */
+const TITLE_PREFIX_RE = /^(?:dr\.?|doktor|prof\.?|professor|herrn?|hr\.?|frau|fr\.?|fräulein)\s+/;
 function mergeDuplicateFiguren(figuren) {
-  const normalize = s => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+  const normalize = s => {
+    let r = (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    while (TITLE_PREFIX_RE.test(r)) r = r.replace(TITLE_PREFIX_RE, '');
+    return r;
+  };
   const groups = new Map();
   for (const f of figuren) {
     const key = normalize(f.name);

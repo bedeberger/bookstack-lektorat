@@ -5,6 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>BookStack Lektorat</title>
   <link rel="icon" href="bookstack_lektorat_icon.ico" type="image/x-icon">
+  <script>
+    // Theme vor erstem Paint setzen (FOUC-Schutz). Gespeicherte Präferenz:
+    // 'auto' (folgt System), 'light', 'dark'. Auflösung → data-theme-Attribut.
+    (function () {
+      var stored = null;
+      try { stored = localStorage.getItem('theme'); } catch (e) {}
+      var pref = (stored === 'light' || stored === 'dark' || stored === 'auto') ? stored : 'auto';
+      var resolved = pref === 'auto'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : pref;
+      document.documentElement.setAttribute('data-theme', resolved);
+      window.__themePref = pref;
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700;900&display=swap" rel="stylesheet">
@@ -14,7 +28,10 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
-<body x-data="lektorat" @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading) runCheck()">
+<body x-data="lektorat"
+      @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading) runCheck()"
+      @keydown.ctrl.s.prevent.window="if (editMode) quickSave()"
+      @keydown.meta.s.prevent.window="if (editMode) quickSave()">
 
 <div class="session-banner" x-show="sessionExpired" x-cloak>
   <span class="session-banner-text">Sitzung abgelaufen – bitte neu anmelden. Nicht gespeicherte Änderungen im Editor gehen beim Neuladen verloren.</span>
@@ -90,6 +107,7 @@
         </table>
       </div>
     </div>
+    <button class="theme-toggle" @click="cycleTheme()" :title="'Design wechseln (aktuell: ' + _themeLabel() + ')'" x-text="_themeLabel()"></button>
     <a href="/auth/logout" class="logout-link">Abmelden</a>
   </div>
 </div>

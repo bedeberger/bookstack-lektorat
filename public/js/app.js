@@ -20,6 +20,7 @@ import { kontinuitaetMethods } from './kontinuitaet.js';
 import { bookSettingsMethods } from './book-settings.js';
 import { pageViewMethods } from './page-view.js';
 import { editorEditMethods } from './editor-edit.js';
+import { focusMethods } from './editor-focus.js';
 import { synonymMethods } from './editor-synonyme.js';
 
 const FIGUR_TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, andere: 4 };
@@ -136,6 +137,7 @@ document.addEventListener('alpine:init', () => {
     currentUser: null,
     devMode: false,
     sessionExpired: false,
+    themePref: 'auto',
     bookstackUrl: '',
     promptConfig: {},
     showTokenSetup: false,
@@ -167,6 +169,12 @@ document.addEventListener('alpine:init', () => {
     editMode: false,
     editDirty: false,
     editSaving: false,
+    saveOffline: false,
+    lastAutosaveAt: null,
+    lastDraftSavedAt: null,
+    _autosaveTimer: null,
+    _draftTimer: null,
+    _onlineHandler: null,
     showSynonymMenu: false,
     synonymMenuX: 0,
     synonymMenuY: 0,
@@ -638,6 +646,32 @@ document.addEventListener('alpine:init', () => {
       });
     },
 
+    _saveStatus() {
+      const server = Math.max(
+        this.lastAutosaveAt || 0,
+        this.currentPage?.updated_at ? new Date(this.currentPage.updated_at).getTime() : 0,
+      );
+      // Draft-Zeitstempel zählt nur im Fokusmodus und nur wenn er neuer als Server ist.
+      const draft = (this.focusMode && this.lastDraftSavedAt && this.lastDraftSavedAt > server)
+        ? this.lastDraftSavedAt : 0;
+      if (draft) return { ts: draft, kind: 'draft' };
+      if (server) return { ts: server, kind: 'saved' };
+      return { ts: 0, kind: '' };
+    },
+
+    _formatSaveTs(ts) {
+      if (!ts) return '';
+      const d = new Date(ts);
+      const sameDay = d.toDateString() === new Date().toDateString();
+      if (sameDay) {
+        return d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+      }
+      return d.toLocaleString('de-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    },
+
+    lastSavedLabel() { return this._formatSaveTs(this._saveStatus().ts); },
+    lastSavedKind() { return this._saveStatus().kind; },
+
     setReviewStatus(msg, spinner = false) {
       this.bookReviewStatus = spinner
         ? `<span class="spinner"></span>${msg}`
@@ -797,8 +831,29 @@ document.addEventListener('alpine:init', () => {
       }));
     },
 
+    // ── Theme (Hell/Dunkel/Auto) ─────────────────────────────────────────────
+    _applyTheme() {
+      const resolved = this.themePref === 'auto'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : this.themePref;
+      document.documentElement.setAttribute('data-theme', resolved);
+    },
+    cycleTheme() {
+      const order = ['auto', 'light', 'dark'];
+      this.themePref = order[(order.indexOf(this.themePref) + 1) % order.length];
+      try { localStorage.setItem('theme', this.themePref); } catch (e) {}
+      this._applyTheme();
+    },
+    _themeLabel() {
+      return { auto: 'Auto', light: 'Hell', dark: 'Dunkel' }[this.themePref] || 'Auto';
+    },
+
     // ── Initialisierung ──────────────────────────────────────────────────────
     async init() {
+      this.themePref = window.__themePref || 'auto';
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if (this.themePref === 'auto') this._applyTheme();
+      });
       window.addEventListener('session-expired', () => { this.sessionExpired = true; });
       window.addEventListener('beforeunload', (e) => {
         if (this.editMode && this.editDirty) { e.preventDefault(); e.returnValue = ''; }
@@ -1048,6 +1103,9 @@ document.addEventListener('alpine:init', () => {
       if (this._synonymPollTimer) { clearInterval(this._synonymPollTimer); this._synonymPollTimer = null; }
       this.showSynonymMenu = false;
       this.showSynonymPicker = false;
+      if (this.focusMode) this.exitFocusMode();
+      this._stopAutosave?.();
+      this._uninstallOnlineRetry?.();
       this.resetChat();
       this.currentPage = null;
       this.currentPageEmpty = false;
@@ -1060,6 +1118,8 @@ document.addEventListener('alpine:init', () => {
       this.editMode = false;
       this.editDirty = false;
       this.editSaving = false;
+      this.lastAutosaveAt = null;
+      this.lastDraftSavedAt = null;
       this.showEditorCard = false;
       this.analysisOut = '';
       this.status = '';
@@ -1200,6 +1260,7 @@ document.addEventListener('alpine:init', () => {
     ...bookSettingsMethods,
     ...pageViewMethods,
     ...editorEditMethods,
+    ...focusMethods,
     ...synonymMethods,
   }));
 });

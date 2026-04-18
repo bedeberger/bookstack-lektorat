@@ -3,15 +3,20 @@
 KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). Läuft als eigenständiger Node.js-Service und bietet:
 
 - **Seitenlektorat** – Rechtschreib-, Grammatik- und Stilprüfung einzelner Seiten mit selektiver Fehlerkorrektur
+- **Bearbeitungsmodus** – Seiteninhalt direkt in der App editieren und nach BookStack zurückspeichern. Auto-Save alle 30 s, lokaler Draft (localStorage) mit Wiederherstellungs-Prompt, Offline-Modus mit automatischem Retry bei Reconnect
+- **Fokusmodus** – Ablenkungsfreier Vollbild-Schreibmodus mit Absatz-Hervorhebung und Typewriter-Scroll (F11)
+- **Synonym-Finder** – Im Bearbeitungsmodus: Wort markieren → Rechtsklick → kombinierte Vorschläge aus [OpenThesaurus](https://www.openthesaurus.de/) (deutsch) und der KI mit Satzkontext; Klick ersetzt direkt im Text
 - **Seiten-Chat** – Freier KI-Dialog zu einer Seite inkl. Kontext (Figuren, Buchbewertung); Änderungsvorschläge direkt in BookStack übernehmen
 - **Buch-Chat** – KI-Dialog über das gesamte Buch; relevante Seiten werden automatisch nach Thema ausgewählt
 - **Buchbewertung** – Gesamtbewertung mit Stärken, Schwächen und Empfehlungen
-- **Figurenübersicht** – Automatische Charakterextraktion mit interaktivem Beziehungsgraph
+- **Figurenübersicht** – Automatische Charakterextraktion mit interaktivem Beziehungsgraph; Figurenkontext-Panel auch während des Lektorats einer Seite einblendbar
 - **Ereignisse / Schauplätze / Szenen** – Automatische Übersichten pro Kapitel
 - **Kontinuitätsprüfer** – Findet Widersprüche im Buch
-- **Lektorat-Verlauf mit Vorschau** – Alle bisherigen Prüfungen einer Seite chronologisch einsehbar; vergangene Korrekturen per Klick als Inline-Highlights im Editor anzeigen und selektiv nachträglich übernehmen
+- **Lektorat-Verlauf mit Vorschau** – Alle bisherigen Prüfungen einer Seite chronologisch einsehbar; vergangene Korrekturen per Klick als Inline-Highlights im Editor anzeigen und selektiv nachträglich übernehmen. Einzelne Verlaufseinträge lassen sich löschen
 - **Buchstatistik** – Tägliche Snapshots (Wortanzahl, Tokens) als Zeitliniendiagramm
 - **Bucheinstellungen** – Sprache, Buchtyp und freier Kontext werden in alle KI-Prompts eingebettet
+- **Hell/Dunkel/Auto-Design** – Theme-Umschalter in der Kopfzeile; „Auto" folgt dem Betriebssystem
+- **Session-Banner bei Ablauf** – Bei `401`-Antworten blendet die App einen Banner ein statt hart umzuleiten; ungespeicherte Inhalte im Editor/Chat bleiben dadurch erreichbar
 
 ---
 
@@ -124,8 +129,9 @@ Theme-Name in der BookStack `.env` setzen (`APP_THEME=custom`).
 Dieses Projekt wurde mit [Claude Code](https://claude.ai/code) komplett **vibecoded**.
 
 - **[BookStack](https://www.bookstackapp.com/)** – offene, selbst hostbare Wiki-Plattform
-- **[Ollama](https://ollama.com/)** – lokale LLMs auf eigener Hardware
 - **[Anthropic Claude](https://www.anthropic.com/)** – KI-Modell und Coding-Assistent
+- **[Ollama](https://ollama.com/)** und **[llama.cpp](https://github.com/ggerganov/llama.cpp)** / **[LM Studio](https://lmstudio.ai/)** – lokale LLMs auf eigener Hardware (wahlweise per `API_PROVIDER=ollama` oder `API_PROVIDER=llama`)
+- **[OpenThesaurus](https://www.openthesaurus.de/)** – deutscher Community-Thesaurus (Synonym-Finder)
 - **[Alpine.js](https://alpinejs.dev/)** – leichtgewichtiges reaktives Framework
 - **[vis-network](https://visjs.github.io/vis-network/)** – interaktiver Beziehungsgraph
 - **[Chart.js](https://www.chartjs.org/)** – Diagramme
