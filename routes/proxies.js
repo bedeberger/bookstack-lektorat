@@ -78,7 +78,7 @@ router.post('/claude', jsonBody, async (req, res) => {
     res.end();
   } catch (err) {
     logger.error('Claude proxy error: ' + err.message);
-    if (!res.headersSent) res.status(502).json({ error: 'Claude nicht erreichbar: ' + err.message });
+    if (!res.headersSent) res.status(502).json({ error_code: 'CLAUDE_UNREACHABLE', params: { detail: err.message } });
     else res.end();
   }
 });
@@ -326,12 +326,12 @@ const bookstackProxy = createProxyMiddleware({
     proxyRes: (proxyRes, _req, res) => {
       if (proxyRes.statusCode === 301 || proxyRes.statusCode === 302) {
         proxyRes.destroy();
-        res.status(401).json({ error: 'BookStack: Nicht authentifiziert – Token ungültig oder abgelaufen.' });
+        res.status(401).json({ error_code: 'BOOKSTACK_UNAUTHED' });
       }
     },
     error: (err, _req, res) => {
       logger.error('BookStack proxy error: ' + err.message);
-      res.status(502).json({ error: 'BookStack nicht erreichbar: ' + err.message });
+      res.status(502).json({ error_code: 'BOOKSTACK_UNREACHABLE', params: { detail: err.message } });
     }
   }
 });

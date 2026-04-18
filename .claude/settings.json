@@ -182,7 +182,20 @@
       "Bash(node -c public/js/bookstats.js)",
       "Bash(node -c public/js/review.js)",
       "Bash(node -c public/js/api-bookstack.js)",
-      "Bash(node -c public/js/chat-base.js)"
+      "Bash(node -c public/js/chat-base.js)",
+      "Bash(node -c public/js/tree.js)",
+      "Bash(node -c public/js/chat.js)",
+      "Bash(node -c public/js/history.js)",
+      "Bash(node -c public/js/page-view.js)",
+      "Bash(node --check public/js/graph.js)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('public/js/i18n/de.json'\\)\\); JSON.parse\\(require\\('fs'\\).readFileSync\\('public/js/i18n/en.json'\\)\\); console.log\\('JSON OK'\\)\")",
+      "Bash(node -c routes/booksettings.js)",
+      "Bash(node -c routes/chat.js)",
+      "Bash(node -c routes/sync.js)",
+      "Bash(node -c routes/history.js)",
+      "Bash(node -c routes/jobs/shared.js)",
+      "Bash(node -c public/js/book-settings.js)",
+      "Bash(node -c public/js/i18n.js)"
     ]
   }
 }

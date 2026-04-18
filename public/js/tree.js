@@ -16,17 +16,17 @@ export const treeMethods = {
 
   async loadBooks() {
     try {
-      this.setStatus('Verbinde mit BookStack…', true);
+      this.setStatus(this.t('tree.connecting'), true);
       this.books = await this.bsGetAll('books');
       if (!this.selectedBookId || !this.books.some(b => String(b.id) === String(this.selectedBookId))) {
         this.selectedBookId = String(this.books[0]?.id || '');
       }
       this.showBookCard = true;
-      this.setStatus(this.books.length + ' Buch/Bücher gefunden.', false, 4000);
+      this.setStatus(this.t('tree.booksFound', { n: this.books.length }), false, 4000);
       await this.loadPages();
     } catch (e) {
       console.error('[loadBooks]', e);
-      this.setStatus('Fehler: ' + e.message);
+      this.setStatus(this.t('common.errorColon') + e.message);
     }
   },
 
@@ -39,7 +39,7 @@ export const treeMethods = {
     this.figurenProgress = 0;
     this.figurenStatus = '';
     try {
-      this.setStatus('Lade Seiten…', true);
+      this.setStatus(this.t('tree.loadingPages'), true);
       this.pageSearch = '';
       this.tokEsts = {};
       this._tokenEstGen++;
@@ -67,7 +67,7 @@ export const treeMethods = {
         })
         .map(p => ({
           ...p,
-          chapterName: p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : null,
+          chapterName: p.chapter_id ? (chMap[p.chapter_id] || this.t('tree.chapterFallback')) : null,
           url: this.bookstackUrl && p.book_slug && p.slug
             ? `${this.bookstackUrl}/books/${p.book_slug}/page/${p.slug}`
             : null,
@@ -134,7 +134,7 @@ export const treeMethods = {
       this.loadTokenEstimates(this._tokenEstGen); // Hintergrund, kein await
     } catch (e) {
       console.error('[loadPages]', e);
-      this.setStatus('Fehler: ' + e.message);
+      this.setStatus(this.t('common.errorColon') + e.message);
     }
   },
 

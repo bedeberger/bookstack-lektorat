@@ -40,7 +40,7 @@ export const bookSettingsMethods = {
         }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Speichern fehlgeschlagen');
+      if (!r.ok) throw new Error(this.tError(data));
       this.bookSettingsSaved = true;
       setTimeout(() => { this.bookSettingsSaved = false; }, 3000);
     } catch (e) {

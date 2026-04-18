@@ -640,7 +640,7 @@ sharedRouter.get('/stats', (req, res) => {
 
 sharedRouter.get('/last-run', (req, res) => {
   const { type, book_id } = req.query;
-  if (!type || !book_id) return res.status(400).json({ error: 'type und book_id erforderlich' });
+  if (!type || !book_id) return res.status(400).json({ error_code: 'TYPE_BOOKID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const row = db.prepare(`
     SELECT ended_at FROM job_runs
@@ -653,7 +653,7 @@ sharedRouter.get('/last-run', (req, res) => {
 sharedRouter.get('/active', (req, res) => {
   const { type, book_id, page_id } = req.query;
   const entityId = page_id || book_id;
-  if (!type || !entityId) return res.status(400).json({ error: 'type und book_id (oder page_id) erforderlich' });
+  if (!type || !entityId) return res.status(400).json({ error_code: 'TYPE_ENTITY_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const jobId = runningJobs.get(jobKey(type, entityId, userEmail));
   if (!jobId || !jobs.has(jobId)) return res.json({ jobId: null });
@@ -664,15 +664,15 @@ sharedRouter.get('/active', (req, res) => {
 sharedRouter.delete('/:id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
   const job = jobs.get(req.params.id);
-  if (!job) return res.status(404).json({ error: 'Job nicht gefunden' });
+  if (!job) return res.status(404).json({ error_code: 'JOB_NOT_FOUND' });
   const ok = cancelJob(req.params.id, userEmail);
-  if (!ok) return res.status(400).json({ error: `Job kann nicht abgebrochen werden (Status: ${job.status})` });
+  if (!ok) return res.status(400).json({ error_code: 'JOB_CANCEL_FAILED', params: { status: job.status } });
   res.json({ ok: true });
 });
 
 sharedRouter.get('/:id', (req, res) => {
   const job = jobs.get(req.params.id);
-  if (!job) return res.status(404).json({ error: 'Job nicht gefunden' });
+  if (!job) return res.status(404).json({ error_code: 'JOB_NOT_FOUND' });
   let statusText = job.statusText;
   if (job.status === 'queued') {
     const pos = jobQueue.findIndex(e => e.jobId === job.id) + 1;

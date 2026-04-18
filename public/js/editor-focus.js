@@ -102,18 +102,9 @@ export const focusMethods = {
   enterFocusMode() {
     if (this.focusMode) return;
     if (!this.showEditorCard || !this.editMode) return;
-    if (this.checkDone) {
-      this.closeFindings?.();
-      const editEl = document.querySelector('#editor-card .page-content-view--editing');
-      if (editEl) {
-        editEl.querySelectorAll('mark.lektorat-mark').forEach(m => {
-          const parent = m.parentNode;
-          while (m.firstChild) parent.insertBefore(m.firstChild, m);
-          parent.removeChild(m);
-        });
-        editEl.normalize();
-      }
-    }
+    // Findings/Marks bleiben erhalten – CSS unterdrückt das Mark-Styling im
+    // Fokusmodus (distraktionsfrei). Beim Speichern filtert
+    // _filterFindingsAfterSave behobene Findings wie im Edit-Modus raus.
     this.focusMode = true;
     document.body.classList.add('focus-mode');
 

@@ -51,11 +51,29 @@ export function tRaw(key, params) {
   return msg;
 }
 
+/** Übersetzt eine Backend-Fehlerantwort. Akzeptiert:
+ *  - { error_code: 'CODE', params: {...} } → t('error.CODE', params)
+ *  - { error: 'freier Text' }              → Text direkt (Legacy-Fallback)
+ *  - null / undefined / {}                  → common.unknownError
+ */
+export function tErrorRaw(response) {
+  if (!response) return tRaw('common.unknownError');
+  if (response.error_code) return tRaw('error.' + response.error_code, response.params || {});
+  if (response.error)      return response.error;
+  return tRaw('common.unknownError');
+}
+
 // Alpine-Methoden: `t` referenziert `this.uiLocale`, damit Alpine bei Sprachwechsel re-evaluiert.
 export const i18nMethods = {
   t(key, params) {
     void this.uiLocale;
     return tRaw(key, params);
+  },
+
+  /** Backend-Fehler übersetzen. Siehe tErrorRaw für Schema. */
+  tError(response) {
+    void this.uiLocale;
+    return tErrorRaw(response);
   },
 
   /** Sprache wechseln, neue Messages laden und auf Server persistieren. */

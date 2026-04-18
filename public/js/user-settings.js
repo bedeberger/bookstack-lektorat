@@ -37,7 +37,7 @@ export const userSettingsMethods = {
         }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || this.t('common.saveFailed'));
+      if (!r.ok) throw new Error(this.tError(data));
       this.userSettingsSaved = true;
       setTimeout(() => { this.userSettingsSaved = false; }, 3000);
     } catch (e) {
@@ -60,7 +60,7 @@ export const userSettingsMethods = {
     try {
       const r = await fetch(`/history/book/${bookId}`, { method: 'DELETE' });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || this.t('common.deleteFailed'));
+      if (!r.ok) throw new Error(this.tError(data));
       const d = data.deleted || {};
       this.bookHistoryResetMessage = this.t('userSettings.resetSummary', {
         lektorate: d.page_checks || 0,

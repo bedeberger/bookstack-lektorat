@@ -109,21 +109,21 @@ router.get('/auth/logout', (req, res) => {
 
 // GET /auth/me → aktueller User (JSON, für Frontend)
 router.get('/auth/me', (req, res) => {
-  if (!req.session?.user) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (!req.session?.user) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   res.json(req.session.user);
 });
 
 // GET /auth/token → ob ein BookStack-Token hinterlegt ist (kein Klartext!)
 router.get('/auth/token', (req, res) => {
-  if (!req.session?.user) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (!req.session?.user) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   res.json({ hasToken: !!req.session.bookstackToken });
 });
 
 // PUT /auth/token → BookStack-Token speichern (DB + Session)
 router.put('/auth/token', express.json(), (req, res) => {
-  if (!req.session?.user) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (!req.session?.user) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   const { tokenId, tokenPw } = req.body || {};
-  if (!tokenId || !tokenPw) return res.status(400).json({ error: 'tokenId und tokenPw erforderlich' });
+  if (!tokenId || !tokenPw) return res.status(400).json({ error_code: 'TOKEN_ID_PW_REQUIRED' });
   const email = req.session.user.email;
   setUserToken(email, tokenId, tokenPw);
   req.session.bookstackToken = { id: tokenId, pw: tokenPw };

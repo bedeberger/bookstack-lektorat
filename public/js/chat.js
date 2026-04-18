@@ -70,7 +70,7 @@ export const chatMethods = {
     const setErr = (msg) => { v()._error = msg; };
 
     if (!this.currentPage) {
-      setErr('Seiteninhalt nicht geladen – bitte Seite neu auswählen.');
+      setErr(this.t('chat.pageNotLoaded'));
       return;
     }
 
@@ -79,11 +79,11 @@ export const chatMethods = {
     try {
       const page = await this.bsGet('pages/' + this.currentPage.id);
       if (page.html.indexOf(vorschlag.original) === -1) {
-        setErr('Originaltext nicht mehr in der Seite gefunden.');
+        setErr(this.t('chat.originalNotFound'));
         return;
       }
     } catch {
-      setErr('Seiteninhalt konnte nicht geladen werden.');
+      setErr(this.t('chat.pageLoadFailed'));
       return;
     }
 
@@ -116,11 +116,12 @@ export const chatMethods = {
           console.warn('[applyChatVorschlag] Markierung nicht persistiert:', e.message);
         }
       }
-      this.chatStatus = '<span class="success-msg">Änderung in BookStack gespeichert.</span>';
-      setTimeout(() => { if (this.chatStatus.includes('gespeichert')) this.chatStatus = ''; }, 3000);
+      const successMsg = `<span class="success-msg">${escHtml(this.t('chat.changeSaved'))}</span>`;
+      this.chatStatus = successMsg;
+      setTimeout(() => { if (this.chatStatus === successMsg) this.chatStatus = ''; }, 3000);
     } catch (e) {
       console.error('[applyChatVorschlag]', e);
-      setErr('Fehler beim Speichern: ' + e.message);
+      setErr(this.t('chat.saveFailedPrefix') + e.message);
       this.chatStatus = '';
     } finally {
       v()._applying = false;

@@ -1233,6 +1233,11 @@ document.addEventListener('alpine:init', () => {
         this._syncUrlNow();
         this._applyingHash = false;
         this._setupHashRouting();
+        // Figurengraph/Soziogramm enthalten übersetzte Labels (Schicht, Beziehung, Figurentyp).
+        // Bei Sprachwechsel neu rendern – der Hash in renderFigurGraph() berücksichtigt uiLocale.
+        this.$watch('uiLocale', () => {
+          if (this.showFiguresCard && this.figuren?.length) this.renderFigurGraph();
+        });
         this._startJobQueuePoll();
       } catch {
         this.setStatus(this.t('app.configLoadError'));
@@ -1336,6 +1341,8 @@ document.addEventListener('alpine:init', () => {
         this._updatePageViewHeight();
         const rawPreview = htmlToText(html).trim() || null;
         if (rawPreview) p.previewText = rawPreview;
+        // Listing-Cache kann stale sein (bsPut aktualisiert ihn nicht).
+        if (pd.updated_at) p.updated_at = pd.updated_at;
         this.currentPageEmpty = !rawPreview;
         this.analysisOut = '';
       } catch (e) {
@@ -1591,7 +1598,7 @@ document.addEventListener('alpine:init', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tokenId: this.tokenSetupId.trim(), tokenPw: this.tokenSetupPw.trim() }),
         });
-        if (!r.ok) throw new Error((await r.json()).error || this.t('common.saveFailed'));
+        if (!r.ok) throw new Error(this.tError(await r.json()));
         this.showTokenSetup = false;
         this.tokenSetupId = '';
         this.tokenSetupPw = '';

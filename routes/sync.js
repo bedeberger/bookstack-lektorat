@@ -260,7 +260,7 @@ router.post('/pages/:book_id', async (req, res) => {
   const token = req.session?.bookstackToken
     ? { token_id: req.session.bookstackToken.id, token_pw: req.session.bookstackToken.pw }
     : getAnyUserToken();
-  if (!token) return res.status(503).json({ error: 'Kein BookStack-Token verfügbar.' });
+  if (!token) return res.status(503).json({ error_code: 'NO_BOOKSTACK_TOKEN' });
   try {
     await syncPagesCache(parseInt(req.params.book_id), token);
     res.json({ ok: true });
@@ -275,7 +275,7 @@ router.post('/book/:book_id', async (req, res) => {
   const token = req.session?.bookstackToken
     ? { token_id: req.session.bookstackToken.id, token_pw: req.session.bookstackToken.pw }
     : getAnyUserToken();
-  if (!token) return res.status(503).json({ error: 'Kein BookStack-Token verfügbar.' });
+  if (!token) return res.status(503).json({ error_code: 'NO_BOOKSTACK_TOKEN' });
   try {
     const result = await syncBook(parseInt(req.params.book_id), token);
     res.json({ ok: true, ...result });

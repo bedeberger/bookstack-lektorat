@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const { db } = require('../../db/schema');
-const { callAIChat, CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../../lib/ai');
+const { callAIChat, parseJSON, CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../../lib/ai');
 const {
   _promptConfig,
   makeJobLogger, updateJob, completeJob, failJob,
@@ -19,8 +19,7 @@ const chatRouter = express.Router();
 
 function _parseChatResponse(text) {
   try {
-    const clean = text.replace(/```json\s*|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    const parsed = parseJSON(text);
     return {
       antwort: parsed.antwort ?? text,
       vorschlaege: parsed.vorschlaege ?? [],
@@ -343,14 +342,14 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
 
 function _handleChatPost(req, res, { jobType, sessionSelect, labelFn, runFn }) {
   const { session_id, message } = req.body;
-  if (!session_id || !message?.trim()) return res.status(400).json({ error: 'session_id und message erforderlich' });
+  if (!session_id || !message?.trim()) return res.status(400).json({ error_code: 'SESSION_ID_MSG_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
-  if (!userEmail) return res.status(401).json({ error: 'Nicht eingeloggt' });
+  if (!userEmail) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   const existing = runningJobs.get(jobKey(jobType, session_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
 
   const session = db.prepare(sessionSelect).get(parseInt(session_id), userEmail);
-  if (!session) return res.status(404).json({ error: 'Session nicht gefunden' });
+  if (!session) return res.status(404).json({ error_code: 'SESSION_NOT_FOUND' });
 
   const now = new Date().toISOString();
   const userMsgResult = db.prepare(
@@ -386,7 +385,7 @@ chatRouter.post('/book-chat', jsonBody, (req, res) => _handleChatPost(req, res, 
 
 chatRouter.delete('/book-chat-cache', (req, res) => {
   const { book_id } = req.query;
-  if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
+  if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const key = `${book_id}:${userEmail}`;
   _bookPageCache.delete(key);

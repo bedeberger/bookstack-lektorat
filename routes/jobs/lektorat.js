@@ -170,7 +170,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
 // ── Routen ────────────────────────────────────────────────────────────────────
 lektoratRouter.post('/check', jsonBody, (req, res) => {
   const { page_id, book_id, page_name } = req.body;
-  if (!page_id) return res.status(400).json({ error: 'page_id fehlt' });
+  if (!page_id) return res.status(400).json({ error_code: 'PAGE_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = req.session?.bookstackToken
     ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw }
@@ -185,7 +185,7 @@ lektoratRouter.post('/check', jsonBody, (req, res) => {
 
 lektoratRouter.post('/batch-check', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
-  if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
+  if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = req.session?.bookstackToken
     ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw }

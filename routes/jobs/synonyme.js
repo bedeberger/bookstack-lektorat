@@ -49,8 +49,8 @@ async function runSynonymJob(jobId, wort, satz, bookId) {
 
 synonymeRouter.post('/synonym', jsonBody, (req, res) => {
   const { wort, satz, book_id } = req.body || {};
-  if (!wort || typeof wort !== 'string' || !wort.trim()) return res.status(400).json({ error: 'wort fehlt' });
-  if (!satz || typeof satz !== 'string' || !satz.trim()) return res.status(400).json({ error: 'satz fehlt' });
+  if (!wort || typeof wort !== 'string' || !wort.trim()) return res.status(400).json({ error_code: 'WORT_REQUIRED' });
+  if (!satz || typeof satz !== 'string' || !satz.trim()) return res.status(400).json({ error_code: 'SATZ_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const entityKey = `${wort.trim().toLowerCase()}|${satz.trim().slice(0, 60)}`;
   const existing = runningJobs.get(jobKey('synonym', entityKey, userEmail));

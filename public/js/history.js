@@ -83,7 +83,7 @@ export const historyMethods = {
         const pd = await this.bsGet('pages/' + this.currentPage.id);
         this.originalHtml = pd.html || '';
       } catch (e) {
-        this.setStatus('Seiteninhalt konnte nicht geladen werden.');
+        this.setStatus(this.t('chat.pageLoadFailed'));
         return;
       }
     }

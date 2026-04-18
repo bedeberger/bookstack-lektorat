@@ -911,7 +911,7 @@ async function runKomplettAnalyseAll() {
 // ── Routen ────────────────────────────────────────────────────────────────────
 komplettRouter.post('/komplett-analyse', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
-  if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
+  if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
   const existing = runningJobs.get(jobKey('komplett-analyse', book_id, userEmail));
@@ -924,7 +924,7 @@ komplettRouter.post('/komplett-analyse', jsonBody, (req, res) => {
 
 komplettRouter.post('/kontinuitaet', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
-  if (!book_id) return res.status(400).json({ error: 'book_id fehlt' });
+  if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
   const existing = runningJobs.get(jobKey('kontinuitaet', book_id, userEmail));

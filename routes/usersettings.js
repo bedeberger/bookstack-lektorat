@@ -23,7 +23,7 @@ const FIELDS = [
 router.get('/settings', (req, res) => {
   const email = req.session.user.email;
   const user = getUser(email);
-  if (!user) return res.status(404).json({ error: 'Benutzerprofil nicht gefunden.' });
+  if (!user) return res.status(404).json({ error_code: 'USER_PROFILE_NOT_FOUND' });
   res.json(user);
 });
 
@@ -32,14 +32,14 @@ router.get('/settings', (req, res) => {
 router.patch('/settings', jsonBody, (req, res) => {
   const email = req.session.user.email;
   const existing = getUser(email);
-  if (!existing) return res.status(404).json({ error: 'Benutzerprofil nicht gefunden.' });
+  if (!existing) return res.status(404).json({ error_code: 'USER_PROFILE_NOT_FOUND' });
 
   const body = req.body || {};
 
   for (const { key, allowed, label } of FIELDS) {
     if (body[key] === undefined || body[key] === null || body[key] === '') continue;
     if (!allowed.includes(body[key])) {
-      return res.status(400).json({ error: `Ungültiger Wert für ${label}. Erlaubt: ${allowed.join(', ')}.` });
+      return res.status(400).json({ error_code: 'INVALID_VALUE', params: { field: label, allowed: allowed.join(', ') } });
     }
   }
 

@@ -3,8 +3,6 @@
   <div class="card-header">
     <div>
       <span class="card-title" x-text="t('editor.title', { name: currentPage?.name || '–' })"></span>
-      <span class="mode-pill" :class="editMode ? 'mode-pill--edit' : 'mode-pill--read'"
-            x-text="editMode ? t('editor.mode.edit') : t('editor.mode.read')"></span>
       <span class="save-indicator" x-show="lastSavedLabel()"
             :class="{ 'save-indicator--draft': lastSavedKind() === 'draft', 'save-indicator--offline': saveOffline }"
             x-text="lastSavedKind() === 'draft' ? t('editor.draft', { when: lastSavedLabel() }) : t('editor.saved', { when: lastSavedLabel() })"
@@ -47,7 +45,7 @@
             <span x-show="editSaving" class="spinner"></span><span x-text="editSaving ? t('common.saving') : t('common.save')"></span>
           </button>
           <button @click="cancelEdit()" :disabled="editSaving" x-text="t('common.cancel')"></button>
-          <button @click="closeFindings()" x-show="checkDone" :title="t('editor.btn.exitCheckTitle')" x-text="t('editor.btn.exitCheck')"></button>
+          <button @click="closeFindings()" x-show="checkDone && !focusMode" :title="t('editor.btn.exitCheckTitle')" x-text="t('editor.btn.exitCheck')"></button>
           <button @click="toggleFocusMode()" :class="{ primary: focusMode }" :title="focusMode ? t('editor.btn.leaveFocusTitle') : t('editor.btn.enterFocusTitle')" x-text="focusMode ? t('editor.btn.leaveFocus') : t('editor.btn.focusShort')"></button>
         </span>
       </template>

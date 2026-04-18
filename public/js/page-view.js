@@ -1,9 +1,8 @@
 // Seitenansicht-Methoden: Formatierte HTML-Ansicht mit Inline-Fehlermarkierung
 // und Figurenkontext-Panel. `this` bezieht sich auf die Alpine-Komponente.
 
-import { escHtml } from './utils.js';
-
-const TYP_LABELS = { rechtschreibung:'Rechtschreibung', grammatik:'Grammatik', wiederholung:'Wdh.', schwaches_verb:'schw. Verb', fuellwort:'Füllwort', show_vs_tell:'Show/Tell', passiv:'Passiv', perspektivbruch:'Perspektive', tempuswechsel:'Tempus', stil:'Stil' };
+import { escHtml, htmlToText } from './utils.js';
+import { tRaw } from './i18n.js';
 
 // Weiche Typen: standardmässig nicht vorausgewählt (User entscheidet pro Finding)
 export const SOFT_TYPEN = new Set(['wiederholung', 'schwaches_verb', 'fuellwort', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel']);
@@ -104,7 +103,7 @@ function showTip(mark, errors) {
   activeMark = mark;
   const tip = ensureTipEl();
 
-  const typLabel = TYP_LABELS[f.typ] || f.typ;
+  const typLabel = tRaw('finding.' + f.typ);
   const isHard = { rechtschreibung:1, grammatik:1, tempuswechsel:1 }[f.typ];
   const badgeCls = isHard ? 'badge-err' : 'badge-warn';
   tip.innerHTML =
@@ -159,7 +158,15 @@ export const pageViewMethods = {
 
   /** Berechnet max-height für die Seitenansicht basierend auf Textlänge */
   _updatePageViewHeight() {
-    const words = this.tokEsts?.[this.currentPage?.id]?.words || 0;
+    // Nach Edits ist tokEsts stale → aktuellen Text aus originalHtml ableiten,
+    // sonst auf Cache fallback (bevor die Seite geladen ist).
+    let words = 0;
+    if (this.originalHtml) {
+      const text = htmlToText(this.originalHtml).trim();
+      words = text ? text.split(/\s+/).length : 0;
+    } else {
+      words = this.tokEsts?.[this.currentPage?.id]?.words || 0;
+    }
     // ~12 Wörter pro Zeile, ~1.8em Zeilenhöhe ≈ 28px
     const estLines = Math.ceil(words / 12);
     const vh = Math.min(75, Math.max(15, Math.round(estLines * 28 / window.innerHeight * 100)));
@@ -190,6 +197,7 @@ export const pageViewMethods = {
     } else {
       this.renderedPageHtml = this.originalHtml;
     }
+    this._updatePageViewHeight();
   },
 
   /** Lädt Figurenkontext für das aktuelle Kapitel (nur bei >1 Seite im Kapitel) */

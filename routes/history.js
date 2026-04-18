@@ -102,9 +102,9 @@ router.delete('/review/:id', (req, res) => {
 // chat_sessions (inkl. Nachrichten via ON DELETE CASCADE) des eingeloggten Users.
 router.delete('/book/:book_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
-  if (!user_email) return res.status(401).json({ error: 'unauthenticated' });
+  if (!user_email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   const book_id = parseInt(req.params.book_id);
-  if (!Number.isFinite(book_id)) return res.status(400).json({ error: 'invalid book_id' });
+  if (!Number.isFinite(book_id)) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
 
   const delChecks   = db.prepare('DELETE FROM page_checks    WHERE book_id = ? AND user_email = ?');
   const delReviews  = db.prepare('DELETE FROM book_reviews   WHERE book_id = ? AND user_email = ?');

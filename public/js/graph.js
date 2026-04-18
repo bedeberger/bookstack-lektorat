@@ -6,18 +6,6 @@ import { escHtml } from './utils.js';
 // Gemeinsamer Font für alle vis-Nodes.
 const DEFAULT_FONT = { size: 13, face: 'system-ui, -apple-system, sans-serif' };
 
-// Anzeige-Label pro Sozialschicht (Soziogramm-Bänder + Figur-Tooltip).
-const SCHICHT_LABEL = {
-  wirtschaftselite:    'Wirtschaftselite',
-  gehobenes_buergertum:'Geh. Bürgertum',
-  mittelschicht:       'Mittelschicht',
-  arbeiterschicht:     'Arbeiterschicht',
-  migrantenmilieu:     'Migrantenmilieu',
-  prekariat:           'Prekariat',
-  unterwelt:           'Unterwelt',
-  andere:              'Weitere',
-};
-
 // Node-Label aus einer Figur: Kurzname + optionales Geburtsdatum in zweiter Zeile.
 const nodeLabel = f => (f.kurzname || f.name) + (f.geburtstag ? '\n* ' + f.geburtstag : '');
 
@@ -125,8 +113,8 @@ export const graphMethods = {
     const container = document.getElementById('figuren-graph');
     if (!container) return;
 
-    // Caching: Graph nur neu aufbauen wenn sich Figuren oder Modus geändert haben
-    const hash = this.figuren.map(f => f.id).join(',') + '|' + this.figurenGraphModus;
+    // Caching: Graph nur neu aufbauen wenn sich Figuren, Modus oder Sprache geändert haben
+    const hash = this.figuren.map(f => f.id).join(',') + '|' + this.figurenGraphModus + '|' + this.uiLocale;
     if (this._figurenNetwork && this._figurenHash === hash) return;
     this._figurenHash = hash;
 
@@ -135,11 +123,11 @@ export const graphMethods = {
       this._figurenNetwork = null;
     }
     if (!this.figuren.length) {
-      container.innerHTML = '<span class="muted-msg" style="display:block;padding:20px;text-align:center;">Noch keine Figuren – «Figuren ermitteln» starten.</span>';
+      container.innerHTML = `<span class="muted-msg" style="display:block;padding:20px;text-align:center;">${escHtml(this.t('graph.empty.figuren'))}</span>`;
       return;
     }
     if (typeof vis === 'undefined') {
-      container.innerHTML = '<span class="muted-msg" style="display:block;padding:20px;text-align:center;">vis-network wird geladen…</span>';
+      container.innerHTML = `<span class="muted-msg" style="display:block;padding:20px;text-align:center;">${escHtml(this.t('graph.empty.visLoading'))}</span>`;
       return;
     }
 
@@ -335,7 +323,7 @@ export const graphMethods = {
     const hasSchicht = this.figuren.some(f => f.sozialschicht && f.sozialschicht !== 'andere');
     if (!hasSchicht) {
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
-      container.innerHTML = '<span class="muted-msg soziogramm-placeholder">Noch keine Sozialschichten analysiert.<br>Bitte auf «Alle aktualisieren» klicken, um Schichtzugehörigkeit und Machtstrukturen zu ermitteln.</span>';
+      container.innerHTML = `<span class="muted-msg soziogramm-placeholder">${this.t('graph.empty.sozialschicht')}</span>`;
       return;
     }
 
@@ -465,7 +453,7 @@ export const graphMethods = {
         const domY = network.canvasToDOM({ x: 0, y: Number(levStr) * LEVEL_Y_GAP }).y;
         if (domY < -16 || domY > ctx.canvas.height / dpr + 16) continue;
         // Hintergrund-Pill (rounded rect, compat-safe) – Koordinaten in Canvas-Pixeln (× dpr)
-        const label = SCHICHT_LABEL[schicht] || schicht;
+        const label = this.t('figuren.schicht.' + schicht);
         const tw    = ctx.measureText(label).width;
         const cY = domY * dpr;
         const px = 6 * dpr, py = cY - 9 * dpr, pw = tw + 12 * dpr, ph = 18 * dpr, pr = 4 * dpr;
@@ -509,6 +497,7 @@ export const graphMethods = {
         if (addedPairs.has(dedupeKey)) continue;
         addedPairs.add(dedupeKey);
 
+        const typLabel = this.t('figuren.bz.' + bz.typ);
         if (soziogrammModus) {
           // Soziogramm: Farbe nach Kategorie, Breite nach Machtasymmetrie, Pfeil nach machtverhaltnis
           const cat    = BZ_SOZIO_CAT[bz.typ] || 'sozial';
@@ -522,9 +511,10 @@ export const graphMethods = {
 
           edgeList.push({
             from: f.id, to: toId,
-            label: bz.typ,
-            title: bz.beschreibung || bz.typ,
-            font: { size: 10, color },
+            // Label bewusst leer: Beziehungstyp nur im Hover-Tooltip, um dichte Graphen lesbar zu halten
+            label: '',
+            typ: bz.typ,
+            title: bz.beschreibung || typLabel,
             color: { color, highlight: color },
             arrows,
             dashes: false,
@@ -535,9 +525,9 @@ export const graphMethods = {
           const s = BZ[bz.typ] || BZ.andere;
           edgeList.push({
             from: f.id, to: toId,
-            label: bz.typ,
-            title: bz.beschreibung || bz.typ,
-            font: { size: 10, color: s.color },
+            label: '',
+            typ: bz.typ,
+            title: bz.beschreibung || typLabel,
             color: { color: s.color, highlight: s.highlight },
             arrows: s.arrows,
             dashes: s.dashes,
@@ -557,9 +547,10 @@ export const graphMethods = {
       // „Weitere" im Tooltip unterdrücken – der Tooltip blendet die Schichtzeile
       // nur ein, wenn es eine echte Zuordnung gibt.
       const schichtLabel = f.sozialschicht && f.sozialschicht !== 'andere'
-        ? (SCHICHT_LABEL[f.sozialschicht] || '') : '';
+        ? this.t('figuren.schicht.' + f.sozialschicht) : '';
+      const typLabel = f.typ ? this.t('figuren.type.' + f.typ) : '';
       tip.innerHTML = `<strong>${escHtml(f.name)}</strong>`
-        + `<em>${escHtml(f.typ)}${schichtLabel ? ' · ' + escHtml(schichtLabel) : ''}</em>`
+        + `<em>${escHtml(typLabel)}${schichtLabel ? ' · ' + escHtml(schichtLabel) : ''}</em>`
         + (f.beschreibung ? `<p>${escHtml(f.beschreibung)}</p>` : '');
       tip.style.left = '0px';
       tip.style.top  = '0px';

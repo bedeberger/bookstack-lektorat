@@ -1,7 +1,7 @@
 const express = require('express');
 const { db } = require('../db/schema');
 const logger = require('../logger');
-const { CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../lib/ai');
+const { CHARS_PER_TOKEN, MAX_TOKENS_OUT, parseJSON } = require('../lib/ai');
 const {
   getPrompts, getBookPrompts,
   getFiguren, getLatestReview, buildChatMessageHistory,
@@ -29,7 +29,7 @@ router.post('/session', jsonBody, (req, res) => {
   const { book_id, book_name, page_id, page_name } = req.body;
   const userEmail = req.session?.user?.email || null;
   if (!book_id || !page_id || !userEmail) {
-    return res.status(400).json({ error: 'book_id, page_id und Login erforderlich.' });
+    return res.status(400).json({ error_code: 'BOOKID_PAGEID_LOGIN_REQ' });
   }
   const now = new Date().toISOString();
   const result = db.prepare(`
@@ -44,7 +44,7 @@ router.post('/session/book', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   const userEmail = req.session?.user?.email || null;
   if (!book_id || !userEmail) {
-    return res.status(400).json({ error: 'book_id und Login erforderlich.' });
+    return res.status(400).json({ error_code: 'BOOKID_LOGIN_REQ' });
   }
   const now = new Date().toISOString();
   const result = db.prepare(`
@@ -88,7 +88,7 @@ router.get('/session/:id', (req, res) => {
   const session = db.prepare(`
     SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?
   `).get(parseInt(req.params.id), userEmail);
-  if (!session) return res.status(404).json({ error: 'Session nicht gefunden.' });
+  if (!session) return res.status(404).json({ error_code: 'SESSION_NOT_FOUND' });
 
   const messages = db.prepare(`
     SELECT id, role, content, vorschlaege, tokens_in, tokens_out, tps, context_info, created_at
@@ -125,10 +125,10 @@ router.patch('/message/:id/vorschlag/:idx/applied', jsonBody, (req, res) => {
     JOIN chat_sessions cs ON cs.id = cm.session_id
     WHERE cm.id = ? AND cs.user_email = ?
   `).get(msgId, userEmail);
-  if (!row) return res.status(404).json({ error: 'Nachricht nicht gefunden.' });
+  if (!row) return res.status(404).json({ error_code: 'MESSAGE_NOT_FOUND' });
 
   const vorschlaege = row.vorschlaege ? JSON.parse(row.vorschlaege) : [];
-  if (!vorschlaege[idx]) return res.status(400).json({ error: 'Vorschlag-Index ungültig.' });
+  if (!vorschlaege[idx]) return res.status(400).json({ error_code: 'VORSCHLAG_INDEX_INVALID' });
 
   if (applied) {
     vorschlaege[idx].applied = true;
@@ -157,7 +157,7 @@ router.post('/send', jsonBody, async (req, res) => {
   const userEmail = req.session?.user?.email || null;
 
   if (!session_id || !message?.trim() || !userEmail) {
-    return res.status(400).json({ error: 'session_id, message und Login erforderlich.' });
+    return res.status(400).json({ error_code: 'SESSION_MSG_LOGIN_REQ' });
   }
 
   // Alles in einem try/catch – Express 4 fängt async-Fehler nicht automatisch ab.
@@ -169,7 +169,7 @@ router.post('/send', jsonBody, async (req, res) => {
     const session = db.prepare(
       'SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?'
     ).get(parseInt(session_id), userEmail);
-    if (!session) return res.status(404).json({ error: 'Session nicht gefunden.' });
+    if (!session) return res.status(404).json({ error_code: 'SESSION_NOT_FOUND' });
     logger.info(`[chat/send] «${session.page_name}» session=${session_id} user=${userEmail} book=${session.book_id}`);
 
     const now = new Date().toISOString();
@@ -235,12 +235,11 @@ router.post('/send', jsonBody, async (req, res) => {
         (tIn, tOut) => { tokensIn = tIn; tokensOut = tOut; });
     }
 
-    // Vollständige Antwort parsen
+    // Vollständige Antwort parsen (mehrstufiger Fallback: JSON.parse → balanced extract → jsonrepair)
     let antwort = fullText;
     let vorschlaege = [];
     try {
-      const clean = fullText.replace(/```json\s*|```/g, '').trim();
-      const parsed = JSON.parse(clean);
+      const parsed = parseJSON(fullText);
       antwort     = parsed.antwort     ?? fullText;
       vorschlaege = parsed.vorschlaege ?? [];
     } catch {

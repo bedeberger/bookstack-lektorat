@@ -48,6 +48,33 @@ export const editorEditMethods = {
     return document.querySelector('#editor-card .page-content-view--editing');
   },
 
+  // Nach jedem erfolgreichen Save: Findings, deren `original`-Text nicht mehr
+  // im neuen HTML vorkommt, gelten als behoben und fliegen raus. Gilt sowohl
+  // für saveEdit (expliziter Save) als auch quickSave (Ctrl+S/Autosave) –
+  // damit das Prüf-Panel auch nach Fokus-Editor-Edits aktuell bleibt.
+  _filterFindingsAfterSave(newHtml) {
+    if (!this.lektoratFindings || this.lektoratFindings.length === 0) return;
+    const survivors = [];
+    const prevSelected = new Map();
+    for (let i = 0; i < this.lektoratFindings.length; i++) {
+      const f = this.lektoratFindings[i];
+      if (f.original && newHtml.indexOf(f.original) !== -1) {
+        survivors.push(f);
+        prevSelected.set(f, !!this.selectedFindings[i]);
+      }
+    }
+    this.lektoratFindings = sortByPosition(newHtml, survivors);
+    this.selectedFindings = this.lektoratFindings.map(f => prevSelected.get(f) ?? false);
+    this.appliedOriginals = this.appliedOriginals.filter(o => newHtml.indexOf(o) !== -1);
+    if (this.lektoratFindings.length === 0) {
+      this.checkDone = false;
+      this.correctedHtml = null;
+      this.hasErrors = false;
+    } else {
+      this._recomputeCorrectedHtml();
+    }
+  },
+
   startEdit() {
     if (!this.currentPage || !this.originalHtml) return;
     if (this.checkLoading || this.saveApplying != null) return;
@@ -136,37 +163,18 @@ export const editorEditMethods = {
     this.editSaving = true;
     this.setStatus(this.t('edit.saving'), true);
     try {
-      await this.bsPut('pages/' + this.currentPage.id, {
+      const saved = await this.bsPut('pages/' + this.currentPage.id, {
         html: newHtml,
         name: this.currentPage.name,
       });
+      if (saved?.updated_at) this.currentPage.updated_at = saved.updated_at;
 
       this.originalHtml = newHtml;
       const rawPreview = htmlToText(newHtml).trim() || null;
       if (this.currentPage) this.currentPage.previewText = rawPreview;
       this.currentPageEmpty = !rawPreview;
 
-      if (this.lektoratFindings.length > 0) {
-        const survivors = [];
-        const prevSelected = new Map();
-        for (let i = 0; i < this.lektoratFindings.length; i++) {
-          const f = this.lektoratFindings[i];
-          if (f.original && newHtml.indexOf(f.original) !== -1) {
-            survivors.push(f);
-            prevSelected.set(f, !!this.selectedFindings[i]);
-          }
-        }
-        this.lektoratFindings = sortByPosition(newHtml, survivors);
-        this.selectedFindings = this.lektoratFindings.map(f => prevSelected.get(f) ?? false);
-        this.appliedOriginals = this.appliedOriginals.filter(o => newHtml.indexOf(o) !== -1);
-        if (this.lektoratFindings.length === 0) {
-          this.checkDone = false;
-          this.correctedHtml = null;
-          this.hasErrors = false;
-        } else {
-          this._recomputeCorrectedHtml();
-        }
-      }
+      this._filterFindingsAfterSave(newHtml);
 
       clearDraft(this.currentPage.id);
       this.lastAutosaveAt = Date.now();
@@ -228,10 +236,11 @@ export const editorEditMethods = {
     }
 
     try {
-      await this.bsPut('pages/' + this.currentPage.id, {
+      const saved = await this.bsPut('pages/' + this.currentPage.id, {
         html: newHtml,
         name: this.currentPage.name,
       });
+      if (saved?.updated_at) this.currentPage.updated_at = saved.updated_at;
       this.originalHtml = newHtml;
       this.editDirty = false;
       this.saveOffline = false;
@@ -241,6 +250,7 @@ export const editorEditMethods = {
       const rawPreview = htmlToText(newHtml).trim() || null;
       if (this.currentPage) this.currentPage.previewText = rawPreview;
       this.currentPageEmpty = !rawPreview;
+      this._filterFindingsAfterSave(newHtml);
       this.updatePageView();
       this.setStatus(this.t('edit.savedAt', { time: new Date().toLocaleTimeString(localeTag) }), false, 2500);
     } catch (e) {

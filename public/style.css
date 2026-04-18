@@ -1256,7 +1256,6 @@ body.focus-mode #editor-card .card-header {
 body.focus-mode #editor-card .card-header:hover { opacity: 1; }
 
 body.focus-mode #editor-card .tok-stats,
-body.focus-mode #editor-card .mode-pill,
 body.focus-mode #editor-card .tag--link,
 body.focus-mode #editor-card .figure-context-panel,
 body.focus-mode #editor-card .lektorat-split-findings,
@@ -1345,24 +1344,16 @@ body.focus-mode .page-content-view--editing .focus-paragraph-active {
   opacity: 1;
 }
 
-/* Mode-Pill (Lesen vs. Bearbeiten) */
-.mode-pill {
-  display: inline-block;
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  margin-left: 6px;
-  vertical-align: middle;
-  letter-spacing: 0.02em;
-}
-.mode-pill--read {
-  background: var(--color-tag-bg);
-  color: var(--color-muted);
-}
-.mode-pill--edit {
-  background: var(--color-primary);
-  color: var(--color-surface);
+/* Lektorat-Marks im Fokusmodus optisch neutralisieren (Findings bleiben
+   aber in der Daten-/State-Ebene erhalten, damit _filterFindingsAfterSave
+   behobene Einträge nach dem Speichern entfernen kann). */
+body.focus-mode .lektorat-mark,
+body.focus-mode .lektorat-mark--selected {
+  background: transparent;
+  border-bottom: none;
+  text-decoration: none;
+  color: inherit;
+  cursor: text;
 }
 
 .save-indicator {
@@ -2944,6 +2935,7 @@ body.focus-mode .page-content-view--editing .focus-paragraph-active {
   gap: 6px;
   flex-wrap: wrap;
   align-items: center;
+  margin-left: auto;
 }
 
 .card-actions button {
