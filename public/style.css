@@ -1223,7 +1223,8 @@ ins {
 
 /* === Fokus-Modus (Vollbild, Serif, Absatz-Spotlight, Typewriter-Scroll) === */
 /* --focus-vh wird in editor-focus.js aus visualViewport.height gesetzt und
-   folgt der iOS-Tastatur (fallback: 100dvh, dann 100vh). */
+   folgt der iOS-Tastatur. Fallback: 100vh (dvh wäre besser, existiert aber
+   erst ab Safari 15.4 — JS setzt --focus-vh ohnehin nach einem Frame). */
 body.focus-mode { overflow: hidden; overscroll-behavior: contain; }
 
 body.focus-mode #editor-card {
@@ -1232,8 +1233,8 @@ body.focus-mode #editor-card {
   right: 0;
   bottom: 0;
   top: var(--focus-vh-top, 0px);
-  height: var(--focus-vh, 100dvh);
-  max-height: var(--focus-vh, 100dvh);
+  height: var(--focus-vh, 100vh);
+  max-height: var(--focus-vh, 100vh);
   z-index: 1000;
   margin: 0;
   border-radius: 0;
@@ -1265,17 +1266,17 @@ body.focus-mode #editor-card #status { display: none; }
 
 /* Safari resolved height:100% über eine block-Kette nicht zuverlässig in
    Flex-Kontexten — deshalb die Wrapper explizit als flex-column, damit die
-   Scroll-Fläche eine definierte Höhe bekommt und overflow-y greift. */
-body.focus-mode #editor-card .lektorat-split,
-body.focus-mode #editor-card > div:has(.page-content-view) {
+   Scroll-Fläche eine definierte Höhe bekommt und overflow-y greift.
+   Stabile Klassen statt :has(), weil Safari < 15.4 (z.B. Big Sur / altes
+   Monterey) :has() nicht kennt und der Scroll sonst nicht greift. */
+body.focus-mode #editor-card .editor-body-wrap {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
 }
-body.focus-mode #editor-card .lektorat-split-preview,
-body.focus-mode #editor-card > div:has(.page-content-view) > div:has(.page-content-view) {
+body.focus-mode #editor-card .editor-preview-wrap {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -1291,9 +1292,9 @@ body.focus-mode .page-content-view--editing {
   max-width: 60ch;
   margin: 0 auto;
   /* Oben/unten fast halbe Viewporthöhe als Puffer, damit der aktive Absatz
-     mittig stehen kann. --focus-vh folgt der Tastatur, Fallback dvh/vh. */
-  padding-top: calc(var(--focus-vh, 100dvh) * 0.45);
-  padding-bottom: calc(var(--focus-vh, 100dvh) * 0.45 + env(safe-area-inset-bottom, 0px));
+     mittig stehen kann. --focus-vh folgt der Tastatur, Fallback vh. */
+  padding-top: calc(var(--focus-vh, 100vh) * 0.45);
+  padding-bottom: calc(var(--focus-vh, 100vh) * 0.45 + env(safe-area-inset-bottom, 0px));
   padding-left: max(2rem, env(safe-area-inset-left, 0px));
   padding-right: max(2rem, env(safe-area-inset-right, 0px));
   background: transparent;
@@ -1325,8 +1326,8 @@ body.focus-mode .page-content-view--editing {
   body.focus-mode .page-content-view--editing {
     font-size: 1.15rem;
     line-height: 1.7;
-    padding-top: calc(var(--focus-vh, 100dvh) * 0.25);
-    padding-bottom: calc(var(--focus-vh, 100dvh) * 0.55 + env(safe-area-inset-bottom, 0px));
+    padding-top: calc(var(--focus-vh, 100vh) * 0.25);
+    padding-bottom: calc(var(--focus-vh, 100vh) * 0.55 + env(safe-area-inset-bottom, 0px));
     padding-left: max(1.1rem, env(safe-area-inset-left, 0px));
     padding-right: max(1.1rem, env(safe-area-inset-right, 0px));
   }

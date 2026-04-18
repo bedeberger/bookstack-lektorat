@@ -143,8 +143,8 @@
 
   <!-- Preview + optional Befunde: Layout wird zum Split, sobald geprüft wurde.
        editMode zeigt contenteditable statt Preview (Findings bleiben rechts sichtbar). -->
-  <div :class="checkDone ? 'lektorat-split' : ''">
-    <div :class="checkDone ? 'lektorat-split-preview' : ''">
+  <div class="editor-body-wrap" :class="checkDone ? 'lektorat-split' : ''">
+    <div class="editor-preview-wrap" :class="checkDone ? 'lektorat-split-preview' : ''">
       <div x-show="editMode" x-ref="editArea" class="page-content-view page-content-view--editing" contenteditable="true" spellcheck="true" @input="_markEditDirty()" @contextmenu="_onEditContextMenu($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>
       <div x-show="!editMode && renderedPageHtml" class="page-content-view" x-html="renderedPageHtml" @click="handleMarkClick($event)" @pointermove="handleMarkPointer($event)" @pointerleave="handleMarkPointerLeave($event)"></div>
     </div>
