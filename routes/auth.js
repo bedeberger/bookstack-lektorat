@@ -66,10 +66,24 @@ router.get('/auth/callback', async (req, res) => {
     const client = await getClient();
     const appUrl = (process.env.APP_URL || 'http://localhost:3737').replace(/\/$/, '');
     const params = client.callbackParams(req);
+    // Passenden pending-Flow suchen (Mehrtab-Support). Fallback auf Legacy-Felder.
+    const pending = Array.isArray(req.session.oidcPending) ? req.session.oidcPending : [];
+    const flowIdx = pending.findIndex(f => f.state === params.state);
+    const flow = flowIdx >= 0
+      ? pending[flowIdx]
+      : (req.session.oidcState && req.session.oidcState === params.state
+          ? { state: req.session.oidcState, nonce: req.session.oidcNonce, returnTo: req.session.returnTo }
+          : null);
+    if (!flow) {
+      logger.warn(`Auth callback: kein passender Login-Flow für state=${params.state}`);
+      return res.status(400).send(
+        'Anmeldung abgelaufen oder ungültig. <a href="/auth/login">Erneut anmelden</a>'
+      );
+    }
     const tokenSet = await client.callback(
       `${appUrl}/auth/callback`,
       params,
-      { state: req.session.oidcState, nonce: req.session.oidcNonce }
+      { state: flow.state, nonce: flow.nonce }
     );
     const claims = tokenSet.claims();
     const email = claims.email;
@@ -87,7 +101,12 @@ router.get('/auth/callback', async (req, res) => {
       }
     }
 
-    const returnTo = req.session.returnTo || '/';
+    const returnTo = flow.returnTo || '/';
+    // Verbrauchten Flow entfernen; übrige parallele Flows nicht antasten.
+    if (flowIdx >= 0) {
+      pending.splice(flowIdx, 1);
+      req.session.oidcPending = pending;
+    }
     delete req.session.oidcState;
     delete req.session.oidcNonce;
     delete req.session.returnTo;
