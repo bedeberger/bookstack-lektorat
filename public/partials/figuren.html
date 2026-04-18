@@ -19,12 +19,13 @@
 
     <!-- Modus-Toggle -->
     <div class="figur-modus-toggle">
-      <button class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'figur' }" @click="figurenGraphModus !== 'figur' && toggleFigurenGraphModus()" x-text="t('figuren.modeGraph')"></button>
-      <button class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'soziogramm' }" @click="figurenGraphModus !== 'soziogramm' && toggleFigurenGraphModus()" x-text="t('figuren.modeSoziogramm')"></button>
+      <button class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'figur' }" @click="setFigurenGraphModus('figur')" x-text="t('figuren.modeGraph')"></button>
+      <button class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'familie', 'figur-modus-btn--disabled': !figurenHasFamilyEdges() }" :disabled="!figurenHasFamilyEdges()" @click="figurenHasFamilyEdges() && setFigurenGraphModus('familie')" x-text="t('figuren.modeFamilie')"></button>
+      <button class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'soziogramm' }" @click="setFigurenGraphModus('soziogramm')" x-text="t('figuren.modeSoziogramm')"></button>
     </div>
 
-    <!-- Legende Figurengraph -->
-    <template x-if="figurenGraphModus === 'figur'">
+    <!-- Legende Figurengraph + Familie -->
+    <template x-if="figurenGraphModus !== 'soziogramm'">
       <div>
         <div class="figur-legend">
           <span class="figur-legend-dot figur-legend-dot--hauptfigur"></span><span x-text="t('figuren.type.hauptfigur')"></span>
@@ -42,6 +43,7 @@
           <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--patronage"></span><span x-text="t('figuren.edge.patronage')"></span></span>
           <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschaeft"></span><span x-text="t('figuren.edge.geschaeft')"></span></span>
         </div>
+        <div x-show="figurenGraphModus === 'figur'" class="figur-soziogramm-hint" x-text="t('figuren.graph.hint')"></div>
       </div>
     </template>
 

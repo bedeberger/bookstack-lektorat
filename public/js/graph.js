@@ -90,10 +90,20 @@ export const graphMethods = {
     return colors[typ] || colors.andere;
   },
 
-  toggleFigurenGraphModus() {
-    this.figurenGraphModus = this.figurenGraphModus === 'figur' ? 'soziogramm' : 'figur';
+  setFigurenGraphModus(mode) {
+    if (mode === this.figurenGraphModus) return;
+    this.figurenGraphModus = mode;
     this._figurenHash = null; // Cache ungültig machen → erzwingt Neurender
     this.$nextTick(() => this.renderFigurGraph());
+  },
+
+  figurenHasFamilyEdges() {
+    for (const f of (this.figuren || [])) {
+      for (const bz of (f.beziehungen || [])) {
+        if (['elternteil', 'kind', 'geschwister'].includes(bz.typ)) return true;
+      }
+    }
+    return false;
   },
 
   toggleFigurenGraphFullscreen() {
@@ -113,8 +123,13 @@ export const graphMethods = {
     const container = document.getElementById('figuren-graph');
     if (!container) return;
 
-    // Caching: Graph nur neu aufbauen wenn sich Figuren, Modus oder Sprache geändert haben
-    const hash = this.figuren.map(f => f.id).join(',') + '|' + this.figurenGraphModus + '|' + this.uiLocale;
+    // Cache-Hash: Figuren-IDs + Kapitelsignatur + Modus + Sprache. Kapitelsignatur sorgt
+    // dafür, dass Häufigkeitsänderungen einer Figur einen Re-Render auslösen, selbst wenn
+    // die ID-Liste gleich bleibt.
+    const kapSig = this.figuren.map(f =>
+      f.id + ':' + (f.kapitel || []).map(k => k.name + k.haeufigkeit).join(',')
+    ).join('|');
+    const hash = kapSig + '|' + this.figurenGraphModus + '|' + this.uiLocale;
     if (this._figurenNetwork && this._figurenHash === hash) return;
     this._figurenHash = hash;
 
@@ -131,80 +146,124 @@ export const graphMethods = {
       return;
     }
 
-    if (this.figurenGraphModus === 'soziogramm') {
-      this._renderSoziogramm(container);
-    } else {
-      this._renderFigurengraph(container);
-    }
+    if (this.figurenGraphModus === 'soziogramm')      this._renderSoziogramm(container);
+    else if (this.figurenGraphModus === 'familie')    this._renderFamiliengraph(container);
+    else                                              this._renderFigurengraph(container);
   },
 
-  // ── Figurengraph (nach Figurentyp gefärbt) ──────────────────────────────────
+  // ── Figurengraph: Kapitel-Swimlane (deterministisch) ────────────────────────
+  // Layout-Idee:
+  //   X = narrative Kapitel-Achse (Kapitel 1 links, letztes Kapitel rechts);
+  //       jede Figur landet auf dem gewichteten Mittel ihrer Kapitel-Indizes.
+  //   Y = Figurentyp-Tier (Hauptfigur oben → Andere unten); innerhalb des Tiers
+  //       wird per Slot-Allokation eine vertikale Unterreihe gewählt, sobald
+  //       zwei Figuren am selben x dicht beieinanderliegen.
+  //   Presence-Bar unter jeder Figur zeigt Kapitel-für-Kapitel die Auftrittsdichte.
+  //   Keine Physics, keine Zufälligkeit – jede Position ist aus den Daten ableitbar.
   _renderFigurengraph(container) {
-    // Tableau-10-Palette für Kapitel-Cluster
-    const CHAP_PALETTE = [
-      [78,121,167],[242,142,43],[225,87,89],[118,183,178],[89,161,79],
-      [237,201,72],[176,122,161],[255,157,167],[156,117,95],[186,176,172],
-    ];
+    const chapterOrder = this.figurenKapitelListe();
+    const N = chapterOrder.length;
+    const chapIdx = {};
+    chapterOrder.forEach((c, i) => { chapIdx[c] = i; });
 
-    // Kapitel-Clustering: Startposition jeder Figur = gewichtetes Mittel
-    // der Kapitel-Positionen. Figuren die in denselben Kapiteln vorkommen,
-    // starten nahe beieinander.
-    const allChapters = [...new Set(
-      this.figuren.flatMap(f => (f.kapitel || []).map(k => k.name))
-    )];
-    const N = allChapters.length;
+    const COL_W           = 320;  // Spaltenbreite – breit genug für horizontale Binnen-Verteilung
+    const COL_INNER_FRAC  = 0.85; // Anteil der Spaltenbreite, innerhalb dessen Figuren verteilt werden
+    const ROW_H           = 50;   // Vertikaler Abstand, falls Bin eine Zeile umbrechen muss
+    const TIER_BASE_GAP   = 80;   // Zusatz-Luft zwischen zwei Tiers
+    const MIN_DX          = 130;  // Minimaler horizontaler Abstand zwischen zwei Figuren derselben Zeile
+    const TIER_ORDER      = ['hauptfigur', 'antagonist', 'mentor', 'nebenfigur', 'andere'];
+    const TIER_COLOR = {
+      hauptfigur: '#2d6a9f', antagonist: '#E24B4A',
+      mentor:     '#639922', nebenfigur: '#666',    andere: '#c4a55a',
+    };
+    const tierOf = f => TIER_ORDER.includes(f.typ) ? f.typ : 'andere';
 
-    // Cluster- und Ring-Radius aus tatsächlicher Figurenzahl ableiten, damit
-    // jeder Kreis seine Figuren auch wirklich aufnehmen kann. Ohne diese
-    // Skalierung überlappen Ringe bei >3 Figuren/Kapitel und der Post-Pass
-    // drückt Figuren nach aussen, weg von ihrem Kreis.
-    const NODE_SPACING = 120;
-    const figurenPerChapter = {};
-    for (const f of this.figuren) for (const k of (f.kapitel || [])) {
-      figurenPerChapter[k.name] = (figurenPerChapter[k.name] || 0) + 1;
-    }
-    const maxFigs = Math.max(1, ...Object.values(figurenPerChapter));
-    // Packungsformel: clusterR ≈ 0.65 · spacing · √(m) reicht für m Figuren pro Disk
-    const clusterR = N <= 1
-      ? Math.max(280, 0.65 * NODE_SPACING * Math.sqrt(maxFigs))
-      : Math.max(140, 0.65 * NODE_SPACING * Math.sqrt(maxFigs));
-    // Ring so gross, dass benachbarte Cluster-Disks mit 10% Puffer nicht überlappen
-    const R = N <= 1 ? 0 : Math.max(180, clusterR / Math.sin(Math.PI / N) * 1.1);
-    console.debug('[graph] allChapters:', N, 'maxFigs:', maxFigs, 'R:', Math.round(R), 'clusterR:', Math.round(clusterR));
-
-    const chapPos = {};
-    allChapters.forEach((ch, i) => {
-      const angle = (2 * Math.PI * i / N) - Math.PI / 2;
-      chapPos[ch] = { x: R * Math.cos(angle), y: R * Math.sin(angle) };
-    });
-
-    this._figurenNodes = new vis.DataSet(this.figuren.map((f, figIdx) => {
-      let x = 0, y = 0;
-      const kaps = (f.kapitel || []).filter(k => chapPos[k.name]);
-      // Gewichtete Kapitel-Position nur wenn N > 1: bei N <= 1 liegen alle
-      // chapPos auf (0,0) (R=0), was zu identischen Startpositionen und damit
-      // zur Linien-Degeneration des barnesHut-Physics führt.
-      // Häufigkeit hoch 1.5 gewichten, damit Figuren mit klarem Hauptkapitel
-      // dort angesiedelt werden statt zwischen mehreren Kapiteln im Zentrum
-      // zu landen.
-      if (kaps.length && N > 1) {
-        const weight = k => Math.pow(k.haeufigkeit || 1, 1.5);
+    // Pro Figur: gewichteter x-Index, Ersterscheinung, Tier, Wichtigkeit
+    const weight = k => Math.pow(k.haeufigkeit || 1, 1.5);
+    const info = {};
+    for (const f of this.figuren) {
+      const kaps = (f.kapitel || []).filter(k => chapIdx[k.name] !== undefined);
+      let xIdx = N > 1 ? (N - 1) / 2 : 0;
+      let firstCh = Number.POSITIVE_INFINITY;
+      if (kaps.length) {
         const total = kaps.reduce((s, k) => s + weight(k), 0);
+        let sum = 0;
         for (const k of kaps) {
-          const w = weight(k) / total;
-          x += chapPos[k.name].x * w;
-          y += chapPos[k.name].y * w;
+          sum += chapIdx[k.name] * (weight(k) / total);
+          if (chapIdx[k.name] < firstCh) firstCh = chapIdx[k.name];
+        }
+        xIdx = sum;
+      }
+      const importance = (f.kapitel || []).reduce((s, k) => s + (k.haeufigkeit || 0), 0);
+      info[f.id] = { xIdx, firstCh, tier: tierOf(f), importance };
+    }
+
+    // Tier-Buckets in fester Reihenfolge; nur belegte Tiers werden gerendert.
+    const byTier = {};
+    for (const t of TIER_ORDER) byTier[t] = [];
+    for (const f of this.figuren) byTier[info[f.id].tier].push(f);
+    const tiersUsed = TIER_ORDER.filter(t => byTier[t].length > 0);
+
+    // Layout pro Tier: Figuren werden in ihre Primär-Kapitel-Spalte gebinned und
+    // innerhalb der Spalte horizontal verteilt. Erst wenn in einer Spalte mehr
+    // Figuren stehen als perRow, wird in neue Zeilen umgebrochen. Das ersetzt
+    // das frühere Slot-Stapeln vertikal → deutlich kompakter bei vielen Nebenfiguren.
+    const spread = COL_W * COL_INNER_FRAC;
+    const perRow = Math.max(1, Math.floor(spread / MIN_DX) + 1);
+    const sortFigs = arr => arr.slice().sort((a, b) => {
+      const ax = info[a.id].xIdx, bx = info[b.id].xIdx;
+      if (ax !== bx) return ax - bx;
+      const af = info[a.id].firstCh, bf = info[b.id].firstCh;
+      if (af !== bf) return af - bf;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+    const layoutPerTier = {};
+    for (const t of tiersUsed) {
+      const bins = new Map(); // binIdx (gerundetes Kapitel) → Figuren[]
+      for (const f of sortFigs(byTier[t])) {
+        const bin = Math.round(info[f.id].xIdx);
+        if (!bins.has(bin)) bins.set(bin, []);
+        bins.get(bin).push(f);
+      }
+      const maxRows = Math.max(1, ...Array.from(bins.values()).map(g => Math.ceil(g.length / perRow)));
+      layoutPerTier[t] = { bins, maxRows };
+    }
+
+    // Y-Koordinaten kumulativ: jedes Tier nimmt so viel Platz, wie seine grösste
+    // Spalte Zeilen braucht. Damit ragen Nebenfiguren-Stapel nicht ins nächste Tier.
+    const TIER_Y = {};
+    let yCursor = 0;
+    for (const t of tiersUsed) {
+      TIER_Y[t] = yCursor;
+      yCursor += (layoutPerTier[t].maxRows - 1) * ROW_H + TIER_BASE_GAP;
+    }
+
+    // Figuren platzieren: pro Bin horizontal verteilen, bei Überlauf in neue Zeile.
+    const nodePositions = [];
+    for (const t of tiersUsed) {
+      const { bins } = layoutPerTier[t];
+      for (const [bin, group] of bins.entries()) {
+        for (let i = 0; i < group.length; i++) {
+          const row = Math.floor(i / perRow);
+          const col = i - row * perRow;
+          const lastRowCount = group.length - row * perRow;
+          const inRow = Math.min(perRow, lastRowCount);
+          const offset = inRow > 1
+            ? (col - (inRow - 1) / 2) * (spread / (inRow - 1))
+            : 0;
+          nodePositions.push({
+            f: group[i],
+            x: bin * COL_W + offset,
+            y: TIER_Y[t] + row * ROW_H,
+          });
         }
       }
-      // Fallback: (0,0) als Startposition führt bei barnesHut zur Linien-Degeneration.
-      // Tritt auf wenn: kein Kapitel, N<=1, oder Figur erscheint gleichmässig in allen
-      // Kapiteln (Schwerpunkt eines symmetrischen Kreises = Zentrum).
-      if (Math.abs(x) < 1 && Math.abs(y) < 1) {
-        const startR = Math.max(200, this.figuren.length * 28);
-        const angle  = (2 * Math.PI * figIdx / Math.max(1, this.figuren.length)) - Math.PI / 2;
-        x = startR * Math.cos(angle);
-        y = startR * Math.sin(angle);
-      }
+    }
+
+    // Startpositionen deterministisch; Physics bleibt aus, damit Nodes ohne
+    // Rückzug dort bleiben, wohin der Nutzer sie zieht.
+    this._figurenNodes = new vis.DataSet(nodePositions.map(({ f, x, y }) => {
+      const borderWidth = Math.min(4, 1 + Math.round(Math.log2(Math.max(1, info[f.id].importance))));
       return {
         id: f.id,
         label: nodeLabel(f),
@@ -213,6 +272,7 @@ export const graphMethods = {
         shape: 'box',
         margin: 10,
         widthConstraint: { maximum: 160 },
+        borderWidth,
         x, y,
       };
     }));
@@ -222,159 +282,198 @@ export const graphMethods = {
     this._figurenEdges = new vis.DataSet(edgeList);
     const edges = this._figurenEdges;
 
-    const hasFamilyEdges = edgeList.some(e => ['elternteil', 'kind'].includes(e.typ));
-    console.debug('[graph] hasFamilyEdges:', hasFamilyEdges, '→ circles:', !hasFamilyEdges && N > 0);
-    const options = {
-      physics: hasFamilyEdges
-        ? { solver: 'hierarchicalRepulsion', hierarchicalRepulsion: { nodeDistance: 140 } }
-        : { solver: 'barnesHut', barnesHut: { gravitationalConstant: -1500, centralGravity: 0, springLength: 80, springConstant: 0.08, damping: 0.2, avoidOverlap: 1.0 }, stabilization: { iterations: 250 } },
-      layout: hasFamilyEdges
-        ? { hierarchical: { direction: 'UD', sortMethod: 'directed', nodeSpacing: 160, levelSeparation: 120 } }
-        : { improvedLayout: false },
-      interaction: { hover: true, tooltipDelay: 100 },
-      // dynamic: vis-network setzt virtuelle Stützpunkte auf jede Edge, die an der
-      // Physics teilnehmen → Kanten biegen sich natürlich um Nodes herum.
-      // cubicBezier bleibt für hierarchisches Layout (Familienbaum), da dynamic
-      // dort mit dem hierarchical-Solver interferiert.
-      edges: { smooth: hasFamilyEdges ? { type: 'cubicBezier' } : { type: 'dynamic', roundness: 0.5 } },
-    };
+    this._figurenNetwork = new vis.Network(container, { nodes, edges }, {
+      physics: false,
+      layout: { improvedLayout: false },
+      interaction: { hover: true, tooltipDelay: 100, dragNodes: true },
+      edges: { smooth: { type: 'curvedCW', roundness: 0.15 } },
+    });
+    const network = this._figurenNetwork;
 
-    this._figurenNetwork = new vis.Network(container, { nodes, edges }, options);
+    // Vertikale Ausdehnung für Kapitel-Spalten (genug Luft über/unter den Tier-Bändern)
+    const lastTier   = tiersUsed[tiersUsed.length - 1];
+    const lastTierY  = lastTier
+      ? TIER_Y[lastTier] + (layoutPerTier[lastTier].maxRows - 1) * ROW_H
+      : 0;
+    const PAD_Y      = 200;
+    const Y_TOP      = -PAD_Y;
+    const Y_BOT      = lastTierY + PAD_Y;
 
-    // Kapitel-Cluster-Kreise + Labels im Hintergrund zeichnen
-    if (!hasFamilyEdges && N > 0) {
-      const network = this._figurenNetwork;
-      network.on('beforeDrawing', ctx => {
-        const dpr = window.devicePixelRatio || 1;
-
-        // 1) Kreise in Netzwerk-Koordinaten (skalieren mit Zoom/Pan)
+    network.on('beforeDrawing', ctx => {
+      // 1) Kapitel-Spalten (Netzwerk-Koordinaten → skalieren mit Zoom)
+      if (N > 0) {
         ctx.save();
-        allChapters.forEach((ch, i) => {
-          const [r, g, b] = CHAP_PALETTE[i % CHAP_PALETTE.length];
-          const { x, y } = chapPos[ch];
+        for (let i = 0; i < N; i++) {
+          const cx = i * COL_W;
+          ctx.fillStyle = (i % 2 === 0) ? 'rgba(0,0,0,0.028)' : 'rgba(0,0,0,0)';
+          ctx.fillRect(cx - COL_W / 2, Y_TOP, COL_W, Y_BOT - Y_TOP);
+          ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+          ctx.lineWidth   = 0.5;
           ctx.beginPath();
-          ctx.arc(x, y, clusterR, 0, 2 * Math.PI);
-          ctx.fillStyle = `rgba(${r},${g},${b},0.12)`;
-          ctx.fill();
-          ctx.strokeStyle = `rgba(${r},${g},${b},0.50)`;
-          ctx.lineWidth = 2;
-          ctx.setLineDash([8, 6]);
+          ctx.moveTo(cx - COL_W / 2, Y_TOP);
+          ctx.lineTo(cx - COL_W / 2, Y_BOT);
           ctx.stroke();
-          ctx.setLineDash([]);
-        });
+        }
+        const edgeX = (N - 1) * COL_W + COL_W / 2;
+        ctx.beginPath();
+        ctx.moveTo(edgeX, Y_TOP); ctx.lineTo(edgeX, Y_BOT); ctx.stroke();
         ctx.restore();
+      }
 
-        // 2) Labels in Screen-Koordinaten (feste Lesegrösse unabhängig vom Zoom)
+      const dpr = window.devicePixelRatio || 1;
+
+      // 2) Kapitel-Header oben (Screen-Koordinaten → feste Lesegrösse, folgen dem Pan)
+      if (N > 0) {
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.font = `bold ${11 * dpr}px system-ui,-apple-system,sans-serif`;
-        ctx.textAlign = 'center';
+        ctx.font = `600 ${11 * dpr}px system-ui,-apple-system,sans-serif`;
+        ctx.textAlign    = 'center';
         ctx.textBaseline = 'top';
-        allChapters.forEach((ch, i) => {
-          const [r, g, b] = CHAP_PALETTE[i % CHAP_PALETTE.length];
-          const { x, y } = chapPos[ch];
-          // Unterkante des Kreises → DOM-Koordinaten → Canvas-Pixel
-          const domBot = network.canvasToDOM({ x, y: y + clusterR });
-          if (domBot.y < -20 || domBot.y > ctx.canvas.height / dpr + 20) return;
-          const cX = domBot.x * dpr;
-          const cY = domBot.y * dpr + 5 * dpr;
-          ctx.fillStyle = `rgba(${r},${g},${b},0.85)`;
-          ctx.fillText(ch, cX, cY);
-        });
+        ctx.fillStyle    = '#555';
+        const cWidth = ctx.canvas.width / dpr;
+        for (let i = 0; i < N; i++) {
+          const dom = network.canvasToDOM({ x: i * COL_W, y: Y_TOP });
+          if (dom.x < -120 || dom.x > cWidth + 120) continue;
+          const raw = `${i + 1}. ${chapterOrder[i]}`;
+          const lbl = raw.length > 34 ? raw.slice(0, 32) + '…' : raw;
+          ctx.fillText(lbl, dom.x * dpr, 8 * dpr);
+        }
+        ctx.restore();
+      }
+
+      // 3) Tier-Labels links am Canvas-Rand (Screen-Koordinaten)
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.font = `600 ${10 * dpr}px system-ui,-apple-system,sans-serif`;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign    = 'left';
+      const cHeight = ctx.canvas.height / dpr;
+      for (const t of tiersUsed) {
+        const midY = TIER_Y[t] + ((layoutPerTier[t].maxRows - 1) * ROW_H) / 2;
+        const dom = network.canvasToDOM({ x: 0, y: midY });
+        if (dom.y < -16 || dom.y > cHeight + 16) continue;
+        const label = this.t('figuren.type.' + t);
+        const tw    = ctx.measureText(label).width;
+        const px = 6 * dpr, py = dom.y * dpr - 9 * dpr, pw = tw + 12 * dpr, ph = 18 * dpr, pr = 4 * dpr;
+        ctx.fillStyle = 'rgba(255,255,255,0.88)';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(px, py, pw, ph, pr);
+        else ctx.rect(px, py, pw, ph);
+        ctx.fill();
+        ctx.fillStyle = TIER_COLOR[t] || '#555';
+        ctx.fillText(label, 12 * dpr, dom.y * dpr);
+      }
+      ctx.restore();
+    });
+
+    // 4) Presence-Bar unter jeder Node (Netzwerk-Koordinaten, skaliert mit Zoom)
+    if (N > 0) {
+      network.on('afterDrawing', ctx => {
+        ctx.save();
+        for (const f of this.figuren) {
+          const bb = network.getBoundingBox(f.id);
+          if (!bb) continue;
+          const barW    = Math.max(bb.right - bb.left, 70);
+          const barLeft = (bb.left + bb.right) / 2 - barW / 2;
+          const barY    = bb.bottom + 4;
+          const barH    = 4;
+          const segW    = barW / N;
+          const kapsByName = {};
+          for (const k of (f.kapitel || [])) kapsByName[k.name] = k.haeufigkeit || 1;
+          // Hintergrund
+          ctx.fillStyle = 'rgba(0,0,0,0.07)';
+          ctx.fillRect(barLeft, barY, barW, barH);
+          // Gefüllte Segmente pro Kapitel mit Auftritt
+          const tier = info[f.id].tier;
+          const col  = TIER_COLOR[tier] || '#2d6a9f';
+          const [r, g, b] = col.startsWith('#') ? [parseInt(col.slice(1,3),16), parseInt(col.slice(3,5),16), parseInt(col.slice(5,7),16)] : [45,106,159];
+          for (let i = 0; i < N; i++) {
+            const h = kapsByName[chapterOrder[i]];
+            if (!h) continue;
+            const alpha = Math.min(1, 0.35 + h / 5);
+            ctx.fillStyle = `rgba(${r},${g},${b},${alpha.toFixed(2)})`;
+            ctx.fillRect(barLeft + i * segW + 0.5, barY, Math.max(0.5, segW - 1), barH);
+          }
+        }
         ctx.restore();
       });
     }
 
-    this._figurenNetwork.once('stabilizationIterationsDone', () => {
-      // Positionen einfrieren bevor Physics/hierarchisches Layout deaktiviert wird –
-      // sonst zieht vis-network beim Drag den ganzen Teilbaum mit.
-      const positions = this._figurenNetwork.getPositions();
-      nodes.update(Object.entries(positions).map(([id, { x, y }]) => ({ id, x, y })));
-      this._figurenNetwork.setOptions({ physics: false, layout: { hierarchical: { enabled: false } } });
-      // Chapter-Attract: Nodes Richtung ihres Kapitel-Zentroids ziehen, damit die
-      // Cluster-Struktur nach der Spring-Simulation erkennbar wird. Nur im
-      // barnesHut-Modus (kein Familienbaum) und wenn es ≥ 2 Kapitel gibt.
-      if (!hasFamilyEdges && N > 1) this._chapterAttractPostPass(chapPos, nodes);
-      // Aktiven Filter nach Neurender wiederherstellen
+    // Klick auf Kapitel-Header → Filter setzen
+    network.on('click', ({ pointer, event }) => {
+      if (N === 0) return;
+      // pointer.canvas = Netzwerk-Koordinaten; Header-Band liegt über Y_TOP.
+      if (pointer.canvas.y > Y_TOP + 60) return;
+      const idx = Math.round(pointer.canvas.x / COL_W);
+      if (idx < 0 || idx >= N) return;
+      const ch = chapterOrder[idx];
+      this._figurenGraphSetKapitel(this.figurenGraphKapitel === ch ? null : ch);
+      event?.preventDefault?.();
+    });
+
+    // Sofort fitten (keine Stabilisierung nötig, Physics ist aus)
+    requestAnimationFrame(() => {
+      network.fit({ animation: { duration: 250, easingFunction: 'easeInOutQuad' } });
       if (this.figurenGraphKapitel) this._figurenGraphSetKapitel(this.figurenGraphKapitel);
     });
+
     this._attachTooltip(container);
   },
 
-  // ── Chapter-Attract Post-Pass (Variante 2) ───────────────────────────────────
-  // Zieht jede Figur anteilig in den gewichteten Mittelpunkt ihrer Kapitel und
-  // löst Überlappungen per einfacher pairwise-Repulsion auf. Läuft geometrisch
-  // (kein vis-Physics), damit die Edges nicht direkt zurückziehen.
-  _chapterAttractPostPass(chapPos, nodes) {
-    const ALPHA = 0.6;      // Anteil Richtung Zentroid pro Pass (1.0 = hart snappen)
-    const MIN_DIST = 120;   // Ziel-Mindestabstand zwischen Node-Mittelpunkten
-    const REPULSION_ITER = 25;
-
-    const pos = this._figurenNetwork.getPositions();
-    const next = {};
-    // Gleiche Gewichtung wie Startposition: Hauptkapitel (höchste Häufigkeit)
-    // dominiert deutlich, damit Mehrfach-Kapitel-Figuren nicht im Zentrum landen.
-    const weight = k => Math.pow(k.haeufigkeit || 1, 1.5);
-
-    for (const f of this.figuren) {
-      const cur = pos[f.id];
-      if (!cur) continue;
-      const kaps = (f.kapitel || []).filter(k => chapPos[k.name]);
-      if (!kaps.length) { next[f.id] = { x: cur.x, y: cur.y }; continue; }
-      const total = kaps.reduce((s, k) => s + weight(k), 0);
-      let tx = 0, ty = 0;
-      for (const k of kaps) {
-        const w = weight(k) / total;
-        tx += chapPos[k.name].x * w;
-        ty += chapPos[k.name].y * w;
-      }
-      next[f.id] = {
-        x: cur.x + ALPHA * (tx - cur.x),
-        y: cur.y + ALPHA * (ty - cur.y),
-      };
+  // ── Familienbaum (hierarchisches Layout, nur Familien-Edges) ────────────────
+  _renderFamiliengraph(container) {
+    const { edgeList } = this._buildEdges(/* soziogrammModus */ false);
+    const familyEdges = edgeList.filter(e => ['elternteil', 'kind', 'geschwister'].includes(e.typ));
+    if (!familyEdges.length) {
+      container.innerHTML = `<span class="muted-msg" style="display:block;padding:20px;text-align:center;">${escHtml(this.t('graph.empty.familie'))}</span>`;
+      return;
     }
+    const familyIds = new Set();
+    for (const e of familyEdges) { familyIds.add(e.from); familyIds.add(e.to); }
 
-    // Pairwise-Repulsion: schiebt sich überlappende Nodes auseinander, ohne die
-    // Cluster-Zugehörigkeit zu zerstören (Aufwand O(N² · iter), N typ. < 50).
-    const ids = Object.keys(next);
-    for (let iter = 0; iter < REPULSION_ITER; iter++) {
-      let moved = false;
-      for (let i = 0; i < ids.length; i++) {
-        for (let j = i + 1; j < ids.length; j++) {
-          const a = next[ids[i]], b = next[ids[j]];
-          const dx = b.x - a.x, dy = b.y - a.y;
-          const d = Math.hypot(dx, dy);
-          if (d < MIN_DIST && d > 0.01) {
-            const push = (MIN_DIST - d) / 2;
-            const nx = dx / d, ny = dy / d;
-            a.x -= nx * push; a.y -= ny * push;
-            b.x += nx * push; b.y += ny * push;
-            moved = true;
-          } else if (d <= 0.01) {
-            // exakt gleiche Position → minimal auseinanderstossen
-            a.x -= 1; b.x += 1;
-            moved = true;
-          }
-        }
-      }
-      if (!moved) break;
-    }
+    const nodes = new vis.DataSet(this.figuren.filter(f => familyIds.has(f.id)).map(f => ({
+      id: f.id,
+      label: nodeLabel(f),
+      color: this._figTypColor(f.typ),
+      font: DEFAULT_FONT,
+      shape: 'box',
+      margin: 10,
+      widthConstraint: { maximum: 160 },
+    })));
+    const edges = new vis.DataSet(familyEdges);
+    this._figurenNodes = nodes;
+    this._figurenEdges = edges;
 
-    nodes.update(ids.map(id => ({ id, x: next[id].x, y: next[id].y })));
+    this._figurenNetwork = new vis.Network(container, { nodes, edges }, {
+      physics: { solver: 'hierarchicalRepulsion', hierarchicalRepulsion: { nodeDistance: 140 } },
+      layout: { hierarchical: { direction: 'UD', sortMethod: 'directed', nodeSpacing: 160, levelSeparation: 120 } },
+      interaction: { hover: true, tooltipDelay: 100 },
+      edges: { smooth: { type: 'cubicBezier' } },
+    });
+    this._figurenNetwork.once('stabilizationIterationsDone', () => {
+      const positions = this._figurenNetwork.getPositions();
+      nodes.update(Object.entries(positions).map(([id, { x, y }]) => ({ id, x, y })));
+      this._figurenNetwork.setOptions({ physics: false, layout: { hierarchical: { enabled: false } } });
+    });
+    this._attachTooltip(container);
   },
 
   // ── Kapitel-Filter im Figurengraph ──────────────────────────────────────────
   _figurenGraphSetKapitel(ch) {
     this.figurenGraphKapitel = ch;
     if (!this._figurenNodes || !this._figurenEdges) return;
+    // Filter greift nur im Figurengraph-Modus. In Familie/Soziogramm enthalten die
+    // DataSets nicht alle Figuren-IDs → ein update() würde Geister-Nodes erzeugen.
+    if (this.figurenGraphModus !== 'figur') return;
 
+    const existingIds = new Set(this._figurenNodes.getIds());
     const activeIds = new Set(
       ch ? this.figuren.filter(f => (f.kapitel || []).some(k => k.name === ch)).map(f => f.id)
          : this.figuren.map(f => f.id)
     );
 
     // Nodes: aktive = Originalfarbe, inaktive = ausgegraut
-    this._figurenNodes.update(this.figuren.map(f => {
+    this._figurenNodes.update(this.figuren.filter(f => existingIds.has(f.id)).map(f => {
       if (!ch || activeIds.has(f.id)) {
         return {
           id: f.id,

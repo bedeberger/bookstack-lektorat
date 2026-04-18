@@ -5,6 +5,20 @@ import { makeChatMethods } from './chat-base.js';
 // Keine Vorschläge – nur freie Konversation über das gesamte Buch.
 
 export const bookChatMethods = {
+  // Gruppiert Tool-Calls eines Agent-Buch-Chat-Turns nach Name.
+  // Rückgabe: [{ name, count, errors }]
+  _agentToolSummary(toolCalls) {
+    if (!Array.isArray(toolCalls) || !toolCalls.length) return [];
+    const byName = new Map();
+    for (const tc of toolCalls) {
+      const e = byName.get(tc.name) || { name: tc.name, count: 0, errors: 0 };
+      e.count++;
+      if (tc.ok === false) e.errors++;
+      byName.set(tc.name, e);
+    }
+    return Array.from(byName.values());
+  },
+
   ...makeChatMethods({
     label: 'BookChat',
     props: {

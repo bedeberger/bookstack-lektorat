@@ -236,7 +236,9 @@
   "figuren.title":               "Characters: {name}",
   "figuren.heading":             "Characters",
   "figuren.modeGraph":           "Character graph",
+  "figuren.modeFamilie":         "Family",
   "figuren.modeSoziogramm":      "Sociogram",
+  "figuren.graph.hint":          "Horizontal = chapter sequence · Vertical = character type · Bar under the node = per-chapter presence (darker = more frequent) · Click a chapter title to filter",
   "figuren.soziogramm.hint":     "Arrow thickness = power asymmetry · Node rows = social class · Arrow direction = stronger → weaker · Within a class: powerful at top, subordinates at bottom",
 
   "figuren.type.hauptfigur":     "Protagonist",
@@ -295,6 +297,7 @@
   "graph.empty.figuren":         "No characters yet – run «Extract characters».",
   "graph.empty.visLoading":      "Loading vis-network…",
   "graph.empty.sozialschicht":   "No social classes analysed yet.<br>Please click «Update all» to determine class membership and power structures.",
+  "graph.empty.familie":         "No family relationships found.",
 
   "szenen.title":                "Scenes: {name}",
   "szenen.byFigur":              "By character",
@@ -429,6 +432,8 @@
   "chat.ofTotalPages":           " of {n} pages",
   "chat.ctxFiguren":             "Characters",
   "chat.ctxReview":              "Book review",
+  "chat.errors.contextExceeded": "The response was cut short due to context limits. Please narrow your question.",
+  "chat.errors.maxIterReached":  "I've exhausted the tool calls without reaching a final answer. Please phrase the question more concretely.",
 
   "header.logout":               "Sign out",
   "header.profile":              "Profile",
@@ -503,6 +508,7 @@
 
   "job.phase.preparing":             "Preparing…",
   "job.phase.aiReply":               "AI replying…",
+  "job.phase.agentTools":            "Tools {current}/{total}…",
   "job.phase.pagesFromCache":        "Pages from cache…",
   "job.phase.pageListLoading":       "Loading page list…",
   "job.phase.loadingPagesBatch":     "Loading pages… {loaded}/{total}",

@@ -236,7 +236,9 @@
   "figuren.title":               "Figuren: {name}",
   "figuren.heading":             "Figuren",
   "figuren.modeGraph":           "Figurengraph",
+  "figuren.modeFamilie":         "Familie",
   "figuren.modeSoziogramm":      "Soziogramm",
+  "figuren.graph.hint":          "Horizontal = Kapitelabfolge · Vertikal = Figurentyp · Balken unter der Figur = Kapitelpräsenz (dunkler = häufiger) · Klick auf Kapiteltitel filtert",
   "figuren.soziogramm.hint":     "Pfeilstärke = Machtasymmetrie · Knotenzeilen = Gesellschaftsschicht · Pfeilrichtung = Mächtiger → Schwächerer · Innerhalb der Schicht: Mächtige oben, Untergebene unten",
 
   "figuren.type.hauptfigur":     "Hauptfigur",
@@ -295,6 +297,7 @@
   "graph.empty.figuren":         "Noch keine Figuren – «Figuren ermitteln» starten.",
   "graph.empty.visLoading":      "vis-network wird geladen…",
   "graph.empty.sozialschicht":   "Noch keine Sozialschichten analysiert.<br>Bitte auf «Alle aktualisieren» klicken, um Schichtzugehörigkeit und Machtstrukturen zu ermitteln.",
+  "graph.empty.familie":         "Keine Familienbeziehungen gefunden.",
 
   "szenen.title":                "Szenen: {name}",
   "szenen.byFigur":              "Pro Figur",
@@ -429,6 +432,8 @@
   "chat.ofTotalPages":           " von {n} Seiten",
   "chat.ctxFiguren":             "Figuren",
   "chat.ctxReview":              "Buchbewertung",
+  "chat.errors.contextExceeded": "Die Antwort wurde wegen Kontext-Begrenzung vorzeitig beendet. Bitte präzisiere deine Frage.",
+  "chat.errors.maxIterReached":  "Ich habe die Werkzeugaufrufe ausgeschöpft, ohne zu einer abschliessenden Antwort zu kommen. Bitte formuliere die Frage konkreter.",
 
   "header.logout":               "Abmelden",
   "header.profile":              "Profil",
@@ -503,6 +508,7 @@
 
   "job.phase.preparing":             "Vorbereitung…",
   "job.phase.aiReply":               "KI antwortet…",
+  "job.phase.agentTools":            "Werkzeuge {current}/{total}…",
   "job.phase.pagesFromCache":        "Seiten aus Cache…",
   "job.phase.pageListLoading":       "Seitenliste laden…",
   "job.phase.loadingPagesBatch":     "Seiten laden… {loaded}/{total}",

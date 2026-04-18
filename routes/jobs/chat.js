@@ -107,6 +107,10 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
 
     const signal = jobAbortControllers.get(jobId)?.signal;
     const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress, null, signal, undefined, SCHEMA_CHAT);
+    // Job-State auf echte Provider-Werte setzen, damit Status-Anzeige und
+    // gespeicherte Chat-Nachricht dieselben Tokens zeigen (statt eines
+    // Streaming-Zwischenstands).
+    updateJob(jobId, { tokensIn, tokensOut });
 
     const { antwort, vorschlaege } = _parseChatResponse(text);
     if (antwort === text && vorschlaege.length === 0) {
@@ -311,6 +315,10 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     };
 
     const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress, null, jobSignal, undefined, SCHEMA_BOOK_CHAT);
+    // Job-State auf echte Provider-Werte setzen (Ollama/Llama melden prompt_tokens
+    // erst am Streaming-Ende; ohne diesen Update bleibt die Status-Anzeige auf
+    // einem Zwischenstand und weicht von der DB-Nachricht ab).
+    updateJob(jobId, { tokensIn, tokensOut });
 
     const { antwort } = _parseChatResponse(text);
     if (antwort === text) {
@@ -391,7 +399,7 @@ async function runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEma
   const logger = makeJobLogger(jobId);
   const { buildBookChatAgentSystemPrompt, BOOK_CHAT_TOOLS } = await getPrompts();
   try {
-    updateJob(jobId, { statusText: 'Vorbereitung…', progress: 5 });
+    updateJob(jobId, { statusText: 'job.phase.preparing', progress: 5 });
 
     const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?')
       .get(parseInt(sessionId), userEmail);
@@ -426,7 +434,8 @@ async function runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEma
     for (iter = 0; iter < BOOK_CHAT_MAX_TOOL_ITER; iter++) {
       if (jobSignal?.aborted) throw new DOMException('Aborted', 'AbortError');
       updateJob(jobId, {
-        statusText: `Werkzeuge ${iter + 1}/${BOOK_CHAT_MAX_TOOL_ITER}…`,
+        statusText: 'job.phase.agentTools',
+        statusParams: { current: iter + 1, total: BOOK_CHAT_MAX_TOOL_ITER },
         progress: Math.min(90, 10 + iter * 12),
       });
 
@@ -451,7 +460,7 @@ async function runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEma
 
       if (result.tokensIn > BOOK_CHAT_TOKEN_BUDGET) {
         logger.warn(`Job ${jobId}: Context-Budget überschritten (${result.tokensIn}/${BOOK_CHAT_TOKEN_BUDGET} Input-Tokens) – Loop abgebrochen.`);
-        finalText = result.text || JSON.stringify({ antwort: 'Die Antwort wurde wegen Kontext-Begrenzung vorzeitig beendet. Bitte präzisiere deine Frage.' });
+        finalText = result.text || JSON.stringify({ antwort: '__i18n:chat.errors.contextExceeded__' });
         break;
       }
 
@@ -489,7 +498,7 @@ async function runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEma
 
     if (finalText == null) {
       logger.warn(`Job ${jobId}: Max-Iterationen (${BOOK_CHAT_MAX_TOOL_ITER}) erreicht ohne finale Antwort.`);
-      finalText = JSON.stringify({ antwort: 'Ich habe die Werkzeugaufrufe ausgeschöpft, ohne zu einer abschliessenden Antwort zu kommen. Bitte formuliere die Frage konkreter.' });
+      finalText = JSON.stringify({ antwort: '__i18n:chat.errors.maxIterReached__' });
     }
 
     const { antwort } = _parseChatResponse(finalText);

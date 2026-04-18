@@ -118,28 +118,45 @@
             <div x-data="{ expanded: false }"
                  class="chat-context-info">
               <span class="chat-context-label" x-text="t('chat.contextLabel')"></span>
-              <template x-for="(p, pi) in (expanded ? msg.context_info.pages : msg.context_info.pages.slice(0, 3))" :key="pi">
+
+              <!-- Agent-Modus: aufgerufene Werkzeuge -->
+              <template x-if="msg.context_info.mode === 'agent'">
                 <span>
-                  <template x-if="pi > 0"><span class="chat-context-sep">, </span></template>
-                  <a x-show="p.id"
-                     :href="'#book/' + selectedBookId + '/page/' + p.id"
-                     @click.prevent="gotoPageById(p.id)"
-                     class="chat-context-link" x-text="p.name"></a>
-                  <span x-show="!p.id" x-text="p.name"></span>
+                  <template x-for="(entry, ei) in _agentToolSummary(msg.context_info.tool_calls)" :key="ei">
+                    <span class="chat-context-badge"
+                          :class="{ 'chat-context-badge--error': entry.errors > 0 }"
+                          x-text="entry.name + (entry.count > 1 ? ' ×' + entry.count : '')"></span>
+                  </template>
                 </span>
               </template>
-              <button x-show="msg.context_info.pages.length > 3"
-                      class="chat-context-toggle"
-                      @click.stop="expanded = !expanded"
-                      x-text="expanded ? '▲' : '+' + (msg.context_info.pages.length - 3)"></button>
-              <template x-if="msg.context_info.totalPages > msg.context_info.pages.length">
-                <span class="chat-context-total" x-text="t('chat.ofTotalPages', { n: msg.context_info.totalPages })"></span>
-              </template>
-              <template x-if="msg.context_info.figuren">
-                <span class="chat-context-badge" x-text="t('chat.ctxFiguren')"></span>
-              </template>
-              <template x-if="msg.context_info.review">
-                <span class="chat-context-badge" x-text="t('chat.ctxReview')"></span>
+
+              <!-- Klassischer Modus: vorausgewählte Seiten -->
+              <template x-if="msg.context_info.mode !== 'agent' && msg.context_info.pages">
+                <span>
+                  <template x-for="(p, pi) in (expanded ? msg.context_info.pages : msg.context_info.pages.slice(0, 3))" :key="pi">
+                    <span>
+                      <template x-if="pi > 0"><span class="chat-context-sep">, </span></template>
+                      <a x-show="p.id"
+                         :href="'#book/' + selectedBookId + '/page/' + p.id"
+                         @click.prevent="gotoPageById(p.id)"
+                         class="chat-context-link" x-text="p.name"></a>
+                      <span x-show="!p.id" x-text="p.name"></span>
+                    </span>
+                  </template>
+                  <button x-show="msg.context_info.pages.length > 3"
+                          class="chat-context-toggle"
+                          @click.stop="expanded = !expanded"
+                          x-text="expanded ? '▲' : '+' + (msg.context_info.pages.length - 3)"></button>
+                  <template x-if="msg.context_info.totalPages > msg.context_info.pages.length">
+                    <span class="chat-context-total" x-text="t('chat.ofTotalPages', { n: msg.context_info.totalPages })"></span>
+                  </template>
+                  <template x-if="msg.context_info.figuren">
+                    <span class="chat-context-badge" x-text="t('chat.ctxFiguren')"></span>
+                  </template>
+                  <template x-if="msg.context_info.review">
+                    <span class="chat-context-badge" x-text="t('chat.ctxReview')"></span>
+                  </template>
+                </span>
               </template>
             </div>
           </template>

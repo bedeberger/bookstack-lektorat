@@ -76,7 +76,10 @@ export function makeChatMethods(cfg) {
             const tokOut = job.tokensOut || 0;
             if (tokIn + tokOut > 0) {
               const tpsPart = job.tokensPerSec ? ` · ${Math.round(job.tokensPerSec)} tok/s` : '';
-              this[p.status] = `<span class="muted-msg">↑${fmtTok(tokIn)} ↓${fmtTok(tokOut)} Tokens${tpsPart}</span>`;
+              // tokIn ist bei Ollama/Llama erst am Streaming-Ende bekannt (aus usage);
+              // vorher wird nur tokOut angezeigt, um falsche Schätzwerte zu vermeiden.
+              const inPart = tokIn > 0 ? `↑${fmtTok(tokIn)} ` : '';
+              this[p.status] = `<span class="muted-msg">${inPart}↓${fmtTok(tokOut)} Tokens${tpsPart}</span>`;
             } else {
               this[p.status] = '';
             }
@@ -185,7 +188,12 @@ export function makeChatMethods(cfg) {
 
   m[`start${L}Poll`]      = function (jobId) { return startPoll.call(this, jobId); };
   m[`_scroll${L}ToBottom`] = function () { scrollToBottom.call(this); };
-  m._renderChatMarkdown    = (text) => renderChatMarkdown(text);
+  // Server-persistierte Fallback-Nachrichten werden als `__i18n:key__` gespeichert
+  // und beim Rendern in die aktuelle Locale aufgelöst (siehe CLAUDE.md, i18n-Regel).
+  m._renderChatMarkdown    = function (text) {
+    const match = /^__i18n:([a-zA-Z0-9_.-]+)__$/.exec(text || '');
+    return renderChatMarkdown(match ? this.t(match[1]) : text);
+  };
 
   m[`reset${L}`] = function () {
     if (this[p.pollTimer]) { clearInterval(this[p.pollTimer]); this[p.pollTimer] = null; }
