@@ -1026,6 +1026,19 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 42').run();
     logger.info('DB-Migration auf Version 42 abgeschlossen (page_stats-Index-Felder + page_figure_mentions).');
   }
+  if (version < 43) {
+    // page_stats.book_id wurde bei ON-CONFLICT-Updates nicht mitgezogen: Seiten,
+    // die in BookStack zwischen Büchern verschoben wurden, behielten ihr altes
+    // book_id. Aus pages-Cache heilen, wo die page_id dort bekannt ist.
+    const healed = db.prepare(`
+      UPDATE page_stats
+      SET book_id = (SELECT p.book_id FROM pages p WHERE p.page_id = page_stats.page_id)
+      WHERE EXISTS (SELECT 1 FROM pages p WHERE p.page_id = page_stats.page_id)
+        AND book_id <> (SELECT p.book_id FROM pages p WHERE p.page_id = page_stats.page_id)
+    `).run();
+    db.prepare('UPDATE schema_version SET version = 43').run();
+    logger.info(`DB-Migration auf Version 43 abgeschlossen (page_stats.book_id für ${healed.changes} verschobene Seiten geheilt).`);
+  }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).
@@ -1364,15 +1377,15 @@ function reconcilePageIds() {
     WHERE page_id IS NULL AND seite IS NOT NULL
   `).run();
 
-  // 9. figure_scenes: kapitel per chapter_id aktualisieren
+  // 9. figure_scenes: kapitel per chapter_id aktualisieren (kapitel ist NOT NULL → COALESCE)
   db.prepare(`
     UPDATE figure_scenes
-    SET kapitel = (
+    SET kapitel = COALESCE((
       SELECT DISTINCT chapter_name FROM pages
       WHERE book_id = figure_scenes.book_id
         AND chapter_id = figure_scenes.chapter_id
       LIMIT 1
-    )
+    ), kapitel)
     WHERE chapter_id IS NOT NULL
   `).run();
 

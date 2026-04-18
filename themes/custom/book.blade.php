@@ -276,6 +276,31 @@
 }
 .export-format-pdf blockquote p { text-indent: 0 !important; }
 
+/* ── GEDICHTE ───────────────────────────────────────── */
+.export-format-pdf .poem {
+  font-family: 'EB Garamond', Georgia, serif !important;
+  font-size: 11.5pt !important;
+  font-style: italic !important;
+  line-height: 1.5 !important;
+  white-space: pre-line !important;
+  text-align: left !important;
+  text-indent: 0 !important;
+  hyphens: none !important;
+  color: #2a1f12 !important;
+  margin: 6mm 0 6mm 8mm !important;
+  padding: 0 0 0 4mm !important;
+  border-left: 0.75pt solid #c8bfad !important;
+  page-break-inside: avoid !important;
+}
+.export-format-pdf .poem p {
+  text-align: left !important;
+  text-indent: 0 !important;
+  hyphens: none !important;
+  margin: 0 0 2mm 0 !important;
+  font-style: italic !important;
+}
+.export-format-pdf .poem br { line-height: 1.5 !important; }
+
 /* ── BILDER ─────────────────────────────────────────── */
 .export-format-pdf img {
   max-width: 100% !important; height: auto !important;

@@ -109,7 +109,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
   const locale = getBookLocale(bookId, userEmail);
   try {
     updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
-    const pages = await bsGetAll('pages?book_id=' + bookId, userToken);
+    const pages = await bsGetAll('pages?filter[book_id]=' + bookId, userToken);
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
     logger.info(`Start: ${pages.length} Seiten (book=${bookId})`);
 

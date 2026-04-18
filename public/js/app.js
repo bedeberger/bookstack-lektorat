@@ -762,8 +762,7 @@ document.addEventListener('alpine:init', () => {
       try {
         if (String(this.selectedBookId) !== targetBookId) {
           this.selectedBookId = targetBookId;
-          this.bookReviewHistory = [];
-          this.selectedBookReviewId = null;
+          this._resetBookScopedState();
           await this.loadPages();
         }
 
@@ -1241,10 +1240,14 @@ document.addEventListener('alpine:init', () => {
         this._setupHashRouting();
         // Buchwechsel (Combobox, Hash-Nav oder programmatisch) → Seiten/Tree neu laden.
         // _applyingHash unterdrückt Doppelladen während Hash-Anwendung.
-        this.$watch('selectedBookId', (newVal) => {
+        // _resetBookScopedState() räumt buchspezifische Daten/Caches ab, damit
+        // keine Figuren/Orte/Chats/Stats des alten Buchs im UI stehenbleiben.
+        this.$watch('selectedBookId', async (newVal) => {
           if (this._applyingHash) return;
           if (!newVal) return;
-          this.loadPages();
+          this._resetBookScopedState();
+          await this.loadPages();
+          await this._reloadVisibleBookCards();
         });
         // Figurengraph/Soziogramm enthalten übersetzte Labels (Schicht, Beziehung, Figurentyp).
         // Bei Sprachwechsel neu rendern – der Hash in renderFigurGraph() berücksichtigt uiLocale.
@@ -1512,6 +1515,76 @@ document.addEventListener('alpine:init', () => {
       this.checkDone = false;
       this.checkLoading = false;
       this.checkProgress = 0;
+    },
+
+    // Setzt allen buchbezogenen State zurück. Wird bei Buchwechsel (Combobox,
+    // Hash, programmatisch) aufgerufen, bevor `loadPages()` das neue Buch lädt.
+    // Karten bleiben sichtbar — `_reloadVisibleBookCards()` füllt sie danach neu.
+    _resetBookScopedState() {
+      // Datenarrays
+      this.figuren = [];
+      this.orte = [];
+      this.szenen = [];
+      this.bookStatsData = [];
+      this.bookStatsCoverage = null;
+      this.bookStatsDelta = null;
+      this.globalZeitstrahl = [];
+      this.bookReviewHistory = [];
+      this.chatSessions = [];
+      this.chatMessages = [];
+      this.chatSessionId = null;
+      this.bookChatSessions = [];
+      this.bookChatMessages = [];
+      this.bookChatSessionId = null;
+      this.kontinuitaetResult = null;
+      this.chapterFigures = [];
+      this.pageHistory = [];
+      this.activeHistoryEntryId = null;
+      this.tokEsts = {};
+      this._tokenEstGen++;
+
+      // Selektionen
+      this.selectedFigurId = null;
+      this.selectedOrtId = null;
+      this.selectedBookReviewId = null;
+      this.lastCheckId = null;
+
+      // Timestamps
+      this.figurenUpdatedAt = null;
+      this.szenenUpdatedAt = null;
+      this.orteUpdatedAt = null;
+
+      // Buch-scoped Pollers stoppen (zielen sonst auf altes Buch)
+      const timers = [
+        '_figuresPollTimer', '_ortePollTimer', '_szenenPollTimer',
+        '_consolidatePollTimer', '_kontinuitaetPollTimer',
+        '_ereignisseExtractPollTimer', '_chatPollTimer',
+        '_bookChatPollTimer', '_reviewPollTimer', '_komplettPollTimer',
+      ];
+      for (const t of timers) {
+        if (this[t]) { clearInterval(this[t]); this[t] = null; }
+      }
+
+      // Visualisierungen zerstören (bauen Graph/Chart sonst mit altem Buch-Daten auf)
+      if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
+      this._figurenHash = null;
+    },
+
+    async _reloadVisibleBookCards() {
+      const bookId = this.selectedBookId;
+      if (!bookId) return;
+      const jobs = [];
+      // `loadPages()` lädt figuren + bookReviewHistory selbst — hier nur die übrigen.
+      if (this.showOrteCard)       jobs.push(this.loadOrte(bookId));
+      if (this.showSzenenCard)     jobs.push(this.loadSzenen(bookId));
+      if (this.showBookStatsCard)  jobs.push(this.loadBookStats(bookId));
+      if (this.showBookSettingsCard && typeof this.loadBookSettings === 'function') {
+        jobs.push(this.loadBookSettings());
+      }
+      if (this.showEreignisseCard && typeof this._reloadZeitstrahl === 'function') {
+        jobs.push(this._reloadZeitstrahl());
+      }
+      await Promise.all(jobs);
     },
 
     // Setzt alles zurück: Seiten-Level (via resetPage) + Buch-Level.

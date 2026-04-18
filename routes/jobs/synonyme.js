@@ -52,7 +52,7 @@ synonymeRouter.post('/synonym', jsonBody, (req, res) => {
   if (!wort || typeof wort !== 'string' || !wort.trim()) return res.status(400).json({ error_code: 'WORT_REQUIRED' });
   if (!satz || typeof satz !== 'string' || !satz.trim()) return res.status(400).json({ error_code: 'SATZ_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
-  const entityKey = `${wort.trim().toLowerCase()}|${satz.trim().slice(0, 60)}`;
+  const entityKey = `${book_id || 0}|${wort.trim().toLowerCase()}|${satz.trim().slice(0, 60)}`;
   const existing = runningJobs.get(jobKey('synonym', entityKey, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = 'job.label.synonymWord';

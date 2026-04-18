@@ -21,8 +21,8 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
   try {
     updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
-      bsGetAll('chapters?book_id=' + bookId, userToken),
-      bsGetAll('pages?book_id=' + bookId, userToken),
+      bsGetAll('chapters?filter[book_id]=' + bookId, userToken),
+      bsGetAll('pages?filter[book_id]=' + bookId, userToken),
     ]);
 
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }

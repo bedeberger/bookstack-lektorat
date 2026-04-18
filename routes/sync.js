@@ -52,6 +52,7 @@ const upsertPageStats = db.prepare(`
   INSERT INTO page_stats (page_id, book_id, tok, words, chars, updated_at, cached_at)
   VALUES (@page_id, @book_id, @tok, @words, @chars, @updated_at, @cached_at)
   ON CONFLICT(page_id) DO UPDATE SET
+    book_id=excluded.book_id,
     tok=excluded.tok, words=excluded.words, chars=excluded.chars,
     updated_at=excluded.updated_at, cached_at=excluded.cached_at
 `);
@@ -115,8 +116,8 @@ const PREVIEW_CHARS = 800;
 
 async function syncPagesCache(bookId, token) {
   const [pages, chapters] = await Promise.all([
-    bsGetAll(`pages?book_id=${bookId}`, token),
-    bsGetAll(`chapters?book_id=${bookId}`, token),
+    bsGetAll(`pages?filter[book_id]=${bookId}`, token),
+    bsGetAll(`chapters?filter[book_id]=${bookId}`, token),
   ]);
   _upsertPagesCache(bookId, pages, chapters);
 
@@ -145,9 +146,9 @@ async function syncPagesCache(bookId, token) {
 
 async function syncBook(bookId, token) {
   const [pages, book, chapters] = await Promise.all([
-    bsGetAll(`pages?book_id=${bookId}`, token),
+    bsGetAll(`pages?filter[book_id]=${bookId}`, token),
     bsGet(`books/${bookId}`, token),
-    bsGetAll(`chapters?book_id=${bookId}`, token),
+    bsGetAll(`chapters?filter[book_id]=${bookId}`, token),
   ]);
   const chapterCount = chapters.length;
 

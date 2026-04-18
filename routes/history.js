@@ -32,13 +32,19 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
     ? JSON.stringify(req.body.selected_errors_json)
     : null;
   const user_email = req.session?.user?.email || null;
-  db.prepare('UPDATE page_checks SET saved = ?, saved_at = ?, applied_errors_json = COALESCE(?, applied_errors_json), selected_errors_json = COALESCE(?, selected_errors_json) WHERE id = ? AND user_email = ?')
-    .run(saved, saved_at, applied, selected, parseInt(req.params.id), user_email);
+  const id = parseInt(req.params.id);
+
+  // Erst Ownership prüfen (user_email-Scope), dann updaten. Verhindert ID-Raten
+  // über Buch-/User-Grenzen und liefert verifizierte book_id für das Log.
+  const row = db.prepare('SELECT page_id, page_name, book_id, chapter_id FROM page_checks WHERE id = ? AND user_email = ?').get(id, user_email);
+  if (!row) return res.status(404).json({ error_code: 'NOT_FOUND' });
+
+  db.prepare('UPDATE page_checks SET saved = ?, saved_at = ?, applied_errors_json = COALESCE(?, applied_errors_json), selected_errors_json = COALESCE(?, selected_errors_json) WHERE id = ? AND user_email = ? AND book_id = ?')
+    .run(saved, saved_at, applied, selected, id, user_email, row.book_id);
 
   if (saved) {
-    const row = db.prepare('SELECT page_id, page_name, book_id, chapter_id FROM page_checks WHERE id = ?').get(parseInt(req.params.id));
     const appliedErrors = req.body?.applied_errors_json;
-    if (row && Array.isArray(appliedErrors)) {
+    if (Array.isArray(appliedErrors)) {
       const counts = { rechtschreibung: 0, grammatik: 0, wiederholung: 0, stil: 0 };
       for (const f of appliedErrors) if (f.typ && counts[f.typ] !== undefined) counts[f.typ]++;
       const total = appliedErrors.length;
