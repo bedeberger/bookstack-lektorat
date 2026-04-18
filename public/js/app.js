@@ -1142,7 +1142,8 @@ document.addEventListener('alpine:init', () => {
       if ((tokIn || 0) + (tokOut || 0) > 0) {
         const pctPart = (progress > 0 && progress < 100) ? ` ~${progress}%` : '';
         const tpsPart = tokPerSec ? ` · ${Math.round(tokPerSec)} tok/s` : '';
-        tokInfo = ` · ↑${fmtTok(tokIn || 0)} ↓${fmtTok(tokOut || 0)} Tokens${pctPart}${tpsPart}`;
+        const inPart = (tokIn || 0) > 0 ? `↑${fmtTok(tokIn)} ` : '';
+        tokInfo = ` · ${inPart}↓${fmtTok(tokOut || 0)} Tokens${pctPart}${tpsPart}`;
       }
       // statusText kann ein i18n-Key sein (z.B. 'job.phase.extracting') oder freier Text.
       // tRaw gibt unbekannte Keys 1:1 zurück, damit Legacy-Text pass-through funktioniert.

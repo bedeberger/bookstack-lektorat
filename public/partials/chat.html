@@ -131,9 +131,9 @@
               </template>
 
               <!-- Klassischer Modus: vorausgewählte Seiten -->
-              <template x-if="msg.context_info.mode !== 'agent' && msg.context_info.pages">
+              <template x-if="msg.context_info.mode !== 'agent' && Array.isArray(msg.context_info.pages)">
                 <span>
-                  <template x-for="(p, pi) in (expanded ? msg.context_info.pages : msg.context_info.pages.slice(0, 3))" :key="pi">
+                  <template x-for="(p, pi) in (expanded ? msg.context_info.pages : (msg.context_info.pages || []).slice(0, 3))" :key="pi">
                     <span>
                       <template x-if="pi > 0"><span class="chat-context-sep">, </span></template>
                       <a x-show="p.id"
@@ -143,11 +143,11 @@
                       <span x-show="!p.id" x-text="p.name"></span>
                     </span>
                   </template>
-                  <button x-show="msg.context_info.pages.length > 3"
+                  <button x-show="(msg.context_info.pages || []).length > 3"
                           class="chat-context-toggle"
                           @click.stop="expanded = !expanded"
-                          x-text="expanded ? '▲' : '+' + (msg.context_info.pages.length - 3)"></button>
-                  <template x-if="msg.context_info.totalPages > msg.context_info.pages.length">
+                          x-text="expanded ? '▲' : '+' + ((msg.context_info.pages || []).length - 3)"></button>
+                  <template x-if="msg.context_info.totalPages > (msg.context_info.pages || []).length">
                     <span class="chat-context-total" x-text="t('chat.ofTotalPages', { n: msg.context_info.totalPages })"></span>
                   </template>
                   <template x-if="msg.context_info.figuren">

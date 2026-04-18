@@ -12,6 +12,11 @@
     "en": "IMITATE AUTHOR'S STYLE: Review the author's individual style in the given text — sentence structure, rhythm, word choice, tone, perspective, recurring patterns. All corrections, replacements, and suggested text must fit seamlessly into this style, as if written by the author themselves. Avoid any phrasing that feels foreign, generic, or in another author's voice.\n\nSEPARATE JUDGMENT FROM WORDING: 'Imitate author's style' applies exclusively to the form of your suggested corrections, replacements, and examples. In spotting, naming, and evaluating weaknesses (explanations, feedback) you remain direct, uncompromising, and unvarnished — no softening, no hedging, no praise preamble."
   },
 
+  "localModelChatRule": {
+    "de": "ANTWORT-VOLLSTÄNDIGKEIT (Pflicht): Wenn du in einer Antwort «Gründe», «Punkte», «Argumente», «Beispiele» oder «Schritte» ankündigst, musst du diese in derselben Antwort ausformulieren – nicht nur ankündigen und abbrechen. Keine Antwort darf mit einem Doppelpunkt enden.",
+    "en": "ANSWER COMPLETENESS (mandatory): If you announce 'reasons', 'points', 'arguments', 'examples', or 'steps' in a response, you must spell them out in the same response — never announce and stop. No response may end with a colon."
+  },
+
   "buchtypen": {
     "de": {
       "roman":          { "label": "Roman",                     "zusatz": "Das vorliegende Werk ist ein Roman mit durchgehender Handlung und Figurenentwicklung über das gesamte Buch." },

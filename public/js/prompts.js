@@ -56,6 +56,7 @@ function buildSystemSynonym(prefix, korrekturRegeln, buchKontext) {
 let _localeMap  = new Map();
 let _rawLocales = new Map();
 let _autorenstilByLocale = new Map(); // localeKey → autorenstil-String (bereits Slim/Full gewählt)
+let _localChatAddonByLocale = new Map(); // localeKey → Zusatzregel nur für ollama/llama (Seiten-/Buch-Chat); leer bei Claude
 let _buchtypen  = {};        // cfg.buchtypen aus prompt-config.json
 let _erklaerungRule = '';    // cfg.erklaerungRule
 let _defaultLocale = 'de-CH';
@@ -67,10 +68,12 @@ let _defaultLocale = 'de-CH';
  *  bleiben davon unberührt – dort soll die Kritik nicht durch Autorenstil-Imitation
  *  abgemildert werden.
  */
-function _buildLocalePrompts(localeConfig, globalErklaerungRule, buchKontext = '', autorenstilRule = '') {
+function _buildLocalePrompts(localeConfig, globalErklaerungRule, buchKontext = '', autorenstilRule = '', localChatAddon = '') {
   const rules = localeConfig.baseRules || '';
   const rulesWithAutorenstil = autorenstilRule ? `${rules}\n\n${autorenstilRule}` : rules;
   const sp    = localeConfig.systemPrompts || {};
+  // Nur für lokale Provider (ollama/llama) befüllt; bricht den „Ich kündige an und höre auf"-Trainingsbias.
+  const chatAddonSuffix = localChatAddon ? `\n\n${localChatAddon}` : '';
   return {
     ERKLAERUNG_RULE:             globalErklaerungRule || '',
     KORREKTUR_REGELN:            localeConfig.korrekturRegeln || '',
@@ -85,8 +88,8 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule, buchKontext = '
     // + optionaler Autor-Kontext. Ohne baseRules/commonRules, da die Synonym-Aufgabe
     // klein und eng umrissen ist (Kontextmenü im Editor).
     SYSTEM_SYNONYM:              buildSystemSynonym(sp.synonym    || '', localeConfig.korrekturRegeln || '', buchKontext),
-    SYSTEM_CHAT:                 buildSystemNoJson(sp.chat        || '', rulesWithAutorenstil),
-    SYSTEM_BOOK_CHAT:            buildSystemNoJson(sp.buchchat    || '', rules),
+    SYSTEM_CHAT:                 buildSystemNoJson(sp.chat        || '', rulesWithAutorenstil) + chatAddonSuffix,
+    SYSTEM_BOOK_CHAT:            buildSystemNoJson(sp.buchchat    || '', rules) + chatAddonSuffix,
     SYSTEM_ORTE:                 buildSystem(sp.orte              || 'Du bist ein Literaturanalytiker. Du identifizierst Schauplätze und Orte präzise und konservativ – nur was im Text eindeutig belegt ist.', rules),
     SYSTEM_KONTINUITAET:         buildSystem(sp.kontinuitaet      || 'Du bist ein sorgfältiger Literaturlektor. Du prüfst einen Roman auf Kontinuitätsfehler und Widersprüche – Figuren, Zeitabläufe, Orte, Objekte und Charakterverhalten.', rules),
     SYSTEM_ZEITSTRAHL:           buildSystem(sp.zeitstrahl        || '', rules),
@@ -133,14 +136,16 @@ export function configurePrompts(cfg, provider = 'claude') {
   _localeMap.clear();
   _rawLocales.clear();
   _autorenstilByLocale.clear();
+  _localChatAddonByLocale.clear();
   _buchtypen     = cfg.buchtypen || {};
   _erklaerungRule = cfg.erklaerungRule || '';
 
   if (cfg.locales && typeof cfg.locales === 'object') {
     // ── Neues Format: locales-Map ─────────────────────────────────────────────
     _defaultLocale = cfg.defaultLocale || 'de-CH';
-    const commonRules    = cfg.commonRules    || {};
-    const autorenstilRaw = cfg.autorenstilRule || {};
+    const commonRules        = cfg.commonRules         || {};
+    const autorenstilRaw     = cfg.autorenstilRule     || {};
+    const localChatAddonRaw  = cfg.localModelChatRule  || {};
     for (const [key, localeCfg] of Object.entries(cfg.locales)) {
       const langCode = key.split('-')[0];
       // Für lokale Modelle wird commonRules durch eine Slim-Version ersetzt.
@@ -153,6 +158,8 @@ export function configurePrompts(cfg, provider = 'claude') {
       const autorenstil = _isLocal
         ? (SLIM_AUTORENSTIL_RULE[langCode] || '')
         : (autorenstilRaw[langCode] || '');
+      // Chat-Zusatzregel nur an lokale Provider: zwingt das Modell, Ankündigungen auszuformulieren.
+      const localChatAddon = _isLocal ? (localChatAddonRaw[langCode] || '') : '';
       const base = localeCfg.baseRules || '';
       const mergedCfg = {
         ...localeCfg,
@@ -160,7 +167,8 @@ export function configurePrompts(cfg, provider = 'claude') {
       };
       _rawLocales.set(key, mergedCfg);
       _autorenstilByLocale.set(key, autorenstil);
-      _localeMap.set(key, _buildLocalePrompts(mergedCfg, cfg.erklaerungRule, '', autorenstil));
+      _localChatAddonByLocale.set(key, localChatAddon);
+      _localeMap.set(key, _buildLocalePrompts(mergedCfg, cfg.erklaerungRule, '', autorenstil, localChatAddon));
     }
     // Fallback: Falls defaultLocale nicht in der Map → ersten Eintrag nehmen
     if (!_localeMap.has(_defaultLocale) && _localeMap.size > 0) {
@@ -223,7 +231,8 @@ export function getLocalePromptsForBook(localeKey, buchtyp, buchKontext) {
   // buchKontext als soziogramm-Kontext weitergeben (figurenBasisRules / SYSTEM_KOMPLETT_EXTRAKTION)
   // autorenstilRule wird nur an Lektorat/Chat/Stilkorrektur angehängt (siehe _buildLocalePrompts).
   const autorenstil = _autorenstilByLocale.get(localeKey) || _autorenstilByLocale.get(_defaultLocale) || '';
-  return _buildLocalePrompts(augLocale, _erklaerungRule, kontext, autorenstil);
+  const localChatAddon = _localChatAddonByLocale.get(localeKey) || _localChatAddonByLocale.get(_defaultLocale) || '';
+  return _buildLocalePrompts(augLocale, _erklaerungRule, kontext, autorenstil, localChatAddon);
 }
 
 export function buildStilkorrekturPrompt(html, styles) {

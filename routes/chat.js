@@ -1,7 +1,7 @@
 const express = require('express');
 const { db } = require('../db/schema');
 const logger = require('../logger');
-const { CHARS_PER_TOKEN, MAX_TOKENS_OUT, parseJSON } = require('../lib/ai');
+const { CHARS_PER_TOKEN, MAX_TOKENS_OUT, parseJSON, chatTemperature } = require('../lib/ai');
 const {
   getPrompts, getBookPrompts,
   getFiguren, getLatestReview, buildChatMessageHistory,
@@ -366,6 +366,9 @@ async function _streamLlama(messages, systemPrompt, res, onText, onTokens, jsonS
     ? { type: 'json_schema', json_schema: { name: 'response', strict: true, schema: jsonSchema } }
     : { type: 'json_object' };
 
+  const chatTemp = chatTemperature();
+  const temperature = chatTemp != null ? chatTemp : parseFloat(process.env.LLAMA_TEMPERATURE || '0.1');
+
   const upstream = await fetch(`${llamaHost}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -374,7 +377,7 @@ async function _streamLlama(messages, systemPrompt, res, onText, onTokens, jsonS
       messages: llamaMessages,
       stream: true,
       stream_options: { include_usage: true },
-      temperature: parseFloat(process.env.LLAMA_TEMPERATURE || '0.1'),
+      temperature,
       response_format: responseFormat,
     }),
   });
@@ -432,10 +435,15 @@ async function _streamOllama(messages, systemPrompt, res, onText, onTokens, json
   // Schema → strikte GBNF-Grammatik; sonst 'json' als Hint-Fallback.
   const fmt = jsonSchema || 'json';
 
+  // Seiten-Chat ohne CHAT_TEMPERATURE behält bisheriges Verhalten (Ollama-Default),
+  // damit bestehende Installationen keine Verhaltensänderung sehen.
+  const chatTemp = chatTemperature();
+  const options = chatTemp != null ? { think: false, temperature: chatTemp } : { think: false };
+
   const upstream = await fetch(`${ollamaHost}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: ollamaMessages, stream: true, format: fmt, options: { think: false } }),
+    body: JSON.stringify({ model, messages: ollamaMessages, stream: true, format: fmt, options }),
   });
 
   if (!upstream.ok) {
