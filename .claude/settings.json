@@ -145,7 +145,9 @@
       "Bash(node -c public/js/app.js)",
       "Bash(curl -s \"https://www.openthesaurus.de/synonyme/search?q=ging&format=application/json&baseform=true\")",
       "Bash(timeout 3 node -e ' *)",
-      "Bash(BOOKSTACK_URL=http://localhost:1 node -e \"require\\('./routes/proxies.js'\\); console.log\\('Module loaded OK'\\);\")"
+      "Bash(BOOKSTACK_URL=http://localhost:1 node -e \"require\\('./routes/proxies.js'\\); console.log\\('Module loaded OK'\\);\")",
+      "Bash(node -e \"import\\('./public/js/prompts.js'\\).then\\(m => { console.log\\('soz prompt:', typeof m.buildSoziogrammConsolidationPrompt\\); console.log\\('soz schema:', typeof m.SCHEMA_SOZIOGRAMM_KONSOL\\); console.log\\('sample:', m.buildSoziogrammConsolidationPrompt\\('Test', [{id:'fig_1', name:'A', beziehungen:[{figur_id:'fig_2',typ:'freund',machtverhaltnis:1}]},{id:'fig_2',name:'B',sozialschicht:'mittelschicht'}], 'Kontext'\\).slice\\(0,300\\)\\); }\\).catch\\(e => { console.error\\('ERR:', e.message\\); process.exit\\(1\\); }\\)\")",
+      "Bash(node -c /Users/bd/ClaudeProjects/bookstack-lektorat/routes/jobs/komplett.js)"
     ]
   }
 }

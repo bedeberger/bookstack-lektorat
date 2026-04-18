@@ -335,7 +335,7 @@ export const graphMethods = {
     const hasSchicht = this.figuren.some(f => f.sozialschicht && f.sozialschicht !== 'andere');
     if (!hasSchicht) {
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
-      container.innerHTML = '<span class="muted-msg soziogramm-placeholder">Noch keine Sozialschichten analysiert.<br>Klicke auf «Sozialschichten analysieren» um Schichtzugehörigkeit und Machtstrukturen zu ermitteln.</span>';
+      container.innerHTML = '<span class="muted-msg soziogramm-placeholder">Noch keine Sozialschichten analysiert.<br>Bitte auf «Alle aktualisieren» klicken, um Schichtzugehörigkeit und Machtstrukturen zu ermitteln.</span>';
       return;
     }
 

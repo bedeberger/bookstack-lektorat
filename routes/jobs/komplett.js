@@ -433,9 +433,10 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments) {
   const { jobId, bookIdInt, bookName, email, call, tok, log, prompts, sys, idMaps, effectiveProvider } = ctx;
 
   updateJob(jobId, { progress: 30, statusText: 'KI konsolidiert Figuren…' });
+  const figProgressEnd = effectiveProvider === 'claude' ? 40 : 43;
   const figResult = await call(jobId, tok,
     prompts.buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren, sys.BUCH_KONTEXT || ''),
-    sys.SYSTEM_FIGUREN, 30, 43, 8000, 0.2, null, prompts.SCHEMA_FIGUREN_KONSOL,
+    sys.SYSTEM_FIGUREN, 30, figProgressEnd, 8000, 0.2, null, prompts.SCHEMA_FIGUREN_KONSOL,
   );
   if (!Array.isArray(figResult?.figuren)) throw new Error('Figuren-Konsolidierung ungültig: figuren-Array fehlt');
   let figuren = figResult.figuren.map((f, i) => ({ ...f, id: f.id || ('fig_' + (i + 1)) }));
@@ -449,14 +450,49 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments) {
   saveFigurenToDb(bookIdInt, figuren, email, idMaps);
   log.info(`Job ${jobId}: ${figuren.length} Figuren gespeichert.`);
 
-  // Soziogramm aus P2-Ergebnis (kein separater API-Call)
+  // Soziogramm: preliminary-Werte aus P2-Ergebnis als Fallback
   if (figuren.length >= 4) {
-    const sozFiguren = figuren.map(f => ({ fig_id: f.id, sozialschicht: f.sozialschicht || 'andere' }));
-    const sozBeziehungen = figuren.flatMap(f =>
+    let sozFiguren = figuren.map(f => ({ fig_id: f.id, sozialschicht: f.sozialschicht || 'andere' }));
+    let sozBeziehungen = figuren.flatMap(f =>
       (f.beziehungen || [])
         .filter(bz => bz.machtverhaltnis && bz.figur_id)
         .map(bz => ({ from_fig_id: f.id, to_fig_id: bz.figur_id, machtverhaltnis: bz.machtverhaltnis }))
     );
+
+    // Claude-only: holistische Soziogramm-Konsolidierung (sozialschicht + machtverhaltnis)
+    // Non-critical – bei Fehler fallen wir auf die preliminary-Werte zurück.
+    if (effectiveProvider === 'claude') {
+      updateJob(jobId, { progress: 40, statusText: 'KI verfeinert Soziogramm…' });
+      try {
+        const sozResult = await call(jobId, tok,
+          prompts.buildSoziogrammConsolidationPrompt(bookName, figuren, sys.BUCH_KONTEXT || ''),
+          sys.SYSTEM_FIGUREN, 40, 43, 3000, 0.2, null, prompts.SCHEMA_SOZIOGRAMM_KONSOL,
+        );
+        const validIds = new Set(figuren.map(f => f.id));
+        const prelimSchichtById = Object.fromEntries(sozFiguren.map(s => [s.fig_id, s.sozialschicht]));
+        const prelimPairs = new Set(sozBeziehungen.map(bz => `${bz.from_fig_id}|${bz.to_fig_id}`));
+        const schichtOverride = {};
+        for (const f of (sozResult?.figuren || [])) {
+          if (f && validIds.has(f.id) && f.sozialschicht) schichtOverride[f.id] = f.sozialschicht;
+        }
+        sozFiguren = figuren.map(f => ({
+          fig_id: f.id,
+          sozialschicht: schichtOverride[f.id] || prelimSchichtById[f.id] || 'andere',
+        }));
+        const refinedBz = (sozResult?.beziehungen || [])
+          .filter(bz => bz && validIds.has(bz.from_fig_id) && validIds.has(bz.to_fig_id)
+            && bz.from_fig_id !== bz.to_fig_id
+            && Number.isFinite(bz.machtverhaltnis)
+            && prelimPairs.has(`${bz.from_fig_id}|${bz.to_fig_id}`));
+        if (refinedBz.length > 0) sozBeziehungen = refinedBz;
+        const changedSchichten = Object.keys(schichtOverride).filter(id => schichtOverride[id] !== prelimSchichtById[id]).length;
+        log.info(`Job ${jobId}: Soziogramm-Konsolidierung: ${changedSchichten} Schicht-Korrekturen, ${refinedBz.length}/${prelimPairs.size} Machtbeziehungen verfeinert.`);
+      } catch (e) {
+        log.warn(`Job ${jobId}: Soziogramm-Konsolidierung fehlgeschlagen, nutze preliminary-Werte: ${e.message}`);
+        updateJob(jobId, { progress: 43 });
+      }
+    }
+
     updateFigurenSoziogramm(bookIdInt, sozFiguren, sozBeziehungen, email);
     log.info(`Job ${jobId}: Soziogramm: ${sozFiguren.length} Figuren, ${sozBeziehungen.length} Machtbeziehungen.`);
   }

@@ -608,6 +608,53 @@ Regeln:
 }
 
 
+// ── Soziogramm-Konsolidierung (Claude-only, holistische Revision) ────────────
+export function buildSoziogrammConsolidationPrompt(bookName, figuren, buchKontext = '') {
+  const figInfo = figuren.map(f => {
+    const nameById = Object.fromEntries(figuren.map(x => [x.id, x.name]));
+    const meta = [f.typ, f.beruf, f.geschlecht].filter(Boolean).join(', ');
+    const bzStr = (f.beziehungen || [])
+      .map(b => `${nameById[b.figur_id] || b.figur_id} [${b.typ}${Number.isFinite(b.machtverhaltnis) ? ', macht=' + b.machtverhaltnis : ''}]`)
+      .join(', ');
+    return `- **${f.id}** ${f.name}${f.kurzname && f.kurzname !== f.name ? ` («${f.kurzname}»)` : ''} | ${meta || '—'} | sozialschicht=${f.sozialschicht || '—'}` +
+      (f.beschreibung ? `\n  ${f.beschreibung}` : '') +
+      (bzStr ? `\n  Beziehungen: ${bzStr}` : '');
+  }).join('\n');
+
+  return `Buch: «${bookName}»${buchKontext ? `\nBuchkontext: ${buchKontext}` : ''}
+
+Die folgenden Figuren sind bereits konsolidiert. Die preliminary-Werte für sozialschicht und die machtverhaltnis-Werte in den Beziehungen stammen aus einer kapitelweisen Vorab-Analyse und sind oft inkonsistent oder fehlen. Revidiere beides HOLISTISCH mit Blick auf das ganze Buch.
+
+Figurenliste:
+${figInfo}
+
+Antworte mit diesem JSON-Schema:
+{
+  "figuren": [
+    { "id": "fig_1", "sozialschicht": "wirtschaftselite|gehobenes_buergertum|mittelschicht|arbeiterschicht|migrantenmilieu|prekariat|unterwelt|andere" }
+  ],
+  "beziehungen": [
+    { "from_fig_id": "fig_1", "to_fig_id": "fig_2", "machtverhaltnis": 0 }
+  ]
+}
+
+Regeln sozialschicht:
+- Für JEDE Figur der Liste einen Eintrag – auch wenn der preliminary-Wert übernommen wird
+- id: exakt aus der obigen Liste (keine neuen IDs, keine Namensfelder)
+- wirtschaftselite=Unternehmerfamilien/Direktoren, gehobenes_buergertum=Akademiker/freie Berufe/obere Kader, mittelschicht=Angestellte/Beamte/mittlere Kader, arbeiterschicht=Fabrik-/Bauarbeiter/Servicepersonal, migrantenmilieu=Zugewanderte/zweite Generation (primär nach Milieu-Zugehörigkeit, nicht nach beruflichem Status), prekariat=Sozialhilfe/Randständige/Langzeitarbeitslose, unterwelt=kriminelles Milieu, andere=nicht eindeutig zuordenbar
+- Innerhalb eines Buchs Milieu-Zuordnungen konsistent halten: wenn zwei Figuren im gleichen Haushalt/Familienverbund leben, teilen sie meist die sozialschicht
+- KONSERVATIV: im Zweifel «andere» statt spekulativ eine Schicht wählen
+
+Regeln beziehungen (machtverhaltnis):
+- Nur Beziehungen der obigen Liste – keine neuen Paare, keine Pfeile zwischen Figuren ohne bestehende Beziehung
+- from_fig_id / to_fig_id: exakt die figur_id aus dem obigen Beziehungsfeld («von» = die Figur in deren Block die Beziehung steht, «zu» = figur_id darin)
+- machtverhaltnis: +2=to_fig_id dominiert klar, +1=to_fig_id hat leichten Vorteil, 0=symmetrisch, -1=from_fig_id hat leichten Vorteil, -2=from_fig_id dominiert klar
+- HOLISTISCH bewerten: wer hat strukturelle Macht (Kapital, Hierarchie, Wissen), wer psychologische (Manipulation, Autorität)? Im Zweifel 0
+- Pro ungeordnetem Paar (A,B) nur EIN Eintrag – nicht sowohl A→B als auch B→A
+- Beziehungen weglassen wenn machtverhaltnis unklar oder 0 ist und der preliminary-Wert ebenfalls 0/leer war`;
+}
+
+
 // ── Schauplatz-Schemata (auch verwendet in Komplett-Analyse) ─────────────────
 
 const ORTE_SCHEMA = `{
@@ -1185,6 +1232,11 @@ export const SCHEMA_KOMPLETT_EXTRAKTION = _obj({
 // ── Konsolidierungen (Komplett-Pipeline) ─────────────────────────────────────
 export const SCHEMA_FIGUREN_KONSOL = _obj({ figuren: { type: 'array', items: _figurSchema } });
 export const SCHEMA_ORTE_KONSOL    = _obj({ orte:    { type: 'array', items: _ortSchema } });
+
+export const SCHEMA_SOZIOGRAMM_KONSOL = _obj({
+  figuren:     { type: 'array', items: _obj({ id: _str, sozialschicht: _str }) },
+  beziehungen: { type: 'array', items: _obj({ from_fig_id: _str, to_fig_id: _str, machtverhaltnis: _num }) },
+});
 
 export const SCHEMA_BEZIEHUNGEN = _obj({
   beziehungen: {

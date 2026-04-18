@@ -1937,11 +1937,6 @@ ins {
   gap: 10px;
   margin-bottom: 6px;
 }
-.figur-sozio-status {
-  font-size: var(--font-size-xs);
-  color: var(--color-muted);
-}
-
 /* === Figuren: Sozialschicht-Badge in Detail === */
 .figur-sozialschicht-badge {
   --sch-hue: var(--palette-gray);
