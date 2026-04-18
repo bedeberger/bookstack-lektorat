@@ -26,12 +26,14 @@ async function getPrompts() {
 
 /**
  * Gibt das Locale-Prompts-Objekt für ein Buch zurück – augmentiert mit Buchtyp und Buchkontext.
- * Liest Sprache, Region, Buchtyp und Buchkontext aus book_settings.
+ * Liest Sprache, Region, Buchtyp und Buchkontext aus book_settings;
+ * falls die Zeile fehlt, werden die User-Defaults (falls userEmail übergeben) als Fallback verwendet.
  * @param {number|string} bookId
+ * @param {string|null}   userEmail optional – ermöglicht User-Default-Fallback bei fehlenden book_settings
  */
-async function getBookPrompts(bookId) {
+async function getBookPrompts(bookId, userEmail = null) {
   const { getLocalePromptsForBook } = await getPrompts();
-  const settings = bookId ? getBookSettings(bookId) : { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null };
+  const settings = bookId ? getBookSettings(bookId, userEmail) : { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null };
   const locale   = `${settings.language}-${settings.region}`;
   return getLocalePromptsForBook(locale, settings.buchtyp || null, settings.buch_kontext || null);
 }

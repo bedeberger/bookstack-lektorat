@@ -14,7 +14,7 @@ const BUCH_KONTEXT_MAX = 1000;
 router.get('/:book_id', (req, res) => {
   const bookId = parseInt(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
-  const settings = getBookSettings(bookId);
+  const settings = getBookSettings(bookId, req.session?.user?.email || null);
   res.json(settings);
 });
 

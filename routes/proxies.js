@@ -292,7 +292,8 @@ router.get('/openthesaurus/synonyms', async (req, res) => {
   const bookId = parseInt(req.query.book_id, 10) || null;
   const log = logger.child({ job: 'thesaurus', user: req.session?.user?.email || '-', book: bookId || '-' });
   if (!word) return res.json({ synonyme: [], disabled: false });
-  const locale = bookId ? getBookLocale(bookId) : 'de-CH';
+  const userEmail = req.session?.user?.email || null;
+  const locale = bookId ? getBookLocale(bookId, userEmail) : 'de-CH';
   if (!locale || !locale.toLowerCase().startsWith('de')) {
     log.info(`word=«${word}» skipped (locale=${locale})`);
     return res.json({ synonyme: [], disabled: true });

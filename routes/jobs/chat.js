@@ -89,7 +89,7 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
       : null;
     const figuren = getFiguren(session.book_id, userEmail, pageRow?.chapter_name ?? null);
     const review  = getLatestReview(session.book_id, userEmail);
-    const { SYSTEM_CHAT: chatSysPrompt } = await getBookPrompts(session.book_id);
+    const { SYSTEM_CHAT: chatSysPrompt } = await getBookPrompts(session.book_id, userEmail);
     const systemPrompt = buildChatSystemPrompt(session.page_name || 'Unbekannte Seite', pageText, figuren, review, chatSysPrompt);
 
     // Konversationshistorie aufbauen
@@ -182,7 +182,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
       .get(parseInt(sessionId), userEmail);
     if (!session) throw i18nError('job.error.sessionNotFound');
 
-    const { SYSTEM_BOOK_CHAT: bookChatSys, STOPWORDS: bookChatSW } = await getBookPrompts(session.book_id);
+    const { SYSTEM_BOOK_CHAT: bookChatSys, STOPWORDS: bookChatSW } = await getBookPrompts(session.book_id, userEmail);
     const bookChatStopwords = new Set(bookChatSW || []);
 
     if (!userToken) throw i18nError('job.error.noBookstackToken');
@@ -407,7 +407,7 @@ async function runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEma
 
     const figuren = getFiguren(session.book_id, userEmail);
     const review  = getLatestReview(session.book_id, userEmail);
-    const { SYSTEM_BOOK_CHAT: bookChatSys } = await getBookPrompts(session.book_id);
+    const { SYSTEM_BOOK_CHAT: bookChatSys } = await getBookPrompts(session.book_id, userEmail);
     const systemPrompt = buildBookChatAgentSystemPrompt(
       session.book_name || '', figuren, review, bookChatSys
     );

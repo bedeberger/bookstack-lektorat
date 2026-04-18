@@ -192,7 +192,7 @@ router.post('/send', jsonBody, async (req, res) => {
 
     // System-Prompt aus prompts.js (Single Source of Truth)
     const { buildChatSystemPrompt, SCHEMA_CHAT } = await getPrompts();
-    const { SYSTEM_CHAT: chatSys } = await getBookPrompts(session.book_id);
+    const { SYSTEM_CHAT: chatSys } = await getBookPrompts(session.book_id, userEmail);
     const systemPrompt = buildChatSystemPrompt(
       session.page_name || 'Unbekannte Seite',
       page_text || '',

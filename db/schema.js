@@ -1664,14 +1664,26 @@ const _upsertBookSettings = db.prepare(`
     updated_at=excluded.updated_at
 `);
 
-/** Gibt {language, region, buchtyp, buch_kontext} für ein Buch zurück. */
-function getBookSettings(bookId) {
-  return _getBookSettings.get(parseInt(bookId)) || { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null };
+/** Gibt {language, region, buchtyp, buch_kontext} für ein Buch zurück.
+ *  Fehlt die book_settings-Zeile, werden – wenn vorhanden – die User-Defaults
+ *  (default_language/region/buchtyp) als Fallback verwendet. */
+function getBookSettings(bookId, userEmail = null) {
+  const row = _getBookSettings.get(parseInt(bookId));
+  if (row) return row;
+  if (userEmail) {
+    const u = _getUser.get(userEmail);
+    if (u && (u.default_language || u.default_buchtyp)) {
+      const language = u.default_language || 'de';
+      const region   = u.default_region   || (language === 'en' ? 'US' : 'CH');
+      return { language, region, buchtyp: u.default_buchtyp || null, buch_kontext: null };
+    }
+  }
+  return { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null };
 }
 
 /** Locale-Key für ein Buch: z.B. "de-CH", "en-US". */
-function getBookLocale(bookId) {
-  const { language, region } = getBookSettings(bookId);
+function getBookLocale(bookId, userEmail = null) {
+  const { language, region } = getBookSettings(bookId, userEmail);
   return `${language}-${region}`;
 }
 

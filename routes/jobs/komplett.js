@@ -628,7 +628,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
   // ollama / llama: bewusst 60K Limit → Multi-Pass mit Delta-Cache.
   const singlePassLimit = effectiveProvider === 'claude' ? 250_000 : SINGLE_PASS_LIMIT;
   const prompts = await getPrompts();
-  const sys = await getBookPrompts(bookId);
+  const sys = await getBookPrompts(bookId, email);
   const tok = { in: 0, out: 0, ms: 0, inflight: new Map() };
 
   try {
@@ -766,7 +766,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
   const effectiveProvider = provider || process.env.API_PROVIDER || 'claude';
   const singlePassLimit = effectiveProvider === 'claude' ? 250_000 : SINGLE_PASS_LIMIT;
   const prompts = await getPrompts();
-  const sys = await getBookPrompts(bookId);
+  const sys = await getBookPrompts(bookId, email);
 
   try {
     const cp = loadCheckpoint('kontinuitaet', bookIdInt, email);

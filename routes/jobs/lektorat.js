@@ -44,8 +44,8 @@ const lektoratRouter = express.Router();
 async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
   const { buildLektoratPrompt, SCHEMA_LEKTORAT } = await getPrompts();
-  const { SYSTEM_LEKTORAT, STOPWORDS: lektoratStopwords, ERKLAERUNG_RULE: lektoratErklaerungRule, KORREKTUR_REGELN: lektoratKorrekturRegeln } = await getBookPrompts(bookId);
-  const locale = bookId ? getBookLocale(bookId) : 'de-CH';
+  const { SYSTEM_LEKTORAT, STOPWORDS: lektoratStopwords, ERKLAERUNG_RULE: lektoratErklaerungRule, KORREKTUR_REGELN: lektoratKorrekturRegeln } = await getBookPrompts(bookId, userEmail);
+  const locale = bookId ? getBookLocale(bookId, userEmail) : 'de-CH';
   try {
     logger.info(`Start: Seite #${pageId} (book=${bookId || '-'})`);
     updateJob(jobId, { statusText: 'job.phase.loadingPageContent', progress: 5 });
@@ -105,8 +105,8 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
 async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
   const { buildBatchLektoratPrompt, SCHEMA_LEKTORAT } = await getPrompts();
-  const { SYSTEM_LEKTORAT, STOPWORDS: batchStopwords, ERKLAERUNG_RULE: batchErklaerungRule, KORREKTUR_REGELN: batchKorrekturRegeln } = await getBookPrompts(bookId);
-  const locale = getBookLocale(bookId);
+  const { SYSTEM_LEKTORAT, STOPWORDS: batchStopwords, ERKLAERUNG_RULE: batchErklaerungRule, KORREKTUR_REGELN: batchKorrekturRegeln } = await getBookPrompts(bookId, userEmail);
+  const locale = getBookLocale(bookId, userEmail);
   try {
     updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     const pages = await bsGetAll('pages?book_id=' + bookId, userToken);

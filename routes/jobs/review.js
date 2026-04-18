@@ -17,7 +17,7 @@ const reviewRouter = express.Router();
 async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
   const { buildBookReviewSinglePassPrompt, buildChapterAnalysisPrompt, buildBookReviewMultiPassPrompt, SCHEMA_REVIEW, SCHEMA_CHAPTER_ANALYSIS } = await getPrompts();
-  const { SYSTEM_BUCHBEWERTUNG, SYSTEM_KAPITELANALYSE } = await getBookPrompts(bookId);
+  const { SYSTEM_BUCHBEWERTUNG, SYSTEM_KAPITELANALYSE } = await getBookPrompts(bookId, userEmail);
   try {
     updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     const [chaptersData, pages] = await Promise.all([

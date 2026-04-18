@@ -2,11 +2,12 @@ require('dotenv').config();
 const express = require('express');
 const helmet = require('helmet');
 const session = require('express-session');
+const SqliteStore = require('better-sqlite3-session-store')(session);
 const path = require('path');
 const logger = require('./logger');
 
 // DB-Setup + Migrationen laufen beim Import
-const { cleanupStuckJobRuns, upsertUserLogin } = require('./db/schema');
+const { db, cleanupStuckJobRuns, upsertUserLogin } = require('./db/schema');
 
 const authRouter = require('./routes/auth');
 const historyRouter = require('./routes/history');
@@ -35,6 +36,10 @@ app.use((req, _res, next) => {
 // ── Session ──────────────────────────────────────────────────────────────────
 const isHttps = (process.env.APP_URL || '').startsWith('https');
 app.use(session({
+  store: new SqliteStore({
+    client: db,
+    expired: { clear: true, intervalMs: 15 * 60 * 1000 }, // alle 15 min abgelaufene Sessions löschen
+  }),
   secret: process.env.SESSION_SECRET || 'bitte-session-secret-in-env-setzen',
   resave: false,
   saveUninitialized: false,

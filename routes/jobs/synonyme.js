@@ -10,10 +10,10 @@ const {
 
 const synonymeRouter = express.Router();
 
-async function runSynonymJob(jobId, wort, satz, bookId) {
+async function runSynonymJob(jobId, wort, satz, bookId, userEmail) {
   const logger = makeJobLogger(jobId);
   const { buildSynonymPrompt, SCHEMA_SYNONYM } = await getPrompts();
-  const { SYSTEM_SYNONYM } = await getBookPrompts(bookId);
+  const { SYSTEM_SYNONYM } = await getBookPrompts(bookId, userEmail);
   try {
     logger.info(`Start: Synonym für «${wort}» (book=${bookId || '-'})`);
     updateJob(jobId, { statusText: 'job.phase.searchingSynonyms', progress: 10 });
@@ -58,7 +58,7 @@ synonymeRouter.post('/synonym', jsonBody, (req, res) => {
   const label = 'job.label.synonymWord';
   const labelParams = { word: wort.trim() };
   const jobId = createJob('synonym', entityKey, userEmail, label, labelParams);
-  enqueueJob(jobId, () => runSynonymJob(jobId, wort.trim(), satz.trim(), book_id || null));
+  enqueueJob(jobId, () => runSynonymJob(jobId, wort.trim(), satz.trim(), book_id || null, userEmail));
   res.json({ jobId });
 });
 
