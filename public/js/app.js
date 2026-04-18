@@ -1239,6 +1239,13 @@ document.addEventListener('alpine:init', () => {
         this._syncUrlNow();
         this._applyingHash = false;
         this._setupHashRouting();
+        // Buchwechsel (Combobox, Hash-Nav oder programmatisch) → Seiten/Tree neu laden.
+        // _applyingHash unterdrückt Doppelladen während Hash-Anwendung.
+        this.$watch('selectedBookId', (newVal) => {
+          if (this._applyingHash) return;
+          if (!newVal) return;
+          this.loadPages();
+        });
         // Figurengraph/Soziogramm enthalten übersetzte Labels (Schicht, Beziehung, Figurentyp).
         // Bei Sprachwechsel neu rendern – der Hash in renderFigurGraph() berücksichtigt uiLocale.
         this.$watch('uiLocale', () => {

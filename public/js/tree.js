@@ -30,11 +30,9 @@ export const treeMethods = {
     }
   },
 
-  async loadPages(overrideBookId) {
-    if (overrideBookId !== undefined && overrideBookId !== null && overrideBookId !== '') {
-      this.selectedBookId = String(overrideBookId);
-    }
+  async loadPages() {
     const bookId = this.selectedBookId;
+    if (!bookId) return;
     // Laufenden Figuren-Job-Poll abbrechen (Buch könnte gewechselt haben).
     // checkPendingJobs am Ende reconnectet korrekt für das neue Buch.
     if (this._figuresPollTimer) { clearInterval(this._figuresPollTimer); this._figuresPollTimer = null; }
@@ -49,8 +47,8 @@ export const treeMethods = {
       this.pages = [];
       this._tokenEstGen++;
       const [chapters, pages] = await Promise.all([
-        this.bsGetAll('chapters?book_id=' + bookId),
-        this.bsGetAll('pages?book_id=' + bookId),
+        this.bsGetAll('chapters?filter[book_id]=' + bookId),
+        this.bsGetAll('pages?filter[book_id]=' + bookId),
       ]);
 
       // Buch wurde gewechselt während die Anfrage lief → veraltete Daten verwerfen.
