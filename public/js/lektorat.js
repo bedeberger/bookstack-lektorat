@@ -51,7 +51,7 @@ export const lektoratMethods = {
     this.selectedFindings = [];
     this.appliedOriginals = [];
     this.checkProgress = 0;
-    this.setStatus('Starte Lektorat…', true);
+    this.setStatus(this.t('lektorat.starting'), true);
 
     try {
       const { jobId } = await fetch('/jobs/check', {
@@ -69,7 +69,7 @@ export const lektoratMethods = {
     } catch (e) {
       console.error('[runCheck]', e);
       if (this.currentPage?.id !== pageIdAtStart) return;
-      this.analysisOut = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
+      this.analysisOut = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(e.message)}</span>`;
       this.setStatus('');
       this.checkLoading = false;
     }
@@ -90,14 +90,14 @@ export const lektoratMethods = {
       onNotFound: () => {
         if (this.currentPage?.id !== pageId) return;
         this.checkLoading = false;
-        this.analysisOut = '<span class="error-msg">Analyse unterbrochen (Server-Neustart). Bitte neu starten.</span>';
+        this.analysisOut = `<span class="error-msg">${escHtml(this.t('job.interrupted'))}</span>`;
         this.setStatus('');
       },
       onError: (job) => {
         if (this.currentPage?.id !== pageId) return;
         this.checkLoading = false;
         setTimeout(() => { this.checkProgress = 0; }, 400);
-        this.analysisOut = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
+        this.analysisOut = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(job.error)}</span>`;
         this.setStatus('');
       },
       onDone: async (job) => {
@@ -105,7 +105,7 @@ export const lektoratMethods = {
         this.checkLoading = false;
         setTimeout(() => { this.checkProgress = 0; }, 400);
         if (job.result?.empty) {
-          this.analysisOut = '<span class="muted-msg">Seite ist leer.</span>';
+          this.analysisOut = `<span class="muted-msg">${escHtml(this.t('job.pageEmpty'))}</span>`;
           this.setStatus('');
           return;
         }
@@ -127,9 +127,9 @@ export const lektoratMethods = {
         const szenen = r.szenen || [];
         if (szenen.length > 0) {
           const wertungBadge = w => {
-            if (w === 'stark')   return '<span class="badge badge-ok">stark</span>';
-            if (w === 'schwach') return '<span class="badge badge-err">schwach</span>';
-            return '<span class="badge badge-warn">mittel</span>';
+            if (w === 'stark')   return `<span class="badge badge-ok">${escHtml(this.t('szenen.rating.stark'))}</span>`;
+            if (w === 'schwach') return `<span class="badge badge-err">${escHtml(this.t('szenen.rating.schwach'))}</span>`;
+            return `<span class="badge badge-warn">${escHtml(this.t('szenen.rating.mittel'))}</span>`;
           };
           const rows = szenen.map(s =>
             `<div class="szene-item">
@@ -137,16 +137,16 @@ export const lektoratMethods = {
               ${s.kommentar ? `<div class="szene-kommentar">${escHtml(s.kommentar)}</div>` : ''}
             </div>`
           ).join('');
-          out += `<div class="stilbox"><div class="bewertung-section-title">Szenen</div>${rows}</div>`;
+          out += `<div class="stilbox"><div class="bewertung-section-title">${escHtml(this.t('lektorat.section.szenen'))}</div>${rows}</div>`;
         }
-        if (r.stilanalyse) out += `<div class="stilbox"><div class="bewertung-section-title">Stilanalyse</div>${escHtml(r.stilanalyse)}</div>`;
+        if (r.stilanalyse) out += `<div class="stilbox"><div class="bewertung-section-title">${escHtml(this.t('lektorat.section.stilanalyse'))}</div>${escHtml(r.stilanalyse)}</div>`;
         if (r.fazit) out += `<div class="fazit">${escHtml(r.fazit)}</div>`;
         this.analysisOut = out;
         this.checkDone = true;
         this.lastCheckId = r.checkId || null;
         this.activeHistoryEntryId = r.checkId || null;
         if (pageId != null) await this.loadPageHistory(pageId);
-        this.setStatus('Analyse abgeschlossen.', false, 5000);
+        this.setStatus(this.t('job.analyseDone'), false, 5000);
       },
     });
   },
@@ -191,7 +191,7 @@ export const lektoratMethods = {
         } catch (e) { console.error('[history saved]', e); }
       }
       this.saveApplying = null;
-      this.setStatus('✓ Korrekturen gespeichert.', false, 5000);
+      this.setStatus(this.t('lektorat.correctionsSaved'), false, 5000);
       this.correctedHtml = null;
       this.hasErrors = false;
       this.lektoratFindings = [];
@@ -208,16 +208,16 @@ export const lektoratMethods = {
     } catch (e) {
       console.error('[saveCorrections]', e);
       this.saveApplying = null;
-      this.setStatus('Fehler: ' + e.message);
+      this.setStatus(this.t('common.errorColon') + e.message);
     }
   },
 
   async batchCheck() {
     if (!this.pages.length) return;
-    if (!confirm(`Alle ${this.pages.length} Seiten prüfen und Ergebnisse in der History speichern?\n\nDies kann bei grossen Büchern mehrere Minuten dauern.`)) return;
+    if (!confirm(this.t('lektorat.batchConfirm', { n: this.pages.length }))) return;
     this.batchLoading = true;
     this.batchProgress = 0;
-    this.batchStatus = this._runningJobStatus('Starte…', 0, 0);
+    this.batchStatus = this._runningJobStatus(this.t('common.starting'), 0, 0);
     try {
       const { jobId } = await fetch('/jobs/batch-check', {
         method: 'POST',
@@ -228,7 +228,7 @@ export const lektoratMethods = {
       this.startBatchPoll(jobId);
     } catch (e) {
       console.error('[batchCheck]', e);
-      this.batchStatus = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
+      this.batchStatus = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(e.message)}</span>`;
       this.batchLoading = false;
     }
   },
@@ -245,19 +245,19 @@ export const lektoratMethods = {
       },
       onNotFound: () => {
         this.batchLoading = false;
-        this.batchStatus = 'Analyse unterbrochen (Server-Neustart). Bitte neu starten.';
+        this.batchStatus = this.t('job.interrupted');
       },
       onError: (job) => {
         this.batchLoading = false;
         setTimeout(() => { this.batchProgress = 0; }, 400);
-        this.batchStatus = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
+        this.batchStatus = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(job.error)}</span>`;
       },
       onDone: async (job) => {
         this.batchLoading = false;
         setTimeout(() => { this.batchProgress = 0; }, 400);
-        if (job.result?.empty) { this.batchStatus = 'Keine Seiten im Buch gefunden.'; return; }
+        if (job.result?.empty) { this.batchStatus = this.t('lektorat.batchNoPages'); return; }
         const r = job.result;
-        this.batchStatus = `Fertig: ${r.done}/${r.pageCount} Seiten geprüft, ${r.totalErrors} Beanstandungen.`;
+        this.batchStatus = this.t('lektorat.batchDone', { done: r.done, total: r.pageCount, errors: r.totalErrors });
         if (this.currentPage) await this.loadPageHistory(this.currentPage.id);
       },
     });

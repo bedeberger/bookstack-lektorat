@@ -16,27 +16,27 @@ export const reviewMethods = {
         <div class="stilbox" style="margin-bottom:14px;">${escHtml(r.zusammenfassung || '')}</div>`;
     if (r.struktur) html += `
         <div class="bewertung-section">
-          <div class="bewertung-section-title">Struktur &amp; Aufbau</div>
+          <div class="bewertung-section-title">${escHtml(this.t('review.section.struktur'))}</div>
           <p class="bewertung-section-text">${escHtml(r.struktur)}</p>
         </div>`;
     if (r.stil) html += `
         <div class="bewertung-section">
-          <div class="bewertung-section-title">Schreibstil</div>
+          <div class="bewertung-section-title">${escHtml(this.t('review.section.stil'))}</div>
           <p class="bewertung-section-text">${escHtml(r.stil)}</p>
         </div>`;
     if (r.staerken?.length) html += `
         <div class="bewertung-section">
-          <div class="bewertung-section-title">Stärken</div>
+          <div class="bewertung-section-title">${escHtml(this.t('review.strengths'))}</div>
           <ul class="bullet-list pos">${r.staerken.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
         </div>`;
     if (r.schwaechen?.length) html += `
         <div class="bewertung-section">
-          <div class="bewertung-section-title">Schwächen</div>
+          <div class="bewertung-section-title">${escHtml(this.t('review.weaknesses'))}</div>
           <ul class="bullet-list neg">${r.schwaechen.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
         </div>`;
     if (r.empfehlungen?.length) html += `
         <div class="bewertung-section">
-          <div class="bewertung-section-title">Empfehlungen</div>
+          <div class="bewertung-section-title">${escHtml(this.t('review.section.empfehlungen'))}</div>
           <ul class="bullet-list">${r.empfehlungen.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
         </div>`;
     if (r.fazit) html += `<div class="fazit" style="margin-top:16px;">${escHtml(r.fazit)}</div>`;
@@ -57,21 +57,21 @@ export const reviewMethods = {
       },
       onNotFound: () => {
         this.bookReviewLoading = false;
-        this.setReviewStatus('Analyse unterbrochen (Server-Neustart). Bitte neu starten.');
+        this.setReviewStatus(this.t('job.interrupted'));
       },
       onError: (job) => {
         this.bookReviewLoading = false;
-        this.bookReviewOut = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
+        this.bookReviewOut = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(job.error)}</span>`;
         this.setReviewStatus('');
       },
       onDone: async (job) => {
         this.bookReviewLoading = false;
-        if (job.result?.empty) { this.setReviewStatus('Keine Seiten im Buch gefunden.'); return; }
+        if (job.result?.empty) { this.setReviewStatus(this.t('review.noPages')); return; }
         const r = job.result?.review;
         if (r) {
           this.bookReviewOut = this._renderReviewHtml(r);
           setTimeout(() => { this.bookReviewProgress = 0; }, 400);
-          this.setReviewStatus(`${job.result.pageCount || '?'} Seiten analysiert.`);
+          this.setReviewStatus(this.t('review.pagesAnalyzed', { n: job.result.pageCount || '?' }));
           await this.loadBookReviewHistory(bookId);
         }
       },
@@ -92,7 +92,7 @@ export const reviewMethods = {
             this.bookReviewLoading = true;
             this.bookReviewProgress = 0;
             this.bookReviewOut = '';
-            this.setReviewStatus('Analyse läuft bereits…', true);
+            this.setReviewStatus(this.t('common.analysisAlreadyRunning'), true);
             this.startReviewPoll(jobId);
           }
         } catch (e) {
@@ -109,7 +109,7 @@ export const reviewMethods = {
     this.bookReviewProgress = 0;
     this.showBookReviewCard = true;
     this.bookReviewOut = '';
-    this.setReviewStatus('Starte Analyse…', true);
+    this.setReviewStatus(this.t('review.starting'), true);
     try {
       const { jobId } = await fetch('/jobs/review', {
         method: 'POST',
@@ -120,7 +120,7 @@ export const reviewMethods = {
       this.startReviewPoll(jobId);
     } catch (e) {
       console.error('[runBookReview]', e);
-      this.bookReviewOut = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
+      this.bookReviewOut = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(e.message)}</span>`;
       this.setReviewStatus('');
       this.bookReviewLoading = false;
     }

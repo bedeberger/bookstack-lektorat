@@ -1,9 +1,9 @@
 <!-- Seiten-Chat -->
 <div class="card" id="chat-card" x-show="showChatCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="'Chat: ' + (currentPage?.name || '–')"></span>
+    <span class="card-title" x-text="t('chat.title', { name: currentPage?.name || '–' })"></span>
     <div class="card-actions">
-      <button @click="startNewChatSession()" :disabled="chatLoading" title="Neues Gespräch starten">+ Neu</button>
+      <button @click="startNewChatSession()" :disabled="chatLoading" :title="t('chat.newSessionTitle')" x-text="t('chat.newSession')"></button>
     </div>
   </div>
 
@@ -13,9 +13,7 @@
   <div x-show="chatStatus" class="card-status" x-html="chatStatus"></div>
 
   <div id="chat-messages" class="chat-messages">
-    <div x-show="chatMessages.length === 0" class="chat-empty">
-      Starte das Gespräch mit einer Frage zur Seite &laquo;<span x-text="currentPage?.name"></span>&raquo;.
-    </div>
+    <div x-show="chatMessages.length === 0" class="chat-empty" x-text="t('chat.emptyPage', { name: currentPage?.name || '' })"></div>
 
     <template x-for="(msg, msgIdx) in chatMessages" :key="msgIdx">
       <div :class="'chat-msg chat-msg--' + msg.role">
@@ -31,14 +29,14 @@
             <template x-for="(v, vIdx) in msg.vorschlaege" :key="vIdx">
               <div class="chat-vorschlag" :class="v._applied ? 'chat-vorschlag--applied' : ''">
                 <div class="chat-vorschlag-header">
-                  <span class="chat-vorschlag-label">Vorschlag</span>
+                  <span class="chat-vorschlag-label" x-text="t('chat.suggestion')"></span>
                   <button
                     class="chat-vorschlag-btn"
                     @click="applyChatVorschlag(v, msgIdx, vIdx)"
                     :disabled="!!v._applied || !!v._applying || chatLoading"
                   >
                     <span x-show="v._applying" class="spinner"></span>
-                    <span x-text="v._applied ? '✓ Übernommen' : v._applying ? 'Speichert…' : 'Übernehmen'"></span>
+                    <span x-text="v._applied ? t('chat.applied') : v._applying ? t('common.saving') : t('chat.apply')"></span>
                   </button>
                 </div>
                 <div class="chat-vorschlag-diff">
@@ -65,7 +63,7 @@
     <textarea
       class="chat-input"
       x-model="chatInput"
-      placeholder="Frage oder Kommentar…"
+      :placeholder="t('chat.placeholder')"
       rows="2"
       :disabled="chatLoading"
       @keydown.enter="if(!$event.isComposing && $event.keyCode !== 229 && !$event.shiftKey && !$event.ctrlKey && !$event.metaKey) { $event.preventDefault(); sendChatMessage(); }"
@@ -75,19 +73,19 @@
       <span x-show="!chatLoading">↑</span>
     </button>
   </div>
-  <div class="chat-input-hint">Enter senden &nbsp;·&nbsp; Shift+Enter Zeilenumbruch</div>
+  <div class="chat-input-hint" x-text="t('chat.inputHint')"></div>
 
   <div x-show="chatSessions.length > 1" class="card-history-section">
-    <div class="chat-history-title">Frühere Gespräche</div>
+    <div class="chat-history-title" x-text="t('chat.history')"></div>
     <template x-for="s in chatSessions" :key="s.id">
       <div
         class="chat-session-item"
         :class="s.id === chatSessionId ? 'chat-session-item--active' : ''"
         @click="loadChatSession(s.id)"
       >
-        <div class="chat-session-preview" x-text="(s.preview || '(leer)').slice(0, 80)"></div>
+        <div class="chat-session-preview" x-text="(s.preview || t('chat.previewEmpty')).slice(0, 80)"></div>
         <div class="chat-session-meta" x-text="formatDate(s.last_message_at)"></div>
-        <button class="chat-session-delete btn-card-close" @click.stop="deleteChatSession(s.id)" title="Löschen">×</button>
+        <button class="chat-session-delete btn-card-close" @click.stop="deleteChatSession(s.id)" :title="t('common.delete')">×</button>
       </div>
     </template>
   </div>
@@ -96,9 +94,9 @@
 <!-- Buch-Chat -->
 <div class="card" id="book-chat-card" x-show="showBookChatCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="'Buch-Chat: ' + selectedBookName"></span>
+    <span class="card-title" x-text="t('chat.titleBook', { name: selectedBookName })"></span>
     <div class="card-actions">
-      <button @click="startNewBookChatSession()" :disabled="bookChatLoading" title="Neues Gespräch starten">+ Neu</button>
+      <button @click="startNewBookChatSession()" :disabled="bookChatLoading" :title="t('chat.newSessionTitle')" x-text="t('chat.newSession')"></button>
     </div>
   </div>
 
@@ -108,9 +106,7 @@
   <div x-show="bookChatStatus" class="card-status" x-html="bookChatStatus"></div>
 
   <div id="book-chat-messages" class="chat-messages">
-    <div x-show="bookChatMessages.length === 0" class="chat-empty">
-      Stelle eine Frage zum gesamten Buch &laquo;<span x-text="selectedBookName"></span>&raquo;. Relevante Seiten werden automatisch in den Kontext geladen.
-    </div>
+    <div x-show="bookChatMessages.length === 0" class="chat-empty" x-text="t('chat.emptyBook', { name: selectedBookName || '' })"></div>
 
     <template x-for="(msg, msgIdx) in bookChatMessages" :key="msgIdx">
       <div :class="'chat-msg chat-msg--' + msg.role">
@@ -121,7 +117,7 @@
           <template x-if="msg.role === 'assistant' && msg.context_info">
             <div x-data="{ expanded: false }"
                  class="chat-context-info">
-              <span class="chat-context-label">Kontext: </span>
+              <span class="chat-context-label" x-text="t('chat.contextLabel')"></span>
               <template x-for="(p, pi) in (expanded ? msg.context_info.pages : msg.context_info.pages.slice(0, 3))" :key="pi">
                 <span>
                   <template x-if="pi > 0"><span class="chat-context-sep">, </span></template>
@@ -137,13 +133,13 @@
                       @click.stop="expanded = !expanded"
                       x-text="expanded ? '▲' : '+' + (msg.context_info.pages.length - 3)"></button>
               <template x-if="msg.context_info.totalPages > msg.context_info.pages.length">
-                <span class="chat-context-total" x-text="' von ' + msg.context_info.totalPages + ' Seiten'"></span>
+                <span class="chat-context-total" x-text="t('chat.ofTotalPages', { n: msg.context_info.totalPages })"></span>
               </template>
               <template x-if="msg.context_info.figuren">
-                <span class="chat-context-badge">Figuren</span>
+                <span class="chat-context-badge" x-text="t('chat.ctxFiguren')"></span>
               </template>
               <template x-if="msg.context_info.review">
-                <span class="chat-context-badge">Buchbewertung</span>
+                <span class="chat-context-badge" x-text="t('chat.ctxReview')"></span>
               </template>
             </div>
           </template>
@@ -162,7 +158,7 @@
     <textarea
       class="chat-input"
       x-model="bookChatInput"
-      placeholder="Frage zum Buch…"
+      :placeholder="t('chat.placeholderBook')"
       rows="2"
       :disabled="bookChatLoading"
       @keydown.enter="if(!$event.isComposing && $event.keyCode !== 229 && !$event.shiftKey && !$event.ctrlKey && !$event.metaKey) { $event.preventDefault(); sendBookChatMessage(); }"
@@ -172,19 +168,19 @@
       <span x-show="!bookChatLoading">↑</span>
     </button>
   </div>
-  <div class="chat-input-hint">Enter senden &nbsp;·&nbsp; Shift+Enter Zeilenumbruch</div>
+  <div class="chat-input-hint" x-text="t('chat.inputHint')"></div>
 
   <div x-show="bookChatSessions.length > 1" class="card-history-section">
-    <div class="chat-history-title">Frühere Gespräche</div>
+    <div class="chat-history-title" x-text="t('chat.history')"></div>
     <template x-for="s in bookChatSessions" :key="s.id">
       <div
         class="chat-session-item"
         :class="s.id === bookChatSessionId ? 'chat-session-item--active' : ''"
         @click="loadBookChatSession(s.id)"
       >
-        <div class="chat-session-preview" x-text="(s.preview || '(leer)').slice(0, 80)"></div>
+        <div class="chat-session-preview" x-text="(s.preview || t('chat.previewEmpty')).slice(0, 80)"></div>
         <div class="chat-session-meta" x-text="formatDate(s.last_message_at)"></div>
-        <button class="chat-session-delete btn-card-close" @click.stop="deleteBookChatSession(s.id)" title="Löschen">×</button>
+        <button class="chat-session-delete btn-card-close" @click.stop="deleteBookChatSession(s.id)" :title="t('common.delete')">×</button>
       </div>
     </template>
   </div>

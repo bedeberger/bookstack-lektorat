@@ -165,10 +165,10 @@ export const synonymMethods = {
         this.synonymThesDisabled = !!d.disabled;
         this.synonymThesList = Array.isArray(d.synonyme) ? d.synonyme : [];
         if (!this.synonymThesDisabled && this.synonymThesList.length === 0) {
-          this.synonymThesError = 'Keine Treffer.';
+          this.synonymThesError = this.t('synonym.noMatches');
         }
       })
-      .catch(e => { this.synonymThesError = e.message || 'Fehler.'; })
+      .catch(e => { this.synonymThesError = e.message || this.t('synonym.error'); })
       .finally(() => {
         this.synonymThesLoading = false;
         this.$nextTick(() => this._positionSynonymUI());
@@ -181,7 +181,7 @@ export const synonymMethods = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wort, satz, book_id: bookId }),
       }).then(r => r.json());
-      if (!jobId) throw new Error(error || 'Job konnte nicht gestartet werden');
+      if (!jobId) throw new Error(error || this.t('synonym.jobFailed'));
       this._synonymJobId = jobId;
       this._startSynonymPoll(jobId);
     } catch (e) {
@@ -198,12 +198,12 @@ export const synonymMethods = {
       onProgress: () => { /* keine Progress-Anzeige, kurzer Call */ },
       onNotFound: () => {
         this.synonymKiLoading = false;
-        this.synonymKiError = 'Job nicht mehr verfügbar.';
+        this.synonymKiError = this.t('synonym.jobUnavailable');
         this._synonymJobId = null;
       },
       onError: (job) => {
         this.synonymKiLoading = false;
-        this.synonymKiError = job.error || 'Fehler bei der KI-Anfrage.';
+        this.synonymKiError = job.error || this.t('synonym.kiFailed');
         this._synonymJobId = null;
       },
       onDone: (job) => {
@@ -211,7 +211,7 @@ export const synonymMethods = {
         this._synonymJobId = null;
         this.synonymKiList = Array.isArray(job.result?.synonyme) ? job.result.synonyme : [];
         if (this.synonymKiList.length === 0) {
-          this.synonymKiError = 'Keine passenden Synonyme gefunden.';
+          this.synonymKiError = this.t('synonym.noneFound');
         }
         this.$nextTick(() => this._positionSynonymUI());
       },

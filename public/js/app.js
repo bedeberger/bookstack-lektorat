@@ -19,6 +19,7 @@ import { orteMethods } from './orte.js';
 import { kontinuitaetMethods } from './kontinuitaet.js';
 import { bookSettingsMethods } from './book-settings.js';
 import { userSettingsMethods } from './user-settings.js';
+import { configureI18n, i18nMethods, getSupportedLocales } from './i18n.js';
 import { pageViewMethods } from './page-view.js';
 import { editorEditMethods } from './editor-edit.js';
 import { focusMethods } from './editor-focus.js';
@@ -147,6 +148,7 @@ document.addEventListener('alpine:init', () => {
     devMode: false,
     sessionExpired: false,
     themePref: 'auto',
+    uiLocale: '',
     bookstackUrl: '',
     promptConfig: {},
     showTokenSetup: false,
@@ -1032,15 +1034,15 @@ document.addEventListener('alpine:init', () => {
 
     async clearChapterCache() {
       if (!this.selectedBookId) return;
-      if (!confirm('Delta-Cache für dieses Buch leeren?\n\nDie nächste Komplettanalyse extrahiert alle Kapitel neu – auch unveränderte. Das erhöht die KI-Kosten und Laufzeit.')) return;
+      if (!confirm(this.t('app.cacheClearConfirm'))) return;
       const res = await fetch(`/jobs/chapter-cache/${this.selectedBookId}`, { method: 'DELETE' });
       const { deleted } = await res.json();
-      alert(`Cache geleert: ${deleted} Kapitel-Einträge entfernt.`);
+      alert(this.t('app.cacheCleared', { n: deleted }));
     },
 
     async alleAktualisieren() {
       if (!this.selectedBookId || this.alleAktualisierenLoading) return;
-      if (!confirm('Komplettanalyse starten?\n\nFiguren, Soziogramm, Schauplätze, Szenen, Ereignisse und Zeitstrahl werden neu ermittelt. Bei grossen Büchern kann das mehrere Minuten dauern.')) return;
+      if (!confirm(this.t('komplett.confirm'))) return;
       this.alleAktualisierenLoading = true;
       this.alleAktualisierenProgress = 0;
       this.alleAktualisierenTokIn = 0;
@@ -1050,7 +1052,7 @@ document.addEventListener('alpine:init', () => {
       const bookId = this.selectedBookId;
       const bookName = this.selectedBookName;
       try {
-        this.alleAktualisierenStatus = 'Komplettanalyse gestartet…';
+        this.alleAktualisierenStatus = this.t('komplett.started');
         const { jobId } = await fetch('/jobs/komplett-analyse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1059,7 +1061,7 @@ document.addEventListener('alpine:init', () => {
         this._startKomplettPoll(jobId, bookId);
       } catch (e) {
         console.error('[alleAktualisieren]', e);
-        this.alleAktualisierenStatus = `Fehler: ${e.message}`;
+        this.alleAktualisierenStatus = `${this.t('common.errorColon')}${e.message}`;
         this.alleAktualisierenLoading = false;
       }
     },
@@ -1078,11 +1080,11 @@ document.addEventListener('alpine:init', () => {
         },
         onNotFound: () => {
           this.alleAktualisierenLoading = false;
-          this.alleAktualisierenStatus = 'Analyse unterbrochen (Server-Neustart).';
+          this.alleAktualisierenStatus = this.t('komplett.interrupted');
         },
         onError: (job) => {
           this.alleAktualisierenLoading = false;
-          this.alleAktualisierenStatus = `Fehler: ${job.error || 'Job fehlgeschlagen'}`;
+          this.alleAktualisierenStatus = `${this.t('common.errorColon')}${job.error || this.t('app.jobFailed')}`;
         },
         onDone: async () => {
           await Promise.all([
@@ -1094,8 +1096,9 @@ document.addEventListener('alpine:init', () => {
             this._reloadZeitstrahl(),
           ]);
           this.alleAktualisierenLoading = false;
-          this.alleAktualisierenStatus = 'Fertig.';
-          setTimeout(() => { if (this.alleAktualisierenStatus === 'Fertig.') this.alleAktualisierenStatus = ''; }, 4000);
+          const doneMsg = this.t('common.finished');
+          this.alleAktualisierenStatus = doneMsg;
+          setTimeout(() => { if (this.alleAktualisierenStatus === doneMsg) this.alleAktualisierenStatus = ''; }, 4000);
         },
       });
     },
@@ -1113,20 +1116,20 @@ document.addEventListener('alpine:init', () => {
     _komplettPhasen() {
       const p = this.alleAktualisierenProgress;
       const phases = [
-        { label: 'Seiten laden',          threshold: 12  },
-        { label: 'Vollextraktion',        threshold: 30  },
-        { label: 'Figuren konsolidieren', threshold: 43  },
-        { label: 'Orte konsolidieren',    threshold: 56  },
-        { label: 'Kap. Beziehungen',      threshold: 58  },
-        { label: 'Szenen + Ereignisse',   threshold: 83  },
-        { label: 'Zeitstrahl',            threshold: 89  },
-        { label: 'Kontinuität',           threshold: 97  },
+        { key: 'phase.loadPages',          threshold: 12  },
+        { key: 'phase.extract',            threshold: 30  },
+        { key: 'phase.figurenConsolidate', threshold: 43  },
+        { key: 'phase.orteConsolidate',    threshold: 56  },
+        { key: 'phase.chapterRelations',   threshold: 58  },
+        { key: 'phase.szenenEvents',       threshold: 83  },
+        { key: 'phase.timeline',           threshold: 89  },
+        { key: 'phase.continuity',         threshold: 97  },
       ];
       return phases.map((ph, i) => {
         const done = p >= ph.threshold;
         const prevThreshold = i === 0 ? 0 : phases[i - 1].threshold;
         const active = !done && p >= prevThreshold;
-        return { label: ph.label, done, active };
+        return { label: this.t(ph.key), done, active };
       });
     },
 
@@ -1175,7 +1178,7 @@ document.addEventListener('alpine:init', () => {
       }).catch(e => console.error('[theme] Persist fehlgeschlagen:', e));
     },
     _themeLabel() {
-      return { auto: 'Auto', light: 'Hell', dark: 'Dunkel' }[this.themePref] || 'Auto';
+      return this.t({ auto: 'theme.auto', light: 'theme.light', dark: 'theme.dark' }[this.themePref] || 'theme.auto');
     },
 
     // ── Initialisierung ──────────────────────────────────────────────────────
@@ -1188,9 +1191,16 @@ document.addEventListener('alpine:init', () => {
       window.addEventListener('beforeunload', (e) => {
         if (this.editMode && this.editDirty) { e.preventDefault(); e.returnValue = ''; }
       });
-      await this._loadPartials();
       try {
         const cfg = await fetch('/config').then(r => r.json());
+        const browserLoc = (navigator.language || 'de').slice(0, 2);
+        const preferred  = cfg.userSettings?.locale || browserLoc || 'de';
+        const supported  = getSupportedLocales();
+        const locale = supported.includes(preferred) ? preferred : 'de';
+        await configureI18n(locale);
+        this.uiLocale = locale;
+        document.documentElement.setAttribute('lang', locale);
+        await this._loadPartials();
         this.bookstackUrl = cfg.bookstackUrl || '';
         if (cfg.claudeModel) this.claudeModel = cfg.claudeModel;
         if (cfg.claudeMaxTokens) this.claudeMaxTokens = cfg.claudeMaxTokens;
@@ -1225,7 +1235,7 @@ document.addEventListener('alpine:init', () => {
         this._setupHashRouting();
         this._startJobQueuePoll();
       } catch {
-        this.setStatus('Fehler beim Laden der Konfiguration.');
+        this.setStatus(this.t('app.configLoadError'));
       }
     },
 
@@ -1282,7 +1292,7 @@ document.addEventListener('alpine:init', () => {
         return;
       }
       if (this.editMode && this.editDirty) {
-        if (!confirm('Ungespeicherte Bearbeitung verwerfen und Seite wechseln?')) return;
+        if (!confirm(this.t('app.switchPageConfirm'))) return;
       }
       // Buchkarten schliessen – nur eine Ebene (Buch oder Seite) aktiv
       this.showBookReviewCard = false;
@@ -1308,7 +1318,7 @@ document.addEventListener('alpine:init', () => {
           this.checkLoading = true;
           this.checkProgress = 0;
           this.analysisOut = '';
-          this.setStatus('Lektorat läuft…', true);
+          this.setStatus(this.t('app.lektoratRunning'), true);
           this.startCheckPoll(activeJobId);
           await this.loadPageHistory(p.id);
           return;
@@ -1369,7 +1379,7 @@ document.addEventListener('alpine:init', () => {
         this.bookReviewProgress = job.progress || 0;
         this.showBookReviewCard = true;
         this.bookReviewOut = '';
-        this.setReviewStatus(job.statusText || 'Analyse läuft…', true);
+        this.setReviewStatus(job.statusText || this.t('common.analysisRunning'), true);
         this.startReviewPoll(jobId);
       });
 
@@ -1377,7 +1387,7 @@ document.addEventListener('alpine:init', () => {
         this.figurenLoading = true;
         this.figurenProgress = job.progress || 0;
         this.showFiguresCard = true;
-        this.figurenStatus = job.statusText || 'Analyse läuft…';
+        this.figurenStatus = job.statusText || this.t('common.analysisRunning');
         this.startFiguresPoll(jobId);
       });
 
@@ -1400,7 +1410,7 @@ document.addEventListener('alpine:init', () => {
             this.alleAktualisierenTokIn = 0;
             this.alleAktualisierenTokOut = 0;
             this.alleAktualisierenTps = null;
-            this.alleAktualisierenStatus = statusText || 'Komplettanalyse läuft…';
+            this.alleAktualisierenStatus = statusText || this.t('komplett.running');
             this.showKomplettStatus = true;
             this._startKomplettPoll(jobId, bookId);
           }
@@ -1437,7 +1447,7 @@ document.addEventListener('alpine:init', () => {
           if (jobId) {
             this.batchLoading = true;
             this.batchProgress = 0;
-            this.batchStatus = this._runningJobStatus('Analyse läuft bereits…', 0, 0);
+            this.batchStatus = this._runningJobStatus(this.t('common.analysisAlreadyRunning'), 0, 0);
             this.startBatchPoll(jobId);
           }
         } catch (e) {
@@ -1571,7 +1581,7 @@ document.addEventListener('alpine:init', () => {
     async saveBookstackToken() {
       this.tokenSetupError = '';
       if (!this.tokenSetupId.trim() || !this.tokenSetupPw.trim()) {
-        this.tokenSetupError = 'Bitte Token ID und Token Secret eingeben.';
+        this.tokenSetupError = this.t('app.tokenRequired');
         return;
       }
       this.tokenSetupLoading = true;
@@ -1581,7 +1591,7 @@ document.addEventListener('alpine:init', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tokenId: this.tokenSetupId.trim(), tokenPw: this.tokenSetupPw.trim() }),
         });
-        if (!r.ok) throw new Error((await r.json()).error || 'Fehler beim Speichern');
+        if (!r.ok) throw new Error((await r.json()).error || this.t('common.saveFailed'));
         this.showTokenSetup = false;
         this.tokenSetupId = '';
         this.tokenSetupPw = '';
@@ -1611,6 +1621,7 @@ document.addEventListener('alpine:init', () => {
     ...kontinuitaetMethods,
     ...bookSettingsMethods,
     ...userSettingsMethods,
+    ...i18nMethods,
     ...pageViewMethods,
     ...editorEditMethods,
     ...focusMethods,

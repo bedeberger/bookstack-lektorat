@@ -42,34 +42,32 @@
       @keydown.meta.s.prevent.window="if (editMode) quickSave()">
 
 <div class="session-banner" x-show="sessionExpired" x-cloak>
-  <span class="session-banner-text">Sitzung abgelaufen – bitte neu anmelden. Nicht gespeicherte Änderungen im Editor gehen beim Neuladen verloren.</span>
-  <a class="session-banner-btn" :href="'/auth/login?returnTo=' + encodeURIComponent(location.pathname + location.search)">Neu anmelden</a>
+  <span class="session-banner-text" x-text="t('session.expired')"></span>
+  <a class="session-banner-btn" :href="'/auth/login?returnTo=' + encodeURIComponent(location.pathname + location.search)" x-text="t('session.relogin')"></a>
 </div>
 
-<h1 @click="resetView()" class="site-title" title="Ansicht zurücksetzen">
+<h1 @click="resetView()" class="site-title" :title="t('app.titleReset')">
   <img src="bookstack_lektorat_icon.svg" alt="" class="site-logo" width="64" height="64">
   BookStack Lektorat
 </h1>
-<div class="dev-banner" x-show="devMode" x-cloak>DEV-MODUS – lokale Session, kein OAuth</div>
+<div class="dev-banner" x-show="devMode" x-cloak x-text="t('dev.banner')"></div>
 <div class="site-header-row">
-  <p class="subtitle">KI-gestützte Rechtschreibprüfung &amp; Stilanalyse <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : apiProvider === 'llama' ? '· Llama: ' + llamaModel : '· Claude: ' + claudeModel"></span></p>
+  <p class="subtitle"><span x-text="t('app.subtitle')"></span> <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : apiProvider === 'llama' ? '· Llama: ' + llamaModel : '· Claude: ' + claudeModel"></span></p>
   <div class="user-info" x-show="currentUser">
     <span class="user-email" x-text="currentUser?.name || currentUser?.email"></span>
-    <div class="komplett-status-wrap" @click.outside="showKomplettStatus = false" @mouseenter="if (alleAktualisierenLoading) showKomplettStatus = true" :data-lastrun="(!alleAktualisierenLoading && alleAktualisierenLastRun) ? 'Stand: ' + alleAktualisierenLastRun : null">
-      <button class="job-stats-btn" @click="alleAktualisieren()" :disabled="alleAktualisierenLoading || !selectedBookId" title="Figuren, Soziogramm, Schauplätze, Szenenanalyse, Ereignisse und Zeitstrahl neu ermitteln">
+    <div class="komplett-status-wrap" @click.outside="showKomplettStatus = false" @mouseenter="if (alleAktualisierenLoading) showKomplettStatus = true" :data-lastrun="(!alleAktualisierenLoading && alleAktualisierenLastRun) ? t('common.asOf', { date: alleAktualisierenLastRun }) : null">
+      <button class="job-stats-btn" @click="alleAktualisieren()" :disabled="alleAktualisierenLoading || !selectedBookId" :title="t('header.updateAllTitle')">
         <span x-show="alleAktualisierenLoading" class="spinner"></span>
-        Alle aktualisieren
+        <span x-text="t('header.updateAll')"></span>
       </button>
-      <button class="cache-clear-btn" @click="clearChapterCache()" :disabled="alleAktualisierenLoading || !selectedBookId" title="Delta-Cache für dieses Buch leeren – nächste Analyse extrahiert alle Kapitel neu">
-        Cache leeren
-      </button>
+      <button class="cache-clear-btn" @click="clearChapterCache()" :disabled="alleAktualisierenLoading || !selectedBookId" :title="t('header.clearCacheTitle')" x-text="t('header.clearCache')"></button>
       <div class="komplett-status-panel" x-show="showKomplettStatus" x-cloak>
-        <div class="komplett-status-title">Komplettanalyse</div>
+        <div class="komplett-status-title" x-text="t('komplett.title')"></div>
         <div class="progress-bar-wrap komplett-progress-bar-wrap">
           <div class="progress-bar" :style="`width: ${alleAktualisierenProgress}%`"></div>
         </div>
         <div class="komplett-progress-label">
-          <span x-text="alleAktualisierenStatus || 'Abgeschlossen'"></span>
+          <span x-text="alleAktualisierenStatus || t('komplett.done')"></span>
           <span x-show="alleAktualisierenTokIn > 0 || alleAktualisierenTokOut > 0" class="komplett-tokens" x-text="`↑${_fmtTok(alleAktualisierenTokIn)} ↓${_fmtTok(alleAktualisierenTokOut)}${alleAktualisierenTps ? ' · ' + Math.round(alleAktualisierenTps) + ' tok/s' : ''}`"></span>
         </div>
         <ul class="komplett-phase-list">
@@ -83,19 +81,19 @@
       </div>
     </div>
     <div class="job-stats-wrap" @click.outside="showJobStats = false">
-      <button class="job-stats-btn" :class="{ 'job-stats-btn--active': showJobStats }" @click="toggleJobStats()" title="Job-Zeiten &amp; Token-Verbrauch">Zeiten</button>
+      <button class="job-stats-btn" :class="{ 'job-stats-btn--active': showJobStats }" @click="toggleJobStats()" :title="t('header.timesTitle')" x-text="t('header.times')"></button>
       <div class="job-stats-panel" x-show="showJobStats" x-cloak>
-        <div class="job-stats-title">Job-Statistiken</div>
-        <div x-show="!jobStats" class="job-stats-loading">Laden…</div>
-        <div x-show="jobStats && jobStats.length === 0" class="job-stats-empty">Noch keine Jobs gelaufen.</div>
+        <div class="job-stats-title" x-text="t('jobStats.title')"></div>
+        <div x-show="!jobStats" class="job-stats-loading" x-text="t('jobStats.loading')"></div>
+        <div x-show="jobStats && jobStats.length === 0" class="job-stats-empty" x-text="t('jobStats.empty')"></div>
         <table x-show="jobStats && jobStats.length > 0" class="job-stats-table">
           <thead>
             <tr>
-              <th>Typ</th>
-              <th title="Durchschnittliche Laufzeit (start bis ende)">Ø Dauer</th>
-              <th title="Durchschnittlicher KI-Tokenverbrauch (Eingabe + Ausgabe)">Ø Tokens</th>
-              <th>Letzter Lauf</th>
-              <th title="Erfolgreiche Läufe / Fehler">Läufe</th>
+              <th x-text="t('jobStats.col.type')"></th>
+              <th :title="t('jobStats.col.avgDurationTitle')" x-text="t('jobStats.col.avgDuration')"></th>
+              <th :title="t('jobStats.col.avgTokensTitle')" x-text="t('jobStats.col.avgTokens')"></th>
+              <th x-text="t('jobStats.col.lastRun')"></th>
+              <th :title="t('jobStats.col.runsTitle')" x-text="t('jobStats.col.runs')"></th>
             </tr>
           </thead>
           <tbody>
@@ -115,46 +113,46 @@
         </table>
       </div>
     </div>
-    <button class="theme-toggle" @click="cycleTheme()" :title="'Design wechseln (aktuell: ' + _themeLabel() + ')'" x-text="_themeLabel()"></button>
-    <button class="theme-toggle" :class="{ 'theme-toggle--active': showUserSettingsCard }" @click="toggleUserSettingsCard()" title="Profil &amp; Einstellungen">Profil</button>
-    <a href="/auth/logout" class="logout-link">Abmelden</a>
+    <button class="theme-toggle" @click="cycleTheme()" :title="t('theme.cycleTitle', { label: _themeLabel() })" x-text="_themeLabel()"></button>
+    <button class="theme-toggle" :class="{ 'theme-toggle--active': showUserSettingsCard }" @click="toggleUserSettingsCard()" :title="t('header.profileTitle')" x-text="t('header.profile')"></button>
+    <a href="/auth/logout" class="logout-link" x-text="t('header.logout')"></a>
   </div>
 </div>
 
 <!-- BookStack Token Setup -->
 <div class="card token-setup-card" x-show="showTokenSetup" x-cloak>
   <div class="card-header">
-    <span class="card-title">BookStack API-Token einrichten</span>
+    <span class="card-title" x-text="t('tokenSetup.title')"></span>
   </div>
   <p class="token-setup-desc">
-    Erstelle einen persönlichen API-Token in BookStack und trage ihn hier ein.<br>
-    <a :href="bookstackUrl + '/my-account/api-tokens'" target="_blank" x-show="bookstackUrl">
-      BookStack öffnen → Profil → API-Tokens
-    </a>
-    <span x-show="!bookstackUrl">BookStack → Profil → API-Tokens</span>
+    <span x-text="t('tokenSetup.desc')"></span><br>
+    <a :href="bookstackUrl + '/my-account/api-tokens'" target="_blank" x-show="bookstackUrl" x-text="t('tokenSetup.openLink')"></a>
+    <span x-show="!bookstackUrl" x-text="t('tokenSetup.fallbackText')"></span>
   </p>
   <div class="token-setup-fields">
-    <label>Token ID
-      <input type="text" x-model="tokenSetupId" placeholder="Token ID" autocomplete="off" spellcheck="false">
+    <label>
+      <span x-text="t('tokenSetup.tokenId')"></span>
+      <input type="text" x-model="tokenSetupId" :placeholder="t('tokenSetup.tokenId')" autocomplete="off" spellcheck="false">
     </label>
-    <label>Token Secret
-      <input type="password" x-model="tokenSetupPw" placeholder="Token Secret" autocomplete="off">
+    <label>
+      <span x-text="t('tokenSetup.tokenSecret')"></span>
+      <input type="password" x-model="tokenSetupPw" :placeholder="t('tokenSetup.tokenSecret')" autocomplete="off">
     </label>
   </div>
   <p class="token-setup-error" x-show="tokenSetupError" x-text="tokenSetupError"></p>
   <div class="row">
     <button @click="saveBookstackToken()" :disabled="tokenSetupLoading">
       <span x-show="tokenSetupLoading" class="spinner"></span>
-      <span x-text="tokenSetupLoading ? 'Speichert…' : 'Speichern'"></span>
+      <span x-text="tokenSetupLoading ? t('common.saving') : t('common.save')"></span>
     </button>
   </div>
 </div>
 
 <!-- Bücherliste & Seitenauswahl -->
 <div class="card" x-show="showBookCard" x-cloak>
-  <label>Buch</label>
+  <label x-text="t('book.label')"></label>
   <div class="row book-selector-row">
-    <div x-data="combobox('Buch wählen…')"
+    <div x-data="combobox(t('book.chooseBook'))"
          x-modelable="value" x-model="selectedBookId"
          x-effect="options = books.map(b => ({value: String(b.id), label: b.name}))"
          @combobox-change="bookReviewHistory = []; selectedBookReviewId = null; loadPages();"
@@ -162,46 +160,46 @@
          @keydown="onKeydown($event)"
          class="combobox-wrap">
     </div>
-    <a :href="selectedBookUrl || '#'" target="_blank" rel="noopener" class="btn-bookstack-link" :class="{ 'btn-bookstack-link--hidden': !selectedBookUrl }" :tabindex="selectedBookUrl ? 0 : -1" :aria-hidden="!selectedBookUrl" title="Buch in BookStack öffnen">BookStack</a>
+    <a :href="selectedBookUrl || '#'" target="_blank" rel="noopener" class="btn-bookstack-link" :class="{ 'btn-bookstack-link--hidden': !selectedBookUrl }" :tabindex="selectedBookUrl ? 0 : -1" :aria-hidden="!selectedBookUrl" :title="t('book.openInBookstack')" x-text="t('book.bookstack')"></a>
   </div>
 
   <!-- Feature-Tiles: Buchanalyse -->
   <div class="feature-tiles">
     <button class="feature-tile" :class="{ 'feature-tile--active': showBookReviewCard }" @click="toggleBookReviewCard()">
-      <span class="feature-tile-title">Bewertung</span>
-      <span class="feature-tile-desc">Note &amp; Analyse</span>
+      <span class="feature-tile-title" x-text="t('tile.review')"></span>
+      <span class="feature-tile-desc" x-text="t('tile.review.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showFiguresCard }" @click="toggleFiguresCard()" title="Figurenübersicht anzeigen">
-      <span class="feature-tile-title">Figuren</span>
-      <span class="feature-tile-desc">Charakterkarte</span>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showFiguresCard }" @click="toggleFiguresCard()" :title="t('tile.figuren.title')">
+      <span class="feature-tile-title" x-text="t('tile.figuren')"></span>
+      <span class="feature-tile-desc" x-text="t('tile.figuren.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showSzenenCard }" @click="toggleSzenenCard()" title="Szenenanalyse anzeigen">
-      <span class="feature-tile-title">Szenen</span>
-      <span class="feature-tile-desc">Szenenanalyse</span>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showSzenenCard }" @click="toggleSzenenCard()" :title="t('tile.szenen.title')">
+      <span class="feature-tile-title" x-text="t('tile.szenen')"></span>
+      <span class="feature-tile-desc" x-text="t('tile.szenen.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showBookStatsCard }" @click="toggleBookStatsCard()" title="Buchentwicklung anzeigen">
-      <span class="feature-tile-title">Entwicklung</span>
-      <span class="feature-tile-desc">Zeitverlauf</span>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showBookStatsCard }" @click="toggleBookStatsCard()" :title="t('tile.stats.title')">
+      <span class="feature-tile-title" x-text="t('tile.stats')"></span>
+      <span class="feature-tile-desc" x-text="t('tile.stats.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showBookChatCard }" @click="toggleBookChatCard()" :disabled="!pages.length || bookChatLoading" title="Chat mit dem gesamten Buch">
-      <span class="feature-tile-title">Buch-Chat</span>
-      <span class="feature-tile-desc">Fragen &amp; Antworten</span>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showBookChatCard }" @click="toggleBookChatCard()" :disabled="!pages.length" :title="t('tile.bookchat.title')">
+      <span class="feature-tile-title" x-text="t('tile.bookchat')"></span>
+      <span class="feature-tile-desc" x-text="t('tile.bookchat.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showEreignisseCard }" @click="toggleEreignisseCard()" title="Globale Zeitleiste anzeigen">
-      <span class="feature-tile-title">Ereignisse</span>
-      <span class="feature-tile-desc">Globale Zeitleiste</span>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showEreignisseCard }" @click="toggleEreignisseCard()" :title="t('tile.events.title')">
+      <span class="feature-tile-title" x-text="t('tile.events')"></span>
+      <span class="feature-tile-desc" x-text="t('tile.events.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showOrteCard }" @click="toggleOrteCard()" title="Schauplätze und Orte des Buchs">
-      <span class="feature-tile-title">Schauplätze</span>
-      <span class="feature-tile-desc">Orte &amp; Atmosphäre</span>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showOrteCard }" @click="toggleOrteCard()" :title="t('tile.orte.title')">
+      <span class="feature-tile-title" x-text="t('tile.orte')"></span>
+      <span class="feature-tile-desc" x-text="t('tile.orte.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showKontinuitaetCard }" @click="toggleKontinuitaetCard()" title="Kontinuitätsprüfung: Widersprüche im Buch finden">
-      <span class="feature-tile-title">Kontinuität</span>
-      <span class="feature-tile-desc">Widersprüche prüfen</span>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showKontinuitaetCard }" @click="toggleKontinuitaetCard()" :title="t('tile.kontinuitaet.title')">
+      <span class="feature-tile-title" x-text="t('tile.kontinuitaet')"></span>
+      <span class="feature-tile-desc" x-text="t('tile.kontinuitaet.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showBookSettingsCard }" @click="toggleBookSettingsCard()" title="Sprache und Region für dieses Buch konfigurieren">
-      <span class="feature-tile-title">Einstellungen</span>
-      <span class="feature-tile-desc">Sprache &amp; Region</span>
+    <button class="feature-tile" :class="{ 'feature-tile--active': showBookSettingsCard }" @click="toggleBookSettingsCard()" :title="t('tile.bookSettings.title')">
+      <span class="feature-tile-title" x-text="t('tile.bookSettings')"></span>
+      <span class="feature-tile-desc" x-text="t('tile.bookSettings.desc')"></span>
     </button>
   </div>
 
@@ -213,19 +211,19 @@
 <!-- Seitenbaum -->
 <div class="card">
   <div class="card-header">
-    <span class="card-title" x-text="'Seiten: ' + selectedBookName"></span>
+    <span class="card-title" x-text="t('sidebar.pagesOf', { name: selectedBookName })"></span>
     <div class="card-actions">
-      <button @click="loadPages()">Seiten laden</button>
-      <button @click="batchCheck()" :disabled="!pages.length" title="Alle Seiten sequenziell prüfen und in History speichern">Alle prüfen</button>
+      <button @click="loadPages()" x-text="t('sidebar.loadPages')"></button>
+      <button @click="batchCheck()" :disabled="!pages.length" :title="t('sidebar.checkAllTitle')" x-text="t('sidebar.checkAll')"></button>
     </div>
   </div>
   <!-- Suche -->
   <div class="search-wrap">
-    <input type="text" x-model="pageSearch" placeholder="Seite suchen…" class="page-search">
+    <input type="text" x-model="pageSearch" :placeholder="t('sidebar.searchPage')" class="page-search">
   </div>
   <div x-show="!pageSearch" class="btn-group">
-    <button @click="tree.forEach(c => c.open = true)" class="btn-sm">Alle ausklappen</button>
-    <button @click="tree.forEach(c => c.open = false)" class="btn-sm">Alle einklappen</button>
+    <button @click="tree.forEach(c => c.open = true)" class="btn-sm" x-text="t('sidebar.expandAll')"></button>
+    <button @click="tree.forEach(c => c.open = false)" class="btn-sm" x-text="t('sidebar.collapseAll')"></button>
     <span x-show="Object.keys(tokEsts).length > 0" class="tok-totals">
       <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.tok,0).toLocaleString('de-CH') + ' T'"></span>
       <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.words,0).toLocaleString('de-CH') + ' W'"></span>
@@ -247,7 +245,7 @@
             <span class="tree-chevron" :class="{ open: item.open }" x-show="item.pages.length > 0">›</span>
             <span x-text="item.name"></span>
             <span class="tree-chapter-meta">
-              <span class="tag" x-show="item.pages.length > 1" x-text="item.pages.length + ' Seiten'"></span>
+              <span class="tag" x-show="item.pages.length > 1" x-text="t('sidebar.pagesCount', { n: item.pages.length })"></span>
               <template x-if="item.pages.length > 1 && chapterStats(item)">
                 <span class="tok-badge tok-neutral"
                   x-text="(() => { const s = chapterStats(item); return s.chars >= 1000 ? '~' + Math.round(s.chars/1000) + 'k Z' : s.chars + ' Z'; })()"
@@ -270,7 +268,7 @@
                     </span>
                   </template>
                   <template x-if="tokEsts[page.id] && tokEsts[page.id].words === 0">
-                    <span class="tok-badge tok-empty">leer</span>
+                    <span class="tok-badge tok-empty" x-text="t('sidebar.empty')"></span>
                   </template>
                 </span>
               </div>
@@ -298,7 +296,7 @@
       </template>
     </div>
   </template>
-  <div x-show="filteredTree.length === 0 && pageSearch" class="muted-msg muted-msg--sm">Keine Seiten gefunden.</div>
+  <div x-show="filteredTree.length === 0 && pageSearch" class="muted-msg muted-msg--sm" x-text="t('sidebar.noPagesFound')"></div>
 </div>
 
 </div><!-- end layout-sidebar -->
@@ -327,21 +325,21 @@
      :style="`left:${tokLegendPos.x}px; top:${tokLegendPos.y - 8}px`"
      class="tok-tooltip"
      @mouseleave="showTokLegend=false; tokTooltipData=null">
-  <div class="tok-tt-row" x-text="tokTooltipData ? ((tokTooltipData.words >= 1000 ? '~' + Math.round(tokTooltipData.words/1000) + 'k' : tokTooltipData.words) + ' Wörter') : ''"></div>
-  <div class="tok-tt-row" x-show="tokTooltipData && !tokTooltipData._chapterOnly" x-text="tokTooltipData ? ('~' + (tokTooltipData.tok >= 1000 ? Math.round(tokTooltipData.tok/1000) + 'k' : tokTooltipData.tok) + ' Tokens') : ''"></div>
+  <div class="tok-tt-row" x-text="tokTooltipData ? t('tok.words', { n: (tokTooltipData.words >= 1000 ? '~' + Math.round(tokTooltipData.words/1000) + 'k' : tokTooltipData.words) }) : ''"></div>
+  <div class="tok-tt-row" x-show="tokTooltipData && !tokTooltipData._chapterOnly" x-text="tokTooltipData ? t('tok.tokens', { n: (tokTooltipData.tok >= 1000 ? Math.round(tokTooltipData.tok/1000) + 'k' : tokTooltipData.tok) }) : ''"></div>
 </div>
 
 <!-- Job-Queue Footer -->
 <div class="job-queue-bar" x-show="jobQueueItems.length > 0" x-cloak>
-  <span class="job-queue-label">Jobs:</span>
+  <span class="job-queue-label" x-text="t('jobQueue.label')"></span>
   <template x-for="job in jobQueueItems" :key="job.id">
-    <div class="job-queue-pill" :class="'job-queue-pill--' + job.status" @click="navigateToJob(job)" title="Zum Feature">
+    <div class="job-queue-pill" :class="'job-queue-pill--' + job.status" @click="navigateToJob(job)" :title="t('jobQueue.jumpTo')">
       <span class="job-queue-pill-label" x-text="job.label"></span>
       <span class="job-queue-pill-status" x-text="job.statusText"></span>
       <template x-if="job.status === 'running' && job.progress > 0">
         <span class="job-queue-pill-progress" x-text="job.progress + '%'"></span>
       </template>
-      <button class="job-queue-cancel-btn" @click.stop="cancelJob(job.id)" title="Abbrechen">&#x2715;</button>
+      <button class="job-queue-cancel-btn" @click.stop="cancelJob(job.id)" :title="t('jobQueue.cancel')">&#x2715;</button>
     </div>
   </template>
 </div>

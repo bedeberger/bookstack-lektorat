@@ -796,6 +796,7 @@ select:focus {
   gap: 6px;
 }
 .combobox-trigger:hover { background: var(--color-hover); }
+.combobox-trigger:active { transform: none; }
 .combobox-trigger:focus { outline: none; border-color: var(--color-border-focus); }
 .combobox-wrap:has(.combobox-dropdown[style*="display"]:not([style*="display: none"])) .combobox-trigger,
 .combobox-trigger:focus-within { border-color: var(--color-border-focus); }
@@ -809,7 +810,6 @@ select:focus {
 .combobox-chevron {
   flex-shrink: 0;
   opacity: 0.5;
-  transition: transform 0.15s ease;
 }
 .combobox-chevron--open { transform: rotate(180deg); }
 .combobox-dropdown {
@@ -2944,7 +2944,6 @@ body.focus-mode .page-content-view--editing .focus-paragraph-active {
   gap: 6px;
   flex-wrap: wrap;
   align-items: center;
-  margin-left: auto;
 }
 
 .card-actions button {

@@ -1,8 +1,8 @@
 <!-- Kontinuitätsprüfung -->
 <div class="card" x-show="showKontinuitaetCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="'Kontinuität: ' + selectedBookName"></span>
-    <span x-show="alleAktualisierenLastRun && !kontinuitaetLoading" class="figuren-updated-at" x-text="'Stand: ' + alleAktualisierenLastRun"></span>
+    <span class="card-title" x-text="t('kontinuitaet.title', { name: selectedBookName })"></span>
+    <span x-show="alleAktualisierenLastRun && !kontinuitaetLoading" class="figuren-updated-at" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
   </div>
 
   <div x-show="kontinuitaetProgress > 0" class="progress-bar-wrap">
@@ -10,19 +10,17 @@
   </div>
   <div x-show="kontinuitaetStatus" class="card-status" x-html="kontinuitaetStatus"></div>
 
-  <div x-show="!kontinuitaetResult && !kontinuitaetLoading && !kontinuitaetStatus" class="card-status">
-    Noch keine Daten vorhanden. Bitte auf «Alle aktualisieren» klicken.
-  </div>
+  <div x-show="!kontinuitaetResult && !kontinuitaetLoading && !kontinuitaetStatus" class="card-status" x-text="t('common.noDataYet')"></div>
 
   <!-- Filter-Leiste (ausserhalb x-if, damit Alpine x-effect die Parent-Reaktivität korrekt trackt) -->
   <div x-show="kontinuitaetResult?.issues?.length > 0" class="filter-bar">
-    <div x-data="combobox('Figur…', 'Alle Figuren')"
+    <div x-data="combobox(t('filter.figur'), t('filter.allFiguren'))"
          x-modelable="value" x-model="kontinuitaetFilterFigurId"
          x-effect="options = figuren.filter(f => (kontinuitaetResult?.issues||[]).some(i => i.fig_ids?.length ? i.fig_ids.includes(f.id) : (i.figuren||[]).includes(f.name))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
-    <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
+    <div x-data="combobox(t('filter.chapter'), t('filter.allChapters'))"
          x-modelable="value" x-model="kontinuitaetFilterKapitel"
          x-effect="options = kontinuitaetKapitelListe().map(k => ({value: k, label: k}))"
          @click.outside="close()" @keydown="onKeydown($event)"
@@ -39,19 +37,15 @@
       <div class="kontinuitaet-summary" x-text="kontinuitaetResult.summary"></div>
 
       <!-- Keine Probleme -->
-      <div x-show="kontinuitaetResult.issues?.length === 0" class="kontinuitaet-ok">
-        Keine Kontinuitätsprobleme gefunden.
-      </div>
+      <div x-show="kontinuitaetResult.issues?.length === 0" class="kontinuitaet-ok" x-text="t('kontinuitaet.noIssues')"></div>
       <!-- Alle weggefiltert -->
-      <div x-show="kontinuitaetResult.issues?.length > 0 && kontinuitaetIssuesFiltered.length === 0" class="kontinuitaet-ok">
-        Keine Probleme für den gewählten Filter.
-      </div>
+      <div x-show="kontinuitaetResult.issues?.length > 0 && kontinuitaetIssuesFiltered.length === 0" class="kontinuitaet-ok" x-text="t('kontinuitaet.noMatch')"></div>
 
       <!-- Probleme nach Schwere -->
       <template x-for="[severity, issues] in Object.entries(kontinuitaetIssuesBySwere()).filter(([,v]) => v.length > 0)" :key="severity">
         <div>
           <div class="kontinuitaet-group-header" :class="'kontinuitaet-group-header--' + severity">
-            <span x-text="severity.charAt(0).toUpperCase() + severity.slice(1)"></span> (<span x-text="issues.length"></span>)
+            <span x-text="t('kontinuitaet.severity.' + severity)"></span> (<span x-text="issues.length"></span>)
           </div>
           <template x-for="(issue, i) in issues" :key="severity + i">
             <div class="kontinuitaet-issue" :class="'kontinuitaet-issue--' + severity">
@@ -59,7 +53,7 @@
                 <span class="tag kontinuitaet-typ-tag" x-text="issue.typ"></span>
                 <span class="kontinuitaet-stellen">
                   <template x-if="kontinuitaetResolveStelle(issue.stelle_a, issue, 'a')">
-                    <span class="internal-link" :title="'Zur Stelle springen: ' + kontinuitaetResolveStelle(issue.stelle_a, issue, 'a').name"
+                    <span class="internal-link" :title="t('kontinuitaet.gotoTitle', { name: kontinuitaetResolveStelle(issue.stelle_a, issue, 'a').name })"
                           @click="kontinuitaetGotoStelle(issue.stelle_a, issue, 'a')" x-text="issue.stelle_a"></span>
                   </template>
                   <template x-if="!kontinuitaetResolveStelle(issue.stelle_a, issue, 'a')">
@@ -67,7 +61,7 @@
                   </template>
                   <span class="kontinuitaet-arrow">↔</span>
                   <template x-if="kontinuitaetResolveStelle(issue.stelle_b, issue, 'b')">
-                    <span class="internal-link" :title="'Zur Stelle springen: ' + kontinuitaetResolveStelle(issue.stelle_b, issue, 'b').name"
+                    <span class="internal-link" :title="t('kontinuitaet.gotoTitle', { name: kontinuitaetResolveStelle(issue.stelle_b, issue, 'b').name })"
                           @click="kontinuitaetGotoStelle(issue.stelle_b, issue, 'b')" x-text="issue.stelle_b"></span>
                   </template>
                   <template x-if="!kontinuitaetResolveStelle(issue.stelle_b, issue, 'b')">

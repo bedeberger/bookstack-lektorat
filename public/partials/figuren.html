@@ -1,8 +1,8 @@
 <!-- Figurenübersicht -->
 <div class="card" x-show="showFiguresCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="'Figuren: ' + selectedBookName"></span>
-    <span x-show="alleAktualisierenLastRun && !figurenLoading" class="figuren-updated-at" x-text="'Stand: ' + alleAktualisierenLastRun"></span>
+    <span class="card-title" x-text="t('figuren.title', { name: selectedBookName })"></span>
+    <span x-show="alleAktualisierenLastRun && !figurenLoading" class="figuren-updated-at" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
   </div>
 
   <!-- Fortschritt -->
@@ -12,37 +12,35 @@
   <div x-show="figurenStatus" class="card-status" x-html="figurenStatus"></div>
 
   <!-- Leer-Hinweis -->
-  <div x-show="figuren.length === 0 && !figurenLoading && !figurenStatus" class="card-status">
-    Noch keine Daten vorhanden. Bitte auf «Alle aktualisieren» klicken.
-  </div>
+  <div x-show="figuren.length === 0 && !figurenLoading && !figurenStatus" class="card-status" x-text="t('common.noDataYet')"></div>
 
   <!-- Graph -->
   <div x-show="figuren.length > 0" class="figur-graph-section">
 
     <!-- Modus-Toggle -->
     <div class="figur-modus-toggle">
-      <button class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'figur' }" @click="figurenGraphModus !== 'figur' && toggleFigurenGraphModus()">Figurengraph</button>
-      <button class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'soziogramm' }" @click="figurenGraphModus !== 'soziogramm' && toggleFigurenGraphModus()">Soziogramm</button>
+      <button class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'figur' }" @click="figurenGraphModus !== 'figur' && toggleFigurenGraphModus()" x-text="t('figuren.modeGraph')"></button>
+      <button class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'soziogramm' }" @click="figurenGraphModus !== 'soziogramm' && toggleFigurenGraphModus()" x-text="t('figuren.modeSoziogramm')"></button>
     </div>
 
     <!-- Legende Figurengraph -->
     <template x-if="figurenGraphModus === 'figur'">
       <div>
         <div class="figur-legend">
-          <span class="figur-legend-dot figur-legend-dot--hauptfigur"></span>Hauptfigur
-          <span class="figur-legend-dot figur-legend-dot--antagonist"></span>Antagonist
-          <span class="figur-legend-dot figur-legend-dot--mentor"></span>Mentor
-          <span class="figur-legend-dot figur-legend-dot--nebenfigur"></span>Nebenfigur
-          <span class="figur-legend-dot figur-legend-dot--andere"></span>Andere
+          <span class="figur-legend-dot figur-legend-dot--hauptfigur"></span><span x-text="t('figuren.type.hauptfigur')"></span>
+          <span class="figur-legend-dot figur-legend-dot--antagonist"></span><span x-text="t('figuren.type.antagonist')"></span>
+          <span class="figur-legend-dot figur-legend-dot--mentor"></span><span x-text="t('figuren.type.mentor')"></span>
+          <span class="figur-legend-dot figur-legend-dot--nebenfigur"></span><span x-text="t('figuren.type.nebenfigur')"></span>
+          <span class="figur-legend-dot figur-legend-dot--andere"></span><span x-text="t('figuren.type.andere')"></span>
         </div>
         <div class="figur-legend figur-legend--edges">
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--eltern"></span>Eltern</span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschwister"></span>Geschwister</span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--freund"></span>Freund</span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--feind"></span>Feind</span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--liebesbeziehung"></span>Liebesbeziehung</span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--patronage"></span>Patronage</span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschaeft"></span>Geschäft</span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--eltern"></span><span x-text="t('figuren.edge.eltern')"></span></span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschwister"></span><span x-text="t('figuren.edge.geschwister')"></span></span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--freund"></span><span x-text="t('figuren.edge.freund')"></span></span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--feind"></span><span x-text="t('figuren.edge.feind')"></span></span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--liebesbeziehung"></span><span x-text="t('figuren.edge.liebesbeziehung')"></span></span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--patronage"></span><span x-text="t('figuren.edge.patronage')"></span></span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschaeft"></span><span x-text="t('figuren.edge.geschaeft')"></span></span>
         </div>
       </div>
     </template>
@@ -51,17 +49,15 @@
     <template x-if="figurenGraphModus === 'soziogramm'">
       <div>
         <div class="figur-legend figur-legend--soziogramm">
-          <span class="figur-legend-dot figur-legend-dot--wirtschaftselite"></span>Wirtschaftselite
-          <span class="figur-legend-dot figur-legend-dot--gehobenes_buergertum"></span>Geh. Bürgertum
-          <span class="figur-legend-dot figur-legend-dot--mittelschicht"></span>Mittelschicht
-          <span class="figur-legend-dot figur-legend-dot--arbeiterschicht"></span>Arbeiterschicht
-          <span class="figur-legend-dot figur-legend-dot--migrantenmilieu"></span>Migrantenmilieu
-          <span class="figur-legend-dot figur-legend-dot--prekariat"></span>Prekariat
-          <span class="figur-legend-dot figur-legend-dot--unterwelt"></span>Unterwelt
+          <span class="figur-legend-dot figur-legend-dot--wirtschaftselite"></span><span x-text="t('figuren.schicht.wirtschaftselite')"></span>
+          <span class="figur-legend-dot figur-legend-dot--gehobenes_buergertum"></span><span x-text="t('figuren.schicht.gehobenes_buergertum')"></span>
+          <span class="figur-legend-dot figur-legend-dot--mittelschicht"></span><span x-text="t('figuren.schicht.mittelschicht')"></span>
+          <span class="figur-legend-dot figur-legend-dot--arbeiterschicht"></span><span x-text="t('figuren.schicht.arbeiterschicht')"></span>
+          <span class="figur-legend-dot figur-legend-dot--migrantenmilieu"></span><span x-text="t('figuren.schicht.migrantenmilieu')"></span>
+          <span class="figur-legend-dot figur-legend-dot--prekariat"></span><span x-text="t('figuren.schicht.prekariat')"></span>
+          <span class="figur-legend-dot figur-legend-dot--unterwelt"></span><span x-text="t('figuren.schicht.unterwelt')"></span>
         </div>
-        <div class="figur-soziogramm-hint">
-          Pfeilstärke = Machtasymmetrie · Knotenzeilen = Gesellschaftsschicht · Pfeilrichtung = Mächtiger → Schwächerer · Innerhalb der Schicht: Mächtige oben, Untergebene unten
-        </div>
+        <div class="figur-soziogramm-hint" x-text="t('figuren.soziogramm.hint')"></div>
       </div>
     </template>
 
@@ -69,16 +65,16 @@
       <div class="figuren-graph-toolbar">
         <!-- Kapitel-Filter (nur Figurengraph) -->
         <div x-show="figurenGraphModus === 'figur' && figurenKapitelListe().length > 0" class="figuren-graph-filter">
-          <button class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': !figurenGraphKapitel }" @click="_figurenGraphSetKapitel(null)">Alle</button>
+          <button class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': !figurenGraphKapitel }" @click="_figurenGraphSetKapitel(null)" x-text="t('common.all')"></button>
           <template x-for="ch in figurenKapitelListe()" :key="ch">
             <button class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': figurenGraphKapitel === ch }" @click="_figurenGraphSetKapitel(ch)" x-text="ch"></button>
           </template>
         </div>
         <div class="figuren-graph-toolbar-zoom">
-          <button class="graph-tool-btn" title="Zoom in" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 1.3, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">+</button>
-          <button class="graph-tool-btn" title="Zoom out" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 0.77, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">−</button>
-          <button class="graph-tool-btn graph-tool-btn--reset" title="Ansicht zurücksetzen" @click="_figurenNetwork && _figurenNetwork.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } })">&#x26F6;</button>
-          <button class="graph-tool-btn" :title="figurenGraphFullscreen ? 'Vollbild schliessen' : 'Vollbild'" @click="toggleFigurenGraphFullscreen()" x-text="figurenGraphFullscreen ? '✕' : '⤢'"></button>
+          <button class="graph-tool-btn" :title="t('graph.zoomIn')" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 1.3, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">+</button>
+          <button class="graph-tool-btn" :title="t('graph.zoomOut')" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 0.77, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">−</button>
+          <button class="graph-tool-btn graph-tool-btn--reset" :title="t('graph.reset')" @click="_figurenNetwork && _figurenNetwork.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } })">&#x26F6;</button>
+          <button class="graph-tool-btn" :title="figurenGraphFullscreen ? t('graph.fullscreenClose') : t('graph.fullscreen')" @click="toggleFigurenGraphFullscreen()" x-text="figurenGraphFullscreen ? '✕' : '⤢'"></button>
         </div>
       </div>
       <div id="figuren-graph" class="figuren-graph-container"></div>
@@ -86,25 +82,25 @@
     </div>
   </div>
 
- 
+
 
   <!-- Figurenliste -->
   <div x-show="figuren.length > 0" class="figur-list-section">
     <div class="figur-list-header">
-      <div class="history-heading">Figuren</div>
+      <div class="history-heading" x-text="t('figuren.heading')"></div>
     </div>
 
      <!-- Filter -->
     <div x-show="figuren.length > 0 && figurenKapitelListe().length > 0" class="filter-bar">
-      <input type="text" x-model="figurenSuche" placeholder="Suche…" class="filter-search-input">
-      <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
+      <input type="text" x-model="figurenSuche" :placeholder="t('common.search')" class="filter-search-input">
+      <div x-data="combobox(t('filter.chapter'), t('filter.allChapters'))"
           x-modelable="value" x-model="figurenKapitelFilter"
           x-effect="options = figurenKapitelListe().map(k => ({value: k, label: k}))"
           @combobox-change="figurenSeitenFilter = ''; selectedFigurId = null"
           @click.outside="close()" @keydown="onKeydown($event)"
           class="combobox-wrap combobox-wrap--compact">
       </div>
-      <div x-data="combobox('Seite…', 'Alle Seiten')"
+      <div x-data="combobox(t('filter.page'), t('filter.allPages'))"
           x-modelable="value" x-model="figurenSeitenFilter"
           x-effect="_disabled = !figurenKapitelFilter || figurenSeitenListe().length === 0; options = figurenSeitenListe().map(s => ({value: s, label: s}))"
           @combobox-change="selectedFigurId = null"
@@ -120,7 +116,7 @@
         <div class="figur-item" :data-figid="f.id" @click="selectedFigurId = selectedFigurId === f.id ? null : f.id;">
           <span class="figur-typ-dot" :style="'background:' + ({ hauptfigur:'var(--color-primary)', nebenfigur:'var(--color-muted)', antagonist:'var(--color-err-border)', mentor:'var(--color-ok-border)', andere:'var(--color-accent)' }[f.typ] || 'var(--color-border)')"></span>
           <span class="figur-name" x-text="f.name"></span>
-          <span class="tag" x-text="f.typ"></span>
+          <span class="tag" x-text="t('figuren.type.' + f.typ)"></span>
           <span x-show="f.geburtstag" class="tag" x-text="'* ' + f.geburtstag"></span>
           <!-- Kapitel-Badges -->
           <template x-if="f.kapitel?.length">
@@ -137,13 +133,13 @@
           <p x-show="f.beschreibung" x-text="f.beschreibung" class="figur-beschreibung"></p>
           <!-- Beruf + Sozialschicht -->
           <div x-show="f.beruf || f.sozialschicht" class="figur-detail-row">
-            <span x-show="f.beruf" class="bewertung-section-title bewertung-section-title--inline">Beruf:&nbsp;</span>
+            <span x-show="f.beruf" class="bewertung-section-title bewertung-section-title--inline" x-text="t('figuren.field.beruf') + '\u00A0'"></span>
             <span x-show="f.beruf" class="figur-detail-value" x-text="f.beruf"></span>
-            <span x-show="f.sozialschicht" class="tag figur-sozialschicht-badge" :class="'figur-schicht-' + f.sozialschicht" x-text="({ wirtschaftselite:'Wirtschaftselite', gehobenes_buergertum:'Geh. Bürgertum', mittelschicht:'Mittelschicht', arbeiterschicht:'Arbeiterschicht', migrantenmilieu:'Migrantenmilieu', prekariat:'Prekariat', unterwelt:'Unterwelt', andere:'—' })[f.sozialschicht] || f.sozialschicht"></span>
+            <span x-show="f.sozialschicht" class="tag figur-sozialschicht-badge" :class="'figur-schicht-' + f.sozialschicht" x-text="t('figuren.schicht.' + f.sozialschicht)"></span>
           </div>
           <!-- Kapitelauftritte -->
           <div class="figur-kapitelauftritte" x-show="f.kapitel?.length > 1">
-            <div class="bewertung-section-title">Kapitelauftritte</div>
+            <div class="bewertung-section-title" x-text="t('figuren.field.kapitelauftritte')"></div>
             <div class="figur-tags-row">
               <template x-for="(k, ki) in (f.kapitel || [])" :key="ki">
                 <span class="tag internal-link" @click="figurenKapitelFilter = k.name; figurenSeitenFilter = ''" x-text="ki === 0 ? k.name : k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
@@ -151,7 +147,7 @@
             </div>
           </div>
           <div x-show="f.eigenschaften?.length">
-            <div class="bewertung-section-title">Eigenschaften</div>
+            <div class="bewertung-section-title" x-text="t('figuren.field.eigenschaften')"></div>
             <ul class="bullet-list figur-eigenschaften-list">
               <template x-for="(e, i) in (f.eigenschaften || [])" :key="i">
                 <li x-text="e"></li>
@@ -160,19 +156,19 @@
           </div>
           <!-- Familie -->
           <div x-show="f.eltern_ids?.length || f.geschwister_ids?.length">
-            <div class="bewertung-section-title">Familie</div>
+            <div class="bewertung-section-title" x-text="t('figuren.field.familie')"></div>
             <div class="figur-tags-row">
               <template x-for="pid in (f.eltern_ids || [])" :key="'e'+pid">
-                <span class="tag figur-rel-tag internal-link" title="Elternteil" @click.stop="openFigurById(pid)" x-text="'↑ ' + (figuren.find(x => x.id === pid)?.name || pid)"></span>
+                <span class="tag figur-rel-tag internal-link" :title="t('figuren.rel.parent')" @click.stop="openFigurById(pid)" x-text="'↑ ' + (figuren.find(x => x.id === pid)?.name || pid)"></span>
               </template>
               <template x-for="sid in (f.geschwister_ids || [])" :key="'s'+sid">
-                <span class="tag figur-rel-tag internal-link" title="Geschwister" @click.stop="openFigurById(sid)" x-text="'⇔ ' + (figuren.find(x => x.id === sid)?.name || sid)"></span>
+                <span class="tag figur-rel-tag internal-link" :title="t('figuren.rel.sibling')" @click.stop="openFigurById(sid)" x-text="'⇔ ' + (figuren.find(x => x.id === sid)?.name || sid)"></span>
               </template>
             </div>
           </div>
           <!-- Beziehungen -->
           <div x-show="f.beziehungen?.length">
-            <div class="bewertung-section-title">Beziehungen</div>
+            <div class="bewertung-section-title" x-text="t('figuren.field.beziehungen')"></div>
             <div class="figur-bz-list">
               <template x-for="(bz, i) in (f.beziehungen || [])" :key="i">
                 <div class="figur-beziehung-item">
@@ -186,7 +182,7 @@
           </div>
           <!-- Lebensereignisse / Zeitstrahl -->
           <div x-show="f.lebensereignisse?.length">
-            <div class="bewertung-section-title">Zeitstrahl</div>
+            <div class="bewertung-section-title" x-text="t('figuren.field.zeitstrahl')"></div>
             <div class="global-zeitstrahl-body">
               <template x-for="(ev, i) in (f.lebensereignisse || [])" :key="i">
                 <div class="gz-item" :class="ev.typ === 'extern' ? 'gz-item--extern' : ''">
@@ -195,7 +191,7 @@
                     <div class="gz-datum-row">
                       <span class="gz-datum" x-text="ev.datum"></span>
                       <template x-if="ev.typ === 'extern'">
-                        <span class="gz-extern-badge">extern</span>
+                        <span class="gz-extern-badge" x-text="t('figuren.external')"></span>
                       </template>
                     </div>
                     <div class="gz-ereignis internal-link" @click="openEreignisseMitFigur(f.id)" x-text="ev.ereignis"></div>

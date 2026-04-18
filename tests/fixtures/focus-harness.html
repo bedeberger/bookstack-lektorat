@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Focus Editor Test Harness</title>
+  <style>
+    body { margin: 0; font: 16px/1.6 system-ui, sans-serif; }
+    #editor-card { height: 100vh; display: flex; flex-direction: column; }
+    .page-content-view {
+      flex: 1; overflow-y: auto; padding: 0 24px;
+      scroll-behavior: auto; /* smooth-scroll abschalten → deterministische Tests */
+    }
+    .page-content-view p { margin: 0 0 1em; opacity: 1; }
+    .focus-paragraph-active { background: #ff0; }
+  </style>
+</head>
+<body>
+  <div id="editor-card">
+    <div class="page-content-view page-content-view--editing" contenteditable="true"></div>
+  </div>
+
+  <script type="module">
+    import { focusMethods } from '/public/js/editor-focus.js';
+
+    // 60 Absätze mit genug Text, dass die Container weit über die Höhe scrollt.
+    const editor = document.querySelector('.page-content-view--editing');
+    for (let i = 0; i < 60; i++) {
+      const p = document.createElement('p');
+      p.textContent = `Absatz ${i}: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`;
+      editor.appendChild(p);
+    }
+
+    // Minimal-Harness, das die Alpine-Komponente nachbildet, soweit
+    // editor-focus.js sie braucht.
+    const harness = {
+      ...focusMethods,
+      focusMode: false,
+      editMode: true,
+      showEditorCard: true,
+      checkDone: false,
+      editDirty: false,
+      showSynonymMenu: false,
+      showSynonymPicker: false,
+      $nextTick: (fn) => Promise.resolve().then(fn),
+      startEdit() { this.editMode = true; },
+      cancelEdit() { this.editMode = false; this.editDirty = false; },
+      closeFindings() {},
+    };
+
+    // Smooth-Scroll-Override deaktivieren: scroll-behavior:auto in CSS reicht
+    // nicht – container.scrollBy({ behavior: 'smooth' }) überschreibt es. Wir
+    // patchen scrollBy, damit Tests sofort am Endwert messen können.
+    const origScrollBy = HTMLElement.prototype.scrollBy;
+    HTMLElement.prototype.scrollBy = function (opts) {
+      if (opts && typeof opts === 'object') {
+        return origScrollBy.call(this, { ...opts, behavior: 'auto' });
+      }
+      return origScrollBy.apply(this, arguments);
+    };
+
+    window.harness = harness;
+    window.harnessReady = true;
+  </script>
+</body>
+</html>

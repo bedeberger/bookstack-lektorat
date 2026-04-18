@@ -2,14 +2,14 @@
 <div class="card" id="editor-card" x-show="showEditorCard" x-cloak x-transition>
   <div class="card-header">
     <div>
-      <span class="card-title" x-text="'Lektorat: ' + (currentPage?.name || '–')"></span>
+      <span class="card-title" x-text="t('editor.title', { name: currentPage?.name || '–' })"></span>
       <span class="mode-pill" :class="editMode ? 'mode-pill--edit' : 'mode-pill--read'"
-            x-text="editMode ? 'Bearbeiten' : 'Lesen'"></span>
+            x-text="editMode ? t('editor.mode.edit') : t('editor.mode.read')"></span>
       <span class="save-indicator" x-show="lastSavedLabel()"
             :class="{ 'save-indicator--draft': lastSavedKind() === 'draft', 'save-indicator--offline': saveOffline }"
-            x-text="(lastSavedKind() === 'draft' ? 'Entwurf ' : 'gespeichert ') + lastSavedLabel()"
-            :title="lastSavedKind() === 'draft' ? 'Lokaler Entwurf – noch nicht auf dem Server' : 'Auf BookStack gespeichert'"></span>
-      <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag tag--link">In BookStack öffnen</a>
+            x-text="lastSavedKind() === 'draft' ? t('editor.draft', { when: lastSavedLabel() }) : t('editor.saved', { when: lastSavedLabel() })"
+            :title="lastSavedKind() === 'draft' ? t('editor.draftTitle') : t('editor.savedTitle')"></span>
+      <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag tag--link" x-text="t('editor.openInBookstack')"></a>
       <span x-show="currentPage && tokEsts[currentPage.id]" class="tok-stats">
         <template x-if="tokEsts[currentPage?.id]?.words > 0">
           <span class="display-contents">
@@ -24,31 +24,31 @@
           </span>
         </template>
         <template x-if="tokEsts[currentPage?.id] && tokEsts[currentPage.id].words === 0">
-          <span class="tok-badge tok-empty">leer</span>
+          <span class="tok-badge tok-empty" x-text="t('sidebar.empty')"></span>
         </template>
       </span>
     </div>
     <div class="card-actions">
       <template x-if="!editMode">
         <span class="display-contents">
-          <button @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? 'Seite ist leer' : 'Ctrl+Enter'">Prüfen</button>
-          <button @click="startEdit()" :disabled="checkLoading || saveApplying != null || !originalHtml" title="Text manuell bearbeiten">Bearbeiten</button>
-          <button @click="startFocusEdit()" :disabled="checkLoading || saveApplying != null || !originalHtml" title="Ablenkungsfrei im Vollbild schreiben (F11)">Fokus-Editor</button>
-          <button @click="closeFindings()" x-show="checkDone" title="Befunde ausblenden, Vollansicht wiederherstellen">Prüfmodus verlassen</button>
+          <button @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? t('editor.btn.pageEmpty') : t('editor.btn.checkTitle')" x-text="t('editor.btn.check')"></button>
+          <button @click="startEdit()" :disabled="checkLoading || saveApplying != null || !originalHtml" :title="t('editor.btn.editTitle')" x-text="t('editor.btn.edit')"></button>
+          <button @click="startFocusEdit()" :disabled="checkLoading || saveApplying != null || !originalHtml" :title="t('editor.btn.focusTitle')" x-text="t('editor.btn.focus')"></button>
+          <button @click="closeFindings()" x-show="checkDone" :title="t('editor.btn.exitCheckTitle')" x-text="t('editor.btn.exitCheck')"></button>
           <button class="success" @click="saveCorrections()" :disabled="saveApplying != null" x-show="(correctedHtml && selectedFindings.some(v => v)) || saveApplying != null">
-            <span x-show="saveApplying != null" class="spinner"></span><span x-text="saveApplying != null ? 'Wird gespeichert…' : 'Korrekturen speichern'"></span>
+            <span x-show="saveApplying != null" class="spinner"></span><span x-text="saveApplying != null ? t('editor.btn.saveCorrectionsProgress') : t('editor.btn.saveCorrections')"></span>
           </button>
-          <button @click="toggleChatCard()" :class="{ primary: showChatCard }" :disabled="currentPageEmpty" title="Chat mit dieser Seite">Chat</button>
+          <button @click="toggleChatCard()" :class="{ primary: showChatCard }" :disabled="currentPageEmpty" :title="t('editor.btn.chatTitle')" x-text="t('editor.btn.chat')"></button>
         </span>
       </template>
       <template x-if="editMode">
         <span class="display-contents">
           <button class="success" @click="saveEdit()" :disabled="editSaving">
-            <span x-show="editSaving" class="spinner"></span><span x-text="editSaving ? 'Speichere…' : 'Speichern'"></span>
+            <span x-show="editSaving" class="spinner"></span><span x-text="editSaving ? t('common.saving') : t('common.save')"></span>
           </button>
-          <button @click="cancelEdit()" :disabled="editSaving">Abbrechen</button>
-          <button @click="closeFindings()" x-show="checkDone" title="Befunde ausblenden, Vollansicht wiederherstellen">Prüfmodus verlassen</button>
-          <button @click="toggleFocusMode()" :class="{ primary: focusMode }" :title="focusMode ? 'Fokus verlassen (F11)' : 'Ablenkungsfreier Vollbild-Schreibmodus (F11)'" x-text="focusMode ? 'Fokus verlassen' : 'Fokus'"></button>
+          <button @click="cancelEdit()" :disabled="editSaving" x-text="t('common.cancel')"></button>
+          <button @click="closeFindings()" x-show="checkDone" :title="t('editor.btn.exitCheckTitle')" x-text="t('editor.btn.exitCheck')"></button>
+          <button @click="toggleFocusMode()" :class="{ primary: focusMode }" :title="focusMode ? t('editor.btn.leaveFocusTitle') : t('editor.btn.enterFocusTitle')" x-text="focusMode ? t('editor.btn.leaveFocus') : t('editor.btn.focusShort')"></button>
         </span>
       </template>
     </div>
@@ -64,7 +64,7 @@
       <div class="figure-context-header" @click="showChapterFigures = !showChapterFigures">
         <span class="figure-context-title">
           <span class="figure-context-icon">F</span>
-          <span x-text="chapterFigures.length + ' Figuren in diesem Kapitel'"></span>
+          <span x-text="t('editor.figuresInChapter', { n: chapterFigures.length })"></span>
         </span>
         <span class="history-chevron" :class="{ open: showChapterFigures }">›</span>
       </div>
@@ -72,11 +72,11 @@
         <template x-for="(fig, fi) in chapterFigures" :key="fi">
           <span class="figure-context-chip" x-data="{ show: false }" @mouseenter="show = true" @mouseleave="show = false">
             <span x-text="fig.kurzname || fig.name"></span>
-            <span x-show="fig.typ" class="tag" x-text="fig.typ"></span>
+            <span x-show="fig.typ" class="tag" x-text="t('figuren.type.' + fig.typ)"></span>
             <div x-show="show" x-cloak class="figure-context-tooltip">
               <div class="figure-context-tooltip-name" x-text="fig.name"></div>
-              <div x-show="fig.beruf" class="figure-context-tooltip-row"><span class="figure-context-label">Beruf:</span> <span x-text="fig.beruf"></span></div>
-              <div x-show="fig.geschlecht" class="figure-context-tooltip-row"><span class="figure-context-label">Geschlecht:</span> <span x-text="fig.geschlecht"></span></div>
+              <div x-show="fig.beruf" class="figure-context-tooltip-row"><span class="figure-context-label" x-text="t('figuren.field.beruf')"></span> <span x-text="fig.beruf"></span></div>
+              <div x-show="fig.geschlecht" class="figure-context-tooltip-row"><span class="figure-context-label" x-text="t('editor.field.geschlecht')"></span> <span x-text="fig.geschlecht"></span></div>
               <div x-show="fig.beschreibung" class="figure-context-tooltip-desc" x-text="fig.beschreibung"></div>
             </div>
           </span>
@@ -92,9 +92,7 @@
          :style="{ left: synonymMenuX + 'px', top: synonymMenuY + 'px' }"
          @click.outside="closeSynonymMenu()"
          @keydown.escape.window="closeSynonymMenu()">
-      <button class="synonym-menu-btn" @click="requestSynonyms()">
-        Synonym suchen für «<span x-text="_synonymWord"></span>»
-      </button>
+      <button class="synonym-menu-btn" @click="requestSynonyms()" x-text="t('editor.synonym.searchFor', { word: _synonymWord })"></button>
     </div>
   </template>
 
@@ -105,15 +103,15 @@
          @click.outside="closeSynonymPicker()"
          @keydown.escape.window="closeSynonymPicker()">
       <div class="synonym-picker-header">
-        <span>Synonyme für «<span x-text="_synonymWord"></span>»</span>
-        <button class="synonym-picker-close" @click="closeSynonymPicker()" title="Schliessen">×</button>
+        <span x-text="t('editor.synonym.titleFor', { word: _synonymWord })"></span>
+        <button class="synonym-picker-close" @click="closeSynonymPicker()" :title="t('common.close')">×</button>
       </div>
 
       <div class="synonym-picker-body">
         <div class="synonym-picker-section" x-show="!synonymThesDisabled">
-          <div class="synonym-picker-subheader">OpenThesaurus</div>
+          <div class="synonym-picker-subheader" x-text="t('editor.synonym.thesaurus')"></div>
           <div x-show="synonymThesLoading" class="synonym-picker-loading">
-            <span class="spinner"></span> Lade…
+            <span class="spinner"></span> <span x-text="t('editor.synonym.loading')"></span>
           </div>
           <div x-show="!synonymThesLoading && synonymThesError" class="synonym-picker-error" x-text="synonymThesError"></div>
           <div x-show="!synonymThesLoading && !synonymThesError && synonymThesList.length > 0" class="synonym-picker-list">
@@ -127,9 +125,9 @@
         </div>
 
         <div class="synonym-picker-section">
-          <div class="synonym-picker-subheader">KI-Vorschläge</div>
+          <div class="synonym-picker-subheader" x-text="t('editor.synonym.ki')"></div>
           <div x-show="synonymKiLoading" class="synonym-picker-loading">
-            <span class="spinner"></span> KI sucht…
+            <span class="spinner"></span> <span x-text="t('editor.synonym.kiLoading')"></span>
           </div>
           <div x-show="!synonymKiLoading && synonymKiError" class="synonym-picker-error" x-text="synonymKiError"></div>
           <div x-show="!synonymKiLoading && !synonymKiError && synonymKiList.length > 0" class="synonym-picker-list">
@@ -156,24 +154,24 @@
 
       <!-- Fehlerfrei -->
       <div x-show="lektoratFindings.length === 0" class="finding ok">
-        <span class="badge badge-ok">✓ Fehlerfrei</span> &nbsp;Keine Beanstandungen gefunden.
+        <span class="badge badge-ok" x-text="t('editor.findings.okBadge')"></span> &nbsp;<span x-text="t('editor.findings.ok')"></span>
       </div>
 
       <!-- Findings-Sektion (Fehler + Stilanmerkungen, in Lesereihenfolge) -->
       <template x-if="lektoratFindings.length > 0">
         <div>
           <div class="section-heading finding-header">
-            <span x-text="lektoratFindings.length + ' Beanstandungen'"></span>
+            <span x-text="t('editor.findings.count', { n: lektoratFindings.length })"></span>
             <div class="finding-toggle-group">
-              <button class="btn-sm" @click="selectAllFindings(true)">Alle</button>
-              <button class="btn-sm" @click="selectAllFindings(false)">Keine</button>
+              <button class="btn-sm" @click="selectAllFindings(true)" x-text="t('editor.findings.selectAll')"></button>
+              <button class="btn-sm" @click="selectAllFindings(false)" x-text="t('editor.findings.selectNone')"></button>
             </div>
           </div>
           <template x-for="(f, i) in lektoratFindings" :key="i">
             <label class="finding" :class="{ 'error': f.typ !== 'stil', 'style': f.typ === 'stil', 'finding-deselected': !selectedFindings[i], 'finding--applied': appliedOriginals.includes(f.original) }" :data-finding-idx="i" @pointerenter="handleFindingPointer(i)">
               <input type="checkbox" class="finding-checkbox" :checked="selectedFindings[i]" :disabled="appliedOriginals.includes(f.original)" @change="toggleFinding(i)">
-              <span class="badge" :class="({'rechtschreibung':1,'grammatik':1,'tempuswechsel':1}[f.typ]) ? 'badge-err' : 'badge-warn'" x-text="({'rechtschreibung':'Rechtschr.','grammatik':'Grammatik','wiederholung':'Wdh.','schwaches_verb':'schw. Verb','fuellwort':'Füllwort','show_vs_tell':'Show/Tell','passiv':'Passiv','perspektivbruch':'Perspektive','tempuswechsel':'Tempus','stil':'Stil'})[f.typ] || f.typ"></span>
-              <span x-show="appliedOriginals.includes(f.original)" class="tag">✓ übernommen</span>
+              <span class="badge" :class="({'rechtschreibung':1,'grammatik':1,'tempuswechsel':1}[f.typ]) ? 'badge-err' : 'badge-warn'" x-text="t('finding.' + f.typ)"></span>
+              <span x-show="appliedOriginals.includes(f.original)" class="tag" x-text="t('editor.findings.applied')"></span>
               <span class="finding-content">
                 <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
                 <div class="finding-explanation" x-text="f.erklaerung"></div>
@@ -190,14 +188,14 @@
 
   <!-- Verlauf dieser Seite (kompakte Leiste) -->
   <div x-show="pageHistory.length > 0" class="history-bar">
-    <div class="history-heading">Verlauf</div>
+    <div class="history-heading" x-text="t('editor.history')"></div>
     <template x-for="entry in pageHistory" :key="entry.id">
       <div class="history-item" :class="{ 'history-item--active': activeHistoryEntryId === entry.id }" @click="loadHistoryEntry(entry)">
         <span class="history-date" x-text="formatDate(entry.checked_at)"></span>
-        <span class="badge" :class="entry.error_count > 0 ? 'badge-err' : 'badge-ok'" x-text="entry.error_count > 0 ? entry.error_count + ' Fehler' : 'fehlerfrei'"></span>
-        <button class="btn-toggle-saved" :class="entry.saved ? 'btn-toggle-saved--on' : 'btn-toggle-saved--off'" @click.stop="toggleHistoryEntrySaved(entry)" :title="entry.saved ? 'Als nicht umgesetzt markieren' : 'Als umgesetzt markieren'" x-text="entry.saved ? '✓ umgesetzt' : 'offen'"></button>
+        <span class="badge" :class="entry.error_count > 0 ? 'badge-err' : 'badge-ok'" x-text="entry.error_count > 0 ? t('editor.history.errors', { n: entry.error_count }) : t('editor.history.errorFree')"></span>
+        <button class="btn-toggle-saved" :class="entry.saved ? 'btn-toggle-saved--on' : 'btn-toggle-saved--off'" @click.stop="toggleHistoryEntrySaved(entry)" :title="entry.saved ? t('editor.history.markOpen') : t('editor.history.markDone')" x-text="entry.saved ? t('editor.history.done') : t('editor.history.open')"></button>
         <span class="tag" x-text="entry.model"></span>
-        <button class="history-item-delete" @click.stop="deletePageCheck(entry.id)" title="Eintrag löschen">×</button>
+        <button class="history-item-delete" @click.stop="deletePageCheck(entry.id)" :title="t('common.deleteEntry')">×</button>
       </div>
     </template>
   </div>

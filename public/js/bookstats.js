@@ -3,15 +3,17 @@
 
 const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
-const METRIC_LABELS = {
-  words:             'Wörter',
-  chars:             'Zeichen',
-  page_count:        'Seiten',
-  tok:               'Tokens',
-  unique_words:      'Einzigartige Wörter',
-  delta_words:       'Δ Wörter/Tag',
-  avg_sentence_len:  'Ø Satzlänge (Wörter)',
-  pages_per_chapter: 'Ø Seiten/Kapitel',
+// Chart-Labels kommen zur Render-Zeit über t() (siehe _metricLabel()), damit sie
+// bei Sprachwechsel live nachgezogen werden.
+const METRIC_KEYS = {
+  words:             'bookstats.metric.words',
+  chars:             'bookstats.metric.chars',
+  page_count:        'bookstats.metric.pages',
+  tok:               'bookstats.metric.tok',
+  unique_words:      'bookstats.metric.unique',
+  delta_words:       'bookstats.metric.delta',
+  avg_sentence_len:  'bookstats.metric.avgSentence',
+  pages_per_chapter: 'bookstats.metric.pagesPerChapter',
 };
 
 // Ausserhalb von Alpine gespeichert, damit die Chart.js-Instanz nicht durch
@@ -66,13 +68,14 @@ export const bookstatsMethods = {
   async syncBookStats() {
     if (this.bookStatsLoading) return;
     this.bookStatsLoading = true;
-    this.bookStatsSyncStatus = '<span class="spinner"></span>Synchronisiere…';
+    this.bookStatsSyncStatus = `<span class="spinner"></span>${this.t('bookstats.syncing')}`;
     try {
       const result = await fetch('/sync/book/' + this.selectedBookId, { method: 'POST' })
         .then(r => r.json());
       if (result.error) throw new Error(result.error);
-      const now = new Date().toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
-      this.bookStatsSyncStatus = `Sync um ${now} abgeschlossen`;
+      const localeTag = (this.uiLocale === 'en') ? 'en-US' : 'de-CH';
+      const now = new Date().toLocaleTimeString(localeTag, { hour: '2-digit', minute: '2-digit' });
+      this.bookStatsSyncStatus = this.t('bookstats.syncDone', { time: now });
       await this.loadBookStats(this.selectedBookId);
       // page_stats-Cache in tokEsts übernehmen, falls Seiten geladen
       if (this.pages.length) {
@@ -85,7 +88,7 @@ export const bookstatsMethods = {
         }
       }
     } catch (e) {
-      this.bookStatsSyncStatus = 'Fehler: ' + e.message;
+      this.bookStatsSyncStatus = this.t('common.errorColon') + e.message;
     } finally {
       this.bookStatsLoading = false;
     }
@@ -121,11 +124,12 @@ export const bookstatsMethods = {
       : isPpc  ? rows.map(r => r.chapter_count > 0 ? Math.round((r.page_count / r.chapter_count) * 10) / 10 : null)
       : rows.map(r => r[metric] ?? null);
 
-    const metricLabel = METRIC_LABELS[metric] || metric;
+    const metricLabel = METRIC_KEYS[metric] ? this.t(METRIC_KEYS[metric]) : metric;
 
+    const localeTag = (this.uiLocale === 'en') ? 'en-US' : 'de-CH';
     const isDecimal = isPpc || metric === 'avg_sentence_len';
-    const fmt = v => isDecimal ? v.toLocaleString('de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-      : Math.round(v).toLocaleString('de-CH');
+    const fmt = v => isDecimal ? v.toLocaleString(localeTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+      : Math.round(v).toLocaleString(localeTag);
     const makeTick = () => v => {
       if (v === null) return '';
       return (isDelta && v >= 0 ? '+' : '') + fmt(v);

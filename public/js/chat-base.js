@@ -90,7 +90,7 @@ export function makeChatMethods(cfg) {
       onError: (job) => {
         this[p.loading] = false;
         if (p.progress) this[p.progress] = 0;
-        this[p.status] = `<span class="error-msg">Fehler: ${escHtml(job.error || 'Unbekannter Fehler')}</span>`;
+        this[p.status] = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(job.error || this.t('common.unknownError'))}</span>`;
       },
       onDone: async () => {
         this[p.loading] = false;
@@ -177,7 +177,7 @@ export function makeChatMethods(cfg) {
     } catch (e) {
       console.error(`[send${L}Message]`, e);
       this[p.messages] = this[p.messages].slice(0, -1);
-      this[p.status] = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
+      this[p.status] = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(e.message)}</span>`;
       this[p.loading] = false;
       this.$nextTick(() => scrollToBottom.call(this));
     }

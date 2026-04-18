@@ -37,9 +37,10 @@ function clearDraft(pageId) {
   try { localStorage.removeItem(DRAFT_KEY(pageId)); } catch {}
 }
 
-function formatDraftTime(ts) {
+function formatDraftTime(ts, locale) {
   const d = new Date(ts);
-  return d.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
+  const tag = locale === 'en' ? 'en-US' : 'de-DE';
+  return d.toLocaleString(tag, { dateStyle: 'short', timeStyle: 'short' });
 }
 
 export const editorEditMethods = {
@@ -60,11 +61,11 @@ export const editorEditMethods = {
     // Draft-Wiederherstellung: lokalen Entwurf prüfen, wenn vorhanden und abweichend.
     const draft = readDraft(this.currentPage.id);
     if (draft && draft.html && draft.html !== this.originalHtml) {
-      const when = formatDraftTime(draft.savedAt || Date.now());
+      const when = formatDraftTime(draft.savedAt || Date.now(), this.uiLocale);
       const serverChanged = draft.originalHtml && draft.originalHtml !== this.originalHtml;
       const msg = serverChanged
-        ? `Nicht gespeicherter Entwurf vom ${when} gefunden.\n\nACHTUNG: Die Seite wurde seitdem serverseitig geändert. Entwurf trotzdem wiederherstellen (überschreibt Server-Änderungen beim Speichern)?`
-        : `Nicht gespeicherter Entwurf vom ${when} gefunden. Wiederherstellen?`;
+        ? this.t('edit.draftConfirmServerChanged', { when })
+        : this.t('edit.draftConfirm', { when });
       if (confirm(msg)) {
         initialHtml = draft.html;
         this.editDirty = true;
@@ -91,7 +92,7 @@ export const editorEditMethods = {
   },
 
   cancelEdit() {
-    if (this.editDirty && !confirm('Ungespeicherte Bearbeitung verwerfen? Der lokale Entwurf wird gelöscht.')) return;
+    if (this.editDirty && !confirm(this.t('edit.cancelConfirm'))) return;
     if (this.currentPage) clearDraft(this.currentPage.id);
     this._stopAutosave();
     this._uninstallOnlineRetry();
@@ -102,6 +103,7 @@ export const editorEditMethods = {
     this.saveOffline = false;
     this.closeSynonymMenu?.();
     this.closeSynonymPicker?.();
+    this.updatePageView();
     if (this.focusMode) this.exitFocusMode();
   },
 
@@ -114,16 +116,16 @@ export const editorEditMethods = {
 
     const newText = htmlToText(newHtml).trim();
     if (!newText) {
-      this.setStatus('Leerer Text – Speichern abgebrochen.', false, 5000);
+      this.setStatus(this.t('edit.emptyTextAbort'), false, 5000);
       return;
     }
     const origText = htmlToText(this.originalHtml || '').trim();
     if (origText.length > 50 && newText.length < origText.length * 0.2) {
-      if (!confirm(`Der neue Text ist deutlich kürzer (${newText.length} statt ${origText.length} Zeichen). Trotzdem speichern?`)) return;
+      if (!confirm(this.t('edit.shorterConfirm', { newLen: newText.length, oldLen: origText.length }))) return;
     }
 
     this.editSaving = true;
-    this.setStatus('Speichere Bearbeitung…', true);
+    this.setStatus(this.t('edit.saving'), true);
     try {
       await this.bsPut('pages/' + this.currentPage.id, {
         html: newHtml,
@@ -162,16 +164,16 @@ export const editorEditMethods = {
       this.lastDraftSavedAt = null;
       this.editDirty = false;
       this.saveOffline = false;
+      this.updatePageView();
       if (this.focusMode) {
-        this.setStatus('✓ Änderungen gespeichert.', false, 3000);
+        this.setStatus(this.t('edit.changesSaved'), false, 3000);
       } else {
         this._stopAutosave();
         this._uninstallOnlineRetry();
         this.editMode = false;
         this.closeSynonymMenu?.();
         this.closeSynonymPicker?.();
-        this.updatePageView();
-        this.setStatus('✓ Änderungen gespeichert.', false, 5000);
+        this.setStatus(this.t('edit.changesSaved'), false, 5000);
       }
     } catch (e) {
       console.error('[saveEdit]', e);
@@ -180,9 +182,9 @@ export const editorEditMethods = {
       this.lastDraftSavedAt = Date.now();
       this.saveOffline = true;
       if (!navigator.onLine) {
-        this.setStatus('Offline – Entwurf lokal gesichert. Speichern bei Verbindung automatisch.', false, 8000);
+        this.setStatus(this.t('edit.offlineSaved'), false, 8000);
       } else {
-        this.setStatus('Speichern fehlgeschlagen – Entwurf lokal gesichert. Fehler: ' + e.message, false, 8000);
+        this.setStatus(this.t('edit.saveFailed', { msg: e.message }), false, 8000);
       }
     } finally {
       this.editSaving = false;
@@ -208,9 +210,11 @@ export const editorEditMethods = {
     writeDraft(this.currentPage.id, newHtml, this.originalHtml);
     this.lastDraftSavedAt = Date.now();
 
+    const localeTag = (this.uiLocale === 'en') ? 'en-US' : 'de-DE';
+
     if (!navigator.onLine) {
       this.saveOffline = true;
-      this.setStatus('Offline – lokal gesichert (' + new Date().toLocaleTimeString('de-DE') + ')', false, 3000);
+      this.setStatus(this.t('edit.offlineSavedAt', { time: new Date().toLocaleTimeString(localeTag) }), false, 3000);
       return;
     }
 
@@ -228,11 +232,12 @@ export const editorEditMethods = {
       const rawPreview = htmlToText(newHtml).trim() || null;
       if (this.currentPage) this.currentPage.previewText = rawPreview;
       this.currentPageEmpty = !rawPreview;
-      this.setStatus('✓ gespeichert ' + new Date().toLocaleTimeString('de-DE'), false, 2500);
+      this.updatePageView();
+      this.setStatus(this.t('edit.savedAt', { time: new Date().toLocaleTimeString(localeTag) }), false, 2500);
     } catch (e) {
       console.error('[quickSave]', e);
       this.saveOffline = true;
-      this.setStatus('Speichern fehlgeschlagen – Entwurf lokal gesichert. Retry bei nächster Verbindung.', false, 6000);
+      this.setStatus(this.t('edit.saveFailedRetry'), false, 6000);
     }
   },
 

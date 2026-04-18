@@ -17,7 +17,7 @@ export const kontinuitaetMethods = {
         if (jobId) {
           this.kontinuitaetLoading = true;
           this.kontinuitaetProgress = 0;
-          this.kontinuitaetStatus = 'Prüfung läuft bereits…';
+          this.kontinuitaetStatus = this.t('kontinuitaet.alreadyRunning');
           this.startKontinuitaetPoll(jobId);
         }
       } catch (e) {
@@ -48,22 +48,22 @@ export const kontinuitaetMethods = {
       onNotFound: () => {
         this.kontinuitaetLoading = false;
         this.kontinuitaetProgress = 0;
-        this.kontinuitaetStatus = 'Prüfung unterbrochen (Server-Neustart). Bitte neu starten.';
+        this.kontinuitaetStatus = this.t('kontinuitaet.interrupted');
       },
       onError: (job) => {
         this.kontinuitaetLoading = false;
         this.kontinuitaetProgress = 0;
-        this.kontinuitaetStatus = `<span class="error-msg">Fehler: ${escHtml(job.error)}</span>`;
+        this.kontinuitaetStatus = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(job.error)}</span>`;
       },
       onDone: async (job) => {
         this.kontinuitaetLoading = false;
         this.kontinuitaetProgress = 0;
-        if (job.result?.empty) { this.kontinuitaetStatus = 'Keine Seiten gefunden.'; return; }
+        if (job.result?.empty) { this.kontinuitaetStatus = this.t('kontinuitaet.noPages'); return; }
         await this._loadKontinuitaetHistory();
         const count = job.result?.count || 0;
         this.kontinuitaetStatus = count === 0
-          ? 'Keine Kontinuitätsprobleme gefunden.'
-          : `${count} Problem${count === 1 ? '' : 'e'} gefunden.`;
+          ? this.t('kontinuitaet.noIssues')
+          : this.t(count === 1 ? 'kontinuitaet.issuesOne' : 'kontinuitaet.issuesMany', { count });
       },
     });
   },
@@ -73,7 +73,7 @@ export const kontinuitaetMethods = {
     const bookName = this.selectedBookName;
     this.kontinuitaetLoading = true;
     this.kontinuitaetProgress = 0;
-    this.kontinuitaetStatus = 'Starte Prüfung…';
+    this.kontinuitaetStatus = this.t('kontinuitaet.starting');
     this.kontinuitaetResult = null;
     try {
       const { jobId } = await fetch('/jobs/kontinuitaet', {
@@ -85,7 +85,7 @@ export const kontinuitaetMethods = {
       this.startKontinuitaetPoll(jobId);
     } catch (e) {
       console.error('[runKontinuitaetCheck]', e);
-      this.kontinuitaetStatus = `<span class="error-msg">Fehler: ${escHtml(e.message)}</span>`;
+      this.kontinuitaetStatus = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(e.message)}</span>`;
       this.kontinuitaetLoading = false;
       this.kontinuitaetProgress = 0;
     }

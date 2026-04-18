@@ -1,12 +1,12 @@
 <!-- Buchentwicklung -->
 <div class="card" x-show="showBookStatsCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="'Buchentwicklung: ' + selectedBookName"></span>
+    <span class="card-title" x-text="t('bookstats.title', { name: selectedBookName })"></span>
     <div class="card-actions">
-      <span x-show="bookStatsData.length > 0 && !bookStatsLoading" class="figuren-updated-at" x-text="'Letzter Snapshot: ' + (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '')"></span>
+      <span x-show="bookStatsData.length > 0 && !bookStatsLoading" class="figuren-updated-at" x-text="t('bookstats.lastSnapshot', { date: (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '') })"></span>
       <button @click="syncBookStats()" :disabled="bookStatsLoading">
         <span x-show="bookStatsLoading" class="spinner"></span>
-        <span x-text="bookStatsLoading ? '' : 'Synchronisieren'"></span>
+        <span x-text="bookStatsLoading ? '' : t('bookstats.sync')"></span>
       </button>
     </div>
   </div>
@@ -16,24 +16,33 @@
 
   <!-- Metrik- & Zeitraum-Umschalter -->
   <div x-show="bookStatsData.length > 0" class="book-stats-controls">
-    <div x-data="combobox('Metrik…')"
+    <div x-data="combobox(t('bookstats.metric'))"
          x-modelable="value" x-model="bookStatsMetric"
-         x-effect="options = [{value:'words',label:'Wörter'},{value:'chars',label:'Zeichen'},{value:'page_count',label:'Seiten'},{value:'tok',label:'Tokens'},{value:'unique_words',label:'Einzigartige W.'},{value:'delta_words',label:'Δ Wörter/T'},{value:'avg_sentence_len',label:'Ø Satzlänge'},{value:'pages_per_chapter',label:'S./Kap.'}]"
+         x-effect="options = [
+           {value:'words',              label: t('bookstats.metric.words')},
+           {value:'chars',              label: t('bookstats.metric.chars')},
+           {value:'page_count',         label: t('bookstats.metric.pages')},
+           {value:'tok',                label: t('bookstats.metric.tok')},
+           {value:'unique_words',       label: t('bookstats.metric.unique')},
+           {value:'delta_words',        label: t('bookstats.metric.delta')},
+           {value:'avg_sentence_len',   label: t('bookstats.metric.avgSentence')},
+           {value:'pages_per_chapter',  label: t('bookstats.metric.pagesPerChapter')}
+         ]"
          @combobox-change="$nextTick(() => renderStatsChart())"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact combobox-wrap--metric">
     </div>
     <div class="btn-group">
       <button class="btn-sm" :class="{ primary: bookStatsRange === 7 }"
-        @click="bookStatsRange = 7; renderStatsChart()">7 T</button>
+        @click="bookStatsRange = 7; renderStatsChart()" x-text="t('bookstats.range.7')"></button>
       <button class="btn-sm" :class="{ primary: bookStatsRange === 30 }"
-        @click="bookStatsRange = 30; renderStatsChart()">30 T</button>
+        @click="bookStatsRange = 30; renderStatsChart()" x-text="t('bookstats.range.30')"></button>
       <button class="btn-sm" :class="{ primary: bookStatsRange === 90 }"
-        @click="bookStatsRange = 90; renderStatsChart()">90 T</button>
+        @click="bookStatsRange = 90; renderStatsChart()" x-text="t('bookstats.range.90')"></button>
       <button class="btn-sm" :class="{ primary: bookStatsRange === 365 }"
-        @click="bookStatsRange = 365; renderStatsChart()">1 J</button>
+        @click="bookStatsRange = 365; renderStatsChart()" x-text="t('bookstats.range.365')"></button>
       <button class="btn-sm" :class="{ primary: bookStatsRange === 0 }"
-        @click="bookStatsRange = 0; renderStatsChart()">Alles</button>
+        @click="bookStatsRange = 0; renderStatsChart()" x-text="t('bookstats.range.all')"></button>
     </div>
   </div>
 
@@ -45,25 +54,23 @@
   <!-- Aktuelle Stats (letzter Snapshot) -->
   <div x-show="bookStatsData.length > 0" class="book-stats-current">
     <span class="tok-badge tok-neutral"
-      x-text="(bookStatsData[bookStatsData.length - 1]?.words ?? 0).toLocaleString('de-CH') + ' W'"></span>
+      x-text="(bookStatsData[bookStatsData.length - 1]?.words ?? 0).toLocaleString('de-CH') + ' ' + t('bookstats.unit.w')"></span>
     <span class="tok-badge tok-neutral"
-      x-text="(bookStatsData[bookStatsData.length - 1]?.chars ?? 0).toLocaleString('de-CH') + ' Z'"></span>
+      x-text="(bookStatsData[bookStatsData.length - 1]?.chars ?? 0).toLocaleString('de-CH') + ' ' + t('bookstats.unit.z')"></span>
     <span class="tok-badge tok-neutral"
-      x-text="bookStatsData[bookStatsData.length - 1]?.page_count + ' S'"></span>
+      x-text="bookStatsData[bookStatsData.length - 1]?.page_count + ' ' + t('bookstats.unit.s')"></span>
     <span class="tok-badge tok-neutral"
-      x-text="(bookStatsData[bookStatsData.length - 1]?.tok ?? 0).toLocaleString('de-CH') + ' T'"></span>
+      x-text="(bookStatsData[bookStatsData.length - 1]?.tok ?? 0).toLocaleString('de-CH') + ' ' + t('bookstats.unit.t')"></span>
     <span class="tok-badge tok-neutral" x-show="bookStatsDelta !== null"
-      x-text="(bookStatsDelta >= 0 ? '+' : '') + (bookStatsDelta ?? 0).toLocaleString('de-CH') + ' Δ'"></span>
+      x-text="(bookStatsDelta >= 0 ? '+' : '') + (bookStatsDelta ?? 0).toLocaleString('de-CH') + ' ' + t('bookstats.unit.delta')"></span>
     <span class="tok-badge tok-neutral" x-show="bookStatsCoverage !== null"
-      x-text="(bookStatsCoverage?.pct ?? 0) + '% geprüft (' + (bookStatsCoverage?.checked_pages ?? 0) + '/' + (bookStatsCoverage?.total_pages ?? 0) + ')'"></span>
+      x-text="t('bookstats.coverage', { pct: (bookStatsCoverage?.pct ?? 0), checked: (bookStatsCoverage?.checked_pages ?? 0), total: (bookStatsCoverage?.total_pages ?? 0) })"></span>
     <span class="tok-badge tok-neutral" x-show="bookStatsData[bookStatsData.length - 1]?.avg_sentence_len != null"
-      x-text="'Ø ' + (bookStatsData[bookStatsData.length - 1]?.avg_sentence_len ?? 0).toLocaleString('de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' W/Satz'"></span>
+      x-text="t('bookstats.avgSentenceBadge', { n: (bookStatsData[bookStatsData.length - 1]?.avg_sentence_len ?? 0).toLocaleString('de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
     <span class="tok-badge tok-neutral" x-show="bookStatsData[bookStatsData.length - 1]?.chapter_count > 0"
-      x-text="'Ø ' + ((bookStatsData[bookStatsData.length - 1]?.page_count / bookStatsData[bookStatsData.length - 1]?.chapter_count) || 0).toLocaleString('de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' S/Kap.'"></span>
+      x-text="t('bookstats.pagesPerChapterBadge', { n: ((bookStatsData[bookStatsData.length - 1]?.page_count / bookStatsData[bookStatsData.length - 1]?.chapter_count) || 0).toLocaleString('de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
   </div>
 
   <!-- Leer-Zustand -->
-  <div x-show="!bookStatsData.length && !bookStatsLoading" class="muted-msg muted-msg--spaced">
-    Noch keine Daten vorhanden. Klicke «Synchronisieren» um den ersten Snapshot zu erfassen.
-  </div>
+  <div x-show="!bookStatsData.length && !bookStatsLoading" class="muted-msg muted-msg--spaced" x-text="t('bookstats.emptyState')"></div>
 </div>

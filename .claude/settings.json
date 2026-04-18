@@ -160,7 +160,29 @@
       "Bash(node -c routes/usersettings.js)",
       "Bash(node -c routes/auth.js)",
       "Bash(node -c server.js)",
-      "Bash(node --input-type=module -e \"import\\('./public/js/user-settings.js'\\).then\\(m => console.log\\(Object.keys\\(m.userSettingsMethods\\)\\)\\)\")"
+      "Bash(node --input-type=module -e \"import\\('./public/js/user-settings.js'\\).then\\(m => console.log\\(Object.keys\\(m.userSettingsMethods\\)\\)\\)\")",
+      "Bash(node --input-type=module -e \"import\\('./public/js/i18n.js'\\).then\\(m => console.log\\('exports:', Object.keys\\(m\\)\\)\\)\")",
+      "Bash(python3 -c \"import json; json.load\\(open\\('public/js/i18n/de.json'\\)\\); json.load\\(open\\('public/js/i18n/en.json'\\)\\); print\\('JSON OK'\\)\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('public/js/i18n/de.json'\\)\\); e=json.load\\(open\\('public/js/i18n/en.json'\\)\\); print\\('de keys:', len\\(d\\)\\); print\\('en keys:', len\\(e\\)\\); missing = set\\(d\\) - set\\(e\\); extra = set\\(e\\) - set\\(d\\); print\\('missing in en:', missing\\); print\\('extra in en:', extra\\)\")",
+      "Bash(grep -nE '\\(>[A-ZÄÖÜa-zäöü][^<>]{2,}<|placeholder=\"[^\"]+\"|title=\"[^\"]+\"\\)' /Users/bd/ClaudeProjects/bookstack-lektorat/public/index.html)",
+      "Bash(python3 -c \"import json; json.load\\(open\\('public/js/i18n/de.json'\\)\\); json.load\\(open\\('public/js/i18n/en.json'\\)\\); print\\('both JSON files OK'\\)\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('public/js/i18n/de.json'\\)\\); e=json.load\\(open\\('public/js/i18n/en.json'\\)\\); print\\('de:', len\\(d\\), 'en:', len\\(e\\)\\); print\\('missing in en:', set\\(d\\)-set\\(e\\)\\); print\\('missing in de:', set\\(e\\)-set\\(d\\)\\)\")",
+      "Bash(npm -v)",
+      "Bash(npx playwright *)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('public/js/i18n/de.json'\\)\\); e=json.load\\(open\\('public/js/i18n/en.json'\\)\\); print\\('de:', len\\(d\\), 'en:', len\\(e\\)\\); m1=set\\(d\\)-set\\(e\\); m2=set\\(e\\)-set\\(d\\); print\\('missing in en:', m1 or 'none'\\); print\\('missing in de:', m2 or 'none'\\)\")",
+      "Bash(npm test *)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('public/js/i18n/de.json'\\)\\); e=json.load\\(open\\('public/js/i18n/en.json'\\)\\); print\\('de:', len\\(d\\), 'en:', len\\(e\\)\\); print\\('diff:', \\(set\\(d\\)^set\\(e\\)\\) or 'none'\\)\")",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('public/js/i18n/de.json', 'utf8'\\)\\); console.log\\('de ok'\\); JSON.parse\\(require\\('fs'\\).readFileSync\\('public/js/i18n/en.json', 'utf8'\\)\\); console.log\\('en ok'\\);\")",
+      "Bash(curl -sI http://localhost:3737/js/i18n/de.json)",
+      "Bash(curl -s http://localhost:3737/js/i18n/de.json)",
+      "Bash(node -c public/js/lektorat.js)",
+      "Bash(node -c public/js/editor-edit.js)",
+      "Bash(node -c public/js/kontinuitaet.js)",
+      "Bash(node -c public/js/user-settings.js)",
+      "Bash(node -c public/js/bookstats.js)",
+      "Bash(node -c public/js/review.js)",
+      "Bash(node -c public/js/api-bookstack.js)",
+      "Bash(node -c public/js/chat-base.js)"
     ]
   }
 }

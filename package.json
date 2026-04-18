@@ -4,7 +4,11 @@
   "description": "KI-Lektorat für BookStack – Der Amoklauf",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",

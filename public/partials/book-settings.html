@@ -1,45 +1,45 @@
 <!-- Buch-Einstellungen -->
 <div class="card" x-show="showBookSettingsCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="'Einstellungen: ' + selectedBookName"></span>
+    <span class="card-title" x-text="t('book.settings.title', { name: selectedBookName })"></span>
     <div class="card-actions">
       <button @click="saveBookSettings()" :disabled="bookSettingsSaving || bookSettingsLoading">
         <span x-show="bookSettingsSaving" class="spinner"></span>
-        <span x-text="bookSettingsSaving ? 'Speichert…' : 'Speichern'"></span>
+        <span x-text="bookSettingsSaving ? t('common.saving') : t('common.save')"></span>
       </button>
     </div>
   </div>
 
-  <div x-show="bookSettingsLoading" class="muted-msg">Einstellungen werden geladen…</div>
+  <div x-show="bookSettingsLoading" class="muted-msg" x-text="t('common.loading')"></div>
 
   <div x-show="!bookSettingsLoading" class="book-settings-form">
 
     <div class="book-settings-row">
-      <label class="book-settings-label">Sprache</label>
+      <label class="book-settings-label" x-text="t('book.settings.language')"></label>
       <div class="book-settings-options">
         <label class="book-settings-option">
           <input type="radio" name="bs-lang" value="de" x-model="bookSettingsLanguage" @change="bookSettingsRegion = (bookSettingsLanguage === 'de' ? 'CH' : 'US'); bookSettingsBuchtyp = ''">
-          Deutsch
+          <span x-text="t('lang.de')"></span>
         </label>
         <label class="book-settings-option">
           <input type="radio" name="bs-lang" value="en" x-model="bookSettingsLanguage" @change="bookSettingsRegion = (bookSettingsLanguage === 'de' ? 'CH' : 'US'); bookSettingsBuchtyp = ''">
-          English
+          <span x-text="t('lang.en')"></span>
         </label>
       </div>
     </div>
 
     <div class="book-settings-row">
-      <label class="book-settings-label">Region</label>
+      <label class="book-settings-label" x-text="t('book.settings.region')"></label>
       <div class="book-settings-options">
         <template x-if="bookSettingsLanguage === 'de'">
           <div class="book-settings-options">
             <label class="book-settings-option">
               <input type="radio" name="bs-region" value="CH" x-model="bookSettingsRegion">
-              Schweiz (de-CH)
+              <span x-text="t('region.de.CH')"></span>
             </label>
             <label class="book-settings-option">
               <input type="radio" name="bs-region" value="DE" x-model="bookSettingsRegion">
-              Deutschland (de-DE)
+              <span x-text="t('region.de.DE')"></span>
             </label>
           </div>
         </template>
@@ -47,11 +47,11 @@
           <div class="book-settings-options">
             <label class="book-settings-option">
               <input type="radio" name="bs-region" value="US" x-model="bookSettingsRegion">
-              USA (en-US)
+              <span x-text="t('region.en.US')"></span>
             </label>
             <label class="book-settings-option">
               <input type="radio" name="bs-region" value="GB" x-model="bookSettingsRegion">
-              United Kingdom (en-GB)
+              <span x-text="t('region.en.GB')"></span>
             </label>
           </div>
         </template>
@@ -59,9 +59,9 @@
     </div>
 
     <div class="book-settings-row">
-      <label class="book-settings-label" for="bs-buchtyp">Buchtyp</label>
+      <label class="book-settings-label" for="bs-buchtyp" x-text="t('book.settings.buchtyp')"></label>
       <select id="bs-buchtyp" class="book-settings-select" x-model="bookSettingsBuchtyp">
-        <option value="">— nicht klassifiziert —</option>
+        <option value="" x-text="t('book.settings.buchtyp.none')"></option>
         <template x-for="typ in bookSettingsBuchtypen()" :key="typ.key">
           <option :value="typ.key" x-text="typ.label"></option>
         </template>
@@ -69,13 +69,13 @@
     </div>
 
     <div class="book-settings-row book-settings-row--top">
-      <label class="book-settings-label" for="bs-buchkontext">Weiterer Kontext</label>
+      <label class="book-settings-label" for="bs-buchkontext" x-text="t('book.settings.context')"></label>
       <div class="book-settings-kontext-wrap">
         <textarea
           id="bs-buchkontext"
           class="book-settings-textarea"
           x-model="bookSettingsBuchKontext"
-          placeholder="z.B. Schauplatz: Zürich, 1970er Jahre. Atmosphäre: dunkel, melancholisch. Besonderheiten: Die Hauptfigur leidet an Amnesie – Erinnerungslücken sind absichtlich."
+          :placeholder="t('book.settings.contextPlaceholder')"
           rows="4"
           maxlength="1000"
         ></textarea>
@@ -83,7 +83,7 @@
       </div>
     </div>
 
-    <p class="book-settings-saved" x-show="bookSettingsSaved">Einstellungen gespeichert.</p>
+    <p class="book-settings-saved" x-show="bookSettingsSaved" x-text="t('common.settingsSaved')"></p>
     <p class="book-settings-error" x-show="bookSettingsError" x-text="bookSettingsError"></p>
   </div>
 </div>

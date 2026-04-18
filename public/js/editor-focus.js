@@ -4,6 +4,14 @@
 const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'LI', 'PRE']);
 const BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, blockquote, li, pre';
 
+// Wie lange nach einem Pointer-Event ein darauf folgendes selectionchange
+// noch als Maus/Touch zählt (kein Recenter). Ein Klick erzeugt Pointerdown→up
+// und kurz danach selectionchange – die Spanne deckt das ab.
+const POINTER_GRACE_MS = 250;
+// Wie lange Scroll-Events nach einem programmatischen scrollBy() ignoriert
+// werden. smooth-scroll feuert n Events; Counter wäre nicht deterministisch.
+const PROG_SCROLL_GRACE_MS = 400;
+
 function getScrollContainer() {
   return document.querySelector('#editor-card .page-content-view:not([style*="display: none"])')
       || document.querySelector('#editor-card .page-content-view');
@@ -18,12 +26,17 @@ function findBlockFromNode(node, root) {
   return null;
 }
 
-function findBlockAtViewportCenter(container) {
+function findBlockAtViewportCenter(container, visibleBlocks) {
   const rect = container.getBoundingClientRect();
   const centerY = rect.top + rect.height / 2;
+  // Bevorzugt das vom IntersectionObserver gepflegte Set (typ. <10 Blöcke).
+  // Fallback auf Vollscan, wenn der Observer noch nicht gefeuert hat.
+  const pool = (visibleBlocks && visibleBlocks.size > 0)
+    ? visibleBlocks
+    : container.querySelectorAll(BLOCK_SEL);
   let best = null;
   let bestDist = Infinity;
-  for (const el of container.querySelectorAll(BLOCK_SEL)) {
+  for (const el of pool) {
     const r = el.getBoundingClientRect();
     if (r.height === 0) continue;
     const dist = Math.abs((r.top + r.bottom) / 2 - centerY);
@@ -66,18 +79,23 @@ function typewriterScroll(container, targetRect) {
 export const focusMethods = {
   focusMode: false,
   _focusRaf: null,
-  _focusSuppressScroll: 0,
+  _focusLastProgScroll: 0,
+  _focusLastPointer: 0,
   _focusListeners: null,
+  _focusVisibleBlocks: null,
+  _focusEnteredFromView: false,
 
   toggleFocusMode() {
     if (this.focusMode) this.exitFocusMode(); else this.enterFocusMode();
   },
 
   startFocusEdit() {
+    const fromView = !this.editMode;
     if (!this.editMode) {
       this.startEdit();
       if (!this.editMode) return;
     }
+    this._focusEnteredFromView = fromView;
     this.$nextTick(() => this.enterFocusMode());
   },
 
@@ -103,17 +121,33 @@ export const focusMethods = {
       const container = getScrollContainer();
       if (!container) return;
 
+      // IntersectionObserver pflegt das Set sichtbarer Blöcke; MutationObserver
+      // observiert neu hinzukommende Blöcke (Enter im Editor erzeugt <p>).
+      // So läuft die Center-Suche bei langen Seiten über ~10 statt n Blöcke.
+      const visibleBlocks = new Set();
+      this._focusVisibleBlocks = visibleBlocks;
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) visibleBlocks.add(e.target);
+          else visibleBlocks.delete(e.target);
+        }
+      }, { root: container, threshold: 0 });
+      const observeAll = () => {
+        for (const el of container.querySelectorAll(BLOCK_SEL)) io.observe(el);
+      };
+      observeAll();
+      const mo = new MutationObserver(observeAll);
+      mo.observe(container, { childList: true, subtree: true });
+
       // Klick/Touch soll NICHT typewriter-scrollen – der Cursor sitzt dort,
       // wo der User hingeklickt hat. Nur Tippen/Pfeiltasten recentern.
-      const onPointerDown = () => { this._focusPointerActive = true; };
-      const onPointerUp = () => {
-        // Kurze Schonfrist, damit der nachfolgende selectionchange-Event
-        // (der direkt nach dem Klick feuert) noch als Maus-Input zählt.
-        setTimeout(() => { this._focusPointerActive = false; }, 120);
+      const markPointer = () => { this._focusLastPointer = performance.now(); };
+      const onSelection = () => {
+        const isPointer = performance.now() - this._focusLastPointer < POINTER_GRACE_MS;
+        this._focusUpdateActive(!isPointer);
       };
-      const onSelection = () => this._focusUpdateActive(!this._focusPointerActive);
       const onScroll = () => {
-        if (this._focusSuppressScroll > 0) { this._focusSuppressScroll--; return; }
+        if (performance.now() - this._focusLastProgScroll < PROG_SCROLL_GRACE_MS) return;
         this._focusUpdateActive(false);
       };
       const onKey = (e) => {
@@ -150,12 +184,12 @@ export const focusMethods = {
 
       document.addEventListener('selectionchange', onSelection);
       container.addEventListener('scroll', onScroll, { passive: true });
-      container.addEventListener('pointerdown', onPointerDown);
-      container.addEventListener('pointerup', onPointerUp);
+      container.addEventListener('pointerdown', markPointer);
+      container.addEventListener('pointerup', markPointer);
       window.addEventListener('keydown', onKey);
       window.visualViewport?.addEventListener('resize', syncViewport);
       window.visualViewport?.addEventListener('scroll', syncViewport);
-      this._focusListeners = { onSelection, onScroll, onPointerDown, onPointerUp, onKey, syncViewport, container };
+      this._focusListeners = { onSelection, onScroll, markPointer, onKey, syncViewport, container, io, mo };
 
       this._focusUpdateActive(true);
       const editEl = document.querySelector('.page-content-view--editing');
@@ -165,6 +199,8 @@ export const focusMethods = {
 
   exitFocusMode() {
     if (!this.focusMode) return;
+    const enteredFromView = this._focusEnteredFromView;
+    this._focusEnteredFromView = false;
     this.focusMode = false;
     document.body.classList.remove('focus-mode');
     document.documentElement.style.removeProperty('--focus-vh');
@@ -174,20 +210,37 @@ export const focusMethods = {
     if (L) {
       document.removeEventListener('selectionchange', L.onSelection);
       L.container?.removeEventListener('scroll', L.onScroll);
-      L.container?.removeEventListener('pointerdown', L.onPointerDown);
-      L.container?.removeEventListener('pointerup', L.onPointerUp);
+      L.container?.removeEventListener('pointerdown', L.markPointer);
+      L.container?.removeEventListener('pointerup', L.markPointer);
       window.removeEventListener('keydown', L.onKey);
       if (L.syncViewport) {
         window.visualViewport?.removeEventListener('resize', L.syncViewport);
         window.visualViewport?.removeEventListener('scroll', L.syncViewport);
       }
+      L.io?.disconnect();
+      L.mo?.disconnect();
       this._focusListeners = null;
     }
-    this._focusPointerActive = false;
+    this._focusVisibleBlocks = null;
+    this._focusLastPointer = 0;
+    this._focusLastProgScroll = 0;
     if (this._focusRaf) { cancelAnimationFrame(this._focusRaf); this._focusRaf = null; }
 
     document.querySelectorAll('#editor-card .focus-paragraph-active')
       .forEach(el => el.classList.remove('focus-paragraph-active'));
+
+    // Fokus aus Ansichtsmodus gestartet + nichts Ungespeichertes → zurück in die Ansicht.
+    if (enteredFromView && this.editMode && !this.editDirty) {
+      this._stopAutosave?.();
+      this._uninstallOnlineRetry?.();
+      this.editMode = false;
+      this.editSaving = false;
+      this.saveOffline = false;
+      this.lastDraftSavedAt = null;
+      this.closeSynonymMenu?.();
+      this.closeSynonymPicker?.();
+      this.updatePageView?.();
+    }
   },
 
   _focusUpdateActive(scroll) {
@@ -195,7 +248,7 @@ export const focusMethods = {
     if (this._focusRaf) cancelAnimationFrame(this._focusRaf);
     this._focusRaf = requestAnimationFrame(() => {
       this._focusRaf = null;
-      const container = getScrollContainer();
+      const container = this._focusListeners?.container;
       if (!container) return;
 
       let block = null;
@@ -206,7 +259,7 @@ export const focusMethods = {
           block = findBlockFromNode(anchor, container);
         }
       }
-      if (!block) block = findBlockAtViewportCenter(container);
+      if (!block) block = findBlockAtViewportCenter(container, this._focusVisibleBlocks);
 
       setActiveBlock(container, block);
 
@@ -215,7 +268,7 @@ export const focusMethods = {
         // Caret-Rect ermittelbar ist (z.B. leerer Absatz, kein Fokus), auf
         // Block-Mitte zurückfallen.
         const targetRect = getCaretRect(container) || block.getBoundingClientRect();
-        this._focusSuppressScroll = 2;
+        this._focusLastProgScroll = performance.now();
         typewriterScroll(container, targetRect);
       }
     });

@@ -1,8 +1,8 @@
 <!-- Globale Ereignisse -->
 <div class="card" x-show="showEreignisseCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="'Ereignisse: ' + selectedBookName"></span>
-    <span x-show="alleAktualisierenLastRun && !ereignisseLoading && !zeitstrahlConsolidating" class="figuren-updated-at" x-text="'Stand: ' + alleAktualisierenLastRun"></span>
+    <span class="card-title" x-text="t('events.title', { name: selectedBookName })"></span>
+    <span x-show="alleAktualisierenLastRun && !ereignisseLoading && !zeitstrahlConsolidating" class="figuren-updated-at" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
   </div>
 
   <!-- Fortschritt Ermittlung -->
@@ -18,27 +18,25 @@
   <div x-show="zeitstrahlStatus && !ereignisseLoading" class="card-status" x-html="zeitstrahlStatus"></div>
 
   <!-- Leer-Hinweis -->
-  <div x-show="globalZeitstrahl.length === 0 && !zeitstrahlConsolidating && !ereignisseLoading" class="card-status">
-    Noch keine Daten vorhanden. Bitte auf «Alle aktualisieren» klicken.
-  </div>
+  <div x-show="globalZeitstrahl.length === 0 && !zeitstrahlConsolidating && !ereignisseLoading" class="card-status" x-text="t('common.noDataYet')"></div>
 
   <!-- Filter -->
   <div x-show="globalZeitstrahl.length > 0" class="filter-bar">
-    <input type="text" x-model="ereignisseSuche" placeholder="Suche…" class="filter-search-input">
-    <div x-data="combobox('Figur…', 'Alle Figuren')"
+    <input type="text" x-model="ereignisseSuche" :placeholder="t('common.search')" class="filter-search-input">
+    <div x-data="combobox(t('filter.figur'), t('filter.allFiguren'))"
          x-modelable="value" x-model="ereignisseFilterFigurId"
          x-effect="options = figuren.filter(f => globalZeitstrahl.some(ev => ev.figuren.some(fr => fr.id === f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
-    <div x-data="combobox('Kapitel…', 'Alle Kapitel')"
+    <div x-data="combobox(t('filter.chapter'), t('filter.allChapters'))"
          x-modelable="value" x-model="ereignisseFilterKapitel"
          x-effect="options = ereignisseKapitelListe().map(k => ({value: k, label: k}))"
          @combobox-change="ereignisseFilterSeite = ''"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
-    <div x-data="combobox('Seite…', 'Alle Seiten')"
+    <div x-data="combobox(t('filter.page'), t('filter.allPages'))"
          x-modelable="value" x-model="ereignisseFilterSeite"
          x-effect="_disabled = !ereignisseFilterKapitel || ereignisseSeitenListe().length === 0; options = ereignisseSeitenListe().map(s => ({value: s, label: s}))"
          @click.outside="close()" @keydown="onKeydown($event)"
@@ -57,7 +55,7 @@
           <div class="gz-datum-row">
             <span class="gz-datum" x-text="ev.datum"></span>
             <template x-if="ev.typ === 'extern'">
-              <span class="gz-extern-badge">Weltgeschehen</span>
+              <span class="gz-extern-badge" x-text="t('events.worldEvent')"></span>
             </template>
           </div>
           <div class="gz-ereignis" x-text="ev.ereignis"></div>

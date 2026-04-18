@@ -37,7 +37,7 @@ export const userSettingsMethods = {
         }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Speichern fehlgeschlagen');
+      if (!r.ok) throw new Error(data.error || this.t('common.saveFailed'));
       this.userSettingsSaved = true;
       setTimeout(() => { this.userSettingsSaved = false; }, 3000);
     } catch (e) {
@@ -51,11 +51,8 @@ export const userSettingsMethods = {
     const bookId = this.userSettingsDangerBookId;
     if (!bookId) return;
     const book = this.books.find(b => String(b.id) === String(bookId));
-    const name = book?.name || 'dieses Buch';
-    if (!confirm(
-      `Alle deine Lektorate, Buchbewertungen und Chats zu «${name}» löschen?\n\n` +
-      `Andere Nutzer sind nicht betroffen. Diese Aktion ist nicht rückgängig zu machen.`
-    )) return;
+    const name = book?.name || '';
+    if (!confirm(this.t('userSettings.resetConfirm', { name }))) return;
 
     this.bookHistoryResetLoading = true;
     this.bookHistoryResetMessage = '';
@@ -63,10 +60,13 @@ export const userSettingsMethods = {
     try {
       const r = await fetch(`/history/book/${bookId}`, { method: 'DELETE' });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Löschen fehlgeschlagen');
+      if (!r.ok) throw new Error(data.error || this.t('common.deleteFailed'));
       const d = data.deleted || {};
-      this.bookHistoryResetMessage =
-        `Gelöscht: ${d.page_checks || 0} Lektorate, ${d.book_reviews || 0} Bewertungen, ${d.chat_sessions || 0} Chats.`;
+      this.bookHistoryResetMessage = this.t('userSettings.resetSummary', {
+        lektorate: d.page_checks || 0,
+        reviews:   d.book_reviews || 0,
+        chats:     d.chat_sessions || 0,
+      });
       if (String(this.selectedBookId) === String(bookId)) {
         this.pageHistory       = [];
         this.bookReviewHistory = [];

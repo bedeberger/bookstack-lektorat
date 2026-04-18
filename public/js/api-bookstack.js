@@ -8,15 +8,15 @@ import { SAFETY_HTML_RATIO } from './utils.js';
 export const bookstackMethods = {
   async bsGet(path) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(new Error('Timeout: BookStack hat nicht innerhalb von 30 Sekunden geantwortet')), 30000);
+    const timer = setTimeout(() => ctrl.abort(new Error(this.t('bs.timeoutGet'))), 30000);
     try {
       const r = await fetch('/api/' + path, { signal: ctrl.signal });
       if (r.status === 401) { location.href = '/auth/login'; return; }
-      if (!r.ok) throw new Error('BookStack API Fehler ' + r.status);
+      if (!r.ok) throw new Error(this.t('bs.apiError', { status: r.status }));
       return r.json();
     } catch (e) {
       if (e.name === 'AbortError') {
-        throw new Error(ctrl.signal.reason?.message || 'Timeout: Anfrage wurde abgebrochen');
+        throw new Error(ctrl.signal.reason?.message || this.t('bs.timeoutAborted'));
       }
       throw e;
     } finally {
@@ -39,7 +39,7 @@ export const bookstackMethods = {
 
   async bsPut(path, body) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(new Error('Timeout: BookStack hat nicht innerhalb von 90 Sekunden geantwortet')), 90000);
+    const timer = setTimeout(() => ctrl.abort(new Error(this.t('bs.timeoutPut'))), 90000);
     try {
       const r = await fetch('/api/' + path, {
         method: 'PUT',
@@ -51,12 +51,14 @@ export const bookstackMethods = {
       if (!r.ok) {
         let detail = '';
         try { const e = await r.json(); detail = e.message || e.error || ''; } catch (_) {}
-        throw new Error(`BookStack API Fehler ${r.status}${detail ? ': ' + detail : ''}`);
+        throw new Error(detail
+          ? this.t('bs.apiErrorDetail', { status: r.status, detail })
+          : this.t('bs.apiError', { status: r.status }));
       }
       return r.json();
     } catch (e) {
       if (e.name === 'AbortError') {
-        throw new Error(ctrl.signal.reason?.message || 'Timeout: Anfrage wurde abgebrochen');
+        throw new Error(ctrl.signal.reason?.message || this.t('bs.timeoutAborted'));
       }
       throw e;
     } finally {
@@ -80,27 +82,27 @@ export const bookstackMethods = {
   // onProgress(chars, aiBase) – optional, für zusätzliches Fortschritts-Tracking beim Aufrufer.
   async _applyStilkorrektur(html, selectedStyles, onProgress) {
     const aiBase = html.length || 1;
-    this.setStatus('KI überarbeitet Stil… (0 Zeichen)', true);
+    this.setStatus(this.t('stilkorrektur.working', { chars: 0 }), true);
     try {
       let completionInfo = null;
       const result = await this.callAI(
         buildStilkorrekturPrompt(html, selectedStyles),
         SYSTEM_STILKORREKTUR,
         (chars) => {
-          this.setStatus(`KI überarbeitet Stil… (${chars} Zeichen)`, true);
+          this.setStatus(this.t('stilkorrektur.working', { chars }), true);
           if (onProgress) onProgress(chars, aiBase);
         },
         ({ tokensIn, tokensOut, tokPerSec }) => { completionInfo = { tokensIn, tokensOut, tokPerSec }; }
       );
       if (completionInfo?.tokPerSec) {
-        this.setStatus(`KI überarbeitet Stil… (${completionInfo.tokPerSec} tok/s)`, true);
+        this.setStatus(this.t('stilkorrektur.tps', { tps: completionInfo.tokPerSec }), true);
       }
       if (Array.isArray(result?.korrekturen) && result.korrekturen.length > 0) {
         return this._applyCorrections(html, result.korrekturen.map(k => ({ original: k.original, korrektur: k.ersatz })));
       }
     } catch (e) {
       console.error('[_applyStilkorrektur]', e);
-      this.setStatus('Stilkorrektur fehlgeschlagen – speichere übrige Korrekturen…', true);
+      this.setStatus(this.t('stilkorrektur.failed'), true);
     }
     return html;
   },
@@ -110,7 +112,7 @@ export const bookstackMethods = {
   // onProgress(pct, statusText) – Fortschritt (10–85), statusText nur bei Phasenwechsel.
   // Gibt das gespeicherte HTML zurück. Wirft bei Fehler.
   async _loadApplyAndSave(selectedErrors, selectedStyles, onProgress) {
-    onProgress(10, 'Lade aktuelle Seite…');
+    onProgress(10, this.t('bs.loadingPage'));
     const page = await this.bsGet('pages/' + this.currentPage.id);
 
     let finalHtml = selectedErrors.length > 0
@@ -127,10 +129,10 @@ export const bookstackMethods = {
     }
 
     if (finalHtml.length < page.html.length * SAFETY_HTML_RATIO) {
-      throw new Error('Korrigiertes HTML wirkt unvollständig – Speichern abgebrochen.');
+      throw new Error(this.t('bs.unsafeHtml'));
     }
 
-    onProgress(85, 'Speichere in BookStack…');
+    onProgress(85, this.t('bs.savingToBookStack'));
     await this.bsPut('pages/' + this.currentPage.id, { html: finalHtml, name: this.currentPage.name });
     return finalHtml;
   },

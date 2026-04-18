@@ -1,11 +1,11 @@
 <!-- Buchbewertung -->
 <div class="card" x-show="showBookReviewCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="'Buchbewertung: ' + selectedBookName"></span>
+    <span class="card-title" x-text="t('review.title', { name: selectedBookName })"></span>
     <div class="card-actions">
       <button @click="runBookReview()" :disabled="bookReviewLoading">
         <span x-show="bookReviewLoading" class="spinner"></span>
-        <span x-text="bookReviewOut ? 'Neu bewerten' : 'Buch bewerten'"></span>
+        <span x-text="bookReviewOut ? t('review.rerun') : t('review.start')"></span>
       </button>
     </div>
   </div>
@@ -17,7 +17,7 @@
 
   <!-- Buchbewertungs-Verlauf -->
   <div x-show="bookReviewHistory.length > 0" class="card-history-section">
-    <div class="history-heading">Frühere Bewertungen</div>
+    <div class="history-heading" x-text="t('review.history')"></div>
     <template x-for="entry in bookReviewHistory" :key="entry.id">
       <div>
         <div class="history-item" @click="selectedBookReviewId = selectedBookReviewId === entry.id ? null : entry.id">
@@ -29,12 +29,12 @@
         </div>
         <div x-show="selectedBookReviewId === entry.id" class="history-detail">
           <div x-show="entry.review_json?.zusammenfassung" class="stilbox">
-            <div class="bewertung-section-title">Zusammenfassung</div>
+            <div class="bewertung-section-title" x-text="t('review.summary')"></div>
             <span x-text="entry.review_json?.zusammenfassung"></span>
           </div>
           <div x-show="entry.review_json?.staerken?.length">
             <div class="stilbox">
-              <div class="bewertung-section-title">Stärken</div>
+              <div class="bewertung-section-title" x-text="t('review.strengths')"></div>
               <ul class="bullet-list pos">
                 <template x-for="(s, i) in (entry.review_json?.staerken || [])" :key="i">
                   <li x-text="s"></li>
@@ -44,7 +44,7 @@
           </div>
           <div x-show="entry.review_json?.schwaechen?.length">
             <div class="stilbox">
-              <div class="bewertung-section-title">Schwächen</div>
+              <div class="bewertung-section-title" x-text="t('review.weaknesses')"></div>
               <ul class="bullet-list neg">
                 <template x-for="(s, i) in (entry.review_json?.schwaechen || [])" :key="i">
                   <li x-text="s"></li>
@@ -53,7 +53,7 @@
             </div>
           </div>
           <div x-show="entry.review_json?.fazit" class="fazit" x-text="entry.review_json?.fazit"></div>
-          <button class="btn-delete-history" @click.stop="deleteBookReview(entry.id)" title="Eintrag löschen">Eintrag löschen</button>
+          <button class="btn-delete-history" @click.stop="deleteBookReview(entry.id)" :title="t('common.deleteEntry')" x-text="t('common.deleteEntry')"></button>
         </div>
       </div>
     </template>
