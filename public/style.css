@@ -288,8 +288,18 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* Metric-adjusted Fallback: matcht Lato-Dimensionen, eliminiert Font-Swap-CLS. */
+@font-face {
+  font-family: 'Lato Fallback';
+  src: local('Arial');
+  size-adjust: 97.38%;
+  ascent-override: 101.3%;
+  descent-override: 21.9%;
+  line-gap-override: 0%;
+}
+
 body {
-  font-family: 'Lato', sans-serif;
+  font-family: 'Lato', 'Lato Fallback', sans-serif;
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -386,6 +396,7 @@ code {
   gap: 1rem;
   flex-wrap: wrap;
   margin-bottom: 2rem;
+  min-height: 2.5rem;
 }
 
 .subtitle {
