@@ -64,6 +64,7 @@ export const bookstackSearchMethods = {
   },
 
   selectPageFromBookstackSearch(hit) {
+    if (this.currentPage && this.currentPage.id === hit.id) return;
     const page = this.pages.find(p => p.id === hit.id) || { id: hit.id, name: hit.name };
     this.clearBookstackSearch();
     this.selectPage(page);

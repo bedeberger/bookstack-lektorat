@@ -25,6 +25,7 @@ import { userSettingsMethods } from './user-settings.js';
 import { configureI18n, i18nMethods, getSupportedLocales } from './i18n.js';
 import { pageViewMethods } from './page-view.js';
 import { editorEditMethods } from './editor-edit.js';
+import { editorFindMethods } from './editor-find.js';
 import { focusMethods } from './editor-focus.js';
 import { synonymMethods } from './editor-synonyme.js';
 import { figurLookupMethods } from './editor-figur-lookup.js';
@@ -264,6 +265,9 @@ document.addEventListener('alpine:init', () => {
     kapitelReviewHistory: {},
     selectedKapitelReviewId: null,
     _kapitelReviewPollTimer: null,
+    newPageTitle: '',
+    newPageCreating: false,
+    newPageError: '',
     tokEsts: {},
     _tokenEstGen: 0,
     pageLastChecked: {},
@@ -1635,6 +1639,9 @@ document.addEventListener('alpine:init', () => {
       this.kapitelReviewLoading = false;
       this.kapitelReviewChapterId = '';
       this.selectedKapitelReviewId = null;
+      this.newPageTitle = '';
+      this.newPageCreating = false;
+      this.newPageError = '';
       this.chatSessions = [];
       this.chatMessages = [];
       this.chatSessionId = null;
@@ -1857,6 +1864,7 @@ document.addEventListener('alpine:init', () => {
     ...i18nMethods,
     ...pageViewMethods,
     ...editorEditMethods,
+    ...editorFindMethods,
     ...focusMethods,
     ...synonymMethods,
     ...figurLookupMethods,

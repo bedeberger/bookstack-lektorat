@@ -182,19 +182,68 @@ export const kapitelReviewMethods = {
     }
   },
 
-  // Liste der Kapitel, die sich für ein Makro-Review lohnen: mehr als eine Seite.
-  // Einzelseiten-„Kapitel" werden über das normale Seiten-Lektorat abgedeckt.
+  // Sobald ein Buch als „strukturiert" erkennbar ist (≥2 Kapitel und
+  // mindestens eines mit mehreren Seiten), lohnt sich das Kapitel-Review für
+  // alle Kapitel – auch für solche mit nur einer Seite. Reine Flachbücher
+  // (jedes Kapitel = 1 Seite) deckt das Seiten-Lektorat ab.
+  _bookQualifiesForChapterReview() {
+    const chapters = (this.tree || []).filter(i => i.type === 'chapter');
+    return chapters.length >= 2 && chapters.some(c => c.pages.length > 1);
+  },
+
+  // Liste der Kapitel, die fürs Kapitel-Review anklickbar sind. Qualifiziert das
+  // Buch nicht, bleibt die Liste leer. `pageCount` wird weiter mitgeliefert, weil
+  // die Sidebar daraus die Badge rendert.
   // Als Methode statt Getter, weil Alpine-Spread Getter einmalig evaluiert und
   // als tote Property einfriert – `this.tree` wäre beim Spread undefined.
   kapitelReviewChapterOptions() {
+    if (!this._bookQualifiesForChapterReview()) return [];
     return (this.tree || [])
-      .filter(i => i.type === 'chapter' && i.pages.length > 1)
+      .filter(i => i.type === 'chapter' && i.pages.length > 0)
       .map(c => ({ id: c.id, name: c.name, pageCount: c.pages.length }));
+  },
+
+  // Aktuell im Kapitel-Review gewähltes Kapitel – liefert das vollständige
+  // Tree-Item inkl. `pages`, damit die Verdichtungs-Ansicht direkt zugreifen kann.
+  kapitelReviewSelectedChapter() {
+    if (!this.kapitelReviewChapterId) return null;
+    return (this.tree || []).find(i =>
+      i.type === 'chapter' && String(i.id) === String(this.kapitelReviewChapterId)
+    ) || null;
   },
 
   // Historieneinträge für das aktuell gewählte Kapitel
   kapitelReviewCurrentHistory() {
     if (!this.kapitelReviewChapterId) return [];
     return this.kapitelReviewHistory?.[String(this.kapitelReviewChapterId)] || [];
+  },
+
+  // Schnell eine Seite im aktuellen Kapitel anlegen. BookStack hängt neue
+  // Seiten automatisch ans Ende (höchste `priority`) an – keine Sortierlogik
+  // nötig. Nach Erfolg: Baum neu laden und zur neuen Seite springen.
+  async createKapitelPage() {
+    const chapter = this.kapitelReviewSelectedChapter();
+    const title = (this.newPageTitle || '').trim();
+    if (!chapter || !title || this.newPageCreating) return;
+    this.newPageCreating = true;
+    this.newPageError = '';
+    try {
+      const created = await this.bsPost('pages', {
+        chapter_id: parseInt(chapter.id),
+        name: title,
+        html: '<p></p>',
+      });
+      this.newPageTitle = '';
+      await this.loadPages();
+      if (created?.id) {
+        const page = this.pages.find(p => p.id === created.id);
+        if (page) await this.selectPage(page);
+      }
+    } catch (e) {
+      console.error('[createKapitelPage]', e);
+      this.newPageError = e.message || this.t('common.unknownError');
+    } finally {
+      this.newPageCreating = false;
+    }
   },
 };

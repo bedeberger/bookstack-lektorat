@@ -85,11 +85,15 @@
                   <span class="heatmap-detail-page-count" x-text="t('fehlerHeatmap.detail.countLabel', { n: page.count })"></span>
                 </div>
                 <template x-if="page.samples">
-                  <div>
-                    <template x-for="(s, i) in page.samples" :key="i">
-                      <div class="heatmap-detail-sample">
-                        <span class="tag stil-repetition-word" x-text="s.token"></span>
-                        <span class="heatmap-detail-original" x-text="s.sentence"></span>
+                  <div class="heatmap-detail-token-groups">
+                    <template x-for="(g, i) in stilGroupSamplesByToken(page.samples)" :key="i">
+                      <div class="heatmap-detail-token-group">
+                        <span class="tag stil-repetition-word heatmap-detail-token" x-text="g.token"></span>
+                        <div class="heatmap-detail-token-sentences">
+                          <template x-for="(sentence, j) in g.sentences" :key="j">
+                            <span class="heatmap-detail-original" x-text="sentence"></span>
+                          </template>
+                        </div>
                       </div>
                     </template>
                   </div>

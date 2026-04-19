@@ -40,7 +40,7 @@
       @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading && !focusMode) runCheck()"
       @keydown.ctrl.s.prevent.window="if (editMode) quickSave()"
       @keydown.meta.s.prevent.window="if (editMode) quickSave()"
-      @keydown.window="handleShortcutsHotkey($event)">
+      @keydown.window="handleShortcutsHotkey($event); handleFindHotkey($event)">
 
 <div class="session-banner" x-show="sessionExpired" x-cloak>
   <span class="session-banner-text" x-text="t('session.expired')"></span>
@@ -102,7 +102,7 @@
       <div class="bookstack-search-status bookstack-search-status--error" x-show="!bookstackSearchLoading && bookstackSearchError" x-text="bookstackSearchError"></div>
       <div class="bookstack-search-empty" x-show="!bookstackSearchLoading && !bookstackSearchError && bookstackSearched && bookstackSearchResults.length === 0" x-text="t('book.search.noResults')"></div>
       <template x-for="hit in bookstackSearchResults" :key="hit.id">
-        <div class="bookstack-search-item" x-show="!bookstackSearchLoading" @click="selectPageFromBookstackSearch(hit)">
+        <div class="bookstack-search-item" :class="{ 'is-current': currentPage && currentPage.id === hit.id }" x-show="!bookstackSearchLoading" @click="selectPageFromBookstackSearch(hit)">
           <div class="bookstack-search-item-title" x-html="escPreserveStrong(hit.preview_html?.name || hit.name)"></div>
           <div class="bookstack-search-item-snippet" x-html="escPreserveStrong(hit.preview_html?.content || '')" x-show="hit.preview_html?.content"></div>
         </div>
@@ -115,10 +115,6 @@
     <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showBookReviewCard }" @click="toggleBookReviewCard()">
       <span class="feature-tile-title" x-text="t('tile.review')"></span>
       <span class="feature-tile-desc" x-text="t('tile.review.desc')"></span>
-    </button>
-    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showKapitelReviewCard }" @click="toggleKapitelReviewCard()" :disabled="kapitelReviewChapterOptions().length === 0" :title="t('tile.kapitelReview.title')">
-      <span class="feature-tile-title" x-text="t('tile.kapitelReview')"></span>
-      <span class="feature-tile-desc" x-text="t('tile.kapitelReview.desc')"></span>
     </button>
     <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showFiguresCard }" @click="toggleFiguresCard()" :title="t('tile.figuren.title')">
       <span class="feature-tile-title" x-text="t('tile.figuren')"></span>
@@ -187,6 +183,7 @@
 <div id="partial-user-settings"></div>
 <!-- Edit-Toolbar (Bubble + Slash) – teleportiert nach <body>, hier nur Scope-Host -->
 <div id="partial-editor-toolbar"></div>
+<div id="partial-editor-find"></div>
 <div id="partial-shortcuts"></div>
 
 </div><!-- end layout-main -->

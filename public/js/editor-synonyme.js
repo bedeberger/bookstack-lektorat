@@ -1,4 +1,5 @@
 import { escHtml, fetchJson } from './utils.js';
+import { rangeForWordAtClientPoint } from './editor-figur-lookup.js';
 
 // Synonym-Ermittler für den contenteditable-Editor.
 // Rechtsklick auf ein markiertes Einzelwort → Custom-Menü → KI-Call →
@@ -17,22 +18,45 @@ export const synonymMethods = {
 
   _onEditContextMenu(e) {
     if (!this.editMode) return;
+    // macOS: Ctrl+Klick feuert `contextmenu` statt `click`. Deshalb Figuren-
+    // Lookup auch hier versuchen, sonst ginge Ctrl+Klick auf eine Figur auf
+    // Mac nie.
+    if ((e.ctrlKey || e.metaKey) && this._tryOpenFigurLookupAt?.(e)) return;
+
     // Mobile: natives Kontextmenü behalten, Synonym-Feature ist Desktop-only.
     if (window.innerWidth <= 768) return;
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
-    const text = sel.toString();
-    if (!text || !WORD_RE.test(text.trim())) return;
-
-    // Selection muss innerhalb des Edit-Containers liegen
     const editEl = this._getEditEl?.();
     if (!editEl) return;
-    const range = sel.getRangeAt(0);
-    if (!editEl.contains(range.commonAncestorContainer)) return;
+    const sel = window.getSelection();
+
+    let range = null;
+    let wort = '';
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      const text = sel.toString().trim();
+      if (!text || !WORD_RE.test(text)) return;
+      const r = sel.getRangeAt(0);
+      if (!editEl.contains(r.commonAncestorContainer)) return;
+      range = r.cloneRange();
+      wort  = text;
+    } else {
+      // Safari markiert beim Rechtsklick auf ein Wort die Auswahl nicht
+      // automatisch — Wort unter Cursor selbst ermitteln.
+      const hit = rangeForWordAtClientPoint(e.clientX, e.clientY);
+      if (!hit) return;
+      if (!editEl.contains(hit.range.commonAncestorContainer)) return;
+      range = hit.range;
+      wort  = hit.word;
+      // Sichtbare Selektion setzen, damit der User weiss, auf welches Wort
+      // sich das Menü bezieht.
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(range.cloneRange());
+      }
+    }
 
     e.preventDefault();
-    this._synonymRange = range.cloneRange();
-    this._synonymWord  = text.trim();
+    this._synonymRange = range;
+    this._synonymWord  = wort;
     this.showSynonymPicker = false;
     this.synonymThesList = [];
     this.synonymThesError = '';

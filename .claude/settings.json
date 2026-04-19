@@ -200,7 +200,22 @@
       "Bash(node --check public/js/stil-heatmap.js)",
       "Bash(node --check public/js/fehler-heatmap.js)",
       "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('public/js/i18n/de.json','utf8'\\)\\); JSON.parse\\(require\\('fs'\\).readFileSync\\('public/js/i18n/en.json','utf8'\\)\\); console.log\\('JSON ok'\\);\")",
-      "Bash(node -e \"require\\('./lib/page-index.js'\\); require\\('./db/schema.js'\\); console.log\\('OK'\\)\")"
+      "Bash(node -e \"require\\('./lib/page-index.js'\\); require\\('./db/schema.js'\\); console.log\\('OK'\\)\")",
+      "Bash(grep -v \":0$\")",
+      "Bash(lsof -nP -iTCP:3737 -sTCP:LISTEN)",
+      "Bash(node -e \"const { pruneStaleBookData } = require\\('./db/schema'\\); console.log\\('pruneStaleBookData exported:', typeof pruneStaleBookData\\);\")",
+      "Bash(node --check public/js/editor-find.js)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('public/js/i18n/de.json','utf8'\\)\\); JSON.parse\\(require\\('fs'\\).readFileSync\\('public/js/i18n/en.json','utf8'\\)\\); console.log\\('OK'\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(p['id'], p['name']\\) for p in d['data']]\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); html=d.get\\('html',''\\); print\\('has <br>:', '<br' in html\\); print\\('first 3 br contexts:'\\); import re; [print\\(repr\\(html[max\\(0,m.start\\(\\)-40\\):m.end\\(\\)+40]\\)\\) for m in list\\(re.finditer\\(r'<br', html\\)\\)[:3]]\")",
+      "Bash(node /private/tmp/shift-enter-probe.js)",
+      "Bash(node --check public/js/editor-figur-lookup.js)",
+      "Bash(node /private/tmp/shift-enter-probe2.js)",
+      "Bash(node -e \"require\\('./routes/jobs/shared.js'\\); console.log\\('OK'\\)\")",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('/Users/bd/ClaudeProjects/bookstack-lektorat/public/js/i18n/de.json','utf8'\\)\\);JSON.parse\\(require\\('fs'\\).readFileSync\\('/Users/bd/ClaudeProjects/bookstack-lektorat/public/js/i18n/en.json','utf8'\\)\\);console.log\\('ok'\\)\")",
+      "Read(//Users/bd/Library/Caches/ms-playwright/**)",
+      "Bash(node /private/tmp/shift-enter-webkit.js)",
+      "Bash(git check-ignore *)"
     ]
   }
 }

@@ -5,12 +5,23 @@ const AUTOSAVE_INTERVAL_MS = 30000;
 const DRAFT_DEBOUNCE_MS = 500;
 const DRAFT_KEY = (pageId) => `editor_draft_${pageId}`;
 
+// Entfernt jegliche Korrekturvorschlags-Markup, das buildHighlightedHtml
+// erzeugen kann, bevor der Editor-Inhalt nach BookStack gespeichert wird:
+//   - .lektorat-mark / .chat-mark → unwrap (Originaltext behalten)
+//   - .lektorat-ins / .chat-mark-ins → komplett entfernen (nur Vorschlagstext)
+// Defensiv: greift auch, falls Vorschlags-Markup auf unerwartetem Weg
+// (Re-Render, Paste, künftige Refactors) in das contenteditable gerät.
 function stripLektoratMarks(html) {
   let out = html;
-  if (out && out.indexOf('lektorat-mark') !== -1) {
+  const hasMark = out && (out.indexOf('lektorat-mark') !== -1 || out.indexOf('chat-mark') !== -1);
+  const hasIns = out && (out.indexOf('lektorat-ins') !== -1 || out.indexOf('chat-mark-ins') !== -1);
+  if (hasMark || hasIns) {
     const tmp = document.createElement('div');
     tmp.innerHTML = out;
-    tmp.querySelectorAll('.lektorat-mark').forEach(mark => {
+    tmp.querySelectorAll('.lektorat-ins, .chat-mark-ins').forEach(ins => {
+      ins.parentNode?.removeChild(ins);
+    });
+    tmp.querySelectorAll('.lektorat-mark, .chat-mark').forEach(mark => {
       const parent = mark.parentNode;
       if (!parent) return;
       while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);

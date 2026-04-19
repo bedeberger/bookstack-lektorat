@@ -38,6 +38,15 @@ function wordAtTextNode(textNode, offset) {
 }
 
 function wordAtClientPoint(x, y) {
+  const r = rangeForWordAtClientPoint(x, y);
+  return r ? r.word : null;
+}
+
+// Expandiert einen Punkt (clientX/Y) zum darunterliegenden Wort und liefert
+// sowohl das Wort als auch einen Range über genau dieses Wort. Wird auch vom
+// Synonym-Handler genutzt, um bei Safari-Rechtsklick ohne Selection das Wort
+// unter dem Cursor automatisch zu markieren.
+export function rangeForWordAtClientPoint(x, y) {
   let range = null;
   if (document.caretRangeFromPoint) {
     range = document.caretRangeFromPoint(x, y);
@@ -52,7 +61,20 @@ function wordAtClientPoint(x, y) {
   if (!range) return null;
   const node = range.startContainer;
   if (!node || node.nodeType !== Node.TEXT_NODE) return null;
-  return wordAtTextNode(node, range.startOffset);
+  const text = node.nodeValue || '';
+  if (!text) return null;
+  const isWordChar = (c) => /[\p{L}\p{N}\-']/u.test(c);
+  let start = range.startOffset;
+  let end   = range.startOffset;
+  while (start > 0 && isWordChar(text[start - 1])) start--;
+  while (end < text.length && isWordChar(text[end])) end++;
+  if (start === end) return null;
+  const word = text.slice(start, end);
+  if (!WORD_AT_POINT_RE.test(word)) return null;
+  const wordRange = document.createRange();
+  wordRange.setStart(node, start);
+  wordRange.setEnd(node, end);
+  return { range: wordRange, word };
 }
 
 export const figurLookupMethods = {
@@ -103,13 +125,23 @@ export const figurLookupMethods = {
   _onEditClick(e) {
     if (!this.editMode) return;
     if (!(e.ctrlKey || e.metaKey)) return;
+    this._tryOpenFigurLookupAt(e);
+  },
+
+  // Gemeinsamer Einstieg für Figuren-Popover an einer Click-Position.
+  // Auf macOS feuert Ctrl+Click kein `click`-Event, nur `contextmenu` — daher
+  // ruft auch der Synonym-Kontextmenü-Handler diese Methode auf.
+  // Gibt true zurück, wenn ein Popover geöffnet wurde.
+  _tryOpenFigurLookupAt(e) {
+    if (!this.editMode) return false;
     const word = wordAtClientPoint(e.clientX, e.clientY);
-    if (!word) return;
+    if (!word) return false;
     const fig = this._findFigurByWord(word);
-    if (!fig) return;
+    if (!fig) return false;
     e.preventDefault();
     e.stopPropagation();
     this._openFigurLookup(fig, e.clientX, e.clientY);
+    return true;
   },
 
   _openFigurLookup(fig, clientX, clientY) {

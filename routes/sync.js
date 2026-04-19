@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, getAnyUserToken, getAllUserTokens, reconcilePageIds } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
+const { db, getAnyUserToken, getAllUserTokens, reconcilePageIds, pruneStaleBookData } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
 const logger = require('../logger');
 const { CHARS_PER_TOKEN } = require('../lib/ai');
 const { computePageIndex, writePageIndex, writeFigureMentionsForPageAllUsers, tokenizeNamesForStopwords, METRICS_VERSION } = require('../lib/page-index');
@@ -109,6 +109,18 @@ function _upsertPagesCache(bookId, pages, chapters) {
       _upsertChapterStmt.run(c.id, bookId, c.name, c.updated_at || null);
     }
   })();
+
+  // In BookStack gelöschte Seiten/Kapitel aus Cache + Historie entfernen.
+  // Muss VOR reconcilePageIds() laufen, damit reconcile nicht versucht, verwaiste
+  // Einträge anhand der (bereits gelöschten) Pages zu heilen.
+  const pruned = pruneStaleBookData(bookId, pages.map(p => p.id), chapters.map(c => c.id));
+  if (pruned.stale_pages || pruned.stale_chapters) {
+    logger.info(`Prune Buch ${bookId}: ${pruned.stale_pages} Seiten, ${pruned.stale_chapters} Kapitel entfernt ` +
+      `(page_checks=${pruned.page_checks}, page_stats=${pruned.page_stats}, chat_sessions=${pruned.chat_sessions}, ` +
+      `chapter_reviews=${pruned.chapter_reviews}, chapter_extract_cache=${pruned.chapter_extract_cache}, ` +
+      `figure_appearances=${pruned.figure_appearances}, location_chapters=${pruned.location_chapters}).`);
+  }
+
   reconcilePageIds();
 }
 

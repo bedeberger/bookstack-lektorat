@@ -64,6 +64,34 @@ export const bookstackMethods = {
     }
   },
 
+  async bsPost(path, body) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(new Error(this.t('bs.timeoutPut'))), 90000);
+    try {
+      const r = await fetch('/api/' + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+      if (!r.ok) {
+        let detail = '';
+        try { const e = await r.json(); detail = e.message || e.error || ''; } catch (_) {}
+        throw new Error(detail
+          ? this.t('bs.apiErrorDetail', { status: r.status, detail })
+          : this.t('bs.apiError', { status: r.status }));
+      }
+      return r.json();
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        throw new Error(ctrl.signal.reason?.message || this.t('bs.timeoutAborted'));
+      }
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+
   _applyCorrections(html, fehler) {
     let result = html;
     for (const f of fehler) {

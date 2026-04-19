@@ -35,11 +35,11 @@
                :class="{
                  disabled: item.pages.length === 0,
                  'tree-chapter-header--active': showKapitelReviewCard && String(kapitelReviewChapterId) === String(item.id),
-                 'tree-chapter-header--reviewable': item.pages.length > 1,
+                 'tree-chapter-header--reviewable': _bookQualifiesForChapterReview() && item.pages.length > 0,
                }"
-               :title="item.pages.length > 1 && !pageSearch ? t('sidebar.reviewChapterTitle', { name: item.name }) : ''"
+               :title="_bookQualifiesForChapterReview() && item.pages.length > 0 && !pageSearch ? t('sidebar.reviewChapterTitle', { name: item.name }) : ''"
                @click="if (pageSearch || item.pages.length === 0) return;
-                       if (item.pages.length > 1) openKapitelReviewForChapter(item.id);
+                       if (_bookQualifiesForChapterReview()) openKapitelReviewForChapter(item.id);
                        else item.open = !item.open">
             <span class="tree-chevron" :class="{ open: item.open }" x-show="item.pages.length > 0"
                   @click.stop="if (!pageSearch && item.pages.length > 0) item.open = !item.open"></span>

@@ -272,6 +272,10 @@ const SINGLE_PASS_LIMIT = 60000;
 // Extraktionsqualität. 20K Zeichen ≈ 5K Token Eingabetext – zusammen mit
 // System-Prompt (~4K) und Output-Reserve (14K) bleibt man bei ~23K Token pro Call.
 const PER_CHUNK_LIMIT = 20000;
+// Mindestabstand zwischen zwei updateJob-Calls aus dem Streaming-onProgress.
+// Reduziert Event-Loop-Last bei parallelen KI-Streams; die Live-Anzeige ruckelt
+// in der Praxis bei 200 ms nicht sichtbar.
+const PROGRESS_THROTTLE_MS = 200;
 const BATCH_SIZE = 15;
 
 async function loadPageContents(pages, chMap, minLength, onBatch, userToken, signal = null) {
@@ -368,20 +372,25 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
   // (tok.inflight ist ein Map, der nur vom komplett-analyse-Job gesetzt wird, damit
   // bei parallelen Kapitel-Calls die Live-Anzeige alle in-flight-Tokens summiert.)
   const callId = Symbol();
+  // Throttle: updateJob höchstens alle PROGRESS_THROTTLE_MS. Bei parallelen Streams
+  // (Komplettanalyse) feuert onProgress sonst hunderte Mal/s pro Call und belastet
+  // den Event-Loop, sodass andere Clients Requests verzögert bedient werden.
+  // Kalibrierung läuft ungedrosselt – sie ist einmalig und braucht die erste tokIn-Meldung.
+  // Finale Werte werden nach callAI-Ende ohnehin explizit gesetzt.
+  let lastUpdateMs = 0;
   const onProgress = ({ chars, tokIn }) => {
-    const updates = {};
-    // Einmalige Recalibrierung sobald tokIn bekannt ist
     if (!calibrated && tokIn > 0) {
       dynExpectedChars = Math.max(expectedChars, Math.round(tokIn * 4 * outputRatio));
       calibrated = true;
     }
-    // Fortschrittsbalken auf Basis akkumulierter Zeichen
+    const now = Date.now();
+    if (now - lastUpdateMs < PROGRESS_THROTTLE_MS) return;
+    lastUpdateMs = now;
+
+    const updates = {};
     if (fromPct != null && toPct != null) {
       updates.progress = Math.round(fromPct + (toPct - fromPct) * Math.min(1, chars / dynExpectedChars));
     }
-    // Live-Token-Anzeige: tok.in/tok.out = bisherige abgeschlossene Calls.
-    // Wenn tok.inflight vorhanden (parallele Calls), werden alle in-flight-Tokens
-    // aller laufenden Calls summiert – sonst nur der aktuelle Call.
     if (tok.inflight) {
       const entry = tok.inflight.get(callId) || { tokIn: 0, outEst: 0 };
       tok.inflight.set(callId, {

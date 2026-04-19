@@ -255,6 +255,23 @@ export const stilMethods = {
     };
   },
 
+  // Gruppiert Samples nach Token, damit im Detail-Panel jedes Token einmal als
+  // Badge erscheint und die Beispielsätze darunter eingerückt stehen.
+  stilGroupSamplesByToken(samples) {
+    const groups = [];
+    const byToken = new Map();
+    for (const s of samples || []) {
+      const token = s.token || '';
+      if (!byToken.has(token)) {
+        const group = { token, sentences: [] };
+        byToken.set(token, group);
+        groups.push(group);
+      }
+      byToken.get(token).sentences.push(s.sentence);
+    }
+    return groups;
+  },
+
   async stilJumpToPage(pageId) {
     const page = (this.pages || []).find(p => p.id === pageId);
     if (!page) return;

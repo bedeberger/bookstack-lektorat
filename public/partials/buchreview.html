@@ -20,7 +20,8 @@
     <div class="history-heading" x-text="t('review.history')"></div>
     <template x-for="entry in bookReviewHistory" :key="entry.id">
       <div>
-        <div class="history-item" @click="selectedBookReviewId = selectedBookReviewId === entry.id ? null : entry.id">
+        <div class="history-item" :class="{ 'history-item--open': selectedBookReviewId === entry.id }"
+             @click="selectedBookReviewId = selectedBookReviewId === entry.id ? null : entry.id">
           <span class="history-date" x-text="formatDate(entry.reviewed_at)"></span>
           <span x-show="entry.review_json?.gesamtnote" class="badge badge-ok review-stars"
             x-text="'★'.repeat(Math.min(6, +(entry.review_json?.gesamtnote) || 0)) + '☆'.repeat(Math.max(0, 6 - (+(entry.review_json?.gesamtnote) || 0)))"></span>
@@ -28,31 +29,7 @@
           <span class="history-chevron" :class="{ open: selectedBookReviewId === entry.id }">›</span>
         </div>
         <div x-show="selectedBookReviewId === entry.id" class="history-detail">
-          <div x-show="entry.review_json?.zusammenfassung" class="stilbox">
-            <div class="bewertung-section-title" x-text="t('review.summary')"></div>
-            <span x-text="entry.review_json?.zusammenfassung"></span>
-          </div>
-          <div x-show="entry.review_json?.staerken?.length">
-            <div class="stilbox">
-              <div class="bewertung-section-title" x-text="t('review.strengths')"></div>
-              <ul class="bullet-list pos">
-                <template x-for="(s, i) in (entry.review_json?.staerken || [])" :key="i">
-                  <li x-text="s"></li>
-                </template>
-              </ul>
-            </div>
-          </div>
-          <div x-show="entry.review_json?.schwaechen?.length">
-            <div class="stilbox">
-              <div class="bewertung-section-title" x-text="t('review.weaknesses')"></div>
-              <ul class="bullet-list neg">
-                <template x-for="(s, i) in (entry.review_json?.schwaechen || [])" :key="i">
-                  <li x-text="s"></li>
-                </template>
-              </ul>
-            </div>
-          </div>
-          <div x-show="entry.review_json?.fazit" class="fazit" x-text="entry.review_json?.fazit"></div>
+          <div x-html="entry.review_json ? _renderReviewHtml(entry.review_json) : ''"></div>
           <button type="button" class="btn-delete-history" @click.stop="deleteBookReview(entry.id)" :title="t('common.deleteEntry')" x-text="t('common.deleteEntry')"></button>
         </div>
       </div>
