@@ -1,4 +1,4 @@
-<!-- Stil-Heatmap: Kapitel × Metrik -->
+<!-- Stil-Heatmap: Kapitel × Metrik. Klick auf eine Zelle öffnet Treffer-Beispiele. -->
 <div class="card" x-show="showStilCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="t('stil.title', { name: selectedBookName })"></span>
@@ -18,19 +18,17 @@
        class="muted-msg muted-msg--spaced" x-text="t('stil.emptyState')"></div>
 
   <template x-if="stilData?.pages?.length > 0">
-    <div class="stil-heatmap-wrap">
-      <!-- Metrik-Legende -->
-      <div class="stil-legend" x-text="t('stil.legend')"></div>
+    <div class="heatmap-wrap">
+      <div class="heatmap-legend" x-text="t('stil.legend')"></div>
 
-      <!-- Heatmap-Tabelle -->
-      <div class="stil-heatmap">
-        <table class="stil-heatmap-table">
+      <div class="heatmap-scroll">
+        <table class="heatmap-table">
           <thead>
             <tr>
-              <th class="stil-heatmap-rowhead" x-text="t('stil.chapter')"></th>
-              <th class="stil-heatmap-words" x-text="t('stil.words')"></th>
+              <th class="heatmap-rowhead" x-text="t('stil.chapter')"></th>
+              <th class="heatmap-numcol" x-text="t('stil.words')"></th>
               <template x-for="m in stilMetricDefs" :key="m.key">
-                <th class="stil-heatmap-metric" :title="t('stil.tip.' + m.key)">
+                <th :title="t('stil.tip.' + m.key)">
                   <span x-text="t(m.label)"></span>
                 </th>
               </template>
@@ -39,14 +37,19 @@
           <tbody>
             <template x-for="c in stilChaptersAggregated()" :key="c.key">
               <tr>
-                <th class="stil-heatmap-rowhead" scope="row">
-                  <span class="stil-chapter-name" x-text="c.name"></span>
-                  <span class="stil-chapter-pages" x-text="t('stil.pagesCount', { n: c.pageCount })"></span>
+                <th class="heatmap-rowhead" scope="row">
+                  <span class="heatmap-rowhead-main" x-text="c.name"></span>
+                  <span class="heatmap-rowhead-sub" x-text="t('stil.pagesCount', { n: c.pageCount })"></span>
                 </th>
-                <td class="stil-heatmap-words" x-text="(c.words || 0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH')"></td>
+                <td class="heatmap-numcol" x-text="(c.words || 0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH')"></td>
                 <template x-for="m in stilMetricDefs" :key="m.key">
-                  <td class="stil-heatmap-cell"
+                  <td class="heatmap-cell"
+                      :class="{
+                        'heatmap-cell--clickable': stilIsClickableMetric(m.key) && (c[m.key] || 0) > 0,
+                        'heatmap-cell--active': activeStilDetailKey === (c.key + ':' + m.key),
+                      }"
                       :style="stilCellStyle(c[m.key], m.key, stilChaptersAggregated())"
+                      @click="stilIsClickableMetric(m.key) && (c[m.key] || 0) > 0 && toggleStilDetail(c.key, m.key)"
                       x-text="stilFormat(c[m.key], m.key)">
                   </td>
                 </template>
@@ -56,22 +59,53 @@
         </table>
       </div>
 
-      <!-- Wiederholungs-Drilldown pro Kapitel -->
-      <details class="stil-repetitions">
-        <summary x-text="t('stil.repetitions.summary')"></summary>
-        <div class="stil-repetitions-list">
-          <template x-for="c in stilChaptersAggregated()" :key="'rep-' + c.key">
-            <div class="stil-repetitions-chapter" x-show="c.topRepetitions.length > 0">
-              <div class="stil-repetitions-title" x-text="c.name"></div>
-              <div class="stil-repetitions-words">
-                <template x-for="r in c.topRepetitions" :key="r.word">
-                  <span class="tag stil-repetition-word" x-text="r.word + ' · ' + r.count"></span>
+      <!-- Detail-Panel: Treffer-Beispiele für die angeklickte Zelle -->
+      <template x-if="stilActiveDetail()">
+        <div class="heatmap-detail">
+          <div class="heatmap-detail-header">
+            <span class="heatmap-detail-title"
+                  x-text="t('stil.detail.title', {
+                    metric: stilActiveDetail().metricLabel,
+                    chapter: stilActiveDetail().chapterName,
+                  })"></span>
+            <button type="button" class="heatmap-detail-close"
+                    @click="activeStilDetailKey = null"
+                    x-text="t('common.close')"></button>
+          </div>
+          <div class="heatmap-detail-list">
+            <template x-if="stilActiveDetail().entries.length === 0">
+              <div class="muted-msg" x-text="t('stil.detail.empty')"></div>
+            </template>
+            <template x-for="page in stilActiveDetail().entries" :key="page.page_id">
+              <div class="heatmap-detail-page">
+                <div class="heatmap-detail-page-header">
+                  <span class="tag internal-link"
+                        @click="stilJumpToPage(page.page_id)"
+                        x-text="page.page_name"></span>
+                  <span class="heatmap-detail-page-count" x-text="t('fehlerHeatmap.detail.countLabel', { n: page.count })"></span>
+                </div>
+                <template x-if="page.samples">
+                  <div>
+                    <template x-for="(s, i) in page.samples" :key="i">
+                      <div class="heatmap-detail-sample">
+                        <span class="tag stil-repetition-word" x-text="s.token"></span>
+                        <span class="heatmap-detail-original" x-text="s.sentence"></span>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+                <template x-if="page.words">
+                  <div class="stil-repetitions-words">
+                    <template x-for="w in page.words" :key="w.token">
+                      <span class="tag stil-repetition-word" x-text="w.token + ' · ' + w.count"></span>
+                    </template>
+                  </div>
                 </template>
               </div>
-            </div>
-          </template>
+            </template>
+          </div>
         </div>
-      </details>
+      </template>
     </div>
   </template>
 </div>

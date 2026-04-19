@@ -195,7 +195,12 @@
       "Bash(node -c routes/history.js)",
       "Bash(node -c routes/jobs/shared.js)",
       "Bash(node -c public/js/book-settings.js)",
-      "Bash(node -c public/js/i18n.js)"
+      "Bash(node -c public/js/i18n.js)",
+      "Bash(git mv *)",
+      "Bash(node --check public/js/stil-heatmap.js)",
+      "Bash(node --check public/js/fehler-heatmap.js)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('public/js/i18n/de.json','utf8'\\)\\); JSON.parse\\(require\\('fs'\\).readFileSync\\('public/js/i18n/en.json','utf8'\\)\\); console.log\\('JSON ok'\\);\")",
+      "Bash(node -e \"require\\('./lib/page-index.js'\\); require\\('./db/schema.js'\\); console.log\\('OK'\\)\")"
     ]
   }
 }

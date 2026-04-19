@@ -16,7 +16,7 @@
  * 11.  Analysis Output ............. .stilbox, .fazit, .bewertung-*, .bullet-list
  * 12.  Section Headings ............ .section-heading*  (JS-generierter Output)
  * 13.  Progress Bar ................ .progress-bar-wrap, .progress-bar
- * 14.  Tree View ................... .tree-chapter*, .tree-chevron, .page-item-indent
+ * 14.  Tree View ................... .tree-chapter*, .tree-chevron, .tree-chapter-pages
  * 15.  History ..................... .history-*
  * 16.  Token-Schätzung ............. .tok-badge, .tok-*, .tok-tooltip
  * 17.  Figurenübersicht ............ .figuren-graph-container, .figur-*
@@ -994,18 +994,23 @@ ins {
 
 /* === Page list === */
 .page-item {
-  padding: 10px 12px;
-  border: 0.5px solid var(--color-border);
+  padding: 7px 10px;
+  border: 0.5px solid transparent;
   border-radius: var(--radius-md);
-  margin-bottom: 6px;
+  margin-bottom: 3px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
 }
-.page-item:hover { background: var(--color-hover-light); }
-.page-item.selected { border-color: var(--color-accent); background: var(--color-accent-soft); }
+.page-item:hover { background: var(--color-hover-light); color: var(--color-text); }
+.page-item.selected {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
 .page-item.disabled { opacity: 0.4; cursor: not-allowed; }
 .page-item.disabled:hover { background: none; }
 
@@ -2103,19 +2108,21 @@ body.focus-mode .edit-slash-menu { display: none !important; }
 }
 
 /* === Tree view === */
-.tree-chapter { margin-bottom: 2px; }
+.tree-chapter { margin-bottom: 6px; }
 
 .tree-chapter-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
+  gap: 6px;
+  padding: 8px 10px 8px 2px;
+  border: 0.5px solid transparent;
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-weight: 400;
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
+  font-weight: 600;
+  font-size: var(--font-size-md);
+  color: var(--color-text);
   user-select: none;
+  margin-bottom: 2px;
 }
 .tree-chapter-meta {
   margin-left: auto;
@@ -2125,8 +2132,33 @@ body.focus-mode .edit-slash-menu { display: none !important; }
   flex-shrink: 0;
 }
 .tree-chapter-header:hover { background: var(--color-hover); }
-.tree-chapter-header.disabled { opacity: 0.4; cursor: not-allowed; }
+.tree-chapter-header.disabled { opacity: 0.4; cursor: not-allowed; font-weight: 400; }
 .tree-chapter-header.disabled:hover { background: none; }
+.tree-chapter-header--active,
+.tree-chapter-header--active:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+/* Guide-Linie für die Seiten eines Kapitels */
+.tree-chapter-pages {
+  position: relative;
+  margin-left: 10px;
+  padding-left: 14px;
+  padding-top: 2px;
+}
+.tree-chapter-pages::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 4px;
+  width: 1px;
+  background: var(--color-border);
+}
+.tree-chapter-header--active + .tree-chapter-pages::before {
+  background: var(--color-accent);
+}
 
 .tree-chevron {
   display: inline-block;
@@ -2141,7 +2173,6 @@ body.focus-mode .edit-slash-menu { display: none !important; }
 }
 .tree-chevron.open { transform: rotate(90deg); }
 
-.page-item-indent { margin-left: 22px; }
 
 /* === History === */
 .history-heading {
@@ -3451,33 +3482,33 @@ body.focus-mode .edit-slash-menu { display: none !important; }
 }
 
 
-/* === Stil-Heatmap === */
-.stil-heatmap-wrap {
+/* === Heatmap (shared: Stil + Fehler) === */
+.heatmap-wrap {
   margin-top: 10px;
 }
-.stil-legend {
+.heatmap-legend {
   font-size: var(--font-size-sm);
   color: var(--color-muted);
   margin-bottom: 8px;
 }
-.stil-heatmap {
+.heatmap-scroll {
   overflow-x: auto;
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-sm);
 }
-.stil-heatmap-table {
+.heatmap-table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--font-size-sm);
 }
-.stil-heatmap-table th,
-.stil-heatmap-table td {
+.heatmap-table th,
+.heatmap-table td {
   padding: 6px 10px;
   text-align: right;
   border-bottom: 0.5px solid var(--color-border);
   white-space: nowrap;
 }
-.stil-heatmap-table thead th {
+.heatmap-table thead th {
   background: var(--color-surface-alt, var(--color-surface));
   color: var(--color-muted);
   font-weight: 500;
@@ -3486,56 +3517,158 @@ body.focus-mode .edit-slash-menu { display: none !important; }
   top: 0;
   z-index: 1;
 }
-.stil-heatmap-rowhead {
+.heatmap-rowhead {
   text-align: left !important;
   font-weight: 500;
 }
-.stil-chapter-name {
+.heatmap-rowhead-main {
   display: block;
   color: var(--color-fg);
 }
-.stil-chapter-pages {
+.heatmap-rowhead-sub {
   display: block;
   font-size: var(--font-size-xs, 11px);
   color: var(--color-muted);
   margin-top: 2px;
 }
-.stil-heatmap-words {
+.heatmap-numcol {
   color: var(--color-muted);
 }
-.stil-heatmap-cell {
+.heatmap-cell {
   font-variant-numeric: tabular-nums;
   transition: background 0.15s ease;
 }
-.stil-heatmap-cell:hover {
+.heatmap-cell:hover {
+  outline: 1px solid var(--color-primary);
+  outline-offset: -1px;
+}
+.heatmap-cell--clickable {
+  cursor: pointer;
+}
+.heatmap-cell--active {
   outline: 1px solid var(--color-primary);
   outline-offset: -1px;
 }
 
-.stil-repetitions {
-  margin-top: 12px;
+/* Coverage-Progress in Rowhead (Fehler-Heatmap) */
+.heatmap-coverage {
+  display: block;
+  margin-top: 4px;
+  height: 3px;
+  background: var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  max-width: 160px;
 }
-.stil-repetitions > summary {
-  cursor: pointer;
-  color: var(--color-muted);
+.heatmap-coverage-bar {
+  display: block;
+  height: 100%;
+  background: var(--color-primary);
+}
+
+/* Mode-Toggle (offen / angenommen / gesamt) */
+.mode-toggle {
+  display: inline-flex;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.mode-toggle-btn {
+  padding: 4px 10px;
   font-size: var(--font-size-sm);
-  padding: 6px 0;
+  background: transparent;
+  color: var(--color-muted);
+  border: none;
+  cursor: pointer;
 }
-.stil-repetitions-list {
+.mode-toggle-btn:not(:last-child) {
+  border-right: 0.5px solid var(--color-border);
+}
+.mode-toggle-btn:hover {
+  background: var(--color-surface-alt, var(--color-surface));
+}
+.mode-toggle-btn--active {
+  background: var(--color-primary);
+  color: var(--color-surface);
+}
+.mode-toggle-btn--active:hover {
+  background: var(--color-primary-hover);
+}
+
+/* Heatmap-Detail-Panel (aufklappbar unter der Tabelle) */
+.heatmap-detail {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt, var(--color-surface));
+}
+.heatmap-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.heatmap-detail-title {
+  font-weight: 500;
+}
+.heatmap-detail-close {
+  padding: 2px 8px;
+  font-size: var(--font-size-sm);
+  background: transparent;
+  color: var(--color-muted);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.heatmap-detail-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 8px;
 }
-.stil-repetitions-chapter {
+.heatmap-detail-page {
+  padding: 6px 0;
   border-top: 0.5px dashed var(--color-border);
-  padding-top: 6px;
 }
-.stil-repetitions-title {
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
+.heatmap-detail-page:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.heatmap-detail-page-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   margin-bottom: 4px;
 }
+.heatmap-detail-page-count {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-muted);
+}
+.heatmap-detail-sample {
+  font-size: var(--font-size-sm);
+  margin-left: 8px;
+  padding: 4px 0;
+}
+.heatmap-detail-original {
+  background: color-mix(in srgb, var(--color-danger, #c0392b) 15%, transparent);
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+}
+.heatmap-detail-arrow {
+  margin: 0 6px;
+  color: var(--color-muted);
+}
+.heatmap-detail-korrektur {
+  background: color-mix(in srgb, var(--color-success, #27ae60) 15%, transparent);
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+}
+.heatmap-detail-erklaerung {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-muted);
+  margin-top: 2px;
+}
+
 .stil-repetitions-words {
   display: flex;
   flex-wrap: wrap;

@@ -8,11 +8,13 @@ import { treeMethods } from './tree.js';
 import { bookstackSearchMethods } from './bookstack-search.js';
 import { lektoratMethods } from './lektorat.js';
 import { reviewMethods } from './review.js';
+import { kapitelReviewMethods } from './kapitel-review.js';
 import { figurenMethods } from './figuren.js';
 import { ereignisseMethods } from './ereignisse.js';
 import { graphMethods } from './graph.js';
 import { bookstatsMethods } from './bookstats.js';
-import { stilMethods } from './stil.js';
+import { stilMethods } from './stil-heatmap.js';
+import { fehlerHeatmapMethods } from './fehler-heatmap.js';
 import { chatMethods } from './chat.js';
 import { bookChatMethods } from './book-chat.js';
 import { szenenMethods } from './szenen.js';
@@ -252,6 +254,16 @@ document.addEventListener('alpine:init', () => {
     activeHistoryEntryId: null,
     bookReviewHistory: [],
     selectedBookReviewId: null,
+    // Kapitel-Review-State
+    showKapitelReviewCard: false,
+    kapitelReviewChapterId: '',
+    kapitelReviewOut: '',
+    kapitelReviewStatus: '',
+    kapitelReviewLoading: false,
+    kapitelReviewProgress: 0,
+    kapitelReviewHistory: {},
+    selectedKapitelReviewId: null,
+    _kapitelReviewPollTimer: null,
     tokEsts: {},
     _tokenEstGen: 0,
     pageLastChecked: {},
@@ -318,6 +330,13 @@ document.addEventListener('alpine:init', () => {
     stilLoading: false,
     stilSyncing: false,
     stilStatus: '',
+    activeStilDetailKey: null,
+    showFehlerHeatmapCard: false,
+    fehlerHeatmapData: null,
+    fehlerHeatmapLoading: false,
+    fehlerHeatmapStatus: '',
+    fehlerHeatmapMode: 'all',
+    activeFehlerDetailKey: null,
     showChatCard: false,
     chatSessions: [],
     chatMessages: [],
@@ -661,8 +680,8 @@ document.addEventListener('alpine:init', () => {
     },
 
     // ── URL-Hash-Permalinks ─────────────────────────────────────────────────
-    // Schema: #profil | #book/:bookId[/page/:pageId|/figur/:figId|/ort/:ortId|/<view>]
-    // Views: figuren, orte, szenen, ereignisse, kontinuitaet, bewertung, chat, stats, einstellungen
+    // Schema: #profil | #book/:bookId[/page/:pageId|/figur/:figId|/ort/:ortId|/kapitel[/:chapterId]|/<view>]
+    // Views: figuren, orte, szenen, ereignisse, kontinuitaet, bewertung, kapitel, chat, stats, einstellungen
     _computeHash() {
       if (this.showUserSettingsCard) return '#profil';
       if (!this.selectedBookId) return '';
@@ -673,15 +692,19 @@ document.addEventListener('alpine:init', () => {
         parts.push('figur', String(this.selectedFigurId));
       } else if (this.showOrteCard && this.selectedOrtId) {
         parts.push('ort', String(this.selectedOrtId));
+      } else if (this.showKapitelReviewCard && this.kapitelReviewChapterId) {
+        parts.push('kapitel', String(this.kapitelReviewChapterId));
       } else if (this.showFiguresCard) parts.push('figuren');
       else if (this.showOrteCard) parts.push('orte');
       else if (this.showSzenenCard) parts.push('szenen');
       else if (this.showEreignisseCard) parts.push('ereignisse');
       else if (this.showKontinuitaetCard) parts.push('kontinuitaet');
       else if (this.showBookReviewCard) parts.push('bewertung');
+      else if (this.showKapitelReviewCard) parts.push('kapitel');
       else if (this.showBookChatCard) parts.push('chat');
       else if (this.showBookStatsCard) parts.push('stats');
       else if (this.showStilCard) parts.push('stil');
+      else if (this.showFehlerHeatmapCard) parts.push('fehler');
       else if (this.showBookSettingsCard) parts.push('einstellungen');
       return '#' + parts.join('/');
     },
@@ -847,6 +870,18 @@ document.addEventListener('alpine:init', () => {
           case 'bewertung':
             if (!this.showBookReviewCard) await this.toggleBookReviewCard();
             break;
+          case 'kapitel':
+            if (!this.showKapitelReviewCard) await this.toggleKapitelReviewCard();
+            if (arg) {
+              // Nur übernehmen, wenn es ein qualifizierendes Kapitel ist (>1 Seite).
+              const opts = this.kapitelReviewChapterOptions();
+              if (opts.some(c => String(c.id) === String(arg))) {
+                this.kapitelReviewChapterId = String(arg);
+                this.kapitelReviewOut = '';
+                this.setKapitelReviewStatus('');
+              }
+            }
+            break;
           case 'chat':
             if (!this.showBookChatCard) await this.toggleBookChatCard();
             break;
@@ -855,6 +890,9 @@ document.addEventListener('alpine:init', () => {
             break;
           case 'stil':
             if (!this.showStilCard) await this.toggleStilCard();
+            break;
+          case 'fehler':
+            if (!this.showFehlerHeatmapCard) await this.toggleFehlerHeatmapCard();
             break;
           case 'einstellungen':
             if (!this.showBookSettingsCard) await this.toggleBookSettingsCard();
@@ -872,7 +910,9 @@ document.addEventListener('alpine:init', () => {
         'selectedFigurId', 'selectedOrtId',
         'showFiguresCard', 'showOrteCard', 'showSzenenCard', 'showEreignisseCard',
         'showKontinuitaetCard', 'showBookReviewCard', 'showBookChatCard',
-        'showBookStatsCard', 'showStilCard', 'showBookSettingsCard', 'showUserSettingsCard',
+        'showKapitelReviewCard', 'kapitelReviewChapterId',
+        'showBookStatsCard', 'showStilCard', 'showFehlerHeatmapCard',
+        'showBookSettingsCard', 'showUserSettingsCard',
       ];
       for (const prop of watchers) {
         this.$watch(prop, () => this._updateHash());
@@ -1359,9 +1399,11 @@ document.addEventListener('alpine:init', () => {
       }
       // Buchkarten schliessen – nur eine Ebene (Buch oder Seite) aktiv
       this.showBookReviewCard = false;
+      this.showKapitelReviewCard = false;
       this.showFiguresCard = false;
       this.showBookStatsCard = false;
       this.showStilCard = false;
+      this.showFehlerHeatmapCard = false;
       this.showBookChatCard = false;
       this.showEreignisseCard = false;
       this.showSzenenCard = false;
@@ -1439,6 +1481,25 @@ document.addEventListener('alpine:init', () => {
         this.startReviewPoll(jobId);
       });
 
+      // Kapitel-Review: nur einen laufenden Job pro Buch reconnecten – erste
+      // Fundstelle gewinnt (Dedup läuft pro Kapitel, gleichzeitige Läufe sind rar).
+      for (const item of (this.tree || [])) {
+        if (item.type !== 'chapter') continue;
+        const lsKey = `lektorat_chapter_review_job_${bookId}_${item.id}`;
+        const jobIdLs = localStorage.getItem(lsKey);
+        if (!jobIdLs) continue;
+        await this._reconnectJob(lsKey, (job, jobId) => {
+          this.kapitelReviewLoading = true;
+          this.kapitelReviewProgress = job.progress || 0;
+          this.kapitelReviewChapterId = String(item.id);
+          this.showKapitelReviewCard = true;
+          this.kapitelReviewOut = '';
+          this.setKapitelReviewStatus(job.statusText ? this.t(job.statusText, job.statusParams) : this.t('common.analysisRunning'), true);
+          this.startKapitelReviewPoll(jobId, item.id);
+        });
+        if (this._kapitelReviewPollTimer) break;
+      }
+
       await this._reconnectJob('lektorat_figures_job_' + bookId, (job, jobId) => {
         this.figurenLoading = true;
         this.figurenProgress = job.progress || 0;
@@ -1479,11 +1540,13 @@ document.addEventListener('alpine:init', () => {
     // Beim Öffnen einer Buchkarte wird auch die offene Seite geschlossen.
     _closeOtherMainCards(keep) {
       if (keep !== 'bookReview') this.showBookReviewCard = false;
+      if (keep !== 'kapitelReview') this.showKapitelReviewCard = false;
       if (keep !== 'figures') this.showFiguresCard = false;
       if (keep !== 'szenen') this.showSzenenCard = false;
       if (keep !== 'ereignisse') this.showEreignisseCard = false;
       if (keep !== 'bookStats') this.showBookStatsCard = false;
       if (keep !== 'stil') this.showStilCard = false;
+      if (keep !== 'fehlerHeatmap') this.showFehlerHeatmapCard = false;
       if (keep !== 'bookChat') this.showBookChatCard = false;
       if (keep !== 'orte') this.showOrteCard = false;
       if (keep !== 'kontinuitaet') this.showKontinuitaetCard = false;
@@ -1565,6 +1628,13 @@ document.addEventListener('alpine:init', () => {
       this.bookStatsDelta = null;
       this.globalZeitstrahl = [];
       this.bookReviewHistory = [];
+      this.kapitelReviewHistory = {};
+      this.kapitelReviewOut = '';
+      this.kapitelReviewStatus = '';
+      this.kapitelReviewProgress = 0;
+      this.kapitelReviewLoading = false;
+      this.kapitelReviewChapterId = '';
+      this.selectedKapitelReviewId = null;
       this.chatSessions = [];
       this.chatMessages = [];
       this.chatSessionId = null;
@@ -1594,7 +1664,7 @@ document.addEventListener('alpine:init', () => {
         '_figuresPollTimer', '_ortePollTimer', '_szenenPollTimer',
         '_consolidatePollTimer', '_kontinuitaetPollTimer',
         '_ereignisseExtractPollTimer', '_chatPollTimer',
-        '_bookChatPollTimer', '_reviewPollTimer', '_komplettPollTimer',
+        '_bookChatPollTimer', '_reviewPollTimer', '_kapitelReviewPollTimer', '_komplettPollTimer',
       ];
       for (const t of timers) {
         if (this[t]) { clearInterval(this[t]); this[t] = null; }
@@ -1625,6 +1695,7 @@ document.addEventListener('alpine:init', () => {
       if (this.showSzenenCard)     jobs.push(this.loadSzenen(bookId));
       if (this.showBookStatsCard)  jobs.push(this.loadBookStats(bookId));
       if (this.showStilCard)       jobs.push(this.loadStilStats(bookId));
+      if (this.showFehlerHeatmapCard) jobs.push(this.loadFehlerHeatmap());
       if (this.showBookSettingsCard && typeof this.loadBookSettings === 'function') {
         jobs.push(this.loadBookSettings());
       }
@@ -1645,6 +1716,10 @@ document.addEventListener('alpine:init', () => {
       this.bookReviewStatus = '';
       this.bookReviewHistory = [];
       this.selectedBookReviewId = null;
+      this.showKapitelReviewCard = false;
+      this.kapitelReviewOut = '';
+      this.kapitelReviewStatus = '';
+      this.selectedKapitelReviewId = null;
       if (this._batchPollTimer) { clearInterval(this._batchPollTimer); this._batchPollTimer = null; }
       this.batchLoading = false;
       this.batchProgress = 0;
@@ -1692,6 +1767,12 @@ document.addEventListener('alpine:init', () => {
       this.stilStatus = '';
       this.stilLoading = false;
       this.stilSyncing = false;
+      this.activeStilDetailKey = null;
+      this.showFehlerHeatmapCard = false;
+      this.fehlerHeatmapData = null;
+      this.fehlerHeatmapStatus = '';
+      this.fehlerHeatmapLoading = false;
+      this.activeFehlerDetailKey = null;
       this.showOrteCard = false;
       this.orte = [];
       this.orteStatus = '';
@@ -1759,11 +1840,13 @@ document.addEventListener('alpine:init', () => {
     ...bookstackSearchMethods,
     ...lektoratMethods,
     ...reviewMethods,
+    ...kapitelReviewMethods,
     ...figurenMethods,
     ...ereignisseMethods,
     ...graphMethods,
     ...bookstatsMethods,
     ...stilMethods,
+    ...fehlerHeatmapMethods,
     ...chatMethods,
     ...bookChatMethods,
     ...szenenMethods,

@@ -82,6 +82,9 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule, buchKontext = '
     SYSTEM_LEKTORAT:             buildSystem(sp.lektorat          || '', rulesWithAutorenstil),
     SYSTEM_BUCHBEWERTUNG:        buildSystem(sp.buchbewertung     || '', rules),
     SYSTEM_KAPITELANALYSE:       buildSystem(sp.kapitelanalyse    || '', rules),
+    // Kapitel-Review nutzt die gleiche Bewerter-Rolle wie die Buchbewertung,
+    // wenn prompt-config.json keinen eigenen `kapitelreview`-Slot liefert.
+    SYSTEM_KAPITELREVIEW:        buildSystem(sp.kapitelreview     || sp.buchbewertung || '', rules),
     SYSTEM_FIGUREN:              buildSystem(sp.figuren           || '', rules),
     SYSTEM_STILKORREKTUR:        buildSystem(sp.stilkorrektur     || '', rulesWithAutorenstil),
     // Synonym-Suche: schlanker System-Prompt – nur Rolle + Locale-Norm (korrekturRegeln)
@@ -113,6 +116,7 @@ export let STOPWORDS                    = [];
 export let SYSTEM_LEKTORAT              = null;
 export let SYSTEM_BUCHBEWERTUNG         = null;
 export let SYSTEM_KAPITELANALYSE        = null;
+export let SYSTEM_KAPITELREVIEW         = null;
 export let SYSTEM_FIGUREN               = null;
 export let SYSTEM_STILKORREKTUR         = null;
 export let SYSTEM_SYNONYM               = null;
@@ -201,6 +205,7 @@ export function configurePrompts(cfg, provider = 'claude') {
   SYSTEM_LEKTORAT              = def.SYSTEM_LEKTORAT              ?? null;
   SYSTEM_BUCHBEWERTUNG         = def.SYSTEM_BUCHBEWERTUNG         ?? null;
   SYSTEM_KAPITELANALYSE        = def.SYSTEM_KAPITELANALYSE        ?? null;
+  SYSTEM_KAPITELREVIEW         = def.SYSTEM_KAPITELREVIEW         ?? null;
   SYSTEM_FIGUREN               = def.SYSTEM_FIGUREN               ?? null;
   SYSTEM_STILKORREKTUR         = def.SYSTEM_STILKORREKTUR         ?? null;
   SYSTEM_SYNONYM               = def.SYSTEM_SYNONYM               ?? null;
@@ -488,6 +493,43 @@ Antworte mit diesem JSON-Schema:
   "qualitaet": "Allgemeiner Qualitätseindruck in 1-2 Sätzen",
   "staerken": ["konkrete Stärke 1", "konkrete Stärke 2"],
   "schwaechen": ["konkrete Schwäche 1", "konkrete Schwäche 2"]
+}
+
+Kapitelinhalt (${pageCount} Seiten):
+
+${chText}`;
+}
+
+// Kapitel-Review: makro-kritische Bewertung eines einzelnen Kapitels.
+// Fokus: Dramaturgie, Pacing, Kohärenz, Perspektive, Figuren – Dinge, die
+// beim Seiten-Lektorat (Mikro-Fehler) und bei der Buchbewertung (Gesamtnote)
+// naturgemäss nicht erfasst werden.
+export function buildChapterReviewPrompt(chapterName, bookName, pageCount, chText) {
+  return `Bewerte das Kapitel «${chapterName}» aus dem Buch «${bookName}» kritisch und umfassend.
+Der Fokus liegt auf seitenübergreifenden Qualitäten – nicht auf Mikro-Fehlern (dafür gibt es das Seiten-Lektorat).
+Prüfe:
+- Dramaturgie und Spannungsbogen (Szenenabfolge, Aufbau, Höhepunkte)
+- Pacing (Tempo, Längen, Leerlauf, Szenenrhythmus)
+- Kohärenz und roter Faden (Übergänge zwischen Seiten/Szenen, Logik der Handlung)
+- Erzählperspektive und Konsistenz innerhalb des Kapitels
+- Figuren im Kapitel (Auftreten, Stimmigkeit, Entwicklung)
+
+GEWICHTUNG: Dramaturgie, Pacing und Kohärenz sind die zentralen Bewertungskriterien dieses Kapitels und fliessen stärker in die Gesamtnote ein als sprachliche Einzelmängel.
+
+Antworte mit diesem JSON-Schema:
+{
+  "gesamtnote": 4.5,
+  "gesamtnote_begruendung": "Ein Satz warum diese Note (gesamtnote als Dezimalzahl von 1.0=sehr schwach bis 6.0=ausgezeichnet, Halbschritte erlaubt)",
+  "zusammenfassung": "2-3 Sätze Gesamteindruck dieses Kapitels",
+  "dramaturgie": "Spannungsbogen, Szenenstruktur, Aufbau (3-4 Sätze)",
+  "pacing": "Tempo, Längen, Leerlauf (2-3 Sätze)",
+  "kohaerenz": "Roter Faden und Übergänge zwischen Seiten/Szenen (2-3 Sätze)",
+  "perspektive": "Erzählperspektive und Konsistenz innerhalb des Kapitels (1-2 Sätze)",
+  "figuren": "Auftreten und Stimmigkeit der Figuren in diesem Kapitel (2-3 Sätze)",
+  "staerken": ["konkrete Stärke 1", "konkrete Stärke 2", "konkrete Stärke 3"],
+  "schwaechen": ["konkrete Schwäche 1", "konkrete Schwäche 2"],
+  "empfehlungen": ["Empfehlung 1", "Empfehlung 2", "Empfehlung 3"],
+  "fazit": "Abschliessendes Urteil in 1-2 Sätzen"
 }
 
 Kapitelinhalt (${pageCount} Seiten):
@@ -1650,6 +1692,20 @@ export const SCHEMA_CHAPTER_ANALYSIS = _obj({
   qualitaet: _str,
   staerken: { type: 'array', items: _str },
   schwaechen: { type: 'array', items: _str },
+});
+export const SCHEMA_CHAPTER_REVIEW = _obj({
+  gesamtnote: _num,
+  gesamtnote_begruendung: _str,
+  zusammenfassung: _str,
+  dramaturgie: _str,
+  pacing: _str,
+  kohaerenz: _str,
+  perspektive: _str,
+  figuren: _str,
+  staerken: { type: 'array', items: _str },
+  schwaechen: { type: 'array', items: _str },
+  empfehlungen: { type: 'array', items: _str },
+  fazit: _str,
 });
 
 // ── Chat ─────────────────────────────────────────────────────────────────────

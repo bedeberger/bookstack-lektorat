@@ -1,0 +1,51 @@
+<!-- Kapitel-Review: Makrobewertung eines einzelnen Kapitels -->
+<div class="card" x-show="showKapitelReviewCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title" x-text="t('kapitelReview.title', { name: selectedBookName })"></span>
+    <div class="card-actions">
+      <button type="button"
+              @click="runKapitelReview()"
+              :disabled="kapitelReviewLoading || !kapitelReviewChapterId">
+        <span x-show="kapitelReviewLoading" class="spinner"></span>
+        <span x-text="kapitelReviewOut ? t('kapitelReview.rerun') : t('kapitelReview.start')"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Kapitel-Auswahl (nur Kapitel mit mehr als einer Seite) -->
+  <div x-show="kapitelReviewChapterOptions().length > 0" class="book-settings-row">
+    <label class="book-settings-label" for="kr-chapter" x-text="t('kapitelReview.chapterLabel')"></label>
+    <select id="kr-chapter" class="book-settings-select" x-model="kapitelReviewChapterId" :disabled="kapitelReviewLoading">
+      <template x-for="c in kapitelReviewChapterOptions()" :key="c.id">
+        <option :value="String(c.id)" x-text="c.name + ' (' + t('sidebar.pagesCount', { n: c.pageCount }) + ')'"></option>
+      </template>
+    </select>
+  </div>
+  <div x-show="kapitelReviewChapterOptions().length === 0" class="muted-msg" x-text="t('kapitelReview.noEligibleChapters')"></div>
+
+  <div class="progress-bar-wrap" x-show="kapitelReviewProgress > 0">
+    <div class="progress-bar" :style="'width:' + kapitelReviewProgress + '%'"></div>
+  </div>
+  <div class="card-status" x-html="kapitelReviewStatus"></div>
+  <div x-html="kapitelReviewOut"></div>
+
+  <!-- Verlauf für das aktuell gewählte Kapitel -->
+  <div x-show="kapitelReviewCurrentHistory().length > 0" class="card-history-section">
+    <div class="history-heading" x-text="t('kapitelReview.history')"></div>
+    <template x-for="entry in kapitelReviewCurrentHistory()" :key="entry.id">
+      <div>
+        <div class="history-item" @click="selectedKapitelReviewId = selectedKapitelReviewId === entry.id ? null : entry.id">
+          <span class="history-date" x-text="formatDate(entry.reviewed_at)"></span>
+          <span x-show="entry.review_json?.gesamtnote" class="badge badge-ok review-stars"
+            x-text="'★'.repeat(Math.min(6, +(entry.review_json?.gesamtnote) || 0)) + '☆'.repeat(Math.max(0, 6 - (+(entry.review_json?.gesamtnote) || 0)))"></span>
+          <span class="tag" x-text="entry.model"></span>
+          <span class="history-chevron" :class="{ open: selectedKapitelReviewId === entry.id }">›</span>
+        </div>
+        <div x-show="selectedKapitelReviewId === entry.id" class="history-detail">
+          <div x-html="entry.review_json ? _renderKapitelReviewHtml(entry.review_json) : ''"></div>
+          <button type="button" class="btn-delete-history" @click.stop="deleteKapitelReview(entry.id)" :title="t('common.deleteEntry')" x-text="t('common.deleteEntry')"></button>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>

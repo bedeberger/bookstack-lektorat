@@ -204,6 +204,7 @@ export const treeMethods = {
       this.setStatus('');
       await Promise.all([
         this.loadBookReviewHistory(bookId),
+        this.loadKapitelReviewHistory(bookId),
         this.loadFiguren(bookId),
         this.loadLastKomplettRun(bookId),
       ]);

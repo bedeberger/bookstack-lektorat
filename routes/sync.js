@@ -2,7 +2,7 @@ const express = require('express');
 const { db, getAnyUserToken, getAllUserTokens, reconcilePageIds } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
 const logger = require('../logger');
 const { CHARS_PER_TOKEN } = require('../lib/ai');
-const { computePageIndex, writePageIndex, writeFigureMentionsForPageAllUsers, METRICS_VERSION } = require('../lib/page-index');
+const { computePageIndex, writePageIndex, writeFigureMentionsForPageAllUsers, tokenizeNamesForStopwords, METRICS_VERSION } = require('../lib/page-index');
 
 const router = express.Router();
 
@@ -166,6 +166,17 @@ async function syncBook(bookId, token) {
       .all(bookId).map(r => [r.page_id, r])
   );
 
+  // Eigennamen aus Figuren + Schauplätzen + Szenen-Titeln dieses Buchs
+  // (user-übergreifend, weil page_stats shared ist) → werden aus der
+  // Wiederholungs-Metrik ausgeschlossen, damit "Anna" oder "Zürich" nicht als
+  // Stil-Befund auftauchen.
+  const nameSource = [
+    ...db.prepare('SELECT name, kurzname FROM figures WHERE book_id = ?').all(bookId).flatMap(r => [r.name, r.kurzname]),
+    ...db.prepare('SELECT name FROM locations WHERE book_id = ?').all(bookId).map(r => r.name),
+    ...db.prepare('SELECT titel FROM figure_scenes WHERE book_id = ?').all(bookId).map(r => r.titel),
+  ];
+  const extraStopwords = tokenizeNamesForStopwords(nameSource);
+
   const previewItems = [];
   const indexItems = [];
   for (let i = 0; i < pages.length; i += BATCH) {
@@ -188,7 +199,7 @@ async function syncBook(bookId, token) {
         totalSentences += sentences;
         for (const w of wordList) globalWordSet.add(w.toLowerCase());
 
-        const indexResult = computePageIndex(fullText);
+        const indexResult = computePageIndex(fullText, { extraStopwords });
         indexItems.push({ page_id: r.value.page_id, index: indexResult, fullText });
       }
     }

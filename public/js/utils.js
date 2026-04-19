@@ -26,6 +26,41 @@ export async function fetchText(url, opts) {
 // Sicherheitscheck vor dem Speichern: < 50 % wirkt unvollständig → Abbruch
 export const SAFETY_HTML_RATIO = 0.5;
 
+// Intl-Locale-Tag aus uiLocale (en → en-US, sonst de-CH).
+export function localeTag(uiLocale) {
+  return uiLocale === 'en' ? 'en-US' : 'de-CH';
+}
+
+// Locale-korrekte Zahl mit fixer Dezimalstellenzahl. Null/NaN → '–'.
+export function formatNumber(value, uiLocale, decimals = 1) {
+  if (value == null || !isFinite(value)) return '–';
+  return value.toLocaleString(localeTag(uiLocale), {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+// Min/Max über `items`. `getValue` liefert Zahl oder null/NaN.
+// Leere Menge → { min: 0, max: 0 } (konsistent mit den Heatmap-Callern).
+export function minMaxBy(items, getValue) {
+  let min = Infinity, max = -Infinity;
+  for (const it of items) {
+    const v = getValue(it);
+    if (typeof v !== 'number' || !isFinite(v)) continue;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  if (min === Infinity) return { min: 0, max: 0 };
+  return { min, max };
+}
+
+// Heatmap-Zellfarbe: t∈[0,1], 0 → grün, 1 → rot. Liefert den
+// `background: …;`-Inline-Style — Opazität/Zusätze hängt der Aufrufer selbst an.
+export function heatmapCellBg(t) {
+  const pct = Math.round(Math.max(0, Math.min(1, t)) * 100);
+  return `background: color-mix(in srgb, var(--color-danger, #c0392b) ${pct}%, var(--color-success, #27ae60));`;
+}
+
 export function fmtTok(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';

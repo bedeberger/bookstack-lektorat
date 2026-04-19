@@ -5,6 +5,7 @@ const router = express.Router();
 const { sharedRouter } = require('./jobs/shared');
 const { lektoratRouter } = require('./jobs/lektorat');
 const { reviewRouter } = require('./jobs/review');
+const { kapitelRouter } = require('./jobs/kapitel');
 const { komplettRouter, runKomplettAnalyseAll } = require('./jobs/komplett');
 const { chatRouter } = require('./jobs/chat');
 const { synonymeRouter } = require('./jobs/synonyme');
@@ -14,6 +15,7 @@ const { synonymeRouter } = require('./jobs/synonyme');
 // GET /kontinuitaet/:book_id) abfangen würden.
 router.use('/', lektoratRouter);
 router.use('/', reviewRouter);
+router.use('/', kapitelRouter);
 router.use('/', komplettRouter);
 router.use('/', chatRouter);
 router.use('/', synonymeRouter);

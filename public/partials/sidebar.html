@@ -31,8 +31,18 @@
     <div>
       <template x-if="item.type === 'chapter'">
         <div class="tree-chapter">
-          <div class="tree-chapter-header" :class="{ disabled: item.pages.length === 0 }" @click="if (!pageSearch && item.pages.length > 0) item.open = !item.open">
-            <span class="tree-chevron" :class="{ open: item.open }" x-show="item.pages.length > 0">›</span>
+          <div class="tree-chapter-header"
+               :class="{
+                 disabled: item.pages.length === 0,
+                 'tree-chapter-header--active': showKapitelReviewCard && String(kapitelReviewChapterId) === String(item.id),
+                 'tree-chapter-header--reviewable': item.pages.length > 1,
+               }"
+               :title="item.pages.length > 1 && !pageSearch ? t('sidebar.reviewChapterTitle', { name: item.name }) : ''"
+               @click="if (pageSearch || item.pages.length === 0) return;
+                       if (item.pages.length > 1) openKapitelReviewForChapter(item.id);
+                       else item.open = !item.open">
+            <span class="tree-chevron" :class="{ open: item.open }" x-show="item.pages.length > 0"
+                  @click.stop="if (!pageSearch && item.pages.length > 0) item.open = !item.open"></span>
             <span x-text="item.name"></span>
             <span class="tree-chapter-meta">
               <span class="tag" x-show="item.pages.length > 1" x-text="t('sidebar.pagesCount', { n: item.pages.length })"></span>
@@ -44,9 +54,9 @@
               </template>
             </span>
           </div>
-          <div x-show="item.open">
+          <div x-show="item.open" class="tree-chapter-pages">
             <template x-for="page in item.pages" :key="page.id">
-              <div class="page-item page-item-indent" :class="{ selected: currentPage?.id === page.id, disabled: tokEsts[page.id] && tokEsts[page.id].words === 0 }" @click="if (!(tokEsts[page.id] && tokEsts[page.id].words === 0)) selectPage(page)">
+              <div class="page-item" :class="{ selected: currentPage?.id === page.id, disabled: tokEsts[page.id] && tokEsts[page.id].words === 0 }" @click="if (!(tokEsts[page.id] && tokEsts[page.id].words === 0)) selectPage(page)">
                 <span class="page-name">
                   <span class="page-status-dot" :class="'page-status-' + pageStatus(page)"
                     @mouseenter.stop="const r=$el.getBoundingClientRect(); pageStatusTipPos={x:r.left,y:r.top}; pageStatusTipText=pageStatusTooltip(page); showPageStatusTip=true"

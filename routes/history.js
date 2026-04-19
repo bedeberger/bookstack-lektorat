@@ -112,19 +112,22 @@ router.delete('/book/:book_id', (req, res) => {
   const book_id = parseInt(req.params.book_id);
   if (!Number.isFinite(book_id)) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
 
-  const delChecks   = db.prepare('DELETE FROM page_checks    WHERE book_id = ? AND user_email = ?');
-  const delReviews  = db.prepare('DELETE FROM book_reviews   WHERE book_id = ? AND user_email = ?');
-  const delSessions = db.prepare('DELETE FROM chat_sessions  WHERE book_id = ? AND user_email = ?');
+  const delChecks     = db.prepare('DELETE FROM page_checks      WHERE book_id = ? AND user_email = ?');
+  const delReviews    = db.prepare('DELETE FROM book_reviews     WHERE book_id = ? AND user_email = ?');
+  const delChReviews  = db.prepare('DELETE FROM chapter_reviews  WHERE book_id = ? AND user_email = ?');
+  const delSessions   = db.prepare('DELETE FROM chat_sessions    WHERE book_id = ? AND user_email = ?');
 
   const result = db.transaction(() => ({
-    page_checks:    delChecks.run(book_id, user_email).changes,
-    book_reviews:   delReviews.run(book_id, user_email).changes,
-    chat_sessions:  delSessions.run(book_id, user_email).changes,
+    page_checks:      delChecks.run(book_id, user_email).changes,
+    book_reviews:     delReviews.run(book_id, user_email).changes,
+    chapter_reviews:  delChReviews.run(book_id, user_email).changes,
+    chat_sessions:    delSessions.run(book_id, user_email).changes,
   }))();
 
   logger.info(
     `History-Reset: book=${book_id} user=${user_email} ` +
-    `page_checks=${result.page_checks} book_reviews=${result.book_reviews} chat_sessions=${result.chat_sessions}`
+    `page_checks=${result.page_checks} book_reviews=${result.book_reviews} ` +
+    `chapter_reviews=${result.chapter_reviews} chat_sessions=${result.chat_sessions}`
   );
   res.json({ ok: true, deleted: result });
 });
@@ -136,6 +139,33 @@ router.get('/review/:book_id', (req, res) => {
     SELECT * FROM book_reviews WHERE book_id = ? AND user_email = ?
     ORDER BY reviewed_at DESC LIMIT 10`).all(parseInt(req.params.book_id), user_email);
   res.json(rows.map(r => ({ ...r, review_json: JSON.parse(r.review_json || 'null') })));
+});
+
+// Kapitel-Reviews: alle Einträge eines Buchs, gruppiert als { [chapter_id]: [entries] }.
+// Max. 10 Einträge pro Kapitel (absteigend nach Datum).
+router.get('/chapter-reviews/:book_id', (req, res) => {
+  const user_email = req.session?.user?.email || null;
+  const book_id = parseInt(req.params.book_id);
+  const rows = db.prepare(`
+    SELECT * FROM chapter_reviews WHERE book_id = ? AND user_email = ?
+    ORDER BY chapter_id, reviewed_at DESC`).all(book_id, user_email);
+  const byChapter = {};
+  for (const r of rows) {
+    const key = String(r.chapter_id);
+    if (!byChapter[key]) byChapter[key] = [];
+    if (byChapter[key].length < 10) {
+      byChapter[key].push({ ...r, review_json: JSON.parse(r.review_json || 'null') });
+    }
+  }
+  res.json(byChapter);
+});
+
+// Einzelnes Kapitel-Review löschen
+router.delete('/chapter-review/:id', (req, res) => {
+  const user_email = req.session?.user?.email || null;
+  db.prepare('DELETE FROM chapter_reviews WHERE id = ? AND user_email = ?')
+    .run(parseInt(req.params.id), user_email);
+  res.json({ ok: true });
 });
 
 // Seiten-Stats-Cache: alle gecachten Stats für ein Buch (geteilter Cache, nicht user-spezifisch)
@@ -183,19 +213,23 @@ router.get('/style-stats/:book_id', (req, res) => {
            ps.words, ps.chars, ps.sentences, ps.dialog_chars,
            ps.filler_count, ps.passive_count, ps.adverb_count,
            ps.avg_sentence_len, ps.sentence_len_p90, ps.repetition_data,
-           ps.lix, ps.flesch_de, ps.metrics_version, ps.cached_at
+           ps.lix, ps.flesch_de, ps.style_samples, ps.metrics_version, ps.cached_at
     FROM page_stats ps
     JOIN pages p ON p.page_id = ps.page_id
     WHERE ps.book_id = ?
     ORDER BY p.chapter_id, p.page_id
   `).all(bookId);
-  // repetition_data aus JSON-String parsen; defensiv, damit eine korrupte Zeile die Antwort nicht kippt.
+  // repetition_data / style_samples aus JSON-String parsen; defensiv, damit eine
+  // korrupte Zeile die Antwort nicht kippt.
   const pages = rows.map(r => {
-    let rep = null;
+    let rep = null, samples = null;
     if (r.repetition_data) {
       try { rep = JSON.parse(r.repetition_data); } catch { rep = null; }
     }
-    return { ...r, repetition_data: rep };
+    if (r.style_samples) {
+      try { samples = JSON.parse(r.style_samples); } catch { samples = null; }
+    }
+    return { ...r, repetition_data: rep, style_samples: samples };
   });
   // Neuestes cached_at = letzter Sync-Zeitpunkt für dieses Buch.
   const lastUpdated = pages.reduce((max, p) => {
@@ -242,6 +276,149 @@ router.get('/coverage/:book_id', (req, res) => {
   ).get(bookId, user_email);
   const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
   res.json({ checked_pages: checked, total_pages: total, pct });
+});
+
+// Fehler-Heatmap: aggregiert Fehler-Typen × Kapitel aus dem jeweils jüngsten page_check pro Seite.
+// mode=open     → Fehler aus errors_json, die nicht in applied_errors_json stehen (default)
+// mode=applied  → nur applied_errors_json
+// mode=all      → alle Fehler aus errors_json
+router.get('/fehler-heatmap/:book_id', (req, res) => {
+  const user_email = req.session?.user?.email || null;
+  const bookId = parseInt(req.params.book_id);
+  const mode = ['open', 'applied', 'all'].includes(req.query.mode) ? req.query.mode : 'open';
+
+  const pages = db.prepare(`
+    SELECT p.page_id, p.page_name, p.chapter_id, p.chapter_name,
+           COALESCE(ps.words, 0) AS words
+    FROM pages p
+    LEFT JOIN page_stats ps ON ps.page_id = p.page_id
+    WHERE p.book_id = ?
+  `).all(bookId);
+
+  const checks = db.prepare(`
+    WITH latest AS (
+      SELECT page_id, errors_json, applied_errors_json,
+             ROW_NUMBER() OVER (PARTITION BY page_id ORDER BY checked_at DESC) AS rn
+      FROM page_checks
+      WHERE book_id = ? AND user_email = ?
+    )
+    SELECT page_id, errors_json, applied_errors_json
+    FROM latest
+    WHERE rn = 1
+  `).all(bookId, user_email);
+
+  const checkByPage = new Map();
+  for (const c of checks) checkByPage.set(c.page_id, c);
+
+  const parseArr = (s) => {
+    if (!s) return [];
+    try { const v = JSON.parse(s); return Array.isArray(v) ? v : []; } catch { return []; }
+  };
+
+  // Gruppiere nach Kapitel. chapter_id kann null sein → '__uncat__'.
+  const chapters = new Map();
+  for (const p of pages) {
+    const key = p.chapter_id ?? '__uncat__';
+    if (!chapters.has(key)) {
+      chapters.set(key, {
+        chapter_id: p.chapter_id,
+        chapter_name: p.chapter_name || null,
+        pages_total: 0,
+        pages_checked: 0,
+        words: 0,
+        typen: {},      // { typ: { count, pages: Set<page_id> } }
+        details: {},    // { typ: [{ page_id, page_name, count, samples }] }
+      });
+    }
+    const ch = chapters.get(key);
+    ch.pages_total++;
+    ch.words += p.words;
+    const check = checkByPage.get(p.page_id);
+    if (!check) continue;
+    ch.pages_checked++;
+
+    const errs = parseArr(check.errors_json);
+    const applied = parseArr(check.applied_errors_json);
+    const appliedSet = new Set(applied.map(e => e?.original).filter(Boolean));
+
+    let effective;
+    if (mode === 'applied') effective = applied;
+    else if (mode === 'all') effective = errs;
+    else effective = errs.filter(e => e?.original && !appliedSet.has(e.original));
+
+    const pageTypCounts = {};
+    const pageTypSamples = {};
+    for (const e of effective) {
+      const typ = e?.typ;
+      if (!typ) continue;
+      pageTypCounts[typ] = (pageTypCounts[typ] || 0) + 1;
+      if (!pageTypSamples[typ]) pageTypSamples[typ] = [];
+      if (pageTypSamples[typ].length < 3) {
+        pageTypSamples[typ].push({
+          original: e.original || '',
+          korrektur: e.korrektur || '',
+          erklaerung: e.erklaerung || '',
+        });
+      }
+    }
+
+    for (const typ of Object.keys(pageTypCounts)) {
+      if (!ch.typen[typ]) ch.typen[typ] = { count: 0, pages: new Set() };
+      ch.typen[typ].count += pageTypCounts[typ];
+      ch.typen[typ].pages.add(p.page_id);
+      if (!ch.details[typ]) ch.details[typ] = [];
+      ch.details[typ].push({
+        page_id: p.page_id,
+        page_name: p.page_name || String(p.page_id),
+        count: pageTypCounts[typ],
+        samples: pageTypSamples[typ] || [],
+      });
+    }
+  }
+
+  // Sortierung: Kapitel mit numerischer ID zuerst (BookStack-Reihenfolge ist chapter_id),
+  // unkategorisiert am Ende.
+  const chaptersArr = [...chapters.values()].sort((a, b) => {
+    if (a.chapter_id == null && b.chapter_id == null) return 0;
+    if (a.chapter_id == null) return 1;
+    if (b.chapter_id == null) return -1;
+    return a.chapter_id - b.chapter_id;
+  });
+
+  // Matrix + Totals bauen
+  const matrix = {};
+  const totals = {};
+  for (const ch of chaptersArr) {
+    const key = ch.chapter_id ?? '__uncat__';
+    matrix[key] = {};
+    for (const [typ, v] of Object.entries(ch.typen)) {
+      const per1k = ch.words > 0 ? Math.round((v.count / ch.words) * 1000 * 10) / 10 : 0;
+      matrix[key][typ] = { count: v.count, per1k, pages: v.pages.size };
+      totals[typ] = (totals[typ] || 0) + v.count;
+    }
+  }
+
+  const detailsOut = {};
+  for (const ch of chaptersArr) {
+    const key = ch.chapter_id ?? '__uncat__';
+    for (const [typ, arr] of Object.entries(ch.details)) {
+      detailsOut[`${key}:${typ}`] = arr.sort((a, b) => b.count - a.count);
+    }
+  }
+
+  res.json({
+    mode,
+    chapters: chaptersArr.map(c => ({
+      chapter_id: c.chapter_id,
+      chapter_name: c.chapter_name,
+      pages_total: c.pages_total,
+      pages_checked: c.pages_checked,
+      words: c.words,
+    })),
+    matrix,
+    totals,
+    details: detailsOut,
+  });
 });
 
 module.exports = router;

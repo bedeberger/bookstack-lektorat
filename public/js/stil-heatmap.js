@@ -2,20 +2,29 @@
 // Greift auf page_stats zu (gefüllt vom Sync-Job über lib/page-index.js).
 // `this` zeigt auf die Alpine-Komponente.
 
-import { fetchJson } from './utils.js';
+import { fetchJson, formatNumber, heatmapCellBg, localeTag, minMaxBy } from './utils.js';
 
 // Metrik-Schlüssel → i18n-Label. Reihenfolge = Spaltenreihenfolge in der Heatmap.
+// sampleBucket: Schlüssel im pro-Seite `style_samples`-Objekt bzw. 'repetition'
+// für die Top-Wörter aus repetition_data. null → keine Drilldown-Beispiele.
 const STIL_METRICS = [
-  { key: 'filler_per1k',     label: 'stil.metric.filler',     decimals: 1, higherIsWorse: true  },
-  { key: 'passive_per1k',    label: 'stil.metric.passive',    decimals: 1, higherIsWorse: true  },
-  { key: 'adverb_per1k',     label: 'stil.metric.adverb',     decimals: 1, higherIsWorse: true  },
-  { key: 'avg_sentence_len', label: 'stil.metric.avgSentence', decimals: 1, higherIsWorse: null },
-  { key: 'sentence_len_p90', label: 'stil.metric.sentP90',    decimals: 0, higherIsWorse: null },
-  { key: 'dialog_ratio',     label: 'stil.metric.dialog',     decimals: 1, higherIsWorse: null },
-  { key: 'repetition_score', label: 'stil.metric.repetition', decimals: 1, higherIsWorse: true  },
-  { key: 'lix',              label: 'stil.metric.lix',        decimals: 1, higherIsWorse: true  },
-  { key: 'flesch_de',        label: 'stil.metric.flesch',     decimals: 1, higherIsWorse: false },
+  { key: 'filler_per1k',     label: 'stil.metric.filler',     decimals: 1, higherIsWorse: true,  sampleBucket: 'filler'     },
+  { key: 'passive_per1k',    label: 'stil.metric.passive',    decimals: 1, higherIsWorse: true,  sampleBucket: 'passive'    },
+  { key: 'adverb_per1k',     label: 'stil.metric.adverb',     decimals: 1, higherIsWorse: true,  sampleBucket: 'adverb'     },
+  { key: 'avg_sentence_len', label: 'stil.metric.avgSentence', decimals: 1, higherIsWorse: null, sampleBucket: null         },
+  { key: 'sentence_len_p90', label: 'stil.metric.sentP90',    decimals: 0, higherIsWorse: null,  sampleBucket: null         },
+  { key: 'dialog_ratio',     label: 'stil.metric.dialog',     decimals: 1, higherIsWorse: null,  sampleBucket: null         },
+  { key: 'repetition_score', label: 'stil.metric.repetition', decimals: 1, higherIsWorse: true,  sampleBucket: 'repetition' },
+  { key: 'lix',              label: 'stil.metric.lix',        decimals: 1, higherIsWorse: true,  sampleBucket: null         },
+  { key: 'flesch_de',        label: 'stil.metric.flesch',     decimals: 1, higherIsWorse: false, sampleBucket: null         },
 ];
+
+// Pro-Seite-Zählung, die für die Sortierung der Drilldown-Treffer dient.
+const STIL_COUNT_FIELD = { filler: 'filler_count', passive: 'passive_count', adverb: 'adverb_count' };
+
+// Erwartete METRICS_VERSION aus lib/page-index.js. Muss mitgepflegt werden, damit
+// _stilNeedsSync bei einem Backend-Bump auto-resynct.
+const EXPECTED_METRICS_VERSION = 5;
 
 export const stilMethods = {
   get stilMetricDefs() { return STIL_METRICS; },
@@ -34,8 +43,8 @@ export const stilMethods = {
   _stilNeedsSync() {
     const pages = this.stilData?.pages || [];
     if (pages.length === 0) return true;
-    // Als "unvollständig" gilt: lix leer trotz words>0, oder metrics_version<2.
-    return pages.some(p => (p.words > 0) && (p.lix == null || (p.metrics_version ?? 0) < 2));
+    // Als "unvollständig" gilt: lix leer trotz words>0, oder metrics_version < EXPECTED.
+    return pages.some(p => (p.words > 0) && (p.lix == null || (p.metrics_version ?? 0) < EXPECTED_METRICS_VERSION));
   },
 
   async loadStilStats(bookId) {
@@ -137,15 +146,7 @@ export const stilMethods = {
   // Pro Metrik: min/max über alle Kapitel, für Farbskala.
   // Cached im Trägerobjekt (wird bei jedem Aufruf frisch berechnet — günstig, <100 Kapitel).
   stilMetricRange(metricKey, chapters) {
-    let min = Infinity, max = -Infinity;
-    for (const c of chapters) {
-      const v = c[metricKey];
-      if (typeof v !== 'number') continue;
-      if (v < min) min = v;
-      if (v > max) max = v;
-    }
-    if (min === Infinity) return { min: 0, max: 0 };
-    return { min, max };
+    return minMaxBy(chapters, (c) => c[metricKey]);
   },
 
   // Liefert eine CSS-Hintergrundfarbe für eine Zelle: 0..1 normalisiert, Richtung je nach higherIsWorse.
@@ -161,14 +162,11 @@ export const stilMethods = {
     let t = (value - min) / (max - min); // 0..1
     if (def.higherIsWorse === false) t = 1 - t;
     // Neutral: Primary-Fade; direktional: rot ↔ grün.
-    // CSS-Variablen bleiben im Theme konsistent.
     if (def.higherIsWorse === null) {
       const alpha = 0.12 + (0.55 * t);
       return `background: color-mix(in srgb, var(--color-primary) ${Math.round(alpha * 100)}%, transparent);`;
     }
-    // t=0 → grün, t=1 → rot. color-mix zwischen success und danger.
-    const pct = Math.round(t * 100);
-    return `background: color-mix(in srgb, var(--color-danger, #c0392b) ${pct}%, var(--color-success, #27ae60));`;
+    return heatmapCellBg(t);
   },
 
   // Formatiert den last_updated-ISO-Timestamp lokalisiert (Datum + Uhrzeit ohne Sekunden).
@@ -177,17 +175,91 @@ export const stilMethods = {
     if (!iso) return '';
     const d = new Date(iso);
     if (isNaN(d.getTime())) return '';
-    const localeTag = (this.uiLocale === 'en') ? 'en-US' : 'de-CH';
-    const date = d.toLocaleDateString(localeTag, { year: 'numeric', month: '2-digit', day: '2-digit' });
-    const time = d.toLocaleTimeString(localeTag, { hour: '2-digit', minute: '2-digit' });
+    const tag = localeTag(this.uiLocale);
+    const date = d.toLocaleDateString(tag, { year: 'numeric', month: '2-digit', day: '2-digit' });
+    const time = d.toLocaleTimeString(tag, { hour: '2-digit', minute: '2-digit' });
     return this.t('stil.lastUpdated', { date, time });
   },
 
   stilFormat(value, metricKey) {
-    if (value == null || !isFinite(value)) return '–';
     const def = STIL_METRICS.find(m => m.key === metricKey);
-    const decimals = def?.decimals ?? 1;
-    const localeTag = (this.uiLocale === 'en') ? 'en-US' : 'de-CH';
-    return value.toLocaleString(localeTag, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    return formatNumber(value, this.uiLocale, def?.decimals ?? 1);
+  },
+
+  // Drilldown: welche Metrik-Spalten zeigen Beispiele, wenn man auf die Zelle klickt.
+  stilIsClickableMetric(metricKey) {
+    const def = STIL_METRICS.find(m => m.key === metricKey);
+    return !!def?.sampleBucket;
+  },
+
+  toggleStilDetail(chapterKey, metricKey) {
+    if (!this.stilIsClickableMetric(metricKey)) return;
+    const key = `${chapterKey}:${metricKey}`;
+    this.activeStilDetailKey = (this.activeStilDetailKey === key) ? null : key;
+  },
+
+  stilMetricLabel(metricKey) {
+    const def = STIL_METRICS.find(m => m.key === metricKey);
+    return def ? this.t(def.label) : metricKey;
+  },
+
+  // Baut das Detail-Objekt für die aktive Zelle: Seiten-Liste mit Samples bzw.
+  // Top-Wörtern (Wiederholungs-Drilldown). `this` = Alpine-Komponente.
+  stilActiveDetail() {
+    const key = this.activeStilDetailKey;
+    if (!key) return null;
+    const [chapterKey, metricKey] = key.split(':');
+    const def = STIL_METRICS.find(m => m.key === metricKey);
+    if (!def?.sampleBucket) return null;
+
+    const pages = this.stilData?.pages || [];
+    const inChapter = pages.filter(p => String(p.chapter_id ?? '__uncat__') === chapterKey);
+    const unassignedLabel = this.t('stil.unassigned');
+    const chapterName = inChapter[0]?.chapter_name || unassignedLabel;
+
+    const entries = [];
+    if (def.sampleBucket === 'repetition') {
+      for (const p of inChapter) {
+        const top = p.repetition_data?.top || [];
+        if (!top.length) continue;
+        entries.push({
+          page_id: p.page_id,
+          page_name: p.page_name || String(p.page_id),
+          count: top.reduce((s, r) => s + (r.count || 0), 0),
+          words: top.map(r => ({ token: r.word, count: r.count })),
+        });
+      }
+    } else {
+      const bucket = def.sampleBucket;
+      const countField = STIL_COUNT_FIELD[bucket];
+      for (const p of inChapter) {
+        const samples = p.style_samples?.[bucket] || [];
+        if (!samples.length) continue;
+        entries.push({
+          page_id: p.page_id,
+          page_name: p.page_name || String(p.page_id),
+          count: (countField && p[countField]) || samples.length,
+          samples,
+        });
+      }
+    }
+    entries.sort((a, b) => b.count - a.count);
+
+    return {
+      key,
+      chapterKey,
+      metricKey,
+      metricLabel: this.stilMetricLabel(metricKey),
+      chapterName,
+      entries,
+    };
+  },
+
+  async stilJumpToPage(pageId) {
+    const page = (this.pages || []).find(p => p.id === pageId);
+    if (!page) return;
+    this.showStilCard = false;
+    this.activeStilDetailKey = null;
+    await this.selectPage(page);
   },
 };

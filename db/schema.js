@@ -1098,6 +1098,35 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 46').run();
     logger.info('DB-Migration auf Version 46 abgeschlossen (Stil-Heatmap + Lesbarkeit: page_stats + book_stats_history).');
   }
+  if (version < 47) {
+    // Kapitel-Review: makro-kritische Bewertung eines einzelnen Kapitels
+    // (Dramaturgie, Pacing, Kohärenz). Pendant zu book_reviews, nur pro Kapitel.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS chapter_reviews (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id      INTEGER NOT NULL,
+        book_name    TEXT,
+        chapter_id   INTEGER NOT NULL,
+        chapter_name TEXT,
+        reviewed_at  TEXT NOT NULL,
+        review_json  TEXT,
+        model        TEXT,
+        user_email   TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_cr_book_chapter_user_date
+        ON chapter_reviews(book_id, chapter_id, user_email, reviewed_at DESC);
+    `);
+    db.prepare('UPDATE schema_version SET version = 47').run();
+    logger.info('DB-Migration auf Version 47 abgeschlossen (chapter_reviews für Kapitel-Makroreviews).');
+  }
+  if (version < 48) {
+    // Konkrete Treffer-Samples pro Metrik (Füllwörter, Passiv, Adverbien) für
+    // Drilldown in der Stil-Heatmap. METRICS_VERSION-Bump erzwingt Nachberechnung.
+    const psCols48 = db.pragma('table_info(page_stats)').map(c => c.name);
+    if (!psCols48.includes('style_samples')) db.exec('ALTER TABLE page_stats ADD COLUMN style_samples TEXT');
+    db.prepare('UPDATE schema_version SET version = 48').run();
+    logger.info('DB-Migration auf Version 48 abgeschlossen (page_stats.style_samples für Stil-Heatmap-Drilldown).');
+  }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).

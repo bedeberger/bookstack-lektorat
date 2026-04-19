@@ -142,12 +142,12 @@ export const toolbarMethods = {
   },
 
   _onEditKeydown(e) {
-    // Im Fokus-Mode sind alle Formatierungs-Shortcuts tabu – auch die
-    // nativen (Ctrl/⌘+B/I/U), die der Browser sonst auf contenteditable
-    // direkt umsetzt. Sonst könnte der User unsichtbar formatieren, weil
-    // die Plättung das Ergebnis versteckt.
+    // Im Fokus-Mode bleibt U (Underline) tabu – die Plättung versteckt
+    // das Ergebnis und der User würde unsichtbar formatieren. B/I sind
+    // explizit erlaubt: die Auszeichnung landet im HTML und wird beim
+    // Verlassen des Fokus sichtbar.
     if (this.focusMode) {
-      if ((e.metaKey || e.ctrlKey) && /^[biuBIU]$/.test(e.key)) {
+      if ((e.metaKey || e.ctrlKey) && /^[uU]$/.test(e.key)) {
         e.preventDefault();
       }
       return;

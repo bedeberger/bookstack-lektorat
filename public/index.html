@@ -116,6 +116,10 @@
       <span class="feature-tile-title" x-text="t('tile.review')"></span>
       <span class="feature-tile-desc" x-text="t('tile.review.desc')"></span>
     </button>
+    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showKapitelReviewCard }" @click="toggleKapitelReviewCard()" :disabled="kapitelReviewChapterOptions().length === 0" :title="t('tile.kapitelReview.title')">
+      <span class="feature-tile-title" x-text="t('tile.kapitelReview')"></span>
+      <span class="feature-tile-desc" x-text="t('tile.kapitelReview.desc')"></span>
+    </button>
     <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showFiguresCard }" @click="toggleFiguresCard()" :title="t('tile.figuren.title')">
       <span class="feature-tile-title" x-text="t('tile.figuren')"></span>
       <span class="feature-tile-desc" x-text="t('tile.figuren.desc')"></span>
@@ -131,6 +135,10 @@
     <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showStilCard }" @click="toggleStilCard()" :title="t('tile.stil.title')">
       <span class="feature-tile-title" x-text="t('tile.stil')"></span>
       <span class="feature-tile-desc" x-text="t('tile.stil.desc')"></span>
+    </button>
+    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showFehlerHeatmapCard }" @click="toggleFehlerHeatmapCard()" :title="t('tile.fehlerHeatmap.title')">
+      <span class="feature-tile-title" x-text="t('tile.fehlerHeatmap')"></span>
+      <span class="feature-tile-desc" x-text="t('tile.fehlerHeatmap.desc')"></span>
     </button>
     <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showBookChatCard }" @click="toggleBookChatCard()" :disabled="!pages.length" :title="t('tile.bookchat.title')">
       <span class="feature-tile-title" x-text="t('tile.bookchat')"></span>
@@ -162,13 +170,15 @@
 </div><!-- end layout-sidebar -->
 <div class="layout-main">
 <div id="partial-buchreview"></div>
+<div id="partial-kapitelreview"></div>
 <div id="partial-figuren"></div>
 <div id="partial-szenen"></div>
 <div id="partial-ereignisse"></div>
 <div id="partial-orte"></div>
 <div id="partial-kontinuitaet"></div>
 <div id="partial-bookstats"></div>
-<div id="partial-stil"></div>
+<div id="partial-stil-heatmap"></div>
+<div id="partial-fehler-heatmap"></div>
 <div class="editor-chat-wrap" :class="{ 'editor-chat-split': showEditorCard && showChatCard }">
   <div id="partial-editor"></div>
   <div id="partial-chat"></div>
