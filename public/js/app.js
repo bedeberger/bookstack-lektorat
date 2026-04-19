@@ -1565,6 +1565,17 @@ document.addEventListener('alpine:init', () => {
         if (this[t]) { clearInterval(this[t]); this[t] = null; }
       }
 
+      // Komplett-Analyse-UI zurücksetzen, damit ein neues Buch eine eigene
+      // Komplett-Analyse queuen kann. Der Server-Job des alten Buchs läuft weiter;
+      // checkPendingJobs(bookId) reconnectet beim Zurückwechseln automatisch.
+      this.alleAktualisierenLoading = false;
+      this.alleAktualisierenStatus = '';
+      this.alleAktualisierenProgress = 0;
+      this.alleAktualisierenTokIn = 0;
+      this.alleAktualisierenTokOut = 0;
+      this.alleAktualisierenTps = null;
+      this.showKomplettStatus = false;
+
       // Visualisierungen zerstören (bauen Graph/Chart sonst mit altem Buch-Daten auf)
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
       this._figurenHash = null;

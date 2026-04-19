@@ -117,7 +117,7 @@ router.get('/:book_id', (req, res) => {
     WHERE f.book_id = ? AND f.user_email = ?
     ORDER BY fe.figure_id, fe.sort_order`).all(bookId, userEmail);
   const rels = db.prepare(
-    'SELECT from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis FROM figure_relations WHERE book_id = ? AND user_email = ?'
+    'SELECT from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, belege FROM figure_relations WHERE book_id = ? AND user_email = ?'
   ).all(bookId, userEmail);
 
   const tagMap = {};
@@ -127,7 +127,17 @@ router.get('/:book_id', (req, res) => {
   const evtMap = {};
   for (const e of evts) (evtMap[e.figure_id] ??= []).push({ datum: e.datum, ereignis: e.ereignis, bedeutung: e.bedeutung, typ: e.typ || 'persoenlich', kapitel: e.kapitel || null, seite: e.seite || null });
   const relMap = {};
-  for (const r of rels) (relMap[r.from_fig_id] ??= []).push({ figur_id: r.to_fig_id, typ: r.typ, beschreibung: r.beschreibung, machtverhaltnis: r.machtverhaltnis ?? null });
+  for (const r of rels) {
+    let belege = [];
+    if (r.belege) { try { belege = JSON.parse(r.belege) || []; } catch { belege = []; } }
+    (relMap[r.from_fig_id] ??= []).push({
+      figur_id: r.to_fig_id,
+      typ: r.typ,
+      beschreibung: r.beschreibung,
+      machtverhaltnis: r.machtverhaltnis ?? null,
+      belege: Array.isArray(belege) ? belege : [],
+    });
+  }
 
   const sceneFigRows = db.prepare(
     'SELECT fs.kapitel, fs.seite, sf.fig_id FROM figure_scenes fs JOIN scene_figures sf ON sf.scene_id = fs.id WHERE fs.book_id = ? AND fs.user_email = ?'
@@ -141,22 +151,36 @@ router.get('/:book_id', (req, res) => {
     }
   }
 
-  const figuren = figs.map(f => ({
-    id: f.fig_id,
-    name: f.name,
-    kurzname: f.kurzname,
-    typ: f.typ,
-    geburtstag: f.geburtstag,
-    geschlecht: f.geschlecht,
-    beruf: f.beruf,
-    beschreibung: f.beschreibung,
-    sozialschicht: f.sozialschicht || null,
-    eigenschaften: tagMap[f.id] || [],
-    kapitel: appMap[f.id] || [],
-    seiten: seitenMap[f.fig_id] || [],
-    lebensereignisse: evtMap[f.id] || [],
-    beziehungen: relMap[f.fig_id] || [],
-  }));
+  const figuren = figs.map(f => {
+    let zitate = [];
+    if (f.schluesselzitate) {
+      try { zitate = JSON.parse(f.schluesselzitate) || []; } catch { zitate = []; }
+    }
+    return {
+      id: f.fig_id,
+      name: f.name,
+      kurzname: f.kurzname,
+      typ: f.typ,
+      geburtstag: f.geburtstag,
+      geschlecht: f.geschlecht,
+      beruf: f.beruf,
+      beschreibung: f.beschreibung,
+      sozialschicht: f.sozialschicht || null,
+      praesenz: f.praesenz || null,
+      rolle: f.rolle || null,
+      motivation: f.motivation || null,
+      konflikt: f.konflikt || null,
+      entwicklung: f.entwicklung || null,
+      erste_erwaehnung: f.erste_erwaehnung || null,
+      erste_erwaehnung_page_id: f.erste_erwaehnung_page_id || null,
+      schluesselzitate: Array.isArray(zitate) ? zitate : [],
+      eigenschaften: tagMap[f.id] || [],
+      kapitel: appMap[f.id] || [],
+      seiten: seitenMap[f.fig_id] || [],
+      lebensereignisse: evtMap[f.id] || [],
+      beziehungen: relMap[f.fig_id] || [],
+    };
+  });
 
   res.json({ figuren, updated_at: figs[0]?.updated_at || null });
 });

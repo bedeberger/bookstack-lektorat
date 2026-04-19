@@ -97,6 +97,10 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule, buchKontext = '
     // Schema und Regeln sind im System-Prompt → werden gecacht; User-Message enthält nur Kapiteltext.
     // buchKontext dient als soziogramm-Kontext für die Sozialschicht-Klassifikation der Figuren.
     SYSTEM_KOMPLETT_EXTRAKTION:  buildSystemKomplett(sp.figuren   || '', rules, buchKontext),
+    // Welle 4 · #11 – für lokale Modelle zweiter fokussierter Pass.
+    // Claude nutzt weiterhin SYSTEM_KOMPLETT_EXTRAKTION (kombinierter Single-Call).
+    SYSTEM_KOMPLETT_FIGUREN_PASS: buildSystemKomplettFiguren(sp.figuren || '', rules, buchKontext),
+    SYSTEM_KOMPLETT_ORTE_PASS:    buildSystemKomplettOrteSzenen(sp.orte || sp.figuren || '', rules, buchKontext),
   };
 }
 
@@ -118,6 +122,8 @@ export let SYSTEM_ORTE                  = null;
 export let SYSTEM_KONTINUITAET          = null;
 export let SYSTEM_ZEITSTRAHL            = null;
 export let SYSTEM_KOMPLETT_EXTRAKTION   = null;
+export let SYSTEM_KOMPLETT_FIGUREN_PASS = null;
+export let SYSTEM_KOMPLETT_ORTE_PASS    = null;
 
 /**
  * Setzt alle System-Prompts aus dem promptConfig-Objekt (geladen aus prompt-config.json).
@@ -132,6 +138,9 @@ export function configurePrompts(cfg, provider = 'claude') {
   if (!cfg) throw new Error('prompt-config.json fehlt oder ist ungültig – Prompts können nicht konfiguriert werden.');
 
   _isLocal = provider === 'ollama' || provider === 'llama';
+  // Schemas sind _isLocal-abhängig (machtverhaltnis-Weglassen für lokale Provider)
+  // – bei jedem configure neu bauen.
+  _rebuildSchemas();
 
   _localeMap.clear();
   _rawLocales.clear();
@@ -201,6 +210,8 @@ export function configurePrompts(cfg, provider = 'claude') {
   SYSTEM_KONTINUITAET          = def.SYSTEM_KONTINUITAET          ?? null;
   SYSTEM_ZEITSTRAHL            = def.SYSTEM_ZEITSTRAHL            ?? null;
   SYSTEM_KOMPLETT_EXTRAKTION   = def.SYSTEM_KOMPLETT_EXTRAKTION   ?? null;
+  SYSTEM_KOMPLETT_FIGUREN_PASS = def.SYSTEM_KOMPLETT_FIGUREN_PASS ?? null;
+  SYSTEM_KOMPLETT_ORTE_PASS    = def.SYSTEM_KOMPLETT_ORTE_PASS    ?? null;
 }
 
 /**
@@ -524,11 +535,18 @@ const FIGUREN_BASIS_SCHEMA = `{
       "geburtstag": "JJJJ oder leer wenn unbekannt",
       "geschlecht": "männlich|weiblich|divers|unbekannt",
       "beruf": "Beruf oder Rolle oder leer",
-      "beschreibung": "2-3 Sätze zu Rolle, Persönlichkeit und Bedeutung",
+      "rolle": "1 Satz: Funktion in der Handlung (z.B. 'Ermittelt den Mordfall', 'Erzählerin, blickt rückblickend zurück')",
+      "motivation": "1 Satz: was die Figur antreibt; leer wenn nicht belegt",
+      "konflikt": "1 Satz: zentraler innerer oder äusserer Konflikt; leer wenn nicht belegt",
+      "beschreibung": "2-3 Sätze: Rolle + Persönlichkeit + Bedeutung, textnah",
       "sozialschicht": "wirtschaftselite|gehobenes_buergertum|mittelschicht|arbeiterschicht|migrantenmilieu|prekariat|unterwelt|andere",
       "eigenschaften": ["Eigenschaft1", "Eigenschaft2"],
+      "praesenz": "zentral|regelmaessig|punktuell|randfigur",
+      "entwicklung": "statisch|Kurzbeschreibung des Wandels (1 Satz, z.B. 'verliert Vertrauen in Mentor')",
+      "erste_erwaehnung": "Kapitelname oder Seitenname der ersten Erwähnung (leer wenn unklar)",
+      "schluesselzitate": ["Bis zu 3 charakterisierende Zitate, max. 80 Zeichen, wörtlich aus dem Text"],
       "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
-      "beziehungen": [{ "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|patronage|geschaeft|andere", "machtverhaltnis": 0, "beschreibung": "1 Satz" }]
+      "beziehungen": [{ "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|patronage|geschaeft|andere", "machtverhaltnis": 0, "beschreibung": "1 Satz", "belege": [{ "kapitel": "Kapitelname", "seite": "Seitentitel" }] }]
     }
   ]
 }`;
@@ -537,14 +555,21 @@ const figurenBasisRules = (kontext = '') => `Regeln:
 - Eindeutige IDs (fig_1, fig_2, …)
 - beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
 - kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten; name = immer der Kapitelname (aus dem ## Kapitel-Header über dem Abschnitt oder aus dem Prompt-Kontext) – NIEMALS Seitentitel als Kapitelnamen verwenden
+- praesenz: Gewichtung der Figur im Gesamtbuch. zentral=Haupthandlungsträger, regelmaessig=wiederkehrend und handlungsrelevant, punktuell=taucht in einzelnen Szenen auf, randfigur=kaum mehr als Erwähnung. Bei Einzelkapitel-Analyse: Einschätzung basiert nur auf diesem Kapitel.
+- rolle / motivation / konflikt: je 1 Satz, textnah. Leer lassen wenn nicht belegt – nicht spekulieren.
+- beschreibung: 2-3 Sätze Zusammenfassung (Fallback für Anzeige und Chat-Kontext). Soll KEINE Spekulation enthalten.
+- schluesselzitate: bis zu 3 wörtliche Zitate (max. 80 Zeichen) die die Figur charakterisieren – exakt aus dem Text, in der Original-Interpunktion. Leer lassen wenn keine prägnanten Stellen gefunden.
+- erste_erwaehnung: Kapitel- oder Seitenname der ersten Erwähnung (so präzise wie belegt). Leer wenn unklar.
+- entwicklung: "statisch" wenn die Figur über das Buch hinweg unverändert bleibt, sonst 1 Satz zum Wandel. Leer wenn nicht eindeutig.
 - sozialschicht: gesellschaftliche Schicht der Figur${kontext ? ` (${kontext})` : ''} – nur vergeben wenn eindeutig belegt; wirtschaftselite=Unternehmerfamilien/Direktoren, gehobenes_buergertum=Akademiker/freie Berufe/obere Kader, mittelschicht=Angestellte/Beamte/mittlere Kader, arbeiterschicht=Fabrik-/Bauarbeiter/Servicepersonal, migrantenmilieu=Zugewanderte/zweite Generation, prekariat=Sozialhilfe/Randständige/Langzeitarbeitslose, unterwelt=kriminelles Milieu, andere=nicht eindeutig
 - beziehungen.machtverhaltnis: Machtasymmetrie: +2=Gegenüber (figur_id) dominiert klar, +1=Gegenüber hat leichten Vorteil, 0=symmetrisch, -1=diese Figur hat leichten Vorteil, -2=diese Figur dominiert klar; weglassen oder 0 wenn unklar
+- beziehungen.belege: 1-3 Stellen (Kapitelname + Seitentitel) an denen die Beziehung klar wird. Genau wie im Text stehen lassen; leer lassen wenn unsicher. Seitennamen aus ### Überschriften, Kapitelnamen aus ## Überschriften oder dem Prompt-Kontext.
 - Beziehungstypen: typ beschreibt die ROLLE von figur_id (NICHT der aktuellen Figur!). Bei Figur X der Eintrag {figur_id: Y, typ: elternteil} bedeutet: Y IST der Elternteil von X. Konkretes Beispiel: Robert hat Mutter Sandra → bei Robert eintragen {figur_id: «<Sandras fig_id>», typ: elternteil, machtverhaltnis: 2}. patronage=Schutzherrschaft (figur_id = Patron), geschaeft=wirtschaftliche Beziehung, geschwister=undirektional, übrige selbsterklärend
 - Pro Figurenpaar höchstens EINE Beziehung eintragen – aus der Perspektive EINER Figur. Keine widersprüchlichen Angaben (z.B. nicht gleichzeitig elternteil und kind für dasselbe Paar)
 - Nur fiktive Charaktere oder Figuren die aktiv an der Buchhandlung teilnehmen – keine Orte oder Objekte
 - KEINE historischen oder realen Personen die nur erwähnt, zitiert oder als Referenz genannt werden (z.B. Napoleon, Einstein, ein Politiker, eine Künstlerin)
-- Sortiert nach Wichtigkeit
-- KONSERVATIV: Nur Figuren und Beziehungen aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren.
+- Sortiert nach Wichtigkeit (zentral zuerst)
+- KONSERVATIV: Nur Figuren und Beziehungen aufnehmen die im Text eindeutig belegt sind. Lieber weglassen als spekulieren. Leere Strings/Arrays sind besser als erfundene Inhalte.
 - DEDUPLIZIERUNG MIT KONTEXTABGLEICH: Figuren zusammenführen wenn der Name übereinstimmt (gleicher Vor- und Nachname) ODER ein Teilname (nur Vorname oder nur Nachname) mit mindestens einem inhaltlichen Indiz zusammenpasst – z.B. gleicher Beruf, überschneidende Fachkenntnisse, konsistente Charakterzüge oder übereinstimmendes Verhalten kapitelübergreifend. Beispiel: «Maria» die in Kapitel 1 als Kräuterkundige gilt und «Maria Huber» die in Kapitel 3 Naturheilkunde beherrscht – zusammenführen. Widersprechen sich Eigenschaften eindeutig, getrennt behalten. Gibt es nur Namensähnlichkeit ohne inhaltliche Überschneidung: getrennt behalten.`;
 
 
@@ -602,7 +627,7 @@ ${bookText}
 Antworte mit diesem JSON-Schema:
 {
   "beziehungen": [
-    { "von": "fig_1", "zu": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|patronage|geschaeft|andere", "machtverhaltnis": 0, "beschreibung": "1 Satz" }
+    { "von": "fig_1", "zu": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|patronage|geschaeft|andere", "machtverhaltnis": 0, "beschreibung": "1 Satz", "belege": [{ "kapitel": "Kapitelname", "seite": "Seitentitel" }] }
   ]
 }
 
@@ -613,6 +638,7 @@ Regeln:
 - Jede Beziehung nur einmal eintragen (nicht von→zu UND zu→von für denselben Typ)
 - Keine Beziehungen die bereits in «Bekannte Beziehungen» stehen
 - machtverhaltnis: Machtasymmetrie: +2=Gegenüber («zu») dominiert klar, +1=Gegenüber hat leichten Vorteil, 0=symmetrisch, -1=diese Figur («von») hat leichten Vorteil, -2=diese Figur dominiert klar; weglassen oder 0 wenn unklar
+- belege: 1-3 Stellen (Kapitelname + Seitentitel) an denen die Beziehung sichtbar wird. Seitennamen aus ### Überschriften, Kapitel aus ## Überschriften des übergebenen Textes.
 - Leeres Array wenn keine neuen kapitelübergreifenden Beziehungen eindeutig belegt sind`;
 }
 
@@ -823,6 +849,101 @@ Ereignis-Regeln:
 - Nur Figuren ausgeben die mindestens ein Ereignis haben; leeres assignments-Array wenn keine Ereignisse gefunden`;
 }
 
+// ── Split-Schemas für lokale Modelle (Welle 4 · #11) ──────────────────────────
+// Kleine Modelle werden vom kombinierten 5-Array-Schema überfordert. Für Ollama/llama
+// teilen wir die Extraktion in zwei fokussierte Pässe auf. Claude bekommt weiterhin
+// den kombinierten Pass (nutzt das grosse Kontextfenster besser).
+
+/** Schema-Block nur für Figuren + Lebensereignisse (Pass A, Lokalmodus). */
+function buildKomplettSchemaFigurenOnly(kontext = '') {
+  const schemaPart = `Antworte mit diesem JSON-Schema (nur Figuren und Lebensereignisse):
+{
+  ${_schemaBody(FIGUREN_BASIS_SCHEMA)},
+  "assignments": [
+    {
+      "figur_name": "Figurenname exakt wie im Text",
+      "lebensereignisse": [
+        {
+          "datum": "JJJJ (nur Jahreszahl; aus Kontext errechnen wenn nötig; leer wenn nicht errechenbar)",
+          "ereignis": "Was passierte – neutral formuliert. Gleiches Ereignis bei allen beteiligten Figuren identisch.",
+          "typ": "persoenlich|extern",
+          "bedeutung": "Bedeutung für diese Figur (1 Satz, leer wenn nicht klar)",
+          "seite": "Seitentitel (leer wenn unklar)",
+          "kapitel": "Kapitelname (aus ## Header; leer wenn unklar)"
+        }
+      ]
+    }
+  ]
+}`;
+  if (_isLocal) {
+    return `${schemaPart}
+
+Kernregeln:
+- Nur Figuren erfassen, keine Orte/Szenen/Fakten.
+- Eindeutige IDs (fig_1, fig_2, …); Beziehungen nur zwischen IDs dieser Liste.
+- KONSERVATIV: Nur was im Text eindeutig belegt ist.
+- Keine historischen/realen Personen die nur erwähnt werden.
+- kapitel[].name: aus ## Header oder Prompt-Kontext. Nie Seitentitel.
+- figur_name: Klarname exakt wie im Text.
+- Ereignisse: datum JJJJ; ohne errechenbares Jahr weglassen.
+- Leere Arrays wenn nichts gefunden.`;
+  }
+  return `${schemaPart}
+
+Figuren-Regeln:
+${figurenBasisRules(kontext)}
+
+Ereignis-Regeln:
+- typ='persoenlich' / typ='extern' wie oben dokumentiert.
+- Nur Figuren ausgeben die mindestens ein Ereignis haben.`;
+}
+
+/** Schema-Block nur für Orte + Fakten + Szenen (Pass B, Lokalmodus). */
+function buildKomplettSchemaOrteSzenen(_kontext = '') {
+  const schemaPart = `Antworte mit diesem JSON-Schema (nur Schauplätze, Fakten, Szenen):
+{
+  ${_schemaBody(ORTE_SCHEMA)},
+  ${FAKTEN_SCHEMA},
+  "szenen": [
+    {
+      "seite": "Seitentitel (leer wenn unklar)",
+      "kapitel": "Kapitelname (aus ## Header; leer wenn unklar)",
+      "titel": "Kurze Szenenbezeichnung (1 Satz)",
+      "wertung": "stark|mittel|schwach",
+      "kommentar": "1-2 Sätze: was funktioniert, was fehlt",
+      "figuren_namen": ["Figurenname exakt wie im Text"],
+      "orte_namen": ["Schauplatzname exakt wie im Text"]
+    }
+  ]
+}`;
+  if (_isLocal) {
+    return `${schemaPart}
+
+Kernregeln:
+- Keine Figuren-Stammdaten; figuren_namen nur als Klarname-Referenz in Szenen.
+- KONSERVATIV: Nur was eindeutig belegt ist.
+- kapitel[].name: aus ## Header oder Prompt-Kontext.
+- Leere Arrays wenn nichts gefunden.`;
+  }
+  return `${schemaPart}
+
+Schauplatz-Regeln:
+${ORTE_RULES}
+
+${FAKTEN_RULES}
+
+Szenen-Regeln:
+- figuren_namen: Klarnamen exakt wie im Text; leeres Array wenn keine Figur beteiligt.
+- orte_namen: exakter Name wie im Text; leeres Array wenn kein konkreter Ort.`;
+}
+
+function buildSystemKomplettFiguren(prefix, rules, kontext) {
+  return `${prefix}\n\n${rules}\n\n${buildKomplettSchemaFigurenOnly(kontext)}${_jsonOnly()}`;
+}
+function buildSystemKomplettOrteSzenen(prefix, rules, kontext) {
+  return `${prefix}\n\n${rules}\n\n${buildKomplettSchemaOrteSzenen(kontext)}${_jsonOnly()}`;
+}
+
 // buildSystemKomplett: wie buildSystem, aber mit eingebettetem Schema+Regeln-Block.
 // Der Schema-Block wird so gecacht (cache_control: ephemeral in lib/ai.js) – spart bei
 // ~20 Kapitel-Calls ~19 × Schema-Tokens (statt in jeder User-Message wiederholen).
@@ -848,6 +969,38 @@ export function buildExtraktionKomplettChapterPrompt(chapterName, bookName, page
     ? 'Der Text ist in Kapitel-Sektionen gegliedert (## Kapitelname) mit Seiten darunter (### Seitentitel). Für alle Kapitel-Felder (kapitel[].name der Figuren und Orte, szenen[].kapitel, lebensereignisse[].kapitel): den Kapitelnamen exakt aus dem ## Header entnehmen, unter dem der jeweilige Abschnitt steht.'
     : `Für alle Kapitel-Felder (kapitel[].name der Figuren und Orte, szenen[].kapitel, lebensereignisse[].kapitel): immer genau «${chapterName}» verwenden – die ### Überschriften im Text sind Seitentitel, keine Kapitelnamen.`;
   return `Extrahiere aus ${scope} in einem Durchgang: alle Figuren, alle Schauplätze, alle kontinuitätsrelevanten Fakten, alle Szenen und alle Lebensereignisse der Figuren.
+
+${kapitelNote}
+
+${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} Seiten)`}:
+
+${chText}`;
+}
+
+/** Welle 4 · #11 – Pass A: nur Figuren + Lebensereignisse (Lokalmodus). */
+export function buildExtraktionFigurenPassPrompt(chapterName, bookName, pageCount, chText) {
+  const isSinglePass = chapterName === 'Gesamtbuch';
+  const scope = isSinglePass ? `dem Buch «${bookName}»` : `dem Kapitel «${chapterName}» des Buchs «${bookName}»`;
+  const kapitelNote = isSinglePass
+    ? 'Der Text ist in Kapitel-Sektionen gegliedert (## Kapitelname) mit Seiten darunter (### Seitentitel). Für kapitel[].name und lebensereignisse[].kapitel: exakt aus dem ## Header entnehmen.'
+    : `Für kapitel[].name und lebensereignisse[].kapitel: immer genau «${chapterName}» verwenden – ### Überschriften sind Seitentitel.`;
+  return `Extrahiere aus ${scope} AUSSCHLIESSLICH: alle Figuren (inkl. Beziehungen) und alle Lebensereignisse der Figuren. Keine Orte, keine Fakten, keine Szenen – die werden separat extrahiert.
+
+${kapitelNote}
+
+${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} Seiten)`}:
+
+${chText}`;
+}
+
+/** Welle 4 · #11 – Pass B: nur Orte + Fakten + Szenen (Lokalmodus). */
+export function buildExtraktionOrtePassPrompt(chapterName, bookName, pageCount, chText) {
+  const isSinglePass = chapterName === 'Gesamtbuch';
+  const scope = isSinglePass ? `dem Buch «${bookName}»` : `dem Kapitel «${chapterName}» des Buchs «${bookName}»`;
+  const kapitelNote = isSinglePass
+    ? 'Der Text ist in Kapitel-Sektionen gegliedert (## Kapitelname). Für alle Kapitel-Felder den Namen aus dem ## Header entnehmen.'
+    : `Für alle Kapitel-Felder: immer genau «${chapterName}» verwenden.`;
+  return `Extrahiere aus ${scope} AUSSCHLIESSLICH: alle Schauplätze, alle kontinuitätsrelevanten Fakten und alle Szenen. Figuren-Stammdaten nicht – die sind separat erfasst. In Szenen nur Figurennamen als Referenz nennen.
 
 ${kapitelNote}
 
@@ -1302,7 +1455,15 @@ export const SCHEMA_LEKTORAT = _obj({
 // Typ-Enums bewusst permissiv (type: string ohne enum), weil das Modell hier
 // freiere Bezeichnungen produziert und strikte Enums das Sampling blockieren
 // könnten. Wichtig ist die Grammatik-Struktur, nicht die Feld-Werte.
-const _figurSchema = _obj({
+// Beziehungs-Items: für lokale Provider wird `machtverhaltnis` absichtlich aus dem
+// JSON-Schema weggelassen – kleine Modelle setzen es fast immer 0 oder halluzinieren.
+// Lieber das Feld leer lassen als falsche Werte anzeigen. Für Claude bleibt es erhalten.
+const _bzBeleg = _obj({ kapitel: _str, seite: _str });
+const _bzItem = () => _obj(_isLocal
+  ? { figur_id: _str, typ: _str, beschreibung: _str, belege: { type: 'array', items: _bzBeleg } }
+  : { figur_id: _str, typ: _str, machtverhaltnis: _num, beschreibung: _str, belege: { type: 'array', items: _bzBeleg } }
+);
+const _figurSchemaProps = () => ({
   id: _str,
   name: _str,
   kurzname: _str,
@@ -1310,15 +1471,23 @@ const _figurSchema = _obj({
   geburtstag: _str,
   geschlecht: _str,
   beruf: _str,
+  rolle: _str,
+  motivation: _str,
+  konflikt: _str,
   beschreibung: _str,
   sozialschicht: _str,
+  praesenz: { type: 'string', enum: ['zentral', 'regelmaessig', 'punktuell', 'randfigur'] },
+  entwicklung: _str,
+  erste_erwaehnung: _str,
+  schluesselzitate: { type: 'array', items: _str },
   eigenschaften: { type: 'array', items: _str },
   kapitel: { type: 'array', items: _obj({ name: _str, haeufigkeit: _num }) },
-  beziehungen: {
-    type: 'array',
-    items: _obj({ figur_id: _str, typ: _str, machtverhaltnis: _num, beschreibung: _str }),
-  },
+  beziehungen: { type: 'array', items: _bzItem() },
 });
+// Achtung: Das konkrete _figurSchema-Objekt (und alle Schemas, die es enthalten) wird
+// in _rebuildSchemas() bei jedem configurePrompts-Aufruf neu gebaut, damit der
+// dynamisch gesetzte _isLocal-Flag korrekt wirkt (z.B. machtverhaltnis-Weglassen).
+let _figurSchema = _obj(_figurSchemaProps());
 const _ortSchema = _obj({
   id: _str,
   name: _str,
@@ -1330,11 +1499,19 @@ const _ortSchema = _obj({
   figuren: { type: 'array', items: _str },
 });
 const _faktSchema = _obj({ kategorie: _str, subjekt: _str, fakt: _str, seite: _str });
-export const SCHEMA_KOMPLETT_EXTRAKTION = _obj({
-  figuren: { type: 'array', items: _figurSchema },
-  orte: { type: 'array', items: _ortSchema },
-  fakten: { type: 'array', items: _faktSchema },
-  szenen: {
+
+// Schemas, die Figuren-Einträge oder machtverhaltnis enthalten, werden in
+// _rebuildSchemas() neu gebaut. Für Claude-Provider: unverändert. Für Lokal:
+// machtverhaltnis fehlt (siehe _bzItem), damit kleine Modelle das Feld nicht
+// mit Nullen oder Halluzinationen füllen.
+export let SCHEMA_KOMPLETT_EXTRAKTION = null;
+export let SCHEMA_KOMPLETT_FIGUREN_PASS = null;
+export let SCHEMA_KOMPLETT_ORTE_PASS = null;
+export let SCHEMA_FIGUREN_KONSOL = null;
+export let SCHEMA_BEZIEHUNGEN = null;
+
+function _szenenField() {
+  return {
     type: 'array',
     items: _obj({
       seite: _str,
@@ -1345,8 +1522,10 @@ export const SCHEMA_KOMPLETT_EXTRAKTION = _obj({
       figuren_namen: { type: 'array', items: _str },
       orte_namen: { type: 'array', items: _str },
     }),
-  },
-  assignments: {
+  };
+}
+function _assignmentsField() {
+  return {
     type: 'array',
     items: _obj({
       figur_name: _str,
@@ -1362,23 +1541,57 @@ export const SCHEMA_KOMPLETT_EXTRAKTION = _obj({
         }),
       },
     }),
-  },
-});
+  };
+}
+
+function _buildExtraktionSchema() {
+  return _obj({
+    figuren: { type: 'array', items: _figurSchema },
+    orte: { type: 'array', items: _ortSchema },
+    fakten: { type: 'array', items: _faktSchema },
+    szenen: _szenenField(),
+    assignments: _assignmentsField(),
+  });
+}
+
+function _buildFigurenPassSchema() {
+  return _obj({
+    figuren: { type: 'array', items: _figurSchema },
+    assignments: _assignmentsField(),
+  });
+}
+function _buildOrtePassSchema() {
+  return _obj({
+    orte: { type: 'array', items: _ortSchema },
+    fakten: { type: 'array', items: _faktSchema },
+    szenen: _szenenField(),
+  });
+}
+
+function _buildBeziehungenSchema() {
+  const belegeField = { belege: { type: 'array', items: _bzBeleg } };
+  const props = _isLocal
+    ? { von: _str, zu: _str, typ: _str, beschreibung: _str, ...belegeField }
+    : { von: _str, zu: _str, typ: _str, machtverhaltnis: _num, beschreibung: _str, ...belegeField };
+  return _obj({ beziehungen: { type: 'array', items: _obj(props) } });
+}
+
+export function _rebuildSchemas() {
+  _figurSchema = _obj(_figurSchemaProps());
+  SCHEMA_KOMPLETT_EXTRAKTION = _buildExtraktionSchema();
+  SCHEMA_KOMPLETT_FIGUREN_PASS = _buildFigurenPassSchema();
+  SCHEMA_KOMPLETT_ORTE_PASS = _buildOrtePassSchema();
+  SCHEMA_FIGUREN_KONSOL = _obj({ figuren: { type: 'array', items: _figurSchema } });
+  SCHEMA_BEZIEHUNGEN = _buildBeziehungenSchema();
+}
+_rebuildSchemas();
 
 // ── Konsolidierungen (Komplett-Pipeline) ─────────────────────────────────────
-export const SCHEMA_FIGUREN_KONSOL = _obj({ figuren: { type: 'array', items: _figurSchema } });
 export const SCHEMA_ORTE_KONSOL    = _obj({ orte:    { type: 'array', items: _ortSchema } });
 
 export const SCHEMA_SOZIOGRAMM_KONSOL = _obj({
   figuren:     { type: 'array', items: _obj({ id: _str, sozialschicht: _str }) },
   beziehungen: { type: 'array', items: _obj({ from_fig_id: _str, to_fig_id: _str, machtverhaltnis: _num }) },
-});
-
-export const SCHEMA_BEZIEHUNGEN = _obj({
-  beziehungen: {
-    type: 'array',
-    items: _obj({ von: _str, zu: _str, typ: _str, machtverhaltnis: _num, beschreibung: _str }),
-  },
 });
 
 export const SCHEMA_ZEITSTRAHL = _obj({

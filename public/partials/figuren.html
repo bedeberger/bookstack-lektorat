@@ -133,11 +133,45 @@
         </div>
         <div x-show="selectedFigurId === f.id" class="figur-detail">
           <p x-show="f.beschreibung" x-text="f.beschreibung" class="figur-beschreibung"></p>
-          <!-- Beruf + Sozialschicht -->
-          <div x-show="f.beruf || f.sozialschicht" class="figur-detail-row">
+          <!-- Rolle / Motivation / Konflikt / Entwicklung -->
+          <div x-show="f.rolle || f.motivation || f.konflikt || f.entwicklung" class="figur-kerninfo">
+            <div x-show="f.rolle" class="figur-kerninfo-row">
+              <span class="bewertung-section-title bewertung-section-title--inline" x-text="t('figuren.field.rolle') + '\u00A0'"></span>
+              <span class="figur-detail-value" x-text="f.rolle"></span>
+            </div>
+            <div x-show="f.motivation" class="figur-kerninfo-row">
+              <span class="bewertung-section-title bewertung-section-title--inline" x-text="t('figuren.field.motivation') + '\u00A0'"></span>
+              <span class="figur-detail-value" x-text="f.motivation"></span>
+            </div>
+            <div x-show="f.konflikt" class="figur-kerninfo-row">
+              <span class="bewertung-section-title bewertung-section-title--inline" x-text="t('figuren.field.konflikt') + '\u00A0'"></span>
+              <span class="figur-detail-value" x-text="f.konflikt"></span>
+            </div>
+            <div x-show="f.entwicklung" class="figur-kerninfo-row">
+              <span class="bewertung-section-title bewertung-section-title--inline" x-text="t('figuren.field.entwicklung') + '\u00A0'"></span>
+              <span class="figur-detail-value" x-text="f.entwicklung"></span>
+            </div>
+          </div>
+          <!-- Beruf + Sozialschicht + Präsenz -->
+          <div x-show="f.beruf || f.sozialschicht || f.praesenz" class="figur-detail-row">
             <span x-show="f.beruf" class="bewertung-section-title bewertung-section-title--inline" x-text="t('figuren.field.beruf') + '\u00A0'"></span>
             <span x-show="f.beruf" class="figur-detail-value" x-text="f.beruf"></span>
             <span x-show="f.sozialschicht" class="tag figur-sozialschicht-badge" :class="'figur-schicht-' + f.sozialschicht" x-text="t('figuren.schicht.' + f.sozialschicht)"></span>
+            <span x-show="f.praesenz" class="tag figur-praesenz-badge" :class="'figur-praesenz-' + f.praesenz" x-text="t('figuren.praesenz.' + f.praesenz)"></span>
+          </div>
+          <!-- Erste Erwähnung -->
+          <div x-show="f.erste_erwaehnung" class="figur-detail-row">
+            <span class="bewertung-section-title bewertung-section-title--inline" x-text="t('figuren.field.ersteErwaehnung') + '\u00A0'"></span>
+            <span class="figur-detail-value" x-text="f.erste_erwaehnung"></span>
+          </div>
+          <!-- Schlüsselzitate -->
+          <div x-show="f.schluesselzitate?.length">
+            <div class="bewertung-section-title" x-text="t('figuren.field.schluesselzitate')"></div>
+            <ul class="bullet-list figur-zitate-list">
+              <template x-for="(z, i) in (f.schluesselzitate || [])" :key="i">
+                <li class="figur-zitat" x-text="'«' + z + '»'"></li>
+              </template>
+            </ul>
           </div>
           <!-- Kapitelauftritte -->
           <div class="figur-kapitelauftritte" x-show="f.kapitel?.length > 1">
@@ -178,6 +212,13 @@
                   <span class="figur-bz-name internal-link" @click.stop="openFigurById(bz.figur_id)" x-text="figuren.find(x => x.id === bz.figur_id)?.name || bz.figur_id"></span>
                   <span x-show="bz.machtverhaltnis && bz.machtverhaltnis !== 0" class="figur-bz-macht" :class="bz.machtverhaltnis > 0 ? 'figur-bz-macht--positiv' : 'figur-bz-macht--negativ'" x-text="bz.machtverhaltnis > 0 ? '↑'.repeat(Math.abs(bz.machtverhaltnis)) : '↓'.repeat(Math.abs(bz.machtverhaltnis))"></span>
                   <span x-show="bz.beschreibung" class="figur-bz-hint" x-text="'– ' + bz.beschreibung"></span>
+                  <template x-if="bz.belege?.length">
+                    <span class="figur-bz-belege">
+                      <template x-for="(bg, bi) in (bz.belege || [])" :key="bi">
+                        <span class="figur-bz-beleg internal-link" @click.stop="gotoStelle(bg.kapitel, bg.seite)" x-text="bg.seite || bg.kapitel" :title="(bg.kapitel || '') + (bg.seite ? ' · ' + bg.seite : '')"></span>
+                      </template>
+                    </span>
+                  </template>
                 </div>
               </template>
             </div>

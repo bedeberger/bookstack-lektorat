@@ -1039,6 +1039,47 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 43').run();
     logger.info(`DB-Migration auf Version 43 abgeschlossen (page_stats.book_id für ${healed.changes} verschobene Seiten geheilt).`);
   }
+  if (version < 44) {
+    // Welle 1 – Figuren-Schema anreichern: neue Felder für textnähere Analyse.
+    // praesenz ersetzt die bisherige haeufigkeit-Summe als kategorische Gewichtung.
+    // Backfill: praesenz aus typ + figure_appearances-Aggregaten ableiten.
+    const figCols44 = db.pragma('table_info(figures)').map(c => c.name);
+    const addCol = (name, def) => {
+      if (!figCols44.includes(name)) db.exec(`ALTER TABLE figures ADD COLUMN ${name} ${def}`);
+    };
+    addCol('praesenz',                 'TEXT');
+    addCol('rolle',                    'TEXT');
+    addCol('motivation',               'TEXT');
+    addCol('konflikt',                 'TEXT');
+    addCol('entwicklung',              'TEXT');
+    addCol('erste_erwaehnung',         'TEXT');
+    addCol('erste_erwaehnung_page_id', 'INTEGER');
+    addCol('schluesselzitate',         'TEXT');
+    // Backfill praesenz: hauptfigur → zentral; ab 5 Kapiteln oder Summe haeufigkeit ≥ 20 → zentral;
+    // antagonist/mentor → regelmaessig; ab 2 Kapiteln → regelmaessig; Summe ≥ 3 → punktuell; sonst randfigur.
+    const bf = db.prepare(`
+      UPDATE figures SET praesenz = CASE
+        WHEN typ = 'hauptfigur' THEN 'zentral'
+        WHEN (SELECT COUNT(*) FROM figure_appearances WHERE figure_id = figures.id) >= 5 THEN 'zentral'
+        WHEN COALESCE((SELECT SUM(haeufigkeit) FROM figure_appearances WHERE figure_id = figures.id), 0) >= 20 THEN 'zentral'
+        WHEN typ IN ('antagonist','mentor') THEN 'regelmaessig'
+        WHEN (SELECT COUNT(*) FROM figure_appearances WHERE figure_id = figures.id) >= 2 THEN 'regelmaessig'
+        WHEN COALESCE((SELECT SUM(haeufigkeit) FROM figure_appearances WHERE figure_id = figures.id), 0) >= 3 THEN 'punktuell'
+        ELSE 'randfigur'
+      END
+      WHERE praesenz IS NULL
+    `).run();
+    db.prepare('UPDATE schema_version SET version = 44').run();
+    logger.info(`DB-Migration auf Version 44 abgeschlossen (figures-Anreicherung: praesenz/rolle/motivation/konflikt/entwicklung/erste_erwaehnung/schluesselzitate; ${bf.changes} Figuren praesenz-gebackfillt).`);
+  }
+  if (version < 45) {
+    // Welle 3 · #10 – Beziehungs-Belege als JSON-Array [{kapitel, seite}].
+    // Nachvollziehbarkeit: Lektorin kann zur Textstelle springen.
+    const frelCols45 = db.pragma('table_info(figure_relations)').map(c => c.name);
+    if (!frelCols45.includes('belege')) db.exec('ALTER TABLE figure_relations ADD COLUMN belege TEXT');
+    db.prepare('UPDATE schema_version SET version = 45').run();
+    logger.info('DB-Migration auf Version 45 abgeschlossen (figure_relations.belege hinzugefügt).');
+  }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).
@@ -1141,21 +1182,31 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
     }
 
     const insFig = db.prepare(`
-      INSERT INTO figures (book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sozialschicht, sort_order, user_email, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      INSERT INTO figures
+        (book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sozialschicht,
+         praesenz, rolle, motivation, konflikt, entwicklung, erste_erwaehnung, erste_erwaehnung_page_id, schluesselzitate,
+         sort_order, user_email, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insTag = db.prepare('INSERT OR IGNORE INTO figure_tags (figure_id, tag) VALUES (?, ?)');
     const insApp = db.prepare('INSERT OR IGNORE INTO figure_appearances (figure_id, chapter_id, chapter_name, haeufigkeit) VALUES (?, ?, ?, ?)');
-    const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, user_email) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, belege, user_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
 
     const validIds = new Set(figuren.map(f => f.id));
     const allRelations = [];
 
     for (let i = 0; i < figuren.length; i++) {
       const f = figuren[i];
+      const zitate = Array.isArray(f.schluesselzitate) && f.schluesselzitate.length
+        ? JSON.stringify(f.schluesselzitate.filter(Boolean).slice(0, 3))
+        : null;
+      const erstPageId = idMaps?.pageNameToId?.[f.erste_erwaehnung] ?? null;
       const { lastInsertRowid: fid } = insFig.run(
         bookId, f.id, f.name, f.kurzname || null, f.typ || null,
         f.geburtstag || null, f.geschlecht || null, f.beruf || null,
-        f.beschreibung || null, f.sozialschicht || null, i, userEmail || null, now
+        f.beschreibung || null, f.sozialschicht || null,
+        f.praesenz || null, f.rolle || null, f.motivation || null, f.konflikt || null,
+        f.entwicklung || null, f.erste_erwaehnung || null, erstPageId, zitate,
+        i, userEmail || null, now
       );
       for (const tag of (f.eigenschaften || [])) insTag.run(fid, tag);
       for (const app of (f.kapitel || [])) {
@@ -1163,11 +1214,19 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
         if (chapId != null) insApp.run(fid, chapId, app.name, app.haeufigkeit || 1);
       }
       for (const bz of (f.beziehungen || [])) {
-        allRelations.push({ from: f.id, to: bz.figur_id, typ: bz.typ, beschreibung: bz.beschreibung || null, machtverhaltnis: bz.machtverhaltnis ?? null });
+        const belegeArr = Array.isArray(bz.belege)
+          ? bz.belege.filter(b => b && (b.kapitel || b.seite)).slice(0, 5)
+          : [];
+        allRelations.push({
+          from: f.id, to: bz.figur_id, typ: bz.typ,
+          beschreibung: bz.beschreibung || null,
+          machtverhaltnis: bz.machtverhaltnis ?? null,
+          belege: belegeArr.length ? JSON.stringify(belegeArr) : null,
+        });
       }
     }
     for (const r of dedupRelations(allRelations, validIds)) {
-      insRel.run(bookId, r.from, r.to, r.typ, r.beschreibung, r.machtverhaltnis, userEmail || null);
+      insRel.run(bookId, r.from, r.to, r.typ, r.beschreibung, r.machtverhaltnis, r.belege, userEmail || null);
     }
   })();
 }
@@ -1742,7 +1801,7 @@ function addFigurenBeziehungen(bookId, beziehungen, userEmail) {
     'SELECT COUNT(*) as cnt FROM figures WHERE book_id = ? AND fig_id = ? AND user_email IS ?'
   );
   const ins = db.prepare(
-    'INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, user_email) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, belege, user_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   );
   db.transaction(() => {
     const seenInBatch = new Set();
@@ -1755,7 +1814,11 @@ function addFigurenBeziehungen(bookId, beziehungen, userEmail) {
       if (pairExists.get(bookId, bz.von, bz.zu, bz.zu, bz.von, em)?.cnt > 0) continue;
       if (figExists.get(bookId, bz.von, em)?.cnt === 0) continue;
       if (figExists.get(bookId, bz.zu, em)?.cnt === 0) continue;
-      ins.run(bookId, bz.von, bz.zu, bz.typ, bz.beschreibung || null, bz.machtverhaltnis ?? null, em);
+      const belegeArr = Array.isArray(bz.belege)
+        ? bz.belege.filter(x => x && (x.kapitel || x.seite)).slice(0, 5)
+        : [];
+      const belege = belegeArr.length ? JSON.stringify(belegeArr) : null;
+      ins.run(bookId, bz.von, bz.zu, bz.typ, bz.beschreibung || null, bz.machtverhaltnis ?? null, belege, em);
       seenInBatch.add(key);
     }
   })();
@@ -1880,21 +1943,60 @@ function cleanupDuplicateFiguren(bookId, userEmail) {
     }
     stats.relationsRemoved = toDelete.length;
 
+    // Alle Figuren mit ihren Namen (für Rescue-Lookup)
+    const figByIdForRescue = db.prepare(
+      'SELECT fig_id, name, kurzname FROM figures WHERE book_id = ? AND user_email IS ?'
+    ).all(bookId, em);
+    const figLookup = figByIdForRescue.map(f => ({
+      fig_id: f.fig_id,
+      names: [f.name, f.kurzname].filter(Boolean).map(s => s.toLowerCase()),
+    }));
+
     const relsWithNames = db.prepare(`
-      SELECT r.rowid, r.beschreibung, f2.name AS to_name, f2.kurzname AS to_kurz
+      SELECT r.rowid, r.from_fig_id, r.to_fig_id, r.typ, r.machtverhaltnis, r.beschreibung,
+             f2.name AS to_name, f2.kurzname AS to_kurz
       FROM figure_relations r
       LEFT JOIN figures f2 ON f2.fig_id = r.to_fig_id AND f2.book_id = r.book_id AND f2.user_email IS ?
       WHERE r.book_id = ? AND r.user_email IS ? AND r.beschreibung IS NOT NULL AND r.beschreibung != ''
     `).all(em, bookId, em);
     const clearDesc = db.prepare('UPDATE figure_relations SET beschreibung = NULL WHERE rowid = ?');
+    const getRel = db.prepare(
+      'SELECT rowid, beschreibung FROM figure_relations WHERE book_id = ? AND user_email IS ? AND from_fig_id = ? AND to_fig_id = ?'
+    );
+    const setDesc = db.prepare('UPDATE figure_relations SET beschreibung = ? WHERE rowid = ?');
+    const insRel = db.prepare(
+      'INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, user_email) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+
+    stats.descriptionsMoved = 0;
     for (const r of relsWithNames) {
       const targets = [r.to_name, r.to_kurz].filter(Boolean).map(s => s.toLowerCase());
       if (!targets.length) continue;
       const text = r.beschreibung.toLowerCase();
-      if (!targets.some(n => text.includes(n))) {
-        clearDesc.run(r.rowid);
-        stats.descriptionsCleared++;
+      if (targets.some(n => text.includes(n))) continue; // passt
+
+      // Rescue: finde Figur, die eindeutig in beschreibung vorkommt und weder from noch to ist
+      const candidates = figLookup.filter(c =>
+        c.fig_id !== r.from_fig_id && c.fig_id !== r.to_fig_id && c.names.some(n => text.includes(n))
+      );
+      if (candidates.length === 1) {
+        const target = candidates[0];
+        const existing = getRel.get(bookId, em, r.from_fig_id, target.fig_id);
+        if (existing && !existing.beschreibung) {
+          setDesc.run(r.beschreibung, existing.rowid);
+          clearDesc.run(r.rowid);
+          stats.descriptionsMoved++;
+          continue;
+        }
+        if (!existing) {
+          insRel.run(bookId, r.from_fig_id, target.fig_id, r.typ, r.beschreibung, r.machtverhaltnis ?? null, em);
+          clearDesc.run(r.rowid);
+          stats.descriptionsMoved++;
+          continue;
+        }
       }
+      clearDesc.run(r.rowid);
+      stats.descriptionsCleared++;
     }
   })();
 

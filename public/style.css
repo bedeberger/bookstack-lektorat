@@ -2274,6 +2274,54 @@ body.focus-mode .lektorat-mark--selected {
 /* Unterwelt: invertierte Darstellung (dunkler Hintergrund, heller Text) */
 .figur-schicht-unterwelt            { --sch-hue: var(--palette-dark); background: var(--palette-dark); color: var(--color-text-inverse); }
 
+/* === Figuren: Präsenz-Badge === */
+.figur-praesenz-badge {
+  --pres-hue: var(--palette-gray);
+  font-size: 11px;
+  margin-left: 6px;
+  background: color-mix(in srgb, var(--pres-hue) var(--figpal-bg-mix), var(--color-surface));
+  color:      color-mix(in srgb, var(--pres-hue) var(--figpal-text-mix), var(--color-text));
+}
+.figur-praesenz-zentral      { --pres-hue: var(--palette-blue); }
+.figur-praesenz-regelmaessig { --pres-hue: var(--palette-green); }
+.figur-praesenz-punktuell    { --pres-hue: var(--palette-orange); }
+.figur-praesenz-randfigur    { --pres-hue: var(--palette-gray); }
+
+/* === Figuren: Kerninfo (Rolle/Motivation/Konflikt/Entwicklung) === */
+.figur-kerninfo {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: var(--color-surface-alt, var(--color-surface));
+  border-left: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.figur-kerninfo-row { font-size: var(--font-size-sm); line-height: 1.5; margin-bottom: 2px; }
+.figur-kerninfo-row:last-child { margin-bottom: 0; }
+
+/* === Figuren: Schlüsselzitate === */
+.figur-zitate-list { margin-bottom: 10px; }
+.figur-zitat {
+  font-style: italic;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+/* === Figuren: Beziehungs-Belege === */
+.figur-bz-belege {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-left: 6px;
+}
+.figur-bz-beleg {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-border) 20%, var(--color-surface));
+  color: var(--color-muted);
+}
+
 /* === Figuren: Graph-Bereich === */
 .figur-graph-section { margin-top: 14px; position: relative; }
 

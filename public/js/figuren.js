@@ -4,11 +4,50 @@
 
 import { escHtml } from './utils.js';
 
+function _cleanStr(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (!s || s === '-' || s === '–' || s === '—' || s === 'n/a' || s === 'N/A') return null;
+  return s;
+}
+
+function _sanitizeFigur(f) {
+  return {
+    ...f,
+    kurzname: _cleanStr(f.kurzname),
+    beruf: _cleanStr(f.beruf),
+    beschreibung: _cleanStr(f.beschreibung),
+    geburtstag: _cleanStr(f.geburtstag),
+    geschlecht: _cleanStr(f.geschlecht),
+    sozialschicht: _cleanStr(f.sozialschicht),
+    praesenz: _cleanStr(f.praesenz),
+    rolle: _cleanStr(f.rolle),
+    motivation: _cleanStr(f.motivation),
+    konflikt: _cleanStr(f.konflikt),
+    entwicklung: _cleanStr(f.entwicklung),
+    erste_erwaehnung: _cleanStr(f.erste_erwaehnung),
+    schluesselzitate: (f.schluesselzitate || []).map(_cleanStr).filter(Boolean).slice(0, 3),
+    eigenschaften: (f.eigenschaften || []).map(_cleanStr).filter(Boolean),
+    lebensereignisse: (f.lebensereignisse || []).map(ev => ({
+      ...ev,
+      datum: _cleanStr(ev.datum),
+      ereignis: _cleanStr(ev.ereignis),
+      kapitel: _cleanStr(ev.kapitel),
+      seite: _cleanStr(ev.seite),
+      bedeutung: _cleanStr(ev.bedeutung),
+    })).filter(ev => ev.ereignis || ev.datum),
+    beziehungen: (f.beziehungen || []).map(bz => ({
+      ...bz,
+      beschreibung: _cleanStr(bz.beschreibung),
+    })),
+  };
+}
+
 export const figurenMethods = {
   async loadFiguren(bookId) {
     try {
       const data = await fetch('/figures/' + bookId).then(r => r.json());
-      this.figuren = data?.figuren || [];
+      this.figuren = (data?.figuren || []).map(_sanitizeFigur);
       this.figurenUpdatedAt = data?.updated_at || null;
       this._buildGlobalZeitstrahl();
     } catch (e) {
