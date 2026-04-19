@@ -25,12 +25,13 @@ function _fmtDateShort(d, locale) {
 
 export const treeMethods = {
   pageStatus(page) {
-    const iso = this.pageLastChecked?.[page.id];
-    if (!iso) return 'none';
-    const checkedAt = new Date(iso);
+    const rec = this.pageLastChecked?.[page.id];
+    if (!rec) return 'none';
+    const checkedAt = new Date(rec.at);
     const updatedMs = page.updated_at ? new Date(page.updated_at).getTime() : 0;
     if (updatedMs > checkedAt.getTime()) return 'warn';
     if (_diffDays(checkedAt) >= STALE_THRESHOLD_DAYS) return 'warn';
+    if (rec.pending) return 'pending';
     return 'ok';
   },
 
@@ -46,23 +47,29 @@ export const treeMethods = {
   },
 
   pageStatusTooltip(page) {
-    const iso = this.pageLastChecked?.[page.id];
+    const rec = this.pageLastChecked?.[page.id];
     const updatedAt = page.updated_at ? new Date(page.updated_at) : null;
     const pageLine = updatedAt ? this._fmtRelativeLine(updatedAt, 'sidebar.status.pageUpdated') : '';
-    if (!iso) {
+    if (!rec) {
       const first = this.t('sidebar.status.noLektorat');
       return pageLine ? `${first} · ${pageLine}` : first;
     }
-    const checkedAt = new Date(iso);
+    const checkedAt = new Date(rec.at);
     const lektLine = this._fmtRelativeLine(checkedAt, 'sidebar.status.lektorat');
     const editedSince = updatedAt && updatedAt.getTime() > checkedAt.getTime();
-    const prefix = editedSince ? this.t('sidebar.status.editedSince') + ' · ' : '';
+    const prefixParts = [];
+    if (editedSince) prefixParts.push(this.t('sidebar.status.editedSince'));
+    else if (rec.pending) prefixParts.push(this.t('sidebar.status.pending'));
+    const prefix = prefixParts.length ? prefixParts.join(' · ') + ' · ' : '';
     return `${prefix}${lektLine}${pageLine ? ' · ' + pageLine : ''}`;
   },
 
-  markPageChecked(pageId) {
+  markPageChecked(pageId, { pending = false } = {}) {
     if (pageId == null) return;
-    this.pageLastChecked = { ...this.pageLastChecked, [pageId]: new Date().toISOString() };
+    this.pageLastChecked = {
+      ...this.pageLastChecked,
+      [pageId]: { at: new Date().toISOString(), pending: !!pending },
+    };
   },
 
   async refreshPageAges() {

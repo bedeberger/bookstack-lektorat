@@ -174,22 +174,30 @@ router.get('/book-stats/:book_id', (req, res) => {
   res.json(rows);
 });
 
-// Pro Seite den letzten Check-Zeitpunkt (user-spezifisch). Frontend berechnet Staleness.
-// Wenn Korrekturen aus einem Check übernommen wurden (saved_at gesetzt), zählt dieser
-// Zeitpunkt — sonst würde das anschliessende BookStack-updated_at die Seite sofort
-// wieder auf "bearbeitet seit Lektorat" (warn) flippen.
+// Pro Seite: letzter Check-Zeitpunkt + Pending-Flag (user-spezifisch). Frontend
+// berechnet Staleness/Edited-Since. "Pending" = jüngster Check hat Fehler, wurde
+// aber weder geöffnet noch übernommen (saved_at NULL).
+// Wenn Korrekturen aus einem Check übernommen wurden, zählt saved_at — sonst
+// würde das anschliessende BookStack-updated_at die Seite sofort wieder auf
+// "bearbeitet seit Lektorat" (warn) flippen.
 router.get('/page-ages/:book_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
   const bookId = parseInt(req.params.book_id);
   const rows = db.prepare(`
+    WITH latest AS (
+      SELECT page_id, checked_at, saved_at, error_count,
+             ROW_NUMBER() OVER (PARTITION BY page_id ORDER BY checked_at DESC) AS rn
+      FROM page_checks
+      WHERE book_id = ? AND user_email = ?
+    )
     SELECT page_id,
-           MAX(CASE WHEN saved_at IS NOT NULL AND saved_at > checked_at THEN saved_at ELSE checked_at END) as last_checked_at
-    FROM page_checks
-    WHERE book_id = ? AND user_email = ?
-    GROUP BY page_id
+           CASE WHEN saved_at IS NOT NULL AND saved_at > checked_at THEN saved_at ELSE checked_at END AS at,
+           CASE WHEN saved_at IS NULL AND error_count > 0 THEN 1 ELSE 0 END AS pending
+    FROM latest
+    WHERE rn = 1
   `).all(bookId, user_email);
   const map = {};
-  for (const r of rows) map[r.page_id] = r.last_checked_at;
+  for (const r of rows) map[r.page_id] = { at: r.at, pending: !!r.pending };
   res.json(map);
 });
 

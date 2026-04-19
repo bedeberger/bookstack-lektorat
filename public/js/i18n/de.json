@@ -217,6 +217,7 @@
   "sidebar.status.pageUpdatedDaysAgo":   "Seite vor {days} Tagen aktualisiert, {time}",
   "sidebar.status.pageUpdatedOn":        "Seite aktualisiert {date}, {time}",
   "sidebar.status.editedSince":  "Seit dem Lektorat bearbeitet",
+  "sidebar.status.pending":      "Lektorat noch nicht angesehen",
 
   "tok.words":                   "{n} Wörter",
   "tok.tokens":                  "~{n} Tokens",

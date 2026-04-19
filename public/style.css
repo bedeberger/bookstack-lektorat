@@ -43,6 +43,7 @@
   --color-ok-border: #639922;
   --color-warn-bg: #FAEEDA;
   --color-warn-text: #854F0B;
+  --color-pending: #f59e0b;
   --color-err-bg: #FCEBEB;
   --color-err-text: #A32D2D;
   --color-err-border: #E24B4A;
@@ -192,6 +193,7 @@
   --color-ok-border: #7fbc36;
   --color-warn-bg: rgba(184, 134, 11, 0.18);
   --color-warn-text: #e5b960;
+  --color-pending: #fbbf24;
   --color-err-bg: rgba(226, 75, 74, 0.18);
   --color-err-text: #ff9090;
   --color-err-border: #e85a58;
@@ -1017,9 +1019,10 @@ ins {
   background: var(--color-subtle);
   border: 1px solid transparent;
 }
-.page-status-ok   { background: var(--color-ok-border); }
-.page-status-warn { background: var(--color-err-border); }
-.page-status-none { background: transparent; border-color: var(--color-subtle); }
+.page-status-ok      { background: var(--color-ok-border); }
+.page-status-pending { background: var(--color-pending); }
+.page-status-warn    { background: var(--color-err-border); }
+.page-status-none    { background: transparent; border-color: var(--color-subtle); }
 
 /* === Tags === */
 .tag {

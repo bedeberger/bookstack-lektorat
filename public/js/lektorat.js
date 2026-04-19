@@ -145,7 +145,7 @@ export const lektoratMethods = {
         this.checkDone = true;
         this.lastCheckId = r.checkId || null;
         this.activeHistoryEntryId = r.checkId || null;
-        this.markPageChecked(pageId);
+        this.markPageChecked(pageId, { pending: fehler.length > 0 });
         if (pageId != null) await this.loadPageHistory(pageId);
         this.setStatus(this.t('job.analyseDone'), false, 5000);
       },

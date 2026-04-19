@@ -217,6 +217,7 @@
   "sidebar.status.pageUpdatedDaysAgo":   "Page updated {days} d ago, {time}",
   "sidebar.status.pageUpdatedOn":        "Page updated {date}, {time}",
   "sidebar.status.editedSince":  "Edited since last review",
+  "sidebar.status.pending":      "Review result pending",
 
   "tok.words":                   "{n} words",
   "tok.tokens":                  "~{n} tokens",
