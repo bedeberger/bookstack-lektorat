@@ -307,6 +307,8 @@
   "figuren.field.entwicklung":       "Entwicklung:",
   "figuren.field.ersteErwaehnung":   "Erste Erwähnung:",
   "figuren.field.schluesselzitate":  "Schlüsselzitate",
+  "figurLookup.geburt":              "Geburt:",
+  "figurLookup.open":                "Figur öffnen",
   "figuren.praesenz.zentral":        "zentral",
   "figuren.praesenz.regelmaessig":   "regelmässig",
   "figuren.praesenz.punktuell":      "punktuell",

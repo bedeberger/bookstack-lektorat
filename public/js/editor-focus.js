@@ -83,19 +83,16 @@ export const focusMethods = {
   _focusLastPointer: 0,
   _focusListeners: null,
   _focusVisibleBlocks: null,
-  _focusEnteredFromView: false,
 
   toggleFocusMode() {
     if (this.focusMode) this.exitFocusMode(); else this.enterFocusMode();
   },
 
   startFocusEdit() {
-    const fromView = !this.editMode;
     if (!this.editMode) {
       this.startEdit();
       if (!this.editMode) return;
     }
-    this._focusEnteredFromView = fromView;
     this.$nextTick(() => this.enterFocusMode());
   },
 
@@ -144,6 +141,7 @@ export const focusMethods = {
       const onKey = (e) => {
         if (e.key === 'Escape' && this.focusMode) {
           if (this.showSynonymMenu || this.showSynonymPicker) return;
+          if (this.showFigurLookup) { this.closeFigurLookup(); return; }
           e.preventDefault();
           if (this.editMode && this.editDirty && this.cancelEdit) {
             this.cancelEdit();
@@ -188,10 +186,17 @@ export const focusMethods = {
     });
   },
 
-  exitFocusMode() {
+  async exitFocusMode() {
     if (!this.focusMode) return;
-    const enteredFromView = this._focusEnteredFromView;
-    this._focusEnteredFromView = false;
+
+    // Immer speichern beim Verlassen. quickSave ist still, bleibt im Editor
+    // und setzt editDirty=false bei Erfolg → triggert unten den View-Drop.
+    // Bei Offline/Fehler bleibt editDirty true + Draft im LocalStorage →
+    // User bleibt im Edit-Modus und kann manuell retten.
+    if (this.editMode && this.editDirty && !this.editSaving) {
+      await this.quickSave?.();
+    }
+
     this.focusMode = false;
     document.body.classList.remove('focus-mode');
     document.documentElement.style.removeProperty('--focus-vh');
@@ -220,8 +225,9 @@ export const focusMethods = {
     document.querySelectorAll('#editor-card .focus-paragraph-active')
       .forEach(el => el.classList.remove('focus-paragraph-active'));
 
-    // Fokus aus Ansichtsmodus gestartet + nichts Ungespeichertes → zurück in die Ansicht.
-    if (enteredFromView && this.editMode && !this.editDirty) {
+    // Nichts Ungespeichertes → zurück in die Ansicht (Save im Fokus impliziert
+    // Ende der Edit-Session; unsaubere Exits behalten den Edit-Modus).
+    if (this.editMode && !this.editDirty) {
       this._stopAutosave?.();
       this._uninstallOnlineRetry?.();
       this.editMode = false;
@@ -230,6 +236,7 @@ export const focusMethods = {
       this.lastDraftSavedAt = null;
       this.closeSynonymMenu?.();
       this.closeSynonymPicker?.();
+      this.closeFigurLookup?.();
       this.updatePageView?.();
     }
   },

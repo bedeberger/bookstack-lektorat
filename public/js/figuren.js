@@ -49,6 +49,7 @@ export const figurenMethods = {
       const data = await fetch('/figures/' + bookId).then(r => r.json());
       this.figuren = (data?.figuren || []).map(_sanitizeFigur);
       this.figurenUpdatedAt = data?.updated_at || null;
+      this._figurLookupIndex = null;
       this._buildGlobalZeitstrahl();
     } catch (e) {
       console.error('[loadFiguren]', e);

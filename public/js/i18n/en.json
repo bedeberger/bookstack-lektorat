@@ -307,6 +307,8 @@
   "figuren.field.entwicklung":       "Arc:",
   "figuren.field.ersteErwaehnung":   "First mention:",
   "figuren.field.schluesselzitate":  "Key quotes",
+  "figurLookup.geburt":              "Born:",
+  "figurLookup.open":                "Open figure",
   "figuren.praesenz.zentral":        "central",
   "figuren.praesenz.regelmaessig":   "recurring",
   "figuren.praesenz.punktuell":      "occasional",

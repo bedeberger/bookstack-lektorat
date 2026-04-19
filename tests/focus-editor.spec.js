@@ -4,7 +4,9 @@ const HARNESS = '/tests/fixtures/focus-harness.html';
 const EDITOR = '#editor-card .page-content-view--editing';
 
 async function enter(page) {
-  await page.evaluate(() => window.harness.enterFocusMode());
+  // exitFocusMode droppt bei !editDirty zurück in den View-Modus (editMode=false).
+  // Für Re-Entry im Test editMode zurücksetzen.
+  await page.evaluate(() => { window.harness.editMode = true; window.harness.enterFocusMode(); });
   await page.waitForFunction(() => window.harness._focusListeners !== null);
 }
 

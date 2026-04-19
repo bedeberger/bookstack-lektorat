@@ -23,6 +23,7 @@ import { pageViewMethods } from './page-view.js';
 import { editorEditMethods } from './editor-edit.js';
 import { focusMethods } from './editor-focus.js';
 import { synonymMethods } from './editor-synonyme.js';
+import { figurLookupMethods } from './editor-figur-lookup.js';
 
 const FIGUR_TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, andere: 4 };
 
@@ -212,6 +213,13 @@ document.addEventListener('alpine:init', () => {
     _synonymWord: '',
     _synonymPollTimer: null,
     _synonymScrollHandler: null,
+    showFigurLookup: false,
+    figurLookupX: 0,
+    figurLookupY: 0,
+    figurLookupData: null,
+    _figurLookupScrollHandler: null,
+    _figurLookupAnchor: null,
+    _figurLookupIndex: null,
     showBookCard: false,
     showTreeCard: true,
     showEditorCard: false,
@@ -1486,6 +1494,7 @@ document.addEventListener('alpine:init', () => {
       if (this._synonymPollTimer) { clearInterval(this._synonymPollTimer); this._synonymPollTimer = null; }
       this.showSynonymMenu = false;
       this.showSynonymPicker = false;
+      this.closeFigurLookup?.();
       if (this.focusMode) this.exitFocusMode();
       this._stopAutosave?.();
       this._uninstallOnlineRetry?.();
@@ -1734,5 +1743,6 @@ document.addEventListener('alpine:init', () => {
     ...editorEditMethods,
     ...focusMethods,
     ...synonymMethods,
+    ...figurLookupMethods,
   }));
 });

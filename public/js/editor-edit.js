@@ -130,6 +130,7 @@ export const editorEditMethods = {
     this.saveOffline = false;
     this.closeSynonymMenu?.();
     this.closeSynonymPicker?.();
+    this.closeFigurLookup?.();
     this.updatePageView();
     if (this.focusMode) this.exitFocusMode();
   },
