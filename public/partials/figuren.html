@@ -153,10 +153,10 @@
             </div>
           </div>
           <!-- Beruf + Sozialschicht + Präsenz -->
-          <div x-show="f.beruf || f.sozialschicht || f.praesenz" class="figur-detail-row">
+          <div x-show="f.beruf || (f.sozialschicht && f.sozialschicht !== 'andere') || f.praesenz" class="figur-detail-row">
             <span x-show="f.beruf" class="bewertung-section-title bewertung-section-title--inline" x-text="t('figuren.field.beruf') + '\u00A0'"></span>
             <span x-show="f.beruf" class="figur-detail-value" x-text="f.beruf"></span>
-            <span x-show="f.sozialschicht" class="tag figur-sozialschicht-badge" :class="'figur-schicht-' + f.sozialschicht" x-text="t('figuren.schicht.' + f.sozialschicht)"></span>
+            <span x-show="f.sozialschicht && f.sozialschicht !== 'andere'" class="tag figur-sozialschicht-badge" :class="'figur-schicht-' + f.sozialschicht" x-text="t('figuren.schicht.' + f.sozialschicht)"></span>
             <span x-show="f.praesenz" class="tag figur-praesenz-badge" :class="'figur-praesenz-' + f.praesenz" x-text="t('figuren.praesenz.' + f.praesenz)"></span>
           </div>
           <!-- Erste Erwähnung -->

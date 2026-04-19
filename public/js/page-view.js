@@ -3,6 +3,7 @@
 
 import { escHtml, htmlToText } from './utils.js';
 import { tRaw } from './i18n.js';
+import { _sanitizeFigur } from './figuren.js';
 
 // Weiche Typen: standardmässig nicht vorausgewählt (User entscheidet pro Finding)
 export const SOFT_TYPEN = new Set(['wiederholung', 'schwaches_verb', 'fuellwort', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel']);
@@ -221,7 +222,7 @@ export const pageViewMethods = {
     }
     try {
       const data = await fetch(`/figures/chapter/${this.selectedBookId}/${this.currentPage.chapter_id}`).then(r => r.json());
-      this.chapterFigures = data?.figuren || [];
+      this.chapterFigures = (data?.figuren || []).map(_sanitizeFigur);
     } catch (e) {
       console.error('[loadChapterFigures]', e);
       this.chapterFigures = [];

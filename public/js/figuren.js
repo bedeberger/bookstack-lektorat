@@ -4,14 +4,14 @@
 
 import { escHtml } from './utils.js';
 
-function _cleanStr(v) {
+export function _cleanStr(v) {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
   if (!s || s === '-' || s === '–' || s === '—' || s === 'n/a' || s === 'N/A') return null;
   return s;
 }
 
-function _sanitizeFigur(f) {
+export function _sanitizeFigur(f) {
   return {
     ...f,
     kurzname: _cleanStr(f.kurzname),
