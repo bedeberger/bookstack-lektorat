@@ -174,6 +174,18 @@ router.get('/book-stats/:book_id', (req, res) => {
   res.json(rows);
 });
 
+// Pro Seite den letzten Check-Zeitpunkt (user-spezifisch). Frontend berechnet Staleness.
+router.get('/page-ages/:book_id', (req, res) => {
+  const user_email = req.session?.user?.email || null;
+  const bookId = parseInt(req.params.book_id);
+  const rows = db.prepare(
+    'SELECT page_id, MAX(checked_at) as last_checked_at FROM page_checks WHERE book_id = ? AND user_email = ? GROUP BY page_id'
+  ).all(bookId, user_email);
+  const map = {};
+  for (const r of rows) map[r.page_id] = r.last_checked_at;
+  res.json(map);
+});
+
 // Lektorat-Abdeckung: wie viele Seiten eines Buchs wurden schon geprüft (user-spezifisch)
 router.get('/coverage/:book_id', (req, res) => {
   const user_email = req.session?.user?.email || null;

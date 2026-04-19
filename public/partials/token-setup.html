@@ -1,0 +1,28 @@
+<!-- BookStack Token Setup (nur beim Erstsetup sichtbar) -->
+<div class="card token-setup-card" x-show="showTokenSetup" x-cloak>
+  <div class="card-header">
+    <span class="card-title" x-text="t('tokenSetup.title')"></span>
+  </div>
+  <p class="token-setup-desc">
+    <span x-text="t('tokenSetup.desc')"></span><br>
+    <a :href="bookstackUrl + '/my-account/api-tokens'" target="_blank" x-show="bookstackUrl" x-text="t('tokenSetup.openLink')"></a>
+    <span x-show="!bookstackUrl" x-text="t('tokenSetup.fallbackText')"></span>
+  </p>
+  <div class="token-setup-fields">
+    <label>
+      <span x-text="t('tokenSetup.tokenId')"></span>
+      <input type="text" x-model="tokenSetupId" :placeholder="t('tokenSetup.tokenId')" autocomplete="off" spellcheck="false">
+    </label>
+    <label>
+      <span x-text="t('tokenSetup.tokenSecret')"></span>
+      <input type="password" x-model="tokenSetupPw" :placeholder="t('tokenSetup.tokenSecret')" autocomplete="off">
+    </label>
+  </div>
+  <p class="token-setup-error" x-show="tokenSetupError" x-text="tokenSetupError"></p>
+  <div class="row">
+    <button @click="saveBookstackToken()" :disabled="tokenSetupLoading">
+      <span x-show="tokenSetupLoading" class="spinner"></span>
+      <span x-text="tokenSetupLoading ? t('common.saving') : t('common.save')"></span>
+    </button>
+  </div>
+</div>

@@ -170,9 +170,7 @@ export const editorEditMethods = {
       if (saved?.updated_at) this.currentPage.updated_at = saved.updated_at;
 
       this.originalHtml = newHtml;
-      const rawPreview = htmlToText(newHtml).trim() || null;
-      if (this.currentPage) this.currentPage.previewText = rawPreview;
-      this.currentPageEmpty = !rawPreview;
+      this.currentPageEmpty = !htmlToText(newHtml).trim();
 
       this._filterFindingsAfterSave(newHtml);
 
@@ -247,9 +245,7 @@ export const editorEditMethods = {
       this.lastAutosaveAt = Date.now();
       this.lastDraftSavedAt = null;
       clearDraft(this.currentPage.id);
-      const rawPreview = htmlToText(newHtml).trim() || null;
-      if (this.currentPage) this.currentPage.previewText = rawPreview;
-      this.currentPageEmpty = !rawPreview;
+      this.currentPageEmpty = !htmlToText(newHtml).trim();
       this._filterFindingsAfterSave(newHtml);
       this.updatePageView();
       this.setStatus(this.t('edit.savedAt', { time: new Date().toLocaleTimeString(localeTag) }), false, 2500);

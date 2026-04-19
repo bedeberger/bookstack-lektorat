@@ -1,7 +1,6 @@
 import { escHtml, htmlToText, fmtTok } from './utils.js';
 import { configurePrompts } from './prompts.js';
 
-const PREVIEW_MAX_CHARS = 600;
 import { bookstackMethods } from './api-bookstack.js';
 import { aiMethods } from './api-ai.js';
 import { historyMethods } from './history.js';
@@ -174,6 +173,13 @@ document.addEventListener('alpine:init', () => {
     _pageOrderMap: null,
     _pageIdOrderMap: null,
     pageSearch: '',
+    bookstackSearch: '',
+    bookstackSearchResults: [],
+    bookstackSearchLoading: false,
+    bookstackSearchError: '',
+    _bookstackSearchTimer: null,
+    _bookstackSearchAbort: null,
+    _bookstackSearchSeq: 0,
     currentPage: null,
     currentPageEmpty: false,
     renderedPageHtml: '',
@@ -235,9 +241,13 @@ document.addEventListener('alpine:init', () => {
     selectedBookReviewId: null,
     tokEsts: {},
     _tokenEstGen: 0,
+    pageLastChecked: {},
     showTokLegend: false,
     tokLegendPos: { x: 0, y: 0 },
     tokTooltipData: null,
+    showPageStatusTip: false,
+    pageStatusTipPos: { x: 0, y: 0 },
+    pageStatusTipText: '',
     showFiguresCard: false,
     figuren: [],
     figurenUpdatedAt: null,
@@ -1153,7 +1163,8 @@ document.addEventListener('alpine:init', () => {
     // ── Partials laden ───────────────────────────────────────────────────────
     async _loadPartials() {
       const names = [
-        'buchreview', 'figuren', 'szenen', 'ereignisse', 'orte',
+        'token-setup', 'komplett-status', 'job-stats',
+        'sidebar', 'buchreview', 'figuren', 'szenen', 'ereignisse', 'orte',
         'kontinuitaet', 'bookstats', 'editor', 'chat', 'book-settings',
         'user-settings',
       ];
@@ -1355,23 +1366,13 @@ document.addEventListener('alpine:init', () => {
         this.originalHtml = html;
         this.renderedPageHtml = html;
         this._updatePageViewHeight();
-        const rawPreview = htmlToText(html).trim() || null;
-        if (rawPreview) p.previewText = rawPreview;
         // Listing-Cache kann stale sein (bsPut aktualisiert ihn nicht).
         if (pd.updated_at) p.updated_at = pd.updated_at;
-        this.currentPageEmpty = !rawPreview;
+        this.currentPageEmpty = !htmlToText(html).trim();
         this.analysisOut = '';
       } catch (e) {
         console.error('[selectPage load-page]', e);
-        // Fallback: cached Preview-Text verwenden
-        const rawPreview = p.previewText;
-        if (rawPreview) {
-          const preview = rawPreview.length > PREVIEW_MAX_CHARS ? rawPreview.slice(0, PREVIEW_MAX_CHARS) + ' …' : rawPreview;
-          this.currentPageEmpty = !preview;
-          this.analysisOut = preview
-            ? `<div class="preview-text">${escHtml(preview)}</div>`
-            : '<span class="muted-msg">Seite ist leer.</span>';
-        }
+        this.setStatus(this.t('chat.pageLoadFailed'));
       }
 
       // Figurenkontext für dieses Kapitel laden (parallel zur History)
@@ -1601,6 +1602,7 @@ document.addEventListener('alpine:init', () => {
     // Setzt alles zurück: Seiten-Level (via resetPage) + Buch-Level.
     resetView() {
       this.resetPage();
+      this.clearBookstackSearch();
       // Kapitel in der Sidebar bleiben geöffnet (kein c.open = false)
       this.showTreeCard = true;
       this.showBookReviewCard = false;

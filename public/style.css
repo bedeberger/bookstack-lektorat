@@ -15,14 +15,13 @@
  * 10.  Status & Spinner ............ #status, .muted-msg, .error-msg, .spinner
  * 11.  Analysis Output ............. .stilbox, .fazit, .bewertung-*, .bullet-list
  * 12.  Section Headings ............ .section-heading*  (JS-generierter Output)
- * 13.  Preview ..................... .preview-text, .preview-hint
- * 14.  Progress Bar ................ .progress-bar-wrap, .progress-bar
- * 15.  Tree View ................... .tree-chapter*, .tree-chevron, .page-item-indent
- * 16.  History ..................... .history-*
- * 17.  Token-Schätzung ............. .tok-badge, .tok-*, .tok-tooltip
- * 18.  Figurenübersicht ............ .figuren-graph-container, .figur-*
- * 19.  Batch-Check & Utilities ..... .batch-status, .page-search, .diff-view, [x-cloak]
- * 20.  Chat ......................... .chat-messages, .chat-msg-*, .chat-vorschlag-*, .chat-input-*
+ * 13.  Progress Bar ................ .progress-bar-wrap, .progress-bar
+ * 14.  Tree View ................... .tree-chapter*, .tree-chevron, .page-item-indent
+ * 15.  History ..................... .history-*
+ * 16.  Token-Schätzung ............. .tok-badge, .tok-*, .tok-tooltip
+ * 17.  Figurenübersicht ............ .figuren-graph-container, .figur-*
+ * 18.  Batch-Check & Utilities ..... .batch-status, .page-search, .diff-view, [x-cloak]
+ * 19.  Chat ......................... .chat-messages, .chat-msg-*, .chat-vorschlag-*, .chat-input-*
  */
 
 /* === Custom Properties === */
@@ -557,7 +556,7 @@ code {
   right: 0;
   background: var(--color-surface);
   border: 0.5px solid var(--color-border);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-sm);
   font-size: 10px;
   color: var(--color-muted);
   padding: 3px 8px;
@@ -589,7 +588,7 @@ code {
 .komplett-progress-bar-wrap {
   margin-top: 0;
   margin-bottom: 0.4rem;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 .komplett-progress-label {
   display: flex;
@@ -1003,6 +1002,25 @@ ins {
 .page-item.disabled { opacity: 0.4; cursor: not-allowed; }
 .page-item.disabled:hover { background: none; }
 
+.page-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.page-status-dot {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-sm);
+  background: var(--color-subtle);
+  border: 1px solid transparent;
+}
+.page-status-ok   { background: var(--color-ok-border); }
+.page-status-warn { background: var(--color-warn-text); }
+.page-status-none { background: transparent; border-color: var(--color-subtle); }
+
 /* === Tags === */
 .tag {
   font-size: var(--font-size-xs);
@@ -1157,24 +1175,6 @@ ins {
   gap: 4px;
 }
 
-/* === Preview === */
-.preview-text {
-  color: var(--color-text-preview);
-  font-size: var(--font-size-base);
-  line-height: 1.7;
-  white-space: pre-wrap;
-  background: var(--color-bg);
-  margin: 12px 0;
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
-}
-
-.preview-hint {
-  margin-top: 8px;
-  font-size: var(--font-size-sm);
-  color: var(--color-subtle);
-}
-
 /* === Page Content View === */
 .page-content-view {
   max-height: var(--pcv-max-h, 60vh);
@@ -1207,7 +1207,7 @@ ins {
 .page-content-view img { max-width: 100%; height: auto; border-radius: var(--radius-md); }
 .page-content-view hr { border: none; border-top: 1px solid var(--color-border); margin: 1em 0; }
 .page-content-view pre { background: var(--color-bg); padding: 10px 12px; border-radius: var(--radius-md); overflow-x: auto; font-size: 13px; }
-.page-content-view code { background: var(--color-bg); padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
+.page-content-view code { background: var(--color-bg); padding: 1px 4px; border-radius: var(--radius-sm); font-size: 0.9em; }
 .page-content-view pre code { background: none; padding: 0; }
 
 /* Edit-Modus: contenteditable-Preview */
@@ -1382,7 +1382,7 @@ body.focus-mode .lektorat-mark--selected {
   z-index: 1000;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   box-shadow: 0 4px 12px var(--color-shadow-med);
   padding: 4px;
   min-width: 220px;
@@ -1394,7 +1394,7 @@ body.focus-mode .lektorat-mark--selected {
   background: transparent;
   border: none;
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.9rem;
   color: var(--color-text);
@@ -1406,7 +1406,7 @@ body.focus-mode .lektorat-mark--selected {
   z-index: 1000;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   box-shadow: 0 4px 12px var(--color-shadow-med);
   min-width: 520px;
   max-width: 680px;
@@ -1479,7 +1479,7 @@ body.focus-mode .lektorat-mark--selected {
   background: transparent;
   border: none;
   padding: 3px 10px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   text-align: left;
   line-height: 1.3;
@@ -1561,7 +1561,7 @@ body.focus-mode .lektorat-mark--selected {
   position: relative;
   background: var(--color-mark-bg);
   border-bottom: 2px solid var(--color-mark-border);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -1597,7 +1597,7 @@ body.focus-mode .lektorat-mark--selected {
   color: var(--color-mark-ins-text);
   font-weight: 700;
   background: var(--color-mark-ins-bg);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   padding: 0 2px;
   margin-left: 2px;
 }
@@ -1608,7 +1608,7 @@ body.focus-mode .lektorat-mark--selected {
   position: relative;
   background: var(--color-mark-del-bg);
   border-bottom: 2px solid var(--color-mark-del-border);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   text-decoration: line-through;
   text-decoration-color: var(--color-mark-del-strike);
   color: var(--color-mark-del-text);
@@ -1621,7 +1621,7 @@ body.focus-mode .lektorat-mark--selected {
   color: var(--color-mark-ins-text);
   font-weight: 700;
   background: var(--color-mark-ins-bg);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   padding: 0 2px;
   margin-left: 2px;
 }
@@ -1941,6 +1941,8 @@ body.focus-mode .lektorat-mark--selected {
 .tok-tt-enter { transition: opacity 0.12s ease; }
 .tok-tt-hidden { opacity: 0; }
 .tok-tt-visible { opacity: 1; }
+
+.page-status-tip { min-width: auto; white-space: nowrap; }
 
 /* === Figurenübersicht === */
 .figuren-updated-at {
@@ -2541,7 +2543,7 @@ body.focus-mode .lektorat-mark--selected {
 .gz-marker--extern {
   background: var(--color-err-border);
   box-shadow: 0 0 0 1.5px var(--color-err-border);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   width: 10px;
   height: 10px;
   left: -34px;
@@ -2883,6 +2885,83 @@ body.focus-mode .lektorat-mark--selected {
 [x-cloak] { display: none !important; }
 
 .book-selector-row { margin-bottom: 12px; }
+
+/* === BookStack-Volltextsuche === */
+.bookstack-search { margin-bottom: 14px; position: relative; }
+.bookstack-search-input-wrap { position: relative; }
+.bookstack-search-input {
+  width: 100%;
+  padding: 7px 30px 7px 10px;
+  border: 0.5px solid var(--color-border-input);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.bookstack-search-input:focus { outline: none; border-color: var(--color-border-focus); }
+.bookstack-search-clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0 6px;
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.bookstack-search-clear:hover { color: var(--color-text); }
+.bookstack-search-status {
+  padding: 6px 10px;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+.bookstack-search-status--error { color: var(--color-schwach-text); }
+.bookstack-search-results {
+  margin-top: 6px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card-bg);
+  max-height: 320px;
+  overflow-y: auto;
+}
+.bookstack-search-empty {
+  padding: 10px;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  text-align: center;
+}
+.bookstack-search-item {
+  padding: 8px 10px;
+  border-bottom: 0.5px solid var(--color-border);
+  cursor: pointer;
+}
+.bookstack-search-item:last-child { border-bottom: none; }
+.bookstack-search-item:hover { background: var(--color-hover); }
+.bookstack-search-item-title {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text);
+  margin-bottom: 3px;
+}
+.bookstack-search-item-snippet {
+  font-size: 12px;
+  color: var(--color-text-preview);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.bookstack-search-item-title strong,
+.bookstack-search-item-snippet strong {
+  color: var(--color-accent);
+  font-weight: 600;
+  background: var(--color-accent-soft);
+}
+
 .search-wrap { margin-bottom: 10px; }
 .batch-wrap { margin-bottom: 10px; }
 .tok-stats-wrap { display: contents; }
@@ -3014,6 +3093,11 @@ body.focus-mode .lektorat-mark--selected {
   .card-actions button { min-width: 80px; }
 }
 
+/* Variante: Actions permanent unter dem Titel, volle Breite (Sidebar-Card) */
+.card--stacked-actions > .card-header { flex-direction: column; align-items: stretch; }
+.card--stacked-actions > .card-header > .card-actions { width: 100%; margin-left: 0; }
+.card--stacked-actions > .card-header > .card-actions button { flex: 1 1 auto; min-width: 0; }
+
 /* === Close-Button in Card-Header === */
 .btn-card-close {
   background: none;
@@ -3040,7 +3124,7 @@ body.focus-mode .lektorat-mark--selected {
   padding: 6px 10px;
   font-size: 13px;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--color-bg);
   color: var(--color-muted);
   text-decoration: none;
@@ -3143,7 +3227,7 @@ body.focus-mode .lektorat-mark--selected {
 }
 .chat-skeleton-line {
   height: 13px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: linear-gradient(90deg, var(--color-shimmer-from) 25%, var(--color-neutral-bg) 50%, var(--color-shimmer-from) 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.4s ease-in-out infinite;
@@ -3188,7 +3272,7 @@ body.focus-mode .lektorat-mark--selected {
   font-size: 10px;
   background: none;
   border: 0.5px solid var(--color-border);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   color: var(--color-subtle);
   cursor: pointer;
   vertical-align: middle;
@@ -3242,7 +3326,7 @@ body.focus-mode .lektorat-mark--selected {
   font-size: 0.9em;
   background: var(--color-hover-strong);
   padding: 1px 5px;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .chat-table {
@@ -3502,7 +3586,7 @@ body.focus-mode .lektorat-mark--selected {
   background: var(--color-accent-bg);
   color: var(--color-accent-text);
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .syn-applied-badge {
@@ -3910,7 +3994,7 @@ body.focus-mode .lektorat-mark--selected {
   font-size: 13px;
   padding: 4px 8px;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
   min-width: 220px;
@@ -3930,7 +4014,7 @@ body.focus-mode .lektorat-mark--selected {
   font-family: inherit;
   padding: 6px 8px;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
   resize: vertical;
@@ -3947,7 +4031,7 @@ body.focus-mode .lektorat-mark--selected {
   margin-top: 24px;
   padding: 12px 14px;
   border: 1px solid var(--color-err-border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--color-err-bg);
 }
 .book-settings-danger-title {
@@ -3978,7 +4062,7 @@ body.focus-mode .lektorat-mark--selected {
   border: 1px solid var(--color-err-text);
   background: var(--color-surface);
   color: var(--color-err-text);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-weight: 500;
   white-space: nowrap;

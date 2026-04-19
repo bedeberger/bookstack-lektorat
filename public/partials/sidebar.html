@@ -1,0 +1,123 @@
+<!-- Seitenbaum -->
+<div class="card card--stacked-actions">
+  <div class="card-header">
+    <span class="card-title" x-text="t('sidebar.pagesOf', { name: selectedBookName })"></span>
+    <div class="card-actions">
+      <button @click="loadPages()" x-text="t('sidebar.loadPages')"></button>
+      <button @click="batchCheck()" :disabled="!pages.length" :title="t('sidebar.checkAllTitle')" x-text="t('sidebar.checkAll')"></button>
+    </div>
+  </div>
+  <!-- Suche -->
+  <div class="search-wrap">
+    <input type="text" x-model="pageSearch" :placeholder="t('sidebar.searchPage')" class="page-search">
+  </div>
+  <div x-show="!pageSearch" class="btn-group">
+    <button @click="tree.forEach(c => c.open = true)" class="btn-sm" x-text="t('sidebar.expandAll')"></button>
+    <button @click="tree.forEach(c => c.open = false)" class="btn-sm" x-text="t('sidebar.collapseAll')"></button>
+    <span x-show="Object.keys(tokEsts).length > 0" class="tok-totals">
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.tok,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.t')"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.words,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.w')"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.chars,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.z')"></span>
+    </span>
+  </div>
+  <!-- Batch-Fortschritt -->
+  <div x-show="batchLoading || batchStatus" class="batch-wrap">
+    <div class="progress-bar-wrap" x-show="batchLoading">
+      <div class="progress-bar" :style="'width:' + batchProgress + '%'"></div>
+    </div>
+    <div class="batch-status" x-html="batchStatus"></div>
+  </div>
+  <template x-for="item in filteredTree" :key="item.id">
+    <div>
+      <template x-if="item.type === 'chapter'">
+        <div class="tree-chapter">
+          <div class="tree-chapter-header" :class="{ disabled: item.pages.length === 0 }" @click="if (!pageSearch && item.pages.length > 0) item.open = !item.open">
+            <span class="tree-chevron" :class="{ open: item.open }" x-show="item.pages.length > 0">›</span>
+            <span x-text="item.name"></span>
+            <span class="tree-chapter-meta">
+              <span class="tag" x-show="item.pages.length > 1" x-text="t('sidebar.pagesCount', { n: item.pages.length })"></span>
+              <template x-if="item.pages.length > 1 && chapterStats(item)">
+                <span class="tok-badge tok-neutral"
+                  x-text="(() => { const s = chapterStats(item); return s.chars >= 1000 ? '~' + Math.round(s.chars/1000) + 'k Z' : s.chars + ' Z'; })()"
+                  @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; tokTooltipData={...chapterStats(item), _chapterOnly: true}; showTokLegend=true"
+                  @mouseleave.stop="showTokLegend=false; tokTooltipData=null"></span>
+              </template>
+            </span>
+          </div>
+          <div x-show="item.open">
+            <template x-for="page in item.pages" :key="page.id">
+              <div class="page-item page-item-indent" :class="{ selected: currentPage?.id === page.id, disabled: tokEsts[page.id] && tokEsts[page.id].words === 0 }" @click="if (!(tokEsts[page.id] && tokEsts[page.id].words === 0)) selectPage(page)">
+                <span class="page-name">
+                  <span class="page-status-dot" :class="'page-status-' + pageStatus(page)"
+                    @mouseenter.stop="const r=$el.getBoundingClientRect(); pageStatusTipPos={x:r.left,y:r.top}; pageStatusTipText=pageStatusTooltip(page); showPageStatusTip=true"
+                    @mouseleave.stop="showPageStatusTip=false"></span>
+                  <span x-text="page.name"></span>
+                </span>
+                <span x-show="tokEsts[page.id]" class="tok-stats">
+                  <template x-if="tokEsts[page.id]?.words > 0">
+                    <span class="tok-stats-wrap">
+                      <span class="tok-badge tok-neutral"
+                        x-text="tokEsts[page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[page.id].chars/1000) + 'k Z' : tokEsts[page.id]?.chars + ' Z'"
+                        @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; tokTooltipData=tokEsts[page.id]; showTokLegend=true"
+                        @mouseleave.stop="showTokLegend=false; tokTooltipData=null"></span>
+                    </span>
+                  </template>
+                  <template x-if="tokEsts[page.id] && tokEsts[page.id].words === 0">
+                    <span class="tok-badge tok-empty" x-text="t('sidebar.empty')"></span>
+                  </template>
+                </span>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+      <template x-if="item.type === 'page'">
+        <div class="page-item" :class="{ selected: currentPage?.id === item.page.id }" @click="selectPage(item.page)">
+          <span class="page-name">
+            <span class="page-status-dot" :class="'page-status-' + pageStatus(item.page)"
+              @mouseenter.stop="const r=$el.getBoundingClientRect(); pageStatusTipPos={x:r.left,y:r.top}; pageStatusTipText=pageStatusTooltip(item.page); showPageStatusTip=true"
+              @mouseleave.stop="showPageStatusTip=false"></span>
+            <span x-text="item.name"></span>
+          </span>
+          <span x-show="tokEsts[item.page.id]" class="tok-stats">
+            <template x-if="tokEsts[item.page.id]?.words > 0">
+              <span class="tok-stats-wrap">
+                <span class="tok-badge tok-neutral"
+                  x-text="tokEsts[item.page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[item.page.id].chars/1000) + 'k Z' : tokEsts[item.page.id]?.chars + ' Z'"
+                  @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; tokTooltipData=tokEsts[item.page.id]; showTokLegend=true"
+                  @mouseleave.stop="showTokLegend=false; tokTooltipData=null"></span>
+              </span>
+            </template>
+            <template x-if="tokEsts[item.page.id] && tokEsts[item.page.id].words === 0">
+              <span class="tok-badge tok-empty" x-text="t('sidebar.empty')"></span>
+            </template>
+          </span>
+        </div>
+      </template>
+    </div>
+  </template>
+  <div x-show="filteredTree.length === 0 && pageSearch" class="muted-msg muted-msg--sm" x-text="t('sidebar.noPagesFound')"></div>
+</div>
+
+<!-- Token-Badge Tooltip (fixed, kein Layout-Einfluss) -->
+<div x-show="showTokLegend"
+     x-transition:enter="tok-tt-enter" x-transition:enter-start="tok-tt-hidden" x-transition:enter-end="tok-tt-visible"
+     x-transition:leave="tok-tt-enter" x-transition:leave-start="tok-tt-visible" x-transition:leave-end="tok-tt-hidden"
+     :style="`left:${tokLegendPos.x}px; top:${tokLegendPos.y - 8}px`"
+     class="tok-tooltip"
+     @mouseleave="showTokLegend=false; tokTooltipData=null">
+  <div class="tok-tt-row" x-text="tokTooltipData ? t('tok.words', { n: (tokTooltipData.words >= 1000 ? '~' + Math.round(tokTooltipData.words/1000) + 'k' : tokTooltipData.words) }) : ''"></div>
+  <div class="tok-tt-row" x-show="tokTooltipData && !tokTooltipData._chapterOnly" x-text="tokTooltipData ? t('tok.tokens', { n: (tokTooltipData.tok >= 1000 ? Math.round(tokTooltipData.tok/1000) + 'k' : tokTooltipData.tok) }) : ''"></div>
+</div>
+
+<!-- Seiten-Status Tooltip -->
+<div x-show="showPageStatusTip"
+     x-transition:enter="tok-tt-enter" x-transition:enter-start="tok-tt-hidden" x-transition:enter-end="tok-tt-visible"
+     x-transition:leave="tok-tt-enter" x-transition:leave-start="tok-tt-visible" x-transition:leave-end="tok-tt-hidden"
+     :style="`left:${pageStatusTipPos.x}px; top:${pageStatusTipPos.y - 8}px`"
+     class="tok-tooltip page-status-tip"
+     x-cloak>
+  <template x-for="line in pageStatusTipText.split(' · ')" :key="line">
+    <div class="tok-tt-row" x-text="line"></div>
+  </template>
+</div>

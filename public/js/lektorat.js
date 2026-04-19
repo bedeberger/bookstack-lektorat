@@ -1,4 +1,4 @@
-import { escHtml, htmlToText } from './utils.js';
+import { escHtml } from './utils.js';
 import { sortByPosition, SOFT_TYPEN } from './page-view.js';
 
 // Lektorat-Workflow-Methoden (werden in die Alpine-Komponente gespreadet)
@@ -145,6 +145,7 @@ export const lektoratMethods = {
         this.checkDone = true;
         this.lastCheckId = r.checkId || null;
         this.activeHistoryEntryId = r.checkId || null;
+        this.markPageChecked(pageId);
         if (pageId != null) await this.loadPageHistory(pageId);
         this.setStatus(this.t('job.analyseDone'), false, 5000);
       },
@@ -202,8 +203,6 @@ export const lektoratMethods = {
       // Seitenansicht aus dem gerade gespeicherten HTML neu aufbauen
       this.originalHtml = finalHtml;
       this.renderedPageHtml = finalHtml;
-      const rawPreview = htmlToText(finalHtml).trim() || null;
-      if (this.currentPage) this.currentPage.previewText = rawPreview;
       this.analysisOut = '';
     } catch (e) {
       console.error('[saveCorrections]', e);
@@ -258,6 +257,7 @@ export const lektoratMethods = {
         if (job.result?.empty) { this.batchStatus = this.t('lektorat.batchNoPages'); return; }
         const r = job.result;
         this.batchStatus = this.t('lektorat.batchDone', { done: r.done, total: r.pageCount, errors: r.totalErrors });
+        this.refreshPageAges();
         if (this.currentPage) await this.loadPageHistory(this.currentPage.id);
       },
     });
