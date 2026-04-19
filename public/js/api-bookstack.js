@@ -132,6 +132,9 @@ export const bookstackMethods = {
 
     onProgress(85, this.t('bs.savingToBookStack'));
     await this.bsPut('pages/' + this.currentPage.id, { html: finalHtml, name: this.currentPage.name });
+    // Übernommene Korrekturen sind eine direkte Folge des Lektorats — Seite soll nicht
+    // unmittelbar danach auf "seit Lektorat bearbeitet" flippen.
+    this.markPageChecked?.(this.currentPage.id);
     return finalHtml;
   },
 };

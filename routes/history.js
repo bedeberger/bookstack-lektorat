@@ -175,12 +175,19 @@ router.get('/book-stats/:book_id', (req, res) => {
 });
 
 // Pro Seite den letzten Check-Zeitpunkt (user-spezifisch). Frontend berechnet Staleness.
+// Wenn Korrekturen aus einem Check übernommen wurden (saved_at gesetzt), zählt dieser
+// Zeitpunkt — sonst würde das anschliessende BookStack-updated_at die Seite sofort
+// wieder auf "bearbeitet seit Lektorat" (warn) flippen.
 router.get('/page-ages/:book_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
   const bookId = parseInt(req.params.book_id);
-  const rows = db.prepare(
-    'SELECT page_id, MAX(checked_at) as last_checked_at FROM page_checks WHERE book_id = ? AND user_email = ? GROUP BY page_id'
-  ).all(bookId, user_email);
+  const rows = db.prepare(`
+    SELECT page_id,
+           MAX(CASE WHEN saved_at IS NOT NULL AND saved_at > checked_at THEN saved_at ELSE checked_at END) as last_checked_at
+    FROM page_checks
+    WHERE book_id = ? AND user_email = ?
+    GROUP BY page_id
+  `).all(bookId, user_email);
   const map = {};
   for (const r of rows) map[r.page_id] = r.last_checked_at;
   res.json(map);

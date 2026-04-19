@@ -1018,7 +1018,7 @@ ins {
   border: 1px solid transparent;
 }
 .page-status-ok   { background: var(--color-ok-border); }
-.page-status-warn { background: var(--color-warn-text); }
+.page-status-warn { background: var(--color-err-border); }
 .page-status-none { background: transparent; border-color: var(--color-subtle); }
 
 /* === Tags === */
