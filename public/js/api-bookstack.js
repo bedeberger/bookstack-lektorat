@@ -1,5 +1,5 @@
 import { SYSTEM_STILKORREKTUR, buildStilkorrekturPrompt } from './prompts.js';
-import { SAFETY_HTML_RATIO, findInHtml } from './utils.js';
+import { SAFETY_HTML_RATIO, findInHtml, stripFocusArtefacts } from './utils.js';
 
 // Methoden für BookStack-API-Calls (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -112,6 +112,7 @@ export const bookstackMethods = {
   async _loadApplyAndSave(selectedErrors, selectedStyles, onProgress) {
     onProgress(10, this.t('bs.loadingPage'));
     const page = await this.bsGet('pages/' + this.currentPage.id);
+    page.html = stripFocusArtefacts(page.html || '');
 
     let finalHtml = selectedErrors.length > 0
       ? this._applyCorrections(page.html, selectedErrors)

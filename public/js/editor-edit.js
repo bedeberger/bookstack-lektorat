@@ -1,4 +1,4 @@
-import { htmlToText } from './utils.js';
+import { htmlToText, stripFocusArtefacts } from './utils.js';
 import { sortByPosition, buildHighlightedHtml } from './page-view.js';
 
 const AUTOSAVE_INTERVAL_MS = 30000;
@@ -6,16 +6,19 @@ const DRAFT_DEBOUNCE_MS = 500;
 const DRAFT_KEY = (pageId) => `editor_draft_${pageId}`;
 
 function stripLektoratMarks(html) {
-  if (!html || html.indexOf('lektorat-mark') === -1) return html;
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  tmp.querySelectorAll('.lektorat-mark').forEach(mark => {
-    const parent = mark.parentNode;
-    if (!parent) return;
-    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
-    parent.removeChild(mark);
-  });
-  return tmp.innerHTML;
+  let out = html;
+  if (out && out.indexOf('lektorat-mark') !== -1) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = out;
+    tmp.querySelectorAll('.lektorat-mark').forEach(mark => {
+      const parent = mark.parentNode;
+      if (!parent) return;
+      while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+      parent.removeChild(mark);
+    });
+    out = tmp.innerHTML;
+  }
+  return stripFocusArtefacts(out);
 }
 
 function readDraft(pageId) {

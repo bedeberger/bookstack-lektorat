@@ -1,4 +1,4 @@
-import { escHtml, htmlToText, fmtTok } from './utils.js';
+import { escHtml, htmlToText, fmtTok, stripFocusArtefacts } from './utils.js';
 import { configurePrompts } from './prompts.js';
 
 import { bookstackMethods } from './api-bookstack.js';
@@ -1370,7 +1370,7 @@ document.addEventListener('alpine:init', () => {
       // Seiteninhalt laden und als formatiertes HTML rendern
       try {
         const pd = await this.bsGet('pages/' + p.id);
-        const html = pd.html || '';
+        const html = stripFocusArtefacts(pd.html || '');
         this.originalHtml = html;
         this.renderedPageHtml = html;
         this._updatePageViewHeight();

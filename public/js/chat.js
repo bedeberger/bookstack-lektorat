@@ -1,4 +1,4 @@
-import { escHtml, fmtTok, findInHtml } from './utils.js';
+import { escHtml, fmtTok, findInHtml, stripFocusArtefacts } from './utils.js';
 import { makeChatMethods } from './chat-base.js';
 
 // Seiten-Chat-Methoden (werden in die Alpine-Komponente gespreadet).
@@ -37,7 +37,7 @@ const baseMethods = makeChatMethods({
   onBeforeSend: async function () {
     try {
       const pageData = await this.bsGet('pages/' + this.currentPage.id);
-      this.originalHtml = pageData.html || '';
+      this.originalHtml = stripFocusArtefacts(pageData.html || '');
       this._chatPendingRefresh = false;
     } catch (e) {
       console.warn('[sendChatMessage] Seiteninhalt konnte nicht geladen werden:', e.message);

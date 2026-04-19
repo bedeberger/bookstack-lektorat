@@ -1,7 +1,7 @@
 // History-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 
-import { escHtml } from './utils.js';
+import { escHtml, stripFocusArtefacts } from './utils.js';
 import { sortByPosition, SOFT_TYPEN } from './page-view.js';
 
 export const historyMethods = {
@@ -81,7 +81,7 @@ export const historyMethods = {
     if (!this.originalHtml) {
       try {
         const pd = await this.bsGet('pages/' + this.currentPage.id);
-        this.originalHtml = pd.html || '';
+        this.originalHtml = stripFocusArtefacts(pd.html || '');
       } catch (e) {
         this.setStatus(this.t('chat.pageLoadFailed'));
         return;

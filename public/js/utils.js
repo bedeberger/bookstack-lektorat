@@ -25,6 +25,57 @@ export function htmlToText(html) {
   return d.textContent || d.innerText || '';
 }
 
+/**
+ * Entfernt Fokus-Modus-Artefakte aus BookStack-HTML. Browser friert bei
+ * contenteditable-Edits die computed `font-size` des Fokus-Containers als
+ * inline `<span style="font-size:1.45rem">` ein; die Klasse
+ * `focus-paragraph-active` ist eine rein interne UI-Markierung, die nie ins
+ * persistierte HTML gehört. Idempotent – auch auf bereits sauberem HTML
+ * sicher aufrufbar. Aufruf an allen Seams: nach dem Laden von BookStack und
+ * vor dem Speichern an BookStack.
+ */
+export function stripFocusArtefacts(html) {
+  if (!html) return html;
+  if (!html.includes('focus-paragraph-active') && !/font-size|background-color\s*:\s*transparent/i.test(html)) {
+    return html;
+  }
+
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+
+  tmp.querySelectorAll('.focus-paragraph-active').forEach(el => {
+    el.classList.remove('focus-paragraph-active');
+    if (el.classList.length === 0) el.removeAttribute('class');
+  });
+
+  tmp.querySelectorAll('[style]').forEach(el => {
+    const cleaned = (el.getAttribute('style') || '')
+      .split(';')
+      .map(d => d.trim())
+      .filter(d => {
+        if (!d) return false;
+        const key = d.split(':')[0].trim().toLowerCase();
+        if (key === 'font-size') return false;
+        if (key === 'background-color' && /transparent/i.test(d)) return false;
+        return true;
+      })
+      .join('; ');
+    if (cleaned) el.setAttribute('style', cleaned);
+    else el.removeAttribute('style');
+  });
+
+  tmp.querySelectorAll('span').forEach(span => {
+    if (span.attributes.length === 0) {
+      const parent = span.parentNode;
+      if (!parent) return;
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+    }
+  });
+
+  return tmp.innerHTML;
+}
+
 // Dekodiert eine einzelne HTML-Entity (z.B. &bdquo;) via Browser-Parser.
 // Gibt null zurück, wenn sich die Entity nicht auflöst.
 const _entityDecoder = typeof document !== 'undefined' ? document.createElement('textarea') : null;
