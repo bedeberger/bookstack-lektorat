@@ -409,6 +409,20 @@
   "editor.figuresInChapter":     "{n} characters in this chapter",
   "editor.field.geschlecht":     "Gender:",
 
+  "editor.toolbar.bold":         "Bold",
+  "editor.toolbar.boldTitle":    "Bold (Ctrl/⌘+B)",
+  "editor.toolbar.italic":       "Italic",
+  "editor.toolbar.italicTitle":  "Italic (Ctrl/⌘+I)",
+
+  "editor.slash.hint":           "Choose block type",
+  "editor.slash.paragraph":      "Paragraph",
+  "editor.slash.h2":             "Heading 2",
+  "editor.slash.h3":             "Heading 3",
+  "editor.slash.blockquote":     "Block quote",
+  "editor.slash.poem":           "Poem",
+  "editor.slash.list":           "Bullet list",
+  "editor.slash.hr":             "Horizontal rule",
+
   "editor.synonym.searchFor":    "Find synonym for «{word}»",
   "editor.synonym.titleFor":     "Synonyms for «{word}»",
   "editor.synonym.thesaurus":    "OpenThesaurus",

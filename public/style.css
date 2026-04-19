@@ -1195,7 +1195,13 @@ ins {
 .page-content-view h2 { font-size: 1.3em; margin: 0.5em 0 0.3em; font-weight: 700; }
 .page-content-view h3 { font-size: 1.15em; margin: 0.4em 0 0.2em; font-weight: 700; }
 .page-content-view h4 { font-size: 1.05em; margin: 0.3em 0 0.2em; font-weight: 700; }
+.page-content-view h5 { font-size: 0.95em; margin: 0.3em 0 0.2em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.page-content-view h6 { font-size: 0.9em; margin: 0.3em 0 0.2em; font-weight: 700; color: var(--color-muted); }
 .page-content-view p { margin: 0.4em 0; }
+.page-content-view u { text-decoration: underline; }
+.page-content-view s, .page-content-view del, .page-content-view strike { text-decoration: line-through; }
+.page-content-view sup { vertical-align: super; font-size: 0.75em; line-height: 0; }
+.page-content-view sub { vertical-align: sub; font-size: 0.75em; line-height: 0; }
 .page-content-view blockquote {
   border-left: 3px solid var(--color-border);
   padding-left: 12px;
@@ -1212,6 +1218,35 @@ ins {
 .page-content-view pre { background: var(--color-bg); padding: 10px 12px; border-radius: var(--radius-md); overflow-x: auto; font-size: 13px; }
 .page-content-view code { background: var(--color-bg); padding: 1px 4px; border-radius: var(--radius-sm); font-size: 0.9em; }
 .page-content-view pre code { background: none; padding: 0; }
+
+/* Gedichte (div.poem) – an blockquote angelehnt, aber mit erhaltenen
+   Zeilenumbrüchen und ohne Silbentrennung (Verse sind verslängen-gebunden). */
+.page-content-view .poem {
+  border-left: 3px solid var(--color-border);
+  padding-left: 12px;
+  margin: 0.6em 0;
+  color: var(--color-text-preview-soft);
+  font-style: italic;
+  white-space: pre-line;
+  hyphens: none;
+}
+.page-content-view .poem p {
+  margin: 0 0 0.3em 0;
+  text-indent: 0;
+}
+
+/* BookStack-Callouts (div.callout.info / .warning / .danger / .success) */
+.page-content-view .callout {
+  border-left: 4px solid var(--color-border);
+  background: var(--color-bg);
+  padding: 10px 14px;
+  margin: 0.6em 0;
+  border-radius: var(--radius-sm);
+}
+.page-content-view .callout.info    { border-left-color: var(--color-primary); background: var(--color-history-active-bg); }
+.page-content-view .callout.success { border-left-color: var(--color-ok-border, var(--color-stark)); background: var(--color-ok-bg); color: var(--color-ok-text); }
+.page-content-view .callout.warning { border-left-color: var(--color-mittel); background: var(--color-warn-bg); color: var(--color-warn-text); }
+.page-content-view .callout.danger  { border-left-color: var(--color-err-border, var(--color-schwach-text)); background: var(--color-err-bg); color: var(--color-err-text); }
 
 /* Edit-Modus: contenteditable-Preview */
 .page-content-view--editing {
@@ -1286,6 +1321,11 @@ body.focus-mode #editor-card .editor-preview-wrap {
   min-height: 0;
   width: 100%;
 }
+/* Die Partial-Hosts liegen zwischen .editor-preview-wrap und .page-content-view;
+   display:contents lässt sie aus der Box-Kette verschwinden, damit der Scroll-
+   Container (page-content-view) direkt vom Flex-Parent eine Höhe bekommt. */
+#partial-editor-body-edit,
+#partial-editor-body-view { display: contents; }
 
 body.focus-mode .page-content-view,
 body.focus-mode .page-content-view--editing {
@@ -1366,6 +1406,163 @@ body.focus-mode .lektorat-mark--selected {
   text-decoration: none;
   color: inherit;
   cursor: text;
+}
+
+/* === Fokus-Modus: Formatierungen auf Fliesstext plätten ===
+   Rein visuell – HTML bleibt intakt (Edit-Mode + Save-Pfad). Der User sieht
+   nur Absätze, damit nichts vom Rhythmus des Textes ablenkt. */
+body.focus-mode .page-content-view h1,
+body.focus-mode .page-content-view h2,
+body.focus-mode .page-content-view h3,
+body.focus-mode .page-content-view h4,
+body.focus-mode .page-content-view h5,
+body.focus-mode .page-content-view h6,
+body.focus-mode .page-content-view--editing h1,
+body.focus-mode .page-content-view--editing h2,
+body.focus-mode .page-content-view--editing h3,
+body.focus-mode .page-content-view--editing h4,
+body.focus-mode .page-content-view--editing h5,
+body.focus-mode .page-content-view--editing h6 {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-transform: none;
+  margin: 0.4em 0;
+  color: inherit;
+}
+
+body.focus-mode .page-content-view strong,
+body.focus-mode .page-content-view b,
+body.focus-mode .page-content-view--editing strong,
+body.focus-mode .page-content-view--editing b {
+  font-weight: inherit;
+}
+
+body.focus-mode .page-content-view em,
+body.focus-mode .page-content-view i,
+body.focus-mode .page-content-view--editing em,
+body.focus-mode .page-content-view--editing i {
+  font-style: inherit;
+}
+
+body.focus-mode .page-content-view u,
+body.focus-mode .page-content-view s,
+body.focus-mode .page-content-view del,
+body.focus-mode .page-content-view strike,
+body.focus-mode .page-content-view--editing u,
+body.focus-mode .page-content-view--editing s,
+body.focus-mode .page-content-view--editing del,
+body.focus-mode .page-content-view--editing strike {
+  text-decoration: none;
+  color: inherit;
+}
+
+body.focus-mode .page-content-view sup,
+body.focus-mode .page-content-view sub,
+body.focus-mode .page-content-view--editing sup,
+body.focus-mode .page-content-view--editing sub {
+  vertical-align: baseline;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+body.focus-mode .page-content-view code,
+body.focus-mode .page-content-view pre,
+body.focus-mode .page-content-view--editing code,
+body.focus-mode .page-content-view--editing pre {
+  background: transparent;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  font-family: inherit;
+  font-size: inherit;
+  white-space: inherit;
+  overflow-x: visible;
+}
+
+body.focus-mode .page-content-view blockquote,
+body.focus-mode .page-content-view--editing blockquote {
+  border: none;
+  padding: 0;
+  margin: 0.4em 0;
+  color: inherit;
+  font-style: inherit;
+}
+
+body.focus-mode .page-content-view .callout,
+body.focus-mode .page-content-view--editing .callout {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0.4em 0;
+  color: inherit;
+  border-radius: 0;
+}
+
+/* Fokus-Modus: .poem-Wrapper aus dem Render-Tree entfernen, damit die inneren
+   <p> wie normale Absätze behandelt werden und focus-paragraph-active greift
+   (opacity 0.5 auf dem Wrapper würde sonst das aktive <p> mitdimmen). */
+body.focus-mode .page-content-view .poem,
+body.focus-mode .page-content-view--editing .poem {
+  display: contents;
+}
+
+body.focus-mode .page-content-view ul,
+body.focus-mode .page-content-view ol,
+body.focus-mode .page-content-view--editing ul,
+body.focus-mode .page-content-view--editing ol {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.4em 0;
+}
+
+body.focus-mode .page-content-view li,
+body.focus-mode .page-content-view--editing li {
+  margin: 0.4em 0;
+}
+
+body.focus-mode .page-content-view hr,
+body.focus-mode .page-content-view--editing hr {
+  border: none;
+  margin: 0.8em 0;
+  height: 0;
+}
+
+/* Inline-Formatierungen aus BookStack (text-align, Farbe, Hintergrund via
+   style-Attribut). Attribut-Selektor greift auch bei beliebigen span-
+   Wrappern ohne dass wir den Stil parsen müssen. */
+body.focus-mode .page-content-view [style*="color"],
+body.focus-mode .page-content-view [style*="background"],
+body.focus-mode .page-content-view [style*="text-align"],
+body.focus-mode .page-content-view [style*="font-family"],
+body.focus-mode .page-content-view [style*="font-style"],
+body.focus-mode .page-content-view [style*="font-weight"],
+body.focus-mode .page-content-view [style*="white-space"],
+body.focus-mode .page-content-view--editing [style*="color"],
+body.focus-mode .page-content-view--editing [style*="background"],
+body.focus-mode .page-content-view--editing [style*="text-align"],
+body.focus-mode .page-content-view--editing [style*="font-family"],
+body.focus-mode .page-content-view--editing [style*="font-style"],
+body.focus-mode .page-content-view--editing [style*="font-weight"],
+body.focus-mode .page-content-view--editing [style*="white-space"] {
+  color: inherit !important;
+  background: transparent !important;
+  text-align: inherit !important;
+  font-family: inherit !important;
+  font-style: inherit !important;
+  font-weight: inherit !important;
+  white-space: normal !important;
+}
+
+/* Tabellen und Bilder stören den Lese-/Schreibfluss – komplett ausblenden.
+   Im Edit-Modus bleibt das Markup im DOM erhalten und wird beim Verlassen
+   wieder sichtbar. */
+body.focus-mode .page-content-view table,
+body.focus-mode .page-content-view img,
+body.focus-mode .page-content-view--editing table,
+body.focus-mode .page-content-view--editing img {
+  display: none;
 }
 
 .save-indicator {
@@ -1508,6 +1705,72 @@ body.focus-mode .lektorat-mark--selected {
   .synonym-picker,
   .figur-lookup { display: none !important; }
 }
+
+/* === Edit-Toolbar: Bubble (Inline) + Slash (Block-Transforms) ===
+   Teleportiert nach <body>, deshalb position:fixed. Eckig + textbasiert
+   (keine Icons) gem. Projektästhetik. Im Fokus-Modus strukturell gesperrt. */
+.edit-bubble-toolbar {
+  position: fixed;
+  z-index: 1001;
+  transform: translate(-50%, calc(-100% - 8px));
+  display: flex;
+  gap: 2px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 12px var(--color-shadow-med);
+  padding: 3px;
+}
+.edit-bubble-btn {
+  background: transparent;
+  border: none;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  cursor: pointer;
+  line-height: 1.2;
+  font-family: inherit;
+}
+.edit-bubble-btn:hover { background: var(--color-hover); }
+.edit-bubble-btn:active { background: var(--color-hover-strong); }
+
+.edit-slash-menu {
+  position: fixed;
+  z-index: 1001;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 12px var(--color-shadow-med);
+  padding: 4px;
+  min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.edit-slash-hint {
+  padding: 4px 10px 6px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 3px;
+}
+.edit-slash-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  cursor: pointer;
+  font-family: inherit;
+}
+.edit-slash-item:hover,
+.edit-slash-item--active { background: var(--color-hover); }
+
+/* Tabu im Fokus-Mode: strukturell kaltgestellt, unabhängig vom x-show. */
+body.focus-mode .edit-bubble-toolbar,
+body.focus-mode .edit-slash-menu { display: none !important; }
 
 /* === Figuren-Lookup-Popover (Ctrl/Cmd-Klick im Editor) === */
 .figur-lookup {

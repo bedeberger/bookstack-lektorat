@@ -1,0 +1,16 @@
+<!-- Bearbeitungsmodus: contenteditable. Die Toolbar (Bubble + Slash) lebt
+     strukturell NICHT hier drin – sie ist nach <body> teleportiert, damit
+     position:fixed nicht vom card-Transform-Kontext eingefangen wird. Sie
+     wird separat als partial-editor-toolbar geladen. -->
+<div x-show="editMode"
+     x-ref="editArea"
+     class="page-content-view page-content-view--editing"
+     contenteditable="true"
+     spellcheck="true"
+     @input="_markEditDirty(); _onEditInput && _onEditInput($event)"
+     @keydown="_onEditKeydown && _onEditKeydown($event)"
+     @paste="_onEditPaste($event)"
+     @contextmenu="_onEditContextMenu($event)"
+     @click="_onEditClick($event)"
+     @pointermove="handleMarkPointer($event)"
+     @pointerleave="handleMarkPointerLeave($event)"></div>

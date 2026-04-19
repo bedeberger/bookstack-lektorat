@@ -409,6 +409,20 @@
   "editor.figuresInChapter":     "{n} Figuren in diesem Kapitel",
   "editor.field.geschlecht":     "Geschlecht:",
 
+  "editor.toolbar.bold":         "Fett",
+  "editor.toolbar.boldTitle":    "Fett (Strg/⌘+B)",
+  "editor.toolbar.italic":       "Kursiv",
+  "editor.toolbar.italicTitle":  "Kursiv (Strg/⌘+I)",
+
+  "editor.slash.hint":           "Blocktyp wählen",
+  "editor.slash.paragraph":      "Absatz",
+  "editor.slash.h2":             "Überschrift 2",
+  "editor.slash.h3":             "Überschrift 3",
+  "editor.slash.blockquote":     "Blockzitat",
+  "editor.slash.poem":           "Gedicht",
+  "editor.slash.list":           "Aufzählung",
+  "editor.slash.hr":             "Trennlinie",
+
   "editor.synonym.searchFor":    "Synonym suchen für «{word}»",
   "editor.synonym.titleFor":     "Synonyme für «{word}»",
   "editor.synonym.thesaurus":    "OpenThesaurus",

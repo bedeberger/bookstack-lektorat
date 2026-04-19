@@ -1,0 +1,34 @@
+<!-- Edit-Toolbar: Bubble (Inline auf Selektion) + Slash (Block-Transforms).
+     Beides nach <body> teleportiert, damit position:fixed nicht von einem
+     transformierten Eltern-Container (Card) eingefangen wird.
+     Nur in Edit-Mode aktiv, im Fokus-Modus strukturell ausgeblendet. -->
+
+<!-- Bubble-Toolbar (Inline-Formate) -->
+<template x-teleport="body">
+  <div x-show="bubbleShow && editMode && !focusMode" x-cloak
+       class="edit-bubble-toolbar"
+       :style="{ left: bubbleX + 'px', top: bubbleY + 'px' }"
+       @mousedown.prevent>
+    <button type="button" class="edit-bubble-btn" @click="toolbarBold()"   :title="t('editor.toolbar.boldTitle')"   x-text="t('editor.toolbar.bold')"></button>
+    <button type="button" class="edit-bubble-btn" @click="toolbarItalic()" :title="t('editor.toolbar.italicTitle')" x-text="t('editor.toolbar.italic')"></button>
+  </div>
+</template>
+
+<!-- Slash-Menü (Block-Transforms) -->
+<template x-teleport="body">
+  <div x-show="slashShow && editMode && !focusMode" x-cloak
+       class="edit-slash-menu"
+       :style="{ left: slashX + 'px', top: slashY + 'px' }"
+       @click.outside="_closeSlash()">
+    <div class="edit-slash-hint" x-text="t('editor.slash.hint')"></div>
+    <template x-for="(it, i) in slashItems()" :key="it.key">
+      <button type="button"
+              class="edit-slash-item"
+              :class="{ 'edit-slash-item--active': slashIdx === i }"
+              @mousedown.prevent
+              @click="_applySlashByKey(it.key)"
+              @mouseenter="slashIdx = i"
+              x-text="it.label"></button>
+    </template>
+  </div>
+</template>

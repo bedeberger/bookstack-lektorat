@@ -1,4 +1,4 @@
-import { htmlToText, stripFocusArtefacts } from './utils.js';
+import { htmlToText, stripFocusArtefacts, cleanContentArtefacts } from './utils.js';
 import { sortByPosition, buildHighlightedHtml } from './page-view.js';
 
 const AUTOSAVE_INTERVAL_MS = 30000;
@@ -18,7 +18,7 @@ function stripLektoratMarks(html) {
     });
     out = tmp.innerHTML;
   }
-  return stripFocusArtefacts(out);
+  return cleanContentArtefacts(stripFocusArtefacts(out));
 }
 
 function readDraft(pageId) {
@@ -258,6 +258,27 @@ export const editorEditMethods = {
       this.saveOffline = true;
       this.setStatus(this.t('edit.saveFailedRetry'), false, 6000);
     }
+  },
+
+  // Paste-Handler: Browser injiziert beim Paste (besonders aus anderen
+  // BookStack-Seiten / Websites mit Lato) Computed-Styles inline auf jeden
+  // Block. Ohne Sanitisierung landen `<p style="font-family:Lato;color:..."`-
+  // Hüllen in der DB und überschreiben dort .poem & Co. Wir parsen das
+  // Clipboard-HTML, kleinen es durch den gleichen Cleaner wie der Save-Pfad
+  // und fügen sauber via execCommand ein.
+  _onEditPaste(e) {
+    const cd = e.clipboardData;
+    if (!cd) return;
+    e.preventDefault();
+
+    const html = cd.getData('text/html');
+    if (html) {
+      document.execCommand('insertHTML', false, cleanContentArtefacts(html));
+    } else {
+      const text = cd.getData('text/plain') || '';
+      if (text) document.execCommand('insertText', false, text);
+    }
+    this._markEditDirty();
   },
 
   _markEditDirty() {

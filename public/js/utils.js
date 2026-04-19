@@ -76,6 +76,54 @@ export function stripFocusArtefacts(html) {
   return tmp.innerHTML;
 }
 
+// Tags, auf denen `style` IMMER unerwünscht ist (Block-Styling kommt über
+// .poem/.callout/style.css; der Editor selbst setzt nie inline-style).
+// Strukturelemente wie img/table/td/col/figure/iframe bleiben unangetastet,
+// dort sind Width-/Height-Angaben legitim.
+const STRIP_STYLE_TAGS = new Set([
+  'P', 'SPAN', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+  'LI', 'UL', 'OL', 'BLOCKQUOTE', 'A', 'B', 'I', 'STRONG', 'EM',
+  'BR', 'PRE', 'CODE', 'SMALL', 'MARK', 'U', 'S', 'SUB', 'SUP',
+]);
+
+/**
+ * Säubert HTML von Inline-Style-Müll, leeren Spans und Paste-Wrapper-Tags.
+ *
+ * Chrome friert beim Tippen oder Pasten in `contenteditable` die Computed-
+ * Styles auf jedem Block ein (z.B. `<p style="margin:0.4em 0px;color:rgb(...);
+ * font-family:Lato,...">`). Wenn dieses HTML via `bsPut` an BookStack geht,
+ * überschreiben die Inline-Styles dort die echten Block-Styles (`.poem` &Co)
+ * und das Resultat sieht kaputt aus.
+ *
+ * Idempotent. Behält `style` auf img/table/td/col/figure/iframe.
+ */
+export function cleanContentArtefacts(html) {
+  if (!html) return html;
+  if (!/\sstyle\s*=|<(span|meta|link|script|style|title)\b/i.test(html)) return html;
+
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+
+  // Paste-Wrapper aus Browser/Office (komplett raus, samt Inhalt)
+  tmp.querySelectorAll('meta, link, script, style, title').forEach(el => el.remove());
+
+  tmp.querySelectorAll('[style]').forEach(el => {
+    if (STRIP_STYLE_TAGS.has(el.tagName)) el.removeAttribute('style');
+  });
+
+  // Leere Spans aus Paste-/Selection-Operationen entkernen
+  tmp.querySelectorAll('span').forEach(span => {
+    if (span.attributes.length === 0) {
+      const parent = span.parentNode;
+      if (!parent) return;
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+    }
+  });
+
+  return tmp.innerHTML;
+}
+
 // Dekodiert eine einzelne HTML-Entity (z.B. &bdquo;) via Browser-Parser.
 // Gibt null zurück, wenn sich die Entity nicht auflöst.
 const _entityDecoder = typeof document !== 'undefined' ? document.createElement('textarea') : null;

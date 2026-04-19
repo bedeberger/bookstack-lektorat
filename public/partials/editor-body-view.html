@@ -1,0 +1,7 @@
+<!-- Lesemodus: gerenderte Seite aus BookStack (inkl. Lektorat-Marks). -->
+<div x-show="!editMode && renderedPageHtml"
+     class="page-content-view"
+     x-html="renderedPageHtml"
+     @click="handleMarkClick($event)"
+     @pointermove="handleMarkPointer($event)"
+     @pointerleave="handleMarkPointerLeave($event)"></div>

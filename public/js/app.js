@@ -24,6 +24,7 @@ import { editorEditMethods } from './editor-edit.js';
 import { focusMethods } from './editor-focus.js';
 import { synonymMethods } from './editor-synonyme.js';
 import { figurLookupMethods } from './editor-figur-lookup.js';
+import { toolbarMethods } from './editor-toolbar.js';
 
 const FIGUR_TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, andere: 4 };
 
@@ -1169,18 +1170,25 @@ document.addEventListener('alpine:init', () => {
     },
 
     // ── Partials laden ───────────────────────────────────────────────────────
+    // DOM-Auto-Discovery: jeder `<div id="partial-$name">` bekommt seinen
+    // Inhalt aus `/partials/$name.html`. Partials dürfen weitere
+    // `partial-*`-Container enthalten – die Schleife iteriert, bis nichts
+    // Neues mehr auftaucht (Schutzlimit gegen zirkuläre Referenzen).
     async _loadPartials() {
-      const names = [
-        'token-setup', 'komplett-status', 'job-stats',
-        'sidebar', 'buchreview', 'figuren', 'szenen', 'ereignisse', 'orte',
-        'kontinuitaet', 'bookstats', 'editor', 'chat', 'book-settings',
-        'user-settings',
-      ];
-      await Promise.all(names.map(async name => {
-        const html = await fetch(`/partials/${name}.html`).then(r => r.text());
-        const el = document.getElementById(`partial-${name}`);
-        if (el) { el.innerHTML = html; Alpine.initTree(el); }
-      }));
+      const loadPass = async () => {
+        const empty = [...document.querySelectorAll('[id^="partial-"]')]
+          .filter(el => el.childElementCount === 0);
+        if (empty.length === 0) return 0;
+        await Promise.all(empty.map(async el => {
+          const name = el.id.replace(/^partial-/, '');
+          const html = await fetch(`/partials/${name}.html`).then(r => r.text());
+          el.innerHTML = html;
+          Alpine.initTree(el);
+        }));
+        return empty.length;
+      };
+      let safety = 5;
+      while (safety-- > 0 && await loadPass() > 0) { /* weiter */ }
     },
 
     // ── Theme (Hell/Dunkel/Auto) ─────────────────────────────────────────────
@@ -1225,6 +1233,7 @@ document.addEventListener('alpine:init', () => {
         this.uiLocale = locale;
         document.documentElement.setAttribute('lang', locale);
         await this._loadPartials();
+        this._installToolbarListeners();
         this.bookstackUrl = cfg.bookstackUrl || '';
         if (cfg.claudeModel) this.claudeModel = cfg.claudeModel;
         if (cfg.claudeMaxTokens) this.claudeMaxTokens = cfg.claudeMaxTokens;
@@ -1744,5 +1753,6 @@ document.addEventListener('alpine:init', () => {
     ...focusMethods,
     ...synonymMethods,
     ...figurLookupMethods,
+    ...toolbarMethods,
   }));
 });
