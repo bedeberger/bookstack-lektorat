@@ -166,9 +166,8 @@ export const graphMethods = {
     const chapIdx = {};
     chapterOrder.forEach((c, i) => { chapIdx[c] = i; });
 
-    const COL_W           = 440;  // Spaltenbreite – breit genug für horizontale Binnen-Verteilung
-    const COL_INNER_FRAC  = 0.85; // Anteil der Spaltenbreite, innerhalb dessen Figuren verteilt werden
-    const ROW_H           = 50;   // Vertikaler Abstand, falls Bin eine Zeile umbrechen muss
+    const COL_W           = 440;  // Breite einer Kapitel-Spalte (Hintergrund-Raster + xIdx-Skalierung)
+    const ROW_H           = 50;   // Vertikaler Abstand zwischen zwei Stapelzeilen innerhalb eines Tiers
     const TIER_BASE_GAP   = 80;   // Zusatz-Luft zwischen zwei Tiers
     const MIN_DX          = 130;  // Minimaler horizontaler Abstand zwischen zwei Figuren derselben Zeile
     const TIER_ORDER      = ['hauptfigur', 'antagonist', 'mentor', 'nebenfigur', 'andere'];
@@ -204,12 +203,10 @@ export const graphMethods = {
     for (const f of this.figuren) byTier[info[f.id].tier].push(f);
     const tiersUsed = TIER_ORDER.filter(t => byTier[t].length > 0);
 
-    // Layout pro Tier: Figuren werden in ihre Primär-Kapitel-Spalte gebinned und
-    // innerhalb der Spalte horizontal verteilt. Erst wenn in einer Spalte mehr
-    // Figuren stehen als perRow, wird in neue Zeilen umgebrochen. Das ersetzt
-    // das frühere Slot-Stapeln vertikal → deutlich kompakter bei vielen Nebenfiguren.
-    const spread = COL_W * COL_INNER_FRAC;
-    const perRow = Math.max(1, Math.floor(spread / MIN_DX) + 1);
+    // Layout pro Tier: Figuren sitzen an ihrem tatsächlichen narrativen Schwerpunkt
+    // (xIdx * COL_W). Greedy-Stapelung: jede Figur kommt in die oberste Zeile, in
+    // der sie zur zuletzt platzierten Figur dieser Zeile mindestens MIN_DX Abstand
+    // hat. So gibt es kein Binning mehr → keine Clumps an Kapitelrändern.
     const sortFigs = arr => arr.slice().sort((a, b) => {
       const ax = info[a.id].xIdx, bx = info[b.id].xIdx;
       if (ax !== bx) return ax - bx;
@@ -219,18 +216,20 @@ export const graphMethods = {
     });
     const layoutPerTier = {};
     for (const t of tiersUsed) {
-      const bins = new Map(); // binIdx (gerundetes Kapitel) → Figuren[]
+      const rowLastX = []; // row → x der zuletzt platzierten Figur
+      const items = [];
       for (const f of sortFigs(byTier[t])) {
-        const bin = Math.round(info[f.id].xIdx);
-        if (!bins.has(bin)) bins.set(bin, []);
-        bins.get(bin).push(f);
+        const x = info[f.id].xIdx * COL_W;
+        let row = 0;
+        while (row < rowLastX.length && x - rowLastX[row] < MIN_DX) row++;
+        rowLastX[row] = x;
+        items.push({ f, x, row });
       }
-      const maxRows = Math.max(1, ...Array.from(bins.values()).map(g => Math.ceil(g.length / perRow)));
-      layoutPerTier[t] = { bins, maxRows };
+      layoutPerTier[t] = { items, maxRows: Math.max(1, rowLastX.length) };
     }
 
-    // Y-Koordinaten kumulativ: jedes Tier nimmt so viel Platz, wie seine grösste
-    // Spalte Zeilen braucht. Damit ragen Nebenfiguren-Stapel nicht ins nächste Tier.
+    // Y-Koordinaten kumulativ: jedes Tier nimmt so viel Platz, wie es Stapelzeilen
+    // gibt. Damit ragen Nebenfiguren-Stapel nicht ins nächste Tier.
     const TIER_Y = {};
     let yCursor = 0;
     for (const t of tiersUsed) {
@@ -238,25 +237,10 @@ export const graphMethods = {
       yCursor += (layoutPerTier[t].maxRows - 1) * ROW_H + TIER_BASE_GAP;
     }
 
-    // Figuren platzieren: pro Bin horizontal verteilen, bei Überlauf in neue Zeile.
     const nodePositions = [];
     for (const t of tiersUsed) {
-      const { bins } = layoutPerTier[t];
-      for (const [bin, group] of bins.entries()) {
-        for (let i = 0; i < group.length; i++) {
-          const row = Math.floor(i / perRow);
-          const col = i - row * perRow;
-          const lastRowCount = group.length - row * perRow;
-          const inRow = Math.min(perRow, lastRowCount);
-          const offset = inRow > 1
-            ? (col - (inRow - 1) / 2) * (spread / (inRow - 1))
-            : 0;
-          nodePositions.push({
-            f: group[i],
-            x: bin * COL_W + offset,
-            y: TIER_Y[t] + row * ROW_H,
-          });
-        }
+      for (const { f, x, row } of layoutPerTier[t].items) {
+        nodePositions.push({ f, x, y: TIER_Y[t] + row * ROW_H });
       }
     }
 
@@ -560,6 +544,8 @@ export const graphMethods = {
 
     const { edgeList } = this._buildEdges(/* soziogrammModus */ true);
     const edges = new vis.DataSet(edgeList);
+    this._figurenNodes = nodes;
+    this._figurenEdges = edges;
 
     const options = {
       physics: { solver: 'repulsion', repulsion: { nodeDistance: 140 }, stabilization: { iterations: 150 } },
@@ -695,7 +681,7 @@ export const graphMethods = {
             // Label bewusst leer: Beziehungstyp nur im Hover-Tooltip, um dichte Graphen lesbar zu halten
             label: '',
             typ: bz.typ,
-            title: bz.beschreibung || typLabel,
+            beschreibung: bz.beschreibung || '',
             color: { color, highlight: color },
             arrows,
             dashes: false,
@@ -708,7 +694,7 @@ export const graphMethods = {
             from: f.id, to: toId,
             label: '',
             typ: bz.typ,
-            title: bz.beschreibung || typLabel,
+            beschreibung: bz.beschreibung || '',
             color: { color: s.color, highlight: s.highlight },
             arrows: s.arrows,
             dashes: s.dashes,
@@ -722,17 +708,10 @@ export const graphMethods = {
   // ── Tooltip-Logik (shared) ───────────────────────────────────────────────────
   _attachTooltip(container) {
     const tip = document.getElementById('figur-tooltip');
-    this._figurenNetwork.on('hoverNode', ({ node, event }) => {
-      const f = this.figuren.find(x => x.id === node);
-      if (!f || !tip) return;
-      // „Weitere" im Tooltip unterdrücken – der Tooltip blendet die Schichtzeile
-      // nur ein, wenn es eine echte Zuordnung gibt.
-      const schichtLabel = f.sozialschicht && f.sozialschicht !== 'andere'
-        ? this.t('figuren.schicht.' + f.sozialschicht) : '';
-      const typLabel = f.typ ? this.t('figuren.type.' + f.typ) : '';
-      tip.innerHTML = `<strong>${escHtml(f.name)}</strong>`
-        + `<em>${escHtml(typLabel)}${schichtLabel ? ' · ' + escHtml(schichtLabel) : ''}</em>`
-        + (f.beschreibung ? `<p>${escHtml(f.beschreibung)}</p>` : '');
+    if (!tip) return;
+
+    const showTipAt = (html, clientX, clientY) => {
+      tip.innerHTML = html;
       tip.style.left = '0px';
       tip.style.top  = '0px';
       tip.classList.add('visible');
@@ -741,8 +720,8 @@ export const graphMethods = {
       const tipH = tip.offsetHeight;
       const cW   = container.offsetWidth;
       const cH   = container.offsetHeight;
-      const cx   = event.clientX - rect.left;
-      const cy   = event.clientY - rect.top;
+      const cx   = clientX - rect.left;
+      const cy   = clientY - rect.top;
       let left = cx + 14;
       let top  = cy + 14;
       if (left + tipW > cW) left = Math.max(0, cx - tipW - 14);
@@ -751,9 +730,39 @@ export const graphMethods = {
       if (top  < 0) top  = 0;
       tip.style.left = left + 'px';
       tip.style.top  = top  + 'px';
+    };
+    const hideTip = () => tip.classList.remove('visible');
+
+    this._figurenNetwork.on('hoverNode', ({ node, event }) => {
+      const f = this.figuren.find(x => x.id === node);
+      if (!f) return;
+      // „Weitere" im Tooltip unterdrücken – der Tooltip blendet die Schichtzeile
+      // nur ein, wenn es eine echte Zuordnung gibt.
+      const schichtLabel = f.sozialschicht && f.sozialschicht !== 'andere'
+        ? this.t('figuren.schicht.' + f.sozialschicht) : '';
+      const typLabel = f.typ ? this.t('figuren.type.' + f.typ) : '';
+      const html = `<strong>${escHtml(f.name)}</strong>`
+        + `<em>${escHtml(typLabel)}${schichtLabel ? ' · ' + escHtml(schichtLabel) : ''}</em>`
+        + (f.beschreibung ? `<p>${escHtml(f.beschreibung)}</p>` : '');
+      showTipAt(html, event.clientX, event.clientY);
     });
-    this._figurenNetwork.on('blurNode', () => {
-      if (tip) tip.classList.remove('visible');
+    this._figurenNetwork.on('blurNode', hideTip);
+
+    this._figurenNetwork.on('hoverEdge', ({ edge, event }) => {
+      const e = this._figurenEdges?.get(edge);
+      if (!e) return;
+      const fromF = this.figuren.find(x => x.id === e.from);
+      const toF   = this.figuren.find(x => x.id === e.to);
+      const typLabel = this.t('figuren.bz.' + e.typ);
+      const arrow = e.arrows === 'to' ? '→' : e.arrows === 'from' ? '←' : '↔';
+      const pair = fromF && toF
+        ? `${escHtml(fromF.kurzname || fromF.name)} ${arrow} ${escHtml(toF.kurzname || toF.name)}`
+        : '';
+      const html = `<strong>${escHtml(typLabel)}</strong>`
+        + (pair ? `<em>${pair}</em>` : '')
+        + (e.beschreibung ? `<p>${escHtml(e.beschreibung)}</p>` : '');
+      showTipAt(html, event.clientX, event.clientY);
     });
+    this._figurenNetwork.on('blurEdge', hideTip);
   },
 };

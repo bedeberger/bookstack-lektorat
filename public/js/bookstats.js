@@ -98,10 +98,13 @@ export const bookstatsMethods = {
     const canvas = document.getElementById('book-stats-chart');
     if (!canvas) return;
 
-    if (!this.bookStatsData.length) {
-      if (_statsChart) { _statsChart.destroy(); _statsChart = null; }
-      return;
-    }
+    // Chart immer frisch aufbauen. Der Update-Pfad (chart.update) liest keine
+    // neuen Canvas-Dimensionen ein — nach einem display:none↔block-Wechsel
+    // (Buchwechsel: bookStatsData = [] → = rows) bleibt das Diagramm sonst
+    // mit stale Dimensionen leer, bis ein Reflow nachzieht.
+    if (_statsChart) { _statsChart.destroy(); _statsChart = null; }
+
+    if (!this.bookStatsData.length) return;
 
     // Zeitraum-Filter
     let rows = this.bookStatsData;
@@ -139,17 +142,6 @@ export const bookstatsMethods = {
       if (v === null) return '';
       return ` ${ctx.dataset.label}: ${isDelta && v >= 0 ? '+' : ''}${fmt(v)}`;
     };
-
-    if (_statsChart) {
-      _statsChart.data.labels = labels;
-      _statsChart.data.datasets[0].data = data;
-      _statsChart.data.datasets[0].label = metricLabel;
-      _statsChart.options.scales.y.ticks.callback = makeTick();
-      _statsChart.options.scales.y.ticks.stepSize = metric === 'page_count' ? 1 : undefined;
-      _statsChart.options.plugins.tooltip.callbacks.label = makeTooltip();
-      _statsChart.update();
-      return;
-    }
 
     const primary  = cssVar('--color-primary');
     const muted    = cssVar('--color-muted');
