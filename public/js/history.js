@@ -23,6 +23,7 @@ export const historyMethods = {
       });
       entry.saved = newSaved;
       entry.saved_at = newSaved ? new Date().toISOString() : null;
+      this.refreshPageAges();
     } catch (e) {
       console.error('[toggleHistoryEntrySaved]', e);
     }
@@ -32,6 +33,7 @@ export const historyMethods = {
     try {
       await fetch('/history/check/' + id, { method: 'DELETE' });
       this.pageHistory = this.pageHistory.filter(e => e.id !== id);
+      this.refreshPageAges();
       // Aktiven Eintrag gelöscht → Vorschau zurücksetzen
       if (this.activeHistoryEntryId === id) {
         this.activeHistoryEntryId = null;

@@ -101,17 +101,19 @@ export const lektoratMethods = {
         this.setStatus('');
       },
       onDone: async (job) => {
+        // Sidebar-Status immer aktualisieren, auch wenn User inzwischen auf eine andere Seite gewechselt hat.
+        const r = job.result || {};
+        const fehler = r.fehler || [];
+        if (!r.empty) this.markPageChecked(pageId, { pending: fehler.length > 0 });
         if (this.currentPage?.id !== pageId) return;
         this.checkLoading = false;
         setTimeout(() => { this.checkProgress = 0; }, 400);
-        if (job.result?.empty) {
+        if (r.empty) {
           this.analysisOut = `<span class="muted-msg">${escHtml(this.t('job.pageEmpty'))}</span>`;
           this.setStatus('');
           return;
         }
-        const r = job.result;
         this.originalHtml = r.originalHtml;
-        const fehler = r.fehler || [];
         const findings = sortByPosition(r.originalHtml, fehler);
         this.lektoratFindings = findings;
         // Default selected: nur „harte" Typen (rechtschreibung, grammatik). Weiche Typen und Stil default unselected.
@@ -145,7 +147,6 @@ export const lektoratMethods = {
         this.checkDone = true;
         this.lastCheckId = r.checkId || null;
         this.activeHistoryEntryId = r.checkId || null;
-        this.markPageChecked(pageId, { pending: fehler.length > 0 });
         if (pageId != null) await this.loadPageHistory(pageId);
         this.setStatus(this.t('job.analyseDone'), false, 5000);
       },
@@ -190,6 +191,7 @@ export const lektoratMethods = {
           });
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           await this.loadPageHistory(this.currentPage.id);
+          this.refreshPageAges();
         } catch (e) { console.error('[history saved]', e); }
       }
       this.saveApplying = null;
