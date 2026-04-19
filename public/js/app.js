@@ -5,6 +5,7 @@ import { bookstackMethods } from './api-bookstack.js';
 import { aiMethods } from './api-ai.js';
 import { historyMethods } from './history.js';
 import { treeMethods } from './tree.js';
+import { bookstackSearchMethods } from './bookstack-search.js';
 import { lektoratMethods } from './lektorat.js';
 import { reviewMethods } from './review.js';
 import { figurenMethods } from './figuren.js';
@@ -179,6 +180,7 @@ document.addEventListener('alpine:init', () => {
     bookstackSearchResults: [],
     bookstackSearchLoading: false,
     bookstackSearchError: '',
+    bookstackSearched: false,
     _bookstackSearchTimer: null,
     _bookstackSearchAbort: null,
     _bookstackSearchSeq: 0,
@@ -1733,6 +1735,7 @@ document.addEventListener('alpine:init', () => {
     ...aiMethods,
     ...historyMethods,
     ...treeMethods,
+    ...bookstackSearchMethods,
     ...lektoratMethods,
     ...reviewMethods,
     ...figurenMethods,
