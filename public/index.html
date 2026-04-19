@@ -39,7 +39,8 @@
 <body x-data="lektorat"
       @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading && !focusMode) runCheck()"
       @keydown.ctrl.s.prevent.window="if (editMode) quickSave()"
-      @keydown.meta.s.prevent.window="if (editMode) quickSave()">
+      @keydown.meta.s.prevent.window="if (editMode) quickSave()"
+      @keydown.window="handleShortcutsHotkey($event)">
 
 <div class="session-banner" x-show="sessionExpired" x-cloak>
   <span class="session-banner-text" x-text="t('session.expired')"></span>
@@ -58,6 +59,7 @@
     <div id="partial-komplett-status"></div>
     <div id="partial-job-stats"></div>
     <button type="button" class="theme-toggle" @click="cycleTheme()" :title="t('theme.cycleTitle', { label: _themeLabel() })" x-text="_themeLabel()"></button>
+    <button type="button" class="theme-toggle theme-toggle--shortcuts" :class="{ 'theme-toggle--active': showShortcutsOverlay }" @click="toggleShortcutsOverlay()" :title="t('shortcuts.buttonTitle')" :aria-label="t('shortcuts.buttonTitle')">?</button>
     <button type="button" class="theme-toggle" :class="{ 'theme-toggle--active': showUserSettingsCard }" @click="toggleUserSettingsCard()" :title="t('header.profileTitle')" x-text="t('header.profile')"></button>
     <a href="/auth/logout" class="logout-link" x-text="t('header.logout')"></a>
   </div>
@@ -92,7 +94,8 @@
       <button type="button" class="bookstack-search-clear"
               x-show="bookstackSearch"
               @mousedown.prevent="clearBookstackSearch()"
-              :title="t('book.search.clear')">×</button>
+              :title="t('book.search.clear')"
+              :aria-label="t('book.search.clear')">×</button>
     </div>
     <div class="bookstack-search-results" x-show="bookstackSearch.trim().length >= 2">
       <div class="bookstack-search-status" x-show="bookstackSearchLoading" x-text="t('book.search.loading')"></div>
@@ -100,8 +103,8 @@
       <div class="bookstack-search-empty" x-show="!bookstackSearchLoading && !bookstackSearchError && bookstackSearched && bookstackSearchResults.length === 0" x-text="t('book.search.noResults')"></div>
       <template x-for="hit in bookstackSearchResults" :key="hit.id">
         <div class="bookstack-search-item" x-show="!bookstackSearchLoading" @click="selectPageFromBookstackSearch(hit)">
-          <div class="bookstack-search-item-title" x-html="hit.preview_html?.name || hit.name"></div>
-          <div class="bookstack-search-item-snippet" x-html="hit.preview_html?.content || ''" x-show="hit.preview_html?.content"></div>
+          <div class="bookstack-search-item-title" x-html="escPreserveStrong(hit.preview_html?.name || hit.name)"></div>
+          <div class="bookstack-search-item-snippet" x-html="escPreserveStrong(hit.preview_html?.content || '')" x-show="hit.preview_html?.content"></div>
         </div>
       </template>
     </div>
@@ -124,6 +127,10 @@
     <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showBookStatsCard }" @click="toggleBookStatsCard()" :title="t('tile.stats.title')">
       <span class="feature-tile-title" x-text="t('tile.stats')"></span>
       <span class="feature-tile-desc" x-text="t('tile.stats.desc')"></span>
+    </button>
+    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showStilCard }" @click="toggleStilCard()" :title="t('tile.stil.title')">
+      <span class="feature-tile-title" x-text="t('tile.stil')"></span>
+      <span class="feature-tile-desc" x-text="t('tile.stil.desc')"></span>
     </button>
     <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showBookChatCard }" @click="toggleBookChatCard()" :disabled="!pages.length" :title="t('tile.bookchat.title')">
       <span class="feature-tile-title" x-text="t('tile.bookchat')"></span>
@@ -161,6 +168,7 @@
 <div id="partial-orte"></div>
 <div id="partial-kontinuitaet"></div>
 <div id="partial-bookstats"></div>
+<div id="partial-stil"></div>
 <div class="editor-chat-wrap" :class="{ 'editor-chat-split': showEditorCard && showChatCard }">
   <div id="partial-editor"></div>
   <div id="partial-chat"></div>
@@ -169,6 +177,7 @@
 <div id="partial-user-settings"></div>
 <!-- Edit-Toolbar (Bubble + Slash) – teleportiert nach <body>, hier nur Scope-Host -->
 <div id="partial-editor-toolbar"></div>
+<div id="partial-shortcuts"></div>
 
 </div><!-- end layout-main -->
 </div><!-- end layout -->

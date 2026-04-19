@@ -2,7 +2,7 @@
 <div class="card" x-show="showOrteCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="t('orte.title', { name: selectedBookName })"></span>
-    <span x-show="alleAktualisierenLastRun && !orteLoading" class="figuren-updated-at" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
+    <span x-show="alleAktualisierenLastRun && !orteLoading" class="card-timestamp" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
   </div>
 
   <div x-show="orteProgress > 0" class="progress-bar-wrap">

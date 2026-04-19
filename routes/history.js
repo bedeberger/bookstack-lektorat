@@ -167,11 +167,42 @@ router.post('/page-stats/batch', express.json(), (req, res) => {
 // Buchstatistik-Verlauf für Zeitliniendiagramm (geteilter Cache, nicht user-spezifisch)
 router.get('/book-stats/:book_id', (req, res) => {
   const rows = db.prepare(`
-    SELECT id, book_id, book_name, recorded_at, page_count, words, chars, tok, unique_words, chapter_count, avg_sentence_len
+    SELECT id, book_id, book_name, recorded_at, page_count, words, chars, tok, unique_words, chapter_count, avg_sentence_len, avg_lix, avg_flesch_de
     FROM book_stats_history WHERE book_id = ?
     ORDER BY recorded_at ASC
   `).all(parseInt(req.params.book_id));
   res.json(rows);
+});
+
+// Stil-Heatmap: alle Stil-Metriken pro Seite eines Buchs (inkl. Kapitel-Info).
+// Frontend aggregiert nach Kapitel, erkennt noch nicht berechnete Seiten via metrics_version.
+router.get('/style-stats/:book_id', (req, res) => {
+  const bookId = parseInt(req.params.book_id);
+  const rows = db.prepare(`
+    SELECT ps.page_id, p.page_name, p.chapter_id, p.chapter_name,
+           ps.words, ps.chars, ps.sentences, ps.dialog_chars,
+           ps.filler_count, ps.passive_count, ps.adverb_count,
+           ps.avg_sentence_len, ps.sentence_len_p90, ps.repetition_data,
+           ps.lix, ps.flesch_de, ps.metrics_version, ps.cached_at
+    FROM page_stats ps
+    JOIN pages p ON p.page_id = ps.page_id
+    WHERE ps.book_id = ?
+    ORDER BY p.chapter_id, p.page_id
+  `).all(bookId);
+  // repetition_data aus JSON-String parsen; defensiv, damit eine korrupte Zeile die Antwort nicht kippt.
+  const pages = rows.map(r => {
+    let rep = null;
+    if (r.repetition_data) {
+      try { rep = JSON.parse(r.repetition_data); } catch { rep = null; }
+    }
+    return { ...r, repetition_data: rep };
+  });
+  // Neuestes cached_at = letzter Sync-Zeitpunkt für dieses Buch.
+  const lastUpdated = pages.reduce((max, p) => {
+    if (!p.cached_at) return max;
+    return (!max || p.cached_at > max) ? p.cached_at : max;
+  }, null);
+  res.json({ pages, last_updated: lastUpdated });
 });
 
 // Pro Seite: letzter Check-Zeitpunkt + Pending-Flag (user-spezifisch). Frontend

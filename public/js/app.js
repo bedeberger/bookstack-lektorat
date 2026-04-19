@@ -1,4 +1,4 @@
-import { escHtml, htmlToText, fmtTok, stripFocusArtefacts, fetchJson, fetchText } from './utils.js';
+import { escHtml, escPreserveStrong, htmlToText, fmtTok, stripFocusArtefacts, fetchJson, fetchText } from './utils.js';
 import { configurePrompts } from './prompts.js';
 
 import { bookstackMethods } from './api-bookstack.js';
@@ -12,6 +12,7 @@ import { figurenMethods } from './figuren.js';
 import { ereignisseMethods } from './ereignisse.js';
 import { graphMethods } from './graph.js';
 import { bookstatsMethods } from './bookstats.js';
+import { stilMethods } from './stil.js';
 import { chatMethods } from './chat.js';
 import { bookChatMethods } from './book-chat.js';
 import { szenenMethods } from './szenen.js';
@@ -26,6 +27,7 @@ import { focusMethods } from './editor-focus.js';
 import { synonymMethods } from './editor-synonyme.js';
 import { figurLookupMethods } from './editor-figur-lookup.js';
 import { toolbarMethods } from './editor-toolbar.js';
+import { shortcutsMethods } from './shortcuts.js';
 
 const FIGUR_TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, andere: 4 };
 
@@ -311,6 +313,11 @@ document.addEventListener('alpine:init', () => {
     bookStatsCoverage: null,
     bookStatsDelta: null,
     _statsChart: null,
+    showStilCard: false,
+    stilData: null,
+    stilLoading: false,
+    stilSyncing: false,
+    stilStatus: '',
     showChatCard: false,
     chatSessions: [],
     chatMessages: [],
@@ -674,6 +681,7 @@ document.addEventListener('alpine:init', () => {
       else if (this.showBookReviewCard) parts.push('bewertung');
       else if (this.showBookChatCard) parts.push('chat');
       else if (this.showBookStatsCard) parts.push('stats');
+      else if (this.showStilCard) parts.push('stil');
       else if (this.showBookSettingsCard) parts.push('einstellungen');
       return '#' + parts.join('/');
     },
@@ -845,6 +853,9 @@ document.addEventListener('alpine:init', () => {
           case 'stats':
             if (!this.showBookStatsCard) await this.toggleBookStatsCard();
             break;
+          case 'stil':
+            if (!this.showStilCard) await this.toggleStilCard();
+            break;
           case 'einstellungen':
             if (!this.showBookSettingsCard) await this.toggleBookSettingsCard();
             break;
@@ -861,7 +872,7 @@ document.addEventListener('alpine:init', () => {
         'selectedFigurId', 'selectedOrtId',
         'showFiguresCard', 'showOrteCard', 'showSzenenCard', 'showEreignisseCard',
         'showKontinuitaetCard', 'showBookReviewCard', 'showBookChatCard',
-        'showBookStatsCard', 'showBookSettingsCard', 'showUserSettingsCard',
+        'showBookStatsCard', 'showStilCard', 'showBookSettingsCard', 'showUserSettingsCard',
       ];
       for (const prop of watchers) {
         this.$watch(prop, () => this._updateHash());
@@ -992,6 +1003,8 @@ document.addEventListener('alpine:init', () => {
         hour: '2-digit', minute: '2-digit',
       });
     },
+
+    escPreserveStrong,
 
     _saveStatus() {
       const server = Math.max(
@@ -1348,6 +1361,7 @@ document.addEventListener('alpine:init', () => {
       this.showBookReviewCard = false;
       this.showFiguresCard = false;
       this.showBookStatsCard = false;
+      this.showStilCard = false;
       this.showBookChatCard = false;
       this.showEreignisseCard = false;
       this.showSzenenCard = false;
@@ -1469,6 +1483,7 @@ document.addEventListener('alpine:init', () => {
       if (keep !== 'szenen') this.showSzenenCard = false;
       if (keep !== 'ereignisse') this.showEreignisseCard = false;
       if (keep !== 'bookStats') this.showBookStatsCard = false;
+      if (keep !== 'stil') this.showStilCard = false;
       if (keep !== 'bookChat') this.showBookChatCard = false;
       if (keep !== 'orte') this.showOrteCard = false;
       if (keep !== 'kontinuitaet') this.showKontinuitaetCard = false;
@@ -1609,6 +1624,7 @@ document.addEventListener('alpine:init', () => {
       if (this.showOrteCard)       jobs.push(this.loadOrte(bookId));
       if (this.showSzenenCard)     jobs.push(this.loadSzenen(bookId));
       if (this.showBookStatsCard)  jobs.push(this.loadBookStats(bookId));
+      if (this.showStilCard)       jobs.push(this.loadStilStats(bookId));
       if (this.showBookSettingsCard && typeof this.loadBookSettings === 'function') {
         jobs.push(this.loadBookSettings());
       }
@@ -1671,6 +1687,11 @@ document.addEventListener('alpine:init', () => {
       this.bookStatsData = [];
       this.bookStatsSyncStatus = '';
       if (this._statsChart) { this._statsChart.destroy(); this._statsChart = null; }
+      this.showStilCard = false;
+      this.stilData = null;
+      this.stilStatus = '';
+      this.stilLoading = false;
+      this.stilSyncing = false;
       this.showOrteCard = false;
       this.orte = [];
       this.orteStatus = '';
@@ -1742,6 +1763,7 @@ document.addEventListener('alpine:init', () => {
     ...ereignisseMethods,
     ...graphMethods,
     ...bookstatsMethods,
+    ...stilMethods,
     ...chatMethods,
     ...bookChatMethods,
     ...szenenMethods,
@@ -1756,5 +1778,6 @@ document.addEventListener('alpine:init', () => {
     ...synonymMethods,
     ...figurLookupMethods,
     ...toolbarMethods,
+    ...shortcutsMethods,
   }));
 });

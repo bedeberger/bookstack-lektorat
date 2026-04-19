@@ -91,7 +91,7 @@ export const kontinuitaetMethods = {
     }
   },
 
-  kontinuitaetIssuesBySwere() {
+  kontinuitaetIssuesBySchwere() {
     if (!this.kontinuitaetResult?.issues) return { kritisch: [], mittel: [], niedrig: [] };
     const groups = { kritisch: [], mittel: [], niedrig: [] };
     for (const issue of this.kontinuitaetIssuesFiltered) {

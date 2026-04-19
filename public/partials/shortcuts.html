@@ -1,0 +1,57 @@
+<!-- Tastenkürzel-Overlay -->
+<div class="shortcuts-overlay" x-show="showShortcutsOverlay" x-cloak x-transition.opacity
+     @click.self="closeShortcutsOverlay()"
+     @keydown.escape.window="showShortcutsOverlay && closeShortcutsOverlay()">
+  <div class="shortcuts-panel" role="dialog" aria-modal="true" :aria-label="t('shortcuts.title')">
+    <div class="shortcuts-header">
+      <span class="shortcuts-title" x-text="t('shortcuts.title')"></span>
+      <button type="button" class="shortcuts-close" @click="closeShortcutsOverlay()" :title="t('common.close')" :aria-label="t('common.close')">&#x2715;</button>
+    </div>
+
+    <div class="shortcuts-section">
+      <div class="shortcuts-section-title" x-text="t('shortcuts.section.global')"></div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>?</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.help')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.esc')"></kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.escape')"></span>
+      </div>
+    </div>
+
+    <div class="shortcuts-section">
+      <div class="shortcuts-section-title" x-text="t('shortcuts.section.editor')"></div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.ctrl')"></kbd>+<kbd x-text="t('shortcuts.key.enter')"></kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.runCheck')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.cmdCtrl')"></kbd>+<kbd>S</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.saveEdit')"></span>
+      </div>
+    </div>
+
+    <div class="shortcuts-section">
+      <div class="shortcuts-section-title" x-text="t('shortcuts.section.focus')"></div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>F11</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.focusToggle')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.esc')"></kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.focusExit')"></span>
+      </div>
+    </div>
+
+    <div class="shortcuts-section">
+      <div class="shortcuts-section-title" x-text="t('shortcuts.section.search')"></div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.esc')"></kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.searchClear')"></span>
+      </div>
+    </div>
+
+    <div class="shortcuts-footer" x-text="t('shortcuts.footer')"></div>
+  </div>
+</div>

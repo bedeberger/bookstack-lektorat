@@ -2,7 +2,7 @@
 <div class="card" x-show="showSzenenCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="t('szenen.title', { name: selectedBookName })"></span>
-    <span x-show="alleAktualisierenLastRun && !szenenLoading" class="figuren-updated-at" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
+    <span x-show="alleAktualisierenLastRun && !szenenLoading" class="card-timestamp" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
   </div>
 
   <!-- Fortschritt -->

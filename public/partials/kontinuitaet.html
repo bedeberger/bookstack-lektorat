@@ -2,7 +2,7 @@
 <div class="card" x-show="showKontinuitaetCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="t('kontinuitaet.title', { name: selectedBookName })"></span>
-    <span x-show="alleAktualisierenLastRun && !kontinuitaetLoading" class="figuren-updated-at" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
+    <span x-show="alleAktualisierenLastRun && !kontinuitaetLoading" class="card-timestamp" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
   </div>
 
   <div x-show="kontinuitaetProgress > 0" class="progress-bar-wrap">
@@ -42,7 +42,7 @@
       <div x-show="kontinuitaetResult.issues?.length > 0 && kontinuitaetIssuesFiltered.length === 0" class="kontinuitaet-ok" x-text="t('kontinuitaet.noMatch')"></div>
 
       <!-- Probleme nach Schwere -->
-      <template x-for="[severity, issues] in Object.entries(kontinuitaetIssuesBySwere()).filter(([,v]) => v.length > 0)" :key="severity">
+      <template x-for="[severity, issues] in Object.entries(kontinuitaetIssuesBySchwere()).filter(([,v]) => v.length > 0)" :key="severity">
         <div>
           <div class="kontinuitaet-group-header" :class="'kontinuitaet-group-header--' + severity">
             <span x-text="t('kontinuitaet.severity.' + severity)"></span> (<span x-text="issues.length"></span>)

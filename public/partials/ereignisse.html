@@ -2,7 +2,7 @@
 <div class="card" x-show="showEreignisseCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="t('events.title', { name: selectedBookName })"></span>
-    <span x-show="alleAktualisierenLastRun && !ereignisseLoading && !zeitstrahlConsolidating" class="figuren-updated-at" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
+    <span x-show="alleAktualisierenLastRun && !ereignisseLoading && !zeitstrahlConsolidating" class="card-timestamp" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
   </div>
 
   <!-- Fortschritt Ermittlung -->

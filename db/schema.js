@@ -1080,6 +1080,24 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 45').run();
     logger.info('DB-Migration auf Version 45 abgeschlossen (figure_relations.belege hinzugefügt).');
   }
+  if (version < 46) {
+    // Stil-Heatmap + Lesbarkeit: deterministische Metriken pro Seite (kein KI-Call).
+    // METRICS_VERSION-Bump in lib/page-index.js erzwingt Nachberechnung beim nächsten Sync.
+    const psCols46 = db.pragma('table_info(page_stats)').map(c => c.name);
+    if (!psCols46.includes('filler_count'))      db.exec('ALTER TABLE page_stats ADD COLUMN filler_count INTEGER');
+    if (!psCols46.includes('passive_count'))     db.exec('ALTER TABLE page_stats ADD COLUMN passive_count INTEGER');
+    if (!psCols46.includes('adverb_count'))      db.exec('ALTER TABLE page_stats ADD COLUMN adverb_count INTEGER');
+    if (!psCols46.includes('avg_sentence_len'))  db.exec('ALTER TABLE page_stats ADD COLUMN avg_sentence_len REAL');
+    if (!psCols46.includes('sentence_len_p90'))  db.exec('ALTER TABLE page_stats ADD COLUMN sentence_len_p90 INTEGER');
+    if (!psCols46.includes('repetition_data'))   db.exec('ALTER TABLE page_stats ADD COLUMN repetition_data TEXT');
+    if (!psCols46.includes('lix'))               db.exec('ALTER TABLE page_stats ADD COLUMN lix REAL');
+    if (!psCols46.includes('flesch_de'))         db.exec('ALTER TABLE page_stats ADD COLUMN flesch_de REAL');
+    const bshCols46 = db.pragma('table_info(book_stats_history)').map(c => c.name);
+    if (!bshCols46.includes('avg_lix'))          db.exec('ALTER TABLE book_stats_history ADD COLUMN avg_lix REAL');
+    if (!bshCols46.includes('avg_flesch_de'))    db.exec('ALTER TABLE book_stats_history ADD COLUMN avg_flesch_de REAL');
+    db.prepare('UPDATE schema_version SET version = 46').run();
+    logger.info('DB-Migration auf Version 46 abgeschlossen (Stil-Heatmap + Lesbarkeit: page_stats + book_stats_history).');
+  }
 
   // ── Schutzchecks: kompensieren DBs, bei denen durch frühere Versions-Bugs
   //    einzelne Migrationen übersprungen wurden (z.B. v21 vor v19/v20 gesetzt).

@@ -16,6 +16,8 @@ const METRIC_KEYS = {
   delta_words:       'bookstats.metric.delta',
   avg_sentence_len:  'bookstats.metric.avgSentence',
   pages_per_chapter: 'bookstats.metric.pagesPerChapter',
+  avg_lix:           'bookstats.metric.lix',
+  avg_flesch_de:     'bookstats.metric.flesch',
 };
 
 // Ausserhalb von Alpine gespeichert, damit die Chart.js-Instanz nicht durch
@@ -131,7 +133,7 @@ export const bookstatsMethods = {
     const metricLabel = METRIC_KEYS[metric] ? this.t(METRIC_KEYS[metric]) : metric;
 
     const localeTag = (this.uiLocale === 'en') ? 'en-US' : 'de-CH';
-    const isDecimal = isPpc || metric === 'avg_sentence_len';
+    const isDecimal = isPpc || metric === 'avg_sentence_len' || metric === 'avg_lix' || metric === 'avg_flesch_de';
     const fmt = v => isDecimal ? v.toLocaleString(localeTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
       : Math.round(v).toLocaleString(localeTag);
     const makeTick = () => v => {

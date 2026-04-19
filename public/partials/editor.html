@@ -102,7 +102,7 @@
          @keydown.escape.window="closeSynonymPicker()">
       <div class="synonym-picker-header">
         <span x-text="t('editor.synonym.titleFor', { word: _synonymWord })"></span>
-        <button type="button" class="synonym-picker-close" @click="closeSynonymPicker()" :title="t('common.close')">×</button>
+        <button type="button" class="synonym-picker-close" @click="closeSynonymPicker()" :title="t('common.close')" :aria-label="t('common.close')">×</button>
       </div>
 
       <div class="synonym-picker-body">
@@ -151,7 +151,7 @@
         <div>
           <div class="figur-lookup-header">
             <span class="figur-lookup-name" x-text="figurLookupData.name"></span>
-            <button type="button" class="figur-lookup-close" @click="closeFigurLookup()" :title="t('common.close')">×</button>
+            <button type="button" class="figur-lookup-close" @click="closeFigurLookup()" :title="t('common.close')" :aria-label="t('common.close')">×</button>
           </div>
           <div class="figur-lookup-body">
             <div x-show="figurLookupGeburt()" class="figur-lookup-row">
@@ -229,7 +229,7 @@
         <span class="badge" :class="entry.error_count > 0 ? 'badge-err' : 'badge-ok'" x-text="entry.error_count > 0 ? t('editor.history.errors', { n: entry.error_count }) : t('editor.history.errorFree')"></span>
         <button type="button" class="btn-toggle-saved" :class="entry.saved ? 'btn-toggle-saved--on' : 'btn-toggle-saved--off'" @click.stop="toggleHistoryEntrySaved(entry)" :title="entry.saved ? t('editor.history.markOpen') : t('editor.history.markDone')" x-text="entry.saved ? t('editor.history.done') : t('editor.history.open')"></button>
         <span class="tag" x-text="entry.model"></span>
-        <button type="button" class="history-item-delete" @click.stop="deletePageCheck(entry.id)" :title="t('common.deleteEntry')">×</button>
+        <button type="button" class="history-item-delete" @click.stop="deletePageCheck(entry.id)" :title="t('common.deleteEntry')" :aria-label="t('common.deleteEntry')">×</button>
       </div>
     </template>
   </div>

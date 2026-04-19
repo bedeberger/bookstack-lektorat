@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Lektorat Test Harness</title>
+</head>
+<body>
+  <div id="page-view"></div>
+
+  <script type="module">
+    // Importiert die echten Feature-Methoden und bindet sie an ein Minimum-
+    // Alpine-Ersatz-Objekt. Ziel: runCheck → Polling → Findings-State →
+    // Toggle → saveCorrections durchspielen, ohne Alpine/i18n/BookStack.
+    import { lektoratMethods }   from '/public/js/lektorat.js';
+    import { pageViewMethods, SOFT_TYPEN, sortByPosition, buildHighlightedHtml } from '/public/js/page-view.js';
+    import { bookstackMethods }  from '/public/js/api-bookstack.js';
+
+    // Passthrough-i18n: gibt den Key zurück. Reicht für die Tests, weil sie
+    // Strukturwerte (findings.length, correctedHtml, DOM-Markup) prüfen und
+    // keine konkreten Texte vergleichen.
+    function t(k, params) {
+      if (!params) return String(k);
+      return String(k) + ' ' + JSON.stringify(params);
+    }
+
+    const harness = {
+      ...bookstackMethods,
+      ...pageViewMethods,
+      ...lektoratMethods,
+
+      // ── State-Defaults (die Felder, die lektoratMethods lesen/schreiben) ──
+      currentPage: { id: 1, book_id: 42, name: 'Testseite' },
+      originalHtml: '',
+      correctedHtml: null,
+      renderedPageHtml: '',
+      lektoratFindings: [],
+      selectedFindings: [],
+      appliedOriginals: [],
+      analysisOut: '',
+      hasErrors: false,
+      checkDone: false,
+      checkLoading: false,
+      checkProgress: 0,
+      status: '',
+      statusSpinner: false,
+      activeHistoryEntryId: null,
+      lastCheckId: null,
+      pageHistory: [],
+      chatMessages: [],
+      tokEsts: {},
+      tree: [],
+      saveApplying: null,
+      lastAutosaveAt: 0,
+
+      // ── Stubs für nicht-getestete Seitenwirkungen ──
+      t,
+      tRaw: (k) => String(k),
+      setStatus(msg, spinner = false) { this.status = msg; this.statusSpinner = !!spinner; },
+      _runningJobStatus(msg) { return msg || ''; },
+      markPageChecked() {},
+      refreshPageAges() {},
+      async loadPageHistory() {},
+      async loadChapterFigures() {},
+
+      // ── _startPoll: 1:1-Kopie aus app.js, aber mit schnellem Intervall
+      // (50 ms statt 2000 ms), damit die Tests zügig durchlaufen. Cleanup
+      // funktioniert identisch (clearInterval + Timer-Prop nullen).
+      _startPoll(config) {
+        if (this[config.timerProp]) clearInterval(this[config.timerProp]);
+        this[config.timerProp] = setInterval(async () => {
+          try {
+            const resp = await fetch('/jobs/' + config.jobId);
+            if (resp.status === 404) {
+              clearInterval(this[config.timerProp]);
+              this[config.timerProp] = null;
+              config.onNotFound?.();
+              return;
+            }
+            if (!resp.ok) return;
+            const job = await resp.json();
+            if (config.progressProp) this[config.progressProp] = job.progress || 0;
+            if (job.status === 'running' || job.status === 'queued') { config.onProgress?.(job); return; }
+            clearInterval(this[config.timerProp]);
+            this[config.timerProp] = null;
+            if (job.status === 'cancelled' || job.status === 'error') await config.onError?.(job);
+            else await config.onDone?.(job);
+          } catch (e) { console.error('[poll]', e); }
+        }, 50);
+      },
+    };
+
+    // `_scenario` aus URL in POST /jobs/check-Body injizieren – so wählt der
+    // Test, welchen Job der Mock-Server zurückgibt, ohne eine neue API an
+    // lektoratMethods zu flanschen.
+    const urlScenario = new URL(location.href).searchParams.get('scenario');
+    if (urlScenario) {
+      const origFetch = window.fetch.bind(window);
+      window.fetch = (input, init = {}) => {
+        if (typeof input === 'string' && input === '/jobs/check' && init.method === 'POST') {
+          let body = {};
+          try { body = init.body ? JSON.parse(init.body) : {}; } catch (_) {}
+          body._scenario = urlScenario;
+          init = { ...init, body: JSON.stringify(body) };
+        }
+        return origFetch(input, init);
+      };
+    }
+
+    // Wartet, bis ein Predicate true wird (mit Timeout). Die Tests hängen
+    // sonst an Polling-Timern, wenn sich das Harness-State nicht direkt
+    // observieren lässt.
+    harness.waitUntil = (predFnSource, timeoutMs = 2000) => new Promise((resolve, reject) => {
+      const pred = new Function('h', 'return (' + predFnSource + ')(h);');
+      const start = Date.now();
+      const tick = () => {
+        try {
+          if (pred(harness)) return resolve(true);
+        } catch (e) { return reject(e); }
+        if (Date.now() - start > timeoutMs) return reject(new Error('waitUntil timeout: ' + predFnSource));
+        setTimeout(tick, 20);
+      };
+      tick();
+    });
+
+    window.harness = harness;
+    window.harnessReady = true;
+  </script>
+</body>
+</html>

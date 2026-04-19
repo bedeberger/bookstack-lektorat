@@ -196,6 +196,20 @@ async function syncBook(bookId, token) {
   const uniqueWords = globalWordSet.size;
   const avgSentenceLen = totalSentences > 0 ? Math.round((totalWords / totalSentences) * 10) / 10 : null;
 
+  // Buch-Level-Lesbarkeit: gewichteter Durchschnitt über alle Seiten (nach Wortzahl).
+  // Eine aus gesamten Totals neu berechnete Kennzahl wäre mathematisch korrekter,
+  // der gewichtete Durchschnitt liegt aber praktisch sehr nah daran und spart Aggregat-Spalten.
+  const wordsByPage = Object.fromEntries(statsItems.map(s => [s.page_id, s.words]));
+  let lixSum = 0, fleschSum = 0, lixWords = 0, fleschWords = 0;
+  for (const item of indexItems) {
+    const w = wordsByPage[item.page_id] || 0;
+    if (w <= 0) continue;
+    if (typeof item.index.lix === 'number') { lixSum += item.index.lix * w; lixWords += w; }
+    if (typeof item.index.flesch_de === 'number') { fleschSum += item.index.flesch_de * w; fleschWords += w; }
+  }
+  const avgLix = lixWords > 0 ? Math.round((lixSum / lixWords) * 10) / 10 : null;
+  const avgFleschDe = fleschWords > 0 ? Math.round((fleschSum / fleschWords) * 10) / 10 : null;
+
   upsertPageStatsMany(statsItems);
   _upsertPagesCache(bookId, pages, chapters);
 
@@ -219,17 +233,18 @@ async function syncBook(bookId, token) {
 
   const today = new Date().toISOString().slice(0, 10);
   db.prepare(`
-    INSERT INTO book_stats_history (book_id, book_name, recorded_at, page_count, words, chars, tok, unique_words, chapter_count, avg_sentence_len)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO book_stats_history (book_id, book_name, recorded_at, page_count, words, chars, tok, unique_words, chapter_count, avg_sentence_len, avg_lix, avg_flesch_de)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(book_id, recorded_at) DO UPDATE SET
       book_name=excluded.book_name, page_count=excluded.page_count,
       words=excluded.words, chars=excluded.chars, tok=excluded.tok,
       unique_words=excluded.unique_words, chapter_count=excluded.chapter_count,
-      avg_sentence_len=excluded.avg_sentence_len
-  `).run(bookId, bookName, today, pages.length, totalWords, totalChars, totalTok, uniqueWords, chapterCount, avgSentenceLen);
+      avg_sentence_len=excluded.avg_sentence_len,
+      avg_lix=excluded.avg_lix, avg_flesch_de=excluded.avg_flesch_de
+  `).run(bookId, bookName, today, pages.length, totalWords, totalChars, totalTok, uniqueWords, chapterCount, avgSentenceLen, avgLix, avgFleschDe);
 
-  logger.info(`Sync Buch ${bookId} (${bookName}): ${pages.length} Seiten, ${chapterCount} Kapitel, ${totalWords} Wörter, ${uniqueWords} einzigartige, Ø ${avgSentenceLen} W/Satz`);
-  return { page_count: pages.length, words: totalWords, chars: totalChars, tok: totalTok, unique_words: uniqueWords, chapter_count: chapterCount, avg_sentence_len: avgSentenceLen };
+  logger.info(`Sync Buch ${bookId} (${bookName}): ${pages.length} Seiten, ${chapterCount} Kapitel, ${totalWords} Wörter, ${uniqueWords} einzigartige, Ø ${avgSentenceLen} W/Satz, LIX ${avgLix}, Flesch ${avgFleschDe}`);
+  return { page_count: pages.length, words: totalWords, chars: totalChars, tok: totalTok, unique_words: uniqueWords, chapter_count: chapterCount, avg_sentence_len: avgSentenceLen, avg_lix: avgLix, avg_flesch_de: avgFleschDe };
 }
 
 async function syncAllBooks() {

@@ -2,7 +2,7 @@
 <div class="card" x-show="showFiguresCard" x-cloak x-transition>
   <div class="card-header">
     <span class="card-title" x-text="t('figuren.title', { name: selectedBookName })"></span>
-    <span x-show="alleAktualisierenLastRun && !figurenLoading" class="figuren-updated-at" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
+    <span x-show="alleAktualisierenLastRun && !figurenLoading" class="card-timestamp" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
   </div>
 
   <!-- Fortschritt -->
@@ -116,7 +116,7 @@
     <template x-for="f in filteredFiguren()" :key="f.id">
       <div>
         <div class="figur-item" :data-figid="f.id" @click="selectedFigurId = selectedFigurId === f.id ? null : f.id;">
-          <span class="figur-typ-dot" :style="'background:' + ({ hauptfigur:'var(--color-primary)', nebenfigur:'var(--color-muted)', antagonist:'var(--color-err-border)', mentor:'var(--color-ok-border)', andere:'var(--color-accent)' }[f.typ] || 'var(--color-border)')"></span>
+          <span class="figur-typ-dot" :class="'figur-typ-dot--' + (f.typ || 'unknown')"></span>
           <span class="figur-name" x-text="f.name"></span>
           <span class="tag" x-text="t('figuren.type.' + f.typ)"></span>
           <span x-show="f.geburtstag" class="tag" x-text="'* ' + f.geburtstag"></span>

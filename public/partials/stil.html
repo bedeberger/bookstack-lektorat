@@ -1,0 +1,77 @@
+<!-- Stil-Heatmap: Kapitel × Metrik -->
+<div class="card" x-show="showStilCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title" x-text="t('stil.title', { name: selectedBookName })"></span>
+    <div class="card-actions">
+      <span x-show="stilData?.last_updated && !stilSyncing && !stilLoading"
+            class="card-timestamp" x-text="stilLastUpdatedLabel()"></span>
+      <button type="button" @click="runStilSync()" :disabled="stilSyncing || stilLoading">
+        <span x-show="stilSyncing" class="spinner"></span>
+        <span x-text="stilSyncing ? '' : t('stil.recompute')"></span>
+      </button>
+    </div>
+  </div>
+
+  <div x-show="stilStatus" class="card-status" x-html="stilStatus"></div>
+
+  <div x-show="!stilLoading && !stilSyncing && (!stilData?.pages || stilData.pages.length === 0)"
+       class="muted-msg muted-msg--spaced" x-text="t('stil.emptyState')"></div>
+
+  <template x-if="stilData?.pages?.length > 0">
+    <div class="stil-heatmap-wrap">
+      <!-- Metrik-Legende -->
+      <div class="stil-legend" x-text="t('stil.legend')"></div>
+
+      <!-- Heatmap-Tabelle -->
+      <div class="stil-heatmap">
+        <table class="stil-heatmap-table">
+          <thead>
+            <tr>
+              <th class="stil-heatmap-rowhead" x-text="t('stil.chapter')"></th>
+              <th class="stil-heatmap-words" x-text="t('stil.words')"></th>
+              <template x-for="m in stilMetricDefs" :key="m.key">
+                <th class="stil-heatmap-metric" :title="t('stil.tip.' + m.key)">
+                  <span x-text="t(m.label)"></span>
+                </th>
+              </template>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="c in stilChaptersAggregated()" :key="c.key">
+              <tr>
+                <th class="stil-heatmap-rowhead" scope="row">
+                  <span class="stil-chapter-name" x-text="c.name"></span>
+                  <span class="stil-chapter-pages" x-text="t('stil.pagesCount', { n: c.pageCount })"></span>
+                </th>
+                <td class="stil-heatmap-words" x-text="(c.words || 0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH')"></td>
+                <template x-for="m in stilMetricDefs" :key="m.key">
+                  <td class="stil-heatmap-cell"
+                      :style="stilCellStyle(c[m.key], m.key, stilChaptersAggregated())"
+                      x-text="stilFormat(c[m.key], m.key)">
+                  </td>
+                </template>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Wiederholungs-Drilldown pro Kapitel -->
+      <details class="stil-repetitions">
+        <summary x-text="t('stil.repetitions.summary')"></summary>
+        <div class="stil-repetitions-list">
+          <template x-for="c in stilChaptersAggregated()" :key="'rep-' + c.key">
+            <div class="stil-repetitions-chapter" x-show="c.topRepetitions.length > 0">
+              <div class="stil-repetitions-title" x-text="c.name"></div>
+              <div class="stil-repetitions-words">
+                <template x-for="r in c.topRepetitions" :key="r.word">
+                  <span class="tag stil-repetition-word" x-text="r.word + ' · ' + r.count"></span>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </details>
+    </div>
+  </template>
+</div>

@@ -3,7 +3,7 @@
   <div class="card-header">
     <span class="card-title" x-text="t('bookstats.title', { name: selectedBookName })"></span>
     <div class="card-actions">
-      <span x-show="bookStatsData.length > 0 && !bookStatsLoading" class="figuren-updated-at" x-text="t('bookstats.lastSnapshot', { date: (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '') })"></span>
+      <span x-show="bookStatsData.length > 0 && !bookStatsLoading" class="card-timestamp" x-text="t('bookstats.lastSnapshot', { date: (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '') })"></span>
       <button type="button" @click="syncBookStats()" :disabled="bookStatsLoading">
         <span x-show="bookStatsLoading" class="spinner"></span>
         <span x-text="bookStatsLoading ? '' : t('bookstats.sync')"></span>
@@ -26,29 +26,25 @@
            {value:'unique_words',       label: t('bookstats.metric.unique')},
            {value:'delta_words',        label: t('bookstats.metric.delta')},
            {value:'avg_sentence_len',   label: t('bookstats.metric.avgSentence')},
-           {value:'pages_per_chapter',  label: t('bookstats.metric.pagesPerChapter')}
+           {value:'pages_per_chapter',  label: t('bookstats.metric.pagesPerChapter')},
+           {value:'avg_lix',            label: t('bookstats.metric.lix')},
+           {value:'avg_flesch_de',      label: t('bookstats.metric.flesch')}
          ]"
          @combobox-change="$nextTick(() => renderStatsChart())"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact combobox-wrap--metric">
     </div>
     <div class="btn-group">
-      <button type="button" class="btn-sm" :class="{ primary: bookStatsRange === 7 }"
-        @click="bookStatsRange = 7; renderStatsChart()" x-text="t('bookstats.range.7')"></button>
-      <button type="button" class="btn-sm" :class="{ primary: bookStatsRange === 30 }"
-        @click="bookStatsRange = 30; renderStatsChart()" x-text="t('bookstats.range.30')"></button>
-      <button type="button" class="btn-sm" :class="{ primary: bookStatsRange === 90 }"
-        @click="bookStatsRange = 90; renderStatsChart()" x-text="t('bookstats.range.90')"></button>
-      <button type="button" class="btn-sm" :class="{ primary: bookStatsRange === 365 }"
-        @click="bookStatsRange = 365; renderStatsChart()" x-text="t('bookstats.range.365')"></button>
-      <button type="button" class="btn-sm" :class="{ primary: bookStatsRange === 0 }"
-        @click="bookStatsRange = 0; renderStatsChart()" x-text="t('bookstats.range.all')"></button>
+      <template x-for="r in [{v:7,k:'7'},{v:30,k:'30'},{v:90,k:'90'},{v:365,k:'365'},{v:0,k:'all'}]" :key="r.v">
+        <button type="button" class="btn-sm" :class="{ primary: bookStatsRange === r.v }"
+          @click="bookStatsRange = r.v; renderStatsChart()" x-text="t('bookstats.range.' + r.k)"></button>
+      </template>
     </div>
   </div>
 
   <!-- Diagramm -->
   <div x-show="bookStatsData.length > 0" class="book-stats-chart-wrap">
-    <canvas id="book-stats-chart"></canvas>
+    <canvas id="book-stats-chart" role="img" :aria-label="t('bookstats.chartFallback')"><span x-text="t('bookstats.chartFallback')"></span></canvas>
   </div>
 
   <!-- Aktuelle Stats (letzter Snapshot) -->

@@ -2,7 +2,7 @@
 // `this` bezieht sich auf die Alpine-Komponente.
 // Die eigentliche Extraktion läuft als Teil von POST /jobs/komplett-analyse.
 
-import { escHtml, fetchJson } from './utils.js';
+import { fetchJson } from './utils.js';
 
 export function _cleanStr(v) {
   if (v === null || v === undefined) return null;

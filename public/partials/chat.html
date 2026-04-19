@@ -68,7 +68,7 @@
       :disabled="chatLoading"
       @keydown.enter="if(!$event.isComposing && $event.keyCode !== 229 && !$event.shiftKey && !$event.ctrlKey && !$event.metaKey) { $event.preventDefault(); sendChatMessage(); }"
     ></textarea>
-    <button type="button" class="chat-send-btn" @click="sendChatMessage()" :disabled="chatLoading || !chatInput.trim()">
+    <button type="button" class="chat-send-btn" @click="sendChatMessage()" :disabled="chatLoading || !chatInput.trim()" :aria-label="t('chat.send')">
       <span x-show="chatLoading" class="spinner"></span>
       <span x-show="!chatLoading">↑</span>
     </button>
@@ -85,7 +85,7 @@
       >
         <div class="chat-session-preview" x-text="(s.preview || t('chat.previewEmpty')).slice(0, 80)"></div>
         <div class="chat-session-meta" x-text="formatDate(s.last_message_at)"></div>
-        <button type="button" class="chat-session-delete btn-card-close" @click.stop="deleteChatSession(s.id)" :title="t('common.delete')">×</button>
+        <button type="button" class="chat-session-delete btn-card-close" @click.stop="deleteChatSession(s.id)" :title="t('common.delete')" :aria-label="t('common.delete')">×</button>
       </div>
     </template>
   </div>
@@ -183,7 +183,7 @@
       :disabled="bookChatLoading"
       @keydown.enter="if(!$event.isComposing && $event.keyCode !== 229 && !$event.shiftKey && !$event.ctrlKey && !$event.metaKey) { $event.preventDefault(); sendBookChatMessage(); }"
     ></textarea>
-    <button type="button" class="chat-send-btn" @click="sendBookChatMessage()" :disabled="bookChatLoading || !bookChatInput.trim()">
+    <button type="button" class="chat-send-btn" @click="sendBookChatMessage()" :disabled="bookChatLoading || !bookChatInput.trim()" :aria-label="t('chat.send')">
       <span x-show="bookChatLoading" class="spinner"></span>
       <span x-show="!bookChatLoading">↑</span>
     </button>
@@ -200,7 +200,7 @@
       >
         <div class="chat-session-preview" x-text="(s.preview || t('chat.previewEmpty')).slice(0, 80)"></div>
         <div class="chat-session-meta" x-text="formatDate(s.last_message_at)"></div>
-        <button type="button" class="chat-session-delete btn-card-close" @click.stop="deleteBookChatSession(s.id)" :title="t('common.delete')">×</button>
+        <button type="button" class="chat-session-delete btn-card-close" @click.stop="deleteBookChatSession(s.id)" :title="t('common.delete')" :aria-label="t('common.delete')">×</button>
       </div>
     </template>
   </div>

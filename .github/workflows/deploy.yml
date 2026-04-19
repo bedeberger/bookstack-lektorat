@@ -86,9 +86,28 @@ jobs:
 
           exit $status
 
+  tests:
+    name: Playwright-Tests
+    runs-on: self-hosted
+    timeout-minutes: 5
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Chromium installieren (idempotent, lokal gecacht)
+        run: npx playwright install chromium
+
+      - name: Tests ausführen
+        run: npm test
+
   deploy:
     name: Deploy to LXC with bookstack
-    needs: tier1
+    needs: [tier1, tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: self-hosted
     environment: production

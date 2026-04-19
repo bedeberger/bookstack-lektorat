@@ -1,7 +1,7 @@
 // Schauplatz-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 
-import { escHtml, fetchJson } from './utils.js';
+import { fetchJson } from './utils.js';
 
 export const orteMethods = {
   async loadOrte(bookId) {
