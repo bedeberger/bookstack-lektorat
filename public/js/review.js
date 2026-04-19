@@ -1,4 +1,4 @@
-import { escHtml } from './utils.js';
+import { escHtml, fetchJson } from './utils.js';
 
 // Buchbewertungs-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -87,7 +87,7 @@ export const reviewMethods = {
       // Prüfen ob auf dem Server bereits ein Job für dieses Buch läuft
       if (!this._reviewPollTimer && !this.bookReviewLoading) {
         try {
-          const { jobId } = await fetch(`/jobs/active?type=review&book_id=${this.selectedBookId}`).then(r => r.json());
+          const { jobId } = await fetchJson(`/jobs/active?type=review&book_id=${this.selectedBookId}`);
           if (jobId) {
             this.bookReviewLoading = true;
             this.bookReviewProgress = 0;
@@ -111,11 +111,11 @@ export const reviewMethods = {
     this.bookReviewOut = '';
     this.setReviewStatus(this.t('review.starting'), true);
     try {
-      const { jobId } = await fetch('/jobs/review', {
+      const { jobId } = await fetchJson('/jobs/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName }),
-      }).then(r => r.json());
+      });
       localStorage.setItem('lektorat_review_job_' + bookId, jobId);
       this.startReviewPoll(jobId);
     } catch (e) {

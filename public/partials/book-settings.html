@@ -3,7 +3,7 @@
   <div class="card-header">
     <span class="card-title" x-text="t('book.settings.title', { name: selectedBookName })"></span>
     <div class="card-actions">
-      <button @click="saveBookSettings()" :disabled="bookSettingsSaving || bookSettingsLoading">
+      <button type="button" @click="saveBookSettings()" :disabled="bookSettingsSaving || bookSettingsLoading">
         <span x-show="bookSettingsSaving" class="spinner"></span>
         <span x-text="bookSettingsSaving ? t('common.saving') : t('common.save')"></span>
       </button>

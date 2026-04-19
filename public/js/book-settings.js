@@ -1,3 +1,5 @@
+import { fetchJson } from './utils.js';
+
 export const bookSettingsMethods = {
 
   async toggleBookSettingsCard() {
@@ -11,7 +13,7 @@ export const bookSettingsMethods = {
     if (!this.selectedBookId) return;
     this.bookSettingsLoading = true;
     try {
-      const data = await fetch(`/booksettings/${this.selectedBookId}`).then(r => r.json());
+      const data = await fetchJson(`/booksettings/${this.selectedBookId}`);
       this.bookSettingsLanguage  = data.language    || 'de';
       this.bookSettingsRegion    = data.region      || 'CH';
       this.bookSettingsBuchtyp   = data.buchtyp     || '';
@@ -39,8 +41,11 @@ export const bookSettingsMethods = {
           buch_kontext: this.bookSettingsBuchKontext || null,
         }),
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(this.tError(data));
+      if (!r.ok) {
+        let data = null;
+        try { data = await r.json(); } catch (_) {}
+        throw new Error(data ? this.tError(data) : `HTTP ${r.status}`);
+      }
       this.bookSettingsSaved = true;
       setTimeout(() => { this.bookSettingsSaved = false; }, 3000);
     } catch (e) {

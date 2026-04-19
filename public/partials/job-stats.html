@@ -1,6 +1,6 @@
 <!-- Job-Zeiten & Token-Verbrauch: Button + Tabellen-Panel -->
 <div class="job-stats-wrap" @click.outside="showJobStats = false">
-  <button class="job-stats-btn" :class="{ 'job-stats-btn--active': showJobStats }" @click="toggleJobStats()" :title="t('header.timesTitle')" x-text="t('header.times')"></button>
+  <button type="button" class="job-stats-btn" :class="{ 'job-stats-btn--active': showJobStats }" @click="toggleJobStats()" :title="t('header.timesTitle')" x-text="t('header.times')"></button>
   <div class="job-stats-panel" x-show="showJobStats" x-cloak>
     <div class="job-stats-title" x-text="t('jobStats.title')"></div>
     <div x-show="!jobStats" class="job-stats-loading" x-text="t('jobStats.loading')"></div>

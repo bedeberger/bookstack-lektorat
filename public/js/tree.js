@@ -1,4 +1,4 @@
-import { htmlToText, CHARS_PER_TOKEN } from './utils.js';
+import { htmlToText, CHARS_PER_TOKEN, fetchJson } from './utils.js';
 import { buildLektoratPrompt } from './prompts.js';
 
 // Buch-/Seiten-Lade-Methoden (werden in die Alpine-Komponente gespreadet)
@@ -76,7 +76,7 @@ export const treeMethods = {
     const bookId = this.selectedBookId;
     if (!bookId) return;
     try {
-      const map = await fetch('/history/page-ages/' + bookId).then(r => r.json());
+      const map = await fetchJson('/history/page-ages/' + bookId);
       if (this.selectedBookId === bookId) this.pageLastChecked = map || {};
     } catch { /* ignore */ }
   },
@@ -188,8 +188,8 @@ export const treeMethods = {
       // Gecachte Stats + Page-Ages aus DB laden
       try {
         const [statsCache, ageMap] = await Promise.all([
-          fetch('/history/page-stats/' + bookId).then(r => r.json()),
-          fetch('/history/page-ages/' + bookId).then(r => r.json()),
+          fetchJson('/history/page-stats/' + bookId),
+          fetchJson('/history/page-ages/' + bookId),
         ]);
         this.pageLastChecked = ageMap || {};
         for (const p of this.pages) {
@@ -244,7 +244,6 @@ export const treeMethods = {
     const query = `${term} {type:page} {in_book:${bookId}}`;
     try {
       const r = await fetch('/api/search?query=' + encodeURIComponent(query) + '&count=20', { signal: ctrl.signal });
-      if (r.status === 401) { location.href = '/auth/login'; return; }
       if (!r.ok) throw new Error(this.t('bs.apiError', { status: r.status }));
       const data = await r.json();
       if (seq !== this._bookstackSearchSeq) return;

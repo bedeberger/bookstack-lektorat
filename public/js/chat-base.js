@@ -2,7 +2,7 @@
 // makeChatMethods() erzeugt ein Methoden-Objekt mit konfigurierbaren
 // Property-Namen und Endpoints, das in die Alpine-Komponente gespreadet wird.
 
-import { escHtml, fmtTok, renderChatMarkdown } from './utils.js';
+import { escHtml, fmtTok, renderChatMarkdown, fetchJson } from './utils.js';
 
 export function makeChatMethods(cfg) {
   const p = cfg.props;
@@ -12,7 +12,7 @@ export function makeChatMethods(cfg) {
 
   async function loadSessions() {
     try {
-      this[p.sessions] = await fetch(cfg.sessionsUrl(this)).then(r => r.json());
+      this[p.sessions] = await fetchJson(cfg.sessionsUrl(this));
     } catch (e) {
       console.error(`[load${L}Sessions]`, e);
     }
@@ -20,7 +20,7 @@ export function makeChatMethods(cfg) {
 
   async function loadSession(sessionId) {
     try {
-      const data = await fetch('/chat/session/' + sessionId).then(r => r.json());
+      const data = await fetchJson('/chat/session/' + sessionId);
       this[p.sessionId] = data.id;
       this[p.messages] = data.messages || [];
       this[p.status] = '';
@@ -30,7 +30,7 @@ export function makeChatMethods(cfg) {
       // Reconnect: prüfen ob ein Chat-Job für diese Session noch läuft
       if (!this[p.pollTimer] && !this[p.loading]) {
         try {
-          const { jobId } = await fetch(`/jobs/active?type=${cfg.activeJobType}&book_id=${sessionId}`).then(r => r.json());
+          const { jobId } = await fetchJson(`/jobs/active?type=${cfg.activeJobType}&book_id=${sessionId}`);
           if (jobId) {
             this[p.loading] = true;
             startPoll.call(this, jobId);
@@ -48,11 +48,11 @@ export function makeChatMethods(cfg) {
     if (!cfg.canOpen(this)) return;
     try {
       if (cfg.onBeforeNewSession) await cfg.onBeforeNewSession.call(this);
-      const { id } = await fetch(cfg.newSessionUrl, {
+      const { id } = await fetchJson(cfg.newSessionUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cfg.newSessionBody(this)),
-      }).then(r => r.json());
+      });
       this[p.sessionId] = id;
       this[p.messages] = [];
       this[p.status] = '';
@@ -170,11 +170,11 @@ export function makeChatMethods(cfg) {
     this.$nextTick(() => scrollToBottom.call(this));
     if (cfg.onBeforeSend) await cfg.onBeforeSend.call(this);
     try {
-      const { jobId } = await fetch(cfg.sendUrl, {
+      const { jobId } = await fetchJson(cfg.sendUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: this[p.sessionId], message: msg }),
-      }).then(r => r.json());
+      });
       if (cfg.lsKeyFn) localStorage.setItem(cfg.lsKeyFn(this[p.sessionId]), jobId);
       startPoll.call(this, jobId);
     } catch (e) {

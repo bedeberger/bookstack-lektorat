@@ -2,7 +2,7 @@
 // `this` bezieht sich auf die Alpine-Komponente.
 // Die eigentliche Extraktion läuft als Teil von POST /jobs/komplett-analyse.
 
-import { escHtml } from './utils.js';
+import { escHtml, fetchJson } from './utils.js';
 
 export function _cleanStr(v) {
   if (v === null || v === undefined) return null;
@@ -46,7 +46,7 @@ export function _sanitizeFigur(f) {
 export const figurenMethods = {
   async loadFiguren(bookId) {
     try {
-      const data = await fetch('/figures/' + bookId).then(r => r.json());
+      const data = await fetchJson('/figures/' + bookId);
       this.figuren = (data?.figuren || []).map(_sanitizeFigur);
       this.figurenUpdatedAt = data?.updated_at || null;
       this._figurLookupIndex = null;
@@ -58,11 +58,12 @@ export const figurenMethods = {
 
   async saveFiguren() {
     try {
-      await fetch('/figures/' + this.selectedBookId, {
+      const r = await fetch('/figures/' + this.selectedBookId, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ figuren: this.figuren }),
       });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
     } catch (e) {
       console.error('[saveFiguren]', e);
     }

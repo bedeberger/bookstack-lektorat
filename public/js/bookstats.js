@@ -1,6 +1,8 @@
 // Buchschreibungsentwicklung – Zeitliniendiagramm
 // `this` zeigt auf die Alpine-Komponente (via spread in app.js)
 
+import { fetchJson } from './utils.js';
+
 const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 // Chart-Labels kommen zur Render-Zeit über t() (siehe _metricLabel()), damit sie
@@ -51,8 +53,8 @@ export const bookstatsMethods = {
   async loadBookStats(bookId) {
     try {
       const [rows, coverage] = await Promise.all([
-        fetch('/history/book-stats/' + bookId).then(r => r.json()),
-        fetch('/history/coverage/' + bookId).then(r => r.json()),
+        fetchJson('/history/book-stats/' + bookId),
+        fetchJson('/history/coverage/' + bookId),
       ]);
       this.bookStatsData = rows;
       this.bookStatsCoverage = coverage;
@@ -70,8 +72,7 @@ export const bookstatsMethods = {
     this.bookStatsLoading = true;
     this.bookStatsSyncStatus = `<span class="spinner"></span>${this.t('bookstats.syncing')}`;
     try {
-      const result = await fetch('/sync/book/' + this.selectedBookId, { method: 'POST' })
-        .then(r => r.json());
+      const result = await fetchJson('/sync/book/' + this.selectedBookId, { method: 'POST' });
       if (result.error) throw new Error(result.error);
       const localeTag = (this.uiLocale === 'en') ? 'en-US' : 'de-CH';
       const now = new Date().toLocaleTimeString(localeTag, { hour: '2-digit', minute: '2-digit' });
@@ -79,7 +80,7 @@ export const bookstatsMethods = {
       await this.loadBookStats(this.selectedBookId);
       // page_stats-Cache in tokEsts übernehmen, falls Seiten geladen
       if (this.pages.length) {
-        const cache = await fetch('/history/page-stats/' + this.selectedBookId).then(r => r.json());
+        const cache = await fetchJson('/history/page-stats/' + this.selectedBookId);
         for (const p of this.pages) {
           const c = cache[p.id];
           if (c && c.updated_at === p.updated_at) {

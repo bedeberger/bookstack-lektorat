@@ -111,10 +111,11 @@ export const chatMethods = {
       const msgId = this.chatMessages[msgIdx]?.id;
       if (msgId) {
         try {
-          await fetch(`/chat/message/${msgId}/vorschlag/${vIdx}/applied`, {
+          const r = await fetch(`/chat/message/${msgId}/vorschlag/${vIdx}/applied`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
           });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
           v().applied = true;
         } catch (e) {
           console.warn('[applyChatVorschlag] Markierung nicht persistiert:', e.message);

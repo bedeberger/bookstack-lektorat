@@ -4,7 +4,7 @@
     <span class="card-title" x-text="t('bookstats.title', { name: selectedBookName })"></span>
     <div class="card-actions">
       <span x-show="bookStatsData.length > 0 && !bookStatsLoading" class="figuren-updated-at" x-text="t('bookstats.lastSnapshot', { date: (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '') })"></span>
-      <button @click="syncBookStats()" :disabled="bookStatsLoading">
+      <button type="button" @click="syncBookStats()" :disabled="bookStatsLoading">
         <span x-show="bookStatsLoading" class="spinner"></span>
         <span x-text="bookStatsLoading ? '' : t('bookstats.sync')"></span>
       </button>
@@ -33,15 +33,15 @@
          class="combobox-wrap combobox-wrap--compact combobox-wrap--metric">
     </div>
     <div class="btn-group">
-      <button class="btn-sm" :class="{ primary: bookStatsRange === 7 }"
+      <button type="button" class="btn-sm" :class="{ primary: bookStatsRange === 7 }"
         @click="bookStatsRange = 7; renderStatsChart()" x-text="t('bookstats.range.7')"></button>
-      <button class="btn-sm" :class="{ primary: bookStatsRange === 30 }"
+      <button type="button" class="btn-sm" :class="{ primary: bookStatsRange === 30 }"
         @click="bookStatsRange = 30; renderStatsChart()" x-text="t('bookstats.range.30')"></button>
-      <button class="btn-sm" :class="{ primary: bookStatsRange === 90 }"
+      <button type="button" class="btn-sm" :class="{ primary: bookStatsRange === 90 }"
         @click="bookStatsRange = 90; renderStatsChart()" x-text="t('bookstats.range.90')"></button>
-      <button class="btn-sm" :class="{ primary: bookStatsRange === 365 }"
+      <button type="button" class="btn-sm" :class="{ primary: bookStatsRange === 365 }"
         @click="bookStatsRange = 365; renderStatsChart()" x-text="t('bookstats.range.365')"></button>
-      <button class="btn-sm" :class="{ primary: bookStatsRange === 0 }"
+      <button type="button" class="btn-sm" :class="{ primary: bookStatsRange === 0 }"
         @click="bookStatsRange = 0; renderStatsChart()" x-text="t('bookstats.range.all')"></button>
     </div>
   </div>

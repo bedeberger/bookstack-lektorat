@@ -57,8 +57,8 @@
     <span class="user-email" x-text="currentUser?.name || currentUser?.email"></span>
     <div id="partial-komplett-status"></div>
     <div id="partial-job-stats"></div>
-    <button class="theme-toggle" @click="cycleTheme()" :title="t('theme.cycleTitle', { label: _themeLabel() })" x-text="_themeLabel()"></button>
-    <button class="theme-toggle" :class="{ 'theme-toggle--active': showUserSettingsCard }" @click="toggleUserSettingsCard()" :title="t('header.profileTitle')" x-text="t('header.profile')"></button>
+    <button type="button" class="theme-toggle" @click="cycleTheme()" :title="t('theme.cycleTitle', { label: _themeLabel() })" x-text="_themeLabel()"></button>
+    <button type="button" class="theme-toggle" :class="{ 'theme-toggle--active': showUserSettingsCard }" @click="toggleUserSettingsCard()" :title="t('header.profileTitle')" x-text="t('header.profile')"></button>
     <a href="/auth/logout" class="logout-link" x-text="t('header.logout')"></a>
   </div>
 </div>
@@ -89,7 +89,7 @@
              @input="onBookstackSearchInput()"
              @keydown.escape="clearBookstackSearch()"
              :placeholder="t('book.search.placeholder')">
-      <button class="bookstack-search-clear"
+      <button type="button" class="bookstack-search-clear"
               x-show="bookstackSearch"
               @click="clearBookstackSearch()"
               :title="t('book.search.clear')"
@@ -110,39 +110,39 @@
 
   <!-- Feature-Tiles: Buchanalyse -->
   <div class="feature-tiles">
-    <button class="feature-tile" :class="{ 'feature-tile--active': showBookReviewCard }" @click="toggleBookReviewCard()">
+    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showBookReviewCard }" @click="toggleBookReviewCard()">
       <span class="feature-tile-title" x-text="t('tile.review')"></span>
       <span class="feature-tile-desc" x-text="t('tile.review.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showFiguresCard }" @click="toggleFiguresCard()" :title="t('tile.figuren.title')">
+    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showFiguresCard }" @click="toggleFiguresCard()" :title="t('tile.figuren.title')">
       <span class="feature-tile-title" x-text="t('tile.figuren')"></span>
       <span class="feature-tile-desc" x-text="t('tile.figuren.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showSzenenCard }" @click="toggleSzenenCard()" :title="t('tile.szenen.title')">
+    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showSzenenCard }" @click="toggleSzenenCard()" :title="t('tile.szenen.title')">
       <span class="feature-tile-title" x-text="t('tile.szenen')"></span>
       <span class="feature-tile-desc" x-text="t('tile.szenen.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showBookStatsCard }" @click="toggleBookStatsCard()" :title="t('tile.stats.title')">
+    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showBookStatsCard }" @click="toggleBookStatsCard()" :title="t('tile.stats.title')">
       <span class="feature-tile-title" x-text="t('tile.stats')"></span>
       <span class="feature-tile-desc" x-text="t('tile.stats.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showBookChatCard }" @click="toggleBookChatCard()" :disabled="!pages.length" :title="t('tile.bookchat.title')">
+    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showBookChatCard }" @click="toggleBookChatCard()" :disabled="!pages.length" :title="t('tile.bookchat.title')">
       <span class="feature-tile-title" x-text="t('tile.bookchat')"></span>
       <span class="feature-tile-desc" x-text="t('tile.bookchat.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showEreignisseCard }" @click="toggleEreignisseCard()" :title="t('tile.events.title')">
+    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showEreignisseCard }" @click="toggleEreignisseCard()" :title="t('tile.events.title')">
       <span class="feature-tile-title" x-text="t('tile.events')"></span>
       <span class="feature-tile-desc" x-text="t('tile.events.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showOrteCard }" @click="toggleOrteCard()" :title="t('tile.orte.title')">
+    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showOrteCard }" @click="toggleOrteCard()" :title="t('tile.orte.title')">
       <span class="feature-tile-title" x-text="t('tile.orte')"></span>
       <span class="feature-tile-desc" x-text="t('tile.orte.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showKontinuitaetCard }" @click="toggleKontinuitaetCard()" :title="t('tile.kontinuitaet.title')">
+    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showKontinuitaetCard }" @click="toggleKontinuitaetCard()" :title="t('tile.kontinuitaet.title')">
       <span class="feature-tile-title" x-text="t('tile.kontinuitaet')"></span>
       <span class="feature-tile-desc" x-text="t('tile.kontinuitaet.desc')"></span>
     </button>
-    <button class="feature-tile" :class="{ 'feature-tile--active': showBookSettingsCard }" @click="toggleBookSettingsCard()" :title="t('tile.bookSettings.title')">
+    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showBookSettingsCard }" @click="toggleBookSettingsCard()" :title="t('tile.bookSettings.title')">
       <span class="feature-tile-title" x-text="t('tile.bookSettings')"></span>
       <span class="feature-tile-desc" x-text="t('tile.bookSettings.desc')"></span>
     </button>
@@ -184,7 +184,7 @@
       <template x-if="job.status === 'running' && job.progress > 0">
         <span class="job-queue-pill-progress" x-text="job.progress + '%'"></span>
       </template>
-      <button class="job-queue-cancel-btn" @click.stop="cancelJob(job.id)" :title="t('jobQueue.cancel')">&#x2715;</button>
+      <button type="button" class="job-queue-cancel-btn" @click.stop="cancelJob(job.id)" :title="t('jobQueue.cancel')">&#x2715;</button>
     </div>
   </template>
 </div>

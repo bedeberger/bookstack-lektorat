@@ -3,7 +3,7 @@
   <div class="card-header">
     <span class="card-title" x-text="t('profile.title')"></span>
     <div class="card-actions">
-      <button @click="saveUserSettings()" :disabled="userSettingsSaving || userSettingsLoading">
+      <button type="button" @click="saveUserSettings()" :disabled="userSettingsSaving || userSettingsLoading">
         <span x-show="userSettingsSaving" class="spinner"></span>
         <span x-text="userSettingsSaving ? t('common.saving') : t('common.save')"></span>
       </button>
@@ -111,7 +111,7 @@
               <option :value="b.id" x-text="b.name"></option>
             </template>
           </select>
-          <button
+          <button type="button"
             class="book-settings-btn-danger"
             @click="resetBookHistory()"
             :disabled="bookHistoryResetLoading || !userSettingsDangerBookId">

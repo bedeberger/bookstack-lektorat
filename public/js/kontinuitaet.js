@@ -1,7 +1,7 @@
 // Kontinuitätsprüfer-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 
-import { escHtml } from './utils.js';
+import { escHtml, fetchJson } from './utils.js';
 
 export const kontinuitaetMethods = {
   async toggleKontinuitaetCard() {
@@ -13,7 +13,7 @@ export const kontinuitaetMethods = {
     // Prüfen ob bereits ein Job läuft
     if (!this._kontinuitaetPollTimer && !this.kontinuitaetLoading) {
       try {
-        const { jobId } = await fetch(`/jobs/active?type=kontinuitaet&book_id=${this.selectedBookId}`).then(r => r.json());
+        const { jobId } = await fetchJson(`/jobs/active?type=kontinuitaet&book_id=${this.selectedBookId}`);
         if (jobId) {
           this.kontinuitaetLoading = true;
           this.kontinuitaetProgress = 0;
@@ -28,7 +28,7 @@ export const kontinuitaetMethods = {
 
   async _loadKontinuitaetHistory() {
     try {
-      const data = await fetch('/jobs/kontinuitaet/' + this.selectedBookId).then(r => r.json());
+      const data = await fetchJson('/jobs/kontinuitaet/' + this.selectedBookId);
       this.kontinuitaetResult = data;
     } catch (e) {
       console.error('[_loadKontinuitaetHistory]', e);
@@ -76,11 +76,11 @@ export const kontinuitaetMethods = {
     this.kontinuitaetStatus = this.t('kontinuitaet.starting');
     this.kontinuitaetResult = null;
     try {
-      const { jobId } = await fetch('/jobs/kontinuitaet', {
+      const { jobId } = await fetchJson('/jobs/kontinuitaet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName }),
-      }).then(r => r.json());
+      });
       localStorage.setItem('lektorat_kontinuitaet_job_' + bookId, jobId);
       this.startKontinuitaetPoll(jobId);
     } catch (e) {

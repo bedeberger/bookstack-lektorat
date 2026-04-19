@@ -3,7 +3,7 @@
   <div class="card-header">
     <span class="card-title" x-text="t('review.title', { name: selectedBookName })"></span>
     <div class="card-actions">
-      <button @click="runBookReview()" :disabled="bookReviewLoading">
+      <button type="button" @click="runBookReview()" :disabled="bookReviewLoading">
         <span x-show="bookReviewLoading" class="spinner"></span>
         <span x-text="bookReviewOut ? t('review.rerun') : t('review.start')"></span>
       </button>
@@ -53,7 +53,7 @@
             </div>
           </div>
           <div x-show="entry.review_json?.fazit" class="fazit" x-text="entry.review_json?.fazit"></div>
-          <button class="btn-delete-history" @click.stop="deleteBookReview(entry.id)" :title="t('common.deleteEntry')" x-text="t('common.deleteEntry')"></button>
+          <button type="button" class="btn-delete-history" @click.stop="deleteBookReview(entry.id)" :title="t('common.deleteEntry')" x-text="t('common.deleteEntry')"></button>
         </div>
       </div>
     </template>

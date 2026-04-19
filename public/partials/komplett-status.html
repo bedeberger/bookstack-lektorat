@@ -1,10 +1,10 @@
 <!-- Komplettanalyse: Button + Cache-Clear + Fortschritts-Panel -->
 <div class="komplett-status-wrap" @click.outside="showKomplettStatus = false" @mouseenter="if (alleAktualisierenLoading) showKomplettStatus = true" :data-lastrun="(!alleAktualisierenLoading && alleAktualisierenLastRun) ? t('common.asOf', { date: alleAktualisierenLastRun }) : null">
-  <button class="job-stats-btn" @click="alleAktualisieren()" :disabled="alleAktualisierenLoading || !selectedBookId" :title="t('header.updateAllTitle')">
+  <button type="button" class="job-stats-btn" @click="alleAktualisieren()" :disabled="alleAktualisierenLoading || !selectedBookId" :title="t('header.updateAllTitle')">
     <span x-show="alleAktualisierenLoading" class="spinner"></span>
     <span x-text="t('header.updateAll')"></span>
   </button>
-  <button class="cache-clear-btn" @click="clearChapterCache()" :disabled="alleAktualisierenLoading || !selectedBookId" :title="t('header.clearCacheTitle')" x-text="t('header.clearCache')"></button>
+  <button type="button" class="cache-clear-btn" @click="clearChapterCache()" :disabled="alleAktualisierenLoading || !selectedBookId" :title="t('header.clearCacheTitle')" x-text="t('header.clearCache')"></button>
   <div class="komplett-status-panel" x-show="showKomplettStatus" x-cloak>
     <div class="komplett-status-title" x-text="t('komplett.title')"></div>
     <div class="progress-bar-wrap komplett-progress-bar-wrap">
@@ -15,7 +15,7 @@
       <span x-show="alleAktualisierenTokIn > 0 || alleAktualisierenTokOut > 0" class="komplett-tokens" x-text="`↑${_fmtTok(alleAktualisierenTokIn)} ↓${_fmtTok(alleAktualisierenTokOut)}${alleAktualisierenTps ? ' · ' + Math.round(alleAktualisierenTps) + ' tok/s' : ''}`"></span>
     </div>
     <ul class="komplett-phase-list">
-      <template x-for="phase in _komplettPhasen()">
+      <template x-for="phase in _komplettPhasen()" :key="phase.key || phase.label">
         <li class="komplett-phase-item" :class="{ 'is-done': phase.done, 'is-active': phase.active }">
           <span class="komplett-phase-icon" x-text="phase.done ? '✓' : (phase.active ? '→' : '○')"></span>
           <span x-text="phase.label"></span>

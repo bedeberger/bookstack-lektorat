@@ -1,6 +1,28 @@
 // Zeichenanzahl pro Token für deutschen Text (Komposita, Umlaute → dichter als Englisch).
 export const CHARS_PER_TOKEN = 3;
 
+/**
+ * Fetch mit Pflicht-OK-Check und JSON-Parsing. Wirft bei HTTP-Fehlern,
+ * damit der `.then(r => r.json())`-Pattern nicht stillschweigend HTML-
+ * Fehlerseiten als JSON parst. 401 läuft durch den globalen fetch-Wrapper
+ * in app.js (dispatcht `session-expired`) und wirft hier dann einen Fehler.
+ */
+export async function fetchJson(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) {
+    let detail = '';
+    try { const e = await r.clone().json(); detail = e.error || e.message || ''; } catch (_) {}
+    throw new Error(detail ? `HTTP ${r.status}: ${detail}` : `HTTP ${r.status}`);
+  }
+  return r.json();
+}
+
+export async function fetchText(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.text();
+}
+
 // Sicherheitscheck vor dem Speichern: < 50 % wirkt unvollständig → Abbruch
 export const SAFETY_HTML_RATIO = 0.5;
 

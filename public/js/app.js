@@ -1,4 +1,4 @@
-import { escHtml, htmlToText, fmtTok, stripFocusArtefacts } from './utils.js';
+import { escHtml, htmlToText, fmtTok, stripFocusArtefacts, fetchJson, fetchText } from './utils.js';
 import { configurePrompts } from './prompts.js';
 
 import { bookstackMethods } from './api-bookstack.js';
@@ -1055,8 +1055,7 @@ document.addEventListener('alpine:init', () => {
     async clearChapterCache() {
       if (!this.selectedBookId) return;
       if (!confirm(this.t('app.cacheClearConfirm'))) return;
-      const res = await fetch(`/jobs/chapter-cache/${this.selectedBookId}`, { method: 'DELETE' });
-      const { deleted } = await res.json();
+      const { deleted } = await fetchJson(`/jobs/chapter-cache/${this.selectedBookId}`, { method: 'DELETE' });
       alert(this.t('app.cacheCleared', { n: deleted }));
     },
 
@@ -1073,11 +1072,11 @@ document.addEventListener('alpine:init', () => {
       const bookName = this.selectedBookName;
       try {
         this.alleAktualisierenStatus = this.t('komplett.started');
-        const { jobId } = await fetch('/jobs/komplett-analyse', {
+        const { jobId } = await fetchJson('/jobs/komplett-analyse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName }),
-        }).then(r => r.json());
+        });
         this._startKomplettPoll(jobId, bookId);
       } catch (e) {
         console.error('[alleAktualisieren]', e);
@@ -1126,7 +1125,7 @@ document.addEventListener('alpine:init', () => {
     async loadLastKomplettRun(bookId) {
       if (!bookId) return;
       try {
-        const { lastRunFmt } = await fetch(`/jobs/last-run?type=komplett-analyse&book_id=${bookId}`).then(r => r.json());
+        const { lastRunFmt } = await fetchJson(`/jobs/last-run?type=komplett-analyse&book_id=${bookId}`);
         this.alleAktualisierenLastRun = lastRunFmt || null;
       } catch { this.alleAktualisierenLastRun = null; }
     },
@@ -1181,7 +1180,7 @@ document.addEventListener('alpine:init', () => {
         if (empty.length === 0) return 0;
         await Promise.all(empty.map(async el => {
           const name = el.id.replace(/^partial-/, '');
-          const html = await fetch(`/partials/${name}.html`).then(r => r.text());
+          const html = await fetchText(`/partials/${name}.html`);
           el.innerHTML = html;
           Alpine.initTree(el);
         }));
@@ -1224,7 +1223,7 @@ document.addEventListener('alpine:init', () => {
         if (this.editMode && this.editDirty) { e.preventDefault(); e.returnValue = ''; }
       });
       try {
-        const cfg = await fetch('/config').then(r => r.json());
+        const cfg = await fetchJson('/config');
         const browserLoc = (navigator.language || 'de').slice(0, 2);
         const preferred  = cfg.userSettings?.locale || browserLoc || 'de';
         const supported  = getSupportedLocales();
@@ -1292,7 +1291,7 @@ document.addEventListener('alpine:init', () => {
       this.showJobStats = !this.showJobStats;
       if (this.showJobStats) {
         try {
-          this.jobStats = await fetch('/jobs/stats').then(r => r.json());
+          this.jobStats = await fetchJson('/jobs/stats');
         } catch {
           this.jobStats = [];
         }
@@ -1303,7 +1302,7 @@ document.addEventListener('alpine:init', () => {
       if (this._jobQueueTimer) clearInterval(this._jobQueueTimer);
       const poll = async () => {
         try {
-          this.jobQueueItems = await fetch('/jobs/queue').then(r => r.json());
+          this.jobQueueItems = await fetchJson('/jobs/queue');
         } catch { /* ignorieren */ }
       };
       poll();
@@ -1361,7 +1360,7 @@ document.addEventListener('alpine:init', () => {
 
       // Prüfen ob ein Lektorat-Check-Job für diese Seite läuft (Server-seitig oder aus früherer Session)
       try {
-        const { jobId: activeJobId } = await fetch(`/jobs/active?type=check&page_id=${p.id}`).then(r => r.json());
+        const { jobId: activeJobId } = await fetchJson(`/jobs/active?type=check&page_id=${p.id}`);
         if (activeJobId) {
           localStorage.setItem('lektorat_check_job_' + p.id, activeJobId);
           this.checkLoading = true;
@@ -1442,9 +1441,9 @@ document.addEventListener('alpine:init', () => {
       // Prüfen ob ein komplett-analyse Job vom Server noch läuft (z.B. Tab geschlossen)
       if (!this.alleAktualisierenLoading) {
         try {
-          const { jobId, status, progress, statusText, statusParams } = await fetch(
+          const { jobId, status, progress, statusText, statusParams } = await fetchJson(
             `/jobs/active?type=komplett-analyse&book_id=${bookId}`
-          ).then(r => r.json());
+          );
           if (jobId && (status === 'running' || status === 'queued')) {
             this.alleAktualisierenLoading = true;
             this.alleAktualisierenProgress = progress || 0;
@@ -1484,7 +1483,7 @@ document.addEventListener('alpine:init', () => {
       // Prüfen ob bereits ein Batch-Check-Job für dieses Buch läuft
       if (!this._batchPollTimer && !this.batchLoading && this.selectedBookId) {
         try {
-          const { jobId } = await fetch(`/jobs/active?type=batch-check&book_id=${this.selectedBookId}`).then(r => r.json());
+          const { jobId } = await fetchJson(`/jobs/active?type=batch-check&book_id=${this.selectedBookId}`);
           if (jobId) {
             this.batchLoading = true;
             this.batchProgress = 0;

@@ -1,7 +1,7 @@
 // Seitenansicht-Methoden: Formatierte HTML-Ansicht mit Inline-Fehlermarkierung
 // und Figurenkontext-Panel. `this` bezieht sich auf die Alpine-Komponente.
 
-import { escHtml, htmlToText } from './utils.js';
+import { escHtml, htmlToText, fetchJson } from './utils.js';
 import { tRaw } from './i18n.js';
 import { _sanitizeFigur } from './figuren.js';
 
@@ -221,7 +221,7 @@ export const pageViewMethods = {
       return;
     }
     try {
-      const data = await fetch(`/figures/chapter/${this.selectedBookId}/${this.currentPage.chapter_id}`).then(r => r.json());
+      const data = await fetchJson(`/figures/chapter/${this.selectedBookId}/${this.currentPage.chapter_id}`);
       this.chapterFigures = (data?.figuren || []).map(_sanitizeFigur);
     } catch (e) {
       console.error('[loadChapterFigures]', e);

@@ -1,3 +1,5 @@
+import { fetchJson } from './utils.js';
+
 export const userSettingsMethods = {
 
   async toggleUserSettingsCard() {
@@ -10,7 +12,7 @@ export const userSettingsMethods = {
   async loadUserSettings() {
     this.userSettingsLoading = true;
     try {
-      const data = await fetch('/me/settings').then(r => r.json());
+      const data = await fetchJson('/me/settings');
       this.userSettingsProfile         = { email: data.email, name: data.name, created_at: data.created_at, last_login_at: data.last_login_at };
       this.userSettingsDefaultLanguage = data.default_language || '';
       this.userSettingsDefaultRegion   = data.default_region   || '';
@@ -36,8 +38,11 @@ export const userSettingsMethods = {
           default_buchtyp:  this.userSettingsDefaultBuchtyp  || null,
         }),
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(this.tError(data));
+      if (!r.ok) {
+        let data = null;
+        try { data = await r.json(); } catch (_) {}
+        throw new Error(data ? this.tError(data) : `HTTP ${r.status}`);
+      }
       this.userSettingsSaved = true;
       setTimeout(() => { this.userSettingsSaved = false; }, 3000);
     } catch (e) {
@@ -59,8 +64,12 @@ export const userSettingsMethods = {
     this.bookHistoryResetError   = '';
     try {
       const r = await fetch(`/history/book/${bookId}`, { method: 'DELETE' });
+      if (!r.ok) {
+        let errData = null;
+        try { errData = await r.json(); } catch (_) {}
+        throw new Error(errData ? this.tError(errData) : `HTTP ${r.status}`);
+      }
       const data = await r.json();
-      if (!r.ok) throw new Error(this.tError(data));
       const d = data.deleted || {};
       this.bookHistoryResetMessage = this.t('userSettings.resetSummary', {
         lektorate: d.page_checks || 0,

@@ -45,10 +45,17 @@ function findBlockAtViewportCenter(container, visibleBlocks) {
   return best;
 }
 
+// Räumt defensiv ALLE Active-Markierungen ab und setzt – falls gewünscht –
+// genau eine neue. querySelectorAll statt querySelector, weil Chromium beim
+// Paragraph-Split in contenteditable die Klasse auf beide <p> kopiert (Enter
+// im aktiven Absatz); ohne Vollscan bleibt die „Leiche" stehen und es wirkt,
+// als seien zwei Absätze aktiv. block=null → alles ausgrauen.
 function setActiveBlock(container, block) {
   if (!container) return;
-  const prev = container.querySelector('.focus-paragraph-active');
-  if (prev && prev !== block) prev.classList.remove('focus-paragraph-active');
+  const prevs = container.querySelectorAll('.focus-paragraph-active');
+  for (const prev of prevs) {
+    if (prev !== block) prev.classList.remove('focus-paragraph-active');
+  }
   if (block && !block.classList.contains('focus-paragraph-active')) {
     block.classList.add('focus-paragraph-active');
   }

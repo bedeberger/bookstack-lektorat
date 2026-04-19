@@ -1,4 +1,4 @@
-import { escHtml } from './utils.js';
+import { escHtml, fetchJson } from './utils.js';
 
 // Ereignisse/Zeitstrahl-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -60,7 +60,7 @@ export const ereignisseMethods = {
   async _reloadZeitstrahl() {
     if (this.zeitstrahlConsolidating) return;
     try {
-      const { ereignisse } = await fetch(`/figures/zeitstrahl/${this.selectedBookId}`).then(r => r.json());
+      const { ereignisse } = await fetchJson(`/figures/zeitstrahl/${this.selectedBookId}`);
       if (ereignisse) {
         this.globalZeitstrahl = ereignisse;
       } else if (!this.globalZeitstrahl.length) {

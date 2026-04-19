@@ -119,11 +119,19 @@ function createJob(type, bookId, userEmail, label, labelParams = null) {
   jobAbortControllers.set(id, new AbortController());
   try { insertJobRun({ id, type, bookId: String(bookId), userEmail, label }); } catch (e) { logger.error(`[${type}|${userEmail || '-'}|${bookId}] insertJobRun: ${e.message}`); }
   runningJobs.set(key, id);
-  // Auto-Cleanup nach 2 Stunden
-  setTimeout(() => {
+  // Auto-Cleanup nach 2 Stunden – aber nur, wenn der Job bereits terminal ist.
+  // Sonst läuft er evtl. noch (z.B. grosse Komplettanalyse) und würde
+  // mitten im Response-Zyklus aus der Map verschwinden.
+  const scheduleCleanup = () => setTimeout(() => {
+    const job = jobs.get(id);
+    if (job && (job.status === 'running' || job.status === 'queued')) {
+      scheduleCleanup();
+      return;
+    }
     jobs.delete(id);
     if (runningJobs.get(key) === id) runningJobs.delete(key);
   }, 7200000);
+  scheduleCleanup();
   return id;
 }
 

@@ -20,7 +20,7 @@
   </div>
   <p class="token-setup-error" x-show="tokenSetupError" x-text="tokenSetupError"></p>
   <div class="row">
-    <button @click="saveBookstackToken()" :disabled="tokenSetupLoading">
+    <button type="button" @click="saveBookstackToken()" :disabled="tokenSetupLoading">
       <span x-show="tokenSetupLoading" class="spinner"></span>
       <span x-text="tokenSetupLoading ? t('common.saving') : t('common.save')"></span>
     </button>

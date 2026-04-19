@@ -1,12 +1,12 @@
 // Schauplatz-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 
-import { escHtml } from './utils.js';
+import { escHtml, fetchJson } from './utils.js';
 
 export const orteMethods = {
   async loadOrte(bookId) {
     try {
-      const data = await fetch('/locations/' + bookId).then(r => r.json());
+      const data = await fetchJson('/locations/' + bookId);
       this.orte = data?.orte || [];
       this.orteUpdatedAt = data?.updated_at || null;
     } catch (e) {
@@ -16,11 +16,12 @@ export const orteMethods = {
 
   async saveOrte() {
     try {
-      await fetch('/locations/' + this.selectedBookId, {
+      const r = await fetch('/locations/' + this.selectedBookId, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orte: this.orte }),
       });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
     } catch (e) {
       console.error('[saveOrte]', e);
     }

@@ -1,4 +1,4 @@
-import { escHtml } from './utils.js';
+import { escHtml, fetchJson } from './utils.js';
 
 // Synonym-Ermittler für den contenteditable-Editor.
 // Rechtsklick auf ein markiertes Einzelwort → Custom-Menü → KI-Call →
@@ -159,8 +159,7 @@ export const synonymMethods = {
 
     // OpenThesaurus: paralleler Sync-Call, keine Job-Queue
     const thesUrl = `/openthesaurus/synonyms?word=${encodeURIComponent(wort)}` + (bookId ? `&book_id=${bookId}` : '');
-    fetch(thesUrl)
-      .then(r => r.json())
+    fetchJson(thesUrl)
       .then(d => {
         this.synonymThesDisabled = !!d.disabled;
         this.synonymThesList = Array.isArray(d.synonyme) ? d.synonyme : [];
@@ -176,11 +175,11 @@ export const synonymMethods = {
 
     // KI via Job-Queue (bestehend)
     try {
-      const { jobId, error } = await fetch('/jobs/synonym', {
+      const { jobId, error } = await fetchJson('/jobs/synonym', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wort, satz, book_id: bookId }),
-      }).then(r => r.json());
+      });
       if (!jobId) throw new Error(error || this.t('synonym.jobFailed'));
       this._synonymJobId = jobId;
       this._startSynonymPoll(jobId);

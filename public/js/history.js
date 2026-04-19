@@ -1,13 +1,13 @@
 // History-Methoden (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
 
-import { escHtml, stripFocusArtefacts } from './utils.js';
+import { escHtml, stripFocusArtefacts, fetchJson } from './utils.js';
 import { sortByPosition, SOFT_TYPEN } from './page-view.js';
 
 export const historyMethods = {
   async loadPageHistory(pageId) {
     try {
-      this.pageHistory = await fetch('/history/page/' + pageId).then(r => r.json());
+      this.pageHistory = await fetchJson('/history/page/' + pageId);
     } catch (e) {
       console.error('[loadPageHistory]', e);
     }
@@ -52,7 +52,7 @@ export const historyMethods = {
 
   async loadBookReviewHistory(bookId) {
     try {
-      this.bookReviewHistory = await fetch('/history/review/' + bookId).then(r => r.json());
+      this.bookReviewHistory = await fetchJson('/history/review/' + bookId);
     } catch (e) {
       console.error('[loadBookReviewHistory]', e);
     }

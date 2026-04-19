@@ -11,7 +11,6 @@ export const bookstackMethods = {
     const timer = setTimeout(() => ctrl.abort(new Error(this.t('bs.timeoutGet'))), 30000);
     try {
       const r = await fetch('/api/' + path, { signal: ctrl.signal });
-      if (r.status === 401) { location.href = '/auth/login'; return; }
       if (!r.ok) throw new Error(this.t('bs.apiError', { status: r.status }));
       return r.json();
     } catch (e) {
@@ -47,7 +46,6 @@ export const bookstackMethods = {
         body: JSON.stringify(body),
         signal: ctrl.signal,
       });
-      if (r.status === 401) { location.href = '/auth/login'; return; }
       if (!r.ok) {
         let detail = '';
         try { const e = await r.json(); detail = e.message || e.error || ''; } catch (_) {}

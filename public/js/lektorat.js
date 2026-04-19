@@ -1,4 +1,4 @@
-import { escHtml } from './utils.js';
+import { escHtml, fetchJson } from './utils.js';
 import { sortByPosition, SOFT_TYPEN } from './page-view.js';
 
 // Lektorat-Workflow-Methoden (werden in die Alpine-Komponente gespreadet)
@@ -54,7 +54,7 @@ export const lektoratMethods = {
     this.setStatus(this.t('lektorat.starting'), true);
 
     try {
-      const { jobId } = await fetch('/jobs/check', {
+      const { jobId } = await fetchJson('/jobs/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -62,7 +62,7 @@ export const lektoratMethods = {
           book_id: this.currentPage.book_id || null,
           page_name: this.currentPage.name || null,
         }),
-      }).then(r => r.json());
+      });
       if (this.currentPage?.id !== pageIdAtStart) return;
       localStorage.setItem('lektorat_check_job_' + this.currentPage.id, jobId);
       this.startCheckPoll(jobId);
@@ -183,11 +183,12 @@ export const lektoratMethods = {
               selectedAll = merge(entry.selected_errors_json, selected);
             }
           }
-          await fetch('/history/check/' + this.lastCheckId + '/saved', {
+          const r = await fetch('/history/check/' + this.lastCheckId + '/saved', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ applied_errors_json: applied, selected_errors_json: selectedAll }),
           });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
           await this.loadPageHistory(this.currentPage.id);
         } catch (e) { console.error('[history saved]', e); }
       }
@@ -218,11 +219,11 @@ export const lektoratMethods = {
     this.batchProgress = 0;
     this.batchStatus = this._runningJobStatus(this.t('common.starting'), 0, 0);
     try {
-      const { jobId } = await fetch('/jobs/batch-check', {
+      const { jobId } = await fetchJson('/jobs/batch-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ book_id: parseInt(this.selectedBookId), book_name: this.selectedBookName || null }),
-      }).then(r => r.json());
+      });
       localStorage.setItem('lektorat_batchcheck_job_' + this.selectedBookId, jobId);
       this.startBatchPoll(jobId);
     } catch (e) {

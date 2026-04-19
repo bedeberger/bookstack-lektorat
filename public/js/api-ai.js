@@ -100,7 +100,8 @@ export const aiMethods = {
     let tokensIn = 0, tokensOut = 0;
     let t_first = 0, t_last = 0;
 
-    while (true) {
+    let streamDone = false;
+    while (!streamDone) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
@@ -109,7 +110,7 @@ export const aiMethods = {
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
         const raw = line.slice(6);
-        if (raw === '[DONE]') break;
+        if (raw === '[DONE]') { streamDone = true; break; }
         try {
           const ev = JSON.parse(raw);
           if (ev.type === 'message_start' && ev.message?.usage) {
@@ -129,6 +130,7 @@ export const aiMethods = {
         }
       }
     }
+    try { await reader.cancel(); } catch (_) {}
 
     const genDurationMs = (t_first && t_last > t_first) ? t_last - t_first : null;
     const tokPerSec = (genDurationMs && tokensOut > 0) ? Math.round(tokensOut / (genDurationMs / 1000)) : null;
