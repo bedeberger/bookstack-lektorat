@@ -6,19 +6,20 @@
 //  - Auth/KI/Job-Queue/SSE: Network-Only, nie cachen
 //  - Version-Bump der Konstanten invalidiert den jeweiligen Cache
 
-const SHELL_CACHE = 'lektorat-shell-v1';
-const API_CACHE = 'lektorat-api-v1';
-const ACTIVE_CACHES = new Set([SHELL_CACHE, API_CACHE]);
+const SHELL_CACHE = 'lektorat-shell-v2';
+const API_CACHE = 'lektorat-api-v2';
+const CONFIG_CACHE = 'lektorat-config-v1';
+const ACTIVE_CACHES = new Set([SHELL_CACHE, API_CACHE, CONFIG_CACHE]);
 const SHELL_PATH = '/index.html';
+const CONFIG_PATH = '/config';
 
 // Pfade, die niemals aus dem Cache kommen dürfen (dynamische/auth-pflichtige Daten, Streams).
-// /api/* ist bewusst NICHT hier – wird in handleApi() separat behandelt.
+// /api/* und /config sind bewusst NICHT hier – sie haben eigene SWR-Handler.
 const NEVER_CACHE_PREFIXES = [
   '/auth/',
   '/claude',
   '/ollama',
   '/llama',
-  '/config',
   '/jobs',
   '/history',
   '/figures',
@@ -28,7 +29,7 @@ const NEVER_CACHE_PREFIXES = [
   '/booksettings',
 ];
 
-const SHELL_ASSET_REGEX = /\.(?:css|js|mjs|svg|ico|png|woff2?)$/i;
+const SHELL_ASSET_REGEX = /\.(?:css|js|mjs|json|svg|ico|png|woff2?)$/i;
 const PARTIAL_REGEX = /^\/partials\//;
 
 function isShellRequest(url) {
@@ -114,6 +115,29 @@ async function handleApi(req) {
   });
 }
 
+// /config liefert Session-User + Provider-Config. SWR, damit wiederkehrende
+// Offline-User den App-Shell-Bootstrap komplett durchlaufen können. 401/Fehler
+// werden nicht gecacht (via res.ok-Check), damit Login-Redirects nicht festfrieren.
+async function handleConfig(req) {
+  const cache = await caches.open(CONFIG_CACHE);
+  const cached = await cache.match(CONFIG_PATH);
+  const netPromise = fetch(req).then((res) => {
+    if (res && res.ok && res.type !== 'opaqueredirect') cache.put(CONFIG_PATH, res.clone());
+    return res;
+  }).catch(() => null);
+
+  if (cached) {
+    netPromise.catch(() => {});
+    return cached;
+  }
+  const net = await netPromise;
+  if (net) return net;
+  return new Response(JSON.stringify({ error: 'offline' }), {
+    status: 503,
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+  });
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -124,6 +148,10 @@ self.addEventListener('fetch', (event) => {
 
   if (req.mode === 'navigate') {
     event.respondWith(handleNavigate(req));
+    return;
+  }
+  if (url.pathname === CONFIG_PATH) {
+    event.respondWith(handleConfig(req));
     return;
   }
   if (url.pathname.startsWith('/api/')) {

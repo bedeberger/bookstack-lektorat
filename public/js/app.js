@@ -385,17 +385,39 @@ document.addEventListener('alpine:init', () => {
       window.addEventListener('beforeunload', (e) => {
         if (this.editMode && this.editDirty) { e.preventDefault(); e.returnValue = ''; }
       }, { signal });
+      // Shell zuerst aufbauen: i18n + Partials brauchen nur statische Assets
+      // (Service Worker cacht sie). /config kann danach scheitern, ohne dass
+      // das UI leer bleibt – Offline-Banner erscheint stattdessen.
+      const browserLoc = (navigator.language || 'de').slice(0, 2);
+      const supported  = getSupportedLocales();
+      const fallbackLocale = supported.includes(browserLoc) ? browserLoc : 'de';
       try {
-        const cfg = await fetchJson('/config');
-        const browserLoc = (navigator.language || 'de').slice(0, 2);
-        const preferred  = cfg.userSettings?.locale || browserLoc || 'de';
-        const supported  = getSupportedLocales();
-        const locale = supported.includes(preferred) ? preferred : 'de';
-        await configureI18n(locale);
-        this.uiLocale = locale;
-        document.documentElement.setAttribute('lang', locale);
+        await configureI18n(fallbackLocale);
+        this.uiLocale = fallbackLocale;
+        document.documentElement.setAttribute('lang', fallbackLocale);
         await this._loadPartials();
         this._installToolbarListeners();
+      } catch (e) {
+        console.error('[init:shell]', e);
+      }
+
+      let cfg = null;
+      try {
+        cfg = await fetchJson('/config');
+      } catch (e) {
+        console.error('[init:config]', e);
+        this.serverOffline = true;
+        return;
+      }
+
+      try {
+        const preferred = cfg.userSettings?.locale || browserLoc || 'de';
+        const locale = supported.includes(preferred) ? preferred : 'de';
+        if (locale !== this.uiLocale) {
+          await configureI18n(locale);
+          this.uiLocale = locale;
+          document.documentElement.setAttribute('lang', locale);
+        }
         this.bookstackUrl = cfg.bookstackUrl || '';
         if (cfg.claudeModel) this.claudeModel = cfg.claudeModel;
         if (cfg.claudeMaxTokens) this.claudeMaxTokens = cfg.claudeMaxTokens;

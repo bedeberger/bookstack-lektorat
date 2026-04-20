@@ -132,11 +132,6 @@ export const bookstatsMethods = {
       rows = rows.filter(r => r.recorded_at >= cutoffStr);
     }
 
-    const labels = rows.map(r => {
-      const [y, m, d] = r.recorded_at.split('-');
-      return `${d}.${m}.${y.slice(2)}`;
-    });
-
     const isDelta = metric === 'delta_words';
     const isPpc   = metric === 'pages_per_chapter';
     const isWritMin = metric === 'writing_minutes';
@@ -147,6 +142,17 @@ export const bookstatsMethods = {
     else if (isWritMin) data = rows.map(r => Math.round(r.seconds / 60));
     else if (isWritCum) { let sum = 0; data = rows.map(r => { sum += r.seconds; return Math.round(sum / 360) / 10; }); }
     else data = rows.map(r => r[metric] ?? null);
+
+    // Leading-Null-Tage abschneiden: X-Achse startet am ersten echten Messpunkt
+    // der gewählten Metrik (z.B. "wörter" erst ab Tag, an dem der Wert existiert).
+    const firstIdx = data.findIndex(v => v !== null && v !== undefined);
+    if (firstIdx > 0) { rows = rows.slice(firstIdx); data = data.slice(firstIdx); }
+    else if (firstIdx === -1) return;
+
+    const labels = rows.map(r => {
+      const [y, m, d] = r.recorded_at.split('-');
+      return `${d}.${m}.${y.slice(2)}`;
+    });
 
     const metricLabel = METRIC_KEYS[metric] ? this.t(METRIC_KEYS[metric]) : metric;
 

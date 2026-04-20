@@ -1,5 +1,5 @@
 // Schreibzeit-Tracking: summiert die Sekunden, während editMode oder focusMode
-// aktiv sind und der Tab sichtbar ist. Heartbeat alle HEARTBEAT_MS, damit bei
+// aktiv sind und der Tab sichtbar ist. Heartbeat alle 15 s, damit bei
 // Crash/Tab-Kill max. dieses Intervall verloren geht. Zusätzlicher Flush bei
 // visibilitychange, pagehide und State-Wechseln.
 //
@@ -7,7 +7,7 @@
 
 import { fetchJson } from './utils.js';
 
-const HEARTBEAT_MS = 30000;
+const HEARTBEAT_MS = 15000;
 
 export const writingTimeMethods = {
   _writingActiveSince: null,

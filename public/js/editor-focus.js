@@ -9,7 +9,7 @@ const BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, blockquote, li, pre';
 // und kurz danach selectionchange – die Spanne deckt das ab.
 const POINTER_GRACE_MS = 250;
 // Wie lange Scroll-Events nach einem programmatischen scrollBy() ignoriert
-// werden. smooth-scroll feuert n Events; Counter wäre nicht deterministisch.
+// werden, damit Recenter nicht mit User-Scroll verwechselt wird.
 const PROG_SCROLL_GRACE_MS = 400;
 
 function getScrollContainer() {
@@ -80,7 +80,7 @@ function typewriterScroll(container, targetRect) {
   const containerCenter = cRect.top + cRect.height / 2;
   const delta = targetCenter - containerCenter;
   if (Math.abs(delta) < 2) return;
-  container.scrollBy({ top: delta, behavior: 'smooth' });
+  container.scrollBy({ top: delta, behavior: 'auto' });
 }
 
 export const focusMethods = {

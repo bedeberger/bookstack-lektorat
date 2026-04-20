@@ -7,6 +7,7 @@ export function initialLektoratState() {
     devMode: false,
     sessionExpired: false,
     bookstackTokenInvalid: false,
+    serverOffline: false,
     themePref: 'auto',
     uiLocale: '',
     bookstackUrl: '',

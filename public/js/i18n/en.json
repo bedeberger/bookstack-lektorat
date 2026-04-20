@@ -156,6 +156,8 @@
   "session.expired":             "Session expired – please sign in again. Unsaved changes in the editor will be lost on reload.",
   "session.relogin":              "Sign in again",
   "session.bookstackTokenInvalid":"BookStack token invalid or expired – please refresh the token.",
+  "session.serverOffline":        "Server unreachable – offline mode. Cached content is readable; changes will only be saved once reconnected.",
+  "session.retry":                "Retry",
   "dev.banner":                  "DEV MODE – local session, no OAuth",
   "app.titleReset":              "Reset view",
   "app.subtitle":                "AI-assisted spellchecking & style analysis",
