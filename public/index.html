@@ -40,7 +40,7 @@
       @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading && !focusMode) runCheck()"
       @keydown.ctrl.s.prevent.window="if (editMode) quickSave()"
       @keydown.meta.s.prevent.window="if (editMode) quickSave()"
-      @keydown.window="handleShortcutsHotkey($event); handleFindHotkey($event)">
+      @keydown.window="handleShortcutsHotkey($event); handleFindHotkey($event); handleFocusHotkey($event)">
 
 <div class="session-banner" x-show="sessionExpired" x-cloak>
   <span class="session-banner-text" x-text="t('session.expired')"></span>

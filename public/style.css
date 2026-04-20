@@ -1343,6 +1343,10 @@ body.focus-mode #editor-card .editor-preview-wrap {
 
 body.focus-mode .page-content-view,
 body.focus-mode .page-content-view--editing {
+  /* overflow-anchor aus: Chrome's Scroll-Anchoring verschiebt den Scrollpunkt
+     bei Content-Mutationen (contenteditable-Split, IO-triggered repaints) und
+     kämpft mit unserem expliziten Typewriter-Scroll → sichtbares „Flattern". */
+  overflow-anchor: none;
   max-height: none;
   flex: 1 1 auto;
   min-height: 0;

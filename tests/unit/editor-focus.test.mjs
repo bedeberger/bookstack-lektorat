@@ -87,6 +87,37 @@ test('findBlockFromNode: DIV ist KEIN Block (Chromium-Default-Trap)', () => {
     'DIV dürfte nicht matchen — sonst bricht defaultParagraphSeparator-Garantie');
 });
 
+test('findBlockFromNode: <p> in <blockquote> → liefert blockquote (outermost)', () => {
+  // Grund: opacity ist multiplikativ im Stacking-Context. Wenn nur das innere
+  // <p> „.focus-paragraph-active" bekommt, dimmt das umschliessende <blockquote>
+  // (opacity:0.5) den Textinhalt trotz opacity:1 am Kind.
+  const root = mkEl('DIV');
+  const bq = mkEl('BLOCKQUOTE', root);
+  const p = mkEl('P', bq);
+  const text = mkText(p);
+  assert.equal(findBlockFromNode(text, root), bq);
+});
+
+test('findBlockFromNode: <p> in <li> (ul wrapper) → liefert li (outermost)', () => {
+  const root = mkEl('DIV');
+  const ul = mkEl('UL', root);
+  const li = mkEl('LI', ul);
+  const p = mkEl('P', li);
+  const text = mkText(p);
+  assert.equal(findBlockFromNode(text, root), li);
+});
+
+test('findBlockFromNode: tief verschachtelt liefert äusserst-möglichen Block', () => {
+  // <blockquote><li><p>text</p></li></blockquote> — konstruiert, aber deckt die
+  // Walk-Logik ab: höchster Block-Tag unter root gewinnt.
+  const root = mkEl('DIV');
+  const bq = mkEl('BLOCKQUOTE', root);
+  const li = mkEl('LI', bq);
+  const p = mkEl('P', li);
+  const text = mkText(p);
+  assert.equal(findBlockFromNode(text, root), bq);
+});
+
 // --- pickCenterBlock --------------------------------------------------------
 
 function mkRectEl(top, bottom) {
@@ -155,10 +186,18 @@ test('computeTypewriterDelta: Target unter Mitte → positives Delta (scroll dow
   assert.equal(computeTypewriterDelta(cRect, tRect), 820 - 500);
 });
 
-test('computeTypewriterDelta: <2px → 0 (kein Jitter)', () => {
+test('computeTypewriterDelta: unter Schwelle → 0 (kein Jitter)', () => {
+  // Schwelle (~16px) filtert Sub-Zeilen-Bewegungen raus — Caret-Rect-Jitter
+  // und getBoundingClientRect-Subpixel-Shifts beim Tippen lösen keinen
+  // Mini-Scroll aus. Echte Zeilenwechsel (line-wrap, Enter) übersteigen die
+  // Schwelle und scrollen.
   const cRect = { top: 0, bottom: 1000, height: 1000 };
   const tRect = { top: 499, bottom: 500, height: 1 };  // Mitte = 499.5, delta = -0.5
   assert.equal(computeTypewriterDelta(cRect, tRect), 0);
+  // 10px unter Schwelle → immer noch 0
+  assert.equal(computeTypewriterDelta(cRect, { top: 495, bottom: 505, height: 10 }), 0);
+  // Deutlich über Schwelle → Delta
+  assert.notEqual(computeTypewriterDelta(cRect, { top: 600, bottom: 640, height: 40 }), 0);
 });
 
 test('computeTypewriterDelta: null-input → 0', () => {

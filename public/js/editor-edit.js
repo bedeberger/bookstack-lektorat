@@ -57,6 +57,47 @@ function formatDraftTime(ts, locale) {
   return d.toLocaleString(tag, { dateStyle: 'short', timeStyle: 'short' });
 }
 
+// Legacy-BookStack-Seiten enthalten teilweise bare Text-Nodes und Inline-
+// Elemente direkt unterhalb des Editor-Roots (ohne <p>-Wrapper). Der
+// Fokusmodus erkennt solche Runs nicht als Block → keine Absatz-
+// Hervorhebung, CSS-Dim-Regeln (`.page-content-view p:not(...)` etc.) greifen
+// ebenfalls nicht. Fix: orphan text/inline-Runs zwischen echten Block-
+// Elementen in <p> verpacken, einmal beim Edit-Start. Die normalisierte
+// Fassung wird beim nächsten Save nach BookStack zurückgeschrieben.
+const ROOT_BLOCK_TAGS = new Set([
+  'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+  'BLOCKQUOTE', 'LI', 'PRE', 'UL', 'OL', 'TABLE',
+  'FIGURE', 'HR', 'DIV', 'DL', 'SECTION', 'ARTICLE',
+  'ASIDE', 'HEADER', 'FOOTER', 'NAV', 'MAIN', 'FORM',
+]);
+
+function normalizeEditorBlocks(el) {
+  if (!el) return;
+  let group = [];
+  const flushBefore = (target) => {
+    if (!group.length) return;
+    const hasContent = group.some(n =>
+      (n.nodeType === 3 && n.textContent.replace(/\u00A0/g, ' ').trim()) ||
+      (n.nodeType === 1)
+    );
+    if (!hasContent) { group = []; return; }
+    const p = document.createElement('p');
+    for (const n of group) p.appendChild(n);
+    if (target) el.insertBefore(p, target);
+    else el.appendChild(p);
+    group = [];
+  };
+  const children = Array.from(el.childNodes);
+  for (const child of children) {
+    if (child.nodeType === 1 && ROOT_BLOCK_TAGS.has(child.tagName)) {
+      flushBefore(child);
+    } else {
+      group.push(child);
+    }
+  }
+  flushBefore(null);
+}
+
 export const editorEditMethods = {
   _getEditEl() {
     return document.querySelector('#editor-card .page-content-view--editing');
@@ -130,6 +171,18 @@ export const editorEditMethods = {
         el.innerHTML = buildHighlightedHtml(this.originalHtml, findings, findings.map(() => false), []);
       } else {
         el.innerHTML = initialHtml;
+      }
+      // Pre-Normalize-Snapshot: weicht die Fassung nach normalizeEditorBlocks
+      // davon ab, hat der Normalizer Legacy-HTML repariert (orphan Text-/
+      // Inline-Nodes direkt unter dem Editor-Root). Ohne Persistenz kehrt
+      // der Defekt nach jedem Reload zurück und bricht Focus-Mode-Absatz-
+      // Hervorhebung erneut. `editDirty=true` sorgt dafür, dass der nächste
+      // Auto- oder Manual-Save die bereinigte Fassung nach BookStack schreibt.
+      const beforeNormalize = el.innerHTML;
+      normalizeEditorBlocks(el);
+      if (el.innerHTML !== beforeNormalize) {
+        this.editDirty = true;
+        this._scheduleDraftSave();
       }
     }
     setTimeout(() => this._getEditEl()?.focus(), 0);

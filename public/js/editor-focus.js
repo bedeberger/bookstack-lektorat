@@ -56,13 +56,22 @@ function getScrollContainer() {
 
 // --- Pure helpers (exportiert für Unit-Tests) -------------------------------
 
+// Gibt den *äussersten* Block-Ancestor unterhalb von `root` zurück. Grund:
+// Bei verschachtelten Blöcken (z.B. `<blockquote><p>…</p></blockquote>` oder
+// `<li><p>…</p></li>`) würde ein innermost-Match nur den inneren `<p>` aktiv
+// markieren. Der äussere Wrapper (`<blockquote>`/`<li>`) bekäme weiter
+// opacity:0.5 — und da opacity im Stacking-Context multipliziert wird, wäre
+// der vermeintlich aktive `<p>` trotzdem halb-gedimmt. Outermost-Wahl löst
+// das auf: der sichtbare Container-Block wird aktiv, CSS dimmt ihn nicht,
+// Kinder erben volle opacity.
 export function findBlockFromNode(node, root, blockTags = BLOCK_TAGS) {
   let cur = node && node.nodeType === 3 ? node.parentNode : node;
+  let outermost = null;
   while (cur && cur !== root) {
-    if (cur.nodeType === 1 && blockTags.has(cur.tagName)) return cur;
+    if (cur.nodeType === 1 && blockTags.has(cur.tagName)) outermost = cur;
     cur = cur.parentNode;
   }
-  return null;
+  return outermost;
 }
 
 // Nimmt beliebiges Iterable von Elementen mit getBoundingClientRect(). Für
@@ -117,13 +126,18 @@ export function getCaretRect(container, selection) {
 }
 
 // Pure: wie weit muss gescrollt werden, damit targetRect auf containerRect-
-// Mitte sitzt? <2px → no-op (kein jitter).
-export function computeTypewriterDelta(containerRect, targetRect) {
+// Mitte sitzt? Unter Schwelle → no-op. Schwelle ist grob eine Zeilenhöhe
+// (~16px), damit Tippen innerhalb derselben Textzeile (Caret-Rect-Jitter,
+// subpixel-Shifts von getBoundingClientRect) keinen Mini-Scroll auslöst und
+// der Editor „ruhig" wirkt. Echter Zeilenwechsel / Enter verursacht einen
+// grösseren Delta und scrollt.
+export const TYPEWRITER_THRESHOLD_PX = 16;
+export function computeTypewriterDelta(containerRect, targetRect, threshold = TYPEWRITER_THRESHOLD_PX) {
   if (!containerRect || !targetRect) return 0;
   const targetCenter = targetRect.top + targetRect.height / 2;
   const containerCenter = containerRect.top + containerRect.height / 2;
   const delta = targetCenter - containerCenter;
-  return Math.abs(delta) < 2 ? 0 : delta;
+  return Math.abs(delta) < threshold ? 0 : delta;
 }
 
 function typewriterScroll(container, targetRect) {
@@ -158,6 +172,21 @@ export const focusMethods = {
     if (this._focusState === 'active') this.exitFocusMode();
     else if (this._focusState === 'idle') this.enterFocusMode();
     // entering/exiting → ignorieren (kein Double-Trigger).
+  },
+
+  // Global F11-Hotkey. Läuft auf dem Body-Listener (siehe index.html), damit
+  // F11 den Fokusmodus auch aus dem Lesemodus heraus einschaltet – das
+  // Install-time onKey innerhalb von _focusInstall greift erst, wenn der Modus
+  // bereits aktiv ist, und konnte Exit, aber kein Enter.
+  handleFocusHotkey(event) {
+    if (event.key !== 'F11') return;
+    if (!this.showEditorCard) return;
+    event.preventDefault();
+    if (this._focusState === 'active') this.exitFocusMode();
+    else if (this._focusState === 'idle') {
+      if (this.editMode) this.enterFocusMode();
+      else this.startFocusEdit();
+    }
   },
 
   startFocusEdit() {
@@ -336,7 +365,11 @@ export const focusMethods = {
       const top = vv ? vv.offsetTop : 0;
       document.documentElement.style.setProperty('--focus-vh', h + 'px');
       document.documentElement.style.setProperty('--focus-vh-top', top + 'px');
-      if (this._focusState === 'active') this._focusUpdateActive(true);
+      // Nur den aktiven Absatz re-validieren, NICHT recentern. Ein Recenter
+      // bei jedem Viewport-Tick würde den Editor bei jedem Mobile-KB-Frame
+      // oder Desktop-Resize springen lassen („flattern"). Scrollt der User
+      // selbst, greifen onScroll/onSelection ohnehin.
+      if (this._focusState === 'active') this._focusUpdateActive(false);
     };
     const syncViewport = () => {
       clearTimeout(ctx.vvTimer);
