@@ -2,9 +2,7 @@
 // Öffnet eine kleine Leiste über dem contenteditable, navigiert per
 // Cmd/Ctrl+F. `this` zeigt auf die Alpine-Komponente.
 
-function getEditEl() {
-  return document.querySelector('#editor-card .page-content-view--editing');
-}
+import { getEditEl, isWordChar } from './editor-utils.js';
 
 // Flache Liste aller Text-Nodes im Editor (keine Scripts/Styles – die
 // gibt's hier ohnehin nicht, TreeWalker reicht).
@@ -24,7 +22,8 @@ function findMatches(root, term, caseSensitive, wholeWord) {
   const full = nodes.map(n => n.nodeValue).join('');
   const hay = caseSensitive ? full : full.toLowerCase();
   const needle = caseSensitive ? term : term.toLowerCase();
-  const isWord = (ch) => /\p{L}|\p{N}|_/u.test(ch || '');
+  // Ganzes Wort: Nachbar-Zeichen prüfen. _ zählt als Wort (z.B. Identifier).
+  const isWord = (ch) => isWordChar(ch || '') || ch === '_';
 
   // Offsets jedes Nodes im konkatenierten String – für Rückmapping.
   const starts = new Array(nodes.length);

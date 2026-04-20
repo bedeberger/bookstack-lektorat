@@ -69,18 +69,20 @@ function _parseJson(fullText) {
 export const aiMethods = {
   // onProgress(chars, tokIn) – wird während des Streamings aufgerufen (tokIn=0 bis message_start)
   // onComplete({ tokensIn, tokensOut }) – optionaler Callback nach Abschluss des Streams
-  async callAI(userPrompt, systemPrompt = null, onProgress = null, onComplete = null) {
+  // promptKind: Server-Allowlist-Key (z.B. 'stilkorrektur'). Der Server löst den System-Prompt
+  //   aus prompts.js auf – Client darf aus Sicherheitsgründen keinen Systemprompt direkt schicken.
+  async callAI(userPrompt, promptKind, onProgress = null, onComplete = null) {
     const { endpoint, model, temperature, label } = _providerConfig(
       this.apiProvider, this.claudeModel, this.ollamaModel, this.llamaModel
     );
 
     const body = {
+      promptKind,
       model,
       max_tokens: this.claudeMaxTokens,
       temperature,
       messages: [{ role: 'user', content: userPrompt }],
     };
-    if (systemPrompt) body.system = systemPrompt;
 
     const resp = await fetch(endpoint, {
       method: 'POST',

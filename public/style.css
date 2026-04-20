@@ -1061,6 +1061,11 @@ ins {
   font-size: var(--font-size-sm);
   padding: 8px 0;
 }
+.muted-msg--block {
+  display: block;
+  padding: 20px;
+  text-align: center;
+}
 
 .error-msg {
   color: var(--color-err-text);
@@ -3678,6 +3683,20 @@ body.focus-mode .edit-find { display: none !important; }
   font-variant-numeric: tabular-nums;
   transition: background 0.15s ease;
 }
+.heatmap-cell--tinted {
+  background: color-mix(in srgb, var(--color-danger, #c0392b) var(--heatmap-t, 0%), var(--color-success, #27ae60));
+  opacity: var(--heatmap-opacity, 1);
+}
+.heatmap-cell--primary {
+  background: color-mix(in srgb, var(--color-primary) var(--heatmap-t, 0%), transparent);
+}
+.heatmap-cell--faded {
+  opacity: var(--heatmap-opacity, 1);
+}
+.heatmap-cell--empty {
+  background: repeating-linear-gradient(45deg, var(--color-border) 0, var(--color-border) 2px, transparent 2px, transparent 6px);
+  opacity: 0.6;
+}
 .heatmap-cell:hover {
   outline: 1px solid var(--color-primary);
   outline-offset: -1px;
@@ -3703,6 +3722,7 @@ body.focus-mode .edit-find { display: none !important; }
 .heatmap-coverage-bar {
   display: block;
   height: 100%;
+  width: var(--coverage, 0%);
   background: var(--color-primary);
 }
 
@@ -4551,6 +4571,8 @@ body.focus-mode .edit-find { display: none !important; }
 .display-contents { display: contents; }
 .editor-section { margin-top: 1rem; }
 .stilbox--spaced { margin-top: 12px; }
+.stilbox--review-summary { margin-bottom: 14px; }
+.fazit--review { margin-top: 16px; }
 .review-stars { font-size: 11px; letter-spacing: 1px; }
 .muted-msg--spaced { margin-top: 14px; }
 .chat-skeleton-line--wide { width: 72%; }

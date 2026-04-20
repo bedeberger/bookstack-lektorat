@@ -1,4 +1,5 @@
 require('dotenv').config();
+const crypto = require('crypto');
 const express = require('express');
 const helmet = require('helmet');
 const session = require('express-session');
@@ -34,13 +35,30 @@ app.use((req, _res, next) => {
 });
 
 // ── Session ──────────────────────────────────────────────────────────────────
+const LOCAL_DEV_MODE = process.env.LOCAL_DEV_MODE === 'true';
+
+// Secret-Policy:
+//   Production → SESSION_SECRET ist Pflicht (sonst Exit).
+//   Dev-Mode   → falls nicht gesetzt, ein prozesslokaler Zufallsstring (Sessions
+//                 gehen beim Restart verloren; keine deterministische Default-Konstante).
+let sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret) {
+  if (LOCAL_DEV_MODE) {
+    sessionSecret = crypto.randomBytes(32).toString('hex');
+    logger.warn('SESSION_SECRET nicht gesetzt – zufälliges Dev-Secret generiert (Sessions überleben Restart nicht).');
+  } else {
+    logger.error('SESSION_SECRET nicht gesetzt – Server wird gestoppt. Bitte in .env setzen.');
+    process.exit(1);
+  }
+}
+
 const isHttps = (process.env.APP_URL || '').startsWith('https');
 app.use(session({
   store: new SqliteStore({
     client: db,
     expired: { clear: true, intervalMs: 15 * 60 * 1000 }, // alle 15 min abgelaufene Sessions löschen
   }),
-  secret: process.env.SESSION_SECRET || 'bitte-session-secret-in-env-setzen',
+  secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -51,18 +69,10 @@ app.use(session({
   },
 }));
 
-const LOCAL_DEV_MODE = process.env.LOCAL_DEV_MODE === 'true';
-
 if (LOCAL_DEV_MODE) {
   logger.warn('LOCAL_DEV_MODE aktiv – OAuth wird übersprungen, automatische Dev-Session!');
-} else {
-  if (!process.env.SESSION_SECRET) {
-    logger.error('SESSION_SECRET nicht gesetzt – Server wird gestoppt. Bitte in .env setzen.');
-    process.exit(1);
-  }
-  if (!process.env.ALLOWED_EMAILS) {
-    logger.warn('ALLOWED_EMAILS nicht gesetzt – ALLE Google-Konten haben Zugriff! Bitte in .env einschränken.');
-  }
+} else if (!process.env.ALLOWED_EMAILS) {
+  logger.warn('ALLOWED_EMAILS nicht gesetzt – ALLE Google-Konten haben Zugriff! Bitte in .env einschränken.');
 }
 
 // ── Auth-Routen (öffentlich) ──────────────────────────────────────────────────
@@ -80,9 +90,10 @@ const PUBLIC_ASSETS = new Set([
   '/bookstack_lektorat_icon.ico',
   '/favicon.ico',
 ]);
+const staticServe = express.static(path.join(__dirname, 'public'));
 app.use((req, res, next) => {
   if (req.method === 'GET' && PUBLIC_ASSETS.has(req.path)) {
-    return express.static(path.join(__dirname, 'public'))(req, res, next);
+    return staticServe(req, res, next);
   }
   next();
 });
@@ -117,10 +128,10 @@ app.use('/chat', chatRouter);
 app.use('/booksettings', bookSettingsRouter);
 app.use('/me', userSettingsRouter);
 app.use('/sync', syncRouter);
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(staticServe);
 app.use('/api', bookstackProxy);
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`Lektorat läuft auf http://0.0.0.0:${PORT}`);
   logger.info(`BookStack Ziel: ${BOOKSTACK_URL}`);
 
@@ -129,9 +140,39 @@ app.listen(PORT, '0.0.0.0', () => {
   if (stuck > 0) logger.warn(`Startup: ${stuck} hängender Job-Run(s) auf 'error' gesetzt.`);
 });
 
+// ── Graceful Shutdown ────────────────────────────────────────────────────────
+// Docker/Systemd schicken SIGTERM, Ctrl+C schickt SIGINT. Ohne Handler werden
+// offene SSE-Streams und Jobs abrupt gekappt. 30 s Drain-Zeit für laufende Requests,
+// danach `server.close()` + SQLite-Close. Kein Force-Kill von Jobs – die kommen
+// beim nächsten Start via cleanupStuckJobRuns() wieder hoch.
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info(`${signal} empfangen – Graceful Shutdown (max 30 s Drain)…`);
+  const force = setTimeout(() => {
+    logger.warn('Drain-Timeout erreicht – erzwinge Exit.');
+    try { db.close(); } catch {}
+    process.exit(1);
+  }, 30000);
+  force.unref();
+  server.close(err => {
+    clearTimeout(force);
+    if (err) logger.error('server.close Fehler: ' + err.message);
+    try { db.close(); } catch {}
+    logger.info('Graceful Shutdown abgeschlossen.');
+    process.exit(err ? 1 : 0);
+  });
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
+
 // Tägliche Cron-Jobs (node-cron)
 try {
   const cron = require('node-cron');
+  // Zeitzone explizit setzen – ohne expliziten Wert läuft node-cron in Server-TZ,
+  // in Docker-Containern typischerweise UTC → "02:00" wäre dann 03:00/04:00 CH-Zeit.
+  const cronTz = process.env.CRON_TIMEZONE || 'Europe/Zurich';
 
   // 02:00 – Buchstatistik-Sync + hängende Jobs bereinigen
   cron.schedule('0 2 * * *', () => {
@@ -141,15 +182,15 @@ try {
     const stuck = cleanupStuckJobRuns();
     if (stuck > 0) logger.warn(`Cron: ${stuck} hängender Job-Run(s) auf 'error' gesetzt.`);
     else logger.info('Cron: Keine hängenden Job-Runs gefunden.');
-  });
-  logger.info('Cron-Job registriert: Buchstatistik-Sync + Job-Cleanup täglich 02:00 Uhr');
+  }, { timezone: cronTz });
+  logger.info(`Cron-Job registriert: Buchstatistik-Sync + Job-Cleanup täglich 02:00 (${cronTz})`);
 
   // 03:00 – Nacht-Komplettanalyse für alle Bücher × alle User (deaktiviert)
   // cron.schedule('0 3 * * *', () => {
   //   logger.info('Cron: Starte nächtliche Komplettanalyse…');
   //   runKomplettAnalyseAll().catch(e => logger.error('Cron-Komplettanalyse Fehler: ' + e.message));
-  // });
-  // logger.info('Cron-Job registriert: Komplettanalyse täglich 03:00 Uhr');
+  // }, { timezone: cronTz });
+  // logger.info(`Cron-Job registriert: Komplettanalyse täglich 03:00 (${cronTz})`);
 } catch {
   logger.warn('node-cron nicht verfügbar – keine automatischen Cron-Jobs (npm install ausführen)');
 }

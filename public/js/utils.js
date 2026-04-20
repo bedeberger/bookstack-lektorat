@@ -17,6 +17,18 @@ export async function fetchJson(url, opts) {
   return r.json();
 }
 
+/**
+ * Löscht eine Alpine-Status-Property nach `delay`, wenn sie dann noch den
+ * gesetzten Wert trägt. Verhindert, dass spätere Status-Updates durch einen
+ * verzögerten Reset überschrieben werden – eigenes setTimeout-Idiom, das sich
+ * an mehreren Stellen wiederholte.
+ */
+export function clearStatusAfter(obj, prop, expected, delay) {
+  setTimeout(() => {
+    if (obj[prop] === expected) obj[prop] = '';
+  }, delay);
+}
+
 export async function fetchText(url, opts) {
   const r = await fetch(url, opts);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -54,11 +66,13 @@ export function minMaxBy(items, getValue) {
   return { min, max };
 }
 
-// Heatmap-Zellfarbe: t∈[0,1], 0 → grün, 1 → rot. Liefert den
-// `background: …;`-Inline-Style — Opazität/Zusätze hängt der Aufrufer selbst an.
-export function heatmapCellBg(t) {
+// Heatmap-Zellfarbe: t∈[0,1], 0 → grün, 1 → rot.
+// Liefert ein Style-Objekt mit CSS-Custom-Properties, das Alpine via
+// `:style` anbindet. Die Farbberechnung selbst steht in style.css
+// (`.heatmap-cell--tinted`), damit keine Inline-Style-Strings im DOM landen.
+export function heatmapCellVars(t, opacity = 1) {
   const pct = Math.round(Math.max(0, Math.min(1, t)) * 100);
-  return `background: color-mix(in srgb, var(--color-danger, #c0392b) ${pct}%, var(--color-success, #27ae60));`;
+  return { '--heatmap-t': pct + '%', '--heatmap-opacity': String(opacity) };
 }
 
 export function fmtTok(n) {

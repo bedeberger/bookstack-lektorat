@@ -66,7 +66,8 @@ export const ereignisseMethods = {
       } else if (!this.globalZeitstrahl.length) {
         this._buildGlobalZeitstrahl();
       }
-    } catch {
+    } catch (e) {
+      console.error('[reloadZeitstrahl]', e);
       if (!this.globalZeitstrahl.length) this._buildGlobalZeitstrahl();
     }
   },

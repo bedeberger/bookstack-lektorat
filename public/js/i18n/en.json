@@ -70,6 +70,7 @@
   "app.tokenRequired":           "Please enter both Token ID and Token Secret.",
   "app.saveError":               "Save failed",
   "app.jobFailed":               "Job failed",
+  "app.jobCancelFailed":         "Could not cancel job.",
   "app.lektoratRunning":         "Editor running…",
 
   "komplett.confirm":            "Start full analysis?\n\nCharacters, sociogram, locations, scenes, events and timeline will be re-computed. For large books this can take several minutes.",

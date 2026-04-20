@@ -1,21 +1,24 @@
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
-const fs = require('fs');
-const path = require('path');
 const logger = require('../logger');
-const { MAX_TOKENS_OUT } = require('../lib/ai');
+const { MAX_TOKENS_OUT, ollamaTemp, llamaTemp } = require('../lib/ai');
 const { getBookLocale, getUser } = require('../db/schema');
+const { getPrompts, getPromptConfig } = require('../lib/prompts-loader');
 
 const BOOKSTACK_URL = process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80';
 
-// prompt-config.json einmalig laden; fehlt die Datei, wird ein Fehler geworfen.
-let _promptConfig = null;
-function getPromptConfig() {
-  if (_promptConfig !== null) return _promptConfig;
-  const raw = fs.readFileSync(path.resolve(__dirname, '../prompt-config.json'), 'utf8');
-  _promptConfig = JSON.parse(raw);
-  logger.info('prompt-config.json geladen.');
-  return _promptConfig;
+// Allowlist für den /claude-, /ollama- und /llama-Proxy: Client darf kein beliebiges
+// `system` schicken. Stattdessen `promptKind` angeben – Server löst den System-Prompt
+// aus prompts.js auf. Verhindert Missbrauch des Proxys als generischer LLM-Zugang.
+const PROMPT_KIND_TO_KEY = {
+  stilkorrektur: 'SYSTEM_STILKORREKTUR',
+};
+
+async function resolveProxySystemPrompt(promptKind) {
+  const key = PROMPT_KIND_TO_KEY[promptKind];
+  if (!key) return null;
+  const mod = await getPrompts();
+  return mod[key] || null;
 }
 
 const router = express.Router();
@@ -42,6 +45,10 @@ router.get('/config', (req, res) => {
 // Proxy /claude → api.anthropic.com (SSE-Streaming mit Key-Injection)
 router.post('/claude', jsonBody, async (req, res) => {
   try {
+    const systemPrompt = await resolveProxySystemPrompt(req.body.promptKind);
+    if (!systemPrompt) {
+      return res.status(400).json({ error_code: 'INVALID_PROMPT_KIND', params: { kind: req.body.promptKind || '' } });
+    }
     // Nur erlaubte Felder weitergeben – verhindert Model-Override durch das Frontend
     const model = process.env.MODEL_NAME || 'claude-sonnet-4-6';
     const maxTokens = MAX_TOKENS_OUT;
@@ -55,7 +62,7 @@ router.post('/claude', jsonBody, async (req, res) => {
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
-        system: req.body.system,
+        system: systemPrompt,
         messages: req.body.messages,
         stream: true,
       }),
@@ -88,15 +95,18 @@ router.post('/ollama', jsonBody, async (req, res) => {
   const ollamaHost = (process.env.OLLAMA_HOST || 'http://localhost:11434').replace(/\/$/, '');
   const model = process.env.OLLAMA_MODEL || 'llama3.2';
   try {
+    const systemPrompt = await resolveProxySystemPrompt(req.body.promptKind);
+    if (!systemPrompt) {
+      return res.status(400).json({ error_code: 'INVALID_PROMPT_KIND', params: { kind: req.body.promptKind || '' } });
+    }
     // Anthropic-Request-Format → Ollama-Format umwandeln
-    const messages = [];
-    if (req.body.system) messages.push({ role: 'system', content: req.body.system });
+    const messages = [{ role: 'system', content: systemPrompt }];
     for (const m of (req.body.messages || [])) messages.push(m);
 
     const upstream = await fetch(`${ollamaHost}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages, stream: true, options: { num_ctx: req.body.max_tokens || 65536, think: false, temperature: parseFloat(process.env.OLLAMA_TEMPERATURE ?? '0.1') } }),
+      body: JSON.stringify({ model, messages, stream: true, options: { num_ctx: MAX_TOKENS_OUT, think: false, temperature: ollamaTemp() } }),
     });
 
     if (!upstream.ok) {
@@ -151,9 +161,12 @@ router.post('/llama', jsonBody, async (req, res) => {
   const llamaHost = (process.env.LLAMA_HOST || 'http://localhost:8080').replace(/\/$/, '');
   const model = process.env.LLAMA_MODEL || 'llama3.2';
   try {
+    const systemPrompt = await resolveProxySystemPrompt(req.body.promptKind);
+    if (!systemPrompt) {
+      return res.status(400).json({ error_code: 'INVALID_PROMPT_KIND', params: { kind: req.body.promptKind || '' } });
+    }
     // Anthropic-Request-Format → OpenAI-Format umwandeln
-    const messages = [];
-    if (req.body.system) messages.push({ role: 'system', content: req.body.system });
+    const messages = [{ role: 'system', content: systemPrompt }];
     for (const m of (req.body.messages || [])) messages.push(m);
 
     const upstream = await fetch(`${llamaHost}/v1/chat/completions`, {
@@ -164,8 +177,8 @@ router.post('/llama', jsonBody, async (req, res) => {
         messages,
         stream: true,
         stream_options: { include_usage: true },
-        temperature: parseFloat(process.env.LLAMA_TEMPERATURE ?? '0.1'),
-        max_tokens: req.body.max_tokens || 65536,
+        temperature: llamaTemp(),
+        max_tokens: MAX_TOKENS_OUT,
       }),
     });
 

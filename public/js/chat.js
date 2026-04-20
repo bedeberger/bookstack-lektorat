@@ -1,4 +1,4 @@
-import { escHtml, fmtTok, findInHtml, stripFocusArtefacts } from './utils.js';
+import { escHtml, fmtTok, findInHtml, stripFocusArtefacts, clearStatusAfter } from './utils.js';
 import { makeChatMethods } from './chat-base.js';
 
 // Seiten-Chat-Methoden (werden in die Alpine-Komponente gespreadet).
@@ -86,7 +86,8 @@ export const chatMethods = {
         setErr(this.t('chat.originalNotFound'));
         return;
       }
-    } catch {
+    } catch (e) {
+      console.error('[chat applyVorschlag pageLoad]', e);
       setErr(this.t('chat.pageLoadFailed'));
       return;
     }
@@ -123,7 +124,7 @@ export const chatMethods = {
       }
       const successMsg = `<span class="success-msg">${escHtml(this.t('chat.changeSaved'))}</span>`;
       this.chatStatus = successMsg;
-      setTimeout(() => { if (this.chatStatus === successMsg) this.chatStatus = ''; }, 3000);
+      clearStatusAfter(this, 'chatStatus', successMsg, 3000);
     } catch (e) {
       console.error('[applyChatVorschlag]', e);
       setErr(this.t('chat.saveFailedPrefix') + e.message);

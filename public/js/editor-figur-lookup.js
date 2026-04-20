@@ -5,36 +5,12 @@
 // den Fluss brechen).
 
 import { escHtml } from './utils.js';
-
-const WORD_AT_POINT_RE = /[\p{L}\p{N}][\p{L}\p{N}\-']*/u;
-
-function normalizeName(s) {
-  return String(s || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim();
-}
+import { isWordChar, normalizeName, WORD_RE } from './editor-utils.js';
 
 function extractYear(geburtstag) {
   if (!geburtstag) return null;
   const m = String(geburtstag).match(/\b(\d{4})\b/);
   return m ? m[1] : null;
-}
-
-// Expandiert den Offset im Textknoten zu einem Wort (Buchstaben/Ziffern, plus - und ').
-function wordAtTextNode(textNode, offset) {
-  const text = textNode.nodeValue || '';
-  if (!text) return null;
-  const isWordChar = (c) => /[\p{L}\p{N}\-']/u.test(c);
-  let start = offset;
-  let end = offset;
-  while (start > 0 && isWordChar(text[start - 1])) start--;
-  while (end < text.length && isWordChar(text[end])) end++;
-  if (start === end) return null;
-  const word = text.slice(start, end);
-  if (!WORD_AT_POINT_RE.test(word)) return null;
-  return word;
 }
 
 function wordAtClientPoint(x, y) {
@@ -63,14 +39,13 @@ export function rangeForWordAtClientPoint(x, y) {
   if (!node || node.nodeType !== Node.TEXT_NODE) return null;
   const text = node.nodeValue || '';
   if (!text) return null;
-  const isWordChar = (c) => /[\p{L}\p{N}\-']/u.test(c);
   let start = range.startOffset;
   let end   = range.startOffset;
   while (start > 0 && isWordChar(text[start - 1])) start--;
   while (end < text.length && isWordChar(text[end])) end++;
   if (start === end) return null;
   const word = text.slice(start, end);
-  if (!WORD_AT_POINT_RE.test(word)) return null;
+  if (!WORD_RE.test(word)) return null;
   const wordRange = document.createRange();
   wordRange.setStart(node, start);
   wordRange.setEnd(node, end);

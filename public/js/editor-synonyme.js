@@ -1,13 +1,10 @@
 import { escHtml, fetchJson } from './utils.js';
 import { rangeForWordAtClientPoint } from './editor-figur-lookup.js';
+import { WORD_RE } from './editor-utils.js';
 
 // Synonym-Ermittler für den contenteditable-Editor.
 // Rechtsklick auf ein markiertes Einzelwort → Custom-Menü → KI-Call →
 // Picker mit Synonymvorschlägen → Klick ersetzt das Wort im DOM.
-
-// Ein "Einzelwort" ist eine zusammenhängende Sequenz aus Buchstaben/Ziffern.
-// Bindestriche und Apostrophe zählen mit, damit «auf-/abwärts» oder «wir's» erfasst werden.
-const WORD_RE = /^[\p{L}\p{N}][\p{L}\p{N}\-']*$/u;
 
 export const synonymMethods = {
   // ── State (wird in der Alpine-Komponente via Spread ergänzt) ─────────────

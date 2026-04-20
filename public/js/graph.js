@@ -138,11 +138,11 @@ export const graphMethods = {
       this._figurenNetwork = null;
     }
     if (!this.figuren.length) {
-      container.innerHTML = `<span class="muted-msg" style="display:block;padding:20px;text-align:center;">${escHtml(this.t('graph.empty.figuren'))}</span>`;
+      container.innerHTML = `<span class="muted-msg muted-msg--block">${escHtml(this.t('graph.empty.figuren'))}</span>`;
       return;
     }
     if (typeof vis === 'undefined') {
-      container.innerHTML = `<span class="muted-msg" style="display:block;padding:20px;text-align:center;">${escHtml(this.t('graph.empty.visLoading'))}</span>`;
+      container.innerHTML = `<span class="muted-msg muted-msg--block">${escHtml(this.t('graph.empty.visLoading'))}</span>`;
       return;
     }
 
@@ -409,7 +409,7 @@ export const graphMethods = {
     const { edgeList } = this._buildEdges(/* soziogrammModus */ false);
     const familyEdges = edgeList.filter(e => ['elternteil', 'kind', 'geschwister'].includes(e.typ));
     if (!familyEdges.length) {
-      container.innerHTML = `<span class="muted-msg" style="display:block;padding:20px;text-align:center;">${escHtml(this.t('graph.empty.familie'))}</span>`;
+      container.innerHTML = `<span class="muted-msg muted-msg--block">${escHtml(this.t('graph.empty.familie'))}</span>`;
       return;
     }
     const familyIds = new Set();

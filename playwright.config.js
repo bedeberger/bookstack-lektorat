@@ -4,7 +4,7 @@
 // Pointer-Schonfrist, Cleanup) abzudecken.
 
 module.exports = {
-  testDir: './tests',
+  testDir: './tests/e2e',
   testMatch: '**/*.spec.js',
   fullyParallel: false,
   use: {

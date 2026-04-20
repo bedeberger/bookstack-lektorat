@@ -1,7 +1,7 @@
 const express = require('express');
 const { db } = require('../db/schema');
 const logger = require('../logger');
-const { CHARS_PER_TOKEN, MAX_TOKENS_OUT, parseJSON, chatTemperature } = require('../lib/ai');
+const { callAIChat, parseJSON, chatTemperature } = require('../lib/ai');
 const {
   getPrompts, getBookPrompts,
   getFiguren, getLatestReview, buildChatMessageHistory,
@@ -214,26 +214,22 @@ router.post('/send', jsonBody, async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     sseStarted = true;
 
+    // Alle drei Provider laufen jetzt über callAIChat; der onProgress-Callback
+    // relayed Text-Deltas als Anthropic-kompatibles SSE-Event an den Client.
+    // (Lokale Provider bekommen das Schema für Grammar-Constrained-JSON.)
     const provider = process.env.API_PROVIDER || 'claude';
-    let fullText = '';
-    let tokensIn = 0;
-    let tokensOut = 0;
-
-    if (provider === 'ollama') {
-      await _streamOllama(messages, systemPrompt, res,
-        (text) => { fullText += text; },
-        (tIn, tOut) => { tokensIn = tIn; tokensOut = tOut; },
-        SCHEMA_CHAT);
-    } else if (provider === 'llama') {
-      await _streamLlama(messages, systemPrompt, res,
-        (text) => { fullText += text; },
-        (tIn, tOut) => { tokensIn = tIn; tokensOut = tOut; },
-        SCHEMA_CHAT);
-    } else {
-      await _streamClaude(messages, systemPrompt, res,
-        (text) => { fullText += text; },
-        (tIn, tOut) => { tokensIn = tIn; tokensOut = tOut; });
-    }
+    const schema = (provider === 'ollama' || provider === 'llama') ? SCHEMA_CHAT : null;
+    const temperatureOverride = (provider === 'ollama' || provider === 'llama') ? chatTemperature() : null;
+    const { text: fullText, tokensIn, tokensOut } = await callAIChat(
+      messages, systemPrompt,
+      ({ delta }) => {
+        if (delta) {
+          res.write(`data: ${JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text: delta } })}\n\n`);
+        }
+      },
+      null, null, provider, schema, temperatureOverride,
+    );
+    logger.info(`[chat] ${provider} call model=${provider === 'claude' ? (process.env.MODEL_NAME || 'claude-sonnet-4-6') : (provider === 'ollama' ? (process.env.OLLAMA_MODEL || 'llama3.2') : (process.env.LLAMA_MODEL || 'llama3.2'))}`);
 
     // Vollständige Antwort parsen (mehrstufiger Fallback: JSON.parse → balanced extract → jsonrepair)
     let antwort = fullText;
@@ -288,203 +284,5 @@ router.post('/send', jsonBody, async (req, res) => {
     } catch { /* res möglicherweise bereits geschlossen */ }
   }
 });
-
-// ── Provider-Streaming ───────────────────────────────────────────────────────
-
-async function _streamClaude(messages, systemPrompt, res, onText, onTokens) {
-  const model     = process.env.MODEL_NAME  || 'claude-sonnet-4-6';
-  const maxTokens = MAX_TOKENS_OUT;
-
-  const upstream = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY || '',
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({ model, max_tokens: maxTokens, system: systemPrompt, messages, stream: true }),
-  });
-
-  if (!upstream.ok) {
-    const err = await upstream.json();
-    throw new Error(`Claude ${upstream.status}: ${JSON.stringify(err)}`);
-  }
-
-  logger.info(`[chat] Claude call model=${model}`);
-
-  const reader  = upstream.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-  let tokIn = 0;
-  let tokOut = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split('\n');
-    buf = lines.pop();
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const raw = line.slice(6);
-      if (raw === '[DONE]') continue;
-      try {
-        const ev = JSON.parse(raw);
-        if (ev.type === 'message_start' && ev.message?.usage) {
-          const u = ev.message.usage;
-          tokIn = (u.input_tokens || 0)
-                + (u.cache_creation_input_tokens || 0)
-                + (u.cache_read_input_tokens || 0);
-        }
-        if (ev.type === 'message_delta' && ev.usage) {
-          tokOut = ev.usage.output_tokens || 0;
-        }
-        if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
-          onText(ev.delta.text);
-          // Nur Text-Deltas ans Frontend weiterleiten
-          res.write(`data: ${JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text: ev.delta.text } })}\n\n`);
-        }
-      } catch { /* ignorieren */ }
-    }
-  }
-  onTokens(tokIn, tokOut);
-}
-
-async function _streamLlama(messages, systemPrompt, res, onText, onTokens, jsonSchema) {
-  const llamaHost = (process.env.LLAMA_HOST || 'http://localhost:8080').replace(/\/$/, '');
-  const model     = process.env.LLAMA_MODEL || 'llama3.2';
-
-  const llamaMessages = [
-    { role: 'system', content: systemPrompt },
-    ...messages,
-  ];
-
-  // Mit Schema → strict json_schema (GBNF-Grammar-Constrained, fixt unescaped-Quote-Bug).
-  // Ohne Schema → json_object-Hint als Fallback.
-  const responseFormat = jsonSchema
-    ? { type: 'json_schema', json_schema: { name: 'response', strict: true, schema: jsonSchema } }
-    : { type: 'json_object' };
-
-  const chatTemp = chatTemperature();
-  const temperature = chatTemp != null ? chatTemp : parseFloat(process.env.LLAMA_TEMPERATURE || '0.1');
-
-  const upstream = await fetch(`${llamaHost}/v1/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      messages: llamaMessages,
-      stream: true,
-      stream_options: { include_usage: true },
-      temperature,
-      response_format: responseFormat,
-    }),
-  });
-
-  if (!upstream.ok) {
-    const text = await upstream.text();
-    throw new Error(`Llama ${upstream.status}: ${text}`);
-  }
-
-  logger.info(`[chat] Llama call model=${model}`);
-
-  const reader  = upstream.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-  let promptTokens = 0;
-  let evalTokens   = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split('\n');
-    buf = lines.pop();
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const raw = line.slice(6);
-      if (raw === '[DONE]') continue;
-      try {
-        const chunk = JSON.parse(raw);
-        const text  = chunk.choices?.[0]?.delta?.content || '';
-        if (text) {
-          onText(text);
-          res.write(`data: ${JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text } })}\n\n`);
-        }
-        if (chunk.usage) {
-          promptTokens = chunk.usage.prompt_tokens     || 0;
-          evalTokens   = chunk.usage.completion_tokens || 0;
-        }
-      } catch { /* ignorieren */ }
-    }
-  }
-  onTokens(promptTokens, evalTokens);
-}
-
-async function _streamOllama(messages, systemPrompt, res, onText, onTokens, jsonSchema) {
-  const ollamaHost = (process.env.OLLAMA_HOST || 'http://localhost:11434').replace(/\/$/, '');
-  const model      = process.env.OLLAMA_MODEL || 'llama3.2';
-
-  const ollamaMessages = [
-    { role: 'system', content: systemPrompt },
-    ...messages,
-  ];
-
-  // Schema → strikte GBNF-Grammatik; sonst 'json' als Hint-Fallback.
-  const fmt = jsonSchema || 'json';
-
-  // Seiten-Chat ohne CHAT_TEMPERATURE behält bisheriges Verhalten (Ollama-Default),
-  // damit bestehende Installationen keine Verhaltensänderung sehen.
-  const chatTemp = chatTemperature();
-  const options = chatTemp != null ? { think: false, temperature: chatTemp } : { think: false };
-
-  const upstream = await fetch(`${ollamaHost}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: ollamaMessages, stream: true, format: fmt, options }),
-  });
-
-  if (!upstream.ok) {
-    const text = await upstream.text();
-    throw new Error(`Ollama ${upstream.status}: ${text}`);
-  }
-
-  logger.info(`[chat] Ollama call model=${model}`);
-
-  const reader  = upstream.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-  let accumulated = '';
-  let promptTokens = 0;
-  let evalTokens   = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split('\n');
-    buf = lines.pop();
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const chunk = JSON.parse(line);
-        const text  = chunk.message?.content || '';
-        if (text) {
-          accumulated += text;
-          onText(text);
-          res.write(`data: ${JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text } })}\n\n`);
-        }
-        if (chunk.done) {
-          promptTokens = chunk.prompt_eval_count || 0;
-          evalTokens   = chunk.eval_count        || Math.ceil(accumulated.length / CHARS_PER_TOKEN);
-        }
-      } catch { /* ignorieren */ }
-    }
-  }
-  onTokens(promptTokens, evalTokens);
-}
 
 module.exports = router;

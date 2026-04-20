@@ -2,37 +2,12 @@ const express = require('express');
 const { db, getAnyUserToken, getAllUserTokens, reconcilePageIds, pruneStaleBookData } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
 const logger = require('../logger');
 const { CHARS_PER_TOKEN } = require('../lib/ai');
-const { computePageIndex, writePageIndex, writeFigureMentionsForPageAllUsers, tokenizeNamesForStopwords, METRICS_VERSION } = require('../lib/page-index');
+const { bsGet, bsGetAll } = require('../lib/bookstack');
+const { computePageIndex, writePageIndex, writeFigureMentionsForPageAllUsers, tokenizeNamesForStopwords } = require('../lib/page-index');
 
 const router = express.Router();
 
-const BOOKSTACK_URL = (process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80').replace(/\/$/, '');
-
 const PROMPT_OVERHEAD = 3250; // SYSTEM_LEKTORAT + buildLektoratPrompt-Wrapper ≈ 3250 Zeichen Overhead
-
-function authHeader(token) {
-  return token ? `Token ${token.token_id}:${token.token_pw}` : '';
-}
-
-async function bsGet(path, token) {
-  const resp = await fetch(`${BOOKSTACK_URL}/api/${path}`, {
-    headers: { Authorization: authHeader(token) },
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!resp.ok) throw new Error(`BookStack /api/${path}: HTTP ${resp.status}`);
-  return resp.json();
-}
-
-async function bsGetAll(path, token) {
-  const sep = path.includes('?') ? '&' : '?';
-  const first = await bsGet(`${path}${sep}count=500&offset=0`, token);
-  let all = first.data || [];
-  while (all.length < first.total) {
-    const page = await bsGet(`${path}${sep}count=500&offset=${all.length}`, token);
-    all = all.concat(page.data || []);
-  }
-  return all;
-}
 
 function htmlToText(html) {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -197,7 +172,7 @@ async function syncBook(bookId, token) {
       const pd = await bsGet(`pages/${p.id}`, token);
       const text = htmlToText(pd.html || '');
       const { words, chars, tok, wordList, sentences } = computeStats(pd.html || '');
-      const preview = text.trim().slice(0, 800);
+      const preview = text.trim().slice(0, PREVIEW_CHARS);
       return { page_id: p.id, book_id: bookId, tok, words, chars, updated_at: p.updated_at || null, cached_at: now, wordList, sentences, preview, fullText: text };
     }));
     for (const r of results) {
@@ -329,9 +304,7 @@ router.get('/pages/:book_id', (req, res) => {
 
 // POST /sync/pages/:book_id – leichtgewichtiger pages-Cache-Update (ohne Seiten-Inhalte)
 router.post('/pages/:book_id', async (req, res) => {
-  const token = req.session?.bookstackToken
-    ? { token_id: req.session.bookstackToken.id, token_pw: req.session.bookstackToken.pw }
-    : getAnyUserToken();
+  const token = req.session?.bookstackToken || getAnyUserToken();
   if (!token) return res.status(503).json({ error_code: 'NO_BOOKSTACK_TOKEN' });
   try {
     await syncPagesCache(parseInt(req.params.book_id), token);
@@ -344,9 +317,7 @@ router.post('/pages/:book_id', async (req, res) => {
 
 // POST /sync/book/:book_id – manueller Trigger für ein Buch
 router.post('/book/:book_id', async (req, res) => {
-  const token = req.session?.bookstackToken
-    ? { token_id: req.session.bookstackToken.id, token_pw: req.session.bookstackToken.pw }
-    : getAnyUserToken();
+  const token = req.session?.bookstackToken || getAnyUserToken();
   if (!token) return res.status(503).json({ error_code: 'NO_BOOKSTACK_TOKEN' });
   try {
     const result = await syncBook(parseInt(req.params.book_id), token);

@@ -1,4 +1,4 @@
-import { SYSTEM_STILKORREKTUR, buildStilkorrekturPrompt } from './prompts.js';
+import { buildStilkorrekturPrompt } from './prompts.js';
 import { SAFETY_HTML_RATIO, findInHtml, stripFocusArtefacts } from './utils.js';
 
 // Methoden für BookStack-API-Calls (werden in die Alpine-Komponente gespreadet)
@@ -111,7 +111,7 @@ export const bookstackMethods = {
       let completionInfo = null;
       const result = await this.callAI(
         buildStilkorrekturPrompt(html, selectedStyles),
-        SYSTEM_STILKORREKTUR,
+        'stilkorrektur',
         (chars) => {
           this.setStatus(this.t('stilkorrektur.working', { chars }), true);
           if (onProgress) onProgress(chars, aiBase);

@@ -2,6 +2,8 @@
 
 KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Variablen: siehe [README.md](README.md).
 
+**Lokal starten:** `npm install && npm start` (Port 3737). Tests: `npm test` (Playwright, erstmalig `npx playwright install chromium`).
+
 ## Harte Regeln
 
 - **Prompts nur in `public/js/prompts.js`** — einzige Quelle für alle Prompt-Schemas und Build-Logik. Server importiert via dynamic `import()`. NIEMALS Prompts in Route-Handlern, Config-Dateien oder anderswo duplizieren.
@@ -57,7 +59,7 @@ Immer nur eine Hauptansicht aktiv. Buchebenen-Features und Seitenebenen-Features
 
 Schema, Tabellen und Migrationslogik: siehe [db/schema.js](db/schema.js).
 
-**Migration hinzufügen:** Neuen `if (version < N)`-Block in `runMigrations()` ergänzen (N = nächste fortlaufende Nummer, aktuell bei 40) + `UPDATE schema_version SET version = N`. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` — keine Versionierung nötig.
+**Migration hinzufügen:** Neuen `if (version < N)`-Block in `runMigrations()` ergänzen (N = nächste fortlaufende Nummer, aktuell bei 48) + `UPDATE schema_version SET version = N`. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` — keine Versionierung nötig.
 
 **Neuer Beziehungstyp:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Neuen Typ in der `BZ`-Konstante (Frontend-Rendering) und im Claude-Prompt (`FINAL_SCHEMA` in `prompts.js`) ergänzen.
 
@@ -153,16 +155,19 @@ logger.js              – Winston-Config
 lib/ai.js              – callAI(), Provider-Dispatch, JSON-Parsing
 db/schema.js           – SQLite-Schema, Migrationen, alle DB-Funktionen
 routes/
-  auth.js              – Google OIDC
-  proxies.js           – KI-Provider-Proxies + BookStack-Proxy
-  jobs.js              – Job-Router (mountet Feature-Router)
-  jobs/shared.js       – Job-Queue, Limits, loadPageContents, Hilfsfunktionen
-  jobs/lektorat.js     – Seiten-Lektorat
-  jobs/review.js       – Buchbewertung
-  jobs/komplett.js     – Komplettanalyse-Pipeline
-  jobs/chat.js         – Buch-Chat
-  chat.js              – Seiten-Chat (SSE)
-  figures.js, locations.js, history.js, sync.js, booksettings.js
+  auth.js                  – Google OIDC
+  proxies.js               – KI-Provider-Proxies + BookStack-Proxy
+  jobs.js                  – Job-Router (mountet alle Feature-Router)
+  jobs/shared.js           – Job-Queue, Limits, loadPageContents, Hilfsfunktionen
+  jobs/lektorat.js         – Seiten-Lektorat + Batch-Check
+  jobs/review.js           – Buchbewertung
+  jobs/kapitel.js          – Kapitelbewertung
+  jobs/komplett.js         – Komplettanalyse-Pipeline (inkl. Kontinuitätscheck)
+  jobs/chat.js             – Buch-Chat (klassisch + Agentic-Dispatch)
+  jobs/book-chat-tools.js  – Tool-Implementierungen für Agentic Buch-Chat
+  jobs/synonyme.js         – Synonym-Vorschläge
+  chat.js                  – Seiten-Chat (SSE)
+  figures.js, locations.js, history.js, sync.js, booksettings.js, usersettings.js
 public/
   index.html           – SPA-Shell
   style.css            – Alle Styles (einzige Quelle)
@@ -175,6 +180,16 @@ public/
 
 ## Tests
 
-Smoke-Tests für den Fokus-Editor: `npm test` (Playwright, ~2 s, 5 Tests). Deckt Toggle, Recenter beim Tippen, Pointer-Schonfrist beim Klick und Cleanup/Leak-Freiheit ab. Setup: [tests/](tests/), [playwright.config.js](playwright.config.js). Erstinstallation: `npm install && npx playwright install chromium`.
+`npm test` führt Unit- und E2E-Tests nacheinander aus. Einzeln: `npm run test:unit` (Node built-in, Millisekunden, kein Browser) oder `npm run test:e2e` (Playwright, Chromium nötig). Setup: [tests/](tests/), [playwright.config.js](playwright.config.js).
 
-**Bei grösseren UI-Änderungen** (besonders am Editor, Fokus-Modus, Scroll-/Selection-Verhalten) vor dem Commit automatisch `npm test` ausführen. Schlägt etwas fehl, Ursache klären statt Tests anpassen. Übrige Bereiche weiterhin manuell validieren.
+**Unit** (`tests/unit/*.test.js`, `node --test`):
+- [tests/unit/ai.test.js](tests/unit/ai.test.js) – `parseJSON`/`extractBalancedJson`: JSON-Fallback-Kette in [lib/ai.js](lib/ai.js).
+- [tests/unit/bookstack.test.js](tests/unit/bookstack.test.js) – `authHeader`, `bsGet`, `bsGetAll`-Paginierung aus [lib/bookstack.js](lib/bookstack.js) (fetch gestubbt).
+- [tests/unit/page-index.test.js](tests/unit/page-index.test.js) – Stil-/Figuren-Metriken (`computeStyleStats`, `computeFigureMentions`, Tokenizer).
+
+**E2E** (`tests/e2e/*.spec.js`, Playwright):
+- [tests/e2e/focus-editor.spec.js](tests/e2e/focus-editor.spec.js) – Fokus-Editor: Toggle, Recenter, Pointer-Schonfrist, Cleanup/Leak-Freiheit.
+- [tests/e2e/clean-content.spec.js](tests/e2e/clean-content.spec.js) – `cleanContentArtefacts` aus [public/js/utils.js](public/js/utils.js): Paste-Artefakt-Stripping.
+- [tests/e2e/lektorat.spec.js](tests/e2e/lektorat.spec.js) – Lektorat-Flow mit Mock-Server und Harness-Szenarien.
+
+**Bei grösseren UI-Änderungen** (besonders am Editor, Fokus-Modus, Scroll-/Selection-Verhalten, Lektorat-Flow) vor dem Commit automatisch `npm test` ausführen. Schlägt etwas fehl, Ursache klären statt Tests anpassen. Übrige Bereiche weiterhin manuell validieren.

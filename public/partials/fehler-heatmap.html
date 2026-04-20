@@ -55,13 +55,16 @@
                 <td class="heatmap-numcol">
                   <span x-text="t('fehlerHeatmap.coverageLabel', { checked: ch.pages_checked, total: ch.pages_total })"></span>
                   <span class="heatmap-coverage">
-                    <span class="heatmap-coverage-bar" :style="'width: ' + fehlerHeatmapCoveragePct(ch) + '%'"></span>
+                    <span class="heatmap-coverage-bar" :style="{ '--coverage': fehlerHeatmapCoveragePct(ch) + '%' }"></span>
                   </span>
                 </td>
                 <template x-for="typ in fehlerHeatmapTypen" :key="typ">
                   <td class="heatmap-cell heatmap-cell--clickable"
-                      :class="{ 'heatmap-cell--active': activeFehlerDetailKey === fehlerHeatmapChapterKey(ch) + ':' + typ }"
-                      :style="fehlerHeatmapCellStyle(fehlerHeatmapChapterKey(ch), typ, fehlerHeatmapCoveragePct(ch))"
+                      :class="[
+                        ('heatmap-cell--' + fehlerHeatmapCellKind(fehlerHeatmapChapterKey(ch), typ, fehlerHeatmapCoveragePct(ch))),
+                        { 'heatmap-cell--active': activeFehlerDetailKey === fehlerHeatmapChapterKey(ch) + ':' + typ }
+                      ]"
+                      :style="fehlerHeatmapCellVars(fehlerHeatmapChapterKey(ch), typ, fehlerHeatmapCoveragePct(ch))"
                       :title="fehlerHeatmapCellTooltip(fehlerHeatmapChapterKey(ch), typ)"
                       @click="toggleFehlerHeatmapDetail(fehlerHeatmapChapterKey(ch), typ)"
                       x-text="fehlerHeatmapCellLabel(fehlerHeatmapChapterKey(ch), typ)">

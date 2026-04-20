@@ -19,11 +19,9 @@ const SLASH_ITEMS = [
   { key: 'hr',         tag: 'hr' },
 ];
 
-const BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, blockquote, pre, li, div.poem';
+import { getEditEl } from './editor-utils.js';
 
-function getEditEl() {
-  return document.querySelector('#editor-card .page-content-view--editing');
-}
+const BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, blockquote, pre, li, div.poem';
 
 function findBlock(node, root) {
   let cur = node && node.nodeType === 3 ? node.parentNode : node;
@@ -65,7 +63,10 @@ export const toolbarMethods = {
   _installToolbarListeners() {
     if (this._toolbarListenersInstalled) return;
     this._toolbarListenersInstalled = true;
-    document.addEventListener('selectionchange', () => this._updateBubble());
+    // signal kommt aus dem Root-AbortController (app.js init). Dadurch werden
+    // beide Listener beim destroy() der Komponente automatisch entfernt.
+    const signal = this._abortCtrl?.signal;
+    document.addEventListener('selectionchange', () => this._updateBubble(), { signal });
     // Capture-Phase, damit wir auch Scroll-Events in internen Containern
     // (editor-preview-wrap) mitbekommen. Beide Menüs folgen beim Scrollen
     // ihrem Anker – NIE schliessen, sonst flackert das Slash-Menü bei
@@ -73,7 +74,7 @@ export const toolbarMethods = {
     window.addEventListener('scroll', () => {
       if (this.bubbleShow) this._updateBubble();
       if (this.slashShow) this._updateSlashPosition();
-    }, true);
+    }, { capture: true, signal });
   },
 
   _updateSlashPosition() {

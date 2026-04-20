@@ -2,7 +2,7 @@
 // Daten kommen live aus /history/fehler-heatmap/:book_id — kein KI-Call, keine Sync-Phase.
 // `this` zeigt auf die Alpine-Komponente.
 
-import { fetchJson, formatNumber, heatmapCellBg, minMaxBy } from './utils.js';
+import { fetchJson, formatNumber, heatmapCellVars, minMaxBy } from './utils.js';
 
 // Reihenfolge der Typen-Spalten. Muss mit VALID_TYPEN in routes/jobs/lektorat.js kompatibel sein.
 const FEHLER_TYPEN = [
@@ -86,20 +86,25 @@ export const fehlerHeatmapMethods = {
     });
   },
 
-  fehlerHeatmapCellStyle(chapterKey, typ, coveragePct) {
+  // Welche Zell-Variante (→ CSS-Klasse) und welche CSS-Variablen. Split,
+  // damit Alpine das :class separat vom :style binden kann und keine
+  // Inline-Style-Strings ins DOM landen.
+  fehlerHeatmapCellKind(chapterKey, typ, coveragePct) {
     const value = this.fehlerHeatmapCellValue(chapterKey, typ);
-    // Ungeprüfte / teilgeprüfte Zelle: Opazität reduzieren.
-    if (value == null) {
-      if (coveragePct === 0) {
-        return 'background: repeating-linear-gradient(45deg, var(--color-border) 0, var(--color-border) 2px, transparent 2px, transparent 6px); opacity: 0.6;';
-      }
-      return '';
-    }
+    if (value == null) return coveragePct === 0 ? 'empty' : 'neutral';
     const { min, max } = this.fehlerHeatmapRange(typ);
+    if (max === min) return coveragePct < 100 ? 'faded' : 'neutral';
+    return 'tinted';
+  },
+
+  fehlerHeatmapCellVars(chapterKey, typ, coveragePct) {
+    const value = this.fehlerHeatmapCellValue(chapterKey, typ);
+    if (value == null) return {};
     const opacity = coveragePct < 100 ? (0.5 + (coveragePct / 200)) : 1;
-    if (max === min) return coveragePct < 100 ? `opacity: ${opacity};` : '';
+    const { min, max } = this.fehlerHeatmapRange(typ);
+    if (max === min) return coveragePct < 100 ? { '--heatmap-opacity': String(opacity) } : {};
     const t = (value - min) / (max - min);
-    return `${heatmapCellBg(t)} opacity: ${opacity};`;
+    return heatmapCellVars(t, opacity);
   },
 
   fehlerHeatmapCellTooltip(chapterKey, typ) {

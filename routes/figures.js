@@ -190,14 +190,17 @@ router.put('/:book_id', jsonBody, (req, res) => {
   const userEmail = req.session?.user?.email || null;
   const bookId = parseInt(req.params.book_id);
   saveFigurenToDb(bookId, req.body.figuren || [], userEmail);
-  // Figuren-Mentions für den Buch-Chat-Index aktualisieren (synchron, pro Buch ~Sekundenbruchteil)
-  try {
-    const { figures, pagesProcessed } = recomputeBookFigureMentions(bookId, userEmail);
-    logger.info(`Figuren-Mentions aktualisiert: Buch ${bookId}, ${figures} Figuren × ${pagesProcessed} Seiten.`);
-  } catch (e) {
-    logger.warn(`Figuren-Mentions-Neuberechnung für Buch ${bookId} fehlgeschlagen: ${e.message}`);
-  }
+  // Response sofort – Mentions-Neuberechnung läuft im Hintergrund. Auf grossen Büchern
+  // (>500 Seiten × >50 Figuren) braucht der Regex-Scan mehrere Sekunden.
   res.json({ ok: true });
+  setImmediate(() => {
+    try {
+      const { figures, pagesProcessed } = recomputeBookFigureMentions(bookId, userEmail);
+      logger.info(`Figuren-Mentions aktualisiert: Buch ${bookId}, ${figures} Figuren × ${pagesProcessed} Seiten.`);
+    } catch (e) {
+      logger.warn(`Figuren-Mentions-Neuberechnung für Buch ${bookId} fehlgeschlagen: ${e.message}`);
+    }
+  });
 });
 
 // Post-Hoc-Cleanup: Namens-Duplikate mergen, Relations deduplizieren,

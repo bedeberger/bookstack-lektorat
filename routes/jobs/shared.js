@@ -1,28 +1,14 @@
 'use strict';
 const express = require('express');
 const { randomUUID } = require('crypto');
-const fs = require('fs');
-const path = require('path');
-const { pathToFileURL } = require('url');
 const logger = require('../../logger');
 const { db, insertJobRun, startJobRun, endJobRun, getBookSettings } = require('../../db/schema');
 const { callAI, parseJSON, CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../../lib/ai');
+const { bsGet: _bsGet, bsGetAll: _bsGetAll, BOOKSTACK_URL: BS_URL } = require('../../lib/bookstack');
+const { getPrompts, getPromptConfig } = require('../../lib/prompts-loader');
 
-// prompt-config.json synchron lesen (einmalig bei Modulstart); fehlt die Datei, bricht der Server ab.
-const _promptConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../prompt-config.json'), 'utf8'));
-
-// System-Prompts aus dem Browser-Modul laden (Single Source of Truth: public/js/prompts.js)
-let _prompts = null;
-async function getPrompts() {
-  if (!_prompts) {
-    _prompts = await import(pathToFileURL(path.resolve(__dirname, '../../public/js/prompts.js')).href);
-    // Provider mitgeben, damit prompts.js für ollama/llama die Slim-Variante baut
-    // (kompaktere commonRules, keine Beispiele, JSON_ONLY entfällt – Grammar-Constrained
-    // JSON-Output von lib/ai.js erzwingt valides JSON ohne explizite Anweisung).
-    _prompts.configurePrompts(_promptConfig, process.env.API_PROVIDER || 'claude');
-  }
-  return _prompts;
-}
+// Rückwärtskompatibler Export – einige Module lesen _promptConfig direkt.
+const _promptConfig = getPromptConfig();
 
 /**
  * Gibt das Locale-Prompts-Objekt für ein Buch zurück – augmentiert mit Buchtyp und Buchkontext.
@@ -102,6 +88,22 @@ function i18nError(key, params = null) {
   return err;
 }
 
+// Auto-Cleanup: 2 h nachdem der Job terminal (done|error|cancelled) wurde,
+// wird der Memory-Eintrag entfernt. Vorher nicht – solange der Job läuft, soll
+// der Client ihn abfragen können.
+const CLEANUP_DELAY_MS = 2 * 60 * 60 * 1000;
+
+function _scheduleJobCleanup(id) {
+  const job = jobs.get(id);
+  if (!job) return;
+  const key = jobKey(job.type, job.bookId, job.userEmail);
+  const timer = setTimeout(() => {
+    jobs.delete(id);
+    if (runningJobs.get(key) === id) runningJobs.delete(key);
+  }, CLEANUP_DELAY_MS);
+  timer.unref?.(); // blockiert den Prozess-Exit nicht
+}
+
 function createJob(type, bookId, userEmail, label, labelParams = null) {
   const id = randomUUID();
   const key = jobKey(type, bookId, userEmail);
@@ -119,19 +121,6 @@ function createJob(type, bookId, userEmail, label, labelParams = null) {
   jobAbortControllers.set(id, new AbortController());
   try { insertJobRun({ id, type, bookId: String(bookId), userEmail, label }); } catch (e) { logger.error(`[${type}|${userEmail || '-'}|${bookId}] insertJobRun: ${e.message}`); }
   runningJobs.set(key, id);
-  // Auto-Cleanup nach 2 Stunden – aber nur, wenn der Job bereits terminal ist.
-  // Sonst läuft er evtl. noch (z.B. grosse Komplettanalyse) und würde
-  // mitten im Response-Zyklus aus der Map verschwinden.
-  const scheduleCleanup = () => setTimeout(() => {
-    const job = jobs.get(id);
-    if (job && (job.status === 'running' || job.status === 'queued')) {
-      scheduleCleanup();
-      return;
-    }
-    jobs.delete(id);
-    if (runningJobs.get(key) === id) runningJobs.delete(key);
-  }, 7200000);
-  scheduleCleanup();
   return id;
 }
 
@@ -165,6 +154,7 @@ function completeJob(id, result, tokensPerSec = null) {
   try { endJobRun(id, 'done', job.endedAt, job.tokensIn, job.tokensOut, tokensPerSec, null); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
   jobAbortControllers.delete(id);
+  _scheduleJobCleanup(id);
 }
 
 function failJob(id, err) {
@@ -178,6 +168,7 @@ function failJob(id, err) {
   try { endJobRun(id, status, job.endedAt, job.tokensIn, job.tokensOut, null, errorMsg); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
   runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
   jobAbortControllers.delete(id);
+  _scheduleJobCleanup(id);
 }
 
 function cancelJob(id, userEmail) {
@@ -192,6 +183,7 @@ function cancelJob(id, userEmail) {
     try { endJobRun(id, 'cancelled', endedAt, 0, 0, null, 'Abgebrochen'); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
     runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
     jobAbortControllers.delete(id);
+    _scheduleJobCleanup(id);
     logger.info(`Job ${id} (${job.type}|${job.userEmail || '-'}|${job.bookId}) aus Warteschlange entfernt und abgebrochen.`);
     return true;
   }
@@ -230,32 +222,24 @@ async function settledAll(thunks) {
 }
 
 // ── BookStack-Helfer ──────────────────────────────────────────────────────────
-const BS_URL = (process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80').replace(/\/$/, '');
-
+// Wrapped `lib/bookstack.js` – mappt Nicht-OK-Responses auf i18nError, damit
+// Job-UI die Meldung übersetzt anzeigen kann.
 async function bsGet(path, userToken) {
-  const auth = userToken
-    ? `Token ${userToken.id}:${userToken.pw}`
-    : `Token ${process.env.TOKEN_ID || ''}:${process.env.TOKEN_KENNWORT || ''}`;
-  const resp = await fetch(`${BS_URL}/api/${path}`, {
-    headers: { Authorization: auth },
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!resp.ok) throw i18nError('job.error.bookstack', { status: resp.status, text: await resp.text() });
-  return resp.json();
+  try {
+    return await _bsGet(path, userToken);
+  } catch (e) {
+    if (e.status) throw i18nError('job.error.bookstack', { status: e.status, text: e.bodyText });
+    throw e;
+  }
 }
 
 async function bsGetAll(path, userToken) {
-  let offset = 0;
-  const all = [];
-  while (true) {
-    const sep = path.includes('?') ? '&' : '?';
-    const data = await bsGet(`${path}${sep}count=500&offset=${offset}`, userToken);
-    const items = data.data || [];
-    all.push(...items);
-    if (all.length >= (data.total || 0) || !items.length) break;
-    offset += items.length;
+  try {
+    return await _bsGetAll(path, userToken);
+  } catch (e) {
+    if (e.status) throw i18nError('job.error.bookstack', { status: e.status, text: e.bodyText });
+    throw e;
   }
-  return all;
 }
 
 function htmlToText(html) {

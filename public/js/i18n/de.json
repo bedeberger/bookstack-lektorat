@@ -70,6 +70,7 @@
   "app.tokenRequired":           "Bitte Token ID und Token Secret eingeben.",
   "app.saveError":               "Fehler beim Speichern",
   "app.jobFailed":               "Job fehlgeschlagen",
+  "app.jobCancelFailed":         "Job konnte nicht abgebrochen werden.",
   "app.lektoratRunning":         "Lektorat läuft…",
 
   "komplett.confirm":            "Komplettanalyse starten?\n\nFiguren, Soziogramm, Schauplätze, Szenen, Ereignisse und Zeitstrahl werden neu ermittelt. Bei grossen Büchern kann das mehrere Minuten dauern.",

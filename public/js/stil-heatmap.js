@@ -2,7 +2,7 @@
 // Greift auf page_stats zu (gefüllt vom Sync-Job über lib/page-index.js).
 // `this` zeigt auf die Alpine-Komponente.
 
-import { fetchJson, formatNumber, heatmapCellBg, localeTag, minMaxBy } from './utils.js';
+import { fetchJson, formatNumber, heatmapCellVars, localeTag, minMaxBy } from './utils.js';
 
 // Metrik-Schlüssel → i18n-Label. Reihenfolge = Spaltenreihenfolge in der Heatmap.
 // sampleBucket: Schlüssel im pro-Seite `style_samples`-Objekt bzw. 'repetition'
@@ -153,20 +153,31 @@ export const stilMethods = {
   // higherIsWorse=null → neutrale Skala (Gradient vom blasseren zum kräftigeren Primary-Ton).
   // higherIsWorse=true → hohe Werte rot, niedrige grün.
   // higherIsWorse=false → umgekehrt.
-  stilCellStyle(value, metricKey, chapters) {
-    if (typeof value !== 'number' || !isFinite(value)) return '';
+  // Zelltyp (→ CSS-Klasse) separat vom Variablen-Style, damit keine Inline-
+  // Style-Strings im DOM landen. Varianten: 'neutral' (kein Tint),
+  // 'primary' (primary-fade über --heatmap-t), 'tinted' (grün→rot über --heatmap-t).
+  stilCellKind(value, metricKey, chapters) {
+    if (typeof value !== 'number' || !isFinite(value)) return 'neutral';
     const def = STIL_METRICS.find(m => m.key === metricKey);
-    if (!def) return '';
+    if (!def) return 'neutral';
     const { min, max } = this.stilMetricRange(metricKey, chapters);
-    if (max === min) return '';
-    let t = (value - min) / (max - min); // 0..1
+    if (max === min) return 'neutral';
+    return def.higherIsWorse === null ? 'primary' : 'tinted';
+  },
+
+  stilCellVars(value, metricKey, chapters) {
+    if (typeof value !== 'number' || !isFinite(value)) return {};
+    const def = STIL_METRICS.find(m => m.key === metricKey);
+    if (!def) return {};
+    const { min, max } = this.stilMetricRange(metricKey, chapters);
+    if (max === min) return {};
+    let t = (value - min) / (max - min);
     if (def.higherIsWorse === false) t = 1 - t;
-    // Neutral: Primary-Fade; direktional: rot ↔ grün.
     if (def.higherIsWorse === null) {
       const alpha = 0.12 + (0.55 * t);
-      return `background: color-mix(in srgb, var(--color-primary) ${Math.round(alpha * 100)}%, transparent);`;
+      return { '--heatmap-t': Math.round(alpha * 100) + '%' };
     }
-    return heatmapCellBg(t);
+    return heatmapCellVars(t);
   },
 
   // Formatiert den last_updated-ISO-Timestamp lokalisiert (Datum + Uhrzeit ohne Sekunden).

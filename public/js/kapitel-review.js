@@ -39,7 +39,7 @@ export const kapitelReviewMethods = {
           <span class="bewertung-stars">${stars}</span>
           <span class="bewertung-header-note">${escHtml(r.gesamtnote_begruendung || '')}</span>
         </div>
-        <div class="stilbox" style="margin-bottom:14px;">${escHtml(r.zusammenfassung || '')}</div>`;
+        <div class="stilbox stilbox--review-summary">${escHtml(r.zusammenfassung || '')}</div>`;
     const sections = [
       ['dramaturgie', 'kapitelReview.section.dramaturgie'],
       ['pacing',      'kapitelReview.section.pacing'],
@@ -69,7 +69,7 @@ export const kapitelReviewMethods = {
           <div class="bewertung-section-title">${escHtml(this.t('review.section.empfehlungen'))}</div>
           <ul class="bullet-list">${r.empfehlungen.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
         </div>`;
-    if (r.fazit) html += `<div class="fazit" style="margin-top:16px;">${escHtml(r.fazit)}</div>`;
+    if (r.fazit) html += `<div class="fazit fazit--review">${escHtml(r.fazit)}</div>`;
     return html;
   },
 

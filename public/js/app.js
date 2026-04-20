@@ -1,4 +1,4 @@
-import { escHtml, escPreserveStrong, htmlToText, fmtTok, stripFocusArtefacts, fetchJson, fetchText } from './utils.js';
+import { escHtml, escPreserveStrong, htmlToText, fmtTok, stripFocusArtefacts, fetchJson, fetchText, clearStatusAfter } from './utils.js';
 import { configurePrompts } from './prompts.js';
 
 import { bookstackMethods } from './api-bookstack.js';
@@ -139,16 +139,28 @@ document.addEventListener('alpine:init', () => {
       });
     },
     init() {
+      // ARIA: das gesamte Widget verhält sich wie ein Combobox mit Listbox-Popup.
+      // aria-expanded gibt Screenreadern den Öffnungszustand, aria-activedescendant
+      // verweist auf die aktuell via Tastatur markierte Option.
+      this.$el.setAttribute('role', 'combobox');
+      this.$el.setAttribute('aria-haspopup', 'listbox');
       this.$el.innerHTML = `
-        <button type="button" class="combobox-trigger" @click="toggle()">
+        <button type="button" class="combobox-trigger" @click="toggle()"
+                :aria-expanded="open ? 'true' : 'false'"
+                :aria-label="selectedLabel || placeholder">
           <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
           <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <div class="combobox-dropdown" x-show="open" x-cloak>
-          <input type="text" class="combobox-search" x-model="query" x-ref="cbInput" placeholder="Suchen…">
-          <ul class="combobox-list">
+          <input type="text" class="combobox-search" x-model="query" x-ref="cbInput"
+                 placeholder="Suchen…" role="searchbox" aria-label="Suchen">
+          <ul class="combobox-list" role="listbox"
+              :aria-activedescendant="highlighted >= 0 ? ($id('cb-opt') + '-' + highlighted) : null">
             <template x-for="(opt, i) in filtered" :key="opt.value">
               <li class="combobox-option"
+                  role="option"
+                  :id="$id('cb-opt') + '-' + i"
+                  :aria-selected="String(opt.value) === String(value) ? 'true' : 'false'"
                   :class="{'combobox-option--selected': String(opt.value) === String(value), 'combobox-option--hl': i === highlighted}"
                   @click="select(opt.value)" @mouseenter="highlighted = i"
                   x-text="opt.label"></li>
@@ -935,7 +947,7 @@ document.addEventListener('alpine:init', () => {
       for (const prop of watchers) {
         this.$watch(prop, () => this._updateHash());
       }
-      window.addEventListener('hashchange', () => this._applyHash());
+      window.addEventListener('hashchange', () => this._applyHash(), { signal: this._abortCtrl?.signal });
     },
 
     // ── UI-Hilfsmethoden ─────────────────────────────────────────────────────
@@ -983,28 +995,26 @@ document.addEventListener('alpine:init', () => {
 
     filteredFiguren() {
       let result = this.figuren;
-      if (this.figurenSuche) {
-        const q = this.figurenSuche.toLowerCase();
-        result = result.filter(f => f.name.toLowerCase().includes(q));
-      }
+      const q = (this.figurenSuche ?? '').toLowerCase();
+      if (q) result = result.filter(f => (f.name ?? '').toLowerCase().includes(q));
       if (this.figurenKapitelFilter) {
         result = result.filter(f =>
-          (f.kapitel || []).some(k => k.name === this.figurenKapitelFilter)
+          (f.kapitel ?? []).some(k => k.name === this.figurenKapitelFilter)
         );
       }
       if (this.figurenSeitenFilter) {
         result = result.filter(f =>
-          (f.seiten || []).some(s => s.kapitel === this.figurenKapitelFilter && s.seite === this.figurenSeitenFilter)
+          (f.seiten ?? []).some(s => s.kapitel === this.figurenKapitelFilter && s.seite === this.figurenSeitenFilter)
         );
       }
       return [...result].sort((a, b) => {
-        const aK = Math.min(...(a.kapitel || []).map(k => this._chapterIdx(k.name)), 9999);
-        const bK = Math.min(...(b.kapitel || []).map(k => this._chapterIdx(k.name)), 9999);
+        const aK = Math.min(...(a.kapitel ?? []).map(k => this._chapterIdx(k.name)), 9999);
+        const bK = Math.min(...(b.kapitel ?? []).map(k => this._chapterIdx(k.name)), 9999);
         if (aK !== bK) return aK - bK;
         const aT = FIGUR_TYP_ORDER[a.typ] ?? 99;
         const bT = FIGUR_TYP_ORDER[b.typ] ?? 99;
         if (aT !== bT) return aT - bT;
-        return (a.name || '').localeCompare(b.name || '', 'de');
+        return (a.name ?? '').localeCompare(b.name ?? '', 'de');
       });
     },
 
@@ -1190,7 +1200,7 @@ document.addEventListener('alpine:init', () => {
           this.alleAktualisierenLoading = false;
           const doneMsg = this.t('common.finished');
           this.alleAktualisierenStatus = doneMsg;
-          setTimeout(() => { if (this.alleAktualisierenStatus === doneMsg) this.alleAktualisierenStatus = ''; }, 4000);
+          clearStatusAfter(this, 'alleAktualisierenStatus', doneMsg, 4000);
         },
       });
     },
@@ -1200,7 +1210,10 @@ document.addEventListener('alpine:init', () => {
       try {
         const { lastRunFmt } = await fetchJson(`/jobs/last-run?type=komplett-analyse&book_id=${bookId}`);
         this.alleAktualisierenLastRun = lastRunFmt || null;
-      } catch { this.alleAktualisierenLastRun = null; }
+      } catch (e) {
+        console.error('[loadLastKomplettRun]', e);
+        this.alleAktualisierenLastRun = null;
+      }
     },
 
     _fmtTok(n) { return fmtTok(n || 0); },
@@ -1285,17 +1298,32 @@ document.addEventListener('alpine:init', () => {
       return this.t({ auto: 'theme.auto', light: 'theme.light', dark: 'theme.dark' }[this.themePref] || 'theme.auto');
     },
 
+    // AbortController für alle globalen Listener. `destroy()` (Alpine-Hook)
+    // ruft abort() → alle Listener dieser Komponente werden automatisch
+    // entfernt. In der Praxis lebt die Root-Komponente so lange wie die Seite,
+    // aber der Controller schützt vor doppelter Registrierung bei Re-Init.
+    _abortCtrl: null,
+
+    destroy() {
+      this._abortCtrl?.abort();
+      if (this._jobQueueTimer) clearInterval(this._jobQueueTimer);
+      if (this._statusTimer) clearTimeout(this._statusTimer);
+    },
+
     // ── Initialisierung ──────────────────────────────────────────────────────
     async init() {
+      this._abortCtrl?.abort();
+      this._abortCtrl = new AbortController();
+      const signal = this._abortCtrl.signal;
       this.themePref = window.__themePref || 'auto';
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
         if (this.themePref === 'auto') this._applyTheme();
-      });
-      window.addEventListener('session-expired', () => { this.sessionExpired = true; });
-      window.addEventListener('bookstack-token-invalid', () => { this.bookstackTokenInvalid = true; });
+      }, { signal });
+      window.addEventListener('session-expired', () => { this.sessionExpired = true; }, { signal });
+      window.addEventListener('bookstack-token-invalid', () => { this.bookstackTokenInvalid = true; }, { signal });
       window.addEventListener('beforeunload', (e) => {
         if (this.editMode && this.editDirty) { e.preventDefault(); e.returnValue = ''; }
-      });
+      }, { signal });
       try {
         const cfg = await fetchJson('/config');
         const browserLoc = (navigator.language || 'de').slice(0, 2);
@@ -1356,7 +1384,8 @@ document.addEventListener('alpine:init', () => {
           if (this.showFiguresCard && this.figuren?.length) this.renderFigurGraph();
         });
         this._startJobQueuePoll();
-      } catch {
+      } catch (e) {
+        console.error('[init]', e);
         this.setStatus(this.t('app.configLoadError'));
       }
     },
@@ -1366,7 +1395,8 @@ document.addEventListener('alpine:init', () => {
       if (this.showJobStats) {
         try {
           this.jobStats = await fetchJson('/jobs/stats');
-        } catch {
+        } catch (e) {
+          console.error('[toggleJobStats]', e);
           this.jobStats = [];
         }
       }
@@ -1374,10 +1404,22 @@ document.addEventListener('alpine:init', () => {
 
     _startJobQueuePoll() {
       if (this._jobQueueTimer) clearInterval(this._jobQueueTimer);
+      let consecutiveFailures = 0;
       const poll = async () => {
         try {
           this.jobQueueItems = await fetchJson('/jobs/queue');
-        } catch { /* ignorieren */ }
+          consecutiveFailures = 0;
+        } catch (e) {
+          // Ein Setzer schlägt fehl, wenn der Server down ist oder die Session
+          // abgelaufen ist – kein Grund für dauerndes Poll-Spam. Nach mehreren
+          // Fehlern in Folge aussetzen; der Fehler bleibt via Logger sichtbar.
+          consecutiveFailures++;
+          console.error('[jobQueuePoll]', e);
+          if (consecutiveFailures >= 5 && this._jobQueueTimer) {
+            clearInterval(this._jobQueueTimer);
+            this._jobQueueTimer = null;
+          }
+        }
       };
       poll();
       this._jobQueueTimer = setInterval(poll, 5000);
@@ -1385,9 +1427,13 @@ document.addEventListener('alpine:init', () => {
 
     async cancelJob(jobId) {
       try {
-        await fetch('/jobs/' + jobId, { method: 'DELETE' });
+        const res = await fetch('/jobs/' + jobId, { method: 'DELETE' });
+        if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
         this.jobQueueItems = this.jobQueueItems.filter(j => j.id !== jobId);
-      } catch { /* ignorieren */ }
+      } catch (e) {
+        console.error('[cancelJob]', e);
+        this.setStatus(this.t('app.jobCancelFailed'), false, 4000);
+      }
     },
 
     navigateToJob(job) {

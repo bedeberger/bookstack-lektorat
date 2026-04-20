@@ -44,11 +44,14 @@
                 <td class="heatmap-numcol" x-text="(c.words || 0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH')"></td>
                 <template x-for="m in stilMetricDefs" :key="m.key">
                   <td class="heatmap-cell"
-                      :class="{
-                        'heatmap-cell--clickable': stilIsClickableMetric(m.key) && (c[m.key] || 0) > 0,
-                        'heatmap-cell--active': activeStilDetailKey === (c.key + ':' + m.key),
-                      }"
-                      :style="stilCellStyle(c[m.key], m.key, stilChaptersAggregated())"
+                      :class="[
+                        ('heatmap-cell--' + stilCellKind(c[m.key], m.key, stilChaptersAggregated())),
+                        {
+                          'heatmap-cell--clickable': stilIsClickableMetric(m.key) && (c[m.key] || 0) > 0,
+                          'heatmap-cell--active': activeStilDetailKey === (c.key + ':' + m.key),
+                        }
+                      ]"
+                      :style="stilCellVars(c[m.key], m.key, stilChaptersAggregated())"
                       @click="stilIsClickableMetric(m.key) && (c[m.key] || 0) > 0 && toggleStilDetail(c.key, m.key)"
                       x-text="stilFormat(c[m.key], m.key)">
                   </td>
