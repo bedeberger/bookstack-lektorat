@@ -23,6 +23,13 @@
     </div>
 
     <div class="book-settings-row">
+      <label class="book-settings-label" x-text="t('profile.bookstackToken')"></label>
+      <div class="book-settings-options">
+        <button type="button" @click="openTokenChange()" x-text="t('profile.changeToken')"></button>
+      </div>
+    </div>
+
+    <div class="book-settings-row">
       <label class="book-settings-label" x-text="t('profile.uiLanguage')"></label>
       <div class="book-settings-options">
         <label class="book-settings-option">

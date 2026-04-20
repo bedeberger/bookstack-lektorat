@@ -142,6 +142,17 @@ export const toolbarMethods = {
   },
 
   _onEditKeydown(e) {
+    // Shift+Enter = weicher Zeilenumbruch (<br>). In Safari/WebKit splittet
+    // die Default-Aktion stattdessen den Absatz in zwei <p> – was in Gedichten
+    // und Dialogen der falsche Umbruch ist. execCommand('insertLineBreak')
+    // setzt das <br> cross-browser konsistent (WebKit + Chromium getestet).
+    if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      document.execCommand('insertLineBreak');
+      this._markEditDirty?.();
+      return;
+    }
+
     // Im Fokus-Mode bleibt U (Underline) tabu – die Plättung versteckt
     // das Ergebnis und der User würde unsichtbar formatieren. B/I sind
     // explizit erlaubt: die Auszeichnung landet im HTML und wird beim

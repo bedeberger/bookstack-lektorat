@@ -159,6 +159,7 @@
   "app.subtitle":                "AI-assisted spellchecking & style analysis",
 
   "tokenSetup.title":            "Set up BookStack API token",
+  "tokenSetup.titleChange":      "Change BookStack API token",
   "tokenSetup.desc":             "Create a personal API token in BookStack and enter it here.",
   "tokenSetup.openLink":         "Open BookStack → Profile → API tokens",
   "tokenSetup.fallbackText":     "BookStack → Profile → API tokens",
@@ -454,7 +455,7 @@
 
   "fehlerHeatmap.title":         "Issue heatmap: {name}",
   "fehlerHeatmap.emptyState":    "No editing runs yet. Open a page and run a check.",
-  "fehlerHeatmap.legend":        "Red = many issues per 1000 words, green = few. Hatched cells: chapter not yet (fully) checked.",
+  "fehlerHeatmap.legend":        "Numbers = findings per 1000 words of chapter text (e.g. 4.2 = 4 findings of this type per 1000 words). This keeps short and long chapters comparable. Colour scaled per column: red = relatively high density, green = low. Hatched cells: chapter not yet or only partially checked.",
   "fehlerHeatmap.chapter":       "Chapter",
   "fehlerHeatmap.coverage":      "Coverage",
   "fehlerHeatmap.coverageLabel": "{checked} / {total} pages",
@@ -618,6 +619,8 @@
 
   "profile.title":               "Profile & settings",
   "profile.account":             "Account",
+  "profile.bookstackToken":      "BookStack API token",
+  "profile.changeToken":         "Change token",
   "profile.uiLanguage":          "Interface language",
   "profile.uiLanguageHint":      "Applies to the user interface only. Independent of a book's language.",
   "profile.newBooksHint":        "These defaults are used as suggestions for newly added books. Already configured books stay unchanged.",

@@ -1,7 +1,7 @@
-<!-- BookStack Token Setup (nur beim Erstsetup sichtbar) -->
+<!-- BookStack Token Setup (Erstsetup + Token-Wechsel) -->
 <div class="card token-setup-card" x-show="showTokenSetup" x-cloak>
   <div class="card-header">
-    <span class="card-title" x-text="t('tokenSetup.title')"></span>
+    <span class="card-title" x-text="tokenSetupCanCancel ? t('tokenSetup.titleChange') : t('tokenSetup.title')"></span>
   </div>
   <p class="token-setup-desc">
     <span x-text="t('tokenSetup.desc')"></span><br>
@@ -24,5 +24,6 @@
       <span x-show="tokenSetupLoading" class="spinner"></span>
       <span x-text="tokenSetupLoading ? t('common.saving') : t('common.save')"></span>
     </button>
+    <button type="button" x-show="tokenSetupCanCancel" @click="cancelTokenSetup()" :disabled="tokenSetupLoading" x-text="t('common.cancel')"></button>
   </div>
 </div>

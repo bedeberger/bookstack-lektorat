@@ -159,6 +159,7 @@
   "app.subtitle":                "KI-gestützte Rechtschreibprüfung & Stilanalyse",
 
   "tokenSetup.title":            "BookStack API-Token einrichten",
+  "tokenSetup.titleChange":      "BookStack API-Token ändern",
   "tokenSetup.desc":             "Erstelle einen persönlichen API-Token in BookStack und trage ihn hier ein.",
   "tokenSetup.openLink":         "BookStack öffnen → Profil → API-Tokens",
   "tokenSetup.fallbackText":     "BookStack → Profil → API-Tokens",
@@ -454,7 +455,7 @@
 
   "fehlerHeatmap.title":         "Fehler-Heatmap: {name}",
   "fehlerHeatmap.emptyState":    "Noch keine Lektorat-Läufe vorhanden. Öffne eine Seite und starte die Prüfung.",
-  "fehlerHeatmap.legend":        "Rot = viele Fehler pro 1000 Wörter, Grün = wenige. Schraffierte Zellen: Kapitel noch nicht oder nur teilweise geprüft.",
+  "fehlerHeatmap.legend":        "Zahlen = Befunde pro 1000 Wörter Kapiteltext (z.B. 4,2 = 4 Befunde dieses Typs auf 1000 Wörter). So bleiben kurze und lange Kapitel vergleichbar. Farbe pro Spalte skaliert: Rot = vergleichsweise hohe Dichte, Grün = niedrig. Schraffierte Zellen: Kapitel noch nicht oder nur teilweise geprüft.",
   "fehlerHeatmap.chapter":       "Kapitel",
   "fehlerHeatmap.coverage":      "Abdeckung",
   "fehlerHeatmap.coverageLabel": "{checked} / {total} Seiten",
@@ -618,6 +619,8 @@
 
   "profile.title":               "Profil & Einstellungen",
   "profile.account":             "Konto",
+  "profile.bookstackToken":      "BookStack API-Token",
+  "profile.changeToken":         "Token ändern",
   "profile.uiLanguage":          "Sprache der Oberfläche",
   "profile.uiLanguageHint":      "Gilt nur für die Benutzeroberfläche. Unabhängig von der Sprache eines Buches.",
   "profile.newBooksHint":        "Diese Standardwerte werden für neu angelegte Bücher als Vorschlag verwendet. Bereits konfigurierte Bücher bleiben unverändert.",

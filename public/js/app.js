@@ -163,6 +163,7 @@ document.addEventListener('alpine:init', () => {
     tokenSetupPw: '',
     tokenSetupError: '',
     tokenSetupLoading: false,
+    tokenSetupCanCancel: false,
     claudeModel: 'claude-sonnet-4-6',
     claudeMaxTokens: 64000,
     apiProvider: 'claude',
@@ -256,15 +257,16 @@ document.addEventListener('alpine:init', () => {
     bookReviewHistory: [],
     selectedBookReviewId: null,
     // Kapitel-Review-State
+    // Job-UI ist pro Kapitel isoliert, damit parallele Bewertungen unabhängig
+    // laufen/angezeigt werden. `kapitelReviewJobs[chapterId]` = { loading,
+    // progress, status, out, jobId }; `_kapitelReviewPollTimers[chapterId]` =
+    // setInterval-Handle pro Kapitel.
     showKapitelReviewCard: false,
     kapitelReviewChapterId: '',
-    kapitelReviewOut: '',
-    kapitelReviewStatus: '',
-    kapitelReviewLoading: false,
-    kapitelReviewProgress: 0,
+    kapitelReviewJobs: {},
     kapitelReviewHistory: {},
     selectedKapitelReviewId: null,
-    _kapitelReviewPollTimer: null,
+    _kapitelReviewPollTimers: {},
     newPageTitle: '',
     newPageCreating: false,
     newPageError: '',
@@ -1829,6 +1831,7 @@ document.addEventListener('alpine:init', () => {
         });
         if (!r.ok) throw new Error(this.tError(await r.json()));
         this.showTokenSetup = false;
+        this.tokenSetupCanCancel = false;
         this.tokenSetupId = '';
         this.tokenSetupPw = '';
         await this.loadBooks();
@@ -1837,6 +1840,23 @@ document.addEventListener('alpine:init', () => {
       } finally {
         this.tokenSetupLoading = false;
       }
+    },
+
+    openTokenChange() {
+      this.tokenSetupId = '';
+      this.tokenSetupPw = '';
+      this.tokenSetupError = '';
+      this.tokenSetupCanCancel = true;
+      this.showUserSettingsCard = false;
+      this.showTokenSetup = true;
+    },
+
+    cancelTokenSetup() {
+      this.showTokenSetup = false;
+      this.tokenSetupCanCancel = false;
+      this.tokenSetupId = '';
+      this.tokenSetupPw = '';
+      this.tokenSetupError = '';
     },
 
     // ── Methoden aus Modulen ─────────────────────────────────────────────────

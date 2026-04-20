@@ -3,11 +3,32 @@ import { escHtml, fetchJson } from './utils.js';
 // Kapitel-Review-Methoden (werden in die Alpine-Komponente gespreadet).
 // `this` bezieht sich auf die Alpine-Komponente. Die eigentliche Analyse
 // läuft serverseitig als Hintergrundjob (POST /jobs/chapter-review).
-// Pro Kapitel kann ein eigener Job laufen – mehrere Kapitel parallel sind ok.
+// Job-UI-State ist pro Kapitel isoliert (`kapitelReviewJobs[chapterId]`),
+// damit parallele Bewertungen in mehreren Kapiteln sich nicht gegenseitig
+// im Status/Progress/Output überschreiben.
+
+const EMPTY_KAPITEL_UI = Object.freeze({ loading: false, progress: 0, status: '', out: '', jobId: null });
 
 export const kapitelReviewMethods = {
   _lsKeyKapitelReview(chapterId) {
     return `lektorat_chapter_review_job_${this.selectedBookId}_${chapterId}`;
+  },
+
+  // Lazy-Init für den Per-Kapitel-UI-Slot. Anlegen statt Getter, damit Alpine
+  // die Reaktivität beim ersten Schreiben erkennt.
+  _ensureKapitelReviewState(chapterId) {
+    const id = String(chapterId);
+    if (!this.kapitelReviewJobs[id]) {
+      this.kapitelReviewJobs[id] = { loading: false, progress: 0, status: '', out: '', jobId: null };
+    }
+    return this.kapitelReviewJobs[id];
+  },
+
+  // Template-Helper: liefert den UI-Slot des aktuell gewählten Kapitels. Fällt
+  // auf ein leeres Objekt zurück, damit `x-show`/`x-html` tolerant bleiben.
+  kapitelReviewUi() {
+    if (!this.kapitelReviewChapterId) return EMPTY_KAPITEL_UI;
+    return this.kapitelReviewJobs[String(this.kapitelReviewChapterId)] || EMPTY_KAPITEL_UI;
   },
 
   _renderKapitelReviewHtml(r) {

@@ -4521,16 +4521,6 @@ body.focus-mode .edit-find { display: none !important; }
 }
 .kapitel-new-page-input {
   flex: 1 1 auto;
-  padding: 6px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-input-bg, var(--color-bg));
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-}
-.kapitel-new-page-input:focus {
-  outline: none;
-  border-color: var(--color-accent);
 }
 
 /* === Token-Badges: W und Z im Seitenbaum ausblenden === */
