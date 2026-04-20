@@ -109,7 +109,11 @@ export function initialLektoratState() {
     activeHistoryEntryId: null,
     bookReviewHistory: [],
     selectedBookReviewId: null,
-    // Kapitel-Review-State
+    // Kapitel-Review-State.
+    // Ein laufender Job pro Buch (nicht pro Kapitel) — `kapitelReviewChapterId`
+    // hält das aktive Kapitel, `_kapitelReviewPollTimer` dessen Poller.
+    // `kapitelReviewHistory` ist ein Dict `chapterId → [entry, ...]` für die
+    // Historienanzeige des aktuell gewählten Kapitels.
     showKapitelReviewCard: false,
     kapitelReviewChapterId: '',
     kapitelReviewLoading: false,
