@@ -1,23 +1,31 @@
 // Seitenansicht-Methoden: Formatierte HTML-Ansicht mit Inline-Fehlermarkierung
 // und Figurenkontext-Panel. `this` bezieht sich auf die Alpine-Komponente.
 
-import { escHtml, htmlToText, fetchJson } from './utils.js';
+import { escHtml, htmlToText, fetchJson, findInHtml } from './utils.js';
 import { tRaw } from './i18n.js';
 import { _sanitizeFigur } from './figuren.js';
 
 // Weiche Typen: standardmässig nicht vorausgewählt (User entscheidet pro Finding)
 export const SOFT_TYPEN = new Set(['wiederholung', 'schwaches_verb', 'fuellwort', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel']);
 
-/** Sortiert Fehler nach Position im HTML. Nicht gefundene ans Ende. */
+/** Sortiert Fehler nach Position im HTML (toleranter Match via `findInHtml`,
+ *  damit Originale mit Tags/Entities/Whitespace-Differenzen richtig einsortiert
+ *  werden statt ans Ende zu fallen). Nicht gefundene ans Ende. */
 export function sortByPosition(html, fehler) {
-  return [...fehler].sort((a, b) => {
-    const posA = a.original ? html.indexOf(a.original) : -1;
-    const posB = b.original ? html.indexOf(b.original) : -1;
-    if (posA === -1 && posB === -1) return 0;
-    if (posA === -1) return 1;
-    if (posB === -1) return -1;
-    return posA - posB;
+  const posCache = fehler.map(f => {
+    if (!f.original) return -1;
+    const m = findInHtml(html, f.original);
+    return m ? m.htmlStart : -1;
   });
+  return [...fehler]
+    .map((f, i) => ({ f, pos: posCache[i] }))
+    .sort((a, b) => {
+      if (a.pos === -1 && b.pos === -1) return 0;
+      if (a.pos === -1) return 1;
+      if (b.pos === -1) return -1;
+      return a.pos - b.pos;
+    })
+    .map(e => e.f);
 }
 
 /**
@@ -33,17 +41,17 @@ export function buildHighlightedHtml(html, errors, selected, chatProposals = [])
   for (let i = 0; i < (errors?.length || 0); i++) {
     const f = errors[i];
     if (!f.original) continue;
-    const idx = html.indexOf(f.original);
-    if (idx !== -1) {
-      positions.push({ idx, len: f.original.length, kind: 'lektorat', errIdx: i });
+    const m = findInHtml(html, f.original);
+    if (m) {
+      positions.push({ idx: m.htmlStart, len: m.htmlEnd - m.htmlStart, kind: 'lektorat', errIdx: i });
     }
   }
   for (let i = 0; i < chatProposals.length; i++) {
     const p = chatProposals[i];
     if (!p.original) continue;
-    const idx = html.indexOf(p.original);
-    if (idx !== -1) {
-      positions.push({ idx, len: p.original.length, kind: 'chat', propIdx: i });
+    const m = findInHtml(html, p.original);
+    if (m) {
+      positions.push({ idx: m.htmlStart, len: m.htmlEnd - m.htmlStart, kind: 'chat', propIdx: i });
     }
   }
 
