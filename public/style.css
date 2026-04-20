@@ -4540,10 +4540,17 @@ body.focus-mode .edit-find { display: none !important; }
 .kapitel-new-page {
   display: flex;
   gap: 6px;
-  align-items: stretch;
+  align-items: center;
+  margin-top: 10px;
 }
 .kapitel-new-page-input {
-  flex: 1 1 auto;
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+.kapitel-new-page > button {
+  flex-shrink: 0;
+  align-self: stretch;
 }
 
 /* === Token-Badges: W und Z im Seitenbaum ausblenden === */
