@@ -37,12 +37,23 @@ const FIGUR_TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3
 // Globaler fetch-Wrapper: fängt 401-Antworten ab und signalisiert Session-Ablauf
 // via 'session-expired'-Event. Alpine zeigt daraufhin einen Banner. Kein Auto-
 // Redirect – User soll ungespeicherte Änderungen (Editor, Chat) retten können.
+// Sonderfall BOOKSTACK_UNAUTHED: der Google-Login ist gültig, nur der
+// BookStack-Token ist abgelaufen/ungültig → eigenes Event 'bookstack-token-invalid'.
 const __origFetch = window.fetch.bind(window);
 window.fetch = async function(...args) {
   const res = await __origFetch(...args);
-  if (res.status === 401 && !window.__sessionExpiredNotified) {
-    window.__sessionExpiredNotified = true;
-    window.dispatchEvent(new CustomEvent('session-expired'));
+  if (res.status === 401) {
+    let code = '';
+    try { code = (await res.clone().json())?.error_code || ''; } catch (_) {}
+    if (code === 'BOOKSTACK_UNAUTHED') {
+      if (!window.__bookstackUnauthedNotified) {
+        window.__bookstackUnauthedNotified = true;
+        window.dispatchEvent(new CustomEvent('bookstack-token-invalid'));
+      }
+    } else if (!window.__sessionExpiredNotified) {
+      window.__sessionExpiredNotified = true;
+      window.dispatchEvent(new CustomEvent('session-expired'));
+    }
   }
   return res;
 };
@@ -154,6 +165,7 @@ document.addEventListener('alpine:init', () => {
     currentUser: null,
     devMode: false,
     sessionExpired: false,
+    bookstackTokenInvalid: false,
     themePref: 'auto',
     uiLocale: '',
     bookstackUrl: '',
@@ -1280,6 +1292,7 @@ document.addEventListener('alpine:init', () => {
         if (this.themePref === 'auto') this._applyTheme();
       });
       window.addEventListener('session-expired', () => { this.sessionExpired = true; });
+      window.addEventListener('bookstack-token-invalid', () => { this.bookstackTokenInvalid = true; });
       window.addEventListener('beforeunload', (e) => {
         if (this.editMode && this.editDirty) { e.preventDefault(); e.returnValue = ''; }
       });
@@ -1834,6 +1847,8 @@ document.addEventListener('alpine:init', () => {
         this.tokenSetupCanCancel = false;
         this.tokenSetupId = '';
         this.tokenSetupPw = '';
+        this.bookstackTokenInvalid = false;
+        window.__bookstackUnauthedNotified = false;
         await this.loadBooks();
       } catch (e) {
         this.tokenSetupError = e.message;

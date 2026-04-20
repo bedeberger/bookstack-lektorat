@@ -154,6 +154,7 @@
 
   "session.expired":             "Sitzung abgelaufen – bitte neu anmelden. Nicht gespeicherte Änderungen im Editor gehen beim Neuladen verloren.",
   "session.relogin":              "Neu anmelden",
+  "session.bookstackTokenInvalid":"BookStack-Token ungültig oder abgelaufen – bitte Token erneuern.",
   "dev.banner":                  "DEV-MODUS – lokale Session, kein OAuth",
   "app.titleReset":              "Ansicht zurücksetzen",
   "app.subtitle":                "KI-gestützte Rechtschreibprüfung & Stilanalyse",

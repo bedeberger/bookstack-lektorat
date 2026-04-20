@@ -384,9 +384,12 @@ code {
   padding: 0.3rem 0.9rem;
   background: var(--color-err-text);
   color: var(--color-surface);
+  border: none;
   border-radius: var(--radius-sm);
   text-decoration: none;
+  font: inherit;
   font-weight: 700;
+  cursor: pointer;
 }
 .session-banner-btn:hover { background: var(--color-session-banner-btn-hover); }
 

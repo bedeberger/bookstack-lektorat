@@ -47,6 +47,11 @@
   <a class="session-banner-btn" :href="'/auth/login?returnTo=' + encodeURIComponent(location.pathname + location.search)" x-text="t('session.relogin')"></a>
 </div>
 
+<div class="session-banner" x-show="bookstackTokenInvalid && !sessionExpired" x-cloak>
+  <span class="session-banner-text" x-text="t('session.bookstackTokenInvalid')"></span>
+  <button type="button" class="session-banner-btn" @click="openTokenChange()" x-text="t('profile.changeToken')"></button>
+</div>
+
 <h1 @click="resetView()" class="site-title" :title="t('app.titleReset')">
   <img src="bookstack_lektorat_icon.svg" alt="" class="site-logo" width="64" height="64">
   BookStack Lektorat
