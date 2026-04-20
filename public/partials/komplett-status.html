@@ -8,7 +8,7 @@
   <div class="komplett-status-panel" x-show="showKomplettStatus" x-cloak>
     <div class="komplett-status-title" x-text="t('komplett.title')"></div>
     <div class="progress-bar-wrap komplett-progress-bar-wrap">
-      <div class="progress-bar" :style="`width: ${alleAktualisierenProgress}%`"></div>
+      <div class="progress-bar" :style="{ '--progress': alleAktualisierenProgress + '%' }"></div>
     </div>
     <div class="komplett-progress-label">
       <span x-text="alleAktualisierenStatus || t('komplett.done')"></span>

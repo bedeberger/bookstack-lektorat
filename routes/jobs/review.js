@@ -1,6 +1,6 @@
 'use strict';
 const express = require('express');
-const { db } = require('../../db/schema');
+const { db, getBookSettings } = require('../../db/schema');
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
@@ -10,6 +10,7 @@ const {
   jobs, runningJobs, createJob, enqueueJob, jobKey,
   jsonBody,
 } = require('./shared');
+const { narrativeLabels } = require('./narrative-labels');
 
 const reviewRouter = express.Router();
 
@@ -18,6 +19,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
   const { buildBookReviewSinglePassPrompt, buildChapterAnalysisPrompt, buildBookReviewMultiPassPrompt, SCHEMA_REVIEW, SCHEMA_CHAPTER_ANALYSIS } = await getPrompts();
   const { SYSTEM_BUCHBEWERTUNG, SYSTEM_KAPITELANALYSE } = await getBookPrompts(bookId, userEmail);
+  const narrative = narrativeLabels(getBookSettings(bookId, userEmail));
   try {
     updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     const [chaptersData, pages] = await Promise.all([
@@ -48,7 +50,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
       const bookText = buildSinglePassBookText(groups, groupOrder);
 
       r = await aiCall(jobId, tok,
-        buildBookReviewSinglePassPrompt(bookName, pageContents.length, bookText),
+        buildBookReviewSinglePassPrompt(bookName, pageContents.length, bookText, narrative),
         SYSTEM_BUCHBEWERTUNG,
         65, 97, 5000, 0.2, null, undefined, SCHEMA_REVIEW,
       );
@@ -68,7 +70,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
         });
         const chText = group.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n');
         const ca = await aiCall(jobId, tok,
-          buildChapterAnalysisPrompt(group.name, bookName, group.pages.length, chText),
+          buildChapterAnalysisPrompt(group.name, bookName, group.pages.length, chText, narrative),
           SYSTEM_KAPITELANALYSE,
           fromPct, toPct, 1500, 0.2, null, undefined, SCHEMA_CHAPTER_ANALYSIS,
         );
@@ -88,7 +90,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
         statusText: 'job.phase.finalReview',
       });
       r = await aiCall(jobId, tok,
-        buildBookReviewMultiPassPrompt(bookName, chapterAnalyses, pageContents.length),
+        buildBookReviewMultiPassPrompt(bookName, chapterAnalyses, pageContents.length, narrative),
         SYSTEM_BUCHBEWERTUNG,
         90, 97, 5000, 0.2, null, undefined, SCHEMA_REVIEW,
       );

@@ -72,6 +72,37 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   });
 }
 
+// `.internal-link`-Spans verhalten sich wie Buttons (z.B. Kapitel-Sprünge,
+// Figuren-Öffnen). Per Delegation und MutationObserver machen wir sie
+// tastatur-erreichbar (Tab/Enter/Space), ohne in jedem Partial role/tabindex
+// setzen zu müssen. `:focus-visible`-Stil kommt aus style.css.
+const decorateInternalLinks = (root) => {
+  root.querySelectorAll?.('.internal-link').forEach(el => {
+    if (!el.hasAttribute('role')) el.setAttribute('role', 'button');
+    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+  });
+};
+new MutationObserver(muts => {
+  for (const m of muts) {
+    for (const n of m.addedNodes) {
+      if (n.nodeType !== 1) continue;
+      if (n.classList?.contains('internal-link')) {
+        if (!n.hasAttribute('role')) n.setAttribute('role', 'button');
+        if (!n.hasAttribute('tabindex')) n.setAttribute('tabindex', '0');
+      }
+      decorateInternalLinks(n);
+    }
+  }
+}).observe(document.documentElement, { childList: true, subtree: true });
+document.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (!t?.classList?.contains?.('internal-link')) return;
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    t.click();
+  }
+});
+
 document.addEventListener('alpine:init', () => {
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
     open: false,
@@ -183,6 +214,25 @@ document.addEventListener('alpine:init', () => {
     ...initialLektoratState(),
 
     // ── Computed ─────────────────────────────────────────────────────────────
+    // O(1)-Lookup-Maps für Figuren/Orte. Rebuild nur bei Referenz-Wechsel
+    // (loadFiguren/loadOrte reassignen, pushen nie). In Render-Loops
+    // (figuren.html, orte.html, szenen.html) ersetzen diese ein vielfaches
+    // `.find(x => x.id === id)` pro Zeile durch einen Map-Lookup.
+    get figurenById() {
+      if (this._figMapRef !== this.figuren) {
+        this._figMapRef = this.figuren;
+        this._figMap = new Map((this.figuren || []).map(f => [f.id, f]));
+      }
+      return this._figMap;
+    },
+    get orteById() {
+      if (this._ortMapRef !== this.orte) {
+        this._ortMapRef = this.orte;
+        this._ortMap = new Map((this.orte || []).map(o => [o.id, o]));
+      }
+      return this._ortMap;
+    },
+
     get szenenNachKapitel() {
       const map = new Map();
       for (const s of this.szenen) {

@@ -3,7 +3,7 @@ const express = require('express');
 const { randomUUID } = require('crypto');
 const logger = require('../../logger');
 const { db, insertJobRun, startJobRun, endJobRun, getBookSettings } = require('../../db/schema');
-const { callAI, parseJSON, CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../../lib/ai');
+const { callAI, parseJSON, CHARS_PER_TOKEN, MAX_TOKENS_OUT, INPUT_BUDGET_CHARS } = require('../../lib/ai');
 const { bsGet: _bsGet, bsGetAll: _bsGetAll, BOOKSTACK_URL: BS_URL } = require('../../lib/bookstack');
 const { getPrompts, getPromptConfig } = require('../../lib/prompts-loader');
 
@@ -250,12 +250,15 @@ function htmlToText(html) {
     .replace(/\s+/g, ' ').trim();
 }
 
-const SINGLE_PASS_LIMIT = 60000;
-// Maximale Zeichenzahl pro KI-Call im Multi-Pass für lokale Modelle.
-// Kleinere Modelle (Mistral Small u.ä.) verlieren bei langen Inputs massiv an
-// Extraktionsqualität. 20K Zeichen ≈ 5K Token Eingabetext – zusammen mit
-// System-Prompt (~4K) und Output-Reserve (14K) bleibt man bei ~23K Token pro Call.
-const PER_CHUNK_LIMIT = 20000;
+// Multi-Pass-Grenzen skalieren mit dem Input-Budget (MODEL_CONTEXT − MODEL_TOKEN).
+// SINGLE_PASS_LIMIT: Schwelle, ab der in Chunks zerlegt wird. 70% des Budgets für
+//   Buchtext, 30% für System-Prompt + Schema + Output-Reserve.
+// PER_CHUNK_LIMIT:   Max-Grösse eines einzelnen Chunks. Kleinere lokale Modelle
+//   (Mistral Small u.ä.) verlieren bei grossen Inputs Extraktionsqualität;
+//   Obergrenze 200K Zeichen kappt absurde Werte bei grossen Kontextfenstern.
+// Untergrenzen (20K/10K Zeichen) verhindern zu kleine Pässe bei Misconfig.
+const SINGLE_PASS_LIMIT = Math.max(20000, Math.min(600000, Math.floor(INPUT_BUDGET_CHARS * 0.70)));
+const PER_CHUNK_LIMIT   = Math.max(10000, Math.min(200000, Math.floor(INPUT_BUDGET_CHARS * 0.35)));
 // Mindestabstand zwischen zwei updateJob-Calls aus dem Streaming-onProgress.
 // Reduziert Event-Loop-Last bei parallelen KI-Streams; die Live-Anzeige ruckelt
 // in der Praxis bei 200 ms nicht sichtbar.

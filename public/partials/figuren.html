@@ -7,7 +7,7 @@
 
   <!-- Fortschritt -->
   <div x-show="figurenProgress > 0" class="progress-bar-wrap">
-    <div class="progress-bar" :style="'width:' + figurenProgress + '%'"></div>
+    <div class="progress-bar" :style="{ '--progress': figurenProgress + '%' }"></div>
   </div>
   <div x-show="figurenStatus" class="card-status" x-html="figurenStatus"></div>
 
@@ -195,10 +195,10 @@
             <div class="bewertung-section-title" x-text="t('figuren.field.familie')"></div>
             <div class="figur-tags-row">
               <template x-for="pid in (f.eltern_ids || [])" :key="'e'+pid">
-                <span class="tag figur-rel-tag internal-link" :title="t('figuren.rel.parent')" @click.stop="openFigurById(pid)" x-text="'↑ ' + (figuren.find(x => x.id === pid)?.name || pid)"></span>
+                <span class="tag figur-rel-tag internal-link" :title="t('figuren.rel.parent')" @click.stop="openFigurById(pid)" x-text="'↑ ' + (figurenById.get(pid)?.name || pid)"></span>
               </template>
               <template x-for="sid in (f.geschwister_ids || [])" :key="'s'+sid">
-                <span class="tag figur-rel-tag internal-link" :title="t('figuren.rel.sibling')" @click.stop="openFigurById(sid)" x-text="'⇔ ' + (figuren.find(x => x.id === sid)?.name || sid)"></span>
+                <span class="tag figur-rel-tag internal-link" :title="t('figuren.rel.sibling')" @click.stop="openFigurById(sid)" x-text="'⇔ ' + (figurenById.get(sid)?.name || sid)"></span>
               </template>
             </div>
           </div>
@@ -209,7 +209,7 @@
               <template x-for="(bz, i) in (f.beziehungen || [])" :key="i">
                 <div class="figur-beziehung-item">
                   <span class="figur-bz-typ" :class="'figur-bz-' + bz.typ" x-text="bz.typ"></span>
-                  <span class="figur-bz-name internal-link" @click.stop="openFigurById(bz.figur_id)" x-text="figuren.find(x => x.id === bz.figur_id)?.name || bz.figur_id"></span>
+                  <span class="figur-bz-name internal-link" @click.stop="openFigurById(bz.figur_id)" x-text="figurenById.get(bz.figur_id)?.name || bz.figur_id"></span>
                   <span x-show="bz.machtverhaltnis && bz.machtverhaltnis !== 0" class="figur-bz-macht" :class="bz.machtverhaltnis > 0 ? 'figur-bz-macht--positiv' : 'figur-bz-macht--negativ'" x-text="bz.machtverhaltnis > 0 ? '↑'.repeat(Math.abs(bz.machtverhaltnis)) : '↓'.repeat(Math.abs(bz.machtverhaltnis))"></span>
                   <span x-show="bz.beschreibung" class="figur-bz-hint" x-text="'– ' + bz.beschreibung"></span>
                   <template x-if="bz.belege?.length">

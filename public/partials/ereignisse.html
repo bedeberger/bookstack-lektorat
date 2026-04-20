@@ -7,13 +7,13 @@
 
   <!-- Fortschritt Ermittlung -->
   <div x-show="ereignisseLoading && ereignisseProgress > 0" class="progress-bar-wrap">
-    <div class="progress-bar" :style="'width:' + ereignisseProgress + '%'"></div>
+    <div class="progress-bar" :style="{ '--progress': ereignisseProgress + '%' }"></div>
   </div>
   <div x-show="ereignisseStatus && !zeitstrahlConsolidating" class="card-status" x-html="ereignisseStatus"></div>
 
   <!-- Fortschritt Konsolidierung -->
   <div x-show="zeitstrahlConsolidating && zeitstrahlProgress > 0" class="progress-bar-wrap">
-    <div class="progress-bar" :style="'width:' + zeitstrahlProgress + '%'"></div>
+    <div class="progress-bar" :style="{ '--progress': zeitstrahlProgress + '%' }"></div>
   </div>
   <div x-show="zeitstrahlStatus && !ereignisseLoading" class="card-status" x-html="zeitstrahlStatus"></div>
 

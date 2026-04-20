@@ -364,6 +364,36 @@ function getChapterFigures(bookId, chapterId, userEmail) {
   `).all(bookId, userEmail || null);
 }
 
+/** Beziehungen zwischen Figuren, die im gegebenen Kapitel gemeinsam auftreten.
+ *  Liefert: [{ von, zu, typ, beschreibung }] mit Namen (nicht fig_ids).
+ *  Ohne chapterId: alle Beziehungen des Buchs. */
+function getChapterFigureRelations(bookId, chapterId, userEmail) {
+  if (!bookId) return [];
+  const em = userEmail || null;
+  let rows;
+  if (chapterId) {
+    rows = db.prepare(`
+      SELECT ff.name AS von, ft.name AS zu, r.typ, r.beschreibung
+      FROM figure_relations r
+      JOIN figures ff ON ff.book_id = r.book_id AND ff.fig_id = r.from_fig_id AND ff.user_email IS ?
+      JOIN figures ft ON ft.book_id = r.book_id AND ft.fig_id = r.to_fig_id   AND ft.user_email IS ?
+      WHERE r.book_id = ? AND r.user_email IS ?
+        AND EXISTS (SELECT 1 FROM figure_appearances fa WHERE fa.figure_id = ff.id AND fa.chapter_id = ?)
+        AND EXISTS (SELECT 1 FROM figure_appearances fa WHERE fa.figure_id = ft.id AND fa.chapter_id = ?)
+      ORDER BY ff.sort_order, ft.sort_order
+    `).all(em, em, bookId, em, chapterId, chapterId);
+    if (rows.length > 0) return rows;
+  }
+  return db.prepare(`
+    SELECT ff.name AS von, ft.name AS zu, r.typ, r.beschreibung
+    FROM figure_relations r
+    JOIN figures ff ON ff.book_id = r.book_id AND ff.fig_id = r.from_fig_id AND ff.user_email IS ?
+    JOIN figures ft ON ft.book_id = r.book_id AND ft.fig_id = r.to_fig_id   AND ft.user_email IS ?
+    WHERE r.book_id = ? AND r.user_email IS ?
+    ORDER BY ff.sort_order, ft.sort_order
+  `).all(em, em, bookId, em);
+}
+
 module.exports = {
   RELATION_INVERSES,
   dedupRelations,
@@ -373,4 +403,5 @@ module.exports = {
   addFigurenBeziehungen,
   cleanupDuplicateFiguren,
   getChapterFigures,
+  getChapterFigureRelations,
 };

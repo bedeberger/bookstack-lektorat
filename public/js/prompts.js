@@ -367,7 +367,59 @@ Tempuswechsel-Regeln (typ: «tempuswechsel»):
 }
 
 // Gemeinsamer Rumpf für Einzel- und Batch-Lektorat-Prompts
-function _buildLektoratPromptBody(text, textLabel, { stopwords = STOPWORDS, erklaerungRule = ERKLAERUNG_RULE, korrekturRegeln = KORREKTUR_REGELN, figuren = [] } = {}) {
+/**
+ * Erzeugt den Erzählform-Kontextblock für Bewertungs-/Lektorat-Prompts.
+ * Bei buchtyp='kurzgeschichten' wird die Angabe als Richtwert deklariert, da
+ * einzelne Kurzgeschichten legitim eine andere Perspektive oder Erzählzeit
+ * verwenden können. Gibt '' zurück, wenn weder perspektive noch zeit gesetzt
+ * sind (kein Block im Prompt).
+ *
+ * @param {string|null} perspektive  lesbares Label (z.B. '3. Person personal')
+ * @param {string|null} zeit         lesbares Label (z.B. 'Präteritum')
+ * @param {string|null} buchtyp      Buchtyp-Key (z.B. 'kurzgeschichten')
+ * @param {'lektorat'|'review'} mode 'lektorat' verweist auf perspektivbruch/tempuswechsel;
+ *                                   'review' bleibt neutraler ("Konsistenzprüfung")
+ */
+function _buildErzaehlformBlock(perspektive, zeit, buchtyp, mode = 'lektorat') {
+  if (!perspektive && !zeit) return '';
+  const isShortStories = buchtyp === 'kurzgeschichten';
+  const header = isShortStories
+    ? 'Erzählform der Sammlung (Richtwert – einzelne Kurzgeschichten dürfen legitim abweichen; Abweichungen NICHT als Fehler melden, wenn sie in sich konsistent bleiben):'
+    : (mode === 'review'
+      ? 'Etablierte Erzählform des Buchs (Referenz für Konsistenz- und Stilprüfung – abweichende Passagen sind Bruchstellen, sofern nicht dramaturgisch begründet):'
+      : 'Etablierte Erzählform des Buchs (verbindliche Referenz für «perspektivbruch» und «tempuswechsel» – abweichende Stellen gegen diese Vorgabe prüfen, nicht gegen Default-Annahmen):');
+  const lines = [
+    perspektive ? `- Erzählperspektive: ${perspektive}` : null,
+    zeit        ? `- Erzählzeit: ${zeit}`              : null,
+  ].filter(Boolean);
+  // WICHTIG: Die Vorgabe gilt nur für den narrativen Erzähltext. Dialoge,
+  // Briefe, innere Monologe, Rückblenden und bewusste Stilmittel haben
+  // naturgemäss eigene Perspektive/Zeit und sind KEIN Bruch.
+  const scopeNote = `- Gilt NUR für den narrativen Erzähltext. KEIN Bruch ist in folgenden Fällen: direkte Rede / Dialog (Figuren sprechen in ihrer eigenen Zeit), innere Monologe in direkter Form, zitierte Briefe / Tagebuch­einträge / Nachrichten / Dokumente im Roman, erlebte Rede, historisches Präsens als bewusstes Stilmittel, Rückblenden (Plusquamperfekt) und Antizipationen (Futur), sowie Wechsel an Szenen-/Kapitelgrenzen.`;
+  return `\n${header}\n${lines.join('\n')}\n${scopeNote}\n`;
+}
+
+function _buildLektoratPromptBody(text, textLabel, {
+  stopwords = STOPWORDS,
+  erklaerungRule = ERKLAERUNG_RULE,
+  korrekturRegeln = KORREKTUR_REGELN,
+  figuren = [],
+  figurenBeziehungen = [],
+  orte = [],
+  pageName = null,
+  chapterName = null,
+  erzaehlperspektive = null,
+  erzaehlzeit = null,
+  buchtyp = null,
+  previousExcerpt = null,
+} = {}) {
+  const metaParts = [];
+  if (chapterName) metaParts.push(`Kapitel: «${chapterName}»`);
+  if (pageName)    metaParts.push(`Seite: «${pageName}»`);
+  const metaBlock = metaParts.length ? `\nVerortung im Buch: ${metaParts.join(' · ')}\n` : '';
+
+  const povBlock = _buildErzaehlformBlock(erzaehlperspektive, erzaehlzeit, buchtyp, 'lektorat');
+
   const figurenBlock = figuren.length > 0
     ? `\nBekannte Figuren in diesem Kapitel (Kontext für Namenskonsistenz und Perspektivprüfung):\n${figuren.map(f => {
         const parts = [f.name];
@@ -378,6 +430,27 @@ function _buildLektoratPromptBody(text, textLabel, { stopwords = STOPWORDS, erkl
         if (f.beschreibung) parts.push(f.beschreibung);
         return '- ' + parts.join(' | ');
       }).join('\n')}\nHinweis: Figurennamen und deren Varianten sind KEINE Rechtschreibfehler.\n`
+    : '';
+
+  const beziehungenBlock = figurenBeziehungen.length > 0
+    ? `\nBeziehungen zwischen diesen Figuren (Kontext für Anreden, Pronomen, Rollen):\n${figurenBeziehungen.map(b => {
+        const head = `${b.von} → ${b.zu}: ${b.typ}`;
+        return b.beschreibung ? `- ${head} – ${b.beschreibung}` : `- ${head}`;
+      }).join('\n')}\n`
+    : '';
+
+  const orteBlock = orte.length > 0
+    ? `\nSchauplätze in diesem Kapitel (Kontext – Ortsnamen und deren Varianten sind KEINE Rechtschreibfehler):\n${orte.map(o => {
+        const parts = [o.name];
+        if (o.typ) parts.push(`Typ: ${o.typ}`);
+        if (o.stimmung) parts.push(`Stimmung: ${o.stimmung}`);
+        if (o.beschreibung) parts.push(o.beschreibung);
+        return '- ' + parts.join(' | ');
+      }).join('\n')}\n`
+    : '';
+
+  const previousBlock = previousExcerpt
+    ? `\nLetzter Absatz der vorherigen Seite (NUR als Übergangskontext für Tempus-/Perspektiv-/Pronomen-Prüfung – NICHT bewerten, nicht in «fehler» aufnehmen):\n"""\n${previousExcerpt}\n"""\n`
     : '';
 
   // Lokaler Modus: kleinere Typ-Enum, keine Beispiele, keine spezialisierten Rule-Blöcke
@@ -411,7 +484,7 @@ ${_buildTempuswechselBlock()}
 `;
 
   return `Analysiere den Text vollständig von Anfang bis Ende – nicht nur lokale Abschnitte oder die letzten Sätze – auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
-${wichtigBlock}${filterBlock}
+${metaBlock}${povBlock}${wichtigBlock}${filterBlock}
 Antworte mit diesem JSON-Schema:
 {
   "fehler": [
@@ -441,7 +514,7 @@ ${_buildStilBlock()}
 ${_buildWiederholungBlock(stopwords)}
 ${_buildSchwacheVerbenBlock()}
 ${_buildFuellwortBlock()}
-${spezialBlocks}${figurenBlock}
+${spezialBlocks}${figurenBlock}${beziehungenBlock}${orteBlock}${previousBlock}
 ${textLabel}
 ${text}`;
 }
@@ -454,7 +527,8 @@ export function buildBatchLektoratPrompt(text, opts = {}) {
 
 // ── Buchbewertung ─────────────────────────────────────────────────────────────
 
-export function buildBookReviewSinglePassPrompt(bookName, pageCount, bookText) {
+export function buildBookReviewSinglePassPrompt(bookName, pageCount, bookText, { erzaehlperspektive = null, erzaehlzeit = null, buchtyp = null } = {}) {
+  const povBlock = _buildErzaehlformBlock(erzaehlperspektive, erzaehlzeit, buchtyp, 'review');
   return `Bewerte das folgende Buch «${bookName}» kritisch und umfassend. Analysiere:
 - Struktur und Aufbau (Kapitel, Übergänge, Logik)
 - Sprachstil und Konsistenz über alle Seiten hinweg
@@ -463,14 +537,14 @@ export function buildBookReviewSinglePassPrompt(bookName, pageCount, bookText) {
 - Konkrete Empfehlungen für den Autor
 
 GEWICHTUNG: Stil, Sprache und literarische Qualität sind die zentralen Bewertungskriterien und fliessen stärker in die Gesamtnote ein als Rechtschreib- oder Grammatikfehler.
-
+${povBlock}
 Antworte mit diesem JSON-Schema:
 {
   "gesamtnote": 4.5,
   "gesamtnote_begruendung": "Ein Satz warum diese Note (gesamtnote als Dezimalzahl von 1.0=sehr schwach bis 6.0=ausgezeichnet, Halbschritte erlaubt)",
   "zusammenfassung": "2-3 Sätze Gesamteindruck",
   "struktur": "Analyse des Aufbaus und der Struktur (3-4 Sätze)",
-  "stil": "Analyse des Schreibstils und seiner Konsistenz (3-4 Sätze)",
+  "stil": "Analyse des Schreibstils und seiner Konsistenz (3-4 Sätze) – falls eine Erzählform vorgegeben ist: kurz beurteilen, ob Perspektive und Zeit über das Buch hinweg konsistent gehalten werden",
   "staerken": ["Stärke 1", "Stärke 2", "Stärke 3"],
   "schwaechen": ["Schwäche 1", "Schwäche 2"],
   "empfehlungen": ["Empfehlung 1", "Empfehlung 2", "Empfehlung 3"],
@@ -482,14 +556,15 @@ Buchinhalt (${pageCount} Seiten):
 ${bookText}`;
 }
 
-export function buildChapterAnalysisPrompt(chapterName, bookName, pageCount, chText) {
+export function buildChapterAnalysisPrompt(chapterName, bookName, pageCount, chText, { erzaehlperspektive = null, erzaehlzeit = null, buchtyp = null } = {}) {
+  const povBlock = _buildErzaehlformBlock(erzaehlperspektive, erzaehlzeit, buchtyp, 'review');
   return `Analysiere das Kapitel «${chapterName}» aus dem Buch «${bookName}».
 Lies den vollständigen Kapiteltext und gib eine kompakte Analyse als JSON zurück:
-
+${povBlock}
 Antworte mit diesem JSON-Schema:
 {
   "themen": "Hauptthemen und Inhalte in 2-3 Sätzen",
-  "stil": "Schreibstilbeobachtungen: Wortwahl, Satzbau, Ton in 2 Sätzen",
+  "stil": "Schreibstilbeobachtungen: Wortwahl, Satzbau, Ton in 2 Sätzen – falls eine Erzählform vorgegeben ist, kurz beurteilen, ob das Kapitel diese konsistent einhält",
   "qualitaet": "Allgemeiner Qualitätseindruck in 1-2 Sätzen",
   "staerken": ["konkrete Stärke 1", "konkrete Stärke 2"],
   "schwaechen": ["konkrete Schwäche 1", "konkrete Schwäche 2"]
@@ -504,7 +579,8 @@ ${chText}`;
 // Fokus: Dramaturgie, Pacing, Kohärenz, Perspektive, Figuren – Dinge, die
 // beim Seiten-Lektorat (Mikro-Fehler) und bei der Buchbewertung (Gesamtnote)
 // naturgemäss nicht erfasst werden.
-export function buildChapterReviewPrompt(chapterName, bookName, pageCount, chText) {
+export function buildChapterReviewPrompt(chapterName, bookName, pageCount, chText, { erzaehlperspektive = null, erzaehlzeit = null, buchtyp = null } = {}) {
+  const povBlock = _buildErzaehlformBlock(erzaehlperspektive, erzaehlzeit, buchtyp, 'review');
   return `Bewerte das Kapitel «${chapterName}» aus dem Buch «${bookName}» kritisch und umfassend.
 Der Fokus liegt auf seitenübergreifenden Qualitäten – nicht auf Mikro-Fehlern (dafür gibt es das Seiten-Lektorat).
 Prüfe:
@@ -515,7 +591,7 @@ Prüfe:
 - Figuren im Kapitel (Auftreten, Stimmigkeit, Entwicklung)
 
 GEWICHTUNG: Dramaturgie, Pacing und Kohärenz sind die zentralen Bewertungskriterien dieses Kapitels und fliessen stärker in die Gesamtnote ein als sprachliche Einzelmängel.
-
+${povBlock}
 Antworte mit diesem JSON-Schema:
 {
   "gesamtnote": 4.5,
@@ -524,7 +600,7 @@ Antworte mit diesem JSON-Schema:
   "dramaturgie": "Spannungsbogen, Szenenstruktur, Aufbau (3-4 Sätze)",
   "pacing": "Tempo, Längen, Leerlauf (2-3 Sätze)",
   "kohaerenz": "Roter Faden und Übergänge zwischen Seiten/Szenen (2-3 Sätze)",
-  "perspektive": "Erzählperspektive und Konsistenz innerhalb des Kapitels (1-2 Sätze)",
+  "perspektive": "Erzählperspektive und Konsistenz innerhalb des Kapitels (1-2 Sätze) – falls eine Erzählform vorgegeben ist: explizit beurteilen, ob das Kapitel ihr folgt oder davon abweicht",
   "figuren": "Auftreten und Stimmigkeit der Figuren in diesem Kapitel (2-3 Sätze)",
   "staerken": ["konkrete Stärke 1", "konkrete Stärke 2", "konkrete Stärke 3"],
   "schwaechen": ["konkrete Schwäche 1", "konkrete Schwäche 2"],
@@ -537,7 +613,8 @@ Kapitelinhalt (${pageCount} Seiten):
 ${chText}`;
 }
 
-export function buildBookReviewMultiPassPrompt(bookName, chapterAnalyses, totalPageCount) {
+export function buildBookReviewMultiPassPrompt(bookName, chapterAnalyses, totalPageCount, { erzaehlperspektive = null, erzaehlzeit = null, buchtyp = null } = {}) {
+  const povBlock = _buildErzaehlformBlock(erzaehlperspektive, erzaehlzeit, buchtyp, 'review');
   const synthIn = chapterAnalyses.map((ca, i) =>
     `## Kapitel ${i + 1}: ${ca.name} (${ca.pageCount} Seiten)\nThemen: ${ca.themen || '–'}\nStil: ${ca.stil || '–'}\nQualität: ${ca.qualitaet || '–'}\nStärken: ${(ca.staerken || []).join(' | ')}\nSchwächen: ${(ca.schwaechen || []).join(' | ')}`
   ).join('\n\n');
@@ -545,7 +622,7 @@ export function buildBookReviewMultiPassPrompt(bookName, chapterAnalyses, totalP
 Grundlage sind die Analysen aller ${chapterAnalyses.length} Kapitel (insgesamt ${totalPageCount} Seiten).
 
 GEWICHTUNG: Stil, Sprache und literarische Qualität sind die zentralen Bewertungskriterien und fliessen stärker in die Gesamtnote ein als Rechtschreib- oder Grammatikfehler.
-
+${povBlock}
 Kapitelanalysen:
 
 ${synthIn}
@@ -1395,17 +1472,21 @@ ${PROBLEME_SCHEMA}
 ${PROBLEME_RULES}`;
 }
 
-export function buildKontinuitaetSinglePassPrompt(bookName, bookText, figurenKompakt, orteKompakt) {
+export function buildKontinuitaetSinglePassPrompt(bookName, bookText, figurenKompakt, orteKompakt, { erzaehlperspektive = null, erzaehlzeit = null, buchtyp = null } = {}) {
   const figurenStr = figurenKompakt && figurenKompakt.length
     ? '\n\n## Bekannte Figuren\n' + figurenKompakt.map(f => `${f.name} (${f.typ || ''}): ${f.beschreibung || ''}`).join('\n')
     : '';
   const orteStr = orteKompakt && orteKompakt.length
     ? '\n\n## Bekannte Schauplätze\n' + orteKompakt.map(o => `${o.name} (${o.typ || 'andere'}): ${o.beschreibung || ''}`).join('\n')
     : '';
+  const povBlock = _buildErzaehlformBlock(erzaehlperspektive, erzaehlzeit, buchtyp, 'review');
+  const erzaehlformHint = (erzaehlperspektive || erzaehlzeit) && buchtyp !== 'kurzgeschichten'
+    ? ' Erzählform-Brüche: Kapitel oder Passagen, die die oben angegebene Erzählperspektive oder Erzählzeit unbegründet verlassen (Wechsel nur an Szenen-/Kapitelgrenzen oder bei expliziten Rückblenden zulässig) – typ «sonstiges», Beschreibung: «Erzählform-Bruch: …».'
+    : '';
 
   return `Prüfe das Buch «${bookName}» auf Kontinuitätsfehler und Widersprüche.${figurenStr}${orteStr}
-
-Suche aktiv nach: Figuren die nach ihrem Tod wieder auftauchen; Orte die sich widersprüchlich beschrieben werden; Zeitangaben die nicht vereinbar sind; Objekte die falsch verwendet werden; Figuren die Wissen haben das sie noch nicht haben könnten; Charakterverhalten das ihrer etablierten Persönlichkeit widerspricht; Soziolekt-Brüche: Figuren die plötzlich anders sprechen als durch ihre Herkunft, Bildung und soziale Schicht etabliert (Registerwechsel ohne dramaturgische Begründung).
+${povBlock}
+Suche aktiv nach: Figuren die nach ihrem Tod wieder auftauchen; Orte die sich widersprüchlich beschrieben werden; Zeitangaben die nicht vereinbar sind; Objekte die falsch verwendet werden; Figuren die Wissen haben das sie noch nicht haben könnten; Charakterverhalten das ihrer etablierten Persönlichkeit widerspricht; Soziolekt-Brüche: Figuren die plötzlich anders sprechen als durch ihre Herkunft, Bildung und soziale Schicht etabliert (Registerwechsel ohne dramaturgische Begründung).${erzaehlformHint}
 
 Buchtext:
 

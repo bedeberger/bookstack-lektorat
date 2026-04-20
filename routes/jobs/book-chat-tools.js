@@ -4,14 +4,20 @@
 // ctx = { bookId, userEmail, userToken, jobSignal, logger }
 
 const { db } = require('../../db/schema');
+const { INPUT_BUDGET_CHARS } = require('../../lib/ai');
 const { bsGet, htmlToText } = require('./shared');
 
-// Harte Obergrenzen – schützen das Token-Budget gegen ausufernde Tool-Calls.
-const MAX_RESULT_CHARS      = 8000;
+// Obergrenzen schützen das Token-Budget gegen ausufernde Tool-Calls. Skaliert mit
+// MODEL_CONTEXT, damit User mit grösserem Kontextfenster reichere Tool-Antworten
+// bekommen (mehr Seiten, längere Snippets). chat.js schneidet zusätzlich hart auf
+// TOOL_RESULT_CAP_CHARS, bevor die Antwort an das Modell geht.
+// Divisor 36 ≈ BOOK_CHAT_MAX_TOOL_ITER (6) × typische Tool-Calls/Iter (3) × Sicherheit (2).
+const MAX_RESULT_CHARS      = Math.max(4000, Math.floor(INPUT_BUDGET_CHARS / 36));
+const MAX_CHARS_PER_PAGE    = MAX_RESULT_CHARS;
+const DEFAULT_CHARS_PER_PAGE = Math.max(2000, Math.floor(MAX_CHARS_PER_PAGE * 0.4));
+// Listen-Limits bleiben fix (UI-Ergonomie, nicht Kontextfenster-Schutz):
 const MAX_SEARCH_RESULTS    = 30;
 const MAX_PAGES_PER_FETCH   = 20;
-const MAX_CHARS_PER_PAGE    = 8000;
-const DEFAULT_CHARS_PER_PAGE = 3000;
 const SEARCH_SNIPPET_CONTEXT = 120; // Zeichen vor + nach dem Treffer
 
 /** Kürzt ein Tool-Result-Objekt, damit es nicht das Token-Budget sprengt. */

@@ -248,17 +248,18 @@ function updateUserSettings(email, settings) {
 
 // ── Buch-Einstellungen (Sprache + Region) ─────────────────────────────────────
 
-const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext FROM book_settings WHERE book_id = ?');
+const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext, erzaehlperspektive, erzaehlzeit FROM book_settings WHERE book_id = ?');
 const _upsertBookSettings = db.prepare(`
-  INSERT INTO book_settings (book_id, language, region, buchtyp, buch_kontext, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?)
+  INSERT INTO book_settings (book_id, language, region, buchtyp, buch_kontext, erzaehlperspektive, erzaehlzeit, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(book_id) DO UPDATE SET
     language=excluded.language, region=excluded.region,
     buchtyp=excluded.buchtyp, buch_kontext=excluded.buch_kontext,
+    erzaehlperspektive=excluded.erzaehlperspektive, erzaehlzeit=excluded.erzaehlzeit,
     updated_at=excluded.updated_at
 `);
 
-/** Gibt {language, region, buchtyp, buch_kontext} für ein Buch zurück.
+/** Gibt {language, region, buchtyp, buch_kontext, erzaehlperspektive, erzaehlzeit} für ein Buch zurück.
  *  Fehlt die book_settings-Zeile, werden – wenn vorhanden – die User-Defaults
  *  (default_language/region/buchtyp) als Fallback verwendet. */
 function getBookSettings(bookId, userEmail = null) {
@@ -269,10 +270,10 @@ function getBookSettings(bookId, userEmail = null) {
     if (u && (u.default_language || u.default_buchtyp)) {
       const language = u.default_language || 'de';
       const region   = u.default_region   || (language === 'en' ? 'US' : 'CH');
-      return { language, region, buchtyp: u.default_buchtyp || null, buch_kontext: null };
+      return { language, region, buchtyp: u.default_buchtyp || null, buch_kontext: null, erzaehlperspektive: null, erzaehlzeit: null };
     }
   }
-  return { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null };
+  return { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null, erzaehlperspektive: null, erzaehlzeit: null };
 }
 
 /** Locale-Key für ein Buch: z.B. "de-CH", "en-US". */
@@ -281,13 +282,38 @@ function getBookLocale(bookId, userEmail = null) {
   return `${language}-${region}`;
 }
 
-/** Speichert/aktualisiert Sprache, Region, Buchtyp und Buchkontext für ein Buch. */
-function saveBookSettings(bookId, language, region, buchtyp, buchKontext) {
+/** Speichert/aktualisiert Sprache, Region, Buchtyp, Buchkontext, Erzählperspektive und Erzählzeit. */
+function saveBookSettings(bookId, language, region, buchtyp, buchKontext, erzaehlperspektive = null, erzaehlzeit = null) {
   _upsertBookSettings.run(
     parseInt(bookId), language, region,
     buchtyp || null, buchKontext || null,
+    erzaehlperspektive || null, erzaehlzeit || null,
     new Date().toISOString()
   );
+}
+
+// ── Schauplätze eines Kapitels (via location_chapters) ───────────────────────
+
+/** Schauplätze eines Kapitels. Fallback: alle Buchorte, wenn keine Kapitelzuordnung existiert.
+ *  Liefert: [{ name, typ, beschreibung, stimmung }] */
+function getChapterLocations(bookId, chapterId, userEmail) {
+  if (!bookId) return [];
+  const em = userEmail || null;
+  const cols = 'l.name, l.typ, l.beschreibung, l.stimmung';
+  if (chapterId) {
+    const rows = db.prepare(`
+      SELECT ${cols} FROM locations l
+      JOIN location_chapters lc ON lc.location_id = l.id
+      WHERE l.book_id = ? AND lc.chapter_id = ? AND l.user_email IS ?
+      ORDER BY lc.haeufigkeit DESC, l.sort_order, l.id
+    `).all(bookId, chapterId, em);
+    if (rows.length > 0) return rows;
+  }
+  return db.prepare(`
+    SELECT ${cols} FROM locations l
+    WHERE l.book_id = ? AND l.user_email IS ?
+    ORDER BY l.sort_order, l.id
+  `).all(bookId, em);
 }
 
 module.exports = {
@@ -299,6 +325,9 @@ module.exports = {
   updateFigurenSoziogramm:  figures.updateFigurenSoziogramm,
   cleanupDuplicateFiguren:  figures.cleanupDuplicateFiguren,
   getChapterFigures:        figures.getChapterFigures,
+  getChapterFigureRelations: figures.getChapterFigureRelations,
+  // locations
+  getChapterLocations,
   // pages
   reconcilePageIds:   pages.reconcilePageIds,
   pruneStaleBookData: pages.pruneStaleBookData,

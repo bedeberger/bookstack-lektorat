@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const { db } = require('../../db/schema');
-const { callAIChat, callAIWithTools, parseJSON, chatTemperature, CHARS_PER_TOKEN, MAX_TOKENS_OUT } = require('../../lib/ai');
+const { callAIChat, callAIWithTools, parseJSON, chatTemperature, CHARS_PER_TOKEN, MAX_TOKENS_OUT, INPUT_BUDGET_TOKENS, INPUT_BUDGET_CHARS } = require('../../lib/ai');
 const {
   _promptConfig,
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
@@ -245,13 +245,12 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     const historyChars = historyWithoutLast.reduce((s, m) => s + (m.content?.length || 0), 0);
 
     // ── Schritt 3: Dynamisches Text-Budget ──────────────────────────────────────
-    const MODEL_TOKEN = MAX_TOKENS_OUT;
-    const TOTAL_CHAR_BUDGET     = MODEL_TOKEN * 4;
+    // INPUT_BUDGET_CHARS = (MODEL_CONTEXT − MODEL_TOKEN − Sicherheitspuffer) · CHARS_PER_TOKEN.
+    // Davon noch Platz für System-Prompt und History reservieren.
     const SYSTEM_OVERHEAD_CHARS = 8000;   // ~2k Tokens für System-Prompt-Overhead
-    const ANSWER_RESERVE_CHARS  = 8000;   // ~2k Tokens Reserve für Antwort
     const TEXT_CHAR_BUDGET = Math.max(
       20000,
-      Math.floor((TOTAL_CHAR_BUDGET - historyChars - SYSTEM_OVERHEAD_CHARS - ANSWER_RESERVE_CHARS) * 0.98)
+      Math.floor((INPUT_BUDGET_CHARS - historyChars - SYSTEM_OVERHEAD_CHARS) * 0.98)
     );
 
     // ── Schritt 4: Relevanz-Scoring + Seitenauswahl ─────────────────────────────
@@ -383,9 +382,13 @@ function _handleChatPost(req, res, { jobType, sessionSelect, labelFn, runFn }) {
 // über den gesamten Buchindex zu beantworten, statt alle Seiten vorab zu laden.
 const BOOK_CHAT_MAX_TOOL_ITER = parseInt(process.env.BOOK_CHAT_MAX_TOOL_ITER, 10) || 6;
 // Per-Iteration-Limit für Input-Tokens (Context-Window-Schutz, nicht kumulativ).
-// Claude Sonnet/Opus: 200K Kontext → 150K lässt Platz für Output + eine weitere Tool-Runde.
+// Default leitet sich aus INPUT_BUDGET_TOKENS (= MODEL_CONTEXT − MODEL_TOKEN − Puffer) ab.
 // Prompt-Caching macht wiederholte Tokens ohnehin billig, deshalb kein Summen-Budget.
-const BOOK_CHAT_TOKEN_BUDGET   = parseInt(process.env.BOOK_CHAT_TOKEN_BUDGET, 10) || 150000;
+const BOOK_CHAT_TOKEN_BUDGET   = parseInt(process.env.BOOK_CHAT_TOKEN_BUDGET, 10) || INPUT_BUDGET_TOKENS;
+// Per-Tool-Result-Cap: damit eine einzelne Tool-Antwort nicht allein das Budget sprengt.
+// Annahme: bis zu 6 Iterationen × ~3 Tool-Calls × Sicherheitsfaktor 2 ⇒ /36.
+// Min 4000 Zeichen, damit Tool-Results bei kleinen Kontextfenstern noch brauchbar sind.
+const TOOL_RESULT_CAP_CHARS    = Math.max(4000, Math.floor(INPUT_BUDGET_CHARS / (BOOK_CHAT_MAX_TOOL_ITER * 6)));
 
 function _bookChatUseAgent() {
   const provider = process.env.API_PROVIDER || 'claude';
@@ -489,7 +492,7 @@ async function runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEma
         toolResults.push({
           type: 'tool_result',
           tool_use_id: tu.id,
-          content: content.length > 8000 ? content.slice(0, 8000) + '…' : content,
+          content: content.length > TOOL_RESULT_CAP_CHARS ? content.slice(0, TOOL_RESULT_CAP_CHARS) + '…' : content,
           ...(out && out.error ? { is_error: true } : {}),
         });
       }

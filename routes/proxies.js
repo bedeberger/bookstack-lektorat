@@ -1,7 +1,7 @@
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const logger = require('../logger');
-const { MAX_TOKENS_OUT, ollamaTemp, llamaTemp } = require('../lib/ai');
+const { MAX_TOKENS_OUT, MODEL_CONTEXT, ollamaTemp, llamaTemp } = require('../lib/ai');
 const { getBookLocale, getUser } = require('../db/schema');
 const { getPrompts, getPromptConfig } = require('../lib/prompts-loader');
 
@@ -106,7 +106,7 @@ router.post('/ollama', jsonBody, async (req, res) => {
     const upstream = await fetch(`${ollamaHost}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages, stream: true, options: { num_ctx: MAX_TOKENS_OUT, think: false, temperature: ollamaTemp() } }),
+      body: JSON.stringify({ model, messages, stream: true, options: { num_ctx: MODEL_CONTEXT, think: false, temperature: ollamaTemp() } }),
     });
 
     if (!upstream.ok) {

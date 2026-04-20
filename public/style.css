@@ -2198,6 +2198,7 @@ body.focus-mode .edit-find { display: none !important; }
 
 .progress-bar {
   height: 100%;
+  width: var(--progress, 0%);
   background: var(--color-text);
   border-radius: 0;
   transition: width 0.3s;
@@ -2993,6 +2994,11 @@ body.focus-mode .edit-find { display: none !important; }
 }
 .internal-link:hover {
   opacity: 0.65;
+  text-decoration: underline;
+}
+.internal-link:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
   text-decoration: underline;
 }
 /* Dark-badge links: hover via background-shift instead of opacity (contrast: ~5.7:1) */
@@ -4823,16 +4829,16 @@ body.focus-mode .edit-find { display: none !important; }
   padding: 4px 0 8px;
 }
 .book-settings-row {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  align-items: start;
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 .book-settings-label {
-  min-width: 72px;
   font-weight: 700;
   font-size: 13px;
-  padding-top: 3px;
+  padding-top: 6px;
   color: var(--color-text);
 }
 .book-settings-options {
@@ -4882,10 +4888,10 @@ body.focus-mode .edit-find { display: none !important; }
   align-items: flex-start;
 }
 .book-settings-kontext-wrap {
-  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 .book-settings-textarea {
   width: 100%;
@@ -4963,12 +4969,10 @@ body.focus-mode .edit-find { display: none !important; }
 
 @media (max-width: 600px) {
   .book-settings-row {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: 1fr;
     gap: 6px;
   }
   .book-settings-label {
-    min-width: 0;
     padding-top: 0;
   }
   .book-settings-kontext-wrap {

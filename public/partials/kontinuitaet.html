@@ -6,7 +6,7 @@
   </div>
 
   <div x-show="kontinuitaetProgress > 0" class="progress-bar-wrap">
-    <div class="progress-bar" :style="'width:' + kontinuitaetProgress + '%'"></div>
+    <div class="progress-bar" :style="{ '--progress': kontinuitaetProgress + '%' }"></div>
   </div>
   <div x-show="kontinuitaetStatus" class="card-status" x-html="kontinuitaetStatus"></div>
 

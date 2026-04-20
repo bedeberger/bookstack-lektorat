@@ -1049,6 +1049,13 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 48').run();
     logger.info('DB-Migration auf Version 48 abgeschlossen (page_stats.style_samples für Stil-Heatmap-Drilldown).');
   }
+  if (version < 49) {
+    const bsCols49 = db.pragma('table_info(book_settings)').map(c => c.name);
+    if (!bsCols49.includes('erzaehlperspektive')) db.exec('ALTER TABLE book_settings ADD COLUMN erzaehlperspektive TEXT');
+    if (!bsCols49.includes('erzaehlzeit'))        db.exec('ALTER TABLE book_settings ADD COLUMN erzaehlzeit TEXT');
+    db.prepare('UPDATE schema_version SET version = 49').run();
+    logger.info('DB-Migration auf Version 49 abgeschlossen (book_settings.erzaehlperspektive + erzaehlzeit für Lektorat-Kontext).');
+  }
 
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);

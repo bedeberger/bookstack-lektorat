@@ -7,7 +7,7 @@
 
   <!-- Fortschritt -->
   <div x-show="szenenProgress > 0" class="progress-bar-wrap">
-    <div class="progress-bar" :style="'width:' + szenenProgress + '%'"></div>
+    <div class="progress-bar" :style="{ '--progress': szenenProgress + '%' }"></div>
   </div>
   <div x-show="szenenStatus" class="card-status" x-html="szenenStatus"></div>
 
@@ -109,14 +109,22 @@
           <div x-show="s.kommentar" class="szene-card-kommentar" x-text="s.kommentar"></div>
           <div class="gz-figuren-row">
             <template x-for="(figId, fi) in (s.fig_ids || [])" :key="fi">
-              <span class="gz-figur-badge internal-link"
-                :class="'gz-figur-badge--' + (figuren.find(f => f.id === figId)?.typ || 'andere')"
-                @click="openFigurById(figId)"
-                x-text="figuren.find(f => f.id === figId)?.kurzname || figuren.find(f => f.id === figId)?.name || figId">
-              </span>
+              <template x-if="figurenById.get(figId)">
+                <span class="gz-figur-badge internal-link"
+                  :class="'gz-figur-badge--' + (figurenById.get(figId).typ || 'andere')"
+                  @click="openFigurById(figId)"
+                  x-text="figurenById.get(figId).kurzname || figurenById.get(figId).name">
+                </span>
+              </template>
+              <template x-if="!figurenById.get(figId)">
+                <span class="gz-figur-badge internal-link gz-figur-badge--andere"
+                  @click="openFigurById(figId)"
+                  x-text="figId">
+                </span>
+              </template>
             </template>
             <template x-for="ortId in (s.ort_ids || [])" :key="'o'+ortId">
-              <span class="tag ort-typ-tag figur-szene-ort internal-link" @click="openOrtById(ortId)" x-text="orte.find(o => o.id === ortId)?.name || ortId"></span>
+              <span class="tag ort-typ-tag figur-szene-ort internal-link" @click="openOrtById(ortId)" x-text="orteById.get(ortId)?.name || ortId"></span>
             </template>
           </div>
         </div>

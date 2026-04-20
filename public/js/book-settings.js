@@ -18,6 +18,8 @@ export const bookSettingsMethods = {
       this.bookSettingsRegion    = data.region      || 'CH';
       this.bookSettingsBuchtyp   = data.buchtyp     || '';
       this.bookSettingsBuchKontext = data.buch_kontext || '';
+      this.bookSettingsErzaehlperspektive = data.erzaehlperspektive || '';
+      this.bookSettingsErzaehlzeit        = data.erzaehlzeit        || '';
     } catch (e) {
       console.error('[book-settings] Laden fehlgeschlagen:', e);
     } finally {
@@ -35,10 +37,12 @@ export const bookSettingsMethods = {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          language:     this.bookSettingsLanguage,
-          region:       this.bookSettingsRegion,
-          buchtyp:      this.bookSettingsBuchtyp     || null,
-          buch_kontext: this.bookSettingsBuchKontext || null,
+          language:          this.bookSettingsLanguage,
+          region:            this.bookSettingsRegion,
+          buchtyp:           this.bookSettingsBuchtyp              || null,
+          buch_kontext:      this.bookSettingsBuchKontext          || null,
+          erzaehlperspektive: this.bookSettingsErzaehlperspektive  || null,
+          erzaehlzeit:       this.bookSettingsErzaehlzeit          || null,
         }),
       });
       if (!r.ok) {

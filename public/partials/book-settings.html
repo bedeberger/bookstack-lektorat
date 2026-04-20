@@ -68,6 +68,33 @@
       </select>
     </div>
 
+    <div class="book-settings-row">
+      <label class="book-settings-label" for="bs-pov" x-text="t('book.settings.pov')"></label>
+      <select id="bs-pov" class="book-settings-select" x-model="bookSettingsErzaehlperspektive">
+        <option value="" x-text="t('book.settings.pov.none')"></option>
+        <option value="ich" x-text="t('book.settings.pov.ich')"></option>
+        <option value="er_sie_personal" x-text="t('book.settings.pov.er_personal')"></option>
+        <option value="er_sie_auktorial" x-text="t('book.settings.pov.er_auktorial')"></option>
+        <option value="du" x-text="t('book.settings.pov.du')"></option>
+        <option value="wir" x-text="t('book.settings.pov.wir')"></option>
+        <option value="gemischt" x-text="t('book.settings.pov.gemischt')"></option>
+      </select>
+    </div>
+
+    <div class="book-settings-row">
+      <label class="book-settings-label" for="bs-tempus" x-text="t('book.settings.tempus')"></label>
+      <select id="bs-tempus" class="book-settings-select" x-model="bookSettingsErzaehlzeit">
+        <option value="" x-text="t('book.settings.tempus.none')"></option>
+        <option value="praeteritum" x-text="t('book.settings.tempus.praeteritum')"></option>
+        <option value="praesens" x-text="t('book.settings.tempus.praesens')"></option>
+        <option value="gemischt" x-text="t('book.settings.tempus.gemischt')"></option>
+      </select>
+    </div>
+
+    <p class="book-settings-hint"
+       x-show="bookSettingsBuchtyp === 'kurzgeschichten' && (bookSettingsErzaehlperspektive || bookSettingsErzaehlzeit)"
+       x-text="t('book.settings.pov.kurzgeschichtenHint')"></p>
+
     <div class="book-settings-row book-settings-row--top">
       <label class="book-settings-label" for="bs-buchkontext" x-text="t('book.settings.context')"></label>
       <div class="book-settings-kontext-wrap">

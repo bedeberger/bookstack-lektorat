@@ -72,6 +72,35 @@ export const treeMethods = {
     };
   },
 
+  // Nach einem Page-Save tokEsts neu berechnen, damit der Baum den
+  // "leer"-Badge sofort verliert und die Zeichenzahl stimmt. Persistiert
+  // den frischen Stat-Eintrag auch in der History-DB.
+  _syncPageStatsAfterSave(page, html) {
+    if (!page?.id) return;
+    const text = htmlToText(html || '');
+    const userPrompt = buildLektoratPrompt(text);
+    const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+    const stat = {
+      tok: Math.round(userPrompt.length / CHARS_PER_TOKEN),
+      words,
+      chars: text.length,
+    };
+    this.tokEsts = { ...this.tokEsts, [page.id]: stat };
+    if (!this.selectedBookId) return;
+    fetch('/history/page-stats/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify([{
+        page_id: page.id,
+        book_id: parseInt(this.selectedBookId),
+        tok: stat.tok,
+        words: stat.words,
+        chars: stat.chars,
+        updated_at: page.updated_at || null,
+      }]),
+    }).catch(() => {});
+  },
+
   async refreshPageAges() {
     const bookId = this.selectedBookId;
     if (!bookId) return;

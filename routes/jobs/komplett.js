@@ -7,8 +7,9 @@ const {
   saveZeitstrahlEvents, saveOrteToDb,
   saveCheckpoint, loadCheckpoint, deleteCheckpoint,
   loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache,
-  getAllUserTokens,
+  getAllUserTokens, getBookSettings,
 } = require('../../db/schema');
+const { narrativeLabels } = require('./narrative-labels');
 const { recomputeBookFigureMentions } = require('../../lib/page-index');
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
@@ -981,9 +982,9 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
   const call = (jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, schema) =>
     aiCall(jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, provider, schema);
   const effectiveProvider = provider || process.env.API_PROVIDER || 'claude';
-  // Claude hat 200K Token Kontextfenster (~600K deutsche Zeichen) – Single-Pass für fast alle Bücher.
-  // ollama / llama: bewusst 60K Limit → Multi-Pass mit Delta-Cache.
-  const singlePassLimit = effectiveProvider === 'claude' ? 250_000 : SINGLE_PASS_LIMIT;
+  // SINGLE_PASS_LIMIT skaliert jetzt dynamisch mit MODEL_CONTEXT (siehe shared.js).
+  // Bei 200K-Kontext ≈ 420K Zeichen Single-Pass – reicht für fast alle Bücher.
+  const singlePassLimit = SINGLE_PASS_LIMIT;
   const prompts = await getPrompts();
   const sys = await getBookPrompts(bookId, email);
   const tok = { in: 0, out: 0, ms: 0, inflight: new Map() };
@@ -1081,7 +1082,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         if (totalChars <= singlePassLimit && effectiveProvider === 'claude') {
           log.info(`Job ${jobId}: Kontinuität Single-Pass: ${fullBookText.length} Zeichen, ${figKompakt.length} Figuren, ${orteKompakt.length} Orte`);
           kontResult = await call(jobId, tok,
-            prompts.buildKontinuitaetSinglePassPrompt(bookName, fullBookText, figKompakt, orteKompakt),
+            prompts.buildKontinuitaetSinglePassPrompt(bookName, fullBookText, figKompakt, orteKompakt, narrativeLabels(getBookSettings(bookIdInt, email))),
             sys.SYSTEM_KONTINUITAET, 89, 97, 5000, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
           );
         } else {
@@ -1121,7 +1122,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
   const call = (jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, schema) =>
     aiCall(jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, provider, schema);
   const effectiveProvider = provider || process.env.API_PROVIDER || 'claude';
-  const singlePassLimit = effectiveProvider === 'claude' ? 250_000 : SINGLE_PASS_LIMIT;
+  const singlePassLimit = SINGLE_PASS_LIMIT;
   const prompts = await getPrompts();
   const sys = await getBookPrompts(bookId, email);
 
@@ -1169,7 +1170,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
       updateJob(jobId, { progress: 60, statusText: 'job.phase.checkContinuity' });
       const bookText = buildSinglePassBookText(groups, groupOrder);
       result = await call(jobId, tok,
-        prompts.buildKontinuitaetSinglePassPrompt(bookName, bookText, figurenKompakt, orteKompakt),
+        prompts.buildKontinuitaetSinglePassPrompt(bookName, bookText, figurenKompakt, orteKompakt, narrativeLabels(getBookSettings(bookIdInt, email))),
         sys.SYSTEM_KONTINUITAET, 60, 97, 5000, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
       );
     } else {

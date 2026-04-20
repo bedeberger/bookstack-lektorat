@@ -30,6 +30,70 @@ test('Dialog-Marker: «…» umschliesst korrekt', () => {
   assert.equal(pronoun_counts.sie_sg.narr, 0);
 });
 
+test('Dialog-Marker: engl. Smart Quotes \u201C\u2026\u201D', () => {
+  const text = 'Er fragte \u201Csie kommt gleich\u201D.';
+  const { pronoun_counts, dialog_chars } = computePronounsAndDialog(text);
+  assert.ok(dialog_chars > 0, 'dialog_chars > 0 für Smart Quotes');
+  assert.equal(pronoun_counts.sie_sg.dlg, 1);
+});
+
+test('Dialog-Marker: inverted DE \u00BB\u2026\u00AB', () => {
+  const text = 'Er rief \u00BBsie kommt gleich\u00AB.';
+  const { pronoun_counts, dialog_chars } = computePronounsAndDialog(text);
+  assert.ok(dialog_chars > 0, 'dialog_chars > 0 für inverted Guillemets');
+  assert.equal(pronoun_counts.sie_sg.dlg, 1);
+});
+
+test('Dialog-Marker: DE typografisch \u201E\u2026\u201C', () => {
+  const text = 'Er sagte \u201Esie kommt gleich\u201C.';
+  const { pronoun_counts, dialog_chars } = computePronounsAndDialog(text);
+  assert.ok(dialog_chars > 0, 'dialog_chars > 0 für DE typografisch');
+  assert.equal(pronoun_counts.sie_sg.dlg, 1);
+});
+
+test('Dialog-Marker: franz. einfach \u2039\u2026\u203A', () => {
+  const text = 'Er flüsterte \u2039sie kommt\u203A leise.';
+  const { pronoun_counts, dialog_chars } = computePronounsAndDialog(text);
+  assert.ok(dialog_chars > 0, 'dialog_chars > 0 für FR einfach');
+  assert.equal(pronoun_counts.sie_sg.dlg, 1);
+});
+
+test('Dialog-Marker: DE einfach \u201A\u2026\u2018', () => {
+  const text = 'Er dachte \u201Asie kommt gleich\u2018.';
+  const { pronoun_counts, dialog_chars } = computePronounsAndDialog(text);
+  assert.ok(dialog_chars > 0, 'dialog_chars > 0 für DE einfach');
+  assert.equal(pronoun_counts.sie_sg.dlg, 1);
+});
+
+test('Speech-Verb + Colon ohne Quotes: "Er sagte: Ich komme."', () => {
+  const text = 'Er sagte: Ich komme gleich.';
+  const { pronoun_counts, dialog_chars } = computePronounsAndDialog(text);
+  assert.ok(dialog_chars > 0, 'dialog_chars > 0 für Speech-Verb-Stil');
+  assert.equal(pronoun_counts.ich.dlg, 1, 'Ich nach «sagte:» als Dialog gezählt');
+  assert.equal(pronoun_counts.ich.narr, 0);
+});
+
+test('Speech-Verb + Colon: dachte, fragte, lowercase — je als Dialog', () => {
+  const text = 'Anna dachte: Ich bin müde. Er fragte: Bist du bereit?';
+  const { pronoun_counts } = computePronounsAndDialog(text);
+  assert.equal(pronoun_counts.ich.dlg, 1, 'Ich nach «dachte:» im Dialog');
+  assert.equal(pronoun_counts.du.dlg, 1, 'du nach «fragte:» im Dialog');
+});
+
+test('Speech-Verb + Colon: Aufzählung triggert NICHT', () => {
+  const text = 'Er hatte drei Argumente: Ich sei faul, du auch.';
+  const { pronoun_counts } = computePronounsAndDialog(text);
+  assert.equal(pronoun_counts.ich.dlg, 0, 'hatte ist kein Speech-Verb');
+  assert.equal(pronoun_counts.ich.narr, 1);
+});
+
+test('Em-Dash-Zeilenanfang: "— Ich komme."', () => {
+  const text = 'Sie nickte.\n\u2014 Ich komme gleich.\nEr wandte sich ab.';
+  const { pronoun_counts, dialog_chars } = computePronounsAndDialog(text);
+  assert.ok(dialog_chars > 0, 'dialog_chars > 0 für Em-Dash-Stil');
+  assert.equal(pronoun_counts.ich.dlg, 1, 'Ich nach Em-Dash als Dialog');
+});
+
 test('Pronomen: Er-Pronomen inkl. Possessiv-Formen', () => {
   const text = 'Er öffnete seinen Mantel. Sein Blick war leer.';
   const { pronoun_counts } = computePronounsAndDialog(text);

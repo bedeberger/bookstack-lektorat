@@ -188,6 +188,7 @@ export const editorEditMethods = {
       this.currentPageEmpty = !htmlToText(newHtml).trim();
 
       this._filterFindingsAfterSave(newHtml);
+      this._syncPageStatsAfterSave?.(this.currentPage, newHtml);
 
       clearDraft(this.currentPage.id);
       this.lastAutosaveAt = Date.now();
@@ -262,6 +263,7 @@ export const editorEditMethods = {
       clearDraft(this.currentPage.id);
       this.currentPageEmpty = !htmlToText(newHtml).trim();
       this._filterFindingsAfterSave(newHtml);
+      this._syncPageStatsAfterSave?.(this.currentPage, newHtml);
       this.updatePageView();
       this.setStatus(this.t('edit.savedAt', { time: new Date().toLocaleTimeString(localeTag) }), false, 2500);
     } catch (e) {

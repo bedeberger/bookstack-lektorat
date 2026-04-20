@@ -52,7 +52,7 @@
     </div>
   </div>
   <div class="progress-bar-wrap" x-show="checkProgress > 0 || saveApplying != null">
-    <div class="progress-bar" :style="'width:' + (checkProgress || saveApplying || 0) + '%'"></div>
+    <div class="progress-bar" :style="{ '--progress': (checkProgress || saveApplying || 0) + '%' }"></div>
   </div>
   <div id="status" x-html="statusHtml"></div>
 

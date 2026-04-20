@@ -1,6 +1,6 @@
 'use strict';
 const express = require('express');
-const { db } = require('../../db/schema');
+const { db, getBookSettings } = require('../../db/schema');
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
@@ -10,6 +10,7 @@ const {
   jobs, runningJobs, createJob, enqueueJob, jobKey,
   jsonBody, BATCH_SIZE,
 } = require('./shared');
+const { narrativeLabels } = require('./narrative-labels');
 
 const kapitelRouter = express.Router();
 
@@ -18,6 +19,7 @@ async function runChapterReviewJob(jobId, bookId, chapterId, chapterName, bookNa
   const logger = makeJobLogger(jobId);
   const { buildChapterReviewPrompt, SCHEMA_CHAPTER_REVIEW } = await getPrompts();
   const { SYSTEM_KAPITELREVIEW } = await getBookPrompts(bookId, userEmail);
+  const bookSettings = getBookSettings(bookId, userEmail);
   try {
     updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     // Alle Buchseiten holen; Kapitel-Filter läuft clientseitig – BookStack
@@ -55,7 +57,7 @@ async function runChapterReviewJob(jobId, bookId, chapterId, chapterName, bookNa
 
     updateJob(jobId, { progress: 65, statusText: 'job.phase.aiChapterReview' });
     const r = await aiCall(jobId, tok,
-      buildChapterReviewPrompt(chapterName, bookName, contents.length, chText),
+      buildChapterReviewPrompt(chapterName, bookName, contents.length, chText, narrativeLabels(bookSettings)),
       SYSTEM_KAPITELREVIEW,
       65, 97, 5000, 0.2, null, undefined, SCHEMA_CHAPTER_REVIEW,
     );

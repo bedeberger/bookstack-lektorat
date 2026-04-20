@@ -255,6 +255,8 @@ export function initialLektoratState() {
     bookSettingsRegion: 'CH',
     bookSettingsBuchtyp: '',
     bookSettingsBuchKontext: '',
+    bookSettingsErzaehlperspektive: '',
+    bookSettingsErzaehlzeit: '',
     bookSettingsLoading: false,
     bookSettingsSaving: false,
     bookSettingsSaved: false,

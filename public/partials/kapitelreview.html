@@ -54,7 +54,7 @@
   </template>
 
   <div class="progress-bar-wrap" x-show="kapitelReviewProgress > 0">
-    <div class="progress-bar" :style="'width:' + kapitelReviewProgress + '%'"></div>
+    <div class="progress-bar" :style="{ '--progress': kapitelReviewProgress + '%' }"></div>
   </div>
   <div class="card-status" x-html="kapitelReviewStatus"></div>
   <div x-html="kapitelReviewOut"></div>

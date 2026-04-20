@@ -6,7 +6,7 @@
   </div>
 
   <div x-show="orteProgress > 0" class="progress-bar-wrap">
-    <div class="progress-bar" :style="'width:' + orteProgress + '%'"></div>
+    <div class="progress-bar" :style="{ '--progress': orteProgress + '%' }"></div>
   </div>
   <div x-show="orteStatus" class="card-status" x-html="orteStatus"></div>
 
@@ -69,7 +69,7 @@
           <div x-show="o.figuren?.length > 0" class="ort-meta-row">
             <span class="ort-meta-label" x-text="t('orte.figuren')"></span>
             <template x-for="figId in o.figuren" :key="figId">
-              <span class="tag internal-link" @click.stop="openFigurById(figId)" x-text="figuren.find(f => f.id === figId)?.kurzname || figuren.find(f => f.id === figId)?.name || figId"></span>
+              <span class="tag internal-link" @click.stop="openFigurById(figId)" x-text="figurenById.get(figId)?.kurzname || figurenById.get(figId)?.name || figId"></span>
             </template>
           </div>
           <div x-show="o.kapitel?.length > 1" class="ort-meta-row">
