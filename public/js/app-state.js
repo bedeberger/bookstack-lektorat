@@ -123,6 +123,7 @@ export function initialLektoratState() {
     kapitelReviewHistory: {},
     selectedKapitelReviewId: null,
     _kapitelReviewPollTimer: null,
+    _kapitelReviewRunningChapterId: '',
     newPageTitle: '',
     newPageCreating: false,
     newPageError: '',

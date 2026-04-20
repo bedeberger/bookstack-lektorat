@@ -150,6 +150,7 @@ export const appJobsCoreMethods = {
         this.kapitelReviewLoading = true;
         this.kapitelReviewProgress = job.progress || 0;
         this.kapitelReviewChapterId = String(item.id);
+        this._kapitelReviewRunningChapterId = String(item.id);
         this.showKapitelReviewCard = true;
         this.kapitelReviewOut = '';
         this.setKapitelReviewStatus(job.statusText ? this.t(job.statusText, job.statusParams) : this.t('common.analysisRunning'), true);

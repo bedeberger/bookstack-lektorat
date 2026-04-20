@@ -168,6 +168,7 @@ export const appViewMethods = {
     this.kapitelReviewProgress = 0;
     this.kapitelReviewLoading = false;
     this.kapitelReviewChapterId = '';
+    this._kapitelReviewRunningChapterId = '';
     this.selectedKapitelReviewId = null;
     this.newPageTitle = '';
     this.newPageCreating = false;

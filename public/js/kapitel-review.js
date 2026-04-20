@@ -71,15 +71,18 @@ export const kapitelReviewMethods = {
       },
       onNotFound: () => {
         this.kapitelReviewLoading = false;
+        this._kapitelReviewRunningChapterId = '';
         this.setKapitelReviewStatus(this.t('job.interrupted'));
       },
       onError: (job) => {
         this.kapitelReviewLoading = false;
+        this._kapitelReviewRunningChapterId = '';
         this.kapitelReviewOut = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(this.t(job.error, job.errorParams))}</span>`;
         this.setKapitelReviewStatus('');
       },
       onDone: async (job) => {
         this.kapitelReviewLoading = false;
+        this._kapitelReviewRunningChapterId = '';
         if (job.result?.empty) {
           this.setKapitelReviewStatus(this.t('kapitelReview.noPages'));
           return;
@@ -148,6 +151,7 @@ export const kapitelReviewMethods = {
     const chapterName = chapter?.name || '';
     this.kapitelReviewLoading = true;
     this.kapitelReviewProgress = 0;
+    this._kapitelReviewRunningChapterId = String(chapterId);
     this.showKapitelReviewCard = true;
     this.kapitelReviewOut = '';
     this.setKapitelReviewStatus(this.t('kapitelReview.starting'), true);
@@ -169,6 +173,7 @@ export const kapitelReviewMethods = {
       this.kapitelReviewOut = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(e.message)}</span>`;
       this.setKapitelReviewStatus('');
       this.kapitelReviewLoading = false;
+      this._kapitelReviewRunningChapterId = '';
     }
   },
 
