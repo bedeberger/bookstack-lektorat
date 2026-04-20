@@ -1,8 +1,7 @@
 .env
 .env.local
 .env.*.local
-.claude/settings.json
-.claude/settings.local.json
+.claude/
 node_modules/
 lektorat-history.json
 lektorat.db
