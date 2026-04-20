@@ -160,6 +160,7 @@ export const appViewMethods = {
     this.bookStatsData = [];
     this.bookStatsCoverage = null;
     this.bookStatsDelta = null;
+    this.writingTimeData = null;
     this.globalZeitstrahl = [];
     this.bookReviewHistory = [];
     this.kapitelReviewHistory = {};

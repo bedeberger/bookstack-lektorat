@@ -422,6 +422,8 @@
   "bookstats.metric.pagesPerChapter": "S./Kap.",
   "bookstats.metric.lix":        "LIX (Lesbarkeit)",
   "bookstats.metric.flesch":     "Flesch-DE (Lesbarkeit)",
+  "bookstats.metric.writingMinutes":    "Minuten schreibend/Tag",
+  "bookstats.metric.writingCumulative": "Kumulierte Schreibstunden",
   "bookstats.range.7":           "7 T",
   "bookstats.range.30":          "30 T",
   "bookstats.range.90":          "90 T",
@@ -435,6 +437,8 @@
   "bookstats.coverage":          "{pct}% geprüft ({checked}/{total})",
   "bookstats.avgSentenceBadge":  "Ø {n} W/Satz",
   "bookstats.pagesPerChapterBadge": "Ø {n} S/Kap.",
+  "bookstats.writingTotal":      "{h} h geschrieben",
+  "bookstats.writingAvg":        "Ø {m} min/aktiver Tag",
   "bookstats.emptyState":        "Noch keine Daten vorhanden. Klicke «Synchronisieren» um den ersten Snapshot zu erfassen.",
 
   "stil.title":                  "Stil-Heatmap: {name}",

@@ -890,10 +890,6 @@ select:focus {
 .combobox-wrap--compact .combobox-search { font-size: 12px; padding: 5px 8px; }
 .combobox-wrap--compact .combobox-option { font-size: 12px; padding: 5px 8px; }
 .combobox-wrap--compact .combobox-empty { font-size: 12px; padding: 5px 8px; }
-/* Metric variant (auto-width) */
-.combobox-wrap--metric { width: auto; flex-shrink: 0; }
-.combobox-wrap--metric .combobox-trigger { min-width: 130px; }
-.combobox-wrap--metric .combobox-dropdown { right: 0; min-width: 160px; }
 
 /* === Buttons === */
 button {

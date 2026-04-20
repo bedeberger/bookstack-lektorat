@@ -421,4 +421,54 @@ router.get('/fehler-heatmap/:book_id', (req, res) => {
   });
 });
 
+// Schreibzeit-Tracking: Heartbeat des Frontends (alle ~30 s, solange
+// editMode || focusMode aktiv und Tab sichtbar). Pro (User, Buch, Tag)
+// werden die Sekunden aufsummiert. Server-seitiges Clamping auf 1 h pro
+// Ping verhindert Ausreisser (Uhrensprung, manipulierte Werte).
+router.post('/writing-time', jsonBody, (req, res) => {
+  const user_email = req.session?.user?.email || null;
+  if (!user_email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+  const book_id = parseInt(req.body?.book_id);
+  const secondsRaw = Number(req.body?.seconds);
+  if (!Number.isFinite(book_id) || book_id <= 0) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
+  if (!Number.isFinite(secondsRaw) || secondsRaw <= 0) return res.json({ ok: true, added: 0 });
+  const seconds = Math.min(Math.round(secondsRaw), 3600);
+  const date = new Date().toISOString().slice(0, 10);
+  db.prepare(`
+    INSERT INTO writing_time (user_email, book_id, date, seconds)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_email, book_id, date) DO UPDATE SET seconds = seconds + excluded.seconds
+  `).run(user_email, book_id, date, seconds);
+  res.json({ ok: true, added: seconds });
+});
+
+// Aggregat + Tagesreihe der Schreibzeit pro Buch für den eingeloggten User.
+// active_days = Tage mit seconds > 0 (für Durchschnitt pro aktivem Tag).
+// daily liefert die Rohdaten für das Chart (nur Tage mit seconds > 0).
+router.get('/writing-time/:book_id', (req, res) => {
+  const user_email = req.session?.user?.email || null;
+  if (!user_email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+  const book_id = parseInt(req.params.book_id);
+  const row = db.prepare(`
+    SELECT COALESCE(SUM(seconds), 0) AS total_seconds,
+           COUNT(*)                  AS active_days,
+           MIN(date)                 AS first_date,
+           MAX(date)                 AS last_date
+    FROM writing_time
+    WHERE user_email = ? AND book_id = ? AND seconds > 0
+  `).get(user_email, book_id);
+  const daily = db.prepare(`
+    SELECT date, seconds FROM writing_time
+    WHERE user_email = ? AND book_id = ? AND seconds > 0
+    ORDER BY date ASC
+  `).all(user_email, book_id);
+  res.json({
+    total_seconds: row?.total_seconds || 0,
+    active_days:   row?.active_days   || 0,
+    first_date:    row?.first_date    || null,
+    last_date:     row?.last_date     || null,
+    daily,
+  });
+});
+
 module.exports = router;

@@ -187,6 +187,7 @@ export function initialLektoratState() {
     bookStatsRange: 0,
     bookStatsCoverage: null,
     bookStatsDelta: null,
+    writingTimeData: null,
     _statsChart: null,
     showStilCard: false,
     stilData: null,

@@ -8,17 +8,21 @@ const cssVar = name => getComputedStyle(document.documentElement).getPropertyVal
 // Chart-Labels kommen zur Render-Zeit über t() (siehe _metricLabel()), damit sie
 // bei Sprachwechsel live nachgezogen werden.
 const METRIC_KEYS = {
-  words:             'bookstats.metric.words',
-  chars:             'bookstats.metric.chars',
-  page_count:        'bookstats.metric.pages',
-  tok:               'bookstats.metric.tok',
-  unique_words:      'bookstats.metric.unique',
-  delta_words:       'bookstats.metric.delta',
-  avg_sentence_len:  'bookstats.metric.avgSentence',
-  pages_per_chapter: 'bookstats.metric.pagesPerChapter',
-  avg_lix:           'bookstats.metric.lix',
-  avg_flesch_de:     'bookstats.metric.flesch',
+  words:              'bookstats.metric.words',
+  chars:              'bookstats.metric.chars',
+  page_count:         'bookstats.metric.pages',
+  tok:                'bookstats.metric.tok',
+  unique_words:       'bookstats.metric.unique',
+  delta_words:        'bookstats.metric.delta',
+  avg_sentence_len:   'bookstats.metric.avgSentence',
+  pages_per_chapter:  'bookstats.metric.pagesPerChapter',
+  avg_lix:            'bookstats.metric.lix',
+  avg_flesch_de:      'bookstats.metric.flesch',
+  writing_minutes:    'bookstats.metric.writingMinutes',
+  writing_cumulative: 'bookstats.metric.writingCumulative',
 };
+
+const WRITING_METRICS = new Set(['writing_minutes', 'writing_cumulative']);
 
 // Ausserhalb von Alpine gespeichert, damit die Chart.js-Instanz nicht durch
 // Alpines Reaktivitäts-Proxy beschädigt wird.
@@ -54,12 +58,14 @@ export const bookstatsMethods = {
 
   async loadBookStats(bookId) {
     try {
-      const [rows, coverage] = await Promise.all([
+      const [rows, coverage, writing] = await Promise.all([
         fetchJson('/history/book-stats/' + bookId),
         fetchJson('/history/coverage/' + bookId),
+        fetchJson('/history/writing-time/' + bookId),
       ]);
       this.bookStatsData = rows;
       this.bookStatsCoverage = coverage;
+      this.writingTimeData = writing;
       const last = rows[rows.length - 1];
       const prev = rows[rows.length - 2];
       this.bookStatsDelta = (last && prev) ? last.words - prev.words : null;
@@ -107,10 +113,18 @@ export const bookstatsMethods = {
     // mit stale Dimensionen leer, bis ein Reflow nachzieht.
     if (_statsChart) { _statsChart.destroy(); _statsChart = null; }
 
-    if (!this.bookStatsData.length) return;
+    const metric = this.bookStatsMetric;
+    const isWriting = WRITING_METRICS.has(metric);
+
+    // Writing-Metriken laufen auf der writing_time-Zeitachse (nur aktive Tage),
+    // nicht auf der book_stats_history-Timeline — sonst fehlen Tage ohne Sync,
+    // und Snapshots ohne Schreibzeit würden als 0-Punkte erscheinen.
+    let rows = isWriting
+      ? (this.writingTimeData?.daily || []).map(d => ({ recorded_at: d.date, seconds: d.seconds }))
+      : this.bookStatsData;
+    if (!rows.length) return;
 
     // Zeitraum-Filter
-    let rows = this.bookStatsData;
     if (this.bookStatsRange > 0) {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - this.bookStatsRange);
@@ -118,7 +132,6 @@ export const bookstatsMethods = {
       rows = rows.filter(r => r.recorded_at >= cutoffStr);
     }
 
-    const metric = this.bookStatsMetric;
     const labels = rows.map(r => {
       const [y, m, d] = r.recorded_at.split('-');
       return `${d}.${m}.${y.slice(2)}`;
@@ -126,14 +139,19 @@ export const bookstatsMethods = {
 
     const isDelta = metric === 'delta_words';
     const isPpc   = metric === 'pages_per_chapter';
-    const data = isDelta ? rows.map((r, i) => i === 0 ? null : r.words - rows[i - 1].words)
-      : isPpc  ? rows.map(r => r.chapter_count > 0 ? Math.round((r.page_count / r.chapter_count) * 10) / 10 : null)
-      : rows.map(r => r[metric] ?? null);
+    const isWritMin = metric === 'writing_minutes';
+    const isWritCum = metric === 'writing_cumulative';
+    let data;
+    if (isDelta) data = rows.map((r, i) => i === 0 ? null : r.words - rows[i - 1].words);
+    else if (isPpc) data = rows.map(r => r.chapter_count > 0 ? Math.round((r.page_count / r.chapter_count) * 10) / 10 : null);
+    else if (isWritMin) data = rows.map(r => Math.round(r.seconds / 60));
+    else if (isWritCum) { let sum = 0; data = rows.map(r => { sum += r.seconds; return Math.round(sum / 360) / 10; }); }
+    else data = rows.map(r => r[metric] ?? null);
 
     const metricLabel = METRIC_KEYS[metric] ? this.t(METRIC_KEYS[metric]) : metric;
 
     const localeTag = (this.uiLocale === 'en') ? 'en-US' : 'de-CH';
-    const isDecimal = isPpc || metric === 'avg_sentence_len' || metric === 'avg_lix' || metric === 'avg_flesch_de';
+    const isDecimal = isPpc || isWritCum || metric === 'avg_sentence_len' || metric === 'avg_lix' || metric === 'avg_flesch_de';
     const fmt = v => isDecimal ? v.toLocaleString(localeTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
       : Math.round(v).toLocaleString(localeTag);
     const makeTick = () => v => {

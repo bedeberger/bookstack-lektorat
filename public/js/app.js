@@ -13,6 +13,7 @@ import { figurenMethods } from './figuren.js';
 import { ereignisseMethods } from './ereignisse.js';
 import { graphMethods } from './graph.js';
 import { bookstatsMethods } from './bookstats.js';
+import { writingTimeMethods } from './writing-time.js';
 import { stilMethods } from './stil-heatmap.js';
 import { fehlerHeatmapMethods } from './fehler-heatmap.js';
 import { chatMethods } from './chat.js';
@@ -444,6 +445,7 @@ document.addEventListener('alpine:init', () => {
           if (this.showFiguresCard && this.figuren?.length) this.renderFigurGraph();
         });
         this._startJobQueuePoll();
+        this._setupWritingTime();
       } catch (e) {
         console.error('[init]', e);
         this.setStatus(this.t('app.configLoadError'));
@@ -463,6 +465,7 @@ document.addEventListener('alpine:init', () => {
     ...ereignisseMethods,
     ...graphMethods,
     ...bookstatsMethods,
+    ...writingTimeMethods,
     ...stilMethods,
     ...fehlerHeatmapMethods,
     ...chatMethods,
