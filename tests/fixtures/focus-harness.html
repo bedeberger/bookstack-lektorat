@@ -42,7 +42,12 @@
       showSynonymMenu: false,
       showSynonymPicker: false,
       $nextTick: (fn) => Promise.resolve().then(fn),
-      startEdit() { this.editMode = true; },
+      startEdit() {
+        this.editMode = true;
+        // Spiegelt editor-edit.js::startEdit – Enter soll <p> erzeugen,
+        // nicht den Chromium-Default <div>.
+        try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch {}
+      },
       cancelEdit() { this.editMode = false; this.editDirty = false; },
       closeFindings() {},
     };

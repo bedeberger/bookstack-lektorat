@@ -97,6 +97,12 @@ export const editorEditMethods = {
     this.editSaving = false;
     this.saveOffline = false;
 
+    // Chromium/Safari-Default ist 'div' → Enter an bare Text oder am
+    // Editor-Root erzeugt <div> statt <p>, damit fehlt der Absatz-Abstand
+    // und der Fokus-Mode erkennt den Block nicht (BLOCK_TAGS ohne DIV).
+    // Einmal pro Edit-Session genügt, der Flag ist dokumentweit.
+    try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch {}
+
     let initialHtml = this.originalHtml;
 
     // Draft-Wiederherstellung: lokalen Entwurf prüfen, wenn vorhanden und abweichend.

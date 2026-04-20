@@ -114,6 +114,52 @@ test('Cleanup: exit nullt State, entfernt Klassen + CSS-Vars', async ({ page }) 
   expect(state.raf).toBeNull();
 });
 
+test('Enter erzeugt <p>-Absatz (kein <div>), auch bei bare-text Content', async ({ page }) => {
+  // Chromium-Default für contenteditable-Enter ist <div>. startEdit muss
+  // defaultParagraphSeparator=p setzen, sonst verlieren neue Absätze das
+  // Block-Styling (margin, focus-paragraph-Erkennung via BLOCK_TAGS).
+  await page.evaluate(() => window.harness.startEdit());
+  await enter(page);
+
+  // Bare-Text mit <br> – klassische Problemstelle, wo Chromium ohne Fix <div> produziert.
+  await page.evaluate(() => {
+    const el = document.querySelector('#editor-card .page-content-view--editing');
+    el.replaceChildren(
+      document.createTextNode('Zeile eins.'),
+      document.createElement('br'),
+      document.createTextNode('Zeile zwei.'),
+    );
+    el.focus();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+  });
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('neu');
+  await page.waitForTimeout(50);
+
+  const divCount = await page.locator(`${EDITOR} > div`).count();
+  const pCount   = await page.locator(`${EDITOR} > p`).count();
+  expect(divCount).toBe(0);
+  expect(pCount).toBeGreaterThan(0);
+  await expect(page.locator(`${EDITOR} > p`).last()).toHaveText('neu');
+});
+
+test('Enter in <p> splittet sauber in zwei <p> (Standardfall)', async ({ page }) => {
+  await page.evaluate(() => window.harness.startEdit());
+  await enter(page);
+
+  const before = await page.locator(`${EDITOR} > p`).count();
+  await placeCaretInParagraph(page, 3);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(50);
+  const after = await page.locator(`${EDITOR} > p`).count();
+  expect(after).toBe(before + 1);
+  expect(await page.locator(`${EDITOR} > div`).count()).toBe(0);
+});
+
 test('5× Toggle leakt keine Observer/Listeners', async ({ page }) => {
   for (let i = 0; i < 5; i++) {
     await enter(page);
