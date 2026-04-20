@@ -160,6 +160,43 @@ test('Enter in <p> splittet sauber in zwei <p> (Standardfall)', async ({ page })
   expect(await page.locator(`${EDITOR} > div`).count()).toBe(0);
 });
 
+test('Enter im Fokus-Mode zentriert auf den neuen Absatz (Typewriter-Scroll)', async ({ page }) => {
+  // Regression: vor defaultParagraphSeparator=p erzeugte Enter <div>, das
+  // nicht in BLOCK_TAGS ist → findBlockFromNode lieferte null → kein
+  // Recenter auf die neue Zeile. Ergebnis: Cursor wanderte unsichtbar
+  // aus dem Viewport-Zentrum.
+  await page.evaluate(() => window.harness.startEdit());
+  await enter(page);
+
+  // Absatz weit unten fokussieren + zentrieren, damit Enter einen messbaren
+  // Scroll-Delta erzeugen kann. Caret ans Ende, damit der neue <p> nach
+  // Enter die aktive Zeile ist (nicht der verbleibende Rest).
+  await page.evaluate(() => {
+    const p = document.querySelectorAll('#editor-card .page-content-view--editing p')[30];
+    const range = document.createRange();
+    range.selectNodeContents(p);
+    range.collapse(false);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+  });
+  // Scroll auf 0 zurücksetzen: ohne Recenter bleibt der neue Absatz weit
+  // unterhalb des Viewports. Mit Recenter springt scrollTop messbar nach oben.
+  await page.evaluate((sel) => { document.querySelector(sel).scrollTop = 0; }, EDITOR);
+  await page.waitForTimeout(50);
+
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('frisch');
+  await page.waitForTimeout(100);
+
+  // Der frisch getippte Absatz muss aktiv markiert sein (Recenter-Pfad
+  // basiert auf BLOCK_TAGS-Match, DIV würde hier durchfallen).
+  const activeText = await page.locator(`${EDITOR} .focus-paragraph-active`).innerText();
+  expect(activeText).toBe('frisch');
+
+  // Recenter muss scrollTop klar nach oben bewegen (neuer Absatz weit unten).
+  expect(await scrollTop(page)).toBeGreaterThan(200);
+});
+
 test('5× Toggle leakt keine Observer/Listeners', async ({ page }) => {
   for (let i = 0; i < 5; i++) {
     await enter(page);
