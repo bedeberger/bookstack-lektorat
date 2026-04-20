@@ -4,7 +4,13 @@ KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). L�
 
 - **Seitenlektorat** – Rechtschreib-, Grammatik- und Stilprüfung einzelner Seiten mit selektiver Fehlerkorrektur
 - **Bearbeitungsmodus** – Seiteninhalt direkt in der App editieren und nach BookStack zurückspeichern. Auto-Save alle 30 s, lokaler Draft (localStorage) mit Wiederherstellungs-Prompt, Offline-Modus mit automatischem Retry bei Reconnect
-- **Fokusmodus** – Ablenkungsfreier Vollbild-Schreibmodus mit Absatz-Hervorhebung und Typewriter-Scroll (F11)
+- **Fokusmodus** – Ablenkungsfreier Vollbild-Schreibmodus (F11):
+  - Typewriter-Scroll – die Cursor-Zeile bleibt automatisch mittig im Viewport
+  - Absatz-Hervorhebung – der aktuelle Absatz bleibt hell, der Rest wird abgedunkelt
+  - Offline-fähig – Auto-Save alle 30 s, lokaler Draft (localStorage), automatischer Retry bei Reconnect; beim Verlassen wird gespeichert
+  - Figuren-Lookup und Synonym-Finder (Rechtsklick) bleiben im Fokusmodus verfügbar
+  - Schreibzeit-Tracking – Editier- und Fokuszeit werden pro Buch summiert (Heartbeat alle 15 s)
+  - Mobile- und IME-Support – passt sich der Bildschirmtastatur (`visualViewport`) an und respektiert CJK-Composition sowie `prefers-reduced-motion`
 - **Synonym-Finder** – Im Bearbeitungsmodus: Wort markieren → Rechtsklick → kombinierte Vorschläge aus [OpenThesaurus](https://www.openthesaurus.de/) (deutsch) und der KI mit Satzkontext; Klick ersetzt direkt im Text
 - **Seiten-Chat** – Freier KI-Dialog zu einer Seite inkl. Kontext (Figuren, Buchbewertung); Änderungsvorschläge direkt in BookStack übernehmen
 - **Buch-Chat** – KI-Dialog über das gesamte Buch. Der Assistent nutzt Werkzeuge (Pronomen-Zählung, Figurenverteilung, Volltextsuche, Seitenabruf), die auf einen vorberechneten Index zugreifen, und kann so auch Häufigkeits- und Verteilungsfragen über das ganze Buch präzise beantworten (z.B. „Kommt der Ich-Erzähler häufiger vor?"). Index wird beim täglichen Sync (02:00) aktualisiert

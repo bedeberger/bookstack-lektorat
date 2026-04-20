@@ -1397,15 +1397,34 @@ body.focus-mode .page-content-view--editing::-webkit-scrollbar {
   height: 0;
 }
 
-body.focus-mode .page-content-view > *,
-body.focus-mode .page-content-view--editing > * {
+/* Typewriter-Dim: alle Block-Elemente gedimmt, aktiver bleibt hell.
+   Descendant- statt Child-Selector, weil BookStack-HTML Absätze in Wrapper
+   (z.B. <div>, .poem) packen kann – dann würde `> *` nur den Wrapper treffen
+   und die <p> darin blieben hell. `:not(.focus-paragraph-active)` macht die
+   Brighten-Regel überflüssig und vermeidet opacity-Stacking-Probleme, bei
+   denen ein dim-Parent den aktiven Kind-Absatz mit runterzieht. */
+body.focus-mode .page-content-view p:not(.focus-paragraph-active),
+body.focus-mode .page-content-view h1:not(.focus-paragraph-active),
+body.focus-mode .page-content-view h2:not(.focus-paragraph-active),
+body.focus-mode .page-content-view h3:not(.focus-paragraph-active),
+body.focus-mode .page-content-view h4:not(.focus-paragraph-active),
+body.focus-mode .page-content-view h5:not(.focus-paragraph-active),
+body.focus-mode .page-content-view h6:not(.focus-paragraph-active),
+body.focus-mode .page-content-view blockquote:not(.focus-paragraph-active),
+body.focus-mode .page-content-view li:not(.focus-paragraph-active),
+body.focus-mode .page-content-view pre:not(.focus-paragraph-active),
+body.focus-mode .page-content-view--editing p:not(.focus-paragraph-active),
+body.focus-mode .page-content-view--editing h1:not(.focus-paragraph-active),
+body.focus-mode .page-content-view--editing h2:not(.focus-paragraph-active),
+body.focus-mode .page-content-view--editing h3:not(.focus-paragraph-active),
+body.focus-mode .page-content-view--editing h4:not(.focus-paragraph-active),
+body.focus-mode .page-content-view--editing h5:not(.focus-paragraph-active),
+body.focus-mode .page-content-view--editing h6:not(.focus-paragraph-active),
+body.focus-mode .page-content-view--editing blockquote:not(.focus-paragraph-active),
+body.focus-mode .page-content-view--editing li:not(.focus-paragraph-active),
+body.focus-mode .page-content-view--editing pre:not(.focus-paragraph-active) {
   opacity: 0.5;
   transition: opacity 0.35s ease;
-}
-
-body.focus-mode .page-content-view .focus-paragraph-active,
-body.focus-mode .page-content-view--editing .focus-paragraph-active {
-  opacity: 1;
 }
 
 /* Lektorat-Marks im Fokusmodus optisch neutralisieren (Findings bleiben

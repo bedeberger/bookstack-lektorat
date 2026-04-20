@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <title>Focus Editor Test Harness</title>
+  <!-- Produktions-CSS laden, damit Tests die echte Dim-Logik
+       (opacity 0.5 auf `> *`, opacity 1 auf `.focus-paragraph-active`)
+       gegen die tatsächlichen Regeln messen, nicht gegen Harness-Attrappen. -->
+  <link rel="stylesheet" href="/public/style.css">
   <style>
     body { margin: 0; font: 16px/1.6 system-ui, sans-serif; }
     #editor-card { height: 100vh; display: flex; flex-direction: column; }
@@ -10,13 +14,18 @@
       flex: 1; overflow-y: auto; padding: 0 24px;
       scroll-behavior: auto; /* smooth-scroll abschalten → deterministische Tests */
     }
-    .page-content-view p { margin: 0 0 1em; opacity: 1; }
-    .focus-paragraph-active { background: #ff0; }
+    .page-content-view p { margin: 0 0 1em; }
   </style>
 </head>
 <body>
   <div id="editor-card">
+    <!-- Editor (Edit-Modus). -->
     <div class="page-content-view page-content-view--editing" contenteditable="true"></div>
+    <!-- Versteckter View-Modus-Container. Spiegelt den realen Alpine-x-show-Zustand
+         im Edit-Modus (display:none). Früher fing getScrollContainer() diesen
+         Container via `:not([style*="display: none"])`-Race und verlor die
+         eigentlichen Editor-Blöcke. Der Fallback muss ihn ignorieren. -->
+    <div class="page-content-view" style="display: none;"></div>
   </div>
 
   <script type="module">
@@ -31,7 +40,8 @@
     }
 
     // Minimal-Harness, das die Alpine-Komponente nachbildet, soweit
-    // editor-focus.js sie braucht.
+    // editor-focus.js sie braucht. Tests dürfen Stubs (z.B. quickSave)
+    // per Monkey-Patch überschreiben.
     const harness = {
       ...focusMethods,
       focusMode: false,
@@ -39,8 +49,12 @@
       showEditorCard: true,
       checkDone: false,
       editDirty: false,
+      editSaving: false,
+      saveOffline: false,
+      lastDraftSavedAt: null,
       showSynonymMenu: false,
       showSynonymPicker: false,
+      showFigurLookup: false,
       $nextTick: (fn) => Promise.resolve().then(fn),
       startEdit() {
         this.editMode = true;
@@ -49,6 +63,20 @@
         try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch {}
       },
       cancelEdit() { this.editMode = false; this.editDirty = false; },
+      quickSave: async function () {
+        // Default-Stub: schnell, erfolgreich. Tests überschreiben diesen
+        // Slot für Save-Failure-Szenarien (quickSave = async () => { throw ... }).
+        this.editSaving = true;
+        await Promise.resolve();
+        this.editDirty = false;
+        this.editSaving = false;
+      },
+      _stopAutosave() {},
+      _uninstallOnlineRetry() {},
+      closeSynonymMenu() { this.showSynonymMenu = false; },
+      closeSynonymPicker() { this.showSynonymPicker = false; },
+      closeFigurLookup() { this.showFigurLookup = false; },
+      updatePageView() {},
       closeFindings() {},
     };
 

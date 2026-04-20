@@ -6,8 +6,8 @@ on:
     branches: [main]
 
 jobs:
-  tier1:
-    name: Tier-1 Guards
+  static-checks:
+    name: Static Checks
     runs-on: self-hosted
     timeout-minutes: 5
     env:
@@ -123,7 +123,7 @@ jobs:
 
   deploy:
     name: Deploy to LXC with bookstack
-    needs: [tier1, unit, e2e]
+    needs: [static-checks, unit, e2e]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: self-hosted
     environment: production
