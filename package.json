@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "npm run test:unit && npm run test:e2e",
-    "test:unit": "node --test \"tests/unit/*.test.js\" \"tests/unit/*.test.mjs\"",
+    "test:unit": "node --test --test-concurrency=4 \"tests/unit/*.test.js\" \"tests/unit/*.test.mjs\"",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

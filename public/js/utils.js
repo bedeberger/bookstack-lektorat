@@ -205,6 +205,41 @@ export function cleanContentArtefacts(html) {
   return tmp.innerHTML;
 }
 
+// Elemente mit eigenem "visuellen" Inhalt (dürfen leer wirken, bleiben erhalten).
+const _STRUCTURAL_LEAF = 'img,iframe,video,audio,table,figure,hr,object,embed,canvas,svg,input,button';
+
+function _isBlankTrailing(node) {
+  if (!node) return false;
+  if (node.nodeType === 3) return !node.textContent.replace(/\u00A0/g, ' ').trim();
+  if (node.nodeType !== 1) return false;
+  const tag = node.tagName;
+  if (tag !== 'P' && tag !== 'DIV' && tag !== 'BR') return false;
+  if (tag === 'BR') return true;
+  if ((node.textContent || '').replace(/\u00A0/g, ' ').trim()) return false;
+  if (node.querySelector(_STRUCTURAL_LEAF)) return false;
+  return true;
+}
+
+/**
+ * Entfernt leere Absätze am Ende des HTML. contenteditable hängt beim Tippen
+ * oft `<p><br></p>`/`<p>&nbsp;</p>` an; ohne Strip wachsen beim jedem Save
+ * weitere Leerabsätze hinten ans BookStack-HTML. Idempotent, Top-Level only.
+ * Nutzt DOMParser statt innerHTML-Assign, um keine Script-Side-Effects auszulösen.
+ */
+export function stripTrailingEmptyBlocks(html) {
+  if (!html) return html;
+  const doc = new DOMParser().parseFromString('<div id="r">' + html + '</div>', 'text/html');
+  const root = doc.getElementById('r');
+  if (!root) return html;
+  let last = root.lastChild;
+  while (last && _isBlankTrailing(last)) {
+    const prev = last.previousSibling;
+    root.removeChild(last);
+    last = prev;
+  }
+  return root.innerHTML;
+}
+
 // Dekodiert eine einzelne HTML-Entity (z.B. &bdquo;) via Browser-Parser.
 // Gibt null zurück, wenn sich die Entity nicht auflöst.
 const _entityDecoder = typeof document !== 'undefined' ? document.createElement('textarea') : null;

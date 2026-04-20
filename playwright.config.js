@@ -6,15 +6,19 @@
 module.exports = {
   testDir: './tests/e2e',
   testMatch: '**/*.spec.js',
-  fullyParallel: false,
+  fullyParallel: true,
+  workers: process.env.CI ? 2 : undefined,
   use: {
     baseURL: 'http://localhost:8765',
     viewport: { width: 1024, height: 768 },
   },
+  projects: [
+    { name: 'chromium', use: { browserName: 'chromium' } },
+  ],
   webServer: {
     command: 'node tests/server.js',
     url: 'http://localhost:8765/tests/fixtures/focus-harness.html',
-    timeout: 5000,
+    timeout: 10000,
     reuseExistingServer: !process.env.CI,
   },
 };

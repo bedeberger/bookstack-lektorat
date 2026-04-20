@@ -1,4 +1,4 @@
-import { htmlToText, stripFocusArtefacts, cleanContentArtefacts } from './utils.js';
+import { htmlToText, stripFocusArtefacts, cleanContentArtefacts, stripTrailingEmptyBlocks } from './utils.js';
 import { sortByPosition, buildHighlightedHtml } from './page-view.js';
 
 const AUTOSAVE_INTERVAL_MS = 30000;
@@ -29,7 +29,7 @@ function stripLektoratMarks(html) {
     });
     out = tmp.innerHTML;
   }
-  return cleanContentArtefacts(stripFocusArtefacts(out));
+  return stripTrailingEmptyBlocks(cleanContentArtefacts(stripFocusArtefacts(out)));
 }
 
 function readDraft(pageId) {

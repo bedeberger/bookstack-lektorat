@@ -6,8 +6,8 @@ on:
     branches: [main]
 
 jobs:
-  static-checks:
-    name: Static Checks
+  checks-and-unit:
+    name: Static Checks + Unit-Tests
     runs-on: self-hosted
     timeout-minutes: 5
     env:
@@ -15,9 +15,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Cache node_modules
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install deps
-        run: npm ci --no-audit --no-fund
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Syntax-Check (node --check auf allen JS-Dateien)
         run: |
@@ -86,19 +96,6 @@ jobs:
 
           exit $status
 
-  unit:
-    name: Unit-Tests (node --test)
-    runs-on: self-hosted
-    timeout-minutes: 2
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install deps
-        run: npm ci --no-audit --no-fund
-
       - name: Unit-Tests ausführen
         run: npm run test:unit
 
@@ -111,19 +108,43 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Cache node_modules
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install deps
-        run: npm ci --no-audit --no-fund
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --no-fund
 
-      - name: Chromium installieren (idempotent, lokal gecacht)
-        run: npx playwright install chromium
+      - name: Playwright-Version ermitteln
+        id: pw-version
+        run: |
+          ver=$(node -p "require('@playwright/test/package.json').version")
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright-Browser
+        id: cache-playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw-version.outputs.version }}
+
+      - name: Chromium installieren (nur bei Cache-Miss)
+        if: steps.cache-playwright.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
 
       - name: E2E-Tests ausführen
         run: npm run test:e2e
 
   deploy:
     name: Deploy to LXC with bookstack
-    needs: [static-checks, unit, e2e]
+    needs: [checks-and-unit, e2e]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: self-hosted
     environment: production
@@ -132,6 +153,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Deploy
         run: bash deploy.sh

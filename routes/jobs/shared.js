@@ -636,6 +636,12 @@ sharedRouter.get('/queue', (req, res) => {
 sharedRouter.get('/stats', (req, res) => {
   const userEmail = req.session?.user?.email || null;
   const placeholders = STATS_EXCLUDED_TYPES.map(() => '?').join(',');
+  const bookIdRaw = req.query.book_id;
+  const bookId = bookIdRaw != null && bookIdRaw !== '' ? parseInt(bookIdRaw) : null;
+  const bookClause = Number.isFinite(bookId) ? ' AND book_id = ?' : '';
+  const params = Number.isFinite(bookId)
+    ? [userEmail, bookId, ...STATS_EXCLUDED_TYPES]
+    : [userEmail, ...STATS_EXCLUDED_TYPES];
   const rows = db.prepare(`
     SELECT
       type,
@@ -647,10 +653,10 @@ sharedRouter.get('/stats', (req, res) => {
       AVG(CASE WHEN status = 'done' THEN tokens_out ELSE NULL END) AS avgTokensOut,
       SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS errorCount
     FROM job_runs
-    WHERE user_email = ? AND type NOT IN (${placeholders})
+    WHERE user_email = ?${bookClause} AND type NOT IN (${placeholders})
     GROUP BY type
     ORDER BY lastRun IS NULL, lastRun DESC
-  `).all(userEmail, ...STATS_EXCLUDED_TYPES);
+  `).all(...params);
 
   const result = rows.map(r => ({
     type:         r.type,

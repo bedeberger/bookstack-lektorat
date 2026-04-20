@@ -53,7 +53,10 @@ export const appJobsCoreMethods = {
     this.showJobStats = !this.showJobStats;
     if (this.showJobStats) {
       try {
-        this.jobStats = await fetchJson('/jobs/stats');
+        const url = this.selectedBookId
+          ? `/jobs/stats?book_id=${encodeURIComponent(this.selectedBookId)}`
+          : '/jobs/stats';
+        this.jobStats = await fetchJson(url);
       } catch (e) {
         console.error('[toggleJobStats]', e);
         this.jobStats = [];

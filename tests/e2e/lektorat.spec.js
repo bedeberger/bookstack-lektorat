@@ -21,6 +21,8 @@ async function state(page, getter) {
 }
 
 test.describe('Lektorat-Flow', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test('runCheck: Findings erscheinen, correctedHtml ersetzt Fehler', async ({ page }) => {
     await loadHarness(page, 'ok');
     await page.evaluate(() => window.harness.runCheck());
