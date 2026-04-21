@@ -10,7 +10,7 @@
  *  5.  Form Elements ............... input, select, label
  *  6.  Buttons ..................... button, .btn-compact, .btn-group
  *  7.  Badges ...................... .badge, .badge-*
- *  8.  Findings .................... .finding, del, ins
+ *  8.  Findings .................... .finding, .finding-original, .finding-korrektur
  *  9.  Page List & Tags ............ .page-item, .tag
  * 10.  Status & Spinner ............ #status, .muted-msg, .error-msg, .spinner
  * 11.  Analysis Output ............. .stilbox, .fazit, .bewertung-*, .bullet-list
@@ -967,11 +967,15 @@ button.success:hover { background: var(--color-success-hover); }
 .finding.finding--applied .finding-explanation {
   color: var(--color-muted);
 }
-.finding.finding-deselected del,
-.finding.finding-deselected ins,
-.finding.finding--applied del,
-.finding.finding--applied ins {
+.finding.finding-deselected .finding-original,
+.finding.finding-deselected .finding-korrektur,
+.finding.finding--applied .finding-original,
+.finding.finding--applied .finding-korrektur {
   background: transparent;
+  color: var(--color-muted);
+}
+.finding.finding-deselected .finding-arrow,
+.finding.finding--applied .finding-arrow {
   color: var(--color-muted);
 }
 .finding.finding--applied { text-decoration: line-through; text-decoration-color: var(--color-muted); }
@@ -980,34 +984,29 @@ button.success:hover { background: var(--color-success-hover); }
 .finding > .badge { flex-shrink: 0; }
 .finding-content { flex: 1; min-width: 0; overflow-x: auto; }
 
-/* Del/Ins in der Fehlerliste optisch an die Inline-Marks im View-Mode angleichen
-   (.lektorat-mark--selected + .lektorat-ins), damit Vorschlag hier gleich wirkt. */
-.finding-content del {
-  background: var(--color-mark-del-bg);
-  color: var(--color-mark-del-text);
-  text-decoration: line-through;
-  text-decoration-color: var(--color-mark-del-strike);
+/* Offene Findings: Original/Korrektur wie im Fehler-Heatmap-Detail – weich
+   getönte Pillen statt Strikethrough, damit die Liste ruhig lesbar bleibt. */
+.finding-original {
+  background: color-mix(in srgb, var(--color-danger, #c0392b) 15%, transparent);
+  padding: 1px 4px;
   border-radius: var(--radius-sm);
-  padding: 0 3px;
   word-break: break-word;
 }
-.finding-content ins {
-  background: var(--color-mark-ins-bg);
-  color: var(--color-mark-ins-text);
-  font-weight: 700;
-  text-decoration: none;
+.finding-arrow {
+  margin: 0 6px;
+  color: var(--color-muted);
+}
+.finding-korrektur {
+  background: color-mix(in srgb, var(--color-success, #27ae60) 15%, transparent);
+  padding: 1px 4px;
   border-radius: var(--radius-sm);
-  padding: 0 3px;
   word-break: break-word;
 }
 
 .finding-explanation {
   color: var(--color-muted);
   font-size: var(--font-size-xs);
-  font-style: italic;
-  margin-top: 6px;
-  padding-left: 8px;
-  border-left: 2px solid var(--color-border);
+  margin-top: 4px;
   overflow-wrap: break-word;
 }
 
