@@ -77,8 +77,20 @@ export const appUiMethods = {
   szenenKapitelListe() {
     return this._deriveKapitel(this.szenen, s => s.kapitel);
   },
+  // Pages im Szenen-Filter-Dropdown: alle Seiten des gewählten Kapitels aus dem
+  // Buch-Baum — unabhängig davon, ob die KI sie als `seite` an den Szenen
+  // hinterlegt hat. Zusätzlich Szenen-eigene `seite`-Werte (z.B. abweichende
+  // Schreibweisen), damit der Filter auf sie trifft.
   szenenSeitenListe() {
-    return this._deriveSeiten(this.szenen, this.szenenFilterKapitel, s => s.kapitel, s => s.seite);
+    if (!this.szenenFilterKapitel) return [];
+    const names = new Set();
+    for (const p of (this.pages || [])) {
+      if (p.chapterName === this.szenenFilterKapitel && p.name) names.add(p.name);
+    }
+    for (const s of (this.szenen || [])) {
+      if (s.kapitel === this.szenenFilterKapitel && s.seite) names.add(s.seite);
+    }
+    return this._sortByPageOrder([...names]);
   },
   orteKapitelListe() {
     return this._deriveKapitel(this.orte, o => o.kapitel);
