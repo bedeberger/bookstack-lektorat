@@ -982,7 +982,11 @@ button.success:hover { background: var(--color-success-hover); }
 
 .finding-explanation {
   color: var(--color-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
+  font-style: italic;
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 2px solid var(--color-border);
   overflow-wrap: break-word;
 }
 
