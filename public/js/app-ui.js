@@ -77,15 +77,24 @@ export const appUiMethods = {
   szenenKapitelListe() {
     return this._deriveKapitel(this.szenen, s => s.kapitel);
   },
-  // Pages im Szenen-Filter-Dropdown: alle Seiten des gewählten Kapitels aus dem
-  // Buch-Baum — unabhängig davon, ob die KI sie als `seite` an den Szenen
-  // hinterlegt hat. Zusätzlich Szenen-eigene `seite`-Werte (z.B. abweichende
-  // Schreibweisen), damit der Filter auf sie trifft.
+  // Pages im Szenen-Filter-Dropdown: alle Seiten des gewählten Kapitels — primär
+  // aus dem Buch-Baum (via chapter_id-Match), ergänzt um evtl. abweichende
+  // Schreibweisen aus den Szenen selbst. So bleibt der Filter auch dann nützlich,
+  // wenn die KI bei einzelnen Szenen kein `seite` gesetzt hat.
   szenenSeitenListe() {
     if (!this.szenenFilterKapitel) return [];
+    // Kapitel-ID aus Szenen oder Tree auflösen (Name als Key, weil Filter ein Name ist).
+    const chapterIds = new Set();
+    for (const s of (this.szenen || [])) {
+      if (s.kapitel === this.szenenFilterKapitel && s.chapter_id) chapterIds.add(s.chapter_id);
+    }
+    for (const t of (this.tree || [])) {
+      if (t.type === 'chapter' && t.name === this.szenenFilterKapitel) chapterIds.add(t.id);
+    }
     const names = new Set();
     for (const p of (this.pages || [])) {
-      if (p.chapterName === this.szenenFilterKapitel && p.name) names.add(p.name);
+      if (p.chapter_id && chapterIds.has(p.chapter_id) && p.name) names.add(p.name);
+      else if (p.chapterName === this.szenenFilterKapitel && p.name) names.add(p.name);
     }
     for (const s of (this.szenen || [])) {
       if (s.kapitel === this.szenenFilterKapitel && s.seite) names.add(s.seite);
