@@ -158,10 +158,12 @@ export const bookstackMethods = {
     }
 
     onProgress(85, this.t('bs.savingToBookStack'));
-    await this.bsPut('pages/' + this.currentPage.id, { html: finalHtml, name: this.currentPage.name });
+    const saved = await this.bsPut('pages/' + this.currentPage.id, { html: finalHtml, name: this.currentPage.name });
+    if (saved?.updated_at) this.currentPage.updated_at = saved.updated_at;
     // Übernommene Korrekturen sind eine direkte Folge des Lektorats — Seite soll nicht
     // unmittelbar danach auf "seit Lektorat bearbeitet" flippen.
     this.markPageChecked?.(this.currentPage.id);
+    this._syncPageStatsAfterSave?.(this.currentPage, finalHtml);
     return finalHtml;
   },
 };
