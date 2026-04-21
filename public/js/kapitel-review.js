@@ -224,7 +224,10 @@ export const kapitelReviewMethods = {
 
   // Schnell eine Seite im aktuellen Kapitel anlegen. BookStack hängt neue
   // Seiten automatisch ans Ende (höchste `priority`) an – keine Sortierlogik
-  // nötig. Nach Erfolg: Baum neu laden und zur neuen Seite springen.
+  // nötig. Nach Erfolg: Seite lokal in Baum + Flat-Liste einhängen (kein
+  // `loadPages()`-Roundtrip, der sonst den gesamten Baum inkl. Stats/History
+  // neu lädt und den Sidebar-Baum spürbar flackern lässt) und zur neuen Seite
+  // springen.
   async createKapitelPage() {
     const chapter = this.kapitelReviewSelectedChapter();
     const title = (this.newPageTitle || '').trim();
@@ -238,11 +241,26 @@ export const kapitelReviewMethods = {
         html: '<p></p>',
       });
       this.newPageTitle = '';
-      await this.loadPages();
-      if (created?.id) {
-        const page = this.pages.find(p => p.id === created.id);
-        if (page) await this.selectPage(page);
+      if (!created?.id) return;
+      const newPage = {
+        ...created,
+        chapterName: chapter.name,
+        url: this.bookstackUrl && created.book_slug && created.slug
+          ? `${this.bookstackUrl}/books/${created.book_slug}/page/${created.slug}`
+          : null,
+      };
+      this.pages.push(newPage);
+      const chapterItem = this.tree.find(i =>
+        i.type === 'chapter' && String(i.id) === String(chapter.id)
+      );
+      if (chapterItem) {
+        chapterItem.pages.push(newPage);
+        chapterItem.open = true;
       }
+      // Neue Seite ist leer – Stats direkt setzen, damit die Sidebar den
+      // "leer"-Badge ohne Hintergrund-Rechnung anzeigt.
+      this.tokEsts[newPage.id] = { tok: 0, words: 0, chars: 0 };
+      await this.selectPage(newPage);
     } catch (e) {
       console.error('[createKapitelPage]', e);
       this.newPageError = e.message || this.t('common.unknownError');
