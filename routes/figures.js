@@ -40,7 +40,7 @@ router.get('/scenes/:book_id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
 
   const rows = db.prepare(`
-    SELECT id, kapitel, seite, titel, wertung, kommentar, updated_at
+    SELECT id, kapitel, seite, titel, wertung, kommentar, chapter_id, page_id, updated_at
     FROM figure_scenes
     WHERE book_id = ? AND user_email = ?
     ORDER BY sort_order
@@ -60,14 +60,16 @@ router.get('/scenes/:book_id', (req, res) => {
   for (const sl of slRows) (slMap[sl.scene_id] ??= []).push(sl.loc_id);
 
   const szenen = rows.map(s => ({
-    id:        s.id,
-    kapitel:   s.kapitel,
-    seite:     s.seite,
-    titel:     s.titel,
-    wertung:   s.wertung,
-    kommentar: s.kommentar,
-    fig_ids:   sfMap[s.id] || [],
-    ort_ids:   slMap[s.id] || [],
+    id:         s.id,
+    kapitel:    s.kapitel,
+    seite:      s.seite,
+    titel:      s.titel,
+    wertung:    s.wertung,
+    kommentar:  s.kommentar,
+    chapter_id: s.chapter_id,
+    page_id:    s.page_id,
+    fig_ids:    sfMap[s.id] || [],
+    ort_ids:    slMap[s.id] || [],
   }));
 
   const updated_at = rows.length ? rows[0].updated_at : null;
