@@ -980,6 +980,27 @@ button.success:hover { background: var(--color-success-hover); }
 .finding > .badge { flex-shrink: 0; }
 .finding-content { flex: 1; min-width: 0; overflow-x: auto; }
 
+/* Del/Ins in der Fehlerliste optisch an die Inline-Marks im View-Mode angleichen
+   (.lektorat-mark--selected + .lektorat-ins), damit Vorschlag hier gleich wirkt. */
+.finding-content del {
+  background: var(--color-mark-del-bg);
+  color: var(--color-mark-del-text);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-mark-del-strike);
+  border-radius: var(--radius-sm);
+  padding: 0 3px;
+  word-break: break-word;
+}
+.finding-content ins {
+  background: var(--color-mark-ins-bg);
+  color: var(--color-mark-ins-text);
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  padding: 0 3px;
+  word-break: break-word;
+}
+
 .finding-explanation {
   color: var(--color-muted);
   font-size: var(--font-size-xs);
