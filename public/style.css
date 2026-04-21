@@ -1033,8 +1033,8 @@ ins {
   background: var(--color-accent-soft);
   color: var(--color-text);
 }
-.page-item.disabled { opacity: 0.4; cursor: not-allowed; }
-.page-item.disabled:hover { background: none; }
+.page-item.page-item--empty { opacity: 0.6; }
+.page-item.page-item--empty.selected { opacity: 1; }
 
 .page-name {
   display: flex;
