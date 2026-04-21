@@ -40,6 +40,7 @@ import { appJobsCoreMethods } from './app-jobs-core.js';
 import { appViewMethods } from './app-view.js';
 import { appNavigationMethods } from './app-navigation.js';
 import { appHashRouterMethods } from './app-hash-router.js';
+import { offlineSyncMethods } from './offline-sync.js';
 
 // Globaler fetch-Wrapper: fängt 401-Antworten ab und signalisiert Session-Ablauf
 // via 'session-expired'-Event. Alpine zeigt daraufhin einen Banner. Kein Auto-
@@ -385,6 +386,7 @@ document.addEventListener('alpine:init', () => {
       window.addEventListener('beforeunload', (e) => {
         if (this.editMode && this.editDirty) { e.preventDefault(); e.returnValue = ''; }
       }, { signal });
+      this._setupOfflineSync();
       // Shell zuerst aufbauen: i18n + Partials brauchen nur statische Assets
       // (Service Worker cacht sie). /config kann danach scheitern, ohne dass
       // das UI leer bleibt – Offline-Banner erscheint stattdessen.
@@ -513,5 +515,6 @@ document.addEventListener('alpine:init', () => {
     ...appViewMethods,
     ...appNavigationMethods,
     ...appHashRouterMethods,
+    ...offlineSyncMethods,
   }));
 });

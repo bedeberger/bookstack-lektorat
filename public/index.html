@@ -57,6 +57,10 @@
   <button type="button" class="session-banner-btn" @click="location.reload()" x-text="t('session.retry')"></button>
 </div>
 
+<div class="session-banner session-banner--offline" x-show="isOffline && !sessionExpired && !serverOffline" x-cloak>
+  <span class="session-banner-text" x-text="t('session.offlineMode')"></span>
+</div>
+
 <h1 @click="resetView()" class="site-title" :title="t('app.titleReset')">
   <img src="bookstack_lektorat_icon.svg" alt="" class="site-logo" width="64" height="64">
   BookStack Lektorat

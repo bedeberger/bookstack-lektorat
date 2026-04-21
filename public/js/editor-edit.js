@@ -363,18 +363,28 @@ export const editorEditMethods = {
     if (this._draftTimer) clearTimeout(this._draftTimer);
     this._draftTimer = setTimeout(() => {
       this._draftTimer = null;
-      if (!this.editMode || !this.currentPage) return;
-      const el = this._getEditEl();
-      if (!el) return;
-      const html = stripLektoratMarks(el.innerHTML);
-      if (html === this.originalHtml) {
-        clearDraft(this.currentPage.id);
-        this.lastDraftSavedAt = null;
-        return;
-      }
-      writeDraft(this.currentPage.id, html, this.originalHtml);
-      this.lastDraftSavedAt = Date.now();
+      this._flushDraftSaveNow();
     }, DRAFT_DEBOUNCE_MS);
+  },
+
+  // Schreibt den aktuellen Editor-Inhalt sofort als Draft – unabhängig vom
+  // Debounce-Timer. Aufruf vor jedem Zustandsübergang, der den Editor-Inhalt
+  // nicht mehr einfängt (Focus-Mode-Entry) oder ihn riskieren könnte zu
+  // verlieren. Beim Aufruf nach Debounce-Fire ist _draftTimer bereits null
+  // (ungefährlicher No-op).
+  _flushDraftSaveNow() {
+    if (this._draftTimer) { clearTimeout(this._draftTimer); this._draftTimer = null; }
+    if (!this.editMode || !this.currentPage) return;
+    const el = this._getEditEl();
+    if (!el) return;
+    const html = stripLektoratMarks(el.innerHTML);
+    if (html === this.originalHtml) {
+      clearDraft(this.currentPage.id);
+      this.lastDraftSavedAt = null;
+      return;
+    }
+    writeDraft(this.currentPage.id, html, this.originalHtml);
+    this.lastDraftSavedAt = Date.now();
   },
 
   _startAutosave() {

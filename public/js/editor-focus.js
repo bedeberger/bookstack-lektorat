@@ -201,6 +201,11 @@ export const focusMethods = {
     if (this._focusState !== 'idle') return;
     if (!this.showEditorCard || !this.editMode) return;
 
+    // Übergang edit-mode → focus-mode: offenen Debounce-Draft jetzt flushen,
+    // damit bei Offline-Sessions kein getippter Inhalt verloren geht, falls
+    // der User später im Focus-Mode abbricht oder Crashs auftreten.
+    this._flushDraftSaveNow?.();
+
     this._focusState = 'entering';
     const gen = ++this._focusGen;
 

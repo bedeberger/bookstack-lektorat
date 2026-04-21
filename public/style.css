@@ -406,6 +406,24 @@ code {
 }
 .session-banner-btn:hover { background: var(--color-session-banner-btn-hover); }
 
+.session-banner--offline {
+  background: var(--color-warn-bg);
+  color: var(--color-warn-text);
+  border-bottom: 2px solid var(--color-warn-text);
+}
+body.focus-mode .session-banner--offline {
+  padding: 0.15rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 400;
+  background: transparent;
+  color: var(--color-muted);
+  border-bottom: none;
+  box-shadow: none;
+  opacity: 0.55;
+  pointer-events: none;
+}
+body.focus-mode .session-banner--offline:hover { opacity: 1; }
+
 .site-header-row {
   display: flex;
   align-items: baseline;
