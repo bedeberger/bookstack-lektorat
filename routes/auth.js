@@ -1,7 +1,7 @@
 const express = require('express');
 const { Issuer, generators } = require('openid-client');
 const logger = require('../logger');
-const { getUserToken, setUserToken, upsertUserLogin } = require('../db/schema');
+const { getUserToken, setUserToken, upsertUserLogin, getTokenForRequest } = require('../db/schema');
 
 const router = express.Router();
 
@@ -141,7 +141,7 @@ router.get('/auth/me', (req, res) => {
 // GET /auth/token → ob ein BookStack-Token hinterlegt ist (kein Klartext!)
 router.get('/auth/token', (req, res) => {
   if (!req.session?.user) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
-  res.json({ hasToken: !!req.session.bookstackToken });
+  res.json({ hasToken: !!getTokenForRequest(req) });
 });
 
 // PUT /auth/token → BookStack-Token speichern (DB + Session)

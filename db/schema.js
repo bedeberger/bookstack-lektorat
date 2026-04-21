@@ -332,10 +332,11 @@ module.exports = {
   reconcilePageIds:   pages.reconcilePageIds,
   pruneStaleBookData: pages.pruneStaleBookData,
   // tokens
-  getUserToken:     tokens.getUserToken,
-  setUserToken:     tokens.setUserToken,
-  getAnyUserToken:  tokens.getAnyUserToken,
-  getAllUserTokens: tokens.getAllUserTokens,
+  getUserToken:       tokens.getUserToken,
+  setUserToken:       tokens.setUserToken,
+  getAnyUserToken:    tokens.getAnyUserToken,
+  getAllUserTokens:   tokens.getAllUserTokens,
+  getTokenForRequest: tokens.getTokenForRequest,
   // local
   saveZeitstrahlEvents,
   saveOrteToDb,

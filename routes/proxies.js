@@ -2,7 +2,7 @@ const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const logger = require('../logger');
 const { MAX_TOKENS_OUT, MODEL_CONTEXT, ollamaTemp, llamaTemp } = require('../lib/ai');
-const { getBookLocale, getUser } = require('../db/schema');
+const { getBookLocale, getUser, getTokenForRequest } = require('../db/schema');
 const { getPrompts, getPromptConfig } = require('../lib/prompts-loader');
 
 const BOOKSTACK_URL = process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80';
@@ -29,7 +29,7 @@ router.get('/config', (req, res) => {
   const user = req.session?.user || null;
   res.json({
     bookstackUrl: BOOKSTACK_URL.replace(/\/$/, ''),
-    bookstackTokenOk: !!req.session?.bookstackToken,
+    bookstackTokenOk: !!getTokenForRequest(req),
     claudeMaxTokens: MAX_TOKENS_OUT,
     claudeModel: process.env.MODEL_NAME || 'claude-sonnet-4-6',
     apiProvider: process.env.API_PROVIDER || 'claude',
@@ -324,7 +324,9 @@ router.get('/openthesaurus/synonyms', async (req, res) => {
   }
 });
 
-// Proxy /api/* → BookStack (Token kommt aus req.session.bookstackToken)
+// Proxy /api/* → BookStack. Token wird pro Request aus der DB gezogen, nicht
+// aus der Session – sonst würde ein Token-Update auf Gerät A die Sessions auf
+// anderen Geräten nicht erreichen (stale-token → fälschliches 401).
 const bookstackProxy = createProxyMiddleware({
   target: BOOKSTACK_URL,
   changeOrigin: true,
@@ -332,8 +334,8 @@ const bookstackProxy = createProxyMiddleware({
   on: {
     proxyReq: (proxyReq, req) => {
       proxyReq.removeHeader('Authorization');
-      const t = req.session?.bookstackToken;
-      if (t?.id && t?.pw) {
+      const t = getTokenForRequest(req);
+      if (t) {
         proxyReq.setHeader('Authorization', `Token ${t.id}:${t.pw}`);
       }
     },

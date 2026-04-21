@@ -1,6 +1,6 @@
 'use strict';
 const express = require('express');
-const { db, getBookLocale, getBookSettings, getChapterFigures, getChapterFigureRelations, getChapterLocations } = require('../../db/schema');
+const { db, getBookLocale, getBookSettings, getChapterFigures, getChapterFigureRelations, getChapterLocations, getTokenForRequest } = require('../../db/schema');
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
@@ -285,9 +285,7 @@ lektoratRouter.post('/check', jsonBody, (req, res) => {
   const { page_id, book_id, page_name } = req.body;
   if (!page_id) return res.status(400).json({ error_code: 'PAGE_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
-  const userToken = req.session?.bookstackToken
-    ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw }
-    : null;
+  const userToken = getTokenForRequest(req);
   const existing = runningJobs.get(jobKey('check', page_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = 'job.label.checkPage';
@@ -301,9 +299,7 @@ lektoratRouter.post('/batch-check', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
-  const userToken = req.session?.bookstackToken
-    ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw }
-    : null;
+  const userToken = getTokenForRequest(req);
   const existing = runningJobs.get(jobKey('batch-check', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = book_name ? 'job.label.batchCheckBook' : 'job.label.batchCheck';

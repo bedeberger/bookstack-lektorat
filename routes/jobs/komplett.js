@@ -7,7 +7,7 @@ const {
   saveZeitstrahlEvents, saveOrteToDb,
   saveCheckpoint, loadCheckpoint, deleteCheckpoint,
   loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache,
-  getAllUserTokens, getBookSettings,
+  getAllUserTokens, getBookSettings, getTokenForRequest,
 } = require('../../db/schema');
 const { narrativeLabels } = require('./narrative-labels');
 const { recomputeBookFigureMentions } = require('../../lib/page-index');
@@ -1282,7 +1282,7 @@ komplettRouter.post('/komplett-analyse', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
-  const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
+  const userToken = getTokenForRequest(req);
   const existing = runningJobs.get(jobKey('komplett-analyse', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = book_name ? 'job.label.komplettBook' : 'job.label.komplett';
@@ -1296,7 +1296,7 @@ komplettRouter.post('/kontinuitaet', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
-  const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
+  const userToken = getTokenForRequest(req);
   const existing = runningJobs.get(jobKey('kontinuitaet', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = book_name ? 'job.label.kontinuitaetBook' : 'job.label.kontinuitaet';

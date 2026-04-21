@@ -38,7 +38,7 @@
     </div>
     <div class="btn-group">
       <template x-for="r in [{v:7,k:'7'},{v:30,k:'30'},{v:90,k:'90'},{v:365,k:'365'},{v:0,k:'all'}]" :key="r.v">
-        <button type="button" class="btn-sm" :class="{ primary: bookStatsRange === r.v }"
+        <button type="button" class="btn-compact" :class="{ primary: bookStatsRange === r.v }"
           @click="bookStatsRange = r.v; renderStatsChart()" x-text="t('bookstats.range.' + r.k)"></button>
       </template>
     </div>

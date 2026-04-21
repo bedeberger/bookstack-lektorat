@@ -1,6 +1,6 @@
 'use strict';
 const express = require('express');
-const { db, getBookSettings } = require('../../db/schema');
+const { db, getBookSettings, getTokenForRequest } = require('../../db/schema');
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
@@ -92,9 +92,7 @@ kapitelRouter.post('/chapter-review', jsonBody, (req, res) => {
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   if (!chapter_id) return res.status(400).json({ error_code: 'CHAPTER_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
-  const userToken = req.session?.bookstackToken
-    ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw }
-    : null;
+  const userToken = getTokenForRequest(req);
   // Dedup auf Kapitel-Ebene – parallele Reviews unterschiedlicher Kapitel sind ok.
   const existing = runningJobs.get(jobKey('chapter-review', chapter_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });

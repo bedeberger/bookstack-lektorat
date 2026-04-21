@@ -12,8 +12,8 @@
     <input type="text" x-model="pageSearch" :placeholder="t('sidebar.searchPage')" class="page-search">
   </div>
   <div x-show="!pageSearch" class="btn-group">
-    <button type="button" @click="tree.forEach(c => c.open = true)" class="btn-sm" x-text="t('sidebar.expandAll')"></button>
-    <button type="button" @click="tree.forEach(c => c.open = false)" class="btn-sm" x-text="t('sidebar.collapseAll')"></button>
+    <button type="button" @click="tree.forEach(c => c.open = true)" class="btn-compact" x-text="t('sidebar.expandAll')"></button>
+    <button type="button" @click="tree.forEach(c => c.open = false)" class="btn-compact" x-text="t('sidebar.collapseAll')"></button>
     <span x-show="Object.keys(tokEsts).length > 0" class="tok-totals">
       <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.tok,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.t')"></span>
       <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.words,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.w')"></span>

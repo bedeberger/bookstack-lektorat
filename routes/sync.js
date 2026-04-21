@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, getAnyUserToken, getAllUserTokens, reconcilePageIds, pruneStaleBookData } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
+const { db, getAnyUserToken, getAllUserTokens, reconcilePageIds, pruneStaleBookData, getTokenForRequest } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
 const logger = require('../logger');
 const { CHARS_PER_TOKEN } = require('../lib/ai');
 const { bsGet, bsGetAll } = require('../lib/bookstack');
@@ -304,7 +304,7 @@ router.get('/pages/:book_id', (req, res) => {
 
 // POST /sync/pages/:book_id – leichtgewichtiger pages-Cache-Update (ohne Seiten-Inhalte)
 router.post('/pages/:book_id', async (req, res) => {
-  const token = req.session?.bookstackToken || getAnyUserToken();
+  const token = getTokenForRequest(req) || getAnyUserToken();
   if (!token) return res.status(503).json({ error_code: 'NO_BOOKSTACK_TOKEN' });
   try {
     await syncPagesCache(parseInt(req.params.book_id), token);
@@ -317,7 +317,7 @@ router.post('/pages/:book_id', async (req, res) => {
 
 // POST /sync/book/:book_id – manueller Trigger für ein Buch
 router.post('/book/:book_id', async (req, res) => {
-  const token = req.session?.bookstackToken || getAnyUserToken();
+  const token = getTokenForRequest(req) || getAnyUserToken();
   if (!token) return res.status(503).json({ error_code: 'NO_BOOKSTACK_TOKEN' });
   try {
     const result = await syncBook(parseInt(req.params.book_id), token);

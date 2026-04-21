@@ -57,22 +57,35 @@ export const bookstatsMethods = {
   },
 
   async loadBookStats(bookId) {
-    try {
-      const [rows, coverage, writing] = await Promise.all([
-        fetchJson('/history/book-stats/' + bookId),
-        fetchJson('/history/coverage/' + bookId),
-        fetchJson('/history/writing-time/' + bookId),
-      ]);
-      this.bookStatsData = rows;
-      this.bookStatsCoverage = coverage;
-      this.writingTimeData = writing;
-      const last = rows[rows.length - 1];
-      const prev = rows[rows.length - 2];
-      this.bookStatsDelta = (last && prev) ? last.words - prev.words : null;
-      this.$nextTick(() => this.renderStatsChart());
-    } catch (e) {
-      console.error('[loadBookStats]', e);
+    const results = await Promise.allSettled([
+      fetchJson('/history/book-stats/' + bookId),
+      fetchJson('/history/coverage/' + bookId),
+      fetchJson('/history/writing-time/' + bookId),
+    ]);
+
+    // Stale-Guard: spätere Response eines alten Buchs nicht in neuen State kippen.
+    if (String(bookId) !== String(this.selectedBookId)) return;
+
+    const failed = results.filter(r => r.status === 'rejected');
+    for (const r of failed) console.error('[loadBookStats]', r.reason);
+
+    const [rowsRes, coverageRes, writingRes] = results;
+    const rows = rowsRes.status === 'fulfilled' ? rowsRes.value : [];
+    this.bookStatsData = rows;
+    this.bookStatsCoverage = coverageRes.status === 'fulfilled' ? coverageRes.value : null;
+    this.writingTimeData = writingRes.status === 'fulfilled' ? writingRes.value : null;
+    const last = rows[rows.length - 1];
+    const prev = rows[rows.length - 2];
+    this.bookStatsDelta = (last && prev) ? last.words - prev.words : null;
+
+    if (failed.length && !rows.length && !this.writingTimeData?.daily?.length) {
+      this.bookStatsSyncStatus = this.t('bookstats.loadError');
     }
+
+    // rAF innerhalb von $nextTick: Alpine flusht das x-show (display:block) erst,
+    // $nextTick garantiert aber nur das DOM-Update, keinen Layout-Pass. Ohne rAF
+    // liest Chart.js gelegentlich ein noch 0×0 grosses Canvas und bleibt leer.
+    this.$nextTick(() => requestAnimationFrame(() => this.renderStatsChart()));
   },
 
   async syncBookStats() {

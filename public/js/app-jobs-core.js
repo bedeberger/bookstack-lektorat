@@ -1,5 +1,169 @@
 import { escHtml, fmtTok, fetchJson } from './utils.js';
 
+// Factory für standard job-driven Feature-Cards (Review, Kontinuität,
+// Kapitel-Review, Figuren, …). Die Features folgen alle demselben Muster:
+// toggle → POST /jobs/… → localStorage-Backup → poll bis done →
+// Status-HTML ins x-html-Feld. Die Factory deklariert die generischen
+// Methoden (`start`, `run`, `toggle`) und das Feature-Modul liefert nur
+// die variablen Teile (Endpoint, Render, Payload, Post-Processing).
+//
+// cfg:
+//   name              — logischer Feature-Name (z. B. 'review'), Default für
+//                       LS-Key und activeType.
+//   endpoint          — POST-Ziel, z. B. '/jobs/review'.
+//   activeType        — Override für /jobs/active?type=…; Default = name.
+//   timerProp         — z. B. '_reviewPollTimer'.
+//   closeCardKey      — Argument für _closeOtherMainCards(…).
+//   methodNames       — { start, run, toggle? }.
+//   fields            — { show, loading, progress, status, out?, result? }.
+//   lsKey             — optional: (bookId, self) => string.
+//                       Default `lektorat_${name}_job_${bookId}`.
+//   i18n              — { starting, interrupted, alreadyRunning,
+//                         alreadyRunningSpinner?, empty? }.
+//   buildPayload      — (self) => body-Objekt für den POST.
+//   render            — (job, self) => html für `fields.out`. Optional.
+//   onDone            — async (job, self) => void — nach render.
+//   onError           — (job, self) => void — Override des Default-Rendering.
+//   onNotFound        — (self) => void — Zusatz nach NotFound.
+//   onOpen            — async (self) => void — nach frischem Öffnen.
+//   onOpenWhenOpen    — async (self) => void — wenn toggle auf offene Karte.
+//   beforeRun         — (self) => void — vor POST (z. B. Result-Reset).
+//   resetProgressOnDone — bool (Default: true) — Progress auf 0 nach onDone.
+//   progressResetDelay  — ms (Default: 0) — verzögerter Reset nach Erfolg
+//                         (lässt die Fortschrittsleiste ausfüllen, bevor sie
+//                         zurückspringt). Bei empty/error sofortiger Reset.
+export function createJobFeature(cfg) {
+  const { show, loading, progress, status, out } = cfg.fields;
+  const timerProp  = cfg.timerProp;
+  const activeType = cfg.activeType || cfg.name;
+  const lsKeyFn    = cfg.lsKey || ((bookId) => `lektorat_${cfg.name}_job_${bookId}`);
+  const names      = cfg.methodNames;
+  const i18n       = cfg.i18n || {};
+
+  function writeStatus(msg, spinner) {
+    this[status] = spinner ? `<span class="spinner"></span>${msg}` : msg;
+  }
+  function jobErrHtml(job) {
+    return `<span class="error-msg">${this.t('common.errorColon')}${escHtml(this.t(job.error, job.errorParams))}</span>`;
+  }
+  function errHtml(err) {
+    return `<span class="error-msg">${this.t('common.errorColon')}${escHtml(err.message)}</span>`;
+  }
+
+  const startPoll = function (jobId) {
+    const bookId = this.selectedBookId;
+    this._startPoll({
+      timerProp,
+      jobId,
+      lsKey: lsKeyFn(bookId, this),
+      progressProp: progress,
+      onProgress: (job) => {
+        this[status] = this._runningJobStatus(
+          job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut,
+          job.progress, job.tokensPerSec, job.statusParams,
+        );
+      },
+      onNotFound: () => {
+        this[loading] = false;
+        if (progress) this[progress] = 0;
+        writeStatus.call(this, this.t(i18n.interrupted), false);
+        cfg.onNotFound?.call(this);
+      },
+      onError: (job) => {
+        this[loading] = false;
+        if (progress) this[progress] = 0;
+        if (cfg.onError) { cfg.onError.call(this, job); return; }
+        if (out) {
+          this[out] = jobErrHtml.call(this, job);
+          writeStatus.call(this, '', false);
+        } else {
+          this[status] = jobErrHtml.call(this, job);
+        }
+      },
+      onDone: async (job) => {
+        this[loading] = false;
+        if (i18n.empty && job.result?.empty) {
+          writeStatus.call(this, this.t(i18n.empty), false);
+          if (cfg.resetProgressOnDone !== false && progress) this[progress] = 0;
+          return;
+        }
+        if (cfg.render && out) {
+          const html = cfg.render.call(this, job);
+          if (html !== undefined) this[out] = html;
+        }
+        if (cfg.onDone) await cfg.onDone.call(this, job);
+        if (cfg.resetProgressOnDone !== false && progress) {
+          const delay = cfg.progressResetDelay || 0;
+          if (delay > 0) setTimeout(() => { this[progress] = 0; }, delay);
+          else this[progress] = 0;
+        }
+      },
+    });
+  };
+
+  const run = async function () {
+    const bookId = this.selectedBookId;
+    this[loading] = true;
+    if (progress) this[progress] = 0;
+    this[show] = true;
+    if (out) this[out] = '';
+    writeStatus.call(this, this.t(i18n.starting), true);
+    if (cfg.beforeRun) cfg.beforeRun.call(this);
+    try {
+      const { jobId } = await fetchJson(cfg.endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfg.buildPayload.call(this)),
+      });
+      localStorage.setItem(lsKeyFn(bookId, this), jobId);
+      this[names.start](jobId);
+    } catch (e) {
+      console.error(`[${names.run}]`, e);
+      if (out) {
+        this[out] = errHtml.call(this, e);
+        writeStatus.call(this, '', false);
+      } else {
+        this[status] = errHtml.call(this, e);
+      }
+      this[loading] = false;
+      if (progress) this[progress] = 0;
+    }
+  };
+
+  const toggle = async function () {
+    if (this[show]) {
+      if (cfg.onOpenWhenOpen) await cfg.onOpenWhenOpen.call(this);
+      return;
+    }
+    this._closeOtherMainCards(cfg.closeCardKey);
+    this[show] = true;
+    if (cfg.onOpen) await cfg.onOpen.call(this);
+    if (!this[timerProp] && !this[loading] && this.selectedBookId) {
+      try {
+        const { jobId } = await fetchJson(
+          `/jobs/active?type=${activeType}&book_id=${this.selectedBookId}`
+        );
+        if (jobId) {
+          this[loading] = true;
+          if (progress) this[progress] = 0;
+          if (out) this[out] = '';
+          const spinner = i18n.alreadyRunningSpinner !== false;
+          writeStatus.call(this, this.t(i18n.alreadyRunning), spinner);
+          this[names.start](jobId);
+        }
+      } catch (e) {
+        console.error(`[${names.toggle || 'toggle-' + cfg.name}] active-job check:`, e);
+      }
+    }
+  };
+
+  const methods = {};
+  if (names.start)  methods[names.start]  = startPoll;
+  if (names.run)    methods[names.run]    = run;
+  if (names.toggle) methods[names.toggle] = toggle;
+  return methods;
+}
+
 // Generische Job-Infrastruktur: Polling, Wiederaufnahme nach Tab-Wechsel,
 // Job-Queue-Sichtbarkeit. Von jedem Feature-Modul via `this.` referenziert.
 export const appJobsCoreMethods = {

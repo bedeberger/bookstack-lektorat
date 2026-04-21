@@ -1,6 +1,6 @@
 'use strict';
 const express = require('express');
-const { db, getBookSettings } = require('../../db/schema');
+const { db, getBookSettings, getTokenForRequest } = require('../../db/schema');
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
@@ -115,7 +115,7 @@ reviewRouter.post('/review', jsonBody, (req, res) => {
   const { book_id, book_name } = req.body;
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
-  const userToken = req.session?.bookstackToken ? { id: req.session.bookstackToken.id, pw: req.session.bookstackToken.pw } : null;
+  const userToken = getTokenForRequest(req);
   const existing = runningJobs.get(jobKey('review', book_id, userEmail));
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = book_name ? 'job.label.reviewBook' : 'job.label.review';

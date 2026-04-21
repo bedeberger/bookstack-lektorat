@@ -8,7 +8,7 @@
  *  3.  Layout ...................... .subtitle, .row, Breakpoints
  *  4.  Cards ....................... .card, .card-header, .card-title, .card-actions
  *  5.  Form Elements ............... input, select, label
- *  6.  Buttons ..................... button, .btn-sm, .btn-group
+ *  6.  Buttons ..................... button, .btn-compact, .btn-group
  *  7.  Badges ...................... .badge, .badge-*
  *  8.  Findings .................... .finding, del, ins
  *  9.  Page List & Tags ............ .page-item, .tag
@@ -167,6 +167,19 @@
   --font-size-base: 14px;
   --font-size-md: 15px;
   --font-size-lg: 22px;
+
+  /* Default-Controlgrösse (vertikal) – geteilt von button,
+     .combobox-trigger und input/select, damit Buttons, Dropdowns und
+     Felder in einer Zeile exakt dieselbe Höhe haben. Horizontale
+     Padding bleibt pro Elementtyp unterschiedlich (Buttons bekommen
+     bewusst mehr Luft). */
+  --size-default-padding-y: 8px;
+
+  /* Compact-Controlgrösse – geteilt von .btn-compact und
+     .combobox-wrap--compact, damit Buttons und Dropdowns nebeneinander
+     exakt dieselbe Höhe haben. Einzige Quelle der Wahrheit. */
+  --size-compact-font-size: 12px;
+  --size-compact-padding: 4px 10px;
 }
 
 /* === Dark-Theme Overrides === */
@@ -763,7 +776,7 @@ input[type=text],
 input[type=password],
 select {
   width: 100%;
-  padding: 8px 10px;
+  padding: var(--size-default-padding-y) 10px;
   border: 0.5px solid var(--color-border-input);
   border-radius: var(--radius-md);
   font-size: var(--font-size-base);
@@ -794,7 +807,7 @@ select:focus {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 8px 10px;
+  padding: var(--size-default-padding-y) 10px;
   border: 0.5px solid var(--color-border-input);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -876,10 +889,10 @@ select:focus {
   cursor: not-allowed;
   pointer-events: none;
 }
-/* Compact variant */
+/* Compact variant – Grösse über --size-compact-* synchron mit .btn-compact. */
 .combobox-wrap--compact .combobox-trigger {
-  font-size: 12px;
-  padding: 3px 8px;
+  font-size: var(--size-compact-font-size);
+  padding: var(--size-compact-padding);
   border-color: var(--color-border);
   background: var(--color-bg);
 }
@@ -887,13 +900,13 @@ select:focus {
   right: auto;
   min-width: 180px;
 }
-.combobox-wrap--compact .combobox-search { font-size: 12px; padding: 5px 8px; }
-.combobox-wrap--compact .combobox-option { font-size: 12px; padding: 5px 8px; }
-.combobox-wrap--compact .combobox-empty { font-size: 12px; padding: 5px 8px; }
+.combobox-wrap--compact .combobox-search { font-size: var(--size-compact-font-size); padding: 5px 8px; }
+.combobox-wrap--compact .combobox-option { font-size: var(--size-compact-font-size); padding: 5px 8px; }
+.combobox-wrap--compact .combobox-empty { font-size: var(--size-compact-font-size); padding: 5px 8px; }
 
 /* === Buttons === */
 button {
-  padding: 8px 16px;
+  padding: var(--size-default-padding-y) 16px;
   border: 0.5px solid var(--color-border-input);
   border-radius: var(--radius-md);
   background: transparent;
@@ -4004,10 +4017,11 @@ body.focus-mode .edit-find { display: none !important; }
   flex-wrap: wrap;
 }
 
-/* === Kleine Buttons === */
-.btn-sm {
-  font-size: 12px;
-  padding: 4px 10px;
+/* === Compact Buttons === */
+/* Grösse synchron mit .combobox-wrap--compact über --size-compact-*. */
+.btn-compact {
+  font-size: var(--size-compact-font-size);
+  padding: var(--size-compact-padding);
 }
 
 /* === Diff-Ansicht === */

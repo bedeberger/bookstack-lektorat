@@ -99,6 +99,7 @@
 
   "bookstats.syncing":           "Synchronisiere…",
   "bookstats.syncDone":          "Sync um {time} abgeschlossen",
+  "bookstats.loadError":         "Statistiken konnten nicht geladen werden. Bitte erneut versuchen.",
 
   "review.starting":             "Starte Analyse…",
   "review.pagesAnalyzed":        "{n} Seiten analysiert.",

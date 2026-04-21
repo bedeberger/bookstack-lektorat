@@ -27,6 +27,24 @@ function _decryptRow(row, email) {
 /** Gibt { token_id, token_pw } für eine E-Mail zurück, oder undefined. */
 function getUserToken(email) { return _decryptRow(_getToken.get(email), email); }
 
+/**
+ * Liefert das aktuelle BookStack-Token für den eingeloggten User eines Requests.
+ * Quelle ist die DB (nicht `req.session.bookstackToken`), damit Token-Änderungen
+ * auf einem anderen Gerät sofort in allen Sessions wirken.
+ * Fallback auf Session-Token für LOCAL_DEV_MODE (dort steht das Token aus der
+ * .env direkt in der Session, ohne DB-Eintrag).
+ * @returns {{ id: string, pw: string } | null}
+ */
+function getTokenForRequest(req) {
+  const email = req.session?.user?.email;
+  if (email) {
+    const stored = getUserToken(email);
+    if (stored?.token_id && stored?.token_pw) return { id: stored.token_id, pw: stored.token_pw };
+  }
+  const t = req.session?.bookstackToken;
+  return t?.id && t?.pw ? { id: t.id, pw: t.pw } : null;
+}
+
 /** Speichert/aktualisiert den BookStack-Token für eine E-Mail (verschlüsselt). */
 function setUserToken(email, tokenId, tokenPw) { _upsertToken.run(email, encrypt(tokenId), encrypt(tokenPw)); }
 
@@ -45,4 +63,4 @@ function getAllUserTokens() {
   }));
 }
 
-module.exports = { getUserToken, setUserToken, getAnyUserToken, getAllUserTokens };
+module.exports = { getUserToken, setUserToken, getAnyUserToken, getAllUserTokens, getTokenForRequest };

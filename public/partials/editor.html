@@ -197,8 +197,8 @@
           <div class="section-heading finding-header">
             <span x-text="t('editor.findings.count', { n: lektoratFindings.length })"></span>
             <div class="finding-toggle-group">
-              <button type="button" class="btn-sm" @click="selectAllFindings(true)" x-text="t('editor.findings.selectAll')"></button>
-              <button type="button" class="btn-sm" @click="selectAllFindings(false)" x-text="t('editor.findings.selectNone')"></button>
+              <button type="button" class="btn-compact" @click="selectAllFindings(true)" x-text="t('editor.findings.selectAll')"></button>
+              <button type="button" class="btn-compact" @click="selectAllFindings(false)" x-text="t('editor.findings.selectNone')"></button>
             </div>
           </div>
           <template x-for="(f, i) in lektoratFindings" :key="i">
