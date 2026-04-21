@@ -206,7 +206,7 @@
               <input type="checkbox" class="finding-checkbox" :checked="selectedFindings[i]" :disabled="appliedOriginals.includes(f.original)" @change="toggleFinding(i)">
               <span class="badge" :class="_isHardFinding(f.typ) ? 'badge-err' : 'badge-warn'" x-text="t('finding.' + f.typ)"></span>
               <span x-show="appliedOriginals.includes(f.original)" class="tag" x-text="t('editor.findings.applied')"></span>
-              <span class="finding-content"><del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+              <span class="finding-content"><span class="finding-original" x-text="f.original"></span><template x-if="f.korrektur"><span class="finding-arrow">→</span></template><template x-if="f.korrektur"><span class="finding-korrektur" x-text="f.korrektur"></span></template>
                 <div class="finding-explanation" x-text="f.erklaerung"></div>
               </span>
             </label>
