@@ -202,12 +202,11 @@
             </div>
           </div>
           <template x-for="(f, i) in lektoratFindings" :key="i">
-            <label class="finding" :class="{ 'error': f.typ !== 'stil', 'style': f.typ === 'stil', 'finding-deselected': !selectedFindings[i], 'finding--applied': appliedOriginals.includes(f.original) }" :data-finding-idx="i" @pointerenter="handleFindingPointer(i)">
+            <label class="finding" :class="{ 'error': _isHardFinding(f.typ), 'style': !_isHardFinding(f.typ), 'finding-deselected': !selectedFindings[i], 'finding--applied': appliedOriginals.includes(f.original) }" :data-finding-idx="i" @pointerenter="handleFindingPointer(i)">
               <input type="checkbox" class="finding-checkbox" :checked="selectedFindings[i]" :disabled="appliedOriginals.includes(f.original)" @change="toggleFinding(i)">
-              <span class="badge" :class="({'rechtschreibung':1,'grammatik':1,'tempuswechsel':1}[f.typ]) ? 'badge-err' : 'badge-warn'" x-text="t('finding.' + f.typ)"></span>
+              <span class="badge" :class="_isHardFinding(f.typ) ? 'badge-err' : 'badge-warn'" x-text="t('finding.' + f.typ)"></span>
               <span x-show="appliedOriginals.includes(f.original)" class="tag" x-text="t('editor.findings.applied')"></span>
-              <span class="finding-content">
-                <del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
+              <span class="finding-content"><del x-text="f.original"></del> → <ins x-text="f.korrektur"></ins>
                 <div class="finding-explanation" x-text="f.erklaerung"></div>
               </span>
             </label>

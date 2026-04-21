@@ -8,6 +8,12 @@ import { _sanitizeFigur } from './figuren.js';
 // Weiche Typen: standardmässig nicht vorausgewählt (User entscheidet pro Finding)
 export const SOFT_TYPEN = new Set(['wiederholung', 'schwaches_verb', 'fuellwort', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel']);
 
+// Harte Typen = Default-selektiert → rote Einfärbung (Badge, Border, Inline-Mark --selected).
+// Weiche Typen und 'stil' = Default-unselektiert → orange Einfärbung.
+export function isHardFinding(typ) {
+  return typ !== 'stil' && !SOFT_TYPEN.has(typ);
+}
+
 /** Sortiert Fehler nach Position im HTML (toleranter Match via `findInHtml`,
  *  damit Originale mit Tags/Entities/Whitespace-Differenzen richtig einsortiert
  *  werden statt ans Ende zu fallen). Nicht gefundene ans Ende. */
@@ -113,8 +119,7 @@ function showTip(mark, errors) {
   const tip = ensureTipEl();
 
   const typLabel = tRaw('finding.' + f.typ);
-  const isHard = { rechtschreibung:1, grammatik:1, tempuswechsel:1 }[f.typ];
-  const badgeCls = isHard ? 'badge-err' : 'badge-warn';
+  const badgeCls = isHardFinding(f.typ) ? 'badge-err' : 'badge-warn';
   tip.innerHTML =
     `<span class="badge ${badgeCls}">${escHtml(typLabel)}</span>`
     + (f.erklaerung ? `<span class="lektorat-tip-erkl">${escHtml(f.erklaerung)}</span>` : '');
@@ -164,6 +169,8 @@ export const pageViewMethods = {
   // renderedPageHtml: '',
   // chapterFigures: [],
   // showChapterFigures: false,
+
+  _isHardFinding(typ) { return isHardFinding(typ); },
 
   /** Berechnet max-height für die Seitenansicht basierend auf Textlänge */
   _updatePageViewHeight() {
