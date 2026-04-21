@@ -36,19 +36,52 @@ export const appUiMethods = {
   },
 
   // ── Filter-Listen: Kapitel/Seiten-Optionen für Combobox-Filter ──────────
-  szenenKapitelListe() {
-    return this._sortByChapterOrder([...new Set(this.szenen.map(s => s.kapitel).filter(Boolean))]);
-  },
-  szenenSeitenListe() {
-    if (!this.szenenFilterKapitel) return [];
-    return this._sortByPageOrder([...new Set(this.szenen.filter(s => s.kapitel === this.szenenFilterKapitel && s.seite).map(s => s.seite))]);
-  },
-  orteKapitelListe() {
+  // Generische Extraktion aus heterogenen Quellen:
+  //   extract(item) liefert entweder einen String, ein Array von Strings
+  //   oder ein Array von {name}-Objekten. Unbekannte Shapes werden ignoriert.
+  _deriveKapitel(items, extract) {
     const names = new Set();
-    for (const o of this.orte) {
-      for (const k of (o.kapitel || [])) { if (k.name) names.add(k.name); }
+    for (const it of (items || [])) {
+      const v = extract(it);
+      if (!v) continue;
+      if (Array.isArray(v)) {
+        for (const x of v) {
+          const n = typeof x === 'string' ? x : x?.name;
+          if (n) names.add(n);
+        }
+      } else {
+        names.add(v);
+      }
     }
     return this._sortByChapterOrder([...names]);
+  },
+  // Wie _deriveKapitel, aber für Seiten. Wird nur aktiv, wenn ein Kapitel
+  // gefiltert ist — ohne Kapitelfilter keine Seiten.
+  // kapExtract liefert pro Item das Kapitel (String oder Array), seiteExtract
+  // die Seite(n) (String oder Array).
+  _deriveSeiten(items, filterKapitel, kapExtract, seiteExtract) {
+    if (!filterKapitel) return [];
+    const names = new Set();
+    for (const it of (items || [])) {
+      const k = kapExtract(it);
+      const kapMatches = Array.isArray(k) ? k.includes(filterKapitel) : k === filterKapitel;
+      if (!kapMatches) continue;
+      const s = seiteExtract(it);
+      if (!s) continue;
+      if (Array.isArray(s)) { for (const x of s) if (x) names.add(x); }
+      else names.add(s);
+    }
+    return this._sortByPageOrder([...names]);
+  },
+
+  szenenKapitelListe() {
+    return this._deriveKapitel(this.szenen, s => s.kapitel);
+  },
+  szenenSeitenListe() {
+    return this._deriveSeiten(this.szenen, this.szenenFilterKapitel, s => s.kapitel, s => s.seite);
+  },
+  orteKapitelListe() {
+    return this._deriveKapitel(this.orte, o => o.kapitel);
   },
 
   kontinuitaetKapitelListe() {
@@ -81,17 +114,15 @@ export const appUiMethods = {
   },
 
   figurenKapitelListe() {
-    const names = new Set();
-    for (const f of (this.figuren || [])) {
-      for (const k of (f.kapitel || [])) { if (k.name) names.add(k.name); }
-    }
-    return this._sortByChapterOrder([...names]);
+    return this._deriveKapitel(this.figuren, f => f.kapitel);
   },
 
   figurenSeitenListe() {
+    // seiten ist ein Array von {kapitel, seite} — eigener Iterator nötig,
+    // weil _deriveSeiten eine Eins-zu-Eins-Relation annimmt.
     if (!this.figurenKapitelFilter) return [];
     const names = new Set();
-    for (const f of this.figuren) {
+    for (const f of (this.figuren || [])) {
       for (const s of (f.seiten || [])) {
         if (s.kapitel === this.figurenKapitelFilter && s.seite) names.add(s.seite);
       }
@@ -125,24 +156,16 @@ export const appUiMethods = {
   },
 
   ereignisseKapitelListe() {
-    const names = new Set();
-    for (const ev of this.globalZeitstrahl) {
-      if (Array.isArray(ev.kapitel)) { for (const k of ev.kapitel) if (k) names.add(k); }
-      else if (ev.kapitel) names.add(ev.kapitel);
-    }
-    return this._sortByChapterOrder([...names]);
+    return this._deriveKapitel(this.globalZeitstrahl, ev => ev.kapitel);
   },
 
   ereignisseSeitenListe() {
-    if (!this.ereignisseFilterKapitel) return [];
-    const names = new Set();
-    for (const ev of this.globalZeitstrahl) {
-      const kap = Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []);
-      if (!kap.includes(this.ereignisseFilterKapitel)) continue;
-      const seiten = Array.isArray(ev.seiten) ? ev.seiten : (ev.seite ? [ev.seite] : []);
-      for (const s of seiten) if (s) names.add(s);
-    }
-    return this._sortByPageOrder([...names]);
+    return this._deriveSeiten(
+      this.globalZeitstrahl,
+      this.ereignisseFilterKapitel,
+      ev => ev.kapitel,
+      ev => Array.isArray(ev.seiten) ? ev.seiten : ev.seite,
+    );
   },
 
   filteredEreignisse() {
