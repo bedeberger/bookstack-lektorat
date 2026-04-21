@@ -958,27 +958,12 @@ button.success:hover { background: var(--color-success-hover); }
 .finding.error { border-color: var(--color-err-border); }
 .finding.style { border-color: var(--color-style-border); }
 .finding.ok    { border-color: var(--color-ok-border); }
-.finding.finding-deselected,
+.finding.finding-deselected { opacity: 0.55; }
 .finding.finding--applied {
-  color: var(--color-muted);
-  border-left-color: var(--color-border);
+  opacity: 0.5;
+  text-decoration: line-through;
+  text-decoration-color: var(--color-muted);
 }
-.finding.finding-deselected .finding-explanation,
-.finding.finding--applied .finding-explanation {
-  color: var(--color-muted);
-}
-.finding.finding-deselected .finding-original,
-.finding.finding-deselected .finding-korrektur,
-.finding.finding--applied .finding-original,
-.finding.finding--applied .finding-korrektur {
-  background: transparent;
-  color: var(--color-muted);
-}
-.finding.finding-deselected .finding-arrow,
-.finding.finding--applied .finding-arrow {
-  color: var(--color-muted);
-}
-.finding.finding--applied { text-decoration: line-through; text-decoration-color: var(--color-muted); }
 .finding.finding--applied .finding-checkbox { cursor: not-allowed; }
 .finding-checkbox { flex-shrink: 0; margin-top: 2px; cursor: pointer; }
 .finding > .badge { flex-shrink: 0; }
@@ -1004,6 +989,7 @@ button.success:hover { background: var(--color-success-hover); }
 }
 
 .finding-explanation {
+  display: block;
   color: var(--color-muted);
   font-size: var(--font-size-xs);
   margin-top: 4px;
