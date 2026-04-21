@@ -56,7 +56,7 @@
           </div>
           <div x-show="item.open" class="tree-chapter-pages">
             <template x-for="page in item.pages" :key="page.id">
-              <div class="page-item" :class="{ selected: currentPage?.id === page.id, disabled: tokEsts[page.id] && tokEsts[page.id].words === 0 }" @click="if (!(tokEsts[page.id] && tokEsts[page.id].words === 0)) selectPage(page)">
+              <div class="page-item" :class="{ selected: currentPage?.id === page.id, 'page-item--empty': tokEsts[page.id] && tokEsts[page.id].words === 0 }" @click="selectPage(page)">
                 <span class="page-name">
                   <span class="page-status-dot" :class="'page-status-' + pageStatus(page)"
                     @mouseenter.stop="const r=$el.getBoundingClientRect(); pageStatusTipPos={x:r.left,y:r.top}; pageStatusTipText=pageStatusTooltip(page); showPageStatusTip=true"
