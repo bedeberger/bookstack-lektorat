@@ -61,29 +61,29 @@
   <div x-show="szenen.length > 0" class="szenen-liste-section">
     <!-- Filter-Leiste -->
     <div class="filter-bar">
-      <input type="text" x-model="szenenSuche" :placeholder="t('common.search')" class="filter-search-input">
+      <input type="text" x-model="szenenFilters.suche" :placeholder="t('common.search')" class="filter-search-input">
       <div class="szenen-filter-group">
-        <button type="button" class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenFilterWertung === '' }" @click="szenenFilterWertung = ''" x-text="t('common.all')"></button>
-        <button type="button" class="szenen-filter-btn szenen-filter-btn--stark"   :class="{ 'szenen-filter-btn--active': szenenFilterWertung === 'stark' }"   @click="szenenFilterWertung = szenenFilterWertung === 'stark'   ? '' : 'stark'" x-text="t('szenen.rating.stark')"></button>
-        <button type="button" class="szenen-filter-btn szenen-filter-btn--mittel"  :class="{ 'szenen-filter-btn--active': szenenFilterWertung === 'mittel' }"  @click="szenenFilterWertung = szenenFilterWertung === 'mittel'  ? '' : 'mittel'" x-text="t('szenen.rating.mittel')"></button>
-        <button type="button" class="szenen-filter-btn szenen-filter-btn--schwach" :class="{ 'szenen-filter-btn--active': szenenFilterWertung === 'schwach' }" @click="szenenFilterWertung = szenenFilterWertung === 'schwach' ? '' : 'schwach'" x-text="t('szenen.rating.schwach')"></button>
+        <button type="button" class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenFilters.wertung === '' }" @click="szenenFilters.wertung = ''" x-text="t('common.all')"></button>
+        <button type="button" class="szenen-filter-btn szenen-filter-btn--stark"   :class="{ 'szenen-filter-btn--active': szenenFilters.wertung === 'stark' }"   @click="szenenFilters.wertung = szenenFilters.wertung === 'stark'   ? '' : 'stark'" x-text="t('szenen.rating.stark')"></button>
+        <button type="button" class="szenen-filter-btn szenen-filter-btn--mittel"  :class="{ 'szenen-filter-btn--active': szenenFilters.wertung === 'mittel' }"  @click="szenenFilters.wertung = szenenFilters.wertung === 'mittel'  ? '' : 'mittel'" x-text="t('szenen.rating.mittel')"></button>
+        <button type="button" class="szenen-filter-btn szenen-filter-btn--schwach" :class="{ 'szenen-filter-btn--active': szenenFilters.wertung === 'schwach' }" @click="szenenFilters.wertung = szenenFilters.wertung === 'schwach' ? '' : 'schwach'" x-text="t('szenen.rating.schwach')"></button>
       </div>
       <div x-data="combobox(t('filter.figur'), t('filter.allFiguren'))"
-           x-modelable="value" x-model="szenenFilterFigurId"
+           x-modelable="value" x-model="szenenFilters.figurId"
            x-effect="options = figuren.filter(f => szenen.some(s => s.fig_ids.includes(f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
            @click.outside="close()" @keydown="onKeydown($event)"
            class="combobox-wrap combobox-wrap--compact">
       </div>
       <div x-data="combobox(t('filter.chapter'), t('filter.allChapters'))"
-           x-modelable="value" x-model="szenenFilterKapitel"
+           x-modelable="value" x-model="szenenFilters.kapitel"
            x-effect="options = szenenKapitelListe().map(k => ({value: k, label: k}))"
-           @combobox-change="szenenFilterSeite = ''"
+           @combobox-change="szenenFilters.seite = ''"
            @click.outside="close()" @keydown="onKeydown($event)"
            class="combobox-wrap combobox-wrap--compact">
       </div>
-      <template x-if="szenenFilterKapitel && szenenSeitenListe().length > 0">
+      <template x-if="szenenFilters.kapitel && szenenSeitenListe().length > 0">
         <div x-data="combobox(t('filter.page'), t('filter.allPages'))"
-             x-modelable="value" x-model="szenenFilterSeite"
+             x-modelable="value" x-model="szenenFilters.seite"
              x-effect="options = szenenSeitenListe().map(s => ({value: s, label: s}))"
              @click.outside="close()" @keydown="onKeydown($event)"
              class="combobox-wrap combobox-wrap--compact">
@@ -91,7 +91,7 @@
       </template>
       <div x-show="orte.length > 0"
            x-data="combobox(t('filter.ort'), t('filter.allOrte'))"
-           x-modelable="value" x-model="szenenFilterOrtId"
+           x-modelable="value" x-model="szenenFilters.ortId"
            x-effect="options = orte.filter(o => szenen.some(s => (s.ort_ids||[]).includes(o.id))).map(o => ({value: o.id, label: o.name}))"
            @click.outside="close()" @keydown="onKeydown($event)"
            class="combobox-wrap combobox-wrap--compact">

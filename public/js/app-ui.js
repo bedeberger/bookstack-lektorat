@@ -82,22 +82,22 @@ export const appUiMethods = {
   // Schreibweisen aus den Szenen selbst. So bleibt der Filter auch dann nützlich,
   // wenn die KI bei einzelnen Szenen kein `seite` gesetzt hat.
   szenenSeitenListe() {
-    if (!this.szenenFilterKapitel) return [];
+    if (!this.szenenFilters.kapitel) return [];
     // Kapitel-ID aus Szenen oder Tree auflösen (Name als Key, weil Filter ein Name ist).
     const chapterIds = new Set();
     for (const s of (this.szenen || [])) {
-      if (s.kapitel === this.szenenFilterKapitel && s.chapter_id) chapterIds.add(s.chapter_id);
+      if (s.kapitel === this.szenenFilters.kapitel && s.chapter_id) chapterIds.add(s.chapter_id);
     }
     for (const t of (this.tree || [])) {
-      if (t.type === 'chapter' && t.name === this.szenenFilterKapitel) chapterIds.add(t.id);
+      if (t.type === 'chapter' && t.name === this.szenenFilters.kapitel) chapterIds.add(t.id);
     }
     const names = new Set();
     for (const p of (this.pages || [])) {
       if (p.chapter_id && chapterIds.has(p.chapter_id) && p.name) names.add(p.name);
-      else if (p.chapterName === this.szenenFilterKapitel && p.name) names.add(p.name);
+      else if (p.chapterName === this.szenenFilters.kapitel && p.name) names.add(p.name);
     }
     for (const s of (this.szenen || [])) {
-      if (s.kapitel === this.szenenFilterKapitel && s.seite) names.add(s.seite);
+      if (s.kapitel === this.szenenFilters.kapitel && s.seite) names.add(s.seite);
     }
     return this._sortByPageOrder([...names]);
   },

@@ -233,12 +233,14 @@ const szenenState = () => ({
   szenenLoading: false,
   szenenProgress: 0,
   szenenStatus: '',
-  szenenFilterWertung: '',
-  szenenFilterFigurId: '',
-  szenenFilterKapitel: '',
-  szenenFilterSeite: '',
-  szenenFilterOrtId: '',
-  szenenSuche: '',
+  szenenFilters: {
+    wertung: '',
+    figurId: '',
+    kapitel: '',
+    seite: '',
+    ortId: '',
+    suche: '',
+  },
   _szenenPollTimer: null,
 });
 

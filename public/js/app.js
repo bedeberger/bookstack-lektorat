@@ -279,14 +279,14 @@ document.addEventListener('alpine:init', () => {
       });
     },
     get szenenFiltered() {
-      const q = this.szenenSuche ? this.szenenSuche.toLowerCase() : '';
+      const q = this.szenenFilters.suche ? this.szenenFilters.suche.toLowerCase() : '';
       return this.szenen.filter(s =>
         (!q || (s.titel || '').toLowerCase().includes(q)) &&
-        (!this.szenenFilterWertung || s.wertung === this.szenenFilterWertung) &&
-        (!this.szenenFilterFigurId || (s.fig_ids || []).includes(this.szenenFilterFigurId)) &&
-        (!this.szenenFilterKapitel || s.kapitel === this.szenenFilterKapitel) &&
-        (!this.szenenFilterSeite || s.seite === this.szenenFilterSeite) &&
-        (!this.szenenFilterOrtId || (s.ort_ids || []).includes(this.szenenFilterOrtId))
+        (!this.szenenFilters.wertung || s.wertung === this.szenenFilters.wertung) &&
+        (!this.szenenFilters.figurId || (s.fig_ids || []).includes(this.szenenFilters.figurId)) &&
+        (!this.szenenFilters.kapitel || s.kapitel === this.szenenFilters.kapitel) &&
+        (!this.szenenFilters.seite || s.seite === this.szenenFilters.seite) &&
+        (!this.szenenFilters.ortId || (s.ort_ids || []).includes(this.szenenFilters.ortId))
       ).sort((a, b) => {
         const c = this._chapterIdx(a.kapitel) - this._chapterIdx(b.kapitel);
         if (c !== 0) return c;
