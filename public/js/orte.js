@@ -1,5 +1,6 @@
-// Schauplatz-Methoden (werden in die Alpine-Komponente gespreadet)
-// `this` bezieht sich auf die Alpine-Komponente.
+// Schauplatz-Methoden. Bleiben im Root-Spread, weil sie von mehreren Orten
+// (app-view._reloadVisibleBookCards, Szenen-Trigger, toggleOrteCard) gerufen
+// werden. `this.orte` geht über den Root-Proxy-Getter an Alpine.store('catalog').
 
 import { fetchJson } from './utils.js';
 
@@ -25,13 +26,5 @@ export const orteMethods = {
     } catch (e) {
       console.error('[saveOrte]', e);
     }
-  },
-
-  async toggleOrteCard() {
-    if (this.showOrteCard) { await this.loadOrte(this.selectedBookId); return; }
-    this._closeOtherMainCards('orte');
-    this.showOrteCard = true;
-    if (!this.szenen.length) await this.loadSzenen(this.selectedBookId);
-    await this.loadOrte(this.selectedBookId);
   },
 };

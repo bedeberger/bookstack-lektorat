@@ -1,18 +1,11 @@
-// Szenenanalyse-Methoden (werden in die Alpine-Komponente gespreadet)
-// `this` bezieht sich auf die Alpine-Komponente.
+// Szenenanalyse-Methoden. Bleiben im Root-Spread, weil sie von mehreren
+// Orten (komplett-Job, app-view._reloadVisibleBookCards, orteCard via
+// $root.loadSzenen) gerufen werden. `this.szenen` geht über den Root-Proxy
+// an Alpine.store('catalog').
 
 import { fetchJson } from './utils.js';
 
 export const szenenMethods = {
-  async toggleSzenenCard() {
-    if (this.showSzenenCard) { await this.loadSzenen(this.selectedBookId); return; }
-    this._closeOtherMainCards('szenen');
-    this.showSzenenCard = true;
-    if (!this.figuren.length) await this.loadFiguren(this.selectedBookId);
-    if (!this.orte.length) await this.loadOrte(this.selectedBookId);
-    await this.loadSzenen(this.selectedBookId);
-  },
-
   async loadSzenen(bookId) {
     try {
       const data = await fetchJson('/figures/scenes/' + bookId);
@@ -22,5 +15,4 @@ export const szenenMethods = {
       console.error('[loadSzenen]', e);
     }
   },
-
 };

@@ -117,6 +117,51 @@ export const appViewMethods = {
     this._closeOtherMainCards('userSettings');
     this.showUserSettingsCard = true;
   },
+  // Abweichend von den anderen Toggles: erneuter Klick schliesst NICHT, sondern
+  // refresht die History (bildet das alte onOpenWhenOpen-Verhalten nach, das
+  // bei createJobFeature-basierten Karten aktiv war). Sub-Komponente lauscht
+  // auf `card:refresh` mit name='kontinuitaet'.
+  toggleKontinuitaetCard() {
+    if (this.showKontinuitaetCard) {
+      window.dispatchEvent(new CustomEvent('card:refresh', { detail: { name: 'kontinuitaet' } }));
+      return;
+    }
+    this._closeOtherMainCards('kontinuitaet');
+    this.showKontinuitaetCard = true;
+  },
+  // Erneuter Klick refresht statt zu schliessen (siehe kontinuitaetCard-Muster).
+  async toggleEreignisseCard() {
+    if (this.showEreignisseCard) {
+      window.dispatchEvent(new CustomEvent('card:refresh', { detail: { name: 'ereignisse' } }));
+      return;
+    }
+    this._closeOtherMainCards('ereignisse');
+    this.showEreignisseCard = true;
+    // Figuren werden für den Figur-Filter gebraucht — noch nicht in Sub-Komponente;
+    // Fallback-Load bleibt vorerst im Root.
+    if (!this.figuren.length) {
+      await this.loadFiguren(this.selectedBookId);
+    }
+  },
+  async toggleOrteCard() {
+    if (this.showOrteCard) {
+      window.dispatchEvent(new CustomEvent('card:refresh', { detail: { name: 'orte' } }));
+      return;
+    }
+    this._closeOtherMainCards('orte');
+    this.showOrteCard = true;
+    if (!this.figuren.length) await this.loadFiguren(this.selectedBookId);
+  },
+  async toggleSzenenCard() {
+    if (this.showSzenenCard) {
+      window.dispatchEvent(new CustomEvent('card:refresh', { detail: { name: 'szenen' } }));
+      return;
+    }
+    this._closeOtherMainCards('szenen');
+    this.showSzenenCard = true;
+    if (!this.figuren.length) await this.loadFiguren(this.selectedBookId);
+    if (!this.orte.length) await this.loadOrte(this.selectedBookId);
+  },
 
   async toggleTreeCard() {
     if (this.showTreeCard) { this.showTreeCard = false; this.resetPage(); return; }
@@ -212,7 +257,7 @@ export const appViewMethods = {
     this.bookChatSessions = [];
     this.bookChatMessages = [];
     this.bookChatSessionId = null;
-    this.kontinuitaetResult = null;
+    // kontinuitaetCard: Sub-Komponente hört auf `book:changed` und resetet.
     this.chapterFigures = [];
     this.pageHistory = [];
     this.activeHistoryEntryId = null;
@@ -230,11 +275,12 @@ export const appViewMethods = {
     this.szenenUpdatedAt = null;
     this.orteUpdatedAt = null;
 
-    // Buch-scoped Pollers stoppen (zielen sonst auf altes Buch)
+    // Buch-scoped Pollers stoppen (zielen sonst auf altes Buch).
+    // Migrierte Karten (kontinuitaet/ereignisse/orte/szenen) stoppen eigene
+    // Timer via book:changed-Handler in der Sub-Komponente.
     const timers = [
-      '_figuresPollTimer', '_ortePollTimer', '_szenenPollTimer',
-      '_consolidatePollTimer', '_kontinuitaetPollTimer',
-      '_ereignisseExtractPollTimer', '_chatPollTimer',
+      '_figuresPollTimer',
+      '_chatPollTimer',
       '_bookChatPollTimer', '_reviewPollTimer', '_kapitelReviewPollTimer', '_komplettPollTimer',
     ];
     for (const t of timers) {
@@ -258,18 +304,9 @@ export const appViewMethods = {
   },
 
   async _reloadVisibleBookCards() {
-    const bookId = this.selectedBookId;
-    if (!bookId) return;
-    const jobs = [];
-    // `loadPages()` lädt figuren + bookReviewHistory selbst — hier nur die übrigen.
-    if (this.showOrteCard)       jobs.push(this.loadOrte(bookId));
-    if (this.showSzenenCard)     jobs.push(this.loadSzenen(bookId));
-    // bookStatsCard + stilCard + fehlerHeatmapCard + bookSettingsCard:
-    // Sub-Komponente lädt per book:changed selbst neu.
-    if (this.showEreignisseCard && typeof this._reloadZeitstrahl === 'function') {
-      jobs.push(this._reloadZeitstrahl());
-    }
-    await Promise.all(jobs);
+    // Alle migrierten Sub-Komponenten (orte/szenen/ereignisse/kontinuitaet/
+    // bookStats/stil/fehlerHeatmap/bookSettings) laden selbst per book:changed-
+    // Event neu. `loadPages()` übernimmt den Rest (figuren + bookReviewHistory).
   },
 
   // Setzt alles zurück: Seiten-Level (via resetPage) + Buch-Level.
@@ -303,30 +340,21 @@ export const appViewMethods = {
     this.figurenFilters.seite = '';
     this.globalZeitstrahl = [];
     this.showGlobalZeitstrahl = false;
-    this.zeitstrahlConsolidating = false;
-    this.zeitstrahlProgress = 0;
-    this.zeitstrahlStatus = '';
     this.showEreignisseCard = false;
-    this.ereignisseLoading = false;
-    this.ereignisseProgress = 0;
-    this.ereignisseStatus = '';
     this.ereignisseFilters.figurId = '';
     this.ereignisseFilters.kapitel = '';
     this.ereignisseFilters.seite = '';
-    if (this._ereignisseExtractPollTimer) { clearInterval(this._ereignisseExtractPollTimer); this._ereignisseExtractPollTimer = null; }
+    // ereignisseCard: Sub-Komponente hört auf `view:reset` und resetet eigenen
+    // State (Loading/Progress/Status, PollTimer).
     this.showSzenenCard = false;
     this.szenen = [];
     this.szenenUpdatedAt = null;
-    this.szenenStatus = '';
-    this.szenenProgress = 0;
-    this.szenenLoading = false;
     this.szenenFilters.wertung = '';
     this.szenenFilters.figurId = '';
     this.szenenFilters.kapitel = '';
     this.szenenFilters.seite = '';
     this.szenenFilters.ortId = '';
-    if (this._consolidatePollTimer) { clearInterval(this._consolidatePollTimer); this._consolidatePollTimer = null; }
-    if (this._szenenPollTimer) { clearInterval(this._szenenPollTimer); this._szenenPollTimer = null; }
+    // szenenCard: Sub-Komponente hört auf `view:reset` (Loading/Progress/Status/Timer).
     if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
     this.showBookStatsCard = false;
     // bookStatsCard: Sub-Komponente hört auf `view:reset` und resetet eigenen
@@ -337,21 +365,13 @@ export const appViewMethods = {
     // fehlerHeatmapCard: Sub-Komponente hört auf `view:reset` und resetet eigenen State.
     this.showOrteCard = false;
     this.orte = [];
-    this.orteStatus = '';
-    this.orteProgress = 0;
-    this.orteLoading = false;
     this.orteFilters.figurId = '';
     this.orteFilters.kapitel = '';
     this.orteFilters.szeneId = '';
-    if (this._ortePollTimer) { clearInterval(this._ortePollTimer); this._ortePollTimer = null; }
+    // orteCard: Sub-Komponente hört auf `view:reset` (Loading/Progress/Status/Timer).
     this.showKontinuitaetCard = false;
-    this.kontinuitaetResult = null;
-    this.kontinuitaetStatus = '';
-    this.kontinuitaetProgress = 0;
-    this.kontinuitaetLoading = false;
-    this.kontinuitaetFilters.figurId = '';
-    this.kontinuitaetFilters.kapitel = '';
-    if (this._kontinuitaetPollTimer) { clearInterval(this._kontinuitaetPollTimer); this._kontinuitaetPollTimer = null; }
+    // kontinuitaetCard: Sub-Komponente hört auf `view:reset` und resetet
+    // eigenen State (inkl. Poll-Timer-Stop).
     if (this._komplettPollTimer) { clearInterval(this._komplettPollTimer); this._komplettPollTimer = null; }
     this.showBookSettingsCard = false;
     this.showUserSettingsCard = false;

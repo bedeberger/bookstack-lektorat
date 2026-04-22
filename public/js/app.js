@@ -14,13 +14,17 @@ import { ereignisseMethods } from './ereignisse.js';
 import { graphMethods } from './graph.js';
 import { registerBookStatsCard } from './cards/book-stats-card.js';
 import { writingTimeMethods } from './writing-time.js';
+import { registerCatalogStore } from './cards/catalog-store.js';
+import { registerEreignisseCard } from './cards/ereignisse-card.js';
+import { registerOrteCard } from './cards/orte-card.js';
+import { registerSzenenCard } from './cards/szenen-card.js';
 import { registerStilCard } from './cards/stil-card.js';
 import { registerFehlerHeatmapCard } from './cards/fehler-heatmap-card.js';
 import { chatMethods } from './chat.js';
 import { bookChatMethods } from './book-chat.js';
 import { szenenMethods } from './szenen.js';
 import { orteMethods } from './orte.js';
-import { kontinuitaetMethods } from './kontinuitaet.js';
+import { registerKontinuitaetCard } from './cards/kontinuitaet-card.js';
 import { registerBookSettingsCard } from './cards/book-settings-card.js';
 import { registerUserSettingsCard } from './cards/user-settings-card.js';
 import { configureI18n, i18nMethods, getSupportedLocales } from './i18n.js';
@@ -106,12 +110,20 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('alpine:init', () => {
+  // Geteilte Fach-Daten (figuren, orte, szenen, globalZeitstrahl) vor allen
+  // Komponenten registrieren — die Root-Getter (siehe unten) lesen aus dem Store.
+  registerCatalogStore();
+
   // Migrierte Alpine.data-Sub-Komponenten (Fach-State aus der Root ausgelagert).
   registerStilCard();
   registerFehlerHeatmapCard();
   registerBookStatsCard();
   registerBookSettingsCard();
   registerUserSettingsCard();
+  registerKontinuitaetCard();
+  registerEreignisseCard();
+  registerOrteCard();
+  registerSzenenCard();
 
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
     open: false,
@@ -222,6 +234,22 @@ document.addEventListener('alpine:init', () => {
     // ── State ────────────────────────────────────────────────────────────────
     ...initialLektoratState(),
 
+    // ── Catalog-Proxy ────────────────────────────────────────────────────────
+    // Figuren, Orte, Szenen, globalZeitstrahl leben in Alpine.store('catalog')
+    // (siehe cards/catalog-store.js). Der Root exponiert sie weiterhin als
+    // direkt adressierbare Properties — so bleibt vorhandener Root-Code
+    // (this.figuren = …, this.orte.push) und bestehende Sub-Komponenten-Reads
+    // ($root.figuren) unverändert funktional. Neue Karten greifen direkt via
+    // $store.catalog zu.
+    get figuren() { return Alpine.store('catalog').figuren; },
+    set figuren(v) { Alpine.store('catalog').figuren = v; },
+    get orte() { return Alpine.store('catalog').orte; },
+    set orte(v) { Alpine.store('catalog').orte = v; },
+    get szenen() { return Alpine.store('catalog').szenen; },
+    set szenen(v) { Alpine.store('catalog').szenen = v; },
+    get globalZeitstrahl() { return Alpine.store('catalog').globalZeitstrahl; },
+    set globalZeitstrahl(v) { Alpine.store('catalog').globalZeitstrahl = v; },
+
     // ── Computed ─────────────────────────────────────────────────────────────
     // O(1)-Lookup-Maps für Figuren/Orte. Rebuild nur bei Referenz-Wechsel
     // (loadFiguren/loadOrte reassignen, pushen nie). In Render-Loops
@@ -295,35 +323,7 @@ document.addEventListener('alpine:init', () => {
       });
     },
 
-    get kontinuitaetIssuesFiltered() {
-      const chapters = (this.tree || []).filter(t => t.type === 'chapter');
-      const chapterNames = new Set(chapters.map(t => t.name));
-      const fromStelle = (s) => {
-        if (!s) return null;
-        const ci = s.indexOf(':');
-        const c = ci > 0 ? s.substring(0, ci).trim() : s.trim();
-        return chapterNames.has(c) ? c : null;
-      };
-      return (this.kontinuitaetResult?.issues || []).filter(issue => {
-        if (this.kontinuitaetFilters.figurId) {
-          if (issue.fig_ids?.length) {
-            if (!issue.fig_ids.includes(this.kontinuitaetFilters.figurId)) return false;
-          } else {
-            const selectedName = this.figuren.find(f => f.id === this.kontinuitaetFilters.figurId)?.name || '';
-            if (selectedName && !(issue.figuren || []).includes(selectedName)) return false;
-          }
-        }
-        if (this.kontinuitaetFilters.kapitel) {
-          const f = this.kontinuitaetFilters.kapitel;
-          const selectedId = chapters.find(t => t.name === f)?.id;
-          const idMatch    = selectedId !== undefined && issue.chapter_ids?.includes(selectedId);
-          const nameMatch  = (issue.kapitel || []).includes(f);
-          const stelleMatch = fromStelle(issue.stelle_a) === f || fromStelle(issue.stelle_b) === f;
-          if (!idMatch && !nameMatch && !stelleMatch) return false;
-        }
-        return true;
-      });
-    },
+    // kontinuitaetIssuesFiltered wandert in Alpine.data('kontinuitaetCard').
 
     get statusHtml() {
       if (!this.status) return '';
@@ -497,7 +497,7 @@ document.addEventListener('alpine:init', () => {
     ...bookChatMethods,
     ...szenenMethods,
     ...orteMethods,
-    ...kontinuitaetMethods,
+    // kontinuitaetMethods migriert nach Alpine.data('kontinuitaetCard').
     // bookSettingsMethods + userSettingsMethods migriert nach Alpine.data
     // — siehe cards/book-settings-card.js + cards/user-settings-card.js.
     ...i18nMethods,

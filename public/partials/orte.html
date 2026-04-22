@@ -1,8 +1,13 @@
 <!-- Schauplätze -->
-<div class="card" x-show="showOrteCard" x-cloak x-transition>
+<!--
+  Alpine.data-Sub-Komponente — siehe public/js/cards/orte-card.js.
+  Fachdaten (orte, szenen, figuren) leben in Alpine.store('catalog');
+  orteFilters + selectedOrtId bleiben im Root.
+-->
+<div class="card" x-data="orteCard" x-show="$root.showOrteCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="t('orte.title', { name: selectedBookName })"></span>
-    <span x-show="alleAktualisierenLastRun && !orteLoading" class="card-timestamp" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
+    <span class="card-title" x-text="$root.t('orte.title', { name: $root.selectedBookName })"></span>
+    <span x-show="$root.alleAktualisierenLastRun && !orteLoading" class="card-timestamp" x-text="$root.t('common.asOf', { date: $root.alleAktualisierenLastRun })"></span>
   </div>
 
   <div x-show="orteProgress > 0" class="progress-bar-wrap">
@@ -10,39 +15,39 @@
   </div>
   <div x-show="orteStatus" class="card-status" x-html="orteStatus"></div>
 
-  <div x-show="orte.length === 0 && !orteLoading && !orteStatus" class="card-status" x-text="t('common.noDataYet')"></div>
+  <div x-show="$root.orte.length === 0 && !orteLoading && !orteStatus" class="card-status" x-text="$root.t('common.noDataYet')"></div>
 
   <!-- Filter-Leiste -->
-  <div x-show="orte.length > 0" class="filter-bar">
-    <input type="text" x-model="orteFilters.suche" :placeholder="t('common.search')" class="filter-search-input">
-    <div x-data="combobox(t('filter.figur'), t('filter.allFiguren'))"
-         x-modelable="value" x-model="orteFilters.figurId"
-         x-effect="options = figuren.filter(f => orte.some(o => (o.figuren || []).includes(f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
+  <div x-show="$root.orte.length > 0" class="filter-bar">
+    <input type="text" x-model="$root.orteFilters.suche" :placeholder="$root.t('common.search')" class="filter-search-input">
+    <div x-data="combobox($root.t('filter.figur'), $root.t('filter.allFiguren'))"
+         x-modelable="value" x-model="$root.orteFilters.figurId"
+         x-effect="options = $root.figuren.filter(f => $root.orte.some(o => (o.figuren || []).includes(f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
-    <div x-data="combobox(t('filter.chapter'), t('filter.allChapters'))"
-         x-modelable="value" x-model="orteFilters.kapitel"
-         x-effect="options = orteKapitelListe().map(k => ({value: k, label: k}))"
+    <div x-data="combobox($root.t('filter.chapter'), $root.t('filter.allChapters'))"
+         x-modelable="value" x-model="$root.orteFilters.kapitel"
+         x-effect="options = $root.orteKapitelListe().map(k => ({value: k, label: k}))"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
-    <div x-show="szenen.length > 0"
-         x-data="combobox(t('filter.szene'), t('filter.allSzenen'))"
-         x-modelable="value" x-model="orteFilters.szeneId"
-         x-effect="options = szenen.map(s => ({value: String(s.id), label: s.titel}))"
+    <div x-show="$root.szenen.length > 0"
+         x-data="combobox($root.t('filter.szene'), $root.t('filter.allSzenen'))"
+         x-modelable="value" x-model="$root.orteFilters.szeneId"
+         x-effect="options = $root.szenen.map(s => ({value: String(s.id), label: s.titel}))"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
-    <span class="filter-count" x-text="orteFiltered.length + ' / ' + orte.length"></span>
+    <span class="filter-count" x-text="$root.orteFiltered.length + ' / ' + $root.orte.length"></span>
   </div>
 
   <!-- Ortsliste -->
-  <div x-show="orte.length > 0" class="ort-list">
-    <template x-for="o in orteFiltered" :key="o.id">
+  <div x-show="$root.orte.length > 0" class="ort-list">
+    <template x-for="o in $root.orteFiltered" :key="o.id">
       <div>
-        <div class="ort-item" :data-ortid="o.id" @click="selectedOrtId = selectedOrtId === o.id ? null : o.id">
-          <span class="tag ort-typ-tag" x-text="o.typ || t('orte.typAndere')"></span>
+        <div class="ort-item" :data-ortid="o.id" @click="$root.selectedOrtId = $root.selectedOrtId === o.id ? null : o.id">
+          <span class="tag ort-typ-tag" x-text="o.typ || $root.t('orte.typAndere')"></span>
           <span class="ort-name" x-text="o.name"></span>
           <span x-show="o.stimmung" class="ort-stimmung" x-text="o.stimmung"></span>
           <template x-if="o.kapitel?.length">
@@ -53,34 +58,34 @@
               </template>
             </span>
           </template>
-          <span class="history-chevron" :class="{ open: selectedOrtId === o.id }">›</span>
+          <span class="history-chevron" :class="{ open: $root.selectedOrtId === o.id }">›</span>
         </div>
-        <div x-show="selectedOrtId === o.id" class="ort-detail">
+        <div x-show="$root.selectedOrtId === o.id" class="ort-detail">
           <p x-show="o.beschreibung" x-text="o.beschreibung" class="ort-beschreibung"></p>
           <div x-show="o.erste_erwaehnung" class="ort-meta-row">
-            <span class="ort-meta-label" x-text="t('orte.firstMention')"></span>
+            <span class="ort-meta-label" x-text="$root.t('orte.firstMention')"></span>
             <template x-if="o.erste_erwaehnung_page_id">
-              <span class="internal-link" @click.stop="gotoPageById(o.erste_erwaehnung_page_id)" x-text="o.erste_erwaehnung"></span>
+              <span class="internal-link" @click.stop="$root.gotoPageById(o.erste_erwaehnung_page_id)" x-text="o.erste_erwaehnung"></span>
             </template>
             <template x-if="!o.erste_erwaehnung_page_id">
               <span x-text="o.erste_erwaehnung"></span>
             </template>
           </div>
           <div x-show="o.figuren?.length > 0" class="ort-meta-row">
-            <span class="ort-meta-label" x-text="t('orte.figuren')"></span>
+            <span class="ort-meta-label" x-text="$root.t('orte.figuren')"></span>
             <template x-for="figId in o.figuren" :key="figId">
-              <span class="tag internal-link" @click.stop="openFigurById(figId)" x-text="figurenById.get(figId)?.kurzname || figurenById.get(figId)?.name || figId"></span>
+              <span class="tag internal-link" @click.stop="$root.openFigurById(figId)" x-text="$root.figurenById.get(figId)?.kurzname || $root.figurenById.get(figId)?.name || figId"></span>
             </template>
           </div>
           <div x-show="o.kapitel?.length > 1" class="ort-meta-row">
-            <span class="ort-meta-label" x-text="t('orte.kapitel')"></span>
+            <span class="ort-meta-label" x-text="$root.t('orte.kapitel')"></span>
             <template x-for="k in o.kapitel" :key="k.name">
               <span class="tag" x-text="k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
             </template>
           </div>
-          <div x-show="szenen.some(s => (s.ort_ids||[]).includes(o.id))" class="ort-meta-row">
-            <span class="ort-meta-label" x-text="t('orte.szenen')"></span>
-            <template x-for="s in szenen.filter(s => (s.ort_ids||[]).includes(o.id))" :key="s.id">
+          <div x-show="$root.szenen.some(s => (s.ort_ids||[]).includes(o.id))" class="ort-meta-row">
+            <span class="ort-meta-label" x-text="$root.t('orte.szenen')"></span>
+            <template x-for="s in $root.szenen.filter(s => (s.ort_ids||[]).includes(o.id))" :key="s.id">
               <span class="tag" x-text="s.titel"></span>
             </template>
           </div>

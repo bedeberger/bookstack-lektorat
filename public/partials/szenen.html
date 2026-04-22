@@ -1,8 +1,13 @@
 <!-- Szenenanalyse -->
-<div class="card" x-show="showSzenenCard" x-cloak x-transition>
+<!--
+  Alpine.data-Sub-Komponente — siehe public/js/cards/szenen-card.js.
+  Fachdaten (szenen, figuren, orte) leben in Alpine.store('catalog');
+  szenenFilters bleibt im Root.
+-->
+<div class="card" x-data="szenenCard" x-show="$root.showSzenenCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="t('szenen.title', { name: selectedBookName })"></span>
-    <span x-show="alleAktualisierenLastRun && !szenenLoading" class="card-timestamp" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
+    <span class="card-title" x-text="$root.t('szenen.title', { name: $root.selectedBookName })"></span>
+    <span x-show="$root.alleAktualisierenLastRun && !szenenLoading" class="card-timestamp" x-text="$root.t('common.asOf', { date: $root.alleAktualisierenLastRun })"></span>
   </div>
 
   <!-- Fortschritt -->
@@ -12,29 +17,29 @@
   <div x-show="szenenStatus" class="card-status" x-html="szenenStatus"></div>
 
   <!-- Leer-Hinweis -->
-  <div x-show="!szenen.length && !szenenLoading && !szenenStatus" class="card-status" x-text="t('common.noDataYet')"></div>
+  <div x-show="!$root.szenen.length && !szenenLoading && !szenenStatus" class="card-status" x-text="$root.t('common.noDataYet')"></div>
 
   <!-- Szenen-Übersicht: Figuren / Kapitel / Seiten -->
-  <div x-show="szenen.length > 0" class="szenen-uebersicht-grid">
+  <div x-show="$root.szenen.length > 0" class="szenen-uebersicht-grid">
     <!-- Pro Figur -->
     <div class="szenen-uebersicht-block">
-      <div class="bewertung-section-title" x-text="t('szenen.byFigur')"></div>
+      <div class="bewertung-section-title" x-text="$root.t('szenen.byFigur')"></div>
       <div class="szenen-count-badges">
-        <template x-for="f in figuren" :key="f.id">
-          <span x-show="szenen.some(s => s.fig_ids.includes(f.id))"
+        <template x-for="f in $root.figuren" :key="f.id">
+          <span x-show="$root.szenen.some(s => s.fig_ids.includes(f.id))"
             class="szenen-figur-count-badge"
-            :class="szenen.filter(s => s.fig_ids.includes(f.id)).length < 3 ? 'szenen-figur-count-badge--wenig' : ''"
-            x-text="(f.kurzname || f.name) + ' · ' + szenen.filter(s => s.fig_ids.includes(f.id)).length">
+            :class="$root.szenen.filter(s => s.fig_ids.includes(f.id)).length < 3 ? 'szenen-figur-count-badge--wenig' : ''"
+            x-text="(f.kurzname || f.name) + ' · ' + $root.szenen.filter(s => s.fig_ids.includes(f.id)).length">
           </span>
         </template>
       </div>
     </div>
     <!-- Pro Kapitel -->
     <div class="szenen-uebersicht-block">
-      <div class="bewertung-section-title" x-text="t('szenen.byKapitel')"></div>
+      <div class="bewertung-section-title" x-text="$root.t('szenen.byKapitel')"></div>
       <div class="szenen-count-badges">
-        <template x-for="k in szenenNachKapitel" :key="k.name">
-          <span class="szenen-kapitel-count-badge" :title="t('szenen.tooltip', { stark: k.stark, mittel: k.mittel, schwach: k.schwach })">
+        <template x-for="k in $root.szenenNachKapitel" :key="k.name">
+          <span class="szenen-kapitel-count-badge" :title="$root.t('szenen.tooltip', { stark: k.stark, mittel: k.mittel, schwach: k.schwach })">
             <span class="szenen-kapitel-name" x-text="k.name"></span>
             <span class="szenen-kapitel-dots">
               <template x-for="n in k.stark"   :key="'s'+n"><span class="szenen-dot szenen-dot--stark"></span></template>
@@ -47,10 +52,10 @@
       </div>
     </div>
     <!-- Pro Seite -->
-    <div class="szenen-uebersicht-block" x-show="szenenNachSeite.length > 0">
-      <div class="bewertung-section-title" x-text="t('szenen.bySeite')"></div>
+    <div class="szenen-uebersicht-block" x-show="$root.szenenNachSeite.length > 0">
+      <div class="bewertung-section-title" x-text="$root.t('szenen.bySeite')"></div>
       <div class="szenen-count-badges">
-        <template x-for="p in szenenNachSeite" :key="p.name">
+        <template x-for="p in $root.szenenNachSeite" :key="p.name">
           <span class="szenen-seite-count-badge" :title="p.kapitel" x-text="p.name + ' · ' + p.total"></span>
         </template>
       </div>
@@ -58,73 +63,73 @@
   </div>
 
   <!-- Alle Szenen -->
-  <div x-show="szenen.length > 0" class="szenen-liste-section">
+  <div x-show="$root.szenen.length > 0" class="szenen-liste-section">
     <!-- Filter-Leiste -->
     <div class="filter-bar">
-      <input type="text" x-model="szenenFilters.suche" :placeholder="t('common.search')" class="filter-search-input">
+      <input type="text" x-model="$root.szenenFilters.suche" :placeholder="$root.t('common.search')" class="filter-search-input">
       <div class="szenen-filter-group">
-        <button type="button" class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': szenenFilters.wertung === '' }" @click="szenenFilters.wertung = ''" x-text="t('common.all')"></button>
-        <button type="button" class="szenen-filter-btn szenen-filter-btn--stark"   :class="{ 'szenen-filter-btn--active': szenenFilters.wertung === 'stark' }"   @click="szenenFilters.wertung = szenenFilters.wertung === 'stark'   ? '' : 'stark'" x-text="t('szenen.rating.stark')"></button>
-        <button type="button" class="szenen-filter-btn szenen-filter-btn--mittel"  :class="{ 'szenen-filter-btn--active': szenenFilters.wertung === 'mittel' }"  @click="szenenFilters.wertung = szenenFilters.wertung === 'mittel'  ? '' : 'mittel'" x-text="t('szenen.rating.mittel')"></button>
-        <button type="button" class="szenen-filter-btn szenen-filter-btn--schwach" :class="{ 'szenen-filter-btn--active': szenenFilters.wertung === 'schwach' }" @click="szenenFilters.wertung = szenenFilters.wertung === 'schwach' ? '' : 'schwach'" x-text="t('szenen.rating.schwach')"></button>
+        <button type="button" class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': $root.szenenFilters.wertung === '' }" @click="$root.szenenFilters.wertung = ''" x-text="$root.t('common.all')"></button>
+        <button type="button" class="szenen-filter-btn szenen-filter-btn--stark"   :class="{ 'szenen-filter-btn--active': $root.szenenFilters.wertung === 'stark' }"   @click="$root.szenenFilters.wertung = $root.szenenFilters.wertung === 'stark'   ? '' : 'stark'" x-text="$root.t('szenen.rating.stark')"></button>
+        <button type="button" class="szenen-filter-btn szenen-filter-btn--mittel"  :class="{ 'szenen-filter-btn--active': $root.szenenFilters.wertung === 'mittel' }"  @click="$root.szenenFilters.wertung = $root.szenenFilters.wertung === 'mittel'  ? '' : 'mittel'" x-text="$root.t('szenen.rating.mittel')"></button>
+        <button type="button" class="szenen-filter-btn szenen-filter-btn--schwach" :class="{ 'szenen-filter-btn--active': $root.szenenFilters.wertung === 'schwach' }" @click="$root.szenenFilters.wertung = $root.szenenFilters.wertung === 'schwach' ? '' : 'schwach'" x-text="$root.t('szenen.rating.schwach')"></button>
       </div>
-      <div x-data="combobox(t('filter.figur'), t('filter.allFiguren'))"
-           x-modelable="value" x-model="szenenFilters.figurId"
-           x-effect="options = figuren.filter(f => szenen.some(s => s.fig_ids.includes(f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
+      <div x-data="combobox($root.t('filter.figur'), $root.t('filter.allFiguren'))"
+           x-modelable="value" x-model="$root.szenenFilters.figurId"
+           x-effect="options = $root.figuren.filter(f => $root.szenen.some(s => s.fig_ids.includes(f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
            @click.outside="close()" @keydown="onKeydown($event)"
            class="combobox-wrap combobox-wrap--compact">
       </div>
-      <div x-data="combobox(t('filter.chapter'), t('filter.allChapters'))"
-           x-modelable="value" x-model="szenenFilters.kapitel"
-           x-effect="options = szenenKapitelListe().map(k => ({value: k, label: k}))"
-           @combobox-change="szenenFilters.seite = ''"
+      <div x-data="combobox($root.t('filter.chapter'), $root.t('filter.allChapters'))"
+           x-modelable="value" x-model="$root.szenenFilters.kapitel"
+           x-effect="options = $root.szenenKapitelListe().map(k => ({value: k, label: k}))"
+           @combobox-change="$root.szenenFilters.seite = ''"
            @click.outside="close()" @keydown="onKeydown($event)"
            class="combobox-wrap combobox-wrap--compact">
       </div>
-      <template x-if="szenenFilters.kapitel && szenenSeitenListe().length > 0">
-        <div x-data="combobox(t('filter.page'), t('filter.allPages'))"
-             x-modelable="value" x-model="szenenFilters.seite"
-             x-effect="options = szenenSeitenListe()"
+      <template x-if="$root.szenenFilters.kapitel && $root.szenenSeitenListe().length > 0">
+        <div x-data="combobox($root.t('filter.page'), $root.t('filter.allPages'))"
+             x-modelable="value" x-model="$root.szenenFilters.seite"
+             x-effect="options = $root.szenenSeitenListe()"
              @click.outside="close()" @keydown="onKeydown($event)"
              class="combobox-wrap combobox-wrap--compact">
         </div>
       </template>
-      <div x-show="orte.length > 0"
-           x-data="combobox(t('filter.ort'), t('filter.allOrte'))"
-           x-modelable="value" x-model="szenenFilters.ortId"
-           x-effect="options = orte.filter(o => szenen.some(s => (s.ort_ids||[]).includes(o.id))).map(o => ({value: o.id, label: o.name}))"
+      <div x-show="$root.orte.length > 0"
+           x-data="combobox($root.t('filter.ort'), $root.t('filter.allOrte'))"
+           x-modelable="value" x-model="$root.szenenFilters.ortId"
+           x-effect="options = $root.orte.filter(o => $root.szenen.some(s => (s.ort_ids||[]).includes(o.id))).map(o => ({value: o.id, label: o.name}))"
            @click.outside="close()" @keydown="onKeydown($event)"
            class="combobox-wrap combobox-wrap--compact">
       </div>
-      <span class="filter-count" x-text="szenenFiltered.length + ' / ' + szenen.length"></span>
+      <span class="filter-count" x-text="$root.szenenFiltered.length + ' / ' + $root.szenen.length"></span>
     </div>
     <div class="szenen-liste">
-      <template x-for="(s, i) in szenenFiltered" :key="i">
+      <template x-for="(s, i) in $root.szenenFiltered" :key="i">
         <div class="szene-card" :class="'szene-card--' + (s.wertung || 'mittel')">
           <div class="szene-card-header">
-            <span class="szene-card-wertung" :class="'figur-szene-wertung--' + (s.wertung || 'mittel')" x-text="s.wertung ? t('szenen.rating.' + s.wertung) : '–'"></span>
-            <span class="szene-card-ort internal-link" @click="gotoStelle(s.kapitel, s.seite)" x-text="s.kapitel + (s.seite ? ' · ' + s.seite : '')"></span>
+            <span class="szene-card-wertung" :class="'figur-szene-wertung--' + (s.wertung || 'mittel')" x-text="s.wertung ? $root.t('szenen.rating.' + s.wertung) : '–'"></span>
+            <span class="szene-card-ort internal-link" @click="$root.gotoStelle(s.kapitel, s.seite)" x-text="s.kapitel + (s.seite ? ' · ' + s.seite : '')"></span>
           </div>
           <div class="szene-card-titel" x-text="s.titel"></div>
           <div x-show="s.kommentar" class="szene-card-kommentar" x-text="s.kommentar"></div>
           <div class="gz-figuren-row">
             <template x-for="(figId, fi) in (s.fig_ids || [])" :key="fi">
-              <template x-if="figurenById.get(figId)">
+              <template x-if="$root.figurenById.get(figId)">
                 <span class="gz-figur-badge internal-link"
-                  :class="'gz-figur-badge--' + (figurenById.get(figId).typ || 'andere')"
-                  @click="openFigurById(figId)"
-                  x-text="figurenById.get(figId).kurzname || figurenById.get(figId).name">
+                  :class="'gz-figur-badge--' + ($root.figurenById.get(figId).typ || 'andere')"
+                  @click="$root.openFigurById(figId)"
+                  x-text="$root.figurenById.get(figId).kurzname || $root.figurenById.get(figId).name">
                 </span>
               </template>
-              <template x-if="!figurenById.get(figId)">
+              <template x-if="!$root.figurenById.get(figId)">
                 <span class="gz-figur-badge internal-link gz-figur-badge--andere"
-                  @click="openFigurById(figId)"
+                  @click="$root.openFigurById(figId)"
                   x-text="figId">
                 </span>
               </template>
             </template>
             <template x-for="ortId in (s.ort_ids || [])" :key="'o'+ortId">
-              <span class="tag ort-typ-tag figur-szene-ort internal-link" @click="openOrtById(ortId)" x-text="orteById.get(ortId)?.name || ortId"></span>
+              <span class="tag ort-typ-tag figur-szene-ort internal-link" @click="$root.openOrtById(ortId)" x-text="$root.orteById.get(ortId)?.name || ortId"></span>
             </template>
           </div>
         </div>

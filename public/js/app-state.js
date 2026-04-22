@@ -193,7 +193,8 @@ const kapitelReviewState = () => ({
 });
 
 const figurenState = () => ({
-  figuren: [],
+  // `figuren` lebt in Alpine.store('catalog') — siehe cards/catalog-store.js.
+  // Der Root exponiert es als Getter/Setter (app.js) für Rückwärtskompatibilität.
   figurenUpdatedAt: null,
   figurenLoading: false,
   figurenProgress: 0,
@@ -210,29 +211,21 @@ const figurenState = () => ({
 });
 
 const ereignisseState = () => ({
-  globalZeitstrahl: [],
-  zeitstrahlConsolidating: false,
-  zeitstrahlProgress: 0,
-  zeitstrahlStatus: '',
-  ereignisseLoading: false,
-  ereignisseProgress: 0,
-  ereignisseStatus: '',
+  // `globalZeitstrahl` lebt in Alpine.store('catalog').
+  // Meta-Felder (Loading/Progress/Status/PollTimer) wandern in
+  // Alpine.data('ereignisseCard'). Filters bleiben am Root (app-navigation
+  // schreibt sie).
   ereignisseFilters: {
     figurId: '',
     kapitel: '',
     seite: '',
     suche: '',
   },
-  _consolidatePollTimer: null,
-  _ereignisseExtractPollTimer: null,
 });
 
 const szenenState = () => ({
-  szenen: [],
+  // `szenen` lebt in Alpine.store('catalog'). Meta-Felder in szenenCard.
   szenenUpdatedAt: null,
-  szenenLoading: false,
-  szenenProgress: 0,
-  szenenStatus: '',
   szenenFilters: {
     wertung: '',
     figurId: '',
@@ -241,15 +234,11 @@ const szenenState = () => ({
     ortId: '',
     suche: '',
   },
-  _szenenPollTimer: null,
 });
 
 const orteState = () => ({
-  orte: [],
+  // `orte` lebt in Alpine.store('catalog'). Meta-Felder in orteCard.
   orteUpdatedAt: null,
-  orteLoading: false,
-  orteProgress: 0,
-  orteStatus: '',
   selectedOrtId: null,
   orteFilters: {
     figurId: '',
@@ -257,20 +246,10 @@ const orteState = () => ({
     szeneId: '',
     suche: '',
   },
-  _ortePollTimer: null,
 });
 
-const kontinuitaetState = () => ({
-  kontinuitaetLoading: false,
-  kontinuitaetProgress: 0,
-  kontinuitaetStatus: '',
-  kontinuitaetResult: null,
-  kontinuitaetFilters: {
-    figurId: '',
-    kapitel: '',
-  },
-  _kontinuitaetPollTimer: null,
-});
+// kontinuitaetState wandert in Alpine.data('kontinuitaetCard')
+// — siehe public/js/cards/kontinuitaet-card.js.
 
 // bookStatsState wandert in Alpine.data('bookStatsCard')
 // — siehe public/js/cards/book-stats-card.js.
@@ -333,7 +312,6 @@ export function initialLektoratState() {
     ...ereignisseState(),
     ...szenenState(),
     ...orteState(),
-    ...kontinuitaetState(),
     ...chatsState(),
     ...jobsState(),
   };

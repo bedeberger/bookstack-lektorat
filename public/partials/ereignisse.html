@@ -1,8 +1,16 @@
 <!-- Globale Ereignisse -->
-<div class="card" x-show="showEreignisseCard" x-cloak x-transition>
+<!--
+  Alpine.data-Sub-Komponente — siehe public/js/cards/ereignisse-card.js.
+  Fachdaten (globalZeitstrahl) leben in Alpine.store('catalog') und werden
+  über den Root-Proxy als $root.globalZeitstrahl exponiert. ereignisseFilters
+  bleibt am Root (app-navigation schreibt darauf). Meta-State + UI-Helper
+  (filteredEreignisse, ereignisseKapitelListe, ereignisseSeitenListe) leben
+  hier in der Sub-Komponente.
+-->
+<div class="card" x-data="ereignisseCard" x-show="$root.showEreignisseCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="t('events.title', { name: selectedBookName })"></span>
-    <span x-show="alleAktualisierenLastRun && !ereignisseLoading && !zeitstrahlConsolidating" class="card-timestamp" x-text="t('common.asOf', { date: alleAktualisierenLastRun })"></span>
+    <span class="card-title" x-text="$root.t('events.title', { name: $root.selectedBookName })"></span>
+    <span x-show="$root.alleAktualisierenLastRun && !ereignisseLoading && !zeitstrahlConsolidating" class="card-timestamp" x-text="$root.t('common.asOf', { date: $root.alleAktualisierenLastRun })"></span>
   </div>
 
   <!-- Fortschritt Ermittlung -->
@@ -18,36 +26,36 @@
   <div x-show="zeitstrahlStatus && !ereignisseLoading" class="card-status" x-html="zeitstrahlStatus"></div>
 
   <!-- Leer-Hinweis -->
-  <div x-show="globalZeitstrahl.length === 0 && !zeitstrahlConsolidating && !ereignisseLoading" class="card-status" x-text="t('common.noDataYet')"></div>
+  <div x-show="$root.globalZeitstrahl.length === 0 && !zeitstrahlConsolidating && !ereignisseLoading" class="card-status" x-text="$root.t('common.noDataYet')"></div>
 
   <!-- Filter -->
-  <div x-show="globalZeitstrahl.length > 0" class="filter-bar">
-    <input type="text" x-model="ereignisseFilters.suche" :placeholder="t('common.search')" class="filter-search-input">
-    <div x-data="combobox(t('filter.figur'), t('filter.allFiguren'))"
-         x-modelable="value" x-model="ereignisseFilters.figurId"
-         x-effect="options = figuren.filter(f => globalZeitstrahl.some(ev => ev.figuren.some(fr => fr.id === f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
+  <div x-show="$root.globalZeitstrahl.length > 0" class="filter-bar">
+    <input type="text" x-model="$root.ereignisseFilters.suche" :placeholder="$root.t('common.search')" class="filter-search-input">
+    <div x-data="combobox($root.t('filter.figur'), $root.t('filter.allFiguren'))"
+         x-modelable="value" x-model="$root.ereignisseFilters.figurId"
+         x-effect="options = $root.figuren.filter(f => $root.globalZeitstrahl.some(ev => ev.figuren.some(fr => fr.id === f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
-    <div x-data="combobox(t('filter.chapter'), t('filter.allChapters'))"
-         x-modelable="value" x-model="ereignisseFilters.kapitel"
+    <div x-data="combobox($root.t('filter.chapter'), $root.t('filter.allChapters'))"
+         x-modelable="value" x-model="$root.ereignisseFilters.kapitel"
          x-effect="options = ereignisseKapitelListe().map(k => ({value: k, label: k}))"
-         @combobox-change="ereignisseFilters.seite = ''"
+         @combobox-change="$root.ereignisseFilters.seite = ''"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
-    <div x-data="combobox(t('filter.page'), t('filter.allPages'))"
-         x-modelable="value" x-model="ereignisseFilters.seite"
-         x-effect="_disabled = !ereignisseFilters.kapitel || ereignisseSeitenListe().length === 0; options = ereignisseSeitenListe().map(s => ({value: s, label: s}))"
+    <div x-data="combobox($root.t('filter.page'), $root.t('filter.allPages'))"
+         x-modelable="value" x-model="$root.ereignisseFilters.seite"
+         x-effect="_disabled = !$root.ereignisseFilters.kapitel || ereignisseSeitenListe().length === 0; options = ereignisseSeitenListe().map(s => ({value: s, label: s}))"
          @click.outside="close()" @keydown="onKeydown($event)"
          :class="{'combobox-wrap--disabled': _disabled}"
          class="combobox-wrap combobox-wrap--compact">
     </div>
-    <span class="filter-count" x-text="filteredEreignisse().length + ' / ' + globalZeitstrahl.length"></span>
+    <span class="filter-count" x-text="filteredEreignisse().length + ' / ' + $root.globalZeitstrahl.length"></span>
   </div>
 
   <!-- Zeitleiste -->
-  <div x-show="globalZeitstrahl.length > 0" class="global-zeitstrahl-body global-zeitstrahl-body--card">
+  <div x-show="$root.globalZeitstrahl.length > 0" class="global-zeitstrahl-body global-zeitstrahl-body--card">
     <template x-for="(ev, i) in filteredEreignisse()" :key="i">
       <div class="gz-item" :class="ev.typ === 'extern' ? 'gz-item--extern' : ''">
         <div class="gz-marker" :class="ev.typ === 'extern' ? 'gz-marker--extern' : ''"></div>
@@ -55,27 +63,27 @@
           <div class="gz-datum-row">
             <span class="gz-datum" x-text="ev.datum"></span>
             <template x-if="ev.typ === 'extern'">
-              <span class="gz-extern-badge" x-text="t('events.worldEvent')"></span>
+              <span class="gz-extern-badge" x-text="$root.t('events.worldEvent')"></span>
             </template>
           </div>
           <div class="gz-ereignis" x-text="ev.ereignis"></div>
           <div x-show="Array.isArray(ev.kapitel) ? ev.kapitel.length : ev.kapitel" class="gz-kapitel">
             <template x-for="(kap, ki) in (Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []))" :key="ki">
-              <span class="gz-kapitel-link internal-link" x-text="kap" @click="gotoStelle(kap, null)"></span>
+              <span class="gz-kapitel-link internal-link" x-text="kap" @click="$root.gotoStelle(kap, null)"></span>
             </template>
           </div>
           <div x-show="Array.isArray(ev.seiten) ? ev.seiten.length : ev.seite" class="gz-seite">
             <template x-for="(s, si) in (Array.isArray(ev.seiten) ? ev.seiten : (ev.seite ? [ev.seite] : []))" :key="si">
               <span>
                 <template x-if="si > 0"><span> · </span></template>
-                <span class="internal-link" @click="gotoStelle(Array.isArray(ev.kapitel) ? ev.kapitel[0] : ev.kapitel, s)" x-text="s"></span>
+                <span class="internal-link" @click="$root.gotoStelle(Array.isArray(ev.kapitel) ? ev.kapitel[0] : ev.kapitel, s)" x-text="s"></span>
               </span>
             </template>
           </div>
           <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
           <div class="gz-figuren-row">
             <template x-for="(fref, fi) in ev.figuren" :key="fi">
-              <span class="gz-figur-badge internal-link" :class="'gz-figur-badge--' + (fref.typ || 'andere')" x-text="fref.name" @click="openFigurById(fref.id)"></span>
+              <span class="gz-figur-badge internal-link" :class="'gz-figur-badge--' + (fref.typ || 'andere')" x-text="fref.name" @click="$root.openFigurById(fref.id)"></span>
             </template>
           </div>
         </div>

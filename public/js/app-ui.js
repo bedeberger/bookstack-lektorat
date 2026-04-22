@@ -136,34 +136,7 @@ export const appUiMethods = {
     return this._deriveKapitel(this.orte, o => o.kapitel);
   },
 
-  kontinuitaetKapitelListe() {
-    const chapterById = new Map(
-      (this.tree || []).filter(t => t.type === 'chapter').map(t => [t.id, t.name])
-    );
-    const chapterNames = new Set(chapterById.values());
-    // Extract chapter name from stelle text like "Kapitel 3: Seite 45" → "Kapitel 3"
-    const fromStelle = (s) => {
-      if (!s) return null;
-      const ci = s.indexOf(':');
-      const c = ci > 0 ? s.substring(0, ci).trim() : s.trim();
-      return chapterNames.has(c) ? c : null;
-    };
-    const names = new Set();
-    for (const issue of (this.kontinuitaetResult?.issues || [])) {
-      // Primary: chapter_ids – authoritative server-side mapping
-      if (issue.chapter_ids?.length) {
-        for (const id of issue.chapter_ids) { const n = chapterById.get(id); if (n) names.add(n); }
-      }
-      // Secondary: kapitel names validated against tree
-      if (issue.kapitel?.length) {
-        for (const k of issue.kapitel) if (k && chapterNames.has(k)) names.add(k);
-      }
-      // Tertiary: extract from stelle_a / stelle_b (covers empty-kapitel cases)
-      const a = fromStelle(issue.stelle_a); if (a) names.add(a);
-      const b = fromStelle(issue.stelle_b); if (b) names.add(b);
-    }
-    return this._sortByChapterOrder([...names]);
-  },
+  // kontinuitaetKapitelListe() wandert in Alpine.data('kontinuitaetCard').
 
   figurenKapitelListe() {
     return this._deriveKapitel(this.figuren, f => f.kapitel);
@@ -207,42 +180,8 @@ export const appUiMethods = {
     });
   },
 
-  ereignisseKapitelListe() {
-    return this._deriveKapitel(this.globalZeitstrahl, ev => ev.kapitel);
-  },
-
-  ereignisseSeitenListe() {
-    return this._deriveSeiten(
-      this.globalZeitstrahl,
-      this.ereignisseFilters.kapitel,
-      ev => ev.kapitel,
-      ev => Array.isArray(ev.seiten) ? ev.seiten : ev.seite,
-    );
-  },
-
-  filteredEreignisse() {
-    let result = this.globalZeitstrahl;
-    if (this.ereignisseFilters.suche) {
-      const q = this.ereignisseFilters.suche.toLowerCase();
-      result = result.filter(ev => (ev.ereignis || '').toLowerCase().includes(q));
-    }
-    if (this.ereignisseFilters.figurId) {
-      result = result.filter(ev => ev.figuren.some(f => f.id === this.ereignisseFilters.figurId));
-    }
-    if (this.ereignisseFilters.kapitel) {
-      result = result.filter(ev => {
-        const kap = Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []);
-        return kap.includes(this.ereignisseFilters.kapitel);
-      });
-    }
-    if (this.ereignisseFilters.seite && this.ereignisseFilters.kapitel) {
-      result = result.filter(ev => {
-        const seiten = Array.isArray(ev.seiten) ? ev.seiten : (ev.seite ? [ev.seite] : []);
-        return seiten.includes(this.ereignisseFilters.seite);
-      });
-    }
-    return result;
-  },
+  // ereignisseKapitelListe / ereignisseSeitenListe / filteredEreignisse
+  // wandern in Alpine.data('ereignisseCard') — siehe cards/ereignisse-card.js.
 
   // ── Datum / Save-Status ─────────────────────────────────────────────────
   formatDate(iso) {
