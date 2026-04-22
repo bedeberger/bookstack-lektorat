@@ -262,12 +262,12 @@ document.addEventListener('alpine:init', () => {
         });
     },
     get orteFiltered() {
-      const q = this.orteSuche ? this.orteSuche.toLowerCase() : '';
+      const q = this.orteFilters.suche ? this.orteFilters.suche.toLowerCase() : '';
       return this.orte.filter(o =>
         (!q || (o.name || '').toLowerCase().includes(q)) &&
-        (!this.orteFilterFigurId || (o.figuren || []).includes(this.orteFilterFigurId)) &&
-        (!this.orteFilterKapitel || (o.kapitel || []).some(k => k.name === this.orteFilterKapitel)) &&
-        (!this.orteFilterSzeneId || this.szenen.some(s => String(s.id) === String(this.orteFilterSzeneId) && (s.ort_ids || []).includes(o.id)))
+        (!this.orteFilters.figurId || (o.figuren || []).includes(this.orteFilters.figurId)) &&
+        (!this.orteFilters.kapitel || (o.kapitel || []).some(k => k.name === this.orteFilters.kapitel)) &&
+        (!this.orteFilters.szeneId || this.szenen.some(s => String(s.id) === String(this.orteFilters.szeneId) && (s.ort_ids || []).includes(o.id)))
       ).sort((a, b) => {
         const aK = Math.min(...(a.kapitel || []).map(k => this._chapterIdx(k.name)), 9999);
         const bK = Math.min(...(b.kapitel || []).map(k => this._chapterIdx(k.name)), 9999);

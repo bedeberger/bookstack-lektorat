@@ -14,22 +14,22 @@
 
   <!-- Filter-Leiste -->
   <div x-show="orte.length > 0" class="filter-bar">
-    <input type="text" x-model="orteSuche" :placeholder="t('common.search')" class="filter-search-input">
+    <input type="text" x-model="orteFilters.suche" :placeholder="t('common.search')" class="filter-search-input">
     <div x-data="combobox(t('filter.figur'), t('filter.allFiguren'))"
-         x-modelable="value" x-model="orteFilterFigurId"
+         x-modelable="value" x-model="orteFilters.figurId"
          x-effect="options = figuren.filter(f => orte.some(o => (o.figuren || []).includes(f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
     <div x-data="combobox(t('filter.chapter'), t('filter.allChapters'))"
-         x-modelable="value" x-model="orteFilterKapitel"
+         x-modelable="value" x-model="orteFilters.kapitel"
          x-effect="options = orteKapitelListe().map(k => ({value: k, label: k}))"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
     <div x-show="szenen.length > 0"
          x-data="combobox(t('filter.szene'), t('filter.allSzenen'))"
-         x-modelable="value" x-model="orteFilterSzeneId"
+         x-modelable="value" x-model="orteFilters.szeneId"
          x-effect="options = szenen.map(s => ({value: String(s.id), label: s.titel}))"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">

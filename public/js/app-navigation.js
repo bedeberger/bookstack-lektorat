@@ -22,10 +22,10 @@ export const appNavigationMethods = {
   async openOrtById(ortId) {
     this._beginNavigation();
     try {
-      this.orteSuche = '';
-      this.orteFilterFigurId = '';
-      this.orteFilterKapitel = '';
-      this.orteFilterSzeneId = '';
+      this.orteFilters.suche = '';
+      this.orteFilters.figurId = '';
+      this.orteFilters.kapitel = '';
+      this.orteFilters.szeneId = '';
       if (!this.showOrteCard) {
         await this.toggleOrteCard();
       }

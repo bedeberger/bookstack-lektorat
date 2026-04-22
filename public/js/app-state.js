@@ -245,10 +245,12 @@ const orteState = () => ({
   orteProgress: 0,
   orteStatus: '',
   selectedOrtId: null,
-  orteFilterFigurId: '',
-  orteFilterKapitel: '',
-  orteFilterSzeneId: '',
-  orteSuche: '',
+  orteFilters: {
+    figurId: '',
+    kapitel: '',
+    szeneId: '',
+    suche: '',
+  },
   _ortePollTimer: null,
 });
 
