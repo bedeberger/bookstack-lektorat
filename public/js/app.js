@@ -113,6 +113,17 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('alpine:init', () => {
+  // Magic `$app` — verweist auf die `lektorat`-Root-Komponente am body. In
+  // Alpine ist `$root` das nächste x-data-Element (bei Sub-Komponenten also die
+  // Sub selbst), nicht die Top-Level-Komponente. Sub-Komponenten und Partials
+  // brauchen aber weiterhin Zugriff auf Root-Methoden (`t`, `loadFiguren`,
+  // `gotoPageById` …) und geteilten State (`selectedBookId`, `figuren`, …).
+  //
+  // Die Referenz wird in Root.init() auf window.__app gesetzt (garantiert
+  // reactive proxy) — `Alpine.$data(document.body)` allein ist bei manchen
+  // Getter-Evaluationen noch nicht gesetzt und liefert undefined.
+  Alpine.magic('app', () => window.__app || Alpine.$data(document.body));
+
   // Geteilte Fach-Daten (figuren, orte, szenen, globalZeitstrahl) vor allen
   // Komponenten registrieren — die Root-Getter (siehe unten) lesen aus dem Store.
   registerCatalogStore();
@@ -381,6 +392,9 @@ document.addEventListener('alpine:init', () => {
 
     // ── Initialisierung ──────────────────────────────────────────────────────
     async init() {
+      // Referenz für $app-Magic (siehe oben). Sub-Komponenten und Partials
+      // greifen über $app.xxx auf Root-State zu.
+      window.__app = this;
       this._abortCtrl?.abort();
       this._abortCtrl = new AbortController();
       const signal = this._abortCtrl.signal;

@@ -21,11 +21,11 @@ export function registerOrteCard() {
     _onCardRefresh: null,
 
     init() {
-      this.$watch(() => this.$root.showOrteCard, async (visible) => {
+      this.$watch(() => window.__app.showOrteCard, async (visible) => {
         if (!visible) return;
-        if (!this.$root.selectedBookId) return;
-        if (!this.$root.szenen.length) await this.$root.loadSzenen(this.$root.selectedBookId);
-        await this.$root.loadOrte(this.$root.selectedBookId);
+        if (!window.__app.selectedBookId) return;
+        if (!window.__app.szenen.length) await window.__app.loadSzenen(window.__app.selectedBookId);
+        await window.__app.loadOrte(window.__app.selectedBookId);
       });
 
       this._onBookChanged = async () => {
@@ -33,9 +33,9 @@ export function registerOrteCard() {
         this.orteLoading = false;
         this.orteProgress = 0;
         this.orteStatus = '';
-        if (!this.$root.showOrteCard) return;
-        if (!this.$root.selectedBookId) return;
-        await this.$root.loadOrte(this.$root.selectedBookId);
+        if (!window.__app.showOrteCard) return;
+        if (!window.__app.selectedBookId) return;
+        await window.__app.loadOrte(window.__app.selectedBookId);
       };
       window.addEventListener('book:changed', this._onBookChanged);
 
@@ -49,8 +49,8 @@ export function registerOrteCard() {
 
       this._onCardRefresh = (e) => {
         if (e.detail?.name !== 'orte') return;
-        if (!this.$root.selectedBookId) return;
-        this.$root.loadOrte(this.$root.selectedBookId);
+        if (!window.__app.selectedBookId) return;
+        window.__app.loadOrte(window.__app.selectedBookId);
       };
       window.addEventListener('card:refresh', this._onCardRefresh);
     },

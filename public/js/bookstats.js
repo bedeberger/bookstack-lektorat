@@ -1,7 +1,7 @@
 // Buchschreibungsentwicklung – Zeitliniendiagramm
 // `this` zeigt auf die Alpine.data('bookStatsCard')-Sub-Komponente; Zugriff
 // auf Root-State (selectedBookId, uiLocale, pages, tokEsts, t) läuft über
-// this.$root.
+// window.__app.
 
 import { fetchJson } from './utils.js';
 
@@ -62,7 +62,7 @@ export const bookstatsMethods = {
     ]);
 
     // Stale-Guard: spätere Response eines alten Buchs nicht in neuen State kippen.
-    if (String(bookId) !== String(this.$root.selectedBookId)) return;
+    if (String(bookId) !== String(window.__app.selectedBookId)) return;
 
     const failed = results.filter(r => r.status === 'rejected');
     for (const r of failed) console.error('[loadBookStats]', r.reason);
@@ -77,7 +77,7 @@ export const bookstatsMethods = {
     this.bookStatsDelta = (last && prev) ? last.words - prev.words : null;
 
     if (failed.length && !rows.length && !this.writingTimeData?.daily?.length) {
-      this.bookStatsSyncStatus = this.$root.t('bookstats.loadError');
+      this.bookStatsSyncStatus = window.__app.t('bookstats.loadError');
     }
 
     // rAF innerhalb von $nextTick: Alpine flusht das x-show (display:block) erst,
@@ -89,26 +89,26 @@ export const bookstatsMethods = {
   async syncBookStats() {
     if (this.bookStatsLoading) return;
     this.bookStatsLoading = true;
-    this.bookStatsSyncStatus = `<span class="spinner"></span>${this.$root.t('bookstats.syncing')}`;
+    this.bookStatsSyncStatus = `<span class="spinner"></span>${window.__app.t('bookstats.syncing')}`;
     try {
-      const result = await fetchJson('/sync/book/' + this.$root.selectedBookId, { method: 'POST' });
+      const result = await fetchJson('/sync/book/' + window.__app.selectedBookId, { method: 'POST' });
       if (result.error) throw new Error(result.error);
-      const localeTag = (this.$root.uiLocale === 'en') ? 'en-US' : 'de-CH';
+      const localeTag = (window.__app.uiLocale === 'en') ? 'en-US' : 'de-CH';
       const now = new Date().toLocaleTimeString(localeTag, { hour: '2-digit', minute: '2-digit' });
-      this.bookStatsSyncStatus = this.$root.t('bookstats.syncDone', { time: now });
-      await this.loadBookStats(this.$root.selectedBookId);
+      this.bookStatsSyncStatus = window.__app.t('bookstats.syncDone', { time: now });
+      await this.loadBookStats(window.__app.selectedBookId);
       // page_stats-Cache in tokEsts übernehmen, falls Seiten geladen
-      if (this.$root.pages.length) {
-        const cache = await fetchJson('/history/page-stats/' + this.$root.selectedBookId);
-        for (const p of this.$root.pages) {
+      if (window.__app.pages.length) {
+        const cache = await fetchJson('/history/page-stats/' + window.__app.selectedBookId);
+        for (const p of window.__app.pages) {
           const c = cache[p.id];
           if (c && c.updated_at === p.updated_at) {
-            this.$root.tokEsts[p.id] = { tok: c.tok, words: c.words, chars: c.chars };
+            window.__app.tokEsts[p.id] = { tok: c.tok, words: c.words, chars: c.chars };
           }
         }
       }
     } catch (e) {
-      this.bookStatsSyncStatus = this.$root.t('common.errorColon') + e.message;
+      this.bookStatsSyncStatus = window.__app.t('common.errorColon') + e.message;
     } finally {
       this.bookStatsLoading = false;
     }
@@ -165,9 +165,9 @@ export const bookstatsMethods = {
       return `${d}.${m}.${y.slice(2)}`;
     });
 
-    const metricLabel = METRIC_KEYS[metric] ? this.$root.t(METRIC_KEYS[metric]) : metric;
+    const metricLabel = METRIC_KEYS[metric] ? window.__app.t(METRIC_KEYS[metric]) : metric;
 
-    const localeTag = (this.$root.uiLocale === 'en') ? 'en-US' : 'de-CH';
+    const localeTag = (window.__app.uiLocale === 'en') ? 'en-US' : 'de-CH';
     const isDecimal = isPpc || isWritCum || metric === 'avg_sentence_len' || metric === 'avg_lix' || metric === 'avg_flesch_de';
     const fmt = v => isDecimal ? v.toLocaleString(localeTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
       : Math.round(v).toLocaleString(localeTag);

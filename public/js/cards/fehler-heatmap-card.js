@@ -7,7 +7,7 @@
 //   - Fachlicher State (fehlerHeatmapData, fehlerHeatmapLoading,
 //     fehlerHeatmapStatus, fehlerHeatmapMode, activeFehlerDetailKey) lebt hier.
 //   - `showFehlerHeatmapCard` und `toggleFehlerHeatmapCard` bleiben im Root.
-//   - Root-State via this.$root (selectedBookId, uiLocale, pages, selectPage,
+//   - Root-State via window.__app (selectedBookId, uiLocale, pages, selectPage,
 //     pageHistory, activeHistoryEntryId, loadHistoryEntry, t).
 //   - Lifecycle-Events: `book:changed` + `view:reset` (siehe stil-card.js).
 
@@ -27,16 +27,16 @@ export function registerFehlerHeatmapCard() {
 
     init() {
       // Bei Öffnen der Karte: Daten laden.
-      this.$watch(() => this.$root.showFehlerHeatmapCard, async (visible) => {
+      this.$watch(() => window.__app.showFehlerHeatmapCard, async (visible) => {
         if (!visible) return;
-        if (!this.$root.selectedBookId) return;
+        if (!window.__app.selectedBookId) return;
         await this.loadFehlerHeatmap();
       });
 
       // Buchwechsel bei offener Karte → Daten für neues Buch nachladen.
       this._onBookChanged = () => {
-        if (!this.$root.showFehlerHeatmapCard) return;
-        if (!this.$root.selectedBookId) return;
+        if (!window.__app.showFehlerHeatmapCard) return;
+        if (!window.__app.selectedBookId) return;
         this.loadFehlerHeatmap();
       };
       window.addEventListener('book:changed', this._onBookChanged);

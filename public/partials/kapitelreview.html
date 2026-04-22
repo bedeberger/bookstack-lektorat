@@ -5,15 +5,15 @@
   Sub. `newPageTitle/newPageCreating/newPageError` bleiben am Root (von
   createKapitelPage() in der Sub via $root gelesen/geschrieben).
 -->
-<div class="card" x-data="kapitelReviewCard" x-show="$root.showKapitelReviewCard" x-cloak x-transition>
+<div class="card" x-data="kapitelReviewCard" x-show="$app.showKapitelReviewCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="$root.t('kapitelReview.title', { name: kapitelReviewSelectedChapter()?.name || $root.selectedBookName })"></span>
+    <span class="card-title" x-text="$app.t('kapitelReview.title', { name: kapitelReviewSelectedChapter()?.name || $app.selectedBookName })"></span>
     <div class="card-actions">
       <button type="button"
               @click="runKapitelReview()"
-              :disabled="kapitelReviewLoading || !kapitelReviewChapterId">
+              :disabled="kapitelReviewLoading || !$app.kapitelReviewChapterId">
         <span x-show="kapitelReviewLoading" class="spinner"></span>
-        <span x-text="kapitelReviewOut ? $root.t('kapitelReview.rerun') : $root.t('kapitelReview.start')"></span>
+        <span x-text="kapitelReviewOut ? $app.t('kapitelReview.rerun') : $app.t('kapitelReview.start')"></span>
       </button>
     </div>
   </div>
@@ -21,21 +21,21 @@
   <!-- Seitenstatistik des gewählten Kapitels – klickbar zur Seite -->
   <template x-if="kapitelReviewSelectedChapter()">
     <div class="kapitel-pages-section">
-      <div class="kapitel-pages-heading" x-text="$root.t('kapitelReview.pagesHeading', { n: kapitelReviewSelectedChapter().pages.length })"></div>
+      <div class="kapitel-pages-heading" x-text="$app.t('kapitelReview.pagesHeading', { n: kapitelReviewSelectedChapter().pages.length })"></div>
       <div class="kapitel-pages-list">
         <template x-for="page in kapitelReviewSelectedChapter().pages" :key="page.id">
-          <div class="kapitel-page-row" @click="$root.selectPage(page)" :title="$root.pageStatusTooltip(page)">
+          <div class="kapitel-page-row" @click="$app.selectPage(page)" :title="$app.pageStatusTooltip(page)">
             <span class="kapitel-page-name">
-              <span class="page-status-dot" :class="'page-status-' + $root.pageStatus(page)"></span>
+              <span class="page-status-dot" :class="'page-status-' + $app.pageStatus(page)"></span>
               <span x-text="page.name"></span>
             </span>
             <span class="kapitel-page-stats">
-              <template x-if="$root.tokEsts[page.id] && $root.tokEsts[page.id].words > 0">
+              <template x-if="$app.tokEsts[page.id] && $app.tokEsts[page.id].words > 0">
                 <span class="tok-badge tok-neutral"
-                  x-text="$root.tokEsts[page.id].chars >= 1000 ? '~' + Math.round($root.tokEsts[page.id].chars / 1000) + 'k Z' : $root.tokEsts[page.id].chars + ' Z'"></span>
+                  x-text="$app.tokEsts[page.id].chars >= 1000 ? '~' + Math.round($app.tokEsts[page.id].chars / 1000) + 'k Z' : $app.tokEsts[page.id].chars + ' Z'"></span>
               </template>
-              <template x-if="$root.tokEsts[page.id] && $root.tokEsts[page.id].words === 0">
-                <span class="tok-badge tok-empty" x-text="$root.t('sidebar.empty')"></span>
+              <template x-if="$app.tokEsts[page.id] && $app.tokEsts[page.id].words === 0">
+                <span class="tok-badge tok-empty" x-text="$app.t('sidebar.empty')"></span>
               </template>
             </span>
           </div>
@@ -46,20 +46,20 @@
       <form class="kapitel-new-page" @submit.prevent="createKapitelPage()">
         <input type="text"
                class="kapitel-new-page-input"
-               x-model="$root.newPageTitle"
-               :placeholder="$root.t('kapitelReview.newPagePlaceholder')"
-               :disabled="$root.newPageCreating">
+               x-model="$app.newPageTitle"
+               :placeholder="$app.t('kapitelReview.newPagePlaceholder')"
+               :disabled="$app.newPageCreating">
         <button type="submit"
-                :disabled="$root.newPageCreating || !$root.newPageTitle.trim()">
-          <span x-show="$root.newPageCreating" class="spinner"></span>
-          <span x-text="$root.t('kapitelReview.newPageAdd')"></span>
+                :disabled="$app.newPageCreating || !$app.newPageTitle.trim()">
+          <span x-show="$app.newPageCreating" class="spinner"></span>
+          <span x-text="$app.t('kapitelReview.newPageAdd')"></span>
         </button>
       </form>
-      <div x-show="$root.newPageError" class="error-msg" x-text="$root.newPageError"></div>
+      <div x-show="$app.newPageError" class="error-msg" x-text="$app.newPageError"></div>
     </div>
   </template>
 
-  <div class="progress-bar-wrap" x-show="kapitelReviewProgress > 0 && String(_kapitelReviewRunningChapterId) === String(kapitelReviewChapterId)">
+  <div class="progress-bar-wrap" x-show="kapitelReviewProgress > 0 && String(_kapitelReviewRunningChapterId) === String($app.kapitelReviewChapterId)">
     <div class="progress-bar" :style="{ '--progress': kapitelReviewProgress + '%' }"></div>
   </div>
   <div class="card-status" x-html="kapitelReviewStatus"></div>
@@ -67,12 +67,12 @@
 
   <!-- Verlauf für das aktuell gewählte Kapitel -->
   <div x-show="kapitelReviewCurrentHistory().length > 0" class="card-history-section">
-    <div class="history-heading" x-text="$root.t('kapitelReview.history')"></div>
+    <div class="history-heading" x-text="$app.t('kapitelReview.history')"></div>
     <template x-for="entry in kapitelReviewCurrentHistory()" :key="entry.id">
       <div>
         <div class="history-item" :class="{ 'history-item--open': selectedKapitelReviewId === entry.id }"
              @click="selectedKapitelReviewId = selectedKapitelReviewId === entry.id ? null : entry.id">
-          <span class="history-date" x-text="$root.formatDate(entry.reviewed_at)"></span>
+          <span class="history-date" x-text="$app.formatDate(entry.reviewed_at)"></span>
           <span x-show="entry.review_json?.gesamtnote" class="badge badge-ok review-stars"
             x-text="'★'.repeat(Math.min(6, +(entry.review_json?.gesamtnote) || 0)) + '☆'.repeat(Math.max(0, 6 - (+(entry.review_json?.gesamtnote) || 0)))"></span>
           <span class="tag" x-text="entry.model"></span>
@@ -80,7 +80,7 @@
         </div>
         <div x-show="selectedKapitelReviewId === entry.id" class="history-detail">
           <div x-html="entry.review_json ? _renderKapitelReviewHtml(entry.review_json) : ''"></div>
-          <button type="button" class="btn-delete-history" @click.stop="deleteKapitelReview(entry.id)" :title="$root.t('common.deleteEntry')" x-text="$root.t('common.deleteEntry')"></button>
+          <button type="button" class="btn-delete-history" @click.stop="deleteKapitelReview(entry.id)" :title="$app.t('common.deleteEntry')" x-text="$app.t('common.deleteEntry')"></button>
         </div>
       </div>
     </template>

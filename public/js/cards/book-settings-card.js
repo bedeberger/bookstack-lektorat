@@ -22,15 +22,15 @@ export function registerBookSettingsCard() {
     _onViewReset: null,
 
     init() {
-      this.$watch(() => this.$root.showBookSettingsCard, async (visible) => {
+      this.$watch(() => window.__app.showBookSettingsCard, async (visible) => {
         if (!visible) return;
-        if (!this.$root.selectedBookId) return;
+        if (!window.__app.selectedBookId) return;
         await this.loadBookSettings();
       });
 
       this._onBookChanged = () => {
-        if (!this.$root.showBookSettingsCard) return;
-        if (!this.$root.selectedBookId) return;
+        if (!window.__app.showBookSettingsCard) return;
+        if (!window.__app.selectedBookId) return;
         this.loadBookSettings();
       };
       window.addEventListener('book:changed', this._onBookChanged);

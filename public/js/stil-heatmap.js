@@ -2,7 +2,7 @@
 // Greift auf page_stats zu (gefüllt vom Sync-Job über lib/page-index.js).
 // `this` zeigt auf die Alpine.data('stilCard')-Sub-Komponente; Zugriff auf
 // Root-State (selectedBookId, uiLocale, pages, selectPage, t) läuft über
-// this.$root.
+// window.__app.
 
 import { fetchJson, formatNumber, heatmapCellVars, localeTag, minMaxBy } from './utils.js';
 
@@ -45,7 +45,7 @@ export const stilMethods = {
       this.stilData = data;
     } catch (e) {
       console.error('[loadStilStats]', e);
-      this.stilStatus = this.$root.t('common.errorColon') + (e.message || '');
+      this.stilStatus = window.__app.t('common.errorColon') + (e.message || '');
     } finally {
       this.stilLoading = false;
     }
@@ -54,14 +54,14 @@ export const stilMethods = {
   async runStilSync() {
     if (this.stilSyncing) return;
     this.stilSyncing = true;
-    this.stilStatus = `<span class="spinner"></span>${this.$root.t('stil.computing')}`;
+    this.stilStatus = `<span class="spinner"></span>${window.__app.t('stil.computing')}`;
     try {
-      const result = await fetchJson('/sync/book/' + this.$root.selectedBookId, { method: 'POST' });
+      const result = await fetchJson('/sync/book/' + window.__app.selectedBookId, { method: 'POST' });
       if (result.error) throw new Error(result.error);
-      await this.loadStilStats(this.$root.selectedBookId);
+      await this.loadStilStats(window.__app.selectedBookId);
       this.stilStatus = '';
     } catch (e) {
-      this.stilStatus = this.$root.t('common.errorColon') + (e.message || '');
+      this.stilStatus = window.__app.t('common.errorColon') + (e.message || '');
     } finally {
       this.stilSyncing = false;
     }
@@ -73,7 +73,7 @@ export const stilMethods = {
     const pages = this.stilData?.pages || [];
     if (!pages.length) return [];
     const groups = new Map();
-    const unassignedLabel = this.$root.t('stil.unassigned');
+    const unassignedLabel = window.__app.t('stil.unassigned');
     for (const p of pages) {
       const key = p.chapter_id ?? '__uncat__';
       const name = p.chapter_name || unassignedLabel;
@@ -177,15 +177,15 @@ export const stilMethods = {
     if (!iso) return '';
     const d = new Date(iso);
     if (isNaN(d.getTime())) return '';
-    const tag = localeTag(this.$root.uiLocale);
+    const tag = localeTag(window.__app.uiLocale);
     const date = d.toLocaleDateString(tag, { year: 'numeric', month: '2-digit', day: '2-digit' });
     const time = d.toLocaleTimeString(tag, { hour: '2-digit', minute: '2-digit' });
-    return this.$root.t('stil.lastUpdated', { date, time });
+    return window.__app.t('stil.lastUpdated', { date, time });
   },
 
   stilFormat(value, metricKey) {
     const def = STIL_METRICS.find(m => m.key === metricKey);
-    return formatNumber(value, this.$root.uiLocale, def?.decimals ?? 1);
+    return formatNumber(value, window.__app.uiLocale, def?.decimals ?? 1);
   },
 
   // Drilldown: welche Metrik-Spalten zeigen Beispiele, wenn man auf die Zelle klickt.
@@ -202,7 +202,7 @@ export const stilMethods = {
 
   stilMetricLabel(metricKey) {
     const def = STIL_METRICS.find(m => m.key === metricKey);
-    return def ? this.$root.t(def.label) : metricKey;
+    return def ? window.__app.t(def.label) : metricKey;
   },
 
   // Baut das Detail-Objekt für die aktive Zelle: Seiten-Liste mit Samples bzw.
@@ -216,7 +216,7 @@ export const stilMethods = {
 
     const pages = this.stilData?.pages || [];
     const inChapter = pages.filter(p => String(p.chapter_id ?? '__uncat__') === chapterKey);
-    const unassignedLabel = this.$root.t('stil.unassigned');
+    const unassignedLabel = window.__app.t('stil.unassigned');
     const chapterName = inChapter[0]?.chapter_name || unassignedLabel;
 
     const entries = [];
@@ -275,10 +275,10 @@ export const stilMethods = {
   },
 
   async stilJumpToPage(pageId) {
-    const page = (this.$root.pages || []).find(p => p.id === pageId);
+    const page = (window.__app.pages || []).find(p => p.id === pageId);
     if (!page) return;
-    this.$root.showStilCard = false;
+    window.__app.showStilCard = false;
     this.activeStilDetailKey = null;
-    await this.$root.selectPage(page);
+    await window.__app.selectPage(page);
   },
 };

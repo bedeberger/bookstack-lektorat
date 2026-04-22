@@ -42,9 +42,9 @@ export function registerFigurenCard() {
     _localeWatchCleanup: null,
 
     init() {
-      this.$watch(() => this.$root.showFiguresCard, async (visible) => {
+      this.$watch(() => window.__app.showFiguresCard, async (visible) => {
         if (!visible) return;
-        const root = this.$root;
+        const root = window.__app;
         if (!root.selectedBookId) return;
         await root.loadFiguren(root.selectedBookId);
         await this.$nextTick();
@@ -52,8 +52,8 @@ export function registerFigurenCard() {
       });
 
       // Sprachwechsel → Graph-Labels neu rendern (uiLocale Teil des Hash).
-      this._localeWatchCleanup = this.$watch(() => this.$root.uiLocale, () => {
-        if (this.$root.showFiguresCard && this.$root.figuren?.length) {
+      this._localeWatchCleanup = this.$watch(() => window.__app.uiLocale, () => {
+        if (window.__app.showFiguresCard && window.__app.figuren?.length) {
           this.renderFigurGraph();
         }
       });
@@ -63,8 +63,8 @@ export function registerFigurenCard() {
         this._figurenHash = null;
         this.figurenUpdatedAt = null;
         this.figurenGraphKapitel = null;
-        if (!this.$root.showFiguresCard) return;
-        if (!this.$root.selectedBookId) return;
+        if (!window.__app.showFiguresCard) return;
+        if (!window.__app.selectedBookId) return;
         // loadFiguren läuft bereits aus _resetBookScopedState-Flow (loadPages);
         // wir warten bis figuren aktualisiert sind und rendern dann.
         await this.$nextTick();
@@ -86,7 +86,7 @@ export function registerFigurenCard() {
 
       this._onCardRefresh = async (e) => {
         if (e.detail?.name !== 'figuren') return;
-        const root = this.$root;
+        const root = window.__app;
         if (!root.selectedBookId) return;
         await root.loadFiguren(root.selectedBookId);
         await this.$nextTick();
@@ -104,25 +104,25 @@ export function registerFigurenCard() {
 
     // ── UI-Helper (zuvor in app-ui.js) ──────────────────────────────────────
     figurenKapitelListe() {
-      return this.$root._deriveKapitel(this.$root.figuren, f => f.kapitel);
+      return window.__app._deriveKapitel(window.__app.figuren, f => f.kapitel);
     },
 
     figurenSeitenListe() {
       // seiten ist ein Array von {kapitel, seite} — eigener Iterator nötig,
       // weil _deriveSeiten eine Eins-zu-Eins-Relation annimmt.
-      const filters = this.$root.figurenFilters;
+      const filters = window.__app.figurenFilters;
       if (!filters.kapitel) return [];
       const names = new Set();
-      for (const f of (this.$root.figuren || [])) {
+      for (const f of (window.__app.figuren || [])) {
         for (const s of (f.seiten || [])) {
           if (s.kapitel === filters.kapitel && s.seite) names.add(s.seite);
         }
       }
-      return this.$root._sortByPageOrder([...names]);
+      return window.__app._sortByPageOrder([...names]);
     },
 
     filteredFiguren() {
-      const root = this.$root;
+      const root = window.__app;
       const filters = root.figurenFilters;
       let result = root.figuren;
       const q = (filters.suche ?? '').toLowerCase();

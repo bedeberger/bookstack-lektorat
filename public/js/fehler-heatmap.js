@@ -2,7 +2,7 @@
 // Daten kommen live aus /history/fehler-heatmap/:book_id — kein KI-Call, keine Sync-Phase.
 // `this` zeigt auf die Alpine.data('fehlerHeatmapCard')-Sub-Komponente; Zugriff auf
 // Root-State (selectedBookId, uiLocale, pages, selectPage, pageHistory,
-// activeHistoryEntryId, loadHistoryEntry, t) läuft über this.$root.
+// activeHistoryEntryId, loadHistoryEntry, t) läuft über window.__app.
 
 import { fetchJson, formatNumber, heatmapCellVars, minMaxBy } from './utils.js';
 
@@ -26,16 +26,16 @@ export const fehlerHeatmapMethods = {
   get fehlerHeatmapTypen() { return FEHLER_TYPEN; },
 
   async loadFehlerHeatmap() {
-    if (!this.$root.selectedBookId) return;
+    if (!window.__app.selectedBookId) return;
     this.fehlerHeatmapLoading = true;
     this.fehlerHeatmapStatus = '';
     try {
       const mode = MODES.includes(this.fehlerHeatmapMode) ? this.fehlerHeatmapMode : 'all';
-      const data = await fetchJson(`/history/fehler-heatmap/${this.$root.selectedBookId}?mode=${mode}`);
+      const data = await fetchJson(`/history/fehler-heatmap/${window.__app.selectedBookId}?mode=${mode}`);
       this.fehlerHeatmapData = data;
     } catch (e) {
       console.error('[loadFehlerHeatmap]', e);
-      this.fehlerHeatmapStatus = this.$root.t('common.errorColon') + (e.message || '');
+      this.fehlerHeatmapStatus = window.__app.t('common.errorColon') + (e.message || '');
     } finally {
       this.fehlerHeatmapLoading = false;
     }
@@ -54,7 +54,7 @@ export const fehlerHeatmapMethods = {
   },
 
   fehlerHeatmapChapterName(ch) {
-    return ch.chapter_name || this.$root.t('fehlerHeatmap.unassigned');
+    return ch.chapter_name || window.__app.t('fehlerHeatmap.unassigned');
   },
 
   fehlerHeatmapCoveragePct(ch) {
@@ -105,17 +105,17 @@ export const fehlerHeatmapMethods = {
   fehlerHeatmapCellTooltip(chapterKey, typ) {
     const cell = this.fehlerHeatmapData?.matrix?.[chapterKey]?.[typ];
     if (!cell || !cell.count) return '';
-    return this.$root.t('fehlerHeatmap.cellTooltip', {
+    return window.__app.t('fehlerHeatmap.cellTooltip', {
       count: cell.count,
       pages: cell.pages,
-      per1k: formatNumber(cell.per1k, this.$root.uiLocale, 1),
+      per1k: formatNumber(cell.per1k, window.__app.uiLocale, 1),
     });
   },
 
   fehlerHeatmapCellLabel(chapterKey, typ) {
     const cell = this.fehlerHeatmapData?.matrix?.[chapterKey]?.[typ];
     if (!cell || !cell.count) return '–';
-    return formatNumber(cell.per1k, this.$root.uiLocale, 1);
+    return formatNumber(cell.per1k, window.__app.uiLocale, 1);
   },
 
   toggleFehlerHeatmapDetail(chapterKey, typ) {
@@ -145,16 +145,16 @@ export const fehlerHeatmapMethods = {
   },
 
   async fehlerHeatmapJumpToPage(pageId) {
-    const page = (this.$root.pages || []).find(p => p.id === pageId);
+    const page = (window.__app.pages || []).find(p => p.id === pageId);
     if (!page) return;
-    this.$root.showFehlerHeatmapCard = false;
+    window.__app.showFehlerHeatmapCard = false;
     this.activeFehlerDetailKey = null;
-    await this.$root.selectPage(page);
+    await window.__app.selectPage(page);
     // Jüngsten Lektorat-Eintrag öffnen, damit die Findings direkt sichtbar sind.
     // Wenn gerade ein Check-Job läuft, ist pageHistory evtl. leer – dann nichts tun.
-    const latest = (this.$root.pageHistory || [])[0];
-    if (latest && this.$root.activeHistoryEntryId !== latest.id) {
-      await this.$root.loadHistoryEntry(latest);
+    const latest = (window.__app.pageHistory || [])[0];
+    if (latest && window.__app.activeHistoryEntryId !== latest.id) {
+      await window.__app.loadHistoryEntry(latest);
     }
   },
 };

@@ -33,9 +33,9 @@ export function registerBookReviewCard() {
     _onJobReconnect: null,
 
     init() {
-      this.$watch(() => this.$root.showBookReviewCard, async (visible) => {
+      this.$watch(() => window.__app.showBookReviewCard, async (visible) => {
         if (!visible) return;
-        if (!this.$root.selectedBookId) return;
+        if (!window.__app.selectedBookId) return;
         await this._onVisibleBookReview();
       });
 
@@ -61,7 +61,7 @@ export function registerBookReviewCard() {
 
       this._onCardRefresh = async (e) => {
         if (e.detail?.name !== 'bookReview') return;
-        if (this.$root.selectedBookId) await this.$root.loadBookReviewHistory(this.$root.selectedBookId);
+        if (window.__app.selectedBookId) await window.__app.loadBookReviewHistory(window.__app.selectedBookId);
       };
       window.addEventListener('card:refresh', this._onCardRefresh);
 
@@ -73,7 +73,7 @@ export function registerBookReviewCard() {
         this.bookReviewProgress = job.progress || 0;
         this.bookReviewOut = '';
         this._writeBookReviewStatus(
-          job.statusText ? this.$root.t(job.statusText, job.statusParams) : this.$root.t('common.analysisRunning'),
+          job.statusText ? window.__app.t(job.statusText, job.statusParams) : window.__app.t('common.analysisRunning'),
           true,
         );
         this.startBookReviewPoll(d.jobId);
@@ -94,7 +94,7 @@ export function registerBookReviewCard() {
     },
 
     _renderReviewHtml(r) {
-      return renderReviewHtml(r, (k, p) => this.$root.t(k, p));
+      return renderReviewHtml(r, (k, p) => window.__app.t(k, p));
     },
 
     ...createCardJobFeature({
@@ -122,8 +122,8 @@ export function registerBookReviewCard() {
       progressResetDelay: 400,
       buildPayload() {
         return {
-          book_id: parseInt(this.$root.selectedBookId),
-          book_name: this.$root.selectedBookName,
+          book_id: parseInt(window.__app.selectedBookId),
+          book_name: window.__app.selectedBookName,
         };
       },
       render(job) {
@@ -132,11 +132,11 @@ export function registerBookReviewCard() {
       },
       async onDone(job) {
         if (!job.result?.review) return;
-        this.bookReviewStatus = this.$root.t('review.pagesAnalyzed', { n: job.result.pageCount || '?' });
-        if (this.$root.selectedBookId) await this.$root.loadBookReviewHistory(this.$root.selectedBookId);
+        this.bookReviewStatus = window.__app.t('review.pagesAnalyzed', { n: job.result.pageCount || '?' });
+        if (window.__app.selectedBookId) await window.__app.loadBookReviewHistory(window.__app.selectedBookId);
       },
       async onOpen() {
-        if (this.$root.selectedBookId) await this.$root.loadBookReviewHistory(this.$root.selectedBookId);
+        if (window.__app.selectedBookId) await window.__app.loadBookReviewHistory(window.__app.selectedBookId);
       },
     }),
   }));

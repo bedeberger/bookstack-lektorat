@@ -25,7 +25,7 @@ export function registerUserSettingsCard() {
     _onViewReset: null,
 
     init() {
-      this.$watch(() => this.$root.showUserSettingsCard, async (visible) => {
+      this.$watch(() => window.__app.showUserSettingsCard, async (visible) => {
         if (!visible) return;
         await this.loadUserSettings();
       });

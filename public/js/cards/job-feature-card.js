@@ -3,10 +3,10 @@
 // Unterschiede zur Root-Version:
 //   - Kein `toggle` — die Root-Methode toggleXxxCard() ist Flag-Only.
 //   - `show` liegt am Root (Single Source of Truth für Hash-Router) —
-//     dort über `this.$root[show]`.
+//     dort über `window.__app[show]`.
 //   - `loading`, `progress`, `status`, `out` sind lokal in der Sub-Komponente.
 //   - `this.t(…)`, `this.selectedBookId`, `this.selectedBookName` gehen über
-//     this.$root.
+//     window.__app.
 //   - Polling via pure `startPoll(this, …)` statt Root-Methode.
 
 import { fetchJson, escHtml } from '../utils.js';
@@ -44,14 +44,14 @@ export function createCardJobFeature(cfg) {
     this[status] = spinner ? `<span class="spinner"></span>${msg}` : msg;
   }
   function jobErrHtml(job) {
-    return `<span class="error-msg">${this.$root.t('common.errorColon')}${escHtml(this.$root.t(job.error, job.errorParams))}</span>`;
+    return `<span class="error-msg">${window.__app.t('common.errorColon')}${escHtml(window.__app.t(job.error, job.errorParams))}</span>`;
   }
   function errHtml(err) {
-    return `<span class="error-msg">${this.$root.t('common.errorColon')}${escHtml(err.message)}</span>`;
+    return `<span class="error-msg">${window.__app.t('common.errorColon')}${escHtml(err.message)}</span>`;
   }
 
   const startPollMethod = function (jobId) {
-    const bookId = this.$root.selectedBookId;
+    const bookId = window.__app.selectedBookId;
     startPoll(this, {
       timerProp,
       jobId,
@@ -59,7 +59,7 @@ export function createCardJobFeature(cfg) {
       progressProp: progress,
       onProgress: (job) => {
         this[status] = runningJobStatus(
-          (k, p) => this.$root.t(k, p),
+          (k, p) => window.__app.t(k, p),
           job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut,
           job.progress, job.tokensPerSec, job.statusParams,
         );
@@ -67,7 +67,7 @@ export function createCardJobFeature(cfg) {
       onNotFound: () => {
         this[loading] = false;
         if (progress) this[progress] = 0;
-        writeStatus.call(this, this.$root.t(i18n.interrupted), false);
+        writeStatus.call(this, window.__app.t(i18n.interrupted), false);
         cfg.onNotFound?.call(this);
       },
       onError: (job) => {
@@ -84,7 +84,7 @@ export function createCardJobFeature(cfg) {
       onDone: async (job) => {
         this[loading] = false;
         if (i18n.empty && job.result?.empty) {
-          writeStatus.call(this, this.$root.t(i18n.empty), false);
+          writeStatus.call(this, window.__app.t(i18n.empty), false);
           if (cfg.resetProgressOnDone !== false && progress) this[progress] = 0;
           return;
         }
@@ -103,12 +103,12 @@ export function createCardJobFeature(cfg) {
   };
 
   const runMethod = async function () {
-    const bookId = this.$root.selectedBookId;
+    const bookId = window.__app.selectedBookId;
     this[loading] = true;
     if (progress) this[progress] = 0;
-    if (show) this.$root[show] = true;
+    if (show) window.__app[show] = true;
     if (out) this[out] = '';
-    writeStatus.call(this, this.$root.t(i18n.starting), true);
+    writeStatus.call(this, window.__app.t(i18n.starting), true);
     if (cfg.beforeRun) cfg.beforeRun.call(this);
     try {
       const { jobId } = await fetchJson(cfg.endpoint, {
@@ -136,17 +136,17 @@ export function createCardJobFeature(cfg) {
   // cfg.onOpen für Erst-Initialisierung (z.B. History laden).
   const onVisibleMethod = async function () {
     if (cfg.onOpen) await cfg.onOpen.call(this);
-    if (!this[timerProp] && !this[loading] && this.$root.selectedBookId) {
+    if (!this[timerProp] && !this[loading] && window.__app.selectedBookId) {
       try {
         const { jobId } = await fetchJson(
-          `/jobs/active?type=${activeType}&book_id=${this.$root.selectedBookId}`
+          `/jobs/active?type=${activeType}&book_id=${window.__app.selectedBookId}`
         );
         if (jobId) {
           this[loading] = true;
           if (progress) this[progress] = 0;
           if (out) this[out] = '';
           const spinner = i18n.alreadyRunningSpinner !== false;
-          writeStatus.call(this, this.$root.t(i18n.alreadyRunning), spinner);
+          writeStatus.call(this, window.__app.t(i18n.alreadyRunning), spinner);
           this[names.start](jobId);
         }
       } catch (e) {

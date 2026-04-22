@@ -33,9 +33,9 @@ export function registerKontinuitaetCard() {
     _onCardRefresh: null,
 
     init() {
-      this.$watch(() => this.$root.showKontinuitaetCard, async (visible) => {
+      this.$watch(() => window.__app.showKontinuitaetCard, async (visible) => {
         if (!visible) return;
-        const root = this.$root;
+        const root = window.__app;
         if (!root.selectedBookId) return;
         if (!root.figuren?.length) await root.loadFiguren(root.selectedBookId);
         await this._loadKontinuitaetHistory();
@@ -53,8 +53,8 @@ export function registerKontinuitaetCard() {
         this.kontinuitaetStatus = '';
         this.kontinuitaetFilters.figurId = '';
         this.kontinuitaetFilters.kapitel = '';
-        if (!this.$root.showKontinuitaetCard) return;
-        if (!this.$root.selectedBookId) return;
+        if (!window.__app.showKontinuitaetCard) return;
+        if (!window.__app.selectedBookId) return;
         await this._loadKontinuitaetHistory();
       };
       window.addEventListener('book:changed', this._onBookChanged);

@@ -3,7 +3,7 @@
 // `this` zeigt auf die Alpine.data('userSettingsCard')-Sub-Komponente;
 // Zugriff auf Root-State (books, selectedBookId, promptConfig, t, tError,
 // pageHistory, bookReviewHistory, chatSessions, chatMessages, chatSessionId)
-// via this.$root.
+// via window.__app.
 
 import { fetchJson } from './utils.js';
 
@@ -40,7 +40,7 @@ export const userSettingsMethods = {
       if (!r.ok) {
         let data = null;
         try { data = await r.json(); } catch (_) {}
-        throw new Error(data ? this.$root.tError(data) : `HTTP ${r.status}`);
+        throw new Error(data ? window.__app.tError(data) : `HTTP ${r.status}`);
       }
       this.userSettingsSaved = true;
       setTimeout(() => { this.userSettingsSaved = false; }, 3000);
@@ -54,9 +54,9 @@ export const userSettingsMethods = {
   async resetBookHistory() {
     const bookId = this.userSettingsDangerBookId;
     if (!bookId) return;
-    const book = this.$root.books.find(b => String(b.id) === String(bookId));
+    const book = window.__app.books.find(b => String(b.id) === String(bookId));
     const name = book?.name || '';
-    if (!confirm(this.$root.t('userSettings.resetConfirm', { name }))) return;
+    if (!confirm(window.__app.t('userSettings.resetConfirm', { name }))) return;
 
     this.bookHistoryResetLoading = true;
     this.bookHistoryResetMessage = '';
@@ -66,18 +66,18 @@ export const userSettingsMethods = {
       if (!r.ok) {
         let errData = null;
         try { errData = await r.json(); } catch (_) {}
-        throw new Error(errData ? this.$root.tError(errData) : `HTTP ${r.status}`);
+        throw new Error(errData ? window.__app.tError(errData) : `HTTP ${r.status}`);
       }
       const data = await r.json();
       const d = data.deleted || {};
-      this.bookHistoryResetMessage = this.$root.t('userSettings.resetSummary', {
+      this.bookHistoryResetMessage = window.__app.t('userSettings.resetSummary', {
         lektorate: d.page_checks || 0,
         reviews:   d.book_reviews || 0,
         chats:     d.chat_sessions || 0,
       });
-      if (String(this.$root.selectedBookId) === String(bookId)) {
-        this.$root.pageHistory       = [];
-        this.$root.bookReviewHistory = [];
+      if (String(window.__app.selectedBookId) === String(bookId)) {
+        window.__app.pageHistory       = [];
+        window.__app.bookReviewHistory = [];
         // chatCard-Reset via Event: der Seiten-Chat lebt in der Sub-Komponente.
         window.dispatchEvent(new CustomEvent('chat:reset'));
       }
@@ -92,7 +92,7 @@ export const userSettingsMethods = {
   /** Buchtyp-Liste abhängig von der gewählten Default-Sprache (fallback: de). */
   userSettingsBuchtypen() {
     const lang = this.userSettingsDefaultLanguage || 'de';
-    const typen = this.$root.promptConfig?.buchtypen?.[lang] || {};
+    const typen = window.__app.promptConfig?.buchtypen?.[lang] || {};
     return Object.entries(typen).map(([key, val]) => ({ key, label: val.label }));
   },
 };

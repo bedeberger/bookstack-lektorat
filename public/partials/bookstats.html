@@ -4,14 +4,14 @@
   `showBookStatsCard`-Flag bleibt im Root (Hash-Router, Exklusivität),
   fachlicher State + Chart.js-Lifecycle leben in dieser Komponente.
 -->
-<div class="card" x-data="bookStatsCard" x-show="$root.showBookStatsCard" x-cloak x-transition>
+<div class="card" x-data="bookStatsCard" x-show="$app.showBookStatsCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="$root.t('bookstats.title', { name: $root.selectedBookName })"></span>
+    <span class="card-title" x-text="$app.t('bookstats.title', { name: $app.selectedBookName })"></span>
     <div class="card-actions">
-      <span x-show="bookStatsData.length > 0 && !bookStatsLoading" class="card-timestamp" x-text="$root.t('bookstats.lastSnapshot', { date: (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '') })"></span>
+      <span x-show="bookStatsData.length > 0 && !bookStatsLoading" class="card-timestamp" x-text="$app.t('bookstats.lastSnapshot', { date: (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '') })"></span>
       <button type="button" @click="syncBookStats()" :disabled="bookStatsLoading">
         <span x-show="bookStatsLoading" class="spinner"></span>
-        <span x-text="bookStatsLoading ? '' : $root.t('bookstats.sync')"></span>
+        <span x-text="bookStatsLoading ? '' : $app.t('bookstats.sync')"></span>
       </button>
     </div>
   </div>
@@ -21,21 +21,21 @@
 
   <!-- Metrik- & Zeitraum-Umschalter -->
   <div x-show="bookStatsData.length > 0 || (writingTimeData?.daily?.length > 0)" class="book-stats-controls">
-    <div x-data="combobox($root.t('bookstats.metric'))"
+    <div x-data="combobox($app.t('bookstats.metric'))"
          x-modelable="value" x-model="bookStatsMetric"
          x-effect="options = [
-           {value:'words',              label: $root.t('bookstats.metric.words')},
-           {value:'chars',              label: $root.t('bookstats.metric.chars')},
-           {value:'page_count',         label: $root.t('bookstats.metric.pages')},
-           {value:'tok',                label: $root.t('bookstats.metric.tok')},
-           {value:'unique_words',       label: $root.t('bookstats.metric.unique')},
-           {value:'delta_words',        label: $root.t('bookstats.metric.delta')},
-           {value:'avg_sentence_len',   label: $root.t('bookstats.metric.avgSentence')},
-           {value:'pages_per_chapter',  label: $root.t('bookstats.metric.pagesPerChapter')},
-           {value:'avg_lix',            label: $root.t('bookstats.metric.lix')},
-           {value:'avg_flesch_de',      label: $root.t('bookstats.metric.flesch')},
-           {value:'writing_minutes',    label: $root.t('bookstats.metric.writingMinutes')},
-           {value:'writing_cumulative', label: $root.t('bookstats.metric.writingCumulative')}
+           {value:'words',              label: $app.t('bookstats.metric.words')},
+           {value:'chars',              label: $app.t('bookstats.metric.chars')},
+           {value:'page_count',         label: $app.t('bookstats.metric.pages')},
+           {value:'tok',                label: $app.t('bookstats.metric.tok')},
+           {value:'unique_words',       label: $app.t('bookstats.metric.unique')},
+           {value:'delta_words',        label: $app.t('bookstats.metric.delta')},
+           {value:'avg_sentence_len',   label: $app.t('bookstats.metric.avgSentence')},
+           {value:'pages_per_chapter',  label: $app.t('bookstats.metric.pagesPerChapter')},
+           {value:'avg_lix',            label: $app.t('bookstats.metric.lix')},
+           {value:'avg_flesch_de',      label: $app.t('bookstats.metric.flesch')},
+           {value:'writing_minutes',    label: $app.t('bookstats.metric.writingMinutes')},
+           {value:'writing_cumulative', label: $app.t('bookstats.metric.writingCumulative')}
          ]"
          @combobox-change="$nextTick(() => renderStatsChart())"
          @click.outside="close()" @keydown="onKeydown($event)"
@@ -44,40 +44,40 @@
     <div class="btn-group">
       <template x-for="r in [{v:7,k:'7'},{v:30,k:'30'},{v:90,k:'90'},{v:365,k:'365'},{v:0,k:'all'}]" :key="r.v">
         <button type="button" class="btn-compact" :class="{ primary: bookStatsRange === r.v }"
-          @click="bookStatsRange = r.v; renderStatsChart()" x-text="$root.t('bookstats.range.' + r.k)"></button>
+          @click="bookStatsRange = r.v; renderStatsChart()" x-text="$app.t('bookstats.range.' + r.k)"></button>
       </template>
     </div>
   </div>
 
   <!-- Diagramm -->
   <div x-show="bookStatsData.length > 0 || (writingTimeData?.daily?.length > 0)" class="book-stats-chart-wrap">
-    <canvas id="book-stats-chart" role="img" :aria-label="$root.t('bookstats.chartFallback')"><span x-text="$root.t('bookstats.chartFallback')"></span></canvas>
+    <canvas id="book-stats-chart" role="img" :aria-label="$app.t('bookstats.chartFallback')"><span x-text="$app.t('bookstats.chartFallback')"></span></canvas>
   </div>
 
   <!-- Aktuelle Stats (letzter Snapshot) -->
   <div x-show="bookStatsData.length > 0" class="book-stats-current">
     <span class="tok-badge tok-neutral"
-      x-text="(bookStatsData[bookStatsData.length - 1]?.words ?? 0).toLocaleString($root.uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + $root.t('bookstats.unit.w')"></span>
+      x-text="(bookStatsData[bookStatsData.length - 1]?.words ?? 0).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + $app.t('bookstats.unit.w')"></span>
     <span class="tok-badge tok-neutral"
-      x-text="(bookStatsData[bookStatsData.length - 1]?.chars ?? 0).toLocaleString($root.uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + $root.t('bookstats.unit.z')"></span>
+      x-text="(bookStatsData[bookStatsData.length - 1]?.chars ?? 0).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + $app.t('bookstats.unit.z')"></span>
     <span class="tok-badge tok-neutral"
-      x-text="bookStatsData[bookStatsData.length - 1]?.page_count + ' ' + $root.t('bookstats.unit.s')"></span>
+      x-text="bookStatsData[bookStatsData.length - 1]?.page_count + ' ' + $app.t('bookstats.unit.s')"></span>
     <span class="tok-badge tok-neutral"
-      x-text="(bookStatsData[bookStatsData.length - 1]?.tok ?? 0).toLocaleString($root.uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + $root.t('bookstats.unit.t')"></span>
+      x-text="(bookStatsData[bookStatsData.length - 1]?.tok ?? 0).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + $app.t('bookstats.unit.t')"></span>
     <span class="tok-badge tok-neutral" x-show="bookStatsDelta !== null"
-      x-text="(bookStatsDelta >= 0 ? '+' : '') + (bookStatsDelta ?? 0).toLocaleString($root.uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + $root.t('bookstats.unit.delta')"></span>
+      x-text="(bookStatsDelta >= 0 ? '+' : '') + (bookStatsDelta ?? 0).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + $app.t('bookstats.unit.delta')"></span>
     <span class="tok-badge tok-neutral" x-show="bookStatsCoverage !== null"
-      x-text="$root.t('bookstats.coverage', { pct: (bookStatsCoverage?.pct ?? 0), checked: (bookStatsCoverage?.checked_pages ?? 0), total: (bookStatsCoverage?.total_pages ?? 0) })"></span>
+      x-text="$app.t('bookstats.coverage', { pct: (bookStatsCoverage?.pct ?? 0), checked: (bookStatsCoverage?.checked_pages ?? 0), total: (bookStatsCoverage?.total_pages ?? 0) })"></span>
     <span class="tok-badge tok-neutral" x-show="bookStatsData[bookStatsData.length - 1]?.avg_sentence_len != null"
-      x-text="$root.t('bookstats.avgSentenceBadge', { n: (bookStatsData[bookStatsData.length - 1]?.avg_sentence_len ?? 0).toLocaleString($root.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
+      x-text="$app.t('bookstats.avgSentenceBadge', { n: (bookStatsData[bookStatsData.length - 1]?.avg_sentence_len ?? 0).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
     <span class="tok-badge tok-neutral" x-show="bookStatsData[bookStatsData.length - 1]?.chapter_count > 0"
-      x-text="$root.t('bookstats.pagesPerChapterBadge', { n: ((bookStatsData[bookStatsData.length - 1]?.page_count / bookStatsData[bookStatsData.length - 1]?.chapter_count) || 0).toLocaleString($root.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
+      x-text="$app.t('bookstats.pagesPerChapterBadge', { n: ((bookStatsData[bookStatsData.length - 1]?.page_count / bookStatsData[bookStatsData.length - 1]?.chapter_count) || 0).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
     <span class="tok-badge tok-neutral" x-show="(writingTimeData?.total_seconds ?? 0) > 0"
-      x-text="$root.t('bookstats.writingTotal', { h: ((writingTimeData?.total_seconds ?? 0) / 3600).toLocaleString($root.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
+      x-text="$app.t('bookstats.writingTotal', { h: ((writingTimeData?.total_seconds ?? 0) / 3600).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
     <span class="tok-badge tok-neutral" x-show="(writingTimeData?.active_days ?? 0) > 0"
-      x-text="$root.t('bookstats.writingAvg', { m: Math.round((writingTimeData?.total_seconds ?? 0) / 60 / (writingTimeData?.active_days || 1)).toLocaleString($root.uiLocale === 'en' ? 'en-US' : 'de-CH') })"></span>
+      x-text="$app.t('bookstats.writingAvg', { m: Math.round((writingTimeData?.total_seconds ?? 0) / 60 / (writingTimeData?.active_days || 1)).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH') })"></span>
   </div>
 
   <!-- Leer-Zustand -->
-  <div x-show="!bookStatsData.length && !(writingTimeData?.daily?.length > 0) && !bookStatsLoading" class="muted-msg muted-msg--spaced" x-text="$root.t('bookstats.emptyState')"></div>
+  <div x-show="!bookStatsData.length && !(writingTimeData?.daily?.length > 0) && !bookStatsLoading" class="muted-msg muted-msg--spaced" x-text="$app.t('bookstats.emptyState')"></div>
 </div>

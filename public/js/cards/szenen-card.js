@@ -20,10 +20,10 @@ export function registerSzenenCard() {
     _onCardRefresh: null,
 
     init() {
-      this.$watch(() => this.$root.showSzenenCard, async (visible) => {
+      this.$watch(() => window.__app.showSzenenCard, async (visible) => {
         if (!visible) return;
-        if (!this.$root.selectedBookId) return;
-        await this.$root.loadSzenen(this.$root.selectedBookId);
+        if (!window.__app.selectedBookId) return;
+        await window.__app.loadSzenen(window.__app.selectedBookId);
       });
 
       this._onBookChanged = async () => {
@@ -31,9 +31,9 @@ export function registerSzenenCard() {
         this.szenenLoading = false;
         this.szenenProgress = 0;
         this.szenenStatus = '';
-        if (!this.$root.showSzenenCard) return;
-        if (!this.$root.selectedBookId) return;
-        await this.$root.loadSzenen(this.$root.selectedBookId);
+        if (!window.__app.showSzenenCard) return;
+        if (!window.__app.selectedBookId) return;
+        await window.__app.loadSzenen(window.__app.selectedBookId);
       };
       window.addEventListener('book:changed', this._onBookChanged);
 
@@ -47,8 +47,8 @@ export function registerSzenenCard() {
 
       this._onCardRefresh = (e) => {
         if (e.detail?.name !== 'szenen') return;
-        if (!this.$root.selectedBookId) return;
-        this.$root.loadSzenen(this.$root.selectedBookId);
+        if (!window.__app.selectedBookId) return;
+        window.__app.loadSzenen(window.__app.selectedBookId);
       };
       window.addEventListener('card:refresh', this._onCardRefresh);
     },

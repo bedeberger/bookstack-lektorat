@@ -8,7 +8,7 @@
 //     bookStatsMetric, bookStatsRange, bookStatsCoverage, bookStatsDelta,
 //     writingTimeData) lebt hier.
 //   - `showBookStatsCard` + `toggleBookStatsCard` bleiben im Root.
-//   - Root-State via this.$root (selectedBookId, uiLocale, pages, tokEsts, t).
+//   - Root-State via window.__app (selectedBookId, uiLocale, pages, tokEsts, t).
 //   - Chart.js-Instanz + Theme-Observer leben als Modul-State in bookstats.js
 //     (siehe _statsChart, _themeObserver dort) — Alpine-Reaktivitäts-Proxy
 //     würde die Chart-Instanz beschädigen. destroy() räumt beide auf.
@@ -36,22 +36,22 @@ export function registerBookStatsCard() {
 
     init() {
       // Öffnen: (Re-)Load der Daten.
-      this.$watch(() => this.$root.showBookStatsCard, async (visible) => {
+      this.$watch(() => window.__app.showBookStatsCard, async (visible) => {
         if (!visible) return;
-        if (!this.$root.selectedBookId) return;
-        await this.loadBookStats(this.$root.selectedBookId);
+        if (!window.__app.selectedBookId) return;
+        await this.loadBookStats(window.__app.selectedBookId);
       });
 
       this._onBookChanged = () => {
-        if (!this.$root.showBookStatsCard) return;
-        if (!this.$root.selectedBookId) return;
+        if (!window.__app.showBookStatsCard) return;
+        if (!window.__app.selectedBookId) return;
         // Bei Buchwechsel: State nullen + neu laden. `renderStatsChart` baut
         // das Chart ohnehin nach jedem Load frisch auf.
         this.bookStatsData = [];
         this.bookStatsCoverage = null;
         this.bookStatsDelta = null;
         this.writingTimeData = null;
-        this.loadBookStats(this.$root.selectedBookId);
+        this.loadBookStats(window.__app.selectedBookId);
       };
       window.addEventListener('book:changed', this._onBookChanged);
 

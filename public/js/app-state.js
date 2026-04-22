@@ -174,8 +174,12 @@ const bookReviewState = () => ({
   bookReviewHistory: [],
 });
 
-// kapitelReview-State komplett in Alpine.data('kapitelReviewCard') migriert.
-const kapitelReviewState = () => ({});
+// Grösster Teil in Alpine.data('kapitelReviewCard') migriert. Nur
+// `kapitelReviewChapterId` bleibt am Root — Hash-Router und Sidebar brauchen
+// es als Single Source of Truth (analog zu selectedFigurId/selectedOrtId).
+const kapitelReviewState = () => ({
+  kapitelReviewChapterId: '',
+});
 
 const figurenState = () => ({
   // `figuren` lebt in Alpine.store('catalog').

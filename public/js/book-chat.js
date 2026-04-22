@@ -3,7 +3,7 @@ import { makeChatMethods } from './chat-base.js';
 // Buch-Chat-Methoden (werden in Alpine.data('bookChatCard') gespreadet).
 // Gemeinsame Logik kommt aus chat-base.js; hier nur Buch-Chat-Konfiguration.
 // Keine Vorschläge – nur freie Konversation über das gesamte Buch.
-// `this` zeigt auf die Sub-Komponente; Root-Zugriffe via this.$root.
+// `this` zeigt auf die Sub-Komponente; Root-Zugriffe via window.__app.
 
 export const bookChatMethods = {
   // Gruppiert Tool-Calls eines Agent-Buch-Chat-Turns nach Name.
@@ -35,16 +35,16 @@ export const bookChatMethods = {
     },
     scrollElId: 'book-chat-messages',
     activeJobType: 'book-chat',
-    canOpen: (ctx) => !!ctx.$root.selectedBookId,
-    sessionsUrl: (ctx) => '/chat/sessions/book/' + ctx.$root.selectedBookId,
+    canOpen: (ctx) => !!ctx.$app.selectedBookId,
+    sessionsUrl: (ctx) => '/chat/sessions/book/' + ctx.$app.selectedBookId,
     newSessionUrl: '/chat/session/book',
     newSessionBody: (ctx) => ({
-      book_id:   parseInt(ctx.$root.selectedBookId),
-      book_name: ctx.$root.selectedBookName,
+      book_id:   parseInt(ctx.$app.selectedBookId),
+      book_name: ctx.$app.selectedBookName,
     }),
     sendUrl: '/jobs/book-chat',
     onBeforeNewSession: async function () {
-      await fetch('/jobs/book-chat-cache?book_id=' + this.$root.selectedBookId, { method: 'DELETE' });
+      await fetch('/jobs/book-chat-cache?book_id=' + window.__app.selectedBookId, { method: 'DELETE' });
     },
     onReopen: async function () {
       await this.loadBookChatSessions();

@@ -28,10 +28,10 @@ export function registerEreignisseCard() {
     _onCardRefresh: null,
 
     init() {
-      this.$watch(() => this.$root.showEreignisseCard, async (visible) => {
+      this.$watch(() => window.__app.showEreignisseCard, async (visible) => {
         if (!visible) return;
-        if (!this.$root.selectedBookId) return;
-        await this.$root._reloadZeitstrahl();
+        if (!window.__app.selectedBookId) return;
+        await window.__app._reloadZeitstrahl();
       });
 
       this._onBookChanged = async () => {
@@ -43,9 +43,9 @@ export function registerEreignisseCard() {
         this.zeitstrahlConsolidating = false;
         this.zeitstrahlProgress = 0;
         this.zeitstrahlStatus = '';
-        if (!this.$root.showEreignisseCard) return;
-        if (!this.$root.selectedBookId) return;
-        await this.$root._reloadZeitstrahl();
+        if (!window.__app.showEreignisseCard) return;
+        if (!window.__app.selectedBookId) return;
+        await window.__app._reloadZeitstrahl();
       };
       window.addEventListener('book:changed', this._onBookChanged);
 
@@ -63,7 +63,7 @@ export function registerEreignisseCard() {
 
       this._onCardRefresh = (e) => {
         if (e.detail?.name !== 'ereignisse') return;
-        this.$root._reloadZeitstrahl();
+        window.__app._reloadZeitstrahl();
       };
       window.addEventListener('card:refresh', this._onCardRefresh);
     },
@@ -78,20 +78,20 @@ export function registerEreignisseCard() {
 
     // UI-Helper (aus app-ui.js hierher gezogen). Lesen $root-Filter + -Daten.
     ereignisseKapitelListe() {
-      return this.$root._deriveKapitel(this.$root.globalZeitstrahl, ev => ev.kapitel);
+      return window.__app._deriveKapitel(window.__app.globalZeitstrahl, ev => ev.kapitel);
     },
 
     ereignisseSeitenListe() {
-      return this.$root._deriveSeiten(
-        this.$root.globalZeitstrahl,
-        this.$root.ereignisseFilters.kapitel,
+      return window.__app._deriveSeiten(
+        window.__app.globalZeitstrahl,
+        window.__app.ereignisseFilters.kapitel,
         ev => ev.kapitel,
         ev => Array.isArray(ev.seiten) ? ev.seiten : ev.seite,
       );
     },
 
     filteredEreignisse() {
-      const root = this.$root;
+      const root = window.__app;
       const filters = root.ereignisseFilters;
       let result = root.globalZeitstrahl;
       if (filters.suche) {

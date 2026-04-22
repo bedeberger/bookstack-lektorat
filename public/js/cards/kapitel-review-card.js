@@ -22,7 +22,8 @@ import { startPoll, runningJobStatus } from './job-helpers.js';
 export function registerKapitelReviewCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
   window.Alpine.data('kapitelReviewCard', () => ({
-    kapitelReviewChapterId: '',
+    // kapitelReviewChapterId lebt am Root (Hash-Router + Sidebar lesen es);
+    // die Sub greift via window.__app darauf zu.
     kapitelReviewLoading: false,
     kapitelReviewProgress: 0,
     kapitelReviewStatus: '',
@@ -39,7 +40,7 @@ export function registerKapitelReviewCard() {
     _onSelectChapter: null,
 
     init() {
-      this.$watch(() => this.$root.showKapitelReviewCard, async (visible) => {
+      this.$watch(() => window.__app.showKapitelReviewCard, async (visible) => {
         if (!visible) return;
         await this._openKapitelReview();
       });
@@ -51,8 +52,8 @@ export function registerKapitelReviewCard() {
         if (!chapterId) return;
         const opts = this.kapitelReviewChapterOptions();
         if (!opts.some(c => String(c.id) === String(chapterId))) return;
-        const switching = String(this.kapitelReviewChapterId) !== String(chapterId);
-        this.kapitelReviewChapterId = String(chapterId);
+        const switching = String(window.__app.kapitelReviewChapterId) !== String(chapterId);
+        window.__app.kapitelReviewChapterId = String(chapterId);
         if (switching) {
           this.kapitelReviewOut = '';
           this.setKapitelReviewStatus('');
@@ -66,7 +67,7 @@ export function registerKapitelReviewCard() {
         this.kapitelReviewProgress = 0;
         this.kapitelReviewStatus = '';
         this.kapitelReviewOut = '';
-        this.kapitelReviewChapterId = '';
+        window.__app.kapitelReviewChapterId = '';
         this._kapitelReviewRunningChapterId = '';
         this.selectedKapitelReviewId = null;
         this.kapitelReviewHistory = {};
@@ -80,7 +81,7 @@ export function registerKapitelReviewCard() {
 
       this._onCardRefresh = async (e) => {
         if (e.detail?.name !== 'kapitelReview') return;
-        if (this.$root.selectedBookId) await this.loadKapitelReviewHistory(this.$root.selectedBookId);
+        if (window.__app.selectedBookId) await this.loadKapitelReviewHistory(window.__app.selectedBookId);
       };
       window.addEventListener('card:refresh', this._onCardRefresh);
 
@@ -91,11 +92,11 @@ export function registerKapitelReviewCard() {
         const chapterId = d.extra?.chapterId;
         this.kapitelReviewLoading = true;
         this.kapitelReviewProgress = job.progress || 0;
-        this.kapitelReviewChapterId = String(chapterId);
+        window.__app.kapitelReviewChapterId = String(chapterId);
         this._kapitelReviewRunningChapterId = String(chapterId);
         this.kapitelReviewOut = '';
         this.setKapitelReviewStatus(
-          job.statusText ? this.$root.t(job.statusText, job.statusParams) : this.$root.t('common.analysisRunning'),
+          job.statusText ? window.__app.t(job.statusText, job.statusParams) : window.__app.t('common.analysisRunning'),
           true,
         );
         this.startKapitelReviewPoll(d.jobId, chapterId);
@@ -113,11 +114,11 @@ export function registerKapitelReviewCard() {
     },
 
     _lsKeyKapitelReview(chapterId) {
-      return `lektorat_chapter_review_job_${this.$root.selectedBookId}_${chapterId}`;
+      return `lektorat_chapter_review_job_${window.__app.selectedBookId}_${chapterId}`;
     },
 
     _renderKapitelReviewHtml(r) {
-      const t = (k, p) => this.$root.t(k, p);
+      const t = (k, p) => window.__app.t(k, p);
       const note = parseInt(r.gesamtnote, 10) || 0;
       const stars = '★'.repeat(Math.min(6, Math.max(0, note))) + '☆'.repeat(Math.max(0, 6 - note));
       let html = `
@@ -166,7 +167,7 @@ export function registerKapitelReviewCard() {
     },
 
     startKapitelReviewPoll(jobId, chapterId) {
-      const root = this.$root;
+      const root = window.__app;
       startPoll(this, {
         timerProp: '_kapitelReviewPollTimer',
         jobId,
@@ -220,22 +221,22 @@ export function registerKapitelReviewCard() {
     // Wird beim Öffnen der Karte (über den $watch) aufgerufen — setzt ein
     // Default-Kapitel und lädt die History.
     async _openKapitelReview() {
-      const current = this.kapitelReviewChapterId;
+      const current = window.__app.kapitelReviewChapterId;
       const eligible = this.kapitelReviewChapterOptions();
       const stillValid = current && eligible.some(c => String(c.id) === String(current));
       if (!stillValid) {
-        this.kapitelReviewChapterId = eligible.length ? String(eligible[0].id) : '';
+        window.__app.kapitelReviewChapterId = eligible.length ? String(eligible[0].id) : '';
       }
-      if (this.$root.selectedBookId) {
-        await this.loadKapitelReviewHistory(this.$root.selectedBookId);
+      if (window.__app.selectedBookId) {
+        await this.loadKapitelReviewHistory(window.__app.selectedBookId);
       }
     },
 
     async runKapitelReview() {
-      const root = this.$root;
+      const root = window.__app;
       const bookId = root.selectedBookId;
       const bookName = root.selectedBookName;
-      const chapterId = this.kapitelReviewChapterId;
+      const chapterId = window.__app.kapitelReviewChapterId;
       if (!chapterId) return;
       const chapter = (root.tree || []).find(i => i.type === 'chapter' && String(i.id) === String(chapterId));
       const chapterName = chapter?.name || '';
@@ -270,7 +271,7 @@ export function registerKapitelReviewCard() {
     async deleteKapitelReview(id) {
       try {
         await fetchJson('/history/chapter-review/' + id, { method: 'DELETE' });
-        if (this.$root.selectedBookId) await this.loadKapitelReviewHistory(this.$root.selectedBookId);
+        if (window.__app.selectedBookId) await this.loadKapitelReviewHistory(window.__app.selectedBookId);
       } catch (e) {
         console.error('[deleteKapitelReview]', e);
       }
@@ -280,35 +281,35 @@ export function registerKapitelReviewCard() {
     // mindestens eines mit mehreren Seiten), lohnt sich das Kapitel-Review für
     // alle Kapitel – auch für solche mit nur einer Seite.
     _bookQualifiesForChapterReview() {
-      const chapters = (this.$root.tree || []).filter(i => i.type === 'chapter');
+      const chapters = (window.__app.tree || []).filter(i => i.type === 'chapter');
       return chapters.length >= 2 && chapters.some(c => c.pages.length > 1);
     },
 
     // Liste der Kapitel, die fürs Kapitel-Review anklickbar sind.
     kapitelReviewChapterOptions() {
       if (!this._bookQualifiesForChapterReview()) return [];
-      return (this.$root.tree || [])
+      return (window.__app.tree || [])
         .filter(i => i.type === 'chapter' && i.pages.length > 0)
         .map(c => ({ id: c.id, name: c.name, pageCount: c.pages.length }));
     },
 
     kapitelReviewSelectedChapter() {
-      if (!this.kapitelReviewChapterId) return null;
-      return (this.$root.tree || []).find(i =>
-        i.type === 'chapter' && String(i.id) === String(this.kapitelReviewChapterId)
+      if (!window.__app.kapitelReviewChapterId) return null;
+      return (window.__app.tree || []).find(i =>
+        i.type === 'chapter' && String(i.id) === String(window.__app.kapitelReviewChapterId)
       ) || null;
     },
 
     kapitelReviewCurrentHistory() {
-      if (!this.kapitelReviewChapterId) return [];
-      return this.kapitelReviewHistory?.[String(this.kapitelReviewChapterId)] || [];
+      if (!window.__app.kapitelReviewChapterId) return [];
+      return this.kapitelReviewHistory?.[String(window.__app.kapitelReviewChapterId)] || [];
     },
 
     // Schnell eine Seite im aktuellen Kapitel anlegen. BookStack hängt neue
     // Seiten automatisch ans Ende an — Baum + Flat-Liste lokal einhängen, dann
     // zur neuen Seite springen.
     async createKapitelPage() {
-      const root = this.$root;
+      const root = window.__app;
       const chapter = this.kapitelReviewSelectedChapter();
       const title = (root.newPageTitle || '').trim();
       if (!chapter || !title || root.newPageCreating) return;

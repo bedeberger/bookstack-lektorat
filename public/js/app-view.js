@@ -172,6 +172,14 @@ export const appViewMethods = {
     this._closeOtherMainCards('figures');
     this.showFiguresCard = true;
   },
+  toggleBookReviewCard() {
+    if (this.showBookReviewCard) {
+      window.dispatchEvent(new CustomEvent('card:refresh', { detail: { name: 'bookReview' } }));
+      return;
+    }
+    this._closeOtherMainCards('bookReview');
+    this.showBookReviewCard = true;
+  },
   // Seiten-Chat: lebt neben dem Editor, schließt NICHT den Editor. Toggle
   // merkt sich checkDone-Snapshot (Chat soll Findings temporär verbergen).
   toggleChatCard() {

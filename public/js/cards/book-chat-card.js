@@ -26,7 +26,7 @@ export function registerBookChatCard() {
     _onResetBookChat: null,
 
     init() {
-      this.$watch(() => this.$root.showBookChatCard, async (visible) => {
+      this.$watch(() => window.__app.showBookChatCard, async (visible) => {
         if (!visible) return;
         await this._onVisibleBookChat();
       });

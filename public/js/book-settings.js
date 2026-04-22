@@ -1,15 +1,15 @@
 // Buch-Einstellungen (Sprache, Region, Buchtyp, Perspektive, Zeit, Kontext).
 // `this` zeigt auf die Alpine.data('bookSettingsCard')-Sub-Komponente;
-// Zugriff auf Root-State (selectedBookId, promptConfig, tError) via this.$root.
+// Zugriff auf Root-State (selectedBookId, promptConfig, tError) via window.__app.
 
 import { fetchJson } from './utils.js';
 
 export const bookSettingsMethods = {
   async loadBookSettings() {
-    if (!this.$root.selectedBookId) return;
+    if (!window.__app.selectedBookId) return;
     this.bookSettingsLoading = true;
     try {
-      const data = await fetchJson(`/booksettings/${this.$root.selectedBookId}`);
+      const data = await fetchJson(`/booksettings/${window.__app.selectedBookId}`);
       this.bookSettingsLanguage  = data.language    || 'de';
       this.bookSettingsRegion    = data.region      || 'CH';
       this.bookSettingsBuchtyp   = data.buchtyp     || '';
@@ -24,12 +24,12 @@ export const bookSettingsMethods = {
   },
 
   async saveBookSettings() {
-    if (!this.$root.selectedBookId) return;
+    if (!window.__app.selectedBookId) return;
     this.bookSettingsSaving = true;
     this.bookSettingsSaved  = false;
     this.bookSettingsError  = '';
     try {
-      const r = await fetch(`/booksettings/${this.$root.selectedBookId}`, {
+      const r = await fetch(`/booksettings/${window.__app.selectedBookId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -44,7 +44,7 @@ export const bookSettingsMethods = {
       if (!r.ok) {
         let data = null;
         try { data = await r.json(); } catch (_) {}
-        throw new Error(data ? this.$root.tError(data) : `HTTP ${r.status}`);
+        throw new Error(data ? window.__app.tError(data) : `HTTP ${r.status}`);
       }
       this.bookSettingsSaved = true;
       setTimeout(() => { this.bookSettingsSaved = false; }, 3000);
@@ -68,7 +68,7 @@ export const bookSettingsMethods = {
   /** Gibt die Buchtyp-Liste für die aktuelle Sprache zurück (aus promptConfig). */
   bookSettingsBuchtypen() {
     const lang = this.bookSettingsLanguage || 'de';
-    const typen = this.$root.promptConfig?.buchtypen?.[lang] || {};
+    const typen = window.__app.promptConfig?.buchtypen?.[lang] || {};
     return Object.entries(typen).map(([key, val]) => ({ key, label: val.label }));
   },
 };

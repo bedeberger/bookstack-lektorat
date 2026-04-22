@@ -27,7 +27,7 @@ export function registerChatCard() {
     _onResetChat: null,
 
     init() {
-      this.$watch(() => this.$root.showChatCard, async (visible) => {
+      this.$watch(() => window.__app.showChatCard, async (visible) => {
         if (!visible) return;
         await this._onVisibleChat();
       });

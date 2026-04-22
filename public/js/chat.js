@@ -3,7 +3,7 @@ import { makeChatMethods } from './chat-base.js';
 
 // Seiten-Chat-Methoden (werden in Alpine.data('chatCard') gespreadet).
 // Gemeinsame Logik kommt aus chat-base.js; hier nur Seiten-Chat-Spezifika.
-// `this` zeigt auf die Sub-Komponente; Root-Zugriffe via this.$root.
+// `this` zeigt auf die Sub-Komponente; Root-Zugriffe via window.__app.
 
 const baseMethods = makeChatMethods({
   label: 'Chat',
@@ -21,14 +21,14 @@ const baseMethods = makeChatMethods({
   },
   scrollElId: 'chat-messages',
   activeJobType: 'chat',
-  canOpen: (ctx) => !!ctx.$root.currentPage,
-  sessionsUrl: (ctx) => '/chat/sessions/' + ctx.$root.currentPage.id,
+  canOpen: (ctx) => !!ctx.$app.currentPage,
+  sessionsUrl: (ctx) => '/chat/sessions/' + ctx.$app.currentPage.id,
   newSessionUrl: '/chat/session',
   newSessionBody: (ctx) => ({
-    book_id:   parseInt(ctx.$root.selectedBookId),
-    book_name: ctx.$root.selectedBookName,
-    page_id:   ctx.$root.currentPage.id,
-    page_name: ctx.$root.currentPage.name,
+    book_id:   parseInt(ctx.$app.selectedBookId),
+    book_name: ctx.$app.selectedBookName,
+    page_id:   ctx.$app.currentPage.id,
+    page_name: ctx.$app.currentPage.name,
   }),
   sendUrl: '/jobs/chat',
   lsKeyFn: (sessionId) => 'lektorat_chat_job_' + sessionId,
@@ -36,7 +36,7 @@ const baseMethods = makeChatMethods({
     this.chatStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec, job.statusParams);
   },
   onBeforeSend: async function () {
-    const root = this.$root;
+    const root = window.__app;
     try {
       const pageData = await root.bsGet('pages/' + root.currentPage.id);
       root.originalHtml = stripFocusArtefacts(pageData.html || '');
@@ -46,8 +46,8 @@ const baseMethods = makeChatMethods({
     }
   },
   onPollDone: async function () {
-    if (this.$root.currentPage) await this.loadChatSessions();
-    this.$root.updatePageView();
+    if (window.__app.currentPage) await this.loadChatSessions();
+    window.__app.updatePageView();
   },
   onAfterSessionLoad: function () {
     for (const m of this.chatMessages) {
@@ -55,10 +55,10 @@ const baseMethods = makeChatMethods({
         for (const v of m.vorschlaege) if (v.applied) v._applied = true;
       }
     }
-    this.$root.updatePageView();
+    window.__app.updatePageView();
   },
   onReset: function () {
-    this.$root.updatePageView();
+    window.__app.updatePageView();
   },
 });
 
@@ -68,7 +68,7 @@ export const chatMethods = {
   // ── Seiten-Chat-spezifisch: Vorschlag übernehmen ──────────────────────────
 
   async applyChatVorschlag(vorschlag, msgIdx, vIdx) {
-    const root = this.$root;
+    const root = window.__app;
     const v = () => this.chatMessages[msgIdx].vorschlaege[vIdx];
     const setErr = (msg) => { v()._error = msg; };
 

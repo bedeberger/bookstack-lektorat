@@ -37,7 +37,7 @@ export function startPoll(ctx, config) {
 }
 
 // Baut das Status-HTML für einen laufenden Job. `translate` ist die i18n-Funktion
-// (in Root: this.t, in Sub: this.$root.t) — via expliziten Parameter entkoppelt.
+// (in Root: this.t, in Sub: window.__app.t) — via expliziten Parameter entkoppelt.
 export function runningJobStatus(translate, statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams) {
   let tokInfo = '';
   if ((tokIn || 0) + (tokOut || 0) > 0) {

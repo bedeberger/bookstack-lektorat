@@ -1,7 +1,7 @@
 // Kontinuitätsprüfer-Methoden (werden in Alpine.data('kontinuitaetCard')
 // gespreadet). `this` zeigt auf die Sub-Komponente; Root-Zugriffe (selectedBookId,
 // selectedBookName, figuren, tree, pages, t, selectPage, loadFiguren,
-// _runningJobStatus, _sortByChapterOrder) laufen über this.$root.
+// _runningJobStatus, _sortByChapterOrder) laufen über window.__app.
 //
 // Einziger Job-Flow ausserhalb des Root — daher kein createJobFeature:
 // runKontinuitaetCheck + startKontinuitaetPoll sind hier direkt implementiert.
@@ -11,7 +11,7 @@ import { fetchJson, escHtml } from './utils.js';
 export const kontinuitaetMethods = {
   async _loadKontinuitaetHistory() {
     try {
-      const data = await fetchJson('/jobs/kontinuitaet/' + this.$root.selectedBookId);
+      const data = await fetchJson('/jobs/kontinuitaet/' + window.__app.selectedBookId);
       this.kontinuitaetResult = data;
     } catch (e) {
       console.error('[_loadKontinuitaetHistory]', e);
@@ -23,7 +23,7 @@ export const kontinuitaetMethods = {
   },
 
   async runKontinuitaetCheck() {
-    const root = this.$root;
+    const root = window.__app;
     const bookId = root.selectedBookId;
     this.kontinuitaetLoading = true;
     this.kontinuitaetProgress = 0;
@@ -51,7 +51,7 @@ export const kontinuitaetMethods = {
   },
 
   startKontinuitaetPoll(jobId) {
-    const root = this.$root;
+    const root = window.__app;
     const bookId = root.selectedBookId;
     const lsKey = `lektorat_kontinuitaet_job_${bookId}`;
     if (this._kontinuitaetPollTimer) clearInterval(this._kontinuitaetPollTimer);
@@ -105,7 +105,7 @@ export const kontinuitaetMethods = {
   // Issues gefiltert nach UI-Filtern (figurId, kapitel). Reads figuren+tree
   // from root. Ersetzt den gleichnamigen Getter, der vorher auf der Root lag.
   get kontinuitaetIssuesFiltered() {
-    const root = this.$root;
+    const root = window.__app;
     const chapters = (root.tree || []).filter(t => t.type === 'chapter');
     const chapterNames = new Set(chapters.map(t => t.name));
     const fromStelle = (s) => {
@@ -147,7 +147,7 @@ export const kontinuitaetMethods = {
   },
 
   kontinuitaetKapitelListe() {
-    const root = this.$root;
+    const root = window.__app;
     const chapterById = new Map(
       (root.tree || []).filter(t => t.type === 'chapter').map(t => [t.id, t.name])
     );
@@ -182,7 +182,7 @@ export const kontinuitaetMethods = {
   // namen, z.B. Seite "Der Vater" in Kapitel "Der Unauffällige" vs. Kapitel
   // "Der Vater" mit erster Seite "Die letzte Familie").
   kontinuitaetResolveStelle(stelle, issue, side) {
-    const root = this.$root;
+    const root = window.__app;
     if (!stelle) return null;
     const chapters = (root.tree || []).filter(t => t.type === 'chapter');
     const chIds = issue?.chapter_ids || [];
@@ -221,6 +221,6 @@ export const kontinuitaetMethods = {
 
   kontinuitaetGotoStelle(stelle, issue, side) {
     const page = this.kontinuitaetResolveStelle(stelle, issue, side);
-    if (page) this.$root.selectPage(page);
+    if (page) window.__app.selectPage(page);
   },
 };

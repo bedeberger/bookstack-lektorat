@@ -8,7 +8,7 @@
 //     activeStilDetailKey) lebt hier, NICHT mehr im Root.
 //   - `showStilCard` und `toggleStilCard` bleiben im Root — Hash-Router und
 //     Karten-Exklusivität brauchen die Flag als Single Source of Truth.
-//   - Zugriff auf Root-State via this.$root (selectedBookId, uiLocale, pages,
+//   - Zugriff auf Root-State via window.__app (selectedBookId, uiLocale, pages,
 //     selectPage, t).
 //   - Lifecycle-Events: `book:changed` (Sub-Komponente lädt neu, wenn sichtbar)
 //     und `view:reset` (lokalen State nullen). Werden vom Root dispatcht.
@@ -30,17 +30,17 @@ export function registerStilCard() {
 
     init() {
       // Bei Öffnen der Karte: erstmals laden, bei Bedarf Auto-Sync starten.
-      this.$watch(() => this.$root.showStilCard, async (visible) => {
+      this.$watch(() => window.__app.showStilCard, async (visible) => {
         if (!visible) return;
-        if (!this.$root.selectedBookId) return;
-        await this.loadStilStats(this.$root.selectedBookId);
+        if (!window.__app.selectedBookId) return;
+        await this.loadStilStats(window.__app.selectedBookId);
         if (this._stilNeedsSync()) await this.runStilSync();
       });
 
       // Buchwechsel bei offener Karte → Daten für neues Buch nachladen.
       this._onBookChanged = (e) => {
-        if (!this.$root.showStilCard) return;
-        const bookId = e.detail?.bookId || this.$root.selectedBookId;
+        if (!window.__app.showStilCard) return;
+        const bookId = e.detail?.bookId || window.__app.selectedBookId;
         if (bookId) this.loadStilStats(bookId);
       };
       window.addEventListener('book:changed', this._onBookChanged);

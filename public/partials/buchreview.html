@@ -6,13 +6,13 @@
   bookReviewHistory bleibt im Root (tree.js/loadPages schreibt, user-settings
   liest beim Danger-Reset).
 -->
-<div class="card" x-data="bookReviewCard" x-show="$root.showBookReviewCard" x-cloak x-transition>
+<div class="card" x-data="bookReviewCard" x-show="$app.showBookReviewCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="$root.t('review.title', { name: $root.selectedBookName })"></span>
+    <span class="card-title" x-text="$app.t('review.title', { name: $app.selectedBookName })"></span>
     <div class="card-actions">
       <button type="button" @click="runBookReview()" :disabled="bookReviewLoading">
         <span x-show="bookReviewLoading" class="spinner"></span>
-        <span x-text="bookReviewOut ? $root.t('review.rerun') : $root.t('review.start')"></span>
+        <span x-text="bookReviewOut ? $app.t('review.rerun') : $app.t('review.start')"></span>
       </button>
     </div>
   </div>
@@ -23,13 +23,13 @@
   <div x-html="bookReviewOut"></div>
 
   <!-- Buchbewertungs-Verlauf -->
-  <div x-show="$root.bookReviewHistory.length > 0" class="card-history-section">
-    <div class="history-heading" x-text="$root.t('review.history')"></div>
-    <template x-for="entry in $root.bookReviewHistory" :key="entry.id">
+  <div x-show="$app.bookReviewHistory.length > 0" class="card-history-section">
+    <div class="history-heading" x-text="$app.t('review.history')"></div>
+    <template x-for="entry in $app.bookReviewHistory" :key="entry.id">
       <div>
         <div class="history-item" :class="{ 'history-item--open': selectedBookReviewId === entry.id }"
              @click="selectedBookReviewId = selectedBookReviewId === entry.id ? null : entry.id">
-          <span class="history-date" x-text="$root.formatDate(entry.reviewed_at)"></span>
+          <span class="history-date" x-text="$app.formatDate(entry.reviewed_at)"></span>
           <span x-show="entry.review_json?.gesamtnote" class="badge badge-ok review-stars"
             x-text="'★'.repeat(Math.min(6, +(entry.review_json?.gesamtnote) || 0)) + '☆'.repeat(Math.max(0, 6 - (+(entry.review_json?.gesamtnote) || 0)))"></span>
           <span class="tag" x-text="entry.model"></span>
@@ -37,7 +37,7 @@
         </div>
         <div x-show="selectedBookReviewId === entry.id" class="history-detail">
           <div x-html="entry.review_json ? _renderReviewHtml(entry.review_json) : ''"></div>
-          <button type="button" class="btn-delete-history" @click.stop="$root.deleteBookReview(entry.id)" :title="$root.t('common.deleteEntry')" x-text="$root.t('common.deleteEntry')"></button>
+          <button type="button" class="btn-delete-history" @click.stop="$app.deleteBookReview(entry.id)" :title="$app.t('common.deleteEntry')" x-text="$app.t('common.deleteEntry')"></button>
         </div>
       </div>
     </template>

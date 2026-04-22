@@ -233,7 +233,8 @@ export const treeMethods = {
       this.setStatus('');
       await Promise.all([
         this.loadBookReviewHistory(bookId),
-        this.loadKapitelReviewHistory(bookId),
+        // loadKapitelReviewHistory lebt jetzt in Alpine.data('kapitelReviewCard')
+        // und wird beim Öffnen der Karte (bzw. book:changed-Event) geladen.
         this.loadFiguren(bookId),
         this.loadLastKomplettRun(bookId),
       ]);

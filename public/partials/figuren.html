@@ -5,51 +5,51 @@
   auflösbar. Graph-Modus + vis-network-Internals wohnen in der Sub.
   figurenFilters + selectedFigurId + Loading/Progress/Status bleiben am Root.
 -->
-<div class="card" x-data="figurenCard" x-show="$root.showFiguresCard" x-cloak x-transition>
+<div class="card" x-data="figurenCard" x-show="$app.showFiguresCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="$root.t('figuren.title', { name: $root.selectedBookName })"></span>
-    <span x-show="$root.alleAktualisierenLastRun && !$root.figurenLoading" class="card-timestamp" x-text="$root.t('common.asOf', { date: $root.alleAktualisierenLastRun })"></span>
+    <span class="card-title" x-text="$app.t('figuren.title', { name: $app.selectedBookName })"></span>
+    <span x-show="$app.alleAktualisierenLastRun && !$app.figurenLoading" class="card-timestamp" x-text="$app.t('common.asOf', { date: $app.alleAktualisierenLastRun })"></span>
   </div>
 
   <!-- Fortschritt -->
-  <div x-show="$root.figurenProgress > 0" class="progress-bar-wrap">
-    <div class="progress-bar" :style="{ '--progress': $root.figurenProgress + '%' }"></div>
+  <div x-show="$app.figurenProgress > 0" class="progress-bar-wrap">
+    <div class="progress-bar" :style="{ '--progress': $app.figurenProgress + '%' }"></div>
   </div>
-  <div x-show="$root.figurenStatus" class="card-status" x-html="$root.figurenStatus"></div>
+  <div x-show="$app.figurenStatus" class="card-status" x-html="$app.figurenStatus"></div>
 
   <!-- Leer-Hinweis -->
-  <div x-show="$root.figuren.length === 0 && !$root.figurenLoading && !$root.figurenStatus" class="card-status" x-text="$root.t('common.noDataYet')"></div>
+  <div x-show="$app.figuren.length === 0 && !$app.figurenLoading && !$app.figurenStatus" class="card-status" x-text="$app.t('common.noDataYet')"></div>
 
   <!-- Graph -->
-  <div x-show="$root.figuren.length > 0" class="figur-graph-section">
+  <div x-show="$app.figuren.length > 0" class="figur-graph-section">
 
     <!-- Modus-Toggle -->
     <div class="figur-modus-toggle">
-      <button type="button" class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'figur' }" @click="setFigurenGraphModus('figur')" x-text="$root.t('figuren.modeGraph')"></button>
-      <button type="button" class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'familie', 'figur-modus-btn--disabled': !figurenHasFamilyEdges() }" :disabled="!figurenHasFamilyEdges()" @click="figurenHasFamilyEdges() && setFigurenGraphModus('familie')" x-text="$root.t('figuren.modeFamilie')"></button>
-      <button type="button" class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'soziogramm' }" @click="setFigurenGraphModus('soziogramm')" x-text="$root.t('figuren.modeSoziogramm')"></button>
+      <button type="button" class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'figur' }" @click="setFigurenGraphModus('figur')" x-text="$app.t('figuren.modeGraph')"></button>
+      <button type="button" class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'familie', 'figur-modus-btn--disabled': !figurenHasFamilyEdges() }" :disabled="!figurenHasFamilyEdges()" @click="figurenHasFamilyEdges() && setFigurenGraphModus('familie')" x-text="$app.t('figuren.modeFamilie')"></button>
+      <button type="button" class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'soziogramm' }" @click="setFigurenGraphModus('soziogramm')" x-text="$app.t('figuren.modeSoziogramm')"></button>
     </div>
 
     <!-- Legende Figurengraph + Familie -->
     <template x-if="figurenGraphModus !== 'soziogramm'">
       <div>
         <div class="figur-legend">
-          <span class="figur-legend-dot figur-legend-dot--hauptfigur"></span><span x-text="$root.t('figuren.type.hauptfigur')"></span>
-          <span class="figur-legend-dot figur-legend-dot--antagonist"></span><span x-text="$root.t('figuren.type.antagonist')"></span>
-          <span class="figur-legend-dot figur-legend-dot--mentor"></span><span x-text="$root.t('figuren.type.mentor')"></span>
-          <span class="figur-legend-dot figur-legend-dot--nebenfigur"></span><span x-text="$root.t('figuren.type.nebenfigur')"></span>
-          <span class="figur-legend-dot figur-legend-dot--andere"></span><span x-text="$root.t('figuren.type.andere')"></span>
+          <span class="figur-legend-dot figur-legend-dot--hauptfigur"></span><span x-text="$app.t('figuren.type.hauptfigur')"></span>
+          <span class="figur-legend-dot figur-legend-dot--antagonist"></span><span x-text="$app.t('figuren.type.antagonist')"></span>
+          <span class="figur-legend-dot figur-legend-dot--mentor"></span><span x-text="$app.t('figuren.type.mentor')"></span>
+          <span class="figur-legend-dot figur-legend-dot--nebenfigur"></span><span x-text="$app.t('figuren.type.nebenfigur')"></span>
+          <span class="figur-legend-dot figur-legend-dot--andere"></span><span x-text="$app.t('figuren.type.andere')"></span>
         </div>
         <div class="figur-legend figur-legend--edges">
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--eltern"></span><span x-text="$root.t('figuren.edge.eltern')"></span></span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschwister"></span><span x-text="$root.t('figuren.edge.geschwister')"></span></span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--freund"></span><span x-text="$root.t('figuren.edge.freund')"></span></span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--feind"></span><span x-text="$root.t('figuren.edge.feind')"></span></span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--liebesbeziehung"></span><span x-text="$root.t('figuren.edge.liebesbeziehung')"></span></span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--patronage"></span><span x-text="$root.t('figuren.edge.patronage')"></span></span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschaeft"></span><span x-text="$root.t('figuren.edge.geschaeft')"></span></span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--eltern"></span><span x-text="$app.t('figuren.edge.eltern')"></span></span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschwister"></span><span x-text="$app.t('figuren.edge.geschwister')"></span></span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--freund"></span><span x-text="$app.t('figuren.edge.freund')"></span></span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--feind"></span><span x-text="$app.t('figuren.edge.feind')"></span></span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--liebesbeziehung"></span><span x-text="$app.t('figuren.edge.liebesbeziehung')"></span></span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--patronage"></span><span x-text="$app.t('figuren.edge.patronage')"></span></span>
+          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschaeft"></span><span x-text="$app.t('figuren.edge.geschaeft')"></span></span>
         </div>
-        <div x-show="figurenGraphModus === 'figur'" class="figur-soziogramm-hint" x-text="$root.t('figuren.graph.hint')"></div>
+        <div x-show="figurenGraphModus === 'figur'" class="figur-soziogramm-hint" x-text="$app.t('figuren.graph.hint')"></div>
       </div>
     </template>
 
@@ -57,15 +57,15 @@
     <template x-if="figurenGraphModus === 'soziogramm'">
       <div>
         <div class="figur-legend figur-legend--soziogramm">
-          <span class="figur-legend-dot figur-legend-dot--wirtschaftselite"></span><span x-text="$root.t('figuren.schicht.wirtschaftselite')"></span>
-          <span class="figur-legend-dot figur-legend-dot--gehobenes_buergertum"></span><span x-text="$root.t('figuren.schicht.gehobenes_buergertum')"></span>
-          <span class="figur-legend-dot figur-legend-dot--mittelschicht"></span><span x-text="$root.t('figuren.schicht.mittelschicht')"></span>
-          <span class="figur-legend-dot figur-legend-dot--arbeiterschicht"></span><span x-text="$root.t('figuren.schicht.arbeiterschicht')"></span>
-          <span class="figur-legend-dot figur-legend-dot--migrantenmilieu"></span><span x-text="$root.t('figuren.schicht.migrantenmilieu')"></span>
-          <span class="figur-legend-dot figur-legend-dot--prekariat"></span><span x-text="$root.t('figuren.schicht.prekariat')"></span>
-          <span class="figur-legend-dot figur-legend-dot--unterwelt"></span><span x-text="$root.t('figuren.schicht.unterwelt')"></span>
+          <span class="figur-legend-dot figur-legend-dot--wirtschaftselite"></span><span x-text="$app.t('figuren.schicht.wirtschaftselite')"></span>
+          <span class="figur-legend-dot figur-legend-dot--gehobenes_buergertum"></span><span x-text="$app.t('figuren.schicht.gehobenes_buergertum')"></span>
+          <span class="figur-legend-dot figur-legend-dot--mittelschicht"></span><span x-text="$app.t('figuren.schicht.mittelschicht')"></span>
+          <span class="figur-legend-dot figur-legend-dot--arbeiterschicht"></span><span x-text="$app.t('figuren.schicht.arbeiterschicht')"></span>
+          <span class="figur-legend-dot figur-legend-dot--migrantenmilieu"></span><span x-text="$app.t('figuren.schicht.migrantenmilieu')"></span>
+          <span class="figur-legend-dot figur-legend-dot--prekariat"></span><span x-text="$app.t('figuren.schicht.prekariat')"></span>
+          <span class="figur-legend-dot figur-legend-dot--unterwelt"></span><span x-text="$app.t('figuren.schicht.unterwelt')"></span>
         </div>
-        <div class="figur-soziogramm-hint" x-text="$root.t('figuren.soziogramm.hint')"></div>
+        <div class="figur-soziogramm-hint" x-text="$app.t('figuren.soziogramm.hint')"></div>
       </div>
     </template>
 
@@ -73,16 +73,16 @@
       <div class="figuren-graph-toolbar">
         <!-- Kapitel-Filter (nur Figurengraph) -->
         <div x-show="figurenGraphModus === 'figur' && figurenKapitelListe().length > 0" class="figuren-graph-filter">
-          <button type="button" class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': !figurenGraphKapitel }" @click="_figurenGraphSetKapitel(null)" x-text="$root.t('common.all')"></button>
+          <button type="button" class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': !figurenGraphKapitel }" @click="_figurenGraphSetKapitel(null)" x-text="$app.t('common.all')"></button>
           <template x-for="ch in figurenKapitelListe()" :key="ch">
             <button type="button" class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': figurenGraphKapitel === ch }" @click="_figurenGraphSetKapitel(ch)" x-text="ch"></button>
           </template>
         </div>
         <div class="figuren-graph-toolbar-zoom">
-          <button type="button" class="graph-tool-btn" :title="$root.t('graph.zoomIn')" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 1.3, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">+</button>
-          <button type="button" class="graph-tool-btn" :title="$root.t('graph.zoomOut')" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 0.77, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">−</button>
-          <button type="button" class="graph-tool-btn graph-tool-btn--reset" :title="$root.t('graph.reset')" @click="_figurenNetwork && _figurenNetwork.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } })">&#x26F6;</button>
-          <button type="button" class="graph-tool-btn" :title="figurenGraphFullscreen ? $root.t('graph.fullscreenClose') : $root.t('graph.fullscreen')" @click="toggleFigurenGraphFullscreen()" x-text="figurenGraphFullscreen ? '✕' : '⤢'"></button>
+          <button type="button" class="graph-tool-btn" :title="$app.t('graph.zoomIn')" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 1.3, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">+</button>
+          <button type="button" class="graph-tool-btn" :title="$app.t('graph.zoomOut')" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 0.77, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">−</button>
+          <button type="button" class="graph-tool-btn graph-tool-btn--reset" :title="$app.t('graph.reset')" @click="_figurenNetwork && _figurenNetwork.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } })">&#x26F6;</button>
+          <button type="button" class="graph-tool-btn" :title="figurenGraphFullscreen ? $app.t('graph.fullscreenClose') : $app.t('graph.fullscreen')" @click="toggleFigurenGraphFullscreen()" x-text="figurenGraphFullscreen ? '✕' : '⤢'"></button>
         </div>
       </div>
       <div id="figuren-graph" class="figuren-graph-container"></div>
@@ -93,86 +93,86 @@
 
 
   <!-- Figurenliste -->
-  <div x-show="$root.figuren.length > 0" class="figur-list-section">
+  <div x-show="$app.figuren.length > 0" class="figur-list-section">
     <div class="figur-list-header">
-      <div class="history-heading" x-text="$root.t('figuren.heading')"></div>
+      <div class="history-heading" x-text="$app.t('figuren.heading')"></div>
     </div>
 
      <!-- Filter -->
-    <div x-show="$root.figuren.length > 0 && figurenKapitelListe().length > 0" class="filter-bar">
-      <input type="text" x-model="$root.figurenFilters.suche" :placeholder="$root.t('common.search')" class="filter-search-input">
-      <div x-data="combobox($root.t('filter.chapter'), $root.t('filter.allChapters'))"
-          x-modelable="value" x-model="$root.figurenFilters.kapitel"
+    <div x-show="$app.figuren.length > 0 && figurenKapitelListe().length > 0" class="filter-bar">
+      <input type="text" x-model="$app.figurenFilters.suche" :placeholder="$app.t('common.search')" class="filter-search-input">
+      <div x-data="combobox($app.t('filter.chapter'), $app.t('filter.allChapters'))"
+          x-modelable="value" x-model="$app.figurenFilters.kapitel"
           x-effect="options = figurenKapitelListe().map(k => ({value: k, label: k}))"
-          @combobox-change="$root.figurenFilters.seite = ''; $root.selectedFigurId = null"
+          @combobox-change="$app.figurenFilters.seite = ''; $app.selectedFigurId = null"
           @click.outside="close()" @keydown="onKeydown($event)"
           class="combobox-wrap combobox-wrap--compact">
       </div>
-      <div x-data="combobox($root.t('filter.page'), $root.t('filter.allPages'))"
-          x-modelable="value" x-model="$root.figurenFilters.seite"
-          x-effect="_disabled = !$root.figurenFilters.kapitel || figurenSeitenListe().length === 0; options = figurenSeitenListe().map(s => ({value: s, label: s}))"
-          @combobox-change="$root.selectedFigurId = null"
+      <div x-data="combobox($app.t('filter.page'), $app.t('filter.allPages'))"
+          x-modelable="value" x-model="$app.figurenFilters.seite"
+          x-effect="_disabled = !$app.figurenFilters.kapitel || figurenSeitenListe().length === 0; options = figurenSeitenListe().map(s => ({value: s, label: s}))"
+          @combobox-change="$app.selectedFigurId = null"
           @click.outside="close()" @keydown="onKeydown($event)"
           :class="{'combobox-wrap--disabled': _disabled}"
           class="combobox-wrap combobox-wrap--compact">
       </div>
-      <span class="filter-count" x-text="filteredFiguren().length + ' / ' + $root.figuren.length"></span>
+      <span class="filter-count" x-text="filteredFiguren().length + ' / ' + $app.figuren.length"></span>
     </div>
 
     <template x-for="f in filteredFiguren()" :key="f.id">
       <div>
-        <div class="figur-item" :data-figid="f.id" @click="$root.selectedFigurId = $root.selectedFigurId === f.id ? null : f.id;">
+        <div class="figur-item" :data-figid="f.id" @click="$app.selectedFigurId = $app.selectedFigurId === f.id ? null : f.id;">
           <span class="figur-typ-dot" :class="'figur-typ-dot--' + (f.typ || 'unknown')"></span>
           <span class="figur-name" x-text="f.name"></span>
-          <span class="tag" x-text="$root.t('figuren.type.' + f.typ)"></span>
+          <span class="tag" x-text="$app.t('figuren.type.' + f.typ)"></span>
           <span x-show="f.geburtstag" class="tag" x-text="'* ' + f.geburtstag"></span>
           <!-- Kapitel-Badges -->
           <template x-if="f.kapitel?.length">
             <span class="figur-kapitel-badges">
-              <span class="figur-kapitel-primary internal-link" x-text="f.kapitel[0].name" @click.stop="$root.figurenFilters.kapitel = f.kapitel[0].name; $root.figurenFilters.seite = ''"></span>
+              <span class="figur-kapitel-primary internal-link" x-text="f.kapitel[0].name" @click.stop="$app.figurenFilters.kapitel = f.kapitel[0].name; $app.figurenFilters.seite = ''"></span>
               <template x-if="f.kapitel.length > 1">
                 <span class="figur-kapitel-more" x-text="'+' + (f.kapitel.length - 1)"></span>
               </template>
             </span>
           </template>
-          <span class="history-chevron" :class="{ open: $root.selectedFigurId === f.id }">›</span>
+          <span class="history-chevron" :class="{ open: $app.selectedFigurId === f.id }">›</span>
         </div>
-        <div x-show="$root.selectedFigurId === f.id" class="figur-detail">
+        <div x-show="$app.selectedFigurId === f.id" class="figur-detail">
           <p x-show="f.beschreibung" x-text="f.beschreibung" class="figur-beschreibung"></p>
           <!-- Rolle / Motivation / Konflikt / Entwicklung -->
           <div x-show="f.rolle || f.motivation || f.konflikt || f.entwicklung" class="figur-kerninfo">
             <div x-show="f.rolle" class="figur-kerninfo-row">
-              <span class="bewertung-section-title bewertung-section-title--inline" x-text="$root.t('figuren.field.rolle') + ' '"></span>
+              <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.rolle') + ' '"></span>
               <span class="figur-detail-value" x-text="f.rolle"></span>
             </div>
             <div x-show="f.motivation" class="figur-kerninfo-row">
-              <span class="bewertung-section-title bewertung-section-title--inline" x-text="$root.t('figuren.field.motivation') + ' '"></span>
+              <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.motivation') + ' '"></span>
               <span class="figur-detail-value" x-text="f.motivation"></span>
             </div>
             <div x-show="f.konflikt" class="figur-kerninfo-row">
-              <span class="bewertung-section-title bewertung-section-title--inline" x-text="$root.t('figuren.field.konflikt') + ' '"></span>
+              <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.konflikt') + ' '"></span>
               <span class="figur-detail-value" x-text="f.konflikt"></span>
             </div>
             <div x-show="f.entwicklung" class="figur-kerninfo-row">
-              <span class="bewertung-section-title bewertung-section-title--inline" x-text="$root.t('figuren.field.entwicklung') + ' '"></span>
+              <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.entwicklung') + ' '"></span>
               <span class="figur-detail-value" x-text="f.entwicklung"></span>
             </div>
           </div>
           <!-- Beruf + Sozialschicht + Präsenz -->
           <div x-show="f.beruf || (f.sozialschicht && f.sozialschicht !== 'andere') || f.praesenz" class="figur-detail-row">
-            <span x-show="f.beruf" class="bewertung-section-title bewertung-section-title--inline" x-text="$root.t('figuren.field.beruf') + ' '"></span>
+            <span x-show="f.beruf" class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.beruf') + ' '"></span>
             <span x-show="f.beruf" class="figur-detail-value" x-text="f.beruf"></span>
-            <span x-show="f.sozialschicht && f.sozialschicht !== 'andere'" class="tag figur-sozialschicht-badge" :class="'figur-schicht-' + f.sozialschicht" x-text="$root.t('figuren.schicht.' + f.sozialschicht)"></span>
-            <span x-show="f.praesenz" class="tag figur-praesenz-badge" :class="'figur-praesenz-' + f.praesenz" x-text="$root.t('figuren.praesenz.' + f.praesenz)"></span>
+            <span x-show="f.sozialschicht && f.sozialschicht !== 'andere'" class="tag figur-sozialschicht-badge" :class="'figur-schicht-' + f.sozialschicht" x-text="$app.t('figuren.schicht.' + f.sozialschicht)"></span>
+            <span x-show="f.praesenz" class="tag figur-praesenz-badge" :class="'figur-praesenz-' + f.praesenz" x-text="$app.t('figuren.praesenz.' + f.praesenz)"></span>
           </div>
           <!-- Erste Erwähnung -->
           <div x-show="f.erste_erwaehnung" class="figur-detail-row">
-            <span class="bewertung-section-title bewertung-section-title--inline" x-text="$root.t('figuren.field.ersteErwaehnung') + ' '"></span>
+            <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.ersteErwaehnung') + ' '"></span>
             <span class="figur-detail-value" x-text="f.erste_erwaehnung"></span>
           </div>
           <!-- Schlüsselzitate -->
           <div x-show="f.schluesselzitate?.length">
-            <div class="bewertung-section-title" x-text="$root.t('figuren.field.schluesselzitate')"></div>
+            <div class="bewertung-section-title" x-text="$app.t('figuren.field.schluesselzitate')"></div>
             <ul class="bullet-list figur-zitate-list">
               <template x-for="(z, i) in (f.schluesselzitate || [])" :key="i">
                 <li class="figur-zitat" x-text="'«' + z + '»'"></li>
@@ -181,15 +181,15 @@
           </div>
           <!-- Kapitelauftritte -->
           <div class="figur-kapitelauftritte" x-show="f.kapitel?.length > 1">
-            <div class="bewertung-section-title" x-text="$root.t('figuren.field.kapitelauftritte')"></div>
+            <div class="bewertung-section-title" x-text="$app.t('figuren.field.kapitelauftritte')"></div>
             <div class="figur-tags-row">
               <template x-for="(k, ki) in (f.kapitel || [])" :key="ki">
-                <span class="tag internal-link" @click="$root.figurenFilters.kapitel = k.name; $root.figurenFilters.seite = ''" x-text="ki === 0 ? k.name : k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
+                <span class="tag internal-link" @click="$app.figurenFilters.kapitel = k.name; $app.figurenFilters.seite = ''" x-text="ki === 0 ? k.name : k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
               </template>
             </div>
           </div>
           <div x-show="f.eigenschaften?.length">
-            <div class="bewertung-section-title" x-text="$root.t('figuren.field.eigenschaften')"></div>
+            <div class="bewertung-section-title" x-text="$app.t('figuren.field.eigenschaften')"></div>
             <ul class="bullet-list figur-eigenschaften-list">
               <template x-for="(e, i) in (f.eigenschaften || [])" :key="i">
                 <li x-text="e"></li>
@@ -198,30 +198,30 @@
           </div>
           <!-- Familie -->
           <div x-show="f.eltern_ids?.length || f.geschwister_ids?.length">
-            <div class="bewertung-section-title" x-text="$root.t('figuren.field.familie')"></div>
+            <div class="bewertung-section-title" x-text="$app.t('figuren.field.familie')"></div>
             <div class="figur-tags-row">
               <template x-for="pid in (f.eltern_ids || [])" :key="'e'+pid">
-                <span class="tag figur-rel-tag internal-link" :title="$root.t('figuren.rel.parent')" @click.stop="$root.openFigurById(pid)" x-text="'↑ ' + ($root.figurenById.get(pid)?.name || pid)"></span>
+                <span class="tag figur-rel-tag internal-link" :title="$app.t('figuren.rel.parent')" @click.stop="$app.openFigurById(pid)" x-text="'↑ ' + ($app.figurenById.get(pid)?.name || pid)"></span>
               </template>
               <template x-for="sid in (f.geschwister_ids || [])" :key="'s'+sid">
-                <span class="tag figur-rel-tag internal-link" :title="$root.t('figuren.rel.sibling')" @click.stop="$root.openFigurById(sid)" x-text="'⇔ ' + ($root.figurenById.get(sid)?.name || sid)"></span>
+                <span class="tag figur-rel-tag internal-link" :title="$app.t('figuren.rel.sibling')" @click.stop="$app.openFigurById(sid)" x-text="'⇔ ' + ($app.figurenById.get(sid)?.name || sid)"></span>
               </template>
             </div>
           </div>
           <!-- Beziehungen -->
           <div x-show="f.beziehungen?.length">
-            <div class="bewertung-section-title" x-text="$root.t('figuren.field.beziehungen')"></div>
+            <div class="bewertung-section-title" x-text="$app.t('figuren.field.beziehungen')"></div>
             <div class="figur-bz-list">
               <template x-for="(bz, i) in (f.beziehungen || [])" :key="i">
                 <div class="figur-beziehung-item">
                   <span class="figur-bz-typ" :class="'figur-bz-' + bz.typ" x-text="bz.typ"></span>
-                  <span class="figur-bz-name internal-link" @click.stop="$root.openFigurById(bz.figur_id)" x-text="$root.figurenById.get(bz.figur_id)?.name || bz.figur_id"></span>
+                  <span class="figur-bz-name internal-link" @click.stop="$app.openFigurById(bz.figur_id)" x-text="$app.figurenById.get(bz.figur_id)?.name || bz.figur_id"></span>
                   <span x-show="bz.machtverhaltnis && bz.machtverhaltnis !== 0" class="figur-bz-macht" :class="bz.machtverhaltnis > 0 ? 'figur-bz-macht--positiv' : 'figur-bz-macht--negativ'" x-text="bz.machtverhaltnis > 0 ? '↑'.repeat(Math.abs(bz.machtverhaltnis)) : '↓'.repeat(Math.abs(bz.machtverhaltnis))"></span>
                   <span x-show="bz.beschreibung" class="figur-bz-hint" x-text="'– ' + bz.beschreibung"></span>
                   <template x-if="bz.belege?.length">
                     <span class="figur-bz-belege">
                       <template x-for="(bg, bi) in (bz.belege || [])" :key="bi">
-                        <span class="figur-bz-beleg internal-link" @click.stop="$root.gotoStelle(bg.kapitel, bg.seite)" x-text="bg.seite || bg.kapitel" :title="(bg.kapitel || '') + (bg.seite ? ' · ' + bg.seite : '')"></span>
+                        <span class="figur-bz-beleg internal-link" @click.stop="$app.gotoStelle(bg.kapitel, bg.seite)" x-text="bg.seite || bg.kapitel" :title="(bg.kapitel || '') + (bg.seite ? ' · ' + bg.seite : '')"></span>
                       </template>
                     </span>
                   </template>
@@ -231,7 +231,7 @@
           </div>
           <!-- Lebensereignisse / Zeitstrahl -->
           <div x-show="f.lebensereignisse?.length">
-            <div class="bewertung-section-title" x-text="$root.t('figuren.field.zeitstrahl')"></div>
+            <div class="bewertung-section-title" x-text="$app.t('figuren.field.zeitstrahl')"></div>
             <div class="global-zeitstrahl-body">
               <template x-for="(ev, i) in (f.lebensereignisse || [])" :key="i">
                 <div class="gz-item" :class="ev.typ === 'extern' ? 'gz-item--extern' : ''">
@@ -240,15 +240,15 @@
                     <div class="gz-datum-row">
                       <span class="gz-datum" x-text="ev.datum"></span>
                       <template x-if="ev.typ === 'extern'">
-                        <span class="gz-extern-badge" x-text="$root.t('figuren.external')"></span>
+                        <span class="gz-extern-badge" x-text="$app.t('figuren.external')"></span>
                       </template>
                     </div>
-                    <div class="gz-ereignis internal-link" @click="$root.openEreignisseMitFigur(f.id)" x-text="ev.ereignis"></div>
+                    <div class="gz-ereignis internal-link" @click="$app.openEreignisseMitFigur(f.id)" x-text="ev.ereignis"></div>
                     <div x-show="ev.kapitel" class="gz-kapitel">
-                      <span class="gz-kapitel-link internal-link" @click="$root.gotoStelle(ev.kapitel, null)" x-text="ev.kapitel"></span>
+                      <span class="gz-kapitel-link internal-link" @click="$app.gotoStelle(ev.kapitel, null)" x-text="ev.kapitel"></span>
                     </div>
                     <div x-show="ev.seite" class="gz-seite">
-                      <span class="internal-link" @click="$root.gotoStelle(ev.kapitel, ev.seite)" x-text="ev.seite"></span>
+                      <span class="internal-link" @click="$app.gotoStelle(ev.kapitel, ev.seite)" x-text="ev.seite"></span>
                     </div>
                     <div x-show="ev.bedeutung" class="gz-bedeutung" x-text="ev.bedeutung"></div>
                   </div>

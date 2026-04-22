@@ -5,7 +5,7 @@
 // Zugriff auf Root-State (t, selectedBookId, selectedBookName, currentPage,
 // bsGet, _loadApplyAndSave, updatePageView, saveApplying, originalHtml,
 // lektoratFindings, checkDone, _checkDoneBeforeChat, _chatPendingRefresh)
-// läuft über this.$root.
+// läuft über window.__app.
 //
 // Der `toggle`-Teil (open/close + _closeOtherMainCards) lebt nicht mehr hier:
 // Root setzt die `showXxxCard`-Flag, die Sub-Komponente reagiert per $watch
@@ -75,7 +75,7 @@ export function makeChatMethods(cfg) {
 
   function startPollLocal(jobId) {
     const sessionId = this[p.sessionId];
-    const root = this.$root;
+    const root = window.__app;
     startPoll(this, {
       timerProp: p.pollTimer,
       ...(p.progress ? { progressProp: p.progress } : {}),
@@ -126,7 +126,7 @@ export function makeChatMethods(cfg) {
   // Ersetzt das frühere `toggleXxxCard` aus chat-base (öffnende Hälfte).
   async function onVisible() {
     if (!cfg.canOpen(this)) return;
-    const root = this.$root;
+    const root = window.__app;
     root._checkDoneBeforeChat = root.checkDone;
     root.checkDone = false;
     await loadSessions.call(this);
@@ -167,7 +167,7 @@ export function makeChatMethods(cfg) {
   };
 
   m[`send${L}Message`] = async function () {
-    const root = this.$root;
+    const root = window.__app;
     const msg = (this[p.input] || '').trim();
     if (!msg || this[p.loading] || !this[p.sessionId]) return;
     this[p.input] = '';
@@ -199,14 +199,14 @@ export function makeChatMethods(cfg) {
   // und beim Rendern in die aktuelle Locale aufgelöst (siehe CLAUDE.md, i18n-Regel).
   m._renderChatMarkdown    = function (text) {
     const match = /^__i18n:([a-zA-Z0-9_.-]+)__$/.exec(text || '');
-    return renderChatMarkdown(match ? this.$root.t(match[1]) : text);
+    return renderChatMarkdown(match ? window.__app.t(match[1]) : text);
   };
 
   // Status-HTML für laufende Jobs — wird von onPollProgress-Callbacks der
   // konkreten Chats genutzt (sie rufen this._runningJobStatus).
   m._runningJobStatus = function (statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams) {
     return runningJobStatus(
-      (k, p2) => this.$root.t(k, p2),
+      (k, p2) => window.__app.t(k, p2),
       statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams,
     );
   };
