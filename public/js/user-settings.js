@@ -78,9 +78,8 @@ export const userSettingsMethods = {
       if (String(this.$root.selectedBookId) === String(bookId)) {
         this.$root.pageHistory       = [];
         this.$root.bookReviewHistory = [];
-        this.$root.chatSessions      = [];
-        this.$root.chatMessages      = [];
-        this.$root.chatSessionId     = null;
+        // chatCard-Reset via Event: der Seiten-Chat lebt in der Sub-Komponente.
+        window.dispatchEvent(new CustomEvent('chat:reset'));
       }
       setTimeout(() => { this.bookHistoryResetMessage = ''; }, 6000);
     } catch (e) {

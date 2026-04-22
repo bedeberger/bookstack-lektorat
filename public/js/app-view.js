@@ -172,6 +172,41 @@ export const appViewMethods = {
     this._closeOtherMainCards('figures');
     this.showFiguresCard = true;
   },
+  // Seiten-Chat: lebt neben dem Editor, schließt NICHT den Editor. Toggle
+  // merkt sich checkDone-Snapshot (Chat soll Findings temporär verbergen).
+  toggleChatCard() {
+    if (this.showChatCard) {
+      this.showChatCard = false;
+      // lektoratFindings bleiben in der Sub — hier nur Flags am Root:
+      if (this._checkDoneBeforeChat && this.lektoratFindings?.length > 0) {
+        this.checkDone = true;
+        this._checkDoneBeforeChat = false;
+      }
+      return;
+    }
+    if (!this.currentPage) return;
+    // Seiten-Chat schliesst NICHT die anderen Karten — er läuft neben dem Editor.
+    this.showChatCard = true;
+    // checkDoneBeforeChat wird in chat-base beim onVisible gesetzt.
+  },
+  // Buch-Chat: exklusive Hauptkarte wie alle anderen.
+  toggleBookChatCard() {
+    if (this.showBookChatCard) {
+      window.dispatchEvent(new CustomEvent('card:refresh', { detail: { name: 'bookChat' } }));
+      return;
+    }
+    if (!this.selectedBookId) return;
+    this._closeOtherMainCards('bookChat');
+    this.showBookChatCard = true;
+  },
+  // Seitenwechsel: Seiten-Chat resetten (Chat ist pro Seite). Wird von
+  // resetPage() aufgerufen — dispatched an die Sub-Komponente.
+  resetChat() {
+    window.dispatchEvent(new CustomEvent('chat:reset'));
+  },
+  resetBookChat() {
+    window.dispatchEvent(new CustomEvent('book-chat:reset'));
+  },
 
   async toggleTreeCard() {
     if (this.showTreeCard) { this.showTreeCard = false; this.resetPage(); return; }
@@ -254,12 +289,7 @@ export const appViewMethods = {
     this.newPageTitle = '';
     this.newPageCreating = false;
     this.newPageError = '';
-    this.chatSessions = [];
-    this.chatMessages = [];
-    this.chatSessionId = null;
-    this.bookChatSessions = [];
-    this.bookChatMessages = [];
-    this.bookChatSessionId = null;
+    // chatCard + bookChatCard: Sub-Komponenten hören auf `book:changed` und resetten sich.
     // kontinuitaetCard: Sub-Komponente hört auf `book:changed` und resetet.
     this.chapterFigures = [];
     this.pageHistory = [];
@@ -282,8 +312,7 @@ export const appViewMethods = {
     // Timer via book:changed-Handler in der Sub-Komponente.
     const timers = [
       '_figuresPollTimer',
-      '_chatPollTimer',
-      '_bookChatPollTimer', '_komplettPollTimer',
+      '_komplettPollTimer',
     ];
     for (const t of timers) {
       if (this[t]) { clearInterval(this[t]); this[t] = null; }

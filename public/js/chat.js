@@ -1,8 +1,9 @@
 import { escHtml, fmtTok, findInHtml, stripFocusArtefacts, clearStatusAfter } from './utils.js';
 import { makeChatMethods } from './chat-base.js';
 
-// Seiten-Chat-Methoden (werden in die Alpine-Komponente gespreadet).
+// Seiten-Chat-Methoden (werden in Alpine.data('chatCard') gespreadet).
 // Gemeinsame Logik kommt aus chat-base.js; hier nur Seiten-Chat-Spezifika.
+// `this` zeigt auf die Sub-Komponente; Root-Zugriffe via this.$root.
 
 const baseMethods = makeChatMethods({
   label: 'Chat',
@@ -20,14 +21,14 @@ const baseMethods = makeChatMethods({
   },
   scrollElId: 'chat-messages',
   activeJobType: 'chat',
-  canOpen: (ctx) => !!ctx.currentPage,
-  sessionsUrl: (ctx) => '/chat/sessions/' + ctx.currentPage.id,
+  canOpen: (ctx) => !!ctx.$root.currentPage,
+  sessionsUrl: (ctx) => '/chat/sessions/' + ctx.$root.currentPage.id,
   newSessionUrl: '/chat/session',
   newSessionBody: (ctx) => ({
-    book_id:   parseInt(ctx.selectedBookId),
-    book_name: ctx.selectedBookName,
-    page_id:   ctx.currentPage.id,
-    page_name: ctx.currentPage.name,
+    book_id:   parseInt(ctx.$root.selectedBookId),
+    book_name: ctx.$root.selectedBookName,
+    page_id:   ctx.$root.currentPage.id,
+    page_name: ctx.$root.currentPage.name,
   }),
   sendUrl: '/jobs/chat',
   lsKeyFn: (sessionId) => 'lektorat_chat_job_' + sessionId,
@@ -35,17 +36,18 @@ const baseMethods = makeChatMethods({
     this.chatStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec, job.statusParams);
   },
   onBeforeSend: async function () {
+    const root = this.$root;
     try {
-      const pageData = await this.bsGet('pages/' + this.currentPage.id);
-      this.originalHtml = stripFocusArtefacts(pageData.html || '');
+      const pageData = await root.bsGet('pages/' + root.currentPage.id);
+      root.originalHtml = stripFocusArtefacts(pageData.html || '');
       this._chatPendingRefresh = false;
     } catch (e) {
       console.warn('[sendChatMessage] Seiteninhalt konnte nicht geladen werden:', e.message);
     }
   },
   onPollDone: async function () {
-    if (this.currentPage) await this.loadChatSessions();
-    this.updatePageView();
+    if (this.$root.currentPage) await this.loadChatSessions();
+    this.$root.updatePageView();
   },
   onAfterSessionLoad: function () {
     for (const m of this.chatMessages) {
@@ -53,10 +55,10 @@ const baseMethods = makeChatMethods({
         for (const v of m.vorschlaege) if (v.applied) v._applied = true;
       }
     }
-    this.updatePageView();
+    this.$root.updatePageView();
   },
   onReset: function () {
-    this.updatePageView();
+    this.$root.updatePageView();
   },
 });
 
@@ -66,11 +68,12 @@ export const chatMethods = {
   // ── Seiten-Chat-spezifisch: Vorschlag übernehmen ──────────────────────────
 
   async applyChatVorschlag(vorschlag, msgIdx, vIdx) {
+    const root = this.$root;
     const v = () => this.chatMessages[msgIdx].vorschlaege[vIdx];
     const setErr = (msg) => { v()._error = msg; };
 
-    if (!this.currentPage) {
-      setErr(this.t('chat.pageNotLoaded'));
+    if (!root.currentPage) {
+      setErr(root.t('chat.pageNotLoaded'));
       return;
     }
 
@@ -81,14 +84,14 @@ export const chatMethods = {
     // `das magische Wort`). Ohne Tolerant-Match würde die Mehrheit realistischer
     // KI-Vorschläge fälschlich abgelehnt.
     try {
-      const page = await this.bsGet('pages/' + this.currentPage.id);
+      const page = await root.bsGet('pages/' + root.currentPage.id);
       if (!findInHtml(page.html, vorschlag.original)) {
-        setErr(this.t('chat.originalNotFound'));
+        setErr(root.t('chat.originalNotFound'));
         return;
       }
     } catch (e) {
       console.error('[chat applyVorschlag pageLoad]', e);
-      setErr(this.t('chat.pageLoadFailed'));
+      setErr(root.t('chat.pageLoadFailed'));
       return;
     }
 
@@ -97,18 +100,18 @@ export const chatMethods = {
     try {
       // Gleiche Pipeline wie beim Lektorat: laden → anwenden → Safety-Check → speichern.
       // onProgress setzt saveApplying (→ Editor-Progressbar) und chatStatus.
-      const finalHtml = await this._loadApplyAndSave(
+      const finalHtml = await root._loadApplyAndSave(
         [{ original: vorschlag.original, korrektur: vorschlag.ersatz }],
         [],
         (pct, text) => {
-          this.saveApplying = pct;
+          root.saveApplying = pct;
           if (text) this.chatStatus = `<span class="spinner"></span>${escHtml(text)}`;
         },
       );
-      this.originalHtml = finalHtml;
+      root.originalHtml = finalHtml;
       this._chatPendingRefresh = true;
       v()._applied = true;
-      this.updatePageView();
+      root.updatePageView();
       const msgId = this.chatMessages[msgIdx]?.id;
       if (msgId) {
         try {
@@ -122,16 +125,16 @@ export const chatMethods = {
           console.warn('[applyChatVorschlag] Markierung nicht persistiert:', e.message);
         }
       }
-      const successMsg = `<span class="success-msg">${escHtml(this.t('chat.changeSaved'))}</span>`;
+      const successMsg = `<span class="success-msg">${escHtml(root.t('chat.changeSaved'))}</span>`;
       this.chatStatus = successMsg;
       clearStatusAfter(this, 'chatStatus', successMsg, 3000);
     } catch (e) {
       console.error('[applyChatVorschlag]', e);
-      setErr(this.t('chat.saveFailedPrefix') + e.message);
+      setErr(root.t('chat.saveFailedPrefix') + e.message);
       this.chatStatus = '';
     } finally {
       v()._applying = false;
-      this.saveApplying = null;
+      root.saveApplying = null;
     }
   },
 

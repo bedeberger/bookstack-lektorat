@@ -23,8 +23,8 @@ import { registerSzenenCard } from './cards/szenen-card.js';
 import { registerFigurenCard } from './cards/figuren-card.js';
 import { registerStilCard } from './cards/stil-card.js';
 import { registerFehlerHeatmapCard } from './cards/fehler-heatmap-card.js';
-import { chatMethods } from './chat.js';
-import { bookChatMethods } from './book-chat.js';
+import { registerChatCard } from './cards/chat-card.js';
+import { registerBookChatCard } from './cards/book-chat-card.js';
 import { szenenMethods } from './szenen.js';
 import { orteMethods } from './orte.js';
 import { registerKontinuitaetCard } from './cards/kontinuitaet-card.js';
@@ -130,6 +130,8 @@ document.addEventListener('alpine:init', () => {
   registerFigurenCard();
   registerBookReviewCard();
   registerKapitelReviewCard();
+  registerChatCard();
+  registerBookChatCard();
 
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
     open: false,
@@ -494,8 +496,7 @@ document.addEventListener('alpine:init', () => {
     // der bookStatsCard-Sichtbarkeit.
     ...writingTimeMethods,
     // stilMethods + fehlerHeatmapMethods migriert nach Alpine.data — siehe cards/.
-    ...chatMethods,
-    ...bookChatMethods,
+    // chatMethods + bookChatMethods migriert nach Alpine.data — siehe cards/*.js.
     ...szenenMethods,
     ...orteMethods,
     // kontinuitaetMethods migriert nach Alpine.data('kontinuitaetCard').

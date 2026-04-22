@@ -1,8 +1,19 @@
-// Gemeinsame Chat-Logik für Seiten-Chat und Buch-Chat.
-// makeChatMethods() erzeugt ein Methoden-Objekt mit konfigurierbaren
-// Property-Namen und Endpoints, das in die Alpine-Komponente gespreadet wird.
+// Gemeinsame Chat-Logik für Seiten-Chat und Buch-Chat Sub-Komponenten.
+//
+// Nach der Alpine.data-Migration liefert makeChatMethods ein Methoden-Objekt,
+// das in eine Sub-Komponente gespreadet wird. `this` ist die Sub-Komponente;
+// Zugriff auf Root-State (t, selectedBookId, selectedBookName, currentPage,
+// bsGet, _loadApplyAndSave, updatePageView, saveApplying, originalHtml,
+// lektoratFindings, checkDone, _checkDoneBeforeChat, _chatPendingRefresh)
+// läuft über this.$root.
+//
+// Der `toggle`-Teil (open/close + _closeOtherMainCards) lebt nicht mehr hier:
+// Root setzt die `showXxxCard`-Flag, die Sub-Komponente reagiert per $watch
+// und führt onVisible() aus. Das Refresh-Pattern (erneuter Klick auf offene
+// Karte) läuft über `card:refresh`-Events.
 
 import { escHtml, fmtTok, renderChatMarkdown, fetchJson } from './utils.js';
+import { startPoll, runningJobStatus } from './cards/job-helpers.js';
 
 export function makeChatMethods(cfg) {
   const p = cfg.props;
@@ -33,7 +44,7 @@ export function makeChatMethods(cfg) {
           const { jobId } = await fetchJson(`/jobs/active?type=${cfg.activeJobType}&book_id=${sessionId}`);
           if (jobId) {
             this[p.loading] = true;
-            startPoll.call(this, jobId);
+            startPollLocal.call(this, jobId);
           }
         } catch (e) {
           console.error(`[load${L}Session] active-job check:`, e);
@@ -62,9 +73,10 @@ export function makeChatMethods(cfg) {
     }
   }
 
-  function startPoll(jobId) {
+  function startPollLocal(jobId) {
     const sessionId = this[p.sessionId];
-    this._startPoll({
+    const root = this.$root;
+    startPoll(this, {
       timerProp: p.pollTimer,
       ...(p.progress ? { progressProp: p.progress } : {}),
       jobId,
@@ -93,7 +105,7 @@ export function makeChatMethods(cfg) {
       onError: (job) => {
         this[p.loading] = false;
         if (p.progress) this[p.progress] = 0;
-        this[p.status] = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(job.error ? this.t(job.error, job.errorParams) : this.t('common.unknownError'))}</span>`;
+        this[p.status] = `<span class="error-msg">${root.t('common.errorColon')}${escHtml(job.error ? root.t(job.error, job.errorParams) : root.t('common.unknownError'))}</span>`;
       },
       onDone: async () => {
         this[p.loading] = false;
@@ -110,25 +122,13 @@ export function makeChatMethods(cfg) {
     if (el) el.scrollTop = el.scrollHeight;
   }
 
-  // ── Öffentliche Methoden (dynamische Namen via cfg.label) ─────────────────
-
-  const m = {};
-
-  m[`toggle${L}Card`] = async function () {
-    if (this[p.show]) {
-      if (cfg.onReopen) await cfg.onReopen.call(this);
-      else this[p.show] = false;
-      if (this._checkDoneBeforeChat && this.lektoratFindings?.length > 0) {
-        this.checkDone = true;
-        this._checkDoneBeforeChat = false;
-      }
-      return;
-    }
+  // Wrapper, den die Sub-Komponenten beim $watch(showXxxCard) aufrufen.
+  // Ersetzt das frühere `toggleXxxCard` aus chat-base (öffnende Hälfte).
+  async function onVisible() {
     if (!cfg.canOpen(this)) return;
-    if (cfg.closeOtherCards) this._closeOtherMainCards(cfg.closeOtherCards);
-    this._checkDoneBeforeChat = this.checkDone;
-    this.checkDone = false;
-    this[p.show] = true;
+    const root = this.$root;
+    root._checkDoneBeforeChat = root.checkDone;
+    root.checkDone = false;
     await loadSessions.call(this);
     if (this[p.sessions].length === 0) {
       await startNewSession.call(this);
@@ -136,7 +136,13 @@ export function makeChatMethods(cfg) {
       await loadSession.call(this, this[p.sessions][0].id);
     }
     this.$nextTick(() => scrollToBottom.call(this));
-  };
+  }
+
+  // ── Öffentliche Methoden ────────────────────────────────────────────────
+
+  const m = {};
+
+  m[`_onVisible${L}`] = async function () { return onVisible.call(this); };
 
   m[`startNew${L}Session`] = function () { return startNewSession.call(this); };
   m[`load${L}Sessions`]    = function () { return loadSessions.call(this); };
@@ -161,6 +167,7 @@ export function makeChatMethods(cfg) {
   };
 
   m[`send${L}Message`] = async function () {
+    const root = this.$root;
     const msg = (this[p.input] || '').trim();
     if (!msg || this[p.loading] || !this[p.sessionId]) return;
     this[p.input] = '';
@@ -176,28 +183,36 @@ export function makeChatMethods(cfg) {
         body: JSON.stringify({ session_id: this[p.sessionId], message: msg }),
       });
       if (cfg.lsKeyFn) localStorage.setItem(cfg.lsKeyFn(this[p.sessionId]), jobId);
-      startPoll.call(this, jobId);
+      startPollLocal.call(this, jobId);
     } catch (e) {
       console.error(`[send${L}Message]`, e);
       this[p.messages] = this[p.messages].slice(0, -1);
-      this[p.status] = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(e.message)}</span>`;
+      this[p.status] = `<span class="error-msg">${root.t('common.errorColon')}${escHtml(e.message)}</span>`;
       this[p.loading] = false;
       this.$nextTick(() => scrollToBottom.call(this));
     }
   };
 
-  m[`start${L}Poll`]      = function (jobId) { return startPoll.call(this, jobId); };
+  m[`start${L}Poll`]      = function (jobId) { return startPollLocal.call(this, jobId); };
   m[`_scroll${L}ToBottom`] = function () { scrollToBottom.call(this); };
   // Server-persistierte Fallback-Nachrichten werden als `__i18n:key__` gespeichert
   // und beim Rendern in die aktuelle Locale aufgelöst (siehe CLAUDE.md, i18n-Regel).
   m._renderChatMarkdown    = function (text) {
     const match = /^__i18n:([a-zA-Z0-9_.-]+)__$/.exec(text || '');
-    return renderChatMarkdown(match ? this.t(match[1]) : text);
+    return renderChatMarkdown(match ? this.$root.t(match[1]) : text);
+  };
+
+  // Status-HTML für laufende Jobs — wird von onPollProgress-Callbacks der
+  // konkreten Chats genutzt (sie rufen this._runningJobStatus).
+  m._runningJobStatus = function (statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams) {
+    return runningJobStatus(
+      (k, p2) => this.$root.t(k, p2),
+      statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams,
+    );
   };
 
   m[`reset${L}`] = function () {
     if (this[p.pollTimer]) { clearInterval(this[p.pollTimer]); this[p.pollTimer] = null; }
-    this[p.show] = false;
     this[p.sessions] = [];
     this[p.messages] = [];
     this[p.sessionId] = null;

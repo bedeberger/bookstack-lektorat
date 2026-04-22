@@ -243,24 +243,11 @@ const orteState = () => ({
 // fehlerHeatmapState wandert in Alpine.data('fehlerHeatmapCard')
 // — siehe public/js/cards/fehler-heatmap-card.js.
 
+// Chat-State komplett in Alpine.data('chatCard') + ('bookChatCard') migriert.
+// _checkDoneBeforeChat bleibt am Root (von toggleChatCard + resetPage verwendet,
+// Editor-nah) — siehe shellState.
 const chatsState = () => ({
-  chatSessions: [],
-  chatMessages: [],
-  chatSessionId: null,
-  chatInput: '',
-  chatLoading: false,
-  chatProgress: 0,
-  chatStatus: '',
-  _chatPollTimer: null,
-  _chatPendingRefresh: false,
-  bookChatSessions: [],
-  bookChatMessages: [],
-  bookChatSessionId: null,
-  bookChatInput: '',
-  bookChatLoading: false,
-  bookChatProgress: 0,
-  bookChatStatus: '',
-  _bookChatPollTimer: null,
+  _checkDoneBeforeChat: false,
 });
 
 const jobsState = () => ({
