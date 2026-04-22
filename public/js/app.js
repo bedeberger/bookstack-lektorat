@@ -15,7 +15,7 @@ import { graphMethods } from './graph.js';
 import { bookstatsMethods } from './bookstats.js';
 import { writingTimeMethods } from './writing-time.js';
 import { registerStilCard } from './cards/stil-card.js';
-import { fehlerHeatmapMethods } from './fehler-heatmap.js';
+import { registerFehlerHeatmapCard } from './cards/fehler-heatmap-card.js';
 import { chatMethods } from './chat.js';
 import { bookChatMethods } from './book-chat.js';
 import { szenenMethods } from './szenen.js';
@@ -108,6 +108,7 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('alpine:init', () => {
   // Migrierte Alpine.data-Sub-Komponenten (Fach-State aus der Root ausgelagert).
   registerStilCard();
+  registerFehlerHeatmapCard();
 
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
     open: false,
@@ -485,8 +486,7 @@ document.addEventListener('alpine:init', () => {
     ...graphMethods,
     ...bookstatsMethods,
     ...writingTimeMethods,
-    // stilMethods migriert nach Alpine.data('stilCard') — siehe cards/stil-card.js.
-    ...fehlerHeatmapMethods,
+    // stilMethods + fehlerHeatmapMethods migriert nach Alpine.data — siehe cards/.
     ...chatMethods,
     ...bookChatMethods,
     ...szenenMethods,

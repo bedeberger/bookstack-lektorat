@@ -81,35 +81,35 @@ test('szenenSeitenListe: leer ohne Kapitel-Filter', () => {
   assert.deepEqual(ctx.szenenSeitenListe(), []);
 });
 
-test('szenenSeitenListe: Tree-Seiten des Kapitels mit page_id als Value', () => {
+test('szenenSeitenListe: nur Seiten mit Szenen; page_id als Value (Tree-Label bevorzugt)', () => {
   const ctx = makeCtx({ ...BOOK, szenenFilters: { ...makeCtx().szenenFilters, kapitel: 'Kapitel 1' } });
   const opts = ctx.szenenSeitenListe();
-  // Muss Morgens + Mittags (aus Tree) sowie Frühstück (Szenen-Fallback) enthalten.
-  // Morgens doppelt ('Morgens' + 'morgens' in Szenen) wird per seenIds/seenNames entdupliziert.
   const labels = opts.map(o => o.label).sort();
-  assert.deepEqual(labels, ['Frühstück', 'Mittags', 'Morgens']);
-  // Tree-Seiten tragen page_id (Number) als Value.
+  // Morgens (Szene 1 + 2 via page_id=100) und Frühstück (Szene 3, nur-Name).
+  // Mittags erscheint NICHT — keine Szene auf dieser Seite.
+  // 'morgens' (falsche Schreibweise aus Szene 2) taucht nicht als zweite Option auf,
+  // weil page_id=100 schon von 'Morgens' belegt ist.
+  assert.deepEqual(labels, ['Frühstück', 'Morgens']);
   const morgens = opts.find(o => o.label === 'Morgens');
-  const mittags = opts.find(o => o.label === 'Mittags');
-  assert.equal(morgens.value, 100);
-  assert.equal(mittags.value, 101);
-  // Name-Fallback: Frühstück hat keine passende Tree-Seite → Value ist der Name (String).
+  assert.equal(morgens.value, 100, 'page_id als Value für aufgelöste Tree-Seiten');
   const fruehstueck = opts.find(o => o.label === 'Frühstück');
-  assert.equal(fruehstueck.value, 'Frühstück');
+  assert.equal(fruehstueck.value, 'Frühstück', 'Name als Fallback-Value für Szenen ohne page_id');
 });
 
-test('szenenSeitenListe: Kapitel-Auflösung über tree funktioniert auch ohne chapter_id an der Szene', () => {
-  // Szene ohne chapter_id: Kapitel-ID nur via tree auflösen.
+test('szenenSeitenListe: Fallback-Label aus Szenen-seite wenn page_id nicht in this.pages auflösbar', () => {
+  // Szene verweist auf page_id=999, das nicht in this.pages ist (Tree noch nicht geladen).
+  // Dann fällt das Label auf den Szenen-seite-String zurück, die page_id bleibt als Value.
   const szenen = [
-    { id: 1, kapitel: 'Kapitel 1', seite: 'Morgens', chapter_id: null, page_id: 100, titel: 'x', fig_ids: [], ort_ids: [] },
+    { id: 1, kapitel: 'Kapitel 1', seite: 'Irgendwas', page_id: 999, titel: 'x', fig_ids: [], ort_ids: [] },
   ];
   const ctx = makeCtx({
-    tree: BOOK.tree, pages: BOOK.pages, szenen,
+    tree: [], pages: [], szenen,
     szenenFilters: { ...makeCtx().szenenFilters, kapitel: 'Kapitel 1' },
   });
   const opts = ctx.szenenSeitenListe();
-  assert.ok(opts.some(o => o.label === 'Morgens' && o.value === 100));
-  assert.ok(opts.some(o => o.label === 'Mittags' && o.value === 101));
+  assert.equal(opts.length, 1);
+  assert.equal(opts[0].value, 999, 'page_id bleibt stabile Filter-Referenz');
+  assert.equal(opts[0].label, 'Irgendwas');
 });
 
 // ── applySzenenFilters (Regression-Core) ──────────────────────────────────
@@ -209,15 +209,11 @@ test('E2E-Regression: jede Option aus szenenSeitenListe findet mindestens eine S
   }
 });
 
-test('E2E-Regression: Tree-Seite ohne entsprechende Szene erscheint NICHT im Dropdown', () => {
-  // 'Mittags' (page_id=101) gehört zu Kapitel 1, aber keine Szene hat page_id=101
-  // noch seite='Mittags'. Es erscheint trotzdem im Dropdown (Tree-basiert), aber
-  // der Filter findet nichts. Das ist ok — Dropdown zeigt verfügbare Seiten,
-  // Filter zeigt vorhandene Szenen. Dieser Test dokumentiert das Verhalten.
+test('E2E-Regression: Seite ohne Szenen erscheint NICHT im Dropdown', () => {
+  // 'Mittags' (page_id=101) gehört zu Kapitel 1, aber keine Szene hat page_id=101.
+  // Das Dropdown darf die Seite nicht anbieten — sonst wählt der User sie aus
+  // und sieht nichts (= „Filter funktioniert nicht"-Beschwerde).
   const ctx = makeCtx({ ...BOOK, szenenFilters: { ...makeCtx().szenenFilters, kapitel: 'Kapitel 1' } });
   const opts = ctx.szenenSeitenListe();
-  const mittags = opts.find(o => o.label === 'Mittags');
-  assert.ok(mittags, 'Mittags ist eine Tree-Seite des Kapitels → im Dropdown erwartet');
-  const filtered = applySzenenFilters(BOOK.szenen, { kapitel: 'Kapitel 1', seite: mittags.value });
-  assert.equal(filtered.length, 0, 'keine Szene auf dieser Seite → Filter liefert leer');
+  assert.ok(!opts.some(o => o.label === 'Mittags'), 'leere Seite darf nicht im Dropdown stehen');
 });

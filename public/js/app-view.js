@@ -97,6 +97,11 @@ export const appViewMethods = {
     this._closeOtherMainCards('stil');
     this.showStilCard = true;
   },
+  toggleFehlerHeatmapCard() {
+    if (this.showFehlerHeatmapCard) { this.showFehlerHeatmapCard = false; return; }
+    this._closeOtherMainCards('fehlerHeatmap');
+    this.showFehlerHeatmapCard = true;
+  },
 
   async toggleTreeCard() {
     if (this.showTreeCard) { this.showTreeCard = false; this.resetPage(); return; }
@@ -247,8 +252,7 @@ export const appViewMethods = {
     if (this.showOrteCard)       jobs.push(this.loadOrte(bookId));
     if (this.showSzenenCard)     jobs.push(this.loadSzenen(bookId));
     if (this.showBookStatsCard)  jobs.push(this.loadBookStats(bookId));
-    // stilCard: Sub-Komponente lädt via $watch(selectedBookId) selbst neu.
-    if (this.showFehlerHeatmapCard) jobs.push(this.loadFehlerHeatmap());
+    // stilCard + fehlerHeatmapCard: Sub-Komponente lädt via $watch(selectedBookId) selbst neu.
     if (this.showBookSettingsCard && typeof this.loadBookSettings === 'function') {
       jobs.push(this.loadBookSettings());
     }
@@ -321,10 +325,7 @@ export const appViewMethods = {
     this.showStilCard = false;
     // stilCard: Sub-Komponente hört auf `view:reset` und resetet eigenen State.
     this.showFehlerHeatmapCard = false;
-    this.fehlerHeatmapData = null;
-    this.fehlerHeatmapStatus = '';
-    this.fehlerHeatmapLoading = false;
-    this.activeFehlerDetailKey = null;
+    // fehlerHeatmapCard: Sub-Komponente hört auf `view:reset` und resetet eigenen State.
     this.showOrteCard = false;
     this.orte = [];
     this.orteStatus = '';

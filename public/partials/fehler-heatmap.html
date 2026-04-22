@@ -1,24 +1,29 @@
 <!-- Fehler-Heatmap: Fehlertyp × Kapitel, aggregiert aus jüngstem page_check pro Seite -->
-<div class="card" x-show="showFehlerHeatmapCard" x-cloak x-transition>
+<!--
+  Alpine.data-Sub-Komponente — siehe public/js/cards/fehler-heatmap-card.js. Der
+  `showFehlerHeatmapCard`-Flag bleibt im Root (Hash-Router, Exklusivität),
+  fachlicher State lebt in dieser Komponente.
+-->
+<div class="card" x-data="fehlerHeatmapCard" x-show="$root.showFehlerHeatmapCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="t('fehlerHeatmap.title', { name: selectedBookName })"></span>
+    <span class="card-title" x-text="$root.t('fehlerHeatmap.title', { name: $root.selectedBookName })"></span>
     <div class="card-actions">
       <div class="mode-toggle">
         <button type="button"
                 :class="{ 'mode-toggle-btn--active': fehlerHeatmapMode === 'open' }"
                 class="mode-toggle-btn"
                 @click="setFehlerHeatmapMode('open')"
-                x-text="t('fehlerHeatmap.mode.open')"></button>
+                x-text="$root.t('fehlerHeatmap.mode.open')"></button>
         <button type="button"
                 :class="{ 'mode-toggle-btn--active': fehlerHeatmapMode === 'applied' }"
                 class="mode-toggle-btn"
                 @click="setFehlerHeatmapMode('applied')"
-                x-text="t('fehlerHeatmap.mode.applied')"></button>
+                x-text="$root.t('fehlerHeatmap.mode.applied')"></button>
         <button type="button"
                 :class="{ 'mode-toggle-btn--active': fehlerHeatmapMode === 'all' }"
                 class="mode-toggle-btn"
                 @click="setFehlerHeatmapMode('all')"
-                x-text="t('fehlerHeatmap.mode.all')"></button>
+                x-text="$root.t('fehlerHeatmap.mode.all')"></button>
       </div>
     </div>
   </div>
@@ -26,21 +31,21 @@
   <div x-show="fehlerHeatmapStatus" class="card-status" x-html="fehlerHeatmapStatus"></div>
 
   <div x-show="!fehlerHeatmapLoading && (!fehlerHeatmapData?.chapters || fehlerHeatmapData.chapters.length === 0)"
-       class="muted-msg muted-msg--spaced" x-text="t('fehlerHeatmap.emptyState')"></div>
+       class="muted-msg muted-msg--spaced" x-text="$root.t('fehlerHeatmap.emptyState')"></div>
 
   <template x-if="fehlerHeatmapData?.chapters?.length > 0">
     <div class="heatmap-wrap">
-      <div class="heatmap-legend" x-text="t('fehlerHeatmap.legend')"></div>
+      <div class="heatmap-legend" x-text="$root.t('fehlerHeatmap.legend')"></div>
 
       <div class="heatmap-scroll">
         <table class="heatmap-table">
           <thead>
             <tr>
-              <th class="heatmap-rowhead" x-text="t('fehlerHeatmap.chapter')"></th>
-              <th class="heatmap-numcol" x-text="t('fehlerHeatmap.coverage')"></th>
+              <th class="heatmap-rowhead" x-text="$root.t('fehlerHeatmap.chapter')"></th>
+              <th class="heatmap-numcol" x-text="$root.t('fehlerHeatmap.coverage')"></th>
               <template x-for="typ in fehlerHeatmapTypen" :key="typ">
-                <th :title="t('fehlerHeatmap.typ.' + typ)">
-                  <span x-text="t('fehlerHeatmap.typ.' + typ)"></span>
+                <th :title="$root.t('fehlerHeatmap.typ.' + typ)">
+                  <span x-text="$root.t('fehlerHeatmap.typ.' + typ)"></span>
                 </th>
               </template>
             </tr>
@@ -50,10 +55,10 @@
               <tr>
                 <th class="heatmap-rowhead" scope="row">
                   <span class="heatmap-rowhead-main" x-text="fehlerHeatmapChapterName(ch)"></span>
-                  <span class="heatmap-rowhead-sub" x-text="t('fehlerHeatmap.words', { n: (ch.words || 0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') })"></span>
+                  <span class="heatmap-rowhead-sub" x-text="$root.t('fehlerHeatmap.words', { n: (ch.words || 0).toLocaleString($root.uiLocale === 'en' ? 'en-US' : 'de-CH') })"></span>
                 </th>
                 <td class="heatmap-numcol">
-                  <span x-text="t('fehlerHeatmap.coverageLabel', { checked: ch.pages_checked, total: ch.pages_total })"></span>
+                  <span x-text="$root.t('fehlerHeatmap.coverageLabel', { checked: ch.pages_checked, total: ch.pages_total })"></span>
                   <span class="heatmap-coverage">
                     <span class="heatmap-coverage-bar" :style="{ '--coverage': fehlerHeatmapCoveragePct(ch) + '%' }"></span>
                   </span>
@@ -81,13 +86,13 @@
         <div class="heatmap-detail">
           <div class="heatmap-detail-header">
             <span class="heatmap-detail-title"
-                  x-text="t('fehlerHeatmap.detail.title', {
-                    typ: t('fehlerHeatmap.typ.' + fehlerHeatmapActiveDetail().typ),
+                  x-text="$root.t('fehlerHeatmap.detail.title', {
+                    typ: $root.t('fehlerHeatmap.typ.' + fehlerHeatmapActiveDetail().typ),
                     chapter: fehlerHeatmapActiveDetail().chapterName,
                   })"></span>
             <button type="button" class="heatmap-detail-close"
                     @click="activeFehlerDetailKey = null"
-                    x-text="t('common.close')"></button>
+                    x-text="$root.t('common.close')"></button>
           </div>
           <div class="heatmap-detail-list">
             <template x-for="page in fehlerHeatmapActiveDetail().pages" :key="page.page_id">
@@ -96,7 +101,7 @@
                   <span class="tag internal-link"
                         @click="fehlerHeatmapJumpToPage(page.page_id)"
                         x-text="page.page_name"></span>
-                  <span class="heatmap-detail-page-count" x-text="t('fehlerHeatmap.detail.countLabel', { n: page.count })"></span>
+                  <span class="heatmap-detail-page-count" x-text="$root.t('fehlerHeatmap.detail.countLabel', { n: page.count })"></span>
                 </div>
                 <template x-for="(s, i) in page.samples" :key="i">
                   <div class="heatmap-detail-sample">

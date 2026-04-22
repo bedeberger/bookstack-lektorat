@@ -95,37 +95,40 @@ export const appUiMethods = {
   szenenKapitelListe() {
     return this._deriveKapitel(this.szenen, s => s.kapitel);
   },
-  // Pages im Szenen-Filter-Dropdown: liefert {value,label}-Options. Value ist
-  // primär die `page_id` (Number) aus dem Buch-Baum — so greift der Filter auch,
-  // wenn `s.seite` anders geschrieben ist als der Tree-Titel. Fallback: Szenen
-  // mit nur-String-`seite` (ohne auflösbare page_id) werden mit dem Namen als
-  // Value aufgenommen, damit sie weiterhin filterbar bleiben.
+  // Pages im Szenen-Filter-Dropdown: nur Seiten, die tatsächlich Szenen tragen.
+  // Value ist primär die `page_id` (Number) — der Filter matcht dann auch Szenen,
+  // deren `seite`-String abweicht (z.B. KI-Schreibweise ≠ BookStack-Titel).
+  // Fallback für Szenen ohne auflösbare `page_id`: Seitenname als String-Value.
   szenenSeitenListe() {
     if (!this.szenenFilters.kapitel) return [];
-    const chapterIds = new Set();
+    const pageIdsOfKapitel = new Set();
+    const namesOfKapitel = new Set();
     for (const s of (this.szenen || [])) {
-      if (s.kapitel === this.szenenFilters.kapitel && s.chapter_id) chapterIds.add(s.chapter_id);
-    }
-    for (const t of (this.tree || [])) {
-      if (t.type === 'chapter' && t.name === this.szenenFilters.kapitel) chapterIds.add(t.id);
+      if (s.kapitel !== this.szenenFilters.kapitel) continue;
+      if (s.page_id) pageIdsOfKapitel.add(s.page_id);
+      else if (s.seite) namesOfKapitel.add(s.seite);
     }
     const options = [];
-    const seenIds = new Set();
-    const seenNames = new Set();
+    const labelById = new Map();
+    // Primär: Tree-Seiten auflösen (stabile page_id, robuster Label).
     for (const p of (this.pages || [])) {
-      if (!p.name) continue;
-      const inChapter = (p.chapter_id && chapterIds.has(p.chapter_id))
-        || p.chapterName === this.szenenFilters.kapitel;
-      if (!inChapter || seenIds.has(p.id)) continue;
-      options.push({ value: p.id, label: p.name });
-      seenIds.add(p.id);
-      seenNames.add(p.name);
+      if (p.id && pageIdsOfKapitel.has(p.id) && p.name && !labelById.has(p.id)) {
+        options.push({ value: p.id, label: p.name });
+        labelById.set(p.id, p.name);
+      }
     }
+    // Fallback: page_id, die in `this.pages` nicht aufzulösen ist (Tree noch
+    // nicht geladen) → Szenen-`seite`-String als Label.
     for (const s of (this.szenen || [])) {
-      if (s.kapitel !== this.szenenFilters.kapitel || !s.seite) continue;
-      if (seenNames.has(s.seite)) continue;
-      options.push({ value: s.seite, label: s.seite });
-      seenNames.add(s.seite);
+      if (s.kapitel !== this.szenenFilters.kapitel || !s.page_id || !s.seite) continue;
+      if (!labelById.has(s.page_id)) {
+        options.push({ value: s.page_id, label: s.seite });
+        labelById.set(s.page_id, s.seite);
+      }
+    }
+    // Szenen ohne page_id: Name als Value (schwächerer Match, aber besser als nichts).
+    for (const name of namesOfKapitel) {
+      options.push({ value: name, label: name });
     }
     return options.sort((a, b) => this._pageIdx(a.label) - this._pageIdx(b.label));
   },

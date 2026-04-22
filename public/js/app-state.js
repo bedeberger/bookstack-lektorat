@@ -286,13 +286,8 @@ const bookStatsState = () => ({
 
 // stilState wandert in Alpine.data('stilCard') — siehe public/js/cards/stil-card.js.
 
-const fehlerHeatmapState = () => ({
-  fehlerHeatmapData: null,
-  fehlerHeatmapLoading: false,
-  fehlerHeatmapStatus: '',
-  fehlerHeatmapMode: 'all',
-  activeFehlerDetailKey: null,
-});
+// fehlerHeatmapState wandert in Alpine.data('fehlerHeatmapCard')
+// — siehe public/js/cards/fehler-heatmap-card.js.
 
 const chatsState = () => ({
   chatSessions: [],
@@ -371,7 +366,6 @@ export function initialLektoratState() {
     ...orteState(),
     ...kontinuitaetState(),
     ...bookStatsState(),
-    ...fehlerHeatmapState(),
     ...chatsState(),
     ...jobsState(),
     ...settingsState(),
