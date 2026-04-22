@@ -306,16 +306,16 @@ document.addEventListener('alpine:init', () => {
         return chapterNames.has(c) ? c : null;
       };
       return (this.kontinuitaetResult?.issues || []).filter(issue => {
-        if (this.kontinuitaetFilterFigurId) {
+        if (this.kontinuitaetFilters.figurId) {
           if (issue.fig_ids?.length) {
-            if (!issue.fig_ids.includes(this.kontinuitaetFilterFigurId)) return false;
+            if (!issue.fig_ids.includes(this.kontinuitaetFilters.figurId)) return false;
           } else {
-            const selectedName = this.figuren.find(f => f.id === this.kontinuitaetFilterFigurId)?.name || '';
+            const selectedName = this.figuren.find(f => f.id === this.kontinuitaetFilters.figurId)?.name || '';
             if (selectedName && !(issue.figuren || []).includes(selectedName)) return false;
           }
         }
-        if (this.kontinuitaetFilterKapitel) {
-          const f = this.kontinuitaetFilterKapitel;
+        if (this.kontinuitaetFilters.kapitel) {
+          const f = this.kontinuitaetFilters.kapitel;
           const selectedId = chapters.find(t => t.name === f)?.id;
           const idMatch    = selectedId !== undefined && issue.chapter_ids?.includes(selectedId);
           const nameMatch  = (issue.kapitel || []).includes(f);

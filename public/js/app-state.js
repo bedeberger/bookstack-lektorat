@@ -257,8 +257,10 @@ const kontinuitaetState = () => ({
   kontinuitaetProgress: 0,
   kontinuitaetStatus: '',
   kontinuitaetResult: null,
-  kontinuitaetFilterFigurId: '',
-  kontinuitaetFilterKapitel: '',
+  kontinuitaetFilters: {
+    figurId: '',
+    kapitel: '',
+  },
   _kontinuitaetPollTimer: null,
 });
 
