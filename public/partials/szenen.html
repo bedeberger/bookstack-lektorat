@@ -114,19 +114,11 @@
           <div x-show="s.kommentar" class="szene-card-kommentar" x-text="s.kommentar"></div>
           <div class="gz-figuren-row">
             <template x-for="(figId, fi) in (s.fig_ids || [])" :key="fi">
-              <template x-if="$app.figurenById.get(figId)">
-                <span class="gz-figur-badge internal-link"
-                  :class="'gz-figur-badge--' + ($app.figurenById.get(figId).typ || 'andere')"
-                  @click="$app.openFigurById(figId)"
-                  x-text="$app.figurenById.get(figId).kurzname || $app.figurenById.get(figId).name">
-                </span>
-              </template>
-              <template x-if="!$app.figurenById.get(figId)">
-                <span class="gz-figur-badge internal-link gz-figur-badge--andere"
-                  @click="$app.openFigurById(figId)"
-                  x-text="figId">
-                </span>
-              </template>
+              <span class="gz-figur-badge internal-link"
+                :class="'gz-figur-badge--' + ($app.figurenById.get(figId)?.typ || 'andere')"
+                @click="$app.openFigurById(figId)"
+                x-text="$app.figurenById.get(figId)?.kurzname || $app.figurenById.get(figId)?.name || figId">
+              </span>
             </template>
             <template x-for="ortId in (s.ort_ids || [])" :key="'o'+ortId">
               <span class="tag ort-typ-tag figur-szene-ort internal-link" @click="$app.openOrtById(ortId)" x-text="$app.orteById.get(ortId)?.name || ortId"></span>
