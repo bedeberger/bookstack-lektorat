@@ -320,6 +320,7 @@
   "figuren.type.antagonist":     "Antagonist",
   "figuren.type.mentor":         "Mentor",
   "figuren.type.nebenfigur":     "Supporting",
+  "figuren.type.randfigur":      "Minor",
   "figuren.type.andere":         "Other",
 
   "figuren.edge.eltern":         "Parents",

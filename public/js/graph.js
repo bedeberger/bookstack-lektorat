@@ -82,6 +82,7 @@ export const graphMethods = {
       nebenfigur:  { background: '#F0F0F0', border: '#888',    highlight: { background: '#E4E4E4', border: '#555' } },
       antagonist:  { background: '#FFE0E0', border: '#E24B4A', highlight: { background: '#FFC7C7', border: '#B03030' } },
       mentor:      { background: '#EAF3DE', border: '#639922', highlight: { background: '#D5EBBD', border: '#3B6D11' } },
+      randfigur:   { background: '#F7F7F7', border: '#BBB',    highlight: { background: '#EDEDED', border: '#999' } },
       andere:      { background: '#FFF5DC', border: '#c4a55a', highlight: { background: '#FFEEBB', border: '#8a6a20' } },
     };
     return colors[typ] || colors.andere;
@@ -169,10 +170,10 @@ export const graphMethods = {
     const ROW_H           = 50;   // Vertikaler Abstand zwischen zwei Stapelzeilen innerhalb eines Tiers
     const TIER_BASE_GAP   = 80;   // Zusatz-Luft zwischen zwei Tiers
     const MIN_DX          = 130;  // Minimaler horizontaler Abstand zwischen zwei Figuren derselben Zeile
-    const TIER_ORDER      = ['hauptfigur', 'antagonist', 'mentor', 'nebenfigur', 'andere'];
+    const TIER_ORDER      = ['hauptfigur', 'antagonist', 'mentor', 'nebenfigur', 'randfigur', 'andere'];
     const TIER_COLOR = {
       hauptfigur: '#2d6a9f', antagonist: '#E24B4A',
-      mentor:     '#639922', nebenfigur: '#666',    andere: '#c4a55a',
+      mentor:     '#639922', nebenfigur: '#666',    randfigur: '#999', andere: '#c4a55a',
     };
     const tierOf = f => TIER_ORDER.includes(f.typ) ? f.typ : 'andere';
 

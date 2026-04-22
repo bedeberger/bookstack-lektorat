@@ -650,7 +650,7 @@ const FIGUREN_BASIS_SCHEMA = `{
       "id": "fig_1",
       "name": "Vollständiger Name",
       "kurzname": "Vorname oder Spitzname",
-      "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere",
+      "typ": "hauptfigur|nebenfigur|antagonist|mentor|randfigur|andere",
       "geburtstag": "JJJJ oder leer wenn unbekannt",
       "geschlecht": "männlich|weiblich|divers|unbekannt",
       "beruf": "Beruf oder Rolle oder leer",
@@ -674,6 +674,7 @@ const figurenBasisRules = (kontext = '') => `Regeln:
 - Eindeutige IDs (fig_1, fig_2, …)
 - beziehungen.figur_id: nur IDs aus dieser Liste; jede Beziehung nur einmal eintragen
 - kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte mit aktivem Auftreten; name = immer der Kapitelname (aus dem ## Kapitel-Header über dem Abschnitt oder aus dem Prompt-Kontext) – NIEMALS Seitentitel als Kapitelnamen verwenden
+- typ: Figuren-Archetyp. hauptfigur=trägt zentral die Handlung, antagonist=Gegenspieler, mentor=Anleiter/Lehrerin, nebenfigur=klar identifizierbarer Sekundärcharakter mit mehreren Auftritten, randfigur=tritt nur am Rand in Erscheinung (kaum mehr als Erwähnung), andere=nicht zuordenbar. NICHT mit praesenz verwechseln (Typ = Rolle, Präsenz = Handlungsgewicht).
 - praesenz: Gewichtung der Figur im Gesamtbuch. zentral=Haupthandlungsträger, regelmaessig=wiederkehrend und handlungsrelevant, punktuell=taucht in einzelnen Szenen auf, randfigur=kaum mehr als Erwähnung. Bei Einzelkapitel-Analyse: Einschätzung basiert nur auf diesem Kapitel.
 - rolle / motivation / konflikt: je 1 Satz, textnah. Leer lassen wenn nicht belegt – nicht spekulieren.
 - beschreibung: 2-3 Sätze Zusammenfassung (Fallback für Anzeige und Chat-Kontext). Soll KEINE Spekulation enthalten.
@@ -1150,7 +1151,7 @@ Antworte mit diesem JSON-Schema:
       "bedeutung": "zusammengeführte Bedeutung oder leer",
       "kapitel": ["Kapitelname1", "Kapitelname2"],
       "seiten": ["Seite1", "Seite2"],
-      "figuren": [{ "id": "fig_1", "name": "Name", "typ": "hauptfigur|nebenfigur|antagonist|mentor|andere" }]
+      "figuren": [{ "id": "fig_1", "name": "Name", "typ": "hauptfigur|nebenfigur|antagonist|mentor|randfigur|andere" }]
     }
   ]
 }

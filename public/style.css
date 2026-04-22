@@ -148,6 +148,7 @@
   --palette-brown:  #8B5E26;
   --palette-wine:   #8B3A3A;
   --palette-gray:   #888;
+  --palette-gray-light: #BBB;
   --palette-dark:   #3A3A3A;
 
   /* Kontrast-Border – kontrastiert immer mit dem Hintergrund,
@@ -2665,6 +2666,7 @@ body.focus-mode .edit-find { display: none !important; }
 }
 .figur-typ-dot--hauptfigur { background: var(--color-primary); }
 .figur-typ-dot--nebenfigur { background: var(--color-muted); }
+.figur-typ-dot--randfigur { background: var(--palette-gray-light); }
 .figur-typ-dot--antagonist { background: var(--color-err-border); }
 .figur-typ-dot--mentor { background: var(--color-ok-border); }
 .figur-typ-dot--andere { background: var(--color-accent); }
@@ -2770,6 +2772,7 @@ body.focus-mode .edit-find { display: none !important; }
 .figur-legend-dot--antagonist  { --fig-hue: var(--palette-red); }
 .figur-legend-dot--mentor      { --fig-hue: var(--palette-green); }
 .figur-legend-dot--nebenfigur  { --fig-hue: var(--palette-gray); }
+.figur-legend-dot--randfigur   { --fig-hue: var(--palette-gray-light); }
 .figur-legend-dot--andere      { --fig-hue: var(--color-accent); }
 
 /* Sozialschicht-Legende (Soziogramm-Modus, Schweiz Mittelland 90er–2010er) */

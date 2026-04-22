@@ -6,6 +6,8 @@
 
 import { fetchJson } from './utils.js';
 
+const _VALID_TYPES = new Set(['hauptfigur', 'nebenfigur', 'antagonist', 'mentor', 'randfigur', 'andere']);
+
 export function _cleanStr(v) {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
@@ -16,6 +18,7 @@ export function _cleanStr(v) {
 export function _sanitizeFigur(f) {
   return {
     ...f,
+    typ: _VALID_TYPES.has(f.typ) ? f.typ : 'andere',
     kurzname: _cleanStr(f.kurzname),
     beruf: _cleanStr(f.beruf),
     beschreibung: _cleanStr(f.beschreibung),
