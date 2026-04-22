@@ -6,8 +6,8 @@ export const appNavigationMethods = {
   async openFigurById(figId) {
     this._beginNavigation();
     try {
-      this.figurenKapitelFilter = '';
-      this.figurenSeitenFilter = '';
+      this.figurenFilters.kapitel = '';
+      this.figurenFilters.seite = '';
       if (!this.showFiguresCard) {
         await this.toggleFiguresCard();
       }

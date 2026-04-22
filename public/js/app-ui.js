@@ -141,11 +141,11 @@ export const appUiMethods = {
   figurenSeitenListe() {
     // seiten ist ein Array von {kapitel, seite} — eigener Iterator nötig,
     // weil _deriveSeiten eine Eins-zu-Eins-Relation annimmt.
-    if (!this.figurenKapitelFilter) return [];
+    if (!this.figurenFilters.kapitel) return [];
     const names = new Set();
     for (const f of (this.figuren || [])) {
       for (const s of (f.seiten || [])) {
-        if (s.kapitel === this.figurenKapitelFilter && s.seite) names.add(s.seite);
+        if (s.kapitel === this.figurenFilters.kapitel && s.seite) names.add(s.seite);
       }
     }
     return this._sortByPageOrder([...names]);
@@ -153,16 +153,16 @@ export const appUiMethods = {
 
   filteredFiguren() {
     let result = this.figuren;
-    const q = (this.figurenSuche ?? '').toLowerCase();
+    const q = (this.figurenFilters.suche ?? '').toLowerCase();
     if (q) result = result.filter(f => (f.name ?? '').toLowerCase().includes(q));
-    if (this.figurenKapitelFilter) {
+    if (this.figurenFilters.kapitel) {
       result = result.filter(f =>
-        (f.kapitel ?? []).some(k => k.name === this.figurenKapitelFilter)
+        (f.kapitel ?? []).some(k => k.name === this.figurenFilters.kapitel)
       );
     }
-    if (this.figurenSeitenFilter) {
+    if (this.figurenFilters.seite) {
       result = result.filter(f =>
-        (f.seiten ?? []).some(s => s.kapitel === this.figurenKapitelFilter && s.seite === this.figurenSeitenFilter)
+        (f.seiten ?? []).some(s => s.kapitel === this.figurenFilters.kapitel && s.seite === this.figurenFilters.seite)
       );
     }
     return [...result].sort((a, b) => {

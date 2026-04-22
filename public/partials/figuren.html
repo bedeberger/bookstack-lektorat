@@ -94,17 +94,17 @@
 
      <!-- Filter -->
     <div x-show="figuren.length > 0 && figurenKapitelListe().length > 0" class="filter-bar">
-      <input type="text" x-model="figurenSuche" :placeholder="t('common.search')" class="filter-search-input">
+      <input type="text" x-model="figurenFilters.suche" :placeholder="t('common.search')" class="filter-search-input">
       <div x-data="combobox(t('filter.chapter'), t('filter.allChapters'))"
-          x-modelable="value" x-model="figurenKapitelFilter"
+          x-modelable="value" x-model="figurenFilters.kapitel"
           x-effect="options = figurenKapitelListe().map(k => ({value: k, label: k}))"
-          @combobox-change="figurenSeitenFilter = ''; selectedFigurId = null"
+          @combobox-change="figurenFilters.seite = ''; selectedFigurId = null"
           @click.outside="close()" @keydown="onKeydown($event)"
           class="combobox-wrap combobox-wrap--compact">
       </div>
       <div x-data="combobox(t('filter.page'), t('filter.allPages'))"
-          x-modelable="value" x-model="figurenSeitenFilter"
-          x-effect="_disabled = !figurenKapitelFilter || figurenSeitenListe().length === 0; options = figurenSeitenListe().map(s => ({value: s, label: s}))"
+          x-modelable="value" x-model="figurenFilters.seite"
+          x-effect="_disabled = !figurenFilters.kapitel || figurenSeitenListe().length === 0; options = figurenSeitenListe().map(s => ({value: s, label: s}))"
           @combobox-change="selectedFigurId = null"
           @click.outside="close()" @keydown="onKeydown($event)"
           :class="{'combobox-wrap--disabled': _disabled}"
@@ -123,7 +123,7 @@
           <!-- Kapitel-Badges -->
           <template x-if="f.kapitel?.length">
             <span class="figur-kapitel-badges">
-              <span class="figur-kapitel-primary internal-link" x-text="f.kapitel[0].name" @click.stop="figurenKapitelFilter = f.kapitel[0].name; figurenSeitenFilter = ''"></span>
+              <span class="figur-kapitel-primary internal-link" x-text="f.kapitel[0].name" @click.stop="figurenFilters.kapitel = f.kapitel[0].name; figurenFilters.seite = ''"></span>
               <template x-if="f.kapitel.length > 1">
                 <span class="figur-kapitel-more" x-text="'+' + (f.kapitel.length - 1)"></span>
               </template>
@@ -178,7 +178,7 @@
             <div class="bewertung-section-title" x-text="t('figuren.field.kapitelauftritte')"></div>
             <div class="figur-tags-row">
               <template x-for="(k, ki) in (f.kapitel || [])" :key="ki">
-                <span class="tag internal-link" @click="figurenKapitelFilter = k.name; figurenSeitenFilter = ''" x-text="ki === 0 ? k.name : k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
+                <span class="tag internal-link" @click="figurenFilters.kapitel = k.name; figurenFilters.seite = ''" x-text="ki === 0 ? k.name : k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
               </template>
             </div>
           </div>
