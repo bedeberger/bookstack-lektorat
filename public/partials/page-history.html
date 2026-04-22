@@ -1,0 +1,21 @@
+<!-- Verlaufsbalken: vergangene Prüfungen dieser Seite.
+     Der Partial-Container in editor.html hat `display: contents`, damit
+     DIESER Wrapper direkter Geschwister im Card-Layout bleibt. -->
+<div x-data="pageHistoryCard"
+     x-show="$app.pageHistory.length > 0"
+     class="history-bar">
+  <div class="history-heading" x-text="$app.t('editor.history')"></div>
+  <template x-for="entry in $app.pageHistory" :key="entry.id">
+    <div class="history-item" :class="{ 'history-item--active': $app.activeHistoryEntryId === entry.id }" @click="$app.loadHistoryEntry(entry)">
+      <span class="history-date" x-text="$app.formatDate(entry.checked_at)"></span>
+      <span class="badge" :class="entry.error_count > 0 ? 'badge-err' : 'badge-ok'" x-text="entry.error_count > 0 ? $app.t('editor.history.errors', { n: entry.error_count }) : $app.t('editor.history.errorFree')"></span>
+      <button type="button" class="btn-toggle-saved"
+              :class="entry.saved ? 'btn-toggle-saved--on' : 'btn-toggle-saved--off'"
+              @click.stop="$app.toggleHistoryEntrySaved(entry)"
+              :title="entry.saved ? $app.t('editor.history.markOpen') : $app.t('editor.history.markDone')"
+              x-text="entry.saved ? $app.t('editor.history.done') : $app.t('editor.history.open')"></button>
+      <span class="tag" x-text="entry.model"></span>
+      <button type="button" class="history-item-delete" @click.stop="$app.deletePageCheck(entry.id)" :title="$app.t('common.deleteEntry')" :aria-label="$app.t('common.deleteEntry')">×</button>
+    </div>
+  </template>
+</div>

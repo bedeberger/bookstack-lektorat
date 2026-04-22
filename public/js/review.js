@@ -1,9 +1,5 @@
-// Buchbewertungs-Render-Helper. Der komplette Job-Flow (Start, Poll, Render)
-// lebt in Alpine.data('bookReviewCard'). Hier nur noch das HTML-Rendering,
-// das aus der Sub-Komponente importiert wird.
-//
-// Wird weiterhin als Root-Spread eingehängt, weil einige Module (history.js)
-// damit kompatibel bleiben sollen — ist aber leer geworden.
+// Buchbewertungs-Render-Helper. Der Job-Flow (Start, Poll, Render) lebt in
+// Alpine.data('bookReviewCard'); hier nur das HTML-Rendering.
 
 import { escHtml } from './utils.js';
 
@@ -44,7 +40,3 @@ export function renderReviewHtml(r, translate) {
   if (r.fazit) html += `<div class="fazit fazit--review">${escHtml(r.fazit)}</div>`;
   return html;
 }
-
-// Leer-Shim für Kompatibilität mit app.js-Spread — die eigentliche Logik lebt
-// in cards/book-review-card.js.
-export const reviewMethods = {};

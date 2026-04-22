@@ -8,7 +8,7 @@ const path = require('path');
 const logger = require('./logger');
 
 // DB-Setup + Migrationen laufen beim Import
-const { db, cleanupStuckJobRuns, upsertUserLogin } = require('./db/schema');
+const { db, cleanupStuckJobRuns, upsertUserLogin, touchUserLastSeen, addUserActivity } = require('./db/schema');
 
 const authRouter = require('./routes/auth');
 const historyRouter = require('./routes/history');
@@ -116,6 +116,33 @@ app.use((req, res, next) => {
     return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   }
   return res.redirect(`/auth/login?returnTo=${encodeURIComponent(req.originalUrl)}`);
+});
+
+// ── Aktivitäts-Tracking ──────────────────────────────────────────────────────
+// Pro authentifiziertem Request wird die Differenz zum letzten Request als aktive
+// Zeit gezählt – aber nur, wenn die Lücke < 5 min ist (danach gilt der User als
+// weg gewesen). `users.last_seen_at` wird nur alle 60 s in die DB geschrieben,
+// um Write-Last niedrig zu halten.
+const ACTIVITY_GAP_MS      = 5 * 60 * 1000;
+const LAST_SEEN_THROTTLE_MS = 60 * 1000;
+app.use((req, res, next) => {
+  const email = req.session?.user?.email;
+  if (!email) return next();
+  const now  = Date.now();
+  const last = req.session.lastSeen || 0;
+  const delta = now - last;
+  if (delta > 0 && delta < ACTIVITY_GAP_MS) {
+    try { addUserActivity(email, delta / 1000, new Date(now).toISOString()); }
+    catch (e) { logger.warn('addUserActivity: ' + e.message); }
+  }
+  if (!req.session.loginAt) req.session.loginAt = now; // Fallback für Sessions aus Zeit vor diesem Feature
+  req.session.lastSeen = now;
+  if (now - (req.session.lastSeenPersisted || 0) > LAST_SEEN_THROTTLE_MS) {
+    try { touchUserLastSeen(email, new Date(now).toISOString()); }
+    catch (e) { logger.warn('touchUserLastSeen: ' + e.message); }
+    req.session.lastSeenPersisted = now;
+  }
+  next();
 });
 
 // ── Geschützte Routen ────────────────────────────────────────────────────────

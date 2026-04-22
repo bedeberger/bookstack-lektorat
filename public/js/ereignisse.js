@@ -1,8 +1,5 @@
-// Ereignisse/Zeitstrahl-Methoden. Bleiben im Root-Spread, weil figuren.js
-// (`_buildGlobalZeitstrahl` aus `loadFiguren`) und app-komplett.js
-// (`_reloadZeitstrahl` in der Komplett-Pipeline) sie am Root erwarten.
-// `this.figuren` und `this.globalZeitstrahl` gehen über die Root-Proxy-Getter
-// an Alpine.store('catalog').
+// Ereignisse/Zeitstrahl-Methoden am Root-Spread (figuren.js ruft
+// _buildGlobalZeitstrahl, app-komplett.js ruft _reloadZeitstrahl).
 
 import { fetchJson } from './utils.js';
 

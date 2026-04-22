@@ -418,40 +418,56 @@ function _buildLektoratPromptBody(text, textLabel, {
   if (pageName)    metaParts.push(`Seite: «${pageName}»`);
   const metaBlock = metaParts.length ? `\nVerortung im Buch: ${metaParts.join(' · ')}\n` : '';
 
-  const povBlock = _buildErzaehlformBlock(erzaehlperspektive, erzaehlzeit, buchtyp, 'lektorat');
+  // Erzählform-Block dient nur perspektivbruch/tempuswechsel – lokal ohnehin nicht geprüft.
+  const povBlock = _isLocal
+    ? ''
+    : _buildErzaehlformBlock(erzaehlperspektive, erzaehlzeit, buchtyp, 'lektorat');
 
+  // Lokal: nur Namen (+ Kurzname) als Erkennungshilfe – Geschlecht/Beruf/Typ/Beschreibung
+  // werden für Rechtschreibung/Grammatik/Stil nicht gebraucht und kosten nur Tokens.
   const figurenBlock = figuren.length > 0
-    ? `\nBekannte Figuren in diesem Kapitel (Kontext für Namenskonsistenz und Perspektivprüfung):\n${figuren.map(f => {
-        const parts = [f.name];
-        if (f.kurzname) parts.push(`Kurzname: ${f.kurzname}`);
-        if (f.geschlecht) parts.push(f.geschlecht);
-        if (f.beruf) parts.push(f.beruf);
-        if (f.typ) parts.push(`Typ: ${f.typ}`);
-        if (f.beschreibung) parts.push(f.beschreibung);
-        return '- ' + parts.join(' | ');
-      }).join('\n')}\nHinweis: Figurennamen und deren Varianten sind KEINE Rechtschreibfehler.\n`
+    ? (_isLocal
+      ? `\nBekannte Figuren in diesem Kapitel (Namen sind KEINE Rechtschreibfehler):\n${figuren.map(f => {
+          const parts = [f.name];
+          if (f.kurzname && f.kurzname !== f.name) parts.push(f.kurzname);
+          return '- ' + parts.join(' / ');
+        }).join('\n')}\n`
+      : `\nBekannte Figuren in diesem Kapitel (Kontext für Namenskonsistenz und Perspektivprüfung):\n${figuren.map(f => {
+          const parts = [f.name];
+          if (f.kurzname) parts.push(`Kurzname: ${f.kurzname}`);
+          if (f.geschlecht) parts.push(f.geschlecht);
+          if (f.beruf) parts.push(f.beruf);
+          if (f.typ) parts.push(`Typ: ${f.typ}`);
+          if (f.beschreibung) parts.push(f.beschreibung);
+          return '- ' + parts.join(' | ');
+        }).join('\n')}\nHinweis: Figurennamen und deren Varianten sind KEINE Rechtschreibfehler.\n`)
     : '';
 
-  const beziehungenBlock = figurenBeziehungen.length > 0
-    ? `\nBeziehungen zwischen diesen Figuren (Kontext für Anreden, Pronomen, Rollen):\n${figurenBeziehungen.map(b => {
+  // Beziehungen dienen v.a. Anreden/Pronomen/Perspektiv-Prüfung – lokal nicht relevant.
+  const beziehungenBlock = (_isLocal || figurenBeziehungen.length === 0)
+    ? ''
+    : `\nBeziehungen zwischen diesen Figuren (Kontext für Anreden, Pronomen, Rollen):\n${figurenBeziehungen.map(b => {
         const head = `${b.von} → ${b.zu}: ${b.typ}`;
         return b.beschreibung ? `- ${head} – ${b.beschreibung}` : `- ${head}`;
-      }).join('\n')}\n`
-    : '';
+      }).join('\n')}\n`;
 
+  // Lokal: nur Ortsnamen als Erkennungshilfe – Typ/Stimmung/Beschreibung sind für Lektorat irrelevant.
   const orteBlock = orte.length > 0
-    ? `\nSchauplätze in diesem Kapitel (Kontext – Ortsnamen und deren Varianten sind KEINE Rechtschreibfehler):\n${orte.map(o => {
-        const parts = [o.name];
-        if (o.typ) parts.push(`Typ: ${o.typ}`);
-        if (o.stimmung) parts.push(`Stimmung: ${o.stimmung}`);
-        if (o.beschreibung) parts.push(o.beschreibung);
-        return '- ' + parts.join(' | ');
-      }).join('\n')}\n`
+    ? (_isLocal
+      ? `\nSchauplätze in diesem Kapitel (Ortsnamen sind KEINE Rechtschreibfehler):\n${orte.map(o => '- ' + o.name).join('\n')}\n`
+      : `\nSchauplätze in diesem Kapitel (Kontext – Ortsnamen und deren Varianten sind KEINE Rechtschreibfehler):\n${orte.map(o => {
+          const parts = [o.name];
+          if (o.typ) parts.push(`Typ: ${o.typ}`);
+          if (o.stimmung) parts.push(`Stimmung: ${o.stimmung}`);
+          if (o.beschreibung) parts.push(o.beschreibung);
+          return '- ' + parts.join(' | ');
+        }).join('\n')}\n`)
     : '';
 
-  const previousBlock = previousExcerpt
-    ? `\nLetzter Absatz der vorherigen Seite (NUR als Übergangskontext für Tempus-/Perspektiv-/Pronomen-Prüfung – NICHT bewerten, nicht in «fehler» aufnehmen):\n"""\n${previousExcerpt}\n"""\n`
-    : '';
+  // Vorseiten-Absatz dient Tempus-/Perspektiv-Übergang – lokal nicht geprüft.
+  const previousBlock = (_isLocal || !previousExcerpt)
+    ? ''
+    : `\nLetzter Absatz der vorherigen Seite (NUR als Übergangskontext für Tempus-/Perspektiv-/Pronomen-Prüfung – NICHT bewerten, nicht in «fehler» aufnehmen):\n"""\n${previousExcerpt}\n"""\n`;
 
   // Lokaler Modus: kleinere Typ-Enum, keine Beispiele, keine spezialisierten Rule-Blöcke
   // (show_vs_tell, passiv, perspektivbruch, tempuswechsel). Diese Typen verlangen nuanciertes
@@ -483,9 +499,21 @@ ${_buildPerspektivbruchBlock()}
 ${_buildTempuswechselBlock()}
 `;
 
-  return `Analysiere den Text vollständig von Anfang bis Ende – nicht nur lokale Abschnitte oder die letzten Sätze – auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.
-${metaBlock}${povBlock}${wichtigBlock}${filterBlock}
-Antworte mit diesem JSON-Schema:
+  // Lokal: szenen/stilanalyse/fazit werden aus Schema und Prompt gestrichen. Kleine Modelle
+  // halluzinieren diese Felder oft generisch und das Generieren kostet spürbar Output-Tokens.
+  const schemaBlock = _isLocal
+    ? `Antworte mit diesem JSON-Schema:
+{
+  "fehler": [
+    {
+      "typ": "${typEnum}",
+      "original": "das fehlerhafte Wort oder die fehlerhafte Phrase – bei «wiederholung»: vollständiger Satz zeichengenau aus dem Text",
+      "korrektur": "die korrekte Version – bei «wiederholung»: derselbe Satz mit Synonym",
+      "erklaerung": "kurze Erklärung – nur diesen einen Mangel beschreiben"
+    }
+  ]
+}`
+    : `Antworte mit diesem JSON-Schema:
 {
   "fehler": [
     {
@@ -504,12 +532,22 @@ Antworte mit diesem JSON-Schema:
   ],
   "stilanalyse": "4-5 Sätze Stilanalyse – KEINE konkreten Fehler erwähnen, die bereits im «fehler»-Array stehen (weder Rechtschreibung, Grammatik, Stil, Wiederholungen noch andere Typen). Fokus ausschliesslich auf übergreifende Beobachtungen zu literarischem Stil, Rhythmus, Bildsprache und Wirkung, die nicht als Einzelfehler erfasst sind.",
   "fazit": "ein Satz Gesamtfazit zur literarischen Qualität – KEINE Fehler aus dem «fehler»-Array wiederholen oder zusammenfassen, da diese separat behoben werden"
-}
-${beispielBlock}
+}`;
+
+  const szenenRegelnBlock = _isLocal ? '' : `
 Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
 - Wenn die Seite keine erkennbaren Szenen enthält (z.B. rein beschreibender Text, Exposition): «szenen» als leeres Array zurückgeben
-- wertung: «stark» = funktioniert gut, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
+- wertung: «stark» = funktioniert gut, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen`;
+
+  const aufgabeSatz = _isLocal
+    ? 'Analysiere den Text vollständig von Anfang bis Ende – nicht nur lokale Abschnitte oder die letzten Sätze – auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen.'
+    : 'Analysiere den Text vollständig von Anfang bis Ende – nicht nur lokale Abschnitte oder die letzten Sätze – auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.';
+
+  return `${aufgabeSatz}
+${metaBlock}${povBlock}${wichtigBlock}${filterBlock}
+${schemaBlock}
+${beispielBlock}${szenenRegelnBlock}
 ${_buildStilBlock()}
 ${_buildWiederholungBlock(stopwords)}
 ${_buildSchwacheVerbenBlock()}
@@ -905,8 +943,8 @@ Antworte mit diesem JSON-Schema:
   ${FAKTEN_SCHEMA},
   "szenen": [
     {
-      "seite": "EXAKT einer der ### Seiten-Header aus dem aktuellen ## Kapitel – wortwörtlich kopieren inkl. Gross-/Kleinschreibung. NIEMALS den ## Kapitelnamen als seite verwenden. Leer lassen, wenn kein passender ### Header identifizierbar ist.",
-      "kapitel": "EXAKT der ## Kapitel-Header über diesem Abschnitt (nicht der ### Seiten-Header); leer wenn unklar",
+      "seite": "NUR der reine Seitentitel aus einem ### Header – OHNE die ###-Markierung und OHNE führende Leerzeichen. Beispiel: aus «### Was macht Adrian?» wird «Was macht Adrian?». NIEMALS den Kapitelnamen als seite. Leer wenn kein passender ### Header identifizierbar.",
+      "kapitel": "NUR der reine Kapitelname aus dem ## Header – OHNE die ##-Markierung. Beispiel: aus «## Der Vater» wird «Der Vater». Nicht der ### Seiten-Header. Leer wenn unklar.",
       "titel": "Kurze Szenenbezeichnung (1 Satz)",
       "wertung": "stark|mittel|schwach",
       "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)",
@@ -923,8 +961,8 @@ Antworte mit diesem JSON-Schema:
           "ereignis": "Was passierte – neutral und kanonisch formuliert, NICHT aus der Figurenperspektive. Ereignisse die mehrere Figuren betreffen MÜSSEN bei allen beteiligten Figuren identisch formuliert sein (z.B. 'Geburt von Maria' für Vater, Mutter und Kind – nicht 'Geburt seiner Tochter' oder 'Eigene Geburt').",
           "typ": "persoenlich|extern",
           "bedeutung": "Bedeutung für diese Figur (1 Satz, leer wenn nicht klar)",
-          "seite": "EXAKT einer der ### Seiten-Header aus dem aktuellen ## Kapitel (wortwörtlich). NIE der ## Kapitelname. Leer wenn unklar.",
-          "kapitel": "EXAKT der ## Kapitel-Header über diesem Abschnitt (nicht ### Seiten-Header); leer wenn unklar"
+          "seite": "NUR der reine Seitentitel aus einem ### Header – OHNE ###-Markierung. NIE der Kapitelname. Leer wenn unklar.",
+          "kapitel": "NUR der reine Kapitelname aus dem ## Header – OHNE ##-Markierung. Nicht der ### Seiten-Header. Leer wenn unklar."
         }
       ]
     }
@@ -958,8 +996,8 @@ ${FAKTEN_RULES}
 
 Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
-- seite MUSS EXAKT einem der ### Seiten-Header innerhalb des aktuellen ## Kapitels entsprechen (wortwörtlich, inkl. Gross-/Kleinschreibung und Satzzeichen). Wenn unklar: leer lassen. Der Kapitelname (## Header) ist NIE ein gültiger Wert für seite.
-- kapitel: exakt der ## Header des Kapitels
+- seite: NUR der reine Seitentitel, OHNE die «### »-Markierung am Anfang. Aus «### Was macht Adrian?» wird «Was macht Adrian?». Wortwörtlich sonst (Gross-/Kleinschreibung, Satzzeichen). Leer lassen wenn kein passender ### Header identifizierbar. Der Kapitelname ist NIE ein gültiger Wert für seite.
+- kapitel: NUR der reine Kapitelname aus dem ## Header, OHNE die «## »-Markierung.
 - figuren_namen: aktiv beteiligte Figuren – Namen exakt wie im Text (vollständiger Name oder Spitzname); leeres Array wenn keine Figur beteiligt
 - orte_namen: Schauplatz der Szene – exakter Name wie im Text; leeres Array wenn kein konkreter Ort erwähnt
 - wertung: «stark» = überzeugend/spannend, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
@@ -1030,8 +1068,8 @@ function buildKomplettSchemaOrteSzenen(_kontext = '') {
   ${FAKTEN_SCHEMA},
   "szenen": [
     {
-      "seite": "EXAKT ein ### Seiten-Header aus dem aktuellen ## Kapitel (wortwörtlich). NIE der ## Kapitelname. Leer wenn unklar.",
-      "kapitel": "EXAKT der ## Kapitel-Header (nicht ### Seiten-Header); leer wenn unklar",
+      "seite": "NUR der reine Seitentitel aus einem ### Header – OHNE ###-Markierung (Beispiel: aus «### Was macht Adrian?» wird «Was macht Adrian?»). NIE der Kapitelname. Leer wenn unklar.",
+      "kapitel": "NUR der reine Kapitelname aus dem ## Header – OHNE ##-Markierung. Nicht der ### Seiten-Header. Leer wenn unklar.",
       "titel": "Kurze Szenenbezeichnung (1 Satz)",
       "wertung": "stark|mittel|schwach",
       "kommentar": "1-2 Sätze: was funktioniert, was fehlt",
@@ -1046,8 +1084,8 @@ function buildKomplettSchemaOrteSzenen(_kontext = '') {
 Kernregeln:
 - Keine Figuren-Stammdaten; figuren_namen nur als Klarname-Referenz in Szenen.
 - KONSERVATIV: Nur was eindeutig belegt ist.
-- kapitel[].name: aus ## Header oder Prompt-Kontext.
-- Szene.seite: EXAKT ein ### Header aus dem aktuellen ## Kapitel. NIE der Kapitelname. Im Zweifel leer.
+- kapitel[].name: aus ## Header oder Prompt-Kontext, OHNE «## »-Markierung.
+- Szene.seite: reiner Titel eines ### Headers aus dem aktuellen ## Kapitel, OHNE «### »-Markierung. NIE der Kapitelname. Im Zweifel leer.
 - Leere Arrays wenn nichts gefunden.`;
   }
   return `${schemaPart}
@@ -1058,7 +1096,7 @@ ${ORTE_RULES}
 ${FAKTEN_RULES}
 
 Szenen-Regeln:
-- seite MUSS EXAKT einem der ### Seiten-Header im aktuellen ## Kapitel entsprechen (wortwörtlich). NIEMALS den Kapitelnamen als seite. Bei Unklarheit: leer.
+- seite: NUR der reine Titel eines ### Headers im aktuellen ## Kapitel, OHNE «### »-Markierung. NIEMALS den Kapitelnamen. Bei Unklarheit: leer.
 - figuren_namen: Klarnamen exakt wie im Text; leeres Array wenn keine Figur beteiligt.
 - orte_namen: exakter Name wie im Text; leeres Array wenn kein konkreter Ort.`;
 }
@@ -1103,36 +1141,40 @@ ${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} S
 ${chText}`;
 }
 
-/** Welle 4 · #11 – Pass A: nur Figuren + Lebensereignisse (Lokalmodus). */
+/** Welle 4 · #11 – Pass A: nur Figuren + Lebensereignisse (Lokalmodus).
+ *  chText === null: Buchtext ist im System-Prompt (cached, Claude-Single-Pass-Split). */
 export function buildExtraktionFigurenPassPrompt(chapterName, bookName, pageCount, chText) {
   const isSinglePass = chapterName === 'Gesamtbuch';
   const scope = isSinglePass ? `dem Buch «${bookName}»` : `dem Kapitel «${chapterName}» des Buchs «${bookName}»`;
   const kapitelNote = isSinglePass
     ? 'Der Text ist in Kapitel-Sektionen gegliedert (## Kapitelname) mit Seiten darunter (### Seitentitel). Für kapitel[].name und lebensereignisse[].kapitel: exakt aus dem ## Header entnehmen.'
     : `Für kapitel[].name und lebensereignisse[].kapitel: immer genau «${chapterName}» verwenden – ### Überschriften sind Seitentitel.`;
+  const textBlock = chText == null
+    ? 'Der Buchtext steht im System-Prompt oben.'
+    : `${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} Seiten)`}:\n\n${chText}`;
   return `Extrahiere aus ${scope} AUSSCHLIESSLICH: alle Figuren (inkl. Beziehungen) und alle Lebensereignisse der Figuren. Keine Orte, keine Fakten, keine Szenen – die werden separat extrahiert.
 
 ${kapitelNote}
 
-${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} Seiten)`}:
-
-${chText}`;
+${textBlock}`;
 }
 
-/** Welle 4 · #11 – Pass B: nur Orte + Fakten + Szenen (Lokalmodus). */
+/** Welle 4 · #11 – Pass B: nur Orte + Fakten + Szenen (Lokalmodus).
+ *  chText === null: Buchtext ist im System-Prompt (cached, Claude-Single-Pass-Split). */
 export function buildExtraktionOrtePassPrompt(chapterName, bookName, pageCount, chText) {
   const isSinglePass = chapterName === 'Gesamtbuch';
   const scope = isSinglePass ? `dem Buch «${bookName}»` : `dem Kapitel «${chapterName}» des Buchs «${bookName}»`;
   const kapitelNote = isSinglePass
     ? 'Der Text ist in Kapitel-Sektionen gegliedert (## Kapitelname). Für alle Kapitel-Felder den Namen aus dem ## Header entnehmen.'
     : `Für alle Kapitel-Felder: immer genau «${chapterName}» verwenden.`;
+  const textBlock = chText == null
+    ? 'Der Buchtext steht im System-Prompt oben.'
+    : `${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} Seiten)`}:\n\n${chText}`;
   return `Extrahiere aus ${scope} AUSSCHLIESSLICH: alle Schauplätze, alle kontinuitätsrelevanten Fakten und alle Szenen. Figuren-Stammdaten nicht – die sind separat erfasst. In Szenen nur Figurennamen als Referenz nennen.
 
 ${kapitelNote}
 
-${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} Seiten)`}:
-
-${chText}`;
+${textBlock}`;
 }
 
 
@@ -1489,13 +1531,14 @@ export function buildKontinuitaetSinglePassPrompt(bookName, bookText, figurenKom
     ? ' Erzählform-Brüche: Kapitel oder Passagen, die die oben angegebene Erzählperspektive oder Erzählzeit unbegründet verlassen (Wechsel nur an Szenen-/Kapitelgrenzen oder bei expliziten Rückblenden zulässig) – typ «sonstiges», Beschreibung: «Erzählform-Bruch: …».'
     : '';
 
+  const textBlock = bookText == null
+    ? 'Der Buchtext steht im System-Prompt oben.'
+    : `Buchtext:\n\n${bookText}`;
   return `Prüfe das Buch «${bookName}» auf Kontinuitätsfehler und Widersprüche.${figurenStr}${orteStr}
 ${povBlock}
 Suche aktiv nach: Figuren die nach ihrem Tod wieder auftauchen; Orte die sich widersprüchlich beschrieben werden; Zeitangaben die nicht vereinbar sind; Objekte die falsch verwendet werden; Figuren die Wissen haben das sie noch nicht haben könnten; Charakterverhalten das ihrer etablierten Persönlichkeit widerspricht; Soziolekt-Brüche: Figuren die plötzlich anders sprechen als durch ihre Herkunft, Bildung und soziale Schicht etabliert (Registerwechsel ohne dramaturgische Begründung).${erzaehlformHint}
 
-Buchtext:
-
-${bookText}
+${textBlock}
 
 Antworte mit diesem JSON-Schema:
 ${PROBLEME_SCHEMA}
@@ -1558,8 +1601,12 @@ const _num = { type: 'number' };
 
 // ── Lektorat (check + batch-check) ───────────────────────────────────────────
 // Enum-Werte müssen mit typEnum in _buildLektoratPromptBody (Slim-Variante) übereinstimmen.
-export const SCHEMA_LEKTORAT = _obj({
-  fehler: {
+// Lokale Provider erhalten ein reduziertes Schema ohne szenen/stilanalyse/fazit – kleine Modelle
+// halluzinieren diese Felder oft generisch, das Generieren kostet Output-Tokens.
+// Wird in _rebuildSchemas() neu gebaut, damit _isLocal dynamisch wirkt.
+export let SCHEMA_LEKTORAT = null;
+function _buildLektoratSchema() {
+  const fehlerField = {
     type: 'array',
     items: _obj({
       typ: { type: 'string', enum: ['rechtschreibung', 'grammatik', 'stil', 'wiederholung', 'schwaches_verb', 'fuellwort'] },
@@ -1568,18 +1615,22 @@ export const SCHEMA_LEKTORAT = _obj({
       kontext: _str,
       erklaerung: _str,
     }),
-  },
-  szenen: {
-    type: 'array',
-    items: _obj({
-      titel: _str,
-      wertung: { type: 'string', enum: ['stark', 'mittel', 'schwach'] },
-      kommentar: _str,
-    }),
-  },
-  stilanalyse: _str,
-  fazit: _str,
-});
+  };
+  if (_isLocal) return _obj({ fehler: fehlerField });
+  return _obj({
+    fehler: fehlerField,
+    szenen: {
+      type: 'array',
+      items: _obj({
+        titel: _str,
+        wertung: { type: 'string', enum: ['stark', 'mittel', 'schwach'] },
+        kommentar: _str,
+      }),
+    },
+    stilanalyse: _str,
+    fazit: _str,
+  });
+}
 
 // ── Komplett-Extraktion (pro Kapitel) ────────────────────────────────────────
 // Typ-Enums bewusst permissiv (type: string ohne enum), weil das Modell hier
@@ -1708,6 +1759,7 @@ function _buildBeziehungenSchema() {
 
 export function _rebuildSchemas() {
   _figurSchema = _obj(_figurSchemaProps());
+  SCHEMA_LEKTORAT = _buildLektoratSchema();
   SCHEMA_KOMPLETT_EXTRAKTION = _buildExtraktionSchema();
   SCHEMA_KOMPLETT_FIGUREN_PASS = _buildFigurenPassSchema();
   SCHEMA_KOMPLETT_ORTE_PASS = _buildOrtePassSchema();

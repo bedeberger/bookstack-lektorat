@@ -612,8 +612,9 @@
   "header.updateAllTitle":       "Re-run figures, sociogram, locations, scene analysis, events and timeline",
   "header.clearCache":           "Clear cache",
   "header.clearCacheTitle":      "Clear delta cache for this book – next analysis re-extracts all chapters",
+  "header.theme":                "Theme",
+  "header.providerTitle":        "AI provider & model",
 
-  "theme.cycleTitle":            "Change theme (current: {label})",
   "theme.auto":                  "Auto",
   "theme.light":                 "Light",
   "theme.dark":                  "Dark",

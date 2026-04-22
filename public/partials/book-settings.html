@@ -116,5 +116,36 @@
 
     <p class="book-settings-saved" x-show="bookSettingsSaved" x-text="$app.t('common.settingsSaved')"></p>
     <p class="book-settings-error" x-show="bookSettingsError" x-text="bookSettingsError"></p>
+
+    <section class="book-settings-stats">
+      <h3 class="book-settings-stats-title" x-text="$app.t('jobStats.title')"></h3>
+      <div x-show="bookJobStatsLoading && !bookJobStats" class="job-stats-loading" x-text="$app.t('jobStats.loading')"></div>
+      <div x-show="bookJobStats && bookJobStats.length === 0" class="job-stats-empty" x-text="$app.t('jobStats.empty')"></div>
+      <table x-show="bookJobStats && bookJobStats.length > 0" class="job-stats-table">
+        <thead>
+          <tr>
+            <th x-text="$app.t('jobStats.col.type')"></th>
+            <th :title="$app.t('jobStats.col.avgDurationTitle')" x-text="$app.t('jobStats.col.avgDuration')"></th>
+            <th :title="$app.t('jobStats.col.avgTokensTitle')" x-text="$app.t('jobStats.col.avgTokens')"></th>
+            <th x-text="$app.t('jobStats.col.lastRun')"></th>
+            <th :title="$app.t('jobStats.col.runsTitle')" x-text="$app.t('jobStats.col.runs')"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="row in bookJobStats" :key="row.type">
+            <tr>
+              <td x-text="$app.t(row.typeLabel)"></td>
+              <td x-text="row.avgDurationFmt"></td>
+              <td x-text="row.avgTokensFmt"></td>
+              <td x-text="row.lastRunFmt"></td>
+              <td>
+                <span x-text="row.count"></span>
+                <span x-show="row.errorCount > 0" class="job-stats-errors" x-text="' / ' + row.errorCount + ' ✕'"></span>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </section>
   </div>
 </div>

@@ -1,16 +1,7 @@
-// Gemeinsame Chat-Logik für Seiten-Chat und Buch-Chat Sub-Komponenten.
-//
-// Nach der Alpine.data-Migration liefert makeChatMethods ein Methoden-Objekt,
-// das in eine Sub-Komponente gespreadet wird. `this` ist die Sub-Komponente;
-// Zugriff auf Root-State (t, selectedBookId, selectedBookName, currentPage,
-// bsGet, _loadApplyAndSave, updatePageView, saveApplying, originalHtml,
-// lektoratFindings, checkDone, _checkDoneBeforeChat, _chatPendingRefresh)
-// läuft über window.__app.
-//
-// Der `toggle`-Teil (open/close + _closeOtherMainCards) lebt nicht mehr hier:
-// Root setzt die `showXxxCard`-Flag, die Sub-Komponente reagiert per $watch
-// und führt onVisible() aus. Das Refresh-Pattern (erneuter Klick auf offene
-// Karte) läuft über `card:refresh`-Events.
+// Gemeinsame Chat-Logik für Seiten-Chat und Buch-Chat Cards.
+// makeChatMethods liefert ein Methoden-Objekt, das in eine Card gespreadet wird.
+// `this` ist die Card; Root-Zugriffe laufen über window.__app. Der Root setzt
+// die showXxxCard-Flag, die Card reagiert per $watch und ruft onVisible().
 
 import { escHtml, fmtTok, renderChatMarkdown, fetchJson } from './utils.js';
 import { startPoll, runningJobStatus } from './cards/job-helpers.js';
@@ -88,8 +79,8 @@ export function makeChatMethods(cfg) {
             const tokOut = job.tokensOut || 0;
             if (tokIn + tokOut > 0) {
               const tpsPart = job.tokensPerSec ? ` · ${Math.round(job.tokensPerSec)} tok/s` : '';
-              // tokIn ist bei Ollama/Llama erst am Streaming-Ende bekannt (aus usage);
-              // vorher wird nur tokOut angezeigt, um falsche Schätzwerte zu vermeiden.
+              // tokIn ist bei Ollama/Llama erst am Streaming-Ende bekannt (aus
+              // usage) — vorher nur tokOut zeigen statt falscher Schätzwerte.
               const inPart = tokIn > 0 ? `↑${fmtTok(tokIn)} ` : '';
               this[p.status] = `<span class="muted-msg">${inPart}↓${fmtTok(tokOut)} Tokens${tpsPart}</span>`;
             } else {
@@ -122,8 +113,7 @@ export function makeChatMethods(cfg) {
     if (el) el.scrollTop = el.scrollHeight;
   }
 
-  // Wrapper, den die Sub-Komponenten beim $watch(showXxxCard) aufrufen.
-  // Ersetzt das frühere `toggleXxxCard` aus chat-base (öffnende Hälfte).
+  // Wird beim $watch(showXxxCard) aufgerufen, wenn die Karte geöffnet wird.
   async function onVisible() {
     if (!cfg.canOpen(this)) return;
     const root = window.__app;

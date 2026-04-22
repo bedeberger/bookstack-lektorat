@@ -84,29 +84,19 @@ const editorState = () => ({
   newPageError: '',
 });
 
+// Restliche Editor-Popup-Felder am Root:
+//   - `_figurLookupIndex`: Lookup-Cache für den synchronen Hit-Test in
+//     `_tryOpenFigurLookupAt` (wird aus Synonym-Kontextmenü aufgerufen).
+//   - `_figurLookupOpen`, `_synonymMenuOpen`, `_synonymPickerOpen`: Spiegel-
+//     Flags, die die Subs setzen, damit editor-focus-onKey (Escape) weiss,
+//     welches Popover offen ist, ohne in die Sub zu greifen.
+// Der Rest des Synonym-/Figur-Lookup-States lebt in den jeweiligen
+// Alpine.data-Subs (editorSynonymeCard, editorFigurLookupCard).
 const editorPopupState = () => ({
-  showSynonymMenu: false,
-  synonymMenuX: 0,
-  synonymMenuY: 0,
-  showSynonymPicker: false,
-  synonymThesList: [],
-  synonymThesLoading: false,
-  synonymThesError: '',
-  synonymThesDisabled: false,
-  synonymKiList: [],
-  synonymKiLoading: false,
-  synonymKiError: '',
-  _synonymRange: null,
-  _synonymWord: '',
-  _synonymPollTimer: null,
-  _synonymScrollHandler: null,
-  showFigurLookup: false,
-  figurLookupX: 0,
-  figurLookupY: 0,
-  figurLookupData: null,
-  _figurLookupScrollHandler: null,
-  _figurLookupAnchor: null,
   _figurLookupIndex: null,
+  _figurLookupOpen: false,
+  _synonymMenuOpen: false,
+  _synonymPickerOpen: false,
 });
 
 // Sichtbarkeit der Hauptkarten. Exklusiv: `_closeOtherMainCards(keep)`
@@ -131,6 +121,7 @@ const cardsState = () => ({
   showBookSettingsCard: false,
   showUserSettingsCard: false,
   showKomplettStatus: false,
+  showAvatarMenu: false,
 });
 
 const statusState = () => ({
@@ -235,8 +226,6 @@ const chatsState = () => ({
 const jobsState = () => ({
   jobQueueItems: [],
   _jobQueueTimer: null,
-  showJobStats: false,
-  jobStats: null,
   alleAktualisierenLoading: false,
   alleAktualisierenStatus: '',
   alleAktualisierenLastRun: null,

@@ -1,8 +1,6 @@
 // Stil-Heatmap: deterministische Stil-Metriken pro Kapitel (kein KI-Call).
 // Greift auf page_stats zu (gefüllt vom Sync-Job über lib/page-index.js).
-// `this` zeigt auf die Alpine.data('stilCard')-Sub-Komponente; Zugriff auf
-// Root-State (selectedBookId, uiLocale, pages, selectPage, t) läuft über
-// window.__app.
+// Methoden werden in Alpine.data('stilCard') gespreadet; Root-Zugriffe via window.__app.
 
 import { fetchJson, formatNumber, heatmapCellVars, localeTag, minMaxBy } from './utils.js';
 

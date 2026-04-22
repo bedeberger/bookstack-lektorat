@@ -1,20 +1,7 @@
 // Alpine.data('kapitelReviewCard') — Sub-Komponente der Kapitel-Bewertung.
-//
-// Eigener State: kapitelReviewChapterId, kapitelReviewLoading,
-//   kapitelReviewProgress, kapitelReviewStatus, kapitelReviewOut,
-//   selectedKapitelReviewId, _kapitelReviewPollTimer,
-//   _kapitelReviewRunningChapterId.
-// Root behält:
-//   - `showKapitelReviewCard` (Hash-Router + Exklusivität)
-//   - `kapitelReviewHistory` (Dict chapterId → [entry, …]; wird bei Buchwechsel
-//     aus _resetBookScopedState geleert — wandert als Event-Reset in die Sub)
-//   - `tree`, `selectedBookId`, `selectedBookName`, `bookstackUrl`, `pages`,
-//     `tokEsts`, `newPageTitle`, `newPageCreating`, `newPageError`,
-//     `loadKapitelReviewHistory` bleiben zugreifbar via $root
-//
-// Job-Flow ist manuell implementiert (kein createCardJobFeature), weil der
-// Start-Payload kapitelbezogen ist und die Poll-Logik `_kapitelReviewRunningChapterId`
-// trackt, was die Factory nicht abbildet.
+// Job-Flow manuell implementiert (kein createCardJobFeature), weil der
+// Start-Payload kapitelbezogen ist und die Poll-Logik
+// _kapitelReviewRunningChapterId trackt.
 
 import { fetchJson, escHtml } from '../utils.js';
 import { startPoll, runningJobStatus } from './job-helpers.js';
@@ -22,8 +9,7 @@ import { startPoll, runningJobStatus } from './job-helpers.js';
 export function registerKapitelReviewCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
   window.Alpine.data('kapitelReviewCard', () => ({
-    // kapitelReviewChapterId lebt am Root (Hash-Router + Sidebar lesen es);
-    // die Sub greift via window.__app darauf zu.
+    // kapitelReviewChapterId lebt am Root (Hash-Router + Sidebar lesen es).
     kapitelReviewLoading: false,
     kapitelReviewProgress: 0,
     kapitelReviewStatus: '',

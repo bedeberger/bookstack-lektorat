@@ -183,21 +183,6 @@ export const appJobsCoreMethods = {
     );
   },
 
-  async toggleJobStats() {
-    this.showJobStats = !this.showJobStats;
-    if (this.showJobStats) {
-      try {
-        const url = this.selectedBookId
-          ? `/jobs/stats?book_id=${encodeURIComponent(this.selectedBookId)}`
-          : '/jobs/stats';
-        this.jobStats = await fetchJson(url);
-      } catch (e) {
-        console.error('[toggleJobStats]', e);
-        this.jobStats = [];
-      }
-    }
-  },
-
   _startJobQueuePoll() {
     if (this._jobQueueTimer) clearInterval(this._jobQueueTimer);
     let consecutiveFailures = 0;

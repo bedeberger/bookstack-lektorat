@@ -6,10 +6,6 @@
 //   - `ereignisseFilters` (app-navigation.js schreibt darauf)
 //   - `_buildGlobalZeitstrahl` (wird aus figuren.js / loadFiguren gerufen)
 //   - `_reloadZeitstrahl` (wird aus app-komplett.js gerufen)
-//
-// UI-Helper aus app-ui.js (`ereignisseKapitelListe`, `ereignisseSeitenListe`,
-// `filteredEreignisse`) wandern hierher — sie sind nur vom Ereignisse-Partial
-// benutzt und lesen $root-State.
 
 export function registerEreignisseCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
@@ -76,7 +72,7 @@ export function registerEreignisseCard() {
       if (this._onCardRefresh) window.removeEventListener('card:refresh', this._onCardRefresh);
     },
 
-    // UI-Helper (aus app-ui.js hierher gezogen). Lesen $root-Filter + -Daten.
+    // UI-Helper. Lesen $root-Filter + -Daten.
     ereignisseKapitelListe() {
       return window.__app._deriveKapitel(window.__app.globalZeitstrahl, ev => ev.kapitel);
     },

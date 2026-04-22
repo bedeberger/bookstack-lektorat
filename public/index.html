@@ -40,7 +40,7 @@
       @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading && !focusMode) runCheck()"
       @keydown.ctrl.s.prevent.window="if (editMode) quickSave()"
       @keydown.meta.s.prevent.window="if (editMode) quickSave()"
-      @keydown.window="handleShortcutsHotkey($event); handleFindHotkey($event); handleFocusHotkey($event)">
+      @keydown.window="handleShortcutsHotkey($event); handleFocusHotkey($event)">
 
 <div class="session-banner" x-show="sessionExpired" x-cloak>
   <span class="session-banner-text" x-text="t('session.expired')"></span>
@@ -67,15 +67,12 @@
 </h1>
 <div class="dev-banner" x-show="devMode" x-cloak x-text="t('dev.banner')"></div>
 <div class="site-header-row">
-  <p class="subtitle"><span x-text="t('app.subtitle')"></span> <span class="provider-badge" x-text="apiProvider === 'ollama' ? '· Ollama: ' + ollamaModel : apiProvider === 'llama' ? '· Llama: ' + llamaModel : '· Claude: ' + claudeModel"></span></p>
-  <div class="user-info" x-show="currentUser">
-    <span class="user-email" x-text="currentUser?.name || currentUser?.email"></span>
-    <div id="partial-komplett-status"></div>
-    <div id="partial-job-stats"></div>
-    <button type="button" class="theme-toggle" @click="cycleTheme()" :title="t('theme.cycleTitle', { label: _themeLabel() })" x-text="_themeLabel()"></button>
-    <button type="button" class="theme-toggle theme-toggle--shortcuts" :class="{ 'theme-toggle--active': showShortcutsOverlay }" @click="toggleShortcutsOverlay()" :title="t('shortcuts.buttonTitle')" :aria-label="t('shortcuts.buttonTitle')">?</button>
-    <button type="button" class="theme-toggle" :class="{ 'theme-toggle--active': showUserSettingsCard }" @click="toggleUserSettingsCard()" :title="t('header.profileTitle')" x-text="t('header.profile')"></button>
-    <a href="/auth/logout" class="logout-link" x-text="t('header.logout')"></a>
+  <p class="subtitle"><span x-text="t('app.subtitle')"></span></p>
+  <div class="header-actions" x-show="currentUser">
+    <div class="header-action-cluster">
+      <div id="partial-komplett-status"></div>
+    </div>
+    <div id="partial-avatar-menu"></div>
   </div>
 </div>
 
@@ -198,6 +195,9 @@
 <!-- Edit-Toolbar (Bubble + Slash) – teleportiert nach <body>, hier nur Scope-Host -->
 <div id="partial-editor-toolbar"></div>
 <div id="partial-editor-find"></div>
+<div id="partial-editor-figur-lookup"></div>
+<div id="partial-editor-synonyme"></div>
+<div id="partial-editor-focus"></div>
 <div id="partial-shortcuts"></div>
 
 </div><!-- end layout-main -->

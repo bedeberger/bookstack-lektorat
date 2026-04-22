@@ -1,6 +1,5 @@
 // Gemeinsame Utilities für die Editor-Module (editor-find, editor-synonyme,
-// editor-figur-lookup). Vermeidet die dreifache Definition von Wort-Regex
-// und Namens-Normalisierung.
+// editor-figur-lookup): Wort-Regex und Namens-Normalisierung.
 
 // Ein "Einzelwort" ist eine zusammenhängende Sequenz aus Buchstaben/Ziffern.
 // Bindestriche und Apostrophe zählen mit, damit «auf-/abwärts» oder «wir's» erfasst werden.
@@ -18,7 +17,7 @@ export function normalizeName(s) {
     .trim();
 }
 
-// Editor-Root aus dem DOM holen – jede Editor-Methode brauchte das.
+// Editor-Root aus dem DOM holen.
 export function getEditEl() {
   return document.querySelector('#editor-card .page-content-view--editing');
 }

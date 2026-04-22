@@ -1,0 +1,39 @@
+<!-- Figuren-Lookup-Popover (Ctrl/Cmd-Klick auf Figurenname im Edit-/Fokusmodus).
+     Teleport nach <body>, damit position:fixed nicht vom card-Transform
+     eingefangen wird. Alpine.data-Sub — siehe public/js/cards/editor-figur-lookup-card.js. -->
+<div x-data="editorFigurLookupCard" class="display-contents">
+  <template x-teleport="body">
+    <div x-show="showFigurLookup" x-cloak class="figur-lookup"
+         :style="{ left: figurLookupX + 'px', top: figurLookupY + 'px' }"
+         @click.outside="closeFigurLookup()"
+         @keydown.escape.window="closeFigurLookup()">
+      <template x-if="figurLookupData">
+        <div>
+          <div class="figur-lookup-header">
+            <span class="figur-lookup-name" x-text="figurLookupData.name"></span>
+            <button type="button" class="figur-lookup-close" @click="closeFigurLookup()" :title="$app.t('common.close')" :aria-label="$app.t('common.close')">×</button>
+          </div>
+          <div class="figur-lookup-body">
+            <div x-show="figurLookupGeburt()" class="figur-lookup-row">
+              <span class="figur-lookup-label" x-text="$app.t('figurLookup.geburt')"></span>
+              <span x-text="figurLookupGeburt()"></span>
+            </div>
+            <div x-show="(figurLookupData.eigenschaften || []).length > 0" class="figur-lookup-tags">
+              <template x-for="(tag, ti) in (figurLookupData.eigenschaften || [])" :key="ti">
+                <span class="tag" x-text="tag"></span>
+              </template>
+            </div>
+            <div x-show="figurLookupData.beruf || figurLookupData.rolle" class="figur-lookup-meta">
+              <span x-show="figurLookupData.beruf" x-text="figurLookupData.beruf"></span>
+              <span x-show="figurLookupData.beruf && figurLookupData.rolle" class="figur-lookup-meta-sep"> · </span>
+              <span x-show="figurLookupData.rolle" x-text="figurLookupData.rolle"></span>
+            </div>
+          </div>
+          <div x-show="$app.editMode && !$app.focusMode" class="figur-lookup-footer">
+            <button type="button" class="figur-lookup-link" @click="openFigurLookupTarget()" x-text="$app.t('figurLookup.open')"></button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </template>
+</div>

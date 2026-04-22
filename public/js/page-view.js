@@ -16,21 +16,18 @@ export function isHardFinding(typ) {
 
 /** Sortiert Fehler nach Position im HTML (toleranter Match via `findInHtml`,
  *  damit Originale mit Tags/Entities/Whitespace-Differenzen richtig einsortiert
- *  werden statt ans Ende zu fallen). Nicht gefundene ans Ende. */
+ *  werden). Findings, deren `original` im HTML nicht gefunden wird (z.B. KI-
+ *  Halluzination), werden rausgefiltert – sie hätten in der Seitenansicht
+ *  ohnehin keine Markierung. */
 export function sortByPosition(html, fehler) {
-  const posCache = fehler.map(f => {
-    if (!f.original) return -1;
-    const m = findInHtml(html, f.original);
-    return m ? m.htmlStart : -1;
-  });
-  return [...fehler]
-    .map((f, i) => ({ f, pos: posCache[i] }))
-    .sort((a, b) => {
-      if (a.pos === -1 && b.pos === -1) return 0;
-      if (a.pos === -1) return 1;
-      if (b.pos === -1) return -1;
-      return a.pos - b.pos;
+  return fehler
+    .map(f => {
+      if (!f.original) return null;
+      const m = findInHtml(html, f.original);
+      return m ? { f, pos: m.htmlStart } : null;
     })
+    .filter(Boolean)
+    .sort((a, b) => a.pos - b.pos)
     .map(e => e.f);
 }
 

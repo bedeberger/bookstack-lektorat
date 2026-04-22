@@ -1,6 +1,6 @@
 // Buch-Einstellungen (Sprache, Region, Buchtyp, Perspektive, Zeit, Kontext).
-// `this` zeigt auf die Alpine.data('bookSettingsCard')-Sub-Komponente;
-// Zugriff auf Root-State (selectedBookId, promptConfig, tError) via window.__app.
+// Methoden werden in Alpine.data('bookSettingsCard') gespreadet;
+// Root-Zugriffe via window.__app.
 
 import { fetchJson } from './utils.js';
 
@@ -70,5 +70,21 @@ export const bookSettingsMethods = {
     const lang = this.bookSettingsLanguage || 'de';
     const typen = window.__app.promptConfig?.buchtypen?.[lang] || {};
     return Object.entries(typen).map(([key, val]) => ({ key, label: val.label }));
+  },
+
+  async loadBookJobStats() {
+    if (!window.__app.selectedBookId) {
+      this.bookJobStats = null;
+      return;
+    }
+    this.bookJobStatsLoading = true;
+    try {
+      this.bookJobStats = await fetchJson(`/jobs/stats?book_id=${encodeURIComponent(window.__app.selectedBookId)}`);
+    } catch (e) {
+      console.error('[book-settings] Job-Statistiken laden fehlgeschlagen:', e);
+      this.bookJobStats = [];
+    } finally {
+      this.bookJobStatsLoading = false;
+    }
   },
 };

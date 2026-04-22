@@ -92,6 +92,9 @@ export const appKomplettMethods = {
     // Thresholds entsprechen den Server-Progress-Punkten nach den jeweiligen aiCalls:
     //   orteConsolidate=55 = Ende aiCall Phase 3 (43→55)
     //   chapterRelations=58 = Ende aiCall Phase 3b (55→58, nur Multi-Pass)
+    //   szenenEvents=78    = Ende Szenen-Remap/Save (58→78)
+    //   timeline=82        = Ende aiCall Phase 6 (78→82)
+    //   continuity=97      = Ende aiCall Phase 8 (82→97, breite Range für langen Call)
     // Im Single-Pass wird Phase 3b übersprungen (Server setzt passMode='single'),
     // damit sie auch im UI nicht als „erledigt" erscheint.
     const phases = [
@@ -100,8 +103,8 @@ export const appKomplettMethods = {
       { key: 'phase.figurenConsolidate', threshold: 43  },
       { key: 'phase.orteConsolidate',    threshold: 55  },
       { key: 'phase.chapterRelations',   threshold: 58, onlyMulti: true },
-      { key: 'phase.szenenEvents',       threshold: 83  },
-      { key: 'phase.timeline',           threshold: 89  },
+      { key: 'phase.szenenEvents',       threshold: 78  },
+      { key: 'phase.timeline',           threshold: 82  },
       { key: 'phase.continuity',         threshold: 97  },
     ];
     const visible = phases.filter(ph => !(ph.onlyMulti && this.alleAktualisierenPassMode === 'single'));

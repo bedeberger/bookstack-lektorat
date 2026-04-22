@@ -3,8 +3,15 @@
 // Geburt, Eigenschaften sowie optional Beruf/Rolle. Im Edit-Modus zusätzlich
 // "Figur öffnen"-Link (nicht im Fokus-Modus, dort würde der Kontext-Wechsel
 // den Fluss brechen).
+//
+// Zweigeteilt:
+//   - `figurLookupMethods`: Root-Methoden (Index, Word-Lookup, Click-Handler,
+//     `_tryOpenFigurLookupAt` für synchronen Hit-Test aus dem Synonym-Menü).
+//     Dispatcht `editor:figur-lookup:open { fig, x, y }` und
+//     `editor:figur-lookup:close` — die Sub-Komponente hört darauf.
+//   - `figurLookupCardMethods`: Popup-Display (Position, Scroll, Schliessen)
+//     in Alpine.data('editorFigurLookupCard').
 
-import { escHtml } from './utils.js';
 import { isWordChar, normalizeName, WORD_RE } from './editor-utils.js';
 
 function extractYear(geburtstag) {
@@ -52,11 +59,12 @@ export function rangeForWordAtClientPoint(x, y) {
   return { range: wordRange, word };
 }
 
+// ── Root-Methoden ──────────────────────────────────────────────────────────
+// Lookup-Index + Word-Matching leben am Root, weil `_tryOpenFigurLookupAt`
+// synchron ein Bool zurückgeben muss (Synonym-Menü nutzt das, um nicht zu
+// öffnen, falls bereits ein Figur-Popover gezeigt wird). Der Display-Teil
+// läuft als Sub-Komponente und wird über Events gesteuert.
 export const figurLookupMethods = {
-  // ── State (via Spread in Alpine-Komponente ergänzt) ────────────────────────
-  // showFigurLookup, figurLookupX, figurLookupY, figurLookupData
-  // _figurLookupScrollHandler, _figurLookupIndex
-
   _buildFigurLookupIndex() {
     const map = new Map();
     for (const f of (this.figuren || [])) {
@@ -115,13 +123,28 @@ export const figurLookupMethods = {
     if (!fig) return false;
     e.preventDefault();
     e.stopPropagation();
-    this._openFigurLookup(fig, e.clientX, e.clientY);
+    window.dispatchEvent(new CustomEvent('editor:figur-lookup:open', {
+      detail: { fig, x: e.clientX, y: e.clientY },
+    }));
     return true;
   },
 
+  // Trampolin — Legacy-Aufrufer (resetPage, cancelEdit, focus-mode,
+  // synonyme-close) rufen `closeFigurLookup()` am Root. Dispatcht an die Sub.
+  closeFigurLookup() {
+    window.dispatchEvent(new CustomEvent('editor:figur-lookup:close'));
+  },
+};
+
+// ── Sub-Komponenten-Methoden ──────────────────────────────────────────────
+// `this` zeigt auf die Alpine.data('editorFigurLookupCard')-Instanz.
+export const figurLookupCardMethods = {
   _openFigurLookup(fig, clientX, clientY) {
     this.figurLookupData = fig;
     this.showFigurLookup = true;
+    // Root-Flag, damit editor-focus-onKey (Escape) weiss, dass ein Popover
+    // offen ist, ohne in die Sub greifen zu müssen.
+    if (window.__app) window.__app._figurLookupOpen = true;
     this._figurLookupAnchor = { x: clientX, y: clientY };
     this._attachFigurLookupScroll();
     this.$nextTick(() => this._positionFigurLookup());
@@ -134,6 +157,7 @@ export const figurLookupMethods = {
     this.showFigurLookup = false;
     this.figurLookupData = null;
     this._figurLookupAnchor = null;
+    if (window.__app) window.__app._figurLookupOpen = false;
     this._detachFigurLookupScroll();
   },
 
@@ -157,7 +181,7 @@ export const figurLookupMethods = {
       // Im Fokus-Modus driftet das Popover vom darunterliegenden Wort weg,
       // sobald der Text scrollt (typewriter-Recenter). Statt mitzuwandern:
       // schliessen, damit der User einen klaren Zustand sieht.
-      if (this.focusMode) { this.closeFigurLookup(); return; }
+      if (window.__app?.focusMode) { this.closeFigurLookup(); return; }
       this._positionFigurLookup();
     };
     window.addEventListener('scroll', handler, true);
@@ -184,6 +208,6 @@ export const figurLookupMethods = {
     const fig = this.figurLookupData;
     this.closeFigurLookup();
     if (!fig?.id) return;
-    await this.openFigurById(fig.id);
+    await window.__app?.openFigurById?.(fig.id);
   },
 };

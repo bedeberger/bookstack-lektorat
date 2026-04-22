@@ -36,20 +36,22 @@
 
     <div class="book-settings-row">
       <label class="book-settings-label" x-text="$app.t('profile.uiLanguage')"></label>
-      <div class="book-settings-options">
-        <label class="book-settings-option">
-          <input type="radio" name="us-ui-lang" value="de" :checked="$app.uiLocale === 'de'" @change="$app.changeLocale('de')">
-          <span x-text="$app.t('lang.de')"></span>
-        </label>
-        <label class="book-settings-option">
-          <input type="radio" name="us-ui-lang" value="en" :checked="$app.uiLocale === 'en'" @change="$app.changeLocale('en')">
-          <span x-text="$app.t('lang.en')"></span>
-        </label>
+      <div class="book-settings-field">
+        <div class="book-settings-options">
+          <label class="book-settings-option">
+            <input type="radio" name="us-ui-lang" value="de" :checked="$app.uiLocale === 'de'" @change="$app.changeLocale('de')">
+            <span x-text="$app.t('lang.de')"></span>
+          </label>
+          <label class="book-settings-option">
+            <input type="radio" name="us-ui-lang" value="en" :checked="$app.uiLocale === 'en'" @change="$app.changeLocale('en')">
+            <span x-text="$app.t('lang.en')"></span>
+          </label>
+        </div>
+        <p class="book-settings-field-note" x-text="$app.t('profile.uiLanguageHint')"></p>
       </div>
     </div>
-    <p class="user-settings-section-note" x-text="$app.t('profile.uiLanguageHint')"></p>
 
-    <p class="user-settings-section-note" x-text="$app.t('profile.newBooksHint')"></p>
+    <p class="book-settings-section-divider" x-text="$app.t('profile.newBooksHint')"></p>
 
     <div class="book-settings-row">
       <label class="book-settings-label" x-text="$app.t('profile.defaultLanguage')"></label>

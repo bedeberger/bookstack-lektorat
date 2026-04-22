@@ -7,7 +7,6 @@ import { historyMethods } from './history.js';
 import { treeMethods } from './tree.js';
 import { bookstackSearchMethods } from './bookstack-search.js';
 import { lektoratMethods } from './lektorat.js';
-import { reviewMethods } from './review.js';
 import { kapitelReviewMethods } from './kapitel-review.js';
 import { registerBookReviewCard } from './cards/book-review-card.js';
 import { registerKapitelReviewCard } from './cards/kapitel-review-card.js';
@@ -32,11 +31,16 @@ import { registerUserSettingsCard } from './cards/user-settings-card.js';
 import { configureI18n, i18nMethods, getSupportedLocales } from './i18n.js';
 import { pageViewMethods } from './page-view.js';
 import { editorEditMethods } from './editor-edit.js';
-import { editorFindMethods } from './editor-find.js';
+import { registerEditorFindCard } from './cards/editor-find-card.js';
 import { focusMethods } from './editor-focus.js';
 import { synonymMethods } from './editor-synonyme.js';
+import { registerEditorSynonymeCard } from './cards/editor-synonyme-card.js';
 import { figurLookupMethods } from './editor-figur-lookup.js';
-import { toolbarMethods } from './editor-toolbar.js';
+import { registerEditorFigurLookupCard } from './cards/editor-figur-lookup-card.js';
+import { registerEditorToolbarCard } from './cards/editor-toolbar-card.js';
+import { registerEditorFocusCard } from './cards/editor-focus-card.js';
+import { registerLektoratFindingsCard } from './cards/lektorat-findings-card.js';
+import { registerPageHistoryCard } from './cards/page-history-card.js';
 import { shortcutsMethods } from './shortcuts.js';
 import { initialLektoratState } from './app-state.js';
 import { appUiMethods, applySzenenFilters } from './app-ui.js';
@@ -135,6 +139,13 @@ document.addEventListener('alpine:init', () => {
   registerKapitelReviewCard();
   registerChatCard();
   registerBookChatCard();
+  registerEditorFindCard();
+  registerEditorFigurLookupCard();
+  registerEditorSynonymeCard();
+  registerEditorToolbarCard();
+  registerEditorFocusCard();
+  registerLektoratFindingsCard();
+  registerPageHistoryCard();
 
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
     open: false,
@@ -402,7 +413,6 @@ document.addEventListener('alpine:init', () => {
         this.uiLocale = fallbackLocale;
         document.documentElement.setAttribute('lang', fallbackLocale);
         await this._loadPartials();
-        this._installToolbarListeners();
       } catch (e) {
         console.error('[init:shell]', e);
       }
@@ -482,7 +492,6 @@ document.addEventListener('alpine:init', () => {
     ...treeMethods,
     ...bookstackSearchMethods,
     ...lektoratMethods,
-    ...reviewMethods,
     ...kapitelReviewMethods,
     ...figurenMethods,
     ...ereignisseMethods,
@@ -494,11 +503,9 @@ document.addEventListener('alpine:init', () => {
     ...i18nMethods,
     ...pageViewMethods,
     ...editorEditMethods,
-    ...editorFindMethods,
     ...focusMethods,
     ...synonymMethods,
     ...figurLookupMethods,
-    ...toolbarMethods,
     ...shortcutsMethods,
     ...appUiMethods,
     ...appChromeMethods,

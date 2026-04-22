@@ -12,6 +12,14 @@ const {
 
 const { narrativeLabels } = require('./narrative-labels');
 
+// Lokale Provider (ollama/llama) bekommen einen deutlich abgespeckten Lektorat-Prompt:
+// kein Vorseiten-Kontext (BookStack-Roundtrip gespart), keine Figuren-Beziehungen,
+// kein POV-/Tempus-Block. Alle Einsparungen auch in public/js/prompts.js (_isLocal).
+const _isLocalProvider = () => {
+  const p = process.env.API_PROVIDER || 'claude';
+  return p === 'ollama' || p === 'llama';
+};
+
 // Letzten Absatz eines Texts extrahieren (max. maxChars Zeichen). Dient als
 // Übergangskontext für den Lektorat-Prompt, damit Tempus-/Perspektivwechsel
 // am Seitenanfang korrekt bewertet werden.
@@ -94,9 +102,11 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     const text = htmlToText(html);
     if (!text.trim()) { completeJob(jobId, { empty: true }); return; }
 
-    // Kapitelkontext laden: Figuren, Beziehungen, Schauplätze (falls Komplettanalyse gelaufen ist)
+    // Kapitelkontext laden: Figuren, Beziehungen, Schauplätze (falls Komplettanalyse gelaufen ist).
+    // Lokale Provider: Beziehungen weglassen – der Prompt-Block wird für _isLocal ohnehin gedroppt.
+    const local = _isLocalProvider();
     const figuren           = getChapterFigures(bookId, pd.chapter_id, userEmail);
-    const figurenBeziehungen = bookId ? getChapterFigureRelations(bookId, pd.chapter_id, userEmail) : [];
+    const figurenBeziehungen = (!local && bookId) ? getChapterFigureRelations(bookId, pd.chapter_id, userEmail) : [];
     const orte              = bookId ? getChapterLocations(bookId, pd.chapter_id, userEmail) : [];
 
     // Kapitelname: zuerst aus lokaler chapters-Tabelle (kein BookStack-Call nötig),
@@ -108,8 +118,10 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
 
     // Vorseite ermitteln (letzter Absatz als Übergangskontext). Nur Buch-Seiten aus BookStack
     // ziehen – pages-Listing ist paginiert, aber typischerweise günstig (Metadaten).
+    // Lokale Provider: komplett überspringen – wird für _isLocal im Prompt nicht verwendet
+    // (dient nur Tempus-/Perspektiv-Prüfung, die lokal aus dem typ-Enum gedroppt ist).
     let previousExcerpt = null;
-    if (bookId) {
+    if (bookId && !local) {
       try {
         const allPages = await bsGetAll('pages?filter[book_id]=' + bookId, userToken);
         const prev = findPreviousPage(allPages, pageId, pd.chapter_id);
@@ -182,6 +194,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
   // Kapitelname-Cache (chapter_id → name) aus lokaler DB, spart wiederholte Lookups pro Seite.
   const chapterRows = db.prepare('SELECT chapter_id, chapter_name FROM chapters WHERE book_id = ?').all(parseInt(bookId));
   const chapterNameById = Object.fromEntries(chapterRows.map(r => [String(r.chapter_id), r.chapter_name]));
+  const local = _isLocalProvider();
   try {
     updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     const pages = await bsGetAll('pages?filter[book_id]=' + bookId, userToken);
@@ -213,24 +226,28 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
         if (!text) continue;
 
         const batchFiguren        = getChapterFigures(bookId, pd.chapter_id, userEmail);
-        const batchBeziehungen    = getChapterFigureRelations(bookId, pd.chapter_id, userEmail);
+        const batchBeziehungen    = local ? [] : getChapterFigureRelations(bookId, pd.chapter_id, userEmail);
         const batchOrte           = getChapterLocations(bookId, pd.chapter_id, userEmail);
 
-        const prev = findPreviousPage(pages, p.id, pd.chapter_id);
+        // Lokale Provider: Vorseiten-Kontext wird im Prompt nicht verwendet – kompletter
+        // Block überspringen, spart einen BookStack-Fetch pro Seite.
         let previousExcerpt = null;
-        if (prev) {
-          if (lastParaCache.has(prev.id)) {
-            previousExcerpt = lastParaCache.get(prev.id);
-          } else {
-            try {
-              const prevPd = await bsGet('pages/' + prev.id, userToken);
-              previousExcerpt = lastParagraph(htmlToText(prevPd.html));
-              lastParaCache.set(prev.id, previousExcerpt);
-            } catch (_) { /* Vorseite fehlschlägt → kein Kontext, nicht kritisch */ }
+        if (!local) {
+          const prev = findPreviousPage(pages, p.id, pd.chapter_id);
+          if (prev) {
+            if (lastParaCache.has(prev.id)) {
+              previousExcerpt = lastParaCache.get(prev.id);
+            } else {
+              try {
+                const prevPd = await bsGet('pages/' + prev.id, userToken);
+                previousExcerpt = lastParagraph(htmlToText(prevPd.html));
+                lastParaCache.set(prev.id, previousExcerpt);
+              } catch (_) { /* Vorseite fehlschlägt → kein Kontext, nicht kritisch */ }
+            }
           }
+          // Aktuelle Seite als zukünftige Vorseite vormerken (spart Fetch für die Folge-Iteration)
+          lastParaCache.set(p.id, lastParagraph(text));
         }
-        // Aktuelle Seite als zukünftige Vorseite vormerken (spart Fetch für die Folge-Iteration)
-        lastParaCache.set(p.id, lastParagraph(text));
 
         const chapterName = pd.chapter_id ? (chapterNameById[String(pd.chapter_id)] || null) : null;
 

@@ -1,8 +1,6 @@
 // Fehler-Heatmap: aggregiert Fehlertypen × Kapitel aus jüngstem page_check pro Seite.
 // Daten kommen live aus /history/fehler-heatmap/:book_id — kein KI-Call, keine Sync-Phase.
-// `this` zeigt auf die Alpine.data('fehlerHeatmapCard')-Sub-Komponente; Zugriff auf
-// Root-State (selectedBookId, uiLocale, pages, selectPage, pageHistory,
-// activeHistoryEntryId, loadHistoryEntry, t) läuft über window.__app.
+// Methoden werden in Alpine.data('fehlerHeatmapCard') gespreadet; Root-Zugriffe via window.__app.
 
 import { fetchJson, formatNumber, heatmapCellVars, minMaxBy } from './utils.js';
 

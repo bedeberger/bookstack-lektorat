@@ -1,0 +1,43 @@
+<!-- Lektorat-Findings-Panel (Befunde, Stilanalyse, Fazit).
+     Der Partial-Container in editor.html hat `display: contents`, damit
+     DIESER Wrapper direkter Grid-Nachbar von .lektorat-split-preview bleibt. -->
+<div x-data="lektoratFindingsCard"
+     x-show="$app.checkDone"
+     class="lektorat-split-findings">
+  <!-- Fehlerfrei -->
+  <div x-show="$app.lektoratFindings.length === 0" class="finding ok">
+    <span class="badge badge-ok" x-text="$app.t('editor.findings.okBadge')"></span> &nbsp;<span x-text="$app.t('editor.findings.ok')"></span>
+  </div>
+
+  <!-- Findings-Sektion (Fehler + Stilanmerkungen, in Lesereihenfolge) -->
+  <template x-if="$app.lektoratFindings.length > 0">
+    <div>
+      <div class="section-heading finding-header">
+        <span x-text="$app.t('editor.findings.count', { n: $app.lektoratFindings.length })"></span>
+        <div class="finding-toggle-group">
+          <button type="button" class="btn-compact" @click="$app.selectAllFindings(true)" x-text="$app.t('editor.findings.selectAll')"></button>
+          <button type="button" class="btn-compact" @click="$app.selectAllFindings(false)" x-text="$app.t('editor.findings.selectNone')"></button>
+        </div>
+      </div>
+      <template x-for="(f, i) in $app.lektoratFindings" :key="i">
+        <label class="finding"
+               :class="{ 'error': _isHardFinding(f.typ), 'style': !_isHardFinding(f.typ), 'finding-deselected': !$app.selectedFindings[i], 'finding--applied': $app.appliedOriginals.includes(f.original) }"
+               :data-finding-idx="i"
+               @pointerenter="handleFindingPointer(i)">
+          <input type="checkbox" class="finding-checkbox" :checked="$app.selectedFindings[i]" :disabled="$app.appliedOriginals.includes(f.original)" @change="$app.toggleFinding(i)">
+          <span class="badge" :class="_isHardFinding(f.typ) ? 'badge-err' : 'badge-warn'" x-text="$app.t('finding.' + f.typ)"></span>
+          <span x-show="$app.appliedOriginals.includes(f.original)" class="tag" x-text="$app.t('editor.findings.applied')"></span>
+          <span class="finding-content">
+            <span class="finding-original" x-text="f.original"></span>
+            <template x-if="f.korrektur"><span class="finding-arrow">→</span></template>
+            <template x-if="f.korrektur"><span class="finding-korrektur" x-text="f.korrektur"></span></template>
+            <span class="finding-explanation" x-text="f.erklaerung"></span>
+          </span>
+        </label>
+      </template>
+    </div>
+  </template>
+
+  <!-- Stilanalyse & Fazit -->
+  <div x-html="$app.analysisOut"></div>
+</div>

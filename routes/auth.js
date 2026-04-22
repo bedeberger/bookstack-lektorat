@@ -111,6 +111,8 @@ router.get('/auth/callback', async (req, res) => {
     delete req.session.oidcNonce;
     delete req.session.returnTo;
     req.session.user = { email, name: claims.name || email };
+    req.session.loginAt = Date.now();
+    req.session.lastSeen = Date.now();
     upsertUserLogin(email, claims.name || email);
     // Gespeicherten BookStack-Token in Session laden (falls vorhanden)
     const stored = getUserToken(email);
@@ -126,8 +128,12 @@ router.get('/auth/callback', async (req, res) => {
 // GET /auth/logout → Session löschen
 router.get('/auth/logout', (req, res) => {
   const email = req.session.user?.email;
+  const loginAt = req.session.loginAt;
   req.session.destroy(() => {
-    if (email) logger.info(`Logout: ${email}`);
+    if (email) {
+      const durMin = loginAt ? Math.round((Date.now() - loginAt) / 60000) : null;
+      logger.info(`Logout: ${email}${durMin != null ? ` (Session ${durMin} min)` : ''}`);
+    }
     res.redirect('/auth/login');
   });
 });

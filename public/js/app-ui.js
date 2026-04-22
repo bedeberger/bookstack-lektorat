@@ -1,9 +1,12 @@
 import { escPreserveStrong, fetchText } from './utils.js';
 
 // Pure Filter-Logik für die Szenen-Liste. Getrennt von Alpine-Getter, damit
-// Unit-Tests den Page-/Kapitel-Filter direkt gegen Fixtures prüfen können —
-// besonders die Regression, dass der Seiten-Filter per `page_id` (Number) UND
-// Name (String) matchen muss.
+// Unit-Tests den Page-/Kapitel-Filter direkt gegen Fixtures prüfen können.
+// Kapitel-Filter matcht per Name (die Kapitelnamen in den Szenen stammen aus
+// dem Komplett-Job und sind dort bereits auf die echten BookStack-Namen
+// normalisiert). Seiten-Filter matcht ausschliesslich per `page_id` (Number) —
+// die Dropdown-Optionen liefert `szenenSeitenListe()` direkt aus dem
+// BookStack-Kapitel-Baum, sodass der Value immer eine gültige page_id ist.
 export function applySzenenFilters(szenen, filters) {
   const q = filters.suche ? filters.suche.toLowerCase() : '';
   return (szenen || []).filter(s =>
@@ -11,9 +14,7 @@ export function applySzenenFilters(szenen, filters) {
     (!filters.wertung || s.wertung === filters.wertung) &&
     (!filters.figurId || (s.fig_ids || []).includes(filters.figurId)) &&
     (!filters.kapitel || s.kapitel === filters.kapitel) &&
-    (!filters.seite || (typeof filters.seite === 'number'
-      ? s.page_id === filters.seite
-      : s.seite === filters.seite)) &&
+    (!filters.seite || s.page_id === filters.seite) &&
     (!filters.ortId || (s.ort_ids || []).includes(filters.ortId))
   );
 }
@@ -33,8 +34,6 @@ export const appUiMethods = {
       }, duration);
     }
   },
-
-  // setReviewStatus wandert in Alpine.data('bookReviewCard') (._writeBookReviewStatus).
 
   // ── Sort helpers (use persistent order maps from loadPages) ─────────────
   _chapterIdx(name) { return this._chapterOrderMap?.get(name) ?? 9999; },
@@ -89,54 +88,36 @@ export const appUiMethods = {
   szenenKapitelListe() {
     return this._deriveKapitel(this.szenen, s => s.kapitel);
   },
-  // Pages im Szenen-Filter-Dropdown: nur Seiten, die tatsächlich Szenen tragen.
-  // Value ist primär die `page_id` (Number) — der Filter matcht dann auch Szenen,
-  // deren `seite`-String abweicht (z.B. KI-Schreibweise ≠ BookStack-Titel).
-  // Fallback für Szenen ohne auflösbare `page_id`: Seitenname als String-Value.
+  // Pages im Szenen-Filter-Dropdown: alle Seiten des gewählten Kapitels aus
+  // dem BookStack-Kapitel-Baum (`this.pages`). So bleibt das Dropdown auch
+  // dann befüllt, wenn die KI bei einzelnen Szenen keine `seite` gesetzt hat.
+  // Value = page_id (Number); der Filter in `applySzenenFilters` matcht strikt
+  // `s.page_id === filter.seite`. Szenen mit `page_id=null` tauchen in keinem
+  // Seiten-Filter auf – das ist OK (User sieht sie ohne Seitenfilter).
   szenenSeitenListe() {
     if (!this.szenenFilters.kapitel) return [];
-    const pageIdsOfKapitel = new Set();
-    const namesOfKapitel = new Set();
-    for (const s of (this.szenen || [])) {
-      if (s.kapitel !== this.szenenFilters.kapitel) continue;
-      if (s.page_id) pageIdsOfKapitel.add(s.page_id);
-      else if (s.seite) namesOfKapitel.add(s.seite);
-    }
-    const options = [];
-    const labelById = new Map();
-    // Primär: Tree-Seiten auflösen (stabile page_id, robuster Label).
-    for (const p of (this.pages || [])) {
-      if (p.id && pageIdsOfKapitel.has(p.id) && p.name && !labelById.has(p.id)) {
-        options.push({ value: p.id, label: p.name });
-        labelById.set(p.id, p.name);
+    // chapter_id aus Tree auflösen; Fallback aus den Szenen selbst (falls Tree
+    // noch nicht geladen oder Kapitel = "Sonstige Seiten" → chapterId bleibt null).
+    let chapterId = (this.tree || [])
+      .find(t => t.type === 'chapter' && t.name === this.szenenFilters.kapitel)?.id ?? null;
+    if (chapterId == null) {
+      for (const s of (this.szenen || [])) {
+        if (s.kapitel === this.szenenFilters.kapitel && s.chapter_id) {
+          chapterId = s.chapter_id; break;
+        }
       }
     }
-    // Fallback: page_id, die in `this.pages` nicht aufzulösen ist (Tree noch
-    // nicht geladen) → Szenen-`seite`-String als Label.
-    for (const s of (this.szenen || [])) {
-      if (s.kapitel !== this.szenenFilters.kapitel || !s.page_id || !s.seite) continue;
-      if (!labelById.has(s.page_id)) {
-        options.push({ value: s.page_id, label: s.seite });
-        labelById.set(s.page_id, s.seite);
-      }
-    }
-    // Szenen ohne page_id: Name als Value (schwächerer Match, aber besser als nichts).
-    for (const name of namesOfKapitel) {
-      options.push({ value: name, label: name });
-    }
-    return options.sort((a, b) => this._pageIdx(a.label) - this._pageIdx(b.label));
+    const matchesChapter = chapterId == null
+      ? (p => !p.chapter_id && p.chapterName === this.szenenFilters.kapitel)
+      : (p => p.chapter_id === chapterId);
+    return (this.pages || [])
+      .filter(p => p.id && p.name && matchesChapter(p))
+      .map(p => ({ value: p.id, label: p.name }))
+      .sort((a, b) => this._pageIdx(a.label) - this._pageIdx(b.label));
   },
   orteKapitelListe() {
     return this._deriveKapitel(this.orte, o => o.kapitel);
   },
-
-  // kontinuitaetKapitelListe() wandert in Alpine.data('kontinuitaetCard').
-
-  // figurenKapitelListe / figurenSeitenListe / filteredFiguren wandern
-  // in Alpine.data('figurenCard') — siehe cards/figuren-card.js.
-
-  // ereignisseKapitelListe / ereignisseSeitenListe / filteredEreignisse
-  // wandern in Alpine.data('ereignisseCard') — siehe cards/ereignisse-card.js.
 
   // ── Datum / Save-Status ─────────────────────────────────────────────────
   formatDate(iso) {

@@ -3,7 +3,6 @@ import { makeChatMethods } from './chat-base.js';
 
 // Seiten-Chat-Methoden (werden in Alpine.data('chatCard') gespreadet).
 // Gemeinsame Logik kommt aus chat-base.js; hier nur Seiten-Chat-Spezifika.
-// `this` zeigt auf die Sub-Komponente; Root-Zugriffe via window.__app.
 
 const baseMethods = makeChatMethods({
   label: 'Chat',

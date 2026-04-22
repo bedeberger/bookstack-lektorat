@@ -1071,6 +1071,56 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 51').run();
     logger.info('DB-Migration auf Version 51 abgeschlossen (page_ids in zeitstrahl_events für robusten Klick-Link auf Seiten).');
   }
+  if (version < 52) {
+    const userCols52 = db.pragma('table_info(users)').map(c => c.name);
+    if (!userCols52.includes('last_seen_at')) {
+      db.exec('ALTER TABLE users ADD COLUMN last_seen_at TEXT');
+    }
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS user_activity (
+        user_email TEXT NOT NULL,
+        date       TEXT NOT NULL,
+        seconds    INTEGER NOT NULL DEFAULT 0,
+        first_at   TEXT,
+        last_at    TEXT,
+        PRIMARY KEY (user_email, date)
+      );
+      CREATE INDEX IF NOT EXISTS idx_ua_date ON user_activity(date);
+    `);
+    db.prepare('UPDATE schema_version SET version = 52').run();
+    logger.info('DB-Migration auf Version 52 abgeschlossen (users.last_seen_at + user_activity für Session-Aktivitätszeit).');
+  }
+  if (version < 53) {
+    // Szenen-Seite: historisch hat die KI die Markdown-Header wortwörtlich kopiert
+    // («### Was macht Adrian?» statt nur «Was macht Adrian?»), sodass der
+    // page_id-Lookup im Komplettanalyse-Save immer null ergeben hat. Jetzt
+    // strippen wir den Präfix einmalig und holen fehlende page_ids aus
+    // pages (unser lokaler BookStack-Cache), gescoped auf book_id + chapter_id.
+    const stripped = db.prepare(`
+      UPDATE figure_scenes
+      SET seite = TRIM(SUBSTR(seite, 5))
+      WHERE seite LIKE '### %'
+    `).run().changes;
+    const strippedH2 = db.prepare(`
+      UPDATE figure_scenes
+      SET seite = TRIM(SUBSTR(seite, 4))
+      WHERE seite LIKE '## %'
+    `).run().changes;
+    const backfilled = db.prepare(`
+      UPDATE figure_scenes
+      SET page_id = (
+        SELECT p.page_id FROM pages p
+        WHERE p.book_id = figure_scenes.book_id
+          AND ((p.chapter_id IS NULL AND figure_scenes.chapter_id IS NULL)
+               OR p.chapter_id = figure_scenes.chapter_id)
+          AND p.page_name = figure_scenes.seite
+        LIMIT 1
+      )
+      WHERE page_id IS NULL AND seite IS NOT NULL AND seite != ''
+    `).run().changes;
+    db.prepare('UPDATE schema_version SET version = 53').run();
+    logger.info(`DB-Migration auf Version 53 abgeschlossen (figure_scenes.seite: ${stripped + strippedH2} Präfix-Strips, ${backfilled} page_id-Backfills).`);
+  }
 
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);

@@ -1,20 +1,12 @@
 // Alpine.data('kontinuitaetCard') — Sub-Komponente der Kontinuitätsprüfung.
-//
-// Eigener State: kontinuitaetResult, kontinuitaetStatus, kontinuitaetProgress,
-// kontinuitaetLoading, kontinuitaetFilters, _kontinuitaetPollTimer.
-// Root-Zugriffe (figuren, tree, pages, t, selectedBookId, selectedBookName,
-// loadFiguren, selectPage, _runningJobStatus, _sortByChapterOrder) via $root.
-//
-// Einzige Sub-Komponente mit Job-Polling (läuft ohne createJobFeature,
-// weil die Factory aktuell Root-Spread voraussetzt; Duplikation akzeptabel,
-// bis die Reviews-Karten migriert werden und eine Sub-Variante nötig wird).
+// Job-Polling implementiert die Karte selbst (manueller Flow, kein createCardJobFeature).
 //
 // Lifecycle:
 //   - $watch(showKontinuitaetCard): bei Öffnen Figuren sicherstellen + History laden
 //   - book:changed: State zurück, History fürs neue Buch laden (wenn sichtbar)
 //   - view:reset: eigenen State nullen, Poll-Timer stoppen
 //   - card:refresh (name==='kontinuitaet'): History-Refresh bei erneutem Klick
-//     auf die bereits offene Karte (bildet das onOpenWhenOpen von vorher nach)
+//     auf die bereits offene Karte
 
 import { kontinuitaetMethods } from '../kontinuitaet.js';
 

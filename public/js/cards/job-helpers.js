@@ -1,13 +1,10 @@
-// Pure Job-Helper — extrahiert aus app-jobs-core.js, damit Sub-Komponenten
-// das Polling nutzen können, ohne `this._startPoll` am Root zu verlangen.
-// Der Root behält seine Methoden-Wrapper für Rückwärtskompatibilität
-// (lektorat/figuren/komplett rufen weiterhin `this._startPoll(…)`).
+// Pure Job-Helper — wird sowohl vom Root (via appJobsCoreMethods-Wrapper) als
+// auch direkt von Karten verwendet.
 
 import { escHtml, fmtTok } from '../utils.js';
 
-// Generischer Job-Poller. `ctx` ist das Komponenten-Objekt, in dessen Feldern
-// `timerProp` und `progressProp` geschrieben wird. Root-Kontext: `ctx` = die
-// Alpine-Komponente. Sub-Kontext: `ctx` = die Sub-Komponente selbst.
+// Generischer Job-Poller. `ctx` ist das Komponenten-Objekt (Root oder Card),
+// in dessen Feldern `timerProp` und `progressProp` geschrieben wird.
 //
 // config: { timerProp, jobId, lsKey?, progressProp?, onProgress, onNotFound, onError, onDone }
 export function startPoll(ctx, config) {
@@ -46,8 +43,8 @@ export function runningJobStatus(translate, statusText, tokIn, tokOut, maxTokOut
     const inPart = (tokIn || 0) > 0 ? `↑${fmtTok(tokIn)} ` : '';
     tokInfo = ` · ${inPart}↓${fmtTok(tokOut || 0)} Tokens${pctPart}${tpsPart}`;
   }
-  // statusText kann ein i18n-Key sein (z.B. 'job.phase.extracting') oder freier Text.
-  // tRaw gibt unbekannte Keys 1:1 zurück, damit Legacy-Text pass-through funktioniert.
+  // statusText kann ein i18n-Key sein (z.B. 'job.phase.extracting') oder freier
+  // Text — tRaw liefert unbekannte Keys 1:1 zurück.
   const label = statusText ? translate(statusText, statusParams) : '…';
   return `<span class="spinner"></span>${escHtml(label)}${tokInfo}`;
 }

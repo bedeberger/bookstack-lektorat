@@ -33,6 +33,15 @@ function extractField(settled, chunkTexts, field) {
   }));
 }
 
+/**
+ * Baut den System-Block mit dem Buchtext, der über mehrere Claude-Calls gecached wird.
+ * Byte-identische Formatierung in Phase 1 Pass A/B und Phase 8 Kontinuität,
+ * damit der Cache-Prefix-Match greift (erster cache_control-Breakpoint).
+ */
+function buildBookSystemBlockText(bookName, pageCount, fullBookText) {
+  return `Buch: «${bookName}»\n\nBuchtext (${pageCount} Seiten):\n\n${fullBookText}`;
+}
+
 /** Führt eine nicht-kritische Phase aus – Fehler werden geloggt, nicht geworfen. */
 async function runNonCritical(label, fn, log, jobId) {
   try {
@@ -399,12 +408,16 @@ function remapSzenen(chSzenen, figNameToId, figNameToIdLower, ortNameToId, ortNa
   const szenen = [];
   for (const { kapitel, szenen: chSz } of (chSzenen || [])) {
     for (const s of (chSz || [])) {
-      const effKapitel = (s.kapitel && chNameToId[s.kapitel] != null) ? s.kapitel : kapitel;
-      // LLM-Halluzination: Kapitelname als Seitentitel zurückgegeben, weil der
+      // Wie bei `seite` kann die KI auch beim Kapitel den ##-Präfix mitliefern.
+      const rawKapitel = (s.kapitel || '').replace(/^#{1,6}\s+/, '').trim();
+      const effKapitel = (rawKapitel && chNameToId[rawKapitel] != null) ? rawKapitel : kapitel;
+      // LLM-Halluzination 1: Markdown-Header-Präfix («### Seitentitel» statt
+      // «Seitentitel») – wortwörtlich aus der User-Message kopiert.
+      // LLM-Halluzination 2: Kapitelname als Seitentitel zurückgegeben, weil der
       // echte Titel nicht erkannt wurde. Oder chMap-Fallback «Sonstige Seiten».
-      // In beiden Fällen `seite` nullen — sonst erscheint sie fälschlich als
-      // Filter-Option im Frontend.
-      let effSeite = s.seite || null;
+      // In beiden Fällen `seite` nullen / strippen, damit der page_id-Lookup
+      // unten trifft.
+      let effSeite = (s.seite || '').replace(/^#{1,6}\s+/, '').trim() || null;
       if (effSeite && (effSeite === effKapitel || effSeite === 'Sonstige Seiten')) {
         effSeite = null;
       }
@@ -443,9 +456,12 @@ function remapAssignments(chAssignments, figNameToId, figNameToIdLower, chNameTo
       }
       if (!mergedEvtMap.has(figId)) mergedEvtMap.set(figId, []);
       for (const ev of (assignment.lebensereignisse || [])) {
+        const evKap = (ev.kapitel || '').replace(/^#{1,6}\s+/, '').trim();
+        const evSeite = (ev.seite || '').replace(/^#{1,6}\s+/, '').trim();
         mergedEvtMap.get(figId).push({
           ...ev,
-          kapitel: (ev.kapitel && chNameToId[ev.kapitel] != null) ? ev.kapitel : kapitel,
+          kapitel: (evKap && chNameToId[evKap] != null) ? evKap : kapitel,
+          seite: evSeite || null,
         });
       }
     }
@@ -588,17 +604,48 @@ async function runPhase1(ctx) {
   if (totalChars <= singlePassLimit) {
     // ── Single-Pass ──
     updateJob(jobId, { progress: 12, statusText: 'job.phase.extracting' });
-    const r = await call(jobId, tok,
-      prompts.buildExtraktionKomplettChapterPrompt('Gesamtbuch', bookName, pageContents.length, fullBookText),
-      sys.SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 16000, 0.2, null, prompts.SCHEMA_KOMPLETT_EXTRAKTION,
-    );
-    chapterFiguren     = [{ kapitel: 'Gesamtbuch', figuren:     r?.figuren     || [] }];
-    chapterOrte        = [{ kapitel: 'Gesamtbuch', orte:        r?.orte        || [] }];
-    chapterFakten      = [{ kapitel: 'Gesamtbuch', fakten:      r?.fakten      || [] }];
-    chapterSzenen      = [{ kapitel: 'Gesamtbuch', szenen:      r?.szenen      || [] }];
-    chapterAssignments = [{ kapitel: 'Gesamtbuch', assignments: r?.assignments || [] }];
-    const totalEvents = (r?.assignments || []).reduce((s, a) => s + (a.lebensereignisse?.length || 0), 0);
-    log.info(`Job ${jobId}: Single-Pass OK – fig=${chapterFiguren[0].figuren.length} orte=${chapterOrte[0].orte.length} sz=${chapterSzenen[0].szenen.length} (${totalEvents} Ereignisse)`);
+    // Claude: zwei fokussierte Pässe parallel (figuren+assignments | orte+fakten+szenen).
+    //   Halbiert die Output-Tokens pro Call und lässt beide gleichzeitig streamen
+    //   → spürbar schneller als ein kombinierter 64K-Output.
+    // Lokal: kombinierter Call bleibt – settledAll serialisiert bei Ollama/Llama
+    //   (VRAM-Schutz), zwei serielle Pässe wären strikt schlechter.
+    let passA, passB;
+    if (effectiveProvider === 'claude') {
+      // Buchtext als eigenen cache_control-Block mit 1h-TTL → Pass B trifft auf
+      // Pass As Cache-Write; Phase 8 Kontinuität weiter unten trifft auch darauf.
+      const bookSystemBlock = { text: buildBookSystemBlockText(bookName, pageContents.length, fullBookText), ttl: '1h' };
+      const [sA, sB] = await settledAll([
+        () => call(jobId, tok,
+          prompts.buildExtraktionFigurenPassPrompt('Gesamtbuch', bookName, pageContents.length, null),
+          [bookSystemBlock, { text: sys.SYSTEM_KOMPLETT_FIGUREN_PASS }],
+          12, 28, 12000, 0.2, null, prompts.SCHEMA_KOMPLETT_FIGUREN_PASS,
+        ),
+        () => call(jobId, tok,
+          prompts.buildExtraktionOrtePassPrompt('Gesamtbuch', bookName, pageContents.length, null),
+          [bookSystemBlock, { text: sys.SYSTEM_KOMPLETT_ORTE_PASS }],
+          12, 28, 10000, 0.2, null, prompts.SCHEMA_KOMPLETT_ORTE_PASS,
+        ),
+      ]);
+      if (sA.status !== 'fulfilled') throw sA.reason;
+      if (sB.status !== 'fulfilled') throw sB.reason;
+      passA = sA.value;
+      passB = sB.value;
+    } else {
+      const r = await call(jobId, tok,
+        prompts.buildExtraktionKomplettChapterPrompt('Gesamtbuch', bookName, pageContents.length, fullBookText),
+        sys.SYSTEM_KOMPLETT_EXTRAKTION, 12, 28, 16000, 0.2, null, prompts.SCHEMA_KOMPLETT_EXTRAKTION,
+      );
+      passA = { figuren: r?.figuren, assignments: r?.assignments };
+      passB = { orte: r?.orte, fakten: r?.fakten, szenen: r?.szenen };
+    }
+    chapterFiguren     = [{ kapitel: 'Gesamtbuch', figuren:     passA?.figuren     || [] }];
+    chapterOrte        = [{ kapitel: 'Gesamtbuch', orte:        passB?.orte        || [] }];
+    chapterFakten      = [{ kapitel: 'Gesamtbuch', fakten:      passB?.fakten      || [] }];
+    chapterSzenen      = [{ kapitel: 'Gesamtbuch', szenen:      passB?.szenen      || [] }];
+    chapterAssignments = [{ kapitel: 'Gesamtbuch', assignments: passA?.assignments || [] }];
+    const totalEvents = (passA?.assignments || []).reduce((s, a) => s + (a.lebensereignisse?.length || 0), 0);
+    const mode = effectiveProvider === 'claude' ? 'Single-Pass Split' : 'Single-Pass';
+    log.info(`Job ${jobId}: ${mode} OK – fig=${chapterFiguren[0].figuren.length} orte=${chapterOrte[0].orte.length} sz=${chapterSzenen[0].szenen.length} (${totalEvents} Ereignisse)`);
   } else {
     // ── Multi-Pass mit Delta-Cache ──
     // Für lokale Modelle: Kapitel die PER_CHUNK_LIMIT überschreiten, werden in Seiten-Untergruppen
@@ -934,7 +981,7 @@ async function runPhase3b(ctx, figuren) {
 async function runZeitstrahl(ctx) {
   const { jobId, bookIdInt, email, call, tok, log, prompts, sys, idMaps } = ctx;
 
-  updateJob(jobId, { progress: 83, statusText: 'job.phase.consolidatingTimeline' });
+  updateJob(jobId, { progress: 78, statusText: 'job.phase.consolidatingTimeline' });
   const rawEvtRows = db.prepare(`
     SELECT f.fig_id, f.name AS fig_name, f.typ AS fig_typ,
            fe.datum, fe.ereignis, fe.typ AS evt_typ, fe.bedeutung, fe.kapitel, fe.seite
@@ -967,14 +1014,14 @@ async function runZeitstrahl(ctx) {
   const zeitstrahlEvents = [...evtGroupMap.values()].sort((a, b) => parseInt(a.datum) - parseInt(b.datum));
   const ztResult = await call(jobId, tok,
     prompts.buildZeitstrahlConsolidationPrompt(zeitstrahlEvents),
-    sys.SYSTEM_ZEITSTRAHL, 83, 89, 3000, 0.2, null, prompts.SCHEMA_ZEITSTRAHL,
+    sys.SYSTEM_ZEITSTRAHL, 78, 82, 3000, 0.2, null, prompts.SCHEMA_ZEITSTRAHL,
   );
   if (Array.isArray(ztResult?.ereignisse)) {
     saveZeitstrahlEvents(bookIdInt, email, ztResult.ereignisse, idMaps.chNameToId, idMaps.pageNameToIdByChapter);
     log.info(`Job ${jobId}: ${ztResult.ereignisse.length} Zeitstrahl-Ereignisse gespeichert.`);
   }
-  // Sicherstellen dass Zeitstrahl-Threshold (89) zuverlässig erreicht wird
-  updateJob(jobId, { progress: 89 });
+  // Sicherstellen dass Zeitstrahl-Threshold (82) zuverlässig erreicht wird
+  updateJob(jobId, { progress: 82 });
 }
 
 // ── Job: Komplettanalyse ─────────────────────────────────────────────────────
@@ -1085,13 +1132,16 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     const locIdToDbId = Object.fromEntries(locRows.map(r => [r.loc_id, r.id]));
     const szenen = remapSzenen(chapterSzenen, figNameToId, figNameToIdLower, ortNameToId, ortNameToIdLower, idMaps.chNameToId);
     const assignments = remapAssignments(chapterAssignments, figNameToId, figNameToIdLower, idMaps.chNameToId, log, jobId);
-    updateJob(jobId, { progress: 81, statusText: 'job.phase.savingScenes' });
+    updateJob(jobId, { progress: 76, statusText: 'job.phase.savingScenes' });
     const szenenResult = saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId, idMaps, log, jobId);
 
-    // P6: Zeitstrahl konsolidieren (aiCall 83..89)
+    // P6: Zeitstrahl konsolidieren (aiCall 78..82)
     await runZeitstrahl(ctx);
 
-    // P8: Kontinuitätsprüfung (aiCall 89..97)
+    // P8: Kontinuitätsprüfung (aiCall 82..97)
+    // Breitere Range als P6, weil Phase 8 (Single-Pass Kontinuität) bei grossen
+    // Büchern zeitlich dominiert – 15% Progress-Luft statt 8% vermeidet, dass
+    // der Balken minutenlang bei ~90 steht während der Call noch läuft.
     // Claude: Single-Pass für kleine Bücher (voller Buchtext).
     // Llama/Ollama: immer facts-basiert – voller Buchtext wäre ein zweiter langer KI-Call.
     const figKompakt = figuren.map(f => ({ name: f.name, typ: f.typ || 'andere', beschreibung: f.beschreibung || '' }));
@@ -1100,19 +1150,24 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     ).all(bookIdInt, email);
     const orteKompakt = ortRows.map(o => ({ name: o.name, typ: o.typ, beschreibung: o.beschreibung || '' }));
 
-    updateJob(jobId, { progress: 89, statusText: 'job.phase.checkContinuity' });
+    updateJob(jobId, { progress: 82, statusText: 'job.phase.checkContinuity' });
     let kontResult;
     if (totalChars <= singlePassLimit && effectiveProvider === 'claude') {
       log.info(`Job ${jobId}: Kontinuität Single-Pass: ${fullBookText.length} Zeichen, ${figKompakt.length} Figuren, ${orteKompakt.length} Orte`);
+      // Buchtext-Block byte-identisch zu Phase 1 A/B → trifft den 1h-Cache-Write
+      // aus der Extraktion: Input wird als cache_read abgerechnet und liefert
+      // das erste Token deutlich schneller.
+      const bookSystemBlock = { text: buildBookSystemBlockText(bookName, pageContents.length, fullBookText), ttl: '1h' };
       kontResult = await call(jobId, tok,
-        prompts.buildKontinuitaetSinglePassPrompt(bookName, fullBookText, figKompakt, orteKompakt, narrativeLabels(getBookSettings(bookIdInt, email))),
-        sys.SYSTEM_KONTINUITAET, 89, 97, 5000, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
+        prompts.buildKontinuitaetSinglePassPrompt(bookName, null, figKompakt, orteKompakt, narrativeLabels(getBookSettings(bookIdInt, email))),
+        [bookSystemBlock, { text: sys.SYSTEM_KONTINUITAET }],
+        82, 97, 5000, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
       );
     } else {
       log.info(`Job ${jobId}: Kontinuität facts-basiert: ${chapterFakten.length} Kapitel, ${figKompakt.length} Figuren`);
       kontResult = await call(jobId, tok,
         prompts.buildKontinuitaetCheckPrompt(bookName, chapterFakten, figKompakt, orteKompakt),
-        sys.SYSTEM_KONTINUITAET, 89, 97, effectiveProvider === 'claude' ? 5000 : 2500, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
+        sys.SYSTEM_KONTINUITAET, 82, 97, effectiveProvider === 'claude' ? 5000 : 2500, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
       );
     }
     saveKontinuitaetResult(bookIdInt, email, kontResult, figNameToId, idMaps.chNameToId, effectiveProvider, log, jobId);

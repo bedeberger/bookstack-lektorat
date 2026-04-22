@@ -1,0 +1,61 @@
+<!-- Synonym-Kontextmenü + Picker (Rechtsklick auf Wort im Edit-Mode).
+     Teleport nach <body>, damit position:fixed nicht vom card-Transform
+     eingefangen wird. Alpine.data-Sub — siehe public/js/cards/editor-synonyme-card.js. -->
+<div x-data="editorSynonymeCard" class="display-contents">
+  <!-- Synonym-Kontextmenü -->
+  <template x-teleport="body">
+    <div x-show="showSynonymMenu" x-cloak class="synonym-menu"
+         :style="{ left: synonymMenuX + 'px', top: synonymMenuY + 'px' }"
+         @click.outside="closeSynonymMenu()"
+         @keydown.escape.window="closeSynonymMenu()">
+      <button type="button" class="synonym-menu-btn" @click="requestSynonyms()" x-text="$app.t('editor.synonym.searchFor', { word: _synonymWord })"></button>
+    </div>
+  </template>
+
+  <!-- Synonym-Picker -->
+  <template x-teleport="body">
+    <div x-show="showSynonymPicker" x-cloak class="synonym-picker"
+         :style="{ left: synonymMenuX + 'px', top: synonymMenuY + 'px' }"
+         @click.outside="closeSynonymPicker()"
+         @keydown.escape.window="closeSynonymPicker()">
+      <div class="synonym-picker-header">
+        <span x-text="$app.t('editor.synonym.titleFor', { word: _synonymWord })"></span>
+        <button type="button" class="synonym-picker-close" @click="closeSynonymPicker()" :title="$app.t('common.close')" :aria-label="$app.t('common.close')">×</button>
+      </div>
+
+      <div class="synonym-picker-body">
+        <div class="synonym-picker-section" x-show="!synonymThesDisabled">
+          <div class="synonym-picker-subheader" x-text="$app.t('editor.synonym.thesaurus')"></div>
+          <div x-show="synonymThesLoading" class="synonym-picker-loading">
+            <span class="spinner"></span> <span x-text="$app.t('editor.synonym.loading')"></span>
+          </div>
+          <div x-show="!synonymThesLoading && synonymThesError" class="synonym-picker-error" x-text="synonymThesError"></div>
+          <div x-show="!synonymThesLoading && !synonymThesError && synonymThesList.length > 0" class="synonym-picker-list">
+            <template x-for="(s, i) in synonymThesList" :key="'t'+i">
+              <button type="button" class="synonym-entry" @click="applySynonym(s)">
+                <span class="synonym-word" x-text="s.wort"></span>
+                <span x-show="s.hinweis" class="synonym-hint" x-text="s.hinweis"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <div class="synonym-picker-section">
+          <div class="synonym-picker-subheader" x-text="$app.t('editor.synonym.ki')"></div>
+          <div x-show="synonymKiLoading" class="synonym-picker-loading">
+            <span class="spinner"></span> <span x-text="$app.t('editor.synonym.kiLoading')"></span>
+          </div>
+          <div x-show="!synonymKiLoading && synonymKiError" class="synonym-picker-error" x-text="synonymKiError"></div>
+          <div x-show="!synonymKiLoading && !synonymKiError && synonymKiList.length > 0" class="synonym-picker-list">
+            <template x-for="(s, i) in synonymKiList" :key="'k'+i">
+              <button type="button" class="synonym-entry" @click="applySynonym(s)">
+                <span class="synonym-word" x-text="s.wort"></span>
+                <span x-show="s.hinweis" class="synonym-hint" x-text="s.hinweis"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>

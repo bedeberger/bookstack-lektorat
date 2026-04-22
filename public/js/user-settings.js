@@ -1,9 +1,6 @@
 // Benutzer-Einstellungen (Profil, Default-Sprache/Region/Buchtyp, Danger:
-// Buch-Historie löschen).
-// `this` zeigt auf die Alpine.data('userSettingsCard')-Sub-Komponente;
-// Zugriff auf Root-State (books, selectedBookId, promptConfig, t, tError,
-// pageHistory, bookReviewHistory, chatSessions, chatMessages, chatSessionId)
-// via window.__app.
+// Buch-Historie löschen). Methoden werden in Alpine.data('userSettingsCard')
+// gespreadet; Root-Zugriffe via window.__app.
 
 import { fetchJson } from './utils.js';
 
@@ -78,7 +75,6 @@ export const userSettingsMethods = {
       if (String(window.__app.selectedBookId) === String(bookId)) {
         window.__app.pageHistory       = [];
         window.__app.bookReviewHistory = [];
-        // chatCard-Reset via Event: der Seiten-Chat lebt in der Sub-Komponente.
         window.dispatchEvent(new CustomEvent('chat:reset'));
       }
       setTimeout(() => { this.bookHistoryResetMessage = ''; }, 6000);

@@ -29,7 +29,7 @@
   </div>
 
   <script type="module">
-    import { focusMethods } from '/public/js/editor-focus.js';
+    import { focusCardMethods } from '/public/js/editor-focus.js';
 
     // 60 Absätze mit genug Text, dass die Container weit über die Höhe scrollt.
     const editor = document.querySelector('.page-content-view--editing');
@@ -39,11 +39,20 @@
       editor.appendChild(p);
     }
 
-    // Minimal-Harness, das die Alpine-Komponente nachbildet, soweit
-    // editor-focus.js sie braucht. Tests dürfen Stubs (z.B. quickSave)
-    // per Monkey-Patch überschreiben.
+    // Minimal-Harness, das Alpine.data('editorFocusCard') nachbildet. Die
+    // Sub-Komponenten-Methoden (`focusCardMethods`) werden direkt gespread;
+    // Root-State (editMode, editDirty …) liegt ebenfalls am Harness, weil
+    // wir `window.__app = harness` setzen — die Sub-Methoden greifen über
+    // window.__app auf die "Root"-Felder zu.
     const harness = {
-      ...focusMethods,
+      ...focusCardMethods,
+      // Sub-State
+      _focusState: 'idle',
+      _focusGen: 0,
+      _focusListeners: null,
+      _focusVisibleBlocks: null,
+      _focusRaf: null,
+      // Root-gespiegelte Felder (sub-methods greifen via window.__app)
       focusMode: false,
       editMode: true,
       showEditorCard: true,
@@ -52,9 +61,9 @@
       editSaving: false,
       saveOffline: false,
       lastDraftSavedAt: null,
-      showSynonymMenu: false,
-      showSynonymPicker: false,
-      showFigurLookup: false,
+      _figurLookupOpen: false,
+      _synonymMenuOpen: false,
+      _synonymPickerOpen: false,
       $nextTick: (fn) => Promise.resolve().then(fn),
       startEdit() {
         this.editMode = true;
@@ -71,11 +80,12 @@
         this.editDirty = false;
         this.editSaving = false;
       },
+      _flushDraftSaveNow() {},
       _stopAutosave() {},
       _uninstallOnlineRetry() {},
-      closeSynonymMenu() { this.showSynonymMenu = false; },
-      closeSynonymPicker() { this.showSynonymPicker = false; },
-      closeFigurLookup() { this.showFigurLookup = false; },
+      closeSynonymMenu() {},
+      closeSynonymPicker() {},
+      closeFigurLookup() { this._figurLookupOpen = false; },
       updatePageView() {},
       closeFindings() {},
     };
@@ -92,6 +102,9 @@
     };
 
     window.harness = harness;
+    // Sub-Methoden greifen auf `window.__app` zu (Root-Proxy); der Harness
+    // bündelt Root- und Sub-Felder in einem Objekt.
+    window.__app = harness;
     window.harnessReady = true;
   </script>
 </body>

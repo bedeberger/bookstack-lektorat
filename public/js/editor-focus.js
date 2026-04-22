@@ -6,14 +6,12 @@
 // Zähler-Variable invalidiert asynchrone Nachzügler (z.B. RAFs, die nach
 // einem schnellen exit noch feuern wollen).
 //
-// @typedef {Object} FocusHost  Erwartete Felder/Methoden auf der Alpine-Komponente:
-//   @property {boolean} editMode, editDirty, editSaving, saveOffline
-//   @property {boolean} showEditorCard, showSynonymMenu, showSynonymPicker, showFigurLookup
-//   @property {(fn: Function) => Promise<void>} $nextTick
-//   @property {() => void} startEdit, cancelEdit
-//   @property {() => void} closeSynonymMenu, closeSynonymPicker, closeFigurLookup
-//   @property {() => void} _stopAutosave, _uninstallOnlineRetry, updatePageView
-//   @property {() => Promise<void>} quickSave
+// Zweigeteilt:
+//   - `focusMethods`: Root-Trampoline (toggleFocusMode, startFocusEdit,
+//     enterFocusMode, exitFocusMode, handleFocusHotkey) — dispatchen Events
+//     an die Sub. Root hält `focusMode` als sichtbare Flag.
+//   - `focusCardMethods`: State-Machine + DOM-Handler in
+//     Alpine.data('editorFocusCard').
 
 // Block-Elemente, die als „aktiver Absatz" erkannt werden. TABLE-Zellen und
 // FIGURE/FIGCAPTION zählen mit, damit Klicks in Tabellen/Bildunterschriften
@@ -155,61 +153,80 @@ function typewriterScroll(container, targetRect) {
   return delta;
 }
 
-// --- Alpine-Methoden --------------------------------------------------------
-
+// ── Root-Trampoline ─────────────────────────────────────────────────────────
+// Dispatcht Events an Alpine.data('editorFocusCard'). Root hält `focusMode`
+// als sichtbare Flag (CSS, body-Class, Template-Checks).
 export const focusMethods = {
   focusMode: false,
-  // State-machine + generation counter. _focusListeners/_focusVisibleBlocks/
-  // _focusRaf bleiben als flache Felder erhalten, damit bestehende Tests
-  // (inkl. Leak-Asserts) unverändert funktionieren.
-  _focusState: 'idle',
-  _focusGen: 0,
-  _focusListeners: null,
-  _focusVisibleBlocks: null,
-  _focusRaf: null,
 
+  toggleFocusMode() {
+    window.dispatchEvent(new CustomEvent('editor:focus:toggle'));
+  },
+
+  startFocusEdit() {
+    // Root wechselt in Edit-Mode (falls nicht bereits), Sub tritt dann in Fokus ein.
+    window.dispatchEvent(new CustomEvent('editor:focus:start-edit'));
+  },
+
+  enterFocusMode() {
+    window.dispatchEvent(new CustomEvent('editor:focus:enter'));
+  },
+
+  exitFocusMode() {
+    window.dispatchEvent(new CustomEvent('editor:focus:exit'));
+  },
+
+  // Global F11-Hotkey. Läuft auf dem Body-Listener (siehe index.html), damit
+  // F11 den Fokusmodus auch aus dem Lesemodus heraus einschaltet.
+  handleFocusHotkey(event) {
+    if (event.key !== 'F11') return;
+    if (!this.showEditorCard) return;
+    event.preventDefault();
+    if (this.focusMode) {
+      window.dispatchEvent(new CustomEvent('editor:focus:exit'));
+    } else if (this.editMode) {
+      window.dispatchEvent(new CustomEvent('editor:focus:enter'));
+    } else {
+      window.dispatchEvent(new CustomEvent('editor:focus:start-edit'));
+    }
+  },
+};
+
+// ── Sub-Komponenten-Methoden ────────────────────────────────────────────────
+// `this` zeigt auf Alpine.data('editorFocusCard'). `_app` ist der reaktive
+// Root-Proxy (window.__app).
+export const focusCardMethods = {
   toggleFocusMode() {
     if (this._focusState === 'active') this.exitFocusMode();
     else if (this._focusState === 'idle') this.enterFocusMode();
     // entering/exiting → ignorieren (kein Double-Trigger).
   },
 
-  // Global F11-Hotkey. Läuft auf dem Body-Listener (siehe index.html), damit
-  // F11 den Fokusmodus auch aus dem Lesemodus heraus einschaltet – das
-  // Install-time onKey innerhalb von _focusInstall greift erst, wenn der Modus
-  // bereits aktiv ist, und konnte Exit, aber kein Enter.
-  handleFocusHotkey(event) {
-    if (event.key !== 'F11') return;
-    if (!this.showEditorCard) return;
-    event.preventDefault();
-    if (this._focusState === 'active') this.exitFocusMode();
-    else if (this._focusState === 'idle') {
-      if (this.editMode) this.enterFocusMode();
-      else this.startFocusEdit();
-    }
-  },
-
   startFocusEdit() {
-    if (!this.editMode) {
-      this.startEdit();
-      if (!this.editMode) return;
+    const app = window.__app;
+    if (!app) return;
+    if (!app.editMode) {
+      app.startEdit?.();
+      if (!app.editMode) return;
     }
     this.$nextTick(() => this.enterFocusMode());
   },
 
   enterFocusMode() {
+    const app = window.__app;
+    if (!app) return;
     if (this._focusState !== 'idle') return;
-    if (!this.showEditorCard || !this.editMode) return;
+    if (!app.showEditorCard || !app.editMode) return;
 
     // Übergang edit-mode → focus-mode: offenen Debounce-Draft jetzt flushen,
     // damit bei Offline-Sessions kein getippter Inhalt verloren geht, falls
     // der User später im Focus-Mode abbricht oder Crashs auftreten.
-    this._flushDraftSaveNow?.();
+    app._flushDraftSaveNow?.();
 
     this._focusState = 'entering';
     const gen = ++this._focusGen;
 
-    this.focusMode = true;
+    app.focusMode = true;
     document.body.classList.add('focus-mode');
 
     this.$nextTick(() => {
@@ -223,7 +240,7 @@ export const focusMethods = {
       } catch (err) {
         reportError('enterFocusMode', err);
         this._focusTeardown();
-        this.focusMode = false;
+        app.focusMode = false;
         document.body.classList.remove('focus-mode');
         this._focusState = 'idle';
       }
@@ -231,6 +248,7 @@ export const focusMethods = {
   },
 
   _focusInstall() {
+    const app = window.__app;
     const container = getScrollContainer();
     if (!container) throw new Error('focus: no scroll container');
 
@@ -343,12 +361,12 @@ export const focusMethods = {
     const onKey = (e) => {
       if (this._focusState !== 'active') return;
       if (e.key === 'Escape') {
-        if (this.showSynonymMenu || this.showSynonymPicker) return;
-        if (this.showFigurLookup) { this.closeFigurLookup(); return; }
-        if (this.editSaving) return;   // während Save-Request kein Exit
+        if (app?._synonymMenuOpen || app?._synonymPickerOpen) return;
+        if (app?._figurLookupOpen) { app.closeFigurLookup?.(); return; }
+        if (app?.editSaving) return;   // während Save-Request kein Exit
         e.preventDefault();
-        if (this.editMode && this.editDirty && this.cancelEdit) {
-          this.cancelEdit();
+        if (app?.editMode && app?.editDirty && app?.cancelEdit) {
+          app.cancelEdit();
         } else {
           this.exitFocusMode();
         }
@@ -433,6 +451,8 @@ export const focusMethods = {
   },
 
   async exitFocusMode() {
+    const app = window.__app;
+    if (!app) return;
     if (this._focusState !== 'active') return;
     this._focusState = 'exiting';
     const gen = ++this._focusGen;
@@ -441,8 +461,8 @@ export const focusMethods = {
     // Event-Handler sind via _focusState='exiting' bereits stumm-geschaltet.
     // Bei Offline/Fehler bleibt editDirty true + Draft im LocalStorage →
     // User bleibt im Edit-Modus und kann manuell retten.
-    if (this.editMode && this.editDirty && !this.editSaving) {
-      try { await this.quickSave?.(); }
+    if (app.editMode && app.editDirty && !app.editSaving) {
+      try { await app.quickSave?.(); }
       catch (e) { reportError('exitFocusMode:save', e); }
     }
     // Race: jemand hat während await enter() gerufen → abbrechen.
@@ -450,7 +470,7 @@ export const focusMethods = {
 
     this._focusTeardown();
 
-    this.focusMode = false;
+    app.focusMode = false;
     document.body.classList.remove('focus-mode');
     document.documentElement.style.removeProperty('--focus-vh');
     document.documentElement.style.removeProperty('--focus-vh-top');
@@ -460,17 +480,17 @@ export const focusMethods = {
 
     // Nichts Ungespeichertes → zurück in die Ansicht (Save im Fokus impliziert
     // Ende der Edit-Session; unsaubere Exits behalten den Edit-Modus).
-    if (this.editMode && !this.editDirty) {
-      this._stopAutosave?.();
-      this._uninstallOnlineRetry?.();
-      this.editMode = false;
-      this.editSaving = false;
-      this.saveOffline = false;
-      this.lastDraftSavedAt = null;
-      this.closeSynonymMenu?.();
-      this.closeSynonymPicker?.();
-      this.closeFigurLookup?.();
-      this.updatePageView?.();
+    if (app.editMode && !app.editDirty) {
+      app._stopAutosave?.();
+      app._uninstallOnlineRetry?.();
+      app.editMode = false;
+      app.editSaving = false;
+      app.saveOffline = false;
+      app.lastDraftSavedAt = null;
+      app.closeSynonymMenu?.();
+      app.closeSynonymPicker?.();
+      app.closeFigurLookup?.();
+      app.updatePageView?.();
     }
 
     this._focusState = 'idle';

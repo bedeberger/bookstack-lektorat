@@ -17,6 +17,8 @@ export function registerBookSettingsCard() {
     bookSettingsSaving: false,
     bookSettingsSaved: false,
     bookSettingsError: '',
+    bookJobStats: null,
+    bookJobStatsLoading: false,
 
     _onBookChanged: null,
     _onViewReset: null,
@@ -25,13 +27,14 @@ export function registerBookSettingsCard() {
       this.$watch(() => window.__app.showBookSettingsCard, async (visible) => {
         if (!visible) return;
         if (!window.__app.selectedBookId) return;
-        await this.loadBookSettings();
+        await Promise.all([this.loadBookSettings(), this.loadBookJobStats()]);
       });
 
       this._onBookChanged = () => {
         if (!window.__app.showBookSettingsCard) return;
         if (!window.__app.selectedBookId) return;
         this.loadBookSettings();
+        this.loadBookJobStats();
       };
       window.addEventListener('book:changed', this._onBookChanged);
 

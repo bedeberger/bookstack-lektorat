@@ -108,7 +108,7 @@
         <div class="szene-card" :class="'szene-card--' + (s.wertung || 'mittel')">
           <div class="szene-card-header">
             <span class="szene-card-wertung" :class="'figur-szene-wertung--' + (s.wertung || 'mittel')" x-text="s.wertung ? $app.t('szenen.rating.' + s.wertung) : '–'"></span>
-            <span class="szene-card-ort internal-link" @click="$app.gotoStelle(s.kapitel, s.seite)" x-text="s.kapitel + (s.seite ? ' · ' + s.seite : '')"></span>
+            <span class="szene-card-ort internal-link" @click="s.page_id ? $app.gotoPageById(s.page_id) : $app.gotoStelle(s.kapitel, s.seite)" x-text="s.kapitel + (s.seite ? ' · ' + s.seite : '')"></span>
           </div>
           <div class="szene-card-titel" x-text="s.titel"></div>
           <div x-show="s.kommentar" class="szene-card-kommentar" x-text="s.kommentar"></div>

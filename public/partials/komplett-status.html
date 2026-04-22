@@ -1,10 +1,26 @@
-<!-- Komplettanalyse: Button + Cache-Clear + Fortschritts-Panel -->
+<!-- Komplettanalyse: Primärbutton mit eingebettetem Fortschrittsring + Cache-Clear + Status-Panel -->
 <div class="komplett-status-wrap" @click.outside="showKomplettStatus = false" @mouseenter="if (alleAktualisierenLoading) showKomplettStatus = true" :data-lastrun="(!alleAktualisierenLoading && alleAktualisierenLastRun) ? t('common.asOf', { date: alleAktualisierenLastRun }) : null">
-  <button type="button" class="job-stats-btn" @click="alleAktualisieren()" :disabled="alleAktualisierenLoading || !selectedBookId" :title="t('header.updateAllTitle')">
-    <span x-show="alleAktualisierenLoading" class="spinner"></span>
-    <span x-text="t('header.updateAll')"></span>
+  <button type="button"
+          class="update-all-btn"
+          :class="{ 'update-all-btn--running': alleAktualisierenLoading }"
+          @click="alleAktualisieren()"
+          :disabled="alleAktualisierenLoading || !selectedBookId"
+          :title="t('header.updateAllTitle')">
+    <span class="update-all-btn-ring"
+          x-show="alleAktualisierenLoading"
+          :style="{ '--progress': (alleAktualisierenProgress || 0) + '%' }"
+          aria-hidden="true"></span>
+    <span class="update-all-btn-icon" x-show="!alleAktualisierenLoading" aria-hidden="true">↻</span>
+    <span class="update-all-btn-label" x-text="t('header.updateAll')"></span>
   </button>
-  <button type="button" class="cache-clear-btn" @click="clearChapterCache()" :disabled="alleAktualisierenLoading || !selectedBookId" :title="t('header.clearCacheTitle')" x-text="t('header.clearCache')"></button>
+  <button type="button"
+          class="header-icon-btn header-icon-btn--cache"
+          @click="clearChapterCache()"
+          :disabled="alleAktualisierenLoading || !selectedBookId"
+          :title="t('header.clearCacheTitle')"
+          :aria-label="t('header.clearCache')">
+    <span aria-hidden="true">⌫</span>
+  </button>
   <div class="komplett-status-panel" x-show="showKomplettStatus" x-cloak>
     <div class="komplett-status-title" x-text="t('komplett.title')"></div>
     <div class="progress-bar-wrap komplett-progress-bar-wrap">

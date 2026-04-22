@@ -612,8 +612,9 @@
   "header.updateAllTitle":       "Figuren, Soziogramm, Schauplätze, Szenenanalyse, Ereignisse und Zeitstrahl neu ermitteln",
   "header.clearCache":           "Cache leeren",
   "header.clearCacheTitle":      "Delta-Cache für dieses Buch leeren – nächste Analyse extrahiert alle Kapitel neu",
+  "header.theme":                "Design",
+  "header.providerTitle":        "KI-Provider & Modell",
 
-  "theme.cycleTitle":            "Design wechseln (aktuell: {label})",
   "theme.auto":                  "Auto",
   "theme.light":                 "Hell",
   "theme.dark":                  "Dunkel",

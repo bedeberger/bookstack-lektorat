@@ -232,9 +232,8 @@ export const appViewMethods = {
   // Setzt allen Seiten-Level-State zurück (Editor, Lektorat, Chat, History).
   resetPage() {
     if (this._checkPollTimer) { clearInterval(this._checkPollTimer); this._checkPollTimer = null; }
-    if (this._synonymPollTimer) { clearInterval(this._synonymPollTimer); this._synonymPollTimer = null; }
-    this.showSynonymMenu = false;
-    this.showSynonymPicker = false;
+    this.closeSynonymMenu?.();
+    this.closeSynonymPicker?.();
     this.closeFigurLookup?.();
     if (this.focusMode) this.exitFocusMode();
     this._stopAutosave?.();

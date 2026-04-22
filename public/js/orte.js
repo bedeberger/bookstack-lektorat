@@ -1,6 +1,4 @@
-// Schauplatz-Methoden. Bleiben im Root-Spread, weil sie von mehreren Orten
-// (app-view._reloadVisibleBookCards, Szenen-Trigger, toggleOrteCard) gerufen
-// werden. `this.orte` geht über den Root-Proxy-Getter an Alpine.store('catalog').
+// Schauplatz-Methoden am Root-Spread (von app-view, Szenen-Trigger, toggleOrteCard gerufen).
 
 import { fetchJson } from './utils.js';
 

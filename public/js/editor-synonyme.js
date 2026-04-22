@@ -1,18 +1,21 @@
-import { escHtml, fetchJson } from './utils.js';
+import { fetchJson } from './utils.js';
 import { rangeForWordAtClientPoint } from './editor-figur-lookup.js';
 import { WORD_RE } from './editor-utils.js';
+import { startPoll } from './cards/job-helpers.js';
 
 // Synonym-Ermittler für den contenteditable-Editor.
 // Rechtsklick auf ein markiertes Einzelwort → Custom-Menü → KI-Call →
 // Picker mit Synonymvorschlägen → Klick ersetzt das Wort im DOM.
+//
+// Zweigeteilt:
+//   - `synonymMethods`: Root-Trigger am contenteditable. Extrahiert Range +
+//     Wort, dispatcht `editor:synonym:open {range, word, x, y}`. Enthält
+//     Trampoline `closeSynonymMenu/Picker`, `requestSynonyms` für Legacy-
+//     Aufrufer (app-view.resetPage, editor-edit.cancelEdit/saveEdit).
+//   - `synonymCardMethods`: Menü/Picker-Display + Thesaurus/KI-Fetch in
+//     Alpine.data('editorSynonymeCard').
 
 export const synonymMethods = {
-  // ── State (wird in der Alpine-Komponente via Spread ergänzt) ─────────────
-  // showSynonymMenu, synonymMenuX, synonymMenuY, showSynonymPicker
-  // synonymThesList / synonymThesLoading / synonymThesError / synonymThesDisabled
-  // synonymKiList / synonymKiLoading / synonymKiError
-  // _synonymRange, _synonymWord, _synonymPollTimer
-
   _onEditContextMenu(e) {
     if (!this.editMode) return;
     // macOS: Ctrl+Klick feuert `contextmenu` statt `click`. Deshalb Figuren-
@@ -52,8 +55,31 @@ export const synonymMethods = {
     }
 
     e.preventDefault();
+    window.dispatchEvent(new CustomEvent('editor:synonym:open', {
+      detail: { range, word: wort, clientX: e.clientX, clientY: e.clientY },
+    }));
+  },
+
+  // Trampoline für Legacy-Aufrufer.
+  closeSynonymMenu() {
+    window.dispatchEvent(new CustomEvent('editor:synonym:close-menu'));
+  },
+  closeSynonymPicker() {
+    window.dispatchEvent(new CustomEvent('editor:synonym:close-picker'));
+  },
+  // Wird vom Menü-Button im Partial aufgerufen (Root-Scope wegen Event-Bubble).
+  requestSynonyms() {
+    window.dispatchEvent(new CustomEvent('editor:synonym:request'));
+  },
+};
+
+// ── Sub-Komponenten-Methoden ──────────────────────────────────────────────
+// `this` zeigt auf die Alpine.data('editorSynonymeCard')-Instanz.
+export const synonymCardMethods = {
+  _openSynonymMenu({ range, word, clientX, clientY }) {
+    if (!range || !word) return;
     this._synonymRange = range;
-    this._synonymWord  = wort;
+    this._synonymWord  = word;
     this.showSynonymPicker = false;
     this.synonymThesList = [];
     this.synonymThesError = '';
@@ -61,10 +87,20 @@ export const synonymMethods = {
     this.synonymKiList = [];
     this.synonymKiError = '';
     this.showSynonymMenu = true;
+    this._syncOpenFlag();
     this._attachSynonymScroll();
-    this.$nextTick(() => this._positionSynonymUI());
-    // Erstpositionierung bereits vor nextTick, damit kein Flash oben links
-    this._positionSynonymUI();
+    this.$nextTick(() => this._positionSynonymUI(clientX, clientY));
+    this._positionSynonymUI(clientX, clientY);
+  },
+
+  // Spiegelt den Sichtbarkeits-Zustand an den Root, damit focus-onKey
+  // (Escape) weiss, ob ein Menü/Picker offen ist, ohne in die Sub zu greifen.
+  _syncOpenFlag() {
+    const app = window.__app;
+    if (app) {
+      app._synonymMenuOpen   = this.showSynonymMenu;
+      app._synonymPickerOpen = this.showSynonymPicker;
+    }
   },
 
   // Neupositionierung anhand der aktuellen Range. Wird initial und bei jedem
@@ -109,11 +145,13 @@ export const synonymMethods = {
 
   closeSynonymMenu() {
     this.showSynonymMenu = false;
+    this._syncOpenFlag();
     if (!this.showSynonymPicker) this._detachSynonymScroll();
   },
 
   closeSynonymPicker() {
     this.showSynonymPicker = false;
+    this._syncOpenFlag();
     const wasLoading = this.synonymKiLoading;
     const jobId = this._synonymJobId;
     this.synonymThesList = [];
@@ -163,9 +201,10 @@ export const synonymMethods = {
 
   async requestSynonyms() {
     if (!this._synonymRange || !this._synonymWord) return;
+    const app = window.__app;
     const wort = this._synonymWord;
     const satz = this._extractSentence(this._synonymRange, wort);
-    const bookId = this.currentPage?.book_id || null;
+    const bookId = app?.currentPage?.book_id || null;
     this.showSynonymMenu = false;
     this.synonymThesLoading = true;
     this.synonymThesError = '';
@@ -175,6 +214,7 @@ export const synonymMethods = {
     this.synonymKiError = '';
     this.synonymKiList = [];
     this.showSynonymPicker = true;
+    this._syncOpenFlag();
     this._attachSynonymScroll();
     this.$nextTick(() => this._positionSynonymUI());
 
@@ -185,10 +225,10 @@ export const synonymMethods = {
         this.synonymThesDisabled = !!d.disabled;
         this.synonymThesList = Array.isArray(d.synonyme) ? d.synonyme : [];
         if (!this.synonymThesDisabled && this.synonymThesList.length === 0) {
-          this.synonymThesError = this.t('synonym.noMatches');
+          this.synonymThesError = app?.t('synonym.noMatches') || '';
         }
       })
-      .catch(e => { this.synonymThesError = e.message || this.t('synonym.error'); })
+      .catch(e => { this.synonymThesError = e.message || (app?.t('synonym.error') || ''); })
       .finally(() => {
         this.synonymThesLoading = false;
         this.$nextTick(() => this._positionSynonymUI());
@@ -201,7 +241,7 @@ export const synonymMethods = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wort, satz, book_id: bookId }),
       });
-      if (!jobId) throw new Error(error || this.t('synonym.jobFailed'));
+      if (!jobId) throw new Error(error || app?.t('synonym.jobFailed'));
       this._synonymJobId = jobId;
       this._startSynonymPoll(jobId);
     } catch (e) {
@@ -211,19 +251,20 @@ export const synonymMethods = {
   },
 
   _startSynonymPoll(jobId) {
-    this._startPoll({
+    const app = window.__app;
+    startPoll(this, {
       timerProp: '_synonymPollTimer',
       jobId,
       lsKey: null,
       onProgress: () => { /* keine Progress-Anzeige, kurzer Call */ },
       onNotFound: () => {
         this.synonymKiLoading = false;
-        this.synonymKiError = this.t('synonym.jobUnavailable');
+        this.synonymKiError = app?.t('synonym.jobUnavailable') || '';
         this._synonymJobId = null;
       },
       onError: (job) => {
         this.synonymKiLoading = false;
-        this.synonymKiError = job.error ? this.t(job.error, job.errorParams) : this.t('synonym.kiFailed');
+        this.synonymKiError = job.error ? app.t(job.error, job.errorParams) : app.t('synonym.kiFailed');
         this._synonymJobId = null;
       },
       onDone: (job) => {
@@ -231,7 +272,7 @@ export const synonymMethods = {
         this._synonymJobId = null;
         this.synonymKiList = Array.isArray(job.result?.synonyme) ? job.result.synonyme : [];
         if (this.synonymKiList.length === 0) {
-          this.synonymKiError = this.t('synonym.noneFound');
+          this.synonymKiError = app?.t('synonym.noneFound') || '';
         }
         this.$nextTick(() => this._positionSynonymUI());
       },
@@ -240,8 +281,9 @@ export const synonymMethods = {
 
   applySynonym(entry) {
     const range = this._synonymRange;
+    const app = window.__app;
     if (!range || !entry?.wort) { this.closeSynonymPicker(); return; }
-    const editEl = this._getEditEl?.();
+    const editEl = app?._getEditEl?.();
     if (!editEl || !editEl.contains(range.startContainer)) { this.closeSynonymPicker(); return; }
     try {
       range.deleteContents();
@@ -249,7 +291,7 @@ export const synonymMethods = {
       // Ersatzwort nach Einfügung selektieren, damit der User sieht, was passiert ist
       const sel = window.getSelection();
       sel.removeAllRanges();
-      this._markEditDirty?.();
+      app?._markEditDirty?.();
     } catch (e) {
       console.error('[applySynonym]', e);
     }

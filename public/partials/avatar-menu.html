@@ -1,0 +1,57 @@
+<!-- Avatar-Menu: Identität, Theme, Shortcuts, Profil, Provider, Logout -->
+<div class="avatar-menu-wrap" @click.outside="showAvatarMenu = false" @keydown.escape.window="showAvatarMenu = false">
+  <button type="button"
+          class="avatar-btn"
+          :class="{ 'avatar-btn--active': showAvatarMenu }"
+          @click="showAvatarMenu = !showAvatarMenu"
+          :title="currentUser?.name || currentUser?.email || ''"
+          :aria-label="currentUser?.name || currentUser?.email || ''"
+          aria-haspopup="menu"
+          :aria-expanded="showAvatarMenu">
+    <span class="avatar-btn-initials" x-text="_avatarInitials()"></span>
+  </button>
+
+  <div class="avatar-menu-panel" x-show="showAvatarMenu" x-cloak role="menu">
+    <div class="avatar-menu-header">
+      <span class="avatar-menu-header-avatar" x-text="_avatarInitials()"></span>
+      <div class="avatar-menu-header-text">
+        <div class="avatar-menu-name" x-text="currentUser?.name || currentUser?.email"></div>
+        <div class="avatar-menu-email" x-show="currentUser?.name && currentUser?.email && currentUser.name !== currentUser.email" x-text="currentUser?.email"></div>
+      </div>
+    </div>
+
+    <div class="avatar-menu-section">
+      <div class="avatar-menu-label" x-text="t('header.theme')"></div>
+      <div class="theme-segmented" role="group" :aria-label="t('header.theme')">
+        <template x-for="opt in ['auto','light','dark']" :key="opt">
+          <button type="button"
+                  class="theme-segmented-btn"
+                  :class="{ 'is-active': themePref === opt }"
+                  @click="setTheme(opt)"
+                  :aria-pressed="themePref === opt"
+                  x-text="t({ auto: 'theme.auto', light: 'theme.light', dark: 'theme.dark' }[opt])"></button>
+        </template>
+      </div>
+    </div>
+
+    <div class="avatar-menu-divider"></div>
+
+    <button type="button" class="avatar-menu-item" role="menuitem" @click="showAvatarMenu = false; toggleShortcutsOverlay()">
+      <span class="avatar-menu-item-label" x-text="t('shortcuts.title')"></span>
+      <span class="avatar-menu-item-key">?</span>
+    </button>
+
+    <button type="button" class="avatar-menu-item" role="menuitem" @click="showAvatarMenu = false; toggleUserSettingsCard()">
+      <span class="avatar-menu-item-label" x-text="t('header.profile')"></span>
+    </button>
+
+    <div class="avatar-menu-divider"></div>
+
+    <div class="avatar-menu-provider" :title="t('header.providerTitle')">
+      <span class="avatar-menu-provider-dot"></span>
+      <span x-text="apiProvider === 'ollama' ? 'Ollama · ' + ollamaModel : apiProvider === 'llama' ? 'Llama · ' + llamaModel : 'Claude · ' + claudeModel"></span>
+    </div>
+
+    <a href="/auth/logout" class="avatar-menu-item avatar-menu-item--logout" role="menuitem" x-text="t('header.logout')"></a>
+  </div>
+</div>

@@ -1,7 +1,5 @@
-// Buchschreibungsentwicklung – Zeitliniendiagramm
-// `this` zeigt auf die Alpine.data('bookStatsCard')-Sub-Komponente; Zugriff
-// auf Root-State (selectedBookId, uiLocale, pages, tokEsts, t) läuft über
-// window.__app.
+// Buchschreibungsentwicklung – Zeitliniendiagramm.
+// Methoden werden in Alpine.data('bookStatsCard') gespreadet; Root-Zugriffe via window.__app.
 
 import { fetchJson } from './utils.js';
 

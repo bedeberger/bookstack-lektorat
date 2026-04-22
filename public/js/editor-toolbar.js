@@ -1,9 +1,11 @@
 // Edit-Modus-Toolbar: Bubble (Inline-Formate auf Selektion) + Slash-Menü
 // (Block-Transforms). Beides als teleportierte Templates in
-// editor-toolbar.html; die Methoden hier werden in die Alpine-Root gespread.
+// editor-toolbar.html; die Methoden hier werden in
+// Alpine.data('editorToolbarCard') gespreadet (this = Sub-Komponente,
+// Root-Zugriffe via window.__app).
 //
 // Tabu im Fokus-Modus: alle Aktionen und Trigger-Handler sind über
-// `!this.focusMode` gegated – die Partial-Instanz lebt weiter, reagiert
+// `!$app.focusMode` gegated – die Partial-Instanz lebt weiter, reagiert
 // aber nicht mehr.
 
 // Blocktyp-Definitionen für Slash-Transform. `tag` ist das Zielelement;
@@ -45,38 +47,7 @@ function placeCaretIn(el) {
   sel.addRange(range);
 }
 
-export const toolbarMethods = {
-  // Bubble-State (teleport in editor-toolbar.html)
-  bubbleShow: false,
-  bubbleX: 0,
-  bubbleY: 0,
-
-  // Slash-State
-  slashShow: false,
-  slashX: 0,
-  slashY: 0,
-  slashIdx: 0,
-  _slashBlock: null,
-
-  _toolbarListenersInstalled: false,
-
-  _installToolbarListeners() {
-    if (this._toolbarListenersInstalled) return;
-    this._toolbarListenersInstalled = true;
-    // signal kommt aus dem Root-AbortController (app.js init). Dadurch werden
-    // beide Listener beim destroy() der Komponente automatisch entfernt.
-    const signal = this._abortCtrl?.signal;
-    document.addEventListener('selectionchange', () => this._updateBubble(), { signal });
-    // Capture-Phase, damit wir auch Scroll-Events in internen Containern
-    // (editor-preview-wrap) mitbekommen. Beide Menüs folgen beim Scrollen
-    // ihrem Anker – NIE schliessen, sonst flackert das Slash-Menü bei
-    // jedem Auto-Scroll des Editors (z.B. durch Keydown).
-    window.addEventListener('scroll', () => {
-      if (this.bubbleShow) this._updateBubble();
-      if (this.slashShow) this._updateSlashPosition();
-    }, { capture: true, signal });
-  },
-
+export const toolbarCardMethods = {
   _updateSlashPosition() {
     if (!this.slashShow || !this._slashBlock || !this._slashBlock.isConnected) return;
     const rect = this._slashBlock.getBoundingClientRect();
@@ -90,7 +61,8 @@ export const toolbarMethods = {
   },
 
   _updateBubble() {
-    if (!this.editMode || this.focusMode) { this.bubbleShow = false; return; }
+    const app = window.__app;
+    if (!app?.editMode || app.focusMode) { this.bubbleShow = false; return; }
     const sel = document.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
       this.bubbleShow = false;
@@ -119,7 +91,7 @@ export const toolbarMethods = {
     if (!editEl) return;
     editEl.focus();
     document.execCommand(command, false);
-    this._markEditDirty?.();
+    window.__app?._markEditDirty?.();
     this.$nextTick(() => this._updateBubble());
   },
 
@@ -129,20 +101,20 @@ export const toolbarMethods = {
   // ── Slash-Menü ────────────────────────────────────────────────────────
   // Reaktive Labels: jedes Mal frisch aus i18n (günstig). Kein Getter –
   // der Spread in der Alpine-data-Fabrik würde sonst sofort `this.t`
-  // aufrufen (auf toolbarMethods selbst), bevor die Komponente steht, und
+  // aufrufen (auf toolbarCardMethods selbst), bevor die Komponente steht, und
   // die gesamte Initialisierung scheitern lassen.
   slashItems() {
+    const app = window.__app;
     return SLASH_ITEMS.map(it => ({
       key: it.key,
-      label: this.t('editor.slash.' + it.key),
+      label: app?.t('editor.slash.' + it.key) || it.key,
     }));
   },
 
-  _onEditInput() {
-    // Reserviert – aktuell keine zusätzliche Logik.
-  },
-
   _onEditKeydown(e) {
+    const app = window.__app;
+    if (!app?.editMode) return;
+
     // Shift+Enter = weicher Zeilenumbruch (<br>). In Safari/WebKit splittet
     // die Default-Aktion stattdessen den Absatz in zwei <p> – was in Gedichten
     // und Dialogen der falsche Umbruch ist. execCommand('insertLineBreak')
@@ -150,7 +122,7 @@ export const toolbarMethods = {
     if (e.key === 'Enter' && e.shiftKey) {
       e.preventDefault();
       document.execCommand('insertLineBreak');
-      this._markEditDirty?.();
+      app._markEditDirty?.();
       return;
     }
 
@@ -158,7 +130,7 @@ export const toolbarMethods = {
     // das Ergebnis und der User würde unsichtbar formatieren. B/I sind
     // explizit erlaubt: die Auszeichnung landet im HTML und wird beim
     // Verlassen des Fokus sichtbar.
-    if (this.focusMode) {
+    if (app.focusMode) {
       if ((e.metaKey || e.ctrlKey) && /^[uU]$/.test(e.key)) {
         e.preventDefault();
       }
@@ -254,7 +226,7 @@ export const toolbarMethods = {
     }
 
     placeCaretIn(caretTarget);
-    this._markEditDirty?.();
+    window.__app?._markEditDirty?.();
     this._closeSlash();
   },
 };

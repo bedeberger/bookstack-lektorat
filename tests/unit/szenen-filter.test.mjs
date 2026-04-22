@@ -1,16 +1,16 @@
 // Unit-Tests für Szenen-Kapitel- und Seiten-Filter.
-// Regression-Guard: Der Seiten-Filter muss auch greifen, wenn die KI
-// `s.seite` anders formuliert als BookStack. Der Dropdown-Wert ist die
-// `page_id` (Number) aus dem Buch-Baum, Fallback ist der Szenen-Name (String).
+//
+// Modellannahme: der Komplett-Job normalisiert `seite`/`kapitel` (strippt
+// «### »-Präfixe der KI) und löst die page_id gegen den BookStack-Baum auf.
+// Darum kann das Seiten-Dropdown direkt aus `this.pages` (Tree) kommen und
+// der Filter strikt per `page_id` arbeiten. Szenen ohne auflösbare page_id
+// tauchen im Seiten-Filter nicht auf (wohl aber in der unfilterten Liste).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { applySzenenFilters, appUiMethods } = await import('../../public/js/app-ui.js');
 
-// Harness: minimales Alpine-Ersatz-Objekt mit nur den Feldern, die die
-// Filter-Listen-Methoden lesen. Order-Maps leer → Stabile lexikalische
-// Sortierung reicht für die Tests.
 function makeCtx(overrides = {}) {
   return {
     szenen: [],
@@ -20,7 +20,6 @@ function makeCtx(overrides = {}) {
     _chapterOrderMap: new Map(),
     _pageOrderMap: new Map(),
     ...overrides,
-    // Methoden aus appUiMethods draufsetzen, gebunden über `this`.
     szenenKapitelListe: appUiMethods.szenenKapitelListe,
     szenenSeitenListe: appUiMethods.szenenSeitenListe,
     _deriveKapitel: appUiMethods._deriveKapitel,
@@ -31,16 +30,12 @@ function makeCtx(overrides = {}) {
   };
 }
 
-// Beispielbuch: 2 Kapitel, 4 Seiten, 5 Szenen.
+// Beispielbuch: 2 Kapitel, 4 Seiten, 4 Szenen.
 // Kapitel-1 (chapter_id=10) hat Seite 100 ("Morgens") und 101 ("Mittags").
 // Kapitel-2 (chapter_id=20) hat Seite 200 ("Abends") und 201 ("Nachts").
-// Szene 1: Kap-1 + page_id=100 → seite='Morgens' (sauber verlinkt).
-// Szene 2: Kap-1 + page_id=100 → seite='morgens' (falsche Schreibweise,
-//         aber page_id gesetzt — muss via page_id filterbar sein).
-// Szene 3: Kap-1 + page_id=null → seite='Frühstück' (KI-Name, im Tree nicht
-//         vorhanden — muss via Namens-Fallback filterbar bleiben).
-// Szene 4: Kap-2 + page_id=200 → seite='Abends'.
-// Szene 5: Kap-2 + page_id=201 → seite='Nachts'.
+// Nur 100, 200, 201 haben Szenen. 101 ("Mittags") hat keine — soll aber
+// trotzdem als Dropdown-Option angeboten werden (User sieht dann einfach
+// „keine Szenen auf dieser Seite").
 const BOOK = {
   tree: [
     { type: 'chapter', id: 10, name: 'Kapitel 1' },
@@ -53,11 +48,10 @@ const BOOK = {
     { id: 201, name: 'Nachts',  chapter_id: 20, chapterName: 'Kapitel 2' },
   ],
   szenen: [
-    { id: 1, kapitel: 'Kapitel 1', seite: 'Morgens',    chapter_id: 10, page_id: 100, titel: 'Aufstehen',     wertung: 'stark',   fig_ids: [], ort_ids: [] },
-    { id: 2, kapitel: 'Kapitel 1', seite: 'morgens',    chapter_id: 10, page_id: 100, titel: 'Frühstück',     wertung: 'mittel',  fig_ids: [], ort_ids: [] },
-    { id: 3, kapitel: 'Kapitel 1', seite: 'Frühstück',  chapter_id: 10, page_id: null, titel: 'Kaffee',       wertung: 'schwach', fig_ids: [], ort_ids: [] },
-    { id: 4, kapitel: 'Kapitel 2', seite: 'Abends',     chapter_id: 20, page_id: 200, titel: 'Heimkehr',      wertung: 'stark',   fig_ids: [], ort_ids: [] },
-    { id: 5, kapitel: 'Kapitel 2', seite: 'Nachts',     chapter_id: 20, page_id: 201, titel: 'Traum',         wertung: 'mittel',  fig_ids: [], ort_ids: [] },
+    { id: 1, kapitel: 'Kapitel 1', seite: 'Morgens', chapter_id: 10, page_id: 100, titel: 'Aufstehen', wertung: 'stark',   fig_ids: [], ort_ids: [] },
+    { id: 2, kapitel: 'Kapitel 1', seite: 'Morgens', chapter_id: 10, page_id: 100, titel: 'Frühstück', wertung: 'mittel',  fig_ids: [], ort_ids: [] },
+    { id: 3, kapitel: 'Kapitel 2', seite: 'Abends',  chapter_id: 20, page_id: 200, titel: 'Heimkehr',  wertung: 'stark',   fig_ids: [], ort_ids: [] },
+    { id: 4, kapitel: 'Kapitel 2', seite: 'Nachts',  chapter_id: 20, page_id: 201, titel: 'Traum',     wertung: 'mittel',  fig_ids: [], ort_ids: [] },
   ],
 };
 
@@ -81,90 +75,83 @@ test('szenenSeitenListe: leer ohne Kapitel-Filter', () => {
   assert.deepEqual(ctx.szenenSeitenListe(), []);
 });
 
-test('szenenSeitenListe: nur Seiten mit Szenen; page_id als Value (Tree-Label bevorzugt)', () => {
+test('szenenSeitenListe: alle Seiten des Kapitels aus dem Tree (auch ohne Szenen)', () => {
   const ctx = makeCtx({ ...BOOK, szenenFilters: { ...makeCtx().szenenFilters, kapitel: 'Kapitel 1' } });
   const opts = ctx.szenenSeitenListe();
-  const labels = opts.map(o => o.label).sort();
-  // Morgens (Szene 1 + 2 via page_id=100) und Frühstück (Szene 3, nur-Name).
-  // Mittags erscheint NICHT — keine Szene auf dieser Seite.
-  // 'morgens' (falsche Schreibweise aus Szene 2) taucht nicht als zweite Option auf,
-  // weil page_id=100 schon von 'Morgens' belegt ist.
-  assert.deepEqual(labels, ['Frühstück', 'Morgens']);
-  const morgens = opts.find(o => o.label === 'Morgens');
-  assert.equal(morgens.value, 100, 'page_id als Value für aufgelöste Tree-Seiten');
-  const fruehstueck = opts.find(o => o.label === 'Frühstück');
-  assert.equal(fruehstueck.value, 'Frühstück', 'Name als Fallback-Value für Szenen ohne page_id');
+  // Mittags (page_id=101) hat keine Szene, soll aber trotzdem angeboten werden —
+  // das Dropdown soll die vollständige Struktur des Kapitels zeigen.
+  assert.deepEqual(opts.map(o => o.label).sort(), ['Mittags', 'Morgens']);
+  assert.deepEqual(opts.map(o => o.value).sort((a, b) => a - b), [100, 101]);
 });
 
-test('szenenSeitenListe: Fallback-Label aus Szenen-seite wenn page_id nicht in this.pages auflösbar', () => {
-  // Szene verweist auf page_id=999, das nicht in this.pages ist (Tree noch nicht geladen).
-  // Dann fällt das Label auf den Szenen-seite-String zurück, die page_id bleibt als Value.
-  const szenen = [
-    { id: 1, kapitel: 'Kapitel 1', seite: 'Irgendwas', page_id: 999, titel: 'x', fig_ids: [], ort_ids: [] },
-  ];
+test('szenenSeitenListe: chapter_id-Auflösung fällt auf Szenen zurück, wenn Tree leer ist', () => {
   const ctx = makeCtx({
-    tree: [], pages: [], szenen,
-    szenenFilters: { ...makeCtx().szenenFilters, kapitel: 'Kapitel 1' },
+    ...BOOK, tree: [],
+    szenenFilters: { ...makeCtx().szenenFilters, kapitel: 'Kapitel 2' },
   });
   const opts = ctx.szenenSeitenListe();
-  assert.equal(opts.length, 1);
-  assert.equal(opts[0].value, 999, 'page_id bleibt stabile Filter-Referenz');
-  assert.equal(opts[0].label, 'Irgendwas');
+  assert.deepEqual(opts.map(o => o.label).sort(), ['Abends', 'Nachts']);
 });
 
-// ── applySzenenFilters (Regression-Core) ──────────────────────────────────
+test('szenenSeitenListe: «Sonstige Seiten» (chapter_id=null) greift auf chapterName-Fallback', () => {
+  const pages = [
+    { id: 500, name: 'Vorwort',  chapter_id: null, chapterName: 'Sonstige Seiten' },
+    { id: 501, name: 'Widmung',  chapter_id: null, chapterName: 'Sonstige Seiten' },
+    { id: 100, name: 'Morgens',  chapter_id: 10,   chapterName: 'Kapitel 1' },
+  ];
+  const ctx = makeCtx({
+    tree: [], pages, szenen: [],
+    szenenFilters: { ...makeCtx().szenenFilters, kapitel: 'Sonstige Seiten' },
+  });
+  const opts = ctx.szenenSeitenListe();
+  assert.deepEqual(opts.map(o => o.label).sort(), ['Vorwort', 'Widmung']);
+});
+
+// ── applySzenenFilters ─────────────────────────────────────────────────────
 
 test('applySzenenFilters: kein Filter → alle Szenen', () => {
   const out = applySzenenFilters(BOOK.szenen, { suche: '', wertung: '', figurId: '', kapitel: '', seite: '', ortId: '' });
-  assert.equal(out.length, 5);
+  assert.equal(out.length, 4);
 });
 
 test('applySzenenFilters: Kapitel-Filter beschränkt auf Kapitel-Szenen', () => {
   const out = applySzenenFilters(BOOK.szenen, { kapitel: 'Kapitel 1' });
-  assert.deepEqual(out.map(s => s.id).sort(), [1, 2, 3]);
+  assert.deepEqual(out.map(s => s.id).sort(), [1, 2]);
 });
 
-test('applySzenenFilters: Seite-Filter per page_id (Number) findet Szenen mit korrekter page_id — unabhängig von seite-String', () => {
-  // Dropdown-Wert ist page_id=100 (aus Tree). Szenen 1+2 matchen beide, obwohl
-  // Szene 2 `seite='morgens'` hat (falsche Schreibweise).
+test('applySzenenFilters: Seite-Filter per page_id findet nur Szenen mit passender page_id', () => {
   const out = applySzenenFilters(BOOK.szenen, { kapitel: 'Kapitel 1', seite: 100 });
   assert.deepEqual(out.map(s => s.id).sort(), [1, 2]);
 });
 
-test('applySzenenFilters: Seite-Filter per Name (String, Fallback) findet KI-Only-Szenen ohne page_id', () => {
-  // Szene 3 hat page_id=null und seite='Frühstück'. Dropdown-Wert ist dann der
-  // String 'Frühstück' (Name-Fallback).
-  const out = applySzenenFilters(BOOK.szenen, { kapitel: 'Kapitel 1', seite: 'Frühstück' });
-  assert.deepEqual(out.map(s => s.id), [3]);
+test('applySzenenFilters: Seite-Filter auf Seite ohne Szenen → leere Liste', () => {
+  // User wählt Mittags (page_id=101); keine Szene hat diese page_id → leer.
+  const out = applySzenenFilters(BOOK.szenen, { kapitel: 'Kapitel 1', seite: 101 });
+  assert.deepEqual(out, []);
 });
 
-test('applySzenenFilters: Seite-Filter per page_id matcht NICHT per Namens-Zufall', () => {
-  // Eine Szene ohne page_id (Szene 3) darf nicht durch page_id=100 gematcht werden,
-  // selbst wenn sie im gleichen Kapitel liegt.
-  const out = applySzenenFilters(BOOK.szenen, { kapitel: 'Kapitel 1', seite: 100 });
-  assert.ok(!out.some(s => s.id === 3));
-});
-
-test('applySzenenFilters: Seite-Filter (String) greift nicht für Szenen mit abweichender Schreibweise', () => {
-  // String-Filter ist exakt — 'Morgens' ≠ 'morgens'. Dieser Edge Case motiviert
-  // genau den Wechsel auf page_id: Szene 2 wäre per String-Match nicht zu finden.
-  const out = applySzenenFilters(BOOK.szenen, { kapitel: 'Kapitel 1', seite: 'Morgens' });
+test('applySzenenFilters: Szenen ohne page_id werden vom Seiten-Filter nicht erfasst', () => {
+  const szenen = [
+    { id: 1, kapitel: 'K1', page_id: 100, titel: 't1' },
+    { id: 2, kapitel: 'K1', page_id: null, titel: 't2' },
+  ];
+  const out = applySzenenFilters(szenen, { seite: 100 });
   assert.deepEqual(out.map(s => s.id), [1]);
 });
 
 test('applySzenenFilters: Kapitel + Seite kombiniert', () => {
   const out = applySzenenFilters(BOOK.szenen, { kapitel: 'Kapitel 2', seite: 200 });
-  assert.deepEqual(out.map(s => s.id), [4]);
+  assert.deepEqual(out.map(s => s.id), [3]);
 });
 
 test('applySzenenFilters: Wertungs-Filter', () => {
   const out = applySzenenFilters(BOOK.szenen, { wertung: 'stark' });
-  assert.deepEqual(out.map(s => s.id).sort(), [1, 4]);
+  assert.deepEqual(out.map(s => s.id).sort(), [1, 3]);
 });
 
 test('applySzenenFilters: Such-Filter matcht Titel case-insensitive', () => {
-  const out = applySzenenFilters(BOOK.szenen, { suche: 'KAFFEE' });
-  assert.deepEqual(out.map(s => s.id), [3]);
+  const out = applySzenenFilters(BOOK.szenen, { suche: 'TRAUM' });
+  assert.deepEqual(out.map(s => s.id), [4]);
 });
 
 test('applySzenenFilters: Figur-Filter matcht fig_ids', () => {
@@ -186,34 +173,13 @@ test('applySzenenFilters: Ort-Filter matcht ort_ids', () => {
   assert.deepEqual(out.map(s => s.id), [1]);
 });
 
-// ── End-to-end: Dropdown-Value → Filter findet Szene ────────────────────────
-// Das ist das eigentliche Regressions-Szenario, das der User mehrfach gemeldet
-// hat: User wählt im Dropdown eine Seite → Szenen-Liste muss sich darauf
-// reduzieren. Wir simulieren das, indem wir szenenSeitenListe aufrufen und
-// jede zurückgelieferte Option als Filter-Wert in applySzenenFilters stecken.
+// ── E2E: Dropdown-Value → Filter findet Szene ──────────────────────────────
 
-test('E2E-Regression: jede Option aus szenenSeitenListe findet mindestens eine Szene', () => {
+test('E2E: jede Option mit Szenen aus szenenSeitenListe findet diese Szenen', () => {
   const ctx = makeCtx({ ...BOOK, szenenFilters: { ...makeCtx().szenenFilters, kapitel: 'Kapitel 1' } });
   const opts = ctx.szenenSeitenListe();
-  assert.ok(opts.length > 0, 'Dropdown muss Optionen liefern');
-  for (const opt of opts) {
-    const filtered = applySzenenFilters(BOOK.szenen, { kapitel: 'Kapitel 1', seite: opt.value });
-    assert.ok(
-      filtered.length > 0,
-      `Filter-Regression: Option ${JSON.stringify(opt)} findet keine Szene — das war der ursprüngliche Bug`,
-    );
-    // Jede gefundene Szene muss auch tatsächlich zum Kapitel gehören.
-    for (const s of filtered) {
-      assert.equal(s.kapitel, 'Kapitel 1');
-    }
-  }
-});
-
-test('E2E-Regression: Seite ohne Szenen erscheint NICHT im Dropdown', () => {
-  // 'Mittags' (page_id=101) gehört zu Kapitel 1, aber keine Szene hat page_id=101.
-  // Das Dropdown darf die Seite nicht anbieten — sonst wählt der User sie aus
-  // und sieht nichts (= „Filter funktioniert nicht"-Beschwerde).
-  const ctx = makeCtx({ ...BOOK, szenenFilters: { ...makeCtx().szenenFilters, kapitel: 'Kapitel 1' } });
-  const opts = ctx.szenenSeitenListe();
-  assert.ok(!opts.some(o => o.label === 'Mittags'), 'leere Seite darf nicht im Dropdown stehen');
+  // Szenen 1+2 liegen auf page_id=100 ("Morgens").
+  const morgens = opts.find(o => o.label === 'Morgens');
+  const filtered = applySzenenFilters(BOOK.szenen, { kapitel: 'Kapitel 1', seite: morgens.value });
+  assert.deepEqual(filtered.map(s => s.id).sort(), [1, 2]);
 });

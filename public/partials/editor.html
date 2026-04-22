@@ -83,100 +83,6 @@
     </div>
   </template>
 
-  <!-- Synonym-Kontextmenü (an body teleportiert, damit position:fixed
-       nicht vom card-Transform-Context eingefangen wird) -->
-  <template x-teleport="body">
-    <div x-show="showSynonymMenu" x-cloak class="synonym-menu"
-         :style="{ left: synonymMenuX + 'px', top: synonymMenuY + 'px' }"
-         @click.outside="closeSynonymMenu()"
-         @keydown.escape.window="closeSynonymMenu()">
-      <button type="button" class="synonym-menu-btn" @click="requestSynonyms()" x-text="t('editor.synonym.searchFor', { word: _synonymWord })"></button>
-    </div>
-  </template>
-
-  <!-- Synonym-Picker -->
-  <template x-teleport="body">
-    <div x-show="showSynonymPicker" x-cloak class="synonym-picker"
-         :style="{ left: synonymMenuX + 'px', top: synonymMenuY + 'px' }"
-         @click.outside="closeSynonymPicker()"
-         @keydown.escape.window="closeSynonymPicker()">
-      <div class="synonym-picker-header">
-        <span x-text="t('editor.synonym.titleFor', { word: _synonymWord })"></span>
-        <button type="button" class="synonym-picker-close" @click="closeSynonymPicker()" :title="t('common.close')" :aria-label="t('common.close')">×</button>
-      </div>
-
-      <div class="synonym-picker-body">
-        <div class="synonym-picker-section" x-show="!synonymThesDisabled">
-          <div class="synonym-picker-subheader" x-text="t('editor.synonym.thesaurus')"></div>
-          <div x-show="synonymThesLoading" class="synonym-picker-loading">
-            <span class="spinner"></span> <span x-text="t('editor.synonym.loading')"></span>
-          </div>
-          <div x-show="!synonymThesLoading && synonymThesError" class="synonym-picker-error" x-text="synonymThesError"></div>
-          <div x-show="!synonymThesLoading && !synonymThesError && synonymThesList.length > 0" class="synonym-picker-list">
-            <template x-for="(s, i) in synonymThesList" :key="'t'+i">
-              <button type="button" class="synonym-entry" @click="applySynonym(s)">
-                <span class="synonym-word" x-text="s.wort"></span>
-                <span x-show="s.hinweis" class="synonym-hint" x-text="s.hinweis"></span>
-              </button>
-            </template>
-          </div>
-        </div>
-
-        <div class="synonym-picker-section">
-          <div class="synonym-picker-subheader" x-text="t('editor.synonym.ki')"></div>
-          <div x-show="synonymKiLoading" class="synonym-picker-loading">
-            <span class="spinner"></span> <span x-text="t('editor.synonym.kiLoading')"></span>
-          </div>
-          <div x-show="!synonymKiLoading && synonymKiError" class="synonym-picker-error" x-text="synonymKiError"></div>
-          <div x-show="!synonymKiLoading && !synonymKiError && synonymKiList.length > 0" class="synonym-picker-list">
-            <template x-for="(s, i) in synonymKiList" :key="'k'+i">
-              <button type="button" class="synonym-entry" @click="applySynonym(s)">
-                <span class="synonym-word" x-text="s.wort"></span>
-                <span x-show="s.hinweis" class="synonym-hint" x-text="s.hinweis"></span>
-              </button>
-            </template>
-          </div>
-        </div>
-      </div>
-    </div>
-  </template>
-
-  <!-- Figuren-Lookup-Popover (Ctrl/Cmd-Klick auf Figurenname im Edit-/Fokusmodus) -->
-  <template x-teleport="body">
-    <div x-show="showFigurLookup" x-cloak class="figur-lookup"
-         :style="{ left: figurLookupX + 'px', top: figurLookupY + 'px' }"
-         @click.outside="closeFigurLookup()"
-         @keydown.escape.window="closeFigurLookup()">
-      <template x-if="figurLookupData">
-        <div>
-          <div class="figur-lookup-header">
-            <span class="figur-lookup-name" x-text="figurLookupData.name"></span>
-            <button type="button" class="figur-lookup-close" @click="closeFigurLookup()" :title="t('common.close')" :aria-label="t('common.close')">×</button>
-          </div>
-          <div class="figur-lookup-body">
-            <div x-show="figurLookupGeburt()" class="figur-lookup-row">
-              <span class="figur-lookup-label" x-text="t('figurLookup.geburt')"></span>
-              <span x-text="figurLookupGeburt()"></span>
-            </div>
-            <div x-show="(figurLookupData.eigenschaften || []).length > 0" class="figur-lookup-tags">
-              <template x-for="(tag, ti) in (figurLookupData.eigenschaften || [])" :key="ti">
-                <span class="tag" x-text="tag"></span>
-              </template>
-            </div>
-            <div x-show="figurLookupData.beruf || figurLookupData.rolle" class="figur-lookup-meta">
-              <span x-show="figurLookupData.beruf" x-text="figurLookupData.beruf"></span>
-              <span x-show="figurLookupData.beruf && figurLookupData.rolle" class="figur-lookup-meta-sep"> · </span>
-              <span x-show="figurLookupData.rolle" x-text="figurLookupData.rolle"></span>
-            </div>
-          </div>
-          <div x-show="editMode && !focusMode" class="figur-lookup-footer">
-            <button type="button" class="figur-lookup-link" @click="openFigurLookupTarget()" x-text="t('figurLookup.open')"></button>
-          </div>
-        </div>
-      </template>
-    </div>
-  </template>
-
   <!-- Preview + optional Befunde: Layout wird zum Split, sobald geprüft wurde.
        editMode zeigt contenteditable statt Preview (Findings bleiben rechts sichtbar). -->
   <div class="editor-body-wrap" :class="checkDone ? 'lektorat-split' : ''">
@@ -184,50 +90,9 @@
       <div id="partial-editor-body-edit"></div>
       <div id="partial-editor-body-view"></div>
     </div>
-    <div x-show="checkDone" class="lektorat-split-findings">
-
-      <!-- Fehlerfrei -->
-      <div x-show="lektoratFindings.length === 0" class="finding ok">
-        <span class="badge badge-ok" x-text="t('editor.findings.okBadge')"></span> &nbsp;<span x-text="t('editor.findings.ok')"></span>
-      </div>
-
-      <!-- Findings-Sektion (Fehler + Stilanmerkungen, in Lesereihenfolge) -->
-      <template x-if="lektoratFindings.length > 0">
-        <div>
-          <div class="section-heading finding-header">
-            <span x-text="t('editor.findings.count', { n: lektoratFindings.length })"></span>
-            <div class="finding-toggle-group">
-              <button type="button" class="btn-compact" @click="selectAllFindings(true)" x-text="t('editor.findings.selectAll')"></button>
-              <button type="button" class="btn-compact" @click="selectAllFindings(false)" x-text="t('editor.findings.selectNone')"></button>
-            </div>
-          </div>
-          <template x-for="(f, i) in lektoratFindings" :key="i">
-            <label class="finding" :class="{ 'error': _isHardFinding(f.typ), 'style': !_isHardFinding(f.typ), 'finding-deselected': !selectedFindings[i], 'finding--applied': appliedOriginals.includes(f.original) }" :data-finding-idx="i" @pointerenter="handleFindingPointer(i)">
-              <input type="checkbox" class="finding-checkbox" :checked="selectedFindings[i]" :disabled="appliedOriginals.includes(f.original)" @change="toggleFinding(i)">
-              <span class="badge" :class="_isHardFinding(f.typ) ? 'badge-err' : 'badge-warn'" x-text="t('finding.' + f.typ)"></span>
-              <span x-show="appliedOriginals.includes(f.original)" class="tag" x-text="t('editor.findings.applied')"></span>
-              <span class="finding-content"><span class="finding-original" x-text="f.original"></span><template x-if="f.korrektur"><span class="finding-arrow">→</span></template><template x-if="f.korrektur"><span class="finding-korrektur" x-text="f.korrektur"></span></template><span class="finding-explanation" x-text="f.erklaerung"></span></span>
-            </label>
-          </template>
-        </div>
-      </template>
-
-      <!-- Stilanalyse & Fazit -->
-      <div x-html="analysisOut"></div>
-    </div>
+    <div id="partial-editor-findings" class="display-contents"></div>
   </div>
 
-  <!-- Verlauf dieser Seite (kompakte Leiste) -->
-  <div x-show="pageHistory.length > 0" class="history-bar">
-    <div class="history-heading" x-text="t('editor.history')"></div>
-    <template x-for="entry in pageHistory" :key="entry.id">
-      <div class="history-item" :class="{ 'history-item--active': activeHistoryEntryId === entry.id }" @click="loadHistoryEntry(entry)">
-        <span class="history-date" x-text="formatDate(entry.checked_at)"></span>
-        <span class="badge" :class="entry.error_count > 0 ? 'badge-err' : 'badge-ok'" x-text="entry.error_count > 0 ? t('editor.history.errors', { n: entry.error_count }) : t('editor.history.errorFree')"></span>
-        <button type="button" class="btn-toggle-saved" :class="entry.saved ? 'btn-toggle-saved--on' : 'btn-toggle-saved--off'" @click.stop="toggleHistoryEntrySaved(entry)" :title="entry.saved ? t('editor.history.markOpen') : t('editor.history.markDone')" x-text="entry.saved ? t('editor.history.done') : t('editor.history.open')"></button>
-        <span class="tag" x-text="entry.model"></span>
-        <button type="button" class="history-item-delete" @click.stop="deletePageCheck(entry.id)" :title="t('common.deleteEntry')" :aria-label="t('common.deleteEntry')">×</button>
-      </div>
-    </template>
-  </div>
+  <!-- Verlauf dieser Seite (Partial → pageHistoryCard) -->
+  <div id="partial-page-history" class="display-contents"></div>
 </div>

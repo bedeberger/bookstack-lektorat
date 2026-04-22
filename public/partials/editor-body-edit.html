@@ -1,13 +1,14 @@
 <!-- Bearbeitungsmodus: contenteditable. Die Toolbar (Bubble + Slash) lebt
      strukturell NICHT hier drin – sie ist nach <body> teleportiert, damit
      position:fixed nicht vom card-Transform-Kontext eingefangen wird. Sie
-     wird separat als partial-editor-toolbar geladen. -->
+     wird separat als partial-editor-toolbar geladen. Die Sub-Komponente
+     editorToolbarCard installiert selbst einen delegierten keydown-Listener
+     auf dem contenteditable — daher kein @keydown hier. -->
 <div x-show="editMode"
      class="page-content-view page-content-view--editing"
      contenteditable="true"
      spellcheck="true"
-     @input="_markEditDirty(); _onEditInput && _onEditInput($event)"
-     @keydown="_onEditKeydown && _onEditKeydown($event)"
+     @input="_markEditDirty()"
      @paste="_onEditPaste($event)"
      @contextmenu="_onEditContextMenu($event)"
      @click="_onEditClick($event)"

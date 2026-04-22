@@ -1,62 +1,65 @@
 <!-- Find & Replace im Edit-Mode (Cmd/Ctrl+F).
      Teleport nach <body>, damit position:fixed nicht vom card-Transform
-     eingefangen wird. Strukturell nur im Edit-Mode sichtbar. -->
-<template x-teleport="body">
-  <div x-show="findOpen && editMode" x-cloak
-       class="edit-find"
-       role="dialog"
-       :aria-label="t('find.title')"
-       :style="{ left: findX + 'px', top: findY + 'px' }"
-       @keydown.escape.stop="closeFind()"
-       @mousedown.stop>
-    <div class="edit-find-row">
-      <input type="text"
-             class="edit-find-input"
-             x-model="findTerm"
-             @input="onFindInput()"
-             @keydown="onFindKeydown($event)"
-             :placeholder="t('find.placeholder')"
-             :aria-label="t('find.placeholder')">
-      <span class="edit-find-count"
-            x-text="findTerm
-              ? (findMatches.length > 0
-                  ? t('find.counter', { i: findIndex + 1, n: findMatches.length })
-                  : t('find.noMatches'))
-              : ''"></span>
-      <button type="button" class="edit-find-btn" @click="findPrev()"
-              :disabled="findMatches.length === 0"
-              :title="t('find.prev')" :aria-label="t('find.prev')">&#x2191;</button>
-      <button type="button" class="edit-find-btn" @click="findNext()"
-              :disabled="findMatches.length === 0"
-              :title="t('find.next')" :aria-label="t('find.next')">&#x2193;</button>
-      <button type="button" class="edit-find-btn edit-find-btn--toggle"
-              :class="{ 'edit-find-btn--active': findCaseSensitive }"
-              @click="findCaseSensitive = !findCaseSensitive; recomputeFindMatches()"
-              :title="t('find.caseSensitive')" :aria-label="t('find.caseSensitive')"
-              :aria-pressed="findCaseSensitive">Aa</button>
-      <button type="button" class="edit-find-btn edit-find-btn--toggle"
-              :class="{ 'edit-find-btn--active': findWholeWord }"
-              @click="findWholeWord = !findWholeWord; recomputeFindMatches()"
-              :title="t('find.wholeWord')" :aria-label="t('find.wholeWord')"
-              :aria-pressed="findWholeWord">W</button>
-      <button type="button" class="edit-find-close" @click="closeFind()"
-              :title="t('common.close')" :aria-label="t('common.close')">&#x2715;</button>
+     eingefangen wird. Strukturell nur im Edit-Mode sichtbar.
+     Alpine.data-Sub-Komponente — siehe public/js/cards/editor-find-card.js. -->
+<div x-data="editorFindCard" class="display-contents">
+  <template x-teleport="body">
+    <div x-show="findOpen && $app.editMode" x-cloak
+         class="edit-find"
+         role="dialog"
+         :aria-label="$app.t('find.title')"
+         :style="{ left: findX + 'px', top: findY + 'px' }"
+         @keydown.escape.stop="closeFind()"
+         @mousedown.stop>
+      <div class="edit-find-row">
+        <input type="text"
+               class="edit-find-input"
+               x-model="findTerm"
+               @input="onFindInput()"
+               @keydown="onFindKeydown($event)"
+               :placeholder="$app.t('find.placeholder')"
+               :aria-label="$app.t('find.placeholder')">
+        <span class="edit-find-count"
+              x-text="findTerm
+                ? (findMatches.length > 0
+                    ? $app.t('find.counter', { i: findIndex + 1, n: findMatches.length })
+                    : $app.t('find.noMatches'))
+                : ''"></span>
+        <button type="button" class="edit-find-btn" @click="findPrev()"
+                :disabled="findMatches.length === 0"
+                :title="$app.t('find.prev')" :aria-label="$app.t('find.prev')">&#x2191;</button>
+        <button type="button" class="edit-find-btn" @click="findNext()"
+                :disabled="findMatches.length === 0"
+                :title="$app.t('find.next')" :aria-label="$app.t('find.next')">&#x2193;</button>
+        <button type="button" class="edit-find-btn edit-find-btn--toggle"
+                :class="{ 'edit-find-btn--active': findCaseSensitive }"
+                @click="findCaseSensitive = !findCaseSensitive; recomputeFindMatches()"
+                :title="$app.t('find.caseSensitive')" :aria-label="$app.t('find.caseSensitive')"
+                :aria-pressed="findCaseSensitive">Aa</button>
+        <button type="button" class="edit-find-btn edit-find-btn--toggle"
+                :class="{ 'edit-find-btn--active': findWholeWord }"
+                @click="findWholeWord = !findWholeWord; recomputeFindMatches()"
+                :title="$app.t('find.wholeWord')" :aria-label="$app.t('find.wholeWord')"
+                :aria-pressed="findWholeWord">W</button>
+        <button type="button" class="edit-find-close" @click="closeFind()"
+                :title="$app.t('common.close')" :aria-label="$app.t('common.close')">&#x2715;</button>
+      </div>
+      <div class="edit-find-row">
+        <input type="text"
+               class="edit-find-input edit-find-input--replace"
+               x-model="findReplace"
+               @keydown.escape.stop="closeFind()"
+               :placeholder="$app.t('find.replacePlaceholder')"
+               :aria-label="$app.t('find.replacePlaceholder')">
+        <button type="button" class="edit-find-btn edit-find-btn--text"
+                @click="replaceCurrent()"
+                :disabled="findMatches.length === 0"
+                x-text="$app.t('find.replace')"></button>
+        <button type="button" class="edit-find-btn edit-find-btn--text"
+                @click="replaceAll()"
+                :disabled="findMatches.length === 0"
+                x-text="$app.t('find.replaceAll')"></button>
+      </div>
     </div>
-    <div class="edit-find-row">
-      <input type="text"
-             class="edit-find-input edit-find-input--replace"
-             x-model="findReplace"
-             @keydown.escape.stop="closeFind()"
-             :placeholder="t('find.replacePlaceholder')"
-             :aria-label="t('find.replacePlaceholder')">
-      <button type="button" class="edit-find-btn edit-find-btn--text"
-              @click="replaceCurrent()"
-              :disabled="findMatches.length === 0"
-              x-text="t('find.replace')"></button>
-      <button type="button" class="edit-find-btn edit-find-btn--text"
-              @click="replaceAll()"
-              :disabled="findMatches.length === 0"
-              x-text="t('find.replaceAll')"></button>
-    </div>
-  </div>
-</template>
+  </template>
+</div>

@@ -1,8 +1,6 @@
-// Figurenübersicht-Methoden. Bleiben im Root-Spread, weil sie von vielen
-// anderen Modulen (komplett.js, loadPages, ereignisseCard, kontinuitaetCard,
-// orteCard, szenenCard) via `$root.loadFiguren()` oder direkt am Root gerufen
-// werden. `this.figuren` geht über den Root-Proxy an Alpine.store('catalog').
-// Die eigentliche Extraktion läuft als Teil von POST /jobs/komplett-analyse.
+// Figurenübersicht-Methoden am Root-Spread (von vielen Modulen via
+// $root.loadFiguren() gerufen). Die eigentliche Extraktion läuft als Teil
+// von POST /jobs/komplett-analyse.
 
 import { fetchJson } from './utils.js';
 

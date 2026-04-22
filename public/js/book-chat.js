@@ -1,9 +1,7 @@
 import { makeChatMethods } from './chat-base.js';
 
 // Buch-Chat-Methoden (werden in Alpine.data('bookChatCard') gespreadet).
-// Gemeinsame Logik kommt aus chat-base.js; hier nur Buch-Chat-Konfiguration.
-// Keine Vorschläge – nur freie Konversation über das gesamte Buch.
-// `this` zeigt auf die Sub-Komponente; Root-Zugriffe via window.__app.
+// Keine Vorschläge – nur freie Konversation über das gesamte Buch (Agent-Flow).
 
 export const bookChatMethods = {
   // Gruppiert Tool-Calls eines Agent-Buch-Chat-Turns nach Name.

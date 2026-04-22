@@ -269,12 +269,22 @@ const _upsertUserLogin = db.prepare(`
     last_login_at = excluded.last_login_at
 `);
 const _getUser = db.prepare(
-  'SELECT email, name, created_at, last_login_at, locale, theme, default_buchtyp, default_language, default_region FROM users WHERE email = ?'
+  'SELECT email, name, created_at, last_login_at, last_seen_at, locale, theme, default_buchtyp, default_language, default_region FROM users WHERE email = ?'
 );
 const _updateUserSettings = db.prepare(`
   UPDATE users
   SET locale = ?, theme = ?, default_buchtyp = ?, default_language = ?, default_region = ?
   WHERE email = ?
+`);
+const _touchUserLastSeen = db.prepare(
+  "UPDATE users SET last_seen_at = ? WHERE email = ?"
+);
+const _addUserActivity = db.prepare(`
+  INSERT INTO user_activity (user_email, date, seconds, first_at, last_at)
+  VALUES (?, ?, ?, ?, ?)
+  ON CONFLICT(user_email, date) DO UPDATE SET
+    seconds = seconds + excluded.seconds,
+    last_at = excluded.last_at
 `);
 
 /** Upsert User bei Login – aktualisiert name + last_login_at. */
@@ -285,6 +295,19 @@ function upsertUserLogin(email, name) {
 /** Gibt User-Profil zurück oder null. */
 function getUser(email) {
   return _getUser.get(email) || null;
+}
+
+/** Aktualisiert `last_seen_at` auf jetzt. Throttling macht der Aufrufer. */
+function touchUserLastSeen(email, nowIso = new Date().toISOString()) {
+  if (!email) return;
+  _touchUserLastSeen.run(nowIso, email);
+}
+
+/** Summiert aktive Sekunden für (user, Tag). Aufrufer clamped/heuristisiert selbst. */
+function addUserActivity(email, seconds, nowIso = new Date().toISOString()) {
+  if (!email || !(seconds > 0)) return;
+  const date = nowIso.slice(0, 10);
+  _addUserActivity.run(email, date, Math.round(seconds), nowIso, nowIso);
 }
 
 /** Aktualisiert alle Settings-Felder. Null-Werte setzen die Spalte zurück. */
@@ -394,6 +417,7 @@ module.exports = {
   saveZeitstrahlEvents,
   saveOrteToDb,
   upsertUserLogin, getUser, updateUserSettings,
+  touchUserLastSeen, addUserActivity,
   saveCheckpoint, loadCheckpoint, deleteCheckpoint,
   insertJobRun, startJobRun, endJobRun, cleanupStuckJobRuns,
   getBookSettings, getBookLocale, saveBookSettings,

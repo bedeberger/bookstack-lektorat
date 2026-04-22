@@ -1,6 +1,7 @@
 // Find & Replace im Edit-Mode.
 // Öffnet eine kleine Leiste über dem contenteditable, navigiert per
-// Cmd/Ctrl+F. `this` zeigt auf die Alpine-Komponente.
+// Cmd/Ctrl+F. Wird in Alpine.data('editorFindCard') gespread; `this` zeigt
+// auf die Sub-Komponente, Root-Zugriffe via window.__app.
 
 import { getEditEl, isWordChar } from './editor-utils.js';
 
@@ -98,35 +99,10 @@ function clearHighlights() {
   if (_hlCurrent) _hlCurrent.clear();
 }
 
-export const editorFindMethods = {
-  findOpen: false,
-  findTerm: '',
-  findReplace: '',
-  findCaseSensitive: false,
-  findWholeWord: false,
-  findMatches: [],
-  findIndex: -1,
-  findX: 0,
-  findY: 0,
-  _findRecomputeTimer: null,
-  _findReflowHandler: null,
-
-  // Cmd/Ctrl+F global: im Edit-Mode Finder öffnen, sonst BookStack-Suche fokussieren.
-  handleFindHotkey(event) {
-    const isFind = (event.metaKey || event.ctrlKey) && !event.altKey && (event.key === 'f' || event.key === 'F');
-    if (!isFind) return;
-    if (this.editMode && !this.focusMode) {
-      event.preventDefault();
-      this.openFind();
-    } else if (this.selectedBookId) {
-      event.preventDefault();
-      const input = document.querySelector('.bookstack-search-input');
-      if (input) { input.focus(); input.select?.(); }
-    }
-  },
-
+export const editorFindCardMethods = {
   openFind() {
-    if (!this.editMode) return;
+    const app = window.__app;
+    if (!app?.editMode) return;
     const sel = window.getSelection();
     if (sel && sel.toString() && sel.rangeCount > 0) {
       const editEl = getEditEl();
@@ -282,7 +258,7 @@ export const editorFindMethods = {
       sel.addRange(range);
       editEl.focus();
       document.execCommand('insertText', false, this.findReplace);
-      this._markEditDirty?.();
+      window.__app?._markEditDirty?.();
       this.$nextTick(() => {
         this.recomputeFindMatches();
         if (this.findMatches.length > 0) {
@@ -313,8 +289,9 @@ export const editorFindMethods = {
         count++;
       } catch (e) { /* Match ungültig – überspringen */ }
     }
-    this._markEditDirty?.();
-    this.setStatus(this.t('find.replacedAll', { n: count }), false, 3000);
+    const app = window.__app;
+    app?._markEditDirty?.();
+    app?.setStatus?.(app.t('find.replacedAll', { n: count }), false, 3000);
     this.$nextTick(() => this.recomputeFindMatches());
   },
 

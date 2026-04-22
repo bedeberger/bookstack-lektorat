@@ -1,18 +1,13 @@
-// Kapitel-Review-Root-Methods. Der Job-Flow, Render, State und History leben
-// in Alpine.data('kapitelReviewCard') — siehe cards/kapitel-review-card.js.
-// Hier bleiben nur Root-seitige Einstiegspunkte, die von Sidebar und
-// Hash-Router am Root erwartet werden.
+// Root-seitige Einstiegspunkte für die Kapitel-Bewertung (Sidebar + Hash-Router).
+// Job-Flow, Render, State + History leben in Alpine.data('kapitelReviewCard').
 
 export const kapitelReviewMethods = {
-  // Flag-Toggle für die Karte. Die Sub reagiert via $watch auf showKapitelReviewCard.
   async toggleKapitelReviewCard() {
     if (this.showKapitelReviewCard) { this.showKapitelReviewCard = false; return; }
     this._closeOtherMainCards('kapitelReview');
     this.showKapitelReviewCard = true;
   },
 
-  // Aus der Sidebar: Kapitel wählen + Karte öffnen. Dispatcht
-  // `kapitel-review:select` an die Sub, die die eigentliche Logik umsetzt.
   async openKapitelReviewForChapter(chapterId) {
     if (!chapterId) return;
     const opts = this.kapitelReviewChapterOptions();
@@ -33,9 +28,6 @@ export const kapitelReviewMethods = {
     return chapters.length >= 2 && chapters.some(c => c.pages.length > 1);
   },
 
-  // Liste der Kapitel, die fürs Kapitel-Review anklickbar sind — genutzt von
-  // sidebar.html, app-hash-router.js und von der Sub-Komponente (dort eine
-  // eigene Kopie, damit der Scope nicht auf $root angewiesen ist).
   kapitelReviewChapterOptions() {
     if (!this._bookQualifiesForChapterReview()) return [];
     return (this.tree || [])

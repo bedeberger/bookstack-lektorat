@@ -9,9 +9,10 @@ export const appChromeMethods = {
       : this.themePref;
     document.documentElement.setAttribute('data-theme', resolved);
   },
-  cycleTheme() {
-    const order = ['auto', 'light', 'dark'];
-    this.themePref = order[(order.indexOf(this.themePref) + 1) % order.length];
+  setTheme(pref) {
+    if (pref !== 'auto' && pref !== 'light' && pref !== 'dark') return;
+    if (this.themePref === pref) return;
+    this.themePref = pref;
     try { localStorage.setItem('theme', this.themePref); } catch (e) {}
     this._applyTheme();
     fetch('/me/settings', {
@@ -20,8 +21,12 @@ export const appChromeMethods = {
       body: JSON.stringify({ theme: this.themePref }),
     }).catch(e => console.error('[theme] Persist fehlgeschlagen:', e));
   },
-  _themeLabel() {
-    return this.t({ auto: 'theme.auto', light: 'theme.light', dark: 'theme.dark' }[this.themePref] || 'theme.auto');
+  _avatarInitials() {
+    const src = (this.currentUser && (this.currentUser.name || this.currentUser.email)) || '';
+    if (!src) return '·';
+    const parts = src.split('@')[0].split(/[\s._-]+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return (parts[0] || src).slice(0, 2).toUpperCase();
   },
 
   // ── BookStack Token Setup ────────────────────────────────────────────────

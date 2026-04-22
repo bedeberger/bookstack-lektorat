@@ -1,7 +1,4 @@
-// Szenenanalyse-Methoden. Bleiben im Root-Spread, weil sie von mehreren
-// Orten (komplett-Job, app-view._reloadVisibleBookCards, orteCard via
-// $root.loadSzenen) gerufen werden. `this.szenen` geht über den Root-Proxy
-// an Alpine.store('catalog').
+// Szenenanalyse-Methoden am Root-Spread (von komplett-Job, app-view, orteCard gerufen).
 
 import { fetchJson } from './utils.js';
 

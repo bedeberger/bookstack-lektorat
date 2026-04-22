@@ -1,10 +1,6 @@
 // Kontinuitätsprüfer-Methoden (werden in Alpine.data('kontinuitaetCard')
-// gespreadet). `this` zeigt auf die Sub-Komponente; Root-Zugriffe (selectedBookId,
-// selectedBookName, figuren, tree, pages, t, selectPage, loadFiguren,
-// _runningJobStatus, _sortByChapterOrder) laufen über window.__app.
-//
-// Einziger Job-Flow ausserhalb des Root — daher kein createJobFeature:
-// runKontinuitaetCheck + startKontinuitaetPoll sind hier direkt implementiert.
+// gespreadet). Job-Flow (runKontinuitaetCheck + startKontinuitaetPoll) direkt
+// implementiert, ohne createCardJobFeature.
 
 import { fetchJson, escHtml } from './utils.js';
 

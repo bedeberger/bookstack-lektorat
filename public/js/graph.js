@@ -1,9 +1,8 @@
 import { escHtml } from './utils.js';
 
 // Graph-Render-Methoden (werden in Alpine.data('figurenCard') gespreadet).
-// `this` zeigt auf die Sub-Komponente; Root-Zugriffe (figuren, uiLocale, t)
-// laufen über window.__app. vis-network-Instanz (_figurenNetwork) und
-// Graph-Modus-State leben direkt in der Sub — destroy() räumt beides auf.
+// Root-Zugriffe via window.__app. vis-network-Instanz (_figurenNetwork) +
+// Graph-Modus-State leben in der Card; destroy() räumt beides auf.
 
 // Gemeinsamer Font für alle vis-Nodes.
 const DEFAULT_FONT = { size: 13, face: 'system-ui, -apple-system, sans-serif' };
