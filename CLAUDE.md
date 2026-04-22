@@ -31,18 +31,55 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Va
 4. Prompt-Builder in `public/js/prompts.js` ergänzen
 5. Schema-Validierung nach `callAI` nicht vergessen
 
-### Frontend
+### Frontend (neue Karte als `Alpine.data`-Sub-Komponente)
 
-1. Neues Modul in `public/js/` → Methoden-Objekt exportieren (z.B. `export const xxxMethods = { ... }`)
-2. Methoden verwenden `this` (zeigt auf Alpine-Komponente)
-3. In `public/js/app.js` per `...spread` einbinden
+Der Frontend-Scope ist in **Alpine.data-Sub-Komponenten** aufgeteilt:
+- **Root** (`x-data="lektorat"` am `<body>`): Navigation (`selectedBookId`, `pages`, `tree`), Session, i18n, `showXxxCard`-Flags (Single Source of Truth für Hash-Router + Exklusivität), Job-Queue-Footer, globale Cross-Cutting-Methoden (`t`, `bsGet`, `loadFiguren`, `selectPage`, `gotoStelle` …).
+- **14 Sub-Komponenten** in [public/js/cards/](public/js/cards/) — eine pro UI-Karte (Figuren, Orte, Szenen, Ereignisse, Stil, Fehler-Heatmap, BookStats, BookSettings, UserSettings, Kontinuität, Seiten-Chat, Buch-Chat, Buch-Review, Kapitel-Review). Jede besitzt ihren fachlichen State + Lifecycle.
+- **Editor** (inkl. `page-view`, `editor-*`, `lektorat`-Findings, `chat`) bleibt **bewusst im Root** — zu eng mit Seiten-Chat, Hash-Router, Auto-Save, Selection-Management gekoppelt.
+
+**Neue Karte anlegen:**
+1. Fachmodul in `public/js/` → Methods-Export (`export const xxxMethods = { ... }`), Root-Zugriffe via `window.__app.xxx` (siehe unten).
+2. Sub-Komponente in `public/js/cards/xxx-card.js` → `Alpine.data('xxxCard', () => ({ ...state, init(), destroy(), ...xxxMethods }))`, registriert als `registerXxxCard()` und in `app.js` aufgerufen.
+3. Partial in `public/partials/xxx.html` mit `x-data="xxxCard"` am Wurzel-`<div class="card">`. Root-Zugriffe im Template via `$app.xxx`.
+4. Root-Methode `toggleXxxCard()` in `app-view.js` — reiner Flag-Toggle + `_closeOtherMainCards`. Bei Karten, die bei erneutem Klick refreshen sollen (statt schliessen): `window.dispatchEvent(new CustomEvent('card:refresh', { detail: { name: 'xxx' } }))`.
+5. `showXxxCard`-Flag in `app-state.js` → `cardsState`.
+
+### Root-Zugriff aus Sub-Komponenten (`$app` / `window.__app`)
+
+Alpine's `$root` zeigt auf das **nächste x-data-Element** (bei Sub-Komponenten also die Sub selbst), nicht auf die `lektorat`-Root. Darum gibt es `$app`:
+- **In Templates** (Alpine-Expressions): `$app.t('key')`, `$app.selectedBookId`, `$app.figuren`. Funktioniert über die Custom-Magic `Alpine.magic('app', …)` in [app.js](public/js/app.js).
+- **In JS-Methoden/Gettern** (Sub-Komponenten): `window.__app.xxx` — der Root cached sich in `init()` in `window.__app` (garantiert reaktiver Alpine-Proxy). Alpine-Magics sind in JS-Getter-Ausführungen **nicht** zuverlässig verfügbar; `window.__app` ist robust.
+
+### Geteilter Fach-State: `Alpine.store('catalog')`
+
+`figuren`, `orte`, `szenen`, `globalZeitstrahl` leben in [public/js/cards/catalog-store.js](public/js/cards/catalog-store.js). Der Root exponiert sie als Getter/Setter-Proxy — alter Root-Code (`this.figuren = …`) funktioniert unverändert. Sub-Komponenten lesen via `$app.figuren` oder direkt `Alpine.store('catalog').figuren`.
+
+### Events zwischen Root und Subs
+
+Root dispatched, Subs hören:
+- **`book:changed`** — aus `_resetBookScopedState()`; Subs resetten State + laden bei offener Karte neu.
+- **`view:reset`** — aus `resetView()`; Subs nullen lokalen State komplett.
+- **`card:refresh` `{ name }`** — erneuter Klick auf offene Karte; bildet das alte `onOpenWhenOpen`-Verhalten von `createJobFeature` nach.
+- **`job:reconnect` `{ type, jobId, job, extra? }`** — aus `checkPendingJobs()`; Review/Kapitel-Review-Subs übernehmen Loading-State + starten Polling.
+- **`chat:reset` / `book-chat:reset`** — Root dispatcht beim Seitenwechsel / User-Settings-Danger-Reset; Chat-Subs leeren Session.
+- **`kapitel-review:select` `{ chapterId }`** — aus Sidebar/Hash-Router; Sub setzt ihre `kapitelReviewChapterId`.
+
+### Job-Polling (shared utilities)
+
+Pure Funktionen in [public/js/cards/job-helpers.js](public/js/cards/job-helpers.js):
+- `startPoll(ctx, config)` — generischer Job-Poller mit explizitem ctx.
+- `runningJobStatus(translate, …)` — Status-HTML mit Token-Info.
+
+Für createJobFeature-ähnliche Karten: [public/js/cards/job-feature-card.js](public/js/cards/job-feature-card.js) exportiert `createCardJobFeature(cfg)` — Sub-Variante der Root-Factory mit Flag am `$app` statt lokal.
 
 ### Feature-Toggle (Exklusivität)
 
 Immer nur eine Hauptansicht aktiv. Buchebenen-Features und Seitenebenen-Features (Editor) sind gegenseitig exklusiv.
-- Jedes Buchebenen-Toggle ruft `_closeOtherMainCards(keep)` auf (schliesst alle anderen Karten + Editor)
+- Root-Toggle-Methode (`app-view.js`) ruft `_closeOtherMainCards(keep)` auf (schliesst alle anderen Karten + Editor)
 - `selectPage()` schliesst alle Buchkarten bevor der Editor öffnet
-- Neues Feature-Toggle immer nach diesem Muster implementieren
+- Sub-Komponenten haben **keine** eigenen `showXxxCard`-Flags — der Root ist SSoT. Subs hören auf `$watch(() => window.__app.showXxxCard)`.
+- Seiten-Chat ist eine Ausnahme: läuft neben dem Editor, kein `_closeOtherMainCards` beim Öffnen.
 
 ## Prompt-System
 
@@ -176,11 +213,40 @@ routes/
 public/
   index.html           – SPA-Shell
   style.css            – Alle Styles (einzige Quelle)
-  js/app.js            – Alpine-Root, Feature-Module per ...spread
+  partials/            – HTML-Partials, geladen per _loadPartials()
+  js/app.js            – Alpine-Root (`x-data="lektorat"`), Methoden-Spreads,
+                         `$app`-Magic, window.__app-Referenz
+  js/app-state.js      – Root-State-Slices (shell, ai, navigation, editor,
+                         cards-Flags, Editor-Findings, …)
+  js/app-view.js       – Root-Toggle-Methoden (toggleXxxCard), selectPage,
+                         resetView/_resetBookScopedState mit Event-Dispatches
+  js/app-ui.js         – Filter-/Sort-Helper, Partial-Loader
+  js/app-jobs-core.js  – Job-Queue, checkPendingJobs, _startPoll-Wrapper
+  js/app-hash-router.js, app-navigation.js, app-chrome.js, app-komplett.js
+  js/cards/            – Alpine.data-Sub-Komponenten (14 Karten + Shared)
+    catalog-store.js          – Alpine.store('catalog') für figuren/orte/szenen/globalZeitstrahl
+    job-helpers.js            – pure `startPoll(ctx, cfg)` + `runningJobStatus(translate, …)`
+    job-feature-card.js       – `createCardJobFeature(cfg)` für Sub-Komponenten
+    stil-card.js, fehler-heatmap-card.js, book-stats-card.js
+    book-settings-card.js, user-settings-card.js
+    kontinuitaet-card.js, ereignisse-card.js, orte-card.js, szenen-card.js
+    figuren-card.js           – inkl. vis-network-Graph-Lifecycle
+    book-review-card.js, kapitel-review-card.js
+    chat-card.js, book-chat-card.js
   js/prompts.js        – Prompt-Schemas + Build-Logik (shared Server/Frontend)
   js/utils.js          – Gemeinsame Hilfsfunktionen
-  js/chat-base.js      – Geteilte Chat-Infrastruktur (Seiten- + Buch-Chat)
-  js/*.js              – Feature-Module (lektorat, review, figuren, chat, etc.)
+  js/chat-base.js      – Geteilte Chat-Methoden (spreaded in chat-card + book-chat-card)
+  js/*.js              – Fachmodule, die in Sub-Komponenten oder Root gespreadet werden
+                         (figuren, orte, szenen, kontinuitaet, graph, review,
+                          stil-heatmap, fehler-heatmap, bookstats, writing-time,
+                          book-settings, user-settings, kapitel-review, ereignisse,
+                          chat, book-chat)
+                       – Editor-/Findings-Module (bleiben im Root-Spread):
+                          page-view, editor-edit, editor-focus, editor-toolbar,
+                          editor-find, editor-synonyme, editor-figur-lookup,
+                          editor-utils, lektorat, shortcuts, tree, history,
+                          api-ai, api-bookstack, bookstack-search, offline-sync,
+                          i18n
 ```
 
 ## Tests
