@@ -19,6 +19,7 @@ export const appKomplettMethods = {
     this.alleAktualisierenTokIn = 0;
     this.alleAktualisierenTokOut = 0;
     this.alleAktualisierenTps = null;
+    this.alleAktualisierenPassMode = null;
     this.showKomplettStatus = true;
     const bookId = this.selectedBookId;
     const bookName = this.selectedBookName;
@@ -48,6 +49,7 @@ export const appKomplettMethods = {
         if (job.tokensIn != null) this.alleAktualisierenTokIn = job.tokensIn;
         if (job.tokensOut != null) this.alleAktualisierenTokOut = job.tokensOut;
         if (job.tokensPerSec != null) this.alleAktualisierenTps = job.tokensPerSec;
+        if (job.passMode) this.alleAktualisierenPassMode = job.passMode;
       },
       onNotFound: () => {
         this.alleAktualisierenLoading = false;
@@ -87,19 +89,25 @@ export const appKomplettMethods = {
 
   _komplettPhasen() {
     const p = this.alleAktualisierenProgress;
+    // Thresholds entsprechen den Server-Progress-Punkten nach den jeweiligen aiCalls:
+    //   orteConsolidate=55 = Ende aiCall Phase 3 (43→55)
+    //   chapterRelations=58 = Ende aiCall Phase 3b (55→58, nur Multi-Pass)
+    // Im Single-Pass wird Phase 3b übersprungen (Server setzt passMode='single'),
+    // damit sie auch im UI nicht als „erledigt" erscheint.
     const phases = [
       { key: 'phase.loadPages',          threshold: 12  },
       { key: 'phase.extract',            threshold: 30  },
       { key: 'phase.figurenConsolidate', threshold: 43  },
-      { key: 'phase.orteConsolidate',    threshold: 56  },
-      { key: 'phase.chapterRelations',   threshold: 58  },
+      { key: 'phase.orteConsolidate',    threshold: 55  },
+      { key: 'phase.chapterRelations',   threshold: 58, onlyMulti: true },
       { key: 'phase.szenenEvents',       threshold: 83  },
       { key: 'phase.timeline',           threshold: 89  },
       { key: 'phase.continuity',         threshold: 97  },
     ];
-    return phases.map((ph, i) => {
+    const visible = phases.filter(ph => !(ph.onlyMulti && this.alleAktualisierenPassMode === 'single'));
+    return visible.map((ph, i) => {
       const done = p >= ph.threshold;
-      const prevThreshold = i === 0 ? 0 : phases[i - 1].threshold;
+      const prevThreshold = i === 0 ? 0 : visible[i - 1].threshold;
       const active = !done && p >= prevThreshold;
       return { label: this.t(ph.key), done, active };
     });

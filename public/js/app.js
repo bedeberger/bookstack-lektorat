@@ -13,7 +13,6 @@ import { registerBookReviewCard } from './cards/book-review-card.js';
 import { registerKapitelReviewCard } from './cards/kapitel-review-card.js';
 import { figurenMethods } from './figuren.js';
 import { ereignisseMethods } from './ereignisse.js';
-// graphMethods migriert nach Alpine.data('figurenCard') — siehe cards/figuren-card.js.
 import { registerBookStatsCard } from './cards/book-stats-card.js';
 import { writingTimeMethods } from './writing-time.js';
 import { registerCatalogStore } from './cards/catalog-store.js';
@@ -116,19 +115,12 @@ document.addEventListener('alpine:init', () => {
   // Magic `$app` — verweist auf die `lektorat`-Root-Komponente am body. In
   // Alpine ist `$root` das nächste x-data-Element (bei Sub-Komponenten also die
   // Sub selbst), nicht die Top-Level-Komponente. Sub-Komponenten und Partials
-  // brauchen aber weiterhin Zugriff auf Root-Methoden (`t`, `loadFiguren`,
-  // `gotoPageById` …) und geteilten State (`selectedBookId`, `figuren`, …).
-  //
-  // Die Referenz wird in Root.init() auf window.__app gesetzt (garantiert
-  // reactive proxy) — `Alpine.$data(document.body)` allein ist bei manchen
-  // Getter-Evaluationen noch nicht gesetzt und liefert undefined.
+  // greifen über $app auf Root-Methoden und geteilten State zu. Die Referenz
+  // wird in Root.init() auf window.__app gesetzt (garantiert reactive proxy) —
+  // Alpine.$data(document.body) liefert bei manchen Getter-Evaluationen undefined.
   Alpine.magic('app', () => window.__app || Alpine.$data(document.body));
 
-  // Geteilte Fach-Daten (figuren, orte, szenen, globalZeitstrahl) vor allen
-  // Komponenten registrieren — die Root-Getter (siehe unten) lesen aus dem Store.
   registerCatalogStore();
-
-  // Migrierte Alpine.data-Sub-Komponenten (Fach-State aus der Root ausgelagert).
   registerStilCard();
   registerFehlerHeatmapCard();
   registerBookStatsCard();
@@ -254,12 +246,10 @@ document.addEventListener('alpine:init', () => {
     ...initialLektoratState(),
 
     // ── Catalog-Proxy ────────────────────────────────────────────────────────
-    // Figuren, Orte, Szenen, globalZeitstrahl leben in Alpine.store('catalog')
-    // (siehe cards/catalog-store.js). Der Root exponiert sie weiterhin als
-    // direkt adressierbare Properties — so bleibt vorhandener Root-Code
-    // (this.figuren = …, this.orte.push) und bestehende Sub-Komponenten-Reads
-    // ($root.figuren) unverändert funktional. Neue Karten greifen direkt via
-    // $store.catalog zu.
+    // Figuren, Orte, Szenen, globalZeitstrahl leben in Alpine.store('catalog').
+    // Root exponiert sie als direkt adressierbare Properties, damit this.figuren=
+    // / this.orte.push weiter funktionieren. Karten können auch direkt via
+    // $store.catalog zugreifen.
     get figuren() { return Alpine.store('catalog').figuren; },
     set figuren(v) { Alpine.store('catalog').figuren = v; },
     get orte() { return Alpine.store('catalog').orte; },
@@ -342,8 +332,6 @@ document.addEventListener('alpine:init', () => {
       });
     },
 
-    // kontinuitaetIssuesFiltered wandert in Alpine.data('kontinuitaetCard').
-
     get statusHtml() {
       if (!this.status) return '';
       return this.statusSpinner
@@ -376,14 +364,10 @@ document.addEventListener('alpine:init', () => {
       }).filter(Boolean);
     },
 
-    // Hash-Router: _computeHash, _hashCategory, _writeHash, _syncUrlNow,
-    // _updateHash, _applyHash, _setupHashRouting — siehe app-hash-router.js.
-
     // AbortController `_abortCtrl` (initialisiert via app-state.js) hält alle
     // globalen Listener dieser Komponente. `destroy()` (Alpine-Hook) ruft abort()
-    // → alle Listener werden automatisch entfernt. In der Praxis lebt die
-    // Root-Komponente so lange wie die Seite, aber der Controller schützt vor
-    // doppelter Registrierung bei Re-Init.
+    // → alle Listener werden automatisch entfernt. Schützt vor doppelter
+    // Registrierung bei Re-Init.
     destroy() {
       this._abortCtrl?.abort();
       if (this._jobQueueTimer) clearInterval(this._jobQueueTimer);
@@ -392,8 +376,7 @@ document.addEventListener('alpine:init', () => {
 
     // ── Initialisierung ──────────────────────────────────────────────────────
     async init() {
-      // Referenz für $app-Magic (siehe oben). Sub-Komponenten und Partials
-      // greifen über $app.xxx auf Root-State zu.
+      // Referenz für $app-Magic (siehe oben).
       window.__app = this;
       this._abortCtrl?.abort();
       this._abortCtrl = new AbortController();
@@ -484,7 +467,6 @@ document.addEventListener('alpine:init', () => {
           await this.loadPages();
           await this._reloadVisibleBookCards();
         });
-        // Figurengraph-Re-Render bei Sprachwechsel: Watch lebt in Alpine.data('figurenCard').
         this._startJobQueuePoll();
         this._setupWritingTime();
       } catch (e) {
@@ -504,18 +486,11 @@ document.addEventListener('alpine:init', () => {
     ...kapitelReviewMethods,
     ...figurenMethods,
     ...ereignisseMethods,
-    // bookstatsMethods migriert nach Alpine.data('bookStatsCard') — siehe cards/book-stats-card.js.
     // writingTimeMethods bleiben im Root: Schreibzeit-Heartbeat lauscht auf
-    // editMode/focusMode (Editor-State ist Root-nah), läuft unabhängig von
-    // der bookStatsCard-Sichtbarkeit.
+    // editMode/focusMode, läuft unabhängig von der bookStatsCard-Sichtbarkeit.
     ...writingTimeMethods,
-    // stilMethods + fehlerHeatmapMethods migriert nach Alpine.data — siehe cards/.
-    // chatMethods + bookChatMethods migriert nach Alpine.data — siehe cards/*.js.
     ...szenenMethods,
     ...orteMethods,
-    // kontinuitaetMethods migriert nach Alpine.data('kontinuitaetCard').
-    // bookSettingsMethods + userSettingsMethods migriert nach Alpine.data
-    // — siehe cards/book-settings-card.js + cards/user-settings-card.js.
     ...i18nMethods,
     ...pageViewMethods,
     ...editorEditMethods,

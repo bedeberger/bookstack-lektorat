@@ -1,18 +1,4 @@
 // Alpine.data('stilCard') — Sub-Komponente der Stil-Heatmap.
-//
-// Teil der Migration von Root-Methoden-Spreads zu echten Alpine.data-Komponenten
-// (siehe CLAUDE.md und Refactoring-Plan).
-//
-// Scope-Regeln:
-//   - Fachlicher State (stilData, stilLoading, stilSyncing, stilStatus,
-//     activeStilDetailKey) lebt hier, NICHT mehr im Root.
-//   - `showStilCard` und `toggleStilCard` bleiben im Root — Hash-Router und
-//     Karten-Exklusivität brauchen die Flag als Single Source of Truth.
-//   - Zugriff auf Root-State via window.__app (selectedBookId, uiLocale, pages,
-//     selectPage, t).
-//   - Lifecycle-Events: `book:changed` (Sub-Komponente lädt neu, wenn sichtbar)
-//     und `view:reset` (lokalen State nullen). Werden vom Root dispatcht.
-//   - `$watch($root.showStilCard)` triggert beim Öffnen den First-Load.
 
 import { stilMethods } from '../stil-heatmap.js';
 

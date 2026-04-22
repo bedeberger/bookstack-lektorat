@@ -1063,6 +1063,14 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 50').run();
     logger.info('DB-Migration auf Version 50 abgeschlossen (writing_time für Edit-/Fokus-Zeit-Tracking).');
   }
+  if (version < 51) {
+    const zeCols51 = db.pragma('table_info(zeitstrahl_events)').map(c => c.name);
+    if (!zeCols51.includes('page_ids')) {
+      db.exec('ALTER TABLE zeitstrahl_events ADD COLUMN page_ids TEXT');
+    }
+    db.prepare('UPDATE schema_version SET version = 51').run();
+    logger.info('DB-Migration auf Version 51 abgeschlossen (page_ids in zeitstrahl_events für robusten Klick-Link auf Seiten).');
+  }
 
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);

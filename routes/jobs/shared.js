@@ -730,6 +730,7 @@ sharedRouter.get('/:id', (req, res) => {
     maxTokensOut: job.maxTokensOut,
     tokensPerSec: job.tokensPerSec,
     result: job.result, error: job.error, errorParams: job.errorParams,
+    passMode: job.passMode ?? null,
   });
 });
 

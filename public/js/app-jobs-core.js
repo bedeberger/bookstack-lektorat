@@ -168,15 +168,14 @@ export function createJobFeature(cfg) {
 // Generische Job-Infrastruktur: Polling, Wiederaufnahme nach Tab-Wechsel,
 // Job-Queue-Sichtbarkeit. Von jedem Feature-Modul via `this.` referenziert.
 export const appJobsCoreMethods = {
-  // Root-Wrapper: delegiert an die pure Helper (cards/job-helpers.js). Die
-  // Sub-Komponenten rufen die Funktionen direkt, der Root nutzt weiter `this._startPoll(…)`.
+  // Root-Wrapper: delegiert an die pure Helper (cards/job-helpers.js). Karten
+  // können die Funktionen auch direkt nutzen.
   _startPoll(config) {
     return _startPollFn(this, config);
   },
 
   _fmtTok(n) { return fmtTok(n || 0); },
 
-  // Root-Wrapper für Status-HTML. Sub-Komponenten nutzen runningJobStatus() direkt.
   _runningJobStatus(statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams) {
     return _runningJobStatusFn(
       (k, p) => this.t(k, p),
@@ -265,10 +264,10 @@ export const appJobsCoreMethods = {
     localStorage.removeItem(lsKey);
   },
 
-  // Prüft beim Laden eines Buchs ob noch ein Job aus einer früheren Session läuft
-  // (z.B. Tab versehentlich geschlossen während Analyse lief). Migrierte
-  // Sub-Komponenten lauschen auf `job:reconnect { type, jobId, job, extra? }`
-  // und stellen dort selbst ihren Loading/Progress/Status-State her.
+  // Prüft beim Laden eines Buchs ob noch ein Job aus einer früheren Session
+  // läuft (z.B. Tab versehentlich geschlossen während Analyse lief). Karten
+  // lauschen auf `job:reconnect { type, jobId, job, extra? }` und stellen
+  // ihren Loading/Progress/Status-State selbst her.
   async checkPendingJobs(bookId) {
     await this._reconnectJob('lektorat_review_job_' + bookId, (job, jobId) => {
       this.showBookReviewCard = true;

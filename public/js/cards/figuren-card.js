@@ -9,8 +9,7 @@
 //   - `figuren` (im Store, via $root-Proxy)
 //   - `figurenFilters` (app-navigation schreibt darauf)
 //   - `selectedFigurId` (Hash-Router)
-//   - `figurenLoading/Progress/Status` (schreibt auch checkPendingJobs am Root;
-//     Migration dieser Felder verlangt einen späteren job:reconnect-Refactor)
+//   - `figurenLoading/Progress/Status` (checkPendingJobs schreibt darauf)
 //   - `loadFiguren`, `saveFiguren` (von vielen Modulen gerufen)
 //
 // Lifecycle:
@@ -102,7 +101,7 @@ export function registerFigurenCard() {
       if (this._onCardRefresh) window.removeEventListener('card:refresh', this._onCardRefresh);
     },
 
-    // ── UI-Helper (zuvor in app-ui.js) ──────────────────────────────────────
+    // ── UI-Helper ────────────────────────────────────────────────────────────
     figurenKapitelListe() {
       return window.__app._deriveKapitel(window.__app.figuren, f => f.kapitel);
     },

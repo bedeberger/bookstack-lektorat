@@ -167,25 +167,21 @@ const lektoratState = () => ({
   _checkPollTimer: null,
 });
 
+// bookReviewHistory wird von tree.js/loadPages geschrieben und von
+// user-settings beim Danger-Reset gelesen; deshalb am Root.
 const bookReviewState = () => ({
-  // Loading/Progress/Status/Out/selectedBookReviewId wandern in Alpine.data(
-  // 'bookReviewCard'). bookReviewHistory bleibt am Root (tree.js/loadPages
-  // schreibt, user-settings liest beim Danger-Reset).
   bookReviewHistory: [],
 });
 
-// Grösster Teil in Alpine.data('kapitelReviewCard') migriert. Nur
-// `kapitelReviewChapterId` bleibt am Root — Hash-Router und Sidebar brauchen
-// es als Single Source of Truth (analog zu selectedFigurId/selectedOrtId).
+// Hash-Router und Sidebar brauchen kapitelReviewChapterId als Single Source
+// of Truth (analog zu selectedFigurId/selectedOrtId).
 const kapitelReviewState = () => ({
   kapitelReviewChapterId: '',
 });
 
+// Root-seitig: figurenLoading/Progress/Status, selectedFigurId, Filters —
+// gebraucht von Hash-Router, app-navigation, checkPendingJobs-Reconnect.
 const figurenState = () => ({
-  // `figuren` lebt in Alpine.store('catalog').
-  // figurenUpdatedAt + Graph-Internals wandern in Alpine.data('figurenCard').
-  // Loading/Progress/Status + selectedFigurId + figurenFilters bleiben am Root
-  // (Hash-Router, app-navigation, checkPendingJobs-Reconnect).
   figurenLoading: false,
   figurenProgress: 0,
   figurenStatus: '',
@@ -198,11 +194,8 @@ const figurenState = () => ({
   _figuresPollTimer: null,
 });
 
+// Filters bleiben am Root — app-navigation schreibt sie.
 const ereignisseState = () => ({
-  // `globalZeitstrahl` lebt in Alpine.store('catalog').
-  // Meta-Felder (Loading/Progress/Status/PollTimer) wandern in
-  // Alpine.data('ereignisseCard'). Filters bleiben am Root (app-navigation
-  // schreibt sie).
   ereignisseFilters: {
     figurId: '',
     kapitel: '',
@@ -212,7 +205,6 @@ const ereignisseState = () => ({
 });
 
 const szenenState = () => ({
-  // `szenen` lebt in Alpine.store('catalog'). Meta-Felder in szenenCard.
   szenenUpdatedAt: null,
   szenenFilters: {
     wertung: '',
@@ -225,7 +217,6 @@ const szenenState = () => ({
 });
 
 const orteState = () => ({
-  // `orte` lebt in Alpine.store('catalog'). Meta-Felder in orteCard.
   orteUpdatedAt: null,
   selectedOrtId: null,
   orteFilters: {
@@ -236,20 +227,7 @@ const orteState = () => ({
   },
 });
 
-// kontinuitaetState wandert in Alpine.data('kontinuitaetCard')
-// — siehe public/js/cards/kontinuitaet-card.js.
-
-// bookStatsState wandert in Alpine.data('bookStatsCard')
-// — siehe public/js/cards/book-stats-card.js.
-
-// stilState wandert in Alpine.data('stilCard') — siehe public/js/cards/stil-card.js.
-
-// fehlerHeatmapState wandert in Alpine.data('fehlerHeatmapCard')
-// — siehe public/js/cards/fehler-heatmap-card.js.
-
-// Chat-State komplett in Alpine.data('chatCard') + ('bookChatCard') migriert.
-// _checkDoneBeforeChat bleibt am Root (von toggleChatCard + resetPage verwendet,
-// Editor-nah) — siehe shellState.
+// _checkDoneBeforeChat wird von toggleChatCard + resetPage verwendet (Editor-nah).
 const chatsState = () => ({
   _checkDoneBeforeChat: false,
 });
@@ -266,10 +244,8 @@ const jobsState = () => ({
   alleAktualisierenTokIn: 0,
   alleAktualisierenTokOut: 0,
   alleAktualisierenTps: null,
+  alleAktualisierenPassMode: null,
 });
-
-// settingsState wandert in Alpine.data('bookSettingsCard') + ('userSettingsCard')
-// — siehe public/js/cards/book-settings-card.js + user-settings-card.js.
 
 export function initialLektoratState() {
   return {

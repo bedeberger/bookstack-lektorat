@@ -732,7 +732,6 @@
   "job.phase.consolidatingTimeline": "Consolidating timeline…",
   "job.phase.loadingPages":          "Loading pages…",
   "job.phase.readingPages":          "Reading {from}–{to} of {total} pages…",
-  "job.phase.processingScenesContinuity": "Processing scenes and continuity…",
   "job.phase.processingScenes":      "Processing scenes from extraction…",
   "job.phase.savingScenes":          "Saving scenes…",
   "job.phase.checkContinuity":       "AI checking continuity…",

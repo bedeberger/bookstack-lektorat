@@ -1,21 +1,8 @@
 // Alpine.data('bookStatsCard') — Sub-Komponente der Buchstatistik-Karte.
 //
-// Teil der Migration von Root-Methoden-Spreads zu echten Alpine.data-Komponenten
-// (siehe CLAUDE.md und Refactoring-Plan).
-//
-// Scope-Regeln:
-//   - Fachlicher State (bookStatsData, bookStatsLoading, bookStatsSyncStatus,
-//     bookStatsMetric, bookStatsRange, bookStatsCoverage, bookStatsDelta,
-//     writingTimeData) lebt hier.
-//   - `showBookStatsCard` + `toggleBookStatsCard` bleiben im Root.
-//   - Root-State via window.__app (selectedBookId, uiLocale, pages, tokEsts, t).
-//   - Chart.js-Instanz + Theme-Observer leben als Modul-State in bookstats.js
-//     (siehe _statsChart, _themeObserver dort) — Alpine-Reaktivitäts-Proxy
-//     würde die Chart-Instanz beschädigen. destroy() räumt beide auf.
-//   - Writing-Time-Heartbeat (editMode/focusMode-Tracking) lebt weiter im
-//     Root (writingTimeMethods), weil der Heartbeat auf editMode+focusMode
-//     reagiert — Editor-State ist Root-nah und die Karte braucht NICHT offen
-//     zu sein, damit Schreibzeit erfasst wird.
+// Chart.js-Instanz + Theme-Observer leben als Modul-State in bookstats.js —
+// ein Alpine-Reaktivitäts-Proxy würde die Chart-Instanz beschädigen. destroy()
+// räumt beide auf.
 
 import { bookstatsMethods, _destroyStatsChart, _disconnectThemeObserver } from '../bookstats.js';
 

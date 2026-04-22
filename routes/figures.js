@@ -11,17 +11,19 @@ router.get('/zeitstrahl/:book_id', (req, res) => {
   const bookId = parseInt(req.params.book_id);
   const userEmail = req.session?.user?.email || null;
   const rows = db.prepare(
-    'SELECT datum, ereignis, typ, bedeutung, kapitel, seiten, figuren FROM zeitstrahl_events WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+    'SELECT datum, ereignis, typ, bedeutung, kapitel, chapter_ids, seiten, page_ids, figuren FROM zeitstrahl_events WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
   ).all(bookId, userEmail || '');
   if (!rows.length) return res.json({ ereignisse: null });
   const ereignisse = rows.map(r => ({
-    datum:     r.datum,
-    ereignis:  r.ereignis,
-    typ:       r.typ || 'persoenlich',
-    bedeutung: r.bedeutung || '',
-    kapitel:   r.kapitel ? JSON.parse(r.kapitel) : [],
-    seiten:    r.seiten  ? JSON.parse(r.seiten)  : [],
-    figuren:   r.figuren ? JSON.parse(r.figuren) : [],
+    datum:       r.datum,
+    ereignis:    r.ereignis,
+    typ:         r.typ || 'persoenlich',
+    bedeutung:   r.bedeutung || '',
+    kapitel:     r.kapitel     ? JSON.parse(r.kapitel)     : [],
+    chapter_ids: r.chapter_ids ? JSON.parse(r.chapter_ids) : [],
+    seiten:      r.seiten      ? JSON.parse(r.seiten)      : [],
+    page_ids:    r.page_ids    ? JSON.parse(r.page_ids)    : [],
+    figuren:     r.figuren     ? JSON.parse(r.figuren)     : [],
   }));
   res.json({ ereignisse });
 });

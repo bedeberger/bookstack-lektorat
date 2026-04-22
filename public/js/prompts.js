@@ -665,7 +665,7 @@ const FIGUREN_BASIS_SCHEMA = `{
       "erste_erwaehnung": "Kapitelname oder Seitenname der ersten Erwähnung (leer wenn unklar)",
       "schluesselzitate": ["Bis zu 3 charakterisierende Zitate, max. 80 Zeichen, wörtlich aus dem Text"],
       "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
-      "beziehungen": [{ "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|patronage|geschaeft|andere", "machtverhaltnis": 0, "beschreibung": "1 Satz", "belege": [{ "kapitel": "Kapitelname", "seite": "Seitentitel" }] }]
+      "beziehungen": [{ "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|patronage|geschaeft|andere", "machtverhaltnis": 0, "beschreibung": "1 Satz", "belege": [{ "kapitel": "EXAKT der ## Kapitel-Header", "seite": "EXAKT ein ### Seiten-Header aus dem Kapitel – NIE der Kapitelname; leer wenn unklar" }] }]
     }
   ]
 }`;
@@ -747,7 +747,7 @@ ${bookText}
 Antworte mit diesem JSON-Schema:
 {
   "beziehungen": [
-    { "von": "fig_1", "zu": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|patronage|geschaeft|andere", "machtverhaltnis": 0, "beschreibung": "1 Satz", "belege": [{ "kapitel": "Kapitelname", "seite": "Seitentitel" }] }
+    { "von": "fig_1", "zu": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|patronage|geschaeft|andere", "machtverhaltnis": 0, "beschreibung": "1 Satz", "belege": [{ "kapitel": "EXAKT der ## Kapitel-Header", "seite": "EXAKT ein ### Seiten-Header aus dem Kapitel – NIE der Kapitelname; leer wenn unklar" }] }
   ]
 }
 
@@ -923,8 +923,8 @@ Antworte mit diesem JSON-Schema:
           "ereignis": "Was passierte – neutral und kanonisch formuliert, NICHT aus der Figurenperspektive. Ereignisse die mehrere Figuren betreffen MÜSSEN bei allen beteiligten Figuren identisch formuliert sein (z.B. 'Geburt von Maria' für Vater, Mutter und Kind – nicht 'Geburt seiner Tochter' oder 'Eigene Geburt').",
           "typ": "persoenlich|extern",
           "bedeutung": "Bedeutung für diese Figur (1 Satz, leer wenn nicht klar)",
-          "seite": "Name der Seite/des Abschnitts (leer wenn unklar)",
-          "kapitel": "Kapitelname (aus dem ## Kapitel-Header über diesem Abschnitt; leer wenn unklar)"
+          "seite": "EXAKT einer der ### Seiten-Header aus dem aktuellen ## Kapitel (wortwörtlich). NIE der ## Kapitelname. Leer wenn unklar.",
+          "kapitel": "EXAKT der ## Kapitel-Header über diesem Abschnitt (nicht ### Seiten-Header); leer wenn unklar"
         }
       ]
     }
@@ -992,8 +992,8 @@ function buildKomplettSchemaFigurenOnly(kontext = '') {
           "ereignis": "Was passierte – neutral formuliert. Gleiches Ereignis bei allen beteiligten Figuren identisch.",
           "typ": "persoenlich|extern",
           "bedeutung": "Bedeutung für diese Figur (1 Satz, leer wenn nicht klar)",
-          "seite": "Seitentitel (leer wenn unklar)",
-          "kapitel": "Kapitelname (aus ## Header; leer wenn unklar)"
+          "seite": "EXAKT ein ### Seiten-Header aus dem aktuellen ## Kapitel. NIE der Kapitelname. Leer wenn unklar.",
+          "kapitel": "EXAKT der ## Kapitel-Header (nicht ###); leer wenn unklar"
         }
       ]
     }

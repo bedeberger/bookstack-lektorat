@@ -1,15 +1,4 @@
 // Alpine.data('fehlerHeatmapCard') — Sub-Komponente der Fehler-Heatmap.
-//
-// Teil der Migration von Root-Methoden-Spreads zu echten Alpine.data-Komponenten
-// (siehe CLAUDE.md und Refactoring-Plan).
-//
-// Scope-Regeln:
-//   - Fachlicher State (fehlerHeatmapData, fehlerHeatmapLoading,
-//     fehlerHeatmapStatus, fehlerHeatmapMode, activeFehlerDetailKey) lebt hier.
-//   - `showFehlerHeatmapCard` und `toggleFehlerHeatmapCard` bleiben im Root.
-//   - Root-State via window.__app (selectedBookId, uiLocale, pages, selectPage,
-//     pageHistory, activeHistoryEntryId, loadHistoryEntry, t).
-//   - Lifecycle-Events: `book:changed` + `view:reset` (siehe stil-card.js).
 
 import { fehlerHeatmapMethods } from '../fehler-heatmap.js';
 

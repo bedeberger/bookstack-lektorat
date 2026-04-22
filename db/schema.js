@@ -46,23 +46,48 @@ function cleanupStuckJobRuns() {
 // Ersetzt den gesamten Bestand für book/user.
 // ereignisse: Array aus KI-Antwort [{datum, ereignis, typ, bedeutung, kapitel[], seiten[], figuren[]}]
 // chNameToId: optionaler Map Kapitelname → chapter_id für stabile ID-Referenzen.
-function saveZeitstrahlEvents(bookId, userEmail, ereignisse, chNameToId = {}) {
+// pageNameToIdByChapter: optionaler Map chapter_id → (page_name → page_id) für
+// kapitel-scoped Auflösung der seiten-Einträge. Fehlt er, bleiben page_ids leer.
+function saveZeitstrahlEvents(bookId, userEmail, ereignisse, chNameToId = {}, pageNameToIdByChapter = null) {
   const now = new Date().toISOString();
   db.transaction(() => {
     db.prepare('DELETE FROM zeitstrahl_events WHERE book_id = ? AND user_email = ?').run(bookId, userEmail || '');
     const ins = db.prepare(`INSERT INTO zeitstrahl_events
-      (book_id, user_email, datum, ereignis, typ, bedeutung, kapitel, chapter_ids, seiten, figuren, sort_order, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      (book_id, user_email, datum, ereignis, typ, bedeutung, kapitel, chapter_ids, seiten, page_ids, figuren, sort_order, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     for (let i = 0; i < ereignisse.length; i++) {
       const ev = ereignisse[i];
       const kapitelArr = Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []);
       const chapIds = kapitelArr.map(n => chNameToId?.[n] ?? null).filter(id => id != null);
+      const seitenArr = Array.isArray(ev.seiten) ? ev.seiten : [];
+      // Seiten auflösen: erst in den Event-Kapiteln suchen (kapitel-scoped),
+      // dann Unambiguous-Match global. Halluzinations-Check: seite === kapitel → skip.
+      const pageIds = [];
+      if (pageNameToIdByChapter) {
+        for (const seite of seitenArr) {
+          if (!seite || kapitelArr.includes(seite) || seite === 'Sonstige Seiten') continue;
+          let pid = null;
+          for (const chId of chapIds) {
+            pid = pageNameToIdByChapter[chId]?.[seite] ?? null;
+            if (pid) break;
+          }
+          if (pid == null) {
+            const cand = [];
+            for (const m of Object.values(pageNameToIdByChapter)) {
+              if (m[seite]) cand.push(m[seite]);
+            }
+            if (cand.length === 1) pid = cand[0];
+          }
+          if (pid != null && !pageIds.includes(pid)) pageIds.push(pid);
+        }
+      }
       ins.run(
         bookId, userEmail || '',
         ev.datum || '', ev.ereignis || '', ev.typ || 'persoenlich', ev.bedeutung || null,
         kapitelArr.length ? JSON.stringify(kapitelArr) : null,
         chapIds.length    ? JSON.stringify(chapIds)    : null,
-        Array.isArray(ev.seiten) ? JSON.stringify(ev.seiten) : null,
+        seitenArr.length  ? JSON.stringify(seitenArr)  : null,
+        pageIds.length    ? JSON.stringify(pageIds)    : null,
         ev.figuren ? JSON.stringify(ev.figuren) : null,
         i, now
       );
@@ -75,11 +100,38 @@ function saveZeitstrahlEvents(bookId, userEmail, ereignisse, chNameToId = {}) {
 // (ON DELETE CASCADE) erhalten bleiben.
 // chNameToId: optionaler Map Kapitelname → chapter_id. Wird er nicht übergeben,
 // wird er aus der chapters-Tabelle aufgebaut (für UI-Endpunkt ohne Job-Kontext).
-function saveOrteToDb(bookId, orte, userEmail, chNameToId = null) {
+// pageNameToIdByChapter: optional. Fehlt er, wird er aus der pages-Tabelle
+// aufgebaut — kapitel-scoped gegen Namenskollisionen zwischen Kapiteln.
+function saveOrteToDb(bookId, orte, userEmail, chNameToId = null, pageNameToIdByChapter = null) {
   if (chNameToId == null) {
     const rows = db.prepare('SELECT chapter_id, chapter_name FROM chapters WHERE book_id = ?').all(bookId);
     chNameToId = Object.fromEntries(rows.map(r => [r.chapter_name, r.chapter_id]));
   }
+  if (pageNameToIdByChapter == null) {
+    const rows = db.prepare('SELECT page_id, page_name, chapter_id FROM pages WHERE book_id = ?').all(bookId);
+    pageNameToIdByChapter = {};
+    for (const r of rows) {
+      const k = r.chapter_id ?? 0;
+      (pageNameToIdByChapter[k] ??= {})[r.page_name] = r.page_id;
+    }
+  }
+  // Löst erste_erwaehnung einer Location auf eine konkrete page_id auf.
+  // Scope: Kapitel aus location_chapters (o.kapitel). Fallback: Unambiguous-Match.
+  const resolveErstePageIdForOrt = (ersteErwaehnung, kapitel) => {
+    if (!ersteErwaehnung) return null;
+    for (const k of (kapitel || [])) {
+      const chapId = chNameToId?.[k.name];
+      if (chapId != null) {
+        const pid = pageNameToIdByChapter[chapId]?.[ersteErwaehnung];
+        if (pid) return pid;
+      }
+    }
+    const cand = [];
+    for (const m of Object.values(pageNameToIdByChapter)) {
+      if (m[ersteErwaehnung]) cand.push(m[ersteErwaehnung]);
+    }
+    return cand.length === 1 ? cand[0] : null;
+  };
   const now = new Date().toISOString();
   const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
   const emailVal  = userEmail ? [userEmail] : [];
@@ -100,13 +152,13 @@ function saveOrteToDb(bookId, orte, userEmail, chNameToId = null) {
     }
 
     const upd = db.prepare(`
-      UPDATE locations SET name=?, typ=?, beschreibung=?, erste_erwaehnung=?, stimmung=?,
+      UPDATE locations SET name=?, typ=?, beschreibung=?, erste_erwaehnung=?, erste_erwaehnung_page_id=?, stimmung=?,
         sort_order=?, updated_at=?
       WHERE id=?`);
     const ins = db.prepare(`
-      INSERT INTO locations (book_id, loc_id, name, typ, beschreibung, erste_erwaehnung, stimmung,
+      INSERT INTO locations (book_id, loc_id, name, typ, beschreibung, erste_erwaehnung, erste_erwaehnung_page_id, stimmung,
         sort_order, user_email, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const delLf = db.prepare('DELETE FROM location_figures WHERE location_id = ?');
     const delLc = db.prepare('DELETE FROM location_chapters WHERE location_id = ?');
     const insLf = db.prepare('INSERT INTO location_figures (location_id, fig_id) VALUES (?, ?)');
@@ -114,18 +166,19 @@ function saveOrteToDb(bookId, orte, userEmail, chNameToId = null) {
 
     for (let i = 0; i < orte.length; i++) {
       const o = orte[i];
+      const erstPageId = resolveErstePageIdForOrt(o.erste_erwaehnung, o.kapitel);
       let locDbId = existingMap[o.id];
       if (locDbId !== undefined) {
         // integer id (und scene_locations) bleibt erhalten
         upd.run(o.name, o.typ || null, o.beschreibung || null,
-          o.erste_erwaehnung || null, o.stimmung || null,
+          o.erste_erwaehnung || null, erstPageId, o.stimmung || null,
           i, now, locDbId);
         delLf.run(locDbId);
         delLc.run(locDbId);
       } else {
         const { lastInsertRowid } = ins.run(
           bookId, o.id, o.name, o.typ || null, o.beschreibung || null,
-          o.erste_erwaehnung || null, o.stimmung || null,
+          o.erste_erwaehnung || null, erstPageId, o.stimmung || null,
           i, userEmail || null, now
         );
         locDbId = lastInsertRowid;

@@ -89,9 +89,9 @@ export const appViewMethods = {
     this.resetPage();
   },
 
-  // Karten-Toggles für migrierte Alpine.data-Sub-Komponenten: Root hält die
-  // `showXxxCard`-Flags (Single Source of Truth für Hash-Router + Exklusivität);
-  // die Sub-Komponente reagiert per $watch und lädt ihre Daten selbst.
+  // Karten-Toggles: Root hält die `showXxxCard`-Flags (Single Source of Truth
+  // für Hash-Router + Exklusivität); die Sub-Komponente reagiert per $watch
+  // und lädt ihre Daten selbst.
   toggleStilCard() {
     if (this.showStilCard) { this.showStilCard = false; return; }
     this._closeOtherMainCards('stil');
@@ -118,9 +118,8 @@ export const appViewMethods = {
     this.showUserSettingsCard = true;
   },
   // Abweichend von den anderen Toggles: erneuter Klick schliesst NICHT, sondern
-  // refresht die History (bildet das alte onOpenWhenOpen-Verhalten nach, das
-  // bei createJobFeature-basierten Karten aktiv war). Sub-Komponente lauscht
-  // auf `card:refresh` mit name='kontinuitaet'.
+  // refresht die History. Sub-Komponente lauscht auf `card:refresh`
+  // mit name='kontinuitaet'.
   toggleKontinuitaetCard() {
     if (this.showKontinuitaetCard) {
       window.dispatchEvent(new CustomEvent('card:refresh', { detail: { name: 'kontinuitaet' } }));
@@ -129,7 +128,6 @@ export const appViewMethods = {
     this._closeOtherMainCards('kontinuitaet');
     this.showKontinuitaetCard = true;
   },
-  // Erneuter Klick refresht statt zu schliessen (siehe kontinuitaetCard-Muster).
   async toggleEreignisseCard() {
     if (this.showEreignisseCard) {
       window.dispatchEvent(new CustomEvent('card:refresh', { detail: { name: 'ereignisse' } }));
@@ -137,8 +135,7 @@ export const appViewMethods = {
     }
     this._closeOtherMainCards('ereignisse');
     this.showEreignisseCard = true;
-    // Figuren werden für den Figur-Filter gebraucht — noch nicht in Sub-Komponente;
-    // Fallback-Load bleibt vorerst im Root.
+    // Figuren werden für den Figur-Filter gebraucht.
     if (!this.figuren.length) {
       await this.loadFiguren(this.selectedBookId);
     }
@@ -162,8 +159,6 @@ export const appViewMethods = {
     if (!this.figuren.length) await this.loadFiguren(this.selectedBookId);
     if (!this.orte.length) await this.loadOrte(this.selectedBookId);
   },
-  // Erneuter Klick refresht statt zu schliessen (bildet das alte
-  // createJobFeature-Verhalten nach).
   toggleFiguresCard() {
     if (this.showFiguresCard) {
       window.dispatchEvent(new CustomEvent('card:refresh', { detail: { name: 'figuren' } }));
@@ -182,10 +177,10 @@ export const appViewMethods = {
   },
   // Seiten-Chat: lebt neben dem Editor, schließt NICHT den Editor. Toggle
   // merkt sich checkDone-Snapshot (Chat soll Findings temporär verbergen).
+  // checkDoneBeforeChat wird in chat-base beim onVisible gesetzt.
   toggleChatCard() {
     if (this.showChatCard) {
       this.showChatCard = false;
-      // lektoratFindings bleiben in der Sub — hier nur Flags am Root:
       if (this._checkDoneBeforeChat && this.lektoratFindings?.length > 0) {
         this.checkDone = true;
         this._checkDoneBeforeChat = false;
@@ -193,9 +188,7 @@ export const appViewMethods = {
       return;
     }
     if (!this.currentPage) return;
-    // Seiten-Chat schliesst NICHT die anderen Karten — er läuft neben dem Editor.
     this.showChatCard = true;
-    // checkDoneBeforeChat wird in chat-base beim onVisible gesetzt.
   },
   // Buch-Chat: exklusive Hauptkarte wie alle anderen.
   toggleBookChatCard() {
@@ -207,8 +200,7 @@ export const appViewMethods = {
     this._closeOtherMainCards('bookChat');
     this.showBookChatCard = true;
   },
-  // Seitenwechsel: Seiten-Chat resetten (Chat ist pro Seite). Wird von
-  // resetPage() aufgerufen — dispatched an die Sub-Komponente.
+  // Seitenwechsel: Seiten-Chat resetten (Chat ist pro Seite).
   resetChat() {
     window.dispatchEvent(new CustomEvent('chat:reset'));
   },
@@ -279,45 +271,33 @@ export const appViewMethods = {
   // Setzt allen buchbezogenen State zurück. Wird bei Buchwechsel (Combobox,
   // Hash, programmatisch) aufgerufen, bevor `loadPages()` das neue Buch lädt.
   // Karten bleiben sichtbar — `_reloadVisibleBookCards()` füllt sie danach neu.
-  // Migrierte Alpine.data-Sub-Komponenten (z.B. stilCard) hören auf das
-  // `book:changed`-Event und resetten ihren eigenen State selbst.
+  // Sub-Komponenten hören auf das `book:changed`-Event und resetten/laden selbst.
   _resetBookScopedState() {
     window.dispatchEvent(new CustomEvent('book:changed', {
       detail: { bookId: this.selectedBookId },
     }));
-    // Datenarrays
     this.figuren = [];
     this.orte = [];
     this.szenen = [];
-    // bookStatsCard (bookStatsData, bookStatsCoverage, bookStatsDelta,
-    // writingTimeData): Sub-Komponente hört auf `book:changed` und lädt neu.
     this.globalZeitstrahl = [];
     this.bookReviewHistory = [];
-    // kapitelReviewCard: Sub-Komponente hört auf `book:changed` und resetet eigenen State.
     this.newPageTitle = '';
     this.newPageCreating = false;
     this.newPageError = '';
-    // chatCard + bookChatCard: Sub-Komponenten hören auf `book:changed` und resetten sich.
-    // kontinuitaetCard: Sub-Komponente hört auf `book:changed` und resetet.
     this.chapterFigures = [];
     this.pageHistory = [];
     this.activeHistoryEntryId = null;
     this.tokEsts = {};
     this._tokenEstGen++;
 
-    // Selektionen
     this.selectedFigurId = null;
     this.selectedOrtId = null;
-    // bookReviewCard: Sub-Komponente resetet selectedBookReviewId via book:changed.
     this.lastCheckId = null;
 
-    // Timestamps (figurenUpdatedAt lebt jetzt in figurenCard)
     this.szenenUpdatedAt = null;
     this.orteUpdatedAt = null;
 
-    // Buch-scoped Pollers stoppen (zielen sonst auf altes Buch).
-    // Migrierte Karten (kontinuitaet/ereignisse/orte/szenen) stoppen eigene
-    // Timer via book:changed-Handler in der Sub-Komponente.
+    // Root-gehaltene Pollers stoppen (zielen sonst auf altes Buch).
     const timers = [
       '_figuresPollTimer',
       '_komplettPollTimer',
@@ -336,20 +316,15 @@ export const appViewMethods = {
     this.alleAktualisierenTokOut = 0;
     this.alleAktualisierenTps = null;
     this.showKomplettStatus = false;
-
-    // Graph- und Chart-Zerstörung passiert in den Sub-Komponenten
-    // (figurenCard, bookStatsCard) via book:changed-Handler.
   },
 
   async _reloadVisibleBookCards() {
-    // Alle migrierten Sub-Komponenten (orte/szenen/ereignisse/kontinuitaet/
-    // bookStats/stil/fehlerHeatmap/bookSettings) laden selbst per book:changed-
-    // Event neu. `loadPages()` übernimmt den Rest (figuren + bookReviewHistory).
+    // Sub-Komponenten laden selbst per book:changed-Event.
+    // `loadPages()` übernimmt den Rest (figuren + bookReviewHistory).
   },
 
   // Setzt alles zurück: Seiten-Level (via resetPage) + Buch-Level.
-  // Migrierte Alpine.data-Sub-Komponenten hören auf `view:reset` und resetten
-  // ihren eigenen State selbst; der Root setzt nur noch die `showXxxCard`-Flags.
+  // Sub-Komponenten hören auf `view:reset` und resetten eigenen State.
   resetView() {
     window.dispatchEvent(new CustomEvent('view:reset'));
     this.resetPage();
@@ -359,8 +334,6 @@ export const appViewMethods = {
     this.showBookReviewCard = false;
     this.bookReviewHistory = [];
     this.showKapitelReviewCard = false;
-    // bookReviewCard + kapitelReviewCard: Sub-Komponenten hören auf `view:reset`
-    // und resetten Loading/Progress/Status/Out + Selektionen selbst.
     if (this._batchPollTimer) { clearInterval(this._batchPollTimer); this._batchPollTimer = null; }
     this.batchLoading = false;
     this.batchProgress = 0;
@@ -371,15 +344,12 @@ export const appViewMethods = {
     this.selectedFigurId = null;
     this.figurenFilters.kapitel = '';
     this.figurenFilters.seite = '';
-    // figurenCard: figurenUpdatedAt + Graph-Internals reseted die Sub-Komponente via `view:reset`.
     this.globalZeitstrahl = [];
     this.showGlobalZeitstrahl = false;
     this.showEreignisseCard = false;
     this.ereignisseFilters.figurId = '';
     this.ereignisseFilters.kapitel = '';
     this.ereignisseFilters.seite = '';
-    // ereignisseCard: Sub-Komponente hört auf `view:reset` und resetet eigenen
-    // State (Loading/Progress/Status, PollTimer).
     this.showSzenenCard = false;
     this.szenen = [];
     this.szenenUpdatedAt = null;
@@ -388,29 +358,19 @@ export const appViewMethods = {
     this.szenenFilters.kapitel = '';
     this.szenenFilters.seite = '';
     this.szenenFilters.ortId = '';
-    // szenenCard: Sub-Komponente hört auf `view:reset` (Loading/Progress/Status/Timer).
     if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
     this.showBookStatsCard = false;
-    // bookStatsCard: Sub-Komponente hört auf `view:reset` und resetet eigenen
-    // State (inkl. Chart.destroy + Theme-Observer.disconnect).
     this.showStilCard = false;
-    // stilCard: Sub-Komponente hört auf `view:reset` und resetet eigenen State.
     this.showFehlerHeatmapCard = false;
-    // fehlerHeatmapCard: Sub-Komponente hört auf `view:reset` und resetet eigenen State.
     this.showOrteCard = false;
     this.orte = [];
     this.orteFilters.figurId = '';
     this.orteFilters.kapitel = '';
     this.orteFilters.szeneId = '';
-    // orteCard: Sub-Komponente hört auf `view:reset` (Loading/Progress/Status/Timer).
     this.showKontinuitaetCard = false;
-    // kontinuitaetCard: Sub-Komponente hört auf `view:reset` und resetet
-    // eigenen State (inkl. Poll-Timer-Stop).
     if (this._komplettPollTimer) { clearInterval(this._komplettPollTimer); this._komplettPollTimer = null; }
     this.showBookSettingsCard = false;
     this.showUserSettingsCard = false;
-    // bookSettingsCard + userSettingsCard: Sub-Komponenten hören auf
-    // `view:reset` und resetten ihren eigenen State (Saved-/Error-Flags).
     this.alleAktualisierenLastRun = null;
     this.alleAktualisierenProgress = 0;
     this.alleAktualisierenTokIn = 0;

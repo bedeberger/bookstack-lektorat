@@ -732,7 +732,6 @@
   "job.phase.consolidatingTimeline": "Zeitstrahl konsolidieren…",
   "job.phase.loadingPages":          "Lade Seiten…",
   "job.phase.readingPages":          "Lese {from}–{to} von {total} Seiten…",
-  "job.phase.processingScenesContinuity": "Szenen verarbeiten und Kontinuität prüfen…",
   "job.phase.processingScenes":      "Szenen aus Extraktion verarbeiten…",
   "job.phase.savingScenes":          "Szenen speichern…",
   "job.phase.checkContinuity":       "KI prüft Kontinuität…",

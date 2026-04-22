@@ -23,6 +23,45 @@ function dedupRelations(relations, validIds) {
   return result;
 }
 
+// Auflösung der ersten Erwähnung einer Figur auf eine konkrete page_id:
+// 1. Versuche die Pages innerhalb der figure_appearances-Kapitel
+//    (kapitel-scoped, gegen Namenskollisionen gleichnamiger Seiten).
+// 2. Fallback: Unambiguous-Match über alle Kapitel (nur wenn der Seitenname
+//    genau einmal vorkommt).
+function resolveErstePageId(ersteErwaehnung, appearances, idMaps) {
+  if (!ersteErwaehnung || !idMaps?.pageNameToIdByChapter) return null;
+  for (const app of (appearances || [])) {
+    const chapId = idMaps.chNameToId?.[app.name];
+    if (chapId != null) {
+      const pid = idMaps.pageNameToIdByChapter[chapId]?.[ersteErwaehnung];
+      if (pid) return pid;
+    }
+  }
+  const candidates = [];
+  for (const m of Object.values(idMaps.pageNameToIdByChapter)) {
+    if (m[ersteErwaehnung]) candidates.push(m[ersteErwaehnung]);
+  }
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
+// Reichert einen Beziehungs-Beleg ({kapitel, seite}) um chapter_id / page_id an,
+// damit das Frontend Klick-Links ohne erneuten Namens-Match bauen kann.
+// LLM-Halluzination (seite === kapitel) wird wie bei Szenen genullt.
+function enrichBelegWithIds(beleg, idMaps) {
+  const chId = idMaps?.chNameToId?.[beleg.kapitel] ?? null;
+  const effSeite = (beleg.seite && beleg.seite !== beleg.kapitel && beleg.seite !== 'Sonstige Seiten')
+    ? beleg.seite : null;
+  const pId = effSeite
+    ? (idMaps?.pageNameToIdByChapter?.[chId ?? 0]?.[effSeite] ?? null)
+    : null;
+  return {
+    kapitel: beleg.kapitel || null,
+    seite: effSeite,
+    chapter_id: chId,
+    page_id: pId,
+  };
+}
+
 function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
   const now = new Date().toISOString();
   db.transaction(() => {
@@ -52,7 +91,10 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
       const zitate = Array.isArray(f.schluesselzitate) && f.schluesselzitate.length
         ? JSON.stringify(f.schluesselzitate.filter(Boolean).slice(0, 3))
         : null;
-      const erstPageId = idMaps?.pageNameToId?.[f.erste_erwaehnung] ?? null;
+      // erste_erwaehnung ist Freitext (kann Kapitel- ODER Seitenname sein).
+      // Auflösen: zuerst in den Kapiteln der Figur (figure_appearances) suchen,
+      // dann globaler Unambiguous-Match. Kein Name → null.
+      const erstPageId = resolveErstePageId(f.erste_erwaehnung, f.kapitel, idMaps);
       const { lastInsertRowid: fid } = insFig.run(
         bookId, f.id, f.name, f.kurzname || null, f.typ || null,
         f.geburtstag || null, f.geschlecht || null, f.beruf || null,
@@ -68,7 +110,9 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
       }
       for (const bz of (f.beziehungen || [])) {
         const belegeArr = Array.isArray(bz.belege)
-          ? bz.belege.filter(b => b && (b.kapitel || b.seite)).slice(0, 5)
+          ? bz.belege.filter(b => b && (b.kapitel || b.seite))
+              .slice(0, 5)
+              .map(b => enrichBelegWithIds(b, idMaps))
           : [];
         allRelations.push({
           from: f.id, to: bz.figur_id, typ: bz.typ,
@@ -103,7 +147,17 @@ function updateFigurenEvents(bookId, assignments, userEmail, idMaps) {
       if (!rowId) continue;
       for (let j = 0; j < (assignment.lebensereignisse || []).length; j++) {
         const ev = assignment.lebensereignisse[j];
-        insEvt.run(rowId, ev.datum || '', ev.ereignis || '', ev.bedeutung || null, ev.typ || 'persoenlich', ev.kapitel || null, ev.seite || null, idMaps?.chNameToId?.[ev.kapitel] ?? null, idMaps?.pageNameToId?.[ev.seite] ?? null, j);
+        const chId = idMaps?.chNameToId?.[ev.kapitel] ?? null;
+        // LLM-Halluzination: seite === kapitel (Kapitelname statt Seitentitel)
+        // oder chMap-Fallback «Sonstige Seiten» → seite nullen.
+        const effSeite = (ev.seite && ev.seite !== ev.kapitel && ev.seite !== 'Sonstige Seiten')
+          ? ev.seite : null;
+        // Kapitel-scoped page-id Lookup gegen Namenskollisionen zwischen Kapiteln.
+        const pageId = effSeite
+          ? (idMaps?.pageNameToIdByChapter?.[chId ?? 0]?.[effSeite] ?? null)
+          : null;
+        insEvt.run(rowId, ev.datum || '', ev.ereignis || '', ev.bedeutung || null,
+          ev.typ || 'persoenlich', ev.kapitel || null, effSeite, chId, pageId, j);
       }
     }
   })();
@@ -134,7 +188,7 @@ function updateFigurenSoziogramm(bookId, figurenSoziogramm, beziehungenMacht, us
  *  höchstens EINE Beziehung – wenn zwischen bz.von und bz.zu schon irgendeine
  *  Relation existiert, wird die neue verworfen. Zusätzlich: beide fig_ids
  *  müssen in figures existieren. */
-function addFigurenBeziehungen(bookId, beziehungen, userEmail) {
+function addFigurenBeziehungen(bookId, beziehungen, userEmail, idMaps) {
   const pairExists = db.prepare(
     'SELECT COUNT(*) as cnt FROM figure_relations WHERE book_id = ? AND ((from_fig_id = ? AND to_fig_id = ?) OR (from_fig_id = ? AND to_fig_id = ?)) AND user_email IS ?'
   );
@@ -156,7 +210,9 @@ function addFigurenBeziehungen(bookId, beziehungen, userEmail) {
       if (figExists.get(bookId, bz.von, em)?.cnt === 0) continue;
       if (figExists.get(bookId, bz.zu, em)?.cnt === 0) continue;
       const belegeArr = Array.isArray(bz.belege)
-        ? bz.belege.filter(x => x && (x.kapitel || x.seite)).slice(0, 5)
+        ? bz.belege.filter(x => x && (x.kapitel || x.seite))
+            .slice(0, 5)
+            .map(x => enrichBelegWithIds(x, idMaps))
         : [];
       const belege = belegeArr.length ? JSON.stringify(belegeArr) : null;
       ins.run(bookId, bz.von, bz.zu, bz.typ, bz.beschreibung || null, bz.machtverhaltnis ?? null, belege, em);

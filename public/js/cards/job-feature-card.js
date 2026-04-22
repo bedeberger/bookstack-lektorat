@@ -1,13 +1,7 @@
-// Sub-Komponenten-Variante von createJobFeature (app-jobs-core.js).
-//
-// Unterschiede zur Root-Version:
-//   - Kein `toggle` — die Root-Methode toggleXxxCard() ist Flag-Only.
-//   - `show` liegt am Root (Single Source of Truth für Hash-Router) —
-//     dort über `window.__app[show]`.
-//   - `loading`, `progress`, `status`, `out` sind lokal in der Sub-Komponente.
-//   - `this.t(…)`, `this.selectedBookId`, `this.selectedBookName` gehen über
-//     window.__app.
-//   - Polling via pure `startPoll(this, …)` statt Root-Methode.
+// Card-Variante von createJobFeature. `show` lebt am Root (Single Source of
+// Truth für Hash-Router), alle anderen Felder lokal auf der Card. Root-Zugriffe
+// gehen über window.__app. Kein toggle() — die Root-Methode toggleXxxCard()
+// setzt nur das Flag.
 
 import { fetchJson, escHtml } from '../utils.js';
 import { startPoll, runningJobStatus } from './job-helpers.js';
