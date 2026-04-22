@@ -904,8 +904,8 @@ Antworte mit diesem JSON-Schema:
   ${FAKTEN_SCHEMA},
   "szenen": [
     {
-      "seite": "Name der Seite/des Abschnitts (leer wenn unklar)",
-      "kapitel": "Kapitelname (aus dem ## Kapitel-Header über diesem Abschnitt; leer wenn unklar)",
+      "seite": "EXAKT einer der ### Seiten-Header aus dem aktuellen ## Kapitel – wortwörtlich kopieren inkl. Gross-/Kleinschreibung. NIEMALS den ## Kapitelnamen als seite verwenden. Leer lassen, wenn kein passender ### Header identifizierbar ist.",
+      "kapitel": "EXAKT der ## Kapitel-Header über diesem Abschnitt (nicht der ### Seiten-Header); leer wenn unklar",
       "titel": "Kurze Szenenbezeichnung (1 Satz)",
       "wertung": "stark|mittel|schwach",
       "kommentar": "1-2 Sätze: was funktioniert, was fehlt (Spannung, Tempo, Figurenentwicklung)",
@@ -957,6 +957,8 @@ ${FAKTEN_RULES}
 
 Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
+- seite MUSS EXAKT einem der ### Seiten-Header innerhalb des aktuellen ## Kapitels entsprechen (wortwörtlich, inkl. Gross-/Kleinschreibung und Satzzeichen). Wenn unklar: leer lassen. Der Kapitelname (## Header) ist NIE ein gültiger Wert für seite.
+- kapitel: exakt der ## Header des Kapitels
 - figuren_namen: aktiv beteiligte Figuren – Namen exakt wie im Text (vollständiger Name oder Spitzname); leeres Array wenn keine Figur beteiligt
 - orte_namen: Schauplatz der Szene – exakter Name wie im Text; leeres Array wenn kein konkreter Ort erwähnt
 - wertung: «stark» = überzeugend/spannend, «mittel» = verbesserungswürdig, «schwach» = klare Schwächen
@@ -1027,8 +1029,8 @@ function buildKomplettSchemaOrteSzenen(_kontext = '') {
   ${FAKTEN_SCHEMA},
   "szenen": [
     {
-      "seite": "Seitentitel (leer wenn unklar)",
-      "kapitel": "Kapitelname (aus ## Header; leer wenn unklar)",
+      "seite": "EXAKT ein ### Seiten-Header aus dem aktuellen ## Kapitel (wortwörtlich). NIE der ## Kapitelname. Leer wenn unklar.",
+      "kapitel": "EXAKT der ## Kapitel-Header (nicht ### Seiten-Header); leer wenn unklar",
       "titel": "Kurze Szenenbezeichnung (1 Satz)",
       "wertung": "stark|mittel|schwach",
       "kommentar": "1-2 Sätze: was funktioniert, was fehlt",
@@ -1044,6 +1046,7 @@ Kernregeln:
 - Keine Figuren-Stammdaten; figuren_namen nur als Klarname-Referenz in Szenen.
 - KONSERVATIV: Nur was eindeutig belegt ist.
 - kapitel[].name: aus ## Header oder Prompt-Kontext.
+- Szene.seite: EXAKT ein ### Header aus dem aktuellen ## Kapitel. NIE der Kapitelname. Im Zweifel leer.
 - Leere Arrays wenn nichts gefunden.`;
   }
   return `${schemaPart}
@@ -1054,6 +1057,7 @@ ${ORTE_RULES}
 ${FAKTEN_RULES}
 
 Szenen-Regeln:
+- seite MUSS EXAKT einem der ### Seiten-Header im aktuellen ## Kapitel entsprechen (wortwörtlich). NIEMALS den Kapitelnamen als seite. Bei Unklarheit: leer.
 - figuren_namen: Klarnamen exakt wie im Text; leeres Array wenn keine Figur beteiligt.
 - orte_namen: exakter Name wie im Text; leeres Array wenn kein konkreter Ort.`;
 }

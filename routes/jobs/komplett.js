@@ -399,9 +399,18 @@ function remapSzenen(chSzenen, figNameToId, figNameToIdLower, ortNameToId, ortNa
   const szenen = [];
   for (const { kapitel, szenen: chSz } of (chSzenen || [])) {
     for (const s of (chSz || [])) {
+      const effKapitel = (s.kapitel && chNameToId[s.kapitel] != null) ? s.kapitel : kapitel;
+      // LLM-Halluzination: Kapitelname als Seitentitel zurückgegeben, weil der
+      // echte Titel nicht erkannt wurde. Oder chMap-Fallback «Sonstige Seiten».
+      // In beiden Fällen `seite` nullen — sonst erscheint sie fälschlich als
+      // Filter-Option im Frontend.
+      let effSeite = s.seite || null;
+      if (effSeite && (effSeite === effKapitel || effSeite === 'Sonstige Seiten')) {
+        effSeite = null;
+      }
       szenen.push({
-        kapitel: (s.kapitel && chNameToId[s.kapitel] != null) ? s.kapitel : kapitel,
-        seite: s.seite || null,
+        kapitel: effKapitel,
+        seite: effSeite,
         titel: s.titel || '(unbekannt)',
         wertung: s.wertung || null,
         kommentar: s.kommentar || null,
@@ -468,11 +477,14 @@ function saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId,
     const insSf = db.prepare('INSERT INTO scene_figures (scene_id, fig_id) VALUES (?, ?)');
     const insSl = db.prepare('INSERT OR IGNORE INTO scene_locations (scene_id, location_id) VALUES (?, ?)');
     for (const s of szenen) {
+      const chapterId = idMaps.chNameToId[s.kapitel] ?? null;
+      const pageId = s.seite
+        ? (idMaps.pageNameToIdByChapter[chapterId ?? 0]?.[s.seite] ?? null)
+        : null;
       const { lastInsertRowid: sceneId } = ins.run(
         bookIdInt, email,
         s.kapitel, s.seite, s.titel, s.wertung, s.kommentar,
-        idMaps.chNameToId[s.kapitel] ?? null,
-        s.seite ? (idMaps.pageNameToId[s.seite] ?? null) : null,
+        chapterId, pageId,
         s.sort_order, now,
       );
       for (const fid of s.fig_ids) insSf.run(sceneId, fid);
@@ -1012,6 +1024,17 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     const idMaps = {
       chNameToId:   Object.fromEntries(chaptersData.map(c => [c.name, c.id])),
       pageNameToId: Object.fromEntries(pages.map(p => [p.name, p.id])),
+      // Kapitel-scoped Page-Lookup gegen Namenskollisionen: derselbe Seitenname
+      // kann in mehreren Kapiteln existieren (z.B. «Der Vater» als Kapitelname
+      // und als Page-Titel in einem anderen Kapitel). Key 0 = Seiten ohne Kapitel.
+      pageNameToIdByChapter: (() => {
+        const map = {};
+        for (const p of pages) {
+          const k = p.chapter_id ?? 0;
+          (map[k] ??= {})[p.name] = p.id;
+        }
+        return map;
+      })(),
     };
     invalidateRenamedChapterCaches(bookIdInt, chaptersData, log, jobId);
 
