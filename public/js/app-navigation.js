@@ -43,7 +43,7 @@ export const appNavigationMethods = {
       if (!this.showEreignisseCard) {
         await this.toggleEreignisseCard();
       }
-      this.ereignisseFilterKapitel = kapitel;
+      this.ereignisseFilters.kapitel = kapitel;
     } finally {
       this._endNavigation();
     }
@@ -55,10 +55,10 @@ export const appNavigationMethods = {
       if (!this.showEreignisseCard) {
         await this.toggleEreignisseCard();
       }
-      this.ereignisseFilterFigurId = figurId;
-      this.ereignisseFilterKapitel = '';
-      this.ereignisseFilterSeite = '';
-      this.ereignisseSuche = '';
+      this.ereignisseFilters.figurId = figurId;
+      this.ereignisseFilters.kapitel = '';
+      this.ereignisseFilters.seite = '';
+      this.ereignisseFilters.suche = '';
     } finally {
       this._endNavigation();
     }

@@ -22,23 +22,23 @@
 
   <!-- Filter -->
   <div x-show="globalZeitstrahl.length > 0" class="filter-bar">
-    <input type="text" x-model="ereignisseSuche" :placeholder="t('common.search')" class="filter-search-input">
+    <input type="text" x-model="ereignisseFilters.suche" :placeholder="t('common.search')" class="filter-search-input">
     <div x-data="combobox(t('filter.figur'), t('filter.allFiguren'))"
-         x-modelable="value" x-model="ereignisseFilterFigurId"
+         x-modelable="value" x-model="ereignisseFilters.figurId"
          x-effect="options = figuren.filter(f => globalZeitstrahl.some(ev => ev.figuren.some(fr => fr.id === f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
     <div x-data="combobox(t('filter.chapter'), t('filter.allChapters'))"
-         x-modelable="value" x-model="ereignisseFilterKapitel"
+         x-modelable="value" x-model="ereignisseFilters.kapitel"
          x-effect="options = ereignisseKapitelListe().map(k => ({value: k, label: k}))"
-         @combobox-change="ereignisseFilterSeite = ''"
+         @combobox-change="ereignisseFilters.seite = ''"
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
     <div x-data="combobox(t('filter.page'), t('filter.allPages'))"
-         x-modelable="value" x-model="ereignisseFilterSeite"
-         x-effect="_disabled = !ereignisseFilterKapitel || ereignisseSeitenListe().length === 0; options = ereignisseSeitenListe().map(s => ({value: s, label: s}))"
+         x-modelable="value" x-model="ereignisseFilters.seite"
+         x-effect="_disabled = !ereignisseFilters.kapitel || ereignisseSeitenListe().length === 0; options = ereignisseSeitenListe().map(s => ({value: s, label: s}))"
          @click.outside="close()" @keydown="onKeydown($event)"
          :class="{'combobox-wrap--disabled': _disabled}"
          class="combobox-wrap combobox-wrap--compact">

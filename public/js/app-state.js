@@ -217,10 +217,12 @@ const ereignisseState = () => ({
   ereignisseLoading: false,
   ereignisseProgress: 0,
   ereignisseStatus: '',
-  ereignisseFilterFigurId: '',
-  ereignisseFilterKapitel: '',
-  ereignisseFilterSeite: '',
-  ereignisseSuche: '',
+  ereignisseFilters: {
+    figurId: '',
+    kapitel: '',
+    seite: '',
+    suche: '',
+  },
   _consolidatePollTimer: null,
   _ereignisseExtractPollTimer: null,
 });

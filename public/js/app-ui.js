@@ -183,7 +183,7 @@ export const appUiMethods = {
   ereignisseSeitenListe() {
     return this._deriveSeiten(
       this.globalZeitstrahl,
-      this.ereignisseFilterKapitel,
+      this.ereignisseFilters.kapitel,
       ev => ev.kapitel,
       ev => Array.isArray(ev.seiten) ? ev.seiten : ev.seite,
     );
@@ -191,23 +191,23 @@ export const appUiMethods = {
 
   filteredEreignisse() {
     let result = this.globalZeitstrahl;
-    if (this.ereignisseSuche) {
-      const q = this.ereignisseSuche.toLowerCase();
+    if (this.ereignisseFilters.suche) {
+      const q = this.ereignisseFilters.suche.toLowerCase();
       result = result.filter(ev => (ev.ereignis || '').toLowerCase().includes(q));
     }
-    if (this.ereignisseFilterFigurId) {
-      result = result.filter(ev => ev.figuren.some(f => f.id === this.ereignisseFilterFigurId));
+    if (this.ereignisseFilters.figurId) {
+      result = result.filter(ev => ev.figuren.some(f => f.id === this.ereignisseFilters.figurId));
     }
-    if (this.ereignisseFilterKapitel) {
+    if (this.ereignisseFilters.kapitel) {
       result = result.filter(ev => {
         const kap = Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []);
-        return kap.includes(this.ereignisseFilterKapitel);
+        return kap.includes(this.ereignisseFilters.kapitel);
       });
     }
-    if (this.ereignisseFilterSeite && this.ereignisseFilterKapitel) {
+    if (this.ereignisseFilters.seite && this.ereignisseFilters.kapitel) {
       result = result.filter(ev => {
         const seiten = Array.isArray(ev.seiten) ? ev.seiten : (ev.seite ? [ev.seite] : []);
-        return seiten.includes(this.ereignisseFilterSeite);
+        return seiten.includes(this.ereignisseFilters.seite);
       });
     }
     return result;
