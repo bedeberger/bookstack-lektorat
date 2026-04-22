@@ -162,6 +162,16 @@ export const appViewMethods = {
     if (!this.figuren.length) await this.loadFiguren(this.selectedBookId);
     if (!this.orte.length) await this.loadOrte(this.selectedBookId);
   },
+  // Erneuter Klick refresht statt zu schliessen (bildet das alte
+  // createJobFeature-Verhalten nach).
+  toggleFiguresCard() {
+    if (this.showFiguresCard) {
+      window.dispatchEvent(new CustomEvent('card:refresh', { detail: { name: 'figuren' } }));
+      return;
+    }
+    this._closeOtherMainCards('figures');
+    this.showFiguresCard = true;
+  },
 
   async toggleTreeCard() {
     if (this.showTreeCard) { this.showTreeCard = false; this.resetPage(); return; }
@@ -270,8 +280,7 @@ export const appViewMethods = {
     this.selectedBookReviewId = null;
     this.lastCheckId = null;
 
-    // Timestamps
-    this.figurenUpdatedAt = null;
+    // Timestamps (figurenUpdatedAt lebt jetzt in figurenCard)
     this.szenenUpdatedAt = null;
     this.orteUpdatedAt = null;
 
@@ -298,9 +307,8 @@ export const appViewMethods = {
     this.alleAktualisierenTps = null;
     this.showKomplettStatus = false;
 
-    // Visualisierungen zerstören (bauen Graph/Chart sonst mit altem Buch-Daten auf)
-    if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
-    this._figurenHash = null;
+    // Graph- und Chart-Zerstörung passiert in den Sub-Komponenten
+    // (figurenCard, bookStatsCard) via book:changed-Handler.
   },
 
   async _reloadVisibleBookCards() {
@@ -334,10 +342,10 @@ export const appViewMethods = {
     this.showFiguresCard = false;
     this.figurenStatus = '';
     this.figurenProgress = 0;
-    this.figurenUpdatedAt = null;
     this.selectedFigurId = null;
     this.figurenFilters.kapitel = '';
     this.figurenFilters.seite = '';
+    // figurenCard: figurenUpdatedAt + Graph-Internals reseted die Sub-Komponente via `view:reset`.
     this.globalZeitstrahl = [];
     this.showGlobalZeitstrahl = false;
     this.showEreignisseCard = false;

@@ -1,7 +1,5 @@
 import { escPreserveStrong, fetchText } from './utils.js';
 
-const FIGUR_TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, andere: 4 };
-
 // Pure Filter-Logik für die Szenen-Liste. Getrennt von Alpine-Getter, damit
 // Unit-Tests den Page-/Kapitel-Filter direkt gegen Fixtures prüfen können —
 // besonders die Regression, dass der Seiten-Filter per `page_id` (Number) UND
@@ -138,47 +136,8 @@ export const appUiMethods = {
 
   // kontinuitaetKapitelListe() wandert in Alpine.data('kontinuitaetCard').
 
-  figurenKapitelListe() {
-    return this._deriveKapitel(this.figuren, f => f.kapitel);
-  },
-
-  figurenSeitenListe() {
-    // seiten ist ein Array von {kapitel, seite} — eigener Iterator nötig,
-    // weil _deriveSeiten eine Eins-zu-Eins-Relation annimmt.
-    if (!this.figurenFilters.kapitel) return [];
-    const names = new Set();
-    for (const f of (this.figuren || [])) {
-      for (const s of (f.seiten || [])) {
-        if (s.kapitel === this.figurenFilters.kapitel && s.seite) names.add(s.seite);
-      }
-    }
-    return this._sortByPageOrder([...names]);
-  },
-
-  filteredFiguren() {
-    let result = this.figuren;
-    const q = (this.figurenFilters.suche ?? '').toLowerCase();
-    if (q) result = result.filter(f => (f.name ?? '').toLowerCase().includes(q));
-    if (this.figurenFilters.kapitel) {
-      result = result.filter(f =>
-        (f.kapitel ?? []).some(k => k.name === this.figurenFilters.kapitel)
-      );
-    }
-    if (this.figurenFilters.seite) {
-      result = result.filter(f =>
-        (f.seiten ?? []).some(s => s.kapitel === this.figurenFilters.kapitel && s.seite === this.figurenFilters.seite)
-      );
-    }
-    return [...result].sort((a, b) => {
-      const aK = Math.min(...(a.kapitel ?? []).map(k => this._chapterIdx(k.name)), 9999);
-      const bK = Math.min(...(b.kapitel ?? []).map(k => this._chapterIdx(k.name)), 9999);
-      if (aK !== bK) return aK - bK;
-      const aT = FIGUR_TYP_ORDER[a.typ] ?? 99;
-      const bT = FIGUR_TYP_ORDER[b.typ] ?? 99;
-      if (aT !== bT) return aT - bT;
-      return (a.name ?? '').localeCompare(b.name ?? '', 'de');
-    });
-  },
+  // figurenKapitelListe / figurenSeitenListe / filteredFiguren wandern
+  // in Alpine.data('figurenCard') — siehe cards/figuren-card.js.
 
   // ereignisseKapitelListe / ereignisseSeitenListe / filteredEreignisse
   // wandern in Alpine.data('ereignisseCard') — siehe cards/ereignisse-card.js.

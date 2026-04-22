@@ -193,9 +193,10 @@ const kapitelReviewState = () => ({
 });
 
 const figurenState = () => ({
-  // `figuren` lebt in Alpine.store('catalog') — siehe cards/catalog-store.js.
-  // Der Root exponiert es als Getter/Setter (app.js) für Rückwärtskompatibilität.
-  figurenUpdatedAt: null,
+  // `figuren` lebt in Alpine.store('catalog').
+  // figurenUpdatedAt + Graph-Internals wandern in Alpine.data('figurenCard').
+  // Loading/Progress/Status + selectedFigurId + figurenFilters bleiben am Root
+  // (Hash-Router, app-navigation, checkPendingJobs-Reconnect).
   figurenLoading: false,
   figurenProgress: 0,
   figurenStatus: '',
@@ -205,8 +206,6 @@ const figurenState = () => ({
     seite: '',
     suche: '',
   },
-  _figurenNetwork: null,
-  _figurenHash: null,
   _figuresPollTimer: null,
 });
 

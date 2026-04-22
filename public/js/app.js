@@ -11,13 +11,14 @@ import { reviewMethods } from './review.js';
 import { kapitelReviewMethods } from './kapitel-review.js';
 import { figurenMethods } from './figuren.js';
 import { ereignisseMethods } from './ereignisse.js';
-import { graphMethods } from './graph.js';
+// graphMethods migriert nach Alpine.data('figurenCard') — siehe cards/figuren-card.js.
 import { registerBookStatsCard } from './cards/book-stats-card.js';
 import { writingTimeMethods } from './writing-time.js';
 import { registerCatalogStore } from './cards/catalog-store.js';
 import { registerEreignisseCard } from './cards/ereignisse-card.js';
 import { registerOrteCard } from './cards/orte-card.js';
 import { registerSzenenCard } from './cards/szenen-card.js';
+import { registerFigurenCard } from './cards/figuren-card.js';
 import { registerStilCard } from './cards/stil-card.js';
 import { registerFehlerHeatmapCard } from './cards/fehler-heatmap-card.js';
 import { chatMethods } from './chat.js';
@@ -124,6 +125,7 @@ document.addEventListener('alpine:init', () => {
   registerEreignisseCard();
   registerOrteCard();
   registerSzenenCard();
+  registerFigurenCard();
 
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
     open: false,
@@ -462,11 +464,7 @@ document.addEventListener('alpine:init', () => {
           await this.loadPages();
           await this._reloadVisibleBookCards();
         });
-        // Figurengraph/Soziogramm enthalten übersetzte Labels (Schicht, Beziehung, Figurentyp).
-        // Bei Sprachwechsel neu rendern – der Hash in renderFigurGraph() berücksichtigt uiLocale.
-        this.$watch('uiLocale', () => {
-          if (this.showFiguresCard && this.figuren?.length) this.renderFigurGraph();
-        });
+        // Figurengraph-Re-Render bei Sprachwechsel: Watch lebt in Alpine.data('figurenCard').
         this._startJobQueuePoll();
         this._setupWritingTime();
       } catch (e) {
@@ -486,7 +484,6 @@ document.addEventListener('alpine:init', () => {
     ...kapitelReviewMethods,
     ...figurenMethods,
     ...ereignisseMethods,
-    ...graphMethods,
     // bookstatsMethods migriert nach Alpine.data('bookStatsCard') — siehe cards/book-stats-card.js.
     // writingTimeMethods bleiben im Root: Schreibzeit-Heartbeat lauscht auf
     // editMode/focusMode (Editor-State ist Root-nah), läuft unabhängig von

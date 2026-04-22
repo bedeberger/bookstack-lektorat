@@ -1,5 +1,7 @@
-// Figurenübersicht-Methoden (werden in die Alpine-Komponente gespreadet)
-// `this` bezieht sich auf die Alpine-Komponente.
+// Figurenübersicht-Methoden. Bleiben im Root-Spread, weil sie von vielen
+// anderen Modulen (komplett.js, loadPages, ereignisseCard, kontinuitaetCard,
+// orteCard, szenenCard) via `$root.loadFiguren()` oder direkt am Root gerufen
+// werden. `this.figuren` geht über den Root-Proxy an Alpine.store('catalog').
 // Die eigentliche Extraktion läuft als Teil von POST /jobs/komplett-analyse.
 
 import { fetchJson } from './utils.js';
@@ -67,19 +69,5 @@ export const figurenMethods = {
     } catch (e) {
       console.error('[saveFiguren]', e);
     }
-  },
-
-  async toggleFiguresCard() {
-    if (this.showFiguresCard) {
-      await this.loadFiguren(this.selectedBookId);
-      await this.$nextTick();
-      this.renderFigurGraph();
-      return;
-    }
-    this._closeOtherMainCards('figures');
-    this.showFiguresCard = true;
-    await this.loadFiguren(this.selectedBookId);
-    await this.$nextTick();
-    this.renderFigurGraph();
   },
 };

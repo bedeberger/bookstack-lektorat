@@ -1,7 +1,9 @@
 import { escHtml } from './utils.js';
 
-// Graph-Render-Methoden (werden in die Alpine-Komponente gespreadet)
-// `this` bezieht sich auf die Alpine-Komponente.
+// Graph-Render-Methoden (werden in Alpine.data('figurenCard') gespreadet).
+// `this` zeigt auf die Sub-Komponente; Root-Zugriffe (figuren, uiLocale, t)
+// laufen über this.$root. vis-network-Instanz (_figurenNetwork) und
+// Graph-Modus-State leben direkt in der Sub — destroy() räumt beides auf.
 
 // Gemeinsamer Font für alle vis-Nodes.
 const DEFAULT_FONT = { size: 13, face: 'system-ui, -apple-system, sans-serif' };
@@ -74,11 +76,6 @@ const BZ_SOZIO_CAT = {
 const DIRECTED_TYPES = ['elternteil', 'kind', 'mentor', 'schuetzling', 'patronage'];
 
 export const graphMethods = {
-  // Reaktiver Modus-State (spread in Alpine-Data)
-  figurenGraphModus: 'figur',
-  figurenGraphKapitel: null,   // aktiver Kapitel-Filter (null = alle)
-  figurenGraphFullscreen: false,
-
   _figTypColor(typ) {
     const colors = {
       hauptfigur: { background: '#D4E8FF', border: '#2d6a9f', highlight: { background: '#BDD8FF', border: '#1d4b73' } },
@@ -98,7 +95,7 @@ export const graphMethods = {
   },
 
   figurenHasFamilyEdges() {
-    for (const f of (this.figuren || [])) {
+    for (const f of (this.$root.figuren || [])) {
       for (const bz of (f.beziehungen || [])) {
         if (['elternteil', 'kind', 'geschwister'].includes(bz.typ)) return true;
       }
@@ -122,14 +119,15 @@ export const graphMethods = {
   renderFigurGraph() {
     const container = document.getElementById('figuren-graph');
     if (!container) return;
+    const figuren = this.$root.figuren;
 
     // Cache-Hash: Figuren-IDs + Kapitelsignatur + Modus + Sprache. Kapitelsignatur sorgt
     // dafür, dass Häufigkeitsänderungen einer Figur einen Re-Render auslösen, selbst wenn
     // die ID-Liste gleich bleibt.
-    const kapSig = this.figuren.map(f =>
+    const kapSig = figuren.map(f =>
       f.id + ':' + (f.kapitel || []).map(k => k.name + k.haeufigkeit).join(',')
     ).join('|');
-    const hash = kapSig + '|' + this.figurenGraphModus + '|' + this.uiLocale;
+    const hash = kapSig + '|' + this.figurenGraphModus + '|' + this.$root.uiLocale;
     if (this._figurenNetwork && this._figurenHash === hash) return;
     this._figurenHash = hash;
 
@@ -137,12 +135,12 @@ export const graphMethods = {
       this._figurenNetwork.destroy();
       this._figurenNetwork = null;
     }
-    if (!this.figuren.length) {
-      container.innerHTML = `<span class="muted-msg muted-msg--block">${escHtml(this.t('graph.empty.figuren'))}</span>`;
+    if (!figuren.length) {
+      container.innerHTML = `<span class="muted-msg muted-msg--block">${escHtml(this.$root.t('graph.empty.figuren'))}</span>`;
       return;
     }
     if (typeof vis === 'undefined') {
-      container.innerHTML = `<span class="muted-msg muted-msg--block">${escHtml(this.t('graph.empty.visLoading'))}</span>`;
+      container.innerHTML = `<span class="muted-msg muted-msg--block">${escHtml(this.$root.t('graph.empty.visLoading'))}</span>`;
       return;
     }
 
@@ -161,6 +159,7 @@ export const graphMethods = {
   //   Presence-Bar unter jeder Figur zeigt Kapitel-für-Kapitel die Auftrittsdichte.
   //   Keine Physics, keine Zufälligkeit – jede Position ist aus den Daten ableitbar.
   _renderFigurengraph(container) {
+    const figuren = this.$root.figuren;
     const chapterOrder = this.figurenKapitelListe();
     const N = chapterOrder.length;
     const chapIdx = {};
@@ -180,7 +179,7 @@ export const graphMethods = {
     // Pro Figur: gewichteter x-Index, Ersterscheinung, Tier, Wichtigkeit
     const weight = k => Math.pow(k.haeufigkeit || 1, 1.5);
     const info = {};
-    for (const f of this.figuren) {
+    for (const f of figuren) {
       const kaps = (f.kapitel || []).filter(k => chapIdx[k.name] !== undefined);
       let xIdx = N > 1 ? (N - 1) / 2 : 0;
       let firstCh = Number.POSITIVE_INFINITY;
@@ -200,7 +199,7 @@ export const graphMethods = {
     // Tier-Buckets in fester Reihenfolge; nur belegte Tiers werden gerendert.
     const byTier = {};
     for (const t of TIER_ORDER) byTier[t] = [];
-    for (const f of this.figuren) byTier[info[f.id].tier].push(f);
+    for (const f of figuren) byTier[info[f.id].tier].push(f);
     const tiersUsed = TIER_ORDER.filter(t => byTier[t].length > 0);
 
     // Layout pro Tier: Figuren sitzen an ihrem tatsächlichen narrativen Schwerpunkt
@@ -336,7 +335,7 @@ export const graphMethods = {
         const midY = TIER_Y[t] + ((layoutPerTier[t].maxRows - 1) * ROW_H) / 2;
         const dom = network.canvasToDOM({ x: 0, y: midY });
         if (dom.y < -16 || dom.y > cHeight + 16) continue;
-        const label = this.t('figuren.type.' + t);
+        const label = this.$root.t('figuren.type.' + t);
         const tw    = ctx.measureText(label).width;
         const px = 6 * dpr, py = dom.y * dpr - 9 * dpr, pw = tw + 12 * dpr, ph = 18 * dpr, pr = 4 * dpr;
         ctx.fillStyle = 'rgba(255,255,255,0.88)';
@@ -354,7 +353,7 @@ export const graphMethods = {
     if (N > 0) {
       network.on('afterDrawing', ctx => {
         ctx.save();
-        for (const f of this.figuren) {
+        for (const f of figuren) {
           const bb = network.getBoundingBox(f.id);
           if (!bb) continue;
           const barW    = Math.max(bb.right - bb.left, 70);
@@ -406,16 +405,17 @@ export const graphMethods = {
 
   // ── Familienbaum (hierarchisches Layout, nur Familien-Edges) ────────────────
   _renderFamiliengraph(container) {
+    const figuren = this.$root.figuren;
     const { edgeList } = this._buildEdges(/* soziogrammModus */ false);
     const familyEdges = edgeList.filter(e => ['elternteil', 'kind', 'geschwister'].includes(e.typ));
     if (!familyEdges.length) {
-      container.innerHTML = `<span class="muted-msg muted-msg--block">${escHtml(this.t('graph.empty.familie'))}</span>`;
+      container.innerHTML = `<span class="muted-msg muted-msg--block">${escHtml(this.$root.t('graph.empty.familie'))}</span>`;
       return;
     }
     const familyIds = new Set();
     for (const e of familyEdges) { familyIds.add(e.from); familyIds.add(e.to); }
 
-    const nodes = new vis.DataSet(this.figuren.filter(f => familyIds.has(f.id)).map(f => ({
+    const nodes = new vis.DataSet(figuren.filter(f => familyIds.has(f.id)).map(f => ({
       id: f.id,
       label: nodeLabel(f),
       color: this._figTypColor(f.typ),
@@ -450,14 +450,15 @@ export const graphMethods = {
     // DataSets nicht alle Figuren-IDs → ein update() würde Geister-Nodes erzeugen.
     if (this.figurenGraphModus !== 'figur') return;
 
+    const figuren = this.$root.figuren;
     const existingIds = new Set(this._figurenNodes.getIds());
     const activeIds = new Set(
-      ch ? this.figuren.filter(f => (f.kapitel || []).some(k => k.name === ch)).map(f => f.id)
-         : this.figuren.map(f => f.id)
+      ch ? figuren.filter(f => (f.kapitel || []).some(k => k.name === ch)).map(f => f.id)
+         : figuren.map(f => f.id)
     );
 
     // Nodes: aktive = Originalfarbe, inaktive = ausgegraut
-    this._figurenNodes.update(this.figuren.filter(f => existingIds.has(f.id)).map(f => {
+    this._figurenNodes.update(figuren.filter(f => existingIds.has(f.id)).map(f => {
       if (!ch || activeIds.has(f.id)) {
         return {
           id: f.id,
@@ -484,11 +485,12 @@ export const graphMethods = {
 
   // ── Soziogramm (nach Sozialschicht gefärbt, Schicht-Rows, Machtpfeile) ──────
   _renderSoziogramm(container) {
+    const figuren = this.$root.figuren;
     // Guard: noch keine Sozialschichten vorhanden → Placeholder statt leerem Graph
-    const hasSchicht = this.figuren.some(f => f.sozialschicht && f.sozialschicht !== 'andere');
+    const hasSchicht = figuren.some(f => f.sozialschicht && f.sozialschicht !== 'andere');
     if (!hasSchicht) {
       if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
-      container.innerHTML = `<span class="muted-msg soziogramm-placeholder">${this.t('graph.empty.sozialschicht')}</span>`;
+      container.innerHTML = `<span class="muted-msg soziogramm-placeholder">${this.$root.t('graph.empty.sozialschicht')}</span>`;
       return;
     }
 
@@ -505,7 +507,7 @@ export const graphMethods = {
 
     // Knoten nach Schicht-Ebene gruppieren, innerhalb jeder Gruppe nach Macht sortieren (absteigend).
     const levelGroups = {};
-    for (const f of this.figuren) {
+    for (const f of figuren) {
       const lev = SCHICHT_LEVEL[f.sozialschicht] ?? SCHICHT_LEVEL.andere;
       (levelGroups[lev] ??= []).push(f);
     }
@@ -526,7 +528,7 @@ export const graphMethods = {
       });
     }
 
-    const nodes = new vis.DataSet(this.figuren.map(f => {
+    const nodes = new vis.DataSet(figuren.map(f => {
       const { x, y } = posById.get(f.id);
       const schichtStyle = SCHICHT_COLOR[f.sozialschicht] || SCHICHT_COLOR.andere;
       return {
@@ -561,7 +563,7 @@ export const graphMethods = {
 
     // Welche Schichten sind wirklich belegt? level → schicht
     const levelToSchicht = {};
-    for (const f of this.figuren) {
+    for (const f of figuren) {
       const lev = SCHICHT_LEVEL[f.sozialschicht] ?? SCHICHT_LEVEL.andere;
       if (!levelToSchicht[lev]) levelToSchicht[lev] = f.sozialschicht || 'andere';
     }
@@ -620,7 +622,7 @@ export const graphMethods = {
         const domY = network.canvasToDOM({ x: 0, y: Number(levStr) * LEVEL_Y_GAP }).y;
         if (domY < -16 || domY > ctx.canvas.height / dpr + 16) continue;
         // Hintergrund-Pill (rounded rect, compat-safe) – Koordinaten in Canvas-Pixeln (× dpr)
-        const label = this.t('figuren.schicht.' + schicht);
+        const label = this.$root.t('figuren.schicht.' + schicht);
         const tw    = ctx.measureText(label).width;
         const cY = domY * dpr;
         const px = 6 * dpr, py = cY - 9 * dpr, pw = tw + 12 * dpr, ph = 18 * dpr, pr = 4 * dpr;
@@ -648,12 +650,13 @@ export const graphMethods = {
 
   // ── Gemeinsame Kanten-Baulogik ───────────────────────────────────────────────
   _buildEdges(soziogrammModus) {
+    const figuren = this.$root.figuren;
     const edgeList = [];
     const addedPairs = new Set();
 
-    for (const f of this.figuren) {
+    for (const f of figuren) {
       for (const bz of (f.beziehungen || [])) {
-        const targetFigur = this.figuren.find(x => x.id == bz.figur_id);
+        const targetFigur = figuren.find(x => x.id == bz.figur_id);
         if (!targetFigur) continue;
         const toId = targetFigur.id;
 
@@ -664,7 +667,6 @@ export const graphMethods = {
         if (addedPairs.has(dedupeKey)) continue;
         addedPairs.add(dedupeKey);
 
-        const typLabel = this.t('figuren.bz.' + bz.typ);
         if (soziogrammModus) {
           // Soziogramm: Farbe nach Kategorie, Breite nach Machtasymmetrie, Pfeil nach machtverhaltnis
           const cat    = BZ_SOZIO_CAT[bz.typ] || 'sozial';
@@ -734,13 +736,13 @@ export const graphMethods = {
     const hideTip = () => tip.classList.remove('visible');
 
     this._figurenNetwork.on('hoverNode', ({ node, event }) => {
-      const f = this.figuren.find(x => x.id === node);
+      const f = this.$root.figuren.find(x => x.id === node);
       if (!f) return;
       // „Weitere" im Tooltip unterdrücken – der Tooltip blendet die Schichtzeile
       // nur ein, wenn es eine echte Zuordnung gibt.
       const schichtLabel = f.sozialschicht && f.sozialschicht !== 'andere'
-        ? this.t('figuren.schicht.' + f.sozialschicht) : '';
-      const typLabel = f.typ ? this.t('figuren.type.' + f.typ) : '';
+        ? this.$root.t('figuren.schicht.' + f.sozialschicht) : '';
+      const typLabel = f.typ ? this.$root.t('figuren.type.' + f.typ) : '';
       const html = `<strong>${escHtml(f.name)}</strong>`
         + `<em>${escHtml(typLabel)}${schichtLabel ? ' · ' + escHtml(schichtLabel) : ''}</em>`
         + (f.beschreibung ? `<p>${escHtml(f.beschreibung)}</p>` : '');
@@ -751,9 +753,9 @@ export const graphMethods = {
     this._figurenNetwork.on('hoverEdge', ({ edge, event }) => {
       const e = this._figurenEdges?.get(edge);
       if (!e) return;
-      const fromF = this.figuren.find(x => x.id === e.from);
-      const toF   = this.figuren.find(x => x.id === e.to);
-      const typLabel = this.t('figuren.bz.' + e.typ);
+      const fromF = this.$root.figuren.find(x => x.id === e.from);
+      const toF   = this.$root.figuren.find(x => x.id === e.to);
+      const typLabel = this.$root.t('figuren.bz.' + e.typ);
       const arrow = e.arrows === 'to' ? '→' : e.arrows === 'from' ? '←' : '↔';
       const pair = fromF && toF
         ? `${escHtml(fromF.kurzname || fromF.name)} ${arrow} ${escHtml(toF.kurzname || toF.name)}`
