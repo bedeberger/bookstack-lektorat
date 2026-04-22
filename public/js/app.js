@@ -12,7 +12,7 @@ import { kapitelReviewMethods } from './kapitel-review.js';
 import { figurenMethods } from './figuren.js';
 import { ereignisseMethods } from './ereignisse.js';
 import { graphMethods } from './graph.js';
-import { bookstatsMethods } from './bookstats.js';
+import { registerBookStatsCard } from './cards/book-stats-card.js';
 import { writingTimeMethods } from './writing-time.js';
 import { registerStilCard } from './cards/stil-card.js';
 import { registerFehlerHeatmapCard } from './cards/fehler-heatmap-card.js';
@@ -21,8 +21,8 @@ import { bookChatMethods } from './book-chat.js';
 import { szenenMethods } from './szenen.js';
 import { orteMethods } from './orte.js';
 import { kontinuitaetMethods } from './kontinuitaet.js';
-import { bookSettingsMethods } from './book-settings.js';
-import { userSettingsMethods } from './user-settings.js';
+import { registerBookSettingsCard } from './cards/book-settings-card.js';
+import { registerUserSettingsCard } from './cards/user-settings-card.js';
 import { configureI18n, i18nMethods, getSupportedLocales } from './i18n.js';
 import { pageViewMethods } from './page-view.js';
 import { editorEditMethods } from './editor-edit.js';
@@ -109,6 +109,9 @@ document.addEventListener('alpine:init', () => {
   // Migrierte Alpine.data-Sub-Komponenten (Fach-State aus der Root ausgelagert).
   registerStilCard();
   registerFehlerHeatmapCard();
+  registerBookStatsCard();
+  registerBookSettingsCard();
+  registerUserSettingsCard();
 
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
     open: false,
@@ -484,7 +487,10 @@ document.addEventListener('alpine:init', () => {
     ...figurenMethods,
     ...ereignisseMethods,
     ...graphMethods,
-    ...bookstatsMethods,
+    // bookstatsMethods migriert nach Alpine.data('bookStatsCard') — siehe cards/book-stats-card.js.
+    // writingTimeMethods bleiben im Root: Schreibzeit-Heartbeat lauscht auf
+    // editMode/focusMode (Editor-State ist Root-nah), läuft unabhängig von
+    // der bookStatsCard-Sichtbarkeit.
     ...writingTimeMethods,
     // stilMethods + fehlerHeatmapMethods migriert nach Alpine.data — siehe cards/.
     ...chatMethods,
@@ -492,8 +498,8 @@ document.addEventListener('alpine:init', () => {
     ...szenenMethods,
     ...orteMethods,
     ...kontinuitaetMethods,
-    ...bookSettingsMethods,
-    ...userSettingsMethods,
+    // bookSettingsMethods + userSettingsMethods migriert nach Alpine.data
+    // — siehe cards/book-settings-card.js + cards/user-settings-card.js.
     ...i18nMethods,
     ...pageViewMethods,
     ...editorEditMethods,

@@ -1,21 +1,26 @@
 <!-- Benutzer-Einstellungen -->
-<div class="card" x-show="showUserSettingsCard" x-cloak x-transition>
+<!--
+  Alpine.data-Sub-Komponente — siehe public/js/cards/user-settings-card.js.
+  `showUserSettingsCard` + `toggleUserSettingsCard` im Root, fachlicher State
+  (Profil, Default-Präferenzen, Reset-Zone) in dieser Komponente.
+-->
+<div class="card" x-data="userSettingsCard" x-show="$root.showUserSettingsCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="t('profile.title')"></span>
+    <span class="card-title" x-text="$root.t('profile.title')"></span>
     <div class="card-actions">
       <button type="button" @click="saveUserSettings()" :disabled="userSettingsSaving || userSettingsLoading">
         <span x-show="userSettingsSaving" class="spinner"></span>
-        <span x-text="userSettingsSaving ? t('common.saving') : t('common.save')"></span>
+        <span x-text="userSettingsSaving ? $root.t('common.saving') : $root.t('common.save')"></span>
       </button>
     </div>
   </div>
 
-  <div x-show="userSettingsLoading" class="muted-msg" x-text="t('common.loading')"></div>
+  <div x-show="userSettingsLoading" class="muted-msg" x-text="$root.t('common.loading')"></div>
 
   <div x-show="!userSettingsLoading" class="book-settings-form">
 
     <div class="book-settings-row">
-      <label class="book-settings-label" x-text="t('profile.account')"></label>
+      <label class="book-settings-label" x-text="$root.t('profile.account')"></label>
       <div class="user-settings-profile">
         <div><strong x-text="userSettingsProfile?.name || '—'"></strong></div>
         <div class="muted-msg muted-msg--sm" x-text="userSettingsProfile?.email || ''"></div>
@@ -23,59 +28,59 @@
     </div>
 
     <div class="book-settings-row">
-      <label class="book-settings-label" x-text="t('profile.bookstackToken')"></label>
+      <label class="book-settings-label" x-text="$root.t('profile.bookstackToken')"></label>
       <div class="book-settings-options">
-        <button type="button" @click="openTokenChange()" x-text="t('profile.changeToken')"></button>
+        <button type="button" @click="$root.openTokenChange()" x-text="$root.t('profile.changeToken')"></button>
       </div>
     </div>
 
     <div class="book-settings-row">
-      <label class="book-settings-label" x-text="t('profile.uiLanguage')"></label>
+      <label class="book-settings-label" x-text="$root.t('profile.uiLanguage')"></label>
       <div class="book-settings-options">
         <label class="book-settings-option">
-          <input type="radio" name="us-ui-lang" value="de" :checked="uiLocale === 'de'" @change="changeLocale('de')">
-          <span x-text="t('lang.de')"></span>
+          <input type="radio" name="us-ui-lang" value="de" :checked="$root.uiLocale === 'de'" @change="$root.changeLocale('de')">
+          <span x-text="$root.t('lang.de')"></span>
         </label>
         <label class="book-settings-option">
-          <input type="radio" name="us-ui-lang" value="en" :checked="uiLocale === 'en'" @change="changeLocale('en')">
-          <span x-text="t('lang.en')"></span>
+          <input type="radio" name="us-ui-lang" value="en" :checked="$root.uiLocale === 'en'" @change="$root.changeLocale('en')">
+          <span x-text="$root.t('lang.en')"></span>
         </label>
       </div>
     </div>
-    <p class="user-settings-section-note" x-text="t('profile.uiLanguageHint')"></p>
+    <p class="user-settings-section-note" x-text="$root.t('profile.uiLanguageHint')"></p>
 
-    <p class="user-settings-section-note" x-text="t('profile.newBooksHint')"></p>
+    <p class="user-settings-section-note" x-text="$root.t('profile.newBooksHint')"></p>
 
     <div class="book-settings-row">
-      <label class="book-settings-label" x-text="t('profile.defaultLanguage')"></label>
+      <label class="book-settings-label" x-text="$root.t('profile.defaultLanguage')"></label>
       <div class="book-settings-options">
         <label class="book-settings-option">
           <input type="radio" name="us-lang" value="" x-model="userSettingsDefaultLanguage" @change="userSettingsDefaultRegion = ''; userSettingsDefaultBuchtyp = ''">
-          <span x-text="t('common.notSet')"></span>
+          <span x-text="$root.t('common.notSet')"></span>
         </label>
         <label class="book-settings-option">
           <input type="radio" name="us-lang" value="de" x-model="userSettingsDefaultLanguage" @change="userSettingsDefaultRegion = 'CH'; userSettingsDefaultBuchtyp = ''">
-          <span x-text="t('lang.de')"></span>
+          <span x-text="$root.t('lang.de')"></span>
         </label>
         <label class="book-settings-option">
           <input type="radio" name="us-lang" value="en" x-model="userSettingsDefaultLanguage" @change="userSettingsDefaultRegion = 'US'; userSettingsDefaultBuchtyp = ''">
-          <span x-text="t('lang.en')"></span>
+          <span x-text="$root.t('lang.en')"></span>
         </label>
       </div>
     </div>
 
     <div class="book-settings-row" x-show="userSettingsDefaultLanguage">
-      <label class="book-settings-label" x-text="t('profile.defaultRegion')"></label>
+      <label class="book-settings-label" x-text="$root.t('profile.defaultRegion')"></label>
       <div class="book-settings-options">
         <template x-if="userSettingsDefaultLanguage === 'de'">
           <div class="book-settings-options">
             <label class="book-settings-option">
               <input type="radio" name="us-region" value="CH" x-model="userSettingsDefaultRegion">
-              <span x-text="t('region.de.CH')"></span>
+              <span x-text="$root.t('region.de.CH')"></span>
             </label>
             <label class="book-settings-option">
               <input type="radio" name="us-region" value="DE" x-model="userSettingsDefaultRegion">
-              <span x-text="t('region.de.DE')"></span>
+              <span x-text="$root.t('region.de.DE')"></span>
             </label>
           </div>
         </template>
@@ -83,11 +88,11 @@
           <div class="book-settings-options">
             <label class="book-settings-option">
               <input type="radio" name="us-region" value="US" x-model="userSettingsDefaultRegion">
-              <span x-text="t('region.en.US')"></span>
+              <span x-text="$root.t('region.en.US')"></span>
             </label>
             <label class="book-settings-option">
               <input type="radio" name="us-region" value="GB" x-model="userSettingsDefaultRegion">
-              <span x-text="t('region.en.GB')"></span>
+              <span x-text="$root.t('region.en.GB')"></span>
             </label>
           </div>
         </template>
@@ -95,26 +100,26 @@
     </div>
 
     <div class="book-settings-row" x-show="userSettingsDefaultLanguage">
-      <label class="book-settings-label" for="us-buchtyp" x-text="t('profile.defaultBuchtyp')"></label>
+      <label class="book-settings-label" for="us-buchtyp" x-text="$root.t('profile.defaultBuchtyp')"></label>
       <select id="us-buchtyp" class="book-settings-select" x-model="userSettingsDefaultBuchtyp">
-        <option value="" x-text="t('common.notSet')"></option>
+        <option value="" x-text="$root.t('common.notSet')"></option>
         <template x-for="typ in userSettingsBuchtypen()" :key="typ.key">
           <option :value="typ.key" x-text="typ.label"></option>
         </template>
       </select>
     </div>
 
-    <p class="book-settings-saved" x-show="userSettingsSaved" x-text="t('profile.savedMsg')"></p>
+    <p class="book-settings-saved" x-show="userSettingsSaved" x-text="$root.t('profile.savedMsg')"></p>
     <p class="book-settings-error" x-show="userSettingsError" x-text="userSettingsError"></p>
 
     <div class="book-settings-danger-zone">
-      <div class="book-settings-danger-title" x-text="t('profile.dangerZone')"></div>
+      <div class="book-settings-danger-title" x-text="$root.t('profile.dangerZone')"></div>
       <div class="book-settings-danger-row">
-        <div class="book-settings-danger-text" x-text="t('profile.dangerText')"></div>
+        <div class="book-settings-danger-text" x-text="$root.t('profile.dangerText')"></div>
         <div class="book-settings-danger-actions">
           <select class="book-settings-select" x-model="userSettingsDangerBookId">
-            <option value="" x-text="t('common.chooseBook')"></option>
-            <template x-for="b in books" :key="b.id">
+            <option value="" x-text="$root.t('common.chooseBook')"></option>
+            <template x-for="b in $root.books" :key="b.id">
               <option :value="b.id" x-text="b.name"></option>
             </template>
           </select>
@@ -123,7 +128,7 @@
             @click="resetBookHistory()"
             :disabled="bookHistoryResetLoading || !userSettingsDangerBookId">
             <span x-show="bookHistoryResetLoading" class="spinner"></span>
-            <span x-text="bookHistoryResetLoading ? t('common.deleting') : t('profile.dangerButton')"></span>
+            <span x-text="bookHistoryResetLoading ? $root.t('common.deleting') : $root.t('profile.dangerButton')"></span>
           </button>
         </div>
       </div>

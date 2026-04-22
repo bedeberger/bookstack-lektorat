@@ -1,45 +1,49 @@
 <!-- Buch-Einstellungen -->
-<div class="card" x-show="showBookSettingsCard" x-cloak x-transition>
+<!--
+  Alpine.data-Sub-Komponente — siehe public/js/cards/book-settings-card.js.
+  `showBookSettingsCard` bleibt im Root, fachlicher State in dieser Komponente.
+-->
+<div class="card" x-data="bookSettingsCard" x-show="$root.showBookSettingsCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="t('book.settings.title', { name: selectedBookName })"></span>
+    <span class="card-title" x-text="$root.t('book.settings.title', { name: $root.selectedBookName })"></span>
     <div class="card-actions">
       <button type="button" @click="saveBookSettings()" :disabled="bookSettingsSaving || bookSettingsLoading">
         <span x-show="bookSettingsSaving" class="spinner"></span>
-        <span x-text="bookSettingsSaving ? t('common.saving') : t('common.save')"></span>
+        <span x-text="bookSettingsSaving ? $root.t('common.saving') : $root.t('common.save')"></span>
       </button>
     </div>
   </div>
 
-  <div x-show="bookSettingsLoading" class="muted-msg" x-text="t('common.loading')"></div>
+  <div x-show="bookSettingsLoading" class="muted-msg" x-text="$root.t('common.loading')"></div>
 
   <div x-show="!bookSettingsLoading" class="book-settings-form">
 
     <div class="book-settings-row">
-      <label class="book-settings-label" x-text="t('book.settings.language')"></label>
+      <label class="book-settings-label" x-text="$root.t('book.settings.language')"></label>
       <div class="book-settings-options">
         <label class="book-settings-option">
           <input type="radio" name="bs-lang" value="de" x-model="bookSettingsLanguage" @change="bookSettingsRegion = (bookSettingsLanguage === 'de' ? 'CH' : 'US'); bookSettingsBuchtyp = ''">
-          <span x-text="t('lang.de')"></span>
+          <span x-text="$root.t('lang.de')"></span>
         </label>
         <label class="book-settings-option">
           <input type="radio" name="bs-lang" value="en" x-model="bookSettingsLanguage" @change="bookSettingsRegion = (bookSettingsLanguage === 'de' ? 'CH' : 'US'); bookSettingsBuchtyp = ''">
-          <span x-text="t('lang.en')"></span>
+          <span x-text="$root.t('lang.en')"></span>
         </label>
       </div>
     </div>
 
     <div class="book-settings-row">
-      <label class="book-settings-label" x-text="t('book.settings.region')"></label>
+      <label class="book-settings-label" x-text="$root.t('book.settings.region')"></label>
       <div class="book-settings-options">
         <template x-if="bookSettingsLanguage === 'de'">
           <div class="book-settings-options">
             <label class="book-settings-option">
               <input type="radio" name="bs-region" value="CH" x-model="bookSettingsRegion">
-              <span x-text="t('region.de.CH')"></span>
+              <span x-text="$root.t('region.de.CH')"></span>
             </label>
             <label class="book-settings-option">
               <input type="radio" name="bs-region" value="DE" x-model="bookSettingsRegion">
-              <span x-text="t('region.de.DE')"></span>
+              <span x-text="$root.t('region.de.DE')"></span>
             </label>
           </div>
         </template>
@@ -47,11 +51,11 @@
           <div class="book-settings-options">
             <label class="book-settings-option">
               <input type="radio" name="bs-region" value="US" x-model="bookSettingsRegion">
-              <span x-text="t('region.en.US')"></span>
+              <span x-text="$root.t('region.en.US')"></span>
             </label>
             <label class="book-settings-option">
               <input type="radio" name="bs-region" value="GB" x-model="bookSettingsRegion">
-              <span x-text="t('region.en.GB')"></span>
+              <span x-text="$root.t('region.en.GB')"></span>
             </label>
           </div>
         </template>
@@ -59,9 +63,9 @@
     </div>
 
     <div class="book-settings-row">
-      <label class="book-settings-label" for="bs-buchtyp" x-text="t('book.settings.buchtyp')"></label>
+      <label class="book-settings-label" for="bs-buchtyp" x-text="$root.t('book.settings.buchtyp')"></label>
       <select id="bs-buchtyp" class="book-settings-select" x-model="bookSettingsBuchtyp">
-        <option value="" x-text="t('book.settings.buchtyp.none')"></option>
+        <option value="" x-text="$root.t('book.settings.buchtyp.none')"></option>
         <template x-for="typ in bookSettingsBuchtypen()" :key="typ.key">
           <option :value="typ.key" x-text="typ.label"></option>
         </template>
@@ -69,40 +73,40 @@
     </div>
 
     <div class="book-settings-row">
-      <label class="book-settings-label" for="bs-pov" x-text="t('book.settings.pov')"></label>
+      <label class="book-settings-label" for="bs-pov" x-text="$root.t('book.settings.pov')"></label>
       <select id="bs-pov" class="book-settings-select" x-model="bookSettingsErzaehlperspektive">
-        <option value="" x-text="t('book.settings.pov.none')"></option>
-        <option value="ich" x-text="t('book.settings.pov.ich')"></option>
-        <option value="er_sie_personal" x-text="t('book.settings.pov.er_personal')"></option>
-        <option value="er_sie_auktorial" x-text="t('book.settings.pov.er_auktorial')"></option>
-        <option value="du" x-text="t('book.settings.pov.du')"></option>
-        <option value="wir" x-text="t('book.settings.pov.wir')"></option>
-        <option value="gemischt" x-text="t('book.settings.pov.gemischt')"></option>
+        <option value="" x-text="$root.t('book.settings.pov.none')"></option>
+        <option value="ich" x-text="$root.t('book.settings.pov.ich')"></option>
+        <option value="er_sie_personal" x-text="$root.t('book.settings.pov.er_personal')"></option>
+        <option value="er_sie_auktorial" x-text="$root.t('book.settings.pov.er_auktorial')"></option>
+        <option value="du" x-text="$root.t('book.settings.pov.du')"></option>
+        <option value="wir" x-text="$root.t('book.settings.pov.wir')"></option>
+        <option value="gemischt" x-text="$root.t('book.settings.pov.gemischt')"></option>
       </select>
     </div>
 
     <div class="book-settings-row">
-      <label class="book-settings-label" for="bs-tempus" x-text="t('book.settings.tempus')"></label>
+      <label class="book-settings-label" for="bs-tempus" x-text="$root.t('book.settings.tempus')"></label>
       <select id="bs-tempus" class="book-settings-select" x-model="bookSettingsErzaehlzeit">
-        <option value="" x-text="t('book.settings.tempus.none')"></option>
-        <option value="praeteritum" x-text="t('book.settings.tempus.praeteritum')"></option>
-        <option value="praesens" x-text="t('book.settings.tempus.praesens')"></option>
-        <option value="gemischt" x-text="t('book.settings.tempus.gemischt')"></option>
+        <option value="" x-text="$root.t('book.settings.tempus.none')"></option>
+        <option value="praeteritum" x-text="$root.t('book.settings.tempus.praeteritum')"></option>
+        <option value="praesens" x-text="$root.t('book.settings.tempus.praesens')"></option>
+        <option value="gemischt" x-text="$root.t('book.settings.tempus.gemischt')"></option>
       </select>
     </div>
 
     <p class="book-settings-hint"
        x-show="bookSettingsBuchtyp === 'kurzgeschichten' && (bookSettingsErzaehlperspektive || bookSettingsErzaehlzeit)"
-       x-text="t('book.settings.pov.kurzgeschichtenHint')"></p>
+       x-text="$root.t('book.settings.pov.kurzgeschichtenHint')"></p>
 
     <div class="book-settings-row book-settings-row--top">
-      <label class="book-settings-label" for="bs-buchkontext" x-text="t('book.settings.context')"></label>
+      <label class="book-settings-label" for="bs-buchkontext" x-text="$root.t('book.settings.context')"></label>
       <div class="book-settings-kontext-wrap">
         <textarea
           id="bs-buchkontext"
           class="book-settings-textarea"
           x-model="bookSettingsBuchKontext"
-          :placeholder="t('book.settings.contextPlaceholder')"
+          :placeholder="$root.t('book.settings.contextPlaceholder')"
           rows="4"
           maxlength="1000"
         ></textarea>
@@ -110,7 +114,7 @@
       </div>
     </div>
 
-    <p class="book-settings-saved" x-show="bookSettingsSaved" x-text="t('common.settingsSaved')"></p>
+    <p class="book-settings-saved" x-show="bookSettingsSaved" x-text="$root.t('common.settingsSaved')"></p>
     <p class="book-settings-error" x-show="bookSettingsError" x-text="bookSettingsError"></p>
   </div>
 </div>

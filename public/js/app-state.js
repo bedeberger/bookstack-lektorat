@@ -272,17 +272,8 @@ const kontinuitaetState = () => ({
   _kontinuitaetPollTimer: null,
 });
 
-const bookStatsState = () => ({
-  bookStatsData: [],
-  bookStatsLoading: false,
-  bookStatsSyncStatus: '',
-  bookStatsMetric: 'words',
-  bookStatsRange: 0,
-  bookStatsCoverage: null,
-  bookStatsDelta: null,
-  writingTimeData: null,
-  _statsChart: null,
-});
+// bookStatsState wandert in Alpine.data('bookStatsCard')
+// — siehe public/js/cards/book-stats-card.js.
 
 // stilState wandert in Alpine.data('stilCard') — siehe public/js/cards/stil-card.js.
 
@@ -323,30 +314,8 @@ const jobsState = () => ({
   alleAktualisierenTps: null,
 });
 
-const settingsState = () => ({
-  bookSettingsLanguage: 'de',
-  bookSettingsRegion: 'CH',
-  bookSettingsBuchtyp: '',
-  bookSettingsBuchKontext: '',
-  bookSettingsErzaehlperspektive: '',
-  bookSettingsErzaehlzeit: '',
-  bookSettingsLoading: false,
-  bookSettingsSaving: false,
-  bookSettingsSaved: false,
-  bookSettingsError: '',
-  bookHistoryResetLoading: false,
-  bookHistoryResetMessage: '',
-  bookHistoryResetError: '',
-  userSettingsProfile: null,
-  userSettingsDefaultLanguage: '',
-  userSettingsDefaultRegion: '',
-  userSettingsDefaultBuchtyp: '',
-  userSettingsDangerBookId: '',
-  userSettingsLoading: false,
-  userSettingsSaving: false,
-  userSettingsSaved: false,
-  userSettingsError: '',
-});
+// settingsState wandert in Alpine.data('bookSettingsCard') + ('userSettingsCard')
+// — siehe public/js/cards/book-settings-card.js + user-settings-card.js.
 
 export function initialLektoratState() {
   return {
@@ -365,9 +334,7 @@ export function initialLektoratState() {
     ...szenenState(),
     ...orteState(),
     ...kontinuitaetState(),
-    ...bookStatsState(),
     ...chatsState(),
     ...jobsState(),
-    ...settingsState(),
   };
 }

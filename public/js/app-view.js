@@ -102,6 +102,21 @@ export const appViewMethods = {
     this._closeOtherMainCards('fehlerHeatmap');
     this.showFehlerHeatmapCard = true;
   },
+  toggleBookStatsCard() {
+    if (this.showBookStatsCard) { this.showBookStatsCard = false; return; }
+    this._closeOtherMainCards('bookStats');
+    this.showBookStatsCard = true;
+  },
+  toggleBookSettingsCard() {
+    if (this.showBookSettingsCard) { this.showBookSettingsCard = false; return; }
+    this._closeOtherMainCards('bookSettings');
+    this.showBookSettingsCard = true;
+  },
+  toggleUserSettingsCard() {
+    if (this.showUserSettingsCard) { this.showUserSettingsCard = false; return; }
+    this._closeOtherMainCards('userSettings');
+    this.showUserSettingsCard = true;
+  },
 
   async toggleTreeCard() {
     if (this.showTreeCard) { this.showTreeCard = false; this.resetPage(); return; }
@@ -176,10 +191,8 @@ export const appViewMethods = {
     this.figuren = [];
     this.orte = [];
     this.szenen = [];
-    this.bookStatsData = [];
-    this.bookStatsCoverage = null;
-    this.bookStatsDelta = null;
-    this.writingTimeData = null;
+    // bookStatsCard (bookStatsData, bookStatsCoverage, bookStatsDelta,
+    // writingTimeData): Sub-Komponente hört auf `book:changed` und lädt neu.
     this.globalZeitstrahl = [];
     this.bookReviewHistory = [];
     this.kapitelReviewHistory = {};
@@ -251,11 +264,8 @@ export const appViewMethods = {
     // `loadPages()` lädt figuren + bookReviewHistory selbst — hier nur die übrigen.
     if (this.showOrteCard)       jobs.push(this.loadOrte(bookId));
     if (this.showSzenenCard)     jobs.push(this.loadSzenen(bookId));
-    if (this.showBookStatsCard)  jobs.push(this.loadBookStats(bookId));
-    // stilCard + fehlerHeatmapCard: Sub-Komponente lädt via $watch(selectedBookId) selbst neu.
-    if (this.showBookSettingsCard && typeof this.loadBookSettings === 'function') {
-      jobs.push(this.loadBookSettings());
-    }
+    // bookStatsCard + stilCard + fehlerHeatmapCard + bookSettingsCard:
+    // Sub-Komponente lädt per book:changed selbst neu.
     if (this.showEreignisseCard && typeof this._reloadZeitstrahl === 'function') {
       jobs.push(this._reloadZeitstrahl());
     }
@@ -319,9 +329,8 @@ export const appViewMethods = {
     if (this._szenenPollTimer) { clearInterval(this._szenenPollTimer); this._szenenPollTimer = null; }
     if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
     this.showBookStatsCard = false;
-    this.bookStatsData = [];
-    this.bookStatsSyncStatus = '';
-    if (this._statsChart) { this._statsChart.destroy(); this._statsChart = null; }
+    // bookStatsCard: Sub-Komponente hört auf `view:reset` und resetet eigenen
+    // State (inkl. Chart.destroy + Theme-Observer.disconnect).
     this.showStilCard = false;
     // stilCard: Sub-Komponente hört auf `view:reset` und resetet eigenen State.
     this.showFehlerHeatmapCard = false;
@@ -345,11 +354,9 @@ export const appViewMethods = {
     if (this._kontinuitaetPollTimer) { clearInterval(this._kontinuitaetPollTimer); this._kontinuitaetPollTimer = null; }
     if (this._komplettPollTimer) { clearInterval(this._komplettPollTimer); this._komplettPollTimer = null; }
     this.showBookSettingsCard = false;
-    this.bookSettingsSaved = false;
-    this.bookSettingsError = '';
     this.showUserSettingsCard = false;
-    this.userSettingsSaved = false;
-    this.userSettingsError = '';
+    // bookSettingsCard + userSettingsCard: Sub-Komponenten hören auf
+    // `view:reset` und resetten ihren eigenen State (Saved-/Error-Flags).
     this.alleAktualisierenLastRun = null;
     this.alleAktualisierenProgress = 0;
     this.alleAktualisierenTokIn = 0;

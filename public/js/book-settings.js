@@ -1,19 +1,15 @@
+// Buch-Einstellungen (Sprache, Region, Buchtyp, Perspektive, Zeit, Kontext).
+// `this` zeigt auf die Alpine.data('bookSettingsCard')-Sub-Komponente;
+// Zugriff auf Root-State (selectedBookId, promptConfig, tError) via this.$root.
+
 import { fetchJson } from './utils.js';
 
 export const bookSettingsMethods = {
-
-  async toggleBookSettingsCard() {
-    if (this.showBookSettingsCard) { await this.loadBookSettings(); return; }
-    this._closeOtherMainCards('bookSettings');
-    this.showBookSettingsCard = true;
-    await this.loadBookSettings();
-  },
-
   async loadBookSettings() {
-    if (!this.selectedBookId) return;
+    if (!this.$root.selectedBookId) return;
     this.bookSettingsLoading = true;
     try {
-      const data = await fetchJson(`/booksettings/${this.selectedBookId}`);
+      const data = await fetchJson(`/booksettings/${this.$root.selectedBookId}`);
       this.bookSettingsLanguage  = data.language    || 'de';
       this.bookSettingsRegion    = data.region      || 'CH';
       this.bookSettingsBuchtyp   = data.buchtyp     || '';
@@ -28,12 +24,12 @@ export const bookSettingsMethods = {
   },
 
   async saveBookSettings() {
-    if (!this.selectedBookId) return;
+    if (!this.$root.selectedBookId) return;
     this.bookSettingsSaving = true;
     this.bookSettingsSaved  = false;
     this.bookSettingsError  = '';
     try {
-      const r = await fetch(`/booksettings/${this.selectedBookId}`, {
+      const r = await fetch(`/booksettings/${this.$root.selectedBookId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -48,7 +44,7 @@ export const bookSettingsMethods = {
       if (!r.ok) {
         let data = null;
         try { data = await r.json(); } catch (_) {}
-        throw new Error(data ? this.tError(data) : `HTTP ${r.status}`);
+        throw new Error(data ? this.$root.tError(data) : `HTTP ${r.status}`);
       }
       this.bookSettingsSaved = true;
       setTimeout(() => { this.bookSettingsSaved = false; }, 3000);
@@ -72,7 +68,7 @@ export const bookSettingsMethods = {
   /** Gibt die Buchtyp-Liste für die aktuelle Sprache zurück (aus promptConfig). */
   bookSettingsBuchtypen() {
     const lang = this.bookSettingsLanguage || 'de';
-    const typen = this.promptConfig?.buchtypen?.[lang] || {};
+    const typen = this.$root.promptConfig?.buchtypen?.[lang] || {};
     return Object.entries(typen).map(([key, val]) => ({ key, label: val.label }));
   },
 };
