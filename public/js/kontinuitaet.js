@@ -103,8 +103,11 @@ export const kontinuitaetMethods = {
   },
 
   // Issues gefiltert nach UI-Filtern (figurId, kapitel). Reads figuren+tree
-  // from root. Ersetzt den gleichnamigen Getter, der vorher auf der Root lag.
-  get kontinuitaetIssuesFiltered() {
+  // from root. Muss eine Methode sein (keine `get`-Syntax): `kontinuitaetMethods`
+  // wird per `...spread` in die Alpine.data-Factory übernommen, und Spread ruft
+  // Getter auf und speichert nur den Wert — die Reaktivität auf Filter/Result
+  // ginge verloren, und der Wert wäre zur Spread-Zeit `[]`.
+  kontinuitaetIssuesFiltered() {
     const root = window.__app;
     const chapters = (root.tree || []).filter(t => t.type === 'chapter');
     const chapterNames = new Set(chapters.map(t => t.name));
@@ -138,7 +141,7 @@ export const kontinuitaetMethods = {
   kontinuitaetIssuesBySchwere() {
     if (!this.kontinuitaetResult?.issues) return { kritisch: [], mittel: [], niedrig: [] };
     const groups = { kritisch: [], mittel: [], niedrig: [] };
-    for (const issue of this.kontinuitaetIssuesFiltered) {
+    for (const issue of this.kontinuitaetIssuesFiltered()) {
       const s = issue.schwere || 'niedrig';
       if (groups[s]) groups[s].push(issue);
       else groups.niedrig.push(issue);

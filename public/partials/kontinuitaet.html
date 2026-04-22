@@ -32,7 +32,7 @@
          @click.outside="close()" @keydown="onKeydown($event)"
          class="combobox-wrap combobox-wrap--compact">
     </div>
-    <span class="filter-count" x-text="kontinuitaetResult ? kontinuitaetIssuesFiltered.length + ' / ' + kontinuitaetResult.issues.length : ''"></span>
+    <span class="filter-count" x-text="kontinuitaetResult ? kontinuitaetIssuesFiltered().length + ' / ' + kontinuitaetResult.issues.length : ''"></span>
   </div>
 
   <!-- Ergebnisse -->
@@ -45,7 +45,7 @@
       <!-- Keine Probleme -->
       <div x-show="kontinuitaetResult.issues?.length === 0" class="kontinuitaet-ok" x-text="$app.t('kontinuitaet.noIssues')"></div>
       <!-- Alle weggefiltert -->
-      <div x-show="kontinuitaetResult.issues?.length > 0 && kontinuitaetIssuesFiltered.length === 0" class="kontinuitaet-ok" x-text="$app.t('kontinuitaet.noMatch')"></div>
+      <div x-show="kontinuitaetResult.issues?.length > 0 && kontinuitaetIssuesFiltered().length === 0" class="kontinuitaet-ok" x-text="$app.t('kontinuitaet.noMatch')"></div>
 
       <!-- Probleme nach Schwere -->
       <template x-for="[severity, issues] in Object.entries(kontinuitaetIssuesBySchwere()).filter(([,v]) => v.length > 0)" :key="severity">
