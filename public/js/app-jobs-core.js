@@ -1,4 +1,5 @@
 import { escHtml, fmtTok, fetchJson } from './utils.js';
+import { startPoll as _startPollFn, runningJobStatus as _runningJobStatusFn } from './cards/job-helpers.js';
 
 // Factory für standard job-driven Feature-Cards (Review, Kontinuität,
 // Kapitel-Review, Figuren, …). Die Features folgen alle demselben Muster:
@@ -167,50 +168,20 @@ export function createJobFeature(cfg) {
 // Generische Job-Infrastruktur: Polling, Wiederaufnahme nach Tab-Wechsel,
 // Job-Queue-Sichtbarkeit. Von jedem Feature-Modul via `this.` referenziert.
 export const appJobsCoreMethods = {
-  // Generischer Job-Poller.
-  // config: { timerProp, jobId, lsKey?, progressProp?, onProgress, onNotFound, onError, onDone }
+  // Root-Wrapper: delegiert an die pure Helper (cards/job-helpers.js). Die
+  // Sub-Komponenten rufen die Funktionen direkt, der Root nutzt weiter `this._startPoll(…)`.
   _startPoll(config) {
-    if (this[config.timerProp]) clearInterval(this[config.timerProp]);
-    this[config.timerProp] = setInterval(async () => {
-      try {
-        const resp = await fetch('/jobs/' + config.jobId);
-        if (resp.status === 404) {
-          clearInterval(this[config.timerProp]);
-          this[config.timerProp] = null;
-          if (config.lsKey) localStorage.removeItem(config.lsKey);
-          config.onNotFound?.();
-          return;
-        }
-        if (!resp.ok) return;
-        const job = await resp.json();
-        if (config.progressProp) this[config.progressProp] = job.progress || 0;
-        if (job.status === 'running' || job.status === 'queued') { config.onProgress?.(job); return; }
-        clearInterval(this[config.timerProp]);
-        this[config.timerProp] = null;
-        if (config.lsKey) localStorage.removeItem(config.lsKey);
-        if (job.status === 'cancelled') { await config.onError?.(job); return; }
-        if (job.status === 'error') await config.onError?.(job);
-        else await config.onDone?.(job);
-      } catch (e) { console.error('[poll ' + config.timerProp + ']', e); }
-    }, 2000);
+    return _startPollFn(this, config);
   },
 
   _fmtTok(n) { return fmtTok(n || 0); },
 
-  // Generiertes Status-HTML für laufende Jobs: Spinner + statusText + Token-Info.
-  // Wird von review.js, figuren.js und lektorat.js (batchCheck) verwendet.
+  // Root-Wrapper für Status-HTML. Sub-Komponenten nutzen runningJobStatus() direkt.
   _runningJobStatus(statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams) {
-    let tokInfo = '';
-    if ((tokIn || 0) + (tokOut || 0) > 0) {
-      const pctPart = (progress > 0 && progress < 100) ? ` ~${progress}%` : '';
-      const tpsPart = tokPerSec ? ` · ${Math.round(tokPerSec)} tok/s` : '';
-      const inPart = (tokIn || 0) > 0 ? `↑${fmtTok(tokIn)} ` : '';
-      tokInfo = ` · ${inPart}↓${fmtTok(tokOut || 0)} Tokens${pctPart}${tpsPart}`;
-    }
-    // statusText kann ein i18n-Key sein (z.B. 'job.phase.extracting') oder freier Text.
-    // tRaw gibt unbekannte Keys 1:1 zurück, damit Legacy-Text pass-through funktioniert.
-    const label = statusText ? this.t(statusText, statusParams) : '…';
-    return `<span class="spinner"></span>${escHtml(label)}${tokInfo}`;
+    return _runningJobStatusFn(
+      (k, p) => this.t(k, p),
+      statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams,
+    );
   },
 
   async toggleJobStats() {
@@ -295,15 +266,15 @@ export const appJobsCoreMethods = {
   },
 
   // Prüft beim Laden eines Buchs ob noch ein Job aus einer früheren Session läuft
-  // (z.B. Tab versehentlich geschlossen während Analyse lief).
+  // (z.B. Tab versehentlich geschlossen während Analyse lief). Migrierte
+  // Sub-Komponenten lauschen auf `job:reconnect { type, jobId, job, extra? }`
+  // und stellen dort selbst ihren Loading/Progress/Status-State her.
   async checkPendingJobs(bookId) {
     await this._reconnectJob('lektorat_review_job_' + bookId, (job, jobId) => {
-      this.bookReviewLoading = true;
-      this.bookReviewProgress = job.progress || 0;
       this.showBookReviewCard = true;
-      this.bookReviewOut = '';
-      this.setReviewStatus(job.statusText ? this.t(job.statusText, job.statusParams) : this.t('common.analysisRunning'), true);
-      this.startReviewPoll(jobId);
+      window.dispatchEvent(new CustomEvent('job:reconnect', {
+        detail: { type: 'review', jobId, job },
+      }));
     });
 
     // Kapitel-Review: nur einen laufenden Job pro Buch reconnecten – erste
@@ -313,17 +284,15 @@ export const appJobsCoreMethods = {
       const lsKey = `lektorat_chapter_review_job_${bookId}_${item.id}`;
       const jobIdLs = localStorage.getItem(lsKey);
       if (!jobIdLs) continue;
+      let dispatched = false;
       await this._reconnectJob(lsKey, (job, jobId) => {
-        this.kapitelReviewLoading = true;
-        this.kapitelReviewProgress = job.progress || 0;
-        this.kapitelReviewChapterId = String(item.id);
-        this._kapitelReviewRunningChapterId = String(item.id);
         this.showKapitelReviewCard = true;
-        this.kapitelReviewOut = '';
-        this.setKapitelReviewStatus(job.statusText ? this.t(job.statusText, job.statusParams) : this.t('common.analysisRunning'), true);
-        this.startKapitelReviewPoll(jobId, item.id);
+        window.dispatchEvent(new CustomEvent('job:reconnect', {
+          detail: { type: 'kapitel-review', jobId, job, extra: { chapterId: item.id } },
+        }));
+        dispatched = true;
       });
-      if (this._kapitelReviewPollTimer) break;
+      if (dispatched) break;
     }
 
     await this._reconnectJob('lektorat_figures_job_' + bookId, (job, jobId) => {

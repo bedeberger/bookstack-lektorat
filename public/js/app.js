@@ -9,6 +9,8 @@ import { bookstackSearchMethods } from './bookstack-search.js';
 import { lektoratMethods } from './lektorat.js';
 import { reviewMethods } from './review.js';
 import { kapitelReviewMethods } from './kapitel-review.js';
+import { registerBookReviewCard } from './cards/book-review-card.js';
+import { registerKapitelReviewCard } from './cards/kapitel-review-card.js';
 import { figurenMethods } from './figuren.js';
 import { ereignisseMethods } from './ereignisse.js';
 // graphMethods migriert nach Alpine.data('figurenCard') — siehe cards/figuren-card.js.
@@ -126,6 +128,8 @@ document.addEventListener('alpine:init', () => {
   registerOrteCard();
   registerSzenenCard();
   registerFigurenCard();
+  registerBookReviewCard();
+  registerKapitelReviewCard();
 
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
     open: false,

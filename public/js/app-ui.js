@@ -34,11 +34,7 @@ export const appUiMethods = {
     }
   },
 
-  setReviewStatus(msg, spinner = false) {
-    this.bookReviewStatus = spinner
-      ? `<span class="spinner"></span>${msg}`
-      : msg;
-  },
+  // setReviewStatus wandert in Alpine.data('bookReviewCard') (._writeBookReviewStatus).
 
   // ── Sort helpers (use persistent order maps from loadPages) ─────────────
   _chapterIdx(name) { return this._chapterOrderMap?.get(name) ?? 9999; },

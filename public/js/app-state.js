@@ -168,29 +168,14 @@ const lektoratState = () => ({
 });
 
 const bookReviewState = () => ({
-  bookReviewOut: '',
-  bookReviewStatus: '',
-  bookReviewLoading: false,
-  bookReviewProgress: 0,
+  // Loading/Progress/Status/Out/selectedBookReviewId wandern in Alpine.data(
+  // 'bookReviewCard'). bookReviewHistory bleibt am Root (tree.js/loadPages
+  // schreibt, user-settings liest beim Danger-Reset).
   bookReviewHistory: [],
-  selectedBookReviewId: null,
-  _reviewPollTimer: null,
 });
 
-// Ein laufender Job pro Buch (nicht pro Kapitel) — `kapitelReviewChapterId`
-// hält das aktive Kapitel, `_kapitelReviewPollTimer` dessen Poller.
-// `kapitelReviewHistory` ist ein Dict `chapterId → [entry, ...]`.
-const kapitelReviewState = () => ({
-  kapitelReviewChapterId: '',
-  kapitelReviewLoading: false,
-  kapitelReviewProgress: 0,
-  kapitelReviewStatus: '',
-  kapitelReviewOut: '',
-  kapitelReviewHistory: {},
-  selectedKapitelReviewId: null,
-  _kapitelReviewPollTimer: null,
-  _kapitelReviewRunningChapterId: '',
-});
+// kapitelReview-State komplett in Alpine.data('kapitelReviewCard') migriert.
+const kapitelReviewState = () => ({});
 
 const figurenState = () => ({
   // `figuren` lebt in Alpine.store('catalog').

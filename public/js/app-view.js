@@ -250,14 +250,7 @@ export const appViewMethods = {
     // writingTimeData): Sub-Komponente hört auf `book:changed` und lädt neu.
     this.globalZeitstrahl = [];
     this.bookReviewHistory = [];
-    this.kapitelReviewHistory = {};
-    this.kapitelReviewOut = '';
-    this.kapitelReviewStatus = '';
-    this.kapitelReviewProgress = 0;
-    this.kapitelReviewLoading = false;
-    this.kapitelReviewChapterId = '';
-    this._kapitelReviewRunningChapterId = '';
-    this.selectedKapitelReviewId = null;
+    // kapitelReviewCard: Sub-Komponente hört auf `book:changed` und resetet eigenen State.
     this.newPageTitle = '';
     this.newPageCreating = false;
     this.newPageError = '';
@@ -277,7 +270,7 @@ export const appViewMethods = {
     // Selektionen
     this.selectedFigurId = null;
     this.selectedOrtId = null;
-    this.selectedBookReviewId = null;
+    // bookReviewCard: Sub-Komponente resetet selectedBookReviewId via book:changed.
     this.lastCheckId = null;
 
     // Timestamps (figurenUpdatedAt lebt jetzt in figurenCard)
@@ -290,7 +283,7 @@ export const appViewMethods = {
     const timers = [
       '_figuresPollTimer',
       '_chatPollTimer',
-      '_bookChatPollTimer', '_reviewPollTimer', '_kapitelReviewPollTimer', '_komplettPollTimer',
+      '_bookChatPollTimer', '_komplettPollTimer',
     ];
     for (const t of timers) {
       if (this[t]) { clearInterval(this[t]); this[t] = null; }
@@ -327,14 +320,10 @@ export const appViewMethods = {
     // Kapitel in der Sidebar bleiben geöffnet (kein c.open = false)
     this.showTreeCard = true;
     this.showBookReviewCard = false;
-    this.bookReviewOut = '';
-    this.bookReviewStatus = '';
     this.bookReviewHistory = [];
-    this.selectedBookReviewId = null;
     this.showKapitelReviewCard = false;
-    this.kapitelReviewOut = '';
-    this.kapitelReviewStatus = '';
-    this.selectedKapitelReviewId = null;
+    // bookReviewCard + kapitelReviewCard: Sub-Komponenten hören auf `view:reset`
+    // und resetten Loading/Progress/Status/Out + Selektionen selbst.
     if (this._batchPollTimer) { clearInterval(this._batchPollTimer); this._batchPollTimer = null; }
     this.batchLoading = false;
     this.batchProgress = 0;
