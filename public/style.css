@@ -48,10 +48,10 @@
   --color-err-text: #A32D2D;
   --color-err-border: #E24B4A;
   --color-style-border: #EF9F27;
-  --color-primary: #2d6a9f;
-  --color-primary-hover: #245a87;
-  --color-primary-light: #7eb8f0;
-  --color-accent: #c4a55a;
+  --color-primary: #1e3a5f;
+  --color-primary-hover: #16293d;
+  --color-primary-light: #6a8cb0;
+  --color-accent: #9a7f3e;
   --color-success: #34d399;
   --color-success-hover: #1D9E75;
   --color-ai-purple: #a78bfa;
@@ -67,12 +67,12 @@
 
   --color-card-bg: var(--color-surface);
   --color-neutral-bg: #e8e8e8;
-  --color-accent-bg: rgba(196, 165, 90, 0.15);
-  --color-accent-text: #7a5c00;
-  --color-accent-hover: rgba(196, 165, 90, 0.1);
-  --color-accent-soft: rgba(196, 165, 90, 0.07);
+  --color-accent-bg: rgba(154, 127, 62, 0.14);
+  --color-accent-text: #6e5a26;
+  --color-accent-hover: rgba(154, 127, 62, 0.09);
+  --color-accent-soft: rgba(154, 127, 62, 0.06);
   --color-err-light: #fc8181;
-  --color-running: #63b3ed;
+  --color-running: #2d6a9f;
 
   /* Schatten (vier Abstufungen) */
   --color-shadow-soft: rgba(0, 0, 0, 0.1);
@@ -106,8 +106,8 @@
   --color-mark-highlight: #fff3b0;
 
   /* Historie aktiv (auf Basis --color-primary) */
-  --color-history-active-bg: rgba(45, 106, 159, 0.08);
-  --color-history-active-bg-hover: rgba(45, 106, 159, 0.12);
+  --color-history-active-bg: rgba(30, 58, 95, 0.08);
+  --color-history-active-bg-hover: rgba(30, 58, 95, 0.14);
   --color-history-section-bg: #e8e6e0;
 
   /* Page-Content-View + Tooltip-Panels */
@@ -123,17 +123,17 @@
   /* Skeleton-Shimmer */
   --color-shimmer-from: #ccc;
 
-  /* Job-Queue-Footer (bleibt dauerhaft dunkel – Overlay-Look) */
-  --color-queue-bar-bg: rgba(28, 30, 35, 0.96);
-  --color-queue-border-subtle: rgba(255, 255, 255, 0.08);
-  --color-queue-pill-bg: rgba(255, 255, 255, 0.06);
-  --color-queue-pill-border: rgba(255, 255, 255, 0.1);
-  --color-queue-pill-bg-hover: rgba(255, 255, 255, 0.12);
-  --color-queue-pill-border-queued: rgba(255, 255, 255, 0.12);
-  --color-queue-pill-running-border: rgba(99, 179, 237, 0.4);
-  --color-queue-pill-running-bg: rgba(99, 179, 237, 0.08);
-  --color-queue-pill-text: #e2e8f0;
-  --color-separator-on-dark: rgba(255, 255, 255, 0.04);
+  /* Job-Queue-Footer – folgt Theme (Light: warme Crème, Dark: warmes Dunkelbraun) */
+  --color-queue-bar-bg: var(--color-surface);
+  --color-queue-border-subtle: var(--color-border);
+  --color-queue-pill-bg: var(--color-bg);
+  --color-queue-pill-border: var(--color-border);
+  --color-queue-pill-bg-hover: var(--color-hover);
+  --color-queue-pill-border-queued: var(--color-border);
+  --color-queue-pill-running-border: var(--color-primary-light);
+  --color-queue-pill-running-bg: var(--color-history-active-bg);
+  --color-queue-pill-text: var(--color-text);
+  --color-separator-on-dark: var(--color-border);
 
   /* Figuren-Palette – semantische Basisfarben.
      Jeder Figurentyp/Milieu/Beziehungstyp verwendet genau eine dieser Hues;
@@ -167,7 +167,11 @@
   --font-size-sm: 13px;
   --font-size-base: 14px;
   --font-size-md: 15px;
-  --font-size-lg: 22px;
+  --font-size-lg: 26px;
+
+  /* Schriftfamilien – Sans für UI, Serif für Überschriften + Reading-Column */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Source Serif 4', 'Iowan Old Style', 'Palatino', Georgia, serif;
 
   /* Default-Controlgrösse (vertikal) – geteilt von button,
      .combobox-trigger und input/select, damit Buttons, Dropdowns und
@@ -212,10 +216,10 @@
   --color-err-text: #ff9090;
   --color-err-border: #e85a58;
   --color-style-border: #f0ad44;
-  --color-primary: #6eb1e0;
-  --color-primary-hover: #a8d3ff;
-  --color-primary-light: #5a9acc;
-  --color-accent: #d8bc6e;
+  --color-primary: #7aa3ca;
+  --color-primary-hover: #a8c4e0;
+  --color-primary-light: #5a7a99;
+  --color-accent: #c9a961;
   --color-success: #4fd9aa;
   --color-success-hover: #6eead0;
   --color-ai-purple: #b7a3ff;
@@ -231,10 +235,10 @@
   --color-schwach-text: #ff9090;
 
   --color-neutral-bg: #2d2a25;
-  --color-accent-bg: rgba(216, 188, 110, 0.18);
-  --color-accent-text: #e5c780;
-  --color-accent-hover: rgba(216, 188, 110, 0.12);
-  --color-accent-soft: rgba(216, 188, 110, 0.07);
+  --color-accent-bg: rgba(201, 169, 97, 0.18);
+  --color-accent-text: #e0c070;
+  --color-accent-hover: rgba(201, 169, 97, 0.12);
+  --color-accent-soft: rgba(201, 169, 97, 0.07);
   /* err-light bleibt #fc8181 – funktioniert auf Dark */
 
   /* Schatten – deutlich kräftiger, damit Erhebungen auf Dark sichtbar bleiben */
@@ -268,8 +272,8 @@
   --color-mark-highlight: rgba(255, 243, 176, 0.25);
 
   /* Historie – Primary neu gewichtet */
-  --color-history-active-bg: rgba(110, 177, 224, 0.12);
-  --color-history-active-bg-hover: rgba(110, 177, 224, 0.2);
+  --color-history-active-bg: rgba(122, 163, 202, 0.12);
+  --color-history-active-bg-hover: rgba(122, 163, 202, 0.2);
   --color-history-section-bg: #2a2723;
 
   /* Page-View + Tooltip – leicht tiefer als surface für Staffelung */
@@ -283,7 +287,7 @@
   /* Skeleton-Shimmer auf Dark */
   --color-shimmer-from: #3a3a3a;
 
-  /* Queue-Footer bleibt dauerhaft dunkel – Tokens identisch, keine Overrides */
+  /* Queue-Footer folgt Theme über var()-Verkettung – keine Overrides nötig */
 
   /* Kontrast-Border (ersetzt altes --palette-black-Mapping) */
   --color-border-contrast: #d8d8d8;
@@ -297,24 +301,31 @@
 /* === Reset === */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* === Einheitlicher Fokus-Ring (Keyboard-only via :focus-visible) === */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Barrierefreiheit: Animationen bei System-Präferenz ausschalten */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* === Base === */
 html {
   background: var(--color-bg);
   scrollbar-gutter: stable;
 }
 
-/* Metric-adjusted Fallback: matcht Lato-Dimensionen, eliminiert Font-Swap-CLS. */
-@font-face {
-  font-family: 'Lato Fallback';
-  src: local('Arial');
-  size-adjust: 97.38%;
-  ascent-override: 101.3%;
-  descent-override: 21.9%;
-  line-gap-override: 0%;
-}
-
 body {
-  font-family: 'Lato', 'Lato Fallback', sans-serif;
+  font-family: var(--font-sans);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -335,8 +346,10 @@ body {
 }
 
 h1 {
+  font-family: var(--font-serif);
   font-size: var(--font-size-lg);
-  font-weight: 400;
+  font-weight: 500;
+  letter-spacing: -0.015em;
   margin-bottom: 0.25rem;
 }
 
@@ -979,7 +992,9 @@ body.focus-mode .session-banner--offline:hover { opacity: 1; }
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  margin-bottom: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
   flex-wrap: wrap;
 }
 
@@ -988,8 +1003,10 @@ body.focus-mode .session-banner--offline:hover { opacity: 1; }
 }
 
 .card-title {
-  font-weight: 400;
-  font-size: var(--font-size-md);
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 18px;
+  letter-spacing: -0.01em;
 }
 
 /* === Form elements === */
@@ -1138,9 +1155,11 @@ button {
   border: 0.5px solid var(--color-border-input);
   border-radius: var(--radius-md);
   background: transparent;
+  font: inherit;
   font-size: var(--font-size-base);
   cursor: pointer;
   color: var(--color-text);
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 button:hover { background: var(--color-hover); }
 button:active { transform: scale(0.98); }
@@ -1447,14 +1466,22 @@ ins {
 .page-content-view {
   max-height: var(--pcv-max-h, 60vh);
   overflow-y: auto;
-  padding: 16px 18px;
+  padding: 28px clamp(18px, 4vw, 40px);
   background: var(--color-page-view-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   margin: 12px 0;
-  line-height: 1.8;
-  font-size: 15px;
+  line-height: 1.7;
+  font-family: var(--font-serif);
+  font-size: 17px;
   color: var(--color-page-view-text);
+  hyphens: auto;
+}
+/* Reading-Column – Inhalt auf Buch-Mass zentrieren, Rahmen bleibt card-breit */
+.page-content-view > * {
+  max-width: 64ch;
+  margin-left: auto;
+  margin-right: auto;
 }
 .page-content-view h1 { font-size: 1.5em; margin: 0.6em 0 0.3em; font-weight: 700; }
 .page-content-view h2 { font-size: 1.3em; margin: 0.5em 0 0.3em; font-weight: 700; }
@@ -1613,7 +1640,7 @@ body.focus-mode .page-content-view--editing {
   border: none;
   outline: none;
   border-left: none;
-  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  font-family: var(--font-serif);
   font-size: 1.45rem;
   line-height: 1.85;
   color: var(--color-text);
@@ -2479,12 +2506,12 @@ body.focus-mode .edit-find { display: none !important; }
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px 8px 2px;
+  padding: 6px 10px 6px 2px;
   border: 0.5px solid transparent;
   border-radius: var(--radius-md);
   cursor: pointer;
   font-weight: 600;
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-base);
   color: var(--color-text);
   user-select: none;
   margin-bottom: 2px;
@@ -4733,8 +4760,8 @@ body.focus-mode .edit-find { display: none !important; }
 @media (min-width: 960px) {
   .layout {
     display: grid;
-    grid-template-columns: 340px 1fr;
-    gap: 0 1.5rem;
+    grid-template-columns: 280px 1fr;
+    gap: 0 1.75rem;
     align-items: start;
   }
 }
@@ -4880,8 +4907,7 @@ body.focus-mode .edit-find { display: none !important; }
   gap: 8px;
   flex-wrap: wrap;
   font-size: 12px;
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
+  box-shadow: 0 -2px 10px var(--color-shadow-soft);
 }
 .job-queue-label {
   color: var(--color-muted);
