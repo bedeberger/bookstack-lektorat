@@ -284,13 +284,7 @@ const bookStatsState = () => ({
   _statsChart: null,
 });
 
-const stilState = () => ({
-  stilData: null,
-  stilLoading: false,
-  stilSyncing: false,
-  stilStatus: '',
-  activeStilDetailKey: null,
-});
+// stilState wandert in Alpine.data('stilCard') — siehe public/js/cards/stil-card.js.
 
 const fehlerHeatmapState = () => ({
   fehlerHeatmapData: null,
@@ -377,7 +371,6 @@ export function initialLektoratState() {
     ...orteState(),
     ...kontinuitaetState(),
     ...bookStatsState(),
-    ...stilState(),
     ...fehlerHeatmapState(),
     ...chatsState(),
     ...jobsState(),

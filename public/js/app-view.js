@@ -89,6 +89,15 @@ export const appViewMethods = {
     this.resetPage();
   },
 
+  // Karten-Toggles für migrierte Alpine.data-Sub-Komponenten: Root hält die
+  // `showXxxCard`-Flags (Single Source of Truth für Hash-Router + Exklusivität);
+  // die Sub-Komponente reagiert per $watch und lädt ihre Daten selbst.
+  toggleStilCard() {
+    if (this.showStilCard) { this.showStilCard = false; return; }
+    this._closeOtherMainCards('stil');
+    this.showStilCard = true;
+  },
+
   async toggleTreeCard() {
     if (this.showTreeCard) { this.showTreeCard = false; this.resetPage(); return; }
     this._closeOtherMainCards('tree');
@@ -152,7 +161,12 @@ export const appViewMethods = {
   // Setzt allen buchbezogenen State zurück. Wird bei Buchwechsel (Combobox,
   // Hash, programmatisch) aufgerufen, bevor `loadPages()` das neue Buch lädt.
   // Karten bleiben sichtbar — `_reloadVisibleBookCards()` füllt sie danach neu.
+  // Migrierte Alpine.data-Sub-Komponenten (z.B. stilCard) hören auf das
+  // `book:changed`-Event und resetten ihren eigenen State selbst.
   _resetBookScopedState() {
+    window.dispatchEvent(new CustomEvent('book:changed', {
+      detail: { bookId: this.selectedBookId },
+    }));
     // Datenarrays
     this.figuren = [];
     this.orte = [];
@@ -233,7 +247,7 @@ export const appViewMethods = {
     if (this.showOrteCard)       jobs.push(this.loadOrte(bookId));
     if (this.showSzenenCard)     jobs.push(this.loadSzenen(bookId));
     if (this.showBookStatsCard)  jobs.push(this.loadBookStats(bookId));
-    if (this.showStilCard)       jobs.push(this.loadStilStats(bookId));
+    // stilCard: Sub-Komponente lädt via $watch(selectedBookId) selbst neu.
     if (this.showFehlerHeatmapCard) jobs.push(this.loadFehlerHeatmap());
     if (this.showBookSettingsCard && typeof this.loadBookSettings === 'function') {
       jobs.push(this.loadBookSettings());
@@ -245,7 +259,10 @@ export const appViewMethods = {
   },
 
   // Setzt alles zurück: Seiten-Level (via resetPage) + Buch-Level.
+  // Migrierte Alpine.data-Sub-Komponenten hören auf `view:reset` und resetten
+  // ihren eigenen State selbst; der Root setzt nur noch die `showXxxCard`-Flags.
   resetView() {
+    window.dispatchEvent(new CustomEvent('view:reset'));
     this.resetPage();
     this.clearBookstackSearch();
     // Kapitel in der Sidebar bleiben geöffnet (kein c.open = false)
@@ -302,11 +319,7 @@ export const appViewMethods = {
     this.bookStatsSyncStatus = '';
     if (this._statsChart) { this._statsChart.destroy(); this._statsChart = null; }
     this.showStilCard = false;
-    this.stilData = null;
-    this.stilStatus = '';
-    this.stilLoading = false;
-    this.stilSyncing = false;
-    this.activeStilDetailKey = null;
+    // stilCard: Sub-Komponente hört auf `view:reset` und resetet eigenen State.
     this.showFehlerHeatmapCard = false;
     this.fehlerHeatmapData = null;
     this.fehlerHeatmapStatus = '';

@@ -1,13 +1,18 @@
 <!-- Stil-Heatmap: Kapitel × Metrik. Klick auf eine Zelle öffnet Treffer-Beispiele. -->
-<div class="card" x-show="showStilCard" x-cloak x-transition>
+<!--
+  Alpine.data-Sub-Komponente — siehe public/js/cards/stil-card.js. Der
+  `showStilCard`-Flag bleibt im Root (Hash-Router, Exklusivität), fachlicher
+  State (stilData, stilLoading, …) lebt in dieser Komponente.
+-->
+<div class="card" x-data="stilCard" x-show="$root.showStilCard" x-cloak x-transition>
   <div class="card-header">
-    <span class="card-title" x-text="t('stil.title', { name: selectedBookName })"></span>
+    <span class="card-title" x-text="$root.t('stil.title', { name: $root.selectedBookName })"></span>
     <div class="card-actions">
       <span x-show="stilData?.last_updated && !stilSyncing && !stilLoading"
             class="card-timestamp" x-text="stilLastUpdatedLabel()"></span>
       <button type="button" @click="runStilSync()" :disabled="stilSyncing || stilLoading">
         <span x-show="stilSyncing" class="spinner"></span>
-        <span x-text="stilSyncing ? '' : t('stil.recompute')"></span>
+        <span x-text="stilSyncing ? '' : $root.t('stil.recompute')"></span>
       </button>
     </div>
   </div>
@@ -15,21 +20,21 @@
   <div x-show="stilStatus" class="card-status" x-html="stilStatus"></div>
 
   <div x-show="!stilLoading && !stilSyncing && (!stilData?.pages || stilData.pages.length === 0)"
-       class="muted-msg muted-msg--spaced" x-text="t('stil.emptyState')"></div>
+       class="muted-msg muted-msg--spaced" x-text="$root.t('stil.emptyState')"></div>
 
   <template x-if="stilData?.pages?.length > 0">
     <div class="heatmap-wrap">
-      <div class="heatmap-legend" x-text="t('stil.legend')"></div>
+      <div class="heatmap-legend" x-text="$root.t('stil.legend')"></div>
 
       <div class="heatmap-scroll">
         <table class="heatmap-table">
           <thead>
             <tr>
-              <th class="heatmap-rowhead" x-text="t('stil.chapter')"></th>
-              <th class="heatmap-numcol" x-text="t('stil.words')"></th>
+              <th class="heatmap-rowhead" x-text="$root.t('stil.chapter')"></th>
+              <th class="heatmap-numcol" x-text="$root.t('stil.words')"></th>
               <template x-for="m in stilMetricDefs" :key="m.key">
-                <th :title="t('stil.tip.' + m.key)">
-                  <span x-text="t(m.label)"></span>
+                <th :title="$root.t('stil.tip.' + m.key)">
+                  <span x-text="$root.t(m.label)"></span>
                 </th>
               </template>
             </tr>
@@ -39,9 +44,9 @@
               <tr>
                 <th class="heatmap-rowhead" scope="row">
                   <span class="heatmap-rowhead-main" x-text="c.name"></span>
-                  <span class="heatmap-rowhead-sub" x-text="t('stil.pagesCount', { n: c.pageCount })"></span>
+                  <span class="heatmap-rowhead-sub" x-text="$root.t('stil.pagesCount', { n: c.pageCount })"></span>
                 </th>
-                <td class="heatmap-numcol" x-text="(c.words || 0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH')"></td>
+                <td class="heatmap-numcol" x-text="(c.words || 0).toLocaleString($root.uiLocale === 'en' ? 'en-US' : 'de-CH')"></td>
                 <template x-for="m in stilMetricDefs" :key="m.key">
                   <td class="heatmap-cell"
                       :class="[
@@ -67,17 +72,17 @@
         <div class="heatmap-detail">
           <div class="heatmap-detail-header">
             <span class="heatmap-detail-title"
-                  x-text="t('stil.detail.title', {
+                  x-text="$root.t('stil.detail.title', {
                     metric: stilActiveDetail().metricLabel,
                     chapter: stilActiveDetail().chapterName,
                   })"></span>
             <button type="button" class="heatmap-detail-close"
                     @click="activeStilDetailKey = null"
-                    x-text="t('common.close')"></button>
+                    x-text="$root.t('common.close')"></button>
           </div>
           <div class="heatmap-detail-list">
             <template x-if="stilActiveDetail().entries.length === 0">
-              <div class="muted-msg" x-text="t('stil.detail.empty')"></div>
+              <div class="muted-msg" x-text="$root.t('stil.detail.empty')"></div>
             </template>
             <template x-for="page in stilActiveDetail().entries" :key="page.page_id">
               <div class="heatmap-detail-page">
@@ -85,7 +90,7 @@
                   <span class="tag internal-link"
                         @click="stilJumpToPage(page.page_id)"
                         x-text="page.page_name"></span>
-                  <span class="heatmap-detail-page-count" x-text="t('fehlerHeatmap.detail.countLabel', { n: page.count })"></span>
+                  <span class="heatmap-detail-page-count" x-text="$root.t('fehlerHeatmap.detail.countLabel', { n: page.count })"></span>
                 </div>
                 <template x-if="page.samples">
                   <div class="heatmap-detail-token-groups">

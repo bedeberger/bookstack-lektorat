@@ -14,7 +14,7 @@ import { ereignisseMethods } from './ereignisse.js';
 import { graphMethods } from './graph.js';
 import { bookstatsMethods } from './bookstats.js';
 import { writingTimeMethods } from './writing-time.js';
-import { stilMethods } from './stil-heatmap.js';
+import { registerStilCard } from './cards/stil-card.js';
 import { fehlerHeatmapMethods } from './fehler-heatmap.js';
 import { chatMethods } from './chat.js';
 import { bookChatMethods } from './book-chat.js';
@@ -33,7 +33,7 @@ import { figurLookupMethods } from './editor-figur-lookup.js';
 import { toolbarMethods } from './editor-toolbar.js';
 import { shortcutsMethods } from './shortcuts.js';
 import { initialLektoratState } from './app-state.js';
-import { appUiMethods } from './app-ui.js';
+import { appUiMethods, applySzenenFilters } from './app-ui.js';
 import { appChromeMethods } from './app-chrome.js';
 import { appKomplettMethods } from './app-komplett.js';
 import { appJobsCoreMethods } from './app-jobs-core.js';
@@ -106,6 +106,9 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('alpine:init', () => {
+  // Migrierte Alpine.data-Sub-Komponenten (Fach-State aus der Root ausgelagert).
+  registerStilCard();
+
   Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
     open: false,
     query: '',
@@ -279,15 +282,7 @@ document.addEventListener('alpine:init', () => {
       });
     },
     get szenenFiltered() {
-      const q = this.szenenFilters.suche ? this.szenenFilters.suche.toLowerCase() : '';
-      return this.szenen.filter(s =>
-        (!q || (s.titel || '').toLowerCase().includes(q)) &&
-        (!this.szenenFilters.wertung || s.wertung === this.szenenFilters.wertung) &&
-        (!this.szenenFilters.figurId || (s.fig_ids || []).includes(this.szenenFilters.figurId)) &&
-        (!this.szenenFilters.kapitel || s.kapitel === this.szenenFilters.kapitel) &&
-        (!this.szenenFilters.seite || s.seite === this.szenenFilters.seite) &&
-        (!this.szenenFilters.ortId || (s.ort_ids || []).includes(this.szenenFilters.ortId))
-      ).sort((a, b) => {
+      return applySzenenFilters(this.szenen, this.szenenFilters).sort((a, b) => {
         const c = this._chapterIdx(a.kapitel) - this._chapterIdx(b.kapitel);
         if (c !== 0) return c;
         const p = this._pageIdx(a.seite) - this._pageIdx(b.seite);
@@ -490,7 +485,7 @@ document.addEventListener('alpine:init', () => {
     ...graphMethods,
     ...bookstatsMethods,
     ...writingTimeMethods,
-    ...stilMethods,
+    // stilMethods migriert nach Alpine.data('stilCard') — siehe cards/stil-card.js.
     ...fehlerHeatmapMethods,
     ...chatMethods,
     ...bookChatMethods,

@@ -98,7 +98,7 @@ kapitelRouter.post('/chapter-review', jsonBody, (req, res) => {
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = chapter_name ? 'job.label.chapterReviewChapter' : 'job.label.chapterReview';
   const labelParams = chapter_name ? { name: chapter_name } : null;
-  const jobId = createJob('chapter-review', chapter_id, userEmail, label, labelParams);
+  const jobId = createJob('chapter-review', book_id, userEmail, label, labelParams, chapter_id);
   enqueueJob(jobId, () => runChapterReviewJob(
     jobId, book_id, chapter_id, chapter_name || '', book_name || '', userEmail, userToken,
   ));

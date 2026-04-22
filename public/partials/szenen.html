@@ -84,7 +84,7 @@
       <template x-if="szenenFilters.kapitel && szenenSeitenListe().length > 0">
         <div x-data="combobox(t('filter.page'), t('filter.allPages'))"
              x-modelable="value" x-model="szenenFilters.seite"
-             x-effect="options = szenenSeitenListe().map(s => ({value: s, label: s}))"
+             x-effect="options = szenenSeitenListe()"
              @click.outside="close()" @keydown="onKeydown($event)"
              class="combobox-wrap combobox-wrap--compact">
         </div>

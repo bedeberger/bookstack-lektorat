@@ -93,10 +93,14 @@ function i18nError(key, params = null) {
 // der Client ihn abfragen können.
 const CLEANUP_DELAY_MS = 2 * 60 * 60 * 1000;
 
+function jobDedupKey(job) {
+  return jobKey(job.type, job.dedupId ?? job.bookId, job.userEmail);
+}
+
 function _scheduleJobCleanup(id) {
   const job = jobs.get(id);
   if (!job) return;
-  const key = jobKey(job.type, job.bookId, job.userEmail);
+  const key = jobDedupKey(job);
   const timer = setTimeout(() => {
     jobs.delete(id);
     if (runningJobs.get(key) === id) runningJobs.delete(key);
@@ -104,11 +108,12 @@ function _scheduleJobCleanup(id) {
   timer.unref?.(); // blockiert den Prozess-Exit nicht
 }
 
-function createJob(type, bookId, userEmail, label, labelParams = null) {
+function createJob(type, bookId, userEmail, label, labelParams = null, dedupId = null) {
   const id = randomUUID();
-  const key = jobKey(type, bookId, userEmail);
+  const dedupValue = dedupId != null ? String(dedupId) : null;
+  const key = jobKey(type, dedupValue ?? bookId, userEmail);
   jobs.set(id, {
-    id, type, bookId: String(bookId), userEmail: userEmail || null,
+    id, type, bookId: String(bookId), dedupId: dedupValue, userEmail: userEmail || null,
     label: label || null,
     labelParams: labelParams || null,
     status: 'queued', progress: 0, statusText: 'job.queued', statusParams: null,
@@ -152,7 +157,7 @@ function completeJob(id, result, tokensPerSec = null) {
   if (!job) return;
   Object.assign(job, { status: 'done', progress: 100, result, tokensPerSec, endedAt: new Date().toISOString() });
   try { endJobRun(id, 'done', job.endedAt, job.tokensIn, job.tokensOut, tokensPerSec, null); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
-  runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
+  runningJobs.delete(jobDedupKey(job));
   jobAbortControllers.delete(id);
   _scheduleJobCleanup(id);
 }
@@ -166,7 +171,7 @@ function failJob(id, err) {
   const errorParams = isCancelled ? null : (err?.i18nParams || null);
   Object.assign(job, { status, error: errorMsg, errorParams, progress: isCancelled ? job.progress : 0, endedAt: new Date().toISOString() });
   try { endJobRun(id, status, job.endedAt, job.tokensIn, job.tokensOut, null, errorMsg); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
-  runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
+  runningJobs.delete(jobDedupKey(job));
   jobAbortControllers.delete(id);
   _scheduleJobCleanup(id);
 }
@@ -181,7 +186,7 @@ function cancelJob(id, userEmail) {
     const endedAt = new Date().toISOString();
     Object.assign(job, { status: 'cancelled', error: 'job.cancelled', errorParams: null, endedAt });
     try { endJobRun(id, 'cancelled', endedAt, 0, 0, null, 'Abgebrochen'); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
-    runningJobs.delete(jobKey(job.type, job.bookId, job.userEmail));
+    runningJobs.delete(jobDedupKey(job));
     jobAbortControllers.delete(id);
     _scheduleJobCleanup(id);
     logger.info(`Job ${id} (${job.type}|${job.userEmail || '-'}|${job.bookId}) aus Warteschlange entfernt und abgebrochen.`);
@@ -567,6 +572,7 @@ const JOB_TYPE_LABELS = {
   'batch-check':      'job.label.batchCheck',
   'komplett-analyse': 'job.label.komplett',
   'review':           'job.label.review',
+  'chapter-review':   'job.label.chapterReview',
   'book-chat':        'job.label.bookChat',
   'chat':             'job.label.chat',
   'synonym':          'job.label.synonym',

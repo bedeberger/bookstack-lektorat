@@ -2,6 +2,24 @@ import { escPreserveStrong, fetchText } from './utils.js';
 
 const FIGUR_TYP_ORDER = { hauptfigur: 0, antagonist: 1, mentor: 2, nebenfigur: 3, andere: 4 };
 
+// Pure Filter-Logik für die Szenen-Liste. Getrennt von Alpine-Getter, damit
+// Unit-Tests den Page-/Kapitel-Filter direkt gegen Fixtures prüfen können —
+// besonders die Regression, dass der Seiten-Filter per `page_id` (Number) UND
+// Name (String) matchen muss.
+export function applySzenenFilters(szenen, filters) {
+  const q = filters.suche ? filters.suche.toLowerCase() : '';
+  return (szenen || []).filter(s =>
+    (!q || (s.titel || '').toLowerCase().includes(q)) &&
+    (!filters.wertung || s.wertung === filters.wertung) &&
+    (!filters.figurId || (s.fig_ids || []).includes(filters.figurId)) &&
+    (!filters.kapitel || s.kapitel === filters.kapitel) &&
+    (!filters.seite || (typeof filters.seite === 'number'
+      ? s.page_id === filters.seite
+      : s.seite === filters.seite)) &&
+    (!filters.ortId || (s.ort_ids || []).includes(filters.ortId))
+  );
+}
+
 // Allgemeine UI-Helpers: Status, Sortierung, Filter-Listen, Datumformatierung,
 // Partial-Loader. Reine `this.*`-basierte Methoden ohne Querabhängigkeiten
 // zu Job-Queues oder Routing — für die Hash-/Job-/View-Module vorgesehen.
@@ -77,13 +95,13 @@ export const appUiMethods = {
   szenenKapitelListe() {
     return this._deriveKapitel(this.szenen, s => s.kapitel);
   },
-  // Pages im Szenen-Filter-Dropdown: alle Seiten des gewählten Kapitels — primär
-  // aus dem Buch-Baum (via chapter_id-Match), ergänzt um evtl. abweichende
-  // Schreibweisen aus den Szenen selbst. So bleibt der Filter auch dann nützlich,
-  // wenn die KI bei einzelnen Szenen kein `seite` gesetzt hat.
+  // Pages im Szenen-Filter-Dropdown: liefert {value,label}-Options. Value ist
+  // primär die `page_id` (Number) aus dem Buch-Baum — so greift der Filter auch,
+  // wenn `s.seite` anders geschrieben ist als der Tree-Titel. Fallback: Szenen
+  // mit nur-String-`seite` (ohne auflösbare page_id) werden mit dem Namen als
+  // Value aufgenommen, damit sie weiterhin filterbar bleiben.
   szenenSeitenListe() {
     if (!this.szenenFilters.kapitel) return [];
-    // Kapitel-ID aus Szenen oder Tree auflösen (Name als Key, weil Filter ein Name ist).
     const chapterIds = new Set();
     for (const s of (this.szenen || [])) {
       if (s.kapitel === this.szenenFilters.kapitel && s.chapter_id) chapterIds.add(s.chapter_id);
@@ -91,15 +109,25 @@ export const appUiMethods = {
     for (const t of (this.tree || [])) {
       if (t.type === 'chapter' && t.name === this.szenenFilters.kapitel) chapterIds.add(t.id);
     }
-    const names = new Set();
+    const options = [];
+    const seenIds = new Set();
+    const seenNames = new Set();
     for (const p of (this.pages || [])) {
-      if (p.chapter_id && chapterIds.has(p.chapter_id) && p.name) names.add(p.name);
-      else if (p.chapterName === this.szenenFilters.kapitel && p.name) names.add(p.name);
+      if (!p.name) continue;
+      const inChapter = (p.chapter_id && chapterIds.has(p.chapter_id))
+        || p.chapterName === this.szenenFilters.kapitel;
+      if (!inChapter || seenIds.has(p.id)) continue;
+      options.push({ value: p.id, label: p.name });
+      seenIds.add(p.id);
+      seenNames.add(p.name);
     }
     for (const s of (this.szenen || [])) {
-      if (s.kapitel === this.szenenFilters.kapitel && s.seite) names.add(s.seite);
+      if (s.kapitel !== this.szenenFilters.kapitel || !s.seite) continue;
+      if (seenNames.has(s.seite)) continue;
+      options.push({ value: s.seite, label: s.seite });
+      seenNames.add(s.seite);
     }
-    return this._sortByPageOrder([...names]);
+    return options.sort((a, b) => this._pageIdx(a.label) - this._pageIdx(b.label));
   },
   orteKapitelListe() {
     return this._deriveKapitel(this.orte, o => o.kapitel);
