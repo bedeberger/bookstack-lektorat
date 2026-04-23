@@ -51,6 +51,13 @@
             <span class="finetune-check-desc" x-text="$app.t('finetune.type.authorChat.desc')"></span>
           </span>
         </label>
+        <label class="finetune-check">
+          <input type="checkbox" x-model="finetuneTypeCorrection">
+          <span>
+            <span class="finetune-check-title" x-text="$app.t('finetune.type.correction')"></span>
+            <span class="finetune-check-desc" x-text="$app.t('finetune.type.correction.desc')"></span>
+          </span>
+        </label>
       </div>
     </div>
 
@@ -99,6 +106,7 @@
         <span class="tok-badge tok-neutral" x-show="finetuneStats.sceneCount > 0" x-text="$app.t('finetune.stats.scene', { n: finetuneStats.sceneCount })"></span>
         <span class="tok-badge tok-neutral" x-show="finetuneStats.dialogCount > 0" x-text="$app.t('finetune.stats.dialog', { n: finetuneStats.dialogCount })"></span>
         <span class="tok-badge tok-neutral" x-show="finetuneStats.authorChatCount > 0" x-text="$app.t('finetune.stats.authorChat', { n: finetuneStats.authorChatCount })"></span>
+        <span class="tok-badge tok-neutral" x-show="finetuneStats.correctionCount > 0" x-text="$app.t('finetune.stats.correction', { n: finetuneStats.correctionCount })"></span>
       </div>
 
       <div class="finetune-downloads">

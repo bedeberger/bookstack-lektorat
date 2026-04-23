@@ -33,10 +33,12 @@ function splitParagraphs(text) {
   return text.split(/\n\s*\n+/).map(p => p.trim()).filter(Boolean);
 }
 
-function splitHalfAtSentence(text) {
-  const mid = Math.floor(text.length / 2);
-  const head = text.slice(0, mid);
-  const tail = text.slice(mid);
+// Splittet `text` nahe `ratio` (0–1) an einer Satzgrenze. Sucht zuerst rückwärts
+// vom Zielindex nach dem letzten Satzende, fällt dann vorwärts zurück.
+function splitAtSentence(text, ratio) {
+  const target = Math.max(1, Math.min(text.length - 1, Math.floor(text.length * ratio)));
+  const head = text.slice(0, target);
+  const tail = text.slice(target);
   const lastStop = head.search(/[.!?…][”"«»„"']?\s+[A-ZÄÖÜ"„«][^.!?…]*$/);
   if (lastStop !== -1) {
     const after = head.slice(lastStop).search(/\s/);
@@ -47,11 +49,12 @@ function splitHalfAtSentence(text) {
   }
   const nextStop = tail.search(/[.!?…][”"«»„"']?\s+[A-ZÄÖÜ"„«]/);
   if (nextStop !== -1) {
-    const idx = mid + nextStop + 1;
+    const idx = target + nextStop + 1;
     return [text.slice(0, idx + 1).trim(), text.slice(idx + 1).trim()];
   }
   return [head.trim(), tail.trim()];
 }
+const splitHalfAtSentence = (text) => splitAtSentence(text, 0.5);
 
 // Dialog-Zitate (DE + EN-Typografie + ASCII). Bewusst konservativ — matched nur
 // Zitate innerhalb eines Absatzes (keine Zeilenumbrüche), damit keine
@@ -164,7 +167,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
     const seed = Number.isFinite(opts.valSeed) ? opts.valSeed : 0;
 
     const samples = [];
-    let styleCount = 0, sceneCount = 0, dialogCount = 0, authorChatCount = 0;
+    let styleCount = 0, sceneCount = 0, dialogCount = 0, authorChatCount = 0, correctionCount = 0;
 
     if (opts.types.style) {
       updateJob(jobId, { progress: 55, statusText: 'finetune.phase.style' });
@@ -174,25 +177,67 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       const prefix = langIsEn
         ? "Continue the following passage in the author's style:\n\n"
         : 'Setze den folgenden Abschnitt im Stil des Autors fort:\n\n';
+      const contextPrefix = langIsEn
+        ? "Given this passage, continue in the author's style. Write only the next paragraph:\n\n"
+        : 'Setze den folgenden Abschnitt fort. Schreibe nur den nächsten Absatz im Stil des Autors:\n\n';
+
+      // Split-Ratios pro Absatz: 50/50 ist das stärkste Signal (Haupt-Sample),
+      // 25/75 und 75/25 ergänzen als augmentierte Varianten (Training-Volumen
+      // ×3 bei gleichem Ausgangsmaterial). Verhindert dass das Modell nur
+      // „halbierte" Prompt-Länge als Stil-Fortsetzung kennt.
+      const splitRatios = [0.50, 0.25, 0.75];
+
       for (const p of pageContents) {
         const paragraphs = splitParagraphs(p.text);
-        let pi = 0;
-        for (const para of paragraphs) {
-          if (para.length < minChars) { pi++; continue; }
+
+        // ── Intra-Absatz-Splits (Sliding-Windows) ─────────────────────────
+        for (let pi = 0; pi < paragraphs.length; pi++) {
+          const para = paragraphs[pi];
+          if (para.length < minChars) continue;
           const clipped = para.length > maxChars ? para.slice(0, maxChars) : para;
-          const [first, second] = splitHalfAtSentence(clipped);
-          if (first.length < 60 || second.length < 60) { pi++; continue; }
+          for (let ri = 0; ri < splitRatios.length; ri++) {
+            const [first, second] = splitAtSentence(clipped, splitRatios[ri]);
+            if (first.length < 60 || second.length < 60) continue;
+            samples.push({
+              id: 'style|' + p.id + '|' + pi + '|r' + ri,
+              type: 'style',
+              messages: [
+                { role: 'system', content: sys },
+                { role: 'user', content: prefix + first },
+                { role: 'assistant', content: second },
+              ],
+            });
+            styleCount++;
+          }
+        }
+
+        // ── Multi-Absatz-Kontext (Langstrecken-Kohärenz) ──────────────────
+        // Prompt = vorhergehende 1–3 Absätze, Completion = nächster Absatz.
+        // Teaches long-range coherence so dass Fortsetzungen über Absätze
+        // hinweg klingen wie der Autor. Überspringt Einträge, wenn der
+        // Prompt-Kontext zu kurz oder zu lang ist.
+        const CTX_MAX_PROMPT = Math.floor(maxChars * 2);
+        for (let i = 1; i < paragraphs.length; i++) {
+          const next = paragraphs[i];
+          if (next.length < minChars) continue;
+          const ctxStart = Math.max(0, i - 3);
+          const context = paragraphs.slice(ctxStart, i).join('\n\n');
+          if (context.length < 200) continue;
+          const ctxClipped = context.length > CTX_MAX_PROMPT
+            ? context.slice(context.length - CTX_MAX_PROMPT)
+            : context;
+          const completion = next.length > maxChars ? next.slice(0, maxChars) : next;
+          if (completion.length < 80) continue;
           samples.push({
-            id: 'style|' + p.id + '|' + pi,
+            id: 'styleCtx|' + p.id + '|' + i,
             type: 'style',
             messages: [
               { role: 'system', content: sys },
-              { role: 'user', content: prefix + first },
-              { role: 'assistant', content: second },
+              { role: 'user', content: contextPrefix + ctxClipped },
+              { role: 'assistant', content: completion },
             ],
           });
           styleCount++;
-          pi++;
         }
       }
     }
@@ -272,6 +317,71 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       }
     }
 
+    if (opts.types.correction) {
+      updateJob(jobId, { progress: 88, statusText: 'finetune.phase.correction' });
+      const sys = langIsEn
+        ? "You are an editor. Rewrite the given sentence in the author's voice — concise, precise, stylistically refined. Return only the improved version."
+        : 'Du bist Lektor. Formuliere den Satz im Stil des Autors um — knapp, präzise, stilistisch geschliffen. Gib nur die verbesserte Fassung zurück.';
+      const userPrefix    = langIsEn ? 'Improve: ' : 'Verbessere: ';
+      const reasonedSys   = langIsEn
+        ? "You are an editor. Rewrite the given sentence in the author's voice, then explain the change in one sentence."
+        : 'Du bist Lektor. Formuliere den Satz im Stil des Autors um und erkläre die Änderung in einem Satz.';
+      const reasonedUser  = langIsEn ? 'Improve and explain: ' : 'Verbessere und begründe: ';
+      const reasonLabel   = langIsEn ? 'Reason: ' : 'Grund: ';
+
+      // Neueste-First, damit bei mehrfach geprüften Seiten die aktuellste Korrektur
+      // den Dedupe-Slot gewinnt (gleich-hashende Paare später ignoriert).
+      const checkRows = db.prepare(`
+        SELECT errors_json FROM page_checks
+        WHERE book_id = ? AND user_email = ? AND errors_json IS NOT NULL AND error_count > 0
+        ORDER BY checked_at DESC
+      `).all(bookIdInt, userEmail);
+      const seen = new Set();
+      for (const row of checkRows) {
+        let errs = null;
+        try { errs = JSON.parse(row.errors_json); } catch { continue; }
+        if (!Array.isArray(errs)) continue;
+        for (const e of errs) {
+          const orig = (e.original || '').trim();
+          const korr = (e.korrektur || '').trim();
+          if (orig.length < 8 || korr.length < 5) continue;
+          if (orig.toLowerCase() === korr.toLowerCase()) continue;
+          if (orig.length > maxChars || korr.length > maxChars) continue;
+          const key = orig + '→' + korr;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const idx = seen.size;
+          // Base-Variante: nur verbesserter Satz als Antwort.
+          samples.push({
+            id: 'correction|a|' + idx,
+            type: 'correction',
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user',   content: userPrefix + orig },
+              { role: 'assistant', content: korr },
+            ],
+          });
+          correctionCount++;
+          // Reasoned-Variante (nur wenn Begründung vorhanden): verbesserter Satz
+          // + kurze Begründung. Trainiert ein Warum-Signal mit, ohne Basis-Antworten
+          // mit Reasoning zu verwässern.
+          const erkl = (e.erklaerung || '').trim();
+          if (erkl.length >= 15 && erkl.length <= 400) {
+            samples.push({
+              id: 'correction|b|' + idx,
+              type: 'correction',
+              messages: [
+                { role: 'system', content: reasonedSys },
+                { role: 'user',   content: reasonedUser + orig },
+                { role: 'assistant', content: korr + '\n\n' + reasonLabel + erkl },
+              ],
+            });
+            correctionCount++;
+          }
+        }
+      }
+    }
+
     if (opts.types.authorChat) {
       updateJob(jobId, { progress: 90, statusText: 'finetune.phase.authorChat' });
       const displayName = bookName || (langIsEn ? 'this book' : 'diesem Buch');
@@ -294,18 +404,44 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
         return out;
       };
 
+      // Mehr Fragevarianten = Modell lernt dieselbe Buchfakten über viele
+      // Formulierungen hinweg assoziieren → schnellere Memorisierung der Welt.
       const figQuestions = langIsEn
-        ? ['Who is {name}?', 'Tell me about {name}.', 'How would you describe {name}?', 'What do I need to know about {name}?']
-        : ['Wer ist {name}?', 'Erzähl mir von {name}.', 'Wie würdest du {name} beschreiben?', 'Was sollte ich über {name} wissen?'];
+        ? ['Who is {name}?', 'Tell me about {name}.', 'How would you describe {name}?',
+           'What do I need to know about {name}?', 'What is {name} like?',
+           "What's {name}'s story?", 'Give me a portrait of {name}.']
+        : ['Wer ist {name}?', 'Erzähl mir von {name}.', 'Wie würdest du {name} beschreiben?',
+           'Was sollte ich über {name} wissen?', 'Was für ein Mensch ist {name}?',
+           'Was ist {name} für eine Figur?', 'Zeichne mir ein Bild von {name}.']
+      ;
       const ortQuestions = langIsEn
-        ? ['What is {name}?', 'Describe {name}.', 'What kind of place is {name}?', 'How does {name} feel?']
-        : ['Was ist {name}?', 'Beschreibe {name}.', 'Was für ein Ort ist {name}?', 'Wie wirkt {name}?'];
+        ? ['What is {name}?', 'Describe {name}.', 'What kind of place is {name}?',
+           'How does {name} feel?', 'Tell me about {name}.',
+           'What should I imagine when I hear {name}?']
+        : ['Was ist {name}?', 'Beschreibe {name}.', 'Was für ein Ort ist {name}?',
+           'Wie wirkt {name}?', 'Erzähl mir von {name}.',
+           'Was soll ich mir unter {name} vorstellen?']
+      ;
       const sceneQuestions = langIsEn
-        ? ['What happens in «{titel}»?', 'Can you summarize the scene «{titel}»?', 'What is «{titel}» about?']
-        : ['Was passiert in «{titel}»?', 'Worum geht es in «{titel}»?', 'Fasse die Szene «{titel}» zusammen.'];
+        ? ['What happens in «{titel}»?', 'Can you summarize the scene «{titel}»?',
+           'What is «{titel}» about?', 'Tell me about the scene «{titel}».',
+           "What's going on in «{titel}»?"]
+        : ['Was passiert in «{titel}»?', 'Worum geht es in «{titel}»?',
+           'Fasse die Szene «{titel}» zusammen.', 'Erzähl mir von der Szene «{titel}».',
+           'Was spielt sich in «{titel}» ab?']
+      ;
       const eventQuestions = langIsEn
-        ? ['What happens around {ereignis}?', 'What is the significance of {ereignis}?']
-        : ['Was weisst du über {ereignis}?', 'Welche Bedeutung hat {ereignis}?'];
+        ? ['What happens around {ereignis}?', 'What is the significance of {ereignis}?',
+           'Tell me about {ereignis}.', 'How does {ereignis} matter?']
+        : ['Was weisst du über {ereignis}?', 'Welche Bedeutung hat {ereignis}?',
+           'Erzähl mir von {ereignis}.', 'Warum ist {ereignis} wichtig?']
+      ;
+      const chapterQuestions = langIsEn
+        ? ['What happens in «{kapitel}»?', 'Summarize «{kapitel}» for me.',
+           'Walk me through «{kapitel}».', 'What is «{kapitel}» about?']
+        : ['Was passiert in «{kapitel}»?', 'Fasse «{kapitel}» zusammen.',
+           'Was geschieht im Kapitel «{kapitel}»?', 'Worum geht es in «{kapitel}»?']
+      ;
 
       const pushQA = (id, q, a) => {
         const qq = (q || '').trim();
@@ -336,10 +472,19 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
           if (tags) extras.push(langIsEn ? `Traits: ${tags}.` : `Eigenschaften: ${tags}.`);
         }
         const answer = [desc, ...extras].join(' ');
-        const idxs = pickVariants('fig|' + f.fig_id, figQuestions, 2);
+        // 3 Paraphrasen pro Figur → gleiche Fakten mehrmals sehen → bessere
+        // Memorisierung der Buchwelt (Ziel: Figur als «Realität» akzeptieren).
+        const idxs = pickVariants('fig|' + f.fig_id, figQuestions, 3);
         for (const idx of idxs) {
           const q = figQuestions[idx].replace('{name}', f.name);
           pushQA('authorChat|fig|' + f.fig_id + '|' + idx, q, answer);
+        }
+        // Zusatz-Frage mit Kurzname als Zielnamen (wenn vorhanden), damit das
+        // Modell beide Namen-Varianten kennt.
+        if (f.kurzname && f.kurzname !== f.name && f.kurzname.trim().length >= 2) {
+          const altIdx = Math.floor(hashSplit('figAlt|' + f.fig_id, seed) * figQuestions.length);
+          const q = figQuestions[altIdx].replace('{name}', f.kurzname);
+          pushQA('authorChat|figAlt|' + f.fig_id, q, answer);
         }
       }
 
@@ -351,7 +496,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
         if (l.stimmung) parts.push(langIsEn ? `The atmosphere: ${l.stimmung}.` : `Die Stimmung: ${l.stimmung}.`);
         if (l.typ)      parts.push(langIsEn ? `Type: ${l.typ}.` : `Art des Ortes: ${l.typ}.`);
         const answer = parts.join(' ');
-        const idxs = pickVariants('ort|' + l.loc_id, ortQuestions, 2);
+        const idxs = pickVariants('ort|' + l.loc_id, ortQuestions, 3);
         for (const idx of idxs) {
           const q = ortQuestions[idx].replace('{name}', l.name);
           pushQA('authorChat|ort|' + l.loc_id + '|' + idx, q, answer);
@@ -371,7 +516,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
         if (locNames.length) parts.push(langIsEn ? `Setting: ${locNames.join(', ')}.` : `Schauplatz: ${locNames.join(', ')}.`);
         if (s.kapitel) parts.push(langIsEn ? `Chapter: ${s.kapitel}.` : `Kapitel: ${s.kapitel}.`);
         const answer = parts.join(' ');
-        const idxs = pickVariants('scene|' + s.id, sceneQuestions, 1);
+        const idxs = pickVariants('scene|' + s.id, sceneQuestions, 2);
         for (const idx of idxs) {
           const q = sceneQuestions[idx].replace('{titel}', s.titel);
           pushQA('authorChat|scene|' + s.id + '|' + idx, q, answer);
@@ -436,6 +581,59 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
         }
       }
 
+      // ── Kapitel-Reviews ───────────────────────────────────────────────────
+      // Neueste pro Kapitel (user+book). Pro Review mehrere Q&A: Zusammenfassung,
+      // Fazit, Stärken, Schwächen, Dramaturgie, Pacing, Figuren.
+      const chapterReviewRows = db.prepare(`
+        SELECT cr1.chapter_name, cr1.review_json
+        FROM chapter_reviews cr1
+        WHERE cr1.book_id = ? AND cr1.user_email = ?
+          AND cr1.reviewed_at = (
+            SELECT MAX(cr2.reviewed_at) FROM chapter_reviews cr2
+            WHERE cr2.book_id = cr1.book_id AND cr2.chapter_id = cr1.chapter_id AND cr2.user_email = cr1.user_email
+          )
+      `).all(bookIdInt, userEmail);
+      for (const row of chapterReviewRows) {
+        const chName = (row.chapter_name || '').trim();
+        if (!chName || !row.review_json) continue;
+        let cr = null;
+        try { cr = JSON.parse(row.review_json); } catch { continue; }
+        if (!cr || typeof cr !== 'object') continue;
+        // Zusammenfassung als Hauptantwort auf „Was passiert in Kapitel X?"
+        if (cr.zusammenfassung) {
+          const idxs = pickVariants('chap|' + chName, chapterQuestions, 2);
+          for (const idx of idxs) {
+            const q = chapterQuestions[idx].replace('{kapitel}', chName);
+            pushQA('authorChat|chap|' + chName + '|' + idx, q, cr.zusammenfassung);
+          }
+        }
+        if (cr.fazit) {
+          pushQA('authorChat|chap-fazit|' + chName,
+            langIsEn ? `What's the takeaway of «${chName}»?` : `Was ist das Fazit zu Kapitel «${chName}»?`,
+            cr.fazit);
+        }
+        if (cr.dramaturgie) {
+          pushQA('authorChat|chap-drama|' + chName,
+            langIsEn ? `How does «${chName}» build tension?` : `Wie ist «${chName}» dramaturgisch aufgebaut?`,
+            cr.dramaturgie);
+        }
+        if (cr.pacing) {
+          pushQA('authorChat|chap-pacing|' + chName,
+            langIsEn ? `How is the pacing of «${chName}»?` : `Wie ist das Tempo in «${chName}»?`,
+            cr.pacing);
+        }
+        if (cr.figuren) {
+          pushQA('authorChat|chap-fig|' + chName,
+            langIsEn ? `Who carries «${chName}»?` : `Welche Figuren tragen «${chName}»?`,
+            cr.figuren);
+        }
+        if (Array.isArray(cr.staerken) && cr.staerken.length) {
+          pushQA('authorChat|chap-str|' + chName,
+            langIsEn ? `What makes «${chName}» strong?` : `Was macht «${chName}» stark?`,
+            cr.staerken.join(' · '));
+        }
+      }
+
       // ── Echte Buch-Chat-Messages ──────────────────────────────────────────
       // Consecutive (user, assistant)-Paare aus book-chat-Sessions (page_name
       // = '__book__') direkt übernehmen. Das ist die authentischste Q&A-Quelle.
@@ -475,14 +673,14 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       total: samples.length,
       train: trainArr.length,
       val: valArr.length,
-      styleCount, sceneCount, dialogCount, authorChatCount,
+      styleCount, sceneCount, dialogCount, authorChatCount, correctionCount,
       trainBytes: Buffer.byteLength(trainJsonl, 'utf8'),
       valBytes:   Buffer.byteLength(valJsonl,   'utf8'),
     };
 
     storeFinetuneResult(jobId, { trainJsonl, valJsonl });
     completeJob(jobId, { stats });
-    logger.info(`Finetune-Export fertig: ${stats.total} Samples (${styleCount} style / ${sceneCount} scene / ${dialogCount} dialog / ${authorChatCount} authorChat) → ${trainArr.length} train, ${valArr.length} val.`);
+    logger.info(`Finetune-Export fertig: ${stats.total} Samples (${styleCount} style / ${sceneCount} scene / ${dialogCount} dialog / ${authorChatCount} authorChat / ${correctionCount} correction) → ${trainArr.length} train, ${valArr.length} val.`);
   } catch (e) {
     if (e.name !== 'AbortError') logger.error(`Fehler Finetune-Export (book=${bookId}): ${e.message}`);
     failJob(jobId, e);
@@ -498,13 +696,14 @@ finetuneExportRouter.post('/finetune-export', jsonBody, (req, res) => {
       scene:      !!(types && types.scene),
       dialog:     !!(types && types.dialog),
       authorChat: !!(types && types.authorChat),
+      correction: !!(types && types.correction),
     },
     minChars: Number(min_chars) || 200,
     maxChars: Number(max_chars) || 4000,
     valSplit: Number.isFinite(Number(val_split)) ? Number(val_split) : 0.1,
     valSeed:  Number(val_seed)  || 0,
   };
-  if (!opts.types.style && !opts.types.scene && !opts.types.dialog && !opts.types.authorChat) {
+  if (!Object.values(opts.types).some(v => v)) {
     return res.status(400).json({ error_code: 'FINETUNE_NO_TYPES' });
   }
   const userEmail = req.session?.user?.email || null;
