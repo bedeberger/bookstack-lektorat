@@ -110,7 +110,7 @@ router.get('/auth/callback', async (req, res) => {
     delete req.session.oidcState;
     delete req.session.oidcNonce;
     delete req.session.returnTo;
-    req.session.user = { email, name: claims.name || email };
+    req.session.user = { email, name: claims.name || email, picture: claims.picture || null };
     req.session.loginAt = Date.now();
     req.session.lastSeen = Date.now();
     upsertUserLogin(email, claims.name || email);

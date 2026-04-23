@@ -38,6 +38,29 @@
     </div>
   </template>
 
+  <!-- Eingearbeitete Korrekturen (nur in History-Ansicht, wenn Original nicht mehr im Text steht) -->
+  <template x-if="$app.appliedHistoricCorrections.length > 0">
+    <div class="applied-history">
+      <div class="section-heading">
+        <span x-text="$app.t('editor.findings.appliedHistoryTitle', { n: $app.appliedHistoricCorrections.length })"></span>
+      </div>
+      <template x-for="(f, i) in $app.appliedHistoricCorrections" :key="i">
+        <div class="applied-history-item">
+          <span class="badge" :class="_isHardFinding(f.typ) ? 'badge-err' : 'badge-warn'" x-text="$app.t('finding.' + f.typ)"></span>
+          <span class="applied-history-text">
+            <span class="finding-original" x-text="f.original"></span>
+            <template x-if="f.korrektur">
+              <span class="finding-arrow">→</span>
+            </template>
+            <template x-if="f.korrektur">
+              <span class="finding-korrektur" x-text="f.korrektur"></span>
+            </template>
+          </span>
+        </div>
+      </template>
+    </div>
+  </template>
+
   <!-- Stilanalyse & Fazit -->
   <div x-html="$app.analysisOut"></div>
 </div>

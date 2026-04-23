@@ -40,6 +40,7 @@ export const historyMethods = {
         this.lektoratFindings = [];
         this.selectedFindings = [];
         this.appliedOriginals = [];
+        this.appliedHistoricCorrections = [];
         this.correctedHtml = null;
         this.hasErrors = false;
         this.checkDone = false;
@@ -68,6 +69,7 @@ export const historyMethods = {
       this.lektoratFindings = [];
       this.selectedFindings = [];
       this.appliedOriginals = [];
+      this.appliedHistoricCorrections = [];
       this.correctedHtml = null;
       this.hasErrors = false;
       this.checkDone = false;
@@ -94,11 +96,22 @@ export const historyMethods = {
     this.lektoratFindings = findings;
 
     // Vereinigung aller übernommenen Originals (Fehler + Stil) für Per-Vorschlag-Status
-    const appliedUnion = entry.saved
-      ? [...(entry.applied_errors_json || []), ...(entry.selected_errors_json || [])].map(e => e.original)
+    const appliedEntries = entry.saved
+      ? [...(entry.applied_errors_json || []), ...(entry.selected_errors_json || [])]
       : [];
+    const appliedUnion = appliedEntries.map(e => e.original);
     this.appliedOriginals = [...new Set(appliedUnion)];
     const appliedSet = new Set(this.appliedOriginals);
+
+    // Bereits eingearbeitete Korrekturen, deren Original nicht mehr im Text steht
+    // (wurde durch die Korrektur ersetzt) → separate, kompakte Sektion in der Fehlerliste.
+    const stillVisible = new Set(findings.map(f => f.original));
+    const seenOriginals = new Set();
+    this.appliedHistoricCorrections = appliedEntries.filter(e => {
+      if (!e.original || stillVisible.has(e.original) || seenOriginals.has(e.original)) return false;
+      seenOriginals.add(e.original);
+      return true;
+    });
 
     // Selection: bereits angewendete Korrekturen + weiche Typen + Stil default unselected
     this.selectedFindings = findings.map(f => !appliedSet.has(f.original) && !SOFT_TYPEN.has(f.typ) && f.typ !== 'stil');

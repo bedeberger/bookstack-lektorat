@@ -283,6 +283,8 @@
   "jobQueue.label":              "Jobs:",
   "jobQueue.jumpTo":             "Jump to feature",
   "jobQueue.cancel":             "Cancel",
+  "jobQueue.expand":              "Show {count} more",
+  "jobQueue.collapse":            "Show less",
 
   "review.title":                "Book review: {name}",
   "review.start":                "Review book",
@@ -560,6 +562,7 @@
   "editor.findings.selectAll":   "All",
   "editor.findings.selectNone":  "None",
   "editor.findings.applied":     "✓ applied",
+  "editor.findings.appliedHistoryTitle": "Applied corrections ({n})",
 
   "finding.rechtschreibung":     "Spell.",
   "finding.grammatik":           "Grammar",

@@ -8,6 +8,7 @@
       "program": "${workspaceFolder}/server.js",
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal",
+      "runtimeExecutable": "/home/bd/.nvm/versions/node/v24.14.1/bin/node",
       "restart": true,
       "runtimeArgs": ["--watch"],
       "skipFiles": ["<node_internals>/**", "${workspaceFolder}/node_modules/**"]

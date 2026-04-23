@@ -126,10 +126,24 @@ export const toolbarCardMethods = {
       return;
     }
 
+    // Ctrl/Cmd+B und Ctrl/Cmd+I: Bold/Italic auch im Fokus-Modus, in dem die
+    // Bubble-Toolbar ausgeblendet ist. Explizit statt Browser-Default, damit
+    // _markEditDirty + Bubble-Reposition konsistent laufen.
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
+      if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        this._applyInline('bold');
+        return;
+      }
+      if (e.key === 'i' || e.key === 'I') {
+        e.preventDefault();
+        this._applyInline('italic');
+        return;
+      }
+    }
+
     // Im Fokus-Mode bleibt U (Underline) tabu – die Plättung versteckt
-    // das Ergebnis und der User würde unsichtbar formatieren. B/I sind
-    // explizit erlaubt: die Auszeichnung landet im HTML und wird beim
-    // Verlassen des Fokus sichtbar.
+    // das Ergebnis und der User würde unsichtbar formatieren.
     if (app.focusMode) {
       if ((e.metaKey || e.ctrlKey) && /^[uU]$/.test(e.key)) {
         e.preventDefault();

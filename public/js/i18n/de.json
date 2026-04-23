@@ -283,6 +283,8 @@
   "jobQueue.label":              "Jobs:",
   "jobQueue.jumpTo":             "Zum Feature",
   "jobQueue.cancel":             "Abbrechen",
+  "jobQueue.expand":              "{count} weitere anzeigen",
+  "jobQueue.collapse":            "Weniger anzeigen",
 
   "review.title":                "Buchbewertung: {name}",
   "review.start":                "Buch bewerten",
@@ -560,6 +562,7 @@
   "editor.findings.selectAll":   "Alle",
   "editor.findings.selectNone":  "Keine",
   "editor.findings.applied":     "✓ übernommen",
+  "editor.findings.appliedHistoryTitle": "Eingearbeitete Korrekturen ({n})",
 
   "finding.rechtschreibung":     "Rechtschr.",
   "finding.grammatik":           "Grammatik",

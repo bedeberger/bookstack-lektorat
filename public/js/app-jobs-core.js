@@ -190,12 +190,18 @@ export const appJobsCoreMethods = {
       try {
         this.jobQueueItems = await fetchJson('/jobs/queue');
         consecutiveFailures = 0;
+        if (this.serverOffline) this.serverOffline = false;
       } catch (e) {
         // Ein Setzer schlägt fehl, wenn der Server down ist oder die Session
-        // abgelaufen ist – kein Grund für dauerndes Poll-Spam. Nach mehreren
-        // Fehlern in Folge aussetzen; der Fehler bleibt via Logger sichtbar.
+        // abgelaufen ist – kein Grund für dauerndes Poll-Spam. Nach 2 Fehlern
+        // in Folge den serverOffline-Banner zeigen, damit der User weiss warum
+        // Aktionen gerade fehlschlagen. Nach 5 Fehlern Polling aussetzen; der
+        // Banner bleibt, Reload-Button lädt neu.
         consecutiveFailures++;
         console.error('[jobQueuePoll]', e);
+        if (consecutiveFailures >= 2 && !this.serverOffline && !this.sessionExpired) {
+          this.serverOffline = true;
+        }
         if (consecutiveFailures >= 5 && this._jobQueueTimer) {
           clearInterval(this._jobQueueTimer);
           this._jobQueueTimer = null;

@@ -136,6 +136,7 @@ const lektoratState = () => ({
   lektoratFindings: [],
   selectedFindings: [],
   appliedOriginals: [],
+  appliedHistoricCorrections: [],
   checkDone: false,
   checkLoading: false,
   checkProgress: 0,
@@ -201,7 +202,6 @@ const szenenState = () => ({
     wertung: '',
     figurId: '',
     kapitel: '',
-    seite: '',
     ortId: '',
     suche: '',
   },
@@ -225,6 +225,7 @@ const chatsState = () => ({
 
 const jobsState = () => ({
   jobQueueItems: [],
+  jobQueueExpanded: false,
   _jobQueueTimer: null,
   alleAktualisierenLoading: false,
   alleAktualisierenStatus: '',

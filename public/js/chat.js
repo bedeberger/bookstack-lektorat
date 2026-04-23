@@ -1,4 +1,4 @@
-import { escHtml, fmtTok, findInHtml, stripFocusArtefacts, clearStatusAfter } from './utils.js';
+import { escHtml, findInHtml, stripFocusArtefacts, clearStatusAfter } from './utils.js';
 import { makeChatMethods } from './chat-base.js';
 
 // Seiten-Chat-Methoden (werden in Alpine.data('chatCard') gespreadet).
@@ -135,11 +135,5 @@ export const chatMethods = {
       v()._applying = false;
       root.saveApplying = null;
     }
-  },
-
-  _chatTokenInfo(msg) {
-    if (!msg.tokens_in && !msg.tokens_out) return '';
-    const tpsPart = msg.tps ? ` · ${Math.round(msg.tps)} tok/s` : '';
-    return `↑${fmtTok(msg.tokens_in || 0)} ↓${fmtTok(msg.tokens_out || 0)}${tpsPart}`;
   },
 };

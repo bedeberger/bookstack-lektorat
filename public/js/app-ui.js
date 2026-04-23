@@ -1,12 +1,10 @@
 import { escPreserveStrong, fetchText } from './utils.js';
 
 // Pure Filter-Logik für die Szenen-Liste. Getrennt von Alpine-Getter, damit
-// Unit-Tests den Page-/Kapitel-Filter direkt gegen Fixtures prüfen können.
+// Unit-Tests den Kapitel-Filter direkt gegen Fixtures prüfen können.
 // Kapitel-Filter matcht per Name (die Kapitelnamen in den Szenen stammen aus
 // dem Komplett-Job und sind dort bereits auf die echten BookStack-Namen
-// normalisiert). Seiten-Filter matcht ausschliesslich per `page_id` (Number) —
-// die Dropdown-Optionen liefert `szenenSeitenListe()` direkt aus dem
-// BookStack-Kapitel-Baum, sodass der Value immer eine gültige page_id ist.
+// normalisiert).
 export function applySzenenFilters(szenen, filters) {
   const q = filters.suche ? filters.suche.toLowerCase() : '';
   return (szenen || []).filter(s =>
@@ -14,7 +12,6 @@ export function applySzenenFilters(szenen, filters) {
     (!filters.wertung || s.wertung === filters.wertung) &&
     (!filters.figurId || (s.fig_ids || []).includes(filters.figurId)) &&
     (!filters.kapitel || s.kapitel === filters.kapitel) &&
-    (!filters.seite || s.page_id === filters.seite) &&
     (!filters.ortId || (s.ort_ids || []).includes(filters.ortId))
   );
 }
@@ -87,33 +84,6 @@ export const appUiMethods = {
 
   szenenKapitelListe() {
     return this._deriveKapitel(this.szenen, s => s.kapitel);
-  },
-  // Pages im Szenen-Filter-Dropdown: alle Seiten des gewählten Kapitels aus
-  // dem BookStack-Kapitel-Baum (`this.pages`). So bleibt das Dropdown auch
-  // dann befüllt, wenn die KI bei einzelnen Szenen keine `seite` gesetzt hat.
-  // Value = page_id (Number); der Filter in `applySzenenFilters` matcht strikt
-  // `s.page_id === filter.seite`. Szenen mit `page_id=null` tauchen in keinem
-  // Seiten-Filter auf – das ist OK (User sieht sie ohne Seitenfilter).
-  szenenSeitenListe() {
-    if (!this.szenenFilters.kapitel) return [];
-    // chapter_id aus Tree auflösen; Fallback aus den Szenen selbst (falls Tree
-    // noch nicht geladen oder Kapitel = "Sonstige Seiten" → chapterId bleibt null).
-    let chapterId = (this.tree || [])
-      .find(t => t.type === 'chapter' && t.name === this.szenenFilters.kapitel)?.id ?? null;
-    if (chapterId == null) {
-      for (const s of (this.szenen || [])) {
-        if (s.kapitel === this.szenenFilters.kapitel && s.chapter_id) {
-          chapterId = s.chapter_id; break;
-        }
-      }
-    }
-    const matchesChapter = chapterId == null
-      ? (p => !p.chapter_id && p.chapterName === this.szenenFilters.kapitel)
-      : (p => p.chapter_id === chapterId);
-    return (this.pages || [])
-      .filter(p => p.id && p.name && matchesChapter(p))
-      .map(p => ({ value: p.id, label: p.name }))
-      .sort((a, b) => this._pageIdx(a.label) - this._pageIdx(b.label));
   },
   orteKapitelListe() {
     return this._deriveKapitel(this.orte, o => o.kapitel);

@@ -192,6 +192,12 @@ export function makeChatMethods(cfg) {
     return renderChatMarkdown(match ? window.__app.t(match[1]) : text);
   };
 
+  m._chatTokenInfo = function (msg) {
+    if (!msg.tokens_in && !msg.tokens_out) return '';
+    const tpsPart = msg.tps ? ` · ${Math.round(msg.tps)} tok/s` : '';
+    return `↑${fmtTok(msg.tokens_in || 0)} ↓${fmtTok(msg.tokens_out || 0)}${tpsPart}`;
+  };
+
   // Status-HTML für laufende Jobs — wird von onPollProgress-Callbacks der
   // konkreten Chats genutzt (sie rufen this._runningJobStatus).
   m._runningJobStatus = function (statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams) {

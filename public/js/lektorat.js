@@ -30,6 +30,7 @@ export const lektoratMethods = {
     this.lektoratFindings = [];
     this.selectedFindings = [];
     this.appliedOriginals = [];
+    this.appliedHistoricCorrections = [];
     this.correctedHtml = null;
     this.hasErrors = false;
     this.analysisOut = '';
@@ -50,6 +51,7 @@ export const lektoratMethods = {
     this.lektoratFindings = [];
     this.selectedFindings = [];
     this.appliedOriginals = [];
+    this.appliedHistoricCorrections = [];
     this.checkProgress = 0;
     this.setStatus(this.t('lektorat.starting'), true);
 
@@ -201,6 +203,7 @@ export const lektoratMethods = {
       this.lektoratFindings = [];
       this.selectedFindings = [];
       this.appliedOriginals = [];
+      this.appliedHistoricCorrections = [];
       this.checkDone = false;
       this.activeHistoryEntryId = null;
       // Seitenansicht aus dem gerade gespeicherten HTML neu aufbauen

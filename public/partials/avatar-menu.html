@@ -8,12 +8,22 @@
           :aria-label="currentUser?.name || currentUser?.email || ''"
           aria-haspopup="menu"
           :aria-expanded="showAvatarMenu">
-    <span class="avatar-btn-initials" x-text="_avatarInitials()"></span>
+    <template x-if="currentUser?.picture">
+      <img class="avatar-btn-img" :src="currentUser.picture" :alt="currentUser?.name || currentUser?.email || ''" referrerpolicy="no-referrer" @error="currentUser.picture = null">
+    </template>
+    <template x-if="!currentUser?.picture">
+      <span class="avatar-btn-initials" x-text="_avatarInitials()"></span>
+    </template>
   </button>
 
   <div class="avatar-menu-panel" x-show="showAvatarMenu" x-cloak role="menu">
     <div class="avatar-menu-header">
-      <span class="avatar-menu-header-avatar" x-text="_avatarInitials()"></span>
+      <template x-if="currentUser?.picture">
+        <img class="avatar-menu-header-img" :src="currentUser.picture" :alt="currentUser?.name || currentUser?.email || ''" referrerpolicy="no-referrer" @error="currentUser.picture = null">
+      </template>
+      <template x-if="!currentUser?.picture">
+        <span class="avatar-menu-header-avatar" x-text="_avatarInitials()"></span>
+      </template>
       <div class="avatar-menu-header-text">
         <div class="avatar-menu-name" x-text="currentUser?.name || currentUser?.email"></div>
         <div class="avatar-menu-email" x-show="currentUser?.name && currentUser?.email && currentUser.name !== currentUser.email" x-text="currentUser?.email"></div>
