@@ -1,5 +1,13 @@
-// Zeichenanzahl pro Token für deutschen Text (Komposita, Umlaute → dichter als Englisch).
-export const CHARS_PER_TOKEN = 3;
+// Durchschnittliche Zeichen pro Token für Display-Schätzungen. Wird in app.js aus
+// /config überschrieben (Server setzt den provider-spezifischen Wert). Vor dem
+// /config-Load bleibt der Claude-Default aktiv. Änderung ist via Live-Binding in
+// allen Importern sofort sichtbar.
+export let CHARS_PER_TOKEN = 3;
+
+export function configureTokenEstimate(value) {
+  const v = parseFloat(value);
+  if (Number.isFinite(v) && v > 0) CHARS_PER_TOKEN = v;
+}
 
 /**
  * Fetch mit Pflicht-OK-Check und JSON-Parsing. Wirft bei HTTP-Fehlern,

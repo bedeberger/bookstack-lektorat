@@ -167,6 +167,10 @@
       <span class="feature-tile-title" x-text="t('tile.bookSettings')"></span>
       <span class="feature-tile-desc" x-text="t('tile.bookSettings.desc')"></span>
     </button>
+    <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showFinetuneExportCard }" @click="toggleFinetuneExportCard()" :title="t('tile.finetuneExport.title')">
+      <span class="feature-tile-title" x-text="t('tile.finetuneExport')"></span>
+      <span class="feature-tile-desc" x-text="t('tile.finetuneExport.desc')"></span>
+    </button>
   </div>
 
 </div>
@@ -191,6 +195,7 @@
   <div id="partial-chat"></div>
 </div>
 <div id="partial-book-settings"></div>
+<div id="partial-finetune-export"></div>
 <div id="partial-user-settings"></div>
 <!-- Edit-Toolbar (Bubble + Slash) – teleportiert nach <body>, hier nur Scope-Host -->
 <div id="partial-editor-toolbar"></div>

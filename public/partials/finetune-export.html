@@ -1,0 +1,124 @@
+<!-- Fine-Tuning-Datenexport -->
+<!--
+  Alpine.data-Sub-Komponente — siehe public/js/cards/finetune-export-card.js.
+  `showFinetuneExportCard` bleibt im Root (Hash-Router + Exklusivität),
+  fachlicher State in dieser Komponente.
+-->
+<div class="card" x-data="finetuneExportCard" x-show="$app.showFinetuneExportCard" x-cloak x-transition>
+  <div class="card-header">
+    <span class="card-title" x-text="$app.t('finetune.title', { name: $app.selectedBookName })"></span>
+    <div class="card-actions">
+      <button type="button"
+              @click="runFinetuneExport()"
+              :disabled="finetuneLoading || !finetuneAnyTypeSelected() || !$app.selectedBookId">
+        <span x-show="finetuneLoading" class="spinner"></span>
+        <span x-text="finetuneLoading ? $app.t('finetune.generating') : $app.t('finetune.generate')"></span>
+      </button>
+    </div>
+  </div>
+
+  <p class="finetune-lead" x-text="$app.t('finetune.lead')"></p>
+
+  <div class="finetune-form">
+    <div class="finetune-row">
+      <label class="finetune-label" x-text="$app.t('finetune.types')"></label>
+      <div class="finetune-types">
+        <label class="finetune-check">
+          <input type="checkbox" x-model="finetuneTypeStyle">
+          <span>
+            <span class="finetune-check-title" x-text="$app.t('finetune.type.style')"></span>
+            <span class="finetune-check-desc" x-text="$app.t('finetune.type.style.desc')"></span>
+          </span>
+        </label>
+        <label class="finetune-check">
+          <input type="checkbox" x-model="finetuneTypeScene">
+          <span>
+            <span class="finetune-check-title" x-text="$app.t('finetune.type.scene')"></span>
+            <span class="finetune-check-desc" x-text="$app.t('finetune.type.scene.desc')"></span>
+          </span>
+        </label>
+        <label class="finetune-check">
+          <input type="checkbox" x-model="finetuneTypeDialog">
+          <span>
+            <span class="finetune-check-title" x-text="$app.t('finetune.type.dialog')"></span>
+            <span class="finetune-check-desc" x-text="$app.t('finetune.type.dialog.desc')"></span>
+          </span>
+        </label>
+        <label class="finetune-check">
+          <input type="checkbox" x-model="finetuneTypeAuthorChat">
+          <span>
+            <span class="finetune-check-title" x-text="$app.t('finetune.type.authorChat')"></span>
+            <span class="finetune-check-desc" x-text="$app.t('finetune.type.authorChat.desc')"></span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="finetune-row">
+      <label class="finetune-label" x-text="$app.t('finetune.length')"></label>
+      <div class="finetune-inline">
+        <label class="finetune-inline-field">
+          <span x-text="$app.t('finetune.length.min')"></span>
+          <input type="number" min="80" max="5000" step="20" x-model.number="finetuneMinChars" class="finetune-num">
+        </label>
+        <label class="finetune-inline-field">
+          <span x-text="$app.t('finetune.length.max')"></span>
+          <input type="number" min="200" max="16000" step="100" x-model.number="finetuneMaxChars" class="finetune-num">
+        </label>
+      </div>
+    </div>
+
+    <div class="finetune-row">
+      <label class="finetune-label" x-text="$app.t('finetune.valSplit')"></label>
+      <div class="finetune-inline">
+        <label class="finetune-inline-field">
+          <span x-text="$app.t('finetune.valSplit.ratio')"></span>
+          <input type="number" min="0" max="0.5" step="0.05" x-model.number="finetuneValSplit" class="finetune-num">
+        </label>
+        <label class="finetune-inline-field">
+          <span x-text="$app.t('finetune.valSplit.seed')"></span>
+          <input type="number" min="0" max="999999" step="1" x-model.number="finetuneValSeed" class="finetune-num">
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div x-show="finetuneLoading" class="progress-bar-wrap">
+    <div class="progress-bar" :style="{ '--progress': finetuneProgress + '%' }"></div>
+  </div>
+
+  <div x-show="finetuneStatus" class="card-status" x-html="finetuneStatus"></div>
+
+  <template x-if="finetuneStats && !finetuneLoading">
+    <div class="finetune-results">
+      <div class="finetune-stats">
+        <span class="tok-badge tok-neutral" x-text="$app.t('finetune.stats.total', { n: finetuneStats.total })"></span>
+        <span class="tok-badge tok-neutral" x-text="$app.t('finetune.stats.train', { n: finetuneStats.train })"></span>
+        <span class="tok-badge tok-neutral" x-show="finetuneStats.val > 0" x-text="$app.t('finetune.stats.val', { n: finetuneStats.val })"></span>
+        <span class="tok-badge tok-neutral" x-show="finetuneStats.styleCount > 0" x-text="$app.t('finetune.stats.style', { n: finetuneStats.styleCount })"></span>
+        <span class="tok-badge tok-neutral" x-show="finetuneStats.sceneCount > 0" x-text="$app.t('finetune.stats.scene', { n: finetuneStats.sceneCount })"></span>
+        <span class="tok-badge tok-neutral" x-show="finetuneStats.dialogCount > 0" x-text="$app.t('finetune.stats.dialog', { n: finetuneStats.dialogCount })"></span>
+        <span class="tok-badge tok-neutral" x-show="finetuneStats.authorChatCount > 0" x-text="$app.t('finetune.stats.authorChat', { n: finetuneStats.authorChatCount })"></span>
+      </div>
+
+      <div class="finetune-downloads">
+        <button type="button"
+                @click="finetuneDownload('train')"
+                :disabled="!finetuneJobId || (finetuneStats.train ?? 0) === 0">
+          <span x-text="$app.t('finetune.download.train')"></span>
+          <span class="finetune-size" x-text="'(' + finetuneFormatBytes(finetuneStats.trainBytes) + ')'" x-show="finetuneStats.trainBytes > 0"></span>
+        </button>
+        <button type="button"
+                @click="finetuneDownload('val')"
+                :disabled="!finetuneJobId || (finetuneStats.val ?? 0) === 0">
+          <span x-text="$app.t('finetune.download.val')"></span>
+          <span class="finetune-size" x-text="'(' + finetuneFormatBytes(finetuneStats.valBytes) + ')'" x-show="finetuneStats.valBytes > 0"></span>
+        </button>
+      </div>
+
+      <p class="finetune-hint" x-text="$app.t('finetune.hint.expiry')"></p>
+    </div>
+  </template>
+
+  <div x-show="!finetuneLoading && !finetuneStats && !finetuneStatus" class="muted-msg muted-msg--spaced" x-text="$app.t('finetune.emptyState')"></div>
+</div>

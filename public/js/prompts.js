@@ -1132,13 +1132,14 @@ export function buildExtraktionKomplettChapterPrompt(chapterName, bookName, page
   const kapitelNote = isSinglePass
     ? 'Der Text ist in Kapitel-Sektionen gegliedert (## Kapitelname) mit Seiten darunter (### Seitentitel). Für alle Kapitel-Felder (kapitel[].name der Figuren und Orte, szenen[].kapitel, lebensereignisse[].kapitel): den Kapitelnamen exakt aus dem ## Header entnehmen, unter dem der jeweilige Abschnitt steht.'
     : `Für alle Kapitel-Felder (kapitel[].name der Figuren und Orte, szenen[].kapitel, lebensereignisse[].kapitel): immer genau «${chapterName}» verwenden – die ### Überschriften im Text sind Seitentitel, keine Kapitelnamen.`;
+  const textBlock = chText == null
+    ? 'Der Buchtext steht im System-Prompt oben.'
+    : `${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} Seiten)`}:\n\n${chText}`;
   return `Extrahiere aus ${scope} in einem Durchgang: alle Figuren, alle Schauplätze, alle kontinuitätsrelevanten Fakten, alle Szenen und alle Lebensereignisse der Figuren.
 
 ${kapitelNote}
 
-${isSinglePass ? `Buchtext (${pageCount} Seiten)` : `Kapiteltext (${pageCount} Seiten)`}:
-
-${chText}`;
+${textBlock}`;
 }
 
 /** Welle 4 · #11 – Pass A: nur Figuren + Lebensereignisse (Lokalmodus).

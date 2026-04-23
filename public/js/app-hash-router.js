@@ -1,6 +1,6 @@
 // URL-Hash-Permalinks + History-Management.
 // Schema: #profil | #book/:bookId[/page/:pageId|/figur/:figId|/ort/:ortId|/kapitel[/:chapterId]|/<view>]
-// Views: figuren, orte, szenen, ereignisse, kontinuitaet, bewertung, kapitel, chat, stats, stil, fehler, einstellungen
+// Views: figuren, orte, szenen, ereignisse, kontinuitaet, bewertung, kapitel, chat, stats, stil, fehler, einstellungen, finetune
 //
 // Entwurfsentscheidungen:
 // - push vs. replace entscheidet `_hashCategory`: gleiche Kategorie → replace
@@ -35,6 +35,7 @@ export const appHashRouterMethods = {
     else if (this.showStilCard) parts.push('stil');
     else if (this.showFehlerHeatmapCard) parts.push('fehler');
     else if (this.showBookSettingsCard) parts.push('einstellungen');
+    else if (this.showFinetuneExportCard) parts.push('finetune');
     return '#' + parts.join('/');
   },
 
@@ -202,6 +203,9 @@ export const appHashRouterMethods = {
         case 'einstellungen':
           if (!this.showBookSettingsCard) await this.toggleBookSettingsCard();
           break;
+        case 'finetune':
+          if (!this.showFinetuneExportCard) await this.toggleFinetuneExportCard();
+          break;
       }
     } finally {
       this._applyingHash = false;
@@ -218,6 +222,7 @@ export const appHashRouterMethods = {
       'showKapitelReviewCard', 'kapitelReviewChapterId',
       'showBookStatsCard', 'showStilCard', 'showFehlerHeatmapCard',
       'showBookSettingsCard', 'showUserSettingsCard',
+      'showFinetuneExportCard',
     ];
     for (const prop of watchers) {
       this.$watch(prop, () => this._updateHash());

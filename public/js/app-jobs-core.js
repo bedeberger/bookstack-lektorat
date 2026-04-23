@@ -230,6 +230,7 @@ export const appJobsCoreMethods = {
       'kontinuitaet':     'toggleKontinuitaetCard',
       'batch-check':      'toggleTreeCard',
       'book-chat':        'toggleBookChatCard',
+      'finetune-export':  'toggleFinetuneExportCard',
     };
     if (job.type === 'check') {
       const page = this.pages.find(p => String(p.id) === String(job.bookId));

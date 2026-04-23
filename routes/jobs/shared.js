@@ -576,6 +576,7 @@ const JOB_TYPE_LABELS = {
   'book-chat':        'job.label.bookChat',
   'chat':             'job.label.chat',
   'synonym':          'job.label.synonym',
+  'finetune-export':  'job.label.finetuneExport',
 };
 
 function fmtDuration(seconds) {

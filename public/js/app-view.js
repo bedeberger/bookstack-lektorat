@@ -26,7 +26,7 @@ export const appViewMethods = {
     this.showBookSettingsCard = false;
     this.showKontinuitaetCard = false;
     this.showUserSettingsCard = false;
-
+    this.showFinetuneExportCard = false;
     this.resetPage();
     this.currentPage = p;
     this.showEditorCard = true;
@@ -86,6 +86,7 @@ export const appViewMethods = {
     if (keep !== 'kontinuitaet') this.showKontinuitaetCard = false;
     if (keep !== 'bookSettings') this.showBookSettingsCard = false;
     if (keep !== 'userSettings') this.showUserSettingsCard = false;
+    if (keep !== 'finetuneExport') this.showFinetuneExportCard = false;
     this.resetPage();
   },
 
@@ -116,6 +117,11 @@ export const appViewMethods = {
     if (this.showUserSettingsCard) { this.showUserSettingsCard = false; return; }
     this._closeOtherMainCards('userSettings');
     this.showUserSettingsCard = true;
+  },
+  toggleFinetuneExportCard() {
+    if (this.showFinetuneExportCard) { this.showFinetuneExportCard = false; return; }
+    this._closeOtherMainCards('finetuneExport');
+    this.showFinetuneExportCard = true;
   },
   // Abweichend von den anderen Toggles: erneuter Klick schliesst NICHT, sondern
   // refresht die History. Sub-Komponente lauscht auf `card:refresh`
@@ -370,6 +376,7 @@ export const appViewMethods = {
     if (this._komplettPollTimer) { clearInterval(this._komplettPollTimer); this._komplettPollTimer = null; }
     this.showBookSettingsCard = false;
     this.showUserSettingsCard = false;
+    this.showFinetuneExportCard = false;
     this.alleAktualisierenLastRun = null;
     this.alleAktualisierenProgress = 0;
     this.alleAktualisierenTokIn = 0;

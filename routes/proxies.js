@@ -1,7 +1,7 @@
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const logger = require('../logger');
-const { MAX_TOKENS_OUT, MODEL_CONTEXT, ollamaTemp, llamaTemp } = require('../lib/ai');
+const { MAX_TOKENS_OUT, MODEL_CONTEXT, CHARS_PER_TOKEN, ollamaTemp, llamaTemp } = require('../lib/ai');
 const { getBookLocale, getUser, getTokenForRequest } = require('../db/schema');
 const { getPrompts, getPromptConfig } = require('../lib/prompts-loader');
 
@@ -33,6 +33,7 @@ router.get('/config', (req, res) => {
     claudeMaxTokens: MAX_TOKENS_OUT,
     claudeModel: process.env.MODEL_NAME || 'claude-sonnet-4-6',
     apiProvider: process.env.API_PROVIDER || 'claude',
+    charsPerToken: CHARS_PER_TOKEN,
     ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
     llamaModel:  process.env.LLAMA_MODEL  || 'llama3.2',
     user,

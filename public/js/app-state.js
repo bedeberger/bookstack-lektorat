@@ -120,6 +120,7 @@ const cardsState = () => ({
   showBookChatCard: false,
   showBookSettingsCard: false,
   showUserSettingsCard: false,
+  showFinetuneExportCard: false,
   showKomplettStatus: false,
   showAvatarMenu: false,
 });

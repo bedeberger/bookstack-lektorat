@@ -1,4 +1,4 @@
-import { fetchJson } from './utils.js';
+import { fetchJson, configureTokenEstimate } from './utils.js';
 import { configurePrompts } from './prompts.js';
 
 import { bookstackMethods } from './api-bookstack.js';
@@ -28,6 +28,7 @@ import { orteMethods } from './orte.js';
 import { registerKontinuitaetCard } from './cards/kontinuitaet-card.js';
 import { registerBookSettingsCard } from './cards/book-settings-card.js';
 import { registerUserSettingsCard } from './cards/user-settings-card.js';
+import { registerFinetuneExportCard } from './cards/finetune-export-card.js';
 import { configureI18n, i18nMethods, getSupportedLocales } from './i18n.js';
 import { pageViewMethods } from './page-view.js';
 import { editorEditMethods } from './editor-edit.js';
@@ -130,6 +131,7 @@ document.addEventListener('alpine:init', () => {
   registerBookStatsCard();
   registerBookSettingsCard();
   registerUserSettingsCard();
+  registerFinetuneExportCard();
   registerKontinuitaetCard();
   registerEreignisseCard();
   registerOrteCard();
@@ -449,6 +451,7 @@ document.addEventListener('alpine:init', () => {
           this._applyTheme();
         }
         configurePrompts(cfg.promptConfig, cfg.apiProvider || 'claude');
+        configureTokenEstimate(cfg.charsPerToken);
         if (!cfg.bookstackTokenOk) {
           this.showTokenSetup = true;
           return;

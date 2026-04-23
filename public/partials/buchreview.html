@@ -23,7 +23,9 @@
   <div x-html="bookReviewOut"></div>
 
   <!-- Buchbewertungs-Verlauf -->
-  <div x-show="$app.bookReviewHistory.length > 0" class="card-history-section">
+  <div x-show="$app.bookReviewHistory.length > 0"
+       class="card-history-section"
+       :class="{ 'card-history-section--borderless': !bookReviewOut }">
     <div class="history-heading" x-text="$app.t('review.history')"></div>
     <template x-for="entry in $app.bookReviewHistory" :key="entry.id">
       <div>
