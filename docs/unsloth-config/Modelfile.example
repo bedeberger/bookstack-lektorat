@@ -1,8 +1,8 @@
-# Ollama-Modelfile für das fine-getunete Ministral-8B.
+# Ollama-Modelfile für das fine-getunete Ministral-3-8B.
 # Vor Benutzung: `BOOK_TITLE` im SYSTEM-Feld auf deinen Buchtitel setzen.
 #
 # Build:
-#   cd runs/ministral-buch/gguf
+#   cd runs/ministral3-buch/gguf
 #   ollama create buch-autor -f ../../../Modelfile.example
 #
 # Test:
@@ -10,7 +10,8 @@
 
 FROM ./unsloth.Q5_K_M.gguf
 
-# Mistral-Chat-Template — passt zu Ministral-8B-Instruct-2410.
+# Mistral-Chat-Template — gilt identisch für Ministral-3-Instruct-2512.
+# Mistral-Common rendert Instruct-Turns weiterhin als <s>[INST] … [/INST].
 TEMPLATE """{{ if .System }}<s>[INST] {{ .System }}
 
 {{ .Prompt }} [/INST]{{ else }}<s>[INST] {{ .Prompt }} [/INST]{{ end }} {{ .Response }}</s>"""
@@ -18,7 +19,9 @@ TEMPLATE """{{ if .System }}<s>[INST] {{ .System }}
 PARAMETER temperature       0.8
 PARAMETER top_p             0.95
 PARAMETER repeat_penalty    1.05
-PARAMETER num_ctx           8192
+# Ministral-3 kann nativ bis 256k. 32k reicht für Buch-Chat + Lektorat-
+# Calls und spart KV-Cache-RAM. Bei sehr langen Dokumenten hochsetzen.
+PARAMETER num_ctx           32768
 
 # System-Prompt muss der System-Line aus dem Training entsprechen —
 # sonst "verliert" das Modell die internalisierte Persona.

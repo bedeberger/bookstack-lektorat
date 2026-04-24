@@ -1,26 +1,35 @@
-# Getestet auf CUDA 12.1 / Python 3.11 / RTX 4000 Ada (Ada Lovelace).
-# Versionen sind bewusst gepinnt — Unsloth/TRL/transformers müssen als Tupel
-# zusammenpassen, sonst bricht entweder load_in_4bit oder train_on_responses_only.
+# Getestet auf CUDA 12.1+ / Python 3.11 / RTX 4000 Ada (Ada Lovelace).
+# Pins sind bewusst gesetzt — Unsloth/TRL/transformers/mistral-common müssen
+# als Tupel zusammenpassen, sonst bricht entweder load_in_4bit, das Chat-
+# Template oder train_on_responses_only.
+#
+# Ziel-Modell: unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit
+# (Dez-2025-Release, Mistral-Common-Tokenizer).
 
-# Kernkomponenten
-torch==2.4.0
-transformers==4.46.3
-trl==0.11.4
-peft==0.13.2
-accelerate==1.0.1
+# Kernkomponenten — Ministral-3 braucht transformers >= 4.48 (Mistral-Common-
+# Backend-Integration) und ein Unsloth-Release ab Dez 2025.
+torch==2.5.1
+transformers==4.48.3
+trl==0.13.0
+peft==0.14.0
+accelerate==1.2.1
 
-# Unsloth (installiert sich mit Abhängigkeiten selbst; hier als Pin für Reproduzierbarkeit)
-unsloth @ git+https://github.com/unslothai/unsloth.git@2024.12.9
+# Unsloth — Pin auf Dez-2025-Release, der Ministral-3 offiziell supportet.
+# Falls Studio-UI statt CLI: `pip install unsloth` reicht dort separat.
+unsloth @ git+https://github.com/unslothai/unsloth.git@2025.12.4
 
 # 4-bit Quantisierung
-bitsandbytes==0.44.1
+bitsandbytes==0.45.0
 
-# Tokenizer / Sentencepiece (Mistral braucht protobuf)
+# Mistral-Common Tokenizer (neu für Ministral-3)
+mistral-common>=1.8.6
+
+# Tokenizer / Sentencepiece (Mistral braucht weiterhin protobuf)
 sentencepiece==0.2.0
 protobuf==4.25.5
 
 # Dataset-Handling
-datasets==3.1.0
+datasets==3.2.0
 
 # GGUF-Export (llama.cpp-Backend, wird beim ersten Aufruf automatisch gebaut)
 # Falls du den Build vermeiden willst: `save_pretrained_gguf` auskommentieren

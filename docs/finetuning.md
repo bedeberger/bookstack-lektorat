@@ -25,16 +25,22 @@ einen Grund für vollen bf16-LoRA statt QLoRA hast. Sonst: Unsloth nehmen.
 
 ### Das Basemodell
 
-**`unsloth/Ministral-8B-Instruct-2410-bnb-4bit`** — die Unsloth-vorquantisierte
-Variante von Mistrals Ministral-8B. Gründe:
+**`unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit`** — Dez-2025-Release
+von Mistrals Ministral 3, Unsloth-vorquantisiert als Dynamic-4-bit. Gründe:
 
+- **Neueste Generation (Dez 2025)** — direktes Upgrade zum 8B-2410. Bessere
+  Multilingual-Performance, stärkere Instruct-Adhärenz (Arena Hard 0.551
+  laut Unsloth-Model-Card).
 - **Native DE-Kompetenz** aus Mistrals EU-multilingualem Training. Für
   literarische deutsche Prosa stärker als Llama-3.1-8B oder Qwen2.5-7B.
-- **128 k Context** passt zum Buch-Chat und zur Komplettanalyse im Tool.
+- **256 k Context** (verdoppelt gegenüber 2410) — Buch-Chat und
+  Komplettanalyse im Tool können längere Dokumente ohne Split verarbeiten.
 - **8 B Parameter** — trainieren UND deployen auf einer Consumer-Karte:
   QLoRA-Training ~12 GB VRAM, Inferenz nach Q5_K_M-Merge ~6 GB.
-- **Mistral-Tokenizer + `[INST]`/`[/INST]`-Template** — der Exporter und die
-  Prompt-Konventionen im Projekt sind genau darauf ausgelegt.
+- **`[INST]`/`[/INST]`-Template** unverändert (via Mistral-Common-Tokenizer
+  gerendert) — Exporter und Prompt-Konventionen im Projekt passen weiter.
+- **Unsloth-Dynamic-4bit** statt Plain-bnb-4bit → bessere Quantisierungs-
+  Qualität bei identischem VRAM.
 - **Ollama-tauglich** über `save_pretrained_gguf` aus Unsloth, Ergebnis
   als `OLLAMA_MODEL` direkt in bookstack-lektorat einsetzbar.
 
@@ -42,16 +48,19 @@ Ausgeschlossen:
 
 | Modell | Grund |
 |---|---|
-| Ministral-3B | Nicht als offene Gewichte verfügbar — nur über API. |
-| Mistral-Small-3.2-24B | ≥ 40 GB VRAM zum Trainieren, passt nicht auf Consumer-Karten. |
-| Llama-3.1-8B | Anderes Chat-Template, DE schwächer auf Prosa. |
-| Qwen2.5-7B | Strong, aber DE leicht unter Ministral auf literarischem Text. |
+| Ministral-3-3B | Zu klein für Welt + Stil in einem Modell — verliert schneller die Persona. |
+| Ministral-3-14B | 14 B QLoRA passt, aber 1.5–1.7× längere Trainingszeit; nur bei grösseren Büchern lohnend. |
+| Ministral-3-8B-Reasoning | Reasoning-Variante ist auf CoT optimiert, würde Buch-Stil verwässern. |
+| Ministral-8B-2410 | Vorgänger, noch kompatibel, aber strikt schlechter als 2512. |
+| Mistral-Small-3.2-24B | QLoRA-4bit auf 20 GB knapp machbar (~16 GB), aber ~2.5× Trainingszeit und KV-Cache sprengt zweite Karte. |
+| Llama-3.3-8B | Anderes Chat-Template, DE schwächer auf Prosa. |
+| Qwen3-8B | Stark, aber DE leicht unter Ministral auf literarischem Text. |
 
 ### Deine Umgebung: 2× RTX 4000 Ada (20 GB / 20 GB)
 
 **Primäre Route: Single-GPU-Training auf einer Karte, zweite Karte für
 Evaluation/Inferenz parallel.** Unsloth-Open-Source ist Single-GPU-fokussiert;
-QLoRA für Ministral-8B braucht nur ~12 GB, d. h. eine 4000 Ada genügt locker.
+QLoRA für Ministral-3-8B braucht nur ~12 GB, d. h. eine 4000 Ada genügt locker.
 
 Training-Budget für diese Karte:
 
@@ -150,10 +159,10 @@ cd docs/unsloth-config
 CUDA_VISIBLE_DEVICES=0 python train_book.py
 
 # 4. Merge zu GGUF (wird am Ende des Scripts automatisch gemacht)
-#    Output: runs/ministral-buch/gguf/*.gguf
+#    Output: runs/ministral3-buch/gguf/*.gguf
 
 # 5. In Ollama einbinden
-cd runs/ministral-buch/gguf
+cd runs/ministral3-buch/gguf
 ollama create buch-autor -f ../../../Modelfile.example
 ollama run buch-autor "Schreibe den Anfang eines neuen Kapitels."
 ```
@@ -238,7 +247,7 @@ Test 6 ok → Buchwissen adressierbar.
 ## 6. Option B: `mistral-finetune` (offiziell, nur bei ≥ 40 GB VRAM)
 
 Mistrals offizielles CLI. Produktionsstabil, macht nur LoRA — **kein** QLoRA,
-d. h. Ministral-8B braucht ca. 40–48 GB VRAM zum Trainieren. Für dich auf
+d. h. Ministral-3-8B braucht ca. 40–48 GB VRAM zum Trainieren. Für dich auf
 2× 20 GB relevant nur mit Tensor-Parallelism — deutlich mehr Aufwand als die
 Unsloth-Route.
 
@@ -251,8 +260,8 @@ pip install -r requirements.txt
 
 pip install -U "huggingface_hub[cli]"
 hf login
-hf download mistralai/Ministral-8B-Instruct-2410 \
-  --local-dir ./models/ministral-8b \
+hf download mistralai/Ministral-3-8B-Instruct-2512 \
+  --local-dir ./models/ministral3-8b \
   --exclude "consolidated.safetensors"
 
 python -m utils.reformat_data /abs/path/train.jsonl
@@ -266,7 +275,7 @@ data:
   instruct_data:      "/abs/path/train.reformatted.jsonl"
   eval_instruct_data: "/abs/path/val.reformatted.jsonl"
   data: ""
-model_id_or_path: "/abs/path/models/ministral-8b"
+model_id_or_path: "/abs/path/models/ministral3-8b"
 lora:
   enable: true
   rank: 32
@@ -283,14 +292,14 @@ eval_freq: 200
 save_frequency: 500
 no_eval: false
 ckpt_only: false
-run_dir: "/abs/path/runs/ministral-8b-buch"
+run_dir: "/abs/path/runs/ministral3-8b-buch"
 ```
 
 Start (Multi-GPU empfohlen):
 
 ```bash
 torchrun --nproc-per-node 2 -m train config.yaml
-tensorboard --logdir /abs/path/runs/ministral-8b-buch
+tensorboard --logdir /abs/path/runs/ministral3-8b-buch
 ```
 
 Inferenz dann über vLLM mit `LoRARequest` — Details in der offiziellen
@@ -301,7 +310,8 @@ Inferenz dann über vLLM mit `LoRARequest` — Details in der offiziellen
 ## 7. Weiterführend
 
 - **Unsloth-Docs:** [docs.unsloth.ai](https://docs.unsloth.ai)
-- **Ministral-Modellkarte:** [huggingface.co/mistralai/Ministral-8B-Instruct-2410](https://huggingface.co/mistralai/Ministral-8B-Instruct-2410)
+- **Ministral-3-Modellkarte:** [huggingface.co/mistralai/Ministral-3-8B-Instruct-2512](https://huggingface.co/mistralai/Ministral-3-8B-Instruct-2512)
+- **Unsloth-Collection:** [huggingface.co/collections/unsloth/ministral-3](https://huggingface.co/collections/unsloth/ministral-3)
 - **TRL SFTTrainer:** [huggingface.co/docs/trl](https://huggingface.co/docs/trl/sft_trainer)
 - **mistral-finetune:** [github.com/mistralai/mistral-finetune](https://github.com/mistralai/mistral-finetune)
 

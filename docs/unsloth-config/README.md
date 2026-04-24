@@ -1,7 +1,13 @@
 # Unsloth-Training-Config
 
-Fertige Scripts, um Ministral-8B auf den JSONL-Exports der Fine-Tuning-Export-
-Karte zu trainieren. Optimiert für **1× RTX 4000 Ada (20 GB VRAM)**.
+Fertige Scripts, um **Ministral-3-8B-Instruct-2512** auf den JSONL-Exports
+der Fine-Tuning-Export-Karte zu trainieren. Optimiert für **1× RTX 4000 Ada
+(20 GB VRAM)**.
+
+> **Modell-Update (Dez 2025):** Default ist jetzt
+> `unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit` (Ministral 3, 256k
+> Context, Mistral-Common-Tokenizer). Altes 8B-Instruct-2410 ist weiter
+> kompatibel, wird aber nicht mehr aktiv gepflegt.
 
 Zwei Wege, je nach dem wie du arbeitest:
 
@@ -68,8 +74,9 @@ Ablauf:
    unsloth studio -H 0.0.0.0 -p 8888
    ```
    Dann `http://localhost:8888` öffnen.
-2. **Modell** im „Model"-Tab wählen: `unsloth/Ministral-8B-Instruct-2410-bnb-4bit`
-   mit Method = **QLoRA**.
+2. **Modell** im „Model"-Tab wählen:
+   `unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit` mit
+   Method = **QLoRA**.
 3. **Dataset** im „Dataset"-Tab hochladen: `train.jsonl` + `val.jsonl`,
    Format **conversational / messages**. Studio erkennt das `messages`-Feld
    automatisch.
@@ -90,27 +97,85 @@ Ablauf:
 ### Variante B: Fallback — alles manuell in der GUI
 
 Falls Studio den YAML-Import aus irgendeinem Grund nicht annimmt (alte
-Version, Parsing-Fehler), nimm die YAML als Checkliste und klick die Werte
-von Hand in die entsprechenden Felder. Zentrale Werte:
+Version, Parsing-Fehler), alle Werte klickst du in diese drei Spalten:
+**Dataset** (links) · **Parameters** (Mitte) · **Training** (rechts).
+
+#### Dataset-Spalte (links)
+
+- **Choose dataset** → `Local` (falls Datei bereits in Studio) oder
+  **Upload** → `train.jsonl` aus dem Export. Format wird als
+  Conversational/`messages` automatisch erkannt.
+- **Eval dataset → Upload eval file** → `val.jsonl`. Separater Upload,
+  nicht im selben Dropdown. Ohne Eval-Datei würde Studio sonst einen Split
+  selbst bilden — unsere Export-Karte liefert aber bereits einen sauberen
+  Split, deshalb explizit hochladen.
+- **Advanced** → Basemodell:
+  `unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit`,
+  Method = **QLoRA**.
+
+#### Parameters-Spalte (Mitte)
+
+Oberer Block:
 
 | GUI-Feld | Wert | Grund |
 |---|---|---|
-| `max_seq_length` | **4096** | matcht unseren Export-Filter |
-| `per_device_train_batch_size` | **2** | füllt 20 GB VRAM gut aus |
-| `gradient_accumulation_steps` | **8** | effektive Batch = 16 |
-| `num_train_epochs` | **2** | Welt-Internalisierung braucht 2 Durchläufe |
-| `learning_rate` | **2e-4** | LoRA-Standard |
-| `lr_scheduler_type` | **cosine** | stabiler als linear |
-| `warmup_ratio` | **0.03** | wenig Warmup nötig |
-| `lora.r` | **32** | Sweet-Spot für Welt + Stil |
-| `lora.lora_alpha` | **32** | alpha = r (Unsloth-Empfehlung) |
-| `lora.lora_dropout` | **0** | Unsloth-patched: 0 ist am schnellsten |
-| `optim` | **adamw_8bit** | halbiert Optimizer-VRAM |
-| `bf16` | **true** | Ada Lovelace unterstützt bf16 nativ |
-| `packing` | **false** | erhält Sample-Grenzen |
-| `train_on_responses_only` | **true** | Kernfeature: Loss nur auf Assistant |
-| `instruction_part` | **`[INST]`** | Ministral-Template-Marker |
-| `response_part` | **`[/INST]`** | Ministral-Template-Marker |
+| **Max Steps / Use Epochs** | Toggle auf **Use Epochs**, dann **2** | 2 volle Durchläufe für Welt-Internalisierung; Max Steps = 30 ist nur Studio-Smoke-Test-Default |
+| **Context Length** | **4096** (Dropdown) | matcht Export-Filter |
+| **Learning Rate** | **0.0002** | LoRA-Standard |
+
+**LoRA Settings** (Panel aufklappen, Modus-Button **Enable LoRA** aktiv —
+nicht RS-LoRA, nicht LoftQ):
+
+| GUI-Feld | Wert | Grund |
+|---|---|---|
+| **Rank** | **32** | Default 16 zu klein für Welt + Stil |
+| **Alpha** | **32** | alpha = rank (Unsloth-Empfehlung) |
+| **Dropout** | **0.00** | Unsloth-patched: 0 am schnellsten |
+| **Target Modules** | alle sieben aktiv: `q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj` | full-MLP-LoRA; Studio-Default passt |
+
+**Training Hyperparameters → Tab Optimization**:
+
+| GUI-Feld | Wert | Grund |
+|---|---|---|
+| **Optimizer** | **AdamW 8-bit** | halbiert Optimizer-VRAM |
+| **LR scheduler** | **Cosine** (Default Linear überschreiben) | stabiler Ausklang |
+| **Batch Size** | **2** | füllt 20 GB VRAM gut aus |
+| **Grad Accum** | **8** (Default 4 erhöhen) | effektive Batch = 16 |
+| **Weight Decay** | **0.001** | Studio-Default passt |
+
+**Tab Schedule**:
+
+- **Warmup Ratio** → **0.03** (alternativ Warmup Steps ≈ 3 % der
+  Gesamt-Steps).
+- Falls hier nochmal Scheduler-Auswahl: **Cosine** sicherstellen.
+
+**Tab Memory**:
+
+- **Precision / bf16** → **bf16** (Ada Lovelace native Unterstützung).
+- **Gradient Checkpointing** → **an** (Unsloth-Modus falls wählbar,
+  spart VRAM).
+- **Sample Packing** → **aus**. Packing würde unabhängige Fortsetzungen
+  mischen.
+
+**Train-on-Responses-Only** — wichtigster Qualitäts-Hebel. Je nach
+Studio-Version unter **Advanced → Loss masking** oder als Toggle im
+Parameters-Panel:
+
+- `instruction_part` = `[INST]`
+- `response_part` = `[/INST]`
+
+Loss zählt dann nur auf Assistant-Antworten. Studio defaulted das oft
+**nicht** — nicht überspringen. Kein Toggle auffindbar → Config-Upload
+(Variante A) erzwingen oder auf CLI-Script ausweichen.
+
+#### Training-Spalte (rechts)
+
+- **Training Config → Save** vor dem Start (macht Lauf reproduzierbar).
+- **Start Training** klicken. Live-Loss-Chart erscheint oben rechts.
+  Erwartung: `eval_loss` fällt in ersten ~500 Steps auf **1.4–1.8**,
+  stabilisiert danach.
+- Nach Run: Studio-**Export → GGUF Q5_K_M**. Runterladen, zu Ollama
+  verfrachten (siehe [„In Ollama einbinden"](#in-ollama-einbinden)).
 
 Das [`train_book.py`](train_book.py) in diesem Ordner ist die CLI-Version
 derselben Config — nützlich zum lokalen Testen, wenn Studio nicht
@@ -136,11 +201,11 @@ gleicher VRAM-Klasse, daher gut genug für Overnight-Runs.
 
 ```bash
 # In einem zweiten Terminal
-tensorboard --logdir runs/ministral-buch
+tensorboard --logdir runs/ministral3-buch
 ```
 
 Wichtige Kurve: **`eval/loss`**. Erwartung:
-- Start-Value typischerweise 2.2–2.8 bei Ministral.
+- Start-Value typischerweise 2.2–2.8 bei Ministral-3.
 - Fällt über die ersten 500–1500 Steps auf 1.4–1.8.
 - Stabilisiert danach. **Steigt eval/loss wieder: Early-Stopping schlägt zu
   (Callback ist aktiv, stoppt nach 3 Eval-Plateaus).**
@@ -150,7 +215,7 @@ Wichtige Kurve: **`eval/loss`**. Erwartung:
 Am Ende des Runs existieren:
 
 ```
-runs/ministral-buch/
+runs/ministral3-buch/
 ├── checkpoint-XXXX/          # Zwischenstände (max. 3 durch save_total_limit)
 ├── adapter/                  # LoRA-Adapter (~200 MB)
 ├── merged/                   # bf16 vollständiges Modell (~16 GB)
@@ -161,7 +226,7 @@ runs/ministral-buch/
 ## In Ollama einbinden
 
 ```bash
-cd runs/ministral-buch/gguf
+cd runs/ministral3-buch/gguf
 # Modelfile.example ggf. editieren (BOOK_TITLE im SYSTEM-Feld)
 ollama create buch-autor -f ../../../Modelfile.example
 
@@ -259,9 +324,9 @@ manuell über `convert_hf_to_gguf.py` aus llama.cpp erzeugen.
 
 ```bash
 # Checkpoints (gross) behalten nur wenn du erneut merchen willst
-rm -rf runs/ministral-buch/checkpoint-*
+rm -rf runs/ministral3-buch/checkpoint-*
 
 # bf16-Merge ist nur für HuggingFace-Inferenz nötig; bei reinem Ollama-Einsatz
 # reicht der adapter/ und die gguf/-Datei
-rm -rf runs/ministral-buch/merged
+rm -rf runs/ministral3-buch/merged
 ```

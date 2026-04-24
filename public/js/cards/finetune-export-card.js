@@ -9,7 +9,7 @@
 //   - book:changed / view:reset: Poller stoppen, State leeren.
 //   - job:reconnect (type='finetune-export'): Loading-State übernehmen.
 //
-// Default-Profil: Unsloth Studio + Ministral-8B-QLoRA auf 20-GB-GPU
+// Default-Profil: Unsloth Studio + Ministral-3-8B-QLoRA auf 20-GB-GPU
 // (z.B. RTX 4000 Ada). Ableitungen:
 //   maxChars=4000    → p95 ≈ 1500 Tokens → passt in seq_len=4096
 //   maxSeqTokens=4096 → Studio-Empfehlung für 20-GB-QLoRA
@@ -34,7 +34,7 @@ export function registerFinetuneExportCard() {
     finetuneMaxChars:     4000,
     finetuneValSplit:     0.1,
     finetuneValSeed:      0,
-    finetuneMaxSeqTokens: 4096,   // Sweet-Spot Ministral-8B-QLoRA @ 20 GB VRAM
+    finetuneMaxSeqTokens: 4096,   // Sweet-Spot Ministral-3-8B-QLoRA @ 20 GB VRAM
     finetuneEmitText:     false,
 
     finetuneLoading:  false,

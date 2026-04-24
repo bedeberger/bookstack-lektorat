@@ -29,7 +29,7 @@ function hashSplit(id, seed) {
   return ((h[0] << 8) | h[1]) / 0xffff;
 }
 
-// Token-Schätzer. Für Ministral/Mistral-Tokenizer ergibt sich empirisch:
+// Token-Schätzer. Für Ministral-3/Mistral-Common-Tokenizer ergibt sich empirisch:
 // DE ≈ 3.3 Zeichen/Token, EN ≈ 4.0 Zeichen/Token. Bewusst konservativ
 // (eher aufrunden), damit die `maxSeqTokens`-Filter nicht in Truncation läuft.
 function estimateTokens(text, langIsEn) {
@@ -38,10 +38,10 @@ function estimateTokens(text, langIsEn) {
   return Math.ceil(text.length / perToken);
 }
 
-// Ministral-V3/Mistral-Chat-Template (minimaler Umriss für Token-Budget und
-// optionale Text-Felder). Das echte Template fügt BOS/EOS/[INST] ein — Unsloth
-// rendert das selbst. Wir brauchen hier nur ein realistisches String-Gerüst
-// für Längen-Schätzung und `emitText`.
+// Ministral-3/Mistral-Common-Chat-Template (minimaler Umriss für Token-
+// Budget und optionale Text-Felder). Das echte Template fügt BOS/EOS/[INST]
+// ein — Unsloth/Mistral-Common rendert das selbst. Wir brauchen hier nur ein
+// realistisches String-Gerüst für Längen-Schätzung und `emitText`.
 function renderMistralChat(messages) {
   let out = '<s>';
   const sys = messages.find(m => m.role === 'system')?.content || '';
@@ -346,7 +346,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
     const seed = Number.isFinite(opts.valSeed) ? opts.valSeed : 0;
     // `maxSeqTokens`: hartes Token-Limit nach Chat-Template-Wrapping. 0/null =
     // kein Filter (alles durch, Token-Stats trotzdem berechnen). Defaults:
-    // 4096 ist Sweet-Spot für Ministral-8B-QLoRA auf 20-GB-Karten.
+    // 4096 ist Sweet-Spot für Ministral-3-8B-QLoRA auf 20-GB-Karten.
     const maxSeqTokens = Math.max(0, Number(opts.maxSeqTokens) || 0);
     const emitText = !!opts.emitText;
 
@@ -1594,7 +1594,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
     // ── Token-Budget pro Sample (für Stats + Filter) ──────────────────────
     // Pro Sample: Summe aller Nachrichten + fester Template-Overhead (BOS/EOS,
     // [INST]/[/INST]-Marker, Rollen-Separatoren). 20 Tokens sind eine sichere
-    // Obergrenze für Ministral/Mistral-V3.
+    // Obergrenze für Ministral-3/Mistral-Common.
     const TEMPLATE_OVERHEAD = 20;
     const withTokens = samples.map(s => {
       const sum = s.messages.reduce((a, m) => a + estimateTokens(m.content, langIsEn), 0);

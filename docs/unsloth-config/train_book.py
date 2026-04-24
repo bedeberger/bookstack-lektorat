@@ -1,5 +1,6 @@
 """
-Unsloth-QLoRA-Training für Ministral-8B auf den Fine-Tuning-Export-Daten.
+Unsloth-QLoRA-Training für Ministral-3-8B-Instruct-2512 auf den Fine-Tuning-
+Export-Daten.
 
 Zielumgebung: 1× RTX 4000 Ada (20 GB VRAM). Single-GPU. Die zweite Karte im
 System bleibt für Inferenz/Evaluation frei.
@@ -13,11 +14,15 @@ Erwartete Dateien im selben Ordner:
     val.jsonl     # aus UI-Export
 
 Ergebnis am Ende:
-    runs/ministral-buch/adapter/        # LoRA-Adapter (klein)
-    runs/ministral-buch/merged/         # bf16-Merge (vollgrösse)
-    runs/ministral-buch/gguf/*.gguf     # Q5_K_M für Ollama
+    runs/ministral3-buch/adapter/        # LoRA-Adapter (klein)
+    runs/ministral3-buch/merged/         # bf16-Merge (vollgrösse)
+    runs/ministral3-buch/gguf/*.gguf     # Q5_K_M für Ollama
 
 Buchtitel unten anpassen (BOOK_TITLE).
+
+Tokenizer-Hinweis: Ministral-3 nutzt Mistral-Common >= 1.8.6 (wird durch die
+pinned requirements.txt mitinstalliert). Die Assistant-Marker bleiben
+[INST]/[/INST] — unten in `train_on_responses_only` validiert.
 """
 
 from unsloth import FastLanguageModel
@@ -31,9 +36,9 @@ from transformers import TrainingArguments, EarlyStoppingCallback
 # ─────────────────────────────────────────────────────────────────────────
 
 BOOK_TITLE  = "Mein Buchtitel"   # nur für den Fallback-System-Prompt in der Inferenz
-MODEL       = "unsloth/Ministral-8B-Instruct-2410-bnb-4bit"
+MODEL       = "unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit"
 MAX_SEQ     = 4096               # matcht finetune-export Empfehlung
-OUT_DIR     = "runs/ministral-buch"
+OUT_DIR     = "runs/ministral3-buch"
 
 TRAIN_FILE  = "train.jsonl"
 EVAL_FILE   = "val.jsonl"
@@ -114,7 +119,7 @@ trainer = SFTTrainer(
         bf16                         = True,
         fp16                         = False,
         # adamw_8bit halbiert den Optimizer-State-VRAM — zusammen mit
-        # bnb-4bit ist das der VRAM-Schlüssel für Ministral-8B auf 20 GB.
+        # bnb-4bit ist das der VRAM-Schlüssel für Ministral-3-8B auf 20 GB.
         optim                        = "adamw_8bit",
         weight_decay                 = 0.01,
         max_grad_norm                = 1.0,
@@ -139,8 +144,21 @@ trainer = SFTTrainer(
 # Ohne diesen Wrapper lernt das Modell auch aus unseren System-Prompts und
 # User-Fragen → Stil verwässert, Paraphrasen aus authorChat werden fälschlich
 # als "Produktion" gelernt statt als "Eingabe".
-# Marker müssen exakt zum Mistral/Ministral-Template passen.
+#
+# Marker müssen exakt zum Chat-Template von Ministral-3 passen. Mistral-Common
+# >= 1.8.6 rendert weiterhin [INST]/[/INST] um Instruction/Response — deshalb
+# unveränderte Marker gegenüber dem 2410-Vorgänger. Validation direkt aus dem
+# Tokenizer, damit ein späteres Template-Update (ohne dass wir's merken) früh
+# knallt statt stumm zu maskieren.
 # ─────────────────────────────────────────────────────────────────────────
+
+_probe = tokenizer.apply_chat_template(
+    [{"role": "user", "content": "x"}, {"role": "assistant", "content": "y"}],
+    tokenize=False,
+)
+assert "[INST]" in _probe and "[/INST]" in _probe, (
+    f"Unerwartetes Chat-Template — [INST]/[/INST]-Marker fehlen:\n{_probe}"
+)
 
 trainer = train_on_responses_only(
     trainer,

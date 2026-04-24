@@ -783,7 +783,7 @@
   "job.label.finetuneExportBook":    "Fine-tuning export · {name}",
 
   "finetune.title":                  "Fine-tuning export · {name}",
-  "finetune.lead":                   "Generates JSONL training data from book text, characters, scenes, and locations. Chat format (messages), loads directly in Unsloth Studio or the Unsloth CLI. Defaults tuned for Ministral-8B-QLoRA on a 20 GB GPU.",
+  "finetune.lead":                   "Generates JSONL training data from book text, characters, scenes, and locations. Chat format (messages), loads directly in Unsloth Studio or the Unsloth CLI. Defaults tuned for Ministral-3-8B-QLoRA on a 20 GB GPU.",
   "finetune.generate":               "Generate",
   "finetune.generating":             "Generating…",
   "finetune.starting":               "Starting export…",
