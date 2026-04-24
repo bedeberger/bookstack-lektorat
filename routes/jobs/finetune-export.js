@@ -182,6 +182,9 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       figsByLocPk.get(r.location_id).push(r.fig_id);
     }
     const locPkByLocId = new Map(locRows.map(l => [l.loc_id, l.pk]));
+    const sceneLocRows = db.prepare(
+      'SELECT sl.scene_id, l.loc_id FROM scene_locations sl JOIN locations l ON l.id = sl.location_id JOIN figure_scenes fs ON fs.id = sl.scene_id WHERE fs.book_id = ? AND fs.user_email = ?'
+    ).all(bookIdInt, userEmail);
     const scenesByLocPk = new Map();
     for (const r of sceneLocRows) {
       const locPk = locPkByLocId.get(r.loc_id);
@@ -278,9 +281,6 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
     `).all(bookIdInt, userEmail);
     const sceneFigRows = db.prepare(
       'SELECT sf.scene_id, sf.fig_id FROM scene_figures sf JOIN figure_scenes fs ON fs.id = sf.scene_id WHERE fs.book_id = ? AND fs.user_email = ?'
-    ).all(bookIdInt, userEmail);
-    const sceneLocRows = db.prepare(
-      'SELECT sl.scene_id, l.loc_id FROM scene_locations sl JOIN locations l ON l.id = sl.location_id JOIN figure_scenes fs ON fs.id = sl.scene_id WHERE fs.book_id = ? AND fs.user_email = ?'
     ).all(bookIdInt, userEmail);
     const figsByScene = new Map();
     for (const r of sceneFigRows) {
