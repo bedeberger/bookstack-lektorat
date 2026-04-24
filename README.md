@@ -14,13 +14,17 @@ KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). L�
 - **Synonym-Finder** – Im Bearbeitungsmodus: Wort markieren → Rechtsklick → kombinierte Vorschläge aus [OpenThesaurus](https://www.openthesaurus.de/) (deutsch) und der KI mit Satzkontext; Klick ersetzt direkt im Text
 - **Seiten-Chat** – Freier KI-Dialog zu einer Seite inkl. Kontext (Figuren, Buchbewertung); Änderungsvorschläge direkt in BookStack übernehmen
 - **Buch-Chat** – KI-Dialog über das gesamte Buch. Der Assistent nutzt Werkzeuge (Pronomen-Zählung, Figurenverteilung, Volltextsuche, Seitenabruf), die auf einen vorberechneten Index zugreifen, und kann so auch Häufigkeits- und Verteilungsfragen über das ganze Buch präzise beantworten (z.B. „Kommt der Ich-Erzähler häufiger vor?"). Index wird beim täglichen Sync (02:00) aktualisiert
-- **Buchbewertung** – Gesamtbewertung mit Stärken, Schwächen und Empfehlungen
+- **Buchbewertung** – Gesamtbewertung des Buchs mit Stärken, Schwächen und Empfehlungen
+- **Kapitelbewertung** – Fokussierte Einzelbewertung eines Kapitels (Dramaturgie, Erzähltempo, Kohärenz, Perspektive); unabhängig von der Gesamt-Buchbewertung
 - **Figurenübersicht** – Automatische Charakterextraktion mit interaktivem Beziehungsgraph; Figurenkontext-Panel auch während des Lektorats einer Seite einblendbar
 - **Ereignisse / Schauplätze / Szenen** – Automatische Übersichten pro Kapitel
 - **Kontinuitätsprüfer** – Findet Widersprüche im Buch
+- **Stil-Heatmap** – Visualisiert stilistische Kennzahlen (Satzlänge, Adverbien, Füllwörter, Wiederholungen …) pro Kapitel
+- **Fehler-Heatmap** – Clustert die Befunde aller bisherigen Lektorats-Läufe nach Kapitel und Fehlertyp
 - **Lektorat-Verlauf mit Vorschau** – Alle bisherigen Prüfungen einer Seite chronologisch einsehbar; vergangene Korrekturen per Klick als Inline-Highlights im Editor anzeigen und selektiv nachträglich übernehmen. Einzelne Verlaufseinträge lassen sich löschen
 - **Buchstatistik** – Tägliche Snapshots (Wortanzahl, Tokens) als Zeitliniendiagramm
-- **Bucheinstellungen** – Sprache, Buchtyp und freier Kontext werden in alle KI-Prompts eingebettet
+- **Fine-Tuning-Export** – Erzeugt JSONL-Trainingsdaten aus Buchtext, Figuren, Szenen und Schauplätzen (Stil-Fortsetzung, Szenen-Generierung, Dialog pro Figur, Autor-Chat-Q&A, Lektorats-Korrekturen); Chat-Format mit Train/Val-Split, kompatibel zu Mistral-Fine-Tune und OpenAI-Style-Tools. Anleitung zum eigentlichen Training eines Ministral-Modells: [docs/finetuning.md](docs/finetuning.md)
+- **Bucheinstellungen** – Sprache, Buchtyp, Erzählperspektive, Erzählzeit und freier Kontext werden in alle KI-Prompts eingebettet
 - **Hell/Dunkel/Auto-Design** – Theme-Umschalter in der Kopfzeile; „Auto" folgt dem Betriebssystem
 - **Session-Banner bei Ablauf** – Bei `401`-Antworten blendet die App einen Banner ein statt hart umzuleiten; ungespeicherte Inhalte im Editor/Chat bleiben dadurch erreichbar
 

@@ -121,7 +121,8 @@
       <h3 class="book-settings-stats-title" x-text="$app.t('jobStats.title')"></h3>
       <div x-show="bookJobStatsLoading && !bookJobStats" class="job-stats-loading" x-text="$app.t('jobStats.loading')"></div>
       <div x-show="bookJobStats && bookJobStats.length === 0" class="job-stats-empty" x-text="$app.t('jobStats.empty')"></div>
-      <table x-show="bookJobStats && bookJobStats.length > 0" class="job-stats-table">
+      <div x-show="bookJobStats && bookJobStats.length > 0" class="job-stats-scroll">
+      <table class="job-stats-table">
         <thead>
           <tr>
             <th x-text="$app.t('jobStats.col.type')"></th>
@@ -146,6 +147,7 @@
           </template>
         </tbody>
       </table>
+      </div>
     </section>
   </div>
 </div>

@@ -802,6 +802,10 @@ body.focus-mode .session-banner--offline:hover { opacity: 1; }
   letter-spacing: 0.07em;
   margin: 0 0 0.6rem;
 }
+.job-stats-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .job-stats-table {
   width: 100%;
   border-collapse: collapse;
@@ -832,6 +836,21 @@ body.focus-mode .session-banner--offline:hover { opacity: 1; }
   color: var(--color-muted);
   font-size: 12px;
   padding: 4px 0;
+}
+@media (max-width: 600px) {
+  .job-stats-table {
+    font-size: 11px;
+  }
+  .job-stats-table th,
+  .job-stats-table td {
+    padding-right: 8px;
+  }
+  .job-stats-table th:first-child,
+  .job-stats-table td:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--color-card-bg);
+  }
 }
 
 /* ── Komplettanalyse Status Panel ──────────────────────────────────────────── */

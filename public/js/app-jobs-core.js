@@ -233,7 +233,8 @@ export const appJobsCoreMethods = {
       'finetune-export':  'toggleFinetuneExportCard',
     };
     if (job.type === 'check') {
-      const page = this.pages.find(p => String(p.id) === String(job.bookId));
+      const pageId = job.dedupId ?? job.bookId;
+      const page = this.pages.find(p => String(p.id) === String(pageId));
       if (page) this.selectPage(page);
       return;
     }

@@ -307,7 +307,7 @@ lektoratRouter.post('/check', jsonBody, (req, res) => {
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = 'job.label.checkPage';
   const labelParams = { name: page_name || `#${page_id}` };
-  const jobId = createJob('check', page_id, userEmail, label, labelParams);
+  const jobId = createJob('check', book_id || 0, userEmail, label, labelParams, page_id);
   enqueueJob(jobId, () => runCheckJob(jobId, page_id, book_id || null, userEmail, userToken));
   res.json({ jobId });
 });

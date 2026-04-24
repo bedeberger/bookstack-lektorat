@@ -628,6 +628,7 @@ sharedRouter.get('/queue', (req, res) => {
       id: job.id,
       type: job.type,
       bookId: job.bookId,
+      dedupId: job.dedupId,
       label: job.label || job.type,
       labelParams: job.labelParams || null,
       status: job.status,

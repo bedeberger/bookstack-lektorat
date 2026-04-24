@@ -57,7 +57,7 @@ synonymeRouter.post('/synonym', jsonBody, (req, res) => {
   if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
   const label = 'job.label.synonymWord';
   const labelParams = { word: wort.trim() };
-  const jobId = createJob('synonym', entityKey, userEmail, label, labelParams);
+  const jobId = createJob('synonym', book_id || 0, userEmail, label, labelParams, entityKey);
   enqueueJob(jobId, () => runSynonymJob(jobId, wort.trim(), satz.trim(), book_id || null, userEmail));
   res.json({ jobId });
 });

@@ -1121,6 +1121,33 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 53').run();
     logger.info(`DB-Migration auf Version 53 abgeschlossen (figure_scenes.seite: ${stripped + strippedH2} Präfix-Strips, ${backfilled} page_id-Backfills).`);
   }
+  if (version < 54) {
+    // job_runs.book_id enthielt für page-/session-scoped Jobs (check, chat,
+    // book-chat, synonym) bisher die Dedup-Entity-ID (page_id / session_id /
+    // entityKey) statt der echten book_id. Dadurch fehlten diese Jobs in der
+    // per-Buch-Statistik. Ab jetzt speichert createJob die echte book_id und
+    // trennt Dedup über dedupId; historische Zeilen werden hier gebackfillt.
+    const checkBack = db.prepare(`
+      UPDATE job_runs
+      SET book_id = (SELECT p.book_id FROM pages p WHERE p.page_id = job_runs.book_id LIMIT 1)
+      WHERE type = 'check'
+        AND EXISTS (SELECT 1 FROM pages p WHERE p.page_id = job_runs.book_id)
+    `).run().changes;
+    const chatBack = db.prepare(`
+      UPDATE job_runs
+      SET book_id = (SELECT cs.book_id FROM chat_sessions cs WHERE cs.id = job_runs.book_id LIMIT 1)
+      WHERE type IN ('chat', 'book-chat')
+        AND EXISTS (SELECT 1 FROM chat_sessions cs WHERE cs.id = job_runs.book_id)
+    `).run().changes;
+    // Synonym-entityKey hatte Format "<bookId>|wort|satz"; erstes Segment extrahieren.
+    const synBack = db.prepare(`
+      UPDATE job_runs
+      SET book_id = CAST(SUBSTR(book_id, 1, INSTR(book_id, '|') - 1) AS INTEGER)
+      WHERE type = 'synonym' AND INSTR(CAST(book_id AS TEXT), '|') > 0
+    `).run().changes;
+    db.prepare('UPDATE schema_version SET version = 54').run();
+    logger.info(`DB-Migration auf Version 54 abgeschlossen (job_runs.book_id Backfill: check=${checkBack}, chat/book-chat=${chatBack}, synonym=${synBack}).`);
+  }
 
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);

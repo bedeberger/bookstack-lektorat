@@ -369,7 +369,7 @@ function _handleChatPost(req, res, { jobType, sessionSelect, labelFn, runFn }) {
   const userToken = getTokenForRequest(req);
 
   const { key: label, params: labelParams } = labelFn(session);
-  const jobId = createJob(jobType, session_id, userEmail, label, labelParams);
+  const jobId = createJob(jobType, session.book_id || 0, userEmail, label, labelParams, session_id);
   enqueueJob(jobId, () => runFn(jobId, session_id, userMsgResult.lastInsertRowid, message.trim(), userEmail, userToken));
   res.json({ jobId });
 }
@@ -548,7 +548,7 @@ function runBookChatJobDispatch(jobId, sessionId, userMsgId, message, userEmail,
 
 chatRouter.post('/chat', jsonBody, (req, res) => _handleChatPost(req, res, {
   jobType: 'chat',
-  sessionSelect: 'SELECT id, page_name, book_name FROM chat_sessions WHERE id = ? AND user_email = ?',
+  sessionSelect: 'SELECT id, book_id, page_name, book_name FROM chat_sessions WHERE id = ? AND user_email = ?',
   labelFn: s => s.page_name
     ? { key: 'job.label.chatPage', params: { name: s.page_name } }
     : { key: 'job.label.chat', params: null },
@@ -557,7 +557,7 @@ chatRouter.post('/chat', jsonBody, (req, res) => _handleChatPost(req, res, {
 
 chatRouter.post('/book-chat', jsonBody, (req, res) => _handleChatPost(req, res, {
   jobType: 'book-chat',
-  sessionSelect: 'SELECT id, book_name FROM chat_sessions WHERE id = ? AND user_email = ?',
+  sessionSelect: 'SELECT id, book_id, book_name FROM chat_sessions WHERE id = ? AND user_email = ?',
   labelFn: s => s.book_name
     ? { key: 'job.label.bookChatBook', params: { name: s.book_name } }
     : { key: 'job.label.bookChat', params: null },
