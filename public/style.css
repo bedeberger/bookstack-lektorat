@@ -503,9 +503,15 @@ body.focus-mode .session-banner--offline:hover { opacity: 1; }
   cursor: default;
 }
 .update-all-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
   font-size: 14px;
   line-height: 1;
   color: var(--color-muted);
+  flex-shrink: 0;
 }
 .update-all-btn-ring {
   --progress: 0%;

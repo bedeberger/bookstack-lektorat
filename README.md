@@ -120,17 +120,11 @@ Fehlt die Datei, startet der Server nicht.
 
 ---
 
-## BookStack PDF-Export anpassen
+## BookStack-Templates
 
-Im Repository liegt [`book.blade.php`](book.blade.php) als Beispiel für ein Buch-Export-Template (B5, Playfair Display / EB Garamond, automatisches Inhaltsverzeichnis, laufende Kopfzeilen).
+Unter [`themes/custom/`](themes/custom/) liegen ein BookStack-Theme mit angepasstem PDF-Export (Buch, Kapitel, Seite — B5, Playfair Display / EB Garamond, Inhaltsverzeichnis, laufende Kopfzeilen) sowie eine Editor-Erweiterung für ein Block-Format „Gedicht" (TinyMCE + Lexical).
 
-**Installation:**
-```
-themes/custom/exports/book.blade.php
-```
-Theme-Name in der BookStack `.env` setzen (`APP_THEME=custom`).
-
-> Das Template lädt Google Fonts via `@import url()` – der Server braucht Internetzugang für die PDF-Generierung.
+Vollständige Installationsanleitung: [docs/bookstack-templates.md](docs/bookstack-templates.md).
 
 ---
 
