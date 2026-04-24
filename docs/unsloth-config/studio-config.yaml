@@ -1,0 +1,144 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Unsloth-Studio / Axolotl Fine-Tuning-Config
+#
+# Ziel: Ministral-8B-Instruct-2410 QLoRA auf einer RTX 4000 Ada (20 GB VRAM).
+# Datensatz: die JSONL-Dateien aus der bookstack-lektorat Fine-Tuning-Export-
+# Karte (messages-Format, emit_text=false).
+#
+# Format: Axolotl-YAML — das ist die übliche Austauschform für Fine-Tuning-
+# Configs und wird von Unsloth Studio (Import-Dialog) sowie von Axolotl
+# selbst gelesen. Wenn Studio den Upload nicht akzeptiert, nimm die Werte
+# hier als Checkliste und klick sie in die GUI.
+#
+# Alle Kommentare erklären die Entscheidung, nicht nur den Wert — damit
+# Abweichungen bei anderen Büchern/GPUs informiert gemacht werden können.
+# ─────────────────────────────────────────────────────────────────────────
+
+# ─── Modell ──────────────────────────────────────────────────────────────
+# Unsloths vorquantisiertes 4-bit-Repo: keine Extra-Quantisierung beim Laden,
+# spart 3–5 min beim Start. Wenn du das Modell bereits lokal gepinnt hast,
+# ersetze mit dem lokalen Pfad.
+base_model: unsloth/Ministral-8B-Instruct-2410-bnb-4bit
+model_type: MistralForCausalLM
+tokenizer_type: AutoTokenizer
+
+load_in_4bit: true
+strict: false
+
+# Mistral-v3-Chat-Template matcht Ministral-8B-Instruct-2410. Wenn du ein
+# anderes Basemodell wählst, entsprechend anpassen (z.B. llama3, chatml).
+chat_template: mistral_v3
+
+# ─── Daten ───────────────────────────────────────────────────────────────
+# train.jsonl = Hauptdatensatz; val.jsonl separat (nicht aus train-Split).
+# `type: chat_template` triggert automatisches Chat-Template-Rendering.
+# `message_field_role`/`message_field_content` matchen das OpenAI-Schema,
+# das unser Exporter produziert.
+datasets:
+  - path: train.jsonl
+    type: chat_template
+    chat_template: mistral_v3
+    field_messages: messages
+    message_field_role: role
+    message_field_content: content
+
+# Dedizierte Val-Datei — kein zusätzlicher Split aus train.
+val_set_size: 0.0
+test_datasets:
+  - path: val.jsonl
+    type: chat_template
+    chat_template: mistral_v3
+    field_messages: messages
+    message_field_role: role
+    message_field_content: content
+    split: train   # Axolotl-Konvention: auch Val-Files werden als "train"-Split eingelesen
+
+dataset_prepared_path: ./cache/prepared
+output_dir: ./runs/ministral-buch
+
+# ─── LoRA / QLoRA ────────────────────────────────────────────────────────
+# r=32 ist der Sweet-Spot für "Buchwelt internalisieren". alpha == r ist die
+# moderne Unsloth-Empfehlung (früher 2×r). Dropout 0 wegen Unsloths
+# Fused-LoRA-Patch — schneller als >0 ohne Qualitätseinbusse bei 2 Epochen.
+adapter: qlora
+lora_r: 32
+lora_alpha: 32
+lora_dropout: 0
+lora_target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+lora_modules_to_save: []
+
+# ─── Sequenzen ───────────────────────────────────────────────────────────
+# 4096 matcht unseren Export-Filter (max_seq_tokens=4096). sample_packing=false
+# erhält Sample-Grenzen — wichtig für pageCont/chapTrans-Samples, die
+# Fortsetzungs-Semantik haben und nicht mit anderen Samples gemischt werden
+# dürfen.
+sequence_len: 4096
+sample_packing: false
+pad_to_sequence_len: true
+
+# ─── Kernentscheidung: Loss nur auf Assistant-Tokens ─────────────────────
+# `train_on_inputs: false` in Axolotl == `train_on_responses_only` bei
+# Unsloth: User-Prompts und System-Messages werden beim Loss maskiert,
+# Modell lernt nur die Assistant-Antwort zu produzieren. Ohne das
+# verwässert der Buch-Stil messbar.
+train_on_inputs: false
+group_by_length: false
+
+# ─── Batching & Optimierung (20 GB VRAM) ─────────────────────────────────
+# Effektive Batch = 2 × 8 = 16. VRAM-Peak ~14–16 GB auf 20 GB Ada — 4 GB
+# Puffer. adamw_8bit halbiert den Optimizer-State; zusammen mit bnb-4bit
+# ist das der Schlüssel, um Ministral-8B auf 20 GB zu trainieren.
+gradient_accumulation_steps: 8
+micro_batch_size: 2
+num_epochs: 2
+
+optimizer: adamw_8bit
+lr_scheduler: cosine
+learning_rate: 0.0002
+warmup_ratio: 0.03
+weight_decay: 0.01
+max_grad_norm: 1.0
+
+# ─── Precision ───────────────────────────────────────────────────────────
+# RTX 4000 Ada = Ada Lovelace = bf16-nativ. tf32 für MatMul-Speedup auf
+# Tensor Cores. flash_attention halbiert Attention-VRAM bei seq_len=4096.
+bf16: auto
+fp16: false
+tf32: true
+gradient_checkpointing: unsloth
+flash_attention: true
+
+# ─── Logging / Eval / Checkpoints ────────────────────────────────────────
+# Eval alle 200 Steps reicht, um die Kurve im Auge zu behalten ohne
+# Trainingszeit zu fressen. Early-Stopping nach 3 stagnierten Eval-Runs
+# verhindert Over-Train.
+logging_steps: 20
+eval_steps: 200
+save_steps: 500
+save_total_limit: 3
+save_strategy: steps
+evaluation_strategy: steps
+load_best_model_at_end: true
+metric_for_best_model: eval_loss
+greater_is_better: false
+early_stopping_patience: 3
+
+# ─── Reproduzierbarkeit ──────────────────────────────────────────────────
+seed: 42
+dataloader_num_workers: 2
+
+# ─── Token-Besonderheiten ────────────────────────────────────────────────
+# Ministral-Tokenizer hat bereits alle nötigen Special-Tokens; nur Pad
+# expliziet setzen, damit kein Warning beim Batching geworfen wird.
+special_tokens:
+  pad_token: "</s>"
+
+# ─── Unsloth-spezifisch (wird von Axolotl ignoriert, von Studio gelesen) ─
+use_unsloth: true

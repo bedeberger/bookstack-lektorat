@@ -12,8 +12,9 @@ Zwei Wege, je nach dem wie du arbeitest:
 
 | Datei | Zweck |
 |---|---|
-| [`train_book.py`](train_book.py) | Training + Merge + GGUF-Export in einem Script |
-| [`requirements.txt`](requirements.txt) | Gepinnte Paket-Versionen |
+| [`studio-config.yaml`](studio-config.yaml) | Deklarative Config für Studio-Import (Axolotl-Format) — oder als Checkliste für die GUI |
+| [`train_book.py`](train_book.py) | CLI-Script: Training + Merge + GGUF-Export in einem |
+| [`requirements.txt`](requirements.txt) | Gepinnte Paket-Versionen (nur für CLI-Pfad) |
 | [`Modelfile.example`](Modelfile.example) | Ollama-Modelfile für das fertige Modell |
 
 ## Setup (einmalig)
@@ -47,20 +48,34 @@ hochladen, siehe unten).
 ## Unsloth Studio (UI-Route)
 
 Wenn du Studio statt der Kommandozeile nutzt — der Export ist bereits
-kompatibel. Ablauf:
+kompatibel. Zwei Wege in Studio:
 
-1. **Dataset hochladen:** In Studio → „Upload Dataset" → `train.jsonl` +
-   `val.jsonl` wählen. Format-Auswahl: **Conversational / messages**.
-   Studio erkennt das `messages`-Feld automatisch und rendert das
-   Chat-Template basierend auf dem ausgewählten Basemodell.
+### Variante A: Config-Datei importieren (falls Studio das unterstützt)
+
+Studio hat in neueren Versionen einen Config-Import. Ablauf:
+
+1. Studio öffnen → neues Projekt → „Import config" (oder Name ähnlich).
+2. [`studio-config.yaml`](studio-config.yaml) hochladen.
+3. `train.jsonl` und `val.jsonl` als Dataset hochladen.
+4. Training starten.
+
+Wenn Studio die YAML nicht frisst (je nach Version kann die Upload-Option
+fehlen oder ein anderes Format verlangen), geh nach Variante B und nutze die
+Datei als Checkliste.
+
+### Variante B: Parameter manuell in der GUI setzen
+
+1. **Dataset hochladen:** Studio → „Upload Dataset" → `train.jsonl` +
+   `val.jsonl`. Format-Auswahl: **Conversational / messages**. Studio
+   erkennt das `messages`-Feld automatisch und rendert das Chat-Template
+   basierend auf dem ausgewählten Basemodell.
 2. **Basemodell wählen:** `unsloth/Ministral-8B-Instruct-2410-bnb-4bit`.
-3. **Training-Parameter** (die wichtigen — Studio hat für den Rest gute
-   Defaults):
+3. **Training-Parameter** (genau wie in [studio-config.yaml](studio-config.yaml)):
 
-   | Parameter | Wert | Grund |
+   | GUI-Feld | Wert | Grund |
    |---|---|---|
-   | `max_seq_length` | **4096** | matcht unseren Export-Filter |
-   | `per_device_train_batch_size` | **2** | füllt 20 GB VRAM gut aus |
+   | `max_seq_length` / `sequence_len` | **4096** | matcht unseren Export-Filter |
+   | `per_device_train_batch_size` / `micro_batch_size` | **2** | füllt 20 GB VRAM gut aus |
    | `gradient_accumulation_steps` | **8** | effektive Batch = 16 |
    | `num_train_epochs` | **2** | Welt-Internalisierung braucht 2 Durchläufe |
    | `learning_rate` | **2e-4** | LoRA-Standard |
@@ -71,12 +86,14 @@ kompatibel. Ablauf:
    | `lora_dropout` | **0** | Unsloth-patched: 0 ist am schnellsten |
    | `optim` | **adamw_8bit** | halbiert Optimizer-VRAM |
    | `bf16` | **true** | Ada Lovelace unterstützt bf16 nativ |
+   | `sample_packing` | **false** | erhält Sample-Grenzen |
 
-4. **Train-on-Responses-Only:** in Studio unter „Advanced" → `train_on_responses_only` **aktivieren** mit
-   `instruction_part = "[INST]"`, `response_part = "[/INST]"`. Das ist der
-   wichtigste Qualitäts-Hebel: Loss zählt nur auf die Assistant-Antwort, nicht
-   auf unsere System-Prompts und User-Fragen. Studio vergisst diesen Schalter
-   gerne zu defaulten — nicht überspringen.
+4. **Train-on-Responses-Only:** unter „Advanced" oder ähnlich → aktivieren
+   mit `instruction_part = "[INST]"`, `response_part = "[/INST]"`. In der
+   YAML entspricht das `train_on_inputs: false`. Das ist der wichtigste
+   Qualitäts-Hebel — Loss zählt nur auf die Assistant-Antwort, nicht auf
+   unsere System-Prompts und User-Fragen. Studio vergisst diesen Schalter
+   gerne zu defaulten; nicht überspringen.
 5. **Training starten.** Studio zeigt `train/loss` und `eval/loss` live.
    Erwartung: eval_loss fällt in den ersten ~500 Steps auf ~1.4–1.8, dann
    stabilisiert es sich.
@@ -84,8 +101,8 @@ kompatibel. Ablauf:
    Runterladen, zu Ollama verfrachten (siehe [„In Ollama einbinden"](#in-ollama-einbinden)).
 
 Das `train_book.py`-Script in diesem Ordner bildet exakt diese Config
-lokal als Python nach — nützlich zum Testen oder wenn Studio mal
-nicht erreichbar ist.
+lokal als Python nach — nützlich zum Testen oder wenn Studio mal nicht
+erreichbar ist.
 
 ## Run: Single-GPU-CLI (primäre Route)
 
