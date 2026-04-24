@@ -8,6 +8,16 @@
 //   - $watch($root.showFinetuneExportCard): on-visible → Active-Job-Check.
 //   - book:changed / view:reset: Poller stoppen, State leeren.
 //   - job:reconnect (type='finetune-export'): Loading-State übernehmen.
+//
+// Default-Profil: Unsloth Studio + Ministral-8B-QLoRA auf 20-GB-GPU
+// (z.B. RTX 4000 Ada). Ableitungen:
+//   maxChars=4000    → p95 ≈ 1500 Tokens → passt in seq_len=4096
+//   maxSeqTokens=4096 → Studio-Empfehlung für 20-GB-QLoRA
+//   emitText=false   → Studio rendert das Chat-Template selbst auf Basis des
+//                      gewählten Basemodells; ein vorgerenderter text-Feld-
+//                      String würde kollidieren. Nur einschalten, wenn du
+//                      mit einem CLI-Trainer arbeitest, der `dataset_text_field`
+//                      erwartet.
 
 import { finetuneExportMethods } from '../finetune-export.js';
 import { createCardJobFeature } from './job-feature-card.js';
@@ -20,10 +30,12 @@ export function registerFinetuneExportCard() {
     finetuneTypeDialog:     true,
     finetuneTypeAuthorChat: true,
     finetuneTypeCorrection: true,
-    finetuneMinChars:   200,
-    finetuneMaxChars:   4000,
-    finetuneValSplit:   0.1,
-    finetuneValSeed:    0,
+    finetuneMinChars:     200,
+    finetuneMaxChars:     4000,
+    finetuneValSplit:     0.1,
+    finetuneValSeed:      0,
+    finetuneMaxSeqTokens: 4096,   // Sweet-Spot Ministral-8B-QLoRA @ 20 GB VRAM
+    finetuneEmitText:     false,
 
     finetuneLoading:  false,
     finetuneProgress: 0,
@@ -114,10 +126,12 @@ export function registerFinetuneExportCard() {
             authorChat: !!this.finetuneTypeAuthorChat,
             correction: !!this.finetuneTypeCorrection,
           },
-          min_chars: Number(this.finetuneMinChars) || 200,
-          max_chars: Number(this.finetuneMaxChars) || 4000,
-          val_split: Number(this.finetuneValSplit) || 0,
-          val_seed:  Number(this.finetuneValSeed)  || 0,
+          min_chars:      Number(this.finetuneMinChars) || 200,
+          max_chars:      Number(this.finetuneMaxChars) || 4000,
+          val_split:      Number(this.finetuneValSplit) || 0,
+          val_seed:       Number(this.finetuneValSeed)  || 0,
+          max_seq_tokens: Number(this.finetuneMaxSeqTokens) || 0,
+          emit_text:      !!this.finetuneEmitText,
         };
       },
       async onDone(job) {

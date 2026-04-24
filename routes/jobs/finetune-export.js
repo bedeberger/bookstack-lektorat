@@ -29,6 +29,51 @@ function hashSplit(id, seed) {
   return ((h[0] << 8) | h[1]) / 0xffff;
 }
 
+// Token-Schätzer. Für Ministral/Mistral-Tokenizer ergibt sich empirisch:
+// DE ≈ 3.3 Zeichen/Token, EN ≈ 4.0 Zeichen/Token. Bewusst konservativ
+// (eher aufrunden), damit die `maxSeqTokens`-Filter nicht in Truncation läuft.
+function estimateTokens(text, langIsEn) {
+  if (!text) return 0;
+  const perToken = langIsEn ? 4.0 : 3.3;
+  return Math.ceil(text.length / perToken);
+}
+
+// Ministral-V3/Mistral-Chat-Template (minimaler Umriss für Token-Budget und
+// optionale Text-Felder). Das echte Template fügt BOS/EOS/[INST] ein — Unsloth
+// rendert das selbst. Wir brauchen hier nur ein realistisches String-Gerüst
+// für Längen-Schätzung und `emitText`.
+function renderMistralChat(messages) {
+  let out = '<s>';
+  const sys = messages.find(m => m.role === 'system')?.content || '';
+  const turns = messages.filter(m => m.role !== 'system');
+  for (let i = 0; i < turns.length; i++) {
+    const m = turns[i];
+    if (m.role === 'user') {
+      const prefix = (i === 0 && sys) ? sys + '\n\n' : '';
+      out += '[INST] ' + prefix + m.content + ' [/INST]';
+    } else if (m.role === 'assistant') {
+      out += ' ' + m.content + '</s>';
+    }
+  }
+  return out;
+}
+
+// Perzentile aus sortiertem Numeric-Array (Nearest-Rank).
+function percentile(sortedNums, p) {
+  if (!sortedNums.length) return 0;
+  const idx = Math.min(sortedNums.length - 1, Math.floor(sortedNums.length * p));
+  return sortedNums[idx];
+}
+
+// Empfohlene `max_seq_length` für Unsloth/TRL: nächste Potenz von 2 über p95
+// mit ~10 % Puffer fürs Chat-Template. Mindestens 1024, max 16384.
+function recommendSeqLen(p95) {
+  const target = Math.ceil(p95 * 1.1);
+  let n = 1024;
+  while (n < target && n < 16384) n *= 2;
+  return Math.max(1024, Math.min(16384, n));
+}
+
 function splitParagraphs(text) {
   return text.split(/\n\s*\n+/).map(p => p.trim()).filter(Boolean);
 }
@@ -299,6 +344,11 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
     const maxChars = Math.max(minChars + 100, opts.maxChars | 0);
     const valSplit = Math.max(0, Math.min(0.5, Number.isFinite(opts.valSplit) ? opts.valSplit : 0.1));
     const seed = Number.isFinite(opts.valSeed) ? opts.valSeed : 0;
+    // `maxSeqTokens`: hartes Token-Limit nach Chat-Template-Wrapping. 0/null =
+    // kein Filter (alles durch, Token-Stats trotzdem berechnen). Defaults:
+    // 4096 ist Sweet-Spot für Ministral-8B-QLoRA auf 20-GB-Karten.
+    const maxSeqTokens = Math.max(0, Number(opts.maxSeqTokens) || 0);
+    const emitText = !!opts.emitText;
 
     const samples = [];
     let styleCount = 0, sceneCount = 0, dialogCount = 0, authorChatCount = 0, correctionCount = 0;
@@ -1540,30 +1590,73 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
     }
 
     updateJob(jobId, { progress: 95, statusText: 'finetune.phase.building' });
+
+    // ── Token-Budget pro Sample (für Stats + Filter) ──────────────────────
+    // Pro Sample: Summe aller Nachrichten + fester Template-Overhead (BOS/EOS,
+    // [INST]/[/INST]-Marker, Rollen-Separatoren). 20 Tokens sind eine sichere
+    // Obergrenze für Ministral/Mistral-V3.
+    const TEMPLATE_OVERHEAD = 20;
+    const withTokens = samples.map(s => {
+      const sum = s.messages.reduce((a, m) => a + estimateTokens(m.content, langIsEn), 0);
+      return { s, tokens: sum + TEMPLATE_OVERHEAD };
+    });
+
+    // ── Seq-Filter (optional) ─────────────────────────────────────────────
+    // Samples rauswerfen, die bei `maxSeqTokens` zu stiller Truncation führen
+    // würden. Ohne Filter werden sie später beim Training entweder weggeworfen
+    // (SFTTrainer ab Version X) oder — schlimmer — am Assistant-Ende
+    // abgeschnitten.
+    const kept = maxSeqTokens > 0
+      ? withTokens.filter(e => e.tokens <= maxSeqTokens)
+      : withTokens;
+    const droppedCount = withTokens.length - kept.length;
+
+    // ── Token-Histogramm (p50/p95/max) ────────────────────────────────────
+    const tokenCounts = kept.map(e => e.tokens).sort((a, b) => a - b);
+    const tokensP50 = percentile(tokenCounts, 0.50);
+    const tokensP95 = percentile(tokenCounts, 0.95);
+    const tokensMax = tokenCounts.length ? tokenCounts[tokenCounts.length - 1] : 0;
+    const recommendedSeqLen = recommendSeqLen(tokensP95);
+
     const trainArr = [];
     const valArr = [];
-    for (const s of samples) {
+    for (const { s } of kept) {
       if (valSplit > 0 && hashSplit(s.id, seed) < valSplit) valArr.push(s);
       else trainArr.push(s);
     }
+
+    // JSONL-Line: immer `messages`-Feld. Mit `emitText=true` zusätzlich ein
+    // vorgerendertes `text`-Feld (Mistral-Template), damit Unsloth-Userinnen
+    // `SFTTrainer(dataset_text_field="text")` ohne `formatting_func` nutzen
+    // können. Das `messages`-Feld bleibt erhalten — manche Tools wollen das.
+    const serialize = (sample) => {
+      const obj = { messages: sample.messages };
+      if (emitText) obj.text = renderMistralChat(sample.messages);
+      return JSON.stringify(obj);
+    };
     const toJsonl = (arr) => arr.length
-      ? arr.map(s => JSON.stringify({ messages: s.messages })).join('\n') + '\n'
+      ? arr.map(serialize).join('\n') + '\n'
       : '';
 
     const trainJsonl = toJsonl(trainArr);
     const valJsonl   = toJsonl(valArr);
     const stats = {
-      total: samples.length,
+      total: kept.length,
+      dropped: droppedCount,
       train: trainArr.length,
       val: valArr.length,
       styleCount, sceneCount, dialogCount, authorChatCount, correctionCount,
       trainBytes: Buffer.byteLength(trainJsonl, 'utf8'),
       valBytes:   Buffer.byteLength(valJsonl,   'utf8'),
+      tokensP50, tokensP95, tokensMax,
+      recommendedSeqLen,
+      maxSeqTokens: maxSeqTokens || null,
+      emitText,
     };
 
     storeFinetuneResult(jobId, { trainJsonl, valJsonl });
     completeJob(jobId, { stats });
-    logger.info(`Finetune-Export fertig: ${stats.total} Samples (${styleCount} style / ${sceneCount} scene / ${dialogCount} dialog / ${authorChatCount} authorChat / ${correctionCount} correction) → ${trainArr.length} train, ${valArr.length} val.`);
+    logger.info(`Finetune-Export fertig: ${stats.total} Samples (${styleCount} style / ${sceneCount} scene / ${dialogCount} dialog / ${authorChatCount} authorChat / ${correctionCount} correction) → ${trainArr.length} train, ${valArr.length} val, dropped=${droppedCount}, p95=${tokensP95} tok, max=${tokensMax} tok, recSeq=${recommendedSeqLen}.`);
   } catch (e) {
     if (e.name !== 'AbortError') logger.error(`Fehler Finetune-Export (book=${bookId}): ${e.message}`);
     failJob(jobId, e);
@@ -1571,7 +1664,8 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
 }
 
 finetuneExportRouter.post('/finetune-export', jsonBody, (req, res) => {
-  const { book_id, book_name, types, min_chars, max_chars, val_split, val_seed } = req.body || {};
+  const { book_id, book_name, types, min_chars, max_chars, val_split, val_seed,
+          max_seq_tokens, emit_text } = req.body || {};
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const opts = {
     types: {
@@ -1585,6 +1679,8 @@ finetuneExportRouter.post('/finetune-export', jsonBody, (req, res) => {
     maxChars: Number(max_chars) || 4000,
     valSplit: Number.isFinite(Number(val_split)) ? Number(val_split) : 0.1,
     valSeed:  Number(val_seed)  || 0,
+    maxSeqTokens: Number(max_seq_tokens) || 0,
+    emitText: !!emit_text,
   };
   if (!Object.values(opts.types).some(v => v)) {
     return res.status(400).json({ error_code: 'FINETUNE_NO_TYPES' });

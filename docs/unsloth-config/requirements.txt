@@ -1,0 +1,30 @@
+# Getestet auf CUDA 12.1 / Python 3.11 / RTX 4000 Ada (Ada Lovelace).
+# Versionen sind bewusst gepinnt — Unsloth/TRL/transformers müssen als Tupel
+# zusammenpassen, sonst bricht entweder load_in_4bit oder train_on_responses_only.
+
+# Kernkomponenten
+torch==2.4.0
+transformers==4.46.3
+trl==0.11.4
+peft==0.13.2
+accelerate==1.0.1
+
+# Unsloth (installiert sich mit Abhängigkeiten selbst; hier als Pin für Reproduzierbarkeit)
+unsloth @ git+https://github.com/unslothai/unsloth.git@2024.12.9
+
+# 4-bit Quantisierung
+bitsandbytes==0.44.1
+
+# Tokenizer / Sentencepiece (Mistral braucht protobuf)
+sentencepiece==0.2.0
+protobuf==4.25.5
+
+# Dataset-Handling
+datasets==3.1.0
+
+# GGUF-Export (llama.cpp-Backend, wird beim ersten Aufruf automatisch gebaut)
+# Falls du den Build vermeiden willst: `save_pretrained_gguf` auskommentieren
+# und GGUF manuell via `llama.cpp`'s `convert_hf_to_gguf.py` erzeugen.
+
+# Monitoring (optional)
+tensorboard==2.18.0

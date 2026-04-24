@@ -1,0 +1,25 @@
+# Ollama-Modelfile für das fine-getunete Ministral-8B.
+# Vor Benutzung: `BOOK_TITLE` im SYSTEM-Feld auf deinen Buchtitel setzen.
+#
+# Build:
+#   cd runs/ministral-buch/gguf
+#   ollama create buch-autor -f ../../../Modelfile.example
+#
+# Test:
+#   ollama run buch-autor "Schreibe den Anfang eines neuen Kapitels."
+
+FROM ./unsloth.Q5_K_M.gguf
+
+# Mistral-Chat-Template — passt zu Ministral-8B-Instruct-2410.
+TEMPLATE """{{ if .System }}<s>[INST] {{ .System }}
+
+{{ .Prompt }} [/INST]{{ else }}<s>[INST] {{ .Prompt }} [/INST]{{ end }} {{ .Response }}</s>"""
+
+PARAMETER temperature       0.8
+PARAMETER top_p             0.95
+PARAMETER repeat_penalty    1.05
+PARAMETER num_ctx           8192
+
+# System-Prompt muss der System-Line aus dem Training entsprechen —
+# sonst "verliert" das Modell die internalisierte Persona.
+SYSTEM """Du bist die Stimme des Autors von «Mein Buchtitel» und antwortest einer Leserin im Gespräch. Antworte knapp, präzise und im Geist des Buchs."""

@@ -88,6 +88,25 @@
         </label>
       </div>
     </div>
+
+    <div class="finetune-row">
+      <label class="finetune-label" x-text="$app.t('finetune.unsloth')"></label>
+      <div class="finetune-inline">
+        <label class="finetune-inline-field">
+          <span x-text="$app.t('finetune.unsloth.maxSeqTokens')"></span>
+          <input type="number" min="0" max="16384" step="512" x-model.number="finetuneMaxSeqTokens" class="finetune-num">
+        </label>
+      </div>
+      <div class="finetune-types">
+        <label class="finetune-check">
+          <input type="checkbox" x-model="finetuneEmitText">
+          <span>
+            <span class="finetune-check-title" x-text="$app.t('finetune.unsloth.emitText')"></span>
+            <span class="finetune-check-desc" x-text="$app.t('finetune.unsloth.emitText.desc')"></span>
+          </span>
+        </label>
+      </div>
+    </div>
   </div>
 
   <div x-show="finetuneLoading" class="progress-bar-wrap">
@@ -107,6 +126,10 @@
         <span class="tok-badge tok-neutral" x-show="finetuneStats.dialogCount > 0" x-text="$app.t('finetune.stats.dialog', { n: finetuneStats.dialogCount })"></span>
         <span class="tok-badge tok-neutral" x-show="finetuneStats.authorChatCount > 0" x-text="$app.t('finetune.stats.authorChat', { n: finetuneStats.authorChatCount })"></span>
         <span class="tok-badge tok-neutral" x-show="finetuneStats.correctionCount > 0" x-text="$app.t('finetune.stats.correction', { n: finetuneStats.correctionCount })"></span>
+        <span class="tok-badge tok-neutral" x-show="finetuneStats.tokensP95 > 0" x-text="$app.t('finetune.stats.tokensP95', { n: finetuneStats.tokensP95 })"></span>
+        <span class="tok-badge tok-neutral" x-show="finetuneStats.tokensMax > 0" x-text="$app.t('finetune.stats.tokensMax', { n: finetuneStats.tokensMax })"></span>
+        <span class="tok-badge tok-neutral" x-show="finetuneStats.recommendedSeqLen > 0" x-text="$app.t('finetune.stats.recommendedSeqLen', { n: finetuneStats.recommendedSeqLen })"></span>
+        <span class="tok-badge tok-med" x-show="finetuneStats.dropped > 0" x-text="$app.t('finetune.stats.dropped', { n: finetuneStats.dropped })"></span>
       </div>
 
       <div class="finetune-downloads">
