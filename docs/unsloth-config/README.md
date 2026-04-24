@@ -62,9 +62,26 @@ Laut [Unsloth-Studio-Doku](https://unsloth.ai/docs/new/studio) unterstützt
 Studio explizit YAML-Import: *„Import a YAML config and Studio will pre-fill
 the relevant settings."*
 
-**Wichtig:** Die Studio-YAML enthält **nur `training:`, `lora:`, `logging:`** —
+**Wichtig:** Die Studio-YAML enthält **nur `training:` und `lora:`** —
 Modell und Dataset werden weiter in der GUI gewählt. Der Import pre-fillt
-also nur die Hyperparameter.
+nur die Hyperparameter.
+
+**Schema-Kuriosität:** Studio benutzt eigene Key-Namen, nicht die von
+HuggingFace TrainingArguments. Kritische Unterschiede:
+
+| HF-/Axolotl-Name | Studio-Name |
+|---|---|
+| `train_on_responses_only` | `train_on_completions` |
+| `warmup_ratio` | `warmup_steps` (absolut!) |
+| `num_train_epochs` | `num_epochs` |
+| `per_device_train_batch_size` | `batch_size` |
+| `seed` | `random_seed` |
+| `lora.r` | `lora.lora_r` |
+
+Unsere [`studio-config.yaml`](studio-config.yaml) nutzt bereits die
+Studio-Namen. Drittanbieter-YAMLs vor dem Upload auf diese Keys prüfen —
+falsche Keys werden **stumm ignoriert** (kein Fehler, aber Hyperparameter
+bleiben auf Default).
 
 Ablauf:
 
@@ -83,10 +100,11 @@ Ablauf:
 4. Im „Training & Config"-Tab → **Import YAML** →
    [`studio-config.yaml`](studio-config.yaml) hochladen. Hyperparameter
    werden befüllt.
-5. Kurz überprüfen, dass `train_on_responses_only: true` aus der YAML
-   tatsächlich übernommen wurde (Studio-Versionen, die diesen Key noch nicht
-   kennen, ignorieren ihn — dann manuell unter „Advanced / Loss masking"
-   aktivieren mit `instruction_part = "[INST]"`, `response_part = "[/INST]"`).
+5. Kurz überprüfen, dass `train_on_completions: true` aus der YAML
+   tatsächlich übernommen wurde (Toggle sichtbar im Parameters-Panel).
+   Fehlt der Toggle in der GUI → Studio-Version zu alt, auf neuere updaten
+   oder CLI-Script nutzen. Ohne Completions-Masking verwässert der Buch-
+   Stil messbar.
 6. **Training starten.** Studio zeigt `train/loss` und `eval/loss` live.
    Erwartung: eval_loss fällt in den ersten ~500 Steps auf ~1.4–1.8, dann
    stabilisiert es sich.
@@ -157,16 +175,24 @@ nicht RS-LoRA, nicht LoftQ):
 - **Sample Packing** → **aus**. Packing würde unabhängige Fortsetzungen
   mischen.
 
-**Train-on-Responses-Only** — wichtigster Qualitäts-Hebel. Je nach
-Studio-Version unter **Advanced → Loss masking** oder als Toggle im
-Parameters-Panel:
+**Train on Completions** — wichtigster Qualitäts-Hebel. Studio-Toggle
+heisst genau so (entspricht HF-seitigem `train_on_responses_only`).
+Findest du ihn im Parameters-Panel, aktivieren. Chat-Template-Marker
+leitet Studio intern aus dem Modell ab — für Ministral-3 sind das
+`[INST]`/`[/INST]`, kein manueller Eintrag nötig.
 
-- `instruction_part` = `[INST]`
-- `response_part` = `[/INST]`
+Fehlt der Toggle → Studio-Version zu alt: update, Config-Upload
+(Variante A) mit `train_on_completions: true` erzwingen, oder auf
+CLI-Script ausweichen.
 
-Loss zählt dann nur auf Assistant-Antworten. Studio defaulted das oft
-**nicht** — nicht überspringen. Kein Toggle auffindbar → Config-Upload
-(Variante A) erzwingen oder auf CLI-Script ausweichen.
+**Ministral-3-spezifisch — Layer-Auswahl unter Advanced:**
+
+- **`Finetune vision layers`** → **aus**. Ministral-3 hat einen 0.4 B
+  Vision-Encoder; bei reinem Text-Finetuning würde der sonst ohne Bild-
+  Daten trainiert (VRAM-Waste + Vision-Gewichte-Korruption).
+- **`Finetune language layers`** → **an** (Studio-Default).
+- **`Finetune attention modules`** → **an**.
+- **`Finetune MLP modules`** → **an**.
 
 #### Training-Spalte (rechts)
 

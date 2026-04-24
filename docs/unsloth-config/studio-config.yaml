@@ -1,104 +1,94 @@
 # ─────────────────────────────────────────────────────────────────────────
-# Unsloth-Studio Training-Config (Studio-natives Format)
+# Unsloth-Studio Training-Config (Studio-natives Format, Schema Dez 2025)
 #
-# Verwendung: In Studio → „Import YAML" → diese Datei hochladen. Studio
-# pre-fillt die Hyperparameter. Modell und Dataset werden anschliessend in
-# der GUI gewählt — die Studio-YAML enthält nach Doku ausdrücklich
-# KEINE model/dataset-Sektionen.
+# Keys entsprechen exakt dem Schema, das Studio über „Training Config →
+# Save" exportiert. Frühere Versionen dieser Datei benutzten TrainingArguments-
+# Namen (num_train_epochs, per_device_train_batch_size, warmup_ratio,
+# train_on_responses_only, lora.r …) — Studio ignoriert diese Keys beim
+# Import still. Die Namen hier sind die einzigen, die Studio tatsächlich
+# liest.
+#
+# Verwendung: In Studio → „Training Config → Upload" → diese Datei
+# hochladen. Studio pre-fillt die Hyperparameter. Modell und Dataset werden
+# weiterhin in der GUI gewählt.
 #
 # Ziel: Ministral-3-8B-Instruct-2512 QLoRA auf 1× RTX 4000 Ada (20 GB VRAM)
 # mit den JSONL-Exports der Fine-Tuning-Export-Karte.
 #
 # Vor dem Import in Studio noch in der GUI einstellen:
-#   1. Model-Tab:   unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit,
-#                   Method = QLoRA
-#   2. Dataset-Tab: train.jsonl + val.jsonl (Format: conversational/messages)
+#   1. Dataset-Spalte: train.jsonl (Upload/Local), val.jsonl als Eval-File.
+#   2. Advanced:       unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit,
+#                      Method = QLoRA.
 #
 # Hinweis Tokenizer: Ministral-3 nutzt Mistral-Common >= 1.8.6. Das Chat-
-# Template rendert weiterhin [INST]/[/INST] als Response-Marker, der Rest
-# (BOS, Tool-Calls) läuft über MistralCommonBackend. Unsloth kümmert sich
-# selbst, sofern Version >= Dez-2025 installiert ist.
+# Template rendert weiterhin [INST]/[/INST] um Assistant-Antworten. Unsloth-
+# Studio kümmert sich selbst um die Masking-Marker — `train_on_completions`
+# reicht.
 #
-# Alle Kommentare erklären die Entscheidung, damit Abweichungen bei anderen
-# Büchern/GPUs informiert gemacht werden können.
+# Hinweis fehlende Keys: Studios Schema kennt keine Entsprechung zu
+# `load_best_model_at_end`, `early_stopping_patience`, `save_total_limit`,
+# `bf16/fp16` (auto), `max_grad_norm`, `eval_strategy`, `save_strategy`.
+# Best-Checkpoint-Auswahl und Early-Stopping musst du visuell am Loss-Chart
+# entscheiden, oder auf das CLI-Script [train_book.py] ausweichen, das die
+# fehlenden Mechanismen vollständig abdeckt.
 # ─────────────────────────────────────────────────────────────────────────
 
 training:
   # ─── Step-vs-Epoch-Strategie ─────────────────────────────────────────
-  # max_steps=0 → Epochen-gesteuert. 2 Epochen sind der Default für Welt-
-  # Internalisierung; Studio stoppt bei Eval-Plateau dank
-  # early_stopping_patience auch früher.
+  # max_steps=0 → Epochen-gesteuert. num_epochs=2 ist Default für
+  # Welt-Internalisierung. In Studio: „Use Epochs"-Toggle aktivieren.
   max_steps: 0
-  num_train_epochs: 2
+  num_epochs: 2
 
   # ─── Batching (20-GB-VRAM-Profil) ────────────────────────────────────
-  # effektive Batch = 2 × 8 = 16. VRAM-Peak ~14–16 GB auf RTX 4000 Ada,
-  # lässt ~4 GB Puffer.
-  per_device_train_batch_size: 2
-  per_device_eval_batch_size: 2
+  # effektive Batch = 2 × 8 = 16. VRAM-Peak ~14–16 GB auf RTX 4000 Ada.
+  batch_size: 2
   gradient_accumulation_steps: 8
 
   # ─── Sequenzlänge ────────────────────────────────────────────────────
-  # 4096 matcht unseren Export-Filter (max_seq_tokens=4096). p95 unserer
-  # Samples ≈ 1500 Tokens → 2.7× Headroom. Auf 8192 bringt null Quality-
-  # Gain und doppelten VRAM-Verbrauch.
+  # 4096 matcht Export-Filter (max_seq_tokens=4096). p95 unserer Samples
+  # ≈ 1500 Tokens → 2.7× Headroom. 8192 bringt null Quality-Gain bei
+  # doppeltem VRAM.
   max_seq_length: 4096
 
   # ─── Optimizer & LR-Schedule ─────────────────────────────────────────
   # adamw_8bit halbiert Optimizer-State-VRAM; zusammen mit bnb-4bit der
   # Schlüssel für Ministral-3-8B auf 20 GB. Cosine statt linear: stabiler
-  # bei 2 Epochen. warmup_ratio=0.03 reicht — Unsloth patcht den LoRA-
-  # Init-Warmup intern.
+  # bei 2 Epochen. Studio kennt nur warmup_steps (absolut), keine
+  # warmup_ratio. 20 Steps ≈ 1–3 % eines typischen Buch-Runs — Unsloth
+  # patcht den LoRA-Init-Warmup zusätzlich intern.
   learning_rate: 2.0e-4
   lr_scheduler_type: cosine
-  warmup_ratio: 0.03
+  warmup_steps: 20
   weight_decay: 0.01
-  max_grad_norm: 1.0
   optim: adamw_8bit
-
-  # ─── Precision ───────────────────────────────────────────────────────
-  # Ada Lovelace unterstützt bf16 nativ. Niemals fp16 + bf16 gleichzeitig.
-  bf16: true
-  fp16: false
 
   # ─── Packing ─────────────────────────────────────────────────────────
   # false: erhält Sample-Grenzen. Wichtig für pageCont/chapTrans/scnTrans-
-  # Samples aus dem Export, die Fortsetzungs-Semantik haben. Packing würde
-  # zwei unabhängige Fortsetzungen in eine Sequenz mischen.
+  # Samples aus dem Export — Packing würde unabhängige Fortsetzungen in
+  # eine Sequenz mischen.
   packing: false
 
-  # ─── Eval + Checkpointing ────────────────────────────────────────────
-  # Eval alle 200 Steps, speichern alle 500. load_best_model_at_end wählt
-  # am Ende den Checkpoint mit niedrigstem eval_loss — zusammen mit
-  # early_stopping_patience verhindert das Over-Training.
-  eval_strategy: steps
+  # ─── Eval + Checkpointing (Studio-Minimalschema) ─────────────────────
+  # Studio steuert Eval/Save nur über die Step-Intervalle. eval_strategy/
+  # save_strategy sind implizit „steps", sobald eval_steps/save_steps > 0.
   eval_steps: 200
-  save_strategy: steps
   save_steps: 500
-  save_total_limit: 3
-  load_best_model_at_end: true
-  metric_for_best_model: eval_loss
-  greater_is_better: false
-  early_stopping_patience: 3
 
   # ─── Loss-Masking (wichtigster Qualitäts-Hebel) ──────────────────────
-  # Loss zählt NUR auf Assistant-Tokens — User-Prompts und System-Messages
-  # werden maskiert. Ohne das lernt das Modell auch unsere Paraphrase-
-  # Fragen als Produktion, der Buch-Stil verwässert messbar.
-  # instruction_part/response_part müssen exakt zum Chat-Template von
-  # Ministral-3 passen. Mistral-Common rendert weiterhin [INST]/[/INST]
-  # um Assistant-Antworten herum, deshalb bleiben die Marker identisch
-  # zum 2410-Vorgänger. Falls Studio diese Keys nicht pre-fillt: in der
-  # GUI unter „Advanced / Loss masking" setzen. Verifizieren:
+  # Studio-Schlüssel: train_on_completions (entspricht Unsloths
+  # train_on_responses_only). Ohne das lernt das Modell auch aus System-
+  # Prompts und User-Fragen, Buch-Stil verwässert messbar. Instruction-/
+  # Response-Marker werden intern aus dem Chat-Template des gewählten
+  # Modells abgeleitet — für Ministral-3 sind das [INST]/[/INST].
+  # Verifizieren vor dem Run:
   #   python -c "from unsloth import FastLanguageModel; \
   #     _, tok = FastLanguageModel.from_pretrained('unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit', load_in_4bit=True); \
   #     print(tok.apply_chat_template([{'role':'user','content':'x'},{'role':'assistant','content':'y'}], tokenize=False))"
-  train_on_responses_only: true
-  instruction_part: "[INST]"
-  response_part: "[/INST]"
+  train_on_completions: true
 
   # ─── Reproduzierbarkeit ──────────────────────────────────────────────
-  seed: 42
+  random_seed: 42
 
   # ─── Memory-Tricks ───────────────────────────────────────────────────
   # "unsloth" statt true = Unsloths schnellere Gradient-Checkpointing-
@@ -107,17 +97,16 @@ training:
 
 lora:
   # ─── Rang & Alpha ────────────────────────────────────────────────────
-  # r=32 ist Sweet-Spot für "Welt internalisieren". Weniger: zu wenig
-  # Kapazität für alle Figuren/Orte. Mehr: Over-Training-Risiko bei 2
-  # Epochen. alpha==r ist moderne Unsloth-Empfehlung (früher 2×r).
-  r: 32
+  # r=32 ist Sweet-Spot für "Welt internalisieren". Studio-Default 16 ist
+  # zu klein — verliert Kapazität für Figuren/Orte. alpha=32 = r (moderne
+  # Unsloth-Empfehlung; früher 2×r).
+  lora_r: 32
   lora_alpha: 32
 
   # ─── Dropout ─────────────────────────────────────────────────────────
   # 0 ist am schnellsten dank Unsloths Fused-LoRA-Patch. Bei Over-Training
   # auf 0.05 hochsetzen.
   lora_dropout: 0
-  bias: none
 
   # ─── Target-Module ───────────────────────────────────────────────────
   # Alle Attention- + MLP-Projections. Partielle Sets (nur q/v) trainieren
@@ -131,12 +120,16 @@ lora:
     - up_proj
     - down_proj
 
-  # RSLoRA bringt bei 32 nur marginalen Effekt — aus lassen.
-  use_rslora: false
-  random_state: 42
+  # ─── Welche Layer-Gruppen trainieren (Ministral-3-spezifisch) ────────
+  # Ministral-3 enthält einen 0.4 B Vision-Encoder. Für reines Text-
+  # Finetuning ist vision=false Pflicht — sonst werden Vision-Gewichte
+  # ohne Bilddaten angefasst (VRAM-Waste, potenziell Corruption bei
+  # späterer multimodaler Nutzung). Die anderen Gruppen an lassen.
+  finetune_vision_layers: false
+  finetune_language_layers: true
+  finetune_attention_modules: true
+  finetune_mlp_modules: true
 
-logging:
-  # TensorBoard lokal: `tensorboard --logdir <output>`. Studio zeigt
-  # zusätzlich Live-Charts in der GUI.
-  report_to: tensorboard
-  logging_steps: 20
+  # RSLoRA + LoftQ bringen bei r=32 nur marginalen Effekt — aus lassen.
+  use_rslora: false
+  use_loftq: false

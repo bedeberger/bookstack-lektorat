@@ -59,6 +59,14 @@ model, tokenizer = FastLanguageModel.from_pretrained(
 # r=32 ist der Sweet-Spot für "Buchwelt internalisieren" — genug Kapazität
 # für Figuren/Orte/Beziehungen, ohne zu overfitten.
 # alpha == r ist die moderne Unsloth-Empfehlung (früher alpha = 2×r).
+#
+# Vision-Hinweis: Ministral-3 ist multimodal (0.4 B Vision-Encoder). Beim
+# reinen Text-Finetuning dürfen die Vision-Layer NICHT angefasst werden —
+# sonst VRAM-Waste und mögliche Corruption, wenn das Modell später wieder
+# Bilder verarbeiten soll. Falls Unsloth in einer späteren Version einen
+# `finetune_vision_layers=False`-Kwarg exponiert, hier setzen. Aktuell
+# beschränken die expliziten `target_modules` die LoRA-Injection auf die
+# Sprach-Layer (q/k/v/o + MLP), was denselben Effekt hat.
 # ─────────────────────────────────────────────────────────────────────────
 
 model = FastLanguageModel.get_peft_model(
