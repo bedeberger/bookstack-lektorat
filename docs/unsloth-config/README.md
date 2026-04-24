@@ -50,58 +50,70 @@ hochladen, siehe unten).
 Wenn du Studio statt der Kommandozeile nutzt — der Export ist bereits
 kompatibel. Zwei Wege in Studio:
 
-### Variante A: Config-Datei importieren (falls Studio das unterstützt)
+### Variante A: Config-Datei importieren (schnellster Weg)
 
-Studio hat in neueren Versionen einen Config-Import. Ablauf:
+Laut [Unsloth-Studio-Doku](https://unsloth.ai/docs/new/studio) unterstützt
+Studio explizit YAML-Import: *„Import a YAML config and Studio will pre-fill
+the relevant settings."*
 
-1. Studio öffnen → neues Projekt → „Import config" (oder Name ähnlich).
-2. [`studio-config.yaml`](studio-config.yaml) hochladen.
-3. `train.jsonl` und `val.jsonl` als Dataset hochladen.
-4. Training starten.
+**Wichtig:** Die Studio-YAML enthält **nur `training:`, `lora:`, `logging:`** —
+Modell und Dataset werden weiter in der GUI gewählt. Der Import pre-fillt
+also nur die Hyperparameter.
 
-Wenn Studio die YAML nicht frisst (je nach Version kann die Upload-Option
-fehlen oder ein anderes Format verlangen), geh nach Variante B und nutze die
-Datei als Checkliste.
+Ablauf:
 
-### Variante B: Parameter manuell in der GUI setzen
-
-1. **Dataset hochladen:** Studio → „Upload Dataset" → `train.jsonl` +
-   `val.jsonl`. Format-Auswahl: **Conversational / messages**. Studio
-   erkennt das `messages`-Feld automatisch und rendert das Chat-Template
-   basierend auf dem ausgewählten Basemodell.
-2. **Basemodell wählen:** `unsloth/Ministral-8B-Instruct-2410-bnb-4bit`.
-3. **Training-Parameter** (genau wie in [studio-config.yaml](studio-config.yaml)):
-
-   | GUI-Feld | Wert | Grund |
-   |---|---|---|
-   | `max_seq_length` / `sequence_len` | **4096** | matcht unseren Export-Filter |
-   | `per_device_train_batch_size` / `micro_batch_size` | **2** | füllt 20 GB VRAM gut aus |
-   | `gradient_accumulation_steps` | **8** | effektive Batch = 16 |
-   | `num_train_epochs` | **2** | Welt-Internalisierung braucht 2 Durchläufe |
-   | `learning_rate` | **2e-4** | LoRA-Standard |
-   | `lr_scheduler_type` | **cosine** | stabiler als linear |
-   | `warmup_ratio` | **0.03** | wenig Warmup nötig |
-   | `lora_r` | **32** | Sweet-Spot für Welt + Stil |
-   | `lora_alpha` | **32** | alpha = r (Unsloth-Empfehlung) |
-   | `lora_dropout` | **0** | Unsloth-patched: 0 ist am schnellsten |
-   | `optim` | **adamw_8bit** | halbiert Optimizer-VRAM |
-   | `bf16` | **true** | Ada Lovelace unterstützt bf16 nativ |
-   | `sample_packing` | **false** | erhält Sample-Grenzen |
-
-4. **Train-on-Responses-Only:** unter „Advanced" oder ähnlich → aktivieren
-   mit `instruction_part = "[INST]"`, `response_part = "[/INST]"`. In der
-   YAML entspricht das `train_on_inputs: false`. Das ist der wichtigste
-   Qualitäts-Hebel — Loss zählt nur auf die Assistant-Antwort, nicht auf
-   unsere System-Prompts und User-Fragen. Studio vergisst diesen Schalter
-   gerne zu defaulten; nicht überspringen.
-5. **Training starten.** Studio zeigt `train/loss` und `eval/loss` live.
+1. **Studio starten** (einmalig, ausserhalb Conda):
+   ```bash
+   pip install unsloth
+   unsloth studio -H 0.0.0.0 -p 8888
+   ```
+   Dann `http://localhost:8888` öffnen.
+2. **Modell** im „Model"-Tab wählen: `unsloth/Ministral-8B-Instruct-2410-bnb-4bit`
+   mit Method = **QLoRA**.
+3. **Dataset** im „Dataset"-Tab hochladen: `train.jsonl` + `val.jsonl`,
+   Format **conversational / messages**. Studio erkennt das `messages`-Feld
+   automatisch.
+4. Im „Training & Config"-Tab → **Import YAML** →
+   [`studio-config.yaml`](studio-config.yaml) hochladen. Hyperparameter
+   werden befüllt.
+5. Kurz überprüfen, dass `train_on_responses_only: true` aus der YAML
+   tatsächlich übernommen wurde (Studio-Versionen, die diesen Key noch nicht
+   kennen, ignorieren ihn — dann manuell unter „Advanced / Loss masking"
+   aktivieren mit `instruction_part = "[INST]"`, `response_part = "[/INST]"`).
+6. **Training starten.** Studio zeigt `train/loss` und `eval/loss` live.
    Erwartung: eval_loss fällt in den ersten ~500 Steps auf ~1.4–1.8, dann
    stabilisiert es sich.
-6. **Export:** nach dem Run in Studio → „Save / Export" → GGUF Q5_K_M.
-   Runterladen, zu Ollama verfrachten (siehe [„In Ollama einbinden"](#in-ollama-einbinden)).
+7. **Export:** nach dem Run → „Save / Export" → GGUF Q5_K_M.
+   Runterladen, zu Ollama verfrachten (siehe
+   [„In Ollama einbinden"](#in-ollama-einbinden)).
 
-Das `train_book.py`-Script in diesem Ordner bildet exakt diese Config
-lokal als Python nach — nützlich zum Testen oder wenn Studio mal nicht
+### Variante B: Fallback — alles manuell in der GUI
+
+Falls Studio den YAML-Import aus irgendeinem Grund nicht annimmt (alte
+Version, Parsing-Fehler), nimm die YAML als Checkliste und klick die Werte
+von Hand in die entsprechenden Felder. Zentrale Werte:
+
+| GUI-Feld | Wert | Grund |
+|---|---|---|
+| `max_seq_length` | **4096** | matcht unseren Export-Filter |
+| `per_device_train_batch_size` | **2** | füllt 20 GB VRAM gut aus |
+| `gradient_accumulation_steps` | **8** | effektive Batch = 16 |
+| `num_train_epochs` | **2** | Welt-Internalisierung braucht 2 Durchläufe |
+| `learning_rate` | **2e-4** | LoRA-Standard |
+| `lr_scheduler_type` | **cosine** | stabiler als linear |
+| `warmup_ratio` | **0.03** | wenig Warmup nötig |
+| `lora.r` | **32** | Sweet-Spot für Welt + Stil |
+| `lora.lora_alpha` | **32** | alpha = r (Unsloth-Empfehlung) |
+| `lora.lora_dropout` | **0** | Unsloth-patched: 0 ist am schnellsten |
+| `optim` | **adamw_8bit** | halbiert Optimizer-VRAM |
+| `bf16` | **true** | Ada Lovelace unterstützt bf16 nativ |
+| `packing` | **false** | erhält Sample-Grenzen |
+| `train_on_responses_only` | **true** | Kernfeature: Loss nur auf Assistant |
+| `instruction_part` | **`[INST]`** | Ministral-Template-Marker |
+| `response_part` | **`[/INST]`** | Ministral-Template-Marker |
+
+Das [`train_book.py`](train_book.py) in diesem Ordner ist die CLI-Version
+derselben Config — nützlich zum lokalen Testen, wenn Studio nicht
 erreichbar ist.
 
 ## Run: Single-GPU-CLI (primäre Route)
