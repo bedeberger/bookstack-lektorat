@@ -4930,8 +4930,10 @@ body.focus-mode .edit-find { display: none !important; }
     position: sticky;
     top: 1.5rem;
   }
-  .editor-chat-split .chat-messages {
+  .editor-chat-split .chat-messages,
+  .editor-chat-split .ideen-list {
     max-height: 60vh;
+    overflow-y: auto;
   }
 }
 
