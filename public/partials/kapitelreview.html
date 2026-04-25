@@ -48,6 +48,7 @@
                class="kapitel-new-page-input"
                x-model="$app.newPageTitle"
                :placeholder="$app.t('kapitelReview.newPagePlaceholder')"
+               :aria-label="$app.t('kapitelReview.newPagePlaceholder')"
                :disabled="$app.newPageCreating">
         <button type="submit"
                 :disabled="$app.newPageCreating || !$app.newPageTitle.trim()">

@@ -69,6 +69,20 @@ function mapOffset(nodes, starts, globalStart, length) {
   return { startNode, startOffset, endNode, endOffset };
 }
 
+// Nächster scrollbarer Vorfahre — wichtig für Focus-Mode, wo das
+// Edit-Element selbst scrollt statt das Window.
+function findScrollContainer(node) {
+  let el = node;
+  while (el && el !== document.body) {
+    const st = getComputedStyle(el);
+    if (/(auto|scroll|overlay)/.test(st.overflowY) && el.scrollHeight > el.clientHeight) {
+      return el;
+    }
+    el = el.parentElement;
+  }
+  return null;
+}
+
 function rangeOf(m) {
   const r = document.createRange();
   r.setStart(m.startNode, m.startOffset);
@@ -233,10 +247,18 @@ export const editorFindCardMethods = {
       sel.addRange(range);
       const rect = range.getBoundingClientRect();
       if (rect) {
+        // Sichtbarkeitsprüfung gegen den tatsächlichen Scroll-Container
+        // (im Focus-Mode scrollt das Edit-Element selbst, sonst das Window).
+        // Grosszügige Margins (~25% oben/unten), damit Treffer am Rand
+        // beim Durchklicken nicht klemmen, sondern in die Mitte rutschen.
         const editEl = getEditEl();
-        const within = rect.top >= 80 && rect.bottom <= window.innerHeight - 40;
+        const scroller = findScrollContainer(m.startNode.parentElement) || editEl;
+        const cRect = scroller && scroller !== document.scrollingElement
+          ? scroller.getBoundingClientRect()
+          : { top: 0, bottom: window.innerHeight };
+        const margin = Math.max(120, (cRect.bottom - cRect.top) * 0.25);
+        const within = rect.top >= cRect.top + margin && rect.bottom <= cRect.bottom - margin;
         if (!within) {
-          editEl?.scrollIntoView?.({ block: 'nearest' });
           const el = m.startNode.parentElement;
           el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
         }

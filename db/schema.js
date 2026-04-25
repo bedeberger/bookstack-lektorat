@@ -393,6 +393,140 @@ function saveBookSettings(bookId, language, region, buchtyp, buchKontext, erzaeh
   );
 }
 
+// ── Kontinuitätsprüfung ───────────────────────────────────────────────────────
+// Eine Zeile pro Issue (continuity_issues) plus Bridge-Tabellen für Figuren-/
+// Kapitel-Referenzen. Vorbild: figure_scenes mit scene_figures/scene_locations.
+
+const _insContinuityCheck = db.prepare(
+  `INSERT INTO continuity_checks (book_id, user_email, checked_at, summary, model)
+   VALUES (?, ?, ?, ?, ?)`
+);
+const _insContinuityIssue = db.prepare(
+  `INSERT INTO continuity_issues
+   (check_id, book_id, user_email, schwere, typ, beschreibung, stelle_a, stelle_b, empfehlung, sort_order, updated_at)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+);
+const _insContinuityIssueFig = db.prepare(
+  `INSERT INTO continuity_issue_figures (issue_id, fig_id, figur_name, sort_order) VALUES (?, ?, ?, ?)`
+);
+const _insContinuityIssueCh = db.prepare(
+  `INSERT INTO continuity_issue_chapters (issue_id, chapter_id, chapter_name, sort_order) VALUES (?, ?, ?, ?)`
+);
+
+/** Speichert einen Kontinuitäts-Check mit allen Issues als eigene Zeilen.
+ *  issues: [{schwere, typ, beschreibung, stelle_a, stelle_b, empfehlung,
+ *            figuren:[Namen], kapitel:[Namen]}]
+ *  figNameToId / chNameToId: Auflösungs-Maps (Name → fig_id / chapter_id).
+ *  Gibt { checkId, normalizedIssues } zurück, wobei normalizedIssues die
+ *  Frontend-Form mit fig_ids/chapter_ids enthält (kompatibel zur alten Antwort). */
+function saveContinuityCheck(bookId, userEmail, summary, model, issues, figNameToId, chNameToId) {
+  const bookIdInt = parseInt(bookId);
+  const email = userEmail || null;
+  const now = new Date().toISOString();
+  const normalizedIssues = [];
+  let checkId = null;
+  db.transaction(() => {
+    const { lastInsertRowid: cid } = _insContinuityCheck.run(
+      bookIdInt, email, now, summary || '', model || null,
+    );
+    checkId = cid;
+    const issuesArr = Array.isArray(issues) ? issues : [];
+    for (let i = 0; i < issuesArr.length; i++) {
+      const it = issuesArr[i] || {};
+      const { lastInsertRowid: issueId } = _insContinuityIssue.run(
+        cid, bookIdInt, email,
+        it.schwere || null, it.typ || null, it.beschreibung || null,
+        it.stelle_a || null, it.stelle_b || null, it.empfehlung || null,
+        i, now,
+      );
+      const figNames = Array.isArray(it.figuren) ? it.figuren.map(_toRefString).filter(Boolean) : [];
+      const fig_ids = [];
+      const seenFig = new Set();
+      figNames.forEach((name, j) => {
+        const fid = figNameToId?.[name] || null;
+        const key = (fid || '') + '|' + name;
+        if (seenFig.has(key)) return;
+        seenFig.add(key);
+        if (fid) fig_ids.push(fid);
+        _insContinuityIssueFig.run(issueId, fid, name, j);
+      });
+      const chNames = Array.isArray(it.kapitel) ? it.kapitel.map(_toRefString).filter(Boolean) : [];
+      const chapter_ids = [];
+      const seenCh = new Set();
+      chNames.forEach((name, j) => {
+        const cidCh = chNameToId?.[name] ?? null;
+        const key = (cidCh ?? '') + '|' + name;
+        if (seenCh.has(key)) return;
+        seenCh.add(key);
+        if (cidCh != null) chapter_ids.push(cidCh);
+        _insContinuityIssueCh.run(issueId, cidCh, name, j);
+      });
+      normalizedIssues.push({
+        schwere: it.schwere || null, typ: it.typ || null,
+        beschreibung: it.beschreibung || null,
+        stelle_a: it.stelle_a || null, stelle_b: it.stelle_b || null,
+        empfehlung: it.empfehlung || null,
+        figuren: figNames, fig_ids,
+        kapitel: chNames, chapter_ids,
+      });
+    }
+  })();
+  return { checkId, normalizedIssues };
+}
+
+/** Lädt den letzten Kontinuitäts-Check eines Buchs in Frontend-Form
+ *  ({id, checked_at, issues:[{...}], summary, model}) oder null. */
+function getLatestContinuityCheck(bookId, userEmail) {
+  const bookIdInt = parseInt(bookId);
+  const email = userEmail || null;
+  const row = db.prepare(`
+    SELECT id, checked_at, summary, model
+    FROM continuity_checks
+    WHERE book_id = ? AND user_email IS ?
+    ORDER BY checked_at DESC LIMIT 1
+  `).get(bookIdInt, email);
+  if (!row) return null;
+  const issueRows = db.prepare(`
+    SELECT id, schwere, typ, beschreibung, stelle_a, stelle_b, empfehlung
+    FROM continuity_issues
+    WHERE check_id = ?
+    ORDER BY sort_order, id
+  `).all(row.id);
+  const figRows = db.prepare(`
+    SELECT issue_id, fig_id, figur_name FROM continuity_issue_figures
+    WHERE issue_id IN (SELECT id FROM continuity_issues WHERE check_id = ?)
+    ORDER BY issue_id, sort_order
+  `).all(row.id);
+  const chRows = db.prepare(`
+    SELECT issue_id, chapter_id, chapter_name FROM continuity_issue_chapters
+    WHERE issue_id IN (SELECT id FROM continuity_issues WHERE check_id = ?)
+    ORDER BY issue_id, sort_order
+  `).all(row.id);
+  const figByIssue = new Map();
+  for (const r of figRows) {
+    if (!figByIssue.has(r.issue_id)) figByIssue.set(r.issue_id, { figuren: [], fig_ids: [] });
+    const bucket = figByIssue.get(r.issue_id);
+    if (r.figur_name) bucket.figuren.push(r.figur_name);
+    if (r.fig_id) bucket.fig_ids.push(r.fig_id);
+  }
+  const chByIssue = new Map();
+  for (const r of chRows) {
+    if (!chByIssue.has(r.issue_id)) chByIssue.set(r.issue_id, { kapitel: [], chapter_ids: [] });
+    const bucket = chByIssue.get(r.issue_id);
+    if (r.chapter_name) bucket.kapitel.push(r.chapter_name);
+    if (r.chapter_id != null) bucket.chapter_ids.push(r.chapter_id);
+  }
+  const issues = issueRows.map(r => ({
+    schwere: r.schwere, typ: r.typ, beschreibung: r.beschreibung,
+    stelle_a: r.stelle_a, stelle_b: r.stelle_b, empfehlung: r.empfehlung,
+    figuren: figByIssue.get(r.id)?.figuren || [],
+    fig_ids: figByIssue.get(r.id)?.fig_ids || [],
+    kapitel: chByIssue.get(r.id)?.kapitel || [],
+    chapter_ids: chByIssue.get(r.id)?.chapter_ids || [],
+  }));
+  return { id: row.id, checked_at: row.checked_at, issues, summary: row.summary, model: row.model };
+}
+
 // ── Schauplätze eines Kapitels (via location_chapters) ───────────────────────
 
 /** Schauplätze eines Kapitels. Fallback: alle Buchorte, wenn keine Kapitelzuordnung existiert.
@@ -441,6 +575,8 @@ module.exports = {
   // local
   saveZeitstrahlEvents,
   saveOrteToDb,
+  saveContinuityCheck,
+  getLatestContinuityCheck,
   upsertUserLogin, getUser, updateUserSettings,
   touchUserLastSeen, addUserActivity,
   saveCheckpoint, loadCheckpoint, deleteCheckpoint,

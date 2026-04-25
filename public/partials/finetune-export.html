@@ -24,35 +24,35 @@
       <label class="finetune-label" x-text="$app.t('finetune.types')"></label>
       <div class="finetune-types">
         <label class="finetune-check">
-          <input type="checkbox" x-model="finetuneTypeStyle">
+          <input type="checkbox" id="ft-type-style" name="ft-type-style" x-model="finetuneTypeStyle">
           <span>
             <span class="finetune-check-title" x-text="$app.t('finetune.type.style')"></span>
             <span class="finetune-check-desc" x-text="$app.t('finetune.type.style.desc')"></span>
           </span>
         </label>
         <label class="finetune-check">
-          <input type="checkbox" x-model="finetuneTypeScene">
+          <input type="checkbox" id="ft-type-scene" name="ft-type-scene" x-model="finetuneTypeScene">
           <span>
             <span class="finetune-check-title" x-text="$app.t('finetune.type.scene')"></span>
             <span class="finetune-check-desc" x-text="$app.t('finetune.type.scene.desc')"></span>
           </span>
         </label>
         <label class="finetune-check">
-          <input type="checkbox" x-model="finetuneTypeDialog">
+          <input type="checkbox" id="ft-type-dialog" name="ft-type-dialog" x-model="finetuneTypeDialog">
           <span>
             <span class="finetune-check-title" x-text="$app.t('finetune.type.dialog')"></span>
             <span class="finetune-check-desc" x-text="$app.t('finetune.type.dialog.desc')"></span>
           </span>
         </label>
         <label class="finetune-check">
-          <input type="checkbox" x-model="finetuneTypeAuthorChat">
+          <input type="checkbox" id="ft-type-authorchat" name="ft-type-authorchat" x-model="finetuneTypeAuthorChat">
           <span>
             <span class="finetune-check-title" x-text="$app.t('finetune.type.authorChat')"></span>
             <span class="finetune-check-desc" x-text="$app.t('finetune.type.authorChat.desc')"></span>
           </span>
         </label>
         <label class="finetune-check">
-          <input type="checkbox" x-model="finetuneTypeCorrection">
+          <input type="checkbox" id="ft-type-correction" name="ft-type-correction" x-model="finetuneTypeCorrection">
           <span>
             <span class="finetune-check-title" x-text="$app.t('finetune.type.correction')"></span>
             <span class="finetune-check-desc" x-text="$app.t('finetune.type.correction.desc')"></span>
@@ -66,11 +66,11 @@
       <div class="finetune-inline">
         <label class="finetune-inline-field">
           <span x-text="$app.t('finetune.length.min')"></span>
-          <input type="number" min="80" max="5000" step="20" x-model.number="finetuneMinChars" class="finetune-num">
+          <input type="number" id="ft-min-chars" name="ft-min-chars" min="80" max="5000" step="20" x-model.number="finetuneMinChars" class="finetune-num">
         </label>
         <label class="finetune-inline-field">
           <span x-text="$app.t('finetune.length.max')"></span>
-          <input type="number" min="200" max="16000" step="100" x-model.number="finetuneMaxChars" class="finetune-num">
+          <input type="number" id="ft-max-chars" name="ft-max-chars" min="200" max="16000" step="100" x-model.number="finetuneMaxChars" class="finetune-num">
         </label>
       </div>
     </div>
@@ -80,11 +80,11 @@
       <div class="finetune-inline">
         <label class="finetune-inline-field">
           <span x-text="$app.t('finetune.valSplit.ratio')"></span>
-          <input type="number" min="0" max="0.5" step="0.05" x-model.number="finetuneValSplit" class="finetune-num">
+          <input type="number" id="ft-val-split" name="ft-val-split" min="0" max="0.5" step="0.05" x-model.number="finetuneValSplit" class="finetune-num">
         </label>
         <label class="finetune-inline-field">
           <span x-text="$app.t('finetune.valSplit.seed')"></span>
-          <input type="number" min="0" max="999999" step="1" x-model.number="finetuneValSeed" class="finetune-num">
+          <input type="number" id="ft-val-seed" name="ft-val-seed" min="0" max="999999" step="1" x-model.number="finetuneValSeed" class="finetune-num">
         </label>
       </div>
     </div>
@@ -94,12 +94,12 @@
       <div class="finetune-inline">
         <label class="finetune-inline-field">
           <span x-text="$app.t('finetune.unsloth.maxSeqTokens')"></span>
-          <input type="number" min="0" max="16384" step="512" x-model.number="finetuneMaxSeqTokens" class="finetune-num">
+          <input type="number" id="ft-max-seq-tokens" name="ft-max-seq-tokens" min="0" max="16384" step="512" x-model.number="finetuneMaxSeqTokens" class="finetune-num">
         </label>
       </div>
       <div class="finetune-types">
         <label class="finetune-check">
-          <input type="checkbox" x-model="finetuneEmitText">
+          <input type="checkbox" id="ft-emit-text" name="ft-emit-text" x-model="finetuneEmitText">
           <span>
             <span class="finetune-check-title" x-text="$app.t('finetune.unsloth.emitText')"></span>
             <span class="finetune-check-desc" x-text="$app.t('finetune.unsloth.emitText.desc')"></span>

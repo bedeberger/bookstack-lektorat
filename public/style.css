@@ -24,6 +24,40 @@
  * 19.  Chat ......................... .chat-messages, .chat-msg-*, .chat-vorschlag-*, .chat-input-*
  */
 
+/* === Self-hosted Fonts === */
+@font-face {
+  font-family: 'Inter';
+  src: url('fonts/Inter.var.woff2') format('woff2-variations'),
+       url('fonts/Inter.var.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('fonts/Inter-Italic.var.woff2') format('woff2-variations'),
+       url('fonts/Inter-Italic.var.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  src: url('fonts/SourceSerif4.var.woff2') format('woff2-variations'),
+       url('fonts/SourceSerif4.var.woff2') format('woff2');
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  src: url('fonts/SourceSerif4-Italic.var.woff2') format('woff2-variations'),
+       url('fonts/SourceSerif4-Italic.var.woff2') format('woff2');
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: swap;
+}
+
 /* === Custom Properties === */
 :root {
   color-scheme: light;
@@ -1264,15 +1298,15 @@ button.success:hover { background: var(--color-success-hover); }
   border-radius: var(--radius-sm);
   word-break: break-word;
 }
-.finding-arrow {
-  margin: 0 6px;
-  color: var(--color-muted);
-}
 .finding-korrektur {
+  display: block;
+  margin-top: 4px;
+  margin-left: 1.5em;
   background: color-mix(in srgb, var(--color-success, #27ae60) 15%, transparent);
   padding: 1px 4px;
   border-radius: var(--radius-sm);
   word-break: break-word;
+  width: fit-content;
 }
 
 .finding-explanation {
@@ -1548,10 +1582,6 @@ ins {
   padding: 0;
   border-radius: 0;
   color: var(--color-text);
-}
-.applied-history .finding-arrow {
-  margin: 0 6px;
-  color: var(--color-subtle);
 }
 
 /* === Page Content View === */
@@ -1987,6 +2017,10 @@ body.focus-mode.focus-cursor-hidden .page-content-view--editing * {
   vertical-align: middle;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.focus-live-counter--today {
+  color: var(--color-ok-text);
+  margin-left: 6px;
 }
 
 .save-indicator {

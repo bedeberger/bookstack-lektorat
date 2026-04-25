@@ -75,10 +75,10 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
 
     const insFig = db.prepare(`
       INSERT INTO figures
-        (book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sozialschicht,
+        (book_id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, wohnadresse, beschreibung, sozialschicht,
          praesenz, rolle, motivation, konflikt, entwicklung, erste_erwaehnung, erste_erwaehnung_page_id, schluesselzitate,
          sort_order, user_email, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insTag = db.prepare('INSERT OR IGNORE INTO figure_tags (figure_id, tag) VALUES (?, ?)');
     const insApp = db.prepare('INSERT OR IGNORE INTO figure_appearances (figure_id, chapter_id, chapter_name, haeufigkeit) VALUES (?, ?, ?, ?)');
     const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, belege, user_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
@@ -98,7 +98,7 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
       const { lastInsertRowid: fid } = insFig.run(
         bookId, f.id, f.name, f.kurzname || null, f.typ || null,
         f.geburtstag || null, f.geschlecht || null, f.beruf || null,
-        f.beschreibung || null, f.sozialschicht || null,
+        f.wohnadresse || null, f.beschreibung || null, f.sozialschicht || null,
         f.praesenz || null, f.rolle || null, f.motivation || null, f.konflikt || null,
         f.entwicklung || null, f.erste_erwaehnung || null, erstPageId, zitate,
         i, userEmail || null, now
@@ -244,7 +244,7 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
   const normalize = s => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
 
   const figs = db.prepare(
-    'SELECT id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sozialschicht FROM figures WHERE book_id = ? AND user_email IS ? ORDER BY sort_order, id'
+    'SELECT id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, wohnadresse, beschreibung, sozialschicht FROM figures WHERE book_id = ? AND user_email IS ? ORDER BY sort_order, id'
   ).all(bookId, em);
 
   const groups = new Map();
@@ -256,7 +256,7 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
   }
 
   const updFig = db.prepare(
-    'UPDATE figures SET kurzname=?, typ=?, geburtstag=?, geschlecht=?, beruf=?, sozialschicht=?, beschreibung=? WHERE id=?'
+    'UPDATE figures SET kurzname=?, typ=?, geburtstag=?, geschlecht=?, beruf=?, wohnadresse=?, sozialschicht=?, beschreibung=? WHERE id=?'
   );
   const moveTags = db.prepare(
     'INSERT OR IGNORE INTO figure_tags (figure_id, tag) SELECT ?, tag FROM figure_tags WHERE figure_id = ?'
@@ -306,11 +306,11 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
       group.sort((a, b) => (b.beschreibung?.length || 0) - (a.beschreibung?.length || 0));
       const canon = { ...group[0] };
       for (const other of group.slice(1)) {
-        for (const field of ['kurzname', 'typ', 'geburtstag', 'geschlecht', 'beruf', 'sozialschicht']) {
+        for (const field of ['kurzname', 'typ', 'geburtstag', 'geschlecht', 'beruf', 'wohnadresse', 'sozialschicht']) {
           if (!canon[field] && other[field]) canon[field] = other[field];
         }
       }
-      updFig.run(canon.kurzname, canon.typ, canon.geburtstag, canon.geschlecht, canon.beruf, canon.sozialschicht, canon.beschreibung, canon.id);
+      updFig.run(canon.kurzname, canon.typ, canon.geburtstag, canon.geschlecht, canon.beruf, canon.wohnadresse, canon.sozialschicht, canon.beschreibung, canon.id);
 
       for (const dup of group.slice(1)) {
         moveTags.run(canon.id, dup.id);
@@ -424,10 +424,10 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
 
 /** Figuren eines Kapitels laden (via figure_appearances).
  *  Fallback: alle Buchfiguren, wenn keine Kapitelzuordnung existiert.
- *  Gibt kompakte Objekte zurück: { name, kurzname, geschlecht, beruf, beschreibung, typ } */
+ *  Gibt kompakte Objekte zurück: { name, kurzname, geschlecht, beruf, wohnadresse, beschreibung, typ } */
 function getChapterFigures(bookId, chapterId, userEmail) {
   if (!bookId) return [];
-  const cols = 'f.name, f.kurzname, f.geschlecht, f.beruf, f.beschreibung, f.typ';
+  const cols = 'f.name, f.kurzname, f.geschlecht, f.beruf, f.wohnadresse, f.beschreibung, f.typ';
   if (chapterId) {
     const rows = db.prepare(`
       SELECT ${cols} FROM figures f

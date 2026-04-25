@@ -30,7 +30,7 @@
 
   <!-- Filter -->
   <div x-show="$app.globalZeitstrahl.length > 0" class="filter-bar">
-    <input type="text" x-model="$app.ereignisseFilters.suche" :placeholder="$app.t('common.search')" class="filter-search-input">
+    <input type="text" x-model="$app.ereignisseFilters.suche" :placeholder="$app.t('common.search')" :aria-label="$app.t('common.search')" class="filter-search-input">
     <div x-data="combobox($app.t('filter.figur'), $app.t('filter.allFiguren'))"
          x-modelable="value" x-model="$app.ereignisseFilters.figurId"
          x-effect="options = $app.figuren.filter(f => $app.globalZeitstrahl.some(ev => ev.figuren.some(fr => fr.id === f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"

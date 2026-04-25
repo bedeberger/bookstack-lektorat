@@ -1,7 +1,7 @@
 // Versionsmarker für persistente Caches (z.B. chapter_extract_cache, Phase-1
 // Single-Pass-Cache). Bei jeder schemarelevanten Änderung erhöhen, damit alte
 // Cache-Einträge nicht mehr matchen und frisch extrahiert wird.
-export const PROMPTS_VERSION = '1';
+export const PROMPTS_VERSION = '2';
 
 // Unveränderliche technische Pflicht-Anweisung – darf nicht konfiguriert werden,
 // da callAI() immer ein JSON-Objekt erwartet.
@@ -697,6 +697,7 @@ const FIGUREN_BASIS_SCHEMA = `{
       "geburtstag": "JJJJ oder leer wenn unbekannt",
       "geschlecht": "männlich|weiblich|divers|unbekannt",
       "beruf": "Beruf oder Rolle oder leer",
+      "wohnadresse": "Wohnort/Wohnadresse der Figur oder leer wenn nicht belegt",
       "rolle": "1 Satz: Funktion in der Handlung (z.B. 'Ermittelt den Mordfall', 'Erzählerin, blickt rückblickend zurück')",
       "motivation": "1 Satz: was die Figur antreibt; leer wenn nicht belegt",
       "konflikt": "1 Satz: zentraler innerer oder äusserer Konflikt; leer wenn nicht belegt",
@@ -723,6 +724,7 @@ const figurenBasisRules = (kontext = '') => `Regeln:
 - beschreibung: 2-3 Sätze Zusammenfassung (Fallback für Anzeige und Chat-Kontext). Soll KEINE Spekulation enthalten.
 - schluesselzitate: bis zu 3 wörtliche Zitate (max. 80 Zeichen) die die Figur charakterisieren – exakt aus dem Text, in der Original-Interpunktion. Leer lassen wenn keine prägnanten Stellen gefunden.
 - erste_erwaehnung: Kapitel- oder Seitenname der ersten Erwähnung (so präzise wie belegt). Leer wenn unklar.
+- wohnadresse: Wohnort oder Wohnadresse der Figur, so präzise wie textnah belegt (z.B. «Zürich», «Bahnhofstrasse 12, Bern», «kleines Bauernhaus am Waldrand»). Nur ausfüllen wenn explizit aus dem Text hervorgeht. Leer wenn nicht erwähnt – nicht spekulieren.
 - entwicklung: "statisch" wenn die Figur über das Buch hinweg unverändert bleibt, sonst 1 Satz zum Wandel. Leer wenn nicht eindeutig.
 - sozialschicht: gesellschaftliche Schicht der Figur${kontext ? ` (${kontext})` : ''} – nur vergeben wenn eindeutig belegt; wirtschaftselite=Unternehmerfamilien/Direktoren, gehobenes_buergertum=Akademiker/freie Berufe/obere Kader, mittelschicht=Angestellte/Beamte/mittlere Kader, arbeiterschicht=Fabrik-/Bauarbeiter/Servicepersonal, migrantenmilieu=Zugewanderte/zweite Generation, prekariat=Sozialhilfe/Randständige/Langzeitarbeitslose, unterwelt=kriminelles Milieu, andere=nicht eindeutig
 - beziehungen.machtverhaltnis: Machtasymmetrie: +2=Gegenüber (figur_id) dominiert klar, +1=Gegenüber hat leichten Vorteil, 0=symmetrisch, -1=diese Figur hat leichten Vorteil, -2=diese Figur dominiert klar; weglassen oder 0 wenn unklar
@@ -743,6 +745,7 @@ export function buildFiguresBasisConsolidationPrompt(bookName, chapterFiguren, b
     return `## Kapitel: ${cf.kapitel}\n` + (cf.figuren || []).map(f => {
       const meta = [f.typ, f.beruf, f.geburtstag ? `*${f.geburtstag}` : '', f.geschlecht].filter(Boolean).join(', ');
       return `- ${f.name}${f.kurzname && f.kurzname !== f.name ? ` («${f.kurzname}»)` : ''} (${meta}): ${f.beschreibung || ''}` +
+        (f.wohnadresse ? '\n  Wohnadresse: ' + f.wohnadresse : '') +
         (f.eigenschaften?.length ? '\n  Eigenschaften: ' + f.eigenschaften.join(', ') : '') +
         (f.kapitel?.length ? '\n  Kapitel: ' + f.kapitel.map(k => k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')).join(', ') : '') +
         (f.beziehungen?.length ? '\n  Beziehungen: ' + f.beziehungen.map(b => {
@@ -1220,21 +1223,41 @@ ${JSON.stringify(events, null, 2)}`;
 
 /**
  * Baut den vollständigen System-Prompt für den Seiten-Chat.
- * @param {string}   pageName   Name der Seite
- * @param {string}   pageText   Seiteninhalt als Plaintext
- * @param {Array}    figuren    Figuren-Array aus der DB (kann leer sein)
- * @param {Object}   review     Letzte Buchbewertung aus der DB (kann null sein)
+ * @param {string}      pageName        Name der Seite
+ * @param {string}      pageText        Aktueller Seiteninhalt als Plaintext
+ * @param {Array}       figuren         Figuren-Array aus der DB (kann leer sein)
+ * @param {Object}      review          Letzte Buchbewertung aus der DB (kann null sein)
+ * @param {string|null} systemOverride  Optionaler System-Prompt-Override
+ * @param {string|null} openingPageText Snapshot beim Chat-Öffnen; nur setzen wenn
+ *                                      ungleich pageText (sonst null → keine
+ *                                      redundante Section).
  */
-export function buildChatSystemPrompt(pageName, pageText, figuren, review, systemOverride = null) {
+export function buildChatSystemPrompt(pageName, pageText, figuren, review, systemOverride = null, openingPageText = null) {
   const parts = [
     systemOverride ?? SYSTEM_CHAT,
     '',
     `Aktuelle Seite: «${pageName}»`,
     '',
-    '=== SEITENINHALT ===',
-    pageText,
-    '',
   ];
+
+  if (openingPageText) {
+    parts.push(
+      '=== SEITENINHALT BEIM CHAT-START ===',
+      openingPageText,
+      '',
+      '=== SEITENINHALT JETZT (nach Änderungen des Autors) ===',
+      pageText,
+      '',
+      'Hinweis: Der Autor hat die Seite seit Chat-Start verändert. Beziehe dich beim Antworten auf den aktuellen Stand; verweise nur auf den Chat-Start-Stand, wenn die Änderung selbst Thema ist.',
+      '',
+    );
+  } else {
+    parts.push(
+      '=== SEITENINHALT ===',
+      pageText,
+      '',
+    );
+  }
 
   if (figuren && figuren.length > 0) {
     parts.push('=== FIGUREN DES BUCHS ===');
@@ -1658,6 +1681,7 @@ const _figurSchemaProps = () => ({
   geburtstag: _str,
   geschlecht: _str,
   beruf: _str,
+  wohnadresse: _str,
   rolle: _str,
   motivation: _str,
   konflikt: _str,

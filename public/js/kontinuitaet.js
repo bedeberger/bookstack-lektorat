@@ -174,13 +174,13 @@ export const kontinuitaetMethods = {
 
   // Löst "stelle_a/stelle_b" zu einem Page-Objekt auf. `stelle` ist ein
   // LLM-generierter String – Format nominal "Kapitel: Seite", kann aber
-  // auch "Seite: Zitat" oder nur "Kapitel" sein. Der authoritative Kontext
-  // ist issue.chapter_ids (serverseitig aus issue.kapitel gemappt) – der
-  // Seitenname wird innerhalb dieses Kapitels gesucht. Der Kapitel-Namens-
-  // Match auf dem ersten Teil darf nur greifen, wenn Teil 2 zu einer Seite
-  // passt (sonst Verwechslung zwischen gleichnamigen Kapitel- und Seiten-
-  // namen, z.B. Seite "Der Vater" in Kapitel "Der Unauffällige" vs. Kapitel
-  // "Der Vater" mit erster Seite "Die letzte Familie").
+  // auch nur "Kapitel" sein. Authoritativer Kontext: issue.chapter_ids.
+  //
+  // Wichtig: Reine Kapitelreferenz (kein ":" oder part1 == Kapitelname)
+  // verlinkt IMMER auf die erste Kapitelseite, NIE auf eine gleichnamige
+  // Seite – sonst landet "Der Vater" (Kapitel) versehentlich auf einer
+  // Seite namens "Der Vater" (in irgendeinem Kapitel). Globalen Page-
+  // Fallback gibt es nicht: ohne Kapitelkontext kein Link.
   kontinuitaetResolveStelle(stelle, issue, side) {
     const root = window.__app;
     if (!stelle) return null;
@@ -193,6 +193,9 @@ export const kontinuitaetMethods = {
     const part1 = (ci > 0 ? stelle.slice(0, ci) : stelle).trim();
     const part2 = ci > 0 ? stelle.slice(ci + 1).trim() : '';
 
+    const chapter = targetCh || chapters.find(c => c.name === part1) || null;
+    if (!chapter) return null;
+
     const pageByName = (pages, needle) => {
       if (!pages?.length || !needle) return null;
       const nLower = needle.toLowerCase();
@@ -201,22 +204,16 @@ export const kontinuitaetMethods = {
         || null;
     };
 
-    if (targetCh) {
-      const byPart2 = pageByName(targetCh.pages, part2);
-      if (byPart2) return byPart2;
-      const byPart1 = pageByName(targetCh.pages, part1);
-      if (byPart1) return byPart1;
+    if (!part2) {
+      // Reine Kapitelreferenz → erste Kapitelseite (auch wenn gleichnamige
+      // Seite existiert). Wenn part1 nicht der Kapitelname ist, kann es
+      // ein Seitenname innerhalb des Kapitels sein.
+      if (part1.toLowerCase() === chapter.name.toLowerCase()) {
+        return chapter.pages?.[0] || null;
+      }
+      return pageByName(chapter.pages, part1) || chapter.pages?.[0] || null;
     }
-    const chFromName = chapters.find(c => c.name === part1);
-    if (chFromName) {
-      const p = pageByName(chFromName.pages, part2);
-      if (p) return p;
-    }
-    const globalByPart1 = pageByName(root.pages || [], part1);
-    if (globalByPart1) return globalByPart1;
-    if (targetCh?.pages?.length) return targetCh.pages[0];
-    if (chFromName?.pages?.length) return chFromName.pages[0];
-    return null;
+    return pageByName(chapter.pages, part2) || chapter.pages?.[0] || null;
   },
 
   kontinuitaetGotoStelle(stelle, issue, side) {

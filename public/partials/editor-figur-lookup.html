@@ -18,6 +18,10 @@
               <span class="figur-lookup-label" x-text="$app.t('figurLookup.geburt')"></span>
               <span x-text="figurLookupGeburt()"></span>
             </div>
+            <div x-show="figurLookupData.wohnadresse" class="figur-lookup-row">
+              <span class="figur-lookup-label" x-text="$app.t('figurLookup.wohnadresse')"></span>
+              <span x-text="figurLookupData.wohnadresse"></span>
+            </div>
             <div x-show="(figurLookupData.eigenschaften || []).length > 0" class="figur-lookup-tags">
               <template x-for="(tag, ti) in (figurLookupData.eigenschaften || [])" :key="ti">
                 <span class="tag" x-text="tag"></span>

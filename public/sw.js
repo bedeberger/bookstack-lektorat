@@ -6,7 +6,7 @@
 //  - Auth/KI/Job-Queue/SSE: Network-Only, nie cachen
 //  - Version-Bump der Konstanten invalidiert den jeweiligen Cache
 
-const SHELL_CACHE = 'lektorat-shell-v39';
+const SHELL_CACHE = 'lektorat-shell-v40';
 const API_CACHE = 'lektorat-api-v2';
 const CONFIG_CACHE = 'lektorat-config-v1';
 const ACTIVE_CACHES = new Set([SHELL_CACHE, API_CACHE, CONFIG_CACHE]);
@@ -167,6 +167,20 @@ async function handleConfig(req) {
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
   });
 }
+
+// Logout aus dem Client: API+Config-Caches dropen, sonst rendert die SPA nach
+// `/auth/logout` kurz noch gecachte Seiten/Configs des alten Users.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'auth-logout') {
+    event.waitUntil((async () => {
+      await Promise.all([
+        caches.delete(API_CACHE),
+        caches.delete(CONFIG_CACHE),
+      ]);
+      event.source?.postMessage?.({ type: 'auth-logout-done' });
+    })());
+  }
+});
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;

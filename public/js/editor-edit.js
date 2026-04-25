@@ -1,7 +1,12 @@
 import { htmlToText, stripFocusArtefacts, cleanContentArtefacts, stripTrailingEmptyBlocks } from './utils.js';
 import { sortByPosition, buildHighlightedHtml } from './page-view.js';
+import { installEditCounter } from './editor-focus.js';
 
-const AUTOSAVE_INTERVAL_MS = 30000;
+// Auto-Save nach BookStack: idle-debounce + max-Cap. Jede Schreibaktion
+// resettet den Idle-Timer; läuft der User durchgehend, greift der Max-Timer.
+// Reduziert Revision-Spam (vorher fester 30-s-Tick → ~120 Revisions/h Tippen).
+const AUTOSAVE_IDLE_MS = 60000;
+const AUTOSAVE_MAX_MS = 120000;
 const DRAFT_DEBOUNCE_MS = 500;
 const DRAFT_KEY = (pageId) => `editor_draft_${pageId}`;
 
@@ -180,6 +185,9 @@ export const editorEditMethods = {
     this._startAutosave();
     this._installOnlineRetry();
     this._installFindingMarkWatcher();
+    // Counter erst nach Alpine-x-show-Flush installieren — vorher existiert
+    // .page-content-view--editing noch nicht im DOM.
+    setTimeout(() => { if (this.editMode) installEditCounter(this); }, 0);
   },
 
   cancelEdit() {
@@ -188,6 +196,7 @@ export const editorEditMethods = {
     this._stopAutosave();
     this._uninstallOnlineRetry();
     this._uninstallFindingMarkWatcher();
+    this._editCounterCtx?.teardown?.();
     this.lastDraftSavedAt = null;
     this.editMode = false;
     this.editDirty = false;
@@ -253,6 +262,7 @@ export const editorEditMethods = {
         this._stopAutosave();
         this._uninstallOnlineRetry();
         this._uninstallFindingMarkWatcher();
+        this._editCounterCtx?.teardown?.();
         this.editMode = false;
         this.closeSynonymMenu?.();
         this.closeSynonymPicker?.();
@@ -356,6 +366,7 @@ export const editorEditMethods = {
     if (!this.editMode) return;
     this.editDirty = true;
     this._scheduleDraftSave();
+    this._scheduleAutosave();
   },
 
   _scheduleDraftSave() {
@@ -387,17 +398,35 @@ export const editorEditMethods = {
   },
 
   _startAutosave() {
-    this._stopAutosave();
-    this._autosaveTimer = setInterval(() => {
-      if (this.editMode && this.editDirty && !this.editSaving) {
-        this.quickSave();
-      }
-    }, AUTOSAVE_INTERVAL_MS);
+    this._clearAutosaveTimers();
+    if (this.editDirty) this._scheduleAutosave();
   },
 
   _stopAutosave() {
-    if (this._autosaveTimer) { clearInterval(this._autosaveTimer); this._autosaveTimer = null; }
+    this._clearAutosaveTimers();
     if (this._draftTimer) { clearTimeout(this._draftTimer); this._draftTimer = null; }
+  },
+
+  _clearAutosaveTimers() {
+    if (this._autosaveIdleTimer) { clearTimeout(this._autosaveIdleTimer); this._autosaveIdleTimer = null; }
+    if (this._autosaveMaxTimer) { clearTimeout(this._autosaveMaxTimer); this._autosaveMaxTimer = null; }
+  },
+
+  // Idle-Timer wird bei jedem Edit zurückgesetzt → speichert erst nach
+  // AUTOSAVE_IDLE_MS Tipp-Pause. Max-Timer läuft ab erstem Dirty-Mark
+  // weiter und greift bei Dauer-Tippen, sodass spätestens AUTOSAVE_MAX_MS
+  // nach der ersten Änderung ein Save ausgelöst wird.
+  _scheduleAutosave() {
+    if (this._autosaveIdleTimer) clearTimeout(this._autosaveIdleTimer);
+    this._autosaveIdleTimer = setTimeout(() => this._fireAutosave(), AUTOSAVE_IDLE_MS);
+    if (!this._autosaveMaxTimer) {
+      this._autosaveMaxTimer = setTimeout(() => this._fireAutosave(), AUTOSAVE_MAX_MS);
+    }
+  },
+
+  _fireAutosave() {
+    this._clearAutosaveTimers();
+    if (this.editMode && this.editDirty && !this.editSaving) this.quickSave();
   },
 
   _installOnlineRetry() {

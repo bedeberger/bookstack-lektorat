@@ -36,6 +36,7 @@ db.exec(`
     geburtstag   TEXT,
     geschlecht   TEXT,
     beruf        TEXT,
+    wohnadresse  TEXT,
     beschreibung TEXT,
     sort_order   INTEGER DEFAULT 0,
     meta         TEXT,
@@ -198,11 +199,43 @@ db.exec(`
     book_id     INTEGER NOT NULL,
     user_email  TEXT,
     checked_at  TEXT NOT NULL,
-    issues_json TEXT,
     summary     TEXT,
     model       TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_cc_book_id ON continuity_checks(book_id, user_email);
+
+  CREATE TABLE IF NOT EXISTS continuity_issues (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    check_id     INTEGER NOT NULL REFERENCES continuity_checks(id) ON DELETE CASCADE,
+    book_id      INTEGER NOT NULL,
+    user_email   TEXT,
+    schwere      TEXT,
+    typ          TEXT,
+    beschreibung TEXT,
+    stelle_a     TEXT,
+    stelle_b     TEXT,
+    empfehlung   TEXT,
+    sort_order   INTEGER DEFAULT 0,
+    updated_at   TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_ci_check ON continuity_issues(check_id);
+  CREATE INDEX IF NOT EXISTS idx_ci_book  ON continuity_issues(book_id, user_email);
+
+  CREATE TABLE IF NOT EXISTS continuity_issue_figures (
+    issue_id   INTEGER NOT NULL REFERENCES continuity_issues(id) ON DELETE CASCADE,
+    fig_id     TEXT,
+    figur_name TEXT,
+    sort_order INTEGER DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_cif_issue ON continuity_issue_figures(issue_id);
+
+  CREATE TABLE IF NOT EXISTS continuity_issue_chapters (
+    issue_id     INTEGER NOT NULL REFERENCES continuity_issues(id) ON DELETE CASCADE,
+    chapter_id   INTEGER,
+    chapter_name TEXT,
+    sort_order   INTEGER DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_cic_issue ON continuity_issue_chapters(issue_id);
 
   CREATE TABLE IF NOT EXISTS zeitstrahl_events (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1171,6 +1204,153 @@ function runMigrations() {
     db.exec('CREATE INDEX IF NOT EXISTS idx_pages_book_chapter_name ON pages(book_id, chapter_name)');
     db.prepare('UPDATE schema_version SET version = 56').run();
     logger.info('DB-Migration auf Version 56 abgeschlossen (Index pages(book_id, chapter_name) fuer reconcilePageIds).');
+  }
+
+  if (version < 57) {
+    const figCols57 = db.pragma('table_info(figures)').map(c => c.name);
+    if (!figCols57.includes('wohnadresse')) {
+      db.exec('ALTER TABLE figures ADD COLUMN wohnadresse TEXT');
+    }
+    db.prepare('UPDATE schema_version SET version = 57').run();
+    logger.info('DB-Migration auf Version 57 abgeschlossen (figures.wohnadresse).');
+  }
+
+  if (version < 58) {
+    const csCols58 = db.pragma('table_info(chat_sessions)').map(c => c.name);
+    if (!csCols58.includes('opening_page_text')) {
+      db.prepare('ALTER TABLE chat_sessions ADD COLUMN opening_page_text TEXT').run();
+    }
+    db.prepare('UPDATE schema_version SET version = 58').run();
+    logger.info('DB-Migration auf Version 58 abgeschlossen (chat_sessions.opening_page_text).');
+  }
+
+  if (version < 59) {
+    // continuity_checks.issues_json (JSON-Blob) → eigene Tabelle continuity_issues + Bridge-Tabellen.
+    // Vorbild: figure_scenes mit scene_figures/scene_locations.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS continuity_issues (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        check_id     INTEGER NOT NULL REFERENCES continuity_checks(id) ON DELETE CASCADE,
+        book_id      INTEGER NOT NULL,
+        user_email   TEXT,
+        schwere      TEXT,
+        typ          TEXT,
+        beschreibung TEXT,
+        stelle_a     TEXT,
+        stelle_b     TEXT,
+        empfehlung   TEXT,
+        sort_order   INTEGER DEFAULT 0,
+        updated_at   TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_ci_check ON continuity_issues(check_id);
+      CREATE INDEX IF NOT EXISTS idx_ci_book  ON continuity_issues(book_id, user_email);
+
+      CREATE TABLE IF NOT EXISTS continuity_issue_figures (
+        issue_id   INTEGER NOT NULL REFERENCES continuity_issues(id) ON DELETE CASCADE,
+        fig_id     TEXT,
+        figur_name TEXT,
+        sort_order INTEGER DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_cif_issue ON continuity_issue_figures(issue_id);
+
+      CREATE TABLE IF NOT EXISTS continuity_issue_chapters (
+        issue_id     INTEGER NOT NULL REFERENCES continuity_issues(id) ON DELETE CASCADE,
+        chapter_id   INTEGER,
+        chapter_name TEXT,
+        sort_order   INTEGER DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_cic_issue ON continuity_issue_chapters(issue_id);
+    `);
+
+    const ccCols59 = db.pragma('table_info(continuity_checks)').map(c => c.name);
+    if (ccCols59.includes('issues_json')) {
+      const insIssue = db.prepare(`INSERT INTO continuity_issues
+        (check_id, book_id, user_email, schwere, typ, beschreibung, stelle_a, stelle_b, empfehlung, sort_order, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      const insIssueFig = db.prepare(`INSERT INTO continuity_issue_figures
+        (issue_id, fig_id, figur_name, sort_order) VALUES (?, ?, ?, ?)`);
+      const insIssueCh = db.prepare(`INSERT INTO continuity_issue_chapters
+        (issue_id, chapter_id, chapter_name, sort_order) VALUES (?, ?, ?, ?)`);
+      const figByName = db.prepare('SELECT fig_id FROM figures WHERE book_id = ? AND name = ? LIMIT 1');
+      const chByName  = db.prepare('SELECT chapter_id FROM chapters WHERE book_id = ? AND chapter_name = ? LIMIT 1');
+
+      const rows = db.prepare('SELECT id, book_id, user_email, checked_at, issues_json FROM continuity_checks WHERE issues_json IS NOT NULL').all();
+      let migrated = 0;
+      db.transaction(() => {
+        for (const r of rows) {
+          let issues;
+          try { issues = JSON.parse(r.issues_json); } catch { continue; }
+          if (!Array.isArray(issues)) continue;
+          for (let i = 0; i < issues.length; i++) {
+            const it = issues[i] || {};
+            const { lastInsertRowid: issueId } = insIssue.run(
+              r.id, r.book_id, r.user_email,
+              it.schwere || null, it.typ || null, it.beschreibung || null,
+              it.stelle_a || null, it.stelle_b || null, it.empfehlung || null,
+              i, r.checked_at,
+            );
+            // Namen sind authoritativ — das alte normalizedProbleme.fig_ids/chapter_ids
+            // war .filter(Boolean) und damit positional NICHT mehr alignt. Daher per
+            // chapter_name/figur_name in chapters/figures nachschlagen.
+            const figNames = Array.isArray(it.figuren) ? it.figuren : [];
+            const seenFig = new Set();
+            for (let j = 0; j < figNames.length; j++) {
+              const name = typeof figNames[j] === 'string' ? figNames[j].trim() : null;
+              if (!name || seenFig.has(name)) continue;
+              seenFig.add(name);
+              const fid = figByName.get(r.book_id, name)?.fig_id || null;
+              insIssueFig.run(issueId, fid, name, j);
+            }
+            const chNames = Array.isArray(it.kapitel) ? it.kapitel : [];
+            const seenCh = new Set();
+            for (let j = 0; j < chNames.length; j++) {
+              const name = typeof chNames[j] === 'string' ? chNames[j].trim() : null;
+              if (!name || seenCh.has(name)) continue;
+              seenCh.add(name);
+              const cid = chByName.get(r.book_id, name)?.chapter_id ?? null;
+              insIssueCh.run(issueId, cid, name, j);
+            }
+            migrated++;
+          }
+        }
+      })();
+      db.exec('ALTER TABLE continuity_checks DROP COLUMN issues_json');
+      logger.info(`DB-Migration auf Version 59: ${migrated} Kontinuitäts-Issues aus issues_json migriert; Spalte gedroppt.`);
+    } else {
+      logger.info('DB-Migration auf Version 59: continuity_checks.issues_json nicht vorhanden — Backfill übersprungen.');
+    }
+    db.prepare('UPDATE schema_version SET version = 59').run();
+    logger.info('DB-Migration auf Version 59 abgeschlossen (continuity_issues + Bridge-Tabellen).');
+  }
+
+  if (version < 60) {
+    // Korrektur: v59-Backfill alignte chapter_ids/fig_ids positional zu kapitel/figuren,
+    // aber das alte normalizedProbleme-Format filterte unaufgelöste IDs raus
+    // (positional alignment falsch). Hier neu auflösen anhand chapter_name/figur_name.
+    const fixCh = db.prepare(`
+      UPDATE continuity_issue_chapters
+      SET chapter_id = (
+        SELECT c.chapter_id FROM chapters c
+        JOIN continuity_issues i ON i.id = continuity_issue_chapters.issue_id
+        WHERE c.book_id = i.book_id AND c.chapter_name = continuity_issue_chapters.chapter_name
+        LIMIT 1
+      )
+      WHERE chapter_name IS NOT NULL
+    `);
+    const fixFig = db.prepare(`
+      UPDATE continuity_issue_figures
+      SET fig_id = (
+        SELECT f.fig_id FROM figures f
+        JOIN continuity_issues i ON i.id = continuity_issue_figures.issue_id
+        WHERE f.book_id = i.book_id AND f.name = continuity_issue_figures.figur_name
+        LIMIT 1
+      )
+      WHERE figur_name IS NOT NULL
+    `);
+    const chFixed = fixCh.run().changes;
+    const figFixed = fixFig.run().changes;
+    db.prepare('UPDATE schema_version SET version = 60').run();
+    logger.info(`DB-Migration auf Version 60: ${chFixed} chapter_id- / ${figFixed} fig_id-Verknüpfungen neu aufgelöst.`);
   }
 
   // Schutzchecks: idempotent bei jedem Start.

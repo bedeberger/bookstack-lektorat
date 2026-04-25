@@ -29,7 +29,6 @@
           <span x-show="$app.appliedOriginals.includes(f.original)" class="tag" x-text="$app.t('editor.findings.applied')"></span>
           <span class="finding-content">
             <span class="finding-original" x-text="f.original"></span>
-            <template x-if="f.korrektur"><span class="finding-arrow">→</span></template>
             <template x-if="f.korrektur"><span class="finding-korrektur" x-text="f.korrektur"></span></template>
             <span class="finding-explanation" x-text="f.erklaerung"></span>
           </span>
@@ -49,9 +48,6 @@
           <span class="badge" :class="_isHardFinding(f.typ) ? 'badge-err' : 'badge-warn'" x-text="$app.t('finding.' + f.typ)"></span>
           <span class="applied-history-text">
             <span class="finding-original" x-text="f.original"></span>
-            <template x-if="f.korrektur">
-              <span class="finding-arrow">→</span>
-            </template>
             <template x-if="f.korrektur">
               <span class="finding-korrektur" x-text="f.korrektur"></span>
             </template>

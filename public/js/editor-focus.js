@@ -78,10 +78,58 @@ function dailyDelta(pageId, words, chars) {
 
 // `±0` für klare Optik bei Null statt nacktem `0`. Unicode-Minus für sauberen
 // Tabulator-Look (gleiche Glyph-Breite wie Plus); ASCII-Hyphen ist schmaler.
-function fmtSigned(n) {
+export function fmtSigned(n) {
   if (n > 0) return '+' + n;
   if (n < 0) return '−' + Math.abs(n);
   return '±0';
+}
+
+export { dailyDelta };
+
+// Edit-Mode-Counter: läuft sobald Edit-Modus aktiv ist (NICHT erst im Fokus).
+// Setzt Tagesbaseline beim Edit-Start (nicht beim Focus-Eintritt) und tickt bei
+// jeder Eingabe – damit zählen auch Edits ausserhalb des Fokusmodus zum
+// „heute"-Delta. Idempotent: doppelter Install-Aufruf liefert dieselbe Teardown-
+// Funktion zurück, ohne zweite Listener anzuhängen.
+export function installEditCounter(app) {
+  if (!app) return () => {};
+  if (app._editCounterCtx) return app._editCounterCtx.teardown;
+
+  const container = document.querySelector('#editor-card .page-content-view--editing');
+  if (!container) return () => {};
+
+  let timer = 0;
+  const compute = () => {
+    const txt = container.textContent || '';
+    const chars = txt.length;
+    const words = txt.trim() ? txt.trim().split(/\s+/).length : 0;
+    app.focusCountChars = chars;
+    app.focusCountWords = words;
+    const { dw, dc } = dailyDelta(app.currentPage?.id, words, chars);
+    app.focusCountWordsDelta = fmtSigned(dw);
+    app.focusCountCharsDelta = fmtSigned(dc);
+  };
+  const schedule = () => {
+    clearTimeout(timer);
+    timer = setTimeout(compute, COUNTER_DEBOUNCE_MS);
+  };
+
+  container.addEventListener('input', schedule);
+  container.addEventListener('compositionend', schedule);
+
+  // Initial: Baseline für heute setzen (falls noch nicht vorhanden) und
+  // aktuellen Stand anzeigen. Ohne diesen Call würde Delta erst nach erstem
+  // Tastendruck überhaupt initialisiert.
+  compute();
+
+  const teardown = () => {
+    clearTimeout(timer);
+    container.removeEventListener('input', schedule);
+    container.removeEventListener('compositionend', schedule);
+    if (app._editCounterCtx?.teardown === teardown) app._editCounterCtx = null;
+  };
+  app._editCounterCtx = { teardown };
+  return teardown;
 }
 
 // --- Feature-Detect ---------------------------------------------------------
@@ -602,6 +650,7 @@ export const focusCardMethods = {
     if (app.editMode && !app.editDirty) {
       app._stopAutosave?.();
       app._uninstallOnlineRetry?.();
+      app._editCounterCtx?.teardown?.();
       app.editMode = false;
       app.editSaving = false;
       app.saveOffline = false;

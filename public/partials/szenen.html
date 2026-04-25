@@ -66,7 +66,7 @@
   <div x-show="$app.szenen.length > 0" class="szenen-liste-section">
     <!-- Filter-Leiste -->
     <div class="filter-bar">
-      <input type="text" x-model="$app.szenenFilters.suche" :placeholder="$app.t('common.search')" class="filter-search-input">
+      <input type="text" x-model="$app.szenenFilters.suche" :placeholder="$app.t('common.search')" :aria-label="$app.t('common.search')" class="filter-search-input">
       <div class="szenen-filter-group">
         <button type="button" class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': $app.szenenFilters.wertung === '' }" @click="$app.szenenFilters.wertung = ''" x-text="$app.t('common.all')"></button>
         <button type="button" class="szenen-filter-btn szenen-filter-btn--stark"   :class="{ 'szenen-filter-btn--active': $app.szenenFilters.wertung === 'stark' }"   @click="$app.szenenFilters.wertung = $app.szenenFilters.wertung === 'stark'   ? '' : 'stark'" x-text="$app.t('szenen.rating.stark')"></button>

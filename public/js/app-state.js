@@ -64,7 +64,6 @@ const navigationState = () => ({
 const editorState = () => ({
   currentPage: null,
   currentPageEmpty: false,
-  pageRevisionCount: null,
   renderedPageHtml: '',
   chapterFigures: [],
   showChapterFigures: false,
@@ -77,7 +76,8 @@ const editorState = () => ({
   saveOffline: false,
   lastAutosaveAt: null,
   lastDraftSavedAt: null,
-  _autosaveTimer: null,
+  _autosaveIdleTimer: null,
+  _autosaveMaxTimer: null,
   _draftTimer: null,
   _onlineHandler: null,
   newPageTitle: '',

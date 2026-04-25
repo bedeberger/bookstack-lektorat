@@ -8,9 +8,12 @@
             x-text="lastSavedKind() === 'draft' ? t('editor.draft', { when: lastSavedLabel() }) : t('editor.saved', { when: lastSavedLabel() })"
             :title="lastSavedKind() === 'draft' ? t('editor.draftTitle') : t('editor.savedTitle')"></span>
       <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag tag--link" x-text="t('editor.openInBookstack')"></a>
-      <a x-show="currentPage?.url && pageRevisionCount > 0" :href="currentPage?.url + '/revisions'" target="_blank" rel="noopener" class="tag tag--link" :title="t('editor.revisionsTitle')" x-text="t('editor.revisions', { n: pageRevisionCount })"></a>
-      <span x-show="focusMode && editMode" class="focus-live-counter"
-            x-text="t('editor.focus.counter', { words: focusCountWords, chars: focusCountChars, wordsDelta: focusCountWordsDelta, charsDelta: focusCountCharsDelta })"></span>
+      <a x-show="currentPage?.url && currentPage?.revision_count > 0" :href="currentPage?.url + '/revisions'" target="_blank" rel="noopener" class="tag tag--link" :title="t('editor.revisionsTitle')" x-text="t('editor.revisions', { n: currentPage?.revision_count })"></a>
+      <span x-show="focusMode && editMode" class="focus-live-counter">
+        <span x-text="t('editor.focus.counterTotal', { words: focusCountWords, chars: focusCountChars })"></span>
+        <span class="focus-live-counter--today"
+              x-text="t('editor.focus.counterToday', { wordsDelta: focusCountWordsDelta, charsDelta: focusCountCharsDelta })"></span>
+      </span>
       <span x-show="currentPage && tokEsts[currentPage.id]" class="tok-stats">
         <template x-if="tokEsts[currentPage?.id]?.words > 0">
           <span class="display-contents">

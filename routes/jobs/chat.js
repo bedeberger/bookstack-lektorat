@@ -91,7 +91,13 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
     const figuren = getFiguren(session.book_id, userEmail, pageRow?.chapter_name ?? null);
     const review  = getLatestReview(session.book_id, userEmail);
     const { SYSTEM_CHAT: chatSysPrompt } = await getBookPrompts(session.book_id, userEmail);
-    const systemPrompt = buildChatSystemPrompt(session.page_name || 'Unbekannte Seite', pageText, figuren, review, chatSysPrompt);
+    // opening_page_text: Snapshot, der beim Chat-Öffnen gesichert wurde. Wird als
+    // Vergleichsbasis nur an die KI gegeben, wenn er sich vom aktuellen Stand
+    // unterscheidet (sonst wäre er redundant + kostet nur Tokens).
+    const openingPageText = (session.opening_page_text && session.opening_page_text.trim() && session.opening_page_text.trim() !== pageText.trim())
+      ? session.opening_page_text
+      : null;
+    const systemPrompt = buildChatSystemPrompt(session.page_name || 'Unbekannte Seite', pageText, figuren, review, chatSysPrompt, openingPageText);
 
     // Konversationshistorie aufbauen
     const historyWithoutLast = buildChatMessageHistory(session.id).slice(0, -1);

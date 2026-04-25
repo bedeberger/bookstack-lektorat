@@ -8,6 +8,7 @@ const {
   saveCheckpoint, loadCheckpoint, deleteCheckpoint,
   loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache,
   getAllUserTokens, getBookSettings, getTokenForRequest,
+  saveContinuityCheck, getLatestContinuityCheck,
 } = require('../../db/schema');
 const { narrativeLabels } = require('./narrative-labels');
 const { recomputeBookFigureMentions } = require('../../lib/page-index');
@@ -157,7 +158,7 @@ function _nameTokens(name) {
 /** Fasst zwei Figuren zu einer kanonischen Figur zusammen. `canon` wird mutiert.
  *  Gibt nichts zurück – Caller kümmert sich um idRemap. */
 function _mergeFigurInto(canon, other) {
-  for (const field of ['kurzname', 'typ', 'geburtstag', 'geschlecht', 'beruf', 'sozialschicht',
+  for (const field of ['kurzname', 'typ', 'geburtstag', 'geschlecht', 'beruf', 'wohnadresse', 'sozialschicht',
                        'rolle', 'motivation', 'konflikt', 'entwicklung', 'erste_erwaehnung', 'praesenz']) {
     if (!canon[field] && other[field]) canon[field] = other[field];
   }
@@ -275,7 +276,7 @@ function preMergeChapterFiguren(chapterFiguren) {
         // Merge: kapitel, eigenschaften, leere Kernfelder; Beziehungen NICHT mergen (lokale fig_ids).
         // Rollierender Dedup ist Pre-Processing – die Phase-2-KI bekommt trotzdem die
         // Original-Beziehungen pro Kapitel und löst die Referenzen dort auf.
-        for (const field of ['kurzname', 'typ', 'geburtstag', 'geschlecht', 'beruf', 'sozialschicht',
+        for (const field of ['kurzname', 'typ', 'geburtstag', 'geschlecht', 'beruf', 'wohnadresse', 'sozialschicht',
                              'rolle', 'motivation', 'konflikt', 'entwicklung', 'erste_erwaehnung', 'praesenz',
                              'beschreibung']) {
           if (!canon[field] && f[field]) canon[field] = f[field];
@@ -556,26 +557,23 @@ function saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId,
   return { szenenCount: szenen.length, eventsCount };
 }
 
-/** Speichert Kontinuitätsprüfung in die DB. Gibt normalizedProbleme zurück, oder null bei ungültiger Antwort. */
+/** Speichert Kontinuitätsprüfung in die DB (eine Zeile pro Issue + Bridge-Tabellen
+ *  für Figuren-/Kapitel-Referenzen). Gibt normalizedIssues zurück, oder null bei
+ *  ungültiger Antwort. */
 function saveKontinuitaetResult(bookIdInt, email, kontResult, figNameToId, chNameToId, effectiveProvider, log, jobId) {
   if (typeof kontResult?.zusammenfassung === 'undefined') return null;
-  const normalizedProbleme = (kontResult.probleme || []).map(issue => ({
-    ...issue,
-    fig_ids: (issue.figuren || []).map(n => {
-      const name = _refToString(n);
-      return name ? figNameToId[name] : null;
-    }).filter(Boolean),
-    chapter_ids: (issue.kapitel || []).map(n => {
-      const name = _refToString(n);
-      return name ? chNameToId[name] : null;
-    }).filter(Boolean),
+  const issues = (kontResult.probleme || []).map(p => ({
+    schwere: p.schwere, typ: p.typ, beschreibung: p.beschreibung,
+    stelle_a: p.stelle_a, stelle_b: p.stelle_b, empfehlung: p.empfehlung,
+    figuren: (p.figuren || []).map(_refToString).filter(Boolean),
+    kapitel: (p.kapitel || []).map(_refToString).filter(Boolean),
   }));
-  db.prepare(`INSERT INTO continuity_checks (book_id, user_email, checked_at, issues_json, summary, model)
-    VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(bookIdInt, email, new Date().toISOString(),
-      JSON.stringify(normalizedProbleme), kontResult.zusammenfassung || '', _modelName(effectiveProvider));
-  log.info(`Job ${jobId}: Kontinuitätsprüfung gespeichert (${normalizedProbleme.length} Probleme).`);
-  return normalizedProbleme;
+  const { normalizedIssues } = saveContinuityCheck(
+    bookIdInt, email, kontResult.zusammenfassung || '',
+    _modelName(effectiveProvider), issues, figNameToId, chNameToId,
+  );
+  log.info(`Job ${jobId}: Kontinuitätsprüfung gespeichert (${normalizedIssues.length} Probleme).`);
+  return normalizedIssues;
 }
 
 /** Invalidiert Delta-Cache-Einträge für umbenannte Kapitel. */
@@ -1470,16 +1468,8 @@ komplettRouter.get('/kontinuitaet/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const userEmail = req.session?.user?.email || null;
-  const row = db.prepare(`
-    SELECT id, checked_at, issues_json, summary, model
-    FROM continuity_checks
-    WHERE book_id = ? AND user_email = ?
-    ORDER BY checked_at DESC LIMIT 1
-  `).get(bookId, userEmail);
-  if (!row) return res.json(null);
-  let issues = [];
-  try { issues = JSON.parse(row.issues_json); } catch { /* ignore */ }
-  res.json({ id: row.id, checked_at: row.checked_at, issues, summary: row.summary, model: row.model });
+  const result = getLatestContinuityCheck(bookId, userEmail);
+  res.json(result);
 });
 
 komplettRouter.delete('/chapter-cache/:book_id', (req, res) => {

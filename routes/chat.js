@@ -1,11 +1,13 @@
 const express = require('express');
-const { db } = require('../db/schema');
+const { db, getTokenForRequest } = require('../db/schema');
 const logger = require('../logger');
 const { callAIChat, parseJSON, chatTemperature } = require('../lib/ai');
 const { toIntId } = require('../lib/validate');
+const { BOOKSTACK_URL } = require('../lib/bookstack');
 const {
   getPrompts, getBookPrompts,
   getFiguren, getLatestReview, buildChatMessageHistory,
+  htmlToText,
 } = require('./jobs/shared');
 
 const router = express.Router();
@@ -26,7 +28,7 @@ function normalizeContextInfo(ci) {
 // ── Routen ───────────────────────────────────────────────────────────────────
 
 /** Neue Chat-Session erstellen */
-router.post('/session', jsonBody, (req, res) => {
+router.post('/session', jsonBody, async (req, res) => {
   const { book_name, page_name } = req.body;
   const book_id = toIntId(req.body?.book_id);
   const page_id = toIntId(req.body?.page_id);
@@ -34,11 +36,35 @@ router.post('/session', jsonBody, (req, res) => {
   if (!book_id || !page_id || !userEmail) {
     return res.status(400).json({ error_code: 'BOOKID_PAGEID_LOGIN_REQ' });
   }
+
+  // Snapshot: Seitentext beim Chat-Öffnen einmalig sichern. Ermöglicht später
+  // im System-Prompt einen Vergleich „Stand beim Öffnen" vs. „aktueller Stand",
+  // damit die KI Änderungen während laufendem Chat erkennt.
+  let openingPageText = null;
+  try {
+    const token = getTokenForRequest(req);
+    const authHeader = token
+      ? `Token ${token.id}:${token.pw}`
+      : `Token ${process.env.TOKEN_ID || ''}:${process.env.TOKEN_KENNWORT || ''}`;
+    const resp = await fetch(`${BOOKSTACK_URL}/api/pages/${page_id}`, {
+      headers: { Authorization: authHeader },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (resp.ok) {
+      const pd = await resp.json();
+      openingPageText = htmlToText(pd.html || '');
+    } else {
+      logger.warn(`[chat/session] Snapshot-Load fehlgeschlagen page=${page_id} status=${resp.status}`);
+    }
+  } catch (e) {
+    logger.warn(`[chat/session] Snapshot-Load Fehler page=${page_id}: ${e.message}`);
+  }
+
   const now = new Date().toISOString();
   const result = db.prepare(`
-    INSERT INTO chat_sessions (book_id, book_name, page_id, page_name, user_email, created_at, last_message_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(book_id, book_name || null, page_id, page_name || null, userEmail, now, now);
+    INSERT INTO chat_sessions (book_id, book_name, page_id, page_name, user_email, created_at, last_message_at, opening_page_text)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(book_id, book_name || null, page_id, page_name || null, userEmail, now, now, openingPageText);
   res.json({ id: result.lastInsertRowid });
 });
 
@@ -208,12 +234,16 @@ router.post('/send', jsonBody, async (req, res) => {
     // System-Prompt aus prompts.js (Single Source of Truth)
     const { buildChatSystemPrompt, SCHEMA_CHAT } = await getPrompts();
     const { SYSTEM_CHAT: chatSys } = await getBookPrompts(session.book_id, userEmail);
+    const openingPageText = (session.opening_page_text && session.opening_page_text.trim() && session.opening_page_text.trim() !== (page_text || '').trim())
+      ? session.opening_page_text
+      : null;
     const systemPrompt = buildChatSystemPrompt(
       session.page_name || 'Unbekannte Seite',
       page_text || '',
       figuren,
       review,
-      chatSys
+      chatSys,
+      openingPageText,
     );
 
     // Konversationshistorie aufbauen (aktuelle User-Nachricht nicht doppelt senden)

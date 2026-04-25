@@ -21,6 +21,28 @@ export const appChromeMethods = {
       body: JSON.stringify({ theme: this.themePref }),
     }).catch(e => console.error('[theme] Persist fehlgeschlagen:', e));
   },
+  // Logout: SW-Caches dropen, bevor der Browser zum Login redirected. Sonst
+  // liefert die SWR-Strategie nach Re-Login kurz noch /api/* + /config des
+  // alten Users, bis Eviction greift.
+  async logout(ev) {
+    const sw = navigator.serviceWorker;
+    if (!sw?.controller) return; // kein SW aktiv → normales Anker-Verhalten
+    ev.preventDefault();
+    const ctrl = sw.controller;
+    const done = new Promise(resolve => {
+      const onMsg = (e) => {
+        if (e.data?.type === 'auth-logout-done') {
+          sw.removeEventListener('message', onMsg);
+          resolve();
+        }
+      };
+      sw.addEventListener('message', onMsg);
+      setTimeout(() => { sw.removeEventListener('message', onMsg); resolve(); }, 1500);
+    });
+    ctrl.postMessage({ type: 'auth-logout' });
+    await done;
+    location.href = '/auth/logout';
+  },
   _avatarInitials() {
     const src = (this.currentUser && (this.currentUser.name || this.currentUser.email)) || '';
     if (!src) return '·';

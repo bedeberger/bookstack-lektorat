@@ -335,6 +335,10 @@ const bookstackProxy = createProxyMiddleware({
   pathRewrite: { '^/': '/api/' },
   on: {
     proxyReq: (proxyReq, req) => {
+      // Lektorat-Session-Cookie nicht an BookStack weiterreichen — BookStack sieht
+      // sonst Cookie + Token gleichzeitig und auth-fallback hängt sich an die
+      // (anonyme) Session statt am Token, Resultat: 403 "no API permission".
+      proxyReq.removeHeader('cookie');
       proxyReq.removeHeader('Authorization');
       const t = getTokenForRequest(req);
       if (t) {

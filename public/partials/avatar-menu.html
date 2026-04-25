@@ -62,6 +62,6 @@
       <span x-text="apiProvider === 'ollama' ? 'Ollama · ' + ollamaModel : apiProvider === 'llama' ? 'Llama · ' + llamaModel : 'Claude · ' + claudeModel"></span>
     </div>
 
-    <a href="/auth/logout" class="avatar-menu-item avatar-menu-item--logout" role="menuitem" x-text="t('header.logout')"></a>
+    <a href="/auth/logout" class="avatar-menu-item avatar-menu-item--logout" role="menuitem" x-text="t('header.logout')" @click="logout($event)"></a>
   </div>
 </div>

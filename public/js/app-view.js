@@ -66,18 +66,7 @@ export const appViewMethods = {
 
     // Figurenkontext für dieses Kapitel laden (parallel zur History)
     this.loadChapterFigures();
-    this._loadPageRevisionCount(p.id);
     await this.loadPageHistory(p.id);
-  },
-
-  async _loadPageRevisionCount(pageId) {
-    try {
-      const data = await this.bsGet(`page-revisions?filter[page_id]=${pageId}&count=1`);
-      if (this.currentPage?.id !== pageId) return;
-      this.pageRevisionCount = data.total ?? null;
-    } catch (e) {
-      console.error('[loadPageRevisionCount]', e);
-    }
   },
 
   // Schliesst die anderen Hauptkarten (nicht Tree – der bleibt immer aktiv).
@@ -258,7 +247,6 @@ export const appViewMethods = {
     this.resetChat();
     this.currentPage = null;
     this.currentPageEmpty = false;
-    this.pageRevisionCount = null;
     this.renderedPageHtml = '';
     this.chapterFigures = [];
     this.showChapterFigures = false;

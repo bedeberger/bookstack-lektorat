@@ -176,6 +176,7 @@ router.get('/:book_id', (req, res) => {
       geburtstag: f.geburtstag,
       geschlecht: f.geschlecht,
       beruf: f.beruf,
+      wohnadresse: f.wohnadresse || null,
       beschreibung: f.beschreibung,
       sozialschicht: f.sozialschicht || null,
       praesenz: f.praesenz || null,

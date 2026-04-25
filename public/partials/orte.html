@@ -19,7 +19,7 @@
 
   <!-- Filter-Leiste -->
   <div x-show="$app.orte.length > 0" class="filter-bar">
-    <input type="text" x-model="$app.orteFilters.suche" :placeholder="$app.t('common.search')" class="filter-search-input">
+    <input type="text" x-model="$app.orteFilters.suche" :placeholder="$app.t('common.search')" :aria-label="$app.t('common.search')" class="filter-search-input">
     <div x-data="combobox($app.t('filter.figur'), $app.t('filter.allFiguren'))"
          x-modelable="value" x-model="$app.orteFilters.figurId"
          x-effect="options = $app.figuren.filter(f => $app.orte.some(o => (o.figuren || []).includes(f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"

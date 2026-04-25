@@ -19,6 +19,7 @@ export function _sanitizeFigur(f) {
     typ: _VALID_TYPES.has(f.typ) ? f.typ : 'andere',
     kurzname: _cleanStr(f.kurzname),
     beruf: _cleanStr(f.beruf),
+    wohnadresse: _cleanStr(f.wohnadresse),
     beschreibung: _cleanStr(f.beschreibung),
     geburtstag: _cleanStr(f.geburtstag),
     geschlecht: _cleanStr(f.geschlecht),

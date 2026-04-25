@@ -101,7 +101,7 @@
 
      <!-- Filter -->
     <div x-show="$app.figuren.length > 0 && figurenKapitelListe().length > 0" class="filter-bar">
-      <input type="text" x-model="$app.figurenFilters.suche" :placeholder="$app.t('common.search')" class="filter-search-input">
+      <input type="text" x-model="$app.figurenFilters.suche" :placeholder="$app.t('common.search')" :aria-label="$app.t('common.search')" class="filter-search-input">
       <div x-data="combobox($app.t('filter.chapter'), $app.t('filter.allChapters'))"
           x-modelable="value" x-model="$app.figurenFilters.kapitel"
           x-effect="options = figurenKapitelListe().map(k => ({value: k, label: k}))"
@@ -165,6 +165,11 @@
             <span x-show="f.beruf" class="figur-detail-value" x-text="f.beruf"></span>
             <span x-show="f.sozialschicht && f.sozialschicht !== 'andere'" class="tag figur-sozialschicht-badge" :class="'figur-schicht-' + f.sozialschicht" x-text="$app.t('figuren.schicht.' + f.sozialschicht)"></span>
             <span x-show="f.praesenz" class="tag figur-praesenz-badge" :class="'figur-praesenz-' + f.praesenz" x-text="$app.t('figuren.praesenz.' + f.praesenz)"></span>
+          </div>
+          <!-- Wohnadresse -->
+          <div x-show="f.wohnadresse" class="figur-detail-row">
+            <span class="bewertung-section-title bewertung-section-title--inline" x-text="$app.t('figuren.field.wohnadresse') + ' '"></span>
+            <span class="figur-detail-value" x-text="f.wohnadresse"></span>
           </div>
           <!-- Erste Erwähnung -->
           <div x-show="f.erste_erwaehnung" class="figur-detail-row">

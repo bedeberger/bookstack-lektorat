@@ -36,6 +36,12 @@ const baseMethods = makeChatMethods({
   },
   onBeforeSend: async function () {
     const root = window.__app;
+    // Ungespeicherte Editor-Änderungen flushen, sonst sieht der Chat-Job den
+    // alten BookStack-Stand (Autosave läuft nur alle 30s).
+    if (root.editMode && root.editDirty && !root.editSaving) {
+      try { await root.quickSave(); }
+      catch (e) { console.warn('[sendChatMessage] quickSave fehlgeschlagen:', e.message); }
+    }
     try {
       const pageData = await root.bsGet('pages/' + root.currentPage.id);
       root.originalHtml = stripFocusArtefacts(pageData.html || '');

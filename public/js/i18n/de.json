@@ -359,6 +359,7 @@
   "figuren.schicht.andere":               "—",
 
   "figuren.field.beruf":             "Beruf:",
+  "figuren.field.wohnadresse":       "Wohnadresse:",
   "figuren.field.kapitelauftritte":  "Kapitelauftritte",
   "figuren.field.eigenschaften":     "Eigenschaften",
   "figuren.field.familie":           "Familie",
@@ -371,6 +372,7 @@
   "figuren.field.ersteErwaehnung":   "Erste Erwähnung:",
   "figuren.field.schluesselzitate":  "Schlüsselzitate",
   "figurLookup.geburt":              "Geburt:",
+  "figurLookup.wohnadresse":         "Wohnadresse:",
   "figurLookup.open":                "Figur öffnen",
   "figuren.praesenz.zentral":        "zentral",
   "figuren.praesenz.regelmaessig":   "regelmässig",
@@ -536,6 +538,8 @@
   "editor.btn.enterFocusTitle":  "Ablenkungsfreier Vollbild-Schreibmodus (F11)",
 
   "editor.focus.counter":        "{words} Wörter ({wordsDelta} heute) · {chars} Zeichen ({charsDelta} heute)",
+  "editor.focus.counterTotal":   "{words} Wörter · {chars} Zeichen",
+  "editor.focus.counterToday":   "{wordsDelta} Wörter · {charsDelta} Zeichen heute",
 
   "editor.figuresInChapter":     "{n} Figuren in diesem Kapitel",
   "editor.field.geschlecht":     "Geschlecht:",

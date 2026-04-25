@@ -119,7 +119,7 @@
       <div class="book-settings-danger-row">
         <div class="book-settings-danger-text" x-text="$app.t('profile.dangerText')"></div>
         <div class="book-settings-danger-actions">
-          <select class="book-settings-select" x-model="userSettingsDangerBookId">
+          <select class="book-settings-select" x-model="userSettingsDangerBookId" :aria-label="$app.t('common.chooseBook')">
             <option value="" x-text="$app.t('common.chooseBook')"></option>
             <template x-for="b in $app.books" :key="b.id">
               <option :value="b.id" x-text="b.name"></option>
