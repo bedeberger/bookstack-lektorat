@@ -4,12 +4,13 @@ const winston = require('winston');
 const LOG_FILE = path.join(__dirname, 'lektorat.log');
 
 const logger = winston.createLogger({
-  level: 'info',
+  level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    winston.format.printf(({ timestamp, level, message, job, user, book }) => {
+    winston.format.printf(({ timestamp, level, message, job, user, book, stack }) => {
       const ctx = job ? ` [${job}|${user || '-'}|${book || '-'}]` : '';
-      return `${timestamp} [${level.toUpperCase()}]${ctx} ${message}`;
+      const tail = stack ? `\n${stack}` : '';
+      return `${timestamp} [${level.toUpperCase()}]${ctx} ${message}${tail}`;
     })
   ),
   transports: [

@@ -42,7 +42,8 @@ export function createJobFeature(cfg) {
   const i18n       = cfg.i18n || {};
 
   function writeStatus(msg, spinner) {
-    this[status] = spinner ? `<span class="spinner"></span>${msg}` : msg;
+    const safe = escHtml(msg);
+    this[status] = spinner ? `<span class="spinner"></span>${safe}` : safe;
   }
   function jobErrHtml(job) {
     return `<span class="error-msg">${this.t('common.errorColon')}${escHtml(this.t(job.error, job.errorParams))}</span>`;

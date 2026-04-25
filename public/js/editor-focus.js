@@ -27,6 +27,62 @@ const BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, blockquote, li, pre, td, th, figur
 
 const POINTER_GRACE_MS = 300;
 const VV_DEBOUNCE_MS = 100;
+const CURSOR_HIDE_MS = 2000;
+const COUNTER_DEBOUNCE_MS = 220;
+
+// Tagesbaseline für „neue Wörter/Zeichen heute". Pro pageId genau ein Snapshot
+// pro Tag — bei der ersten Messung wird der aktuelle Stand als Vergleichswert
+// festgehalten, jede weitere Messung am selben Tag liefert das Delta dazu.
+// Stale Einträge (andere Tage) werden lazy bei jedem Read geprunt, damit der
+// Storage nicht über Wochen durch alte Seiten/Tage anwächst.
+const DAILY_BASELINE_KEY = 'focus.dailyBaseline';
+
+function todayKey() {
+  const d = new Date();
+  return d.getFullYear() + '-'
+       + String(d.getMonth() + 1).padStart(2, '0') + '-'
+       + String(d.getDate()).padStart(2, '0');
+}
+
+function readDailyBaselines() {
+  try {
+    const raw = localStorage.getItem(DAILY_BASELINE_KEY);
+    return raw ? (JSON.parse(raw) || {}) : {};
+  } catch { return {}; }
+}
+
+function writeDailyBaselines(obj) {
+  try { localStorage.setItem(DAILY_BASELINE_KEY, JSON.stringify(obj)); }
+  catch { /* quota / private mode — egal, Delta bleibt 0 */ }
+}
+
+// Liefert {dw, dc} (delta words/chars) für die heutige Sitzung der Seite.
+// Schreibt bei Bedarf einen frischen Baseline-Eintrag und prunt stale.
+function dailyDelta(pageId, words, chars) {
+  if (pageId == null) return { dw: 0, dc: 0 };
+  const today = todayKey();
+  const all = readDailyBaselines();
+  let dirty = false;
+  for (const id of Object.keys(all)) {
+    if (all[id]?.date !== today) { delete all[id]; dirty = true; }
+  }
+  let entry = all[pageId];
+  if (!entry || entry.date !== today) {
+    entry = { date: today, words, chars };
+    all[pageId] = entry;
+    dirty = true;
+  }
+  if (dirty) writeDailyBaselines(all);
+  return { dw: words - entry.words, dc: chars - entry.chars };
+}
+
+// `±0` für klare Optik bei Null statt nacktem `0`. Unicode-Minus für sauberen
+// Tabulator-Look (gleiche Glyph-Breite wie Plus); ASCII-Hyphen ist schmaler.
+function fmtSigned(n) {
+  if (n > 0) return '+' + n;
+  if (n < 0) return '−' + Math.abs(n);
+  return '±0';
+}
 
 // --- Feature-Detect ---------------------------------------------------------
 
@@ -111,6 +167,19 @@ export function setActiveBlock(container, block) {
   }
 }
 
+// Threshold dynamisch aus computed line-height ableiten. Im Fokusmodus ist
+// font-size 1.45rem, line-height 1.85 → ~42px. Statisches 16px scrollte schon
+// bei subpixel-Jitter; halbe Zeilenhöhe ist die natürliche Grenze für „echter
+// Zeilenwechsel". Fallback 16, falls computed style nicht greifbar.
+export function dynamicTypewriterThreshold(block, fallback = TYPEWRITER_THRESHOLD_PX) {
+  if (!block || typeof window === 'undefined' || !window.getComputedStyle) return fallback;
+  try {
+    const lh = parseFloat(window.getComputedStyle(block).lineHeight);
+    if (Number.isFinite(lh) && lh > 0) return Math.max(fallback, lh * 0.5);
+  } catch { /* ignore */ }
+  return fallback;
+}
+
 export function getCaretRect(container, selection) {
   const sel = selection || (typeof document !== 'undefined' ? document.getSelection() : null);
   if (!sel || sel.rangeCount === 0) return null;
@@ -138,10 +207,13 @@ export function computeTypewriterDelta(containerRect, targetRect, threshold = TY
   return Math.abs(delta) < threshold ? 0 : delta;
 }
 
-function typewriterScroll(container, targetRect) {
+function typewriterScroll(container, targetRect, ctx, threshold = TYPEWRITER_THRESHOLD_PX) {
   if (!container || !targetRect) return 0;
-  const delta = computeTypewriterDelta(container.getBoundingClientRect(), targetRect);
+  const delta = computeTypewriterDelta(container.getBoundingClientRect(), targetRect, threshold);
   if (delta === 0) return 0;
+  // Programmatischen Scroll vorab im Counter ankündigen, damit onScroll uns
+  // nicht für eine User-Interaktion hält und unnötig recentert.
+  if (ctx) ctx.expectedScroll++;
   // prefers-reduced-motion: User hat System-Weit angegeben „kein Animation-
   // Overhead". Zwei-Schritt-Scroll überspringen und direkt den Zielwert
   // setzen, damit aktiver Absatz trotzdem passt.
@@ -155,9 +227,14 @@ function typewriterScroll(container, targetRect) {
 
 // ── Root-Trampoline ─────────────────────────────────────────────────────────
 // Dispatcht Events an Alpine.data('editorFocusCard'). Root hält `focusMode`
-// als sichtbare Flag (CSS, body-Class, Template-Checks).
+// als sichtbare Flag (CSS, body-Class, Template-Checks) und die Live-Counter
+// `focusCountWords` / `focusCountChars`, die der Header im Fokus-Modus zeigt.
 export const focusMethods = {
   focusMode: false,
+  focusCountWords: 0,
+  focusCountChars: 0,
+  focusCountWordsDelta: '±0',
+  focusCountCharsDelta: '±0',
 
   toggleFocusMode() {
     window.dispatchEvent(new CustomEvent('editor:focus:toggle'));
@@ -307,6 +384,8 @@ export const focusCardMethods = {
       composing: false,       // IME-Composition aktiv (CJK-Eingabe)
       expectedScroll: 0,      // prog-Scroll-Unterscheidung (Counter statt Zeit)
       vvTimer: 0,
+      cursorTimer: 0,
+      counterTimer: 0,
     };
 
     const markPointer = () => {
@@ -324,11 +403,46 @@ export const focusCardMethods = {
       this._focusUpdateActive(!isPointer);
     };
 
+    // Auto-Hide-Cursor: Maus 2s ruhig → Cursor unsichtbar. Nächste Bewegung
+    // bringt ihn zurück. Nur Klassentoggle, kein Style-Reset.
+    const showCursor = () => {
+      document.body.classList.remove('focus-cursor-hidden');
+      clearTimeout(ctx.cursorTimer);
+      ctx.cursorTimer = setTimeout(() => {
+        if (this._focusState === 'active') {
+          document.body.classList.add('focus-cursor-hidden');
+        }
+      }, CURSOR_HIDE_MS);
+    };
+
+    // Wort-/Zeichen-Counter: textContent reicht (DOM-Reflow vermeiden, kein
+    // innerText). Whitespace-Split für Wörter, Filter gegen Leerstrings.
+    // Zusätzlich Delta gegen die Tages-Baseline, damit der Header anzeigt,
+    // wieviel der User heute auf dieser Seite ergänzt hat.
+    const updateCounter = () => {
+      if (!app) return;
+      const txt = container.textContent || '';
+      const chars = txt.length;
+      const words = txt.trim() ? txt.trim().split(/\s+/).length : 0;
+      app.focusCountChars = chars;
+      app.focusCountWords = words;
+      const { dw, dc } = dailyDelta(app.currentPage?.id, words, chars);
+      app.focusCountWordsDelta = fmtSigned(dw);
+      app.focusCountCharsDelta = fmtSigned(dc);
+    };
+    const scheduleCounter = () => {
+      clearTimeout(ctx.counterTimer);
+      ctx.counterTimer = setTimeout(() => {
+        if (this._focusState === 'active') updateCounter();
+      }, COUNTER_DEBOUNCE_MS);
+    };
+
     // Input-Event fängt Fälle, die selectionchange nicht abdeckt: undo/redo
     // ohne Caret-Move, Paste mit stabiler Caret-Position, Content-Rewrite
     // durch externe Module.
     const onInput = () => {
       if (this._focusState !== 'active') return;
+      scheduleCounter();
       if (ctx.composing) return;
       this._focusUpdateActive(true);
     };
@@ -373,7 +487,18 @@ export const focusCardMethods = {
       } else if (e.key === 'F11') {
         e.preventDefault();
         this.toggleFocusMode();
+      } else if ((e.key === 'l' || e.key === 'L') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        // Vim/emacs-Konvention: Ctrl+L recentert Cursor-Zeile in Viewport-Mitte.
+        // Browser-Default (Adress-Leiste fokussieren) wird im Fokus-Modus
+        // unterdrückt — User wollte ohnehin im Editor bleiben.
+        e.preventDefault();
+        this._focusUpdateActive(true);
       }
+    };
+
+    const onPointerMove = () => {
+      if (this._focusState !== 'active') return;
+      showCursor();
     };
 
     // Mobile-Tastatur: visualViewport schrumpft UND kann scrollen
@@ -402,15 +527,6 @@ export const focusCardMethods = {
     window.scrollTo(0, 0);
     applyViewport();
 
-    // Patche scrollBy auf dem Container, damit jeder programmatische Scroll
-    // den expectedScroll-Counter inkrementiert. Restore bei teardown.
-    const origScrollBy = container.scrollBy.bind(container);
-    container.scrollBy = function (opts) {
-      ctx.expectedScroll++;
-      return origScrollBy(opts);
-    };
-    ctx.origScrollBy = origScrollBy;
-
     document.addEventListener('selectionchange', onSelection, { signal });
     container.addEventListener('input', onInput, { signal });
     container.addEventListener('compositionstart', onCompositionStart, { signal });
@@ -421,12 +537,16 @@ export const focusCardMethods = {
     container.addEventListener('blur', onBlur, { signal, capture: true });
     container.addEventListener('focus', onFocus, { signal, capture: true });
     window.addEventListener('keydown', onKey, { signal });
+    window.addEventListener('pointermove', onPointerMove, { signal, passive: true });
     window.addEventListener('resize', syncViewport, { signal });
     window.visualViewport?.addEventListener('resize', syncViewport, { signal });
     window.visualViewport?.addEventListener('scroll', syncViewport, { signal });
 
     this._focusListeners = ctx;
     this._focusVisibleBlocks = visibleBlocks;
+
+    updateCounter();
+    showCursor();
 
     const editEl = document.querySelector('.page-content-view--editing');
     editEl?.focus();
@@ -440,10 +560,8 @@ export const focusCardMethods = {
       ctx.mo?.disconnect();
       clearTimeout(ctx.pointerTimer);
       clearTimeout(ctx.vvTimer);
-      if (ctx.container && ctx.origScrollBy) {
-        // scrollBy-Patch zurücknehmen, falls Container weiterlebt.
-        ctx.container.scrollBy = ctx.origScrollBy;
-      }
+      clearTimeout(ctx.cursorTimer);
+      clearTimeout(ctx.counterTimer);
       this._focusListeners = null;
     }
     this._focusVisibleBlocks = null;
@@ -472,6 +590,7 @@ export const focusCardMethods = {
 
     app.focusMode = false;
     document.body.classList.remove('focus-mode');
+    document.body.classList.remove('focus-cursor-hidden');
     document.documentElement.style.removeProperty('--focus-vh');
     document.documentElement.style.removeProperty('--focus-vh-top');
 
@@ -490,8 +609,17 @@ export const focusCardMethods = {
       app.closeSynonymMenu?.();
       app.closeSynonymPicker?.();
       app.closeFigurLookup?.();
-      app.updatePageView?.();
     }
+
+    // View-Mode + Kennzahlen (Wörter/Zeichen/Token) immer auffrischen, egal
+    // ob Save erfolgte, no-op war oder fehlschlug. Garantie: beim Verlassen
+    // des Fokusmodus reflektieren View-Mode-HTML und tokEsts-Badges den
+    // aktuellen originalHtml. Idempotent zu den Save-Pfaden, die diese
+    // Calls ohnehin bereits feuern.
+    if (app.currentPage && app.originalHtml != null) {
+      app._syncPageStatsAfterSave?.(app.currentPage, app.originalHtml);
+    }
+    app.updatePageView?.();
 
     this._focusState = 'idle';
   },
@@ -533,7 +661,8 @@ export const focusCardMethods = {
           // Caret-Rect ermittelbar ist (z.B. leerer Absatz, kein Fokus), auf
           // Block-Mitte zurückfallen.
           const targetRect = getCaretRect(container) || block.getBoundingClientRect();
-          typewriterScroll(container, targetRect);
+          const threshold = dynamicTypewriterThreshold(block);
+          typewriterScroll(container, targetRect, ctx, threshold);
         }
       } catch (err) {
         reportError('updateActive', err);

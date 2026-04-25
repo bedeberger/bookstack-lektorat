@@ -15,7 +15,8 @@ export const kontinuitaetMethods = {
   },
 
   _kontinuitaetWriteStatus(msg, spinner) {
-    this.kontinuitaetStatus = spinner ? `<span class="spinner"></span>${msg}` : msg;
+    const safe = escHtml(msg);
+    this.kontinuitaetStatus = spinner ? `<span class="spinner"></span>${safe}` : safe;
   },
 
   async runKontinuitaetCheck() {

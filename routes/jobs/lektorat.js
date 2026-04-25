@@ -6,7 +6,7 @@ const {
   aiCall, getPrompts, getBookPrompts,
   htmlToText, bsGet, bsGetAll, jobAbortControllers,
   _modelName, fmtTok, tps,
-  jobs, runningJobs, createJob, enqueueJob, jobKey,
+  jobs, runningJobs, createJob, enqueueJob, jobKey, findActiveJobId,
   jsonBody,
 } = require('./shared');
 
@@ -179,7 +179,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     }, tps(tok));
     logger.info(`«${pd.name}» fertig (page=${pageId}, book=${bookId || '-'}, chap=${pd.chapter_id || '-'}, ${result.fehler.length} Beanstandungen, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens)`);
   } catch (e) {
-    if (e.name !== 'AbortError') logger.error(`Fehler (page=${pageId}, book=${bookId || '-'}): ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Fehler (page=${pageId}, book=${bookId || '-'}): ${e.message}`, { stack: e.stack });
     failJob(jobId, e);
   }
 }
@@ -292,7 +292,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
     completeJob(jobId, { pageCount: pages.length, done, totalErrors, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`Fertig: ${done}/${pages.length} Seiten (book=${bookId}), ${totalErrors} Beanstandungen, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens`);
   } catch (e) {
-    if (e.name !== 'AbortError') logger.error(`Fehler (book=${bookId}): ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Fehler (book=${bookId}): ${e.message}`, { stack: e.stack });
     failJob(jobId, e);
   }
 }
@@ -303,8 +303,8 @@ lektoratRouter.post('/check', jsonBody, (req, res) => {
   if (!page_id) return res.status(400).json({ error_code: 'PAGE_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = getTokenForRequest(req);
-  const existing = runningJobs.get(jobKey('check', page_id, userEmail));
-  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const existing = findActiveJobId('check', page_id, userEmail);
+  if (existing) return res.json({ jobId: existing, existing: true });
   const label = 'job.label.checkPage';
   const labelParams = { name: page_name || `#${page_id}` };
   const jobId = createJob('check', book_id || 0, userEmail, label, labelParams, page_id);
@@ -317,8 +317,8 @@ lektoratRouter.post('/batch-check', jsonBody, (req, res) => {
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = getTokenForRequest(req);
-  const existing = runningJobs.get(jobKey('batch-check', book_id, userEmail));
-  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const existing = findActiveJobId('batch-check', book_id, userEmail);
+  if (existing) return res.json({ jobId: existing, existing: true });
   const label = book_name ? 'job.label.batchCheckBook' : 'job.label.batchCheck';
   const labelParams = book_name ? { name: book_name } : null;
   const jobId = createJob('batch-check', book_id, userEmail, label, labelParams);

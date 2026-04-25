@@ -138,7 +138,7 @@
               <td x-text="$app.t(row.typeLabel)"></td>
               <td x-text="row.avgDurationFmt"></td>
               <td x-text="row.avgTokensFmt"></td>
-              <td x-text="row.lastRunFmt"></td>
+              <td x-text="$app.formatLastRun(row.lastRun)"></td>
               <td>
                 <span x-text="row.count"></span>
                 <span x-show="row.errorCount > 0" class="job-stats-errors" x-text="' / ' + row.errorCount + ' ✕'"></span>

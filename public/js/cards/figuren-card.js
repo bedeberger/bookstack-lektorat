@@ -59,6 +59,10 @@ export function registerFigurenCard() {
 
       this._onBookChanged = async () => {
         if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
+        // vis-network DataSets halten Referenzen aufs alte Buch; ohne null
+        // bleiben sie bis zum nächsten view:reset im Speicher.
+        this._figurenNodes = null;
+        this._figurenEdges = null;
         this._figurenHash = null;
         this.figurenUpdatedAt = null;
         this.figurenGraphKapitel = null;

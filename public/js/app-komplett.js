@@ -1,4 +1,4 @@
-import { fetchJson, clearStatusAfter } from './utils.js';
+import { fetchJson, clearStatusAfter, formatLastRun } from './utils.js';
 
 // Komplett-Analyse-Pipeline-UI: Start, Polling, Phasen-Indikator,
 // Last-Run-Anzeige, Kapitel-Cache-Reset.
@@ -79,8 +79,8 @@ export const appKomplettMethods = {
   async loadLastKomplettRun(bookId) {
     if (!bookId) return;
     try {
-      const { lastRunFmt } = await fetchJson(`/jobs/last-run?type=komplett-analyse&book_id=${bookId}`);
-      this.alleAktualisierenLastRun = lastRunFmt || null;
+      const { lastRun } = await fetchJson(`/jobs/last-run?type=komplett-analyse&book_id=${bookId}`);
+      this.alleAktualisierenLastRun = lastRun ? formatLastRun(lastRun, (k, p) => this.t(k, p), this.uiLocale) : null;
     } catch (e) {
       console.error('[loadLastKomplettRun]', e);
       this.alleAktualisierenLastRun = null;

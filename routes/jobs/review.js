@@ -7,7 +7,7 @@ const {
   loadPageContents, groupByChapter, buildSinglePassBookText,
   bsGetAll, SINGLE_PASS_LIMIT, BATCH_SIZE, jobAbortControllers, settledAll,
   _modelName, fmtTok, tps,
-  jobs, runningJobs, createJob, enqueueJob, jobKey,
+  jobs, runningJobs, createJob, enqueueJob, jobKey, findActiveJobId,
   jsonBody,
 } = require('./shared');
 const { narrativeLabels } = require('./narrative-labels');
@@ -105,7 +105,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
     completeJob(jobId, { review: r, pageCount: pageContents.length, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`«${bookName}» fertig (book=${bookId}, ${pageContents.length} Seiten, Note ${r.gesamtnote}, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens)`);
   } catch (e) {
-    if (e.name !== 'AbortError') logger.error(`Fehler (book=${bookId}): ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Fehler (book=${bookId}): ${e.message}`, { stack: e.stack });
     failJob(jobId, e);
   }
 }
@@ -116,8 +116,8 @@ reviewRouter.post('/review', jsonBody, (req, res) => {
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = getTokenForRequest(req);
-  const existing = runningJobs.get(jobKey('review', book_id, userEmail));
-  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const existing = findActiveJobId('review', book_id, userEmail);
+  if (existing) return res.json({ jobId: existing, existing: true });
   const label = book_name ? 'job.label.reviewBook' : 'job.label.review';
   const labelParams = book_name ? { name: book_name } : null;
   const jobId = createJob('review', book_id, userEmail, label, labelParams);

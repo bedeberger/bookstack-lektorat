@@ -4,7 +4,7 @@ const { randomUUID } = require('crypto');
 const logger = require('../../logger');
 const { db, insertJobRun, startJobRun, endJobRun, getBookSettings } = require('../../db/schema');
 const { callAI, parseJSON, CHARS_PER_TOKEN, MAX_TOKENS_OUT, INPUT_BUDGET_CHARS } = require('../../lib/ai');
-const { bsGet: _bsGet, bsGetAll: _bsGetAll, BOOKSTACK_URL: BS_URL } = require('../../lib/bookstack');
+const { bsGet: _bsGet, bsGetAll: _bsGetAll, bsBatch: _bsBatch, BOOKSTACK_URL: BS_URL } = require('../../lib/bookstack');
 const { getPrompts, getPromptConfig } = require('../../lib/prompts-loader');
 
 // Rückwärtskompatibler Export – einige Module lesen _promptConfig direkt.
@@ -95,6 +95,21 @@ const CLEANUP_DELAY_MS = 2 * 60 * 60 * 1000;
 
 function jobDedupKey(job) {
   return jobKey(job.type, job.dedupId ?? job.bookId, job.userEmail);
+}
+
+/**
+ * Liefert die jobId eines AKTIVEN (queued/running) Dedup-Matches oder null.
+ * `runningJobs` hält Einträge auch nach Abschluss noch CLEANUP_DELAY_MS lang;
+ * die nackte Map-Lookup würde abgeschlossene Jobs (status='done'/'error'/
+ * 'cancelled') wie laufende behandeln und das Frontend pollt einen toten Job.
+ */
+function findActiveJobId(type, entityId, userEmail) {
+  const id = runningJobs.get(jobKey(type, entityId, userEmail));
+  if (!id) return null;
+  const job = jobs.get(id);
+  if (!job) return null;
+  if (job.status === 'queued' || job.status === 'running') return id;
+  return null;
 }
 
 function _scheduleJobCleanup(id) {
@@ -302,26 +317,53 @@ const PROGRESS_THROTTLE_MS = 200;
 const BATCH_SIZE = 15;
 
 async function loadPageContents(pages, chMap, minLength, onBatch, userToken, signal = null) {
-  const contents = [];
-  for (let i = 0; i < pages.length; i += BATCH_SIZE) {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    if (onBatch) onBatch(i, pages.length);
-    const results = await Promise.allSettled(pages.slice(i, i + BATCH_SIZE).map(async p => {
-      const pd = await bsGet('pages/' + p.id, userToken);
-      const text = htmlToText(pd.html).trim();
-      if (text.length < minLength) return null;
-      return {
-        id: p.id,
-        updated_at: p.updated_at || '',
-        title: p.name,
-        chapter_id: p.chapter_id || null,
-        chapter: p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : null,
-        text,
-      };
-    }));
-    for (const r of results) if (r.status === 'fulfilled' && r.value) contents.push(r.value);
+  // Vor-Filter via preview_text aus dem pages-Cache: wenn ein gespeicherter
+  // Preview kürzer als minLength ist, ist auch der Volltext zu kurz und wir
+  // sparen den BookStack-Roundtrip (oft 100+ leere Stub-Pages pro Buch).
+  // Nur sinnvoll wenn minLength <= PREVIEW_CHARS (800) — sonst ist der Preview
+  // kein zuverlässiger Indikator.
+  let skipped = 0;
+  let filteredPages = pages;
+  if (minLength > 0 && minLength <= 800 && pages.length > 0) {
+    try {
+      const ids = pages.map(p => p.id);
+      const placeholders = ids.map(() => '?').join(',');
+      const rows = db.prepare(
+        `SELECT page_id, preview_text FROM pages WHERE page_id IN (${placeholders})`
+      ).all(...ids);
+      const previewMap = new Map(rows.map(r => [r.page_id, r.preview_text || '']));
+      filteredPages = pages.filter(p => {
+        const prev = previewMap.get(p.id);
+        // Nur skippen wenn Preview existiert UND nachweislich zu kurz.
+        // Fehlender Preview = nicht entscheidbar → fetchen.
+        if (prev != null && prev.length > 0 && prev.length < minLength) {
+          skipped++;
+          return false;
+        }
+        return true;
+      });
+    } catch (e) {
+      // DB-Lookup ist optional; bei Fehler einfach den Vor-Filter überspringen.
+      filteredPages = pages;
+    }
   }
-  return contents;
+  return _bsBatch(filteredPages, async (p, batchSignal) => {
+    const pd = await _bsGet('pages/' + p.id, userToken, { timeoutMs: 30000 }).catch(e => {
+      if (e.status) throw i18nError('job.error.bookstack', { status: e.status, text: e.bodyText });
+      throw e;
+    });
+    if (batchSignal?.aborted) return null;
+    const text = htmlToText(pd.html).trim();
+    if (text.length < minLength) return null;
+    return {
+      id: p.id,
+      updated_at: p.updated_at || '',
+      title: p.name,
+      chapter_id: p.chapter_id || null,
+      chapter: p.chapter_id ? (chMap[p.chapter_id] || 'Kapitel') : null,
+      text,
+    };
+  }, { batchSize: BATCH_SIZE, onBatch, signal });
 }
 
 function groupByChapter(pageContents) {
@@ -619,20 +661,9 @@ function fmtDuration(seconds) {
   return rem > 0 ? `${m}m ${rem}s` : `${m}m`;
 }
 
-function fmtLastRun(isoStr) {
-  if (!isoStr) return '—';
-  const d = new Date(isoStr);
-  const now = new Date();
-  const time = d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
-  // Mitternacht in lokaler Zeitzone vergleichen, nicht rohe ms-Differenz
-  const dDay  = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const diffDays = Math.round((today - dDay) / 86400000);
-  if (diffDays === 0) return `heute, ${time}`;
-  if (diffDays === 1) return `gestern, ${time}`;
-  if (diffDays < 7) return `vor ${diffDays} Tagen, ${time}`;
-  return d.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }) + `, ${time}`;
-}
+// Entfällt: Server-seitige Lokalisierung verletzt die i18n-Hard-Rule (alles
+// im Frontend übersetzen). lastRunFmt wird nicht mehr gesetzt; das Frontend
+// formatiert direkt aus dem ISO-Timestamp via formatLastRun() (utils.js).
 
 // Job-Typen, die vom Superjob (komplett-analyse) abgedeckt werden und nicht in der Statistik erscheinen sollen
 const STATS_EXCLUDED_TYPES = ['figures', 'soziogramm', 'szenen', 'locations', 'figure-events', 'consolidate-zeitstrahl', 'kontinuitaet'];
@@ -703,7 +734,7 @@ sharedRouter.get('/stats', (req, res) => {
     count:        r.count || 0,
     errorCount:   r.errorCount || 0,
     avgDurationFmt: fmtDuration(r.avgDuration),
-    lastRunFmt:   fmtLastRun(r.lastRun),
+    lastRun:      r.lastRun || null,
     avgTokensIn:  r.avgTokensIn != null ? Math.round(r.avgTokensIn) : null,
     avgTokensOut: r.avgTokensOut != null ? Math.round(r.avgTokensOut) : null,
     avgTokensFmt: r.avgTokensIn != null
@@ -722,7 +753,7 @@ sharedRouter.get('/last-run', (req, res) => {
     WHERE type = ? AND book_id = ? AND user_email = ? AND status = 'done'
     ORDER BY ended_at DESC LIMIT 1
   `).get(type, parseInt(book_id), userEmail);
-  res.json({ lastRun: row?.ended_at || null, lastRunFmt: row ? fmtLastRun(row.ended_at) : null });
+  res.json({ lastRun: row?.ended_at || null });
 });
 
 sharedRouter.get('/active', (req, res) => {
@@ -730,8 +761,8 @@ sharedRouter.get('/active', (req, res) => {
   const entityId = page_id || book_id;
   if (!type || !entityId) return res.status(400).json({ error_code: 'TYPE_ENTITY_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
-  const jobId = runningJobs.get(jobKey(type, entityId, userEmail));
-  if (!jobId || !jobs.has(jobId)) return res.json({ jobId: null });
+  const jobId = findActiveJobId(type, entityId, userEmail);
+  if (!jobId) return res.json({ jobId: null });
   const job = jobs.get(jobId);
   res.json({ jobId: job.id, status: job.status, progress: job.progress, statusText: job.statusText, statusParams: job.statusParams });
 });
@@ -771,7 +802,7 @@ module.exports = {
   _promptConfig,
   jobs, runningJobs, jobAbortControllers, jobQueue,
   makeJobLogger, enqueueJob, createJob, updateJob,
-  tps, completeJob, failJob, cancelJob, jobKey, fmtTok, i18nError,
+  tps, completeJob, failJob, cancelJob, jobKey, findActiveJobId, fmtTok, i18nError,
   _modelName, settledAll,
   BS_URL, bsGet, bsGetAll,
   htmlToText,

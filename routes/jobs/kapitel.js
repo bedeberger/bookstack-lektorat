@@ -7,7 +7,7 @@ const {
   bsGet, bsGetAll, jobAbortControllers,
   htmlToText,
   _modelName, fmtTok, tps,
-  jobs, runningJobs, createJob, enqueueJob, jobKey,
+  jobs, runningJobs, createJob, enqueueJob, jobKey, findActiveJobId,
   jsonBody, BATCH_SIZE,
 } = require('./shared');
 const { narrativeLabels } = require('./narrative-labels');
@@ -81,7 +81,7 @@ async function runChapterReviewJob(jobId, bookId, chapterId, chapterName, bookNa
     }, tps(tok));
     logger.info(`«${chapterName}» fertig (book=${bookId}, chap=${chapterId}, ${contents.length} Seiten, Note ${r.gesamtnote}, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens)`);
   } catch (e) {
-    if (e.name !== 'AbortError') logger.error(`Fehler (book=${bookId}, chap=${chapterId}): ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Fehler (book=${bookId}, chap=${chapterId}): ${e.message}`, { stack: e.stack });
     failJob(jobId, e);
   }
 }
@@ -94,8 +94,8 @@ kapitelRouter.post('/chapter-review', jsonBody, (req, res) => {
   const userEmail = req.session?.user?.email || null;
   const userToken = getTokenForRequest(req);
   // Dedup auf Kapitel-Ebene – parallele Reviews unterschiedlicher Kapitel sind ok.
-  const existing = runningJobs.get(jobKey('chapter-review', chapter_id, userEmail));
-  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const existing = findActiveJobId('chapter-review', chapter_id, userEmail);
+  if (existing) return res.json({ jobId: existing, existing: true });
   const label = chapter_name ? 'job.label.chapterReviewChapter' : 'job.label.chapterReview';
   const labelParams = chapter_name ? { name: chapter_name } : null;
   const jobId = createJob('chapter-review', book_id, userEmail, label, labelParams, chapter_id);

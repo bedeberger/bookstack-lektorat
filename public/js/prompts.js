@@ -1,3 +1,8 @@
+// Versionsmarker für persistente Caches (z.B. chapter_extract_cache, Phase-1
+// Single-Pass-Cache). Bei jeder schemarelevanten Änderung erhöhen, damit alte
+// Cache-Einträge nicht mehr matchen und frisch extrahiert wird.
+export const PROMPTS_VERSION = '1';
+
 // Unveränderliche technische Pflicht-Anweisung – darf nicht konfiguriert werden,
 // da callAI() immer ein JSON-Objekt erwartet.
 const JSON_ONLY = 'Antworte ausschliesslich mit einem JSON-Objekt – kein Markdown, kein Text davor oder danach. Beginne deine Antwort direkt mit { und beende sie mit }.';

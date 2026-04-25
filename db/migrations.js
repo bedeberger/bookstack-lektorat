@@ -1149,6 +1149,30 @@ function runMigrations() {
     logger.info(`DB-Migration auf Version 54 abgeschlossen (job_runs.book_id Backfill: check=${checkBack}, chat/book-chat=${chatBack}, synonym=${synBack}).`);
   }
 
+  if (version < 55) {
+    // Hot-Path-Indexes für Lookups, die bisher Full-Scans waren.
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_lc_chapter_id  ON location_chapters(chapter_id);
+      CREATE INDEX IF NOT EXISTS idx_fa_chapter_id  ON figure_appearances(chapter_id);
+      CREATE INDEX IF NOT EXISTS idx_fscene_chapter ON figure_scenes(chapter_id);
+      CREATE INDEX IF NOT EXISTS idx_fscene_page    ON figure_scenes(page_id);
+      CREATE INDEX IF NOT EXISTS idx_jr_status      ON job_runs(status);
+      CREATE INDEX IF NOT EXISTS idx_jr_queued_at   ON job_runs(queued_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_frel_from      ON figure_relations(from_fig_id);
+      CREATE INDEX IF NOT EXISTS idx_frel_to        ON figure_relations(to_fig_id);
+    `);
+    db.prepare('UPDATE schema_version SET version = 55').run();
+    logger.info('DB-Migration auf Version 55 abgeschlossen (Hot-Path-Indexes für location_chapters, figure_appearances, figure_scenes, job_runs, figure_relations).');
+  }
+
+  if (version < 56) {
+    // reconcilePageIds() filtert jetzt per book_id; ohne diesen Index landen die
+    // Korrelations-Subqueries (chapter_name -> chapter_id) auf einem Full-Scan.
+    db.exec('CREATE INDEX IF NOT EXISTS idx_pages_book_chapter_name ON pages(book_id, chapter_name)');
+    db.prepare('UPDATE schema_version SET version = 56').run();
+    logger.info('DB-Migration auf Version 56 abgeschlossen (Index pages(book_id, chapter_name) fuer reconcilePageIds).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

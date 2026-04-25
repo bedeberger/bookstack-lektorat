@@ -51,6 +51,26 @@ export function localeTag(uiLocale) {
   return uiLocale === 'en' ? 'en-US' : 'de-CH';
 }
 
+// Relative Last-Run-Anzeige aus ISO-Timestamp. Server liefert nur den ISO-
+// String; Lokalisierung passiert hier (i18n-Hard-Rule). `t` ist die i18n-Funktion,
+// `uiLocale` der Sprachcode aus der App ('de' oder 'en').
+export function formatLastRun(isoStr, t, uiLocale) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return '';
+  const tag = localeTag(uiLocale);
+  const time = d.toLocaleTimeString(tag, { hour: '2-digit', minute: '2-digit' });
+  const now = new Date();
+  const dDay  = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((today - dDay) / 86400000);
+  if (diffDays === 0) return t('job.lastRun.today',     { time });
+  if (diffDays === 1) return t('job.lastRun.yesterday', { time });
+  if (diffDays < 7)   return t('job.lastRun.daysAgo',   { days: diffDays, time });
+  const date = d.toLocaleDateString(tag, { day: '2-digit', month: '2-digit' });
+  return t('job.lastRun.dateAt', { date, time });
+}
+
 // Locale-korrekte Zahl mit fixer Dezimalstellenzahl. Null/NaN → '–'.
 export function formatNumber(value, uiLocale, decimals = 1) {
   if (value == null || !isFinite(value)) return '–';
@@ -95,7 +115,8 @@ export function escHtml(s) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // Escapt alles außer <strong>…</strong> (BookStack-Search-Highlight).
@@ -109,9 +130,19 @@ export function escPreserveStrong(s) {
 }
 
 export function htmlToText(html) {
-  const d = document.createElement('div');
-  d.innerHTML = html;
-  return d.textContent || d.innerText || '';
+  // DOMParser statt detached div: `div.innerHTML = …` triggert in allen
+  // Browsern einen GET auf `<img src>`/Background-URLs (HTML-Parser-Pipeline
+  // setzt Resource-Loads nicht aus). DOMParser('text/html') produziert ein
+  // inert document ohne Resource-Requests.
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const doc = new DOMParser().parseFromString(html || '', 'text/html');
+      return doc.body?.textContent || '';
+    } catch { /* fallback unten */ }
+  }
+  const d = document.createElement('template');
+  d.innerHTML = html || '';
+  return d.content?.textContent || '';
 }
 
 /**

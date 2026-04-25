@@ -8,6 +8,8 @@
             x-text="lastSavedKind() === 'draft' ? t('editor.draft', { when: lastSavedLabel() }) : t('editor.saved', { when: lastSavedLabel() })"
             :title="lastSavedKind() === 'draft' ? t('editor.draftTitle') : t('editor.savedTitle')"></span>
       <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag tag--link" x-text="t('editor.openInBookstack')"></a>
+      <span x-show="focusMode && editMode" class="focus-live-counter"
+            x-text="t('editor.focus.counter', { words: focusCountWords, chars: focusCountChars, wordsDelta: focusCountWordsDelta, charsDelta: focusCountCharsDelta })"></span>
       <span x-show="currentPage && tokEsts[currentPage.id]" class="tok-stats">
         <template x-if="tokEsts[currentPage?.id]?.words > 0">
           <span class="display-contents">

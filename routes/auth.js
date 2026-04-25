@@ -66,14 +66,12 @@ router.get('/auth/callback', async (req, res) => {
     const client = await getClient();
     const appUrl = (process.env.APP_URL || 'http://localhost:3737').replace(/\/$/, '');
     const params = client.callbackParams(req);
-    // Passenden pending-Flow suchen (Mehrtab-Support). Fallback auf Legacy-Felder.
+    // Passenden pending-Flow suchen (Mehrtab-Support). `oidcPending` ist seit
+    // Multi-Tab-Refactor die einzige Quelle; ältere `oidcState`/`oidcNonce`-
+    // Felder werden nirgends mehr geschrieben.
     const pending = Array.isArray(req.session.oidcPending) ? req.session.oidcPending : [];
     const flowIdx = pending.findIndex(f => f.state === params.state);
-    const flow = flowIdx >= 0
-      ? pending[flowIdx]
-      : (req.session.oidcState && req.session.oidcState === params.state
-          ? { state: req.session.oidcState, nonce: req.session.oidcNonce, returnTo: req.session.returnTo }
-          : null);
+    const flow = flowIdx >= 0 ? pending[flowIdx] : null;
     if (!flow) {
       logger.warn(`Auth callback: kein passender Login-Flow für state=${params.state}`);
       return res.status(400).send(

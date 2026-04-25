@@ -363,7 +363,6 @@ export const appViewMethods = {
     this.szenenFilters.figurId = '';
     this.szenenFilters.kapitel = '';
     this.szenenFilters.ortId = '';
-    if (this._figurenNetwork) { this._figurenNetwork.destroy(); this._figurenNetwork = null; }
     this.showBookStatsCard = false;
     this.showStilCard = false;
     this.showFehlerHeatmapCard = false;

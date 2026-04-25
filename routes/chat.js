@@ -220,7 +220,7 @@ router.post('/send', jsonBody, async (req, res) => {
     const provider = process.env.API_PROVIDER || 'claude';
     const schema = (provider === 'ollama' || provider === 'llama') ? SCHEMA_CHAT : null;
     const temperatureOverride = (provider === 'ollama' || provider === 'llama') ? chatTemperature() : null;
-    const { text: fullText, tokensIn, tokensOut } = await callAIChat(
+    const { text: fullText, truncated, tokensIn, tokensOut } = await callAIChat(
       messages, systemPrompt,
       ({ delta }) => {
         if (delta) {
@@ -230,16 +230,23 @@ router.post('/send', jsonBody, async (req, res) => {
       null, null, provider, schema, temperatureOverride,
     );
     logger.info(`[chat] ${provider} call model=${provider === 'claude' ? (process.env.MODEL_NAME || 'claude-sonnet-4-6') : (provider === 'ollama' ? (process.env.OLLAMA_MODEL || 'llama3.2') : (process.env.LLAMA_MODEL || 'llama3.2'))}`);
+    if (truncated) {
+      logger.warn(`[chat/send] «${session.page_name}» session=${session_id} Antwort abgeschnitten (max_tokens) – ${tokensIn}↑ ${tokensOut}↓.`);
+    }
 
     // Vollständige Antwort parsen (mehrstufiger Fallback: JSON.parse → balanced extract → jsonrepair)
+    // Bei truncated=true ist das Parsing best-effort; jsonrepair liefert oft
+    // partielle Daten zurück. Frontend erhält truncated-Flag im Meta-Event.
     let antwort = fullText;
     let vorschlaege = [];
-    try {
-      const parsed = parseJSON(fullText);
-      antwort     = parsed.antwort     ?? fullText;
-      vorschlaege = parsed.vorschlaege ?? [];
-    } catch {
-      logger.warn(`[chat/send] «${session.page_name}» session=${session_id} KI-Antwort kein valides JSON – Rohtext wird gespeichert.`);
+    if (!truncated) {
+      try {
+        const parsed = parseJSON(fullText);
+        antwort     = parsed.antwort     ?? fullText;
+        vorschlaege = parsed.vorschlaege ?? [];
+      } catch {
+        logger.warn(`[chat/send] «${session.page_name}» session=${session_id} KI-Antwort kein valides JSON – Rohtext wird gespeichert.`);
+      }
     }
 
     // Assistant-Nachricht in DB speichern
@@ -265,6 +272,7 @@ router.post('/send', jsonBody, async (req, res) => {
       tokens_in: tokensIn,
       tokens_out: tokensOut,
       vorschlaege,
+      truncated: !!truncated,
     })}\n\n`);
     logger.info(`[chat/send] «${session.page_name}» session=${session_id} abgeschlossen (${tokensIn}↑ ${tokensOut}↓, ${vorschlaege.length} Vorschläge).`);
     res.write('data: [DONE]\n\n');

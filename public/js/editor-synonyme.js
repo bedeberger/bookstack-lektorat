@@ -146,6 +146,11 @@ export const synonymCardMethods = {
   closeSynonymMenu() {
     this.showSynonymMenu = false;
     this._syncOpenFlag();
+    // User schliesst das Kontextmenü, bevor er Synonyme requested → Picker
+    // läuft nicht. Falls aber ein Polling-Timer aus früherer Session noch
+    // aktiv ist (race), hier ebenfalls räumen — sonst pollt er bis Timeout/
+    // Job-NotFound zombie weiter.
+    if (this._synonymPollTimer) { clearInterval(this._synonymPollTimer); this._synonymPollTimer = null; }
     if (!this.showSynonymPicker) this._detachSynonymScroll();
   },
 

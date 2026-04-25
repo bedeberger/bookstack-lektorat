@@ -5,7 +5,7 @@ const { db, getTokenForRequest, getBookSettings } = require('../../db/schema');
 const {
   makeJobLogger, updateJob, completeJob, failJob,
   bsGetAll, loadPageContents,
-  jobs, runningJobs, createJob, enqueueJob, jobKey,
+  jobs, runningJobs, createJob, enqueueJob, jobKey, findActiveJobId,
   jobAbortControllers, BATCH_SIZE,
   jsonBody,
 } = require('./shared');
@@ -2433,7 +2433,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
     completeJob(jobId, { stats });
     logger.info(`Finetune-Export fertig: ${stats.total} Samples (${styleCount} style / ${sceneCount} scene / ${dialogCount} dialog / ${authorChatCount} authorChat / ${correctionCount} correction) → ${trainArr.length} train, ${valArr.length} val, dropped=${droppedCount}, p95=${tokensP95} tok, max=${tokensMax} tok, recSeq=${recommendedSeqLen}.`);
   } catch (e) {
-    if (e.name !== 'AbortError') logger.error(`Fehler Finetune-Export (book=${bookId}): ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Fehler Finetune-Export (book=${bookId}): ${e.message}`, { stack: e.stack });
     failJob(jobId, e);
   }
 }
@@ -2462,8 +2462,8 @@ finetuneExportRouter.post('/finetune-export', jsonBody, (req, res) => {
   }
   const userEmail = req.session?.user?.email || null;
   const userToken = getTokenForRequest(req);
-  const existing = runningJobs.get(jobKey('finetune-export', book_id, userEmail));
-  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const existing = findActiveJobId('finetune-export', book_id, userEmail);
+  if (existing) return res.json({ jobId: existing, existing: true });
   const label = book_name ? 'job.label.finetuneExportBook' : 'job.label.finetuneExport';
   const labelParams = book_name ? { name: book_name } : null;
   const jobId = createJob('finetune-export', book_id, userEmail, label, labelParams);

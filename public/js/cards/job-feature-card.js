@@ -35,7 +35,8 @@ export function createCardJobFeature(cfg) {
   const i18n       = cfg.i18n || {};
 
   function writeStatus(msg, spinner) {
-    this[status] = spinner ? `<span class="spinner"></span>${msg}` : msg;
+    const safe = escHtml(msg);
+    this[status] = spinner ? `<span class="spinner"></span>${safe}` : safe;
   }
   function jobErrHtml(job) {
     return `<span class="error-msg">${window.__app.t('common.errorColon')}${escHtml(window.__app.t(job.error, job.errorParams))}</span>`;

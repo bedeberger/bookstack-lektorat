@@ -2,6 +2,7 @@
 // Methoden werden in Alpine.data('bookStatsCard') gespreadet; Root-Zugriffe via window.__app.
 
 import { fetchJson } from './utils.js';
+import { loadChart } from './lazy-libs.js';
 
 const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
@@ -112,9 +113,21 @@ export const bookstatsMethods = {
     }
   },
 
-  renderStatsChart() {
+  async renderStatsChart() {
     const canvas = document.getElementById('book-stats-chart');
     if (!canvas) return;
+
+    // Chart.js on demand laden (~200 KB). Nur beim ersten Render der Karte.
+    if (typeof window.Chart === 'undefined') {
+      try { await loadChart(); }
+      catch (e) {
+        const ph = document.createElement('div');
+        ph.className = 'muted-msg muted-msg--block';
+        ph.textContent = e.message;
+        canvas.replaceWith(ph);
+        return;
+      }
+    }
 
     // Chart immer frisch aufbauen. Der Update-Pfad (chart.update) liest keine
     // neuen Canvas-Dimensionen ein — nach einem display:none↔block-Wechsel

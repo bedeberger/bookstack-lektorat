@@ -48,12 +48,6 @@ function clearDraft(pageId) {
   try { localStorage.removeItem(DRAFT_KEY(pageId)); } catch {}
 }
 
-function formatDraftTime(ts, locale) {
-  const d = new Date(ts);
-  const tag = locale === 'en' ? 'en-US' : 'de-DE';
-  return d.toLocaleString(tag, { dateStyle: 'short', timeStyle: 'short' });
-}
-
 // Legacy-BookStack-Seiten enthalten teilweise bare Text-Nodes und Inline-
 // Elemente direkt unterhalb des Editor-Roots (ohne <p>-Wrapper). Der
 // Fokusmodus erkennt solche Runs nicht als Block → keine Absatz-
@@ -143,22 +137,14 @@ export const editorEditMethods = {
 
     let initialHtml = this.originalHtml;
 
-    // Draft-Wiederherstellung: lokalen Entwurf prüfen, wenn vorhanden und abweichend.
+    // Draft-Wiederherstellung: lokalen Entwurf immer übernehmen, wenn vorhanden
+    // und abweichend. Kein Dialog – der User hat den Entwurf bewusst getippt,
+    // ihn beim Wiedereintritt zu verwerfen wäre destruktiv.
     const draft = readDraft(this.currentPage.id);
     if (draft && draft.html && draft.html !== this.originalHtml) {
-      const when = formatDraftTime(draft.savedAt || Date.now(), this.uiLocale);
-      const serverChanged = draft.originalHtml && draft.originalHtml !== this.originalHtml;
-      const msg = serverChanged
-        ? this.t('edit.draftConfirmServerChanged', { when })
-        : this.t('edit.draftConfirm', { when });
-      if (confirm(msg)) {
-        initialHtml = draft.html;
-        this.editDirty = true;
-        this.lastDraftSavedAt = draft.savedAt || Date.now();
-      } else {
-        clearDraft(this.currentPage.id);
-        this.lastDraftSavedAt = null;
-      }
+      initialHtml = draft.html;
+      this.editDirty = true;
+      this.lastDraftSavedAt = draft.savedAt || Date.now();
     }
 
     const el = this._getEditEl();
@@ -186,6 +172,7 @@ export const editorEditMethods = {
 
     this._startAutosave();
     this._installOnlineRetry();
+    this._installFindingMarkWatcher();
   },
 
   cancelEdit() {
@@ -193,6 +180,7 @@ export const editorEditMethods = {
     if (this.currentPage) clearDraft(this.currentPage.id);
     this._stopAutosave();
     this._uninstallOnlineRetry();
+    this._uninstallFindingMarkWatcher();
     this.lastDraftSavedAt = null;
     this.editMode = false;
     this.editDirty = false;
@@ -257,6 +245,7 @@ export const editorEditMethods = {
       } else {
         this._stopAutosave();
         this._uninstallOnlineRetry();
+        this._uninstallFindingMarkWatcher();
         this.editMode = false;
         this.closeSynonymMenu?.();
         this.closeSynonymPicker?.();
@@ -305,6 +294,10 @@ export const editorEditMethods = {
       return;
     }
 
+    // editSaving früh setzen — verhindert, dass parallele Auto-Save-Tick + Ctrl+S
+    // (oder exitFocusMode-quickSave + Auto-Save-Timer) den gleichen PUT zweimal
+    // absetzen. Vorher prüfte nur saveEdit dieses Flag, quickSave nicht.
+    this.editSaving = true;
     try {
       const saved = await this.bsPut('pages/' + this.currentPage.id, {
         html: newHtml,
@@ -326,6 +319,8 @@ export const editorEditMethods = {
       console.error('[quickSave]', e);
       this.saveOffline = true;
       this.setStatus(this.t('edit.saveFailedRetry'), false, 6000);
+    } finally {
+      this.editSaving = false;
     }
   },
 
@@ -412,5 +407,58 @@ export const editorEditMethods = {
     if (!this._onlineHandler) return;
     window.removeEventListener('online', this._onlineHandler);
     this._onlineHandler = null;
+  },
+
+  // Findings-Marks (lektorat/chat) werden in startEdit ins contenteditable
+  // injiziert. Bearbeitet der User Text innerhalb eines Marks, "folgt" der
+  // <mark> dem mutierten Text – sichtbar als rote Markierung um neuen Text,
+  // während die Findings-Liste rechts noch das alte original anzeigt. Damit
+  // das nicht bis zum Save persistiert, läuft hier ein debounced Input-
+  // Listener, der ein Mark unwrapt sobald sein Text vom Snapshot abweicht.
+  _installFindingMarkWatcher() {
+    const el = this._getEditEl();
+    if (!el) return;
+    this._uninstallFindingMarkWatcher();
+    const snapshot = new WeakMap();
+    for (const m of el.querySelectorAll('.lektorat-mark, .chat-mark')) {
+      snapshot.set(m, m.textContent);
+    }
+    let timer = null;
+    const unwrapStale = () => {
+      timer = null;
+      const cur = this._getEditEl();
+      if (!cur) return;
+      for (const m of cur.querySelectorAll('.lektorat-mark, .chat-mark')) {
+        const orig = snapshot.get(m);
+        if (orig != null && m.textContent !== orig) {
+          const parent = m.parentNode;
+          if (!parent) continue;
+          while (m.firstChild) parent.insertBefore(m.firstChild, m);
+          // Begleitendes <ins>-Block (Korrektur-Anzeige) entfernen.
+          const ins = m.nextSibling;
+          if (ins && ins.nodeType === 1 && (ins.classList?.contains('lektorat-ins') || ins.classList?.contains('chat-mark-ins'))) {
+            parent.removeChild(ins);
+          }
+          parent.removeChild(m);
+        }
+      }
+    };
+    this._findingMarkInputHandler = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(unwrapStale, 150);
+    };
+    el.addEventListener('input', this._findingMarkInputHandler);
+    this._findingMarkEl = el;
+    this._findingMarkTimer = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  },
+
+  _uninstallFindingMarkWatcher() {
+    if (this._findingMarkEl && this._findingMarkInputHandler) {
+      this._findingMarkEl.removeEventListener('input', this._findingMarkInputHandler);
+    }
+    if (typeof this._findingMarkTimer === 'function') this._findingMarkTimer();
+    this._findingMarkEl = null;
+    this._findingMarkInputHandler = null;
+    this._findingMarkTimer = null;
   },
 };

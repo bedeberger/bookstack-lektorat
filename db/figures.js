@@ -229,67 +229,80 @@ function addFigurenBeziehungen(bookId, beziehungen, userEmail, idMaps) {
  *  2. figure_relations dedupliziert (pro ungeordnetem Paar max 1), Relations mit
  *     nicht-existierenden fig_ids oder Selbst-Referenz entfernt.
  *  3. Beziehungs-Beschreibungen geleert, die den Namen der Zielfigur nicht enthalten
- *     (häufiger Verrutscher bei Lokal-KI). */
-function cleanupDuplicateFiguren(bookId, userEmail) {
+ *     (häufiger Verrutscher bei Lokal-KI).
+ *
+ *  Performance: Statt einer einzigen umfassenden `db.transaction` läuft der
+ *  Cleanup in vielen kleinen Transaktionen (eine pro Duplikat-Gruppe + je eine
+ *  für Relations-Dedup und Description-Rescue). better-sqlite3 ist synchron;
+ *  ein einziger grosser Transaction-Block würde den WAL-Writer-Lock minutenlang
+ *  halten und konkurrierende Requests blockieren. Per-Gruppe-Transaktionen
+ *  geben den Lock zwischendurch frei. `onProgress(done, total)` (optional) liefert
+ *  Fortschritt für UI-Polling. */
+function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
   const em = userEmail || null;
-  const stats = { figurenMerged: 0, relationsRemoved: 0, descriptionsCleared: 0 };
+  const stats = { figurenMerged: 0, relationsRemoved: 0, descriptionsCleared: 0, descriptionsMoved: 0 };
   const normalize = s => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
 
-  db.transaction(() => {
-    const figs = db.prepare(
-      'SELECT id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sozialschicht FROM figures WHERE book_id = ? AND user_email IS ? ORDER BY sort_order, id'
-    ).all(bookId, em);
+  const figs = db.prepare(
+    'SELECT id, fig_id, name, kurzname, typ, geburtstag, geschlecht, beruf, beschreibung, sozialschicht FROM figures WHERE book_id = ? AND user_email IS ? ORDER BY sort_order, id'
+  ).all(bookId, em);
 
-    const groups = new Map();
-    for (const f of figs) {
-      const key = normalize(f.name);
-      if (!key) continue;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(f);
-    }
+  const groups = new Map();
+  for (const f of figs) {
+    const key = normalize(f.name);
+    if (!key) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
+  }
 
-    const updFig = db.prepare(
-      'UPDATE figures SET kurzname=?, typ=?, geburtstag=?, geschlecht=?, beruf=?, sozialschicht=?, beschreibung=? WHERE id=?'
-    );
-    const moveTags = db.prepare(
-      'INSERT OR IGNORE INTO figure_tags (figure_id, tag) SELECT ?, tag FROM figure_tags WHERE figure_id = ?'
-    );
-    const delTags = db.prepare('DELETE FROM figure_tags WHERE figure_id = ?');
-    const getDupApps = db.prepare(
-      'SELECT chapter_id, chapter_name, haeufigkeit FROM figure_appearances WHERE figure_id = ?'
-    );
-    const upsertApp = db.prepare(`
-      INSERT INTO figure_appearances (figure_id, chapter_id, chapter_name, haeufigkeit) VALUES (?, ?, ?, ?)
-      ON CONFLICT(figure_id, chapter_id) DO UPDATE SET haeufigkeit = haeufigkeit + excluded.haeufigkeit
-    `);
-    const delApps = db.prepare('DELETE FROM figure_appearances WHERE figure_id = ?');
-    const moveEvents = db.prepare('UPDATE figure_events SET figure_id = ? WHERE figure_id = ?');
-    const remapRelFrom = db.prepare(
-      'UPDATE figure_relations SET from_fig_id = ? WHERE book_id = ? AND user_email IS ? AND from_fig_id = ?'
-    );
-    const remapRelTo = db.prepare(
-      'UPDATE figure_relations SET to_fig_id = ? WHERE book_id = ? AND user_email IS ? AND to_fig_id = ?'
-    );
-    const moveSceneFigs = db.prepare(`
-      INSERT OR IGNORE INTO scene_figures (scene_id, fig_id)
-      SELECT scene_id, ? FROM scene_figures sf WHERE sf.fig_id = ?
-        AND sf.scene_id IN (SELECT id FROM figure_scenes WHERE book_id = ? AND user_email = ?)
-    `);
-    const delSceneFigs = db.prepare(
-      'DELETE FROM scene_figures WHERE fig_id = ? AND scene_id IN (SELECT id FROM figure_scenes WHERE book_id = ? AND user_email = ?)'
-    );
-    const moveLocFigs = db.prepare(`
-      INSERT OR IGNORE INTO location_figures (location_id, fig_id)
-      SELECT location_id, ? FROM location_figures lf WHERE lf.fig_id = ?
-        AND lf.location_id IN (SELECT id FROM locations WHERE book_id = ? AND user_email IS ?)
-    `);
-    const delLocFigs = db.prepare(
-      'DELETE FROM location_figures WHERE fig_id = ? AND location_id IN (SELECT id FROM locations WHERE book_id = ? AND user_email IS ?)'
-    );
-    const delFig = db.prepare('DELETE FROM figures WHERE id = ?');
+  const updFig = db.prepare(
+    'UPDATE figures SET kurzname=?, typ=?, geburtstag=?, geschlecht=?, beruf=?, sozialschicht=?, beschreibung=? WHERE id=?'
+  );
+  const moveTags = db.prepare(
+    'INSERT OR IGNORE INTO figure_tags (figure_id, tag) SELECT ?, tag FROM figure_tags WHERE figure_id = ?'
+  );
+  const delTags = db.prepare('DELETE FROM figure_tags WHERE figure_id = ?');
+  const getDupApps = db.prepare(
+    'SELECT chapter_id, chapter_name, haeufigkeit FROM figure_appearances WHERE figure_id = ?'
+  );
+  const upsertApp = db.prepare(`
+    INSERT INTO figure_appearances (figure_id, chapter_id, chapter_name, haeufigkeit) VALUES (?, ?, ?, ?)
+    ON CONFLICT(figure_id, chapter_id) DO UPDATE SET haeufigkeit = haeufigkeit + excluded.haeufigkeit
+  `);
+  const delApps = db.prepare('DELETE FROM figure_appearances WHERE figure_id = ?');
+  const moveEvents = db.prepare('UPDATE figure_events SET figure_id = ? WHERE figure_id = ?');
+  const remapRelFrom = db.prepare(
+    'UPDATE figure_relations SET from_fig_id = ? WHERE book_id = ? AND user_email IS ? AND from_fig_id = ?'
+  );
+  const remapRelTo = db.prepare(
+    'UPDATE figure_relations SET to_fig_id = ? WHERE book_id = ? AND user_email IS ? AND to_fig_id = ?'
+  );
+  const moveSceneFigs = db.prepare(`
+    INSERT OR IGNORE INTO scene_figures (scene_id, fig_id)
+    SELECT scene_id, ? FROM scene_figures sf WHERE sf.fig_id = ?
+      AND sf.scene_id IN (SELECT id FROM figure_scenes WHERE book_id = ? AND user_email = ?)
+  `);
+  const delSceneFigs = db.prepare(
+    'DELETE FROM scene_figures WHERE fig_id = ? AND scene_id IN (SELECT id FROM figure_scenes WHERE book_id = ? AND user_email = ?)'
+  );
+  const moveLocFigs = db.prepare(`
+    INSERT OR IGNORE INTO location_figures (location_id, fig_id)
+    SELECT location_id, ? FROM location_figures lf WHERE lf.fig_id = ?
+      AND lf.location_id IN (SELECT id FROM locations WHERE book_id = ? AND user_email IS ?)
+  `);
+  const delLocFigs = db.prepare(
+    'DELETE FROM location_figures WHERE fig_id = ? AND location_id IN (SELECT id FROM locations WHERE book_id = ? AND user_email IS ?)'
+  );
+  const delFig = db.prepare('DELETE FROM figures WHERE id = ?');
 
-    for (const group of groups.values()) {
-      if (group.length < 2) continue;
+  // Phase 1: Duplikat-Gruppen mergen — eine Transaktion pro Gruppe, damit der
+  // WAL-Lock zwischen Gruppen freigegeben wird (vorher: ein einziger Block über
+  // alle Gruppen, der den Server für die Dauer aller Merges blockierte).
+  const groupArr = [...groups.values()].filter(g => g.length >= 2);
+  const totalSteps = groupArr.length + 2; // +1 für Relations-Dedup, +1 für Description-Rescue
+  let stepDone = 0;
+  for (const group of groupArr) {
+    db.transaction(() => {
       group.sort((a, b) => (b.beschreibung?.length || 0) - (a.beschreibung?.length || 0));
       const canon = { ...group[0] };
       for (const other of group.slice(1)) {
@@ -316,8 +329,13 @@ function cleanupDuplicateFiguren(bookId, userEmail) {
         delFig.run(dup.id);
         stats.figurenMerged++;
       }
-    }
+    })();
+    stepDone++;
+    if (onProgress) onProgress(stepDone, totalSteps);
+  }
 
+  // Phase 2: Relations-Dedup (eine Transaktion).
+  db.transaction(() => {
     const rels = db.prepare(
       'SELECT rowid, from_fig_id, to_fig_id FROM figure_relations WHERE book_id = ? AND user_email IS ?'
     ).all(bookId, em);
@@ -339,7 +357,12 @@ function cleanupDuplicateFiguren(bookId, userEmail) {
       for (const rid of toDelete) delRel.run(rid);
     }
     stats.relationsRemoved = toDelete.length;
+  })();
+  stepDone++;
+  if (onProgress) onProgress(stepDone, totalSteps);
 
+  // Phase 3: Description-Rescue (eine Transaktion).
+  db.transaction(() => {
     const figByIdForRescue = db.prepare(
       'SELECT fig_id, name, kurzname FROM figures WHERE book_id = ? AND user_email IS ?'
     ).all(bookId, em);
@@ -364,7 +387,6 @@ function cleanupDuplicateFiguren(bookId, userEmail) {
       'INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, user_email) VALUES (?, ?, ?, ?, ?, ?, ?)'
     );
 
-    stats.descriptionsMoved = 0;
     for (const r of relsWithNames) {
       const targets = [r.to_name, r.to_kurz].filter(Boolean).map(s => s.toLowerCase());
       if (!targets.length) continue;
@@ -394,6 +416,8 @@ function cleanupDuplicateFiguren(bookId, userEmail) {
       stats.descriptionsCleared++;
     }
   })();
+  stepDone++;
+  if (onProgress) onProgress(stepDone, totalSteps);
 
   return stats;
 }

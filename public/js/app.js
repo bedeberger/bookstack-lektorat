@@ -1,4 +1,4 @@
-import { fetchJson, configureTokenEstimate } from './utils.js';
+import { fetchJson, configureTokenEstimate, escHtml } from './utils.js';
 import { configurePrompts } from './prompts.js';
 
 import { bookstackMethods } from './api-bookstack.js';
@@ -97,6 +97,17 @@ const decorateInternalLinks = (root) => {
 };
 new MutationObserver(muts => {
   for (const m of muts) {
+    if (m.type === 'attributes') {
+      // `:class="…internal-link…"`-Toggles auf bereits gemounteten Elementen
+      // tauchen nicht in addedNodes auf; ohne attributeFilter würde A11y dort
+      // nie greifen (Tab/Enter würde den Klick nicht auslösen).
+      const t = m.target;
+      if (t?.nodeType === 1 && t.classList?.contains('internal-link')) {
+        if (!t.hasAttribute('role')) t.setAttribute('role', 'button');
+        if (!t.hasAttribute('tabindex')) t.setAttribute('tabindex', '0');
+      }
+      continue;
+    }
     for (const n of m.addedNodes) {
       if (n.nodeType !== 1) continue;
       if (n.classList?.contains('internal-link')) {
@@ -106,7 +117,7 @@ new MutationObserver(muts => {
       decorateInternalLinks(n);
     }
   }
-}).observe(document.documentElement, { childList: true, subtree: true });
+}).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
 document.addEventListener('keydown', (e) => {
   const t = e.target;
   if (!t?.classList?.contains?.('internal-link')) return;
@@ -347,9 +358,10 @@ document.addEventListener('alpine:init', () => {
 
     get statusHtml() {
       if (!this.status) return '';
+      const safe = escHtml(this.status);
       return this.statusSpinner
-        ? `<span class="spinner"></span>${this.status}`
-        : this.status;
+        ? `<span class="spinner"></span>${safe}`
+        : safe;
     },
 
     get selectedBookName() {
@@ -473,9 +485,14 @@ document.addEventListener('alpine:init', () => {
         // _applyingHash unterdrückt Doppelladen während Hash-Anwendung.
         // _resetBookScopedState() räumt buchspezifische Daten/Caches ab, damit
         // keine Figuren/Orte/Chats/Stats des alten Buchs im UI stehenbleiben.
-        this.$watch('selectedBookId', async (newVal) => {
+        this.$watch('selectedBookId', async (newVal, oldVal) => {
           if (this._applyingHash) return;
           if (!newVal) return;
+          // Alpine kann den Watcher mit identischem Wert feuern (z.B. bei
+          // Combobox-Re-Selection oder String/Number-Coercion). Doppelter
+          // _resetBookScopedState löscht User-Eingaben (Filter, offene Karten),
+          // also überspringen.
+          if (String(newVal) === String(oldVal)) return;
           this._resetBookScopedState();
           await this.loadPages();
           await this._reloadVisibleBookCards();

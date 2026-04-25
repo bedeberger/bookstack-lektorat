@@ -42,6 +42,14 @@ export function registerEditorFindCard() {
         }
       };
       window.addEventListener('keydown', this._onFindHotkey);
+
+      // Find-Widget muss bei Buchwechsel/View-Reset geschlossen werden, sonst
+      // bleibt der capture-phase Scroll-Listener am Window kleben (per Sub-
+      // mount akkumuliert).
+      this._onBookChanged = () => this.closeFind?.();
+      this._onViewReset = () => this.closeFind?.();
+      window.addEventListener('book:changed', this._onBookChanged);
+      window.addEventListener('view:reset', this._onViewReset);
     },
 
     destroy() {
@@ -55,6 +63,8 @@ export function registerEditorFindCard() {
         window.removeEventListener('keydown', this._onFindHotkey);
         this._onFindHotkey = null;
       }
+      if (this._onBookChanged) window.removeEventListener('book:changed', this._onBookChanged);
+      if (this._onViewReset)   window.removeEventListener('view:reset',  this._onViewReset);
     },
 
     ...editorFindCardMethods,

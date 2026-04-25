@@ -31,11 +31,20 @@ export function registerEditorFigurLookupCard() {
       this._onClose = () => this.closeFigurLookup();
       window.addEventListener('editor:figur-lookup:open', this._onOpen);
       window.addEventListener('editor:figur-lookup:close', this._onClose);
+
+      // Bei Buchwechsel/View-Reset Popover hart schliessen — sonst bleibt der
+      // capture-phase Scroll-Listener nach Buchwechsel-Wegnavigation am Window.
+      this._onBookChanged = () => this.closeFigurLookup?.();
+      this._onViewReset   = () => this.closeFigurLookup?.();
+      window.addEventListener('book:changed', this._onBookChanged);
+      window.addEventListener('view:reset',  this._onViewReset);
     },
 
     destroy() {
       if (this._onOpen)  window.removeEventListener('editor:figur-lookup:open',  this._onOpen);
       if (this._onClose) window.removeEventListener('editor:figur-lookup:close', this._onClose);
+      if (this._onBookChanged) window.removeEventListener('book:changed', this._onBookChanged);
+      if (this._onViewReset)   window.removeEventListener('view:reset',  this._onViewReset);
       this._detachFigurLookupScroll();
     },
 

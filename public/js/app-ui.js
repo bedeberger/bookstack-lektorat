@@ -148,5 +148,15 @@ export const appUiMethods = {
     };
     let safety = 5;
     while (safety-- > 0 && await loadPass() > 0) { /* weiter */ }
+    // Falls nach 5 Iterationen immer noch leere `partial-*`-Container existieren,
+    // ist die Verschachtelung tiefer als erwartet (oder zirkulär). Stilles
+    // Aufgeben würde leere Karten produzieren — Hinweis loggen, damit der Bug
+    // im DevTools-Console sichtbar wird.
+    const stillEmpty = [...document.querySelectorAll('[id^="partial-"]')]
+      .filter(el => el.childElementCount === 0)
+      .map(el => el.id);
+    if (stillEmpty.length > 0) {
+      console.warn(`[loadPartials] Schutzlimit (5 Pässe) erreicht, leer geblieben:`, stillEmpty);
+    }
   },
 };

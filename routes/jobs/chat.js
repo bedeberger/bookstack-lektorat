@@ -8,7 +8,7 @@ const {
   getPrompts, getBookPrompts,
   htmlToText, jobAbortControllers,
   fmtTok, BS_URL,
-  jobs, runningJobs, createJob, enqueueJob, jobKey,
+  jobs, runningJobs, createJob, enqueueJob, jobKey, findActiveJobId,
   jsonBody,
   getFiguren, getLatestReview, buildChatMessageHistory,
 } = require('./shared');
@@ -106,11 +106,12 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
     };
 
     const signal = jobAbortControllers.get(jobId)?.signal;
-    const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress, null, signal, undefined, SCHEMA_CHAT, chatTemperature());
+    const { text, truncated, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress, null, signal, undefined, SCHEMA_CHAT, chatTemperature());
     // Job-State auf echte Provider-Werte setzen, damit Status-Anzeige und
     // gespeicherte Chat-Nachricht dieselben Tokens zeigen (statt eines
     // Streaming-Zwischenstands).
     updateJob(jobId, { tokensIn, tokensOut });
+    if (truncated) throw i18nError('job.error.aiTruncated', { max: MAX_TOKENS_OUT, tokIn: tokensIn, tokOut: tokensOut, total: tokensIn + tokensOut });
 
     const { antwort, vorschlaege } = _parseChatResponse(text);
     if (antwort === text && vorschlaege.length === 0) {
@@ -137,7 +138,7 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
     }, chatTps);
     logger.info(`Job ${jobId}: Chat «${session.page_name || '-'}» session ${sessionId} abgeschlossen (${fmtTok(tokensIn)}↑ ${fmtTok(tokensOut)}↓ Tokens, ${vorschlaege.length} Vorschläge).`);
   } catch (e) {
-    if (e.name !== 'AbortError') logger.error(`Job ${jobId}: Chat Fehler: ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Job ${jobId}: Chat Fehler: ${e.message}`, { stack: e.stack });
     failJob(jobId, e);
   }
 }
@@ -313,11 +314,12 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
       updateJob(jobId, updates);
     };
 
-    const { text, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress, null, jobSignal, undefined, SCHEMA_BOOK_CHAT, chatTemperature());
+    const { text, truncated, tokensIn, tokensOut, genDurationMs } = await callAIChat(aiMessages, systemPrompt, onProgress, null, jobSignal, undefined, SCHEMA_BOOK_CHAT, chatTemperature());
     // Job-State auf echte Provider-Werte setzen (Ollama/Llama melden prompt_tokens
     // erst am Streaming-Ende; ohne diesen Update bleibt die Status-Anzeige auf
     // einem Zwischenstand und weicht von der DB-Nachricht ab).
     updateJob(jobId, { tokensIn, tokensOut });
+    if (truncated) throw i18nError('job.error.aiTruncated', { max: MAX_TOKENS_OUT, tokIn: tokensIn, tokOut: tokensOut, total: tokensIn + tokensOut });
 
     const { antwort } = _parseChatResponse(text);
     if (antwort === text) {
@@ -342,7 +344,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     }, bookChatTps);
     logger.info(`Job ${jobId}: Buch-Chat «${session.book_name || '-'}» session ${sessionId} abgeschlossen (${fmtTok(tokensIn)}↑ ${fmtTok(tokensOut)}↓, ${selectedPages.length}/${pageContents.length} Seiten).`);
   } catch (e) {
-    if (e.name !== 'AbortError') logger.error(`Job ${jobId}: Buch-Chat Fehler: ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Job ${jobId}: Buch-Chat Fehler: ${e.message}`, { stack: e.stack });
     failJob(jobId, e);
   }
 }
@@ -354,8 +356,8 @@ function _handleChatPost(req, res, { jobType, sessionSelect, labelFn, runFn }) {
   if (!session_id || !message?.trim()) return res.status(400).json({ error_code: 'SESSION_ID_MSG_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   if (!userEmail) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
-  const existing = runningJobs.get(jobKey(jobType, session_id, userEmail));
-  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const existing = findActiveJobId(jobType, session_id, userEmail);
+  if (existing) return res.json({ jobId: existing, existing: true });
 
   const session = db.prepare(sessionSelect).get(parseInt(session_id), userEmail);
   if (!session) return res.status(404).json({ error_code: 'SESSION_NOT_FOUND' });
@@ -459,6 +461,8 @@ async function runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEma
       // die bei reinen Tool-Use-Iterationen ohne Text-Stream 0 bleibt).
       updateJob(jobId, { tokensIn: totalTokIn, tokensOut: totalTokOut });
 
+      if (result.truncated) throw i18nError('job.error.aiTruncated', { max: MAX_TOKENS_OUT, tokIn: totalTokIn, tokOut: totalTokOut, total: totalTokIn + totalTokOut });
+
       if (result.tokensIn > BOOK_CHAT_TOKEN_BUDGET) {
         logger.warn(`Job ${jobId}: Context-Budget überschritten (${result.tokensIn}/${BOOK_CHAT_TOKEN_BUDGET} Input-Tokens) – Loop abgebrochen.`);
         finalText = result.text || JSON.stringify({ antwort: '__i18n:chat.errors.contextExceeded__' });
@@ -531,7 +535,7 @@ async function runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEma
     }, tpsVal);
     logger.info(`Job ${jobId}: Agent-Buch-Chat session ${sessionId} abgeschlossen (${fmtTok(totalTokIn)}↑ ${fmtTok(totalTokOut)}↓, ${toolLog.length} Tool-Calls, ${iter + 1} Iter).`);
   } catch (e) {
-    if (e.name !== 'AbortError') logger.error(`Job ${jobId}: Agent-Buch-Chat Fehler: ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Job ${jobId}: Agent-Buch-Chat Fehler: ${e.message}`, { stack: e.stack });
     failJob(jobId, e);
   }
 }
@@ -573,4 +577,18 @@ chatRouter.delete('/book-chat-cache', (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = { chatRouter };
+/**
+ * Verwirft alle Cache-Einträge eines Buchs (alle User). Wird nach Sync-Operationen
+ * aufgerufen, damit Buch-Chat nicht 10 Min lang auf veraltetem Content antwortet.
+ * Cache-Key-Format: `${bookId}:${userEmail}` – Prefix-Match räumt alle User-
+ * Varianten gleichzeitig ab (BookStack-Permissions ändern sich selten und
+ * verlieren beim Sync ohnehin ihre Aktualität).
+ */
+function invalidateBookPageCache(bookId) {
+  const prefix = `${bookId}:`;
+  for (const key of _bookPageCache.keys()) {
+    if (key.startsWith(prefix)) _bookPageCache.delete(key);
+  }
+}
+
+module.exports = { chatRouter, invalidateBookPageCache };

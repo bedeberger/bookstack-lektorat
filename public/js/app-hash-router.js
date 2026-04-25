@@ -118,8 +118,16 @@ export const appHashRouterMethods = {
     this._applyingHash = true;
     this._inHashApply = true;
     try {
+      // Beim ersten _applyHash (Deep-Link / Reload) ist selectedBookId in init()
+      // bereits aus dem Hash gesetzt – die Equality-Prüfung würde Reset+loadPages
+      // überspringen und Sub-Karten blieben ohne book:changed leer.
+      const isInitialApply = !this._initialApplyDone;
+      this._initialApplyDone = true;
       if (String(this.selectedBookId) !== targetBookId) {
         this.selectedBookId = targetBookId;
+        this._resetBookScopedState();
+        await this.loadPages();
+      } else if (isInitialApply) {
         this._resetBookScopedState();
         await this.loadPages();
       }
@@ -179,13 +187,11 @@ export const appHashRouterMethods = {
         case 'kapitel':
           if (!this.showKapitelReviewCard) await this.toggleKapitelReviewCard();
           if (arg) {
-            // Nur übernehmen, wenn es ein qualifizierendes Kapitel ist (>1 Seite).
-            const opts = this.kapitelReviewChapterOptions();
-            if (opts.some(c => String(c.id) === String(arg))) {
-              this.kapitelReviewChapterId = String(arg);
-              this.kapitelReviewOut = '';
-              this.setKapitelReviewStatus('');
-            }
+            // `kapitelReviewChapterOptions`/`kapitelReviewOut`/`setKapitelReviewStatus`
+            // leben auf der kapitel-review-Sub. Bei Deep-Link `#book/X/kapitel/Y`
+            // ist die Sub evtl. noch nicht gemountet → guard, sonst Crash.
+            // Sub übernimmt den Chapter-Wechsel via `kapitel-review:select`-Event.
+            window.dispatchEvent(new CustomEvent('kapitel-review:select', { detail: { chapterId: String(arg) } }));
           }
           break;
         case 'chat':
@@ -214,6 +220,10 @@ export const appHashRouterMethods = {
   },
 
   _setupHashRouting() {
+    // Re-init sammelt sonst mehrfache $watch — bei jedem Property-Change feuern
+    // dann doppelte URL-Writes mit doppeltem History-Eintrag. Existierende
+    // Teardowns vorab abräumen.
+    this._teardownHashRouting();
     const watchers = [
       'selectedBookId', 'currentPage', 'showEditorCard',
       'selectedFigurId', 'selectedOrtId',
@@ -224,9 +234,20 @@ export const appHashRouterMethods = {
       'showBookSettingsCard', 'showUserSettingsCard',
       'showFinetuneExportCard',
     ];
+    this._hashWatcherTeardowns = [];
     for (const prop of watchers) {
-      this.$watch(prop, () => this._updateHash());
+      const off = this.$watch(prop, () => this._updateHash());
+      if (typeof off === 'function') this._hashWatcherTeardowns.push(off);
     }
     window.addEventListener('hashchange', () => this._applyHash(), { signal: this._abortCtrl?.signal });
+  },
+
+  _teardownHashRouting() {
+    if (Array.isArray(this._hashWatcherTeardowns)) {
+      for (const off of this._hashWatcherTeardowns) {
+        try { off(); } catch { /* noop */ }
+      }
+    }
+    this._hashWatcherTeardowns = [];
   },
 };

@@ -1832,19 +1832,10 @@ body.focus-mode .page-content-view--editing h6 {
   color: inherit;
 }
 
-body.focus-mode .page-content-view strong,
-body.focus-mode .page-content-view b,
-body.focus-mode .page-content-view--editing strong,
-body.focus-mode .page-content-view--editing b {
-  font-weight: inherit;
-}
-
-body.focus-mode .page-content-view em,
-body.focus-mode .page-content-view i,
-body.focus-mode .page-content-view--editing em,
-body.focus-mode .page-content-view--editing i {
-  font-style: inherit;
-}
+/* Bold/Italic im Fokus-Modus sichtbar lassen — Ctrl+B/Ctrl+I sind als
+   Shortcut explizit dokumentiert. <u> bleibt unten geplättet, weil
+   Underline mit Link-Styling kollidiert und Ctrl+U-Eingabe ohnehin
+   geblockt ist. */
 
 body.focus-mode .page-content-view u,
 body.focus-mode .page-content-view s,
@@ -1936,24 +1927,21 @@ body.focus-mode .page-content-view [style*="color"],
 body.focus-mode .page-content-view [style*="background"],
 body.focus-mode .page-content-view [style*="text-align"],
 body.focus-mode .page-content-view [style*="font-family"],
-body.focus-mode .page-content-view [style*="font-style"],
-body.focus-mode .page-content-view [style*="font-weight"],
 body.focus-mode .page-content-view [style*="white-space"],
 body.focus-mode .page-content-view--editing [style*="color"],
 body.focus-mode .page-content-view--editing [style*="background"],
 body.focus-mode .page-content-view--editing [style*="text-align"],
 body.focus-mode .page-content-view--editing [style*="font-family"],
-body.focus-mode .page-content-view--editing [style*="font-style"],
-body.focus-mode .page-content-view--editing [style*="font-weight"],
 body.focus-mode .page-content-view--editing [style*="white-space"] {
   color: inherit !important;
   background: transparent !important;
   text-align: inherit !important;
   font-family: inherit !important;
-  font-style: inherit !important;
-  font-weight: inherit !important;
   white-space: normal !important;
 }
+/* font-weight / font-style absichtlich NICHT geplättet — execCommand('bold')
+   in Chrome mit styleWithCSS=true schreibt inline-styles statt <b>; sonst
+   wäre Bold im Fokus-Modus unsichtbar trotz funktionierendem Shortcut. */
 
 /* Tabellen und Bilder stören den Lese-/Schreibfluss – komplett ausblenden.
    Im Edit-Modus bleibt das Markup im DOM erhalten und wird beim Verlassen
@@ -1963,6 +1951,42 @@ body.focus-mode .page-content-view img,
 body.focus-mode .page-content-view--editing table,
 body.focus-mode .page-content-view--editing img {
   display: none;
+}
+
+/* === Fokus-Modus: Caret-Pulse, Auto-Hide-Cursor, Header-Live-Counter === */
+
+/* Caret pulst dezent — Auge findet die Schreibmarke schneller, ohne dass
+   es nervig blinkt. Reduced-Motion respektieren. */
+@keyframes focus-caret-pulse {
+  0%, 100% { caret-color: var(--color-primary); }
+  50%      { caret-color: var(--color-border-focus); }
+}
+body.focus-mode .page-content-view--editing {
+  animation: focus-caret-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.focus-mode .page-content-view--editing { animation: none; }
+}
+
+/* Auto-Hide-Cursor: 2s ohne Mausbewegung → unsichtbar (JS toggelt Klasse).
+   Bei Mausbewegung wird die Klasse entfernt. Nur im Editor-Container, damit
+   Header-Buttons weiterhin normalen Cursor zeigen, wenn Maus dorthin geht. */
+body.focus-mode.focus-cursor-hidden .page-content-view--editing,
+body.focus-mode.focus-cursor-hidden .page-content-view--editing * {
+  cursor: none;
+}
+
+/* Live-Counter im Header (nur Fokus + Edit). Rückt da rein, wo sonst die
+   `tok-stats`-Badges der gespeicherten Seite sitzen — die werden im Fokus
+   ohnehin per CSS ausgeblendet. */
+.focus-live-counter {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  color: var(--color-subtle);
+  margin-left: 8px;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .save-indicator {

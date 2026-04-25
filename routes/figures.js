@@ -207,18 +207,34 @@ router.put('/:book_id', jsonBody, (req, res) => {
   });
 });
 
+// Concurrency-Guard: zwei parallele Cleanups auf demselben Buch erzeugen
+// nur Lock-Contention und doppelte Logs. Key = `${bookId}:${userEmail}`.
+const _cleanupInflight = new Set();
+
 // Post-Hoc-Cleanup: Namens-Duplikate mergen, Relations deduplizieren,
 // verdächtige Beziehungs-Beschreibungen entfernen. Idempotent.
+//
+// Läuft synchron (better-sqlite3); frühere Implementation hielt eine einzige
+// grosse Transaction über alle Duplikat-Gruppen, was den WAL-Writer-Lock
+// minutenlang blockierte. Seit dem Per-Gruppen-Split (db/figures.js) wird
+// der Lock zwischen Gruppen freigegeben — andere Requests können dazwischen
+// progressen. Concurrency-Guard verhindert zusätzlich doppelte Aufrufe.
 router.post('/cleanup/:book_id', (req, res) => {
   const bookId = parseInt(req.params.book_id);
+  if (!Number.isInteger(bookId) || bookId <= 0) return res.status(400).json({ error_code: 'BOOK_ID_INVALID' });
   const userEmail = req.session?.user?.email || null;
+  const guardKey = `${bookId}:${userEmail || ''}`;
+  if (_cleanupInflight.has(guardKey)) return res.status(409).json({ error_code: 'CLEANUP_IN_PROGRESS' });
+  _cleanupInflight.add(guardKey);
   try {
     const stats = cleanupDuplicateFiguren(bookId, userEmail);
     logger.info(`Figuren-Cleanup Buch ${bookId} (${userEmail || 'legacy'}): ${stats.figurenMerged} Figuren gemergt, ${stats.relationsRemoved} Beziehungen entfernt, ${stats.descriptionsCleared} Beschreibungen geleert.`);
     res.json({ ok: true, ...stats });
   } catch (e) {
-    logger.error(`Figuren-Cleanup fehlgeschlagen: ${e.message}`);
+    logger.error(`Figuren-Cleanup fehlgeschlagen: ${e.message}`, { stack: e.stack });
     res.status(500).json({ error: e.message });
+  } finally {
+    _cleanupInflight.delete(guardKey);
   }
 });
 

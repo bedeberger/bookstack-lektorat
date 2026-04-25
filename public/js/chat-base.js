@@ -143,6 +143,9 @@ export function makeChatMethods(cfg) {
       await fetch('/chat/session/' + id, { method: 'DELETE' });
       this[p.sessions] = this[p.sessions].filter(s => s.id !== id);
       if (this[p.sessionId] === id) {
+        // Laufenden Polling-Timer der gelöschten Session abbrechen, sonst
+        // pollt er weiter mit der nun toten sessionId/jobId.
+        if (this[p.pollTimer]) { clearInterval(this[p.pollTimer]); this[p.pollTimer] = null; }
         this[p.sessionId] = null;
         this[p.messages] = [];
         if (this[p.sessions].length > 0) {

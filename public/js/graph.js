@@ -1,4 +1,5 @@
 import { escHtml } from './utils.js';
+import { loadVis } from './lazy-libs.js';
 
 // Graph-Render-Methoden (werden in Alpine.data('figurenCard') gespreadet).
 // Root-Zugriffe via window.__app. vis-network-Instanz (_figurenNetwork) +
@@ -116,10 +117,22 @@ export const graphMethods = {
     });
   },
 
-  renderFigurGraph() {
+  async renderFigurGraph() {
     const container = document.getElementById('figuren-graph');
     if (!container) return;
     const figuren = window.__app.figuren;
+
+    if (typeof window.vis === 'undefined') {
+      const ph = document.createElement('span');
+      ph.className = 'muted-msg muted-msg--block';
+      ph.textContent = window.__app.t('graph.empty.visLoading');
+      container.replaceChildren(ph);
+      try { await loadVis(); }
+      catch (e) {
+        ph.textContent = e.message;
+        return;
+      }
+    }
 
     // Cache-Hash: Figuren-IDs + Kapitelsignatur + Modus + Sprache. Kapitelsignatur sorgt
     // dafür, dass Häufigkeitsänderungen einer Figur einen Re-Render auslösen, selbst wenn
@@ -139,11 +152,6 @@ export const graphMethods = {
       container.innerHTML = `<span class="muted-msg muted-msg--block">${escHtml(window.__app.t('graph.empty.figuren'))}</span>`;
       return;
     }
-    if (typeof vis === 'undefined') {
-      container.innerHTML = `<span class="muted-msg muted-msg--block">${escHtml(window.__app.t('graph.empty.visLoading'))}</span>`;
-      return;
-    }
-
     if (this.figurenGraphModus === 'soziogramm')      this._renderSoziogramm(container);
     else if (this.figurenGraphModus === 'familie')    this._renderFamiliengraph(container);
     else                                              this._renderFigurengraph(container);

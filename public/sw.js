@@ -95,11 +95,27 @@ async function handleShellAsset(req) {
 // BookStack-GETs: Stale-While-Revalidate, damit Buch-/Kapitel-/Seitenlisten
 // und einzelne Seiteninhalte (/api/pages/:id) offline lesbar bleiben.
 // 401/Fehlerantworten werden nicht gecacht, damit Login-Redirects nicht festfrieren.
+//
+// LRU-Bound: ohne Limit wächst der API-Cache mit jeder besuchten Seite und
+// verbraucht auf Long-Running-Sessions zig MB. MAX_API_CACHE_ENTRIES kappt
+// nach FIFO (cache.keys() liefert Insertion-Order in allen Browsern, die SW
+// unterstützen).
+const MAX_API_CACHE_ENTRIES = 200;
+async function _evictApiCache(cache) {
+  const keys = await cache.keys();
+  const overflow = keys.length - MAX_API_CACHE_ENTRIES;
+  if (overflow > 0) {
+    for (let i = 0; i < overflow; i++) await cache.delete(keys[i]);
+  }
+}
 async function handleApi(req) {
   const cache = await caches.open(API_CACHE);
   const cached = await cache.match(req);
-  const netPromise = fetch(req).then((res) => {
-    if (res && res.ok && res.type !== 'opaqueredirect') cache.put(req, res.clone());
+  const netPromise = fetch(req).then(async (res) => {
+    if (res && res.ok && res.type !== 'opaqueredirect') {
+      await cache.put(req, res.clone());
+      await _evictApiCache(cache);
+    }
     return res;
   }).catch(() => null);
 

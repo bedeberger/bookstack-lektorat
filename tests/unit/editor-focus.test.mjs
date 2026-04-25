@@ -11,6 +11,7 @@ const {
   computeTypewriterDelta,
   getCaretRect,
   setActiveBlock,
+  dynamicTypewriterThreshold,
 } = await import('../../public/js/editor-focus.js');
 
 // --- findBlockFromNode ------------------------------------------------------
@@ -322,4 +323,12 @@ test('setActiveBlock: Re-Set auf gleichen Block → idempotent', () => {
 test('setActiveBlock: null-container → no-op (kein Throw)', () => {
   setActiveBlock(null, null);
   setActiveBlock(null, mkBlock());
+});
+
+// --- dynamicTypewriterThreshold --------------------------------------------
+
+test('dynamicTypewriterThreshold: ohne window/getComputedStyle → fallback', () => {
+  // Block ohne ownerDocument → getComputedStyle wirft, fallback greift
+  assert.equal(dynamicTypewriterThreshold(null, 16), 16);
+  assert.equal(dynamicTypewriterThreshold(undefined, 21), 21);
 });

@@ -345,12 +345,14 @@ const bookstackProxy = createProxyMiddleware({
       // widerrufene/ungültige Tokens per 401. Beides → einheitlicher Fehler-Code.
       if (proxyRes.statusCode === 301 || proxyRes.statusCode === 302 || proxyRes.statusCode === 401) {
         proxyRes.destroy();
-        res.status(401).json({ error_code: 'BOOKSTACK_UNAUTHED' });
+        // headersSent-Guard: wenn http-proxy-middleware bereits Header relayed
+        // hat, würde res.status() einen "Cannot set headers"-Crash werfen.
+        if (!res.headersSent) res.status(401).json({ error_code: 'BOOKSTACK_UNAUTHED' });
       }
     },
     error: (err, _req, res) => {
       logger.error('BookStack proxy error: ' + err.message);
-      res.status(502).json({ error_code: 'BOOKSTACK_UNREACHABLE', params: { detail: err.message } });
+      if (!res.headersSent) res.status(502).json({ error_code: 'BOOKSTACK_UNREACHABLE', params: { detail: err.message } });
     }
   }
 });

@@ -255,6 +255,10 @@ export const treeMethods = {
     for (let i = 0; i < pages.length; i += BATCH) {
       if (this._tokenEstGen !== gen) return;
       const batch = pages.slice(i, i + BATCH);
+      // Lokaler Per-Batch-Buffer; erst nach gen-Check in `this.tokEsts` mergen.
+      // Vorher wurde `this.tokEsts[p.id] = …` direkt mutiert, sodass nach einem
+      // Buchwechsel mid-run die Sidebar kurz Stats des alten Buchs zeigte.
+      const local = {};
       await Promise.allSettled(batch.map(async p => {
         try {
           const pd = await this.bsGet('pages/' + p.id);
@@ -262,15 +266,16 @@ export const treeMethods = {
           const text = htmlToText(html);
           const userPrompt = buildLektoratPrompt(text);
           const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
-          this.tokEsts[p.id] = {
+          const stat = {
             tok: Math.round(userPrompt.length / CHARS_PER_TOKEN),
             words,
             chars: text.length,
           };
+          local[p.id] = stat;
           newStats.push({
             page_id: p.id,
             book_id: parseInt(this.selectedBookId),
-            tok: this.tokEsts[p.id].tok,
+            tok: stat.tok,
             words,
             chars: text.length,
             updated_at: p.updated_at || null,
@@ -278,8 +283,14 @@ export const treeMethods = {
         } catch { /* ignore */ }
       }));
 
+      // Generations-Check vor dem Merge: wenn der User in der Zwischenzeit das
+      // Buch gewechselt hat, gehört das Ergebnis zu einem alten Lauf und darf
+      // weder den Cache noch die DB überschreiben.
+      if (this._tokenEstGen !== gen) return;
+      this.tokEsts = { ...this.tokEsts, ...local };
+
       // Neu berechnete Stats in DB persistieren
-      if (newStats.length && this._tokenEstGen === gen) {
+      if (newStats.length) {
         fetch('/history/page-stats/batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

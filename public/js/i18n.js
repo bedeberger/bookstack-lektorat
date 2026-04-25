@@ -8,6 +8,8 @@
 // Key-Konvention: 'bereich.feld' (z.B. 'header.logout', 'profile.title').
 // Platzhalter: {name} → Parameter-Map: t('foo', { name: 'Anna' }).
 
+import { formatLastRun as _formatLastRunImpl } from './utils.js';
+
 const FALLBACK_LOCALE = 'de';
 const SUPPORTED_LOCALES = ['de', 'en'];
 
@@ -74,6 +76,13 @@ export const i18nMethods = {
   tError(response) {
     void this.uiLocale;
     return tErrorRaw(response);
+  },
+
+  /** ISO-Timestamp → relativer Lokalisiertext. Lazy-Import um Zykel zu vermeiden. */
+  formatLastRun(isoStr) {
+    void this.uiLocale;
+    if (!isoStr) return '';
+    return _formatLastRunImpl(isoStr, (k, p) => tRaw(k, p), this.uiLocale);
   },
 
   /** Sprache wechseln, neue Messages laden und auf Server persistieren. */

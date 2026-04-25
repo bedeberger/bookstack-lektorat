@@ -1,6 +1,7 @@
 require('dotenv').config();
 const crypto = require('crypto');
 const express = require('express');
+const compression = require('compression');
 const helmet = require('helmet');
 const session = require('express-session');
 const SqliteStore = require('better-sqlite3-session-store')(session);
@@ -29,6 +30,18 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false })); // CSP aus: Alpine/vis-network via CDN würde blockiert
 
+// gzip aktiv, aber SSE-Streams (text/event-stream) und Responses mit
+// `x-no-compression` ausgenommen — Kompression würde Stream-Chunks bis zum
+// Buffer-Flush zurückhalten und Live-Updates blockieren.
+app.use(compression({
+  filter(req, res) {
+    if (req.headers['x-no-compression']) return false;
+    const ct = res.getHeader('Content-Type');
+    if (typeof ct === 'string' && ct.includes('text/event-stream')) return false;
+    return compression.filter(req, res);
+  },
+}));
+
 app.use((req, _res, next) => {
   logger.info(`${req.method} ${req.path}`);
   next();
@@ -45,6 +58,7 @@ let sessionSecret = process.env.SESSION_SECRET;
 if (!sessionSecret) {
   if (LOCAL_DEV_MODE) {
     sessionSecret = crypto.randomBytes(32).toString('hex');
+    process.env.SESSION_SECRET = sessionSecret;
     logger.warn('SESSION_SECRET nicht gesetzt – zufälliges Dev-Secret generiert (Sessions überleben Restart nicht).');
   } else {
     logger.error('SESSION_SECRET nicht gesetzt – Server wird gestoppt. Bitte in .env setzen.');
@@ -90,7 +104,20 @@ const PUBLIC_ASSETS = new Set([
   '/bookstack_lektorat_icon.ico',
   '/favicon.ico',
 ]);
-const staticServe = express.static(path.join(__dirname, 'public'));
+// Statische Assets: 1 h für HTML/Manifest (User soll Updates schnell sehen),
+// 7 Tage für JS/CSS/Bilder. Kein `immutable`, weil Dateinamen nicht gehasht sind —
+// aber ETag bleibt aktiv, sodass der Browser nach maxAge mit If-None-Match revalidiert.
+const staticServe = express.static(path.join(__dirname, 'public'), {
+  etag: true,
+  lastModified: true,
+  setHeaders(res, filePath) {
+    if (/\.(html|webmanifest)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=604800');
+    }
+  },
+});
 app.use((req, res, next) => {
   if (req.method === 'GET' && PUBLIC_ASSETS.has(req.path)) {
     return staticServe(req, res, next);

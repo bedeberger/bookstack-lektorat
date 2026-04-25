@@ -8,7 +8,7 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Va
 
 - **Prompts nur in `public/js/prompts.js`** — einzige Quelle für alle Prompt-Schemas und Build-Logik. Server importiert via dynamic `import()`. NIEMALS Prompts in Route-Handlern, Config-Dateien oder anderswo duplizieren.
 - **KI-Calls nur via Job-Queue** — neue Features implementieren einen Job-Typ in `routes/jobs/` (Funktion `runXxxJob` + `router.post`). Direkte synchrone KI-Calls aus Route-Handlern sind verboten. Einzige Ausnahme: Seiten-Chat (`/chat/send`) nutzt bewusst SSE-Streaming.
-- **`callAI` gibt nur JSON zurück** — jeder Systemprompt muss JSON-Only erzwingen (`JSON_ONLY`-Konstante in `prompts.js`). Nach jedem `callAI`-Aufruf Pflichtfeld prüfen (z.B. `fehler`, `gesamtnote`, `figuren`). Fehler werfen statt falsche Daten rendern.
+- **`callAI` gibt nur JSON zurück** — jeder Systemprompt muss JSON-Only erzwingen (`JSON_ONLY`-Konstante in `prompts.js`). Nach jedem `callAI`-Aufruf Pflichtfeld prüfen (z.B. `fehler`, `gesamtnote`, `figuren`). Fehler werfen statt falsche Daten rendern. **`truncated`-Flag IMMER vor `parseJSON` prüfen und werfen** — `jsonrepair` ist tolerant und liefert sonst Partial-Daten zurück (verhindert „silent partial"-Bug).
 - **Styles nur in `style.css`** — keine Inline-`style`-Attribute, keine `<style>`-Blöcke im HTML.
 - **UI-Strings nur in `public/js/i18n/{de,en}.json`** — keine hartcodierten deutschen/englischen Texte in HTML-Partials, JS-Modulen oder Alpine-Templates. Immer `t('bereich.feld')` (bzw. `tRaw()` ausserhalb von Alpine) verwenden. Neuer String → Key in **beiden** Locale-Dateien ergänzen (de = Fallback, en = Übersetzung). Key-Konvention: `bereich.feld` (z.B. `profile.title`). Platzhalter via `{name}` + Parameter-Map.
   - **Gilt auch serverseitig:** `updateJob`/`failJob`-`statusText` immer als i18n-Key setzen (z.B. `'job.phase.aiReply'`), dynamische Werte als `statusParams`-Objekt. Job-Labels via `{ key, params }` an `createJob`. Fehler-Messages, die der User sieht, ebenfalls als Key.
@@ -28,8 +28,9 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Va
 1. Job-Datei in `routes/jobs/` anlegen (Pattern: siehe `routes/jobs/review.js`)
 2. `runXxxJob`-Funktion + `router.post('/xxx', ...)` implementieren
 3. Router in `routes/jobs.js` mounten
-4. Prompt-Builder in `public/js/prompts.js` ergänzen
+4. Prompt-Builder in `public/js/prompts.js` ergänzen — **bei schemarelevanter Änderung `PROMPTS_VERSION` bumpen** (invalidiert `chapter_extract_cache`-Einträge der Komplettanalyse)
 5. Schema-Validierung nach `callAI` nicht vergessen
+6. Dedup-Check im POST-Handler: `findActiveJobId(type, entityId, userEmail)` aus `routes/jobs/shared.js` (NICHT `runningJobs.get(...) && jobs.has(...)` — matcht sonst auch fertige Jobs)
 
 ### Frontend (neue Karte als `Alpine.data`-Sub-Komponente)
 
@@ -99,7 +100,7 @@ Immer nur eine Hauptansicht aktiv. Buchebenen-Features und Seitenebenen-Features
 
 Schema, Tabellen und Migrationslogik: siehe [db/schema.js](db/schema.js).
 
-**Migration hinzufügen:** Neuen `if (version < N)`-Block in `runMigrations()` ergänzen (N = nächste fortlaufende Nummer, aktuell bei 48) + `UPDATE schema_version SET version = N`. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` — keine Versionierung nötig.
+**Migration hinzufügen:** Neuen `if (version < N)`-Block in `runMigrations()` ergänzen (N = nächste fortlaufende Nummer, aktuell bei 56) + `UPDATE schema_version SET version = N`. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` — keine Versionierung nötig.
 
 **Neuer Beziehungstyp:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Neuen Typ in der `BZ`-Konstante (Frontend-Rendering) und im Claude-Prompt (`FINAL_SCHEMA` in `prompts.js`) ergänzen.
 

@@ -53,7 +53,19 @@ migrateFromJson();
 // Seiten-ID-Reconciliation: wird nach jedem syncBook()-Aufruf aufgerufen.
 // Befüllt chapter_id/page_id in den Figuren-Tabellen anhand der pages-Cache-Tabelle
 // und heilt veraltete Namen bei Kapitel-/Seiten-Umbenennungen in BookStack.
-function reconcilePageIds() {
+//
+// `bookId` (optional, Number): wenn gesetzt, scoped jede Subquery+Outer-Update
+// auf das angegebene Buch. Ohne Argument läuft die Reconciliation cross-book
+// (Legacy-Pfad, z.B. nach Migration). Bei jedem normalen Sync sollte `bookId`
+// gesetzt sein, damit die UPDATEs nicht alle Tabellen einer Multi-Book-Install
+// scannen.
+function reconcilePageIds(bookId = null) {
+  const bookFilter = bookId != null ? `AND p.book_id = ${Number(bookId)}` : '';
+  const sceneBookFilter = bookId != null ? `AND book_id = ${Number(bookId)}` : '';
+  const scenesOuter = bookId != null ? `AND figure_scenes.book_id = ${Number(bookId)}` : '';
+  const figuresBookFilter = bookId != null ? `AND figures.book_id = ${Number(bookId)}` : '';
+  const locationsBookFilter = bookId != null ? `AND locations.book_id = ${Number(bookId)}` : '';
+
   db.prepare(`
     UPDATE figure_appearances
     SET chapter_id = (
@@ -62,9 +74,11 @@ function reconcilePageIds() {
       WHERE f.id = figure_appearances.figure_id
         AND p.chapter_name = figure_appearances.chapter_name
         AND p.chapter_id IS NOT NULL
+        ${bookFilter}
       LIMIT 1
     )
     WHERE chapter_id IS NULL AND chapter_name IS NOT NULL
+      ${bookId != null ? `AND figure_id IN (SELECT id FROM figures WHERE 1=1 ${figuresBookFilter})` : ''}
   `).run();
 
   db.prepare(`
@@ -74,9 +88,11 @@ function reconcilePageIds() {
       JOIN figures f ON f.book_id = p.book_id
       WHERE f.id = figure_appearances.figure_id
         AND p.chapter_id = figure_appearances.chapter_id
+        ${bookFilter}
       LIMIT 1
     )
     WHERE chapter_id IS NOT NULL
+      ${bookId != null ? `AND figure_id IN (SELECT id FROM figures WHERE 1=1 ${figuresBookFilter})` : ''}
   `).run();
 
   db.prepare(`
@@ -87,9 +103,11 @@ function reconcilePageIds() {
       WHERE f.id = figure_events.figure_id
         AND p.chapter_name = figure_events.kapitel
         AND p.chapter_id IS NOT NULL
+        ${bookFilter}
       LIMIT 1
     )
     WHERE chapter_id IS NULL AND kapitel IS NOT NULL
+      ${bookId != null ? `AND figure_id IN (SELECT id FROM figures WHERE 1=1 ${figuresBookFilter})` : ''}
   `).run();
 
   db.prepare(`
@@ -99,9 +117,11 @@ function reconcilePageIds() {
       JOIN figures f ON f.book_id = p.book_id
       WHERE f.id = figure_events.figure_id
         AND p.page_name = figure_events.seite
+        ${bookFilter}
       LIMIT 1
     )
     WHERE page_id IS NULL AND seite IS NOT NULL
+      ${bookId != null ? `AND figure_id IN (SELECT id FROM figures WHERE 1=1 ${figuresBookFilter})` : ''}
   `).run();
 
   db.prepare(`
@@ -111,9 +131,11 @@ function reconcilePageIds() {
       JOIN figures f ON f.book_id = p.book_id
       WHERE f.id = figure_events.figure_id
         AND p.chapter_id = figure_events.chapter_id
+        ${bookFilter}
       LIMIT 1
     )
     WHERE chapter_id IS NOT NULL
+      ${bookId != null ? `AND figure_id IN (SELECT id FROM figures WHERE 1=1 ${figuresBookFilter})` : ''}
   `).run();
 
   db.prepare(`
@@ -121,9 +143,11 @@ function reconcilePageIds() {
     SET seite = (
       SELECT p.page_name FROM pages p
       WHERE p.page_id = figure_events.page_id
+        ${bookFilter}
       LIMIT 1
     )
     WHERE page_id IS NOT NULL
+      ${bookId != null ? `AND figure_id IN (SELECT id FROM figures WHERE 1=1 ${figuresBookFilter})` : ''}
   `).run();
 
   db.prepare(`
@@ -136,6 +160,7 @@ function reconcilePageIds() {
       LIMIT 1
     )
     WHERE chapter_id IS NULL AND kapitel IS NOT NULL
+      ${scenesOuter}
   `).run();
 
   db.prepare(`
@@ -147,6 +172,7 @@ function reconcilePageIds() {
       LIMIT 1
     )
     WHERE page_id IS NULL AND seite IS NOT NULL
+      ${scenesOuter}
   `).run();
 
   // kapitel ist NOT NULL → COALESCE, damit Null-Treffer den Wert nicht überschreiben
@@ -159,6 +185,7 @@ function reconcilePageIds() {
       LIMIT 1
     ), kapitel)
     WHERE chapter_id IS NOT NULL
+      ${scenesOuter}
   `).run();
 
   db.prepare(`
@@ -169,6 +196,7 @@ function reconcilePageIds() {
       LIMIT 1
     )
     WHERE page_id IS NOT NULL
+      ${scenesOuter}
   `).run();
 
   db.prepare(`
@@ -179,9 +207,11 @@ function reconcilePageIds() {
       WHERE p.book_id = l.book_id
         AND p.chapter_name = location_chapters.chapter_name
         AND p.chapter_id IS NOT NULL
+        ${bookFilter}
       LIMIT 1
     )
     WHERE chapter_id IS NULL AND chapter_name IS NOT NULL
+      ${bookId != null ? `AND location_id IN (SELECT id FROM locations WHERE 1=1 ${locationsBookFilter})` : ''}
   `).run();
 
   db.prepare(`
@@ -191,9 +221,11 @@ function reconcilePageIds() {
       JOIN locations l ON l.id = location_chapters.location_id
       WHERE p.book_id = l.book_id
         AND p.chapter_id = location_chapters.chapter_id
+        ${bookFilter}
       LIMIT 1
     )
     WHERE chapter_id IS NOT NULL
+      ${bookId != null ? `AND location_id IN (SELECT id FROM locations WHERE 1=1 ${locationsBookFilter})` : ''}
   `).run();
 
   db.prepare(`
@@ -205,6 +237,7 @@ function reconcilePageIds() {
       LIMIT 1
     )
     WHERE erste_erwaehnung IS NOT NULL
+      ${bookId != null ? `AND locations.book_id = ${Number(bookId)}` : ''}
   `).run();
 }
 

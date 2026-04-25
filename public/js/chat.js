@@ -76,6 +76,12 @@ export const chatMethods = {
       return;
     }
 
+    // User kann zwischen den awaits unten zur nächsten Seite wechseln; ohne
+    // Snapshot würde der Vorschlag dann auf der falschen Seite landen
+    // (= stiller Datenverlust auf der ursprünglichen Seite).
+    const pageIdAtStart = root.currentPage.id;
+    const samePage = () => root.currentPage?.id === pageIdAtStart;
+
     // Vorab prüfen ob der Originaltext noch existiert – sonst meldet _loadApplyAndSave
     // nur einen No-Op, was sich fälschlich wie ein Erfolg anfühlt.
     // Tolerant suchen: die KI sieht die Seite als Plaintext, im HTML stecken aber
@@ -83,17 +89,19 @@ export const chatMethods = {
     // `das magische Wort`). Ohne Tolerant-Match würde die Mehrheit realistischer
     // KI-Vorschläge fälschlich abgelehnt.
     try {
-      const page = await root.bsGet('pages/' + root.currentPage.id);
+      const page = await root.bsGet('pages/' + pageIdAtStart);
+      if (!samePage()) return;
       if (!findInHtml(page.html, vorschlag.original)) {
         setErr(root.t('chat.originalNotFound'));
         return;
       }
     } catch (e) {
       console.error('[chat applyVorschlag pageLoad]', e);
-      setErr(root.t('chat.pageLoadFailed'));
+      if (samePage()) setErr(root.t('chat.pageLoadFailed'));
       return;
     }
 
+    if (!samePage()) return;
     v()._applying = true;
     v()._error = null;
     try {
@@ -107,6 +115,7 @@ export const chatMethods = {
           if (text) this.chatStatus = `<span class="spinner"></span>${escHtml(text)}`;
         },
       );
+      if (!samePage()) return;
       root.originalHtml = finalHtml;
       this._chatPendingRefresh = true;
       v()._applied = true;

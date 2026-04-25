@@ -4,6 +4,7 @@ const logger = require('../logger');
 const { CHARS_PER_TOKEN } = require('../lib/ai');
 const { bsGet, bsGetAll } = require('../lib/bookstack');
 const { computePageIndex, writePageIndex, writeFigureMentionsForPageAllUsers, tokenizeNamesForStopwords } = require('../lib/page-index');
+const { invalidateBookPageCache } = require('./jobs/chat');
 
 const router = express.Router();
 
@@ -96,7 +97,12 @@ function _upsertPagesCache(bookId, pages, chapters) {
       `figure_appearances=${pruned.figure_appearances}, location_chapters=${pruned.location_chapters}).`);
   }
 
-  reconcilePageIds();
+  reconcilePageIds(bookId);
+
+  // Buch-Chat-Page-Cache verwerfen, sonst antwortet Buch-Chat bis zu 10 Min
+  // lang aus stale Seiten-Inhalten (z.B. nach manuellem /sync/pages oder
+  // nächtlichem syncAllBooks).
+  invalidateBookPageCache(bookId);
 }
 
 const PREVIEW_CHARS = 800;

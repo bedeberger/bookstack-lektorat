@@ -4,7 +4,7 @@ const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
   fmtTok, tps,
-  jobs, runningJobs, createJob, enqueueJob, jobKey,
+  jobs, runningJobs, createJob, enqueueJob, jobKey, findActiveJobId,
   jsonBody,
 } = require('./shared');
 
@@ -42,7 +42,7 @@ async function runSynonymJob(jobId, wort, satz, bookId, userEmail) {
     completeJob(jobId, { synonyme, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`Synonym «${wort}» fertig (${synonyme.length} Vorschläge, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens)`);
   } catch (e) {
-    if (e.name !== 'AbortError') logger.error(`Fehler Synonym «${wort}»: ${e.message}`);
+    if (e.name !== 'AbortError') logger.error(`Fehler Synonym «${wort}»: ${e.message}`, { stack: e.stack });
     failJob(jobId, e);
   }
 }
@@ -53,8 +53,8 @@ synonymeRouter.post('/synonym', jsonBody, (req, res) => {
   if (!satz || typeof satz !== 'string' || !satz.trim()) return res.status(400).json({ error_code: 'SATZ_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const entityKey = `${book_id || 0}|${wort.trim().toLowerCase()}|${satz.trim().slice(0, 60)}`;
-  const existing = runningJobs.get(jobKey('synonym', entityKey, userEmail));
-  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const existing = findActiveJobId('synonym', entityKey, userEmail);
+  if (existing) return res.json({ jobId: existing, existing: true });
   const label = 'job.label.synonymWord';
   const labelParams = { word: wort.trim() };
   const jobId = createJob('synonym', book_id || 0, userEmail, label, labelParams, entityKey);

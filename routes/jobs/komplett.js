@@ -17,7 +17,7 @@ const {
   loadPageContents, groupByChapter, buildSinglePassBookText, splitGroupsIntoChunks,
   bsGetAll, SINGLE_PASS_LIMIT, PER_CHUNK_LIMIT, BATCH_SIZE, jobAbortControllers,
   _modelName, fmtTok, tps, settledAll,
-  jobs, runningJobs, createJob, enqueueJob, jobKey,
+  jobs, runningJobs, createJob, enqueueJob, jobKey, findActiveJobId,
   jsonBody,
 } = require('./shared');
 
@@ -62,15 +62,17 @@ function buildBookSystemBlockText(bookName, pageCount, fullBookText) {
  * Berücksichtigt page_id, page-updated_at, chapter_id, chapter-Name sowie
  * buchtyp/buch_kontext/language – ändert sich eins davon, wird der Cache
  * invalidiert, weil die entsprechenden Prompts andere Ergebnisse liefern.
+ * `cacheVersion` (model+prompts-Version) hängt zusätzlich an, damit Modell-
+ * oder Schema-Änderungen alte Caches automatisch invalidieren.
  */
-function buildBookPagesSig(pageContents, bookSettings) {
+function buildBookPagesSig(pageContents, bookSettings, cacheVersion) {
   const pagesPart = pageContents
     .map(p => `${p.id}:${p.updated_at || ''}|${p.chapter_id ?? ''}:${p.chapter ?? ''}`)
     .sort()
     .join('|');
   const s = bookSettings || {};
   const settingsPart = `${s.language || ''}:${s.region || ''}:${s.buchtyp || ''}:${s.buch_kontext || ''}`;
-  return `${pagesPart}||${settingsPart}`;
+  return `${pagesPart}||${settingsPart}||${cacheVersion || ''}`;
 }
 
 /** Führt eine nicht-kritische Phase aus – Fehler werden geloggt, nicht geworfen. */
@@ -630,7 +632,7 @@ function restorePhase1FromCheckpoint(cp, tok, log, jobId) {
  */
 async function runPhase1(ctx) {
   const { jobId, bookIdInt, bookName, email, call, tok, log,
-    effectiveProvider, singlePassLimit,
+    effectiveProvider, singlePassLimit, cacheVersion,
     prompts, sys, pageContents, groups, groupOrder, totalChars, fullBookText } = ctx;
 
   const perChunkLimit = effectiveProvider === 'claude' ? singlePassLimit : PER_CHUNK_LIMIT;
@@ -645,7 +647,7 @@ async function runPhase1(ctx) {
     // Persistenter Cache: wenn Pages+Kapitelnamen unverändert, P1-Ergebnis wiederverwenden.
     // Key: chapter_key='__singlepass__' + Gesamt-Seitensignatur. Überlebt Job-Ende
     // (der Anthropic-Prompt-Cache deckt nur eine 1h-Fensterspanne ab).
-    const bookPagesSig = buildBookPagesSig(pageContents, getBookSettings(bookIdInt, email));
+    const bookPagesSig = buildBookPagesSig(pageContents, getBookSettings(bookIdInt, email), cacheVersion);
     const cached = loadChapterExtractCache(bookIdInt, email, '__singlepass__', bookPagesSig);
     if (cached && Array.isArray(cached.chapterFiguren) && cached.chapterFiguren[0]?.figuren?.length > 0) {
       chapterFiguren     = cached.chapterFiguren;
@@ -700,7 +702,7 @@ async function runPhase1(ctx) {
       const chunk = chunks.get(chunkKey);
       return {
         chunk, key: chunkKey,
-        pagesSig: chunk.pages.map(p => `${p.id}:${p.updated_at}`).sort().join('|'),
+        pagesSig: chunk.pages.map(p => `${p.id}:${p.updated_at}`).sort().join('|') + `||${cacheVersion || ''}`,
         chText: chunk.pages.map(p => `### ${p.title}\n${p.text}`).join('\n\n---\n\n'),
       };
     });
@@ -1169,9 +1171,14 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     const passMode = totalChars <= singlePassLimit ? 'single' : 'multi';
     updateJob(jobId, { passMode });
 
+    // Cache-Version: Modellname + Prompts-Schema-Version. Ändert sich eins davon,
+    // werden alle persistierten Phase-1-Caches automatisch verworfen (Hit-Test
+    // matcht den vollen Sig-String inkl. dieser Version).
+    const cacheVersion = `${_modelName(effectiveProvider)}:${prompts.PROMPTS_VERSION || ''}`;
+
     const ctx = {
       jobId, bookIdInt, bookName, email, call, tok, log,
-      effectiveProvider, singlePassLimit, prompts, sys,
+      effectiveProvider, singlePassLimit, cacheVersion, prompts, sys,
       idMaps, pageContents, groups, groupOrder, totalChars, fullBookText,
     };
 
@@ -1413,8 +1420,7 @@ async function runKomplettAnalyseAll() {
   let queued = 0;
   for (const book of books) {
     for (const u of users) {
-      const key = jobKey('komplett-analyse', book.id, u.email);
-      if (runningJobs.has(key)) {
+      if (findActiveJobId('komplett-analyse', book.id, u.email)) {
         logger.info(`Nacht-Analyse: Buch ${book.id} / ${u.email} läuft bereits – überspringe.`);
         continue;
       }
@@ -1434,8 +1440,8 @@ komplettRouter.post('/komplett-analyse', jsonBody, (req, res) => {
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = getTokenForRequest(req);
-  const existing = runningJobs.get(jobKey('komplett-analyse', book_id, userEmail));
-  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const existing = findActiveJobId('komplett-analyse', book_id, userEmail);
+  if (existing) return res.json({ jobId: existing, existing: true });
   const label = book_name ? 'job.label.komplettBook' : 'job.label.komplett';
   const labelParams = book_name ? { name: book_name } : null;
   const jobId = createJob('komplett-analyse', book_id, userEmail, label, labelParams);
@@ -1448,8 +1454,8 @@ komplettRouter.post('/kontinuitaet', jsonBody, (req, res) => {
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = getTokenForRequest(req);
-  const existing = runningJobs.get(jobKey('kontinuitaet', book_id, userEmail));
-  if (existing && jobs.has(existing)) return res.json({ jobId: existing, existing: true });
+  const existing = findActiveJobId('kontinuitaet', book_id, userEmail);
+  if (existing) return res.json({ jobId: existing, existing: true });
   const label = book_name ? 'job.label.kontinuitaetBook' : 'job.label.kontinuitaet';
   const labelParams = book_name ? { name: book_name } : null;
   const jobId = createJob('kontinuitaet', book_id, userEmail, label, labelParams);

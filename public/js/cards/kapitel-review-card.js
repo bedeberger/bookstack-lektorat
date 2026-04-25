@@ -147,9 +147,10 @@ export function registerKapitelReviewCard() {
     },
 
     setKapitelReviewStatus(msg, spinner = false) {
+      const safe = escHtml(msg);
       this.kapitelReviewStatus = spinner
-        ? `<span class="spinner"></span>${msg}`
-        : msg;
+        ? `<span class="spinner"></span>${safe}`
+        : safe;
     },
 
     startKapitelReviewPoll(jobId, chapterId) {
