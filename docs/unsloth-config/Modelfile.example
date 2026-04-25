@@ -1,25 +1,25 @@
-# Ollama-Modelfile für das fine-getunete Ministral-3-8B.
+# Ollama-Modelfile für das fine-getunete Mistral-Small-3.2-24B.
 # Vor Benutzung: `BOOK_TITLE` im SYSTEM-Feld auf deinen Buchtitel setzen.
 #
 # Build:
-#   cd runs/ministral3-buch/gguf
+#   cd runs/mistral-small32-buch/gguf
 #   ollama create buch-autor -f ../../../Modelfile.example
 #
 # Test:
 #   ollama run buch-autor "Schreibe den Anfang eines neuen Kapitels."
 
-FROM ./unsloth.Q5_K_M.gguf
+FROM ./unsloth.Q4_K_M.gguf
 
-# Mistral-Chat-Template — gilt identisch für Ministral-3-Instruct-2512.
-# Mistral-Common rendert Instruct-Turns weiterhin als <s>[INST] … [/INST].
-TEMPLATE """{{ if .System }}<s>[INST] {{ .System }}
-
-{{ .Prompt }} [/INST]{{ else }}<s>[INST] {{ .Prompt }} [/INST]{{ end }} {{ .Response }}</s>"""
+# Mistral-Tekken-V7-Template (Mistral-Small-3.2-Instruct-2506).
+# System-Prompts kapseln in [SYSTEM_PROMPT]/[/SYSTEM_PROMPT], User-Turns in
+# [INST]/[/INST]. Assistant-Antwort folgt direkt nach [/INST] und endet mit
+# </s>. Unterschied zur alten 8B-Mistral-Vorlage: separate System-Tags.
+TEMPLATE """{{ if .System }}<s>[SYSTEM_PROMPT]{{ .System }}[/SYSTEM_PROMPT][INST]{{ .Prompt }}[/INST]{{ else }}<s>[INST]{{ .Prompt }}[/INST]{{ end }} {{ .Response }}</s>"""
 
 PARAMETER temperature       0.8
 PARAMETER top_p             0.95
 PARAMETER repeat_penalty    1.05
-# Ministral-3 kann nativ bis 256k. 32k reicht für Buch-Chat + Lektorat-
+# Mistral-Small-3.2 kann nativ bis 128k. 32k reicht für Buch-Chat + Lektorat-
 # Calls und spart KV-Cache-RAM. Bei sehr langen Dokumenten hochsetzen.
 PARAMETER num_ctx           32768
 

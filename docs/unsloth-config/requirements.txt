@@ -3,26 +3,27 @@
 # als Tupel zusammenpassen, sonst bricht entweder load_in_4bit, das Chat-
 # Template oder train_on_responses_only.
 #
-# Ziel-Modell: unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit
-# (Dez-2025-Release, Mistral-Common-Tokenizer).
+# Ziel-Modell: unsloth/Mistral-Small-3.2-24B-Instruct-2506-unsloth-bnb-4bit
+# (Juni-2025-Release, Tekken-V7-Tokenizer, Pixtral-Vision-Encoder).
 
-# Kernkomponenten — Ministral-3 braucht transformers >= 4.48 (Mistral-Common-
-# Backend-Integration) und ein Unsloth-Release ab Dez 2025.
+# Kernkomponenten — Mistral-Small-3.2 braucht transformers >= 4.51
+# (Mistral3ForConditionalGeneration + Pixtral-Vision-Tower), TRL >= 0.15
+# für die SFTTrainer-API mit dem neuen Tokenizer.
 torch==2.5.1
-transformers==4.48.3
-trl==0.13.0
+transformers==4.51.3
+trl==0.15.2
 peft==0.14.0
-accelerate==1.2.1
+accelerate==1.4.0
 
-# Unsloth — Pin auf Dez-2025-Release, der Ministral-3 offiziell supportet.
+# Unsloth — Pin auf Dez-2025-Release, der Mistral-Small-3.2 supportet.
 # Falls Studio-UI statt CLI: `pip install unsloth` reicht dort separat.
 unsloth @ git+https://github.com/unslothai/unsloth.git@2025.12.4
 
 # 4-bit Quantisierung
 bitsandbytes==0.45.0
 
-# Mistral-Common Tokenizer (neu für Ministral-3)
-mistral-common>=1.8.6
+# Mistral-Common Tokenizer (Tekken-V7 für Mistral-Small-3.2)
+mistral-common>=1.6.0
 
 # Tokenizer / Sentencepiece (Mistral braucht weiterhin protobuf)
 sentencepiece==0.2.0

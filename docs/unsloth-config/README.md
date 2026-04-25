@@ -1,13 +1,15 @@
 # Unsloth-Training-Config
 
-Fertige Scripts, um **Ministral-3-8B-Instruct-2512** auf den JSONL-Exports
-der Fine-Tuning-Export-Karte zu trainieren. Optimiert für **1× RTX 4000 Ada
-(20 GB VRAM)**.
+Fertige Scripts, um **Mistral-Small-3.2-24B-Instruct-2506** auf den JSONL-
+Exports der Fine-Tuning-Export-Karte zu trainieren. Optimiert für **1× RTX
+4000 Ada (20 GB VRAM)**.
 
-> **Modell-Update (Dez 2025):** Default ist jetzt
-> `unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit` (Ministral 3, 256k
-> Context, Mistral-Common-Tokenizer). Altes 8B-Instruct-2410 ist weiter
-> kompatibel, wird aber nicht mehr aktiv gepflegt.
+> **Modell-Update (April 2026):** Default ist jetzt
+> `unsloth/Mistral-Small-3.2-24B-Instruct-2506-unsloth-bnb-4bit` (Mistral-
+> Small 3.2, 128k Context, Tekken-V7-Tokenizer, Pixtral-Vision-Encoder).
+> Vorgänger Ministral-3-8B-Instruct-2512 produzierte unbrauchbare deutsche
+> Fortsetzungen — zu wenig Kapazität für Roman-Domäne. 24B löst das, kostet
+> dafür ~3× Trainingszeit und engeres VRAM-Budget (`batch_size=1`).
 
 Zwei Wege, je nach dem wie du arbeitest:
 
@@ -92,7 +94,7 @@ Ablauf:
    ```
    Dann `http://localhost:8888` öffnen.
 2. **Modell** im „Model"-Tab wählen:
-   `unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit` mit
+   `unsloth/Mistral-Small-3.2-24B-Instruct-2506-unsloth-bnb-4bit` mit
    Method = **QLoRA**.
 3. **Dataset** im „Dataset"-Tab hochladen: `train.jsonl` + `val.jsonl`,
    Format **conversational / messages**. Studio erkennt das `messages`-Feld
@@ -128,7 +130,7 @@ Version, Parsing-Fehler), alle Werte klickst du in diese drei Spalten:
   selbst bilden — unsere Export-Karte liefert aber bereits einen sauberen
   Split, deshalb explizit hochladen.
 - **Advanced** → Basemodell:
-  `unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit`,
+  `unsloth/Mistral-Small-3.2-24B-Instruct-2506-unsloth-bnb-4bit`,
   Method = **QLoRA**.
 
 #### Parameters-Spalte (Mitte)
@@ -157,8 +159,8 @@ nicht RS-LoRA, nicht LoftQ):
 |---|---|---|
 | **Optimizer** | **AdamW 8-bit** | halbiert Optimizer-VRAM |
 | **LR scheduler** | **Cosine** (Default Linear überschreiben) | stabiler Ausklang |
-| **Batch Size** | **2** | füllt 20 GB VRAM gut aus |
-| **Grad Accum** | **8** (Default 4 erhöhen) | effektive Batch = 16 |
+| **Batch Size** | **1** | 24B-Modell sprengt mit 2 das 20-GB-Limit |
+| **Grad Accum** | **16** (Default 4 erhöhen) | effektive Batch = 16 |
 | **Weight Decay** | **0.001** | Studio-Default passt |
 
 **Tab Schedule**:
@@ -178,18 +180,18 @@ nicht RS-LoRA, nicht LoftQ):
 **Train on Completions** — wichtigster Qualitäts-Hebel. Studio-Toggle
 heisst genau so (entspricht HF-seitigem `train_on_responses_only`).
 Findest du ihn im Parameters-Panel, aktivieren. Chat-Template-Marker
-leitet Studio intern aus dem Modell ab — für Ministral-3 sind das
-`[INST]`/`[/INST]`, kein manueller Eintrag nötig.
+leitet Studio intern aus dem Modell ab — für Mistral-Small-3.2 sind das
+`[INST]`/`[/INST]` (Tekken-V7), kein manueller Eintrag nötig.
 
 Fehlt der Toggle → Studio-Version zu alt: update, Config-Upload
 (Variante A) mit `train_on_completions: true` erzwingen, oder auf
 CLI-Script ausweichen.
 
-**Ministral-3-spezifisch — Layer-Auswahl unter Advanced:**
+**Mistral-Small-3.2-spezifisch — Layer-Auswahl unter Advanced:**
 
-- **`Finetune vision layers`** → **aus**. Ministral-3 hat einen 0.4 B
-  Vision-Encoder; bei reinem Text-Finetuning würde der sonst ohne Bild-
-  Daten trainiert (VRAM-Waste + Vision-Gewichte-Korruption).
+- **`Finetune vision layers`** → **aus**. Mistral-Small-3.2 hat einen
+  Pixtral-Vision-Encoder; bei reinem Text-Finetuning würde der sonst
+  ohne Bilddaten trainiert (VRAM-Waste + Vision-Gewichte-Korruption).
 - **`Finetune language layers`** → **an** (Studio-Default).
 - **`Finetune attention modules`** → **an**.
 - **`Finetune MLP modules`** → **an**.
@@ -220,19 +222,21 @@ Während das auf GPU 0 läuft, bleibt GPU 1 frei — ideal für paralleles Ollam
 ### Laufzeit (Richtwert)
 
 Bei ~30 000 Trainings-Samples, seq_len 4096, 2 Epochen auf RTX 4000 Ada:
-**ca. 6–9 Stunden**. Ada Lovelace ist ~30 % schneller pro Step als Ampere
-gleicher VRAM-Klasse, daher gut genug für Overnight-Runs.
+**ca. 18–28 Stunden** (24B ist ~3× langsamer pro Step als 8B). Ada Lovelace
+ist ~30 % schneller pro Step als Ampere gleicher VRAM-Klasse, aber für 24B
+solltest du Multi-Day-Runs einplanen — oder den Datensatz halbieren.
 
 ### Monitoring
 
 ```bash
 # In einem zweiten Terminal
-tensorboard --logdir runs/ministral3-buch
+tensorboard --logdir runs/mistral-small32-buch
 ```
 
 Wichtige Kurve: **`eval/loss`**. Erwartung:
-- Start-Value typischerweise 2.2–2.8 bei Ministral-3.
-- Fällt über die ersten 500–1500 Steps auf 1.4–1.8.
+- Start-Value typischerweise 1.8–2.4 bei Mistral-Small-3.2 (niedriger als
+  Ministral-3-8B — Modell startet sprachlich schon kompetenter).
+- Fällt über die ersten 500–1500 Steps auf 1.1–1.5.
 - Stabilisiert danach. **Steigt eval/loss wieder: Early-Stopping schlägt zu
   (Callback ist aktiv, stoppt nach 3 Eval-Plateaus).**
 
@@ -241,18 +245,18 @@ Wichtige Kurve: **`eval/loss`**. Erwartung:
 Am Ende des Runs existieren:
 
 ```
-runs/ministral3-buch/
+runs/mistral-small32-buch/
 ├── checkpoint-XXXX/          # Zwischenstände (max. 3 durch save_total_limit)
-├── adapter/                  # LoRA-Adapter (~200 MB)
-├── merged/                   # bf16 vollständiges Modell (~16 GB)
+├── adapter/                  # LoRA-Adapter (~400 MB)
+├── merged/                   # bf16 vollständiges Modell (~48 GB)
 └── gguf/
-    └── unsloth.Q5_K_M.gguf   # Für Ollama/llama.cpp (~5.5 GB)
+    └── unsloth.Q4_K_M.gguf   # Für Ollama/llama.cpp (~14 GB)
 ```
 
 ## In Ollama einbinden
 
 ```bash
-cd runs/ministral3-buch/gguf
+cd runs/mistral-small32-buch/gguf
 # Modelfile.example ggf. editieren (BOOK_TITLE im SYSTEM-Feld)
 ollama create buch-autor -f ../../../Modelfile.example
 
@@ -276,8 +280,8 @@ durch dein fine-getunetes Modell.
 
 Unsloth-Open-Source unterstützt Multi-GPU nicht offiziell. Praktisch
 funktioniert DDP auf zwei gleichen Karten dennoch — bring aber
-`gradient_accumulation_steps` von 8 auf 4 runter, damit die effektive
-Batch-Size identisch bleibt (2 GPUs × 2 batch × 4 accum = 16).
+`gradient_accumulation_steps` von 16 auf 8 runter, damit die effektive
+Batch-Size identisch bleibt (2 GPUs × 1 batch × 8 accum = 16).
 
 ```bash
 # train_book.py so lassen, nur `gradient_accumulation_steps = 4` setzen
@@ -296,13 +300,15 @@ Datensatz bleibt die Single-GPU-Route einfacher und stabiler.
 
 ### `OSError: CUDA out of memory`
 
-Dein Export hat mehr Samples mit extremen Längen als erwartet. Optionen:
+Bei 24B auf 20 GB ist das Profil von Anfang an eng. Optionen in Reihenfolge:
 
-1. **Export neu machen mit `max_seq_tokens=4096`** — filtert alle zu langen
-   Samples raus (empfohlen). Das Badge „{n} über Limit verworfen" zeigt dir,
-   wie viele.
-2. **`max_seq_length = 2048`** im Script, dafür `per_device_batch_size = 1`
-   und `gradient_accumulation_steps = 16`.
+1. **`max_seq_length = 2048`** im Script (Default ist 4096). Halbiert
+   Activation-VRAM ohne nennenswerten Quality-Loss — p95 unserer Samples
+   liegt bei ~1500 Tokens.
+2. **Export neu machen mit `max_seq_tokens=2048`** — filtert lange Samples
+   raus. Das Badge „{n} über Limit verworfen" zeigt dir, wie viele.
+3. **LoRA-Rang reduzieren**: `r=16, alpha=16` (statt 32/32). Spart ~500 MB
+   VRAM bei minimalem Quality-Hit.
 
 ### `RuntimeError: [INST] not found in tokens` bei `train_on_responses_only`
 
@@ -350,9 +356,9 @@ manuell über `convert_hf_to_gguf.py` aus llama.cpp erzeugen.
 
 ```bash
 # Checkpoints (gross) behalten nur wenn du erneut merchen willst
-rm -rf runs/ministral3-buch/checkpoint-*
+rm -rf runs/mistral-small32-buch/checkpoint-*
 
 # bf16-Merge ist nur für HuggingFace-Inferenz nötig; bei reinem Ollama-Einsatz
 # reicht der adapter/ und die gguf/-Datei
-rm -rf runs/ministral3-buch/merged
+rm -rf runs/mistral-small32-buch/merged
 ```

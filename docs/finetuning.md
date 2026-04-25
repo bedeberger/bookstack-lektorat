@@ -25,20 +25,22 @@ einen Grund für vollen bf16-LoRA statt QLoRA hast. Sonst: Unsloth nehmen.
 
 ### Das Basemodell
 
-**`unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit`** — Dez-2025-Release
-von Mistrals Ministral 3, Unsloth-vorquantisiert als Dynamic-4-bit. Gründe:
+**`unsloth/Mistral-Small-3.2-24B-Instruct-2506-unsloth-bnb-4bit`** — Juni-
+2025-Release von Mistral Small 3.2, Unsloth-vorquantisiert als Dynamic-4-bit.
+Gründe:
 
-- **Neueste Generation (Dez 2025)** — direktes Upgrade zum 8B-2410. Bessere
-  Multilingual-Performance, stärkere Instruct-Adhärenz (Arena Hard 0.551
-  laut Unsloth-Model-Card).
+- **Praxis-getestet** — Vorgänger Ministral-3-8B-Instruct-2512 produzierte
+  unbrauchbare deutsche Fortsetzungen (Token-Salat, Repetitions-Loops). 24B
+  ist die kleinste Klasse, die Roman-Domäne sauber lernt.
 - **Native DE-Kompetenz** aus Mistrals EU-multilingualem Training. Für
-  literarische deutsche Prosa stärker als Llama-3.1-8B oder Qwen2.5-7B.
-- **256 k Context** (verdoppelt gegenüber 2410) — Buch-Chat und
-  Komplettanalyse im Tool können längere Dokumente ohne Split verarbeiten.
-- **8 B Parameter** — trainieren UND deployen auf einer Consumer-Karte:
-  QLoRA-Training ~12 GB VRAM, Inferenz nach Q5_K_M-Merge ~6 GB.
-- **`[INST]`/`[/INST]`-Template** unverändert (via Mistral-Common-Tokenizer
+  literarische deutsche Prosa stärker als Llama-3.1-8B/70B oder Qwen2.5-14B.
+- **128 k Context** — Buch-Chat und Komplettanalyse im Tool können längere
+  Dokumente ohne Split verarbeiten.
+- **24 B Parameter** — trainierbar via QLoRA auf 20 GB (knapp,
+  `batch_size=1`), Inferenz nach Q4_K_M-Merge ~14 GB.
+- **`[INST]`/`[/INST]`-Template** unverändert (Tekken-V7 via Mistral-Common
   gerendert) — Exporter und Prompt-Konventionen im Projekt passen weiter.
+  Neu: System-Prompts kapseln in `[SYSTEM_PROMPT]`/`[/SYSTEM_PROMPT]`.
 - **Unsloth-Dynamic-4bit** statt Plain-bnb-4bit → bessere Quantisierungs-
   Qualität bei identischem VRAM.
 - **Ollama-tauglich** über `save_pretrained_gguf` aus Unsloth, Ergebnis
@@ -48,26 +50,27 @@ Ausgeschlossen:
 
 | Modell | Grund |
 |---|---|
-| Ministral-3-3B | Zu klein für Welt + Stil in einem Modell — verliert schneller die Persona. |
-| Ministral-3-14B | 14 B QLoRA passt, aber 1.5–1.7× längere Trainingszeit; nur bei grösseren Büchern lohnend. |
-| Ministral-3-8B-Reasoning | Reasoning-Variante ist auf CoT optimiert, würde Buch-Stil verwässern. |
-| Ministral-8B-2410 | Vorgänger, noch kompatibel, aber strikt schlechter als 2512. |
-| Mistral-Small-3.2-24B | QLoRA-4bit auf 20 GB knapp machbar (~16 GB), aber ~2.5× Trainingszeit und KV-Cache sprengt zweite Karte. |
-| Llama-3.3-8B | Anderes Chat-Template, DE schwächer auf Prosa. |
-| Qwen3-8B | Stark, aber DE leicht unter Ministral auf literarischem Text. |
+| Ministral-3-8B-Instruct-2512 | Empirisch zu schwach für DE-Roman-Domäne — Output unbrauchbar trotz korrekt konfiguriertem Training. |
+| Ministral-3-3B / -14B | Zu klein bzw. nicht nennenswert besser als 8B bei gleichem Tokenizer-Problem. |
+| Mistral-Small-3.2-24B-Reasoning | Reasoning-Variante würde Buch-Stil verwässern. |
+| Mistral-Small-3.1-24B | Vorgänger, kein Tekken-V7, schlechtere Instruct-Adhärenz. |
+| Llama-3.3-8B / -70B | Anderes Chat-Template, DE schwächer auf Prosa. |
+| Qwen3-14B | Stark, aber DE leicht unter Mistral auf literarischem Text. |
+| Gemma-3-12B | Solide, aber kleineres Native-Context-Fenster. |
 
 ### Deine Umgebung: 2× RTX 4000 Ada (20 GB / 20 GB)
 
 **Primäre Route: Single-GPU-Training auf einer Karte, zweite Karte für
 Evaluation/Inferenz parallel.** Unsloth-Open-Source ist Single-GPU-fokussiert;
-QLoRA für Ministral-3-8B braucht nur ~12 GB, d. h. eine 4000 Ada genügt locker.
+QLoRA für Mistral-Small-3.2-24B braucht ~17–19 GB — passt knapp auf eine
+4000 Ada, sofern `batch_size=1` und Gradient-Checkpointing aktiv sind.
 
 Training-Budget für diese Karte:
 
-- `max_seq_length = 4096`
-- `per_device_train_batch_size = 2`
-- `gradient_accumulation_steps = 8` → effektive Batch-Size = 16
-- **~14–16 GB VRAM-Peak**, Rest als Sicherheit
+- `max_seq_length = 4096` (bei OOM: 2048)
+- `per_device_train_batch_size = 1`
+- `gradient_accumulation_steps = 16` → effektive Batch-Size = 16
+- **~17–19 GB VRAM-Peak**, sehr enger Spielraum
 
 Die zweite Karte (`CUDA_VISIBLE_DEVICES=1` für Inferenz) kann während des
 Trainings Zwischen-Checkpoints evaluieren, ohne die Trainings-GPU zu bremsen.
@@ -159,10 +162,10 @@ cd docs/unsloth-config
 CUDA_VISIBLE_DEVICES=0 python train_book.py
 
 # 4. Merge zu GGUF (wird am Ende des Scripts automatisch gemacht)
-#    Output: runs/ministral3-buch/gguf/*.gguf
+#    Output: runs/mistral-small32-buch/gguf/*.gguf
 
 # 5. In Ollama einbinden
-cd runs/ministral3-buch/gguf
+cd runs/mistral-small32-buch/gguf
 ollama create buch-autor -f ../../../Modelfile.example
 ollama run buch-autor "Schreibe den Anfang eines neuen Kapitels."
 ```
@@ -192,13 +195,16 @@ Welt-internalisieren-Ziel.
 
 ### VRAM-Matrix (falls du woanders trainierst)
 
+Werte gelten für Mistral-Small-3.2-24B QLoRA-4bit. Für kleinere Modelle
+(8B/12B) sind alle Werte grosszügiger:
+
 | VRAM | `batch` | `accum` | `seq_len` | `r` |
 |---|---|---|---|---|
-| 12 GB (3060/4070) | 1 | 16 | 2048 | 16 |
-| 16 GB (4060 Ti 16G) | 1 | 16 | 4096 | 32 |
-| **20 GB (RTX 4000 Ada)** | **2** | **8** | **4096** | **32** |
-| 24 GB (3090/4090) | 2 | 8 | 4096 | 32 |
-| 40 GB+ (A6000/A100) | 4 | 4 | 8192 | 64 |
+| 12 GB (3060/4070) | — | — | — | nicht ausreichend für 24B |
+| 16 GB (4060 Ti 16G) | 1 | 16 | 2048 | 16 |
+| **20 GB (RTX 4000 Ada)** | **1** | **16** | **4096** | **32** |
+| 24 GB (3090/4090) | 1 | 16 | 4096 | 32 |
+| 40 GB+ (A6000/A100) | 2 | 8 | 8192 | 64 |
 
 ---
 
@@ -244,11 +250,12 @@ Test 6 ok → Buchwissen adressierbar.
 
 ---
 
-## 6. Option B: `mistral-finetune` (offiziell, nur bei ≥ 40 GB VRAM)
+## 6. Option B: `mistral-finetune` (offiziell, nur bei ≥ 80 GB VRAM)
 
 Mistrals offizielles CLI. Produktionsstabil, macht nur LoRA — **kein** QLoRA,
-d. h. Ministral-3-8B braucht ca. 40–48 GB VRAM zum Trainieren. Für dich auf
-2× 20 GB relevant nur mit Tensor-Parallelism — deutlich mehr Aufwand als die
+d. h. Mistral-Small-3.2-24B braucht ca. 80–96 GB VRAM zum Trainieren. Auf
+2× 20 GB praktisch nicht erreichbar; nur mit A100/H100 oder Tensor-
+Parallelism über mehrere 40-GB-Karten — deutlich mehr Aufwand als die
 Unsloth-Route.
 
 Kurz-Setup:
@@ -260,8 +267,8 @@ pip install -r requirements.txt
 
 pip install -U "huggingface_hub[cli]"
 hf login
-hf download mistralai/Ministral-3-8B-Instruct-2512 \
-  --local-dir ./models/ministral3-8b \
+hf download mistralai/Mistral-Small-3.2-24B-Instruct-2506 \
+  --local-dir ./models/mistral-small32-24b \
   --exclude "consolidated.safetensors"
 
 python -m utils.reformat_data /abs/path/train.jsonl
@@ -275,7 +282,7 @@ data:
   instruct_data:      "/abs/path/train.reformatted.jsonl"
   eval_instruct_data: "/abs/path/val.reformatted.jsonl"
   data: ""
-model_id_or_path: "/abs/path/models/ministral3-8b"
+model_id_or_path: "/abs/path/models/mistral-small32-24b"
 lora:
   enable: true
   rank: 32
@@ -292,14 +299,14 @@ eval_freq: 200
 save_frequency: 500
 no_eval: false
 ckpt_only: false
-run_dir: "/abs/path/runs/ministral3-8b-buch"
+run_dir: "/abs/path/runs/mistral-small32-24b-buch"
 ```
 
-Start (Multi-GPU empfohlen):
+Start (Multi-GPU Pflicht):
 
 ```bash
-torchrun --nproc-per-node 2 -m train config.yaml
-tensorboard --logdir /abs/path/runs/ministral3-8b-buch
+torchrun --nproc-per-node 4 -m train config.yaml
+tensorboard --logdir /abs/path/runs/mistral-small32-24b-buch
 ```
 
 Inferenz dann über vLLM mit `LoRARequest` — Details in der offiziellen
@@ -310,8 +317,8 @@ Inferenz dann über vLLM mit `LoRARequest` — Details in der offiziellen
 ## 7. Weiterführend
 
 - **Unsloth-Docs:** [docs.unsloth.ai](https://docs.unsloth.ai)
-- **Ministral-3-Modellkarte:** [huggingface.co/mistralai/Ministral-3-8B-Instruct-2512](https://huggingface.co/mistralai/Ministral-3-8B-Instruct-2512)
-- **Unsloth-Collection:** [huggingface.co/collections/unsloth/ministral-3](https://huggingface.co/collections/unsloth/ministral-3)
+- **Mistral-Small-3.2-Modellkarte:** [huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506](https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506)
+- **Unsloth-Variante:** [huggingface.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-unsloth-bnb-4bit](https://huggingface.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-unsloth-bnb-4bit)
 - **TRL SFTTrainer:** [huggingface.co/docs/trl](https://huggingface.co/docs/trl/sft_trainer)
 - **mistral-finetune:** [github.com/mistralai/mistral-finetune](https://github.com/mistralai/mistral-finetune)
 

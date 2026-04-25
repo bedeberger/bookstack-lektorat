@@ -12,18 +12,18 @@
 # hochladen. Studio pre-fillt die Hyperparameter. Modell und Dataset werden
 # weiterhin in der GUI gewählt.
 #
-# Ziel: Ministral-3-8B-Instruct-2512 QLoRA auf 1× RTX 4000 Ada (20 GB VRAM)
-# mit den JSONL-Exports der Fine-Tuning-Export-Karte.
+# Ziel: Mistral-Small-3.2-24B-Instruct-2506 QLoRA auf 1× RTX 4000 Ada (20 GB
+# VRAM) mit den JSONL-Exports der Fine-Tuning-Export-Karte.
 #
 # Vor dem Import in Studio noch in der GUI einstellen:
 #   1. Dataset-Spalte: train.jsonl (Upload/Local), val.jsonl als Eval-File.
-#   2. Advanced:       unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit,
+#   2. Advanced:       unsloth/Mistral-Small-3.2-24B-Instruct-2506-unsloth-bnb-4bit,
 #                      Method = QLoRA.
 #
-# Hinweis Tokenizer: Ministral-3 nutzt Mistral-Common >= 1.8.6. Das Chat-
-# Template rendert weiterhin [INST]/[/INST] um Assistant-Antworten. Unsloth-
-# Studio kümmert sich selbst um die Masking-Marker — `train_on_completions`
-# reicht.
+# Hinweis Tokenizer: Mistral-Small-3.2 nutzt Tekken-V7 (Mistral-Common >=
+# 1.6). Chat-Template rendert weiterhin [INST]/[/INST] um Assistant-Antworten,
+# System-Prompts in [SYSTEM_PROMPT]/[/SYSTEM_PROMPT]. Unsloth-Studio kümmert
+# sich selbst um die Masking-Marker — `train_on_completions` reicht.
 #
 # Hinweis fehlende Keys: Studios Schema kennt keine Entsprechung zu
 # `load_best_model_at_end`, `early_stopping_patience`, `save_total_limit`,
@@ -40,21 +40,22 @@ training:
   max_steps: 0
   num_epochs: 2
 
-  # ─── Batching (20-GB-VRAM-Profil) ────────────────────────────────────
-  # effektive Batch = 2 × 8 = 16. VRAM-Peak ~14–16 GB auf RTX 4000 Ada.
-  batch_size: 2
-  gradient_accumulation_steps: 8
+  # ─── Batching (20-GB-VRAM-Profil für 24B) ────────────────────────────
+  # 24B-Modell verträgt keine batch_size=2 mehr auf 20 GB.
+  # effektive Batch = 1 × 16 = 16. VRAM-Peak ~17–19 GB.
+  batch_size: 1
+  gradient_accumulation_steps: 16
 
   # ─── Sequenzlänge ────────────────────────────────────────────────────
   # 4096 matcht Export-Filter (max_seq_tokens=4096). p95 unserer Samples
-  # ≈ 1500 Tokens → 2.7× Headroom. 8192 bringt null Quality-Gain bei
-  # doppeltem VRAM.
+  # ≈ 1500 Tokens → 2.7× Headroom. Bei OOM auf 2048 reduzieren (24B-
+  # Activations sind ~3× grösser als bei 8B).
   max_seq_length: 4096
 
   # ─── Optimizer & LR-Schedule ─────────────────────────────────────────
   # adamw_8bit halbiert Optimizer-State-VRAM; zusammen mit bnb-4bit der
-  # Schlüssel für Ministral-3-8B auf 20 GB. Cosine statt linear: stabiler
-  # bei 2 Epochen. Studio kennt nur warmup_steps (absolut), keine
+  # Schlüssel für Mistral-Small-3.2-24B auf 20 GB. Cosine statt linear:
+  # stabiler bei 2 Epochen. Studio kennt nur warmup_steps (absolut), keine
   # warmup_ratio. 20 Steps ≈ 1–3 % eines typischen Buch-Runs — Unsloth
   # patcht den LoRA-Init-Warmup zusätzlich intern.
   learning_rate: 2.0e-4
@@ -80,10 +81,10 @@ training:
   # train_on_responses_only). Ohne das lernt das Modell auch aus System-
   # Prompts und User-Fragen, Buch-Stil verwässert messbar. Instruction-/
   # Response-Marker werden intern aus dem Chat-Template des gewählten
-  # Modells abgeleitet — für Ministral-3 sind das [INST]/[/INST].
+  # Modells abgeleitet — für Mistral-Small-3.2 sind das [INST]/[/INST].
   # Verifizieren vor dem Run:
   #   python -c "from unsloth import FastLanguageModel; \
-  #     _, tok = FastLanguageModel.from_pretrained('unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit', load_in_4bit=True); \
+  #     _, tok = FastLanguageModel.from_pretrained('unsloth/Mistral-Small-3.2-24B-Instruct-2506-unsloth-bnb-4bit', load_in_4bit=True); \
   #     print(tok.apply_chat_template([{'role':'user','content':'x'},{'role':'assistant','content':'y'}], tokenize=False))"
   train_on_completions: true
 
@@ -99,7 +100,8 @@ lora:
   # ─── Rang & Alpha ────────────────────────────────────────────────────
   # r=32 ist Sweet-Spot für "Welt internalisieren". Studio-Default 16 ist
   # zu klein — verliert Kapazität für Figuren/Orte. alpha=32 = r (moderne
-  # Unsloth-Empfehlung; früher 2×r).
+  # Unsloth-Empfehlung; früher 2×r). Bei 24B-OOM kann r=16 / alpha=16
+  # zusätzlich VRAM sparen.
   lora_r: 32
   lora_alpha: 32
 
@@ -120,11 +122,11 @@ lora:
     - up_proj
     - down_proj
 
-  # ─── Welche Layer-Gruppen trainieren (Ministral-3-spezifisch) ────────
-  # Ministral-3 enthält einen 0.4 B Vision-Encoder. Für reines Text-
-  # Finetuning ist vision=false Pflicht — sonst werden Vision-Gewichte
-  # ohne Bilddaten angefasst (VRAM-Waste, potenziell Corruption bei
-  # späterer multimodaler Nutzung). Die anderen Gruppen an lassen.
+  # ─── Welche Layer-Gruppen trainieren (Mistral-Small-3.2-spezifisch) ──
+  # Mistral-Small-3.2 enthält einen Pixtral-Vision-Encoder. Für reines
+  # Text-Finetuning ist vision=false Pflicht — sonst werden Vision-
+  # Gewichte ohne Bilddaten angefasst (VRAM-Waste, potenziell Corruption
+  # bei späterer multimodaler Nutzung). Andere Gruppen an lassen.
   finetune_vision_layers: false
   finetune_language_layers: true
   finetune_attention_modules: true

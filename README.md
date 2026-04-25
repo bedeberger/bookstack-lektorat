@@ -23,7 +23,7 @@ KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). L�
 - **Fehler-Heatmap** – Clustert die Befunde aller bisherigen Lektorats-Läufe nach Kapitel und Fehlertyp
 - **Lektorat-Verlauf mit Vorschau** – Alle bisherigen Prüfungen einer Seite chronologisch einsehbar; vergangene Korrekturen per Klick als Inline-Highlights im Editor anzeigen und selektiv nachträglich übernehmen. Einzelne Verlaufseinträge lassen sich löschen
 - **Buchstatistik** – Tägliche Snapshots (Wortanzahl, Tokens) als Zeitliniendiagramm
-- **Fine-Tuning-Export** – Erzeugt JSONL-Trainingsdaten aus Buchtext, Figuren, Szenen und Schauplätzen (Stil-Fortsetzung, Szenen-Generierung, Dialog pro Figur, Autor-Chat-Q&A, Lektorats-Korrekturen); Chat-Format mit Train/Val-Split, kompatibel zu Mistral-Fine-Tune und OpenAI-Style-Tools. Anleitung zum eigentlichen Training eines Ministral-Modells: [docs/finetuning.md](docs/finetuning.md)
+- **Fine-Tuning-Export** – Erzeugt JSONL-Trainingsdaten aus Buchtext, Figuren, Szenen und Schauplätzen (Stil-Fortsetzung, Szenen-Generierung, Dialog pro Figur, Autor-Chat-Q&A, Lektorats-Korrekturen); Chat-Format mit Train/Val-Split, kompatibel zu Mistral-Fine-Tune und OpenAI-Style-Tools. Anleitung zum eigentlichen Training eines Mistral-Small-3.2-Modells: [docs/finetuning.md](docs/finetuning.md)
 - **Bucheinstellungen** – Sprache, Buchtyp, Erzählperspektive, Erzählzeit und freier Kontext werden in alle KI-Prompts eingebettet
 - **Hell/Dunkel/Auto-Design** – Theme-Umschalter in der Kopfzeile; „Auto" folgt dem Betriebssystem
 - **Session-Banner bei Ablauf** – Bei `401`-Antworten blendet die App einen Banner ein statt hart umzuleiten; ungespeicherte Inhalte im Editor/Chat bleiben dadurch erreichbar

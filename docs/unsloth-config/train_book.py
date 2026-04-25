@@ -1,9 +1,14 @@
 """
-Unsloth-QLoRA-Training für Ministral-3-8B-Instruct-2512 auf den Fine-Tuning-
-Export-Daten.
+Unsloth-QLoRA-Training für Mistral-Small-3.2-24B-Instruct-2506 auf den
+Fine-Tuning-Export-Daten.
 
 Zielumgebung: 1× RTX 4000 Ada (20 GB VRAM). Single-GPU. Die zweite Karte im
 System bleibt für Inferenz/Evaluation frei.
+
+Hinweis: Mistral-Small-3.2 (24B) ist ~3× grösser als das vorherige Default
+(Ministral-3-8B). VRAM-Profil ist deutlich enger — `batch_size=1` mit
+`gradient_accumulation_steps=16` ist hier Pflicht. Bei OOM: `MAX_SEQ` von
+4096 auf 2048 reduzieren.
 
 Einsatz:
     conda activate unsloth
@@ -14,15 +19,15 @@ Erwartete Dateien im selben Ordner:
     val.jsonl     # aus UI-Export
 
 Ergebnis am Ende:
-    runs/ministral3-buch/adapter/        # LoRA-Adapter (klein)
-    runs/ministral3-buch/merged/         # bf16-Merge (vollgrösse)
-    runs/ministral3-buch/gguf/*.gguf     # Q5_K_M für Ollama
+    runs/mistral-small32-buch/adapter/        # LoRA-Adapter (klein)
+    runs/mistral-small32-buch/merged/         # bf16-Merge (vollgrösse, ~48 GB)
+    runs/mistral-small32-buch/gguf/*.gguf     # Q4_K_M für Ollama (~14 GB)
 
 Buchtitel unten anpassen (BOOK_TITLE).
 
-Tokenizer-Hinweis: Ministral-3 nutzt Mistral-Common >= 1.8.6 (wird durch die
-pinned requirements.txt mitinstalliert). Die Assistant-Marker bleiben
-[INST]/[/INST] — unten in `train_on_responses_only` validiert.
+Tokenizer-Hinweis: Mistral-Small-3.2 nutzt Tekken-V7 (Mistral-Common >= 1.6).
+Chat-Template rendert weiterhin [INST]/[/INST] um Assistant-Antworten — der
+`train_on_responses_only`-Wrapper unten validiert das via Probe.
 """
 
 from unsloth import FastLanguageModel
@@ -36,9 +41,9 @@ from transformers import TrainingArguments, EarlyStoppingCallback
 # ─────────────────────────────────────────────────────────────────────────
 
 BOOK_TITLE  = "Mein Buchtitel"   # nur für den Fallback-System-Prompt in der Inferenz
-MODEL       = "unsloth/Ministral-3-8B-Instruct-2512-unsloth-bnb-4bit"
-MAX_SEQ     = 4096               # matcht finetune-export Empfehlung
-OUT_DIR     = "runs/ministral3-buch"
+MODEL       = "unsloth/Mistral-Small-3.2-24B-Instruct-2506-unsloth-bnb-4bit"
+MAX_SEQ     = 4096               # matcht finetune-export Empfehlung; bei OOM auf 2048
+OUT_DIR     = "runs/mistral-small32-buch"
 
 TRAIN_FILE  = "train.jsonl"
 EVAL_FILE   = "val.jsonl"
@@ -60,13 +65,11 @@ model, tokenizer = FastLanguageModel.from_pretrained(
 # für Figuren/Orte/Beziehungen, ohne zu overfitten.
 # alpha == r ist die moderne Unsloth-Empfehlung (früher alpha = 2×r).
 #
-# Vision-Hinweis: Ministral-3 ist multimodal (0.4 B Vision-Encoder). Beim
-# reinen Text-Finetuning dürfen die Vision-Layer NICHT angefasst werden —
-# sonst VRAM-Waste und mögliche Corruption, wenn das Modell später wieder
-# Bilder verarbeiten soll. Falls Unsloth in einer späteren Version einen
-# `finetune_vision_layers=False`-Kwarg exponiert, hier setzen. Aktuell
-# beschränken die expliziten `target_modules` die LoRA-Injection auf die
-# Sprach-Layer (q/k/v/o + MLP), was denselben Effekt hat.
+# Vision-Hinweis: Mistral-Small-3.2 hat einen Pixtral-Vision-Encoder. Beim
+# reinen Text-Finetuning dürfen Vision-Layer NICHT angefasst werden — sonst
+# VRAM-Waste und mögliche Corruption, falls das Modell später wieder Bilder
+# verarbeiten soll. Die expliziten `target_modules` beschränken die LoRA-
+# Injection auf die Sprach-Layer (q/k/v/o + MLP), was denselben Effekt hat.
 # ─────────────────────────────────────────────────────────────────────────
 
 model = FastLanguageModel.get_peft_model(
@@ -117,9 +120,10 @@ trainer = SFTTrainer(
     packing          = False,
     args = TrainingArguments(
         output_dir                   = OUT_DIR,
-        # Effektive Batch-Size = 2 × 8 = 16; VRAM-Peak ~14–16 GB auf 20 GB.
-        per_device_train_batch_size  = 2,
-        gradient_accumulation_steps  = 8,
+        # Effektive Batch-Size = 1 × 16 = 16; VRAM-Peak ~17–19 GB auf 20 GB.
+        # 24B-Modell verträgt keine batch_size=2 mehr auf 20 GB.
+        per_device_train_batch_size  = 1,
+        gradient_accumulation_steps  = 16,
         num_train_epochs             = 2,
         learning_rate                = 2e-4,
         warmup_ratio                 = 0.03,
@@ -127,7 +131,7 @@ trainer = SFTTrainer(
         bf16                         = True,
         fp16                         = False,
         # adamw_8bit halbiert den Optimizer-State-VRAM — zusammen mit
-        # bnb-4bit ist das der VRAM-Schlüssel für Ministral-3-8B auf 20 GB.
+        # bnb-4bit der VRAM-Schlüssel für Mistral-Small-3.2-24B auf 20 GB.
         optim                        = "adamw_8bit",
         weight_decay                 = 0.01,
         max_grad_norm                = 1.0,
@@ -153,10 +157,10 @@ trainer = SFTTrainer(
 # User-Fragen → Stil verwässert, Paraphrasen aus authorChat werden fälschlich
 # als "Produktion" gelernt statt als "Eingabe".
 #
-# Marker müssen exakt zum Chat-Template von Ministral-3 passen. Mistral-Common
-# >= 1.8.6 rendert weiterhin [INST]/[/INST] um Instruction/Response — deshalb
-# unveränderte Marker gegenüber dem 2410-Vorgänger. Validation direkt aus dem
-# Tokenizer, damit ein späteres Template-Update (ohne dass wir's merken) früh
+# Marker müssen exakt zum Chat-Template von Mistral-Small-3.2 passen. Tekken-V7
+# rendert Instruction/Response weiterhin als [INST]/[/INST] — System-Prompts
+# wandern in [SYSTEM_PROMPT]/[/SYSTEM_PROMPT], stören das Masking aber nicht.
+# Probe direkt aus dem Tokenizer, damit ein späteres Template-Update früh
 # knallt statt stumm zu maskieren.
 # ─────────────────────────────────────────────────────────────────────────
 
@@ -181,7 +185,7 @@ trainer = train_on_responses_only(
 trainer.train()
 
 # ─────────────────────────────────────────────────────────────────────────
-# Adapter speichern (klein, ~200 MB)
+# Adapter speichern (klein, ~400 MB bei 24B/r=32)
 # ─────────────────────────────────────────────────────────────────────────
 
 adapter_dir = f"{OUT_DIR}/adapter"
@@ -191,9 +195,9 @@ print(f"[✓] LoRA-Adapter gespeichert: {adapter_dir}")
 
 # ─────────────────────────────────────────────────────────────────────────
 # Merge zu bf16 + GGUF-Export für Ollama
-# bf16-Merge: ~16 GB, rein für Debugging/Inferenz via HuggingFace nützlich.
-# GGUF Q5_K_M: ~5.5 GB, für Ollama/llama.cpp — bester Quality/Size-Kompromiss
-# für 8B-Modelle.
+# bf16-Merge: ~48 GB, rein für Debugging/Inferenz via HuggingFace nützlich.
+# GGUF Q4_K_M: ~14 GB, für Ollama/llama.cpp — bei 24B ist Q5_K_M (~17 GB)
+# auf 20-GB-Karten zur Inferenz zu eng (KV-Cache passt nicht mehr).
 # ─────────────────────────────────────────────────────────────────────────
 
 print("[ ] Merge zu bf16…")
@@ -204,11 +208,11 @@ model.save_pretrained_merged(
 )
 print(f"[✓] Merged: {OUT_DIR}/merged")
 
-print("[ ] GGUF-Export (Q5_K_M)…")
+print("[ ] GGUF-Export (Q4_K_M)…")
 model.save_pretrained_gguf(
     f"{OUT_DIR}/gguf",
     tokenizer,
-    quantization_method = "q5_k_m",
+    quantization_method = "q4_k_m",
 )
 print(f"[✓] GGUF: {OUT_DIR}/gguf")
 
