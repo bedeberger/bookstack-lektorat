@@ -148,10 +148,13 @@ export const ideenMethods = {
     });
   },
 
-  get offeneIdeen() {
-    return this.ideen.filter(i => !i.erledigt);
+  // Hinweis: Keine getter — `...ideenMethods`-Spread im Alpine.data-Factory ruft
+  // getters sofort auf, mit `this === ideenMethods` (kein `ideen`-Feld) → Crash.
+  // Plain Methoden funktionieren identisch im Template via `offeneIdeen()`.
+  offeneIdeen() {
+    return (this.ideen || []).filter(i => !i.erledigt);
   },
-  get erledigteIdeen() {
-    return this.ideen.filter(i => !!i.erledigt);
+  erledigteIdeen() {
+    return (this.ideen || []).filter(i => !!i.erledigt);
   },
 };

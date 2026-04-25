@@ -4935,6 +4935,9 @@ body.focus-mode .edit-find { display: none !important; }
     max-height: 60vh;
     overflow-y: auto;
   }
+  .editor-chat-split .lektorat-split {
+    grid-template-columns: 2fr 1fr;
+  }
 }
 
 
