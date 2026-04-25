@@ -1231,8 +1231,12 @@ ${JSON.stringify(events, null, 2)}`;
  * @param {string|null} openingPageText Snapshot beim Chat-Öffnen; nur setzen wenn
  *                                      ungleich pageText (sonst null → keine
  *                                      redundante Section).
+ * @param {Array}       ideen           Offene Ideen des Autors für diese Seite —
+ *                                      Notizen zu möglichen Fortsetzungen, Szenen,
+ *                                      Ankern. KI darf sie aufgreifen/diskutieren,
+ *                                      aber nicht eigenmächtig in Vorschläge umwandeln.
  */
-export function buildChatSystemPrompt(pageName, pageText, figuren, review, systemOverride = null, openingPageText = null) {
+export function buildChatSystemPrompt(pageName, pageText, figuren, review, systemOverride = null, openingPageText = null, ideen = null) {
   const parts = [
     systemOverride ?? SYSTEM_CHAT,
     '',
@@ -1257,6 +1261,17 @@ export function buildChatSystemPrompt(pageName, pageText, figuren, review, syste
       pageText,
       '',
     );
+  }
+
+  if (Array.isArray(ideen) && ideen.length > 0) {
+    parts.push('=== OFFENE IDEEN (Notizen des Autors für diese Seite) ===');
+    for (const i of ideen) {
+      const datum = i.created_at ? ` (${i.created_at.slice(0, 10)})` : '';
+      parts.push(`- ${i.content}${datum}`);
+    }
+    parts.push('');
+    parts.push('Hinweis: Diese Ideen sind Notizen des Autors zu möglichen Fortsetzungen, Szenen oder inhaltlichen Ankern. Greife sie auf, hinterfrage oder ergänze sie konversationell — wandle sie aber nicht eigenmächtig in vorschlaege-Einträge um, solange der Autor nicht danach fragt.');
+    parts.push('');
   }
 
   if (figuren && figuren.length > 0) {

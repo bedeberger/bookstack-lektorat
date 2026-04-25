@@ -181,9 +181,24 @@ export const appViewMethods = {
     this._closeOtherMainCards('bookReview');
     this.showBookReviewCard = true;
   },
+  // Seiten-Ideen: lebt parallel zum Editor wie Seiten-Chat. Mutually exclusive
+  // mit Chat — nur eines kann gleichzeitig aktiv sein (gleicher Slot).
+  toggleIdeenCard() {
+    if (this.showIdeenCard) { this.showIdeenCard = false; return; }
+    if (!this.currentPage) return;
+    if (this.showChatCard) {
+      this.showChatCard = false;
+      if (this._checkDoneBeforeChat && this.lektoratFindings?.length > 0) {
+        this.checkDone = true;
+        this._checkDoneBeforeChat = false;
+      }
+    }
+    this.showIdeenCard = true;
+  },
   // Seiten-Chat: lebt neben dem Editor, schließt NICHT den Editor. Toggle
   // merkt sich checkDone-Snapshot (Chat soll Findings temporär verbergen).
   // checkDoneBeforeChat wird in chat-base beim onVisible gesetzt.
+  // Mutually exclusive mit Ideen — gleicher Slot neben Editor.
   toggleChatCard() {
     if (this.showChatCard) {
       this.showChatCard = false;
@@ -194,6 +209,7 @@ export const appViewMethods = {
       return;
     }
     if (!this.currentPage) return;
+    if (this.showIdeenCard) this.showIdeenCard = false;
     this.showChatCard = true;
   },
   // Buch-Chat: exklusive Hauptkarte wie alle anderen.

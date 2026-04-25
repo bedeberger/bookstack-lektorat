@@ -3,7 +3,7 @@
   Alpine.data-Sub-Komponente — siehe public/js/cards/chat-card.js.
   showChatCard bleibt am Root; fachlicher State in der Sub.
 -->
-<div class="card" id="chat-card" x-data="chatCard" x-show="$app.showChatCard" x-cloak x-transition>
+<div class="card" id="chat-card" x-data="chatCard" x-show="$app.showChatCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="$app.t('chat.title', { name: $app.currentPage?.name || '–' })"></span>
     <div class="card-actions">
@@ -100,7 +100,7 @@
 <!--
   Alpine.data-Sub-Komponente — siehe public/js/cards/book-chat-card.js.
 -->
-<div class="card" id="book-chat-card" x-data="bookChatCard" x-show="$app.showBookChatCard" x-cloak x-transition>
+<div class="card" id="book-chat-card" x-data="bookChatCard" x-show="$app.showBookChatCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="$app.t('chat.titleBook', { name: $app.selectedBookName })"></span>
     <div class="card-actions">

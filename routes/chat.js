@@ -6,7 +6,7 @@ const { toIntId } = require('../lib/validate');
 const { BOOKSTACK_URL } = require('../lib/bookstack');
 const {
   getPrompts, getBookPrompts,
-  getFiguren, getLatestReview, buildChatMessageHistory,
+  getFiguren, getLatestReview, getOpenIdeen, buildChatMessageHistory,
   htmlToText,
 } = require('./jobs/shared');
 
@@ -230,6 +230,7 @@ router.post('/send', jsonBody, async (req, res) => {
       : null;
     const figuren = getFiguren(session.book_id, userEmail, pageRow?.chapter_name ?? null);
     const review  = getLatestReview(session.book_id, userEmail);
+    const ideen   = getOpenIdeen(session.page_id, userEmail);
 
     // System-Prompt aus prompts.js (Single Source of Truth)
     const { buildChatSystemPrompt, SCHEMA_CHAT } = await getPrompts();
@@ -244,6 +245,7 @@ router.post('/send', jsonBody, async (req, res) => {
       review,
       chatSys,
       openingPageText,
+      ideen,
     );
 
     // Konversationshistorie aufbauen (aktuelle User-Nachricht nicht doppelt senden)

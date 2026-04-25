@@ -1353,6 +1353,27 @@ function runMigrations() {
     logger.info(`DB-Migration auf Version 60: ${chFixed} chapter_id- / ${figFixed} fig_id-Verknüpfungen neu aufgelöst.`);
   }
 
+  if (version < 61) {
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS ideen (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id     INTEGER NOT NULL,
+        page_id     INTEGER NOT NULL,
+        page_name   TEXT,
+        user_email  TEXT NOT NULL,
+        content     TEXT NOT NULL,
+        erledigt    INTEGER NOT NULL DEFAULT 0,
+        erledigt_at TEXT,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+      )
+    `).run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_ideen_page_user ON ideen(page_id, user_email)').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_ideen_book_user ON ideen(book_id, user_email)').run();
+    db.prepare('UPDATE schema_version SET version = 61').run();
+    logger.info('DB-Migration auf Version 61 abgeschlossen (ideen-Tabelle).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

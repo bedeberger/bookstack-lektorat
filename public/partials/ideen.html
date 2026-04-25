@@ -1,0 +1,78 @@
+<!-- Seiten-Ideen — Notizen für Fortsetzungen, Szenen, Anker.
+     Sub-Komponente, lebt parallel zum Editor (kein _closeOtherMainCards).
+     Offene Ideen werden im Seiten-Chat als Kontext mitgegeben. -->
+<div class="card" id="ideen-card" x-data="ideenCard" x-show="$app.showIdeenCard" x-cloak>
+  <div class="card-header">
+    <span class="card-title" x-text="$app.t('ideen.title')"></span>
+    <span class="card-subtitle ideen-subtitle" x-text="$app.t('ideen.chatNote')"></span>
+  </div>
+
+  <div x-show="errorMessage" class="card-status card-status--error" x-text="errorMessage"></div>
+
+  <div class="ideen-input-row">
+    <textarea
+      class="ideen-input"
+      x-model="newContent"
+      :placeholder="$app.t('ideen.placeholder')"
+      :aria-label="$app.t('ideen.placeholder')"
+      rows="2"
+      :disabled="busy"
+      @keydown.enter="if(!$event.isComposing && $event.keyCode !== 229 && ($event.ctrlKey || $event.metaKey)) { $event.preventDefault(); addIdee(); }"
+    ></textarea>
+    <button type="button"
+      class="ideen-add-btn"
+      @click="addIdee()"
+      :disabled="busy || !newContent.trim()"
+      x-text="$app.t('ideen.add')"></button>
+  </div>
+
+  <div x-show="loading" class="ideen-loading" x-text="$app.t('common.loading')"></div>
+
+  <div x-show="!loading && ideen.length === 0" class="ideen-empty" x-text="$app.t('ideen.empty')"></div>
+
+  <!-- Offene Ideen -->
+  <template x-if="!loading && offeneIdeen.length > 0">
+    <div class="ideen-section">
+      <div class="ideen-section-title" x-text="$app.t('ideen.sectionOpen')"></div>
+      <template x-for="idee in offeneIdeen" :key="idee.id">
+        <div class="idee-item">
+          <div class="idee-status-badge" x-text="$app.t('ideen.statusOpen')"></div>
+          <template x-if="editingId !== idee.id">
+            <div class="idee-content" x-text="idee.content"></div>
+          </template>
+          <template x-if="editingId === idee.id">
+            <div class="idee-edit">
+              <textarea class="ideen-input" x-model="editingDraft" rows="3" :disabled="busy"></textarea>
+              <div class="idee-edit-actions">
+                <button type="button" @click="saveEditIdee(idee)" :disabled="busy" x-text="$app.t('ideen.save')"></button>
+                <button type="button" @click="cancelEditIdee()" :disabled="busy" x-text="$app.t('ideen.cancel')"></button>
+              </div>
+            </div>
+          </template>
+          <div class="idee-actions" x-show="editingId !== idee.id">
+            <button type="button" @click="toggleErledigtIdee(idee)" :disabled="busy" :title="$app.t('ideen.markDone')" x-text="$app.t('ideen.markDone')"></button>
+            <button type="button" @click="startEditIdee(idee)" :disabled="busy" :title="$app.t('ideen.edit')" x-text="$app.t('ideen.edit')"></button>
+            <button type="button" class="idee-delete-btn" @click="deleteIdee(idee)" :disabled="busy" :title="$app.t('ideen.delete')" x-text="$app.t('ideen.delete')"></button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </template>
+
+  <!-- Erledigte Ideen -->
+  <template x-if="!loading && erledigteIdeen.length > 0">
+    <div class="ideen-section">
+      <div class="ideen-section-title" x-text="$app.t('ideen.sectionDone')"></div>
+      <template x-for="idee in erledigteIdeen" :key="idee.id">
+        <div class="idee-item idee-item--erledigt">
+          <div class="idee-status-badge idee-status-badge--erledigt" x-text="$app.t('ideen.statusDone')"></div>
+          <div class="idee-content" x-text="idee.content"></div>
+          <div class="idee-actions">
+            <button type="button" @click="toggleErledigtIdee(idee)" :disabled="busy" x-text="$app.t('ideen.markOpen')"></button>
+            <button type="button" class="idee-delete-btn" @click="deleteIdee(idee)" :disabled="busy" x-text="$app.t('ideen.delete')"></button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </template>
+</div>

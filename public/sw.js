@@ -1,12 +1,13 @@
 // Service Worker: hält die SPA-Shell und BookStack-Inhalte offline verfügbar (Zug-Szenario).
 // Strategie:
-//  - Shell (HTML/CSS/JS/Partials/Icons): Stale-While-Revalidate im SHELL_CACHE
+//  - Shell-Assets (CSS/JS/Icons): Stale-While-Revalidate im SHELL_CACHE
+//  - HTML-Partials: Network-First mit Cache-Fallback (verhindert eingefrorene UI-Bugs)
 //  - BookStack-GETs (/api/*): Stale-While-Revalidate im API_CACHE → Navigation + Seiteninhalt offline
 //  - Schreibende Requests (PUT/POST/DELETE): nie behandelt (method-Check am Anfang)
 //  - Auth/KI/Job-Queue/SSE: Network-Only, nie cachen
 //  - Version-Bump der Konstanten invalidiert den jeweiligen Cache
 
-const SHELL_CACHE = 'lektorat-shell-v40';
+const SHELL_CACHE = 'lektorat-shell-v42';
 const API_CACHE = 'lektorat-api-v2';
 const CONFIG_CACHE = 'lektorat-config-v1';
 const ACTIVE_CACHES = new Set([SHELL_CACHE, API_CACHE, CONFIG_CACHE]);
@@ -27,6 +28,7 @@ const NEVER_CACHE_PREFIXES = [
   '/chat',
   '/sync',
   '/booksettings',
+  '/ideen',
 ];
 
 const SHELL_ASSET_REGEX = /\.(?:css|js|mjs|json|svg|ico|png|woff2?)$/i;
@@ -77,6 +79,20 @@ async function handleNavigate(req) {
 
 async function handleShellAsset(req) {
   const cache = await caches.open(SHELL_CACHE);
+  const url = new URL(req.url);
+  // Partials: Network-First. SWR fror UI-Bugs ein, weil alte HTML-Snippets
+  // weitergereicht wurden, während neuer Stand schon im Repo war.
+  if (PARTIAL_REGEX.test(url.pathname)) {
+    try {
+      const net = await fetch(req);
+      if (net && net.ok) cache.put(req, net.clone());
+      return net;
+    } catch {
+      const cached = await cache.match(req);
+      if (cached) return cached;
+      return new Response('Offline', { status: 503 });
+    }
+  }
   const cached = await cache.match(req);
   const netPromise = fetch(req).then((res) => {
     if (res && res.ok) cache.put(req, res.clone());

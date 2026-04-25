@@ -22,6 +22,7 @@ import { registerFigurenCard } from './cards/figuren-card.js';
 import { registerStilCard } from './cards/stil-card.js';
 import { registerFehlerHeatmapCard } from './cards/fehler-heatmap-card.js';
 import { registerChatCard } from './cards/chat-card.js';
+import { registerIdeenCard } from './cards/ideen-card.js';
 import { registerBookChatCard } from './cards/book-chat-card.js';
 import { szenenMethods } from './szenen.js';
 import { orteMethods } from './orte.js';
@@ -151,6 +152,7 @@ document.addEventListener('alpine:init', () => {
   registerBookReviewCard();
   registerKapitelReviewCard();
   registerChatCard();
+  registerIdeenCard();
   registerBookChatCard();
   registerEditorFindCard();
   registerEditorFigurLookupCard();

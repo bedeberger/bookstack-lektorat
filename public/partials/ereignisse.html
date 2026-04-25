@@ -7,7 +7,7 @@
   (filteredEreignisse, ereignisseKapitelListe, ereignisseSeitenListe) leben
   hier in der Sub-Komponente.
 -->
-<div class="card" x-data="ereignisseCard" x-show="$app.showEreignisseCard" x-cloak x-transition>
+<div class="card" x-data="ereignisseCard" x-show="$app.showEreignisseCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="$app.t('events.title', { name: $app.selectedBookName })"></span>
     <span x-show="$app.alleAktualisierenLastRun && !ereignisseLoading && !zeitstrahlConsolidating" class="card-timestamp" x-text="$app.t('common.asOf', { date: $app.alleAktualisierenLastRun })"></span>

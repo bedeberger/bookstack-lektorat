@@ -1,5 +1,5 @@
 <!-- Seiteneditor & Lektorat -->
-<div class="card" id="editor-card" x-show="showEditorCard" x-cloak x-transition>
+<div class="card" id="editor-card" x-show="showEditorCard" x-cloak>
   <div class="card-header">
     <div>
       <span class="card-title" x-text="t('editor.title', { name: currentPage?.name || '–' })"></span>
@@ -43,6 +43,7 @@
             <span x-show="saveApplying != null" class="spinner"></span><span x-text="saveApplying != null ? t('editor.btn.saveCorrectionsProgress') : t('editor.btn.saveCorrections')"></span>
           </button>
           <button type="button" @click="toggleChatCard()" :class="{ primary: showChatCard }" :disabled="currentPageEmpty" :title="t('editor.btn.chatTitle')" x-text="t('editor.btn.chat')"></button>
+          <button type="button" @click="toggleIdeenCard()" :class="{ primary: showIdeenCard }" :title="t('ideen.title')" x-text="t('ideen.title')"></button>
         </span>
       </template>
       <template x-if="editMode">

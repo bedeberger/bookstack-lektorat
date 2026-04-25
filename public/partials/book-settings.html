@@ -3,7 +3,7 @@
   Alpine.data-Sub-Komponente — siehe public/js/cards/book-settings-card.js.
   `showBookSettingsCard` bleibt im Root, fachlicher State in dieser Komponente.
 -->
-<div class="card" x-data="bookSettingsCard" x-show="$app.showBookSettingsCard" x-cloak x-transition>
+<div class="card" x-data="bookSettingsCard" x-show="$app.showBookSettingsCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="$app.t('book.settings.title', { name: $app.selectedBookName })"></span>
     <div class="card-actions">

@@ -4,7 +4,7 @@
   `showStilCard`-Flag bleibt im Root (Hash-Router, Exklusivität), fachlicher
   State (stilData, stilLoading, …) lebt in dieser Komponente.
 -->
-<div class="card" x-data="stilCard" x-show="$app.showStilCard" x-cloak x-transition>
+<div class="card" x-data="stilCard" x-show="$app.showStilCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="$app.t('stil.title', { name: $app.selectedBookName })"></span>
     <div class="card-actions">

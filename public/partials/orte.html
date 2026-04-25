@@ -4,7 +4,7 @@
   Fachdaten (orte, szenen, figuren) leben in Alpine.store('catalog');
   orteFilters + selectedOrtId bleiben im Root.
 -->
-<div class="card" x-data="orteCard" x-show="$app.showOrteCard" x-cloak x-transition>
+<div class="card" x-data="orteCard" x-show="$app.showOrteCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="$app.t('orte.title', { name: $app.selectedBookName })"></span>
     <span x-show="$app.alleAktualisierenLastRun && !orteLoading" class="card-timestamp" x-text="$app.t('common.asOf', { date: $app.alleAktualisierenLastRun })"></span>

@@ -5,7 +5,7 @@
   kontinuitaet-spezifische „bei erneutem Klick refreshen" läuft über
   window-Event `card:refresh { name: 'kontinuitaet' }`.
 -->
-<div class="card" x-data="kontinuitaetCard" x-show="$app.showKontinuitaetCard" x-cloak x-transition>
+<div class="card" x-data="kontinuitaetCard" x-show="$app.showKontinuitaetCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="$app.t('kontinuitaet.title', { name: $app.selectedBookName })"></span>
     <span x-show="$app.alleAktualisierenLastRun && !kontinuitaetLoading" class="card-timestamp" x-text="$app.t('common.asOf', { date: $app.alleAktualisierenLastRun })"></span>

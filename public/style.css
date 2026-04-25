@@ -1293,20 +1293,23 @@ button.success:hover { background: var(--color-success-hover); }
 /* Offene Findings: Original/Korrektur wie im Fehler-Heatmap-Detail – weich
    getönte Pillen statt Strikethrough, damit die Liste ruhig lesbar bleibt. */
 .finding-original {
-  background: color-mix(in srgb, var(--color-danger, #c0392b) 15%, transparent);
-  padding: 1px 4px;
-  border-radius: var(--radius-sm);
-  word-break: break-word;
-}
-.finding-korrektur {
   display: block;
-  margin-top: 4px;
-  margin-left: 1.5em;
-  background: color-mix(in srgb, var(--color-success, #27ae60) 15%, transparent);
-  padding: 1px 4px;
+  background: color-mix(in srgb, var(--color-danger, #c0392b) 15%, transparent);
+  padding: 2px 6px;
   border-radius: var(--radius-sm);
   word-break: break-word;
   width: fit-content;
+  max-width: 100%;
+}
+.finding-korrektur {
+  display: block;
+  margin-top: 3px;
+  background: color-mix(in srgb, var(--color-success, #27ae60) 15%, transparent);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  word-break: break-word;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .finding-explanation {
@@ -4293,18 +4296,21 @@ body.focus-mode .edit-find { display: none !important; }
   min-width: 0;
 }
 .heatmap-detail-original {
+  display: block;
   background: color-mix(in srgb, var(--color-danger, #c0392b) 15%, transparent);
-  padding: 1px 4px;
+  padding: 2px 6px;
   border-radius: var(--radius-sm);
-}
-.heatmap-detail-arrow {
-  margin: 0 6px;
-  color: var(--color-muted);
+  width: fit-content;
+  max-width: 100%;
 }
 .heatmap-detail-korrektur {
+  display: block;
+  margin-top: 3px;
   background: color-mix(in srgb, var(--color-success, #27ae60) 15%, transparent);
-  padding: 1px 4px;
+  padding: 2px 6px;
   border-radius: var(--radius-sm);
+  width: fit-content;
+  max-width: 100%;
 }
 .heatmap-detail-erklaerung {
   font-size: var(--font-size-xs, 11px);
@@ -4919,7 +4925,8 @@ body.focus-mode .edit-find { display: none !important; }
     gap: 0 1rem;
     align-items: start;
   }
-  .editor-chat-split #chat-card {
+  .editor-chat-split #chat-card,
+  .editor-chat-split #ideen-card {
     position: sticky;
     top: 1.5rem;
   }
@@ -5703,3 +5710,96 @@ body.focus-mode .edit-find { display: none !important; }
   color: var(--color-muted);
   font-style: italic;
 }
+
+/* === Ideen-Karte ============================================================
+   Notizen pro Seite. Offene Ideen werden als Chat-Kontext mitgegeben.
+   Layout: Header + Subtitle, Eingabezeile, dann zwei Sections (offen/erledigt).
+   Eckige Status-Badges via var(--radius-sm). */
+.ideen-subtitle {
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  margin-left: 8px;
+  font-weight: 400;
+}
+.card-status--error {
+  color: var(--color-danger, #c62828);
+}
+.ideen-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  margin: 8px 0 12px;
+}
+.ideen-input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 0.5px solid var(--color-border-input);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-family: inherit;
+  resize: vertical;
+  background: var(--color-surface);
+  color: var(--color-text);
+  line-height: 1.5;
+}
+.ideen-input:focus { outline: none; border-color: var(--color-border-focus); }
+.ideen-input:disabled { opacity: 0.6; }
+.ideen-add-btn { flex-shrink: 0; align-self: stretch; }
+.ideen-loading,
+.ideen-empty {
+  text-align: center;
+  color: var(--color-subtle);
+  font-size: var(--font-size-sm);
+  padding: 16px 0;
+}
+.ideen-section { margin-top: 12px; }
+.ideen-section-title {
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.idee-item {
+  position: relative;
+  border: 0.5px solid var(--color-border);
+  background: var(--color-bg);
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border-radius: var(--radius-sm);
+}
+.idee-item--erledigt { opacity: 0.6; }
+.idee-item--erledigt .idee-content { text-decoration: line-through; }
+.idee-status-badge {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  color: var(--color-muted);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+.idee-status-badge--erledigt { color: var(--color-subtle); }
+.idee-content {
+  font-size: var(--font-size-sm);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.5;
+}
+.idee-edit { display: flex; flex-direction: column; gap: 6px; }
+.idee-edit-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.idee-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.idee-actions button {
+  font-size: var(--font-size-xs);
+  padding: 3px 8px;
+}
+.idee-delete-btn { color: var(--color-danger, #c62828); }

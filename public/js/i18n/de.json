@@ -718,6 +718,8 @@
   "error.INVALID_KIND":              "Unbekannter Split-Typ.",
   "error.FORBIDDEN":                 "Zugriff verweigert.",
   "error.CLAUDE_UNREACHABLE":        "Claude nicht erreichbar: {detail}",
+  "error.OLLAMA_UNREACHABLE":        "Ollama nicht erreichbar ({host}): {detail}",
+  "error.LLAMA_UNREACHABLE":         "Llama nicht erreichbar ({host}): {detail}",
 
   "job.queued":                      "In Warteschlange…",
   "job.queuedPos":                   "Warteschlange #{pos}",
@@ -843,5 +845,28 @@
   "finetune.stats.dropped":          "{n} über Limit verworfen",
   "finetune.download.train":         "train.jsonl herunterladen",
   "finetune.download.val":           "val.jsonl herunterladen",
-  "finetune.hint.expiry":            "Downloads verfallen 2 h nach Abschluss — danach bitte neu generieren."
+  "finetune.hint.expiry":            "Downloads verfallen 2 h nach Abschluss — danach bitte neu generieren.",
+
+  "ideen.title":                     "Ideen",
+  "ideen.subtitle":                  "Notizen für mögliche Fortsetzungen, Szenen oder Anker auf dieser Seite.",
+  "ideen.placeholder":               "Idee, Szene, Fortsetzung…",
+  "ideen.add":                       "Hinzufügen",
+  "ideen.edit":                      "Bearbeiten",
+  "ideen.save":                      "Speichern",
+  "ideen.cancel":                    "Abbrechen",
+  "ideen.delete":                    "Löschen",
+  "ideen.confirmDelete":             "Diese Idee wirklich löschen?",
+  "ideen.empty":                     "Noch keine Ideen für diese Seite.",
+  "ideen.markDone":                  "Als erledigt markieren",
+  "ideen.markOpen":                  "Wieder öffnen",
+  "ideen.statusOpen":                "Offen",
+  "ideen.statusDone":                "Erledigt",
+  "ideen.sectionOpen":               "Offen",
+  "ideen.sectionDone":               "Erledigt",
+  "ideen.error.load":                "Ideen konnten nicht geladen werden.",
+  "ideen.error.save":                "Idee konnte nicht gespeichert werden.",
+  "ideen.error.delete":              "Idee konnte nicht gelöscht werden.",
+  "ideen.error.contentRequired":     "Bitte einen Text eingeben.",
+  "ideen.error.contentTooLong":      "Text ist zu lang (max. 4000 Zeichen).",
+  "ideen.chatNote":                  "Offene Ideen werden im Seiten-Chat als Kontext berücksichtigt."
 }

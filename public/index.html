@@ -190,9 +190,10 @@
 <div id="partial-bookstats"></div>
 <div id="partial-stil-heatmap"></div>
 <div id="partial-fehler-heatmap"></div>
-<div class="editor-chat-wrap" :class="{ 'editor-chat-split': showEditorCard && showChatCard }">
-  <div id="partial-editor"></div>
-  <div id="partial-chat"></div>
+<div class="editor-chat-wrap" :class="{ 'editor-chat-split': showEditorCard && (showChatCard || showIdeenCard) }">
+  <div id="partial-editor" class="display-contents"></div>
+  <div id="partial-chat" class="display-contents"></div>
+  <div id="partial-ideen" class="display-contents"></div>
 </div>
 <div id="partial-book-settings"></div>
 <div id="partial-finetune-export"></div>

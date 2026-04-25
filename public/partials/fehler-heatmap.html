@@ -4,7 +4,7 @@
   `showFehlerHeatmapCard`-Flag bleibt im Root (Hash-Router, Exklusivität),
   fachlicher State lebt in dieser Komponente.
 -->
-<div class="card" x-data="fehlerHeatmapCard" x-show="$app.showFehlerHeatmapCard" x-cloak x-transition>
+<div class="card" x-data="fehlerHeatmapCard" x-show="$app.showFehlerHeatmapCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="$app.t('fehlerHeatmap.title', { name: $app.selectedBookName })"></span>
     <div class="card-actions">
@@ -106,9 +106,6 @@
                 <template x-for="(s, i) in page.samples" :key="i">
                   <div class="heatmap-detail-sample">
                     <span class="heatmap-detail-original" x-text="s.original"></span>
-                    <template x-if="s.korrektur">
-                      <span class="heatmap-detail-arrow">→</span>
-                    </template>
                     <template x-if="s.korrektur">
                       <span class="heatmap-detail-korrektur" x-text="s.korrektur"></span>
                     </template>

@@ -718,6 +718,8 @@
   "error.INVALID_KIND":              "Unknown split kind.",
   "error.FORBIDDEN":                 "Access denied.",
   "error.CLAUDE_UNREACHABLE":        "Claude unreachable: {detail}",
+  "error.OLLAMA_UNREACHABLE":        "Ollama unreachable ({host}): {detail}",
+  "error.LLAMA_UNREACHABLE":         "Llama unreachable ({host}): {detail}",
 
   "job.queued":                      "Queued…",
   "job.queuedPos":                   "Queue #{pos}",
@@ -843,5 +845,28 @@
   "finetune.stats.dropped":          "{n} over limit dropped",
   "finetune.download.train":         "Download train.jsonl",
   "finetune.download.val":           "Download val.jsonl",
-  "finetune.hint.expiry":            "Downloads expire 2 h after completion — regenerate afterwards."
+  "finetune.hint.expiry":            "Downloads expire 2 h after completion — regenerate afterwards.",
+
+  "ideen.title":                     "Ideas",
+  "ideen.subtitle":                  "Notes for possible continuations, scenes or anchors on this page.",
+  "ideen.placeholder":               "Idea, scene, continuation…",
+  "ideen.add":                       "Add",
+  "ideen.edit":                      "Edit",
+  "ideen.save":                      "Save",
+  "ideen.cancel":                    "Cancel",
+  "ideen.delete":                    "Delete",
+  "ideen.confirmDelete":             "Really delete this idea?",
+  "ideen.empty":                     "No ideas for this page yet.",
+  "ideen.markDone":                  "Mark as done",
+  "ideen.markOpen":                  "Reopen",
+  "ideen.statusOpen":                "Open",
+  "ideen.statusDone":                "Done",
+  "ideen.sectionOpen":               "Open",
+  "ideen.sectionDone":               "Done",
+  "ideen.error.load":                "Could not load ideas.",
+  "ideen.error.save":                "Could not save idea.",
+  "ideen.error.delete":              "Could not delete idea.",
+  "ideen.error.contentRequired":     "Please enter some text.",
+  "ideen.error.contentTooLong":      "Text is too long (max 4000 characters).",
+  "ideen.chatNote":                  "Open ideas are passed to the page chat as context."
 }

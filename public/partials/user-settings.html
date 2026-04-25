@@ -4,7 +4,7 @@
   `showUserSettingsCard` + `toggleUserSettingsCard` im Root, fachlicher State
   (Profil, Default-Präferenzen, Reset-Zone) in dieser Komponente.
 -->
-<div class="card" x-data="userSettingsCard" x-show="$app.showUserSettingsCard" x-cloak x-transition>
+<div class="card" x-data="userSettingsCard" x-show="$app.showUserSettingsCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="$app.t('profile.title')"></span>
     <div class="card-actions">

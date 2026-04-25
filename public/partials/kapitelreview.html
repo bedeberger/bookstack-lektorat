@@ -5,7 +5,7 @@
   Sub. `newPageTitle/newPageCreating/newPageError` bleiben am Root (von
   createKapitelPage() in der Sub via $root gelesen/geschrieben).
 -->
-<div class="card" x-data="kapitelReviewCard" x-show="$app.showKapitelReviewCard" x-cloak x-transition>
+<div class="card" x-data="kapitelReviewCard" x-show="$app.showKapitelReviewCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="$app.t('kapitelReview.title', { name: kapitelReviewSelectedChapter()?.name || $app.selectedBookName })"></span>
     <div class="card-actions">

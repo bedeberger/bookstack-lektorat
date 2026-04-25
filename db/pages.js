@@ -271,6 +271,7 @@ function pruneStaleBookData(bookId, validPageIds, validChapterIds) {
     page_stats: 0,
     page_figure_mentions: 0,
     chat_sessions: 0,
+    ideen: 0,
     pages: 0,
     chapter_reviews: 0,
     chapter_extract_cache: 0,
@@ -293,6 +294,8 @@ function pruneStaleBookData(bookId, validPageIds, validChapterIds) {
       counts.page_figure_mentions = db.prepare('DELETE FROM page_figure_mentions WHERE page_id IN (SELECT page_id FROM _stale_pages) AND figure_id IN (SELECT id FROM figures WHERE book_id = ?)').run(bookId).changes;
       // Buch-Chat (page_id=0) nicht antasten; chat_messages werden per FK CASCADE mitgenommen
       counts.chat_sessions        = db.prepare('DELETE FROM chat_sessions        WHERE book_id = ? AND page_id != 0 AND page_id IN (SELECT page_id FROM _stale_pages)').run(bookId).changes;
+      // Ideen verwaister Seiten löschen (user-scoped Tabelle, aber Page weg → Inhalt obsolet)
+      counts.ideen                = db.prepare('DELETE FROM ideen                WHERE book_id = ? AND page_id IN (SELECT page_id FROM _stale_pages)').run(bookId).changes;
 
       // User-kuratierte Daten nur nullen (page_name/seite mit, damit reconcile sie nicht neu resettet)
       db.prepare('UPDATE figure_events SET page_id = NULL, seite = NULL WHERE page_id IN (SELECT page_id FROM _stale_pages)').run();

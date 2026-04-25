@@ -489,6 +489,17 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
 
 // ── Chat-Hilfsfunktionen (shared zwischen routes/chat.js und routes/jobs/chat.js) ──
 
+/** Offene Ideen einer Seite (user-spezifisch). Werden im Seiten-Chat als Kontext eingespielt. */
+function getOpenIdeen(pageId, userEmail) {
+  if (!pageId || !userEmail) return [];
+  return db.prepare(`
+    SELECT content, created_at
+    FROM ideen
+    WHERE page_id = ? AND user_email = ? AND erledigt = 0
+    ORDER BY created_at ASC
+  `).all(pageId, userEmail);
+}
+
 /** Letzte Buchbewertung für ein Buch (user-spezifisch) aus der DB. */
 function getLatestReview(bookId, userEmail) {
   const row = db.prepare(`
@@ -810,7 +821,7 @@ module.exports = {
   loadPageContents, groupByChapter, buildSinglePassBookText, splitGroupsIntoChunks,
   aiCall,
   getPrompts, getBookPrompts,
-  getFiguren, getLatestReview, buildChatMessageHistory,
+  getFiguren, getLatestReview, getOpenIdeen, buildChatMessageHistory,
   SINGLE_PASS_LIMIT, PER_CHUNK_LIMIT, BATCH_SIZE,
   jsonBody, jsonBodyLarge,
   sharedRouter,
