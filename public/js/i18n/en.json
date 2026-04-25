@@ -514,6 +514,8 @@
   "editor.draftTitle":           "Local draft – not yet on the server",
   "editor.savedTitle":           "Saved to BookStack",
   "editor.openInBookstack":      "Open in BookStack",
+  "editor.revisions":            "{n} revisions",
+  "editor.revisionsTitle":       "Open revision history in BookStack",
 
   "editor.btn.check":            "Check",
   "editor.btn.checkTitle":       "Ctrl+Enter",

@@ -11,6 +11,7 @@ const {
 } = require('../../db/schema');
 const { narrativeLabels } = require('./narrative-labels');
 const { recomputeBookFigureMentions } = require('../../lib/page-index');
+const { toIntId } = require('../../lib/validate');
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
@@ -1436,7 +1437,8 @@ async function runKomplettAnalyseAll() {
 
 // ── Routen ────────────────────────────────────────────────────────────────────
 komplettRouter.post('/komplett-analyse', jsonBody, (req, res) => {
-  const { book_id, book_name } = req.body;
+  const { book_name } = req.body;
+  const book_id = toIntId(req.body?.book_id);
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = getTokenForRequest(req);
@@ -1450,7 +1452,8 @@ komplettRouter.post('/komplett-analyse', jsonBody, (req, res) => {
 });
 
 komplettRouter.post('/kontinuitaet', jsonBody, (req, res) => {
-  const { book_id, book_name } = req.body;
+  const { book_name } = req.body;
+  const book_id = toIntId(req.body?.book_id);
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = getTokenForRequest(req);
@@ -1464,7 +1467,8 @@ komplettRouter.post('/kontinuitaet', jsonBody, (req, res) => {
 });
 
 komplettRouter.get('/kontinuitaet/:book_id', (req, res) => {
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const userEmail = req.session?.user?.email || null;
   const row = db.prepare(`
     SELECT id, checked_at, issues_json, summary, model
@@ -1479,7 +1483,8 @@ komplettRouter.get('/kontinuitaet/:book_id', (req, res) => {
 });
 
 komplettRouter.delete('/chapter-cache/:book_id', (req, res) => {
-  const bookId = req.params.book_id;
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const userEmail = req.session?.user?.email || '';
   const deleted = deleteChapterExtractCache(bookId, userEmail);
   res.json({ ok: true, deleted });

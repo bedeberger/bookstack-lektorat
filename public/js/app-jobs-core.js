@@ -270,22 +270,36 @@ export const appJobsCoreMethods = {
       }));
     });
 
-    // Kapitel-Review: nur einen laufenden Job pro Buch reconnecten – erste
-    // Fundstelle gewinnt (Dedup läuft pro Kapitel, gleichzeitige Läufe sind rar).
-    for (const item of (this.tree || [])) {
+    // Kapitel-Review: nur einen laufenden Job pro Buch reconnecten – im
+    // tree-Order erste Fundstelle gewinnt. Probes laufen parallel, damit
+    // Tab-Reopen bei vielen Kapiteln nicht N serielle Roundtrips kostet.
+    const chapterCandidates = [];
+    for (const [index, item] of (this.tree || []).entries()) {
       if (item.type !== 'chapter') continue;
       const lsKey = `lektorat_chapter_review_job_${bookId}_${item.id}`;
       const jobIdLs = localStorage.getItem(lsKey);
       if (!jobIdLs) continue;
-      let dispatched = false;
-      await this._reconnectJob(lsKey, (job, jobId) => {
-        this.showKapitelReviewCard = true;
-        window.dispatchEvent(new CustomEvent('job:reconnect', {
-          detail: { type: 'kapitel-review', jobId, job, extra: { chapterId: item.id } },
-        }));
-        dispatched = true;
-      });
-      if (dispatched) break;
+      chapterCandidates.push({ index, chapterId: item.id, lsKey, jobId: jobIdLs });
+    }
+    const chapterProbes = await Promise.all(chapterCandidates.map(async (c) => {
+      try {
+        const resp = await fetch('/jobs/' + c.jobId);
+        if (resp.ok) {
+          const job = await resp.json();
+          if (job.status === 'running') return { ...c, job };
+        }
+      } catch { /* ignore */ }
+      localStorage.removeItem(c.lsKey);
+      return null;
+    }));
+    const winner = chapterProbes
+      .filter(Boolean)
+      .sort((a, b) => a.index - b.index)[0];
+    if (winner) {
+      this.showKapitelReviewCard = true;
+      window.dispatchEvent(new CustomEvent('job:reconnect', {
+        detail: { type: 'kapitel-review', jobId: winner.jobId, job: winner.job, extra: { chapterId: winner.chapterId } },
+      }));
     }
 
     await this._reconnectJob('lektorat_figures_job_' + bookId, (job, jobId) => {

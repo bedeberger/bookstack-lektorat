@@ -11,6 +11,7 @@ const {
   jsonBody, BATCH_SIZE,
 } = require('./shared');
 const { narrativeLabels } = require('./narrative-labels');
+const { toIntId } = require('../../lib/validate');
 
 const kapitelRouter = express.Router();
 
@@ -88,7 +89,9 @@ async function runChapterReviewJob(jobId, bookId, chapterId, chapterName, bookNa
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 kapitelRouter.post('/chapter-review', jsonBody, (req, res) => {
-  const { book_id, chapter_id, chapter_name, book_name } = req.body;
+  const { chapter_name, book_name } = req.body;
+  const book_id = toIntId(req.body?.book_id);
+  const chapter_id = toIntId(req.body?.chapter_id);
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   if (!chapter_id) return res.status(400).json({ error_code: 'CHAPTER_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;

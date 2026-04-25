@@ -1,5 +1,6 @@
 const express = require('express');
 const { db } = require('../db/schema');
+const { toIntId } = require('../lib/validate');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -32,7 +33,8 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
     ? JSON.stringify(req.body.selected_errors_json)
     : null;
   const user_email = req.session?.user?.email || null;
-  const id = parseInt(req.params.id);
+  const id = toIntId(req.params.id);
+  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
 
   // Erst Ownership prüfen (user_email-Scope), dann updaten. Verhindert ID-Raten
   // über Buch-/User-Grenzen und liefert verifizierte book_id für das Log.
@@ -60,9 +62,11 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
 // Letzte 20 Läufe für eine Seite
 router.get('/page/:page_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
+  const pageId = toIntId(req.params.page_id);
+  if (!pageId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const rows = db.prepare(`
     SELECT * FROM page_checks WHERE page_id = ? AND user_email = ?
-    ORDER BY checked_at DESC LIMIT 20`).all(parseInt(req.params.page_id), user_email);
+    ORDER BY checked_at DESC LIMIT 20`).all(pageId, user_email);
   res.json(rows.map(r => ({
     ...r,
     errors_json: JSON.parse(r.errors_json || '[]'),
@@ -91,16 +95,20 @@ router.post('/review', jsonBody, (req, res) => {
 // Lektorat-Prüfung löschen
 router.delete('/check/:id', (req, res) => {
   const user_email = req.session?.user?.email || null;
+  const id = toIntId(req.params.id);
+  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   db.prepare('DELETE FROM page_checks WHERE id = ? AND user_email = ?')
-    .run(parseInt(req.params.id), user_email);
+    .run(id, user_email);
   res.json({ ok: true });
 });
 
 // Buchbewertung löschen
 router.delete('/review/:id', (req, res) => {
   const user_email = req.session?.user?.email || null;
+  const id = toIntId(req.params.id);
+  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   db.prepare('DELETE FROM book_reviews WHERE id = ? AND user_email = ?')
-    .run(parseInt(req.params.id), user_email);
+    .run(id, user_email);
   res.json({ ok: true });
 });
 
@@ -109,8 +117,8 @@ router.delete('/review/:id', (req, res) => {
 router.delete('/book/:book_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
   if (!user_email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
-  const book_id = parseInt(req.params.book_id);
-  if (!Number.isFinite(book_id)) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
+  const book_id = toIntId(req.params.book_id);
+  if (!book_id) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
 
   const delChecks     = db.prepare('DELETE FROM page_checks      WHERE book_id = ? AND user_email = ?');
   const delReviews    = db.prepare('DELETE FROM book_reviews     WHERE book_id = ? AND user_email = ?');
@@ -135,9 +143,11 @@ router.delete('/book/:book_id', (req, res) => {
 // Letzte 10 Bewertungen für ein Buch
 router.get('/review/:book_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const rows = db.prepare(`
     SELECT * FROM book_reviews WHERE book_id = ? AND user_email = ?
-    ORDER BY reviewed_at DESC LIMIT 10`).all(parseInt(req.params.book_id), user_email);
+    ORDER BY reviewed_at DESC LIMIT 10`).all(bookId, user_email);
   res.json(rows.map(r => ({ ...r, review_json: JSON.parse(r.review_json || 'null') })));
 });
 
@@ -145,7 +155,8 @@ router.get('/review/:book_id', (req, res) => {
 // Max. 10 Einträge pro Kapitel (absteigend nach Datum).
 router.get('/chapter-reviews/:book_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
-  const book_id = parseInt(req.params.book_id);
+  const book_id = toIntId(req.params.book_id);
+  if (!book_id) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const rows = db.prepare(`
     SELECT * FROM chapter_reviews WHERE book_id = ? AND user_email = ?
     ORDER BY chapter_id, reviewed_at DESC`).all(book_id, user_email);
@@ -163,16 +174,20 @@ router.get('/chapter-reviews/:book_id', (req, res) => {
 // Einzelnes Kapitel-Review löschen
 router.delete('/chapter-review/:id', (req, res) => {
   const user_email = req.session?.user?.email || null;
+  const id = toIntId(req.params.id);
+  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   db.prepare('DELETE FROM chapter_reviews WHERE id = ? AND user_email = ?')
-    .run(parseInt(req.params.id), user_email);
+    .run(id, user_email);
   res.json({ ok: true });
 });
 
 // Seiten-Stats-Cache: alle gecachten Stats für ein Buch (geteilter Cache, nicht user-spezifisch)
 router.get('/page-stats/:book_id', (req, res) => {
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const rows = db.prepare(
     'SELECT page_id, tok, words, chars, updated_at FROM page_stats WHERE book_id = ?'
-  ).all(parseInt(req.params.book_id));
+  ).all(bookId);
   const map = {};
   for (const r of rows) map[r.page_id] = { tok: r.tok, words: r.words, chars: r.chars, updated_at: r.updated_at };
   res.json(map);
@@ -196,18 +211,21 @@ router.post('/page-stats/batch', express.json(), (req, res) => {
 
 // Buchstatistik-Verlauf für Zeitliniendiagramm (geteilter Cache, nicht user-spezifisch)
 router.get('/book-stats/:book_id', (req, res) => {
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const rows = db.prepare(`
     SELECT id, book_id, book_name, recorded_at, page_count, words, chars, tok, unique_words, chapter_count, avg_sentence_len, avg_lix, avg_flesch_de
     FROM book_stats_history WHERE book_id = ?
     ORDER BY recorded_at ASC
-  `).all(parseInt(req.params.book_id));
+  `).all(bookId);
   res.json(rows);
 });
 
 // Stil-Heatmap: alle Stil-Metriken pro Seite eines Buchs (inkl. Kapitel-Info).
 // Frontend aggregiert nach Kapitel, erkennt noch nicht berechnete Seiten via metrics_version.
 router.get('/style-stats/:book_id', (req, res) => {
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const rows = db.prepare(`
     SELECT ps.page_id, p.page_name, p.chapter_id, p.chapter_name,
            ps.words, ps.chars, ps.sentences, ps.dialog_chars,
@@ -247,7 +265,8 @@ router.get('/style-stats/:book_id', (req, res) => {
 // "bearbeitet seit Lektorat" (warn) flippen.
 router.get('/page-ages/:book_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const rows = db.prepare(`
     WITH latest AS (
       SELECT page_id, checked_at, saved_at, error_count,
@@ -269,7 +288,8 @@ router.get('/page-ages/:book_id', (req, res) => {
 // Lektorat-Abdeckung: wie viele Seiten eines Buchs wurden schon geprüft (user-spezifisch)
 router.get('/coverage/:book_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const { total } = db.prepare('SELECT COUNT(*) as total FROM page_stats WHERE book_id = ?').get(bookId);
   const { checked } = db.prepare(
     'SELECT COUNT(DISTINCT page_id) as checked FROM page_checks WHERE book_id = ? AND user_email = ?'
@@ -284,7 +304,8 @@ router.get('/coverage/:book_id', (req, res) => {
 // mode=all      → alle Fehler aus errors_json
 router.get('/fehler-heatmap/:book_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const mode = ['open', 'applied', 'all'].includes(req.query.mode) ? req.query.mode : 'open';
 
   const pages = db.prepare(`
@@ -428,9 +449,9 @@ router.get('/fehler-heatmap/:book_id', (req, res) => {
 router.post('/writing-time', jsonBody, (req, res) => {
   const user_email = req.session?.user?.email || null;
   if (!user_email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
-  const book_id = parseInt(req.body?.book_id);
+  const book_id = toIntId(req.body?.book_id);
   const secondsRaw = Number(req.body?.seconds);
-  if (!Number.isFinite(book_id) || book_id <= 0) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
+  if (!book_id) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   if (!Number.isFinite(secondsRaw) || secondsRaw <= 0) return res.json({ ok: true, added: 0 });
   const seconds = Math.min(Math.round(secondsRaw), 3600);
   const date = new Date().toISOString().slice(0, 10);
@@ -448,7 +469,8 @@ router.post('/writing-time', jsonBody, (req, res) => {
 router.get('/writing-time/:book_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
   if (!user_email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
-  const book_id = parseInt(req.params.book_id);
+  const book_id = toIntId(req.params.book_id);
+  if (!book_id) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const row = db.prepare(`
     SELECT COALESCE(SUM(seconds), 0) AS total_seconds,
            COUNT(*)                  AS active_days,

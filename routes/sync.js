@@ -2,6 +2,7 @@ const express = require('express');
 const { db, getAnyUserToken, getAllUserTokens, reconcilePageIds, pruneStaleBookData, getTokenForRequest } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
 const logger = require('../logger');
 const { CHARS_PER_TOKEN } = require('../lib/ai');
+const { toIntId } = require('../lib/validate');
 const { bsGet, bsGetAll } = require('../lib/bookstack');
 const { computePageIndex, writePageIndex, writeFigureMentionsForPageAllUsers, tokenizeNamesForStopwords } = require('../lib/page-index');
 const { invalidateBookPageCache } = require('./jobs/chat');
@@ -300,9 +301,11 @@ async function syncAllBooks() {
 
 // GET /sync/pages/:book_id – gecachte Seiten-Vorschautexte liefern
 router.get('/pages/:book_id', (req, res) => {
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const rows = db.prepare(
     'SELECT page_id, preview_text, updated_at FROM pages WHERE book_id = ?'
-  ).all(parseInt(req.params.book_id));
+  ).all(bookId);
   const result = {};
   for (const r of rows) result[r.page_id] = { preview_text: r.preview_text, updated_at: r.updated_at };
   res.json(result);
@@ -310,10 +313,12 @@ router.get('/pages/:book_id', (req, res) => {
 
 // POST /sync/pages/:book_id – leichtgewichtiger pages-Cache-Update (ohne Seiten-Inhalte)
 router.post('/pages/:book_id', async (req, res) => {
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const token = getTokenForRequest(req) || getAnyUserToken();
   if (!token) return res.status(503).json({ error_code: 'NO_BOOKSTACK_TOKEN' });
   try {
-    await syncPagesCache(parseInt(req.params.book_id), token);
+    await syncPagesCache(bookId, token);
     res.json({ ok: true });
   } catch (e) {
     logger.error('pages-Cache Sync Fehler: ' + e.message);
@@ -323,10 +328,12 @@ router.post('/pages/:book_id', async (req, res) => {
 
 // POST /sync/book/:book_id – manueller Trigger für ein Buch
 router.post('/book/:book_id', async (req, res) => {
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const token = getTokenForRequest(req) || getAnyUserToken();
   if (!token) return res.status(503).json({ error_code: 'NO_BOOKSTACK_TOKEN' });
   try {
-    const result = await syncBook(parseInt(req.params.book_id), token);
+    const result = await syncBook(bookId, token);
     res.json({ ok: true, ...result });
   } catch (e) {
     logger.error('Sync-Route Fehler: ' + e.message);

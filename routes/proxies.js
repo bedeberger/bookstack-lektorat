@@ -4,6 +4,7 @@ const logger = require('../logger');
 const { MAX_TOKENS_OUT, MODEL_CONTEXT, CHARS_PER_TOKEN, ollamaTemp, llamaTemp } = require('../lib/ai');
 const { getBookLocale, getUser, getTokenForRequest } = require('../db/schema');
 const { getPrompts, getPromptConfig } = require('../lib/prompts-loader');
+const { toIntId } = require('../lib/validate');
 
 const BOOKSTACK_URL = process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80';
 
@@ -303,7 +304,7 @@ async function fetchOpenThesaurus(word, budgetSignal) {
 
 router.get('/openthesaurus/synonyms', async (req, res) => {
   const word = (req.query.word || '').trim();
-  const bookId = parseInt(req.query.book_id, 10) || null;
+  const bookId = toIntId(req.query.book_id);
   const log = logger.child({ job: 'thesaurus', user: req.session?.user?.email || '-', book: bookId || '-' });
   if (!word) return res.json({ synonyme: [], disabled: false });
   const userEmail = req.session?.user?.email || null;

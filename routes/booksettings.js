@@ -1,6 +1,7 @@
 'use strict';
 const express = require('express');
 const { getBookSettings, saveBookSettings } = require('../db/schema');
+const { toIntId } = require('../lib/validate');
 
 const router = express.Router();
 const jsonBody = express.json();
@@ -14,7 +15,7 @@ const BUCH_KONTEXT_MAX = 1000;
 
 /** Gibt Sprache, Region, Buchtyp und Buchkontext für ein Buch zurück. */
 router.get('/:book_id', (req, res) => {
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const settings = getBookSettings(bookId, req.session?.user?.email || null);
   res.json(settings);
@@ -22,7 +23,7 @@ router.get('/:book_id', (req, res) => {
 
 /** Speichert Sprache, Region, Buchtyp und Buchkontext für ein Buch. */
 router.put('/:book_id', jsonBody, (req, res) => {
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
 
   const { language, region, buchtyp, buch_kontext, erzaehlperspektive, erzaehlzeit } = req.body || {};

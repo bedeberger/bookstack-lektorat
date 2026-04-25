@@ -50,8 +50,13 @@ export const offlineSyncMethods = {
   // Enumeriert alle localStorage-Drafts und versucht sie nach BookStack zu
   // pushen. Aktive Editor-Seite wird übersprungen — dafür ist
   // editor-edit._installOnlineRetry zuständig (synchronisiert den
-  // Editor-State). Konflikt (Server-HTML ≠ draft.originalHtml) → Draft bleibt
-  // liegen, damit editor-edit beim Öffnen nachfragen kann.
+  // Editor-State). Konflikt (Server-HTML ≠ draft.originalHtml ODER
+  // Server-updated_at ≠ draft.originalUpdatedAt) → Draft bleibt liegen,
+  // damit editor-edit beim Öffnen nachfragen kann.
+  //
+  // WICHTIG: Page-Read MUSS am Service-Worker-Cache vorbei (`__fresh=1`),
+  // sonst matcht stale `page.html` mit veraltetem `draft.originalHtml`
+  // und wir überschreiben den Server-Stand mit altem Inhalt.
   async _pushAllDrafts() {
     if (this._draftPushRunning) return;
     this._draftPushRunning = true;
@@ -64,8 +69,14 @@ export const offlineSyncMethods = {
         const draft = readDraft(pageId);
         if (!draft?.html) continue;
         try {
-          const page = await this.bsGet('pages/' + pageId);
+          const r = await fetch('/api/pages/' + pageId + '?__fresh=1');
+          if (!r.ok) { failed++; continue; }
+          const page = await r.json();
           if (draft.originalHtml && page.html !== draft.originalHtml) {
+            conflicts++;
+            continue;
+          }
+          if (draft.originalUpdatedAt && page.updated_at && page.updated_at !== draft.originalUpdatedAt) {
             conflicts++;
             continue;
           }

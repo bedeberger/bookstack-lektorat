@@ -1,4 +1,4 @@
-import { htmlToText, stripFocusArtefacts, fetchJson } from './utils.js';
+import { htmlToText, stripFocusArtefacts, fetchJson, escHtml } from './utils.js';
 
 // View-Steuerung: Exklusivität zwischen Buch-/Seiten-Karten, Seitenauswahl,
 // Reset-Logik beim Buch-/Seitenwechsel. Buchebenen-Features und Editor sind
@@ -39,7 +39,7 @@ export const appViewMethods = {
         this.checkLoading = true;
         this.checkProgress = 0;
         this.analysisOut = '';
-        this.setStatus(this.t('app.lektoratRunning'), true);
+        this.checkStatus = `<span class="spinner"></span>${escHtml(this.t('app.lektoratRunning'))}`;
         this.startCheckPoll(activeJobId);
         await this.loadPageHistory(p.id);
         return;
@@ -66,7 +66,18 @@ export const appViewMethods = {
 
     // Figurenkontext für dieses Kapitel laden (parallel zur History)
     this.loadChapterFigures();
+    this._loadPageRevisionCount(p.id);
     await this.loadPageHistory(p.id);
+  },
+
+  async _loadPageRevisionCount(pageId) {
+    try {
+      const data = await this.bsGet(`page-revisions?filter[page_id]=${pageId}&count=1`);
+      if (this.currentPage?.id !== pageId) return;
+      this.pageRevisionCount = data.total ?? null;
+    } catch (e) {
+      console.error('[loadPageRevisionCount]', e);
+    }
   },
 
   // Schliesst die anderen Hauptkarten (nicht Tree – der bleibt immer aktiv).
@@ -247,6 +258,7 @@ export const appViewMethods = {
     this.resetChat();
     this.currentPage = null;
     this.currentPageEmpty = false;
+    this.pageRevisionCount = null;
     this.renderedPageHtml = '';
     this.chapterFigures = [];
     this.showChapterFigures = false;
@@ -272,6 +284,7 @@ export const appViewMethods = {
     this.checkDone = false;
     this.checkLoading = false;
     this.checkProgress = 0;
+    this.checkStatus = '';
   },
 
   // Setzt allen buchbezogenen State zurück. Wird bei Buchwechsel (Combobox,

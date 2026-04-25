@@ -8,6 +8,7 @@
             x-text="lastSavedKind() === 'draft' ? t('editor.draft', { when: lastSavedLabel() }) : t('editor.saved', { when: lastSavedLabel() })"
             :title="lastSavedKind() === 'draft' ? t('editor.draftTitle') : t('editor.savedTitle')"></span>
       <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag tag--link" x-text="t('editor.openInBookstack')"></a>
+      <a x-show="currentPage?.url && pageRevisionCount > 0" :href="currentPage?.url + '/revisions'" target="_blank" rel="noopener" class="tag tag--link" :title="t('editor.revisionsTitle')" x-text="t('editor.revisions', { n: pageRevisionCount })"></a>
       <span x-show="focusMode && editMode" class="focus-live-counter"
             x-text="t('editor.focus.counter', { words: focusCountWords, chars: focusCountChars, wordsDelta: focusCountWordsDelta, charsDelta: focusCountCharsDelta })"></span>
       <span x-show="currentPage && tokEsts[currentPage.id]" class="tok-stats">
@@ -32,8 +33,8 @@
       <template x-if="!editMode">
         <span class="display-contents">
           <button type="button" @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? t('editor.btn.pageEmpty') : t('editor.btn.checkTitle')" x-text="t('editor.btn.check')"></button>
-          <button type="button" @click="startEdit()" :disabled="checkLoading || saveApplying != null || !originalHtml" :title="t('editor.btn.editTitle')" x-text="t('editor.btn.edit')"></button>
-          <button type="button" @click="startFocusEdit()" :disabled="checkLoading || saveApplying != null || !originalHtml" :title="t('editor.btn.focusTitle')" x-text="t('editor.btn.focus')"></button>
+          <button type="button" @click="startEdit()" :disabled="checkLoading || saveApplying != null || originalHtml === null" :title="t('editor.btn.editTitle')" x-text="t('editor.btn.edit')"></button>
+          <button type="button" @click="startFocusEdit()" :disabled="checkLoading || saveApplying != null || originalHtml === null" :title="t('editor.btn.focusTitle')" x-text="t('editor.btn.focus')"></button>
           <button type="button" @click="closeFindings()" x-show="checkDone" :title="t('editor.btn.exitCheckTitle')" x-text="t('editor.btn.exitCheck')"></button>
           <button type="button" class="success" @click="saveCorrections()" :disabled="saveApplying != null" x-show="(correctedHtml && selectedFindings.some(v => v)) || saveApplying != null">
             <span x-show="saveApplying != null" class="spinner"></span><span x-text="saveApplying != null ? t('editor.btn.saveCorrectionsProgress') : t('editor.btn.saveCorrections')"></span>
@@ -56,6 +57,7 @@
   <div class="progress-bar-wrap" x-show="checkProgress > 0 || saveApplying != null">
     <div class="progress-bar" :style="{ '--progress': (checkProgress || saveApplying || 0) + '%' }"></div>
   </div>
+  <div class="card-status" x-show="checkStatus" x-html="checkStatus"></div>
   <div id="status" x-html="statusHtml"></div>
 
   <!-- Figurenkontext-Panel (collapsible) -->

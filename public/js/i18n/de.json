@@ -485,7 +485,7 @@
 
   "fehlerHeatmap.title":         "Fehler-Heatmap: {name}",
   "fehlerHeatmap.emptyState":    "Noch keine Lektorat-Läufe vorhanden. Öffne eine Seite und starte die Prüfung.",
-  "fehlerHeatmap.legend":        "Zahlen = Befunde pro 1000 Wörter Kapiteltext (z.B. 4,2 = 4 Befunde dieses Typs auf 1000 Wörter). So bleiben kurze und lange Kapitel vergleichbar. Farbe pro Spalte skaliert: Rot = vergleichsweise hohe Dichte, Grün = niedrig. Schraffierte Zellen: Kapitel noch nicht oder nur teilweise geprüft.",
+  "fehlerHeatmap.legend":        "Zahlen = Befunde pro 1000 Wörter Kapiteltext (z.B. 4.2 = 4 Befunde dieses Typs auf 1000 Wörter). So bleiben kurze und lange Kapitel vergleichbar. Farbe pro Spalte skaliert: Rot = vergleichsweise hohe Dichte, Grün = niedrig. Schraffierte Zellen: Kapitel noch nicht oder nur teilweise geprüft.",
   "fehlerHeatmap.chapter":       "Kapitel",
   "fehlerHeatmap.coverage":      "Abdeckung",
   "fehlerHeatmap.coverageLabel": "{checked} / {total} Seiten",
@@ -514,6 +514,8 @@
   "editor.draftTitle":           "Lokaler Entwurf – noch nicht auf dem Server",
   "editor.savedTitle":           "Auf BookStack gespeichert",
   "editor.openInBookstack":      "In BookStack öffnen",
+  "editor.revisions":            "{n} Versionen",
+  "editor.revisionsTitle":       "Versionsverlauf in BookStack öffnen",
 
   "editor.btn.check":            "Prüfen",
   "editor.btn.checkTitle":       "Ctrl+Enter",

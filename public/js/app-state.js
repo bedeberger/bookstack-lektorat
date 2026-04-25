@@ -64,6 +64,7 @@ const navigationState = () => ({
 const editorState = () => ({
   currentPage: null,
   currentPageEmpty: false,
+  pageRevisionCount: null,
   renderedPageHtml: '',
   chapterFigures: [],
   showChapterFigures: false,
@@ -141,6 +142,7 @@ const lektoratState = () => ({
   checkDone: false,
   checkLoading: false,
   checkProgress: 0,
+  checkStatus: '',
   saveApplying: null,
   batchLoading: false,
   batchProgress: 0,

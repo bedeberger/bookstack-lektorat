@@ -1,13 +1,15 @@
 'use strict';
 const express = require('express');
 const { db, saveOrteToDb } = require('../db/schema');
+const { toIntId, inClause } = require('../lib/validate');
 
 const router = express.Router();
 const jsonBody = express.json();
 
 // Schauplätze eines Buchs laden
 router.get('/:book_id', (req, res) => {
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const userEmail = req.session?.user?.email || null;
 
   const rows = db.prepare(`
@@ -21,13 +23,13 @@ router.get('/:book_id', (req, res) => {
   if (!rows.length) return res.json(null);
 
   const locIds = rows.map(r => r.id);
-  const ph = locIds.map(() => '?').join(',');
+  const { sql: locSql, values: locVals } = inClause(locIds);
 
-  const lfRows = db.prepare(`SELECT location_id, fig_id FROM location_figures WHERE location_id IN (${ph})`).all(...locIds);
+  const lfRows = db.prepare(`SELECT location_id, fig_id FROM location_figures WHERE location_id IN ${locSql}`).all(...locVals);
   const figMap = {};
   for (const lf of lfRows) (figMap[lf.location_id] ??= []).push(lf.fig_id);
 
-  const lcRows = db.prepare(`SELECT location_id, chapter_name, haeufigkeit FROM location_chapters WHERE location_id IN (${ph}) ORDER BY haeufigkeit DESC`).all(...locIds);
+  const lcRows = db.prepare(`SELECT location_id, chapter_name, haeufigkeit FROM location_chapters WHERE location_id IN ${locSql} ORDER BY haeufigkeit DESC`).all(...locVals);
   const kapMap = {};
   for (const lc of lcRows) (kapMap[lc.location_id] ??= []).push({ name: lc.chapter_name, haeufigkeit: lc.haeufigkeit });
 
@@ -48,8 +50,10 @@ router.get('/:book_id', (req, res) => {
 
 // Schauplätze eines Buchs speichern (überschreibt)
 router.put('/:book_id', jsonBody, (req, res) => {
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const userEmail = req.session?.user?.email || null;
-  saveOrteToDb(parseInt(req.params.book_id), req.body.orte || [], userEmail);
+  saveOrteToDb(bookId, req.body.orte || [], userEmail);
   res.json({ ok: true });
 });
 

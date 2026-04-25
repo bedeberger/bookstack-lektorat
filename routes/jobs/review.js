@@ -11,6 +11,7 @@ const {
   jsonBody,
 } = require('./shared');
 const { narrativeLabels } = require('./narrative-labels');
+const { toIntId } = require('../../lib/validate');
 
 const reviewRouter = express.Router();
 
@@ -112,7 +113,8 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 reviewRouter.post('/review', jsonBody, (req, res) => {
-  const { book_id, book_name } = req.body;
+  const { book_name } = req.body;
+  const book_id = toIntId(req.body?.book_id);
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = getTokenForRequest(req);

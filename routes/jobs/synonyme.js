@@ -7,6 +7,7 @@ const {
   jobs, runningJobs, createJob, enqueueJob, jobKey, findActiveJobId,
   jsonBody,
 } = require('./shared');
+const { toIntId } = require('../../lib/validate');
 
 const synonymeRouter = express.Router();
 
@@ -48,7 +49,8 @@ async function runSynonymJob(jobId, wort, satz, bookId, userEmail) {
 }
 
 synonymeRouter.post('/synonym', jsonBody, (req, res) => {
-  const { wort, satz, book_id } = req.body || {};
+  const { wort, satz } = req.body || {};
+  const book_id = toIntId(req.body?.book_id);
   if (!wort || typeof wort !== 'string' || !wort.trim()) return res.status(400).json({ error_code: 'WORT_REQUIRED' });
   if (!satz || typeof satz !== 'string' || !satz.trim()) return res.status(400).json({ error_code: 'SATZ_REQUIRED' });
   const userEmail = req.session?.user?.email || null;

@@ -6,6 +6,7 @@ const { db, insertJobRun, startJobRun, endJobRun, getBookSettings } = require('.
 const { callAI, parseJSON, CHARS_PER_TOKEN, MAX_TOKENS_OUT, INPUT_BUDGET_CHARS } = require('../../lib/ai');
 const { bsGet: _bsGet, bsGetAll: _bsGetAll, bsBatch: _bsBatch, BOOKSTACK_URL: BS_URL } = require('../../lib/bookstack');
 const { getPrompts, getPromptConfig } = require('../../lib/prompts-loader');
+const { toIntId, inClause } = require('../../lib/validate');
 
 // Rückwärtskompatibler Export – einige Module lesen _promptConfig direkt.
 const _promptConfig = getPromptConfig();
@@ -327,10 +328,10 @@ async function loadPageContents(pages, chMap, minLength, onBatch, userToken, sig
   if (minLength > 0 && minLength <= 800 && pages.length > 0) {
     try {
       const ids = pages.map(p => p.id);
-      const placeholders = ids.map(() => '?').join(',');
+      const { sql, values } = inClause(ids);
       const rows = db.prepare(
-        `SELECT page_id, preview_text FROM pages WHERE page_id IN (${placeholders})`
-      ).all(...ids);
+        `SELECT page_id, preview_text FROM pages WHERE page_id IN ${sql}`
+      ).all(...values);
       const previewMap = new Map(rows.map(r => [r.page_id, r.preview_text || '']));
       filteredPages = pages.filter(p => {
         const prev = previewMap.get(p.id);
@@ -705,13 +706,12 @@ sharedRouter.get('/queue', (req, res) => {
 
 sharedRouter.get('/stats', (req, res) => {
   const userEmail = req.session?.user?.email || null;
-  const placeholders = STATS_EXCLUDED_TYPES.map(() => '?').join(',');
-  const bookIdRaw = req.query.book_id;
-  const bookId = bookIdRaw != null && bookIdRaw !== '' ? parseInt(bookIdRaw) : null;
-  const bookClause = Number.isFinite(bookId) ? ' AND book_id = ?' : '';
-  const params = Number.isFinite(bookId)
-    ? [userEmail, bookId, ...STATS_EXCLUDED_TYPES]
-    : [userEmail, ...STATS_EXCLUDED_TYPES];
+  const { sql: excludedSql, values: excludedVals } = inClause(STATS_EXCLUDED_TYPES);
+  const bookId = toIntId(req.query.book_id);
+  const bookClause = bookId ? ' AND book_id = ?' : '';
+  const params = bookId
+    ? [userEmail, bookId, ...excludedVals]
+    : [userEmail, ...excludedVals];
   const rows = db.prepare(`
     SELECT
       type,
@@ -723,7 +723,7 @@ sharedRouter.get('/stats', (req, res) => {
       AVG(CASE WHEN status = 'done' THEN tokens_out ELSE NULL END) AS avgTokensOut,
       SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS errorCount
     FROM job_runs
-    WHERE user_email = ?${bookClause} AND type NOT IN (${placeholders})
+    WHERE user_email = ?${bookClause} AND type NOT IN ${excludedSql}
     GROUP BY type
     ORDER BY lastRun IS NULL, lastRun DESC
   `).all(...params);
@@ -745,14 +745,15 @@ sharedRouter.get('/stats', (req, res) => {
 });
 
 sharedRouter.get('/last-run', (req, res) => {
-  const { type, book_id } = req.query;
-  if (!type || !book_id) return res.status(400).json({ error_code: 'TYPE_BOOKID_REQUIRED' });
+  const { type } = req.query;
+  const bookId = toIntId(req.query.book_id);
+  if (!type || !bookId) return res.status(400).json({ error_code: 'TYPE_BOOKID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const row = db.prepare(`
     SELECT ended_at FROM job_runs
     WHERE type = ? AND book_id = ? AND user_email = ? AND status = 'done'
     ORDER BY ended_at DESC LIMIT 1
-  `).get(type, parseInt(book_id), userEmail);
+  `).get(type, bookId, userEmail);
   res.json({ lastRun: row?.ended_at || null });
 });
 

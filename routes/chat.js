@@ -2,6 +2,7 @@ const express = require('express');
 const { db } = require('../db/schema');
 const logger = require('../logger');
 const { callAIChat, parseJSON, chatTemperature } = require('../lib/ai');
+const { toIntId } = require('../lib/validate');
 const {
   getPrompts, getBookPrompts,
   getFiguren, getLatestReview, buildChatMessageHistory,
@@ -26,7 +27,9 @@ function normalizeContextInfo(ci) {
 
 /** Neue Chat-Session erstellen */
 router.post('/session', jsonBody, (req, res) => {
-  const { book_id, book_name, page_id, page_name } = req.body;
+  const { book_name, page_name } = req.body;
+  const book_id = toIntId(req.body?.book_id);
+  const page_id = toIntId(req.body?.page_id);
   const userEmail = req.session?.user?.email || null;
   if (!book_id || !page_id || !userEmail) {
     return res.status(400).json({ error_code: 'BOOKID_PAGEID_LOGIN_REQ' });
@@ -41,7 +44,8 @@ router.post('/session', jsonBody, (req, res) => {
 
 /** Neue Buch-Chat-Session erstellen (ohne Seiten-Bezug) */
 router.post('/session/book', jsonBody, (req, res) => {
-  const { book_id, book_name } = req.body;
+  const { book_name } = req.body;
+  const book_id = toIntId(req.body?.book_id);
   const userEmail = req.session?.user?.email || null;
   if (!book_id || !userEmail) {
     return res.status(400).json({ error_code: 'BOOKID_LOGIN_REQ' });
@@ -57,6 +61,8 @@ router.post('/session/book', jsonBody, (req, res) => {
 /** Alle Buch-Chat-Sessions eines Buchs (neueste zuerst, max. 20) */
 router.get('/sessions/book/:book_id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const rows = db.prepare(`
     SELECT cs.id, cs.book_id, cs.book_name, cs.created_at, cs.last_message_at,
            (SELECT content FROM chat_messages WHERE session_id = cs.id ORDER BY created_at ASC LIMIT 1) AS preview
@@ -64,13 +70,15 @@ router.get('/sessions/book/:book_id', (req, res) => {
     WHERE cs.book_id = ? AND cs.page_name = '__book__' AND cs.user_email = ?
     ORDER BY cs.last_message_at DESC
     LIMIT 20
-  `).all(parseInt(req.params.book_id), userEmail);
+  `).all(bookId, userEmail);
   res.json(rows);
 });
 
 /** Alle Sessions einer Seite (neueste zuerst, max. 20) */
 router.get('/sessions/:page_id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
+  const pageId = toIntId(req.params.page_id);
+  if (!pageId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const rows = db.prepare(`
     SELECT cs.id, cs.book_id, cs.page_id, cs.page_name, cs.created_at, cs.last_message_at,
            (SELECT content FROM chat_messages WHERE session_id = cs.id ORDER BY created_at ASC LIMIT 1) AS preview
@@ -78,16 +86,18 @@ router.get('/sessions/:page_id', (req, res) => {
     WHERE cs.page_id = ? AND cs.user_email = ?
     ORDER BY cs.last_message_at DESC
     LIMIT 20
-  `).all(parseInt(req.params.page_id), userEmail);
+  `).all(pageId, userEmail);
   res.json(rows);
 });
 
 /** Session mit allen Nachrichten laden */
 router.get('/session/:id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
+  const id = toIntId(req.params.id);
+  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   const session = db.prepare(`
     SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?
-  `).get(parseInt(req.params.id), userEmail);
+  `).get(id, userEmail);
   if (!session) return res.status(404).json({ error_code: 'SESSION_NOT_FOUND' });
 
   const messages = db.prepare(`
@@ -108,16 +118,20 @@ router.get('/session/:id', (req, res) => {
 /** Session löschen */
 router.delete('/session/:id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
+  const id = toIntId(req.params.id);
+  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   db.prepare('DELETE FROM chat_sessions WHERE id = ? AND user_email = ?')
-    .run(parseInt(req.params.id), userEmail);
+    .run(id, userEmail);
   res.json({ ok: true });
 });
 
 /** Einzelnen Vorschlag einer Assistant-Nachricht als übernommen markieren (oder zurücksetzen) */
 router.patch('/message/:id/vorschlag/:idx/applied', jsonBody, (req, res) => {
   const userEmail = req.session?.user?.email || null;
-  const msgId = parseInt(req.params.id);
-  const idx = parseInt(req.params.idx);
+  const msgId = toIntId(req.params.id);
+  // idx kann 0 sein → toIntId reicht nicht (lehnt 0 ab). Eigene Prüfung auf nicht-negativen Integer.
+  const idx = /^(0|[1-9][0-9]*)$/.test(String(req.params.idx ?? '')) ? Number(req.params.idx) : null;
+  if (!msgId || idx == null) return res.status(400).json({ error_code: 'INVALID_ID' });
   const applied = req.body?.applied !== false;
 
   const row = db.prepare(`
@@ -153,7 +167,8 @@ router.patch('/message/:id/vorschlag/:idx/applied', jsonBody, (req, res) => {
  *   data: [DONE]
  */
 router.post('/send', jsonBody, async (req, res) => {
-  const { session_id, message, page_text } = req.body;
+  const { message, page_text } = req.body;
+  const session_id = toIntId(req.body?.session_id);
   const userEmail = req.session?.user?.email || null;
 
   if (!session_id || !message?.trim() || !userEmail) {
@@ -168,7 +183,7 @@ router.post('/send', jsonBody, async (req, res) => {
     // Session validieren
     const session = db.prepare(
       'SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?'
-    ).get(parseInt(session_id), userEmail);
+    ).get(session_id, userEmail);
     if (!session) return res.status(404).json({ error_code: 'SESSION_NOT_FOUND' });
     logger.info(`[chat/send] «${session.page_name}» session=${session_id} user=${userEmail} book=${session.book_id}`);
 

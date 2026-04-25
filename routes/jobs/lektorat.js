@@ -11,6 +11,7 @@ const {
 } = require('./shared');
 
 const { narrativeLabels } = require('./narrative-labels');
+const { toIntId } = require('../../lib/validate');
 
 // Lokale Provider (ollama/llama) bekommen einen deutlich abgespeckten Lektorat-Prompt:
 // kein Vorseiten-Kontext (BookStack-Roundtrip gespart), keine Figuren-Beziehungen,
@@ -299,7 +300,9 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
 
 // ── Routen ────────────────────────────────────────────────────────────────────
 lektoratRouter.post('/check', jsonBody, (req, res) => {
-  const { page_id, book_id, page_name } = req.body;
+  const { page_name } = req.body;
+  const page_id = toIntId(req.body?.page_id);
+  const book_id = toIntId(req.body?.book_id);
   if (!page_id) return res.status(400).json({ error_code: 'PAGE_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = getTokenForRequest(req);
@@ -313,7 +316,8 @@ lektoratRouter.post('/check', jsonBody, (req, res) => {
 });
 
 lektoratRouter.post('/batch-check', jsonBody, (req, res) => {
-  const { book_id, book_name } = req.body;
+  const { book_name } = req.body;
+  const book_id = toIntId(req.body?.book_id);
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const userToken = getTokenForRequest(req);

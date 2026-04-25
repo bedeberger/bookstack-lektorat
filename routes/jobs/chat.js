@@ -13,6 +13,7 @@ const {
   getFiguren, getLatestReview, buildChatMessageHistory,
 } = require('./shared');
 const { executeTool } = require('./book-chat-tools');
+const { toIntId } = require('../../lib/validate');
 
 const chatRouter = express.Router();
 
@@ -352,14 +353,15 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
 // ── Gemeinsamer Route-Handler ────────────────────────────────────────────────
 
 function _handleChatPost(req, res, { jobType, sessionSelect, labelFn, runFn }) {
-  const { session_id, message } = req.body;
+  const { message } = req.body;
+  const session_id = toIntId(req.body?.session_id);
   if (!session_id || !message?.trim()) return res.status(400).json({ error_code: 'SESSION_ID_MSG_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   if (!userEmail) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   const existing = findActiveJobId(jobType, session_id, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });
 
-  const session = db.prepare(sessionSelect).get(parseInt(session_id), userEmail);
+  const session = db.prepare(sessionSelect).get(session_id, userEmail);
   if (!session) return res.status(404).json({ error_code: 'SESSION_NOT_FOUND' });
 
   const now = new Date().toISOString();
@@ -569,7 +571,7 @@ chatRouter.post('/book-chat', jsonBody, (req, res) => _handleChatPost(req, res, 
 }));
 
 chatRouter.delete('/book-chat-cache', (req, res) => {
-  const { book_id } = req.query;
+  const book_id = toIntId(req.query.book_id);
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const userEmail = req.session?.user?.email || null;
   const key = `${book_id}:${userEmail}`;

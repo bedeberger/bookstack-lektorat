@@ -160,16 +160,22 @@ document.addEventListener('alpine:init', () => {
   registerLektoratFindingsCard();
   registerPageHistoryCard();
 
-  Alpine.data('combobox', (placeholder = 'Auswählen…', emptyLabel = null) => ({
+  Alpine.data('combobox', (placeholder = null, emptyLabel = null) => ({
     open: false,
     query: '',
     value: null,
     options: [],
     _disabled: false,
-    placeholder,
-    emptyLabel,
+    _placeholder: placeholder,
+    _emptyLabel: emptyLabel,
     highlighted: -1,
 
+    get placeholder() {
+      return this._placeholder ?? window.__app?.t?.('common.choose') ?? 'Auswählen…';
+    },
+    get emptyLabel() {
+      return this._emptyLabel;
+    },
     get _allOptions() {
       return this.emptyLabel
         ? [{ value: '', label: this.emptyLabel }, ...this.options]
@@ -246,7 +252,7 @@ document.addEventListener('alpine:init', () => {
         </button>
         <div class="combobox-dropdown" x-show="open" x-cloak>
           <input type="text" class="combobox-search" x-model="query" x-ref="cbInput"
-                 placeholder="Suchen…" role="searchbox" aria-label="Suchen">
+                 :placeholder="$app.t('common.searchShort')" role="searchbox" :aria-label="$app.t('common.searchShort')">
           <ul class="combobox-list" role="listbox"
               :aria-activedescendant="highlighted >= 0 ? ($id('cb-opt') + '-' + highlighted) : null">
             <template x-for="(opt, i) in filtered" :key="opt.value">
@@ -258,7 +264,7 @@ document.addEventListener('alpine:init', () => {
                   @click="select(opt.value)" @mouseenter="highlighted = i"
                   x-text="opt.label"></li>
             </template>
-            <li class="combobox-empty" x-show="filtered.length === 0">Keine Treffer</li>
+            <li class="combobox-empty" x-show="filtered.length === 0" x-text="$app.t('find.noMatches')"></li>
           </ul>
         </div>
       `;

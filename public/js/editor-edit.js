@@ -36,10 +36,10 @@ function readDraft(pageId) {
   } catch { return null; }
 }
 
-function writeDraft(pageId, html, originalHtml) {
+function writeDraft(pageId, html, originalHtml, originalUpdatedAt) {
   try {
     localStorage.setItem(DRAFT_KEY(pageId), JSON.stringify({
-      html, originalHtml, savedAt: Date.now(),
+      html, originalHtml, originalUpdatedAt: originalUpdatedAt || null, savedAt: Date.now(),
     }));
   } catch { /* quota – ignoriert */ }
 }
@@ -122,7 +122,7 @@ export const editorEditMethods = {
   },
 
   startEdit() {
-    if (!this.currentPage || !this.originalHtml) return;
+    if (!this.currentPage || this.originalHtml === null) return;
     if (this.checkLoading || this.saveApplying != null) return;
     this.editMode = true;
     this.editDirty = false;
@@ -152,8 +152,15 @@ export const editorEditMethods = {
       const findings = this.lektoratFindings || [];
       if (findings.length > 0 && initialHtml === this.originalHtml) {
         el.innerHTML = buildHighlightedHtml(this.originalHtml, findings, findings.map(() => false), []);
-      } else {
+      } else if (initialHtml) {
         el.innerHTML = initialHtml;
+      } else {
+        // Leere Seite: Platzhalter-Absatz, damit der Cursor einen Block hat
+        // (sonst landen erste Zeichen als orphan-Textnode direkt unter dem
+        // Editor-Root und Focus-Mode-Absatz-Erkennung greift erst nach Enter).
+        const p = document.createElement('p');
+        p.appendChild(document.createElement('br'));
+        el.replaceChildren(p);
       }
       // Pre-Normalize-Snapshot: weicht die Fassung nach normalizeEditorBlocks
       // davon ab, hat der Normalizer Legacy-HTML repariert (orphan Text-/
@@ -254,7 +261,7 @@ export const editorEditMethods = {
     } catch (e) {
       console.error('[saveEdit]', e);
       // Netzwerkfehler → Draft behalten, Offline-Modus aktivieren, Auto-Retry.
-      writeDraft(this.currentPage.id, newHtml, this.originalHtml);
+      writeDraft(this.currentPage.id, newHtml, this.originalHtml, this.currentPage.updated_at);
       this.lastDraftSavedAt = Date.now();
       this.saveOffline = true;
       if (!navigator.onLine) {
@@ -283,10 +290,10 @@ export const editorEditMethods = {
     if (!newText) return;
 
     // Immer zuerst lokal sichern, dann erst Netzwerkversuch.
-    writeDraft(this.currentPage.id, newHtml, this.originalHtml);
+    writeDraft(this.currentPage.id, newHtml, this.originalHtml, this.currentPage.updated_at);
     this.lastDraftSavedAt = Date.now();
 
-    const localeTag = (this.uiLocale === 'en') ? 'en-US' : 'de-DE';
+    const localeTag = (this.uiLocale === 'en') ? 'en-US' : 'de-CH';
 
     if (!navigator.onLine) {
       this.saveOffline = true;
@@ -375,7 +382,7 @@ export const editorEditMethods = {
       this.lastDraftSavedAt = null;
       return;
     }
-    writeDraft(this.currentPage.id, html, this.originalHtml);
+    writeDraft(this.currentPage.id, html, this.originalHtml, this.currentPage.updated_at);
     this.lastDraftSavedAt = Date.now();
   },
 

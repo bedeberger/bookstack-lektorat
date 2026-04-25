@@ -1,6 +1,7 @@
 const express = require('express');
 const { db, saveFigurenToDb, saveZeitstrahlEvents, getChapterFigures, cleanupDuplicateFiguren } = require('../db/schema');
 const { recomputeBookFigureMentions } = require('../lib/page-index');
+const { toIntId, inClause } = require('../lib/validate');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -8,7 +9,8 @@ const jsonBody = express.json();
 
 // Konsolidierten Zeitstrahl eines Buchs laden (vor /:book_id definiert um Konflikte zu vermeiden)
 router.get('/zeitstrahl/:book_id', (req, res) => {
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const userEmail = req.session?.user?.email || null;
   const rows = db.prepare(
     'SELECT datum, ereignis, typ, bedeutung, kapitel, chapter_ids, seiten, page_ids, figuren FROM zeitstrahl_events WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
@@ -30,7 +32,8 @@ router.get('/zeitstrahl/:book_id', (req, res) => {
 
 // Konsolidierten Zeitstrahl löschen (z.B. nach neuer Extraktion)
 router.delete('/zeitstrahl/:book_id', (req, res) => {
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const userEmail = req.session?.user?.email || null;
   db.prepare('DELETE FROM zeitstrahl_events WHERE book_id = ? AND user_email = ?').run(bookId, userEmail || '');
   res.json({ ok: true });
@@ -38,7 +41,8 @@ router.delete('/zeitstrahl/:book_id', (req, res) => {
 
 // Szenen eines Buchs laden (vor /:book_id definiert um Konflikte zu vermeiden)
 router.get('/scenes/:book_id', (req, res) => {
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const userEmail = req.session?.user?.email || null;
 
   const rows = db.prepare(`
@@ -49,14 +53,15 @@ router.get('/scenes/:book_id', (req, res) => {
   `).all(bookId, userEmail);
 
   const sceneIds = rows.map(r => r.id);
+  const { sql: sceneSql, values: sceneVals } = inClause(sceneIds);
   const sfRows = sceneIds.length
-    ? db.prepare(`SELECT scene_id, fig_id FROM scene_figures WHERE scene_id IN (${sceneIds.map(() => '?').join(',')})`).all(...sceneIds)
+    ? db.prepare(`SELECT scene_id, fig_id FROM scene_figures WHERE scene_id IN ${sceneSql}`).all(...sceneVals)
     : [];
   const sfMap = {};
   for (const sf of sfRows) (sfMap[sf.scene_id] ??= []).push(sf.fig_id);
 
   const slRows = sceneIds.length
-    ? db.prepare(`SELECT sl.scene_id, l.loc_id FROM scene_locations sl JOIN locations l ON sl.location_id = l.id WHERE sl.scene_id IN (${sceneIds.map(() => '?').join(',')})`).all(...sceneIds)
+    ? db.prepare(`SELECT sl.scene_id, l.loc_id FROM scene_locations sl JOIN locations l ON sl.location_id = l.id WHERE sl.scene_id IN ${sceneSql}`).all(...sceneVals)
     : [];
   const slMap = {};
   for (const sl of slRows) (slMap[sl.scene_id] ??= []).push(sl.loc_id);
@@ -80,7 +85,8 @@ router.get('/scenes/:book_id', (req, res) => {
 
 // Szenen eines Buchs löschen
 router.delete('/scenes/:book_id', (req, res) => {
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const userEmail = req.session?.user?.email || null;
   db.prepare('DELETE FROM figure_scenes WHERE book_id = ? AND user_email = ?').run(bookId, userEmail);
   res.json({ ok: true });
@@ -88,8 +94,9 @@ router.delete('/scenes/:book_id', (req, res) => {
 
 // Figuren eines Kapitels laden (für Kontext-Panel im Editor)
 router.get('/chapter/:book_id/:chapter_id', (req, res) => {
-  const bookId = parseInt(req.params.book_id);
-  const chapterId = parseInt(req.params.chapter_id);
+  const bookId = toIntId(req.params.book_id);
+  const chapterId = toIntId(req.params.chapter_id);
+  if (!bookId || !chapterId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const userEmail = req.session?.user?.email || null;
   const figuren = getChapterFigures(bookId, chapterId, userEmail);
   res.json({ figuren });
@@ -97,7 +104,8 @@ router.get('/chapter/:book_id/:chapter_id', (req, res) => {
 
 // Gespeicherte Figuren eines Buchs laden
 router.get('/:book_id', (req, res) => {
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const userEmail = req.session?.user?.email || null;
 
   const figs = db.prepare(`
@@ -192,7 +200,8 @@ router.get('/:book_id', (req, res) => {
 // Figuren eines Buchs speichern (überschreibt)
 router.put('/:book_id', jsonBody, (req, res) => {
   const userEmail = req.session?.user?.email || null;
-  const bookId = parseInt(req.params.book_id);
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   saveFigurenToDb(bookId, req.body.figuren || [], userEmail);
   // Response sofort – Mentions-Neuberechnung läuft im Hintergrund. Auf grossen Büchern
   // (>500 Seiten × >50 Figuren) braucht der Regex-Scan mehrere Sekunden.
@@ -220,8 +229,8 @@ const _cleanupInflight = new Set();
 // der Lock zwischen Gruppen freigegeben — andere Requests können dazwischen
 // progressen. Concurrency-Guard verhindert zusätzlich doppelte Aufrufe.
 router.post('/cleanup/:book_id', (req, res) => {
-  const bookId = parseInt(req.params.book_id);
-  if (!Number.isInteger(bookId) || bookId <= 0) return res.status(400).json({ error_code: 'BOOK_ID_INVALID' });
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'BOOK_ID_INVALID' });
   const userEmail = req.session?.user?.email || null;
   const guardKey = `${bookId}:${userEmail || ''}`;
   if (_cleanupInflight.has(guardKey)) return res.status(409).json({ error_code: 'CLEANUP_IN_PROGRESS' });

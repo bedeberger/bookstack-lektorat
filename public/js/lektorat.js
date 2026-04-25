@@ -34,6 +34,7 @@ export const lektoratMethods = {
     this.correctedHtml = null;
     this.hasErrors = false;
     this.analysisOut = '';
+    this.checkStatus = '';
     this.activeHistoryEntryId = null;
     this.updatePageView();
   },
@@ -53,7 +54,7 @@ export const lektoratMethods = {
     this.appliedOriginals = [];
     this.appliedHistoricCorrections = [];
     this.checkProgress = 0;
-    this.setStatus(this.t('lektorat.starting'), true);
+    this.checkStatus = `<span class="spinner"></span>${escHtml(this.t('lektorat.starting'))}`;
 
     try {
       const { jobId } = await fetchJson('/jobs/check', {
@@ -72,7 +73,7 @@ export const lektoratMethods = {
       console.error('[runCheck]', e);
       if (this.currentPage?.id !== pageIdAtStart) return;
       this.analysisOut = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(e.message)}</span>`;
-      this.setStatus('');
+      this.checkStatus = '';
       this.checkLoading = false;
     }
   },
@@ -86,21 +87,20 @@ export const lektoratMethods = {
       onProgress: (job) => {
         if (this.currentPage?.id !== pageId) return;
         this.checkProgress = job.progress || 0;
-        this.status = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec, job.statusParams);
-        this.statusSpinner = false;
+        this.checkStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec, job.statusParams);
       },
       onNotFound: () => {
         if (this.currentPage?.id !== pageId) return;
         this.checkLoading = false;
         this.analysisOut = `<span class="error-msg">${escHtml(this.t('job.interrupted'))}</span>`;
-        this.setStatus('');
+        this.checkStatus = '';
       },
       onError: (job) => {
         if (this.currentPage?.id !== pageId) return;
         this.checkLoading = false;
         setTimeout(() => { this.checkProgress = 0; }, 400);
         this.analysisOut = `<span class="error-msg">${this.t('common.errorColon')}${escHtml(this.t(job.error, job.errorParams))}</span>`;
-        this.setStatus('');
+        this.checkStatus = '';
       },
       onDone: async (job) => {
         // Sidebar-Status immer aktualisieren, auch wenn User inzwischen auf eine andere Seite gewechselt hat.
@@ -110,9 +110,9 @@ export const lektoratMethods = {
         if (this.currentPage?.id !== pageId) return;
         this.checkLoading = false;
         setTimeout(() => { this.checkProgress = 0; }, 400);
+        this.checkStatus = '';
         if (r.empty) {
           this.analysisOut = `<span class="muted-msg">${escHtml(this.t('job.pageEmpty'))}</span>`;
-          this.setStatus('');
           return;
         }
         this.originalHtml = r.originalHtml;

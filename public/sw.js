@@ -6,7 +6,7 @@
 //  - Auth/KI/Job-Queue/SSE: Network-Only, nie cachen
 //  - Version-Bump der Konstanten invalidiert den jeweiligen Cache
 
-const SHELL_CACHE = 'lektorat-shell-v38';
+const SHELL_CACHE = 'lektorat-shell-v39';
 const API_CACHE = 'lektorat-api-v2';
 const CONFIG_CACHE = 'lektorat-config-v1';
 const ACTIVE_CACHES = new Set([SHELL_CACHE, API_CACHE, CONFIG_CACHE]);
@@ -109,6 +109,20 @@ async function _evictApiCache(cache) {
   }
 }
 async function handleApi(req) {
+  // Bypass-Marker: konsistenzkritische Reads (z.B. Konflikt-Check vor
+  // Draft-Push) müssen frische Server-Daten sehen, nicht den SWR-Cache.
+  // Sonst matcht ein stale `page.html` mit dem `draft.originalHtml` und
+  // ein veralteter Draft überschreibt Server-Stand.
+  const url = new URL(req.url);
+  if (url.searchParams.has('__fresh')) {
+    try { return await fetch(req); }
+    catch {
+      return new Response(JSON.stringify({ error: 'offline' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      });
+    }
+  }
   const cache = await caches.open(API_CACHE);
   const cached = await cache.match(req);
   const netPromise = fetch(req).then(async (res) => {

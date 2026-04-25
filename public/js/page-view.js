@@ -180,10 +180,16 @@ export const pageViewMethods = {
     } else {
       words = this.tokEsts?.[this.currentPage?.id]?.words || 0;
     }
-    // ~12 Wörter pro Zeile, ~1.8em Zeilenhöhe ≈ 28px
-    const estLines = Math.ceil(words / 12);
-    const vh = Math.min(75, Math.max(15, Math.round(estLines * 28 / window.innerHeight * 100)));
-    document.documentElement.style.setProperty('--pcv-max-h', vh + 'vh');
+    // ~7 Wörter/Zeile bei 64ch Spalte mit langen deutschen Wörtern.
+    // line-height 1.7 × 17px = 28.9px; 28px top + 28px bottom Padding = 56px.
+    // Vorher: 12 wpm + nur Content-Höhe → Box deutlich zu kurz, Inhalt
+    // overflowte sichtbar unter den weissen Hintergrund.
+    const estLines = Math.ceil(words / 7);
+    const contentPx = estLines * 29 + 56;
+    const minPx = window.innerHeight * 0.20;
+    const maxPx = window.innerHeight * 0.80;
+    const px = Math.round(Math.min(maxPx, Math.max(minPx, contentPx)));
+    document.documentElement.style.setProperty('--pcv-max-h', px + 'px');
   },
 
   /** Aktualisiert die gerenderte Seitenansicht (mit oder ohne Highlights) */
