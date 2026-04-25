@@ -80,10 +80,28 @@ window.fetch = async function(...args) {
 
 // Service Worker: cached SPA-Shell für Offline/Zug-Modus. Nur über HTTPS bzw.
 // localhost registrierbar. Fehler schlucken – SW ist Progressive Enhancement.
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  });
+// Dev/Localhost: SW deaktiviert (Cache-Artefakte beim Entwickeln eklig).
+// Override pro Browser via `localStorage.setItem('sw', '1')` (an) bzw. `'0'` (aus).
+if ('serviceWorker' in navigator) {
+  const swPref = localStorage.getItem('sw');
+  const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  const swEnabled = swPref === '1'
+    || (swPref !== '0' && location.protocol === 'https:' && !isLocal);
+
+  if (swEnabled) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+  } else {
+    navigator.serviceWorker.getRegistrations()
+      .then(regs => regs.forEach(r => r.unregister()))
+      .catch(() => {});
+    if (window.caches) {
+      caches.keys()
+        .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+        .catch(() => {});
+    }
+  }
 }
 
 // `.internal-link`-Spans verhalten sich wie Buttons (z.B. Kapitel-Sprünge,
