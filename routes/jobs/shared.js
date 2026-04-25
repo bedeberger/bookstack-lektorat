@@ -247,11 +247,42 @@ async function bsGetAll(path, userToken) {
   }
 }
 
+// Single-Pass-Dekoder: jede Entity wird genau einmal aufgelöst, damit
+// `&amp;#39;` (literal: &#39;) nicht versehentlich zu `'` re-decodiert wird.
+const HTML_NAMED_ENTITIES = {
+  nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+  ndash: '–', mdash: '—', hellip: '…',
+  laquo: '«', raquo: '»',
+  lsquo: '‘', rsquo: '’',
+  ldquo: '“', rdquo: '”',
+  bdquo: '„', sbquo: '‚',
+  auml: 'ä', Auml: 'Ä', ouml: 'ö', Ouml: 'Ö', uuml: 'ü', Uuml: 'Ü',
+  szlig: 'ß', shy: '', copy: '©', reg: '®', trade: '™',
+  euro: '€', deg: '°',
+};
+
 function htmlToText(html) {
   return (html || '')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&(?:#x([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]+));/g, (m, hex, dec, name) => {
+      if (hex !== undefined) {
+        const cp = parseInt(hex, 16);
+        if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10FFFF) {
+          try { return String.fromCodePoint(cp); } catch { return m; }
+        }
+        return m;
+      }
+      if (dec !== undefined) {
+        const cp = parseInt(dec, 10);
+        if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10FFFF) {
+          try { return String.fromCodePoint(cp); } catch { return m; }
+        }
+        return m;
+      }
+      return Object.prototype.hasOwnProperty.call(HTML_NAMED_ENTITIES, name)
+        ? HTML_NAMED_ENTITIES[name]
+        : m;
+    })
     .replace(/\s+/g, ' ').trim();
 }
 
