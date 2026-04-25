@@ -261,6 +261,9 @@ export const appViewMethods = {
     this._stopAutosave?.();
     this._uninstallOnlineRetry?.();
     this.resetChat();
+    this.showChatCard = false;
+    this.showIdeenCard = false;
+    this._checkDoneBeforeChat = false;
     this.currentPage = null;
     this.currentPageEmpty = false;
     this.renderedPageHtml = '';
