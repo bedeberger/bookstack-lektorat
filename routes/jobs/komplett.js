@@ -25,6 +25,21 @@ const komplettRouter = express.Router();
 
 // ── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
+/** Reduziert KI-Ref (String oder {name,id,…}-Objekt) auf einen blanken Namen.
+ *  KI liefert in figuren_namen/orte_namen/issue.figuren etc. gelegentlich Objekte
+ *  statt Strings — ohne Normalisierung würde `[object Object]` durch die Pipeline
+ *  laufen oder `n?.toLowerCase()` werfen. */
+function _refToString(v) {
+  if (v == null) return null;
+  if (typeof v === 'string') return v.trim() || null;
+  if (typeof v === 'number') return String(v);
+  if (typeof v === 'object') {
+    const s = v.name || v.titel || v.label || v.fig_id || v.loc_id || v.id;
+    return s ? String(s).trim() || null : null;
+  }
+  return null;
+}
+
 /** Extrahiert ein Feld aus settledAll-Ergebnissen in das Kapitel-Array-Format. */
 function extractField(settled, chunkTexts, field) {
   return settled.map((r, i) => ({
@@ -443,12 +458,14 @@ function remapSzenen(chSzenen, figNameToId, figNameToIdLower, ortNameToId, ortNa
         titel: s.titel || '(unbekannt)',
         wertung: s.wertung || null,
         kommentar: s.kommentar || null,
-        fig_ids: (s.figuren_namen || []).map(n =>
-          figNameToId[n] || figNameToIdLower[n?.toLowerCase()] || null
-        ).filter(Boolean),
-        ort_ids: (s.orte_namen || []).map(n =>
-          ortNameToId[n] || ortNameToIdLower[n?.toLowerCase()] || null
-        ).filter(Boolean),
+        fig_ids: (s.figuren_namen || []).map(n => {
+          const name = _refToString(n);
+          return name ? (figNameToId[name] || figNameToIdLower[name.toLowerCase()] || null) : null;
+        }).filter(Boolean),
+        ort_ids: (s.orte_namen || []).map(n => {
+          const name = _refToString(n);
+          return name ? (ortNameToId[name] || ortNameToIdLower[name.toLowerCase()] || null) : null;
+        }).filter(Boolean),
         sort_order: szenen.length,
       });
     }
@@ -541,8 +558,14 @@ function saveKontinuitaetResult(bookIdInt, email, kontResult, figNameToId, chNam
   if (typeof kontResult?.zusammenfassung === 'undefined') return null;
   const normalizedProbleme = (kontResult.probleme || []).map(issue => ({
     ...issue,
-    fig_ids: (issue.figuren || []).map(n => figNameToId[n]).filter(Boolean),
-    chapter_ids: (issue.kapitel || []).map(n => chNameToId[n]).filter(Boolean),
+    fig_ids: (issue.figuren || []).map(n => {
+      const name = _refToString(n);
+      return name ? figNameToId[name] : null;
+    }).filter(Boolean),
+    chapter_ids: (issue.kapitel || []).map(n => {
+      const name = _refToString(n);
+      return name ? chNameToId[name] : null;
+    }).filter(Boolean),
   }));
   db.prepare(`INSERT INTO continuity_checks (book_id, user_email, checked_at, issues_json, summary, model)
     VALUES (?, ?, ?, ?, ?, ?)`)

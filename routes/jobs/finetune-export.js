@@ -58,6 +58,27 @@ function renderMistralChat(messages) {
   return out;
 }
 
+// Robustes Label aus einem Listenelement extrahieren. Akzeptiert:
+//   - String-Namen ("Renate")
+//   - String-IDs (in `byMap` aufgelöst)
+//   - Objekte ({ name, id, fig_id, loc_id, … }) — Name direkt oder via byMap-Lookup
+// Verhindert "[object Object]" im Output, wenn KI strukturierte Refs liefert
+// statt blanker Strings.
+function extractName(v, byMap = null) {
+  if (v == null) return '';
+  if (typeof v === 'string') {
+    if (byMap && byMap.has(v)) return byMap.get(v).name || v;
+    return v.trim();
+  }
+  if (typeof v === 'number') return String(v);
+  if (typeof v === 'object') {
+    const id = v.fig_id || v.loc_id || v.id;
+    if (id && byMap && byMap.has(id)) return byMap.get(id).name || '';
+    return (v.name || v.titel || v.label || '').toString().trim();
+  }
+  return '';
+}
+
 // Perzentile aus sortiertem Numeric-Array (Nearest-Rank).
 function percentile(sortedNums, p) {
   if (!sortedNums.length) return 0;
@@ -179,7 +200,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
     const langIsEn = (settings.language || 'de') === 'en';
 
     const figRows = db.prepare(`
-      SELECT f.fig_id, f.id AS pk, f.name, f.kurzname, f.typ, f.beschreibung, f.beruf, f.geschlecht,
+      SELECT f.fig_id, f.id AS pk, f.name, f.kurzname, f.typ, f.beschreibung, f.beruf, f.geschlecht, f.sozialschicht,
              GROUP_CONCAT(DISTINCT ft.tag) AS tags_csv
       FROM figures f
       LEFT JOIN figure_tags ft ON ft.figure_id = f.id
@@ -353,11 +374,17 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
     const samples = [];
     let styleCount = 0, sceneCount = 0, dialogCount = 0, authorChatCount = 0, correctionCount = 0;
 
+    // Einheitliche Identität über alle Sample-Typen: Modell soll *eine* Stimme
+    // lernen — die des Buchs — statt mehrerer Personae (Lektor, Dialogschreiber,
+    // literarischer Assistent etc.). Task-Variation steckt im User-Message,
+    // nicht im System-Prompt.
+    const displayName = bookName || (langIsEn ? 'this book' : 'diesem Buch');
+    const unifiedSys = langIsEn
+      ? `You are the voice of «${displayName}». Write, continue, and answer in the author's style and from within this book's world.`
+      : `Du bist die Stimme von «${displayName}». Schreibe, setze fort und antworte im Stil des Autors und aus der Welt dieses Buchs heraus.`;
+
     if (opts.types.style) {
       updateJob(jobId, { progress: 55, statusText: 'finetune.phase.style' });
-      const sys = langIsEn
-        ? "You are a literary assistant writing in the author's style."
-        : 'Du bist ein literarischer Assistent und schreibst im Stil des Autors.';
       const prefix = langIsEn
         ? "Continue the following passage in the author's style:\n\n"
         : 'Setze den folgenden Abschnitt im Stil des Autors fort:\n\n';
@@ -386,7 +413,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
               id: 'style|' + p.id + '|' + pi + '|r' + ri,
               type: 'style',
               messages: [
-                { role: 'system', content: sys },
+                { role: 'system', content: unifiedSys },
                 { role: 'user', content: prefix + first },
                 { role: 'assistant', content: second },
               ],
@@ -416,7 +443,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
             id: 'styleCtx|' + p.id + '|' + i,
             type: 'style',
             messages: [
-              { role: 'system', content: sys },
+              { role: 'system', content: unifiedSys },
               { role: 'user', content: contextPrefix + ctxClipped },
               { role: 'assistant', content: completion },
             ],
@@ -429,9 +456,6 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
         // → nächster Satz. Limit pro Seite, damit einzelne lange Seiten nicht
         // den Trainings-Pool dominieren. Nur Sätze 40–300 Zeichen (Rauschen raus).
         const SENT_CAP_PER_PAGE = 40;
-        const sentSys = langIsEn
-          ? "You continue the author's prose sentence by sentence."
-          : 'Du setzt die Prosa des Autors Satz für Satz fort.';
         const sentPrefix = langIsEn ? 'Next sentence after:\n\n' : 'Nächster Satz nach:\n\n';
         const pageSentences = paragraphs.flatMap(splitSentences);
         let sentEmit = 0;
@@ -444,7 +468,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
             id: 'styleSent|' + p.id + '|' + i,
             type: 'style',
             messages: [
-              { role: 'system', content: sentSys },
+              { role: 'system', content: unifiedSys },
               { role: 'user',   content: sentPrefix + prev },
               { role: 'assistant', content: cur },
             ],
@@ -458,9 +482,6 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       // Ende Kapitel N → Anfang Kapitel N+1. Zentrales Signal für das „wie
       // beginne ich ein neues Kapitel"-Gefühl — genau das, was fürs
       // Fortsetzungs-Schreiben gebraucht wird.
-      const transSys = langIsEn
-        ? "You continue the book across chapter boundaries in the author's voice."
-        : 'Du setzt das Buch über Kapitel-Grenzen hinweg im Stil des Autors fort.';
       for (let i = 0; i + 1 < chapterKeys.length; i++) {
         const kA = chapterKeys[i];
         const kB = chapterKeys[i + 1];
@@ -483,7 +504,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
           id: 'chapTrans|' + kA + '|' + kB,
           type: 'style',
           messages: [
-            { role: 'system', content: transSys },
+            { role: 'system', content: unifiedSys },
             { role: 'user',   content: prompt },
             { role: 'assistant', content: headB.length > maxChars ? headB.slice(0, maxChars) : headB },
           ],
@@ -495,9 +516,6 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       // Ende einer Szene → Anfang der nächsten. Nutzt sceneRows-Reihenfolge
       // pro Kapitel; beide Szenen müssen einen page_id-Mapping haben, sonst
       // kein Text zum Anknüpfen.
-      const scnTransSys = langIsEn
-        ? "You transition from one scene to the next in the author's voice."
-        : 'Du gehst von einer Szene zur nächsten im Stil des Autors über.';
       const sceneByChapterKey = new Map();
       for (const s of sceneRows) {
         if (!s.page_id) continue;
@@ -521,7 +539,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
             id: 'scnTrans|' + sA.id + '|' + sB.id,
             type: 'style',
             messages: [
-              { role: 'system', content: scnTransSys },
+              { role: 'system', content: unifiedSys },
               { role: 'user',   content: prompt },
               { role: 'assistant', content: headB },
             ],
@@ -534,7 +552,6 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       // Alle Absätze eines Kapitels als durchgängiger Stream — Sliding mit
       // Fenster 3 (Kontext) → 1 (Completion). Verbindet sich über Seitengrenzen
       // hinweg, anders als der page-lokale Multi-Absatz-Kontext oben.
-      const chapWinSys = sys;
       const chapWinPrefix = contextPrefix;
       for (const k of chapterKeys) {
         const pages = pagesByChapter.get(k) || [];
@@ -557,7 +574,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
             id: 'chapWin|' + k + '|' + i,
             type: 'style',
             messages: [
-              { role: 'system', content: chapWinSys },
+              { role: 'system', content: unifiedSys },
               { role: 'user',   content: chapWinPrefix + ctxClipped },
               { role: 'assistant', content: completion },
             ],
@@ -575,9 +592,6 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
         if (!scenesByPageId.has(s.page_id)) scenesByPageId.set(s.page_id, []);
         scenesByPageId.get(s.page_id).push(s);
       }
-      const sys = langIsEn
-        ? "You write literary scenes matching the given metadata in the author's style."
-        : 'Du schreibst literarische Szenen im Stil des Autors, passend zu den angegebenen Metadaten.';
       for (const [pageId, scenes] of scenesByPageId) {
         const txt = pageTextById.get(pageId);
         if (!txt || txt.length < minChars) continue;
@@ -588,10 +602,10 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
         const kapitel = scenes[0].kapitel || pageChapterById.get(pageId);
         if (kapitel) meta.push((langIsEn ? 'Chapter: ' : 'Kapitel: ') + kapitel);
         const figIds = [...new Set(scenes.flatMap(s => figsByScene.get(s.id) || []))];
-        const figNames = figIds.map(id => figById.get(id)?.name).filter(Boolean);
+        const figNames = figIds.map(id => extractName(id, figById)).filter(Boolean);
         if (figNames.length) meta.push((langIsEn ? 'Characters: ' : 'Figuren: ') + figNames.join(', '));
         const locIds = [...new Set(scenes.flatMap(s => locsByScene.get(s.id) || []))];
-        const locNames = locIds.map(id => locById.get(id)?.name).filter(Boolean);
+        const locNames = locIds.map(id => extractName(id, locById)).filter(Boolean);
         if (locNames.length) meta.push((langIsEn ? 'Location: ' : 'Schauplatz: ') + locNames.join(', '));
         const comments = [...new Set(scenes.map(s => s.kommentar).filter(Boolean))].join(' ');
         if (comments) meta.push((langIsEn ? 'Notes: ' : 'Notiz: ') + comments);
@@ -603,7 +617,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
           id: 'scene|' + pageId,
           type: 'scene',
           messages: [
-            { role: 'system', content: sys },
+            { role: 'system', content: unifiedSys },
             { role: 'user', content: instr },
             { role: 'assistant', content: completion },
           ],
@@ -616,12 +630,6 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       // erhält ein Sample „Seite «X», Kapitel «Y»: schreibe den Inhalt" →
       // Seitentext. Das doppelt sich bewusst mit dem Szenen-Block (dort
       // metadaten-reicher), hier einfacher und vollständig deckend.
-      const pageSys = langIsEn
-        ? "You reproduce pages from this book accurately and in the author's style."
-        : 'Du gibst Seiten aus diesem Buch akkurat und im Stil des Autors wieder.';
-      const pageSysCont = langIsEn
-        ? "You continue the book from the given starting point in the author's style."
-        : 'Du setzt das Buch ab der angegebenen Stelle im Stil des Autors fort.';
       for (const p of pageContents) {
         if (!p.text || p.text.length < minChars) continue;
         const completion = p.text.length > maxChars ? p.text.slice(0, maxChars) : p.text;
@@ -636,7 +644,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
           id: 'page|' + p.id,
           type: 'scene',
           messages: [
-            { role: 'system', content: pageSys },
+            { role: 'system', content: unifiedSys },
             { role: 'user', content: instr },
             { role: 'assistant', content: completion },
           ],
@@ -656,7 +664,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
               id: 'pageCont|' + p.id,
               type: 'scene',
               messages: [
-                { role: 'system', content: pageSysCont },
+                { role: 'system', content: unifiedSys },
                 { role: 'user', content: (langIsEn
                   ? 'Continue this passage:\n\n'
                   : 'Setze diese Passage fort:\n\n') + prefix + opening },
@@ -711,9 +719,6 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
         }
       }
 
-      const chapOpenSys = langIsEn
-        ? "You begin a chapter of this book in the author's voice, matching the given cast and setting."
-        : 'Du beginnst ein Kapitel dieses Buchs im Stil des Autors, passend zur angegebenen Besetzung und Szenerie.';
       for (let ci = 0; ci < chapterKeys.length; ci++) {
         const k = chapterKeys[ci];
         const text = chapterFullTextByKey.get(k) || '';
@@ -747,7 +752,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
           id: 'chapOpen|' + k,
           type: 'scene',
           messages: [
-            { role: 'system', content: chapOpenSys },
+            { role: 'system', content: unifiedSys },
             { role: 'user',   content: instr },
             { role: 'assistant', content: opening },
           ],
@@ -763,9 +768,6 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       if (opts.types.dialog) {
         updateJob(jobId, { progress: 85, statusText: 'finetune.phase.dialog' });
       }
-      const sys = langIsEn
-        ? "You write dialogue lines for the given character in the author's voice."
-        : 'Du schreibst Dialogzeilen für die jeweilige Figur im Ton des Autors.';
       for (const p of pageContents) {
         const dlgs = extractDialogs(p.text);
         for (const d of dlgs) {
@@ -785,7 +787,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
             id: 'dialog|' + p.id + '|' + d.start,
             type: 'dialog',
             messages: [
-              { role: 'system', content: sys },
+              { role: 'system', content: unifiedSys },
               { role: 'user', content: userPart },
               { role: 'assistant', content: d.quote },
             ],
@@ -801,9 +803,6 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       // Figur cap bei 12 Zitaten, damit stark sprechende Figuren nicht das
       // Training dominieren.
       if (opts.types.dialog) {
-        const reverseSys = langIsEn
-          ? "You identify which character in this book says a given line."
-          : 'Du erkennst, welche Figur in diesem Buch einen gegebenen Satz sagt.';
         const REV_CAP_PER_FIG = 12;
         for (const f of figRows) {
           const entries = dialogsByFigure.get(f.name.toLowerCase()) || [];
@@ -824,10 +823,10 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
               id: 'dialogRev|' + f.fig_id + '|' + emitted,
               type: 'dialog',
               messages: [
-                { role: 'system', content: reverseSys },
+                { role: 'system', content: unifiedSys },
                 { role: 'user',   content: (langIsEn
                   ? `Who says this: "${e.quote}"?`
-                  : `Wer sagt das: „${e.quote}"?`) },
+                  : `Wer sagt das: «${e.quote}»?`) },
                 { role: 'assistant', content: f.name + ctxTag + '.' },
               ],
             });
@@ -840,14 +839,15 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
 
     if (opts.types.correction) {
       updateJob(jobId, { progress: 88, statusText: 'finetune.phase.correction' });
-      const sys = langIsEn
-        ? "You are an editor. Rewrite the given sentence in the author's voice — concise, precise, stylistically refined. Return only the improved version."
-        : 'Du bist Lektor. Formuliere den Satz im Stil des Autors um — knapp, präzise, stilistisch geschliffen. Gib nur die verbesserte Fassung zurück.';
-      const userPrefix    = langIsEn ? 'Improve: ' : 'Verbessere: ';
-      const reasonedSys   = langIsEn
-        ? "You are an editor. Rewrite the given sentence in the author's voice, then explain the change in one sentence."
-        : 'Du bist Lektor. Formuliere den Satz im Stil des Autors um und erkläre die Änderung in einem Satz.';
-      const reasonedUser  = langIsEn ? 'Improve and explain: ' : 'Verbessere und begründe: ';
+      // Lektor-Persona absichtlich entfernt: Korrekturen fliessen mit unifiedSys
+      // ein, sodass die korrigierte Fassung als Autor-Prosa gelernt wird, nicht
+      // als Lektor-Output. Task-Hinweis steckt im User-Prefix.
+      const userPrefix    = langIsEn
+        ? 'Rewrite this sentence in the author\'s style:\n\n'
+        : 'Formuliere diesen Satz im Stil des Autors um:\n\n';
+      const reasonedUser  = langIsEn
+        ? 'Rewrite this sentence in the author\'s style and explain the change in one sentence:\n\n'
+        : 'Formuliere diesen Satz im Stil des Autors um und erkläre die Änderung in einem Satz:\n\n';
       const reasonLabel   = langIsEn ? 'Reason: ' : 'Grund: ';
 
       // Neueste-First, damit bei mehrfach geprüften Seiten die aktuellste Korrektur
@@ -877,7 +877,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
             id: 'correction|a|' + idx,
             type: 'correction',
             messages: [
-              { role: 'system', content: sys },
+              { role: 'system', content: unifiedSys },
               { role: 'user',   content: userPrefix + orig },
               { role: 'assistant', content: korr },
             ],
@@ -892,7 +892,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
               id: 'correction|b|' + idx,
               type: 'correction',
               messages: [
-                { role: 'system', content: reasonedSys },
+                { role: 'system', content: unifiedSys },
                 { role: 'user',   content: reasonedUser + orig },
                 { role: 'assistant', content: korr + '\n\n' + reasonLabel + erkl },
               ],
@@ -905,10 +905,6 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
 
     if (opts.types.authorChat) {
       updateJob(jobId, { progress: 90, statusText: 'finetune.phase.authorChat' });
-      const displayName = bookName || (langIsEn ? 'this book' : 'diesem Buch');
-      const sys = langIsEn
-        ? `You are the author's voice for «${displayName}» answering a reader in conversation. Respond concisely, accurately, and in the spirit of the book.`
-        : `Du bist die Stimme des Autors von «${displayName}» und antwortest einer Leserin im Gespräch. Antworte knapp, präzise und im Geist des Buchs.`;
 
       // Deterministische Auswahl einer Paraphrase pro Entity — bei gleichem Seed
       // reproduzierbar. `pickVariants` liefert `count` Indizes ohne Dubletten.
@@ -972,7 +968,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
           id,
           type: 'authorChat',
           messages: [
-            { role: 'system', content: sys },
+            { role: 'system', content: unifiedSys },
             { role: 'user',   content: qq },
             { role: 'assistant', content: aa },
           ],
@@ -1009,6 +1005,28 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
         }
       }
 
+      // ── Figuren-Charaktereigenschaften (Tags) ────────────────────────────
+      // Pro Figur ein dediziertes Trait-Sample, damit "Wie ist X charakterlich?"
+      // direkt auf figure_tags zielt (nicht nur als Anhang in der Composite-Antwort).
+      for (const f of figRows) {
+        if (!f.tags_csv) continue;
+        const tags = f.tags_csv.split(',').map(t => t.trim()).filter(Boolean);
+        if (!tags.length) continue;
+        const tagList = tags.join(', ');
+        const traitQs = langIsEn
+          ? [`What traits does ${f.name} have?`, `How would you characterize ${f.name}?`,
+             `Describe ${f.name}'s personality.`, `What is ${f.name} like as a person?`]
+          : [`Welche Eigenschaften hat ${f.name}?`, `Wie würdest du ${f.name} charakterisieren?`,
+             `Beschreibe den Charakter von ${f.name}.`, `Was zeichnet ${f.name} charakterlich aus?`];
+        const idxs = pickVariants('figTraits|' + f.fig_id, traitQs, 2);
+        const answer = langIsEn
+          ? `${f.name} is: ${tagList}.`
+          : `${f.name} ist: ${tagList}.`;
+        for (const idx of idxs) {
+          pushQA('authorChat|figTraits|' + f.fig_id + '|' + idx, traitQs[idx], answer);
+        }
+      }
+
       // ── Orte-Q&A (angereichert) ───────────────────────────────────────────
       // Der User hat Orte explizit als zentral markiert — wir produzieren pro
       // Ort mehrere Antwort-Framings (Gesamtbeschreibung, Kapitel-Mapping,
@@ -1017,7 +1035,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       const sceneTitleById = new Map(sceneRows.map(s => [s.id, s.titel]));
       for (const l of locRows) {
         const kapitel    = chaptersByLocPk.get(l.pk) || [];
-        const figsHere   = (figsByLocPk.get(l.pk) || []).map(id => figById.get(id)?.name).filter(Boolean);
+        const figsHere   = (figsByLocPk.get(l.pk) || []).map(id => extractName(id, figById)).filter(Boolean);
         const szenenHere = (scenesByLocPk.get(l.pk) || []).map(id => sceneTitleById.get(id)).filter(Boolean);
         const desc       = (l.beschreibung || '').trim();
 
@@ -1090,16 +1108,121 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
         }
       }
 
+      // ── Schauplätze: Doppel-/Tripel-Verknüpfungen ────────────────────────
+      // Reverse-Indizes (Figur→Orte, Kapitel→Orte) + Tripel (Ort×Figur×Szene)
+      // + typ-/stimmungs-gruppierte Aggregate.
+      const locsByFigId = new Map();
+      for (const [locPk, figIds] of figsByLocPk) {
+        const loc = locRows.find(l => l.pk === locPk);
+        if (!loc) continue;
+        for (const fid of figIds) {
+          if (!locsByFigId.has(fid)) locsByFigId.set(fid, []);
+          locsByFigId.get(fid).push(loc);
+        }
+      }
+      const locsByChapter = new Map();
+      for (const l of locRows) {
+        for (const ch of (chaptersByLocPk.get(l.pk) || [])) {
+          const k = (ch || '').toLowerCase();
+          if (!k) continue;
+          if (!locsByChapter.has(k)) locsByChapter.set(k, { name: ch, items: [] });
+          locsByChapter.get(k).items.push(l);
+        }
+      }
+      for (const f of figRows) {
+        const locs = locsByFigId.get(f.fig_id) || [];
+        if (!locs.length) continue;
+        const list = locs.slice(0, 12).map(l => l.name).join(', ');
+        pushQA('authorChat|locsByFig|' + f.fig_id,
+          langIsEn ? `Which locations does ${f.name} visit?` : `An welchen Orten ist ${f.name} unterwegs?`,
+          list);
+        pushQA('authorChat|locsByFig2|' + f.fig_id,
+          langIsEn ? `Where do we meet ${f.name} in the book?` : `Wo trifft man ${f.name} im Buch?`,
+          list);
+        if (locs.length >= 2) {
+          pushQA('authorChat|locsByFigMap|' + f.fig_id,
+            langIsEn ? `Map ${f.name} across the locations.` : `Verorte ${f.name} in den Schauplätzen.`,
+            list);
+        }
+      }
+      for (const [key, group] of locsByChapter) {
+        if (group.items.length < 1) continue;
+        const list = group.items.slice(0, 10).map(l => l.name).join(', ');
+        pushQA('authorChat|locsByCh|' + key.replace(/\s+/g, '_').slice(0, 80),
+          langIsEn ? `Which locations appear in «${group.name}»?` : `Welche Schauplätze kommen in «${group.name}» vor?`,
+          list);
+      }
+      const sceneTitleByIdLoc = new Map(sceneRows.map(s => [s.id, s.titel]));
+      for (const l of locRows) {
+        const sceneIds = scenesByLocPk.get(l.pk) || [];
+        const figIds = figsByLocPk.get(l.pk) || [];
+        if (!sceneIds.length || !figIds.length) continue;
+        for (let si = 0; si < Math.min(sceneIds.length, 4); si++) {
+          const sid = sceneIds[si];
+          const sTitle = sceneTitleByIdLoc.get(sid);
+          if (!sTitle) continue;
+          for (let fi = 0; fi < Math.min(figIds.length, 3); fi++) {
+            const fid = figIds[fi];
+            const fname = extractName(fid, figById);
+            if (!fname) continue;
+            pushQA('authorChat|locFigSz|' + l.loc_id + '|' + fid + '|' + sid,
+              langIsEn
+                ? `What does ${fname} do at ${l.name} in scene «${sTitle}»?`
+                : `Was macht ${fname} an ${l.name} in der Szene «${sTitle}»?`,
+              langIsEn
+                ? `${fname} is at ${l.name} in scene «${sTitle}».`
+                : `${fname} ist in der Szene «${sTitle}» an ${l.name}.`);
+          }
+        }
+      }
+      const locsByTyp = new Map();
+      const locsByStimmung = new Map();
+      for (const l of locRows) {
+        const t = (l.typ || '').trim().toLowerCase();
+        if (t) {
+          if (!locsByTyp.has(t)) locsByTyp.set(t, { typ: l.typ.trim(), items: [] });
+          locsByTyp.get(t).items.push(l);
+        }
+        const stim = (l.stimmung || '').trim().toLowerCase();
+        if (stim) {
+          if (!locsByStimmung.has(stim)) locsByStimmung.set(stim, { stimmung: l.stimmung.trim(), items: [] });
+          locsByStimmung.get(stim).items.push(l);
+        }
+      }
+      for (const [key, group] of locsByTyp) {
+        if (group.items.length < 2) continue;
+        const list = group.items.slice(0, 12).map(l => l.name).join(', ');
+        pushQA('authorChat|locsByTyp|' + key.replace(/\s+/g, '_').slice(0, 60),
+          langIsEn ? `Which ${group.typ} locations appear in the book?` : `Welche Schauplätze vom Typ «${group.typ}» gibt es im Buch?`,
+          list);
+      }
+      for (const [key, group] of locsByStimmung) {
+        if (group.items.length < 2) continue;
+        const list = group.items.slice(0, 10).map(l => l.name).join(', ');
+        pushQA('authorChat|locsByStim|' + key.replace(/\s+/g, '_').slice(0, 60),
+          langIsEn ? `Which locations carry a «${group.stimmung}» mood?` : `Welche Orte haben eine «${group.stimmung}» Stimmung?`,
+          list);
+      }
+      if (locRows.length >= 2) {
+        const allLocs = locRows.slice(0, 30).map(l => l.name).filter(Boolean).join(', ');
+        pushQA('authorChat|locsAll',
+          langIsEn ? `List all the locations in the book.` : `Liste alle Schauplätze im Buch auf.`,
+          allLocs);
+        pushQA('authorChat|locsAll2',
+          langIsEn ? `What are the settings of this book?` : `An welchen Schauplätzen spielt das Buch?`,
+          allLocs);
+      }
+
       // ── Szenen-Q&A ────────────────────────────────────────────────────────
       for (const s of sceneRows) {
         const komm = (s.kommentar || '').trim();
         if (!s.titel || !komm) continue;
         const parts = [komm];
         const figIds = figsByScene.get(s.id) || [];
-        const figNames = figIds.map(id => figById.get(id)?.name).filter(Boolean);
+        const figNames = figIds.map(id => extractName(id, figById)).filter(Boolean);
         if (figNames.length) parts.push(langIsEn ? `Characters: ${figNames.join(', ')}.` : `Figuren: ${figNames.join(', ')}.`);
         const locIds = locsByScene.get(s.id) || [];
-        const locNames = locIds.map(id => locById.get(id)?.name).filter(Boolean);
+        const locNames = locIds.map(id => extractName(id, locById)).filter(Boolean);
         if (locNames.length) parts.push(langIsEn ? `Setting: ${locNames.join(', ')}.` : `Schauplatz: ${locNames.join(', ')}.`);
         if (s.kapitel) parts.push(langIsEn ? `Chapter: ${s.kapitel}.` : `Kapitel: ${s.kapitel}.`);
         const answer = parts.join(' ');
@@ -1127,14 +1250,9 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
           if (Array.isArray(v)) return v;
           try { const r = JSON.parse(v); return Array.isArray(r) ? r : []; } catch { return []; }
         };
-        const kapitelArr = parseList(ev.kapitel);
-        const seitenArr  = parseList(ev.seiten);
-        const figArr     = parseList(ev.figuren);
-        // Figuren-Array enthält Namen oder IDs — beides zulassen, IDs auflösen.
-        const figNames = figArr.map(f => {
-          if (typeof f === 'string' && figById.has(f)) return figById.get(f).name;
-          return String(f);
-        }).filter(Boolean);
+        const kapitelArr = parseList(ev.kapitel).map(k => extractName(k)).filter(Boolean);
+        const seitenArr  = parseList(ev.seiten).map(s => extractName(s)).filter(Boolean);
+        const figNames   = parseList(ev.figuren).map(f => extractName(f, figById)).filter(Boolean);
 
         const parts = [ereignis + '.'];
         if (ev.datum)     parts.push(langIsEn ? `When: ${ev.datum}.` : `Zeitpunkt: ${ev.datum}.`);
@@ -1192,6 +1310,384 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
         }
       }
 
+      // ── Ereignisse × Orte × Figuren (Doppel-Verknüpfung) ─────────────────
+      // zeitstrahl_events hat kein Orts-Feld → Orte ableiten via:
+      //   (a) Kapitel-Schnittmenge mit location_chapters
+      //   (b) Namens-Erwähnung in ereignis/bedeutung-Text
+      // Ziel: pro Event reiche Tripel (Event, Figur, Ort) als Samples
+      // erzeugen, plus inverse Aggregate (welche Events spielen am Ort X /
+      // welche Events erlebt Figur Y / Schnittmenge Figur×Ort).
+      const parseEvtList = (v) => {
+        if (!v) return [];
+        if (Array.isArray(v)) return v;
+        try { const r = JSON.parse(v); return Array.isArray(r) ? r : []; } catch { return []; }
+      };
+      const locsByChapterName = new Map();
+      for (const l of locRows) {
+        for (const ch of (chaptersByLocPk.get(l.pk) || [])) {
+          const key = (ch || '').toLowerCase();
+          if (!key) continue;
+          if (!locsByChapterName.has(key)) locsByChapterName.set(key, []);
+          locsByChapterName.get(key).push(l);
+        }
+      }
+      // Enriched events: { ereignis, datum, typ, bedeutung, figs:[{fig_id,name}], locs:[{pk,name}], kapitel:[], fullAnswer }
+      const enrichedEvents = [];
+      for (let i = 0; i < evtRows.length; i++) {
+        const ev = evtRows[i];
+        const ereignis = (ev.ereignis || '').trim();
+        if (!ereignis) continue;
+        const kapitelArr = parseEvtList(ev.kapitel).map(k => extractName(k)).filter(Boolean);
+        const figRefs = parseEvtList(ev.figuren)
+          .map(fv => {
+            const name = extractName(fv, figById);
+            if (!name) return null;
+            const match = figRows.find(f => f.name === name || f.kurzname === name);
+            return match ? { fig_id: match.fig_id, name: match.name } : { fig_id: null, name };
+          })
+          .filter(Boolean);
+        const locSet = new Map();
+        for (const ch of kapitelArr) {
+          for (const l of (locsByChapterName.get(ch.toLowerCase()) || [])) {
+            locSet.set(l.pk, l);
+          }
+        }
+        const haystack = ((ev.ereignis || '') + ' ' + (ev.bedeutung || '')).toLowerCase();
+        for (const l of locRows) {
+          if (!l.name || l.name.length < 3) continue;
+          const re = new RegExp('\\b' + escapeRe(l.name) + '\\b', 'i');
+          if (re.test(haystack)) locSet.set(l.pk, l);
+        }
+        const locs = [...locSet.values()];
+        // Vollantwort wie im Hauptblock (Datum/Typ/Figuren/Kapitel/Seiten/Bedeutung) — gespiegelt.
+        const seitenArr = parseEvtList(ev.seiten).map(s => extractName(s)).filter(Boolean);
+        const figNames = figRefs.map(f => f.name);
+        const parts = [ereignis + '.'];
+        if (ev.datum)      parts.push(langIsEn ? `When: ${ev.datum}.` : `Zeitpunkt: ${ev.datum}.`);
+        if (ev.typ)        parts.push(langIsEn ? `Type: ${ev.typ}.` : `Art: ${ev.typ}.`);
+        if (figNames.length) parts.push(langIsEn
+          ? `Characters involved: ${figNames.slice(0, 8).join(', ')}.`
+          : `Beteiligte Figuren: ${figNames.slice(0, 8).join(', ')}.`);
+        if (locs.length) parts.push(langIsEn
+          ? `Locations: ${locs.slice(0, 6).map(l => l.name).join(', ')}.`
+          : `Schauplätze: ${locs.slice(0, 6).map(l => l.name).join(', ')}.`);
+        if (kapitelArr.length) parts.push(langIsEn
+          ? `In chapter(s): ${kapitelArr.slice(0, 5).join(', ')}.`
+          : `In Kapitel: ${kapitelArr.slice(0, 5).join(', ')}.`);
+        if (seitenArr.length) parts.push(langIsEn
+          ? `On page(s): ${seitenArr.slice(0, 5).join(', ')}.`
+          : `Auf Seite(n): ${seitenArr.slice(0, 5).join(', ')}.`);
+        if (ev.bedeutung)  parts.push((langIsEn ? 'Why it matters: ' : 'Bedeutung: ') + ev.bedeutung);
+        const fullAnswer = parts.join(' ');
+        enrichedEvents.push({ i, ereignis, datum: ev.datum, typ: ev.typ, bedeutung: ev.bedeutung,
+                              kapitel: kapitelArr, figs: figRefs, locs, fullAnswer });
+      }
+
+      // Pro-Event Q&A mit Orts-Bezug
+      for (const e of enrichedEvents) {
+        // Wo passiert das Ereignis?
+        if (e.locs.length) {
+          const locList = e.locs.slice(0, 6).map(l => l.name).join(', ');
+          pushQA('authorChat|evt-loc|' + e.i,
+            langIsEn ? `Where does «${e.ereignis}» take place?` : `Wo findet «${e.ereignis}» statt?`,
+            locList);
+          pushQA('authorChat|evt-loc2|' + e.i,
+            langIsEn ? `At which locations does «${e.ereignis}» happen?` : `An welchen Schauplätzen spielt sich «${e.ereignis}» ab?`,
+            locList);
+          // Pro Einzel-Ort eine fokussierte Frage mit voller Antwort
+          for (let li = 0; li < Math.min(e.locs.length, 4); li++) {
+            const l = e.locs[li];
+            pushQA('authorChat|evt-locDetail|' + e.i + '|' + l.pk,
+              langIsEn ? `What happens at ${l.name} during «${e.ereignis}»?` : `Was passiert an ${l.name} bei «${e.ereignis}»?`,
+              e.fullAnswer);
+          }
+        }
+        // Pro Einzel-Figur fokussierte Frage mit voller Antwort
+        for (let fi = 0; fi < Math.min(e.figs.length, 6); fi++) {
+          const fg = e.figs[fi];
+          const fkey = fg.fig_id || fg.name.toLowerCase();
+          pushQA('authorChat|evt-figDetail|' + e.i + '|' + fkey,
+            langIsEn ? `What does ${fg.name} experience during «${e.ereignis}»?` : `Was erlebt ${fg.name} bei «${e.ereignis}»?`,
+            e.fullAnswer);
+          pushQA('authorChat|evt-figRole|' + e.i + '|' + fkey,
+            langIsEn ? `What is ${fg.name}'s role in «${e.ereignis}»?` : `Welche Rolle spielt ${fg.name} bei «${e.ereignis}»?`,
+            e.fullAnswer);
+        }
+        // Tripel: Figur × Ort × Event
+        if (e.figs.length && e.locs.length) {
+          for (let fi = 0; fi < Math.min(e.figs.length, 4); fi++) {
+            const fg = e.figs[fi];
+            const fkey = fg.fig_id || fg.name.toLowerCase();
+            for (let li = 0; li < Math.min(e.locs.length, 3); li++) {
+              const l = e.locs[li];
+              pushQA('authorChat|evt-figLoc|' + e.i + '|' + fkey + '|' + l.pk,
+                langIsEn
+                  ? `What does ${fg.name} do at ${l.name} during «${e.ereignis}»?`
+                  : `Was macht ${fg.name} an ${l.name} während «${e.ereignis}»?`,
+                e.fullAnswer);
+              pushQA('authorChat|evt-figLoc2|' + e.i + '|' + fkey + '|' + l.pk,
+                langIsEn
+                  ? `Why is ${fg.name} at ${l.name} in «${e.ereignis}»?`
+                  : `Warum ist ${fg.name} an ${l.name} bei «${e.ereignis}»?`,
+                e.bedeutung || e.fullAnswer);
+            }
+          }
+        }
+      }
+
+      // ── Inverse Aggregate: Events pro Ort / pro Figur / pro Figur×Ort ───
+      const evtsByLocPk = new Map();
+      const evtsByFigKey = new Map(); // fig_id || lowercased-name → [events]
+      const evtsByFigLoc = new Map(); // fig_id+'|'+locPk → [events]
+      for (const e of enrichedEvents) {
+        for (const l of e.locs) {
+          if (!evtsByLocPk.has(l.pk)) evtsByLocPk.set(l.pk, []);
+          evtsByLocPk.get(l.pk).push(e);
+        }
+        for (const fg of e.figs) {
+          const fkey = fg.fig_id || fg.name.toLowerCase();
+          if (!evtsByFigKey.has(fkey)) evtsByFigKey.set(fkey, { name: fg.name, fig_id: fg.fig_id, items: [] });
+          evtsByFigKey.get(fkey).items.push(e);
+          for (const l of e.locs) {
+            const k = fkey + '|' + l.pk;
+            if (!evtsByFigLoc.has(k)) evtsByFigLoc.set(k, { fig: fg, loc: l, items: [] });
+            evtsByFigLoc.get(k).items.push(e);
+          }
+        }
+      }
+      const renderEvtList = (items, max = 8) => items.slice(0, max)
+        .map(e => `${e.datum ? e.datum + ': ' : ''}${e.ereignis}${e.bedeutung ? ' (' + e.bedeutung + ')' : ''}`)
+        .join(' · ');
+      // Pro Ort: alle dort spielenden Events
+      for (const [locPk, items] of evtsByLocPk) {
+        if (!items.length) continue;
+        const loc = locRows.find(l => l.pk === locPk);
+        if (!loc) continue;
+        const list = renderEvtList(items, 10);
+        pushQA('authorChat|evtsByLoc|' + loc.loc_id,
+          langIsEn ? `Which events take place at ${loc.name}?` : `Welche Ereignisse spielen an ${loc.name}?`,
+          list);
+        pushQA('authorChat|evtsByLoc2|' + loc.loc_id,
+          langIsEn ? `What happens at ${loc.name} over the course of the book?` : `Was geschieht an ${loc.name} im Verlauf des Buches?`,
+          list);
+        // Erst-Ereignis
+        if (items[0]) {
+          pushQA('authorChat|evtsByLocFirst|' + loc.loc_id,
+            langIsEn ? `What's the first event at ${loc.name}?` : `Welches Ereignis spielt zuerst an ${loc.name}?`,
+            items[0].fullAnswer);
+        }
+      }
+      // Pro Figur: alle Zeitstrahl-Events, an denen sie beteiligt ist
+      for (const [fkey, group] of evtsByFigKey) {
+        if (!group.items.length) continue;
+        const list = renderEvtList(group.items, 10);
+        pushQA('authorChat|evtsByFig|' + fkey,
+          langIsEn ? `Which events involve ${group.name}?` : `An welchen Ereignissen ist ${group.name} beteiligt?`,
+          list);
+        pushQA('authorChat|evtsByFig2|' + fkey,
+          langIsEn ? `What does ${group.name} experience throughout the book?` : `Was erlebt ${group.name} im Verlauf des Buches?`,
+          list);
+        if (group.items.length >= 2) {
+          pushQA('authorChat|evtsByFigArc|' + fkey,
+            langIsEn ? `Trace ${group.name}'s arc through the events.` : `Zeichne ${group.name}s Bogen anhand der Ereignisse nach.`,
+            list);
+        }
+      }
+      // Schnittmenge Figur × Ort
+      for (const [, group] of evtsByFigLoc) {
+        if (group.items.length < 1) continue;
+        const list = renderEvtList(group.items, 6);
+        const fname = group.fig.name;
+        const lname = group.loc.name;
+        pushQA('authorChat|evtsByFigLoc|' + (group.fig.fig_id || fname.toLowerCase()) + '|' + group.loc.pk,
+          langIsEn ? `Which events involve ${fname} at ${lname}?` : `Welche Ereignisse erlebt ${fname} an ${lname}?`,
+          list);
+      }
+      // Pro Kapitel: alle Events (kapitelübergreifender Zugriff)
+      const evtsByChapter = new Map();
+      for (const e of enrichedEvents) {
+        for (const ch of e.kapitel) {
+          const key = ch.toLowerCase();
+          if (!evtsByChapter.has(key)) evtsByChapter.set(key, { name: ch, items: [] });
+          evtsByChapter.get(key).items.push(e);
+        }
+      }
+      for (const [key, group] of evtsByChapter) {
+        if (!group.items.length) continue;
+        const list = renderEvtList(group.items, 10);
+        pushQA('authorChat|evtsByCh|' + key.replace(/\s+/g, '_').slice(0, 80),
+          langIsEn ? `Which events take place in «${group.name}»?` : `Welche Ereignisse passieren in «${group.name}»?`,
+          list);
+      }
+
+      // ── Globale (externe) Ereignisse — gezielt boosten ───────────────────
+      // typ='extern' = gesellschaftlich/historisch (Kriege, Krisen, Sport,
+      // Naturkatastrophen). Eigene Aggregate + zusätzliche Q&A pro externes
+      // Event, damit das Modell den historischen Hintergrund prominent lernt.
+      const externEvents = enrichedEvents.filter(e => (e.typ || '').toLowerCase() === 'extern');
+      const persoenlichEvents = enrichedEvents.filter(e => (e.typ || '').toLowerCase() === 'persoenlich' || !e.typ);
+      if (externEvents.length) {
+        const list = externEvents.slice(0, 15)
+          .map(e => `${e.datum ? e.datum + ': ' : ''}${e.ereignis}`)
+          .join(' · ');
+        pushQA('authorChat|evtsExternAll',
+          langIsEn ? `Which historical or global events appear in the book?` : `Welche historischen oder globalen Ereignisse spielen im Buch eine Rolle?`,
+          list);
+        pushQA('authorChat|evtsExternAll2',
+          langIsEn ? `What's the historical backdrop of the book?` : `Welcher historische Hintergrund prägt das Buch?`,
+          list);
+        pushQA('authorChat|evtsExternAll3',
+          langIsEn ? `List the external events that shape the story.` : `Liste die externen Ereignisse, die die Geschichte prägen.`,
+          list);
+        // Pro externes Event extra Frames + Figur-Auswirkung
+        for (const e of externEvents) {
+          pushQA('authorChat|evtExtCtx|' + e.i,
+            langIsEn ? `What is the historical context of «${e.ereignis}»?` : `Welcher historische Kontext steckt hinter «${e.ereignis}»?`,
+            e.fullAnswer);
+          pushQA('authorChat|evtExtSoc|' + e.i,
+            langIsEn ? `How does «${e.ereignis}» shape the world of the book?` : `Wie prägt «${e.ereignis}» die Welt des Buches?`,
+            e.bedeutung || e.fullAnswer);
+          for (const fg of e.figs.slice(0, 6)) {
+            const fkey = fg.fig_id || fg.name.toLowerCase();
+            pushQA('authorChat|evtExtFig|' + e.i + '|' + fkey,
+              langIsEn ? `How does «${e.ereignis}» affect ${fg.name}?` : `Wie betrifft «${e.ereignis}» ${fg.name}?`,
+              e.fullAnswer);
+            pushQA('authorChat|evtExtFigLife|' + e.i + '|' + fkey,
+              langIsEn ? `What does ${fg.name} live through during «${e.ereignis}»?` : `Was erlebt ${fg.name} während «${e.ereignis}»?`,
+              e.fullAnswer);
+          }
+        }
+        // Pro Figur Trennung extern/persönlich für Sortier-Recall
+        const externByFig = new Map();
+        for (const e of externEvents) {
+          for (const fg of e.figs) {
+            const fkey = fg.fig_id || fg.name.toLowerCase();
+            if (!externByFig.has(fkey)) externByFig.set(fkey, { name: fg.name, items: [] });
+            externByFig.get(fkey).items.push(e);
+          }
+        }
+        for (const [fkey, group] of externByFig) {
+          const list2 = renderEvtList(group.items, 8);
+          pushQA('authorChat|evtsExtByFig|' + fkey,
+            langIsEn ? `Which historical events touch ${group.name}'s life?` : `Welche historischen Ereignisse berühren ${group.name}s Leben?`,
+            list2);
+        }
+      }
+      if (persoenlichEvents.length) {
+        const personByFig = new Map();
+        for (const e of persoenlichEvents) {
+          for (const fg of e.figs) {
+            const fkey = fg.fig_id || fg.name.toLowerCase();
+            if (!personByFig.has(fkey)) personByFig.set(fkey, { name: fg.name, items: [] });
+            personByFig.get(fkey).items.push(e);
+          }
+        }
+        for (const [fkey, group] of personByFig) {
+          if (group.items.length < 1) continue;
+          const list2 = renderEvtList(group.items, 8);
+          pushQA('authorChat|evtsPersByFig|' + fkey,
+            langIsEn ? `What are ${group.name}'s personal turning points?` : `Was sind ${group.name}s persönliche Wendepunkte?`,
+            list2);
+        }
+      }
+
+      // ── Figuren-Paar-Events (Wann/Wo/Was zwischen A und B) ───────────────
+      // Pro Event mit ≥2 Figuren werden alle ungeordneten Figuren-Paare
+      // permutiert (A→B). Dadurch bekommt das Modell pro (A,B,Event) drei
+      // bis vier zeitlich-örtliche Q&A-Frames. Bei semantisch erkennbaren
+      // ereignis-Texten (Kuss/Hochzeit/Streit/…) entsteht zusätzlich eine
+      // natürliche Verbalisierung.
+      const verbalize = (ereignis) => {
+        const t = (ereignis || '').toLowerCase();
+        if (langIsEn) {
+          if (/\bkiss/.test(t))                     return { de: null, en: 'kiss for the first time' };
+          if (/\b(meet|first met|first encounter)/.test(t)) return { de: null, en: 'first meet' };
+          if (/\b(wedding|marri|got married)/.test(t)) return { de: null, en: 'get married' };
+          if (/\b(fight|argu|quarrel)/.test(t))      return { de: null, en: 'have a fight' };
+          if (/\b(break.?up|separat|split)/.test(t)) return { de: null, en: 'break up' };
+          if (/\b(reuni|reunion)/.test(t))           return { de: null, en: 'reunite' };
+          return null;
+        }
+        if (/\b(kuss|geküsst|küssen)/.test(t))          return { de: 'sich das erste Mal geküsst', en: null };
+        if (/\b(kennengelernt|kennenlern)/.test(t))     return { de: 'sich kennengelernt', en: null };
+        if (/\b(hochzeit|geheiratet|heirat)/.test(t))   return { de: 'geheiratet', en: null };
+        if (/\b(streit|gestritten)/.test(t))            return { de: 'Streit gehabt', en: null };
+        if (/\b(trennung|getrennt|trennen)/.test(t))    return { de: 'sich getrennt', en: null };
+        if (/\b(versöhn|wiedersehen|wiedergesehen)/.test(t)) return { de: 'sich wiedergesehen', en: null };
+        if (/\b(geboren|geburt)/.test(t))               return { de: 'sich geboren', en: null };
+        return null;
+      };
+      const fmtWhenWhere = (datum, ortName, bedeutung) => {
+        const parts = [];
+        if (datum && ortName)       parts.push(langIsEn ? `In ${datum}, at ${ortName}.` : `Im ${datum}, an ${ortName}.`);
+        else if (datum)             parts.push(langIsEn ? `In ${datum}.` : `Im ${datum}.`);
+        else if (ortName)           parts.push(langIsEn ? `At ${ortName}.` : `An ${ortName}.`);
+        if (bedeutung)              parts.push(bedeutung);
+        return parts.join(' ');
+      };
+      for (const e of enrichedEvents) {
+        if (e.figs.length < 2) continue;
+        const primaryLoc = e.locs[0]?.name || '';
+        const dat = e.datum || '';
+        const bed = e.bedeutung || '';
+        const verb = verbalize(e.ereignis);
+        // Geordnete Paare A→B (beide Richtungen, damit Modell Reihenfolge-invariant lernt)
+        for (let ai = 0; ai < e.figs.length; ai++) {
+          for (let bi = 0; bi < e.figs.length; bi++) {
+            if (ai === bi) continue;
+            if (ai >= 4 || bi >= 4) continue; // cap
+            const A = e.figs[ai];
+            const B = e.figs[bi];
+            const akey = A.fig_id || A.name.toLowerCase();
+            const bkey = B.fig_id || B.name.toLowerCase();
+            const pairKey = e.i + '|' + akey + '|' + bkey;
+            const whenWhere = fmtWhenWhere(dat, primaryLoc, bed);
+            // Generische Wann-Frage
+            if (dat || primaryLoc) {
+              pushQA('authorChat|evtPairWhen|' + pairKey,
+                langIsEn
+                  ? `When does «${e.ereignis}» happen between ${A.name} and ${B.name}?`
+                  : `Wann passiert «${e.ereignis}» zwischen ${A.name} und ${B.name}?`,
+                whenWhere || e.fullAnswer);
+            }
+            // Generische Wo-Frage
+            if (primaryLoc) {
+              pushQA('authorChat|evtPairWhere|' + pairKey,
+                langIsEn
+                  ? `Where does «${e.ereignis}» happen between ${A.name} and ${B.name}?`
+                  : `Wo passiert «${e.ereignis}» zwischen ${A.name} und ${B.name}?`,
+                fmtWhenWhere(dat, primaryLoc, bed) || primaryLoc);
+            }
+            // Was-Frage mit voller Antwort
+            pushQA('authorChat|evtPairWhat|' + pairKey,
+              langIsEn
+                ? `What happens between ${A.name} and ${B.name} during «${e.ereignis}»?`
+                : `Was passiert zwischen ${A.name} und ${B.name} bei «${e.ereignis}»?`,
+              e.fullAnswer);
+            // Verbalisierte Variante (Kuss/Hochzeit/etc.)
+            if (verb) {
+              const phrase = langIsEn ? verb.en : verb.de;
+              if (phrase) {
+                if (dat || primaryLoc) {
+                  pushQA('authorChat|evtPairVerbWhen|' + pairKey,
+                    langIsEn
+                      ? `When do ${A.name} and ${B.name} ${phrase}?`
+                      : `Wann haben ${A.name} und ${B.name} ${phrase}?`,
+                    whenWhere || e.fullAnswer);
+                }
+                if (primaryLoc) {
+                  pushQA('authorChat|evtPairVerbWhere|' + pairKey,
+                    langIsEn
+                      ? `Where do ${A.name} and ${B.name} ${phrase}?`
+                      : `Wo haben ${A.name} und ${B.name} ${phrase}?`,
+                    fmtWhenWhere(dat, primaryLoc, bed) || primaryLoc);
+                }
+              }
+            }
+          }
+        }
+      }
+
       // ── Figuren-Beziehungen ──────────────────────────────────────────────
       // Pro Beziehung Q&A „Wie steht A zu B?" + Rückrichtung. Paare werden
       // einmalig (A→B UND B→A) eingefügt, damit das Modell beide Fragerichtungen
@@ -1212,6 +1708,283 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
         pushQA('authorChat|rel2|' + rel.from_fig_id + '|' + rel.to_fig_id,
           langIsEn ? `What is the relationship between ${a} and ${b}?` : `Welche Beziehung haben ${a} und ${b}?`,
           answer);
+      }
+
+      // ── Cast-Aggregate (Figurentyp-Übersicht) ────────────────────────────
+      // Gruppiert Figuren nach figures.typ (Hauptfigur, Nebenfigur, Statist, …).
+      // Liefert Gesamt-Übersichten („Wer sind die Hauptfiguren?") und Per-Figur-
+      // Rollen-Q&A („Welche Rolle spielt X im Buch?").
+      {
+        const figsByType = new Map(); // typLower → { label, items }
+        for (const f of figRows) {
+          const typRaw = (f.typ || '').trim();
+          if (!typRaw) continue;
+          const key = typRaw.toLowerCase();
+          if (!figsByType.has(key)) figsByType.set(key, { label: typRaw, items: [] });
+          figsByType.get(key).items.push(f);
+        }
+
+        // Buchweite Gesamtübersicht
+        const totalFigs = figRows.length;
+        if (totalFigs > 0) {
+          const breakdown = [...figsByType.entries()]
+            .sort((a, b) => b[1].items.length - a[1].items.length)
+            .map(([, g]) => `${g.items.length}× ${g.label}`)
+            .join(', ');
+          pushQA('authorChat|cast-count',
+            langIsEn ? 'How many characters are in the book?' : 'Wie viele Figuren hat das Buch?',
+            breakdown
+              ? (langIsEn
+                  ? `${totalFigs} characters in total (${breakdown}).`
+                  : `Insgesamt ${totalFigs} Figuren (${breakdown}).`)
+              : (langIsEn ? `${totalFigs} characters in total.` : `Insgesamt ${totalFigs} Figuren.`));
+        }
+
+        // Per Typ: Liste der Figuren mit kurzer Beschreibung
+        for (const [key, group] of figsByType) {
+          const names = group.items.map(f => f.name);
+          if (!names.length) continue;
+          const labelLow = group.label.toLowerCase();
+          const richLines = group.items.slice(0, 20).map(f => {
+            const desc = (f.beschreibung || '').trim();
+            const short = desc ? desc.split(/(?<=[.!?])\s/)[0] : '';
+            return short ? `${f.name} — ${short}` : f.name;
+          }).join('; ');
+
+          // Mehrere Frageparaphrasen pro Typ
+          const typeQs = langIsEn
+            ? [`Who are the ${labelLow}s in the book?`,
+               `Which characters are ${labelLow}s?`,
+               `List the ${labelLow}s.`]
+            : [`Wer sind die ${group.label}n des Romans?`,
+               `Welche Figuren sind ${group.label}n?`,
+               `Nenne mir die ${group.label}n.`];
+          for (let qi = 0; qi < typeQs.length; qi++) {
+            pushQA('authorChat|cast-type|' + key + '|' + qi, typeQs[qi], richLines || names.join(', '));
+          }
+
+          // Pro Figur dieser Typ-Klasse: Rollen-Q&A
+          for (const f of group.items) {
+            pushQA('authorChat|cast-figType|' + f.fig_id,
+              langIsEn ? `What role does ${f.name} play in the book?` : `Welche Rolle spielt ${f.name} im Roman?`,
+              langIsEn ? `${f.name} is a ${labelLow}.` : `${f.name} ist eine ${group.label}.`);
+          }
+        }
+      }
+
+      // ── Familien-Aggregate (verwandtschaftliche Beziehungen) ─────────────
+      // Heuristik: figure_relations.typ matched gegen Familien-Keywords.
+      // Verbundene Komponenten = Familien. Pro Figur Familien-Übersicht.
+      {
+        const familyKeywordsDe = ['vater','mutter','sohn','tochter','kind','ehepartner','ehemann','ehefrau','frau','mann',
+          'geschwister','bruder','schwester','onkel','tante','neffe','nichte','cousin','cousine',
+          'grossvater','grossmutter','grosseltern','opa','oma','schwiegervater','schwiegermutter',
+          'schwiegersohn','schwiegertochter','stiefvater','stiefmutter','stiefsohn','stieftochter',
+          'halbbruder','halbschwester','familie','verwandt','verlobt','verlobte','verlobter','adoptiert','pflege'];
+        const familyKeywordsEn = ['father','mother','son','daughter','child','spouse','husband','wife',
+          'sibling','brother','sister','uncle','aunt','nephew','niece','cousin',
+          'grandfather','grandmother','grandparent','stepfather','stepmother','stepson','stepdaughter',
+          'half-brother','half-sister','family','relative','fiance','fiancee','adopted'];
+        const isFamilyTyp = (typ) => {
+          const t = (typ || '').toLowerCase();
+          if (!t) return false;
+          return familyKeywordsDe.some(k => t.includes(k)) || familyKeywordsEn.some(k => t.includes(k));
+        };
+        const familyRels = figRelRows.filter(r => isFamilyTyp(r.typ));
+
+        if (familyRels.length) {
+          // Union-Find über Familien-Komponenten
+          const parent = new Map();
+          const find = (x) => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
+          const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb); };
+          for (const f of figRows) parent.set(f.fig_id, f.fig_id);
+          for (const r of familyRels) {
+            if (parent.has(r.from_fig_id) && parent.has(r.to_fig_id)) union(r.from_fig_id, r.to_fig_id);
+          }
+          const families = new Map(); // root → [fig_id]
+          for (const f of figRows) {
+            if (!parent.has(f.fig_id)) continue;
+            const root = find(f.fig_id);
+            if (!families.has(root)) families.set(root, []);
+            families.get(root).push(f.fig_id);
+          }
+          // Nur Familien mit ≥2 Mitgliedern, die auch wirklich Familien-Relations haben
+          const familyRoots = [...families.entries()].filter(([root, members]) => {
+            if (members.length < 2) return false;
+            const memberSet = new Set(members);
+            return familyRels.some(r => memberSet.has(r.from_fig_id) && memberSet.has(r.to_fig_id));
+          });
+
+          // Familien-relevante Figuren-Map (für Per-Figur-Antworten)
+          const familyByFig = new Map();
+          for (const [root, members] of familyRoots) {
+            for (const m of members) familyByFig.set(m, root);
+          }
+
+          // Pro Familie: Mitgliederliste + Beziehungs-Aufzählung
+          for (const [root, members] of familyRoots) {
+            const memberSet = new Set(members);
+            const memberNames = members.map(id => figById.get(id)?.name).filter(Boolean);
+            const lines = [];
+            for (const r of familyRels) {
+              if (!memberSet.has(r.from_fig_id) || !memberSet.has(r.to_fig_id)) continue;
+              const a = figById.get(r.from_fig_id)?.name;
+              const b = figById.get(r.to_fig_id)?.name;
+              if (!a || !b) continue;
+              const t = (r.typ || '').trim();
+              const d = (r.beschreibung || '').trim();
+              lines.push(`${a} ↔ ${b}: ${t}${d ? ' (' + d + ')' : ''}`);
+            }
+            const rootName = figById.get(root)?.name || memberNames[0] || root;
+            const answer = (langIsEn
+              ? `Members: ${memberNames.join(', ')}. ${lines.slice(0, 12).join('; ')}.`
+              : `Mitglieder: ${memberNames.join(', ')}. ${lines.slice(0, 12).join('; ')}.`).trim();
+            pushQA('authorChat|family|' + root,
+              langIsEn ? `Describe the family around ${rootName}.` : `Beschreibe die Familie um ${rootName}.`,
+              answer);
+            pushQA('authorChat|family-rel|' + root,
+              langIsEn ? `What are the family relationships in this group?` : `Wie sind die Familienverhältnisse hier?`,
+              answer);
+          }
+
+          // Buchweite Familien-Übersicht
+          if (familyRoots.length) {
+            const overview = familyRoots.map(([root, members]) => {
+              const rootName = figById.get(root)?.name || root;
+              const others = members.map(id => figById.get(id)?.name).filter(Boolean);
+              return `${rootName}-Familie (${others.join(', ')})`;
+            }).join('; ');
+            pushQA('authorChat|family-overview',
+              langIsEn ? 'How are the families structured in the book?' : 'Wie sind die Familienverhältnisse im Buch?',
+              overview);
+          }
+
+          // Per Figur: persönliche Familien-Antwort
+          for (const f of figRows) {
+            const root = familyByFig.get(f.fig_id);
+            if (!root) continue;
+            const personal = [];
+            for (const r of familyRels) {
+              const isFrom = r.from_fig_id === f.fig_id;
+              const isTo   = r.to_fig_id   === f.fig_id;
+              if (!isFrom && !isTo) continue;
+              const otherId = isFrom ? r.to_fig_id : r.from_fig_id;
+              const otherName = figById.get(otherId)?.name;
+              if (!otherName) continue;
+              const t = (r.typ || '').trim();
+              const d = (r.beschreibung || '').trim();
+              personal.push(`${otherName} (${t}${d ? ' — ' + d : ''})`);
+            }
+            if (!personal.length) continue;
+            pushQA('authorChat|family-fig|' + f.fig_id,
+              langIsEn ? `Who are ${f.name}'s family members?` : `Wer gehört zur Familie von ${f.name}?`,
+              personal.slice(0, 10).join(', '));
+          }
+        }
+      }
+
+      // ── Macht-/Hierarchie-Aggregate ──────────────────────────────────────
+      // Quellen: figures.sozialschicht (statisch) + figure_relations.typ
+      // (Macht-Keywords). Liefert Per-Figur-Antworten und buchweite Übersicht.
+      {
+        const powerKeywordsDe = ['vorgesetzt','untergeb','chef','mitarbeit','herr ','herrin','diener','dienstmagd',
+          'meister','schüler','lehrling','lehrer','anführer','gefolg','sklave','sklavin','knecht','magd',
+          'herrscher','untertan','könig','königin','vasall','mentor','protegé','wache','leibwache','komman'];
+        const powerKeywordsEn = ['superior','subordinate','boss','employee','master','servant','apprentice',
+          'teacher','leader','follower','slave','ruler','subject','vassal','mentor','guard','commander'];
+        const isPowerTyp = (typ) => {
+          const t = (typ || '').toLowerCase();
+          if (!t) return false;
+          return powerKeywordsDe.some(k => t.includes(k)) || powerKeywordsEn.some(k => t.includes(k));
+        };
+        const powerRels = figRelRows.filter(r => isPowerTyp(r.typ));
+
+        // Per Figur: sozialschicht
+        const bySchicht = new Map();
+        for (const f of figRows) {
+          const s = (f.sozialschicht || '').trim();
+          if (!s) continue;
+          if (!bySchicht.has(s)) bySchicht.set(s, []);
+          bySchicht.get(s).push(f);
+          pushQA('authorChat|schicht-fig|' + f.fig_id,
+            langIsEn ? `Which social class does ${f.name} belong to?` : `In welcher gesellschaftlichen Schicht steht ${f.name}?`,
+            langIsEn ? `${f.name} belongs to: ${s}.` : `${f.name} gehört zur ${s}.`);
+        }
+        // Per Schicht: Zugehörige Figuren
+        for (const [schicht, members] of bySchicht) {
+          if (members.length < 1) continue;
+          const names = members.map(f => f.name).join(', ');
+          pushQA('authorChat|schicht|' + schicht.toLowerCase(),
+            langIsEn ? `Which characters belong to the ${schicht}?` : `Welche Figuren gehören zur ${schicht}?`,
+            names);
+        }
+
+        // Buchweite Macht-Übersicht
+        const lines = [];
+        if (bySchicht.size) {
+          const sortedSchichten = [...bySchicht.entries()]
+            .sort((a, b) => b[1].length - a[1].length)
+            .map(([s, m]) => `${s}: ${m.map(f => f.name).join(', ')}`);
+          lines.push(...sortedSchichten);
+        }
+        if (powerRels.length) {
+          const relLines = powerRels.slice(0, 15).map(r => {
+            const a = figById.get(r.from_fig_id)?.name;
+            const b = figById.get(r.to_fig_id)?.name;
+            if (!a || !b) return null;
+            const t = (r.typ || '').trim();
+            const d = (r.beschreibung || '').trim();
+            return `${a} → ${b}: ${t}${d ? ' (' + d + ')' : ''}`;
+          }).filter(Boolean);
+          lines.push(...relLines);
+        }
+        if (lines.length) {
+          const overview = lines.join('; ');
+          pushQA('authorChat|power-overview',
+            langIsEn ? 'How are power dynamics structured in the book?' : 'Wie sind die Machtverhältnisse im Buch?',
+            overview);
+          pushQA('authorChat|hierarchy-overview',
+            langIsEn ? 'Describe the hierarchy in the book.' : 'Beschreibe die Hierarchie im Buch.',
+            overview);
+        }
+
+        // Pro Macht-Beziehung: dedizierte Frage (über Standard-Beziehungs-Q&A hinaus)
+        for (const r of powerRels) {
+          const a = figById.get(r.from_fig_id)?.name;
+          const b = figById.get(r.to_fig_id)?.name;
+          if (!a || !b) continue;
+          const t = (r.typ || '').trim();
+          const d = (r.beschreibung || '').trim();
+          if (!t && !d) continue;
+          const answer = d ? (t ? `${t}: ${d}` : d) : t;
+          pushQA('authorChat|power-rel|' + r.from_fig_id + '|' + r.to_fig_id,
+            langIsEn ? `What is the power relationship between ${a} and ${b}?` : `In welchem Machtverhältnis stehen ${a} und ${b}?`,
+            answer);
+        }
+      }
+
+      // ── Tag-Aggregate (Figuren mit Eigenschaft X) ────────────────────────
+      // Reverse-Lookup: pro Tag alle Figuren, die ihn tragen. Erlaubt Fragen
+      // wie "Welche Figuren sind mutig?" — das aktuelle Per-Figur-Sample
+      // beantwortet nur die Gegenrichtung.
+      {
+        const figsByTag = new Map(); // tagLower → { label, names }
+        for (const f of figRows) {
+          if (!f.tags_csv) continue;
+          for (const raw of f.tags_csv.split(',')) {
+            const tag = raw.trim();
+            if (!tag) continue;
+            const key = tag.toLowerCase();
+            if (!figsByTag.has(key)) figsByTag.set(key, { label: tag, names: [] });
+            figsByTag.get(key).names.push(f.name);
+          }
+        }
+        for (const [key, group] of figsByTag) {
+          if (group.names.length < 1) continue;
+          pushQA('authorChat|tag|' + key,
+            langIsEn ? `Which characters are ${group.label}?` : `Welche Figuren sind ${group.label}?`,
+            group.names.join(', '));
+        }
       }
 
       // ── Figuren-Lebensereignisse ─────────────────────────────────────────

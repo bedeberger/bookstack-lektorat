@@ -42,6 +42,21 @@ function cleanupStuckJobRuns() {
   return result.changes;
 }
 
+// KI liefert in Listenfeldern (figuren/kapitel/seiten) gelegentlich Objekte
+// statt blanker Strings — z.B. `{name: 'Renate', id: 'fig-3'}` oder
+// `{name: 'Olten', haeufigkeit: 2}`. Vor dem Persistieren auf String reduzieren,
+// damit Renderer nicht "[object Object]" ausgeben.
+function _toRefString(v) {
+  if (v == null) return null;
+  if (typeof v === 'string') return v.trim() || null;
+  if (typeof v === 'number') return String(v);
+  if (typeof v === 'object') {
+    const s = v.name || v.titel || v.label || v.fig_id || v.loc_id || v.id;
+    return s ? String(s).trim() || null : null;
+  }
+  return null;
+}
+
 // ── Konsolidierter Zeitstrahl ─────────────────────────────────────────────────
 // Ersetzt den gesamten Bestand für book/user.
 // ereignisse: Array aus KI-Antwort [{datum, ereignis, typ, bedeutung, kapitel[], seiten[], figuren[]}]
@@ -57,9 +72,12 @@ function saveZeitstrahlEvents(bookId, userEmail, ereignisse, chNameToId = {}, pa
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     for (let i = 0; i < ereignisse.length; i++) {
       const ev = ereignisse[i];
-      const kapitelArr = Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []);
+      const rawKapitel = Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []);
+      const kapitelArr = rawKapitel.map(_toRefString).filter(Boolean);
       const chapIds = kapitelArr.map(n => chNameToId?.[n] ?? null).filter(id => id != null);
-      const seitenArr = Array.isArray(ev.seiten) ? ev.seiten : [];
+      const rawSeiten = Array.isArray(ev.seiten) ? ev.seiten : [];
+      const seitenArr = rawSeiten.map(_toRefString).filter(Boolean);
+      const figurenArr = Array.isArray(ev.figuren) ? ev.figuren.map(_toRefString).filter(Boolean) : [];
       // Seiten auflösen: erst in den Event-Kapiteln suchen (kapitel-scoped),
       // dann Unambiguous-Match global. Halluzinations-Check: seite === kapitel → skip.
       const pageIds = [];
@@ -88,7 +106,7 @@ function saveZeitstrahlEvents(bookId, userEmail, ereignisse, chNameToId = {}, pa
         chapIds.length    ? JSON.stringify(chapIds)    : null,
         seitenArr.length  ? JSON.stringify(seitenArr)  : null,
         pageIds.length    ? JSON.stringify(pageIds)    : null,
-        ev.figuren ? JSON.stringify(ev.figuren) : null,
+        figurenArr.length ? JSON.stringify(figurenArr) : null,
         i, now
       );
     }
@@ -120,7 +138,8 @@ function saveOrteToDb(bookId, orte, userEmail, chNameToId = null, pageNameToIdBy
   const resolveErstePageIdForOrt = (ersteErwaehnung, kapitel) => {
     if (!ersteErwaehnung) return null;
     for (const k of (kapitel || [])) {
-      const chapId = chNameToId?.[k.name];
+      const chName = _toRefString(typeof k === 'object' && k ? (k.name ?? k) : k);
+      const chapId = chName ? chNameToId?.[chName] : null;
       if (chapId != null) {
         const pid = pageNameToIdByChapter[chapId]?.[ersteErwaehnung];
         if (pid) return pid;
@@ -183,10 +202,16 @@ function saveOrteToDb(bookId, orte, userEmail, chNameToId = null, pageNameToIdBy
         );
         locDbId = lastInsertRowid;
       }
-      for (const fid of (o.figuren || [])) insLf.run(locDbId, fid);
+      for (const fid of (o.figuren || [])) {
+        const ref = _toRefString(fid);
+        if (ref) insLf.run(locDbId, ref);
+      }
       for (const k of (o.kapitel || [])) {
-        const chapId = chNameToId?.[k.name] ?? null;
-        if (chapId != null) insLc.run(locDbId, chapId, k.name, k.haeufigkeit || 1);
+        const chName = _toRefString(typeof k === 'object' && k ? (k.name ?? k) : k);
+        if (!chName) continue;
+        const chapId = chNameToId?.[chName] ?? null;
+        const haeufigkeit = (k && typeof k === 'object' && k.haeufigkeit) || 1;
+        if (chapId != null) insLc.run(locDbId, chapId, chName, haeufigkeit);
       }
     }
   })();
