@@ -47,8 +47,8 @@
 }
 .export-format-pdf body {
   font-family: 'EB Garamond', Georgia, serif !important;
-  font-size: 12pt !important;
-  line-height: 1.85 !important;
+  font-size: 10.5pt !important;
+  line-height: 1.38 !important;
   color: #1a1209 !important;
   background: #faf8f4 !important;
   hyphens: auto !important;
@@ -199,8 +199,8 @@
 /* ── FLIESSTEXT ─────────────────────────────────────── */
 .export-format-pdf p {
   font-family: 'EB Garamond', Georgia, serif !important;
-  font-size: 12pt !important; line-height: 1.85 !important;
-  text-align: justify !important; text-indent: 2em !important;
+  font-size: 10.5pt !important; line-height: 1.38 !important;
+  text-align: justify !important; text-indent: 1em !important;
   margin: 0 !important; padding: 0 !important;
   orphans: 3 !important; widows: 3 !important;
 }
@@ -209,9 +209,6 @@
 .export-format-pdf h3 + p,
 .export-format-pdf h4 + p,
 .export-format-pdf p:first-of-type {
-  text-indent: 0 !important;
-}
-.export-format-pdf p.dialog {
   text-indent: 0 !important;
 }
 
@@ -227,11 +224,11 @@
 
 /* ── LISTEN ─────────────────────────────────────────── */
 .export-format-pdf ul, .export-format-pdf ol {
-  font-size: 12pt !important; line-height: 1.85 !important;
+  font-size: 10.5pt !important; line-height: 1.38 !important;
   margin: 3mm 0 4mm 2em !important; padding: 0 !important;
 }
 .export-format-pdf li {
-  font-size: 12pt !important; margin-bottom: 1mm !important;
+  font-size: 10.5pt !important; margin-bottom: 1mm !important;
   padding: 0 !important; text-align: justify !important;
 }
 .export-format-pdf ul li::marker {
