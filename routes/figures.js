@@ -16,6 +16,45 @@ router.get('/zeitstrahl/:book_id', (req, res) => {
     'SELECT datum, ereignis, typ, bedeutung, kapitel, chapter_ids, seiten, page_ids, figuren FROM zeitstrahl_events WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
   ).all(bookId, userEmail || '');
   if (!rows.length) return res.json({ ereignisse: null });
+
+  // Backward-Compat: alte Rows speicherten figuren als ["Name", ...]-Strings.
+  // Neue Rows speichern {id, name, typ}-Objekte. Beim Laden Strings via figures-
+  // Tabelle (Name → fig_id, typ) anreichern, damit Klick-Link + Badge-Farbe wieder
+  // funktionieren.
+  const figLookup = new Map();
+  const figRows = db.prepare(
+    'SELECT fig_id, name, kurzname, typ FROM figures WHERE book_id = ? AND user_email IS ?'
+  ).all(bookId, userEmail);
+  for (const f of figRows) {
+    const keys = [f.name, f.kurzname].filter(Boolean).map(s => s.toLowerCase());
+    for (const k of keys) figLookup.set(k, { id: f.fig_id, typ: f.typ || 'andere' });
+  }
+  const enrichFigur = (f) => {
+    if (f == null) return null;
+    if (typeof f === 'string') {
+      const name = f.trim();
+      if (!name) return null;
+      const hit = figLookup.get(name.toLowerCase());
+      return hit ? { id: hit.id, name, typ: hit.typ } : { name };
+    }
+    if (typeof f === 'object') {
+      const name = (f.name || f.kurzname || '').trim();
+      if (!name) return null;
+      const out = { name };
+      if (f.id) out.id = String(f.id);
+      if (f.typ) out.typ = String(f.typ);
+      if (!out.id || !out.typ) {
+        const hit = figLookup.get(name.toLowerCase());
+        if (hit) {
+          if (!out.id)  out.id  = hit.id;
+          if (!out.typ) out.typ = hit.typ;
+        }
+      }
+      return out;
+    }
+    return null;
+  };
+
   const ereignisse = rows.map(r => ({
     datum:       r.datum,
     ereignis:    r.ereignis,
@@ -25,7 +64,7 @@ router.get('/zeitstrahl/:book_id', (req, res) => {
     chapter_ids: r.chapter_ids ? JSON.parse(r.chapter_ids) : [],
     seiten:      r.seiten      ? JSON.parse(r.seiten)      : [],
     page_ids:    r.page_ids    ? JSON.parse(r.page_ids)    : [],
-    figuren:     r.figuren     ? JSON.parse(r.figuren)     : [],
+    figuren:     r.figuren ? (JSON.parse(r.figuren) || []).map(enrichFigur).filter(Boolean) : [],
   }));
   res.json({ ereignisse });
 });

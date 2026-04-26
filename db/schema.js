@@ -77,7 +77,25 @@ function saveZeitstrahlEvents(bookId, userEmail, ereignisse, chNameToId = {}, pa
       const chapIds = kapitelArr.map(n => chNameToId?.[n] ?? null).filter(id => id != null);
       const rawSeiten = Array.isArray(ev.seiten) ? ev.seiten : [];
       const seitenArr = rawSeiten.map(_toRefString).filter(Boolean);
-      const figurenArr = Array.isArray(ev.figuren) ? ev.figuren.map(_toRefString).filter(Boolean) : [];
+      // figuren als {id, name, typ}-Objekte erhalten (Schema verlangt das, Renderer
+      // braucht id für Klick-Link und typ für Badge-Klasse). Strings/Mischformen
+      // tolerant in Objekte heben.
+      const figurenArr = Array.isArray(ev.figuren) ? ev.figuren.map(f => {
+        if (f == null) return null;
+        if (typeof f === 'string') {
+          const name = f.trim();
+          return name ? { name } : null;
+        }
+        if (typeof f === 'object') {
+          const name = (f.name || f.kurzname || '').trim();
+          if (!name) return null;
+          const out = { name };
+          if (f.id) out.id = String(f.id);
+          if (f.typ) out.typ = String(f.typ);
+          return out;
+        }
+        return null;
+      }).filter(Boolean) : [];
       // Seiten auflösen: erst in den Event-Kapiteln suchen (kapitel-scoped),
       // dann Unambiguous-Match global. Halluzinations-Check: seite === kapitel → skip.
       const pageIds = [];
