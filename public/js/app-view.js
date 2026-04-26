@@ -6,7 +6,10 @@ import { htmlToText, stripFocusArtefacts, fetchJson, escHtml } from './utils.js'
 export const appViewMethods = {
   async selectPage(p) {
     if (this.currentPage && this.currentPage.id === p.id) {
-      this.resetPage();
+      // Re-Klick auf bereits offene Seite: SW-Cache umgehen und frischen
+      // Server-Stand laden. Aktive Edits nicht überschreiben.
+      if (this.editMode || this.editDirty) return;
+      await this._refetchCurrentPage();
       return;
     }
     if (this.editMode && this.editDirty) {
@@ -52,7 +55,13 @@ export const appViewMethods = {
 
     // Seiteninhalt laden und als formatiertes HTML rendern
     try {
-      const pd = await this.bsGet('pages/' + p.id);
+      let pd = await this.bsGet('pages/' + p.id);
+      // Stale-Check: Wenn der Tree-Eintrag (`p.updated_at`, kann selbst aus
+      // SW-Cache stammen) jünger ist als die Detail-Antwort, hat der SW eine
+      // veraltete Version geliefert → einmalig mit __fresh nachziehen.
+      if (p.updated_at && pd.updated_at && new Date(pd.updated_at) < new Date(p.updated_at)) {
+        pd = await this.bsGet('pages/' + p.id, { fresh: true });
+      }
       const html = stripFocusArtefacts(pd.html || '');
       this.originalHtml = html;
       this.renderedPageHtml = html;
@@ -69,6 +78,27 @@ export const appViewMethods = {
     // Figurenkontext für dieses Kapitel laden (parallel zur History)
     this.loadChapterFigures();
     await this.loadPageHistory(p.id);
+  },
+
+  // Lädt die aktuell offene Seite neu vom Server (SW-Cache umgangen). Wird
+  // beim Re-Klick auf die offene Sidebar-Seite verwendet, damit nach externer
+  // Änderung in BookStack kein veralteter Stand stehenbleibt.
+  async _refetchCurrentPage() {
+    if (!this.currentPage) return;
+    const pageId = this.currentPage.id;
+    try {
+      const pd = await this.bsGet('pages/' + pageId, { fresh: true });
+      if (this.currentPage?.id !== pageId) return;
+      const html = stripFocusArtefacts(pd.html || '');
+      this.originalHtml = html;
+      this.renderedPageHtml = html;
+      this._updatePageViewHeight();
+      if (pd.updated_at) this.currentPage.updated_at = pd.updated_at;
+      this.currentPageEmpty = !htmlToText(html).trim();
+    } catch (e) {
+      console.error('[refetchCurrentPage]', e);
+      this.setStatus(this.t('chat.pageLoadFailed'));
+    }
   },
 
   // Schliesst die anderen Hauptkarten (nicht Tree – der bleibt immer aktiv).

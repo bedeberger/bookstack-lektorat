@@ -31,12 +31,16 @@ async function _fetchWithTimeout(url, opts, timeoutMs, abortMsg) {
 const MAX_RETRY_429 = 3;
 
 export const bookstackMethods = {
-  async bsGet(path) {
+  async bsGet(path, opts = {}) {
     let lastStatus = 0;
+    // Bypass-Marker: SW (public/sw.js) sieht `?__fresh=1` und umgeht den
+    // SWR-Cache. Nötig für konsistenzkritische Reads (Editor-Open, Re-Klick),
+    // sonst kann eine veraltete Version aus dem API-Cache rendern.
+    const url = '/api/' + path + (opts.fresh ? (path.includes('?') ? '&' : '?') + '__fresh=1' : '');
     for (let attempt = 0; attempt <= MAX_RETRY_429; attempt++) {
       let r;
       try {
-        r = await _fetchWithTimeout('/api/' + path, {}, 30000, this.t('bs.timeoutGet'));
+        r = await _fetchWithTimeout(url, {}, 30000, this.t('bs.timeoutGet'));
       } catch (e) {
         if (e.name === 'AbortError') {
           throw new Error(e.message || this.t('bs.timeoutAborted'));

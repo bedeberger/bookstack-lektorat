@@ -60,6 +60,15 @@ router.post('/session', jsonBody, async (req, res) => {
     logger.warn(`[chat/session] Snapshot-Load Fehler page=${page_id}: ${e.message}`);
   }
 
+  // Orphan-Cleanup: vorher angelegte leere Sessions desselben Users für dieselbe
+  // Seite löschen, bevor wir eine neue erstellen. So sammeln sich keine Karteileichen
+  // an, wenn der User Chat-Karte mehrmals öffnet/schliesst, ohne zu schreiben.
+  db.prepare(`
+    DELETE FROM chat_sessions
+    WHERE page_id = ? AND user_email = ?
+      AND NOT EXISTS (SELECT 1 FROM chat_messages WHERE session_id = chat_sessions.id)
+  `).run(page_id, userEmail);
+
   const now = new Date().toISOString();
   const result = db.prepare(`
     INSERT INTO chat_sessions (book_id, book_name, page_id, page_name, user_email, created_at, last_message_at, opening_page_text)
@@ -76,6 +85,13 @@ router.post('/session/book', jsonBody, (req, res) => {
   if (!book_id || !userEmail) {
     return res.status(400).json({ error_code: 'BOOKID_LOGIN_REQ' });
   }
+  // Orphan-Cleanup analog zum Seiten-Chat (siehe Kommentar oben).
+  db.prepare(`
+    DELETE FROM chat_sessions
+    WHERE book_id = ? AND page_name = '__book__' AND user_email = ?
+      AND NOT EXISTS (SELECT 1 FROM chat_messages WHERE session_id = chat_sessions.id)
+  `).run(book_id, userEmail);
+
   const now = new Date().toISOString();
   const result = db.prepare(`
     INSERT INTO chat_sessions (book_id, book_name, page_id, page_name, user_email, created_at, last_message_at)
@@ -84,7 +100,10 @@ router.post('/session/book', jsonBody, (req, res) => {
   res.json({ id: result.lastInsertRowid });
 });
 
-/** Alle Buch-Chat-Sessions eines Buchs (neueste zuerst, max. 20) */
+/** Alle Buch-Chat-Sessions eines Buchs (neueste zuerst, max. 20).
+ *  Leere Sessions (ohne Nachrichten) werden ausgefiltert — sie entstehen beim
+ *  Öffnen der Chat-Karte (auto-`startNewSession`) und sollen weder in der
+ *  History noch im Badge-Count auftauchen, bis der User wirklich schreibt. */
 router.get('/sessions/book/:book_id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
   const bookId = toIntId(req.params.book_id);
@@ -94,13 +113,15 @@ router.get('/sessions/book/:book_id', (req, res) => {
            (SELECT content FROM chat_messages WHERE session_id = cs.id ORDER BY created_at ASC LIMIT 1) AS preview
     FROM chat_sessions cs
     WHERE cs.book_id = ? AND cs.page_name = '__book__' AND cs.user_email = ?
+      AND EXISTS (SELECT 1 FROM chat_messages WHERE session_id = cs.id)
     ORDER BY cs.last_message_at DESC
     LIMIT 20
   `).all(bookId, userEmail);
   res.json(rows);
 });
 
-/** Alle Sessions einer Seite (neueste zuerst, max. 20) */
+/** Alle Sessions einer Seite (neueste zuerst, max. 20).
+ *  Siehe Kommentar oben — leere Sessions werden ausgefiltert. */
 router.get('/sessions/:page_id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
   const pageId = toIntId(req.params.page_id);
@@ -110,6 +131,7 @@ router.get('/sessions/:page_id', (req, res) => {
            (SELECT content FROM chat_messages WHERE session_id = cs.id ORDER BY created_at ASC LIMIT 1) AS preview
     FROM chat_sessions cs
     WHERE cs.page_id = ? AND cs.user_email = ?
+      AND EXISTS (SELECT 1 FROM chat_messages WHERE session_id = cs.id)
     ORDER BY cs.last_message_at DESC
     LIMIT 20
   `).all(pageId, userEmail);

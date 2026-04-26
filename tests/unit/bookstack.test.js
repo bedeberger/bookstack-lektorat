@@ -53,6 +53,66 @@ test('bsGetAll: iteriert alle Seiten via count=500 offset=N', async () => {
   }
 });
 
+test('bsGetAll: total ≤ count → einzelner Call (kein Endlos-Loop bei kleiner Liste)', async () => {
+  // 47 Einträge, count=500 → ein Roundtrip, total=47 erfüllt Abbruchbedingung.
+  // Regression-Schutz: wenn die Schleife `all.length >= total` falsch prüft,
+  // läuft sie ewig oder fragt eine zweite leere Seite ab.
+  const calls = [];
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return {
+      ok: true,
+      json: async () => ({
+        total: 47,
+        data: new Array(47).fill(0).map((_, i) => ({ id: i })),
+      }),
+    };
+  };
+  try {
+    const all = await bsGetAll('books', { id: 'x', pw: 'y' });
+    assert.equal(all.length, 47);
+    assert.equal(calls.length, 1, 'darf nur einen Call machen wenn alle Items in einer Seite passen');
+    assert.match(calls[0], /count=500/);
+    assert.match(calls[0], /offset=0/);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('bsGetAll: leeres Resultat → ein Call, leeres Array (kein Crash bei total=0)', async () => {
+  const calls = [];
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return { ok: true, json: async () => ({ total: 0, data: [] }) };
+  };
+  try {
+    const all = await bsGetAll('chapters?filter[book_id]=99', { id: 'x', pw: 'y' });
+    assert.deepEqual(all, []);
+    assert.equal(calls.length, 1);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('bsGetAll: respektiert bestehende Query-Params (& statt ?)', async () => {
+  const calls = [];
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return { ok: true, json: async () => ({ total: 1, data: [{ id: 1 }] }) };
+  };
+  try {
+    await bsGetAll('pages?filter[book_id]=42', { id: 'x', pw: 'y' });
+    // Wenn der Pfad ein `?` hat, muss `&` als Separator verwendet werden,
+    // sonst entsteht ein zweites `?` und BookStack ignoriert die Pagination.
+    assert.match(calls[0], /\?filter\[book_id\]=42&count=500&offset=0/);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
 test('bsGet: Non-OK-Response → Error mit status', async () => {
   const origFetch = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: false, status: 403, text: async () => 'forbidden' });
