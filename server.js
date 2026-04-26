@@ -22,6 +22,7 @@ const bookSettingsRouter = require('./routes/booksettings');
 const userSettingsRouter = require('./routes/usersettings');
 const { router: proxiesRouter, bookstackProxy, BOOKSTACK_URL } = require('./routes/proxies');
 const { router: syncRouter, syncAllBooks } = require('./routes/sync');
+const exportRouter = require('./routes/export');
 
 const PORT = process.env.PORT || 3737;
 const app = express();
@@ -192,6 +193,7 @@ app.use('/ideen', ideenRouter);
 app.use('/booksettings', bookSettingsRouter);
 app.use('/me', userSettingsRouter);
 app.use('/sync', syncRouter);
+app.use('/export', exportRouter);
 app.use(staticServe);
 app.use('/api', bookstackProxy);
 

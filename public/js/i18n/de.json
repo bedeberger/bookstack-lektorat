@@ -206,6 +206,14 @@
   "book.settings.tempus.gemischt":    "Gemischt / wechselnd",
   "book.settings.pov.kurzgeschichtenHint": "Hinweis: Bei Kurzgeschichten-Sammlungen gelten Perspektive und Erzählzeit nur als Richtwert. Einzelne Geschichten dürfen legitim abweichen – die KI wertet Abweichungen dann nicht als Fehler.",
 
+  "book.export.title":           "Buch exportieren",
+  "book.export.hint":            "Lädt das gesamte Buch via BookStack-Export herunter. Dateiname wird automatisch mit Zeitstempel versehen.",
+  "book.export.pdf":             "PDF",
+  "book.export.html":            "HTML",
+  "book.export.txt":             "Text",
+  "book.export.md":              "Markdown",
+  "book.export.running":         "Export läuft ({fmt}) – kann bei grossen Büchern bis zu einer Minute dauern …",
+
   "tile.review":                 "Bewertung",
   "tile.review.desc":            "Note & Analyse",
   "tile.figuren":                "Figuren",

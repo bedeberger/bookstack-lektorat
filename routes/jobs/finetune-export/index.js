@@ -10,6 +10,7 @@ const {
   jsonBody,
 } = require('../shared');
 
+const { buildExportFilename } = require('../../../lib/filenames');
 const { loadFinetuneData } = require('./data-loader');
 const { finalizeFinetuneSamples } = require('./finalize');
 const { finetuneResultStore } = require('./lib/store');
@@ -211,9 +212,12 @@ finetuneExportRouter.get('/finetune-export/:id/:kind.jsonl', (req, res) => {
   if (!payload) return res.status(410).json({ error_code: 'JSONL_EXPIRED' });
   const content = kind === 'train' ? payload.trainJsonl : payload.valJsonl;
   if (!content) return res.status(404).json({ error_code: 'JSONL_EMPTY' });
-  const ts = new Date(job.endedAt || Date.now())
-    .toISOString().slice(0, 19).replace(/[:T]/g, '-');
-  const filename = `finetune-${kind}-book${job.bookId}-${ts}.jsonl`;
+  const filename = buildExportFilename({
+    prefix: `finetune-${kind}`,
+    slug: payload.bookName || `book${job.bookId}`,
+    ext: 'jsonl',
+    date: new Date(job.endedAt || Date.now()),
+  });
   res.setHeader('Content-Type', 'application/jsonl; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send(content);

@@ -206,6 +206,14 @@
   "book.settings.tempus.gemischt":    "Mixed / shifting",
   "book.settings.pov.kurzgeschichtenHint": "Note: For short-story collections, perspective and tense act only as guidelines. Individual stories may legitimately deviate – the AI will not flag those as errors.",
 
+  "book.export.title":           "Export book",
+  "book.export.hint":            "Downloads the entire book via BookStack export. Filename is timestamped automatically.",
+  "book.export.pdf":             "PDF",
+  "book.export.html":            "HTML",
+  "book.export.txt":             "Text",
+  "book.export.md":              "Markdown",
+  "book.export.running":         "Export running ({fmt}) – may take up to a minute for large books …",
+
   "tile.review":                 "Review",
   "tile.review.desc":            "Grade & analysis",
   "tile.figuren":                "Characters",

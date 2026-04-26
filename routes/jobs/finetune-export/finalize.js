@@ -10,7 +10,7 @@ const { storeFinetuneResult } = require('./lib/store');
 //
 // Gibt `stats`-Objekt zurück, das in completeJob gepackt wird.
 function finalizeFinetuneSamples(jobId, ctx) {
-  const { samples, opts, langIsEn, counts } = ctx;
+  const { samples, opts, langIsEn, counts, bookName } = ctx;
   const { valSplit, valSeed, maxSeqTokens, emitText, truncateLong } = opts;
 
   // ── Token-Budget pro Sample (für Stats + Filter) ──────────────────────
@@ -117,7 +117,7 @@ function finalizeFinetuneSamples(jobId, ctx) {
     emitText,
   };
 
-  storeFinetuneResult(jobId, { trainJsonl, valJsonl });
+  storeFinetuneResult(jobId, { trainJsonl, valJsonl, bookName });
   return stats;
 }
 
