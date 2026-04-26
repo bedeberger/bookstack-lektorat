@@ -9,7 +9,6 @@ export const finetuneExportMethods = {
     const a = document.createElement('a');
     a.href = url;
     a.rel = 'noopener';
-    a.download = `finetune-${kind}-book${window.__app.selectedBookId}.jsonl`;
     document.body.appendChild(a);
     a.click();
     a.remove();
