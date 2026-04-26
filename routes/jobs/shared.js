@@ -277,6 +277,52 @@ const HTML_NAMED_ENTITIES = {
   euro: '€', deg: '°',
 };
 
+// Token-Sparkur fürs Buchtext-Preprocessing (claude-only).
+// Wird nach loadPageContents auf jede Seite angewendet, BEVOR fullBookText oder
+// Multi-Pass-Chunks gebaut werden – damit P1 und P8 byte-identischen Buchtext
+// sehen (Cache-Read in P8 trifft den 1h-Block aus P1).
+// Greift Reste, die htmlToText nicht entfernt: unbekannte HTML-Entities,
+// Zero-Width-Zeichen, weiche Trennstriche, Mehrfach-Leerzeichen.
+const _CLAUDE_ENTITY_MAP = {
+  nbsp: ' ', ensp: ' ', emsp: ' ', thinsp: ' ',
+  mdash: '—', ndash: '–', hellip: '…', bull: '•', middot: '·',
+  lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”',
+  laquo: '«', raquo: '»', sbquo: '‚', bdquo: '„',
+  apos: "'", prime: '′', Prime: '″',
+  times: '×', divide: '÷', plusmn: '±', minus: '−',
+};
+function cleanPageTextForClaude(text) {
+  return (text || '')
+    .replace(/&(?:#x([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]+));/g, (m, hex, dec, name) => {
+      if (hex !== undefined) {
+        const cp = parseInt(hex, 16);
+        if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10FFFF) {
+          try { return String.fromCodePoint(cp); } catch { return m; }
+        }
+        return m;
+      }
+      if (dec !== undefined) {
+        const cp = parseInt(dec, 10);
+        if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10FFFF) {
+          try { return String.fromCodePoint(cp); } catch { return m; }
+        }
+        return m;
+      }
+      return Object.prototype.hasOwnProperty.call(_CLAUDE_ENTITY_MAP, name)
+        ? _CLAUDE_ENTITY_MAP[name]
+        : m;
+    })
+    // Zero-Width-Joiner/Non-Joiner/Space + BOM raus
+    .replace(/[​-‍﻿]/g, '')
+    // Soft Hyphen (Word/PDF-Erbe) raus
+    .replace(/­/g, '')
+    // NBSP zu normalem Space
+    .replace(/ /g, ' ')
+    // Mehrfach-Leerzeichen zu eins
+    .replace(/ {2,}/g, ' ')
+    .trim();
+}
+
 function htmlToText(html) {
   return (html || '')
     .replace(/<[^>]+>/g, ' ')
@@ -850,7 +896,7 @@ module.exports = {
   tps, completeJob, failJob, cancelJob, jobKey, findActiveJobId, fmtTok, i18nError,
   _modelName, settledAll,
   BS_URL, bsGet, bsGetAll,
-  htmlToText,
+  htmlToText, cleanPageTextForClaude,
   loadPageContents, groupByChapter, buildSinglePassBookText, splitGroupsIntoChunks,
   aiCall,
   getPrompts, getBookPrompts,

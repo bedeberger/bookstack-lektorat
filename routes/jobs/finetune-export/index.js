@@ -54,11 +54,30 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
     const maxChars = Math.max(minChars + 100, opts.maxChars | 0);
     const valSplit = Math.max(0, Math.min(0.5, Number.isFinite(opts.valSplit) ? opts.valSplit : 0.1));
     const seed = Number.isFinite(opts.valSeed) ? opts.valSeed : 0;
-    // `maxSeqTokens`: hartes Token-Limit nach Chat-Template-Wrapping. 0/null =
-    // kein Filter (alles durch, Token-Stats trotzdem berechnen). Defaults:
-    // 4096 ist Sweet-Spot für Mistral-Small-3.2-24B-QLoRA auf 20-GB-Karten.
+    // `maxSeqTokens`: hartes Token-Limit nach Tekken-V7-Chat-Template-Wrapping.
+    // 0/null = kein Filter. Sweet-Spots für Mistral-Small-3.2-24B:
+    //   • QLoRA 4-bit auf 20-24 GB (RTX 3090/4090):  4096
+    //   • QLoRA 4-bit auf 48 GB (A6000):            8192-16384
+    //   • LoRA 16-bit auf 80 GB (A100/H100):       16384-32768
+    //   • Voll-FT auf 80 GB:                        8192 (oder grösser mit FSDP)
     const maxSeqTokens = Math.max(0, Number(opts.maxSeqTokens) || 0);
     const emitText = !!opts.emitText;
+    // `fulltext`: aktiviert lange Voll-Kapitel-Samples in scene.js
+    // (Voll-Kapitel-Completion, Sliding-Window-Cuts, Kapitel→Kapitel-Continuation).
+    // Default an — grösste Hebelwirkung für Memorisierung des Buchtexts und
+    // gerechtfertigt durch Mistral-Small-3.2-Kontextfenster (131072 Tokens).
+    // Bei kleinen seqlen-Trainings via maxSeqTokens-Filter aussortiert.
+    const fulltext = opts.fulltext !== false;
+    // `maxFullChars`: Cap für Voll-Kapitel-Samples + Multi-Page-Kontextfenster.
+    // 60000 chars ≈ 18000 Tekken-V7-Tokens DE / 15000 EN — passt in 24-32k
+    // seqlen mitsamt Prompt-Anteil. Bei vollem 128k-Training auf >100000
+    // hochsetzen (dann bleiben ganze Kapitel auch in 200k-Charakter-Romanen
+    // ungekürzt).
+    const maxFullChars = Math.max(maxChars, Number(opts.maxFullChars) || 60000);
+    // `truncateLong`: maxSeqTokens als Cap (Assistant-Content trunkieren) statt
+    // Drop. Bewahrt grosse Samples für kleinere seqlen-Trainings, riskiert dafür
+    // Mid-Sentence-Cuts. Default false → bestehendes Verhalten (Drop).
+    const truncateLong = !!opts.truncateLong;
 
     // Einheitliche Identität über alle Sample-Typen: Modell soll *eine* Stimme
     // lernen — die des Buchs — statt mehrerer Personae (Lektor, Dialogschreiber,
@@ -73,7 +92,8 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
     const counts = { style: 0, scene: 0, dialog: 0, authorChat: 0, correction: 0 };
 
     // Normalised opts mit übernommenen Defaults — wird in alle Sub-Module gereicht.
-    const optsNorm = { ...opts, minChars, maxChars, valSplit, valSeed: seed, maxSeqTokens, emitText };
+    const optsNorm = { ...opts, minChars, maxChars, valSplit, valSeed: seed, maxSeqTokens, emitText,
+                       fulltext, maxFullChars, truncateLong };
 
     const ctx = {
       jobId, logger,
@@ -128,7 +148,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
 
 finetuneExportRouter.post('/finetune-export', jsonBody, (req, res) => {
   const { book_id, book_name, types, min_chars, max_chars, val_split, val_seed,
-          max_seq_tokens, emit_text } = req.body || {};
+          max_seq_tokens, emit_text, fulltext, max_full_chars, truncate_long } = req.body || {};
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
   const opts = {
     types: {
@@ -144,6 +164,9 @@ finetuneExportRouter.post('/finetune-export', jsonBody, (req, res) => {
     valSeed:  Number(val_seed)  || 0,
     maxSeqTokens: Number(max_seq_tokens) || 0,
     emitText: !!emit_text,
+    fulltext: fulltext !== false,
+    maxFullChars: Number(max_full_chars) || 60000,
+    truncateLong: !!truncate_long,
   };
   if (!Object.values(opts.types).some(v => v)) {
     return res.status(400).json({ error_code: 'FINETUNE_NO_TYPES' });
@@ -172,7 +195,9 @@ finetuneExportRouter.get('/finetune-export/:id/:kind.jsonl', (req, res) => {
   if (!payload) return res.status(410).json({ error_code: 'JSONL_EXPIRED' });
   const content = kind === 'train' ? payload.trainJsonl : payload.valJsonl;
   if (!content) return res.status(404).json({ error_code: 'JSONL_EMPTY' });
-  const filename = `finetune-${kind}-book${job.bookId}.jsonl`;
+  const ts = new Date(job.endedAt || Date.now())
+    .toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  const filename = `finetune-${kind}-book${job.bookId}-${ts}.jsonl`;
   res.setHeader('Content-Type', 'application/jsonl; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send(content);

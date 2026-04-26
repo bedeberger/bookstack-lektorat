@@ -3,12 +3,13 @@
 const { extractName, escapeRe } = require('../../lib/names');
 const { splitParagraphs } = require('../../lib/text');
 
-// Block 3+4: Orte-Q&A einzeln + Doppel-/Tripel-Verknüpfungen
+// Block 3+4: Orte-Q&A einzeln + Doppel-/Tripel-Verknüpfungen + Reisen
 function buildLocationSamples(ctx) {
   const {
     langIsEn,
     locRows, sceneRows, figById, figRows,
     chaptersByLocPk, figsByLocPk, scenesByLocPk,
+    figsByScene, locsByScene, locById,
     ortQuestions, pushQA, pickVariants,
   } = ctx;
 
@@ -196,6 +197,51 @@ function buildLocationSamples(ctx) {
     pushQA('authorChat|locsAll2',
       langIsEn ? `What are the settings of this book?` : `An welchen Schauplätzen spielt das Buch?`,
       allLocs);
+  }
+
+  // ── Reise-Sequenzen pro Figur ────────────────────────────────────────
+  // sceneRows ist nach sort_order sortiert → Sequenz der Schauplätze pro
+  // Figur ist ihre „Reise" durchs Buch. Liefert Stationen-Listen + paarweise
+  // Übergänge A→B als gezielte Q&A.
+  const figLocSeq = new Map(); // fig_id → [{loc, sceneId}]
+  for (const s of sceneRows) {
+    const figIds = figsByScene.get(s.id) || [];
+    const locIds = locsByScene.get(s.id) || [];
+    for (const fid of figIds) {
+      for (const lid of locIds) {
+        const loc = locRows.find(l => l.loc_id === lid);
+        if (!loc) continue;
+        if (!figLocSeq.has(fid)) figLocSeq.set(fid, []);
+        const seq = figLocSeq.get(fid);
+        if (seq.length === 0 || seq[seq.length - 1].loc.pk !== loc.pk) {
+          seq.push({ loc, sceneId: s.id });
+        }
+      }
+    }
+  }
+  for (const [fid, seq] of figLocSeq) {
+    if (seq.length < 2) continue;
+    const fname = figById.get(fid)?.name;
+    if (!fname) continue;
+    const stations = seq.slice(0, 12).map(e => e.loc.name).join(' → ');
+    pushQA('authorChat|figJourney|' + fid,
+      langIsEn ? `Trace ${fname}'s journey through the book.` : `Zeichne ${fname}s Reise durchs Buch nach.`,
+      stations);
+    pushQA('authorChat|figStations|' + fid,
+      langIsEn ? `Which stations does ${fname} pass through?` : `Welche Stationen durchläuft ${fname}?`,
+      stations);
+    // Paarweise Übergänge A→B
+    for (let i = 1; i < Math.min(seq.length, 8); i++) {
+      const A = seq[i - 1].loc;
+      const B = seq[i].loc;
+      pushQA('authorChat|figTransit|' + fid + '|' + A.pk + '|' + B.pk,
+        langIsEn
+          ? `How does ${fname} get from ${A.name} to ${B.name}?`
+          : `Wie kommt ${fname} von ${A.name} nach ${B.name}?`,
+        langIsEn
+          ? `From ${A.name} to ${B.name}.`
+          : `Von ${A.name} nach ${B.name}.`);
+    }
   }
 }
 

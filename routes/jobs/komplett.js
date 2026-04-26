@@ -16,7 +16,7 @@ const { toIntId } = require('../../lib/validate');
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
-  loadPageContents, groupByChapter, buildSinglePassBookText, splitGroupsIntoChunks,
+  loadPageContents, groupByChapter, buildSinglePassBookText, splitGroupsIntoChunks, cleanPageTextForClaude,
   bsGetAll, SINGLE_PASS_LIMIT, PER_CHUNK_LIMIT, BATCH_SIZE, jobAbortControllers,
   _modelName, fmtTok, tps, settledAll,
   jobs, runningJobs, createJob, enqueueJob, jobKey, findActiveJobId,
@@ -915,8 +915,12 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments) {
  *  hinzu und kostet ~15K Tokens. Die figuren-Referenzen in den Orten werden gegen das
  *  idRemap aus mergeDuplicateFiguren abgeglichen (gemergte Figuren werden umgebogen,
  *  nicht mehr existente entfernt). */
-async function runPhase3(ctx, chapterOrte, figurenKompakt, isSinglePass, idRemap) {
+async function runPhase3(ctx, chapterOrte, figurenKompakt, isSinglePass, idRemap, opts = {}) {
   const { jobId, bookIdInt, bookName, email, call, tok, log, prompts, sys, idMaps } = ctx;
+  // opts.prefetchedOrteRaw: Ergebnis eines parallel laufenden runPhase3OrteCall.
+  //   Dann nochmaliger Call entfällt; idRemap+validFigIds-Filter werden auf
+  //   den Pre-Merge-IDs angewendet (Prompt nutzte prelim figurenKompakt).
+  const prefetched = opts.prefetchedOrteRaw || null;
 
   let orte;
   if (isSinglePass) {
@@ -934,12 +938,25 @@ async function runPhase3(ctx, chapterOrte, figurenKompakt, isSinglePass, idRemap
     updateJob(jobId, { progress: 55 });
   } else {
     updateJob(jobId, { progress: 43, statusText: 'job.phase.consolidatingOrte' });
-    const orteResultRaw = await call(jobId, tok,
+    const orteResultRaw = prefetched || await call(jobId, tok,
       prompts.buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompakt),
       sys.SYSTEM_ORTE, 43, 55, 6000, 0.2, null, prompts.SCHEMA_ORTE_KONSOL,
     );
     if (!Array.isArray(orteResultRaw?.orte)) throw i18nError('job.error.orteMissing');
-    orte = orteResultRaw.orte.map((o, i) => ({ ...o, id: o.id || ('ort_' + (i + 1)) }));
+    if (prefetched) {
+      // AI-Call lief mit Pre-Merge-figurenKompakt → IDs auf Post-Merge umbiegen.
+      const validFigIds = new Set(figurenKompakt.map(f => f.id));
+      orte = orteResultRaw.orte.map((o, i) => ({
+        ...o,
+        id: o.id || ('ort_' + (i + 1)),
+        figuren: (o.figuren || [])
+          .map(fid => idRemap?.[fid] || fid)
+          .filter(fid => validFigIds.has(fid)),
+      }));
+      updateJob(jobId, { progress: 55 });
+    } else {
+      orte = orteResultRaw.orte.map((o, i) => ({ ...o, id: o.id || ('ort_' + (i + 1)) }));
+    }
   }
   saveOrteToDb(bookIdInt, orte, email, idMaps.chNameToId, idMaps.pageNameToIdByChapter);
   log.info(`Job ${jobId}: ${orte.length} Schauplätze gespeichert.`);
@@ -950,6 +967,33 @@ async function runPhase3(ctx, chapterOrte, figurenKompakt, isSinglePass, idRemap
     ortNameToIdLower[o.name.toLowerCase()] = o.id;
   }
   return { orte, ortNameToId, ortNameToIdLower };
+}
+
+/** Pre-Merge figurenKompakt aus chapterFiguren – für parallelen Orte-Call vor P2-Merge.
+ *  Dedup nach ID (Reihenfolge: erstes Vorkommen gewinnt). */
+function buildPrelimFigurenKompakt(chapterFiguren) {
+  const seen = new Set();
+  const list = [];
+  for (const c of chapterFiguren) {
+    for (const f of (c.figuren || [])) {
+      if (!f?.id || seen.has(f.id)) continue;
+      seen.add(f.id);
+      list.push({ id: f.id, name: f.name, typ: f.typ || 'andere' });
+    }
+  }
+  return list;
+}
+
+/** Nur der Orte-Konso-AI-Call (Multi-Pass) – ohne DB-Save, ohne Progress-Update.
+ *  Aufrufer wendet idRemap+validFigIds-Filter via runPhase3(opts.prefetchedOrteRaw) an. */
+async function runPhase3OrteCall(ctx, chapterOrte, figurenKompaktForPrompt) {
+  const { jobId, bookName, call, tok, prompts, sys } = ctx;
+  return call(jobId, tok,
+    prompts.buildLocationsConsolidationPrompt(bookName, chapterOrte, figurenKompaktForPrompt),
+    sys.SYSTEM_ORTE,
+    null, null,
+    6000, 0.2, null, prompts.SCHEMA_ORTE_KONSOL,
+  );
 }
 
 /**
@@ -1044,10 +1088,13 @@ async function runPhase3b(ctx, figuren) {
 }
 
 /** P6: Zeitstrahl aus gespeicherten Events konsolidieren. */
-async function runZeitstrahl(ctx) {
+async function runZeitstrahl(ctx, opts = {}) {
   const { jobId, bookIdInt, email, call, tok, log, prompts, sys, idMaps } = ctx;
+  // silent: keine Progress-/Status-Updates; nötig wenn parallel zu P8 (Claude),
+  // damit P8 die Bar exklusiv kontrolliert.
+  const silent = !!opts.silent;
 
-  updateJob(jobId, { progress: 78, statusText: 'job.phase.consolidatingTimeline' });
+  if (!silent) updateJob(jobId, { progress: 78, statusText: 'job.phase.consolidatingTimeline' });
   const rawEvtRows = db.prepare(`
     SELECT f.fig_id, f.name AS fig_name, f.typ AS fig_typ,
            fe.datum, fe.ereignis, fe.typ AS evt_typ, fe.bedeutung, fe.kapitel, fe.seite
@@ -1085,30 +1132,34 @@ async function runZeitstrahl(ctx) {
   if (zeitstrahlEvents.length < 5) {
     saveZeitstrahlEvents(bookIdInt, email, zeitstrahlEvents, idMaps.chNameToId, idMaps.pageNameToIdByChapter);
     log.info(`Job ${jobId}: ${zeitstrahlEvents.length} Zeitstrahl-Ereignisse direkt gespeichert (unter Konsolidierungs-Schwelle) – spart einen KI-Call.`);
-    updateJob(jobId, { progress: 82 });
+    if (!silent) updateJob(jobId, { progress: 82 });
     return;
   }
 
   const ztResult = await call(jobId, tok,
     prompts.buildZeitstrahlConsolidationPrompt(zeitstrahlEvents),
-    sys.SYSTEM_ZEITSTRAHL, 78, 82, 3000, 0.2, null, prompts.SCHEMA_ZEITSTRAHL,
+    sys.SYSTEM_ZEITSTRAHL,
+    silent ? null : 78, silent ? null : 82,
+    3000, 0.2, null, prompts.SCHEMA_ZEITSTRAHL,
   );
   if (Array.isArray(ztResult?.ereignisse)) {
     saveZeitstrahlEvents(bookIdInt, email, ztResult.ereignisse, idMaps.chNameToId, idMaps.pageNameToIdByChapter);
     log.info(`Job ${jobId}: ${ztResult.ereignisse.length} Zeitstrahl-Ereignisse gespeichert.`);
   }
   // Sicherstellen dass Zeitstrahl-Threshold (82) zuverlässig erreicht wird
-  updateJob(jobId, { progress: 82 });
+  if (!silent) updateJob(jobId, { progress: 82 });
 }
 
 // ── Job: Komplettanalyse ─────────────────────────────────────────────────────
 // Pipeline (token-optimiert):
 //   P1 (Vollextraktion: Figuren+Orte+Fakten+Szenen+Events, parallel/Kapitel, SYSTEM_KOMPLETT_EXTRAKTION)
 //      → Schema im System-Prompt gecacht; Szenen/Events mit Klarnamen (kein ID-Lookup nötig)
-//   P2 (Figuren konsolidieren + Soziogramm) → figNameToId aufbauen
-//   P3 (Orte konsolidieren) → ortNameToId aufbauen
+//   P2/P3 (Claude Multi-Pass parallel, sonst sequentiell):
+//      P2 (Figuren konsolidieren + Soziogramm) → figNameToId aufbauen
+//      P3 (Orte konsolidieren, prelim figurenKompakt im Prompt, idRemap post-hoc) → ortNameToId
 //   P3b (Kapitelübergreifende Beziehungen, nur Multi-Pass, non-critical)
-//   Block 2 [parallel]: P5 Szenen remappen + P6 Zeitstrahl | P8 Kontinuität
+//   P5 Szenen remappen
+//   P6 Zeitstrahl + P8 Kontinuität: parallel bei Claude (P8 ownt Progress-Bar), sonst sequentiell
 async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userToken, provider = undefined) {
   const bookIdInt = parseInt(bookId);
   const email = userEmail || null;
@@ -1161,6 +1212,21 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     };
     invalidateRenamedChapterCaches(bookIdInt, chaptersData, log, jobId);
 
+    // Buchtext-Preprocessing (claude-only): unbekannte HTML-Entities (&nbsp;,
+    // &mdash;, …), Zero-Width-Zeichen, Soft Hyphen, NBSP, doppelte Spaces raus.
+    // Wirkt auf pageContents → schlägt automatisch in fullBookText UND
+    // Multi-Pass-Chunks durch (beide werden aus pageContents gebaut).
+    // P1 und P8 nutzen identischen Buchtext → 1h-Cache-Read in P8 bleibt intakt.
+    if (effectiveProvider === 'claude') {
+      let savedChars = 0;
+      for (const p of pageContents) {
+        const before = p.text.length;
+        p.text = cleanPageTextForClaude(p.text);
+        savedChars += before - p.text.length;
+      }
+      if (savedChars > 0) log.info(`Job ${jobId}: Buchtext-Preprocessing ${savedChars} Zeichen entfernt (Entities/Whitespace/ZWS).`);
+    }
+
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
     const { groupOrder, groups } = groupByChapter(pageContents);
     // Einmal bauen, wiederverwenden (Phase 1 Single-Pass, Phase 3b, P8 Kontinuität)
@@ -1187,13 +1253,31 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       : await runPhase1(ctx);
     const { chapterFiguren, chapterOrte, chapterFakten, chapterSzenen, chapterAssignments } = p1;
 
-    // ── Phase 2: Figuren konsolidieren ────────────────────────────────────────
-    const { figuren, figNameToId, figNameToIdLower, figurenKompakt, idRemap, isSinglePass } =
-      await runPhase2(ctx, chapterFiguren, chapterAssignments);
-
-    // ── Phase 3: Orte konsolidieren ───────────────────────────────────────────
-    const { orte, ortNameToId, ortNameToIdLower } =
-      await runPhase3(ctx, chapterOrte, figurenKompakt, isSinglePass, idRemap);
+    // ── Phase 2 + 3: Figuren + Orte konsolidieren ────────────────────────────
+    // Multi-Pass Claude: P2 (Figuren-AI) und P3 (Orte-AI) sind unabhängig und
+    // werden parallel gefahren. P3 nutzt prelim figurenKompakt (Pre-P2-Merge) im
+    // Prompt; nach P2-Merge werden die Orte-figuren-IDs via idRemap+validFigIds
+    // auf die finalen Post-Merge-IDs umgebogen.
+    // Single-Pass: kein AI-Call in P2/P3 → Parallelisierung bringt nichts.
+    // Lokale Provider: sequentiell (Mutex serialisiert AI-Calls ohnehin).
+    const isMultiPassClaude = effectiveProvider === 'claude' && chapterFiguren.length > 1;
+    let figuren, figNameToId, figNameToIdLower, figurenKompakt, idRemap, isSinglePass;
+    let orte, ortNameToId, ortNameToIdLower;
+    if (isMultiPassClaude) {
+      const prelimFigKompakt = buildPrelimFigurenKompakt(chapterFiguren);
+      const [p2Result, orteRaw] = await Promise.all([
+        runPhase2(ctx, chapterFiguren, chapterAssignments),
+        runPhase3OrteCall(ctx, chapterOrte, prelimFigKompakt),
+      ]);
+      ({ figuren, figNameToId, figNameToIdLower, figurenKompakt, idRemap, isSinglePass } = p2Result);
+      ({ orte, ortNameToId, ortNameToIdLower } =
+        await runPhase3(ctx, chapterOrte, figurenKompakt, isSinglePass, idRemap, { prefetchedOrteRaw: orteRaw }));
+    } else {
+      ({ figuren, figNameToId, figNameToIdLower, figurenKompakt, idRemap, isSinglePass } =
+        await runPhase2(ctx, chapterFiguren, chapterAssignments));
+      ({ orte, ortNameToId, ortNameToIdLower } =
+        await runPhase3(ctx, chapterOrte, figurenKompakt, isSinglePass, idRemap));
+    }
 
     // ── Phase 3b: Kapitelübergreifende Beziehungen (non-critical, nur Multi-Pass) ──
     if (chapterFiguren.length > 1 && figuren.length >= 2) {
@@ -1201,12 +1285,11 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         () => runPhase3b(ctx, figuren), log, jobId);
     }
 
-    // ── Block 2: Szenen remappen → Zeitstrahl → Kontinuitätsprüfung ───────────
-    // Sequenziell, damit Progress-Bar monoton läuft und Status-Text immer zur
-    // aktuellen Phase passt. Parallelität hier sparte nur den Zeitstrahl-aiCall
-    // parallel zum Kontinuitäts-aiCall – der UX-Preis (Häkchen + Text driften
-    // auseinander, wenn der schnellere Branch die Bar überholt) war höher als
-    // der Zeitgewinn.
+    // ── Block 2: Szenen remappen → Zeitstrahl + Kontinuitätsprüfung ──────────
+    // Claude: P6 (Zeitstrahl) und P8 (Kontinuität) sind unabhängig und laufen
+    // parallel. P8 dominiert zeitlich (voller Buchtext bei Single-Pass, sonst
+    // Fakten-Listen) und kontrolliert die Progress-Bar (82..97); P6 läuft
+    // silent. Lokale Provider sequentiell (Mutex serialisiert ohnehin).
     updateJob(jobId, { progress: 58, statusText: 'job.phase.processingScenes' });
     const locRows = db.prepare(
       'SELECT id, loc_id FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
@@ -1217,40 +1300,43 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     updateJob(jobId, { progress: 76, statusText: 'job.phase.savingScenes' });
     const szenenResult = saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId, idMaps, log, jobId);
 
-    // P6: Zeitstrahl konsolidieren (aiCall 78..82)
-    await runZeitstrahl(ctx);
-
-    // P8: Kontinuitätsprüfung (aiCall 82..97)
-    // Breitere Range als P6, weil Phase 8 (Single-Pass Kontinuität) bei grossen
-    // Büchern zeitlich dominiert – 15% Progress-Luft statt 8% vermeidet, dass
-    // der Balken minutenlang bei ~90 steht während der Call noch läuft.
-    // Claude: Single-Pass für kleine Bücher (voller Buchtext).
-    // Llama/Ollama: immer facts-basiert – voller Buchtext wäre ein zweiter langer KI-Call.
     const figKompakt = figuren.map(f => ({ name: f.name, typ: f.typ || 'andere', beschreibung: f.beschreibung || '' }));
     const ortRows = db.prepare(
       'SELECT name, typ, beschreibung FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
     ).all(bookIdInt, email);
     const orteKompakt = ortRows.map(o => ({ name: o.name, typ: o.typ, beschreibung: o.beschreibung || '' }));
 
-    updateJob(jobId, { progress: 82, statusText: 'job.phase.checkContinuity' });
-    let kontResult;
-    if (totalChars <= singlePassLimit && effectiveProvider === 'claude') {
-      log.info(`Job ${jobId}: Kontinuität Single-Pass: ${fullBookText.length} Zeichen, ${figKompakt.length} Figuren, ${orteKompakt.length} Orte`);
-      // Buchtext-Block byte-identisch zu Phase 1 A/B → trifft den 1h-Cache-Write
-      // aus der Extraktion: Input wird als cache_read abgerechnet und liefert
-      // das erste Token deutlich schneller.
-      const bookSystemBlock = { text: buildBookSystemBlockText(bookName, pageContents.length, fullBookText), ttl: '1h' };
-      kontResult = await call(jobId, tok,
-        prompts.buildKontinuitaetSinglePassPrompt(bookName, null, figKompakt, orteKompakt, narrativeLabels(getBookSettings(bookIdInt, email))),
-        [bookSystemBlock, { text: sys.SYSTEM_KONTINUITAET }],
-        82, 97, 5000, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
-      );
-    } else {
+    // P8-Call als Closure – wird je nach Provider parallel oder sequentiell ausgeführt.
+    const runP8 = async () => {
+      if (totalChars <= singlePassLimit && effectiveProvider === 'claude') {
+        log.info(`Job ${jobId}: Kontinuität Single-Pass: ${fullBookText.length} Zeichen, ${figKompakt.length} Figuren, ${orteKompakt.length} Orte`);
+        const bookSystemBlock = { text: buildBookSystemBlockText(bookName, pageContents.length, fullBookText), ttl: '1h' };
+        return call(jobId, tok,
+          prompts.buildKontinuitaetSinglePassPrompt(bookName, null, figKompakt, orteKompakt, narrativeLabels(getBookSettings(bookIdInt, email))),
+          [bookSystemBlock, { text: sys.SYSTEM_KONTINUITAET }],
+          82, 97, 5000, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
+        );
+      }
       log.info(`Job ${jobId}: Kontinuität facts-basiert: ${chapterFakten.length} Kapitel, ${figKompakt.length} Figuren`);
-      kontResult = await call(jobId, tok,
+      return call(jobId, tok,
         prompts.buildKontinuitaetCheckPrompt(bookName, chapterFakten, figKompakt, orteKompakt),
         sys.SYSTEM_KONTINUITAET, 82, 97, effectiveProvider === 'claude' ? 5000 : 2500, 0.2, null, prompts.SCHEMA_KONTINUITAET_PROBLEME,
       );
+    };
+
+    let kontResult;
+    if (effectiveProvider === 'claude') {
+      // Parallel: P6 silent, P8 ownt Bar (82..97).
+      updateJob(jobId, { progress: 82, statusText: 'job.phase.checkContinuity' });
+      const [, p8Out] = await Promise.all([
+        runZeitstrahl(ctx, { silent: true }),
+        runP8(),
+      ]);
+      kontResult = p8Out;
+    } else {
+      await runZeitstrahl(ctx);
+      updateJob(jobId, { progress: 82, statusText: 'job.phase.checkContinuity' });
+      kontResult = await runP8();
     }
     saveKontinuitaetResult(bookIdInt, email, kontResult, figNameToId, idMaps.chNameToId, effectiveProvider, log, jobId);
 
@@ -1318,6 +1404,17 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
         statusParams: { from: i + 1, to: Math.min(i + BATCH_SIZE, total), total },
       });
     }, userToken, jobAbortControllers.get(jobId)?.signal);
+
+    // Buchtext-Preprocessing claude-only (siehe runKomplettAnalyseJob).
+    if (effectiveProvider === 'claude') {
+      let savedChars = 0;
+      for (const p of pageContents) {
+        const before = p.text.length;
+        p.text = cleanPageTextForClaude(p.text);
+        savedChars += before - p.text.length;
+      }
+      if (savedChars > 0) log.info(`Job ${jobId}: Buchtext-Preprocessing ${savedChars} Zeichen entfernt.`);
+    }
 
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
     const { groupOrder, groups } = groupByChapter(pageContents);

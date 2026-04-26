@@ -353,6 +353,74 @@ function buildEventSamples(ctx) {
         list2);
     }
   }
+  // ── Kausalketten via sort_order-Nachbarn ─────────────────────────────
+  // sort_order in zeitstrahl_events spiegelt narrativ-chronologische Folge.
+  // Pro Event: was führt dahin (Vorgänger), was folgt (Nachfolger). Lehrt
+  // narrative Logik statt isolierter Fakten.
+  for (let i = 0; i < enrichedEvents.length; i++) {
+    const e = enrichedEvents[i];
+    if (i > 0) {
+      const prev = enrichedEvents[i - 1];
+      pushQA('authorChat|evtCausePrev|' + e.i,
+        langIsEn ? `What leads up to «${e.ereignis}»?` : `Was führt zu «${e.ereignis}»?`,
+        prev.fullAnswer);
+      pushQA('authorChat|evtCausePrev2|' + e.i,
+        langIsEn ? `What happens just before «${e.ereignis}»?` : `Was geschieht unmittelbar vor «${e.ereignis}»?`,
+        prev.ereignis + (prev.bedeutung ? ' — ' + prev.bedeutung : ''));
+    }
+    if (i + 1 < enrichedEvents.length) {
+      const next = enrichedEvents[i + 1];
+      pushQA('authorChat|evtCauseNext|' + e.i,
+        langIsEn ? `What follows from «${e.ereignis}»?` : `Was folgt aus «${e.ereignis}»?`,
+        next.fullAnswer);
+      pushQA('authorChat|evtCauseNext2|' + e.i,
+        langIsEn ? `What happens right after «${e.ereignis}»?` : `Was geschieht direkt nach «${e.ereignis}»?`,
+        next.ereignis + (next.bedeutung ? ' — ' + next.bedeutung : ''));
+    }
+    // 2-Schritt-Kette
+    if (i + 2 < enrichedEvents.length) {
+      const a = enrichedEvents[i + 1];
+      const b = enrichedEvents[i + 2];
+      pushQA('authorChat|evtChain|' + e.i,
+        langIsEn ? `Trace the chain of events starting from «${e.ereignis}».` : `Zeichne die Ereigniskette ab «${e.ereignis}» nach.`,
+        [e, a, b].map(x => `${x.datum ? x.datum + ': ' : ''}${x.ereignis}`).join(' → '));
+    }
+  }
+
+  // ── Chronologie-Aggregate ────────────────────────────────────────────
+  if (enrichedEvents.length >= 2) {
+    const chrono = enrichedEvents.slice(0, 30)
+      .map((e, idx) => `${idx + 1}. ${e.datum ? e.datum + ': ' : ''}${e.ereignis}`)
+      .join('\n');
+    pushQA('authorChat|evtChrono',
+      langIsEn ? `List the events of the book in chronological order.` : `Liste die Ereignisse des Buches in chronologischer Reihenfolge.`,
+      chrono);
+    pushQA('authorChat|evtChrono2',
+      langIsEn ? `What's the timeline of the book?` : `Wie sieht der Zeitstrahl des Buches aus?`,
+      chrono);
+  }
+
+  // ── POV-Prosa pro Event×Figur ────────────────────────────────────────
+  // Anders als evt-figDetail (das nur fullAnswer wiederholt): Antwort-Frame
+  // erzwingt Ich-/Er-Perspektive in Prosa, Modell soll POV-Verschiebung
+  // lernen. Antwort bleibt fullAnswer, aber Prompt rahmt klar als Prosa-
+  // Aufgabe → Trainings-Signal kommt aus dem Prompt-Framing.
+  for (const e of enrichedEvents) {
+    for (const fg of e.figs.slice(0, 4)) {
+      const fkey = fg.fig_id || fg.name.toLowerCase();
+      pushQA('authorChat|evtPov|' + e.i + '|' + fkey,
+        langIsEn
+          ? `Tell «${e.ereignis}» from ${fg.name}'s point of view.`
+          : `Erzähle «${e.ereignis}» aus ${fg.name}s Sicht.`,
+        e.fullAnswer);
+      pushQA('authorChat|evtPovInner|' + e.i + '|' + fkey,
+        langIsEn
+          ? `What goes through ${fg.name}'s mind during «${e.ereignis}»?`
+          : `Was geht ${fg.name} während «${e.ereignis}» durch den Kopf?`,
+        e.bedeutung || e.fullAnswer);
+    }
+  }
+
   if (persoenlichEvents.length) {
     const personByFig = new Map();
     for (const e of persoenlichEvents) {

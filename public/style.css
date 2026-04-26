@@ -1308,6 +1308,24 @@ button.success {
 }
 button.success:hover { background: var(--color-success-hover); }
 
+/* Count-Badge in Action-Buttons (Ideen, Chat). Eckig (Projektregel). */
+.btn-count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  background: var(--color-border);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  vertical-align: baseline;
+}
+button.primary .btn-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: var(--color-surface);
+}
+
 /* === Badges === */
 .badge {
   display: inline-block;
@@ -5769,6 +5787,31 @@ body.focus-mode .edit-find { display: none !important; }
   font-size: 12px;
   color: var(--color-muted);
   font-style: italic;
+}
+@media (max-width: 640px) {
+  .finetune-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .finetune-label {
+    padding-top: 0;
+  }
+  .finetune-inline {
+    gap: 10px 16px;
+  }
+  .finetune-inline-field {
+    flex: 1 1 calc(50% - 16px);
+    min-width: 0;
+  }
+  .finetune-num {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+  .finetune-downloads button {
+    flex: 1 1 100%;
+  }
 }
 
 /* === Ideen-Karte ============================================================

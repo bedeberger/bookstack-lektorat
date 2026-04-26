@@ -42,8 +42,14 @@
           <button type="button" class="success" @click="saveCorrections()" :disabled="saveApplying != null" x-show="(correctedHtml && selectedFindings.some(v => v)) || saveApplying != null">
             <span x-show="saveApplying != null" class="spinner"></span><span x-text="saveApplying != null ? t('editor.btn.saveCorrectionsProgress') : t('editor.btn.saveCorrections')"></span>
           </button>
-          <button type="button" @click="toggleChatCard()" :class="{ primary: showChatCard }" :disabled="currentPageEmpty" :title="t('editor.btn.chatTitle')" x-text="t('editor.btn.chat')"></button>
-          <button type="button" @click="toggleIdeenCard()" :class="{ primary: showIdeenCard }" :title="t('ideen.title')" x-text="t('ideen.title')"></button>
+          <button type="button" @click="toggleChatCard()" :class="{ primary: showChatCard }" :disabled="currentPageEmpty" :title="t('editor.btn.chatTitle')">
+            <span x-text="t('editor.btn.chat')"></span>
+            <span class="btn-count" x-show="currentPageChatSessionCount > 0" x-text="currentPageChatSessionCount" :title="t('editor.btn.chatCountTitle', { n: currentPageChatSessionCount })"></span>
+          </button>
+          <button type="button" @click="toggleIdeenCard()" :class="{ primary: showIdeenCard }" :title="t('ideen.title')">
+            <span x-text="t('ideen.title')"></span>
+            <span class="btn-count" x-show="currentPageIdeenOpenCount > 0" x-text="currentPageIdeenOpenCount" :title="t('ideen.openCountTitle', { n: currentPageIdeenOpenCount })"></span>
+          </button>
         </span>
       </template>
       <template x-if="editMode">

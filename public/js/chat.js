@@ -54,6 +54,12 @@ const baseMethods = makeChatMethods({
     if (window.__app.currentPage) await this.loadChatSessions();
     window.__app.updatePageView();
   },
+  onSessionsChanged: function () {
+    const root = window.__app;
+    const pageId = root?.currentPage?.id;
+    if (!pageId) return;
+    root.currentPageChatSessionCount = (this.chatSessions || []).length;
+  },
   onAfterSessionLoad: function () {
     for (const m of this.chatMessages) {
       if (Array.isArray(m.vorschlaege)) {

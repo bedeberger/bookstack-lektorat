@@ -31,6 +31,8 @@ export const appViewMethods = {
     this.currentPage = p;
     this.showEditorCard = true;
 
+    this._loadPageBadgeCounts(p.id);
+
     // Prüfen ob ein Lektorat-Check-Job für diese Seite läuft (Server-seitig oder aus früherer Session)
     try {
       const { jobId: activeJobId } = await fetchJson(`/jobs/active?type=check&page_id=${p.id}`);
@@ -88,6 +90,22 @@ export const appViewMethods = {
     if (keep !== 'userSettings') this.showUserSettingsCard = false;
     if (keep !== 'finetuneExport') this.showFinetuneExportCard = false;
     this.resetPage();
+  },
+
+  // Lädt Badge-Counts (offene Ideen, Chat-Sessions) für die geöffnete Seite.
+  // Race-safe: prüft pageId gegen aktuelle Seite vor Set, falls User schnell wechselt.
+  async _loadPageBadgeCounts(pageId) {
+    try {
+      const [ideen, sessions] = await Promise.all([
+        fetchJson(`/ideen?page_id=${pageId}`).catch(() => []),
+        fetchJson(`/chat/sessions/${pageId}`).catch(() => []),
+      ]);
+      if (this.currentPage?.id !== pageId) return;
+      this.currentPageIdeenOpenCount = (Array.isArray(ideen) ? ideen : []).filter(i => !i.erledigt).length;
+      this.currentPageChatSessionCount = (Array.isArray(sessions) ? sessions : []).length;
+    } catch (e) {
+      console.error('[loadPageBadgeCounts]', e);
+    }
   },
 
   // Karten-Toggles: Root hält die `showXxxCard`-Flags (Single Source of Truth
@@ -266,6 +284,8 @@ export const appViewMethods = {
     this._checkDoneBeforeChat = false;
     this.currentPage = null;
     this.currentPageEmpty = false;
+    this.currentPageIdeenOpenCount = 0;
+    this.currentPageChatSessionCount = 0;
     this.renderedPageHtml = '';
     this.chapterFigures = [];
     this.showChapterFigures = false;

@@ -15,6 +15,7 @@ export function makeChatMethods(cfg) {
   async function loadSessions() {
     try {
       this[p.sessions] = await fetchJson(cfg.sessionsUrl(this));
+      if (cfg.onSessionsChanged) cfg.onSessionsChanged.call(this);
     } catch (e) {
       console.error(`[load${L}Sessions]`, e);
     }
@@ -142,6 +143,7 @@ export function makeChatMethods(cfg) {
     try {
       await fetch('/chat/session/' + id, { method: 'DELETE' });
       this[p.sessions] = this[p.sessions].filter(s => s.id !== id);
+      if (cfg.onSessionsChanged) cfg.onSessionsChanged.call(this);
       if (this[p.sessionId] === id) {
         // Laufenden Polling-Timer der gelöschten Session abbrechen, sonst
         // pollt er weiter mit der nun toten sessionId/jobId.

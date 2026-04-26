@@ -130,6 +130,7 @@
         <span class="tok-badge tok-neutral" x-show="finetuneStats.tokensMax > 0" x-text="$app.t('finetune.stats.tokensMax', { n: finetuneStats.tokensMax })"></span>
         <span class="tok-badge tok-neutral" x-show="finetuneStats.recommendedSeqLen > 0" x-text="$app.t('finetune.stats.recommendedSeqLen', { n: finetuneStats.recommendedSeqLen })"></span>
         <span class="tok-badge tok-med" x-show="finetuneStats.dropped > 0" x-text="$app.t('finetune.stats.dropped', { n: finetuneStats.dropped })"></span>
+        <span class="tok-badge tok-med" x-show="finetuneStats.capped > 0" x-text="$app.t('finetune.stats.capped', { n: finetuneStats.capped })"></span>
       </div>
 
       <div class="finetune-downloads">

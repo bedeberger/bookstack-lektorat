@@ -15,6 +15,7 @@ export const ideenMethods = {
       const rows = await fetchJson(`/ideen?page_id=${pageId}`);
       this.ideen = Array.isArray(rows) ? rows : [];
       this.errorMessage = '';
+      this._publishIdeenCount();
     } catch (e) {
       this.errorMessage = app.t('ideen.error.load');
       this.ideen = [];
@@ -58,6 +59,7 @@ export const ideenMethods = {
       this.ideen = [row, ...this.ideen];
       this.newContent = '';
       this.errorMessage = '';
+      this._publishIdeenCount();
     } catch (e) {
       this.errorMessage = app.t('ideen.error.save');
     } finally {
@@ -93,6 +95,7 @@ export const ideenMethods = {
       this.editingId = null;
       this.editingDraft = '';
       this.errorMessage = '';
+      this._publishIdeenCount();
     } catch (e) {
       this.errorMessage = app.t('ideen.error.save');
     } finally {
@@ -113,6 +116,7 @@ export const ideenMethods = {
       // Sort halten: offene oben, erledigte unten — innerhalb je nach created_at DESC
       this.ideen = this._sortIdeen(this.ideen);
       this.errorMessage = '';
+      this._publishIdeenCount();
     } catch (e) {
       this.errorMessage = app.t('ideen.error.save');
     } finally {
@@ -128,6 +132,7 @@ export const ideenMethods = {
       await fetchJson(`/ideen/${idee.id}`, { method: 'DELETE' });
       this.ideen = this.ideen.filter(i => i.id !== idee.id);
       this.errorMessage = '';
+      this._publishIdeenCount();
     } catch (e) {
       this.errorMessage = app.t('ideen.error.delete');
     } finally {
@@ -136,6 +141,14 @@ export const ideenMethods = {
   },
 
   // ── Helpers ──────────────────────────────────────────────────────────────
+  _publishIdeenCount() {
+    const app = window.__app;
+    const pageId = app?.currentPage?.id;
+    if (!pageId) return;
+    const count = (this.ideen || []).filter(i => !i.erledigt).length;
+    if (app.currentPage?.id === pageId) app.currentPageIdeenOpenCount = count;
+  },
+
   _replaceIdee(row) {
     this.ideen = this.ideen.map(i => (i.id === row.id ? row : i));
   },

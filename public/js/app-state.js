@@ -64,6 +64,8 @@ const navigationState = () => ({
 const editorState = () => ({
   currentPage: null,
   currentPageEmpty: false,
+  currentPageIdeenOpenCount: 0,
+  currentPageChatSessionCount: 0,
   renderedPageHtml: '',
   chapterFigures: [],
   showChapterFigures: false,

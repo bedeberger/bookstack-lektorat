@@ -36,6 +36,78 @@ function buildFigureBaseSamples(ctx) {
     }
   }
 
+  // ── Einzel-Felder als gezielte Q&A ───────────────────────────────────
+  // Composite-Antwort enthält Felder als Anhang, aber gezielte Fragen ziehen
+  // dann nicht direkt — eigene Samples pro Feld zwingen Modell, jedes Attribut
+  // separat zu memorisieren.
+  for (const f of figRows) {
+    if (f.beruf) {
+      pushQA('authorChat|figBeruf|' + f.fig_id,
+        langIsEn ? `What does ${f.name} do for a living?` : `Was macht ${f.name} beruflich?`,
+        langIsEn ? `${f.name} works as: ${f.beruf}.` : `${f.name} arbeitet als ${f.beruf}.`);
+      pushQA('authorChat|figBeruf2|' + f.fig_id,
+        langIsEn ? `What is ${f.name}'s profession?` : `Welchen Beruf hat ${f.name}?`,
+        f.beruf);
+    }
+    if (f.geschlecht) {
+      pushQA('authorChat|figGeschl|' + f.fig_id,
+        langIsEn ? `What is ${f.name}'s gender?` : `Welches Geschlecht hat ${f.name}?`,
+        f.geschlecht);
+    }
+    if (f.sozialschicht) {
+      pushQA('authorChat|figSchicht|' + f.fig_id,
+        langIsEn ? `Which social class does ${f.name} come from?` : `Aus welcher gesellschaftlichen Schicht stammt ${f.name}?`,
+        f.sozialschicht);
+    }
+  }
+
+  // ── Roleplay-/Selbstvorstellung-Frame ─────────────────────────────────
+  // „Stelle dich als X vor" → Ich-Form Beschreibung. Trainiert Personae-
+  // Aktivierung und Voice-Capture. Composite-Antwort als Basis, vorne
+  // angepasste Einleitung.
+  for (const f of figRows) {
+    const desc = (f.beschreibung || '').trim();
+    if (!desc) continue;
+    const intro = langIsEn
+      ? `I am ${f.name}.${f.beruf ? ' ' + f.beruf + '.' : ''} ${desc}`
+      : `Ich bin ${f.name}.${f.beruf ? ' ' + f.beruf + '.' : ''} ${desc}`;
+    pushQA('authorChat|figRole|' + f.fig_id,
+      langIsEn ? `Introduce yourself as ${f.name}.` : `Stelle dich als ${f.name} vor.`,
+      intro);
+    pushQA('authorChat|figRole2|' + f.fig_id,
+      langIsEn ? `Speak as ${f.name} for a moment.` : `Sprich einen Moment lang als ${f.name}.`,
+      intro);
+  }
+
+  // ── Figur-vs-Figur-Vergleich (gleicher typ) ──────────────────────────
+  // Pro Paar gleiche Kategorie (Hauptfigur/Nebenfigur/…): Vergleich auf
+  // Ebene Beschreibung+Tags+Beruf. Lehrt Differenzierung statt Konflation.
+  const byTyp = new Map();
+  for (const f of figRows) {
+    const t = (f.typ || '').trim().toLowerCase();
+    if (!t) continue;
+    if (!byTyp.has(t)) byTyp.set(t, []);
+    byTyp.get(t).push(f);
+  }
+  for (const [, group] of byTyp) {
+    if (group.length < 2) continue;
+    for (let i = 0; i < Math.min(group.length, 6); i++) {
+      for (let j = i + 1; j < Math.min(group.length, 6); j++) {
+        const A = group[i];
+        const B = group[j];
+        const aDesc = (A.beschreibung || '').split(/(?<=[.!?])\s/)[0] || '';
+        const bDesc = (B.beschreibung || '').split(/(?<=[.!?])\s/)[0] || '';
+        if (!aDesc || !bDesc) continue;
+        const answer = langIsEn
+          ? `${A.name}: ${aDesc} ${B.name}: ${bDesc}`
+          : `${A.name}: ${aDesc} ${B.name}: ${bDesc}`;
+        pushQA('authorChat|figCmp|' + A.fig_id + '|' + B.fig_id,
+          langIsEn ? `What distinguishes ${A.name} from ${B.name}?` : `Was unterscheidet ${A.name} von ${B.name}?`,
+          answer);
+      }
+    }
+  }
+
   // ── Figuren-Charaktereigenschaften (Tags) ────────────────────────────
   // Pro Figur ein dediziertes Trait-Sample, damit "Wie ist X charakterlich?"
   // direkt auf figure_tags zielt (nicht nur als Anhang in der Composite-Antwort).
