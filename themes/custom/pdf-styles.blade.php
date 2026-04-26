@@ -211,6 +211,9 @@
 .export-format-pdf p:first-of-type {
   text-indent: 0 !important;
 }
+.export-format-pdf p.dialog {
+  text-indent: 0 !important;
+}
 
 /* ── LINKS ──────────────────────────────────────────── */
 .export-format-pdf a {
