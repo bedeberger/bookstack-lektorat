@@ -208,7 +208,13 @@ export function setActiveBlock(container, block) {
   if (!container) return;
   const prevs = container.querySelectorAll('.focus-paragraph-active');
   for (const prev of prevs) {
-    if (prev !== block) prev.classList.remove('focus-paragraph-active');
+    if (prev !== block) {
+      prev.classList.remove('focus-paragraph-active');
+      // classList.remove leert das Attribut nur, entfernt es aber nicht.
+      // Zurück bleibt `class=""` und produziert sonst eine BookStack-Revision
+      // beim nächsten Save (Diff zur ursprünglichen, attributlosen Fassung).
+      if (prev.classList.length === 0) prev.removeAttribute('class');
+    }
   }
   if (block && !block.classList.contains('focus-paragraph-active')) {
     block.classList.add('focus-paragraph-active');
@@ -643,7 +649,10 @@ export const focusCardMethods = {
     document.documentElement.style.removeProperty('--focus-vh-top');
 
     document.querySelectorAll('#editor-card .focus-paragraph-active')
-      .forEach(el => el.classList.remove('focus-paragraph-active'));
+      .forEach(el => {
+        el.classList.remove('focus-paragraph-active');
+        if (el.classList.length === 0) el.removeAttribute('class');
+      });
 
     // Nichts Ungespeichertes → zurück in die Ansicht (Save im Fokus impliziert
     // Ende der Edit-Session; unsaubere Exits behalten den Edit-Modus).

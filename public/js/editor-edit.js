@@ -34,6 +34,21 @@ function stripLektoratMarks(html) {
   return stripTrailingEmptyBlocks(cleanContentArtefacts(stripFocusArtefacts(out)));
 }
 
+// Vergleichs-Normalform: roher BookStack-HTML und Browser-contenteditable-HTML
+// unterscheiden sich byte-genau auch ohne semantische Änderung (Whitespace,
+// Attribut-Reihenfolge, self-closing Tags, fehlende `<p>`-Wrapper). Ohne
+// gemeinsame Normalisierung schlägt `newHtml === originalHtml` fast immer fehl
+// → unnötige BookStack-Revisions bei Focus-/Edit-Toggle ohne echte Änderung.
+// Beide Seiten durch denselben DOM-Roundtrip + Block-Normalizer + Cleaner.
+function normalizeForCompare(html) {
+  if (!html) return '';
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  const wrap = doc.body.firstChild;
+  if (!wrap) return '';
+  normalizeEditorBlocks(wrap);
+  return stripLektoratMarks(wrap.innerHTML);
+}
+
 function readDraft(pageId) {
   try {
     const raw = localStorage.getItem(DRAFT_KEY(pageId));
@@ -214,7 +229,7 @@ export const editorEditMethods = {
     const el = this._getEditEl();
     if (!el) return;
     const newHtml = stripLektoratMarks(el.innerHTML);
-    if (newHtml === this.originalHtml) {
+    if (newHtml === this.originalHtml || newHtml === normalizeForCompare(this.originalHtml)) {
       // Im Fokusmodus nicht aus Edit-/Fokusmodus herausfallen, wenn
       // der User ein zweites Mal Speichern klickt (nichts geändert).
       if (this.focusMode) {
@@ -290,7 +305,7 @@ export const editorEditMethods = {
     const el = this._getEditEl();
     if (!el) return;
     const newHtml = stripLektoratMarks(el.innerHTML);
-    if (newHtml === this.originalHtml) {
+    if (newHtml === this.originalHtml || newHtml === normalizeForCompare(this.originalHtml)) {
       this.editDirty = false;
       clearDraft(this.currentPage.id);
       this.lastDraftSavedAt = null;
@@ -388,7 +403,7 @@ export const editorEditMethods = {
     const el = this._getEditEl();
     if (!el) return;
     const html = stripLektoratMarks(el.innerHTML);
-    if (html === this.originalHtml) {
+    if (html === this.originalHtml || html === normalizeForCompare(this.originalHtml)) {
       clearDraft(this.currentPage.id);
       this.lastDraftSavedAt = null;
       return;

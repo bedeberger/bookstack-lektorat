@@ -1,4 +1,4 @@
 {
-  "shellCache": "lektorat-shell-v54",
+  "shellCache": "lektorat-shell-v57",
   "_note": "Bei JS/CSS-Änderungen SHELL_CACHE in public/sw.js bumpen UND diese Datei aktualisieren. Test sw-cache.test.js zwingt den expliziten Acknowledge."
 }

@@ -156,7 +156,15 @@ export function htmlToText(html) {
  */
 export function stripFocusArtefacts(html) {
   if (!html) return html;
-  if (!html.includes('focus-paragraph-active') && !/font-size|background-color\s*:\s*transparent/i.test(html)) {
+  // Trigger erweitern: leeres `class=""` entsteht, wenn classList.remove die
+  // letzte Klasse wegnimmt — Attribut bleibt mit leerem Wert stehen. Ohne
+  // diesen Branch erzeugt Focus-Mode-Aktiv-Markierung beim Save eine Revision,
+  // obwohl semantisch nichts geändert wurde.
+  if (
+    !html.includes('focus-paragraph-active') &&
+    !/font-size|background-color\s*:\s*transparent/i.test(html) &&
+    !/\sclass\s*=\s*""/.test(html)
+  ) {
     return html;
   }
 
@@ -192,6 +200,9 @@ export function stripFocusArtefacts(html) {
       parent.removeChild(span);
     }
   });
+
+  // Verbleibende leere class=""-Attribute unabhängig von ihrer Herkunft entfernen.
+  tmp.querySelectorAll('[class=""]').forEach(el => el.removeAttribute('class'));
 
   return tmp.innerHTML;
 }
