@@ -5,22 +5,52 @@ import { SAFETY_HTML_RATIO, findInHtml, stripFocusArtefacts } from './utils.js';
 // `this` bezieht sich auf die Alpine-Komponente.
 // Authorization-Header wird serverseitig vom Proxy injiziert.
 
+// Retry-After: Sekunden (Integer) ODER HTTP-Date. Liefert Millisekunden zum Warten,
+// gedeckelt auf 30 s damit ein böser Header die UI nicht ewig blockiert.
+function _parseRetryAfter(raw) {
+  if (!raw) return null;
+  const secs = Number(raw);
+  if (Number.isFinite(secs) && secs >= 0) return Math.min(30000, Math.round(secs * 1000));
+  const date = Date.parse(raw);
+  if (!Number.isNaN(date)) return Math.min(30000, Math.max(0, date - Date.now()));
+  return null;
+}
+
+// Wrapper um fetch mit eigenem Timeout. Liefert die Response (auch bei 429),
+// damit der Aufrufer entscheiden kann, ob retried wird.
+async function _fetchWithTimeout(url, opts, timeoutMs, abortMsg) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(new Error(abortMsg)), timeoutMs);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const MAX_RETRY_429 = 3;
+
 export const bookstackMethods = {
   async bsGet(path) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(new Error(this.t('bs.timeoutGet'))), 30000);
-    try {
-      const r = await fetch('/api/' + path, { signal: ctrl.signal });
-      if (!r.ok) throw new Error(this.t('bs.apiError', { status: r.status }));
-      return r.json();
-    } catch (e) {
-      if (e.name === 'AbortError') {
-        throw new Error(ctrl.signal.reason?.message || this.t('bs.timeoutAborted'));
+    let lastStatus = 0;
+    for (let attempt = 0; attempt <= MAX_RETRY_429; attempt++) {
+      let r;
+      try {
+        r = await _fetchWithTimeout('/api/' + path, {}, 30000, this.t('bs.timeoutGet'));
+      } catch (e) {
+        if (e.name === 'AbortError') {
+          throw new Error(e.message || this.t('bs.timeoutAborted'));
+        }
+        throw e;
       }
-      throw e;
-    } finally {
-      clearTimeout(timer);
+      if (r.ok) return r.json();
+      lastStatus = r.status;
+      if (r.status !== 429 || attempt === MAX_RETRY_429) break;
+      const wait = _parseRetryAfter(r.headers.get('Retry-After'))
+        ?? Math.min(8000, 1000 * Math.pow(2, attempt));
+      await new Promise(rs => setTimeout(rs, wait));
     }
+    throw new Error(this.t('bs.apiError', { status: lastStatus }));
   },
 
   async bsGetAll(path) {
@@ -37,59 +67,42 @@ export const bookstackMethods = {
   },
 
   async bsPut(path, body) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(new Error(this.t('bs.timeoutPut'))), 90000);
-    try {
-      const r = await fetch('/api/' + path, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: ctrl.signal,
-      });
-      if (!r.ok) {
-        let detail = '';
-        try { const e = await r.json(); detail = e.message || e.error || ''; } catch (_) {}
-        throw new Error(detail
-          ? this.t('bs.apiErrorDetail', { status: r.status, detail })
-          : this.t('bs.apiError', { status: r.status }));
-      }
-      return r.json();
-    } catch (e) {
-      if (e.name === 'AbortError') {
-        throw new Error(ctrl.signal.reason?.message || this.t('bs.timeoutAborted'));
-      }
-      throw e;
-    } finally {
-      clearTimeout(timer);
-    }
+    return this._bsWrite('PUT', path, body);
   },
 
   async bsPost(path, body) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(new Error(this.t('bs.timeoutPut'))), 90000);
-    try {
-      const r = await fetch('/api/' + path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: ctrl.signal,
-      });
-      if (!r.ok) {
-        let detail = '';
-        try { const e = await r.json(); detail = e.message || e.error || ''; } catch (_) {}
-        throw new Error(detail
-          ? this.t('bs.apiErrorDetail', { status: r.status, detail })
-          : this.t('bs.apiError', { status: r.status }));
+    return this._bsWrite('POST', path, body);
+  },
+
+  async _bsWrite(method, path, body) {
+    const opts = {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    };
+    let lastRes = null;
+    for (let attempt = 0; attempt <= MAX_RETRY_429; attempt++) {
+      let r;
+      try {
+        r = await _fetchWithTimeout('/api/' + path, opts, 90000, this.t('bs.timeoutPut'));
+      } catch (e) {
+        if (e.name === 'AbortError') {
+          throw new Error(e.message || this.t('bs.timeoutAborted'));
+        }
+        throw e;
       }
-      return r.json();
-    } catch (e) {
-      if (e.name === 'AbortError') {
-        throw new Error(ctrl.signal.reason?.message || this.t('bs.timeoutAborted'));
-      }
-      throw e;
-    } finally {
-      clearTimeout(timer);
+      if (r.ok) return r.json();
+      lastRes = r;
+      if (r.status !== 429 || attempt === MAX_RETRY_429) break;
+      const wait = _parseRetryAfter(r.headers.get('Retry-After'))
+        ?? Math.min(8000, 1000 * Math.pow(2, attempt));
+      await new Promise(rs => setTimeout(rs, wait));
     }
+    let detail = '';
+    try { const e = await lastRes.json(); detail = e.message || e.error || ''; } catch (_) {}
+    throw new Error(detail
+      ? this.t('bs.apiErrorDetail', { status: lastRes.status, detail })
+      : this.t('bs.apiError', { status: lastRes.status }));
   },
 
   _applyCorrections(html, fehler) {
