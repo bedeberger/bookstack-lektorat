@@ -56,11 +56,12 @@ async function buildAiAugmentSamples(ctx) {
   if (!ai.reversePrompts && !ai.factQA && !ai.reasoningBackfill) return;
 
   const prompts = await getPrompts();
+  const provider = process.env.API_PROVIDER || 'claude';
   const subCtx = {
     ...ctx,
     prompts,
     augmentSystem: prompts.buildFinetuneAugmentSystem(ctx.langIsEn),
-    versionTag: `${_modelName(undefined)}:${prompts.PROMPTS_VERSION || ''}`,
+    versionTag: `${_modelName(provider)}:${prompts.PROMPTS_VERSION || ''}`,
     tok: { in: 0, out: 0, ms: 0 },
   };
 
