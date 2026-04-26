@@ -56,7 +56,7 @@ function buildEventSamples(ctx) {
     const fullAnswer = parts.join(' ');
 
     // Haupt-Q&A: mehrere Paraphrasen mit voller Antwort
-    const idxs = pickVariants('evt|' + i, eventQuestions, 3);
+    const idxs = pickVariants('evt|' + i, eventQuestions, eventQuestions.length);
     for (const idx of idxs) {
       const q = eventQuestions[idx].replace('{ereignis}', ereignis);
       pushQA('authorChat|evt|' + i + '|' + idx, q, fullAnswer);

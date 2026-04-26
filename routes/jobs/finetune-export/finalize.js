@@ -108,6 +108,7 @@ function finalizeFinetuneSamples(jobId, ctx) {
     dialogCount: counts.dialog,
     authorChatCount: counts.authorChat,
     correctionCount: counts.correction,
+    aiAugmentCount: counts.aiAugment || 0,
     trainBytes: Buffer.byteLength(trainJsonl, 'utf8'),
     valBytes:   Buffer.byteLength(valJsonl,   'utf8'),
     tokensP50, tokensP95, tokensMax,

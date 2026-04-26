@@ -55,7 +55,7 @@ function buildLocationSamples(ctx) {
     if (!fullAnswer) continue;
 
     // Haupt-Q&A: 3 Paraphrasen mit voller Antwort
-    const idxs = pickVariants('ort|' + l.loc_id, ortQuestions, 3);
+    const idxs = pickVariants('ort|' + l.loc_id, ortQuestions, ortQuestions.length);
     for (const idx of idxs) {
       const q = ortQuestions[idx].replace('{name}', l.name);
       pushQA('authorChat|ort|' + l.loc_id + '|' + idx, q, fullAnswer);

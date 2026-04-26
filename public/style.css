@@ -5712,6 +5712,11 @@ body.focus-mode .edit-find { display: none !important; }
   flex-direction: column;
   gap: 10px;
 }
+.finetune-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .finetune-check {
   display: grid;
   grid-template-columns: 18px 1fr;

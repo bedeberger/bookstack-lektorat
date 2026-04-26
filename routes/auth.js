@@ -123,16 +123,28 @@ router.get('/auth/callback', async (req, res) => {
   }
 });
 
-// GET /auth/logout → Session löschen
+// GET /auth/logout → Session löschen + Landing-Page anzeigen.
+// Kein Auto-Redirect zu /auth/login: Google-Session wäre meist noch aktiv und
+// würde uns sofort silent wieder einloggen. User klickt aktiv "Erneut anmelden".
 router.get('/auth/logout', (req, res) => {
   const email = req.session.user?.email;
   const loginAt = req.session.loginAt;
+  const accept = String(req.headers['accept-language'] || '').toLowerCase();
+  const lang = accept.startsWith('en') ? 'en' : 'de';
   req.session.destroy(() => {
     if (email) {
       const durMin = loginAt ? Math.round((Date.now() - loginAt) / 60000) : null;
       logger.info(`Logout: ${email}${durMin != null ? ` (Session ${durMin} min)` : ''}`);
     }
-    res.redirect('/auth/login');
+    const t = lang === 'en'
+      ? { title: 'Signed out', body: 'You have been signed out.', cta: 'Sign in again' }
+      : { title: 'Abgemeldet', body: 'Du wurdest abgemeldet.', cta: 'Erneut anmelden' };
+    res.set('Cache-Control', 'no-store');
+    res.send(`<!doctype html>
+<html lang="${lang}"><head><meta charset="utf-8"><title>${t.title}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body><h1>${t.title}</h1><p>${t.body}</p>
+<p><a href="/auth/login">${t.cta}</a></p></body></html>`);
   });
 });
 

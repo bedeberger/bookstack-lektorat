@@ -1374,6 +1374,25 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 61 abgeschlossen (ideen-Tabelle).');
   }
 
+  if (version < 62) {
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS finetune_ai_cache (
+        book_id    INTEGER NOT NULL,
+        user_email TEXT NOT NULL DEFAULT '',
+        scope      TEXT NOT NULL,
+        scope_key  TEXT NOT NULL,
+        sig        TEXT NOT NULL,
+        version    TEXT NOT NULL,
+        result_json TEXT NOT NULL,
+        cached_at  TEXT NOT NULL,
+        PRIMARY KEY (book_id, user_email, scope, scope_key, version)
+      )
+    `).run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_ftai_book_user ON finetune_ai_cache(book_id, user_email)').run();
+    db.prepare('UPDATE schema_version SET version = 62').run();
+    logger.info('DB-Migration auf Version 62 abgeschlossen (finetune_ai_cache).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

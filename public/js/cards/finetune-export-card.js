@@ -36,6 +36,15 @@ export function registerFinetuneExportCard() {
     finetuneValSeed:      0,
     finetuneMaxSeqTokens: 4096,   // Sweet-Spot Mistral-Small-3.2-24B-QLoRA @ 20 GB VRAM
     finetuneEmitText:     false,
+    finetuneTruncateLong: true,   // Lange Samples kappen statt droppen
+
+    // KI-Augmentation: Default aus, weil Provider-Kosten + Laufzeit. Wenn aktiviert,
+    // wird der Cache (finetune_ai_cache) genutzt — Folge-Exports kosten dann ~nichts.
+    finetuneAiReversePrompts:        false,
+    finetuneAiFactQA:                false,
+    finetuneAiReasoningBackfill:     false,
+    finetuneAiReversePromptsPerPage: 4,
+    finetuneAiFactQAPerEntity:       4,
 
     finetuneLoading:  false,
     finetuneProgress: 0,
@@ -132,6 +141,14 @@ export function registerFinetuneExportCard() {
           val_seed:       Number(this.finetuneValSeed)  || 0,
           max_seq_tokens: Number(this.finetuneMaxSeqTokens) || 0,
           emit_text:      !!this.finetuneEmitText,
+          truncate_long:  !!this.finetuneTruncateLong,
+          ai: {
+            reverse_prompts:          !!this.finetuneAiReversePrompts,
+            fact_qa:                  !!this.finetuneAiFactQA,
+            reasoning_backfill:       !!this.finetuneAiReasoningBackfill,
+            reverse_prompts_per_page: Number(this.finetuneAiReversePromptsPerPage) || 4,
+            fact_qa_per_entity:       Number(this.finetuneAiFactQAPerEntity)       || 4,
+          },
         };
       },
       async onDone(job) {

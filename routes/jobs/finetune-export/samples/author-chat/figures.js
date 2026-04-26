@@ -22,7 +22,7 @@ function buildFigureBaseSamples(ctx) {
     const answer = [desc, ...extras].join(' ');
     // 3 Paraphrasen pro Figur → gleiche Fakten mehrmals sehen → bessere
     // Memorisierung der Buchwelt (Ziel: Figur als «Realität» akzeptieren).
-    const idxs = pickVariants('fig|' + f.fig_id, figQuestions, 3);
+    const idxs = pickVariants('fig|' + f.fig_id, figQuestions, figQuestions.length);
     for (const idx of idxs) {
       const q = figQuestions[idx].replace('{name}', f.name);
       pushQA('authorChat|fig|' + f.fig_id + '|' + idx, q, answer);
@@ -121,7 +121,7 @@ function buildFigureBaseSamples(ctx) {
          `Describe ${f.name}'s personality.`, `What is ${f.name} like as a person?`]
       : [`Welche Eigenschaften hat ${f.name}?`, `Wie würdest du ${f.name} charakterisieren?`,
          `Beschreibe den Charakter von ${f.name}.`, `Was zeichnet ${f.name} charakterlich aus?`];
-    const idxs = pickVariants('figTraits|' + f.fig_id, traitQs, 2);
+    const idxs = pickVariants('figTraits|' + f.fig_id, traitQs, traitQs.length);
     const answer = langIsEn
       ? `${f.name} is: ${tagList}.`
       : `${f.name} ist: ${tagList}.`;

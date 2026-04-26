@@ -24,7 +24,7 @@ function buildSceneQASamples(ctx) {
     if (locNames.length) parts.push(langIsEn ? `Setting: ${locNames.join(', ')}.` : `Schauplatz: ${locNames.join(', ')}.`);
     if (s.kapitel) parts.push(langIsEn ? `Chapter: ${s.kapitel}.` : `Kapitel: ${s.kapitel}.`);
     const answer = parts.join(' ');
-    const idxs = pickVariants('scene|' + s.id, sceneQuestions, 2);
+    const idxs = pickVariants('scene|' + s.id, sceneQuestions, sceneQuestions.length);
     for (const idx of idxs) {
       const q = sceneQuestions[idx].replace('{titel}', s.titel);
       pushQA('authorChat|scene|' + s.id + '|' + idx, q, answer);

@@ -284,6 +284,43 @@ function deleteChapterExtractCache(bookId, userEmail) {
   return result.changes;
 }
 
+// ── Delta-Cache: Finetune-AI-Augmentation ─────────────────────────────────────
+// Cache-Key: (book_id, user_email, scope, scope_key, version).
+// scope: 'reverse-prompts' | 'fact-qa' | 'reasoning-backfill'
+// scope_key: stabile Entität (z.B. 'page:42', 'figure:alice', 'corr:hash')
+// sig: Inhalts-Signatur (z.B. content-Hash + Modellname). Bei sig-Mismatch wird
+// der Eintrag verworfen — das verhindert Stale-Augmentations bei Textänderung.
+const _loadFtAiCache = db.prepare(
+  `SELECT result_json, sig FROM finetune_ai_cache
+   WHERE book_id = ? AND user_email = ? AND scope = ? AND scope_key = ? AND version = ?`
+);
+const _saveFtAiCache = db.prepare(
+  `INSERT OR REPLACE INTO finetune_ai_cache
+   (book_id, user_email, scope, scope_key, sig, version, result_json, cached_at)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+);
+const _deleteFtAiCache = db.prepare(
+  `DELETE FROM finetune_ai_cache WHERE book_id = ? AND user_email = ?`
+);
+
+function loadFinetuneAiCache(bookId, userEmail, scope, scopeKey, sig, version) {
+  const row = _loadFtAiCache.get(parseInt(bookId), userEmail || '', scope, scopeKey, version);
+  if (!row) return null;
+  if (row.sig !== sig) return null;
+  try { return JSON.parse(row.result_json); } catch { return null; }
+}
+
+function saveFinetuneAiCache(bookId, userEmail, scope, scopeKey, sig, version, result) {
+  _saveFtAiCache.run(
+    parseInt(bookId), userEmail || '', scope, scopeKey, sig, version,
+    JSON.stringify(result), new Date().toISOString(),
+  );
+}
+
+function deleteFinetuneAiCache(bookId, userEmail) {
+  return _deleteFtAiCache.run(parseInt(bookId), userEmail || '').changes;
+}
+
 // ── User-Profile & Einstellungen ──────────────────────────────────────────────
 
 const _upsertUserLogin = db.prepare(`
@@ -583,4 +620,5 @@ module.exports = {
   insertJobRun, startJobRun, endJobRun, cleanupStuckJobRuns,
   getBookSettings, getBookLocale, saveBookSettings,
   loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache,
+  loadFinetuneAiCache, saveFinetuneAiCache, deleteFinetuneAiCache,
 };

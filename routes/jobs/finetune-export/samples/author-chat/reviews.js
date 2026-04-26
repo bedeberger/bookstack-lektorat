@@ -69,7 +69,7 @@ function buildReviewSamples(ctx) {
     if (!cr || typeof cr !== 'object') continue;
     // Zusammenfassung als Hauptantwort auf „Was passiert in Kapitel X?"
     if (cr.zusammenfassung) {
-      const idxs = pickVariants('chap|' + chName, chapterQuestions, 2);
+      const idxs = pickVariants('chap|' + chName, chapterQuestions, chapterQuestions.length);
       for (const idx of idxs) {
         const q = chapterQuestions[idx].replace('{kapitel}', chName);
         pushQA('authorChat|chap|' + chName + '|' + idx, q, cr.zusammenfassung);

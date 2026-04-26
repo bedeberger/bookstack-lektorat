@@ -17,7 +17,7 @@ function buildDialogSamples(ctx) {
   for (const p of pageContents) {
     const dlgs = extractDialogs(p.text);
     for (const d of dlgs) {
-      if (d.quote.length < 10 || d.quote.length > 400) continue;
+      if (d.quote.length < 6 || d.quote.length > 800) continue;
       const speaker = findSpeaker(p.text, d.start, d.end, figNamesSorted);
       if (!speaker) continue;
       const spkKey = speaker.toLowerCase();
@@ -49,7 +49,7 @@ function buildDialogSamples(ctx) {
   // Figur cap bei 12 Zitaten, damit stark sprechende Figuren nicht das
   // Training dominieren.
   if (opts.types.dialog) {
-    const REV_CAP_PER_FIG = 12;
+    const REV_CAP_PER_FIG = 30;
     for (const f of figRows) {
       const entries = dialogsByFigure.get(f.name.toLowerCase()) || [];
       const altEntries = (f.kurzname && f.kurzname !== f.name)
@@ -61,7 +61,7 @@ function buildDialogSamples(ctx) {
         if (emitted >= REV_CAP_PER_FIG) break;
         if (seenQ.has(e.quote)) continue;
         seenQ.add(e.quote);
-        if (e.quote.length < 20 || e.quote.length > 260) continue;
+        if (e.quote.length < 12 || e.quote.length > 600) continue;
         const ctxTag = e.chapter
           ? (langIsEn ? ` (in «${e.chapter}»)` : ` (in «${e.chapter}»)`)
           : '';

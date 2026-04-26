@@ -31,8 +31,8 @@ function extractName(v, byMap = null) {
 function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 function findSpeaker(text, quoteStart, quoteEnd, figureNames) {
-  const ctx = text.slice(Math.max(0, quoteStart - 120), quoteStart)
-    + ' ' + text.slice(quoteEnd, quoteEnd + 120);
+  const ctx = text.slice(Math.max(0, quoteStart - 280), quoteStart)
+    + ' ' + text.slice(quoteEnd, quoteEnd + 280);
   for (const name of figureNames) {
     const re = new RegExp('\\b' + escapeRe(name) + '\\b', 'i');
     if (re.test(ctx)) return name;

@@ -19,6 +19,7 @@ const { buildSceneSamples } = require('./samples/scene');
 const { buildDialogSamples } = require('./samples/dialog');
 const { buildCorrectionSamples } = require('./samples/correction');
 const { buildAuthorChatSamples } = require('./samples/author-chat');
+const { buildAiAugmentSamples } = require('./samples/ai-augment');
 
 const finetuneExportRouter = express.Router();
 
@@ -89,7 +90,7 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       : `Du bist die Stimme von «${displayName}». Schreibe, setze fort und antworte im Stil des Autors und aus der Welt dieses Buchs heraus.`;
 
     const samples = [];
-    const counts = { style: 0, scene: 0, dialog: 0, authorChat: 0, correction: 0 };
+    const counts = { style: 0, scene: 0, dialog: 0, authorChat: 0, correction: 0, aiAugment: 0 };
 
     // Normalised opts mit übernommenen Defaults — wird in alle Sub-Module gereicht.
     const optsNorm = { ...opts, minChars, maxChars, valSplit, valSeed: seed, maxSeqTokens, emitText,
@@ -135,11 +136,16 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       buildAuthorChatSamples(ctx);
     }
 
+    if (opts.types.aiAugment && (opts.ai?.reversePrompts || opts.ai?.factQA || opts.ai?.reasoningBackfill)) {
+      updateJob(jobId, { progress: 92, statusText: 'finetune.phase.aiAugment' });
+      await buildAiAugmentSamples(ctx);
+    }
+
     updateJob(jobId, { progress: 95, statusText: 'finetune.phase.building' });
 
     const stats = finalizeFinetuneSamples(jobId, ctx);
     completeJob(jobId, { stats });
-    logger.info(`Finetune-Export fertig: ${stats.total} Samples (${counts.style} style / ${counts.scene} scene / ${counts.dialog} dialog / ${counts.authorChat} authorChat / ${counts.correction} correction) → ${stats.train} train, ${stats.val} val, dropped=${stats.dropped}, p95=${stats.tokensP95} tok, max=${stats.tokensMax} tok, recSeq=${stats.recommendedSeqLen}.`);
+    logger.info(`Finetune-Export fertig: ${stats.total} Samples (${counts.style} style / ${counts.scene} scene / ${counts.dialog} dialog / ${counts.authorChat} authorChat / ${counts.correction} correction / ${counts.aiAugment} aiAugment) → ${stats.train} train, ${stats.val} val, dropped=${stats.dropped}, p95=${stats.tokensP95} tok, max=${stats.tokensMax} tok, recSeq=${stats.recommendedSeqLen}.`);
   } catch (e) {
     if (e.name !== 'AbortError') logger.error(`Fehler Finetune-Export (book=${bookId}): ${e.message}`, { stack: e.stack });
     failJob(jobId, e);
@@ -148,8 +154,16 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
 
 finetuneExportRouter.post('/finetune-export', jsonBody, (req, res) => {
   const { book_id, book_name, types, min_chars, max_chars, val_split, val_seed,
-          max_seq_tokens, emit_text, fulltext, max_full_chars, truncate_long } = req.body || {};
+          max_seq_tokens, emit_text, fulltext, max_full_chars, truncate_long, ai } = req.body || {};
   if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
+  const aiOpts = {
+    reversePrompts:        !!(ai && ai.reverse_prompts),
+    factQA:                !!(ai && ai.fact_qa),
+    reasoningBackfill:     !!(ai && ai.reasoning_backfill),
+    reversePromptsPerPage: Number(ai && ai.reverse_prompts_per_page) || 0,
+    factQAPerEntity:       Number(ai && ai.fact_qa_per_entity)       || 0,
+  };
+  const aiAugmentEnabled = aiOpts.reversePrompts || aiOpts.factQA || aiOpts.reasoningBackfill;
   const opts = {
     types: {
       style:      !!(types && types.style),
@@ -157,6 +171,7 @@ finetuneExportRouter.post('/finetune-export', jsonBody, (req, res) => {
       dialog:     !!(types && types.dialog),
       authorChat: !!(types && types.authorChat),
       correction: !!(types && types.correction),
+      aiAugment:  aiAugmentEnabled,
     },
     minChars: Number(min_chars) || 200,
     maxChars: Number(max_chars) || 4000,
@@ -167,6 +182,7 @@ finetuneExportRouter.post('/finetune-export', jsonBody, (req, res) => {
     fulltext: fulltext !== false,
     maxFullChars: Number(max_full_chars) || 60000,
     truncateLong: !!truncate_long,
+    ai: aiOpts,
   };
   if (!Object.values(opts.types).some(v => v)) {
     return res.status(400).json({ error_code: 'FINETUNE_NO_TYPES' });

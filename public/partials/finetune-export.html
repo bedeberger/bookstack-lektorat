@@ -90,21 +90,70 @@
     </div>
 
     <div class="finetune-row">
-      <label class="finetune-label" x-text="$app.t('finetune.unsloth')"></label>
-      <div class="finetune-inline">
-        <label class="finetune-inline-field">
-          <span x-text="$app.t('finetune.unsloth.maxSeqTokens')"></span>
-          <input type="number" id="ft-max-seq-tokens" name="ft-max-seq-tokens" min="0" max="16384" step="512" x-model.number="finetuneMaxSeqTokens" class="finetune-num">
-        </label>
+      <label class="finetune-label" x-text="$app.t('finetune.ai')"></label>
+      <div class="finetune-stack">
+        <p class="finetune-lead" x-text="$app.t('finetune.ai.lead')"></p>
+        <div class="finetune-types">
+          <label class="finetune-check">
+            <input type="checkbox" id="ft-ai-reverse" name="ft-ai-reverse" x-model="finetuneAiReversePrompts">
+            <span>
+              <span class="finetune-check-title" x-text="$app.t('finetune.ai.reversePrompts')"></span>
+              <span class="finetune-check-desc" x-text="$app.t('finetune.ai.reversePrompts.desc')"></span>
+            </span>
+          </label>
+          <label class="finetune-check">
+            <input type="checkbox" id="ft-ai-factqa" name="ft-ai-factqa" x-model="finetuneAiFactQA">
+            <span>
+              <span class="finetune-check-title" x-text="$app.t('finetune.ai.factQA')"></span>
+              <span class="finetune-check-desc" x-text="$app.t('finetune.ai.factQA.desc')"></span>
+            </span>
+          </label>
+          <label class="finetune-check">
+            <input type="checkbox" id="ft-ai-reasoning" name="ft-ai-reasoning" x-model="finetuneAiReasoningBackfill">
+            <span>
+              <span class="finetune-check-title" x-text="$app.t('finetune.ai.reasoningBackfill')"></span>
+              <span class="finetune-check-desc" x-text="$app.t('finetune.ai.reasoningBackfill.desc')"></span>
+            </span>
+          </label>
+        </div>
+        <div class="finetune-inline">
+          <label class="finetune-inline-field">
+            <span x-text="$app.t('finetune.ai.reversePromptsPerPage')"></span>
+            <input type="number" id="ft-ai-rev-per-page" name="ft-ai-rev-per-page" min="1" max="8" step="1" x-model.number="finetuneAiReversePromptsPerPage" class="finetune-num">
+          </label>
+          <label class="finetune-inline-field">
+            <span x-text="$app.t('finetune.ai.factQAPerEntity')"></span>
+            <input type="number" id="ft-ai-qa-per-entity" name="ft-ai-qa-per-entity" min="2" max="8" step="1" x-model.number="finetuneAiFactQAPerEntity" class="finetune-num">
+          </label>
+        </div>
       </div>
-      <div class="finetune-types">
-        <label class="finetune-check">
-          <input type="checkbox" id="ft-emit-text" name="ft-emit-text" x-model="finetuneEmitText">
-          <span>
-            <span class="finetune-check-title" x-text="$app.t('finetune.unsloth.emitText')"></span>
-            <span class="finetune-check-desc" x-text="$app.t('finetune.unsloth.emitText.desc')"></span>
-          </span>
-        </label>
+    </div>
+
+    <div class="finetune-row">
+      <label class="finetune-label" x-text="$app.t('finetune.unsloth')"></label>
+      <div class="finetune-stack">
+        <div class="finetune-inline">
+          <label class="finetune-inline-field">
+            <span x-text="$app.t('finetune.unsloth.maxSeqTokens')"></span>
+            <input type="number" id="ft-max-seq-tokens" name="ft-max-seq-tokens" min="0" max="16384" step="512" x-model.number="finetuneMaxSeqTokens" class="finetune-num">
+          </label>
+        </div>
+        <div class="finetune-types">
+          <label class="finetune-check">
+            <input type="checkbox" id="ft-emit-text" name="ft-emit-text" x-model="finetuneEmitText">
+            <span>
+              <span class="finetune-check-title" x-text="$app.t('finetune.unsloth.emitText')"></span>
+              <span class="finetune-check-desc" x-text="$app.t('finetune.unsloth.emitText.desc')"></span>
+            </span>
+          </label>
+          <label class="finetune-check">
+            <input type="checkbox" id="ft-truncate-long" name="ft-truncate-long" x-model="finetuneTruncateLong">
+            <span>
+              <span class="finetune-check-title" x-text="$app.t('finetune.unsloth.truncateLong')"></span>
+              <span class="finetune-check-desc" x-text="$app.t('finetune.unsloth.truncateLong.desc')"></span>
+            </span>
+          </label>
+        </div>
       </div>
     </div>
   </div>
@@ -126,6 +175,7 @@
         <span class="tok-badge tok-neutral" x-show="finetuneStats.dialogCount > 0" x-text="$app.t('finetune.stats.dialog', { n: finetuneStats.dialogCount })"></span>
         <span class="tok-badge tok-neutral" x-show="finetuneStats.authorChatCount > 0" x-text="$app.t('finetune.stats.authorChat', { n: finetuneStats.authorChatCount })"></span>
         <span class="tok-badge tok-neutral" x-show="finetuneStats.correctionCount > 0" x-text="$app.t('finetune.stats.correction', { n: finetuneStats.correctionCount })"></span>
+        <span class="tok-badge tok-neutral" x-show="finetuneStats.aiAugmentCount > 0" x-text="$app.t('finetune.stats.aiAugment', { n: finetuneStats.aiAugmentCount })"></span>
         <span class="tok-badge tok-neutral" x-show="finetuneStats.tokensP95 > 0" x-text="$app.t('finetune.stats.tokensP95', { n: finetuneStats.tokensP95 })"></span>
         <span class="tok-badge tok-neutral" x-show="finetuneStats.tokensMax > 0" x-text="$app.t('finetune.stats.tokensMax', { n: finetuneStats.tokensMax })"></span>
         <span class="tok-badge tok-neutral" x-show="finetuneStats.recommendedSeqLen > 0" x-text="$app.t('finetune.stats.recommendedSeqLen', { n: finetuneStats.recommendedSeqLen })"></span>

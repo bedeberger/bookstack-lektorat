@@ -88,7 +88,7 @@ function buildSceneSamples(ctx) {
     // weiterschreiben lernt.
     if (p.text.length >= minChars * 2) {
       const prefix = metaParts.length ? metaParts.join(' · ') + '\n\n' : '';
-      for (const cut of [0.15, 0.5, 0.8]) {
+      for (const cut of [0.1, 0.25, 0.4, 0.55, 0.7, 0.85]) {
         const [opening, rest] = splitAtSentence(completion, cut);
         if (opening.length < 80 || rest.length < 120) continue;
         samples.push({
@@ -331,7 +331,7 @@ function buildSceneSamples(ctx) {
       // nicht gechunkt). Bei mehreren Slices liegen die Cuts „innerhalb
       // Teil 1" — die Folge-Slices werden bereits durch (a) abgedeckt.
       const baseSlice = slices[0];
-      for (const cut of [0.2, 0.5, 0.8]) {
+      for (const cut of [0.1, 0.25, 0.4, 0.55, 0.7, 0.85]) {
         const [head, rest] = splitAtSentence(baseSlice, cut);
         if (head.length < 200 || rest.length < 200) continue;
         samples.push({
