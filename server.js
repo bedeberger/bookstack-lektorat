@@ -112,7 +112,11 @@ const staticServe = express.static(path.join(__dirname, 'public'), {
   etag: true,
   lastModified: true,
   setHeaders(res, filePath) {
-    if (/\.(html|webmanifest)$/i.test(filePath)) {
+    // sw.js darf nie HTTP-gecached werden, sonst frieren Clients auf alter
+    // Service-Worker-Version fest und sehen Asset-Updates nicht.
+    if (/(?:^|[\\/])sw\.js$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    } else if (/\.(html|webmanifest)$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=3600');
     } else {
       res.setHeader('Cache-Control', 'public, max-age=604800');

@@ -768,6 +768,39 @@ sharedRouter.get('/last-run', (req, res) => {
   res.json({ lastRun: row?.ended_at || null });
 });
 
+// Einzelne Job-Läufe pro Typ — für Drill-Down in jobStats-Tabelle.
+// Liefert die letzten N Runs (default 20) für (user, book, type).
+sharedRouter.get('/runs', (req, res) => {
+  const userEmail = req.session?.user?.email || null;
+  const bookId = toIntId(req.query.book_id);
+  const type = req.query.type;
+  if (!type || !bookId) return res.status(400).json({ error_code: 'TYPE_BOOKID_REQUIRED' });
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+  const rows = db.prepare(`
+    SELECT job_id, status, queued_at, started_at, ended_at,
+           tokens_in, tokens_out, error,
+           CASE WHEN started_at IS NOT NULL AND ended_at IS NOT NULL
+                THEN (julianday(ended_at) - julianday(started_at)) * 86400
+                ELSE NULL END AS duration
+    FROM job_runs
+    WHERE user_email = ? AND book_id = ? AND type = ?
+    ORDER BY COALESCE(ended_at, started_at, queued_at) DESC
+    LIMIT ?
+  `).all(userEmail, bookId, type, limit);
+  res.json(rows.map(r => ({
+    jobId:       r.job_id,
+    status:      r.status,
+    queuedAt:    r.queued_at,
+    startedAt:   r.started_at,
+    endedAt:     r.ended_at,
+    durationFmt: fmtDuration(r.duration),
+    tokensIn:    r.tokens_in || 0,
+    tokensOut:   r.tokens_out || 0,
+    tokensFmt:   fmtTok((r.tokens_in || 0) + (r.tokens_out || 0)),
+    error:       r.error || null,
+  })));
+});
+
 sharedRouter.get('/active', (req, res) => {
   const { type, book_id, page_id } = req.query;
   const entityId = page_id || book_id;

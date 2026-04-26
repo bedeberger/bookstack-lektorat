@@ -87,4 +87,26 @@ export const bookSettingsMethods = {
       this.bookJobStatsLoading = false;
     }
   },
+
+  // Drill-Down: Typ-Zeile aufklappen → letzte N Runs nachladen.
+  // Cache pro Typ in bookJobRuns; Re-Toggle schliesst nur, lädt nicht neu.
+  async toggleJobRuns(type) {
+    if (this.expandedJobType === type) {
+      this.expandedJobType = null;
+      return;
+    }
+    this.expandedJobType = type;
+    if (this.bookJobRuns[type]) return;
+    this.bookJobRunsLoading = true;
+    try {
+      const bookId = window.__app.selectedBookId;
+      const runs = await fetchJson(`/jobs/runs?book_id=${encodeURIComponent(bookId)}&type=${encodeURIComponent(type)}&limit=20`);
+      this.bookJobRuns[type] = runs;
+    } catch (e) {
+      console.error('[book-settings] Job-Runs laden fehlgeschlagen:', e);
+      this.bookJobRuns[type] = [];
+    } finally {
+      this.bookJobRunsLoading = false;
+    }
+  },
 };

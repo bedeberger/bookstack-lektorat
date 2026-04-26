@@ -19,6 +19,9 @@ export function registerBookSettingsCard() {
     bookSettingsError: '',
     bookJobStats: null,
     bookJobStatsLoading: false,
+    expandedJobType: null,
+    bookJobRuns: {},
+    bookJobRunsLoading: false,
 
     _onBookChanged: null,
     _onViewReset: null,
@@ -31,6 +34,8 @@ export function registerBookSettingsCard() {
       });
 
       this._onBookChanged = () => {
+        this.expandedJobType = null;
+        this.bookJobRuns = {};
         if (!window.__app.showBookSettingsCard) return;
         if (!window.__app.selectedBookId) return;
         this.loadBookSettings();

@@ -132,20 +132,63 @@
             <th :title="$app.t('jobStats.col.runsTitle')" x-text="$app.t('jobStats.col.runs')"></th>
           </tr>
         </thead>
-        <tbody>
-          <template x-for="row in bookJobStats" :key="row.type">
-            <tr>
-              <td x-text="$app.t(row.typeLabel)"></td>
-              <td x-text="row.avgDurationFmt"></td>
-              <td x-text="row.avgTokensFmt"></td>
-              <td x-text="$app.formatLastRun(row.lastRun)"></td>
-              <td>
-                <span x-text="row.count"></span>
-                <span x-show="row.errorCount > 0" class="job-stats-errors" x-text="' / ' + row.errorCount + ' ✕'"></span>
-              </td>
-            </tr>
-          </template>
-        </tbody>
+        <template x-for="row in bookJobStats" :key="row.type">
+          <tbody>
+              <tr class="job-stats-row job-stats-row--clickable"
+                  :class="{ 'job-stats-row--open': expandedJobType === row.type }"
+                  role="button" tabindex="0"
+                  @click="toggleJobRuns(row.type)"
+                  @keydown.enter.prevent="toggleJobRuns(row.type)"
+                  @keydown.space.prevent="toggleJobRuns(row.type)"
+                  :title="$app.t('jobStats.expandHint')">
+                <td>
+                  <span class="history-chevron" :class="{ open: expandedJobType === row.type }">›</span>
+                  <span x-text="$app.t(row.typeLabel)"></span>
+                </td>
+                <td x-text="row.avgDurationFmt"></td>
+                <td x-text="row.avgTokensFmt"></td>
+                <td x-text="$app.formatLastRun(row.lastRun)"></td>
+                <td>
+                  <span x-text="row.count"></span>
+                  <span x-show="row.errorCount > 0" class="job-stats-errors" x-text="' / ' + row.errorCount + ' ✕'"></span>
+                </td>
+              </tr>
+              <tr x-show="expandedJobType === row.type" class="job-stats-runs-row">
+                <td colspan="5">
+                  <div x-show="bookJobRunsLoading && !bookJobRuns[row.type]" class="job-runs-loading" x-text="$app.t('jobStats.loading')"></div>
+                  <div x-show="bookJobRuns[row.type] && bookJobRuns[row.type].length === 0" class="job-runs-empty" x-text="$app.t('jobStats.runs.empty')"></div>
+                  <table x-show="bookJobRuns[row.type] && bookJobRuns[row.type].length > 0" class="job-runs-table">
+                    <thead>
+                      <tr>
+                        <th x-text="$app.t('jobStats.runs.col.when')"></th>
+                        <th x-text="$app.t('jobStats.runs.col.status')"></th>
+                        <th x-text="$app.t('jobStats.runs.col.duration')"></th>
+                        <th x-text="$app.t('jobStats.runs.col.tokens')"></th>
+                        <th x-text="$app.t('jobStats.runs.col.detail')"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <template x-for="run in (bookJobRuns[row.type] || [])" :key="run.jobId">
+                        <tr>
+                          <td x-text="$app.formatLastRun(run.endedAt || run.startedAt || run.queuedAt)"></td>
+                          <td>
+                            <span class="job-run-status" :class="'job-run-status--' + run.status"
+                                  x-text="$app.t('jobStats.runs.status.' + run.status)"></span>
+                          </td>
+                          <td x-text="run.durationFmt"></td>
+                          <td x-text="run.tokensFmt"></td>
+                          <td class="job-run-detail">
+                            <span x-show="run.error" class="job-run-error" :title="$app.t(run.error)" x-text="$app.t(run.error)"></span>
+                            <span x-show="!run.error" class="job-run-muted">—</span>
+                          </td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+          </tbody>
+        </template>
       </table>
       </div>
     </section>
