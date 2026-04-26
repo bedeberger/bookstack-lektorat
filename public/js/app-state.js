@@ -14,6 +14,7 @@ const shellState = () => ({
   bookstackTokenInvalid: false,
   serverOffline: false,
   isOffline: false,
+  updateAvailable: false,
   _offlineSyncInstalled: false,
   _draftPushRunning: false,
   themePref: 'auto',

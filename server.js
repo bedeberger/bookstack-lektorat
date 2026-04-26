@@ -105,9 +105,13 @@ const PUBLIC_ASSETS = new Set([
   '/bookstack_lektorat_icon.ico',
   '/favicon.ico',
 ]);
-// Statische Assets: 1 h für HTML/Manifest (User soll Updates schnell sehen),
-// 7 Tage für JS/CSS/Bilder. Kein `immutable`, weil Dateinamen nicht gehasht sind —
-// aber ETag bleibt aktiv, sodass der Browser nach maxAge mit If-None-Match revalidiert.
+// Statische Assets: `no-cache` für alles ausser Bildern. ETag bleibt aktiv —
+// Browser revalidiert bei jedem Reload mit If-None-Match (304 wenn unverändert,
+// nur Header-Roundtrip, keine Bytes). Vorher: 7 Tage max-age für JS/CSS, was
+// dazu führte, dass Mobile-User nach SHELL_CACHE-Bumps tagelang auf alter
+// Frontend-Version festsassen, weil der HTTP-Cache schon stale lieferte und der
+// SW-SWR davon abhing. Bilder/Icons dürfen weiter 7 Tage halten — die ändern
+// sich praktisch nie.
 const staticServe = express.static(path.join(__dirname, 'public'), {
   etag: true,
   lastModified: true,
@@ -116,10 +120,10 @@ const staticServe = express.static(path.join(__dirname, 'public'), {
     // Service-Worker-Version fest und sehen Asset-Updates nicht.
     if (/(?:^|[\\/])sw\.js$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    } else if (/\.(html|webmanifest)$/i.test(filePath)) {
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-    } else {
+    } else if (/\.(png|jpe?g|gif|webp|svg|ico|woff2?)$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=604800');
+    } else {
+      res.setHeader('Cache-Control', 'no-cache');
     }
   },
 });

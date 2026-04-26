@@ -158,6 +158,8 @@
   "session.serverOffline":        "Server nicht erreichbar – Offline-Modus. Zwischengespeicherte Inhalte sind lesbar, Änderungen werden erst beim Wiederverbinden gespeichert.",
   "session.retry":                "Erneut versuchen",
   "session.offlineMode":          "Offline – Änderungen werden lokal gesichert und bei Wiederverbindung synchronisiert. KI-Funktionen pausiert.",
+  "session.updateAvailable":      "Neue Version verfügbar – jetzt neu laden, um sie zu nutzen. Nicht gespeicherte Änderungen im Editor gehen verloren.",
+  "session.applyUpdate":          "Neu laden",
   "offline.syncDone":             "Offline-Entwürfe synchronisiert: {n} Seite(n).",
   "offline.syncConflicts":        "{n} Entwurf/Entwürfe nicht synchronisiert – Server hat sich seitdem geändert. Beim nächsten Öffnen der Seite wird nachgefragt.",
   "dev.banner":                  "DEV-MODUS – lokale Session, kein OAuth",

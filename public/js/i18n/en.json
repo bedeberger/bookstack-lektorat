@@ -158,6 +158,8 @@
   "session.serverOffline":        "Server unreachable – offline mode. Cached content is readable; changes will only be saved once reconnected.",
   "session.retry":                "Retry",
   "session.offlineMode":          "Offline – changes are stored locally and will sync once reconnected. AI features paused.",
+  "session.updateAvailable":      "New version available – reload now to use it. Unsaved changes in the editor will be lost.",
+  "session.applyUpdate":          "Reload",
   "offline.syncDone":             "Offline drafts synced: {n} page(s).",
   "offline.syncConflicts":        "{n} draft(s) not synced – server changed in the meantime. You'll be asked when you reopen the page.",
   "dev.banner":                  "DEV MODE – local session, no OAuth",

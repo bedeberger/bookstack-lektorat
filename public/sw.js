@@ -7,7 +7,7 @@
 //  - Auth/KI/Job-Queue/SSE: Network-Only, nie cachen
 //  - Version-Bump der Konstanten invalidiert den jeweiligen Cache
 
-const SHELL_CACHE = 'lektorat-shell-v51';
+const SHELL_CACHE = 'lektorat-shell-v53';
 const API_CACHE = 'lektorat-api-v2';
 const CONFIG_CACHE = 'lektorat-config-v1';
 const ACTIVE_CACHES = new Set([SHELL_CACHE, API_CACHE, CONFIG_CACHE]);
@@ -50,7 +50,10 @@ self.addEventListener('install', (event) => {
     const cache = await caches.open(SHELL_CACHE);
     // Einstiegspunkt best-effort vorcachen – scheitert bei Offline-Install lautlos
     try { await cache.add(new Request('/', { cache: 'reload' })); } catch {}
-    self.skipWaiting();
+    // Kein automatisches skipWaiting — der Client soll den Wechsel kontrolliert
+    // anstossen (Update-Banner → User klickt → postMessage 'skip-waiting'),
+    // damit offene Editor-Tabs nicht mitten im Tippen unter den Füssen
+    // weggezogen werden.
   })());
 });
 
@@ -186,7 +189,14 @@ async function handleConfig(req) {
 
 // Logout aus dem Client: API+Config-Caches dropen, sonst rendert die SPA nach
 // `/auth/logout` kurz noch gecachte Seiten/Configs des alten Users.
+// Update-Anstoss: 'skip-waiting' aktiviert den wartenden SW sofort. Erst danach
+// feuert `controllerchange` im Client, der dann ein einmaliges location.reload()
+// macht.
 self.addEventListener('message', (event) => {
+  if (event.data?.type === 'skip-waiting') {
+    self.skipWaiting();
+    return;
+  }
   if (event.data?.type === 'auth-logout') {
     event.waitUntil((async () => {
       await Promise.all([

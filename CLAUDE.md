@@ -21,6 +21,7 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Va
 - **A11y: klickbare Nicht-Buttons** — Elemente mit Klasse `.internal-link` (spans/divs mit `@click`) werden global in `app.js` via MutationObserver + Event-Delegation tastatur-erreichbar gemacht (`role="button"`, `tabindex="0"`, Enter/Space → click). Nicht pro Element wiederholen. Neue klickbare Nicht-Buttons → einfach `.internal-link` setzen.
 - **Progress-Bars** — `.progress-bar` liest die Breite aus CSS-Custom-Prop `--progress`. Binding: `:style="{ '--progress': xProgress + '%' }"`, nicht `:style="'width:' + ... + '%'"`.
 - **Card-Animationen nur via CSS** — `.card` fadet via `cardFadeIn` (style.css) ein. Kein `x-transition` zusätzlich auf `.card`-Elementen, sonst doppelt (CSS translateY + Alpine scale konkurrieren, wirkt wabbelig — sichtbar v.a. bei grossen Karten wie Szenen). Neue Karte: nur `x-show="..." x-cloak`, keine Alpine-Transition.
+- **`SHELL_CACHE` bumpen** — bei JS/CSS-Änderungen Konstante in [public/sw.js](public/sw.js) hochzählen. Sonst halten Mobile-Browser via Service-Worker alte Bundle-Versionen fest.
 
 ## Neues Feature hinzufügen
 
@@ -37,8 +38,8 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Va
 
 Der Frontend-Scope ist in **Alpine.data-Sub-Komponenten** aufgeteilt:
 - **Root** (`x-data="lektorat"` am `<body>`): Navigation (`selectedBookId`, `pages`, `tree`), Session, i18n, `showXxxCard`-Flags (Single Source of Truth für Hash-Router + Exklusivität), Job-Queue-Footer, globale Cross-Cutting-Methoden (`t`, `bsGet`, `loadFiguren`, `selectPage`, `gotoStelle` …).
-- **14 Sub-Komponenten** in [public/js/cards/](public/js/cards/) — eine pro UI-Karte (Figuren, Orte, Szenen, Ereignisse, Stil, Fehler-Heatmap, BookStats, BookSettings, UserSettings, Kontinuität, Seiten-Chat, Buch-Chat, Buch-Review, Kapitel-Review). Jede besitzt ihren fachlichen State + Lifecycle.
-- **Editor** (inkl. `page-view`, `editor-*`, `lektorat`-Findings, `chat`) bleibt **bewusst im Root** — zu eng mit Seiten-Chat, Hash-Router, Auto-Save, Selection-Management gekoppelt.
+- **25 Sub-Komponenten** in [public/js/cards/](public/js/cards/) — eine pro UI-Karte. Buchebene: Figuren, Orte, Szenen, Ereignisse, Stil, Fehler-Heatmap, BookStats, BookSettings, UserSettings, Kontinuität, Ideen, Finetune-Export, Buch-Chat, Buch-Review, Kapitel-Review. Editor-Subs: editor-find, editor-synonyme, editor-figur-lookup, editor-toolbar, editor-focus, lektorat-findings, page-history. Plus Seiten-Chat. Jede besitzt fachlichen State + Lifecycle.
+- **Im Root** verbleibt: `page-view`, `editor-edit`, `editor-utils`, Hash-Router, Auto-Save, Selection-Management, Navigation. Editor-UI-Slices wurden in eigene Cards extrahiert (Trampoline-Events aus dem Root, z.B. `editor:focus:toggle`).
 
 **Neue Karte anlegen:**
 1. Fachmodul in `public/js/` → Methods-Export (`export const xxxMethods = { ... }`), Root-Zugriffe via `window.__app.xxx` (siehe unten).
@@ -99,9 +100,9 @@ Immer nur eine Hauptansicht aktiv. Buchebenen-Features und Seitenebenen-Features
 
 ## Datenbank
 
-Schema, Tabellen und Migrationslogik: siehe [db/schema.js](db/schema.js).
+DB-Code ist auf 6 Files in [db/](db/) verteilt: [connection.js](db/connection.js) (better-sqlite3-Setup), [migrations.js](db/migrations.js) (Schema + `runMigrations`), [schema.js](db/schema.js), [figures.js](db/figures.js), [pages.js](db/pages.js), [tokens.js](db/tokens.js).
 
-**Migration hinzufügen:** Neuen `if (version < N)`-Block in `runMigrations()` ergänzen (N = nächste fortlaufende Nummer, aktuell bei 56) + `UPDATE schema_version SET version = N`. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` — keine Versionierung nötig.
+**Migration hinzufügen:** Neuen `if (version < N)`-Block in `runMigrations()` (in [db/migrations.js](db/migrations.js)) ergänzen (N = nächste fortlaufende Nummer, aktuell bei 62) + `UPDATE schema_version SET version = N`. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` — keine Versionierung nötig.
 
 **Neuer Beziehungstyp:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Neuen Typ in der `BZ`-Konstante (Frontend-Rendering) und im Claude-Prompt (`FINAL_SCHEMA` in `prompts.js`) ergänzen.
 
@@ -201,7 +202,8 @@ Winston (`logger.js`): Level `info`, Ausgabe in `lektorat.log` (5 MB, 3 Dateien 
 server.js              – Express-Setup, Auth-Guard, Cron, Route-Mounting
 logger.js              – Winston-Config
 lib/ai.js              – callAI(), Provider-Dispatch, JSON-Parsing
-db/schema.js           – SQLite-Schema, Migrationen, alle DB-Funktionen
+db/                    – SQLite split: connection, migrations, schema,
+                         figures, pages, tokens
 routes/
   auth.js                  – Google OIDC
   proxies.js               – KI-Provider-Proxies + BookStack-Proxy
@@ -214,8 +216,11 @@ routes/
   jobs/chat.js             – Buch-Chat (klassisch + Agentic-Dispatch)
   jobs/book-chat-tools.js  – Tool-Implementierungen für Agentic Buch-Chat
   jobs/synonyme.js         – Synonym-Vorschläge
+  jobs/finetune-export/    – Finetune-Sample-Generator (eigener Router)
+  jobs/narrative-labels.js – POV-/Tempus-Labels (Helper, kein Router)
   chat.js                  – Seiten-Chat (SSE)
-  figures.js, locations.js, history.js, sync.js, booksettings.js, usersettings.js
+  figures.js, locations.js, history.js, sync.js, booksettings.js,
+  usersettings.js, ideen.js
 public/
   index.html           – SPA-Shell
   style.css            – Alle Styles (einzige Quelle)
@@ -229,7 +234,7 @@ public/
   js/app-ui.js         – Filter-/Sort-Helper, Partial-Loader
   js/app-jobs-core.js  – Job-Queue, checkPendingJobs, _startPoll-Wrapper
   js/app-hash-router.js, app-navigation.js, app-chrome.js, app-komplett.js
-  js/cards/            – Alpine.data-Sub-Komponenten (14 Karten + Shared)
+  js/cards/            – Alpine.data-Sub-Komponenten (25 Karten + Shared)
     catalog-store.js          – Alpine.store('catalog') für figuren/orte/szenen/globalZeitstrahl
     job-helpers.js            – pure `startPoll(ctx, cfg)` + `runningJobStatus(translate, …)`
     job-feature-card.js       – `createCardJobFeature(cfg)` für Sub-Komponenten
@@ -239,6 +244,10 @@ public/
     figuren-card.js           – inkl. vis-network-Graph-Lifecycle
     book-review-card.js, kapitel-review-card.js
     chat-card.js, book-chat-card.js
+    ideen-card.js, finetune-export-card.js
+    editor-find-card.js, editor-synonyme-card.js, editor-figur-lookup-card.js,
+    editor-toolbar-card.js, editor-focus-card.js
+    lektorat-findings-card.js, page-history-card.js
   js/prompts.js        – Prompt-Schemas + Build-Logik (shared Server/Frontend)
   js/utils.js          – Gemeinsame Hilfsfunktionen
   js/chat-base.js      – Geteilte Chat-Methoden (spreaded in chat-card + book-chat-card)
@@ -248,11 +257,14 @@ public/
                           book-settings, user-settings, kapitel-review, ereignisse,
                           chat, book-chat)
                        – Editor-/Findings-Module (bleiben im Root-Spread):
-                          page-view, editor-edit, editor-focus, editor-toolbar,
-                          editor-find, editor-synonyme, editor-figur-lookup,
-                          editor-utils, lektorat, shortcuts, tree, history,
+                          page-view, editor-edit, editor-utils,
+                          shortcuts, tree, history,
                           api-ai, api-bookstack, bookstack-search, offline-sync,
                           i18n
+                       – Module hinter eigenen Cards (gespreaded in *-card.js):
+                          editor-focus, editor-toolbar, editor-find,
+                          editor-synonyme, editor-figur-lookup, lektorat,
+                          ideen, finetune-export
 ```
 
 ## Tests

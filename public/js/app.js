@@ -89,8 +89,37 @@ if ('serviceWorker' in navigator) {
     || (swPref !== '0' && location.protocol === 'https:' && !isLocal);
 
   if (swEnabled) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    window.addEventListener('load', async () => {
+      try {
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        // Periodisch nach Updates fragen — ohne aktiven update()-Call wartet
+        // der Browser u.U. Stunden bis Tage, bis er einen neuen SW
+        // einspielt; v.a. auf Mobile (Tab im Hintergrund / SW gekillt) sieht
+        // der User Frontend-Updates dann nie. 60s ist günstig: minimale
+        // Bandbreite (nur sw.js wird revalidiert), schnelle Sichtbarkeit.
+        setInterval(() => { reg.update().catch(() => {}); }, 60_000);
+        const notify = (worker) => {
+          if (!worker || !navigator.serviceWorker.controller) return;
+          window.__pendingWorker = worker;
+          window.dispatchEvent(new CustomEvent('app:update-available'));
+        };
+        if (reg.waiting) notify(reg.waiting);
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          nw?.addEventListener('statechange', () => {
+            if (nw.state === 'installed') notify(nw);
+          });
+        });
+        // Reload erst nach Controller-Wechsel (nach skip-waiting durch User-
+        // Klick), damit der neue SW alle Asset-Requests bedient — sonst lädt
+        // die Seite mit alten gecachten Modulen neu.
+        let reloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (reloaded) return;
+          reloaded = true;
+          location.reload();
+        });
+      } catch {}
     });
   } else {
     navigator.serviceWorker.getRegistrations()

@@ -43,6 +43,18 @@ export const appChromeMethods = {
     await done;
     location.href = '/auth/logout';
   },
+  // Wartenden SW aktivieren (vom Update-Banner). Nach `skip-waiting` feuert
+  // `controllerchange` im app.js-Listener und macht das eigentliche Reload.
+  // Fallback-Reload nach 2s falls das Event aus irgendeinem Grund nicht
+  // kommt (z.B. SW-Controller fehlt) — dann harten Reload, damit der User
+  // nicht im Banner-Limbo hängenbleibt.
+  applyUpdate() {
+    const w = window.__pendingWorker;
+    if (w) {
+      try { w.postMessage({ type: 'skip-waiting' }); } catch {}
+    }
+    setTimeout(() => location.reload(), 2000);
+  },
   _avatarInitials() {
     const src = (this.currentUser && (this.currentUser.name || this.currentUser.email)) || '';
     if (!src) return '·';

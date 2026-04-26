@@ -378,6 +378,59 @@ export function findInHtml(html, needle) {
   return { htmlStart: starts[idx], htmlEnd: ends[idx + normalized.length - 1] };
 }
 
+const _VOID_TAGS = new Set([
+  'area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr',
+]);
+
+/**
+ * Findet im Slice Tags ohne Partner: Closes ohne vorheriges Open im Slice
+ * (Open liegt VOR dem Slice, Tag muss nach dem Replacement erhalten bleiben),
+ * bzw. Opens ohne nachfolgendes Close im Slice (Close liegt NACH dem Slice).
+ * Self-closing/Void-Elemente werden ignoriert.
+ */
+function _splitOrphanTags(slice) {
+  const tagRe = /<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g;
+  const stack = [];
+  const orphanCloses = [];
+  let m;
+  while ((m = tagRe.exec(slice))) {
+    const full = m[0];
+    const tag = m[1].toLowerCase();
+    if (_VOID_TAGS.has(tag) || /\/>$/.test(full)) continue;
+    if (full.startsWith('</')) {
+      if (stack.length && stack[stack.length - 1].tag === tag) stack.pop();
+      else orphanCloses.push(full);
+    } else {
+      stack.push({ tag, full });
+    }
+  }
+  return { orphanOpens: stack.map(s => s.full), orphanCloses };
+}
+
+/**
+ * Ersetzt `needle` im HTML durch `replacement`. Nutzt `findInHtml` für die
+ * Position. Wenn der Match Tag-Grenzen kreuzt (toleranter Match), bleiben
+ * Waisen-Tags innerhalb der ersetzten Range erhalten, sonst zerbricht die
+ * Tag-Balance (typisch: KI ändert Phrase, die ein `<em>kursiv</em>` umfasst,
+ * dabei darf weder das öffnende noch das schliessende Tag verloren gehen).
+ *
+ * Gibt das neue HTML zurück, oder das Original wenn nichts gefunden.
+ */
+export function replaceInHtml(html, needle, replacement) {
+  if (!html || !needle) return html;
+  const m = findInHtml(html, needle);
+  if (!m) return html;
+  const removed = html.slice(m.htmlStart, m.htmlEnd);
+  let inserted = replacement;
+  if (removed.includes('<')) {
+    const { orphanOpens, orphanCloses } = _splitOrphanTags(removed);
+    if (orphanOpens.length || orphanCloses.length) {
+      inserted = orphanOpens.join('') + replacement + orphanCloses.join('');
+    }
+  }
+  return html.slice(0, m.htmlStart) + inserted + html.slice(m.htmlEnd);
+}
+
 /**
  * Einfaches Markdown → HTML für Chat-Antworten.
  * Unterstützt: # Überschriften, **fett**, *kursiv*, `code`, Zeilenumbrüche, Listen (- und 1.).
