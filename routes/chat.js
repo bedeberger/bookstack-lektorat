@@ -1,7 +1,7 @@
 const express = require('express');
 const { db, getTokenForRequest } = require('../db/schema');
 const logger = require('../logger');
-const { callAIChat, parseJSON, chatTemperature } = require('../lib/ai');
+const { callAIChat, parseJSONLenient, chatTemperature } = require('../lib/ai');
 const { toIntId } = require('../lib/validate');
 const { BOOKSTACK_URL } = require('../lib/bookstack');
 const {
@@ -309,12 +309,15 @@ router.post('/send', jsonBody, async (req, res) => {
     let antwort = fullText;
     let vorschlaege = [];
     if (!truncated) {
-      try {
-        const parsed = parseJSON(fullText);
-        antwort     = parsed.antwort     ?? fullText;
-        vorschlaege = parsed.vorschlaege ?? [];
-      } catch {
-        logger.warn(`[chat/send] «${session.page_name}» session=${session_id} KI-Antwort kein valides JSON – Rohtext wird gespeichert.`);
+      // Lenient: bei kaputtem JSON (z.B. unescaptes `"` in Vorschlag-Feld)
+      // wird wenigstens `antwort` per Regex gerettet, vorschlaege bleibt leer.
+      const r = parseJSONLenient(fullText, ['antwort']);
+      if (r.ok) {
+        antwort     = r.parsed.antwort     ?? fullText;
+        vorschlaege = r.parsed.vorschlaege ?? [];
+      } else {
+        logger.warn(`[chat/send] «${session.page_name}» session=${session_id} KI-Antwort kein valides JSON – Fallback-Extraktion.`);
+        antwort = r.partial.antwort ?? r.partial._raw ?? fullText;
       }
     }
 

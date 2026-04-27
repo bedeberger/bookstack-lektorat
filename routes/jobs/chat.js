@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const { db, getTokenForRequest } = require('../../db/schema');
-const { callAIChat, callAIWithTools, parseJSON, chatTemperature, CHARS_PER_TOKEN, MAX_TOKENS_OUT, INPUT_BUDGET_TOKENS, INPUT_BUDGET_CHARS } = require('../../lib/ai');
+const { callAIChat, callAIWithTools, parseJSONLenient, chatTemperature, CHARS_PER_TOKEN, MAX_TOKENS_OUT, INPUT_BUDGET_TOKENS, INPUT_BUDGET_CHARS } = require('../../lib/ai');
 const {
   _promptConfig,
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
@@ -20,15 +20,20 @@ const chatRouter = express.Router();
 // ── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
 function _parseChatResponse(text) {
-  try {
-    const parsed = parseJSON(text);
+  // Lenient: bei kaputtem JSON (z.B. unescaptes `"` oder typografische Quotes
+  // im Modell-Output) wenigstens `antwort` per Regex retten. Vorschläge gehen
+  // nur sicher zu extrahieren, wenn Gesamt-JSON valid ist.
+  const r = parseJSONLenient(text, ['antwort']);
+  if (r.ok) {
     return {
-      antwort: parsed.antwort ?? text,
-      vorschlaege: parsed.vorschlaege ?? [],
+      antwort: r.parsed.antwort ?? text,
+      vorschlaege: r.parsed.vorschlaege ?? [],
     };
-  } catch {
-    return { antwort: text, vorschlaege: [] };
   }
+  return {
+    antwort: r.partial.antwort ?? r.partial._raw ?? text,
+    vorschlaege: [],
+  };
 }
 
 /**

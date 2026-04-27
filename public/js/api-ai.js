@@ -43,6 +43,43 @@ function _sanitizeControlChars(text) {
   });
 }
 
+// Anführungszeichen-Paare, die das Modell statt ASCII `"` produzieren kann
+// (DE/CH/EN/FR Sprach-Quotes statt JSON-Delimiter). Mirror von QUOTE_PAIRS
+// in lib/ai.js — gleiche Reihenfolge.
+const QUOTE_PAIRS = [
+  ['"', '"'],
+  ['„', '“'],
+  ['«', '»'],
+  ['“', '”'],
+  ['‘', '’'],
+  ['‚', '‘'],
+  ['‹', '›'],
+];
+function _escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// Regex-Extract eines String-Feldwerts aus kaputtem JSON. Probiert alle
+// Quote-Paare für Schlüssel × Wert. Erste Übereinstimmung gewinnt.
+export function extractStringField(text, fieldName) {
+  for (const [ko, kc] of QUOTE_PAIRS) {
+    for (const [vo, vc] of QUOTE_PAIRS) {
+      const re = new RegExp(
+        `${_escapeRe(ko)}${_escapeRe(fieldName)}${_escapeRe(kc)}\\s*:\\s*${_escapeRe(vo)}((?:\\\\.|(?!${_escapeRe(vc)}).)*)${_escapeRe(vc)}`,
+        's',
+      );
+      const m = text.match(re);
+      if (m) {
+        if (vo === '"') {
+          try { return JSON.parse('"' + m[1] + '"'); }
+          catch { return m[1]; }
+        }
+        return m[1];
+      }
+    }
+  }
+  return null;
+}
+
+// Voller Parse mit mehrstufigem Repair. Wirft bei totalem Fehlschlag.
 function _parseJson(fullText) {
   const clean = fullText.replace(/```json\s*|```/g, '').trim();
   try {
@@ -63,6 +100,24 @@ function _parseJson(fullText) {
       }
     }
     throw new Error('KI-Antwort konnte nicht geparst werden (siehe Console für vollständige Rohantwort)');
+  }
+}
+
+// Lenient-Variante: schluckt Parse-Fehler, extrahiert benannte String-Felder
+// per Regex. Pendant zu parseJSONLenient in lib/ai.js. Rückgabe:
+// { ok, parsed?, partial?, error? } — partial._raw als Notnagel.
+export function parseJsonLenient(text, stringFields = []) {
+  try { return { ok: true, parsed: _parseJson(text) }; }
+  catch (err) {
+    const partial = {};
+    for (const f of stringFields) {
+      const v = extractStringField(text, f);
+      if (v != null) partial[f] = v;
+    }
+    if (Object.keys(partial).length === 0) {
+      partial._raw = text.replace(/```json\s*|```/g, '').trim();
+    }
+    return { ok: false, partial, error: err };
   }
 }
 
