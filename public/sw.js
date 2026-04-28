@@ -7,7 +7,7 @@
 //  - Auth/KI/Job-Queue/SSE: Network-Only, nie cachen
 //  - Version-Bump der Konstanten invalidiert den jeweiligen Cache
 
-const SHELL_CACHE = 'lektorat-shell-v61';
+const SHELL_CACHE = 'lektorat-shell-v62';
 const API_CACHE = 'lektorat-api-v2';
 const CONFIG_CACHE = 'lektorat-config-v1';
 const ACTIVE_CACHES = new Set([SHELL_CACHE, API_CACHE, CONFIG_CACHE]);
@@ -33,6 +33,10 @@ const NEVER_CACHE_PREFIXES = [
 
 const SHELL_ASSET_REGEX = /\.(?:css|js|mjs|json|svg|ico|png|woff2?)$/i;
 const PARTIAL_REGEX = /^\/partials\//;
+// i18n-JSON: Network-First wie Partials. SWR hat dazu geführt, dass neue Keys
+// (z.B. nach Feature-Add) bei Mobile-Clients tagelang als Raw-Key sichtbar
+// blieben („ideen.title" statt „Ideen"), bis Cache irgendwann revalidierte.
+const I18N_REGEX = /^\/js\/i18n\/[a-z]{2}\.json$/i;
 
 function isShellRequest(url) {
   if (url.pathname === '/' || url.pathname === '/index.html') return true;
@@ -50,10 +54,12 @@ self.addEventListener('install', (event) => {
     const cache = await caches.open(SHELL_CACHE);
     // Einstiegspunkt best-effort vorcachen – scheitert bei Offline-Install lautlos
     try { await cache.add(new Request('/', { cache: 'reload' })); } catch {}
-    // Kein automatisches skipWaiting — der Client soll den Wechsel kontrolliert
-    // anstossen (Update-Banner → User klickt → postMessage 'skip-waiting'),
-    // damit offene Editor-Tabs nicht mitten im Tippen unter den Füssen
-    // weggezogen werden.
+    // skipWaiting: neuer SW übernimmt sofort, ohne dass alle Tabs geschlossen
+    // werden müssen. Vorher wurde manuell via Update-Banner gewechselt — auf
+    // Mobile (Pixel-PWA) wurde der Banner aber zu oft verfehlt, Clients hingen
+    // tagelang auf alter Version. controllerchange im Client schützt aktive
+    // Editor-Tabs (kein Auto-Reload bei editDirty, sonst beforeunload-Prompt).
+    await self.skipWaiting();
   })());
 });
 
@@ -83,9 +89,10 @@ async function handleNavigate(req) {
 async function handleShellAsset(req) {
   const cache = await caches.open(SHELL_CACHE);
   const url = new URL(req.url);
-  // Partials: Network-First. SWR fror UI-Bugs ein, weil alte HTML-Snippets
-  // weitergereicht wurden, während neuer Stand schon im Repo war.
-  if (PARTIAL_REGEX.test(url.pathname)) {
+  // Partials & i18n-JSON: Network-First. SWR fror UI-Bugs ein, weil alte HTML-
+  // Snippets weitergereicht wurden, während neuer Stand schon im Repo war —
+  // gleicher Effekt bei i18n: neue Keys waren tagelang als Raw-Key sichtbar.
+  if (PARTIAL_REGEX.test(url.pathname) || I18N_REGEX.test(url.pathname)) {
     try {
       const net = await fetch(req);
       if (net && net.ok) cache.put(req, net.clone());

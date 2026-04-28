@@ -110,13 +110,20 @@ if ('serviceWorker' in navigator) {
             if (nw.state === 'installed') notify(nw);
           });
         });
-        // Reload erst nach Controller-Wechsel (nach skip-waiting durch User-
-        // Klick), damit der neue SW alle Asset-Requests bedient — sonst lädt
-        // die Seite mit alten gecachten Modulen neu.
+        // Controllerchange feuert, sobald der neue SW (skipWaiting in sw.js)
+        // die Seite übernimmt. Auto-Reload nur, wenn der Editor nicht dirty ist
+        // — sonst Banner zeigen, damit der User erst speichern kann. Die neue
+        // SW-Version bedient zwar schon Assets, aber alte JS-Module laufen
+        // noch; Reload räumt das mit dem nächsten User-Klick auf.
         let reloaded = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
           if (reloaded) return;
           reloaded = true;
+          const app = window.__app;
+          if (app?.editMode && app?.editDirty) {
+            app.updateAvailable = true;
+            return;
+          }
           location.reload();
         });
       } catch {}
