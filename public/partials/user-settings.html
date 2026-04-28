@@ -111,6 +111,21 @@
       </select>
     </div>
 
+    <p class="book-settings-section-divider" x-text="$app.t('profile.editorSection')"></p>
+
+    <div class="book-settings-row">
+      <label class="book-settings-label" for="us-focus-granularity" x-text="$app.t('profile.focusGranularity')"></label>
+      <div class="book-settings-field">
+        <select id="us-focus-granularity" class="book-settings-select" x-model="userSettingsFocusGranularity">
+          <option value="paragraph"       x-text="$app.t('profile.focus.paragraph')"></option>
+          <option value="sentence"        x-text="$app.t('profile.focus.sentence')"></option>
+          <option value="window-3"        x-text="$app.t('profile.focus.window3')"></option>
+          <option value="typewriter-only" x-text="$app.t('profile.focus.typewriterOnly')"></option>
+        </select>
+        <p class="book-settings-field-note" x-text="$app.t('profile.focusGranularityHint')"></p>
+      </div>
+    </div>
+
     <p class="book-settings-saved" x-show="userSettingsSaved" x-text="$app.t('profile.savedMsg')"></p>
     <p class="book-settings-error" x-show="userSettingsError" x-text="userSettingsError"></p>
 

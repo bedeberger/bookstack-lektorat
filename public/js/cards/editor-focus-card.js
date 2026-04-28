@@ -13,7 +13,7 @@
 //   - `editor:focus:exit`      — verlassen
 //   - `editor:focus:start-edit` — startet Edit-Mode und tritt dann in Fokus ein
 
-import { focusCardMethods } from '../editor-focus.js';
+import { focusCardMethods, readFocusSnapshot, clearFocusSnapshot } from '../editor-focus.js';
 
 export function registerEditorFocusCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
@@ -28,6 +28,7 @@ export function registerEditorFocusCard() {
     _onEnter: null,
     _onExit: null,
     _onStartEdit: null,
+    _restoreSnapshot: null,
 
     init() {
       this._onToggle    = () => this.toggleFocusMode();
@@ -38,6 +39,48 @@ export function registerEditorFocusCard() {
       window.addEventListener('editor:focus:enter',      this._onEnter);
       window.addEventListener('editor:focus:exit',       this._onExit);
       window.addEventListener('editor:focus:start-edit', this._onStartEdit);
+
+      // Live-Switch: User ändert Granularität in den Settings, während Focus
+      // aktiv ist → Body-Class + State sofort umstellen, ohne Exit/Re-Enter.
+      this.$watch(() => window.__app?.focusGranularity, (g) => {
+        if (this._focusState !== 'active') return;
+        document.body.classList.remove('focus-mode--paragraph', 'focus-mode--sentence', 'focus-mode--window-3', 'focus-mode--typewriter-only');
+        document.body.classList.add('focus-mode--' + (g || 'paragraph'));
+        this._focusUpdateActive(false);
+      });
+
+      // Auto-Restore: Reload (z.B. via Session-Banner-Relogin oder manuelles
+      // F5) soll den Fokusmodus wieder einnehmen, wenn die ursprüngliche Seite
+      // geladen ist. Snapshot wird beim Eintritt in editor-focus.js geschrieben
+      // und beim regulären Exit gelöscht.
+      this._restoreSnapshot = readFocusSnapshot();
+      if (this._restoreSnapshot) {
+        const tryRestore = () => this._tryRestoreFocus();
+        this.$watch(() => window.__app?.currentPage?.id, tryRestore);
+        this.$watch(() => window.__app?.renderedPageHtml, tryRestore);
+        this.$watch(() => window.__app?.showEditorCard, tryRestore);
+        // Initial check für den Fall, dass beim Mount bereits alles da ist.
+        queueMicrotask(tryRestore);
+      }
+    },
+
+    _tryRestoreFocus() {
+      const snap = this._restoreSnapshot;
+      if (!snap) return;
+      const app = window.__app;
+      if (!app) return;
+      if (this._focusState !== 'idle') return;
+      if (!app.showEditorCard) return;
+      if (!app.currentPage || app.currentPage.id !== snap.pageId) return;
+      if (!app.renderedPageHtml) return;
+
+      // Snapshot konsumieren — auch bei späterem Misserfolg nicht erneut
+      // versuchen, sonst Loop bei kaputter Seite.
+      this._restoreSnapshot = null;
+      // Snapshot wird in startEdit/enterFocusMode wieder gesetzt; hier vorab
+      // löschen, falls startFocusEdit bricht (z.B. checkLoading aktiv).
+      clearFocusSnapshot();
+      this.startFocusEdit();
     },
 
     destroy() {

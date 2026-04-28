@@ -9,10 +9,11 @@ export const userSettingsMethods = {
     this.userSettingsLoading = true;
     try {
       const data = await fetchJson('/me/settings');
-      this.userSettingsProfile         = { email: data.email, name: data.name, created_at: data.created_at, last_login_at: data.last_login_at };
-      this.userSettingsDefaultLanguage = data.default_language || '';
-      this.userSettingsDefaultRegion   = data.default_region   || '';
-      this.userSettingsDefaultBuchtyp  = data.default_buchtyp  || '';
+      this.userSettingsProfile          = { email: data.email, name: data.name, created_at: data.created_at, last_login_at: data.last_login_at };
+      this.userSettingsDefaultLanguage  = data.default_language  || '';
+      this.userSettingsDefaultRegion    = data.default_region    || '';
+      this.userSettingsDefaultBuchtyp   = data.default_buchtyp   || '';
+      this.userSettingsFocusGranularity = data.focus_granularity || 'paragraph';
     } catch (e) {
       console.error('[user-settings] Laden fehlgeschlagen:', e);
     } finally {
@@ -29,9 +30,10 @@ export const userSettingsMethods = {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          default_language: this.userSettingsDefaultLanguage || null,
-          default_region:   this.userSettingsDefaultRegion   || null,
-          default_buchtyp:  this.userSettingsDefaultBuchtyp  || null,
+          default_language:  this.userSettingsDefaultLanguage  || null,
+          default_region:    this.userSettingsDefaultRegion    || null,
+          default_buchtyp:   this.userSettingsDefaultBuchtyp   || null,
+          focus_granularity: this.userSettingsFocusGranularity || 'paragraph',
         }),
       });
       if (!r.ok) {
@@ -39,6 +41,7 @@ export const userSettingsMethods = {
         try { data = await r.json(); } catch (_) {}
         throw new Error(data ? window.__app.tError(data) : `HTTP ${r.status}`);
       }
+      window.__app.focusGranularity = this.userSettingsFocusGranularity || 'paragraph';
       this.userSettingsSaved = true;
       setTimeout(() => { this.userSettingsSaved = false; }, 3000);
     } catch (e) {

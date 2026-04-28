@@ -1923,29 +1923,64 @@ body.focus-mode .page-content-view--editing::-webkit-scrollbar {
    und die <p> darin blieben hell. `:not(.focus-paragraph-active)` macht die
    Brighten-Regel überflüssig und vermeidet opacity-Stacking-Probleme, bei
    denen ein dim-Parent den aktiven Kind-Absatz mit runterzieht. */
-body.focus-mode .page-content-view p:not(.focus-paragraph-active),
-body.focus-mode .page-content-view h1:not(.focus-paragraph-active),
-body.focus-mode .page-content-view h2:not(.focus-paragraph-active),
-body.focus-mode .page-content-view h3:not(.focus-paragraph-active),
-body.focus-mode .page-content-view h4:not(.focus-paragraph-active),
-body.focus-mode .page-content-view h5:not(.focus-paragraph-active),
-body.focus-mode .page-content-view h6:not(.focus-paragraph-active),
-body.focus-mode .page-content-view blockquote:not(.focus-paragraph-active),
-body.focus-mode .page-content-view li:not(.focus-paragraph-active),
-body.focus-mode .page-content-view pre:not(.focus-paragraph-active),
-body.focus-mode .page-content-view--editing p:not(.focus-paragraph-active),
-body.focus-mode .page-content-view--editing h1:not(.focus-paragraph-active),
-body.focus-mode .page-content-view--editing h2:not(.focus-paragraph-active),
-body.focus-mode .page-content-view--editing h3:not(.focus-paragraph-active),
-body.focus-mode .page-content-view--editing h4:not(.focus-paragraph-active),
-body.focus-mode .page-content-view--editing h5:not(.focus-paragraph-active),
-body.focus-mode .page-content-view--editing h6:not(.focus-paragraph-active),
-body.focus-mode .page-content-view--editing blockquote:not(.focus-paragraph-active),
-body.focus-mode .page-content-view--editing li:not(.focus-paragraph-active),
-body.focus-mode .page-content-view--editing pre:not(.focus-paragraph-active) {
-  opacity: 0.5;
-  transition: opacity 0.35s ease;
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view p:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view h1:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view h2:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view h3:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view h4:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view h5:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view h6:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view blockquote:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view li:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view pre:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing p:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing h1:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing h2:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing h3:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing h4:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing h5:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing h6:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing blockquote:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing li:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing pre:not(.focus-paragraph-active):not(.focus-paragraph-near) {
+  opacity: 0.35;
+  /* Bewusst KEIN transition: vorheriger aktiver Block würde 1.0 → 0.35 faden
+     und dabei mid-transition anders rendern (GPU-Subpixel-Aliasing), was als
+     „extra grau" auffällt. Snap-Out auf dim. */
 }
+
+/* Aktiver Block im Light-Mode auf reines Schwarz heben (statt --color-text
+   #1a1a1a), damit der Kontrast zu den dim-Blöcken (opacity 0.35) deutlich
+   ist. Dark-Theme behält --color-text. */
+:root:not([data-theme="dark"]) body.focus-mode .page-content-view .focus-paragraph-active,
+:root:not([data-theme="dark"]) body.focus-mode .page-content-view--editing .focus-paragraph-active {
+  color: #000;
+}
+
+/* Window-3-Modus: Nachbarn (prev/next) bekommen abgeschwächten Mid-Tone,
+   damit aktiver Block weiter heraussticht, Kontext aber lesbar bleibt. */
+body.focus-mode .page-content-view .focus-paragraph-near,
+body.focus-mode .page-content-view--editing .focus-paragraph-near {
+  opacity: 0.7;
+}
+
+/* Sentence-Modus: nicht-aktive Sätze im aktiven Block werden via CSS Custom
+   Highlight API gedimmt. Range-Registrierung in editor-focus.js.
+   Color matcht den Block-Dim (opacity 0.35 auf schwarzer Schrift) — sonst
+   stehen 3 Grautöne im UI: aktiver Satz schwarz, restl. aktiver Block hell-
+   grau (zu hell), andere Blöcke mittelgrau.
+   Theme-Selector via :root[data-theme] (App-Theme), NICHT prefers-color-
+   scheme — sonst greift System-DM auch wenn App auf light steht. */
+::highlight(focus-sentence-dim) {
+  color: rgba(0, 0, 0, 0.35);
+}
+:root[data-theme="dark"] ::highlight(focus-sentence-dim) {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Typewriter-only-Modus: kein Dim. Body-Class-Guard auf der Dim-Rule oben
+   schliesst diesen Modus aus, daher hier kein Override-Block nötig — alle
+   Blöcke behalten ihre Default-opacity (1). */
 
 /* Lektorat-Marks im Fokusmodus optisch neutralisieren (Findings bleiben
    aber in der Daten-/State-Ebene erhalten, damit _filterFindingsAfterSave

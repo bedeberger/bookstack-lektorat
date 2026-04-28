@@ -693,6 +693,14 @@
   "profile.defaultBuchtyp":      "Standard-Buchtyp",
   "profile.savedMsg":            "Einstellungen gespeichert.",
 
+  "profile.editorSection":              "Editor",
+  "profile.focusGranularity":           "Fokus-Granularität",
+  "profile.focusGranularityHint":       "Bestimmt, was im Fokus-Modus hervorgehoben wird – der ganze Absatz, nur ein Satz, ein Absatz-Fenster oder gar nichts (nur Typewriter-Scroll).",
+  "profile.focus.paragraph":            "Absatz (Standard)",
+  "profile.focus.sentence":             "Satz",
+  "profile.focus.window3":              "Drei Absätze (vor + aktiv + nach)",
+  "profile.focus.typewriterOnly":       "Nur Typewriter-Scroll (kein Dim)",
+
   "profile.dangerZone":          "Gefahrenzone",
   "profile.dangerText":          "Löscht alle deine Lektorate, Buchbewertungen und Chats zum gewählten Buch. Andere Nutzer sind nicht betroffen. Nicht rückgängig zu machen.",
   "profile.dangerButton":        "Historie für dieses Buch löschen",

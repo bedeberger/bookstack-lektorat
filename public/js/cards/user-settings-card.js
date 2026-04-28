@@ -13,6 +13,7 @@ export function registerUserSettingsCard() {
     userSettingsDefaultLanguage: '',
     userSettingsDefaultRegion: '',
     userSettingsDefaultBuchtyp: '',
+    userSettingsFocusGranularity: 'paragraph',
     userSettingsDangerBookId: '',
     userSettingsLoading: false,
     userSettingsSaving: false,

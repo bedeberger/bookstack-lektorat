@@ -37,6 +37,38 @@ const COUNTER_DEBOUNCE_MS = 220;
 // Storage nicht über Wochen durch alte Seiten/Tage anwächst.
 const DAILY_BASELINE_KEY = 'focus.dailyBaseline';
 
+// Focus-Snapshot: persistiert beim Eintritt in den Fokusmodus, damit ein Reload
+// (z.B. nach Klick auf "neu verbinden" im Session-Banner) die Karte wieder
+// öffnet, sobald die ursprüngliche Seite geladen ist. sessionStorage = pro
+// Tab/Fenster, überlebt F5 und OIDC-Redirect-Roundtrip, nicht aber Tab-Close.
+const FOCUS_SNAPSHOT_KEY = 'focus.snapshot';
+const FOCUS_SNAPSHOT_TTL_MS = 60 * 60 * 1000;
+
+function writeFocusSnapshot(pageId) {
+  if (!pageId) return;
+  try {
+    sessionStorage.setItem(FOCUS_SNAPSHOT_KEY, JSON.stringify({ pageId, ts: Date.now() }));
+  } catch {}
+}
+
+export function clearFocusSnapshot() {
+  try { sessionStorage.removeItem(FOCUS_SNAPSHOT_KEY); } catch {}
+}
+
+export function readFocusSnapshot() {
+  try {
+    const raw = sessionStorage.getItem(FOCUS_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const snap = JSON.parse(raw);
+    if (!snap || !snap.pageId || !snap.ts) return null;
+    if (Date.now() - snap.ts > FOCUS_SNAPSHOT_TTL_MS) {
+      clearFocusSnapshot();
+      return null;
+    }
+    return snap;
+  } catch { return null; }
+}
+
 function todayKey() {
   const d = new Date();
   return d.getFullYear() + '-'
@@ -221,6 +253,145 @@ export function setActiveBlock(container, block) {
   }
 }
 
+// Window-Mode: Vorgänger + Nachfolger des aktiven Blocks bleiben hell.
+export function setNearBlocks(container, block, blockSel = BLOCK_SEL) {
+  if (!container) return;
+  const olds = container.querySelectorAll('.focus-paragraph-near');
+  for (const el of olds) {
+    el.classList.remove('focus-paragraph-near');
+    if (el.classList.length === 0) el.removeAttribute('class');
+  }
+  if (!block) return;
+  const sib = (el, dir) => {
+    let n = el?.[dir];
+    while (n && (n.nodeType !== 1 || !n.matches(blockSel))) n = n[dir];
+    return n;
+  };
+  const tag = (el) => {
+    if (!el || el === block) return;
+    if (!el.classList.contains('focus-paragraph-near')) el.classList.add('focus-paragraph-near');
+  };
+  tag(sib(block, 'previousElementSibling'));
+  tag(sib(block, 'nextElementSibling'));
+}
+
+// Räumt sowohl active- als auch near-Klassen + Custom-Highlight ab.
+export function clearAllFocusMarks(container) {
+  if (!container) return;
+  for (const el of container.querySelectorAll('.focus-paragraph-active, .focus-paragraph-near')) {
+    el.classList.remove('focus-paragraph-active');
+    el.classList.remove('focus-paragraph-near');
+    if (el.classList.length === 0) el.removeAttribute('class');
+  }
+  if (typeof CSS !== 'undefined' && CSS.highlights) {
+    CSS.highlights.delete('focus-sentence-dim');
+  }
+}
+
+// Satzgrenzen via Intl.Segmenter (handhabt Abkürzungen wie „z. B." korrekt).
+// Fallback Regex split nach .!? mit Whitespace. Liefert [start,end]-Paare.
+export function findSentenceRanges(text, locale = 'de') {
+  if (!text) return [];
+  if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+    try {
+      const seg = new Intl.Segmenter(locale, { granularity: 'sentence' });
+      const out = [];
+      for (const s of seg.segment(text)) {
+        const start = s.index;
+        const end = start + s.segment.length;
+        if (s.segment.trim()) out.push([start, end]);
+      }
+      return out;
+    } catch { /* fallthrough */ }
+  }
+  const out = [];
+  const re = /[^.!?]+[.!?]*\s*/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m[0].trim()) out.push([m.index, m.index + m[0].length]);
+  }
+  return out;
+}
+
+// Findet die Satz-Range im Block, die den Caret enthält.
+export function findSentenceAtCaret(block, selection) {
+  if (!block || !selection || selection.rangeCount === 0) return null;
+  const range = selection.getRangeAt(0);
+  if (!block.contains(range.startContainer)) return null;
+  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
+  let pos = 0;
+  let caretPos = -1;
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node === range.startContainer) {
+      caretPos = pos + range.startOffset;
+      break;
+    }
+    pos += node.nodeValue.length;
+  }
+  if (caretPos < 0) caretPos = 0;
+  const text = block.textContent || '';
+  const ranges = findSentenceRanges(text);
+  if (ranges.length === 0) return { sentence: [0, text.length], totalLength: text.length };
+  for (const r of ranges) {
+    if (caretPos >= r[0] && caretPos <= r[1]) return { sentence: r, totalLength: text.length };
+  }
+  return { sentence: ranges[ranges.length - 1], totalLength: text.length };
+}
+
+function rangeFromOffsets(block, startOffset, endOffset) {
+  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
+  let pos = 0;
+  let startNode = null, startOff = 0, endNode = null, endOff = 0;
+  let node;
+  while ((node = walker.nextNode())) {
+    const len = node.nodeValue.length;
+    if (!startNode && pos + len >= startOffset) {
+      startNode = node;
+      startOff = startOffset - pos;
+    }
+    if (pos + len >= endOffset) {
+      endNode = node;
+      endOff = endOffset - pos;
+      break;
+    }
+    pos += len;
+  }
+  if (!startNode || !endNode) return null;
+  const r = document.createRange();
+  try {
+    r.setStart(startNode, Math.max(0, Math.min(startOff, startNode.nodeValue.length)));
+    r.setEnd(endNode, Math.max(0, Math.min(endOff, endNode.nodeValue.length)));
+  } catch { return null; }
+  return r;
+}
+
+// Sentence-Mode: nicht-aktive Sätze im aktiven Block werden via CSS-Custom-
+// Highlight gedimmt. Keine DOM-Mutation, kein Save-Diff-Risk.
+export function applySentenceHighlight(block, selection) {
+  if (typeof CSS === 'undefined' || !CSS.highlights || typeof Highlight === 'undefined') return;
+  CSS.highlights.delete('focus-sentence-dim');
+  if (!block) return;
+  const info = findSentenceAtCaret(block, selection);
+  if (!info) return;
+  const [s, e] = info.sentence;
+  const text = block.textContent || '';
+  const ranges = [];
+  if (s > 0) {
+    const r = rangeFromOffsets(block, 0, s);
+    if (r) ranges.push(r);
+  }
+  if (e < text.length) {
+    const r = rangeFromOffsets(block, e, text.length);
+    if (r) ranges.push(r);
+  }
+  if (ranges.length === 0) return;
+  try {
+    const hl = new Highlight(...ranges);
+    CSS.highlights.set('focus-sentence-dim', hl);
+  } catch { /* unsupported / Range invalid */ }
+}
+
 // Threshold dynamisch aus computed line-height ableiten. Im Fokusmodus ist
 // font-size 1.45rem, line-height 1.85 → ~42px. Statisches 16px scrollte schon
 // bei subpixel-Jitter; halbe Zeilenhöhe ist die natürliche Grenze für „echter
@@ -359,6 +530,8 @@ export const focusCardMethods = {
 
     app.focusMode = true;
     document.body.classList.add('focus-mode');
+    document.body.classList.remove('focus-mode--paragraph', 'focus-mode--sentence', 'focus-mode--window-3', 'focus-mode--typewriter-only');
+    document.body.classList.add('focus-mode--' + (app.focusGranularity || 'paragraph'));
 
     this.$nextTick(() => {
       // Wenn in der Zwischenzeit jemand exit() gerufen oder schneller
@@ -368,9 +541,11 @@ export const focusCardMethods = {
         this._focusInstall();
         this._focusState = 'active';
         this._focusUpdateActive(true);
+        writeFocusSnapshot(app.currentPage?.id);
       } catch (err) {
         reportError('enterFocusMode', err);
         this._focusTeardown();
+        clearFocusSnapshot();
         app.focusMode = false;
         document.body.classList.remove('focus-mode');
         this._focusState = 'idle';
@@ -641,18 +816,24 @@ export const focusCardMethods = {
     if (gen !== this._focusGen) return;
 
     this._focusTeardown();
+    clearFocusSnapshot();
 
     app.focusMode = false;
     document.body.classList.remove('focus-mode');
+    document.body.classList.remove('focus-mode--paragraph', 'focus-mode--sentence', 'focus-mode--window-3', 'focus-mode--typewriter-only');
     document.body.classList.remove('focus-cursor-hidden');
     document.documentElement.style.removeProperty('--focus-vh');
     document.documentElement.style.removeProperty('--focus-vh-top');
 
-    document.querySelectorAll('#editor-card .focus-paragraph-active')
+    document.querySelectorAll('#editor-card .focus-paragraph-active, #editor-card .focus-paragraph-near')
       .forEach(el => {
         el.classList.remove('focus-paragraph-active');
+        el.classList.remove('focus-paragraph-near');
         if (el.classList.length === 0) el.removeAttribute('class');
       });
+    if (typeof CSS !== 'undefined' && CSS.highlights) {
+      CSS.highlights.delete('focus-sentence-dim');
+    }
 
     // Nichts Ungespeichertes → zurück in die Ansicht (Save im Fokus impliziert
     // Ende der Edit-Session; unsaubere Exits behalten den Edit-Modus).
@@ -709,7 +890,26 @@ export const focusCardMethods = {
         }
         if (!block) block = findBlockAtViewportCenter(container, ctx.visibleBlocks);
 
-        setActiveBlock(container, block);
+        const granularity = window.__app?.focusGranularity || 'paragraph';
+        if (granularity === 'typewriter-only') {
+          // Kein Block markieren — Body-Class hebt Dim sowieso auf. Trotzdem
+          // Leichen-Klassen abräumen (User wechselt Mode → bereits gesetzte
+          // .focus-paragraph-active/-near sollen weg).
+          setActiveBlock(container, null);
+          setNearBlocks(container, null);
+        } else {
+          setActiveBlock(container, block);
+          if (granularity === 'window-3') {
+            setNearBlocks(container, block);
+          } else {
+            setNearBlocks(container, null);
+          }
+          if (granularity === 'sentence') {
+            applySentenceHighlight(block, sel);
+          } else if (typeof CSS !== 'undefined' && CSS.highlights) {
+            CSS.highlights.delete('focus-sentence-dim');
+          }
+        }
 
         // Aktive Textmarkierung: nicht recentern, sonst springt der Viewport
         // während der User die Auswahl aufzieht oder an ihr arbeitet.

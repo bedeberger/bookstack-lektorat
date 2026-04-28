@@ -1392,6 +1392,14 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 62').run();
     logger.info('DB-Migration auf Version 62 abgeschlossen (finetune_ai_cache).');
   }
+  if (version < 63) {
+    const userCols63 = db.pragma('table_info(users)').map(c => c.name);
+    if (!userCols63.includes('focus_granularity')) {
+      db.exec("ALTER TABLE users ADD COLUMN focus_granularity TEXT");
+    }
+    db.prepare('UPDATE schema_version SET version = 63').run();
+    logger.info('DB-Migration auf Version 63 abgeschlossen (users.focus_granularity).');
+  }
 
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);

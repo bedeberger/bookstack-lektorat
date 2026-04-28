@@ -10,13 +10,15 @@ const VALID_THEMES    = ['auto', 'light', 'dark'];
 const VALID_LANGUAGES = ['de', 'en'];
 const VALID_REGIONS   = ['CH', 'DE', 'US', 'GB'];
 const VALID_BUCHTYPEN = ['roman', 'kurzgeschichten', 'gesellschaft', 'krimi', 'historisch', 'fantasy_scifi', 'erotik', 'jugend', 'autobiografie', 'andere'];
+const VALID_FOCUS_GRANULARITIES = ['paragraph', 'sentence', 'window-3', 'typewriter-only'];
 
 const FIELDS = [
-  { key: 'locale',           allowed: VALID_LOCALES,   label: 'locale' },
-  { key: 'theme',            allowed: VALID_THEMES,    label: 'theme' },
-  { key: 'default_buchtyp',  allowed: VALID_BUCHTYPEN, label: 'default_buchtyp' },
-  { key: 'default_language', allowed: VALID_LANGUAGES, label: 'default_language' },
-  { key: 'default_region',   allowed: VALID_REGIONS,   label: 'default_region' },
+  { key: 'locale',            allowed: VALID_LOCALES,             label: 'locale' },
+  { key: 'theme',             allowed: VALID_THEMES,              label: 'theme' },
+  { key: 'default_buchtyp',   allowed: VALID_BUCHTYPEN,           label: 'default_buchtyp' },
+  { key: 'default_language',  allowed: VALID_LANGUAGES,           label: 'default_language' },
+  { key: 'default_region',    allowed: VALID_REGIONS,             label: 'default_region' },
+  { key: 'focus_granularity', allowed: VALID_FOCUS_GRANULARITIES, label: 'focus_granularity' },
 ];
 
 /** Aktuelles User-Profil samt Einstellungen. */

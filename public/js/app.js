@@ -524,6 +524,10 @@ document.addEventListener('alpine:init', () => {
           try { localStorage.setItem('theme', this.themePref); } catch (e) {}
           this._applyTheme();
         }
+        const fg = cfg.userSettings?.focus_granularity;
+        if (fg === 'paragraph' || fg === 'sentence' || fg === 'window-3' || fg === 'typewriter-only') {
+          this.focusGranularity = fg;
+        }
         configurePrompts(cfg.promptConfig, cfg.apiProvider || 'claude');
         configureTokenEstimate(cfg.charsPerToken);
         if (!cfg.bookstackTokenOk) {

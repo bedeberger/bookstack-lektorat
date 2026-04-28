@@ -693,6 +693,14 @@
   "profile.defaultBuchtyp":      "Default book type",
   "profile.savedMsg":            "Settings saved.",
 
+  "profile.editorSection":              "Editor",
+  "profile.focusGranularity":           "Focus granularity",
+  "profile.focusGranularityHint":       "Controls what gets highlighted in focus mode – the whole paragraph, just one sentence, a paragraph window, or nothing at all (typewriter scroll only).",
+  "profile.focus.paragraph":            "Paragraph (default)",
+  "profile.focus.sentence":             "Sentence",
+  "profile.focus.window3":              "Three paragraphs (prev + active + next)",
+  "profile.focus.typewriterOnly":       "Typewriter scroll only (no dim)",
+
   "profile.dangerZone":          "Danger zone",
   "profile.dangerText":          "Deletes all your page edits, book reviews and chats for the selected book. Other users are not affected. This cannot be undone.",
   "profile.dangerButton":        "Delete history for this book",

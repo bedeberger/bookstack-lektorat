@@ -18,6 +18,7 @@ const shellState = () => ({
   _offlineSyncInstalled: false,
   _draftPushRunning: false,
   themePref: 'auto',
+  focusGranularity: 'paragraph',
   uiLocale: '',
   bookstackUrl: '',
   promptConfig: {},
