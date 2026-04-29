@@ -478,10 +478,14 @@ export const focusMethods = {
     window.dispatchEvent(new CustomEvent('editor:focus:exit'));
   },
 
-  // Global F11-Hotkey. Läuft auf dem Body-Listener (siehe index.html), damit
-  // F11 den Fokusmodus auch aus dem Lesemodus heraus einschaltet.
+  // Global F11- bzw. Cmd/Ctrl+.-Hotkey. Läuft auf dem Body-Listener (siehe
+  // index.html), damit der Fokusmodus auch aus dem Lesemodus heraus einschaltbar ist.
   handleFocusHotkey(event) {
-    if (event.key !== 'F11') return;
+    const isF11 = event.key === 'F11';
+    const isCmdPeriod = (event.ctrlKey || event.metaKey)
+      && !event.altKey && !event.shiftKey
+      && event.key === '.';
+    if (!isF11 && !isCmdPeriod) return;
     if (!this.showEditorCard) return;
     event.preventDefault();
     if (this.focusMode) {

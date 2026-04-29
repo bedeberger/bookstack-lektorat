@@ -30,4 +30,34 @@ export const shortcutsMethods = {
     event.preventDefault();
     this.toggleShortcutsOverlay();
   },
+
+  _focusInputEl(el) {
+    if (!el) return false;
+    el.focus();
+    if (typeof el.select === 'function') el.select();
+    return true;
+  },
+
+  focusTreeSearch() {
+    return this._focusInputEl(document.querySelector('.page-search'));
+  },
+
+  focusBookSearch() {
+    return this._focusInputEl(document.querySelector('.bookstack-search-input'));
+  },
+
+  // Cmd/Ctrl+P → Seitenbaum-Filter, Cmd/Ctrl+K → Volltextsuche.
+  // Greift auch in Inputs/Editor – preventDefault ist Pflicht (sonst Browser-Print).
+  handleNavHotkey(event) {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    if (event.altKey || event.shiftKey) return;
+    const key = (event.key || '').toLowerCase();
+    if (key === 'p') {
+      if (!this.focusTreeSearch()) return;
+      event.preventDefault();
+    } else if (key === 'k') {
+      if (!this.focusBookSearch()) return;
+      event.preventDefault();
+    }
+  },
 };

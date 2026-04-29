@@ -39,7 +39,7 @@
       @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading && !focusMode) runCheck()"
       @keydown.ctrl.s.prevent.window="if (editMode) quickSave()"
       @keydown.meta.s.prevent.window="if (editMode) quickSave()"
-      @keydown.window="handleShortcutsHotkey($event); handleFocusHotkey($event)"
+      @keydown.window="handleShortcutsHotkey($event); handleFocusHotkey($event); handleNavHotkey($event)"
       @app-update-available.window="updateAvailable = true">
 
 <div class="session-banner" x-show="sessionExpired" x-cloak>

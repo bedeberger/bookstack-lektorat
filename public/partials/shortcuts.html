@@ -55,7 +55,7 @@
     <div class="shortcuts-section">
       <div class="shortcuts-section-title" x-text="t('shortcuts.section.focus')"></div>
       <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>F11</kbd></span>
+        <span class="shortcuts-keys"><kbd>F11</kbd> / <kbd x-text="t('shortcuts.key.cmdCtrl')"></kbd>+<kbd x-text="t('shortcuts.key.period')"></kbd></span>
         <span class="shortcuts-desc" x-text="t('shortcuts.item.focusToggle')"></span>
       </div>
       <div class="shortcuts-row">
@@ -70,6 +70,14 @@
 
     <div class="shortcuts-section">
       <div class="shortcuts-section-title" x-text="t('shortcuts.section.search')"></div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.cmdCtrl')"></kbd>+<kbd>P</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.searchTree')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.cmdCtrl')"></kbd>+<kbd>K</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.searchBook')"></span>
+      </div>
       <div class="shortcuts-row">
         <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.esc')"></kbd></span>
         <span class="shortcuts-desc" x-text="t('shortcuts.item.searchClear')"></span>
