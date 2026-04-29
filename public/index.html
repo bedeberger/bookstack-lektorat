@@ -110,7 +110,8 @@
              @keydown.arrow-down="onBookstackSearchKeydown($event)"
              @keydown.arrow-up="onBookstackSearchKeydown($event)"
              :placeholder="t('book.search.placeholder')"
-             :aria-label="t('book.search.placeholder')">
+             :aria-label="t('book.search.placeholder')"
+             :title="t('book.search.placeholderTitle')">
       <button type="button" class="bookstack-search-clear"
               x-show="bookstackSearch"
               @mousedown.prevent="clearBookstackSearch()"

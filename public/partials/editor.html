@@ -54,7 +54,7 @@
       </template>
       <template x-if="editMode">
         <span class="display-contents">
-          <button type="button" class="success" @click="saveEdit()" :disabled="editSaving">
+          <button type="button" class="success" @click="saveEdit()" :disabled="editSaving" :title="t('editor.btn.saveEditTitle')">
             <span x-show="editSaving" class="spinner"></span><span x-text="editSaving ? t('common.saving') : t('common.save')"></span>
           </button>
           <button type="button" @click="cancelEdit()" :disabled="editSaving" x-text="t('common.cancel')"></button>

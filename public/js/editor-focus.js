@@ -478,14 +478,19 @@ export const focusMethods = {
     window.dispatchEvent(new CustomEvent('editor:focus:exit'));
   },
 
-  // Global F11- bzw. Cmd/Ctrl+.-Hotkey. Läuft auf dem Body-Listener (siehe
-  // index.html), damit der Fokusmodus auch aus dem Lesemodus heraus einschaltbar ist.
+  // Global F11- bzw. Cmd/Ctrl+.- bzw. Cmd/Ctrl+Shift+F-Hotkey. Läuft auf dem
+  // Body-Listener (siehe index.html), damit der Fokusmodus auch aus dem Lesemodus
+  // heraus einschaltbar ist. Cmd+Shift+F als macOS-Fallback, weil F11 dort
+  // systemweit (Show Desktop / Mission Control) abgefangen wird.
   handleFocusHotkey(event) {
     const isF11 = event.key === 'F11';
     const isCmdPeriod = (event.ctrlKey || event.metaKey)
       && !event.altKey && !event.shiftKey
       && event.key === '.';
-    if (!isF11 && !isCmdPeriod) return;
+    const isCmdShiftF = (event.ctrlKey || event.metaKey)
+      && event.shiftKey && !event.altKey
+      && event.code === 'KeyF';
+    if (!isF11 && !isCmdPeriod && !isCmdShiftF) return;
     if (!this.showEditorCard) return;
     event.preventDefault();
     if (this.focusMode) {
@@ -718,6 +723,9 @@ export const focusCardMethods = {
           this.exitFocusMode();
         }
       } else if (e.key === 'F11') {
+        e.preventDefault();
+        this.toggleFocusMode();
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.code === 'KeyF') {
         e.preventDefault();
         this.toggleFocusMode();
       } else if ((e.key === 'l' || e.key === 'L') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
