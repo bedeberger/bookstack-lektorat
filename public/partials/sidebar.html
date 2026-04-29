@@ -9,7 +9,7 @@
   </div>
   <!-- Suche -->
   <div class="search-wrap">
-    <input type="text" x-model="pageSearch" :placeholder="t('sidebar.searchPage')" :aria-label="t('sidebar.searchPage')" class="page-search">
+    <input type="text" x-model="pageSearch" @input="onPageSearchInput()" @keydown="onPageSearchKeydown($event)" :placeholder="t('sidebar.searchPage')" :aria-label="t('sidebar.searchPage')" class="page-search">
   </div>
   <div x-show="!pageSearch" class="btn-group">
     <button type="button" @click="tree.forEach(c => c.open = true)" class="btn-compact" x-text="t('sidebar.expandAll')"></button>
@@ -56,7 +56,7 @@
           </div>
           <div x-show="item.open" class="tree-chapter-pages">
             <template x-for="page in item.pages" :key="page.id">
-              <div class="page-item" :class="{ selected: currentPage?.id === page.id, 'page-item--empty': tokEsts[page.id] && tokEsts[page.id].words === 0 }" @click="selectPage(page)">
+              <div class="page-item" :class="{ selected: currentPage?.id === page.id, 'page-item--empty': tokEsts[page.id] && tokEsts[page.id].words === 0, 'page-item--kb-active': _pageSearchActivePageId() ===page.id }" :data-page-id="page.id" @click="selectPage(page)">
                 <span class="page-name">
                   <span class="page-status-dot" :class="'page-status-' + pageStatus(page)"
                     @mouseenter.stop="const r=$el.getBoundingClientRect(); pageStatusTipPos={x:r.left,y:r.top}; pageStatusTipText=pageStatusTooltip(page); showPageStatusTip=true"
@@ -82,7 +82,7 @@
         </div>
       </template>
       <template x-if="item.type === 'page'">
-        <div class="page-item" :class="{ selected: currentPage?.id === item.page.id }" @click="selectPage(item.page)">
+        <div class="page-item" :class="{ selected: currentPage?.id === item.page.id, 'page-item--kb-active': _pageSearchActivePageId() ===item.page.id }" :data-page-id="item.page.id" @click="selectPage(item.page)">
           <span class="page-name">
             <span class="page-status-dot" :class="'page-status-' + pageStatus(item.page)"
               @mouseenter.stop="const r=$el.getBoundingClientRect(); pageStatusTipPos={x:r.left,y:r.top}; pageStatusTipText=pageStatusTooltip(item.page); showPageStatusTip=true"

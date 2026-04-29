@@ -106,6 +106,9 @@
              x-model="bookstackSearch"
              @input="onBookstackSearchInput()"
              @keydown.escape="clearBookstackSearch()"
+             @keydown.enter.prevent="selectActiveBookstackHit()"
+             @keydown.arrow-down="onBookstackSearchKeydown($event)"
+             @keydown.arrow-up="onBookstackSearchKeydown($event)"
              :placeholder="t('book.search.placeholder')"
              :aria-label="t('book.search.placeholder')">
       <button type="button" class="bookstack-search-clear"
@@ -118,8 +121,8 @@
       <div class="bookstack-search-status" x-show="bookstackSearchLoading" x-text="t('book.search.loading')"></div>
       <div class="bookstack-search-status bookstack-search-status--error" x-show="!bookstackSearchLoading && bookstackSearchError" x-text="bookstackSearchError"></div>
       <div class="bookstack-search-empty" x-show="!bookstackSearchLoading && !bookstackSearchError && bookstackSearched && bookstackSearchResults.length === 0" x-text="t('book.search.noResults')"></div>
-      <template x-for="hit in bookstackSearchResults" :key="hit.id">
-        <div class="bookstack-search-item" :class="{ 'is-current': currentPage && currentPage.id === hit.id }" x-show="!bookstackSearchLoading" @click="selectPageFromBookstackSearch(hit)">
+      <template x-for="(hit, hitIdx) in bookstackSearchResults" :key="hit.id">
+        <div class="bookstack-search-item" :class="{ 'is-current': currentPage && currentPage.id === hit.id, 'is-active': hitIdx === bookstackSearchActiveIndex }" :data-bs-idx="hitIdx" x-show="!bookstackSearchLoading" @click="selectPageFromBookstackSearch(hit)">
           <div class="bookstack-search-item-title" x-html="escPreserveStrong(hit.preview_html?.name || hit.name)"></div>
           <div class="bookstack-search-item-snippet" x-html="escPreserveStrong(hit.preview_html?.content || '')" x-show="hit.preview_html?.content"></div>
         </div>

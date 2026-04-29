@@ -299,6 +299,11 @@ document.addEventListener('alpine:init', () => {
       // verweist auf die aktuell via Tastatur markierte Option.
       this.$el.setAttribute('role', 'combobox');
       this.$el.setAttribute('aria-haspopup', 'listbox');
+      // Bei Query-Änderung Highlight an Filter-Liste angleichen, sonst zeigt der
+      // alte Index ins gefilterte Array hinein und Enter selektiert undefined.
+      this.$watch('query', () => {
+        this.highlighted = this.filtered.length > 0 ? 0 : -1;
+      });
       this.$el.innerHTML = `
         <button type="button" class="combobox-trigger" @click="toggle()"
                 :aria-expanded="open ? 'true' : 'false'"

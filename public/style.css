@@ -1477,6 +1477,11 @@ ins {
 }
 .page-item.page-item--empty { opacity: 0.6; }
 .page-item.page-item--empty.selected { opacity: 1; }
+.page-item.page-item--kb-active {
+  border-color: var(--color-accent);
+  background: var(--color-hover-light);
+  color: var(--color-text);
+}
 
 .page-name {
   display: flex;
@@ -4093,6 +4098,11 @@ body.focus-mode .edit-find { display: none !important; }
   border-left: 2px solid var(--color-accent);
 }
 .bookstack-search-item.is-current:hover { background: var(--color-accent-soft); }
+.bookstack-search-item.is-active {
+  background: var(--color-hover);
+  border-left: 2px solid var(--color-accent);
+}
+.bookstack-search-item.is-active.is-current { background: var(--color-accent-soft); }
 .bookstack-search-item-title {
   font-size: var(--font-size-sm);
   font-weight: 500;
