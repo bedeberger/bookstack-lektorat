@@ -22,6 +22,21 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Va
 - **Progress-Bars** — `.progress-bar` liest die Breite aus CSS-Custom-Prop `--progress`. Binding: `:style="{ '--progress': xProgress + '%' }"`, nicht `:style="'width:' + ... + '%'"`.
 - **Card-Animationen nur via CSS** — `.card` fadet via `cardFadeIn` (style.css) ein. Kein `x-transition` zusätzlich auf `.card`-Elementen, sonst doppelt (CSS translateY + Alpine scale konkurrieren, wirkt wabbelig — sichtbar v.a. bei grossen Karten wie Szenen). Neue Karte: nur `x-show="..." x-cloak`, keine Alpine-Transition.
 - **`SHELL_CACHE` bumpen** — bei JS/CSS-Änderungen Konstante in [public/sw.js](public/sw.js) hochzählen. Sonst halten Mobile-Browser via Service-Worker alte Bundle-Versionen fest.
+- **Combobox statt `<select>`** — alle Auswahlfelder nutzen `Alpine.data('combobox')` aus [public/js/app.js:219](public/js/app.js#L219). Kein natives `<select>` für neue Features, ausser bei zwingendem Grund (z.B. native Mobile-Picker erwünscht — dann begründen). `init()` rendert Trigger + Dropdown + Search + Liste komplett selbst und überschreibt `innerHTML` des Wrapper-Divs. Wrapper-Div daher **leer lassen**, nur Attribute setzen. Pflicht-Pattern (sonst Liste rendert nicht / Selection bricht / Updates kommen nicht durch):
+  ```html
+  <div x-data="combobox(placeholder, emptyLabel?)"
+       x-modelable="value" x-model="selectedRef"
+       x-effect="options = computeOptions()"
+       @combobox-change="onChange?($event.detail)"
+       @click.outside="close()" @keydown="onKeydown($event)"
+       class="combobox-wrap"></div>
+  ```
+  - `options`: Array `[{ value, label }]`. Niemals Markup ins Wrapper-Div schreiben — `init()` killt es.
+  - **`x-effect` statt `:options`-Attribut** — sonst keine Reaktivität bei Änderung der Datenquelle (Hauptursache für „Liste leer / nicht aktualisiert"-Bug).
+  - `x-modelable="value" x-model="ref"` koppelt internen `value`-State an äusseres Feld. Ohne `x-modelable` greift `@combobox-change` nicht in den Parent-State durch.
+  - `emptyLabel` (2. Argument) erzeugt „Alle"-Option mit Wert `''`. Weglassen für Pflichtauswahl.
+  - Optional `combobox-wrap--compact` für kleine Variante.
+  - Referenz: [public/index.html:90](public/index.html#L90) (Buchwahl), [public/partials/szenen.html:76](public/partials/szenen.html#L76).
 
 ## Neues Feature hinzufügen
 

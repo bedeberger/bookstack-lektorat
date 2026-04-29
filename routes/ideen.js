@@ -64,7 +64,7 @@ router.patch('/:id', jsonBody, (req, res) => {
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
 
   const existing = db.prepare(
-    'SELECT id FROM ideen WHERE id = ? AND user_email = ?'
+    'SELECT id, book_id, page_id, erledigt FROM ideen WHERE id = ? AND user_email = ?'
   ).get(id, userEmail);
   if (!existing) return res.status(404).json({ error_code: 'IDEE_NOT_FOUND' });
 
@@ -81,6 +81,21 @@ router.patch('/:id', jsonBody, (req, res) => {
     sets.push('erledigt = ?');    vals.push(flag);
     sets.push('erledigt_at = ?'); vals.push(flag ? new Date().toISOString() : null);
   }
+  let movedFrom = null, movedTo = null;
+  if (typeof req.body?.page_id !== 'undefined') {
+    const newPageId = toIntId(req.body.page_id);
+    if (!newPageId) return res.status(400).json({ error_code: 'INVALID_PAGE_ID' });
+    if (existing.erledigt) return res.status(400).json({ error_code: 'IDEE_DONE' });
+    const targetPage = db.prepare('SELECT book_id FROM page_stats WHERE page_id = ?').get(newPageId);
+    if (!targetPage || targetPage.book_id !== existing.book_id) {
+      return res.status(400).json({ error_code: 'BOOK_MISMATCH' });
+    }
+    const newPageName = (req.body?.page_name || '').toString().slice(0, 500) || null;
+    movedFrom = existing.page_id;
+    movedTo = newPageId;
+    sets.push('page_id = ?');   vals.push(newPageId);
+    sets.push('page_name = ?'); vals.push(newPageName);
+  }
   if (!sets.length) return res.status(400).json({ error_code: 'NO_FIELDS' });
 
   const now = new Date().toISOString();
@@ -91,6 +106,7 @@ router.patch('/:id', jsonBody, (req, res) => {
   const row = db.prepare(
     'SELECT id, book_id, page_id, page_name, content, erledigt, erledigt_at, created_at, updated_at FROM ideen WHERE id = ?'
   ).get(id);
+  if (movedTo) logger.info(`[ideen] move id=${id} from=${movedFrom} to=${movedTo} user=${userEmail}`);
   res.json(row);
 });
 

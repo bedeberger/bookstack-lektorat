@@ -29,6 +29,8 @@ export const ideenMethods = {
     this.newContent = '';
     this.editingId = null;
     this.editingDraft = '';
+    this.movingId = null;
+    this.moveTargetId = '';
     this.errorMessage = '';
     this.busy = false;
   },
@@ -119,6 +121,50 @@ export const ideenMethods = {
       this._publishIdeenCount();
     } catch (e) {
       this.errorMessage = app.t('ideen.error.save');
+    } finally {
+      this.busy = false;
+    }
+  },
+
+  // ── Move ─────────────────────────────────────────────────────────────────
+  startMoveIdee(idee) {
+    this.movingId = idee.id;
+    this.moveTargetId = '';
+  },
+
+  cancelMoveIdee() {
+    this.movingId = null;
+    this.moveTargetId = '';
+  },
+
+  // Aus zentralem Picker — Idee wird aus this.movingId geholt.
+  async confirmMoveCurrentIdee() {
+    const idee = (this.ideen || []).find(i => i.id === this.movingId);
+    if (!idee) return;
+    return this.confirmMoveIdee(idee);
+  },
+
+  async confirmMoveIdee(idee) {
+    const app = window.__app;
+    const targetId = parseInt(this.moveTargetId, 10);
+    if (!targetId) return;
+    const target = (app.pages || []).find(p => p.id === targetId);
+    if (!target) return;
+
+    this.busy = true;
+    try {
+      await fetchJson(`/ideen/${idee.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ page_id: targetId, page_name: target.name || null }),
+      });
+      this.ideen = this.ideen.filter(i => i.id !== idee.id);
+      this.movingId = null;
+      this.moveTargetId = '';
+      this.errorMessage = '';
+      this._publishIdeenCount();
+    } catch (e) {
+      this.errorMessage = app.t('ideen.error.move');
     } finally {
       this.busy = false;
     }

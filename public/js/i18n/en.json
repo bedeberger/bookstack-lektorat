@@ -915,5 +915,11 @@
   "ideen.error.delete":              "Could not delete idea.",
   "ideen.error.contentRequired":     "Please enter some text.",
   "ideen.error.contentTooLong":      "Text is too long (max 4000 characters).",
+  "ideen.error.move":                "Could not move idea.",
+  "ideen.move":                      "Move",
+  "ideen.moveTo":                    "Move to page:",
+  "ideen.moveConfirm":               "Move",
+  "ideen.moveSelectPlaceholder":     "Choose page…",
+  "ideen.chapterNone":               "No chapter",
   "ideen.chatNote":                  "Open ideas are passed to the page chat as context."
 }

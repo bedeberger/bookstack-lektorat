@@ -915,5 +915,11 @@
   "ideen.error.delete":              "Idee konnte nicht gelöscht werden.",
   "ideen.error.contentRequired":     "Bitte einen Text eingeben.",
   "ideen.error.contentTooLong":      "Text ist zu lang (max. 4000 Zeichen).",
+  "ideen.error.move":                "Idee konnte nicht verschoben werden.",
+  "ideen.move":                      "Verschieben",
+  "ideen.moveTo":                    "Auf Seite verschieben:",
+  "ideen.moveConfirm":               "Verschieben",
+  "ideen.moveSelectPlaceholder":     "Seite wählen…",
+  "ideen.chapterNone":               "Ohne Kapitel",
   "ideen.chatNote":                  "Offene Ideen werden im Seiten-Chat als Kontext berücksichtigt."
 }

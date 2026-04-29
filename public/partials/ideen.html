@@ -26,6 +26,19 @@
       x-text="$app.t('ideen.add')"></button>
   </div>
 
+  <!-- Move-Picker (Single-Instance, ausserhalb x-for damit Combobox sauber initialisiert) -->
+  <div x-show="movingId !== null" class="idee-move-panel" x-cloak>
+    <span class="ideen-move-label" x-text="$app.t('ideen.moveTo')"></span>
+    <div x-data="combobox($app.t('ideen.moveSelectPlaceholder'), null)"
+         x-modelable="value" x-model="moveTargetId"
+         x-effect="options = $app.ideenMovePickerOptions()"
+         @click.outside="close()" @keydown="onKeydown($event)"
+         class="combobox-wrap combobox-wrap--compact idee-move-combo">
+    </div>
+    <button type="button" class="btn-compact" @click="confirmMoveCurrentIdee()" :disabled="busy || !moveTargetId" x-text="$app.t('ideen.moveConfirm')"></button>
+    <button type="button" class="btn-compact" @click="cancelMoveIdee()" :disabled="busy" x-text="$app.t('ideen.cancel')"></button>
+  </div>
+
   <div class="ideen-list">
     <div x-show="loading" class="ideen-loading" x-text="$app.t('common.loading')"></div>
 
@@ -39,7 +52,7 @@
           <div class="idee-item">
             <div class="idee-status-badge" x-text="$app.t('ideen.statusOpen')"></div>
             <template x-if="editingId !== idee.id">
-              <div class="idee-content" x-text="idee.content"></div>
+              <div class="idee-content" :class="movingId === idee.id ? 'idee-content--moving' : ''" x-text="idee.content"></div>
             </template>
             <template x-if="editingId === idee.id">
               <div class="idee-edit">
@@ -50,9 +63,10 @@
                 </div>
               </div>
             </template>
-            <div class="idee-actions" x-show="editingId !== idee.id">
+            <div class="idee-actions" x-show="editingId !== idee.id && movingId !== idee.id">
               <button type="button" @click="toggleErledigtIdee(idee)" :disabled="busy" :title="$app.t('ideen.markDone')" x-text="$app.t('ideen.markDone')"></button>
               <button type="button" @click="startEditIdee(idee)" :disabled="busy" :title="$app.t('ideen.edit')" x-text="$app.t('ideen.edit')"></button>
+              <button type="button" @click="startMoveIdee(idee)" :disabled="busy" :title="$app.t('ideen.move')" x-text="$app.t('ideen.move')"></button>
               <button type="button" class="idee-delete-btn" @click="deleteIdee(idee)" :disabled="busy" :title="$app.t('ideen.delete')" x-text="$app.t('ideen.delete')"></button>
             </div>
           </div>

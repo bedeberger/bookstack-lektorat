@@ -271,6 +271,65 @@ function _isBlankTrailing(node) {
 }
 
 /**
+ * Reduziert Runs aufeinanderfolgender Leerblöcke (`<p></p>`, `<p><br></p>`,
+ * `<p>&nbsp;</p>`, top-level `<br>`) auf je einen Block und Runs von `<br>`
+ * innerhalb von Inline-Kontext (z.B. `<p>foo<br><br>bar</p>`) auf ein einzelnes
+ * `<br>`. Ein einzelner Leerblock bleibt als bewusste Absatz-Trennung erhalten.
+ * Idempotent. Nutzt DOMParser, keine Script-Side-Effects.
+ */
+export function collapseEmptyBlocks(html) {
+  if (!html) return html;
+  const doc = new DOMParser().parseFromString('<div id="r">' + html + '</div>', 'text/html');
+  const root = doc.getElementById('r');
+  if (!root) return html;
+
+  // Top-Level: Run von Leerblöcken → erster Block bleibt, Rest weg.
+  let node = root.firstChild;
+  while (node) {
+    const next = node.nextSibling;
+    if (_isBlankTrailing(node)) {
+      let probe = next;
+      while (probe) {
+        const probeNext = probe.nextSibling;
+        if (probe.nodeType === 3 && !probe.textContent.replace(/ /g, ' ').trim()) {
+          probe.remove();
+          probe = probeNext;
+          continue;
+        }
+        if (_isBlankTrailing(probe)) {
+          probe.remove();
+          probe = probeNext;
+          continue;
+        }
+        break;
+      }
+    }
+    node = next;
+  }
+
+  // Inline: aufeinanderfolgende `<br>` (auch durch Whitespace getrennt) → ein `<br>`.
+  root.querySelectorAll('br').forEach(br => {
+    let s = br.nextSibling;
+    while (s) {
+      const sn = s.nextSibling;
+      if (s.nodeType === 3 && !s.textContent.replace(/ /g, ' ').trim()) {
+        s.remove();
+        s = sn;
+        continue;
+      }
+      if (s.nodeType === 1 && s.tagName === 'BR') {
+        s.remove();
+        s = sn;
+        continue;
+      }
+      break;
+    }
+  });
+
+  return root.innerHTML;
+}
+
+/**
  * Entfernt leere Absätze am Ende des HTML. contenteditable hängt beim Tippen
  * oft `<p><br></p>`/`<p>&nbsp;</p>` an; ohne Strip wachsen beim jedem Save
  * weitere Leerabsätze hinten ans BookStack-HTML. Idempotent, Top-Level only.

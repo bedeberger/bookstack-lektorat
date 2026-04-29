@@ -11,6 +11,8 @@ export function registerIdeenCard() {
     newContent: '',
     editingId: null,
     editingDraft: '',
+    movingId: null,
+    moveTargetId: '',
     loading: false,
     busy: false,
     errorMessage: '',

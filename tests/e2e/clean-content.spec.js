@@ -34,3 +34,42 @@ test('cleanContentArtefacts strips paste artefacts but keeps structure + img sty
   expect(cleanMeta).not.toContain('<meta');
   expect(cleanMeta).toContain('<p>hi</p>');
 });
+
+test('collapseEmptyBlocks reduces empty paragraph + br runs to one', async ({ page }) => {
+  await page.goto('http://localhost:8765/tests/fixtures/focus-harness.html');
+  await page.addScriptTag({
+    type: 'module',
+    content: `import { collapseEmptyBlocks } from '/public/js/utils.js';
+              window.__collapse = collapseEmptyBlocks;`,
+  });
+  await page.waitForFunction(() => typeof window.__collapse === 'function');
+
+  // Run mehrerer leerer Absätze → einer bleibt
+  const multi = '<p>foo</p><p></p><p><br></p><p>&nbsp;</p><p>bar</p>';
+  const r1 = await page.evaluate(s => window.__collapse(s), multi);
+  expect(r1).toBe('<p>foo</p><p></p><p>bar</p>');
+
+  // Einzelner Leerblock zwischen Inhalt bleibt erhalten
+  const single = '<p>a</p><p></p><p>b</p>';
+  const r2 = await page.evaluate(s => window.__collapse(s), single);
+  expect(r2).toBe('<p>a</p><p></p><p>b</p>');
+
+  // <br><br> innerhalb <p> → ein <br>
+  const inlineBr = '<p>foo<br><br>bar</p>';
+  const r3 = await page.evaluate(s => window.__collapse(s), inlineBr);
+  expect(r3).toBe('<p>foo<br>bar</p>');
+
+  // Top-Level <br><br> + leerer <p> als gemischter Run
+  const mixed = '<p>x</p><br><br><p></p><p>y</p>';
+  const r4 = await page.evaluate(s => window.__collapse(s), mixed);
+  expect(r4).toBe('<p>x</p><br><p>y</p>');
+
+  // Idempotent
+  const r5 = await page.evaluate(s => window.__collapse(window.__collapse(s)), multi);
+  expect(r5).toBe(r1);
+
+  // Inhalt unangetastet
+  const clean = '<p>a</p><p>b</p><p>c</p>';
+  const r6 = await page.evaluate(s => window.__collapse(s), clean);
+  expect(r6).toBe(clean);
+});

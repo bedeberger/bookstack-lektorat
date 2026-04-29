@@ -1,4 +1,4 @@
-import { htmlToText, stripFocusArtefacts, cleanContentArtefacts, stripTrailingEmptyBlocks } from './utils.js';
+import { htmlToText, stripFocusArtefacts, cleanContentArtefacts, collapseEmptyBlocks, stripTrailingEmptyBlocks } from './utils.js';
 import { sortByPosition, buildHighlightedHtml } from './page-view.js';
 import { installEditCounter } from './editor-focus.js';
 
@@ -31,7 +31,7 @@ function stripLektoratMarks(html) {
     });
     out = tmp.innerHTML;
   }
-  return stripTrailingEmptyBlocks(cleanContentArtefacts(stripFocusArtefacts(out)));
+  return stripTrailingEmptyBlocks(collapseEmptyBlocks(cleanContentArtefacts(stripFocusArtefacts(out))));
 }
 
 // Vergleichs-Normalform: roher BookStack-HTML und Browser-contenteditable-HTML
@@ -236,6 +236,11 @@ export const editorEditMethods = {
         this.setStatus(this.t('edit.changesSaved'), false, 2000);
         return;
       }
+      // editDirty kann durch startEdit-Normalize gesetzt sein, obwohl der
+      // tatsächliche Inhalt sich nicht von normalizeForCompare(original)
+      // unterscheidet. cancelEdit darf hier NICHT den Verwerfen-Dialog
+      // zeigen — wir sind im Save-Flow, nicht im Cancel-Flow.
+      this.editDirty = false;
       this.cancelEdit();
       return;
     }
