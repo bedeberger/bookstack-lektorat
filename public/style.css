@@ -6009,6 +6009,10 @@ body.focus-mode .edit-find { display: none !important; }
 }
 .idee-move-combo { flex: 1 1 180px; min-width: 0; }
 .idee-content--moving { opacity: 0.5; }
+.idee-item--moving {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
 
 /* === Safari < 16.2 Fallback ===
    color-mix() ist erst ab Safari 16.2 verfügbar. Für ältere Versionen

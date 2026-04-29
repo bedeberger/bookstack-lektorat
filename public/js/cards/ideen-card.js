@@ -32,6 +32,20 @@ export function registerIdeenCard() {
         if (window.__app.showIdeenCard) await this.loadIdeen();
       });
 
+      // Move-Picker neben aktive Idee verschieben (DOM-Move, weil Combobox
+      // in x-for nicht sauber initialisiert — daher Single-Panel ausserhalb).
+      this.$watch('movingId', (id) => {
+        const panel = this.$el.querySelector('.idee-move-panel');
+        if (!panel) return;
+        if (id === null) {
+          const list = this.$el.querySelector('.ideen-list');
+          if (list && panel.nextSibling !== list) this.$el.insertBefore(panel, list);
+          return;
+        }
+        const item = this.$el.querySelector(`[data-idee-id="${id}"]`);
+        if (item && item.parentNode) item.parentNode.insertBefore(panel, item.nextSibling);
+      });
+
       this._onIdeenReset = () => this.resetIdeen();
       window.addEventListener('ideen:reset', this._onIdeenReset);
 

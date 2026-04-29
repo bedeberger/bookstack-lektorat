@@ -63,36 +63,30 @@
     </div>
 
     <div class="book-settings-row">
-      <label class="book-settings-label" for="bs-buchtyp" x-text="$app.t('book.settings.buchtyp')"></label>
-      <select id="bs-buchtyp" class="book-settings-select" x-model="bookSettingsBuchtyp">
-        <option value="" x-text="$app.t('book.settings.buchtyp.none')"></option>
-        <template x-for="typ in bookSettingsBuchtypen()" :key="typ.key">
-          <option :value="typ.key" x-text="typ.label"></option>
-        </template>
-      </select>
+      <label class="book-settings-label" x-text="$app.t('book.settings.buchtyp')"></label>
+      <div x-data="combobox($app.t('book.settings.buchtyp'), $app.t('book.settings.buchtyp.none'))"
+           x-modelable="value" x-model="bookSettingsBuchtyp"
+           x-effect="options = bookSettingsBuchtypOptions()"
+           @click.outside="close()" @keydown="onKeydown($event)"
+           class="combobox-wrap combobox-wrap--compact"></div>
     </div>
 
     <div class="book-settings-row">
-      <label class="book-settings-label" for="bs-pov" x-text="$app.t('book.settings.pov')"></label>
-      <select id="bs-pov" class="book-settings-select" x-model="bookSettingsErzaehlperspektive">
-        <option value="" x-text="$app.t('book.settings.pov.none')"></option>
-        <option value="ich" x-text="$app.t('book.settings.pov.ich')"></option>
-        <option value="er_sie_personal" x-text="$app.t('book.settings.pov.er_personal')"></option>
-        <option value="er_sie_auktorial" x-text="$app.t('book.settings.pov.er_auktorial')"></option>
-        <option value="du" x-text="$app.t('book.settings.pov.du')"></option>
-        <option value="wir" x-text="$app.t('book.settings.pov.wir')"></option>
-        <option value="gemischt" x-text="$app.t('book.settings.pov.gemischt')"></option>
-      </select>
+      <label class="book-settings-label" x-text="$app.t('book.settings.pov')"></label>
+      <div x-data="combobox($app.t('book.settings.pov'), $app.t('book.settings.pov.none'))"
+           x-modelable="value" x-model="bookSettingsErzaehlperspektive"
+           x-effect="options = bookSettingsPovOptions()"
+           @click.outside="close()" @keydown="onKeydown($event)"
+           class="combobox-wrap combobox-wrap--compact"></div>
     </div>
 
     <div class="book-settings-row">
-      <label class="book-settings-label" for="bs-tempus" x-text="$app.t('book.settings.tempus')"></label>
-      <select id="bs-tempus" class="book-settings-select" x-model="bookSettingsErzaehlzeit">
-        <option value="" x-text="$app.t('book.settings.tempus.none')"></option>
-        <option value="praeteritum" x-text="$app.t('book.settings.tempus.praeteritum')"></option>
-        <option value="praesens" x-text="$app.t('book.settings.tempus.praesens')"></option>
-        <option value="gemischt" x-text="$app.t('book.settings.tempus.gemischt')"></option>
-      </select>
+      <label class="book-settings-label" x-text="$app.t('book.settings.tempus')"></label>
+      <div x-data="combobox($app.t('book.settings.tempus'), $app.t('book.settings.tempus.none'))"
+           x-modelable="value" x-model="bookSettingsErzaehlzeit"
+           x-effect="options = bookSettingsTempusOptions()"
+           @click.outside="close()" @keydown="onKeydown($event)"
+           class="combobox-wrap combobox-wrap--compact"></div>
     </div>
 
     <p class="book-settings-hint"

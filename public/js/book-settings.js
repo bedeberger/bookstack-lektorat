@@ -72,6 +72,31 @@ export const bookSettingsMethods = {
     return Object.entries(typen).map(([key, val]) => ({ key, label: val.label }));
   },
 
+  bookSettingsBuchtypOptions() {
+    return this.bookSettingsBuchtypen().map(t => ({ value: t.key, label: t.label }));
+  },
+
+  bookSettingsPovOptions() {
+    const app = window.__app;
+    return [
+      { value: 'ich',                label: app.t('book.settings.pov.ich') },
+      { value: 'er_sie_personal',    label: app.t('book.settings.pov.er_personal') },
+      { value: 'er_sie_auktorial',   label: app.t('book.settings.pov.er_auktorial') },
+      { value: 'du',                 label: app.t('book.settings.pov.du') },
+      { value: 'wir',                label: app.t('book.settings.pov.wir') },
+      { value: 'gemischt',           label: app.t('book.settings.pov.gemischt') },
+    ];
+  },
+
+  bookSettingsTempusOptions() {
+    const app = window.__app;
+    return [
+      { value: 'praeteritum', label: app.t('book.settings.tempus.praeteritum') },
+      { value: 'praesens',    label: app.t('book.settings.tempus.praesens') },
+      { value: 'gemischt',    label: app.t('book.settings.tempus.gemischt') },
+    ];
+  },
+
   // Buch-Export: Blob-Download mit Loading-Indicator. Plain-Anchor-Download wäre
   // einfacher, lässt aber keinen Spinner zu — BookStack-PDF-Render kann 30-60 s
   // brauchen, da soll der User sehen, dass etwas läuft.

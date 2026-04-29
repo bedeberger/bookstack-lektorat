@@ -49,7 +49,7 @@
       <div class="ideen-section">
         <div class="ideen-section-title" x-text="$app.t('ideen.sectionOpen')"></div>
         <template x-for="idee in offeneIdeen()" :key="idee.id">
-          <div class="idee-item">
+          <div class="idee-item" :class="{'idee-item--moving': movingId === idee.id}" :data-idee-id="idee.id">
             <div class="idee-status-badge" x-text="$app.t('ideen.statusOpen')"></div>
             <template x-if="editingId !== idee.id">
               <div class="idee-content" :class="movingId === idee.id ? 'idee-content--moving' : ''" x-text="idee.content"></div>

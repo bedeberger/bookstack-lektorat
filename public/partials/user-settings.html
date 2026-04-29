@@ -102,26 +102,24 @@
     </div>
 
     <div class="book-settings-row" x-show="userSettingsDefaultLanguage">
-      <label class="book-settings-label" for="us-buchtyp" x-text="$app.t('profile.defaultBuchtyp')"></label>
-      <select id="us-buchtyp" class="book-settings-select" x-model="userSettingsDefaultBuchtyp">
-        <option value="" x-text="$app.t('common.notSet')"></option>
-        <template x-for="typ in userSettingsBuchtypen()" :key="typ.key">
-          <option :value="typ.key" x-text="typ.label"></option>
-        </template>
-      </select>
+      <label class="book-settings-label" x-text="$app.t('profile.defaultBuchtyp')"></label>
+      <div x-data="combobox($app.t('profile.defaultBuchtyp'), $app.t('common.notSet'))"
+           x-modelable="value" x-model="userSettingsDefaultBuchtyp"
+           x-effect="options = userSettingsBuchtypOptions()"
+           @click.outside="close()" @keydown="onKeydown($event)"
+           class="combobox-wrap combobox-wrap--compact"></div>
     </div>
 
     <p class="book-settings-section-divider" x-text="$app.t('profile.editorSection')"></p>
 
     <div class="book-settings-row">
-      <label class="book-settings-label" for="us-focus-granularity" x-text="$app.t('profile.focusGranularity')"></label>
+      <label class="book-settings-label" x-text="$app.t('profile.focusGranularity')"></label>
       <div class="book-settings-field">
-        <select id="us-focus-granularity" class="book-settings-select" x-model="userSettingsFocusGranularity">
-          <option value="paragraph"       x-text="$app.t('profile.focus.paragraph')"></option>
-          <option value="sentence"        x-text="$app.t('profile.focus.sentence')"></option>
-          <option value="window-3"        x-text="$app.t('profile.focus.window3')"></option>
-          <option value="typewriter-only" x-text="$app.t('profile.focus.typewriterOnly')"></option>
-        </select>
+        <div x-data="combobox($app.t('profile.focusGranularity'))"
+             x-modelable="value" x-model="userSettingsFocusGranularity"
+             x-effect="options = userSettingsFocusOptions()"
+             @click.outside="close()" @keydown="onKeydown($event)"
+             class="combobox-wrap combobox-wrap--compact"></div>
         <p class="book-settings-field-note" x-text="$app.t('profile.focusGranularityHint')"></p>
       </div>
     </div>
@@ -134,12 +132,11 @@
       <div class="book-settings-danger-row">
         <div class="book-settings-danger-text" x-text="$app.t('profile.dangerText')"></div>
         <div class="book-settings-danger-actions">
-          <select class="book-settings-select" x-model="userSettingsDangerBookId" :aria-label="$app.t('common.chooseBook')">
-            <option value="" x-text="$app.t('common.chooseBook')"></option>
-            <template x-for="b in $app.books" :key="b.id">
-              <option :value="b.id" x-text="b.name"></option>
-            </template>
-          </select>
+          <div x-data="combobox($app.t('common.chooseBook'))"
+               x-modelable="value" x-model="userSettingsDangerBookId"
+               x-effect="options = userSettingsDangerBookOptions()"
+               @click.outside="close()" @keydown="onKeydown($event)"
+               class="combobox-wrap combobox-wrap--compact"></div>
           <button type="button"
             class="book-settings-btn-danger"
             @click="resetBookHistory()"

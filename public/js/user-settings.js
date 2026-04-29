@@ -94,4 +94,22 @@ export const userSettingsMethods = {
     const typen = window.__app.promptConfig?.buchtypen?.[lang] || {};
     return Object.entries(typen).map(([key, val]) => ({ key, label: val.label }));
   },
+
+  userSettingsBuchtypOptions() {
+    return this.userSettingsBuchtypen().map(t => ({ value: t.key, label: t.label }));
+  },
+
+  userSettingsFocusOptions() {
+    const app = window.__app;
+    return [
+      { value: 'paragraph',       label: app.t('profile.focus.paragraph') },
+      { value: 'sentence',        label: app.t('profile.focus.sentence') },
+      { value: 'window-3',        label: app.t('profile.focus.window3') },
+      { value: 'typewriter-only', label: app.t('profile.focus.typewriterOnly') },
+    ];
+  },
+
+  userSettingsDangerBookOptions() {
+    return (window.__app.books || []).map(b => ({ value: b.id, label: b.name }));
+  },
 };
