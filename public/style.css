@@ -342,6 +342,42 @@
   outline-offset: 2px;
 }
 
+/* Skip-Link: standardmässig optisch versteckt, beim Fokussieren sichtbar
+   in der oberen linken Ecke. Greift Screenreader- und Tastatur-User früh ab. */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -3rem;
+  z-index: 1000;
+  background: var(--color-primary);
+  color: var(--color-on-primary, #fff);
+  padding: 0.5rem 0.875rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 0.5rem;
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Tree-Pfeil-Navigation: Page-Items sind tabbar; sichtbarer Fokus muss klar
+   abgrenzbar sein vom .selected-Zustand. */
+.page-item:focus-visible,
+.tree-chapter-header:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+/* Findings-Label bekommt bei Tastaturfokus (Alt+J/K) sichtbaren Rahmen. */
+.lektorat-split-findings .finding:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* Barrierefreiheit: Animationen bei System-Präferenz ausschalten */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -1263,6 +1299,13 @@ select:focus {
   border: 0.5px solid var(--color-border-focus);
   border-top: none;
   box-shadow: 0 4px 14px var(--color-shadow-soft);
+}
+.combobox-dropdown--up {
+  top: auto;
+  bottom: 100%;
+  border-top: 0.5px solid var(--color-border-focus);
+  border-bottom: none;
+  box-shadow: 0 -4px 14px var(--color-shadow-soft);
 }
 .combobox-search {
   display: block;
@@ -5630,6 +5673,64 @@ body.focus-mode .edit-find { display: none !important; }
   flex-wrap: wrap;
 }
 
+/* === Confirm-Dialog (Ersatz für window.confirm) === */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 11000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.confirm-dialog {
+  background: var(--color-card-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 16px 48px var(--color-shadow-strong);
+  max-width: 480px;
+  width: 100%;
+  padding: 1.25rem 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+.confirm-dialog-message {
+  font-size: var(--font-size-base, 0.95rem);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.confirm-dialog-btn {
+  padding: 0.45rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.confirm-dialog-btn:hover { background: var(--color-hover-light); }
+.confirm-dialog-btn--primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary, #fff);
+  border-color: var(--color-primary);
+}
+.confirm-dialog-btn--primary:hover { background: var(--color-primary-hover); }
+.confirm-dialog-btn--danger {
+  background: var(--color-err-text, #b91c1c);
+  color: var(--color-surface);
+  border-color: var(--color-err-text, #b91c1c);
+}
+.confirm-dialog-btn--danger:hover { background: var(--color-session-banner-btn-hover, #7a1f1f); }
+
 @media (max-width: 600px) {
   .book-settings-row {
     grid-template-columns: 1fr;
@@ -5963,7 +6064,7 @@ body.focus-mode .edit-find { display: none !important; }
   position: relative;
   border: 0.5px solid var(--color-border);
   background: var(--color-bg);
-  padding: 10px 12px;
+  padding: 10px 38px 10px 12px;
   margin-bottom: 6px;
   border-radius: var(--radius-sm);
 }
@@ -5990,18 +6091,64 @@ body.focus-mode .edit-find { display: none !important; }
 }
 .idee-edit { display: flex; flex-direction: column; gap: 6px; }
 .idee-edit-actions { display: flex; gap: 6px; justify-content: flex-end; }
-.idee-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-.idee-actions button,
 .idee-edit-actions button {
   font-size: var(--font-size-xs);
   padding: 3px 8px;
 }
-.idee-delete-btn { color: var(--color-danger, #c62828); }
+.idee-menu {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+.idee-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0.5px solid transparent;
+  background: transparent;
+  color: var(--color-muted);
+  border-radius: var(--radius-sm);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.idee-menu-btn:hover:not(:disabled),
+.idee-menu-btn[aria-expanded="true"] {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+.idee-menu-btn:disabled { opacity: 0.4; cursor: default; }
+.idee-menu-popover {
+  position: fixed;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+}
+.idee-menu-popover-inner {
+  display: flex;
+  flex-direction: column;
+}
+.idee-menu-popover button {
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 6px 10px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.idee-menu-popover button:hover:not(:disabled) { background: var(--color-bg); }
+.idee-menu-popover button:disabled { opacity: 0.5; cursor: default; }
+.idee-menu-popover .idee-menu-item--danger { color: var(--color-danger, #c62828); }
 .ideen-move-label {
   font-size: var(--font-size-xs);
   color: var(--color-subtle);

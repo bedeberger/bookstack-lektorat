@@ -2,7 +2,9 @@
 <div class="shortcuts-overlay" x-show="showShortcutsOverlay" x-cloak x-transition.opacity
      @click.self="closeShortcutsOverlay()"
      @keydown.escape.window="showShortcutsOverlay && closeShortcutsOverlay()">
-  <div class="shortcuts-panel" role="dialog" aria-modal="true" :aria-label="t('shortcuts.title')">
+  <div class="shortcuts-panel" role="dialog" aria-modal="true" :aria-label="t('shortcuts.title')"
+       x-effect="if (showShortcutsOverlay) { $nextTick(() => { const btn = $el.querySelector('.shortcuts-close'); if (btn) btn.focus(); }); }"
+       @keydown="trapFocus($event, $el)">
     <div class="shortcuts-header">
       <span class="shortcuts-title" x-text="t('shortcuts.title')"></span>
       <button type="button" class="shortcuts-close" @click="closeShortcutsOverlay()" :title="t('common.close')" :aria-label="t('common.close')">&#x2715;</button>
@@ -81,6 +83,89 @@
       <div class="shortcuts-row">
         <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.esc')"></kbd></span>
         <span class="shortcuts-desc" x-text="t('shortcuts.item.searchClear')"></span>
+      </div>
+    </div>
+
+    <div class="shortcuts-section">
+      <div class="shortcuts-section-title" x-text="t('shortcuts.section.cards')"></div>
+      <div class="shortcuts-row shortcuts-row--hint">
+        <span class="shortcuts-desc" x-text="t('shortcuts.chord.hint', { lead: 'g' })"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>r</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardReview')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>f</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardFiguren')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>s</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardSzenen')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>e</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardEreignisse')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>o</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardOrte')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>k</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardKontinuitaet')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>t</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardStil')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>h</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardHeatmap')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>b</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardStats')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>c</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardChat')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>i</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardIdeen')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>,</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardUserSettings')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>;</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardBookSettings')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>x</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardFinetune')"></span>
+      </div>
+    </div>
+
+    <div class="shortcuts-section">
+      <div class="shortcuts-section-title" x-text="t('shortcuts.section.navigation')"></div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.tab')"></kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.skipLink')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.arrows')"></kbd> / <kbd x-text="t('shortcuts.key.enter')"></kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.treeArrows')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.arrowsLR')"></kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.treeChapter')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.alt')"></kbd>+<kbd>J</kbd> / <kbd x-text="t('shortcuts.key.alt')"></kbd>+<kbd>K</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.findingsNav')"></span>
       </div>
     </div>
 

@@ -30,6 +30,10 @@ export function registerChatCard() {
       this.$watch(() => window.__app.showChatCard, async (visible) => {
         if (!visible) return;
         await this._onVisibleChat();
+        this.$nextTick(() => {
+          const ta = this.$el?.querySelector('.chat-input');
+          if (ta) ta.focus();
+        });
       });
 
       // Beim Seitenwechsel Chat-Session komplett zurücksetzen — chat gehört

@@ -7,9 +7,11 @@
     <div x-show="findOpen && $app.editMode" x-cloak
          class="edit-find"
          role="dialog"
+         aria-modal="true"
          :aria-label="$app.t('find.title')"
          :style="{ left: findX + 'px', top: findY + 'px' }"
          @keydown.escape.stop="closeFind()"
+         @keydown="$app.trapFocus($event, $el)"
          @mousedown.stop>
       <div class="edit-find-row">
         <input type="text"

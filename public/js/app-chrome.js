@@ -108,4 +108,29 @@ export const appChromeMethods = {
     this.tokenSetupPw = '';
     this.tokenSetupError = '';
   },
+
+  // Custom Confirm-Dialog. Native window.confirm() reisst Chrome auf macOS aus
+  // dem nativen Vollbild-Space (zeigt Modal nur ausserhalb des Spaces) — nach
+  // dem Klick bleibt das Fenster im Standard-Modus. Bricht u.a. Focus-Mode-
+  // Cancel-Flow.
+  // Verwendung:
+  //   if (!await this.appConfirm({ message, confirmLabel?, cancelLabel?, danger? })) return;
+  appConfirm({ message, confirmLabel, cancelLabel, danger = false } = {}) {
+    if (this._confirmDialogResolve) {
+      try { this._confirmDialogResolve(false); } catch {}
+    }
+    this.confirmDialogMessage = message || '';
+    this.confirmDialogConfirmLabel = confirmLabel || this.t('common.confirm');
+    this.confirmDialogCancelLabel = cancelLabel || this.t('common.cancel');
+    this.confirmDialogDanger = !!danger;
+    this.confirmDialogOpen = true;
+    return new Promise(resolve => { this._confirmDialogResolve = resolve; });
+  },
+
+  _resolveConfirmDialog(value) {
+    const r = this._confirmDialogResolve;
+    this._confirmDialogResolve = null;
+    this.confirmDialogOpen = false;
+    if (r) r(value);
+  },
 };

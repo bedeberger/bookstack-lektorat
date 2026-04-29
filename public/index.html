@@ -39,8 +39,10 @@
       @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading && !focusMode) runCheck()"
       @keydown.ctrl.s.prevent.window="if (editMode) quickSave()"
       @keydown.meta.s.prevent.window="if (editMode) quickSave()"
-      @keydown.window="handleShortcutsHotkey($event); handleFocusHotkey($event); handleNavHotkey($event)"
+      @keydown.window="handleShortcutsHotkey($event); handleFocusHotkey($event); handleNavHotkey($event); handleChordHotkey($event); handleFindingsHotkey($event); handleTreeKeydown($event)"
       @app-update-available.window="updateAvailable = true">
+
+<a class="skip-link" href="#main-content" x-text="t('a11y.skipToMain')"></a>
 
 <div class="session-banner" x-show="sessionExpired" x-cloak>
   <span class="session-banner-text" x-text="t('session.expired')"></span>
@@ -105,7 +107,7 @@
              class="bookstack-search-input"
              x-model="bookstackSearch"
              @input="onBookstackSearchInput()"
-             @keydown.escape="clearBookstackSearch()"
+             @keydown.escape="clearBookstackSearch(); $event.target.blur()"
              @keydown.enter.prevent="selectActiveBookstackHit()"
              @keydown.arrow-down="onBookstackSearchKeydown($event)"
              @keydown.arrow-up="onBookstackSearchKeydown($event)"
@@ -189,7 +191,7 @@
 <div class="layout-sidebar">
   <div id="partial-sidebar"></div>
 </div><!-- end layout-sidebar -->
-<div class="layout-main">
+<div class="layout-main" id="main-content" tabindex="-1">
 <div id="partial-buchreview"></div>
 <div id="partial-kapitelreview"></div>
 <div id="partial-figuren"></div>
@@ -219,8 +221,26 @@
 </div><!-- end layout-main -->
 </div><!-- end layout -->
 
+<!-- Confirm-Dialog (Ersatz für window.confirm; siehe appConfirm in app-chrome.js) -->
+<div class="confirm-overlay" x-show="confirmDialogOpen" x-cloak
+     @keydown.escape.window="if (confirmDialogOpen) _resolveConfirmDialog(false)"
+     @click.self="_resolveConfirmDialog(false)">
+  <div class="confirm-dialog" role="alertdialog" aria-modal="true" :aria-label="confirmDialogMessage">
+    <div class="confirm-dialog-message" x-text="confirmDialogMessage"></div>
+    <div class="confirm-dialog-actions">
+      <button type="button" class="confirm-dialog-btn confirm-dialog-btn--cancel"
+              @click="_resolveConfirmDialog(false)" x-text="confirmDialogCancelLabel"></button>
+      <button type="button" class="confirm-dialog-btn"
+              :class="confirmDialogDanger ? 'confirm-dialog-btn--danger' : 'confirm-dialog-btn--primary'"
+              @click="_resolveConfirmDialog(true)"
+              x-init="$watch('confirmDialogOpen', v => { if (v) $nextTick(() => $el.focus()); })"
+              x-text="confirmDialogConfirmLabel"></button>
+    </div>
+  </div>
+</div>
+
 <!-- Job-Queue Footer -->
-<div class="job-queue-bar" x-show="jobQueueItems.length > 0" x-cloak>
+<div class="job-queue-bar" x-show="jobQueueItems.length > 0" x-cloak aria-live="polite" aria-atomic="false">
   <span class="job-queue-label" x-text="t('jobQueue.label')"></span>
   <template x-for="job in (jobQueueExpanded ? jobQueueItems : jobQueueItems.slice(0, 3))" :key="job.id">
     <div class="job-queue-pill" :class="'job-queue-pill--' + job.status" @click="navigateToJob(job)" :title="t('jobQueue.jumpTo')">

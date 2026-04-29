@@ -179,6 +179,53 @@ function reportError(tag, err) {
   try { console.error('[focus:' + tag + ']', err); } catch { /* last-resort swallow */ }
 }
 
+// Beim Eintritt in den Fokusmodus: Caret an Buchende. Letzter Absatz schon
+// leer → wiederverwenden, sonst neuen `<p><br></p>` anhängen. NICHT als
+// dirty markieren – der neue Absatz ist nur ein „Schreib-Slot". Tippt der
+// User darin, greift der reguläre `@input="_markEditDirty()"`-Handler.
+// Bleibt er leer und der User schliesst Focus-Mode wieder, räumt
+// exitFocusMode den Slot ab → keine Phantom-Revision in BookStack.
+// Nur „echte" leere `<p>` werden recycled (keine leeren Headings/Listen).
+function isEmptyParagraph(el) {
+  if (!el || el.tagName !== 'P') return false;
+  const txt = (el.textContent || '').replace(/ /g, ' ').trim();
+  return txt === '';
+}
+
+// Liefert das auto-erzeugte <p> zurück (oder null, falls bestehender leerer
+// Absatz recycelt wurde). Caller speichert die Referenz, um beim Exit gezielt
+// aufzuräumen statt blind den letzten leeren Block zu killen.
+function jumpToTrailingParagraph(container) {
+  if (!container) return null;
+  const last = container.lastElementChild;
+  let target;
+  let added = null;
+  if (isEmptyParagraph(last)) {
+    target = last;
+  } else {
+    const p = document.createElement('p');
+    p.appendChild(document.createElement('br'));
+    container.appendChild(p);
+    target = p;
+    added = p;
+  }
+  const range = document.createRange();
+  range.setStart(target, 0);
+  range.collapse(true);
+  const sel = document.getSelection();
+  if (sel) {
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  // Direkter Sync-Scroll auf den Ziel-Absatz. Vorher hing das am späteren
+  // `_focusUpdateActive(true)`-RAF, der je nach Layout-Timing den Delta-
+  // Threshold knapp riss → mal scrollte er, mal nicht. scrollIntoView ist
+  // synchron, triggert Reflow und ist deterministisch.
+  try { target.scrollIntoView({ block: 'center', behavior: 'auto' }); }
+  catch { /* alte Browser ohne ScrollIntoViewOptions */ }
+  return added;
+}
+
 function getScrollContainer() {
   // Fokusmodus läuft ausschliesslich im Edit-Modus (Guard in enterFocusMode),
   // also ist `--editing` immer der gewünschte Scroll-Container. Das frühere
@@ -791,6 +838,7 @@ export const focusCardMethods = {
 
     const editEl = document.querySelector('.page-content-view--editing');
     editEl?.focus();
+    this._focusAutoAddedP = jumpToTrailingParagraph(container);
   },
 
   _focusTeardown() {
@@ -815,6 +863,15 @@ export const focusCardMethods = {
     if (this._focusState !== 'active') return;
     this._focusState = 'exiting';
     const gen = ++this._focusGen;
+
+    // Auto-Slot vom Focus-Entry abräumen, falls User nichts reingeschrieben
+    // hat. Sonst würde der leere `<p>` als „Änderung" gespeichert werden und
+    // bei jedem Focus-Open eine BookStack-Revision erzeugen.
+    const autoP = this._focusAutoAddedP;
+    if (autoP && autoP.parentNode && isEmptyParagraph(autoP)) {
+      autoP.remove();
+    }
+    this._focusAutoAddedP = null;
 
     // Immer speichern beim Verlassen. UI bleibt optisch bis Save durch,
     // Event-Handler sind via _focusState='exiting' bereits stumm-geschaltet.

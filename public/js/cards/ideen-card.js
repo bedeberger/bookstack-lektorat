@@ -13,6 +13,9 @@ export function registerIdeenCard() {
     editingDraft: '',
     movingId: null,
     moveTargetId: '',
+    menuOpenId: null,
+    menuPos: { top: 0, left: 0 },
+    _menuCloseHandler: null,
     loading: false,
     busy: false,
     errorMessage: '',
@@ -22,10 +25,15 @@ export function registerIdeenCard() {
     _onIdeenReset: null,
 
     init() {
-      // Beim Öffnen + Page-Wechsel laden.
+      // Beim Öffnen + Page-Wechsel laden. Beim Öffnen Textarea fokussieren,
+      // damit User direkt eine neue Idee tippen kann (Tastatur-Workflow).
       this.$watch(() => window.__app.showIdeenCard, async (visible) => {
         if (!visible) return;
         await this.loadIdeen();
+        this.$nextTick(() => {
+          const ta = this.$el?.querySelector('.ideen-input');
+          if (ta) ta.focus();
+        });
       });
       this.$watch(() => window.__app.currentPage?.id, async (pid) => {
         if (!pid) { this.resetIdeen(); return; }
@@ -60,6 +68,7 @@ export function registerIdeenCard() {
       if (this._onIdeenReset)  window.removeEventListener('ideen:reset', this._onIdeenReset);
       if (this._onBookChanged) window.removeEventListener('book:changed', this._onBookChanged);
       if (this._onViewReset)   window.removeEventListener('view:reset', this._onViewReset);
+      this._detachMenuListeners?.();
     },
 
     ...ideenMethods,

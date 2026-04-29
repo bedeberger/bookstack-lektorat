@@ -17,7 +17,7 @@
       :aria-label="$app.t('ideen.placeholder')"
       rows="2"
       :disabled="busy"
-      @keydown.enter="if(!$event.isComposing && $event.keyCode !== 229 && ($event.ctrlKey || $event.metaKey)) { $event.preventDefault(); addIdee(); }"
+      @keydown.enter="if(!$event.isComposing && $event.keyCode !== 229 && !$event.shiftKey && !$event.ctrlKey && !$event.metaKey) { $event.preventDefault(); addIdee(); }"
     ></textarea>
     <button type="button"
       class="ideen-add-btn"
@@ -51,24 +51,66 @@
         <template x-for="idee in offeneIdeen()" :key="idee.id">
           <div class="idee-item" :class="{'idee-item--moving': movingId === idee.id}" :data-idee-id="idee.id">
             <div class="idee-status-badge" x-text="$app.t('ideen.statusOpen')"></div>
+            <div class="idee-menu" x-show="editingId !== idee.id && movingId !== idee.id">
+              <button type="button"
+                class="idee-menu-btn"
+                @click.stop="openMenu($event, idee)"
+                :disabled="busy"
+                :aria-label="$app.t('ideen.actions')"
+                :aria-expanded="menuOpenId === idee.id"
+                aria-haspopup="menu">⋯</button>
+            </div>
             <template x-if="editingId !== idee.id">
               <div class="idee-content" :class="movingId === idee.id ? 'idee-content--moving' : ''" x-text="idee.content"></div>
             </template>
             <template x-if="editingId === idee.id">
               <div class="idee-edit">
-                <textarea class="ideen-input" x-model="editingDraft" rows="3" :disabled="busy"></textarea>
+                <textarea class="ideen-input" x-model="editingDraft" rows="3" :disabled="busy"
+                  @keydown.enter="if(!$event.isComposing && $event.keyCode !== 229 && !$event.shiftKey && !$event.ctrlKey && !$event.metaKey) { $event.preventDefault(); saveEditIdee(idee); }"
+                  @keydown.escape="cancelEditIdee()"></textarea>
                 <div class="idee-edit-actions">
                   <button type="button" @click="saveEditIdee(idee)" :disabled="busy" x-text="$app.t('ideen.save')"></button>
                   <button type="button" @click="cancelEditIdee()" :disabled="busy" x-text="$app.t('ideen.cancel')"></button>
                 </div>
               </div>
             </template>
-            <div class="idee-actions" x-show="editingId !== idee.id && movingId !== idee.id">
-              <button type="button" @click="toggleErledigtIdee(idee)" :disabled="busy" :title="$app.t('ideen.markDone')" x-text="$app.t('ideen.markDone')"></button>
-              <button type="button" @click="startEditIdee(idee)" :disabled="busy" :title="$app.t('ideen.edit')" x-text="$app.t('ideen.edit')"></button>
-              <button type="button" @click="startMoveIdee(idee)" :disabled="busy" :title="$app.t('ideen.move')" x-text="$app.t('ideen.move')"></button>
-              <button type="button" class="idee-delete-btn" @click="deleteIdee(idee)" :disabled="busy" :title="$app.t('ideen.delete')" x-text="$app.t('ideen.delete')"></button>
-            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <!-- Single-Instance Popover für Meatball-Menü.
+         Via x-teleport zu <body>, weil .ideen-list im Split-View einen
+         Scroll-Container darstellt (max-height + overflow-y) und ein
+         lokales position:absolute-Popover dort abgeschnitten würde. -->
+    <template x-teleport="body">
+      <div class="idee-menu-popover idee-menu-popover--portal"
+           x-show="menuOpenId !== null && !!menuOpenIdee()" x-cloak
+           :style="`top:${menuPos.top}px;left:${menuPos.left}px`"
+           @click.outside="closeMenu()"
+           @keydown.escape.window="closeMenu()"
+           role="menu">
+        <template x-if="menuOpenIdee()">
+          <div class="idee-menu-popover-inner">
+            <button type="button" role="menuitem"
+                    x-show="!menuOpenIdee().erledigt"
+                    @click.stop="toggleErledigtIdee(menuOpenIdee()); closeMenu()"
+                    :disabled="busy" x-text="$app.t('ideen.markDone')"></button>
+            <button type="button" role="menuitem"
+                    x-show="menuOpenIdee().erledigt"
+                    @click.stop="toggleErledigtIdee(menuOpenIdee()); closeMenu()"
+                    :disabled="busy" x-text="$app.t('ideen.markOpen')"></button>
+            <button type="button" role="menuitem"
+                    x-show="!menuOpenIdee().erledigt"
+                    @click.stop="startEditIdee(menuOpenIdee()); closeMenu()"
+                    :disabled="busy" x-text="$app.t('ideen.edit')"></button>
+            <button type="button" role="menuitem"
+                    x-show="!menuOpenIdee().erledigt"
+                    @click.stop="startMoveIdee(menuOpenIdee()); closeMenu()"
+                    :disabled="busy" x-text="$app.t('ideen.move')"></button>
+            <button type="button" role="menuitem" class="idee-menu-item--danger"
+                    @click.stop="deleteIdee(menuOpenIdee()); closeMenu()"
+                    :disabled="busy" x-text="$app.t('ideen.delete')"></button>
           </div>
         </template>
       </div>
@@ -81,11 +123,16 @@
         <template x-for="idee in erledigteIdeen()" :key="idee.id">
           <div class="idee-item idee-item--erledigt">
             <div class="idee-status-badge idee-status-badge--erledigt" x-text="$app.t('ideen.statusDone')"></div>
-            <div class="idee-content" x-text="idee.content"></div>
-            <div class="idee-actions">
-              <button type="button" @click="toggleErledigtIdee(idee)" :disabled="busy" x-text="$app.t('ideen.markOpen')"></button>
-              <button type="button" class="idee-delete-btn" @click="deleteIdee(idee)" :disabled="busy" x-text="$app.t('ideen.delete')"></button>
+            <div class="idee-menu">
+              <button type="button"
+                class="idee-menu-btn"
+                @click.stop="openMenu($event, idee)"
+                :disabled="busy"
+                :aria-label="$app.t('ideen.actions')"
+                :aria-expanded="menuOpenId === idee.id"
+                aria-haspopup="menu">⋯</button>
             </div>
+            <div class="idee-content" x-text="idee.content"></div>
           </div>
         </template>
       </div>

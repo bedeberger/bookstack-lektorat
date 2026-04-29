@@ -32,12 +32,23 @@
       <template x-if="item.type === 'chapter'">
         <div class="tree-chapter">
           <div class="tree-chapter-header"
+               role="button"
+               :tabindex="item.pages.length === 0 ? -1 : 0"
+               :aria-expanded="item.pages.length > 0 ? (item.open ? 'true' : 'false') : null"
                :class="{
                  disabled: item.pages.length === 0,
                  'tree-chapter-header--active': showKapitelReviewCard && String(kapitelReviewChapterId) === String(item.id),
                  'tree-chapter-header--reviewable': _bookQualifiesForChapterReview() && item.pages.length > 0,
                }"
                :title="_bookQualifiesForChapterReview() && item.pages.length > 0 && !pageSearch ? t('sidebar.reviewChapterTitle', { name: item.name }) : ''"
+               @keydown.enter.prevent="if (pageSearch || item.pages.length === 0) return;
+                       if (_bookQualifiesForChapterReview()) openKapitelReviewForChapter(item.id);
+                       else item.open = !item.open"
+               @keydown.space.prevent="if (pageSearch || item.pages.length === 0) return;
+                       if (_bookQualifiesForChapterReview()) openKapitelReviewForChapter(item.id);
+                       else item.open = !item.open"
+               @keydown.arrow-right.prevent="if (item.pages.length > 0 && !item.open) item.open = true"
+               @keydown.arrow-left.prevent="if (item.pages.length > 0 && item.open) item.open = false"
                @click="if (pageSearch || item.pages.length === 0) return;
                        if (_bookQualifiesForChapterReview()) openKapitelReviewForChapter(item.id);
                        else item.open = !item.open">
@@ -56,7 +67,7 @@
           </div>
           <div x-show="item.open" class="tree-chapter-pages">
             <template x-for="page in item.pages" :key="page.id">
-              <div class="page-item" :class="{ selected: currentPage?.id === page.id, 'page-item--empty': tokEsts[page.id] && tokEsts[page.id].words === 0, 'page-item--kb-active': _pageSearchActivePageId() ===page.id }" :data-page-id="page.id" @click="selectPage(page)">
+              <div class="page-item" :class="{ selected: currentPage?.id === page.id, 'page-item--empty': tokEsts[page.id] && tokEsts[page.id].words === 0, 'page-item--kb-active': _pageSearchActivePageId() ===page.id }" :data-page-id="page.id" role="button" tabindex="0" :aria-current="currentPage?.id === page.id ? 'page' : null" @click="selectPage(page)">
                 <span class="page-name">
                   <span class="page-status-dot" :class="'page-status-' + pageStatus(page)"
                     @mouseenter.stop="const r=$el.getBoundingClientRect(); pageStatusTipPos={x:r.left,y:r.top}; pageStatusTipText=pageStatusTooltip(page); showPageStatusTip=true"
@@ -82,7 +93,7 @@
         </div>
       </template>
       <template x-if="item.type === 'page'">
-        <div class="page-item" :class="{ selected: currentPage?.id === item.page.id, 'page-item--kb-active': _pageSearchActivePageId() ===item.page.id }" :data-page-id="item.page.id" @click="selectPage(item.page)">
+        <div class="page-item" :class="{ selected: currentPage?.id === item.page.id, 'page-item--kb-active': _pageSearchActivePageId() ===item.page.id }" :data-page-id="item.page.id" role="button" tabindex="0" :aria-current="currentPage?.id === item.page.id ? 'page' : null" @click="selectPage(item.page)">
           <span class="page-name">
             <span class="page-status-dot" :class="'page-status-' + pageStatus(item.page)"
               @mouseenter.stop="const r=$el.getBoundingClientRect(); pageStatusTipPos={x:r.left,y:r.top}; pageStatusTipText=pageStatusTooltip(item.page); showPageStatusTip=true"

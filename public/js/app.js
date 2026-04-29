@@ -225,6 +225,7 @@ document.addEventListener('alpine:init', () => {
     _placeholder: placeholder,
     _emptyLabel: emptyLabel,
     highlighted: -1,
+    openUp: false,
 
     get placeholder() {
       return this._placeholder ?? window.__app?.t?.('common.choose') ?? 'Auswählen…';
@@ -254,12 +255,26 @@ document.addEventListener('alpine:init', () => {
       this.open = true;
       this.query = '';
       this.highlighted = this._allOptions.findIndex(o => String(o.value) === String(this.value));
-      this.$nextTick(() => this.$refs.cbInput?.focus());
+      this.$nextTick(() => {
+        this._decideOpenDirection();
+        this.$refs.cbInput?.focus();
+      });
+    },
+    _decideOpenDirection() {
+      const trigger = this.$el.querySelector('.combobox-trigger');
+      const dropdown = this.$el.querySelector('.combobox-dropdown');
+      if (!trigger || !dropdown) { this.openUp = false; return; }
+      const triggerRect = trigger.getBoundingClientRect();
+      const dropdownH = dropdown.getBoundingClientRect().height || 250;
+      const spaceBelow = window.innerHeight - triggerRect.bottom;
+      const spaceAbove = triggerRect.top;
+      this.openUp = spaceBelow < dropdownH && spaceAbove > spaceBelow;
     },
     close() {
       this.open = false;
       this.query = '';
       this.highlighted = -1;
+      this.openUp = false;
     },
     select(val) {
       this.value = val;
@@ -311,7 +326,7 @@ document.addEventListener('alpine:init', () => {
           <span class="combobox-value" x-text="selectedLabel || placeholder"></span>
           <svg class="combobox-chevron" :class="{'combobox-chevron--open': open}" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 3.5L5 7L8.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <div class="combobox-dropdown" x-show="open" x-cloak>
+        <div class="combobox-dropdown" :class="{'combobox-dropdown--up': openUp}" x-show="open" x-cloak>
           <input type="text" class="combobox-search" x-model="query" x-ref="cbInput"
                  :placeholder="$app.t('common.searchShort')" role="searchbox" :aria-label="$app.t('common.searchShort')">
           <ul class="combobox-list" role="listbox"

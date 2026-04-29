@@ -31,8 +31,50 @@ export const ideenMethods = {
     this.editingDraft = '';
     this.movingId = null;
     this.moveTargetId = '';
+    this.menuOpenId = null;
+    this._detachMenuListeners?.();
     this.errorMessage = '';
     this.busy = false;
+  },
+
+  // ── Meatball-Menu (Popover) ───────────────────────────────────────────────
+  openMenu(ev, idee) {
+    if (this.menuOpenId === idee.id) { this.closeMenu(); return; }
+    const r = ev.currentTarget.getBoundingClientRect();
+    const PW = 200;
+    const PH = 200;
+    const left = Math.max(8, Math.min(window.innerWidth - PW - 8, r.right - PW));
+    const top  = (r.bottom + PH + 8 > window.innerHeight)
+      ? Math.max(8, r.top - PH - 4)
+      : r.bottom + 4;
+    this.menuPos = { top, left };
+    this.menuOpenId = idee.id;
+    this._attachMenuListeners();
+  },
+
+  closeMenu() {
+    this.menuOpenId = null;
+    this._detachMenuListeners();
+  },
+
+  // Plain Methode statt Getter — siehe Hinweis bei offeneIdeen().
+  menuOpenIdee() {
+    if (this.menuOpenId == null) return null;
+    return (this.ideen || []).find(i => i.id === this.menuOpenId) || null;
+  },
+
+  _attachMenuListeners() {
+    if (this._menuCloseHandler) return;
+    this._menuCloseHandler = () => this.closeMenu();
+    window.addEventListener('scroll', this._menuCloseHandler, true);
+    window.addEventListener('resize', this._menuCloseHandler);
+  },
+
+  _detachMenuListeners() {
+    if (!this._menuCloseHandler) return;
+    window.removeEventListener('scroll', this._menuCloseHandler, true);
+    window.removeEventListener('resize', this._menuCloseHandler);
+    this._menuCloseHandler = null;
   },
 
   // ── CRUD ─────────────────────────────────────────────────────────────────

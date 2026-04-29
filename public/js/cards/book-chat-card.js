@@ -29,6 +29,10 @@ export function registerBookChatCard() {
       this.$watch(() => window.__app.showBookChatCard, async (visible) => {
         if (!visible) return;
         await this._onVisibleBookChat();
+        this.$nextTick(() => {
+          const ta = this.$el?.querySelector('.chat-input');
+          if (ta) ta.focus();
+        });
       });
 
       this._onResetBookChat = () => this.resetBookChat();

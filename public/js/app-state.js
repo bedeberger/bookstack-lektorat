@@ -139,6 +139,20 @@ const statusState = () => ({
   _statusTimer: null,
 });
 
+// Confirm-Dialog (Ersatz für window.confirm). Native confirm() lässt Chrome
+// auf macOS aus dem nativen Vollbild-Space rausspringen, damit die Browser-
+// Modal überhaupt rendert — nach Klick bleibt das Fenster ausserhalb des
+// Vollbilds. Eigener Alpine-Modal vermeidet das. `_resolve` wird vom
+// `appConfirm`-Helper gesetzt; Buttons rufen `_resolveConfirmDialog(bool)`.
+const confirmDialogState = () => ({
+  confirmDialogOpen: false,
+  confirmDialogMessage: '',
+  confirmDialogConfirmLabel: '',
+  confirmDialogCancelLabel: '',
+  confirmDialogDanger: false,
+  _confirmDialogResolve: null,
+});
+
 // Seiten-Lektorat (Finding-Liste, Apply-Flow, Token-Estimates)
 const lektoratState = () => ({
   analysisOut: '',
@@ -256,6 +270,7 @@ export function initialLektoratState() {
     ...editorPopupState(),
     ...cardsState(),
     ...statusState(),
+    ...confirmDialogState(),
     ...lektoratState(),
     ...bookReviewState(),
     ...kapitelReviewState(),

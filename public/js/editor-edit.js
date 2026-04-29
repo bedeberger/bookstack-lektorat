@@ -205,8 +205,15 @@ export const editorEditMethods = {
     setTimeout(() => { if (this.editMode) installEditCounter(this); }, 0);
   },
 
-  cancelEdit() {
-    if (this.editDirty && !confirm(this.t('edit.cancelConfirm'))) return;
+  async cancelEdit() {
+    if (this.editDirty) {
+      const ok = await this.appConfirm({
+        message: this.t('edit.cancelConfirm'),
+        confirmLabel: this.t('edit.discardEdit'),
+        danger: true,
+      });
+      if (!ok) return;
+    }
     if (this.currentPage) clearDraft(this.currentPage.id);
     this._stopAutosave();
     this._uninstallOnlineRetry();
@@ -252,7 +259,10 @@ export const editorEditMethods = {
     }
     const origText = htmlToText(this.originalHtml || '').trim();
     if (origText.length > 50 && newText.length < origText.length * 0.2) {
-      if (!confirm(this.t('edit.shorterConfirm', { newLen: newText.length, oldLen: origText.length }))) return;
+      const okShort = await this.appConfirm({
+        message: this.t('edit.shorterConfirm', { newLen: newText.length, oldLen: origText.length }),
+      });
+      if (!okShort) return;
     }
 
     this.editSaving = true;

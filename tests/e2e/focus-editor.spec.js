@@ -8,6 +8,10 @@ async function enter(page) {
   // Für Re-Entry im Test editMode zurücksetzen.
   await page.evaluate(() => { window.harness.editMode = true; window.harness.enterFocusMode(); });
   await page.waitForFunction(() => window.harness._focusListeners !== null);
+  // Focus-Entry hängt einen leeren <p> ans Ende und recentert – dadurch
+  // scrollt der Editor initial. Auf den abschliessenden RAF warten, damit
+  // Tests von einem stabilen Scroll-Zustand aus arbeiten können.
+  await page.waitForTimeout(50);
 }
 
 async function placeCaretInParagraph(page, idx) {
@@ -244,15 +248,19 @@ test('Dim-Logik: nicht-aktive Absätze opacity 0.5, aktiver opacity 1 (2-Absatz-
   await placeCaretInParagraph(page, 1);
   await page.waitForTimeout(80);
 
+  // Focus-Entry hängt zusätzlich einen leeren <p> ans Ende (Caret-Sprung-
+  // Feature: User soll sofort tippen können). State enthält daher 3 <p>.
   let state = await readState();
-  expect(state).toHaveLength(2);
+  expect(state).toHaveLength(3);
   expect(state.filter(s => s.active)).toHaveLength(1);
   expect(state[1].active).toBe(true);
   expect(state[0].active).toBe(false);
+  expect(state[2].active).toBe(false);
   expect(state[1].opacity).toBe(1);
   expect(state[0].opacity).toBeLessThan(1); // der entscheidende Punkt
+  expect(state[2].opacity).toBeLessThan(1);
 
-  // Caret ans Ende von P2, Enter → neuer P3. Nach Typing: nur P3 aktiv.
+  // Caret ans Ende von P2, Enter → neuer P. Nach Typing: getippter Absatz aktiv.
   await page.evaluate(() => {
     const p = document.querySelectorAll('#editor-card .page-content-view--editing p')[1];
     const r = document.createRange();
@@ -264,14 +272,17 @@ test('Dim-Logik: nicht-aktive Absätze opacity 0.5, aktiver opacity 1 (2-Absatz-
   await page.waitForTimeout(80);
 
   state = await readState();
-  expect(state).toHaveLength(3);
+  // Erster, Zweiter, Dritter., trailing-empty (vom Focus-Entry).
+  expect(state).toHaveLength(4);
   expect(state.filter(s => s.active)).toHaveLength(1);
   expect(state[2].active).toBe(true);
+  expect(state[2].text).toBe('Dritter.');
   expect(state[2].opacity).toBe(1);
-  // Beide Vorgänger müssen gedimmt sein – insbesondere der erste, der im
+  // Alle Nicht-Aktiven müssen gedimmt sein – insbesondere der erste, der im
   // Report hell blieb.
   expect(state[0].opacity).toBeLessThan(1);
   expect(state[1].opacity).toBeLessThan(1);
+  expect(state[3].opacity).toBeLessThan(1);
 });
 
 test('Dim-Logik: greift auch bei Wrapper-Elementen um die <p> (BookStack-Struktur)', async ({ page }) => {
@@ -306,13 +317,18 @@ test('Dim-Logik: greift auch bei Wrapper-Elementen um die <p> (BookStack-Struktu
       opacity: parseFloat(getComputedStyle(p).opacity),
     }));
   });
-  expect(state).toHaveLength(2);
+  // Focus-Entry hängt einen weiteren leeren <p> direkt ans Editor-Root – die
+  // Wrapper-<div>-Struktur bleibt unverändert, nur am Ende kommt ein Sibling
+  // dazu. P1/P2 sind im Wrapper, P3 ist der Trailing-Empty.
+  expect(state).toHaveLength(3);
   expect(state[1].active).toBe(true);
   expect(state[1].opacity).toBe(1);
   // Der entscheidende Fall: P1 ist KEIN direktes Kind von
   // .page-content-view--editing, muss aber trotzdem gedimmt werden.
   expect(state[0].active).toBe(false);
   expect(state[0].opacity).toBeLessThan(1);
+  expect(state[2].active).toBe(false);
+  expect(state[2].opacity).toBeLessThan(1);
 });
 
 test('5× Toggle leakt keine Observer/Listeners', async ({ page }) => {
