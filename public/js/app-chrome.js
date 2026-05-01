@@ -133,4 +133,14 @@ export const appChromeMethods = {
     this.confirmDialogOpen = false;
     if (r) r(value);
   },
+
+  // Alert-Variante: nur OK-Button, immer truthy. Nutzt dieselbe Modal-DOM,
+  // setzt Cancel-Label leer → Cancel-Button wird via x-show ausgeblendet.
+  appAlert({ message, confirmLabel } = {}) {
+    return this.appConfirm({
+      message,
+      confirmLabel: confirmLabel || this.t('common.confirm'),
+      cancelLabel: '',
+    });
+  },
 };

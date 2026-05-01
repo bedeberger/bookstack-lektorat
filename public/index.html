@@ -229,6 +229,7 @@
     <div class="confirm-dialog-message" x-text="confirmDialogMessage"></div>
     <div class="confirm-dialog-actions">
       <button type="button" class="confirm-dialog-btn confirm-dialog-btn--cancel"
+              x-show="confirmDialogCancelLabel"
               @click="_resolveConfirmDialog(false)" x-text="confirmDialogCancelLabel"></button>
       <button type="button" class="confirm-dialog-btn"
               :class="confirmDialogDanger ? 'confirm-dialog-btn--danger' : 'confirm-dialog-btn--primary'"

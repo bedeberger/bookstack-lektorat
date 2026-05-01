@@ -1638,8 +1638,39 @@ ins {
 /* === Buchbewertung === */
 .bewertung-stars {
   font-size: var(--font-size-lg);
-  letter-spacing: 2px;
 }
+
+/* Sterne-Rating: zwei übereinander liegende Layer, Vordergrund-Width pro
+   Halbschritt-Klasse. Letter-spacing 0, damit halbe Breite optisch genau
+   zwischen zwei Sternen liegt. */
+.stars-rating {
+  position: relative;
+  display: inline-block;
+  line-height: 1;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+.stars-rating__bg { color: var(--color-border); }
+.stars-rating__fg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  width: 0;
+  color: var(--color-accent);
+}
+.stars-rating--n-1  .stars-rating__fg { width: calc(100% *  1 / 12); }
+.stars-rating--n-2  .stars-rating__fg { width: calc(100% *  2 / 12); }
+.stars-rating--n-3  .stars-rating__fg { width: calc(100% *  3 / 12); }
+.stars-rating--n-4  .stars-rating__fg { width: calc(100% *  4 / 12); }
+.stars-rating--n-5  .stars-rating__fg { width: calc(100% *  5 / 12); }
+.stars-rating--n-6  .stars-rating__fg { width: calc(100% *  6 / 12); }
+.stars-rating--n-7  .stars-rating__fg { width: calc(100% *  7 / 12); }
+.stars-rating--n-8  .stars-rating__fg { width: calc(100% *  8 / 12); }
+.stars-rating--n-9  .stars-rating__fg { width: calc(100% *  9 / 12); }
+.stars-rating--n-10 .stars-rating__fg { width: calc(100% * 10 / 12); }
+.stars-rating--n-11 .stars-rating__fg { width: calc(100% * 11 / 12); }
+.stars-rating--n-12 .stars-rating__fg { width: 100%; }
 
 .bewertung-header {
   display: flex;
@@ -2391,9 +2422,12 @@ body.focus-mode.focus-cursor-hidden .page-content-view--editing * {
   cursor: pointer;
   line-height: 1.2;
   font-family: inherit;
+  min-width: 1.6em;
 }
 .edit-bubble-btn:hover { background: var(--color-hover); }
 .edit-bubble-btn:active { background: var(--color-hover-strong); }
+.edit-bubble-btn--bold   { font-weight: 700; }
+.edit-bubble-btn--italic { font-style: italic; }
 
 .edit-slash-menu {
   position: fixed;
@@ -5257,7 +5291,7 @@ body.focus-mode .edit-find { display: none !important; }
 .stilbox--spaced { margin-top: 12px; }
 .stilbox--review-summary { margin-bottom: 14px; }
 .fazit--review { margin-top: 16px; }
-.review-stars { font-size: 11px; letter-spacing: 1px; }
+.review-stars { font-size: 11px; }
 .muted-msg--spaced { margin-top: 14px; }
 .chat-skeleton-line--wide { width: 72%; }
 .chat-skeleton-line--narrow { width: 48%; }

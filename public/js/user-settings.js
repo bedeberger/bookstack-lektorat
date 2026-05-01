@@ -56,7 +56,11 @@ export const userSettingsMethods = {
     if (!bookId) return;
     const book = window.__app.books.find(b => String(b.id) === String(bookId));
     const name = book?.name || '';
-    if (!confirm(window.__app.t('userSettings.resetConfirm', { name }))) return;
+    if (!await window.__app.appConfirm({
+      message: window.__app.t('userSettings.resetConfirm', { name }),
+      confirmLabel: window.__app.t('common.delete'),
+      danger: true,
+    })) return;
 
     this.bookHistoryResetLoading = true;
     this.bookHistoryResetMessage = '';

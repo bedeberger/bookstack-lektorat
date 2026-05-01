@@ -11,8 +11,8 @@
          class="edit-bubble-toolbar"
          :style="{ left: bubbleX + 'px', top: bubbleY + 'px' }"
          @mousedown.prevent>
-      <button type="button" class="edit-bubble-btn" @click="toolbarBold()"   :title="$app.t('editor.toolbar.boldTitle')"   x-text="$app.t('editor.toolbar.bold')"></button>
-      <button type="button" class="edit-bubble-btn" @click="toolbarItalic()" :title="$app.t('editor.toolbar.italicTitle')" x-text="$app.t('editor.toolbar.italic')"></button>
+      <button type="button" class="edit-bubble-btn edit-bubble-btn--bold"   @click="toolbarBold()"   :title="$app.t('editor.toolbar.boldTitle')"   :aria-label="$app.t('editor.toolbar.boldTitle')">B</button>
+      <button type="button" class="edit-bubble-btn edit-bubble-btn--italic" @click="toolbarItalic()" :title="$app.t('editor.toolbar.italicTitle')" :aria-label="$app.t('editor.toolbar.italicTitle')">I</button>
     </div>
   </template>
 

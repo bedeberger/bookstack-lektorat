@@ -110,17 +110,21 @@ export function fmtTok(n) {
 }
 
 // Sterne-Render mit Halbschritt-Support. `gesamtnote` ist Dezimal (Schema:
-// 1.0–6.0, Halbschritte erlaubt). Auf nächste 0.5 runden, dann full/half/empty
-// zerlegen. Total-Länge immer = max, damit Liste und Detail identisch wirken.
-// Halbstern via U+2BE8 (STAR WITH LEFT HALF BLACK).
+// 1.0–6.0, Halbschritte erlaubt). Liefert HTML-Markup mit zwei übereinander
+// liegenden Layern: Hintergrund = max ★ in Mute-Farbe, Vordergrund = max ★ in
+// Akzentfarbe, Vordergrund-Width via Step-Klasse (`stars-rating--n-{N}`,
+// N = 0..max*2 in halben Schritten). Identische Glyphen + identisches Layout
+// auf beiden Layern → fontunabhängig, kein Tofu. Output ist konstantes Markup
+// ohne User-Daten — direkt in x-html / Template-Literals einsetzbar.
 export function renderStars(note, max = 6) {
   const n = Number(note);
-  if (!Number.isFinite(n) || n <= 0) return '☆'.repeat(max);
-  const halved = Math.round(Math.min(max, n) * 2) / 2;
-  const full = Math.floor(halved);
-  const half = halved - full === 0.5 ? 1 : 0;
-  const empty = max - full - half;
-  return '★'.repeat(full) + (half ? '⯨' : '') + '☆'.repeat(empty);
+  const safe = Number.isFinite(n) && n > 0 ? Math.min(max, n) : 0;
+  const step = Math.round(safe * 2);
+  const stars = '★'.repeat(max);
+  return `<span class="stars-rating stars-rating--n-${step}" aria-hidden="true">`
+    + `<span class="stars-rating__bg">${stars}</span>`
+    + `<span class="stars-rating__fg">${stars}</span>`
+    + `</span>`;
 }
 
 export function escHtml(s) {

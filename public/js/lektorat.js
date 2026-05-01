@@ -219,7 +219,7 @@ export const lektoratMethods = {
 
   async batchCheck() {
     if (!this.pages.length) return;
-    if (!confirm(this.t('lektorat.batchConfirm', { n: this.pages.length }))) return;
+    if (!await this.appConfirm({ message: this.t('lektorat.batchConfirm', { n: this.pages.length }) })) return;
     this.batchLoading = true;
     this.batchProgress = 0;
     this.batchStatus = this._runningJobStatus(this.t('common.starting'), 0, 0);

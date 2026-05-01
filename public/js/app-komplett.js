@@ -6,14 +6,18 @@ import { fetchJson, clearStatusAfter, formatLastRun } from './utils.js';
 export const appKomplettMethods = {
   async clearChapterCache() {
     if (!this.selectedBookId) return;
-    if (!confirm(this.t('app.cacheClearConfirm'))) return;
+    if (!await this.appConfirm({
+      message: this.t('app.cacheClearConfirm'),
+      confirmLabel: this.t('common.delete'),
+      danger: true,
+    })) return;
     const { deleted } = await fetchJson(`/jobs/chapter-cache/${this.selectedBookId}`, { method: 'DELETE' });
-    alert(this.t('app.cacheCleared', { n: deleted }));
+    await this.appAlert({ message: this.t('app.cacheCleared', { n: deleted }) });
   },
 
   async alleAktualisieren() {
     if (!this.selectedBookId || this.alleAktualisierenLoading) return;
-    if (!confirm(this.t('komplett.confirm'))) return;
+    if (!await this.appConfirm({ message: this.t('komplett.confirm') })) return;
     this.alleAktualisierenLoading = true;
     this.alleAktualisierenProgress = 0;
     this.alleAktualisierenTokIn = 0;

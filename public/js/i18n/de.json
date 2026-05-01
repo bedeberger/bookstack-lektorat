@@ -572,9 +572,7 @@
   "editor.figuresInChapter":     "{n} Figuren in diesem Kapitel",
   "editor.field.geschlecht":     "Geschlecht:",
 
-  "editor.toolbar.bold":         "Fett",
   "editor.toolbar.boldTitle":    "Fett (Strg/⌘+B)",
-  "editor.toolbar.italic":       "Kursiv",
   "editor.toolbar.italicTitle":  "Kursiv (Strg/⌘+I)",
 
   "editor.slash.hint":           "Blocktyp wählen",

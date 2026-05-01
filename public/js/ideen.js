@@ -214,7 +214,11 @@ export const ideenMethods = {
 
   async deleteIdee(idee) {
     const app = window.__app;
-    if (!confirm(app.t('ideen.confirmDelete'))) return;
+    if (!await app.appConfirm({
+      message: app.t('ideen.confirmDelete'),
+      confirmLabel: app.t('common.delete'),
+      danger: true,
+    })) return;
     this.busy = true;
     try {
       await fetchJson(`/ideen/${idee.id}`, { method: 'DELETE' });

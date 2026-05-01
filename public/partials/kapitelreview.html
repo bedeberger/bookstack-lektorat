@@ -75,7 +75,7 @@
              @click="selectedKapitelReviewId = selectedKapitelReviewId === entry.id ? null : entry.id">
           <span class="history-date" x-text="$app.formatDate(entry.reviewed_at)"></span>
           <span x-show="entry.review_json?.gesamtnote" class="badge badge-ok review-stars"
-            x-text="renderStars(entry.review_json?.gesamtnote)"></span>
+            x-html="renderStars(entry.review_json?.gesamtnote)"></span>
           <span class="tag" x-text="entry.model"></span>
           <span class="history-chevron" :class="{ open: selectedKapitelReviewId === entry.id }">›</span>
         </div>
