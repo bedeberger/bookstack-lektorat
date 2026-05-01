@@ -33,7 +33,7 @@
              @click="selectedBookReviewId = selectedBookReviewId === entry.id ? null : entry.id">
           <span class="history-date" x-text="$app.formatDate(entry.reviewed_at)"></span>
           <span x-show="entry.review_json?.gesamtnote" class="badge badge-ok review-stars"
-            x-text="'★'.repeat(Math.min(6, +(entry.review_json?.gesamtnote) || 0)) + '☆'.repeat(Math.max(0, 6 - (+(entry.review_json?.gesamtnote) || 0)))"></span>
+            x-text="renderStars(entry.review_json?.gesamtnote)"></span>
           <span class="tag" x-text="entry.model"></span>
           <span class="history-chevron" :class="{ open: selectedBookReviewId === entry.id }">›</span>
         </div>

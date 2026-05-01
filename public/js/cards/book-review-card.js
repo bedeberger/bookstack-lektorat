@@ -15,7 +15,7 @@
 //   - job:reconnect (type='review'): Loading-State übernehmen + Polling starten
 
 import { renderReviewHtml } from '../review.js';
-import { escHtml } from '../utils.js';
+import { escHtml, renderStars } from '../utils.js';
 import { createCardJobFeature } from './job-feature-card.js';
 
 export function registerBookReviewCard() {
@@ -98,6 +98,8 @@ export function registerBookReviewCard() {
     _renderReviewHtml(r) {
       return renderReviewHtml(r, (k, p) => window.__app.t(k, p));
     },
+
+    renderStars(note) { return renderStars(note); },
 
     ...createCardJobFeature({
       name: 'review',

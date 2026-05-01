@@ -3,7 +3,7 @@
 // Start-Payload kapitelbezogen ist und die Poll-Logik
 // _kapitelReviewRunningChapterId trackt.
 
-import { fetchJson, escHtml } from '../utils.js';
+import { fetchJson, escHtml, renderStars } from '../utils.js';
 import { startPoll, runningJobStatus } from './job-helpers.js';
 
 export function registerKapitelReviewCard() {
@@ -103,10 +103,11 @@ export function registerKapitelReviewCard() {
       return `lektorat_chapter_review_job_${window.__app.selectedBookId}_${chapterId}`;
     },
 
+    renderStars(note) { return renderStars(note); },
+
     _renderKapitelReviewHtml(r) {
       const t = (k, p) => window.__app.t(k, p);
-      const note = parseInt(r.gesamtnote, 10) || 0;
-      const stars = '★'.repeat(Math.min(6, Math.max(0, note))) + '☆'.repeat(Math.max(0, 6 - note));
+      const stars = renderStars(r.gesamtnote);
       let html = `
           <div class="bewertung-header">
             <span class="bewertung-stars">${stars}</span>

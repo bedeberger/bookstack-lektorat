@@ -1,11 +1,10 @@
 // Buchbewertungs-Render-Helper. Der Job-Flow (Start, Poll, Render) lebt in
 // Alpine.data('bookReviewCard'); hier nur das HTML-Rendering.
 
-import { escHtml } from './utils.js';
+import { escHtml, renderStars } from './utils.js';
 
 export function renderReviewHtml(r, translate) {
-  const note = parseInt(r.gesamtnote, 10) || 0;
-  const stars = '★'.repeat(Math.min(6, Math.max(0, note))) + '☆'.repeat(Math.max(0, 6 - note));
+  const stars = renderStars(r.gesamtnote);
   let html = `
       <div class="bewertung-header">
         <span class="bewertung-stars">${stars}</span>

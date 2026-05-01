@@ -109,6 +109,20 @@ export function fmtTok(n) {
   return String(n);
 }
 
+// Sterne-Render mit Halbschritt-Support. `gesamtnote` ist Dezimal (Schema:
+// 1.0–6.0, Halbschritte erlaubt). Auf nächste 0.5 runden, dann full/half/empty
+// zerlegen. Total-Länge immer = max, damit Liste und Detail identisch wirken.
+// Halbstern via U+2BE8 (STAR WITH LEFT HALF BLACK).
+export function renderStars(note, max = 6) {
+  const n = Number(note);
+  if (!Number.isFinite(n) || n <= 0) return '☆'.repeat(max);
+  const halved = Math.round(Math.min(max, n) * 2) / 2;
+  const full = Math.floor(halved);
+  const half = halved - full === 0.5 ? 1 : 0;
+  const empty = max - full - half;
+  return '★'.repeat(full) + (half ? '⯨' : '') + '☆'.repeat(empty);
+}
+
 export function escHtml(s) {
   if (!s) return '';
   return String(s)
