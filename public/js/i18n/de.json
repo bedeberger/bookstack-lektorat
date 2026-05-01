@@ -217,6 +217,10 @@
   "book.export.md":              "Markdown",
   "book.export.running":         "Export läuft ({fmt}) – kann bei grossen Büchern bis zu einer Minute dauern …",
 
+  "tile.group.review":           "Bewertung",
+  "tile.group.world":            "Welt & Plot",
+  "tile.group.tools":            "Werkzeug",
+
   "tile.review":                 "Bewertung",
   "tile.review.desc":            "Note & Analyse",
   "tile.figuren":                "Figuren",

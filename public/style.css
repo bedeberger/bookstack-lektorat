@@ -2882,6 +2882,10 @@ body.focus-mode .edit-find { display: none !important; }
   transition: width 0.3s;
 }
 
+.progress-bar-wrap + .card-status {
+  margin-bottom: 20px;
+}
+
 /* === Tree view === */
 .tree-chapter { margin-bottom: 6px; }
 
@@ -4222,11 +4226,48 @@ body.focus-mode .edit-find { display: none !important; }
 }
 
 /* === Feature-Tiles === */
+.feature-section {
+  margin-bottom: 12px;
+}
+.feature-section:last-child {
+  margin-bottom: 0;
+}
+.feature-section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.feature-section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+.feature-section-label::before {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 9px;
+  background: var(--color-accent);
+}
+.feature-section .feature-tiles {
+  margin-bottom: 0;
+}
+
 .feature-tiles {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+.feature-tiles--quad {
+  grid-template-columns: repeat(4, 1fr);
 }
 
 .feature-tile {
@@ -4234,19 +4275,16 @@ body.focus-mode .edit-find { display: none !important; }
   flex-direction: column;
   align-items: flex-start;
   gap: 1px;
-  padding: 7px 7px;
+  padding: 6px 9px;
   border: 0.5px solid var(--color-border-input);
   border-radius: var(--radius-md);
   background: var(--color-bg);
   cursor: pointer;
   text-align: left;
-  transition: background 0.1s, border-color 0.1s;
 }
 .feature-tile:hover {
   background: var(--color-hover);
-  border-color: var(--color-border-focus);
 }
-.feature-tile:active { transform: scale(0.98); }
 
 .feature-tile--active {
   background: var(--color-primary);
@@ -4256,8 +4294,8 @@ body.focus-mode .edit-find { display: none !important; }
 .feature-tile--active:hover { background: var(--color-primary-hover); }
 
 .feature-tile-title {
-  font-size: 12px;
-  font-weight: 400;
+  font-size: 12.5px;
+  font-weight: 500;
   line-height: 1.2;
 }
 
@@ -4272,9 +4310,11 @@ body.focus-mode .edit-find { display: none !important; }
 
 @media (max-width: 900px) {
   .feature-tiles { grid-template-columns: repeat(4, 1fr); }
+  .feature-tiles--quad { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 500px) {
   .feature-tiles { grid-template-columns: repeat(3, 1fr); }
+  .feature-tiles--quad { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* === Buchentwicklung (Zeitliniendiagramm) === */
