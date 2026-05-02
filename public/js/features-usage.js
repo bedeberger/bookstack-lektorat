@@ -1,12 +1,10 @@
-// Feature-Usage-Tracking + Palette/Quick-Pill-Helpers am Root.
+// Feature-Usage-Tracking am Root.
 // Erfasst Karten-Öffnungen via $watch auf den Show-Flags (rising edge), POSTet
 // pro User an /usage/track. Lädt /usage/recent beim Login, fällt auf
-// DEFAULT_RECENT_KEYS zurück. Stellt Methoden für Hero-Bar/Quick-Pills bereit:
-//   - featureLabel/Desc/IsActive/Activate
-//   - openPalette
-//   - loadRecentFeatures (idempotent)
+// DEFAULT_RECENT_KEYS zurück. Die Liste wird ausschliesslich von der
+// Command-Palette gelesen (Section „Zuletzt"). Hero-Trigger ruft openPalette().
 
-import { FEATURES, DEFAULT_RECENT_KEYS, featureByKey, isFeatureAvailable } from './cards/feature-registry.js';
+import { FEATURES, DEFAULT_RECENT_KEYS, featureByKey } from './cards/feature-registry.js';
 import { fetchJson } from './utils.js';
 
 export const featuresUsageMethods = {
@@ -58,38 +56,6 @@ export const featuresUsageMethods = {
     } catch (e) {
       this.recentFeatureKeys = DEFAULT_RECENT_KEYS.slice();
     }
-  },
-
-  // Template-Helpers ---------------------------------------------------------
-
-  featureLabel(key) {
-    const f = featureByKey(key);
-    return f ? this.t(f.labelKey) : '';
-  },
-
-  featureDesc(key) {
-    const f = featureByKey(key);
-    return f ? this.t(f.descKey) : '';
-  },
-
-  isFeatureActive(key) {
-    const f = featureByKey(key);
-    return !!(f && this[f.flag]);
-  },
-
-  isFeatureEnabled(key) {
-    const f = featureByKey(key);
-    if (!f) return false;
-    return isFeatureAvailable(f, { selectedBookId: this.selectedBookId, pages: this.pages });
-  },
-
-  activateFeature(key) {
-    const f = featureByKey(key);
-    if (!f) return;
-    if (!this.isFeatureEnabled(key)) return;
-    const fn = this[f.toggle];
-    if (typeof fn !== 'function') return;
-    fn.call(this);
   },
 
   openPalette() {

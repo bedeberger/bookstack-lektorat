@@ -113,18 +113,6 @@
     <kbd class="palette-hero-kbd" x-text="isMac ? '⌘K' : 'Ctrl+K'"></kbd>
   </button>
 
-  <!-- Quick-Pills: dynamisch Top-3 nach Recency. Default-Set für neue User. -->
-  <div class="quick-pills" x-show="selectedBookId" x-cloak>
-    <template x-for="key in recentFeatureKeys" :key="key">
-      <button type="button"
-              class="quick-pill"
-              :class="{ 'quick-pill--active': isFeatureActive(key) }"
-              :disabled="!isFeatureEnabled(key)"
-              @click="activateFeature(key)"
-              x-text="featureLabel(key)"></button>
-    </template>
-  </div>
-
   <!-- BookStack-Volltextsuche (im aktuellen Buch) -->
   <div class="bookstack-search" x-show="selectedBookId" x-cloak>
     <div class="bookstack-search-input-wrap">
