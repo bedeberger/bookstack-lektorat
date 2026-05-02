@@ -4415,9 +4415,31 @@ body.focus-mode .edit-find { display: none !important; }
 }
 .palette-hint { display: inline-flex; align-items: center; }
 
-@media (max-width: 500px) {
+@media (max-width: 600px) {
+  /* Hero: kbd-Hint weg (Mobile hat keine physische Tastatur), Padding etwas
+     grösser für Tap-Komfort. */
   .palette-hero-kbd { display: none; }
-  .palette-overlay { padding-top: 6vh; }
+  .palette-hero { padding: 12px 14px; }
+  /* Quick-Pills: Tap-Target ≥40px hoch (Apple HIG). */
+  .quick-pill {
+    padding: 9px 14px;
+    font-size: 13px;
+  }
+  /* Palette-Modal: Soft-Keyboard verdeckt sonst Panel. Wenig Padding-Top,
+     volle vertikale Reichweite. Safe-Area für Notch/Home-Indicator. */
+  .palette-overlay {
+    padding: 4vh 8px max(8px, env(safe-area-inset-bottom));
+  }
+  .palette-panel {
+    max-height: calc(100vh - 6vh - env(safe-area-inset-bottom, 0px));
+  }
+  .palette-item {
+    padding: 12px 16px;
+  }
+  .palette-item-label { font-size: 14px; }
+  .palette-item-desc  { font-size: 12px; }
+  /* Footer-Keyboard-Hints sind auf Touch sinnlos. */
+  .palette-footer { display: none; }
 }
 
 /* === Buchentwicklung (Zeitliniendiagramm) === */

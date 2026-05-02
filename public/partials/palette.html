@@ -15,6 +15,10 @@
                x-model="paletteQuery"
                @input="onPaletteInput()"
                @keydown="onPaletteKeydown($event)"
+               autocomplete="off"
+               autocapitalize="off"
+               autocorrect="off"
+               spellcheck="false"
                :placeholder="$app.t('palette.placeholder')"
                :aria-label="$app.t('palette.placeholder')">
         <div class="palette-list" role="listbox">
