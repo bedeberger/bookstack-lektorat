@@ -20,6 +20,10 @@ const shellState = () => ({
   themePref: 'auto',
   focusGranularity: 'paragraph',
   uiLocale: '',
+  // Plattform-Detect für Tasten-Hint-Anzeige (⌘ vs. Ctrl). Wird in init()
+  // gesetzt; default true wäre auf Windows falsch, default false ist sichere
+  // Annahme bevor JS gelaufen ist (Hero erscheint mit Ctrl, dann snap auf ⌘ falls Mac).
+  isMac: false,
   bookstackUrl: '',
   promptConfig: {},
   showTokenSetup: false,
@@ -247,6 +251,12 @@ const chatsState = () => ({
   _checkDoneBeforeChat: false,
 });
 
+// Feature-Usage: Top-3 nach Recency, gespeist aus /usage/recent. Default-Set
+// aus feature-registry, wenn User noch keine Tracking-Daten hat.
+const featuresUsageState = () => ({
+  recentFeatureKeys: ['review', 'figuren', 'bookchat'],
+});
+
 const jobsState = () => ({
   jobQueueItems: [],
   jobQueueExpanded: false,
@@ -279,6 +289,7 @@ export function initialLektoratState() {
     ...szenenState(),
     ...orteState(),
     ...chatsState(),
+    ...featuresUsageState(),
     ...jobsState(),
   };
 }

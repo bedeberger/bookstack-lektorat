@@ -178,18 +178,25 @@ export const shortcutsMethods = {
     });
   },
 
-  // Cmd/Ctrl+P → Seitenbaum-Filter, Cmd/Ctrl+K → Volltextsuche.
-  // Greift auch in Inputs/Editor – preventDefault ist Pflicht (sonst Browser-Print).
+  // Cmd/Ctrl+P → Seitenbaum-Filter
+  // Cmd/Ctrl+K → Command-Palette
+  // Cmd/Ctrl+Shift+F → BookStack-Volltextsuche im aktuellen Buch
+  // Greift auch in Inputs/Editor – preventDefault ist Pflicht (sonst Browser-Print/Find).
   handleNavHotkey(event) {
     if (!(event.ctrlKey || event.metaKey)) return;
-    if (event.altKey || event.shiftKey) return;
     const key = (event.key || '').toLowerCase();
+    if (event.shiftKey && !event.altKey && key === 'f') {
+      if (!this.focusBookSearch()) return;
+      event.preventDefault();
+      return;
+    }
+    if (event.altKey || event.shiftKey) return;
     if (key === 'p') {
       if (!this.focusTreeSearch()) return;
       event.preventDefault();
     } else if (key === 'k') {
-      if (!this.focusBookSearch()) return;
       event.preventDefault();
+      window.dispatchEvent(new CustomEvent('palette:open'));
     }
   },
 

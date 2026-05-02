@@ -1400,6 +1400,20 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 63').run();
     logger.info('DB-Migration auf Version 63 abgeschlossen (users.focus_granularity).');
   }
+  if (version < 64) {
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS user_feature_usage (
+        user_email   TEXT NOT NULL,
+        feature_key  TEXT NOT NULL,
+        last_used    INTEGER NOT NULL,
+        use_count    INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (user_email, feature_key)
+      )
+    `).run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_ufu_user_lastused ON user_feature_usage(user_email, last_used DESC)').run();
+    db.prepare('UPDATE schema_version SET version = 64').run();
+    logger.info('DB-Migration auf Version 64 abgeschlossen (user_feature_usage).');
+  }
 
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);

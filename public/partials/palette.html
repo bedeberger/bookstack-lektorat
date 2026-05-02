@@ -1,0 +1,60 @@
+<!-- Command-Palette: Modal mit Such-Input + gruppierter Feature-Liste.
+     Nach <body> teleportiert, damit fixed-Overlay nicht von einem
+     transformierten Eltern-Container eingefangen wird.
+     Alpine.data-Sub — siehe public/js/cards/palette-card.js. -->
+
+<div x-data="paletteCard" class="display-contents">
+  <template x-teleport="body">
+    <div x-show="paletteOpen" x-cloak
+         class="palette-overlay"
+         @click="onOverlayClick($event)"
+         @keydown.escape.window="if (paletteOpen) closePalette()">
+      <div class="palette-panel" role="dialog" aria-modal="true" :aria-label="$app.t('palette.placeholder')">
+        <input type="text"
+               class="palette-input"
+               x-model="paletteQuery"
+               @input="onPaletteInput()"
+               @keydown="onPaletteKeydown($event)"
+               :placeholder="$app.t('palette.placeholder')"
+               :aria-label="$app.t('palette.placeholder')">
+        <div class="palette-list" role="listbox">
+          <template x-for="section in paletteSections()" :key="section.key">
+            <div class="palette-section">
+              <div class="palette-section-label" x-text="$app.t(section.labelKey)"></div>
+              <template x-for="item in section.items" :key="section.key + ':' + item.key">
+                <button type="button"
+                        class="palette-item"
+                        :class="{
+                          'palette-item--active': paletteIdx === paletteGlobalIdx(section.key, item.key),
+                          'palette-item--disabled': !item.available,
+                        }"
+                        :disabled="!item.available"
+                        @click="activateFeature(item.key)"
+                        @mouseenter="paletteIdx = paletteGlobalIdx(section.key, item.key)"
+                        role="option"
+                        :aria-selected="paletteIdx === paletteGlobalIdx(section.key, item.key)">
+                  <span class="palette-item-label" x-text="$app.t(item.feature.labelKey)"></span>
+                  <span class="palette-item-desc" x-text="$app.t(item.feature.descKey)"></span>
+                </button>
+              </template>
+            </div>
+          </template>
+          <div class="palette-empty"
+               x-show="paletteSections().length === 0"
+               x-text="$app.t('palette.empty')"></div>
+        </div>
+        <div class="palette-footer">
+          <span class="palette-hint">
+            <kbd>↑↓</kbd> <span x-text="$app.t('palette.hint.navigate')"></span>
+          </span>
+          <span class="palette-hint">
+            <kbd>↵</kbd> <span x-text="$app.t('palette.hint.activate')"></span>
+          </span>
+          <span class="palette-hint">
+            <kbd>Esc</kbd> <span x-text="$app.t('palette.hint.close')"></span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>

@@ -100,6 +100,31 @@
     <a :href="selectedBookUrl || '#'" target="_blank" rel="noopener" class="btn-bookstack-link" :class="{ 'btn-bookstack-link--hidden': !selectedBookUrl }" :tabindex="selectedBookUrl ? 0 : -1" :aria-hidden="!selectedBookUrl" :title="t('book.openInBookstack')" x-text="t('book.bookstack')"></a>
   </div>
 
+  <!-- Hero-Palette-Trigger: Power-User-Eintritt zu allen Features (⌘K / Strg+K). -->
+  <button type="button"
+          class="palette-hero"
+          x-show="selectedBookId"
+          x-cloak
+          @click="openPalette()"
+          :title="t('palette.openHint')"
+          :aria-label="t('palette.openHint')">
+    <span class="palette-hero-icon" aria-hidden="true" x-text="isMac ? '⌘' : 'Ctrl'"></span>
+    <span class="palette-hero-text" x-text="t('palette.hero.text')"></span>
+    <kbd class="palette-hero-kbd" x-text="isMac ? '⌘K' : 'Ctrl+K'"></kbd>
+  </button>
+
+  <!-- Quick-Pills: dynamisch Top-3 nach Recency. Default-Set für neue User. -->
+  <div class="quick-pills" x-show="selectedBookId" x-cloak>
+    <template x-for="key in recentFeatureKeys" :key="key">
+      <button type="button"
+              class="quick-pill"
+              :class="{ 'quick-pill--active': isFeatureActive(key) }"
+              :disabled="!isFeatureEnabled(key)"
+              @click="activateFeature(key)"
+              x-text="featureLabel(key)"></button>
+    </template>
+  </div>
+
   <!-- BookStack-Volltextsuche (im aktuellen Buch) -->
   <div class="bookstack-search" x-show="selectedBookId" x-cloak>
     <div class="bookstack-search-input-wrap">
@@ -130,79 +155,6 @@
           <div class="bookstack-search-item-snippet" x-html="escPreserveStrong(hit.preview_html?.content || '')" x-show="hit.preview_html?.content"></div>
         </div>
       </template>
-    </div>
-  </div>
-
-  <!-- Feature-Tiles: Buchanalyse, gruppiert in Bewertung / Welt & Plot / Werkzeug -->
-  <div class="feature-section">
-    <div class="feature-section-header">
-      <span class="feature-section-label" x-text="t('tile.group.review')"></span>
-    </div>
-    <div class="feature-tiles feature-tiles--quad">
-      <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showBookReviewCard }" @click="toggleBookReviewCard()">
-        <span class="feature-tile-title" x-text="t('tile.review')"></span>
-        <span class="feature-tile-desc" x-text="t('tile.review.desc')"></span>
-      </button>
-      <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showStilCard }" @click="toggleStilCard()" :title="t('tile.stil.title')">
-        <span class="feature-tile-title" x-text="t('tile.stil')"></span>
-        <span class="feature-tile-desc" x-text="t('tile.stil.desc')"></span>
-      </button>
-      <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showFehlerHeatmapCard }" @click="toggleFehlerHeatmapCard()" :title="t('tile.fehlerHeatmap.title')">
-        <span class="feature-tile-title" x-text="t('tile.fehlerHeatmap')"></span>
-        <span class="feature-tile-desc" x-text="t('tile.fehlerHeatmap.desc')"></span>
-      </button>
-      <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showKontinuitaetCard }" @click="toggleKontinuitaetCard()" :title="t('tile.kontinuitaet.title')">
-        <span class="feature-tile-title" x-text="t('tile.kontinuitaet')"></span>
-        <span class="feature-tile-desc" x-text="t('tile.kontinuitaet.desc')"></span>
-      </button>
-    </div>
-  </div>
-
-  <div class="feature-section">
-    <div class="feature-section-header">
-      <span class="feature-section-label" x-text="t('tile.group.world')"></span>
-    </div>
-    <div class="feature-tiles feature-tiles--quad">
-      <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showFiguresCard }" @click="toggleFiguresCard()" :title="t('tile.figuren.title')">
-        <span class="feature-tile-title" x-text="t('tile.figuren')"></span>
-        <span class="feature-tile-desc" x-text="t('tile.figuren.desc')"></span>
-      </button>
-      <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showSzenenCard }" @click="toggleSzenenCard()" :title="t('tile.szenen.title')">
-        <span class="feature-tile-title" x-text="t('tile.szenen')"></span>
-        <span class="feature-tile-desc" x-text="t('tile.szenen.desc')"></span>
-      </button>
-      <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showOrteCard }" @click="toggleOrteCard()" :title="t('tile.orte.title')">
-        <span class="feature-tile-title" x-text="t('tile.orte')"></span>
-        <span class="feature-tile-desc" x-text="t('tile.orte.desc')"></span>
-      </button>
-      <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showEreignisseCard }" @click="toggleEreignisseCard()" :title="t('tile.events.title')">
-        <span class="feature-tile-title" x-text="t('tile.events')"></span>
-        <span class="feature-tile-desc" x-text="t('tile.events.desc')"></span>
-      </button>
-    </div>
-  </div>
-
-  <div class="feature-section">
-    <div class="feature-section-header">
-      <span class="feature-section-label" x-text="t('tile.group.tools')"></span>
-    </div>
-    <div class="feature-tiles feature-tiles--quad">
-      <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showBookChatCard }" @click="toggleBookChatCard()" :disabled="!pages.length" :title="t('tile.bookchat.title')">
-        <span class="feature-tile-title" x-text="t('tile.bookchat')"></span>
-        <span class="feature-tile-desc" x-text="t('tile.bookchat.desc')"></span>
-      </button>
-      <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showBookStatsCard }" @click="toggleBookStatsCard()" :title="t('tile.stats.title')">
-        <span class="feature-tile-title" x-text="t('tile.stats')"></span>
-        <span class="feature-tile-desc" x-text="t('tile.stats.desc')"></span>
-      </button>
-      <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showBookSettingsCard }" @click="toggleBookSettingsCard()" :title="t('tile.bookSettings.title')">
-        <span class="feature-tile-title" x-text="t('tile.bookSettings')"></span>
-        <span class="feature-tile-desc" x-text="t('tile.bookSettings.desc')"></span>
-      </button>
-      <button type="button" class="feature-tile" :class="{ 'feature-tile--active': showFinetuneExportCard }" @click="toggleFinetuneExportCard()" :title="t('tile.finetuneExport.title')">
-        <span class="feature-tile-title" x-text="t('tile.finetuneExport')"></span>
-        <span class="feature-tile-desc" x-text="t('tile.finetuneExport.desc')"></span>
-      </button>
     </div>
   </div>
 
@@ -238,6 +190,7 @@
 <div id="partial-editor-synonyme"></div>
 <div id="partial-editor-focus"></div>
 <div id="partial-shortcuts"></div>
+<div id="partial-palette"></div>
 
 </div><!-- end layout-main -->
 </div><!-- end layout -->

@@ -43,7 +43,9 @@ import { registerEditorToolbarCard } from './cards/editor-toolbar-card.js';
 import { registerEditorFocusCard } from './cards/editor-focus-card.js';
 import { registerLektoratFindingsCard } from './cards/lektorat-findings-card.js';
 import { registerPageHistoryCard } from './cards/page-history-card.js';
+import { registerPaletteCard } from './cards/palette-card.js';
 import { shortcutsMethods } from './shortcuts.js';
+import { featuresUsageMethods } from './features-usage.js';
 import { initialLektoratState } from './app-state.js';
 import { appUiMethods, applySzenenFilters } from './app-ui.js';
 import { appChromeMethods } from './app-chrome.js';
@@ -215,6 +217,7 @@ document.addEventListener('alpine:init', () => {
   registerEditorFocusCard();
   registerLektoratFindingsCard();
   registerPageHistoryCard();
+  registerPaletteCard();
 
   Alpine.data('combobox', (placeholder = null, emptyLabel = null) => ({
     open: false,
@@ -502,6 +505,13 @@ document.addEventListener('alpine:init', () => {
       this._abortCtrl?.abort();
       this._abortCtrl = new AbortController();
       const signal = this._abortCtrl.signal;
+      // Tracking-Watcher früh registrieren, damit auch Karten-Öffnungen
+      // während der initialen Hash-Anwendung erfasst werden.
+      this.setupFeatureUsageWatchers();
+      // Plattform-Detect für Tasten-Hints (⌘ vs. Ctrl).
+      const ua = navigator.userAgent || '';
+      const plat = navigator.platform || '';
+      this.isMac = /Mac|iPhone|iPad|iPod/.test(plat) || /Mac OS X/.test(ua);
       this.themePref = window.__themePref || 'auto';
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
         if (this.themePref === 'auto') this._applyTheme();
@@ -577,6 +587,8 @@ document.addEventListener('alpine:init', () => {
           this.selectedBookId = hashParts[1];
         }
         await this.loadBooks();
+        // Top-3 Recency-Features für Quick-Pills laden (best-effort).
+        this.loadRecentFeatures();
         await this._applyHash();
         this._syncUrlNow();
         this._applyingHash = false;
@@ -635,5 +647,6 @@ document.addEventListener('alpine:init', () => {
     ...appNavigationMethods,
     ...appHashRouterMethods,
     ...offlineSyncMethods,
+    ...featuresUsageMethods,
   }));
 });
