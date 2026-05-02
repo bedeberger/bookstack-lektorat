@@ -249,14 +249,14 @@ export const shortcutsMethods = {
   },
   handleFindingsHotkey(event) {
     if (!event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
-    const k = (event.key || '').toLowerCase();
-    if (k !== 'j' && k !== 'k') return;
+    const code = event.code;
+    if (code !== 'KeyJ' && code !== 'KeyK') return;
     if (!this.checkDone || !this.lektoratFindings?.length) return;
     const items = this._findingItems();
     if (!items.length) return;
     event.preventDefault();
     const cur = items.indexOf(document.activeElement);
-    const dir = (k === 'j') ? 1 : -1;
+    const dir = (code === 'KeyJ') ? 1 : -1;
     const idx = cur < 0 ? (dir > 0 ? 0 : items.length - 1)
                         : (cur + dir + items.length) % items.length;
     this._activateFinding(items[idx]);

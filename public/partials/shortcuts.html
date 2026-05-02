@@ -13,12 +13,32 @@
     <div class="shortcuts-section">
       <div class="shortcuts-section-title" x-text="t('shortcuts.section.global')"></div>
       <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.cmdCtrl')"></kbd>+<kbd>K</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.palette')"></span>
+      </div>
+      <div class="shortcuts-row">
         <span class="shortcuts-keys"><kbd>?</kbd></span>
         <span class="shortcuts-desc" x-text="t('shortcuts.item.help')"></span>
       </div>
       <div class="shortcuts-row">
         <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.esc')"></kbd></span>
         <span class="shortcuts-desc" x-text="t('shortcuts.item.escape')"></span>
+      </div>
+    </div>
+
+    <div class="shortcuts-section">
+      <div class="shortcuts-section-title" x-text="t('shortcuts.section.search')"></div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.cmdCtrl')"></kbd>+<kbd>P</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.searchTree')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.cmdCtrl')"></kbd>+<kbd x-text="t('shortcuts.key.shift')"></kbd>+<kbd>F</kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.searchBook')"></span>
+      </div>
+      <div class="shortcuts-row">
+        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.esc')"></kbd></span>
+        <span class="shortcuts-desc" x-text="t('shortcuts.item.searchClear')"></span>
       </div>
     </div>
 
@@ -67,89 +87,6 @@
       <div class="shortcuts-row">
         <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.cmdCtrl')"></kbd>+<kbd>L</kbd></span>
         <span class="shortcuts-desc" x-text="t('shortcuts.item.focusRecenter')"></span>
-      </div>
-    </div>
-
-    <div class="shortcuts-section">
-      <div class="shortcuts-section-title" x-text="t('shortcuts.section.search')"></div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.cmdCtrl')"></kbd>+<kbd>P</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.searchTree')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.cmdCtrl')"></kbd>+<kbd>K</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.palette')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.cmdCtrl')"></kbd>+<kbd x-text="t('shortcuts.key.shift')"></kbd>+<kbd>F</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.searchBook')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd x-text="t('shortcuts.key.esc')"></kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.searchClear')"></span>
-      </div>
-    </div>
-
-    <div class="shortcuts-section">
-      <div class="shortcuts-section-title" x-text="t('shortcuts.section.cards')"></div>
-      <div class="shortcuts-row shortcuts-row--hint">
-        <span class="shortcuts-desc" x-text="t('shortcuts.chord.hint', { lead: 'g' })"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>r</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardReview')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>f</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardFiguren')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>s</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardSzenen')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>e</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardEreignisse')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>o</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardOrte')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>k</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardKontinuitaet')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>t</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardStil')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>h</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardHeatmap')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>b</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardStats')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>c</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardChat')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>i</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardIdeen')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>,</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardUserSettings')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>;</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardBookSettings')"></span>
-      </div>
-      <div class="shortcuts-row">
-        <span class="shortcuts-keys"><kbd>g</kbd> <kbd>x</kbd></span>
-        <span class="shortcuts-desc" x-text="t('shortcuts.item.cardFinetune')"></span>
       </div>
     </div>
 
