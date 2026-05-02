@@ -1414,6 +1414,21 @@ function runMigrations() {
     db.prepare('UPDATE schema_version SET version = 64').run();
     logger.info('DB-Migration auf Version 64 abgeschlossen (user_feature_usage).');
   }
+  if (version < 65) {
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS user_page_usage (
+        user_email   TEXT NOT NULL,
+        page_id      INTEGER NOT NULL,
+        book_id      INTEGER NOT NULL,
+        last_used    INTEGER NOT NULL,
+        use_count    INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (user_email, page_id)
+      )
+    `).run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_upu_user_book_lastused ON user_page_usage(user_email, book_id, last_used DESC)').run();
+    db.prepare('UPDATE schema_version SET version = 65').run();
+    logger.info('DB-Migration auf Version 65 abgeschlossen (user_page_usage).');
+  }
 
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);

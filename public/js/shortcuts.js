@@ -86,10 +86,18 @@ export const shortcutsMethods = {
   },
 
   handleShortcutsHotkey(event) {
-    if (event.key !== '?') return;
     if (!this._shortcutHotkeyAllowed(event)) return;
-    event.preventDefault();
-    this.toggleShortcutsOverlay();
+    if (event.key === '?') {
+      event.preventDefault();
+      this.toggleShortcutsOverlay();
+      return;
+    }
+    // `/` öffnet die Command-Palette (Slack/GitHub-Pattern). Nur ausserhalb
+    // von Inputs/Editor — _shortcutHotkeyAllowed hat das bereits gefiltert.
+    if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      window.dispatchEvent(new CustomEvent('palette:open'));
+    }
   },
 
   _focusInputEl(el) {

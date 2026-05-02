@@ -205,6 +205,9 @@ export const ideenMethods = {
       this.moveTargetId = '';
       this.errorMessage = '';
       this._publishIdeenCount();
+      // Ziel-Seite: open count +1 (Backend lehnt Move bei erledigt ab).
+      const tgtPrev = (app.ideenCounts && app.ideenCounts[targetId]) || 0;
+      this._setTreeIdeenCount(targetId, tgtPrev + 1);
     } catch (e) {
       this.errorMessage = app.t('ideen.error.move');
     } finally {
@@ -239,6 +242,18 @@ export const ideenMethods = {
     if (!pageId) return;
     const count = (this.ideen || []).filter(i => !i.erledigt).length;
     if (app.currentPage?.id === pageId) app.currentPageIdeenOpenCount = count;
+    // Tree-Indikator (sanftes Badge im Seitenbaum) synchron halten.
+    this._setTreeIdeenCount(pageId, count);
+  },
+
+  // Patched ideenCounts-Map am Root für den Sidebar-Indikator.
+  _setTreeIdeenCount(pageId, count) {
+    const app = window.__app;
+    if (!app || !pageId) return;
+    const next = { ...(app.ideenCounts || {}) };
+    if (count > 0) next[pageId] = count;
+    else delete next[pageId];
+    app.ideenCounts = next;
   },
 
   _replaceIdee(row) {

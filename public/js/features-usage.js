@@ -58,6 +58,39 @@ export const featuresUsageMethods = {
     }
   },
 
+  // Letzte N Seiten des aktuellen Buchs (Command-Palette „Zuletzt"-Sektion).
+  // Wird bei Buch-Wechsel + nach Tracking-Bumps neu geladen.
+  async loadRecentPages(bookId) {
+    if (!bookId) { this.recentPageIds = []; return; }
+    try {
+      const rows = await fetchJson(`/usage/page/recent?book_id=${encodeURIComponent(bookId)}&limit=5`);
+      this.recentPageIds = (Array.isArray(rows) ? rows : [])
+        .map(r => r.page_id)
+        .filter(Number.isFinite);
+    } catch (e) {
+      this.recentPageIds = [];
+    }
+  },
+
+  // Best-Effort-Tracking. Aufgerufen aus selectPage(). Lokale Liste wird
+  // sofort umsortiert, damit Palette ohne Roundtrip aktuell ist.
+  _trackPageUsage(pageId, bookId) {
+    if (!pageId || !bookId) return;
+    try {
+      fetch('/usage/page/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ page_id: pageId, book_id: bookId }),
+        credentials: 'same-origin',
+      }).catch(() => {});
+    } catch {}
+    const cur = Array.isArray(this.recentPageIds) ? this.recentPageIds.slice() : [];
+    const idx = cur.indexOf(pageId);
+    if (idx !== -1) cur.splice(idx, 1);
+    cur.unshift(pageId);
+    this.recentPageIds = cur.slice(0, 5);
+  },
+
   openPalette() {
     window.dispatchEvent(new CustomEvent('palette:open'));
   },

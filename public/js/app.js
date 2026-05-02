@@ -387,6 +387,13 @@ document.addEventListener('alpine:init', () => {
       }
       return this._ortMap;
     },
+    get szenenById() {
+      if (this._szeneMapRef !== this.szenen) {
+        this._szeneMapRef = this.szenen;
+        this._szeneMap = new Map((this.szenen || []).map(s => [s.id, s]));
+      }
+      return this._szeneMap;
+    },
 
     get szenenNachKapitel() {
       const map = new Map();
@@ -589,6 +596,7 @@ document.addEventListener('alpine:init', () => {
         await this.loadBooks();
         // Top-3 Recency-Features für Quick-Pills laden (best-effort).
         this.loadRecentFeatures();
+        if (this.selectedBookId) this.loadRecentPages(this.selectedBookId);
         await this._applyHash();
         this._syncUrlNow();
         this._applyingHash = false;

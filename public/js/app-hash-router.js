@@ -21,6 +21,8 @@ export const appHashRouterMethods = {
       parts.push('figur', String(this.selectedFigurId));
     } else if (this.showOrteCard && this.selectedOrtId) {
       parts.push('ort', String(this.selectedOrtId));
+    } else if (this.showSzenenCard && this.selectedSzeneId) {
+      parts.push('szene', String(this.selectedSzeneId));
     } else if (this.showKapitelReviewCard && this.kapitelReviewChapterId) {
       parts.push('kapitel', String(this.kapitelReviewChapterId));
     } else if (this.showFiguresCard) parts.push('figuren');
@@ -46,7 +48,7 @@ export const appHashRouterMethods = {
     if (parts[0] !== 'book' || !parts[1]) return null;
     const bookId = parts[1];
     const view = parts[2] || 'book';
-    const kind = view === 'figur' ? 'figuren' : view === 'ort' ? 'orte' : view;
+    const kind = view === 'figur' ? 'figuren' : view === 'ort' ? 'orte' : view === 'szene' ? 'szenen' : view;
     return bookId + ':' + kind;
   },
 
@@ -172,8 +174,18 @@ export const appHashRouterMethods = {
           if (!this.showOrteCard) await this.toggleOrteCard();
           else this._closeOtherMainCards('orte');
           break;
+        case 'szene':
+          if (arg) await this.openSzeneById(arg);
+          else {
+            this.selectedSzeneId = null;
+            if (!this.showSzenenCard) await this.toggleSzenenCard();
+            else this._closeOtherMainCards('szenen');
+          }
+          break;
         case 'szenen':
+          this.selectedSzeneId = null;
           if (!this.showSzenenCard) await this.toggleSzenenCard();
+          else this._closeOtherMainCards('szenen');
           break;
         case 'ereignisse':
           if (!this.showEreignisseCard) await this.toggleEreignisseCard();
@@ -226,7 +238,7 @@ export const appHashRouterMethods = {
     this._teardownHashRouting();
     const watchers = [
       'selectedBookId', 'currentPage', 'showEditorCard',
-      'selectedFigurId', 'selectedOrtId',
+      'selectedFigurId', 'selectedOrtId', 'selectedSzeneId',
       'showFiguresCard', 'showOrteCard', 'showSzenenCard', 'showEreignisseCard',
       'showKontinuitaetCard', 'showBookReviewCard', 'showBookChatCard',
       'showKapitelReviewCard', 'kapitelReviewChapterId',

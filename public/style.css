@@ -1501,7 +1501,7 @@ ins {
 
 /* === Page list === */
 .page-item {
-  padding: 7px 10px;
+  padding: 7px 8px 7px 6px;
   border: 0.5px solid transparent;
   border-radius: var(--radius-md);
   margin-bottom: 3px;
@@ -1529,7 +1529,7 @@ ins {
 .page-name {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -1545,6 +1545,21 @@ ins {
 .page-status-pending { background: var(--color-pending); }
 .page-status-warn    { background: var(--color-err-border); }
 .page-status-none    { background: transparent; border-color: var(--color-subtle); }
+
+/* Sanfter Indikator: Anzahl offener Ideen pro Seite. Sitzt rechts neben den
+   tok-badges. Outline statt Fläche — liest sich als Marker, nicht als weitere
+   Stat-Zahl, und kollidiert nicht mit langen Titeln. */
+.ideen-count-badge {
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-accent-soft);
+  background: transparent;
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
 
 /* === Tags === */
 .tag {
@@ -2922,8 +2937,8 @@ body.focus-mode .edit-find { display: none !important; }
 /* Guide-Linie für die Seiten eines Kapitels */
 .tree-chapter-pages {
   position: relative;
-  margin-left: 10px;
-  padding-left: 14px;
+  margin-left: 4px;
+  padding-left: 8px;
   padding-top: 2px;
 }
 .tree-chapter-pages::before {
@@ -3897,18 +3912,6 @@ body.focus-mode .edit-find { display: none !important; }
   margin-bottom: 3px;
 }
 
-.szene-card-wertung {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-.figur-szene-wertung--stark   { background: var(--color-stark-bg); color: var(--color-stark-text); }
-.figur-szene-wertung--mittel  { background: var(--color-mittel-bg); color: var(--color-mittel-text); }
-.figur-szene-wertung--schwach { background: var(--color-schwach-bg); color: var(--color-schwach-text); }
-
 .figur-szene-ort {
   font-size: 11px;
   color: var(--color-muted);
@@ -3934,14 +3937,33 @@ body.focus-mode .edit-find { display: none !important; }
   margin: 8px 0;
 }
 
-/* === Szenen-Karte: Übersichts-Grid (Figur / Kapitel / Seite) === */
+/* === Szenen-Karte: Übersichts-Grid (Figur / Kapitel / Seite, klappbar) === */
+.szenen-uebersicht {
+  padding: 4px 0 0;
+  margin-bottom: 4px;
+}
+.szenen-uebersicht-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+.szenen-uebersicht-toggle:hover { color: var(--color-text); }
 .szenen-uebersicht-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   padding: 8px 0 12px;
   border-bottom: 1px solid var(--color-border);
-  margin-bottom: 4px;
+  margin-top: 4px;
 }
 @media (max-width: 700px) {
   .szenen-uebersicht-grid { grid-template-columns: 1fr; }
@@ -3997,31 +4019,73 @@ body.focus-mode .edit-find { display: none !important; }
   cursor: default;
 }
 
-/* === Szenen-Karte: Szenen-Liste === */
+/* === Szenen-Karte: kompakte Liste (analog Schauplätze) === */
 .szenen-liste-section { padding: 4px 0; }
 
-.szenen-liste {
+.szene-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 6px;
+  gap: 0;
+  padding: 0;
 }
-
-.szene-card {
-  border: 1px solid var(--color-border);
-  border-left-width: 3px;
-  padding: 10px 14px;
-  background: var(--color-card-bg);
+.szene-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.5rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
 }
-.szene-card--stark   { border-left-color: var(--color-stark); }
-.szene-card--mittel  { border-left-color: var(--color-mittel); }
-.szene-card--schwach { border-left-color: var(--color-err-border); }
-
-.szene-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-
-.szene-card-ort      { font-size: 11px; color: var(--color-muted); }
-.szene-card-titel    { font-size: var(--font-size-sm); font-weight: 400; margin-bottom: 3px; }
-.szene-card-kommentar { font-size: 12px; color: var(--color-muted); margin-bottom: 6px; }
+.szene-row:hover { background: var(--color-hover); }
+.szene-row--selected { background: var(--color-hover); }
+.szene-row-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+.szene-row-titel {
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.szene-row-stelle {
+  font-size: 12px;
+  color: var(--color-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+.szene-detail {
+  padding: 0.6rem 0.5rem 0.8rem 1rem;
+  background: var(--color-hover);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+}
+.szene-detail-kommentar {
+  margin: 0 0 0.4rem;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+.szene-meta-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+.szene-meta-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
 
 /* === Filter-Leiste (alle Features) === */
 .filter-bar {
@@ -4380,8 +4444,72 @@ body.focus-mode .edit-find { display: none !important; }
   margin-right: 3px;
 }
 .palette-hint { display: inline-flex; align-items: center; }
+.palette-hint--prefix kbd { margin-right: 1px; }
+.palette-hint--prefix { margin-left: auto; }
+.palette-mark {
+  background: transparent;
+  color: var(--color-accent);
+  font-weight: 600;
+  padding: 0;
+}
+.palette-toast {
+  padding: 8px 14px;
+  border-top: 1px solid var(--color-border);
+  font-size: 12px;
+  color: var(--color-muted);
+  background: var(--color-bg);
+}
+.palette-mode {
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+.palette-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.palette-mode-pill kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  padding: 1px 5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+.palette-legend {
+  padding: 6px 14px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+.palette-legend-title { display: none; }
+.palette-legend-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.palette-legend-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.palette-legend-row kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  padding: 0 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  min-width: 12px;
+  text-align: center;
+}
 
 @media (max-width: 600px) {
+  .palette-legend-grid { grid-template-columns: 1fr; }
   /* Hero: kbd-Hint weg (Mobile hat keine physische Tastatur), Padding etwas
      grösser für Tap-Komfort. */
   .palette-hero-kbd { display: none; }
@@ -5998,6 +6126,7 @@ body.focus-mode .edit-find { display: none !important; }
 .shortcuts-keys {
   flex: 0 0 8.5rem;
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
   align-items: center;
 }
@@ -6030,8 +6159,13 @@ body.focus-mode .edit-find { display: none !important; }
   .shortcuts-panel {
     padding: 1rem;
   }
+  .shortcuts-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
   .shortcuts-keys {
-    flex: 0 0 6rem;
+    flex: 0 0 auto;
   }
 }
 

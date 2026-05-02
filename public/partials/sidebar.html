@@ -74,7 +74,7 @@
                     @mouseleave.stop="showPageStatusTip=false"></span>
                   <span x-text="page.name"></span>
                 </span>
-                <span x-show="tokEsts[page.id]" class="tok-stats">
+                <span x-show="tokEsts[page.id] || ideenCounts[page.id] > 0" class="tok-stats">
                   <template x-if="tokEsts[page.id]?.words > 0">
                     <span class="tok-stats-wrap">
                       <span class="tok-badge tok-neutral"
@@ -86,6 +86,10 @@
                   <template x-if="tokEsts[page.id] && tokEsts[page.id].words === 0">
                     <span class="tok-badge tok-empty" x-text="t('sidebar.empty')"></span>
                   </template>
+                  <span x-show="ideenCounts[page.id] > 0"
+                        class="ideen-count-badge"
+                        x-text="ideenCounts[page.id]"
+                        :title="t('ideen.openCountTitle', { n: ideenCounts[page.id] })"></span>
                 </span>
               </div>
             </template>
@@ -100,7 +104,7 @@
               @mouseleave.stop="showPageStatusTip=false"></span>
             <span x-text="item.name"></span>
           </span>
-          <span x-show="tokEsts[item.page.id]" class="tok-stats">
+          <span x-show="tokEsts[item.page.id] || ideenCounts[item.page.id] > 0" class="tok-stats">
             <template x-if="tokEsts[item.page.id]?.words > 0">
               <span class="tok-stats-wrap">
                 <span class="tok-badge tok-neutral"
@@ -112,6 +116,10 @@
             <template x-if="tokEsts[item.page.id] && tokEsts[item.page.id].words === 0">
               <span class="tok-badge tok-empty" x-text="t('sidebar.empty')"></span>
             </template>
+            <span x-show="ideenCounts[item.page.id] > 0"
+                  class="ideen-count-badge"
+                  x-text="ideenCounts[item.page.id]"
+                  :title="t('ideen.openCountTitle', { n: ideenCounts[item.page.id] })"></span>
           </span>
         </div>
       </template>

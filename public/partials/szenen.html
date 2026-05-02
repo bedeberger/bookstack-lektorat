@@ -19,45 +19,54 @@
   <!-- Leer-Hinweis -->
   <div x-show="!$app.szenen.length && !szenenLoading && !szenenStatus" class="card-status" x-text="$app.t('common.noDataYet')"></div>
 
-  <!-- Szenen-Übersicht: Figuren / Kapitel / Seiten -->
-  <div x-show="$app.szenen.length > 0" class="szenen-uebersicht-grid">
-    <!-- Pro Figur -->
-    <div class="szenen-uebersicht-block">
-      <div class="bewertung-section-title" x-text="$app.t('szenen.byFigur')"></div>
-      <div class="szenen-count-badges">
-        <template x-for="f in $app.figuren" :key="f.id">
-          <span x-show="$app.szenen.some(s => s.fig_ids.includes(f.id))"
-            class="szenen-figur-count-badge"
-            :class="$app.szenen.filter(s => s.fig_ids.includes(f.id)).length < 3 ? 'szenen-figur-count-badge--wenig' : ''"
-            x-text="(f.kurzname || f.name) + ' · ' + $app.szenen.filter(s => s.fig_ids.includes(f.id)).length">
-          </span>
-        </template>
-      </div>
-    </div>
-    <!-- Pro Kapitel -->
-    <div class="szenen-uebersicht-block">
-      <div class="bewertung-section-title" x-text="$app.t('szenen.byKapitel')"></div>
-      <div class="szenen-count-badges">
-        <template x-for="k in $app.szenenNachKapitel" :key="k.name">
-          <span class="szenen-kapitel-count-badge" :title="$app.t('szenen.tooltip', { stark: k.stark, mittel: k.mittel, schwach: k.schwach })">
-            <span class="szenen-kapitel-name" x-text="k.name"></span>
-            <span class="szenen-kapitel-dots">
-              <template x-for="n in k.stark"   :key="'s'+n"><span class="szenen-dot szenen-dot--stark"></span></template>
-              <template x-for="n in k.mittel"  :key="'m'+n"><span class="szenen-dot szenen-dot--mittel"></span></template>
-              <template x-for="n in k.schwach" :key="'w'+n"><span class="szenen-dot szenen-dot--schwach"></span></template>
+  <!-- Szenen-Übersicht: klappbar -->
+  <div x-show="$app.szenen.length > 0" class="szenen-uebersicht">
+    <button type="button"
+            class="szenen-uebersicht-toggle"
+            @click="szenenUebersichtOpen = !szenenUebersichtOpen"
+            :aria-expanded="szenenUebersichtOpen">
+      <span class="history-chevron" :class="{ open: szenenUebersichtOpen }">›</span>
+      <span x-text="$app.t('szenen.distribution')"></span>
+    </button>
+    <div x-show="szenenUebersichtOpen" class="szenen-uebersicht-grid" x-cloak>
+      <!-- Pro Figur -->
+      <div class="szenen-uebersicht-block">
+        <div class="bewertung-section-title" x-text="$app.t('szenen.byFigur')"></div>
+        <div class="szenen-count-badges">
+          <template x-for="f in $app.figuren" :key="f.id">
+            <span x-show="$app.szenen.some(s => s.fig_ids.includes(f.id))"
+              class="szenen-figur-count-badge"
+              :class="$app.szenen.filter(s => s.fig_ids.includes(f.id)).length < 3 ? 'szenen-figur-count-badge--wenig' : ''"
+              x-text="(f.kurzname || f.name) + ' · ' + $app.szenen.filter(s => s.fig_ids.includes(f.id)).length">
             </span>
-            <span class="szenen-kapitel-total" x-text="k.total"></span>
-          </span>
-        </template>
+          </template>
+        </div>
       </div>
-    </div>
-    <!-- Pro Seite -->
-    <div class="szenen-uebersicht-block" x-show="$app.szenenNachSeite.length > 0">
-      <div class="bewertung-section-title" x-text="$app.t('szenen.bySeite')"></div>
-      <div class="szenen-count-badges">
-        <template x-for="p in $app.szenenNachSeite" :key="p.name">
-          <span class="szenen-seite-count-badge" :title="p.kapitel" x-text="p.name + ' · ' + p.total"></span>
-        </template>
+      <!-- Pro Kapitel -->
+      <div class="szenen-uebersicht-block">
+        <div class="bewertung-section-title" x-text="$app.t('szenen.byKapitel')"></div>
+        <div class="szenen-count-badges">
+          <template x-for="k in $app.szenenNachKapitel" :key="k.name">
+            <span class="szenen-kapitel-count-badge" :title="$app.t('szenen.tooltip', { stark: k.stark, mittel: k.mittel, schwach: k.schwach })">
+              <span class="szenen-kapitel-name" x-text="k.name"></span>
+              <span class="szenen-kapitel-dots">
+                <template x-for="n in k.stark"   :key="'s'+n"><span class="szenen-dot szenen-dot--stark"></span></template>
+                <template x-for="n in k.mittel"  :key="'m'+n"><span class="szenen-dot szenen-dot--mittel"></span></template>
+                <template x-for="n in k.schwach" :key="'w'+n"><span class="szenen-dot szenen-dot--schwach"></span></template>
+              </span>
+              <span class="szenen-kapitel-total" x-text="k.total"></span>
+            </span>
+          </template>
+        </div>
+      </div>
+      <!-- Pro Seite -->
+      <div class="szenen-uebersicht-block" x-show="$app.szenenNachSeite.length > 0">
+        <div class="bewertung-section-title" x-text="$app.t('szenen.bySeite')"></div>
+        <div class="szenen-count-badges">
+          <template x-for="p in $app.szenenNachSeite" :key="p.name">
+            <span class="szenen-seite-count-badge" :title="p.kapitel" x-text="p.name + ' · ' + p.total"></span>
+          </template>
+        </div>
       </div>
     </div>
   </div>
@@ -94,26 +103,42 @@
       </div>
       <span class="filter-count" x-text="$app.szenenFiltered.length + ' / ' + $app.szenen.length"></span>
     </div>
-    <div class="szenen-liste">
-      <template x-for="(s, i) in $app.szenenFiltered" :key="i">
-        <div class="szene-card" :class="'szene-card--' + (s.wertung || 'mittel')">
-          <div class="szene-card-header">
-            <span class="szene-card-wertung" :class="'figur-szene-wertung--' + (s.wertung || 'mittel')" x-text="s.wertung ? $app.t('szenen.rating.' + s.wertung) : '–'"></span>
-            <span class="szene-card-ort internal-link" @click="s.page_id ? $app.gotoPageById(s.page_id) : $app.gotoStelle(s.kapitel, s.seite)" x-text="s.kapitel + (s.seite ? ' · ' + s.seite : '')"></span>
+
+    <!-- Kompakte Szenen-Liste -->
+    <div class="szene-list">
+      <template x-for="(s, i) in $app.szenenFiltered" :key="s.id || i">
+        <div>
+          <div class="szene-row"
+               :data-szeneid="s.id"
+               :class="{ 'szene-row--selected': $app.selectedSzeneId === s.id }"
+               @click="$app.selectedSzeneId = $app.selectedSzeneId === s.id ? null : s.id">
+            <span class="szenen-dot szene-row-dot"
+                  :class="'szenen-dot--' + (s.wertung || 'mittel')"
+                  :title="s.wertung ? $app.t('szenen.rating.' + s.wertung) : ''"></span>
+            <span class="szene-row-titel" x-text="s.titel"></span>
+            <span class="szene-row-stelle internal-link"
+                  @click.stop="s.page_id ? $app.gotoPageById(s.page_id) : $app.gotoStelle(s.kapitel, s.seite)"
+                  x-text="s.kapitel + (s.seite ? ' · ' + s.seite : '')"></span>
+            <span class="history-chevron" :class="{ open: $app.selectedSzeneId === s.id }">›</span>
           </div>
-          <div class="szene-card-titel" x-text="s.titel"></div>
-          <div x-show="s.kommentar" class="szene-card-kommentar" x-text="s.kommentar"></div>
-          <div class="gz-figuren-row">
-            <template x-for="(figId, fi) in (s.fig_ids || [])" :key="fi">
-              <span class="gz-figur-badge internal-link"
-                :class="'gz-figur-badge--' + ($app.figurenById.get(figId)?.typ || 'andere')"
-                @click="$app.openFigurById(figId)"
-                x-text="$app.figurenById.get(figId)?.kurzname || $app.figurenById.get(figId)?.name || figId">
-              </span>
-            </template>
-            <template x-for="ortId in (s.ort_ids || [])" :key="'o'+ortId">
-              <span class="tag ort-typ-tag figur-szene-ort internal-link" @click="$app.openOrtById(ortId)" x-text="$app.orteById.get(ortId)?.name || ortId"></span>
-            </template>
+          <div x-show="$app.selectedSzeneId === s.id" class="szene-detail" x-cloak>
+            <p x-show="s.kommentar" x-text="s.kommentar" class="szene-detail-kommentar"></p>
+            <div x-show="(s.fig_ids || []).length > 0" class="szene-meta-row">
+              <span class="szene-meta-label" x-text="$app.t('orte.figuren')"></span>
+              <template x-for="figId in (s.fig_ids || [])" :key="figId">
+                <span class="tag internal-link"
+                      @click.stop="$app.openFigurById(figId)"
+                      x-text="$app.figurenById.get(figId)?.kurzname || $app.figurenById.get(figId)?.name || figId"></span>
+              </template>
+            </div>
+            <div x-show="(s.ort_ids || []).length > 0" class="szene-meta-row">
+              <span class="szene-meta-label" x-text="$app.t('szenen.orte')"></span>
+              <template x-for="ortId in (s.ort_ids || [])" :key="'o'+ortId">
+                <span class="tag internal-link"
+                      @click.stop="$app.openOrtById(ortId)"
+                      x-text="$app.orteById.get(ortId)?.name || ortId"></span>
+              </template>
+            </div>
           </div>
         </div>
       </template>

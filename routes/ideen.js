@@ -16,6 +16,23 @@ function userEmailOrNull(req) {
   return req.session?.user?.email || null;
 }
 
+// Map page_id → Anzahl offener Ideen für ein Buch (für Tree-Indikatoren).
+router.get('/counts', (req, res) => {
+  const userEmail = userEmailOrNull(req);
+  const bookId = toIntId(req.query.book_id);
+  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
+  if (!bookId)    return res.status(400).json({ error_code: 'INVALID_ID' });
+  const rows = db.prepare(`
+    SELECT page_id, COUNT(*) AS n
+    FROM ideen
+    WHERE book_id = ? AND user_email = ? AND erledigt = 0
+    GROUP BY page_id
+  `).all(bookId, userEmail);
+  const map = {};
+  for (const r of rows) map[r.page_id] = r.n;
+  res.json(map);
+});
+
 // Liste aller Ideen einer Seite (offen oben, dann erledigte; je Block neueste zuerst).
 router.get('/', (req, res) => {
   const userEmail = userEmailOrNull(req);

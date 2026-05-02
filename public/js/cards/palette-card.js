@@ -1,17 +1,24 @@
-// Alpine.data('paletteCard') — Command-Palette (Cmd/Ctrl+K).
-// Modal mit Such-Input + gefilterter Feature-Liste, gruppiert nach
-// Bewertung / Welt & Plot / Werkzeug. Oben optional „Zuletzt"-Block.
+// Alpine.data('paletteCard') — Command-Palette (Cmd/Ctrl+K bzw. /).
+// Modal mit Such-Input + Sektionen aus Karten + globalen Aktionen + Such-Providern.
+// Prefix-Modi: `>` Befehle, `#` Seiten, `!` Kapitel, `@` Figuren, `$` Orte,
+// `%` Szenen. Ohne Prefix: alles fuzzy gemixt.
 //
 // Trigger:
 //  - Hero-Bar Klick → CustomEvent('palette:open')
-//  - Globaler Shortcut Cmd/Ctrl+K (shortcuts.js) → CustomEvent('palette:open')
-//  - Quick-Pill ⌘K-Hint → CustomEvent('palette:open')
+//  - Globaler Shortcut Cmd/Ctrl+K bzw. `/` (shortcuts.js) → CustomEvent('palette:open')
 //
 // Activate:
-//  - Klick auf Item oder Enter mit aktiver Idx → activateFeature(key)
-//  - Schliesst Palette und ruft Root-Toggle-Methode
+//  - Klick auf Item oder Enter mit aktiver Idx → activateItem(item)
+//  - Schliesst Palette und ruft passende Aktion (Toggle/Action/Provider-Run).
 
-import { FEATURES, FEATURE_GROUPS, GROUP_LABEL_KEY, featureByKey, isFeatureAvailable } from './feature-registry.js';
+import {
+  FEATURES, ACTIONS, FEATURE_GROUPS, GROUP_LABEL_KEY,
+  featureByKey, isFeatureAvailable, unavailabilityReasonKey,
+} from './feature-registry.js';
+import { fuzzyMatch, highlight } from './palette-fuzzy.js';
+import { PROVIDERS, parseQuery } from './palette-providers.js';
+
+const FUZZY_THRESHOLD_PER_CHAR = 6; // grobe Score-Grenze für Mix-Modus
 
 export function registerPaletteCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
@@ -19,7 +26,11 @@ export function registerPaletteCard() {
     paletteOpen: false,
     paletteQuery: '',
     paletteIdx: 0,
+    paletteToast: '',
     _paletteAbort: null,
+    _toastTimer: null,
+    _sectionsCache: null,
+    _sectionsCacheKey: '',
 
     init() {
       const abort = new AbortController();
@@ -32,12 +43,14 @@ export function registerPaletteCard() {
 
     destroy() {
       this._paletteAbort?.abort();
+      if (this._toastTimer) clearTimeout(this._toastTimer);
     },
 
     openPalette() {
       this.paletteOpen = true;
       this.paletteQuery = '';
       this.paletteIdx = 0;
+      this.paletteToast = '';
       this.$nextTick(() => {
         const input = document.querySelector('.palette-input');
         if (input) input.focus();
@@ -48,6 +61,7 @@ export function registerPaletteCard() {
       this.paletteOpen = false;
       this.paletteQuery = '';
       this.paletteIdx = 0;
+      this.paletteToast = '';
     },
 
     onPaletteInput() {
@@ -61,20 +75,23 @@ export function registerPaletteCard() {
         this.closePalette();
         return;
       }
-      const flat = this._paletteFlatItems();
-      if (!flat.length) return;
-      if (k === 'ArrowDown') {
+      const flat = this._flatItems();
+      if (!flat.length) {
+        if (k === 'Tab') event.preventDefault();
+        return;
+      }
+      if (k === 'ArrowDown' || (k === 'Tab' && !event.shiftKey)) {
         event.preventDefault();
         this.paletteIdx = (this.paletteIdx + 1) % flat.length;
         this._scrollActiveIntoView();
-      } else if (k === 'ArrowUp') {
+      } else if (k === 'ArrowUp' || (k === 'Tab' && event.shiftKey)) {
         event.preventDefault();
         this.paletteIdx = (this.paletteIdx - 1 + flat.length) % flat.length;
         this._scrollActiveIntoView();
       } else if (k === 'Enter') {
         event.preventDefault();
         const item = flat[this.paletteIdx];
-        if (item) this.activateFeature(item.key);
+        if (item) this.activateItem(item);
       }
     },
 
@@ -93,98 +110,341 @@ export function registerPaletteCard() {
       };
     },
 
-    _matches(feature, q) {
-      if (!q) return true;
-      const t = (key) => (window.__app?.t?.(key) || '').toLowerCase();
-      const groupLabel = t(GROUP_LABEL_KEY[feature.group]);
-      const label = t(feature.labelKey);
-      const desc = t(feature.descKey);
-      const needle = q.toLowerCase();
-      return label.includes(needle) || desc.includes(needle) || groupLabel.includes(needle);
+    // ── Sektionen-Aufbau ──────────────────────────────────────────────────
+    // Wird pro Render mehrfach gelesen. Cache via stringifiziertem Key (query
+    // + book-id + Längen der Daten-Quellen) damit Fuzzy nicht 20×/keystroke läuft.
+    paletteSections() {
+      const root = window.__app || {};
+      const ctx = this._ctx();
+      const cacheKey = [
+        this.paletteQuery,
+        ctx.selectedBookId || '',
+        (ctx.pages || []).length,
+        (root.figuren || []).length,
+        (root.orte || []).length,
+        (root.szenen || []).length,
+        (root.tree || []).length,
+        (root.recentFeatureKeys || []).join(','),
+        (root.recentPageIds || []).join(','),
+        root.uiLocale || '',
+      ].join('|');
+      if (this._sectionsCache && this._sectionsCacheKey === cacheKey) {
+        return this._sectionsCache;
+      }
+      const sections = this._buildSections(root, ctx);
+      this._sectionsCacheKey = cacheKey;
+      this._sectionsCache = sections;
+      return sections;
     },
 
-    // Sektionen für die Render-Struktur; jede Section enthält gefilterte Features.
-    paletteSections() {
-      const q = this.paletteQuery.trim();
-      const ctx = this._ctx();
+    _buildSections(root, ctx) {
+      const parsed = parseQuery(this.paletteQuery);
+      const t = (k, p) => (root.t ? root.t(k, p) : k);
+
+      // Provider-Modus: nur dieser eine Provider.
+      if (parsed.mode === 'provider') {
+        if (typeof parsed.provider.prepare === 'function') {
+          // Lazy-Load anstossen, falls Datenquelle (orte/szenen) noch leer ist.
+          // Ergebnis kommt asynchron, Alpine re-rendered sobald root-State sich ändert
+          // (cacheKey enthält Längen der Listen).
+          parsed.provider.prepare(root);
+        }
+        const items = parsed.provider.search(root, parsed.q, t);
+        if (!items.length) return [];
+        return [{ key: parsed.provider.key, labelKey: parsed.provider.sectionKey, items }];
+      }
+
+      // Befehls-Modus: nur Aktionen.
+      if (parsed.mode === 'commands') {
+        const items = this._matchActions(ACTIONS, parsed.q, ctx, t);
+        if (!items.length) return [];
+        return [{ key: 'commands', labelKey: 'palette.section.commands', items }];
+      }
+
+      // Mix-Modus: Karten + Aktionen + (bei aktiver Query) Top-Treffer aus Providern.
+      const q = parsed.q;
       const sections = [];
 
-      // „Zuletzt"-Block nur ohne Suche und mit vorhandenen Recent-Keys.
+      // „Zuletzt"-Block nur ohne Suche.
       if (!q) {
-        const recent = (window.__app?.recentFeatureKeys || [])
+        const recent = (root.recentFeatureKeys || [])
           .map(k => featureByKey(k))
           .filter(Boolean);
         if (recent.length) {
           sections.push({
             key: 'recent',
             labelKey: 'palette.recent',
-            items: recent.map(f => ({ key: f.key, feature: f, available: isFeatureAvailable(f, ctx) })),
+            items: recent.map(f => this._toggleItem(f, ctx)),
+          });
+        }
+        // Zuletzt besuchte Seiten (max. 5) — Lookup gegen ctx.pages.
+        const pageById = new Map((ctx.pages || []).map(p => [p.id, p]));
+        const recentPages = (root.recentPageIds || [])
+          .map(id => pageById.get(id))
+          .filter(Boolean);
+        if (recentPages.length) {
+          sections.push({
+            key: 'recentPages',
+            labelKey: 'palette.section.recentPages',
+            items: recentPages.map(p => ({
+              key: 'page:' + p.id,
+              providerKey: 'pages',
+              kind: 'page',
+              label: p.name || '',
+              sub: p.chapterName || '',
+              score: 0,
+              indices: [],
+              available: true,
+              run: (r) => r.gotoPageById(p.id),
+            })),
           });
         }
       }
 
+      // Karten-Gruppen.
       for (const groupKey of FEATURE_GROUPS) {
-        const items = FEATURES
-          .filter(f => f.group === groupKey)
-          .filter(f => this._matches(f, q))
-          .map(f => ({ key: f.key, feature: f, available: isFeatureAvailable(f, ctx) }));
+        if (groupKey === 'app') continue; // App-Aktionen kommen separat.
+        const items = this._matchFeatures(FEATURES.filter(f => f.group === groupKey), q, ctx, t);
         if (items.length) {
           sections.push({ key: groupKey, labelKey: GROUP_LABEL_KEY[groupKey], items });
+        }
+      }
+
+      // App-Aktionen (immer mitgesucht).
+      const actionItems = this._matchActions(ACTIONS, q, ctx, t);
+      if (actionItems.length) {
+        sections.push({ key: 'app', labelKey: GROUP_LABEL_KEY.app, items: actionItems });
+      }
+
+      // Such-Provider (nur bei aktiver Query): Pages/Chapters/Figuren/Orte/Szenen
+      // mit Top-Treffern, sofern Score gut genug.
+      if (q && q.length >= 2) {
+        const limit = Math.max(3, Math.ceil(q.length * FUZZY_THRESHOLD_PER_CHAR));
+        for (const provider of PROVIDERS) {
+          const items = provider.search(root, q, t).filter(it => it.score < limit);
+          if (items.length) {
+            sections.push({ key: provider.key, labelKey: provider.sectionKey, items });
+          }
         }
       }
       return sections;
     },
 
-    // Flach-Liste für Tastatur-Navigation. Index entspricht visueller Reihenfolge.
-    _paletteFlatItems() {
+    _matchFeatures(features, q, ctx, t) {
+      const out = [];
+      for (const f of features) {
+        const item = this._toggleItem(f, ctx);
+        if (!q) { out.push(item); continue; }
+        const m = this._matchFeatureFuzzy(f, q, t);
+        if (!m) continue;
+        item.score = m.score;
+        item.indices = m.indices;
+        out.push(item);
+      }
+      if (q) out.sort((a, b) => a.score - b.score);
+      return out;
+    },
+
+    _matchActions(actions, q, ctx, t) {
+      const out = [];
+      for (const a of actions) {
+        const item = this._actionItem(a, ctx);
+        if (!q) { out.push(item); continue; }
+        const m = this._matchFeatureFuzzy(a, q, t);
+        if (!m) continue;
+        item.score = m.score;
+        item.indices = m.indices;
+        out.push(item);
+      }
+      if (q) out.sort((a, b) => a.score - b.score);
+      return out;
+    },
+
+    // Fuzzy gegen Label, Desc, Group-Label und Aliases. Bestes Ergebnis gewinnt.
+    // Indices kommen nur aus Label-Treffern (für Highlight).
+    _matchFeatureFuzzy(feature, q, t) {
+      const label = (feature.labelKey ? t(feature.labelKey) : '') || '';
+      const desc  = (feature.descKey  ? t(feature.descKey)  : '') || '';
+      const groupLabel = feature.group ? (t(GROUP_LABEL_KEY[feature.group]) || '') : '';
+      const labelMatch = fuzzyMatch(q, label);
+      let best = labelMatch ? { score: labelMatch.score, indices: labelMatch.indices } : null;
+      const others = [desc, groupLabel, ...(feature.aliases || [])];
+      for (const o of others) {
+        const m = fuzzyMatch(q, o);
+        if (!m) continue;
+        const score = m.score + 4; // Label-Treffer bevorzugen
+        if (!best || score < best.score) best = { score, indices: labelMatch?.indices || [] };
+      }
+      return best;
+    },
+
+    _toggleItem(feature, ctx) {
+      const available = isFeatureAvailable(feature, ctx);
+      return {
+        key: feature.key,
+        kind: 'toggle',
+        feature,
+        labelKey: feature.labelKey,
+        descKey: feature.descKey,
+        available,
+        reasonKey: available ? null : unavailabilityReasonKey(feature, ctx),
+        score: 0,
+        indices: [],
+      };
+    },
+
+    _actionItem(action, ctx) {
+      const available = isFeatureAvailable(action, ctx);
+      return {
+        key: action.key,
+        kind: 'action',
+        feature: action,
+        labelKey: action.labelKey,
+        descKey: action.descKey,
+        available,
+        reasonKey: available ? null : unavailabilityReasonKey(action, ctx),
+        score: 0,
+        indices: [],
+      };
+    },
+
+    // ── Flach-Liste für Tastatur-Navigation ──────────────────────────────
+    _flatItems() {
       const out = [];
       for (const sec of this.paletteSections()) {
-        for (const it of sec.items) out.push(it);
+        for (const it of sec.items) out.push({ ...it, sectionKey: sec.key });
       }
       return out;
     },
 
-    paletteIsActive(idx) {
-      return idx === this.paletteIdx;
+    // ── Render-Helfer für Template ────────────────────────────────────────
+    paletteItemId(sectionKey, itemKey) {
+      return 'palette-opt-' + sectionKey + '-' + String(itemKey).replace(/[^\w-]/g, '_');
     },
 
-    paletteItemIndex(sectionKey, itemKey) {
-      const flat = this._paletteFlatItems();
-      return flat.findIndex(it => it.key === itemKey && this._sectionForFlatIdx(flat, sectionKey, itemKey));
+    paletteIsActive(sectionKey, itemKey) {
+      const flat = this._flatItems();
+      const cur = flat[this.paletteIdx];
+      return !!cur && cur.sectionKey === sectionKey && cur.key === itemKey;
     },
 
-    // Hilfs-Lookup: globaler Index eines Items innerhalb der flachen Liste.
-    // Bei Recent + Group-Section kann derselbe key zweimal vorkommen — wir
-    // matchen über Reihenfolge in paletteSections().
-    paletteGlobalIdx(sectionKey, itemKey) {
-      let idx = 0;
-      for (const sec of this.paletteSections()) {
-        for (const it of sec.items) {
-          if (sec.key === sectionKey && it.key === itemKey) return idx;
-          idx++;
-        }
+    activeItemDomId() {
+      const flat = this._flatItems();
+      const cur = flat[this.paletteIdx];
+      if (!cur) return '';
+      return this.paletteItemId(cur.sectionKey, cur.key);
+    },
+
+    // Aktueller Modus für Mode-Pill (nur wenn Prefix erkannt).
+    paletteCurrentMode() {
+      const parsed = parseQuery(this.paletteQuery);
+      if (parsed.mode === 'commands') return { key: 'commands', labelKey: 'palette.mode.commands', prefix: '>' };
+      if (parsed.mode === 'provider') return { key: parsed.provider.key, labelKey: parsed.provider.sectionKey, prefix: parsed.provider.prefix };
+      return null;
+    },
+
+    // Statische Legende der Prefix-Modi (für Empty-State).
+    paletteLegendItems() {
+      return [
+        { prefix: '>', labelKey: 'palette.legend.commands' },
+        { prefix: '#', labelKey: 'palette.legend.pages' },
+        { prefix: '!', labelKey: 'palette.legend.chapters' },
+        { prefix: '@', labelKey: 'palette.legend.figuren' },
+        { prefix: '$', labelKey: 'palette.legend.orte' },
+        { prefix: '%', labelKey: 'palette.legend.szenen' },
+      ];
+    },
+
+    onItemHover(sectionKey, itemKey) {
+      const flat = this._flatItems();
+      const idx = flat.findIndex(it => it.sectionKey === sectionKey && it.key === itemKey);
+      if (idx >= 0) this.paletteIdx = idx;
+    },
+
+    // t() darf nicht aus dem Root extrahiert werden — i18n.t liest `this.uiLocale`,
+    // ein unbound-Aufruf wirft TypeError und kappt das gesamte Alpine-Rendering.
+    _t(key, params) {
+      const root = window.__app;
+      if (root && typeof root.t === 'function') return root.t(key, params);
+      return key;
+    },
+
+    renderLabelHtml(item) {
+      if (item.labelKey) return highlight(this._t(item.labelKey), item.indices || []);
+      return highlight(item.label || '', item.indices || []);
+    },
+
+    renderSubText(item) {
+      if (item.kind === 'toggle' || item.kind === 'action') {
+        return item.descKey ? this._t(item.descKey) : '';
       }
-      return -1;
+      return item.sub || '';
     },
 
-    activateFeature(key) {
-      const feature = featureByKey(key);
-      if (!feature) return;
-      const ctx = this._ctx();
-      if (!isFeatureAvailable(feature, ctx)) return;
+    // ── Aktion ausführen ──────────────────────────────────────────────────
+    activateItem(item) {
+      if (!item) return;
+      if (!item.available) {
+        if (item.reasonKey) this._showToast(item.reasonKey);
+        return;
+      }
       const root = window.__app;
       if (!root) return;
-      const fn = root[feature.toggle];
-      if (typeof fn !== 'function') return;
-      this.closePalette();
-      fn.call(root);
+
+      // Karten-Toggle
+      if (item.kind === 'toggle') {
+        const fn = root[item.feature.toggle];
+        if (typeof fn !== 'function') return;
+        this._trackPaletteUsage(item.feature.key);
+        this.closePalette();
+        fn.call(root);
+        return;
+      }
+      // Globale Aktion
+      if (item.kind === 'action') {
+        if (typeof item.feature.run !== 'function') return;
+        this.closePalette();
+        try { item.feature.run(root); } catch (e) { console.error('[palette action]', e); }
+        return;
+      }
+      // Provider-Item
+      if (typeof item.run === 'function') {
+        this.closePalette();
+        try { item.run(root); } catch (e) { console.error('[palette provider]', e); }
+      }
+    },
+
+    // Legacy-API: per Klick aus Template bisher activateFeature(key) — bleibt.
+    activateFeature(key) {
+      const flat = this._flatItems();
+      const item = flat.find(it => it.key === key);
+      if (item) this.activateItem(item);
     },
 
     onOverlayClick(event) {
-      // Nur schliessen wenn Klick auf Overlay selbst, nicht auf Panel.
       if (event.target === event.currentTarget) this.closePalette();
     },
 
-    _sectionForFlatIdx() { return true; }, // unbenutzt, Reservation
+    // ── Disabled-Toast ───────────────────────────────────────────────────
+    _showToast(key) {
+      this.paletteToast = this._t(key);
+      if (this._toastTimer) clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => { this.paletteToast = ''; }, 2200);
+    },
+
+    // ── Tracking-Quelle markieren ────────────────────────────────────────
+    // Karten-Öffnungen werden via $watch in features-usage.js ohnehin getrackt.
+    // Zusätzlich melden wir die Quelle 'palette' an /usage/track — Server kann
+    // den Source-Tag in Logs auswerten (kein DB-Schema-Change nötig).
+    _trackPaletteUsage(key) {
+      try {
+        fetch('/usage/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, source: 'palette' }),
+          credentials: 'same-origin',
+        }).catch(() => {});
+      } catch {}
+    },
   }));
 }

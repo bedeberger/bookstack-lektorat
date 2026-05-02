@@ -178,6 +178,7 @@ const lektoratState = () => ({
   tokEsts: {},
   _tokenEstGen: 0,
   pageLastChecked: {},
+  ideenCounts: {},
   showTokLegend: false,
   tokLegendPos: { x: 0, y: 0 },
   tokTooltipData: null,
@@ -226,6 +227,7 @@ const ereignisseState = () => ({
 
 const szenenState = () => ({
   szenenUpdatedAt: null,
+  selectedSzeneId: null,
   szenenFilters: {
     wertung: '',
     figurId: '',
@@ -253,8 +255,10 @@ const chatsState = () => ({
 
 // Feature-Usage: Top-3 nach Recency, gespeist aus /usage/recent. Default-Set
 // aus feature-registry, wenn User noch keine Tracking-Daten hat.
+// recentPageIds: pro Buch die letzten N geöffneten Seiten-IDs (Command-Palette).
 const featuresUsageState = () => ({
   recentFeatureKeys: ['review', 'figuren', 'bookchat'],
+  recentPageIds: [],
 });
 
 const jobsState = () => ({

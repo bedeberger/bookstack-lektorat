@@ -37,6 +37,25 @@ export const appNavigationMethods = {
     }
   },
 
+  async openSzeneById(szeneId) {
+    this._beginNavigation();
+    try {
+      this.szenenFilters.suche = '';
+      this.szenenFilters.wertung = '';
+      this.szenenFilters.figurId = '';
+      this.szenenFilters.kapitel = '';
+      this.szenenFilters.ortId = '';
+      if (!this.showSzenenCard) {
+        await this.toggleSzenenCard();
+      }
+      this.selectedSzeneId = szeneId;
+      await this.$nextTick();
+      document.querySelector(`.szene-row[data-szeneid="${szeneId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } finally {
+      this._endNavigation();
+    }
+  },
+
   async openEreignisseMitKapitel(kapitel) {
     this._beginNavigation();
     try {

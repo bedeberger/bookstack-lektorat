@@ -34,6 +34,10 @@ export const appViewMethods = {
     this.currentPage = p;
     this.showEditorCard = true;
 
+    if (typeof this._trackPageUsage === 'function' && this.selectedBookId) {
+      this._trackPageUsage(p.id, this.selectedBookId);
+    }
+
     this._loadPageBadgeCounts(p.id);
 
     // Prüfen ob ein Lektorat-Check-Job für diese Seite läuft (Server-seitig oder aus früherer Session)
@@ -131,8 +135,14 @@ export const appViewMethods = {
         fetchJson(`/chat/sessions/${pageId}`).catch(() => []),
       ]);
       if (this.currentPage?.id !== pageId) return;
-      this.currentPageIdeenOpenCount = (Array.isArray(ideen) ? ideen : []).filter(i => !i.erledigt).length;
+      const openCount = (Array.isArray(ideen) ? ideen : []).filter(i => !i.erledigt).length;
+      this.currentPageIdeenOpenCount = openCount;
       this.currentPageChatSessionCount = (Array.isArray(sessions) ? sessions : []).length;
+      // Tree-Indikator mit frischer Wahrheit syncen (z.B. bei Cross-Tab-Edits).
+      const next = { ...(this.ideenCounts || {}) };
+      if (openCount > 0) next[pageId] = openCount;
+      else delete next[pageId];
+      this.ideenCounts = next;
     } catch (e) {
       console.error('[loadPageBadgeCounts]', e);
     }
@@ -364,14 +374,21 @@ export const appViewMethods = {
     this.pageHistory = [];
     this.activeHistoryEntryId = null;
     this.tokEsts = {};
+    this.ideenCounts = {};
     this._tokenEstGen++;
 
     this.selectedFigurId = null;
     this.selectedOrtId = null;
+    this.selectedSzeneId = null;
     this.lastCheckId = null;
 
     this.szenenUpdatedAt = null;
     this.orteUpdatedAt = null;
+
+    this.recentPageIds = [];
+    if (typeof this.loadRecentPages === 'function' && this.selectedBookId) {
+      this.loadRecentPages(this.selectedBookId);
+    }
 
     // Root-gehaltene Pollers stoppen (zielen sonst auf altes Buch).
     const timers = [
@@ -429,6 +446,7 @@ export const appViewMethods = {
     this.showSzenenCard = false;
     this.szenen = [];
     this.szenenUpdatedAt = null;
+    this.selectedSzeneId = null;
     this.szenenFilters.wertung = '';
     this.szenenFilters.figurId = '';
     this.szenenFilters.kapitel = '';

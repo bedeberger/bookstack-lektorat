@@ -13,6 +13,7 @@ export function registerSzenenCard() {
     szenenLoading: false,
     szenenProgress: 0,
     szenenStatus: '',
+    szenenUebersichtOpen: false,
     _szenenPollTimer: null,
 
     _onBookChanged: null,

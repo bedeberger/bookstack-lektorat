@@ -149,6 +149,7 @@ export const treeMethods = {
       this.pageSearch = '';
       this.tokEsts = {};
       this.pageLastChecked = {};
+      this.ideenCounts = {};
       this.tree = [];
       this.pages = [];
       this._tokenEstGen++;
@@ -214,13 +215,15 @@ export const treeMethods = {
         this._pageIdOrderMap.set(p.id, i);
       }
 
-      // Gecachte Stats + Page-Ages aus DB laden
+      // Gecachte Stats + Page-Ages + Ideen-Counts aus DB laden
       try {
-        const [statsCache, ageMap] = await Promise.all([
+        const [statsCache, ageMap, ideenMap] = await Promise.all([
           fetchJson('/history/page-stats/' + bookId),
           fetchJson('/history/page-ages/' + bookId),
+          fetchJson('/ideen/counts?book_id=' + bookId).catch(() => ({})),
         ]);
         this.pageLastChecked = ageMap || {};
+        this.ideenCounts = ideenMap || {};
         for (const p of this.pages) {
           const c = statsCache[p.id];
           if (c && c.updated_at === p.updated_at) {
