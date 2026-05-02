@@ -2902,7 +2902,7 @@ body.focus-mode .edit-find { display: none !important; }
 }
 
 /* === Tree view === */
-.tree-chapter { margin-bottom: 6px; }
+.tree-chapter { margin-bottom: 16px; }
 
 .tree-chapter-header {
   display: flex;
@@ -2937,8 +2937,8 @@ body.focus-mode .edit-find { display: none !important; }
 /* Guide-Linie für die Seiten eines Kapitels */
 .tree-chapter-pages {
   position: relative;
-  margin-left: 4px;
-  padding-left: 8px;
+  margin-left: 12px;
+  padding-left: 10px;
   padding-top: 2px;
 }
 .tree-chapter-pages::before {
@@ -5405,10 +5405,48 @@ body.focus-mode .edit-find { display: none !important; }
 @media (min-width: 960px) {
   .layout {
     display: grid;
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: var(--sidebar-w, 280px) 1fr;
     gap: 0 1.75rem;
     align-items: start;
   }
+}
+
+/* Resize-Handle: sitzt am rechten Rand der Sidebar, ragt halb in den
+   Grid-Gap. JS injiziert das Element in `.layout-sidebar` und schreibt
+   `--sidebar-w` auf `.layout`. Persistenz in localStorage('sidebar-width').
+   Mobile (<960px) hat keinen Grid → Handle versteckt.
+   Editor schrumpft mit (1fr), Chat/Ideen-Spalte bleibt fix bei 420px. */
+.layout-sidebar {
+  position: relative;
+}
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: calc(-1 * (1.75rem / 2) - 3px);
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+  z-index: 5;
+  touch-action: none;
+}
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle.dragging,
+.sidebar-resize-handle:focus-visible {
+  background: var(--color-accent-soft);
+  outline: none;
+}
+@media (max-width: 959.98px) {
+  .sidebar-resize-handle { display: none; }
+}
+body.sidebar-resizing {
+  cursor: col-resize !important;
+  user-select: none;
+}
+body.sidebar-resizing iframe {
+  pointer-events: none;
 }
 
 /* === Editor + Chat side-by-side === */

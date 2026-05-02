@@ -55,6 +55,85 @@ export const appChromeMethods = {
     }
     setTimeout(() => location.reload(), 2000);
   },
+  // ── Sidebar-Resize ──────────────────────────────────────────────────────
+  // Handle am rechten Rand der `.layout-sidebar`; verändert `--sidebar-w`
+  // auf `.layout`. Editor (1fr) gibt Platz, Chat/Ideen (420px fix) nicht.
+  _initSidebarResize() {
+    const layout  = document.querySelector('.layout');
+    const sidebar = document.querySelector('.layout-sidebar');
+    if (!layout || !sidebar) return;
+    if (sidebar.querySelector('.sidebar-resize-handle')) return;
+
+    const MIN = 220;
+    const MAX = 600;
+    const apply = (w) => {
+      const clamped = Math.max(MIN, Math.min(MAX, Math.round(w)));
+      layout.style.setProperty('--sidebar-w', clamped + 'px');
+      return clamped;
+    };
+
+    const saved = parseInt(localStorage.getItem('sidebar-width'), 10);
+    if (Number.isFinite(saved)) apply(saved);
+
+    const handle = document.createElement('div');
+    handle.className = 'sidebar-resize-handle';
+    handle.setAttribute('role', 'separator');
+    handle.setAttribute('aria-orientation', 'vertical');
+    handle.setAttribute('aria-label', this.t('sidebar.resizeHandle'));
+    handle.tabIndex = 0;
+    sidebar.appendChild(handle);
+
+    let dragging = false;
+    let startX = 0;
+    let startW = 0;
+
+    const onMove = (e) => {
+      if (!dragging) return;
+      apply(startW + (e.clientX - startX));
+    };
+    const persist = () => {
+      const cur = parseInt(getComputedStyle(layout).getPropertyValue('--sidebar-w'), 10);
+      if (Number.isFinite(cur)) {
+        try { localStorage.setItem('sidebar-width', String(cur)); } catch {}
+      }
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove('dragging');
+      document.body.classList.remove('sidebar-resizing');
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      persist();
+    };
+
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      dragging = true;
+      startX = e.clientX;
+      startW = sidebar.getBoundingClientRect().width;
+      handle.classList.add('dragging');
+      document.body.classList.add('sidebar-resizing');
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+
+    handle.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const cur = sidebar.getBoundingClientRect().width;
+      const step = e.shiftKey ? 32 : 8;
+      apply(cur + (e.key === 'ArrowRight' ? step : -step));
+      persist();
+    });
+
+    handle.addEventListener('dblclick', () => {
+      apply(280);
+      persist();
+    });
+  },
+
   _avatarInitials() {
     const src = (this.currentUser && (this.currentUser.name || this.currentUser.email)) || '';
     if (!src) return '·';

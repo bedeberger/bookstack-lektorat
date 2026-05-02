@@ -540,6 +540,7 @@ document.addEventListener('alpine:init', () => {
         this.uiLocale = fallbackLocale;
         document.documentElement.setAttribute('lang', fallbackLocale);
         await this._loadPartials();
+        this._initSidebarResize();
       } catch (e) {
         console.error('[init:shell]', e);
       }

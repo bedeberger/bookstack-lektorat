@@ -317,6 +317,7 @@
   "sidebar.reviewChapterTitle":  "Review chapter «{name}» (dramaturgy, pacing, coherence)",
   "sidebar.empty":               "empty",
   "sidebar.noPagesFound":        "No pages found.",
+  "sidebar.resizeHandle":        "Resize sidebar (use arrow keys to adjust)",
   "sidebar.status.noLektorat":   "Not yet reviewed",
   "sidebar.status.lektoratToday":     "Reviewed today, {time}",
   "sidebar.status.lektoratYesterday": "Reviewed yesterday, {time}",

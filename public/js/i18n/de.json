@@ -317,6 +317,7 @@
   "sidebar.reviewChapterTitle":  "Kapitel «{name}» bewerten (Dramaturgie, Erzähltempo, Kohärenz)",
   "sidebar.empty":               "leer",
   "sidebar.noPagesFound":        "Keine Seiten gefunden.",
+  "sidebar.resizeHandle":        "Sidebar-Breite verändern (Pfeiltasten zum Anpassen)",
   "sidebar.status.noLektorat":   "Noch kein Lektorat",
   "sidebar.status.lektoratToday":     "Lektorat heute, {time}",
   "sidebar.status.lektoratYesterday": "Lektorat gestern, {time}",
