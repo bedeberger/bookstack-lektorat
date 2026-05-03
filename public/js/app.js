@@ -428,7 +428,7 @@ document.addEventListener('alpine:init', () => {
       return this.orte.filter(o =>
         (!q || (o.name || '').toLowerCase().includes(q)) &&
         (!this.orteFilters.figurId || (o.figuren || []).includes(this.orteFilters.figurId)) &&
-        (!this.orteFilters.kapitel || (o.kapitel || []).some(k => k.name === this.orteFilters.kapitel)) &&
+        (!this.orteFilters.kapitel || (o.kapitel || []).some(k => k.name === this.orteFilters.kapitel || String(k.chapter_id) === String(this.orteFilters.kapitel))) &&
         (!this.orteFilters.szeneId || this.szenen.some(s => String(s.id) === String(this.orteFilters.szeneId) && (s.ort_ids || []).includes(o.id)))
       ).sort((a, b) => {
         const aK = Math.min(...(a.kapitel || []).map(k => this._chapterIdx(k.name)), 9999);

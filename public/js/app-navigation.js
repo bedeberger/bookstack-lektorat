@@ -53,6 +53,24 @@ export const appNavigationMethods = {
     }
   },
 
+  async openOrtMitKapitel(ortId, kapitelName) {
+    this._beginNavigation();
+    try {
+      this.orteFilters.suche = '';
+      this.orteFilters.figurId = '';
+      this.orteFilters.kapitel = kapitelName || '';
+      this.orteFilters.szeneId = '';
+      if (!this.showOrteCard) {
+        await this.toggleOrteCard();
+      }
+      this.selectedOrtId = ortId;
+      await this.$nextTick();
+      document.querySelector(`[data-ortid="${ortId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } finally {
+      this._endNavigation();
+    }
+  },
+
   async openSzeneById(szeneId) {
     this._beginNavigation();
     try {

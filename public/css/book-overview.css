@@ -293,8 +293,8 @@
   color: var(--color-muted);
 }
 .overview-fig-chips {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 .overview-fig-chip {
@@ -306,7 +306,6 @@
   background: var(--color-surface);
   border: 0.5px solid var(--color-border);
   font-size: var(--font-size-xs);
-  max-width: 100%;
   min-width: 0;
 }
 .overview-fig-name {
@@ -332,6 +331,35 @@
 .overview-fig-avatar[data-idx="0"] { background: var(--color-accent); }
 .overview-fig-avatar[data-idx="1"] { background: var(--color-success, #4caf50); }
 .overview-fig-avatar[data-idx="2"] { background: var(--color-warning, #c97a2b); }
+
+/* ── Schauplatz-Chips ────────────────────────────────────────────────────── */
+.overview-ort-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  max-width: 100%;
+  min-width: 0;
+  cursor: pointer;
+}
+.overview-ort-chip:hover { border-color: var(--color-accent); }
+.overview-ort-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-sm);
+  flex: 0 0 auto;
+  background: var(--color-muted);
+}
+/* Schauplatz-Typ-Farben (Enum aus prompts/komplett.js: stadt|gebaeude|raum|landschaft|region|andere) */
+.overview-ort-dot[data-typ="stadt"]      { background: var(--color-accent); }
+.overview-ort-dot[data-typ="gebaeude"]   { background: var(--color-warning, #c97a2b); }
+.overview-ort-dot[data-typ="raum"]       { background: var(--color-success, #4caf50); }
+.overview-ort-dot[data-typ="landschaft"] { background: #6aa9c2; }
+.overview-ort-dot[data-typ="region"]     { background: #9b6dbf; }
 
 /* ── Szenen: Stacked-Bar ─────────────────────────────────────────────────── */
 .overview-stacked-bar {
@@ -371,39 +399,33 @@
   align-items: baseline;
   gap: 8px;
 }
-.overview-sort-btn {
-  background: transparent;
-  border: 0.5px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 2px 8px;
+.overview-tile-median {
   font-size: var(--font-size-xs);
   color: var(--color-muted);
-  cursor: pointer;
   font-variant-numeric: tabular-nums;
-  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  white-space: nowrap;
+  margin-left: auto;
 }
-.overview-sort-btn:hover {
-  border-color: var(--color-border-focus);
-  color: var(--color-text);
-  background: var(--color-hover);
-}
-
 /* ── Kapitel-Verteilung: Horizontale Bars ────────────────────────────────── */
+/* Liste = Grid mit 3 Spalten; Rows nutzen `subgrid`, damit Spaltenbreiten
+   global konsistent sind (sonst sizet jede Row ihre Meta-Spalte separat
+   und der Median-Tick wandert zwischen Rows). */
 .overview-chapter-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: minmax(120px, 22%) 1fr auto;
+  column-gap: 12px;
+  row-gap: 4px;
   max-height: 280px;
   overflow-y: auto;
 }
 .overview-chapter-row {
   display: grid;
-  grid-template-columns: minmax(120px, 22%) 1fr auto;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: center;
-  gap: 12px;
   padding: 6px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -459,6 +481,15 @@
 .overview-chapter-bar-fill--findings {
   background: var(--color-warning, #c97a2b);
 }
+/* Diverging-Findings: über Median = mehr Befunde als typisch → Warnfarbe.
+   Unter Median = weniger als typisch → gemutete Erfolgsfarbe. */
+.overview-chapter-bar-fill--findings-pos {
+  background: var(--color-warning, #c97a2b);
+}
+.overview-chapter-bar-fill--findings-neg {
+  background: var(--color-success, #4caf50);
+  opacity: 0.55;
+}
 /* Diverging-Variante: Track ohne eigene Background-Farbe (Mittellinie übernimmt
    visuelle Trennung). Bar absolut positioniert, wächst von 50% nach links/rechts. */
 .overview-chapter-bar-track--diverge {
@@ -483,18 +514,25 @@
   background: var(--color-danger, #d32f2f);
   opacity: 0.7;
 }
-/* Median-Tick: bei Diverging-Bar fix in Track-Mitte, markiert Bezugspunkt. */
+/* Median-Tick: bei Diverging-Bar fix in Track-Mitte, markiert Bezugspunkt.
+   Stretch top/bottom = 8px (Row-Padding 6px + halbe Liste-Gap 2px), damit
+   die Ticks angrenzender Zeilen visuell zu einer durchgehenden Linie
+   verschmelzen. Dashed → liest sich als Median-Referenz quer durchs Tile. */
 .overview-chapter-median-tick {
   position: absolute;
-  top: -2px;
-  bottom: -2px;
+  top: -8px;
+  bottom: -8px;
   left: 50%;
-  width: 1.5px;
-  background: var(--color-text);
-  opacity: 0.55;
+  width: 0;
+  border-left: 1px dashed var(--color-text);
+  opacity: 0.45;
   transform: translateX(-50%);
   pointer-events: none;
+  z-index: 1;
 }
+/* Erste/letzte Zeile: kein Überhang nach oben/unten. */
+.overview-chapter-list > li:first-child .overview-chapter-median-tick { top: 0; }
+.overview-chapter-list > li:last-child .overview-chapter-median-tick { bottom: 0; }
 .overview-chapter-meta {
   display: inline-flex;
   gap: 10px;
@@ -507,6 +545,23 @@
 .overview-chapter-delta {
   font-variant-numeric: tabular-nums;
   min-width: 3.5em;
+  text-align: right;
+}
+/* Pin meta-cell-Breiten, damit Track-Spalte (1fr) zeilenübergreifend identisch
+   breit ist. Sonst wandert der Median-Tick je nach Stelligkeit der Zahlen. */
+.overview-chapter-chars {
+  font-variant-numeric: tabular-nums;
+  min-width: 5.5em;
+  text-align: right;
+}
+.overview-chapter-words {
+  font-variant-numeric: tabular-nums;
+  min-width: 5em;
+  text-align: right;
+}
+.overview-chapter-pages {
+  font-variant-numeric: tabular-nums;
+  min-width: 2.5em;
   text-align: right;
 }
 
@@ -572,7 +627,9 @@
   cursor: pointer;
   text-align: center;
   vertical-align: middle;
-  /* --cell-intensity: 0..100% — Opacity des Fill-Layers. */
+  /* --cell-pct 0..100: globaler Anteil (Wert / Max aller Cells im Matrix).
+     Hue, Sat, Light, Alpha alle daraus → seltene Cells blass-olive,
+     Hauptpräsenz sattes Grün. */
 }
 .overview-presence-cell--empty {
   background: transparent;
@@ -583,23 +640,34 @@
   position: absolute;
   inset: 0;
   border-radius: var(--radius-sm);
-  background: var(--color-accent);
-  opacity: calc(var(--cell-intensity, 0%) / 100);
-  transition: opacity 0.18s;
+  /* Hue 50 (warmes Gelb) → 142 (kräftiges Grün), Sat 30% → 78%,
+     Light leicht abnehmend für satteren High-End. */
+  background: hsl(
+    calc(50 + var(--cell-pct, 0) * 0.92)
+    calc(30% + var(--cell-pct, 0) * 0.48%)
+    calc(60% - var(--cell-pct, 0) * 0.12%)
+  );
+  opacity: calc(0.25 + 0.75 * (var(--cell-pct, 0) / 100));
+  transition: background 0.2s, opacity 0.18s;
 }
 .overview-presence-cell:hover:not(.overview-presence-cell--empty) .overview-presence-fill {
-  filter: brightness(1.15);
+  filter: brightness(1.15) saturate(1.2);
 }
 .overview-presence-cell--empty .overview-presence-fill { display: none; }
 .overview-presence-num {
   position: relative;
   z-index: 1;
   font-size: 10px;
-  font-weight: 600;
-  color: var(--color-bg);
+  font-weight: 700;
+  color: var(--color-text);
   font-variant-numeric: tabular-nums;
-  mix-blend-mode: difference;
-  filter: invert(1);
+  letter-spacing: -0.02em;
+  /* Halo in Hintergrundfarbe — bricht die HSL-Cell-Farbe genug, dass dunkler
+     Text auf jeder Sättigung lesbar bleibt. Theme-adaptiv (light + dark). */
+  text-shadow:
+    0 0 2px var(--color-bg),
+    0 0 1px var(--color-bg),
+    0 1px 0 var(--color-bg);
 }
 
 /* ── Recent-Pages ────────────────────────────────────────────────────────── */

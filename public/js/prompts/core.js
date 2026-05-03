@@ -17,7 +17,7 @@ import {
 // Versionsmarker für persistente Caches (z.B. chapter_extract_cache, Phase-1
 // Single-Pass-Cache). Bei jeder schemarelevanten Änderung erhöhen, damit alte
 // Cache-Einträge nicht mehr matchen und frisch extrahiert wird.
-export const PROMPTS_VERSION = '3';
+export const PROMPTS_VERSION = '5';
 
 // Kompakte Ersatzregeln für commonRules[langCode] im Lokal-Modus.
 // Behält nur die Kernregel – WAS GEMELDET WERDEN SOLL ist redundant mit den typ-spezifischen

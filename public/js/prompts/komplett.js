@@ -29,7 +29,7 @@ const FIGUREN_BASIS_SCHEMA = `{
       "praesenz": "zentral|regelmaessig|punktuell|randfigur",
       "entwicklung": "statisch|Kurzbeschreibung des Wandels (1 Satz, z.B. 'verliert Vertrauen in Mentor')",
       "erste_erwaehnung": "Kapitelname oder Seitenname der ersten Erwähnung (leer wenn unklar)",
-      "schluesselzitate": ["Bis zu 3 charakterisierende Zitate, max. 80 Zeichen, wörtlich aus dem Text"],
+      "schluesselzitate": ["Bis zu 3 charakterisierende Zitate, wörtlich aus dem Text"],
       "kapitel": [{ "name": "Kapitelname", "haeufigkeit": 3 }],
       "beziehungen": [{ "figur_id": "fig_2", "typ": "elternteil|geschwister|kind|freund|feind|kollege|bekannt|liebesbeziehung|rivale|mentor|schuetzling|patronage|geschaeft|andere", "machtverhaltnis": 0, "beschreibung": "1 Satz", "belege": [{ "kapitel": "EXAKT der ## Kapitel-Header", "seite": "EXAKT ein ### Seiten-Header aus dem Kapitel – NIE der Kapitelname; leer wenn unklar" }] }]
     }
@@ -192,10 +192,10 @@ const ORTE_SCHEMA = `{
 
 const ORTE_RULES = `Regeln:
 - Eindeutige IDs (ort_1, ort_2, …)
-- Nur Schauplätze, die im Text eindeutig beschrieben oder mehrfach genannt werden – keine einmaligen, flüchtigen Erwähnungen
+- SEHR GROSSZÜGIG erfassen: alle Schauplätze inklusive Nebenschauplätze und einmaliger Erwähnungen; lieber inkludieren als weglassen. haeufigkeit=1 ist gültig.
 - figuren: nur IDs aus der gelieferten Figurenliste (leer lassen wenn keine Figuren bekannt)
 - kapitel: absteigend nach Häufigkeit; haeufigkeit = Anzahl Seiten/Abschnitte in denen der Ort aktiv vorkommt
-- KONSERVATIV: Lieber weglassen als spekulieren; maximal 20 Orte`;
+- Kein Cap auf Anzahl Orte – vollständige Erfassung wichtiger als Kürze`;
 
 // ── Fakten-Schema (verwendet in Komplett-Analyse und Kontinuität) ────────────
 
@@ -214,7 +214,7 @@ const FAKTEN_RULES = `Fakten-Regeln:
 - Soziolekt: Wenn eine Figur erstmals oder markant spricht, ein Faktum erfassen das ihr Sprachregister beschreibt. Kategorie «soziolekt» verwenden.
 - Objekte: Wer besitzt was, wo liegt was, in welchem Zustand
 - Zeitangaben: Relative («am nächsten Morgen») und absolute («1943») erfassen
-- Maximal 50 Fakten pro Kapitel; lieber weniger, dafür präzise`;
+- Kein Cap auf Anzahl Fakten – vollständige, präzise Erfassung wichtiger als Kürze`;
 
 // ── Kontinuitäts-Probleme-Schema (verwendet in Check und SinglePass) ─────────
 

@@ -425,7 +425,7 @@ async function runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEma
     const review  = getLatestReview(session.book_id, userEmail);
     const { SYSTEM_BOOK_CHAT: bookChatSys } = await getBookPrompts(session.book_id, userEmail);
     const systemPrompt = buildBookChatAgentSystemPrompt(
-      session.book_name || '', figuren, review, bookChatSys
+      session.book_name || '', figuren, review, bookChatSys, BOOK_CHAT_MAX_TOOL_ITER
     );
 
     const jobSignal = jobAbortControllers.get(jobId)?.signal;

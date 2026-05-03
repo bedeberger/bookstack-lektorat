@@ -58,7 +58,7 @@
          SVG ist aria-hidden — Trend-Prozent darunter trägt die Info,
          das Tile selbst hat ein zusammenfassendes aria-label. -->
     <template x-if="overviewSparkline().d">
-      <div class="overview-tile overview-tile--hero internal-link"
+      <div class="overview-tile internal-link"
            @click="_openLengthStats(30, 'chars')"
            :aria-label="$app.t('overview.trend') + ', ' + $app.t('overview.trendDelta', { pct: (overviewSparkline().deltaPct >= 0 ? '+' : '') + overviewSparkline().deltaPct })"
            :title="$app.t('overview.openStats')">
@@ -258,15 +258,82 @@
       </div>
     </template>
 
+    <!-- Schauplätze: Anzahl + Top-6 als Chips, typ als data-attr für Akzentfarbe -->
+    <template x-if="overviewOrteCount() > 0">
+      <div class="overview-tile internal-link"
+           @click="$app.toggleOrteCard()"
+           :aria-label="$app.t('tile.orte') + ': ' + _fmtNum(overviewOrteCount()) + ' ' + $app.t('overview.unit.orte')"
+           :title="$app.t('tile.orte.title')">
+        <div class="overview-tile-label" x-text="$app.t('tile.orte')"></div>
+        <div class="overview-fig-row">
+          <span class="overview-fig-count" x-text="_fmtNum(overviewOrteCount())"></span>
+          <span class="overview-fig-count-unit" x-text="$app.t('overview.unit.orte')"></span>
+        </div>
+        <div class="overview-fig-chips" x-show="overviewTopOrte().length > 0">
+          <template x-for="o in overviewTopOrte()" :key="o.id">
+            <span class="overview-ort-chip"
+                  :data-typ="o.typ"
+                  :title="o.name + (o.total > 0 ? ' · ' + o.total : '')"
+                  @click.stop="$app.openOrtById(o.id)">
+              <span class="overview-ort-dot" :data-typ="o.typ" aria-hidden="true"></span>
+              <span class="overview-fig-name" x-text="o.name"></span>
+            </span>
+          </template>
+        </div>
+      </div>
+    </template>
+
+    <!-- Schauplatz-Präsenz-Matrix: Kapitel (Zeilen) × Top-Schauplätze (Spalten).
+         Cell-Wert = location_chapters.haeufigkeit. Cell-Intensität = per Spalte
+         skaliert. Match primär per chapter_id, Fallback chapter_name. -->
+    <template x-if="overviewOrtPresence()">
+      <div class="overview-tile overview-tile--medium">
+        <div class="overview-tile-label" x-text="$app.t('overview.ortPresence')"></div>
+        <div class="overview-presence-wrap">
+          <table class="overview-presence-matrix">
+            <thead>
+              <tr>
+                <th></th>
+                <template x-for="p in overviewOrtPresence().places" :key="p.id">
+                  <th class="overview-presence-col-head"
+                      :title="p.name"
+                      x-text="p.name"></th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="row in overviewOrtPresence().rows" :key="row.id">
+                <tr>
+                  <th class="overview-presence-row-head" :title="row.name" x-text="row.name"></th>
+                  <template x-for="cell in row.cells" :key="cell.ortId">
+                    <td class="overview-presence-cell"
+                        :class="{
+                          'overview-presence-cell--empty': cell.value === 0,
+                          'internal-link': cell.value > 0
+                        }"
+                        :style="{ '--cell-pct': cell.pct }"
+                        :title="cell.value > 0 ? $app.t('overview.ortPresenceOpen', { ort: cell.ortName, kapitel: row.name }) : (cell.ortName + ' · ' + row.name + ': 0')"
+                        @click="cell.value > 0 && $app.openOrtMitKapitel(cell.ortId, row.name)">
+                      <span class="overview-presence-fill"></span>
+                      <span class="overview-presence-num" x-show="cell.value > 0" x-text="cell.value"></span>
+                    </td>
+                  </template>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </template>
+
     <!-- Kapitel-Verteilung: horizontale Bars pro Kapitel (Zeichen relativ) -->
     <template x-if="overviewChapterDistribution().length > 0">
       <div class="overview-tile overview-tile--medium">
         <div class="overview-tile-head">
           <div class="overview-tile-label" x-text="$app.t('overview.chapterDist')"></div>
-          <button type="button" class="overview-sort-btn"
-                  @click="cycleChapterSort()"
-                  :title="$app.t('overview.chapterSort.cycle')"
-                  x-text="chapterSortLabel()"></button>
+          <span class="overview-tile-median"
+                x-show="overviewChapterDistribution()[0]?.median > 0"
+                x-text="$app.t('overview.medianTick') + ': ' + _fmtNum(Math.round(overviewChapterDistribution()[0]?.median)) + ' ' + $app.t('bookstats.unit.z')"></span>
         </div>
         <ul class="overview-chapter-list">
           <template x-for="ch in overviewChapterDistribution()" :key="ch.id">
@@ -274,7 +341,7 @@
                 :class="{ 'overview-chapter-row--max': ch.isMax, 'overview-chapter-row--min': ch.isMin }"
                 @click="_openKapitelReview(ch.id)"
                 :title="$app.t('overview.chapterReviewOpen', { name: ch.name })">
-              <span class="overview-chapter-name" x-text="ch.name"></span>
+              <span class="overview-chapter-name" :title="ch.name" x-text="ch.name"></span>
               <div class="overview-chapter-bar-track overview-chapter-bar-track--diverge">
                 <div class="overview-chapter-bar-fill"
                      :class="ch.isPositive ? 'overview-chapter-bar-fill--pos' : 'overview-chapter-bar-fill--neg'"
@@ -324,7 +391,7 @@
                           'overview-presence-cell--empty': cell.value === 0,
                           'internal-link': cell.value > 0
                         }"
-                        :style="{ '--cell-intensity': cell.pct + '%' }"
+                        :style="{ '--cell-pct': cell.pct }"
                         :title="cell.value > 0 ? $app.t('overview.figPresenceOpen', { figur: cell.figureName, kapitel: row.name }) : (cell.figureName + ' · ' + row.name + ': 0')"
                         @click="cell.value > 0 && $app.openFigurMitKapitel(cell.figureId, row.name)">
                       <span class="overview-presence-fill"></span>
@@ -348,17 +415,32 @@
       <div class="overview-tile overview-tile--medium internal-link"
            @click="$app.toggleFehlerHeatmapCard()"
            :title="$app.t('overview.openHeatmap')">
-        <div class="overview-tile-label" x-text="$app.t('overview.chapterFindings')"></div>
+        <div class="overview-tile-head">
+          <div class="overview-tile-label" x-text="$app.t('overview.chapterFindings')"></div>
+          <span class="overview-tile-median"
+                x-show="overviewChapterFindings()[0]?.showMedian"
+                x-text="$app.t('overview.medianTick') + ': ' + overviewChapterFindings()[0]?.median + ' ' + $app.t('overview.unit.per1k')"></span>
+        </div>
         <ul class="overview-chapter-list">
           <template x-for="ch in overviewChapterFindings()" :key="ch.id">
             <li class="overview-chapter-row"
                 :class="{ 'overview-chapter-row--nocheck': ch.noCheck }">
-              <span class="overview-chapter-name" x-text="ch.name"></span>
-              <div class="overview-chapter-bar-track">
-                <div class="overview-chapter-bar-fill overview-chapter-bar-fill--findings"
-                     :style="{ width: ch.pct + '%' }"></div>
+              <span class="overview-chapter-name" :title="ch.name" x-text="ch.name"></span>
+              <div class="overview-chapter-bar-track overview-chapter-bar-track--diverge"
+                   x-show="ch.showMedian">
+                <div class="overview-chapter-bar-fill"
+                     x-show="!ch.noCheck"
+                     :class="ch.isAbove ? 'overview-chapter-bar-fill--findings-pos' : 'overview-chapter-bar-fill--findings-neg'"
+                     :style="{ left: ch.barLeftPct + '%', width: ch.barWidthPct + '%' }"></div>
+                <div class="overview-chapter-median-tick"
+                     x-show="!ch.noCheck"
+                     :title="$app.t('overview.medianTick') + ': ' + ch.median + ' ' + $app.t('overview.unit.per1k')"></div>
               </div>
               <span class="overview-chapter-meta">
+                <span class="overview-chapter-delta"
+                      x-show="!ch.noCheck && ch.showMedian"
+                      :class="ch.deltaPct > 0 ? 'overview-trend-pct--down' : ch.deltaPct < 0 ? 'overview-trend-pct--up' : ''"
+                      x-text="(ch.deltaPct >= 0 ? '+' : '') + ch.deltaPct + '%'"></span>
                 <span class="overview-chapter-per1k"
                       x-show="!ch.noCheck"
                       x-text="ch.per1k + ' ' + $app.t('overview.unit.per1k')"></span>
@@ -387,7 +469,7 @@
                 <span class="overview-recent-chars"
                       x-show="overviewPageChars(p.id) != null"
                       x-text="_fmtNum(overviewPageChars(p.id)) + ' ' + $app.t('bookstats.unit.z')"></span>
-                <span class="overview-recent-chapter" x-show="p.chapterName" x-text="p.chapterName"></span>
+                <span class="overview-recent-chapter" x-show="p.chapterName" :title="p.chapterName" x-text="p.chapterName"></span>
               </span>
             </li>
           </template>
@@ -401,7 +483,6 @@
       <div class="overview-actions">
         <button type="button" class="btn-compact" @click="$app.toggleBookChatCard()" :disabled="!$app.pages.length" x-text="$app.t('tile.bookchat')"></button>
         <button type="button" class="btn-compact" @click="$app.toggleKontinuitaetCard()" x-text="$app.t('tile.kontinuitaet')"></button>
-        <button type="button" class="btn-compact" @click="$app.toggleOrteCard()" x-text="$app.t('tile.orte')"></button>
         <button type="button" class="btn-compact" @click="$app.toggleEreignisseCard()" x-text="$app.t('tile.events')"></button>
         <button type="button" class="btn-compact" @click="$app.alleAktualisieren()" :disabled="$app.alleAktualisierenLoading" x-text="$app.t('palette.action.komplett')"></button>
       </div>

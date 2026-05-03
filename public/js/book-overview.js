@@ -25,7 +25,7 @@ export const bookOverviewMethods = {
     this.overviewLoading = true;
     this.overviewBookId = bookId;
     try {
-      const [stats, coverage, heat, reviews, recent, figuren, szenen] = await Promise.all([
+      const [stats, coverage, heat, reviews, recent, figuren, szenen, orte] = await Promise.all([
         fetchJson(`/history/book-stats/${bookId}`).catch(() => []),
         fetchJson(`/history/coverage/${bookId}`).catch(() => null),
         fetchJson(`/history/fehler-heatmap/${bookId}?mode=open`).catch(() => null),
@@ -33,6 +33,7 @@ export const bookOverviewMethods = {
         fetchJson(`/usage/page/recent?book_id=${bookId}&limit=5`).catch(() => []),
         fetchJson(`/figures/${bookId}`).catch(() => null),
         fetchJson(`/figures/scenes/${bookId}`).catch(() => null),
+        fetchJson(`/locations/${bookId}`).catch(() => null),
       ]);
       if (this.overviewBookId !== bookId) return;
       this.overviewStats = Array.isArray(stats) ? stats : [];
@@ -45,6 +46,7 @@ export const bookOverviewMethods = {
       this.overviewFiguren = Array.isArray(figuren?.figuren) ? figuren.figuren : [];
       const sz = Array.isArray(szenen?.szenen) ? szenen.szenen : [];
       this.overviewSzenen = sz;
+      this.overviewOrte = Array.isArray(orte?.orte) ? orte.orte : [];
       this._memos = {};
     } catch (e) {
       console.error('[loadBookOverview]', e);
@@ -62,6 +64,7 @@ export const bookOverviewMethods = {
     this.overviewRecent = [];
     this.overviewFiguren = [];
     this.overviewSzenen = [];
+    this.overviewOrte = [];
     this.overviewBookId = null;
     this._memos = {};
   },
@@ -122,7 +125,7 @@ export const bookOverviewMethods = {
     });
   },
 
-  // Top-3 Figuren nach Szenen-Präsenz (gleiche Quelle wie figurenpräsenz-matrix:
+  // Top-6 Figuren nach Szenen-Präsenz (gleiche Quelle wie figurenpräsenz-matrix:
   // overviewSzenen.fig_ids). figuren[].kapitel.haeufigkeit zählt nur namentliche
   // Treffer und unterzählt Hauptfiguren bei pronomenlastigen Texten systematisch.
   overviewTopFiguren() {
@@ -145,7 +148,7 @@ export const bookOverviewMethods = {
         mentions: totals.get(f.id) || 0,
       }))
       .sort((a, b) => b.mentions - a.mentions)
-      .slice(0, 3);
+      .slice(0, 6);
     memos.topFiguren = { figs, sz, value };
     return value;
   },
@@ -312,7 +315,7 @@ export const bookOverviewMethods = {
   // * 48% (cap bei 48%, damit Bars nicht an Track-Rand stossen).
   // deltaPct = Abweichung gegen Median (±%, gerundet).
   // isMax/isMin markieren Extrem-Kapitel (Border-Akzent).
-  // chapterSort: 'order' (Lese-Reihenfolge), 'charsDesc', 'charsAsc'.
+  // Sortierung: Lese-Reihenfolge aus tree (= Buch-Sortierung der Kapitel).
   overviewChapterDistribution() {
     const app = window.__app;
     if (!app) return [];
@@ -335,7 +338,6 @@ export const bookOverviewMethods = {
         pages: pages.length,
         words,
         chars,
-        order: out.length,
       });
     }
     if (out.length === 0) return out;
@@ -354,7 +356,7 @@ export const bookOverviewMethods = {
     }));
     const maxAbsDelta = Math.max(1, ...withDelta.map(c => Math.abs(c.deltaPct)));
     const HALF = 48; // % of full track
-    const enriched = withDelta.map(c => {
+    return withDelta.map(c => {
       const halfPct = (Math.abs(c.deltaPct) / maxAbsDelta) * HALF;
       return {
         ...c,
@@ -364,28 +366,17 @@ export const bookOverviewMethods = {
         isPositive: c.deltaPct >= 0,
       };
     });
-    const sortMode = this.chapterSort || 'order';
-    if (sortMode === 'charsDesc') enriched.sort((a, b) => b.chars - a.chars);
-    else if (sortMode === 'charsAsc') enriched.sort((a, b) => a.chars - b.chars);
-    else enriched.sort((a, b) => a.order - b.order);
-    return enriched;
-  },
-
-  cycleChapterSort() {
-    const seq = ['order', 'charsDesc', 'charsAsc'];
-    const cur = this.chapterSort || 'order';
-    this.chapterSort = seq[(seq.indexOf(cur) + 1) % seq.length];
-  },
-
-  chapterSortLabel() {
-    const app = window.__app;
-    if (!app?.t) return '';
-    return app.t('overview.chapterSort.' + (this.chapterSort || 'order'));
   },
 
   // Lektorat-Findings pro Kapitel: aus overviewHeat.matrix (mode=open).
   // per1k = Findings pro 1000 Wörter (normalisiert; kurze Kapitel mit vielen
-  // Findings werden so sichtbar). Sortiert nach per1k desc.
+  // Findings werden so sichtbar).
+  // Diverging-Bar um Median analog Kapitellänge: rechts vom Tick = mehr
+  // Befunde als typisches Kapitel (warnfarbe), links = weniger (gemutet).
+  // Bar-Länge = |deltaPct| / maxAbsDelta * 48% (cap, damit Bars nicht an
+  // Track-Rand stossen). Median nur aus geprüften Kapiteln; ungeprüfte
+  // Zeilen behalten den Tick als Referenz, zeigen aber keinen Bar.
+  // Schwelle ≥3 geprüfte Kapitel für Median — darunter zu instabil.
   overviewChapterFindings() {
     const heat = this.overviewHeat;
     if (!heat || !Array.isArray(heat.chapters) || !heat.matrix) return [];
@@ -407,12 +398,39 @@ export const bookOverviewMethods = {
       });
     }
     if (out.length === 0) return out;
-    const maxPer1k = Math.max(1, ...out.map(c => c.per1k));
-    const enriched = out.map(c => ({
-      ...c,
-      pct: Math.max(2, Math.round((c.per1k / maxPer1k) * 100)),
-      noCheck: c.pages_checked === 0,
-    }));
+    const checked = out.filter(c => c.pages_checked > 0);
+    const showMedian = checked.length >= 3;
+    let median = 0;
+    if (showMedian) {
+      const sorted = checked.map(c => c.per1k).sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      median = sorted.length % 2 === 0
+        ? (sorted[mid - 1] + sorted[mid]) / 2
+        : sorted[mid];
+    }
+    const withDelta = out.map(c => {
+      const noCheck = c.pages_checked === 0;
+      const deltaPct = !noCheck && median > 0
+        ? Math.round(((c.per1k - median) / median) * 100)
+        : 0;
+      return { ...c, noCheck, deltaPct };
+    });
+    const HALF = 48;
+    const deltas = withDelta.filter(c => !c.noCheck).map(c => Math.abs(c.deltaPct));
+    const maxAbsDelta = Math.max(1, ...deltas);
+    const enriched = withDelta.map(c => {
+      const halfPct = showMedian && !c.noCheck
+        ? (Math.abs(c.deltaPct) / maxAbsDelta) * HALF
+        : 0;
+      return {
+        ...c,
+        median,
+        showMedian,
+        barWidthPct: halfPct,
+        barLeftPct: c.deltaPct >= 0 ? 50 : 50 - halfPct,
+        isAbove: c.deltaPct > 0,
+      };
+    });
     enriched.sort((a, b) => b.per1k - a.per1k);
     return enriched;
   },
@@ -479,26 +497,117 @@ export const bookOverviewMethods = {
     const selected = candidates.slice(0, MAX_COLS);
 
     const figures = selected.map(c => ({ id: c.id, name: c.name }));
-    const colMaxes = selected.map(c => {
-      let mx = 0;
-      for (const ch of chapters) { const v = lookup(c.m, ch); if (v > mx) mx = v; }
-      return Math.max(1, mx);
-    });
+    // Globaler Max über alle Cells: einziger Skala-Bezug. Spalten-Normierung
+    // verworfen, weil Figuren oft nur in 1 Kapitel auftauchen → col-pct 100 %
+    // selbst bei Wert 1, wodurch sparse Cells fälschlich „voll" wirkten.
+    let globalMax = 0;
+    for (const c of selected) {
+      for (const ch of chapters) {
+        const v = lookup(c.m, ch);
+        if (v > globalMax) globalMax = v;
+      }
+    }
+    globalMax = Math.max(1, globalMax);
 
     const rows = chapters.map(ch => ({
       id: ch.id,
       name: ch.name,
-      cells: selected.map((c, i) => {
+      cells: selected.map((c) => {
         const v = lookup(c.m, ch);
         return {
           figureId: c.id,
           figureName: c.name,
           value: v,
-          pct: v > 0 ? Math.max(15, Math.round((v / colMaxes[i]) * 100)) : 0,
+          pct: v > 0 ? Math.max(8, Math.round((v / globalMax) * 100)) : 0,
         };
       }),
     }));
     return { figures, rows };
+  },
+
+  // ── Schauplätze ──────────────────────────────────────────────────────────
+  // Datenquelle: /locations/:book_id liefert pro Ort `kapitel: [{name, haeufigkeit}]`
+  // (sortiert haeufigkeit desc) und `figuren: [fig_id]`. Kein Geo, keine Koordinaten.
+  // Ranking: Summe der Kapitel-Häufigkeiten = Gesamt-Präsenz im Buch.
+
+  overviewOrteCount() { return (this.overviewOrte || []).length; },
+
+  overviewTopOrte() {
+    const orte = this.overviewOrte || [];
+    return this._memo('topOrte', orte, () => {
+      return orte
+        .map(o => {
+          const kap = Array.isArray(o.kapitel) ? o.kapitel : [];
+          const total = kap.reduce((s, k) => s + (Number(k.haeufigkeit) || 0), 0);
+          return { id: o.id, name: o.name, typ: o.typ || 'andere', total };
+        })
+        .filter(o => o.total > 0 || (this.overviewOrte || []).length <= 6)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 6);
+    });
+  },
+
+  // Schauplatz-Präsenz-Matrix: Kapitel (Zeilen) × Top-Schauplätze (Spalten).
+  // Cell-Wert = location_chapters.haeufigkeit. Match primär per chapter_id
+  // (stabil), Fallback auf chapter_name (Backfill-Lücken: alte Einträge ohne
+  // aufgelöste ID). Skalierung pro Spalte (max der Spalte über alle Kapitel).
+  overviewOrtPresence() {
+    const orte = this.overviewOrte || [];
+    return this._memo('ortPresence', orte, () => {
+      const app = window.__app;
+      if (!app || orte.length === 0) return null;
+      const tree = app.tree || [];
+      const chapters = tree
+        .filter(i => i.type === 'chapter')
+        .map(c => ({ id: c.id, name: c.name }));
+      if (chapters.length === 0) return null;
+
+      const MAX_COLS = 20;
+
+      const candidates = orte.map(o => {
+        const kap = Array.isArray(o.kapitel) ? o.kapitel : [];
+        const byId = new Map();
+        const byName = new Map();
+        for (const k of kap) {
+          const h = Number(k?.haeufigkeit) || 0;
+          if (k?.chapter_id != null) byId.set(Number(k.chapter_id), (byId.get(Number(k.chapter_id)) || 0) + h);
+          if (k?.name) byName.set(k.name, (byName.get(k.name) || 0) + h);
+        }
+        let total = 0;
+        for (const v of byName.values()) total += v;
+        return { id: o.id, name: o.name, typ: o.typ || 'andere', byId, byName, total };
+      }).filter(c => c.total > 0);
+
+      if (candidates.length === 0) return null;
+      candidates.sort((a, b) => b.total - a.total);
+      const selected = candidates.slice(0, MAX_COLS);
+
+      const lookup = (c, ch) => c.byId.get(Number(ch.id)) ?? c.byName.get(ch.name) ?? 0;
+
+      const places = selected.map(c => ({ id: c.id, name: c.name, typ: c.typ }));
+      let globalMax = 0;
+      for (const c of selected) {
+        for (const ch of chapters) {
+          const v = lookup(c, ch);
+          if (v > globalMax) globalMax = v;
+        }
+      }
+      globalMax = Math.max(1, globalMax);
+      const rows = chapters.map(ch => ({
+        id: ch.id,
+        name: ch.name,
+        cells: selected.map((c) => {
+          const v = lookup(c, ch);
+          return {
+            ortId: c.id,
+            ortName: c.name,
+            value: v,
+            pct: v > 0 ? Math.max(8, Math.round((v / globalMax) * 100)) : 0,
+          };
+        }),
+      }));
+      return { places, rows };
+    });
   },
 
   // Fehler-Typ-Label: i18n-Key versuchen; Fallback humanisiert.

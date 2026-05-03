@@ -105,7 +105,7 @@ export function buildChatSystemPrompt(pageName, pageText, figuren, review, syste
  * dafür eine Anweisung an das Modell, Werkzeuge aufzurufen statt zu raten.
  * Figuren + Review bleiben im System-Prompt (klein, gecacht).
  */
-export function buildBookChatAgentSystemPrompt(bookName, figuren, review, systemOverride = null) {
+export function buildBookChatAgentSystemPrompt(bookName, figuren, review, systemOverride = null, maxToolIter = 6) {
   const parts = [
     systemOverride ?? SYSTEM_BOOK_CHAT,
     '',
@@ -117,7 +117,7 @@ export function buildBookChatAgentSystemPrompt(bookName, figuren, review, system
     '- Konkrete Textstellen oder Zitate → search_passages, get_pages',
     '',
     'Rufe Werkzeuge an, bevor du vermutest. Bei interpretatorischen Fragen (Stil, Ton, Wirkung) kannst du direkt antworten oder mit search_passages Belege suchen.',
-    'Maximal 6 Werkzeug-Aufrufe pro Antwort. Halte Werkzeug-Argumente präzise und kurz.',
+    `Maximal ${maxToolIter} Werkzeug-Iterationen pro Antwort. Halte Werkzeug-Argumente präzise und kurz.`,
     '',
   ];
 
@@ -219,7 +219,7 @@ export const BOOK_CHAT_TOOLS = [
       type: 'object',
       properties: {
         ids:                { type: 'array', items: { type: 'integer' }, description: 'Liste der page_ids (aus list_chapters oder anderen Tool-Ergebnissen).' },
-        max_chars_per_page: { type: 'integer', description: 'Harte Kürzung pro Seite (default 3000, max 8000).' },
+        max_chars_per_page: { type: 'integer', description: 'Harte Kürzung pro Seite. Server clamped automatisch an das Kontextfenster – nur setzen, wenn explizit weniger gewünscht.' },
       },
       required: ['ids'],
     },
