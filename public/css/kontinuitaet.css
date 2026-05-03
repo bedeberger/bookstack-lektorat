@@ -49,8 +49,16 @@
   gap: 0.3rem;
   flex-wrap: wrap;
 }
+/* Stellen-Texte können lange Szenen-/Datums-Titel sein — umbrechen statt
+   überlaufen. Globaler kapitel-badge nowrap wird hier überschrieben. */
+.kontinuitaet-row-stellen .kapitel-badge {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 100%;
+}
 .kontinuitaet-arrow {
   color: var(--color-subtle);
+  flex-shrink: 0;
 }
 
 /* Empfehlung — hervorgehoben mit Akzentlinie + Tint, damit der

@@ -11,6 +11,19 @@
   .szenen-uebersicht-grid { gap: 8px; padding: 6px 0 8px; }
 }
 
+/* Stelle (Kapitel + Seite) ist primäre Info — bleibt auch <480px sichtbar
+   und wrappt bei langen Kapitelnamen, statt aus Karte zu schiessen.
+   Überschreibt globale `.kapitel-badges { display:none }`-Regel auf <480px
+   sowie `kapitel-badge { white-space: nowrap }` aus tokens-est.css. */
+.card--szenen .entity-row .kapitel-badge {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 100%;
+}
+@media (max-width: 480px) {
+  .card--szenen .entity-row .kapitel-badges { display: inline-flex; }
+}
+
 /* === Figuren-Karte: Szenen-Sub-Liste === */
 .figur-szenen-list {
   display: flex;

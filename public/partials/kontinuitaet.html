@@ -100,7 +100,7 @@
                     :class="'severity-tag--' + (issue.schwere || 'niedrig')"
                     x-text="$app.t('kontinuitaet.severity.' + (issue.schwere || 'niedrig'))"></span>
               <span class="tag entity-typ-tag" x-text="issue.typ"></span>
-              <span class="kontinuitaet-row-stellen kapitel-badges">
+              <span class="kontinuitaet-row-stellen">
                 <template x-if="kontinuitaetResolveStelle(issue.stelle_a, issue, 'a')">
                   <span class="kapitel-badge kapitel-badge--primary internal-link"
                         :title="$app.t('kontinuitaet.gotoTitle', { name: kontinuitaetResolveStelle(issue.stelle_a, issue, 'a').name })"
