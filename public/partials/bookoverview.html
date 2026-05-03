@@ -20,19 +20,23 @@
 
   <div class="overview-grid" x-show="overviewLatest() || overviewCoverage?.total_pages > 0 || $app.pages.length > 0">
 
-    <!-- HERO: Snapshot mit Hero-Wortzahl + Sub-Stats -->
+    <!-- HERO: Snapshot mit Hero-Zeichen + Sub-Stats (Reihenfolge: Z → W → S → Kapitel → T) -->
     <template x-if="overviewLatest()">
       <div class="overview-tile overview-tile--hero internal-link"
-           @click="_openWordsStats(30, 'words')"
-           :aria-label="$app.t('overview.snapshot') + ': ' + _fmtNum(overviewLatest()?.words) + ' ' + $app.t('bookstats.unit.w')"
+           @click="_openLengthStats(30, 'chars')"
+           :aria-label="$app.t('overview.snapshot') + ': ' + _fmtNum(overviewLatest()?.chars) + ' ' + $app.t('bookstats.unit.z')"
            :title="$app.t('overview.openStats')">
         <div class="overview-tile-label" x-text="$app.t('overview.snapshot')"></div>
         <div class="overview-hero-row">
           <div class="overview-hero-num">
-            <span class="overview-hero-value" x-text="_fmtNum(overviewLatest()?.words)"></span>
-            <span class="overview-hero-unit" x-text="$app.t('bookstats.unit.w')"></span>
+            <span class="overview-hero-value" x-text="_fmtNum(overviewLatest()?.chars)"></span>
+            <span class="overview-hero-unit" x-text="$app.t('bookstats.unit.z')"></span>
           </div>
           <div class="overview-substats">
+            <div class="overview-substat" x-show="overviewLatest()?.words > 0">
+              <span class="overview-substat-value" x-text="_fmtNum(overviewLatest()?.words)"></span>
+              <span class="overview-substat-unit" x-text="$app.t('bookstats.unit.w')"></span>
+            </div>
             <div class="overview-substat">
               <span class="overview-substat-value" x-text="_fmtNum(overviewLatest()?.page_count)"></span>
               <span class="overview-substat-unit" x-text="$app.t('bookstats.unit.s')"></span>
@@ -55,12 +59,12 @@
          das Tile selbst hat ein zusammenfassendes aria-label. -->
     <template x-if="overviewSparkline().d">
       <div class="overview-tile overview-tile--hero internal-link"
-           @click="_openWordsStats(30, 'words')"
+           @click="_openLengthStats(30, 'chars')"
            :aria-label="$app.t('overview.trend') + ', ' + $app.t('overview.trendDelta', { pct: (overviewSparkline().deltaPct >= 0 ? '+' : '') + overviewSparkline().deltaPct })"
            :title="$app.t('overview.openStats')">
         <div class="overview-tile-label" x-text="$app.t('overview.trend')"></div>
         <svg class="overview-sparkline"
-             :viewBox="'0 0 ' + overviewSparkline().w + ' ' + overviewSparkline().h"
+             viewBox="0 0 240 48"
              preserveAspectRatio="none"
              aria-hidden="true">
           <defs>
@@ -85,7 +89,7 @@
     <!-- 7-Tage-Balken: Mini-Bar-Chart Zeichen-Delta pro Tag -->
     <template x-if="overview7DayCharDelta() !== null">
       <div class="overview-tile internal-link"
-           @click="_openWordsStats(7, 'delta_words')"
+           @click="_openLengthStats(7, 'delta_chars')"
            :aria-label="$app.t('overview.last7Days') + ': ' + (overview7DayCharDelta() >= 0 ? '+' : '') + _fmtNum(overview7DayCharDelta()) + ' ' + $app.t('bookstats.unit.z')"
            :title="$app.t('overview.openStats')">
         <div class="overview-tile-label" x-text="$app.t('overview.last7Days')"></div>
@@ -254,7 +258,7 @@
       </div>
     </template>
 
-    <!-- Kapitel-Verteilung: horizontale Bars pro Kapitel (Wörter relativ) -->
+    <!-- Kapitel-Verteilung: horizontale Bars pro Kapitel (Zeichen relativ) -->
     <template x-if="overviewChapterDistribution().length > 0">
       <div class="overview-tile overview-tile--medium">
         <div class="overview-tile-head">
@@ -271,19 +275,20 @@
                 @click="_openKapitelReview(ch.id)"
                 :title="$app.t('overview.chapterReviewOpen', { name: ch.name })">
               <span class="overview-chapter-name" x-text="ch.name"></span>
-              <div class="overview-chapter-bar-track">
-                <div class="overview-chapter-bar-fill" :style="{ width: ch.pct + '%' }"></div>
+              <div class="overview-chapter-bar-track overview-chapter-bar-track--diverge">
+                <div class="overview-chapter-bar-fill"
+                     :class="ch.isPositive ? 'overview-chapter-bar-fill--pos' : 'overview-chapter-bar-fill--neg'"
+                     :style="{ left: ch.barLeftPct + '%', width: ch.barWidthPct + '%' }"></div>
                 <div class="overview-chapter-median-tick"
-                     x-show="ch.medianPct > 0"
-                     :style="{ left: ch.medianPct + '%' }"
-                     :title="$app.t('overview.medianTick')"></div>
+                     :title="$app.t('overview.medianTick') + ': ' + _fmtNum(ch.median) + ' ' + $app.t('bookstats.unit.z')"></div>
               </div>
               <span class="overview-chapter-meta">
                 <span class="overview-chapter-delta"
                       :class="ch.deltaPct > 0 ? 'overview-trend-pct--up' : ch.deltaPct < 0 ? 'overview-trend-pct--down' : ''"
                       x-text="(ch.deltaPct >= 0 ? '+' : '') + ch.deltaPct + '%'"></span>
-                <span class="overview-chapter-pages" x-text="ch.pages + ' ' + $app.t('bookstats.unit.s')"></span>
+                <span class="overview-chapter-chars" x-text="_fmtNum(ch.chars) + ' ' + $app.t('bookstats.unit.z')"></span>
                 <span class="overview-chapter-words" x-text="_fmtNum(ch.words) + ' ' + $app.t('bookstats.unit.w')"></span>
+                <span class="overview-chapter-pages" x-text="ch.pages + ' ' + $app.t('bookstats.unit.s')"></span>
               </span>
             </li>
           </template>
@@ -379,9 +384,9 @@
             <li class="overview-recent-item internal-link" @click="$app.selectPage(p)">
               <span class="overview-recent-name" x-text="p.name"></span>
               <span class="overview-recent-meta">
-                <span class="overview-recent-words"
-                      x-show="overviewPageWords(p.id) != null"
-                      x-text="_fmtNum(overviewPageWords(p.id)) + ' ' + $app.t('bookstats.unit.w')"></span>
+                <span class="overview-recent-chars"
+                      x-show="overviewPageChars(p.id) != null"
+                      x-text="_fmtNum(overviewPageChars(p.id)) + ' ' + $app.t('bookstats.unit.z')"></span>
                 <span class="overview-recent-chapter" x-show="p.chapterName" x-text="p.chapterName"></span>
               </span>
             </li>

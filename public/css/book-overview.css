@@ -459,15 +459,39 @@
 .overview-chapter-bar-fill--findings {
   background: var(--color-warning, #c97a2b);
 }
-/* Median-Tick: vertikale Linie an Median-Position über dem Track.
-   Sitzt absolut, damit auch bei breiterem Fill sichtbar. */
+/* Diverging-Variante: Track ohne eigene Background-Farbe (Mittellinie übernimmt
+   visuelle Trennung). Bar absolut positioniert, wächst von 50% nach links/rechts. */
+.overview-chapter-bar-track--diverge {
+  background: transparent;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  height: 10px;
+  border-radius: 0;
+}
+.overview-chapter-bar-track--diverge .overview-chapter-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  height: auto;
+  border-radius: var(--radius-sm);
+  transition: left 0.2s ease, width 0.2s ease;
+}
+.overview-chapter-bar-fill--pos {
+  background: var(--color-success, #4caf50);
+}
+.overview-chapter-bar-fill--neg {
+  background: var(--color-danger, #d32f2f);
+  opacity: 0.7;
+}
+/* Median-Tick: bei Diverging-Bar fix in Track-Mitte, markiert Bezugspunkt. */
 .overview-chapter-median-tick {
   position: absolute;
   top: -2px;
   bottom: -2px;
+  left: 50%;
   width: 1.5px;
   background: var(--color-text);
-  opacity: 0.45;
+  opacity: 0.55;
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -491,7 +515,11 @@
     grid-template-columns: 1fr;
     gap: 4px;
   }
-  .overview-chapter-meta { justify-content: flex-end; }
+  .overview-chapter-meta {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
 }
 
 /* ── Figuren-Präsenz-Matrix ──────────────────────────────────────────────── */

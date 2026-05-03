@@ -69,7 +69,7 @@ export const ACTIONS = [
     run: (root) => { root.toggleShortcutsOverlay(); } },
   { key: 'action.closeAll',       kind: 'action', group: 'app', labelKey: 'palette.action.closeAll',  descKey: 'palette.action.closeAll.desc',
     aliases: ['esc','dismiss','reset','schliessen'],
-    run: (root) => { root._closeOtherMainCards(null); } },
+    run: (root) => { root._closeOtherMainCards(null); root._maybeOpenBookOverview(); } },
   { key: 'action.komplett',       kind: 'action', group: 'app', labelKey: 'palette.action.komplett',  descKey: 'palette.action.komplett.desc',
     requiresBook: true,
     aliases: ['analyse','vollanalyse','reload','aktualisieren','refresh','komplett'],

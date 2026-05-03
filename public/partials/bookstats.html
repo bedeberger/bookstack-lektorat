@@ -30,11 +30,12 @@
     <div x-data="combobox($app.t('bookstats.metric'))"
          x-modelable="value" x-model="bookStatsMetric"
          x-effect="options = [
-           {value:'words',              label: $app.t('bookstats.metric.words')},
            {value:'chars',              label: $app.t('bookstats.metric.chars')},
+           {value:'words',              label: $app.t('bookstats.metric.words')},
            {value:'page_count',         label: $app.t('bookstats.metric.pages')},
            {value:'tok',                label: $app.t('bookstats.metric.tok')},
            {value:'unique_words',       label: $app.t('bookstats.metric.unique')},
+           {value:'delta_chars',        label: $app.t('bookstats.metric.deltaChars')},
            {value:'delta_words',        label: $app.t('bookstats.metric.delta')},
            {value:'avg_sentence_len',   label: $app.t('bookstats.metric.avgSentence')},
            {value:'pages_per_chapter',  label: $app.t('bookstats.metric.pagesPerChapter')},
@@ -63,9 +64,9 @@
   <!-- Aktuelle Stats (letzter Snapshot) -->
   <div x-show="bookStatsData.length > 0" class="book-stats-current">
     <span class="tok-badge tok-neutral"
-      x-text="(bookStatsData[bookStatsData.length - 1]?.words ?? 0).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + $app.t('bookstats.unit.w')"></span>
-    <span class="tok-badge tok-neutral"
       x-text="(bookStatsData[bookStatsData.length - 1]?.chars ?? 0).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + $app.t('bookstats.unit.z')"></span>
+    <span class="tok-badge tok-neutral"
+      x-text="(bookStatsData[bookStatsData.length - 1]?.words ?? 0).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + $app.t('bookstats.unit.w')"></span>
     <span class="tok-badge tok-neutral"
       x-text="bookStatsData[bookStatsData.length - 1]?.page_count + ' ' + $app.t('bookstats.unit.s')"></span>
     <span class="tok-badge tok-neutral"

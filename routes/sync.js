@@ -6,21 +6,24 @@ const { toIntId } = require('../lib/validate');
 const { bsGet, bsGetAll } = require('../lib/bookstack');
 const { computePageIndex, writePageIndex, writeFigureMentionsForPageAllUsers, tokenizeNamesForStopwords } = require('../lib/page-index');
 const { invalidateBookPageCache } = require('./jobs/chat');
+const { getPrompts } = require('../lib/prompts-loader');
 
 const router = express.Router();
-
-const PROMPT_OVERHEAD = 3250; // SYSTEM_LEKTORAT + buildLektoratPrompt-Wrapper ≈ 3250 Zeichen Overhead
 
 function htmlToText(html) {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function computeStats(html) {
+// Token-Schätzung: echte Promptlänge aus buildLektoratPrompt — gleiche Quelle
+// wie public/js/tree.js:_syncPageStatsAfterSave, damit Cron-Sync und
+// Page-Save-Pfad denselben Wert in page_stats.tok schreiben (Snapshot vs.
+// Sidebar-Σ wären sonst dauerhaft auseinander).
+function computeStats(html, buildLektoratPrompt) {
   const text = htmlToText(html);
   const wordList = text.trim() === '' ? [] : text.trim().split(/\s+/);
   const words = wordList.length;
   const chars = text.length;
-  const tok = Math.round((PROMPT_OVERHEAD + chars) / CHARS_PER_TOKEN);
+  const tok = Math.round(buildLektoratPrompt(text).length / CHARS_PER_TOKEN);
   const sentences = text.trim() === '' ? 0 : text.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
   return { words, chars, tok, wordList, sentences };
 }
@@ -139,6 +142,7 @@ async function syncPagesCache(bookId, token) {
 }
 
 async function syncBook(bookId, token) {
+  const { buildLektoratPrompt } = await getPrompts();
   const [pages, book, chapters] = await Promise.all([
     bsGetAll(`pages?filter[book_id]=${bookId}`, token),
     bsGet(`books/${bookId}`, token),
@@ -178,7 +182,7 @@ async function syncBook(bookId, token) {
     const results = await Promise.allSettled(batch.map(async p => {
       const pd = await bsGet(`pages/${p.id}`, token);
       const text = htmlToText(pd.html || '');
-      const { words, chars, tok, wordList, sentences } = computeStats(pd.html || '');
+      const { words, chars, tok, wordList, sentences } = computeStats(pd.html || '', buildLektoratPrompt);
       const preview = text.trim().slice(0, PREVIEW_CHARS);
       return { page_id: p.id, book_id: bookId, tok, words, chars, updated_at: p.updated_at || null, cached_at: now, wordList, sentences, preview, fullText: text };
     }));

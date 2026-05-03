@@ -9,11 +9,12 @@ const cssVar = name => getComputedStyle(document.documentElement).getPropertyVal
 // Chart-Labels kommen zur Render-Zeit über t() (siehe _metricLabel()), damit sie
 // bei Sprachwechsel live nachgezogen werden.
 const METRIC_KEYS = {
-  words:              'bookstats.metric.words',
   chars:              'bookstats.metric.chars',
+  words:              'bookstats.metric.words',
   page_count:         'bookstats.metric.pages',
   tok:                'bookstats.metric.tok',
   unique_words:       'bookstats.metric.unique',
+  delta_chars:        'bookstats.metric.deltaChars',
   delta_words:        'bookstats.metric.delta',
   avg_sentence_len:   'bookstats.metric.avgSentence',
   pages_per_chapter:  'bookstats.metric.pagesPerChapter',
@@ -154,12 +155,13 @@ export const bookstatsMethods = {
       rows = rows.filter(r => r.recorded_at >= cutoffStr);
     }
 
-    const isDelta = metric === 'delta_words';
+    const isDelta = metric === 'delta_words' || metric === 'delta_chars';
     const isPpc   = metric === 'pages_per_chapter';
     const isWritMin = metric === 'writing_minutes';
     const isWritCum = metric === 'writing_cumulative';
     let data;
-    if (isDelta) data = rows.map((r, i) => i === 0 ? null : r.words - rows[i - 1].words);
+    if (metric === 'delta_words') data = rows.map((r, i) => i === 0 ? null : r.words - rows[i - 1].words);
+    else if (metric === 'delta_chars') data = rows.map((r, i) => i === 0 ? null : (Number(r.chars) || 0) - (Number(rows[i - 1].chars) || 0));
     else if (isPpc) data = rows.map(r => r.chapter_count > 0 ? Math.round((r.page_count / r.chapter_count) * 10) / 10 : null);
     else if (isWritMin) data = rows.map(r => Math.round(r.seconds / 60));
     else if (isWritCum) { let sum = 0; data = rows.map(r => { sum += r.seconds; return Math.round(sum / 360) / 10; }); }

@@ -76,9 +76,33 @@ export const bookOverviewMethods = {
   },
 
   // ── Aggregate ────────────────────────────────────────────────────────────
+  // Hero-Snapshot: live-aggregiert aus `tokEsts` (gleiche Quelle wie Sidebar-Σ),
+  // damit Hero und Sidebar nach jedem Save sofort identisch sind. Cron-Snapshot
+  // (book_stats_history) wird nur als Fallback genutzt, wenn tokEsts noch nicht
+  // bereit ist (Buch eben gewechselt, Background-Estimate noch unterwegs).
+  // Sparkline + 7-Tage-Balken lesen weiterhin overviewStats direkt — die
+  // brauchen den historischen Verlauf.
   overviewLatest() {
-    const a = this.overviewStats;
-    return (a && a.length) ? a[a.length - 1] : null;
+    const app = window.__app;
+    const tokEsts = app?.tokEsts || {};
+    const ids = Object.keys(tokEsts);
+    const histLast = (this.overviewStats && this.overviewStats.length)
+      ? this.overviewStats[this.overviewStats.length - 1] : null;
+    if (!ids.length) return histLast;
+    let chars = 0, words = 0, tok = 0;
+    for (const id of ids) {
+      const e = tokEsts[id];
+      if (!e) continue;
+      chars += Number(e.chars) || 0;
+      words += Number(e.words) || 0;
+      tok += Number(e.tok) || 0;
+    }
+    const pages = app?.pages || [];
+    const page_count = pages.length || ids.length;
+    const chapter_count = new Set(
+      pages.map(p => p.chapter_id).filter(Boolean)
+    ).size;
+    return { ...(histLast || {}), chars, words, tok, page_count, chapter_count };
   },
 
   overviewFigurenCount() { return (this.overviewFiguren || []).length; },
@@ -98,20 +122,32 @@ export const bookOverviewMethods = {
     });
   },
 
-  // Top-3 Figuren nach Total-Erwähnungen über alle Kapitel.
-  // figuren[].kapitel: [{ name, haeufigkeit }]
+  // Top-3 Figuren nach Szenen-Präsenz (gleiche Quelle wie figurenpräsenz-matrix:
+  // overviewSzenen.fig_ids). figuren[].kapitel.haeufigkeit zählt nur namentliche
+  // Treffer und unterzählt Hauptfiguren bei pronomenlastigen Texten systematisch.
   overviewTopFiguren() {
     const figs = this.overviewFiguren || [];
-    return this._memo('topFiguren', figs, () => figs
+    const sz = this.overviewSzenen || [];
+    const memos = (this._memos ||= {});
+    const hit = memos.topFiguren;
+    if (hit && hit.figs === figs && hit.sz === sz) return hit.value;
+    const totals = new Map();
+    for (const s of sz) {
+      if (!Array.isArray(s.fig_ids)) continue;
+      for (const fid of s.fig_ids) totals.set(fid, (totals.get(fid) || 0) + 1);
+    }
+    const value = figs
       .map(f => ({
         id: f.id,
         name: f.name,
         kurzname: f.kurzname,
         rolle: f.rolle || null,
-        mentions: (f.kapitel || []).reduce((s, k) => s + (Number(k.haeufigkeit) || 0), 0),
+        mentions: totals.get(f.id) || 0,
       }))
       .sort((a, b) => b.mentions - a.mentions)
-      .slice(0, 3));
+      .slice(0, 3);
+    memos.topFiguren = { figs, sz, value };
+    return value;
   },
 
   // Letzte 7 Kalendertage. Pro Tag: Zeichen-Delta zum Vortags-Snapshot.
@@ -165,7 +201,7 @@ export const bookOverviewMethods = {
     const stats = this.overviewStats || [];
     return this._memo('sparkline', stats, () => {
       const W = 240, H = 48, PAD = 3;
-      const data = stats.slice(-30).map(s => Number(s.words) || 0);
+      const data = stats.slice(-30).map(s => Number(s.chars) || 0);
       if (data.length < 2) return { d: null, area: null, color: 'currentColor', deltaPct: 0, endX: 0, endY: 0, w: W, h: H };
       const min = Math.min(...data);
       const max = Math.max(...data);
@@ -263,19 +299,20 @@ export const bookOverviewMethods = {
     return ids.map(id => byId.get(id)).filter(Boolean);
   },
 
-  // Word-Count-Badge pro Recent-Page (aus tokEsts oder pages-Cache).
-  overviewPageWords(pageId) {
+  // Zeichen-Badge pro Recent-Page (aus tokEsts).
+  overviewPageChars(pageId) {
     const est = window.__app?.tokEsts?.[pageId];
-    return est?.words ?? null;
+    return est?.chars ?? null;
   },
 
-  // Kapitel-Verteilung: Seiten + Wörter + Zeichen pro Kapitel.
-  // Liest tree (Lese-Reihenfolge) und tokEsts (Live-Wortzahlen pro Seite).
-  // pct = Wörter relativ zum längsten Kapitel — für Bar-Width-Skalierung.
-  // medianPct = Median-Position im Track (vertikaler Tick).
+  // Kapitel-Verteilung: Zeichen + Wörter + Seiten pro Kapitel.
+  // Liest tree (Lese-Reihenfolge) und tokEsts (Live-Metriken pro Seite).
+  // Diverging-Bar um Median (Zeichen): Track-Mitte = Median, Bars wachsen rechts
+  // (länger als Median) oder links (kürzer). Bar-Länge = |deltaPct| / maxAbsDelta
+  // * 48% (cap bei 48%, damit Bars nicht an Track-Rand stossen).
   // deltaPct = Abweichung gegen Median (±%, gerundet).
-  // isMax/isMin markieren Top-/Schwächstes-Kapitel (Akzent-Highlight).
-  // chapterSort: 'order' (Lese-Reihenfolge), 'wordsDesc', 'wordsAsc'.
+  // isMax/isMin markieren Extrem-Kapitel (Border-Akzent).
+  // chapterSort: 'order' (Lese-Reihenfolge), 'charsDesc', 'charsAsc'.
   overviewChapterDistribution() {
     const app = window.__app;
     if (!app) return [];
@@ -302,38 +339,48 @@ export const bookOverviewMethods = {
       });
     }
     if (out.length === 0) return out;
-    const maxWords = Math.max(1, ...out.map(c => c.words));
-    const minWords = Math.min(...out.map(c => c.words));
-    const sorted = [...out].map(c => c.words).sort((a, b) => a - b);
+    const maxChars = Math.max(1, ...out.map(c => c.chars));
+    const minChars = Math.min(...out.map(c => c.chars));
+    const sorted = [...out].map(c => c.chars).sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
     const median = sorted.length % 2 === 0
       ? (sorted[mid - 1] + sorted[mid]) / 2
       : sorted[mid];
-    const enriched = out.map(c => ({
+    const withDelta = out.map(c => ({
       ...c,
-      pct: Math.max(2, Math.round((c.words / maxWords) * 100)),
-      medianPct: Math.round((median / maxWords) * 100),
-      deltaPct: median > 0 ? Math.round(((c.words - median) / median) * 100) : 0,
-      isMax: c.words === maxWords && maxWords > 0,
-      isMin: c.words === minWords && maxWords !== minWords,
+      deltaPct: median > 0 ? Math.round(((c.chars - median) / median) * 100) : 0,
+      isMax: c.chars === maxChars && maxChars > 0,
+      isMin: c.chars === minChars && maxChars !== minChars,
     }));
+    const maxAbsDelta = Math.max(1, ...withDelta.map(c => Math.abs(c.deltaPct)));
+    const HALF = 48; // % of full track
+    const enriched = withDelta.map(c => {
+      const halfPct = (Math.abs(c.deltaPct) / maxAbsDelta) * HALF;
+      return {
+        ...c,
+        median,
+        barWidthPct: halfPct,
+        barLeftPct: c.deltaPct >= 0 ? 50 : 50 - halfPct,
+        isPositive: c.deltaPct >= 0,
+      };
+    });
     const sortMode = this.chapterSort || 'order';
-    if (sortMode === 'wordsDesc') enriched.sort((a, b) => b.words - a.words);
-    else if (sortMode === 'wordsAsc') enriched.sort((a, b) => a.words - b.words);
+    if (sortMode === 'charsDesc') enriched.sort((a, b) => b.chars - a.chars);
+    else if (sortMode === 'charsAsc') enriched.sort((a, b) => a.chars - b.chars);
     else enriched.sort((a, b) => a.order - b.order);
     return enriched;
   },
 
   cycleChapterSort() {
-    const seq = ['order', 'wordsDesc', 'wordsAsc'];
+    const seq = ['order', 'charsDesc', 'charsAsc'];
     const cur = this.chapterSort || 'order';
     this.chapterSort = seq[(seq.indexOf(cur) + 1) % seq.length];
   },
 
   chapterSortLabel() {
-    const t = window.__app?.t;
-    if (!t) return '';
-    return t('overview.chapterSort.' + (this.chapterSort || 'order'));
+    const app = window.__app;
+    if (!app?.t) return '';
+    return app.t('overview.chapterSort.' + (this.chapterSort || 'order'));
   },
 
   // Lektorat-Findings pro Kapitel: aus overviewHeat.matrix (mode=open).
@@ -457,7 +504,8 @@ export const bookOverviewMethods = {
   // Fehler-Typ-Label: i18n-Key versuchen; Fallback humanisiert.
   overviewFehlerLabel(typ) {
     const key = 'fehlerHeatmap.typ.' + typ;
-    const translated = window.__app?.t?.(key);
+    const app = window.__app;
+    const translated = app?.t ? app.t(key) : null;
     if (translated && translated !== key) return translated;
     const s = String(typ || '').replace(/_/g, ' ').replace(/\bvs\b/, 'vs.');
     return s.charAt(0).toUpperCase() + s.slice(1);
@@ -477,7 +525,7 @@ export const bookOverviewMethods = {
   },
 
   // ── Tile-Click-Handler ───────────────────────────────────────────────────
-  _openWordsStats(range = 30, metric = 'words') {
+  _openLengthStats(range = 30, metric = 'chars') {
     window.dispatchEvent(new CustomEvent('book-stats:select', { detail: { metric, range } }));
     window.__app?.toggleBookStatsCard?.();
   },
