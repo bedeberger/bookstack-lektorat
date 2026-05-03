@@ -4,7 +4,7 @@ const logger = require('../../logger');
 const {
   db,
   saveFigurenToDb, addFigurenBeziehungen, updateFigurenEvents, updateFigurenSoziogramm,
-  saveZeitstrahlEvents, saveOrteToDb,
+  saveZeitstrahlEvents, saveOrteToDb, backfillLocationChaptersFromScenes,
   saveCheckpoint, loadCheckpoint, deleteCheckpoint,
   loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache,
   getAllUserTokens, getBookSettings, getTokenForRequest,
@@ -1299,6 +1299,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     const assignments = remapAssignments(chapterAssignments, figNameToId, figNameToIdLower, idMaps.chNameToId, log, jobId);
     updateJob(jobId, { progress: 76, statusText: 'job.phase.savingScenes' });
     const szenenResult = saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId, idMaps, log, jobId);
+    backfillLocationChaptersFromScenes(bookIdInt, email);
 
     const figKompakt = figuren.map(f => ({ name: f.name, typ: f.typ || 'andere', beschreibung: f.beschreibung || '' }));
     const ortRows = db.prepare(

@@ -1,4 +1,16 @@
 @layer components {
+/* === Szenen-Karte: Akzentfarbe + Severity-Bar links =================
+   Akzent = --card-accent-szenen (violett, Erzähl-Beat). Severity-Punkt
+   wird zur vertikalen Bar (Heatmap-Effekt beim Scannen).
+*/
+.card--szenen { --card-accent: var(--card-accent-szenen); }
+/* Severity in der Liste: Text-Tag via .severity-tag (entity-list.css).
+   Übersichts-Badges (.severity-dot--*) bleiben unverändert als runde Dots. */
+
+@media (max-width: 600px) {
+  .szenen-uebersicht-grid { gap: 8px; padding: 6px 0 8px; }
+}
+
 /* === Figuren-Karte: Szenen-Sub-Liste === */
 .figur-szenen-list {
   display: flex;
@@ -47,16 +59,16 @@
 
 /* === Szenen-Karte: Übersichts-Grid (Figur / Kapitel / Seite, klappbar) === */
 .szenen-uebersicht {
-  padding: 4px 0 0;
-  margin-bottom: 4px;
+  padding: 14px 0 12px;
+  margin-bottom: 8px;
 }
 .szenen-uebersicht-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
-  padding: 8px 0 12px;
+  padding: 12px 0 14px;
   border-bottom: 1px solid var(--color-border);
-  margin-top: 4px;
+  margin-top: 8px;
 }
 @media (max-width: 700px) {
   .szenen-uebersicht-grid { grid-template-columns: 1fr; }

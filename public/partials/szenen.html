@@ -4,7 +4,7 @@
   Fachdaten (szenen, figuren, orte) leben in Alpine.store('catalog');
   szenenFilters bleibt im Root.
 -->
-<div class="card" x-data="szenenCard" x-show="$app.showSzenenCard" x-cloak>
+<div class="card card--szenen" x-data="szenenCard" x-show="$app.showSzenenCard" x-cloak>
   <div class="card-header card-header--subline">
     <div class="card-header-titlebar">
       <span class="card-title" x-text="$app.t('szenen.title', { name: $app.selectedBookName })"></span>
@@ -22,6 +22,17 @@
 
   <!-- Leer-Hinweis -->
   <div x-show="!$app.szenen.length && !szenenLoading && !szenenStatus" class="card-status" x-text="$app.t('common.noDataYet')"></div>
+
+  <!-- Skeleton während Loading vor erstem Datensatz -->
+  <div x-show="szenenLoading && !$app.szenen.length" class="entity-skeleton entity-list--accented" x-cloak>
+    <template x-for="i in 6" :key="i">
+      <div class="entity-skeleton-row">
+        <span class="entity-skeleton-cell entity-skeleton-cell--anchor"></span>
+        <span class="entity-skeleton-cell entity-skeleton-cell--title"></span>
+        <span class="entity-skeleton-cell entity-skeleton-cell--meta"></span>
+      </div>
+    </template>
+  </div>
 
   <!-- Szenen-Übersicht: klappbar -->
   <div x-show="$app.szenen.length > 0" class="szenen-uebersicht">
@@ -109,16 +120,16 @@
     </div>
 
     <!-- Kompakte Szenen-Liste -->
-    <div class="entity-list">
+    <div class="entity-list entity-list--accented">
       <template x-for="(s, i) in $app.szenenFiltered" :key="s.id || i">
         <div>
           <div class="entity-row"
                :data-szeneid="s.id"
                :class="{ 'entity-row--selected': $app.selectedSzeneId === s.id }"
                @click="$app.selectedSzeneId = $app.selectedSzeneId === s.id ? null : s.id">
-            <span class="severity-dot severity-dot--lg"
-                  :class="'severity-dot--' + (s.wertung || 'mittel')"
-                  :title="s.wertung ? $app.t('szenen.rating.' + s.wertung) : ''"></span>
+            <span class="severity-tag"
+                  :class="'severity-tag--' + (s.wertung || 'mittel')"
+                  x-text="$app.t('szenen.rating.' + (s.wertung || 'mittel'))"></span>
             <span class="entity-row-title" x-text="s.titel"></span>
             <span class="entity-row-meta internal-link"
                   @click.stop="s.page_id ? $app.gotoPageById(s.page_id) : $app.gotoStelle(s.kapitel, s.seite)"

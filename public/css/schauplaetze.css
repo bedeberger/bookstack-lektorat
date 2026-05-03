@@ -1,9 +1,11 @@
 @layer components {
 /* === Schauplätze ===
    Listen-/Detail-Layout via .entity-list aus entity-list.css.
-   Hier nur Karten-spezifische Overrides.
+   Akzentfarbe = --card-accent-orte (erdig-grün) → Anchor-Bar links + Title-Underline.
 */
-.ort-list { padding: 0 1rem 1rem; }
+.card--orte { --card-accent: var(--card-accent-orte); }
+
+.ort-list { padding: 0 0 1rem; }
 .ort-stimmung {
   font-style: italic;
   color: var(--color-muted);
@@ -12,5 +14,25 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 30%;
+}
+
+/* Typ-Tag als Anker — kein Hintergrund, nur Akzent-Text mono-uppercase.
+   "Innen/Aussen/Reise/…" wird so zur ersten Information beim Scannen. */
+.card--orte .entity-typ-tag {
+  background: transparent;
+  border: 0;
+  color: var(--card-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0;
+  min-width: 64px;
+  text-align: left;
+}
+
+@media (max-width: 600px) {
+  .ort-list { padding: 0 0 0.75rem; }
+  .ort-stimmung { max-width: 100%; }
 }
 }

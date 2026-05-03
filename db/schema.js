@@ -235,6 +235,24 @@ function saveOrteToDb(bookId, orte, userEmail, chNameToId = null, pageNameToIdBy
   })();
 }
 
+// Backfill für location_chapters: ergänzt fehlende Kapitel-Zuordnungen aus
+// scene_locations → figure_scenes.chapter_id. Nutzt INSERT OR IGNORE — bestehende
+// Einträge (Primary-Key location_id+chapter_id) bleiben unverändert (haeufigkeit
+// wird nicht überschrieben). Deckt Fall ab: AI liefert für Ort kein kapitel-Array,
+// aber Ort hängt an Szene mit aufgelöstem chapter_id.
+function backfillLocationChaptersFromScenes(bookId, userEmail) {
+  const emailCond = userEmail ? 'fs.user_email = ?' : 'fs.user_email IS NULL';
+  const emailVal  = userEmail ? [userEmail] : [];
+  db.prepare(`
+    INSERT OR IGNORE INTO location_chapters (location_id, chapter_id, chapter_name, haeufigkeit)
+    SELECT sl.location_id, fs.chapter_id, fs.kapitel, COUNT(*)
+    FROM scene_locations sl
+    JOIN figure_scenes fs ON fs.id = sl.scene_id
+    WHERE fs.book_id = ? AND ${emailCond} AND fs.chapter_id IS NOT NULL
+    GROUP BY sl.location_id, fs.chapter_id
+  `).run(bookId, ...emailVal);
+}
+
 // ── Job-Checkpoints ───────────────────────────────────────────────────────────
 // Speichert Zwischenergebnisse für Multi-Pass-Jobs, damit diese nach einem
 // Server-Neustart fortgesetzt werden können statt von vorne zu beginnen.
@@ -631,6 +649,7 @@ module.exports = {
   // local
   saveZeitstrahlEvents,
   saveOrteToDb,
+  backfillLocationChaptersFromScenes,
   saveContinuityCheck,
   getLatestContinuityCheck,
   upsertUserLogin, getUser, updateUserSettings,

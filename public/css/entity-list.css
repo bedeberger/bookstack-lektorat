@@ -40,9 +40,33 @@
   cursor: pointer;
   border-bottom: 1px solid var(--color-border);
   font-size: 14px;
+  position: relative;
 }
 .entity-row:hover { background: var(--color-hover); }
 .entity-row--selected { background: var(--color-hover); }
+
+/* Anchor-Bar: 3px farbiger Linksrand am Row + Detail.
+   Sichtbar nur, wenn .entity-list--accented gesetzt + --card-accent vorhanden.
+   Macht jede Karte (Orte/Szenen/Kontinuität) optisch unterscheidbar. */
+.entity-list--accented .entity-row {
+  border-left: 3px solid transparent;
+  padding-left: calc(0.5rem - 3px);
+}
+.entity-list--accented .entity-row::before {
+  content: "";
+  position: absolute;
+  left: -3px; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--card-accent, transparent);
+  opacity: 0.35;
+  transition: opacity 0.15s;
+}
+.entity-list--accented .entity-row:hover::before,
+.entity-list--accented .entity-row--selected::before { opacity: 1; }
+.entity-list--accented .entity-detail {
+  border-left: 3px solid var(--card-accent, var(--color-border));
+  padding-left: calc(1rem - 3px);
+}
 .entity-row-title {
   font-weight: 700;
   flex: 1;
@@ -61,7 +85,7 @@
 }
 .entity-typ-tag {
   font-size: 11px;
-  min-width: 72px;
+  width: 96px;
   text-align: center;
   flex-shrink: 0;
 }
@@ -112,6 +136,33 @@
 .severity-dot--kritisch { background: var(--color-err-border); }
 .severity-dot--niedrig  { background: var(--color-border); }
 
+/* === Severity-Tag (Anker links in entity-row) ===
+   Geteilt zwischen Szenen (stark/mittel/schwach) und Kontinuität
+   (kritisch/mittel/niedrig). Text statt nur Farbe → barrierearm,
+   konsistent mit den .severity-filter-btn-Labels. */
+.severity-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  min-width: 64px;
+  text-align: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+}
+/* Farbsemantik folgt der bestehenden severity-dot-Logik:
+   - stark (Szene gut)     → grün
+   - schwach (Szene schwach) → rot
+   - kritisch (Konflikt)   → rot
+   - mittel                → amber
+   - niedrig               → grau */
+.severity-tag--stark    { color: var(--color-surface); background: var(--color-stark); }
+.severity-tag--mittel   { color: var(--color-surface); background: var(--color-mittel); }
+.severity-tag--schwach,
+.severity-tag--kritisch { color: var(--color-surface); background: var(--color-err-border); }
+.severity-tag--niedrig  { color: var(--color-muted); background: var(--color-tag-bg); }
+
 /* === Severity-Filter-Buttons === */
 .severity-filter-group { display: flex; gap: 4px; }
 .severity-filter-btn {
@@ -142,6 +193,72 @@
 .severity-filter-btn--schwach.severity-filter-btn--active  { background: var(--color-err-border); border-color: var(--color-err-border); color: var(--color-surface); }
 .severity-filter-btn--kritisch.severity-filter-btn--active { background: var(--color-err-border); border-color: var(--color-err-border); color: var(--color-surface); }
 .severity-filter-btn--niedrig.severity-filter-btn--active  { background: var(--color-muted);      border-color: var(--color-muted);      color: var(--color-surface); }
+
+/* === Skeleton-Loader für Listen-Karten ===
+   Genutzt während xxxLoading vor erstem Datensatz. Reusing skeleton-shimmer
+   keyframes aus chat.css. */
+.entity-skeleton {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+.entity-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  height: 38px;
+  box-sizing: border-box;
+}
+.entity-list--accented .entity-skeleton-row {
+  border-left: 3px solid var(--card-accent, transparent);
+  padding-left: calc(0.5rem - 3px);
+  opacity: 0.6;
+}
+.entity-skeleton-cell {
+  height: 11px;
+  background: linear-gradient(90deg, var(--color-shimmer-from) 25%, var(--color-neutral-bg) 50%, var(--color-shimmer-from) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+.entity-skeleton-cell--anchor { width: 60px; flex-shrink: 0; }
+.entity-skeleton-cell--title  { flex: 1; max-width: 60%; }
+.entity-skeleton-cell--meta   { width: 80px; flex-shrink: 0; }
+
+/* === Mobile-Breakpoints für Listen-Rows ===
+   Single-line entity-row sprengt auf <600px. Title bekommt volle Breite,
+   Meta + Tags rutschen darunter, Typ-Tag wird schmaler.
+*/
+@media (max-width: 600px) {
+  .entity-row {
+    flex-wrap: wrap;
+    row-gap: 3px;
+    column-gap: 0.4rem;
+  }
+  .entity-row-title {
+    flex-basis: 100%;
+    order: -1;
+  }
+  .entity-row-meta { max-width: 100%; }
+  .entity-typ-tag {
+    width: auto;
+    min-width: 0;
+    padding: 1px 6px;
+  }
+  .severity-tag {
+    min-width: 0;
+    padding: 2px 5px;
+    font-size: 9px;
+  }
+  .filter-search-input { width: 100%; }
+  .filter-bar > .combobox-wrap--compact { flex: 1 1 45%; min-width: 0; }
+  .filter-count { width: 100%; text-align: right; }
+  /* Skeleton soll sich nicht aufblähen, behält single-line */
+  .entity-skeleton-row { flex-wrap: nowrap; }
+  .entity-skeleton-cell--meta { width: 50px; }
+}
 
 /* === Klappbarer Section-Toggle (Übersicht/Summary in Karten) === */
 .collapsible-toggle {

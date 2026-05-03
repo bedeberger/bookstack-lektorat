@@ -4,7 +4,7 @@
   Fachdaten (orte, szenen, figuren) leben in Alpine.store('catalog');
   orteFilters + selectedOrtId bleiben im Root.
 -->
-<div class="card" x-data="orteCard" x-show="$app.showOrteCard" x-cloak>
+<div class="card card--orte" x-data="orteCard" x-show="$app.showOrteCard" x-cloak>
   <div class="card-header card-header--subline">
     <div class="card-header-titlebar">
       <span class="card-title" x-text="$app.t('orte.title', { name: $app.selectedBookName })"></span>
@@ -20,6 +20,17 @@
   <div x-show="orteStatus" class="card-status" x-html="orteStatus"></div>
 
   <div x-show="$app.orte.length === 0 && !orteLoading && !orteStatus" class="card-status" x-text="$app.t('common.noDataYet')"></div>
+
+  <!-- Skeleton während Loading vor erstem Datensatz -->
+  <div x-show="orteLoading && $app.orte.length === 0" class="entity-skeleton entity-list--accented" x-cloak>
+    <template x-for="i in 6" :key="i">
+      <div class="entity-skeleton-row">
+        <span class="entity-skeleton-cell entity-skeleton-cell--anchor"></span>
+        <span class="entity-skeleton-cell entity-skeleton-cell--title"></span>
+        <span class="entity-skeleton-cell entity-skeleton-cell--meta"></span>
+      </div>
+    </template>
+  </div>
 
   <!-- Filter-Leiste -->
   <div x-show="$app.orte.length > 0" class="filter-bar">
@@ -47,7 +58,7 @@
   </div>
 
   <!-- Ortsliste -->
-  <div x-show="$app.orte.length > 0" class="entity-list ort-list">
+  <div x-show="$app.orte.length > 0" class="entity-list entity-list--accented ort-list">
     <template x-for="o in $app.orteFiltered" :key="o.id">
       <div>
         <div class="entity-row" :data-ortid="o.id" @click="$app.selectedOrtId = $app.selectedOrtId === o.id ? null : o.id">

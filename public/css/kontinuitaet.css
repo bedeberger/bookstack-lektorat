@@ -2,15 +2,24 @@
 /* === Kontinuitätsprüfung ===
    Listen-/Detail-/Filter-/Dot-Layout via .entity-list + .severity-* aus
    entity-list.css. Hier nur Karten-spezifische Ergänzungen.
+   Akzentfarbe = --card-accent-kontinuitaet (bernstein-rot, Warn-Charakter).
 */
+.card--kontinuitaet { --card-accent: var(--card-accent-kontinuitaet); }
+/* Schwere-Tag als Anker links: shared .severity-tag aus entity-list.css. */
+
+@media (max-width: 600px) {
+  .kontinuitaet-result { padding: 0.25rem 0 0.75rem; }
+  .kontinuitaet-row-stellen { font-size: 11px; gap: 0.2rem; }
+}
+
 .kontinuitaet-result {
-  padding: 0.25rem 1rem 1rem;
+  padding: 0.25rem 0 1rem;
 }
 
 /* Zusammenfassung – klappbar */
 .kontinuitaet-summary-wrap {
-  padding: 4px 0 0;
-  margin-bottom: 4px;
+  padding: 14px 0 12px;
+  margin-bottom: 8px;
 }
 .kontinuitaet-summary {
   font-size: 13px;
@@ -18,7 +27,7 @@
   line-height: 1.5;
   padding: 0.4rem 0.75rem 0.6rem;
   border-left: 3px solid var(--color-border);
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 .kontinuitaet-ok {
@@ -42,6 +51,23 @@
 }
 .kontinuitaet-arrow {
   color: var(--color-subtle);
+}
+
+/* Empfehlung — hervorgehoben mit Akzentlinie + Tint, damit der
+   handlungsrelevante Hinweis direkt ins Auge springt. */
+.kontinuitaet-empfehlung {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-warn-bg);
+  border-left: 3px solid var(--card-accent-kontinuitaet);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.kontinuitaet-empfehlung-label {
+  color: var(--card-accent-kontinuitaet);
+}
+.kontinuitaet-empfehlung-value {
+  font-weight: 500;
+  color: var(--color-text);
 }
 
 /* ── Buch-Einstellungen ──────────────────────────────────────────────────────── */

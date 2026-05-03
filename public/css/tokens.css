@@ -162,6 +162,14 @@
   /* Skeleton-Shimmer */
   --color-shimmer-from: #ccc;
 
+  /* Card-Akzente — Eigenheit pro Listen-Karte (Orte/Szenen/Kontinuität).
+     Genutzt als linker Anchor-Bar an .entity-row und am Detail-Drawer.
+     Light: gedämpfte Naturtöne — Orte erdig-grün, Szenen violett (Erzähl-Beat),
+     Kontinuität bernstein-rot (Warn-Charakter). */
+  --card-accent-orte: #4f7a3a;
+  --card-accent-szenen: #6e4f9a;
+  --card-accent-kontinuitaet: #b86537;
+
   /* Job-Queue-Footer – folgt Theme (Light: warme Crème, Dark: warmes Dunkelbraun) */
   --color-queue-bar-bg: var(--color-surface);
   --color-queue-border-subtle: var(--color-border);
@@ -325,6 +333,11 @@
 
   /* Skeleton-Shimmer auf Dark */
   --color-shimmer-from: #3a3a3a;
+
+  /* Card-Akzente — heller auf Dark, sonst kontrastlos */
+  --card-accent-orte: #8aaa6a;
+  --card-accent-szenen: #b39ad9;
+  --card-accent-kontinuitaet: #e0905a;
 
   /* Queue-Footer folgt Theme über var()-Verkettung – keine Overrides nötig */
 
