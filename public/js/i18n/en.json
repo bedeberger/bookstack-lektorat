@@ -317,6 +317,8 @@
   "overview.openHeatmap":        "Open heatmap",
   "overview.lastReview":         "Latest review",
   "overview.openReview":         "Open review",
+  "overview.chapterDist":        "Chapter distribution (by words)",
+  "overview.chapterReviewOpen":  "Review chapter «{name}»",
   "overview.recent":             "Recently opened pages",
   "overview.quickActions":       "Actions",
   "overview.last7Days":          "Written (7 days)",

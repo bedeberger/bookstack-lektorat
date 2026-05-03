@@ -226,6 +226,49 @@ export const bookOverviewMethods = {
     return est?.words ?? null;
   },
 
+  // Kapitel-Verteilung: Seiten + Wörter + Zeichen pro Kapitel.
+  // Liest tree (Lese-Reihenfolge) und tokEsts (Live-Wortzahlen pro Seite).
+  // pct = Wörter relativ zum längsten Kapitel — für Bar-Width-Skalierung.
+  // Unkategorisierte Seiten werden ignoriert (selten relevant für Verteilung).
+  overviewChapterDistribution() {
+    const app = window.__app;
+    if (!app) return [];
+    const tree = app.tree || [];
+    const tokEsts = app.tokEsts || {};
+    const out = [];
+    for (const item of tree) {
+      if (item.type !== 'chapter') continue;
+      const pages = item.pages || [];
+      let words = 0, chars = 0;
+      for (const p of pages) {
+        const est = tokEsts[p.id];
+        if (!est) continue;
+        words += Number(est.words) || 0;
+        chars += Number(est.chars) || 0;
+      }
+      out.push({
+        id: item.id,
+        name: item.name,
+        pages: pages.length,
+        words,
+        chars,
+      });
+    }
+    if (out.length === 0) return out;
+    const maxWords = Math.max(1, ...out.map(c => c.words));
+    return out.map(c => ({ ...c, pct: Math.max(2, Math.round((c.words / maxWords) * 100)) }));
+  },
+
+  // Fehler-Typ-Label: i18n-Key versuchen; Fallback humanisiert (`show_vs_tell`
+  // → „Show vs tell"), damit unbekannte Typen nicht codey aussehen.
+  overviewFehlerLabel(typ) {
+    const key = 'fehlerHeatmap.typ.' + typ;
+    const translated = window.__app?.t?.(key);
+    if (translated && translated !== key) return translated;
+    const s = String(typ || '').replace(/_/g, ' ').replace(/\bvs\b/, 'vs.');
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  },
+
   // Initialen für Avatar-Chip: erste Buchstaben aus Vor-/Nachname.
   overviewInitials(name) {
     if (!name) return '?';

@@ -317,6 +317,8 @@
   "overview.openHeatmap":        "Heatmap öffnen",
   "overview.lastReview":         "Letzte Bewertung",
   "overview.openReview":         "Bewertung öffnen",
+  "overview.chapterDist":        "Kapitel-Verteilung (nach Wörtern)",
+  "overview.chapterReviewOpen":  "Kapitel «{name}» bewerten",
   "overview.recent":             "Zuletzt geöffnete Seiten",
   "overview.quickActions":       "Aktionen",
   "overview.last7Days":          "Geschrieben (7 Tage)",

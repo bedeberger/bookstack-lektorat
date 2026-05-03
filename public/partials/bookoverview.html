@@ -154,7 +154,7 @@
           <template x-for="e in overviewTopFehler()" :key="e.typ">
             <li class="overview-error-bar-item">
               <div class="overview-error-bar-head">
-                <span class="overview-error-typ" x-text="e.typ"></span>
+                <span class="overview-error-typ" x-text="overviewFehlerLabel(e.typ)"></span>
                 <span class="overview-error-count" x-text="_fmtNum(e.count)"></span>
               </div>
               <div class="overview-error-bar-track">
@@ -254,6 +254,29 @@
                 x-show="overviewSzenenWertung().schwach > 0"
                 x-text="overviewSzenenWertung().schwach + ' ' + $app.t('overview.unit.schwach')"></span>
         </div>
+      </div>
+    </template>
+
+    <!-- Kapitel-Verteilung: horizontale Bars pro Kapitel (Wörter relativ) -->
+    <template x-if="overviewChapterDistribution().length > 0">
+      <div class="overview-tile overview-tile--wide">
+        <div class="overview-tile-label" x-text="$app.t('overview.chapterDist')"></div>
+        <ul class="overview-chapter-list">
+          <template x-for="ch in overviewChapterDistribution()" :key="ch.id">
+            <li class="overview-chapter-row internal-link"
+                @click="$app.kapitelReviewChapterId = String(ch.id); if (!$app.showKapitelReviewCard) $app.toggleKapitelReviewCard()"
+                :title="$app.t('overview.chapterReviewOpen', { name: ch.name })">
+              <span class="overview-chapter-name" x-text="ch.name"></span>
+              <div class="overview-chapter-bar-track">
+                <div class="overview-chapter-bar-fill" :style="{ width: ch.pct + '%' }"></div>
+              </div>
+              <span class="overview-chapter-meta">
+                <span class="overview-chapter-pages" x-text="ch.pages + ' ' + $app.t('bookstats.unit.s')"></span>
+                <span class="overview-chapter-words" x-text="_fmtNum(ch.words) + ' ' + $app.t('bookstats.unit.w')"></span>
+              </span>
+            </li>
+          </template>
+        </ul>
       </div>
     </template>
 
