@@ -217,31 +217,7 @@
 .chat-vorschlag-btn:disabled { opacity: 0.5; cursor: default; }
 
 .chat-vorschlag-diff {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  flex-wrap: wrap;
   margin-bottom: 4px;
-}
-.chat-vorschlag-diff del {
-  color: var(--color-err-text);
-  background: var(--color-err-bg);
-  text-decoration: line-through;
-  padding: 0 3px;
-  font-size: var(--font-size-sm);
-  word-break: break-word;
-}
-.chat-vorschlag-diff ins {
-  color: var(--color-ok-text);
-  background: var(--color-ok-bg);
-  text-decoration: none;
-  padding: 0 3px;
-  font-size: var(--font-size-sm);
-  word-break: break-word;
-}
-.chat-vorschlag-arrow {
-  color: var(--color-muted);
-  flex-shrink: 0;
 }
 .chat-vorschlag-begruendung {
   color: var(--color-muted);

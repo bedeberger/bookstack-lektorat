@@ -44,9 +44,8 @@
                   </button>
                 </div>
                 <div class="chat-vorschlag-diff">
-                  <del x-text="v.original"></del>
-                  <span class="chat-vorschlag-arrow">→</span>
-                  <ins x-text="v.ersatz"></ins>
+                  <span class="finding-original" x-text="v.original"></span>
+                  <span class="finding-korrektur" x-text="v.ersatz"></span>
                 </div>
                 <div x-show="v.begruendung" class="chat-vorschlag-begruendung" x-text="v.begruendung"></div>
                 <div x-show="v._error" class="chat-vorschlag-error" x-text="v._error"></div>
@@ -80,7 +79,7 @@
   </div>
   <div class="chat-input-hint" x-text="$app.t('chat.inputHint')"></div>
 
-  <div x-show="chatSessions.length > 1" class="card-history-section">
+  <div x-show="chatSessions.some(s => s.id !== chatSessionId)" class="card-history-section">
     <div class="chat-history-title" x-text="$app.t('chat.history')"></div>
     <template x-for="s in chatSessions" :key="s.id">
       <div
@@ -199,7 +198,7 @@
   </div>
   <div class="chat-input-hint" x-text="$app.t('chat.inputHint')"></div>
 
-  <div x-show="bookChatSessions.length > 1" class="card-history-section">
+  <div x-show="bookChatSessions.some(s => s.id !== bookChatSessionId)" class="card-history-section">
     <div class="chat-history-title" x-text="$app.t('chat.history')"></div>
     <template x-for="s in bookChatSessions" :key="s.id">
       <div
