@@ -131,9 +131,16 @@
                   :class="'severity-tag--' + (s.wertung || 'mittel')"
                   x-text="$app.t('szenen.rating.' + (s.wertung || 'mittel'))"></span>
             <span class="entity-row-title" x-text="s.titel"></span>
-            <span class="entity-row-meta internal-link"
-                  @click.stop="s.page_id ? $app.gotoPageById(s.page_id) : $app.gotoStelle(s.kapitel, s.seite)"
-                  x-text="s.kapitel + (s.seite ? ' · ' + s.seite : '')"></span>
+            <span class="kapitel-badges">
+              <span class="kapitel-badge kapitel-badge--primary internal-link"
+                    @click.stop="$app.openKapitelByName(s.kapitel)"
+                    x-text="s.kapitel"></span>
+              <template x-if="s.seite">
+                <span class="kapitel-badge kapitel-badge--secondary internal-link"
+                      @click.stop="s.page_id ? $app.gotoPageById(s.page_id) : $app.gotoStelle(s.kapitel, s.seite)"
+                      x-text="s.seite"></span>
+              </template>
+            </span>
             <span class="history-chevron" :class="{ open: $app.selectedSzeneId === s.id }">›</span>
           </div>
           <div x-show="$app.selectedSzeneId === s.id" class="entity-detail" x-cloak>

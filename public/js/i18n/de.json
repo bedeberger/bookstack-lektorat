@@ -392,6 +392,7 @@
   "figuren.modeSoziogramm":      "Soziogramm",
   "figuren.graph.hint":          "Horizontal = Kapitelabfolge · Vertikal = Figurentyp · Balken unter der Figur = Kapitelpräsenz (dunkler = häufiger) · Klick auf Kapiteltitel filtert",
   "figuren.soziogramm.hint":     "Pfeilstärke = Machtasymmetrie · Knotenzeilen = Gesellschaftsschicht · Pfeilrichtung = Mächtiger → Schwächerer · Innerhalb der Schicht: Mächtige oben, Untergebene unten",
+  "figuren.legend.toggle":       "Legende",
 
   "figuren.type.hauptfigur":     "Hauptfigur",
   "figuren.type.antagonist":     "Antagonist",

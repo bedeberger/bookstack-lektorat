@@ -100,23 +100,23 @@
                     :class="'severity-tag--' + (issue.schwere || 'niedrig')"
                     x-text="$app.t('kontinuitaet.severity.' + (issue.schwere || 'niedrig'))"></span>
               <span class="tag entity-typ-tag" x-text="issue.typ"></span>
-              <span class="kontinuitaet-row-stellen">
+              <span class="kontinuitaet-row-stellen kapitel-badges">
                 <template x-if="kontinuitaetResolveStelle(issue.stelle_a, issue, 'a')">
-                  <span class="tag internal-link"
+                  <span class="kapitel-badge kapitel-badge--primary internal-link"
                         :title="$app.t('kontinuitaet.gotoTitle', { name: kontinuitaetResolveStelle(issue.stelle_a, issue, 'a').name })"
                         @click.stop="kontinuitaetGotoStelle(issue.stelle_a, issue, 'a')" x-text="issue.stelle_a"></span>
                 </template>
                 <template x-if="!kontinuitaetResolveStelle(issue.stelle_a, issue, 'a')">
-                  <span class="tag" x-text="issue.stelle_a"></span>
+                  <span class="kapitel-badge kapitel-badge--primary" x-text="issue.stelle_a"></span>
                 </template>
                 <span class="kontinuitaet-arrow">↔</span>
                 <template x-if="kontinuitaetResolveStelle(issue.stelle_b, issue, 'b')">
-                  <span class="tag internal-link"
+                  <span class="kapitel-badge kapitel-badge--primary internal-link"
                         :title="$app.t('kontinuitaet.gotoTitle', { name: kontinuitaetResolveStelle(issue.stelle_b, issue, 'b').name })"
                         @click.stop="kontinuitaetGotoStelle(issue.stelle_b, issue, 'b')" x-text="issue.stelle_b"></span>
                 </template>
                 <template x-if="!kontinuitaetResolveStelle(issue.stelle_b, issue, 'b')">
-                  <span class="tag" x-text="issue.stelle_b"></span>
+                  <span class="kapitel-badge kapitel-badge--secondary" x-text="issue.stelle_b"></span>
                 </template>
               </span>
               <span class="history-chevron" :class="{ open: selectedKontinuitaetIssueKey === kontinuitaetIssueKey(issue, i) }">›</span>

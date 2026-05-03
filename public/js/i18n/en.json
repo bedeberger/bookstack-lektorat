@@ -392,6 +392,7 @@
   "figuren.modeSoziogramm":      "Sociogram",
   "figuren.graph.hint":          "Horizontal = chapter sequence · Vertical = character type · Bar under the node = per-chapter presence (darker = more frequent) · Click a chapter title to filter",
   "figuren.soziogramm.hint":     "Arrow thickness = power asymmetry · Node rows = social class · Arrow direction = stronger → weaker · Within a class: powerful at top, subordinates at bottom",
+  "figuren.legend.toggle":       "Legend",
 
   "figuren.type.hauptfigur":     "Protagonist",
   "figuren.type.antagonist":     "Antagonist",

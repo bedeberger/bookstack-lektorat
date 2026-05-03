@@ -59,7 +59,7 @@
 
 /* === Szenen-Karte: Übersichts-Grid (Figur / Kapitel / Seite, klappbar) === */
 .szenen-uebersicht {
-  padding: 14px 0 12px;
+  padding: 4px 0 12px;
   margin-bottom: 8px;
 }
 .szenen-uebersicht-grid {

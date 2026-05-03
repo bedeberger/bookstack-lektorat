@@ -18,13 +18,30 @@
 .figur-legend-dot--unterwelt            { --fig-hue: var(--palette-dark); --figpal-bg-mix: 95%; border-color: var(--color-border-contrast); }
 
 /* === Figuren: Kanten-Legende === */
-.figur-legend--edges { margin-top: 4px; }
 .figur-legend--soziogramm { flex-wrap: wrap; row-gap: 4px; }
 
 .figur-legend-entry {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+/* === Figuren: kollabierbare Legende === */
+.figur-legend-wrap {
+  margin-bottom: 6px;
+}
+.figur-legend-body {
+  margin-top: 4px;
+}
+.figur-legend-body .figur-soziogramm-hint {
+  margin: 4px 0 0;
+}
+.figur-legend-sep {
+  display: inline-block;
+  width: 1px;
+  height: 10px;
+  background: var(--color-border);
+  margin: 0 2px;
 }
 
 .figur-edge-line {
@@ -203,11 +220,6 @@
 .figur-list-header .history-heading {
   margin-bottom: 0;
 }
-.figur-kapitel-filter {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
 
 /* === Figurengraph: Kapitel-Filter === */
 .figuren-graph-filter {
@@ -295,7 +307,7 @@
   text-decoration: underline;
 }
 /* Dark-badge links: hover via background-shift instead of opacity (contrast: ~5.7:1) */
-.figur-kapitel-primary.internal-link:hover,
+.kapitel-badge--primary.internal-link:hover,
 .gz-kapitel-link.internal-link:hover {
   opacity: 1;
   background: var(--color-muted);

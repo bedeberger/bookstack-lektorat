@@ -66,10 +66,10 @@
           <span class="entity-row-title" x-text="o.name"></span>
           <span x-show="o.stimmung" class="ort-stimmung" x-text="o.stimmung"></span>
           <template x-if="o.kapitel?.length">
-            <span class="figur-kapitel-badges">
-              <span class="figur-kapitel-primary" x-text="o.kapitel[0].name"></span>
+            <span class="kapitel-badges">
+              <span class="kapitel-badge kapitel-badge--primary internal-link" @click.stop="$app.openKapitelByName(o.kapitel[0].name)" x-text="o.kapitel[0].name"></span>
               <template x-if="o.kapitel.length > 1">
-                <span class="figur-kapitel-more" x-text="'+' + (o.kapitel.length - 1)"></span>
+                <span class="kapitel-badge kapitel-badge--more" x-text="'+' + (o.kapitel.length - 1)"></span>
               </template>
             </span>
           </template>
@@ -95,7 +95,7 @@
           <div x-show="o.kapitel?.length > 1" class="entity-meta-row">
             <span class="entity-meta-label" x-text="$app.t('orte.kapitel')"></span>
             <template x-for="k in o.kapitel" :key="k.name">
-              <span class="tag" x-text="k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
+              <span class="tag internal-link" @click.stop="$app.openKapitelByName(k.name)" x-text="k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
             </template>
           </div>
           <div x-show="$app.szenen.some(s => (s.ort_ids||[]).includes(o.id))" class="entity-meta-row">

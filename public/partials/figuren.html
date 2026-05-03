@@ -34,54 +34,64 @@
       <button type="button" class="figur-modus-btn" :class="{ 'figur-modus-btn--active': figurenGraphModus === 'soziogramm' }" @click="setFigurenGraphModus('soziogramm')" x-text="$app.t('figuren.modeSoziogramm')"></button>
     </div>
 
-    <!-- Legende Figurengraph + Familie -->
-    <template x-if="figurenGraphModus !== 'soziogramm'">
-      <div>
-        <div class="figur-legend">
-          <span class="figur-legend-dot figur-legend-dot--hauptfigur"></span><span x-text="$app.t('figuren.type.hauptfigur')"></span>
-          <span class="figur-legend-dot figur-legend-dot--antagonist"></span><span x-text="$app.t('figuren.type.antagonist')"></span>
-          <span class="figur-legend-dot figur-legend-dot--mentor"></span><span x-text="$app.t('figuren.type.mentor')"></span>
-          <span class="figur-legend-dot figur-legend-dot--nebenfigur"></span><span x-text="$app.t('figuren.type.nebenfigur')"></span>
-          <span class="figur-legend-dot figur-legend-dot--randfigur"></span><span x-text="$app.t('figuren.type.randfigur')"></span>
-          <span class="figur-legend-dot figur-legend-dot--andere"></span><span x-text="$app.t('figuren.type.andere')"></span>
-        </div>
-        <div class="figur-legend figur-legend--edges">
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--eltern"></span><span x-text="$app.t('figuren.edge.eltern')"></span></span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschwister"></span><span x-text="$app.t('figuren.edge.geschwister')"></span></span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--freund"></span><span x-text="$app.t('figuren.edge.freund')"></span></span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--feind"></span><span x-text="$app.t('figuren.edge.feind')"></span></span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--liebesbeziehung"></span><span x-text="$app.t('figuren.edge.liebesbeziehung')"></span></span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--patronage"></span><span x-text="$app.t('figuren.edge.patronage')"></span></span>
-          <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschaeft"></span><span x-text="$app.t('figuren.edge.geschaeft')"></span></span>
-        </div>
-        <div x-show="figurenGraphModus === 'figur'" class="figur-soziogramm-hint" x-text="$app.t('figuren.graph.hint')"></div>
-      </div>
-    </template>
+    <!-- Legende (klappbar, Chevron-Stil wie Kontinuität) -->
+    <div class="figur-legend-wrap">
+      <button type="button"
+              class="collapsible-toggle"
+              @click="figurenLegendOpen = !figurenLegendOpen"
+              :aria-expanded="figurenLegendOpen">
+        <span class="history-chevron" :class="{ open: figurenLegendOpen }">›</span>
+        <span x-text="$app.t('figuren.legend.toggle')"></span>
+      </button>
 
-    <!-- Legende Soziogramm -->
-    <template x-if="figurenGraphModus === 'soziogramm'">
-      <div>
-        <div class="figur-legend figur-legend--soziogramm">
-          <span class="figur-legend-dot figur-legend-dot--wirtschaftselite"></span><span x-text="$app.t('figuren.schicht.wirtschaftselite')"></span>
-          <span class="figur-legend-dot figur-legend-dot--gehobenes_buergertum"></span><span x-text="$app.t('figuren.schicht.gehobenes_buergertum')"></span>
-          <span class="figur-legend-dot figur-legend-dot--mittelschicht"></span><span x-text="$app.t('figuren.schicht.mittelschicht')"></span>
-          <span class="figur-legend-dot figur-legend-dot--arbeiterschicht"></span><span x-text="$app.t('figuren.schicht.arbeiterschicht')"></span>
-          <span class="figur-legend-dot figur-legend-dot--migrantenmilieu"></span><span x-text="$app.t('figuren.schicht.migrantenmilieu')"></span>
-          <span class="figur-legend-dot figur-legend-dot--prekariat"></span><span x-text="$app.t('figuren.schicht.prekariat')"></span>
-          <span class="figur-legend-dot figur-legend-dot--unterwelt"></span><span x-text="$app.t('figuren.schicht.unterwelt')"></span>
+      <template x-if="figurenLegendOpen && figurenGraphModus !== 'soziogramm'">
+        <div class="figur-legend-body">
+          <div class="figur-legend">
+            <span class="figur-legend-entry"><span class="figur-legend-dot figur-legend-dot--hauptfigur"></span><span x-text="$app.t('figuren.type.hauptfigur')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-legend-dot figur-legend-dot--antagonist"></span><span x-text="$app.t('figuren.type.antagonist')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-legend-dot figur-legend-dot--mentor"></span><span x-text="$app.t('figuren.type.mentor')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-legend-dot figur-legend-dot--nebenfigur"></span><span x-text="$app.t('figuren.type.nebenfigur')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-legend-dot figur-legend-dot--randfigur"></span><span x-text="$app.t('figuren.type.randfigur')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-legend-dot figur-legend-dot--andere"></span><span x-text="$app.t('figuren.type.andere')"></span></span>
+            <span class="figur-legend-sep" aria-hidden="true"></span>
+            <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--eltern"></span><span x-text="$app.t('figuren.edge.eltern')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschwister"></span><span x-text="$app.t('figuren.edge.geschwister')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--freund"></span><span x-text="$app.t('figuren.edge.freund')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--feind"></span><span x-text="$app.t('figuren.edge.feind')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--liebesbeziehung"></span><span x-text="$app.t('figuren.edge.liebesbeziehung')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--patronage"></span><span x-text="$app.t('figuren.edge.patronage')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-edge-line figur-edge-line--geschaeft"></span><span x-text="$app.t('figuren.edge.geschaeft')"></span></span>
+          </div>
+          <div x-show="figurenGraphModus === 'figur'" class="figur-soziogramm-hint" x-text="$app.t('figuren.graph.hint')"></div>
         </div>
-        <div class="figur-soziogramm-hint" x-text="$app.t('figuren.soziogramm.hint')"></div>
-      </div>
-    </template>
+      </template>
+
+      <template x-if="figurenLegendOpen && figurenGraphModus === 'soziogramm'">
+        <div class="figur-legend-body">
+          <div class="figur-legend figur-legend--soziogramm">
+            <span class="figur-legend-entry"><span class="figur-legend-dot figur-legend-dot--wirtschaftselite"></span><span x-text="$app.t('figuren.schicht.wirtschaftselite')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-legend-dot figur-legend-dot--gehobenes_buergertum"></span><span x-text="$app.t('figuren.schicht.gehobenes_buergertum')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-legend-dot figur-legend-dot--mittelschicht"></span><span x-text="$app.t('figuren.schicht.mittelschicht')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-legend-dot figur-legend-dot--arbeiterschicht"></span><span x-text="$app.t('figuren.schicht.arbeiterschicht')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-legend-dot figur-legend-dot--migrantenmilieu"></span><span x-text="$app.t('figuren.schicht.migrantenmilieu')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-legend-dot figur-legend-dot--prekariat"></span><span x-text="$app.t('figuren.schicht.prekariat')"></span></span>
+            <span class="figur-legend-entry"><span class="figur-legend-dot figur-legend-dot--unterwelt"></span><span x-text="$app.t('figuren.schicht.unterwelt')"></span></span>
+          </div>
+          <div class="figur-soziogramm-hint" x-text="$app.t('figuren.soziogramm.hint')"></div>
+        </div>
+      </template>
+    </div>
 
     <div class="figuren-graph-wrap" :class="{ 'is-fullscreen': figurenGraphFullscreen }" @keydown.escape.window="figurenGraphFullscreen && toggleFigurenGraphFullscreen()">
       <div class="figuren-graph-toolbar">
-        <!-- Kapitel-Filter (nur Figurengraph) -->
-        <div x-show="figurenGraphModus === 'figur' && figurenKapitelListe().length > 0" class="figuren-graph-filter">
-          <button type="button" class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': !figurenGraphKapitel }" @click="_figurenGraphSetKapitel(null)" x-text="$app.t('common.all')"></button>
-          <template x-for="ch in figurenKapitelListe()" :key="ch">
-            <button type="button" class="figuren-graph-filter-btn" :class="{ 'figuren-graph-filter-btn--active': figurenGraphKapitel === ch }" @click="_figurenGraphSetKapitel(ch)" x-text="ch"></button>
-          </template>
+        <!-- Kapitel-Filter (alle Graph-Modi) -->
+        <div x-show="figurenKapitelListe().length > 0" class="figuren-graph-filter">
+          <div x-data="combobox($app.t('filter.chapter'), $app.t('filter.allChapters'))"
+               x-modelable="value" x-model="figurenGraphKapitel"
+               x-effect="options = figurenKapitelListe().map(k => ({value: k, label: k}))"
+               @combobox-change="_figurenGraphSetKapitel($event.detail || null)"
+               @click.outside="close()" @keydown="onKeydown($event)"
+               class="combobox-wrap combobox-wrap--compact"></div>
         </div>
         <div class="figuren-graph-toolbar-zoom">
           <button type="button" class="graph-tool-btn" :title="$app.t('graph.zoomIn')" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 1.3, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">+</button>
@@ -133,10 +143,10 @@
           <span x-show="f.geburtstag" class="tag" x-text="'* ' + f.geburtstag"></span>
           <!-- Kapitel-Badges -->
           <template x-if="f.kapitel?.length">
-            <span class="figur-kapitel-badges">
-              <span class="figur-kapitel-primary internal-link" x-text="f.kapitel[0].name" @click.stop="$app.figurenFilters.kapitel = f.kapitel[0].name; $app.figurenFilters.seite = ''"></span>
+            <span class="kapitel-badges">
+              <span class="kapitel-badge kapitel-badge--primary internal-link" x-text="f.kapitel[0].name" @click.stop="$app.openKapitelByName(f.kapitel[0].name)"></span>
               <template x-if="f.kapitel.length > 1">
-                <span class="figur-kapitel-more" x-text="'+' + (f.kapitel.length - 1)"></span>
+                <span class="kapitel-badge kapitel-badge--more" x-text="'+' + (f.kapitel.length - 1)"></span>
               </template>
             </span>
           </template>

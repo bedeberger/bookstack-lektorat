@@ -155,6 +155,10 @@ export const graphMethods = {
     if (this.figurenGraphModus === 'soziogramm')      this._renderSoziogramm(container);
     else if (this.figurenGraphModus === 'familie')    this._renderFamiliengraph(container);
     else                                              this._renderFigurengraph(container);
+
+    if (this.figurenGraphKapitel && this._figurenNodes && this._figurenEdges) {
+      requestAnimationFrame(() => this._figurenGraphSetKapitel(this.figurenGraphKapitel));
+    }
   },
 
   // ── Figurengraph: Kapitel-Swimlane (deterministisch) ────────────────────────
@@ -454,9 +458,6 @@ export const graphMethods = {
   _figurenGraphSetKapitel(ch) {
     this.figurenGraphKapitel = ch;
     if (!this._figurenNodes || !this._figurenEdges) return;
-    // Filter greift nur im Figurengraph-Modus. In Familie/Soziogramm enthalten die
-    // DataSets nicht alle Figuren-IDs → ein update() würde Geister-Nodes erzeugen.
-    if (this.figurenGraphModus !== 'figur') return;
 
     const figuren = window.__app.figuren;
     const existingIds = new Set(this._figurenNodes.getIds());
@@ -464,15 +465,21 @@ export const graphMethods = {
       ch ? figuren.filter(f => (f.kapitel || []).some(k => k.name === ch)).map(f => f.id)
          : figuren.map(f => f.id)
     );
+    const soziogrammModus = this.figurenGraphModus === 'soziogramm';
 
-    // Nodes: aktive = Originalfarbe, inaktive = ausgegraut
+    // Nodes: aktive = Originalfarbe, inaktive = ausgegraut. Familie- und
+    // Soziogramm-DataSets enthalten ggf. nur Teilmengen — existingIds-Filter
+    // verhindert Geister-Nodes.
     this._figurenNodes.update(figuren.filter(f => existingIds.has(f.id)).map(f => {
       if (!ch || activeIds.has(f.id)) {
-        return {
-          id: f.id,
-          color: this._figTypColor(f.typ),
-          font: { ...DEFAULT_FONT, color: '#333' },
-        };
+        const schichtStyle = soziogrammModus
+          ? (SCHICHT_COLOR[f.sozialschicht] || SCHICHT_COLOR.andere)
+          : null;
+        const color = soziogrammModus
+          ? { background: schichtStyle.background, border: schichtStyle.border, highlight: schichtStyle.highlight }
+          : this._figTypColor(f.typ);
+        const font = soziogrammModus ? (schichtStyle.font || DEFAULT_FONT) : { ...DEFAULT_FONT, color: '#333' };
+        return { id: f.id, color, font };
       }
       return {
         id: f.id,
@@ -481,9 +488,15 @@ export const graphMethods = {
       };
     }));
 
-    // Edges: sichtbar wenn mind. ein Endpoint aktiv, sonst ausgegraut
+    // Edges: sichtbar wenn mind. ein Endpoint aktiv, sonst ausgegraut. Original-
+    // Farbe je nach Modus aus BZ (Figur/Familie) oder BZ_SOZIO (Soziogramm).
     this._figurenEdges.update(this._figurenEdges.get().map(e => {
       if (!ch || activeIds.has(e.from) || activeIds.has(e.to)) {
+        if (soziogrammModus) {
+          const cat   = BZ_SOZIO_CAT[e.typ] || 'sozial';
+          const color = BZ_SOZIO_COLOR[cat];
+          return { id: e.id, color: { color, highlight: color } };
+        }
         const s = BZ[e.typ] || BZ.andere;
         return { id: e.id, color: { color: s.color, highlight: s.highlight } };
       }

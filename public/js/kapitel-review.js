@@ -20,6 +20,25 @@ export const kapitelReviewMethods = {
     }
   },
 
+  // Klick auf Kapitel-Badge in Listen (figuren/orte/szenen): Kapitel-Review
+  // öffnen, falls das Buch dafür qualifiziert. Sonst Fallback auf erste
+  // Kapitelseite. Match per exaktem Namen, dann case-insensitive.
+  async openKapitelByName(name) {
+    if (!name) return;
+    const chapters = (this.tree || []).filter(i => i.type === 'chapter');
+    const lc = String(name).toLowerCase();
+    const ch = chapters.find(c => c.name === name)
+      || chapters.find(c => c.name.toLowerCase() === lc);
+    if (ch && this._bookQualifiesForChapterReview()) {
+      const opts = this.kapitelReviewChapterOptions();
+      if (opts.some(c => String(c.id) === String(ch.id))) {
+        await this.openKapitelReviewForChapter(ch.id);
+        return;
+      }
+    }
+    this.gotoStelle(name, null);
+  },
+
   // Sobald ein Buch als „strukturiert" erkennbar ist (≥2 Kapitel, mind. eines
   // mit mehreren Seiten), lohnt sich das Kapitel-Review. Reine Flachbücher
   // deckt das Seiten-Lektorat ab.

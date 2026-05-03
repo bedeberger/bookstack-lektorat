@@ -216,6 +216,16 @@
   }
   .palette-item {
     padding: 12px 16px;
+    min-width: 0;
+  }
+  .palette-item-label,
+  .palette-item-desc {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .palette-item-label { font-size: 14px; }
   .palette-item-desc  { font-size: 12px; }

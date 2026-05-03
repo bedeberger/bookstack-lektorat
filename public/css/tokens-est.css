@@ -208,47 +208,44 @@
   font-size: var(--font-size-xs);
 }
 
-.figur-kapitel-badges {
+/* === Kapitel-Badges (generic, used in figuren/orte/szenen/kontinuität) === */
+.kapitel-badges {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 3px;
   align-items: center;
 }
 
-.figur-kapitel-primary {
+.kapitel-badge {
   font-size: 11px;
   padding: 2px 7px;
   border-radius: 0;
+  white-space: nowrap;
+}
+
+.kapitel-badge--primary {
   font-weight: 700;
   background: var(--color-text);
   color: var(--color-surface);
-  white-space: nowrap;
 }
 
-.figur-kapitel-secondary {
-  font-size: 11px;
-  padding: 2px 7px;
-  border-radius: 0;
+.kapitel-badge--secondary {
   background: var(--color-tag-bg);
   color: var(--color-muted);
-  white-space: nowrap;
 }
 
-.figur-kapitel-more {
-  font-size: 11px;
+.kapitel-badge--more {
   padding: 2px 6px;
-  border-radius: 0;
   background: var(--color-tag-bg);
   color: var(--color-muted);
-  white-space: nowrap;
   font-weight: 700;
 }
 
 @media (max-width: 600px) {
-  [data-ortid] .figur-kapitel-badges { display: none; }
+  [data-ortid] .kapitel-badges { display: none; }
 }
 @media (max-width: 480px) {
-  .figur-kapitel-badges { display: none; }
+  .kapitel-badges { display: none; }
   .figur-kapitelauftritte { display: none; }
   .ort-stimmung { display: none; }
 }
