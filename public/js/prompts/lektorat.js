@@ -98,6 +98,17 @@ function _buildLektoratPromptBody(text, textLabel, {
     ? ''
     : '\nWICHTIG: Jede einzelne Beanstandung erhält einen eigenen Eintrag im «fehler»-Array. Wenn an einer Stelle mehrere unabhängige Probleme vorliegen (z.B. ein Gallizismus und separate Anführungszeichen-Problematik), müssen diese als separate Einträge erscheinen – niemals in einer gemeinsamen «erklaerung» zusammenfassen.\n';
 
+  // Gilt für ALLE Typen (lokal + cloud). Modelle bündeln sonst Meta-Präfixe,
+  // Anführungszeichen oder Begründungs-Anhänge in das «korrektur»-Feld – das
+  // Feld muss aber 1:1 in den Editor einsetzbar sein.
+  const korrekturPuritaetBlock = `
+KORREKTUR-PURITÄT (zwingend für jeden Eintrag, alle Typen):
+- «korrektur» enthält AUSSCHLIESSLICH den Ersatztext, der «original» wortwörtlich ersetzen soll – sonst nichts.
+- VERBOTEN in «korrektur»: Meta-Präfixe («Satz kürzen auf:», «Ersetzen durch:», «Vorschlag:», «Besser:», «Stattdessen:» o.Ä.), umschliessende Anführungszeichen oder Guillemets («»/„"/"") um den ganzen Ersatztext, Begründungs-Anhänge per Gedankenstrich («... – weil/damit/sonst ...»), Variantenlisten («A oder B»), Kommentare in Klammern.
+- Begründungen, Hinweise, Alternativen gehören AUSSCHLIESSLICH in «erklaerung».
+- Einsetz-Selbsttest: Würde «original» 1:1 durch «korrektur» ersetzt, ergäbe der Satz korrekten, lesbaren Fliesstext ohne Reste? Wenn nein → Eintrag korrigieren oder weglassen.
+`;
+
   const filterBlock = _isLocal
     ? ''
     : `${erklaerungRule ? `\nFILTER-PFLICHT: ${erklaerungRule}\n` : ''}${korrekturRegeln ? `\n${korrekturRegeln}\n` : ''}`;
@@ -105,8 +116,10 @@ function _buildLektoratPromptBody(text, textLabel, {
   const beispielBlock = _isLocal ? '' : `
 Beispiel eines GUTEN Eintrags:
 { "typ": "grammatik", "original": "wegen dem Regen", "korrektur": "wegen des Regens", "erklaerung": "«wegen» verlangt den Genitiv." }
-Beispiel eines VERWORFENEN Eintrags (NICHT aufnehmen):
+Beispiel eines VERWORFENEN Eintrags (Erklärung-Filter):
 { "typ": "rechtschreibung", "original": "heisst", "korrektur": "heißt", "erklaerung": "Könnte im Standarddeutschen mit ß geschrieben werden." } → Erklärung enthält Unsicherheit → Selbsttest nicht bestanden → weglassen.
+Beispiel eines VERWORFENEN Eintrags (Korrektur-Purität verletzt):
+{ "typ": "show_vs_tell", "original": "Dort versteckte er sich vor der Konfrontation, vor der eigentlich normalsten Auseinandersetzung zwischen Ehepartnern.", "korrektur": "Satz kürzen auf: «Dort versteckte er sich vor der Konfrontation.» – der erklärende Nachsatz nimmt dem Leser die Deutung vorweg.", "erklaerung": "..." } → «korrektur» enthält Meta-Präfix, Guillemets und Begründungs-Anhang → KORRIGIEREN zu: { "korrektur": "Dort versteckte er sich vor der Konfrontation.", "erklaerung": "Der erklärende Nachsatz nimmt dem Leser die Deutung vorweg – Satz kürzen." }
 `;
 
   const spezialBlocks = _isLocal
@@ -163,7 +176,7 @@ Szenen-Regeln:
     : 'Analysiere den Text vollständig von Anfang bis Ende – nicht nur lokale Abschnitte oder die letzten Sätze – auf Rechtschreibfehler, Grammatikfehler, stilistische Auffälligkeiten und auffällige Wortwiederholungen. Bewerte ausserdem die Szenen der Seite.';
 
   return `${aufgabeSatz}
-${metaBlock}${povBlock}${wichtigBlock}${filterBlock}
+${metaBlock}${povBlock}${wichtigBlock}${korrekturPuritaetBlock}${filterBlock}
 ${schemaBlock}
 ${beispielBlock}${szenenRegelnBlock}
 ${_buildStilBlock()}
