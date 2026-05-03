@@ -1,0 +1,114 @@
+@layer components {
+/* === Synonyme === */
+
+.syn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.syn-entry {
+  border: 0.5px solid var(--color-border);
+  border-left: 2px solid var(--color-primary);
+  padding: 10px 12px;
+  background: var(--color-surface);
+}
+
+.syn-vorkommen-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.syn-vorkommen {
+  border-top: 0.5px solid var(--color-border);
+  padding-top: 8px;
+}
+
+.syn-vorkommen--applied {
+  opacity: 0.5;
+}
+
+.syn-passage {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-preview);
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+
+.syn-passage mark {
+  background: var(--color-mark-highlight);
+  color: inherit;
+  font-weight: 700;
+  padding: 0 1px;
+}
+
+.syn-applied-inline {
+  margin-top: 2px;
+}
+
+.syn-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.syn-wort {
+  font-weight: 700;
+  font-size: var(--font-size-base);
+  background: var(--color-accent-bg);
+  color: var(--color-accent-text);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.syn-applied-badge {
+  font-size: var(--font-size-xs);
+  color: var(--color-ok-text);
+  background: var(--color-ok-bg);
+  padding: 1px 7px;
+  font-weight: 400;
+}
+
+.syn-begruendung {
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  font-style: italic;
+  margin-bottom: 8px;
+}
+
+.syn-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.syn-btn {
+  font-size: 12px;
+  padding: 3px 12px;
+  border: 0.5px solid var(--color-primary);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  cursor: pointer;
+  font-weight: 400;
+}
+
+.syn-btn:hover:not(:disabled) {
+  background: var(--color-primary);
+  color: var(--color-surface);
+}
+
+.syn-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.syn-btn--chosen {
+  background: var(--color-primary);
+  color: var(--color-surface);
+}
+
+}

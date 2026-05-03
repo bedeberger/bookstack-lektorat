@@ -1,0 +1,72 @@
+@layer components {
+/* === Kapitel-Review: verdichtete Seitenliste + Quick-Add === */
+.kapitel-pages-section {
+  margin: 8px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-hover-light);
+}
+.kapitel-pages-heading {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin-bottom: 6px;
+}
+.kapitel-pages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.kapitel-page-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text);
+  transition: background 0.12s;
+}
+.kapitel-page-row:hover { background: var(--color-hover-light); }
+.kapitel-page-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kapitel-page-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.kapitel-new-page {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 10px;
+}
+.kapitel-new-page-input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+.kapitel-new-page > button {
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+/* === Token-Badges: W und Z im Seitenbaum ausblenden === */
+.tok-tree-words,
+.tok-tree-chars { display: none; }
+
+}

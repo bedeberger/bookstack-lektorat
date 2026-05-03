@@ -1,0 +1,72 @@
+@layer components {
+/* === Edit-Toolbar: Bubble (Inline) + Slash (Block-Transforms) ===
+   Teleportiert nach <body>, deshalb position:fixed. Eckig + textbasiert
+   (keine Icons) gem. Projektästhetik. Im Fokus-Modus strukturell gesperrt. */
+.edit-bubble-toolbar {
+  position: fixed;
+  z-index: 1001;
+  transform: translate(-50%, calc(-100% - 8px));
+  display: flex;
+  gap: 2px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 12px var(--color-shadow-med);
+  padding: 3px;
+}
+.edit-bubble-btn {
+  background: transparent;
+  border: none;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  cursor: pointer;
+  line-height: 1.2;
+  font-family: inherit;
+  min-width: 1.6em;
+}
+.edit-bubble-btn:hover { background: var(--color-hover); }
+.edit-bubble-btn:active { background: var(--color-hover-strong); }
+.edit-bubble-btn--bold   { font-weight: 700; }
+.edit-bubble-btn--italic { font-style: italic; }
+
+.edit-slash-menu {
+  position: fixed;
+  z-index: 1001;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 12px var(--color-shadow-med);
+  padding: 4px;
+  min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.edit-slash-hint {
+  padding: 4px 10px 6px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 3px;
+}
+.edit-slash-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  cursor: pointer;
+  font-family: inherit;
+}
+.edit-slash-item:hover,
+.edit-slash-item--active { background: var(--color-hover); }
+
+/* Tabu im Fokus-Mode: strukturell kaltgestellt, unabhängig vom x-show. */
+body.focus-mode .edit-bubble-toolbar,
+body.focus-mode .edit-slash-menu,
+body.focus-mode .edit-find { display: none !important; }
+
+}

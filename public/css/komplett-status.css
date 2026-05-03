@@ -1,0 +1,116 @@
+@layer components {
+/* ── Komplettanalyse Status Panel ──────────────────────────────────────────── */
+.komplett-status-wrap {
+  position: relative;
+}
+.komplett-status-wrap[data-lastrun]:hover::after {
+  content: attr(data-lastrun);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  color: var(--color-muted);
+  padding: 3px 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 20;
+}
+.komplett-status-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem 1rem;
+  min-width: 260px;
+  z-index: 200;
+  box-shadow: 0 4px 24px var(--color-shadow-med);
+  animation: cardFadeIn 0.12s ease both;
+}
+.komplett-status-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 0.5rem;
+}
+.komplett-progress-bar-wrap {
+  margin-top: 0;
+  margin-bottom: 0.4rem;
+  border-radius: var(--radius-sm);
+}
+.komplett-progress-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 12px;
+  color: var(--color-muted);
+  margin-bottom: 0.65rem;
+}
+.komplett-tokens {
+  font-size: 11px;
+  color: var(--color-subtle);
+  white-space: nowrap;
+}
+.komplett-phase-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 0.5px solid var(--color-border);
+  padding-top: 0.5rem;
+}
+.komplett-phase-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 12px;
+  padding: 2px 0;
+  color: var(--color-subtle);
+}
+.komplett-phase-item.is-done {
+  color: var(--color-muted);
+}
+.komplett-phase-item.is-active {
+  color: var(--color-text);
+  font-weight: 400;
+}
+.komplett-phase-icon {
+  width: 14px;
+  text-align: center;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.komplett-phase-item.is-done .komplett-phase-icon {
+  color: var(--color-ok-text);
+}
+.komplett-phase-item.is-active .komplett-phase-icon {
+  color: var(--color-primary);
+}
+
+@media (max-width: 600px) {
+  .header-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    white-space: normal;
+  }
+  .komplett-status-panel,
+  .avatar-menu-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    min-width: 0;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+}
+
+}

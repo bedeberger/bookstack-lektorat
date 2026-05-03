@@ -1,0 +1,180 @@
+@layer components {
+/* === Globale Zeitleiste === */
+.global-zeitstrahl-section {
+  margin-top: 20px;
+  border-top: 0.5px solid var(--color-border);
+  padding-top: 14px;
+}
+
+.global-zeitstrahl-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+}
+
+.global-zeitstrahl-header:hover .global-zeitstrahl-heading { color: var(--color-primary); }
+
+.global-zeitstrahl-heading { margin: 0; }
+
+.gz-consolidate-btn {
+  margin-left: auto;
+  font-size: 0.78rem;
+  padding: 2px 10px;
+  min-width: 110px;
+}
+
+.gz-status-row {
+  padding: 4px 0 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+
+.global-zeitstrahl-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  flex: 1;
+}
+
+.global-zeitstrahl-body {
+  position: relative;
+  margin-top: 14px;
+  padding-left: 28px;
+  border-left: 2px solid var(--color-border);
+}
+
+.figur-detail .global-zeitstrahl-body {
+  margin-left: 14px;
+}
+
+.gz-item {
+  position: relative;
+  padding-bottom: 18px;
+}
+
+.gz-item:last-child { padding-bottom: 0; }
+
+.gz-marker {
+  position: absolute;
+  left: -33px;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 0 1.5px var(--color-border);
+}
+
+.gz-marker--extern {
+  background: var(--color-err-border);
+  box-shadow: 0 0 0 1.5px var(--color-err-border);
+  border-radius: var(--radius-sm);
+  width: 10px;
+  height: 10px;
+  left: -34px;
+}
+
+.gz-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.gz-datum-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gz-datum {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-muted);
+  letter-spacing: 0.03em;
+}
+
+.gz-extern-badge {
+  font-size: 10px;
+  font-weight: 400;
+  padding: 1px 6px;
+  background: var(--color-err-bg);
+  color: var(--color-err-text);
+}
+
+.gz-ereignis {
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.gz-item--extern .gz-ereignis {
+  font-weight: 400;
+  color: var(--color-err-text);
+}
+
+.gz-kapitel {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.gz-kapitel-link {
+  font-size: 11px;
+  padding: 2px 7px;
+  font-weight: 700;
+  background: var(--color-text);
+  color: var(--color-surface);
+  white-space: nowrap;
+}
+
+.gz-seite {
+  font-size: 11px;
+  padding: 2px 7px;
+  background: var(--color-tag-bg);
+  color: var(--color-muted);
+  white-space: nowrap;
+  align-self: flex-start;
+  margin-bottom: 2px;
+}
+
+.gz-bedeutung {
+  font-size: 12px;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.gz-figuren-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.gz-figur-badge {
+  --fig-hue: var(--palette-gray);
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--fig-hue) var(--figpal-bg-mix), var(--color-surface));
+  color:      color-mix(in srgb, var(--fig-hue) var(--figpal-text-mix), var(--color-text));
+}
+
+.gz-figuren-row .ort-typ-tag {
+  min-width: 0;
+  text-align: left;
+}
+
+.gz-figur-badge--hauptfigur { --fig-hue: var(--palette-blue); }
+.gz-figur-badge--antagonist { --fig-hue: var(--palette-red); }
+.gz-figur-badge--mentor     { --fig-hue: var(--palette-green); }
+.gz-figur-badge--nebenfigur { /* fällt auf Default-Grau zurück */ }
+.gz-figur-badge--andere     { --fig-hue: var(--color-accent); }
+
+}

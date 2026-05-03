@@ -1,0 +1,339 @@
+/* Layer-Reihenfolge (zentrale Stelle): tokens.css ist unlayered und etabliert
+   die Cascade-Reihenfolge für alle nachfolgenden Stylesheets. base < components
+   < utilities — utilities gewinnen also bei gleicher Spezifität. */
+@layer base, components, utilities;
+
+/*
+ * STYLE.CSS – BookStack Lektorat
+ *
+ * TABLE OF CONTENTS
+ * =================
+ *  1.  Custom Properties ........... :root – Farben, Radien, Schriftgrössen
+ *  2.  Reset & Base ................ html, body, h1, code
+ *  3.  Layout ...................... .subtitle, .row, Breakpoints
+ *  4.  Cards ....................... .card, .card-header, .card-title, .card-actions
+ *  5.  Form Elements ............... input, select, label
+ *  6.  Buttons ..................... button, .btn-compact, .btn-group
+ *  7.  Badges ...................... .badge, .badge-*
+ *  8.  Findings .................... .finding, .finding-original, .finding-korrektur
+ *  9.  Page List & Tags ............ .page-item, .tag
+ * 10.  Status & Spinner ............ #status, .muted-msg, .error-msg, .spinner
+ * 11.  Analysis Output ............. .stilbox, .fazit, .bewertung-*, .bullet-list
+ * 12.  Section Headings ............ .section-heading*  (JS-generierter Output)
+ * 13.  Progress Bar ................ .progress-bar-wrap, .progress-bar
+ * 14.  Tree View ................... .tree-chapter*, .tree-chevron, .tree-chapter-pages
+ * 15.  History ..................... .history-*
+ * 16.  Token-Schätzung ............. .tok-badge, .tok-*, .tok-tooltip
+ * 17.  Figurenübersicht ............ .figuren-graph-container, .figur-*
+ * 18.  Batch-Check & Utilities ..... .batch-status, .page-search, .diff-view, [x-cloak]
+ * 19.  Chat ......................... .chat-messages, .chat-msg-*, .chat-vorschlag-*, .chat-input-*
+ */
+
+/* === Self-hosted Fonts === */
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter.var.woff2') format('woff2-variations'),
+       url('../fonts/Inter.var.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter-Italic.var.woff2') format('woff2-variations'),
+       url('../fonts/Inter-Italic.var.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  src: url('../fonts/SourceSerif4.var.woff2') format('woff2-variations'),
+       url('../fonts/SourceSerif4.var.woff2') format('woff2');
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  src: url('../fonts/SourceSerif4-Italic.var.woff2') format('woff2-variations'),
+       url('../fonts/SourceSerif4-Italic.var.woff2') format('woff2');
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* === Custom Properties === */
+:root {
+  color-scheme: light;
+  --color-bg: #f5f4f0;
+  --color-surface: #ffffff;
+  --color-text: #1a1a1a;
+  --color-muted: #666;
+  --color-subtle: #999;
+  --color-border: rgba(0, 0, 0, 0.12);
+  --color-border-input: rgba(0, 0, 0, 0.2);
+  --color-border-focus: rgba(0, 0, 0, 0.4);
+  --color-hover: rgba(0, 0, 0, 0.05);
+  --color-tag-bg: rgba(0, 0, 0, 0.06);
+
+  --color-ok-bg: #EAF3DE;
+  --color-ok-text: #3B6D11;
+  --color-ok-border: #639922;
+  --color-warn-bg: #FAEEDA;
+  --color-warn-text: #854F0B;
+  --color-pending: #f59e0b;
+  --color-err-bg: #FCEBEB;
+  --color-err-text: #A32D2D;
+  --color-err-border: #E24B4A;
+  --color-style-border: #EF9F27;
+  --color-primary: #1e3a5f;
+  --color-primary-hover: #16293d;
+  --color-primary-light: #6a8cb0;
+  --color-accent: #9a7f3e;
+  --color-success: #34d399;
+  --color-success-hover: #1D9E75;
+  --color-ai-purple: #a78bfa;
+
+  --color-stark: #3a8f3e;
+  --color-stark-bg: #D6F0D8;
+  --color-stark-text: #1e5c23;
+  --color-mittel: #b38600;
+  --color-mittel-bg: #FFF3CC;
+  --color-mittel-text: #6b4c00;
+  --color-schwach-bg: #FFE0E0;
+  --color-schwach-text: #8B1E1E;
+
+  --color-card-bg: var(--color-surface);
+  --color-neutral-bg: #e8e8e8;
+  --color-accent-bg: rgba(154, 127, 62, 0.14);
+  --color-accent-text: #6e5a26;
+  --color-accent-hover: rgba(154, 127, 62, 0.09);
+  --color-accent-soft: rgba(154, 127, 62, 0.06);
+  --color-err-light: #fc8181;
+  --color-running: #2d6a9f;
+
+  /* Schatten (vier Abstufungen) */
+  --color-shadow-soft: rgba(0, 0, 0, 0.1);
+  --color-shadow: rgba(0, 0, 0, 0.12);
+  --color-shadow-med: rgba(0, 0, 0, 0.15);
+  --color-shadow-strong: rgba(0, 0, 0, 0.3);
+
+  /* Hover-Abstufungen (leichter/stärker als --color-hover) */
+  --color-hover-light: rgba(0, 0, 0, 0.03);
+  --color-hover-strong: rgba(0, 0, 0, 0.07);
+
+  /* Textvarianten für eingebettete Inhalte (Preview/Tooltip) */
+  --color-text-preview: #444;
+  --color-text-preview-strong: #333;
+  --color-text-preview-soft: #555;
+  --color-text-tip-hint: #666;
+  --color-text-inverse-muted: rgba(255, 255, 255, 0.65);
+  --color-text-inverse: #eee;
+
+  /* Inline-Markierungen (Lektorat + Chat) */
+  --color-mark-bg: rgba(255, 200, 50, 0.35);
+  --color-mark-bg-hover: rgba(255, 200, 50, 0.55);
+  --color-mark-border: #d4a017;
+  --color-mark-del-bg: rgba(220, 60, 60, 0.10);
+  --color-mark-del-bg-hover: rgba(220, 60, 60, 0.18);
+  --color-mark-del-border: #d33;
+  --color-mark-del-strike: rgba(200, 50, 50, 0.5);
+  --color-mark-del-text: #999;
+  --color-mark-ins-bg: rgba(34, 170, 90, 0.13);
+  --color-mark-ins-text: #1a7f37;
+  --color-mark-highlight: #fff3b0;
+
+  /* Historie aktiv (auf Basis --color-primary) */
+  --color-history-active-bg: rgba(30, 58, 95, 0.08);
+  --color-history-active-bg-hover: rgba(30, 58, 95, 0.14);
+  --color-history-section-bg: #e8e6e0;
+
+  /* Page-Content-View + Tooltip-Panels */
+  --color-page-view-bg: #ffffff;
+  --color-page-view-text: #333333;
+  --color-tooltip-bg: #ffffff;
+
+  /* Dev-Banner + Session-Banner */
+  --color-dev-banner-bg: #f59e0b;
+  --color-dev-banner-text: #1a1a1a;
+  --color-session-banner-btn-hover: #7a1f1f;
+
+  /* Skeleton-Shimmer */
+  --color-shimmer-from: #ccc;
+
+  /* Job-Queue-Footer – folgt Theme (Light: warme Crème, Dark: warmes Dunkelbraun) */
+  --color-queue-bar-bg: var(--color-surface);
+  --color-queue-border-subtle: var(--color-border);
+  --color-queue-pill-bg: var(--color-bg);
+  --color-queue-pill-border: var(--color-border);
+  --color-queue-pill-bg-hover: var(--color-hover);
+  --color-queue-pill-border-queued: var(--color-border);
+  --color-queue-pill-running-border: var(--color-primary-light);
+  --color-queue-pill-running-bg: var(--color-history-active-bg);
+  --color-queue-pill-text: var(--color-text);
+  --color-separator-on-dark: var(--color-border);
+
+  /* Figuren-Palette – semantische Basisfarben.
+     Jeder Figurentyp/Milieu/Beziehungstyp verwendet genau eine dieser Hues;
+     Hintergrund/Text/Rand werden per color-mix() aus Hue + surface/text abgeleitet. */
+  --palette-blue:   #2d6a9f;
+  --palette-red:    #E24B4A;
+  --palette-green:  #639922;
+  --palette-pink:   #D46EA0;
+  --palette-purple: #7B3FA0;
+  --palette-amber:  #B8860B;
+  --palette-orange: #C0602A;
+  --palette-brown:  #8B5E26;
+  --palette-wine:   #8B3A3A;
+  --palette-gray:   #888;
+  --palette-gray-light: #BBB;
+  --palette-dark:   #3A3A3A;
+
+  /* Kontrast-Border – kontrastiert immer mit dem Hintergrund,
+     wird im Dark-Mode auf helle Werte geflippt. */
+  --color-border-contrast: #111;
+
+  /* Mix-Rezepte (zentral justierbar) */
+  --figpal-bg-mix:     18%;
+  --figpal-text-mix:   75%;
+  --figpal-border-mix: 60%;
+
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --font-size-xs: 11px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-md: 15px;
+  --font-size-lg: 26px;
+
+  /* Schriftfamilien – Sans für UI, Serif für Überschriften + Reading-Column */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Source Serif 4', 'Iowan Old Style', 'Palatino', Georgia, serif;
+
+  /* Default-Controlgrösse (vertikal) – geteilt von button,
+     .combobox-trigger und input/select, damit Buttons, Dropdowns und
+     Felder in einer Zeile exakt dieselbe Höhe haben. Horizontale
+     Padding bleibt pro Elementtyp unterschiedlich (Buttons bekommen
+     bewusst mehr Luft). */
+  --size-default-padding-y: 8px;
+
+  /* Compact-Controlgrösse – geteilt von .btn-compact und
+     .combobox-wrap--compact, damit Buttons und Dropdowns nebeneinander
+     exakt dieselbe Höhe haben. Einzige Quelle der Wahrheit. */
+  --size-compact-font-size: 12px;
+  --size-compact-padding: 4px 10px;
+}
+
+/* === Dark-Theme Overrides === */
+/* Aktivierung via data-theme="dark" auf <html> (gesetzt durch Inline-Script
+   in index.html). Reihenfolge spiegelt :root – jedes Token hat sein Gegenstück. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Neutrale Flächen – warm-dunkel (spiegelt das warme Cremeweiss im Light-Mode) */
+  --color-bg: #1a1816;
+  --color-surface: #24221e;
+  --color-text: #e6e2d9;
+  --color-muted: #9a948a;
+  --color-subtle: #6e685f;
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-border-input: rgba(255, 255, 255, 0.22);
+  --color-border-focus: rgba(255, 255, 255, 0.45);
+  --color-hover: rgba(255, 255, 255, 0.06);
+  --color-tag-bg: rgba(255, 255, 255, 0.08);
+
+  /* Status – dezente BG-Tints + hellere Texte für WCAG-AA auf dunklem Grund */
+  --color-ok-bg: rgba(99, 153, 34, 0.18);
+  --color-ok-text: #a5d06b;
+  --color-ok-border: #7fbc36;
+  --color-warn-bg: rgba(184, 134, 11, 0.18);
+  --color-warn-text: #e5b960;
+  --color-pending: #fbbf24;
+  --color-err-bg: rgba(226, 75, 74, 0.18);
+  --color-err-text: #ff9090;
+  --color-err-border: #e85a58;
+  --color-style-border: #f0ad44;
+  --color-primary: #7aa3ca;
+  --color-primary-hover: #a8c4e0;
+  --color-primary-light: #5a7a99;
+  --color-accent: #c9a961;
+  --color-success: #4fd9aa;
+  --color-success-hover: #6eead0;
+  --color-ai-purple: #b7a3ff;
+
+  /* Stark/Mittel/Schwach */
+  --color-stark: #6ac96e;
+  --color-stark-bg: rgba(58, 143, 62, 0.18);
+  --color-stark-text: #9bd49e;
+  --color-mittel: #d8b040;
+  --color-mittel-bg: rgba(179, 134, 0, 0.18);
+  --color-mittel-text: #e5c272;
+  --color-schwach-bg: rgba(226, 75, 74, 0.18);
+  --color-schwach-text: #ff9090;
+
+  --color-neutral-bg: #2d2a25;
+  --color-accent-bg: rgba(201, 169, 97, 0.18);
+  --color-accent-text: #e0c070;
+  --color-accent-hover: rgba(201, 169, 97, 0.12);
+  --color-accent-soft: rgba(201, 169, 97, 0.07);
+  /* err-light bleibt #fc8181 – funktioniert auf Dark */
+
+  /* Schatten – deutlich kräftiger, damit Erhebungen auf Dark sichtbar bleiben */
+  --color-shadow-soft: rgba(0, 0, 0, 0.45);
+  --color-shadow: rgba(0, 0, 0, 0.5);
+  --color-shadow-med: rgba(0, 0, 0, 0.6);
+  --color-shadow-strong: rgba(0, 0, 0, 0.75);
+
+  /* Hover-Abstufungen gespiegelt */
+  --color-hover-light: rgba(255, 255, 255, 0.04);
+  --color-hover-strong: rgba(255, 255, 255, 0.1);
+
+  /* Textvarianten */
+  --color-text-preview: #c0bbb0;
+  --color-text-preview-strong: #d8d3c8;
+  --color-text-preview-soft: #aaa49a;
+  --color-text-tip-hint: #9a948a;
+  /* text-inverse/-muted bleiben hell – werden auf dauerhaft dunklen Flächen genutzt */
+
+  /* Inline-Markierungen – Alpha leicht erhöht, Textfarben heller */
+  --color-mark-bg: rgba(255, 200, 50, 0.28);
+  --color-mark-bg-hover: rgba(255, 200, 50, 0.42);
+  --color-mark-border: #e5b82a;
+  --color-mark-del-bg: rgba(220, 60, 60, 0.22);
+  --color-mark-del-bg-hover: rgba(220, 60, 60, 0.35);
+  --color-mark-del-border: #e85858;
+  --color-mark-del-strike: rgba(255, 120, 120, 0.6);
+  --color-mark-del-text: #8a8580;
+  --color-mark-ins-bg: rgba(34, 170, 90, 0.25);
+  --color-mark-ins-text: #5fd58c;
+  --color-mark-highlight: rgba(255, 243, 176, 0.25);
+
+  /* Historie – Primary neu gewichtet */
+  --color-history-active-bg: rgba(122, 163, 202, 0.12);
+  --color-history-active-bg-hover: rgba(122, 163, 202, 0.2);
+  --color-history-section-bg: #2a2723;
+
+  /* Page-View + Tooltip – leicht tiefer als surface für Staffelung */
+  --color-page-view-bg: #1f1d1a;
+  --color-page-view-text: #d8d3c8;
+  --color-tooltip-bg: #2d2a25;
+
+  /* Dev-/Session-Banner – Amber bleibt, dunkler Text auf Amber bleibt lesbar */
+  --color-session-banner-btn-hover: #c44040;
+
+  /* Skeleton-Shimmer auf Dark */
+  --color-shimmer-from: #3a3a3a;
+
+  /* Queue-Footer folgt Theme über var()-Verkettung – keine Overrides nötig */
+
+  /* Kontrast-Border (ersetzt altes --palette-black-Mapping) */
+  --color-border-contrast: #d8d8d8;
+
+  /* Figuren-Palette: Mix anheben, damit Tints auf Dark sichtbar sind */
+  --figpal-bg-mix:     30%;
+  --figpal-text-mix:   72%;
+  --figpal-border-mix: 55%;
+}
+

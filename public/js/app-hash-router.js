@@ -69,6 +69,8 @@ export const appHashRouterMethods = {
     } else {
       history.pushState(null, '', newHash);
     }
+    // pushState/replaceState feuern kein hashchange → Plausible manuell triggern.
+    try { window.plausible?.('pageview'); } catch { /* noop */ }
   },
 
   // Synchroner URL-Sync ohne neuen History-Eintrag (initial + nach Hash-Apply).

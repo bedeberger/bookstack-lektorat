@@ -727,6 +727,18 @@ export const focusCardMethods = {
       this._focusUpdateActive(true);
     };
 
+    // Chromium kopiert beim Paragraph-Split in contenteditable die Klasse auf
+    // beide <p>. Bis _focusUpdateActive im nächsten RAF aufräumt, sind kurz
+    // ZWEI Absätze .focus-paragraph-active → sichtbarer Doppelflash. Aktiven
+    // Marker hier synchron VOR dem Split abräumen; RAF setzt danach neu.
+    const onBeforeInput = (e) => {
+      if (this._focusState !== 'active') return;
+      if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') {
+        setActiveBlock(container, null);
+        setNearBlocks(container, null);
+      }
+    };
+
     const onCompositionStart = () => { ctx.composing = true; };
     const onCompositionEnd = () => {
       ctx.composing = false;
@@ -808,6 +820,7 @@ export const focusCardMethods = {
     applyViewport();
 
     document.addEventListener('selectionchange', onSelection, { signal });
+    container.addEventListener('beforeinput', onBeforeInput, { signal });
     container.addEventListener('input', onInput, { signal });
     container.addEventListener('compositionstart', onCompositionStart, { signal });
     container.addEventListener('compositionend', onCompositionEnd, { signal });

@@ -127,4 +127,4 @@ reviewRouter.post('/review', jsonBody, (req, res) => {
   res.json({ jobId });
 });
 
-module.exports = { reviewRouter };
+module.exports = { reviewRouter, runReviewJob };

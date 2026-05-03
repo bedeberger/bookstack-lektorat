@@ -1,0 +1,114 @@
+@layer base {
+/* === Reset === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* === Einheitlicher Fokus-Ring (Keyboard-only via :focus-visible) === */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Skip-Link: standardmässig optisch versteckt, beim Fokussieren sichtbar
+   in der oberen linken Ecke. Greift Screenreader- und Tastatur-User früh ab. */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -3rem;
+  z-index: 1000;
+  background: var(--color-primary);
+  color: var(--color-on-primary, #fff);
+  padding: 0.5rem 0.875rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 0.5rem;
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Tree-Pfeil-Navigation: Page-Items sind tabbar; sichtbarer Fokus muss klar
+   abgrenzbar sein vom .selected-Zustand. */
+.page-item:focus-visible,
+.tree-chapter-header:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+/* Findings-Label bekommt bei Tastaturfokus (Alt+J/K) sichtbaren Rahmen. */
+.lektorat-split-findings .finding:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Barrierefreiheit: Animationen bei System-Präferenz ausschalten */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* === Base === */
+html {
+  background: var(--color-bg);
+  scrollbar-gutter: stable;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 1rem 1rem 56px;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+@media (min-width: 600px) {
+  body { padding: 1.5rem 1.5rem 56px; }
+}
+
+@media (min-width: 960px) {
+  body { padding: 2rem 1.5rem 56px; max-width: 1600px; }
+}
+
+h1 {
+  font-family: var(--font-serif);
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  margin-bottom: 0.25rem;
+}
+
+.site-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.site-logo {
+  width: 4rem;
+  height: 4rem;
+  flex-shrink: 0;
+}
+
+code {
+  font-family: monospace;
+  background: var(--color-tag-bg);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
+}

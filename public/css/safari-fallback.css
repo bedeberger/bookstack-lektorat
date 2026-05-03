@@ -1,0 +1,56 @@
+@layer components {
+/* === Safari < 16.2 Fallback ===
+   color-mix() ist erst ab Safari 16.2 verfügbar. Für ältere Versionen
+   (insb. 15.4 auf älteren iPads/Macs) liefern wir flache Ersatzfarben.
+   Lektorat-Kritisch: .finding-original / .finding-korrektur tönen sonst
+   ins Nichts und sind visuell nicht mehr von Plain-Text unterscheidbar. */
+@supports not (background: color-mix(in srgb, red, blue)) {
+  /* Findings (Lektorat) – weiche Tönung via existierende Soft-Vars */
+  .finding-original,
+  .heatmap-detail-original {
+    background: var(--color-err-bg);
+  }
+  .finding-korrektur,
+  .heatmap-detail-korrektur {
+    background: var(--color-ok-bg);
+  }
+
+  /* Figuren-Tokens – Hue als Textfarbe statt getönter Hintergrund;
+     Identität bleibt erkennbar, nur ohne Pastell-Fläche. */
+  .figur-bz-typ,
+  .figur-sozialschicht-badge,
+  .figur-praesenz-badge,
+  .gz-figur-badge {
+    background: var(--color-tag-bg);
+    color: var(--color-text);
+  }
+  .figur-bz-typ          { color: var(--rel-hue); }
+  .figur-sozialschicht-badge { color: var(--sch-hue); }
+  .figur-praesenz-badge  { color: var(--pres-hue); }
+  .gz-figur-badge        { color: var(--fig-hue); }
+
+  /* Legenden-Punkt (10x10) – Hue direkt als Fläche */
+  .figur-legend-dot {
+    background: var(--fig-hue);
+  }
+
+  /* Beziehungs-Belege */
+  .figur-bz-beleg {
+    background: var(--color-surface);
+  }
+
+  /* Fehler-Heatmap – Gradient nicht abbildbar; flache Ersatzfarben.
+     Intensität geht verloren, Zellen bleiben unterscheidbar via Tooltip/Wert. */
+  .heatmap-cell--tinted {
+    background: var(--color-primary-light, var(--color-primary));
+  }
+  .heatmap-cell--primary {
+    background: var(--color-history-active-bg);
+  }
+
+  /* Synonym-Button – Soft-Primary-Tint via existierende Var */
+  .syn-btn {
+    background: var(--color-history-active-bg);
+  }
+}
+}

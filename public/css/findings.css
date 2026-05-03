@@ -1,0 +1,75 @@
+@layer components {
+/* === Findings === */
+.finding {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  cursor: pointer;
+  border-left: 2px solid var(--color-border);
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: var(--font-size-base);
+}
+.finding.error { border-color: var(--color-err-border); }
+.finding.style { border-color: var(--color-style-border); }
+.finding.ok    { border-color: var(--color-ok-border); }
+.finding.finding-deselected { opacity: 0.55; }
+.finding.finding--applied {
+  opacity: 0.5;
+  text-decoration: line-through;
+  text-decoration-color: var(--color-muted);
+}
+.finding.finding--applied .finding-checkbox { cursor: not-allowed; }
+.finding-checkbox { flex-shrink: 0; margin-top: 2px; cursor: pointer; }
+.finding > .badge { flex-shrink: 0; }
+.finding-content { flex: 1; min-width: 0; overflow-x: auto; }
+
+/* Offene Findings: Original/Korrektur wie im Fehler-Heatmap-Detail – weich
+   getönte Pillen statt Strikethrough, damit die Liste ruhig lesbar bleibt. */
+.finding-original {
+  display: block;
+  background: color-mix(in srgb, var(--color-danger, #c0392b) 15%, transparent);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  word-break: break-word;
+  width: fit-content;
+  max-width: 100%;
+}
+.finding-korrektur {
+  display: block;
+  margin-top: 3px;
+  background: color-mix(in srgb, var(--color-success, #27ae60) 15%, transparent);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  word-break: break-word;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.finding-explanation {
+  display: block;
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+  margin-top: 4px;
+  overflow-wrap: break-word;
+}
+
+del {
+  background: var(--color-err-bg);
+  color: var(--color-err-text);
+  text-decoration: none;
+  padding: 0 2px;
+  border-radius: 0;
+  word-break: break-word;
+}
+
+ins {
+  background: var(--color-ok-bg);
+  color: var(--color-ok-text);
+  text-decoration: none;
+  padding: 0 2px;
+  border-radius: 0;
+  word-break: break-word;
+}
+
+}

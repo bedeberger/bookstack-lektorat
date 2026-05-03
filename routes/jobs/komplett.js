@@ -1577,4 +1577,4 @@ komplettRouter.delete('/chapter-cache/:book_id', (req, res) => {
   res.json({ ok: true, deleted });
 });
 
-module.exports = { komplettRouter, runKomplettAnalyseAll };
+module.exports = { komplettRouter, runKomplettAnalyseAll, runKomplettAnalyseJob, runKontinuitaetJob };

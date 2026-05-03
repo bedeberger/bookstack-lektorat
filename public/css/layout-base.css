@@ -1,0 +1,82 @@
+@layer components {
+/* === Layout === */
+.dev-banner {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  padding: 0.2rem 0.7rem;
+  background: var(--color-dev-banner-bg);
+  color: var(--color-dev-banner-text);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.03em;
+}
+
+.session-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.6rem 1rem;
+  background: var(--color-err-bg);
+  color: var(--color-err-text);
+  border-bottom: 2px solid var(--color-err-border);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  box-shadow: 0 2px 8px var(--color-shadow-soft);
+}
+.session-banner-text { flex: 0 1 auto; }
+.session-banner-btn {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.9rem;
+  background: var(--color-err-text);
+  color: var(--color-surface);
+  border: none;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.session-banner-btn:hover { background: var(--color-session-banner-btn-hover); }
+
+.session-banner--offline {
+  background: var(--color-warn-bg);
+  color: var(--color-warn-text);
+  border-bottom: 2px solid var(--color-warn-text);
+}
+body.focus-mode .session-banner--offline {
+  padding: 0.15rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 400;
+  background: transparent;
+  color: var(--color-muted);
+  border-bottom: none;
+  box-shadow: none;
+  opacity: 0.55;
+  pointer-events: none;
+}
+body.focus-mode .session-banner--offline:hover { opacity: 1; }
+
+.site-header-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+  min-height: 2.5rem;
+}
+
+.subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  margin-bottom: 0;
+}
+
+}

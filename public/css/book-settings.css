@@ -1,0 +1,167 @@
+@layer components {
+/* ── Buch-Export (inline in Buch-Einstellungen) ──────────────────────────── */
+.book-settings-export {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 0.5px solid var(--color-border);
+}
+.book-settings-export-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+.book-settings-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.book-settings-export-btn:hover:not(:disabled) {
+  background: var(--color-surface-hover, var(--color-bg));
+  border-color: var(--color-accent);
+}
+.book-settings-export-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.book-settings-export-btn.is-running {
+  border-color: var(--color-accent);
+}
+.book-settings-export-status {
+  margin-top: 0.6rem;
+  font-size: 12px;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+/* ── Job-Statistiken (inline in Buch-Einstellungen) ──────────────────────── */
+.book-settings-stats {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 0.5px solid var(--color-border);
+}
+.book-settings-stats-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 0 0 0.6rem;
+}
+.job-stats-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.job-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.job-stats-table th {
+  text-align: left;
+  color: var(--color-muted);
+  font-weight: 400;
+  padding: 2px 12px 5px 0;
+  border-bottom: 0.5px solid var(--color-border);
+  white-space: nowrap;
+}
+.job-stats-table td {
+  padding: 4px 12px 4px 0;
+  border-bottom: 0.5px solid var(--color-separator-on-dark);
+  white-space: nowrap;
+}
+.job-stats-table tr:last-child td {
+  border-bottom: none;
+}
+.job-stats-errors {
+  color: var(--color-err-light);
+  font-size: 11px;
+}
+.job-stats-empty,
+.job-stats-loading {
+  color: var(--color-muted);
+  font-size: 12px;
+  padding: 4px 0;
+}
+.job-stats-row--clickable { cursor: pointer; }
+.job-stats-row--clickable:hover td { background: var(--color-hover-bg, rgba(255,255,255,0.04)); }
+.job-stats-row--open td { background: var(--color-hover-bg, rgba(255,255,255,0.04)); }
+.job-stats-row--clickable .history-chevron { margin-right: 6px; }
+.job-stats-runs-row td {
+  padding: 6px 0 10px 18px !important;
+  border-bottom: 0.5px solid var(--color-separator-on-dark);
+  background: var(--color-card-bg);
+}
+.job-runs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.job-runs-table th {
+  text-align: left;
+  color: var(--color-muted);
+  font-weight: 400;
+  padding: 2px 12px 4px 0;
+  border-bottom: 0.5px solid var(--color-border);
+  white-space: nowrap;
+}
+.job-runs-table td {
+  padding: 3px 12px 3px 0;
+  white-space: nowrap;
+  vertical-align: top;
+}
+.job-runs-loading,
+.job-runs-empty {
+  color: var(--color-muted);
+  font-size: 11px;
+  padding: 4px 0;
+}
+.job-run-status {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  background: var(--color-badge-bg, rgba(255,255,255,0.06));
+}
+.job-run-status--done      { color: var(--color-ok-light, #6cc472); }
+.job-run-status--error     { color: var(--color-err-light); }
+.job-run-status--cancelled { color: var(--color-muted); }
+.job-run-status--running,
+.job-run-status--queued    { color: var(--color-muted); }
+.job-run-detail { white-space: normal; max-width: 420px; }
+.job-run-error {
+  color: var(--color-err-light);
+  font-size: 11px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.job-run-muted { color: var(--color-muted); }
+@media (max-width: 600px) {
+  .job-stats-table {
+    font-size: 11px;
+  }
+  .job-stats-table th,
+  .job-stats-table td {
+    padding-right: 8px;
+  }
+  .job-stats-table th:first-child,
+  .job-stats-table td:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--color-card-bg);
+  }
+}
+
+}

@@ -44,6 +44,7 @@ export function registerPaletteCard() {
     destroy() {
       this._paletteAbort?.abort();
       if (this._toastTimer) clearTimeout(this._toastTimer);
+      document.body.classList.remove('palette-open');
     },
 
     openPalette() {
@@ -51,6 +52,7 @@ export function registerPaletteCard() {
       this.paletteQuery = '';
       this.paletteIdx = 0;
       this.paletteToast = '';
+      document.body.classList.add('palette-open');
       this.$nextTick(() => {
         const input = document.querySelector('.palette-input');
         if (input) input.focus();
@@ -62,6 +64,7 @@ export function registerPaletteCard() {
       this.paletteQuery = '';
       this.paletteIdx = 0;
       this.paletteToast = '';
+      document.body.classList.remove('palette-open');
     },
 
     onPaletteInput() {

@@ -1,0 +1,116 @@
+@layer components {
+/* === Batch-Check === */
+.batch-status {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  margin-top: 4px;
+}
+
+/* === Card-Actions (Button-Gruppe im card-header) === */
+.card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-left: auto;
+}
+
+.card-actions button {
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .card-actions { width: 100%; }
+  .card-actions button { flex: 1 1 auto; min-width: 0; }
+}
+
+@media (max-width: 480px) {
+  .card-actions button { min-width: 80px; }
+}
+
+/* Variante: Actions permanent unter dem Titel, volle Breite (Sidebar-Card) */
+.card--stacked-actions > .card-header { flex-direction: column; align-items: stretch; }
+.card--stacked-actions > .card-header > .card-actions { width: 100%; margin-left: 0; }
+.card--stacked-actions > .card-header > .card-actions button { flex: 1 1 auto; min-width: 0; }
+
+/* === Close-Button in Card-Header === */
+.btn-card-close {
+  background: none;
+  border: none;
+  color: var(--color-muted);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: 0;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+.btn-card-close:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.btn-bookstack-link {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: var(--radius-sm);
+  background: var(--color-tag-bg);
+  color: var(--color-muted);
+  text-decoration: none;
+}
+.btn-bookstack-link:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.btn-bookstack-link--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+.row > .btn-bookstack-link { flex: 0 0 auto; }
+
+/* === Button-Gruppe (Expand/Collapse) === */
+.btn-group {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Drei Badges (T/W/Z) rechts im page-item */
+.tok-stats {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+/* Summen-Badges neben der Button-Gruppe (Buchebene) */
+.tok-totals {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: 4px;
+  flex-wrap: wrap;
+}
+
+/* === Compact Buttons === */
+/* Grösse synchron mit .combobox-wrap--compact über --size-compact-*. */
+.btn-compact {
+  font-size: var(--size-compact-font-size);
+  padding: var(--size-compact-padding);
+}
+
+}

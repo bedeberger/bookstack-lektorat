@@ -1,0 +1,89 @@
+@layer components {
+/* === Find & Replace (Cmd/Ctrl+F im Edit-Mode) === */
+/* Highlights via CSS Custom Highlight API – rein visuell, kein DOM-Eingriff,
+   landet nicht in BookStack beim Speichern. */
+::highlight(edit-find-match) {
+  background: var(--color-warn-bg);
+  color: inherit;
+}
+::highlight(edit-find-current) {
+  background: var(--color-accent);
+  color: #1a1a1a;
+}
+
+/* left/top werden in editor-find.js aus der Editor-Karten-Box berechnet. */
+.edit-find {
+  position: fixed;
+  z-index: 1002;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 6px 18px var(--color-shadow-med);
+  padding: 6px;
+  width: 420px;
+  max-width: calc(100vw - 48px);
+}
+.edit-find-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.edit-find-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 0.9rem;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+}
+.edit-find-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+.edit-find-count {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  min-width: 56px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.edit-find-btn {
+  flex: 0 0 auto;
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.2;
+}
+.edit-find-btn:hover:not(:disabled) { background: var(--color-hover); }
+.edit-find-btn:active:not(:disabled) { background: var(--color-hover-strong); }
+.edit-find-btn:disabled { opacity: 0.4; cursor: default; }
+.edit-find-btn--toggle { min-width: 28px; }
+.edit-find-btn--active {
+  background: var(--color-hover-strong);
+  border-color: var(--color-accent);
+}
+.edit-find-btn--text { padding: 3px 10px; }
+.edit-find-close {
+  flex: 0 0 auto;
+  background: transparent;
+  color: var(--color-muted);
+  border: none;
+  padding: 3px 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.edit-find-close:hover { color: var(--color-text); }
+
+}

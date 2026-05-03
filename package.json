@@ -5,8 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "npm run test:unit && npm run test:e2e",
+    "test": "npm run test:unit && npm run test:integration && npm run test:e2e",
     "test:unit": "node --test --test-concurrency=4 \"tests/unit/*.test.js\" \"tests/unit/*.test.mjs\"",
+    "test:integration": "node --test \"tests/integration/*.test.js\"",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

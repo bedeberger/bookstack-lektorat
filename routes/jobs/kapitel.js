@@ -108,4 +108,4 @@ kapitelRouter.post('/chapter-review', jsonBody, (req, res) => {
   res.json({ jobId });
 });
 
-module.exports = { kapitelRouter };
+module.exports = { kapitelRouter, runChapterReviewJob };

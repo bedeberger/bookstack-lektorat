@@ -1,0 +1,219 @@
+@layer components {
+/* === Lektorat Split Layout (Preview links, Befunde rechts) === */
+.lektorat-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin-top: 1rem;
+}
+
+@media (min-width: 1100px) {
+  .lektorat-split {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    height: 75vh;
+    min-height: 300px;
+    max-height: 900px;
+  }
+  .lektorat-split-preview {
+    overflow-y: auto;
+    height: 100%;
+  }
+  .lektorat-split-preview .page-content-view {
+    max-height: none;
+    height: 100%;
+    margin: 0;
+    border-radius: var(--radius-md);
+  }
+  .lektorat-split-findings {
+    overflow-y: auto;
+    height: 100%;
+    padding-right: 4px;
+  }
+}
+
+@media (max-width: 1099px) {
+  .lektorat-split {
+    display: block;
+  }
+  .lektorat-split-preview,
+  .lektorat-split-findings {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .lektorat-split-preview .page-content-view,
+  .lektorat-split-preview > .page-content-view {
+    max-height: none;
+    overflow: visible;
+  }
+  .lektorat-split-findings { margin-top: 1rem; }
+}
+
+/* Inline-Fehlermarkierung */
+.lektorat-mark {
+  position: relative;
+  background: var(--color-mark-bg);
+  border-bottom: 2px solid var(--color-mark-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.lektorat-mark:hover { background: var(--color-mark-bg-hover); }
+.lektorat-mark--selected {
+  background: var(--color-mark-del-bg);
+  border-bottom-color: var(--color-mark-del-border);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-mark-del-strike);
+  color: var(--color-mark-del-text);
+}
+.lektorat-mark--selected:hover { background: var(--color-mark-del-bg-hover); }
+
+/* Hover-Sync: Flash-Animation beim Hover-Scrollen im Split-Modus */
+@keyframes hoverSyncFlash {
+  0%   { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+  100% { outline: 2px solid transparent; outline-offset: 1px; }
+}
+.hover-sync-flash {
+  animation: hoverSyncFlash 1.8s ease-out;
+}
+
+/* Hover-Sync: Scroll-Abstand oben/unten, damit Kontext um das Ziel sichtbar bleibt */
+.finding,
+.lektorat-mark {
+  scroll-margin-top: 60px;
+  scroll-margin-bottom: 60px;
+}
+
+/* Inline-Korrekturvorschlag neben durchgestrichenem Original */
+.lektorat-ins {
+  text-decoration: none;
+  color: var(--color-mark-ins-text);
+  font-weight: 700;
+  background: var(--color-mark-ins-bg);
+  border-radius: var(--radius-sm);
+  padding: 0 2px;
+  margin-left: 2px;
+}
+
+/* Chat-Änderungsvorschläge im Preview – gleicher Look wie Lektorat-Korrekturen:
+   rötliches Durchstreichen für den Originaltext + grünes Insert für den Vorschlag. */
+.chat-mark {
+  position: relative;
+  background: var(--color-mark-del-bg);
+  border-bottom: 2px solid var(--color-mark-del-border);
+  border-radius: var(--radius-sm);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-mark-del-strike);
+  color: var(--color-mark-del-text);
+  transition: background 0.2s;
+}
+.chat-mark:hover { background: var(--color-mark-del-bg-hover); }
+
+.chat-mark-ins {
+  text-decoration: none;
+  color: var(--color-mark-ins-text);
+  font-weight: 700;
+  background: var(--color-mark-ins-bg);
+  border-radius: var(--radius-sm);
+  padding: 0 2px;
+  margin-left: 2px;
+}
+
+/* Korrektur-Tooltip auf Inline-Mark (positioniert per JS) */
+.lektorat-tip {
+  display: none;
+  position: fixed;
+  z-index: 50;
+  min-width: 180px;
+  max-width: 340px;
+  width: max-content;
+  padding: 8px 10px;
+  background: var(--color-tooltip-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px var(--color-shadow);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--color-text-preview);
+  text-decoration: none;
+  font-style: normal;
+  font-weight: normal;
+  white-space: normal;
+  cursor: default;
+  flex-direction: column;
+  gap: 4px;
+}
+.lektorat-tip--visible { display: flex; }
+.lektorat-tip .badge { align-self: flex-start; }
+.lektorat-tip-korrektur { font-weight: 700; color: var(--color-mark-ins-text); }
+.lektorat-tip-erkl { color: var(--color-text-tip-hint); }
+
+/* Flash-Animation beim Scrollen zur Fehlerliste */
+.finding--flash {
+  animation: finding-flash 1.5s ease;
+}
+@keyframes finding-flash {
+  0%, 100% { background: transparent; }
+  20% { background: var(--color-accent-bg); }
+}
+
+/* === Figure Context Panel === */
+.figure-context-panel {
+  margin: 12px 0 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+.figure-context-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.figure-context-header:hover { background: var(--color-hover-light); }
+.figure-context-title { display: flex; align-items: center; gap: 6px; font-size: var(--font-size-sm); font-weight: 400; }
+.figure-context-icon { font-size: 11px; font-weight: 700; background: var(--color-accent-bg); color: var(--color-accent-text); width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+.figure-context-body { padding: 4px 12px 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+.figure-context-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: var(--font-size-sm);
+  background: var(--color-tooltip-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  cursor: default;
+}
+.figure-context-chip:hover { border-color: var(--color-accent); }
+.figure-context-chip .tag { font-size: 10px; padding: 0 4px; }
+.figure-context-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 10px 12px;
+  background: var(--color-tooltip-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px var(--color-shadow);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--color-text-preview);
+}
+.figure-context-tooltip-name { font-weight: 700; margin-bottom: 4px; }
+.figure-context-tooltip-row { margin-bottom: 2px; }
+.figure-context-label { font-weight: 400; color: var(--color-text-tip-hint); }
+.figure-context-tooltip-desc {
+  margin-top: 4px;
+  color: var(--color-text-preview-soft);
+  line-height: 1.5;
+}
+
+}

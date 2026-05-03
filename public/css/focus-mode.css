@@ -1,0 +1,404 @@
+@layer components {
+/* === Fokus-Modus (Vollbild, Serif, Absatz-Spotlight, Typewriter-Scroll) === */
+/* --focus-vh wird in editor-focus.js aus visualViewport.height gesetzt und
+   folgt der iOS-Tastatur. Fallback: 100vh (dvh wäre besser, existiert aber
+   erst ab Safari 15.4 — JS setzt --focus-vh ohnehin nach einem Frame). */
+body.focus-mode { overflow: hidden; overscroll-behavior: contain; }
+body.palette-open { overflow: hidden; overscroll-behavior: contain; }
+
+body.focus-mode #editor-card {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: var(--focus-vh-top, 0px);
+  height: var(--focus-vh, 100vh);
+  max-height: var(--focus-vh, 100vh);
+  z-index: 1000;
+  margin: 0;
+  border-radius: 0;
+  border: none;
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  box-shadow: none;
+}
+
+body.focus-mode #editor-card .card-header {
+  flex: 0 0 auto;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 24px 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+  opacity: 0.35;
+  transition: opacity 0.3s;
+}
+body.focus-mode #editor-card .card-header:hover { opacity: 1; }
+
+body.focus-mode #editor-card .tok-stats,
+body.focus-mode #editor-card .tag--link,
+body.focus-mode #editor-card .figure-context-panel,
+body.focus-mode #editor-card .lektorat-split-findings,
+body.focus-mode #editor-card .history-bar,
+body.focus-mode #editor-card .progress-bar-wrap,
+body.focus-mode #editor-card #status { display: none; }
+
+/* Safari resolved height:100% über eine block-Kette nicht zuverlässig in
+   Flex-Kontexten — deshalb die Wrapper explizit als flex-column, damit die
+   Scroll-Fläche eine definierte Höhe bekommt und overflow-y greift.
+   Stabile Klassen statt :has(), weil Safari < 15.4 (z.B. Big Sur / altes
+   Monterey) :has() nicht kennt und der Scroll sonst nicht greift. */
+body.focus-mode #editor-card .editor-body-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+body.focus-mode #editor-card .editor-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+/* Die Partial-Hosts liegen zwischen .editor-preview-wrap und .page-content-view;
+   display:contents lässt sie aus der Box-Kette verschwinden, damit der Scroll-
+   Container (page-content-view) direkt vom Flex-Parent eine Höhe bekommt. */
+#partial-editor-body-edit,
+#partial-editor-body-view { display: contents; }
+
+body.focus-mode .page-content-view,
+body.focus-mode .page-content-view--editing {
+  /* overflow-anchor aus: Chrome's Scroll-Anchoring verschiebt den Scrollpunkt
+     bei Content-Mutationen (contenteditable-Split, IO-triggered repaints) und
+     kämpft mit unserem expliziten Typewriter-Scroll → sichtbares „Flattern". */
+  overflow-anchor: none;
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: 60ch;
+  margin: 0 auto;
+  /* Oben/unten fast halbe Viewporthöhe als Puffer, damit der aktive Absatz
+     mittig stehen kann. --focus-vh folgt der Tastatur, Fallback vh. */
+  padding-top: calc(var(--focus-vh, 100vh) * 0.45);
+  padding-bottom: calc(var(--focus-vh, 100vh) * 0.45 + env(safe-area-inset-bottom, 0px));
+  padding-left: max(2rem, env(safe-area-inset-left, 0px));
+  padding-right: max(2rem, env(safe-area-inset-right, 0px));
+  background: transparent;
+  border: none;
+  outline: none;
+  border-left: none;
+  font-family: var(--font-serif);
+  font-size: 1.45rem;
+  line-height: 1.85;
+  color: var(--color-text);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  caret-color: var(--color-primary);
+}
+
+/* Auf schmalen Screens: kompaktere Schrift, weniger Puffer oben */
+@media (max-width: 600px) {
+  body.focus-mode .page-content-view,
+  body.focus-mode .page-content-view--editing {
+    font-size: 1.15rem;
+    line-height: 1.7;
+    padding-top: calc(var(--focus-vh, 100vh) * 0.25);
+    padding-bottom: calc(var(--focus-vh, 100vh) * 0.55 + env(safe-area-inset-bottom, 0px));
+    padding-left: max(1.1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1.1rem, env(safe-area-inset-right, 0px));
+  }
+  body.focus-mode #editor-card .card-header {
+    padding: 8px 12px;
+    opacity: 0.6;
+  }
+}
+body.focus-mode .page-content-view::-webkit-scrollbar,
+body.focus-mode .page-content-view--editing::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Typewriter-Dim: alle Block-Elemente gedimmt, aktiver bleibt hell.
+   Descendant- statt Child-Selector, weil BookStack-HTML Absätze in Wrapper
+   (z.B. <div>, .poem) packen kann – dann würde `> *` nur den Wrapper treffen
+   und die <p> darin blieben hell. `:not(.focus-paragraph-active)` macht die
+   Brighten-Regel überflüssig und vermeidet opacity-Stacking-Probleme, bei
+   denen ein dim-Parent den aktiven Kind-Absatz mit runterzieht. */
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view p:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view h1:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view h2:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view h3:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view h4:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view h5:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view h6:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view blockquote:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view li:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view pre:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing p:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing h1:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing h2:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing h3:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing h4:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing h5:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing h6:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing blockquote:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing li:not(.focus-paragraph-active):not(.focus-paragraph-near),
+body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing pre:not(.focus-paragraph-active):not(.focus-paragraph-near) {
+  opacity: 0.35;
+  /* Bewusst KEIN transition: vorheriger aktiver Block würde 1.0 → 0.35 faden
+     und dabei mid-transition anders rendern (GPU-Subpixel-Aliasing), was als
+     „extra grau" auffällt. Snap-Out auf dim. */
+}
+
+/* Aktiver Block im Light-Mode auf reines Schwarz heben (statt --color-text
+   #1a1a1a), damit der Kontrast zu den dim-Blöcken (opacity 0.35) deutlich
+   ist. Dark-Theme behält --color-text. */
+:root:not([data-theme="dark"]) body.focus-mode .page-content-view .focus-paragraph-active,
+:root:not([data-theme="dark"]) body.focus-mode .page-content-view--editing .focus-paragraph-active {
+  color: #000;
+}
+
+/* Window-3-Modus: Nachbarn (prev/next) bekommen abgeschwächten Mid-Tone,
+   damit aktiver Block weiter heraussticht, Kontext aber lesbar bleibt. */
+body.focus-mode .page-content-view .focus-paragraph-near,
+body.focus-mode .page-content-view--editing .focus-paragraph-near {
+  opacity: 0.7;
+}
+
+/* Sentence-Modus: nicht-aktive Sätze im aktiven Block werden via CSS Custom
+   Highlight API gedimmt. Range-Registrierung in editor-focus.js.
+   Color matcht den Block-Dim (opacity 0.35 auf schwarzer Schrift) — sonst
+   stehen 3 Grautöne im UI: aktiver Satz schwarz, restl. aktiver Block hell-
+   grau (zu hell), andere Blöcke mittelgrau.
+   Theme-Selector via :root[data-theme] (App-Theme), NICHT prefers-color-
+   scheme — sonst greift System-DM auch wenn App auf light steht. */
+::highlight(focus-sentence-dim) {
+  color: rgba(0, 0, 0, 0.35);
+}
+:root[data-theme="dark"] ::highlight(focus-sentence-dim) {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Typewriter-only-Modus: kein Dim. Body-Class-Guard auf der Dim-Rule oben
+   schliesst diesen Modus aus, daher hier kein Override-Block nötig — alle
+   Blöcke behalten ihre Default-opacity (1). */
+
+/* Lektorat-Marks im Fokusmodus optisch neutralisieren (Findings bleiben
+   aber in der Daten-/State-Ebene erhalten, damit _filterFindingsAfterSave
+   behobene Einträge nach dem Speichern entfernen kann). */
+body.focus-mode .lektorat-mark,
+body.focus-mode .lektorat-mark--selected {
+  background: transparent;
+  border-bottom: none;
+  text-decoration: none;
+  color: inherit;
+  cursor: text;
+}
+
+/* === Fokus-Modus: Formatierungen auf Fliesstext plätten ===
+   Rein visuell – HTML bleibt intakt (Edit-Mode + Save-Pfad). Der User sieht
+   nur Absätze, damit nichts vom Rhythmus des Textes ablenkt. */
+body.focus-mode .page-content-view h1,
+body.focus-mode .page-content-view h2,
+body.focus-mode .page-content-view h3,
+body.focus-mode .page-content-view h4,
+body.focus-mode .page-content-view h5,
+body.focus-mode .page-content-view h6,
+body.focus-mode .page-content-view--editing h1,
+body.focus-mode .page-content-view--editing h2,
+body.focus-mode .page-content-view--editing h3,
+body.focus-mode .page-content-view--editing h4,
+body.focus-mode .page-content-view--editing h5,
+body.focus-mode .page-content-view--editing h6 {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-transform: none;
+  margin: 0.4em 0;
+  color: inherit;
+}
+
+/* Bold/Italic im Fokus-Modus sichtbar lassen — Ctrl+B/Ctrl+I sind als
+   Shortcut explizit dokumentiert. <u> bleibt unten geplättet, weil
+   Underline mit Link-Styling kollidiert und Ctrl+U-Eingabe ohnehin
+   geblockt ist. */
+
+body.focus-mode .page-content-view u,
+body.focus-mode .page-content-view s,
+body.focus-mode .page-content-view del,
+body.focus-mode .page-content-view strike,
+body.focus-mode .page-content-view--editing u,
+body.focus-mode .page-content-view--editing s,
+body.focus-mode .page-content-view--editing del,
+body.focus-mode .page-content-view--editing strike {
+  text-decoration: none;
+  color: inherit;
+}
+
+body.focus-mode .page-content-view sup,
+body.focus-mode .page-content-view sub,
+body.focus-mode .page-content-view--editing sup,
+body.focus-mode .page-content-view--editing sub {
+  vertical-align: baseline;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+body.focus-mode .page-content-view code,
+body.focus-mode .page-content-view pre,
+body.focus-mode .page-content-view--editing code,
+body.focus-mode .page-content-view--editing pre {
+  background: transparent;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  font-family: inherit;
+  font-size: inherit;
+  white-space: inherit;
+  overflow-x: visible;
+}
+
+body.focus-mode .page-content-view blockquote,
+body.focus-mode .page-content-view--editing blockquote {
+  border: none;
+  padding: 0;
+  margin: 0.4em 0;
+  color: inherit;
+  font-style: inherit;
+}
+
+body.focus-mode .page-content-view .callout,
+body.focus-mode .page-content-view--editing .callout {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0.4em 0;
+  color: inherit;
+  border-radius: 0;
+}
+
+/* Fokus-Modus: .poem-Wrapper aus dem Render-Tree entfernen, damit die inneren
+   <p> wie normale Absätze behandelt werden und focus-paragraph-active greift
+   (opacity 0.5 auf dem Wrapper würde sonst das aktive <p> mitdimmen). */
+body.focus-mode .page-content-view .poem,
+body.focus-mode .page-content-view--editing .poem {
+  display: contents;
+}
+
+body.focus-mode .page-content-view ul,
+body.focus-mode .page-content-view ol,
+body.focus-mode .page-content-view--editing ul,
+body.focus-mode .page-content-view--editing ol {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.4em 0;
+}
+
+body.focus-mode .page-content-view li,
+body.focus-mode .page-content-view--editing li {
+  margin: 0.4em 0;
+}
+
+body.focus-mode .page-content-view hr,
+body.focus-mode .page-content-view--editing hr {
+  border: none;
+  margin: 0.8em 0;
+  height: 0;
+}
+
+/* Inline-Formatierungen aus BookStack (text-align, Farbe, Hintergrund via
+   style-Attribut). Attribut-Selektor greift auch bei beliebigen span-
+   Wrappern ohne dass wir den Stil parsen müssen. */
+body.focus-mode .page-content-view [style*="color"],
+body.focus-mode .page-content-view [style*="background"],
+body.focus-mode .page-content-view [style*="text-align"],
+body.focus-mode .page-content-view [style*="font-family"],
+body.focus-mode .page-content-view [style*="white-space"],
+body.focus-mode .page-content-view--editing [style*="color"],
+body.focus-mode .page-content-view--editing [style*="background"],
+body.focus-mode .page-content-view--editing [style*="text-align"],
+body.focus-mode .page-content-view--editing [style*="font-family"],
+body.focus-mode .page-content-view--editing [style*="white-space"] {
+  color: inherit !important;
+  background: transparent !important;
+  text-align: inherit !important;
+  font-family: inherit !important;
+  white-space: normal !important;
+}
+/* font-weight / font-style absichtlich NICHT geplättet — execCommand('bold')
+   in Chrome mit styleWithCSS=true schreibt inline-styles statt <b>; sonst
+   wäre Bold im Fokus-Modus unsichtbar trotz funktionierendem Shortcut. */
+
+/* Tabellen und Bilder stören den Lese-/Schreibfluss – komplett ausblenden.
+   Im Edit-Modus bleibt das Markup im DOM erhalten und wird beim Verlassen
+   wieder sichtbar. */
+body.focus-mode .page-content-view table,
+body.focus-mode .page-content-view img,
+body.focus-mode .page-content-view--editing table,
+body.focus-mode .page-content-view--editing img {
+  display: none;
+}
+
+/* === Fokus-Modus: Caret-Pulse, Auto-Hide-Cursor, Header-Live-Counter === */
+
+/* Caret pulst dezent — Auge findet die Schreibmarke schneller, ohne dass
+   es nervig blinkt. Reduced-Motion respektieren. */
+@keyframes focus-caret-pulse {
+  0%, 100% { caret-color: var(--color-primary); }
+  50%      { caret-color: var(--color-border-focus); }
+}
+body.focus-mode .page-content-view--editing {
+  animation: focus-caret-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.focus-mode .page-content-view--editing { animation: none; }
+}
+
+/* Auto-Hide-Cursor: 2s ohne Mausbewegung → unsichtbar (JS toggelt Klasse).
+   Bei Mausbewegung wird die Klasse entfernt. Nur im Editor-Container, damit
+   Header-Buttons weiterhin normalen Cursor zeigen, wenn Maus dorthin geht. */
+body.focus-mode.focus-cursor-hidden .page-content-view--editing,
+body.focus-mode.focus-cursor-hidden .page-content-view--editing * {
+  cursor: none;
+}
+
+/* Live-Counter im Header (nur Fokus + Edit). Rückt da rein, wo sonst die
+   `tok-stats`-Badges der gespeicherten Seite sitzen — die werden im Fokus
+   ohnehin per CSS ausgeblendet. */
+.focus-live-counter {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  color: var(--color-subtle);
+  margin-left: 8px;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.focus-live-counter--today {
+  color: var(--color-ok-text);
+  margin-left: 6px;
+}
+
+.save-indicator {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  color: var(--color-subtle);
+  margin-left: 8px;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+.save-indicator--draft { color: var(--color-warning, #b5651d); }
+.save-indicator--offline { color: var(--color-error, #b33); }
+
+}

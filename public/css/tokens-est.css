@@ -1,0 +1,298 @@
+@layer components {
+/* === Token-Schätzung === */
+.tok-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-weight: 400;
+  flex-shrink: 0;
+}
+.tok-ok      { background: var(--color-ok-bg);   color: var(--color-ok-text); }
+.tok-med     { background: var(--color-warn-bg);  color: var(--color-warn-text); }
+.tok-high    { background: var(--color-err-bg);   color: var(--color-err-text); }
+.tok-neutral { background: var(--color-neutral-bg); color: var(--color-muted); }
+.tok-empty   { background: var(--color-neutral-bg); color: var(--color-subtle); font-style: italic; }
+
+.tok-tooltip {
+  position: fixed;
+  transform: translateY(-100%);
+  z-index: 9999;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px var(--color-shadow);
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--color-muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tok-tt-label {
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 6px;
+}
+.tok-tt-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.tok-tt-hint {
+  color: var(--color-subtle);
+  font-size: 10px;
+  margin-top: 6px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 5px;
+}
+.tok-tt-enter { transition: opacity 0.12s ease; }
+.tok-tt-hidden { opacity: 0; }
+.tok-tt-visible { opacity: 1; }
+
+.page-status-tip { min-width: auto; white-space: nowrap; }
+
+/* Auf schmalen Screens an den Viewport-Rand klemmen,
+   damit der fixe left-Wert (Badge-Kante) nicht nach rechts überläuft. */
+@media (max-width: 600px) {
+  .tok-tooltip {
+    left: 8px !important;
+    right: 8px !important;
+    min-width: 0;
+    max-width: none;
+    white-space: normal;
+  }
+  .page-status-tip {
+    white-space: normal;
+  }
+}
+
+.card-timestamp {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  margin-left: 0.75rem;
+  align-self: center;
+}
+
+.figuren-graph-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+.figuren-graph-toolbar-zoom {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.graph-tool-btn {
+  background: var(--color-bg);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 3px 9px;
+  min-width: 28px;
+  transition: background 0.1s, color 0.1s;
+}
+
+.graph-tool-btn:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.graph-tool-btn--reset {
+  font-size: 13px;
+}
+
+.figuren-graph-wrap {
+  position: relative;
+}
+
+.figuren-graph-container {
+  width: 100%;
+  height: 600px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+/* Mobile: Einfinger-Vertikalwisch scrollt die Seite, nicht den Graph;
+   Pinch (zwei Finger) bleibt für vis-network nutzbar. */
+@media (max-width: 700px) {
+  .figuren-graph-container {
+    height: 380px;
+    touch-action: pan-y;
+  }
+}
+
+/* Vollbild-Modus: überlagert die Seite, Toolbar oben, Graph nimmt Rest. */
+.figuren-graph-wrap.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  gap: 6px;
+}
+.figuren-graph-wrap.is-fullscreen .figuren-graph-container {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  border-radius: var(--radius-sm);
+  touch-action: none;
+}
+
+.figur-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.figur-legend-dot {
+  --fig-hue: var(--palette-gray);
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 0;
+  border: 1.5px solid var(--fig-hue);
+  margin-right: 3px;
+  vertical-align: middle;
+  background: color-mix(in srgb, var(--fig-hue) var(--figpal-bg-mix), var(--color-surface));
+}
+
+.figur-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 2px;
+  cursor: pointer;
+  user-select: none;
+}
+.figur-item:hover { background: var(--color-hover); }
+
+.figur-typ-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--color-border);
+}
+.figur-typ-dot--hauptfigur { background: var(--color-primary); }
+.figur-typ-dot--nebenfigur { background: var(--color-muted); }
+.figur-typ-dot--randfigur { background: var(--palette-gray-light); }
+.figur-typ-dot--antagonist { background: var(--color-err-border); }
+.figur-typ-dot--mentor { background: var(--color-ok-border); }
+.figur-typ-dot--andere { background: var(--color-accent); }
+
+.figur-name {
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+  flex: 1;
+}
+
+
+.figur-rel-tag {
+  font-size: var(--font-size-xs);
+}
+
+.figur-kapitel-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+}
+
+.figur-kapitel-primary {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 0;
+  font-weight: 700;
+  background: var(--color-text);
+  color: var(--color-surface);
+  white-space: nowrap;
+}
+
+.figur-kapitel-secondary {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 0;
+  background: var(--color-tag-bg);
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.figur-kapitel-more {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 0;
+  background: var(--color-tag-bg);
+  color: var(--color-muted);
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .ort-item .figur-kapitel-badges { display: none; }
+}
+@media (max-width: 480px) {
+  .figur-kapitel-badges { display: none; }
+  .figur-kapitelauftritte { display: none; }
+  .ort-stimmung { display: none; }
+}
+
+.figur-beziehung-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 0.5px solid var(--color-border);
+  flex-wrap: wrap;
+}
+.figur-beziehung-item:last-child { border-bottom: none; }
+
+.figur-bz-typ {
+  --rel-hue: var(--palette-gray);
+  font-size: 11px;
+  font-weight: 400;
+  padding: 2px 7px;
+  border-radius: 0;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--rel-hue) var(--figpal-bg-mix), var(--color-surface));
+  color:      color-mix(in srgb, var(--rel-hue) var(--figpal-text-mix), var(--color-text));
+}
+.figur-bz-freund          { --rel-hue: var(--palette-green); }
+.figur-bz-feind           { --rel-hue: var(--palette-red); }
+.figur-bz-liebesbeziehung { --rel-hue: var(--palette-pink); }
+.figur-bz-rivale          { --rel-hue: var(--palette-orange); }
+.figur-bz-kollege         { --rel-hue: var(--palette-amber); }
+.figur-bz-mentor          { --rel-hue: var(--palette-blue); }
+.figur-bz-schuetzling     { --rel-hue: var(--palette-blue); }
+.figur-bz-bekannt         { /* fällt auf Default-Grau zurück */ }
+.figur-bz-patronage       { --rel-hue: var(--palette-purple); }
+.figur-bz-geschaeft       { --rel-hue: var(--palette-amber); }
+
+.figur-bz-macht {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-left: 2px;
+}
+.figur-bz-macht--positiv { color: var(--color-primary); }
+.figur-bz-macht--negativ { color: var(--color-err-border); }
+
+}

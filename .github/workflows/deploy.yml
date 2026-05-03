@@ -99,6 +99,9 @@ jobs:
       - name: Unit-Tests ausführen
         run: npm run test:unit
 
+      - name: Integration-Tests ausführen (Job-Pipeline mit Mock-AI)
+        run: npm run test:integration
+
   e2e:
     name: Playwright-E2E
     runs-on: self-hosted

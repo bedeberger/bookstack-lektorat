@@ -1,0 +1,224 @@
+@layer components {
+/* === Feature-Tiles === */
+/* Command-Palette: Hero-Trigger + Quick-Pills + Modal-Overlay.
+   Hero-Bar wirkt wie Search-Input (Linear/Raycast-Pattern), Klick öffnet Palette
+   (auch ⌘K / Strg+K). Quick-Pills darunter zeigen User-Top-3 nach Recency. */
+.palette-hero {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border-input);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--color-muted);
+  text-align: left;
+  font-family: inherit;
+  margin-bottom: 8px;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+}
+.palette-hero:hover {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 2px 8px var(--color-shadow-med);
+  background: var(--color-hover);
+}
+.palette-hero:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+.palette-hero:active { transform: none; }
+.palette-hero-icon {
+  font-size: 14px;
+  color: var(--color-accent);
+  font-weight: 600;
+}
+.palette-hero-text {
+  flex: 1;
+}
+.palette-hero-kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  background: var(--color-surface);
+}
+
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 2000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh 16px 16px;
+}
+.palette-panel {
+  width: 100%;
+  max-width: 560px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 40px var(--color-shadow-strong);
+  display: flex;
+  flex-direction: column;
+  max-height: 70vh;
+}
+.palette-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 16px;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  outline: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+.palette-input::placeholder {
+  color: var(--color-muted);
+}
+.palette-list {
+  overflow-y: auto;
+  padding: 6px 0;
+  flex: 1;
+}
+.palette-section { padding: 4px 0; }
+.palette-section-label {
+  padding: 6px 16px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+.palette-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--color-text);
+  border-left: 2px solid transparent;
+}
+.palette-item-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+.palette-item-desc {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.palette-item--active {
+  background: var(--color-hover);
+  border-left-color: var(--color-accent);
+}
+.palette-item--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.palette-item:active { transform: none; }
+.palette-item:hover { background: transparent; }
+.palette-item--active:hover { background: var(--color-hover); }
+.palette-empty {
+  padding: 18px 16px;
+  font-size: 13px;
+  color: var(--color-muted);
+  text-align: center;
+}
+.palette-mark {
+  background: transparent;
+  color: var(--color-accent);
+  font-weight: 600;
+  padding: 0;
+}
+.palette-toast {
+  padding: 8px 14px;
+  border-top: 1px solid var(--color-border);
+  font-size: 12px;
+  color: var(--color-muted);
+  background: var(--color-bg);
+}
+.palette-mode {
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+.palette-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.palette-mode-pill kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  padding: 1px 5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+.palette-legend {
+  padding: 6px 14px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+.palette-legend-title { display: none; }
+.palette-legend-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.palette-legend-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.palette-legend-row kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  padding: 0 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  min-width: 12px;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .palette-legend-grid { grid-template-columns: 1fr; }
+  /* Hero: kbd-Hint weg (Mobile hat keine physische Tastatur), Padding etwas
+     grösser für Tap-Komfort. */
+  .palette-hero-kbd { display: none; }
+  .palette-hero { padding: 12px 14px; }
+  /* Palette-Modal: Soft-Keyboard verdeckt sonst Panel. Wenig Padding-Top,
+     volle vertikale Reichweite. Safe-Area für Notch/Home-Indicator. */
+  .palette-overlay {
+    padding: 4vh 8px max(8px, env(safe-area-inset-bottom));
+  }
+  .palette-panel {
+    max-height: calc(100vh - 6vh - env(safe-area-inset-bottom, 0px));
+  }
+  .palette-item {
+    padding: 12px 16px;
+  }
+  .palette-item-label { font-size: 14px; }
+  .palette-item-desc  { font-size: 12px; }
+}
+
+}

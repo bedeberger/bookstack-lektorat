@@ -6,10 +6,10 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Va
 
 ## Harte Regeln
 
-- **Prompts nur in `public/js/prompts.js`** — einzige Quelle für alle Prompt-Schemas und Build-Logik. Server importiert via dynamic `import()`. NIEMALS Prompts in Route-Handlern, Config-Dateien oder anderswo duplizieren.
+- **Prompts nur unter `public/js/prompts/` (Facade `public/js/prompts.js`)** — einzige Quelle für alle Prompt-Schemas und Build-Logik. Externe Imports gehen ausschliesslich über die Facade `prompts.js`; Submodule (`prompts/lektorat.js`, `prompts/komplett.js`, `prompts/chat.js`, …) sind interne Aufteilung. Server importiert die Facade via dynamic `import()`. NIEMALS Prompts in Route-Handlern, Config-Dateien oder anderswo duplizieren.
 - **KI-Calls nur via Job-Queue** — neue Features implementieren einen Job-Typ in `routes/jobs/` (Funktion `runXxxJob` + `router.post`). Direkte synchrone KI-Calls aus Route-Handlern sind verboten. Einzige Ausnahme: Seiten-Chat (`/chat/send`) nutzt bewusst SSE-Streaming.
-- **`callAI` gibt nur JSON zurück** — jeder Systemprompt muss JSON-Only erzwingen (`JSON_ONLY`-Konstante in `prompts.js`). Nach jedem `callAI`-Aufruf Pflichtfeld prüfen (z.B. `fehler`, `gesamtnote`, `figuren`). Fehler werfen statt falsche Daten rendern. **`truncated`-Flag IMMER vor `parseJSON` prüfen und werfen** — `jsonrepair` ist tolerant und liefert sonst Partial-Daten zurück (verhindert „silent partial"-Bug).
-- **Styles nur in `style.css`** — keine Inline-`style`-Attribute, keine `<style>`-Blöcke im HTML.
+- **`callAI` gibt nur JSON zurück** — jeder Systemprompt muss JSON-Only erzwingen (`JSON_ONLY`-Konstante in `prompts/state.js`). Nach jedem `callAI`-Aufruf Pflichtfeld prüfen (z.B. `fehler`, `gesamtnote`, `figuren`). Fehler werfen statt falsche Daten rendern. **`truncated`-Flag IMMER vor `parseJSON` prüfen und werfen** — `jsonrepair` ist tolerant und liefert sonst Partial-Daten zurück (verhindert „silent partial"-Bug).
+- **Styles nur in `public/css/`** — keine Inline-`style`-Attribute, keine `<style>`-Blöcke im HTML. CSS auf 39 thematische Files aufgeteilt (Cards, Editor-Slices, Layout-Slices, Component-Slices). Cascade-Reihenfolge via `@layer base, components, utilities;` in [public/css/tokens.css](public/css/tokens.css) (tokens unlayered, Custom-Props global). Neue Datei → in passendes File einsortieren oder neue Datei anlegen + in [public/index.html](public/index.html) **und** [tests/fixtures/focus-harness.html](tests/fixtures/focus-harness.html) (gleiche Reihenfolge!) als `<link>` ergänzen + `SHELL_CACHE` in [public/sw.js](public/sw.js) bumpen.
 - **UI-Strings nur in `public/js/i18n/{de,en}.json`** — keine hartcodierten deutschen/englischen Texte in HTML-Partials, JS-Modulen oder Alpine-Templates. Immer `t('bereich.feld')` (bzw. `tRaw()` ausserhalb von Alpine) verwenden. Neuer String → Key in **beiden** Locale-Dateien ergänzen (de = Fallback, en = Übersetzung). Key-Konvention: `bereich.feld` (z.B. `profile.title`). Platzhalter via `{name}` + Parameter-Map.
   - **Gilt auch serverseitig:** `updateJob`/`failJob`-`statusText` immer als i18n-Key setzen (z.B. `'job.phase.aiReply'`), dynamische Werte als `statusParams`-Objekt. Job-Labels via `{ key, params }` an `createJob`. Fehler-Messages, die der User sieht, ebenfalls als Key.
   - **Automatisch übersetzen, ungefragt:** jeder neue User-sichtbare String wird beim Hinzufügen sofort in beide Locale-Dateien eingetragen — egal ob Frontend-Label, Server-Status, Fehlertext, Placeholder oder Tooltip. Nie nur DE (oder nur EN) committen und auf „mach ich später" verschieben.
@@ -20,9 +20,9 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Va
 - **`x-html` nur mit vorab-escaptem Content** — jede Stelle, die ins `x-html` fliesst, muss KI-/User-Felder vor der Interpolation durch `escHtml()` aus `utils.js` geschleust haben. Gilt für Status-Strings (`_runningJobStatus`), Review-Renderer (`_renderReviewHtml`, `_renderKapitelReviewHtml`), Lektorat-Output (`analysisOut`), Chat-Markdown (`renderChatMarkdown` escaped als erstes). Keine neuen `x-html`-Sinks ohne dieses Escape. Keine Runtime-Sanitizer wie DOMPurify – die Escape-Invariante reicht.
 - **A11y: klickbare Nicht-Buttons** — Elemente mit Klasse `.internal-link` (spans/divs mit `@click`) werden global in `app.js` via MutationObserver + Event-Delegation tastatur-erreichbar gemacht (`role="button"`, `tabindex="0"`, Enter/Space → click). Nicht pro Element wiederholen. Neue klickbare Nicht-Buttons → einfach `.internal-link` setzen.
 - **Progress-Bars** — `.progress-bar` liest die Breite aus CSS-Custom-Prop `--progress`. Binding: `:style="{ '--progress': xProgress + '%' }"`, nicht `:style="'width:' + ... + '%'"`.
-- **Card-Animationen nur via CSS** — `.card` fadet via `cardFadeIn` (style.css) ein. Kein `x-transition` zusätzlich auf `.card`-Elementen, sonst doppelt (CSS translateY + Alpine scale konkurrieren, wirkt wabbelig — sichtbar v.a. bei grossen Karten wie Szenen). Neue Karte: nur `x-show="..." x-cloak`, keine Alpine-Transition.
+- **Card-Animationen nur via CSS** — `.card` fadet via `cardFadeIn` (in [public/css/card-form.css](public/css/card-form.css)) ein. Kein `x-transition` zusätzlich auf `.card`-Elementen, sonst doppelt (CSS translateY + Alpine scale konkurrieren, wirkt wabbelig — sichtbar v.a. bei grossen Karten wie Szenen). Neue Karte: nur `x-show="..." x-cloak`, keine Alpine-Transition.
 - **`SHELL_CACHE` bumpen** — bei JS/CSS-Änderungen Konstante in [public/sw.js](public/sw.js) hochzählen. Sonst halten Mobile-Browser via Service-Worker alte Bundle-Versionen fest.
-- **Combobox statt `<select>`** — alle Auswahlfelder nutzen `Alpine.data('combobox')` aus [public/js/app.js:219](public/js/app.js#L219). Kein natives `<select>` für neue Features, ausser bei zwingendem Grund (z.B. native Mobile-Picker erwünscht — dann begründen). `init()` rendert Trigger + Dropdown + Search + Liste komplett selbst und überschreibt `innerHTML` des Wrapper-Divs. Wrapper-Div daher **leer lassen**, nur Attribute setzen. Pflicht-Pattern (sonst Liste rendert nicht / Selection bricht / Updates kommen nicht durch):
+- **Combobox statt `<select>`** — alle Auswahlfelder nutzen `Alpine.data('combobox')` aus [public/js/app.js:222](public/js/app.js#L222). Kein natives `<select>` für neue Features, ausser bei zwingendem Grund (z.B. native Mobile-Picker erwünscht — dann begründen). `init()` rendert Trigger + Dropdown + Search + Liste komplett selbst und überschreibt `innerHTML` des Wrapper-Divs. Wrapper-Div daher **leer lassen**, nur Attribute setzen. Pflicht-Pattern (sonst Liste rendert nicht / Selection bricht / Updates kommen nicht durch):
   ```html
   <div x-data="combobox(placeholder, emptyLabel?)"
        x-modelable="value" x-model="selectedRef"
@@ -45,7 +45,7 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Va
 1. Job-Datei in `routes/jobs/` anlegen (Pattern: siehe `routes/jobs/review.js`)
 2. `runXxxJob`-Funktion + `router.post('/xxx', ...)` implementieren
 3. Router in `routes/jobs.js` mounten
-4. Prompt-Builder in `public/js/prompts.js` ergänzen — **bei schemarelevanter Änderung `PROMPTS_VERSION` bumpen** (invalidiert `chapter_extract_cache`-Einträge der Komplettanalyse)
+4. Prompt-Builder im passenden Submodul unter `public/js/prompts/` ergänzen (z.B. `prompts/komplett.js` für Pipeline-Prompts, `prompts/review.js` für Bewertungen) und in der Facade `public/js/prompts.js` re-exportieren — **bei schemarelevanter Änderung `PROMPTS_VERSION` (in `prompts/core.js`) bumpen** (invalidiert `chapter_extract_cache`-Einträge der Komplettanalyse)
 5. Schema-Validierung nach `callAI` nicht vergessen
 6. Dedup-Check im POST-Handler: `findActiveJobId(type, entityId, userEmail)` aus `routes/jobs/shared.js` (NICHT `runningJobs.get(...) && jobs.has(...)` — matcht sonst auch fertige Jobs)
 
@@ -53,7 +53,7 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Va
 
 Der Frontend-Scope ist in **Alpine.data-Sub-Komponenten** aufgeteilt:
 - **Root** (`x-data="lektorat"` am `<body>`): Navigation (`selectedBookId`, `pages`, `tree`), Session, i18n, `showXxxCard`-Flags (Single Source of Truth für Hash-Router + Exklusivität), Job-Queue-Footer, globale Cross-Cutting-Methoden (`t`, `bsGet`, `loadFiguren`, `selectPage`, `gotoStelle` …).
-- **25 Sub-Komponenten** in [public/js/cards/](public/js/cards/) — eine pro UI-Karte. Buchebene: Figuren, Orte, Szenen, Ereignisse, Stil, Fehler-Heatmap, BookStats, BookSettings, UserSettings, Kontinuität, Ideen, Finetune-Export, Buch-Chat, Buch-Review, Kapitel-Review. Editor-Subs: editor-find, editor-synonyme, editor-figur-lookup, editor-toolbar, editor-focus, lektorat-findings, page-history. Plus Seiten-Chat. Jede besitzt fachlichen State + Lifecycle.
+- **24 Sub-Komponenten** in [public/js/cards/](public/js/cards/) — eine pro UI-Karte. Buchebene: Figuren, Orte, Szenen, Ereignisse, Stil, Fehler-Heatmap, BookStats, BookSettings, UserSettings, Kontinuität, Ideen, Finetune-Export, Buch-Chat, Buch-Review, Kapitel-Review, Palette. Editor-Subs: editor-find, editor-synonyme, editor-figur-lookup, editor-toolbar, editor-focus, lektorat-findings, page-history. Plus Seiten-Chat. Jede besitzt fachlichen State + Lifecycle.
 - **Im Root** verbleibt: `page-view`, `editor-edit`, `editor-utils`, Hash-Router, Auto-Save, Selection-Management, Navigation. Editor-UI-Slices wurden in eigene Cards extrahiert (Trampoline-Events aus dem Root, z.B. `editor:focus:toggle`).
 
 **Neue Karte anlegen:**
@@ -62,6 +62,7 @@ Der Frontend-Scope ist in **Alpine.data-Sub-Komponenten** aufgeteilt:
 3. Partial in `public/partials/xxx.html` mit `x-data="xxxCard"` am Wurzel-`<div class="card">`. Root-Zugriffe im Template via `$app.xxx`.
 4. Root-Methode `toggleXxxCard()` in `app-view.js` — reiner Flag-Toggle + `_closeOtherMainCards`. Bei Karten, die bei erneutem Klick refreshen sollen (statt schliessen): `window.dispatchEvent(new CustomEvent('card:refresh', { detail: { name: 'xxx' } }))`.
 5. `showXxxCard`-Flag in `app-state.js` → `cardsState`.
+6. **Eintrag in [public/js/cards/feature-registry.js](public/js/cards/feature-registry.js)** (Single Source of Truth für Quick-Pills + Command-Palette + Usage-Tracking) — bei `kind: 'toggle'` zusätzlich Key in `ALLOWED_KEYS` von [routes/usage.js](routes/usage.js) ergänzen, sonst verwirft `/usage/track` lautlos.
 
 ### Root-Zugriff aus Sub-Komponenten (`$app` / `window.__app`)
 
@@ -99,14 +100,40 @@ Immer nur eine Hauptansicht aktiv. Buchebenen-Features und Seitenebenen-Features
 - Sub-Komponenten haben **keine** eigenen `showXxxCard`-Flags — der Root ist SSoT. Subs hören auf `$watch(() => window.__app.showXxxCard)`.
 - Seiten-Chat ist eine Ausnahme: läuft neben dem Editor, kein `_closeOtherMainCards` beim Öffnen.
 
+## Command-Palette + Feature-Registry
+
+**SSoT für UI-Features:** [public/js/cards/feature-registry.js](public/js/cards/feature-registry.js) listet alle Karten (`kind: 'toggle'`), globalen Aktionen und Such-Provider. Quick-Pills, Command-Palette und Usage-Tracking lesen ausschliesslich daraus.
+
+**Palette:** [public/js/cards/palette-card.js](public/js/cards/palette-card.js) — Modal mit Such-Input + Sektionen aus Karten + globalen Aktionen + Such-Providern. Trigger: Cmd/Ctrl+K bzw. `/`. Prefix-Modi: `>` Befehle, `#` Seiten, `!` Kapitel, `@` Figuren, `$` Orte, `%` Szenen. Ohne Prefix: alles fuzzy gemixt (Score-Threshold in `FUZZY_THRESHOLD_PER_CHAR`).
+
+**Karten-Keys synchron halten:** Wer eine neue Toggle-Karte hinzufügt, ergänzt sie in `FEATURES` (feature-registry) **und** in `ALLOWED_KEYS` von [routes/usage.js](routes/usage.js). Sonst wird `/usage/track` lautlos verworfen → keine Recency-Position in der Palette.
+
+**Recency:** [public/js/features-usage.js](public/js/features-usage.js) wird in den Root gespreaded; `$watch` auf jeden Show-Flag (rising edge) ruft `/usage/track`. Beim Login lädt `/usage/recent` die letzten Keys; Fallback: `DEFAULT_RECENT_KEYS` aus feature-registry.
+
+## Lazy-Loaded Libs
+
+vis-network (Figuren-Graph) und Chart.js (BookStats) laden ausschliesslich on-demand via [public/js/lazy-libs.js](public/js/lazy-libs.js). Kein neuer `<script>`-Tag im `index.html` für grosse Libs — vorher blockten sie ~800 KB unbenutzte JS am initialen Page-Load.
+
 ## Prompt-System
 
-**Zwei Dateien, klare Trennung:**
+**Trennung Config vs. Code:**
 - `prompt-config.json` (Projektroot, Pflichtdatei) — Rollenformulierungen, Basisregeln, Buchtypen pro Sprache. Fehlt sie → Server-Crash beim Start.
-- `public/js/prompts.js` — JSON-Schemas, Build-Logik, `configurePrompts()`. Wird sowohl vom Server (dynamic `import()`) als auch vom Frontend (ESM) geladen.
+- `public/js/prompts.js` — Facade (Re-Exports + `configurePrompts`-Orchestrator). Externer Einstieg für Server (dynamic `import()`) und Frontend (ESM).
+- `public/js/prompts/` — interne Aufteilung nach Job-Typ:
+  - `state.js` — `_isLocal`-Flag, `_jsonOnly()`, `JSON_ONLY`-Konstante (geteilter Provider-State)
+  - `schema-utils.js` — Schema-Atome (`_obj`, `_str`, `_num`)
+  - `blocks.js` — wiederverwendbare Regel-Blöcke (Stil, Wiederholung, Schwache Verben, Show-vs-Tell, Passiv, Perspektivbruch, Tempuswechsel, Erzählform)
+  - `core.js` — `configureLocales`, `getLocalePromptsForBook`, alle `SYSTEM_*` Live-Exports, `PROMPTS_VERSION`, Locale-State
+  - `lektorat.js` — Seiten-Lektorat (Einzel + Batch) + Stilkorrektur + `SCHEMA_LEKTORAT` (rebuild-pflichtig)
+  - `review.js` — Buch-/Kapitel-Bewertung + statische Schemas
+  - `komplett.js` — Komplettanalyse-Pipeline (Extraktion, Soziogramm, Orte, Kontinuität, Zeitstrahl) + alle dynamischen Schemas
+  - `chat.js` — Seiten-Chat + Buch-Chat (klassisch + Agentic) + `BOOK_CHAT_TOOLS`
+  - `synonym.js` — Synonym-Suche
+  - `finetune.js` — Finetune-Export-Augmentation
+- **Reihenfolge in `configurePrompts`:** `_setIsLocal(provider)` → `_rebuildLektoratSchema()` → `_rebuildKomplettSchemas()` → `configureLocales(cfg)`. Schemas vor `configureLocales`, weil `_buildLocalePrompts` → `buildSystemKomplett*` den `_isLocal`-Flag liest.
 
 **Ladereihenfolge:**
-- Server: `routes/jobs.js` und `routes/chat.js` lesen `prompt-config.json` synchron beim Modulstart → `configurePrompts()` einmalig. `routes/proxies.js` liefert die Config lazy beim ersten `/config`-Call ans Frontend.
+- Server: `routes/jobs.js` und `routes/chat.js` lesen `prompt-config.json` synchron beim Modulstart → `configurePrompts()` einmalig (via `lib/prompts-loader.js`). `routes/proxies.js` liefert die Config lazy beim ersten `/config`-Call ans Frontend.
 - Frontend: `app.js` → `init()` → `configurePrompts(cfg.promptConfig)` → setzt `SYSTEM_*`-Variablen via ESM-Live-Binding.
 
 **Buchtypen:** In `prompt-config.json` unter `buchtypen`, aufgeteilt nach Sprachcode (`de`, `en`). Jeder Key hat `label` + `zusatz`. Neuer Typ: in beiden Sprachen ergänzen.
@@ -117,9 +144,9 @@ Immer nur eine Hauptansicht aktiv. Buchebenen-Features und Seitenebenen-Features
 
 DB-Code ist auf 6 Files in [db/](db/) verteilt: [connection.js](db/connection.js) (better-sqlite3-Setup), [migrations.js](db/migrations.js) (Schema + `runMigrations`), [schema.js](db/schema.js), [figures.js](db/figures.js), [pages.js](db/pages.js), [tokens.js](db/tokens.js).
 
-**Migration hinzufügen:** Neuen `if (version < N)`-Block in `runMigrations()` (in [db/migrations.js](db/migrations.js)) ergänzen (N = nächste fortlaufende Nummer, aktuell bei 62) + `UPDATE schema_version SET version = N`. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` — keine Versionierung nötig.
+**Migration hinzufügen:** Neuen `if (version < N)`-Block in `runMigrations()` (in [db/migrations.js](db/migrations.js)) ergänzen (N = nächste fortlaufende Nummer, aktuell bei 65) + `UPDATE schema_version SET version = N`. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` — keine Versionierung nötig.
 
-**Neuer Beziehungstyp:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Neuen Typ in der `BZ`-Konstante (Frontend-Rendering) und im Claude-Prompt (`FINAL_SCHEMA` in `prompts.js`) ergänzen.
+**Neuer Beziehungstyp:** Keine Schemaänderung. `figure_relations.typ` ist Freitext. Neuen Typ in der `BZ`-Konstante (Frontend-Rendering) und im Claude-Prompt (`FIGUREN_BASIS_SCHEMA` in `public/js/prompts/komplett.js`) ergänzen.
 
 ## Architektur-Überblick
 
@@ -134,7 +161,13 @@ Browser → NGINX (HTTPS) → Express (Port 3737)
   /chat/*    → Seiten-Chat (SSE-Streaming) + Buch-Chat-Sessions
   /history/* → Job-Verlauf (SQLite)
   /figures/* → Figuren-CRUD (SQLite)
-  /sync/*    → Buchstatistik-Sync (manuell + Cron)
+  /locations/*    → Orte-CRUD (SQLite)
+  /ideen/*        → Ideen-CRUD (SQLite)
+  /booksettings/* → Per-Buch-Settings (Buchtyp, Freitext)
+  /me/*           → User-Settings (Sprache, Modell-Override)
+  /sync/*         → Buchstatistik-Sync (manuell + Cron)
+  /export/*       → Buch-Export (BookStack /export/{fmt} mit Timestamp-Filename)
+  /usage/*        → Feature-Usage-Tracking (Recency für Palette/Quick-Pills)
   /          → public/index.html (SPA)
 
 Cron (täglich 02:00) → syncAllBooks() → page_stats + book_stats_history
@@ -216,7 +249,14 @@ Winston (`logger.js`): Level `info`, Ausgabe in `lektorat.log` (5 MB, 3 Dateien 
 ```
 server.js              – Express-Setup, Auth-Guard, Cron, Route-Mounting
 logger.js              – Winston-Config
-lib/ai.js              – callAI(), Provider-Dispatch, JSON-Parsing
+lib/
+  ai.js                – callAI(), Provider-Dispatch, JSON-Parsing
+  bookstack.js         – authHeader, bsGet, bsGetAll-Paginierung
+  crypto.js            – AES-256-GCM für persistierte Tokens (`enc:v1:`-Prefix)
+  filenames.js         – Einheitlicher Filename-Builder mit Timestamp + Slug
+  page-index.js        – Pro-Seite-Metriken (Pronomen, Dialog, Figuren-Mentions) für Agentic Buch-Chat
+  prompts-loader.js    – Lazy-Import von public/js/prompts.js aus CJS-Kontext
+  validate.js          – Eingabe-Validierung an Request-Grenzen (strikte Int-Parser)
 db/                    – SQLite split: connection, migrations, schema,
                          figures, pages, tokens
 routes/
@@ -234,11 +274,16 @@ routes/
   jobs/finetune-export/    – Finetune-Sample-Generator (eigener Router)
   jobs/narrative-labels.js – POV-/Tempus-Labels (Helper, kein Router)
   chat.js                  – Seiten-Chat (SSE)
+  export.js                – BookStack-Buch-Export (Timestamp-Filename)
+  usage.js                 – Feature-Usage-Tracking (ALLOWED_KEYS-Allowlist)
   figures.js, locations.js, history.js, sync.js, booksettings.js,
   usersettings.js, ideen.js
 public/
   index.html           – SPA-Shell
-  style.css            – Alle Styles (einzige Quelle)
+  css/                 – 39 thematische Stylesheets, geladen via 39 <link>-Tags
+                         in index.html. Reihenfolge = Cascade-Reihenfolge.
+                         tokens.css (Custom-Props, Dark-Theme, Fonts) UNLAYERED;
+                         alle anderen via @layer base/components/utilities
   partials/            – HTML-Partials, geladen per _loadPartials()
   js/app.js            – Alpine-Root (`x-data="lektorat"`), Methoden-Spreads,
                          `$app`-Magic, window.__app-Referenz
@@ -249,10 +294,15 @@ public/
   js/app-ui.js         – Filter-/Sort-Helper, Partial-Loader
   js/app-jobs-core.js  – Job-Queue, checkPendingJobs, _startPoll-Wrapper
   js/app-hash-router.js, app-navigation.js, app-chrome.js, app-komplett.js
-  js/cards/            – Alpine.data-Sub-Komponenten (25 Karten + Shared)
+  js/cards/            – Alpine.data-Sub-Komponenten (24 Karten + Shared)
     catalog-store.js          – Alpine.store('catalog') für figuren/orte/szenen/globalZeitstrahl
+    feature-registry.js       – SSoT für Karten-Features + Aktionen + Provider-Hooks
+                                (gelesen von Quick-Pills, Command-Palette, Usage-Tracking)
     job-helpers.js            – pure `startPoll(ctx, cfg)` + `runningJobStatus(translate, …)`
     job-feature-card.js       – `createCardJobFeature(cfg)` für Sub-Komponenten
+    palette-card.js           – Command-Palette (Cmd/Ctrl+K, `/`)
+    palette-fuzzy.js          – Fuzzy-Match + Highlight
+    palette-providers.js      – Such-Provider (Seiten, Kapitel, Figuren, Orte, Szenen)
     stil-card.js, fehler-heatmap-card.js, book-stats-card.js
     book-settings-card.js, user-settings-card.js
     kontinuitaet-card.js, ereignisse-card.js, orte-card.js, szenen-card.js
@@ -263,8 +313,14 @@ public/
     editor-find-card.js, editor-synonyme-card.js, editor-figur-lookup-card.js,
     editor-toolbar-card.js, editor-focus-card.js
     lektorat-findings-card.js, page-history-card.js
-  js/prompts.js        – Prompt-Schemas + Build-Logik (shared Server/Frontend)
+  js/prompts.js        – Facade: Re-Exports + configurePrompts-Orchestrator
+  js/prompts/          – Submodule pro Job-Typ (state, schema-utils, blocks, core,
+                         lektorat, review, komplett, chat, synonym, finetune)
   js/utils.js          – Gemeinsame Hilfsfunktionen
+  js/lazy-libs.js      – On-demand-Loader für vis-network und Chart.js
+                         (kein Eager-Load — sparte ~800 KB JS am initialen Page-Load)
+  js/features-usage.js – Root-Spread: $watch auf Show-Flags, POST /usage/track,
+                         GET /usage/recent für Palette-Section „Zuletzt"
   js/chat-base.js      – Geteilte Chat-Methoden (spreaded in chat-card + book-chat-card)
   js/*.js              – Fachmodule, die in Sub-Komponenten oder Root gespreadet werden
                          (figuren, orte, szenen, kontinuitaet, graph, review,
@@ -286,10 +342,8 @@ public/
 
 `npm test` führt Unit- und E2E-Tests nacheinander aus. Einzeln: `npm run test:unit` (Node built-in, Millisekunden, kein Browser) oder `npm run test:e2e` (Playwright, Chromium nötig). Setup: [tests/](tests/), [playwright.config.js](playwright.config.js).
 
-**Unit** (`tests/unit/*.test.js`, `node --test`):
-- [tests/unit/ai.test.js](tests/unit/ai.test.js) – `parseJSON`/`extractBalancedJson`: JSON-Fallback-Kette in [lib/ai.js](lib/ai.js).
-- [tests/unit/bookstack.test.js](tests/unit/bookstack.test.js) – `authHeader`, `bsGet`, `bsGetAll`-Paginierung aus [lib/bookstack.js](lib/bookstack.js) (fetch gestubbt).
-- [tests/unit/page-index.test.js](tests/unit/page-index.test.js) – Stil-/Figuren-Metriken (`computeStyleStats`, `computeFigureMentions`, Tokenizer).
+**Unit** (`tests/unit/*.test.{js,mjs}`, `node --test`) — 15 Suiten, decken ab:
+- JSON-Fallback-Kette ([ai.test.js](tests/unit/ai.test.js)), BookStack-Pagination ([bookstack.test.js](tests/unit/bookstack.test.js)), Stil-/Figuren-Metriken ([page-index.test.js](tests/unit/page-index.test.js)), Prompts-Build ([prompts.test.mjs](tests/unit/prompts.test.mjs)), XSS-Escape-Invariante ([escape-xss.test.mjs](tests/unit/escape-xss.test.mjs)), Request-Validierung ([validate.test.js](tests/unit/validate.test.js)), Job-Reconnect-Events ([job-reconnect.test.mjs](tests/unit/job-reconnect.test.mjs)), Hash-Router ([hash-router.test.mjs](tests/unit/hash-router.test.mjs)), Card-Exklusivität ([card-exclusivity.test.mjs](tests/unit/card-exclusivity.test.mjs)), Editor-Focus-Granularität ([editor-focus.test.mjs](tests/unit/editor-focus.test.mjs), [focus-granularity.test.mjs](tests/unit/focus-granularity.test.mjs)), Szenen-Filter ([szenen-filter.test.mjs](tests/unit/szenen-filter.test.mjs)), Ideen-Prompt + Schema ([ideen-prompt.test.mjs](tests/unit/ideen-prompt.test.mjs), [ideen-schema.test.js](tests/unit/ideen-schema.test.js)), Shared-Jobs-Helper ([shared-jobs.test.js](tests/unit/shared-jobs.test.js)).
 
 **E2E** (`tests/e2e/*.spec.js`, Playwright):
 - [tests/e2e/focus-editor.spec.js](tests/e2e/focus-editor.spec.js) – Fokus-Editor: Toggle, Recenter, Pointer-Schonfrist, Cleanup/Leak-Freiheit.

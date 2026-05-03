@@ -27,19 +27,71 @@
       window.__themePref = pref;
     })();
   </script>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout-base.css">
+  <link rel="stylesheet" href="css/header-actions.css">
+  <link rel="stylesheet" href="css/book-settings.css">
+  <link rel="stylesheet" href="css/komplett-status.css">
+  <link rel="stylesheet" href="css/token-setup.css">
+  <link rel="stylesheet" href="css/row.css">
+  <link rel="stylesheet" href="css/card-form.css">
+  <link rel="stylesheet" href="css/buttons-badges.css">
+  <link rel="stylesheet" href="css/findings.css">
+  <link rel="stylesheet" href="css/page-list.css">
+  <link rel="stylesheet" href="css/analysis.css">
+  <link rel="stylesheet" href="css/page-view.css">
+  <link rel="stylesheet" href="css/focus-mode.css">
+  <link rel="stylesheet" href="css/synonym-menu.css">
+  <link rel="stylesheet" href="css/edit-toolbar.css">
+  <link rel="stylesheet" href="css/find-replace.css">
+  <link rel="stylesheet" href="css/figur-lookup.css">
+  <link rel="stylesheet" href="css/lektorat.css">
+  <link rel="stylesheet" href="css/tree-history.css">
+  <link rel="stylesheet" href="css/tokens-est.css">
+  <link rel="stylesheet" href="css/figuren.css">
+  <link rel="stylesheet" href="css/zeitleiste.css">
+  <link rel="stylesheet" href="css/szenen.css">
+  <link rel="stylesheet" href="css/search.css">
+  <link rel="stylesheet" href="css/feature-tiles.css">
+  <link rel="stylesheet" href="css/heatmap.css">
+  <link rel="stylesheet" href="css/misc.css">
+  <link rel="stylesheet" href="css/chat.css">
+  <link rel="stylesheet" href="css/synonyme.css">
+  <link rel="stylesheet" href="css/twocolumn.css">
+  <link rel="stylesheet" href="css/kapitel-review.css">
+  <link rel="stylesheet" href="css/utilities.css">
+  <link rel="stylesheet" href="css/schauplaetze.css">
+  <link rel="stylesheet" href="css/kontinuitaet.css">
+  <link rel="stylesheet" href="css/confirm-dialog.css">
+  <link rel="stylesheet" href="css/ideen.css">
+  <link rel="stylesheet" href="css/safari-fallback.css">
   <link rel="preload" href="fonts/Inter.var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/SourceSerif4.var.woff2" as="font" type="font/woff2" crossorigin>
   <script type="module" src="js/app.js"></script>
   <!-- vis-network und Chart.js werden lazy aus public/js/lazy-libs.js nachgeladen,
        sobald die jeweilige Karte (Figuren-Graph / BookStats) geöffnet wird. -->
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+  <!-- Privacy-friendly analytics by Plausible (self-hosted). Nur auf Produktion (kein localhost/.local). -->
+  <script>
+    (function () {
+      var h = location.hostname;
+      if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.endsWith('.local')) return;
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://analytics.david-berger.ch/js/pa-88MHJ1lIXYZYeHM5hVZIA.js';
+      document.head.appendChild(s);
+      window.plausible = window.plausible || function () { (plausible.q = plausible.q || []).push(arguments) };
+      plausible.init = plausible.init || function (i) { plausible.o = i || {} };
+      plausible.init({ hashBasedRouting: true });
+    })();
+  </script>
 </head>
 <body x-data="lektorat"
       @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading && !focusMode) runCheck()"
       @keydown.ctrl.s.prevent.window="if (editMode) quickSave()"
       @keydown.meta.s.prevent.window="if (editMode) quickSave()"
-      @keydown.window="handleShortcutsHotkey($event); handleFocusHotkey($event); handleNavHotkey($event); handleChordHotkey($event); handleFindingsHotkey($event); handleTreeKeydown($event)"
+      @keydown.window="handleShortcutsHotkey($event); handleFocusHotkey($event); handleNavHotkey($event); handleFindingsHotkey($event); handleTreeKeydown($event)"
       @app-update-available.window="updateAvailable = true">
 
 <a class="skip-link" href="#main-content" x-text="t('a11y.skipToMain')"></a>

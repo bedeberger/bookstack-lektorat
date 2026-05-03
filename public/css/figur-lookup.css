@@ -1,0 +1,93 @@
+@layer components {
+/* === Figuren-Lookup-Popover (Ctrl/Cmd-Klick im Editor) === */
+.figur-lookup {
+  position: fixed;
+  z-index: 1000;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px var(--color-shadow-med);
+  min-width: 220px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+}
+.figur-lookup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+.figur-lookup-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+.figur-lookup-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--color-muted);
+  padding: 0 4px;
+}
+.figur-lookup-close:hover { color: var(--color-text); }
+.figur-lookup-body {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+.figur-lookup-row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.figur-lookup-label {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+}
+.figur-lookup-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.figur-lookup-meta {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+.figur-lookup-footer {
+  border-top: 1px solid var(--color-border);
+}
+.figur-lookup-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  text-align: left;
+  transform: none;
+}
+.figur-lookup-link:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.figur-lookup-link:active { transform: none; }
+.figur-lookup-link::after {
+  content: '›';
+  font-size: 1rem;
+  line-height: 1;
+  opacity: 0.5;
+}
+
+}

@@ -4,7 +4,6 @@
 // Overlay dokumentiert nur.
 //
 // Dieses Modul liefert ausserdem:
-//  - Chord-Hotkeys (`g f`, `g o` …) für Kartenwechsel.
 //  - Findings-Sprung Alt+J/K im Editor.
 //  - Tree-Pfeilnavigation für die Sidebar (auch ohne aktive Suche).
 //  - `trapFocus(event, rootEl)`-Helper für Modal-Inline-Nutzung.
@@ -17,38 +16,8 @@ const FOCUSABLE = [
 
 const visible = (el) => !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
 
-// Chord-Buffer: erste Taste (z.B. `g`) öffnet ein Zeitfenster, in dem die
-// nächste Taste die Aktion auswählt. Konflikt mit normalem Tippen: nur ausser-
-// halb von Inputs/Editor aktiv (siehe _shortcutHotkeyAllowed).
-const CHORD_LEAD = 'g';
-const CHORD_TIMEOUT_MS = 1500;
-
-const CHORD_MAP = {
-  // Buchanalyse
-  r: 'toggleBookReviewCard',
-  f: 'toggleFiguresCard',
-  s: 'toggleSzenenCard',
-  e: 'toggleEreignisseCard',
-  o: 'toggleOrteCard',
-  k: 'toggleKontinuitaetCard',
-  t: 'toggleStilCard',          // sTil
-  h: 'toggleFehlerHeatmapCard', // Heatmap
-  b: 'toggleBookStatsCard',     // Buchstats
-  c: '_chordChat',              // Seiten-Chat wenn Editor offen, sonst Buch-Chat
-  i: 'toggleIdeenCard',         // nur im Seitenkontext
-  // Settings (Komma-Konvention für Settings)
-  ',': 'toggleUserSettingsCard',
-  ';': 'toggleBookSettingsCard',
-  x: 'toggleFinetuneExportCard',
-};
-
 export const shortcutsMethods = {
   showShortcutsOverlay: false,
-
-  // Chord-State (kein init nötig — Reactive nicht erforderlich, Buffer ist
-  // ephemer).
-  _chordPrefix: null,
-  _chordTimer: null,
 
   toggleShortcutsOverlay() {
     this.showShortcutsOverlay = !this.showShortcutsOverlay;
@@ -75,7 +44,7 @@ export const shortcutsMethods = {
     }
   },
 
-  // `?` und `g`-Chord in Inputs/Textareas/CE nicht abfangen.
+  // `?` in Inputs/Textareas/CE nicht abfangen.
   _shortcutHotkeyAllowed(event) {
     const el = event.target;
     if (!el) return true;
@@ -205,37 +174,6 @@ export const shortcutsMethods = {
     } else if (key === 'k') {
       event.preventDefault();
       window.dispatchEvent(new CustomEvent('palette:open'));
-    }
-  },
-
-  // ── Chord-Hotkeys (g X) für Kartenwechsel ──────────────────────────────
-  _resetChord() {
-    this._chordPrefix = null;
-    if (this._chordTimer) { clearTimeout(this._chordTimer); this._chordTimer = null; }
-  },
-
-  _chordChat() {
-    // `g c` öffnet Seiten-Chat, wenn Editor aktiv; sonst Buch-Chat.
-    if (this.showEditorCard && this.currentPage) this.toggleChatCard();
-    else this.toggleBookChatCard();
-  },
-
-  handleChordHotkey(event) {
-    if (event.metaKey || event.ctrlKey || event.altKey) return;
-    if (!this._shortcutHotkeyAllowed(event)) return;
-    const k = (event.key || '').toLowerCase();
-    if (this._chordPrefix === CHORD_LEAD) {
-      const action = CHORD_MAP[k];
-      this._resetChord();
-      if (!action) return;
-      event.preventDefault();
-      if (typeof this[action] === 'function') this[action]();
-      return;
-    }
-    if (k === CHORD_LEAD) {
-      event.preventDefault();
-      this._chordPrefix = CHORD_LEAD;
-      this._chordTimer = setTimeout(() => this._resetChord(), CHORD_TIMEOUT_MS);
     }
   },
 

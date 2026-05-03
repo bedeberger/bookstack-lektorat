@@ -1,0 +1,96 @@
+@layer components {
+/* === Two-column Layout === */
+.layout {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 960px) {
+  .layout {
+    display: grid;
+    grid-template-columns: var(--sidebar-w, 280px) 1fr;
+    gap: 0 1.75rem;
+    align-items: start;
+  }
+}
+
+/* Resize-Handle: sitzt am rechten Rand der Sidebar, ragt halb in den
+   Grid-Gap. JS injiziert das Element in `.layout-sidebar` und schreibt
+   `--sidebar-w` auf `.layout`. Persistenz in localStorage('sidebar-width').
+   Mobile (<960px) hat keinen Grid → Handle versteckt.
+   Editor schrumpft mit (1fr), Chat/Ideen-Spalte bleibt fix bei 420px. */
+.layout-sidebar {
+  position: relative;
+}
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: calc(-1 * (1.75rem / 2) - 3px);
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+  z-index: 5;
+  touch-action: none;
+}
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle.dragging,
+.sidebar-resize-handle:focus-visible {
+  background: var(--color-accent-soft);
+  outline: none;
+}
+@media (max-width: 959.98px) {
+  .sidebar-resize-handle { display: none; }
+}
+body.sidebar-resizing {
+  cursor: col-resize !important;
+  user-select: none;
+}
+body.sidebar-resizing iframe {
+  pointer-events: none;
+}
+
+/* === Editor + Chat side-by-side === */
+@media (min-width: 1280px) {
+  .editor-chat-split {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 0 1rem;
+    align-items: start;
+  }
+  .editor-chat-split #chat-card,
+  .editor-chat-split #ideen-card {
+    position: sticky;
+    top: 1.5rem;
+  }
+  .editor-chat-split .chat-messages,
+  .editor-chat-split .ideen-list {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .editor-chat-split .lektorat-split {
+    grid-template-columns: 2fr 1fr;
+  }
+}
+
+
+/* === History-Section (sekundäres Panel, genutzt in Chat/Buchreview) === */
+/* Innerhalb der Card-Padding gehalten, damit die Trennlinie vor der History
+   exakt wie der Border-Bottom im .card-header aussieht (beide inset). */
+.card-history-section {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-border);
+}
+/* Variante ohne Trennlinie: wenn die History direkt auf den Card-Header
+   folgt (kein Output dazwischen), würde der Border-Top doppelt mit dem
+   Header-Border erscheinen. */
+.card-history-section--borderless {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+}

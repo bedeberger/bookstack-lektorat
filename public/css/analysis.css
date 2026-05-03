@@ -1,0 +1,191 @@
+@layer components {
+/* === Stil-/Analyseboxen === */
+.stilbox {
+  margin-top: 12px;
+  padding: 14px;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  line-height: 1.7;
+}
+
+
+.fazit {
+  margin-top: 8px;
+  margin-bottom: 16px;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.szene-item {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.szene-item:last-child { border-bottom: none; }
+
+.szene-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.szene-titel {
+  font-weight: 400;
+  font-size: var(--font-size-sm);
+}
+.szene-kommentar {
+  margin-top: 3px;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+/* === Buchbewertung === */
+.bewertung-stars {
+  font-size: var(--font-size-lg);
+}
+
+/* Sterne-Rating: zwei übereinander liegende Layer, Vordergrund-Width pro
+   Halbschritt-Klasse. Letter-spacing 0, damit halbe Breite optisch genau
+   zwischen zwei Sternen liegt. */
+.stars-rating {
+  position: relative;
+  display: inline-block;
+  line-height: 1;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+.stars-rating__bg { color: var(--color-border); }
+.stars-rating__fg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  width: 0;
+  color: var(--color-accent);
+}
+.stars-rating--n-1  .stars-rating__fg { width: calc(100% *  1 / 12); }
+.stars-rating--n-2  .stars-rating__fg { width: calc(100% *  2 / 12); }
+.stars-rating--n-3  .stars-rating__fg { width: calc(100% *  3 / 12); }
+.stars-rating--n-4  .stars-rating__fg { width: calc(100% *  4 / 12); }
+.stars-rating--n-5  .stars-rating__fg { width: calc(100% *  5 / 12); }
+.stars-rating--n-6  .stars-rating__fg { width: calc(100% *  6 / 12); }
+.stars-rating--n-7  .stars-rating__fg { width: calc(100% *  7 / 12); }
+.stars-rating--n-8  .stars-rating__fg { width: calc(100% *  8 / 12); }
+.stars-rating--n-9  .stars-rating__fg { width: calc(100% *  9 / 12); }
+.stars-rating--n-10 .stars-rating__fg { width: calc(100% * 10 / 12); }
+.stars-rating--n-11 .stars-rating__fg { width: calc(100% * 11 / 12); }
+.stars-rating--n-12 .stars-rating__fg { width: 100%; }
+
+.bewertung-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.bewertung-header-note {
+  font-size: var(--font-size-base);
+  color: var(--color-muted);
+}
+
+.bewertung-section { margin-top: 14px; }
+
+.bewertung-section-title {
+  font-weight: 400;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bewertung-section-text {
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+}
+
+/* === Listen === */
+.bullet-list { list-style: none; padding: 0; margin: 0; }
+.bullet-list li {
+  padding: 4px 0 4px 16px;
+  font-size: var(--font-size-base);
+  position: relative;
+  line-height: 1.5;
+}
+.bullet-list li::before         { content: '–'; position: absolute; left: 0; color: var(--color-subtle); }
+.bullet-list.pos li::before     { content: '+'; color: var(--color-ok-text); }
+.bullet-list.neg li::before     { content: '−'; color: var(--color-err-text); }
+
+/* === Section headings (in JS-generated output) === */
+.section-heading {
+  font-weight: 400;
+  font-size: var(--font-size-base);
+  margin-bottom: 8px;
+}
+
+.section-heading-top {
+  font-weight: 400;
+  font-size: var(--font-size-base);
+  margin: 14px 0 8px;
+}
+
+.finding-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.finding-toggle-group {
+  display: flex;
+  gap: 4px;
+}
+
+/* Eingearbeitete Korrekturen: kompakte Liste bereits gespeicherter Fehler,
+   deren Original-Text nicht mehr im Seiteninhalt vorkommt (wurde ersetzt).
+   Bewusst ruhiger gestaltet als die offenen Findings: keine farbigen Pills,
+   stattdessen Durchstrich am Original und Grid-Ausrichtung der Badge-Spalte. */
+.applied-history {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+.applied-history .section-heading {
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  margin-bottom: 10px;
+}
+.applied-history-item {
+  display: grid;
+  grid-template-columns: minmax(90px, max-content) minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 12px;
+  padding: 4px 0;
+  font-size: var(--font-size-sm);
+}
+.applied-history-item > .badge {
+  opacity: 0.75;
+  align-self: center;
+}
+.applied-history-text {
+  min-width: 0;
+  overflow-x: auto;
+  word-break: break-word;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+.applied-history .finding-original {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: var(--color-subtle);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-subtle);
+}
+.applied-history .finding-korrektur {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: var(--color-text);
+}
+
+}

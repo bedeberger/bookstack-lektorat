@@ -1,0 +1,18 @@
+@layer components {
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.row > * { flex: 1; }
+.row > button { flex: 0 0 auto; }
+
+@media (max-width: 480px) {
+  .row > select,
+  .row > .combobox-wrap,
+  .row > input { flex: 1 0 100%; }
+  .row > button { flex: 1; }
+}
+
+}
