@@ -131,8 +131,28 @@ export const kontinuitaetMethods = {
         const stelleMatch = fromStelle(issue.stelle_a) === f || fromStelle(issue.stelle_b) === f;
         if (!idMatch && !nameMatch && !stelleMatch) return false;
       }
+      if (this.kontinuitaetFilters.schwere) {
+        const s = issue.schwere || 'niedrig';
+        if (s !== this.kontinuitaetFilters.schwere) return false;
+      }
       return true;
     });
+  },
+
+  kontinuitaetIssuesSorted() {
+    const order = { kritisch: 0, mittel: 1, niedrig: 2 };
+    const list = this.kontinuitaetIssuesFiltered().slice();
+    list.sort((a, b) => {
+      const sa = order[a.schwere || 'niedrig'] ?? 2;
+      const sb = order[b.schwere || 'niedrig'] ?? 2;
+      return sa - sb;
+    });
+    return list;
+  },
+
+  // Stable-ish key für Selektion (issues haben keine ID).
+  kontinuitaetIssueKey(issue, i) {
+    return (issue.typ || '') + '|' + (issue.stelle_a || '') + '|' + (issue.stelle_b || '') + '|' + i;
   },
 
   kontinuitaetIssuesBySchwere() {

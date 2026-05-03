@@ -18,69 +18,102 @@
 
   <div x-show="!kontinuitaetResult && !kontinuitaetLoading && !kontinuitaetStatus" class="card-status" x-text="$app.t('common.noDataYet')"></div>
 
-  <!-- Filter-Leiste (ausserhalb x-if, damit Alpine x-effect die Parent-Reaktivität korrekt trackt) -->
-  <div x-show="kontinuitaetResult?.issues?.length > 0" class="filter-bar">
-    <div x-data="combobox($app.t('filter.figur'), $app.t('filter.allFiguren'))"
-         x-modelable="value" x-model="kontinuitaetFilters.figurId"
-         x-effect="options = $app.figuren.filter(f => (kontinuitaetResult?.issues||[]).some(i => i.fig_ids?.length ? i.fig_ids.includes(f.id) : (i.figuren||[]).includes(f.name))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
-         @click.outside="close()" @keydown="onKeydown($event)"
-         class="combobox-wrap combobox-wrap--compact">
-    </div>
-    <div x-data="combobox($app.t('filter.chapter'), $app.t('filter.allChapters'))"
-         x-modelable="value" x-model="kontinuitaetFilters.kapitel"
-         x-effect="options = kontinuitaetKapitelListe().map(k => ({value: k, label: k}))"
-         @click.outside="close()" @keydown="onKeydown($event)"
-         class="combobox-wrap combobox-wrap--compact">
-    </div>
-    <span class="filter-count" x-text="kontinuitaetResult ? kontinuitaetIssuesFiltered().length + ' / ' + kontinuitaetResult.issues.length : ''"></span>
-  </div>
-
-  <!-- Ergebnisse -->
   <template x-if="kontinuitaetResult">
     <div class="kontinuitaet-result">
 
-      <!-- Zusammenfassung -->
-      <div class="kontinuitaet-summary" x-text="kontinuitaetResult.summary"></div>
+      <!-- Zusammenfassung (klappbar) -->
+      <div x-show="kontinuitaetResult.summary" class="kontinuitaet-summary-wrap">
+        <button type="button"
+                class="kontinuitaet-summary-toggle"
+                @click="kontinuitaetSummaryOpen = !kontinuitaetSummaryOpen"
+                :aria-expanded="kontinuitaetSummaryOpen">
+          <span class="history-chevron" :class="{ open: kontinuitaetSummaryOpen }">›</span>
+          <span x-text="$app.t('kontinuitaet.summary')"></span>
+        </button>
+        <div x-show="kontinuitaetSummaryOpen" class="kontinuitaet-summary" x-cloak x-text="kontinuitaetResult.summary"></div>
+      </div>
+
+      <!-- Filter-Leiste -->
+      <div x-show="kontinuitaetResult?.issues?.length > 0" class="filter-bar">
+        <div class="kontinuitaet-filter-group">
+          <button type="button" class="kontinuitaet-filter-btn"
+                  :class="{ 'kontinuitaet-filter-btn--active': kontinuitaetFilters.schwere === '' }"
+                  @click="kontinuitaetFilters.schwere = ''" x-text="$app.t('common.all')"></button>
+          <button type="button" class="kontinuitaet-filter-btn kontinuitaet-filter-btn--kritisch"
+                  :class="{ 'kontinuitaet-filter-btn--active': kontinuitaetFilters.schwere === 'kritisch' }"
+                  @click="kontinuitaetFilters.schwere = kontinuitaetFilters.schwere === 'kritisch' ? '' : 'kritisch'"
+                  x-text="$app.t('kontinuitaet.severity.kritisch')"></button>
+          <button type="button" class="kontinuitaet-filter-btn kontinuitaet-filter-btn--mittel"
+                  :class="{ 'kontinuitaet-filter-btn--active': kontinuitaetFilters.schwere === 'mittel' }"
+                  @click="kontinuitaetFilters.schwere = kontinuitaetFilters.schwere === 'mittel' ? '' : 'mittel'"
+                  x-text="$app.t('kontinuitaet.severity.mittel')"></button>
+          <button type="button" class="kontinuitaet-filter-btn kontinuitaet-filter-btn--niedrig"
+                  :class="{ 'kontinuitaet-filter-btn--active': kontinuitaetFilters.schwere === 'niedrig' }"
+                  @click="kontinuitaetFilters.schwere = kontinuitaetFilters.schwere === 'niedrig' ? '' : 'niedrig'"
+                  x-text="$app.t('kontinuitaet.severity.niedrig')"></button>
+        </div>
+        <div x-data="combobox($app.t('filter.figur'), $app.t('filter.allFiguren'))"
+             x-modelable="value" x-model="kontinuitaetFilters.figurId"
+             x-effect="options = $app.figuren.filter(f => (kontinuitaetResult?.issues||[]).some(i => i.fig_ids?.length ? i.fig_ids.includes(f.id) : (i.figuren||[]).includes(f.name))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
+             @click.outside="close()" @keydown="onKeydown($event)"
+             class="combobox-wrap combobox-wrap--compact">
+        </div>
+        <div x-data="combobox($app.t('filter.chapter'), $app.t('filter.allChapters'))"
+             x-modelable="value" x-model="kontinuitaetFilters.kapitel"
+             x-effect="options = kontinuitaetKapitelListe().map(k => ({value: k, label: k}))"
+             @click.outside="close()" @keydown="onKeydown($event)"
+             class="combobox-wrap combobox-wrap--compact">
+        </div>
+        <span class="filter-count" x-text="kontinuitaetResult ? kontinuitaetIssuesSorted().length + ' / ' + kontinuitaetResult.issues.length : ''"></span>
+      </div>
 
       <!-- Keine Probleme -->
       <div x-show="kontinuitaetResult.issues?.length === 0" class="kontinuitaet-ok" x-text="$app.t('kontinuitaet.noIssues')"></div>
       <!-- Alle weggefiltert -->
-      <div x-show="kontinuitaetResult.issues?.length > 0 && kontinuitaetIssuesFiltered().length === 0" class="kontinuitaet-ok" x-text="$app.t('kontinuitaet.noMatch')"></div>
+      <div x-show="kontinuitaetResult.issues?.length > 0 && kontinuitaetIssuesSorted().length === 0" class="kontinuitaet-ok" x-text="$app.t('kontinuitaet.noMatch')"></div>
 
-      <!-- Probleme nach Schwere -->
-      <template x-for="[severity, issues] in Object.entries(kontinuitaetIssuesBySchwere()).filter(([,v]) => v.length > 0)" :key="severity">
-        <div>
-          <div class="kontinuitaet-group-header" :class="'kontinuitaet-group-header--' + severity">
-            <span x-text="$app.t('kontinuitaet.severity.' + severity)"></span> (<span x-text="issues.length"></span>)
-          </div>
-          <template x-for="(issue, i) in issues" :key="severity + i">
-            <div class="kontinuitaet-issue" :class="'kontinuitaet-issue--' + severity">
-              <div class="kontinuitaet-issue-header">
-                <span class="tag kontinuitaet-typ-tag" x-text="issue.typ"></span>
-                <span class="kontinuitaet-stellen">
-                  <template x-if="kontinuitaetResolveStelle(issue.stelle_a, issue, 'a')">
-                    <span class="internal-link" :title="$app.t('kontinuitaet.gotoTitle', { name: kontinuitaetResolveStelle(issue.stelle_a, issue, 'a').name })"
-                          @click="kontinuitaetGotoStelle(issue.stelle_a, issue, 'a')" x-text="issue.stelle_a"></span>
-                  </template>
-                  <template x-if="!kontinuitaetResolveStelle(issue.stelle_a, issue, 'a')">
-                    <span x-text="issue.stelle_a"></span>
-                  </template>
-                  <span class="kontinuitaet-arrow">↔</span>
-                  <template x-if="kontinuitaetResolveStelle(issue.stelle_b, issue, 'b')">
-                    <span class="internal-link" :title="$app.t('kontinuitaet.gotoTitle', { name: kontinuitaetResolveStelle(issue.stelle_b, issue, 'b').name })"
-                          @click="kontinuitaetGotoStelle(issue.stelle_b, issue, 'b')" x-text="issue.stelle_b"></span>
-                  </template>
-                  <template x-if="!kontinuitaetResolveStelle(issue.stelle_b, issue, 'b')">
-                    <span x-text="issue.stelle_b"></span>
-                  </template>
-                </span>
-              </div>
-              <p class="kontinuitaet-desc" x-text="issue.beschreibung"></p>
-              <p x-show="issue.empfehlung" class="kontinuitaet-empfehlung" x-text="'→ ' + issue.empfehlung"></p>
+      <!-- Flache Liste, sortiert nach Schwere -->
+      <div x-show="kontinuitaetIssuesSorted().length > 0" class="kontinuitaet-list">
+        <template x-for="(issue, i) in kontinuitaetIssuesSorted()" :key="kontinuitaetIssueKey(issue, i)">
+          <div>
+            <div class="kontinuitaet-row"
+                 :class="{ 'kontinuitaet-row--selected': selectedKontinuitaetIssueKey === kontinuitaetIssueKey(issue, i) }"
+                 @click="selectedKontinuitaetIssueKey = selectedKontinuitaetIssueKey === kontinuitaetIssueKey(issue, i) ? null : kontinuitaetIssueKey(issue, i)">
+              <span class="szenen-dot kontinuitaet-row-dot"
+                    :class="'kontinuitaet-dot--' + (issue.schwere || 'niedrig')"
+                    :title="$app.t('kontinuitaet.severity.' + (issue.schwere || 'niedrig'))"></span>
+              <span class="tag kontinuitaet-typ-tag" x-text="issue.typ"></span>
+              <span class="kontinuitaet-row-stellen">
+                <template x-if="kontinuitaetResolveStelle(issue.stelle_a, issue, 'a')">
+                  <span class="tag internal-link"
+                        :title="$app.t('kontinuitaet.gotoTitle', { name: kontinuitaetResolveStelle(issue.stelle_a, issue, 'a').name })"
+                        @click.stop="kontinuitaetGotoStelle(issue.stelle_a, issue, 'a')" x-text="issue.stelle_a"></span>
+                </template>
+                <template x-if="!kontinuitaetResolveStelle(issue.stelle_a, issue, 'a')">
+                  <span class="tag" x-text="issue.stelle_a"></span>
+                </template>
+                <span class="kontinuitaet-arrow">↔</span>
+                <template x-if="kontinuitaetResolveStelle(issue.stelle_b, issue, 'b')">
+                  <span class="tag internal-link"
+                        :title="$app.t('kontinuitaet.gotoTitle', { name: kontinuitaetResolveStelle(issue.stelle_b, issue, 'b').name })"
+                        @click.stop="kontinuitaetGotoStelle(issue.stelle_b, issue, 'b')" x-text="issue.stelle_b"></span>
+                </template>
+                <template x-if="!kontinuitaetResolveStelle(issue.stelle_b, issue, 'b')">
+                  <span class="tag" x-text="issue.stelle_b"></span>
+                </template>
+              </span>
+              <span class="history-chevron" :class="{ open: selectedKontinuitaetIssueKey === kontinuitaetIssueKey(issue, i) }">›</span>
             </div>
-          </template>
-        </div>
-      </template>
+            <div x-show="selectedKontinuitaetIssueKey === kontinuitaetIssueKey(issue, i)" class="kontinuitaet-detail" x-cloak>
+              <p x-show="issue.beschreibung" x-text="issue.beschreibung" class="kontinuitaet-detail-text"></p>
+              <div x-show="issue.empfehlung" class="kontinuitaet-meta-row">
+                <span class="kontinuitaet-meta-label" x-text="$app.t('kontinuitaet.empfehlung')"></span>
+                <span class="kontinuitaet-meta-value" x-text="issue.empfehlung"></span>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
 
     </div>
   </template>

@@ -17,7 +17,9 @@ export function registerKontinuitaetCard() {
     kontinuitaetLoading: false,
     kontinuitaetProgress: 0,
     kontinuitaetStatus: '',
-    kontinuitaetFilters: { figurId: '', kapitel: '' },
+    kontinuitaetFilters: { figurId: '', kapitel: '', schwere: '' },
+    selectedKontinuitaetIssueKey: null,
+    kontinuitaetSummaryOpen: false,
     _kontinuitaetPollTimer: null,
 
     _onBookChanged: null,
@@ -45,6 +47,8 @@ export function registerKontinuitaetCard() {
         this.kontinuitaetStatus = '';
         this.kontinuitaetFilters.figurId = '';
         this.kontinuitaetFilters.kapitel = '';
+        this.kontinuitaetFilters.schwere = '';
+        this.selectedKontinuitaetIssueKey = null;
         if (!window.__app.showKontinuitaetCard) return;
         if (!window.__app.selectedBookId) return;
         await this._loadKontinuitaetHistory();
@@ -62,6 +66,8 @@ export function registerKontinuitaetCard() {
         this.kontinuitaetLoading = false;
         this.kontinuitaetFilters.figurId = '';
         this.kontinuitaetFilters.kapitel = '';
+        this.kontinuitaetFilters.schwere = '';
+        this.selectedKontinuitaetIssueKey = null;
       };
       window.addEventListener('view:reset', this._onViewReset);
 

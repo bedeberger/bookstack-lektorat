@@ -494,6 +494,8 @@
   "kontinuitaet.severity.kritisch": "Critical",
   "kontinuitaet.severity.mittel":   "Medium",
   "kontinuitaet.severity.niedrig":  "Low",
+  "kontinuitaet.summary":           "Summary",
+  "kontinuitaet.empfehlung":        "Recommendation:",
 
   "bookstats.title":             "Book progress: {name}",
   "bookstats.lastSnapshot":      "Last snapshot: {date}",
