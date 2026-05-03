@@ -1,19 +1,25 @@
 <!-- Seiteneditor & Lektorat -->
 <div class="card" id="editor-card" x-show="showEditorCard" x-cloak>
-  <div class="card-header">
-    <div>
+  <div class="card-header card-header--editor">
+    <div class="card-header-titlebar">
       <span class="card-title" x-text="t('editor.title', { name: currentPage?.name || '–' })"></span>
-      <span class="save-indicator" x-show="lastSavedLabel()"
-            :class="{ 'save-indicator--draft': lastSavedKind() === 'draft', 'save-indicator--offline': saveOffline }"
-            x-text="lastSavedKind() === 'draft' ? t('editor.draft', { when: lastSavedLabel() }) : t('editor.saved', { when: lastSavedLabel() })"
-            :title="lastSavedKind() === 'draft' ? t('editor.draftTitle') : t('editor.savedTitle')"></span>
-      <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="tag tag--link" x-text="t('editor.openInBookstack')"></a>
-      <a x-show="currentPage?.url && currentPage?.revision_count > 0" :href="currentPage?.url + '/revisions'" target="_blank" rel="noopener" class="tag tag--link" :title="t('editor.revisionsTitle')" x-text="t('editor.revisions', { n: currentPage?.revision_count })"></a>
-      <span x-show="focusMode && editMode" class="focus-live-counter">
-        <span x-text="t('editor.focus.counterTotal', { words: focusCountWords, chars: focusCountChars })"></span>
-        <span class="focus-live-counter--today"
-              x-text="t('editor.focus.counterToday', { wordsDelta: focusCountWordsDelta, charsDelta: focusCountCharsDelta })"></span>
-      </span>
+      <div class="card-subline">
+        <span class="save-indicator" x-show="lastSavedLabel()"
+              :class="{ 'save-indicator--draft': lastSavedKind() === 'draft', 'save-indicator--offline': saveOffline }"
+              x-text="lastSavedKind() === 'draft' ? t('editor.draft', { when: lastSavedLabel() }) : t('editor.saved', { when: lastSavedLabel() })"
+              :title="lastSavedKind() === 'draft' ? t('editor.draftTitle') : t('editor.savedTitle')"></span>
+        <span class="card-subline-sep" aria-hidden="true" x-show="lastSavedLabel() && currentPage?.url">·</span>
+        <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="card-subline-link" x-text="t('editor.openInBookstack')"></a>
+        <span class="card-subline-sep" aria-hidden="true" x-show="currentPage?.url && currentPage?.revision_count > 0">·</span>
+        <a x-show="currentPage?.url && currentPage?.revision_count > 0" :href="currentPage?.url + '/revisions'" target="_blank" rel="noopener" class="card-subline-link" :title="t('editor.revisionsTitle')" x-text="t('editor.revisions', { n: currentPage?.revision_count })"></a>
+        <span x-show="focusMode && editMode" class="focus-live-counter">
+          <span x-text="t('editor.focus.counterTotal', { words: focusCountWords, chars: focusCountChars })"></span>
+          <span class="focus-live-counter--today"
+                x-text="t('editor.focus.counterToday', { wordsDelta: focusCountWordsDelta, charsDelta: focusCountCharsDelta })"></span>
+        </span>
+      </div>
+    </div>
+    <div class="card-header-aside">
       <span x-show="currentPage && tokEsts[currentPage.id]" class="tok-stats">
         <template x-if="tokEsts[currentPage?.id]?.words > 0">
           <span class="display-contents">
@@ -31,8 +37,7 @@
           <span class="tok-badge tok-empty" x-text="t('sidebar.empty')"></span>
         </template>
       </span>
-    </div>
-    <div class="card-actions">
+      <div class="card-actions">
       <template x-if="!editMode">
         <span class="display-contents">
           <button type="button" @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? t('editor.btn.pageEmpty') : t('editor.btn.checkTitle')" x-text="t('editor.btn.check')"></button>
@@ -62,6 +67,7 @@
           <button type="button" @click="toggleFocusMode()" :class="{ primary: focusMode }" :title="focusMode ? t('editor.btn.leaveFocusTitle') : t('editor.btn.enterFocusTitle')" x-text="focusMode ? t('editor.btn.leaveFocus') : t('editor.btn.focusShort')"></button>
         </span>
       </template>
+      </div>
     </div>
   </div>
   <div class="progress-bar-wrap" x-show="checkProgress > 0 || saveApplying != null">

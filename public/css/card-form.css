@@ -35,6 +35,66 @@
   letter-spacing: -0.01em;
 }
 
+/* Editor-Header: Title oben, Meta-Subline darunter, Aside (Tok-Stats + Buttons) rechts. */
+.card-header--editor { align-items: flex-start; }
+.card-header-titlebar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.card-header-titlebar .card-title { line-height: 1.2; }
+.card-subline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  line-height: 1.4;
+}
+.card-subline .save-indicator { margin-left: 0; }
+.card-subline-link {
+  color: var(--color-muted);
+  text-decoration: none;
+  border-bottom: 0.5px solid transparent;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.card-subline-link:hover {
+  color: var(--color-text);
+  border-bottom-color: var(--color-border);
+}
+.card-subline-sep {
+  color: var(--color-subtle);
+  user-select: none;
+}
+.card-header-aside {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.card-header-aside .tok-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 14px;
+  border-right: 0.5px solid var(--color-border);
+}
+@media (max-width: 700px) {
+  .card-header--editor { flex-direction: column; align-items: stretch; }
+  .card-header-aside { width: 100%; flex-wrap: wrap; }
+  .card-header-aside .tok-stats {
+    padding-right: 0;
+    border-right: none;
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+    border-bottom: 0.5px solid var(--color-border);
+    width: 100%;
+  }
+}
+
 /* === Form elements === */
 label {
   font-size: var(--font-size-sm);

@@ -14,6 +14,13 @@
   }
 }
 
+/* Grid-Items default `min-width: auto` → Inhalt mit `white-space: nowrap`
+   (z.B. Heatmap-Tabelle) sprengt 1fr-Spalte. `min-width: 0` lässt
+   `overflow-x: auto` der Kinder greifen. */
+.layout-main {
+  min-width: 0;
+}
+
 /* Resize-Handle: sitzt am rechten Rand der Sidebar, ragt halb in den
    Grid-Gap. JS injiziert das Element in `.layout-sidebar` und schreibt
    `--sidebar-w` auf `.layout`. Persistenz in localStorage('sidebar-width').
