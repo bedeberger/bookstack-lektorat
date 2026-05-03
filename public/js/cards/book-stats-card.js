@@ -20,6 +20,7 @@ export function registerBookStatsCard() {
 
     _onBookChanged: null,
     _onViewReset: null,
+    _onSelect: null,
 
     init() {
       // Öffnen: (Re-)Load der Daten.
@@ -51,11 +52,26 @@ export function registerBookStatsCard() {
         _destroyStatsChart();
       };
       window.addEventListener('view:reset', this._onViewReset);
+
+      // Deep-Link aus Overview-Tiles: metric + range vorab setzen, damit der
+      // Chart direkt mit dem gewünschten Filter rendert. Daten sind ggf. schon
+      // geladen (renderStatsChart() reicht), sonst zieht der showBookStatsCard-
+      // Watcher loadBookStats nach.
+      this._onSelect = (e) => {
+        const detail = e.detail || {};
+        if (detail.metric) this.bookStatsMetric = detail.metric;
+        if (detail.range != null) this.bookStatsRange = detail.range;
+        if (this.bookStatsData.length > 0) {
+          this.$nextTick(() => this.renderStatsChart());
+        }
+      };
+      window.addEventListener('book-stats:select', this._onSelect);
     },
 
     destroy() {
       if (this._onBookChanged) window.removeEventListener('book:changed', this._onBookChanged);
       if (this._onViewReset)   window.removeEventListener('view:reset',  this._onViewReset);
+      if (this._onSelect)      window.removeEventListener('book-stats:select', this._onSelect);
       _destroyStatsChart();
       _disconnectThemeObserver();
     },

@@ -324,6 +324,9 @@
   "overview.unit.figuren":       "characters",
   "overview.unit.total":         "total",
   "overview.unit.stark":         "strong",
+  "overview.unit.mittel":        "medium",
+  "overview.unit.schwach":       "weak",
+  "overview.szenenBreakdown":    "Strong: {stark} · Medium: {mittel} · Weak: {schwach}",
 
   "sidebar.pagesOf":             "Pages: {name}",
   "sidebar.loadPages":           "Load pages",

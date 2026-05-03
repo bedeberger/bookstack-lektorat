@@ -3,7 +3,7 @@
 // Start-Payload kapitelbezogen ist und die Poll-Logik
 // _kapitelReviewRunningChapterId trackt.
 
-import { fetchJson, escHtml, renderStars } from '../utils.js';
+import { fetchJson, escHtml, escMd, renderStars } from '../utils.js';
 import { startPoll, runningJobStatus } from './job-helpers.js';
 
 export function registerKapitelReviewCard() {
@@ -111,9 +111,9 @@ export function registerKapitelReviewCard() {
       let html = `
           <div class="bewertung-header">
             <span class="bewertung-stars">${stars}</span>
-            <span class="bewertung-header-note">${escHtml(r.gesamtnote_begruendung || '')}</span>
+            <span class="bewertung-header-note">${escMd(r.gesamtnote_begruendung || '')}</span>
           </div>
-          <div class="stilbox stilbox--review-summary">${escHtml(r.zusammenfassung || '')}</div>`;
+          <div class="stilbox stilbox--review-summary">${escMd(r.zusammenfassung || '')}</div>`;
       const sections = [
         ['dramaturgie', 'kapitelReview.section.dramaturgie'],
         ['pacing',      'kapitelReview.section.pacing'],
@@ -125,25 +125,25 @@ export function registerKapitelReviewCard() {
         if (r[key]) html += `
             <div class="bewertung-section">
               <div class="bewertung-section-title">${escHtml(t(i18n))}</div>
-              <p class="bewertung-section-text">${escHtml(r[key])}</p>
+              <p class="bewertung-section-text">${escMd(r[key])}</p>
             </div>`;
       }
       if (r.staerken?.length) html += `
             <div class="bewertung-section">
               <div class="bewertung-section-title">${escHtml(t('review.strengths'))}</div>
-              <ul class="bullet-list pos">${r.staerken.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
+              <ul class="bullet-list pos">${r.staerken.map(s => `<li>${escMd(s)}</li>`).join('')}</ul>
             </div>`;
       if (r.schwaechen?.length) html += `
             <div class="bewertung-section">
               <div class="bewertung-section-title">${escHtml(t('review.weaknesses'))}</div>
-              <ul class="bullet-list neg">${r.schwaechen.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
+              <ul class="bullet-list neg">${r.schwaechen.map(s => `<li>${escMd(s)}</li>`).join('')}</ul>
             </div>`;
       if (r.empfehlungen?.length) html += `
             <div class="bewertung-section">
               <div class="bewertung-section-title">${escHtml(t('review.section.empfehlungen'))}</div>
-              <ul class="bullet-list">${r.empfehlungen.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
+              <ul class="bullet-list">${r.empfehlungen.map(s => `<li>${escMd(s)}</li>`).join('')}</ul>
             </div>`;
-      if (r.fazit) html += `<div class="fazit fazit--review">${escHtml(r.fazit)}</div>`;
+      if (r.fazit) html += `<div class="fazit fazit--review">${escMd(r.fazit)}</div>`;
       return html;
     },
 

@@ -13,10 +13,10 @@ export function registerBookOverviewCard() {
     overviewCoverage: null,
     overviewHeat: null,
     overviewLastReview: null,
+    overviewPrevReview: null,
     overviewRecent: [],
-    overviewFigurenCount: 0,
-    overviewSzenenCount: 0,
-    overviewSzenenStark: 0,
+    overviewFiguren: [],
+    overviewSzenen: [],
 
     _onBookChanged: null,
     _onViewReset: null,

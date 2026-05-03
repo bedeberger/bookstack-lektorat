@@ -224,7 +224,22 @@ export const appJobsCoreMethods = {
     }
   },
 
-  navigateToJob(job) {
+  async navigateToJob(job) {
+    // Cross-Book-Klick: erst Buch wechseln (Reset + loadPages + Sub-Karten),
+    // dann Ziel öffnen. Watcher unterdrücken, damit _maybeOpenBookOverview
+    // nicht die unmittelbar folgende Ziel-Karte überlagert.
+    if (job.bookId && String(job.bookId) !== String(this.selectedBookId)) {
+      if (!this.books.some(b => String(b.id) === String(job.bookId))) return;
+      this._applyingHash = true;
+      try {
+        this.selectedBookId = String(job.bookId);
+        this._resetBookScopedState();
+        await this.loadPages();
+        await this._reloadVisibleBookCards();
+      } finally {
+        this._applyingHash = false;
+      }
+    }
     const map = {
       'review':           'toggleBookReviewCard',
       'komplett-analyse': 'toggleFiguresCard',
@@ -236,11 +251,11 @@ export const appJobsCoreMethods = {
     if (job.type === 'check') {
       const pageId = job.dedupId ?? job.bookId;
       const page = this.pages.find(p => String(p.id) === String(pageId));
-      if (page) this.selectPage(page);
+      if (page) await this.selectPage(page);
       return;
     }
     const method = map[job.type];
-    if (method && this[method]) this[method]();
+    if (method && this[method]) await this[method]();
   },
 
   // Prüft ob ein gespeicherter Job noch läuft und reconnected ggf.
