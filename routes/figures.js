@@ -159,7 +159,7 @@ router.get('/:book_id', (req, res) => {
     JOIN figures f ON f.id = ft.figure_id
     WHERE f.book_id = ? AND f.user_email = ?`).all(bookId, userEmail);
   const apps = db.prepare(`
-    SELECT fa.figure_id, fa.chapter_name, fa.haeufigkeit FROM figure_appearances fa
+    SELECT fa.figure_id, fa.chapter_id, fa.chapter_name, fa.haeufigkeit FROM figure_appearances fa
     JOIN figures f ON f.id = fa.figure_id
     WHERE f.book_id = ? AND f.user_email = ?`).all(bookId, userEmail);
   const evts = db.prepare(`
@@ -174,7 +174,7 @@ router.get('/:book_id', (req, res) => {
   const tagMap = {};
   for (const t of tags) (tagMap[t.figure_id] ??= []).push(t.tag);
   const appMap = {};
-  for (const a of apps) (appMap[a.figure_id] ??= []).push({ name: a.chapter_name, haeufigkeit: a.haeufigkeit });
+  for (const a of apps) (appMap[a.figure_id] ??= []).push({ chapter_id: a.chapter_id ?? null, name: a.chapter_name, haeufigkeit: a.haeufigkeit });
   const evtMap = {};
   for (const e of evts) (evtMap[e.figure_id] ??= []).push({ datum: e.datum, ereignis: e.ereignis, bedeutung: e.bedeutung, typ: e.typ || 'persoenlich', kapitel: e.kapitel || null, seite: e.seite || null });
   const relMap = {};

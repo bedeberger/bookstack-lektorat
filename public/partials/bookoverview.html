@@ -1,24 +1,11 @@
-<!-- Buch-Übersicht (Default-Home) -->
-<!--
-  Alpine.data-Sub-Komponente — siehe public/js/cards/book-overview-card.js.
-  Reine Datenaggregation aus existierenden Endpoints; kein KI-Job. Öffnet
-  sich automatisch beim Buchwechsel + bei resetView, wenn keine andere
-  Hauptkarte aktiv ist. Tiles sind klickbar und öffnen die jeweilige
-  Detail-Karte. Visualisierungen: Inline-SVG (Sparkline mit Gradient,
-  Donut-Ring, Bar-Chart, Stacked-Bar, Sterne) — kein Chart.js-Lazy-Load.
-
-  Aggregate (Sparkline, Coverage-Ring, Wertungs-Verteilung etc.) sind
-  Methoden, NICHT Getter — Object-Spread `{ ...bookOverviewMethods }` würde
-  Getter beim Spread evaluieren und die Werte einfrieren. Methoden werden
-  im Template mit `()` aufgerufen.
--->
+<!-- Buch-Übersicht (Default-Home) — Sub-Komponente, siehe public/js/cards/book-overview-card.js -->
 <div class="card book-overview" x-data="bookOverviewCard" x-show="$app.showBookOverviewCard" x-cloak>
   <div class="card-header">
     <span class="card-title" x-text="$app.t('overview.title', { name: $app.selectedBookName })"></span>
     <div class="card-actions">
       <a class="btn-bookstack-link" target="_blank" rel="noopener"
          x-show="$app.selectedBookUrl"
-         :href="$app.selectedBookUrl || '#'"
+         :href="$app.selectedBookUrl"
          x-text="$app.t('book.bookstack')"></a>
       <button type="button" @click="loadBookOverview($app.selectedBookId)" :disabled="overviewLoading">
         <span x-show="overviewLoading" class="spinner"></span>
@@ -36,7 +23,8 @@
     <!-- HERO: Snapshot mit Hero-Wortzahl + Sub-Stats -->
     <template x-if="overviewLatest()">
       <div class="overview-tile overview-tile--hero internal-link"
-           @click="window.dispatchEvent(new CustomEvent('book-stats:select', { detail: { metric: 'words', range: 30 } })); $app.toggleBookStatsCard()"
+           @click="_openWordsStats(30, 'words')"
+           :aria-label="$app.t('overview.snapshot') + ': ' + _fmtNum(overviewLatest()?.words) + ' ' + $app.t('bookstats.unit.w')"
            :title="$app.t('overview.openStats')">
         <div class="overview-tile-label" x-text="$app.t('overview.snapshot')"></div>
         <div class="overview-hero-row">
@@ -62,16 +50,19 @@
       </div>
     </template>
 
-    <!-- HERO: Sparkline mit Gradient-Fill + farb-codiert + Endpunkt-Marker -->
+    <!-- HERO: Sparkline mit Gradient-Fill + farb-codiert + Endpunkt-Marker.
+         SVG ist aria-hidden — Trend-Prozent darunter trägt die Info,
+         das Tile selbst hat ein zusammenfassendes aria-label. -->
     <template x-if="overviewSparkline().d">
       <div class="overview-tile overview-tile--hero internal-link"
-           @click="window.dispatchEvent(new CustomEvent('book-stats:select', { detail: { metric: 'words', range: 30 } })); $app.toggleBookStatsCard()"
+           @click="_openWordsStats(30, 'words')"
+           :aria-label="$app.t('overview.trend') + ', ' + $app.t('overview.trendDelta', { pct: (overviewSparkline().deltaPct >= 0 ? '+' : '') + overviewSparkline().deltaPct })"
            :title="$app.t('overview.openStats')">
         <div class="overview-tile-label" x-text="$app.t('overview.trend')"></div>
         <svg class="overview-sparkline"
              :viewBox="'0 0 ' + overviewSparkline().w + ' ' + overviewSparkline().h"
              preserveAspectRatio="none"
-             role="img" aria-hidden="true">
+             aria-hidden="true">
           <defs>
             <linearGradient :id="$id('sl-grad')" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%"   :style="'stop-color:' + overviewSparkline().color + ';stop-opacity:0.3'"></stop>
@@ -94,7 +85,8 @@
     <!-- 7-Tage-Balken: Mini-Bar-Chart Zeichen-Delta pro Tag -->
     <template x-if="overview7DayCharDelta() !== null">
       <div class="overview-tile internal-link"
-           @click="window.dispatchEvent(new CustomEvent('book-stats:select', { detail: { metric: 'delta_words', range: 7 } })); $app.toggleBookStatsCard()"
+           @click="_openWordsStats(7, 'delta_words')"
+           :aria-label="$app.t('overview.last7Days') + ': ' + (overview7DayCharDelta() >= 0 ? '+' : '') + _fmtNum(overview7DayCharDelta()) + ' ' + $app.t('bookstats.unit.z')"
            :title="$app.t('overview.openStats')">
         <div class="overview-tile-label" x-text="$app.t('overview.last7Days')"></div>
         <div class="overview-bars7">
@@ -122,10 +114,11 @@
     <template x-if="overviewCoverage && overviewCoverage.total_pages > 0">
       <div class="overview-tile internal-link"
            @click="$app.toggleFehlerHeatmapCard()"
+           :aria-label="$app.t('overview.lektorat') + ': ' + overviewCoverageRing().pct + '%, ' + $app.t('overview.coverageMeta', { checked: (overviewCoverage?.checked_pages ?? 0), total: (overviewCoverage?.total_pages ?? 0) })"
            :title="$app.t('overview.openHeatmap')">
         <div class="overview-tile-label" x-text="$app.t('overview.lektorat')"></div>
         <div class="overview-donut-row">
-          <svg class="overview-donut" viewBox="0 0 72 72" role="img" aria-hidden="true">
+          <svg class="overview-donut" viewBox="0 0 72 72" aria-hidden="true">
             <circle cx="36" cy="36" :r="overviewCoverageRing().r"
                     fill="none" stroke="var(--color-border)" stroke-width="6"></circle>
             <circle cx="36" cy="36" :r="overviewCoverageRing().r"
@@ -148,6 +141,7 @@
     <template x-if="overviewTopFehler().length > 0">
       <div class="overview-tile internal-link"
            @click="$app.toggleFehlerHeatmapCard()"
+           :aria-label="$app.t('overview.topErrors')"
            :title="$app.t('overview.openHeatmap')">
         <div class="overview-tile-label" x-text="$app.t('overview.topErrors')"></div>
         <ul class="overview-error-bars">
@@ -170,9 +164,10 @@
     <template x-if="overviewLastReview">
       <div class="overview-tile internal-link"
            @click="$app.toggleBookReviewCard()"
+           :aria-label="$app.t('overview.lastReview')"
            :title="$app.t('overview.openReview')">
         <div class="overview-tile-label" x-text="$app.t('overview.lastReview')"></div>
-        <div class="overview-stars" :aria-label="(overviewLastReview?.review_json?.gesamtnote ?? '–') + ' / 6'">
+        <div class="overview-stars" :aria-label="overviewStarsAriaLabel()">
           <template x-for="(s, i) in overviewStars(overviewLastReview?.review_json?.gesamtnote)" :key="i">
             <span class="overview-star"
                   :class="s.full ? 'overview-star--full' : s.half ? 'overview-star--half' : 'overview-star--empty'"
@@ -181,10 +176,10 @@
         </div>
         <div class="overview-review-meta">
           <span class="overview-review-date" x-text="$app.formatDate(overviewLastReview?.reviewed_at)"></span>
-          <span class="overview-review-trend" x-show="overviewReviewTrend()"
+          <span class="overview-review-trend" x-show="overviewReviewTrendDisplay()"
                 :class="overviewReviewTrend()?.dir === 'up' ? 'overview-trend-pct--up'
                       : overviewReviewTrend()?.dir === 'down' ? 'overview-trend-pct--down' : ''"
-                x-text="overviewReviewTrend() ? (overviewReviewTrend().dir === 'up' ? '↑ +' : overviewReviewTrend().dir === 'down' ? '↓ ' : '→ ') + (overviewReviewTrend().dir !== 'flat' ? Math.abs(overviewReviewTrend().delta) : '') : ''"></span>
+                x-text="overviewReviewTrendDisplay()"></span>
         </div>
       </div>
     </template>
@@ -193,6 +188,7 @@
     <template x-if="overviewFigurenCount() > 0">
       <div class="overview-tile internal-link"
            @click="$app.toggleFiguresCard()"
+           :aria-label="$app.t('tile.figuren') + ': ' + _fmtNum(overviewFigurenCount()) + ' ' + $app.t('overview.unit.figuren')"
            :title="$app.t('tile.figuren.title')">
         <div class="overview-tile-label" x-text="$app.t('tile.figuren')"></div>
         <div class="overview-fig-row">
@@ -218,6 +214,7 @@
     <template x-if="overviewSzenenCount() > 0">
       <div class="overview-tile internal-link"
            @click="$app.toggleSzenenCard()"
+           :aria-label="$app.t('tile.szenen') + ': ' + _fmtNum(overviewSzenenCount()) + ' ' + $app.t('overview.unit.total')"
            :title="$app.t('tile.szenen.title')">
         <div class="overview-tile-label" x-text="$app.t('tile.szenen')"></div>
         <div class="overview-fig-row">
@@ -259,18 +256,32 @@
 
     <!-- Kapitel-Verteilung: horizontale Bars pro Kapitel (Wörter relativ) -->
     <template x-if="overviewChapterDistribution().length > 0">
-      <div class="overview-tile overview-tile--wide">
-        <div class="overview-tile-label" x-text="$app.t('overview.chapterDist')"></div>
+      <div class="overview-tile overview-tile--medium">
+        <div class="overview-tile-head">
+          <div class="overview-tile-label" x-text="$app.t('overview.chapterDist')"></div>
+          <button type="button" class="overview-sort-btn"
+                  @click="cycleChapterSort()"
+                  :title="$app.t('overview.chapterSort.cycle')"
+                  x-text="chapterSortLabel()"></button>
+        </div>
         <ul class="overview-chapter-list">
           <template x-for="ch in overviewChapterDistribution()" :key="ch.id">
             <li class="overview-chapter-row internal-link"
-                @click="$app.kapitelReviewChapterId = String(ch.id); if (!$app.showKapitelReviewCard) $app.toggleKapitelReviewCard()"
+                :class="{ 'overview-chapter-row--max': ch.isMax, 'overview-chapter-row--min': ch.isMin }"
+                @click="_openKapitelReview(ch.id)"
                 :title="$app.t('overview.chapterReviewOpen', { name: ch.name })">
               <span class="overview-chapter-name" x-text="ch.name"></span>
               <div class="overview-chapter-bar-track">
                 <div class="overview-chapter-bar-fill" :style="{ width: ch.pct + '%' }"></div>
+                <div class="overview-chapter-median-tick"
+                     x-show="ch.medianPct > 0"
+                     :style="{ left: ch.medianPct + '%' }"
+                     :title="$app.t('overview.medianTick')"></div>
               </div>
               <span class="overview-chapter-meta">
+                <span class="overview-chapter-delta"
+                      :class="ch.deltaPct > 0 ? 'overview-trend-pct--up' : ch.deltaPct < 0 ? 'overview-trend-pct--down' : ''"
+                      x-text="(ch.deltaPct >= 0 ? '+' : '') + ch.deltaPct + '%'"></span>
                 <span class="overview-chapter-pages" x-text="ch.pages + ' ' + $app.t('bookstats.unit.s')"></span>
                 <span class="overview-chapter-words" x-text="_fmtNum(ch.words) + ' ' + $app.t('bookstats.unit.w')"></span>
               </span>
@@ -280,9 +291,88 @@
       </div>
     </template>
 
+    <!-- Figuren-Präsenz-Matrix: Top-5 Figuren × Kapitel.
+         Zeile = Figur, Spalte = Kapitel. Cell-Intensität = Häufigkeit (per Zeile skaliert).
+         Klick auf gefüllte Cell → Kapitel-Review. Leere Zellen = POV-Lücke. -->
+    <template x-if="overviewFigurePresence()">
+      <div class="overview-tile overview-tile--medium">
+        <div class="overview-tile-label" x-text="$app.t('overview.figPresence')"></div>
+        <div class="overview-presence-wrap">
+          <table class="overview-presence-matrix">
+            <thead>
+              <tr>
+                <th></th>
+                <template x-for="ch in overviewFigurePresence().chapters" :key="ch.id">
+                  <th class="overview-presence-col-head"
+                      :title="ch.name"
+                      x-text="ch.name"></th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="row in overviewFigurePresence().rows" :key="row.id">
+                <tr>
+                  <th class="overview-presence-row-head" :title="row.name" x-text="row.name"></th>
+                  <template x-for="cell in row.cells" :key="cell.chapterId">
+                    <td class="overview-presence-cell"
+                        :class="{
+                          'overview-presence-cell--empty': cell.value === 0,
+                          'internal-link': cell.value > 0
+                        }"
+                        :style="{ '--cell-intensity': cell.pct + '%' }"
+                        :title="cell.value > 0 ? $app.t('overview.figPresenceOpen', { figur: row.name, kapitel: cell.chapterName }) : (row.name + ' · ' + cell.chapterName + ': 0')"
+                        @click="cell.value > 0 && $app.openFigurMitKapitel(row.id, cell.chapterName)">
+                      <span class="overview-presence-fill"></span>
+                      <span class="overview-presence-num" x-show="cell.value > 0" x-text="cell.value"></span>
+                    </td>
+                  </template>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </template>
+
+    <!-- Lektorat-Findings pro Kapitel: aus Heatmap aggregiert.
+         per1k = Findings pro 1000 Wörter (normalisiert, damit kurze Kapitel
+         mit dichten Findings sichtbar werden). Sort: per1k desc.
+         Klick auf Tile-Header → Fehler-Heatmap; Zeilen sind nicht klickbar
+         (Heatmap zeigt eh alles). -->
+    <template x-if="overviewChapterFindings().length > 0">
+      <div class="overview-tile overview-tile--medium internal-link"
+           @click="$app.toggleFehlerHeatmapCard()"
+           :title="$app.t('overview.openHeatmap')">
+        <div class="overview-tile-label" x-text="$app.t('overview.chapterFindings')"></div>
+        <ul class="overview-chapter-list">
+          <template x-for="ch in overviewChapterFindings()" :key="ch.id">
+            <li class="overview-chapter-row"
+                :class="{ 'overview-chapter-row--nocheck': ch.noCheck }">
+              <span class="overview-chapter-name" x-text="ch.name"></span>
+              <div class="overview-chapter-bar-track">
+                <div class="overview-chapter-bar-fill overview-chapter-bar-fill--findings"
+                     :style="{ width: ch.pct + '%' }"></div>
+              </div>
+              <span class="overview-chapter-meta">
+                <span class="overview-chapter-per1k"
+                      x-show="!ch.noCheck"
+                      x-text="ch.per1k + ' ' + $app.t('overview.unit.per1k')"></span>
+                <span class="overview-chapter-count"
+                      x-show="!ch.noCheck"
+                      x-text="_fmtNum(ch.count) + ' ' + $app.t('overview.unit.findings')"></span>
+                <span class="overview-chapter-nocheck"
+                      x-show="ch.noCheck"
+                      x-text="$app.t('overview.unit.notChecked')"></span>
+              </span>
+            </li>
+          </template>
+        </ul>
+      </div>
+    </template>
+
     <!-- Zuletzt bearbeitet (Zeilen sind individuelle Links) -->
     <template x-if="overviewRecentPages().length > 0">
-      <div class="overview-tile overview-tile--wide">
+      <div class="overview-tile overview-tile--medium">
         <div class="overview-tile-label" x-text="$app.t('overview.recent')"></div>
         <ul class="overview-recent-list">
           <template x-for="p in overviewRecentPages()" :key="p.id">
@@ -300,8 +390,8 @@
       </div>
     </template>
 
-    <!-- Quick-Actions -->
-    <div class="overview-tile overview-tile--wide">
+    <!-- Quick-Actions: kein Daten-Tile, deshalb eigene Variante (kein Hover-Lift). -->
+    <div class="overview-tile overview-tile--medium overview-tile--actions">
       <div class="overview-tile-label" x-text="$app.t('overview.quickActions')"></div>
       <div class="overview-actions">
         <button type="button" class="btn-compact" @click="$app.toggleBookChatCard()" :disabled="!$app.pages.length" x-text="$app.t('tile.bookchat')"></button>

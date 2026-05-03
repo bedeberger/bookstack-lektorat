@@ -17,6 +17,7 @@ export function registerBookOverviewCard() {
     overviewRecent: [],
     overviewFiguren: [],
     overviewSzenen: [],
+    chapterSort: 'order', // 'order' | 'wordsDesc' | 'wordsAsc'
 
     _onBookChanged: null,
     _onViewReset: null,

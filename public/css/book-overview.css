@@ -7,6 +7,10 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
+  /* dense: kleine Tiles füllen Lücken zurück, die `--hero`/`--medium`/`--wide`
+     beim Zeilenumbruch lassen (Orphan-Cells). Verhindert Whitespace-Inseln,
+     wenn z.B. ein span-2-Tile 1 Slot frei lässt. */
+  grid-auto-flow: row dense;
 }
 
 .overview-tile {
@@ -39,10 +43,22 @@
 
 .overview-tile--wide { grid-column: 1 / -1; }
 
+/* Actions-Tile: Container für Quick-Action-Buttons, kein Daten-Tile.
+   Visuell zurückhaltender (gleicher Hintergrund wie Card-Body, keine
+   Hover-Lift-Animation), damit der Unterschied zu klickbaren Daten-Tiles
+   sichtbar ist. */
+.overview-tile--actions {
+  background: var(--color-surface);
+  border-style: dashed;
+}
+
 /* Hero-Tiles (Snapshot + Trend) sind doppelt so breit wie normale Tiles
-   auf grösseren Viewports — visuelle Hierarchie. */
+   auf grösseren Viewports — visuelle Hierarchie. Medium-Tiles (Presence,
+   Findings) ebenfalls span 2 — keine volle Zeilenbreite, sonst zu viel
+   Whitespace bei wenigen Spalten/kurzen Bars. */
 @media (min-width: 720px) {
   .overview-tile--hero { grid-column: span 2; }
+  .overview-tile--medium { grid-column: span 2; }
 }
 
 .overview-tile-label {
@@ -348,6 +364,30 @@
 .overview-stacked-key--mittel::before  { background: var(--color-warning, #c97a2b); }
 .overview-stacked-key--schwach::before { background: var(--color-danger,  #d32f2f); }
 
+/* ── Tile-Head (Label + Sort-Toggle) ─────────────────────────────────────── */
+.overview-tile-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.overview-sort-btn {
+  background: transparent;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.overview-sort-btn:hover {
+  border-color: var(--color-border-focus);
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+
 /* ── Kapitel-Verteilung: Horizontale Bars ────────────────────────────────── */
 .overview-chapter-list {
   list-style: none;
@@ -368,8 +408,34 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   min-width: 0;
+  border-left: 2px solid transparent;
 }
 .overview-chapter-row:hover { background: var(--color-hover); opacity: 1; text-decoration: none; }
+/* Min/Max-Akzent: linker Border + tönt Bar-Fill ein. */
+.overview-chapter-row--max {
+  border-left-color: var(--color-success, #4caf50);
+}
+.overview-chapter-row--max .overview-chapter-bar-fill {
+  background: var(--color-success, #4caf50);
+}
+.overview-chapter-row--min {
+  border-left-color: var(--color-danger, #d32f2f);
+}
+.overview-chapter-row--min .overview-chapter-bar-fill {
+  background: var(--color-danger, #d32f2f);
+  opacity: 0.6;
+}
+/* Findings-Tile: ungeprüfte Kapitel ausgrauen. */
+.overview-chapter-row--nocheck {
+  cursor: default;
+}
+.overview-chapter-row--nocheck .overview-chapter-name,
+.overview-chapter-row--nocheck .overview-chapter-meta {
+  opacity: 0.5;
+}
+.overview-chapter-row--nocheck .overview-chapter-bar-fill {
+  background: var(--color-border);
+}
 .overview-chapter-name {
   white-space: nowrap;
   overflow: hidden;
@@ -380,13 +446,30 @@
   height: 8px;
   border-radius: var(--radius-sm);
   background: var(--color-border);
-  overflow: hidden;
+  overflow: visible;
   min-width: 60px;
+  position: relative;
 }
 .overview-chapter-bar-fill {
   height: 100%;
   background: var(--color-accent);
   transition: width 0.2s ease;
+  border-radius: var(--radius-sm);
+}
+.overview-chapter-bar-fill--findings {
+  background: var(--color-warning, #c97a2b);
+}
+/* Median-Tick: vertikale Linie an Median-Position über dem Track.
+   Sitzt absolut, damit auch bei breiterem Fill sichtbar. */
+.overview-chapter-median-tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1.5px;
+  background: var(--color-text);
+  opacity: 0.45;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 .overview-chapter-meta {
   display: inline-flex;
@@ -397,6 +480,11 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.overview-chapter-delta {
+  font-variant-numeric: tabular-nums;
+  min-width: 3.5em;
+  text-align: right;
+}
 
 @media (max-width: 700px) {
   .overview-chapter-row {
@@ -404,6 +492,86 @@
     gap: 4px;
   }
   .overview-chapter-meta { justify-content: flex-end; }
+}
+
+/* ── Figuren-Präsenz-Matrix ──────────────────────────────────────────────── */
+.overview-presence-wrap {
+  overflow-x: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.overview-presence-matrix {
+  border-collapse: separate;
+  border-spacing: 2px;
+  /* width: auto — Tabelle nimmt nur Platz, den Cells brauchen.
+     `width: 100%` würde Cells über volle Tile-Breite verteilen → Whitespace. */
+  width: auto;
+  font-size: var(--font-size-xs);
+}
+.overview-presence-col-head {
+  font-weight: 500;
+  color: var(--color-muted);
+  font-size: 10px;
+  text-align: center;
+  padding: 0 2px;
+  /* Lange Kapitelnamen rotieren — schmale Spalten. */
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  max-height: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  min-width: 18px;
+}
+.overview-presence-row-head {
+  font-weight: 500;
+  color: var(--color-text);
+  text-align: left;
+  padding: 0 8px 0 4px;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overview-presence-cell {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-border);
+  cursor: pointer;
+  text-align: center;
+  vertical-align: middle;
+  /* --cell-intensity: 0..100% — Opacity des Fill-Layers. */
+}
+.overview-presence-cell--empty {
+  background: transparent;
+  border: 0.5px dashed var(--color-border);
+  cursor: default;
+}
+.overview-presence-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  opacity: calc(var(--cell-intensity, 0%) / 100);
+  transition: opacity 0.18s;
+}
+.overview-presence-cell:hover:not(.overview-presence-cell--empty) .overview-presence-fill {
+  filter: brightness(1.15);
+}
+.overview-presence-cell--empty .overview-presence-fill { display: none; }
+.overview-presence-num {
+  position: relative;
+  z-index: 1;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-bg);
+  font-variant-numeric: tabular-nums;
+  mix-blend-mode: difference;
+  filter: invert(1);
 }
 
 /* ── Recent-Pages ────────────────────────────────────────────────────────── */
@@ -458,5 +626,9 @@
   .overview-hero-row { gap: 14px; }
   .overview-substat-value { font-size: 16px; }
   .overview-fig-count { font-size: 20px; }
+  .overview-presence-col-head { max-height: 70px; font-size: 9px; }
+  .overview-presence-cell { width: 20px; height: 20px; }
+  /* deltaPct + words wandert auf eigene Zeile bei schmal */
+  .overview-chapter-delta { min-width: 0; }
 }
 }

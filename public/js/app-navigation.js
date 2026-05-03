@@ -19,6 +19,22 @@ export const appNavigationMethods = {
     }
   },
 
+  async openFigurMitKapitel(figId, kapitelName) {
+    this._beginNavigation();
+    try {
+      this.figurenFilters.kapitel = kapitelName || '';
+      this.figurenFilters.seite = '';
+      if (!this.showFiguresCard) {
+        await this.toggleFiguresCard();
+      }
+      this.selectedFigurId = figId;
+      await this.$nextTick();
+      document.querySelector(`.figur-item[data-figid="${figId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } finally {
+      this._endNavigation();
+    }
+  },
+
   async openOrtById(ortId) {
     this._beginNavigation();
     try {
