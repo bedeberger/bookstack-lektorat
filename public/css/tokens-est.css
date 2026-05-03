@@ -69,8 +69,6 @@
 .card-timestamp {
   font-size: 0.78rem;
   color: var(--color-muted);
-  margin-left: 0.75rem;
-  align-self: center;
 }
 
 .figuren-graph-toolbar {
@@ -247,7 +245,7 @@
 }
 
 @media (max-width: 600px) {
-  .ort-item .figur-kapitel-badges { display: none; }
+  [data-ortid] .figur-kapitel-badges { display: none; }
 }
 @media (max-width: 480px) {
   .figur-kapitel-badges { display: none; }

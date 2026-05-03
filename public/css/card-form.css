@@ -35,8 +35,10 @@
   letter-spacing: -0.01em;
 }
 
-/* Editor-Header: Title oben, Meta-Subline darunter, Aside (Tok-Stats + Buttons) rechts. */
-.card-header--editor { align-items: flex-start; }
+/* Header mit Subline: Title oben, Meta-Zeile (Timestamp/Save-Indicator/Links) darunter,
+   Aside (optionale Badges + Buttons) rechts. Genutzt vom Editor und allen Karten mit
+   Stand-/Timestamp-Info (figuren, orte, szenen, ereignisse, kontinuitaet, bookstats, stil). */
+.card-header--subline { align-items: flex-start; }
 .card-header-titlebar {
   display: flex;
   flex-direction: column;
@@ -83,7 +85,7 @@
   border-right: 0.5px solid var(--color-border);
 }
 @media (max-width: 700px) {
-  .card-header--editor { flex-direction: column; align-items: stretch; }
+  .card-header--subline { flex-direction: column; align-items: stretch; }
   .card-header-aside { width: 100%; flex-wrap: wrap; }
   .card-header-aside .tok-stats {
     padding-right: 0;

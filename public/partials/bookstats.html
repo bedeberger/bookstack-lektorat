@@ -5,14 +5,20 @@
   fachlicher State + Chart.js-Lifecycle leben in dieser Komponente.
 -->
 <div class="card" x-data="bookStatsCard" x-show="$app.showBookStatsCard" x-cloak>
-  <div class="card-header">
-    <span class="card-title" x-text="$app.t('bookstats.title', { name: $app.selectedBookName })"></span>
-    <div class="card-actions">
-      <span x-show="bookStatsData.length > 0 && !bookStatsLoading" class="card-timestamp" x-text="$app.t('bookstats.lastSnapshot', { date: (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '') })"></span>
-      <button type="button" @click="syncBookStats()" :disabled="bookStatsLoading">
-        <span x-show="bookStatsLoading" class="spinner"></span>
-        <span x-text="bookStatsLoading ? '' : $app.t('bookstats.sync')"></span>
-      </button>
+  <div class="card-header card-header--subline">
+    <div class="card-header-titlebar">
+      <span class="card-title" x-text="$app.t('bookstats.title', { name: $app.selectedBookName })"></span>
+      <div class="card-subline" x-show="bookStatsData.length > 0 && !bookStatsLoading">
+        <span class="card-timestamp" x-text="$app.t('bookstats.lastSnapshot', { date: (bookStatsData[bookStatsData.length - 1]?.recorded_at?.split('-').reverse().join('.') || '') })"></span>
+      </div>
+    </div>
+    <div class="card-header-aside">
+      <div class="card-actions">
+        <button type="button" @click="syncBookStats()" :disabled="bookStatsLoading">
+          <span x-show="bookStatsLoading" class="spinner"></span>
+          <span x-text="bookStatsLoading ? '' : $app.t('bookstats.sync')"></span>
+        </button>
+      </div>
     </div>
   </div>
 

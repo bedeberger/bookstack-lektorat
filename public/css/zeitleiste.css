@@ -166,7 +166,7 @@
   color:      color-mix(in srgb, var(--fig-hue) var(--figpal-text-mix), var(--color-text));
 }
 
-.gz-figuren-row .ort-typ-tag {
+.gz-figuren-row .entity-typ-tag {
   min-width: 0;
   text-align: left;
 }

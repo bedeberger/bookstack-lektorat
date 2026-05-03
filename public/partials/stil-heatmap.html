@@ -5,15 +5,20 @@
   State (stilData, stilLoading, …) lebt in dieser Komponente.
 -->
 <div class="card" x-data="stilCard" x-show="$app.showStilCard" x-cloak>
-  <div class="card-header">
-    <span class="card-title" x-text="$app.t('stil.title', { name: $app.selectedBookName })"></span>
-    <div class="card-actions">
-      <span x-show="stilData?.last_updated && !stilSyncing && !stilLoading"
-            class="card-timestamp" x-text="stilLastUpdatedLabel()"></span>
-      <button type="button" @click="runStilSync()" :disabled="stilSyncing || stilLoading">
-        <span x-show="stilSyncing" class="spinner"></span>
-        <span x-text="stilSyncing ? '' : $app.t('stil.recompute')"></span>
-      </button>
+  <div class="card-header card-header--subline">
+    <div class="card-header-titlebar">
+      <span class="card-title" x-text="$app.t('stil.title', { name: $app.selectedBookName })"></span>
+      <div class="card-subline" x-show="stilData?.last_updated && !stilSyncing && !stilLoading">
+        <span class="card-timestamp" x-text="stilLastUpdatedLabel()"></span>
+      </div>
+    </div>
+    <div class="card-header-aside">
+      <div class="card-actions">
+        <button type="button" @click="runStilSync()" :disabled="stilSyncing || stilLoading">
+          <span x-show="stilSyncing" class="spinner"></span>
+          <span x-text="stilSyncing ? '' : $app.t('stil.recompute')"></span>
+        </button>
+      </div>
     </div>
   </div>
 

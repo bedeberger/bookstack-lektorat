@@ -5,9 +5,13 @@
   szenenFilters bleibt im Root.
 -->
 <div class="card" x-data="szenenCard" x-show="$app.showSzenenCard" x-cloak>
-  <div class="card-header">
-    <span class="card-title" x-text="$app.t('szenen.title', { name: $app.selectedBookName })"></span>
-    <span x-show="$app.alleAktualisierenLastRun && !szenenLoading" class="card-timestamp" x-text="$app.t('common.asOf', { date: $app.alleAktualisierenLastRun })"></span>
+  <div class="card-header card-header--subline">
+    <div class="card-header-titlebar">
+      <span class="card-title" x-text="$app.t('szenen.title', { name: $app.selectedBookName })"></span>
+      <div class="card-subline" x-show="$app.alleAktualisierenLastRun && !szenenLoading">
+        <span class="card-timestamp" x-text="$app.t('common.asOf', { date: $app.alleAktualisierenLastRun })"></span>
+      </div>
+    </div>
   </div>
 
   <!-- Fortschritt -->
@@ -22,7 +26,7 @@
   <!-- Szenen-Übersicht: klappbar -->
   <div x-show="$app.szenen.length > 0" class="szenen-uebersicht">
     <button type="button"
-            class="szenen-uebersicht-toggle"
+            class="collapsible-toggle"
             @click="szenenUebersichtOpen = !szenenUebersichtOpen"
             :aria-expanded="szenenUebersichtOpen">
       <span class="history-chevron" :class="{ open: szenenUebersichtOpen }">›</span>
@@ -50,9 +54,9 @@
             <span class="szenen-kapitel-count-badge" :title="$app.t('szenen.tooltip', { stark: k.stark, mittel: k.mittel, schwach: k.schwach })">
               <span class="szenen-kapitel-name" x-text="k.name"></span>
               <span class="szenen-kapitel-dots">
-                <template x-for="n in k.stark"   :key="'s'+n"><span class="szenen-dot szenen-dot--stark"></span></template>
-                <template x-for="n in k.mittel"  :key="'m'+n"><span class="szenen-dot szenen-dot--mittel"></span></template>
-                <template x-for="n in k.schwach" :key="'w'+n"><span class="szenen-dot szenen-dot--schwach"></span></template>
+                <template x-for="n in k.stark"   :key="'s'+n"><span class="severity-dot severity-dot--stark"></span></template>
+                <template x-for="n in k.mittel"  :key="'m'+n"><span class="severity-dot severity-dot--mittel"></span></template>
+                <template x-for="n in k.schwach" :key="'w'+n"><span class="severity-dot severity-dot--schwach"></span></template>
               </span>
               <span class="szenen-kapitel-total" x-text="k.total"></span>
             </span>
@@ -76,11 +80,11 @@
     <!-- Filter-Leiste -->
     <div class="filter-bar">
       <input type="text" x-model="$app.szenenFilters.suche" :placeholder="$app.t('common.search')" :aria-label="$app.t('common.search')" class="filter-search-input">
-      <div class="szenen-filter-group">
-        <button type="button" class="szenen-filter-btn" :class="{ 'szenen-filter-btn--active': $app.szenenFilters.wertung === '' }" @click="$app.szenenFilters.wertung = ''" x-text="$app.t('common.all')"></button>
-        <button type="button" class="szenen-filter-btn szenen-filter-btn--stark"   :class="{ 'szenen-filter-btn--active': $app.szenenFilters.wertung === 'stark' }"   @click="$app.szenenFilters.wertung = $app.szenenFilters.wertung === 'stark'   ? '' : 'stark'" x-text="$app.t('szenen.rating.stark')"></button>
-        <button type="button" class="szenen-filter-btn szenen-filter-btn--mittel"  :class="{ 'szenen-filter-btn--active': $app.szenenFilters.wertung === 'mittel' }"  @click="$app.szenenFilters.wertung = $app.szenenFilters.wertung === 'mittel'  ? '' : 'mittel'" x-text="$app.t('szenen.rating.mittel')"></button>
-        <button type="button" class="szenen-filter-btn szenen-filter-btn--schwach" :class="{ 'szenen-filter-btn--active': $app.szenenFilters.wertung === 'schwach' }" @click="$app.szenenFilters.wertung = $app.szenenFilters.wertung === 'schwach' ? '' : 'schwach'" x-text="$app.t('szenen.rating.schwach')"></button>
+      <div class="severity-filter-group">
+        <button type="button" class="severity-filter-btn" :class="{ 'severity-filter-btn--active': $app.szenenFilters.wertung === '' }" @click="$app.szenenFilters.wertung = ''" x-text="$app.t('common.all')"></button>
+        <button type="button" class="severity-filter-btn severity-filter-btn--stark"   :class="{ 'severity-filter-btn--active': $app.szenenFilters.wertung === 'stark' }"   @click="$app.szenenFilters.wertung = $app.szenenFilters.wertung === 'stark'   ? '' : 'stark'" x-text="$app.t('szenen.rating.stark')"></button>
+        <button type="button" class="severity-filter-btn severity-filter-btn--mittel"  :class="{ 'severity-filter-btn--active': $app.szenenFilters.wertung === 'mittel' }"  @click="$app.szenenFilters.wertung = $app.szenenFilters.wertung === 'mittel'  ? '' : 'mittel'" x-text="$app.t('szenen.rating.mittel')"></button>
+        <button type="button" class="severity-filter-btn severity-filter-btn--schwach" :class="{ 'severity-filter-btn--active': $app.szenenFilters.wertung === 'schwach' }" @click="$app.szenenFilters.wertung = $app.szenenFilters.wertung === 'schwach' ? '' : 'schwach'" x-text="$app.t('szenen.rating.schwach')"></button>
       </div>
       <div x-data="combobox($app.t('filter.figur'), $app.t('filter.allFiguren'))"
            x-modelable="value" x-model="$app.szenenFilters.figurId"
@@ -105,34 +109,34 @@
     </div>
 
     <!-- Kompakte Szenen-Liste -->
-    <div class="szene-list">
+    <div class="entity-list">
       <template x-for="(s, i) in $app.szenenFiltered" :key="s.id || i">
         <div>
-          <div class="szene-row"
+          <div class="entity-row"
                :data-szeneid="s.id"
-               :class="{ 'szene-row--selected': $app.selectedSzeneId === s.id }"
+               :class="{ 'entity-row--selected': $app.selectedSzeneId === s.id }"
                @click="$app.selectedSzeneId = $app.selectedSzeneId === s.id ? null : s.id">
-            <span class="szenen-dot szene-row-dot"
-                  :class="'szenen-dot--' + (s.wertung || 'mittel')"
+            <span class="severity-dot severity-dot--lg"
+                  :class="'severity-dot--' + (s.wertung || 'mittel')"
                   :title="s.wertung ? $app.t('szenen.rating.' + s.wertung) : ''"></span>
-            <span class="szene-row-titel" x-text="s.titel"></span>
-            <span class="szene-row-stelle internal-link"
+            <span class="entity-row-title" x-text="s.titel"></span>
+            <span class="entity-row-meta internal-link"
                   @click.stop="s.page_id ? $app.gotoPageById(s.page_id) : $app.gotoStelle(s.kapitel, s.seite)"
                   x-text="s.kapitel + (s.seite ? ' · ' + s.seite : '')"></span>
             <span class="history-chevron" :class="{ open: $app.selectedSzeneId === s.id }">›</span>
           </div>
-          <div x-show="$app.selectedSzeneId === s.id" class="szene-detail" x-cloak>
-            <p x-show="s.kommentar" x-text="s.kommentar" class="szene-detail-kommentar"></p>
-            <div x-show="(s.fig_ids || []).length > 0" class="szene-meta-row">
-              <span class="szene-meta-label" x-text="$app.t('orte.figuren')"></span>
+          <div x-show="$app.selectedSzeneId === s.id" class="entity-detail" x-cloak>
+            <p x-show="s.kommentar" x-text="s.kommentar" class="entity-detail-text"></p>
+            <div x-show="(s.fig_ids || []).length > 0" class="entity-meta-row">
+              <span class="entity-meta-label" x-text="$app.t('orte.figuren')"></span>
               <template x-for="figId in (s.fig_ids || [])" :key="figId">
                 <span class="tag internal-link"
                       @click.stop="$app.openFigurById(figId)"
                       x-text="$app.figurenById.get(figId)?.kurzname || $app.figurenById.get(figId)?.name || figId"></span>
               </template>
             </div>
-            <div x-show="(s.ort_ids || []).length > 0" class="szene-meta-row">
-              <span class="szene-meta-label" x-text="$app.t('szenen.orte')"></span>
+            <div x-show="(s.ort_ids || []).length > 0" class="entity-meta-row">
+              <span class="entity-meta-label" x-text="$app.t('szenen.orte')"></span>
               <template x-for="ortId in (s.ort_ids || [])" :key="'o'+ortId">
                 <span class="tag internal-link"
                       @click.stop="$app.openOrtById(ortId)"

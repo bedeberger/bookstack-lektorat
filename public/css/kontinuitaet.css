@@ -1,29 +1,17 @@
 @layer components {
-/* === Kontinuitätsprüfung === */
+/* === Kontinuitätsprüfung ===
+   Listen-/Detail-/Filter-/Dot-Layout via .entity-list + .severity-* aus
+   entity-list.css. Hier nur Karten-spezifische Ergänzungen.
+*/
 .kontinuitaet-result {
   padding: 0.25rem 1rem 1rem;
 }
 
-/* Zusammenfassung – klappbar (analog Szenen-Übersicht) */
+/* Zusammenfassung – klappbar */
 .kontinuitaet-summary-wrap {
   padding: 4px 0 0;
   margin-bottom: 4px;
 }
-.kontinuitaet-summary-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: transparent;
-  border: none;
-  padding: 4px 0;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--color-muted);
-  cursor: pointer;
-}
-.kontinuitaet-summary-toggle:hover { color: var(--color-text); }
 .kontinuitaet-summary {
   font-size: 13px;
   color: var(--color-muted);
@@ -41,66 +29,7 @@
   font-size: 13px;
 }
 
-/* Severity-Filter-Buttons (analog .szenen-filter-btn) */
-.kontinuitaet-filter-group { display: flex; gap: 4px; }
-.kontinuitaet-filter-btn {
-  font-size: 11px;
-  font-weight: 400;
-  padding: 3px 9px;
-  border-radius: 0;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  color: var(--color-text);
-  cursor: pointer;
-  transition: background 0.1s, border-color 0.1s;
-}
-.kontinuitaet-filter-btn:hover { background: var(--color-hover); }
-.kontinuitaet-filter-btn--active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: var(--color-surface);
-}
-.kontinuitaet-filter-btn--active:hover { background: var(--color-primary); color: var(--color-surface); }
-.kontinuitaet-filter-btn--kritisch { border-color: var(--color-err-border); color: var(--color-err-text); }
-.kontinuitaet-filter-btn--mittel   { border-color: var(--color-mittel); color: var(--color-mittel-text); }
-.kontinuitaet-filter-btn--niedrig  { border-color: var(--color-border); color: var(--color-muted); }
-.kontinuitaet-filter-btn--kritisch.kontinuitaet-filter-btn--active { background: var(--color-err-border); border-color: var(--color-err-border); color: var(--color-surface); }
-.kontinuitaet-filter-btn--mittel.kontinuitaet-filter-btn--active   { background: var(--color-mittel);     border-color: var(--color-mittel);     color: var(--color-surface); }
-.kontinuitaet-filter-btn--niedrig.kontinuitaet-filter-btn--active  { background: var(--color-muted);      border-color: var(--color-muted);      color: var(--color-surface); }
-
-/* Liste (analog .ort-list / .szene-list) */
-.kontinuitaet-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 0;
-}
-.kontinuitaet-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.55rem 0.5rem;
-  cursor: pointer;
-  border-bottom: 1px solid var(--color-border);
-  font-size: 14px;
-}
-.kontinuitaet-row:hover { background: var(--color-hover); }
-.kontinuitaet-row--selected { background: var(--color-hover); }
-.kontinuitaet-row-dot {
-  width: 8px;
-  height: 8px;
-  flex-shrink: 0;
-}
-.kontinuitaet-dot--kritisch { background: var(--color-err-border); }
-.kontinuitaet-dot--mittel   { background: var(--color-mittel); }
-.kontinuitaet-dot--niedrig  { background: var(--color-border); }
-
-.kontinuitaet-typ-tag {
-  font-size: 11px;
-  min-width: 72px;
-  text-align: center;
-  flex-shrink: 0;
-}
+/* Stellen-Paar in der Zeile (Stelle A ↔ Stelle B) */
 .kontinuitaet-row-stellen {
   flex: 1;
   min-width: 0;
@@ -113,39 +42,6 @@
 }
 .kontinuitaet-arrow {
   color: var(--color-subtle);
-}
-
-/* Drawer (analog .ort-detail / .szene-detail) */
-.kontinuitaet-detail {
-  padding: 0.6rem 0.5rem 0.8rem 1rem;
-  background: var(--color-hover);
-  border-bottom: 1px solid var(--color-border);
-  font-size: 13px;
-}
-.kontinuitaet-detail-text {
-  margin: 0 0 0.4rem;
-  color: var(--color-text);
-  line-height: 1.5;
-}
-.kontinuitaet-meta-row {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.3rem;
-}
-.kontinuitaet-meta-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--color-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-}
-.kontinuitaet-meta-value {
-  font-size: 13px;
-  color: var(--color-text);
-  line-height: 1.5;
 }
 
 /* ── Buch-Einstellungen ──────────────────────────────────────────────────────── */
@@ -310,5 +206,4 @@
   align-items: center;
   flex-wrap: wrap;
 }
-
 }

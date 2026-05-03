@@ -31,7 +31,7 @@ export const appNavigationMethods = {
       }
       this.selectedOrtId = ortId;
       await this.$nextTick();
-      document.querySelector(`.ort-item[data-ortid="${ortId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      document.querySelector(`[data-ortid="${ortId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } finally {
       this._endNavigation();
     }
@@ -50,7 +50,7 @@ export const appNavigationMethods = {
       }
       this.selectedSzeneId = szeneId;
       await this.$nextTick();
-      document.querySelector(`.szene-row[data-szeneid="${szeneId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      document.querySelector(`[data-szeneid="${szeneId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } finally {
       this._endNavigation();
     }

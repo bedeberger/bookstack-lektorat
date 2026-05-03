@@ -1,0 +1,162 @@
+@layer components {
+/* === Filter-Leiste (alle Listen-Karten) === */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+.filter-count { font-size: 11px; color: var(--color-muted); margin-left: auto; }
+.filter-search-input {
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 3px 8px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  width: 120px;
+  box-sizing: border-box;
+}
+.filter-search-input:focus { outline: none; border-color: var(--color-border-focus); }
+
+/* === Entity-Liste (geteilt: Orte, Szenen, Kontinuität, …) ===
+   Pattern: kompakte Klick-Zeile + ausklappbarer Detail-Drawer.
+*/
+.entity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+}
+.entity-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.5rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+}
+.entity-row:hover { background: var(--color-hover); }
+.entity-row--selected { background: var(--color-hover); }
+.entity-row-title {
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.entity-row-meta {
+  font-size: 12px;
+  color: var(--color-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+.entity-typ-tag {
+  font-size: 11px;
+  min-width: 72px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.entity-detail {
+  padding: 0.6rem 0.5rem 0.8rem 1rem;
+  background: var(--color-hover);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+}
+.entity-detail-text {
+  margin: 0 0 0.4rem;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+.entity-meta-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+.entity-meta-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.entity-meta-value {
+  font-size: 13px;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+/* === Severity-Dots (Wertung/Schwere) === */
+.severity-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.severity-dot--lg { width: 8px; height: 8px; }
+.severity-dot--stark    { background: var(--color-stark); }
+.severity-dot--mittel   { background: var(--color-mittel); }
+.severity-dot--schwach  { background: var(--color-err-border); }
+.severity-dot--kritisch { background: var(--color-err-border); }
+.severity-dot--niedrig  { background: var(--color-border); }
+
+/* === Severity-Filter-Buttons === */
+.severity-filter-group { display: flex; gap: 4px; }
+.severity-filter-btn {
+  font-size: 11px;
+  font-weight: 400;
+  padding: 3px 9px;
+  border-radius: 0;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+.severity-filter-btn:hover { background: var(--color-hover); }
+.severity-filter-btn--active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-surface);
+}
+.severity-filter-btn--active:hover { background: var(--color-primary); color: var(--color-surface); }
+.severity-filter-btn--stark    { border-color: var(--color-stark); color: var(--color-stark-text); }
+.severity-filter-btn--mittel   { border-color: var(--color-mittel); color: var(--color-mittel-text); }
+.severity-filter-btn--schwach  { border-color: var(--color-err-border); color: var(--color-schwach-text); }
+.severity-filter-btn--kritisch { border-color: var(--color-err-border); color: var(--color-err-text); }
+.severity-filter-btn--niedrig  { border-color: var(--color-border); color: var(--color-muted); }
+.severity-filter-btn--stark.severity-filter-btn--active    { background: var(--color-stark);      border-color: var(--color-stark);      color: var(--color-surface); }
+.severity-filter-btn--mittel.severity-filter-btn--active   { background: var(--color-mittel);     border-color: var(--color-mittel);     color: var(--color-surface); }
+.severity-filter-btn--schwach.severity-filter-btn--active  { background: var(--color-err-border); border-color: var(--color-err-border); color: var(--color-surface); }
+.severity-filter-btn--kritisch.severity-filter-btn--active { background: var(--color-err-border); border-color: var(--color-err-border); color: var(--color-surface); }
+.severity-filter-btn--niedrig.severity-filter-btn--active  { background: var(--color-muted);      border-color: var(--color-muted);      color: var(--color-surface); }
+
+/* === Klappbarer Section-Toggle (Übersicht/Summary in Karten) === */
+.collapsible-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+.collapsible-toggle:hover { color: var(--color-text); }
+}

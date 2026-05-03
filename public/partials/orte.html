@@ -5,9 +5,13 @@
   orteFilters + selectedOrtId bleiben im Root.
 -->
 <div class="card" x-data="orteCard" x-show="$app.showOrteCard" x-cloak>
-  <div class="card-header">
-    <span class="card-title" x-text="$app.t('orte.title', { name: $app.selectedBookName })"></span>
-    <span x-show="$app.alleAktualisierenLastRun && !orteLoading" class="card-timestamp" x-text="$app.t('common.asOf', { date: $app.alleAktualisierenLastRun })"></span>
+  <div class="card-header card-header--subline">
+    <div class="card-header-titlebar">
+      <span class="card-title" x-text="$app.t('orte.title', { name: $app.selectedBookName })"></span>
+      <div class="card-subline" x-show="$app.alleAktualisierenLastRun && !orteLoading">
+        <span class="card-timestamp" x-text="$app.t('common.asOf', { date: $app.alleAktualisierenLastRun })"></span>
+      </div>
+    </div>
   </div>
 
   <div x-show="orteProgress > 0" class="progress-bar-wrap">
@@ -43,12 +47,12 @@
   </div>
 
   <!-- Ortsliste -->
-  <div x-show="$app.orte.length > 0" class="ort-list">
+  <div x-show="$app.orte.length > 0" class="entity-list ort-list">
     <template x-for="o in $app.orteFiltered" :key="o.id">
       <div>
-        <div class="ort-item" :data-ortid="o.id" @click="$app.selectedOrtId = $app.selectedOrtId === o.id ? null : o.id">
-          <span class="tag ort-typ-tag" x-text="o.typ || $app.t('orte.typAndere')"></span>
-          <span class="ort-name" x-text="o.name"></span>
+        <div class="entity-row" :data-ortid="o.id" @click="$app.selectedOrtId = $app.selectedOrtId === o.id ? null : o.id">
+          <span class="tag entity-typ-tag" x-text="o.typ || $app.t('orte.typAndere')"></span>
+          <span class="entity-row-title" x-text="o.name"></span>
           <span x-show="o.stimmung" class="ort-stimmung" x-text="o.stimmung"></span>
           <template x-if="o.kapitel?.length">
             <span class="figur-kapitel-badges">
@@ -60,10 +64,10 @@
           </template>
           <span class="history-chevron" :class="{ open: $app.selectedOrtId === o.id }">›</span>
         </div>
-        <div x-show="$app.selectedOrtId === o.id" class="ort-detail">
-          <p x-show="o.beschreibung" x-text="o.beschreibung" class="ort-beschreibung"></p>
-          <div x-show="o.erste_erwaehnung" class="ort-meta-row">
-            <span class="ort-meta-label" x-text="$app.t('orte.firstMention')"></span>
+        <div x-show="$app.selectedOrtId === o.id" class="entity-detail">
+          <p x-show="o.beschreibung" x-text="o.beschreibung" class="entity-detail-text"></p>
+          <div x-show="o.erste_erwaehnung" class="entity-meta-row">
+            <span class="entity-meta-label" x-text="$app.t('orte.firstMention')"></span>
             <template x-if="o.erste_erwaehnung_page_id">
               <span class="internal-link" @click.stop="$app.gotoPageById(o.erste_erwaehnung_page_id)" x-text="o.erste_erwaehnung"></span>
             </template>
@@ -71,20 +75,20 @@
               <span x-text="o.erste_erwaehnung"></span>
             </template>
           </div>
-          <div x-show="o.figuren?.length > 0" class="ort-meta-row">
-            <span class="ort-meta-label" x-text="$app.t('orte.figuren')"></span>
+          <div x-show="o.figuren?.length > 0" class="entity-meta-row">
+            <span class="entity-meta-label" x-text="$app.t('orte.figuren')"></span>
             <template x-for="figId in o.figuren" :key="figId">
               <span class="tag internal-link" @click.stop="$app.openFigurById(figId)" x-text="$app.figurenById.get(figId)?.kurzname || $app.figurenById.get(figId)?.name || figId"></span>
             </template>
           </div>
-          <div x-show="o.kapitel?.length > 1" class="ort-meta-row">
-            <span class="ort-meta-label" x-text="$app.t('orte.kapitel')"></span>
+          <div x-show="o.kapitel?.length > 1" class="entity-meta-row">
+            <span class="entity-meta-label" x-text="$app.t('orte.kapitel')"></span>
             <template x-for="k in o.kapitel" :key="k.name">
               <span class="tag" x-text="k.name + (k.haeufigkeit > 1 ? ' ×' + k.haeufigkeit : '')"></span>
             </template>
           </div>
-          <div x-show="$app.szenen.some(s => (s.ort_ids||[]).includes(o.id))" class="ort-meta-row">
-            <span class="ort-meta-label" x-text="$app.t('orte.szenen')"></span>
+          <div x-show="$app.szenen.some(s => (s.ort_ids||[]).includes(o.id))" class="entity-meta-row">
+            <span class="entity-meta-label" x-text="$app.t('orte.szenen')"></span>
             <template x-for="s in $app.szenen.filter(s => (s.ort_ids||[]).includes(o.id))" :key="s.id">
               <span class="tag" x-text="s.titel"></span>
             </template>
