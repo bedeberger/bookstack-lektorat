@@ -65,12 +65,19 @@ body.focus-mode .session-banner--offline:hover { opacity: 1; }
 
 .site-header-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
   margin-bottom: 2rem;
   min-height: 2.5rem;
+}
+.site-header-center {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .subtitle {
