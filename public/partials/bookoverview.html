@@ -291,9 +291,9 @@
       </div>
     </template>
 
-    <!-- Figuren-Präsenz-Matrix: Top-5 Figuren × Kapitel.
-         Zeile = Figur, Spalte = Kapitel. Cell-Intensität = Häufigkeit (per Zeile skaliert).
-         Klick auf gefüllte Cell → Kapitel-Review. Leere Zellen = POV-Lücke. -->
+    <!-- Figuren-Präsenz-Matrix: Kapitel (Zeilen) × Top-Figuren (Spalten).
+         Cell-Wert = Anzahl Szenen pro (Figur, Kapitel). Cell-Intensität = per Spalte skaliert.
+         Horizontaler Scroll bei vielen Figuren. Leere Zellen = Figur fehlt im Kapitel. -->
     <template x-if="overviewFigurePresence()">
       <div class="overview-tile overview-tile--medium">
         <div class="overview-tile-label" x-text="$app.t('overview.figPresence')"></div>
@@ -302,10 +302,10 @@
             <thead>
               <tr>
                 <th></th>
-                <template x-for="ch in overviewFigurePresence().chapters" :key="ch.id">
+                <template x-for="fig in overviewFigurePresence().figures" :key="fig.id">
                   <th class="overview-presence-col-head"
-                      :title="ch.name"
-                      x-text="ch.name"></th>
+                      :title="fig.name"
+                      x-text="fig.name"></th>
                 </template>
               </tr>
             </thead>
@@ -313,15 +313,15 @@
               <template x-for="row in overviewFigurePresence().rows" :key="row.id">
                 <tr>
                   <th class="overview-presence-row-head" :title="row.name" x-text="row.name"></th>
-                  <template x-for="cell in row.cells" :key="cell.chapterId">
+                  <template x-for="cell in row.cells" :key="cell.figureId">
                     <td class="overview-presence-cell"
                         :class="{
                           'overview-presence-cell--empty': cell.value === 0,
                           'internal-link': cell.value > 0
                         }"
                         :style="{ '--cell-intensity': cell.pct + '%' }"
-                        :title="cell.value > 0 ? $app.t('overview.figPresenceOpen', { figur: row.name, kapitel: cell.chapterName }) : (row.name + ' · ' + cell.chapterName + ': 0')"
-                        @click="cell.value > 0 && $app.openFigurMitKapitel(row.id, cell.chapterName)">
+                        :title="cell.value > 0 ? $app.t('overview.figPresenceOpen', { figur: cell.figureName, kapitel: row.name }) : (cell.figureName + ' · ' + row.name + ': 0')"
+                        @click="cell.value > 0 && $app.openFigurMitKapitel(cell.figureId, row.name)">
                       <span class="overview-presence-fill"></span>
                       <span class="overview-presence-num" x-show="cell.value > 0" x-text="cell.value"></span>
                     </td>

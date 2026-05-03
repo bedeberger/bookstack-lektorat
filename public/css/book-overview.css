@@ -631,4 +631,33 @@
   /* deltaPct + words wandert auf eigene Zeile bei schmal */
   .overview-chapter-delta { min-width: 0; }
 }
+
+/* ── Phone (<=480) ───────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .book-overview .overview-grid { gap: 10px; }
+  .overview-tile { padding: 12px; gap: 6px; }
+  .overview-hero-value { font-size: 26px; }
+  .overview-hero-row { gap: 10px; }
+  .overview-substats { gap: 10px; }
+  .overview-substat-value { font-size: 15px; }
+  .overview-fig-count { font-size: 18px; }
+  .overview-sparkline { height: 48px; }
+  .overview-bars7 { min-height: 52px; }
+  .overview-bar7-track { height: 40px; }
+  .overview-donut { width: 60px; height: 60px; }
+  .overview-donut-row { gap: 10px; }
+  .overview-stars { font-size: 18px; }
+  .overview-chapter-list { max-height: 220px; }
+  .overview-presence-cell { width: 18px; height: 18px; }
+  .overview-presence-num { font-size: 9px; }
+  .overview-presence-row-head { max-width: 100px; padding: 0 6px 0 2px; }
+  /* Recent: Meta unter Name — sonst kollidiert mit langen Page-Titeln. */
+  .overview-recent-item { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .overview-recent-meta { width: 100%; justify-content: flex-start; }
+  /* Sterne + Trend ggf. eng — Wrap erlauben. */
+  .overview-review-meta { flex-wrap: wrap; gap: 4px; }
+  /* Quick-Actions: Buttons volle Zeile, gleichmässig. */
+  .overview-actions { gap: 4px; }
+  .overview-actions .btn-compact { flex: 1 1 calc(50% - 4px); min-width: 0; }
+}
 }

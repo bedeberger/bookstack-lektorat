@@ -370,78 +370,88 @@ export const bookOverviewMethods = {
     return enriched;
   },
 
-  // Figuren-Präsenz-Matrix: Top-Figuren × Kapitel.
-  // Auswahl-Strategie (Set-Cover): Top-5 nach Gesamt-haeufigkeit als Basis.
-  // Danach für jedes nicht abgedeckte Kapitel die dort stärkste Figur
-  // ergänzen (dedup), Cap bei MAX_ROWS Zeilen. Garantiert dass jede Spalte
-  // mit Daten ≥1 Vertretung hat, solange Cap nicht erschöpft ist.
-  // Cell-Wert = haeufigkeit aus figuren[].kapitel[]. Match primär per
-  // chapter_id (stabil gegen Umbenennen), Fallback auf chapter_name (für
-  // Alt-Daten ohne chapter_id). Skalierung pro Zeile (max der Figur).
+  // Figuren-Präsenz-Matrix: Kapitel (Zeilen) × Top-Figuren (Spalten).
+  // Cell-Wert = Anzahl Szenen, in denen die Figur im Kapitel auftritt
+  // (gezählt aus overviewSzenen.fig_ids). `figure_appearances.haeufigkeit`
+  // wird nicht verwendet — bei pronomenlastigen Texten unterzählt die
+  // KI-Phase-1-Extraktion Hauptfiguren systematisch (z.B. Ich-Erzähler
+  // mit 0 namentlichen Treffern).
+  // Auswahl: Top-MAX_COLS Figuren nach Gesamt-Szenen. Match Kapitel
+  // primär per chapter_id (stabil), Fallback auf Name. Skalierung pro
+  // Spalte (max der Figur über alle Kapitel).
   overviewFigurePresence() {
-    const app = window.__app;
     const figs = this.overviewFiguren || [];
-    if (!app || figs.length === 0) return null;
+    const sz = this.overviewSzenen || [];
+    const memos = (this._memos ||= {});
+    const hit = memos.figPresence;
+    if (hit && hit.figs === figs && hit.sz === sz) return hit.value;
+    const value = this._computeFigurePresence(figs, sz);
+    memos.figPresence = { figs, sz, value };
+    return value;
+  },
+
+  _computeFigurePresence(figs, sz) {
+    const app = window.__app;
+    if (!app || figs.length === 0 || sz.length === 0) return null;
     const tree = app.tree || [];
     const chapters = tree
       .filter(i => i.type === 'chapter')
       .map(c => ({ id: c.id, name: c.name }));
     if (chapters.length === 0) return null;
 
-    const MAX_ROWS = 8;
+    const MAX_COLS = 20;
 
-    // Pro Figur: Lookup-Maps für Kapitel-haeufigkeit (id + name).
-    const candidates = figs.map(f => {
-      const byId = new Map();
-      const byName = new Map();
-      for (const k of (f.kapitel || [])) {
-        const h = Number(k.haeufigkeit) || 0;
-        if (k.chapter_id != null) byId.set(Number(k.chapter_id), h);
-        if (k.name) byName.set(k.name, h);
-      }
-      const total = (f.kapitel || []).reduce((s, k) => s + (Number(k.haeufigkeit) || 0), 0);
-      return { id: f.id, name: f.kurzname || f.name, byId, byName, total };
-    }).sort((a, b) => b.total - a.total);
-    if (candidates.length === 0 || candidates[0].total === 0) return null;
+    const figByFigId = new Map();
+    for (const f of figs) figByFigId.set(f.id, f);
 
-    const lookup = (cand, ch) => cand.byId.get(Number(ch.id)) ?? cand.byName.get(ch.name) ?? 0;
-
-    const selected = candidates.slice(0, 5);
-    const selectedIds = new Set(selected.map(c => c.id));
-
-    // Set-Cover-Erweiterung: pro unbedecktem Kapitel beste verfügbare Figur.
-    for (const ch of chapters) {
-      if (selected.length >= MAX_ROWS) break;
-      const covered = selected.some(c => lookup(c, ch) > 0);
-      if (covered) continue;
-      let best = null;
-      for (const cand of candidates) {
-        if (selectedIds.has(cand.id)) continue;
-        const h = lookup(cand, ch);
-        if (h > 0 && (!best || h > best.h)) best = { cand, h };
-      }
-      if (best) {
-        selected.push(best.cand);
-        selectedIds.add(best.cand.id);
+    const counts = new Map(); // fig_id -> { byId, byName, total }
+    for (const s of sz) {
+      if (!Array.isArray(s.fig_ids) || s.fig_ids.length === 0) continue;
+      const chapId = s.chapter_id ?? null;
+      const chapName = s.kapitel || '';
+      for (const figId of s.fig_ids) {
+        let m = counts.get(figId);
+        if (!m) { m = { byId: new Map(), byName: new Map(), total: 0 }; counts.set(figId, m); }
+        if (chapId != null) m.byId.set(Number(chapId), (m.byId.get(Number(chapId)) || 0) + 1);
+        if (chapName) m.byName.set(chapName, (m.byName.get(chapName) || 0) + 1);
+        m.total++;
       }
     }
 
-    const rows = selected.map((f, idx) => {
-      const cells = chapters.map(ch => lookup(f, ch));
-      const max = Math.max(1, ...cells);
-      return {
-        id: f.id,
-        name: f.name,
-        idx,
-        cells: cells.map((v, i) => ({
-          chapterId: chapters[i].id,
-          chapterName: chapters[i].name,
-          value: v,
-          pct: v > 0 ? Math.max(15, Math.round((v / max) * 100)) : 0,
-        })),
-      };
+    const lookup = (m, ch) => m.byId.get(Number(ch.id)) ?? m.byName.get(ch.name) ?? 0;
+
+    const candidates = [];
+    for (const [figId, m] of counts) {
+      const f = figByFigId.get(figId);
+      if (!f) continue;
+      candidates.push({ id: figId, name: f.kurzname || f.name, m, total: m.total });
+    }
+    candidates.sort((a, b) => b.total - a.total);
+    if (candidates.length === 0) return null;
+
+    const selected = candidates.slice(0, MAX_COLS);
+
+    const figures = selected.map(c => ({ id: c.id, name: c.name }));
+    const colMaxes = selected.map(c => {
+      let mx = 0;
+      for (const ch of chapters) { const v = lookup(c.m, ch); if (v > mx) mx = v; }
+      return Math.max(1, mx);
     });
-    return { chapters, rows };
+
+    const rows = chapters.map(ch => ({
+      id: ch.id,
+      name: ch.name,
+      cells: selected.map((c, i) => {
+        const v = lookup(c.m, ch);
+        return {
+          figureId: c.id,
+          figureName: c.name,
+          value: v,
+          pct: v > 0 ? Math.max(15, Math.round((v / colMaxes[i]) * 100)) : 0,
+        };
+      }),
+    }));
+    return { figures, rows };
   },
 
   // Fehler-Typ-Label: i18n-Key versuchen; Fallback humanisiert.
