@@ -4420,32 +4420,14 @@ body.focus-mode .edit-find { display: none !important; }
   cursor: not-allowed;
 }
 .palette-item:active { transform: none; }
+.palette-item:hover { background: transparent; }
+.palette-item--active:hover { background: var(--color-hover); }
 .palette-empty {
   padding: 18px 16px;
   font-size: 13px;
   color: var(--color-muted);
   text-align: center;
 }
-.palette-footer {
-  display: flex;
-  gap: 14px;
-  padding: 8px 14px;
-  border-top: 1px solid var(--color-border);
-  font-size: 11px;
-  color: var(--color-muted);
-}
-.palette-footer kbd {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
-  padding: 1px 5px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg);
-  margin-right: 3px;
-}
-.palette-hint { display: inline-flex; align-items: center; }
-.palette-hint--prefix kbd { margin-right: 1px; }
-.palette-hint--prefix { margin-left: auto; }
 .palette-mark {
   background: transparent;
   color: var(--color-accent);
@@ -4527,8 +4509,6 @@ body.focus-mode .edit-find { display: none !important; }
   }
   .palette-item-label { font-size: 14px; }
   .palette-item-desc  { font-size: 12px; }
-  /* Footer-Keyboard-Hints sind auf Touch sinnlos. */
-  .palette-footer { display: none; }
 }
 
 /* === Buchentwicklung (Zeitliniendiagramm) === */
