@@ -68,13 +68,14 @@ jobs:
             status=1
           fi
 
-          echo "→ JSON_ONLY-Konstante nur in public/js/prompts.js (Kommentare ignoriert)"
+          echo "→ JSON_ONLY-Konstante nur in public/js/prompts.js oder public/js/prompts/ (Kommentare ignoriert)"
           hits=$(grep -rHn 'JSON_ONLY' public/js routes lib 2>/dev/null \
                  | grep -v '^public/js/prompts.js:' \
+                 | grep -v '^public/js/prompts/' \
                  | grep -Ev '//[^"]*JSON_ONLY' \
                  | grep -Ev '^[^:]+:[0-9]+:[[:space:]]*\*' || true)
           if [ -n "$hits" ]; then
-            echo "::error::JSON_ONLY ausserhalb prompts.js referenziert — Prompts gehören nach public/js/prompts.js:"
+            echo "::error::JSON_ONLY ausserhalb prompts.js / prompts/ referenziert — Prompts gehören nach public/js/prompts.js bzw. public/js/prompts/:"
             echo "$hits"
             status=1
           fi
