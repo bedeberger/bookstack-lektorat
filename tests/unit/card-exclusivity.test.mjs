@@ -18,6 +18,7 @@ globalThis.CustomEvent = globalThis.CustomEvent || class CustomEvent {
 function makeCtx() {
   // Spiegelt cards-Flags aus app-state.js. Default: alles geschlossen.
   return {
+    showBookOverviewCard: false,
     showBookReviewCard: false,
     showKapitelReviewCard: false,
     showFiguresCard: false,

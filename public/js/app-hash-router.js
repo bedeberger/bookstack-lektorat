@@ -33,6 +33,7 @@ export const appHashRouterMethods = {
     else if (this.showBookReviewCard) parts.push('bewertung');
     else if (this.showKapitelReviewCard) parts.push('kapitel');
     else if (this.showBookChatCard) parts.push('chat');
+    else if (this.showBookOverviewCard) parts.push('uebersicht');
     else if (this.showBookStatsCard) parts.push('stats');
     else if (this.showStilCard) parts.push('stil');
     else if (this.showFehlerHeatmapCard) parts.push('fehler');
@@ -140,6 +141,7 @@ export const appHashRouterMethods = {
       const arg = parts[3];
       if (!view) {
         this._closeOtherMainCards('none');
+        this._maybeOpenBookOverview();
         return;
       }
 
@@ -211,6 +213,9 @@ export const appHashRouterMethods = {
         case 'chat':
           if (!this.showBookChatCard) await this.toggleBookChatCard();
           break;
+        case 'uebersicht':
+          if (!this.showBookOverviewCard) await this.toggleBookOverviewCard();
+          break;
         case 'stats':
           if (!this.showBookStatsCard) await this.toggleBookStatsCard();
           break;
@@ -247,6 +252,7 @@ export const appHashRouterMethods = {
       'showBookStatsCard', 'showStilCard', 'showFehlerHeatmapCard',
       'showBookSettingsCard', 'showUserSettingsCard',
       'showFinetuneExportCard',
+      'showBookOverviewCard',
     ];
     this._hashWatcherTeardowns = [];
     for (const prop of watchers) {

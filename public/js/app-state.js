@@ -116,6 +116,7 @@ const cardsState = () => ({
   showBookCard: false,
   showTreeCard: true,
   showEditorCard: false,
+  showBookOverviewCard: false,
   showBookReviewCard: false,
   showKapitelReviewCard: false,
   showFiguresCard: false,

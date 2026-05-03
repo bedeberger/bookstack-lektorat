@@ -54,7 +54,10 @@
             <template x-for="ch in fehlerHeatmapData.chapters" :key="fehlerHeatmapChapterKey(ch)">
               <tr>
                 <th class="heatmap-rowhead" scope="row">
-                  <span class="heatmap-rowhead-main" x-text="fehlerHeatmapChapterName(ch)"></span>
+                  <span class="heatmap-rowhead-main"
+                        :class="{ 'internal-link': ch.chapter_id != null }"
+                        @click="ch.chapter_id != null && fehlerHeatmapJumpToChapter(ch)"
+                        x-text="fehlerHeatmapChapterName(ch)"></span>
                   <span class="heatmap-rowhead-sub" x-text="$app.t('fehlerHeatmap.words', { n: (ch.words || 0).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH') })"></span>
                 </th>
                 <td class="heatmap-numcol">

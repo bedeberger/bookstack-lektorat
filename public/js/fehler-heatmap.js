@@ -155,4 +155,23 @@ export const fehlerHeatmapMethods = {
       await window.__app.loadHistoryEntry(latest);
     }
   },
+
+  async fehlerHeatmapJumpToChapter(ch) {
+    if (!ch || ch.chapter_id == null) return;
+    const root = window.__app;
+    const chapterId = ch.chapter_id;
+    const opts = root.kapitelReviewChapterOptions ? root.kapitelReviewChapterOptions() : [];
+    this.activeFehlerDetailKey = null;
+    if (opts.some(c => String(c.id) === String(chapterId))) {
+      root.showFehlerHeatmapCard = false;
+      await root.openKapitelReviewForChapter(chapterId);
+      return;
+    }
+    const chapterNode = (root.tree || []).find(i => i.type === 'chapter' && String(i.id) === String(chapterId));
+    const firstPage = chapterNode?.pages?.[0];
+    if (firstPage) {
+      root.showFehlerHeatmapCard = false;
+      await root.selectPage(firstPage);
+    }
+  },
 };

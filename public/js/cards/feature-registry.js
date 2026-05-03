@@ -15,6 +15,9 @@
 // `aliases` (optional): zusätzliche Suchbegriffe (Synonyme, EN-Übersetzungen).
 
 export const FEATURES = [
+  // Übersicht
+  { key: 'overview',       kind: 'toggle', group: 'tools',  labelKey: 'tile.overview',       descKey: 'tile.overview.desc',       flag: 'showBookOverviewCard',   toggle: 'toggleBookOverviewCard',   requiresBook: true,
+    aliases: ['uebersicht','overview','dashboard','home','start','startseite','landing'] },
   // Bewertung
   { key: 'review',         kind: 'toggle', group: 'review', labelKey: 'tile.review',         descKey: 'tile.review.desc',         flag: 'showBookReviewCard',     toggle: 'toggleBookReviewCard',     requiresBook: true,
     aliases: ['bewertung','rating','note','stars','sterne','feedback'] },

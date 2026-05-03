@@ -279,4 +279,22 @@ export const stilMethods = {
     this.activeStilDetailKey = null;
     await window.__app.selectPage(page);
   },
+
+  async stilJumpToChapter(chapterKey) {
+    if (!chapterKey || chapterKey === '__uncat__') return;
+    const root = window.__app;
+    const opts = root.kapitelReviewChapterOptions ? root.kapitelReviewChapterOptions() : [];
+    this.activeStilDetailKey = null;
+    if (opts.some(c => String(c.id) === String(chapterKey))) {
+      root.showStilCard = false;
+      await root.openKapitelReviewForChapter(chapterKey);
+      return;
+    }
+    const chapterNode = (root.tree || []).find(i => i.type === 'chapter' && String(i.id) === String(chapterKey));
+    const firstPage = chapterNode?.pages?.[0];
+    if (firstPage) {
+      root.showStilCard = false;
+      await root.selectPage(firstPage);
+    }
+  },
 };

@@ -12,6 +12,7 @@ import { registerBookReviewCard } from './cards/book-review-card.js';
 import { registerKapitelReviewCard } from './cards/kapitel-review-card.js';
 import { figurenMethods } from './figuren.js';
 import { ereignisseMethods } from './ereignisse.js';
+import { registerBookOverviewCard } from './cards/book-overview-card.js';
 import { registerBookStatsCard } from './cards/book-stats-card.js';
 import { writingTimeMethods } from './writing-time.js';
 import { registerCatalogStore } from './cards/catalog-store.js';
@@ -196,6 +197,7 @@ document.addEventListener('alpine:init', () => {
   registerCatalogStore();
   registerStilCard();
   registerFehlerHeatmapCard();
+  registerBookOverviewCard();
   registerBookStatsCard();
   registerBookSettingsCard();
   registerUserSettingsCard();
@@ -599,6 +601,7 @@ document.addEventListener('alpine:init', () => {
         this.loadRecentFeatures();
         if (this.selectedBookId) this.loadRecentPages(this.selectedBookId);
         await this._applyHash();
+        this._maybeOpenBookOverview();
         this._syncUrlNow();
         this._applyingHash = false;
         this._setupHashRouting();
@@ -617,6 +620,7 @@ document.addEventListener('alpine:init', () => {
           this._resetBookScopedState();
           await this.loadPages();
           await this._reloadVisibleBookCards();
+          this._maybeOpenBookOverview();
         });
         this._startJobQueuePoll();
         this._setupWritingTime();

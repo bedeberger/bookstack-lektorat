@@ -16,6 +16,7 @@ export const appViewMethods = {
       if (!confirm(this.t('app.switchPageConfirm'))) return;
     }
     // Buchkarten schliessen – nur eine Ebene (Buch oder Seite) aktiv
+    this.showBookOverviewCard = false;
     this.showBookReviewCard = false;
     this.showKapitelReviewCard = false;
     this.showFiguresCard = false;
@@ -109,6 +110,7 @@ export const appViewMethods = {
   // Bewertung, Figuren, Entwicklung und Buch-Chat sind exklusiv.
   // Beim Öffnen einer Buchkarte wird auch die offene Seite geschlossen.
   _closeOtherMainCards(keep) {
+    if (keep !== 'bookOverview') this.showBookOverviewCard = false;
     if (keep !== 'bookReview') this.showBookReviewCard = false;
     if (keep !== 'kapitelReview') this.showKapitelReviewCard = false;
     if (keep !== 'figures') this.showFiguresCard = false;
@@ -151,6 +153,31 @@ export const appViewMethods = {
   // Karten-Toggles: Root hält die `showXxxCard`-Flags (Single Source of Truth
   // für Hash-Router + Exklusivität); die Sub-Komponente reagiert per $watch
   // und lädt ihre Daten selbst.
+  toggleBookOverviewCard() {
+    if (this.showBookOverviewCard) {
+      window.dispatchEvent(new CustomEvent('card:refresh', { detail: { name: 'bookOverview' } }));
+      return;
+    }
+    if (!this.selectedBookId) return;
+    this._closeOtherMainCards('bookOverview');
+    this.showBookOverviewCard = true;
+  },
+  // Default-Landing: öffnet Übersicht, wenn Buch gewählt ist und keine andere
+  // Hauptkarte/Editor aktiv. Wird beim Buchwechsel + bei `#book/:id`-Deeplink
+  // ohne View aufgerufen.
+  _maybeOpenBookOverview() {
+    if (!this.selectedBookId) return;
+    if (this.showEditorCard) return;
+    const anyOpen = this.showBookOverviewCard
+      || this.showBookReviewCard || this.showKapitelReviewCard
+      || this.showFiguresCard || this.showSzenenCard || this.showOrteCard
+      || this.showEreignisseCard || this.showKontinuitaetCard
+      || this.showBookStatsCard || this.showStilCard || this.showFehlerHeatmapCard
+      || this.showBookChatCard || this.showBookSettingsCard
+      || this.showUserSettingsCard || this.showFinetuneExportCard;
+    if (anyOpen) return;
+    this.showBookOverviewCard = true;
+  },
   toggleStilCard() {
     if (this.showStilCard) { this.showStilCard = false; return; }
     this._closeOtherMainCards('stil');
@@ -424,6 +451,7 @@ export const appViewMethods = {
     this.clearBookstackSearch();
     // Kapitel in der Sidebar bleiben geöffnet (kein c.open = false)
     this.showTreeCard = true;
+    this.showBookOverviewCard = false;
     this.showBookReviewCard = false;
     this.bookReviewHistory = [];
     this.showKapitelReviewCard = false;
@@ -471,5 +499,7 @@ export const appViewMethods = {
     this.alleAktualisierenTps = null;
     this.showKomplettStatus = false;
     this.resetBookChat();
+    // Default-Home: nach komplettem Reset Übersicht öffnen, falls Buch gewählt.
+    this._maybeOpenBookOverview();
   },
 };

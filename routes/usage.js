@@ -13,6 +13,7 @@ const jsonBody = express.json();
 // Erlaubte Feature-Keys — synchron mit public/js/cards/feature-registry.js.
 // Erweitern bei neuen Features; unbekannte Keys werden 400-abgelehnt.
 const ALLOWED_KEYS = new Set([
+  'overview',
   'review',
   'stil',
   'fehlerHeatmap',

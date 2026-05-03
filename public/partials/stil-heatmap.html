@@ -48,7 +48,10 @@
             <template x-for="c in stilChaptersAggregated()" :key="c.key">
               <tr>
                 <th class="heatmap-rowhead" scope="row">
-                  <span class="heatmap-rowhead-main" x-text="c.name"></span>
+                  <span class="heatmap-rowhead-main"
+                        :class="{ 'internal-link': c.key !== '__uncat__' }"
+                        @click="c.key !== '__uncat__' && stilJumpToChapter(c.key)"
+                        x-text="c.name"></span>
                   <span class="heatmap-rowhead-sub" x-text="$app.t('stil.pagesCount', { n: c.pageCount })"></span>
                 </th>
                 <td class="heatmap-numcol" x-text="(c.words || 0).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH')"></td>
