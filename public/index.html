@@ -13,20 +13,9 @@
   <link rel="icon" href="bookstack_lektorat_icon.ico" type="image/x-icon">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <script>
-    // Theme vor erstem Paint setzen (FOUC-Schutz). Gespeicherte Präferenz:
-    // 'auto' (folgt System), 'light', 'dark'. Auflösung → data-theme-Attribut.
-    (function () {
-      var stored = null;
-      try { stored = localStorage.getItem('theme'); } catch (e) {}
-      var pref = (stored === 'light' || stored === 'dark' || stored === 'auto') ? stored : 'auto';
-      var resolved = pref === 'auto'
-        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-        : pref;
-      document.documentElement.setAttribute('data-theme', resolved);
-      window.__themePref = pref;
-    })();
-  </script>
+  <!-- Theme-Init synchron VOR dem ersten Paint, damit es FOUC verhindert.
+       Kein defer/module – muss vor body-Render laufen. -->
+  <script src="js/theme-init.js"></script>
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/layout-base.css">
@@ -73,21 +62,12 @@
   <script type="module" src="js/app.js"></script>
   <!-- vis-network und Chart.js werden lazy aus public/js/lazy-libs.js nachgeladen,
        sobald die jeweilige Karte (Figuren-Graph / BookStats) geöffnet wird. -->
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+  <!-- Alpine self-hosted statt CDN: spart externen Roundtrip beim First-Load,
+       wird vom Service-Worker zusammen mit der Shell gecached und funktioniert
+       offline (Zug-Szenario). Pin per Dateiname; bumpen + SHELL_CACHE erhöhen. -->
+  <script defer src="vendor/alpine-3.14.9.min.js"></script>
   <!-- Privacy-friendly analytics by Plausible (self-hosted). Nur auf Produktion (kein localhost/.local). -->
-  <script>
-    (function () {
-      var h = location.hostname;
-      if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.endsWith('.local')) return;
-      var s = document.createElement('script');
-      s.async = true;
-      s.src = 'https://analytics.david-berger.ch/js/pa-88MHJ1lIXYZYeHM5hVZIA.js';
-      document.head.appendChild(s);
-      window.plausible = window.plausible || function () { (plausible.q = plausible.q || []).push(arguments) };
-      plausible.init = plausible.init || function (i) { plausible.o = i || {} };
-      plausible.init({ hashBasedRouting: true });
-    })();
-  </script>
+  <script defer src="js/plausible-init.js"></script>
 </head>
 <body x-data="lektorat"
       @keydown.ctrl.enter.window="if (showEditorCard && !checkLoading && !focusMode) runCheck()"

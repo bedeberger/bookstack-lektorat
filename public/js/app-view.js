@@ -247,8 +247,10 @@ export const appViewMethods = {
     }
     this._closeOtherMainCards('szenen');
     this.showSzenenCard = true;
-    if (!this.figuren.length) await this.loadFiguren(this.selectedBookId);
-    if (!this.orte.length) await this.loadOrte(this.selectedBookId);
+    const tasks = [];
+    if (!this.figuren.length) tasks.push(this.loadFiguren(this.selectedBookId));
+    if (!this.orte.length) tasks.push(this.loadOrte(this.selectedBookId));
+    if (tasks.length) await Promise.all(tasks);
   },
   toggleFiguresCard() {
     if (this.showFiguresCard) {

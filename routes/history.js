@@ -59,22 +59,38 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
   res.json({ ok: true });
 });
 
-// Letzte 20 Läufe für eine Seite
+// Letzte 20 Läufe für eine Seite (Listenansicht – ohne grosse JSON-Felder).
+// JSON-Daten (errors_json/szenen_json/applied/selected) lädt das Frontend
+// lazy via /check/:id/details, sobald der User einen Eintrag öffnet. Spart
+// 20× JSON.parse pro Aufruf, auch wenn keiner expandiert wird.
 router.get('/page/:page_id', (req, res) => {
   const user_email = req.session?.user?.email || null;
   const pageId = toIntId(req.params.page_id);
   if (!pageId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const rows = db.prepare(`
-    SELECT * FROM page_checks WHERE page_id = ? AND user_email = ?
+    SELECT id, page_id, page_name, book_id, chapter_id, checked_at,
+           error_count, stilanalyse, fazit, model, saved, saved_at
+    FROM page_checks WHERE page_id = ? AND user_email = ?
     ORDER BY checked_at DESC LIMIT 20`).all(pageId, user_email);
-  res.json(rows.map(r => ({
-    ...r,
+  res.json(rows.map(r => ({ ...r, saved: !!r.saved })));
+});
+
+// JSON-Detail eines page_check (errors/szenen/applied/selected).
+// Wird vom Frontend bei Klick auf einen History-Eintrag nachgeladen.
+router.get('/check/:id/details', (req, res) => {
+  const user_email = req.session?.user?.email || null;
+  const id = toIntId(req.params.id);
+  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
+  const r = db.prepare(`
+    SELECT errors_json, applied_errors_json, selected_errors_json, szenen_json
+    FROM page_checks WHERE id = ? AND user_email = ?`).get(id, user_email);
+  if (!r) return res.status(404).json({ error_code: 'NOT_FOUND' });
+  res.json({
     errors_json: JSON.parse(r.errors_json || '[]'),
     applied_errors_json: r.applied_errors_json ? JSON.parse(r.applied_errors_json) : null,
     selected_errors_json: r.selected_errors_json ? JSON.parse(r.selected_errors_json) : null,
     szenen_json: r.szenen_json ? JSON.parse(r.szenen_json) : null,
-    saved: !!r.saved,
-  })));
+  });
 });
 
 // Buchbewertung speichern

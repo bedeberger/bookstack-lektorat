@@ -92,6 +92,22 @@ export const historyMethods = {
       }
     }
 
+    // JSON-Details lazy nachladen (Listen-Endpoint liefert sie nicht mehr).
+    // Cache am Eintrag selbst, damit erneuter Klick keinen zweiten Fetch macht.
+    if (entry.errors_json === undefined) {
+      try {
+        const details = await fetchJson('/history/check/' + entry.id + '/details');
+        entry.errors_json = details.errors_json || [];
+        entry.applied_errors_json = details.applied_errors_json || null;
+        entry.selected_errors_json = details.selected_errors_json || null;
+        entry.szenen_json = details.szenen_json || null;
+      } catch (e) {
+        console.error('[loadHistoryEntry details]', e);
+        this.setStatus(this.t('chat.pageLoadFailed'));
+        return;
+      }
+    }
+
     const findings = sortByPosition(this.originalHtml, entry.errors_json || []);
     this.lektoratFindings = findings;
 

@@ -125,8 +125,9 @@ export const appHashRouterMethods = {
     try {
       // Beim ersten _applyHash (Deep-Link / Reload) ist selectedBookId in init()
       // bereits aus dem Hash gesetzt und `loadBooks()` hat `loadPages()` schon
-      // ausgeführt – nur `_resetBookScopedState()` für `book:changed` dispatchen,
-      // sonst doppelte loadPages mit sichtbarem Sidebar-Flicker.
+      // ausgeführt – nur `book:changed` dispatchen, damit Sub-Karten sich
+      // synchronisieren. Kein _resetBookScopedState (würde tokEsts/_tokenEstGen
+      // killen → Page-Stats blieben leer) und kein zweites loadPages (Flicker).
       const isInitialApply = !this._initialApplyDone;
       this._initialApplyDone = true;
       if (String(this.selectedBookId) !== targetBookId) {
@@ -134,7 +135,9 @@ export const appHashRouterMethods = {
         this._resetBookScopedState();
         await this.loadPages();
       } else if (isInitialApply) {
-        this._resetBookScopedState();
+        window.dispatchEvent(new CustomEvent('book:changed', {
+          detail: { bookId: this.selectedBookId },
+        }));
       }
 
       const view = parts[2];

@@ -31,7 +31,40 @@ const app = express();
 // Hinter einem Reverse-Proxy (NGINX, NPM, Traefik …) echte Client-IP
 // und req.secure korrekt auswerten lassen.
 app.set('trust proxy', 1);
-app.use(helmet({ contentSecurityPolicy: false })); // CSP aus: Alpine/vis-network via CDN würde blockiert
+// CSP: alle Skripte/Styles/Fonts self-hosted (vendor/ + js/ + css/ + fonts/).
+// 'unsafe-eval' ist Pflicht für Alpine.js v3 (kompiliert Direktiven dynamisch).
+// 'unsafe-inline' bei style-src ist nötig, weil Alpine `:style` zur Laufzeit
+// inline-style-Attribute setzt (z.B. progress-bar via --progress).
+// img-src enthält die BookStack-Origin (Editor-Preview rendert Server-HTML mit
+// absoluten BookStack-Bild-URLs) plus data:/blob: für Generated Charts/Graphs.
+// connect-src 'self' deckt alle XHR/SSE-Endpunkte (Server proxy'd Anthropic,
+// Ollama, BookStack); Plausible darf an seine eigene Origin posten.
+const PLAUSIBLE_ORIGIN = 'https://analytics.david-berger.ch';
+const cspBookstackOrigin = (() => {
+  try { return new URL(BOOKSTACK_URL).origin; }
+  catch { return null; }
+})();
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-eval'", PLAUSIBLE_ORIGIN],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:', ...(cspBookstackOrigin ? [cspBookstackOrigin] : [])],
+      fontSrc: ["'self'"],
+      connectSrc: ["'self'", PLAUSIBLE_ORIGIN],
+      workerSrc: ["'self'"],
+      manifestSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'same-origin' },
+}));
 
 // gzip aktiv, aber SSE-Streams (text/event-stream) und Responses mit
 // `x-no-compression` ausgenommen — Kompression würde Stream-Chunks bis zum

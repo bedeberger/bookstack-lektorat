@@ -24,8 +24,9 @@ export function registerOrteCard() {
       this.$watch(() => window.__app.showOrteCard, async (visible) => {
         if (!visible) return;
         if (!window.__app.selectedBookId) return;
-        if (!window.__app.szenen.length) await window.__app.loadSzenen(window.__app.selectedBookId);
-        await window.__app.loadOrte(window.__app.selectedBookId);
+        const tasks = [window.__app.loadOrte(window.__app.selectedBookId)];
+        if (!window.__app.szenen.length) tasks.push(window.__app.loadSzenen(window.__app.selectedBookId));
+        await Promise.all(tasks);
       });
 
       this._onBookChanged = async () => {

@@ -202,7 +202,10 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
     if (!pages.length) { completeJob(jobId, { empty: true }); return; }
     logger.info(`Start: ${pages.length} Seiten (book=${bookId})`);
 
-    const tok = { in: 0, out: 0, ms: 0 };
+    // Cloud-Provider verträgt parallele Calls; lokale Provider (Ollama/llama.cpp) sind
+    // bereits via Mutex in lib/ai.js serialisiert – Pool=1 verhindert pile-up im aiCall.
+    const concurrency = local ? 1 : (parseInt(process.env.LEKTORAT_BATCH_CONCURRENCY, 10) || 4);
+    const tok = { in: 0, out: 0, ms: 0, inflight: new Map() };
     const model = _modelName(process.env.API_PROVIDER || 'claude');
     let done = 0, totalErrors = 0;
 
@@ -210,25 +213,16 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
     // nicht dieselbe Seite zweimal von BookStack holt.
     const lastParaCache = new Map();
 
-    for (let i = 0; i < pages.length; i++) {
+    const processPage = async (p, i) => {
       if (jobAbortControllers.get(jobId)?.signal.aborted) throw new DOMException('Aborted', 'AbortError');
-      const p = pages[i];
-      const fromPct = Math.round((i / pages.length) * 95);
-      const toPct   = Math.round(((i + 1) / pages.length) * 95);
-      updateJob(jobId, {
-        progress: fromPct,
-        statusText: 'job.phase.pageProgress',
-        statusParams: { current: i + 1, total: pages.length, name: p.name },
-      });
-
       try {
         const pd = await bsGet('pages/' + p.id, userToken);
         const text = htmlToText(pd.html).trim();
-        if (!text) continue;
+        if (!text) return;
 
-        const batchFiguren        = getChapterFigures(bookId, pd.chapter_id, userEmail);
-        const batchBeziehungen    = local ? [] : getChapterFigureRelations(bookId, pd.chapter_id, userEmail);
-        const batchOrte           = getChapterLocations(bookId, pd.chapter_id, userEmail);
+        const batchFiguren     = getChapterFigures(bookId, pd.chapter_id, userEmail);
+        const batchBeziehungen = local ? [] : getChapterFigureRelations(bookId, pd.chapter_id, userEmail);
+        const batchOrte        = getChapterLocations(bookId, pd.chapter_id, userEmail);
 
         // Lokale Provider: Vorseiten-Kontext wird im Prompt nicht verwendet – kompletter
         // Block überspringen, spart einen BookStack-Fetch pro Seite.
@@ -246,12 +240,14 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
               } catch (_) { /* Vorseite fehlschlägt → kein Kontext, nicht kritisch */ }
             }
           }
-          // Aktuelle Seite als zukünftige Vorseite vormerken (spart Fetch für die Folge-Iteration)
           lastParaCache.set(p.id, lastParagraph(text));
         }
 
         const chapterName = pd.chapter_id ? (chapterNameById[String(pd.chapter_id)] || null) : null;
 
+        // Bei Pool>1 sind feinere Pct-Ranges pro Item nicht sinnvoll
+        // (mehrere Calls schreiben gleichzeitig den Job-Progress); progress wird
+        // unten aus done/total nach jedem fertigen Item gesetzt.
         const result = await aiCall(jobId, tok,
           buildBatchLektoratPrompt(text, {
             stopwords: batchStopwords,
@@ -267,7 +263,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
             previousExcerpt,
           }),
           SYSTEM_LEKTORAT,
-          fromPct, toPct, 2000, 0.2, null, undefined, SCHEMA_LEKTORAT,
+          null, null, 2000, 0.2, null, undefined, SCHEMA_LEKTORAT,
         );
 
         if (!Array.isArray(result?.fehler)) throw new Error('fehler-Array fehlt');
@@ -283,12 +279,30 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
             szenenBatch.length > 0 ? JSON.stringify(szenenBatch) : null,
             result.stilanalyse || null, result.fazit || null, model, userEmail || null);
         logger.info(`[${i + 1}/${pages.length}] «${pd.name}» fertig (page=${p.id}, chap=${p.chapter_id || '-'}, ${fehler.length} Beanstandungen)`);
-        done++;
       } catch (e) {
         if (e.name === 'AbortError') throw e;
         logger.warn(`[${i + 1}/${pages.length}] «${p.name}» übersprungen (page=${p.id}, chap=${p.chapter_id || '-'}): ${e.message}`);
+        return;
       }
-    }
+      done++;
+      const pct = Math.round((done / pages.length) * 95);
+      updateJob(jobId, {
+        progress: pct,
+        statusText: 'job.phase.pageProgress',
+        statusParams: { current: done, total: pages.length, name: p.name },
+      });
+    };
+
+    let nextIndex = 0;
+    const workers = Array.from({ length: Math.min(concurrency, pages.length) }, async () => {
+      while (true) {
+        const idx = nextIndex++;
+        if (idx >= pages.length) return;
+        if (jobAbortControllers.get(jobId)?.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+        await processPage(pages[idx], idx);
+      }
+    });
+    await Promise.all(workers);
 
     completeJob(jobId, { pageCount: pages.length, done, totalErrors, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`Fertig: ${done}/${pages.length} Seiten (book=${bookId}), ${totalErrors} Beanstandungen, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens`);

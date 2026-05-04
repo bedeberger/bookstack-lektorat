@@ -35,6 +35,9 @@ export function registerFigurenCard() {
     _figurenHash: null,
     _figurenNodes: null,
     _figurenEdges: null,
+    _filteredFigurenCache: null,
+    _figurenKapitelListeCache: null,
+    _figurenSeitenListeCache: null,
 
     _onBookChanged: null,
     _onViewReset: null,
@@ -107,49 +110,99 @@ export function registerFigurenCard() {
     },
 
     // ── UI-Helper ────────────────────────────────────────────────────────────
+    // Beide Listen werden aus Comboboxen via x-effect doppelt pro Render gerufen
+    // (für _disabled + options). Cache an Identität von figuren bzw. filters.kapitel,
+    // damit Set-Aufbau + Sort nur bei echter Datenänderung läuft.
     figurenKapitelListe() {
-      return window.__app._deriveKapitel(window.__app.figuren, f => f.kapitel);
+      const figuren = window.__app.figuren;
+      const cache = this._figurenKapitelListeCache;
+      if (cache && cache.figuren === figuren) return cache.result;
+      const result = window.__app._deriveKapitel(figuren, f => f.kapitel);
+      this._figurenKapitelListeCache = { figuren, result };
+      return result;
     },
 
     figurenSeitenListe() {
       // seiten ist ein Array von {kapitel, seite} — eigener Iterator nötig,
       // weil _deriveSeiten eine Eins-zu-Eins-Relation annimmt.
       const filters = window.__app.figurenFilters;
-      if (!filters.kapitel) return [];
+      const figuren = window.__app.figuren;
+      const kapitel = filters.kapitel;
+      const cache = this._figurenSeitenListeCache;
+      if (cache && cache.figuren === figuren && cache.kapitel === kapitel) return cache.result;
+      if (!kapitel) {
+        this._figurenSeitenListeCache = { figuren, kapitel, result: [] };
+        return [];
+      }
       const names = new Set();
-      for (const f of (window.__app.figuren || [])) {
+      for (const f of (figuren || [])) {
         for (const s of (f.seiten || [])) {
-          if (s.kapitel === filters.kapitel && s.seite) names.add(s.seite);
+          if (s.kapitel === kapitel && s.seite) names.add(s.seite);
         }
       }
-      return window.__app._sortByPageOrder([...names]);
+      const result = window.__app._sortByPageOrder([...names]);
+      this._figurenSeitenListeCache = { figuren, kapitel, result };
+      return result;
     },
 
     filteredFiguren() {
       const root = window.__app;
       const filters = root.figurenFilters;
-      let result = root.figuren;
-      const q = (filters.suche ?? '').toLowerCase();
+      const figuren = root.figuren;
+      const chapterMap = root._chapterOrderMap;
+      const suche = filters.suche ?? '';
+      const kapitel = filters.kapitel ?? '';
+      const seite = filters.seite ?? '';
+
+      const cache = this._filteredFigurenCache;
+      if (cache
+        && cache.figuren === figuren
+        && cache.chapterMap === chapterMap
+        && cache.suche === suche
+        && cache.kapitel === kapitel
+        && cache.seite === seite) {
+        return cache.result;
+      }
+
+      let result = figuren;
+      const q = suche.toLowerCase();
       if (q) result = result.filter(f => (f.name ?? '').toLowerCase().includes(q));
-      if (filters.kapitel) {
+      if (kapitel) {
+        result = result.filter(f => (f.kapitel ?? []).some(k => k.name === kapitel));
+      }
+      if (seite) {
         result = result.filter(f =>
-          (f.kapitel ?? []).some(k => k.name === filters.kapitel)
+          (f.seiten ?? []).some(s => s.kapitel === kapitel && s.seite === seite)
         );
       }
-      if (filters.seite) {
-        result = result.filter(f =>
-          (f.seiten ?? []).some(s => s.kapitel === filters.kapitel && s.seite === filters.seite)
-        );
-      }
-      return [...result].sort((a, b) => {
-        const aK = Math.min(...(a.kapitel ?? []).map(k => root._chapterIdx(k.name)), 9999);
-        const bK = Math.min(...(b.kapitel ?? []).map(k => root._chapterIdx(k.name)), 9999);
+
+      // minChapterIdx pro Figur einmal vorab berechnen (kein Math.min(...spread) im Comparator).
+      const minIdx = new Map();
+      const idxOf = (f) => {
+        let m = minIdx.get(f);
+        if (m !== undefined) return m;
+        m = 9999;
+        const ks = f.kapitel;
+        if (ks) for (let i = 0; i < ks.length; i++) {
+          const v = chapterMap?.get(ks[i].name) ?? 9999;
+          if (v < m) m = v;
+        }
+        minIdx.set(f, m);
+        return m;
+      };
+
+      const sorted = [...result].sort((a, b) => {
+        const aK = idxOf(a);
+        const bK = idxOf(b);
         if (aK !== bK) return aK - bK;
         const aT = FIGUR_TYP_ORDER[a.typ] ?? 99;
         const bT = FIGUR_TYP_ORDER[b.typ] ?? 99;
         if (aT !== bT) return aT - bT;
         return (a.name ?? '').localeCompare(b.name ?? '', 'de');
       });
+
+      this._filteredFigurenCache = { figuren, chapterMap, suche, kapitel, seite, result: sorted };
+      return sorted;
     },
 
     ...graphMethods,
