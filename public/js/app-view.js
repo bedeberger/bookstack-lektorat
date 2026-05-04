@@ -9,7 +9,7 @@ export const appViewMethods = {
       // Re-Klick auf bereits offene Seite: SW-Cache umgehen und frischen
       // Server-Stand laden. Aktive Edits nicht überschreiben.
       if (this.editMode || this.editDirty) return;
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      this._scrollToEditorCard();
       await this._refetchCurrentPage();
       return;
     }
@@ -35,7 +35,7 @@ export const appViewMethods = {
     this.resetPage();
     this.currentPage = p;
     this.showEditorCard = true;
-    this.$nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    this.$nextTick(() => this._scrollToEditorCard());
 
     if (typeof this._trackPageUsage === 'function' && this.selectedBookId) {
       this._trackPageUsage(p.id, this.selectedBookId);
@@ -85,6 +85,18 @@ export const appViewMethods = {
     // Figurenkontext für dieses Kapitel laden (parallel zur History)
     this.loadChapterFigures();
     await this.loadPageHistory(p.id);
+  },
+
+  // Scroll-Ziel beim Seitenwechsel: Mobile (<960px, einspaltig) → Editor-Card
+  // ins Viewport, sonst sieht User den Tree statt der frisch geöffneten Seite.
+  // Desktop (>=960px, zweispaltig) → Window-Top, da Editor in eigener Spalte.
+  _scrollToEditorCard() {
+    const isMobile = window.matchMedia('(max-width: 959.98px)').matches;
+    if (isMobile) {
+      const el = document.getElementById('editor-card');
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   },
 
   // Lädt die aktuell offene Seite neu vom Server (SW-Cache umgangen). Wird
