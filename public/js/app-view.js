@@ -9,6 +9,7 @@ export const appViewMethods = {
       // Re-Klick auf bereits offene Seite: SW-Cache umgehen und frischen
       // Server-Stand laden. Aktive Edits nicht überschreiben.
       if (this.editMode || this.editDirty) return;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       await this._refetchCurrentPage();
       return;
     }
@@ -34,6 +35,7 @@ export const appViewMethods = {
     this.resetPage();
     this.currentPage = p;
     this.showEditorCard = true;
+    this.$nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
 
     if (typeof this._trackPageUsage === 'function' && this.selectedBookId) {
       this._trackPageUsage(p.id, this.selectedBookId);
