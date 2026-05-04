@@ -426,10 +426,9 @@ export const bookOverviewMethods = {
   },
 
   // Lektorat-Findings pro Kapitel: aus overviewHeat.matrix (mode=open).
-  // per1k = Findings pro 1000 Wörter (normalisiert; kurze Kapitel mit vielen
-  // Findings werden so sichtbar).
-  // Diverging-Bar um Median analog Kapitellänge: rechts vom Tick = mehr
-  // Befunde als typisches Kapitel (warnfarbe), links = weniger (gemutet).
+  // Median, Diverging-Bar und Sort basieren auf absoluter Anzahl Findings —
+  // direkt ablesbar, ohne mentalen Umweg über Findings/1k Wörter.
+  // per1k bleibt als sekundärer Wert in der Zeilen-Meta erhalten.
   // Bar-Länge = |deltaPct| / maxAbsDelta * 48% (cap, damit Bars nicht an
   // Track-Rand stossen). Median nur aus geprüften Kapiteln; ungeprüfte
   // Zeilen behalten den Tick als Referenz, zeigen aber keinen Bar.
@@ -459,16 +458,16 @@ export const bookOverviewMethods = {
     const showMedian = checked.length >= 3;
     let median = 0;
     if (showMedian) {
-      const sorted = checked.map(c => c.per1k).sort((a, b) => a - b);
+      const sorted = checked.map(c => c.count).sort((a, b) => a - b);
       const mid = Math.floor(sorted.length / 2);
       median = sorted.length % 2 === 0
-        ? Math.round(((sorted[mid - 1] + sorted[mid]) / 2) * 10) / 10
+        ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
         : sorted[mid];
     }
     const withDelta = out.map(c => {
       const noCheck = c.pages_checked === 0;
       const deltaPct = !noCheck && median > 0
-        ? Math.round(((c.per1k - median) / median) * 100)
+        ? Math.round(((c.count - median) / median) * 100)
         : 0;
       return { ...c, noCheck, deltaPct };
     });
@@ -488,7 +487,7 @@ export const bookOverviewMethods = {
         isAbove: c.deltaPct > 0,
       };
     });
-    enriched.sort((a, b) => b.per1k - a.per1k);
+    enriched.sort((a, b) => b.count - a.count);
     return enriched;
   },
 

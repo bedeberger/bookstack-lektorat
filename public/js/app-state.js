@@ -146,6 +146,7 @@ const cardsState = () => ({
   showBookSettingsCard: false,
   showUserSettingsCard: false,
   showFinetuneExportCard: false,
+  showExportCard: false,
   showKomplettStatus: false,
   showAvatarMenu: false,
 });

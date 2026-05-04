@@ -13,12 +13,18 @@
 
 import {
   FEATURES, ACTIONS, FEATURE_GROUPS, GROUP_LABEL_KEY,
+  DEFAULT_RECENT_KEYS,
   featureByKey, isFeatureAvailable, unavailabilityReasonKey,
 } from './feature-registry.js';
 import { fuzzyMatch, highlight } from './palette-fuzzy.js';
 import { PROVIDERS, parseQuery } from './palette-providers.js';
 
-const FUZZY_THRESHOLD_PER_CHAR = 6; // grobe Score-Grenze für Mix-Modus
+// Score-Budget pro Query-Char für Provider-Treffer im Mix-Modus.
+// Höhere Query-Länge = grössere absolute fuzzyMatch-Scores (Gap-Penalty
+// + length-Faktor), Limit muss mit-skalieren damit überhaupt Treffer durchkommen.
+// Kleiner = strenger, grösser = mehr (auch schwächere) Provider-Treffer.
+const FUZZY_SCORE_BUDGET_PER_CHAR = 6;
+const RECENT_TARGET_COUNT = 3;
 
 export function registerPaletteCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
@@ -31,6 +37,11 @@ export function registerPaletteCard() {
     _toastTimer: null,
     _sectionsCache: null,
     _sectionsCacheKey: '',
+    _flatCache: null,
+    _flatCacheKey: '',
+    _modeCache: null,
+    _modeCacheQuery: null,
+    _returnFocusEl: null,
 
     init() {
       const abort = new AbortController();
@@ -48,6 +59,8 @@ export function registerPaletteCard() {
     },
 
     openPalette() {
+      const active = document.activeElement;
+      this._returnFocusEl = (active && active !== document.body) ? active : null;
       this.paletteOpen = true;
       this.paletteQuery = '';
       this.paletteIdx = 0;
@@ -65,6 +78,11 @@ export function registerPaletteCard() {
       this.paletteIdx = 0;
       this.paletteToast = '';
       document.body.classList.remove('palette-open');
+      const el = this._returnFocusEl;
+      this._returnFocusEl = null;
+      if (el && typeof el.focus === 'function' && document.contains(el)) {
+        try { el.focus(); } catch {}
+      }
     },
 
     onPaletteInput() {
@@ -170,7 +188,18 @@ export function registerPaletteCard() {
 
       // „Zuletzt"-Block nur ohne Suche.
       if (!q) {
-        const recent = (root.recentFeatureKeys || [])
+        // Recents aus Tracking; bei Erstnutzern (oder < 3 Einträge) mit
+        // DEFAULT_RECENT_KEYS auffüllen — sonst wäre das Panel leer.
+        const tracked = (root.recentFeatureKeys || []).filter(Boolean);
+        const seen = new Set(tracked);
+        const filled = tracked.slice();
+        for (const k of DEFAULT_RECENT_KEYS) {
+          if (filled.length >= RECENT_TARGET_COUNT) break;
+          if (seen.has(k)) continue;
+          filled.push(k);
+          seen.add(k);
+        }
+        const recent = filled
           .map(k => featureByKey(k))
           .filter(Boolean);
         if (recent.length) {
@@ -222,7 +251,7 @@ export function registerPaletteCard() {
       // Such-Provider (nur bei aktiver Query): Pages/Chapters/Figuren/Orte/Szenen
       // mit Top-Treffern, sofern Score gut genug.
       if (q && q.length >= 2) {
-        const limit = Math.max(3, Math.ceil(q.length * FUZZY_THRESHOLD_PER_CHAR));
+        const limit = Math.max(3, Math.ceil(q.length * FUZZY_SCORE_BUDGET_PER_CHAR));
         for (const provider of PROVIDERS) {
           const items = provider.search(root, q, t).filter(it => it.score < limit);
           if (items.length) {
@@ -312,11 +341,20 @@ export function registerPaletteCard() {
     },
 
     // ── Flach-Liste für Tastatur-Navigation ──────────────────────────────
+    // Cache an _sectionsCacheKey gekoppelt — sobald Sections-Cache hit, ist
+    // auch Flat stabil (rein deterministisch aus sections). Spart O(N) Spread
+    // pro paletteIsActive-Aufruf bei vollen Listen.
     _flatItems() {
+      const sections = this.paletteSections();
+      if (this._flatCache && this._flatCacheKey === this._sectionsCacheKey) {
+        return this._flatCache;
+      }
       const out = [];
-      for (const sec of this.paletteSections()) {
+      for (const sec of sections) {
         for (const it of sec.items) out.push({ ...it, sectionKey: sec.key });
       }
+      this._flatCacheKey = this._sectionsCacheKey;
+      this._flatCache = out;
       return out;
     },
 
@@ -339,11 +377,16 @@ export function registerPaletteCard() {
     },
 
     // Aktueller Modus für Mode-Pill (nur wenn Prefix erkannt).
+    // Cache pro paletteQuery — Template ruft die Funktion 3× pro Render.
     paletteCurrentMode() {
+      if (this._modeCacheQuery === this.paletteQuery) return this._modeCache;
       const parsed = parseQuery(this.paletteQuery);
-      if (parsed.mode === 'commands') return { key: 'commands', labelKey: 'palette.mode.commands', prefix: '>' };
-      if (parsed.mode === 'provider') return { key: parsed.provider.key, labelKey: parsed.provider.sectionKey, prefix: parsed.provider.prefix };
-      return null;
+      let result = null;
+      if (parsed.mode === 'commands') result = { key: 'commands', labelKey: 'palette.mode.commands', prefix: '>' };
+      else if (parsed.mode === 'provider') result = { key: parsed.provider.key, labelKey: parsed.provider.sectionKey, prefix: parsed.provider.prefix };
+      this._modeCacheQuery = this.paletteQuery;
+      this._modeCache = result;
+      return result;
     },
 
     // Statische Legende der Prefix-Modi (für Empty-State).

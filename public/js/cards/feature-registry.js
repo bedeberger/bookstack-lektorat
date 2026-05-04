@@ -45,6 +45,8 @@ export const FEATURES = [
     aliases: ['settings','config','buchtyp','booktype','einstellungen','genre'] },
   { key: 'finetuneExport', kind: 'toggle', group: 'tools',  labelKey: 'tile.finetuneExport', descKey: 'tile.finetuneExport.desc', flag: 'showFinetuneExportCard', toggle: 'toggleFinetuneExportCard', requiresBook: true,
     aliases: ['export','training','jsonl','llm','dataset','samples'] },
+  { key: 'export',         kind: 'toggle', group: 'tools',  labelKey: 'tile.export',         descKey: 'tile.export.desc',         flag: 'showExportCard',         toggle: 'toggleExportCard',         requiresBook: true,
+    aliases: ['download','pdf','epub','html','txt','markdown','md','herunterladen','speichern'] },
 ];
 
 // Globale Aktionen (kind:'action'). Eigene Sektion in der Palette.

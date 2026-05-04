@@ -252,6 +252,8 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
 }
 .overview-error-bar-item {
   display: flex;
@@ -456,7 +458,7 @@
   grid-template-columns: minmax(120px, 22%) 1fr auto;
   column-gap: 12px;
   row-gap: 4px;
-  max-height: 280px;
+  max-height: min(360px, 50vh);
   overflow-y: auto;
 }
 .overview-chapter-row {
@@ -624,6 +626,8 @@
      `-webkit-appearance: none` + Höhe erzwingt klassische Scrollbar (statt
      macOS-Overlay), damit sie permanent sichtbar bleibt, sobald sie da ist. */
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: min(360px, 50vh);
   margin: 0 -4px;
   padding: 0 4px 10px;
   scrollbar-width: thin;
@@ -739,6 +743,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-height: min(280px, 40vh);
+  overflow-y: auto;
 }
 .overview-recent-item {
   display: flex;
@@ -804,7 +810,10 @@
   .overview-donut { width: 60px; height: 60px; }
   .overview-donut-row { gap: 10px; }
   .overview-stars { font-size: 18px; }
-  .overview-chapter-list { max-height: 220px; }
+  .overview-chapter-list { max-height: min(260px, 45vh); }
+  .overview-presence-wrap { max-height: min(280px, 45vh); }
+  .overview-recent-list { max-height: min(220px, 40vh); }
+  .overview-error-bars { max-height: 220px; }
   .overview-presence-cell { width: 18px; height: 18px; }
   .overview-presence-num { font-size: 9px; }
   .overview-presence-row-head { max-width: 100px; padding: 0 6px 0 2px; }

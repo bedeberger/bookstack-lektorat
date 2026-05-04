@@ -1,10 +1,11 @@
 const express = require('express');
-const { createProxyMiddleware } = require('http-proxy-middleware');
+const { createProxyMiddleware, fixRequestBody } = require('http-proxy-middleware');
 const logger = require('../logger');
 const { MAX_TOKENS_OUT, MODEL_CONTEXT, CHARS_PER_TOKEN, ollamaTemp, llamaTemp } = require('../lib/ai');
 const { getBookLocale, getUser, getTokenForRequest } = require('../db/schema');
 const { getPrompts, getPromptConfig } = require('../lib/prompts-loader');
 const { toIntId } = require('../lib/validate');
+const { cleanPageHtml } = require('../lib/html-clean');
 
 const BOOKSTACK_URL = process.env.API_HOST || process.env.BOOKSTACK_URL || 'http://localhost:80';
 
@@ -363,6 +364,31 @@ router.get('/openthesaurus/synonyms', async (req, res) => {
   }
 });
 
+// Page-HTML-Sanitizer für Schreibvorgänge. Vor dem Proxy gemountet; parsed JSON
+// nur für Page-Writes, kollabiert leere Absätze (`<p></p>`, `<p><br></p>`,
+// `<br><br>`-Runs) und triggert beim Proxy `fixRequestBody`. Catched alle Pfade
+// (Lektorat-Save, Chat-Apply, History-Apply, Editor-Save, Future-Routen) — nicht
+// nur die, die im Frontend manuell gefiltert sind.
+const _pageWriteJson = express.json({ limit: '10mb' });
+function _isPageWrite(req) {
+  if (req.method !== 'PUT' && req.method !== 'POST') return false;
+  return /^\/pages(?:\/\d+)?\/?$/.test(req.path);
+}
+const bookstackPageCleaner = (req, res, next) => {
+  if (!_isPageWrite(req)) return next();
+  _pageWriteJson(req, res, (err) => {
+    if (err) return next(err);
+    if (req.body && typeof req.body.html === 'string') {
+      try {
+        req.body.html = cleanPageHtml(req.body.html);
+      } catch (e) {
+        logger.warn(`HTML-Cleaner fehlgeschlagen (${req.method} ${req.path}): ${e.message}`);
+      }
+    }
+    next();
+  });
+};
+
 // Proxy /api/* → BookStack. Token wird pro Request aus der DB gezogen, nicht
 // aus der Session – sonst würde ein Token-Update auf Gerät A die Sessions auf
 // anderen Geräten nicht erreichen (stale-token → fälschliches 401).
@@ -380,6 +406,11 @@ const bookstackProxy = createProxyMiddleware({
       const t = getTokenForRequest(req);
       if (t) {
         proxyReq.setHeader('Authorization', `Token ${t.id}:${t.pw}`);
+      }
+      // Wenn Body bereits geparst wurde (Page-Cleaner-Pfad), Stream neu serialisieren.
+      // Ohne fixRequestBody hängt sich der Proxy auf, weil der Stream konsumiert ist.
+      if (req.body && Object.keys(req.body).length > 0) {
+        fixRequestBody(proxyReq, req);
       }
     },
     proxyRes: (proxyRes, _req, res) => {
@@ -399,4 +430,4 @@ const bookstackProxy = createProxyMiddleware({
   }
 });
 
-module.exports = { router, bookstackProxy, BOOKSTACK_URL };
+module.exports = { router, bookstackProxy, bookstackPageCleaner, BOOKSTACK_URL };

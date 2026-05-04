@@ -26,6 +26,7 @@ const ALLOWED_KEYS = new Set([
   'stats',
   'bookSettings',
   'finetuneExport',
+  'export',
 ]);
 
 function userEmailOrNull(req) {

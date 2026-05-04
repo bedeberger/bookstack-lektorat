@@ -176,7 +176,6 @@
   border-top: 1px solid var(--color-border);
   background: var(--color-bg);
 }
-.palette-legend-title { display: none; }
 .palette-legend-grid {
   display: flex;
   flex-wrap: wrap;
@@ -201,7 +200,6 @@
 }
 
 @media (max-width: 600px) {
-  .palette-legend-grid { grid-template-columns: 1fr; }
   /* Hero: kbd-Hint weg (Mobile hat keine physische Tastatur), Padding etwas
      grösser für Tap-Komfort. */
   .palette-hero-kbd { display: none; }

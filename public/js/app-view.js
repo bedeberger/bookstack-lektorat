@@ -32,6 +32,7 @@ export const appViewMethods = {
     this.showKontinuitaetCard = false;
     this.showUserSettingsCard = false;
     this.showFinetuneExportCard = false;
+    this.showExportCard = false;
     this.resetPage();
     this.currentPage = p;
     this.showEditorCard = true;
@@ -138,6 +139,7 @@ export const appViewMethods = {
     if (keep !== 'bookSettings') this.showBookSettingsCard = false;
     if (keep !== 'userSettings') this.showUserSettingsCard = false;
     if (keep !== 'finetuneExport') this.showFinetuneExportCard = false;
+    if (keep !== 'export') this.showExportCard = false;
     this.resetPage();
   },
 
@@ -187,7 +189,8 @@ export const appViewMethods = {
       || this.showEreignisseCard || this.showKontinuitaetCard
       || this.showBookStatsCard || this.showStilCard || this.showFehlerHeatmapCard
       || this.showBookChatCard || this.showBookSettingsCard
-      || this.showUserSettingsCard || this.showFinetuneExportCard;
+      || this.showUserSettingsCard || this.showFinetuneExportCard
+      || this.showExportCard;
     if (anyOpen) return;
     this.showBookOverviewCard = true;
   },
@@ -220,6 +223,11 @@ export const appViewMethods = {
     if (this.showFinetuneExportCard) { this.showFinetuneExportCard = false; return; }
     this._closeOtherMainCards('finetuneExport');
     this.showFinetuneExportCard = true;
+  },
+  toggleExportCard() {
+    if (this.showExportCard) { this.showExportCard = false; return; }
+    this._closeOtherMainCards('export');
+    this.showExportCard = true;
   },
   // Abweichend von den anderen Toggles: erneuter Klick schliesst NICHT, sondern
   // refresht die History. Sub-Komponente lauscht auf `card:refresh`
@@ -507,6 +515,7 @@ export const appViewMethods = {
     this.showBookSettingsCard = false;
     this.showUserSettingsCard = false;
     this.showFinetuneExportCard = false;
+    this.showExportCard = false;
     this.alleAktualisierenLastRun = null;
     this.alleAktualisierenProgress = 0;
     this.alleAktualisierenTokIn = 0;

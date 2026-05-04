@@ -1,6 +1,6 @@
 // URL-Hash-Permalinks + History-Management.
 // Schema: #profil | #book/:bookId[/page/:pageId|/figur/:figId|/ort/:ortId|/kapitel[/:chapterId]|/<view>]
-// Views: figuren, orte, szenen, ereignisse, kontinuitaet, bewertung, kapitel, chat, stats, stil, fehler, einstellungen, finetune
+// Views: figuren, orte, szenen, ereignisse, kontinuitaet, bewertung, kapitel, chat, stats, stil, fehler, einstellungen, finetune, export
 //
 // Entwurfsentscheidungen:
 // - push vs. replace entscheidet `_hashCategory`: gleiche Kategorie → replace
@@ -39,6 +39,7 @@ export const appHashRouterMethods = {
     else if (this.showFehlerHeatmapCard) parts.push('fehler');
     else if (this.showBookSettingsCard) parts.push('einstellungen');
     else if (this.showFinetuneExportCard) parts.push('finetune');
+    else if (this.showExportCard) parts.push('export');
     return '#' + parts.join('/');
   },
 
@@ -234,6 +235,9 @@ export const appHashRouterMethods = {
         case 'finetune':
           if (!this.showFinetuneExportCard) await this.toggleFinetuneExportCard();
           break;
+        case 'export':
+          if (!this.showExportCard) await this.toggleExportCard();
+          break;
       }
     } finally {
       this._applyingHash = false;
@@ -255,6 +259,7 @@ export const appHashRouterMethods = {
       'showBookStatsCard', 'showStilCard', 'showFehlerHeatmapCard',
       'showBookSettingsCard', 'showUserSettingsCard',
       'showFinetuneExportCard',
+      'showExportCard',
       'showBookOverviewCard',
     ];
     this._hashWatcherTeardowns = [];

@@ -1,0 +1,32 @@
+<!-- Buch-Export -->
+<!--
+  Alpine.data-Sub-Komponente — siehe public/js/cards/export-card.js.
+  `showExportCard` bleibt im Root, fachlicher State in dieser Komponente.
+-->
+<div class="card" x-data="exportCard" x-show="$app.showExportCard" x-cloak>
+  <div class="card-header">
+    <span class="card-title" x-text="$app.t('book.export.title')"></span>
+  </div>
+
+  <p class="book-export-hint" x-text="$app.t('book.export.hint')"></p>
+
+  <div class="book-export-buttons">
+    <template x-for="fmt in ['pdf','epub','html','txt','md']" :key="fmt">
+      <button type="button"
+              class="book-export-btn"
+              :class="{ 'is-running': bookExportLoading === fmt }"
+              :disabled="!!bookExportLoading || !$app.selectedBookId"
+              @click="bookExport(fmt)">
+        <span x-show="bookExportLoading === fmt" class="spinner"></span>
+        <span x-text="$app.t('book.export.' + fmt)"></span>
+      </button>
+    </template>
+  </div>
+
+  <p class="book-export-status"
+     x-show="bookExportLoading"
+     x-text="$app.t('book.export.running', { fmt: (bookExportLoading || '').toUpperCase() })"></p>
+  <p class="book-export-error"
+     x-show="bookExportError"
+     x-text="bookExportError"></p>
+</div>

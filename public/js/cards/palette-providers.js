@@ -18,6 +18,20 @@ import { fuzzyMatch } from './palette-fuzzy.js';
 
 const PER_PROVIDER_LIMIT = 8;
 
+// In-Flight-Guard für lazy provider-prepare Calls. Ohne Guard feuert jeder
+// Keystroke `loadFiguren/Orte/Szenen` neu, bis der Fetch antwortet (Liste leer
+// = guard-bedingung unverändert). Set hält pro Buch+Provider eine pending
+// Promise; nach Resolve/Reject Eintrag löschen.
+const _inFlight = new Set();
+function _onceForBook(bookId, providerKey, runner) {
+  const tag = providerKey + ':' + bookId;
+  if (_inFlight.has(tag)) return;
+  _inFlight.add(tag);
+  let p;
+  try { p = runner(); } catch { _inFlight.delete(tag); return; }
+  Promise.resolve(p).finally(() => _inFlight.delete(tag));
+}
+
 function rank(items) {
   return items
     .filter(Boolean)
@@ -102,7 +116,7 @@ export const PROVIDERS = [
     // Defensive: Falls beim Buch-Wechsel der Reset durchläuft bevor loadFiguren fertig ist.
     prepare(root) {
       if (root.selectedBookId && !(root.figuren && root.figuren.length) && typeof root.loadFiguren === 'function') {
-        root.loadFiguren(root.selectedBookId);
+        _onceForBook(root.selectedBookId, 'figuren', () => root.loadFiguren(root.selectedBookId));
       }
     },
     search(root, q, _t) {
@@ -137,7 +151,7 @@ export const PROVIDERS = [
     // Orte werden sonst nur beim Öffnen der Orte-Karte geladen.
     prepare(root) {
       if (root.selectedBookId && !(root.orte && root.orte.length) && typeof root.loadOrte === 'function') {
-        root.loadOrte(root.selectedBookId);
+        _onceForBook(root.selectedBookId, 'orte', () => root.loadOrte(root.selectedBookId));
       }
     },
     search(root, q, _t) {
@@ -171,7 +185,7 @@ export const PROVIDERS = [
     // Szenen werden sonst nur beim Öffnen der Szenen-Karte geladen.
     prepare(root) {
       if (root.selectedBookId && !(root.szenen && root.szenen.length) && typeof root.loadSzenen === 'function') {
-        root.loadSzenen(root.selectedBookId);
+        _onceForBook(root.selectedBookId, 'szenen', () => root.loadSzenen(root.selectedBookId));
       }
     },
     search(root, q, _t) {

@@ -1,49 +1,4 @@
 @layer components {
-/* ── Buch-Export (inline in Buch-Einstellungen) ──────────────────────────── */
-.book-settings-export {
-  margin-top: 1.75rem;
-  padding-top: 1.25rem;
-  border-top: 0.5px solid var(--color-border);
-}
-.book-settings-export-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.6rem;
-}
-.book-settings-export-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.9rem;
-  border: 0.5px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  cursor: pointer;
-  transition: background var(--transition-slow), border-color var(--transition-slow);
-}
-.book-settings-export-btn:hover:not(:disabled) {
-  background: var(--color-surface-hover, var(--color-bg));
-  border-color: var(--color-accent);
-}
-.book-settings-export-btn:disabled {
-  opacity: var(--opacity-disabled);
-  cursor: not-allowed;
-}
-.book-settings-export-btn.is-running {
-  border-color: var(--color-accent);
-}
-.book-settings-export-status {
-  margin-top: 0.6rem;
-  font-size: 12px;
-  color: var(--color-muted);
-  font-style: italic;
-}
-
 /* ── Job-Statistiken (inline in Buch-Einstellungen) ──────────────────────── */
 .book-settings-stats {
   margin-top: 1.75rem;

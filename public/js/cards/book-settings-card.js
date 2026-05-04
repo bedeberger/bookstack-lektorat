@@ -17,8 +17,6 @@ export function registerBookSettingsCard() {
     bookSettingsSaving: false,
     bookSettingsSaved: false,
     bookSettingsError: '',
-    bookExportLoading: null,
-    bookExportError: '',
     bookJobStats: null,
     bookJobStatsLoading: false,
     expandedJobType: null,

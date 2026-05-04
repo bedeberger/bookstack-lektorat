@@ -62,7 +62,7 @@ export const fehlerHeatmapMethods = {
 
   fehlerHeatmapCellValue(chapterKey, typ) {
     const cell = this.fehlerHeatmapData?.matrix?.[chapterKey]?.[typ];
-    return cell ? cell.per1k : null;
+    return cell ? cell.count : null;
   },
 
   fehlerHeatmapCellCount(chapterKey, typ) {
@@ -75,7 +75,7 @@ export const fehlerHeatmapMethods = {
     const chapters = this.fehlerHeatmapData?.chapters || [];
     return minMaxBy(chapters, (ch) => {
       const key = this.fehlerHeatmapChapterKey(ch);
-      return this.fehlerHeatmapData?.matrix?.[key]?.[typ]?.per1k;
+      return this.fehlerHeatmapData?.matrix?.[key]?.[typ]?.count;
     });
   },
 
@@ -113,7 +113,7 @@ export const fehlerHeatmapMethods = {
   fehlerHeatmapCellLabel(chapterKey, typ) {
     const cell = this.fehlerHeatmapData?.matrix?.[chapterKey]?.[typ];
     if (!cell || !cell.count) return '–';
-    return formatNumber(cell.per1k, window.__app.uiLocale, 1);
+    return formatNumber(cell.count, window.__app.uiLocale, 0);
   },
 
   toggleFehlerHeatmapDetail(chapterKey, typ) {

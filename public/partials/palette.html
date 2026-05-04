@@ -47,7 +47,7 @@
                           'palette-item--active': paletteIsActive(section.key, item.key),
                           'palette-item--disabled': !item.available,
                         }"
-                        :title="!item.available && item.reasonKey ? $app.t(item.reasonKey) : ''"
+                        :data-tip="!item.available && item.reasonKey ? $app.t(item.reasonKey) : null"
                         @click="activateItem(item)"
                         @mouseenter="onItemHover(section.key, item.key)"
                         role="option"
@@ -65,7 +65,6 @@
         </div>
         <!-- Prefix-Legende: nur sichtbar wenn Suchfeld leer. -->
         <div class="palette-legend" x-show="!paletteQuery" x-cloak>
-          <div class="palette-legend-title" x-text="$app.t('palette.legend.title')"></div>
           <div class="palette-legend-grid">
             <template x-for="row in paletteLegendItems()" :key="row.prefix">
               <span class="palette-legend-row">

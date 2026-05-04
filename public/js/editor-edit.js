@@ -13,6 +13,9 @@ const DRAFT_KEY = (pageId) => `editor_draft_${pageId}`;
 // Entfernt Korrekturvorschlags-Markup vor dem Speichern nach BookStack:
 //   - .lektorat-mark / .chat-mark → unwrap (Originaltext behalten)
 //   - .lektorat-ins / .chat-mark-ins → komplett entfernen (nur Vorschlagstext)
+// Block-Wrapping (orphan Text-/Inline-Runs → <p>) übernimmt serverseitig
+// `bookstackPageCleaner` aus lib/html-clean.js auf dem /api-Proxy — single
+// chokepoint für alle Page-Writes (Editor, Lektorat-Save, Chat-Apply, Jobs).
 function stripLektoratMarks(html) {
   let out = html;
   const hasMark = out && (out.indexOf('lektorat-mark') !== -1 || out.indexOf('chat-mark') !== -1);

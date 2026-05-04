@@ -111,29 +111,6 @@
     <p class="book-settings-saved" x-show="bookSettingsSaved" x-text="$app.t('common.settingsSaved')"></p>
     <p class="book-settings-error" x-show="bookSettingsError" x-text="bookSettingsError"></p>
 
-    <section class="book-settings-export" x-show="$app.selectedBookId">
-      <h3 class="book-settings-stats-title" x-text="$app.t('book.export.title')"></h3>
-      <p class="book-settings-hint" x-text="$app.t('book.export.hint')"></p>
-      <div class="book-settings-export-buttons">
-        <template x-for="fmt in ['pdf','html','txt','md']" :key="fmt">
-          <button type="button"
-                  class="book-settings-export-btn"
-                  :class="{ 'is-running': bookExportLoading === fmt }"
-                  :disabled="!!bookExportLoading"
-                  @click="bookExport(fmt)">
-            <span x-show="bookExportLoading === fmt" class="spinner"></span>
-            <span x-text="$app.t('book.export.' + fmt)"></span>
-          </button>
-        </template>
-      </div>
-      <p class="book-settings-export-status"
-         x-show="bookExportLoading"
-         x-text="$app.t('book.export.running', { fmt: (bookExportLoading || '').toUpperCase() })"></p>
-      <p class="book-settings-error"
-         x-show="bookExportError"
-         x-text="bookExportError"></p>
-    </section>
-
     <section class="book-settings-stats">
       <h3 class="book-settings-stats-title" x-text="$app.t('jobStats.title')"></h3>
       <div x-show="bookJobStatsLoading && !bookJobStats" class="job-stats-loading" x-text="$app.t('jobStats.loading')"></div>

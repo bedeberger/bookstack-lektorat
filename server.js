@@ -20,7 +20,7 @@ const chatRouter = require('./routes/chat');
 const ideenRouter = require('./routes/ideen');
 const bookSettingsRouter = require('./routes/booksettings');
 const userSettingsRouter = require('./routes/usersettings');
-const { router: proxiesRouter, bookstackProxy, BOOKSTACK_URL } = require('./routes/proxies');
+const { router: proxiesRouter, bookstackProxy, bookstackPageCleaner, BOOKSTACK_URL } = require('./routes/proxies');
 const { router: syncRouter, syncAllBooks } = require('./routes/sync');
 const exportRouter = require('./routes/export');
 const usageRouter = require('./routes/usage');
@@ -231,7 +231,7 @@ app.use('/usage', usageRouter);
 // Logout: usage-Tabelle behält Einträge (User-Wiederkehr → Top-3 sofort wieder da).
 // Wenn Datenschutz erforderlich, Cleanup über Job/Cron auf Last-Seen-Basis.
 app.use(staticServe);
-app.use('/api', bookstackProxy);
+app.use('/api', bookstackPageCleaner, bookstackProxy);
 
 const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`Lektorat läuft auf http://0.0.0.0:${PORT}`);

@@ -417,9 +417,9 @@
       </div>
     </template>
 
-    <!-- Lektorat-Findings pro Kapitel: aus Heatmap aggregiert.
-         per1k = Findings pro 1000 Wörter (normalisiert, damit kurze Kapitel
-         mit dichten Findings sichtbar werden). Sort: per1k desc.
+    <!-- Lektorat-Findings pro Kapitel: aus Heatmap aggregiert. Median, Bar
+         und Sort basieren auf der absoluten Anzahl Findings; per1k bleibt
+         als Sekundärwert in der Zeilen-Meta sichtbar.
          Klick auf Tile-Header → Fehler-Heatmap; Zeilen sind nicht klickbar
          (Heatmap zeigt eh alles). -->
     <template x-if="overviewChapterFindings().some(c => !c.noCheck)">
@@ -430,7 +430,7 @@
           <div class="overview-tile-label" x-text="$app.t('overview.chapterFindings')"></div>
           <span class="overview-tile-median"
                 x-show="overviewChapterFindings()[0]?.showMedian"
-                x-text="$app.t('overview.medianTick') + ': ' + overviewChapterFindings()[0]?.median + ' ' + $app.t('overview.unit.per1k')"></span>
+                x-text="$app.t('overview.medianTick') + ': ' + overviewChapterFindings()[0]?.median + ' ' + $app.t('overview.unit.findings')"></span>
         </div>
         <ul class="overview-chapter-list">
           <template x-for="ch in overviewChapterFindings()" :key="ch.id">
@@ -445,16 +445,13 @@
                      :style="{ left: ch.barLeftPct + '%', width: ch.barWidthPct + '%' }"></div>
                 <div class="overview-chapter-median-tick"
                      x-show="!ch.noCheck"
-                     :data-tip="$app.t('overview.medianTick') + ': ' + ch.median + ' ' + $app.t('overview.unit.per1k')"></div>
+                     :data-tip="$app.t('overview.medianTick') + ': ' + ch.median + ' ' + $app.t('overview.unit.findings')"></div>
               </div>
               <span class="overview-chapter-meta">
                 <span class="overview-chapter-delta"
                       x-show="!ch.noCheck && ch.showMedian"
                       :class="ch.deltaPct > 0 ? 'overview-trend-pct--down' : ch.deltaPct < 0 ? 'overview-trend-pct--up' : ''"
                       x-text="(ch.deltaPct >= 0 ? '+' : '') + ch.deltaPct + '%'"></span>
-                <span class="overview-chapter-per1k"
-                      x-show="!ch.noCheck"
-                      x-text="ch.per1k + ' ' + $app.t('overview.unit.per1k')"></span>
                 <span class="overview-chapter-count"
                       x-show="!ch.noCheck"
                       x-text="_fmtNum(ch.count) + ' ' + $app.t('overview.unit.findings')"></span>
