@@ -438,12 +438,18 @@ export function registerPaletteCard() {
       if (!root) return;
 
       // Karten-Toggle
+      // Palette-Semantik = "zur Karte gehen", nie zumachen. Manche
+      // toggleXxxCard-Methoden schliessen beim 2. Klick (stil, fehlerHeatmap,
+      // bookStats, bookSettings, userSettings, finetuneExport, export); bei
+      // bereits offener Karte daher Toggle überspringen, sonst landet User
+      // im Leeren.
       if (item.kind === 'toggle') {
         const fn = root[item.feature.toggle];
         if (typeof fn !== 'function') return;
         this._trackPaletteUsage(item.feature.key);
+        const alreadyOpen = !!root[item.feature.flag];
         this.closePalette();
-        fn.call(root);
+        if (!alreadyOpen) fn.call(root);
         return;
       }
       // Globale Aktion
