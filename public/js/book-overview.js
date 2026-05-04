@@ -19,22 +19,41 @@
 // instant beim Buchwechsel sichtbar sein, ohne Lazy-Lib-Load.
 import { fetchJson, fmtExactDuration } from './utils.js';
 
+// Retry once mit kurzem Backoff: bei 9 parallelen Endpoints fängt das
+// 5xx-/Netzwerk-Blips ab, ohne dass das Tile stumm leer rendert.
+async function fetchJsonRetry(url) {
+  try { return await fetchJson(url); }
+  catch (e1) {
+    await new Promise(r => setTimeout(r, 250));
+    try { return await fetchJson(url); }
+    catch (e2) {
+      console.warn('[bookOverview] fetch failed twice', url, e2);
+      throw e2;
+    }
+  }
+}
+
 export const bookOverviewMethods = {
   async loadBookOverview(bookId) {
     if (!bookId) return;
+    // Dedupe: laufender Load fürs gleiche Buch wird ignoriert. Buchwechsel
+    // setzt _loadingBookId auf die neue ID; In-flight-Antworten fürs alte
+    // Buch fallen unten durch den overviewBookId-Guard raus.
+    if (this._loadingBookId === bookId) return;
+    this._loadingBookId = bookId;
     this.overviewLoading = true;
     this.overviewBookId = bookId;
     try {
       const [stats, coverage, heat, reviews, recent, figuren, szenen, orte, lektoratTime] = await Promise.all([
-        fetchJson(`/history/book-stats/${bookId}`).catch(() => []),
-        fetchJson(`/history/coverage/${bookId}`).catch(() => null),
-        fetchJson(`/history/fehler-heatmap/${bookId}?mode=open`).catch(() => null),
-        fetchJson(`/history/review/${bookId}`).catch(() => []),
-        fetchJson(`/usage/page/recent?book_id=${bookId}&limit=5`).catch(() => []),
-        fetchJson(`/figures/${bookId}`).catch(() => null),
-        fetchJson(`/figures/scenes/${bookId}`).catch(() => null),
-        fetchJson(`/locations/${bookId}`).catch(() => null),
-        fetchJson(`/history/lektorat-time/${bookId}`).catch(() => null),
+        fetchJsonRetry(`/history/book-stats/${bookId}`).catch(() => []),
+        fetchJsonRetry(`/history/coverage/${bookId}`).catch(() => null),
+        fetchJsonRetry(`/history/fehler-heatmap/${bookId}?mode=open`).catch(() => null),
+        fetchJsonRetry(`/history/review/${bookId}`).catch(() => []),
+        fetchJsonRetry(`/usage/page/recent?book_id=${bookId}&limit=5`).catch(() => []),
+        fetchJsonRetry(`/figures/${bookId}`).catch(() => null),
+        fetchJsonRetry(`/figures/scenes/${bookId}`).catch(() => null),
+        fetchJsonRetry(`/locations/${bookId}`).catch(() => null),
+        fetchJsonRetry(`/history/lektorat-time/${bookId}`).catch(() => null),
       ]);
       if (this.overviewBookId !== bookId) return;
       this.overviewStats = Array.isArray(stats) ? stats : [];
@@ -53,6 +72,7 @@ export const bookOverviewMethods = {
     } catch (e) {
       console.error('[loadBookOverview]', e);
     } finally {
+      if (this._loadingBookId === bookId) this._loadingBookId = null;
       if (this.overviewBookId === bookId) this.overviewLoading = false;
     }
   },
@@ -78,6 +98,23 @@ export const bookOverviewMethods = {
     if (hit && hit.source === source) return hit.value;
     const value = compute();
     memos[key] = { source, value };
+    return value;
+  },
+
+  // Multi-Source-Variante: Cache hit nur wenn ALLE Source-Refs identisch.
+  // Wichtig für Tiles, die zusätzlich zu `overviewXxx` auch `app.tree`/
+  // `app.figuren` lesen — sonst wird ein Compute mit leerem `tree` (während
+  // loadPages noch läuft) als `null` cached und Tile bleibt aus, obwohl
+  // tree danach befüllt wird (Hauptquelle-Ref unverändert).
+  _memoN(key, sources, compute) {
+    const memos = (this._memos ||= {});
+    const hit = memos[key];
+    if (hit && hit.sources.length === sources.length
+        && hit.sources.every((s, i) => s === sources[i])) {
+      return hit.value;
+    }
+    const value = compute();
+    memos[key] = { sources: [...sources], value };
     return value;
   },
 
@@ -202,13 +239,15 @@ export const bookOverviewMethods = {
   },
 
   // Sparkline-Daten + Polygon-Fläche darunter (Gradient-Fill).
-  // Liefert { d, area, color, deltaPct, endX, endY, w, h } oder { d:null, ... } bei <2 Punkten.
+  // Liefert { d, area, color, deltaPct, endX, endY, w, h, points } oder { d:null, ... } bei <2 Punkten.
+  // `points`: pro Datenpunkt { chars, iso, label } für Hover-Overlay mit Datum + exaktem Wert.
   overviewSparkline() {
     const stats = this.overviewStats || [];
     return this._memo('sparkline', stats, () => {
       const W = 240, H = 48, PAD = 3;
-      const data = stats.slice(-30).map(s => Number(s.chars) || 0);
-      if (data.length < 2) return { d: null, area: null, color: 'currentColor', deltaPct: 0, endX: 0, endY: 0, w: W, h: H };
+      const slice = stats.slice(-30);
+      const data = slice.map(s => Number(s.chars) || 0);
+      if (data.length < 2) return { d: null, area: null, color: 'currentColor', deltaPct: 0, endX: 0, endY: 0, w: W, h: H, points: [] };
       const min = Math.min(...data);
       const max = Math.max(...data);
       const span = Math.max(1, max - min);
@@ -230,7 +269,22 @@ export const bookOverviewMethods = {
                   :                'var(--color-accent)';
       const endX = pts[pts.length - 1][0];
       const endY = pts[pts.length - 1][1];
-      return { d, area, color, deltaPct, endX, endY, w: W, h: H };
+      const tag = window.__app?.uiLocale === 'en' ? 'en-US' : 'de-CH';
+      const dateFmt = new Intl.DateTimeFormat(tag, { day: 'numeric', month: 'short', year: 'numeric' });
+      const numFmt = (n) => Number(n || 0).toLocaleString(tag);
+      const unit = window.__app?.t?.('bookstats.unit.z') || 'Z';
+      const points = slice.map((s, i) => {
+        const iso = s.recorded_at;
+        let label;
+        if (iso) {
+          const dt = new Date(iso + 'T00:00:00');
+          label = dateFmt.format(dt) + ': ' + numFmt(data[i]) + ' ' + unit;
+        } else {
+          label = numFmt(data[i]) + ' ' + unit;
+        }
+        return { chars: data[i], iso, label };
+      });
+      return { d, area, color, deltaPct, endX, endY, w: W, h: H, points };
     });
   },
 
@@ -501,12 +555,9 @@ export const bookOverviewMethods = {
   overviewFigurePresence() {
     const figs = this.overviewFiguren || [];
     const sz = this.overviewSzenen || [];
-    const memos = (this._memos ||= {});
-    const hit = memos.figPresence;
-    if (hit && hit.figs === figs && hit.sz === sz) return hit.value;
-    const value = this._computeFigurePresence(figs, sz);
-    memos.figPresence = { figs, sz, value };
-    return value;
+    const tree = window.__app?.tree || [];
+    return this._memoN('figPresence', [figs, sz, tree],
+      () => this._computeFigurePresence(figs, sz));
   },
 
   _computeFigurePresence(figs, sz) {
@@ -607,7 +658,8 @@ export const bookOverviewMethods = {
   // aufgelöste ID). Skalierung pro Spalte (max der Spalte über alle Kapitel).
   overviewOrtPresence() {
     const orte = this.overviewOrte || [];
-    return this._memo('ortPresence', orte, () => {
+    const tree = window.__app?.tree || [];
+    return this._memoN('ortPresence', [orte, tree], () => {
       const app = window.__app;
       if (!app || orte.length === 0) return null;
       const tree = app.tree || [];

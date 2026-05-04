@@ -18,7 +18,7 @@
   background: var(--color-accent-soft);
   color: var(--color-text);
 }
-.page-item.page-item--empty { opacity: 0.6; }
+.page-item.page-item--empty { opacity: var(--opacity-disabled); }
 .page-item.page-item--empty.selected { opacity: 1; }
 .page-item.page-item--kb-active {
   border-color: var(--color-accent);

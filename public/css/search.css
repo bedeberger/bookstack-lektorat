@@ -54,7 +54,7 @@
   max-height: 320px;
   overflow-y: auto;
   z-index: 10;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-md);
 }
 .bookstack-search-empty {
   padding: 10px;
@@ -109,7 +109,7 @@
 /* === Seitensuche === */
 .page-search {
   width: 100%;
-  padding: 7px 10px;
+  padding: var(--pad-btn-compact);
   border: 0.5px solid var(--color-border-input);
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);

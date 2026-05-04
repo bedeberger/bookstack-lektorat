@@ -33,7 +33,7 @@
 .edit-find-input {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 4px 8px;
+  padding: var(--pad-badge);
   font-size: 0.9rem;
   background: var(--color-bg);
   color: var(--color-text);
@@ -67,7 +67,7 @@
 }
 .edit-find-btn:hover:not(:disabled) { background: var(--color-hover); }
 .edit-find-btn:active:not(:disabled) { background: var(--color-hover-strong); }
-.edit-find-btn:disabled { opacity: 0.4; cursor: default; }
+.edit-find-btn:disabled { opacity: var(--opacity-hint); cursor: default; }
 .edit-find-btn--toggle { min-width: 28px; }
 .edit-find-btn--active {
   background: var(--color-hover-strong);

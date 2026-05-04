@@ -6,7 +6,7 @@
   border: 0.5px solid var(--color-border);
   padding: 1.25rem;
   margin-bottom: 1rem;
-  animation: cardFadeIn 0.15s ease both;
+  animation: cardFadeIn var(--transition-slow) both;
 }
 @keyframes cardFadeIn {
   from { opacity: 0; transform: translateY(5px); }
@@ -61,7 +61,7 @@
   color: var(--color-muted);
   text-decoration: none;
   border-bottom: 0.5px solid transparent;
-  transition: color 0.12s ease, border-color 0.12s ease;
+  transition: color var(--transition-base), border-color var(--transition-base);
 }
 .card-subline-link:hover {
   color: var(--color-text);
@@ -166,7 +166,7 @@ select:focus {
 }
 .combobox-chevron {
   flex-shrink: 0;
-  opacity: 0.5;
+  opacity: var(--opacity-muted);
 }
 .combobox-chevron--open { transform: rotate(180deg); }
 .combobox-dropdown {
@@ -190,7 +190,7 @@ select:focus {
 .combobox-search {
   display: block;
   width: 100%;
-  padding: 7px 10px;
+  padding: var(--pad-btn-compact);
   border: none;
   border-bottom: 0.5px solid var(--color-border);
   background: var(--color-bg);
@@ -207,7 +207,7 @@ select:focus {
   overflow-y: auto;
 }
 .combobox-option {
-  padding: 7px 10px;
+  padding: var(--pad-btn-compact);
   cursor: pointer;
   font-size: var(--font-size-base);
   white-space: nowrap;
@@ -221,13 +221,13 @@ select:focus {
 .combobox-option--selected:hover { background: var(--color-accent-hover); }
 .combobox-empty {
   list-style: none;
-  padding: 7px 10px;
+  padding: var(--pad-btn-compact);
   font-size: var(--font-size-base);
   color: var(--color-muted);
   font-style: italic;
 }
 .combobox-wrap--disabled .combobox-trigger {
-  opacity: 0.4;
+  opacity: var(--opacity-hint);
   cursor: not-allowed;
   pointer-events: none;
 }

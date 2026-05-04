@@ -22,7 +22,7 @@
   border-radius: var(--radius-sm);
   font-weight: 600;
   text-decoration: none;
-  transition: top 0.15s ease;
+  transition: top var(--transition-slow);
 }
 .skip-link:focus,
 .skip-link:focus-visible {

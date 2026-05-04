@@ -29,10 +29,10 @@
   min-width: 260px;
   z-index: 200;
   box-shadow: 0 4px 24px var(--color-shadow-med);
-  animation: cardFadeIn 0.12s ease both;
+  animation: cardFadeIn var(--transition-base) both;
 }
 .komplett-status-title {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   color: var(--color-muted);
   text-transform: uppercase;
@@ -54,7 +54,7 @@
   margin-bottom: 0.65rem;
 }
 .komplett-tokens {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--color-subtle);
   white-space: nowrap;
 }

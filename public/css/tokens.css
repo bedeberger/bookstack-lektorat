@@ -232,6 +232,37 @@
      exakt dieselbe Höhe haben. Einzige Quelle der Wahrheit. */
   --size-compact-font-size: 12px;
   --size-compact-padding: 4px 10px;
+
+  /* === Shadow-Tokens — vier Erhebungs-Stufen ===
+     Dark-Theme erbt automatisch dunklere --color-shadow-*-Werte. */
+  --shadow-sm:      0 2px 8px var(--color-shadow);          /* Karten-Lift */
+  --shadow-md:      0 4px 12px var(--color-shadow-med);     /* Popover/Dropdown */
+  --shadow-lg:      0 12px 40px var(--color-shadow-strong); /* Modal */
+  --shadow-soft-sm: 0 2px 8px var(--color-shadow-soft);     /* sehr dezent */
+  --shadow-inset-top: 0 -2px 10px var(--color-shadow-soft); /* Job-Queue-Footer */
+
+  /* === Padding-Tokens — wiederkehrende Zellgrössen ===
+     Compact-Buttons (Filter-Pills, Drawer-Footer-Buttons),
+     Badges/Tags (Status, Inline-Marker), Detail-Boxen. */
+  --pad-btn-compact: 7px 10px;     /* compact button */
+  --pad-badge:       4px 8px;      /* Badge/Tag/kleiner Pill */
+  --pad-detail:      0.5rem 0.75rem; /* Detail-Box / Drawer-Inhalt */
+
+  /* === Transition-Tokens — drei Geschwindigkeits-Stufen === */
+  --transition-fast: var(--transition-fast);   /* Hover-Tints, schnelle Filter-Pills */
+  --transition-base: var(--transition-base);  /* Standard-Buttons, Cards, Border-Color */
+  --transition-slow: var(--transition-slow);  /* grössere Flächen, Cross-Fade */
+
+  /* === Opacity-Tokens — semantische Stufen === */
+  --opacity-disabled: 0.6;   /* :disabled, deaktiviert */
+  --opacity-muted:    0.5;   /* sekundäre Aktion, gedämpft */
+  --opacity-hint:     0.4;   /* Hint, sehr dezent */
+  --opacity-faint:    0.35;  /* fast unsichtbar (Fokus-Modus, Skeleton) */
+  --opacity-strong:   0.75;  /* gedimmter aktiver Zustand */
+
+  /* === Breakpoint-Konstanten (Doku — CSS @media unterstützt keine var()) ===
+     Mobile-First-Strategie: 480 phone-sm, 600 phone-lg, 768 tablet, 1024 desktop.
+     In neuen @media-Queries ausschliesslich diese vier Werte verwenden. */
 }
 
 /* === Dark-Theme Overrides === */
@@ -341,7 +372,7 @@
 
   /* Queue-Footer folgt Theme über var()-Verkettung – keine Overrides nötig */
 
-  /* Kontrast-Border (ersetzt altes --palette-black-Mapping) */
+  /* Kontrast-Border */
   --color-border-contrast: #d8d8d8;
 
   /* Figuren-Palette: Mix anheben, damit Tints auf Dark sichtbar sind */

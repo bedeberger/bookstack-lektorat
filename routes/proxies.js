@@ -122,6 +122,14 @@ router.post('/ollama', jsonBody, async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
+    // Synthetisches message_start mit geschätzten Input-Tokens — Ollama liefert
+    // prompt_eval_count erst im finalen done-Chunk; Client (api-ai.js) braucht
+    // tokensIn früh für Live-Status. Schätzung anhand systemPrompt + user-Messages.
+    const _ollamaPromptChars = systemPrompt.length
+      + (req.body.messages || []).reduce((a, m) => a + (typeof m.content === 'string' ? m.content.length : 0), 0);
+    const _ollamaEstIn = Math.max(1, Math.round(_ollamaPromptChars / CHARS_PER_TOKEN));
+    res.write(`data: ${JSON.stringify({ type: 'message_start', message: { usage: { input_tokens: _ollamaEstIn } } })}\n\n`);
+
     // Ollama NDJSON → Anthropic-kompatibles SSE normalisieren
     const reader = upstream.body.getReader();
     const decoder = new TextDecoder();
@@ -143,6 +151,16 @@ router.post('/ollama', jsonBody, async (req, res) => {
               delta: { type: 'text_delta', text },
             });
             res.write(`data: ${sse}\n\n`);
+          }
+          // Final-Chunk: prompt_eval_count + eval_count enthalten echte Token-Zahlen.
+          // Korrigiertes message_start (echter Input) + message_delta (Output) emittieren.
+          if (chunk.done) {
+            if (chunk.prompt_eval_count) {
+              res.write(`data: ${JSON.stringify({ type: 'message_start', message: { usage: { input_tokens: chunk.prompt_eval_count } } })}\n\n`);
+            }
+            if (chunk.eval_count) {
+              res.write(`data: ${JSON.stringify({ type: 'message_delta', usage: { output_tokens: chunk.eval_count } })}\n\n`);
+            }
           }
         } catch (e) {
           logger.warn('Ollama NDJSON parse error: ' + e.message);
@@ -195,6 +213,14 @@ router.post('/llama', jsonBody, async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
+    // Synthetisches message_start mit Input-Schätzung — llama.cpp liefert echte
+    // Usage erst im finalen Chunk (stream_options.include_usage). Client braucht
+    // tokensIn früh für Live-Status.
+    const _llamaPromptChars = systemPrompt.length
+      + (req.body.messages || []).reduce((a, m) => a + (typeof m.content === 'string' ? m.content.length : 0), 0);
+    const _llamaEstIn = Math.max(1, Math.round(_llamaPromptChars / CHARS_PER_TOKEN));
+    res.write(`data: ${JSON.stringify({ type: 'message_start', message: { usage: { input_tokens: _llamaEstIn } } })}\n\n`);
+
     // OpenAI-SSE → Anthropic-kompatibles SSE normalisieren
     const reader = upstream.body.getReader();
     const decoder = new TextDecoder();
@@ -218,6 +244,17 @@ router.post('/llama', jsonBody, async (req, res) => {
               delta: { type: 'text_delta', text },
             });
             res.write(`data: ${sse}\n\n`);
+          }
+          // Final-Chunk mit usage (stream_options.include_usage): echte Token-Zahlen
+          // emitten — korrigiertes message_start + message_delta.
+          const usage = chunk.usage;
+          if (usage) {
+            if (usage.prompt_tokens) {
+              res.write(`data: ${JSON.stringify({ type: 'message_start', message: { usage: { input_tokens: usage.prompt_tokens } } })}\n\n`);
+            }
+            if (usage.completion_tokens) {
+              res.write(`data: ${JSON.stringify({ type: 'message_delta', usage: { output_tokens: usage.completion_tokens } })}\n\n`);
+            }
           }
         } catch (e) {
           logger.warn('Llama SSE parse error: ' + e.message);

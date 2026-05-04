@@ -28,7 +28,7 @@
 }
 
 .syn-vorkommen--applied {
-  opacity: 0.5;
+  opacity: var(--opacity-muted);
 }
 
 .syn-passage {

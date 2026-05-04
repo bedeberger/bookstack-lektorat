@@ -22,34 +22,43 @@ export function registerBookOverviewCard() {
 
     _onBookChanged: null,
     _onViewReset: null,
+    _pendingBookId: null,
 
     init() {
-      this.$watch(() => window.__app.showBookOverviewCard, async (visible) => {
-        if (!visible) return;
-        if (!window.__app.selectedBookId) return;
-        await this.loadBookOverview(window.__app.selectedBookId);
+      // Buchwechsel via Combobox feuert beide Events (`view:reset` sync aus
+      // resetView, `book:changed` async aus _resetBookScopedState). Alle
+      // Trigger laufen durch `scheduleLoad`, das per Microtask coalesciert
+      // und dedupliziert — sonst Race zwischen Reset und neuem Load.
+      const scheduleLoad = () => {
+        const bookId = window.__app?.selectedBookId || null;
+        if (!bookId) { this._pendingBookId = null; return; }
+        // Schon gescheduled für diesen Buch → noop, sonst doppelter Load.
+        if (this._pendingBookId === bookId) return;
+        this._pendingBookId = bookId;
+        queueMicrotask(() => {
+          if (!window.__app?.showBookOverviewCard) { this._pendingBookId = null; return; }
+          const target = this._pendingBookId;
+          this._pendingBookId = null;
+          if (target) this.loadBookOverview(target);
+        });
+      };
+
+      this.$watch(() => window.__app.showBookOverviewCard, (visible) => {
+        if (visible) scheduleLoad();
       });
 
       this._onBookChanged = () => {
-        this.resetBookOverview();
-        if (window.__app.showBookOverviewCard && window.__app.selectedBookId) {
-          this.loadBookOverview(window.__app.selectedBookId);
-        }
+        // Arrays nicht hier leeren: alte Daten bleiben sichtbar, bis der neue
+        // Load assignt — verhindert Tile-Flackern. Stale Antworten werden im
+        // loadBookOverview via overviewBookId-Guard verworfen.
+        scheduleLoad();
       };
       window.addEventListener('book:changed', this._onBookChanged);
 
-      this._onViewReset = () => {
-        this.resetBookOverview();
-        // resetView setzt zuerst showBookOverviewCard=false, dann _maybeOpenBookOverview
-        // wieder true — Alpine $watch coalesciert false→true im selben Tick zu no-op,
-        // daher würde loadBookOverview nicht feuern. Explizit nachladen, sobald die
-        // Reaktivität durch ist.
-        queueMicrotask(() => {
-          if (window.__app?.showBookOverviewCard && window.__app.selectedBookId) {
-            this.loadBookOverview(window.__app.selectedBookId);
-          }
-        });
-      };
+      // resetView setzt zuerst showBookOverviewCard=false, dann _maybeOpenBookOverview
+      // wieder true — Alpine $watch coalesciert false→true zu no-op, daher
+      // explizit nachschieben.
+      this._onViewReset = () => { scheduleLoad(); };
       window.addEventListener('view:reset', this._onViewReset);
     },
 

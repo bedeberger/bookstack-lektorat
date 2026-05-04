@@ -9,7 +9,7 @@
 
 @media (max-width: 600px) {
   .kontinuitaet-result { padding: 0.25rem 0 0.75rem; }
-  .kontinuitaet-row-stellen { font-size: 11px; gap: 0.2rem; }
+  .kontinuitaet-row-stellen { font-size: var(--font-size-xs); gap: 0.2rem; }
 }
 
 .kontinuitaet-result {
@@ -34,7 +34,7 @@
   color: var(--color-ok-text);
   background: var(--color-ok-bg);
   border: 1px solid var(--color-ok-border);
-  padding: 0.5rem 0.75rem;
+  padding: var(--pad-detail);
   font-size: 13px;
 }
 
@@ -65,7 +65,7 @@
    handlungsrelevante Hinweis direkt ins Auge springt. */
 .kontinuitaet-empfehlung {
   margin-top: 0.6rem;
-  padding: 0.5rem 0.75rem;
+  padding: var(--pad-detail);
   background: var(--color-warn-bg);
   border-left: 3px solid var(--card-accent-kontinuitaet);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
@@ -151,7 +151,7 @@
 }
 .book-settings-select {
   font-size: 13px;
-  padding: 4px 8px;
+  padding: var(--pad-badge);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
@@ -181,7 +181,7 @@
   box-sizing: border-box;
 }
 .book-settings-hint {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--color-muted);
   text-align: right;
   margin: 0;
@@ -231,7 +231,7 @@
   color: var(--color-surface);
 }
 .book-settings-btn-danger:disabled {
-  opacity: 0.6;
+  opacity: var(--opacity-disabled);
   cursor: not-allowed;
 }
 .book-settings-danger-actions {

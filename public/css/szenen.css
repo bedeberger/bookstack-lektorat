@@ -35,7 +35,7 @@
 .figur-szene-item {
   background: var(--color-card-bg);
   border: 1px solid var(--color-border);
-  padding: 7px 10px;
+  padding: var(--pad-btn-compact);
 }
 
 .figur-szene-header {
@@ -46,7 +46,7 @@
 }
 
 .figur-szene-ort {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--color-muted);
 }
 
@@ -99,7 +99,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   padding: 3px 7px 3px 7px;
   border-radius: 0;
   background: var(--color-tag-bg);
@@ -118,7 +118,7 @@
 
 /* Seiten-Badge */
 .szenen-seite-count-badge {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   padding: 2px 7px;
   border-radius: 0;
   background: var(--color-tag-bg);

@@ -9,7 +9,7 @@
   padding-bottom: 10px;
   border-bottom: 1px solid var(--color-border);
 }
-.filter-count { font-size: 11px; color: var(--color-muted); margin-left: auto; }
+.filter-count { font-size: var(--font-size-xs); color: var(--color-muted); margin-left: auto; }
 .filter-search-input {
   font-size: 12px;
   line-height: 1.4;
@@ -58,8 +58,8 @@
   left: -3px; top: 0; bottom: 0;
   width: 3px;
   background: var(--card-accent, transparent);
-  opacity: 0.35;
-  transition: opacity 0.15s;
+  opacity: var(--opacity-faint);
+  transition: opacity var(--transition-slow);
 }
 .entity-list--accented .entity-row:hover::before,
 .entity-list--accented .entity-row--selected::before { opacity: 1; }
@@ -84,7 +84,7 @@
   max-width: 40%;
 }
 .entity-typ-tag {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   width: 96px;
   text-align: center;
   flex-shrink: 0;
@@ -109,7 +109,7 @@
   margin-top: 0.3rem;
 }
 .entity-meta-label {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   color: var(--color-muted);
   text-transform: uppercase;
@@ -166,7 +166,7 @@
 /* === Severity-Filter-Buttons === */
 .severity-filter-group { display: flex; gap: 4px; }
 .severity-filter-btn {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 400;
   padding: 3px 9px;
   border-radius: 0;
@@ -174,7 +174,7 @@
   background: var(--color-bg);
   color: var(--color-text);
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 .severity-filter-btn:hover { background: var(--color-hover); }
 .severity-filter-btn--active {
@@ -214,7 +214,7 @@
 .entity-list--accented .entity-skeleton-row {
   border-left: 3px solid var(--card-accent, transparent);
   padding-left: calc(0.5rem - 3px);
-  opacity: 0.6;
+  opacity: var(--opacity-disabled);
 }
 .entity-skeleton-cell {
   height: 11px;
@@ -268,7 +268,7 @@
   background: transparent;
   border: none;
   padding: 4px 0;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;

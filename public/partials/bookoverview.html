@@ -63,20 +63,29 @@
            :aria-label="$app.t('overview.trend') + ', ' + $app.t('overview.trendDelta', { pct: (overviewSparkline().deltaPct >= 0 ? '+' : '') + overviewSparkline().deltaPct })"
            :title="$app.t('overview.openStats')">
         <div class="overview-tile-label" x-text="$app.t('overview.trend')"></div>
-        <svg class="overview-sparkline"
-             viewBox="0 0 240 48"
-             preserveAspectRatio="none"
-             aria-hidden="true">
-          <defs>
-            <linearGradient :id="$id('sl-grad')" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   :style="'stop-color:' + overviewSparkline().color + ';stop-opacity:0.3'"></stop>
-              <stop offset="100%" :style="'stop-color:' + overviewSparkline().color + ';stop-opacity:0'"></stop>
-            </linearGradient>
-          </defs>
-          <path :d="overviewSparkline().area" :fill="'url(#' + $id('sl-grad') + ')'" stroke="none"></path>
-          <path :d="overviewSparkline().d" fill="none" :stroke="overviewSparkline().color" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"></path>
-          <circle :cx="overviewSparkline().endX" :cy="overviewSparkline().endY" r="2.2" :fill="overviewSparkline().color"></circle>
-        </svg>
+        <div class="overview-sparkline-wrap">
+          <svg class="overview-sparkline"
+               viewBox="0 0 240 48"
+               preserveAspectRatio="none"
+               aria-hidden="true">
+            <defs>
+              <linearGradient :id="$id('sl-grad')" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   :style="'stop-color:' + overviewSparkline().color + ';stop-opacity:0.3'"></stop>
+                <stop offset="100%" :style="'stop-color:' + overviewSparkline().color + ';stop-opacity:0'"></stop>
+              </linearGradient>
+            </defs>
+            <path :d="overviewSparkline().area" :fill="'url(#' + $id('sl-grad') + ')'" stroke="none"></path>
+            <path :d="overviewSparkline().d" fill="none" :stroke="overviewSparkline().color" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"></path>
+            <circle :cx="overviewSparkline().endX" :cy="overviewSparkline().endY" r="2.2" :fill="overviewSparkline().color"></circle>
+          </svg>
+          <div class="overview-sparkline-hover" aria-hidden="true">
+            <template x-for="(p, i) in overviewSparkline().points" :key="(p.iso || '') + ':' + i">
+              <div class="overview-sparkline-hover-col" :data-tip="p.label">
+                <span class="overview-sparkline-tick" aria-hidden="true"></span>
+              </div>
+            </template>
+          </div>
+        </div>
         <div class="overview-trend-meta">
           <span class="overview-trend-pct"
                 :class="overviewSparkline().deltaPct > 0 ? 'overview-trend-pct--up'
@@ -413,7 +422,7 @@
          mit dichten Findings sichtbar werden). Sort: per1k desc.
          Klick auf Tile-Header → Fehler-Heatmap; Zeilen sind nicht klickbar
          (Heatmap zeigt eh alles). -->
-    <template x-if="overviewChapterFindings().length > 0">
+    <template x-if="overviewChapterFindings().some(c => !c.noCheck)">
       <div class="overview-tile overview-tile--medium internal-link"
            @click="$app.toggleFehlerHeatmapCard()"
            :title="$app.t('overview.openHeatmap')">

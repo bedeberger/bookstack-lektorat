@@ -71,7 +71,7 @@
   background: var(--color-surface);
   color: var(--color-muted);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--transition-slow);
 }
 .figur-modus-btn:first-child { border-radius: var(--radius-md) 0 0 var(--radius-md); }
 .figur-modus-btn:last-child  { border-radius: 0 var(--radius-md) var(--radius-md) 0; }
@@ -109,35 +109,30 @@
   gap: 10px;
   margin-bottom: 6px;
 }
-/* === Figuren: Sozialschicht-Badge in Detail === */
-.figur-sozialschicht-badge {
-  --sch-hue: var(--palette-gray);
-  font-size: 11px;
-  margin-left: 6px;
-  background: color-mix(in srgb, var(--sch-hue) var(--figpal-bg-mix), var(--color-surface));
-  color:      color-mix(in srgb, var(--sch-hue) var(--figpal-text-mix), var(--color-text));
-}
-.figur-schicht-wirtschaftselite     { --sch-hue: var(--palette-amber); }
-.figur-schicht-gehobenes_buergertum { --sch-hue: var(--palette-blue); }
-.figur-schicht-mittelschicht        { --sch-hue: var(--palette-green); }
-.figur-schicht-arbeiterschicht      { --sch-hue: var(--palette-brown); }
-.figur-schicht-migrantenmilieu      { --sch-hue: var(--palette-orange); }
-.figur-schicht-prekariat            { --sch-hue: var(--palette-wine); }
-/* Unterwelt: invertierte Darstellung (dunkler Hintergrund, heller Text) */
-.figur-schicht-unterwelt            { --sch-hue: var(--palette-dark); background: var(--palette-dark); color: var(--color-text-inverse); }
-
-/* === Figuren: Präsenz-Badge === */
+/* === Figuren: Sozialschicht- + Präsenz-Badge ===
+   Gemeinsames Pattern (vgl. .palette-badge in utilities.css). Setzt
+   --badge-hue lokal pro Modifier; Hintergrund + Text werden via color-mix
+   abgeleitet. */
+.figur-sozialschicht-badge,
 .figur-praesenz-badge {
-  --pres-hue: var(--palette-gray);
-  font-size: 11px;
+  --badge-hue: var(--palette-gray);
+  font-size: var(--font-size-xs);
   margin-left: 6px;
-  background: color-mix(in srgb, var(--pres-hue) var(--figpal-bg-mix), var(--color-surface));
-  color:      color-mix(in srgb, var(--pres-hue) var(--figpal-text-mix), var(--color-text));
+  background: color-mix(in srgb, var(--badge-hue) var(--figpal-bg-mix), var(--color-surface));
+  color:      color-mix(in srgb, var(--badge-hue) var(--figpal-text-mix), var(--color-text));
 }
-.figur-praesenz-zentral      { --pres-hue: var(--palette-blue); }
-.figur-praesenz-regelmaessig { --pres-hue: var(--palette-green); }
-.figur-praesenz-punktuell    { --pres-hue: var(--palette-orange); }
-.figur-praesenz-randfigur    { --pres-hue: var(--palette-gray); }
+.figur-schicht-wirtschaftselite     { --badge-hue: var(--palette-amber); }
+.figur-schicht-gehobenes_buergertum { --badge-hue: var(--palette-blue); }
+.figur-schicht-mittelschicht        { --badge-hue: var(--palette-green); }
+.figur-schicht-arbeiterschicht      { --badge-hue: var(--palette-brown); }
+.figur-schicht-migrantenmilieu      { --badge-hue: var(--palette-orange); }
+.figur-schicht-prekariat            { --badge-hue: var(--palette-wine); }
+/* Unterwelt: invertierte Darstellung (dunkler Hintergrund, heller Text) */
+.figur-schicht-unterwelt            { --badge-hue: var(--palette-dark); background: var(--palette-dark); color: var(--color-text-inverse); }
+.figur-praesenz-zentral      { --badge-hue: var(--palette-blue); }
+.figur-praesenz-regelmaessig { --badge-hue: var(--palette-green); }
+.figur-praesenz-punktuell    { --badge-hue: var(--palette-orange); }
+.figur-praesenz-randfigur    { --badge-hue: var(--palette-gray); }
 
 /* === Figuren: Kerninfo (Rolle/Motivation/Konflikt/Entwicklung) === */
 .figur-kerninfo {
@@ -167,7 +162,7 @@
   margin-left: 6px;
 }
 .figur-bz-beleg {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   padding: 1px 6px;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--color-border) 20%, var(--color-surface));
@@ -185,7 +180,7 @@
   background: var(--color-surface);
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-md);
-  box-shadow: 0 2px 8px var(--color-shadow);
+  box-shadow: var(--shadow-sm);
   padding: 8px 10px;
   font-size: var(--font-size-sm);
   max-width: 240px;
@@ -236,7 +231,7 @@
   background: var(--color-bg);
   color: var(--color-muted);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
   white-space: nowrap;
 }
 .figuren-graph-filter-btn:hover:not(.figuren-graph-filter-btn--active) {

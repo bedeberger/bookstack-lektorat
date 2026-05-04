@@ -163,7 +163,7 @@
   font-size: var(--font-size-sm);
 }
 .applied-history-item > .badge {
-  opacity: 0.75;
+  opacity: var(--opacity-strong);
   align-self: center;
 }
 .applied-history-text {

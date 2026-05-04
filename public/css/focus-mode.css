@@ -30,7 +30,7 @@ body.focus-mode #editor-card .card-header {
   padding: calc(14px + env(safe-area-inset-top, 0px)) 24px 14px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg);
-  opacity: 0.35;
+  opacity: var(--opacity-faint);
   transition: opacity 0.3s;
 }
 body.focus-mode #editor-card .card-header:hover { opacity: 1; }
@@ -120,7 +120,7 @@ body.focus-mode .page-content-view--editing {
   }
   body.focus-mode #editor-card .card-header {
     padding: 8px 12px;
-    opacity: 0.6;
+    opacity: var(--opacity-disabled);
   }
 }
 body.focus-mode .page-content-view::-webkit-scrollbar,
@@ -155,7 +155,7 @@ body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing h6
 body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing blockquote:not(.focus-paragraph-active):not(.focus-paragraph-near),
 body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing li:not(.focus-paragraph-active):not(.focus-paragraph-near),
 body.focus-mode:not(.focus-mode--typewriter-only) .page-content-view--editing pre:not(.focus-paragraph-active):not(.focus-paragraph-near) {
-  opacity: 0.35;
+  opacity: var(--opacity-faint);
   /* Bewusst KEIN transition: vorheriger aktiver Block würde 1.0 → 0.35 faden
      und dabei mid-transition anders rendern (GPU-Subpixel-Aliasing), was als
      „extra grau" auffällt. Snap-Out auf dim. */

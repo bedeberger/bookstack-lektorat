@@ -15,7 +15,7 @@
 .finding.ok    { border-color: var(--color-ok-border); }
 .finding.finding-deselected { opacity: 0.55; }
 .finding.finding--applied {
-  opacity: 0.5;
+  opacity: var(--opacity-muted);
   text-decoration: line-through;
   text-decoration-color: var(--color-muted);
 }

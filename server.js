@@ -36,7 +36,8 @@ app.set('trust proxy', 1);
 // 'unsafe-inline' bei style-src ist nötig, weil Alpine `:style` zur Laufzeit
 // inline-style-Attribute setzt (z.B. progress-bar via --progress).
 // img-src enthält die BookStack-Origin (Editor-Preview rendert Server-HTML mit
-// absoluten BookStack-Bild-URLs) plus data:/blob: für Generated Charts/Graphs.
+// absoluten BookStack-Bild-URLs) plus data:/blob: für Generated Charts/Graphs
+// plus *.googleusercontent.com für Google-Profilbilder im Avatar-Menü.
 // connect-src 'self' deckt alle XHR/SSE-Endpunkte (Server proxy'd Anthropic,
 // Ollama, BookStack); Plausible darf an seine eigene Origin posten.
 const PLAUSIBLE_ORIGIN = 'https://analytics.david-berger.ch';
@@ -51,7 +52,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-eval'", PLAUSIBLE_ORIGIN],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'blob:', ...(cspBookstackOrigin ? [cspBookstackOrigin] : [])],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://*.googleusercontent.com', ...(cspBookstackOrigin ? [cspBookstackOrigin] : [])],
       fontSrc: ["'self'"],
       connectSrc: ["'self'", PLAUSIBLE_ORIGIN],
       workerSrc: ["'self'"],
@@ -142,11 +143,8 @@ const PUBLIC_ASSETS = new Set([
 ]);
 // Statische Assets: `no-cache` für alles ausser Bildern. ETag bleibt aktiv —
 // Browser revalidiert bei jedem Reload mit If-None-Match (304 wenn unverändert,
-// nur Header-Roundtrip, keine Bytes). Vorher: 7 Tage max-age für JS/CSS, was
-// dazu führte, dass Mobile-User nach SHELL_CACHE-Bumps tagelang auf alter
-// Frontend-Version festsassen, weil der HTTP-Cache schon stale lieferte und der
-// SW-SWR davon abhing. Bilder/Icons dürfen weiter 7 Tage halten — die ändern
-// sich praktisch nie.
+// nur Header-Roundtrip, keine Bytes). Bilder/Icons halten 7 Tage, weil sie sich
+// praktisch nie ändern.
 const staticServe = express.static(path.join(__dirname, 'public'), {
   etag: true,
   lastModified: true,

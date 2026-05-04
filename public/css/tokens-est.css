@@ -20,9 +20,9 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  box-shadow: 0 4px 12px var(--color-shadow);
+  box-shadow: var(--shadow-md);
   padding: 6px 8px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--color-muted);
   white-space: nowrap;
   pointer-events: none;
@@ -45,7 +45,7 @@
   border-top: 1px solid var(--color-border);
   padding-top: 5px;
 }
-.tok-tt-enter { transition: opacity 0.12s ease; }
+.tok-tt-enter { transition: opacity var(--transition-base); }
 .tok-tt-hidden { opacity: 0; }
 .tok-tt-visible { opacity: 1; }
 
@@ -95,7 +95,7 @@
   line-height: 1;
   padding: 3px 9px;
   min-width: 28px;
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .graph-tool-btn:hover {
@@ -217,7 +217,7 @@
 }
 
 .kapitel-badge {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   padding: 2px 7px;
   border-radius: 0;
   white-space: nowrap;
@@ -262,7 +262,7 @@
 
 .figur-bz-typ {
   --rel-hue: var(--palette-gray);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 400;
   padding: 2px 7px;
   border-radius: 0;
@@ -282,7 +282,7 @@
 .figur-bz-geschaeft       { --rel-hue: var(--palette-amber); }
 
 .figur-bz-macht {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   letter-spacing: 1px;
   margin-left: 2px;

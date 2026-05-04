@@ -28,7 +28,7 @@
   border-bottom: 2px solid var(--color-err-border);
   font-size: var(--font-size-sm);
   font-weight: 600;
-  box-shadow: 0 2px 8px var(--color-shadow-soft);
+  box-shadow: var(--shadow-soft-sm);
 }
 .session-banner-text { flex: 0 1 auto; }
 .session-banner-btn {

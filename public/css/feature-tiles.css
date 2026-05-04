@@ -18,11 +18,11 @@
   text-align: left;
   font-family: inherit;
   margin-bottom: 8px;
-  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base), background var(--transition-base);
 }
 .palette-hero:hover {
   border-color: var(--color-border-focus);
-  box-shadow: 0 2px 8px var(--color-shadow-med);
+  box-shadow: var(--shadow-sm);
   background: var(--color-hover);
 }
 .palette-hero:focus-visible {
@@ -40,7 +40,7 @@
 }
 .palette-hero-kbd {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   padding: 2px 6px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -65,7 +65,7 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  box-shadow: 0 12px 40px var(--color-shadow-strong);
+  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
   max-height: 70vh;
@@ -118,7 +118,7 @@
   font-weight: 500;
 }
 .palette-item-desc {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--color-muted);
 }
 .palette-item--active {
@@ -126,7 +126,7 @@
   border-left-color: var(--color-accent);
 }
 .palette-item--disabled {
-  opacity: 0.4;
+  opacity: var(--opacity-hint);
   cursor: not-allowed;
 }
 .palette-item:active { transform: none; }
@@ -160,7 +160,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--color-muted);
 }
 .palette-mode-pill kbd {
@@ -186,7 +186,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--color-muted);
 }
 .palette-legend-row kbd {

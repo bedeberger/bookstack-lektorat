@@ -10,7 +10,7 @@
   gap: 2px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  box-shadow: 0 4px 12px var(--color-shadow-med);
+  box-shadow: var(--shadow-md);
   padding: 3px;
 }
 .edit-bubble-btn {
@@ -34,7 +34,7 @@
   z-index: 1001;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  box-shadow: 0 4px 12px var(--color-shadow-med);
+  box-shadow: var(--shadow-md);
   padding: 4px;
   min-width: 220px;
   max-height: 320px;

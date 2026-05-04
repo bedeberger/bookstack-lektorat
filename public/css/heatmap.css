@@ -94,7 +94,7 @@
 }
 .heatmap-cell {
   font-variant-numeric: tabular-nums;
-  transition: background 0.15s ease;
+  transition: background var(--transition-slow);
 }
 .heatmap-cell--tinted {
   background: color-mix(in srgb, var(--color-danger, #c0392b) var(--heatmap-t, 0%), var(--color-success, #27ae60));
@@ -108,7 +108,7 @@
 }
 .heatmap-cell--empty {
   background: repeating-linear-gradient(45deg, var(--color-border) 0, var(--color-border) 2px, transparent 2px, transparent 6px);
-  opacity: 0.6;
+  opacity: var(--opacity-disabled);
 }
 .heatmap-cell:hover {
   outline: 1px solid var(--color-primary);

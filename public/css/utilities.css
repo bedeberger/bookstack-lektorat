@@ -7,6 +7,35 @@
 }
 
 
+/* === Layout-Pattern: Header-Zeile ===
+   Verwenden für jede Listen-/Karten-Sektion mit horizontalem Header
+   (Titel + Aktionen). Mobile: bricht auf Spalte.
+   Modifier: --between (space-between), --wrap (flex-wrap). */
+.list-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.list-header--between { justify-content: space-between; }
+.list-header--wrap { flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .list-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* === Palette-Badge — Hue-getriebener Badge === */
+/* Basis-Pattern für alle Figuren-/Sozial-/Präsenz-Badges. Konsumenten setzen
+   genau eine Custom-Property `--badge-hue` (Default: --palette-gray) und
+   bekommen daraus per color-mix() Hintergrund + Textfarbe — mit Light/Dark
+   Theme-Awareness via --figpal-bg-mix / --figpal-text-mix. */
+.palette-badge {
+  --badge-hue: var(--palette-gray);
+  background: color-mix(in srgb, var(--badge-hue) var(--figpal-bg-mix), var(--color-surface));
+  color:      color-mix(in srgb, var(--badge-hue) var(--figpal-text-mix), var(--color-text));
+}
+
 /* === Utility-Klassen === */
 .tag--link {
   margin-left: 6px;
@@ -22,7 +51,7 @@
 .stilbox--spaced { margin-top: 12px; }
 .stilbox--review-summary { margin-bottom: 14px; }
 .fazit--review { margin-top: 16px; }
-.review-stars { font-size: 11px; }
+.review-stars { font-size: var(--font-size-xs); }
 .muted-msg--spaced { margin-top: 14px; }
 .chat-skeleton-line--wide { width: 72%; }
 .chat-skeleton-line--narrow { width: 48%; }
@@ -44,8 +73,8 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 11px;
-  box-shadow: 0 -2px 10px var(--color-shadow-soft);
+  font-size: var(--font-size-xs);
+  box-shadow: var(--shadow-inset-top);
 }
 .job-queue-label {
   color: var(--color-muted);
@@ -81,7 +110,7 @@
 }
 .job-queue-pill-status {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
 }
 .job-queue-pill-status::before {
   content: '·';
@@ -92,7 +121,7 @@
 }
 .job-queue-pill-progress {
   color: var(--color-running);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
 }
 .job-queue-cancel-btn {
@@ -100,11 +129,11 @@
   border: none;
   color: var(--color-muted);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   line-height: 1;
   padding: 0 0 0 4px;
-  opacity: 0.5;
-  transition: opacity 0.15s, color 0.15s;
+  opacity: var(--opacity-muted);
+  transition: opacity var(--transition-slow), color var(--transition-slow);
 }
 .job-queue-cancel-btn:hover {
   color: var(--color-err-light);

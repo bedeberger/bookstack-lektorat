@@ -22,7 +22,7 @@
   border-radius: var(--radius-md);
   background: var(--color-bg);
   min-width: 0;
-  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+  transition: border-color var(--transition-base), background var(--transition-base), box-shadow var(--transition-base);
 }
 
 .overview-tile.internal-link { cursor: pointer; }
@@ -33,7 +33,7 @@
   text-decoration: none;
   border-color: var(--color-border-focus);
   background: var(--color-hover);
-  box-shadow: 0 2px 8px var(--color-shadow-med);
+  box-shadow: var(--shadow-sm);
 }
 .overview-tile.internal-link:focus-visible {
   outline: 2px solid var(--color-primary);
@@ -117,10 +117,48 @@
 }
 
 /* ── Sparkline mit Gradient + Endpunkt-Marker ────────────────────────────── */
+.overview-sparkline-wrap {
+  position: relative;
+  width: 100%;
+}
 .overview-sparkline {
   width: 100%;
   height: 56px;
   display: block;
+}
+/* Hover-Overlay: eine Spalte pro Datenpunkt, transparent, gleichmässig verteilt
+   über die gesamte Sparkline-Fläche. Pointer-Events nur auf den Spalten —
+   Klick auf die Karte (Open Stats) bubblet weiter. */
+.overview-sparkline-hover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  pointer-events: none;
+}
+.overview-sparkline-hover-col {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  pointer-events: auto;
+  cursor: pointer;
+}
+/* Vertikale gestrichelte Linie an der Spalten-Mitte beim Hover/Focus —
+   zeigt, welcher Datenpunkt im Tooltip gemeint ist. */
+.overview-sparkline-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  border-left: 1px dashed var(--color-text);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-0.5px);
+  transition: opacity 0.08s ease;
+}
+.overview-sparkline-hover-col:hover .overview-sparkline-tick,
+.overview-sparkline-hover-col:focus-visible .overview-sparkline-tick {
+  opacity: var(--opacity-disabled);
 }
 .overview-trend-meta {
   display: flex;
@@ -445,7 +483,7 @@
 }
 .overview-chapter-row--min .overview-chapter-bar-fill {
   background: var(--color-danger, #d32f2f);
-  opacity: 0.6;
+  opacity: var(--opacity-disabled);
 }
 /* Findings-Tile: ungeprüfte Kapitel ausgrauen. */
 .overview-chapter-row--nocheck {
@@ -453,7 +491,7 @@
 }
 .overview-chapter-row--nocheck .overview-chapter-name,
 .overview-chapter-row--nocheck .overview-chapter-meta {
-  opacity: 0.5;
+  opacity: var(--opacity-muted);
 }
 .overview-chapter-row--nocheck .overview-chapter-bar-fill {
   background: var(--color-border);
@@ -517,22 +555,22 @@
 /* Median-Tick: bei Diverging-Bar fix in Track-Mitte, markiert Bezugspunkt.
    Stretch top/bottom = 8px (Row-Padding 6px + halbe Liste-Gap 2px), damit
    die Ticks angrenzender Zeilen visuell zu einer durchgehenden Linie
-   verschmelzen. Dashed → liest sich als Median-Referenz quer durchs Tile. */
-.overview-chapter-median-tick {
+   verschmelzen. */
+.overview-chapter-bar-track .overview-chapter-median-tick {
   position: absolute;
   top: -8px;
   bottom: -8px;
   left: 50%;
-  width: 0;
-  border-left: 1px dashed var(--color-text);
+  width: 1px;
+  background: var(--color-text);
   opacity: 0.45;
   transform: translateX(-50%);
   pointer-events: none;
   z-index: 1;
 }
 /* Erste/letzte Zeile: kein Überhang nach oben/unten. */
-.overview-chapter-list > li:first-child .overview-chapter-median-tick { top: 0; }
-.overview-chapter-list > li:last-child .overview-chapter-median-tick { bottom: 0; }
+.overview-chapter-list > li:first-child .overview-chapter-bar-track .overview-chapter-median-tick { top: 0; }
+.overview-chapter-list > li:last-child .overview-chapter-bar-track .overview-chapter-median-tick { bottom: 0; }
 .overview-chapter-meta {
   display: inline-flex;
   gap: 10px;
@@ -579,9 +617,32 @@
 
 /* ── Figuren-Präsenz-Matrix ──────────────────────────────────────────────── */
 .overview-presence-wrap {
+  /* `auto`: Scrollbar erscheint nur bei echtem Overflow. `padding-bottom`
+     reserviert Höhe der Scrollbar permanent → kein Layout-Shift, wenn
+     Tabelle erst bei schmalerem Viewport scrollbar wird. Kein Phantom-Thumb
+     bei Tabellen, die reinpassen.
+     `-webkit-appearance: none` + Höhe erzwingt klassische Scrollbar (statt
+     macOS-Overlay), damit sie permanent sichtbar bleibt, sobald sie da ist. */
   overflow-x: auto;
   margin: 0 -4px;
-  padding: 0 4px;
+  padding: 0 4px 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-muted) transparent;
+}
+.overview-presence-wrap::-webkit-scrollbar {
+  -webkit-appearance: none;
+  height: 10px;
+}
+.overview-presence-wrap::-webkit-scrollbar-track {
+  background: var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.overview-presence-wrap::-webkit-scrollbar-thumb {
+  background: var(--color-muted);
+  border-radius: var(--radius-sm);
+}
+.overview-presence-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text);
 }
 .overview-presence-matrix {
   border-collapse: separate;

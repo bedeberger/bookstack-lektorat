@@ -92,7 +92,7 @@
 }
 
 .gz-datum {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   color: var(--color-muted);
   letter-spacing: 0.03em;
@@ -125,7 +125,7 @@
 }
 
 .gz-kapitel-link {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   padding: 2px 7px;
   font-weight: 700;
   background: var(--color-text);
@@ -134,7 +134,7 @@
 }
 
 .gz-seite {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   padding: 2px 7px;
   background: var(--color-tag-bg);
   color: var(--color-muted);

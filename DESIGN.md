@@ -4,6 +4,18 @@
 
 Token-Referenz (Farben, Radien, Spacing, Schriftgrössen): [public/css/tokens.css](public/css/tokens.css).
 
+## Token-Pflicht (keine ad-hoc-Werte)
+
+Wiederkehrende Werte gehen über Tokens. Ad-hoc-Werte (`box-shadow: 0 4px 12px ...`, `padding: 7px 10px`, `opacity: 0.5`) nur, wenn keine Token-Variante passt.
+
+| Bereich | Tokens | Verwendung |
+|---------|--------|------------|
+| **Schatten** | `--shadow-sm` (Card-Lift), `--shadow-md` (Popover/Dropdown), `--shadow-lg` (Modal), `--shadow-soft-sm` (sehr dezent), `--shadow-inset-top` (Job-Queue-Footer) | Standard-Erhebungen. Dark-Theme erbt automatisch dunklere Schatten. |
+| **Padding** | `--pad-btn-compact` (7px 10px), `--pad-badge` (4px 8px), `--pad-detail` (0.5rem 0.75rem) | Compact-Buttons, Badges/Tags, Detail-Boxen / Drawer-Inhalt. |
+| **Transition** | `--transition-fast` (0.1s ease), `--transition-base` (0.12s ease), `--transition-slow` (0.15s ease) | Standard-Cadence. Längere Animationen (0.18s+, 0.3s) bleiben ad-hoc. |
+| **Opacity** | `--opacity-disabled` (0.6), `--opacity-muted` (0.5), `--opacity-hint` (0.4), `--opacity-faint` (0.35), `--opacity-strong` (0.75) | Semantische Stufen. `:disabled` immer `--opacity-disabled`. |
+| **Font-Size klein** | `--font-size-xs` (11px), `--font-size-sm` (13px), `--font-size-base` (14px) | `font-size: 11px` → `var(--font-size-xs)`. |
+
 ---
 
 ## Klappbarer Section-Toggle (Accordion)
@@ -87,6 +99,11 @@ Pattern + Pflicht-Markup: siehe [CLAUDE.md](CLAUDE.md) Abschnitt „Combobox sta
 - `.severity-tag--kritisch` / `--stark` / `--mittel` / `--schwach` / `--niedrig`
 - Verwendet für Lektorats-/Kontinuitäts-Schweregrade.
 
+**Hue-getriebener Badge** (`.palette-badge` in [public/css/utilities.css](public/css/utilities.css)):
+- Basis-Pattern für alle farb-codierten Badges (Sozialschicht, Präsenz, Figurentyp).
+- Konsumenten setzen lokal `--badge-hue: var(--palette-xxx);` — Hintergrund und Text werden via `color-mix()` aus Hue + Surface/Text abgeleitet (Theme-aware).
+- Beispiel: `<span class="palette-badge" style="--badge-hue: var(--palette-green)">Mittelschicht</span>` oder eigene Modifier-Klassen wie `.figur-schicht-mittelschicht { --badge-hue: var(--palette-green); }`.
+
 ---
 
 ## Buttons
@@ -165,6 +182,34 @@ Kein neuer Marker ohne Eintrag hier.
 ## Mobile-Breakpoints
 
 **Pflicht:** Jede neue UI-Komponente bekommt im selben Commit Mobile-Breakpoints (`@media (max-width: 600px)`). Nie auf später verschieben.
+
+**Standard-Set** (CSS-Custom-Properties funktionieren in `@media` nicht — diese vier Werte ausschliesslich verwenden):
+- `480px` — Phone-Small (sehr enge Devices, harter Reflow)
+- `600px` — Phone-Large (Default-Mobile-Breakpoint)
+- `768px` — Tablet
+- `1024px` — Desktop-Compact
+
+---
+
+## Layout-Pattern: List-Header (`.list-header`)
+
+**Use:** Header-Zeile innerhalb einer Karte oder Sektion, die Titel + Aktionen horizontal anordnet und auf Mobile auf Spalte umbricht.
+
+**Markup:**
+```html
+<div class="list-header list-header--between list-header--wrap">
+  <h3 class="history-heading" x-text="$app.t('bereich.title')"></h3>
+  <div class="card-actions">…</div>
+</div>
+```
+
+**Modifier:**
+- `.list-header--between` — `justify-content: space-between`
+- `.list-header--wrap` — `flex-wrap: wrap`
+
+CSS in [public/css/utilities.css](public/css/utilities.css). Mobile (≤600 px) bricht automatisch auf Spalte (`flex-direction: column; align-items: flex-start`).
+
+**Wichtig:** Bestehende Sub-Header-Klassen (`.figur-list-header`, `.figur-szene-header` etc.) haben kontextspezifische Sonderlogik (Margins, Borders, Padding) und bleiben unverändert; die Util-Klasse ist Default für **neue** Header-Zeilen.
 
 ---
 
@@ -454,18 +499,21 @@ Bei neuen Popover-Komponenten dieses Markup-Schema übernehmen (Header/Body/Foot
 
 **Harte Regel:** `data-tip` ist die bevorzugte Tooltip-Variante. Natives `title=` hat ~500ms Delay, der nicht abstellbar ist — zu langsam für jedes Hover-Feedback. Neue Tooltips werden grundsätzlich als `data-tip` gesetzt.
 
-**Markup:** `data-tip="Mo: +1234"` (oder Alpine `:data-tip="..."`) auf beliebigem Element.
+**Markup:** `data-tip="Mo: +1234"` (oder Alpine `:data-tip="..."`) auf beliebigem Element. Das Attribut bleibt — gerendert wird via geteiltem Layer.
+
+**Implementation:** Ein einziges `.tip-layer`-Element wird beim ersten Hover via [public/js/tooltip.js](public/js/tooltip.js) in den Body gehängt und auf das jeweilige Target positioniert (fixed). Pseudo-Slots (`::before`/`::after`) auf den Targets bleiben so frei für eigene Decorations.
 
 **Klassen** [public/css/tooltip.css](public/css/tooltip.css):
-- `[data-tip]:hover::after` rendert das Attribut sofort als Tooltip oberhalb (zentriert).
-- `[data-tip]:hover::before` ist der Pfeil.
-- `position: relative` wird vom Selektor selbst gesetzt — Element muss Layout zulassen.
+- `.tip-layer` (Wrapper, `position: fixed`), `.tip-bubble` (Inhalt), `.tip-arrow` (Dreieck).
+- `data-placement="top|bottom"` schaltet die Pfeilseite. Auto-Flip nach unten, wenn oben kein Platz.
 
 **Wann `title=` ausnahmsweise erlaubt:**
 - Reine Form-Inputs / Icon-Buttons, wo a11y-Screenreader-Hint wichtiger ist als Geschwindigkeit (`<button title="Schliessen">` etc.).
 - In Konflikt-Fällen darf beides parallel gesetzt werden (`data-tip` für Sicht, `title` für Screenreader).
 
-**Nicht erlaubt:** Neue Wert- oder Erklärungs-Tooltips als `:title=` ohne `data-tip` daneben — User-Präferenz, weil 500ms-Delay als störend empfunden wird.
+**Nicht erlaubt:**
+- Neue Wert- oder Erklärungs-Tooltips als `:title=` ohne `data-tip` daneben — User-Präferenz, weil 500ms-Delay als störend empfunden wird.
+- **Keine** `[data-tip]:hover::before` / `::after`-Selektoren — Pseudos auf dem Target gehören dem Element.
 
 ---
 
