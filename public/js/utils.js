@@ -80,6 +80,23 @@ export function formatNumber(value, uiLocale, decimals = 1) {
   });
 }
 
+// Exakte Dauer in h/min/s. 0 wird als „0 s" zurückgegeben. Komponenten mit
+// Wert 0 werden weggelassen, ausser die Gesamtdauer ist 0. Ergebnis: „1 h 23 min 45 s",
+// „23 min 5 s", „45 s". Einheiten sind locale-stabil (bewusst nicht übersetzt,
+// damit eine Stelle die Reihenfolge h/min/s vorgibt).
+export function fmtExactDuration(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  if (total === 0) return '0 s';
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const parts = [];
+  if (h > 0) parts.push(h + ' h');
+  if (m > 0) parts.push(m + ' min');
+  if (s > 0) parts.push(s + ' s');
+  return parts.join(' ');
+}
+
 // Min/Max über `items`. `getValue` liefert Zahl oder null/NaN.
 // Leere Menge → { min: 0, max: 0 } (konsistent mit den Heatmap-Callern).
 export function minMaxBy(items, getValue) {

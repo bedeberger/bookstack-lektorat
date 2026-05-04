@@ -118,15 +118,50 @@ export const bookstackMethods = {
     return result;
   },
 
-  // Ruft den Stil-KI-Call auf und wendet Korrekturen an. Gibt das (ggf. korrigierte) HTML zurück.
-  // onProgress(chars, aiBase) – optional, für zusätzliches Fortschritts-Tracking beim Aufrufer.
-  async _applyStilkorrektur(html, selectedStyles, onProgress) {
+  // Ruft den Stil-KI-Call auf und wendet Korrekturen an.
+  // Liefert { html, log, appliedStyles } – log enthält requested/returned/applied/items/error
+  // für Debugging und Persistenz in page_checks.stilkorrektur_log.
+  // hardOriginals: Originaltexte der Hard-Findings, die VOR der Stilkorrektur
+  // schon ins HTML appliziert wurden — Stil-Findings, deren `original` sich mit
+  // einem dieser Hard-Strings überschneidet, werden vor dem KI-Call gefiltert
+  // (sonst sucht die KI Texte, die so nicht mehr im HTML stehen).
+  async _applyStilkorrektur(html, selectedStyles, onProgress, hardOriginals = []) {
     const aiBase = html.length || 1;
+    const log = {
+      requested: selectedStyles.length,
+      returned: 0,
+      applied: 0,
+      items: [],
+      error: null,
+      attempted_at: new Date().toISOString(),
+    };
+    // (1) Überlappungs-Filter: Stil-Findings, deren Originaltext sich mit einem
+    // ausgewählten Hard-Finding überlappt (Substring in eine Richtung), schon
+    // vor dem KI-Call droppen. Loggen mit reason='overlapped_with_hard'.
+    const usableStyles = [];
+    for (const s of selectedStyles) {
+      const orig = s.original || '';
+      const overlap = orig && hardOriginals.some(h => h && (h.includes(orig) || orig.includes(h)));
+      if (overlap) {
+        log.items.push({
+          original: orig,
+          ersatz: s.korrektur || '',
+          applied: false,
+          reason: 'overlapped_with_hard',
+        });
+      } else {
+        usableStyles.push(s);
+      }
+    }
+    if (usableStyles.length === 0) {
+      console.info(`[stilkorrektur] requested=${log.requested} all dropped (overlapped_with_hard)`);
+      return { html, log, appliedStyles: [] };
+    }
     this.setStatus(this.t('stilkorrektur.working', { chars: 0 }), true);
     try {
       let completionInfo = null;
       const result = await this.callAI(
-        buildStilkorrekturPrompt(html, selectedStyles),
+        buildStilkorrekturPrompt(html, usableStyles),
         'stilkorrektur',
         (chars) => {
           this.setStatus(this.t('stilkorrektur.working', { chars }), true);
@@ -137,20 +172,50 @@ export const bookstackMethods = {
       if (completionInfo?.tokPerSec) {
         this.setStatus(this.t('stilkorrektur.tps', { tps: completionInfo.tokPerSec }), true);
       }
-      if (Array.isArray(result?.korrekturen) && result.korrekturen.length > 0) {
-        return this._applyCorrections(html, result.korrekturen.map(k => ({ original: k.original, korrektur: k.ersatz })));
+      const korrekturen = Array.isArray(result?.korrekturen) ? result.korrekturen : [];
+      log.returned = korrekturen.length;
+      let outHtml = html;
+      const appliedFlags = [];
+      for (const k of korrekturen) {
+        const skip = !k.original || !k.ersatz || k.original === k.ersatz;
+        const before = outHtml;
+        const after = skip ? before : replaceInHtml(outHtml, k.original, k.ersatz);
+        const applied = !skip && after !== before;
+        log.items.push({
+          original: k.original || '',
+          ersatz: k.ersatz || '',
+          applied,
+          reason: skip ? 'empty_or_identical' : (applied ? null : 'not_found_in_html'),
+        });
+        appliedFlags.push(applied);
+        if (applied) {
+          log.applied++;
+          outHtml = after;
+        }
       }
+      // usableStyles → appliedStyles Mapping. Positional bei Count-Match (Standard-
+      // fall: KI liefert genau eine Antwort pro Item in Reihenfolge des Prompts).
+      // Bei Count-Mismatch konservativ: keine Stil-Findings als "applied" zählen, um
+      // nicht falsche Findings in der History als übernommen zu markieren.
+      let appliedStyles = [];
+      if (appliedFlags.length === usableStyles.length) {
+        appliedStyles = usableStyles.filter((_, i) => appliedFlags[i]);
+      }
+      const dropped = log.requested - usableStyles.length;
+      console.info(`[stilkorrektur] requested=${log.requested} dropped_overlap=${dropped} returned=${log.returned} applied=${log.applied} mappable=${appliedStyles.length}`);
+      return { html: outHtml, log, appliedStyles };
     } catch (e) {
       console.error('[_applyStilkorrektur]', e);
+      log.error = e?.message || String(e);
       this.setStatus(this.t('stilkorrektur.failed'), true);
+      return { html, log, appliedStyles: [] };
     }
-    return html;
   },
 
   // Gemeinsamer Kern für Lektorat-Save und History-Apply:
   // Seite frisch laden → Korrekturen anwenden → Stilkorrektur → Safety-Check → Speichern.
   // onProgress(pct, statusText) – Fortschritt (10–85), statusText nur bei Phasenwechsel.
-  // Gibt das gespeicherte HTML zurück. Wirft bei Fehler.
+  // Liefert { finalHtml, stilLog } (stilLog null wenn keine Stil-Findings). Wirft bei Fehler.
   async _loadApplyAndSave(selectedErrors, selectedStyles, onProgress) {
     onProgress(10, this.t('bs.loadingPage'));
     const page = await this.bsGet('pages/' + this.currentPage.id);
@@ -160,13 +225,20 @@ export const bookstackMethods = {
       ? this._applyCorrections(page.html, selectedErrors)
       : page.html;
 
+    let stilLog = null;
+    let appliedStyles = [];
     if (selectedStyles.length > 0) {
       onProgress(30, null);
-      finalHtml = await this._applyStilkorrektur(
+      const hardOriginals = selectedErrors.map(e => e?.original).filter(Boolean);
+      const r = await this._applyStilkorrektur(
         finalHtml,
         selectedStyles,
         (chars, aiBase) => onProgress(Math.min(70, 30 + Math.round((chars / aiBase) * 40)), null),
+        hardOriginals,
       );
+      finalHtml = r.html;
+      stilLog = r.log;
+      appliedStyles = r.appliedStyles || [];
     }
 
     if (finalHtml.length < page.html.length * SAFETY_HTML_RATIO) {
@@ -180,6 +252,6 @@ export const bookstackMethods = {
     // unmittelbar danach auf "seit Lektorat bearbeitet" flippen.
     this.markPageChecked?.(this.currentPage.id);
     this._syncPageStatsAfterSave?.(this.currentPage, finalHtml);
-    return finalHtml;
+    return { finalHtml, stilLog, appliedStyles };
   },
 };

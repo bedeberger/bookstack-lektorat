@@ -17,7 +17,7 @@
 //
 // Visualisierungen sind reines Inline-SVG (kein Chart.js): Overview soll
 // instant beim Buchwechsel sichtbar sein, ohne Lazy-Lib-Load.
-import { fetchJson } from './utils.js';
+import { fetchJson, fmtExactDuration } from './utils.js';
 
 export const bookOverviewMethods = {
   async loadBookOverview(bookId) {
@@ -25,7 +25,7 @@ export const bookOverviewMethods = {
     this.overviewLoading = true;
     this.overviewBookId = bookId;
     try {
-      const [stats, coverage, heat, reviews, recent, figuren, szenen, orte] = await Promise.all([
+      const [stats, coverage, heat, reviews, recent, figuren, szenen, orte, lektoratTime] = await Promise.all([
         fetchJson(`/history/book-stats/${bookId}`).catch(() => []),
         fetchJson(`/history/coverage/${bookId}`).catch(() => null),
         fetchJson(`/history/fehler-heatmap/${bookId}?mode=open`).catch(() => null),
@@ -34,6 +34,7 @@ export const bookOverviewMethods = {
         fetchJson(`/figures/${bookId}`).catch(() => null),
         fetchJson(`/figures/scenes/${bookId}`).catch(() => null),
         fetchJson(`/locations/${bookId}`).catch(() => null),
+        fetchJson(`/history/lektorat-time/${bookId}`).catch(() => null),
       ]);
       if (this.overviewBookId !== bookId) return;
       this.overviewStats = Array.isArray(stats) ? stats : [];
@@ -47,6 +48,7 @@ export const bookOverviewMethods = {
       const sz = Array.isArray(szenen?.szenen) ? szenen.szenen : [];
       this.overviewSzenen = sz;
       this.overviewOrte = Array.isArray(orte?.orte) ? orte.orte : [];
+      this.overviewLektoratTime = lektoratTime || null;
       this._memos = {};
     } catch (e) {
       console.error('[loadBookOverview]', e);
@@ -65,6 +67,7 @@ export const bookOverviewMethods = {
     this.overviewFiguren = [];
     this.overviewSzenen = [];
     this.overviewOrte = [];
+    this.overviewLektoratTime = null;
     this.overviewBookId = null;
     this._memos = {};
   },
@@ -405,7 +408,7 @@ export const bookOverviewMethods = {
       const sorted = checked.map(c => c.per1k).sort((a, b) => a - b);
       const mid = Math.floor(sorted.length / 2);
       median = sorted.length % 2 === 0
-        ? (sorted[mid - 1] + sorted[mid]) / 2
+        ? Math.round(((sorted[mid - 1] + sorted[mid]) / 2) * 10) / 10
         : sorted[mid];
     }
     const withDelta = out.map(c => {
@@ -432,6 +435,57 @@ export const bookOverviewMethods = {
       };
     });
     enriched.sort((a, b) => b.per1k - a.per1k);
+    return enriched;
+  },
+
+  // Lektoratszeit pro Kapitel: aus /history/lektorat-time/:book_id (per_chapter).
+  // Anzeige in absoluten Sekunden (exakt formatiert h/min/s). Diverging-Bar um
+  // Median der Sekunden — zeigt, ob ein Kapitel über/unter dem typischen
+  // Zeitaufwand liegt. Sort: Sekunden desc.
+  // Schwelle ≥3 Kapitel mit seconds > 0 für Median.
+  overviewChapterLektoratTime() {
+    const lt = this.overviewLektoratTime;
+    if (!lt || !Array.isArray(lt.per_chapter) || lt.per_chapter.length === 0) return [];
+    const out = lt.per_chapter.map(row => ({
+      id: row.chapter_id ?? null,
+      name: row.chapter_name || '—',
+      seconds: Number(row.seconds) || 0,
+      pages_count: Number(row.pages_count) || 0,
+    }));
+    const showMedian = out.length >= 3;
+    let median = 0;
+    if (showMedian) {
+      const sorted = out.map(c => c.seconds).sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      median = sorted.length % 2 === 0
+        ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
+        : sorted[mid];
+    }
+    const withDelta = out.map(c => {
+      const deltaPct = median > 0
+        ? Math.round(((c.seconds - median) / median) * 100)
+        : 0;
+      return { ...c, deltaPct };
+    });
+    const HALF = 48;
+    const deltas = withDelta.map(c => Math.abs(c.deltaPct));
+    const maxAbsDelta = Math.max(1, ...deltas);
+    const enriched = withDelta.map(c => {
+      const halfPct = showMedian
+        ? (Math.abs(c.deltaPct) / maxAbsDelta) * HALF
+        : 0;
+      return {
+        ...c,
+        median,
+        medianLabel: fmtExactDuration(median),
+        durationLabel: fmtExactDuration(c.seconds),
+        showMedian,
+        barWidthPct: halfPct,
+        barLeftPct: c.deltaPct >= 0 ? 50 : 50 - halfPct,
+        isAbove: c.deltaPct > 0,
+      };
+    });
+    enriched.sort((a, b) => b.seconds - a.seconds);
     return enriched;
   },
 
@@ -631,6 +685,10 @@ export const bookOverviewMethods = {
   _fmtNum(n) {
     const tag = window.__app?.uiLocale === 'en' ? 'en-US' : 'de-CH';
     return Number(n || 0).toLocaleString(tag);
+  },
+
+  _fmtDuration(sec) {
+    return fmtExactDuration(sec);
   },
 
   // ── Tile-Click-Handler ───────────────────────────────────────────────────

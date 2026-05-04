@@ -1430,6 +1430,24 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 65 abgeschlossen (user_page_usage).');
   }
 
+  if (version < 66) {
+    const cols = db.pragma('table_info(page_checks)').map(c => c.name);
+    if (!cols.includes('stilkorrektur_log')) {
+      db.exec('ALTER TABLE page_checks ADD COLUMN stilkorrektur_log TEXT');
+    }
+    db.prepare('UPDATE schema_version SET version = 66').run();
+    logger.info('DB-Migration auf Version 66 abgeschlossen (stilkorrektur_log zu page_checks).');
+  }
+
+  if (version < 67) {
+    db.exec('CREATE TABLE IF NOT EXISTS lektorat_time (id INTEGER PRIMARY KEY AUTOINCREMENT, user_email TEXT NOT NULL, book_id INTEGER NOT NULL, page_id INTEGER NOT NULL, date TEXT NOT NULL, seconds INTEGER NOT NULL DEFAULT 0)');
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_lt_user_book_page_date ON lektorat_time(user_email, book_id, page_id, date)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_lt_book ON lektorat_time(book_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_lt_page ON lektorat_time(page_id)');
+    db.prepare('UPDATE schema_version SET version = 67').run();
+    logger.info('DB-Migration auf Version 67 abgeschlossen (lektorat_time für Prüfmodus-Zeit-Tracking).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

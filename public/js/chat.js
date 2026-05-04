@@ -119,7 +119,7 @@ export const chatMethods = {
     try {
       // Gleiche Pipeline wie beim Lektorat: laden → anwenden → Safety-Check → speichern.
       // onProgress setzt saveApplying (→ Editor-Progressbar) und chatStatus.
-      const finalHtml = await root._loadApplyAndSave(
+      const { finalHtml } = await root._loadApplyAndSave(
         [{ original: vorschlag.original, korrektur: vorschlag.ersatz }],
         [],
         (pct, text) => {

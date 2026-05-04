@@ -501,13 +501,9 @@ function typewriterScroll(container, targetRect, ctx, threshold = TYPEWRITER_THR
 // Dispatcht Events an Alpine.data('editorFocusCard'). Root hält `focusMode`
 // als sichtbare Flag (CSS, body-Class, Template-Checks) und die Live-Counter
 // `focusCountWords` / `focusCountChars`, die der Header im Fokus-Modus zeigt.
+// State-Felder leben in `focusModeState` ([app-state.js]) — alle vier
+// Editor-Modi-Flags damit in einem konsistenten Slice.
 export const focusMethods = {
-  focusMode: false,
-  focusCountWords: 0,
-  focusCountChars: 0,
-  focusCountWordsDelta: '±0',
-  focusCountCharsDelta: '±0',
-
   toggleFocusMode() {
     window.dispatchEvent(new CustomEvent('editor:focus:toggle'));
   },

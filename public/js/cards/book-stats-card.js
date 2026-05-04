@@ -12,11 +12,12 @@ export function registerBookStatsCard() {
     bookStatsData: [],
     bookStatsLoading: false,
     bookStatsSyncStatus: '',
-    bookStatsMetric: 'words',
+    bookStatsMetric: 'chars',
     bookStatsRange: 0,
     bookStatsCoverage: null,
     bookStatsDelta: null,
     writingTimeData: null,
+    lektoratTimeData: null,
 
     _onBookChanged: null,
     _onViewReset: null,
@@ -39,6 +40,7 @@ export function registerBookStatsCard() {
         this.bookStatsCoverage = null;
         this.bookStatsDelta = null;
         this.writingTimeData = null;
+        this.lektoratTimeData = null;
         this.loadBookStats(window.__app.selectedBookId);
       };
       window.addEventListener('book:changed', this._onBookChanged);
@@ -49,6 +51,7 @@ export function registerBookStatsCard() {
         this.bookStatsCoverage = null;
         this.bookStatsDelta = null;
         this.writingTimeData = null;
+        this.lektoratTimeData = null;
         _destroyStatsChart();
       };
       window.addEventListener('view:reset', this._onViewReset);

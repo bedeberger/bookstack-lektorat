@@ -22,9 +22,14 @@ const METRIC_KEYS = {
   avg_flesch_de:      'bookstats.metric.flesch',
   writing_minutes:    'bookstats.metric.writingMinutes',
   writing_cumulative: 'bookstats.metric.writingCumulative',
+  lektorat_minutes:    'bookstats.metric.lektoratMinutes',
+  lektorat_cumulative: 'bookstats.metric.lektoratCumulative',
 };
 
-const WRITING_METRICS = new Set(['writing_minutes', 'writing_cumulative']);
+const WRITING_METRICS  = new Set(['writing_minutes',  'writing_cumulative']);
+const LEKTORAT_METRICS = new Set(['lektorat_minutes', 'lektorat_cumulative']);
+const MINUTES_METRICS    = new Set(['writing_minutes',    'lektorat_minutes']);
+const CUMULATIVE_METRICS = new Set(['writing_cumulative', 'lektorat_cumulative']);
 
 // Ausserhalb von Alpine gespeichert, damit die Chart.js-Instanz nicht durch
 // Alpines Reaktivitäts-Proxy beschädigt wird.
@@ -59,6 +64,7 @@ export const bookstatsMethods = {
       fetchJson('/history/book-stats/' + bookId),
       fetchJson('/history/coverage/' + bookId),
       fetchJson('/history/writing-time/' + bookId),
+      fetchJson('/history/lektorat-time/' + bookId),
     ]);
 
     // Stale-Guard: spätere Response eines alten Buchs nicht in neuen State kippen.
@@ -67,11 +73,12 @@ export const bookstatsMethods = {
     const failed = results.filter(r => r.status === 'rejected');
     for (const r of failed) console.error('[loadBookStats]', r.reason);
 
-    const [rowsRes, coverageRes, writingRes] = results;
+    const [rowsRes, coverageRes, writingRes, lektoratRes] = results;
     const rows = rowsRes.status === 'fulfilled' ? rowsRes.value : [];
     this.bookStatsData = rows;
     this.bookStatsCoverage = coverageRes.status === 'fulfilled' ? coverageRes.value : null;
     this.writingTimeData = writingRes.status === 'fulfilled' ? writingRes.value : null;
+    this.lektoratTimeData = lektoratRes.status === 'fulfilled' ? lektoratRes.value : null;
     const last = rows[rows.length - 1];
     const prev = rows[rows.length - 2];
     this.bookStatsDelta = (last && prev) ? last.words - prev.words : null;
@@ -137,14 +144,16 @@ export const bookstatsMethods = {
     if (_statsChart) { _statsChart.destroy(); _statsChart = null; }
 
     const metric = this.bookStatsMetric;
-    const isWriting = WRITING_METRICS.has(metric);
+    const isWriting  = WRITING_METRICS.has(metric);
+    const isLektorat = LEKTORAT_METRICS.has(metric);
 
-    // Writing-Metriken laufen auf der writing_time-Zeitachse (nur aktive Tage),
-    // nicht auf der book_stats_history-Timeline — sonst fehlen Tage ohne Sync,
-    // und Snapshots ohne Schreibzeit würden als 0-Punkte erscheinen.
-    let rows = isWriting
-      ? (this.writingTimeData?.daily || []).map(d => ({ recorded_at: d.date, seconds: d.seconds }))
-      : this.bookStatsData;
+    // Writing-/Lektorat-Metriken laufen auf der writing_time/lektorat_time-Zeitachse
+    // (nur aktive Tage), nicht auf der book_stats_history-Timeline — sonst fehlen
+    // Tage ohne Sync, und Snapshots ohne Tracking-Zeit würden als 0-Punkte erscheinen.
+    let rows;
+    if (isWriting)       rows = (this.writingTimeData?.daily  || []).map(d => ({ recorded_at: d.date, seconds: d.seconds }));
+    else if (isLektorat) rows = (this.lektoratTimeData?.daily || []).map(d => ({ recorded_at: d.date, seconds: d.seconds }));
+    else                 rows = this.bookStatsData;
     if (!rows.length) return;
 
     // Zeitraum-Filter
@@ -157,14 +166,14 @@ export const bookstatsMethods = {
 
     const isDelta = metric === 'delta_words' || metric === 'delta_chars';
     const isPpc   = metric === 'pages_per_chapter';
-    const isWritMin = metric === 'writing_minutes';
-    const isWritCum = metric === 'writing_cumulative';
+    const isMin   = MINUTES_METRICS.has(metric);
+    const isCum   = CUMULATIVE_METRICS.has(metric);
     let data;
     if (metric === 'delta_words') data = rows.map((r, i) => i === 0 ? null : r.words - rows[i - 1].words);
     else if (metric === 'delta_chars') data = rows.map((r, i) => i === 0 ? null : (Number(r.chars) || 0) - (Number(rows[i - 1].chars) || 0));
     else if (isPpc) data = rows.map(r => r.chapter_count > 0 ? Math.round((r.page_count / r.chapter_count) * 10) / 10 : null);
-    else if (isWritMin) data = rows.map(r => Math.round(r.seconds / 60));
-    else if (isWritCum) { let sum = 0; data = rows.map(r => { sum += r.seconds; return Math.round(sum / 360) / 10; }); }
+    else if (isMin) data = rows.map(r => Math.round(r.seconds / 60));
+    else if (isCum) { let sum = 0; data = rows.map(r => { sum += r.seconds; return Math.round(sum / 360) / 10; }); }
     else data = rows.map(r => r[metric] ?? null);
 
     // Leading-Null-Tage abschneiden: X-Achse startet am ersten echten Messpunkt
@@ -181,7 +190,7 @@ export const bookstatsMethods = {
     const metricLabel = METRIC_KEYS[metric] ? window.__app.t(METRIC_KEYS[metric]) : metric;
 
     const localeTag = (window.__app.uiLocale === 'en') ? 'en-US' : 'de-CH';
-    const isDecimal = isPpc || isWritCum || metric === 'avg_sentence_len' || metric === 'avg_lix' || metric === 'avg_flesch_de';
+    const isDecimal = isPpc || isCum || metric === 'avg_sentence_len' || metric === 'avg_lix' || metric === 'avg_flesch_de';
     const fmt = v => isDecimal ? v.toLocaleString(localeTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
       : Math.round(v).toLocaleString(localeTag);
     const makeTick = () => v => {

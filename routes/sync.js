@@ -14,6 +14,26 @@ function htmlToText(html) {
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// undici-Fehler ("fetch failed") verstecken Ursache in e.cause. Ohne Auflösung
+// steht im Log nur "fetch failed" — Diagnose unmöglich. Helper packt code +
+// nested cause-message aus, plus optional HTTP-status/bodyText von bsGet-Errors.
+function _errDetail(e) {
+  const parts = [e.message];
+  const cause = e.cause;
+  if (cause) {
+    const code = cause.code || cause.errno || cause.name;
+    const msg = cause.message;
+    parts.push(`cause: ${[code, msg].filter(Boolean).join(' — ')}`);
+    if (cause.cause) {
+      const c2 = cause.cause;
+      parts.push(`cause.cause: ${[c2.code, c2.message].filter(Boolean).join(' — ')}`);
+    }
+  }
+  if (e.status) parts.push(`status: ${e.status}`);
+  if (e.bodyText) parts.push(`body: ${String(e.bodyText).slice(0, 200)}`);
+  return parts.join(' | ');
+}
+
 // Token-Schätzung: echte Promptlänge aus buildLektoratPrompt — gleiche Quelle
 // wie public/js/tree.js:_syncPageStatsAfterSave, damit Cron-Sync und
 // Page-Save-Pfad denselben Wert in page_stats.tok schreiben (Snapshot vs.
@@ -277,7 +297,7 @@ async function syncAllBooks() {
         else bookOwners.set(b.id, { name: b.name, tokens: [u] });
       }
     } catch (e) {
-      logger.warn(`Sync: Bücherliste mit Token von ${u.email} fehlgeschlagen: ${e.message}`);
+      logger.warn(`Sync: Bücherliste mit Token von ${u.email} fehlgeschlagen: ${_errDetail(e)}`);
     }
   }
 
@@ -295,7 +315,7 @@ async function syncAllBooks() {
         synced = true;
         break;
       } catch (e) {
-        logger.warn(`Sync Buch ${bookId} mit Token von ${u.email} fehlgeschlagen: ${e.message}`);
+        logger.warn(`Sync Buch ${bookId} mit Token von ${u.email} fehlgeschlagen: ${_errDetail(e)}`);
       }
     }
     if (!synced) logger.error(`Sync Buch ${bookId}: alle berechtigten User-Tokens fehlgeschlagen.`);
@@ -325,7 +345,7 @@ router.post('/pages/:book_id', async (req, res) => {
     await syncPagesCache(bookId, token);
     res.json({ ok: true });
   } catch (e) {
-    logger.error('pages-Cache Sync Fehler: ' + e.message);
+    logger.error('pages-Cache Sync Fehler: ' + _errDetail(e));
     res.status(500).json({ error: e.message });
   }
 });
@@ -340,14 +360,14 @@ router.post('/book/:book_id', async (req, res) => {
     const result = await syncBook(bookId, token);
     res.json({ ok: true, ...result });
   } catch (e) {
-    logger.error('Sync-Route Fehler: ' + e.message);
+    logger.error('Sync-Route Fehler: ' + _errDetail(e));
     res.status(500).json({ error: e.message });
   }
 });
 
 // POST /sync/all – alle Bücher
 router.post('/all', async (_req, res) => {
-  syncAllBooks().catch(e => logger.error('Sync /all Fehler: ' + e.message));
+  syncAllBooks().catch(e => logger.error('Sync /all Fehler: ' + _errDetail(e)));
   res.json({ ok: true, message: 'Sync gestartet' });
 });
 

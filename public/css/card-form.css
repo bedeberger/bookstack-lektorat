@@ -75,7 +75,9 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
 }
 .card-header-aside .tok-stats {
   display: inline-flex;

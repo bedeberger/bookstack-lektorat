@@ -26,23 +26,25 @@
   <div x-show="bookStatsSyncStatus" class="card-status" x-html="bookStatsSyncStatus"></div>
 
   <!-- Metrik- & Zeitraum-Umschalter -->
-  <div x-show="bookStatsData.length > 0 || (writingTimeData?.daily?.length > 0)" class="book-stats-controls">
+  <div x-show="bookStatsData.length > 0 || (writingTimeData?.daily?.length > 0) || (lektoratTimeData?.daily?.length > 0)" class="book-stats-controls">
     <div x-data="combobox($app.t('bookstats.metric'))"
          x-modelable="value" x-model="bookStatsMetric"
          x-effect="options = [
-           {value:'chars',              label: $app.t('bookstats.metric.chars')},
-           {value:'words',              label: $app.t('bookstats.metric.words')},
-           {value:'page_count',         label: $app.t('bookstats.metric.pages')},
-           {value:'tok',                label: $app.t('bookstats.metric.tok')},
-           {value:'unique_words',       label: $app.t('bookstats.metric.unique')},
-           {value:'delta_chars',        label: $app.t('bookstats.metric.deltaChars')},
-           {value:'delta_words',        label: $app.t('bookstats.metric.delta')},
-           {value:'avg_sentence_len',   label: $app.t('bookstats.metric.avgSentence')},
-           {value:'pages_per_chapter',  label: $app.t('bookstats.metric.pagesPerChapter')},
-           {value:'avg_lix',            label: $app.t('bookstats.metric.lix')},
-           {value:'avg_flesch_de',      label: $app.t('bookstats.metric.flesch')},
-           {value:'writing_minutes',    label: $app.t('bookstats.metric.writingMinutes')},
-           {value:'writing_cumulative', label: $app.t('bookstats.metric.writingCumulative')}
+           {value:'chars',               label: $app.t('bookstats.metric.chars')},
+           {value:'words',               label: $app.t('bookstats.metric.words')},
+           {value:'page_count',          label: $app.t('bookstats.metric.pages')},
+           {value:'tok',                 label: $app.t('bookstats.metric.tok')},
+           {value:'unique_words',        label: $app.t('bookstats.metric.unique')},
+           {value:'delta_chars',         label: $app.t('bookstats.metric.deltaChars')},
+           {value:'delta_words',         label: $app.t('bookstats.metric.delta')},
+           {value:'avg_sentence_len',    label: $app.t('bookstats.metric.avgSentence')},
+           {value:'pages_per_chapter',   label: $app.t('bookstats.metric.pagesPerChapter')},
+           {value:'avg_lix',             label: $app.t('bookstats.metric.lix')},
+           {value:'avg_flesch_de',       label: $app.t('bookstats.metric.flesch')},
+           {value:'writing_minutes',     label: $app.t('bookstats.metric.writingMinutes')},
+           {value:'writing_cumulative',  label: $app.t('bookstats.metric.writingCumulative')},
+           {value:'lektorat_minutes',    label: $app.t('bookstats.metric.lektoratMinutes')},
+           {value:'lektorat_cumulative', label: $app.t('bookstats.metric.lektoratCumulative')}
          ]"
          @combobox-change="$nextTick(() => renderStatsChart())"
          @click.outside="close()" @keydown="onKeydown($event)"
@@ -57,7 +59,7 @@
   </div>
 
   <!-- Diagramm -->
-  <div x-show="bookStatsData.length > 0 || (writingTimeData?.daily?.length > 0)" class="book-stats-chart-wrap">
+  <div x-show="bookStatsData.length > 0 || (writingTimeData?.daily?.length > 0) || (lektoratTimeData?.daily?.length > 0)" class="book-stats-chart-wrap">
     <canvas id="book-stats-chart" role="img" :aria-label="$app.t('bookstats.chartFallback')"><span x-text="$app.t('bookstats.chartFallback')"></span></canvas>
   </div>
 
@@ -83,8 +85,12 @@
       x-text="$app.t('bookstats.writingTotal', { h: ((writingTimeData?.total_seconds ?? 0) / 3600).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
     <span class="tok-badge tok-neutral" x-show="(writingTimeData?.active_days ?? 0) > 0"
       x-text="$app.t('bookstats.writingAvg', { m: Math.round((writingTimeData?.total_seconds ?? 0) / 60 / (writingTimeData?.active_days || 1)).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH') })"></span>
+    <span class="tok-badge tok-neutral" x-show="(lektoratTimeData?.total_seconds ?? 0) > 0"
+      x-text="$app.t('bookstats.lektoratTotal', { h: ((lektoratTimeData?.total_seconds ?? 0) / 3600).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })"></span>
+    <span class="tok-badge tok-neutral" x-show="(lektoratTimeData?.active_days ?? 0) > 0"
+      x-text="$app.t('bookstats.lektoratAvg', { m: Math.round((lektoratTimeData?.total_seconds ?? 0) / 60 / (lektoratTimeData?.active_days || 1)).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH') })"></span>
   </div>
 
   <!-- Leer-Zustand -->
-  <div x-show="!bookStatsData.length && !(writingTimeData?.daily?.length > 0) && !bookStatsLoading" class="muted-msg muted-msg--spaced" x-text="$app.t('bookstats.emptyState')"></div>
+  <div x-show="!bookStatsData.length && !(writingTimeData?.daily?.length > 0) && !(lektoratTimeData?.daily?.length > 0) && !bookStatsLoading" class="muted-msg muted-msg--spaced" x-text="$app.t('bookstats.emptyState')"></div>
 </div>

@@ -95,6 +95,18 @@ const editorState = () => ({
   newPageError: '',
 });
 
+// Fokusmodus-Flag + Live-Counter. Eigener Slice, damit alle vier Editor-Modi-
+// Flags (editMode, checkDone, focusMode, plus „Viewmodus" als none-of-above)
+// in app-state.js sichtbar sind. Sub-Komponenten-Maschine `_focusState`/
+// `_focusGen` lebt in editorFocusCard.
+const focusModeState = () => ({
+  focusMode: false,
+  focusCountWords: 0,
+  focusCountChars: 0,
+  focusCountWordsDelta: '±0',
+  focusCountCharsDelta: '±0',
+});
+
 // Restliche Editor-Popup-Felder am Root:
 //   - `_figurLookupIndex`: Lookup-Cache für den synchronen Hit-Test in
 //     `_tryOpenFigurLookupAt` (wird aus Synonym-Kontextmenü aufgerufen).
@@ -282,6 +294,7 @@ export function initialLektoratState() {
     ...aiProviderState(),
     ...navigationState(),
     ...editorState(),
+    ...focusModeState(),
     ...editorPopupState(),
     ...cardsState(),
     ...statusState(),

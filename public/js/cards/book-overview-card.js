@@ -18,6 +18,7 @@ export function registerBookOverviewCard() {
     overviewFiguren: [],
     overviewSzenen: [],
     overviewOrte: [],
+    overviewLektoratTime: null,
 
     _onBookChanged: null,
     _onViewReset: null,

@@ -15,6 +15,7 @@ import { ereignisseMethods } from './ereignisse.js';
 import { registerBookOverviewCard } from './cards/book-overview-card.js';
 import { registerBookStatsCard } from './cards/book-stats-card.js';
 import { writingTimeMethods } from './writing-time.js';
+import { lektoratTimeMethods } from './lektorat-time.js';
 import { registerCatalogStore } from './cards/catalog-store.js';
 import { registerEreignisseCard } from './cards/ereignisse-card.js';
 import { registerOrteCard } from './cards/orte-card.js';
@@ -624,6 +625,7 @@ document.addEventListener('alpine:init', () => {
         });
         this._startJobQueuePoll();
         this._setupWritingTime();
+        this._setupLektoratTime();
       } catch (e) {
         console.error('[init]', e);
         this.setStatus(this.t('app.configLoadError'));
@@ -643,6 +645,9 @@ document.addEventListener('alpine:init', () => {
     // writingTimeMethods bleiben im Root: Schreibzeit-Heartbeat lauscht auf
     // editMode/focusMode, läuft unabhängig von der bookStatsCard-Sichtbarkeit.
     ...writingTimeMethods,
+    // lektoratTimeMethods analog: lauscht auf checkDone (Prüfmodus) +
+    // currentPage.id + selectedBookId; bucht Sekunden pro (User, Buch, Seite, Tag).
+    ...lektoratTimeMethods,
     ...szenenMethods,
     ...orteMethods,
     ...i18nMethods,

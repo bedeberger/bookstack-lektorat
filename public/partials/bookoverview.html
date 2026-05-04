@@ -457,6 +457,45 @@
       </div>
     </template>
 
+    <!-- Lektoratszeit pro Kapitel: aus /history/lektorat-time per_chapter.
+         Tracking läuft, solange checkDone (Prüfmodus) aktiv ist und der Tab
+         sichtbar. Sort: Sekunden desc; Diverging-Bar um Median der Sekunden.
+         Anzeige als exakte Dauer (h/min/s). Klick → BookStats (Total-Badges). -->
+    <template x-if="overviewChapterLektoratTime().length > 0">
+      <div class="overview-tile overview-tile--medium internal-link"
+           @click="_openLengthStats(0, 'lektorat_minutes')"
+           :title="$app.t('overview.openBookStats')">
+        <div class="overview-tile-head">
+          <div class="overview-tile-label" x-text="$app.t('overview.chapterLektoratTime')"></div>
+          <span class="overview-tile-median"
+                x-show="overviewChapterLektoratTime()[0]?.showMedian"
+                x-text="$app.t('overview.medianTick') + ': ' + overviewChapterLektoratTime()[0]?.medianLabel"></span>
+        </div>
+        <ul class="overview-chapter-list">
+          <template x-for="ch in overviewChapterLektoratTime()" :key="ch.id ?? '_'">
+            <li class="overview-chapter-row">
+              <span class="overview-chapter-name" :title="ch.name" x-text="ch.name"></span>
+              <div class="overview-chapter-bar-track overview-chapter-bar-track--diverge"
+                   x-show="ch.showMedian">
+                <div class="overview-chapter-bar-fill"
+                     :class="ch.isAbove ? 'overview-chapter-bar-fill--findings-pos' : 'overview-chapter-bar-fill--findings-neg'"
+                     :style="{ left: ch.barLeftPct + '%', width: ch.barWidthPct + '%' }"></div>
+                <div class="overview-chapter-median-tick"
+                     :title="$app.t('overview.medianTick') + ': ' + ch.medianLabel"></div>
+              </div>
+              <span class="overview-chapter-meta">
+                <span class="overview-chapter-delta"
+                      x-show="ch.showMedian"
+                      :class="ch.deltaPct > 0 ? 'overview-trend-pct--down' : ch.deltaPct < 0 ? 'overview-trend-pct--up' : ''"
+                      x-text="(ch.deltaPct >= 0 ? '+' : '') + ch.deltaPct + '%'"></span>
+                <span class="overview-chapter-count" x-text="ch.durationLabel"></span>
+              </span>
+            </li>
+          </template>
+        </ul>
+      </div>
+    </template>
+
     <!-- Zuletzt bearbeitet (Zeilen sind individuelle Links) -->
     <template x-if="overviewRecentPages().length > 0">
       <div class="overview-tile overview-tile--medium">

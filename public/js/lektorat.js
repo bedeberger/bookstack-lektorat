@@ -164,7 +164,7 @@ export const lektoratMethods = {
     const selectedStyles = selected.filter(f => f.typ === 'stil');
 
     try {
-      const finalHtml = await this._loadApplyAndSave(selectedHard, selectedStyles, (pct, text) => {
+      const { finalHtml, stilLog, appliedStyles } = await this._loadApplyAndSave(selectedHard, selectedStyles, (pct, text) => {
         this.saveApplying = pct;
         if (text) this.setStatus(text, true);
       });
@@ -172,7 +172,11 @@ export const lektoratMethods = {
       if (this.lastCheckId) {
         try {
           this.saveApplying = 95;
-          let applied = selectedHard;
+          // applied = Hard-Findings + tatsächlich übernommene Stil-Findings.
+          // Stil-Findings ohne Match (KI-Original passt nicht ins HTML) bleiben
+          // bewusst draußen — sonst zeigt die History sie als gespeichert, obwohl
+          // sie nie ins BookStack-HTML geschrieben wurden.
+          let applied = [...selectedHard, ...(appliedStyles || [])];
           let selectedAll = selected;
           // Bei History-Einträgen: mit bereits angewendeten Korrekturen mergen
           if (this.activeHistoryEntryId) {
@@ -182,14 +186,16 @@ export const lektoratMethods = {
                 const set = new Set((existing || []).map(e => e.original));
                 return [...(existing || []), ...items.filter(e => !set.has(e.original))];
               };
-              applied = merge(entry.applied_errors_json, selectedHard);
+              applied = merge(entry.applied_errors_json, applied);
               selectedAll = merge(entry.selected_errors_json, selected);
             }
           }
+          const body = { applied_errors_json: applied, selected_errors_json: selectedAll };
+          if (stilLog) body.stilkorrektur_log = stilLog;
           const r = await fetch('/history/check/' + this.lastCheckId + '/saved', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ applied_errors_json: applied, selected_errors_json: selectedAll }),
+            body: JSON.stringify(body),
           });
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           await this.loadPageHistory(this.currentPage.id);

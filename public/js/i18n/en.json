@@ -339,6 +339,8 @@
   "overview.unit.per1k":         "/1k w",
   "overview.unit.findings":      "findings",
   "overview.unit.notChecked":    "not checked",
+  "overview.chapterLektoratTime": "Proofreading time per chapter",
+  "overview.openBookStats":      "Open book stats",
 
   "sidebar.pagesOf":             "Pages: {name}",
   "sidebar.loadPages":           "Load pages",
@@ -556,6 +558,8 @@
   "bookstats.metric.flesch":     "Flesch-DE (readability)",
   "bookstats.metric.writingMinutes":    "Writing min/day",
   "bookstats.metric.writingCumulative": "Cumulative writing hours",
+  "bookstats.metric.lektoratMinutes":    "Proofreading min/day",
+  "bookstats.metric.lektoratCumulative": "Cumulative proofreading hours",
   "bookstats.range.7":           "7 d",
   "bookstats.range.30":          "30 d",
   "bookstats.range.90":          "90 d",
@@ -571,6 +575,8 @@
   "bookstats.pagesPerChapterBadge": "avg {n} p/ch.",
   "bookstats.writingTotal":      "{h} h writing",
   "bookstats.writingAvg":        "avg {m} min/active day",
+  "bookstats.lektoratTotal":     "{h} h proofreading",
+  "bookstats.lektoratAvg":       "avg {m} min/active day (proofreading)",
   "bookstats.emptyState":        "No data yet. Click «Synchronise» to capture the first snapshot.",
 
   "stil.title":                  "Style heatmap: {name}",

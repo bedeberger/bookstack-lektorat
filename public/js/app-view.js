@@ -43,23 +43,6 @@ export const appViewMethods = {
 
     this._loadPageBadgeCounts(p.id);
 
-    // Prüfen ob ein Lektorat-Check-Job für diese Seite läuft (Server-seitig oder aus früherer Session)
-    try {
-      const { jobId: activeJobId } = await fetchJson(`/jobs/active?type=check&page_id=${p.id}`);
-      if (activeJobId) {
-        localStorage.setItem('lektorat_check_job_' + p.id, activeJobId);
-        this.checkLoading = true;
-        this.checkProgress = 0;
-        this.analysisOut = '';
-        this.checkStatus = `<span class="spinner"></span>${escHtml(this.t('app.lektoratRunning'))}`;
-        this.startCheckPoll(activeJobId);
-        await this.loadPageHistory(p.id);
-        return;
-      }
-      // Kein aktiver Job → stale localStorage-Eintrag bereinigen
-      localStorage.removeItem('lektorat_check_job_' + p.id);
-    } catch (e) { console.error('[selectPage active-job check]', e); }
-
     // Seiteninhalt laden und als formatiertes HTML rendern
     try {
       let pd = await this.bsGet('pages/' + p.id);
@@ -81,6 +64,22 @@ export const appViewMethods = {
       console.error('[selectPage load-page]', e);
       this.setStatus(this.t('chat.pageLoadFailed'));
     }
+
+    // Prüfen ob ein Lektorat-Check-Job für diese Seite läuft (Server-seitig oder aus früherer Session)
+    try {
+      const { jobId: activeJobId } = await fetchJson(`/jobs/active?type=check&page_id=${p.id}`);
+      if (activeJobId) {
+        localStorage.setItem('lektorat_check_job_' + p.id, activeJobId);
+        this.checkLoading = true;
+        this.checkProgress = 0;
+        this.analysisOut = '';
+        this.checkStatus = `<span class="spinner"></span>${escHtml(this.t('app.lektoratRunning'))}`;
+        this.startCheckPoll(activeJobId);
+      } else {
+        // Kein aktiver Job → stale localStorage-Eintrag bereinigen
+        localStorage.removeItem('lektorat_check_job_' + p.id);
+      }
+    } catch (e) { console.error('[selectPage active-job check]', e); }
 
     // Figurenkontext für dieses Kapitel laden (parallel zur History)
     this.loadChapterFigures();

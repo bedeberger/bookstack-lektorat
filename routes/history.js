@@ -32,6 +32,10 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
   const selected = req.body?.selected_errors_json !== undefined
     ? JSON.stringify(req.body.selected_errors_json)
     : null;
+  const stilLogRaw = req.body?.stilkorrektur_log;
+  const stilLog = (stilLogRaw && typeof stilLogRaw === 'object')
+    ? JSON.stringify(stilLogRaw)
+    : null;
   const user_email = req.session?.user?.email || null;
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
@@ -41,8 +45,8 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
   const row = db.prepare('SELECT page_id, page_name, book_id, chapter_id FROM page_checks WHERE id = ? AND user_email = ?').get(id, user_email);
   if (!row) return res.status(404).json({ error_code: 'NOT_FOUND' });
 
-  db.prepare('UPDATE page_checks SET saved = ?, saved_at = ?, applied_errors_json = COALESCE(?, applied_errors_json), selected_errors_json = COALESCE(?, selected_errors_json) WHERE id = ? AND user_email = ? AND book_id = ?')
-    .run(saved, saved_at, applied, selected, id, user_email, row.book_id);
+  db.prepare('UPDATE page_checks SET saved = ?, saved_at = ?, applied_errors_json = COALESCE(?, applied_errors_json), selected_errors_json = COALESCE(?, selected_errors_json), stilkorrektur_log = COALESCE(?, stilkorrektur_log) WHERE id = ? AND user_email = ? AND book_id = ?')
+    .run(saved, saved_at, applied, selected, stilLog, id, user_email, row.book_id);
 
   if (saved) {
     const appliedErrors = req.body?.applied_errors_json;
@@ -52,6 +56,11 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
       const total = appliedErrors.length;
       logger.info(
         `Lektorat gespeichert: «${row.page_name}» (user=${user_email || '-'}, book=${row.book_id || '-'}, chap=${row.chapter_id || '-'}, page=${row.page_id}, ${total} Korrekturen: R=${counts.rechtschreibung} G=${counts.grammatik} W=${counts.wiederholung} S=${counts.stil})`
+      );
+    }
+    if (stilLogRaw && typeof stilLogRaw === 'object') {
+      logger.info(
+        `Stilkorrektur: «${row.page_name}» (page=${row.page_id}) requested=${stilLogRaw.requested ?? '?'} returned=${stilLogRaw.returned ?? '?'} applied=${stilLogRaw.applied ?? '?'}${stilLogRaw.error ? ` error="${stilLogRaw.error}"` : ''}`
       );
     }
   }
@@ -82,7 +91,7 @@ router.get('/check/:id/details', (req, res) => {
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   const r = db.prepare(`
-    SELECT errors_json, applied_errors_json, selected_errors_json, szenen_json
+    SELECT errors_json, applied_errors_json, selected_errors_json, szenen_json, stilkorrektur_log
     FROM page_checks WHERE id = ? AND user_email = ?`).get(id, user_email);
   if (!r) return res.status(404).json({ error_code: 'NOT_FOUND' });
   res.json({
@@ -90,6 +99,7 @@ router.get('/check/:id/details', (req, res) => {
     applied_errors_json: r.applied_errors_json ? JSON.parse(r.applied_errors_json) : null,
     selected_errors_json: r.selected_errors_json ? JSON.parse(r.selected_errors_json) : null,
     szenen_json: r.szenen_json ? JSON.parse(r.szenen_json) : null,
+    stilkorrektur_log: r.stilkorrektur_log ? JSON.parse(r.stilkorrektur_log) : null,
   });
 });
 
@@ -506,6 +516,84 @@ router.get('/writing-time/:book_id', (req, res) => {
     first_date:    row?.first_date    || null,
     last_date:     row?.last_date     || null,
     daily,
+  });
+});
+
+// Lektoratszeit-Tracking: Heartbeat solange checkDone (Prüfmodus) aktiv und
+// Tab sichtbar. Pro (User, Buch, Seite, Tag) aufsummiert. Server-Clamp auf 1 h.
+router.post('/lektorat-time', jsonBody, (req, res) => {
+  const user_email = req.session?.user?.email || null;
+  if (!user_email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+  const book_id = toIntId(req.body?.book_id);
+  const page_id = toIntId(req.body?.page_id);
+  const secondsRaw = Number(req.body?.seconds);
+  if (!book_id) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
+  if (!page_id) return res.status(400).json({ error_code: 'INVALID_PAGE_ID' });
+  if (!Number.isFinite(secondsRaw) || secondsRaw <= 0) return res.json({ ok: true, added: 0 });
+  const seconds = Math.min(Math.round(secondsRaw), 3600);
+  const date = new Date().toISOString().slice(0, 10);
+  db.prepare(`
+    INSERT INTO lektorat_time (user_email, book_id, page_id, date, seconds)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(user_email, book_id, page_id, date) DO UPDATE SET seconds = seconds + excluded.seconds
+  `).run(user_email, book_id, page_id, date, seconds);
+  res.json({ ok: true, added: seconds });
+});
+
+// Aggregat + Tagesreihe + Per-Page-Aufschlüsselung der Lektoratszeit.
+router.get('/lektorat-time/:book_id', (req, res) => {
+  const user_email = req.session?.user?.email || null;
+  if (!user_email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+  const book_id = toIntId(req.params.book_id);
+  if (!book_id) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
+  const row = db.prepare(`
+    SELECT COALESCE(SUM(seconds), 0) AS total_seconds,
+           COUNT(DISTINCT date)      AS active_days,
+           MIN(date)                 AS first_date,
+           MAX(date)                 AS last_date
+    FROM lektorat_time
+    WHERE user_email = ? AND book_id = ? AND seconds > 0
+  `).get(user_email, book_id);
+  const daily = db.prepare(`
+    SELECT date, SUM(seconds) AS seconds FROM lektorat_time
+    WHERE user_email = ? AND book_id = ? AND seconds > 0
+    GROUP BY date
+    ORDER BY date ASC
+  `).all(user_email, book_id);
+  const per_page = db.prepare(`
+    SELECT lt.page_id, COALESCE(p.page_name, '') AS page_name, SUM(lt.seconds) AS seconds
+    FROM lektorat_time lt
+    LEFT JOIN pages p ON p.page_id = lt.page_id
+    WHERE lt.user_email = ? AND lt.book_id = ? AND lt.seconds > 0
+    GROUP BY lt.page_id
+    ORDER BY seconds DESC
+  `).all(user_email, book_id);
+  // per_chapter: aggregiert über chapter_id der pages-Zeile, Zeichen/Wörter aus
+  // page_stats (gleiche Skala wie die anderen Kapitel-Tiles in der Overview).
+  // Seiten ohne chapter_id (lose Seiten direkt im Buch) werden unter NULL/'' gruppiert.
+  const per_chapter = db.prepare(`
+    SELECT
+      p.chapter_id                     AS chapter_id,
+      COALESCE(p.chapter_name, '')     AS chapter_name,
+      SUM(lt.seconds)                  AS seconds,
+      COUNT(DISTINCT lt.page_id)       AS pages_count,
+      COALESCE(SUM(ps.chars), 0)       AS chars,
+      COALESCE(SUM(ps.words), 0)       AS words
+    FROM lektorat_time lt
+    LEFT JOIN pages p      ON p.page_id      = lt.page_id
+    LEFT JOIN page_stats ps ON ps.page_id    = lt.page_id
+    WHERE lt.user_email = ? AND lt.book_id = ? AND lt.seconds > 0
+    GROUP BY p.chapter_id, p.chapter_name
+    ORDER BY seconds DESC
+  `).all(user_email, book_id);
+  res.json({
+    total_seconds: row?.total_seconds || 0,
+    active_days:   row?.active_days   || 0,
+    first_date:    row?.first_date    || null,
+    last_date:     row?.last_date     || null,
+    daily,
+    per_page,
+    per_chapter,
   });
 });
 

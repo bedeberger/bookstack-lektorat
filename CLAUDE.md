@@ -39,6 +39,135 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Va
   - Optional `combobox-wrap--compact` für kleine Variante.
   - Referenz: [public/index.html:90](public/index.html#L90) (Buchwahl), [public/partials/szenen.html:76](public/partials/szenen.html#L76).
 
+## State-Modell (Frontend)
+
+Verbindlicher Aufbau des Alpine-State. Vor jeder UI-Änderung die richtige Ebene wählen — Root vs. Sub-Komponente vs. Store entscheidet über Reaktivität, Lifecycle und Speicherlecks.
+
+### Drei Ebenen
+
+1. **Root `Alpine.data('lektorat')`** ([public/js/app.js:355](public/js/app.js#L355)) — `x-data="lektorat"` am `<body>`. SSoT für: Navigation, Session/Shell, i18n-Locale, **alle `showXxxCard`-Flags** (Hash-Router + Exklusivität), Job-Queue, Editor-Edit-Mode, Auto-Save, Selection. Cross-Cutting-Methoden: `t/tRaw`, `bsGet/bsGetAll`, `loadFiguren/loadOrte/loadSzenen`, `selectPage`, `gotoStelle`, `_closeOtherMainCards`.
+2. **Sub-Komponenten `Alpine.data('xxxCard')`** in [public/js/cards/](public/js/cards/) — 24 Karten, eine pro UI-Card. Eigener fachlicher State + `init()`/`destroy()`. Karten haben **keine** eigenen `showXxxCard`-Flags (Root ist SSoT); sie hören via `$watch(() => window.__app.showXxxCard)` auf Öffnen/Schliessen.
+3. **`Alpine.store('catalog')`** ([public/js/cards/catalog-store.js](public/js/cards/catalog-store.js)) — geteilte Fach-Daten `figuren / orte / szenen / globalZeitstrahl`. Root spiegelt sie via Getter/Setter-Proxy ([public/js/app.js:364-371](public/js/app.js#L364-L371)), damit `this.figuren = …` und `this.figuren.push(…)` weiter funktionieren. Karten lesen via `$store.catalog` oder `$app.figuren`.
+
+### Root-State-Slices ([public/js/app-state.js](public/js/app-state.js))
+
+`initialLektoratState()` spreadet **14 Slice-Funktionen** in ein flaches Root-Objekt. Neues Feld → in den passenden Slice:
+
+| Slice | Inhalt |
+|-------|--------|
+| `shellState` | currentUser, devMode, sessionExpired, themePref, focusGranularity, uiLocale, isMac, bookstackUrl, promptConfig, Token-Setup-Modal, `_abortCtrl` |
+| `aiProviderState` | claudeModel, claudeMaxTokens, apiProvider, ollamaModel, llamaModel |
+| `navigationState` | books, selectedBookId, pages, tree, Hash-Router-Internals (`_applyingHash`, `_hashInitialized`, …), Order-Maps, pageSearch, BookStack-Search |
+| `editorState` | currentPage, renderedPageHtml, editMode, editDirty, editSaving, Auto-Save-Timer (`_autosaveIdleTimer`, `_autosaveMaxTimer`, `_draftTimer`), originalHtml/correctedHtml, hasErrors, newPage-Felder |
+| `focusModeState` | focusMode, focusCountWords, focusCountChars, focusCountWordsDelta, focusCountCharsDelta (Live-Counter im Fokus-Header) |
+| `editorPopupState` | Spiegel-Flags `_figurLookupOpen`, `_synonymMenuOpen`, `_synonymPickerOpen` (für Escape-Routing in `editor-focus-onKey`) + `_figurLookupIndex` (Lookup-Cache) |
+| `cardsState` | **Alle `showXxxCard`-Flags** (showBookCard, showFiguresCard, showEditorCard, showChatCard, showAvatarMenu, …) — exklusiv via `_closeOtherMainCards(keep)` |
+| `statusState` | status, statusSpinner, `_statusTimer` |
+| `confirmDialogState` | Eigener Modal-Ersatz für `window.confirm` (verhindert macOS-Vollbild-Bug) |
+| `lektoratState` | analysisOut, lektoratFindings, selectedFindings, appliedOriginals, checkLoading/Progress/Status, Token-Estimates (`tokEsts`, `_tokenEstGen`), pageHistory, ideenCounts, pageLastChecked, `_checkPollTimer` |
+| `bookReviewState` | bookReviewHistory (von tree.js geschrieben, von user-settings beim Reset gelesen → Root) |
+| `kapitelReviewState` | kapitelReviewChapterId (Hash-Router-SSoT) |
+| `figurenState` | figurenLoading/Progress/Status, selectedFigurId, figurenFilters, `_figuresPollTimer` (Reconnect-relevant → Root) |
+| `ereignisseState` / `szenenState` / `orteState` | Filter + selectedXxxId (von app-navigation geschrieben) + UpdatedAt |
+| `chatsState` | `_checkDoneBeforeChat` |
+| `featuresUsageState` | recentFeatureKeys (Top-3 Quick-Pills), recentPageIds (Palette) |
+| `jobsState` | jobQueueItems, jobQueueExpanded, alleAktualisierenLoading/Status/Progress/Tps, `_jobQueueTimer` |
+
+**Regel:** Slices sind Funktionen (nicht Konstanten), damit jede Komponenten-Instanz frische Arrays/Objekte erhält. Sonst geteilte Referenzen.
+
+### Computed-Maps am Root (Performance)
+
+`figurenById / orteById / szenenById` ([public/js/app.js:378-398](public/js/app.js#L378-L398)) sind getter-basierte O(1)-Lookups, die nur bei Referenzwechsel der Quell-Arrays neu gebaut werden. **`loadFiguren` etc. müssen die Arrays reassignen, nie pushen** — sonst rebuildet der Cache nicht. Render-Loops in figuren.html/orte.html/szenen.html nutzen diese Maps statt `.find()`.
+
+Weitere Root-Computeds: `szenenNachKapitel`, `szenenNachSeite`, `orteFiltered`, `szenenFiltered`, `filteredTree`, `selectedBookName`, `selectedBookUrl`, `statusHtml`, `ideenMovePickerOptions()`.
+
+### Lifecycle
+
+- **Root `init()`** ([public/js/app.js:511](public/js/app.js#L511)): setzt `window.__app = this` (für `$app`-Magic), erzeugt `_abortCtrl = new AbortController()`, registriert globale Listener mit `{ signal }`.
+- **Root `destroy()`** ([public/js/app.js:504](public/js/app.js#L504)): `_abortCtrl.abort()` → alle Listener weg in einem Schlag. Plus `clearInterval(_jobQueueTimer)`, `clearTimeout(_statusTimer)`. **Pflicht für jede neue globale Subscription:** `{ signal: this._abortCtrl.signal }` an `addEventListener` — sonst Leak bei HMR/Re-Init.
+- **Sub-`init()`/`destroy()`**: Karten managen ihre Window-Listener selbst (z.B. `_onBookChanged`); in `destroy()` mit `removeEventListener` aufräumen. vis-network/Chart-Instanzen explizit `.destroy()` callen + Refs nullen (sonst halten DataSets das alte Buch im Speicher).
+
+### `$app` / `window.__app` (Root-Zugriff aus Subs)
+
+Alpine's `$root` zeigt auf das nächste `x-data` (= Sub selbst), nicht auf die `lektorat`-Root.
+- **In Templates** (Alpine-Expressions): `$app.t('key')`, `$app.selectedBookId`, `$app.figuren` — via `Alpine.magic('app', …)` ([public/js/app.js:195](public/js/app.js#L195)).
+- **In JS-Methoden/Gettern** (Subs): `window.__app.xxx`. Magics sind in JS-Getter-Ausführungen nicht zuverlässig; `window.__app` ist robust und ein reaktiver Alpine-Proxy.
+
+### Event-Bus (Root → Subs)
+
+Custom-Events am `window`. Vollständige Liste:
+
+| Event | Dispatcher | Hörer | Zweck |
+|-------|-----------|-------|-------|
+| `book:changed` | `_resetBookScopedState()` | alle Subs mit Buchscope | State resetten + bei offener Karte neu laden |
+| `view:reset` | `resetView()` | alle Subs | Lokalen State komplett nullen |
+| `card:refresh` `{ name }` | erneuter Klick auf offene Karte | passende Sub | Daten neu laden (ersetzt altes `onOpenWhenOpen`) |
+| `job:reconnect` `{ type, jobId, job, extra? }` | `checkPendingJobs()` | review/kapitel-review/figuren/komplett | Loading-State übernehmen + Polling starten |
+| `chat:reset` / `book-chat:reset` | Seitenwechsel / User-Settings-Reset | chat-card, book-chat-card | Session leeren |
+| `kapitel-review:select` `{ chapterId }` | Sidebar / Hash-Router | kapitel-review-card | Chapter-ID setzen |
+| `book-stats:select` | Hash-Router | book-stats-card | Statistik-Tab wählen |
+| `palette:open` | global | palette-card | Command-Palette öffnen |
+| `app:update-available` | Service-Worker-Listener | Root-Banner | Update-Hinweis |
+| `session-expired` / `bookstack-token-invalid` | `fetch`-Wrapper | Root | Banner zeigen |
+
+### Karten-Inventar (Alpine.data-Names)
+
+Buchebene: `bookOverviewCard`, `bookReviewCard`, `kapitelReviewCard`, `figurenCard`, `orteCard`, `szenenCard`, `ereignisseCard`, `kontinuitaetCard`, `bookStatsCard`, `stilCard`, `fehlerHeatmapCard`, `chatCard`, `bookChatCard`, `ideenCard`, `finetuneExportCard`, `bookSettingsCard`, `userSettingsCard`, `paletteCard`.
+Editor-Slices: `editorFindCard`, `editorSynonymeCard`, `editorFigurLookupCard`, `editorToolbarCard`, `editorFocusCard`, `lektoratFindingsCard`, `pageHistoryCard`.
+
+Alle in [public/js/app.js:197-220](public/js/app.js#L197-L220) via `registerXxxCard()` registriert.
+
+### Was bleibt im Root (nicht in Subs auslagern)
+
+- Alle Show-Flags (Exklusivität!), Hash-Router, Auto-Save, Selection-Management, Editor-Edit-Mode, Job-Queue, Cross-Cutting-Loader (`loadFiguren` etc.), `_abortCtrl`-basiertes globales Listener-Setup.
+- Editor-Module: `page-view`, `editor-edit`, `editor-utils`, `tree`, `history`, `api-ai`, `api-bookstack`, `bookstack-search`, `offline-sync`, `i18n`, `shortcuts` — gespreaded in den Root, nicht in eigene Subs.
+
+### Editor-Modi (4 Stück, **Konsistenz kritisch**)
+
+Vier orthogonale Modi am Editor — kein Single-Enum, sondern Boolean-Flags am Root. Reihenfolge der Mutations und Invarianten sind **harte Regeln**: jede Änderung am Modus-Setup muss diese Tabelle aktuell halten.
+
+| Modus | Flag | Slice / Datei | Enter | Exit |
+|-------|------|---------------|-------|------|
+| **Viewmodus** (Lesen) | _kein_ (= alle anderen `false`) | — | Default | — |
+| **Prüfmodus** | `checkDone: true` | `lektoratState` ([app-state.js:167](public/js/app-state.js#L167)) | `runCheck()` ([lektorat.js:42](public/js/lektorat.js#L42)) → Polling → Setzen bei Done ([lektorat.js:149](public/js/lektorat.js#L149)) oder `loadHistoryEntry` ([history.js:141](public/js/history.js#L141)) | `closeFindings()` ([lektorat.js:28](public/js/lektorat.js#L28)) |
+| **Editmodus** | `editMode: true` | `editorState` ([app-state.js:83](public/js/app-state.js#L83)) | `startEdit()` ([editor-edit.js:144](public/js/editor-edit.js#L144)) | `saveEdit()` / `cancelEdit()` ([editor-edit.js:208-232](public/js/editor-edit.js#L208-L232)) |
+| **Fokusmodus** | `focusMode: true` | `focusModeState` ([app-state.js](public/js/app-state.js)) | `enterFocusMode()` / `startFocusEdit()` / Cmd+Shift+E | `exitFocusMode()` / Esc / Cmd+Shift+E |
+
+**Begleit-State pro Modus:**
+- Prüfmodus: `lektoratFindings`, `selectedFindings`, `correctedHtml`, `hasErrors`, `analysisOut`, `appliedOriginals`, `appliedHistoricCorrections`, `lastCheckId`, `activeHistoryEntryId`, `checkProgress`, `checkStatus`, `_checkPollTimer`.
+- Editmodus: `editDirty`, `editSaving`, `saveOffline`, `lastAutosaveAt`, `lastDraftSavedAt`, `_autosaveIdleTimer`, `_autosaveMaxTimer`, `_draftTimer`, `_onlineHandler`, `originalHtml`.
+- Fokusmodus: `focusCountWords/Chars/*Delta` (`focusModeState`) + `focusGranularity` (`shellState`) + Sub-Maschine `_focusState` (`idle`/`entering`/`active`/`exiting`) + `_focusGen` (Re-Entry-Guard) in [editorFocusCard](public/js/cards/editor-focus-card.js).
+
+**Erlaubte Kombinationen** (8 Bool-Tripel, 6 erlaubt):
+
+| Edit | Focus | Check | Erlaubt? | Bemerkung |
+|------|-------|-------|----------|-----------|
+| 0 | 0 | 0 | ✓ | Viewmodus |
+| 0 | 0 | 1 | ✓ | View + Findings (Split-View) |
+| 1 | 0 | 0 | ✓ | Edit |
+| 1 | 0 | 1 | ✓ | Edit + Findings (Marks im Editor) |
+| 1 | 1 | 0 | ✓ | Edit + Fokus |
+| 1 | 1 | 1 | ✓ | Findings vorhanden, Fokus blendet UI aus |
+| 0 | 1 | * | ✗ | **Invariante: `focusMode → editMode`** |
+
+**Invarianten (Pflicht — bei Änderungen prüfen):**
+
+1. `focusMode === true` ⇒ `editMode === true`. Enforced in [editor-focus.js:572](public/js/editor-focus.js#L572) (`enterFocusMode` bricht ab) und [editor-edit.js:231](public/js/editor-edit.js#L231) (`cancelEdit` ruft `exitFocusMode` zuerst).
+2. `runCheck` darf nicht im Editmodus starten. Template-Guard: Prüfen-Button hat `x-show="!editMode"` ([editor.html:41-43](public/partials/editor.html#L41)).
+3. `closeFindings`-Button im Editmodus nur sichtbar wenn `!focusMode` ([editor.html:66](public/partials/editor.html#L66)) — im Fokus sind Findings ohnehin ausgeblendet.
+4. **Chat-Modus** (showChatCard) snapshotet `checkDone` in `_checkDoneBeforeChat` und setzt `checkDone=false` ([chat-base.js:121](public/js/chat-base.js#L121)); beim Schliessen Restore ([app-view.js:291-307](public/js/app-view.js#L291-L307)). Ohne diesen Snapshot würde der Chat Findings doppelt rendern.
+5. **Reset-Reihenfolge in `resetPage()`** ([app-view.js:355-397](public/js/app-view.js#L355-L397)): `exitFocusMode` → `_stopAutosave` → Chat-Reset → Card-Flags → Editor-State (`editMode/editDirty/editSaving`) → Lektorat-State (`checkDone/findings/...`). Diese Reihenfolge ist Pflicht — Fokus zuerst, weil `exitFocusMode` `editMode/editDirty` liest.
+6. `saveEdit` im Fokus bleibt im Fokus+Edit ([editor-edit.js:289](public/js/editor-edit.js#L289), [editor-focus.js:914](public/js/editor-focus.js#L914)) — User möchte weiter schreiben. Nur sauberer Exit (kein editDirty, kein editSaving) räumt Edit-Mode auf.
+7. Hotkey Cmd+Shift+E ([editor-focus.js:531](public/js/editor-focus.js#L531)) wirkt nur bei `showEditorCard` und routet zustandsabhängig: in Fokus → exit, in Edit → enter, sonst → startFocusEdit (Edit + Fokus in einem Schritt).
+
+**Bei Modus-Erweiterung (z.B. „Diff-Modus", „Annotations-Modus")** dieser Section folgen:
+1. Flag in passenden Slice von `app-state.js`.
+2. Begleit-State + Timer-Refs daneben (gleicher Slice).
+3. Invarianten-Tabelle hier ergänzen (Kombinations-Matrix).
+4. `resetPage()` und `_resetBookScopedState()` um neuen Reset erweitern (gleiche Reihenfolge: neuer Modus zuerst aussen, sonst nach Lifecycle-Abhängigkeit).
+5. Template-Guards setzen (analog `x-show="!editMode"` für Prüfen-Button).
+6. Hotkey-Routing in handleFocusHotkey-Stil prüfen.
+
 ## Neues Feature hinzufügen
 
 ### Backend (KI-Job)
