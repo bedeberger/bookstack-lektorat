@@ -57,17 +57,19 @@ Pattern + Pflicht-Markup: siehe [CLAUDE.md](CLAUDE.md) Abschnitt „Combobox sta
 
 ## Modus-Toggle (Tab-artige Button-Gruppe)
 
-**Use:** Wenn eine Karte mehrere gleichberechtigte Ansichten hat (Figurengraph / Familie / Soziogramm).
+**Use:** Karte mit mehreren gleichberechtigten Ansichten (z.B. Fehler-Heatmap: offen / angewendet / alle).
+
+**Pattern: `.mode-toggle`** ([public/css/heatmap.css:157](public/css/heatmap.css#L157)) — kanonische Klasse für neue Modus-Toggles. Trotz Namens-Herkunft aus `heatmap.css` für alle Modus-Toggle-Use-Cases gedacht.
 
 **Markup:**
 ```html
-<div class="figur-modus-toggle">
-  <button class="figur-modus-btn" :class="{ 'figur-modus-btn--active': mode === 'a' }">A</button>
-  <button class="figur-modus-btn" :class="{ 'figur-modus-btn--active': mode === 'b' }">B</button>
+<div class="mode-toggle">
+  <button class="mode-toggle-btn" :class="{ 'mode-toggle-btn--active': mode === 'a' }">A</button>
+  <button class="mode-toggle-btn" :class="{ 'mode-toggle-btn--active': mode === 'b' }">B</button>
 </div>
 ```
 
-CSS-Klassen aktuell pro Karte (`figur-modus-*`). **TODO:** generalisieren als `.modus-toggle` / `.modus-btn`, wenn dritter Use-Case auftaucht.
+**Altes Pattern `.figur-modus-btn`** ([public/css/figuren.css:61](public/css/figuren.css#L61)) bleibt nur in [public/partials/figuren.html](public/partials/figuren.html) erhalten (Graph/Familie/Soziogramm). **Nicht für neue Karten verwenden** — `.mode-toggle` ist SSoT. Wer figuren.html anfasst: bei Gelegenheit auf `.mode-toggle` migrieren und `figuren.css`-Block entfernen.
 
 ---
 
@@ -286,7 +288,7 @@ CSS: [public/css/entity-list.css](public/css/entity-list.css). Kein `gap` zwisch
 
 **Detail-Drawer** unter Tabelle: `.heatmap-detail` mit `.heatmap-detail-list`/`-page`/`-token-groups`.
 
-**Mode-Toggle innerhalb Heatmaps:** `.mode-toggle` + `.mode-toggle-btn` + `--active`. Generalisierbar — wenn ähnliches Pattern ausserhalb Heatmap auftaucht, hier wiederverwenden statt `figur-modus-btn` zu klonen.
+**Mode-Toggle innerhalb Heatmaps:** `.mode-toggle` + `.mode-toggle-btn` + `--active`. Identisch zur generischen Modus-Toggle-Sektion oben — kein eigenes Heatmap-Pattern mehr, einfach `.mode-toggle` wiederverwenden.
 
 ---
 
@@ -458,6 +460,64 @@ Bei neuen Popover-Komponenten dieses Markup-Schema übernehmen (Header/Body/Foot
 - Innerhalb: `.tok-stats` für Token-Counter
 
 Nicht eigene Toolbar-Layouts pro Karte erfinden.
+
+---
+
+## Command-Palette
+
+**Use:** Globaler Power-User-Eintritt zu allen Features (Cmd/Ctrl+K bzw. `/`). Gruppierte Liste aus Karten, globalen Aktionen und Such-Providern (Seiten, Kapitel, Figuren, Orte, Szenen).
+
+**Hero-Trigger** (auf Buch-Übersicht oben):
+```html
+<button type="button" class="palette-hero" @click="openPalette()">
+  <span class="palette-hero-icon" aria-hidden="true">⌘</span>
+  <span class="palette-hero-text" x-text="t('palette.hero.text')"></span>
+  <kbd class="palette-hero-kbd">⌘K</kbd>
+</button>
+```
+
+**Modal-Markup:** siehe [public/partials/palette.html](public/partials/palette.html) (per `x-teleport="body"` — fixed-Overlay aus transformiertem Eltern-Container befreit).
+
+**Klassen** ([public/css/feature-tiles.css](public/css/feature-tiles.css)):
+- `.palette-hero` / `-icon` / `-text` / `-kbd` — Hero-Trigger im Home
+- `.palette-overlay` — Fullscreen-Overlay mit Backdrop-Blur
+- `.palette-panel` — zentriertes Modal
+- `.palette-input` — Such-Input (mit `role="combobox"`, `aria-controls`)
+- `.palette-list` (`role="listbox"`) + `.palette-section` + `.palette-section-label`
+- `.palette-item` / `--active` / `--disabled` (`role="option"`)
+- `.palette-item-label` / `.palette-item-desc`
+- `.palette-mode` + `.palette-mode-pill` — aktive Prefix-Mode-Anzeige (`>` Befehle, `#` Seiten, `!` Kapitel, `@` Figuren, `$` Orte, `%` Szenen)
+- `.palette-legend` + `-grid` + `-row` — Prefix-Legende bei leerem Input
+- `.palette-mark` — Fuzzy-Match-Highlight im Item-Label
+- `.palette-empty` / `.palette-toast`
+
+**SSoT:** Karten/Aktionen/Provider stehen in [public/js/cards/feature-registry.js](public/js/cards/feature-registry.js), nicht im Template. Neuer Eintrag → dort, nicht hier.
+
+**Kein zweiter Such-Trigger:** Jede neue „Spotlight"-/„Quick-Switcher"-Idee zuerst in Palette-Provider einbauen, kein paralleles Modal.
+
+---
+
+## Book-Overview-Tiles
+
+**Use:** Default-Home beim Buchwechsel ([public/partials/bookoverview.html](public/partials/bookoverview.html)). Tile-Grid mit Inline-SVG-Visualisierungen (Sparkline, Donut, 7-Tage-Bars, Stacked-Bar, Sterne) — bewusst **kein Chart.js-Lazy-Load** (Tiles laden sofort, wenig Daten).
+
+**Klassen** ([public/css/book-overview.css](public/css/book-overview.css)):
+- `.book-overview .overview-grid` — `repeat(auto-fit, minmax(220px, 1fr))` + `grid-auto-flow: row dense` (verhindert Whitespace-Inseln bei `--hero`/`--medium`/`--wide`-Spans)
+- `.overview-tile` — Basis-Tile, optional `.internal-link` für klickbar
+- Spans (≥720px): `.overview-tile--hero` (span 2), `.overview-tile--medium` (span 2), `.overview-tile--wide` (full-width)
+- `.overview-tile--actions` — Quick-Action-Container (gestrichelter Border, kein Hover-Lift, optisch von Daten-Tiles abgesetzt)
+- Tile-Innenleben: `.overview-tile-label` (Header), `.overview-hero-row`/`-num`/`-value`/`-unit`, `.overview-substats`/`-substat`, `.overview-sparkline`, `.overview-trend-meta`/`-pct` (`--up`/`--down`)
+- 7-Tage-Bars: `.overview-bars7` + `-col`/`-track`/`-fill` (`--pos`/`--neg`)/`-label`, `.overview-bars7-total`
+- Donut: `.overview-donut-row` + `.overview-donut` + `-text`/`-meta`
+- Fehler-Bars: `.overview-error-bars` + `-bar-item`/`-head`/`-typ`/`-count`/`-track`/`-fill`
+- Bewertung: `.overview-stars` + `.overview-star` (`--full`/`--half`), `.overview-review-meta`/`-date`/`-trend`
+- Figuren-Chips: `.overview-fig-row` + `-count`/`-count-unit`/`-chips`/`-chip`/`-name`/`-avatar` (Avatar-Farbe via `[data-idx="0|1|2"]`)
+
+**Klick-Verhalten:** `.overview-tile.internal-link` öffnet die zugehörige Karte (über globalen `.internal-link`-Handler aus app.js — nicht selbst verdrahten).
+
+**Hover-Override:** Globaler `.internal-link:hover` setzt `opacity: 0.65`. Für Tiles ungewollt — `.overview-tile.internal-link:hover` setzt `opacity: 1` zurück und nutzt Border/Shadow als Affordance.
+
+**Neuer Tile-Typ:** Bestehende Tile-Klassen wiederverwenden, SVG inline ins Markup, keine externe Vis-Lib für Overview einführen.
 
 ---
 

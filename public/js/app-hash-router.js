@@ -124,8 +124,9 @@ export const appHashRouterMethods = {
     this._inHashApply = true;
     try {
       // Beim ersten _applyHash (Deep-Link / Reload) ist selectedBookId in init()
-      // bereits aus dem Hash gesetzt – die Equality-Prüfung würde Reset+loadPages
-      // überspringen und Sub-Karten blieben ohne book:changed leer.
+      // bereits aus dem Hash gesetzt und `loadBooks()` hat `loadPages()` schon
+      // ausgeführt – nur `_resetBookScopedState()` für `book:changed` dispatchen,
+      // sonst doppelte loadPages mit sichtbarem Sidebar-Flicker.
       const isInitialApply = !this._initialApplyDone;
       this._initialApplyDone = true;
       if (String(this.selectedBookId) !== targetBookId) {
@@ -134,7 +135,6 @@ export const appHashRouterMethods = {
         await this.loadPages();
       } else if (isInitialApply) {
         this._resetBookScopedState();
-        await this.loadPages();
       }
 
       const view = parts[2];
