@@ -3,7 +3,7 @@
 // nach configurePrompts() neu gebaut.
 
 import { _isLocal } from './state.js';
-import { _obj, _str } from './schema-utils.js';
+import { _obj, _str, _num } from './schema-utils.js';
 import {
   _buildStilBlock,
   _buildWiederholungBlock,
@@ -213,10 +213,10 @@ Wichtige Regeln für das "original"-Feld:
 Stilistische Verbesserungen:
 ${liste}
 
-Antworte mit diesem JSON-Schema:
+Antworte mit diesem JSON-Schema. Das Feld "index" ist die 1-basierte Position aus der nummerierten Liste oben (also 1 für den ersten Eintrag, 2 für den zweiten usw.) — gib es immer korrekt an, damit deine Antwort dem ursprünglichen Vorschlag zugeordnet werden kann:
 {
   "korrekturen": [
-    { "original": "zeichengenauer Wortlaut aus dem HTML-Text unten", "ersatz": "deine gewählte Ersatzformulierung" }
+    { "index": 1, "original": "zeichengenauer Wortlaut aus dem HTML-Text unten", "ersatz": "deine gewählte Ersatzformulierung" }
   ]
 }
 
@@ -265,9 +265,12 @@ export function _rebuildLektoratSchema() {
 _rebuildLektoratSchema();
 
 // Statisches Schema – nicht _isLocal-abhängig.
+// `index` (1-basiert) referenziert die Position in der Eingabeliste; erlaubt
+// eindeutiges Mapping zurück auf die Stil-Findings auch wenn die KI Einträge
+// auslässt (z.B. weil keine Verbesserung nötig).
 export const SCHEMA_STILKORREKTUR = _obj({
   korrekturen: {
     type: 'array',
-    items: _obj({ original: _str, ersatz: _str }),
+    items: _obj({ index: _num, original: _str, ersatz: _str }),
   },
 });

@@ -41,6 +41,16 @@ export const lektoratMethods = {
 
   async runCheck() {
     if (!this.currentPage) return;
+    // Guard: Lektorat darf nicht auf nicht-persistierten Edits laufen.
+    // Server-Job liest BookStack server-seitig; sind Edits nur lokal (offline-
+    // Draft oder editDirty), sieht der Job die alte Fassung. Findings haben
+    // dann Positionen aus altem Text, und der spätere Save-Pfad würde nach
+    // einem zwischenzeitlichen Online-Retry ein Race auslösen, das Edits
+    // überschreiben kann. Lieber blocken bis der Save durch ist.
+    if (this.saveOffline || this.editDirty) {
+      this.setStatus(this.t('lektorat.blockedUnsavedEdits'), false, 6000);
+      return;
+    }
     const pageIdAtStart = this.currentPage.id;
     this.checkLoading = true;
     this.checkDone = false;
@@ -113,6 +123,17 @@ export const lektoratMethods = {
         this.checkStatus = '';
         if (r.empty) {
           this.analysisOut = `<span class="muted-msg">${escHtml(this.t('job.pageEmpty'))}</span>`;
+          return;
+        }
+        // Staleness-Guard: Server-Snapshot stammt aus dem Moment, in dem der Job
+        // BookStack ausgelesen hat. Hat der User danach im Fokus-/Edit-Modus
+        // gespeichert (oder externe Änderung in BookStack), passt `r.originalHtml`
+        // nicht mehr zum aktuellen Stand und Findings-Positionen sind verschoben.
+        // Originals einzelner Findings landen dann beim Speichern auf altem Text
+        // → frische Edits werden überschrieben. Ergebnis verwerfen, User soll
+        // erneut prüfen lassen.
+        if (r.updatedAt && this.currentPage?.updated_at && r.updatedAt !== this.currentPage.updated_at) {
+          this.analysisOut = `<span class="error-msg">${escHtml(this.t('lektorat.staleResultDropped'))}</span>`;
           return;
         }
         this.originalHtml = r.originalHtml;

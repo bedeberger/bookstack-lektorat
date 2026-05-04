@@ -7,7 +7,7 @@
 //  - Auth/KI/Job-Queue/SSE: Network-Only, nie cachen
 //  - Version-Bump der Konstanten invalidiert den jeweiligen Cache
 
-const SHELL_CACHE = 'lektorat-shell-v222';
+const SHELL_CACHE = 'lektorat-shell-v227';
 const API_CACHE = 'lektorat-api-v2';
 const CONFIG_CACHE = 'lektorat-config-v1';
 const ACTIVE_CACHES = new Set([SHELL_CACHE, API_CACHE, CONFIG_CACHE]);
@@ -211,6 +211,25 @@ self.addEventListener('message', (event) => {
         caches.delete(CONFIG_CACHE),
       ]);
       event.source?.postMessage?.({ type: 'auth-logout-done' });
+    })());
+  }
+  // Invalidiert API_CACHE-Einträge nach BookStack-Writes. Ohne diesen Bust
+  // liefert SWR nach einem `bsPut('pages/X')` weiterhin die alte HTML-Fassung
+  // beim nächsten `bsGet('pages/X')` — und ein Read-Modify-Write-Pfad
+  // (Lektorat-Save, Chat-Vorschlag) überschreibt damit frische User-Edits
+  // mit Stale-Daten. paths sind BookStack-API-Subpfade ohne `/api/`-Prefix.
+  if (event.data?.type === 'invalidate-api') {
+    const paths = Array.isArray(event.data.paths) ? event.data.paths : [];
+    event.waitUntil((async () => {
+      const cache = await caches.open(API_CACHE);
+      const keys = await cache.keys();
+      const targets = new Set(paths.map(p => '/api/' + p));
+      for (const k of keys) {
+        try {
+          const u = new URL(k.url);
+          if (targets.has(u.pathname)) await cache.delete(k);
+        } catch {}
+      }
     })());
   }
 });

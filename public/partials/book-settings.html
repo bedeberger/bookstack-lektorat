@@ -143,10 +143,10 @@
         <thead>
           <tr>
             <th x-text="$app.t('jobStats.col.type')"></th>
-            <th :title="$app.t('jobStats.col.avgDurationTitle')" x-text="$app.t('jobStats.col.avgDuration')"></th>
-            <th :title="$app.t('jobStats.col.avgTokensTitle')" x-text="$app.t('jobStats.col.avgTokens')"></th>
+            <th :data-tip="$app.t('jobStats.col.avgDurationTitle')" x-text="$app.t('jobStats.col.avgDuration')"></th>
+            <th :data-tip="$app.t('jobStats.col.avgTokensTitle')" x-text="$app.t('jobStats.col.avgTokens')"></th>
             <th x-text="$app.t('jobStats.col.lastRun')"></th>
-            <th :title="$app.t('jobStats.col.runsTitle')" x-text="$app.t('jobStats.col.runs')"></th>
+            <th :data-tip="$app.t('jobStats.col.runsTitle')" x-text="$app.t('jobStats.col.runs')"></th>
           </tr>
         </thead>
         <template x-for="row in bookJobStats" :key="row.type">
@@ -157,7 +157,7 @@
                   @click="toggleJobRuns(row.type)"
                   @keydown.enter.prevent="toggleJobRuns(row.type)"
                   @keydown.space.prevent="toggleJobRuns(row.type)"
-                  :title="$app.t('jobStats.expandHint')">
+                  :data-tip="$app.t('jobStats.expandHint')">
                 <td>
                   <span class="history-chevron" :class="{ open: expandedJobType === row.type }">›</span>
                   <span x-text="$app.t(row.typeLabel)"></span>
@@ -195,7 +195,7 @@
                           <td x-text="run.durationFmt"></td>
                           <td x-text="run.tokensFmt"></td>
                           <td class="job-run-detail">
-                            <span x-show="run.error" class="job-run-error" :title="$app.t(run.error)" x-text="$app.t(run.error)"></span>
+                            <span x-show="run.error" class="job-run-error" :data-tip="$app.t(run.error)" x-text="$app.t(run.error)"></span>
                             <span x-show="!run.error" class="job-run-muted">—</span>
                           </td>
                         </tr>

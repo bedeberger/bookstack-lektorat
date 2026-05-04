@@ -155,11 +155,11 @@
   background: none;
   color: var(--color-subtle);
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.6;
   transition: opacity 0.15s, color 0.15s;
+  flex-shrink: 0;
 }
-.history-item:hover .history-item-delete { opacity: 0.6; }
-.history-item-delete:hover { opacity: 1 !important; color: var(--color-err-text); }
+.history-item-delete:hover { opacity: 1; color: var(--color-err-text); }
 
 .figur-detail {
   border: 0.5px solid var(--color-border);

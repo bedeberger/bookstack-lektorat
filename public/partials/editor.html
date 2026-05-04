@@ -7,7 +7,7 @@
         <span class="save-indicator" x-show="lastSavedLabel()"
               :class="{ 'save-indicator--draft': lastSavedKind() === 'draft', 'save-indicator--offline': saveOffline }"
               x-text="lastSavedKind() === 'draft' ? t('editor.draft', { when: lastSavedLabel() }) : t('editor.saved', { when: lastSavedLabel() })"
-              :title="lastSavedKind() === 'draft' ? t('editor.draftTitle') : t('editor.savedTitle')"></span>
+              :data-tip="lastSavedKind() === 'draft' ? t('editor.draftTitle') : t('editor.savedTitle')"></span>
         <span class="card-subline-sep" aria-hidden="true" x-show="lastSavedLabel() && currentPage?.url">·</span>
         <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="card-subline-link" x-text="t('editor.openInBookstack')"></a>
         <span class="card-subline-sep" aria-hidden="true" x-show="currentPage?.url && currentPage?.revision_count > 0">·</span>

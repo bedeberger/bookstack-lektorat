@@ -43,7 +43,9 @@ const baseMethods = makeChatMethods({
       catch (e) { console.warn('[sendChatMessage] quickSave fehlgeschlagen:', e.message); }
     }
     try {
-      const pageData = await root.bsGet('pages/' + root.currentPage.id);
+      // `fresh: true`: nach quickSave oben muss der Read den neuen Stand sehen
+      // (SW-API_CACHE ist sonst noch stale, falls Cache-Bust noch nicht durch ist).
+      const pageData = await root.bsGet('pages/' + root.currentPage.id, { fresh: true });
       root.originalHtml = stripFocusArtefacts(pageData.html || '');
       this._chatPendingRefresh = false;
     } catch (e) {
@@ -101,7 +103,10 @@ export const chatMethods = {
     // `das magische Wort`). Ohne Tolerant-Match würde die Mehrheit realistischer
     // KI-Vorschläge fälschlich abgelehnt.
     try {
-      const page = await root.bsGet('pages/' + pageIdAtStart);
+      // `fresh: true`: Stale-Check vor dem Apply muss den aktuellen Server-Stand
+      // sehen — sonst kann der gleich folgende _loadApplyAndSave-PUT Edits
+      // überschreiben, die zwischen letztem GET und jetzt geschrieben wurden.
+      const page = await root.bsGet('pages/' + pageIdAtStart, { fresh: true });
       if (!samePage()) return;
       if (!findInHtml(page.html, vorschlag.original)) {
         setErr(root.t('chat.originalNotFound'));

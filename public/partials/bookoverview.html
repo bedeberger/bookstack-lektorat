@@ -95,7 +95,7 @@
         <div class="overview-tile-label" x-text="$app.t('overview.last7Days')"></div>
         <div class="overview-bars7">
           <template x-for="d in overviewLast7Days()" :key="d.iso">
-            <div class="overview-bar7-col" :title="d.label + ': ' + (d.delta >= 0 ? '+' : '') + _fmtNum(d.delta)">
+            <div class="overview-bar7-col" :data-tip="d.label + ': ' + (d.delta >= 0 ? '+' : '') + _fmtNum(d.delta)">
               <div class="overview-bar7-track">
                 <div class="overview-bar7-fill"
                      :class="d.delta > 0 ? 'overview-bar7-fill--pos' : d.delta < 0 ? 'overview-bar7-fill--neg' : ''"
@@ -203,7 +203,7 @@
           <template x-for="(f, i) in overviewTopFiguren()" :key="f.id">
             <span class="overview-fig-chip"
                   :data-rolle="f.rolle || ''"
-                  :title="f.name + (f.mentions > 0 ? ' · ' + f.mentions : '')">
+                  :data-tip="f.name + (f.mentions > 0 ? ' · ' + f.mentions : '')">
               <span class="overview-fig-avatar"
                     :data-idx="i"
                     x-text="overviewInitials(f.kurzname || f.name)"></span>
@@ -226,7 +226,7 @@
           <span class="overview-fig-count-unit" x-text="$app.t('overview.unit.total')"></span>
         </div>
         <div class="overview-stacked-bar"
-             :title="$app.t('overview.szenenBreakdown', {
+             :data-tip="$app.t('overview.szenenBreakdown', {
                stark: overviewSzenenWertung().stark,
                mittel: overviewSzenenWertung().mittel,
                schwach: overviewSzenenWertung().schwach
@@ -273,7 +273,7 @@
           <template x-for="o in overviewTopOrte()" :key="o.id">
             <span class="overview-ort-chip"
                   :data-typ="o.typ"
-                  :title="o.name + (o.total > 0 ? ' · ' + o.total : '')"
+                  :data-tip="o.name + (o.total > 0 ? ' · ' + o.total : '')"
                   @click.stop="$app.openOrtById(o.id)">
               <span class="overview-ort-dot" :data-typ="o.typ" aria-hidden="true"></span>
               <span class="overview-fig-name" x-text="o.name"></span>
@@ -296,7 +296,7 @@
                 <th></th>
                 <template x-for="p in overviewOrtPresence().places" :key="p.id">
                   <th class="overview-presence-col-head"
-                      :title="p.name"
+                      :data-tip="p.name"
                       x-text="p.name"></th>
                 </template>
               </tr>
@@ -304,7 +304,7 @@
             <tbody>
               <template x-for="row in overviewOrtPresence().rows" :key="row.id">
                 <tr>
-                  <th class="overview-presence-row-head" :title="row.name" x-text="row.name"></th>
+                  <th class="overview-presence-row-head" :data-tip="row.name" x-text="row.name"></th>
                   <template x-for="cell in row.cells" :key="cell.ortId">
                     <td class="overview-presence-cell"
                         :class="{
@@ -312,7 +312,8 @@
                           'internal-link': cell.value > 0
                         }"
                         :style="{ '--cell-pct': cell.pct }"
-                        :title="cell.value > 0 ? $app.t('overview.ortPresenceOpen', { ort: cell.ortName, kapitel: row.name }) : (cell.ortName + ' · ' + row.name + ': 0')"
+                        :data-tip="cell.ortName + ' · ' + row.name + ': ' + cell.value"
+                        :title="cell.value > 0 ? $app.t('overview.ortPresenceOpen', { ort: cell.ortName, kapitel: row.name }) : ''"
                         @click="cell.value > 0 && $app.openOrtMitKapitel(cell.ortId, row.name)">
                       <span class="overview-presence-fill"></span>
                       <span class="overview-presence-num" x-show="cell.value > 0" x-text="cell.value"></span>
@@ -341,13 +342,13 @@
                 :class="{ 'overview-chapter-row--max': ch.isMax, 'overview-chapter-row--min': ch.isMin }"
                 @click="_openKapitelReview(ch.id)"
                 :title="$app.t('overview.chapterReviewOpen', { name: ch.name })">
-              <span class="overview-chapter-name" :title="ch.name" x-text="ch.name"></span>
+              <span class="overview-chapter-name" :data-tip="ch.name" x-text="ch.name"></span>
               <div class="overview-chapter-bar-track overview-chapter-bar-track--diverge">
                 <div class="overview-chapter-bar-fill"
                      :class="ch.isPositive ? 'overview-chapter-bar-fill--pos' : 'overview-chapter-bar-fill--neg'"
                      :style="{ left: ch.barLeftPct + '%', width: ch.barWidthPct + '%' }"></div>
                 <div class="overview-chapter-median-tick"
-                     :title="$app.t('overview.medianTick') + ': ' + _fmtNum(ch.median) + ' ' + $app.t('bookstats.unit.z')"></div>
+                     :data-tip="$app.t('overview.medianTick') + ': ' + _fmtNum(ch.median) + ' ' + $app.t('bookstats.unit.z')"></div>
               </div>
               <span class="overview-chapter-meta">
                 <span class="overview-chapter-delta"
@@ -376,7 +377,7 @@
                 <th></th>
                 <template x-for="fig in overviewFigurePresence().figures" :key="fig.id">
                   <th class="overview-presence-col-head"
-                      :title="fig.name"
+                      :data-tip="fig.name"
                       x-text="fig.name"></th>
                 </template>
               </tr>
@@ -384,7 +385,7 @@
             <tbody>
               <template x-for="row in overviewFigurePresence().rows" :key="row.id">
                 <tr>
-                  <th class="overview-presence-row-head" :title="row.name" x-text="row.name"></th>
+                  <th class="overview-presence-row-head" :data-tip="row.name" x-text="row.name"></th>
                   <template x-for="cell in row.cells" :key="cell.figureId">
                     <td class="overview-presence-cell"
                         :class="{
@@ -392,7 +393,8 @@
                           'internal-link': cell.value > 0
                         }"
                         :style="{ '--cell-pct': cell.pct }"
-                        :title="cell.value > 0 ? $app.t('overview.figPresenceOpen', { figur: cell.figureName, kapitel: row.name }) : (cell.figureName + ' · ' + row.name + ': 0')"
+                        :data-tip="cell.figureName + ' · ' + row.name + ': ' + cell.value"
+                        :title="cell.value > 0 ? $app.t('overview.figPresenceOpen', { figur: cell.figureName, kapitel: row.name }) : ''"
                         @click="cell.value > 0 && $app.openFigurMitKapitel(cell.figureId, row.name)">
                       <span class="overview-presence-fill"></span>
                       <span class="overview-presence-num" x-show="cell.value > 0" x-text="cell.value"></span>
@@ -425,7 +427,7 @@
           <template x-for="ch in overviewChapterFindings()" :key="ch.id">
             <li class="overview-chapter-row"
                 :class="{ 'overview-chapter-row--nocheck': ch.noCheck }">
-              <span class="overview-chapter-name" :title="ch.name" x-text="ch.name"></span>
+              <span class="overview-chapter-name" :data-tip="ch.name" x-text="ch.name"></span>
               <div class="overview-chapter-bar-track overview-chapter-bar-track--diverge"
                    x-show="ch.showMedian">
                 <div class="overview-chapter-bar-fill"
@@ -434,7 +436,7 @@
                      :style="{ left: ch.barLeftPct + '%', width: ch.barWidthPct + '%' }"></div>
                 <div class="overview-chapter-median-tick"
                      x-show="!ch.noCheck"
-                     :title="$app.t('overview.medianTick') + ': ' + ch.median + ' ' + $app.t('overview.unit.per1k')"></div>
+                     :data-tip="$app.t('overview.medianTick') + ': ' + ch.median + ' ' + $app.t('overview.unit.per1k')"></div>
               </div>
               <span class="overview-chapter-meta">
                 <span class="overview-chapter-delta"
@@ -474,14 +476,14 @@
         <ul class="overview-chapter-list">
           <template x-for="ch in overviewChapterLektoratTime()" :key="ch.id ?? '_'">
             <li class="overview-chapter-row">
-              <span class="overview-chapter-name" :title="ch.name" x-text="ch.name"></span>
+              <span class="overview-chapter-name" :data-tip="ch.name" x-text="ch.name"></span>
               <div class="overview-chapter-bar-track overview-chapter-bar-track--diverge"
                    x-show="ch.showMedian">
                 <div class="overview-chapter-bar-fill"
                      :class="ch.isAbove ? 'overview-chapter-bar-fill--findings-pos' : 'overview-chapter-bar-fill--findings-neg'"
                      :style="{ left: ch.barLeftPct + '%', width: ch.barWidthPct + '%' }"></div>
                 <div class="overview-chapter-median-tick"
-                     :title="$app.t('overview.medianTick') + ': ' + ch.medianLabel"></div>
+                     :data-tip="$app.t('overview.medianTick') + ': ' + ch.medianLabel"></div>
               </div>
               <span class="overview-chapter-meta">
                 <span class="overview-chapter-delta"
@@ -508,7 +510,7 @@
                 <span class="overview-recent-chars"
                       x-show="overviewPageChars(p.id) != null"
                       x-text="_fmtNum(overviewPageChars(p.id)) + ' ' + $app.t('bookstats.unit.z')"></span>
-                <span class="overview-recent-chapter" x-show="p.chapterName" :title="p.chapterName" x-text="p.chapterName"></span>
+                <span class="overview-recent-chapter" x-show="p.chapterName" :data-tip="p.chapterName" x-text="p.chapterName"></span>
               </span>
             </li>
           </template>

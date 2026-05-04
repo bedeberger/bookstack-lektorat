@@ -24,7 +24,7 @@
       <div class="kapitel-pages-heading" x-text="$app.t('kapitelReview.pagesHeading', { n: kapitelReviewSelectedChapter().pages.length })"></div>
       <div class="kapitel-pages-list">
         <template x-for="page in kapitelReviewSelectedChapter().pages" :key="page.id">
-          <div class="kapitel-page-row" @click="$app.selectPage(page)" :title="$app.pageStatusTooltip(page)">
+          <div class="kapitel-page-row" @click="$app.selectPage(page)" :data-tip="$app.pageStatusTooltip(page)">
             <span class="kapitel-page-name">
               <span class="page-status-dot" :class="'page-status-' + $app.pageStatus(page)"></span>
               <span x-text="page.name"></span>

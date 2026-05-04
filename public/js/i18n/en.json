@@ -29,6 +29,8 @@
   "lektorat.batchConfirm":       "Check all {n} pages and store results in history?\n\nFor large books this can take several minutes.",
   "lektorat.batchNoPages":       "No pages found in book.",
   "lektorat.batchDone":          "Done: {done}/{total} pages checked, {errors} issues.",
+  "lektorat.staleResultDropped": "Page was edited during analysis — result discarded so your changes are not overwritten. Please re-run the check.",
+  "lektorat.blockedUnsavedEdits": "Unsaved changes pending — please save first before starting the proofread.",
 
   "edit.cancelConfirm":          "Discard unsaved edits? The local draft will be deleted.",
   "edit.discardEdit":            "Discard",
@@ -124,8 +126,9 @@
   "bs.loadingPage":              "Loading current page…",
   "bs.savingToBookStack":        "Saving to BookStack…",
 
-  "stilkorrektur.working":       "AI rewriting style… ({chars} characters)",
-  "stilkorrektur.tps":           "AI rewriting style… ({tps} tok/s)",
+  "stilkorrektur.workingChars":  "AI rewriting style… ({chars} characters)",
+  "stilkorrektur.workingTokens": "AI rewriting style… ↑{tokIn}↓~{tokOutEst} tokens",
+  "stilkorrektur.done":          "AI rewriting style… ↑{tokIn}↓{tokOut} tokens · {tps} tok/s",
   "stilkorrektur.failed":        "Style correction failed – saving remaining corrections…",
 
   "common.unknownError":         "Unknown error",

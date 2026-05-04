@@ -1,0 +1,40 @@
+/* Sofort-Tooltip via [data-tip] — natives title hat ~500ms Delay, der nicht
+   abstellbar ist. Für Chart-Hover (Wert sehen) brauchen wir sofortiges
+   Feedback. Anwendung: data-tip="Wert" auf beliebigem Element.
+   Für reine Action-Hints (Karte öffnen, navigieren) bleibt natives title okay. */
+@layer components {
+  [data-tip] {
+    position: relative;
+  }
+  [data-tip]:hover::after,
+  [data-tip]:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    line-height: 1.3;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 60;
+    box-shadow: 0 4px 12px var(--color-shadow-med);
+  }
+  [data-tip]:hover::before,
+  [data-tip]:focus-visible::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-top-color: var(--color-border);
+    pointer-events: none;
+    z-index: 60;
+  }
+}

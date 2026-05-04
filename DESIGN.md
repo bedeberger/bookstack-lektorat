@@ -450,6 +450,25 @@ Bei neuen Popover-Komponenten dieses Markup-Schema übernehmen (Header/Body/Foot
 
 ---
 
+## Sofort-Tooltip (`data-tip`) — **Default-Variante**
+
+**Harte Regel:** `data-tip` ist die bevorzugte Tooltip-Variante. Natives `title=` hat ~500ms Delay, der nicht abstellbar ist — zu langsam für jedes Hover-Feedback. Neue Tooltips werden grundsätzlich als `data-tip` gesetzt.
+
+**Markup:** `data-tip="Mo: +1234"` (oder Alpine `:data-tip="..."`) auf beliebigem Element.
+
+**Klassen** [public/css/tooltip.css](public/css/tooltip.css):
+- `[data-tip]:hover::after` rendert das Attribut sofort als Tooltip oberhalb (zentriert).
+- `[data-tip]:hover::before` ist der Pfeil.
+- `position: relative` wird vom Selektor selbst gesetzt — Element muss Layout zulassen.
+
+**Wann `title=` ausnahmsweise erlaubt:**
+- Reine Form-Inputs / Icon-Buttons, wo a11y-Screenreader-Hint wichtiger ist als Geschwindigkeit (`<button title="Schliessen">` etc.).
+- In Konflikt-Fällen darf beides parallel gesetzt werden (`data-tip` für Sicht, `title` für Screenreader).
+
+**Nicht erlaubt:** Neue Wert- oder Erklärungs-Tooltips als `:title=` ohne `data-tip` daneben — User-Präferenz, weil 500ms-Delay als störend empfunden wird.
+
+---
+
 ## Header-Actions
 
 **Use:** Rechts-ausgerichtete Button-Cluster im Karten-Header (z.B. „Aktualisieren"-Button, Token-Stats).

@@ -1,5 +1,5 @@
 import { buildStilkorrekturPrompt } from './prompts.js';
-import { SAFETY_HTML_RATIO, replaceInHtml, stripFocusArtefacts } from './utils.js';
+import { SAFETY_HTML_RATIO, replaceInHtml, stripFocusArtefacts, fmtTok } from './utils.js';
 
 // Methoden für BookStack-API-Calls (werden in die Alpine-Komponente gespreadet)
 // `this` bezieht sich auf die Alpine-Komponente.
@@ -29,6 +29,18 @@ async function _fetchWithTimeout(url, opts, timeoutMs, abortMsg) {
 }
 
 const MAX_RETRY_429 = 3;
+
+// Bust SW-API_CACHE nach BookStack-Writes. Ohne diese Invalidierung serviert
+// SWR auf Folge-Reads (Editor-Open, Lektorat-Save, Chat-Vorschlag) den alten
+// Stand — und ein Read-Modify-Write-Pfad überschreibt frische Server-Edits
+// mit Stale-Daten. Aufruf nach jedem erfolgreichen `_bsWrite('PUT'|'POST'|...)`.
+export function _invalidateApiCache(paths) {
+  if (typeof navigator === 'undefined') return;
+  const ctrl = navigator.serviceWorker?.controller;
+  if (!ctrl) return;
+  const arr = Array.isArray(paths) ? paths : [paths];
+  try { ctrl.postMessage({ type: 'invalidate-api', paths: arr }); } catch {}
+}
 
 export const bookstackMethods = {
   async bsGet(path, opts = {}) {
@@ -95,7 +107,13 @@ export const bookstackMethods = {
         }
         throw e;
       }
-      if (r.ok) return r.json();
+      if (r.ok) {
+        // Pages-Cache nach Write busten — Folge-Reads müssen die neue Fassung
+        // sehen, sonst überschreibt der nächste Read-Modify-Write Server-Edits
+        // mit Stale-Daten aus dem SWR-Cache.
+        _invalidateApiCache(path);
+        return r.json();
+      }
       lastRes = r;
       if (r.status !== 429 || attempt === MAX_RETRY_429) break;
       const wait = _parseRetryAfter(r.headers.get('Retry-After'))
@@ -157,50 +175,70 @@ export const bookstackMethods = {
       console.info(`[stilkorrektur] requested=${log.requested} all dropped (overlapped_with_hard)`);
       return { html, log, appliedStyles: [] };
     }
-    this.setStatus(this.t('stilkorrektur.working', { chars: 0 }), true);
+    this.setStatus(this.t('stilkorrektur.workingChars', { chars: 0 }), true);
     try {
       let completionInfo = null;
       const result = await this.callAI(
         buildStilkorrekturPrompt(html, usableStyles),
         'stilkorrektur',
-        (chars) => {
-          this.setStatus(this.t('stilkorrektur.working', { chars }), true);
+        (chars, tokIn) => {
+          // tokensIn ist erst ab message_start verfügbar; tokensOut erst am Ende.
+          // Bis tokensIn da ist: chars-Fallback. Danach: ↑in↓~out (chars/4-Schätzung,
+          // Provider-Tokenizer divergieren → ~).
+          const status = (tokIn > 0)
+            ? this.t('stilkorrektur.workingTokens', {
+                tokIn: fmtTok(tokIn),
+                tokOutEst: fmtTok(Math.round(chars / 4)),
+              })
+            : this.t('stilkorrektur.workingChars', { chars });
+          this.setStatus(status, true);
           if (onProgress) onProgress(chars, aiBase);
         },
         ({ tokensIn, tokensOut, tokPerSec }) => { completionInfo = { tokensIn, tokensOut, tokPerSec }; }
       );
-      if (completionInfo?.tokPerSec) {
-        this.setStatus(this.t('stilkorrektur.tps', { tps: completionInfo.tokPerSec }), true);
+      if (completionInfo) {
+        this.setStatus(this.t('stilkorrektur.done', {
+          tokIn: fmtTok(completionInfo.tokensIn || 0),
+          tokOut: fmtTok(completionInfo.tokensOut || 0),
+          tps: completionInfo.tokPerSec ? Math.round(completionInfo.tokPerSec) : 0,
+        }), true);
       }
       const korrekturen = Array.isArray(result?.korrekturen) ? result.korrekturen : [];
       log.returned = korrekturen.length;
       let outHtml = html;
-      const appliedFlags = [];
-      for (const k of korrekturen) {
+      // Per usableStyle merken, ob sie applied wurde – Mapping primär via
+      // index-Feld der KI (1-basiert auf Liste oben), Fallback positional bei
+      // Count-Match (KI liefert genau ebensoviele Einträge wie verlangt).
+      const styleApplied = new Array(usableStyles.length).fill(false);
+      const countMatches = korrekturen.length === usableStyles.length;
+      for (let i = 0; i < korrekturen.length; i++) {
+        const k = korrekturen[i];
         const skip = !k.original || !k.ersatz || k.original === k.ersatz;
         const before = outHtml;
         const after = skip ? before : replaceInHtml(outHtml, k.original, k.ersatz);
         const applied = !skip && after !== before;
+        // Style-Index ableiten: KI-`index` bevorzugen, sonst positional bei Count-Match.
+        let styleIdx = null;
+        if (Number.isInteger(k.index)) {
+          const cand = k.index - 1;
+          if (cand >= 0 && cand < usableStyles.length) styleIdx = cand;
+        }
+        if (styleIdx === null && countMatches) styleIdx = i;
         log.items.push({
+          index: k.index ?? null,
+          style_idx: styleIdx,
           original: k.original || '',
           ersatz: k.ersatz || '',
           applied,
           reason: skip ? 'empty_or_identical' : (applied ? null : 'not_found_in_html'),
         });
-        appliedFlags.push(applied);
         if (applied) {
           log.applied++;
           outHtml = after;
+          if (styleIdx !== null) styleApplied[styleIdx] = true;
         }
       }
-      // usableStyles → appliedStyles Mapping. Positional bei Count-Match (Standard-
-      // fall: KI liefert genau eine Antwort pro Item in Reihenfolge des Prompts).
-      // Bei Count-Mismatch konservativ: keine Stil-Findings als "applied" zählen, um
-      // nicht falsche Findings in der History als übernommen zu markieren.
-      let appliedStyles = [];
-      if (appliedFlags.length === usableStyles.length) {
-        appliedStyles = usableStyles.filter((_, i) => appliedFlags[i]);
-      }
+      const appliedStyles = usableStyles.filter((_, i) => styleApplied[i]);
       const dropped = log.requested - usableStyles.length;
       console.info(`[stilkorrektur] requested=${log.requested} dropped_overlap=${dropped} returned=${log.returned} applied=${log.applied} mappable=${appliedStyles.length}`);
       return { html: outHtml, log, appliedStyles };
@@ -218,7 +256,10 @@ export const bookstackMethods = {
   // Liefert { finalHtml, stilLog } (stilLog null wenn keine Stil-Findings). Wirft bei Fehler.
   async _loadApplyAndSave(selectedErrors, selectedStyles, onProgress) {
     onProgress(10, this.t('bs.loadingPage'));
-    const page = await this.bsGet('pages/' + this.currentPage.id);
+    // `fresh: true` umgeht SWR — sonst kann der API_CACHE nach kurz zuvor
+    // gesetzten Edits noch die alte Fassung liefern, und der gleich folgende
+    // PUT würde frische Server-Edits mit Stale-Daten überschreiben.
+    const page = await this.bsGet('pages/' + this.currentPage.id, { fresh: true });
     page.html = stripFocusArtefacts(page.html || '');
 
     let finalHtml = selectedErrors.length > 0

@@ -44,7 +44,7 @@
               <th class="heatmap-rowhead" x-text="$app.t('fehlerHeatmap.chapter')"></th>
               <th class="heatmap-numcol" x-text="$app.t('fehlerHeatmap.coverage')"></th>
               <template x-for="typ in fehlerHeatmapTypen" :key="typ">
-                <th :title="$app.t('fehlerHeatmap.typ.' + typ)">
+                <th :data-tip="$app.t('fehlerHeatmap.typ.' + typ)">
                   <span x-text="$app.t('fehlerHeatmap.typ.' + typ)"></span>
                 </th>
               </template>
@@ -73,7 +73,7 @@
                         { 'heatmap-cell--active': activeFehlerDetailKey === fehlerHeatmapChapterKey(ch) + ':' + typ }
                       ]"
                       :style="fehlerHeatmapCellVars(fehlerHeatmapChapterKey(ch), typ, fehlerHeatmapCoveragePct(ch))"
-                      :title="fehlerHeatmapCellTooltip(fehlerHeatmapChapterKey(ch), typ)"
+                      :data-tip="fehlerHeatmapCellTooltip(fehlerHeatmapChapterKey(ch), typ)"
                       @click="toggleFehlerHeatmapDetail(fehlerHeatmapChapterKey(ch), typ)"
                       x-text="fehlerHeatmapCellLabel(fehlerHeatmapChapterKey(ch), typ)">
                   </td>

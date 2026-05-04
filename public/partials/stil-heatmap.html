@@ -38,7 +38,7 @@
               <th class="heatmap-rowhead" x-text="$app.t('stil.chapter')"></th>
               <th class="heatmap-numcol" x-text="$app.t('stil.words')"></th>
               <template x-for="m in stilMetricDefs" :key="m.key">
-                <th :title="$app.t('stil.tip.' + m.key)">
+                <th :data-tip="$app.t('stil.tip.' + m.key)">
                   <span x-text="$app.t(m.label)"></span>
                 </th>
               </template>

@@ -62,7 +62,7 @@
         <div class="bewertung-section-title" x-text="$app.t('szenen.byKapitel')"></div>
         <div class="szenen-count-badges">
           <template x-for="k in $app.szenenNachKapitel" :key="k.name">
-            <span class="szenen-kapitel-count-badge" :title="$app.t('szenen.tooltip', { stark: k.stark, mittel: k.mittel, schwach: k.schwach })">
+            <span class="szenen-kapitel-count-badge" :data-tip="$app.t('szenen.tooltip', { stark: k.stark, mittel: k.mittel, schwach: k.schwach })">
               <span class="szenen-kapitel-name" x-text="k.name"></span>
               <span class="szenen-kapitel-dots">
                 <template x-for="n in k.stark"   :key="'s'+n"><span class="severity-dot severity-dot--stark"></span></template>
@@ -79,7 +79,7 @@
         <div class="bewertung-section-title" x-text="$app.t('szenen.bySeite')"></div>
         <div class="szenen-count-badges">
           <template x-for="p in $app.szenenNachSeite" :key="p.name">
-            <span class="szenen-seite-count-badge" :title="p.kapitel" x-text="p.name + ' · ' + p.total"></span>
+            <span class="szenen-seite-count-badge" :data-tip="p.kapitel" x-text="p.name + ' · ' + p.total"></span>
           </template>
         </div>
       </div>

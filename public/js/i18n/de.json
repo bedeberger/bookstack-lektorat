@@ -29,6 +29,8 @@
   "lektorat.batchConfirm":       "Alle {n} Seiten prüfen und Ergebnisse in der History speichern?\n\nDies kann bei grossen Büchern mehrere Minuten dauern.",
   "lektorat.batchNoPages":       "Keine Seiten im Buch gefunden.",
   "lektorat.batchDone":          "Fertig: {done}/{total} Seiten geprüft, {errors} Beanstandungen.",
+  "lektorat.staleResultDropped": "Seite wurde während der Analyse bearbeitet — Ergebnis verworfen, damit deine Änderungen nicht überschrieben werden. Bitte erneut prüfen lassen.",
+  "lektorat.blockedUnsavedEdits": "Ungespeicherte Änderungen vorhanden — bitte zuerst speichern, bevor du das Lektorat startest.",
 
   "edit.cancelConfirm":          "Ungespeicherte Bearbeitung verwerfen? Der lokale Entwurf wird gelöscht.",
   "edit.discardEdit":            "Verwerfen",
@@ -124,8 +126,9 @@
   "bs.loadingPage":              "Lade aktuelle Seite…",
   "bs.savingToBookStack":        "Speichere in BookStack…",
 
-  "stilkorrektur.working":       "KI überarbeitet Stil… ({chars} Zeichen)",
-  "stilkorrektur.tps":           "KI überarbeitet Stil… ({tps} tok/s)",
+  "stilkorrektur.workingChars":  "KI überarbeitet Stil… ({chars} Zeichen)",
+  "stilkorrektur.workingTokens": "KI überarbeitet Stil… ↑{tokIn}↓~{tokOutEst} Tokens",
+  "stilkorrektur.done":          "KI überarbeitet Stil… ↑{tokIn}↓{tokOut} Tokens · {tps} tok/s",
   "stilkorrektur.failed":        "Stilkorrektur fehlgeschlagen – speichere übrige Korrekturen…",
 
   "common.unknownError":         "Unbekannter Fehler",
