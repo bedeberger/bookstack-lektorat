@@ -11,7 +11,7 @@ const callCounts = { bsGet: 0, bsGetAll: 0, bsBatch: 0 };
 // added FKs across many tables. Migration 81 in particular added FK
 // book_id -> books(bookstack_book_id) on 15 tables (caches, stats, job_runs,
 // continuity_*, ...). FK enforcement is on; missing parent rows fail INSERTs.
-function _seedDb({ chapters, pages }) {
+function _seedDb({ chapters, pages, books = [] }) {
   let db;
   try { ({ db } = require('../../../db/connection')); } catch (_) { return; }
   const insBook = db.prepare(
@@ -28,6 +28,7 @@ function _seedDb({ chapters, pages }) {
     const bookIds = new Set();
     for (const c of chapters) if (c.book_id) bookIds.add(c.book_id);
     for (const p of pages) if (p.book_id) bookIds.add(p.book_id);
+    for (const b of books) if (b && b.id) bookIds.add(b.id);
     const nowIso = new Date().toISOString();
     for (const bid of bookIds) {
       insBook.run(bid, `Test-Book-${bid}`, nowIso, nowIso);
