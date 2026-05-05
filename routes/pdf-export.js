@@ -32,10 +32,12 @@ function _ownedOr404(profile, userEmail) {
 }
 
 // ── Profile listing & CRUD ──────────────────────────────────────────────────
+// Profile sind user-scoped (NICHT buch-scoped). `?book=X` wird ignoriert
+// (rückwärtskompatibel — Frontend kann den Param weiter mitschicken). Listing
+// liefert immer alle Profile des Users.
 router.get('/profiles', (req, res) => {
   const userEmail = _user(req);
-  const bookId = toIntId(req.query.book) || 0;
-  const profiles = listPdfExportProfiles(bookId, userEmail);
+  const profiles = listPdfExportProfiles(0, userEmail);
   res.json({ profiles });
 });
 
@@ -51,12 +53,11 @@ router.get('/profiles/:id', (req, res) => {
 
 router.post('/profiles', jsonBody, (req, res) => {
   const userEmail = _user(req);
-  const { book_id, name, config, clone_from } = req.body || {};
-  const bookId = book_id != null ? toIntId(book_id) : 0;
+  const { name, config, clone_from } = req.body || {};
   const safeName = String(name || '').trim().slice(0, NAME_MAX);
   if (!safeName) return res.status(400).json({ error_code: 'NAME_REQUIRED' });
 
-  const existing = listPdfExportProfiles(bookId || 0, userEmail);
+  const existing = listPdfExportProfiles(0, userEmail);
   if (existing.length >= PROFILE_MAX_PER_SCOPE) {
     return res.status(400).json({ error_code: 'PROFILE_LIMIT_REACHED', params: { max: PROFILE_MAX_PER_SCOPE } });
   }
@@ -74,7 +75,8 @@ router.post('/profiles', jsonBody, (req, res) => {
   }
 
   try {
-    const profile = createPdfExportProfile(bookId || 0, userEmail, safeName, cfg);
+    // bookId=0 → _scope() wandelt in user_default-Scope.
+    const profile = createPdfExportProfile(0, userEmail, safeName, cfg);
     res.status(201).json(profile);
   } catch (e) {
     logger.error(`pdf-export profile create: ${e.message}`);
@@ -95,7 +97,8 @@ router.put('/profiles/:id', jsonBody, (req, res) => {
   if (!safeName) return res.status(400).json({ error_code: 'NAME_REQUIRED' });
 
   if (safeName !== profile.name) {
-    const dups = listPdfExportProfiles(profile.book_id, userEmail);
+    // user-scoped — book_id ignorieren.
+    const dups = listPdfExportProfiles(0, userEmail);
     if (dups.some(p => p.name === safeName && p.id !== id)) {
       return res.status(409).json({ error_code: 'PROFILE_NAME_TAKEN' });
     }
@@ -134,7 +137,8 @@ router.post('/profiles/:id/default', (req, res) => {
   const profile = getPdfExportProfile(id);
   const err = _ownedOr404(profile, userEmail);
   if (err) return res.status(err.status).json({ error_code: err.error_code });
-  const updated = setPdfExportProfileDefault(profile.book_id, userEmail, id);
+  // user-scoped — bookId=0 reicht, _scope() wandelt in user_default.
+  const updated = setPdfExportProfileDefault(0, userEmail, id);
   res.json(updated);
 });
 

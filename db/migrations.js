@@ -3203,6 +3203,133 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 82 abgeschlossen (FK book_id -> books fuer 11 strukturelle Tabellen: chat_sessions, book_reviews, chapter_reviews, ideen, page_checks, locations, figure_scenes, pages, chapters, figures, figure_relations).');
   }
 
+  if (version < 83) {
+    // Sentinel-Aufloesung pdf_export_profile.book_id=0 (User-Default-Vorlagen).
+    // Analog zur chat_sessions-Sentinel-Aufloesung in Mig 69:
+    //   book_id IS NULL  + kind='user_default'  → User-Default-Vorlage
+    //   book_id NOT NULL + kind='book'          → Buch-spezifisches Profil
+    // CHECK-Constraint erzwingt Konsistenz.
+    //
+    // UNIQUE(book_id, user_email, name) wird durch zwei partial UNIQUEs ersetzt
+    // (NULL waere in normalen UNIQUEs nicht-vergleichbar):
+    //   - book-scope:    UNIQUE(book_id, user_email, name) WHERE kind='book'
+    //   - default-scope: UNIQUE(user_email, name)          WHERE kind='user_default'
+    //
+    // Nach der Datenmigration wird die books-Sentinel-Zeile (bookstack_book_id=0,
+    // name='__user_default__') aus Mig 77 geloescht — sie ist nun unbenutzt.
+    db.pragma('foreign_keys = OFF');
+    db.prepare('DROP TABLE IF EXISTS pdf_export_profile_new').run();
+    db.prepare(`
+      CREATE TABLE pdf_export_profile_new (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id     INTEGER REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        kind        TEXT    NOT NULL DEFAULT 'book' CHECK(kind IN ('book','user_default')),
+        user_email  TEXT    NOT NULL,
+        name        TEXT    NOT NULL,
+        config_json TEXT    NOT NULL,
+        cover_image BLOB,
+        cover_mime  TEXT,
+        is_default  INTEGER NOT NULL DEFAULT 0,
+        created_at  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL,
+        CHECK ((kind = 'book' AND book_id IS NOT NULL)
+            OR (kind = 'user_default' AND book_id IS NULL))
+      )
+    `).run();
+    db.prepare(`
+      INSERT INTO pdf_export_profile_new
+        (id, book_id, kind, user_email, name, config_json, cover_image, cover_mime, is_default, created_at, updated_at)
+      SELECT id,
+             CASE WHEN book_id = 0 THEN NULL ELSE book_id END,
+             CASE WHEN book_id = 0 THEN 'user_default' ELSE 'book' END,
+             user_email, name, config_json, cover_image, cover_mime, is_default, created_at, updated_at
+        FROM pdf_export_profile
+    `).run();
+    db.prepare('DROP TABLE pdf_export_profile').run();
+    db.prepare('ALTER TABLE pdf_export_profile_new RENAME TO pdf_export_profile').run();
+    db.prepare(
+      'CREATE UNIQUE INDEX idx_pdf_profile_book_name        ON pdf_export_profile(book_id, user_email, name) WHERE kind = \'book\''
+    ).run();
+    db.prepare(
+      'CREATE UNIQUE INDEX idx_pdf_profile_userdefault_name ON pdf_export_profile(user_email, name)          WHERE kind = \'user_default\''
+    ).run();
+    db.prepare(
+      'CREATE INDEX idx_pdf_profile_book_user ON pdf_export_profile(book_id, user_email)'
+    ).run();
+
+    // Pre-Cleanup vor DELETE der Sentinel-Zeile: Mit foreign_keys=OFF
+    // triggert der DELETE keine FK-Cascades, daher explizit alle book_id=0
+    // Refs aufloesen.
+    //   - job_runs.book_id (nullable, Mig 81 SET NULL): → NULL
+    // Andere book_id-Spalten sind NOT NULL und Pre-Cleanups in Mig 81/82
+    // haetten 0-Werte bereits geloescht (NOT IN books); 0 selbst war jedoch
+    // in books. Daher hier expliziter Sentinel-Cleanup.
+    const jr0_83 = db.prepare('UPDATE job_runs SET book_id = NULL WHERE book_id = 0').run();
+    if (jr0_83.changes) logger.info(`Mig 83: ${jr0_83.changes} job_runs.book_id=0 → NULL.`);
+
+    // Sentinel-books-Zeile entfernen — keine Refs mehr.
+    db.prepare("DELETE FROM books WHERE bookstack_book_id = 0").run();
+
+    db.pragma('foreign_keys = ON');
+    const fkErrors83 = db.pragma('foreign_key_check');
+    if (fkErrors83.length) {
+      throw new Error(`Migration 83: foreign_key_check meldet ${fkErrors83.length} Verstoesse: ${JSON.stringify(fkErrors83.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 83').run();
+    logger.info('DB-Migration auf Version 83 abgeschlossen (pdf_export_profile.book_id Sentinel 0 -> NULL + kind-Spalte; books-Sentinel-Zeile entfernt).');
+  }
+
+  if (version < 84) {
+    // PDF-Export-Profile sind ab jetzt user-scoped (nicht mehr buch-scoped).
+    // Bestehende kind='book'-Eintraege werden zu kind='user_default' migriert.
+    // Bei Namens-Kollision (z.B. zwei Buecher haben dasselbe Profil 'A4 Print')
+    // wird der Buchname als Suffix angehaengt, damit der UNIQUE-Index
+    // (user_email, name) WHERE kind='user_default' nicht bricht.
+    const bookProfiles = db.prepare(
+      `SELECT p.id, p.user_email, p.name, COALESCE(b.name, '') AS book_name, p.book_id
+         FROM pdf_export_profile p
+         LEFT JOIN books b ON b.bookstack_book_id = p.book_id
+        WHERE p.kind = 'book'`
+    ).all();
+
+    const existingNames = new Map(); // userEmail → Set<name>
+    db.prepare(
+      `SELECT user_email, name FROM pdf_export_profile WHERE kind = 'user_default'`
+    ).all().forEach(r => {
+      if (!existingNames.has(r.user_email)) existingNames.set(r.user_email, new Set());
+      existingNames.get(r.user_email).add(r.name);
+    });
+
+    const updateStmt = db.prepare(
+      `UPDATE pdf_export_profile
+          SET kind = 'user_default', book_id = NULL, name = ?, is_default = 0, updated_at = ?
+        WHERE id = ?`
+    );
+
+    let migrated = 0;
+    db.transaction(() => {
+      for (const p of bookProfiles) {
+        const userSet = existingNames.get(p.user_email) || new Set();
+        let newName = p.name;
+        if (userSet.has(newName)) {
+          const base = p.book_name ? `${p.name} (${p.book_name})` : `${p.name} (Buch ${p.book_id})`;
+          newName = base;
+          let i = 2;
+          while (userSet.has(newName)) {
+            newName = `${base} #${i++}`;
+          }
+        }
+        userSet.add(newName);
+        existingNames.set(p.user_email, userSet);
+        updateStmt.run(newName, Date.now(), p.id);
+        migrated++;
+      }
+    })();
+
+    db.prepare('UPDATE schema_version SET version = 84').run();
+    logger.info(`DB-Migration auf Version 84 abgeschlossen (pdf_export_profile: ${migrated} kind='book' -> 'user_default' migriert).`);
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

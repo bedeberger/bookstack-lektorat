@@ -50,29 +50,34 @@ export function registerPdfExportCard() {
     init() {
       this.$watch(() => window.__app.showPdfExportCard, async (visible) => {
         if (!visible) return;
-        if (!window.__app.selectedBookId) return;
         await this.loadFonts();
-        await this.loadProfiles();
+        // Profile sind user-scoped → einmal geladen reicht; selectedBookId-
+        // Wechsel triggert KEINE Neuladung.
+        if (!this.profiles.length) await this.loadProfiles();
       });
 
+      // book:changed räumt nur den laufenden Export-State (Buchwechsel = neuer
+      // Render-Kontext). Profile-Liste bleibt erhalten.
       this._onBookChanged = () => {
         this._stopPoll();
         if (this._exportStatusTimer) { clearTimeout(this._exportStatusTimer); this._exportStatusTimer = null; }
-        if (this._savedAtTimer)      { clearTimeout(this._savedAtTimer);      this._savedAtTimer = null; }
-        this.profiles = [];
-        this.activeProfile = null;
-        this.activeProfileId = null;
         this.exporting = false;
         this.exportProgress = 0;
         this.exportStatus = '';
         this.exportError = '';
-        this.savedAt = null;
         this.currentJobId = null;
-        if (window.__app.showPdfExportCard && window.__app.selectedBookId) this.loadProfiles();
       };
       window.addEventListener('book:changed', this._onBookChanged);
 
-      this._onViewReset = () => this._onBookChanged();
+      // view:reset (Logout / User-Settings-Danger-Reset) räumt ALLES inkl.
+      // Profile-Liste — könnte anderer User sein nach Re-Login.
+      this._onViewReset = () => {
+        this._onBookChanged();
+        this.profiles = [];
+        this.activeProfile = null;
+        this.activeProfileId = null;
+        this.savedAt = null;
+      };
       window.addEventListener('view:reset', this._onViewReset);
     },
 
@@ -100,9 +105,8 @@ export function registerPdfExportCard() {
     },
 
     async loadProfiles() {
-      const bookId = parseInt(window.__app.selectedBookId);
       try {
-        const r = await fetch(`/pdf-export/profiles?book=${bookId}`);
+        const r = await fetch('/pdf-export/profiles');
         const d = await r.json();
         this.profiles = d.profiles || [];
         const def = this.profiles.find(p => p.is_default) || this.profiles[0] || null;
@@ -131,8 +135,8 @@ export function registerPdfExportCard() {
     async createProfile() {
       const name = (this.newProfileName || '').trim();
       if (!name) return;
-      const bookId = parseInt(window.__app.selectedBookId);
-      const body = { book_id: bookId, name };
+      // Profile sind user-scoped — kein book_id im Payload.
+      const body = { name };
       if (this.cloneFromId) body.clone_from = this.cloneFromId;
       this.creating = true;
       try {

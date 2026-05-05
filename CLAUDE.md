@@ -280,7 +280,7 @@ DB-Code ist auf 6 Files in [db/](db/) verteilt: [connection.js](db/connection.js
 
 - **Jede neue Tabelle integriert sich via FK** ins bestehende Schema. Lose `*_id`-Spalten (`book_id`, `page_id`, `chapter_id`, `figure_id`, `location_id`, …) ohne `REFERENCES` sind verboten.
 - Refs auf lokale PKs/UNIQUE-Targets MÜSSEN als FK deklariert werden:
-  - `books(id)` (surrogate PK; externe BookStack-ID liegt in `books.bookstack_book_id` UNIQUE — andere Tabellen referenzieren `books.id`, nicht die externe ID)
+  - `books(bookstack_book_id)` (UNIQUE; externe BookStack-ID. `books.id` ist surrogate AUTOINCREMENT-PK, intern ungenutzt — `book_id`-Spalten in Child-Tabellen halten die BookStack-ID und referenzieren `books(bookstack_book_id)`)
   - `pages(page_id)` (PK)
   - `chapters(chapter_id)` (UNIQUE)
   - `figures(id)` (PK; nicht `figures.fig_id` — TEXT, nicht UNIQUE alleine)
@@ -290,7 +290,7 @@ DB-Code ist auf 6 Files in [db/](db/) verteilt: [connection.js](db/connection.js
   - `SET NULL` für user-kuratierte Daten (figure_events.page_id/chapter_id, figure_scenes.page_id/chapter_id, locations.erste_erwaehnung_page_id, ideen.page_id, continuity_issue_chapters.chapter_id, page_checks.chapter_id, pages.chapter_id)
 - **Snapshot-Spalten verboten** (`chapter_name`, `kapitel`, `seite`, `page_name`, `book_name`) — keine Ausnahmen. Display-Werte zur Lese-Zeit per JOIN auf `chapters`/`pages`/`books`/`figures`. Wahrheit lebt nur in `pages.page_name`, `chapters.chapter_name`, `books.name` (BookStack-Sync-Caches) und `figures.name` (User-Stamm). Snapshot-Fallback nur bei nullbarem FK, wenn KI-Output keine ID liefern konnte (z. B. `continuity_issue_figures.figur_name` mit nullable `figure_id`).
 - Index auf jede neue FK-Spalte Pflicht (`CREATE INDEX idx_xx_yy ON …`).
-- `book_id`-Spalten referenzieren `books(id)` (surrogate PK, super primary key für alle Buch-Refs). Discovery via `upsertBook(b)` / `upsertBookByName(bookstackId, name)` in [routes/sync.js](routes/sync.js) bzw. [db/schema.js](db/schema.js); Mapping `bookstack_book_id` → `books.id`. Composite-Defensive `(chapter_id, book_id) REFERENCES chapters(chapter_id, book_id)` prüfen, wenn Cross-Book-Bugs möglich.
+- `book_id`-Spalten referenzieren `books(bookstack_book_id)` (UNIQUE). Discovery via `upsertBook(b)` / `upsertBookByName(bookstackId, name)` in [routes/sync.js](routes/sync.js) bzw. [db/schema.js](db/schema.js) — jede BookStack-Buch-Berührung upserted in `books`, danach sind FK-CASCADE-Pfade aktiv. Composite-Defensive `(chapter_id, book_id) REFERENCES chapters(chapter_id, book_id)` prüfen, wenn Cross-Book-Bugs möglich.
 
 ### Sentinel-freie Modellierung
 

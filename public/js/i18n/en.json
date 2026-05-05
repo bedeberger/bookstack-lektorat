@@ -239,6 +239,7 @@
   "pdfExport.export":                      "Export",
   "pdfExport.exporting":                   "Exporting …",
   "pdfExport.cancel":                      "Cancel",
+  "pdfExport.export.noBookHint":           "Please select a book first.",
   "pdfExport.starting":                    "Starting job …",
   "pdfExport.done":                        "PDF ready – download starting.",
   "pdfExport.pdfaWarning":                 "PDF generated, but PDF/A validator reported issues. File was delivered anyway.",

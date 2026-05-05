@@ -367,6 +367,8 @@
         <span class="pdfx-saved-marker" x-show="savedAt" x-text="$app.t('pdfExport.saved')"></span>
         <button type="button" class="pdfx-btn pdfx-btn--primary"
                 x-show="!exporting"
+                :disabled="!$app.selectedBookId"
+                :title="!$app.selectedBookId ? $app.t('pdfExport.export.noBookHint') : ''"
                 @click="exportPdf()"
                 x-text="$app.t('pdfExport.export')"></button>
         <button type="button" class="pdfx-btn pdfx-btn--ghost"
