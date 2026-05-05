@@ -147,6 +147,7 @@ const cardsState = () => ({
   showUserSettingsCard: false,
   showFinetuneExportCard: false,
   showExportCard: false,
+  showPdfExportCard: false,
   showKomplettStatus: false,
   showAvatarMenu: false,
 });

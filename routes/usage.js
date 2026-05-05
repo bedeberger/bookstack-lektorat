@@ -27,6 +27,7 @@ const ALLOWED_KEYS = new Set([
   'bookSettings',
   'finetuneExport',
   'export',
+  'pdfExport',
 ]);
 
 function userEmailOrNull(req) {

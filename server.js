@@ -23,6 +23,7 @@ const userSettingsRouter = require('./routes/usersettings');
 const { router: proxiesRouter, bookstackProxy, bookstackPageCleaner, BOOKSTACK_URL } = require('./routes/proxies');
 const { router: syncRouter, syncAllBooks } = require('./routes/sync');
 const exportRouter = require('./routes/export');
+const pdfExportRouter = require('./routes/pdf-export');
 const usageRouter = require('./routes/usage');
 
 const PORT = process.env.PORT || 3737;
@@ -226,6 +227,7 @@ app.use('/booksettings', bookSettingsRouter);
 app.use('/me', userSettingsRouter);
 app.use('/sync', syncRouter);
 app.use('/export', exportRouter);
+app.use('/pdf-export', pdfExportRouter);
 app.use('/usage', usageRouter);
 
 // Logout: usage-Tabelle behält Einträge (User-Wiederkehr → Top-3 sofort wieder da).

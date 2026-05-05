@@ -28,6 +28,9 @@
     "linkedom": "^0.18.12",
     "node-cron": "^3.0.3",
     "openid-client": "^5.7.1",
-    "winston": "^3.19.0"
+    "pdfkit": "^0.18.0",
+    "sharp": "^0.34.5",
+    "winston": "^3.19.0",
+    "xmlbuilder2": "^4.0.3"
   }
 }

@@ -557,26 +557,33 @@ function getLatestReview(bookId, userEmail) {
   try { return JSON.parse(row.review_json); } catch { return null; }
 }
 
-/** Alle Figuren eines Buchs (user-spezifisch) als kompaktes Objekt-Array. */
-function getFiguren(bookId, userEmail, chapterName = null) {
-  const figParams = chapterName ? [bookId, userEmail, chapterName] : [bookId, userEmail];
+/** Alle Figuren eines Buchs (user-spezifisch) als kompaktes Objekt-Array.
+ *  chapterId (optional, Number): filtert auf Figuren/Orte/Szenen, die in
+ *  diesem Kapitel auftreten. Übergabe per stabiler chapter_id (nicht Name) —
+ *  Snapshot-Spalten existieren nicht mehr, alle Anzeige-Werte werden zur
+ *  Lese-Zeit aus chapters JOIN'd. */
+function getFiguren(bookId, userEmail, chapterId = null) {
+  const figParams = chapterId != null ? [bookId, userEmail, chapterId] : [bookId, userEmail];
   const rows = db.prepare(`
     SELECT f.fig_id, f.name, f.kurzname, f.typ, f.beschreibung, f.beruf, f.geschlecht,
-           GROUP_CONCAT(DISTINCT ft.tag)         AS tags,
-           GROUP_CONCAT(DISTINCT fa.chapter_name) AS kapitel
+           GROUP_CONCAT(DISTINCT ft.tag) AS tags,
+           GROUP_CONCAT(DISTINCT c.chapter_name) AS kapitel
     FROM figures f
     LEFT JOIN figure_tags        ft ON ft.figure_id = f.id
     LEFT JOIN figure_appearances fa ON fa.figure_id = f.id
+    LEFT JOIN chapters           c  ON c.chapter_id = fa.chapter_id
     WHERE f.book_id = ? AND f.user_email = ?
-    ${chapterName ? 'AND EXISTS (SELECT 1 FROM figure_appearances fa2 WHERE fa2.figure_id = f.id AND fa2.chapter_name = ?)' : ''}
+    ${chapterId != null ? 'AND EXISTS (SELECT 1 FROM figure_appearances fa2 WHERE fa2.figure_id = f.id AND fa2.chapter_id = ?)' : ''}
     GROUP BY f.id
     ORDER BY f.sort_order
   `).all(...figParams);
 
   const evtRows = db.prepare(`
-    SELECT f.fig_id, fe.datum, fe.ereignis, fe.bedeutung, fe.typ, fe.kapitel
+    SELECT f.fig_id, fe.datum, fe.ereignis, fe.bedeutung, fe.typ,
+           c.chapter_name AS kapitel
     FROM figure_events fe
     JOIN figures f ON f.id = fe.figure_id
+    LEFT JOIN chapters c ON c.chapter_id = fe.chapter_id
     WHERE f.book_id = ? AND f.user_email = ?
     ORDER BY fe.sort_order
   `).all(bookId, userEmail);
@@ -609,12 +616,12 @@ function getFiguren(bookId, userEmail, chapterName = null) {
     relsByFigId[r.to_fig_id].push({ mit: r.from_fig_id, ...entry });
   }
 
-  const locParams = chapterName ? [chapterName, bookId, userEmail] : [bookId, userEmail];
-  const locRows = db.prepare(chapterName ? `
+  const locParams = chapterId != null ? [chapterId, bookId, userEmail] : [bookId, userEmail];
+  const locRows = db.prepare(chapterId != null ? `
     SELECT lf.fig_id, l.name, l.typ, l.beschreibung, l.stimmung
     FROM location_figures lf
     JOIN locations l ON l.id = lf.location_id
-    JOIN location_chapters lc ON lc.location_id = l.id AND lc.chapter_name = ?
+    JOIN location_chapters lc ON lc.location_id = l.id AND lc.chapter_id = ?
     WHERE l.book_id = ? AND l.user_email = ?
     ORDER BY l.sort_order
   ` : `
@@ -635,17 +642,19 @@ function getFiguren(bookId, userEmail, chapterName = null) {
     });
   }
 
-  const sceneParams = chapterName ? [bookId, userEmail, chapterName] : [bookId, userEmail];
-  const sceneRows = db.prepare(chapterName ? `
-    SELECT sf.fig_id, fs.titel, fs.kapitel, fs.wertung, fs.kommentar
+  const sceneParams = chapterId != null ? [bookId, userEmail, chapterId] : [bookId, userEmail];
+  const sceneRows = db.prepare(chapterId != null ? `
+    SELECT sf.fig_id, fs.titel, c.chapter_name AS kapitel, fs.wertung, fs.kommentar
     FROM scene_figures sf
     JOIN figure_scenes fs ON fs.id = sf.scene_id
-    WHERE fs.book_id = ? AND fs.user_email = ? AND fs.kapitel = ?
+    LEFT JOIN chapters c ON c.chapter_id = fs.chapter_id
+    WHERE fs.book_id = ? AND fs.user_email = ? AND fs.chapter_id = ?
     ORDER BY fs.sort_order
   ` : `
-    SELECT sf.fig_id, fs.titel, fs.kapitel, fs.wertung, fs.kommentar
+    SELECT sf.fig_id, fs.titel, c.chapter_name AS kapitel, fs.wertung, fs.kommentar
     FROM scene_figures sf
     JOIN figure_scenes fs ON fs.id = sf.scene_id
+    LEFT JOIN chapters c ON c.chapter_id = fs.chapter_id
     WHERE fs.book_id = ? AND fs.user_email = ?
     ORDER BY fs.sort_order
   `).all(...sceneParams);

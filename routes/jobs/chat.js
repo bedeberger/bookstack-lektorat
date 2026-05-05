@@ -91,9 +91,9 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
 
     // Kontext aus DB laden – nur Figuren/Szenen/Orte des aktuellen Kapitels
     const pageRow = session.page_id
-      ? db.prepare('SELECT chapter_name FROM pages WHERE page_id = ?').get(session.page_id)
+      ? db.prepare('SELECT chapter_id FROM pages WHERE page_id = ?').get(session.page_id)
       : null;
-    const figuren = getFiguren(session.book_id, userEmail, pageRow?.chapter_name ?? null);
+    const figuren = getFiguren(session.book_id, userEmail, pageRow?.chapter_id ?? null);
     const review  = getLatestReview(session.book_id, userEmail);
     const { SYSTEM_CHAT: chatSysPrompt } = await getBookPrompts(session.book_id, userEmail);
     // opening_page_text: Snapshot, der beim Chat-Öffnen gesichert wurde. Wird als

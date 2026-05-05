@@ -29,7 +29,13 @@ router.get('/:book_id', (req, res) => {
   const figMap = {};
   for (const lf of lfRows) (figMap[lf.location_id] ??= []).push(lf.fig_id);
 
-  const lcRows = db.prepare(`SELECT location_id, chapter_id, chapter_name, haeufigkeit FROM location_chapters WHERE location_id IN ${locSql} ORDER BY haeufigkeit DESC`).all(...locVals);
+  const lcRows = db.prepare(`
+    SELECT lc.location_id, lc.chapter_id, c.chapter_name, lc.haeufigkeit
+    FROM location_chapters lc
+    LEFT JOIN chapters c ON c.chapter_id = lc.chapter_id
+    WHERE lc.location_id IN ${locSql}
+    ORDER BY lc.haeufigkeit DESC
+  `).all(...locVals);
   const kapMap = {};
   for (const lc of lcRows) (kapMap[lc.location_id] ??= []).push({ chapter_id: lc.chapter_id, name: lc.chapter_name, haeufigkeit: lc.haeufigkeit });
 

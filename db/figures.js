@@ -80,7 +80,7 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
          sort_order, user_email, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insTag = db.prepare('INSERT OR IGNORE INTO figure_tags (figure_id, tag) VALUES (?, ?)');
-    const insApp = db.prepare('INSERT OR IGNORE INTO figure_appearances (figure_id, chapter_id, chapter_name, haeufigkeit) VALUES (?, ?, ?, ?)');
+    const insApp = db.prepare('INSERT OR IGNORE INTO figure_appearances (figure_id, chapter_id, haeufigkeit) VALUES (?, ?, ?)');
     const insRel = db.prepare('INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, belege, user_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
 
     const validIds = new Set(figuren.map(f => f.id));
@@ -106,7 +106,7 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
       for (const tag of (f.eigenschaften || [])) insTag.run(fid, tag);
       for (const app of (f.kapitel || [])) {
         const chapId = idMaps?.chNameToId?.[app.name] ?? null;
-        if (chapId != null) insApp.run(fid, chapId, app.name, app.haeufigkeit || 1);
+        if (chapId != null) insApp.run(fid, chapId, app.haeufigkeit || 1);
       }
       for (const bz of (f.beziehungen || [])) {
         const belegeArr = Array.isArray(bz.belege)
@@ -141,7 +141,7 @@ function updateFigurenEvents(bookId, assignments, userEmail, idMaps) {
     const delEvt = db.prepare('DELETE FROM figure_events WHERE figure_id = ?');
     for (const row of figRows) delEvt.run(row.id);
 
-    const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, kapitel, seite, chapter_id, page_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const insEvt = db.prepare('INSERT INTO figure_events (figure_id, datum, ereignis, bedeutung, typ, chapter_id, page_id, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     for (const assignment of assignments) {
       const rowId = figIdToRowId[assignment.fig_id];
       if (!rowId) continue;
@@ -157,7 +157,7 @@ function updateFigurenEvents(bookId, assignments, userEmail, idMaps) {
           ? (idMaps?.pageNameToIdByChapter?.[chId ?? 0]?.[effSeite] ?? null)
           : null;
         insEvt.run(rowId, ev.datum || '', ev.ereignis || '', ev.bedeutung || null,
-          ev.typ || 'persoenlich', ev.kapitel || null, effSeite, chId, pageId, j);
+          ev.typ || 'persoenlich', chId, pageId, j);
       }
     }
   })();
@@ -263,10 +263,10 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
   );
   const delTags = db.prepare('DELETE FROM figure_tags WHERE figure_id = ?');
   const getDupApps = db.prepare(
-    'SELECT chapter_id, chapter_name, haeufigkeit FROM figure_appearances WHERE figure_id = ?'
+    'SELECT chapter_id, haeufigkeit FROM figure_appearances WHERE figure_id = ?'
   );
   const upsertApp = db.prepare(`
-    INSERT INTO figure_appearances (figure_id, chapter_id, chapter_name, haeufigkeit) VALUES (?, ?, ?, ?)
+    INSERT INTO figure_appearances (figure_id, chapter_id, haeufigkeit) VALUES (?, ?, ?)
     ON CONFLICT(figure_id, chapter_id) DO UPDATE SET haeufigkeit = haeufigkeit + excluded.haeufigkeit
   `);
   const delApps = db.prepare('DELETE FROM figure_appearances WHERE figure_id = ?');
@@ -316,7 +316,7 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
         moveTags.run(canon.id, dup.id);
         delTags.run(dup.id);
         for (const a of getDupApps.all(dup.id)) {
-          upsertApp.run(canon.id, a.chapter_id, a.chapter_name, a.haeufigkeit);
+          upsertApp.run(canon.id, a.chapter_id, a.haeufigkeit);
         }
         delApps.run(dup.id);
         moveEvents.run(canon.id, dup.id);
@@ -427,7 +427,7 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
  *  Gibt kompakte Objekte zurück: { name, kurzname, geschlecht, beruf, wohnadresse, beschreibung, typ } */
 function getChapterFigures(bookId, chapterId, userEmail) {
   if (!bookId) return [];
-  const cols = 'f.name, f.kurzname, f.geschlecht, f.beruf, f.wohnadresse, f.beschreibung, f.typ';
+  const cols = 'f.name, f.kurzname, f.geschlecht, f.beruf, f.wohnadresse, f.beschreibung, f.typ, f.geburtstag';
   if (chapterId) {
     const rows = db.prepare(`
       SELECT ${cols} FROM figures f

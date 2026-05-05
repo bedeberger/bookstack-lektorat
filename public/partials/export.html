@@ -21,6 +21,11 @@
         <span x-text="$app.t('book.export.' + fmt)"></span>
       </button>
     </template>
+    <button type="button"
+            class="book-export-btn book-export-btn--custom"
+            :disabled="!$app.selectedBookId"
+            @click="$app.togglePdfExportCard()"
+            x-text="$app.t('book.export.pdfCustom')"></button>
   </div>
 
   <p class="book-export-status"

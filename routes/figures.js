@@ -85,10 +85,13 @@ router.get('/scenes/:book_id', (req, res) => {
   const userEmail = req.session?.user?.email || null;
 
   const rows = db.prepare(`
-    SELECT id, kapitel, seite, titel, wertung, kommentar, chapter_id, page_id, updated_at
-    FROM figure_scenes
-    WHERE book_id = ? AND user_email = ?
-    ORDER BY sort_order
+    SELECT fs.id, c.chapter_name AS kapitel, p.page_name AS seite,
+           fs.titel, fs.wertung, fs.kommentar, fs.chapter_id, fs.page_id, fs.updated_at
+    FROM figure_scenes fs
+    LEFT JOIN chapters c ON c.chapter_id = fs.chapter_id
+    LEFT JOIN pages    p ON p.page_id    = fs.page_id
+    WHERE fs.book_id = ? AND fs.user_email = ?
+    ORDER BY fs.sort_order
   `).all(bookId, userEmail);
 
   const sceneIds = rows.map(r => r.id);
@@ -159,12 +162,18 @@ router.get('/:book_id', (req, res) => {
     JOIN figures f ON f.id = ft.figure_id
     WHERE f.book_id = ? AND f.user_email = ?`).all(bookId, userEmail);
   const apps = db.prepare(`
-    SELECT fa.figure_id, fa.chapter_id, fa.chapter_name, fa.haeufigkeit FROM figure_appearances fa
+    SELECT fa.figure_id, fa.chapter_id, c.chapter_name, fa.haeufigkeit
+    FROM figure_appearances fa
     JOIN figures f ON f.id = fa.figure_id
+    LEFT JOIN chapters c ON c.chapter_id = fa.chapter_id
     WHERE f.book_id = ? AND f.user_email = ?`).all(bookId, userEmail);
   const evts = db.prepare(`
-    SELECT fe.figure_id, fe.datum, fe.ereignis, fe.bedeutung, fe.typ, fe.kapitel, fe.seite FROM figure_events fe
+    SELECT fe.figure_id, fe.datum, fe.ereignis, fe.bedeutung, fe.typ,
+           c.chapter_name AS kapitel, p.page_name AS seite
+    FROM figure_events fe
     JOIN figures f ON f.id = fe.figure_id
+    LEFT JOIN chapters c ON c.chapter_id = fe.chapter_id
+    LEFT JOIN pages    p ON p.page_id    = fe.page_id
     WHERE f.book_id = ? AND f.user_email = ?
     ORDER BY fe.figure_id, fe.sort_order`).all(bookId, userEmail);
   const rels = db.prepare(
@@ -190,9 +199,14 @@ router.get('/:book_id', (req, res) => {
     });
   }
 
-  const sceneFigRows = db.prepare(
-    'SELECT fs.kapitel, fs.seite, sf.fig_id FROM figure_scenes fs JOIN scene_figures sf ON sf.scene_id = fs.id WHERE fs.book_id = ? AND fs.user_email = ?'
-  ).all(bookId, userEmail);
+  const sceneFigRows = db.prepare(`
+    SELECT c.chapter_name AS kapitel, p.page_name AS seite, sf.fig_id
+    FROM figure_scenes fs
+    JOIN scene_figures sf ON sf.scene_id = fs.id
+    LEFT JOIN chapters c ON c.chapter_id = fs.chapter_id
+    LEFT JOIN pages    p ON p.page_id    = fs.page_id
+    WHERE fs.book_id = ? AND fs.user_email = ?
+  `).all(bookId, userEmail);
   const seitenMap = {};
   for (const sc of sceneFigRows) {
     if (!seitenMap[sc.fig_id]) seitenMap[sc.fig_id] = [];

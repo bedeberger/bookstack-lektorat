@@ -525,8 +525,8 @@ function saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId,
     db.prepare('DELETE FROM figure_scenes WHERE book_id = ? AND user_email = ?').run(bookIdInt, email);
     const now = new Date().toISOString();
     const ins = db.prepare(`INSERT INTO figure_scenes
-      (book_id, user_email, kapitel, seite, titel, wertung, kommentar, chapter_id, page_id, sort_order, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      (book_id, user_email, titel, wertung, kommentar, chapter_id, page_id, sort_order, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insSf = db.prepare('INSERT INTO scene_figures (scene_id, fig_id) VALUES (?, ?)');
     const insSl = db.prepare('INSERT OR IGNORE INTO scene_locations (scene_id, location_id) VALUES (?, ?)');
     for (const s of szenen) {
@@ -536,7 +536,7 @@ function saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId,
         : null;
       const { lastInsertRowid: sceneId } = ins.run(
         bookIdInt, email,
-        s.kapitel, s.seite, s.titel, s.wertung, s.kommentar,
+        s.titel, s.wertung, s.kommentar,
         chapterId, pageId,
         s.sort_order, now,
       );
@@ -1097,9 +1097,12 @@ async function runZeitstrahl(ctx, opts = {}) {
   if (!silent) updateJob(jobId, { progress: 78, statusText: 'job.phase.consolidatingTimeline' });
   const rawEvtRows = db.prepare(`
     SELECT f.fig_id, f.name AS fig_name, f.typ AS fig_typ,
-           fe.datum, fe.ereignis, fe.typ AS evt_typ, fe.bedeutung, fe.kapitel, fe.seite
+           fe.datum, fe.ereignis, fe.typ AS evt_typ, fe.bedeutung,
+           c.chapter_name AS kapitel, p.page_name AS seite
     FROM figure_events fe
     JOIN figures f ON f.id = fe.figure_id
+    LEFT JOIN chapters c ON c.chapter_id = fe.chapter_id
+    LEFT JOIN pages    p ON p.page_id    = fe.page_id
     WHERE f.book_id = ? AND f.user_email IS ?
     ORDER BY fe.datum, f.sort_order
   `).all(bookIdInt, email);

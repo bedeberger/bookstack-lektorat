@@ -6,15 +6,43 @@
   createKapitelPage() in der Sub via $root gelesen/geschrieben).
 -->
 <div class="card" x-data="kapitelReviewCard" x-show="$app.showKapitelReviewCard" x-cloak>
-  <div class="card-header">
-    <span class="card-title" x-text="$app.t('kapitelReview.title', { name: kapitelReviewSelectedChapter()?.name || $app.selectedBookName })"></span>
-    <div class="card-actions">
-      <button type="button"
-              @click="runKapitelReview()"
-              :disabled="kapitelReviewLoading || !$app.kapitelReviewChapterId">
-        <span x-show="kapitelReviewLoading" class="spinner"></span>
-        <span x-text="kapitelReviewOut ? $app.t('kapitelReview.rerun') : $app.t('kapitelReview.start')"></span>
-      </button>
+  <div class="card-header card-header--subline">
+    <div class="card-header-titlebar">
+      <span class="card-title" x-text="$app.t('kapitelReview.title', { name: kapitelReviewSelectedChapter()?.name || $app.selectedBookName })"></span>
+      <div class="card-subline" x-show="kapitelReviewSelectedChapter()?.url || kapitelReviewLastEditAt()">
+        <span x-show="kapitelReviewLastEditAt()" x-text="$app.t('kapitelReview.lastEdit', { when: $app.formatDate(kapitelReviewLastEditAt()) })"></span>
+        <span class="card-subline-sep" aria-hidden="true" x-show="kapitelReviewLastEditAt() && kapitelReviewSelectedChapter()?.url">·</span>
+        <a x-show="kapitelReviewSelectedChapter()?.url" :href="kapitelReviewSelectedChapter()?.url" target="_blank" rel="noopener" class="card-subline-link" x-text="$app.t('editor.openInBookstack')"></a>
+      </div>
+    </div>
+    <div class="card-header-aside">
+      <span x-show="kapitelReviewChapterStats()" class="tok-stats">
+        <template x-if="kapitelReviewChapterStats()?.words > 0">
+          <span class="display-contents">
+            <span class="tok-badge tok-neutral"
+              x-text="kapitelReviewChapterStats().chars >= 1000 ? '~' + Math.round(kapitelReviewChapterStats().chars/1000) + 'k Z' : kapitelReviewChapterStats().chars + ' Z'"></span>
+            <span class="tok-badge tok-neutral"
+              :data-tip="$app.t('bookstats.metric.normseiten')"
+              x-text="(Math.round((kapitelReviewChapterStats().chars || 0) / 1500 * 10) / 10).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ' + $app.t('bookstats.unit.ns')"></span>
+            <span class="tok-badge tok-neutral"
+              x-text="kapitelReviewChapterStats().words >= 1000 ? '~' + Math.round(kapitelReviewChapterStats().words/1000) + 'k W' : kapitelReviewChapterStats().words + ' W'"></span>
+            <span class="tok-badge"
+              :class="kapitelReviewChapterStats().tok > 16000 ? 'tok-high' : kapitelReviewChapterStats().tok > 4000 ? 'tok-med' : 'tok-ok'"
+              x-text="kapitelReviewChapterStats().tok >= 1000 ? '~' + Math.round(kapitelReviewChapterStats().tok/1000) + 'k T' : '~' + kapitelReviewChapterStats().tok + ' T'"></span>
+          </span>
+        </template>
+        <template x-if="kapitelReviewChapterStats() && kapitelReviewChapterStats().words === 0">
+          <span class="tok-badge tok-empty" x-text="$app.t('sidebar.empty')"></span>
+        </template>
+      </span>
+      <div class="card-actions">
+        <button type="button"
+                @click="runKapitelReview()"
+                :disabled="kapitelReviewLoading || !$app.kapitelReviewChapterId">
+          <span x-show="kapitelReviewLoading" class="spinner"></span>
+          <span x-text="kapitelReviewOut ? $app.t('kapitelReview.rerun') : $app.t('kapitelReview.start')"></span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -29,10 +57,21 @@
               <span class="page-status-dot" :class="'page-status-' + $app.pageStatus(page)"></span>
               <span x-text="page.name"></span>
             </span>
+            <span class="kapitel-page-edited" x-show="page.updated_at" x-text="$app.formatDate(page.updated_at)"></span>
             <span class="kapitel-page-stats">
               <template x-if="$app.tokEsts[page.id] && $app.tokEsts[page.id].words > 0">
-                <span class="tok-badge tok-neutral"
-                  x-text="$app.tokEsts[page.id].chars >= 1000 ? '~' + Math.round($app.tokEsts[page.id].chars / 1000) + 'k Z' : $app.tokEsts[page.id].chars + ' Z'"></span>
+                <span class="display-contents">
+                  <span class="tok-badge tok-neutral"
+                    x-text="$app.tokEsts[page.id].chars >= 1000 ? '~' + Math.round($app.tokEsts[page.id].chars / 1000) + 'k Z' : $app.tokEsts[page.id].chars + ' Z'"></span>
+                  <span class="tok-badge tok-neutral"
+                    :data-tip="$app.t('bookstats.metric.normseiten')"
+                    x-text="(Math.round(($app.tokEsts[page.id].chars || 0) / 1500 * 10) / 10).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ' + $app.t('bookstats.unit.ns')"></span>
+                  <span class="tok-badge tok-neutral"
+                    x-text="$app.tokEsts[page.id].words >= 1000 ? '~' + Math.round($app.tokEsts[page.id].words / 1000) + 'k W' : $app.tokEsts[page.id].words + ' W'"></span>
+                  <span class="tok-badge"
+                    :class="$app.tokEsts[page.id].tok > 16000 ? 'tok-high' : $app.tokEsts[page.id].tok > 4000 ? 'tok-med' : 'tok-ok'"
+                    x-text="$app.tokEsts[page.id].tok >= 1000 ? '~' + Math.round($app.tokEsts[page.id].tok / 1000) + 'k T' : '~' + $app.tokEsts[page.id].tok + ' T'"></span>
+                </span>
               </template>
               <template x-if="$app.tokEsts[page.id] && $app.tokEsts[page.id].words === 0">
                 <span class="tok-badge tok-empty" x-text="$app.t('sidebar.empty')"></span>

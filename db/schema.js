@@ -8,6 +8,8 @@ require('./migrations');
 const figures = require('./figures');
 const pages = require('./pages');
 const tokens = require('./tokens');
+const pdfExport = require('./pdf-export');
+const fonts = require('./fonts');
 
 // ── Job-Laufzeiten ────────────────────────────────────────────────────────────
 const _stmtInsJobRun = db.prepare(
@@ -199,7 +201,7 @@ function saveOrteToDb(bookId, orte, userEmail, chNameToId = null, pageNameToIdBy
     const delLf = db.prepare('DELETE FROM location_figures WHERE location_id = ?');
     const delLc = db.prepare('DELETE FROM location_chapters WHERE location_id = ?');
     const insLf = db.prepare('INSERT INTO location_figures (location_id, fig_id) VALUES (?, ?)');
-    const insLc = db.prepare('INSERT INTO location_chapters (location_id, chapter_id, chapter_name, haeufigkeit) VALUES (?, ?, ?, ?)');
+    const insLc = db.prepare('INSERT INTO location_chapters (location_id, chapter_id, haeufigkeit) VALUES (?, ?, ?)');
 
     for (let i = 0; i < orte.length; i++) {
       const o = orte[i];
@@ -229,7 +231,7 @@ function saveOrteToDb(bookId, orte, userEmail, chNameToId = null, pageNameToIdBy
         if (!chName) continue;
         const chapId = chNameToId?.[chName] ?? null;
         const haeufigkeit = (k && typeof k === 'object' && k.haeufigkeit) || 1;
-        if (chapId != null) insLc.run(locDbId, chapId, chName, haeufigkeit);
+        if (chapId != null) insLc.run(locDbId, chapId, haeufigkeit);
       }
     }
   })();
@@ -244,8 +246,8 @@ function backfillLocationChaptersFromScenes(bookId, userEmail) {
   const emailCond = userEmail ? 'fs.user_email = ?' : 'fs.user_email IS NULL';
   const emailVal  = userEmail ? [userEmail] : [];
   db.prepare(`
-    INSERT OR IGNORE INTO location_chapters (location_id, chapter_id, chapter_name, haeufigkeit)
-    SELECT sl.location_id, fs.chapter_id, fs.kapitel, COUNT(*)
+    INSERT OR IGNORE INTO location_chapters (location_id, chapter_id, haeufigkeit)
+    SELECT sl.location_id, fs.chapter_id, COUNT(*)
     FROM scene_locations sl
     JOIN figure_scenes fs ON fs.id = sl.scene_id
     WHERE fs.book_id = ? AND ${emailCond} AND fs.chapter_id IS NOT NULL
@@ -484,7 +486,7 @@ const _insContinuityIssueFig = db.prepare(
   `INSERT INTO continuity_issue_figures (issue_id, fig_id, figur_name, sort_order) VALUES (?, ?, ?, ?)`
 );
 const _insContinuityIssueCh = db.prepare(
-  `INSERT INTO continuity_issue_chapters (issue_id, chapter_id, chapter_name, sort_order) VALUES (?, ?, ?, ?)`
+  `INSERT INTO continuity_issue_chapters (issue_id, chapter_id, sort_order) VALUES (?, ?, ?)`
 );
 
 /** Speichert einen Kontinuitäts-Check mit allen Issues als eigene Zeilen.
@@ -533,7 +535,7 @@ function saveContinuityCheck(bookId, userEmail, summary, model, issues, figNameT
         if (seenCh.has(key)) return;
         seenCh.add(key);
         if (cidCh != null) chapter_ids.push(cidCh);
-        _insContinuityIssueCh.run(issueId, cidCh, name, j);
+        if (cidCh != null) _insContinuityIssueCh.run(issueId, cidCh, j);
       });
       normalizedIssues.push({
         schwere: it.schwere || null, typ: it.typ || null,
@@ -572,9 +574,11 @@ function getLatestContinuityCheck(bookId, userEmail) {
     ORDER BY issue_id, sort_order
   `).all(row.id);
   const chRows = db.prepare(`
-    SELECT issue_id, chapter_id, chapter_name FROM continuity_issue_chapters
-    WHERE issue_id IN (SELECT id FROM continuity_issues WHERE check_id = ?)
-    ORDER BY issue_id, sort_order
+    SELECT cic.issue_id, cic.chapter_id, c.chapter_name
+    FROM continuity_issue_chapters cic
+    LEFT JOIN chapters c ON c.chapter_id = cic.chapter_id
+    WHERE cic.issue_id IN (SELECT id FROM continuity_issues WHERE check_id = ?)
+    ORDER BY cic.issue_id, cic.sort_order
   `).all(row.id);
   const figByIssue = new Map();
   for (const r of figRows) {
@@ -659,4 +663,17 @@ module.exports = {
   getBookSettings, getBookLocale, saveBookSettings,
   loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache,
   loadFinetuneAiCache, saveFinetuneAiCache, deleteFinetuneAiCache,
+  // pdf-export profiles
+  listPdfExportProfiles:  pdfExport.listProfiles,
+  getPdfExportProfile:    pdfExport.getProfile,
+  createPdfExportProfile: pdfExport.createProfile,
+  updatePdfExportProfile: pdfExport.updateProfile,
+  deletePdfExportProfile: pdfExport.deleteProfile,
+  setPdfExportProfileCover:   pdfExport.setCover,
+  clearPdfExportProfileCover: pdfExport.clearCover,
+  getPdfExportProfileCover:   pdfExport.getCover,
+  setPdfExportProfileDefault: pdfExport.setDefault,
+  // fonts
+  getCachedFont: fonts.getCachedFont,
+  cacheFont:     fonts.cacheFont,
 };

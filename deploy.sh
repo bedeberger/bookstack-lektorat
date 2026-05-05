@@ -12,6 +12,23 @@ SERVICE="lektorat"
 
 echo "=== Deploy lektorat ==="
 
+# DB-Backup vor Deploy (sicher online via sqlite3 .backup, hält letzte 10)
+DB_FILE="$INSTALL_DIR/lektorat.db"
+BACKUP_DIR="$INSTALL_DIR/backups"
+if [ -f "$DB_FILE" ]; then
+  mkdir -p "$BACKUP_DIR"
+  TS=$(date '+%Y%m%d-%H%M%S')
+  BACKUP_FILE="$BACKUP_DIR/lektorat-$TS.db"
+  if sqlite3 "$DB_FILE" ".backup '$BACKUP_FILE'"; then
+    gzip "$BACKUP_FILE"
+    echo "✓ DB-Backup: ${BACKUP_FILE}.gz"
+    ls -1t "$BACKUP_DIR"/lektorat-*.db.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
+  else
+    echo "✗ DB-Backup fehlgeschlagen – Deploy abgebrochen"
+    exit 1
+  fi
+fi
+
 # Dateien synchronisieren (.env und node_modules bleiben unangetastet)
 rsync -a --exclude='.env' --exclude='node_modules' --exclude='.git' \
   --exclude='lektorat.db' --exclude='lektorat.db-wal' --exclude='lektorat.db-shm' \

@@ -14,3 +14,4 @@ ai_parse_fails/
 lektorat1.log
 test-results/
 playwright-report/
+lektorat.db.*.bak

@@ -97,6 +97,10 @@ function _upsertPagesCache(bookId, pages, chapters) {
   }
 
   db.transaction(() => {
+    // Chapters VOR pages upsertten — pages.chapter_id ist FK auf chapters(chapter_id).
+    for (const c of chapters) {
+      _upsertChapterStmt.run(c.id, bookId, c.name, c.updated_at || null);
+    }
     for (const p of pages) {
       _upsertPageCacheStmt.run(
         p.id, bookId, p.name,
@@ -104,9 +108,6 @@ function _upsertPagesCache(bookId, pages, chapters) {
         p.chapter_id ? (chMap[p.chapter_id] || null) : null,
         p.updated_at || null
       );
-    }
-    for (const c of chapters) {
-      _upsertChapterStmt.run(c.id, bookId, c.name, c.updated_at || null);
     }
   })();
 

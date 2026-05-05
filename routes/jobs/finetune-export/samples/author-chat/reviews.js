@@ -103,13 +103,13 @@ function buildReviewSamples(ctx) {
   }
 
   // ── Echte Buch-Chat-Messages ──────────────────────────────────────────
-  // Consecutive (user, assistant)-Paare aus book-chat-Sessions (page_name
-  // = '__book__') direkt übernehmen. Das ist die authentischste Q&A-Quelle.
+  // Consecutive (user, assistant)-Paare aus Buch-Chat-Sessions (kind='book')
+  // direkt übernehmen. Das ist die authentischste Q&A-Quelle.
   const chatRows = db.prepare(`
     SELECT cs.id AS sid, cm.role, cm.content, cm.created_at, cm.id AS mid
     FROM chat_messages cm
     JOIN chat_sessions cs ON cs.id = cm.session_id
-    WHERE cs.book_id = ? AND cs.user_email = ? AND cs.page_name = '__book__'
+    WHERE cs.book_id = ? AND cs.user_email = ? AND cs.kind = 'book'
     ORDER BY cs.id, cm.created_at, cm.id
   `).all(bookIdInt, userEmail);
   for (let i = 0; i + 1 < chatRows.length; i++) {

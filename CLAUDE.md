@@ -299,6 +299,8 @@ Browser → NGINX (HTTPS) → Express (Port 3737)
   /me/*           → User-Settings (Sprache, Modell-Override)
   /sync/*         → Buchstatistik-Sync (manuell + Cron)
   /export/*       → Buch-Export (BookStack /export/{fmt} mit Timestamp-Filename)
+  /pdf-export/*   → Custom-PDF-Export-Profile (CRUD + Cover-Upload + Font-Liste)
+  /jobs/pdf-export → Render-Job (eigene pdfkit-Pipeline mit PDF/A-2B)
   /usage/*        → Feature-Usage-Tracking (Recency für Palette/Quick-Pills)
   /          → public/index.html (SPA)
 
@@ -358,6 +360,42 @@ Block 2 [parallel]:
 ## Finetune-Export
 
 Ziel: Buch im Modell **internalisieren** (Stil, Welt, Figuren, Fakten, Plot). Darum **maximal grosszügig extrahieren** — lieber zu viele Trainingssamples als zu wenige. Alles, was sich aus Text/Figuren/Szenen/Schauplätzen/Ereignissen/Lektorats-Findings als Q&A, Stil-Fortsetzung, Dialog, Szenen-Generierung, Fakten-Recall etc. ableiten lässt, mitnehmen. Keine künstlichen Sample-Caps, keine vorsichtigen Limits per Sampler — Modell soll Buch nach Finetune möglichst vollständig „kennen". Neue Sampler/Datenquellen tendenziell hinzufügen, nicht filtern. Code: [routes/jobs/finetune-export/](routes/jobs/finetune-export/).
+
+## Custom PDF-Export
+
+**Eigener Renderer**, nicht der BookStack-Upstream-PDF (der bleibt unter `/export/book/:id/pdf`). Ziel: druckfertige PDF/A-2B-Konformität mit User-konfigurierbarem Layout, Fonts, Cover, Kapitelgliederung.
+
+**Pipeline:**
+```
+/jobs/pdf-export (POST, Job-Queue) → loadBookContents → render (pdfkit) → applyPdfaMetadata → optional veraPDF-Validate
+                                                          ↓
+                                          /jobs/pdf-export/:id/file (Stream)
+```
+
+**Module:**
+- `routes/jobs/pdf-export.js` — Job-Wrapper, hält PDF-Buffers in `pdfResults`-Map (TTL 2h).
+- `lib/pdf-render.js` — pdfkit-Doc-Lifecycle, Cover, Title-Page, TOC, Kapitel-Loop, Header/Footer-Pass.
+- `lib/pdf-html-walker.js` — linkedom-basiert. Whitelist: h1-h3, p, ul/ol/li, blockquote, pre, hr, img + inline strong/em/u/a. `<div class="poem">` → eigener `poem`-Block. Tabellen werden als Plain-Text-Fallback durchgereicht (kein Layout). Standard-Editor-Markup wird unterstützt.
+- `lib/pdf-export-defaults.js` — `defaultConfig()` + `validateConfig(src)`. Strict: unbekannte Keys werden verworfen, Numerik geclampt, Enums whitelisted.
+- `lib/pdfa.js` — PDF/A-2B-Postprocess: XMP-Metadata-Stream + OutputIntent + sRGB-ICC-Profil aus [assets/icc/sRGB-v2-micro.icc](assets/icc/sRGB-v2-micro.icc).
+- `lib/pdfa-validate.js` — veraPDF-CLI-Wrapper. Wenn Binary fehlt → `{ available: false }`, Job liefert PDF mit Warnung. ENV `VERAPDF_BIN`, `VERAPDF_FLAVOUR`, `VERAPDF_DISABLED`.
+- `lib/font-fetch.js` — Google-Fonts-Loader. Hardcoded Whitelist (~24 Familien). UA-Trick (`Wget/1.13.4`) zwingt Google-CSS-API zu TTF. 30-Tage-TTL via `font_cache`-Tabelle (Stale-while-revalidate: bei Network-Fail wird stale-Cache geliefert).
+- `lib/cover-prepare.js` — sharp: Magic-Bytes-Check → JPEG, sRGB, kein Alpha, max. 2400 px Längsseite. PDF/A-tauglich.
+- `db/pdf-export.js` + `db/fonts.js` — Profile-CRUD + Font-Cache. **Multiple Profile pro (book, user)** via `(book_id, user_email, name)`-UNIQUE; `book_id=0` für User-Default-Vorlagen. Cover-Bild als BLOB in `pdf_export_profile.cover_image`.
+
+**Frontend:** `pdfExportCard` ([public/js/cards/pdf-export-card.js](public/js/cards/pdf-export-card.js)) mit Tabs Layout/Schrift/Kapitel/Cover/TOC/Extras/PDF/A. Live-Font-Preview lädt Google-Fonts-CSS lazy in den Browser. Profile-Operationen (CRUD, Default, Cover-Upload) gehen an `/pdf-export/...`. Render-Trigger an `/jobs/pdf-export`, Download-Stream `/jobs/pdf-export/:id/file`.
+
+**Wichtige Invarianten:**
+- `font.body` braucht `family` aus der Whitelist (lib/font-fetch.js#FONT_LIST). PUT validiert; bad font → 400 `FONT_NOT_ALLOWED`.
+- Cover-Bilder werden bei Upload **und** beim Render durch sharp geschleust (defensiv-doppelt; PDF/A erlaubt kein Alpha/CMYK).
+- `pageStructure: 'flatten'` (Default) verkettet alle BookStack-Pages eines Kapitels ohne Per-Page-Heading; `'nested'` rendert pro Page einen h2-Sub-Heading.
+- Job-Result-JSON enthält Metadaten (Größe, MIME, PDF/A-Status), **nicht** den Buffer — der lebt in `routes/jobs/pdf-export.js#pdfResults` und wird über `/jobs/pdf-export/:id/file` gestreamt.
+- veraPDF-Failure ist **non-fatal**: Datei wird trotzdem geliefert, Frontend zeigt Warnung.
+
+**Ops:**
+- veraPDF (Java-CLI, ~80 MB inkl. JRE) optional im Container. Fehlt es → Validation skipped, kein Crash.
+- sharp ist Pflicht-Dep (Cover + Image-Embeds); libvips wird über das npm-Package mitgeliefert.
+- Code: [routes/jobs/pdf-export.js](routes/jobs/pdf-export.js), [routes/pdf-export.js](routes/pdf-export.js), [lib/pdf-render.js](lib/pdf-render.js).
 
 ## Chat
 

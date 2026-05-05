@@ -58,6 +58,9 @@ db.exec(`
     haeufigkeit  INTEGER DEFAULT 1,
     UNIQUE(figure_id, chapter_id)
   );
+  -- chapter_name wird in Migration 70 entfernt; bleibt im initial-Schema, damit
+  -- Daten-Migrationen 39-69 (UPDATE figure_appearances SET chapter_id ...
+  -- WHERE chapter_name = ...) auf frischer DB durchlaufen.
 
   CREATE TABLE IF NOT EXISTS figure_events (
     figure_id  INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
@@ -67,6 +70,8 @@ db.exec(`
     typ        TEXT DEFAULT 'persoenlich',
     sort_order INTEGER DEFAULT 0
   );
+  -- kapitel/seite/chapter_id/page_id werden via spätere ALTER/Migration ergänzt;
+  -- kapitel und seite in Migration 70 entfernt.
 
   CREATE TABLE IF NOT EXISTS figure_relations (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,17 +108,22 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_bsh_book_id ON book_stats_history(book_id);
 
   CREATE TABLE IF NOT EXISTS chat_sessions (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    book_id          INTEGER NOT NULL,
-    book_name        TEXT,
-    page_id          INTEGER NOT NULL,
-    page_name        TEXT,
-    user_email       TEXT NOT NULL,
-    created_at       TEXT NOT NULL,
-    last_message_at  TEXT NOT NULL
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id           INTEGER NOT NULL,
+    book_name         TEXT,
+    kind              TEXT    NOT NULL DEFAULT 'page' CHECK(kind IN ('page','book')),
+    page_id           INTEGER,
+    page_name         TEXT,
+    user_email        TEXT    NOT NULL,
+    created_at        TEXT    NOT NULL,
+    last_message_at   TEXT    NOT NULL,
+    opening_page_text TEXT,
+    CHECK ((kind = 'page' AND page_id IS NOT NULL)
+        OR (kind = 'book' AND page_id IS NULL))
   );
-  CREATE INDEX IF NOT EXISTS idx_cs_page_id  ON chat_sessions(page_id, user_email);
-  CREATE INDEX IF NOT EXISTS idx_cs_book_id  ON chat_sessions(book_id, user_email);
+  CREATE INDEX IF NOT EXISTS idx_cs_page_id ON chat_sessions(page_id, user_email);
+  CREATE INDEX IF NOT EXISTS idx_cs_book_id ON chat_sessions(book_id, user_email);
+  -- idx_cs_book_singleton (partial UNIQUE on kind='book') wird in Migration 69 angelegt
 
   CREATE TABLE IF NOT EXISTS chat_messages (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,6 +160,7 @@ db.exec(`
     updated_at TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_fscene_book ON figure_scenes(book_id, user_email);
+  -- kapitel/seite werden in Migration 70 entfernt.
 
   CREATE TABLE IF NOT EXISTS locations (
     id                       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -193,6 +204,7 @@ db.exec(`
     haeufigkeit  INTEGER DEFAULT 1,
     PRIMARY KEY (location_id, chapter_id)
   );
+  -- chapter_name wird in Migration 70 entfernt.
 
   CREATE TABLE IF NOT EXISTS continuity_checks (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -236,6 +248,7 @@ db.exec(`
     sort_order   INTEGER DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_cic_issue ON continuity_issue_chapters(issue_id);
+  -- chapter_name wird in Migration 70 entfernt.
 
   CREATE TABLE IF NOT EXISTS zeitstrahl_events (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1446,6 +1459,546 @@ function runMigrations() {
     db.exec('CREATE INDEX IF NOT EXISTS idx_lt_page ON lektorat_time(page_id)');
     db.prepare('UPDATE schema_version SET version = 67').run();
     logger.info('DB-Migration auf Version 67 abgeschlossen (lektorat_time für Prüfmodus-Zeit-Tracking).');
+  }
+
+  if (version < 68) {
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS pdf_export_profile (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id      INTEGER NOT NULL,
+        user_email   TEXT    NOT NULL,
+        name         TEXT    NOT NULL,
+        config_json  TEXT    NOT NULL,
+        cover_image  BLOB,
+        cover_mime   TEXT,
+        is_default   INTEGER NOT NULL DEFAULT 0,
+        created_at   INTEGER NOT NULL,
+        updated_at   INTEGER NOT NULL,
+        UNIQUE (book_id, user_email, name)
+      )
+    `).run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_pdf_profile_book_user ON pdf_export_profile (book_id, user_email)').run();
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS font_cache (
+        family       TEXT NOT NULL,
+        weight       INTEGER NOT NULL,
+        style        TEXT NOT NULL,
+        ttf          BLOB NOT NULL,
+        fetched_at   INTEGER NOT NULL,
+        PRIMARY KEY (family, weight, style)
+      )
+    `).run();
+    db.prepare('UPDATE schema_version SET version = 68').run();
+    logger.info('DB-Migration auf Version 68 abgeschlossen (pdf_export_profile + font_cache).');
+  }
+
+  if (version < 69) {
+    // chat_sessions: Sentinel page_name='__book__' + page_id=0 durch
+    // explizite kind-Spalte ersetzen. Voraussetzung fuer FK auf pages(page_id):
+    // page_id darf bei Buch-Chat NULL sein, statt einen FK-blockierenden Sentinel
+    // zu tragen. Recreate-Pattern, weil page_id von NOT NULL auf NULLABLE wechselt.
+    db.pragma('foreign_keys = OFF');
+    db.exec(`
+      DROP TABLE IF EXISTS chat_sessions_new;
+      CREATE TABLE chat_sessions_new (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id           INTEGER NOT NULL,
+        book_name         TEXT,
+        kind              TEXT    NOT NULL DEFAULT 'page' CHECK(kind IN ('page','book')),
+        page_id           INTEGER,
+        page_name         TEXT,
+        user_email        TEXT    NOT NULL,
+        created_at        TEXT    NOT NULL,
+        last_message_at   TEXT    NOT NULL,
+        opening_page_text TEXT,
+        CHECK ((kind = 'page' AND page_id IS NOT NULL)
+            OR (kind = 'book' AND page_id IS NULL))
+      );
+      INSERT INTO chat_sessions_new
+        (id, book_id, book_name, kind, page_id, page_name,
+         user_email, created_at, last_message_at, opening_page_text)
+      SELECT id, book_id, book_name,
+             CASE WHEN page_name = '__book__' OR page_id IS NULL OR page_id = 0
+                  THEN 'book' ELSE 'page' END,
+             CASE WHEN page_name = '__book__' OR page_id IS NULL OR page_id = 0
+                  THEN NULL ELSE page_id END,
+             CASE WHEN page_name = '__book__' OR page_id IS NULL OR page_id = 0
+                  THEN NULL ELSE page_name END,
+             user_email, created_at, last_message_at, opening_page_text
+      FROM chat_sessions;
+      DROP TABLE chat_sessions;
+      ALTER TABLE chat_sessions_new RENAME TO chat_sessions;
+      CREATE INDEX idx_cs_page_id ON chat_sessions(page_id, user_email);
+      CREATE INDEX idx_cs_book_id ON chat_sessions(book_id, user_email);
+      CREATE INDEX idx_cs_kind    ON chat_sessions(book_id, user_email, kind);
+    `);
+    db.pragma('foreign_keys = ON');
+    const fkErrors = db.pragma('foreign_key_check');
+    if (fkErrors.length) {
+      throw new Error(`Migration 69: foreign_key_check meldet ${fkErrors.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 69').run();
+    logger.info('DB-Migration auf Version 69 abgeschlossen (chat_sessions kind-Spalte, Sentinel __book__ aufgeloest).');
+  }
+
+  if (version < 70) {
+    // Snapshot-Spalten in user-kuratierten Tabellen droppen. Display-Werte
+    // (chapter_name, kapitel, seite, page_name) werden zur Lese-Zeit per JOIN
+    // auf chapters/pages gewonnen. Vorteile:
+    //   - keine Stale-Snapshots bei Kapitel-/Seiten-Rename in BookStack
+    //   - reconcilePageIds()-Heilung (~180 SQL-Zeilen) entfaellt
+    //   - Voraussetzung fuer FK auf chapters(chapter_id) und pages(page_id)
+    db.pragma('foreign_keys = OFF');
+    db.exec(`
+      DROP TABLE IF EXISTS figure_appearances_new;
+      DROP TABLE IF EXISTS figure_events_new;
+      DROP TABLE IF EXISTS figure_scenes_new;
+      DROP TABLE IF EXISTS location_chapters_new;
+      DROP TABLE IF EXISTS continuity_issue_chapters_new;
+
+      CREATE TABLE figure_appearances_new (
+        figure_id   INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+        chapter_id  INTEGER NOT NULL,
+        haeufigkeit INTEGER DEFAULT 1,
+        UNIQUE(figure_id, chapter_id)
+      );
+      INSERT INTO figure_appearances_new (figure_id, chapter_id, haeufigkeit)
+        SELECT figure_id, chapter_id, haeufigkeit FROM figure_appearances;
+      DROP TABLE figure_appearances;
+      ALTER TABLE figure_appearances_new RENAME TO figure_appearances;
+      CREATE INDEX idx_fa_chapter_id ON figure_appearances(chapter_id);
+
+      CREATE TABLE figure_events_new (
+        figure_id  INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+        datum      TEXT NOT NULL,
+        ereignis   TEXT NOT NULL,
+        bedeutung  TEXT,
+        typ        TEXT DEFAULT 'persoenlich',
+        sort_order INTEGER DEFAULT 0,
+        chapter_id INTEGER,
+        page_id    INTEGER
+      );
+      INSERT INTO figure_events_new
+        (figure_id, datum, ereignis, bedeutung, typ, sort_order, chapter_id, page_id)
+        SELECT figure_id, datum, ereignis, bedeutung, typ, sort_order, chapter_id, page_id
+        FROM figure_events;
+      DROP TABLE figure_events;
+      ALTER TABLE figure_events_new RENAME TO figure_events;
+      CREATE INDEX idx_fe_chapter ON figure_events(chapter_id);
+      CREATE INDEX idx_fe_page    ON figure_events(page_id);
+
+      CREATE TABLE figure_scenes_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id    INTEGER NOT NULL,
+        user_email TEXT,
+        titel      TEXT NOT NULL,
+        wertung    TEXT,
+        kommentar  TEXT,
+        sort_order INTEGER DEFAULT 0,
+        chapter_id INTEGER,
+        page_id    INTEGER,
+        updated_at TEXT
+      );
+      INSERT INTO figure_scenes_new
+        (id, book_id, user_email, titel, wertung, kommentar, sort_order, chapter_id, page_id, updated_at)
+        SELECT id, book_id, user_email, titel, wertung, kommentar, sort_order, chapter_id, page_id, updated_at
+        FROM figure_scenes;
+      DROP TABLE figure_scenes;
+      ALTER TABLE figure_scenes_new RENAME TO figure_scenes;
+      CREATE INDEX idx_fscene_book    ON figure_scenes(book_id, user_email);
+      CREATE INDEX idx_fscene_chapter ON figure_scenes(chapter_id);
+      CREATE INDEX idx_fscene_page    ON figure_scenes(page_id);
+
+      CREATE TABLE location_chapters_new (
+        location_id  INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+        chapter_id   INTEGER NOT NULL,
+        haeufigkeit  INTEGER DEFAULT 1,
+        PRIMARY KEY (location_id, chapter_id)
+      );
+      INSERT INTO location_chapters_new (location_id, chapter_id, haeufigkeit)
+        SELECT location_id, chapter_id, haeufigkeit FROM location_chapters;
+      DROP TABLE location_chapters;
+      ALTER TABLE location_chapters_new RENAME TO location_chapters;
+      CREATE INDEX idx_lc_chapter_id ON location_chapters(chapter_id);
+
+      CREATE TABLE continuity_issue_chapters_new (
+        issue_id     INTEGER NOT NULL REFERENCES continuity_issues(id) ON DELETE CASCADE,
+        chapter_id   INTEGER,
+        sort_order   INTEGER DEFAULT 0
+      );
+      INSERT INTO continuity_issue_chapters_new (issue_id, chapter_id, sort_order)
+        SELECT issue_id, chapter_id, sort_order FROM continuity_issue_chapters
+        WHERE chapter_id IS NOT NULL;
+      DROP TABLE continuity_issue_chapters;
+      ALTER TABLE continuity_issue_chapters_new RENAME TO continuity_issue_chapters;
+      CREATE INDEX idx_cic_issue   ON continuity_issue_chapters(issue_id);
+      CREATE INDEX idx_cic_chapter ON continuity_issue_chapters(chapter_id);
+    `);
+    db.pragma('foreign_keys = ON');
+    const fkErrors = db.pragma('foreign_key_check');
+    if (fkErrors.length) {
+      throw new Error(`Migration 70: foreign_key_check meldet ${fkErrors.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 70').run();
+    logger.info('DB-Migration auf Version 70 abgeschlossen (Snapshot-Spalten chapter_name/kapitel/seite entfernt).');
+  }
+
+  if (version < 71) {
+    // FK-Anreicherung: harte Refs auf chapters(chapter_id) und pages(page_id).
+    //   - CASCADE fuer reine Caches/Aggregationen (page_stats, page_checks,
+    //     page_figure_mentions, lektorat_time, chat_sessions[kind=page],
+    //     chapter_reviews, chapter_extract_cache, figure_appearances,
+    //     location_chapters).
+    //   - SET NULL fuer user-kuratierte Refs (figure_events, figure_scenes,
+    //     locations.erste_erwaehnung_page_id, continuity_issue_chapters,
+    //     page_checks.chapter_id, ideen.page_id, pages.chapter_id).
+    // Vorbedingung: UNIQUE INDEX auf chapters(chapter_id) (composite PK reicht
+    // nicht als FK-Target). chapter_extract_cache.chapter_key TEXT wird zu
+    // chapter_id INTEGER konvertiert.
+
+    db.pragma('foreign_keys = OFF');
+
+    // Pre-Cleanup: Orphans (chapter_id/page_id auf nicht-existente Eltern) nullen,
+    // damit FK-Migration nicht crasht. SET NULL passt fuer alle SET-NULL-Targets;
+    // CASCADE-Targets bekommen die orphans direkt geloescht.
+    db.exec(`
+      DELETE FROM page_stats           WHERE page_id NOT IN (SELECT page_id FROM pages);
+      DELETE FROM page_checks          WHERE page_id NOT IN (SELECT page_id FROM pages);
+      DELETE FROM page_figure_mentions WHERE page_id NOT IN (SELECT page_id FROM pages);
+      DELETE FROM lektorat_time        WHERE page_id NOT IN (SELECT page_id FROM pages);
+      DELETE FROM chat_sessions        WHERE kind = 'page' AND page_id NOT IN (SELECT page_id FROM pages);
+      DELETE FROM chapter_reviews      WHERE chapter_id NOT IN (SELECT chapter_id FROM chapters);
+      DELETE FROM figure_appearances   WHERE chapter_id NOT IN (SELECT chapter_id FROM chapters);
+      DELETE FROM location_chapters    WHERE chapter_id NOT IN (SELECT chapter_id FROM chapters);
+      -- chapter_extract_cache bleibt String-keyed (kein FK), weil Sub-Phase-Keys
+      -- ('13:figuren', '13:orte', '__singlepass__') noch existieren. Cache wird
+      -- weiterhin manuell beim Kapitel-Drop in pruneStaleBookData invalidiert.
+
+      UPDATE pages                     SET chapter_id = NULL WHERE chapter_id IS NOT NULL AND chapter_id NOT IN (SELECT chapter_id FROM chapters);
+      UPDATE figure_events             SET chapter_id = NULL WHERE chapter_id IS NOT NULL AND chapter_id NOT IN (SELECT chapter_id FROM chapters);
+      UPDATE figure_events             SET page_id    = NULL WHERE page_id    IS NOT NULL AND page_id    NOT IN (SELECT page_id    FROM pages);
+      UPDATE figure_scenes             SET chapter_id = NULL WHERE chapter_id IS NOT NULL AND chapter_id NOT IN (SELECT chapter_id FROM chapters);
+      UPDATE figure_scenes             SET page_id    = NULL WHERE page_id    IS NOT NULL AND page_id    NOT IN (SELECT page_id    FROM pages);
+      UPDATE locations                 SET erste_erwaehnung_page_id = NULL
+        WHERE erste_erwaehnung_page_id IS NOT NULL
+          AND erste_erwaehnung_page_id NOT IN (SELECT page_id FROM pages);
+      UPDATE continuity_issue_chapters SET chapter_id = NULL WHERE chapter_id IS NOT NULL AND chapter_id NOT IN (SELECT chapter_id FROM chapters);
+      UPDATE page_checks               SET chapter_id = NULL WHERE chapter_id IS NOT NULL AND chapter_id NOT IN (SELECT chapter_id FROM chapters);
+      UPDATE ideen                     SET page_id    = NULL WHERE page_id    IS NOT NULL AND page_id    NOT IN (SELECT page_id    FROM pages);
+    `);
+
+    db.exec(`
+      DROP TABLE IF EXISTS chapters_new;
+      DROP TABLE IF EXISTS pages_new;
+      DROP TABLE IF EXISTS page_stats_new;
+      DROP TABLE IF EXISTS page_checks_new;
+      DROP TABLE IF EXISTS page_figure_mentions_new;
+      DROP TABLE IF EXISTS lektorat_time_new;
+      DROP TABLE IF EXISTS chat_sessions_new;
+      DROP TABLE IF EXISTS ideen_new;
+      DROP TABLE IF EXISTS chapter_reviews_new;
+      DROP TABLE IF EXISTS chapter_extract_cache_new;
+      DROP TABLE IF EXISTS figure_appearances_new;
+      DROP TABLE IF EXISTS figure_events_new;
+      DROP TABLE IF EXISTS figure_scenes_new;
+      DROP TABLE IF EXISTS location_chapters_new;
+      DROP TABLE IF EXISTS continuity_issue_chapters_new;
+      DROP TABLE IF EXISTS locations_new;
+
+      -- 1) chapters: composite PK + UNIQUE auf chapter_id alleine
+      CREATE TABLE chapters_new (
+        chapter_id   INTEGER NOT NULL,
+        book_id      INTEGER NOT NULL,
+        chapter_name TEXT    NOT NULL,
+        updated_at   TEXT,
+        PRIMARY KEY (chapter_id, book_id),
+        UNIQUE (chapter_id)
+      );
+      INSERT INTO chapters_new SELECT chapter_id, book_id, chapter_name, updated_at FROM chapters;
+      DROP TABLE chapters;
+      ALTER TABLE chapters_new RENAME TO chapters;
+
+      -- 2) pages.chapter_id → FK SET NULL
+      CREATE TABLE pages_new (
+        page_id      INTEGER PRIMARY KEY,
+        book_id      INTEGER NOT NULL,
+        page_name    TEXT,
+        chapter_id   INTEGER REFERENCES chapters(chapter_id) ON DELETE SET NULL,
+        chapter_name TEXT,
+        updated_at   TEXT,
+        preview_text TEXT
+      );
+      INSERT INTO pages_new SELECT page_id, book_id, page_name, chapter_id, chapter_name, updated_at, preview_text FROM pages;
+      DROP TABLE pages;
+      ALTER TABLE pages_new RENAME TO pages;
+      CREATE INDEX idx_pages_book_id    ON pages(book_id);
+      CREATE INDEX idx_pages_chapter_id ON pages(chapter_id);
+
+      -- 3) page_stats → CASCADE
+      CREATE TABLE page_stats_new (
+        page_id          INTEGER PRIMARY KEY REFERENCES pages(page_id) ON DELETE CASCADE,
+        book_id          INTEGER NOT NULL,
+        tok              INTEGER,
+        words            INTEGER,
+        chars            INTEGER,
+        updated_at       TEXT,
+        cached_at        TEXT,
+        sentences        INTEGER,
+        dialog_chars     INTEGER,
+        pronoun_counts   TEXT,
+        metrics_version  INTEGER DEFAULT 0,
+        content_sig      TEXT,
+        filler_count     INTEGER,
+        passive_count    INTEGER,
+        adverb_count     INTEGER,
+        avg_sentence_len REAL,
+        sentence_len_p90 INTEGER,
+        repetition_data  TEXT,
+        lix              REAL,
+        flesch_de        REAL,
+        style_samples    TEXT
+      );
+      INSERT INTO page_stats_new SELECT
+        page_id, book_id, tok, words, chars, updated_at, cached_at,
+        sentences, dialog_chars, pronoun_counts, metrics_version, content_sig,
+        filler_count, passive_count, adverb_count, avg_sentence_len, sentence_len_p90,
+        repetition_data, lix, flesch_de, style_samples FROM page_stats;
+      DROP TABLE page_stats;
+      ALTER TABLE page_stats_new RENAME TO page_stats;
+      CREATE INDEX idx_ps_book_id ON page_stats(book_id);
+
+      -- 4) page_checks → page_id CASCADE, chapter_id SET NULL
+      CREATE TABLE page_checks_new (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        page_id              INTEGER NOT NULL REFERENCES pages(page_id) ON DELETE CASCADE,
+        page_name            TEXT,
+        book_id              INTEGER,
+        checked_at           TEXT NOT NULL,
+        error_count          INTEGER DEFAULT 0,
+        errors_json          TEXT,
+        stilanalyse          TEXT,
+        fazit                TEXT,
+        model                TEXT,
+        saved                INTEGER DEFAULT 0,
+        saved_at             TEXT,
+        applied_errors_json  TEXT,
+        user_email           TEXT,
+        selected_errors_json TEXT,
+        szenen_json          TEXT,
+        chapter_id           INTEGER REFERENCES chapters(chapter_id) ON DELETE SET NULL,
+        stilkorrektur_log    TEXT
+      );
+      INSERT INTO page_checks_new SELECT
+        id, page_id, page_name, book_id, checked_at, error_count, errors_json,
+        stilanalyse, fazit, model, saved, saved_at, applied_errors_json,
+        user_email, selected_errors_json, szenen_json, chapter_id, stilkorrektur_log
+        FROM page_checks;
+      DROP TABLE page_checks;
+      ALTER TABLE page_checks_new RENAME TO page_checks;
+      CREATE INDEX idx_pc_page_user_date ON page_checks(page_id, user_email, checked_at DESC);
+      CREATE INDEX idx_pc_book_user      ON page_checks(book_id, user_email);
+
+      -- 5) page_figure_mentions → page_id CASCADE (figure_id hatte schon FK)
+      CREATE TABLE page_figure_mentions_new (
+        page_id      INTEGER NOT NULL REFERENCES pages(page_id)  ON DELETE CASCADE,
+        figure_id    INTEGER NOT NULL REFERENCES figures(id)     ON DELETE CASCADE,
+        count        INTEGER NOT NULL DEFAULT 0,
+        first_offset INTEGER,
+        PRIMARY KEY (page_id, figure_id)
+      );
+      INSERT INTO page_figure_mentions_new SELECT page_id, figure_id, count, first_offset FROM page_figure_mentions;
+      DROP TABLE page_figure_mentions;
+      ALTER TABLE page_figure_mentions_new RENAME TO page_figure_mentions;
+      CREATE INDEX idx_pfm_figure ON page_figure_mentions(figure_id);
+      CREATE INDEX idx_pfm_page   ON page_figure_mentions(page_id);
+
+      -- 6) lektorat_time → CASCADE
+      CREATE TABLE lektorat_time_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_email TEXT NOT NULL,
+        book_id    INTEGER NOT NULL,
+        page_id    INTEGER NOT NULL REFERENCES pages(page_id) ON DELETE CASCADE,
+        date       TEXT NOT NULL,
+        seconds    INTEGER NOT NULL DEFAULT 0
+      );
+      INSERT INTO lektorat_time_new SELECT id, user_email, book_id, page_id, date, seconds FROM lektorat_time;
+      DROP TABLE lektorat_time;
+      ALTER TABLE lektorat_time_new RENAME TO lektorat_time;
+      CREATE UNIQUE INDEX idx_lt_user_book_page_date ON lektorat_time(user_email, book_id, page_id, date);
+      CREATE INDEX idx_lt_book ON lektorat_time(book_id);
+      CREATE INDEX idx_lt_page ON lektorat_time(page_id);
+
+      -- 7) chat_sessions.page_id → CASCADE (kind='page'). kind='book' hat page_id NULL.
+      CREATE TABLE chat_sessions_new (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id           INTEGER NOT NULL,
+        book_name         TEXT,
+        kind              TEXT    NOT NULL DEFAULT 'page' CHECK(kind IN ('page','book')),
+        page_id           INTEGER REFERENCES pages(page_id) ON DELETE CASCADE,
+        page_name         TEXT,
+        user_email        TEXT    NOT NULL,
+        created_at        TEXT    NOT NULL,
+        last_message_at   TEXT    NOT NULL,
+        opening_page_text TEXT,
+        CHECK ((kind = 'page' AND page_id IS NOT NULL)
+            OR (kind = 'book' AND page_id IS NULL))
+      );
+      INSERT INTO chat_sessions_new SELECT
+        id, book_id, book_name, kind, page_id, page_name,
+        user_email, created_at, last_message_at, opening_page_text FROM chat_sessions;
+      DROP TABLE chat_sessions;
+      ALTER TABLE chat_sessions_new RENAME TO chat_sessions;
+      CREATE INDEX idx_cs_page_id ON chat_sessions(page_id, user_email);
+      CREATE INDEX idx_cs_book_id ON chat_sessions(book_id, user_email);
+      CREATE INDEX idx_cs_kind    ON chat_sessions(book_id, user_email, kind);
+
+      -- 8) ideen.page_id → SET NULL (war NOT NULL, jetzt nullable)
+      CREATE TABLE ideen_new (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id     INTEGER NOT NULL,
+        page_id     INTEGER REFERENCES pages(page_id) ON DELETE SET NULL,
+        page_name   TEXT,
+        user_email  TEXT NOT NULL,
+        content     TEXT NOT NULL,
+        erledigt    INTEGER NOT NULL DEFAULT 0,
+        erledigt_at TEXT,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+      );
+      INSERT INTO ideen_new SELECT id, book_id, page_id, page_name, user_email, content,
+        erledigt, erledigt_at, created_at, updated_at FROM ideen;
+      DROP TABLE ideen;
+      ALTER TABLE ideen_new RENAME TO ideen;
+      CREATE INDEX idx_ideen_page_user ON ideen(page_id, user_email);
+      CREATE INDEX idx_ideen_book_user ON ideen(book_id, user_email);
+
+      -- 9) chapter_reviews → CASCADE
+      CREATE TABLE chapter_reviews_new (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id      INTEGER NOT NULL,
+        book_name    TEXT,
+        chapter_id   INTEGER NOT NULL REFERENCES chapters(chapter_id) ON DELETE CASCADE,
+        chapter_name TEXT,
+        reviewed_at  TEXT NOT NULL,
+        review_json  TEXT,
+        model        TEXT,
+        user_email   TEXT
+      );
+      INSERT INTO chapter_reviews_new SELECT
+        id, book_id, book_name, chapter_id, chapter_name, reviewed_at, review_json, model, user_email
+        FROM chapter_reviews;
+      DROP TABLE chapter_reviews;
+      ALTER TABLE chapter_reviews_new RENAME TO chapter_reviews;
+      CREATE INDEX idx_cr_book_chapter_user_date
+        ON chapter_reviews(book_id, chapter_id, user_email, reviewed_at DESC);
+
+      -- 10) figure_appearances → CASCADE auf chapters
+      CREATE TABLE figure_appearances_new (
+        figure_id   INTEGER NOT NULL REFERENCES figures(id)            ON DELETE CASCADE,
+        chapter_id  INTEGER NOT NULL REFERENCES chapters(chapter_id)   ON DELETE CASCADE,
+        haeufigkeit INTEGER DEFAULT 1,
+        UNIQUE(figure_id, chapter_id)
+      );
+      INSERT INTO figure_appearances_new SELECT figure_id, chapter_id, haeufigkeit FROM figure_appearances;
+      DROP TABLE figure_appearances;
+      ALTER TABLE figure_appearances_new RENAME TO figure_appearances;
+      CREATE INDEX idx_fa_chapter_id ON figure_appearances(chapter_id);
+
+      -- 12) figure_events → SET NULL chapter_id + page_id (User-kuratiert)
+      CREATE TABLE figure_events_new (
+        figure_id  INTEGER NOT NULL REFERENCES figures(id)         ON DELETE CASCADE,
+        datum      TEXT NOT NULL,
+        ereignis   TEXT NOT NULL,
+        bedeutung  TEXT,
+        typ        TEXT DEFAULT 'persoenlich',
+        sort_order INTEGER DEFAULT 0,
+        chapter_id INTEGER REFERENCES chapters(chapter_id)         ON DELETE SET NULL,
+        page_id    INTEGER REFERENCES pages(page_id)               ON DELETE SET NULL
+      );
+      INSERT INTO figure_events_new SELECT
+        figure_id, datum, ereignis, bedeutung, typ, sort_order, chapter_id, page_id FROM figure_events;
+      DROP TABLE figure_events;
+      ALTER TABLE figure_events_new RENAME TO figure_events;
+      CREATE INDEX idx_fe_chapter ON figure_events(chapter_id);
+      CREATE INDEX idx_fe_page    ON figure_events(page_id);
+
+      -- 13) figure_scenes → SET NULL chapter_id + page_id
+      CREATE TABLE figure_scenes_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id    INTEGER NOT NULL,
+        user_email TEXT,
+        titel      TEXT NOT NULL,
+        wertung    TEXT,
+        kommentar  TEXT,
+        sort_order INTEGER DEFAULT 0,
+        chapter_id INTEGER REFERENCES chapters(chapter_id) ON DELETE SET NULL,
+        page_id    INTEGER REFERENCES pages(page_id)       ON DELETE SET NULL,
+        updated_at TEXT
+      );
+      INSERT INTO figure_scenes_new SELECT
+        id, book_id, user_email, titel, wertung, kommentar, sort_order, chapter_id, page_id, updated_at
+        FROM figure_scenes;
+      DROP TABLE figure_scenes;
+      ALTER TABLE figure_scenes_new RENAME TO figure_scenes;
+      CREATE INDEX idx_fscene_book    ON figure_scenes(book_id, user_email);
+      CREATE INDEX idx_fscene_chapter ON figure_scenes(chapter_id);
+      CREATE INDEX idx_fscene_page    ON figure_scenes(page_id);
+
+      -- 14) location_chapters → CASCADE (PK enthaelt chapter_id, kein NULL moeglich)
+      CREATE TABLE location_chapters_new (
+        location_id INTEGER NOT NULL REFERENCES locations(id)         ON DELETE CASCADE,
+        chapter_id  INTEGER NOT NULL REFERENCES chapters(chapter_id)  ON DELETE CASCADE,
+        haeufigkeit INTEGER DEFAULT 1,
+        PRIMARY KEY (location_id, chapter_id)
+      );
+      INSERT INTO location_chapters_new SELECT location_id, chapter_id, haeufigkeit FROM location_chapters;
+      DROP TABLE location_chapters;
+      ALTER TABLE location_chapters_new RENAME TO location_chapters;
+      CREATE INDEX idx_lc_chapter_id ON location_chapters(chapter_id);
+
+      -- 15) continuity_issue_chapters → SET NULL
+      CREATE TABLE continuity_issue_chapters_new (
+        issue_id   INTEGER NOT NULL REFERENCES continuity_issues(id)  ON DELETE CASCADE,
+        chapter_id INTEGER          REFERENCES chapters(chapter_id)   ON DELETE SET NULL,
+        sort_order INTEGER DEFAULT 0
+      );
+      INSERT INTO continuity_issue_chapters_new SELECT issue_id, chapter_id, sort_order FROM continuity_issue_chapters;
+      DROP TABLE continuity_issue_chapters;
+      ALTER TABLE continuity_issue_chapters_new RENAME TO continuity_issue_chapters;
+      CREATE INDEX idx_cic_issue   ON continuity_issue_chapters(issue_id);
+      CREATE INDEX idx_cic_chapter ON continuity_issue_chapters(chapter_id);
+
+      -- 16) locations.erste_erwaehnung_page_id → SET NULL
+      CREATE TABLE locations_new (
+        id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id                  INTEGER NOT NULL,
+        loc_id                   TEXT NOT NULL,
+        name                     TEXT NOT NULL,
+        typ                      TEXT,
+        beschreibung             TEXT,
+        erste_erwaehnung         TEXT,
+        erste_erwaehnung_page_id INTEGER REFERENCES pages(page_id) ON DELETE SET NULL,
+        stimmung                 TEXT,
+        sort_order               INTEGER DEFAULT 0,
+        user_email               TEXT,
+        updated_at               TEXT NOT NULL,
+        UNIQUE(book_id, loc_id, user_email)
+      );
+      INSERT INTO locations_new SELECT
+        id, book_id, loc_id, name, typ, beschreibung, erste_erwaehnung, erste_erwaehnung_page_id,
+        stimmung, sort_order, user_email, updated_at FROM locations;
+      DROP TABLE locations;
+      ALTER TABLE locations_new RENAME TO locations;
+      CREATE INDEX idx_loc_book_id ON locations(book_id, user_email);
+    `);
+
+    db.pragma('foreign_keys = ON');
+    const fkErrors = db.pragma('foreign_key_check');
+    if (fkErrors.length) {
+      throw new Error(`Migration 71: foreign_key_check meldet ${fkErrors.length} Verstoesse: ${JSON.stringify(fkErrors.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 71').run();
+    logger.info('DB-Migration auf Version 71 abgeschlossen (FK CASCADE/SET NULL fuer pages/chapters-Refs).');
   }
 
   // Schutzchecks: idempotent bei jedem Start.

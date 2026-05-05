@@ -88,14 +88,14 @@ router.post('/session/book', jsonBody, (req, res) => {
   // Orphan-Cleanup analog zum Seiten-Chat (siehe Kommentar oben).
   db.prepare(`
     DELETE FROM chat_sessions
-    WHERE book_id = ? AND page_name = '__book__' AND user_email = ?
+    WHERE book_id = ? AND kind = 'book' AND user_email = ?
       AND NOT EXISTS (SELECT 1 FROM chat_messages WHERE session_id = chat_sessions.id)
   `).run(book_id, userEmail);
 
   const now = new Date().toISOString();
   const result = db.prepare(`
-    INSERT INTO chat_sessions (book_id, book_name, page_id, page_name, user_email, created_at, last_message_at)
-    VALUES (?, ?, 0, '__book__', ?, ?, ?)
+    INSERT INTO chat_sessions (book_id, book_name, kind, user_email, created_at, last_message_at)
+    VALUES (?, ?, 'book', ?, ?, ?)
   `).run(book_id, book_name || null, userEmail, now, now);
   res.json({ id: result.lastInsertRowid });
 });
@@ -112,7 +112,7 @@ router.get('/sessions/book/:book_id', (req, res) => {
     SELECT cs.id, cs.book_id, cs.book_name, cs.created_at, cs.last_message_at,
            (SELECT content FROM chat_messages WHERE session_id = cs.id ORDER BY created_at ASC LIMIT 1) AS preview
     FROM chat_sessions cs
-    WHERE cs.book_id = ? AND cs.page_name = '__book__' AND cs.user_email = ?
+    WHERE cs.book_id = ? AND cs.kind = 'book' AND cs.user_email = ?
       AND EXISTS (SELECT 1 FROM chat_messages WHERE session_id = cs.id)
     ORDER BY cs.last_message_at DESC
     LIMIT 20
@@ -248,9 +248,9 @@ router.post('/send', jsonBody, async (req, res) => {
 
     // Kontext aus DB laden – nur Figuren/Szenen/Orte des aktuellen Kapitels
     const pageRow = session.page_id
-      ? db.prepare('SELECT chapter_name FROM pages WHERE page_id = ?').get(session.page_id)
+      ? db.prepare('SELECT chapter_id FROM pages WHERE page_id = ?').get(session.page_id)
       : null;
-    const figuren = getFiguren(session.book_id, userEmail, pageRow?.chapter_name ?? null);
+    const figuren = getFiguren(session.book_id, userEmail, pageRow?.chapter_id ?? null);
     const review  = getLatestReview(session.book_id, userEmail);
     const ideen   = getOpenIdeen(session.page_id, userEmail);
 

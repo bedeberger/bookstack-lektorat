@@ -49,6 +49,12 @@
   gap: 6px;
   flex-shrink: 0;
 }
+.kapitel-page-edited {
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .kapitel-new-page {
   display: flex;
   gap: 6px;
@@ -68,5 +74,10 @@
 /* === Token-Badges: W und Z im Seitenbaum ausblenden === */
 .tok-tree-words,
 .tok-tree-chars { display: none; }
+
+@media (max-width: 700px) {
+  .kapitel-page-row { flex-wrap: wrap; }
+  .kapitel-page-stats { flex-wrap: wrap; }
+}
 
 }

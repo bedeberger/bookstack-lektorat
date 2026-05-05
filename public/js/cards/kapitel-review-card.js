@@ -288,6 +288,33 @@ export function registerKapitelReviewCard() {
       ) || null;
     },
 
+    kapitelReviewLastEditAt() {
+      const ch = this.kapitelReviewSelectedChapter();
+      if (!ch?.pages?.length) return null;
+      let max = 0;
+      for (const p of ch.pages) {
+        const t = p.updated_at ? new Date(p.updated_at).getTime() : 0;
+        if (t > max) max = t;
+      }
+      return max ? new Date(max).toISOString() : null;
+    },
+
+    kapitelReviewChapterStats() {
+      const ch = this.kapitelReviewSelectedChapter();
+      if (!ch || !ch.pages?.length) return null;
+      const ests = window.__app.tokEsts || {};
+      let chars = 0, words = 0, tok = 0, any = false;
+      for (const p of ch.pages) {
+        const e = ests[p.id];
+        if (!e) continue;
+        any = true;
+        chars += e.chars || 0;
+        words += e.words || 0;
+        tok   += e.tok   || 0;
+      }
+      return any ? { chars, words, tok } : null;
+    },
+
     kapitelReviewCurrentHistory() {
       if (!window.__app.kapitelReviewChapterId) return [];
       return this.kapitelReviewHistory?.[String(window.__app.kapitelReviewChapterId)] || [];

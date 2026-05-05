@@ -39,11 +39,12 @@ function loadFinetuneData({ bookIdInt, userEmail, pageContents, langIsEn }) {
   // Alle als Maps für O(1)-Lookup. Werden im authorChat- und scene-Block
   // verwendet, um reiche, kontextualisierte Antworten aufzubauen.
   const locChaptersRows = db.prepare(`
-    SELECT lc.location_id, lc.chapter_name, lc.haeufigkeit
+    SELECT lc.location_id, c.chapter_name, lc.haeufigkeit
     FROM location_chapters lc
     JOIN locations l ON l.id = lc.location_id
+    LEFT JOIN chapters c ON c.chapter_id = lc.chapter_id
     WHERE l.book_id = ? AND (l.user_email = ? OR (? IS NULL AND l.user_email IS NULL))
-    ORDER BY lc.haeufigkeit DESC, lc.chapter_name
+    ORDER BY lc.haeufigkeit DESC, c.chapter_name
   `).all(bookIdInt, userEmail, userEmail);
   const chaptersByLocPk = new Map();
   for (const r of locChaptersRows) {
@@ -75,11 +76,12 @@ function loadFinetuneData({ bookIdInt, userEmail, pageContents, langIsEn }) {
 
   // Figuren-Auftritte (Kapitel-Liste pro Figur)
   const figAppRows = db.prepare(`
-    SELECT fa.figure_id, fa.chapter_name, fa.haeufigkeit
+    SELECT fa.figure_id, c.chapter_name, fa.haeufigkeit
     FROM figure_appearances fa
     JOIN figures f ON f.id = fa.figure_id
+    LEFT JOIN chapters c ON c.chapter_id = fa.chapter_id
     WHERE f.book_id = ? AND f.user_email = ?
-    ORDER BY fa.haeufigkeit DESC, fa.chapter_name
+    ORDER BY fa.haeufigkeit DESC, c.chapter_name
   `).all(bookIdInt, userEmail);
   const appearancesByFigPk = new Map();
   for (const r of figAppRows) {

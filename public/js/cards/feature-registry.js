@@ -47,6 +47,8 @@ export const FEATURES = [
     aliases: ['export','training','jsonl','llm','dataset','samples'] },
   { key: 'export',         kind: 'toggle', group: 'tools',  labelKey: 'tile.export',         descKey: 'tile.export.desc',         flag: 'showExportCard',         toggle: 'toggleExportCard',         requiresBook: true,
     aliases: ['download','pdf','epub','html','txt','markdown','md','herunterladen','speichern'] },
+  { key: 'pdfExport',      kind: 'toggle', group: 'tools',  labelKey: 'tile.pdfExport',      descKey: 'tile.pdfExport.desc',      flag: 'showPdfExportCard',      toggle: 'togglePdfExportCard',      requiresBook: true,
+    aliases: ['pdf','pdfa','custom','layout','schrift','font','cover','titelbild','print','druck'] },
 ];
 
 // Globale Aktionen (kind:'action'). Eigene Sektion in der Palette.

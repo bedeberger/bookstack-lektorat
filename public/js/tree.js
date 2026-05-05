@@ -191,6 +191,9 @@ export const treeMethods = {
           name: c.name,
           priority: c.priority,
           open: true,
+          url: this.bookstackUrl && c.book_slug && c.slug
+            ? `${this.bookstackUrl}/books/${c.book_slug}/chapter/${c.slug}`
+            : null,
           pages: this.pages.filter(p => p.chapter_id === c.id),
         })),
         ...this.pages.filter(p => !p.chapter_id).map(p => ({

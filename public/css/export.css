@@ -36,6 +36,10 @@
 .book-export-btn.is-running {
   border-color: var(--color-accent);
 }
+.book-export-btn--custom {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
 .book-export-status {
   margin-top: 0.6rem;
   font-size: 12px;

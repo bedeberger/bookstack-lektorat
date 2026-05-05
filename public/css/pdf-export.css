@@ -1,0 +1,257 @@
+@layer components {
+/* ── Custom-PDF-Export-Karte ─────────────────────────────────────────────── */
+.pdf-export-card {
+  --card-accent: var(--color-accent);
+}
+
+.pdfx-empty {
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  margin: 0.5rem 0;
+}
+
+.pdfx-error {
+  color: var(--color-danger, #c33);
+  font-size: var(--font-size-sm);
+  margin: 0.4rem 0 0;
+}
+
+.pdfx-hint {
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  margin: 0 0 0.6rem;
+}
+
+/* Profile-Bar */
+.pdfx-profile-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 0.5px solid var(--color-border);
+}
+
+.pdfx-profile-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-slow), border-color var(--transition-slow);
+}
+.pdfx-profile-pill:hover { border-color: var(--color-accent); }
+.pdfx-profile-pill.is-active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft, rgba(0,120,200,.08));
+}
+.pdfx-default-marker {
+  font-size: 10px;
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.pdfx-profile-create {
+  display: inline-flex;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+/* Profil-Header */
+.pdfx-profile-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+/* Tabs */
+.pdfx-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border-bottom: 0.5px solid var(--color-border);
+  margin-bottom: 0.85rem;
+}
+.pdfx-tab {
+  padding: 0.5rem 0.9rem;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color var(--transition-slow), border-color var(--transition-slow);
+}
+.pdfx-tab:hover { color: var(--color-text); }
+.pdfx-tab.is-active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+.pdfx-tab-panel {
+  padding: 0.4rem 0 0.6rem;
+}
+
+/* Inputs / Form */
+.pdfx-input {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  font-family: inherit;
+}
+.pdfx-input:focus { outline: none; border-color: var(--color-accent); }
+.pdfx-input--name { max-width: 260px; }
+.pdfx-textarea { resize: vertical; min-height: 64px; }
+
+.pdfx-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 12px;
+  color: var(--color-muted);
+  font-weight: 500;
+}
+.pdfx-field--check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text);
+}
+
+.pdfx-fieldset {
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.7rem 0.85rem;
+  margin: 0.6rem 0;
+}
+.pdfx-fieldset > legend {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+  padding: 0 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pdfx-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem 0.8rem;
+  margin-bottom: 0.4rem;
+}
+.pdfx-grid--3 { grid-template-columns: repeat(3, 1fr); }
+.pdfx-grid--4 { grid-template-columns: repeat(4, 1fr); }
+.pdfx-grid--2 { grid-template-columns: repeat(2, 1fr); }
+.pdfx-pair { display: contents; }
+
+/* Buttons */
+.pdfx-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-slow), border-color var(--transition-slow);
+}
+.pdfx-btn:hover:not(:disabled) { border-color: var(--color-accent); background: var(--color-bg); }
+.pdfx-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.pdfx-btn--primary {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+.pdfx-btn--primary:hover:not(:disabled) { background: var(--color-accent-strong, var(--color-accent)); }
+.pdfx-btn--ghost { background: transparent; }
+.pdfx-btn--danger { color: var(--color-danger, #c33); }
+.pdfx-btn--danger:hover:not(:disabled) { border-color: var(--color-danger, #c33); }
+
+/* Cover */
+.pdfx-cover-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 200px;
+  height: 280px;
+  border: 0.5px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-muted);
+  font-size: 12px;
+  margin: 0.4rem 0;
+  overflow: hidden;
+}
+.pdfx-cover-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.pdfx-cover-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.4rem 0 0.6rem;
+}
+
+/* Font-Preview-Box */
+.pdfx-font-preview {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  font-size: 18px;
+}
+.pdfx-font-role { background: var(--color-bg-soft, transparent); }
+
+/* Action-Bar */
+.pdfx-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding-top: 0.85rem;
+  border-top: 0.5px solid var(--color-border);
+}
+.pdfx-saved-marker {
+  color: var(--color-success, #2a8);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.pdfx-progress {
+  margin-top: 0.6rem;
+}
+.pdfx-status {
+  font-size: 12px;
+  color: var(--color-muted);
+  margin: 0.3rem 0 0;
+}
+
+/* Mobile-Breakpoints */
+@media (max-width: 720px) {
+  .pdfx-grid, .pdfx-grid--3, .pdfx-grid--4, .pdfx-grid--2 { grid-template-columns: 1fr; }
+  .pdfx-profile-create { margin-left: 0; flex-wrap: wrap; }
+  .pdfx-input--name { max-width: 100%; }
+  .pdfx-cover-preview { width: 100%; max-width: 200px; }
+}
+}

@@ -1,0 +1,375 @@
+<!-- Custom-PDF-Export — Profile + Editor + Trigger -->
+<!--
+  Alpine.data-Sub-Komponente — public/js/cards/pdf-export-card.js.
+  Tabs: Layout / Schrift / Kapitel / Cover / TOC / Extras / PDF/A.
+  Profile-Liste oben, Editor unten. Speichern + Exportieren in der Action-Bar.
+-->
+<div class="card pdf-export-card" x-data="pdfExportCard" x-show="$app.showPdfExportCard" x-cloak>
+  <div class="card-header">
+    <span class="card-title" x-text="$app.t('pdfExport.title')"></span>
+  </div>
+
+  <!-- Profile-Liste -->
+  <div class="pdfx-profile-bar">
+    <template x-for="p in profiles" :key="p.id">
+      <button type="button"
+              class="pdfx-profile-pill"
+              :class="{ 'is-active': activeProfileId === p.id, 'is-default': p.is_default }"
+              @click="selectProfile(p.id)">
+        <span x-text="p.name"></span>
+        <span class="pdfx-default-marker" x-show="p.is_default" x-text="$app.t('pdfExport.defaultMark')"></span>
+      </button>
+    </template>
+    <div class="pdfx-profile-create">
+      <input type="text"
+             class="pdfx-input pdfx-input--name"
+             x-model="newProfileName"
+             :placeholder="$app.t('pdfExport.newPlaceholder')"
+             @keydown.enter="createProfile()">
+      <select class="pdfx-input" x-model="cloneFromId">
+        <option value="" x-text="$app.t('pdfExport.cloneNone')"></option>
+        <template x-for="p in profiles" :key="'cl'+p.id">
+          <option :value="p.id" x-text="p.name"></option>
+        </template>
+      </select>
+      <button type="button"
+              class="pdfx-btn"
+              :disabled="creating || !newProfileName.trim()"
+              @click="createProfile()"
+              x-text="$app.t('pdfExport.create')"></button>
+    </div>
+  </div>
+
+  <template x-if="!activeProfile">
+    <p class="pdfx-empty" x-text="$app.t('pdfExport.empty')"></p>
+  </template>
+
+  <template x-if="activeProfile">
+    <div>
+      <!-- Profil-Header: Name + Default-Toggle + Delete -->
+      <div class="pdfx-profile-header">
+        <input type="text" class="pdfx-input pdfx-input--name" x-model="activeProfile.name">
+        <button type="button"
+                class="pdfx-btn pdfx-btn--ghost"
+                :disabled="activeProfile.is_default"
+                @click="setDefault(activeProfile.id)"
+                x-text="activeProfile.is_default ? $app.t('pdfExport.isDefault') : $app.t('pdfExport.setDefault')"></button>
+        <button type="button"
+                class="pdfx-btn pdfx-btn--danger"
+                @click="deleteProfile(activeProfile.id)"
+                x-text="$app.t('common.delete')"></button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="pdfx-tabs">
+        <template x-for="tab in ['layout','font','chapter','cover','toc','extras','pdfa']" :key="tab">
+          <button type="button"
+                  class="pdfx-tab"
+                  :class="{ 'is-active': isTab(tab) }"
+                  @click="setTab(tab)"
+                  x-text="$app.t('pdfExport.tab.' + tab)"></button>
+        </template>
+      </div>
+
+      <!-- Layout-Tab -->
+      <div class="pdfx-tab-panel" x-show="isTab('layout')">
+        <div class="pdfx-grid">
+          <label class="pdfx-field">
+            <span x-text="$app.t('pdfExport.layout.pageSize')"></span>
+            <select x-model="activeProfile.config.layout.pageSize" class="pdfx-input">
+              <option value="A4">A4</option>
+              <option value="A5">A5</option>
+              <option value="A6">A6</option>
+              <option value="Letter">Letter</option>
+              <option value="custom" x-text="$app.t('pdfExport.layout.custom')"></option>
+            </select>
+          </label>
+          <template x-if="activeProfile.config.layout.pageSize === 'custom'">
+            <div class="pdfx-pair">
+              <label class="pdfx-field">
+                <span x-text="$app.t('pdfExport.layout.widthMm')"></span>
+                <input type="number" min="50" max="500" x-model.number="activeProfile.config.layout.customWidthMm" class="pdfx-input">
+              </label>
+              <label class="pdfx-field">
+                <span x-text="$app.t('pdfExport.layout.heightMm')"></span>
+                <input type="number" min="50" max="700" x-model.number="activeProfile.config.layout.customHeightMm" class="pdfx-input">
+              </label>
+            </div>
+          </template>
+          <label class="pdfx-field">
+            <span x-text="$app.t('pdfExport.layout.columns')"></span>
+            <select x-model.number="activeProfile.config.layout.columns" class="pdfx-input">
+              <option value="1">1</option>
+              <option value="2">2</option>
+            </select>
+          </label>
+        </div>
+
+        <fieldset class="pdfx-fieldset">
+          <legend x-text="$app.t('pdfExport.layout.margins')"></legend>
+          <div class="pdfx-grid pdfx-grid--4">
+            <label class="pdfx-field"><span>Top</span><input type="number" min="5" max="80" x-model.number="activeProfile.config.layout.marginsMm.top" class="pdfx-input"></label>
+            <label class="pdfx-field"><span>Right</span><input type="number" min="5" max="80" x-model.number="activeProfile.config.layout.marginsMm.right" class="pdfx-input"></label>
+            <label class="pdfx-field"><span>Bottom</span><input type="number" min="5" max="80" x-model.number="activeProfile.config.layout.marginsMm.bottom" class="pdfx-input"></label>
+            <label class="pdfx-field"><span>Left</span><input type="number" min="5" max="80" x-model.number="activeProfile.config.layout.marginsMm.left" class="pdfx-input"></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="pdfx-fieldset">
+          <legend x-text="$app.t('pdfExport.layout.headerFooter')"></legend>
+          <p class="pdfx-hint" x-text="$app.t('pdfExport.layout.tokensHint')"></p>
+          <div class="pdfx-grid pdfx-grid--3">
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.headerLeft')"></span><input x-model="activeProfile.config.layout.headerLeft" class="pdfx-input"></label>
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.headerCenter')"></span><input x-model="activeProfile.config.layout.headerCenter" class="pdfx-input"></label>
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.headerRight')"></span><input x-model="activeProfile.config.layout.headerRight" class="pdfx-input"></label>
+          </div>
+          <div class="pdfx-grid pdfx-grid--3">
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.footerLeft')"></span><input x-model="activeProfile.config.layout.footerLeft" class="pdfx-input"></label>
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.footerCenter')"></span><input x-model="activeProfile.config.layout.footerCenter" class="pdfx-input"></label>
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.footerRight')"></span><input x-model="activeProfile.config.layout.footerRight" class="pdfx-input"></label>
+          </div>
+          <label class="pdfx-field">
+            <span x-text="$app.t('pdfExport.layout.pageNumberStart')"></span>
+            <input type="number" min="1" max="9999" x-model.number="activeProfile.config.layout.pageNumberStart" class="pdfx-input">
+          </label>
+        </fieldset>
+      </div>
+
+      <!-- Schrift-Tab -->
+      <div class="pdfx-tab-panel" x-show="isTab('font')">
+        <template x-for="role in ['body','heading','title','subtitle','byline']" :key="role">
+          <fieldset class="pdfx-fieldset pdfx-font-role">
+            <legend x-text="$app.t('pdfExport.font.' + role)"></legend>
+            <div class="pdfx-grid pdfx-grid--3">
+              <label class="pdfx-field">
+                <span x-text="$app.t('pdfExport.font.family')"></span>
+                <select :value="activeProfile.config.font[role].family"
+                        @change="onFontPick(role, $event.target.value)"
+                        class="pdfx-input">
+                  <template x-for="f in fontList" :key="role+'-'+f.family">
+                    <option :value="f.family" x-text="f.family"></option>
+                  </template>
+                </select>
+              </label>
+              <label class="pdfx-field">
+                <span x-text="$app.t('pdfExport.font.weight')"></span>
+                <select x-model.number="activeProfile.config.font[role].weight" class="pdfx-input">
+                  <template x-for="w in (fontList.find(f => f.family === activeProfile.config.font[role].family)?.weights || [400])" :key="role+'-w-'+w">
+                    <option :value="w" x-text="w"></option>
+                  </template>
+                </select>
+              </label>
+              <template x-if="role !== 'heading'">
+                <label class="pdfx-field">
+                  <span x-text="$app.t('pdfExport.font.sizePt')"></span>
+                  <input type="number" min="6" max="72" x-model.number="activeProfile.config.font[role].sizePt" class="pdfx-input">
+                </label>
+              </template>
+            </div>
+            <template x-if="role === 'heading'">
+              <div class="pdfx-grid pdfx-grid--3">
+                <label class="pdfx-field"><span>h1 (pt)</span><input type="number" min="10" max="60" x-model.number="activeProfile.config.font.heading.sizes.h1" class="pdfx-input"></label>
+                <label class="pdfx-field"><span>h2 (pt)</span><input type="number" min="9"  max="48" x-model.number="activeProfile.config.font.heading.sizes.h2" class="pdfx-input"></label>
+                <label class="pdfx-field"><span>h3 (pt)</span><input type="number" min="8"  max="36" x-model.number="activeProfile.config.font.heading.sizes.h3" class="pdfx-input"></label>
+              </div>
+            </template>
+            <template x-if="role === 'body'">
+              <label class="pdfx-field">
+                <span x-text="$app.t('pdfExport.font.lineHeight')"></span>
+                <input type="number" step="0.05" min="0.8" max="3" x-model.number="activeProfile.config.font.body.lineHeight" class="pdfx-input">
+              </label>
+            </template>
+            <div class="pdfx-font-preview" :style="fontPreviewStyle(role)">
+              <span x-text="$app.t('pdfExport.font.previewText')"></span>
+            </div>
+          </fieldset>
+        </template>
+      </div>
+
+      <!-- Kapitel-Tab -->
+      <div class="pdfx-tab-panel" x-show="isTab('chapter')">
+        <div class="pdfx-grid">
+          <label class="pdfx-field">
+            <span x-text="$app.t('pdfExport.chapter.breakBefore')"></span>
+            <select x-model="activeProfile.config.chapter.breakBefore" class="pdfx-input">
+              <option value="always" x-text="$app.t('pdfExport.chapter.break.always')"></option>
+              <option value="right-page" x-text="$app.t('pdfExport.chapter.break.rightPage')"></option>
+              <option value="none" x-text="$app.t('pdfExport.chapter.break.none')"></option>
+            </select>
+          </label>
+          <label class="pdfx-field">
+            <span x-text="$app.t('pdfExport.chapter.numbering')"></span>
+            <select x-model="activeProfile.config.chapter.numbering" class="pdfx-input">
+              <option value="none" x-text="$app.t('pdfExport.chapter.num.none')"></option>
+              <option value="arabic">1, 2, 3</option>
+              <option value="roman">I, II, III</option>
+              <option value="word" x-text="$app.t('pdfExport.chapter.num.word')"></option>
+            </select>
+          </label>
+          <label class="pdfx-field">
+            <span x-text="$app.t('pdfExport.chapter.titleStyle')"></span>
+            <select x-model="activeProfile.config.chapter.titleStyle" class="pdfx-input">
+              <option value="centered-large" x-text="$app.t('pdfExport.chapter.style.centeredLarge')"></option>
+              <option value="left-rule" x-text="$app.t('pdfExport.chapter.style.leftRule')"></option>
+              <option value="minimal" x-text="$app.t('pdfExport.chapter.style.minimal')"></option>
+            </select>
+          </label>
+          <label class="pdfx-field">
+            <span x-text="$app.t('pdfExport.chapter.spaceBeforeMm')"></span>
+            <input type="number" min="0" max="200" x-model.number="activeProfile.config.chapter.spaceBeforeMm" class="pdfx-input">
+          </label>
+          <label class="pdfx-field pdfx-field--check">
+            <input type="checkbox" x-model="activeProfile.config.chapter.blankPageAfter">
+            <span x-text="$app.t('pdfExport.chapter.blankPageAfter')"></span>
+          </label>
+          <label class="pdfx-field pdfx-field--check">
+            <input type="checkbox" x-model="activeProfile.config.chapter.dropCap">
+            <span x-text="$app.t('pdfExport.chapter.dropCap')"></span>
+          </label>
+        </div>
+        <fieldset class="pdfx-fieldset">
+          <legend x-text="$app.t('pdfExport.chapter.pageStructureLegend')"></legend>
+          <p class="pdfx-hint" x-text="$app.t('pdfExport.chapter.pageStructureHint')"></p>
+          <label class="pdfx-field">
+            <span x-text="$app.t('pdfExport.chapter.pageStructure')"></span>
+            <select x-model="activeProfile.config.chapter.pageStructure" class="pdfx-input">
+              <option value="flatten" x-text="$app.t('pdfExport.chapter.struct.flatten')"></option>
+              <option value="nested" x-text="$app.t('pdfExport.chapter.struct.nested')"></option>
+            </select>
+          </label>
+          <label class="pdfx-field pdfx-field--check" x-show="activeProfile.config.chapter.pageStructure === 'nested'">
+            <input type="checkbox" x-model="activeProfile.config.chapter.pageBreakBetweenPages">
+            <span x-text="$app.t('pdfExport.chapter.pageBreakBetweenPages')"></span>
+          </label>
+        </fieldset>
+      </div>
+
+      <!-- Cover-Tab -->
+      <div class="pdfx-tab-panel" x-show="isTab('cover')">
+        <label class="pdfx-field pdfx-field--check">
+          <input type="checkbox" x-model="activeProfile.config.cover.enabled">
+          <span x-text="$app.t('pdfExport.cover.enabled')"></span>
+        </label>
+        <template x-if="activeProfile.config.cover.enabled">
+          <div>
+            <div class="pdfx-cover-preview">
+              <template x-if="activeProfile.has_cover">
+                <img :src="coverUrl()" alt="">
+              </template>
+              <template x-if="!activeProfile.has_cover">
+                <span x-text="$app.t('pdfExport.cover.noFile')"></span>
+              </template>
+            </div>
+            <div class="pdfx-cover-actions">
+              <label class="pdfx-btn">
+                <input type="file" accept="image/jpeg,image/png,image/webp" hidden @change="uploadCover($event)">
+                <span x-text="coverUploading ? $app.t('pdfExport.cover.uploading') : (activeProfile.has_cover ? $app.t('pdfExport.cover.replace') : $app.t('pdfExport.cover.upload'))"></span>
+              </label>
+              <button type="button" class="pdfx-btn pdfx-btn--ghost"
+                      x-show="activeProfile.has_cover"
+                      @click="removeCover()"
+                      x-text="$app.t('pdfExport.cover.remove')"></button>
+            </div>
+            <p class="pdfx-error" x-show="coverError" x-text="coverError"></p>
+            <div class="pdfx-grid pdfx-grid--3">
+              <label class="pdfx-field">
+                <span x-text="$app.t('pdfExport.cover.fit')"></span>
+                <select x-model="activeProfile.config.cover.fit" class="pdfx-input">
+                  <option value="cover" x-text="$app.t('pdfExport.cover.fitCover')"></option>
+                  <option value="contain" x-text="$app.t('pdfExport.cover.fitContain')"></option>
+                </select>
+              </label>
+              <label class="pdfx-field pdfx-field--check">
+                <input type="checkbox" x-model="activeProfile.config.cover.showTitleOverlay">
+                <span x-text="$app.t('pdfExport.cover.overlay')"></span>
+              </label>
+              <label class="pdfx-field" x-show="activeProfile.config.cover.showTitleOverlay">
+                <span x-text="$app.t('pdfExport.cover.overlayPosition')"></span>
+                <select x-model="activeProfile.config.cover.overlayPosition" class="pdfx-input">
+                  <option value="top" x-text="$app.t('pdfExport.cover.posTop')"></option>
+                  <option value="center" x-text="$app.t('pdfExport.cover.posCenter')"></option>
+                  <option value="bottom" x-text="$app.t('pdfExport.cover.posBottom')"></option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- TOC-Tab -->
+      <div class="pdfx-tab-panel" x-show="isTab('toc')">
+        <label class="pdfx-field pdfx-field--check">
+          <input type="checkbox" x-model="activeProfile.config.toc.enabled">
+          <span x-text="$app.t('pdfExport.toc.enabled')"></span>
+        </label>
+        <template x-if="activeProfile.config.toc.enabled">
+          <div class="pdfx-grid">
+            <label class="pdfx-field">
+              <span x-text="$app.t('pdfExport.toc.title')"></span>
+              <input x-model="activeProfile.config.toc.title" class="pdfx-input">
+            </label>
+            <label class="pdfx-field">
+              <span x-text="$app.t('pdfExport.toc.depth')"></span>
+              <select x-model.number="activeProfile.config.toc.depth" class="pdfx-input">
+                <option value="1" x-text="$app.t('pdfExport.toc.depthChapters')"></option>
+                <option value="2" x-text="$app.t('pdfExport.toc.depthChaptersPages')"></option>
+              </select>
+            </label>
+          </div>
+        </template>
+      </div>
+
+      <!-- Extras-Tab -->
+      <div class="pdfx-tab-panel" x-show="isTab('extras')">
+        <div class="pdfx-grid pdfx-grid--2">
+          <label class="pdfx-field">
+            <span x-text="$app.t('pdfExport.extras.subtitle')"></span>
+            <input x-model="activeProfile.config.extras.subtitle" class="pdfx-input">
+          </label>
+          <label class="pdfx-field">
+            <span x-text="$app.t('pdfExport.extras.year')"></span>
+            <input x-model="activeProfile.config.extras.year" class="pdfx-input" placeholder="2026">
+          </label>
+        </div>
+        <label class="pdfx-field">
+          <span x-text="$app.t('pdfExport.extras.dedication')"></span>
+          <textarea x-model="activeProfile.config.extras.dedication" class="pdfx-input pdfx-textarea" rows="3"></textarea>
+        </label>
+        <label class="pdfx-field">
+          <span x-text="$app.t('pdfExport.extras.imprint')"></span>
+          <textarea x-model="activeProfile.config.extras.imprint" class="pdfx-input pdfx-textarea" rows="6"></textarea>
+        </label>
+      </div>
+
+      <!-- PDF/A-Tab -->
+      <div class="pdfx-tab-panel" x-show="isTab('pdfa')">
+        <label class="pdfx-field pdfx-field--check">
+          <input type="checkbox" x-model="activeProfile.config.pdfa.enabled">
+          <span x-text="$app.t('pdfExport.pdfa.enabled')"></span>
+        </label>
+        <p class="pdfx-hint" x-text="$app.t('pdfExport.pdfa.hint')"></p>
+      </div>
+
+      <!-- Action-Bar -->
+      <div class="pdfx-actions">
+        <button type="button" class="pdfx-btn pdfx-btn--ghost" :disabled="saving" @click="saveActiveProfile()">
+          <span x-text="saving ? $app.t('common.saving') : $app.t('common.save')"></span>
+        </button>
+        <span class="pdfx-saved-marker" x-show="savedAt" x-text="$app.t('pdfExport.saved')"></span>
+        <button type="button" class="pdfx-btn pdfx-btn--ghost" :disabled="exporting" @click="exportPdf({ preview: true })">
+          <span x-text="$app.t('pdfExport.preview')"></span>
+        </button>
+        <button type="button" class="pdfx-btn pdfx-btn--primary" :disabled="exporting" @click="exportPdf({ preview: false })">
+          <span x-show="exporting" class="spinner"></span>
+          <span x-text="exporting ? $app.t('pdfExport.exporting') : $app.t('pdfExport.export')"></span>
+        </button>
+      </div>
+
+      <div class="pdfx-progress" x-show="exporting || (exportProgress > 0 && !exportError)">
+        <div class="progress-bar"><div class="progress-bar__fill" :style="{ '--progress': exportProgress + '%' }"></div></div>
+        <p class="pdfx-status" x-text="exportStatus"></p>
+      </div>
+      <p class="pdfx-error" x-show="exportError" x-text="exportError"></p>
+    </div>
+  </template>
+</div>
