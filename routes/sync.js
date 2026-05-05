@@ -77,8 +77,9 @@ const _upsertChapterStmt = db.prepare(`
     chapter_name=excluded.chapter_name, updated_at=excluded.updated_at
 `);
 
-const _delChapterCacheByKey = db.prepare(
-  'DELETE FROM chapter_extract_cache WHERE book_id = ? AND chapter_key = ?'
+// Mig 75: chapter_extract_cache.chapter_id INTEGER FK; Rename invalidiert alle phases.
+const _delChapterCacheByChapterId = db.prepare(
+  'DELETE FROM chapter_extract_cache WHERE book_id = ? AND chapter_id = ?'
 );
 
 // Leichtgewichtiger pages-Cache-Update (ohne Seiten-Inhalte laden).
@@ -92,7 +93,7 @@ function _upsertPagesCache(bookId, pages, chapters) {
   for (const c of chapters) {
     if (storedChMap[c.id] !== undefined && storedChMap[c.id] !== c.name) {
       logger.info(`Kapitel ${c.id} (Buch ${bookId}) umbenannt: «${storedChMap[c.id]}» → «${c.name}» – Extrakt-Cache invalidiert.`);
-      _delChapterCacheByKey.run(bookId, String(c.id));
+      _delChapterCacheByChapterId.run(bookId, c.id);
     }
   }
 

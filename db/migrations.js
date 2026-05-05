@@ -2282,6 +2282,90 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 74 abgeschlossen (zeitstrahl_events JSON-Spalten -> Junction-Tabellen mit FK).');
   }
 
+  if (version < 75) {
+    // chapter_extract_cache: chapter_key TEXT (Mix aus chapter_id, sub-chunks und
+    // sub-pass-suffixes) -> chapter_id INTEGER FK + phase TEXT. Buch-Level-Cache
+    // (chapter_key='__singlepass__') wandert in eigene Tabelle book_extract_cache
+    // (FK auf book_id nicht moeglich — keine lokale books-Tabelle).
+    //
+    // Format chapter_key: <chapter_id>(__sub<N>)?(:phase)?
+    // Mapping: chapter_id := numerischer Praefix, phase := __sub<N>(:figuren|:orte)?
+    db.pragma('foreign_keys = OFF');
+
+    db.exec(`
+      DROP TABLE IF EXISTS chapter_extract_cache_new;
+      DROP TABLE IF EXISTS book_extract_cache;
+
+      CREATE TABLE chapter_extract_cache_new (
+        book_id      INTEGER NOT NULL,
+        user_email   TEXT    NOT NULL DEFAULT '',
+        chapter_id   INTEGER NOT NULL REFERENCES chapters(chapter_id) ON DELETE CASCADE,
+        phase        TEXT    NOT NULL DEFAULT '',
+        pages_sig    TEXT    NOT NULL,
+        extract_json TEXT    NOT NULL,
+        cached_at    TEXT    NOT NULL,
+        PRIMARY KEY (book_id, user_email, chapter_id, phase)
+      );
+
+      CREATE TABLE book_extract_cache (
+        book_id      INTEGER NOT NULL,
+        user_email   TEXT    NOT NULL DEFAULT '',
+        pages_sig    TEXT    NOT NULL,
+        extract_json TEXT    NOT NULL,
+        cached_at    TEXT    NOT NULL,
+        PRIMARY KEY (book_id, user_email)
+      );
+    `);
+
+    const oldRows = db.prepare(
+      'SELECT book_id, user_email, chapter_key, pages_sig, extract_json, cached_at FROM chapter_extract_cache'
+    ).all();
+    const validChapters = new Set(db.prepare('SELECT chapter_id FROM chapters').all().map(r => r.chapter_id));
+    const insChapter = db.prepare(`
+      INSERT OR REPLACE INTO chapter_extract_cache_new
+        (book_id, user_email, chapter_id, phase, pages_sig, extract_json, cached_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const insBook = db.prepare(`
+      INSERT OR REPLACE INTO book_extract_cache
+        (book_id, user_email, pages_sig, extract_json, cached_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    let migratedChapter = 0, migratedBook = 0, dropped = 0;
+    for (const r of oldRows) {
+      const key = r.chapter_key;
+      if (key === '__singlepass__') {
+        insBook.run(r.book_id, r.user_email || '', r.pages_sig, r.extract_json, r.cached_at);
+        migratedBook++;
+        continue;
+      }
+      const m = String(key).match(/^(\d+)(__sub\d+)?(?::(.+))?$/);
+      if (!m) { dropped++; continue; }
+      const chapterId = parseInt(m[1]);
+      if (!validChapters.has(chapterId)) { dropped++; continue; }
+      const sub = m[2] ? m[2].slice(2) : '';
+      const phaseSuffix = m[3] || '';
+      const phase = sub ? (phaseSuffix ? `${sub}:${phaseSuffix}` : sub) : phaseSuffix;
+      insChapter.run(r.book_id, r.user_email || '', chapterId, phase, r.pages_sig, r.extract_json, r.cached_at);
+      migratedChapter++;
+    }
+    logger.info(`Migration 75: chapter_extract_cache migriert: ${migratedChapter} chapter, ${migratedBook} book, ${dropped} verworfen.`);
+
+    db.exec(`
+      DROP TABLE chapter_extract_cache;
+      ALTER TABLE chapter_extract_cache_new RENAME TO chapter_extract_cache;
+    `);
+
+    db.pragma('foreign_keys = ON');
+    const fkErrors = db.pragma('foreign_key_check');
+    if (fkErrors.length) {
+      throw new Error(`Migration 75: foreign_key_check meldet ${fkErrors.length} Verstoesse: ${JSON.stringify(fkErrors.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 75').run();
+    logger.info('DB-Migration auf Version 75 abgeschlossen (chapter_extract_cache split + FK CASCADE auf chapters).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

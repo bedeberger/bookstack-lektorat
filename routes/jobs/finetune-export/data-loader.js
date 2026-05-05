@@ -114,14 +114,19 @@ function loadFinetuneData({ bookIdInt, userEmail, pageContents, langIsEn }) {
     WHERE r.book_id = ? AND r.user_email = ?
   `).all(bookIdInt, userEmail);
 
-  // Kapitel-Extract-Cache: pro Kapitel liegen Fakten, Figuren, Orte, Szenen.
-  // Fakten-Array ist die grösste bisher ungenutzte Quelle feiner Buchwelt-
-  // Behauptungen (pro Kapitel bis 50 Einträge mit subjekt/fakt/seite).
-  const extractCacheRows = db.prepare(`
-    SELECT chapter_key, extract_json
-    FROM chapter_extract_cache
-    WHERE book_id = ? AND user_email = ?
-  `).all(bookIdInt, userEmail || '');
+  // Kapitel-Extract-Cache (Mig 75): chapter-level (chapter_extract_cache) + book-level
+  // (book_extract_cache, single-pass). Fakten-Array ist die grösste bisher ungenutzte
+  // Quelle feiner Buchwelt-Behauptungen (pro Kapitel bis 50 Einträge mit subjekt/fakt/seite).
+  const extractCacheRows = [
+    ...db.prepare(`
+      SELECT extract_json FROM chapter_extract_cache
+      WHERE book_id = ? AND user_email = ?
+    `).all(bookIdInt, userEmail || ''),
+    ...db.prepare(`
+      SELECT extract_json FROM book_extract_cache
+      WHERE book_id = ? AND user_email = ?
+    `).all(bookIdInt, userEmail || ''),
+  ];
 
   // Dialog-Sammlung pro Figur (wird im dialog-Block gefüllt; hier als
   // Vorbelegung, damit der authorChat-Block die Ergebnisse wiederverwenden

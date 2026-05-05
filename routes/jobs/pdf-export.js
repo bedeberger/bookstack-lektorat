@@ -41,7 +41,7 @@ function _scheduleResultCleanup(jobId) {
   t.unref?.();
 }
 
-async function runPdfExportJob(jobId, { bookId, profileId, userEmail, userToken, preview }) {
+async function runPdfExportJob(jobId, { bookId, profileId, userEmail, userToken }) {
   const log = makeJobLogger(jobId);
   const ctrl = jobAbortControllers.get(jobId);
 
@@ -59,12 +59,6 @@ async function runPdfExportJob(jobId, { bookId, profileId, userEmail, userToken,
 
     if (ctrl?.signal.aborted) throw new Error('job.cancelled');
 
-    let renderGroups = groups;
-    if (preview) {
-      // Preview-Modus: nur das erste Kapitel rendern (Cover + 1 Kapitel).
-      renderGroups = groups.slice(0, 1);
-    }
-
     let coverBuf = null;
     if (profile.config.cover.enabled && profile.has_cover) {
       const cover = getPdfExportProfileCover(profileId);
@@ -74,7 +68,7 @@ async function runPdfExportJob(jobId, { bookId, profileId, userEmail, userToken,
     updateJob(jobId, { progress: 40, statusText: 'job.phase.renderPdf' });
     const buffer = await renderPdfBuffer({
       book,
-      groups: renderGroups,
+      groups,
       profile,
       coverBuf,
       token: userToken,
@@ -100,7 +94,7 @@ async function runPdfExportJob(jobId, { bookId, profileId, userEmail, userToken,
 
     const slug = book.slug || book.name || `book${bookId}`;
     const filename = buildExportFilename({
-      prefix: preview ? 'book-preview' : 'book',
+      prefix: 'book',
       slug, ext: 'pdf', date: new Date(),
     });
 
@@ -113,7 +107,6 @@ async function runPdfExportJob(jobId, { bookId, profileId, userEmail, userToken,
       mime: 'application/pdf',
       filename,
       profileName: profile.name,
-      preview: !!preview,
       pdfa: {
         requested: !!profile.config.pdfa.enabled,
         validatorAvailable: !!validation.available,
@@ -142,20 +135,18 @@ router.post('/pdf-export', jsonBody, async (req, res) => {
 
   const bookId = toIntId(req.body?.book_id || req.body?.bookId);
   const profileId = toIntId(req.body?.profile_id || req.body?.profileId);
-  const preview = !!req.body?.preview;
   if (!bookId || !profileId) return res.status(400).json({ error_code: 'BOOK_OR_PROFILE_REQUIRED' });
 
   const profile = getPdfExportProfile(profileId);
   if (!profile) return res.status(404).json({ error_code: 'PROFILE_NOT_FOUND' });
   if (profile.user_email !== userEmail) return res.status(403).json({ error_code: 'FORBIDDEN' });
 
-  const dedupId = `${bookId}:${profileId}:${preview ? 'p' : 'f'}`;
+  const dedupId = `${bookId}:${profileId}`;
   const existing = findActiveJobId('pdf-export', dedupId, userEmail);
   if (existing) return res.json({ jobId: existing, deduplicated: true });
 
-  const label = { key: preview ? 'job.label.pdfExportPreview' : 'job.label.pdfExport', params: { profile: profile.name } };
-  const jobId = createJob('pdf-export', bookId, userEmail, label.key, label.params, dedupId);
-  enqueueJob(jobId, () => runPdfExportJob(jobId, { bookId, profileId, userEmail, userToken, preview }));
+  const jobId = createJob('pdf-export', bookId, userEmail, 'job.label.pdfExport', { profile: profile.name }, dedupId);
+  enqueueJob(jobId, () => runPdfExportJob(jobId, { bookId, profileId, userEmail, userToken }));
   res.status(202).json({ jobId });
 });
 

@@ -236,7 +236,6 @@
   "pdfExport.create":                      "Anlegen",
   "pdfExport.confirmDelete":               "Profil wirklich löschen?",
   "pdfExport.saved":                       "Gespeichert",
-  "pdfExport.preview":                     "Vorschau",
   "pdfExport.export":                      "Exportieren",
   "pdfExport.exporting":                   "Exportiere …",
   "pdfExport.starting":                    "Job wird gestartet …",
@@ -313,6 +312,7 @@
   "pdfExport.cover.posTop":                "Oben",
   "pdfExport.cover.posCenter":             "Mitte",
   "pdfExport.cover.posBottom":             "Unten",
+  "pdfExport.cover.optionsLegend":         "Darstellung",
 
   "pdfExport.toc.enabled":                 "Inhaltsverzeichnis erzeugen",
   "pdfExport.toc.title":                   "Überschrift",
@@ -346,7 +346,6 @@
   "job.phase.renderPdf":                   "PDF rendern …",
   "job.phase.validatePdfa":                "PDF/A-Konformität prüfen …",
   "job.label.pdfExport":                   "PDF-Export ({profile})",
-  "job.label.pdfExportPreview":            "PDF-Vorschau ({profile})",
   "job.error.profileNotFound":             "Profil nicht gefunden.",
   "job.error.forbidden":                   "Zugriff verweigert.",
   "job.error.bookEmpty":                   "Buch enthält keine Seiten.",

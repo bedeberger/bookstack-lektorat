@@ -318,41 +318,81 @@ function deleteCheckpoint(jobType, bookId, userEmail) {
   _deleteCheckpoint.run(jobType, parseInt(bookId), userEmail || '');
 }
 
-// ── Delta-Cache: Phase-1-Extraktion pro Kapitel ───────────────────────────────
-// Cache-Key: (book_id, user_email, chapter_key, pages_sig).
-// pages_sig: sortierter String aus "page_id:updated_at"-Paaren aller Seiten des Kapitels.
+// ── Delta-Cache: Phase-1-Extraktion pro Kapitel + Buch-Level ──────────────────
+// pages_sig: sortierter String aus "page_id:updated_at"-Paaren aller Seiten.
 // Ändert sich irgendeine Seite, ändert sich die Signatur → Cache-Miss → Neu-Extraktion.
+//
+// chapter_extract_cache: pro Kapitel (FK auf chapters.chapter_id, Mig 75).
+//   PK (book_id, user_email, chapter_id, phase). phase ∈
+//     '' (full chunk), 'figuren'/'orte' (Lokal split-Pässe),
+//     'sub<N>'(:figuren|:orte)? (sub-chunk wenn Kapitel zu lang).
+// book_extract_cache: Buch-Level-Single-Pass (Mig 75, kein FK-Target — book_id extern).
+//
+// chapterKey-Format (Legacy-API): <chapter_id>(__sub<N>)?(:phase)? oder '__singlepass__'.
+
+function _parseChapterKey(key) {
+  if (key === '__singlepass__') return { book: true };
+  const m = String(key).match(/^(\d+)(__sub\d+)?(?::(.+))?$/);
+  if (!m) return null;
+  const chapterId = parseInt(m[1]);
+  const sub = m[2] ? m[2].slice(2) : '';
+  const phaseSuffix = m[3] || '';
+  const phase = sub ? (phaseSuffix ? `${sub}:${phaseSuffix}` : sub) : phaseSuffix;
+  return { chapterId, phase };
+}
 
 const _loadChapterCache = db.prepare(
   `SELECT extract_json FROM chapter_extract_cache
-   WHERE book_id = ? AND user_email = ? AND chapter_key = ? AND pages_sig = ?`
+   WHERE book_id = ? AND user_email = ? AND chapter_id = ? AND phase = ? AND pages_sig = ?`
 );
 const _saveChapterCache = db.prepare(
   `INSERT OR REPLACE INTO chapter_extract_cache
-   (book_id, user_email, chapter_key, pages_sig, extract_json, cached_at)
-   VALUES (?, ?, ?, ?, ?, ?)`
+   (book_id, user_email, chapter_id, phase, pages_sig, extract_json, cached_at)
+   VALUES (?, ?, ?, ?, ?, ?, ?)`
+);
+const _loadBookCache = db.prepare(
+  `SELECT extract_json FROM book_extract_cache
+   WHERE book_id = ? AND user_email = ? AND pages_sig = ?`
+);
+const _saveBookCache = db.prepare(
+  `INSERT OR REPLACE INTO book_extract_cache
+   (book_id, user_email, pages_sig, extract_json, cached_at)
+   VALUES (?, ?, ?, ?, ?)`
 );
 
 function loadChapterExtractCache(bookId, userEmail, chapterKey, pagesSig) {
-  const row = _loadChapterCache.get(parseInt(bookId), userEmail || '', chapterKey, pagesSig);
+  const parsed = _parseChapterKey(chapterKey);
+  if (!parsed) return null;
+  const row = parsed.book
+    ? _loadBookCache.get(parseInt(bookId), userEmail || '', pagesSig)
+    : _loadChapterCache.get(parseInt(bookId), userEmail || '', parsed.chapterId, parsed.phase, pagesSig);
   if (!row) return null;
   try { return JSON.parse(row.extract_json); } catch { return null; }
 }
 
 function saveChapterExtractCache(bookId, userEmail, chapterKey, pagesSig, extract) {
-  _saveChapterCache.run(
-    parseInt(bookId), userEmail || '', chapterKey, pagesSig,
-    JSON.stringify(extract), new Date().toISOString(),
-  );
+  const parsed = _parseChapterKey(chapterKey);
+  if (!parsed) return;
+  const json = JSON.stringify(extract);
+  const now = new Date().toISOString();
+  if (parsed.book) {
+    _saveBookCache.run(parseInt(bookId), userEmail || '', pagesSig, json, now);
+  } else {
+    _saveChapterCache.run(parseInt(bookId), userEmail || '', parsed.chapterId, parsed.phase, pagesSig, json, now);
+  }
 }
 
 const _deleteChapterCache = db.prepare(
   `DELETE FROM chapter_extract_cache WHERE book_id = ? AND user_email = ?`
 );
+const _deleteBookCache = db.prepare(
+  `DELETE FROM book_extract_cache WHERE book_id = ? AND user_email = ?`
+);
 
 function deleteChapterExtractCache(bookId, userEmail) {
-  const result = _deleteChapterCache.run(parseInt(bookId), userEmail || '');
-  return result.changes;
+  const c = _deleteChapterCache.run(parseInt(bookId), userEmail || '').changes;
+  const b = _deleteBookCache.run(parseInt(bookId), userEmail || '').changes;
+  return c + b;
 }
 
 // ── Delta-Cache: Finetune-AI-Augmentation ─────────────────────────────────────

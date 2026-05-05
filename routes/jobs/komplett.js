@@ -588,11 +588,12 @@ function saveKontinuitaetResult(bookIdInt, email, kontResult, figNameToId, chNam
 function invalidateRenamedChapterCaches(bookIdInt, chaptersData, log, jobId) {
   const stored = db.prepare('SELECT chapter_id, chapter_name FROM chapters WHERE book_id = ?').all(bookIdInt);
   const storedChMap = Object.fromEntries(stored.map(r => [r.chapter_id, r.chapter_name]));
-  const delCacheByKey = db.prepare('DELETE FROM chapter_extract_cache WHERE book_id = ? AND chapter_key = ?');
+  // Mig 75: chapter_id INTEGER + phase TEXT — DELETE alle phases pro umbenanntem Kapitel.
+  const delCacheByChapterId = db.prepare('DELETE FROM chapter_extract_cache WHERE book_id = ? AND chapter_id = ?');
   for (const c of chaptersData) {
     if (storedChMap[c.id] !== undefined && storedChMap[c.id] !== c.name) {
       log.info(`Job ${jobId}: Kapitel ${c.id} umbenannt («${storedChMap[c.id]}» → «${c.name}») – Cache invalidiert.`);
-      delCacheByKey.run(bookIdInt, String(c.id));
+      delCacheByChapterId.run(bookIdInt, c.id);
     }
   }
 }

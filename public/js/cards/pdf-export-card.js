@@ -34,7 +34,6 @@ export function registerPdfExportCard() {
     _exportStatusTimer: null,
 
     exporting: false,
-    exportPreview: false,
     exportProgress: 0,
     exportStatus: '',
     exportError: '',
@@ -262,14 +261,13 @@ export function registerPdfExportCard() {
     },
 
     // ── Export-Trigger ────────────────────────────────────────────────────
-    async exportPdf({ preview = false } = {}) {
+    async exportPdf() {
       if (!this.activeProfile) return;
       // Vor Export speichern (Config könnte ungespeichert sein).
       await this.saveActiveProfile();
       if (this.exportError) return;
       if (this._exportStatusTimer) { clearTimeout(this._exportStatusTimer); this._exportStatusTimer = null; }
       this.exporting = true;
-      this.exportPreview = preview;
       this.exportProgress = 0;
       this.exportStatus = window.__app.t('pdfExport.starting');
       this.exportError = '';
@@ -280,7 +278,6 @@ export function registerPdfExportCard() {
           body: JSON.stringify({
             book_id: parseInt(window.__app.selectedBookId),
             profile_id: this.activeProfile.id,
-            preview,
           }),
         });
         if (!r.ok) {

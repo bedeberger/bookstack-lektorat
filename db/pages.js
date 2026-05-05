@@ -144,9 +144,11 @@ function pruneStaleBookData(bookId, validPageIds, validChapterIds) {
       counts.figure_appearances = db.prepare('DELETE FROM figure_appearances WHERE chapter_id IN (SELECT chapter_id FROM _stale_chapters) AND figure_id IN (SELECT id FROM figures WHERE book_id = ?)').run(bookId).changes;
       counts.location_chapters  = db.prepare('DELETE FROM location_chapters  WHERE chapter_id IN (SELECT chapter_id FROM _stale_chapters) AND location_id IN (SELECT id FROM locations WHERE book_id = ?)').run(bookId).changes;
 
-      // chapter_extract_cache: chapter_key ist String(chapter_id)
-      const stmtCec = db.prepare('DELETE FROM chapter_extract_cache WHERE book_id = ? AND chapter_key = ?');
-      for (const cid of staleChapterIds) counts.chapter_extract_cache += stmtCec.run(bookId, String(cid)).changes;
+      // chapter_extract_cache: chapter_id INTEGER FK CASCADE seit Mig 75 — DROP chapters
+      // unten triggert CASCADE; expliziter Cleanup hier defensive (alle phases).
+      counts.chapter_extract_cache = db.prepare(
+        'DELETE FROM chapter_extract_cache WHERE book_id = ? AND chapter_id IN (SELECT chapter_id FROM _stale_chapters)'
+      ).run(bookId).changes;
 
       db.prepare('UPDATE figure_events SET chapter_id = NULL WHERE chapter_id IN (SELECT chapter_id FROM _stale_chapters)').run();
       db.prepare('UPDATE figure_scenes SET chapter_id = NULL WHERE chapter_id IN (SELECT chapter_id FROM _stale_chapters) AND book_id = ?').run(bookId);

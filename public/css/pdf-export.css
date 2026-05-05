@@ -156,14 +156,24 @@
 .pdfx-grid--3 { grid-template-columns: repeat(3, 1fr); }
 .pdfx-grid--4 { grid-template-columns: repeat(4, 1fr); }
 .pdfx-grid--2 { grid-template-columns: repeat(2, 1fr); }
+/* Form-Controls (Selects/Inputs/Checkbox) auf identischer Baseline ausrichten:
+   `align-items: end` fixiert die untere Kante der pdfx-field-Zellen. Dadurch
+   liegen Select-Bottom und Checkbox-Bottom auf derselben Y-Linie, auch wenn
+   die Selects ein Label oben tragen. */
+.pdfx-grid--center { align-items: end; }
+.pdfx-grid--center .pdfx-field--check { padding-bottom: 0.4rem; }
 .pdfx-pair { display: contents; }
 
 /* Buttons */
 .pdfx-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   padding: 0.45rem 0.9rem;
+  min-height: 34px;
+  box-sizing: border-box;
+  line-height: 1.2;
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);

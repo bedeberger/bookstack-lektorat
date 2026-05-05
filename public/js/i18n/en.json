@@ -236,7 +236,6 @@
   "pdfExport.create":                      "Create",
   "pdfExport.confirmDelete":               "Delete this profile?",
   "pdfExport.saved":                       "Saved",
-  "pdfExport.preview":                     "Preview",
   "pdfExport.export":                      "Export",
   "pdfExport.exporting":                   "Exporting …",
   "pdfExport.starting":                    "Starting job …",
@@ -313,6 +312,7 @@
   "pdfExport.cover.posTop":                "Top",
   "pdfExport.cover.posCenter":             "Center",
   "pdfExport.cover.posBottom":             "Bottom",
+  "pdfExport.cover.optionsLegend":         "Display",
 
   "pdfExport.toc.enabled":                 "Generate table of contents",
   "pdfExport.toc.title":                   "Heading",
@@ -346,7 +346,6 @@
   "job.phase.renderPdf":                   "Rendering PDF …",
   "job.phase.validatePdfa":                "Validating PDF/A conformance …",
   "job.label.pdfExport":                   "PDF export ({profile})",
-  "job.label.pdfExportPreview":            "PDF preview ({profile})",
   "job.error.profileNotFound":             "Profile not found.",
   "job.error.forbidden":                   "Access denied.",
   "job.error.bookEmpty":                   "Book contains no pages.",

@@ -261,7 +261,7 @@
               </template>
             </div>
             <div class="pdfx-cover-actions">
-              <label class="pdfx-btn">
+              <label class="pdfx-btn pdfx-btn--ghost">
                 <input type="file" accept="image/jpeg,image/png,image/webp" hidden @change="uploadCover($event)">
                 <span x-text="coverUploading ? $app.t('pdfExport.cover.uploading') : (activeProfile.has_cover ? $app.t('pdfExport.cover.replace') : $app.t('pdfExport.cover.upload'))"></span>
               </label>
@@ -271,27 +271,30 @@
                       x-text="$app.t('pdfExport.cover.remove')"></button>
             </div>
             <p class="pdfx-error" x-show="coverError" x-text="coverError"></p>
-            <div class="pdfx-grid pdfx-grid--3">
-              <label class="pdfx-field">
-                <span x-text="$app.t('pdfExport.cover.fit')"></span>
-                <select x-model="activeProfile.config.cover.fit" class="pdfx-input">
-                  <option value="cover" x-text="$app.t('pdfExport.cover.fitCover')"></option>
-                  <option value="contain" x-text="$app.t('pdfExport.cover.fitContain')"></option>
-                </select>
-              </label>
-              <label class="pdfx-field pdfx-field--check">
-                <input type="checkbox" x-model="activeProfile.config.cover.showTitleOverlay">
-                <span x-text="$app.t('pdfExport.cover.overlay')"></span>
-              </label>
-              <label class="pdfx-field" x-show="activeProfile.config.cover.showTitleOverlay">
-                <span x-text="$app.t('pdfExport.cover.overlayPosition')"></span>
-                <select x-model="activeProfile.config.cover.overlayPosition" class="pdfx-input">
-                  <option value="top" x-text="$app.t('pdfExport.cover.posTop')"></option>
-                  <option value="center" x-text="$app.t('pdfExport.cover.posCenter')"></option>
-                  <option value="bottom" x-text="$app.t('pdfExport.cover.posBottom')"></option>
-                </select>
-              </label>
-            </div>
+            <fieldset class="pdfx-fieldset">
+              <legend x-text="$app.t('pdfExport.cover.optionsLegend')"></legend>
+              <div class="pdfx-grid pdfx-grid--3 pdfx-grid--center">
+                <label class="pdfx-field">
+                  <span x-text="$app.t('pdfExport.cover.fit')"></span>
+                  <select x-model="activeProfile.config.cover.fit" class="pdfx-input">
+                    <option value="cover" x-text="$app.t('pdfExport.cover.fitCover')"></option>
+                    <option value="contain" x-text="$app.t('pdfExport.cover.fitContain')"></option>
+                  </select>
+                </label>
+                <label class="pdfx-field pdfx-field--check">
+                  <input type="checkbox" x-model="activeProfile.config.cover.showTitleOverlay">
+                  <span x-text="$app.t('pdfExport.cover.overlay')"></span>
+                </label>
+                <label class="pdfx-field" x-show="activeProfile.config.cover.showTitleOverlay">
+                  <span x-text="$app.t('pdfExport.cover.overlayPosition')"></span>
+                  <select x-model="activeProfile.config.cover.overlayPosition" class="pdfx-input">
+                    <option value="top" x-text="$app.t('pdfExport.cover.posTop')"></option>
+                    <option value="center" x-text="$app.t('pdfExport.cover.posCenter')"></option>
+                    <option value="bottom" x-text="$app.t('pdfExport.cover.posBottom')"></option>
+                  </select>
+                </label>
+              </div>
+            </fieldset>
           </div>
         </template>
       </div>
@@ -362,10 +365,7 @@
           <span x-text="saving ? $app.t('common.saving') : $app.t('common.save')"></span>
         </button>
         <span class="pdfx-saved-marker" x-show="savedAt" x-text="$app.t('pdfExport.saved')"></span>
-        <button type="button" class="pdfx-btn pdfx-btn--ghost" :disabled="exporting" @click="exportPdf({ preview: true })">
-          <span x-text="$app.t('pdfExport.preview')"></span>
-        </button>
-        <button type="button" class="pdfx-btn pdfx-btn--primary" :disabled="exporting" @click="exportPdf({ preview: false })">
+        <button type="button" class="pdfx-btn pdfx-btn--primary" :disabled="exporting" @click="exportPdf()">
           <span x-show="exporting" class="spinner"></span>
           <span x-text="exporting ? $app.t('pdfExport.exporting') : $app.t('pdfExport.export')"></span>
         </button>
