@@ -7,15 +7,14 @@ const path = require('path');
 let state = { chapters: [], pages: [], pageBodies: {}, books: [] };
 const callCounts = { bsGet: 0, bsGetAll: 0, bsBatch: 0 };
 
-// Seeding chapters/pages/books tables in SQLite is required since migration 71+
-// added FKs across many tables. Migration 81 in particular added FK
-// book_id -> books(bookstack_book_id) on 15 tables (caches, stats, job_runs,
-// continuity_*, ...). FK enforcement is on; missing parent rows fail INSERTs.
+// Seeding chapters/pages/books tables in SQLite is required since FKs across
+// many tables enforce parent rows. books.book_id is the BookStack-extern
+// PRIMARY KEY (analog pages.page_id, chapters.chapter_id).
 function _seedDb({ chapters, pages, books = [] }) {
   let db;
   try { ({ db } = require('../../../db/connection')); } catch (_) { return; }
   const insBook = db.prepare(
-    "INSERT OR IGNORE INTO books (bookstack_book_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)"
+    "INSERT OR IGNORE INTO books (book_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)"
   );
   const insChap = db.prepare(
     'INSERT OR IGNORE INTO chapters (chapter_id, book_id, chapter_name, updated_at) VALUES (?, ?, ?, ?)'
@@ -53,10 +52,9 @@ function _wipeDb() {
   db.transaction(() => {
     db.prepare('DELETE FROM pages').run();
     db.prepare('DELETE FROM chapters').run();
-    // CASCADE on FK book_id -> books(bookstack_book_id) clears the 15 child
-    // tables added in mig 81 (caches, stats, continuity_*, job_runs, ...).
-    // Sentinel row (bookstack_book_id=0) stays for pdf_export_profile defaults.
-    db.prepare('DELETE FROM books WHERE bookstack_book_id != 0').run();
+    // CASCADE on FK book_id -> books(book_id) clears all child tables (caches,
+    // stats, continuity_*, job_runs, structural tables …).
+    db.prepare('DELETE FROM books').run();
   })();
 }
 

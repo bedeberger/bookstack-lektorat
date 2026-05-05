@@ -3,54 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <title>Focus Editor Test Harness</title>
-  <!-- Produktions-CSS laden, damit Tests die echte Dim-Logik
-       (opacity 0.5 auf `> *`, opacity 1 auf `.focus-paragraph-active`)
-       gegen die tatsächlichen Regeln messen, nicht gegen Harness-Attrappen.
-       Reihenfolge muss public/index.html spiegeln (Cascade-Ordnung). */-->
+  <!-- Minimal-CSS für Focus-Tests: tokens.css (Custom-Props + @layer-Ordnung)
+       + focus-mode.css (Dim-Regel + .focus-paragraph-active). Übrige App-CSS
+       laden hier nicht – mehr Files = mehr serielle fs.readFile-Calls im
+       Test-Static-Server, was auf langsamem CI 30s-Timeouts produziert. -->
   <link rel="stylesheet" href="/public/css/tokens.css">
-  <link rel="stylesheet" href="/public/css/base.css">
-  <link rel="stylesheet" href="/public/css/layout-base.css">
-  <link rel="stylesheet" href="/public/css/header-actions.css">
-  <link rel="stylesheet" href="/public/css/book-settings.css">
-  <link rel="stylesheet" href="/public/css/export.css">
-  <link rel="stylesheet" href="/public/css/pdf-export.css">
-  <link rel="stylesheet" href="/public/css/komplett-status.css">
-  <link rel="stylesheet" href="/public/css/token-setup.css">
-  <link rel="stylesheet" href="/public/css/row.css">
-  <link rel="stylesheet" href="/public/css/card-form.css">
-  <link rel="stylesheet" href="/public/css/buttons-badges.css">
-  <link rel="stylesheet" href="/public/css/findings.css">
-  <link rel="stylesheet" href="/public/css/page-list.css">
-  <link rel="stylesheet" href="/public/css/analysis.css">
-  <link rel="stylesheet" href="/public/css/page-view.css">
   <link rel="stylesheet" href="/public/css/focus-mode.css">
-  <link rel="stylesheet" href="/public/css/synonym-menu.css">
-  <link rel="stylesheet" href="/public/css/edit-toolbar.css">
-  <link rel="stylesheet" href="/public/css/find-replace.css">
-  <link rel="stylesheet" href="/public/css/figur-lookup.css">
-  <link rel="stylesheet" href="/public/css/lektorat.css">
-  <link rel="stylesheet" href="/public/css/tree-history.css">
-  <link rel="stylesheet" href="/public/css/tokens-est.css">
-  <link rel="stylesheet" href="/public/css/figuren.css">
-  <link rel="stylesheet" href="/public/css/zeitleiste.css">
-  <link rel="stylesheet" href="/public/css/entity-list.css">
-  <link rel="stylesheet" href="/public/css/szenen.css">
-  <link rel="stylesheet" href="/public/css/search.css">
-  <link rel="stylesheet" href="/public/css/feature-tiles.css">
-  <link rel="stylesheet" href="/public/css/heatmap.css">
-  <link rel="stylesheet" href="/public/css/misc.css">
-  <link rel="stylesheet" href="/public/css/chat.css">
-  <link rel="stylesheet" href="/public/css/synonyme.css">
-  <link rel="stylesheet" href="/public/css/twocolumn.css">
-  <link rel="stylesheet" href="/public/css/kapitel-review.css">
-  <link rel="stylesheet" href="/public/css/utilities.css">
-  <link rel="stylesheet" href="/public/css/schauplaetze.css">
-  <link rel="stylesheet" href="/public/css/kontinuitaet.css">
-  <link rel="stylesheet" href="/public/css/confirm-dialog.css">
-  <link rel="stylesheet" href="/public/css/ideen.css">
-  <link rel="stylesheet" href="/public/css/book-overview.css">
-  <link rel="stylesheet" href="/public/css/tooltip.css">
-  <link rel="stylesheet" href="/public/css/safari-fallback.css">
   <style>
     body { margin: 0; font: 16px/1.6 system-ui, sans-serif; }
     #editor-card { height: 100vh; display: flex; flex-direction: column; }

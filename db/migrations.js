@@ -3330,6 +3330,48 @@ function runMigrations() {
     logger.info(`DB-Migration auf Version 84 abgeschlossen (pdf_export_profile: ${migrated} kind='book' -> 'user_default' migriert).`);
   }
 
+  if (version < 85) {
+    // books-PK-Konsolidierung: bookstack_book_id wird zum PRIMARY KEY (analog
+    // pages.page_id und chapters.chapter_id, die ebenfalls die externe
+    // BookStack-ID direkt als PK nutzen). Surrogate `books.id` AUTOINCREMENT-PK
+    // wird entfernt — war intern ungenutzt.
+    //
+    // Schritt 1: RENAME COLUMN bookstack_book_id -> book_id. SQLite >= 3.25
+    // cascadiert FK-Refs in allen child-Tabellen automatisch (REFERENCES
+    // books(bookstack_book_id) -> REFERENCES books(book_id)).
+    // Schritt 2: Recreate books mit book_id als PK, surrogate `id` entfernt.
+    db.pragma('foreign_keys = OFF');
+
+    db.prepare('ALTER TABLE books RENAME COLUMN bookstack_book_id TO book_id').run();
+
+    db.prepare('DROP TABLE IF EXISTS books_new').run();
+    db.prepare(`
+      CREATE TABLE books_new (
+        book_id      INTEGER PRIMARY KEY,
+        name         TEXT    NOT NULL,
+        slug         TEXT,
+        created_at   TEXT    NOT NULL,
+        updated_at   TEXT    NOT NULL,
+        last_seen_at TEXT
+      )
+    `).run();
+    db.prepare(`
+      INSERT INTO books_new (book_id, name, slug, created_at, updated_at, last_seen_at)
+      SELECT book_id, name, slug, created_at, updated_at, last_seen_at FROM books
+    `).run();
+    db.prepare('DROP TABLE books').run();
+    db.prepare('ALTER TABLE books_new RENAME TO books').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_books_last_seen ON books(last_seen_at)').run();
+
+    db.pragma('foreign_keys = ON');
+    const fkErrors85 = db.pragma('foreign_key_check');
+    if (fkErrors85.length) {
+      throw new Error(`Migration 85: foreign_key_check meldet ${fkErrors85.length} Verstoesse: ${JSON.stringify(fkErrors85.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 85').run();
+    logger.info('DB-Migration auf Version 85 abgeschlossen (books.bookstack_book_id -> book_id PK; surrogate id-Spalte entfernt; FK-Refs in child-Tabellen cascadiert).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

@@ -181,7 +181,7 @@ router.get('/review/:book_id', (req, res) => {
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const rows = db.prepare(`
     SELECT br.*, b.name AS book_name FROM book_reviews br
-    LEFT JOIN books b ON b.bookstack_book_id = br.book_id
+    LEFT JOIN books b ON b.book_id = br.book_id
     WHERE br.book_id = ? AND br.user_email = ?
     ORDER BY br.reviewed_at DESC LIMIT 10`).all(bookId, user_email);
   res.json(rows.map(r => ({ ...r, review_json: JSON.parse(r.review_json || 'null') })));
@@ -195,7 +195,7 @@ router.get('/chapter-reviews/:book_id', (req, res) => {
   if (!book_id) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const rows = db.prepare(`
     SELECT cr.*, b.name AS book_name FROM chapter_reviews cr
-    LEFT JOIN books b ON b.bookstack_book_id = cr.book_id
+    LEFT JOIN books b ON b.book_id = cr.book_id
     WHERE cr.book_id = ? AND cr.user_email = ?
     ORDER BY cr.chapter_id, cr.reviewed_at DESC`).all(book_id, user_email);
   const byChapter = {};
@@ -256,7 +256,7 @@ router.get('/book-stats/:book_id', (req, res) => {
            bsh.page_count, bsh.words, bsh.chars, bsh.tok, bsh.unique_words,
            bsh.chapter_count, bsh.avg_sentence_len, bsh.avg_lix, bsh.avg_flesch_de
     FROM book_stats_history bsh
-    LEFT JOIN books b ON b.bookstack_book_id = bsh.book_id
+    LEFT JOIN books b ON b.book_id = bsh.book_id
     WHERE bsh.book_id = ?
     ORDER BY bsh.recorded_at ASC
   `).all(bookId);

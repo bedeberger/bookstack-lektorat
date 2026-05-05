@@ -571,7 +571,7 @@ chatRouter.post('/chat', jsonBody, (req, res) => _handleChatPost(req, res, {
   // book_name aus books-Tabelle (Mig 77), page_name via pages-JOIN (Mig 78).
   sessionSelect: `SELECT cs.id, cs.book_id, p.page_name, b.name AS book_name
                   FROM chat_sessions cs
-                  LEFT JOIN books b ON b.bookstack_book_id = cs.book_id
+                  LEFT JOIN books b ON b.book_id = cs.book_id
                   LEFT JOIN pages p ON p.page_id = cs.page_id
                   WHERE cs.id = ? AND cs.user_email = ?`,
   labelFn: s => s.page_name
@@ -584,7 +584,7 @@ chatRouter.post('/book-chat', jsonBody, (req, res) => _handleChatPost(req, res, 
   jobType: 'book-chat',
   sessionSelect: `SELECT cs.id, cs.book_id, b.name AS book_name
                   FROM chat_sessions cs
-                  LEFT JOIN books b ON b.bookstack_book_id = cs.book_id
+                  LEFT JOIN books b ON b.book_id = cs.book_id
                   WHERE cs.id = ? AND cs.user_email = ?`,
   labelFn: s => s.book_name
     ? { key: 'job.label.bookChatBook', params: { name: s.book_name } }

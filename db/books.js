@@ -1,15 +1,15 @@
-// Lokale `books`-Tabelle (Mig 77): FK-Target fuer alle book_id-tragenden
-// Tabellen. `bookstack_book_id` ist der externe BookStack-Identifier (UNIQUE).
-// Discovery-Hooks (sync.js + Job-Routen, die book_name aus dem Request-Body
-// erhalten) halten die Tabelle aktuell, ohne dass jede Beruehrung einen
-// API-Roundtrip braucht.
+// Lokale `books`-Tabelle: FK-Target fuer alle book_id-tragenden Tabellen.
+// `book_id` ist der externe BookStack-Identifier und gleichzeitig PRIMARY KEY
+// (analog pages.page_id und chapters.chapter_id). Discovery-Hooks (sync.js +
+// Job-Routen, die book_name aus dem Request-Body erhalten) halten die Tabelle
+// aktuell, ohne dass jede Beruehrung einen API-Roundtrip braucht.
 const { db } = require('./connection');
 const logger = require('../logger');
 
 const _stmtUpsertBook = db.prepare(`
-  INSERT INTO books (bookstack_book_id, name, slug, created_at, updated_at, last_seen_at)
+  INSERT INTO books (book_id, name, slug, created_at, updated_at, last_seen_at)
   VALUES (?, ?, ?, ?, ?, ?)
-  ON CONFLICT(bookstack_book_id) DO UPDATE SET
+  ON CONFLICT(book_id) DO UPDATE SET
     name=excluded.name, slug=excluded.slug,
     updated_at=excluded.updated_at, last_seen_at=excluded.last_seen_at
 `);
@@ -17,14 +17,14 @@ const _stmtUpsertBook = db.prepare(`
 // Variante ohne Slug — Frontend-POSTs liefern nur book_id+book_name. Slug
 // nicht mit NULL ueberschreiben, falls schon befuellt.
 const _stmtUpsertBookByName = db.prepare(`
-  INSERT INTO books (bookstack_book_id, name, slug, created_at, updated_at, last_seen_at)
+  INSERT INTO books (book_id, name, slug, created_at, updated_at, last_seen_at)
   VALUES (?, ?, NULL, ?, ?, ?)
-  ON CONFLICT(bookstack_book_id) DO UPDATE SET
+  ON CONFLICT(book_id) DO UPDATE SET
     name=excluded.name, updated_at=excluded.updated_at,
     last_seen_at=excluded.last_seen_at
 `);
 
-const _stmtGetName = db.prepare('SELECT name FROM books WHERE bookstack_book_id = ?');
+const _stmtGetName = db.prepare('SELECT name FROM books WHERE book_id = ?');
 
 function upsertBook(b) {
   if (!b || !b.id) return;
@@ -54,8 +54,6 @@ function getBookName(bookId) {
 // Chapters-DELETE triggert CASCADE (chapter_reviews, chapter_extract_cache,
 // figure_appearances, location_chapters) und SET NULL (figure_events.chapter_id,
 // figure_scenes.chapter_id, page_checks.chapter_id, pages.chapter_id).
-// Sentinel-Buch (bookstack_book_id=0, '__user_default__') ist ausgenommen — es
-// haelt User-Default-PDF-Export-Profile und darf nie verschwinden.
 function pruneStaleByAge(days) {
   const cutoffMs = Date.now() - Math.max(1, days) * 86_400_000;
   const cutoff = new Date(cutoffMs).toISOString();
@@ -71,7 +69,7 @@ function pruneStaleByAge(days) {
     ).run(cutoff).changes;
 
     counts.stale_books = db.prepare(
-      'DELETE FROM books WHERE bookstack_book_id > 0 AND last_seen_at IS NOT NULL AND last_seen_at < ?'
+      'DELETE FROM books WHERE last_seen_at IS NOT NULL AND last_seen_at < ?'
     ).run(cutoff).changes;
   })();
 

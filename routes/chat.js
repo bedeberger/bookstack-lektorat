@@ -114,7 +114,7 @@ router.get('/sessions/book/:book_id', (req, res) => {
     SELECT cs.id, cs.book_id, b.name AS book_name, cs.created_at, cs.last_message_at,
            (SELECT content FROM chat_messages WHERE session_id = cs.id ORDER BY created_at ASC LIMIT 1) AS preview
     FROM chat_sessions cs
-    LEFT JOIN books b ON b.bookstack_book_id = cs.book_id
+    LEFT JOIN books b ON b.book_id = cs.book_id
     WHERE cs.book_id = ? AND cs.kind = 'book' AND cs.user_email = ?
       AND EXISTS (SELECT 1 FROM chat_messages WHERE session_id = cs.id)
     ORDER BY cs.last_message_at DESC
