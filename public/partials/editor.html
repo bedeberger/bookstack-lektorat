@@ -94,8 +94,10 @@
           <span class="figure-context-chip" x-data="{ show: false }" @mouseenter="show = true" @mouseleave="show = false">
             <span x-text="fig.kurzname || fig.name"></span>
             <span x-show="fig.typ" class="tag" x-text="t('figuren.type.' + fig.typ)"></span>
+            <span x-show="fig.geburtstag" class="tag" x-text="'* ' + fig.geburtstag"></span>
             <div x-show="show" x-cloak class="figure-context-tooltip">
               <div class="figure-context-tooltip-name" x-text="fig.name"></div>
+              <div x-show="fig.geburtstag" class="figure-context-tooltip-row"><span class="figure-context-label" x-text="t('figurLookup.geburt')"></span> <span x-text="fig.geburtstag"></span></div>
               <div x-show="fig.beruf" class="figure-context-tooltip-row"><span class="figure-context-label" x-text="t('figuren.field.beruf')"></span> <span x-text="fig.beruf"></span></div>
               <div x-show="fig.geschlecht" class="figure-context-tooltip-row"><span class="figure-context-label" x-text="t('editor.field.geschlecht')"></span> <span x-text="fig.geschlecht"></span></div>
               <div x-show="fig.beschreibung" class="figure-context-tooltip-desc" x-text="fig.beschreibung"></div>
