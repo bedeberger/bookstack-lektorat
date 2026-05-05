@@ -2168,6 +2168,120 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 73 abgeschlossen (scene_figures/location_figures/continuity_issue_figures fig_id INTEGER + FK).');
   }
 
+  if (version < 74) {
+    // zeitstrahl_events: JSON-Spalten (kapitel, chapter_ids, seiten, page_ids,
+    // figuren) durch Junction-Tabellen mit FK ersetzen. Display-Werte (Namen)
+    // werden zur Lese-Zeit aus chapters/pages/figures gejoined.
+    db.pragma('foreign_keys = OFF');
+
+    db.exec(`
+      DROP TABLE IF EXISTS zeitstrahl_event_chapters;
+      DROP TABLE IF EXISTS zeitstrahl_event_pages;
+      DROP TABLE IF EXISTS zeitstrahl_event_figures;
+
+      CREATE TABLE zeitstrahl_event_chapters (
+        event_id   INTEGER NOT NULL REFERENCES zeitstrahl_events(id) ON DELETE CASCADE,
+        chapter_id INTEGER          REFERENCES chapters(chapter_id)  ON DELETE SET NULL,
+        sort_order INTEGER DEFAULT 0
+      );
+      CREATE INDEX idx_zec_event   ON zeitstrahl_event_chapters(event_id);
+      CREATE INDEX idx_zec_chapter ON zeitstrahl_event_chapters(chapter_id);
+
+      CREATE TABLE zeitstrahl_event_pages (
+        event_id   INTEGER NOT NULL REFERENCES zeitstrahl_events(id) ON DELETE CASCADE,
+        page_id    INTEGER          REFERENCES pages(page_id)        ON DELETE SET NULL,
+        sort_order INTEGER DEFAULT 0
+      );
+      CREATE INDEX idx_zep_event ON zeitstrahl_event_pages(event_id);
+      CREATE INDEX idx_zep_page  ON zeitstrahl_event_pages(page_id);
+
+      CREATE TABLE zeitstrahl_event_figures (
+        event_id   INTEGER NOT NULL REFERENCES zeitstrahl_events(id) ON DELETE CASCADE,
+        figure_id  INTEGER          REFERENCES figures(id)            ON DELETE SET NULL,
+        figur_name TEXT,
+        sort_order INTEGER DEFAULT 0
+      );
+      CREATE INDEX idx_zef_event  ON zeitstrahl_event_figures(event_id);
+      CREATE INDEX idx_zef_figure ON zeitstrahl_event_figures(figure_id);
+    `);
+
+    // JSON in JS parsen und in Junction-Tabellen einfuegen.
+    const events = db.prepare(
+      'SELECT id, book_id, user_email, kapitel, chapter_ids, seiten, page_ids, figuren FROM zeitstrahl_events'
+    ).all();
+    const insZec = db.prepare('INSERT INTO zeitstrahl_event_chapters (event_id, chapter_id, sort_order) VALUES (?, ?, ?)');
+    const insZep = db.prepare('INSERT INTO zeitstrahl_event_pages    (event_id, page_id, sort_order)    VALUES (?, ?, ?)');
+    const insZef = db.prepare('INSERT INTO zeitstrahl_event_figures  (event_id, figure_id, figur_name, sort_order) VALUES (?, ?, ?, ?)');
+    const validChapters = new Set(db.prepare('SELECT chapter_id FROM chapters').all().map(r => r.chapter_id));
+    const validPages    = new Set(db.prepare('SELECT page_id FROM pages').all().map(r => r.page_id));
+    const _safeJson = (s) => { if (!s) return []; try { const v = JSON.parse(s); return Array.isArray(v) ? v : []; } catch { return []; } };
+    for (const ev of events) {
+      const chapIds = _safeJson(ev.chapter_ids).map(x => Number(x)).filter(Number.isInteger);
+      let i = 0;
+      for (const cid of chapIds) {
+        insZec.run(ev.id, validChapters.has(cid) ? cid : null, i++);
+      }
+      const pageIds = _safeJson(ev.page_ids).map(x => Number(x)).filter(Number.isInteger);
+      i = 0;
+      for (const pid of pageIds) {
+        insZep.run(ev.id, validPages.has(pid) ? pid : null, i++);
+      }
+      // figuren: [{id, name, typ}] oder ["Name"]. id ist TEXT-fig_id → INTEGER lookup
+      // pro book/user_email Scope.
+      const figs = _safeJson(ev.figuren);
+      if (figs.length) {
+        const figRows = db.prepare(
+          'SELECT id, fig_id FROM figures WHERE book_id = ? AND user_email IS ?'
+        ).all(ev.book_id, ev.user_email || null);
+        const figIdToRowId = Object.fromEntries(figRows.map(r => [r.fig_id, r.id]));
+        i = 0;
+        for (const f of figs) {
+          if (!f) continue;
+          if (typeof f === 'string') {
+            const name = f.trim();
+            if (name) insZef.run(ev.id, null, name, i++);
+            continue;
+          }
+          if (typeof f === 'object') {
+            const name = (f.name || f.kurzname || '').trim() || null;
+            const figIdText = f.id ? String(f.id) : null;
+            const rowId = figIdText ? (figIdToRowId[figIdText] ?? null) : null;
+            insZef.run(ev.id, rowId, name, i++);
+          }
+        }
+      }
+    }
+
+    // Recreate zeitstrahl_events ohne JSON-Spalten
+    db.exec(`
+      DROP TABLE IF EXISTS zeitstrahl_events_new;
+      CREATE TABLE zeitstrahl_events_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id    INTEGER NOT NULL,
+        user_email TEXT NOT NULL DEFAULT '',
+        datum      TEXT NOT NULL,
+        ereignis   TEXT NOT NULL,
+        typ        TEXT DEFAULT 'persoenlich',
+        bedeutung  TEXT,
+        sort_order INTEGER DEFAULT 0,
+        updated_at TEXT
+      );
+      INSERT INTO zeitstrahl_events_new (id, book_id, user_email, datum, ereignis, typ, bedeutung, sort_order, updated_at)
+      SELECT id, book_id, user_email, datum, ereignis, typ, bedeutung, sort_order, updated_at FROM zeitstrahl_events;
+      DROP TABLE zeitstrahl_events;
+      ALTER TABLE zeitstrahl_events_new RENAME TO zeitstrahl_events;
+      CREATE INDEX idx_ze_book_id ON zeitstrahl_events(book_id, user_email);
+    `);
+
+    db.pragma('foreign_keys = ON');
+    const fkErrors = db.pragma('foreign_key_check');
+    if (fkErrors.length) {
+      throw new Error(`Migration 74: foreign_key_check meldet ${fkErrors.length} Verstoesse: ${JSON.stringify(fkErrors.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 74').run();
+    logger.info('DB-Migration auf Version 74 abgeschlossen (zeitstrahl_events JSON-Spalten -> Junction-Tabellen mit FK).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

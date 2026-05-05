@@ -258,7 +258,7 @@
   "pdfExport.layout.columns":              "Spalten",
   "pdfExport.layout.margins":              "Ränder (mm)",
   "pdfExport.layout.headerFooter":         "Kopf-/Fusszeile",
-  "pdfExport.layout.tokensHint":           "Verfügbare Platzhalter: {title} {author} {chapter} {page} {pages}",
+  "pdfExport.layout.tokensHint":           "Platzhalter: {title} = Buchtitel · {author} = Autor · {chapter} = Kapitelname · {pageTitle} = Seitenname · {page} = Seitenzahl · {pages} = Gesamtseiten",
   "pdfExport.layout.headerLeft":           "Kopf links",
   "pdfExport.layout.headerCenter":         "Kopf mitte",
   "pdfExport.layout.headerRight":          "Kopf rechts",

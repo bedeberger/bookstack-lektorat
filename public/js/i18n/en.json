@@ -258,7 +258,7 @@
   "pdfExport.layout.columns":              "Columns",
   "pdfExport.layout.margins":              "Margins (mm)",
   "pdfExport.layout.headerFooter":         "Header / Footer",
-  "pdfExport.layout.tokensHint":           "Available tokens: {title} {author} {chapter} {page} {pages}",
+  "pdfExport.layout.tokensHint":           "Tokens: {title} = book title · {author} = author · {chapter} = chapter name · {pageTitle} = page name · {page} = current page number · {pages} = total pages",
   "pdfExport.layout.headerLeft":           "Header left",
   "pdfExport.layout.headerCenter":         "Header center",
   "pdfExport.layout.headerRight":          "Header right",

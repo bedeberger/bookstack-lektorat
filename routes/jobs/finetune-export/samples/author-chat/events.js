@@ -18,21 +18,52 @@ function buildEventSamples(ctx) {
   // Felder (typ, figuren, kapitel, seiten) einfliessen lassen und pro
   // Ereignis mehrere spezialisierte Fragen stellen.
   const evtRows = db.prepare(
-    'SELECT ereignis, datum, typ, bedeutung, kapitel, seiten, figuren FROM zeitstrahl_events WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+    'SELECT id, ereignis, datum, typ, bedeutung FROM zeitstrahl_events WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
   ).all(bookIdInt, userEmail || '');
+  // Junction-Maps (Mig 74): event_id → [chapter_name|page_name|figur_name]
+  const _zeChByEvt = new Map();
+  for (const r of db.prepare(`
+    SELECT zec.event_id, c.chapter_name AS name
+    FROM zeitstrahl_event_chapters zec
+    JOIN zeitstrahl_events ze ON ze.id = zec.event_id
+    LEFT JOIN chapters c ON c.chapter_id = zec.chapter_id
+    WHERE ze.book_id = ? AND ze.user_email = ?
+    ORDER BY zec.event_id, zec.sort_order
+  `).all(bookIdInt, userEmail || '')) {
+    if (!_zeChByEvt.has(r.event_id)) _zeChByEvt.set(r.event_id, []);
+    if (r.name) _zeChByEvt.get(r.event_id).push(r.name);
+  }
+  const _zePgByEvt = new Map();
+  for (const r of db.prepare(`
+    SELECT zep.event_id, p.page_name AS name
+    FROM zeitstrahl_event_pages zep
+    JOIN zeitstrahl_events ze ON ze.id = zep.event_id
+    LEFT JOIN pages p ON p.page_id = zep.page_id
+    WHERE ze.book_id = ? AND ze.user_email = ?
+    ORDER BY zep.event_id, zep.sort_order
+  `).all(bookIdInt, userEmail || '')) {
+    if (!_zePgByEvt.has(r.event_id)) _zePgByEvt.set(r.event_id, []);
+    if (r.name) _zePgByEvt.get(r.event_id).push(r.name);
+  }
+  const _zeFgByEvt = new Map();
+  for (const r of db.prepare(`
+    SELECT zef.event_id, COALESCE(f.name, zef.figur_name) AS name
+    FROM zeitstrahl_event_figures zef
+    JOIN zeitstrahl_events ze ON ze.id = zef.event_id
+    LEFT JOIN figures f ON f.id = zef.figure_id
+    WHERE ze.book_id = ? AND ze.user_email = ?
+    ORDER BY zef.event_id, zef.sort_order
+  `).all(bookIdInt, userEmail || '')) {
+    if (!_zeFgByEvt.has(r.event_id)) _zeFgByEvt.set(r.event_id, []);
+    if (r.name) _zeFgByEvt.get(r.event_id).push(r.name);
+  }
   for (let i = 0; i < evtRows.length; i++) {
     const ev = evtRows[i];
     const ereignis = (ev.ereignis || '').trim();
     if (!ereignis) continue;
-    // JSON-Felder defensiv parsen.
-    const parseList = (v) => {
-      if (!v) return [];
-      if (Array.isArray(v)) return v;
-      try { const r = JSON.parse(v); return Array.isArray(r) ? r : []; } catch { return []; }
-    };
-    const kapitelArr = parseList(ev.kapitel).map(k => extractName(k)).filter(Boolean);
-    const seitenArr  = parseList(ev.seiten).map(s => extractName(s)).filter(Boolean);
-    const figNames   = parseList(ev.figuren).map(f => extractName(f, figById)).filter(Boolean);
+    const kapitelArr = _zeChByEvt.get(ev.id) || [];
+    const seitenArr  = _zePgByEvt.get(ev.id) || [];
+    const figNames   = _zeFgByEvt.get(ev.id) || [];
 
     const parts = [ereignis + '.'];
     if (ev.datum)     parts.push(langIsEn ? `When: ${ev.datum}.` : `Zeitpunkt: ${ev.datum}.`);
@@ -97,11 +128,6 @@ function buildEventSamples(ctx) {
   // Ziel: pro Event reiche Tripel (Event, Figur, Ort) als Samples
   // erzeugen, plus inverse Aggregate (welche Events spielen am Ort X /
   // welche Events erlebt Figur Y / Schnittmenge Figur×Ort).
-  const parseEvtList = (v) => {
-    if (!v) return [];
-    if (Array.isArray(v)) return v;
-    try { const r = JSON.parse(v); return Array.isArray(r) ? r : []; } catch { return []; }
-  };
   const locsByChapterName = new Map();
   for (const l of locRows) {
     for (const ch of (chaptersByLocPk.get(l.pk) || [])) {
@@ -117,15 +143,12 @@ function buildEventSamples(ctx) {
     const ev = evtRows[i];
     const ereignis = (ev.ereignis || '').trim();
     if (!ereignis) continue;
-    const kapitelArr = parseEvtList(ev.kapitel).map(k => extractName(k)).filter(Boolean);
-    const figRefs = parseEvtList(ev.figuren)
-      .map(fv => {
-        const name = extractName(fv, figById);
-        if (!name) return null;
-        const match = figRows.find(f => f.name === name || f.kurzname === name);
-        return match ? { fig_id: match.fig_id, name: match.name } : { fig_id: null, name };
-      })
-      .filter(Boolean);
+    const kapitelArr = _zeChByEvt.get(ev.id) || [];
+    const figNamesAll = _zeFgByEvt.get(ev.id) || [];
+    const figRefs = figNamesAll.map(name => {
+      const match = figRows.find(f => f.name === name || f.kurzname === name);
+      return match ? { fig_id: match.fig_id, name: match.name } : { fig_id: null, name };
+    });
     const locSet = new Map();
     for (const ch of kapitelArr) {
       for (const l of (locsByChapterName.get(ch.toLowerCase()) || [])) {
@@ -140,7 +163,7 @@ function buildEventSamples(ctx) {
     }
     const locs = [...locSet.values()];
     // Vollantwort wie im Hauptblock (Datum/Typ/Figuren/Kapitel/Seiten/Bedeutung) — gespiegelt.
-    const seitenArr = parseEvtList(ev.seiten).map(s => extractName(s)).filter(Boolean);
+    const seitenArr = _zePgByEvt.get(ev.id) || [];
     const figNames = figRefs.map(f => f.name);
     const parts = [ereignis + '.'];
     if (ev.datum)      parts.push(langIsEn ? `When: ${ev.datum}.` : `Zeitpunkt: ${ev.datum}.`);

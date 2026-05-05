@@ -13,58 +13,69 @@ router.get('/zeitstrahl/:book_id', (req, res) => {
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const userEmail = req.session?.user?.email || null;
   const rows = db.prepare(
-    'SELECT datum, ereignis, typ, bedeutung, kapitel, chapter_ids, seiten, page_ids, figuren FROM zeitstrahl_events WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
+    'SELECT id, datum, ereignis, typ, bedeutung FROM zeitstrahl_events WHERE book_id = ? AND user_email = ? ORDER BY sort_order'
   ).all(bookId, userEmail || '');
   if (!rows.length) return res.json({ ereignisse: null });
 
-  // Backward-Compat: alte Rows speicherten figuren als ["Name", ...]-Strings.
-  // Neue Rows speichern {id, name, typ}-Objekte. Beim Laden Strings via figures-
-  // Tabelle (Name → fig_id, typ) anreichern, damit Klick-Link + Badge-Farbe wieder
-  // funktionieren.
-  const figLookup = new Map();
-  const figRows = db.prepare(
-    'SELECT fig_id, name, kurzname, typ FROM figures WHERE book_id = ? AND user_email IS ?'
-  ).all(bookId, userEmail);
-  for (const f of figRows) {
-    const keys = [f.name, f.kurzname].filter(Boolean).map(s => s.toLowerCase());
-    for (const k of keys) figLookup.set(k, { id: f.fig_id, typ: f.typ || 'andere' });
+  const eventIds = rows.map(r => r.id);
+  const { sql: idSql, values: idVals } = inClause(eventIds);
+
+  const chRows = db.prepare(`
+    SELECT zec.event_id, zec.chapter_id, c.chapter_name
+    FROM zeitstrahl_event_chapters zec
+    LEFT JOIN chapters c ON c.chapter_id = zec.chapter_id
+    WHERE zec.event_id IN ${idSql}
+    ORDER BY zec.event_id, zec.sort_order
+  `).all(...idVals);
+  const pgRows = db.prepare(`
+    SELECT zep.event_id, zep.page_id, p.page_name
+    FROM zeitstrahl_event_pages zep
+    LEFT JOIN pages p ON p.page_id = zep.page_id
+    WHERE zep.event_id IN ${idSql}
+    ORDER BY zep.event_id, zep.sort_order
+  `).all(...idVals);
+  const fgRows = db.prepare(`
+    SELECT zef.event_id, f.fig_id, COALESCE(f.name, zef.figur_name) AS name, f.typ
+    FROM zeitstrahl_event_figures zef
+    LEFT JOIN figures f ON f.id = zef.figure_id
+    WHERE zef.event_id IN ${idSql}
+    ORDER BY zef.event_id, zef.sort_order
+  `).all(...idVals);
+
+  const chByEvt = new Map();
+  for (const r of chRows) {
+    if (!chByEvt.has(r.event_id)) chByEvt.set(r.event_id, { kapitel: [], chapter_ids: [] });
+    const b = chByEvt.get(r.event_id);
+    if (r.chapter_name) b.kapitel.push(r.chapter_name);
+    if (r.chapter_id != null) b.chapter_ids.push(r.chapter_id);
   }
-  const enrichFigur = (f) => {
-    if (f == null) return null;
-    if (typeof f === 'string') {
-      const name = f.trim();
-      if (!name) return null;
-      const hit = figLookup.get(name.toLowerCase());
-      return hit ? { id: hit.id, name, typ: hit.typ } : { name };
-    }
-    if (typeof f === 'object') {
-      const name = (f.name || f.kurzname || '').trim();
-      if (!name) return null;
-      const out = { name };
-      if (f.id) out.id = String(f.id);
-      if (f.typ) out.typ = String(f.typ);
-      if (!out.id || !out.typ) {
-        const hit = figLookup.get(name.toLowerCase());
-        if (hit) {
-          if (!out.id)  out.id  = hit.id;
-          if (!out.typ) out.typ = hit.typ;
-        }
-      }
-      return out;
-    }
-    return null;
-  };
+  const pgByEvt = new Map();
+  for (const r of pgRows) {
+    if (!pgByEvt.has(r.event_id)) pgByEvt.set(r.event_id, { seiten: [], page_ids: [] });
+    const b = pgByEvt.get(r.event_id);
+    if (r.page_name) b.seiten.push(r.page_name);
+    if (r.page_id != null) b.page_ids.push(r.page_id);
+  }
+  const fgByEvt = new Map();
+  for (const r of fgRows) {
+    if (!fgByEvt.has(r.event_id)) fgByEvt.set(r.event_id, []);
+    if (!r.name) continue;
+    const out = { name: r.name };
+    if (r.fig_id) out.id = r.fig_id;
+    if (r.typ) out.typ = r.typ;
+    fgByEvt.get(r.event_id).push(out);
+  }
 
   const ereignisse = rows.map(r => ({
     datum:       r.datum,
     ereignis:    r.ereignis,
     typ:         r.typ || 'persoenlich',
     bedeutung:   r.bedeutung || '',
-    kapitel:     r.kapitel     ? JSON.parse(r.kapitel)     : [],
-    chapter_ids: r.chapter_ids ? JSON.parse(r.chapter_ids) : [],
-    seiten:      r.seiten      ? JSON.parse(r.seiten)      : [],
-    page_ids:    r.page_ids    ? JSON.parse(r.page_ids)    : [],
-    figuren:     r.figuren ? (JSON.parse(r.figuren) || []).map(enrichFigur).filter(Boolean) : [],
+    kapitel:     chByEvt.get(r.id)?.kapitel     || [],
+    chapter_ids: chByEvt.get(r.id)?.chapter_ids || [],
+    seiten:      pgByEvt.get(r.id)?.seiten      || [],
+    page_ids:    pgByEvt.get(r.id)?.page_ids    || [],
+    figuren:     fgByEvt.get(r.id) || [],
   }));
   res.json({ ereignisse });
 });

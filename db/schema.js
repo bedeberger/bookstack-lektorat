@@ -70,37 +70,47 @@ function saveZeitstrahlEvents(bookId, userEmail, ereignisse, chNameToId = {}, pa
   db.transaction(() => {
     db.prepare('DELETE FROM zeitstrahl_events WHERE book_id = ? AND user_email = ?').run(bookId, userEmail || '');
     const ins = db.prepare(`INSERT INTO zeitstrahl_events
-      (book_id, user_email, datum, ereignis, typ, bedeutung, kapitel, chapter_ids, seiten, page_ids, figuren, sort_order, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      (book_id, user_email, datum, ereignis, typ, bedeutung, sort_order, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+    const insZec = db.prepare('INSERT INTO zeitstrahl_event_chapters (event_id, chapter_id, sort_order) VALUES (?, ?, ?)');
+    const insZep = db.prepare('INSERT INTO zeitstrahl_event_pages    (event_id, page_id, sort_order)    VALUES (?, ?, ?)');
+    const insZef = db.prepare('INSERT INTO zeitstrahl_event_figures  (event_id, figure_id, figur_name, sort_order) VALUES (?, ?, ?, ?)');
+    // figures-Lookup TEXT-fig_id → INTEGER figures.id (FK-Target seit Mig 73).
+    const figRows = db.prepare(
+      'SELECT id, fig_id, name, kurzname FROM figures WHERE book_id = ? AND user_email IS ?'
+    ).all(bookId, userEmail || null);
+    const figIdToRowId = Object.fromEntries(figRows.map(r => [r.fig_id, r.id]));
+    const figNameToRowId = {};
+    for (const r of figRows) {
+      for (const n of [r.name, r.kurzname]) {
+        if (n) figNameToRowId[n.toLowerCase()] = r.id;
+      }
+    }
     for (let i = 0; i < ereignisse.length; i++) {
       const ev = ereignisse[i];
+      const { lastInsertRowid: eventId } = ins.run(
+        bookId, userEmail || '',
+        ev.datum || '', ev.ereignis || '', ev.typ || 'persoenlich', ev.bedeutung || null,
+        i, now
+      );
+
       const rawKapitel = Array.isArray(ev.kapitel) ? ev.kapitel : (ev.kapitel ? [ev.kapitel] : []);
       const kapitelArr = rawKapitel.map(_toRefString).filter(Boolean);
       const chapIds = kapitelArr.map(n => chNameToId?.[n] ?? null).filter(id => id != null);
+      const seenChap = new Set();
+      let j = 0;
+      for (const cid of chapIds) {
+        if (seenChap.has(cid)) continue;
+        seenChap.add(cid);
+        insZec.run(eventId, cid, j++);
+      }
+
       const rawSeiten = Array.isArray(ev.seiten) ? ev.seiten : [];
       const seitenArr = rawSeiten.map(_toRefString).filter(Boolean);
-      // figuren als {id, name, typ}-Objekte erhalten (Schema verlangt das, Renderer
-      // braucht id für Klick-Link und typ für Badge-Klasse). Strings/Mischformen
-      // tolerant in Objekte heben.
-      const figurenArr = Array.isArray(ev.figuren) ? ev.figuren.map(f => {
-        if (f == null) return null;
-        if (typeof f === 'string') {
-          const name = f.trim();
-          return name ? { name } : null;
-        }
-        if (typeof f === 'object') {
-          const name = (f.name || f.kurzname || '').trim();
-          if (!name) return null;
-          const out = { name };
-          if (f.id) out.id = String(f.id);
-          if (f.typ) out.typ = String(f.typ);
-          return out;
-        }
-        return null;
-      }).filter(Boolean) : [];
-      // Seiten auflösen: erst in den Event-Kapiteln suchen (kapitel-scoped),
-      // dann Unambiguous-Match global. Halluzinations-Check: seite === kapitel → skip.
-      const pageIds = [];
+      // Seiten auflösen: erst kapitel-scoped, dann Unambiguous-Match.
+      // Halluzinations-Check: seite === kapitel → skip.
+      const seenPage = new Set();
+      j = 0;
       if (pageNameToIdByChapter) {
         for (const seite of seitenArr) {
           if (!seite || kapitelArr.includes(seite) || seite === 'Sonstige Seiten') continue;
@@ -116,19 +126,36 @@ function saveZeitstrahlEvents(bookId, userEmail, ereignisse, chNameToId = {}, pa
             }
             if (cand.length === 1) pid = cand[0];
           }
-          if (pid != null && !pageIds.includes(pid)) pageIds.push(pid);
+          if (pid != null && !seenPage.has(pid)) {
+            seenPage.add(pid);
+            insZep.run(eventId, pid, j++);
+          }
         }
       }
-      ins.run(
-        bookId, userEmail || '',
-        ev.datum || '', ev.ereignis || '', ev.typ || 'persoenlich', ev.bedeutung || null,
-        kapitelArr.length ? JSON.stringify(kapitelArr) : null,
-        chapIds.length    ? JSON.stringify(chapIds)    : null,
-        seitenArr.length  ? JSON.stringify(seitenArr)  : null,
-        pageIds.length    ? JSON.stringify(pageIds)    : null,
-        figurenArr.length ? JSON.stringify(figurenArr) : null,
-        i, now
-      );
+
+      // figuren: [{id, name, typ}] oder ["Name"]. id (TEXT-fig_id) per Lookup auf
+      // INTEGER figures.id auflösen; Strings via Name-Lookup; figur_name als
+      // Snapshot wenn kein figures-Match.
+      const rawFiguren = Array.isArray(ev.figuren) ? ev.figuren : [];
+      const seenFig = new Set();
+      j = 0;
+      for (const f of rawFiguren) {
+        if (f == null) continue;
+        let name = null, rowId = null;
+        if (typeof f === 'string') {
+          name = f.trim() || null;
+          if (name) rowId = figNameToRowId[name.toLowerCase()] ?? null;
+        } else if (typeof f === 'object') {
+          name = (f.name || f.kurzname || '').trim() || null;
+          if (f.id) rowId = figIdToRowId[String(f.id)] ?? null;
+          if (rowId == null && name) rowId = figNameToRowId[name.toLowerCase()] ?? null;
+        }
+        if (!name && rowId == null) continue;
+        const key = (rowId ?? '') + '|' + (name || '').toLowerCase();
+        if (seenFig.has(key)) continue;
+        seenFig.add(key);
+        insZef.run(eventId, rowId, name, j++);
+      }
     }
   })();
 }
