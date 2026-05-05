@@ -22,6 +22,9 @@ export function registerBookSettingsCard() {
     expandedJobType: null,
     bookJobRuns: {},
     bookJobRunsLoading: false,
+    bookHistoryResetLoading: false,
+    bookHistoryResetMessage: '',
+    bookHistoryResetError: '',
 
     _onBookChanged: null,
     _onViewReset: null,
@@ -36,6 +39,8 @@ export function registerBookSettingsCard() {
       this._onBookChanged = () => {
         this.expandedJobType = null;
         this.bookJobRuns = {};
+        this.bookHistoryResetMessage = '';
+        this.bookHistoryResetError = '';
         if (!window.__app.showBookSettingsCard) return;
         if (!window.__app.selectedBookId) return;
         this.loadBookSettings();
@@ -46,6 +51,8 @@ export function registerBookSettingsCard() {
       this._onViewReset = () => {
         this.bookSettingsSaved = false;
         this.bookSettingsError = '';
+        this.bookHistoryResetMessage = '';
+        this.bookHistoryResetError = '';
       };
       window.addEventListener('view:reset', this._onViewReset);
     },

@@ -108,7 +108,7 @@
 
 <div class="site-header-row">
   <div class="site-header-center">
-    <h1 @click="resetView()" class="site-title" :title="t('app.titleReset')">
+    <h1 @click="resetView()" class="site-title" :data-tip="t('app.titleReset')">
       <img src="bookstack_lektorat_icon.svg" alt="" class="site-logo" width="64" height="64">
       BookStack Lektorat
     </h1>
@@ -137,7 +137,7 @@
          @keydown="onKeydown($event)"
          class="combobox-wrap">
     </div>
-    <a :href="selectedBookUrl || '#'" target="_blank" rel="noopener" class="btn-bookstack-link" :class="{ 'btn-bookstack-link--hidden': !selectedBookUrl }" :tabindex="selectedBookUrl ? 0 : -1" :aria-hidden="!selectedBookUrl" :title="t('book.openInBookstack')" x-text="t('book.bookstack')"></a>
+    <a :href="selectedBookUrl || '#'" target="_blank" rel="noopener" class="btn-bookstack-link" :class="{ 'btn-bookstack-link--hidden': !selectedBookUrl }" :tabindex="selectedBookUrl ? 0 : -1" :aria-hidden="!selectedBookUrl" :data-tip="t('book.openInBookstack')" x-text="t('book.bookstack')"></a>
   </div>
 
   <!-- Hero-Palette-Trigger: Power-User-Eintritt zu allen Features (⌘K / Strg+K). -->
@@ -146,7 +146,7 @@
           x-show="selectedBookId"
           x-cloak
           @click="openPalette()"
-          :title="t('palette.openHint')"
+          :data-tip="t('palette.openHint')"
           :aria-label="t('palette.openHint')">
     <span class="palette-hero-icon" aria-hidden="true" x-text="isMac ? '⌘' : 'Ctrl'"></span>
     <span class="palette-hero-text" x-text="t('palette.hero.text')"></span>
@@ -166,11 +166,11 @@
              @keydown.arrow-up="onBookstackSearchKeydown($event)"
              :placeholder="t('book.search.placeholder')"
              :aria-label="t('book.search.placeholder')"
-             :title="t('book.search.placeholderTitle')">
+             :data-tip="t('book.search.placeholderTitle')">
       <button type="button" class="bookstack-search-clear"
               x-show="bookstackSearch"
               @mousedown.prevent="clearBookstackSearch()"
-              :title="t('book.search.clear')"
+              :data-tip="t('book.search.clear')"
               :aria-label="t('book.search.clear')">×</button>
     </div>
     <div class="bookstack-search-results" x-show="bookstackSearch.trim().length >= 2">
@@ -248,20 +248,21 @@
 <div class="job-queue-bar" x-show="jobQueueItems.length > 0" x-cloak aria-live="polite" aria-atomic="false">
   <span class="job-queue-label" x-text="t('jobQueue.label')"></span>
   <template x-for="job in (jobQueueExpanded ? jobQueueItems : jobQueueItems.slice(0, 3))" :key="job.id">
-    <div class="job-queue-pill" :class="'job-queue-pill--' + job.status" @click="navigateToJob(job)" :title="t('jobQueue.jumpTo')">
+    <div class="job-queue-pill" :class="'job-queue-pill--' + job.status" @click="navigateToJob(job)" :data-tip="t('jobQueue.jumpTo')">
       <span class="job-queue-pill-label" x-text="t(job.label, job.labelParams)"></span>
       <span class="job-queue-pill-status" x-text="t(job.statusText, job.statusParams)"></span>
       <template x-if="job.status === 'running' && job.progress > 0">
         <span class="job-queue-pill-progress" x-text="job.progress + '%'"></span>
       </template>
-      <button type="button" class="job-queue-cancel-btn" @click.stop="cancelJob(job.id)" :title="t('jobQueue.cancel')">&#x2715;</button>
+      <button type="button" class="job-queue-cancel-btn" @click.stop="cancelJob(job.id)" :data-tip="t('jobQueue.cancel')" :aria-label="t('jobQueue.cancel')">&#x2715;</button>
     </div>
   </template>
   <button type="button"
           class="job-queue-toggle-btn"
           x-show="jobQueueItems.length > 3"
           @click="jobQueueExpanded = !jobQueueExpanded"
-          :title="jobQueueExpanded ? t('jobQueue.collapse') : t('jobQueue.expand', { count: jobQueueItems.length - 3 })"
+          :data-tip="jobQueueExpanded ? t('jobQueue.collapse') : t('jobQueue.expand', { count: jobQueueItems.length - 3 })"
+          :aria-label="jobQueueExpanded ? t('jobQueue.collapse') : t('jobQueue.expand', { count: jobQueueItems.length - 3 })"
           x-text="jobQueueExpanded ? '−' : '+' + (jobQueueItems.length - 3)"></button>
 </div>
 

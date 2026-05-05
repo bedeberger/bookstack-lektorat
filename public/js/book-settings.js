@@ -113,6 +113,47 @@ export const bookSettingsMethods = {
     }
   },
 
+  async resetBookHistory() {
+    const bookId = window.__app.selectedBookId;
+    if (!bookId) return;
+    const book = window.__app.books.find(b => String(b.id) === String(bookId));
+    const name = book?.name || '';
+    if (!await window.__app.appConfirm({
+      message: window.__app.t('userSettings.resetConfirm', { name }),
+      confirmLabel: window.__app.t('common.delete'),
+      danger: true,
+    })) return;
+
+    this.bookHistoryResetLoading = true;
+    this.bookHistoryResetMessage = '';
+    this.bookHistoryResetError   = '';
+    try {
+      const r = await fetch(`/history/book/${bookId}`, { method: 'DELETE' });
+      if (!r.ok) {
+        let errData = null;
+        try { errData = await r.json(); } catch (_) {}
+        throw new Error(errData ? window.__app.tError(errData) : `HTTP ${r.status}`);
+      }
+      const data = await r.json();
+      const d = data.deleted || {};
+      this.bookHistoryResetMessage = window.__app.t('userSettings.resetSummary', {
+        lektorate: d.page_checks || 0,
+        reviews:   d.book_reviews || 0,
+        chats:     d.chat_sessions || 0,
+      });
+      if (String(window.__app.selectedBookId) === String(bookId)) {
+        window.__app.pageHistory       = [];
+        window.__app.bookReviewHistory = [];
+        window.dispatchEvent(new CustomEvent('chat:reset'));
+      }
+      setTimeout(() => { this.bookHistoryResetMessage = ''; }, 6000);
+    } catch (e) {
+      this.bookHistoryResetError = e.message;
+    } finally {
+      this.bookHistoryResetLoading = false;
+    }
+  },
+
   // Drill-Down: Typ-Zeile aufklappen → letzte N Runs nachladen.
   // Cache pro Typ in bookJobRuns; Re-Toggle schliesst nur, lädt nicht neu.
   async toggleJobRuns(type) {

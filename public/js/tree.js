@@ -116,7 +116,8 @@ export const treeMethods = {
       const e = this.tokEsts[p.id];
       if (e) { words += e.words; chars += e.chars; tok += e.tok; count++; }
     }
-    return count ? { words, chars, tok } : null;
+    if (!count) return null;
+    return { words, chars, tok, normseiten: Math.round((chars / 1500) * 10) / 10 };
   },
 
   async loadBooks() {

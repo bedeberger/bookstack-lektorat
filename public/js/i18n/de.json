@@ -211,11 +211,15 @@
   "book.settings.tempus.praesens":    "Präsens",
   "book.settings.tempus.gemischt":    "Gemischt / wechselnd",
   "book.settings.pov.kurzgeschichtenHint": "Hinweis: Bei Kurzgeschichten-Sammlungen gelten Perspektive und Erzählzeit nur als Richtwert. Einzelne Geschichten dürfen legitim abweichen – die KI wertet Abweichungen dann nicht als Fehler.",
+  "book.settings.dangerZone":    "Gefahrenzone",
+  "book.settings.dangerText":    "Löscht alle deine Lektorate, Buchbewertungen und Chats zu diesem Buch. Andere Nutzer sind nicht betroffen. Nicht rückgängig zu machen.",
+  "book.settings.dangerButton":  "Historie für dieses Buch löschen",
 
   "book.export.title":           "Buch exportieren",
   "book.export.hint":            "Lädt das gesamte Buch via BookStack-Export herunter. Dateiname wird automatisch mit Zeitstempel versehen.",
   "book.export.pdf":             "PDF",
   "book.export.epub":            "EPUB",
+  "book.export.docx":            "Word (DOCX)",
   "book.export.html":            "HTML",
   "book.export.txt":             "Text",
   "book.export.md":              "Markdown",
@@ -239,6 +243,7 @@
   "palette.mode.commands":       "Befehle",
   "palette.mode.prefixIn":       "Suche in {name}",
   "palette.group.app":           "App",
+  "palette.section.matches":     "Treffer",
   "palette.section.commands":    "Befehle",
   "palette.section.pages":       "Seiten",
   "palette.section.chapters":    "Kapitel",
@@ -346,6 +351,7 @@
   "overview.unit.findings":      "Findings",
   "overview.unit.notChecked":    "ungeprüft",
   "overview.chapterLektoratTime": "Lektoratszeit pro Kapitel",
+  "overview.unit.notTracked":    "nicht erfasst",
   "overview.openBookStats":      "Buchstatistik öffnen",
 
   "sidebar.pagesOf":             "Seiten: {name}",
@@ -375,6 +381,7 @@
 
   "tok.words":                   "{n} Wörter",
   "tok.tokens":                  "~{n} Tokens",
+  "tok.normseiten":              "{n} Normseiten",
 
   "komplett.title":              "Komplettanalyse",
   "komplett.done":               "Abgeschlossen",
@@ -553,6 +560,7 @@
   "bookstats.metric":            "Metrik…",
   "bookstats.metric.words":      "Wörter",
   "bookstats.metric.chars":      "Zeichen",
+  "bookstats.metric.normseiten": "Normseiten (1500 Z)",
   "bookstats.metric.pages":      "Seiten",
   "bookstats.metric.tok":        "Tokens",
   "bookstats.metric.unique":     "Einzigartige W.",
@@ -575,6 +583,7 @@
   "bookstats.unit.z":            "Z",
   "bookstats.unit.s":            "S",
   "bookstats.unit.t":            "T",
+  "bookstats.unit.ns":           "NS",
   "bookstats.unit.delta":        "Δ",
   "bookstats.coverage":          "{pct}% geprüft ({checked}/{total})",
   "bookstats.avgSentenceBadge":  "Ø {n} W/Satz",
@@ -823,10 +832,6 @@
   "profile.focus.sentence":             "Satz",
   "profile.focus.window3":              "Drei Absätze (vor + aktiv + nach)",
   "profile.focus.typewriterOnly":       "Nur Typewriter-Scroll (kein Dim)",
-
-  "profile.dangerZone":          "Gefahrenzone",
-  "profile.dangerText":          "Löscht alle deine Lektorate, Buchbewertungen und Chats zum gewählten Buch. Andere Nutzer sind nicht betroffen. Nicht rückgängig zu machen.",
-  "profile.dangerButton":        "Historie für dieses Buch löschen",
 
   "lang.de":                     "Deutsch",
   "lang.en":                     "English",

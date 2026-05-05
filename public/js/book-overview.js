@@ -395,6 +395,7 @@ export const bookOverviewMethods = {
         pages: pages.length,
         words,
         chars,
+        normseiten: Math.round((chars / 1500) * 10) / 10,
       });
     }
     if (out.length === 0) return out;
@@ -474,6 +475,9 @@ export const bookOverviewMethods = {
     const HALF = 48;
     const deltas = withDelta.filter(c => !c.noCheck).map(c => Math.abs(c.deltaPct));
     const maxAbsDelta = Math.max(1, ...deltas);
+    const checkedCounts = withDelta.filter(c => !c.noCheck).map(c => c.count);
+    const worstCount = checkedCounts.length > 0 ? Math.max(...checkedCounts) : 0;
+    const bestCount = checkedCounts.length > 0 ? Math.min(...checkedCounts) : 0;
     const enriched = withDelta.map(c => {
       const halfPct = showMedian && !c.noCheck
         ? (Math.abs(c.deltaPct) / maxAbsDelta) * HALF
@@ -485,46 +489,68 @@ export const bookOverviewMethods = {
         barWidthPct: halfPct,
         barLeftPct: c.deltaPct >= 0 ? 50 : 50 - halfPct,
         isAbove: c.deltaPct > 0,
+        isWorst: !c.noCheck && checkedCounts.length >= 2 && worstCount !== bestCount && c.count === worstCount,
+        isBest: !c.noCheck && checkedCounts.length >= 2 && worstCount !== bestCount && c.count === bestCount,
       };
     });
     enriched.sort((a, b) => b.count - a.count);
     return enriched;
   },
 
-  // Lektoratszeit pro Kapitel: aus /history/lektorat-time/:book_id (per_chapter).
-  // Anzeige in absoluten Sekunden (exakt formatiert h/min/s). Diverging-Bar um
-  // Median der Sekunden — zeigt, ob ein Kapitel über/unter dem typischen
-  // Zeitaufwand liegt. Sort: Sekunden desc.
-  // Schwelle ≥3 Kapitel mit seconds > 0 für Median.
+  // Lektoratszeit pro Kapitel: alle Kapitel aus tree, gemerged mit
+  // /history/lektorat-time/:book_id (per_chapter). Untracked = noTime,
+  // analog zum noCheck-Flag der Findings-Tile (gleiches Layout).
+  // Diverging-Bar um Median der Sekunden über tracked Kapitel; Schwelle
+  // ≥3 tracked Kapitel für Median. Sort: tracked nach seconds desc,
+  // noTime ans Ende.
   overviewChapterLektoratTime() {
+    const tree = window.__app?.tree || [];
+    const chapters = tree.filter(i => i.type === 'chapter');
+    if (chapters.length === 0) return [];
     const lt = this.overviewLektoratTime;
-    if (!lt || !Array.isArray(lt.per_chapter) || lt.per_chapter.length === 0) return [];
-    const out = lt.per_chapter.map(row => ({
-      id: row.chapter_id ?? null,
-      name: row.chapter_name || '—',
-      seconds: Number(row.seconds) || 0,
-      pages_count: Number(row.pages_count) || 0,
-    }));
-    const showMedian = out.length >= 3;
+    const byId = new Map();
+    const byName = new Map();
+    for (const row of (lt?.per_chapter || [])) {
+      const sec = Number(row.seconds) || 0;
+      if (sec <= 0) continue;
+      if (row.chapter_id != null) byId.set(Number(row.chapter_id), row);
+      if (row.chapter_name) byName.set(row.chapter_name, row);
+    }
+    const out = chapters.map(ch => {
+      const row = byId.get(Number(ch.id)) || byName.get(ch.name) || null;
+      const seconds = row ? (Number(row.seconds) || 0) : 0;
+      return {
+        id: ch.id,
+        name: ch.name,
+        seconds,
+        pages_count: row ? (Number(row.pages_count) || 0) : 0,
+        noTime: seconds <= 0,
+      };
+    });
+    const tracked = out.filter(c => !c.noTime);
+    const showMedian = tracked.length >= 3;
     let median = 0;
     if (showMedian) {
-      const sorted = out.map(c => c.seconds).sort((a, b) => a - b);
+      const sorted = tracked.map(c => c.seconds).sort((a, b) => a - b);
       const mid = Math.floor(sorted.length / 2);
       median = sorted.length % 2 === 0
         ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
         : sorted[mid];
     }
     const withDelta = out.map(c => {
-      const deltaPct = median > 0
+      const deltaPct = !c.noTime && median > 0
         ? Math.round(((c.seconds - median) / median) * 100)
         : 0;
       return { ...c, deltaPct };
     });
     const HALF = 48;
-    const deltas = withDelta.map(c => Math.abs(c.deltaPct));
+    const deltas = withDelta.filter(c => !c.noTime).map(c => Math.abs(c.deltaPct));
     const maxAbsDelta = Math.max(1, ...deltas);
+    const trackedSecs = withDelta.filter(c => !c.noTime).map(c => c.seconds);
+    const worstSeconds = trackedSecs.length > 0 ? Math.max(...trackedSecs) : 0;
+    const bestSeconds = trackedSecs.length > 0 ? Math.min(...trackedSecs) : 0;
     const enriched = withDelta.map(c => {
-      const halfPct = showMedian
+      const halfPct = showMedian && !c.noTime
         ? (Math.abs(c.deltaPct) / maxAbsDelta) * HALF
         : 0;
       return {
@@ -536,9 +562,14 @@ export const bookOverviewMethods = {
         barWidthPct: halfPct,
         barLeftPct: c.deltaPct >= 0 ? 50 : 50 - halfPct,
         isAbove: c.deltaPct > 0,
+        isWorst: !c.noTime && trackedSecs.length >= 2 && worstSeconds !== bestSeconds && c.seconds === worstSeconds,
+        isBest: !c.noTime && trackedSecs.length >= 2 && worstSeconds !== bestSeconds && c.seconds === bestSeconds,
       };
     });
-    enriched.sort((a, b) => b.seconds - a.seconds);
+    enriched.sort((a, b) => {
+      if (a.noTime !== b.noTime) return a.noTime ? 1 : -1;
+      return b.seconds - a.seconds;
+    });
     return enriched;
   },
 

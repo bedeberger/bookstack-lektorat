@@ -4,18 +4,19 @@
     <span class="card-title" x-text="t('sidebar.pagesOf', { name: selectedBookName })"></span>
     <div class="card-actions">
       <button type="button" @click="loadPages()" x-text="t('sidebar.loadPages')"></button>
-      <button type="button" @click="batchCheck()" :disabled="!pages.length" :title="t('sidebar.checkAllTitle')" x-text="t('sidebar.checkAll')"></button>
+      <button type="button" @click="batchCheck()" :disabled="!pages.length" :data-tip="t('sidebar.checkAllTitle')" x-text="t('sidebar.checkAll')"></button>
     </div>
   </div>
   <!-- Suche -->
   <div class="search-wrap">
-    <input type="text" x-model="pageSearch" @input="onPageSearchInput()" @keydown="onPageSearchKeydown($event)" :placeholder="t('sidebar.searchPage')" :aria-label="t('sidebar.searchPage')" :title="t('sidebar.searchPageTitle')" class="page-search">
+    <input type="text" x-model="pageSearch" @input="onPageSearchInput()" @keydown="onPageSearchKeydown($event)" :placeholder="t('sidebar.searchPage')" :aria-label="t('sidebar.searchPage')" :data-tip="t('sidebar.searchPageTitle')" class="page-search">
   </div>
   <div x-show="!pageSearch" class="btn-group">
     <button type="button" @click="tree.forEach(c => c.open = true)" class="btn-compact" x-text="t('sidebar.expandAll')"></button>
     <button type="button" @click="tree.forEach(c => c.open = false)" class="btn-compact" x-text="t('sidebar.collapseAll')"></button>
     <span x-show="Object.keys(tokEsts).length > 0" class="tok-totals">
       <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.chars,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.z')"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + (Math.round(Object.values(tokEsts).reduce((a,b)=>a+b.chars,0) / 1500 * 10) / 10).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ' + t('bookstats.unit.ns')"></span>
       <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.words,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.w')"></span>
       <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.tok,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.t')"></span>
     </span>
@@ -40,7 +41,7 @@
                  'tree-chapter-header--active': showKapitelReviewCard && String(kapitelReviewChapterId) === String(item.id),
                  'tree-chapter-header--reviewable': _bookQualifiesForChapterReview() && item.pages.length > 0,
                }"
-               :title="_bookQualifiesForChapterReview() && item.pages.length > 0 && !pageSearch ? t('sidebar.reviewChapterTitle', { name: item.name }) : ''"
+               :data-tip="_bookQualifiesForChapterReview() && item.pages.length > 0 && !pageSearch ? t('sidebar.reviewChapterTitle', { name: item.name }) : ''"
                @keydown.enter.prevent="if (pageSearch || item.pages.length === 0) return;
                        if (_bookQualifiesForChapterReview()) openKapitelReviewForChapter(item.id);
                        else item.open = !item.open"
@@ -89,7 +90,7 @@
                   <span x-show="ideenCounts[page.id] > 0"
                         class="ideen-count-badge"
                         x-text="ideenCounts[page.id]"
-                        :title="t('ideen.openCountTitle', { n: ideenCounts[page.id] })"></span>
+                        :data-tip="t('ideen.openCountTitle', { n: ideenCounts[page.id] })"></span>
                 </span>
               </div>
             </template>
@@ -119,7 +120,7 @@
             <span x-show="ideenCounts[item.page.id] > 0"
                   class="ideen-count-badge"
                   x-text="ideenCounts[item.page.id]"
-                  :title="t('ideen.openCountTitle', { n: ideenCounts[item.page.id] })"></span>
+                  :data-tip="t('ideen.openCountTitle', { n: ideenCounts[item.page.id] })"></span>
           </span>
         </div>
       </template>
@@ -136,6 +137,7 @@
      class="tok-tooltip"
      @mouseleave="showTokLegend=false; tokTooltipData=null">
   <div class="tok-tt-row" x-text="tokTooltipData ? t('tok.words', { n: (tokTooltipData.words >= 1000 ? '~' + Math.round(tokTooltipData.words/1000) + 'k' : tokTooltipData.words) }) : ''"></div>
+  <div class="tok-tt-row" x-show="tokTooltipData" x-text="tokTooltipData ? t('tok.normseiten', { n: (Math.round((tokTooltipData.chars||0)/1500 * 10) / 10).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }) : ''"></div>
   <div class="tok-tt-row" x-show="tokTooltipData && !tokTooltipData._chapterOnly" x-text="tokTooltipData ? t('tok.tokens', { n: (tokTooltipData.tok >= 1000 ? Math.round(tokTooltipData.tok/1000) + 'k' : tokTooltipData.tok) }) : ''"></div>
 </div>
 

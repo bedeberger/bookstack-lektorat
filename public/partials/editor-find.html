@@ -29,22 +29,22 @@
                 : ''"></span>
         <button type="button" class="edit-find-btn" @click="findPrev()"
                 :disabled="findMatches.length === 0"
-                :title="$app.t('find.prev')" :aria-label="$app.t('find.prev')">&#x2191;</button>
+                :data-tip="$app.t('find.prev')" :aria-label="$app.t('find.prev')">&#x2191;</button>
         <button type="button" class="edit-find-btn" @click="findNext()"
                 :disabled="findMatches.length === 0"
-                :title="$app.t('find.next')" :aria-label="$app.t('find.next')">&#x2193;</button>
+                :data-tip="$app.t('find.next')" :aria-label="$app.t('find.next')">&#x2193;</button>
         <button type="button" class="edit-find-btn edit-find-btn--toggle"
                 :class="{ 'edit-find-btn--active': findCaseSensitive }"
                 @click="findCaseSensitive = !findCaseSensitive; recomputeFindMatches()"
-                :title="$app.t('find.caseSensitive')" :aria-label="$app.t('find.caseSensitive')"
+                :data-tip="$app.t('find.caseSensitive')" :aria-label="$app.t('find.caseSensitive')"
                 :aria-pressed="findCaseSensitive">Aa</button>
         <button type="button" class="edit-find-btn edit-find-btn--toggle"
                 :class="{ 'edit-find-btn--active': findWholeWord }"
                 @click="findWholeWord = !findWholeWord; recomputeFindMatches()"
-                :title="$app.t('find.wholeWord')" :aria-label="$app.t('find.wholeWord')"
+                :data-tip="$app.t('find.wholeWord')" :aria-label="$app.t('find.wholeWord')"
                 :aria-pressed="findWholeWord">W</button>
         <button type="button" class="edit-find-close" @click="closeFind()"
-                :title="$app.t('common.close')" :aria-label="$app.t('common.close')">&#x2715;</button>
+                :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')">&#x2715;</button>
       </div>
       <div class="edit-find-row">
         <input type="text"

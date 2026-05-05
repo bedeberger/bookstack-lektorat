@@ -7,7 +7,7 @@
        @keydown="trapFocus($event, $el)">
     <div class="shortcuts-header">
       <span class="shortcuts-title" x-text="t('shortcuts.title')"></span>
-      <button type="button" class="shortcuts-close" @click="closeShortcutsOverlay()" :title="t('common.close')" :aria-label="t('common.close')">&#x2715;</button>
+      <button type="button" class="shortcuts-close" @click="closeShortcutsOverlay()" :data-tip="t('common.close')" :aria-label="t('common.close')">&#x2715;</button>
     </div>
 
     <div class="shortcuts-section">

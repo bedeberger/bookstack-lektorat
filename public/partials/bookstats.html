@@ -31,6 +31,7 @@
          x-modelable="value" x-model="bookStatsMetric"
          x-effect="options = [
            {value:'chars',               label: $app.t('bookstats.metric.chars')},
+           {value:'normseiten',          label: $app.t('bookstats.metric.normseiten')},
            {value:'words',               label: $app.t('bookstats.metric.words')},
            {value:'page_count',          label: $app.t('bookstats.metric.pages')},
            {value:'tok',                 label: $app.t('bookstats.metric.tok')},
@@ -67,6 +68,9 @@
   <div x-show="bookStatsData.length > 0" class="book-stats-current">
     <span class="tok-badge tok-neutral"
       x-text="(bookStatsData[bookStatsData.length - 1]?.chars ?? 0).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + $app.t('bookstats.unit.z')"></span>
+    <span class="tok-badge tok-neutral"
+      :data-tip="$app.t('bookstats.metric.normseiten')"
+      x-text="(Math.round(((bookStatsData[bookStatsData.length - 1]?.chars ?? 0) / 1500) * 10) / 10).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ' + $app.t('bookstats.unit.ns')"></span>
     <span class="tok-badge tok-neutral"
       x-text="(bookStatsData[bookStatsData.length - 1]?.words ?? 0).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + $app.t('bookstats.unit.w')"></span>
     <span class="tok-badge tok-neutral"

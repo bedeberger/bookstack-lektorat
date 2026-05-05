@@ -5,7 +5,7 @@
           :class="{ 'update-all-btn--running': alleAktualisierenLoading }"
           @click="alleAktualisieren()"
           :disabled="alleAktualisierenLoading || !selectedBookId"
-          :title="t('header.updateAllTitle')">
+          :data-tip="t('header.updateAllTitle')">
     <span class="update-all-btn-ring"
           x-show="alleAktualisierenLoading"
           :style="{ '--progress': (alleAktualisierenProgress || 0) + '%' }"
@@ -17,7 +17,7 @@
           class="header-icon-btn header-icon-btn--cache"
           @click="clearChapterCache()"
           :disabled="alleAktualisierenLoading || !selectedBookId"
-          :title="t('header.clearCacheTitle')"
+          :data-tip="t('header.clearCacheTitle')"
           :aria-label="t('header.clearCache')">
     <span aria-hidden="true">⌫</span>
   </button>

@@ -487,6 +487,15 @@
   background: var(--color-danger, #d32f2f);
   opacity: var(--opacity-disabled);
 }
+/* Worst/Best: für Tiles mit invertierter Semantik (Findings, Lektoratszeit) —
+   höchster Wert = bad (rot), niedrigster = good (grün). Border-only, damit
+   die diverging Bar-Coloring (--findings-pos/neg) nicht überschrieben wird. */
+.overview-chapter-row--worst {
+  border-left-color: var(--color-danger, #d32f2f);
+}
+.overview-chapter-row--best {
+  border-left-color: var(--color-success, #4caf50);
+}
 /* Findings-Tile: ungeprüfte Kapitel ausgrauen. */
 .overview-chapter-row--nocheck {
   cursor: default;
@@ -592,6 +601,11 @@
 .overview-chapter-chars {
   font-variant-numeric: tabular-nums;
   min-width: 5.5em;
+  text-align: right;
+}
+.overview-chapter-ns {
+  font-variant-numeric: tabular-nums;
+  min-width: 4em;
   text-align: right;
 }
 .overview-chapter-words {

@@ -11,7 +11,7 @@
         <div>
           <div class="figur-lookup-header">
             <span class="figur-lookup-name" x-text="figurLookupData.name"></span>
-            <button type="button" class="figur-lookup-close" @click="closeFigurLookup()" :title="$app.t('common.close')" :aria-label="$app.t('common.close')">×</button>
+            <button type="button" class="figur-lookup-close" @click="closeFigurLookup()" :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')">×</button>
           </div>
           <div class="figur-lookup-body">
             <div x-show="figurLookupGeburt()" class="figur-lookup-row">

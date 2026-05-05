@@ -512,6 +512,7 @@ export const appViewMethods = {
     this.orteFilters.szeneId = '';
     this.showKontinuitaetCard = false;
     if (this._komplettPollTimer) { clearInterval(this._komplettPollTimer); this._komplettPollTimer = null; }
+    this.showBookChatCard = false;
     this.showBookSettingsCard = false;
     this.showUserSettingsCard = false;
     this.showFinetuneExportCard = false;

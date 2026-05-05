@@ -12,10 +12,10 @@
       <button type="button" class="btn-toggle-saved"
               :class="entry.saved ? 'btn-toggle-saved--on' : 'btn-toggle-saved--off'"
               @click.stop="$app.toggleHistoryEntrySaved(entry)"
-              :title="entry.saved ? $app.t('editor.history.markOpen') : $app.t('editor.history.markDone')"
+              :data-tip="entry.saved ? $app.t('editor.history.markOpen') : $app.t('editor.history.markDone')"
               x-text="entry.saved ? $app.t('editor.history.done') : $app.t('editor.history.open')"></button>
       <span class="tag" x-text="entry.model"></span>
-      <button type="button" class="history-item-delete" @click.stop="$app.deletePageCheck(entry.id)" :title="$app.t('common.deleteEntry')" :aria-label="$app.t('common.deleteEntry')">×</button>
+      <button type="button" class="history-item-delete" @click.stop="$app.deletePageCheck(entry.id)" :data-tip="$app.t('common.deleteEntry')" :aria-label="$app.t('common.deleteEntry')">×</button>
     </div>
   </template>
 </div>

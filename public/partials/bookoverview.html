@@ -25,7 +25,7 @@
       <div class="overview-tile overview-tile--hero internal-link"
            @click="_openLengthStats(30, 'chars')"
            :aria-label="$app.t('overview.snapshot') + ': ' + _fmtNum(overviewLatest()?.chars) + ' ' + $app.t('bookstats.unit.z')"
-           :title="$app.t('overview.openStats')">
+           :data-tip="$app.t('overview.openStats')">
         <div class="overview-tile-label" x-text="$app.t('overview.snapshot')"></div>
         <div class="overview-hero-row">
           <div class="overview-hero-num">
@@ -33,6 +33,11 @@
             <span class="overview-hero-unit" x-text="$app.t('bookstats.unit.z')"></span>
           </div>
           <div class="overview-substats">
+            <div class="overview-substat" x-show="overviewLatest()?.chars > 0"
+                 :data-tip="$app.t('bookstats.metric.normseiten')">
+              <span class="overview-substat-value" x-text="(Math.round((overviewLatest()?.chars || 0) / 1500 * 10) / 10).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 })"></span>
+              <span class="overview-substat-unit" x-text="$app.t('bookstats.unit.ns')"></span>
+            </div>
             <div class="overview-substat" x-show="overviewLatest()?.words > 0">
               <span class="overview-substat-value" x-text="_fmtNum(overviewLatest()?.words)"></span>
               <span class="overview-substat-unit" x-text="$app.t('bookstats.unit.w')"></span>
@@ -61,7 +66,7 @@
       <div class="overview-tile internal-link"
            @click="_openLengthStats(30, 'chars')"
            :aria-label="$app.t('overview.trend') + ', ' + $app.t('overview.trendDelta', { pct: (overviewSparkline().deltaPct >= 0 ? '+' : '') + overviewSparkline().deltaPct })"
-           :title="$app.t('overview.openStats')">
+           :data-tip="$app.t('overview.openStats')">
         <div class="overview-tile-label" x-text="$app.t('overview.trend')"></div>
         <div class="overview-sparkline-wrap">
           <svg class="overview-sparkline"
@@ -100,7 +105,7 @@
       <div class="overview-tile internal-link"
            @click="_openLengthStats(7, 'delta_chars')"
            :aria-label="$app.t('overview.last7Days') + ': ' + (overview7DayCharDelta() >= 0 ? '+' : '') + _fmtNum(overview7DayCharDelta()) + ' ' + $app.t('bookstats.unit.z')"
-           :title="$app.t('overview.openStats')">
+           :data-tip="$app.t('overview.openStats')">
         <div class="overview-tile-label" x-text="$app.t('overview.last7Days')"></div>
         <div class="overview-bars7">
           <template x-for="d in overviewLast7Days()" :key="d.iso">
@@ -128,7 +133,7 @@
       <div class="overview-tile internal-link"
            @click="$app.toggleFehlerHeatmapCard()"
            :aria-label="$app.t('overview.lektorat') + ': ' + overviewCoverageRing().pct + '%, ' + $app.t('overview.coverageMeta', { checked: (overviewCoverage?.checked_pages ?? 0), total: (overviewCoverage?.total_pages ?? 0) })"
-           :title="$app.t('overview.openHeatmap')">
+           :data-tip="$app.t('overview.openHeatmap')">
         <div class="overview-tile-label" x-text="$app.t('overview.lektorat')"></div>
         <div class="overview-donut-row">
           <svg class="overview-donut" viewBox="0 0 72 72" aria-hidden="true">
@@ -155,7 +160,7 @@
       <div class="overview-tile internal-link"
            @click="$app.toggleFehlerHeatmapCard()"
            :aria-label="$app.t('overview.topErrors')"
-           :title="$app.t('overview.openHeatmap')">
+           :data-tip="$app.t('overview.openHeatmap')">
         <div class="overview-tile-label" x-text="$app.t('overview.topErrors')"></div>
         <ul class="overview-error-bars">
           <template x-for="e in overviewTopFehler()" :key="e.typ">
@@ -178,7 +183,7 @@
       <div class="overview-tile internal-link"
            @click="$app.toggleBookReviewCard()"
            :aria-label="$app.t('overview.lastReview')"
-           :title="$app.t('overview.openReview')">
+           :data-tip="$app.t('overview.openReview')">
         <div class="overview-tile-label" x-text="$app.t('overview.lastReview')"></div>
         <div class="overview-stars" :aria-label="overviewStarsAriaLabel()">
           <template x-for="(s, i) in overviewStars(overviewLastReview?.review_json?.gesamtnote)" :key="i">
@@ -202,7 +207,7 @@
       <div class="overview-tile internal-link"
            @click="$app.toggleFiguresCard()"
            :aria-label="$app.t('tile.figuren') + ': ' + _fmtNum(overviewFigurenCount()) + ' ' + $app.t('overview.unit.figuren')"
-           :title="$app.t('tile.figuren.title')">
+           :data-tip="$app.t('tile.figuren.title')">
         <div class="overview-tile-label" x-text="$app.t('tile.figuren')"></div>
         <div class="overview-fig-row">
           <span class="overview-fig-count" x-text="_fmtNum(overviewFigurenCount())"></span>
@@ -228,7 +233,7 @@
       <div class="overview-tile internal-link"
            @click="$app.toggleSzenenCard()"
            :aria-label="$app.t('tile.szenen') + ': ' + _fmtNum(overviewSzenenCount()) + ' ' + $app.t('overview.unit.total')"
-           :title="$app.t('tile.szenen.title')">
+           :data-tip="$app.t('tile.szenen.title')">
         <div class="overview-tile-label" x-text="$app.t('tile.szenen')"></div>
         <div class="overview-fig-row">
           <span class="overview-fig-count" x-text="_fmtNum(overviewSzenenCount())"></span>
@@ -272,7 +277,7 @@
       <div class="overview-tile internal-link"
            @click="$app.toggleOrteCard()"
            :aria-label="$app.t('tile.orte') + ': ' + _fmtNum(overviewOrteCount()) + ' ' + $app.t('overview.unit.orte')"
-           :title="$app.t('tile.orte.title')">
+           :data-tip="$app.t('tile.orte.title')">
         <div class="overview-tile-label" x-text="$app.t('tile.orte')"></div>
         <div class="overview-fig-row">
           <span class="overview-fig-count" x-text="_fmtNum(overviewOrteCount())"></span>
@@ -322,7 +327,7 @@
                         }"
                         :style="{ '--cell-pct': cell.pct }"
                         :data-tip="cell.ortName + ' · ' + row.name + ': ' + cell.value"
-                        :title="cell.value > 0 ? $app.t('overview.ortPresenceOpen', { ort: cell.ortName, kapitel: row.name }) : ''"
+                        :data-tip="cell.value > 0 ? $app.t('overview.ortPresenceOpen', { ort: cell.ortName, kapitel: row.name }) : ''"
                         @click="cell.value > 0 && $app.openOrtMitKapitel(cell.ortId, row.name)">
                       <span class="overview-presence-fill"></span>
                       <span class="overview-presence-num" x-show="cell.value > 0" x-text="cell.value"></span>
@@ -350,7 +355,7 @@
             <li class="overview-chapter-row internal-link"
                 :class="{ 'overview-chapter-row--max': ch.isMax, 'overview-chapter-row--min': ch.isMin }"
                 @click="_openKapitelReview(ch.id)"
-                :title="$app.t('overview.chapterReviewOpen', { name: ch.name })">
+                :data-tip="$app.t('overview.chapterReviewOpen', { name: ch.name })">
               <span class="overview-chapter-name" :data-tip="ch.name" x-text="ch.name"></span>
               <div class="overview-chapter-bar-track overview-chapter-bar-track--diverge">
                 <div class="overview-chapter-bar-fill"
@@ -364,6 +369,9 @@
                       :class="ch.deltaPct > 0 ? 'overview-trend-pct--up' : ch.deltaPct < 0 ? 'overview-trend-pct--down' : ''"
                       x-text="(ch.deltaPct >= 0 ? '+' : '') + ch.deltaPct + '%'"></span>
                 <span class="overview-chapter-chars" x-text="_fmtNum(ch.chars) + ' ' + $app.t('bookstats.unit.z')"></span>
+                <span class="overview-chapter-ns"
+                      :data-tip="$app.t('bookstats.metric.normseiten')"
+                      x-text="ch.normseiten.toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ' + $app.t('bookstats.unit.ns')"></span>
                 <span class="overview-chapter-words" x-text="_fmtNum(ch.words) + ' ' + $app.t('bookstats.unit.w')"></span>
                 <span class="overview-chapter-pages" x-text="ch.pages + ' ' + $app.t('bookstats.unit.s')"></span>
               </span>
@@ -403,7 +411,7 @@
                         }"
                         :style="{ '--cell-pct': cell.pct }"
                         :data-tip="cell.figureName + ' · ' + row.name + ': ' + cell.value"
-                        :title="cell.value > 0 ? $app.t('overview.figPresenceOpen', { figur: cell.figureName, kapitel: row.name }) : ''"
+                        :data-tip="cell.value > 0 ? $app.t('overview.figPresenceOpen', { figur: cell.figureName, kapitel: row.name }) : ''"
                         @click="cell.value > 0 && $app.openFigurMitKapitel(cell.figureId, row.name)">
                       <span class="overview-presence-fill"></span>
                       <span class="overview-presence-num" x-show="cell.value > 0" x-text="cell.value"></span>
@@ -425,7 +433,7 @@
     <template x-if="overviewChapterFindings().some(c => !c.noCheck)">
       <div class="overview-tile overview-tile--medium internal-link"
            @click="$app.toggleFehlerHeatmapCard()"
-           :title="$app.t('overview.openHeatmap')">
+           :data-tip="$app.t('overview.openHeatmap')">
         <div class="overview-tile-head">
           <div class="overview-tile-label" x-text="$app.t('overview.chapterFindings')"></div>
           <span class="overview-tile-median"
@@ -435,7 +443,7 @@
         <ul class="overview-chapter-list">
           <template x-for="ch in overviewChapterFindings()" :key="ch.id">
             <li class="overview-chapter-row"
-                :class="{ 'overview-chapter-row--nocheck': ch.noCheck }">
+                :class="{ 'overview-chapter-row--nocheck': ch.noCheck, 'overview-chapter-row--worst': ch.isWorst, 'overview-chapter-row--best': ch.isBest }">
               <span class="overview-chapter-name" :data-tip="ch.name" x-text="ch.name"></span>
               <div class="overview-chapter-bar-track overview-chapter-bar-track--diverge"
                    x-show="ch.showMedian">
@@ -469,10 +477,10 @@
          Tracking läuft, solange checkDone (Prüfmodus) aktiv ist und der Tab
          sichtbar. Sort: Sekunden desc; Diverging-Bar um Median der Sekunden.
          Anzeige als exakte Dauer (h/min/s). Klick → BookStats (Total-Badges). -->
-    <template x-if="overviewChapterLektoratTime().length > 0">
+    <template x-if="overviewChapterLektoratTime().some(c => !c.noTime)">
       <div class="overview-tile overview-tile--medium internal-link"
            @click="_openLengthStats(0, 'lektorat_minutes')"
-           :title="$app.t('overview.openBookStats')">
+           :data-tip="$app.t('overview.openBookStats')">
         <div class="overview-tile-head">
           <div class="overview-tile-label" x-text="$app.t('overview.chapterLektoratTime')"></div>
           <span class="overview-tile-median"
@@ -481,22 +489,30 @@
         </div>
         <ul class="overview-chapter-list">
           <template x-for="ch in overviewChapterLektoratTime()" :key="ch.id ?? '_'">
-            <li class="overview-chapter-row">
+            <li class="overview-chapter-row"
+                :class="{ 'overview-chapter-row--nocheck': ch.noTime, 'overview-chapter-row--worst': ch.isWorst, 'overview-chapter-row--best': ch.isBest }">
               <span class="overview-chapter-name" :data-tip="ch.name" x-text="ch.name"></span>
               <div class="overview-chapter-bar-track overview-chapter-bar-track--diverge"
                    x-show="ch.showMedian">
                 <div class="overview-chapter-bar-fill"
+                     x-show="!ch.noTime"
                      :class="ch.isAbove ? 'overview-chapter-bar-fill--findings-pos' : 'overview-chapter-bar-fill--findings-neg'"
                      :style="{ left: ch.barLeftPct + '%', width: ch.barWidthPct + '%' }"></div>
                 <div class="overview-chapter-median-tick"
+                     x-show="!ch.noTime"
                      :data-tip="$app.t('overview.medianTick') + ': ' + ch.medianLabel"></div>
               </div>
               <span class="overview-chapter-meta">
                 <span class="overview-chapter-delta"
-                      x-show="ch.showMedian"
+                      x-show="!ch.noTime && ch.showMedian"
                       :class="ch.deltaPct > 0 ? 'overview-trend-pct--down' : ch.deltaPct < 0 ? 'overview-trend-pct--up' : ''"
                       x-text="(ch.deltaPct >= 0 ? '+' : '') + ch.deltaPct + '%'"></span>
-                <span class="overview-chapter-count" x-text="ch.durationLabel"></span>
+                <span class="overview-chapter-count"
+                      x-show="!ch.noTime"
+                      x-text="ch.durationLabel"></span>
+                <span class="overview-chapter-nocheck"
+                      x-show="ch.noTime"
+                      x-text="$app.t('overview.unit.notTracked')"></span>
               </span>
             </li>
           </template>
@@ -516,6 +532,10 @@
                 <span class="overview-recent-chars"
                       x-show="overviewPageChars(p.id) != null"
                       x-text="_fmtNum(overviewPageChars(p.id)) + ' ' + $app.t('bookstats.unit.z')"></span>
+                <span class="overview-recent-ns"
+                      x-show="overviewPageChars(p.id) != null"
+                      :data-tip="$app.t('bookstats.metric.normseiten')"
+                      x-text="(Math.round(overviewPageChars(p.id) / 1500 * 10) / 10).toLocaleString($app.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ' + $app.t('bookstats.unit.ns')"></span>
                 <span class="overview-recent-chapter" x-show="p.chapterName" :data-tip="p.chapterName" x-text="p.chapterName"></span>
               </span>
             </li>

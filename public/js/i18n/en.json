@@ -211,11 +211,15 @@
   "book.settings.tempus.praesens":    "Present tense",
   "book.settings.tempus.gemischt":    "Mixed / shifting",
   "book.settings.pov.kurzgeschichtenHint": "Note: For short-story collections, perspective and tense act only as guidelines. Individual stories may legitimately deviate – the AI will not flag those as errors.",
+  "book.settings.dangerZone":    "Danger zone",
+  "book.settings.dangerText":    "Deletes all your page edits, book reviews and chats for this book. Other users are not affected. This cannot be undone.",
+  "book.settings.dangerButton":  "Delete history for this book",
 
   "book.export.title":           "Export book",
   "book.export.hint":            "Downloads the entire book via BookStack export. Filename is timestamped automatically.",
   "book.export.pdf":             "PDF",
   "book.export.epub":            "EPUB",
+  "book.export.docx":            "Word (DOCX)",
   "book.export.html":            "HTML",
   "book.export.txt":             "Text",
   "book.export.md":              "Markdown",
@@ -239,6 +243,7 @@
   "palette.mode.commands":       "Commands",
   "palette.mode.prefixIn":       "Search in {name}",
   "palette.group.app":           "App",
+  "palette.section.matches":     "Matches",
   "palette.section.commands":    "Commands",
   "palette.section.pages":       "Pages",
   "palette.section.chapters":    "Chapters",
@@ -346,6 +351,7 @@
   "overview.unit.findings":      "findings",
   "overview.unit.notChecked":    "not checked",
   "overview.chapterLektoratTime": "Proofreading time per chapter",
+  "overview.unit.notTracked":    "not tracked",
   "overview.openBookStats":      "Open book stats",
 
   "sidebar.pagesOf":             "Pages: {name}",
@@ -375,6 +381,7 @@
 
   "tok.words":                   "{n} words",
   "tok.tokens":                  "~{n} tokens",
+  "tok.normseiten":              "{n} standard pages",
 
   "komplett.title":              "Full analysis",
   "komplett.done":               "Done",
@@ -553,6 +560,7 @@
   "bookstats.metric":            "Metric…",
   "bookstats.metric.words":      "Words",
   "bookstats.metric.chars":      "Characters",
+  "bookstats.metric.normseiten": "Standard pages (1500 c)",
   "bookstats.metric.pages":      "Pages",
   "bookstats.metric.tok":        "Tokens",
   "bookstats.metric.unique":     "Unique w.",
@@ -575,6 +583,7 @@
   "bookstats.unit.z":            "c",
   "bookstats.unit.s":            "p",
   "bookstats.unit.t":            "t",
+  "bookstats.unit.ns":           "ns",
   "bookstats.unit.delta":        "Δ",
   "bookstats.coverage":          "{pct}% reviewed ({checked}/{total})",
   "bookstats.avgSentenceBadge":  "avg {n} w/sent.",
@@ -823,10 +832,6 @@
   "profile.focus.sentence":             "Sentence",
   "profile.focus.window3":              "Three paragraphs (prev + active + next)",
   "profile.focus.typewriterOnly":       "Typewriter scroll only (no dim)",
-
-  "profile.dangerZone":          "Danger zone",
-  "profile.dangerText":          "Deletes all your page edits, book reviews and chats for the selected book. Other users are not affected. This cannot be undone.",
-  "profile.dangerButton":        "Delete history for this book",
 
   "lang.de":                     "German",
   "lang.en":                     "English",

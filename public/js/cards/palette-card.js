@@ -233,19 +233,44 @@ export function registerPaletteCard() {
         }
       }
 
-      // Karten-Gruppen.
-      for (const groupKey of FEATURE_GROUPS) {
-        if (groupKey === 'app') continue; // App-Aktionen kommen separat.
-        const items = this._matchFeatures(FEATURES.filter(f => f.group === groupKey), q, ctx, t);
-        if (items.length) {
-          sections.push({ key: groupKey, labelKey: GROUP_LABEL_KEY[groupKey], items });
+      // Ohne Query: Karten gruppiert nach FEATURE_GROUPS, App-Aktionen separat.
+      // Mit Query: alle Karten + Aktionen in eine einzige sortierte Treffer-Sektion,
+      // damit ein Top-Match (z.B. "eins" → "Einstellungen") nicht hinter einer
+      // Gruppe mit schwächerem Treffer (z.B. "Ereignisse") versteckt wird.
+      if (!q) {
+        for (const groupKey of FEATURE_GROUPS) {
+          if (groupKey === 'app') continue;
+          const items = this._matchFeatures(FEATURES.filter(f => f.group === groupKey), q, ctx, t);
+          if (items.length) {
+            sections.push({ key: groupKey, labelKey: GROUP_LABEL_KEY[groupKey], items });
+          }
         }
-      }
-
-      // App-Aktionen (immer mitgesucht).
-      const actionItems = this._matchActions(ACTIONS, q, ctx, t);
-      if (actionItems.length) {
-        sections.push({ key: 'app', labelKey: GROUP_LABEL_KEY.app, items: actionItems });
+        const actionItems = this._matchActions(ACTIONS, q, ctx, t);
+        if (actionItems.length) {
+          sections.push({ key: 'app', labelKey: GROUP_LABEL_KEY.app, items: actionItems });
+        }
+      } else {
+        const matched = [];
+        for (const f of FEATURES) {
+          const m = this._matchFeatureFuzzy(f, q, t);
+          if (!m) continue;
+          const item = this._toggleItem(f, ctx);
+          item.score = m.score;
+          item.indices = m.indices;
+          matched.push(item);
+        }
+        for (const a of ACTIONS) {
+          const m = this._matchFeatureFuzzy(a, q, t);
+          if (!m) continue;
+          const item = this._actionItem(a, ctx);
+          item.score = m.score;
+          item.indices = m.indices;
+          matched.push(item);
+        }
+        matched.sort((x, y) => x.score - y.score);
+        if (matched.length) {
+          sections.push({ key: 'matches', labelKey: 'palette.section.matches', items: matched });
+        }
       }
 
       // Such-Provider (nur bei aktiver Query): Pages/Chapters/Figuren/Orte/Szenen

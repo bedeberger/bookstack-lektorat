@@ -20,7 +20,7 @@
          @keydown.escape.window="closeSynonymPicker()">
       <div class="synonym-picker-header">
         <span x-text="$app.t('editor.synonym.titleFor', { word: _synonymWord })"></span>
-        <button type="button" class="synonym-picker-close" @click="closeSynonymPicker()" :title="$app.t('common.close')" :aria-label="$app.t('common.close')">×</button>
+        <button type="button" class="synonym-picker-close" @click="closeSynonymPicker()" :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')">×</button>
       </div>
 
       <div class="synonym-picker-body">

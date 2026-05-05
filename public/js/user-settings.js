@@ -1,6 +1,6 @@
-// Benutzer-Einstellungen (Profil, Default-Sprache/Region/Buchtyp, Danger:
-// Buch-Historie löschen). Methoden werden in Alpine.data('userSettingsCard')
-// gespreadet; Root-Zugriffe via window.__app.
+// Benutzer-Einstellungen (Profil, Default-Sprache/Region/Buchtyp).
+// Methoden werden in Alpine.data('userSettingsCard') gespreadet;
+// Root-Zugriffe via window.__app.
 
 import { fetchJson } from './utils.js';
 
@@ -51,47 +51,6 @@ export const userSettingsMethods = {
     }
   },
 
-  async resetBookHistory() {
-    const bookId = this.userSettingsDangerBookId;
-    if (!bookId) return;
-    const book = window.__app.books.find(b => String(b.id) === String(bookId));
-    const name = book?.name || '';
-    if (!await window.__app.appConfirm({
-      message: window.__app.t('userSettings.resetConfirm', { name }),
-      confirmLabel: window.__app.t('common.delete'),
-      danger: true,
-    })) return;
-
-    this.bookHistoryResetLoading = true;
-    this.bookHistoryResetMessage = '';
-    this.bookHistoryResetError   = '';
-    try {
-      const r = await fetch(`/history/book/${bookId}`, { method: 'DELETE' });
-      if (!r.ok) {
-        let errData = null;
-        try { errData = await r.json(); } catch (_) {}
-        throw new Error(errData ? window.__app.tError(errData) : `HTTP ${r.status}`);
-      }
-      const data = await r.json();
-      const d = data.deleted || {};
-      this.bookHistoryResetMessage = window.__app.t('userSettings.resetSummary', {
-        lektorate: d.page_checks || 0,
-        reviews:   d.book_reviews || 0,
-        chats:     d.chat_sessions || 0,
-      });
-      if (String(window.__app.selectedBookId) === String(bookId)) {
-        window.__app.pageHistory       = [];
-        window.__app.bookReviewHistory = [];
-        window.dispatchEvent(new CustomEvent('chat:reset'));
-      }
-      setTimeout(() => { this.bookHistoryResetMessage = ''; }, 6000);
-    } catch (e) {
-      this.bookHistoryResetError = e.message;
-    } finally {
-      this.bookHistoryResetLoading = false;
-    }
-  },
-
   /** Buchtyp-Liste abhängig von der gewählten Default-Sprache (fallback: de). */
   userSettingsBuchtypen() {
     const lang = this.userSettingsDefaultLanguage || 'de';
@@ -111,9 +70,5 @@ export const userSettingsMethods = {
       { value: 'window-3',        label: app.t('profile.focus.window3') },
       { value: 'typewriter-only', label: app.t('profile.focus.typewriterOnly') },
     ];
-  },
-
-  userSettingsDangerBookOptions() {
-    return (window.__app.books || []).map(b => ({ value: b.id, label: b.name }));
   },
 };

@@ -7,7 +7,7 @@
   <div class="card-header">
     <span class="card-title" x-text="$app.t('chat.title', { name: $app.currentPage?.name || '–' })"></span>
     <div class="card-actions">
-      <button type="button" @click="startNewChatSession()" :disabled="chatLoading" :title="$app.t('chat.newSessionTitle')" x-text="$app.t('chat.newSession')"></button>
+      <button type="button" @click="startNewChatSession()" :disabled="chatLoading" :data-tip="$app.t('chat.newSessionTitle')" x-text="$app.t('chat.newSession')"></button>
     </div>
   </div>
 
@@ -79,7 +79,7 @@
   </div>
   <div class="chat-input-hint" x-text="$app.t('chat.inputHint')"></div>
 
-  <div x-show="chatSessions.some(s => s.id !== chatSessionId)" class="card-history-section">
+  <div x-show="chatSessions.length > 0" class="card-history-section">
     <div class="chat-history-title" x-text="$app.t('chat.history')"></div>
     <template x-for="s in chatSessions" :key="s.id">
       <div
@@ -89,7 +89,7 @@
       >
         <div class="chat-session-preview" x-text="(s.preview || $app.t('chat.previewEmpty')).slice(0, 80)"></div>
         <div class="chat-session-meta" x-text="$app.formatDate(s.last_message_at)"></div>
-        <button type="button" class="chat-session-delete btn-card-close" @click.stop="deleteChatSession(s.id)" :title="$app.t('common.delete')" :aria-label="$app.t('common.delete')">×</button>
+        <button type="button" class="chat-session-delete btn-card-close" @click.stop="deleteChatSession(s.id)" :data-tip="$app.t('common.delete')" :aria-label="$app.t('common.delete')">×</button>
       </div>
     </template>
   </div>
@@ -103,7 +103,7 @@
   <div class="card-header">
     <span class="card-title" x-text="$app.t('chat.titleBook', { name: $app.selectedBookName })"></span>
     <div class="card-actions">
-      <button type="button" @click="startNewBookChatSession()" :disabled="bookChatLoading" :title="$app.t('chat.newSessionTitle')" x-text="$app.t('chat.newSession')"></button>
+      <button type="button" @click="startNewBookChatSession()" :disabled="bookChatLoading" :data-tip="$app.t('chat.newSessionTitle')" x-text="$app.t('chat.newSession')"></button>
     </div>
   </div>
 
@@ -198,7 +198,7 @@
   </div>
   <div class="chat-input-hint" x-text="$app.t('chat.inputHint')"></div>
 
-  <div x-show="bookChatSessions.some(s => s.id !== bookChatSessionId)" class="card-history-section">
+  <div x-show="bookChatSessions.length > 0" class="card-history-section">
     <div class="chat-history-title" x-text="$app.t('chat.history')"></div>
     <template x-for="s in bookChatSessions" :key="s.id">
       <div
@@ -208,7 +208,7 @@
       >
         <div class="chat-session-preview" x-text="(s.preview || $app.t('chat.previewEmpty')).slice(0, 80)"></div>
         <div class="chat-session-meta" x-text="$app.formatDate(s.last_message_at)"></div>
-        <button type="button" class="chat-session-delete btn-card-close" @click.stop="deleteBookChatSession(s.id)" :title="$app.t('common.delete')" :aria-label="$app.t('common.delete')">×</button>
+        <button type="button" class="chat-session-delete btn-card-close" @click.stop="deleteBookChatSession(s.id)" :data-tip="$app.t('common.delete')" :aria-label="$app.t('common.delete')">×</button>
       </div>
     </template>
   </div>

@@ -11,7 +11,7 @@
   <p class="book-export-hint" x-text="$app.t('book.export.hint')"></p>
 
   <div class="book-export-buttons">
-    <template x-for="fmt in ['pdf','epub','html','txt','md']" :key="fmt">
+    <template x-for="fmt in ['pdf','epub','docx','html','txt','md']" :key="fmt">
       <button type="button"
               class="book-export-btn"
               :class="{ 'is-running': bookExportLoading === fmt }"

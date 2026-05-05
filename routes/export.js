@@ -11,6 +11,7 @@
 const express = require('express');
 const { Readable } = require('stream');
 const { EPub } = require('epub-gen-memory');
+const HTMLtoDOCX = require('@turbodocx/html-to-docx');
 const logger = require('../logger');
 const { getTokenForRequest } = require('../db/schema');
 const { bsGet, bsGetAll, BOOKSTACK_URL, authHeader } = require('../lib/bookstack');
@@ -25,9 +26,72 @@ const FORMATS = {
   txt:  { upstream: 'plaintext', mime: 'text/plain; charset=utf-8' },
   md:   { upstream: 'markdown',  mime: 'text/markdown; charset=utf-8' },
   epub: { upstream: null,        mime: 'application/epub+zip' },
+  docx: { upstream: null,        mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
 };
 
-async function buildEpubBuffer(bookId, token, book) {
+function escXml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildNavMapXml(chapters) {
+  let play = 0;
+  let openParent = false;
+  let out = '<navMap>\n';
+  chapters.forEach((c, i) => {
+    const lvl = c.__level || 0;
+    const id = `np_${i}`;
+    const file = c.filename;
+    const title = escXml(c.title);
+    if (lvl === 0) {
+      if (openParent) { out += '</navPoint>\n'; openParent = false; }
+      const cls = c.__hasChildren ? 'part' : 'chapter';
+      out += `<navPoint id="${id}" playOrder="${++play}" class="${cls}">\n`;
+      out += `<navLabel><text>${title}</text></navLabel>\n`;
+      out += `<content src="${file}"/>\n`;
+      if (c.__hasChildren) openParent = true;
+      else out += '</navPoint>\n';
+    } else {
+      out += `<navPoint id="${id}" playOrder="${++play}" class="chapter">\n`;
+      out += `<navLabel><text>${title}</text></navLabel>\n`;
+      out += `<content src="${file}"/>\n`;
+      out += '</navPoint>\n';
+    }
+  });
+  if (openParent) out += '</navPoint>\n';
+  out += '</navMap>';
+  return out;
+}
+
+function buildTocXhtmlBody(chapters, tocTitle) {
+  let openParent = false;
+  let out = `<h1 class="h1">${escXml(tocTitle)}</h1>\n<nav id="toc" epub:type="toc">\n<ol style="list-style: none">\n`;
+  chapters.forEach(c => {
+    const lvl = c.__level || 0;
+    const file = c.filename;
+    const title = escXml(c.title);
+    if (lvl === 0) {
+      if (openParent) { out += '</ol>\n</li>\n'; openParent = false; }
+      if (c.__hasChildren) {
+        out += `<li class="table-of-content"><a href="${file}">${title}</a>\n<ol style="list-style: none">\n`;
+        openParent = true;
+      } else {
+        out += `<li class="table-of-content"><a href="${file}">${title}</a></li>\n`;
+      }
+    } else {
+      out += `<li class="table-of-content"><a href="${file}">${title}</a></li>\n`;
+    }
+  });
+  if (openParent) out += '</ol>\n</li>\n';
+  out += '</ol>\n</nav>';
+  return out;
+}
+
+async function loadBookContents(bookId, token) {
   const [chapters, pages] = await Promise.all([
     bsGetAll('chapters?filter[book_id]=' + bookId, token),
     bsGetAll('pages?filter[book_id]=' + bookId, token),
@@ -47,40 +111,107 @@ async function buildEpubBuffer(bookId, token, book) {
     return a.priority - b.priority;
   });
 
-  // Pro Seite das gerenderte HTML laden (`/api/pages/{id}` liefert `html`).
   const pageDetails = await Promise.all(
     sortedPages.map(p => bsGet('pages/' + p.id, token).catch(() => null))
   );
-
-  const epubChapters = [];
-  let lastChapterId = Symbol('none');
-  for (let i = 0; i < sortedPages.length; i++) {
-    const p = sortedPages[i];
-    const pd = pageDetails[i];
-    if (!pd || !pd.html) continue;
-
-    // Kapitel-Trenner-Eintrag, sobald wir auf eine neue Chapter-ID stossen.
-    if (p.chapter_id && p.chapter_id !== lastChapterId) {
-      const ch = sortedChapters.find(c => c.id === p.chapter_id);
-      if (ch) {
-        const intro = ch.description_html || (ch.description ? `<p>${ch.description}</p>` : '');
-        epubChapters.push({
-          title: ch.name,
-          content: intro || `<h1>${ch.name}</h1>`,
-          excludeFromToc: false,
-          beforeToc: false,
-        });
-      }
-      lastChapterId = p.chapter_id;
-    } else if (!p.chapter_id) {
-      lastChapterId = Symbol('none');
-    }
-
-    epubChapters.push({
-      title: p.name,
-      content: pd.html,
-    });
+  const valid = sortedPages
+    .map((p, i) => ({ p, pd: pageDetails[i] }))
+    .filter(x => x.pd && x.pd.html);
+  if (!valid.length) {
+    const err = new Error('BOOK_EMPTY');
+    err.code = 'BOOK_EMPTY';
+    throw err;
   }
+
+  const groups = [];
+  let cur = null;
+  for (const x of valid) {
+    if (x.p.chapter_id) {
+      if (!cur || cur.chapterId !== x.p.chapter_id) {
+        cur = {
+          chapterId: x.p.chapter_id,
+          chapter: sortedChapters.find(c => c.id === x.p.chapter_id) || null,
+          pages: [],
+        };
+        groups.push(cur);
+      }
+      cur.pages.push(x);
+    } else {
+      groups.push({ chapterId: null, chapter: null, pages: [x] });
+      cur = null;
+    }
+  }
+  return { groups };
+}
+
+async function buildEpubBuffer(bookId, token, book) {
+  const { groups } = await loadBookContents(bookId, token);
+
+  // Materialisieren mit __level/__hasChildren + expliziten filenames.
+  const epubChapters = [];
+  groups.forEach((g, gi) => {
+    const ch = g.chapter;
+    const introHtml = ch
+      ? (ch.description_html || (ch.description ? `<p>${escXml(ch.description)}</p>` : ''))
+      : '';
+    if (ch && g.pages.length > 1) {
+      // Kapitel als Parent, Seiten als Kinder.
+      epubChapters.push({
+        title: ch.name,
+        content: introHtml || `<h1>${escXml(ch.name)}</h1>`,
+        filename: `chap_${gi}.xhtml`,
+        __level: 0,
+        __hasChildren: true,
+      });
+      g.pages.forEach((x, pi) => {
+        epubChapters.push({
+          title: x.p.name,
+          content: x.pd.html,
+          filename: `chap_${gi}_p_${pi}.xhtml`,
+          __level: 1,
+        });
+      });
+    } else {
+      // Flach: Single-Page-Kapitel oder Seite ohne Kapitel.
+      const x = g.pages[0];
+      const title = ch ? ch.name : x.p.name;
+      const content = ch ? (introHtml + x.pd.html) : x.pd.html;
+      epubChapters.push({
+        title,
+        content,
+        filename: `entry_${gi}.xhtml`,
+        __level: 0,
+        __hasChildren: false,
+      });
+    }
+  });
+
+  const navMapXml = buildNavMapXml(epubChapters);
+  const tocBody = buildTocXhtmlBody(epubChapters, 'Inhalt');
+  const tocNCX = `<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+<head>
+<meta name="dtb:uid" content="<%= id %>"/>
+<meta name="dtb:depth" content="2"/>
+<meta name="dtb:totalPageCount" content="0"/>
+<meta name="dtb:maxPageNumber" content="0"/>
+</head>
+<docTitle><text><%= title %></text></docTitle>
+<docAuthor><text><%= author.join(", ") %></text></docAuthor>
+${navMapXml}
+</ncx>`;
+  const tocXHTML = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="<%- lang %>" lang="<%- lang %>">
+<head>
+<title><%= title %></title>
+<meta charset="UTF-8" />
+<link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+<body>
+${tocBody}
+</body>
+</html>`;
 
   const author = book.created_by?.name || book.owned_by?.name || '';
   const epub = new EPub(
@@ -91,10 +222,58 @@ async function buildEpubBuffer(bookId, token, book) {
       lang: 'de',
       tocTitle: 'Inhalt',
       ignoreFailedDownloads: true,
+      tocNCX,
+      tocXHTML,
     },
     epubChapters,
   );
   return epub.genEpub();
+}
+
+async function buildDocxBuffer(bookId, token, book) {
+  const { groups } = await loadBookContents(bookId, token);
+  const author = book.created_by?.name || book.owned_by?.name || '';
+  const bookTitle = book.name || `Book ${bookId}`;
+
+  let body = `<h1 style="page-break-before: avoid; text-align: center;">${escXml(bookTitle)}</h1>\n`;
+  if (author) body += `<p style="text-align: center;"><em>${escXml(author)}</em></p>\n`;
+  if (book.description) body += `<p style="text-align: center;">${escXml(book.description)}</p>\n`;
+
+  groups.forEach((g, gi) => {
+    const ch = g.chapter;
+    const introHtml = ch
+      ? (ch.description_html || (ch.description ? `<p>${escXml(ch.description)}</p>` : ''))
+      : '';
+    if (ch && g.pages.length > 1) {
+      body += `<h1 style="page-break-before: always;">${escXml(ch.name)}</h1>\n`;
+      if (introHtml) body += introHtml + '\n';
+      g.pages.forEach((x) => {
+        body += `<h2>${escXml(x.p.name)}</h2>\n`;
+        body += x.pd.html + '\n';
+      });
+    } else {
+      const x = g.pages[0];
+      const title = ch ? ch.name : x.p.name;
+      const breakStyle = gi === 0 ? '' : ' style="page-break-before: always;"';
+      body += `<h1${breakStyle}>${escXml(title)}</h1>\n`;
+      if (ch && introHtml) body += introHtml + '\n';
+      body += x.pd.html + '\n';
+    }
+  });
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escXml(bookTitle)}</title></head><body>${body}</body></html>`;
+
+  const buf = await HTMLtoDOCX(html, null, {
+    title: bookTitle,
+    creator: author || undefined,
+    orientation: 'portrait',
+    pageSize: { width: 11906, height: 16838 },
+    pageNumber: true,
+    font: 'Calibri',
+    fontSize: 22,
+    table: { row: { cantSplit: true } },
+  });
+  return Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
 }
 
 router.get('/book/:id/:fmt', async (req, res) => {
@@ -119,14 +298,16 @@ router.get('/book/:id/:fmt', async (req, res) => {
   const slug = book.slug || book.name || `book${id}`;
   const filename = buildExportFilename({ prefix: 'book', slug, ext: fmt, date: new Date() });
 
-  if (fmt === 'epub') {
+  if (fmt === 'epub' || fmt === 'docx') {
     let buf;
     try {
-      buf = await buildEpubBuffer(id, token, book);
+      buf = fmt === 'epub'
+        ? await buildEpubBuffer(id, token, book)
+        : await buildDocxBuffer(id, token, book);
     } catch (e) {
       if (e.code === 'BOOK_EMPTY') return res.status(400).json({ error_code: 'BOOK_EMPTY' });
       if (e.status === 401 || e.status === 403) return res.status(401).json({ error_code: 'BOOKSTACK_UNAUTHED' });
-      logger.error(`EPUB-Build fehlgeschlagen (book=${id}): ${e.message}`);
+      logger.error(`${fmt.toUpperCase()}-Build fehlgeschlagen (book=${id}): ${e.message}`);
       return res.status(502).json({ error_code: 'EXPORT_FAILED' });
     }
     res.setHeader('Content-Type', spec.mime);

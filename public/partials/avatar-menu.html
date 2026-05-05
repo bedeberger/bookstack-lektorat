@@ -4,7 +4,7 @@
           class="avatar-btn"
           :class="{ 'avatar-btn--active': showAvatarMenu }"
           @click="showAvatarMenu = !showAvatarMenu"
-          :title="currentUser?.name || currentUser?.email || ''"
+          :data-tip="currentUser?.name || currentUser?.email || ''"
           :aria-label="currentUser?.name || currentUser?.email || ''"
           aria-haspopup="menu"
           :aria-expanded="showAvatarMenu">
@@ -57,7 +57,7 @@
 
     <div class="avatar-menu-divider"></div>
 
-    <div class="avatar-menu-provider" :title="t('header.providerTitle')">
+    <div class="avatar-menu-provider" :data-tip="t('header.providerTitle')">
       <span class="avatar-menu-provider-dot"></span>
       <span x-text="apiProvider === 'ollama' ? 'Ollama · ' + ollamaModel : apiProvider === 'llama' ? 'Llama · ' + llamaModel : 'Claude · ' + claudeModel"></span>
     </div>

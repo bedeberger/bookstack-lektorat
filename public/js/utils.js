@@ -46,6 +46,14 @@ export async function fetchText(url, opts) {
 // Sicherheitscheck vor dem Speichern: < 50 % wirkt unvollständig → Abbruch
 export const SAFETY_HTML_RATIO = 0.5;
 
+// Klassische Normseite (DIN): 30 Zeilen × ~50 Zeichen ≈ 1500 Zeichen.
+// Sekundäre Umfangs-Kennzahl neben Zeichen/Wörter.
+export const CHARS_PER_NORMSEITE = 1500;
+export function charsToNormseiten(chars) {
+  const n = Number(chars) || 0;
+  return Math.round((n / CHARS_PER_NORMSEITE) * 10) / 10;
+}
+
 // Intl-Locale-Tag aus uiLocale (en → en-US, sonst de-CH).
 export function localeTag(uiLocale) {
   return uiLocale === 'en' ? 'en-US' : 'de-CH';

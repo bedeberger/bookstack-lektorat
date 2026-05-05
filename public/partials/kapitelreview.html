@@ -81,7 +81,7 @@
         </div>
         <div x-show="selectedKapitelReviewId === entry.id" class="history-detail">
           <div x-html="entry.review_json ? _renderKapitelReviewHtml(entry.review_json) : ''"></div>
-          <button type="button" class="btn-delete-history" @click.stop="deleteKapitelReview(entry.id)" :title="$app.t('common.deleteEntry')" x-text="$app.t('common.deleteEntry')"></button>
+          <button type="button" class="btn-delete-history" @click.stop="deleteKapitelReview(entry.id)" :data-tip="$app.t('common.deleteEntry')" x-text="$app.t('common.deleteEntry')"></button>
         </div>
       </div>
     </template>

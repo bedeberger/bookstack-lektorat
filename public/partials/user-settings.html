@@ -126,28 +126,5 @@
 
     <p class="book-settings-saved" x-show="userSettingsSaved" x-text="$app.t('profile.savedMsg')"></p>
     <p class="book-settings-error" x-show="userSettingsError" x-text="userSettingsError"></p>
-
-    <div class="book-settings-danger-zone">
-      <div class="book-settings-danger-title" x-text="$app.t('profile.dangerZone')"></div>
-      <div class="book-settings-danger-row">
-        <div class="book-settings-danger-text" x-text="$app.t('profile.dangerText')"></div>
-        <div class="book-settings-danger-actions">
-          <div x-data="combobox($app.t('common.chooseBook'))"
-               x-modelable="value" x-model="userSettingsDangerBookId"
-               x-effect="options = userSettingsDangerBookOptions()"
-               @click.outside="close()" @keydown="onKeydown($event)"
-               class="combobox-wrap combobox-wrap--compact"></div>
-          <button type="button"
-            class="book-settings-btn-danger"
-            @click="resetBookHistory()"
-            :disabled="bookHistoryResetLoading || !userSettingsDangerBookId">
-            <span x-show="bookHistoryResetLoading" class="spinner"></span>
-            <span x-text="bookHistoryResetLoading ? $app.t('common.deleting') : $app.t('profile.dangerButton')"></span>
-          </button>
-        </div>
-      </div>
-      <p class="book-settings-saved" x-show="bookHistoryResetMessage" x-text="bookHistoryResetMessage"></p>
-      <p class="book-settings-error" x-show="bookHistoryResetError" x-text="bookHistoryResetError"></p>
-    </div>
   </div>
 </div>

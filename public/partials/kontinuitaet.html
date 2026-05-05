@@ -103,7 +103,7 @@
               <span class="kontinuitaet-row-stellen">
                 <template x-if="kontinuitaetResolveStelle(issue.stelle_a, issue, 'a')">
                   <span class="kapitel-badge kapitel-badge--primary internal-link"
-                        :title="$app.t('kontinuitaet.gotoTitle', { name: kontinuitaetResolveStelle(issue.stelle_a, issue, 'a').name })"
+                        :data-tip="$app.t('kontinuitaet.gotoTitle', { name: kontinuitaetResolveStelle(issue.stelle_a, issue, 'a').name })"
                         @click.stop="kontinuitaetGotoStelle(issue.stelle_a, issue, 'a')" x-text="issue.stelle_a"></span>
                 </template>
                 <template x-if="!kontinuitaetResolveStelle(issue.stelle_a, issue, 'a')">
@@ -112,7 +112,7 @@
                 <span class="kontinuitaet-arrow">↔</span>
                 <template x-if="kontinuitaetResolveStelle(issue.stelle_b, issue, 'b')">
                   <span class="kapitel-badge kapitel-badge--primary internal-link"
-                        :title="$app.t('kontinuitaet.gotoTitle', { name: kontinuitaetResolveStelle(issue.stelle_b, issue, 'b').name })"
+                        :data-tip="$app.t('kontinuitaet.gotoTitle', { name: kontinuitaetResolveStelle(issue.stelle_b, issue, 'b').name })"
                         @click.stop="kontinuitaetGotoStelle(issue.stelle_b, issue, 'b')" x-text="issue.stelle_b"></span>
                 </template>
                 <template x-if="!kontinuitaetResolveStelle(issue.stelle_b, issue, 'b')">

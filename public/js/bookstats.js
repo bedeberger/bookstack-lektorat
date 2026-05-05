@@ -10,6 +10,7 @@ const cssVar = name => getComputedStyle(document.documentElement).getPropertyVal
 // bei Sprachwechsel live nachgezogen werden.
 const METRIC_KEYS = {
   chars:              'bookstats.metric.chars',
+  normseiten:         'bookstats.metric.normseiten',
   words:              'bookstats.metric.words',
   page_count:         'bookstats.metric.pages',
   tok:                'bookstats.metric.tok',
@@ -171,6 +172,7 @@ export const bookstatsMethods = {
     let data;
     if (metric === 'delta_words') data = rows.map((r, i) => i === 0 ? null : r.words - rows[i - 1].words);
     else if (metric === 'delta_chars') data = rows.map((r, i) => i === 0 ? null : (Number(r.chars) || 0) - (Number(rows[i - 1].chars) || 0));
+    else if (metric === 'normseiten') data = rows.map(r => Math.round(((Number(r.chars) || 0) / 1500) * 10) / 10);
     else if (isPpc) data = rows.map(r => r.chapter_count > 0 ? Math.round((r.page_count / r.chapter_count) * 10) / 10 : null);
     else if (isMin) data = rows.map(r => Math.round(r.seconds / 60));
     else if (isCum) { let sum = 0; data = rows.map(r => { sum += r.seconds; return Math.round(sum / 360) / 10; }); }
@@ -190,7 +192,7 @@ export const bookstatsMethods = {
     const metricLabel = METRIC_KEYS[metric] ? window.__app.t(METRIC_KEYS[metric]) : metric;
 
     const localeTag = (window.__app.uiLocale === 'en') ? 'en-US' : 'de-CH';
-    const isDecimal = isPpc || isCum || metric === 'avg_sentence_len' || metric === 'avg_lix' || metric === 'avg_flesch_de';
+    const isDecimal = isPpc || isCum || metric === 'avg_sentence_len' || metric === 'avg_lix' || metric === 'avg_flesch_de' || metric === 'normseiten';
     const fmt = v => isDecimal ? v.toLocaleString(localeTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
       : Math.round(v).toLocaleString(localeTag);
     const makeTick = () => v => {

@@ -11,7 +11,7 @@
         <span class="card-subline-sep" aria-hidden="true" x-show="lastSavedLabel() && currentPage?.url">·</span>
         <a x-show="currentPage?.url" :href="currentPage?.url" target="_blank" rel="noopener" class="card-subline-link" x-text="t('editor.openInBookstack')"></a>
         <span class="card-subline-sep" aria-hidden="true" x-show="currentPage?.url && currentPage?.revision_count > 0">·</span>
-        <a x-show="currentPage?.url && currentPage?.revision_count > 0" :href="currentPage?.url + '/revisions'" target="_blank" rel="noopener" class="card-subline-link" :title="t('editor.revisionsTitle')" x-text="t('editor.revisions', { n: currentPage?.revision_count })"></a>
+        <a x-show="currentPage?.url && currentPage?.revision_count > 0" :href="currentPage?.url + '/revisions'" target="_blank" rel="noopener" class="card-subline-link" :data-tip="t('editor.revisionsTitle')" x-text="t('editor.revisions', { n: currentPage?.revision_count })"></a>
         <span x-show="focusMode && editMode" class="focus-live-counter">
           <span x-text="t('editor.focus.counterTotal', { words: focusCountWords, chars: focusCountChars })"></span>
           <span class="focus-live-counter--today"
@@ -25,6 +25,9 @@
           <span class="display-contents">
             <span class="tok-badge tok-neutral"
               x-text="tokEsts[currentPage.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].chars/1000) + 'k Z' : tokEsts[currentPage.id]?.chars + ' Z'"></span>
+            <span class="tok-badge tok-neutral"
+              :data-tip="t('bookstats.metric.normseiten')"
+              x-text="(Math.round((tokEsts[currentPage.id]?.chars || 0) / 1500 * 10) / 10).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ' + t('bookstats.unit.ns')"></span>
             <span class="tok-badge tok-neutral"
               x-text="tokEsts[currentPage.id]?.words >= 1000 ? '~' + Math.round(tokEsts[currentPage.id].words/1000) + 'k W' : tokEsts[currentPage.id]?.words + ' W'"></span>
             <span class="tok-badge"
@@ -40,31 +43,31 @@
       <div class="card-actions">
       <template x-if="!editMode">
         <span class="display-contents">
-          <button type="button" @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :title="currentPageEmpty ? t('editor.btn.pageEmpty') : t('editor.btn.checkTitle')" x-text="t('editor.btn.check')"></button>
-          <button type="button" @click="startEdit()" :disabled="checkLoading || saveApplying != null || originalHtml === null" :title="t('editor.btn.editTitle')" x-text="t('editor.btn.edit')"></button>
-          <button type="button" @click="startFocusEdit()" :disabled="checkLoading || saveApplying != null || originalHtml === null" :title="t('editor.btn.focusTitle')" x-text="t('editor.btn.focus')"></button>
-          <button type="button" @click="closeFindings()" x-show="checkDone" :title="t('editor.btn.exitCheckTitle')" x-text="t('editor.btn.exitCheck')"></button>
+          <button type="button" @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :data-tip="currentPageEmpty ? t('editor.btn.pageEmpty') : t('editor.btn.checkTitle')" x-text="t('editor.btn.check')"></button>
+          <button type="button" @click="startEdit()" :disabled="checkLoading || saveApplying != null || originalHtml === null" :data-tip="t('editor.btn.editTitle')" x-text="t('editor.btn.edit')"></button>
+          <button type="button" @click="startFocusEdit()" :disabled="checkLoading || saveApplying != null || originalHtml === null" :data-tip="t('editor.btn.focusTitle')" x-text="t('editor.btn.focus')"></button>
+          <button type="button" @click="closeFindings()" x-show="checkDone" :data-tip="t('editor.btn.exitCheckTitle')" x-text="t('editor.btn.exitCheck')"></button>
           <button type="button" class="success" @click="saveCorrections()" :disabled="saveApplying != null" x-show="(correctedHtml && selectedFindings.some(v => v)) || saveApplying != null">
             <span x-show="saveApplying != null" class="spinner"></span><span x-text="saveApplying != null ? t('editor.btn.saveCorrectionsProgress') : t('editor.btn.saveCorrections')"></span>
           </button>
-          <button type="button" @click="toggleChatCard()" :class="{ primary: showChatCard }" :disabled="currentPageEmpty" :title="t('editor.btn.chatTitle')">
+          <button type="button" @click="toggleChatCard()" :class="{ primary: showChatCard }" :disabled="currentPageEmpty" :data-tip="t('editor.btn.chatTitle')">
             <span x-text="t('editor.btn.chat')"></span>
-            <span class="btn-count" x-show="currentPageChatSessionCount > 0" x-text="currentPageChatSessionCount" :title="t('editor.btn.chatCountTitle', { n: currentPageChatSessionCount })"></span>
+            <span class="btn-count" x-show="currentPageChatSessionCount > 0" x-text="currentPageChatSessionCount" :data-tip="t('editor.btn.chatCountTitle', { n: currentPageChatSessionCount })"></span>
           </button>
-          <button type="button" @click="toggleIdeenCard()" :class="{ primary: showIdeenCard }" :title="t('ideen.title')">
+          <button type="button" @click="toggleIdeenCard()" :class="{ primary: showIdeenCard }" :data-tip="t('ideen.title')">
             <span x-text="t('ideen.title')"></span>
-            <span class="btn-count" x-show="currentPageIdeenOpenCount > 0" x-text="currentPageIdeenOpenCount" :title="t('ideen.openCountTitle', { n: currentPageIdeenOpenCount })"></span>
+            <span class="btn-count" x-show="currentPageIdeenOpenCount > 0" x-text="currentPageIdeenOpenCount" :data-tip="t('ideen.openCountTitle', { n: currentPageIdeenOpenCount })"></span>
           </button>
         </span>
       </template>
       <template x-if="editMode">
         <span class="display-contents">
-          <button type="button" class="success" @click="saveEdit()" :disabled="editSaving" :title="t('editor.btn.saveEditTitle')">
+          <button type="button" class="success" @click="saveEdit()" :disabled="editSaving" :data-tip="t('editor.btn.saveEditTitle')">
             <span x-show="editSaving" class="spinner"></span><span x-text="editSaving ? t('common.saving') : t('common.save')"></span>
           </button>
           <button type="button" @click="cancelEdit()" :disabled="editSaving" x-text="t('common.cancel')"></button>
-          <button type="button" @click="closeFindings()" x-show="checkDone && !focusMode" :title="t('editor.btn.exitCheckTitle')" x-text="t('editor.btn.exitCheck')"></button>
-          <button type="button" @click="toggleFocusMode()" :class="{ primary: focusMode }" :title="focusMode ? t('editor.btn.leaveFocusTitle') : t('editor.btn.enterFocusTitle')" x-text="focusMode ? t('editor.btn.leaveFocus') : t('editor.btn.focusShort')"></button>
+          <button type="button" @click="closeFindings()" x-show="checkDone && !focusMode" :data-tip="t('editor.btn.exitCheckTitle')" x-text="t('editor.btn.exitCheck')"></button>
+          <button type="button" @click="toggleFocusMode()" :class="{ primary: focusMode }" :data-tip="focusMode ? t('editor.btn.leaveFocusTitle') : t('editor.btn.enterFocusTitle')" x-text="focusMode ? t('editor.btn.leaveFocus') : t('editor.btn.focusShort')"></button>
         </span>
       </template>
       </div>

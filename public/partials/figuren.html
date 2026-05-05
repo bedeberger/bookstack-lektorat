@@ -94,10 +94,10 @@
                class="combobox-wrap combobox-wrap--compact"></div>
         </div>
         <div class="figuren-graph-toolbar-zoom">
-          <button type="button" class="graph-tool-btn" :title="$app.t('graph.zoomIn')" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 1.3, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">+</button>
-          <button type="button" class="graph-tool-btn" :title="$app.t('graph.zoomOut')" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 0.77, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">−</button>
-          <button type="button" class="graph-tool-btn graph-tool-btn--reset" :title="$app.t('graph.reset')" @click="_figurenNetwork && _figurenNetwork.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } })">&#x26F6;</button>
-          <button type="button" class="graph-tool-btn" :title="figurenGraphFullscreen ? $app.t('graph.fullscreenClose') : $app.t('graph.fullscreen')" @click="toggleFigurenGraphFullscreen()" x-text="figurenGraphFullscreen ? '✕' : '⤢'"></button>
+          <button type="button" class="graph-tool-btn" :data-tip="$app.t('graph.zoomIn')" :aria-label="$app.t('graph.zoomIn')" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 1.3, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">+</button>
+          <button type="button" class="graph-tool-btn" :data-tip="$app.t('graph.zoomOut')" :aria-label="$app.t('graph.zoomOut')" @click="_figurenNetwork && _figurenNetwork.moveTo({ scale: _figurenNetwork.getScale() * 0.77, animation: { duration: 200, easingFunction: 'easeInOutQuad' } })">−</button>
+          <button type="button" class="graph-tool-btn graph-tool-btn--reset" :data-tip="$app.t('graph.reset')" :aria-label="$app.t('graph.reset')" @click="_figurenNetwork && _figurenNetwork.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } })">&#x26F6;</button>
+          <button type="button" class="graph-tool-btn" :data-tip="figurenGraphFullscreen ? $app.t('graph.fullscreenClose') : $app.t('graph.fullscreen')" :aria-label="figurenGraphFullscreen ? $app.t('graph.fullscreenClose') : $app.t('graph.fullscreen')" @click="toggleFigurenGraphFullscreen()" x-text="figurenGraphFullscreen ? '✕' : '⤢'"></button>
         </div>
       </div>
       <div id="figuren-graph" class="figuren-graph-container"></div>
@@ -221,10 +221,10 @@
             <div class="bewertung-section-title" x-text="$app.t('figuren.field.familie')"></div>
             <div class="figur-tags-row">
               <template x-for="pid in (f.eltern_ids || [])" :key="'e'+pid">
-                <span class="tag figur-rel-tag internal-link" :title="$app.t('figuren.rel.parent')" @click.stop="$app.openFigurById(pid)" x-text="'↑ ' + ($app.figurenById.get(pid)?.name || pid)"></span>
+                <span class="tag figur-rel-tag internal-link" :data-tip="$app.t('figuren.rel.parent')" @click.stop="$app.openFigurById(pid)" x-text="'↑ ' + ($app.figurenById.get(pid)?.name || pid)"></span>
               </template>
               <template x-for="sid in (f.geschwister_ids || [])" :key="'s'+sid">
-                <span class="tag figur-rel-tag internal-link" :title="$app.t('figuren.rel.sibling')" @click.stop="$app.openFigurById(sid)" x-text="'⇔ ' + ($app.figurenById.get(sid)?.name || sid)"></span>
+                <span class="tag figur-rel-tag internal-link" :data-tip="$app.t('figuren.rel.sibling')" @click.stop="$app.openFigurById(sid)" x-text="'⇔ ' + ($app.figurenById.get(sid)?.name || sid)"></span>
               </template>
             </div>
           </div>
@@ -241,7 +241,7 @@
                   <template x-if="bz.belege?.length">
                     <span class="figur-bz-belege">
                       <template x-for="(bg, bi) in (bz.belege || [])" :key="bi">
-                        <span class="figur-bz-beleg internal-link" @click.stop="$app.gotoStelle(bg.kapitel, bg.seite)" x-text="bg.seite || bg.kapitel" :title="(bg.kapitel || '') + (bg.seite ? ' · ' + bg.seite : '')"></span>
+                        <span class="figur-bz-beleg internal-link" @click.stop="$app.gotoStelle(bg.kapitel, bg.seite)" x-text="bg.seite || bg.kapitel" :data-tip="(bg.kapitel || '') + (bg.seite ? ' · ' + bg.seite : '')"></span>
                       </template>
                     </span>
                   </template>
