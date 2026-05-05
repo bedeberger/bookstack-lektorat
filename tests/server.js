@@ -31,6 +31,8 @@ const jobs = new Map();
 let jobSeq = 0;
 let lastBsPut = null;
 let lastHistoryPatch = null;
+let pdfProfiles = [];
+let pdfProfileSeq = 0;
 
 const ORIGINAL_HTML = '<p>Der Jungen ging in den Walld. Die Sonne scheinet hell.</p>';
 
@@ -127,6 +129,60 @@ async function handleMockRoute(req, res, urlPath) {
   if (urlPath.match(/^\/history\/check\/\d+\/saved$/) && req.method === 'PATCH') {
     const body = await readBody(req);
     try { lastHistoryPatch = JSON.parse(body); } catch (_) { lastHistoryPatch = null; }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end('{}');
+    return true;
+  }
+
+  // ── PDF-Export-Mocks für E2E-Tests ──────────────────────────────────────
+  // Eigener Reset nur für pdf-profiles, damit Parallel-Lauf mit anderen
+  // Specs (lektorat) den Job-State nicht löscht.
+  if (urlPath === '/__mock/pdf-reset' && req.method === 'POST') {
+    pdfProfiles = [];
+    pdfProfileSeq = 0;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end('{}');
+    return true;
+  }
+  if (urlPath === '/pdf-export/fonts' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ fonts: [
+      { family: 'Lora',             category: 'serif', weights: [400, 700], styles: ['normal','italic'] },
+      { family: 'Playfair Display', category: 'display', weights: [400, 700], styles: ['normal'] },
+    ]}));
+    return true;
+  }
+  if (urlPath.match(/^\/pdf-export\/profiles(\?.*)?$/) && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ profiles: pdfProfiles }));
+    return true;
+  }
+  if (urlPath === '/pdf-export/profiles' && req.method === 'POST') {
+    const body = await readBody(req);
+    let payload = {};
+    try { payload = JSON.parse(body); } catch {}
+    const id = ++pdfProfileSeq;
+    const profile = {
+      id, book_id: payload.book_id || 0, user_email: 'test@x',
+      name: payload.name || 'Profil', config: { layout: { pageSize: 'A4' }, font: {}, chapter: {}, cover: {}, toc: {}, extras: {}, pdfa: {} },
+      is_default: false, has_cover: false,
+    };
+    pdfProfiles.push(profile);
+    res.writeHead(201, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(profile));
+    return true;
+  }
+  const profileMatch = urlPath.match(/^\/pdf-export\/profiles\/(\d+)$/);
+  if (profileMatch && req.method === 'GET') {
+    const p = pdfProfiles.find(x => x.id === parseInt(profileMatch[1]));
+    if (!p) { res.writeHead(404); return res.end('{}'); }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(p));
+    return true;
+  }
+  if (profileMatch && req.method === 'DELETE') {
+    const idx = pdfProfiles.findIndex(x => x.id === parseInt(profileMatch[1]));
+    if (idx >= 0) pdfProfiles.splice(idx, 1);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end('{}');
     return true;

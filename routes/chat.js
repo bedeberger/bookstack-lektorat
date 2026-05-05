@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, getTokenForRequest } = require('../db/schema');
+const { db, getTokenForRequest, upsertBookByName } = require('../db/schema');
 const logger = require('../logger');
 const { callAIChat, parseJSONLenient, chatTemperature } = require('../lib/ai');
 const { toIntId } = require('../lib/validate');
@@ -29,7 +29,7 @@ function normalizeContextInfo(ci) {
 
 /** Neue Chat-Session erstellen */
 router.post('/session', jsonBody, async (req, res) => {
-  const { book_name, page_name } = req.body;
+  const { book_name } = req.body;
   const book_id = toIntId(req.body?.book_id);
   const page_id = toIntId(req.body?.page_id);
   const userEmail = req.session?.user?.email || null;
@@ -69,11 +69,12 @@ router.post('/session', jsonBody, async (req, res) => {
       AND NOT EXISTS (SELECT 1 FROM chat_messages WHERE session_id = chat_sessions.id)
   `).run(page_id, userEmail);
 
+  upsertBookByName(book_id, book_name);
   const now = new Date().toISOString();
   const result = db.prepare(`
-    INSERT INTO chat_sessions (book_id, book_name, page_id, page_name, user_email, created_at, last_message_at, opening_page_text)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(book_id, book_name || null, page_id, page_name || null, userEmail, now, now, openingPageText);
+    INSERT INTO chat_sessions (book_id, page_id, user_email, created_at, last_message_at, opening_page_text)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(book_id, page_id, userEmail, now, now, openingPageText);
   res.json({ id: result.lastInsertRowid });
 });
 
@@ -92,11 +93,12 @@ router.post('/session/book', jsonBody, (req, res) => {
       AND NOT EXISTS (SELECT 1 FROM chat_messages WHERE session_id = chat_sessions.id)
   `).run(book_id, userEmail);
 
+  upsertBookByName(book_id, book_name);
   const now = new Date().toISOString();
   const result = db.prepare(`
-    INSERT INTO chat_sessions (book_id, book_name, kind, user_email, created_at, last_message_at)
-    VALUES (?, ?, 'book', ?, ?, ?)
-  `).run(book_id, book_name || null, userEmail, now, now);
+    INSERT INTO chat_sessions (book_id, kind, user_email, created_at, last_message_at)
+    VALUES (?, 'book', ?, ?, ?)
+  `).run(book_id, userEmail, now, now);
   res.json({ id: result.lastInsertRowid });
 });
 
@@ -109,9 +111,10 @@ router.get('/sessions/book/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const rows = db.prepare(`
-    SELECT cs.id, cs.book_id, cs.book_name, cs.created_at, cs.last_message_at,
+    SELECT cs.id, cs.book_id, b.name AS book_name, cs.created_at, cs.last_message_at,
            (SELECT content FROM chat_messages WHERE session_id = cs.id ORDER BY created_at ASC LIMIT 1) AS preview
     FROM chat_sessions cs
+    LEFT JOIN books b ON b.bookstack_book_id = cs.book_id
     WHERE cs.book_id = ? AND cs.kind = 'book' AND cs.user_email = ?
       AND EXISTS (SELECT 1 FROM chat_messages WHERE session_id = cs.id)
     ORDER BY cs.last_message_at DESC
@@ -127,9 +130,10 @@ router.get('/sessions/:page_id', (req, res) => {
   const pageId = toIntId(req.params.page_id);
   if (!pageId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const rows = db.prepare(`
-    SELECT cs.id, cs.book_id, cs.page_id, cs.page_name, cs.created_at, cs.last_message_at,
+    SELECT cs.id, cs.book_id, cs.page_id, p.page_name, cs.created_at, cs.last_message_at,
            (SELECT content FROM chat_messages WHERE session_id = cs.id ORDER BY created_at ASC LIMIT 1) AS preview
     FROM chat_sessions cs
+    LEFT JOIN pages p ON p.page_id = cs.page_id
     WHERE cs.page_id = ? AND cs.user_email = ?
       AND EXISTS (SELECT 1 FROM chat_messages WHERE session_id = cs.id)
     ORDER BY cs.last_message_at DESC
@@ -144,7 +148,9 @@ router.get('/session/:id', (req, res) => {
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   const session = db.prepare(`
-    SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?
+    SELECT cs.*, p.page_name FROM chat_sessions cs
+    LEFT JOIN pages p ON p.page_id = cs.page_id
+    WHERE cs.id = ? AND cs.user_email = ?
   `).get(id, userEmail);
   if (!session) return res.status(404).json({ error_code: 'SESSION_NOT_FOUND' });
 
@@ -229,9 +235,11 @@ router.post('/send', jsonBody, async (req, res) => {
   let sseStarted = false;
   try {
     // Session validieren
-    const session = db.prepare(
-      'SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?'
-    ).get(session_id, userEmail);
+    const session = db.prepare(`
+      SELECT cs.*, p.page_name FROM chat_sessions cs
+      LEFT JOIN pages p ON p.page_id = cs.page_id
+      WHERE cs.id = ? AND cs.user_email = ?
+    `).get(session_id, userEmail);
     if (!session) return res.status(404).json({ error_code: 'SESSION_NOT_FOUND' });
     logger.info(`[chat/send] «${session.page_name}» session=${session_id} user=${userEmail} book=${session.book_id}`);
 

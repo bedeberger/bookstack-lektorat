@@ -21,21 +21,23 @@ function migrateFromJson() {
   catch (e) { logger.error('Migration: JSON lesen fehlgeschlagen: ' + e.message); return; }
 
   const insCheck = db.prepare(`
-    INSERT INTO page_checks (page_id, page_name, book_id, checked_at, error_count, errors_json, stilanalyse, fazit, model, saved, saved_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    INSERT INTO page_checks (page_id, book_id, checked_at, error_count, errors_json, stilanalyse, fazit, model, saved, saved_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const insReview = db.prepare(`
-    INSERT INTO book_reviews (book_id, book_name, reviewed_at, review_json, model)
-    VALUES (?, ?, ?, ?, ?)`);
+    INSERT INTO book_reviews (book_id, reviewed_at, review_json, model)
+    VALUES (?, ?, ?, ?)`);
+  const { upsertBookByName } = require('./books');
 
   db.transaction(() => {
     for (const r of (h.page_checks || [])) {
-      insCheck.run(r.page_id, r.page_name, r.book_id, r.checked_at,
+      insCheck.run(r.page_id, r.book_id, r.checked_at,
         r.error_count || 0, JSON.stringify(r.errors_json || []),
         r.stilanalyse || null, r.fazit || null, r.model || null,
         r.saved ? 1 : 0, r.saved_at || null);
     }
     for (const r of (h.book_reviews || [])) {
-      insReview.run(r.book_id, r.book_name, r.reviewed_at,
+      if (r.book_name) upsertBookByName(r.book_id, r.book_name);
+      insReview.run(r.book_id, r.reviewed_at,
         JSON.stringify(r.review_json || null), r.model || null);
     }
     for (const [bookId, entry] of Object.entries(h.book_figures || {})) {

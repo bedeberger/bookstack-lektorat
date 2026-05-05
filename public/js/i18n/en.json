@@ -238,6 +238,7 @@
   "pdfExport.saved":                       "Saved",
   "pdfExport.export":                      "Export",
   "pdfExport.exporting":                   "Exporting …",
+  "pdfExport.cancel":                      "Cancel",
   "pdfExport.starting":                    "Starting job …",
   "pdfExport.done":                        "PDF ready – download starting.",
   "pdfExport.pdfaWarning":                 "PDF generated, but PDF/A validator reported issues. File was delivered anyway.",

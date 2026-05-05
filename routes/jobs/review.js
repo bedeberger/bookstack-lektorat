@@ -1,6 +1,6 @@
 'use strict';
 const express = require('express');
-const { db, getBookSettings, getTokenForRequest } = require('../../db/schema');
+const { db, getBookSettings, getTokenForRequest, upsertBookByName } = require('../../db/schema');
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
@@ -100,8 +100,9 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
     if (r?.gesamtnote == null) throw i18nError('job.error.gesamtnoteMissing');
 
     const model = _modelName(process.env.API_PROVIDER || 'claude');
-    db.prepare('INSERT INTO book_reviews (book_id, book_name, reviewed_at, review_json, model, user_email) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(parseInt(bookId), bookName || null, new Date().toISOString(), JSON.stringify(r), model, userEmail || null);
+    if (bookName) upsertBookByName(parseInt(bookId), bookName);
+    db.prepare('INSERT INTO book_reviews (book_id, reviewed_at, review_json, model, user_email) VALUES (?, ?, ?, ?, ?)')
+      .run(parseInt(bookId), new Date().toISOString(), JSON.stringify(r), model, userEmail || null);
 
     completeJob(jobId, { review: r, pageCount: pageContents.length, tokensIn: tok.in, tokensOut: tok.out }, tps(tok));
     logger.info(`«${bookName}» fertig (book=${bookId}, ${pageContents.length} Seiten, Note ${r.gesamtnote}, ${fmtTok(tok.in)}↑ ${fmtTok(tok.out)}↓ Tokens)`);

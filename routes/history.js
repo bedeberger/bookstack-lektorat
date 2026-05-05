@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../db/schema');
+const { db, upsertBookByName } = require('../db/schema');
 const { toIntId } = require('../lib/validate');
 const logger = require('../logger');
 
@@ -8,12 +8,12 @@ const jsonBody = express.json();
 
 // Lektorat-Ergebnis speichern
 router.post('/check', jsonBody, (req, res) => {
-  const { page_id, page_name, book_id, error_count, errors_json, stilanalyse, fazit, model } = req.body;
+  const { page_id, book_id, error_count, errors_json, stilanalyse, fazit, model } = req.body;
   const user_email = req.session?.user?.email || null;
   const result = db.prepare(`
-    INSERT INTO page_checks (page_id, page_name, book_id, checked_at, error_count, errors_json, stilanalyse, fazit, model, user_email)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    page_id, page_name, book_id,
+    INSERT INTO page_checks (page_id, book_id, checked_at, error_count, errors_json, stilanalyse, fazit, model, user_email)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    page_id, book_id,
     new Date().toISOString(),
     error_count || 0,
     JSON.stringify(errors_json || []),
@@ -42,7 +42,12 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
 
   // Erst Ownership prüfen (user_email-Scope), dann updaten. Verhindert ID-Raten
   // über Buch-/User-Grenzen und liefert verifizierte book_id für das Log.
-  const row = db.prepare('SELECT page_id, page_name, book_id, chapter_id FROM page_checks WHERE id = ? AND user_email = ?').get(id, user_email);
+  const row = db.prepare(`
+    SELECT pc.page_id, p.page_name, pc.book_id, pc.chapter_id
+    FROM page_checks pc
+    LEFT JOIN pages p ON p.page_id = pc.page_id
+    WHERE pc.id = ? AND pc.user_email = ?
+  `).get(id, user_email);
   if (!row) return res.status(404).json({ error_code: 'NOT_FOUND' });
 
   db.prepare('UPDATE page_checks SET saved = ?, saved_at = ?, applied_errors_json = COALESCE(?, applied_errors_json), selected_errors_json = COALESCE(?, selected_errors_json), stilkorrektur_log = COALESCE(?, stilkorrektur_log) WHERE id = ? AND user_email = ? AND book_id = ?')
@@ -77,10 +82,12 @@ router.get('/page/:page_id', (req, res) => {
   const pageId = toIntId(req.params.page_id);
   if (!pageId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const rows = db.prepare(`
-    SELECT id, page_id, page_name, book_id, chapter_id, checked_at,
-           error_count, stilanalyse, fazit, model, saved, saved_at
-    FROM page_checks WHERE page_id = ? AND user_email = ?
-    ORDER BY checked_at DESC LIMIT 20`).all(pageId, user_email);
+    SELECT pc.id, pc.page_id, p.page_name, pc.book_id, pc.chapter_id, pc.checked_at,
+           pc.error_count, pc.stilanalyse, pc.fazit, pc.model, pc.saved, pc.saved_at
+    FROM page_checks pc
+    LEFT JOIN pages p ON p.page_id = pc.page_id
+    WHERE pc.page_id = ? AND pc.user_email = ?
+    ORDER BY pc.checked_at DESC LIMIT 20`).all(pageId, user_email);
   res.json(rows.map(r => ({ ...r, saved: !!r.saved })));
 });
 
@@ -107,10 +114,11 @@ router.get('/check/:id/details', (req, res) => {
 router.post('/review', jsonBody, (req, res) => {
   const { book_id, book_name, review_json, model } = req.body;
   const user_email = req.session?.user?.email || null;
+  upsertBookByName(book_id, book_name);
   const result = db.prepare(`
-    INSERT INTO book_reviews (book_id, book_name, reviewed_at, review_json, model, user_email)
-    VALUES (?, ?, ?, ?, ?, ?)`).run(
-    book_id, book_name,
+    INSERT INTO book_reviews (book_id, reviewed_at, review_json, model, user_email)
+    VALUES (?, ?, ?, ?, ?)`).run(
+    book_id,
     new Date().toISOString(),
     JSON.stringify(review_json || null),
     model || null, user_email
@@ -172,8 +180,10 @@ router.get('/review/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const rows = db.prepare(`
-    SELECT * FROM book_reviews WHERE book_id = ? AND user_email = ?
-    ORDER BY reviewed_at DESC LIMIT 10`).all(bookId, user_email);
+    SELECT br.*, b.name AS book_name FROM book_reviews br
+    LEFT JOIN books b ON b.bookstack_book_id = br.book_id
+    WHERE br.book_id = ? AND br.user_email = ?
+    ORDER BY br.reviewed_at DESC LIMIT 10`).all(bookId, user_email);
   res.json(rows.map(r => ({ ...r, review_json: JSON.parse(r.review_json || 'null') })));
 });
 
@@ -184,8 +194,10 @@ router.get('/chapter-reviews/:book_id', (req, res) => {
   const book_id = toIntId(req.params.book_id);
   if (!book_id) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const rows = db.prepare(`
-    SELECT * FROM chapter_reviews WHERE book_id = ? AND user_email = ?
-    ORDER BY chapter_id, reviewed_at DESC`).all(book_id, user_email);
+    SELECT cr.*, b.name AS book_name FROM chapter_reviews cr
+    LEFT JOIN books b ON b.bookstack_book_id = cr.book_id
+    WHERE cr.book_id = ? AND cr.user_email = ?
+    ORDER BY cr.chapter_id, cr.reviewed_at DESC`).all(book_id, user_email);
   const byChapter = {};
   for (const r of rows) {
     const key = String(r.chapter_id);
@@ -240,9 +252,13 @@ router.get('/book-stats/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const rows = db.prepare(`
-    SELECT id, book_id, book_name, recorded_at, page_count, words, chars, tok, unique_words, chapter_count, avg_sentence_len, avg_lix, avg_flesch_de
-    FROM book_stats_history WHERE book_id = ?
-    ORDER BY recorded_at ASC
+    SELECT bsh.id, bsh.book_id, b.name AS book_name, bsh.recorded_at,
+           bsh.page_count, bsh.words, bsh.chars, bsh.tok, bsh.unique_words,
+           bsh.chapter_count, bsh.avg_sentence_len, bsh.avg_lix, bsh.avg_flesch_de
+    FROM book_stats_history bsh
+    LEFT JOIN books b ON b.bookstack_book_id = bsh.book_id
+    WHERE bsh.book_id = ?
+    ORDER BY bsh.recorded_at ASC
   `).all(bookId);
   res.json(rows);
 });
@@ -253,13 +269,14 @@ router.get('/style-stats/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const rows = db.prepare(`
-    SELECT ps.page_id, p.page_name, p.chapter_id, p.chapter_name,
+    SELECT ps.page_id, p.page_name, p.chapter_id, c.chapter_name,
            ps.words, ps.chars, ps.sentences, ps.dialog_chars,
            ps.filler_count, ps.passive_count, ps.adverb_count,
            ps.avg_sentence_len, ps.sentence_len_p90, ps.repetition_data,
            ps.lix, ps.flesch_de, ps.style_samples, ps.metrics_version, ps.cached_at
     FROM page_stats ps
     JOIN pages p ON p.page_id = ps.page_id
+    LEFT JOIN chapters c ON c.chapter_id = p.chapter_id AND c.book_id = p.book_id
     WHERE ps.book_id = ?
     ORDER BY p.chapter_id, p.page_id
   `).all(bookId);
@@ -335,9 +352,10 @@ router.get('/fehler-heatmap/:book_id', (req, res) => {
   const mode = ['open', 'applied', 'all'].includes(req.query.mode) ? req.query.mode : 'open';
 
   const pages = db.prepare(`
-    SELECT p.page_id, p.page_name, p.chapter_id, p.chapter_name,
+    SELECT p.page_id, p.page_name, p.chapter_id, c.chapter_name,
            COALESCE(ps.words, 0) AS words
     FROM pages p
+    LEFT JOIN chapters c ON c.chapter_id = p.chapter_id AND c.book_id = p.book_id
     LEFT JOIN page_stats ps ON ps.page_id = p.page_id
     WHERE p.book_id = ?
   `).all(bookId);
@@ -574,16 +592,17 @@ router.get('/lektorat-time/:book_id', (req, res) => {
   const per_chapter = db.prepare(`
     SELECT
       p.chapter_id                     AS chapter_id,
-      COALESCE(p.chapter_name, '')     AS chapter_name,
+      COALESCE(c.chapter_name, '')     AS chapter_name,
       SUM(lt.seconds)                  AS seconds,
       COUNT(DISTINCT lt.page_id)       AS pages_count,
       COALESCE(SUM(ps.chars), 0)       AS chars,
       COALESCE(SUM(ps.words), 0)       AS words
     FROM lektorat_time lt
-    LEFT JOIN pages p      ON p.page_id      = lt.page_id
-    LEFT JOIN page_stats ps ON ps.page_id    = lt.page_id
+    LEFT JOIN pages p       ON p.page_id      = lt.page_id
+    LEFT JOIN chapters c    ON c.chapter_id   = p.chapter_id AND c.book_id = p.book_id
+    LEFT JOIN page_stats ps ON ps.page_id     = lt.page_id
     WHERE lt.user_email = ? AND lt.book_id = ? AND lt.seconds > 0
-    GROUP BY p.chapter_id, p.chapter_name
+    GROUP BY p.chapter_id, c.chapter_name
     ORDER BY seconds DESC
   `).all(user_email, book_id);
   res.json({

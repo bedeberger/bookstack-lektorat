@@ -346,6 +346,12 @@ export function registerPdfExportCard() {
       a.remove();
     },
 
+    async cancelExport() {
+      if (!this.currentJobId) return;
+      try { await fetch(`/jobs/${this.currentJobId}`, { method: 'DELETE' }); } catch {}
+      // Poll deckt das `cancelled`-Status-Update bereits ab; UI-Reset im Polling.
+    },
+
     // ── Helpers fürs Template ────────────────────────────────────────────
     setTab(tab) { if (TABS.includes(tab)) this.activeTab = tab; },
     isTab(tab) { return this.activeTab === tab; },

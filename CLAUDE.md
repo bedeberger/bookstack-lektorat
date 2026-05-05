@@ -278,26 +278,27 @@ DB-Code ist auf 6 Files in [db/](db/) verteilt: [connection.js](db/connection.js
 
 ### Relationale Integrität (Pflicht)
 
-- **Jede neue Tabelle integriert sich via FK** ins bestehende Schema. Lose `*_id`-Spalten (`page_id`, `chapter_id`, `figure_id`, `location_id`, …) ohne `REFERENCES` sind verboten.
+- **Jede neue Tabelle integriert sich via FK** ins bestehende Schema. Lose `*_id`-Spalten (`book_id`, `page_id`, `chapter_id`, `figure_id`, `location_id`, …) ohne `REFERENCES` sind verboten.
 - Refs auf lokale PKs/UNIQUE-Targets MÜSSEN als FK deklariert werden:
+  - `books(id)` (surrogate PK; externe BookStack-ID liegt in `books.bookstack_book_id` UNIQUE — andere Tabellen referenzieren `books.id`, nicht die externe ID)
   - `pages(page_id)` (PK)
-  - `chapters(chapter_id)` (UNIQUE INDEX seit Mig 71)
+  - `chapters(chapter_id)` (UNIQUE)
   - `figures(id)` (PK; nicht `figures.fig_id` — TEXT, nicht UNIQUE alleine)
   - `locations(id)`, `figure_scenes(id)`, `chat_sessions(id)`, `continuity_*(id)`
 - ON-DELETE-Strategie bewusst wählen:
   - `CASCADE` für reine Caches/Aggregationen (page_stats, chapter_reviews, figure_appearances, location_chapters, lektorat_time, page_figure_mentions, chat_sessions[kind=page], page_checks)
-  - `SET NULL` für user-kuratierte Daten mit Snapshot-Charakter (figure_events.page_id/chapter_id, figure_scenes.page_id/chapter_id, locations.erste_erwaehnung_page_id, ideen.page_id, continuity_issue_chapters.chapter_id, page_checks.chapter_id, pages.chapter_id)
-- **Snapshot-Spalten verboten** (`chapter_name`, `kapitel`, `seite`, `page_name`) in user-kuratierten Tabellen — Display-Werte zur Lese-Zeit per JOIN auf `chapters`/`pages`-Cache. Ausnahmen: User-Session-Snapshots zur Erstellungszeit (`chat_sessions.page_name`, `ideen.page_name`, `chapter_reviews.chapter_name`), `pages.chapter_name` als BookStack-Cache.
+  - `SET NULL` für user-kuratierte Daten (figure_events.page_id/chapter_id, figure_scenes.page_id/chapter_id, locations.erste_erwaehnung_page_id, ideen.page_id, continuity_issue_chapters.chapter_id, page_checks.chapter_id, pages.chapter_id)
+- **Snapshot-Spalten verboten** (`chapter_name`, `kapitel`, `seite`, `page_name`, `book_name`) — keine Ausnahmen. Display-Werte zur Lese-Zeit per JOIN auf `chapters`/`pages`/`books`/`figures`. Wahrheit lebt nur in `pages.page_name`, `chapters.chapter_name`, `books.name` (BookStack-Sync-Caches) und `figures.name` (User-Stamm). Snapshot-Fallback nur bei nullbarem FK, wenn KI-Output keine ID liefern konnte (z. B. `continuity_issue_figures.figur_name` mit nullable `figure_id`).
 - Index auf jede neue FK-Spalte Pflicht (`CREATE INDEX idx_xx_yy ON …`).
-- `book_id` ist BookStack-extern — **kein FK** möglich (keine lokale `books`-Tabelle). Composite-Defensive `(chapter_id, book_id) REFERENCES chapters(chapter_id, book_id)` prüfen, wenn Cross-Book-Bugs möglich.
+- `book_id`-Spalten referenzieren `books(id)` (surrogate PK, super primary key für alle Buch-Refs). Discovery via `upsertBook(b)` / `upsertBookByName(bookstackId, name)` in [routes/sync.js](routes/sync.js) bzw. [db/schema.js](db/schema.js); Mapping `bookstack_book_id` → `books.id`. Composite-Defensive `(chapter_id, book_id) REFERENCES chapters(chapter_id, book_id)` prüfen, wenn Cross-Book-Bugs möglich.
 
 ### Sentinel-freie Modellierung
 
-Vermeide Sentinel-Werte (`page_id=0`, `page_name='__book__'`) als Diskriminator. Stattdessen: explizite Spalte (`kind TEXT NOT NULL CHECK(kind IN ('page','book'))`) + `NULL` für nicht-anwendbare Refs + CHECK-Constraint, der die Kombination erzwingt. Beispiel: `chat_sessions` (Mig 69). Sentinels blockieren FK-Constraints und verstecken Geschäftslogik.
+Vermeide Sentinel-Werte (`page_id=0`, `page_name='__book__'`) als Diskriminator. Stattdessen: explizite Spalte (`kind TEXT NOT NULL CHECK(kind IN ('page','book'))`) + `NULL` für nicht-anwendbare Refs + CHECK-Constraint, der die Kombination erzwingt. Beispiel: `chat_sessions`. Sentinels blockieren FK-Constraints und verstecken Geschäftslogik.
 
 ### Migration hinzufügen
 
-Neuen `if (version < N)`-Block in `runMigrations()` ([db/migrations.js](db/migrations.js)) ergänzen (N = nächste fortlaufende Nummer, aktuell bei **72**) + `UPDATE schema_version SET version = N`. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` mit FKs.
+Neuen `if (version < N)`-Block in `runMigrations()` ([db/migrations.js](db/migrations.js)) ergänzen (N = nächste fortlaufende Nummer, aktuelle Version siehe `schema_version`-Tabelle) + `UPDATE schema_version SET version = N`. Neue Tabellen als `CREATE TABLE IF NOT EXISTS` mit FKs.
 
 **Pflicht: jede Migration endet mit:**
 ```js
@@ -323,7 +324,7 @@ db.prepare('UPDATE schema_version SET version = N').run();
 
 Keine Schemaänderung. `figure_relations.typ` ist Freitext. Neuen Typ in der `BZ`-Konstante (Frontend-Rendering) und im Claude-Prompt (`FIGUREN_BASIS_SCHEMA` in `public/js/prompts/komplett.js`) ergänzen.
 
-`figure_relations.from_fig_id`/`to_fig_id` sind seit Mig 72 INTEGER-FK auf `figures.id` (nicht TEXT-fig_id). Schreib-/Lesepfade übersetzen via Lookup-Map (TEXT-fig_id ↔ INTEGER-id, siehe [db/figures.js](db/figures.js) `saveFigurenToDb`/`updateFigurenSoziogramm` und JOINs in [routes/figures.js](routes/figures.js), [routes/jobs/shared.js](routes/jobs/shared.js)).
+`figure_relations.from_fig_id`/`to_fig_id` sind INTEGER-FK auf `figures.id` (nicht TEXT-fig_id). Schreib-/Lesepfade übersetzen via Lookup-Map (TEXT-fig_id ↔ INTEGER-id, siehe [db/figures.js](db/figures.js) `saveFigurenToDb`/`updateFigurenSoziogramm` und JOINs in [routes/figures.js](routes/figures.js), [routes/jobs/shared.js](routes/jobs/shared.js)).
 
 ## Architektur-Überblick
 

@@ -1,6 +1,6 @@
 'use strict';
 const express = require('express');
-const { db, getBookSettings, getTokenForRequest } = require('../../db/schema');
+const { db, getBookSettings, getTokenForRequest, upsertBookByName } = require('../../db/schema');
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError,
   aiCall, getPrompts, getBookPrompts,
@@ -66,10 +66,11 @@ async function runChapterReviewJob(jobId, bookId, chapterId, chapterName, bookNa
     if (r?.gesamtnote == null) throw i18nError('job.error.gesamtnoteMissing');
 
     const model = _modelName(process.env.API_PROVIDER || 'claude');
+    if (bookName) upsertBookByName(parseInt(bookId), bookName);
     db.prepare(`INSERT INTO chapter_reviews
-      (book_id, book_name, chapter_id, chapter_name, reviewed_at, review_json, model, user_email)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(parseInt(bookId), bookName || null, parseInt(chapterId), chapterName || null,
+      (book_id, chapter_id, reviewed_at, review_json, model, user_email)
+      VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(parseInt(bookId), parseInt(chapterId),
         new Date().toISOString(), JSON.stringify(r), model, userEmail || null);
 
     completeJob(jobId, {

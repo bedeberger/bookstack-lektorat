@@ -10,6 +10,7 @@ const pages = require('./pages');
 const tokens = require('./tokens');
 const pdfExport = require('./pdf-export');
 const fonts = require('./fonts');
+const books = require('./books');
 
 // ── Job-Laufzeiten ────────────────────────────────────────────────────────────
 const _stmtInsJobRun = db.prepare(
@@ -726,6 +727,11 @@ module.exports = {
   // pages
   reconcilePageIds:   pages.reconcilePageIds,
   pruneStaleBookData: pages.pruneStaleBookData,
+  // books
+  upsertBook:         books.upsertBook,
+  upsertBookByName:   books.upsertBookByName,
+  getBookName:        books.getBookName,
+  pruneStaleByAge:    books.pruneStaleByAge,
   // tokens
   getUserToken:       tokens.getUserToken,
   setUserToken:       tokens.setUserToken,

@@ -356,7 +356,11 @@ async function tool_get_pages(input, ctx) {
     try {
       const pd = await bsGet(`pages/${pageId}`, ctx.userToken);
       const text = htmlToText(pd.html || '');
-      const pageRow = db.prepare('SELECT page_name, chapter_name FROM pages WHERE page_id = ?').get(pageId);
+      const pageRow = db.prepare(`
+        SELECT p.page_name, c.chapter_name FROM pages p
+        LEFT JOIN chapters c ON c.chapter_id = p.chapter_id AND c.book_id = p.book_id
+        WHERE p.page_id = ?
+      `).get(pageId);
       results.push({
         page_id: pageId,
         page_name: pageRow?.page_name || pd.name || `#${pageId}`,

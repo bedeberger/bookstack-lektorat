@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, getAnyUserToken, getAllUserTokens, reconcilePageIds, pruneStaleBookData, getTokenForRequest } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
+const { db, getAnyUserToken, getAllUserTokens, reconcilePageIds, pruneStaleBookData, getTokenForRequest, upsertBook } = require('../db/schema'); // getAnyUserToken used in POST /book/:book_id
 const logger = require('../logger');
 const { CHARS_PER_TOKEN } = require('../lib/ai');
 const { toIntId } = require('../lib/validate');
@@ -62,19 +62,20 @@ const upsertPageStatsMany = db.transaction((items) => {
 });
 
 const _upsertPageCacheStmt = db.prepare(`
-  INSERT INTO pages (page_id, book_id, page_name, chapter_id, chapter_name, updated_at)
+  INSERT INTO pages (page_id, book_id, page_name, chapter_id, updated_at, last_seen_at)
   VALUES (?, ?, ?, ?, ?, ?)
   ON CONFLICT(page_id) DO UPDATE SET
     book_id=excluded.book_id, page_name=excluded.page_name,
-    chapter_id=excluded.chapter_id, chapter_name=excluded.chapter_name,
-    updated_at=excluded.updated_at
+    chapter_id=excluded.chapter_id, updated_at=excluded.updated_at,
+    last_seen_at=excluded.last_seen_at
 `);
 
 const _upsertChapterStmt = db.prepare(`
-  INSERT INTO chapters (chapter_id, book_id, chapter_name, updated_at)
-  VALUES (?, ?, ?, ?)
+  INSERT INTO chapters (chapter_id, book_id, chapter_name, updated_at, last_seen_at)
+  VALUES (?, ?, ?, ?, ?)
   ON CONFLICT(chapter_id, book_id) DO UPDATE SET
-    chapter_name=excluded.chapter_name, updated_at=excluded.updated_at
+    chapter_name=excluded.chapter_name, updated_at=excluded.updated_at,
+    last_seen_at=excluded.last_seen_at
 `);
 
 // Mig 75: chapter_extract_cache.chapter_id INTEGER FK; Rename invalidiert alle phases.
@@ -85,8 +86,6 @@ const _delChapterCacheByChapterId = db.prepare(
 // Leichtgewichtiger pages-Cache-Update (ohne Seiten-Inhalte laden).
 // Wird sowohl von syncBook() als auch vom /sync/pages/:book_id-Endpunkt genutzt.
 function _upsertPagesCache(bookId, pages, chapters) {
-  const chMap = Object.fromEntries(chapters.map(c => [c.id, c.name]));
-
   // Kapitel-Umbenennungen erkennen → Extrakt-Cache für alle User invalidieren.
   const storedChapters = db.prepare('SELECT chapter_id, chapter_name FROM chapters WHERE book_id = ?').all(bookId);
   const storedChMap = Object.fromEntries(storedChapters.map(c => [c.chapter_id, c.chapter_name]));
@@ -97,17 +96,18 @@ function _upsertPagesCache(bookId, pages, chapters) {
     }
   }
 
+  const seenAt = new Date().toISOString();
   db.transaction(() => {
     // Chapters VOR pages upsertten — pages.chapter_id ist FK auf chapters(chapter_id).
     for (const c of chapters) {
-      _upsertChapterStmt.run(c.id, bookId, c.name, c.updated_at || null);
+      _upsertChapterStmt.run(c.id, bookId, c.name, c.updated_at || null, seenAt);
     }
     for (const p of pages) {
       _upsertPageCacheStmt.run(
         p.id, bookId, p.name,
         p.chapter_id || null,
-        p.chapter_id ? (chMap[p.chapter_id] || null) : null,
-        p.updated_at || null
+        p.updated_at || null,
+        seenAt
       );
     }
   })();
@@ -172,7 +172,10 @@ async function syncBook(bookId, token) {
   ]);
   const chapterCount = chapters.length;
 
+  upsertBook(book);
   const bookName = book.name || '';
+  // bookName lokal weiterhin fuer Logger; book_stats_history.book_name wurde
+  // in Mig 78 entfernt — Anzeige laeuft jetzt ueber JOIN auf books(name).
   const now = new Date().toISOString();
   const BATCH = 5;
   const statsItems = [];
@@ -264,15 +267,15 @@ async function syncBook(bookId, token) {
 
   const today = new Date().toISOString().slice(0, 10);
   db.prepare(`
-    INSERT INTO book_stats_history (book_id, book_name, recorded_at, page_count, words, chars, tok, unique_words, chapter_count, avg_sentence_len, avg_lix, avg_flesch_de)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO book_stats_history (book_id, recorded_at, page_count, words, chars, tok, unique_words, chapter_count, avg_sentence_len, avg_lix, avg_flesch_de)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(book_id, recorded_at) DO UPDATE SET
-      book_name=excluded.book_name, page_count=excluded.page_count,
+      page_count=excluded.page_count,
       words=excluded.words, chars=excluded.chars, tok=excluded.tok,
       unique_words=excluded.unique_words, chapter_count=excluded.chapter_count,
       avg_sentence_len=excluded.avg_sentence_len,
       avg_lix=excluded.avg_lix, avg_flesch_de=excluded.avg_flesch_de
-  `).run(bookId, bookName, today, pages.length, totalWords, totalChars, totalTok, uniqueWords, chapterCount, avgSentenceLen, avgLix, avgFleschDe);
+  `).run(bookId, today, pages.length, totalWords, totalChars, totalTok, uniqueWords, chapterCount, avgSentenceLen, avgLix, avgFleschDe);
 
   logger.info(`Sync Buch ${bookId} (${bookName}): ${pages.length} Seiten, ${chapterCount} Kapitel, ${totalWords} Wörter, ${uniqueWords} einzigartige, Ø ${avgSentenceLen} W/Satz, LIX ${avgLix}, Flesch ${avgFleschDe}`);
   return { page_count: pages.length, words: totalWords, chars: totalChars, tok: totalTok, unique_words: uniqueWords, chapter_count: chapterCount, avg_sentence_len: avgSentenceLen, avg_lix: avgLix, avg_flesch_de: avgFleschDe };
@@ -294,6 +297,7 @@ async function syncAllBooks() {
     try {
       const books = await bsGetAll('books', u);
       for (const b of books) {
+        upsertBook(b);
         const entry = bookOwners.get(b.id);
         if (entry) entry.tokens.push(u);
         else bookOwners.set(b.id, { name: b.name, tokens: [u] });

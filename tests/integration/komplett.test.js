@@ -208,9 +208,9 @@ test('Komplettanalyse Multi-Pass: 3 Kapitel → 3 P1-Chunks + Konsol-Calls', asy
   // (P3b skipped: figuren.length=1 < 2; Zeitstrahl skipped: 0 events; Soziogramm skipped: < 4 figuren.)
   assert.equal(ctx.mockAi.log.length, 6, `expected 6 AI calls, got ${ctx.mockAi.log.length}`);
 
-  // Per-chunk cache populated (3 entries).
+  // Per-chunk cache populated (3 entries, eine pro Kapitel).
   const cacheRows = ctx.dbSchema.db.prepare(
-    `SELECT chapter_key FROM chapter_extract_cache WHERE book_id = ? AND user_email = ?`
+    `SELECT chapter_id FROM chapter_extract_cache WHERE book_id = ? AND user_email = ?`
   ).all(BOOK_ID, 'tester@test.dev');
   assert.equal(cacheRows.length, 3, 'expected 3 chapter_extract_cache rows');
 });

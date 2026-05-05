@@ -238,6 +238,7 @@
   "pdfExport.saved":                       "Gespeichert",
   "pdfExport.export":                      "Exportieren",
   "pdfExport.exporting":                   "Exportiere …",
+  "pdfExport.cancel":                      "Abbrechen",
   "pdfExport.starting":                    "Job wird gestartet …",
   "pdfExport.done":                        "PDF erstellt – Download startet.",
   "pdfExport.pdfaWarning":                 "PDF erstellt, aber PDF/A-Validator meldet Abweichungen. Datei wurde trotzdem geliefert.",

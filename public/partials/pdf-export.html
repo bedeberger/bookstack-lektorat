@@ -365,9 +365,15 @@
           <span x-text="saving ? $app.t('common.saving') : $app.t('common.save')"></span>
         </button>
         <span class="pdfx-saved-marker" x-show="savedAt" x-text="$app.t('pdfExport.saved')"></span>
-        <button type="button" class="pdfx-btn pdfx-btn--primary" :disabled="exporting" @click="exportPdf()">
-          <span x-show="exporting" class="spinner"></span>
-          <span x-text="exporting ? $app.t('pdfExport.exporting') : $app.t('pdfExport.export')"></span>
+        <button type="button" class="pdfx-btn pdfx-btn--primary"
+                x-show="!exporting"
+                @click="exportPdf()"
+                x-text="$app.t('pdfExport.export')"></button>
+        <button type="button" class="pdfx-btn pdfx-btn--ghost"
+                x-show="exporting"
+                @click="cancelExport()">
+          <span class="spinner"></span>
+          <span x-text="$app.t('pdfExport.cancel')"></span>
         </button>
       </div>
 

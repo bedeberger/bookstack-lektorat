@@ -76,11 +76,15 @@
 /* Tabs */
 .pdfx-tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0;
   border-bottom: 0.5px solid var(--color-border);
   margin-bottom: 0.85rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
+.pdfx-tab { flex-shrink: 0; }
 .pdfx-tab {
   padding: 0.5rem 0.9rem;
   border: none;
@@ -186,11 +190,11 @@
 .pdfx-btn:hover:not(:disabled) { border-color: var(--color-accent); background: var(--color-bg); }
 .pdfx-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .pdfx-btn--primary {
-  background: var(--color-accent);
+  background: var(--color-primary);
   color: #fff;
-  border-color: var(--color-accent);
+  border-color: var(--color-primary);
 }
-.pdfx-btn--primary:hover:not(:disabled) { background: var(--color-accent-strong, var(--color-accent)); }
+.pdfx-btn--primary:hover:not(:disabled) { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
 .pdfx-btn--ghost { background: transparent; }
 .pdfx-btn--danger { color: var(--color-danger, #c33); }
 .pdfx-btn--danger:hover:not(:disabled) { border-color: var(--color-danger, #c33); }

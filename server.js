@@ -9,7 +9,7 @@ const path = require('path');
 const logger = require('./logger');
 
 // DB-Setup + Migrationen laufen beim Import
-const { db, cleanupStuckJobRuns, upsertUserLogin, touchUserLastSeen, addUserActivity } = require('./db/schema');
+const { db, cleanupStuckJobRuns, upsertUserLogin, touchUserLastSeen, addUserActivity, pruneStaleByAge } = require('./db/schema');
 
 const authRouter = require('./routes/auth');
 const historyRouter = require('./routes/history');
@@ -242,6 +242,36 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   // Hängende Job-Runs aus dem letzten Server-Leben bereinigen
   const stuck = cleanupStuckJobRuns();
   if (stuck > 0) logger.warn(`Startup: ${stuck} hängender Job-Run(s) auf 'error' gesetzt.`);
+
+  // Catch-up: täglicher 02:00-Sync nachholen, falls Server zur Cron-Zeit aus war.
+  // Stale-Cleanup laeuft NACH dem Sync — Sync setzt last_seen_at frisch, sodass
+  // wieder-erreichbare Buecher nicht versehentlich geprunt werden, wenn der
+  // 02:00-Cron nie lief.
+  let syncPromise = Promise.resolve();
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const row = db.prepare('SELECT MAX(recorded_at) AS last FROM book_stats_history').get();
+    if (!row?.last || row.last < today) {
+      logger.info(`Startup: book_stats_history letzter Eintrag ${row?.last || 'nie'} – hole Sync nach.`);
+      syncPromise = syncAllBooks().catch(e => logger.error('Startup-Sync Fehler: ' + e.message));
+    } else {
+      logger.info('Startup: Sync für heute bereits erfolgt – kein Catch-up nötig.');
+    }
+  } catch (e) {
+    logger.error('Startup-Catch-up Fehler: ' + e.message);
+  }
+
+  syncPromise.finally(() => {
+    const staleDays = Math.max(1, parseInt(process.env.STALE_DAYS || '7', 10));
+    try {
+      const counts = pruneStaleByAge(staleDays);
+      if (!counts.stale_books && !counts.stale_chapters && !counts.stale_pages) {
+        logger.info('Startup: Keine Stale-Eintraege gefunden.');
+      }
+    } catch (e) {
+      logger.error('Startup Stale-Cleanup Fehler: ' + e.message);
+    }
+  });
 });
 
 // ── Graceful Shutdown ────────────────────────────────────────────────────────
@@ -288,6 +318,27 @@ try {
     else logger.info('Cron: Keine hängenden Job-Runs gefunden.');
   }, { timezone: cronTz });
   logger.info(`Cron-Job registriert: Buchstatistik-Sync + Job-Cleanup täglich 02:00 (${cronTz})`);
+
+  // 04:00 – Stale-Cleanup. Eintraege (books/chapters/pages), deren letzter
+  // Discovery-Touch (last_seen_at) aelter ist als STALE_DAYS, werden geloescht.
+  // Faengt Loeschungen ab, die presence-basiertes Pruning verfehlt: Buecher
+  // ohne berechtigten User-Token, oder solche die im Sync-Lauf fehlgeschlagen
+  // sind. Schwelle gross genug, dass ein einzelner Sync-Fehler nicht sofort
+  // zuschlaegt. Laeuft 2h nach dem 02:00-Sync, damit aktuelle last_seen_at-
+  // Touches schon eingebrannt sind.
+  const staleDays = Math.max(1, parseInt(process.env.STALE_DAYS || '7', 10));
+  cron.schedule('0 4 * * *', () => {
+    logger.info(`Cron: Starte Stale-Cleanup (Schwelle ${staleDays} Tage)…`);
+    try {
+      const counts = pruneStaleByAge(staleDays);
+      if (!counts.stale_books && !counts.stale_chapters && !counts.stale_pages) {
+        logger.info('Cron: Keine Stale-Eintraege gefunden.');
+      }
+    } catch (e) {
+      logger.error('Cron Stale-Cleanup Fehler: ' + e.message);
+    }
+  }, { timezone: cronTz });
+  logger.info(`Cron-Job registriert: Stale-Cleanup täglich 04:00 (${cronTz}, Schwelle ${staleDays} Tage)`);
 
   // 03:00 – Nacht-Komplettanalyse für alle Bücher × alle User (deaktiviert)
   // cron.schedule('0 3 * * *', () => {

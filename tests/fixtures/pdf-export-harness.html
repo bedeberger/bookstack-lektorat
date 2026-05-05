@@ -1,0 +1,67 @@
+<!doctype html>
+<!-- Mini-Harness für Playwright-Tests gegen pdfExportCard. Alpine wird als
+     klassisches Script geladen (wie im Hauptbundle), Card-Modul danach via
+     ESM. Backend-Mocks für /pdf-export/* in tests/server.js. -->
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>PDF-Export Harness</title>
+  <link rel="stylesheet" href="/public/css/tokens.css">
+  <link rel="stylesheet" href="/public/css/base.css">
+  <link rel="stylesheet" href="/public/css/buttons-badges.css">
+  <link rel="stylesheet" href="/public/css/card-form.css">
+  <link rel="stylesheet" href="/public/css/pdf-export.css">
+  <style>body { padding: 1rem; max-width: 1200px; margin: 0 auto; }</style>
+
+  <!-- Alpine als globaler Script-Tag (gleich wie public/index.html) -->
+  <script src="/public/vendor/alpine-3.14.9.min.js" defer></script>
+</head>
+<body>
+
+<div id="root">
+  <div id="partial-pdf-export"></div>
+</div>
+
+<script type="module">
+  // Warten, bis Alpine via defer-Script geladen + initialisiert ist (window.Alpine
+  // wird vor `alpine:init` gesetzt, aber `Alpine.data()` muss VOR Alpine.start
+  // registriert sein. Wir hooken auf alpine:init.
+  function whenAlpineReady(fn) {
+    if (window.Alpine && typeof window.Alpine.data === 'function') return fn();
+    document.addEventListener('alpine:init', fn, { once: true });
+  }
+
+  whenAlpineReady(async () => {
+    const dict = await fetch('/public/js/i18n/de.json').then(r => r.json());
+    function tStub(key, params = {}) {
+      let s = dict[key] || key;
+      for (const [k, v] of Object.entries(params || {})) s = s.replaceAll('{' + k + '}', v);
+      return s;
+    }
+
+    window.__app = {
+      selectedBookId: 1,
+      selectedBookName: 'Test',
+      showPdfExportCard: true,
+      t: tStub,
+      togglePdfExportCard() { this.showPdfExportCard = !this.showPdfExportCard; },
+    };
+
+    window.Alpine.magic('app', () => window.__app);
+
+    const { registerPdfExportCard } = await import('/public/js/cards/pdf-export-card.js');
+    registerPdfExportCard();
+
+    // Partial in das DOM einhängen — appendChild via template (kein innerHTML).
+    const html = await fetch('/public/partials/pdf-export.html').then(r => r.text());
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    const slot = document.getElementById('partial-pdf-export');
+    slot.appendChild(tpl.content);
+    window.Alpine.initTree(slot);
+    window.__harnessReady = true;
+  });
+</script>
+
+</body>
+</html>

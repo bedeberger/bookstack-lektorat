@@ -15,6 +15,10 @@ test('CRUD-Cycle für pdf_export_profile', () => {
   const userA = 'a@x.test';
   const userB = 'b@x.test';
 
+  // Mig 81: pdf_export_profile.book_id FK -> books(bookstack_book_id).
+  // Test-Buch im books-Cache anlegen.
+  schema.upsertBookByName(42, 'Test-Buch 42');
+
   const p1 = schema.createPdfExportProfile(42, userA, 'A4 Print', { layout: { pageSize: 'A4' } });
   assert.ok(p1.id);
   assert.equal(p1.is_default, false);

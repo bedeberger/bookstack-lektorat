@@ -2366,6 +2366,575 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 75 abgeschlossen (chapter_extract_cache split + FK CASCADE auf chapters).');
   }
 
+  if (version < 76) {
+    // CHECK-Constraints fuer server-kontrollierte Spalten:
+    //   job_runs.status: festes Enum (5 Zustaende vom Job-Lifecycle).
+    //   page_stats.{tok,words,chars,sentences,dialog_chars,filler_count,
+    //                passive_count,adverb_count,sentence_len_p90}: NULL OK, sonst >= 0.
+    // Spalten von KI-Output (figures.geschlecht, continuity_issues.schwere etc.)
+    // bleiben constraint-frei — KI kann atypische Werte liefern.
+    db.pragma('foreign_keys = OFF');
+
+    // Pre-Cleanup: ungueltige status-Werte (defensive — sollte nicht vorkommen).
+    db.exec(`
+      UPDATE job_runs SET status = 'error'
+      WHERE status NOT IN ('queued','running','done','error','cancelled');
+      UPDATE page_stats SET tok = NULL WHERE tok < 0;
+      UPDATE page_stats SET words = NULL WHERE words < 0;
+      UPDATE page_stats SET chars = NULL WHERE chars < 0;
+      UPDATE page_stats SET sentences = NULL WHERE sentences < 0;
+      UPDATE page_stats SET dialog_chars = NULL WHERE dialog_chars < 0;
+      UPDATE page_stats SET filler_count = NULL WHERE filler_count < 0;
+      UPDATE page_stats SET passive_count = NULL WHERE passive_count < 0;
+      UPDATE page_stats SET adverb_count = NULL WHERE adverb_count < 0;
+      UPDATE page_stats SET sentence_len_p90 = NULL WHERE sentence_len_p90 < 0;
+    `);
+
+    db.exec(`
+      DROP TABLE IF EXISTS job_runs_new;
+      CREATE TABLE job_runs_new (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id         TEXT NOT NULL UNIQUE,
+        type           TEXT NOT NULL,
+        book_id        INTEGER,
+        user_email     TEXT,
+        label          TEXT,
+        status         TEXT NOT NULL DEFAULT 'queued'
+                         CHECK (status IN ('queued','running','done','error','cancelled')),
+        queued_at      TEXT NOT NULL,
+        started_at     TEXT,
+        ended_at       TEXT,
+        tokens_in      INTEGER DEFAULT 0,
+        tokens_out     INTEGER DEFAULT 0,
+        error          TEXT,
+        tokens_per_sec REAL
+      );
+      INSERT INTO job_runs_new
+        (id, job_id, type, book_id, user_email, label, status, queued_at, started_at, ended_at, tokens_in, tokens_out, error, tokens_per_sec)
+      SELECT
+        id, job_id, type, book_id, user_email, label, status, queued_at, started_at, ended_at, tokens_in, tokens_out, error, tokens_per_sec
+      FROM job_runs;
+      DROP TABLE job_runs;
+      ALTER TABLE job_runs_new RENAME TO job_runs;
+      CREATE INDEX idx_jr_book      ON job_runs(book_id);
+      CREATE INDEX idx_jr_user      ON job_runs(user_email);
+      CREATE INDEX idx_jr_status    ON job_runs(status);
+      CREATE INDEX idx_jr_queued_at ON job_runs(queued_at DESC);
+
+      DROP TABLE IF EXISTS page_stats_new;
+      CREATE TABLE page_stats_new (
+        page_id          INTEGER PRIMARY KEY REFERENCES pages(page_id) ON DELETE CASCADE,
+        book_id          INTEGER NOT NULL,
+        tok              INTEGER CHECK (tok IS NULL OR tok >= 0),
+        words            INTEGER CHECK (words IS NULL OR words >= 0),
+        chars            INTEGER CHECK (chars IS NULL OR chars >= 0),
+        updated_at       TEXT,
+        cached_at        TEXT,
+        sentences        INTEGER CHECK (sentences IS NULL OR sentences >= 0),
+        dialog_chars     INTEGER CHECK (dialog_chars IS NULL OR dialog_chars >= 0),
+        pronoun_counts   TEXT,
+        metrics_version  INTEGER DEFAULT 0,
+        content_sig      TEXT,
+        filler_count     INTEGER CHECK (filler_count IS NULL OR filler_count >= 0),
+        passive_count    INTEGER CHECK (passive_count IS NULL OR passive_count >= 0),
+        adverb_count     INTEGER CHECK (adverb_count IS NULL OR adverb_count >= 0),
+        avg_sentence_len REAL,
+        sentence_len_p90 INTEGER CHECK (sentence_len_p90 IS NULL OR sentence_len_p90 >= 0),
+        repetition_data  TEXT,
+        lix              REAL,
+        flesch_de        REAL,
+        style_samples    TEXT
+      );
+      INSERT INTO page_stats_new SELECT
+        page_id, book_id, tok, words, chars, updated_at, cached_at,
+        sentences, dialog_chars, pronoun_counts, metrics_version, content_sig,
+        filler_count, passive_count, adverb_count, avg_sentence_len, sentence_len_p90,
+        repetition_data, lix, flesch_de, style_samples FROM page_stats;
+      DROP TABLE page_stats;
+      ALTER TABLE page_stats_new RENAME TO page_stats;
+      CREATE INDEX idx_ps_book_id ON page_stats(book_id);
+    `);
+
+    db.pragma('foreign_keys = ON');
+    const fkErrors = db.pragma('foreign_key_check');
+    if (fkErrors.length) {
+      throw new Error(`Migration 76: foreign_key_check meldet ${fkErrors.length} Verstoesse: ${JSON.stringify(fkErrors.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 76').run();
+    logger.info('DB-Migration auf Version 76 abgeschlossen (CHECK-Constraints: job_runs.status enum, page_stats numeric >= 0).');
+  }
+
+  if (version < 77) {
+    // Lokale `books`-Tabelle als FK-Target. `bookstack_book_id` ist der
+    // BookStack-externe Identifier (UNIQUE). Bestehende `book_id`-Spalten in
+    // den 26+ Tabellen behalten ihren Wert; FK-Constraints auf
+    // books(bookstack_book_id) folgen tabellenweise in spaeteren Migrationen.
+    //
+    // Backfill: DISTINCT book_ids aus allen bekannten Tabellen + juengste
+    // bekannte Namen aus Snapshot-Spalten (book_stats_history,
+    // chat_sessions, book_reviews, chapter_reviews). Sentinel-Zeile
+    // (bookstack_book_id=0) fuer pdf_export_profile.book_id=0
+    // (User-Default-Vorlagen).
+    db.prepare(
+      'CREATE TABLE IF NOT EXISTS books ('
+      + ' id                INTEGER PRIMARY KEY AUTOINCREMENT,'
+      + ' bookstack_book_id INTEGER NOT NULL UNIQUE,'
+      + ' name              TEXT    NOT NULL,'
+      + ' slug              TEXT,'
+      + ' created_at        TEXT    NOT NULL,'
+      + ' updated_at        TEXT    NOT NULL'
+      + ')'
+    ).run();
+
+    const nowIso77 = new Date().toISOString();
+
+    db.prepare(
+      "INSERT OR IGNORE INTO books (bookstack_book_id, name, created_at, updated_at) VALUES (0, '__user_default__', ?, ?)"
+    ).run(nowIso77, nowIso77);
+
+    // Juengsten bekannten Namen pro book_id aus Snapshot-Spalten sammeln.
+    // Reihenfolge nach Frische: book_stats_history (taeglicher Cron) >
+    // chat_sessions (Session-Erstellung) > book_reviews / chapter_reviews
+    // (Job-Ergebnisse). Erste Eintragung gewinnt — daher frischeste zuerst.
+    const nameByBook77 = new Map();
+    const collect77 = (sql) => {
+      for (const r of db.prepare(sql).all()) {
+        if (!r.book_id || r.book_id === 0) continue;
+        if (!r.book_name) continue;
+        if (!nameByBook77.has(r.book_id)) nameByBook77.set(r.book_id, r.book_name);
+      }
+    };
+    const knownTables77 = new Set(
+      db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r => r.name)
+    );
+    if (knownTables77.has('book_stats_history')) collect77("SELECT book_id, book_name FROM book_stats_history WHERE book_name IS NOT NULL ORDER BY recorded_at DESC");
+    if (knownTables77.has('chat_sessions'))      collect77("SELECT book_id, book_name FROM chat_sessions       WHERE book_name IS NOT NULL ORDER BY created_at  DESC");
+    if (knownTables77.has('book_reviews'))       collect77("SELECT book_id, book_name FROM book_reviews        WHERE book_name IS NOT NULL ORDER BY reviewed_at DESC");
+    if (knownTables77.has('chapter_reviews'))    collect77("SELECT book_id, book_name FROM chapter_reviews     WHERE book_name IS NOT NULL ORDER BY reviewed_at DESC");
+
+    // Alle DISTINCT book_ids aus allen book_id-tragenden Tabellen sammeln.
+    // Tabellen, die auf einer alten DB evtl. fehlen, werden uebersprungen.
+    const bookIdTables77 = [
+      'figures', 'figure_relations', 'page_stats', 'book_stats_history',
+      'chat_sessions', 'figure_scenes', 'locations', 'continuity_checks',
+      'continuity_issues', 'pages', 'chapters', 'job_runs', 'job_checkpoints',
+      'book_settings', 'page_checks', 'book_reviews', 'zeitstrahl_events',
+      'character_arcs', 'chapter_extract_cache', 'book_extract_cache',
+      'ideen', 'finetune_ai_cache', 'writing_time', 'lektorat_time',
+      'user_page_usage', 'pdf_export_profile', 'chapter_reviews',
+    ];
+    const bookIds77 = new Set();
+    for (const t of bookIdTables77) {
+      if (!knownTables77.has(t)) continue;
+      const rows = db.prepare(`SELECT DISTINCT book_id FROM ${t} WHERE book_id IS NOT NULL AND book_id > 0`).all();
+      for (const r of rows) bookIds77.add(r.book_id);
+    }
+
+    const insBook77 = db.prepare(
+      'INSERT OR IGNORE INTO books (bookstack_book_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)'
+    );
+    let inserted77 = 0;
+    db.transaction(() => {
+      for (const bsId of bookIds77) {
+        const name = nameByBook77.get(bsId) || `Buch ${bsId}`;
+        const r = insBook77.run(bsId, name, nowIso77, nowIso77);
+        if (r.changes) inserted77++;
+      }
+    })();
+
+    const fkErrors77 = db.pragma('foreign_key_check');
+    if (fkErrors77.length) {
+      throw new Error(`Migration 77: foreign_key_check meldet ${fkErrors77.length} Verstoesse: ${JSON.stringify(fkErrors77.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 77').run();
+    logger.info(`DB-Migration auf Version 77 abgeschlossen (books-Tabelle + Backfill: ${inserted77} Buecher aus ${bookIds77.size} bekannten BookStack-IDs).`);
+  }
+
+  if (version < 78) {
+    // Snapshot-Spalten in user-kuratierten und Cache-Tabellen entfernen.
+    // Wahrheit lebt nur in pages.page_name (BookStack-Tree-Cache) und
+    // chapters.chapter_name (BookStack-Cache). Display-Werte zur Lese-Zeit
+    // per JOIN.
+    //
+    // Index pages(book_id, chapter_name) ist seit Mig 70 tot (reconcilePageIds
+    // braucht ihn nicht mehr) und blockiert DROP COLUMN — daher zuerst weg.
+    db.pragma('foreign_keys = OFF');
+    db.prepare('DROP INDEX IF EXISTS idx_pages_book_chapter_name').run();
+    db.prepare('ALTER TABLE pages           DROP COLUMN chapter_name').run();
+    db.prepare('ALTER TABLE page_checks     DROP COLUMN page_name').run();
+    db.prepare('ALTER TABLE chat_sessions   DROP COLUMN page_name').run();
+    db.prepare('ALTER TABLE ideen           DROP COLUMN page_name').run();
+    db.prepare('ALTER TABLE chapter_reviews DROP COLUMN chapter_name').run();
+    db.pragma('foreign_keys = ON');
+    const fkErrors78 = db.pragma('foreign_key_check');
+    if (fkErrors78.length) {
+      throw new Error(`Migration 78: foreign_key_check meldet ${fkErrors78.length} Verstoesse: ${JSON.stringify(fkErrors78.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 78').run();
+    logger.info('DB-Migration auf Version 78 abgeschlossen (Snapshot-Spalten page_name/chapter_name aus user-kuratierten Tabellen entfernt; Display per JOIN auf pages/chapters).');
+  }
+
+  if (version < 79) {
+    // book_name-Snapshot-Spalten entfernen — Wahrheit lebt seit Mig 77 in
+    // books(name). Display-Werte zur Lese-Zeit per JOIN auf
+    // books.bookstack_book_id. Spalten haben keine Indexe oder Constraints,
+    // ALTER TABLE DROP COLUMN reicht (kein Recreate-Pattern noetig).
+    db.pragma('foreign_keys = OFF');
+    db.prepare('ALTER TABLE chat_sessions      DROP COLUMN book_name').run();
+    db.prepare('ALTER TABLE book_stats_history DROP COLUMN book_name').run();
+    db.prepare('ALTER TABLE book_reviews       DROP COLUMN book_name').run();
+    db.prepare('ALTER TABLE chapter_reviews    DROP COLUMN book_name').run();
+    db.pragma('foreign_keys = ON');
+    const fkErrors79 = db.pragma('foreign_key_check');
+    if (fkErrors79.length) {
+      throw new Error(`Migration 79: foreign_key_check meldet ${fkErrors79.length} Verstoesse: ${JSON.stringify(fkErrors79.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 79').run();
+    logger.info('DB-Migration auf Version 79 abgeschlossen (Snapshot-Spalte book_name aus 4 Tabellen entfernt; Display per JOIN auf books(name)).');
+  }
+
+  if (version < 80) {
+    // last_seen_at: Discovery-Marker, wird bei jedem Sync (BookStack-Discovery)
+    // auf jetzt gesetzt. Cron prunt Eintraege deren last_seen_at aelter als
+    // STALE_DAYS — zeitbasierte Bereinigung obendrein zur bestehenden
+    // presence-basierten pruneStaleBookData.
+    // Backfill auf jetzt: alle Bestandseintraege bekommen frische Schonfrist.
+    const now80 = new Date().toISOString();
+    db.prepare('ALTER TABLE books    ADD COLUMN last_seen_at TEXT').run();
+    db.prepare('ALTER TABLE chapters ADD COLUMN last_seen_at TEXT').run();
+    db.prepare('ALTER TABLE pages    ADD COLUMN last_seen_at TEXT').run();
+    db.prepare('UPDATE books    SET last_seen_at = ?').run(now80);
+    db.prepare('UPDATE chapters SET last_seen_at = ?').run(now80);
+    db.prepare('UPDATE pages    SET last_seen_at = ?').run(now80);
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_books_last_seen    ON books(last_seen_at)').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_chapters_last_seen ON chapters(last_seen_at)').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_pages_last_seen    ON pages(last_seen_at)').run();
+    const fkErrors80 = db.pragma('foreign_key_check');
+    if (fkErrors80.length) {
+      throw new Error(`Migration 80: foreign_key_check meldet ${fkErrors80.length} Verstoesse: ${JSON.stringify(fkErrors80.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 80').run();
+    logger.info('DB-Migration auf Version 80 abgeschlossen (last_seen_at + Indexe fuer books/chapters/pages; Backfill auf jetzt).');
+  }
+
+  if (version < 81) {
+    // FK-Anreicherung Phase 3a: book_id -> books(bookstack_book_id) fuer 15
+    // nicht-strukturelle Tabellen (Caches, Stats, Logs, Konfigurations-
+    // Singletons, Job-Tracking). Strukturelle Tabellen (chat_sessions,
+    // book_reviews, chapter_reviews, ideen, page_checks, locations,
+    // figure_scenes, pages, chapters, figures, figure_relations) folgen.
+    //
+    // Default ON DELETE CASCADE — Inhalt ist an die BookStack-Buchexistenz
+    // gebunden und ohne Buch sinnlos. Ausnahme: job_runs.book_id (nullable;
+    // System-Jobs ohne Buchkontext erlaubt) -> SET NULL.
+    //
+    // Pre-Cleanup: book_ids ohne Eintrag in books loeschen (sollten dank
+    // Mig 77-Backfill keine sein, Schutz gegen post-77-Inserts ohne
+    // upsertBook-Hook).
+    db.pragma('foreign_keys = OFF');
+
+    const cleanupTables81 = [
+      'chapter_extract_cache', 'book_extract_cache', 'finetune_ai_cache',
+      'page_stats', 'book_stats_history', 'lektorat_time', 'writing_time',
+      'user_page_usage', 'continuity_checks', 'continuity_issues',
+      'zeitstrahl_events', 'pdf_export_profile', 'book_settings',
+      'job_checkpoints',
+    ];
+    let orphans81 = 0;
+    for (const t of cleanupTables81) {
+      const r = db.prepare(`DELETE FROM ${t} WHERE book_id NOT IN (SELECT bookstack_book_id FROM books)`).run();
+      orphans81 += r.changes;
+    }
+    // job_runs: book_id nullable, SET NULL fuer Orphans statt Loeschen.
+    const jrSetNull = db.prepare(
+      'UPDATE job_runs SET book_id = NULL WHERE book_id IS NOT NULL AND book_id NOT IN (SELECT bookstack_book_id FROM books)'
+    ).run();
+    if (orphans81 || jrSetNull.changes) {
+      logger.info(`Mig 81 Pre-Cleanup: ${orphans81} Orphan-Rows geloescht, ${jrSetNull.changes} job_runs.book_id genullt.`);
+    }
+
+    // Helper: Recreate-Pattern in einer Funktion buendeln. createSql muss
+    // Tabelle als `<table>_new` benennen.
+    const _recreate81 = (table, createSql, indexSqls) => {
+      db.prepare(`DROP TABLE IF EXISTS ${table}_new`).run();
+      db.prepare(createSql).run();
+      db.prepare(`INSERT INTO ${table}_new SELECT * FROM ${table}`).run();
+      db.prepare(`DROP TABLE ${table}`).run();
+      db.prepare(`ALTER TABLE ${table}_new RENAME TO ${table}`).run();
+      for (const ix of indexSqls) db.prepare(ix).run();
+    };
+
+    // 1) chapter_extract_cache (FK chapter_id bleibt; book_id wird FK)
+    _recreate81('chapter_extract_cache', `
+      CREATE TABLE chapter_extract_cache_new (
+        book_id      INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        user_email   TEXT    NOT NULL DEFAULT '',
+        chapter_id   INTEGER NOT NULL REFERENCES chapters(chapter_id) ON DELETE CASCADE,
+        phase        TEXT    NOT NULL DEFAULT '',
+        pages_sig    TEXT    NOT NULL,
+        extract_json TEXT    NOT NULL,
+        cached_at    TEXT    NOT NULL,
+        PRIMARY KEY (book_id, user_email, chapter_id, phase)
+      )
+    `, []);
+
+    // 2) book_extract_cache
+    _recreate81('book_extract_cache', `
+      CREATE TABLE book_extract_cache_new (
+        book_id      INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        user_email   TEXT    NOT NULL DEFAULT '',
+        pages_sig    TEXT    NOT NULL,
+        extract_json TEXT    NOT NULL,
+        cached_at    TEXT    NOT NULL,
+        PRIMARY KEY (book_id, user_email)
+      )
+    `, []);
+
+    // 3) finetune_ai_cache
+    _recreate81('finetune_ai_cache', `
+      CREATE TABLE finetune_ai_cache_new (
+        book_id     INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        user_email  TEXT    NOT NULL DEFAULT '',
+        scope       TEXT    NOT NULL,
+        scope_key   TEXT    NOT NULL,
+        sig         TEXT    NOT NULL,
+        version     TEXT    NOT NULL,
+        result_json TEXT    NOT NULL,
+        cached_at   TEXT    NOT NULL,
+        PRIMARY KEY (book_id, user_email, scope, scope_key, version)
+      )
+    `, [
+      'CREATE INDEX idx_ftai_book_user ON finetune_ai_cache(book_id, user_email)',
+    ]);
+
+    // 4) page_stats (FK page_id bleibt; book_id wird FK; CHECK aus Mig 76 bleiben)
+    _recreate81('page_stats', `
+      CREATE TABLE page_stats_new (
+        page_id          INTEGER PRIMARY KEY REFERENCES pages(page_id) ON DELETE CASCADE,
+        book_id          INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        tok              INTEGER CHECK (tok IS NULL OR tok >= 0),
+        words            INTEGER CHECK (words IS NULL OR words >= 0),
+        chars            INTEGER CHECK (chars IS NULL OR chars >= 0),
+        updated_at       TEXT,
+        cached_at        TEXT,
+        sentences        INTEGER CHECK (sentences IS NULL OR sentences >= 0),
+        dialog_chars     INTEGER CHECK (dialog_chars IS NULL OR dialog_chars >= 0),
+        pronoun_counts   TEXT,
+        metrics_version  INTEGER DEFAULT 0,
+        content_sig      TEXT,
+        filler_count     INTEGER CHECK (filler_count IS NULL OR filler_count >= 0),
+        passive_count    INTEGER CHECK (passive_count IS NULL OR passive_count >= 0),
+        adverb_count     INTEGER CHECK (adverb_count IS NULL OR adverb_count >= 0),
+        avg_sentence_len REAL,
+        sentence_len_p90 INTEGER CHECK (sentence_len_p90 IS NULL OR sentence_len_p90 >= 0),
+        repetition_data  TEXT,
+        lix              REAL,
+        flesch_de        REAL,
+        style_samples    TEXT
+      )
+    `, [
+      'CREATE INDEX idx_ps_book_id ON page_stats(book_id)',
+    ]);
+
+    // 5) book_stats_history
+    _recreate81('book_stats_history', `
+      CREATE TABLE book_stats_history_new (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id          INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        recorded_at      TEXT    NOT NULL,
+        page_count       INTEGER,
+        words            INTEGER,
+        chars            INTEGER,
+        tok              INTEGER,
+        unique_words     INTEGER,
+        chapter_count    INTEGER,
+        avg_sentence_len REAL,
+        avg_lix          REAL,
+        avg_flesch_de    REAL
+      )
+    `, [
+      'CREATE UNIQUE INDEX idx_bsh_book_date ON book_stats_history(book_id, recorded_at)',
+      'CREATE INDEX idx_bsh_book_id ON book_stats_history(book_id)',
+    ]);
+
+    // 6) lektorat_time
+    _recreate81('lektorat_time', `
+      CREATE TABLE lektorat_time_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_email TEXT    NOT NULL,
+        book_id    INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        page_id    INTEGER NOT NULL REFERENCES pages(page_id) ON DELETE CASCADE,
+        date       TEXT    NOT NULL,
+        seconds    INTEGER NOT NULL DEFAULT 0
+      )
+    `, [
+      'CREATE UNIQUE INDEX idx_lt_user_book_page_date ON lektorat_time(user_email, book_id, page_id, date)',
+      'CREATE INDEX idx_lt_book ON lektorat_time(book_id)',
+      'CREATE INDEX idx_lt_page ON lektorat_time(page_id)',
+    ]);
+
+    // 7) writing_time
+    _recreate81('writing_time', `
+      CREATE TABLE writing_time_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_email TEXT    NOT NULL,
+        book_id    INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        date       TEXT    NOT NULL,
+        seconds    INTEGER NOT NULL DEFAULT 0
+      )
+    `, [
+      'CREATE UNIQUE INDEX idx_wt_user_book_date ON writing_time(user_email, book_id, date)',
+      'CREATE INDEX idx_wt_book ON writing_time(book_id)',
+    ]);
+
+    // 8) user_page_usage
+    _recreate81('user_page_usage', `
+      CREATE TABLE user_page_usage_new (
+        user_email TEXT    NOT NULL,
+        page_id    INTEGER NOT NULL,
+        book_id    INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        last_used  INTEGER NOT NULL,
+        use_count  INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (user_email, page_id)
+      )
+    `, [
+      'CREATE INDEX idx_upu_user_book_lastused ON user_page_usage(user_email, book_id, last_used DESC)',
+    ]);
+
+    // 9) continuity_checks (continuity_issues.check_id FK auf id bleibt valide nach RENAME)
+    _recreate81('continuity_checks', `
+      CREATE TABLE continuity_checks_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id    INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        user_email TEXT,
+        checked_at TEXT NOT NULL,
+        summary    TEXT,
+        model      TEXT
+      )
+    `, [
+      'CREATE INDEX idx_cc_book_id ON continuity_checks(book_id, user_email)',
+    ]);
+
+    // 10) continuity_issues (FK check_id bleibt; book_id wird FK)
+    _recreate81('continuity_issues', `
+      CREATE TABLE continuity_issues_new (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        check_id     INTEGER NOT NULL REFERENCES continuity_checks(id) ON DELETE CASCADE,
+        book_id      INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        user_email   TEXT,
+        schwere      TEXT,
+        typ          TEXT,
+        beschreibung TEXT,
+        stelle_a     TEXT,
+        stelle_b     TEXT,
+        empfehlung   TEXT,
+        sort_order   INTEGER DEFAULT 0,
+        updated_at   TEXT
+      )
+    `, [
+      'CREATE INDEX idx_ci_check ON continuity_issues(check_id)',
+      'CREATE INDEX idx_ci_book  ON continuity_issues(book_id, user_email)',
+    ]);
+
+    // 11) zeitstrahl_events
+    _recreate81('zeitstrahl_events', `
+      CREATE TABLE zeitstrahl_events_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id    INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        user_email TEXT    NOT NULL DEFAULT '',
+        datum      TEXT    NOT NULL,
+        ereignis   TEXT    NOT NULL,
+        typ        TEXT    DEFAULT 'persoenlich',
+        bedeutung  TEXT,
+        sort_order INTEGER DEFAULT 0,
+        updated_at TEXT
+      )
+    `, [
+      'CREATE INDEX idx_ze_book_id ON zeitstrahl_events(book_id, user_email)',
+    ]);
+
+    // 12) pdf_export_profile (Sentinel book_id=0 hat books-Zeile aus Mig 77)
+    _recreate81('pdf_export_profile', `
+      CREATE TABLE pdf_export_profile_new (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id     INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        user_email  TEXT    NOT NULL,
+        name        TEXT    NOT NULL,
+        config_json TEXT    NOT NULL,
+        cover_image BLOB,
+        cover_mime  TEXT,
+        is_default  INTEGER NOT NULL DEFAULT 0,
+        created_at  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL,
+        UNIQUE (book_id, user_email, name)
+      )
+    `, [
+      'CREATE INDEX idx_pdf_profile_book_user ON pdf_export_profile (book_id, user_email)',
+    ]);
+
+    // 13) book_settings (PK = FK auf books)
+    _recreate81('book_settings', `
+      CREATE TABLE book_settings_new (
+        book_id            INTEGER PRIMARY KEY REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        language           TEXT    NOT NULL DEFAULT 'de',
+        region             TEXT    NOT NULL DEFAULT 'CH',
+        updated_at         TEXT    NOT NULL,
+        buchtyp            TEXT,
+        buch_kontext       TEXT,
+        erzaehlperspektive TEXT,
+        erzaehlzeit        TEXT
+      )
+    `, []);
+
+    // 14) job_checkpoints
+    _recreate81('job_checkpoints', `
+      CREATE TABLE job_checkpoints_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_type   TEXT    NOT NULL,
+        book_id    INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        user_email TEXT    NOT NULL DEFAULT '',
+        data       TEXT    NOT NULL,
+        updated_at TEXT    NOT NULL,
+        UNIQUE(job_type, book_id, user_email)
+      )
+    `, []);
+
+    // 15) job_runs (book_id nullable -> SET NULL bei Buchloeschung;
+    //     System-Jobs ohne Buchkontext bleiben erhalten)
+    _recreate81('job_runs', `
+      CREATE TABLE job_runs_new (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id         TEXT    NOT NULL UNIQUE,
+        type           TEXT    NOT NULL,
+        book_id        INTEGER REFERENCES books(bookstack_book_id) ON DELETE SET NULL,
+        user_email     TEXT,
+        label          TEXT,
+        status         TEXT    NOT NULL DEFAULT 'queued'
+                         CHECK (status IN ('queued','running','done','error','cancelled')),
+        queued_at      TEXT    NOT NULL,
+        started_at     TEXT,
+        ended_at       TEXT,
+        tokens_in      INTEGER DEFAULT 0,
+        tokens_out     INTEGER DEFAULT 0,
+        error          TEXT,
+        tokens_per_sec REAL
+      )
+    `, [
+      'CREATE INDEX idx_jr_book      ON job_runs(book_id)',
+      'CREATE INDEX idx_jr_user      ON job_runs(user_email)',
+      'CREATE INDEX idx_jr_status    ON job_runs(status)',
+      'CREATE INDEX idx_jr_queued_at ON job_runs(queued_at DESC)',
+    ]);
+
+    db.pragma('foreign_keys = ON');
+    const fkErrors81 = db.pragma('foreign_key_check');
+    if (fkErrors81.length) {
+      throw new Error(`Migration 81: foreign_key_check meldet ${fkErrors81.length} Verstoesse: ${JSON.stringify(fkErrors81.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 81').run();
+    logger.info('DB-Migration auf Version 81 abgeschlossen (FK book_id -> books fuer 15 Tabellen: Caches, Stats, Logs, book_settings, job_runs, job_checkpoints, pdf_export_profile, continuity_*, zeitstrahl_events).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {
@@ -2377,10 +2946,6 @@ function runMigrations() {
     db.exec('ALTER TABLE pages ADD COLUMN chapter_id INTEGER');
     db.exec('CREATE INDEX IF NOT EXISTS idx_pages_chapter_id ON pages(chapter_id)');
     logger.info('pages.chapter_id nachgerüstet.');
-  }
-  if (pagesCols20Check.length > 0 && !pagesCols20Check.includes('chapter_name')) {
-    db.exec('ALTER TABLE pages ADD COLUMN chapter_name TEXT');
-    logger.info('pages.chapter_name nachgerüstet.');
   }
   if (pagesCols20Check.length > 0 && !pagesCols20Check.includes('preview_text')) {
     db.exec('ALTER TABLE pages ADD COLUMN preview_text TEXT');

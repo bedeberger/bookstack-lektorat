@@ -40,10 +40,11 @@ router.get('/', (req, res) => {
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   if (!pageId)    return res.status(400).json({ error_code: 'INVALID_ID' });
   const rows = db.prepare(`
-    SELECT id, book_id, page_id, page_name, content, erledigt, erledigt_at, created_at, updated_at
-    FROM ideen
-    WHERE page_id = ? AND user_email = ?
-    ORDER BY erledigt ASC, created_at DESC
+    SELECT i.id, i.book_id, i.page_id, p.page_name, i.content, i.erledigt, i.erledigt_at, i.created_at, i.updated_at
+    FROM ideen i
+    LEFT JOIN pages p ON p.page_id = i.page_id
+    WHERE i.page_id = ? AND i.user_email = ?
+    ORDER BY i.erledigt ASC, i.created_at DESC
   `).all(pageId, userEmail);
   res.json(rows);
 });
@@ -54,7 +55,6 @@ router.post('/', jsonBody, (req, res) => {
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   const pageId = toIntId(req.body?.page_id);
-  const pageName = (req.body?.page_name || '').toString().slice(0, 500) || null;
   const content = (req.body?.content || '').toString().trim();
   if (!bookId || !pageId) return res.status(400).json({ error_code: 'BOOKID_PAGEID_REQ' });
   if (!content)           return res.status(400).json({ error_code: 'CONTENT_REQ' });
@@ -62,13 +62,16 @@ router.post('/', jsonBody, (req, res) => {
 
   const now = new Date().toISOString();
   const result = db.prepare(`
-    INSERT INTO ideen (book_id, page_id, page_name, user_email, content, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(bookId, pageId, pageName, userEmail, content, now, now);
+    INSERT INTO ideen (book_id, page_id, user_email, content, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(bookId, pageId, userEmail, content, now, now);
 
-  const row = db.prepare(
-    'SELECT id, book_id, page_id, page_name, content, erledigt, erledigt_at, created_at, updated_at FROM ideen WHERE id = ?'
-  ).get(result.lastInsertRowid);
+  const row = db.prepare(`
+    SELECT i.id, i.book_id, i.page_id, p.page_name, i.content, i.erledigt, i.erledigt_at, i.created_at, i.updated_at
+    FROM ideen i
+    LEFT JOIN pages p ON p.page_id = i.page_id
+    WHERE i.id = ?
+  `).get(result.lastInsertRowid);
   logger.info(`[ideen] create id=${row.id} page=${pageId} user=${userEmail}`);
   res.json(row);
 });
@@ -107,11 +110,9 @@ router.patch('/:id', jsonBody, (req, res) => {
     if (!targetPage || targetPage.book_id !== existing.book_id) {
       return res.status(400).json({ error_code: 'BOOK_MISMATCH' });
     }
-    const newPageName = (req.body?.page_name || '').toString().slice(0, 500) || null;
     movedFrom = existing.page_id;
     movedTo = newPageId;
-    sets.push('page_id = ?');   vals.push(newPageId);
-    sets.push('page_name = ?'); vals.push(newPageName);
+    sets.push('page_id = ?'); vals.push(newPageId);
   }
   if (!sets.length) return res.status(400).json({ error_code: 'NO_FIELDS' });
 
@@ -120,9 +121,12 @@ router.patch('/:id', jsonBody, (req, res) => {
   vals.push(id, userEmail);
   db.prepare(`UPDATE ideen SET ${sets.join(', ')} WHERE id = ? AND user_email = ?`).run(...vals);
 
-  const row = db.prepare(
-    'SELECT id, book_id, page_id, page_name, content, erledigt, erledigt_at, created_at, updated_at FROM ideen WHERE id = ?'
-  ).get(id);
+  const row = db.prepare(`
+    SELECT i.id, i.book_id, i.page_id, p.page_name, i.content, i.erledigt, i.erledigt_at, i.created_at, i.updated_at
+    FROM ideen i
+    LEFT JOIN pages p ON p.page_id = i.page_id
+    WHERE i.id = ?
+  `).get(id);
   if (movedTo) logger.info(`[ideen] move id=${id} from=${movedFrom} to=${movedTo} user=${userEmail}`);
   res.json(row);
 });

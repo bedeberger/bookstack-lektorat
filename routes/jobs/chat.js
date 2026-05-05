@@ -64,8 +64,11 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
   try {
     updateJob(jobId, { statusText: 'job.phase.preparing', progress: 5 });
 
-    const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?')
-      .get(parseInt(sessionId), userEmail);
+    const session = db.prepare(`
+      SELECT cs.*, p.page_name FROM chat_sessions cs
+      LEFT JOIN pages p ON p.page_id = cs.page_id
+      WHERE cs.id = ? AND cs.user_email = ?
+    `).get(parseInt(sessionId), userEmail);
     if (!session) throw i18nError('job.error.sessionNotFound');
 
     // Seiteninhalt frisch aus BookStack laden
@@ -565,7 +568,12 @@ function runBookChatJobDispatch(jobId, sessionId, userMsgId, message, userEmail,
 
 chatRouter.post('/chat', jsonBody, (req, res) => _handleChatPost(req, res, {
   jobType: 'chat',
-  sessionSelect: 'SELECT id, book_id, page_name, book_name FROM chat_sessions WHERE id = ? AND user_email = ?',
+  // book_name aus books-Tabelle (Mig 77), page_name via pages-JOIN (Mig 78).
+  sessionSelect: `SELECT cs.id, cs.book_id, p.page_name, b.name AS book_name
+                  FROM chat_sessions cs
+                  LEFT JOIN books b ON b.bookstack_book_id = cs.book_id
+                  LEFT JOIN pages p ON p.page_id = cs.page_id
+                  WHERE cs.id = ? AND cs.user_email = ?`,
   labelFn: s => s.page_name
     ? { key: 'job.label.chatPage', params: { name: s.page_name } }
     : { key: 'job.label.chat', params: null },
@@ -574,7 +582,10 @@ chatRouter.post('/chat', jsonBody, (req, res) => _handleChatPost(req, res, {
 
 chatRouter.post('/book-chat', jsonBody, (req, res) => _handleChatPost(req, res, {
   jobType: 'book-chat',
-  sessionSelect: 'SELECT id, book_id, book_name FROM chat_sessions WHERE id = ? AND user_email = ?',
+  sessionSelect: `SELECT cs.id, cs.book_id, b.name AS book_name
+                  FROM chat_sessions cs
+                  LEFT JOIN books b ON b.bookstack_book_id = cs.book_id
+                  WHERE cs.id = ? AND cs.user_email = ?`,
   labelFn: s => s.book_name
     ? { key: 'job.label.bookChatBook', params: { name: s.book_name } }
     : { key: 'job.label.bookChat', params: null },
