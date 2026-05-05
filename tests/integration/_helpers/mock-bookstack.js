@@ -7,36 +7,41 @@ const path = require('path');
 let state = { chapters: [], pages: [], pageBodies: {}, books: [] };
 const callCounts = { bsGet: 0, bsGetAll: 0, bsBatch: 0 };
 
-// Seeding chapters/pages tables in SQLite is required since migration 71 added
-// FKs (chapter_reviews.chapter_id, figure_scenes.chapter_id/page_id,
-// continuity_issue_chapters.chapter_id, locations.erste_erwaehnung_page_id, ...).
-// FK enforcement is on; missing parent rows fail INSERTs.
+// Seeding chapters/pages/books tables in SQLite is required since migration 71+
+// added FKs across many tables. Migration 81 in particular added FK
+// book_id -> books(bookstack_book_id) on 15 tables (caches, stats, job_runs,
+// continuity_*, ...). FK enforcement is on; missing parent rows fail INSERTs.
 function _seedDb({ chapters, pages }) {
   let db;
   try { ({ db } = require('../../../db/connection')); } catch (_) { return; }
+  const insBook = db.prepare(
+    "INSERT OR IGNORE INTO books (bookstack_book_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)"
+  );
   const insChap = db.prepare(
     'INSERT OR IGNORE INTO chapters (chapter_id, book_id, chapter_name, updated_at) VALUES (?, ?, ?, ?)'
   );
   const insPage = db.prepare(
-    'INSERT OR IGNORE INTO pages (page_id, book_id, page_name, chapter_id, chapter_name, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+    'INSERT OR IGNORE INTO pages (page_id, book_id, page_name, chapter_id, updated_at) VALUES (?, ?, ?, ?, ?)'
   );
-  const chNameById = new Map();
+  const chIds = new Set();
   db.transaction(() => {
+    const bookIds = new Set();
+    for (const c of chapters) if (c.book_id) bookIds.add(c.book_id);
+    for (const p of pages) if (p.book_id) bookIds.add(p.book_id);
+    const nowIso = new Date().toISOString();
+    for (const bid of bookIds) {
+      insBook.run(bid, `Test-Book-${bid}`, nowIso, nowIso);
+    }
     for (const c of chapters) {
       insChap.run(c.id, c.book_id, c.name || '', c.updated_at || '');
-      chNameById.set(c.id, c.name || '');
+      chIds.add(c.id);
     }
     for (const p of pages) {
       // Tests sometimes use chapter_id values that do not exist in the seed
       // (filter-test fixtures). pages.chapter_id has FK SET NULL → store NULL
       // for unknown chapter references so the FK does not block the insert.
-      const knownCh = p.chapter_id && chNameById.has(p.chapter_id) ? p.chapter_id : null;
-      insPage.run(
-        p.id, p.book_id, p.name || '',
-        knownCh,
-        knownCh ? chNameById.get(knownCh) : null,
-        p.updated_at || '',
-      );
+      const knownCh = p.chapter_id && chIds.has(p.chapter_id) ? p.chapter_id : null;
+      insPage.run(p.id, p.book_id, p.name || '', knownCh, p.updated_at || '');
     }
   })();
 }
@@ -47,6 +52,10 @@ function _wipeDb() {
   db.transaction(() => {
     db.prepare('DELETE FROM pages').run();
     db.prepare('DELETE FROM chapters').run();
+    // CASCADE on FK book_id -> books(bookstack_book_id) clears the 15 child
+    // tables added in mig 81 (caches, stats, continuity_*, job_runs, ...).
+    // Sentinel row (bookstack_book_id=0) stays for pdf_export_profile defaults.
+    db.prepare('DELETE FROM books WHERE bookstack_book_id != 0').run();
   })();
 }
 
