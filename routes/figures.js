@@ -176,9 +176,14 @@ router.get('/:book_id', (req, res) => {
     LEFT JOIN pages    p ON p.page_id    = fe.page_id
     WHERE f.book_id = ? AND f.user_email = ?
     ORDER BY fe.figure_id, fe.sort_order`).all(bookId, userEmail);
-  const rels = db.prepare(
-    'SELECT from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, belege FROM figure_relations WHERE book_id = ? AND user_email = ?'
-  ).all(bookId, userEmail);
+  const rels = db.prepare(`
+    SELECT ff.fig_id AS from_fig_id, ft.fig_id AS to_fig_id,
+           r.typ, r.beschreibung, r.machtverhaltnis, r.belege
+    FROM figure_relations r
+    JOIN figures ff ON ff.id = r.from_fig_id
+    JOIN figures ft ON ft.id = r.to_fig_id
+    WHERE r.book_id = ? AND r.user_email = ?
+  `).all(bookId, userEmail);
 
   const tagMap = {};
   for (const t of tags) (tagMap[t.figure_id] ??= []).push(t.tag);

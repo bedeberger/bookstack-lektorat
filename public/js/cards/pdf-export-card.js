@@ -30,6 +30,7 @@ export function registerPdfExportCard() {
 
     saving: false,
     savedAt: null,
+    _savedAtTimer: null,
 
     exporting: false,
     exportPreview: false,
@@ -74,6 +75,7 @@ export function registerPdfExportCard() {
 
     destroy() {
       this._stopPoll();
+      if (this._savedAtTimer) { clearTimeout(this._savedAtTimer); this._savedAtTimer = null; }
       if (this._onBookChanged) window.removeEventListener('book:changed', this._onBookChanged);
       if (this._onViewReset)   window.removeEventListener('view:reset',   this._onViewReset);
     },
@@ -181,6 +183,8 @@ export function registerPdfExportCard() {
         }
         this.activeProfile = await r.json();
         this.savedAt = Date.now();
+        if (this._savedAtTimer) clearTimeout(this._savedAtTimer);
+        this._savedAtTimer = setTimeout(() => { this.savedAt = null; this._savedAtTimer = null; }, 2500);
       } finally {
         this.saving = false;
       }
@@ -226,7 +230,7 @@ export function registerPdfExportCard() {
     loadFontPreview(family, weight) {
       const key = `${family}:${weight}`;
       if (this.fontPreviewLoaded.has(key)) return;
-      const url = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g,'+')}:wght@${weight}&display=swap`;
+      const url = `/pdf-export/fonts/${encodeURIComponent(family)}/${weight}/preview.css`;
       const link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = url;

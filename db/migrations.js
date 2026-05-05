@@ -2001,6 +2001,71 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 71 abgeschlossen (FK CASCADE/SET NULL fuer pages/chapters-Refs).');
   }
 
+  if (version < 72) {
+    // figure_relations: TEXT-Refs (from_fig_id/to_fig_id auf figures.fig_id)
+    // durch INTEGER-FK auf figures.id (PK) ersetzen. Spalten bleiben namens-
+    // gleich (from_fig_id/to_fig_id), Typ ändert sich auf INTEGER + FK CASCADE.
+    // Aufrufer (Reads/Writes) übersetzen TEXT-fig_id ↔ INTEGER-id über JOIN.
+    db.pragma('foreign_keys = OFF');
+
+    // Pre-Cleanup: orphans entfernen (rows ohne figures-Match)
+    db.exec(`
+      DELETE FROM figure_relations
+      WHERE NOT EXISTS (
+        SELECT 1 FROM figures f
+        WHERE f.book_id = figure_relations.book_id
+          AND f.fig_id  = figure_relations.from_fig_id
+          AND (f.user_email IS figure_relations.user_email
+               OR (f.user_email IS NULL AND figure_relations.user_email IS NULL))
+      )
+      OR NOT EXISTS (
+        SELECT 1 FROM figures f
+        WHERE f.book_id = figure_relations.book_id
+          AND f.fig_id  = figure_relations.to_fig_id
+          AND (f.user_email IS figure_relations.user_email
+               OR (f.user_email IS NULL AND figure_relations.user_email IS NULL))
+      );
+    `);
+
+    db.exec(`
+      DROP TABLE IF EXISTS figure_relations_new;
+      CREATE TABLE figure_relations_new (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id         INTEGER NOT NULL,
+        from_fig_id     INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+        to_fig_id       INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+        typ             TEXT NOT NULL,
+        beschreibung    TEXT,
+        user_email      TEXT,
+        machtverhaltnis INTEGER,
+        belege          TEXT
+      );
+      INSERT INTO figure_relations_new
+        (id, book_id, from_fig_id, to_fig_id, typ, beschreibung, user_email, machtverhaltnis, belege)
+      SELECT
+        fr.id, fr.book_id,
+        (SELECT f.id FROM figures f WHERE f.book_id = fr.book_id AND f.fig_id = fr.from_fig_id
+           AND (f.user_email IS fr.user_email OR (f.user_email IS NULL AND fr.user_email IS NULL))),
+        (SELECT f.id FROM figures f WHERE f.book_id = fr.book_id AND f.fig_id = fr.to_fig_id
+           AND (f.user_email IS fr.user_email OR (f.user_email IS NULL AND fr.user_email IS NULL))),
+        fr.typ, fr.beschreibung, fr.user_email, fr.machtverhaltnis, fr.belege
+      FROM figure_relations fr;
+      DROP TABLE figure_relations;
+      ALTER TABLE figure_relations_new RENAME TO figure_relations;
+      CREATE INDEX idx_frel_book_id ON figure_relations(book_id);
+      CREATE INDEX idx_frel_from    ON figure_relations(from_fig_id);
+      CREATE INDEX idx_frel_to      ON figure_relations(to_fig_id);
+    `);
+
+    db.pragma('foreign_keys = ON');
+    const fkErrors = db.pragma('foreign_key_check');
+    if (fkErrors.length) {
+      throw new Error(`Migration 72: foreign_key_check meldet ${fkErrors.length} Verstoesse: ${JSON.stringify(fkErrors.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 72').run();
+    logger.info('DB-Migration auf Version 72 abgeschlossen (figure_relations.from/to_fig_id INTEGER + FK CASCADE auf figures.id).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

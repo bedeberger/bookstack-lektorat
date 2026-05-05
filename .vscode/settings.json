@@ -1,0 +1,10 @@
+{
+  "nodejsTesting.include": [
+    "tests/unit/**/*.test.{js,mjs}",
+    "tests/integration/**/*.test.js"
+  ],
+  "nodejsTesting.extensions": [
+    { "extensions": ["js", "mjs"], "parameters": ["--test"] }
+  ],
+  "playwright.reuseBrowser": true
+}

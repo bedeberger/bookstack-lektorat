@@ -12,7 +12,7 @@ const {
 } = require('../db/schema');
 const { defaultConfig, validateConfig } = require('../lib/pdf-export-defaults');
 const { prepareCover, MAX_INPUT_BYTES } = require('../lib/cover-prepare');
-const { listFonts, isAllowed: isFontAllowed } = require('../lib/font-fetch');
+const { listFonts, isAllowed: isFontAllowed, fetchFont } = require('../lib/font-fetch');
 const { toIntId } = require('../lib/validate');
 const logger = require('../logger');
 
@@ -189,6 +189,40 @@ router.get('/profiles/:id/cover', (req, res) => {
 // ── Font-Liste (für Picker) ─────────────────────────────────────────────────
 router.get('/fonts', (_req, res) => {
   res.json({ fonts: listFonts() });
+});
+
+// ── Font-Preview (self-hosted, CSP-konform) ─────────────────────────────────
+// Live-Preview im Picker: liefert @font-face-CSS und TTF aus eigenem Origin,
+// damit CSP `style-src 'self'` und `font-src 'self'` greifen. Backend nutzt
+// denselben Cache wie der Render-Pfad (lib/font-fetch.js).
+router.get('/fonts/:family/:weight/preview.css', (req, res) => {
+  const family = String(req.params.family || '');
+  const weight = parseInt(req.params.weight, 10);
+  if (!isFontAllowed(family, weight, 'normal')) {
+    return res.status(400).json({ error_code: 'FONT_NOT_ALLOWED' });
+  }
+  const ttfUrl = `/pdf-export/fonts/${encodeURIComponent(family)}/${weight}/font.ttf`;
+  const css = `@font-face{font-family:${JSON.stringify(family)};font-style:normal;font-weight:${weight};font-display:swap;src:url(${JSON.stringify(ttfUrl)}) format("truetype");}`;
+  res.setHeader('Content-Type', 'text/css; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+  res.end(css);
+});
+
+router.get('/fonts/:family/:weight/font.ttf', async (req, res) => {
+  const family = String(req.params.family || '');
+  const weight = parseInt(req.params.weight, 10);
+  if (!isFontAllowed(family, weight, 'normal')) {
+    return res.status(400).json({ error_code: 'FONT_NOT_ALLOWED' });
+  }
+  try {
+    const buf = await fetchFont(family, weight, 'normal');
+    res.setHeader('Content-Type', 'font/ttf');
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    res.end(buf);
+  } catch (e) {
+    logger.warn(`font-preview ${family} ${weight}: ${e.message}`);
+    res.status(502).json({ error_code: 'FONT_FETCH_FAILED' });
+  }
 });
 
 module.exports = router;

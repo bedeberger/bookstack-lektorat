@@ -85,6 +85,7 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
 
     const validIds = new Set(figuren.map(f => f.id));
     const allRelations = [];
+    const figIdToRowId = {}; // TEXT-fig_id → INTEGER figures.id (für FK auf figure_relations)
 
     for (let i = 0; i < figuren.length; i++) {
       const f = figuren[i];
@@ -103,6 +104,7 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
         f.entwicklung || null, f.erste_erwaehnung || null, erstPageId, zitate,
         i, userEmail || null, now
       );
+      figIdToRowId[f.id] = fid;
       for (const tag of (f.eigenschaften || [])) insTag.run(fid, tag);
       for (const app of (f.kapitel || [])) {
         const chapId = idMaps?.chNameToId?.[app.name] ?? null;
@@ -123,7 +125,10 @@ function saveFigurenToDb(bookId, figuren, userEmail, idMaps) {
       }
     }
     for (const r of dedupRelations(allRelations, validIds)) {
-      insRel.run(bookId, r.from, r.to, r.typ, r.beschreibung, r.machtverhaltnis, r.belege, userEmail || null);
+      const fromId = figIdToRowId[r.from];
+      const toId   = figIdToRowId[r.to];
+      if (fromId == null || toId == null) continue;
+      insRel.run(bookId, fromId, toId, r.typ, r.beschreibung, r.machtverhaltnis, r.belege, userEmail || null);
     }
   })();
 }
@@ -174,11 +179,19 @@ function updateFigurenSoziogramm(bookId, figurenSoziogramm, beziehungenMacht, us
     for (const f of (figurenSoziogramm || [])) {
       updFig.run(f.sozialschicht || null, bookId, f.fig_id, userEmail || null);
     }
+    // figure_relations.from_fig_id/to_fig_id sind INTEGER (figures.id) — Lookup TEXT → INTEGER.
+    const figRows = db.prepare(
+      'SELECT id, fig_id FROM figures WHERE book_id = ? AND user_email IS ?'
+    ).all(bookId, userEmail || null);
+    const figIdToRowId = Object.fromEntries(figRows.map(r => [r.fig_id, r.id]));
     const updRel = db.prepare(
       'UPDATE figure_relations SET machtverhaltnis = ? WHERE book_id = ? AND from_fig_id = ? AND to_fig_id = ? AND user_email IS ?'
     );
     for (const bz of (beziehungenMacht || [])) {
-      updRel.run(bz.machtverhaltnis ?? null, bookId, bz.from_fig_id, bz.to_fig_id, userEmail || null);
+      const fromId = figIdToRowId[bz.from_fig_id];
+      const toId   = figIdToRowId[bz.to_fig_id];
+      if (fromId == null || toId == null) continue;
+      updRel.run(bz.machtverhaltnis ?? null, bookId, fromId, toId, userEmail || null);
     }
   })();
 }
@@ -189,11 +202,14 @@ function updateFigurenSoziogramm(bookId, figurenSoziogramm, beziehungenMacht, us
  *  Relation existiert, wird die neue verworfen. Zusätzlich: beide fig_ids
  *  müssen in figures existieren. */
 function addFigurenBeziehungen(bookId, beziehungen, userEmail, idMaps) {
+  const em = userEmail || null;
+  // Lookup TEXT-fig_id → INTEGER figures.id (FK-Target seit Mig 72).
+  const figRows = db.prepare(
+    'SELECT id, fig_id FROM figures WHERE book_id = ? AND user_email IS ?'
+  ).all(bookId, em);
+  const figIdToRowId = Object.fromEntries(figRows.map(r => [r.fig_id, r.id]));
   const pairExists = db.prepare(
     'SELECT COUNT(*) as cnt FROM figure_relations WHERE book_id = ? AND ((from_fig_id = ? AND to_fig_id = ?) OR (from_fig_id = ? AND to_fig_id = ?)) AND user_email IS ?'
-  );
-  const figExists = db.prepare(
-    'SELECT COUNT(*) as cnt FROM figures WHERE book_id = ? AND fig_id = ? AND user_email IS ?'
   );
   const ins = db.prepare(
     'INSERT INTO figure_relations (book_id, from_fig_id, to_fig_id, typ, beschreibung, machtverhaltnis, belege, user_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
@@ -202,20 +218,20 @@ function addFigurenBeziehungen(bookId, beziehungen, userEmail, idMaps) {
     const seenInBatch = new Set();
     for (const bz of beziehungen) {
       if (!bz.von || !bz.zu || !bz.typ || bz.von === bz.zu) continue;
-      const em = userEmail || null;
+      const fromId = figIdToRowId[bz.von];
+      const toId   = figIdToRowId[bz.zu];
+      if (fromId == null || toId == null) continue;
       const [a, b] = bz.von < bz.zu ? [bz.von, bz.zu] : [bz.zu, bz.von];
       const key = `${a}|${b}`;
       if (seenInBatch.has(key)) continue;
-      if (pairExists.get(bookId, bz.von, bz.zu, bz.zu, bz.von, em)?.cnt > 0) continue;
-      if (figExists.get(bookId, bz.von, em)?.cnt === 0) continue;
-      if (figExists.get(bookId, bz.zu, em)?.cnt === 0) continue;
+      if (pairExists.get(bookId, fromId, toId, toId, fromId, em)?.cnt > 0) continue;
       const belegeArr = Array.isArray(bz.belege)
         ? bz.belege.filter(x => x && (x.kapitel || x.seite))
             .slice(0, 5)
             .map(x => enrichBelegWithIds(x, idMaps))
         : [];
       const belege = belegeArr.length ? JSON.stringify(belegeArr) : null;
-      ins.run(bookId, bz.von, bz.zu, bz.typ, bz.beschreibung || null, bz.machtverhaltnis ?? null, belege, em);
+      ins.run(bookId, fromId, toId, bz.typ, bz.beschreibung || null, bz.machtverhaltnis ?? null, belege, em);
       seenInBatch.add(key);
     }
   })();
@@ -271,6 +287,7 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
   `);
   const delApps = db.prepare('DELETE FROM figure_appearances WHERE figure_id = ?');
   const moveEvents = db.prepare('UPDATE figure_events SET figure_id = ? WHERE figure_id = ?');
+  // figure_relations.from/to_fig_id sind INTEGER (figures.id) seit Mig 72.
   const remapRelFrom = db.prepare(
     'UPDATE figure_relations SET from_fig_id = ? WHERE book_id = ? AND user_email IS ? AND from_fig_id = ?'
   );
@@ -320,8 +337,8 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
         }
         delApps.run(dup.id);
         moveEvents.run(canon.id, dup.id);
-        remapRelFrom.run(canon.fig_id, bookId, em, dup.fig_id);
-        remapRelTo.run(canon.fig_id, bookId, em, dup.fig_id);
+        remapRelFrom.run(canon.id, bookId, em, dup.id);
+        remapRelTo.run(canon.id, bookId, em, dup.id);
         moveSceneFigs.run(canon.fig_id, dup.fig_id, bookId, em || '');
         delSceneFigs.run(dup.fig_id, bookId, em || '');
         moveLocFigs.run(canon.fig_id, dup.fig_id, bookId, em);
@@ -334,19 +351,16 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
     if (onProgress) onProgress(stepDone, totalSteps);
   }
 
-  // Phase 2: Relations-Dedup (eine Transaktion).
+  // Phase 2: Relations-Dedup (eine Transaktion). FK CASCADE faengt orphans
+  // ohnehin ab — verbleibender Check ist Self-Ref + Pair-Dedup.
   db.transaction(() => {
     const rels = db.prepare(
       'SELECT rowid, from_fig_id, to_fig_id FROM figure_relations WHERE book_id = ? AND user_email IS ?'
     ).all(bookId, em);
-    const existingFigIds = new Set(
-      db.prepare('SELECT fig_id FROM figures WHERE book_id = ? AND user_email IS ?').all(bookId, em).map(r => r.fig_id)
-    );
     const seenPair = new Set();
     const toDelete = [];
     for (const r of rels) {
       if (r.from_fig_id === r.to_fig_id) { toDelete.push(r.rowid); continue; }
-      if (!existingFigIds.has(r.from_fig_id) || !existingFigIds.has(r.to_fig_id)) { toDelete.push(r.rowid); continue; }
       const [a, b] = r.from_fig_id < r.to_fig_id ? [r.from_fig_id, r.to_fig_id] : [r.to_fig_id, r.from_fig_id];
       const key = `${a}|${b}`;
       if (seenPair.has(key)) toDelete.push(r.rowid);
@@ -363,11 +377,13 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
 
   // Phase 3: Description-Rescue (eine Transaktion).
   db.transaction(() => {
+    // figLookup: integer figures.id (=DB-PK) als Schluessel — figure_relations.from/to_fig_id
+    // sind seit Mig 72 INTEGER auf figures.id.
     const figByIdForRescue = db.prepare(
-      'SELECT fig_id, name, kurzname FROM figures WHERE book_id = ? AND user_email IS ?'
+      'SELECT id, name, kurzname FROM figures WHERE book_id = ? AND user_email IS ?'
     ).all(bookId, em);
     const figLookup = figByIdForRescue.map(f => ({
-      fig_id: f.fig_id,
+      id: f.id,
       names: [f.name, f.kurzname].filter(Boolean).map(s => s.toLowerCase()),
     }));
 
@@ -375,9 +391,9 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
       SELECT r.rowid, r.from_fig_id, r.to_fig_id, r.typ, r.machtverhaltnis, r.beschreibung,
              f2.name AS to_name, f2.kurzname AS to_kurz
       FROM figure_relations r
-      LEFT JOIN figures f2 ON f2.fig_id = r.to_fig_id AND f2.book_id = r.book_id AND f2.user_email IS ?
+      LEFT JOIN figures f2 ON f2.id = r.to_fig_id
       WHERE r.book_id = ? AND r.user_email IS ? AND r.beschreibung IS NOT NULL AND r.beschreibung != ''
-    `).all(em, bookId, em);
+    `).all(bookId, em);
     const clearDesc = db.prepare('UPDATE figure_relations SET beschreibung = NULL WHERE rowid = ?');
     const getRel = db.prepare(
       'SELECT rowid, beschreibung FROM figure_relations WHERE book_id = ? AND user_email IS ? AND from_fig_id = ? AND to_fig_id = ?'
@@ -394,11 +410,11 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
       if (targets.some(n => text.includes(n))) continue;
 
       const candidates = figLookup.filter(c =>
-        c.fig_id !== r.from_fig_id && c.fig_id !== r.to_fig_id && c.names.some(n => text.includes(n))
+        c.id !== r.from_fig_id && c.id !== r.to_fig_id && c.names.some(n => text.includes(n))
       );
       if (candidates.length === 1) {
         const target = candidates[0];
-        const existing = getRel.get(bookId, em, r.from_fig_id, target.fig_id);
+        const existing = getRel.get(bookId, em, r.from_fig_id, target.id);
         if (existing && !existing.beschreibung) {
           setDesc.run(r.beschreibung, existing.rowid);
           clearDesc.run(r.rowid);
@@ -406,7 +422,7 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
           continue;
         }
         if (!existing) {
-          insRel.run(bookId, r.from_fig_id, target.fig_id, r.typ, r.beschreibung, r.machtverhaltnis ?? null, em);
+          insRel.run(bookId, r.from_fig_id, target.id, r.typ, r.beschreibung, r.machtverhaltnis ?? null, em);
           clearDesc.run(r.rowid);
           stats.descriptionsMoved++;
           continue;
@@ -455,23 +471,23 @@ function getChapterFigureRelations(bookId, chapterId, userEmail) {
     rows = db.prepare(`
       SELECT ff.name AS von, ft.name AS zu, r.typ, r.beschreibung
       FROM figure_relations r
-      JOIN figures ff ON ff.book_id = r.book_id AND ff.fig_id = r.from_fig_id AND ff.user_email IS ?
-      JOIN figures ft ON ft.book_id = r.book_id AND ft.fig_id = r.to_fig_id   AND ft.user_email IS ?
+      JOIN figures ff ON ff.id = r.from_fig_id
+      JOIN figures ft ON ft.id = r.to_fig_id
       WHERE r.book_id = ? AND r.user_email IS ?
         AND EXISTS (SELECT 1 FROM figure_appearances fa WHERE fa.figure_id = ff.id AND fa.chapter_id = ?)
         AND EXISTS (SELECT 1 FROM figure_appearances fa WHERE fa.figure_id = ft.id AND fa.chapter_id = ?)
       ORDER BY ff.sort_order, ft.sort_order
-    `).all(em, em, bookId, em, chapterId, chapterId);
+    `).all(bookId, em, chapterId, chapterId);
     if (rows.length > 0) return rows;
   }
   return db.prepare(`
     SELECT ff.name AS von, ft.name AS zu, r.typ, r.beschreibung
     FROM figure_relations r
-    JOIN figures ff ON ff.book_id = r.book_id AND ff.fig_id = r.from_fig_id AND ff.user_email IS ?
-    JOIN figures ft ON ft.book_id = r.book_id AND ft.fig_id = r.to_fig_id   AND ft.user_email IS ?
+    JOIN figures ff ON ff.id = r.from_fig_id
+    JOIN figures ft ON ft.id = r.to_fig_id
     WHERE r.book_id = ? AND r.user_email IS ?
     ORDER BY ff.sort_order, ft.sort_order
-  `).all(em, em, bookId, em);
+  `).all(bookId, em);
 }
 
 module.exports = {

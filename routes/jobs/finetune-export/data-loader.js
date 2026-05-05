@@ -105,9 +105,12 @@ function loadFinetuneData({ bookIdInt, userEmail, pageContents, langIsEn }) {
 
   // Figur-Beziehungen (beide Richtungen abrufen, Paare per Smaller-First dedupen)
   const figRelRows = db.prepare(`
-    SELECT from_fig_id, to_fig_id, typ, beschreibung
-    FROM figure_relations
-    WHERE book_id = ? AND user_email = ?
+    SELECT ff.fig_id AS from_fig_id, ft.fig_id AS to_fig_id,
+           r.typ, r.beschreibung
+    FROM figure_relations r
+    JOIN figures ff ON ff.id = r.from_fig_id
+    JOIN figures ft ON ft.id = r.to_fig_id
+    WHERE r.book_id = ? AND r.user_email = ?
   `).all(bookIdInt, userEmail);
 
   // Kapitel-Extract-Cache: pro Kapitel liegen Fakten, Figuren, Orte, Szenen.
