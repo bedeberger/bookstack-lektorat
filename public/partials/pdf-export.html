@@ -303,17 +303,23 @@
           <span x-text="$app.t('pdfExport.toc.enabled')"></span>
         </label>
         <template x-if="activeProfile.config.toc.enabled">
-          <div class="pdfx-grid">
-            <label class="pdfx-field">
-              <span x-text="$app.t('pdfExport.toc.title')"></span>
-              <input x-model="activeProfile.config.toc.title" class="pdfx-input">
-            </label>
-            <label class="pdfx-field">
-              <span x-text="$app.t('pdfExport.toc.depth')"></span>
-              <select x-model.number="activeProfile.config.toc.depth" class="pdfx-input">
-                <option value="1" x-text="$app.t('pdfExport.toc.depthChapters')"></option>
-                <option value="2" x-text="$app.t('pdfExport.toc.depthChaptersPages')"></option>
-              </select>
+          <div>
+            <div class="pdfx-grid">
+              <label class="pdfx-field">
+                <span x-text="$app.t('pdfExport.toc.title')"></span>
+                <input x-model="activeProfile.config.toc.title" class="pdfx-input">
+              </label>
+              <label class="pdfx-field">
+                <span x-text="$app.t('pdfExport.toc.depth')"></span>
+                <select x-model.number="activeProfile.config.toc.depth" class="pdfx-input">
+                  <option value="1" x-text="$app.t('pdfExport.toc.depthChapters')"></option>
+                  <option value="2" x-text="$app.t('pdfExport.toc.depthChaptersPages')"></option>
+                </select>
+              </label>
+            </div>
+            <label class="pdfx-field pdfx-field--check">
+              <input type="checkbox" x-model="activeProfile.config.toc.showPageNumbers">
+              <span x-text="$app.t('pdfExport.toc.showPageNumbers')"></span>
             </label>
           </div>
         </template>

@@ -200,7 +200,12 @@ function saveOrteToDb(bookId, orte, userEmail, chNameToId = null, pageNameToIdBy
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const delLf = db.prepare('DELETE FROM location_figures WHERE location_id = ?');
     const delLc = db.prepare('DELETE FROM location_chapters WHERE location_id = ?');
-    const insLf = db.prepare('INSERT INTO location_figures (location_id, fig_id) VALUES (?, ?)');
+    // location_figures.figure_id ist INTEGER (figures.id) seit Mig 73 — Lookup TEXT → INT.
+    const figRows = db.prepare(
+      'SELECT id, fig_id FROM figures WHERE book_id = ? AND user_email IS ?'
+    ).all(bookId, userEmail || null);
+    const figIdToRowId = Object.fromEntries(figRows.map(r => [r.fig_id, r.id]));
+    const insLf = db.prepare('INSERT OR IGNORE INTO location_figures (location_id, figure_id) VALUES (?, ?)');
     const insLc = db.prepare('INSERT INTO location_chapters (location_id, chapter_id, haeufigkeit) VALUES (?, ?, ?)');
 
     for (let i = 0; i < orte.length; i++) {
@@ -224,7 +229,8 @@ function saveOrteToDb(bookId, orte, userEmail, chNameToId = null, pageNameToIdBy
       }
       for (const fid of (o.figuren || [])) {
         const ref = _toRefString(fid);
-        if (ref) insLf.run(locDbId, ref);
+        const rowId = ref ? figIdToRowId[ref] : null;
+        if (rowId != null) insLf.run(locDbId, rowId);
       }
       for (const k of (o.kapitel || [])) {
         const chName = _toRefString(typeof k === 'object' && k ? (k.name ?? k) : k);
@@ -483,7 +489,7 @@ const _insContinuityIssue = db.prepare(
    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 );
 const _insContinuityIssueFig = db.prepare(
-  `INSERT INTO continuity_issue_figures (issue_id, fig_id, figur_name, sort_order) VALUES (?, ?, ?, ?)`
+  `INSERT INTO continuity_issue_figures (issue_id, figure_id, figur_name, sort_order) VALUES (?, ?, ?, ?)`
 );
 const _insContinuityIssueCh = db.prepare(
   `INSERT INTO continuity_issue_chapters (issue_id, chapter_id, sort_order) VALUES (?, ?, ?)`
@@ -501,6 +507,12 @@ function saveContinuityCheck(bookId, userEmail, summary, model, issues, figNameT
   const now = new Date().toISOString();
   const normalizedIssues = [];
   let checkId = null;
+  // continuity_issue_figures.figure_id ist INTEGER (figures.id) seit Mig 73 —
+  // figNameToId liefert TEXT-fig_id, zusaetzlicher Lookup TEXT → INT.
+  const figRows = db.prepare(
+    'SELECT id, fig_id FROM figures WHERE book_id = ? AND user_email IS ?'
+  ).all(bookIdInt, email);
+  const figIdToRowId = Object.fromEntries(figRows.map(r => [r.fig_id, r.id]));
   db.transaction(() => {
     const { lastInsertRowid: cid } = _insContinuityCheck.run(
       bookIdInt, email, now, summary || '', model || null,
@@ -524,7 +536,8 @@ function saveContinuityCheck(bookId, userEmail, summary, model, issues, figNameT
         if (seenFig.has(key)) return;
         seenFig.add(key);
         if (fid) fig_ids.push(fid);
-        _insContinuityIssueFig.run(issueId, fid, name, j);
+        const figureRowId = fid ? (figIdToRowId[fid] ?? null) : null;
+        _insContinuityIssueFig.run(issueId, figureRowId, name, j);
       });
       const chNames = Array.isArray(it.kapitel) ? it.kapitel.map(_toRefString).filter(Boolean) : [];
       const chapter_ids = [];
@@ -569,9 +582,11 @@ function getLatestContinuityCheck(bookId, userEmail) {
     ORDER BY sort_order, id
   `).all(row.id);
   const figRows = db.prepare(`
-    SELECT issue_id, fig_id, figur_name FROM continuity_issue_figures
-    WHERE issue_id IN (SELECT id FROM continuity_issues WHERE check_id = ?)
-    ORDER BY issue_id, sort_order
+    SELECT cif.issue_id, f.fig_id, cif.figur_name
+    FROM continuity_issue_figures cif
+    LEFT JOIN figures f ON f.id = cif.figure_id
+    WHERE cif.issue_id IN (SELECT id FROM continuity_issues WHERE check_id = ?)
+    ORDER BY cif.issue_id, cif.sort_order
   `).all(row.id);
   const chRows = db.prepare(`
     SELECT cic.issue_id, cic.chapter_id, c.chapter_name

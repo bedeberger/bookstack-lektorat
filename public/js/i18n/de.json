@@ -319,6 +319,7 @@
   "pdfExport.toc.depth":                   "Tiefe",
   "pdfExport.toc.depthChapters":           "Nur Kapitel",
   "pdfExport.toc.depthChaptersPages":      "Kapitel + Unter-Seiten",
+  "pdfExport.toc.showPageNumbers":         "Seitenzahlen anzeigen",
 
   "pdfExport.extras.subtitle":             "Untertitel (optional)",
   "pdfExport.extras.year":                 "Jahr (optional)",

@@ -97,7 +97,12 @@ router.get('/scenes/:book_id', (req, res) => {
   const sceneIds = rows.map(r => r.id);
   const { sql: sceneSql, values: sceneVals } = inClause(sceneIds);
   const sfRows = sceneIds.length
-    ? db.prepare(`SELECT scene_id, fig_id FROM scene_figures WHERE scene_id IN ${sceneSql}`).all(...sceneVals)
+    ? db.prepare(`
+        SELECT sf.scene_id, f.fig_id
+        FROM scene_figures sf
+        JOIN figures f ON f.id = sf.figure_id
+        WHERE sf.scene_id IN ${sceneSql}
+      `).all(...sceneVals)
     : [];
   const sfMap = {};
   for (const sf of sfRows) (sfMap[sf.scene_id] ??= []).push(sf.fig_id);
@@ -205,9 +210,10 @@ router.get('/:book_id', (req, res) => {
   }
 
   const sceneFigRows = db.prepare(`
-    SELECT c.chapter_name AS kapitel, p.page_name AS seite, sf.fig_id
+    SELECT c.chapter_name AS kapitel, p.page_name AS seite, f.fig_id
     FROM figure_scenes fs
     JOIN scene_figures sf ON sf.scene_id = fs.id
+    JOIN figures f ON f.id = sf.figure_id
     LEFT JOIN chapters c ON c.chapter_id = fs.chapter_id
     LEFT JOIN pages    p ON p.page_id    = fs.page_id
     WHERE fs.book_id = ? AND fs.user_email = ?

@@ -52,8 +52,9 @@ function loadFinetuneData({ bookIdInt, userEmail, pageContents, langIsEn }) {
     chaptersByLocPk.get(r.location_id).push(r.chapter_name);
   }
   const locFigRows = db.prepare(`
-    SELECT lf.location_id, lf.fig_id
+    SELECT lf.location_id, f.fig_id
     FROM location_figures lf
+    JOIN figures f ON f.id = lf.figure_id
     JOIN locations l ON l.id = lf.location_id
     WHERE l.book_id = ? AND (l.user_email = ? OR (? IS NULL AND l.user_email IS NULL))
   `).all(bookIdInt, userEmail, userEmail);
@@ -160,13 +161,21 @@ function loadFinetuneData({ bookIdInt, userEmail, pageContents, langIsEn }) {
   }
 
   const sceneRows = db.prepare(`
-    SELECT id, kapitel, seite, titel, wertung, kommentar, chapter_id, page_id
-    FROM figure_scenes WHERE book_id = ? AND user_email = ?
-    ORDER BY sort_order
+    SELECT fs.id, c.chapter_name AS kapitel, p.page_name AS seite,
+           fs.titel, fs.wertung, fs.kommentar, fs.chapter_id, fs.page_id
+    FROM figure_scenes fs
+    LEFT JOIN chapters c ON c.chapter_id = fs.chapter_id
+    LEFT JOIN pages    p ON p.page_id    = fs.page_id
+    WHERE fs.book_id = ? AND fs.user_email = ?
+    ORDER BY fs.sort_order
   `).all(bookIdInt, userEmail);
-  const sceneFigRows = db.prepare(
-    'SELECT sf.scene_id, sf.fig_id FROM scene_figures sf JOIN figure_scenes fs ON fs.id = sf.scene_id WHERE fs.book_id = ? AND fs.user_email = ?'
-  ).all(bookIdInt, userEmail);
+  const sceneFigRows = db.prepare(`
+    SELECT sf.scene_id, f.fig_id
+    FROM scene_figures sf
+    JOIN figures f ON f.id = sf.figure_id
+    JOIN figure_scenes fs ON fs.id = sf.scene_id
+    WHERE fs.book_id = ? AND fs.user_email = ?
+  `).all(bookIdInt, userEmail);
   const figsByScene = new Map();
   for (const r of sceneFigRows) {
     if (!figsByScene.has(r.scene_id)) figsByScene.set(r.scene_id, []);

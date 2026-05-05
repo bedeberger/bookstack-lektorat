@@ -25,7 +25,12 @@ router.get('/:book_id', (req, res) => {
   const locIds = rows.map(r => r.id);
   const { sql: locSql, values: locVals } = inClause(locIds);
 
-  const lfRows = db.prepare(`SELECT location_id, fig_id FROM location_figures WHERE location_id IN ${locSql}`).all(...locVals);
+  const lfRows = db.prepare(`
+    SELECT lf.location_id, f.fig_id
+    FROM location_figures lf
+    JOIN figures f ON f.id = lf.figure_id
+    WHERE lf.location_id IN ${locSql}
+  `).all(...locVals);
   const figMap = {};
   for (const lf of lfRows) (figMap[lf.location_id] ??= []).push(lf.fig_id);
 

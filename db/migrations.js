@@ -2066,6 +2066,108 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 72 abgeschlossen (figure_relations.from/to_fig_id INTEGER + FK CASCADE auf figures.id).');
   }
 
+  if (version < 73) {
+    // scene_figures, location_figures, continuity_issue_figures:
+    // TEXT-fig_id (BookStack-fig_id-String) → INTEGER figure_id (figures.id PK)
+    // mit FK. CASCADE für scene_figures/location_figures (Junction-Tabellen ohne
+    // eigenen Display-State). SET NULL für continuity_issue_figures
+    // (figur_name bleibt als Snapshot, falls KI fig_id=null hatte).
+    db.pragma('foreign_keys = OFF');
+
+    // Pre-Cleanup: orphans entfernen (rows ohne figures-Match via book_id+fig_id+user_email)
+    db.exec(`
+      DELETE FROM scene_figures
+      WHERE NOT EXISTS (
+        SELECT 1 FROM figures f JOIN figure_scenes fs ON fs.id = scene_figures.scene_id
+        WHERE f.book_id = fs.book_id AND f.fig_id = scene_figures.fig_id
+          AND (f.user_email IS fs.user_email OR (f.user_email IS NULL AND fs.user_email IS NULL))
+      );
+      DELETE FROM location_figures
+      WHERE NOT EXISTS (
+        SELECT 1 FROM figures f JOIN locations l ON l.id = location_figures.location_id
+        WHERE f.book_id = l.book_id AND f.fig_id = location_figures.fig_id
+          AND (f.user_email IS l.user_email OR (f.user_email IS NULL AND l.user_email IS NULL))
+      );
+      -- continuity_issue_figures.fig_id NULLABLE: NULL erlaubt (KI lieferte keinen ID-Match);
+      -- nicht-NULL ohne figures-Match -> auf NULL setzen (figur_name bleibt als Snapshot).
+      UPDATE continuity_issue_figures
+      SET fig_id = NULL
+      WHERE fig_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM figures f JOIN continuity_issues ci ON ci.id = continuity_issue_figures.issue_id
+          WHERE f.book_id = ci.book_id AND f.fig_id = continuity_issue_figures.fig_id
+            AND (f.user_email IS ci.user_email OR (f.user_email IS NULL AND ci.user_email IS NULL))
+        );
+    `);
+
+    db.exec(`
+      DROP TABLE IF EXISTS scene_figures_new;
+      DROP TABLE IF EXISTS location_figures_new;
+      DROP TABLE IF EXISTS continuity_issue_figures_new;
+
+      -- scene_figures
+      CREATE TABLE scene_figures_new (
+        scene_id  INTEGER NOT NULL REFERENCES figure_scenes(id) ON DELETE CASCADE,
+        figure_id INTEGER NOT NULL REFERENCES figures(id)       ON DELETE CASCADE,
+        PRIMARY KEY (scene_id, figure_id)
+      );
+      INSERT OR IGNORE INTO scene_figures_new (scene_id, figure_id)
+      SELECT sf.scene_id,
+             (SELECT f.id FROM figures f JOIN figure_scenes fs ON fs.id = sf.scene_id
+              WHERE f.book_id = fs.book_id AND f.fig_id = sf.fig_id
+                AND (f.user_email IS fs.user_email OR (f.user_email IS NULL AND fs.user_email IS NULL)))
+      FROM scene_figures sf;
+      DROP TABLE scene_figures;
+      ALTER TABLE scene_figures_new RENAME TO scene_figures;
+      CREATE INDEX idx_sf_figure ON scene_figures(figure_id);
+
+      -- location_figures
+      CREATE TABLE location_figures_new (
+        location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+        figure_id   INTEGER NOT NULL REFERENCES figures(id)   ON DELETE CASCADE,
+        PRIMARY KEY (location_id, figure_id)
+      );
+      INSERT OR IGNORE INTO location_figures_new (location_id, figure_id)
+      SELECT lf.location_id,
+             (SELECT f.id FROM figures f JOIN locations l ON l.id = lf.location_id
+              WHERE f.book_id = l.book_id AND f.fig_id = lf.fig_id
+                AND (f.user_email IS l.user_email OR (f.user_email IS NULL AND l.user_email IS NULL)))
+      FROM location_figures lf;
+      DROP TABLE location_figures;
+      ALTER TABLE location_figures_new RENAME TO location_figures;
+      CREATE INDEX idx_lf_figure ON location_figures(figure_id);
+
+      -- continuity_issue_figures: figure_id NULLABLE + SET NULL; figur_name bleibt
+      CREATE TABLE continuity_issue_figures_new (
+        issue_id   INTEGER NOT NULL REFERENCES continuity_issues(id) ON DELETE CASCADE,
+        figure_id  INTEGER          REFERENCES figures(id)            ON DELETE SET NULL,
+        figur_name TEXT,
+        sort_order INTEGER DEFAULT 0
+      );
+      INSERT INTO continuity_issue_figures_new (issue_id, figure_id, figur_name, sort_order)
+      SELECT cif.issue_id,
+             CASE WHEN cif.fig_id IS NULL THEN NULL ELSE
+               (SELECT f.id FROM figures f JOIN continuity_issues ci ON ci.id = cif.issue_id
+                WHERE f.book_id = ci.book_id AND f.fig_id = cif.fig_id
+                  AND (f.user_email IS ci.user_email OR (f.user_email IS NULL AND ci.user_email IS NULL)))
+             END,
+             cif.figur_name, cif.sort_order
+      FROM continuity_issue_figures cif;
+      DROP TABLE continuity_issue_figures;
+      ALTER TABLE continuity_issue_figures_new RENAME TO continuity_issue_figures;
+      CREATE INDEX idx_cif_issue  ON continuity_issue_figures(issue_id);
+      CREATE INDEX idx_cif_figure ON continuity_issue_figures(figure_id);
+    `);
+
+    db.pragma('foreign_keys = ON');
+    const fkErrors = db.pragma('foreign_key_check');
+    if (fkErrors.length) {
+      throw new Error(`Migration 73: foreign_key_check meldet ${fkErrors.length} Verstoesse: ${JSON.stringify(fkErrors.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 73').run();
+    logger.info('DB-Migration auf Version 73 abgeschlossen (scene_figures/location_figures/continuity_issue_figures fig_id INTEGER + FK).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

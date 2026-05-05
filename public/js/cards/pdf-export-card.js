@@ -31,6 +31,7 @@ export function registerPdfExportCard() {
     saving: false,
     savedAt: null,
     _savedAtTimer: null,
+    _exportStatusTimer: null,
 
     exporting: false,
     exportPreview: false,
@@ -57,6 +58,8 @@ export function registerPdfExportCard() {
 
       this._onBookChanged = () => {
         this._stopPoll();
+        if (this._exportStatusTimer) { clearTimeout(this._exportStatusTimer); this._exportStatusTimer = null; }
+        if (this._savedAtTimer)      { clearTimeout(this._savedAtTimer);      this._savedAtTimer = null; }
         this.profiles = [];
         this.activeProfile = null;
         this.activeProfileId = null;
@@ -64,6 +67,7 @@ export function registerPdfExportCard() {
         this.exportProgress = 0;
         this.exportStatus = '';
         this.exportError = '';
+        this.savedAt = null;
         this.currentJobId = null;
         if (window.__app.showPdfExportCard && window.__app.selectedBookId) this.loadProfiles();
       };
@@ -75,7 +79,8 @@ export function registerPdfExportCard() {
 
     destroy() {
       this._stopPoll();
-      if (this._savedAtTimer) { clearTimeout(this._savedAtTimer); this._savedAtTimer = null; }
+      if (this._savedAtTimer)     { clearTimeout(this._savedAtTimer);     this._savedAtTimer = null; }
+      if (this._exportStatusTimer) { clearTimeout(this._exportStatusTimer); this._exportStatusTimer = null; }
       if (this._onBookChanged) window.removeEventListener('book:changed', this._onBookChanged);
       if (this._onViewReset)   window.removeEventListener('view:reset',   this._onViewReset);
     },
@@ -262,6 +267,7 @@ export function registerPdfExportCard() {
       // Vor Export speichern (Config könnte ungespeichert sein).
       await this.saveActiveProfile();
       if (this.exportError) return;
+      if (this._exportStatusTimer) { clearTimeout(this._exportStatusTimer); this._exportStatusTimer = null; }
       this.exporting = true;
       this.exportPreview = preview;
       this.exportProgress = 0;
@@ -308,12 +314,17 @@ export function registerPdfExportCard() {
             this.exporting = false;
             this.exportProgress = 100;
             const result = job.result || {};
-            if (result.pdfa?.requested && result.pdfa.validatorAvailable && !result.pdfa.passed) {
-              this.exportStatus = window.__app.t('pdfExport.pdfaWarning');
-            } else {
-              this.exportStatus = window.__app.t('pdfExport.done');
-            }
+            const isWarning = result.pdfa?.requested && result.pdfa.validatorAvailable && !result.pdfa.passed;
+            this.exportStatus = window.__app.t(isWarning ? 'pdfExport.pdfaWarning' : 'pdfExport.done');
             this._triggerDownload(jobId, result.filename);
+            // Status nach kurzer Zeit ausblenden — Warning bleibt länger sichtbar.
+            if (this._exportStatusTimer) clearTimeout(this._exportStatusTimer);
+            const ttl = isWarning ? 8000 : 3500;
+            this._exportStatusTimer = setTimeout(() => {
+              this.exportStatus = '';
+              this.exportProgress = 0;
+              this._exportStatusTimer = null;
+            }, ttl);
           } else if (job.status === 'error' || job.status === 'cancelled') {
             this._stopPoll();
             this.exporting = false;

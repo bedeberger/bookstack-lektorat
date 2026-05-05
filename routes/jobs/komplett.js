@@ -527,7 +527,12 @@ function saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId,
     const ins = db.prepare(`INSERT INTO figure_scenes
       (book_id, user_email, titel, wertung, kommentar, chapter_id, page_id, sort_order, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    const insSf = db.prepare('INSERT INTO scene_figures (scene_id, fig_id) VALUES (?, ?)');
+    // scene_figures.figure_id ist INTEGER (figures.id) seit Mig 73 — Lookup TEXT → INT.
+    const figRows = db.prepare(
+      'SELECT id, fig_id FROM figures WHERE book_id = ? AND user_email IS ?'
+    ).all(bookIdInt, email);
+    const figIdToRowId = Object.fromEntries(figRows.map(r => [r.fig_id, r.id]));
+    const insSf = db.prepare('INSERT OR IGNORE INTO scene_figures (scene_id, figure_id) VALUES (?, ?)');
     const insSl = db.prepare('INSERT OR IGNORE INTO scene_locations (scene_id, location_id) VALUES (?, ?)');
     for (const s of szenen) {
       const chapterId = idMaps.chNameToId[s.kapitel] ?? null;
@@ -540,7 +545,10 @@ function saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId,
         chapterId, pageId,
         s.sort_order, now,
       );
-      for (const fid of s.fig_ids) insSf.run(sceneId, fid);
+      for (const fid of s.fig_ids) {
+        const rowId = figIdToRowId[fid];
+        if (rowId != null) insSf.run(sceneId, rowId);
+      }
       for (const locIdStr of s.ort_ids) {
         const dbLocId = locIdToDbId[locIdStr];
         if (dbLocId) insSl.run(sceneId, dbLocId);

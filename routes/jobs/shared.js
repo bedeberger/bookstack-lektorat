@@ -621,15 +621,17 @@ function getFiguren(bookId, userEmail, chapterId = null) {
 
   const locParams = chapterId != null ? [chapterId, bookId, userEmail] : [bookId, userEmail];
   const locRows = db.prepare(chapterId != null ? `
-    SELECT lf.fig_id, l.name, l.typ, l.beschreibung, l.stimmung
+    SELECT f.fig_id, l.name, l.typ, l.beschreibung, l.stimmung
     FROM location_figures lf
+    JOIN figures f ON f.id = lf.figure_id
     JOIN locations l ON l.id = lf.location_id
     JOIN location_chapters lc ON lc.location_id = l.id AND lc.chapter_id = ?
     WHERE l.book_id = ? AND l.user_email = ?
     ORDER BY l.sort_order
   ` : `
-    SELECT lf.fig_id, l.name, l.typ, l.beschreibung, l.stimmung
+    SELECT f.fig_id, l.name, l.typ, l.beschreibung, l.stimmung
     FROM location_figures lf
+    JOIN figures f ON f.id = lf.figure_id
     JOIN locations l ON l.id = lf.location_id
     WHERE l.book_id = ? AND l.user_email = ?
     ORDER BY l.sort_order
@@ -647,15 +649,17 @@ function getFiguren(bookId, userEmail, chapterId = null) {
 
   const sceneParams = chapterId != null ? [bookId, userEmail, chapterId] : [bookId, userEmail];
   const sceneRows = db.prepare(chapterId != null ? `
-    SELECT sf.fig_id, fs.titel, c.chapter_name AS kapitel, fs.wertung, fs.kommentar
+    SELECT f.fig_id, fs.titel, c.chapter_name AS kapitel, fs.wertung, fs.kommentar
     FROM scene_figures sf
+    JOIN figures f ON f.id = sf.figure_id
     JOIN figure_scenes fs ON fs.id = sf.scene_id
     LEFT JOIN chapters c ON c.chapter_id = fs.chapter_id
     WHERE fs.book_id = ? AND fs.user_email = ? AND fs.chapter_id = ?
     ORDER BY fs.sort_order
   ` : `
-    SELECT sf.fig_id, fs.titel, c.chapter_name AS kapitel, fs.wertung, fs.kommentar
+    SELECT f.fig_id, fs.titel, c.chapter_name AS kapitel, fs.wertung, fs.kommentar
     FROM scene_figures sf
+    JOIN figures f ON f.id = sf.figure_id
     JOIN figure_scenes fs ON fs.id = sf.scene_id
     LEFT JOIN chapters c ON c.chapter_id = fs.chapter_id
     WHERE fs.book_id = ? AND fs.user_email = ?

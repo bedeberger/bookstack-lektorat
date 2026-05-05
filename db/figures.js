@@ -294,21 +294,22 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
   const remapRelTo = db.prepare(
     'UPDATE figure_relations SET to_fig_id = ? WHERE book_id = ? AND user_email IS ? AND to_fig_id = ?'
   );
+  // scene_figures/location_figures.figure_id sind INTEGER (figures.id) seit Mig 73.
   const moveSceneFigs = db.prepare(`
-    INSERT OR IGNORE INTO scene_figures (scene_id, fig_id)
-    SELECT scene_id, ? FROM scene_figures sf WHERE sf.fig_id = ?
+    INSERT OR IGNORE INTO scene_figures (scene_id, figure_id)
+    SELECT scene_id, ? FROM scene_figures sf WHERE sf.figure_id = ?
       AND sf.scene_id IN (SELECT id FROM figure_scenes WHERE book_id = ? AND user_email = ?)
   `);
   const delSceneFigs = db.prepare(
-    'DELETE FROM scene_figures WHERE fig_id = ? AND scene_id IN (SELECT id FROM figure_scenes WHERE book_id = ? AND user_email = ?)'
+    'DELETE FROM scene_figures WHERE figure_id = ? AND scene_id IN (SELECT id FROM figure_scenes WHERE book_id = ? AND user_email = ?)'
   );
   const moveLocFigs = db.prepare(`
-    INSERT OR IGNORE INTO location_figures (location_id, fig_id)
-    SELECT location_id, ? FROM location_figures lf WHERE lf.fig_id = ?
+    INSERT OR IGNORE INTO location_figures (location_id, figure_id)
+    SELECT location_id, ? FROM location_figures lf WHERE lf.figure_id = ?
       AND lf.location_id IN (SELECT id FROM locations WHERE book_id = ? AND user_email IS ?)
   `);
   const delLocFigs = db.prepare(
-    'DELETE FROM location_figures WHERE fig_id = ? AND location_id IN (SELECT id FROM locations WHERE book_id = ? AND user_email IS ?)'
+    'DELETE FROM location_figures WHERE figure_id = ? AND location_id IN (SELECT id FROM locations WHERE book_id = ? AND user_email IS ?)'
   );
   const delFig = db.prepare('DELETE FROM figures WHERE id = ?');
 
@@ -339,10 +340,10 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
         moveEvents.run(canon.id, dup.id);
         remapRelFrom.run(canon.id, bookId, em, dup.id);
         remapRelTo.run(canon.id, bookId, em, dup.id);
-        moveSceneFigs.run(canon.fig_id, dup.fig_id, bookId, em || '');
-        delSceneFigs.run(dup.fig_id, bookId, em || '');
-        moveLocFigs.run(canon.fig_id, dup.fig_id, bookId, em);
-        delLocFigs.run(dup.fig_id, bookId, em);
+        moveSceneFigs.run(canon.id, dup.id, bookId, em || '');
+        delSceneFigs.run(dup.id, bookId, em || '');
+        moveLocFigs.run(canon.id, dup.id, bookId, em);
+        delLocFigs.run(dup.id, bookId, em);
         delFig.run(dup.id);
         stats.figurenMerged++;
       }
