@@ -238,6 +238,14 @@ export const treeMethods = {
 
       this.showTreeCard = true;
       this.setStatus('');
+      // Geöffnete Seite frisch nachziehen (User klickt "Neuladen" → erwartet
+      // auch im Editor den aktuellen Server-Stand). Aktive Edits nicht
+      // überschreiben — gleiche Regel wie beim Re-Klick auf offene Seite.
+      if (this.currentPage
+          && String(this.currentPage.book_id) === String(bookId)
+          && !this.editMode && !this.editDirty) {
+        this._refetchCurrentPage();
+      }
       await Promise.all([
         this.loadBookReviewHistory(bookId),
         // loadKapitelReviewHistory lebt jetzt in Alpine.data('kapitelReviewCard')

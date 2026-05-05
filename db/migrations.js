@@ -2935,6 +2935,274 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 81 abgeschlossen (FK book_id -> books fuer 15 Tabellen: Caches, Stats, Logs, book_settings, job_runs, job_checkpoints, pdf_export_profile, continuity_*, zeitstrahl_events).');
   }
 
+  if (version < 82) {
+    // FK-Anreicherung Phase 3b: book_id -> books(bookstack_book_id) fuer
+    // strukturelle Tabellen — chat_sessions, book_reviews, chapter_reviews,
+    // ideen, page_checks, locations, figure_scenes, pages, chapters, figures,
+    // figure_relations. Alle CASCADE — Inhalt ist an Buchexistenz gebunden.
+    //
+    // pages, chapters, figures sind FK-Targets fuer andere Tabellen
+    // (page_stats, chapter_extract_cache, figure_relations etc). Mit
+    // foreign_keys=OFF waehrend Recreate sind die Child-FKs unkritisch:
+    // SQLite bindet FK-Refs an den Tabellennamen, der nach RENAME _new wieder
+    // valid ist. fk_check am Ende verifiziert.
+    db.pragma('foreign_keys = OFF');
+
+    // Pre-Cleanup: Orphan-book_ids loeschen. Mit foreign_keys=OFF kein Cascade —
+    // pro Tabelle manuell. Reihenfolge egal, kein Dependency-Cleanup noetig.
+    const cleanupTables82 = [
+      'chat_sessions', 'book_reviews', 'chapter_reviews', 'ideen',
+      'page_checks', 'locations', 'figure_scenes', 'pages', 'chapters',
+      'figures', 'figure_relations',
+    ];
+    let orphans82 = 0;
+    for (const t of cleanupTables82) {
+      const r = db.prepare(`DELETE FROM ${t} WHERE book_id NOT IN (SELECT bookstack_book_id FROM books)`).run();
+      orphans82 += r.changes;
+    }
+    if (orphans82) logger.info(`Mig 82 Pre-Cleanup: ${orphans82} Orphan-Rows entfernt.`);
+
+    const _recreate82 = (table, createSql, indexSqls) => {
+      db.prepare(`DROP TABLE IF EXISTS ${table}_new`).run();
+      db.prepare(createSql).run();
+      db.prepare(`INSERT INTO ${table}_new SELECT * FROM ${table}`).run();
+      db.prepare(`DROP TABLE ${table}`).run();
+      db.prepare(`ALTER TABLE ${table}_new RENAME TO ${table}`).run();
+      for (const ix of indexSqls) db.prepare(ix).run();
+    };
+
+    // 1) chat_sessions (page_id-FK + kind-CHECK + page-CHECK bleiben)
+    _recreate82('chat_sessions', `
+      CREATE TABLE chat_sessions_new (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id           INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        kind              TEXT    NOT NULL DEFAULT 'page' CHECK(kind IN ('page','book')),
+        page_id           INTEGER REFERENCES pages(page_id) ON DELETE CASCADE,
+        user_email        TEXT    NOT NULL,
+        created_at        TEXT    NOT NULL,
+        last_message_at   TEXT    NOT NULL,
+        opening_page_text TEXT,
+        CHECK ((kind = 'page' AND page_id IS NOT NULL)
+            OR (kind = 'book' AND page_id IS NULL))
+      )
+    `, [
+      'CREATE INDEX idx_cs_page_id ON chat_sessions(page_id, user_email)',
+      'CREATE INDEX idx_cs_book_id ON chat_sessions(book_id, user_email)',
+      'CREATE INDEX idx_cs_kind    ON chat_sessions(book_id, user_email, kind)',
+    ]);
+
+    // 2) book_reviews
+    _recreate82('book_reviews', `
+      CREATE TABLE book_reviews_new (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id     INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        reviewed_at TEXT    NOT NULL,
+        review_json TEXT,
+        model       TEXT,
+        user_email  TEXT
+      )
+    `, [
+      'CREATE INDEX idx_br_book_user_date ON book_reviews(book_id, user_email, reviewed_at DESC)',
+    ]);
+
+    // 3) chapter_reviews (chapter_id-FK CASCADE bleibt; book_id wird FK)
+    _recreate82('chapter_reviews', `
+      CREATE TABLE chapter_reviews_new (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id     INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        chapter_id  INTEGER NOT NULL REFERENCES chapters(chapter_id) ON DELETE CASCADE,
+        reviewed_at TEXT    NOT NULL,
+        review_json TEXT,
+        model       TEXT,
+        user_email  TEXT
+      )
+    `, [
+      'CREATE INDEX idx_cr_book_chapter_user_date ON chapter_reviews(book_id, chapter_id, user_email, reviewed_at DESC)',
+    ]);
+
+    // 4) ideen (page_id-FK SET NULL bleibt; book_id wird FK CASCADE)
+    _recreate82('ideen', `
+      CREATE TABLE ideen_new (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id     INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        page_id     INTEGER REFERENCES pages(page_id) ON DELETE SET NULL,
+        user_email  TEXT    NOT NULL,
+        content     TEXT    NOT NULL,
+        erledigt    INTEGER NOT NULL DEFAULT 0,
+        erledigt_at TEXT,
+        created_at  TEXT    NOT NULL,
+        updated_at  TEXT    NOT NULL
+      )
+    `, [
+      'CREATE INDEX idx_ideen_page_user ON ideen(page_id, user_email)',
+      'CREATE INDEX idx_ideen_book_user ON ideen(book_id, user_email)',
+    ]);
+
+    // 5) page_checks (page_id-FK CASCADE + chapter_id-FK SET NULL bleiben;
+    //    book_id war NULLABLE — bleibt nullable mit FK SET NULL, sonst gehen
+    //    historische Eintraege verloren, wenn book_id mal vergessen wurde.)
+    _recreate82('page_checks', `
+      CREATE TABLE page_checks_new (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        page_id              INTEGER NOT NULL REFERENCES pages(page_id) ON DELETE CASCADE,
+        book_id              INTEGER REFERENCES books(bookstack_book_id) ON DELETE SET NULL,
+        checked_at           TEXT NOT NULL,
+        error_count          INTEGER DEFAULT 0,
+        errors_json          TEXT,
+        stilanalyse          TEXT,
+        fazit                TEXT,
+        model                TEXT,
+        saved                INTEGER DEFAULT 0,
+        saved_at             TEXT,
+        applied_errors_json  TEXT,
+        user_email           TEXT,
+        selected_errors_json TEXT,
+        szenen_json          TEXT,
+        chapter_id           INTEGER REFERENCES chapters(chapter_id) ON DELETE SET NULL,
+        stilkorrektur_log    TEXT
+      )
+    `, [
+      'CREATE INDEX idx_pc_page_user_date ON page_checks(page_id, user_email, checked_at DESC)',
+      'CREATE INDEX idx_pc_book_user      ON page_checks(book_id, user_email)',
+    ]);
+
+    // 6) locations (FK erste_erwaehnung_page_id SET NULL bleibt; UNIQUE bleibt)
+    _recreate82('locations', `
+      CREATE TABLE locations_new (
+        id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id                  INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        loc_id                   TEXT    NOT NULL,
+        name                     TEXT    NOT NULL,
+        typ                      TEXT,
+        beschreibung             TEXT,
+        erste_erwaehnung         TEXT,
+        erste_erwaehnung_page_id INTEGER REFERENCES pages(page_id) ON DELETE SET NULL,
+        stimmung                 TEXT,
+        sort_order               INTEGER DEFAULT 0,
+        user_email               TEXT,
+        updated_at               TEXT NOT NULL,
+        UNIQUE(book_id, loc_id, user_email)
+      )
+    `, [
+      'CREATE INDEX idx_loc_book_id ON locations(book_id, user_email)',
+    ]);
+
+    // 7) figure_scenes (FK chapter_id, page_id SET NULL bleiben)
+    _recreate82('figure_scenes', `
+      CREATE TABLE figure_scenes_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id    INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        user_email TEXT,
+        titel      TEXT    NOT NULL,
+        wertung    TEXT,
+        kommentar  TEXT,
+        sort_order INTEGER DEFAULT 0,
+        chapter_id INTEGER REFERENCES chapters(chapter_id) ON DELETE SET NULL,
+        page_id    INTEGER REFERENCES pages(page_id)       ON DELETE SET NULL,
+        updated_at TEXT
+      )
+    `, [
+      'CREATE INDEX idx_fscene_book    ON figure_scenes(book_id, user_email)',
+      'CREATE INDEX idx_fscene_chapter ON figure_scenes(chapter_id)',
+      'CREATE INDEX idx_fscene_page    ON figure_scenes(page_id)',
+    ]);
+
+    // 8) pages (FK chapter_id SET NULL bleibt; last_seen_at aus Mig 80 bleibt)
+    _recreate82('pages', `
+      CREATE TABLE pages_new (
+        page_id      INTEGER PRIMARY KEY,
+        book_id      INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        page_name    TEXT,
+        chapter_id   INTEGER REFERENCES chapters(chapter_id) ON DELETE SET NULL,
+        updated_at   TEXT,
+        preview_text TEXT,
+        last_seen_at TEXT
+      )
+    `, [
+      'CREATE INDEX idx_pages_book_id    ON pages(book_id)',
+      'CREATE INDEX idx_pages_chapter_id ON pages(chapter_id)',
+      'CREATE INDEX idx_pages_last_seen  ON pages(last_seen_at)',
+    ]);
+
+    // 9) chapters (composite PK + UNIQUE(chapter_id) bleiben — UNIQUE
+    //    notwendig, weil pages.chapter_id, chapter_reviews.chapter_id,
+    //    chapter_extract_cache.chapter_id u.a. auf chapters(chapter_id)
+    //    referenzieren; FK-Target braucht entweder PK oder UNIQUE.)
+    _recreate82('chapters', `
+      CREATE TABLE chapters_new (
+        chapter_id   INTEGER NOT NULL,
+        book_id      INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        chapter_name TEXT    NOT NULL,
+        updated_at   TEXT,
+        last_seen_at TEXT,
+        PRIMARY KEY (chapter_id, book_id),
+        UNIQUE (chapter_id)
+      )
+    `, [
+      'CREATE INDEX idx_chapters_last_seen ON chapters(last_seen_at)',
+    ]);
+
+    // 10) figures (UNIQUE(book_id, fig_id, user_email) bleibt)
+    _recreate82('figures', `
+      CREATE TABLE figures_new (
+        id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id                  INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        fig_id                   TEXT    NOT NULL,
+        name                     TEXT    NOT NULL,
+        kurzname                 TEXT,
+        typ                      TEXT,
+        geburtstag               TEXT,
+        geschlecht               TEXT,
+        beruf                    TEXT,
+        beschreibung             TEXT,
+        sort_order               INTEGER DEFAULT 0,
+        meta                     TEXT,
+        updated_at               TEXT    NOT NULL,
+        user_email               TEXT,
+        sozialschicht            TEXT,
+        praesenz                 TEXT,
+        rolle                    TEXT,
+        motivation               TEXT,
+        konflikt                 TEXT,
+        entwicklung              TEXT,
+        erste_erwaehnung         TEXT,
+        erste_erwaehnung_page_id INTEGER,
+        schluesselzitate         TEXT,
+        wohnadresse              TEXT,
+        UNIQUE(book_id, fig_id, user_email)
+      )
+    `, [
+      'CREATE INDEX idx_fig_book_id ON figures(book_id)',
+    ]);
+
+    // 11) figure_relations (FK from/to_fig_id CASCADE auf figures.id bleiben)
+    _recreate82('figure_relations', `
+      CREATE TABLE figure_relations_new (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id         INTEGER NOT NULL REFERENCES books(bookstack_book_id) ON DELETE CASCADE,
+        from_fig_id     INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+        to_fig_id       INTEGER NOT NULL REFERENCES figures(id) ON DELETE CASCADE,
+        typ             TEXT    NOT NULL,
+        beschreibung    TEXT,
+        user_email      TEXT,
+        machtverhaltnis INTEGER,
+        belege          TEXT
+      )
+    `, [
+      'CREATE INDEX idx_frel_book_id ON figure_relations(book_id)',
+      'CREATE INDEX idx_frel_from    ON figure_relations(from_fig_id)',
+      'CREATE INDEX idx_frel_to      ON figure_relations(to_fig_id)',
+    ]);
+
+    db.pragma('foreign_keys = ON');
+    const fkErrors82 = db.pragma('foreign_key_check');
+    if (fkErrors82.length) {
+      throw new Error(`Migration 82: foreign_key_check meldet ${fkErrors82.length} Verstoesse: ${JSON.stringify(fkErrors82.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 82').run();
+    logger.info('DB-Migration auf Version 82 abgeschlossen (FK book_id -> books fuer 11 strukturelle Tabellen: chat_sessions, book_reviews, chapter_reviews, ideen, page_checks, locations, figure_scenes, pages, chapters, figures, figure_relations).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {
