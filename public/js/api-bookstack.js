@@ -121,7 +121,20 @@ export const bookstackMethods = {
       await new Promise(rs => setTimeout(rs, wait));
     }
     let detail = '';
-    try { const e = await lastRes.json(); detail = e.message || e.error || ''; } catch (_) {}
+    try {
+      const e = await lastRes.json();
+      // BookStack 422 liefert { error: { message, validation: { feld: [msgs] } } } —
+      // tiefer auflösen, sonst rendert der String "[object Object]".
+      const validation = e?.error?.validation;
+      const flatVal = validation && typeof validation === 'object'
+        ? Object.values(validation).flat().filter(Boolean).join('; ')
+        : '';
+      detail = flatVal
+        || e?.error?.message
+        || e?.message
+        || (typeof e?.error === 'string' ? e.error : '')
+        || '';
+    } catch (_) {}
     throw new Error(detail
       ? this.t('bs.apiErrorDetail', { status: lastRes.status, detail })
       : this.t('bs.apiError', { status: lastRes.status }));

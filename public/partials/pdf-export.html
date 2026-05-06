@@ -108,10 +108,21 @@
         <fieldset class="pdfx-fieldset">
           <legend x-text="$app.t('pdfExport.layout.margins')"></legend>
           <div class="pdfx-grid pdfx-grid--4">
-            <label class="pdfx-field"><span>Top</span><input type="number" min="5" max="80" x-model.number="activeProfile.config.layout.marginsMm.top" class="pdfx-input"></label>
-            <label class="pdfx-field"><span>Right</span><input type="number" min="5" max="80" x-model.number="activeProfile.config.layout.marginsMm.right" class="pdfx-input"></label>
-            <label class="pdfx-field"><span>Bottom</span><input type="number" min="5" max="80" x-model.number="activeProfile.config.layout.marginsMm.bottom" class="pdfx-input"></label>
-            <label class="pdfx-field"><span>Left</span><input type="number" min="5" max="80" x-model.number="activeProfile.config.layout.marginsMm.left" class="pdfx-input"></label>
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.edge.top')"></span><input type="number" min="5" max="80" x-model.number="activeProfile.config.layout.marginsMm.top" class="pdfx-input"></label>
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.edge.right')"></span><input type="number" min="5" max="80" x-model.number="activeProfile.config.layout.marginsMm.right" class="pdfx-input"></label>
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.edge.bottom')"></span><input type="number" min="5" max="80" x-model.number="activeProfile.config.layout.marginsMm.bottom" class="pdfx-input"></label>
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.edge.left')"></span><input type="number" min="5" max="80" x-model.number="activeProfile.config.layout.marginsMm.left" class="pdfx-input"></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="pdfx-fieldset">
+          <legend x-text="$app.t('pdfExport.layout.bodyInset')"></legend>
+          <p class="pdfx-hint" x-text="$app.t('pdfExport.layout.bodyInsetHint')"></p>
+          <div class="pdfx-grid pdfx-grid--4">
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.edge.top')"></span><input type="number" min="0" max="60" x-model.number="activeProfile.config.layout.bodyInsetMm.top" class="pdfx-input"></label>
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.edge.right')"></span><input type="number" min="0" max="60" x-model.number="activeProfile.config.layout.bodyInsetMm.right" class="pdfx-input"></label>
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.edge.bottom')"></span><input type="number" min="0" max="60" x-model.number="activeProfile.config.layout.bodyInsetMm.bottom" class="pdfx-input"></label>
+            <label class="pdfx-field"><span x-text="$app.t('pdfExport.layout.edge.left')"></span><input type="number" min="0" max="60" x-model.number="activeProfile.config.layout.bodyInsetMm.left" class="pdfx-input"></label>
           </div>
         </fieldset>
 
@@ -330,6 +341,7 @@
 
       <!-- Extras-Tab -->
       <div class="pdfx-tab-panel" x-show="isTab('extras')">
+        <p class="pdfx-hint" x-text="$app.t('pdfExport.extras.hint')"></p>
         <div class="pdfx-grid pdfx-grid--2">
           <label class="pdfx-field">
             <span x-text="$app.t('pdfExport.extras.subtitle')"></span>

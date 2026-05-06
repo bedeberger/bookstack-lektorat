@@ -19,6 +19,7 @@ KI-gestütztes Lektorat-Tool für [BookStack](https://www.bookstackapp.com/). Ei
 - **Lektorat-Verlauf** – Frühere Korrekturen als Inline-Highlights, selektiv nachträglich übernehmbar.
 - **Buchstatistik** – Tägliche Snapshots (Wörter, Tokens) als Zeitliniendiagramm.
 - **Fine-Tuning-Export** – JSONL-Trainingsdaten (Stil, Szenen, Dialoge, Q&A, Korrekturen). Anleitung: [docs/finetuning.md](docs/finetuning.md).
+- **WordPress-Import** – One-Shot-Import einer WP-Site aus mysqldump-Datei in ein BookStack-Buch (Categories → Chapter, älteste Posts zuerst). Anleitung: [docs/wordpress-import.md](docs/wordpress-import.md).
 - **Custom-PDF-Export** – Eigener Renderer (pdfkit) mit konfigurierbarem Layout, Schriften aus Google Fonts (runtime download, 30-Tage-Cache), Cover-Bild (sharp-konvertiert), Kapitelumbrüche, Inhaltsverzeichnis und PDF/A-2B-Konformität. Mehrere Profile pro Buch+User. Optional Server-Validierung via veraPDF (im Dockerfile vorinstalliert).
 - **Bucheinstellungen** – Sprache, Buchtyp, Erzählperspektive, Erzählzeit, Freitext-Kontext fliessen in alle Prompts.
 - **Theme** – Hell/Dunkel/Auto.

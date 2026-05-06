@@ -96,6 +96,26 @@ test('Widmung + Impressum erzeugen je eine zusätzliche Seite', async () => {
   assert.equal(pageCount(withExtras) - pageCount(baseline), 2);
 });
 
+test('Lose Seite vor erstem Kapitel: Kapitel-Heading bricht auf eigene Page (Regression)', async () => {
+  // Bug: spaceBeforeMm-Reset (doc.y = margin.top + 60mm) lief auch für
+  // Kapitel 1 unbedingt, sodass auf einer mit losen Seiten befüllten Body-
+  // Page das Kapitel-Heading mitten in den Vorgängerinhalt gestempelt wurde
+  // ("drückt durch"). Fix: Break, sobald die Body-Page schon Inhalt hat.
+  const longHtml = '<p>' + 'Es war einmal in einem fernen Land. '.repeat(80) + '</p>';
+  const groups = [
+    { chapter: null, pages: [{ p: { id: 1, name: 'Vorwort' }, pd: { html: longHtml } }] },
+    { chapter: { id: 10, name: 'Erstes Kapitel' }, pages: [{ p: { id: 2, name: 'S' }, pd: { html: '<p>kurz</p>' } }] },
+  ];
+  const cfg = defaultConfig();
+  cfg.cover.enabled = false;
+  cfg.toc.enabled = false;
+  const buf = await renderPdfBuffer({ book: baseBook, groups, profile: { config: cfg }, coverBuf: null, token: null });
+  // Erwartet: Title-Page + Vorwort-Body-Page(s) + eigene Kapitel-1-Page → ≥3.
+  // Vor dem Fix kollabierten Vorwort + Kapitel-Heading auf eine Body-Page,
+  // dann wäre pageCount=2.
+  assert.ok(pageCount(buf) >= 3, `Erwartet ≥3 Pages, war ${pageCount(buf)} (Overlap-Bug?)`);
+});
+
 test('TOC mit Page-Numbers stempelt Zahlen rechts ein', async () => {
   const cfg = defaultConfig();
   cfg.cover.enabled = false;
