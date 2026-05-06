@@ -18,10 +18,12 @@
 //     --prefix wp_              (Default wp_; manche Installs nutzen wpXX_)
 //     --dry-run                 (zeigt Plan, schreibt nichts)
 //     --limit 5                 (nur N Posts; gut zum Testen)
+//     --yes / -y                (Bestätigungsprompt vor Push überspringen)
 
 'use strict';
 require('dotenv').config();
 const fs = require('fs');
+const readline = require('node:readline');
 const { parseArgs } = require('node:util');
 
 const API_HOST = (process.env.API_HOST || '').replace(/\/$/, '');
@@ -39,7 +41,8 @@ const args = parseArgs({
     'prefix':  { type: 'string', default: 'wp_' },
     'book-id': { type: 'string' },
     'dry-run': { type: 'boolean', default: false },
-    'limit':   { type: 'string' }
+    'limit':   { type: 'string' },
+    'yes':     { type: 'boolean', short: 'y', default: false }
   },
   strict: true
 }).values;
@@ -67,6 +70,7 @@ if (!Number.isInteger(BOOK_ID) || BOOK_ID <= 0) {
 
 const LIMIT = args.limit ? parseInt(args.limit, 10) : null;
 const DRY = args['dry-run'];
+const SKIP_CONFIRM = args.yes;
 const P = args.prefix;
 
 const headers = {
@@ -440,17 +444,33 @@ async function ensureChapters(chapterNames) {
   return map;
 }
 
+function pageTitle(row) {
+  const date = String(row.post_date_gmt || '').slice(0, 10);
+  const base = row.post_title || `(ohne Titel) ${row.ID}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date} ${base}` : base;
+}
+
 async function pushPage(row, chapterId, priority) {
   const html = cleanHtml(row.post_content);
   const body = {
     chapter_id: chapterId,
-    name: row.post_title || `(ohne Titel) ${row.ID}`,
+    name: pageTitle(row),
     html,
     priority,
     tags: buildTags(row)
   };
   if (DRY) return { id: -row.ID, ...body };
   return api('POST', '/pages', body);
+}
+
+function confirm(question) {
+  return new Promise(resolve => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(question, answer => {
+      rl.close();
+      resolve(/^(j|ja|y|yes)$/i.test(answer.trim()));
+    });
+  });
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -483,12 +503,26 @@ async function main() {
       chapterOrder.push(p.chapter);
     }
   }
-  console.log(`Kapitel (Reihenfolge nach erstem Post): ${chapterOrder.length}`);
-  for (const c of chapterOrder) {
-    const cnt = posts.filter(p => p.chapter === c).length;
-    console.log(`  - ${c} (${cnt})`);
-  }
+
+  console.log(`Importplan — ${chapterOrder.length} Kapitel, ${posts.length} Seiten:`);
   console.log('');
+  for (const c of chapterOrder) {
+    const inCh = posts.filter(p => p.chapter === c);
+    console.log(`  ▸ ${c} (${inCh.length} Seiten)`);
+    for (const p of inCh) {
+      console.log(`      ${pageTitle(p)}`);
+    }
+    console.log('');
+  }
+
+  if (!DRY && !SKIP_CONFIRM) {
+    const ok = await confirm('Importieren? [j/N] ');
+    if (!ok) {
+      console.log('Abgebrochen.');
+      return;
+    }
+    console.log('');
+  }
 
   const chapterMap = await ensureChapters(chapterOrder);
 

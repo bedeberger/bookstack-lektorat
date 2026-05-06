@@ -32,6 +32,7 @@ One-Shot-Import einer WordPress-Site in BookStack via mysqldump-Datei. Liest Pos
    ```bash
    node scripts/wp-import.js --dump wp-dump.sql --book-id 42
    ```
+   Vor dem Push zeigt das Script den vollen Importplan (Kapitel + alle Seitentitel mit Datums-Prefix) und wartet auf `j`/`ja`/`y`/`yes`. Mit `--yes` (bzw. `-y`) wird die Bestätigung übersprungen.
 6. In BookStack: Buch öffnen, Stichproben — Reihenfolge, Kategorien, Tags (`wp-id`, `wp-slug`, `wp-date`).
 
 ## CLI-Flags
@@ -43,6 +44,7 @@ One-Shot-Import einer WordPress-Site in BookStack via mysqldump-Datei. Liest Pos
 | `--prefix` | — | `wp_` | Tabellen-Prefix im Dump (manche Installs nutzen `wp1234_`, `wpcustom_`) |
 | `--dry-run` | — | aus | Zeigt Plan, schreibt nichts an BookStack |
 | `--limit N` | — | alle | Nur die ersten N Posts (nach Sortierung) — gut zum Testen |
+| `--yes` / `-y` | — | aus | Bestätigungsprompt überspringen (für CI / Skripte) |
 
 ## Was importiert wird
 
@@ -53,7 +55,7 @@ One-Shot-Import einer WordPress-Site in BookStack via mysqldump-Datei. Liest Pos
 
 **Nach BookStack:**
 - Pro unique Category ein **Chapter** unter dem Zielbuch. Reihenfolge der Chapter = Datum des ersten Posts pro Category aufsteigend, `priority = (i+1) * 10`.
-- Pro Post eine **Page** im jeweiligen Chapter. `priority = (localIdx+1) * 10`, also Lücken für späteres manuelles Reorder.
+- Pro Post eine **Page** im jeweiligen Chapter. `priority = (localIdx+1) * 10`, also Lücken für späteres manuelles Reorder. Seitentitel mit Datums-Prefix `YYYY-MM-DD ` (Veröffentlichungsdatum aus `post_date_gmt`).
 - **Tags pro Page:**
   - `wp-id` — Original-Post-ID (Traceability für spätere Re-Runs / nginx-Redirect-Maps)
   - `wp-slug` — Original-Permalink-Slug
