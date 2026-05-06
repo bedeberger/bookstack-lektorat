@@ -7,6 +7,7 @@ const session = require('express-session');
 const SqliteStore = require('better-sqlite3-session-store')(session);
 const path = require('path');
 const logger = require('./logger');
+const { runWithContext } = require('./lib/log-context');
 
 // DB-Setup + Migrationen laufen beim Import
 const { db, cleanupStuckJobRuns, upsertUserLogin, touchUserLastSeen, addUserActivity, pruneStaleByAge } = require('./db/schema');
@@ -122,13 +123,17 @@ if (LOCAL_DEV_MODE) {
   logger.warn('ALLOWED_EMAILS nicht gesetzt – ALLE Google-Konten haben Zugriff! Bitte in .env einschränken.');
 }
 
-// Request-Logger nach Session, damit req.session.user verfügbar ist.
-app.use((req, _res, next) => {
-  logger.info(`${req.method} ${req.path}`, {
-    ip: req.ip,
-    user: req.session?.user?.email,
-  });
-  next();
+// ALS-Logging-Context: jeder logger.*-Call innerhalb des Request-Scopes erbt
+// reqId/ip/user automatisch. Selbst silent — eigentliches Page-Load-Logging
+// passiert weiter unten kurz vor staticServe.
+app.use((req, res, next) => {
+  const reqId = crypto.randomUUID().slice(0, 8);
+  res.setHeader('X-Request-Id', reqId);
+  runWithContext({
+    reqId,
+    ip: req.ip || null,
+    user: req.session?.user?.email || null,
+  }, () => next());
 });
 
 // ── Auth-Routen (öffentlich) ──────────────────────────────────────────────────
@@ -236,6 +241,22 @@ app.use('/usage', usageRouter);
 
 // Logout: usage-Tabelle behält Einträge (User-Wiederkehr → Top-3 sofort wieder da).
 // Wenn Datenschutz erforderlich, Cleanup über Job/Cron auf Last-Seen-Basis.
+
+// Page-Load-Logging: nur echte SPA-Shell-Requests (Browser-Document, kein
+// SW-Refetch, kein Asset-Call). Heuristik prüft sec-fetch-dest oder Accept.
+app.use((req, _res, next) => {
+  if (req.method === 'GET' && req.path === '/') {
+    const dest = req.headers['sec-fetch-dest'];
+    const accept = req.headers.accept || '';
+    const isDoc = dest === 'document' || accept.startsWith('text/html');
+    if (isDoc) {
+      const ua = req.headers['user-agent'] || '-';
+      logger.info(`page load (ua="${ua}")`);
+    }
+  }
+  next();
+});
+
 app.use(staticServe);
 app.use('/api', bookstackPageCleaner, bookstackProxy);
 

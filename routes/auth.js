@@ -91,7 +91,7 @@ router.get('/auth/callback', async (req, res) => {
     if (allowed) {
       const list = allowed.split(',').map(e => e.trim().toLowerCase());
       if (!list.includes(email.toLowerCase())) {
-        logger.warn(`Login verweigert für: ${email}`);
+        logger.warn('Login verweigert (nicht in ALLOWED_EMAILS).', { user: email });
         return res.status(403).send(
           `Zugriff verweigert: ${email} ist nicht berechtigt. ` +
           `<a href="/auth/logout">Anderes Konto verwenden</a>`
@@ -115,7 +115,7 @@ router.get('/auth/callback', async (req, res) => {
     // Gespeicherten BookStack-Token in Session laden (falls vorhanden)
     const stored = getUserToken(email);
     if (stored) req.session.bookstackToken = { id: stored.token_id, pw: stored.token_pw };
-    logger.info(`Login: ${email}${stored ? ' (Token geladen)' : ' (kein Token hinterlegt)'}`);
+    logger.info(`Login${stored ? ' (Token geladen)' : ' (kein Token hinterlegt)'}`, { user: email });
     res.redirect(returnTo);
   } catch (err) {
     logger.error('Auth callback error: ' + err.message);
@@ -134,7 +134,7 @@ router.get('/auth/logout', (req, res) => {
   req.session.destroy(() => {
     if (email) {
       const durMin = loginAt ? Math.round((Date.now() - loginAt) / 60000) : null;
-      logger.info(`Logout: ${email}${durMin != null ? ` (Session ${durMin} min)` : ''}`);
+      logger.info(`Logout${durMin != null ? ` (Session ${durMin} min)` : ''}`, { user: email });
     }
     const t = lang === 'en'
       ? { title: 'Signed out', body: 'You have been signed out.', cta: 'Sign in again' }
@@ -168,7 +168,7 @@ router.put('/auth/token', express.json(), (req, res) => {
   const email = req.session.user.email;
   setUserToken(email, tokenId, tokenPw);
   req.session.bookstackToken = { id: tokenId, pw: tokenPw };
-  logger.info(`Token gespeichert für: ${email}`);
+  logger.info('BookStack-Token gespeichert.');
   res.json({ ok: true });
 });
 

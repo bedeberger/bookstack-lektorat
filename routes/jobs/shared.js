@@ -2,6 +2,7 @@
 const express = require('express');
 const { randomUUID } = require('crypto');
 const logger = require('../../logger');
+const { runWithContext } = require('../../lib/log-context');
 const { db, insertJobRun, startJobRun, endJobRun, getBookSettings } = require('../../db/schema');
 const { callAI, parseJSON, CHARS_PER_TOKEN, MAX_TOKENS_OUT, INPUT_BUDGET_CHARS } = require('../../lib/ai');
 const { bsGet: _bsGet, bsGetAll: _bsGetAll, bsBatch: _bsBatch, BOOKSTACK_URL: BS_URL } = require('../../lib/bookstack');
@@ -36,10 +37,13 @@ const runningJobs = new Map();
 // key: jobId → AbortController  (für Job-Abbruch)
 const jobAbortControllers = new Map();
 
-function makeJobLogger(jobId) {
-  const j = jobs.get(jobId);
-  if (!j) return logger;
-  return logger.child({ job: j.type, user: j.userEmail || '-', book: j.bookId });
+// Job-Ctx (type/user/book) wird via ALS in `drainQueue` gesetzt – jeder
+// `logger.*`-Call innerhalb der Job-Funktion erbt ihn automatisch.
+// Der frühere Child-Logger ist damit überflüssig; die Funktion bleibt als
+// reiner Pass-Through erhalten, damit die zahlreichen Aufruf-Sites
+// (`const logger = makeJobLogger(jobId)`) unverändert weiterlaufen.
+function makeJobLogger(_jobId) {
+  return logger;
 }
 
 // ── Globale Queue ─────────────────────────────────────────────────────────────
@@ -56,10 +60,13 @@ function drainQueue() {
     activeCount++;
     job.status = 'running';
     job.startedAt = new Date().toISOString();
-    try { startJobRun(jobId, job.startedAt); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] startJobRun: ${e.message}`); }
-    fn()
-      .catch(e => logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] Unkontrollierter Job-Fehler (${jobId}): ${e.message}`))
-      .finally(() => { activeCount--; drainQueue(); });
+    const ctx = { job: job.type, user: job.userEmail || null, book: job.bookId, jobId };
+    runWithContext(ctx, () => {
+      try { startJobRun(jobId, job.startedAt); } catch (e) { logger.error(`startJobRun: ${e.message}`); }
+      fn()
+        .catch(e => logger.error(`Unkontrollierter Job-Fehler (${jobId}): ${e.message}`))
+        .finally(() => { activeCount--; drainQueue(); });
+    });
   }
 }
 
@@ -140,7 +147,9 @@ function createJob(type, bookId, userEmail, label, labelParams = null, dedupId =
     cancelled: false,
   });
   jobAbortControllers.set(id, new AbortController());
-  try { insertJobRun({ id, type, bookId: String(bookId), userEmail, label }); } catch (e) { logger.error(`[${type}|${userEmail || '-'}|${bookId}] insertJobRun: ${e.message}`); }
+  try { insertJobRun({ id, type, bookId: String(bookId), userEmail, label }); } catch (e) {
+    logger.error(`insertJobRun: ${e.message}`, { job: type, user: userEmail, book: bookId });
+  }
   runningJobs.set(key, id);
   return id;
 }
@@ -172,7 +181,9 @@ function completeJob(id, result, tokensPerSec = null) {
   const job = jobs.get(id);
   if (!job) return;
   Object.assign(job, { status: 'done', progress: 100, result, tokensPerSec, endedAt: new Date().toISOString() });
-  try { endJobRun(id, 'done', job.endedAt, job.tokensIn, job.tokensOut, tokensPerSec, null); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
+  try { endJobRun(id, 'done', job.endedAt, job.tokensIn, job.tokensOut, tokensPerSec, null); } catch (e) {
+    logger.error(`endJobRun: ${e.message}`, { job: job.type, user: job.userEmail, book: job.bookId });
+  }
   runningJobs.delete(jobDedupKey(job));
   jobAbortControllers.delete(id);
   _scheduleJobCleanup(id);
@@ -186,7 +197,9 @@ function failJob(id, err) {
   const errorMsg = isCancelled ? 'job.cancelled' : (err.message || String(err));
   const errorParams = isCancelled ? null : (err?.i18nParams || null);
   Object.assign(job, { status, error: errorMsg, errorParams, progress: isCancelled ? job.progress : 0, endedAt: new Date().toISOString() });
-  try { endJobRun(id, status, job.endedAt, job.tokensIn, job.tokensOut, null, errorMsg, errorParams); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
+  try { endJobRun(id, status, job.endedAt, job.tokensIn, job.tokensOut, null, errorMsg, errorParams); } catch (e) {
+    logger.error(`endJobRun: ${e.message}`, { job: job.type, user: job.userEmail, book: job.bookId });
+  }
   runningJobs.delete(jobDedupKey(job));
   jobAbortControllers.delete(id);
   _scheduleJobCleanup(id);
@@ -201,18 +214,22 @@ function cancelJob(id, userEmail) {
     if (idx !== -1) jobQueue.splice(idx, 1);
     const endedAt = new Date().toISOString();
     Object.assign(job, { status: 'cancelled', error: 'job.cancelled', errorParams: null, endedAt });
-    try { endJobRun(id, 'cancelled', endedAt, 0, 0, null, 'Abgebrochen'); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
+    try { endJobRun(id, 'cancelled', endedAt, 0, 0, null, 'Abgebrochen'); } catch (e) {
+      logger.error(`endJobRun: ${e.message}`, { job: job.type, user: job.userEmail, book: job.bookId });
+    }
     runningJobs.delete(jobDedupKey(job));
     jobAbortControllers.delete(id);
     _scheduleJobCleanup(id);
-    logger.info(`Job ${id} (${job.type}|${job.userEmail || '-'}|${job.bookId}) aus Warteschlange entfernt und abgebrochen.`);
+    logger.info(`Job ${id} aus Warteschlange entfernt und abgebrochen.`,
+      { job: job.type, user: job.userEmail, book: job.bookId });
     return true;
   }
   if (job.status === 'running') {
     job.cancelled = true;
     const ctrl = jobAbortControllers.get(id);
     if (ctrl) ctrl.abort();
-    logger.info(`Job ${id} (${job.type}|${job.userEmail || '-'}|${job.bookId}) Abbruch signalisiert.`);
+    logger.info(`Job ${id} Abbruch signalisiert.`,
+      { job: job.type, user: job.userEmail, book: job.bookId });
     return true;
   }
   return false;
@@ -228,17 +245,56 @@ function _modelName(prov) {
 // ── Lokaler-Provider-kompatibler Promise.allSettled-Ersatz ────────────────────
 // Ollama und Llama verarbeiten Requests sequenziell. Bei parallelen Calls mit
 // grossem Kontext läuft der VRAM voll → fetch failed. Daher serialisieren.
-async function settledAll(thunks) {
-  if ((process.env.API_PROVIDER || 'claude') === 'claude')
-    return Promise.allSettled(thunks.map(fn => fn()));
-  const results = [];
-  for (const fn of thunks) {
-    try { results.push({ status: 'fulfilled', value: await fn() }); }
+//
+// Claude-Multi-Pass mit vielen Chunks (grosse Bücher, 11+ Chunks) trifft sonst
+// Anthropic-TPM-Limits → einige Streams kommen als „terminated" zurück. Optional
+// `opts.concurrency` (Default: unbegrenzt) cappt parallele Calls; `opts.warmup`
+// (Default: false) lässt den ERSTEN Thunk seriell laufen, bevor der Rest startet
+// — der Erst-Call schreibt den Prompt-Cache, Folge-Calls greifen den Cache-Hit
+// und sind ~10× günstiger + viel kürzer (kleinerer TPM-Burst).
+async function settledAll(thunks, opts = {}) {
+  const isLocal = (process.env.API_PROVIDER || 'claude') !== 'claude';
+  if (isLocal) {
+    const results = [];
+    for (const fn of thunks) {
+      try { results.push({ status: 'fulfilled', value: await fn() }); }
+      catch (e) {
+        if (e.name === 'AbortError') throw e;
+        results.push({ status: 'rejected', reason: e });
+      }
+    }
+    return results;
+  }
+
+  const settle = async (fn) => {
+    try { return { status: 'fulfilled', value: await fn() }; }
     catch (e) {
       if (e.name === 'AbortError') throw e;
-      results.push({ status: 'rejected', reason: e });
+      return { status: 'rejected', reason: e };
     }
+  };
+
+  const results = new Array(thunks.length);
+  let nextIdx = 0;
+
+  if (opts.warmup && thunks.length > 1) {
+    results[0] = await settle(thunks[0]);
+    nextIdx = 1;
   }
+
+  const concurrency = Math.max(1, opts.concurrency || thunks.length);
+  const remaining = thunks.length - nextIdx;
+  if (remaining <= 0) return results;
+  const workerCount = Math.min(concurrency, remaining);
+
+  const worker = async () => {
+    while (true) {
+      const i = nextIdx++;
+      if (i >= thunks.length) return;
+      results[i] = await settle(thunks[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: workerCount }, worker));
   return results;
 }
 

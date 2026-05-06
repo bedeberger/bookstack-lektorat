@@ -72,7 +72,7 @@ router.post('/', jsonBody, (req, res) => {
     LEFT JOIN pages p ON p.page_id = i.page_id
     WHERE i.id = ?
   `).get(result.lastInsertRowid);
-  logger.info(`[ideen] create id=${row.id} page=${pageId} user=${userEmail}`);
+  logger.info(`[ideen] create id=${row.id} page=${pageId}`);
   res.json(row);
 });
 
@@ -127,7 +127,7 @@ router.patch('/:id', jsonBody, (req, res) => {
     LEFT JOIN pages p ON p.page_id = i.page_id
     WHERE i.id = ?
   `).get(id);
-  if (movedTo) logger.info(`[ideen] move id=${id} from=${movedFrom} to=${movedTo} user=${userEmail}`);
+  if (movedTo) logger.info(`[ideen] move id=${id} from=${movedFrom} to=${movedTo}`);
   res.json(row);
 });
 

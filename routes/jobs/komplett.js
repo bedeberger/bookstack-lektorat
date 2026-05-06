@@ -721,6 +721,18 @@ async function runPhase1(ctx) {
     // Cache-Keys entsprechend `${key}:figuren` / `${key}:orte`, damit alte
     // kombinierte Caches sauber neu entstehen statt fälschlich getroffen zu werden.
     const isSplit = effectiveProvider !== 'claude';
+    // Claude-Multi-Pass: Anthropic-TPM-Burst dämpfen.
+    //   - warmup: Erst-Chunk seriell → schreibt Prompt-Cache; Folge-Chunks
+    //     hitten den Cache, ~10× günstiger Input + kürzere Reqs → kleinerer Burst.
+    //   - concurrency-Cap: max. CLAUDE_PHASE1_CONCURRENCY parallele Chunks.
+    //     Default 4 — empirisch belastbar gegen Tier-1/2 TPM-Limits bei ~25k tok/Chunk.
+    const claudeConcurrency = Math.max(1, parseInt(process.env.CLAUDE_PHASE1_CONCURRENCY, 10) || 4);
+    const settledOpts = (effectiveProvider === 'claude' && chunkTexts.length > claudeConcurrency)
+      ? { concurrency: claudeConcurrency, warmup: true }
+      : {};
+    if (settledOpts.warmup) {
+      log.info(`Job ${jobId}: Phase 1 Multi-Pass – ${chunkTexts.length} Chunks, Warmup-Pass + Concurrency=${claudeConcurrency} (TPM-Schutz).`);
+    }
     const settled = await settledAll(
       chunkTexts.map(({ chunk, key, pagesSig, chText }, chunkIdx) => async () => {
         const chunkLabel = `Chunk ${chunkIdx + 1}/${chunkTexts.length} «${chunk.name}»`;
@@ -777,7 +789,8 @@ async function runPhase1(ctx) {
         };
         log.info(`Job ${jobId}: ${chunkLabel} – Split-OK (fig=${merged.figuren.length} orte=${merged.orte.length} sz=${merged.szenen.length}).`);
         return merged;
-      })
+      }),
+      settledOpts,
     );
 
     // Fehlgeschlagene Chunks loggen (einmal pro Chunk, nicht pro Feld)

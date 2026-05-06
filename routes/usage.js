@@ -57,7 +57,7 @@ router.post('/track', jsonBody, (req, res) => {
         last_used = excluded.last_used,
         use_count = use_count + 1
     `).run(userEmail, key, now);
-    if (source) logger.info(`[usage/track] ${userEmail} ${key} via ${source}`);
+    if (source) logger.info(`[usage/track] ${key} via ${source}`);
     res.json({ ok: true });
   } catch (e) {
     logger.error('[usage/track] DB-Fehler: ' + e.message);

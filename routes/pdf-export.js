@@ -77,6 +77,7 @@ router.post('/profiles', jsonBody, (req, res) => {
   try {
     // bookId=0 → _scope() wandelt in user_default-Scope.
     const profile = createPdfExportProfile(0, userEmail, safeName, cfg);
+    logger.info(`PDF-Export-Profil erstellt: «${safeName}» (id=${profile.id})`);
     res.status(201).json(profile);
   } catch (e) {
     logger.error(`pdf-export profile create: ${e.message}`);
