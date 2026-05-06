@@ -244,8 +244,10 @@ async function syncBook(bookId, token) {
   const avgLix = lixWords > 0 ? Math.round((lixSum / lixWords) * 10) / 10 : null;
   const avgFleschDe = fleschWords > 0 ? Math.round((fleschSum / fleschWords) * 10) / 10 : null;
 
-  upsertPageStatsMany(statsItems);
+  // pages-Cache VOR page_stats: page_stats.page_id REFERENCES pages(page_id).
+  // Bei Erst-Sync eines Buchs sind die pages-Rows sonst noch nicht da → FK-Fail.
   _upsertPagesCache(bookId, pages, chapters);
+  upsertPageStatsMany(statsItems);
 
   if (previewItems.length) {
     const stmtPrev = db.prepare('UPDATE pages SET preview_text = ? WHERE page_id = ?');
