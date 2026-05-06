@@ -358,6 +358,103 @@ router.post('/pages/:book_id', async (req, res) => {
   }
 });
 
+// POST /sync/page-stats/:book_id – leichtgewichtiger Refresh nur der page_stats-Tabelle.
+// Optional `{ ids: [page_id, …] }` priorisiert konkrete Seiten (IntersectionObserver-Lazy-Pfad);
+// ohne ids werden alle Seiten mit fehlendem oder veraltetem stats-Eintrag gerechnet.
+// Antwort: { stats: { [page_id]: { tok, words, chars, updated_at } }, computed, total }.
+router.post('/page-stats/:book_id', express.json(), async (req, res) => {
+  const bookId = toIntId(req.params.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
+  const token = getTokenForRequest(req) || getAnyUserToken();
+  if (!token) return res.status(503).json({ error_code: 'NO_BOOKSTACK_TOKEN' });
+
+  const requestedIds = Array.isArray(req.body?.ids)
+    ? Array.from(new Set(req.body.ids.map(toIntId).filter(Boolean)))
+    : null;
+  if (requestedIds && !requestedIds.length) {
+    return res.json({ stats: {}, computed: 0, total: 0 });
+  }
+
+  try {
+    const { buildLektoratPrompt } = await getPrompts();
+    const pages = await bsGetAll(`pages?filter[book_id]=${bookId}`, token);
+
+    // FK-Vorbereitung: page_stats.book_id → books, page_stats.page_id → pages.
+    if (requestedIds) {
+      // Lazy-Pfad: nur die angefragten pages-Rows einsetzen, kein Chapter-/Prune-Aufwand.
+      const bookRow = db.prepare('SELECT 1 FROM books WHERE book_id = ?').get(bookId);
+      if (!bookRow) {
+        const bookMeta = await bsGet(`books/${bookId}`, token).catch(() => null);
+        if (bookMeta) upsertBook(bookMeta);
+      }
+      const stmt = db.prepare(`
+        INSERT INTO pages (page_id, book_id, page_name, chapter_id, updated_at, last_seen_at)
+        VALUES (?, ?, ?, NULL, ?, ?)
+        ON CONFLICT(page_id) DO UPDATE SET
+          book_id=excluded.book_id, page_name=excluded.page_name,
+          updated_at=excluded.updated_at, last_seen_at=excluded.last_seen_at
+      `);
+      const seenAt = new Date().toISOString();
+      const want = new Set(requestedIds);
+      db.transaction(() => {
+        for (const p of pages) if (want.has(p.id)) stmt.run(p.id, bookId, p.name, p.updated_at || null, seenAt);
+      })();
+    } else {
+      // Full-Backfill: vollwertiger pages-Cache-Update (Chapters, Prune, Reconcile).
+      const chapters = await bsGetAll(`chapters?filter[book_id]=${bookId}`, token);
+      const bookMeta = await bsGet(`books/${bookId}`, token).catch(() => null);
+      if (bookMeta) upsertBook(bookMeta);
+      _upsertPagesCache(bookId, pages, chapters);
+    }
+
+    const existing = Object.fromEntries(
+      db.prepare('SELECT page_id, updated_at FROM page_stats WHERE book_id = ?')
+        .all(bookId).map(r => [r.page_id, r.updated_at])
+    );
+    const requested = requestedIds ? new Set(requestedIds) : null;
+    const stale = pages.filter(p => {
+      if (requested && !requested.has(p.id)) return false;
+      const cur = existing[p.id];
+      return cur === undefined || cur !== (p.updated_at || null);
+    });
+
+    const now = new Date().toISOString();
+    const newItems = [];
+    const BATCH = 10;
+    for (let i = 0; i < stale.length; i += BATCH) {
+      const slice = stale.slice(i, i + BATCH);
+      const results = await Promise.allSettled(slice.map(async p => {
+        const pd = await bsGet(`pages/${p.id}`, token);
+        const { words, chars, tok } = computeStats(pd.html || '', buildLektoratPrompt);
+        return { page_id: p.id, book_id: bookId, tok, words, chars, updated_at: p.updated_at || null, cached_at: now };
+      }));
+      for (const r of results) if (r.status === 'fulfilled') newItems.push(r.value);
+    }
+    if (newItems.length) upsertPageStatsMany(newItems);
+
+    const map = {};
+    if (requested) {
+      const placeholders = requestedIds.map(() => '?').join(',');
+      const rows = db.prepare(
+        `SELECT page_id, tok, words, chars, updated_at FROM page_stats
+         WHERE book_id = ? AND page_id IN (${placeholders})`
+      ).all(bookId, ...requestedIds);
+      for (const r of rows) map[r.page_id] = { tok: r.tok, words: r.words, chars: r.chars, updated_at: r.updated_at };
+    } else {
+      const rows = db.prepare(
+        'SELECT page_id, tok, words, chars, updated_at FROM page_stats WHERE book_id = ?'
+      ).all(bookId);
+      for (const r of rows) map[r.page_id] = { tok: r.tok, words: r.words, chars: r.chars, updated_at: r.updated_at };
+    }
+
+    logger.info(`page-stats Buch ${bookId}: ${newItems.length}/${stale.length} neu, ${pages.length} total${requestedIds ? ' (lazy)' : ''}.`);
+    res.json({ stats: map, computed: newItems.length, total: pages.length });
+  } catch (e) {
+    logger.error('page-stats Sync Fehler: ' + _errDetail(e));
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /sync/book/:book_id – manueller Trigger für ein Buch
 router.post('/book/:book_id', async (req, res) => {
   const bookId = toIntId(req.params.book_id);

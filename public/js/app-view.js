@@ -433,6 +433,7 @@ export const appViewMethods = {
     this.tokEsts = {};
     this.ideenCounts = {};
     this._tokenEstGen++;
+    if (typeof this._teardownStatsObserver === 'function') this._teardownStatsObserver();
 
     this.selectedFigurId = null;
     this.selectedOrtId = null;

@@ -261,57 +261,101 @@ export const treeMethods = {
     }
   },
 
+  // Token-Estimates befüllen die Sidebar-Badges + Σ-Totals. Strategie:
+  //   1) Server-Backfill (`POST /sync/page-stats/:bookId`) — ein einzelner
+  //      Request, Server holt fehlende Stats parallel von BookStack und
+  //      persistiert sie in `page_stats`. Erspart 429 Browser-Roundtrips bei
+  //      einem grossen Buch.
+  //   2) IntersectionObserver auf den Sidebar-Items — fehlende Stats für
+  //      sichtbare Seiten werden bevorzugt nachgereicht (ids-Lazy-Pfad
+  //      derselben Route), damit Badges ohne Warten auf den Vollabgleich
+  //      erscheinen, sobald der User scrollt.
+  // Beide Pfade sind idempotent; der Generations-Counter `_tokenEstGen`
+  // verwirft Resultate aus alten Buch-Läufen.
   async loadTokenEstimates(gen) {
-    const BATCH = 5;
-    const pages = this.pages;
-    if (!pages.length) return;
+    if (this._tokenEstGen !== gen) return;
+    const bookId = this.selectedBookId;
+    if (!bookId || !this.pages.length) return;
+    const missing = this.pages.some(p => !this.tokEsts[p.id]);
+    if (!missing) return;
 
-    const newStats = [];
-    for (let i = 0; i < pages.length; i += BATCH) {
+    this._setupStatsObserver(bookId, gen);
+
+    try {
+      const r = await fetch('/sync/page-stats/' + bookId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      if (!r.ok) return;
+      const data = await r.json();
       if (this._tokenEstGen !== gen) return;
-      const batch = pages.slice(i, i + BATCH);
-      // Lokaler Per-Batch-Buffer; erst nach gen-Check in `this.tokEsts` mergen.
-      // Vorher wurde `this.tokEsts[p.id] = …` direkt mutiert, sodass nach einem
-      // Buchwechsel mid-run die Sidebar kurz Stats des alten Buchs zeigte.
-      const local = {};
-      await Promise.allSettled(batch.map(async p => {
-        try {
-          const pd = await this.bsGet('pages/' + p.id);
-          const html = pd.html || '';
-          const text = htmlToText(html);
-          const userPrompt = buildLektoratPrompt(text);
-          const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
-          const stat = {
-            tok: Math.round(userPrompt.length / CHARS_PER_TOKEN),
-            words,
-            chars: text.length,
-          };
-          local[p.id] = stat;
-          newStats.push({
-            page_id: p.id,
-            book_id: parseInt(this.selectedBookId),
-            tok: stat.tok,
-            words,
-            chars: text.length,
-            updated_at: p.updated_at || null,
-          });
-        } catch { /* ignore */ }
-      }));
+      if (data && data.stats) this.tokEsts = { ...this.tokEsts, ...data.stats };
+    } catch { /* Observer-Pfad übernimmt sukzessive */ }
+  },
 
-      // Generations-Check vor dem Merge: wenn der User in der Zwischenzeit das
-      // Buch gewechselt hat, gehört das Ergebnis zu einem alten Lauf und darf
-      // weder den Cache noch die DB überschreiben.
+  _setupStatsObserver(bookId, gen) {
+    this._teardownStatsObserver();
+    if (typeof IntersectionObserver === 'undefined' || typeof MutationObserver === 'undefined') return;
+
+    const state = { queue: new Set(), flushTimer: null };
+
+    const flush = async () => {
+      state.flushTimer = null;
       if (this._tokenEstGen !== gen) return;
-      this.tokEsts = { ...this.tokEsts, ...local };
-
-      // Neu berechnete Stats in DB persistieren
-      if (newStats.length) {
-        fetch('/history/page-stats/batch', {
+      if (!state.queue.size) return;
+      const ids = [...state.queue];
+      state.queue.clear();
+      try {
+        const r = await fetch('/sync/page-stats/' + bookId, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newStats.splice(0)),
-        }).catch(() => {});
+          body: JSON.stringify({ ids }),
+        });
+        if (!r.ok) return;
+        const data = await r.json();
+        if (this._tokenEstGen !== gen) return;
+        if (data && data.stats) this.tokEsts = { ...this.tokEsts, ...data.stats };
+      } catch { /* einzelner Batch-Fail ist nicht kritisch */ }
+    };
+
+    const io = new IntersectionObserver((entries) => {
+      if (this._tokenEstGen !== gen) return;
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        const id = parseInt(e.target.dataset.pageId, 10);
+        if (!id || this.tokEsts[id]) { io.unobserve(e.target); continue; }
+        state.queue.add(id);
+        io.unobserve(e.target);
       }
-    }
+      if (state.queue.size && !state.flushTimer) state.flushTimer = setTimeout(flush, 200);
+    }, { rootMargin: '200px 0px' });
+
+    const observe = (node) => {
+      if (!(node instanceof Element)) return;
+      if (node.matches?.('.page-item[data-page-id]')) io.observe(node);
+      node.querySelectorAll?.('.page-item[data-page-id]').forEach(n => io.observe(n));
+    };
+    // Auf `#partial-sidebar` einengen, damit der MutationObserver nicht auf
+    // Editor-/Karten-Renderings reagiert. Fallback document.body falls Mount
+    // (noch) nicht existiert.
+    const root = document.getElementById('partial-sidebar') || document.body;
+    observe(root);
+
+    const mo = new MutationObserver(muts => {
+      for (const m of muts) for (const node of m.addedNodes) observe(node);
+    });
+    mo.observe(root, { childList: true, subtree: true });
+
+    this._statsObserver = io;
+    this._statsObserverMutation = mo;
+    this._statsObserverState = state;
+  },
+
+  _teardownStatsObserver() {
+    if (this._statsObserver) { this._statsObserver.disconnect(); this._statsObserver = null; }
+    if (this._statsObserverMutation) { this._statsObserverMutation.disconnect(); this._statsObserverMutation = null; }
+    if (this._statsObserverState?.flushTimer) clearTimeout(this._statsObserverState.flushTimer);
+    this._statsObserverState = null;
   },
 };

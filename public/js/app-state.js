@@ -201,6 +201,12 @@ const lektoratState = () => ({
   pageStatusTipPos: { x: 0, y: 0 },
   pageStatusTipText: '',
   _checkPollTimer: null,
+  // IntersectionObserver-basiertes Lazy-Loading der Token-Estimates für die
+  // Sidebar (Server-Endpoint `/sync/page-stats/:bookId`). Refs hier, damit
+  // _resetBookScopedState() / destroy() sauber aufräumen können.
+  _statsObserver: null,
+  _statsObserverMutation: null,
+  _statsObserverState: null,
 });
 
 // bookReviewHistory wird von tree.js/loadPages geschrieben und von
