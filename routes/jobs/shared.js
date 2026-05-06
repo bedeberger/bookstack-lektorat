@@ -186,7 +186,7 @@ function failJob(id, err) {
   const errorMsg = isCancelled ? 'job.cancelled' : (err.message || String(err));
   const errorParams = isCancelled ? null : (err?.i18nParams || null);
   Object.assign(job, { status, error: errorMsg, errorParams, progress: isCancelled ? job.progress : 0, endedAt: new Date().toISOString() });
-  try { endJobRun(id, status, job.endedAt, job.tokensIn, job.tokensOut, null, errorMsg); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
+  try { endJobRun(id, status, job.endedAt, job.tokensIn, job.tokensOut, null, errorMsg, errorParams); } catch (e) { logger.error(`[${job.type}|${job.userEmail || '-'}|${job.bookId}] endJobRun: ${e.message}`); }
   runningJobs.delete(jobDedupKey(job));
   jobAbortControllers.delete(id);
   _scheduleJobCleanup(id);
@@ -840,7 +840,7 @@ sharedRouter.get('/runs', (req, res) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
   const rows = db.prepare(`
     SELECT job_id, status, queued_at, started_at, ended_at,
-           tokens_in, tokens_out, error,
+           tokens_in, tokens_out, error, error_params,
            CASE WHEN started_at IS NOT NULL AND ended_at IS NOT NULL
                 THEN (julianday(ended_at) - julianday(started_at)) * 86400
                 ELSE NULL END AS duration
@@ -849,18 +849,25 @@ sharedRouter.get('/runs', (req, res) => {
     ORDER BY COALESCE(ended_at, started_at, queued_at) DESC
     LIMIT ?
   `).all(userEmail, bookId, type, limit);
-  res.json(rows.map(r => ({
-    jobId:       r.job_id,
-    status:      r.status,
-    queuedAt:    r.queued_at,
-    startedAt:   r.started_at,
-    endedAt:     r.ended_at,
-    durationFmt: fmtDuration(r.duration),
-    tokensIn:    r.tokens_in || 0,
-    tokensOut:   r.tokens_out || 0,
-    tokensFmt:   fmtTok((r.tokens_in || 0) + (r.tokens_out || 0)),
-    error:       r.error || null,
-  })));
+  res.json(rows.map(r => {
+    let errorParams = null;
+    if (r.error_params) {
+      try { errorParams = JSON.parse(r.error_params); } catch { /* ignore corrupt JSON */ }
+    }
+    return {
+      jobId:       r.job_id,
+      status:      r.status,
+      queuedAt:    r.queued_at,
+      startedAt:   r.started_at,
+      endedAt:     r.ended_at,
+      durationFmt: fmtDuration(r.duration),
+      tokensIn:    r.tokens_in || 0,
+      tokensOut:   r.tokens_out || 0,
+      tokensFmt:   fmtTok((r.tokens_in || 0) + (r.tokens_out || 0)),
+      error:       r.error || null,
+      errorParams,
+    };
+  }));
 });
 
 sharedRouter.get('/active', (req, res) => {

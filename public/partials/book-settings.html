@@ -190,7 +190,7 @@
                           <td x-text="run.durationFmt"></td>
                           <td x-text="run.tokensFmt"></td>
                           <td class="job-run-detail">
-                            <span x-show="run.error" class="job-run-error" :data-tip="$app.t(run.error)" x-text="$app.t(run.error)"></span>
+                            <span x-show="run.error" class="job-run-error" :data-tip="$app.t(run.error, run.errorParams)" x-text="$app.t(run.error, run.errorParams)"></span>
                             <span x-show="!run.error" class="job-run-muted">—</span>
                           </td>
                         </tr>

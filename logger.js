@@ -7,8 +7,10 @@ const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    winston.format.printf(({ timestamp, level, message, job, user, book, stack }) => {
-      const ctx = job ? ` [${job}|${user || '-'}|${book || '-'}]` : '';
+    winston.format.printf(({ timestamp, level, message, job, user, book, ip, stack }) => {
+      let ctx = '';
+      if (job) ctx = ` [${job}|${user || '-'}|${book || '-'}]`;
+      else if (ip || user) ctx = ` [${user || '-'}@${ip || '-'}]`;
       const tail = stack ? `\n${stack}` : '';
       return `${timestamp} [${level.toUpperCase()}]${ctx} ${message}${tail}`;
     })

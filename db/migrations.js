@@ -3372,6 +3372,20 @@ function runMigrations() {
     logger.info('DB-Migration auf Version 85 abgeschlossen (books.bookstack_book_id -> book_id PK; surrogate id-Spalte entfernt; FK-Refs in child-Tabellen cascadiert).');
   }
 
+  if (version < 86) {
+    // job_runs.error_params (JSON-TEXT) — speichert die i18n-Params zum error-Key,
+    // damit /jobs/runs (book-settings Run-History) die Meldung mit eingesetzten
+    // Platzhaltern rendern kann. Vorher: nur error-Key persistiert, UI zeigte
+    // literal {count}/{details}.
+    db.prepare('ALTER TABLE job_runs ADD COLUMN error_params TEXT').run();
+    const fkErrors86 = db.pragma('foreign_key_check');
+    if (fkErrors86.length) {
+      throw new Error(`Migration 86: foreign_key_check meldet ${fkErrors86.length} Verstoesse: ${JSON.stringify(fkErrors86.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 86').run();
+    logger.info('DB-Migration auf Version 86 abgeschlossen (job_runs.error_params).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

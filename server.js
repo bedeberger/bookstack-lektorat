@@ -80,11 +80,6 @@ app.use(compression({
   },
 }));
 
-app.use((req, _res, next) => {
-  logger.info(`${req.method} ${req.path}`);
-  next();
-});
-
 // ── Session ──────────────────────────────────────────────────────────────────
 const LOCAL_DEV_MODE = process.env.LOCAL_DEV_MODE === 'true';
 
@@ -126,6 +121,15 @@ if (LOCAL_DEV_MODE) {
 } else if (!process.env.ALLOWED_EMAILS) {
   logger.warn('ALLOWED_EMAILS nicht gesetzt – ALLE Google-Konten haben Zugriff! Bitte in .env einschränken.');
 }
+
+// Request-Logger nach Session, damit req.session.user verfügbar ist.
+app.use((req, _res, next) => {
+  logger.info(`${req.method} ${req.path}`, {
+    ip: req.ip,
+    user: req.session?.user?.email,
+  });
+  next();
+});
 
 // ── Auth-Routen (öffentlich) ──────────────────────────────────────────────────
 app.use(authRouter);
@@ -243,19 +247,24 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   const stuck = cleanupStuckJobRuns();
   if (stuck > 0) logger.warn(`Startup: ${stuck} hängender Job-Run(s) auf 'error' gesetzt.`);
 
-  // Catch-up: täglicher 02:00-Sync nachholen, falls Server zur Cron-Zeit aus war.
+  // Catch-up: täglicher 23:00-Sync nachholen, falls Server zur Cron-Zeit aus war.
   // Stale-Cleanup laeuft NACH dem Sync — Sync setzt last_seen_at frisch, sodass
   // wieder-erreichbare Buecher nicht versehentlich geprunt werden, wenn der
-  // 02:00-Cron nie lief.
+  // 23:00-Cron nie lief.
+  // Cutoff = letzter erwarteter Lauf: heute wenn now >= 23:00, sonst gestern.
+  // Sonst feuert Catch-up jeden Startup vor 23:00 unnötig (today existiert noch nicht).
   let syncPromise = Promise.resolve();
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const yesterdayStr = new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
+    const cutoff = now.getHours() >= 23 ? todayStr : yesterdayStr;
     const row = db.prepare('SELECT MAX(recorded_at) AS last FROM book_stats_history').get();
-    if (!row?.last || row.last < today) {
+    if (!row?.last || row.last < cutoff) {
       logger.info(`Startup: book_stats_history letzter Eintrag ${row?.last || 'nie'} – hole Sync nach.`);
       syncPromise = syncAllBooks().catch(e => logger.error('Startup-Sync Fehler: ' + e.message));
     } else {
-      logger.info('Startup: Sync für heute bereits erfolgt – kein Catch-up nötig.');
+      logger.info('Startup: Sync aktuell – kein Catch-up nötig.');
     }
   } catch (e) {
     logger.error('Startup-Catch-up Fehler: ' + e.message);
@@ -305,11 +314,12 @@ process.on('SIGINT',  () => shutdown('SIGINT'));
 try {
   const cron = require('node-cron');
   // Zeitzone explizit setzen – ohne expliziten Wert läuft node-cron in Server-TZ,
-  // in Docker-Containern typischerweise UTC → "02:00" wäre dann 03:00/04:00 CH-Zeit.
+  // in Docker-Containern typischerweise UTC → "23:00" wäre dann 00:00/01:00 CH-Zeit.
   const cronTz = process.env.CRON_TIMEZONE || 'Europe/Zurich';
 
-  // 02:00 – Buchstatistik-Sync + hängende Jobs bereinigen
-  cron.schedule('0 2 * * *', () => {
+  // 23:00 – Buchstatistik-Sync + hängende Jobs bereinigen.
+  // Tagesscharfe Statistik: recorded_at am Tag X reflektiert Inhalte vom Tag X.
+  cron.schedule('0 23 * * *', () => {
     logger.info('Cron: Starte täglichen Buchstatistik-Sync…');
     syncAllBooks().catch(e => logger.error('Cron-Sync Fehler: ' + e.message));
 
@@ -317,14 +327,14 @@ try {
     if (stuck > 0) logger.warn(`Cron: ${stuck} hängender Job-Run(s) auf 'error' gesetzt.`);
     else logger.info('Cron: Keine hängenden Job-Runs gefunden.');
   }, { timezone: cronTz });
-  logger.info(`Cron-Job registriert: Buchstatistik-Sync + Job-Cleanup täglich 02:00 (${cronTz})`);
+  logger.info(`Cron-Job registriert: Buchstatistik-Sync + Job-Cleanup täglich 23:00 (${cronTz})`);
 
   // 04:00 – Stale-Cleanup. Eintraege (books/chapters/pages), deren letzter
   // Discovery-Touch (last_seen_at) aelter ist als STALE_DAYS, werden geloescht.
   // Faengt Loeschungen ab, die presence-basiertes Pruning verfehlt: Buecher
   // ohne berechtigten User-Token, oder solche die im Sync-Lauf fehlgeschlagen
   // sind. Schwelle gross genug, dass ein einzelner Sync-Fehler nicht sofort
-  // zuschlaegt. Laeuft 2h nach dem 02:00-Sync, damit aktuelle last_seen_at-
+  // zuschlaegt. Laeuft 5h nach dem 23:00-Sync, damit aktuelle last_seen_at-
   // Touches schon eingebrannt sind.
   const staleDays = Math.max(1, parseInt(process.env.STALE_DAYS || '7', 10));
   cron.schedule('0 4 * * *', () => {

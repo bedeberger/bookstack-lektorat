@@ -21,7 +21,7 @@ const _stmtStartJobRun = db.prepare(
   `UPDATE job_runs SET status = 'running', started_at = ? WHERE job_id = ?`
 );
 const _stmtEndJobRun = db.prepare(
-  `UPDATE job_runs SET status = ?, ended_at = ?, tokens_in = ?, tokens_out = ?, tokens_per_sec = ?, error = ? WHERE job_id = ?`
+  `UPDATE job_runs SET status = ?, ended_at = ?, tokens_in = ?, tokens_out = ?, tokens_per_sec = ?, error = ?, error_params = ? WHERE job_id = ?`
 );
 
 function insertJobRun(job) {
@@ -30,8 +30,9 @@ function insertJobRun(job) {
 function startJobRun(jobId, startedAt) {
   _stmtStartJobRun.run(startedAt, jobId);
 }
-function endJobRun(jobId, status, endedAt, tokensIn, tokensOut, tokensPerSec, error) {
-  _stmtEndJobRun.run(status, endedAt, tokensIn || 0, tokensOut || 0, tokensPerSec ?? null, error || null, jobId);
+function endJobRun(jobId, status, endedAt, tokensIn, tokensOut, tokensPerSec, error, errorParams = null) {
+  const paramsJson = errorParams ? JSON.stringify(errorParams) : null;
+  _stmtEndJobRun.run(status, endedAt, tokensIn || 0, tokensOut || 0, tokensPerSec ?? null, error || null, paramsJson, jobId);
 }
 
 /** Setzt alle hängenden job_runs (status 'running' oder 'queued') auf 'error'.
