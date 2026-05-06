@@ -3,8 +3,8 @@
 //
 // Liest einen WordPress-SQL-Dump, extrahiert Posts (status=publish, type=post)
 // + Categories + Term-Relations, sortiert nach post_date_gmt aufsteigend
-// (älteste zuerst), bündelt pro Yoast-Primary-Category in BookStack-Kapitel
-// und legt sie als Pages im konfigurierten Buch an.
+// (älteste zuerst), bündelt pro Yoast-Primary-Category (oder pro Jahr) in
+// BookStack-Kapitel und legt sie als Pages im konfigurierten Buch an.
 //
 // Voraussetzungen
 //   .env  → API_HOST, TOKEN_ID, TOKEN_KENNWORT (gleiche Variablen wie App).
@@ -16,6 +16,7 @@
 //
 //   Optional:
 //     --prefix wp_              (Default wp_; manche Installs nutzen wpXX_)
+//     --chapters category|year  (Default category; year = Kapitel pro Jahreszahl)
 //     --dry-run                 (zeigt Plan, schreibt nichts)
 //     --limit 5                 (nur N Posts; gut zum Testen)
 //     --yes / -y                (Bestätigungsprompt vor Push überspringen)
@@ -37,12 +38,13 @@ if (!API_HOST || !TOKEN_ID || !TOKEN_SECRET) {
 
 const args = parseArgs({
   options: {
-    'dump':    { type: 'string' },
-    'prefix':  { type: 'string', default: 'wp_' },
-    'book-id': { type: 'string' },
-    'dry-run': { type: 'boolean', default: false },
-    'limit':   { type: 'string' },
-    'yes':     { type: 'boolean', short: 'y', default: false }
+    'dump':     { type: 'string' },
+    'prefix':   { type: 'string', default: 'wp_' },
+    'book-id':  { type: 'string' },
+    'chapters': { type: 'string', default: 'category' },
+    'dry-run':  { type: 'boolean', default: false },
+    'limit':    { type: 'string' },
+    'yes':      { type: 'boolean', short: 'y', default: false }
   },
   strict: true
 }).values;
@@ -55,6 +57,10 @@ for (const k of ['dump', 'book-id']) {
 }
 if (!/^[a-zA-Z0-9_]+$/.test(args.prefix)) {
   console.error(`FEHLER: --prefix "${args.prefix}" enthält ungültige Zeichen.`);
+  process.exit(1);
+}
+if (!['category', 'year'].includes(args.chapters)) {
+  console.error(`FEHLER: --chapters "${args.chapters}" ungültig. Erlaubt: category, year.`);
   process.exit(1);
 }
 if (!fs.existsSync(args.dump)) {
@@ -72,6 +78,7 @@ const LIMIT = args.limit ? parseInt(args.limit, 10) : null;
 const DRY = args['dry-run'];
 const SKIP_CONFIRM = args.yes;
 const P = args.prefix;
+const CHAPTER_MODE = args.chapters;
 
 const headers = {
   'Authorization': `Token ${TOKEN_ID}:${TOKEN_SECRET}`,
@@ -362,10 +369,15 @@ function joinPosts(tables) {
     const all = catsByPost.get(pid) || [];
 
     let chapter = null;
-    const yoastTermId = yoastByPost.get(pid);
-    if (yoastTermId != null) chapter = termName.get(yoastTermId) || null;
-    if (!chapter && all.length) chapter = all[0];
-    if (!chapter) chapter = 'Unkategorisiert';
+    if (CHAPTER_MODE === 'year') {
+      const y = String(p.post_date_gmt || '').slice(0, 4);
+      chapter = /^\d{4}$/.test(y) ? y : 'Ohne Datum';
+    } else {
+      const yoastTermId = yoastByPost.get(pid);
+      if (yoastTermId != null) chapter = termName.get(yoastTermId) || null;
+      if (!chapter && all.length) chapter = all[0];
+      if (!chapter) chapter = 'Unkategorisiert';
+    }
 
     out.push({
       ID: pid,
@@ -420,7 +432,9 @@ function buildTags(row) {
     { name: 'wp-date', value: date }
   ];
   for (const c of row.all_cats) {
-    if (c !== row.chapter) tags.push({ name: 'category', value: c });
+    if (CHAPTER_MODE === 'year' || c !== row.chapter) {
+      tags.push({ name: 'category', value: c });
+    }
   }
   return tags;
 }
@@ -482,6 +496,7 @@ async function main() {
   console.log(`  Dump: ${args.dump}`);
   console.log(`  Prefix: ${P}`);
   console.log(`  BookStack: ${API_HOST} → Buch ${BOOK_ID}`);
+  console.log(`  Kapitel-Modus: ${CHAPTER_MODE}`);
   console.log(`  Limit: ${LIMIT ?? 'alle'}`);
   console.log('');
 

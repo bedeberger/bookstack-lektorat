@@ -1,6 +1,6 @@
 # WordPress-Import
 
-One-Shot-Import einer WordPress-Site in BookStack via mysqldump-Datei. Liest Posts (`status=publish, type=post`) plus Categories aus dem Dump, sortiert nach Veröffentlichungsdatum aufsteigend (älteste zuerst), gruppiert pro Yoast-Primary-Category in BookStack-Kapitel.
+One-Shot-Import einer WordPress-Site in BookStack via mysqldump-Datei. Liest Posts (`status=publish, type=post`) plus Categories aus dem Dump, sortiert nach Veröffentlichungsdatum aufsteigend (älteste zuerst), gruppiert pro Yoast-Primary-Category oder pro Jahr in BookStack-Kapitel.
 
 **Script:** [scripts/wp-import.js](../scripts/wp-import.js)
 
@@ -42,6 +42,7 @@ One-Shot-Import einer WordPress-Site in BookStack via mysqldump-Datei. Liest Pos
 | `--dump` | ✓ | — | Pfad zur mysqldump-Datei |
 | `--book-id` | ✓ | — | BookStack-Buch-ID, in das importiert wird |
 | `--prefix` | — | `wp_` | Tabellen-Prefix im Dump (manche Installs nutzen `wp1234_`, `wpcustom_`) |
+| `--chapters` | — | `category` | `category` = Kapitel pro (Yoast-Primary-)Category, `year` = Kapitel pro Jahreszahl aus `post_date_gmt` |
 | `--dry-run` | — | aus | Zeigt Plan, schreibt nichts an BookStack |
 | `--limit N` | — | alle | Nur die ersten N Posts (nach Sortierung) — gut zum Testen |
 | `--yes` / `-y` | — | aus | Bestätigungsprompt überspringen (für CI / Skripte) |
@@ -62,15 +63,17 @@ One-Shot-Import einer WordPress-Site in BookStack via mysqldump-Datei. Liest Pos
   - `wp-date` — Original-Publish-Date (`YYYY-MM-DD`)
   - `category` — alle weiteren Categories des Posts (Multi-Cat-Spillover; die Primary wird nicht doppelt getaggt)
 
-## Category → Chapter-Logik
+## Kapitel-Modi
 
-Pro Post wird genau eine Primary-Category bestimmt:
+`--chapters category` (Default): pro Post wird genau eine Primary-Category bestimmt:
 
 1. Yoast-SEO `_yoast_wpseo_primary_category`-Postmeta, falls gesetzt.
 2. Sonst: erste Category in alphabetischer Sortierung der Post-Categories.
 3. Sonst: `Unkategorisiert` (Fallback-Chapter).
 
 Begründung: BookStack-Pages leben in genau einem Chapter. Multi-Cat-Posts werden nicht dupliziert; die Sekundär-Categories landen als Tags an der Page (siehe oben).
+
+`--chapters year`: Kapitelname = Jahr (`YYYY`) aus `post_date_gmt`. Posts ohne valides Datum landen im Fallback `Ohne Datum`. Categories spielen für die Kapitelzuordnung keine Rolle und werden vollständig als `category`-Tags pro Page abgelegt (also auch die, die im category-Modus zum Kapitelnamen geworden wäre). Kapitel-Reihenfolge = Jahr aufsteigend (Ergebnis der Datums-Sortierung der Posts).
 
 ## HTML-Cleanup
 
