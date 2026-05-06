@@ -624,7 +624,7 @@ document.addEventListener('alpine:init', () => {
           // also überspringen.
           if (String(newVal) === String(oldVal)) return;
           this._resetBookScopedState();
-          await this.loadPages();
+          await this.loadPages({ source: 'bookSwitch' });
           await this._reloadVisibleBookCards();
           this._maybeOpenBookOverview();
         });

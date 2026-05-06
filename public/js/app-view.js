@@ -326,6 +326,7 @@ export const appViewMethods = {
     if (!this.currentPage) return;
     if (this.showIdeenCard) this.showIdeenCard = false;
     this.showChatCard = true;
+    this.logAuditEvent?.('chatOpened', { page: this.currentPage.id });
   },
   // Buch-Chat: exklusive Hauptkarte wie alle anderen.
   toggleBookChatCard() {
@@ -336,6 +337,7 @@ export const appViewMethods = {
     if (!this.selectedBookId) return;
     this._closeOtherMainCards('bookChat');
     this.showBookChatCard = true;
+    this.logAuditEvent?.('bookChatOpened', { book: this.selectedBookId });
   },
   // Seitenwechsel: Seiten-Chat resetten (Chat ist pro Seite).
   resetChat() {

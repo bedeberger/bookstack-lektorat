@@ -53,6 +53,7 @@ async function runPdfExportJob(jobId, { bookId, profileId, userEmail, userToken 
 
     updateJob(jobId, { progress: 10, statusText: 'job.phase.loadBook' });
     const book = await bsGet(`books/${bookId}`, userToken);
+    log.info(`Start PDF-Export «${book.name}» (book=${bookId}, profile=${profile.name})`);
 
     updateJob(jobId, { progress: 20, statusText: 'job.phase.loadPages' });
     const { groups } = await loadBookContents(bookId, userToken);
@@ -100,6 +101,9 @@ async function runPdfExportJob(jobId, { bookId, profileId, userEmail, userToken 
 
     pdfResults.set(jobId, { buffer, mime: 'application/pdf', filename });
     _scheduleResultCleanup(jobId);
+
+    const sizeKb = Math.round(buffer.length / 1024);
+    log.info(`PDF generiert «${filename}» (${sizeKb} KB, profile=${profile.name}, pdfa=${validation.available ? (validation.passed ? 'pass' : 'fail') : 'skipped'})`);
 
     completeJob(jobId, {
       ready: true,

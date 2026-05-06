@@ -107,14 +107,18 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
       ...data,
     };
 
+    logger.info(`Finetune-Export Phase: Seiten geladen (${pageContents.length} Seiten, ${data.figNamesSorted.length} Figuren bekannt).`);
+
     if (opts.types.style) {
       updateJob(jobId, { progress: 55, statusText: 'finetune.phase.style' });
       buildStyleSamples(ctx);
+      logger.info(`Sampler «style» fertig: ${counts.style} Samples.`);
     }
 
     if (opts.types.scene) {
       updateJob(jobId, { progress: 70, statusText: 'finetune.phase.scene' });
       buildSceneSamples(ctx);
+      logger.info(`Sampler «scene» fertig: ${counts.scene} Samples.`);
     }
 
     // Dialog-Sammlung läuft immer, wenn Figuren bekannt sind — `dialogsByFigure`
@@ -125,21 +129,25 @@ async function runFinetuneExportJob(jobId, bookId, bookName, userEmail, userToke
         updateJob(jobId, { progress: 85, statusText: 'finetune.phase.dialog' });
       }
       buildDialogSamples(ctx);
+      if (opts.types.dialog) logger.info(`Sampler «dialog» fertig: ${counts.dialog} Samples.`);
     }
 
     if (opts.types.correction) {
       updateJob(jobId, { progress: 88, statusText: 'finetune.phase.correction' });
       buildCorrectionSamples(ctx);
+      logger.info(`Sampler «correction» fertig: ${counts.correction} Samples.`);
     }
 
     if (opts.types.authorChat) {
       updateJob(jobId, { progress: 90, statusText: 'finetune.phase.authorChat' });
       buildAuthorChatSamples(ctx);
+      logger.info(`Sampler «authorChat» fertig: ${counts.authorChat} Samples.`);
     }
 
     if (opts.types.aiAugment && (opts.ai?.reversePrompts || opts.ai?.factQA || opts.ai?.reasoningBackfill)) {
       updateJob(jobId, { progress: 92, statusText: 'finetune.phase.aiAugment' });
       await buildAiAugmentSamples(ctx);
+      logger.info(`Sampler «aiAugment» fertig: ${counts.aiAugment} Samples.`);
     }
 
     updateJob(jobId, { progress: 95, statusText: 'finetune.phase.building' });

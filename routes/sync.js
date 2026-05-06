@@ -353,6 +353,11 @@ router.post('/pages/:book_id', async (req, res) => {
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   const token = getTokenForRequest(req) || getAnyUserToken();
   if (!token) return res.status(503).json({ error_code: 'NO_BOOKSTACK_TOKEN' });
+  if (req.query.source === 'manual') {
+    logger.info(`«Seiten laden» geklickt (book=${bookId})`);
+  } else if (req.query.source === 'bookSwitch') {
+    logger.info(`Buch gewechselt (book=${bookId})`);
+  }
   try {
     await syncPagesCache(bookId, token);
     res.json({ ok: true });

@@ -70,6 +70,7 @@ async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userT
       WHERE cs.id = ? AND cs.user_email = ?
     `).get(parseInt(sessionId), userEmail);
     if (!session) throw i18nError('job.error.sessionNotFound');
+    logger.info(`Start: Seiten-Chat «${session.page_name || '-'}» (session=${sessionId}, page=${session.page_id || '-'}, msg-len=${message.length})`);
 
     // Seiteninhalt frisch aus BookStack laden
     let pageText = '';
@@ -197,6 +198,7 @@ async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, u
     const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?')
       .get(parseInt(sessionId), userEmail);
     if (!session) throw i18nError('job.error.sessionNotFound');
+    logger.info(`Start: Buch-Chat «${session.book_name || '-'}» (session=${sessionId}, book=${session.book_id}, msg-len=${message.length})`);
 
     const { SYSTEM_BOOK_CHAT: bookChatSys, STOPWORDS: bookChatSW } = await getBookPrompts(session.book_id, userEmail);
     const bookChatStopwords = new Set(bookChatSW || []);
@@ -423,6 +425,7 @@ async function runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEma
     const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_email = ?')
       .get(parseInt(sessionId), userEmail);
     if (!session) throw i18nError('job.error.sessionNotFound');
+    logger.info(`Start: Buch-Chat (Agent) «${session.book_name || '-'}» (session=${sessionId}, book=${session.book_id}, msg-len=${message.length})`);
 
     const figuren = getFiguren(session.book_id, userEmail);
     const review  = getLatestReview(session.book_id, userEmail);

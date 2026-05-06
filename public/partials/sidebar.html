@@ -3,7 +3,7 @@
   <div class="card-header">
     <span class="card-title" x-text="t('sidebar.pagesOf', { name: selectedBookName })"></span>
     <div class="card-actions">
-      <button type="button" @click="loadPages()" x-text="t('sidebar.loadPages')"></button>
+      <button type="button" @click="loadPages({ source: 'manual' })" x-text="t('sidebar.loadPages')"></button>
       <button type="button" @click="batchCheck()" :disabled="!pages.length" :data-tip="t('sidebar.checkAllTitle')" x-text="t('sidebar.checkAll')"></button>
     </div>
   </div>

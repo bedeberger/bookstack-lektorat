@@ -38,6 +38,19 @@ export const featuresUsageMethods = {
     this._bumpRecentFeatureKey(key);
   },
 
+  // Audit-Event an /me/event POSTen. Server loggt unter Allowlist
+  // (siehe routes/usersettings.js#AUDIT_EVENTS). Best-Effort, niemals throwen.
+  logAuditEvent(event, meta = null) {
+    try {
+      fetch('/me/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event, meta }),
+        credentials: 'same-origin',
+      }).catch(() => {});
+    } catch (e) { /* swallow */ }
+  },
+
   _bumpRecentFeatureKey(key) {
     const cur = Array.isArray(this.recentFeatureKeys) ? this.recentFeatureKeys.slice() : [];
     const idx = cur.indexOf(key);

@@ -136,7 +136,7 @@ export const treeMethods = {
     }
   },
 
-  async loadPages() {
+  async loadPages(opts = {}) {
     const bookId = this.selectedBookId;
     if (!bookId) return;
     // Laufenden Figuren-Job-Poll abbrechen (Buch könnte gewechselt haben).
@@ -163,7 +163,8 @@ export const treeMethods = {
       if (this.selectedBookId !== bookId) return;
 
       // pages-Cache im Hintergrund aktualisieren (fire-and-forget)
-      fetch('/sync/pages/' + bookId, { method: 'POST' }).catch(() => {});
+      const qs = opts.source ? `?source=${encodeURIComponent(opts.source)}` : '';
+      fetch('/sync/pages/' + bookId + qs, { method: 'POST' }).catch(() => {});
 
       const sortedChapters = [...chapters].sort((a, b) => a.priority - b.priority);
       const chMap = Object.fromEntries(sortedChapters.map(c => [c.id, c.name]));

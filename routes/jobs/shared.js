@@ -63,6 +63,10 @@ function drainQueue() {
     const ctx = { job: job.type, user: job.userEmail || null, book: job.bookId, jobId };
     runWithContext(ctx, () => {
       try { startJobRun(jobId, job.startedAt); } catch (e) { logger.error(`startJobRun: ${e.message}`); }
+      // Zentrales Start-Log — gilt für ALLE Job-Typen.
+      // Job-spezifische Module dürfen weiter eigene Detail-Logs ergänzen
+      // (Counts, Phase-Splits etc.); diese Zeile sichert das Minimum.
+      logger.info(`Start (${jobId.slice(0, 8)})`);
       fn()
         .catch(e => logger.error(`Unkontrollierter Job-Fehler (${jobId}): ${e.message}`))
         .finally(() => { activeCount--; drainQueue(); });
@@ -177,13 +181,34 @@ function tps(tok) {
   return tok.ms > 0 ? tok.out / (tok.ms / 1000) : null;
 }
 
+// Dauer von startedAt bis jetzt formatiert (z.B. "12s", "3m 4s").
+function _jobDurationFmt(startedAt) {
+  if (!startedAt) return '?';
+  const ms = Date.now() - new Date(startedAt).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return '?';
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem > 0 ? `${m}m ${rem}s` : `${m}m`;
+}
+
+function _jobLogCtx(job) {
+  return { job: job.type, user: job.userEmail, book: job.bookId };
+}
+
 function completeJob(id, result, tokensPerSec = null) {
   const job = jobs.get(id);
   if (!job) return;
   Object.assign(job, { status: 'done', progress: 100, result, tokensPerSec, endedAt: new Date().toISOString() });
   try { endJobRun(id, 'done', job.endedAt, job.tokensIn, job.tokensOut, tokensPerSec, null); } catch (e) {
-    logger.error(`endJobRun: ${e.message}`, { job: job.type, user: job.userEmail, book: job.bookId });
+    logger.error(`endJobRun: ${e.message}`, _jobLogCtx(job));
   }
+  // Zentrales Done-Log — ALS-Ctx liefert [type|user|book].
+  logger.info(
+    `Fertig (${id.slice(0, 8)}, ${_jobDurationFmt(job.startedAt)}, ${fmtTok(job.tokensIn)}↑ ${fmtTok(job.tokensOut)}↓ Tokens)`,
+    _jobLogCtx(job),
+  );
   runningJobs.delete(jobDedupKey(job));
   jobAbortControllers.delete(id);
   _scheduleJobCleanup(id);
@@ -198,7 +223,14 @@ function failJob(id, err) {
   const errorParams = isCancelled ? null : (err?.i18nParams || null);
   Object.assign(job, { status, error: errorMsg, errorParams, progress: isCancelled ? job.progress : 0, endedAt: new Date().toISOString() });
   try { endJobRun(id, status, job.endedAt, job.tokensIn, job.tokensOut, null, errorMsg, errorParams); } catch (e) {
-    logger.error(`endJobRun: ${e.message}`, { job: job.type, user: job.userEmail, book: job.bookId });
+    logger.error(`endJobRun: ${e.message}`, _jobLogCtx(job));
+  }
+  // Zentrales Terminal-Log: Cancellation als info, echte Fehler als warn
+  // (Job-Modul hat ggf. bereits ein Error mit Stack geschrieben).
+  if (isCancelled) {
+    logger.info(`Abgebrochen (${id.slice(0, 8)}, ${_jobDurationFmt(job.startedAt)})`, _jobLogCtx(job));
+  } else {
+    logger.warn(`Fehlgeschlagen (${id.slice(0, 8)}, ${_jobDurationFmt(job.startedAt)}): ${errorMsg}`, _jobLogCtx(job));
   }
   runningJobs.delete(jobDedupKey(job));
   jobAbortControllers.delete(id);

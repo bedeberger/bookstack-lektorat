@@ -1,9 +1,33 @@
 'use strict';
 const express = require('express');
 const { getUser, updateUserSettings } = require('../db/schema');
+const logger = require('../logger');
 
 const router = express.Router();
 const jsonBody = express.json();
+
+// Audit-Log-Events (UI-Trigger ohne anderen Server-Roundtrip).
+// Allowlist verhindert beliebige Logs durch den Client.
+const AUDIT_EVENTS = {
+  chatOpened:     'Seiten-Chat geöffnet',
+  bookChatOpened: 'Buch-Chat geöffnet',
+  lektoratOpened: 'Lektorat geöffnet',
+};
+
+router.post('/event', jsonBody, (req, res) => {
+  const event = String(req.body?.event || '');
+  const label = AUDIT_EVENTS[event];
+  if (!label) return res.status(400).json({ error_code: 'INVALID_EVENT' });
+  const meta = req.body?.meta && typeof req.body.meta === 'object' ? req.body.meta : null;
+  const suffix = meta
+    ? ' ' + Object.entries(meta)
+        .filter(([, v]) => v != null && v !== '')
+        .map(([k, v]) => `${k}=${v}`)
+        .join(' ')
+    : '';
+  logger.info(`${label}${suffix}`);
+  res.json({ ok: true });
+});
 
 const VALID_LOCALES   = ['de', 'en'];
 const VALID_THEMES    = ['auto', 'light', 'dark'];

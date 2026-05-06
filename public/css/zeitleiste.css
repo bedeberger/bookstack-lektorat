@@ -54,6 +54,7 @@
 .gz-item {
   position: relative;
   padding-bottom: 18px;
+  min-width: 0;
 }
 
 .gz-item:last-child { padding-bottom: 0; }
@@ -83,6 +84,7 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
 }
 
 .gz-datum-row {
@@ -109,6 +111,7 @@
 .gz-ereignis {
   font-size: var(--font-size-sm);
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .gz-item--extern .gz-ereignis {
@@ -147,6 +150,7 @@
   font-size: 12px;
   color: var(--color-muted);
   font-style: italic;
+  overflow-wrap: anywhere;
 }
 
 .gz-figuren-row {

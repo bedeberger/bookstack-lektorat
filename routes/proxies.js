@@ -413,7 +413,7 @@ const bookstackProxy = createProxyMiddleware({
         fixRequestBody(proxyReq, req);
       }
     },
-    proxyRes: (proxyRes, _req, res) => {
+    proxyRes: (proxyRes, req, res) => {
       // BookStack meldet fehlende Auth per Redirect zur Login-Seite (301/302);
       // widerrufene/ungültige Tokens per 401. Beides → einheitlicher Fehler-Code.
       if (proxyRes.statusCode === 301 || proxyRes.statusCode === 302 || proxyRes.statusCode === 401) {
@@ -421,6 +421,16 @@ const bookstackProxy = createProxyMiddleware({
         // headersSent-Guard: wenn http-proxy-middleware bereits Header relayed
         // hat, würde res.status() einen "Cannot set headers"-Crash werfen.
         if (!res.headersSent) res.status(401).json({ error_code: 'BOOKSTACK_UNAUTHED' });
+        return;
+      }
+      // Erfolgreiche Page-Creates loggen (POST /pages → 200/201).
+      if (req.method === 'POST'
+          && /^\/pages\/?$/.test(req.url)
+          && proxyRes.statusCode >= 200 && proxyRes.statusCode < 300) {
+        const name = req.body?.name ? `«${req.body.name}»` : '';
+        const book = req.body?.book_id ? ` book=${req.body.book_id}` : '';
+        const chap = req.body?.chapter_id ? ` chap=${req.body.chapter_id}` : '';
+        logger.info(`Seite erstellt ${name}${book}${chap}`.trim());
       }
     },
     error: (err, _req, res) => {
