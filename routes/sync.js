@@ -134,10 +134,14 @@ function _upsertPagesCache(bookId, pages, chapters) {
 const PREVIEW_CHARS = 800;
 
 async function syncPagesCache(bookId, token) {
-  const [pages, chapters] = await Promise.all([
+  const [pages, chapters, bookMeta] = await Promise.all([
     bsGetAll(`pages?filter[book_id]=${bookId}`, token),
     bsGetAll(`chapters?filter[book_id]=${bookId}`, token),
+    bsGet(`books/${bookId}`, token).catch(() => null),
   ]);
+  // pages.book_id REFERENCES books — Buch upserten, falls noch keine Sync lief
+  // (frisches BookStack-Buch, das Cron noch nicht erfasst hat).
+  if (bookMeta) upsertBook(bookMeta);
   _upsertPagesCache(bookId, pages, chapters);
 
   // Vorschautexte nur für Seiten ohne gecachten Preview laden (neue Seiten oder nach Migration)

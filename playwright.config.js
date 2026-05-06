@@ -8,6 +8,7 @@ module.exports = {
   testMatch: '**/*.spec.js',
   fullyParallel: true,
   workers: process.env.CI ? 2 : undefined,
+  retries: process.env.CI ? 1 : 0,
   use: {
     baseURL: 'http://localhost:8765',
     viewport: { width: 1024, height: 768 },
