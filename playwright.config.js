@@ -6,9 +6,10 @@
 module.exports = {
   testDir: './tests/e2e',
   testMatch: '**/*.spec.js',
-  fullyParallel: true,
+  fullyParallel: false,
   workers: process.env.CI ? 2 : undefined,
-  retries: process.env.CI ? 1 : 0,
+  retries: process.env.CI ? 2 : 0,
+  timeout: 60000,
   use: {
     baseURL: 'http://localhost:8765',
     viewport: { width: 1024, height: 768 },

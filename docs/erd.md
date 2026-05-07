@@ -1,6 +1,6 @@
 # ERD — bookstack-lektorat
 
-Stand: Schema-Version 85, 47 Tabellen (ohne `sqlite_*`/`schema_version`/`sessions`).
+Stand: Schema-Version 86, 46 Tabellen (ohne `sqlite_*`/`schema_version`/`sessions`).
 
 Quelle: Live-Dump aus [lektorat.db](../lektorat.db) (`.schema --indent`) + [db/migrations.js](../db/migrations.js). Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -471,6 +471,7 @@ erDiagram
     INTEGER tokens_out
     REAL    tokens_per_sec
     TEXT    error
+    TEXT    error_params  "JSON, i18n-Params zum error-Key"
   }
   job_checkpoints {
     INTEGER id          PK
