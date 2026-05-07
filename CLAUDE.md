@@ -25,21 +25,19 @@ KI-gestütztes Lektorat-Tool für BookStack. Deployment, Docker-Setup und Env-Va
 - **Progress-Bars** — `.progress-bar` liest die Breite aus CSS-Custom-Prop `--progress`. Binding: `:style="{ '--progress': xProgress + '%' }"`, nicht `:style="'width:' + ... + '%'"`.
 - **Card-Animationen nur via CSS** — `.card` fadet via `cardFadeIn` (in [public/css/card-form.css](public/css/card-form.css)) ein. Kein `x-transition` zusätzlich auf `.card`-Elementen, sonst doppelt (CSS translateY + Alpine scale konkurrieren, wirkt wabbelig — sichtbar v.a. bei grossen Karten wie Szenen). Neue Karte: nur `x-show="..." x-cloak`, keine Alpine-Transition.
 - **`SHELL_CACHE` bumpen** — bei JS/CSS-Änderungen Konstante in [public/sw.js](public/sw.js) hochzählen. Sonst halten Mobile-Browser via Service-Worker alte Bundle-Versionen fest.
-- **Combobox statt `<select>`** — alle Auswahlfelder nutzen `Alpine.data('combobox')` aus [public/js/app.js:222](public/js/app.js#L222). Kein natives `<select>` für neue Features, ausser bei zwingendem Grund (z.B. native Mobile-Picker erwünscht — dann begründen). `init()` rendert Trigger + Dropdown + Search + Liste komplett selbst und überschreibt `innerHTML` des Wrapper-Divs. Wrapper-Div daher **leer lassen**, nur Attribute setzen. Pflicht-Pattern (sonst Liste rendert nicht / Selection bricht / Updates kommen nicht durch):
+- **Combobox statt `<select>`** — alle Auswahlfelder nutzen `Alpine.data('combobox')` aus [public/js/app.js](public/js/app.js). Kein natives `<select>` für neue Features, ausser bei zwingendem Grund (z.B. native Mobile-Picker erwünscht — dann begründen). `init()` rendert Trigger + Dropdown + Search + Liste komplett selbst und überschreibt `innerHTML` des Wrapper-Divs. Wrapper-Div **leer lassen**, nur Attribute setzen. Pflicht-Pattern (3 Attribute):
   ```html
   <div x-data="combobox(placeholder, emptyLabel?)"
        x-modelable="value" x-model="selectedRef"
-       x-effect="options = computeOptions()"
-       @combobox-change="onChange?($event.detail)"
-       @click.outside="close()" @keydown="onKeydown($event)"
-       class="combobox-wrap"></div>
+       x-effect="options = computeOptionsInline()"></div>
   ```
-  - `options`: Array `[{ value, label }]`. Niemals Markup ins Wrapper-Div schreiben — `init()` killt es.
-  - **`x-effect` statt `:options`-Attribut** — sonst keine Reaktivität bei Änderung der Datenquelle (Hauptursache für „Liste leer / nicht aktualisiert"-Bug).
+  - `init()` setzt automatisch: `combobox-wrap`-Klasse (+ `--compact` per Default), document-Mousedown (Outside-Close), Element-Keydown (Tastatur-Nav). Kein `@click.outside`, kein `@keydown`, keine `class`-Attribute mehr im Konsumenten-Markup.
+  - Object-Form für Variante non-compact (selten, z.B. Buchwahl in Hero-Row): `combobox({ placeholder: t('…'), compact: false })`.
+  - `options`: Array `[{ value, label }]`. Inline-Expression im `x-effect` aufbauen (siehe DESIGN.md "Reaktivität bei Datenquelle aus Karten-Scope" — Method-Indirection trackt nicht zuverlässig).
   - `x-modelable="value" x-model="ref"` koppelt internen `value`-State an äusseres Feld. Ohne `x-modelable` greift `@combobox-change` nicht in den Parent-State durch.
-  - `emptyLabel` (2. Argument) erzeugt „Alle"-Option mit Wert `''`. Weglassen für Pflichtauswahl.
-  - Optional `combobox-wrap--compact` für kleine Variante.
-  - Referenz: [public/index.html:90](public/index.html#L90) (Buchwahl), [public/partials/szenen.html:76](public/partials/szenen.html#L76).
+  - `emptyLabel` (2. Positional-Arg oder `{emptyLabel}`) erzeugt „Alle"-Option mit Wert `''`. Weglassen für Pflichtauswahl.
+  - Optional `@combobox-change="…"` für Side-Effects bei Auswahl.
+  - Referenz: [public/index.html](public/index.html) (Buchwahl, non-compact), [public/partials/szenen.html](public/partials/szenen.html) (Filter-Combobox).
 
 ## State-Modell (Frontend)
 

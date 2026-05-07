@@ -25,11 +25,11 @@
 .tree-chapter { margin-bottom: 16px; }
 
 .tree-chapter-header {
-  display: flex;
-  flex-wrap: wrap;
-  row-gap: 4px;
-  align-items: center;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 6px;
+  row-gap: 2px;
+  align-items: start;
   padding: 6px 10px 6px 2px;
   border: 0.5px solid transparent;
   border-radius: var(--radius-md);
@@ -40,18 +40,18 @@
   user-select: none;
   margin-bottom: 2px;
 }
+.tree-chapter-header > .tree-chevron { padding-top: 2px; }
 .tree-chapter-header > span:not(.tree-chevron):not(.tree-chapter-meta) {
   min-width: 0;
-  flex: 1 1 auto;
   overflow-wrap: anywhere;
 }
 
 .tree-chapter-meta {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  margin-top: 2px;
 }
 .tree-chapter-header:hover { background: var(--color-hover); }
 .tree-chapter-header.disabled { opacity: var(--opacity-hint); cursor: not-allowed; font-weight: 400; }
@@ -81,6 +81,17 @@
 .tree-chapter-header--active + .tree-chapter-pages::before {
   background: var(--color-accent);
 }
+
+/* Solo-Chapter: kapitelloser Page-Eintrag, gerendert über denselben
+   chapter→pages-Pfad. Header ausgeblendet, Guide-Linie + Einrückung weg,
+   inter-item-Abstand auf 0, damit Optik wie früherer Standalone-Page-Item. */
+.tree-chapter--solo { margin-bottom: 0; }
+.tree-chapter--solo > .tree-chapter-pages {
+  margin-left: 0;
+  padding-left: 0;
+  padding-top: 0;
+}
+.tree-chapter--solo > .tree-chapter-pages::before { display: none; }
 
 .tree-chevron {
   display: inline-block;

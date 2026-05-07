@@ -48,8 +48,7 @@
            {value:'lektorat_cumulative', label: $app.t('bookstats.metric.lektoratCumulative')}
          ]"
          @combobox-change="$nextTick(() => renderStatsChart())"
-         @click.outside="close()" @keydown="onKeydown($event)"
-         class="combobox-wrap combobox-wrap--compact">
+         >
     </div>
     <div class="btn-group">
       <template x-for="r in [{v:7,k:'7'},{v:30,k:'30'},{v:90,k:'90'},{v:365,k:'365'},{v:0,k:'all'}]" :key="r.v">

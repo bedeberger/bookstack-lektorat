@@ -304,7 +304,7 @@ export const appJobsCoreMethods = {
     // Tab-Reopen bei vielen Kapiteln nicht N serielle Roundtrips kostet.
     const chapterCandidates = [];
     for (const [index, item] of (this.tree || []).entries()) {
-      if (item.type !== 'chapter') continue;
+      if (item.type !== 'chapter' || item.solo) continue;
       const lsKey = `lektorat_chapter_review_job_${bookId}_${item.id}`;
       const jobIdLs = localStorage.getItem(lsKey);
       if (!jobIdLs) continue;

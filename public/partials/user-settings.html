@@ -106,8 +106,7 @@
       <div x-data="combobox($app.t('profile.defaultBuchtyp'), $app.t('common.notSet'))"
            x-modelable="value" x-model="userSettingsDefaultBuchtyp"
            x-effect="options = userSettingsBuchtypOptions()"
-           @click.outside="close()" @keydown="onKeydown($event)"
-           class="combobox-wrap combobox-wrap--compact"></div>
+></div>
     </div>
 
     <p class="book-settings-section-divider" x-text="$app.t('profile.editorSection')"></p>
@@ -118,8 +117,7 @@
         <div x-data="combobox($app.t('profile.focusGranularity'))"
              x-modelable="value" x-model="userSettingsFocusGranularity"
              x-effect="options = userSettingsFocusOptions()"
-             @click.outside="close()" @keydown="onKeydown($event)"
-             class="combobox-wrap combobox-wrap--compact"></div>
+></div>
         <p class="book-settings-field-note" x-text="$app.t('profile.focusGranularityHint')"></p>
       </div>
     </div>

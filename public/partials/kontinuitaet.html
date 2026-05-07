@@ -35,7 +35,7 @@
 
   <!-- Zusammenfassung (klappbar) — ausserhalb x-if, sonst werden Filter und
        Zusammenfassung beim Result-Wechsel komplett neu gemountet. -->
-  <div x-show="kontinuitaetResult?.summary" class="kontinuitaet-summary-wrap" x-cloak>
+  <div x-show="kontinuitaetResult?.summary" class="collapsible-wrap" x-cloak>
     <button type="button"
             class="collapsible-toggle"
             @click="kontinuitaetSummaryOpen = !kontinuitaetSummaryOpen"
@@ -43,40 +43,38 @@
       <span class="history-chevron" :class="{ open: kontinuitaetSummaryOpen }">›</span>
       <span x-text="$app.t('kontinuitaet.summary')"></span>
     </button>
-    <div x-show="kontinuitaetSummaryOpen" class="kontinuitaet-summary" x-cloak x-text="kontinuitaetResult?.summary || ''"></div>
+    <div x-show="kontinuitaetSummaryOpen" class="collapsible-section kontinuitaet-summary" x-cloak x-text="kontinuitaetResult?.summary || ''"></div>
   </div>
 
   <!-- Filter-Leiste — MUSS ausserhalb x-if bleiben, sonst trackt Alpine x-effect
        der Comboboxen die Parent-Reaktivität nicht und options bleibt leer. -->
   <div x-show="kontinuitaetResult?.issues?.length > 0" class="filter-bar" x-cloak>
-    <div class="severity-filter-group">
-      <button type="button" class="severity-filter-btn"
-              :class="{ 'severity-filter-btn--active': kontinuitaetFilters.schwere === '' }"
-              @click="kontinuitaetFilters.schwere = ''" x-text="$app.t('common.all')"></button>
-      <button type="button" class="severity-filter-btn severity-filter-btn--kritisch"
-              :class="{ 'severity-filter-btn--active': kontinuitaetFilters.schwere === 'kritisch' }"
-              @click="kontinuitaetFilters.schwere = kontinuitaetFilters.schwere === 'kritisch' ? '' : 'kritisch'"
-              x-text="$app.t('kontinuitaet.severity.kritisch')"></button>
-      <button type="button" class="severity-filter-btn severity-filter-btn--mittel"
-              :class="{ 'severity-filter-btn--active': kontinuitaetFilters.schwere === 'mittel' }"
-              @click="kontinuitaetFilters.schwere = kontinuitaetFilters.schwere === 'mittel' ? '' : 'mittel'"
-              x-text="$app.t('kontinuitaet.severity.mittel')"></button>
-      <button type="button" class="severity-filter-btn severity-filter-btn--niedrig"
-              :class="{ 'severity-filter-btn--active': kontinuitaetFilters.schwere === 'niedrig' }"
-              @click="kontinuitaetFilters.schwere = kontinuitaetFilters.schwere === 'niedrig' ? '' : 'niedrig'"
-              x-text="$app.t('kontinuitaet.severity.niedrig')"></button>
+    <div class="tabs">
+      <button type="button" class="tabs-btn"
+              :class="{ 'tabs-btn--active': kontinuitaetFilters.schwere === '' }"
+              @click="kontinuitaetFilters.schwere = ''">
+        <span x-text="$app.t('common.all')"></span>
+        <span class="tabs-btn-count" x-text="(kontinuitaetResult?.issues || []).length"></span>
+      </button>
+      <template x-for="sev in ['kritisch','mittel','niedrig']" :key="sev">
+        <button type="button" class="tabs-btn"
+                :class="{ 'tabs-btn--active': kontinuitaetFilters.schwere === sev }"
+                :disabled="(kontinuitaetResult?.issues || []).filter(i => i.schwere === sev).length === 0"
+                @click="kontinuitaetFilters.schwere = kontinuitaetFilters.schwere === sev ? '' : sev">
+          <span x-text="$app.t('kontinuitaet.severity.' + sev)"></span>
+          <span class="tabs-btn-count" x-text="(kontinuitaetResult?.issues || []).filter(i => i.schwere === sev).length"></span>
+        </button>
+      </template>
     </div>
     <div x-data="combobox($app.t('filter.figur'), $app.t('filter.allFiguren'))"
          x-modelable="value" x-model="kontinuitaetFilters.figurId"
          x-effect="options = $app.figuren.filter(f => (kontinuitaetResult?.issues||[]).some(i => i.fig_ids?.length ? i.fig_ids.includes(f.id) : (i.figuren||[]).includes(f.name))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
-         @click.outside="close()" @keydown="onKeydown($event)"
-         class="combobox-wrap combobox-wrap--compact">
+         >
     </div>
     <div x-data="combobox($app.t('filter.chapter'), $app.t('filter.allChapters'))"
          x-modelable="value" x-model="kontinuitaetFilters.kapitel"
          x-effect="options = kontinuitaetKapitelListe().map(k => ({value: k, label: k}))"
-         @click.outside="close()" @keydown="onKeydown($event)"
-         class="combobox-wrap combobox-wrap--compact">
+         >
     </div>
     <span class="filter-count" x-text="kontinuitaetResult ? kontinuitaetIssuesSorted().length + ' / ' + kontinuitaetResult.issues.length : ''"></span>
   </div>

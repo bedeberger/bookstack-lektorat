@@ -199,7 +199,7 @@ const lektoratState = () => ({
   tokTooltipData: null,
   showPageStatusTip: false,
   pageStatusTipPos: { x: 0, y: 0 },
-  pageStatusTipText: '',
+  pageStatusTipLines: [],
   _checkPollTimer: null,
   // IntersectionObserver-basiertes Lazy-Loading der Token-Estimates für die
   // Sidebar (Server-Endpoint `/sync/page-stats/:bookId`). Refs hier, damit

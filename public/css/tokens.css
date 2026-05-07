@@ -248,10 +248,15 @@
   --pad-badge:       4px 8px;      /* Badge/Tag/kleiner Pill */
   --pad-detail:      0.5rem 0.75rem; /* Detail-Box / Drawer-Inhalt */
 
-  /* === Transition-Tokens — drei Geschwindigkeits-Stufen === */
-  --transition-fast: var(--transition-fast);   /* Hover-Tints, schnelle Filter-Pills */
-  --transition-base: var(--transition-base);  /* Standard-Buttons, Cards, Border-Color */
-  --transition-slow: var(--transition-slow);  /* grössere Flächen, Cross-Fade */
+  /* === Transition-Tokens — drei Geschwindigkeits-Stufen ===
+     NIE als `--x: var(--x)` definieren — zirkuläre Custom-Property ist
+     invalid → ganze `transition`/`animation`-Property kippt auf Default
+     (`0s`) → Chevron-Rotation, cardFadeIn, Hover-Tints sind alle tot.
+     Symptom: „Erweiterungen wackeln", weil Section snappt OHNE die
+     Chevron-Rotation, die den Snap visuell maskieren würde. */
+  --transition-fast: 0.1s ease;   /* Hover-Tints, schnelle Filter-Pills */
+  --transition-base: 0.12s ease;  /* Standard-Buttons, Cards, Border-Color */
+  --transition-slow: 0.15s ease;  /* grössere Flächen, Cross-Fade */
 
   /* === Opacity-Tokens — semantische Stufen === */
   --opacity-disabled: 0.6;   /* :disabled, deaktiviert */

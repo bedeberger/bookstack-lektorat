@@ -73,7 +73,7 @@ export const PROVIDERS = [
     prefix: '!',
     sectionKey: 'palette.section.chapters',
     list(root) {
-      return Array.isArray(root.tree) ? root.tree.filter(t => t.type === 'chapter') : [];
+      return Array.isArray(root.tree) ? root.tree.filter(t => t.type === 'chapter' && !t.solo) : [];
     },
     search(root, q, t) {
       const chapters = this.list(root);

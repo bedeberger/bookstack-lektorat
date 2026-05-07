@@ -10,6 +10,11 @@
   <link rel="stylesheet" href="/public/css/base.css">
   <link rel="stylesheet" href="/public/css/buttons-badges.css">
   <link rel="stylesheet" href="/public/css/card-form.css">
+  <link rel="stylesheet" href="/public/css/utilities.css">
+  <link rel="stylesheet" href="/public/css/entity-list.css">
+  <link rel="stylesheet" href="/public/css/tree-history.css">
+  <link rel="stylesheet" href="/public/css/heatmap.css">
+  <link rel="stylesheet" href="/public/css/kontinuitaet.css">
   <link rel="stylesheet" href="/public/css/pdf-export.css">
   <style>body { padding: 1rem; max-width: 1200px; margin: 0 auto; }</style>
 
@@ -48,6 +53,14 @@
     };
 
     window.Alpine.magic('app', () => window.__app);
+
+    // Combobox-Stub für die Harness — die echte Implementation lebt in
+    // public/js/app.js (mid-file, nicht trivial extrahierbar). Tests interagieren
+    // nicht mit Comboboxes; der Stub verhindert nur den "Alpine Expression Error:
+    // combobox is not defined", der das gesamte Subtree-Rendering bricht.
+    window.Alpine.data('combobox', () => ({
+      open: false, value: null, options: [], close() {}, onKeydown() {}, init() {},
+    }));
 
     const { registerPdfExportCard } = await import('/public/js/cards/pdf-export-card.js');
     registerPdfExportCard();

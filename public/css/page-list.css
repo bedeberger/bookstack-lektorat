@@ -5,11 +5,11 @@
   border: 0.5px solid transparent;
   border-radius: var(--radius-md);
   margin-bottom: 3px;
-  display: flex;
-  flex-wrap: wrap;
-  row-gap: 4px;
-  justify-content: space-between;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: start;
   cursor: pointer;
   font-size: var(--font-size-sm);
   color: var(--color-muted);
@@ -30,11 +30,11 @@
 
 .page-name {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   min-width: 0;
-  flex: 1 1 auto;
 }
+.page-name .page-status-dot { margin-top: 5px; }
 .page-name > span:not(.page-status-dot) {
   min-width: 0;
   overflow-wrap: anywhere;

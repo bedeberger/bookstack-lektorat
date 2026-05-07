@@ -47,6 +47,7 @@
   <link rel="stylesheet" href="css/search.css">
   <link rel="stylesheet" href="css/feature-tiles.css">
   <link rel="stylesheet" href="css/heatmap.css">
+  <link rel="stylesheet" href="css/tabs.css">
   <link rel="stylesheet" href="css/misc.css">
   <link rel="stylesheet" href="css/chat.css">
   <link rel="stylesheet" href="css/synonyme.css">
@@ -130,14 +131,10 @@
 <div class="card card--book-selector" x-show="showBookCard" x-cloak>
   <label x-text="t('book.label')"></label>
   <div class="row book-selector-row">
-    <div x-data="combobox(t('book.chooseBook'))"
+    <div x-data="combobox({ placeholder: t('book.chooseBook'), compact: false })"
          x-modelable="value" x-model="selectedBookId"
          x-effect="options = books.map(b => ({value: String(b.id), label: b.name}))"
-         @combobox-change="resetView();"
-         @click.outside="close()"
-         @keydown="onKeydown($event)"
-         class="combobox-wrap">
-    </div>
+         @combobox-change="resetView();"></div>
     <a :href="selectedBookUrl || '#'" target="_blank" rel="noopener" class="btn-bookstack-link" :class="{ 'btn-bookstack-link--hidden': !selectedBookUrl }" :tabindex="selectedBookUrl ? 0 : -1" :aria-hidden="!selectedBookUrl" :data-tip="t('book.openInBookstack')" x-text="t('book.bookstack')"></a>
   </div>
 
@@ -223,6 +220,32 @@
 <div id="partial-editor-focus"></div>
 <div id="partial-shortcuts"></div>
 <div id="partial-palette"></div>
+
+<!-- Globale Sidebar-Tooltips (position: fixed; per Hover aus dem Sidebar-
+     Markup gefüttert). Hier oben, nicht im Sidebar-Partial — sonst
+     dupliziert sich das Markup wenn die Sidebar irgendwann mehrfach gemountet
+     wird. -->
+<div x-show="showTokLegend"
+     x-transition:enter="tok-tt-enter" x-transition:enter-start="tok-tt-hidden" x-transition:enter-end="tok-tt-visible"
+     x-transition:leave="tok-tt-enter" x-transition:leave-start="tok-tt-visible" x-transition:leave-end="tok-tt-hidden"
+     :style="`left:${tokLegendPos.x}px; top:${tokLegendPos.y - 8}px`"
+     class="tok-tooltip"
+     @mouseleave="_hideTokTip()"
+     x-cloak>
+  <div class="tok-tt-row" x-text="tokTooltipData ? t('tok.words', { n: (tokTooltipData.words >= 1000 ? '~' + Math.round(tokTooltipData.words/1000) + 'k' : tokTooltipData.words) }) : ''"></div>
+  <div class="tok-tt-row" x-show="tokTooltipData" x-text="tokTooltipData ? t('tok.normseiten', { n: (Math.round((tokTooltipData.chars||0)/1500 * 10) / 10).toLocaleString(_numLocale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }) : ''"></div>
+  <div class="tok-tt-row" x-show="tokTooltipData && !tokTooltipData._chapterOnly" x-text="tokTooltipData ? t('tok.tokens', { n: (tokTooltipData.tok >= 1000 ? Math.round(tokTooltipData.tok/1000) + 'k' : tokTooltipData.tok) }) : ''"></div>
+</div>
+<div x-show="showPageStatusTip"
+     x-transition:enter="tok-tt-enter" x-transition:enter-start="tok-tt-hidden" x-transition:enter-end="tok-tt-visible"
+     x-transition:leave="tok-tt-enter" x-transition:leave-start="tok-tt-visible" x-transition:leave-end="tok-tt-hidden"
+     :style="`left:${pageStatusTipPos.x}px; top:${pageStatusTipPos.y - 8}px`"
+     class="tok-tooltip page-status-tip"
+     x-cloak>
+  <template x-for="line in pageStatusTipLines" :key="line">
+    <div class="tok-tt-row" x-text="line"></div>
+  </template>
+</div>
 
 </div><!-- end layout-main -->
 </div><!-- end layout -->

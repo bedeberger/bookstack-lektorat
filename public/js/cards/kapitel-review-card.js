@@ -269,7 +269,7 @@ export function registerKapitelReviewCard() {
     // mindestens eines mit mehreren Seiten), lohnt sich das Kapitel-Review für
     // alle Kapitel – auch für solche mit nur einer Seite.
     _bookQualifiesForChapterReview() {
-      const chapters = (window.__app.tree || []).filter(i => i.type === 'chapter');
+      const chapters = (window.__app.tree || []).filter(i => i.type === 'chapter' && !i.solo);
       return chapters.length >= 2 && chapters.some(c => c.pages.length > 1);
     },
 
@@ -277,14 +277,14 @@ export function registerKapitelReviewCard() {
     kapitelReviewChapterOptions() {
       if (!this._bookQualifiesForChapterReview()) return [];
       return (window.__app.tree || [])
-        .filter(i => i.type === 'chapter' && i.pages.length > 0)
+        .filter(i => i.type === 'chapter' && !i.solo && i.pages.length > 0)
         .map(c => ({ id: c.id, name: c.name, pageCount: c.pages.length }));
     },
 
     kapitelReviewSelectedChapter() {
       if (!window.__app.kapitelReviewChapterId) return null;
       return (window.__app.tree || []).find(i =>
-        i.type === 'chapter' && String(i.id) === String(window.__app.kapitelReviewChapterId)
+        i.type === 'chapter' && !i.solo && String(i.id) === String(window.__app.kapitelReviewChapterId)
       ) || null;
     },
 
@@ -347,7 +347,7 @@ export function registerKapitelReviewCard() {
         };
         root.pages.push(newPage);
         const chapterItem = root.tree.find(i =>
-          i.type === 'chapter' && String(i.id) === String(chapter.id)
+          i.type === 'chapter' && !i.solo && String(i.id) === String(chapter.id)
         );
         if (chapterItem) {
           chapterItem.pages.push(newPage);

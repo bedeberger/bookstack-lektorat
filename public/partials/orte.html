@@ -38,21 +38,18 @@
     <div x-data="combobox($app.t('filter.figur'), $app.t('filter.allFiguren'))"
          x-modelable="value" x-model="$app.orteFilters.figurId"
          x-effect="options = $app.figuren.filter(f => $app.orte.some(o => (o.figuren || []).includes(f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
-         @click.outside="close()" @keydown="onKeydown($event)"
-         class="combobox-wrap combobox-wrap--compact">
+         >
     </div>
     <div x-data="combobox($app.t('filter.chapter'), $app.t('filter.allChapters'))"
          x-modelable="value" x-model="$app.orteFilters.kapitel"
          x-effect="options = $app.orteKapitelListe().map(k => ({value: k, label: k}))"
-         @click.outside="close()" @keydown="onKeydown($event)"
-         class="combobox-wrap combobox-wrap--compact">
+         >
     </div>
     <div x-show="$app.szenen.length > 0"
          x-data="combobox($app.t('filter.szene'), $app.t('filter.allSzenen'))"
          x-modelable="value" x-model="$app.orteFilters.szeneId"
          x-effect="options = $app.szenen.map(s => ({value: String(s.id), label: s.titel}))"
-         @click.outside="close()" @keydown="onKeydown($event)"
-         class="combobox-wrap combobox-wrap--compact">
+         >
     </div>
     <span class="filter-count" x-text="$app.orteFiltered.length + ' / ' + $app.orte.length"></span>
   </div>

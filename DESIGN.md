@@ -12,7 +12,7 @@ Wiederkehrende Werte gehen über Tokens. Ad-hoc-Werte (`box-shadow: 0 4px 12px .
 |---------|--------|------------|
 | **Schatten** | `--shadow-sm` (Card-Lift), `--shadow-md` (Popover/Dropdown), `--shadow-lg` (Modal), `--shadow-soft-sm` (sehr dezent), `--shadow-inset-top` (Job-Queue-Footer) | Standard-Erhebungen. Dark-Theme erbt automatisch dunklere Schatten. |
 | **Padding** | `--pad-btn-compact` (7px 10px), `--pad-badge` (4px 8px), `--pad-detail` (0.5rem 0.75rem) | Compact-Buttons, Badges/Tags, Detail-Boxen / Drawer-Inhalt. |
-| **Transition** | `--transition-fast` (0.1s ease), `--transition-base` (0.12s ease), `--transition-slow` (0.15s ease) | Standard-Cadence. Längere Animationen (0.18s+, 0.3s) bleiben ad-hoc. |
+| **Transition** | `--transition-fast` (0.1s ease), `--transition-base` (0.12s ease), `--transition-slow` (0.15s ease) | Standard-Cadence. Längere Animationen (0.18s+, 0.3s) bleiben ad-hoc. **NIE als `--x: var(--x)` definieren** — zirkuläre Custom-Property ist invalid → ganze `transition`/`animation`-Property kippt auf Default `0s` → Chevron-Rotationen, `cardFadeIn`, Hover-Tints sind tot, Erweiterungen „wackeln" weil Section snappt ohne Chevron-Maskierung. Definitionen müssen Literalwerte tragen, [public/css/tokens.css](public/css/tokens.css). |
 | **Opacity** | `--opacity-disabled` (0.6), `--opacity-muted` (0.5), `--opacity-hint` (0.4), `--opacity-faint` (0.35), `--opacity-strong` (0.75) | Semantische Stufen. `:disabled` immer `--opacity-disabled`. |
 | **Font-Size klein** | `--font-size-xs` (11px), `--font-size-sm` (13px), `--font-size-base` (14px) | `font-size: 11px` → `var(--font-size-xs)`. |
 
@@ -24,21 +24,27 @@ Wiederkehrende Werte gehen über Tokens. Ad-hoc-Werte (`box-shadow: 0 4px 12px .
 
 **Markup:**
 ```html
-<button type="button"
-        class="collapsible-toggle"
-        @click="xxxOpen = !xxxOpen"
-        :aria-expanded="xxxOpen">
-  <span class="history-chevron" :class="{ open: xxxOpen }">›</span>
-  <span x-text="$app.t('bereich.toggle')"></span>
-</button>
-<div x-show="xxxOpen" x-cloak>…Inhalt…</div>
+<div class="collapsible-wrap">
+  <button type="button"
+          class="collapsible-toggle"
+          @click="xxxOpen = !xxxOpen"
+          :aria-expanded="xxxOpen">
+    <span class="history-chevron" :class="{ open: xxxOpen }">›</span>
+    <span x-text="$app.t('bereich.toggle')"></span>
+  </button>
+  <div x-show="xxxOpen" x-cloak class="collapsible-section">…Inhalt…</div>
+</div>
 ```
+
+`.collapsible-wrap` (block-Container, Spacing pro Section) + `.collapsible-section` (border-left, padding, Inhaltsabstand) leben beide in [public/css/entity-list.css](public/css/entity-list.css).
 
 **Regeln:**
 - Chevron `›` rotiert via `.history-chevron.open` (90°). CSS in [public/css/tree-history.css](public/css/tree-history.css).
-- Button-Stil `.collapsible-toggle` (uppercase, kleinere Schrift). CSS in [public/css/entity-list.css](public/css/entity-list.css).
+- Button-Stil `.collapsible-toggle` (uppercase, kleinere Schrift, `inline-flex`). CSS in [public/css/entity-list.css](public/css/entity-list.css).
 - State (`xxxOpen`) lebt in der Sub-Komponente, nicht im Root.
 - Kein `<details>`/`<summary>` — nicht stylebar genug, andere optische Sprache.
+- **Toggle-Button NICHT lokal auf `display: flex; width: 100%` umstellen.** Hat in der Vergangenheit horizontalen Wackel-Shift beim Öffnen verursacht (PDF-Export-Karte). Block-Stapelung kommt vom `.collapsible-wrap`-Container, nicht vom Button selbst.
+- **„Wackelt beim Öffnen"-Symptom** = Chevron-Rotation läuft nicht ODER Toggle ist auf full-width gestreckt. Beides geprüft? Section snappt instant auf, ohne dass die `transform: rotate(90deg)`-Transition den Snap visuell trägt → der Sprung wirkt grob. Ursache 1 (vertikal): `--transition-slow` ist invalid (z.B. zirkuläre Definition) → in DevTools auf `0.15s ease` prüfen, Token reparieren reicht für die ganze Karte. Ursache 2 (horizontal nach rechts): Toggle ist `display: flex; width: 100%` und ändert beim Klick die Layout-Box → Default `inline-flex` zurücksetzen, in `.collapsible-wrap` einwickeln.
 
 **Beispiele:** Kontinuitäts-Zusammenfassung [public/partials/kontinuitaet.html:38](public/partials/kontinuitaet.html#L38), Figuren-Legende [public/partials/figuren.html:37](public/partials/figuren.html#L37).
 
@@ -65,23 +71,70 @@ Wiederkehrende Werte gehen über Tokens. Ad-hoc-Werte (`box-shadow: 0 4px 12px .
 
 Pattern + Pflicht-Markup: siehe [CLAUDE.md](CLAUDE.md) Abschnitt „Combobox statt `<select>`". Nicht hier duplizieren — Single Source of Truth bleibt CLAUDE.md.
 
+### Reaktivität bei Datenquelle aus Karten-Scope (häufiger „Liste leer"-Bug)
+
+`<div x-data="combobox(...)">` ist eine **nested x-data** innerhalb der Karten-x-data. Methods am Karten-Scope, die in `x-effect` der Combobox aufgerufen werden und **reaktive Karten-Daten via `this.xxx` lesen**, werden nicht zuverlässig getrackt — Combobox bleibt leer, auch nachdem die Daten nachgeladen wurden. Bestätigt durch Werkstattkommentar bei [`ideenMovePickerOptions` in public/js/app.js](public/js/app.js) („x-effect der Combobox-Sub-x-data nur `$app`/Magics, nicht Karten-Methoden sieht").
+
+**Symptom-Beispiel (PDF-Export, vor Fix):**
+- Schriftart-Combobox leer (`fontFamilyOptions()` liest `this.fontList`)
+- Schriftstärke-Combobox leer (`fontWeightOptions(role)` liest `this.activeProfile`/`this.fontList`)
+- Clone-From-Combobox leer (`cloneOptions()` liest `this.profiles`)
+- Statische Listen (Seitengröße, Spalten, Kapitelumbruch) funktionieren — keine reaktive Datenquelle.
+
+**Etablierter Workaround in der Codebase:** [`figurenKapitelListe`](public/js/cards/figuren-card.js#L116), [`ereignisseKapitelListe`](public/js/cards/ereignisse-card.js), [`kontinuitaetKapitelListe`](public/js/kontinuitaet.js) — Datenzugriff explizit über `window.__app.xxx`, nie über `this.xxx`.
+
+**Fix-Optionen für neuen Combobox mit reaktiver Karten-Datenquelle:**
+
+1. **Inline-Expression in `x-effect`** (minimal-invasiv) — keine Method-Indirektion, Alpine trackt die Reads direkt im Effect-Body:
+   ```html
+   x-effect="options = fontList.map(f => ({ value: f.family, label: f.family }))"
+   ```
+   `fontList` resolved über merged-Scope an die Karte; reaktiver Read im Effect-Body wird getrackt.
+
+2. **State an Root verschieben** — Daten + Option-Builder in einen State-Slice/Method-Spread am Root, Karte liest via `$app.xxx` / `window.__app.xxx`. Konsistent zum bestehenden Pattern (figuren, orte, ereignisse), aber invasiver.
+
+3. **Method auf Karte, Datenzugriff via `window.__app`** — funktioniert nur, wenn die Daten am Root liegen. Nicht anwendbar, wenn der State karten-lokal sein muss.
+
+**Default-Empfehlung:** Variante 1 für karten-lokalen State, Variante 2 wenn die Daten ohnehin global geteilt werden.
+
+**Anti-Pattern (vermeiden):**
+```html
+<!-- Combobox ist nested x-data; this.xxx aus Card-Method wird nicht zuverlässig reaktiv -->
+<div x-data="combobox(...)" x-effect="options = myCardOptions()"></div>
+```
+mit `myCardOptions() { return this.cardData.map(...); }` am Karten-Scope.
+
+**Status PDF-Export:** Alle 12 Comboboxes in [public/partials/pdf-export.html](public/partials/pdf-export.html) verwenden Variante 1 (Inline-Expression im `x-effect`). Karten-lokaler State (`fontList`, `profiles`, `activeProfile`) wird direkt im Effect-Body gelesen; die früher vorhandenen Option-Builder-Methods sind ersatzlos entfernt.
+
 ---
 
-## Modus-Toggle (Tab-artige Button-Gruppe)
+## Tabs / Modus-Toggle
 
-**Use:** Karte mit mehreren gleichberechtigten Ansichten (z.B. Fehler-Heatmap: offen / angewendet / alle).
+**Use:** Tab-Reihen mit Panels (PDF-Export) **und** Modus-Toggles mit 2-3 Optionen (Fehler-Heatmap: offen / angewendet / alle). Ein Pattern, beide Use-Cases.
 
-**Pattern: `.mode-toggle`** ([public/css/heatmap.css:157](public/css/heatmap.css#L157)) — kanonische Klasse für neue Modus-Toggles. Trotz Namens-Herkunft aus `heatmap.css` für alle Modus-Toggle-Use-Cases gedacht.
+**Pattern: `.tabs` / `.tabs-btn` / `.tabs-btn--active`** ([public/css/tabs.css](public/css/tabs.css)). Polished segmented: dezenter Tint statt Vollfarben-Active, 2px Akzentband am Unterkante, weiche Übergänge. Eckig.
 
 **Markup:**
 ```html
-<div class="mode-toggle">
-  <button class="mode-toggle-btn" :class="{ 'mode-toggle-btn--active': mode === 'a' }">A</button>
-  <button class="mode-toggle-btn" :class="{ 'mode-toggle-btn--active': mode === 'b' }">B</button>
+<div class="tabs">
+  <button class="tabs-btn" :class="{ 'tabs-btn--active': mode === 'a' }">A</button>
+  <button class="tabs-btn" :class="{ 'tabs-btn--active': mode === 'b' }">B</button>
 </div>
 ```
 
-**Altes Pattern `.figur-modus-btn`** ([public/css/figuren.css:61](public/css/figuren.css#L61)) bleibt nur in [public/partials/figuren.html](public/partials/figuren.html) erhalten (Graph/Familie/Soziogramm). **Nicht für neue Karten verwenden** — `.mode-toggle` ist SSoT. Wer figuren.html anfasst: bei Gelegenheit auf `.mode-toggle` migrieren und `figuren.css`-Block entfernen.
+**Count-Badge** (optional, z.B. für Filter-Tabs): `.tabs-btn-count` als zweites Span-Kind im Button. Aktiver Tab tönt das Badge primary-getintet, disabled-Tabs dimmen es.
+```html
+<button class="tabs-btn" :disabled="count === 0">
+  <span x-text="label"></span>
+  <span class="tabs-btn-count" x-text="count"></span>
+</button>
+```
+
+**Disabled-Tabs:** native `:disabled` (oder `aria-disabled="true"`) → ausgegraut, kein Hover, `cursor: not-allowed`. Pflicht-Pattern für Filter-Tabs mit leerem Bucket (kein Click ins Nichts). Beispiele: [public/partials/kontinuitaet.html](public/partials/kontinuitaet.html), [public/partials/szenen.html](public/partials/szenen.html).
+
+**Modifier `.tabs--scrollable`** für viele Tabs in schmaler Karte (horizontaler Scroll, Mobile). Beispiel: PDF-Export-Tabs ([public/partials/pdf-export.html](public/partials/pdf-export.html)).
+
+**Altes Pattern `.figur-modus-btn`** ([public/css/figuren.css:61](public/css/figuren.css#L61)) bleibt nur in [public/partials/figuren.html](public/partials/figuren.html) erhalten (Graph/Familie/Soziogramm). **Nicht für neue Karten verwenden** — `.tabs` ist SSoT. Wer figuren.html anfasst: bei Gelegenheit auf `.tabs` migrieren und `figuren.css`-Block entfernen.
 
 ---
 
@@ -115,6 +168,57 @@ Pattern + Pflicht-Markup: siehe [CLAUDE.md](CLAUDE.md) Abschnitt „Combobox sta
 - `:disabled` — Opacity 0.4, cursor not-allowed
 
 **Counter in Button:** `<span class="btn-count">N</span>` rechts vom Label.
+
+---
+
+## Form-Patterns (Settings- und Export-Karten)
+
+**Use:** Karten mit Eingabefeldern in Label-Wert-Anordnung (book-settings, user-settings, finetune-export, …). Eine **gemeinsame** Geometrie über alle Karten — kein paralleles Klassen-Vokabular pro Karte.
+
+### Grid (Label links, Wert rechts)
+
+`.book-settings-form` / `.book-settings-row` / `.book-settings-label` (CSS in [public/css/kontinuitaet.css](public/css/kontinuitaet.css), 170 px-Label-Spalte). Auch ausserhalb von „Buch-Einstellungen" wiederverwenden — Klassenname stammt vom ersten Konsumenten, ist aber generisch gemeint. Modifier `.book-settings-row--top` für oben-ausgerichtete Rows mit Textareas.
+
+```html
+<div class="book-settings-form">
+  <div class="book-settings-row">
+    <label class="book-settings-label" x-text="…"></label>
+    <div class="form-stack">…</div>
+  </div>
+</div>
+```
+
+### Wertspalten-Bausteine (CSS in [public/css/card-form.css](public/css/card-form.css))
+
+| Klasse | Verwendung |
+|--------|------------|
+| `.form-stack` | flex-column gap 10 — vertikale Liste (mehrere Checks oder Sub-Gruppen) |
+| `.form-inline` | flex-row gap 20 wrap — Inline-Felder nebeneinander (z.B. Min/Max) |
+| `.form-inline-field` | Wrapper aus Label + Input (`<label><span/><input/></label>`) |
+| `.form-num` | numerischer Input, 90 px breit, kompakt — paart mit `.form-inline-field` |
+| `.form-check` | Grid 18 px-Checkbox + Title-Desc-Stack |
+| `.form-check-title` | bold Titel der Check-Option |
+| `.form-check-desc` | mittlerer Erklaerungstext (12 px, muted) |
+| `.form-lead` | Intro-Paragraph unter `.card-header`, oberhalb der Form |
+| `.form-section` | Wrapper unter dem Form-Output (Trennstrich + 14 px Abstand) |
+| `.form-stats` | flex-wrap gap 8 — Reihe aus `.tok-badge`-Stats |
+| `.form-size-hint` | sekundärer Inline-Hinweis im Button (z.B. Dateigröße) |
+
+### Section-Trenner innerhalb des Forms
+
+`.book-settings-section-divider` (CSS in [public/css/kontinuitaet.css](public/css/kontinuitaet.css)) — `<p>`-Tag mit Border-Top + erklärendem Text, trennt logische Form-Sektionen (Beispiel: AI-Augmentierung in finetune-export).
+
+### Hint / Error / Saved unterhalb der Form
+
+`.book-settings-hint` (12 px, muted, italic), `.book-settings-error` (rot), `.book-settings-saved` (success).
+
+### Mobile (≤ 600 px)
+
+Grid kollabiert auf 1 Spalte (in [public/css/confirm-dialog.css](public/css/confirm-dialog.css) — Hist. Grund). `.form-inline` reflowed auf 50/50 (`flex 1 1 calc(50% - 16px)`); `.form-num` wird flex-fluid.
+
+### Regel: Keine parallele Reinvention
+
+Wer eine neue Settings-/Export-Karte baut, nutzt diese Klassen direkt (siehe [public/partials/user-settings.html](public/partials/user-settings.html), [public/partials/finetune-export.html](public/partials/finetune-export.html)). Kein eigenes `.xxx-form` / `.xxx-row` / `.xxx-check` mehr. Verstößt gegen die Style-Konsistenz-Regel oben.
 
 ---
 
@@ -305,16 +409,7 @@ Kein Skeleton ohne Shimmer-Animation. CSS-File-Referenzen: [entity-list.css](pub
 </div>
 ```
 
-**Severity-Filter-Buttons:**
-```html
-<div class="severity-filter-group">
-  <button class="severity-filter-btn severity-filter-btn--kritisch"
-          :class="{ 'severity-filter-btn--active': filter === 'kritisch' }">…</button>
-  <!-- weitere: --stark / --mittel / --schwach / --niedrig -->
-</div>
-```
-
-CSS: [public/css/entity-list.css](public/css/entity-list.css). Kein `gap` zwischen Severity-Buttons (aneinander gereiht wie ein Segmented-Control).
+**Severity-/Wertungs-Filter:** generisches `.tabs` / `.tabs-btn` (siehe Tabs-Sektion oben). Kein eigenes Filter-Pattern. Beispiele: [public/partials/kontinuitaet.html](public/partials/kontinuitaet.html), [public/partials/szenen.html](public/partials/szenen.html).
 
 ---
 
@@ -333,7 +428,7 @@ CSS: [public/css/entity-list.css](public/css/entity-list.css). Kein `gap` zwisch
 
 **Detail-Drawer** unter Tabelle: `.heatmap-detail` mit `.heatmap-detail-list`/`-page`/`-token-groups`.
 
-**Mode-Toggle innerhalb Heatmaps:** `.mode-toggle` + `.mode-toggle-btn` + `--active`. Identisch zur generischen Modus-Toggle-Sektion oben — kein eigenes Heatmap-Pattern mehr, einfach `.mode-toggle` wiederverwenden.
+**Mode-Toggle innerhalb Heatmaps:** `.tabs` + `.tabs-btn` + `--active`. Identisch zur generischen Tabs-Sektion oben — kein eigenes Heatmap-Pattern, einfach `.tabs` wiederverwenden.
 
 ---
 

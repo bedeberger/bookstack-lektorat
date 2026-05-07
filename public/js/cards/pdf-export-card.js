@@ -19,10 +19,24 @@ export function registerPdfExportCard() {
     profiles: [],
     activeProfileId: null,
     activeProfile: null,        // { id, name, config, has_cover, ... }
+    // Form-Mount-Gate: getrennt von activeProfile, damit Alpine die x-if-DOM
+    // sicher unmounten kann, BEVOR activeProfile auf null/neuen Wert wechselt.
+    // Sonst feuern x-model/x-effect-Closures (combobox-x-data) noch ein Mal mit
+    // null-activeProfile und werfen "Cannot read properties of null (reading 'config')".
+    _formMounted: false,
     activeTab: 'layout',
 
     fontList: [],
     fontPreviewLoaded: new Set(),
+
+    // Collapsible-Toggles für lange Sektionen.
+    secOpen: {
+      margins: false,
+      bodyInset: false,
+      headerFooter: false,
+      pageStructure: false,
+      coverOptions: false,
+    },
 
     creating: false,
     newProfileName: '',
@@ -71,12 +85,14 @@ export function registerPdfExportCard() {
 
       // view:reset (Logout / User-Settings-Danger-Reset) räumt ALLES inkl.
       // Profile-Liste — könnte anderer User sein nach Re-Login.
-      this._onViewReset = () => {
+      this._onViewReset = async () => {
         this._onBookChanged();
-        this.profiles = [];
-        this.activeProfile = null;
-        this.activeProfileId = null;
-        this.savedAt = null;
+        await this._unmountFormThen(() => {
+          this.profiles = [];
+          this.activeProfile = null;
+          this.activeProfileId = null;
+          this.savedAt = null;
+        });
       };
       window.addEventListener('view:reset', this._onViewReset);
     },
@@ -115,20 +131,30 @@ export function registerPdfExportCard() {
         } else if (this.activeProfileId) {
           await this.selectProfile(this.activeProfileId);
         } else {
-          this.activeProfile = null;
+          await this._unmountFormThen(() => { this.activeProfile = null; });
         }
       } catch (e) {
         console.error('loadProfiles', e);
       }
     },
 
+    // Unmount form, await DOM teardown, then run mutator. Ensures x-if-children
+    // (combobox x-data, x-model) won't see a null activeProfile.
+    async _unmountFormThen(mutate) {
+      this._formMounted = false;
+      await this.$nextTick();
+      mutate();
+    },
+
     async selectProfile(id) {
-      this.activeProfileId = id;
+      // Form unmounten, dann State wechseln, dann neu mounten.
+      await this._unmountFormThen(() => { this.activeProfileId = id; });
       try {
         const r = await fetch(`/pdf-export/profiles/${id}`);
         if (!r.ok) { this.activeProfile = null; return; }
         this.activeProfile = await r.json();
         this.coverPreviewVersion++;
+        this._formMounted = true;
       } catch {}
     },
 
@@ -164,7 +190,9 @@ export function registerPdfExportCard() {
       if (!confirm(window.__app.t('pdfExport.confirmDelete'))) return;
       const r = await fetch(`/pdf-export/profiles/${id}`, { method: 'DELETE' });
       if (!r.ok) return;
-      if (this.activeProfileId === id) this.activeProfileId = null;
+      if (this.activeProfileId === id) {
+        await this._unmountFormThen(() => { this.activeProfileId = null; });
+      }
       await this.loadProfiles();
     },
 
@@ -359,5 +387,10 @@ export function registerPdfExportCard() {
     // ── Helpers fürs Template ────────────────────────────────────────────
     setTab(tab) { if (TABS.includes(tab)) this.activeTab = tab; },
     isTab(tab) { return this.activeTab === tab; },
+
+    // Combobox-Options sind als Inline-Expressions im Template (siehe DESIGN.md
+    // "Reaktivitaet bei Datenquelle aus Karten-Scope"). Nested x-data der Combobox
+    // trackt this.xxx aus Card-Methods nicht zuverlaessig — deshalb Arrays inline
+    // im x-effect aufbauen.
   }));
 }

@@ -12,13 +12,13 @@
     <input type="text" x-model="pageSearch" @input="onPageSearchInput()" @keydown="onPageSearchKeydown($event)" :placeholder="t('sidebar.searchPage')" :aria-label="t('sidebar.searchPage')" :data-tip="t('sidebar.searchPageTitle')" class="page-search">
   </div>
   <div x-show="!pageSearch" class="btn-group">
-    <button type="button" @click="tree.forEach(c => c.open = true)" class="btn-compact" x-text="t('sidebar.expandAll')"></button>
-    <button type="button" @click="tree.forEach(c => c.open = false)" class="btn-compact" x-text="t('sidebar.collapseAll')"></button>
-    <span x-show="Object.keys(tokEsts).length > 0" class="tok-totals">
-      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.chars,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.z')"></span>
-      <span class="tok-badge tok-neutral" x-text="'∑ ' + (Math.round(Object.values(tokEsts).reduce((a,b)=>a+b.chars,0) / 1500 * 10) / 10).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ' + t('bookstats.unit.ns')"></span>
-      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.words,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.w')"></span>
-      <span class="tok-badge tok-neutral" x-text="'∑ ' + Object.values(tokEsts).reduce((a,b)=>a+b.tok,0).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH') + ' ' + t('bookstats.unit.t')"></span>
+    <button type="button" @click="tree.forEach(c => { if (!c.solo) c.open = true })" class="btn-compact" x-text="t('sidebar.expandAll')"></button>
+    <button type="button" @click="tree.forEach(c => { if (!c.solo) c.open = false })" class="btn-compact" x-text="t('sidebar.collapseAll')"></button>
+    <span x-show="tokTotals.any" class="tok-totals">
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + tokTotals.chars.toLocaleString(_numLocale) + ' ' + t('bookstats.unit.z')"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + tokTotals.normseiten.toLocaleString(_numLocale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ' + t('bookstats.unit.ns')"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + tokTotals.words.toLocaleString(_numLocale) + ' ' + t('bookstats.unit.w')"></span>
+      <span class="tok-badge tok-neutral" x-text="'∑ ' + tokTotals.tok.toLocaleString(_numLocale) + ' ' + t('bookstats.unit.t')"></span>
     </span>
   </div>
   <!-- Batch-Fortschritt -->
@@ -29,126 +29,72 @@
     <div class="batch-status" x-html="batchStatus"></div>
   </div>
   <template x-for="item in filteredTree" :key="item.id">
-    <div>
-      <template x-if="item.type === 'chapter'">
-        <div class="tree-chapter">
-          <div class="tree-chapter-header"
-               role="button"
-               :tabindex="item.pages.length === 0 ? -1 : 0"
-               :aria-expanded="item.pages.length > 0 ? (item.open ? 'true' : 'false') : null"
-               :class="{
-                 disabled: item.pages.length === 0,
-                 'tree-chapter-header--active': showKapitelReviewCard && String(kapitelReviewChapterId) === String(item.id),
-                 'tree-chapter-header--reviewable': _bookQualifiesForChapterReview() && item.pages.length > 0,
-               }"
-               :data-tip="_bookQualifiesForChapterReview() && item.pages.length > 0 && !pageSearch ? t('sidebar.reviewChapterTitle', { name: item.name }) : ''"
-               @keydown.enter.prevent="if (pageSearch || item.pages.length === 0) return;
-                       if (_bookQualifiesForChapterReview()) openKapitelReviewForChapter(item.id);
-                       else item.open = !item.open"
-               @keydown.space.prevent="if (pageSearch || item.pages.length === 0) return;
-                       if (_bookQualifiesForChapterReview()) openKapitelReviewForChapter(item.id);
-                       else item.open = !item.open"
-               @keydown.arrow-right.prevent="if (item.pages.length > 0 && !item.open) item.open = true"
-               @keydown.arrow-left.prevent="if (item.pages.length > 0 && item.open) item.open = false"
-               @click="if (pageSearch || item.pages.length === 0) return;
-                       if (_bookQualifiesForChapterReview()) openKapitelReviewForChapter(item.id);
-                       else item.open = !item.open">
-            <span class="tree-chevron" :class="{ open: item.open }" x-show="item.pages.length > 0"
-                  @click.stop="if (!pageSearch && item.pages.length > 0) item.open = !item.open"></span>
-            <span x-text="item.name"></span>
-            <span class="tree-chapter-meta">
-              <span class="tag" x-show="item.pages.length > 1" x-text="t('sidebar.pagesCount', { n: item.pages.length })"></span>
-              <template x-if="item.pages.length > 1 && chapterStats(item)">
-                <span class="tok-badge tok-neutral"
-                  x-text="(() => { const s = chapterStats(item); return s.chars >= 1000 ? '~' + Math.round(s.chars/1000) + 'k Z' : s.chars + ' Z'; })()"
-                  @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; tokTooltipData={...chapterStats(item), _chapterOnly: true}; showTokLegend=true"
-                  @mouseleave.stop="showTokLegend=false; tokTooltipData=null"></span>
+    <div class="tree-chapter" :class="{ 'tree-chapter--solo': item.solo }">
+      <div x-show="!item.solo"
+           class="tree-chapter-header"
+           role="button"
+           :tabindex="item.pages.length === 0 ? -1 : 0"
+           :aria-expanded="item.pages.length > 0 ? (item.open ? 'true' : 'false') : null"
+           :class="{
+             disabled: item.pages.length === 0,
+             'tree-chapter-header--active': showKapitelReviewCard && String(kapitelReviewChapterId) === String(item.id),
+             'tree-chapter-header--reviewable': _bookQualifiesForChapterReview() && item.pages.length > 0,
+           }"
+           :data-tip="_bookQualifiesForChapterReview() && item.pages.length > 0 && !pageSearch ? t('sidebar.reviewChapterTitle', { name: item.name }) : ''"
+           @keydown.enter.prevent="_onChapterHeaderActivate(item)"
+           @keydown.space.prevent="_onChapterHeaderActivate(item)"
+           @keydown.arrow-right.prevent="if (item.pages.length > 0 && !item.open) item.open = true"
+           @keydown.arrow-left.prevent="if (item.pages.length > 0 && item.open) item.open = false"
+           @click="_onChapterHeaderActivate(item)">
+        <span class="tree-chevron" :class="{ open: item.open }" x-show="item.pages.length > 0"
+              @click.stop="if (!pageSearch && item.pages.length > 0) item.open = !item.open"></span>
+        <span x-text="item.name"></span>
+        <span class="tree-chapter-meta">
+          <span class="tag" x-show="item.pages.length > 1" x-text="t('sidebar.pagesCount', { n: item.pages.length })"></span>
+          <template x-if="item.pages.length > 1 && item.stats">
+            <span class="tok-badge tok-neutral"
+              x-text="item.stats.badge"
+              @mouseenter.stop="_showTokTip($el, item.stats, { _chapterOnly: true })"
+              @mouseleave.stop="_hideTokTip()"></span>
+          </template>
+        </span>
+      </div>
+      <div x-show="item.solo || item.open" class="tree-chapter-pages">
+        <template x-for="page in item.pages" :key="page.id">
+          <div class="page-item"
+               :class="{ selected: currentPage?.id === page.id, 'page-item--empty': tokEsts[page.id] && tokEsts[page.id].words === 0, 'page-item--kb-active': _pageSearchActivePageId() === page.id }"
+               :data-page-id="page.id" role="button" tabindex="0"
+               :aria-current="currentPage?.id === page.id ? 'page' : null"
+               @click="selectPage(page)">
+            <span class="page-name">
+              <span class="page-status-dot" :class="'page-status-' + pageStatus(page)"
+                @mouseenter.stop="_showStatusTip($el, page)"
+                @mouseleave.stop="_hideStatusTip()"></span>
+              <span x-text="page.name"></span>
+            </span>
+            <span x-show="tokEsts[page.id] || ideenCounts[page.id] > 0" class="tok-stats">
+              <template x-if="tokEsts[page.id]?.words > 0">
+                <span class="tok-stats-wrap">
+                  <span class="tok-badge tok-neutral"
+                    x-text="tokEsts[page.id].chars >= 1000 ? '~' + Math.round(tokEsts[page.id].chars/1000) + 'k Z' : tokEsts[page.id].chars + ' Z'"
+                    @mouseenter.stop="_showTokTip($el, tokEsts[page.id])"
+                    @mouseleave.stop="_hideTokTip()"></span>
+                </span>
               </template>
+              <template x-if="tokEsts[page.id] && tokEsts[page.id].words === 0">
+                <span class="tok-badge tok-empty" x-text="t('sidebar.empty')"></span>
+              </template>
+              <span x-show="ideenCounts[page.id] > 0"
+                    class="ideen-count-badge"
+                    x-text="ideenCounts[page.id]"
+                    :data-tip="t('ideen.openCountTitle', { n: ideenCounts[page.id] })"></span>
             </span>
           </div>
-          <div x-show="item.open" class="tree-chapter-pages">
-            <template x-for="page in item.pages" :key="page.id">
-              <div class="page-item" :class="{ selected: currentPage?.id === page.id, 'page-item--empty': tokEsts[page.id] && tokEsts[page.id].words === 0, 'page-item--kb-active': _pageSearchActivePageId() ===page.id }" :data-page-id="page.id" role="button" tabindex="0" :aria-current="currentPage?.id === page.id ? 'page' : null" @click="selectPage(page)">
-                <span class="page-name">
-                  <span class="page-status-dot" :class="'page-status-' + pageStatus(page)"
-                    @mouseenter.stop="const r=$el.getBoundingClientRect(); pageStatusTipPos={x:r.left,y:r.top}; pageStatusTipText=pageStatusTooltip(page); showPageStatusTip=true"
-                    @mouseleave.stop="showPageStatusTip=false"></span>
-                  <span x-text="page.name"></span>
-                </span>
-                <span x-show="tokEsts[page.id] || ideenCounts[page.id] > 0" class="tok-stats">
-                  <template x-if="tokEsts[page.id]?.words > 0">
-                    <span class="tok-stats-wrap">
-                      <span class="tok-badge tok-neutral"
-                        x-text="tokEsts[page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[page.id].chars/1000) + 'k Z' : tokEsts[page.id]?.chars + ' Z'"
-                        @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; tokTooltipData=tokEsts[page.id]; showTokLegend=true"
-                        @mouseleave.stop="showTokLegend=false; tokTooltipData=null"></span>
-                    </span>
-                  </template>
-                  <template x-if="tokEsts[page.id] && tokEsts[page.id].words === 0">
-                    <span class="tok-badge tok-empty" x-text="t('sidebar.empty')"></span>
-                  </template>
-                  <span x-show="ideenCounts[page.id] > 0"
-                        class="ideen-count-badge"
-                        x-text="ideenCounts[page.id]"
-                        :data-tip="t('ideen.openCountTitle', { n: ideenCounts[page.id] })"></span>
-                </span>
-              </div>
-            </template>
-          </div>
-        </div>
-      </template>
-      <template x-if="item.type === 'page'">
-        <div class="page-item" :class="{ selected: currentPage?.id === item.page.id, 'page-item--kb-active': _pageSearchActivePageId() ===item.page.id }" :data-page-id="item.page.id" role="button" tabindex="0" :aria-current="currentPage?.id === item.page.id ? 'page' : null" @click="selectPage(item.page)">
-          <span class="page-name">
-            <span class="page-status-dot" :class="'page-status-' + pageStatus(item.page)"
-              @mouseenter.stop="const r=$el.getBoundingClientRect(); pageStatusTipPos={x:r.left,y:r.top}; pageStatusTipText=pageStatusTooltip(item.page); showPageStatusTip=true"
-              @mouseleave.stop="showPageStatusTip=false"></span>
-            <span x-text="item.name"></span>
-          </span>
-          <span x-show="tokEsts[item.page.id] || ideenCounts[item.page.id] > 0" class="tok-stats">
-            <template x-if="tokEsts[item.page.id]?.words > 0">
-              <span class="tok-stats-wrap">
-                <span class="tok-badge tok-neutral"
-                  x-text="tokEsts[item.page.id]?.chars >= 1000 ? '~' + Math.round(tokEsts[item.page.id].chars/1000) + 'k Z' : tokEsts[item.page.id]?.chars + ' Z'"
-                  @mouseenter.stop="const r=$el.getBoundingClientRect(); tokLegendPos={x:r.left,y:r.top}; tokTooltipData=tokEsts[item.page.id]; showTokLegend=true"
-                  @mouseleave.stop="showTokLegend=false; tokTooltipData=null"></span>
-              </span>
-            </template>
-            <template x-if="tokEsts[item.page.id] && tokEsts[item.page.id].words === 0">
-              <span class="tok-badge tok-empty" x-text="t('sidebar.empty')"></span>
-            </template>
-            <span x-show="ideenCounts[item.page.id] > 0"
-                  class="ideen-count-badge"
-                  x-text="ideenCounts[item.page.id]"
-                  :data-tip="t('ideen.openCountTitle', { n: ideenCounts[item.page.id] })"></span>
-          </span>
-        </div>
-      </template>
+        </template>
+      </div>
     </div>
   </template>
-  <div x-show="filteredTree.length === 0 && pageSearch" class="muted-msg muted-msg--sm" x-text="t('sidebar.noPagesFound')"></div>
-</div>
-
-<!-- Token-Badge Tooltip (fixed, kein Layout-Einfluss) -->
-<div x-show="showTokLegend"
-     x-transition:enter="tok-tt-enter" x-transition:enter-start="tok-tt-hidden" x-transition:enter-end="tok-tt-visible"
-     x-transition:leave="tok-tt-enter" x-transition:leave-start="tok-tt-visible" x-transition:leave-end="tok-tt-hidden"
-     :style="`left:${tokLegendPos.x}px; top:${tokLegendPos.y - 8}px`"
-     class="tok-tooltip"
-     @mouseleave="showTokLegend=false; tokTooltipData=null">
-  <div class="tok-tt-row" x-text="tokTooltipData ? t('tok.words', { n: (tokTooltipData.words >= 1000 ? '~' + Math.round(tokTooltipData.words/1000) + 'k' : tokTooltipData.words) }) : ''"></div>
-  <div class="tok-tt-row" x-show="tokTooltipData" x-text="tokTooltipData ? t('tok.normseiten', { n: (Math.round((tokTooltipData.chars||0)/1500 * 10) / 10).toLocaleString(uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }) : ''"></div>
-  <div class="tok-tt-row" x-show="tokTooltipData && !tokTooltipData._chapterOnly" x-text="tokTooltipData ? t('tok.tokens', { n: (tokTooltipData.tok >= 1000 ? Math.round(tokTooltipData.tok/1000) + 'k' : tokTooltipData.tok) }) : ''"></div>
-</div>
-
-<!-- Seiten-Status Tooltip -->
-<div x-show="showPageStatusTip"
-     x-transition:enter="tok-tt-enter" x-transition:enter-start="tok-tt-hidden" x-transition:enter-end="tok-tt-visible"
-     x-transition:leave="tok-tt-enter" x-transition:leave-start="tok-tt-visible" x-transition:leave-end="tok-tt-hidden"
-     :style="`left:${pageStatusTipPos.x}px; top:${pageStatusTipPos.y - 8}px`"
-     class="tok-tooltip page-status-tip"
-     x-cloak>
-  <template x-for="line in pageStatusTipText.split(' · ')" :key="line">
-    <div class="tok-tt-row" x-text="line"></div>
+  <template x-if="filteredTree.length === 0 && pageSearch">
+    <div class="muted-msg muted-msg--sm" x-text="t('sidebar.noPagesFound')"></div>
   </template>
 </div>

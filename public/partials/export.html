@@ -13,7 +13,6 @@
   <div class="book-export-buttons">
     <template x-for="fmt in ['pdf','epub','docx','html','txt','md']" :key="fmt">
       <button type="button"
-              class="book-export-btn"
               :class="{ 'is-running': bookExportLoading === fmt }"
               :disabled="!!bookExportLoading || !$app.selectedBookId"
               @click="bookExport(fmt)">
@@ -22,16 +21,16 @@
       </button>
     </template>
     <button type="button"
-            class="book-export-btn book-export-btn--custom"
+            class="primary"
             :disabled="!$app.selectedBookId"
             @click="$app.togglePdfExportCard()"
             x-text="$app.t('book.export.pdfCustom')"></button>
   </div>
 
-  <p class="book-export-status"
-     x-show="bookExportLoading"
-     x-text="$app.t('book.export.running', { fmt: (bookExportLoading || '').toUpperCase() })"></p>
-  <p class="book-export-error"
-     x-show="bookExportError"
-     x-text="bookExportError"></p>
+  <div class="card-status"
+       x-show="bookExportLoading"
+       x-text="$app.t('book.export.running', { fmt: (bookExportLoading || '').toUpperCase() })"></div>
+  <div class="card-status card-status--error"
+       x-show="bookExportError"
+       x-text="bookExportError"></div>
 </div>

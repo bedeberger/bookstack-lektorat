@@ -51,17 +51,19 @@ export const treeMethods = {
     const updatedAt = page.updated_at ? new Date(page.updated_at) : null;
     const pageLine = updatedAt ? this._fmtRelativeLine(updatedAt, 'sidebar.status.pageUpdated') : '';
     if (!rec) {
-      const first = this.t('sidebar.status.noLektorat');
-      return pageLine ? `${first} · ${pageLine}` : first;
+      const lines = [this.t('sidebar.status.noLektorat')];
+      if (pageLine) lines.push(pageLine);
+      return lines;
     }
     const checkedAt = new Date(rec.at);
     const lektLine = this._fmtRelativeLine(checkedAt, 'sidebar.status.lektorat');
     const editedSince = updatedAt && updatedAt.getTime() > checkedAt.getTime();
-    const prefixParts = [];
-    if (editedSince) prefixParts.push(this.t('sidebar.status.editedSince'));
-    else if (rec.pending) prefixParts.push(this.t('sidebar.status.pending'));
-    const prefix = prefixParts.length ? prefixParts.join(' · ') + ' · ' : '';
-    return `${prefix}${lektLine}${pageLine ? ' · ' + pageLine : ''}`;
+    const lines = [];
+    if (editedSince) lines.push(this.t('sidebar.status.editedSince'));
+    else if (rec.pending) lines.push(this.t('sidebar.status.pending'));
+    lines.push(lektLine);
+    if (pageLine) lines.push(pageLine);
+    return lines;
   },
 
   markPageChecked(pageId, { pending = false } = {}) {
@@ -110,14 +112,58 @@ export const treeMethods = {
     } catch { /* ignore */ }
   },
 
-  chapterStats(item) {
-    let words = 0, chars = 0, tok = 0, count = 0;
-    for (const p of item.pages) {
-      const e = this.tokEsts[p.id];
-      if (e) { words += e.words; chars += e.chars; tok += e.tok; count++; }
+  // Setzt `item.stats` für jedes Kapitel der aktuellen Tree-Struktur.
+  // Aufruf: nach Tree-Build (loadPages) und nach jeder tokEsts-Reassignment
+  // (loadTokenEstimates / _syncPageStatsAfterSave). Mutiert direkt die
+  // Kapitel-Items — Alpine-Reaktivität trägt das Update an die Sidebar.
+  _refreshChapterStats() {
+    const ts = this.tokEsts || {};
+    for (const item of this.tree || []) {
+      if (item.type !== 'chapter') continue;
+      let words = 0, chars = 0, tok = 0, count = 0;
+      for (const p of item.pages) {
+        const e = ts[p.id];
+        if (e) { words += e.words; chars += e.chars; tok += e.tok; count++; }
+      }
+      item.stats = count
+        ? {
+            words, chars, tok,
+            normseiten: Math.round((chars / 1500) * 10) / 10,
+            badge: chars >= 1000 ? '~' + Math.round(chars / 1000) + 'k Z' : chars + ' Z',
+          }
+        : null;
     }
-    if (!count) return null;
-    return { words, chars, tok, normseiten: Math.round((chars / 1500) * 10) / 10 };
+  },
+
+  _onChapterHeaderActivate(item) {
+    if (this.pageSearch || item.pages.length === 0) return;
+    if (this._bookQualifiesForChapterReview()) this.openKapitelReviewForChapter(item.id);
+    else item.open = !item.open;
+  },
+
+  // Sidebar-Tooltip-Helper (Token-Badge + Page-Status). Halten Layout-Code
+  // aus dem Template fern; die im Root liegenden Show-Flags + Pos werden
+  // direkt mutiert.
+  _showTokTip(el, data, opts = {}) {
+    if (!el || !data) return;
+    const r = el.getBoundingClientRect();
+    this.tokLegendPos = { x: r.left, y: r.top };
+    this.tokTooltipData = { ...data, ...opts };
+    this.showTokLegend = true;
+  },
+  _hideTokTip() {
+    this.showTokLegend = false;
+    this.tokTooltipData = null;
+  },
+  _showStatusTip(el, page) {
+    if (!el || !page) return;
+    const r = el.getBoundingClientRect();
+    this.pageStatusTipPos = { x: r.left, y: r.top };
+    this.pageStatusTipLines = this.pageStatusTooltip(page);
+    this.showPageStatusTip = true;
+  },
+  _hideStatusTip() {
+    this.showPageStatusTip = false;
   },
 
   async loadBooks() {
@@ -192,17 +238,21 @@ export const treeMethods = {
           name: c.name,
           priority: c.priority,
           open: true,
+          solo: false,
           url: this.bookstackUrl && c.book_slug && c.slug
             ? `${this.bookstackUrl}/books/${c.book_slug}/chapter/${c.slug}`
             : null,
           pages: this.pages.filter(p => p.chapter_id === c.id),
         })),
         ...this.pages.filter(p => !p.chapter_id).map(p => ({
-          type: 'page',
-          id: p.id,
+          type: 'chapter',
+          id: 'solo-' + p.id,
           name: p.name,
           priority: p.priority,
-          page: p,
+          open: true,
+          solo: true,
+          url: null,
+          pages: [p],
         })),
       ].sort((a, b) => a.priority - b.priority);
 
@@ -210,7 +260,7 @@ export const treeMethods = {
       this._chapterOrderMap = new Map();
       let chIdx = 0;
       for (const item of this.tree) {
-        if (item.type === 'chapter') this._chapterOrderMap.set(item.name, chIdx++);
+        if (item.type === 'chapter' && !item.solo) this._chapterOrderMap.set(item.name, chIdx++);
       }
       this._pageOrderMap = new Map();
       this._pageIdOrderMap = new Map();
@@ -219,6 +269,7 @@ export const treeMethods = {
         if (!this._pageOrderMap.has(p.name)) this._pageOrderMap.set(p.name, i);
         this._pageIdOrderMap.set(p.id, i);
       }
+      this._refreshChapterStats();
 
       // Gecachte Stats + Page-Ages + Ideen-Counts aus DB laden
       try {
@@ -229,12 +280,17 @@ export const treeMethods = {
         ]);
         this.pageLastChecked = ageMap || {};
         this.ideenCounts = ideenMap || {};
+        // Cache-Hits in einem Rutsch zuweisen (statt Index-Assign in der Loop),
+        // damit der tokEsts-$watch in app.js#init feuert und die Kapitel-Stats
+        // synchron mit dem ersten Tree-Render aktualisiert.
+        const initialTokEsts = {};
         for (const p of this.pages) {
           const c = statsCache[p.id];
           if (c && c.updated_at === p.updated_at) {
-            this.tokEsts[p.id] = { tok: c.tok, words: c.words, chars: c.chars };
+            initialTokEsts[p.id] = { tok: c.tok, words: c.words, chars: c.chars };
           }
         }
+        if (Object.keys(initialTokEsts).length) this.tokEsts = initialTokEsts;
       } catch { /* Cache-Fehler ignorieren, Fallback auf Live-Berechnung */ }
 
       this.showTreeCard = true;

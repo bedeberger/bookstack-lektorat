@@ -1,8 +1,12 @@
 <!-- Fine-Tuning-Datenexport -->
 <!--
   Alpine.data-Sub-Komponente — siehe public/js/cards/finetune-export-card.js.
-  `showFinetuneExportCard` bleibt im Root (Hash-Router + Exklusivität),
+  `showFinetuneExportCard` bleibt im Root (Hash-Router + Exklusivitaet),
   fachlicher State in dieser Komponente.
+
+  Markup-Konvention: Form-Geometrie (book-settings-form / -row / -label) und
+  Form-Patterns (form-stack / form-check / form-inline / form-num) sind
+  geteilt mit book-settings.html / user-settings.html. Siehe DESIGN.md.
 -->
 <div class="card" x-data="finetuneExportCard" x-show="$app.showFinetuneExportCard" x-cloak>
   <div class="card-header">
@@ -17,143 +21,141 @@
     </div>
   </div>
 
-  <p class="finetune-lead" x-text="$app.t('finetune.lead')"></p>
+  <p class="form-lead" x-text="$app.t('finetune.lead')"></p>
 
-  <div class="finetune-form">
-    <div class="finetune-row">
-      <label class="finetune-label" x-text="$app.t('finetune.types')"></label>
-      <div class="finetune-types">
-        <label class="finetune-check">
+  <div class="book-settings-form">
+
+    <div class="book-settings-row">
+      <label class="book-settings-label" x-text="$app.t('finetune.types')"></label>
+      <div class="form-stack">
+        <label class="form-check">
           <input type="checkbox" id="ft-type-style" name="ft-type-style" x-model="finetuneTypeStyle">
           <span>
-            <span class="finetune-check-title" x-text="$app.t('finetune.type.style')"></span>
-            <span class="finetune-check-desc" x-text="$app.t('finetune.type.style.desc')"></span>
+            <span class="form-check-title" x-text="$app.t('finetune.type.style')"></span>
+            <span class="form-check-desc" x-text="$app.t('finetune.type.style.desc')"></span>
           </span>
         </label>
-        <label class="finetune-check">
+        <label class="form-check">
           <input type="checkbox" id="ft-type-scene" name="ft-type-scene" x-model="finetuneTypeScene">
           <span>
-            <span class="finetune-check-title" x-text="$app.t('finetune.type.scene')"></span>
-            <span class="finetune-check-desc" x-text="$app.t('finetune.type.scene.desc')"></span>
+            <span class="form-check-title" x-text="$app.t('finetune.type.scene')"></span>
+            <span class="form-check-desc" x-text="$app.t('finetune.type.scene.desc')"></span>
           </span>
         </label>
-        <label class="finetune-check">
+        <label class="form-check">
           <input type="checkbox" id="ft-type-dialog" name="ft-type-dialog" x-model="finetuneTypeDialog">
           <span>
-            <span class="finetune-check-title" x-text="$app.t('finetune.type.dialog')"></span>
-            <span class="finetune-check-desc" x-text="$app.t('finetune.type.dialog.desc')"></span>
+            <span class="form-check-title" x-text="$app.t('finetune.type.dialog')"></span>
+            <span class="form-check-desc" x-text="$app.t('finetune.type.dialog.desc')"></span>
           </span>
         </label>
-        <label class="finetune-check">
+        <label class="form-check">
           <input type="checkbox" id="ft-type-authorchat" name="ft-type-authorchat" x-model="finetuneTypeAuthorChat">
           <span>
-            <span class="finetune-check-title" x-text="$app.t('finetune.type.authorChat')"></span>
-            <span class="finetune-check-desc" x-text="$app.t('finetune.type.authorChat.desc')"></span>
+            <span class="form-check-title" x-text="$app.t('finetune.type.authorChat')"></span>
+            <span class="form-check-desc" x-text="$app.t('finetune.type.authorChat.desc')"></span>
           </span>
         </label>
-        <label class="finetune-check">
+        <label class="form-check">
           <input type="checkbox" id="ft-type-correction" name="ft-type-correction" x-model="finetuneTypeCorrection">
           <span>
-            <span class="finetune-check-title" x-text="$app.t('finetune.type.correction')"></span>
-            <span class="finetune-check-desc" x-text="$app.t('finetune.type.correction.desc')"></span>
+            <span class="form-check-title" x-text="$app.t('finetune.type.correction')"></span>
+            <span class="form-check-desc" x-text="$app.t('finetune.type.correction.desc')"></span>
           </span>
         </label>
       </div>
     </div>
 
-    <div class="finetune-row">
-      <label class="finetune-label" x-text="$app.t('finetune.length')"></label>
-      <div class="finetune-inline">
-        <label class="finetune-inline-field">
+    <div class="book-settings-row">
+      <label class="book-settings-label" x-text="$app.t('finetune.length')"></label>
+      <div class="form-inline">
+        <label class="form-inline-field">
           <span x-text="$app.t('finetune.length.min')"></span>
-          <input type="number" id="ft-min-chars" name="ft-min-chars" min="80" max="5000" step="20" x-model.number="finetuneMinChars" class="finetune-num">
+          <input type="number" id="ft-min-chars" name="ft-min-chars" min="80" max="5000" step="20" x-model.number="finetuneMinChars" class="form-num">
         </label>
-        <label class="finetune-inline-field">
+        <label class="form-inline-field">
           <span x-text="$app.t('finetune.length.max')"></span>
-          <input type="number" id="ft-max-chars" name="ft-max-chars" min="200" max="16000" step="100" x-model.number="finetuneMaxChars" class="finetune-num">
+          <input type="number" id="ft-max-chars" name="ft-max-chars" min="200" max="16000" step="100" x-model.number="finetuneMaxChars" class="form-num">
         </label>
       </div>
     </div>
 
-    <div class="finetune-row">
-      <label class="finetune-label" x-text="$app.t('finetune.valSplit')"></label>
-      <div class="finetune-inline">
-        <label class="finetune-inline-field">
+    <div class="book-settings-row">
+      <label class="book-settings-label" x-text="$app.t('finetune.valSplit')"></label>
+      <div class="form-inline">
+        <label class="form-inline-field">
           <span x-text="$app.t('finetune.valSplit.ratio')"></span>
-          <input type="number" id="ft-val-split" name="ft-val-split" min="0" max="0.5" step="0.05" x-model.number="finetuneValSplit" class="finetune-num">
+          <input type="number" id="ft-val-split" name="ft-val-split" min="0" max="0.5" step="0.05" x-model.number="finetuneValSplit" class="form-num">
         </label>
-        <label class="finetune-inline-field">
+        <label class="form-inline-field">
           <span x-text="$app.t('finetune.valSplit.seed')"></span>
-          <input type="number" id="ft-val-seed" name="ft-val-seed" min="0" max="999999" step="1" x-model.number="finetuneValSeed" class="finetune-num">
+          <input type="number" id="ft-val-seed" name="ft-val-seed" min="0" max="999999" step="1" x-model.number="finetuneValSeed" class="form-num">
         </label>
       </div>
     </div>
 
-    <div class="finetune-row">
-      <label class="finetune-label" x-text="$app.t('finetune.ai')"></label>
-      <div class="finetune-stack">
-        <p class="finetune-lead" x-text="$app.t('finetune.ai.lead')"></p>
-        <div class="finetune-types">
-          <label class="finetune-check">
-            <input type="checkbox" id="ft-ai-reverse" name="ft-ai-reverse" x-model="finetuneAiReversePrompts">
-            <span>
-              <span class="finetune-check-title" x-text="$app.t('finetune.ai.reversePrompts')"></span>
-              <span class="finetune-check-desc" x-text="$app.t('finetune.ai.reversePrompts.desc')"></span>
-            </span>
-          </label>
-          <label class="finetune-check">
-            <input type="checkbox" id="ft-ai-factqa" name="ft-ai-factqa" x-model="finetuneAiFactQA">
-            <span>
-              <span class="finetune-check-title" x-text="$app.t('finetune.ai.factQA')"></span>
-              <span class="finetune-check-desc" x-text="$app.t('finetune.ai.factQA.desc')"></span>
-            </span>
-          </label>
-          <label class="finetune-check">
-            <input type="checkbox" id="ft-ai-reasoning" name="ft-ai-reasoning" x-model="finetuneAiReasoningBackfill">
-            <span>
-              <span class="finetune-check-title" x-text="$app.t('finetune.ai.reasoningBackfill')"></span>
-              <span class="finetune-check-desc" x-text="$app.t('finetune.ai.reasoningBackfill.desc')"></span>
-            </span>
-          </label>
-        </div>
-        <div class="finetune-inline">
-          <label class="finetune-inline-field">
+    <p class="book-settings-section-divider" x-text="$app.t('finetune.ai.lead')"></p>
+
+    <div class="book-settings-row">
+      <label class="book-settings-label" x-text="$app.t('finetune.ai')"></label>
+      <div class="form-stack">
+        <label class="form-check">
+          <input type="checkbox" id="ft-ai-reverse" name="ft-ai-reverse" x-model="finetuneAiReversePrompts">
+          <span>
+            <span class="form-check-title" x-text="$app.t('finetune.ai.reversePrompts')"></span>
+            <span class="form-check-desc" x-text="$app.t('finetune.ai.reversePrompts.desc')"></span>
+          </span>
+        </label>
+        <label class="form-check">
+          <input type="checkbox" id="ft-ai-factqa" name="ft-ai-factqa" x-model="finetuneAiFactQA">
+          <span>
+            <span class="form-check-title" x-text="$app.t('finetune.ai.factQA')"></span>
+            <span class="form-check-desc" x-text="$app.t('finetune.ai.factQA.desc')"></span>
+          </span>
+        </label>
+        <label class="form-check">
+          <input type="checkbox" id="ft-ai-reasoning" name="ft-ai-reasoning" x-model="finetuneAiReasoningBackfill">
+          <span>
+            <span class="form-check-title" x-text="$app.t('finetune.ai.reasoningBackfill')"></span>
+            <span class="form-check-desc" x-text="$app.t('finetune.ai.reasoningBackfill.desc')"></span>
+          </span>
+        </label>
+        <div class="form-inline">
+          <label class="form-inline-field">
             <span x-text="$app.t('finetune.ai.reversePromptsPerPage')"></span>
-            <input type="number" id="ft-ai-rev-per-page" name="ft-ai-rev-per-page" min="1" max="8" step="1" x-model.number="finetuneAiReversePromptsPerPage" class="finetune-num">
+            <input type="number" id="ft-ai-rev-per-page" name="ft-ai-rev-per-page" min="1" max="8" step="1" x-model.number="finetuneAiReversePromptsPerPage" class="form-num">
           </label>
-          <label class="finetune-inline-field">
+          <label class="form-inline-field">
             <span x-text="$app.t('finetune.ai.factQAPerEntity')"></span>
-            <input type="number" id="ft-ai-qa-per-entity" name="ft-ai-qa-per-entity" min="2" max="8" step="1" x-model.number="finetuneAiFactQAPerEntity" class="finetune-num">
+            <input type="number" id="ft-ai-qa-per-entity" name="ft-ai-qa-per-entity" min="2" max="8" step="1" x-model.number="finetuneAiFactQAPerEntity" class="form-num">
           </label>
         </div>
       </div>
     </div>
 
-    <div class="finetune-row">
-      <label class="finetune-label" x-text="$app.t('finetune.unsloth')"></label>
-      <div class="finetune-stack">
-        <div class="finetune-inline">
-          <label class="finetune-inline-field">
+    <div class="book-settings-row">
+      <label class="book-settings-label" x-text="$app.t('finetune.unsloth')"></label>
+      <div class="form-stack">
+        <div class="form-inline">
+          <label class="form-inline-field">
             <span x-text="$app.t('finetune.unsloth.maxSeqTokens')"></span>
-            <input type="number" id="ft-max-seq-tokens" name="ft-max-seq-tokens" min="0" max="16384" step="512" x-model.number="finetuneMaxSeqTokens" class="finetune-num">
+            <input type="number" id="ft-max-seq-tokens" name="ft-max-seq-tokens" min="0" max="16384" step="512" x-model.number="finetuneMaxSeqTokens" class="form-num">
           </label>
         </div>
-        <div class="finetune-types">
-          <label class="finetune-check">
-            <input type="checkbox" id="ft-emit-text" name="ft-emit-text" x-model="finetuneEmitText">
-            <span>
-              <span class="finetune-check-title" x-text="$app.t('finetune.unsloth.emitText')"></span>
-              <span class="finetune-check-desc" x-text="$app.t('finetune.unsloth.emitText.desc')"></span>
-            </span>
-          </label>
-          <label class="finetune-check">
-            <input type="checkbox" id="ft-truncate-long" name="ft-truncate-long" x-model="finetuneTruncateLong">
-            <span>
-              <span class="finetune-check-title" x-text="$app.t('finetune.unsloth.truncateLong')"></span>
-              <span class="finetune-check-desc" x-text="$app.t('finetune.unsloth.truncateLong.desc')"></span>
-            </span>
-          </label>
-        </div>
+        <label class="form-check">
+          <input type="checkbox" id="ft-emit-text" name="ft-emit-text" x-model="finetuneEmitText">
+          <span>
+            <span class="form-check-title" x-text="$app.t('finetune.unsloth.emitText')"></span>
+            <span class="form-check-desc" x-text="$app.t('finetune.unsloth.emitText.desc')"></span>
+          </span>
+        </label>
+        <label class="form-check">
+          <input type="checkbox" id="ft-truncate-long" name="ft-truncate-long" x-model="finetuneTruncateLong">
+          <span>
+            <span class="form-check-title" x-text="$app.t('finetune.unsloth.truncateLong')"></span>
+            <span class="form-check-desc" x-text="$app.t('finetune.unsloth.truncateLong.desc')"></span>
+          </span>
+        </label>
       </div>
     </div>
   </div>
@@ -165,8 +167,8 @@
   <div x-show="finetuneStatus" class="card-status" x-html="finetuneStatus"></div>
 
   <template x-if="finetuneStats && !finetuneLoading">
-    <div class="finetune-results">
-      <div class="finetune-stats">
+    <div class="form-section">
+      <div class="form-stats">
         <span class="tok-badge tok-neutral" x-text="$app.t('finetune.stats.total', { n: finetuneStats.total })"></span>
         <span class="tok-badge tok-neutral" x-text="$app.t('finetune.stats.train', { n: finetuneStats.train })"></span>
         <span class="tok-badge tok-neutral" x-show="finetuneStats.val > 0" x-text="$app.t('finetune.stats.val', { n: finetuneStats.val })"></span>
@@ -183,22 +185,22 @@
         <span class="tok-badge tok-med" x-show="finetuneStats.capped > 0" x-text="$app.t('finetune.stats.capped', { n: finetuneStats.capped })"></span>
       </div>
 
-      <div class="finetune-downloads">
+      <div class="row">
         <button type="button"
                 @click="finetuneDownload('train')"
                 :disabled="!finetuneJobId || (finetuneStats.train ?? 0) === 0">
           <span x-text="$app.t('finetune.download.train')"></span>
-          <span class="finetune-size" x-text="'(' + finetuneFormatBytes(finetuneStats.trainBytes) + ')'" x-show="finetuneStats.trainBytes > 0"></span>
+          <span class="form-size-hint" x-text="'(' + finetuneFormatBytes(finetuneStats.trainBytes) + ')'" x-show="finetuneStats.trainBytes > 0"></span>
         </button>
         <button type="button"
                 @click="finetuneDownload('val')"
                 :disabled="!finetuneJobId || (finetuneStats.val ?? 0) === 0">
           <span x-text="$app.t('finetune.download.val')"></span>
-          <span class="finetune-size" x-text="'(' + finetuneFormatBytes(finetuneStats.valBytes) + ')'" x-show="finetuneStats.valBytes > 0"></span>
+          <span class="form-size-hint" x-text="'(' + finetuneFormatBytes(finetuneStats.valBytes) + ')'" x-show="finetuneStats.valBytes > 0"></span>
         </button>
       </div>
 
-      <p class="finetune-hint" x-text="$app.t('finetune.hint.expiry')"></p>
+      <p class="book-settings-hint" x-text="$app.t('finetune.hint.expiry')"></p>
     </div>
   </template>
 

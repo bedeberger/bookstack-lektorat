@@ -226,14 +226,28 @@ document.addEventListener('alpine:init', () => {
   registerPageHistoryCard();
   registerPaletteCard();
 
-  Alpine.data('combobox', (placeholder = null, emptyLabel = null) => ({
+  // combobox(placeholder, emptyLabel) — Legacy-Positional-Form.
+  // combobox({ placeholder, emptyLabel, compact }) — Object-Form (Default `compact: true`).
+  // init() uebernimmt automatisch: combobox-wrap[--compact]-Klassen, document-Mousedown
+  // (Outside-Close), Element-Keydown (Tastatur-Navigation). Konsumenten brauchen
+  // weder `@click.outside`, noch `@keydown`, noch eine eigene Klasse — nur
+  // `x-data="combobox(...)"`, `x-modelable="value" x-model="ref"` und
+  // `x-effect="options = [...]"` (per DESIGN.md Variante 1).
+  Alpine.data('combobox', (placeholderOrCfg = null, emptyLabelArg = null) => {
+    const cfg = (placeholderOrCfg && typeof placeholderOrCfg === 'object')
+      ? placeholderOrCfg
+      : { placeholder: placeholderOrCfg, emptyLabel: emptyLabelArg, compact: true };
+    if (cfg.compact === undefined) cfg.compact = true;
+    return {
     open: false,
     query: '',
     value: null,
     options: [],
     _disabled: false,
-    _placeholder: placeholder,
-    _emptyLabel: emptyLabel,
+    _placeholder: cfg.placeholder ?? null,
+    _emptyLabel: cfg.emptyLabel ?? null,
+    _compact: cfg.compact !== false,
+    _onOutside: null,
     highlighted: -1,
     openUp: false,
 
@@ -319,6 +333,16 @@ document.addEventListener('alpine:init', () => {
       });
     },
     init() {
+      // Wrap-Klassen automatisch (frueher musste der Konsument
+      // class="combobox-wrap [combobox-wrap--compact]" selbst setzen).
+      this.$el.classList.add('combobox-wrap');
+      if (this._compact) this.$el.classList.add('combobox-wrap--compact');
+
+      // Outside-Click + Keydown intern (frueher @click.outside / @keydown im Markup).
+      this._onOutside = (e) => { if (!this.$el.contains(e.target)) this.close(); };
+      document.addEventListener('mousedown', this._onOutside);
+      this.$el.addEventListener('keydown', (e) => this.onKeydown(e));
+
       // ARIA: das gesamte Widget verhält sich wie ein Combobox mit Listbox-Popup.
       // aria-expanded gibt Screenreadern den Öffnungszustand, aria-activedescendant
       // verweist auf die aktuell via Tastatur markierte Option.
@@ -354,8 +378,24 @@ document.addEventListener('alpine:init', () => {
           </ul>
         </div>
       `;
+      // Alpine processed das frisch gesetzte innerHTML nicht zuverlaessig, wenn
+      // die Combobox innerhalb eines spaet hydratisierten Subtrees liegt
+      // (template x-if mit nested x-data-Wrappern, Beispiel pdfExportCard).
+      // Combobox-Wraps direkt unter dem Karten-Scope rendern korrekt; Wraps
+      // innerhalb <template x-if="activeProfile"> bekamen Trigger-Markup ohne
+      // ausgewertete Direktiven (`:aria-label="selectedLabel || placeholder"`
+      // blieb roh, selectedLabel wurde nie evaluiert). Expliziter initTree-
+      // Aufruf schliesst die Luecke unabhaengig vom Render-Pfad.
+      window.Alpine.initTree(this.$el);
     },
-  }));
+    destroy() {
+      if (this._onOutside) {
+        document.removeEventListener('mousedown', this._onOutside);
+        this._onOutside = null;
+      }
+    },
+  };
+  });
 
   Alpine.data('lektorat', () => ({
     // ── State ────────────────────────────────────────────────────────────────
@@ -471,15 +511,22 @@ document.addEventListener('alpine:init', () => {
       if (!cur?.id) return [];
       const tree = this.tree || [];
       const pages = cur.chapter_id
-        ? (tree.find(it => it.type === 'chapter' && it.id === cur.chapter_id)?.pages || [])
+        ? (tree.find(it => it.type === 'chapter' && !it.solo && it.id === cur.chapter_id)?.pages || [])
             .filter(p => p.id !== cur.id)
-        : tree.filter(it => it.type === 'page' && it.id !== cur.id && it.page).map(it => it.page);
+        : tree
+            .filter(it => it.type === 'chapter' && it.solo && it.pages[0]?.id !== cur.id)
+            .map(it => it.pages[0])
+            .filter(Boolean);
       return pages.map(p => ({ value: p.id, label: p.name }));
     },
 
     get selectedBookName() {
       const book = this.books.find(b => String(b.id) === String(this.selectedBookId));
       return book?.name || '';
+    },
+
+    get _numLocale() {
+      return this.uiLocale === 'en' ? 'en-US' : 'de-CH';
     },
 
     get selectedBookUrl() {
@@ -493,13 +540,28 @@ document.addEventListener('alpine:init', () => {
       if (!this.pageSearch) return this.tree;
       const q = this.pageSearch.toLowerCase();
       return this.tree.map(item => {
-        if (item.type === 'chapter') {
-          const pages = item.pages.filter(p => p.name.toLowerCase().includes(q));
-          if (!pages.length) return null;
-          return { ...item, pages, open: true };
-        }
-        return item.page?.name.toLowerCase().includes(q) ? item : null;
+        const pages = item.pages.filter(p => p.name.toLowerCase().includes(q));
+        if (!pages.length) return null;
+        return { ...item, pages, open: true };
       }).filter(Boolean);
+    },
+
+    get tokTotals() {
+      const ts = this.tokEsts;
+      if (this._tokTotalsCache?.tokRef === ts) return this._tokTotalsCache.value;
+      let chars = 0, words = 0, tok = 0;
+      const keys = Object.keys(ts);
+      for (const k of keys) {
+        const v = ts[k];
+        chars += v.chars; words += v.words; tok += v.tok;
+      }
+      const value = {
+        chars, words, tok,
+        normseiten: Math.round((chars / 1500) * 10) / 10,
+        any: keys.length > 0,
+      };
+      this._tokTotalsCache = { tokRef: ts, value };
+      return value;
     },
 
     // AbortController `_abortCtrl` (initialisiert via app-state.js) hält alle
@@ -536,6 +598,12 @@ document.addEventListener('alpine:init', () => {
       window.addEventListener('beforeunload', (e) => {
         if (this.editMode && this.editDirty) { e.preventDefault(); e.returnValue = ''; }
       }, { signal });
+      // Kapitel-Stats werden bei jeder tokEsts-Reassignment neu berechnet.
+      // Mutationen via Index-Assign (this.tokEsts[id] = …) feuern den Watcher
+      // nicht — solche Pfade müssen _refreshChapterStats() selbst aufrufen.
+      // Kein $watch('tree') — refresh mutiert item.stats und würde sich rekursiv
+      // selbst triggern (Alpine-Deep-Reactivity → Browser-Freeze).
+      this.$watch('tokEsts', () => this._refreshChapterStats());
       this._setupOfflineSync();
       // Shell zuerst aufbauen: i18n + Partials brauchen nur statische Assets
       // (Service Worker cacht sie). /config kann danach scheitern, ohne dass

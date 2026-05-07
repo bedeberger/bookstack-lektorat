@@ -153,35 +153,6 @@
   .heatmap-coverage { max-width: 100px; }
 }
 
-/* Mode-Toggle (offen / angenommen / gesamt) */
-.mode-toggle {
-  display: inline-flex;
-  border: 0.5px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-.mode-toggle-btn {
-  padding: 4px 10px;
-  font-size: var(--font-size-sm);
-  background: transparent;
-  color: var(--color-muted);
-  border: none;
-  cursor: pointer;
-}
-.mode-toggle-btn:not(:last-child) {
-  border-right: 0.5px solid var(--color-border);
-}
-.mode-toggle-btn:hover {
-  background: var(--color-surface-alt, var(--color-surface));
-}
-.mode-toggle-btn--active {
-  background: var(--color-primary);
-  color: var(--color-surface);
-}
-.mode-toggle-btn--active:hover {
-  background: var(--color-primary-hover);
-}
-
 /* Heatmap-Detail-Panel (aufklappbar unter der Tabelle) */
 .heatmap-detail {
   margin-top: 12px;

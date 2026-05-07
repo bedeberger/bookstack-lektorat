@@ -123,7 +123,7 @@ export const appNavigationMethods = {
   _resolvePage(kapitel, seite) {
     const kName = Array.isArray(kapitel) ? kapitel[0] : kapitel;
     if (!kName && !seite) return null;
-    const chapters = (this.tree || []).filter(t => t.type === 'chapter');
+    const chapters = (this.tree || []).filter(t => t.type === 'chapter' && !t.solo);
     const sLower = seite ? String(seite).toLowerCase() : '';
     if (!kName) {
       return this.pages.find(p => p.name === seite)

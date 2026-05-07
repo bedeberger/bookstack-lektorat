@@ -67,8 +67,7 @@
       <div x-data="combobox($app.t('book.settings.buchtyp'), $app.t('book.settings.buchtyp.none'))"
            x-modelable="value" x-model="bookSettingsBuchtyp"
            x-effect="options = bookSettingsBuchtypOptions()"
-           @click.outside="close()" @keydown="onKeydown($event)"
-           class="combobox-wrap combobox-wrap--compact"></div>
+></div>
     </div>
 
     <div class="book-settings-row">
@@ -76,8 +75,7 @@
       <div x-data="combobox($app.t('book.settings.pov'), $app.t('book.settings.pov.none'))"
            x-modelable="value" x-model="bookSettingsErzaehlperspektive"
            x-effect="options = bookSettingsPovOptions()"
-           @click.outside="close()" @keydown="onKeydown($event)"
-           class="combobox-wrap combobox-wrap--compact"></div>
+></div>
     </div>
 
     <div class="book-settings-row">
@@ -85,8 +83,7 @@
       <div x-data="combobox($app.t('book.settings.tempus'), $app.t('book.settings.tempus.none'))"
            x-modelable="value" x-model="bookSettingsErzaehlzeit"
            x-effect="options = bookSettingsTempusOptions()"
-           @click.outside="close()" @keydown="onKeydown($event)"
-           class="combobox-wrap combobox-wrap--compact"></div>
+></div>
     </div>
 
     <p class="book-settings-hint"

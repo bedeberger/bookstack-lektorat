@@ -1,0 +1,118 @@
+/* === Tabs / Segmented-Toggle ===
+   SSoT-Pattern für Tab-Reihen und Modus-Toggles. Generisches `.tabs` +
+   `.tabs-btn` + `--active`. Modifier `.tabs--scrollable` aktiviert horizontalen
+   Scroll für viele Tabs (Mobile / breite PDF-Export-Reihe).
+
+   Markup:
+     <div class="tabs">
+       <button class="tabs-btn" :class="{ 'tabs-btn--active': mode === 'a' }">A</button>
+       <button class="tabs-btn">B</button>
+     </div>
+
+   Polished Segmented: Active dezenter (Tint statt Vollfarbe) + 2px Akzentband
+   am Unterkante, weiche Übergänge. Eckig (radius-sm = 0).
+*/
+@layer components {
+  .tabs {
+    display: inline-flex;
+    border: 0.5px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--color-surface);
+  }
+
+  .tabs-btn {
+    position: relative;
+    padding: 6px 14px;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    background: transparent;
+    color: var(--color-muted);
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 140ms ease, color 140ms ease;
+  }
+
+  .tabs-btn:not(:last-child) {
+    border-right: 0.5px solid var(--color-border);
+  }
+
+  .tabs-btn:hover {
+    background: color-mix(in oklab, var(--color-primary) 6%, transparent);
+    color: var(--color-text);
+  }
+
+  .tabs-btn--active {
+    background: color-mix(in oklab, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
+    font-weight: 600;
+  }
+
+  .tabs-btn--active::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: var(--color-primary);
+  }
+
+  .tabs-btn--active:hover {
+    background: color-mix(in oklab, var(--color-primary) 18%, transparent);
+  }
+
+  .tabs-btn:focus-visible {
+    outline: 2px solid var(--color-border-focus);
+    outline-offset: -2px;
+  }
+
+  /* Disabled (z.B. leerer Filter-Bucket): ausgegraut, kein Hover, kein Active. */
+  .tabs-btn:disabled,
+  .tabs-btn[aria-disabled="true"] {
+    color: var(--color-muted);
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+  .tabs-btn:disabled:hover,
+  .tabs-btn[aria-disabled="true"]:hover {
+    background: transparent;
+    color: var(--color-muted);
+  }
+
+  /* Count-Badge im Tab (rechts vom Label). Reuse Stil von .btn-count. */
+  .tabs-btn-count {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 6px;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    background: var(--color-border);
+    color: var(--color-text);
+    border-radius: var(--radius-sm);
+    vertical-align: middle;
+  }
+  .tabs-btn--active .tabs-btn-count {
+    background: color-mix(in oklab, var(--color-primary) 22%, transparent);
+    color: var(--color-primary);
+  }
+  .tabs-btn:disabled .tabs-btn-count,
+  .tabs-btn[aria-disabled="true"] .tabs-btn-count {
+    opacity: 0.7;
+  }
+
+  /* Scrollable-Variante: viele Tabs in schmaler Karte (PDF-Export, Mobile). */
+  .tabs--scrollable {
+    display: flex;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tabs--scrollable .tabs-btn {
+    flex-shrink: 0;
+  }
+}

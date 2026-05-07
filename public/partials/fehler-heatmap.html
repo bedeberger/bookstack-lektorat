@@ -8,20 +8,20 @@
   <div class="card-header">
     <span class="card-title" x-text="$app.t('fehlerHeatmap.title', { name: $app.selectedBookName })"></span>
     <div class="card-actions">
-      <div class="mode-toggle">
+      <div class="tabs">
         <button type="button"
-                :class="{ 'mode-toggle-btn--active': fehlerHeatmapMode === 'open' }"
-                class="mode-toggle-btn"
+                :class="{ 'tabs-btn--active': fehlerHeatmapMode === 'open' }"
+                class="tabs-btn"
                 @click="setFehlerHeatmapMode('open')"
                 x-text="$app.t('fehlerHeatmap.mode.open')"></button>
         <button type="button"
-                :class="{ 'mode-toggle-btn--active': fehlerHeatmapMode === 'applied' }"
-                class="mode-toggle-btn"
+                :class="{ 'tabs-btn--active': fehlerHeatmapMode === 'applied' }"
+                class="tabs-btn"
                 @click="setFehlerHeatmapMode('applied')"
                 x-text="$app.t('fehlerHeatmap.mode.applied')"></button>
         <button type="button"
-                :class="{ 'mode-toggle-btn--active': fehlerHeatmapMode === 'all' }"
-                class="mode-toggle-btn"
+                :class="{ 'tabs-btn--active': fehlerHeatmapMode === 'all' }"
+                class="tabs-btn"
                 @click="setFehlerHeatmapMode('all')"
                 x-text="$app.t('fehlerHeatmap.mode.all')"></button>
       </div>

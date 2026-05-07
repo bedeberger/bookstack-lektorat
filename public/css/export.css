@@ -1,54 +1,33 @@
 @layer components {
-/* ── Buch-Export-Karte ───────────────────────────────────────────────────── */
+/* === Buch-Export-Karte =====================================================
+   Alle Buttons (Format-Tiles + Custom-PDF-Primary) erben Standard-Button-Stil
+   aus buttons-badges.css → einheitliche Hoehe und Padding. Hier nur Layout-
+   Spezifika (Grid + .is-running-Akzent). */
 .book-export-hint {
   color: var(--color-muted);
   font-size: var(--font-size-sm);
-  margin: 0 0 0.85rem;
+  margin: 0 0 12px;
 }
+
 .book-export-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 8px;
+  align-items: center;
 }
-.book-export-btn {
+
+.book-export-buttons button {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.9rem;
-  border: 0.5px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  cursor: pointer;
-  transition: background var(--transition-slow), border-color var(--transition-slow);
+  gap: 6px;
 }
-.book-export-btn:hover:not(:disabled) {
-  background: var(--color-surface-hover, var(--color-bg));
+
+.book-export-buttons button.is-running {
   border-color: var(--color-accent);
 }
-.book-export-btn:disabled {
-  opacity: var(--opacity-disabled);
-  cursor: not-allowed;
-}
-.book-export-btn.is-running {
-  border-color: var(--color-accent);
-}
-.book-export-btn--custom {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-}
-.book-export-status {
-  margin-top: 0.6rem;
-  font-size: 12px;
-  color: var(--color-muted);
-  font-style: italic;
-}
-.book-export-error {
-  margin-top: 0.6rem;
-  font-size: 12px;
-  color: var(--color-err-light);
+
+@media (max-width: 600px) {
+  .book-export-buttons { gap: 6px; }
+  .book-export-buttons button { flex: 1 1 calc(50% - 6px); justify-content: center; }
 }
 }

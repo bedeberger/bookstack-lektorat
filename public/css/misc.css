@@ -91,9 +91,7 @@
   gap: 4px;
   align-items: center;
   flex-shrink: 0;
-  margin-left: auto;
-  margin-top: 4px;
-  margin-bottom: 4px;
+  margin-top: 1px;
 }
 
 /* Summen-Badges neben der Button-Gruppe (Buchebene) */

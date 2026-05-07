@@ -91,30 +91,38 @@
     <!-- Filter-Leiste -->
     <div class="filter-bar">
       <input type="text" x-model="$app.szenenFilters.suche" :placeholder="$app.t('common.search')" :aria-label="$app.t('common.search')" class="filter-search-input">
-      <div class="severity-filter-group">
-        <button type="button" class="severity-filter-btn" :class="{ 'severity-filter-btn--active': $app.szenenFilters.wertung === '' }" @click="$app.szenenFilters.wertung = ''" x-text="$app.t('common.all')"></button>
-        <button type="button" class="severity-filter-btn severity-filter-btn--stark"   :class="{ 'severity-filter-btn--active': $app.szenenFilters.wertung === 'stark' }"   @click="$app.szenenFilters.wertung = $app.szenenFilters.wertung === 'stark'   ? '' : 'stark'" x-text="$app.t('szenen.rating.stark')"></button>
-        <button type="button" class="severity-filter-btn severity-filter-btn--mittel"  :class="{ 'severity-filter-btn--active': $app.szenenFilters.wertung === 'mittel' }"  @click="$app.szenenFilters.wertung = $app.szenenFilters.wertung === 'mittel'  ? '' : 'mittel'" x-text="$app.t('szenen.rating.mittel')"></button>
-        <button type="button" class="severity-filter-btn severity-filter-btn--schwach" :class="{ 'severity-filter-btn--active': $app.szenenFilters.wertung === 'schwach' }" @click="$app.szenenFilters.wertung = $app.szenenFilters.wertung === 'schwach' ? '' : 'schwach'" x-text="$app.t('szenen.rating.schwach')"></button>
+      <div class="tabs">
+        <button type="button" class="tabs-btn"
+                :class="{ 'tabs-btn--active': $app.szenenFilters.wertung === '' }"
+                @click="$app.szenenFilters.wertung = ''">
+          <span x-text="$app.t('common.all')"></span>
+          <span class="tabs-btn-count" x-text="$app.szenen.length"></span>
+        </button>
+        <template x-for="w in ['stark','mittel','schwach']" :key="w">
+          <button type="button" class="tabs-btn"
+                  :class="{ 'tabs-btn--active': $app.szenenFilters.wertung === w }"
+                  :disabled="$app.szenen.filter(s => (s.wertung || 'mittel') === w).length === 0"
+                  @click="$app.szenenFilters.wertung = $app.szenenFilters.wertung === w ? '' : w">
+            <span x-text="$app.t('szenen.rating.' + w)"></span>
+            <span class="tabs-btn-count" x-text="$app.szenen.filter(s => (s.wertung || 'mittel') === w).length"></span>
+          </button>
+        </template>
       </div>
       <div x-data="combobox($app.t('filter.figur'), $app.t('filter.allFiguren'))"
            x-modelable="value" x-model="$app.szenenFilters.figurId"
            x-effect="options = $app.figuren.filter(f => $app.szenen.some(s => s.fig_ids.includes(f.id))).map(f => ({value: f.id, label: f.kurzname || f.name}))"
-           @click.outside="close()" @keydown="onKeydown($event)"
-           class="combobox-wrap combobox-wrap--compact">
+           >
       </div>
       <div x-data="combobox($app.t('filter.chapter'), $app.t('filter.allChapters'))"
            x-modelable="value" x-model="$app.szenenFilters.kapitel"
            x-effect="options = $app.szenenKapitelListe().map(k => ({value: k, label: k}))"
-           @click.outside="close()" @keydown="onKeydown($event)"
-           class="combobox-wrap combobox-wrap--compact">
+           >
       </div>
       <div x-show="$app.orte.length > 0"
            x-data="combobox($app.t('filter.ort'), $app.t('filter.allOrte'))"
            x-modelable="value" x-model="$app.szenenFilters.ortId"
            x-effect="options = $app.orte.filter(o => $app.szenen.some(s => (s.ort_ids||[]).includes(o.id))).map(o => ({value: o.id, label: o.name}))"
-           @click.outside="close()" @keydown="onKeydown($event)"
-           class="combobox-wrap combobox-wrap--compact">
+           >
       </div>
       <span class="filter-count" x-text="$app.szenenFiltered.length + ' / ' + $app.szenen.length"></span>
     </div>
