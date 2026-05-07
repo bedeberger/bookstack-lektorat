@@ -78,6 +78,13 @@
 @media (max-width: 700px) {
   .kapitel-page-row { flex-wrap: wrap; }
   .kapitel-page-stats { flex-wrap: wrap; }
+  .kapitel-page-name {
+    flex-basis: 100%;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
 }
 
 }

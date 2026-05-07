@@ -240,6 +240,10 @@
   .entity-row-title {
     flex-basis: 100%;
     order: -1;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
   }
   .entity-row-meta { max-width: 100%; }
   .entity-typ-tag {

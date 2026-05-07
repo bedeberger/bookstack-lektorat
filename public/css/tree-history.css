@@ -38,6 +38,16 @@
   user-select: none;
   margin-bottom: 2px;
 }
+.tree-chapter-header > span:not(.tree-chevron):not(.tree-chapter-meta) {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .tree-chapter-header { flex-wrap: wrap; row-gap: 4px; }
+  .tree-chapter-meta { margin-left: 0; }
+}
 .tree-chapter-meta {
   margin-left: auto;
   display: flex;

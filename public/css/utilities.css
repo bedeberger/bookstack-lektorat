@@ -75,6 +75,9 @@
   flex-wrap: wrap;
   font-size: var(--font-size-xs);
   box-shadow: var(--shadow-inset-top);
+  max-height: 40vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .job-queue-label {
   color: var(--color-muted);
@@ -92,6 +95,8 @@
   padding: 1px 8px;
   white-space: nowrap;
   cursor: pointer;
+  max-width: 100%;
+  min-width: 0;
 }
 .job-queue-pill:hover {
   background: var(--color-queue-pill-bg-hover);
@@ -107,6 +112,9 @@
 .job-queue-pill-label {
   color: var(--color-queue-pill-text);
   font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .job-queue-pill-status {
   color: var(--color-muted);
@@ -154,6 +162,44 @@
 .job-queue-toggle-btn:hover {
   background: var(--color-queue-pill-bg-hover);
   color: var(--color-queue-pill-text);
+}
+
+@media (max-width: 600px) {
+  .job-queue-bar {
+    padding: 6px 10px;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    gap: 6px;
+    max-height: 50vh;
+  }
+  .job-queue-label {
+    width: 100%;
+    margin-right: 0;
+  }
+  .job-queue-pill {
+    width: 100%;
+    padding: 8px 10px;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+  .job-queue-pill-label {
+    flex: 1 1 auto;
+  }
+  .job-queue-cancel-btn {
+    padding: 10px 8px;
+    margin: -10px -8px -10px 0;
+    font-size: var(--font-size-sm);
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .job-queue-toggle-btn {
+    width: 100%;
+    padding: 12px;
+    font-size: var(--font-size-xs);
+    min-height: 44px;
+  }
 }
 
 }

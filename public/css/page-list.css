@@ -33,6 +33,15 @@
   min-width: 0;
   flex: 1 1 auto;
 }
+.page-name > span:not(.page-status-dot) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .page-item { flex-wrap: wrap; row-gap: 4px; }
+  .page-name { flex-basis: 100%; }
+}
 .page-status-dot {
   flex-shrink: 0;
   width: 9px;
