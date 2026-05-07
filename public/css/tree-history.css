@@ -26,6 +26,8 @@
 
 .tree-chapter-header {
   display: flex;
+  flex-wrap: wrap;
+  row-gap: 4px;
   align-items: center;
   gap: 6px;
   padding: 6px 10px 6px 2px;
@@ -44,10 +46,6 @@
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 600px) {
-  .tree-chapter-header { flex-wrap: wrap; row-gap: 4px; }
-  .tree-chapter-meta { margin-left: 0; }
-}
 .tree-chapter-meta {
   margin-left: auto;
   display: flex;

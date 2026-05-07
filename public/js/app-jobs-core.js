@@ -198,8 +198,13 @@ export const appJobsCoreMethods = {
         // in Folge den serverOffline-Banner zeigen, damit der User weiss warum
         // Aktionen gerade fehlschlagen. Nach 5 Fehlern Polling aussetzen; der
         // Banner bleibt, Reload-Button lädt neu.
-        consecutiveFailures++;
         console.error('[jobQueuePoll]', e);
+        // Hintergrund-Tab: Browser friert nach einigen Minuten Connections ein,
+        // erste Fetches beim Wakeup schlagen fehl. Solche Fails dürfen weder
+        // zählen noch das Polling stoppen – sonst false-positive Offline-Banner
+        // sobald der User zum Tab zurückkehrt.
+        if (document.hidden) return;
+        consecutiveFailures++;
         if (consecutiveFailures >= 2 && !this.serverOffline && !this.sessionExpired) {
           this.serverOffline = true;
         }
@@ -211,6 +216,15 @@ export const appJobsCoreMethods = {
     };
     poll();
     this._jobQueueTimer = setInterval(poll, 5000);
+    // Wakeup: Tab kommt aus Background. Counter resetten, sofort frisch pollen
+    // (löscht den Banner, falls er fälschlich angezeigt wurde) und Polling
+    // wieder starten, falls es nach 5 Fehlern eingestellt war.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return;
+      consecutiveFailures = 0;
+      if (!this._jobQueueTimer) this._jobQueueTimer = setInterval(poll, 5000);
+      poll();
+    }, this._abortCtrl?.signal ? { signal: this._abortCtrl.signal } : false);
   },
 
   async cancelJob(jobId) {
