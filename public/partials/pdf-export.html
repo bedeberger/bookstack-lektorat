@@ -185,10 +185,16 @@
               </div>
             </template>
             <template x-if="role === 'body'">
-              <label class="pdfx-field">
-                <span x-text="$app.t('pdfExport.font.lineHeight')"></span>
-                <input type="number" step="0.05" min="0.8" max="3" x-model.number="activeProfile.config.font.body.lineHeight" class="pdfx-input">
-              </label>
+              <div class="pdfx-grid pdfx-grid--2">
+                <label class="pdfx-field">
+                  <span x-text="$app.t('pdfExport.font.lineHeight')"></span>
+                  <input type="number" step="0.05" min="0.8" max="3" x-model.number="activeProfile.config.font.body.lineHeight" class="pdfx-input">
+                </label>
+                <label class="pdfx-field">
+                  <span x-text="$app.t('pdfExport.font.paragraphGap')"></span>
+                  <input type="number" step="0.05" min="0" max="3" x-model.number="activeProfile.config.font.body.paragraphGap" class="pdfx-input">
+                </label>
+              </div>
             </template>
             <div class="pdfx-font-preview" :style="fontPreviewStyle(role)">
               <span x-text="$app.t('pdfExport.font.previewText')"></span>

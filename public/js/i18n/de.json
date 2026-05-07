@@ -283,6 +283,7 @@
   "pdfExport.font.weight":                 "Strichstärke",
   "pdfExport.font.sizePt":                 "Grösse (pt)",
   "pdfExport.font.lineHeight":             "Zeilenhöhe",
+  "pdfExport.font.paragraphGap":           "Absatzabstand",
   "pdfExport.font.previewText":            "Es war einmal ein König, der hatte drei Söhne …",
 
   "pdfExport.chapter.breakBefore":         "Seitenumbruch vor Kapitel",
