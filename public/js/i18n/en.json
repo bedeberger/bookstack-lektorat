@@ -2456,6 +2456,7 @@
   "reference.empty.szenen": "No scenes.",
   "reference.empty.ereignisse": "No events.",
   "reference.empty.recherche": "No research entries.",
+  "reference.recherche.openTip": "Open in the research card",
   "reference.verwandt.search": "Find related passages",
   "reference.verwandt.searching": "Searching…",
   "reference.verwandt.basisPage": "Whole page",

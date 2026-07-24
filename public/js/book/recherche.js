@@ -45,6 +45,9 @@ export const rechercheMethods = {
       this.loading = false;
       this.refreshing = false;
     }
+    // Deep-Link-Ziel (#…/recherche/<itemId>), das vor dem Load ankam, jetzt
+    // fokussieren — das Item existiert erst nach diesem Load in `items`.
+    if (this._pendingFocusItemId != null) this._focusRechercheItemById(this._pendingFocusItemId);
   },
 
   async _loadTags() {
@@ -97,6 +100,8 @@ export const rechercheMethods = {
     this.draft = _emptyDraft();
     this.editingId = null;
     this.editDraft = _emptyDraft();
+    this._pendingFocusItemId = null;
+    if (window.Alpine) window.Alpine.store('nav').rechercheItemId = null;
     this.filterKind = '';
     this.filterTag = '';
     this.filterLinked = '';
@@ -270,6 +275,9 @@ export const rechercheMethods = {
   startEdit(item) {
     this.editingId = item.id;
     this.creating = false;
+    // Permalink-Spiegel: offenes Item → #…/recherche/<itemId>. editingId bleibt
+    // SSoT in der Karte (analog editingBeatId ↔ plotBeatId in der Plot-Werkstatt).
+    if (window.Alpine) window.Alpine.store('nav').rechercheItemId = item.id;
     this.editDraft = {
       kind: item.kind || 'note',
       title: item.title || '',
@@ -279,7 +287,11 @@ export const rechercheMethods = {
       tags: (item.tags || []).join(', '),
     };
   },
-  cancelEdit() { this.editingId = null; this.editDraft = _emptyDraft(); },
+  cancelEdit() {
+    this.editingId = null;
+    this.editDraft = _emptyDraft();
+    if (window.Alpine) window.Alpine.store('nav').rechercheItemId = null;
+  },
 
   // URL-Zeilen im Anlegen-/Bearbeiten-Formular (geteilt über draft/editDraft).
   addUrlRow(draft) { if (!Array.isArray(draft.urls)) draft.urls = []; draft.urls.push({ url: '', label: '' }); },
@@ -311,6 +323,7 @@ export const rechercheMethods = {
       this._replaceItem(row);
       this.editingId = null;
       this.editDraft = _emptyDraft();
+      if (window.Alpine) window.Alpine.store('nav').rechercheItemId = null;
       this.errorMessage = '';
       this._loadTags();
     } catch (e) {
@@ -368,6 +381,10 @@ export const rechercheMethods = {
     try {
       await fetchJson(`/research/${item.id}`, { method: 'DELETE' });
       this.items = this.items.filter(i => i.id !== item.id);
+      if (this.editingId === item.id) {
+        this.editingId = null;
+        if (window.Alpine) window.Alpine.store('nav').rechercheItemId = null;
+      }
       this._loadTags();
       if ((item.links || []).some(l => l.target_kind === 'page')) this._refreshRecherchePageCounts();
       if ((item.links || []).some(l => l.target_kind === 'chapter')) this._refreshRechercheChapterCounts();

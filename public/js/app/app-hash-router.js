@@ -60,6 +60,8 @@ export const appHashRouterMethods = {
       parts.push('rueckblick', String(this.$store.nav.rueckblickEntryId));
     } else if (this.showPlotCard && this.$store.nav.plotBeatId) {
       parts.push('plot', String(this.$store.nav.plotBeatId));
+    } else if (this.showRechercheCard && this.$store.nav.rechercheItemId) {
+      parts.push('recherche', String(this.$store.nav.rechercheItemId));
     } else if (this.showFiguresCard) parts.push('figuren');
     else if (this.showFigurWerkstattCard) parts.push('werkstatt');
     else if (this.showOrteCard) parts.push('orte');
@@ -422,8 +424,14 @@ export const appHashRouterMethods = {
           else { this._closeOtherMainCards('weltfakten'); this._scrollToCardByKey('weltfakten'); }
           break;
         case 'recherche':
+          // Optionaler Item-Permalink (#…/recherche/<itemId>). Root-SSoT vor dem
+          // Toggle setzen; die rechercheCard fokussiert das Item nach dem Board-
+          // Load (bzw. sofort, falls schon geladen) via `recherche:focus-item` +
+          // _pendingFocusItemId.
+          this.$store.nav.rechercheItemId = arg ? String(arg) : null;
           if (!this.showRechercheCard) await this.toggleRechercheCard();
           else { this._closeOtherMainCards('recherche'); this._scrollToCardByKey('recherche'); }
+          if (arg) window.dispatchEvent(new CustomEvent(EVT.RECHERCHE_FOCUS_ITEM, { detail: { itemId: arg } }));
           break;
         case 'kontinuitaet':
           if (!this.showKontinuitaetCard) await this.toggleKontinuitaetCard();
@@ -559,6 +567,9 @@ export const appHashRouterMethods = {
       // Beat-Permalink: Edit öffnen setzt plotBeatId → #…/plot/<beatId> (replace,
       // gleiche Kategorie), Schliessen/Esc/Verwerfen nullt ihn → zurück auf #…/plot.
       () => this.$store.nav.plotBeatId,
+      // Recherche-Item-Permalink: Öffnen/Fokussieren setzt rechercheItemId →
+      // #…/recherche/<itemId> (replace, gleiche Kategorie), Schliessen nullt ihn.
+      () => this.$store.nav.rechercheItemId,
       () => this.$store.nav.searchScope,
     ];
     for (const getter of storeWatched) {

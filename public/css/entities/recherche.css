@@ -184,6 +184,13 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
 .research-item--pinned { background: var(--color-bg); }
 .research-item--archived { opacity: 0.6; }
 
+/* Kurzes Hervorheben beim Springen aus dem Referenz-Slot zum Schnipsel. */
+@keyframes researchItemFlash {
+  0%, 100% { box-shadow: none; }
+  20%, 65% { box-shadow: 0 0 0 2px var(--card-accent); }
+}
+.research-item--flash { animation: researchItemFlash 1.6s ease; }
+
 .research-item-body { display: flex; flex-direction: column; gap: var(--space-sm); }
 .research-item-body--clickable { cursor: pointer; }
 

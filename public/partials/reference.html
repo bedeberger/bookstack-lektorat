@@ -130,7 +130,8 @@
         <div class="reference-empty" x-text="$app.t('reference.empty.recherche')"></div>
       </template>
       <template x-for="item in referenceRechercheItems()" :key="'rr-' + item.id">
-        <div class="reference-row">
+        <div class="reference-row reference-row--clickable internal-link" @click="openRechercheItem(item)"
+             :data-tip="$app.t('reference.recherche.openTip')">
           <div class="reference-row-head">
             <span class="reference-row-title" x-text="referenceRechercheText(item)"></span>
             <span class="tag" x-text="referenceRechercheKind(item)"></span>

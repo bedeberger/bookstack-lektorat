@@ -84,6 +84,7 @@ export const EVT = {
   RUECKBLICK_SELECT: 'rueckblick:select',                 // detail: { date }
   RECHERCHE_FILTER_PAGE: 'recherche:filter-page',         // detail: { pageId }
   RECHERCHE_FILTER_CHAPTER: 'recherche:filter-chapter',   // detail: { chapterId }
+  RECHERCHE_FOCUS_ITEM: 'recherche:focus-item',           // detail: { itemId }
   BOOK_STATS_SELECT: 'book-stats:select',                 // detail: { metric }
   SHARE_PREFILL: 'share:prefill',                         // detail: { scope, id }
 

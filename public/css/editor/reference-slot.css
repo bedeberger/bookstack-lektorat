@@ -44,6 +44,15 @@
 }
 .reference-row:last-child { border-bottom: none; }
 
+/* Klickbare Zeile (z.B. Recherche-Schnipsel → Recherche-Karte öffnen). */
+.reference-row--clickable {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding-inline: var(--space-xs);
+  transition: background var(--transition-fast);
+}
+.reference-row--clickable:hover { background: var(--color-surface); }
+
 .reference-row-head {
   display: flex;
   align-items: baseline;

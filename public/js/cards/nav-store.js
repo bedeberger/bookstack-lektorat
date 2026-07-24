@@ -34,6 +34,7 @@ export function registerNavStore() {
     werkstattDraftId: null,
     werkstattDrafts: [],
     plotBeatId: null,
+    rechercheItemId: null,
     rueckblickEntryId: null,
     pendingRueckblickZeitraum: null,
     // Permalink-Spiegel des effektiven Such-Scopes ('book' | 'all'). Die

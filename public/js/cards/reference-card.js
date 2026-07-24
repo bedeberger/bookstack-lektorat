@@ -368,5 +368,13 @@ export function registerReferenceCard() {
     referenceRechercheText(item) {
       return item?.title || item?.body || '';
     },
+    // Klick auf einen Recherche-Schnipsel im Referenz-Slot: zur Recherche-Karte
+    // springen und das Item öffnen. Deep-Link-Hash als SSoT — der Hash-Router
+    // öffnet die Karte, setzt Exklusivität und fokussiert das Item (analog gotoLink).
+    openRechercheItem(item) {
+      const bookId = Alpine.store('nav').selectedBookId;
+      if (!bookId || item?.id == null) return;
+      location.hash = `#book/${bookId}/recherche/${item.id}`;
+    },
   }));
 }
