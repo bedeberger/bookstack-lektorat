@@ -3,7 +3,7 @@
 Neben der Web-SPA gibt es zwei native Offline-First-Clients, die in eigenen Repos leben und denselben Server konsumieren:
 
 - **macOS** — [schreibwerkstatt-focuseditor](https://github.com/bedeberger/schreibwerkstatt-focuseditor): der Focus-Writer in einer WKWebView-Schale, die den Editor-Kern per OTA zieht (siehe [docs/focus-editor.md](focus-editor.md) → `setEditorHost()`/Bridge).
-- **Android** — [schreibwerkstatt-mobile](https://github.com/bedeberger/schreibwerkstatt-mobile): native Mobile-App, eigener Editor (keine WKWebView-Schale), gleiche Auth + Sync.
+- **Android** — [schreibwerkstatt-mobile](https://github.com/bedeberger/schreibwerkstatt-mobile): native Mobile-App mit nativer Navigation/UI; der Schreibmodus selbst ist eine WebView, die denselben Editor-Kern per OTA zieht (eigenes Boot-HTML `assets/editor-host/host.html` + `editor-host.css`, Bundle-Load via `BundleManager`/`EditorViewModel`). Gleiche Auth + Sync.
 
 Diese Datei ist der **Überblick über die client-seitige Server-Schicht** (Auth, OTA, Sync, Presence, Release-Discovery). Der Editor-Kern selbst und die Bridge in fremde Schalen sind in [docs/focus-editor.md](focus-editor.md) dokumentiert; das Sync-/Konflikt-Modell der Seiten in [docs/notebook-editor.md](notebook-editor.md) (Block-Level-Merge).
 
@@ -41,14 +41,14 @@ Pro Request, ergänzend zum statischen `device_tokens.platform`:
 - **`device_tokens`** ([db/device-tokens.js](../db/device-tokens.js), ERD in [docs/erd.md](erd.md)) — die Bearer-Tokens. FK `app_users(email)` CASCADE, `token_hash` UNIQUE. Default-Scopes `content:read,content:write`.
 - **`app_users_devices`** — Browser-/Geräte-Sessions (UUID `device_id`, Auto-Label aus UA). Trägt Multi-Device-Presence und `pages.last_editor_device_id` (wer eine Seite zuletzt von welchem Gerät editiert hat). **Nicht** zu verwechseln mit `device_tokens`: `app_users_devices` ist die Presence-/Audit-Identität (auch für Browser-Tabs), `device_tokens` ist der Auth-Credential der nativen Clients.
 
-## OTA: Editor-Bundle (nur macOS)
+## OTA: Editor-Bundle (macOS + Android)
 
-Der macOS-Client ist eine **WKWebView-Schale ohne Alpine**, die den Editor-Kern **zur Laufzeit** zieht und lokal cacht (statt ihn zur Build-Zeit aus dem Repo zu kopieren).
+Beide Clients sind Web-Schalen ohne Alpine um denselben Editor-Kern, den sie **zur Laufzeit** ziehen und lokal cachen (statt ihn zur Build-Zeit aus dem Repo zu kopieren). Jeder Client bringt nur sein eigenes Boot-/Bridge-HTML mit.
 
 - `GET /content/editor-bundle.zip` ([routes/content.js](../routes/content.js)) — ZIP mit der transitiven ES-Modul-Import-Closure ab `focus/standalone.js` + `shared/editor-host.js` + `shared/block-merge.js` (+ Spellcheck-/Synonym-Controller), den Focus-Editor-CSS-Dateien und einem `bundle-manifest.json` (`{ sourceCommit, jsFiles[], cssFiles[] }`). **Kein** `index.html` — das Boot-/Bridge-HTML besitzt der Client.
 - **SSoT der Closure-Auflösung:** [lib/editor-bundle.js](../lib/editor-bundle.js) (`specifiersOf`/`resolveSpecifier`/`buildClosure`). Editor-Code-SSoT bleibt `public/js` — hier wird nur gelesen und gepackt.
 - **Caching:** `ETag = sha256(sourceCommit + sortierte Datei-Hashes)`, `Cache-Control: no-cache` → der Client fragt bei jedem Online-Start konditional an; `If-None-Match` mit passendem ETag → `304` ohne Body.
-- **Android nutzt das nicht** — die Mobile-App bringt ihren eigenen nativen Editor mit, keine WKWebView-Schale.
+- **Beide Clients ziehen dasselbe ZIP** (macOS `EditorBundleStore`, Android `BundleManager` → `ensureBundle` beim Öffnen des Editors). JS und CSS kommen darin **atomar** aus einem Stand — ein Skew zwischen neuem Editor-JS und altem Editor-CSS ist ausgeschlossen. Folge: Editor-Änderungen erreichen beide Clients erst nach einem **Server-Deploy** (neuer ETag), nicht nach einem App-Update.
 
 ## OTA: i18n-Overrides (nur macOS)
 
@@ -83,14 +83,14 @@ Das Profil (`/me`) zeigt eingeloggten Usern Version + Download-Link der nativen 
 
 | Aspekt | macOS (`focuseditor`) | Android (`mobile`) |
 |--------|----------------------|--------------------|
-| Architektur | WKWebView-Schale, Editor-Kern per OTA | native App, eigener Editor |
+| Architektur | WKWebView-Schale, Editor-Kern per OTA | native App + WebView-Schreibmodus, Editor-Kern per OTA |
 | Device-Token-Auth | ✅ | ✅ |
 | Sync (`/sync`) + Presence | ✅ | ✅ |
 | Release-Discovery | ✅ `.dmg` | ✅ `.apk` |
-| OTA-Editor-Bundle | ✅ | — (per Design nicht nötig) |
+| OTA-Editor-Bundle | ✅ | ✅ (eigenes Boot-HTML) |
 | OTA-i18n-Override | ✅ | — (native Strings) |
 | Push-Notifications | — | — (kein FCM/APNS im Server) |
 
-Das Fehlende auf Android-Seite (OTA-Bundle, i18n-Override) ist **kein Gap, sondern Folge der Architektur**: die native App teilt keinen Editor-JS-Kern mit der SPA. Was beide gemeinsam tragen — Auth, Sync, Presence, Release-Discovery — ist symmetrisch abgedeckt.
+Das Fehlende auf Android-Seite (i18n-Override) ist **kein Gap, sondern Folge der Architektur**: die App verwaltet ihre Chrome-Strings nativ, der Editor-Kern bringt seine eigenen mit. Was beide gemeinsam tragen — Auth, Sync, Presence, Release-Discovery, Editor-Bundle — ist symmetrisch abgedeckt.
 
 **Push-Notifications** existieren auf keiner Plattform serverseitig (kein FCM/APNS). Falls künftig gewünscht, wäre das ein neuer Baustein (Token-Registry analog `device_tokens`, Notify-Trigger an den Sync-/Collab-Punkten).

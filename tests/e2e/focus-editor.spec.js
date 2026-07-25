@@ -185,6 +185,20 @@ test('Letzter Absatz erreicht die Schreiblinie (Tail-Puffer reicht)', async ({ p
   expect(padBottom).toBeGreaterThanOrEqual(needed - 1);
 });
 
+test('Erster Absatz erreicht die Schreiblinie (Kopf-Puffer reicht)', async ({ page }) => {
+  await enter(page);
+  // Spiegelbild zum Tail: um die erste Zeile auf die Schreiblinie zu senken,
+  // bräuchte es negativen Scroll — den gibt es nicht. Also muss der Puffer
+  // oberhalb des Textes mindestens Anker − Boxoberkante betragen.
+  const { padTop, needed } = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const cr = el.getBoundingClientRect();
+    const anchor = (window.visualViewport?.offsetTop || 0) + (window.visualViewport?.height || window.innerHeight) * 0.5;
+    return { padTop: parseFloat(getComputedStyle(el).paddingTop), needed: anchor - cr.top };
+  }, EDITOR);
+  expect(padTop).toBeGreaterThanOrEqual(needed - 1);
+});
+
 test('Pointer-Schonfrist verhindert Recenter (Klick-Verhalten)', async ({ page }) => {
   await enter(page);
 

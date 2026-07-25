@@ -167,8 +167,11 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
      (`--focus-vh` * 0.5), die Box reicht aber bis zum Layout-Ende (100vh, mobil
      hinter der Tastatur). Unter der letzten Zeile müssen also `100vh −
      --focus-vh * 0.5` scrollbar bleiben, sonst erreicht sie die Linie nie und
-     die letzten Absätze werden nicht mehr nachgezogen. Desktop: 50 vh. */
-  padding-top: calc(var(--focus-vh, 100vh) * 0.45);
+     die letzten Absätze werden nicht mehr nachgezogen. Desktop: 50 vh.
+     Oben spiegelbildlich: `--focus-vh * 0.5` ist die Strecke, die die ERSTE
+     Zeile nach unten braucht, um auf der Linie zu landen (negativer Scroll gibt
+     es nicht). Weniger Puffer klemmt den Seitenanfang leicht über der Linie. */
+  padding-top: calc(var(--focus-vh, 100vh) * 0.5);
   padding-bottom: calc(100vh - var(--focus-vh, 100vh) * 0.5 + env(safe-area-inset-bottom, 0px));
   padding-left: max(2rem, env(safe-area-inset-left, 0px));
   padding-right: max(2rem, env(safe-area-inset-right, 0px));
