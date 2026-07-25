@@ -69,6 +69,70 @@ test('notebook: klick auf squiggle oeffnet popover', async ({ page }) => {
   expect(replacements).toBeGreaterThanOrEqual(1);
 });
 
+test('notebook: escape schliesst popover, text bleibt unveraendert', async ({ page }) => {
+  await page.goto(HARNESS, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.__harnessReady === true);
+  await waitForSquiggles(page);
+  const before = await page.locator('#editor').textContent();
+  await clickFirstSquiggle(page);
+  await page.waitForSelector('.lt-popover');
+  await page.keyboard.press('Escape');
+  await expect.poll(() => page.locator('.lt-popover').count()).toBe(0);
+  expect(await page.locator('#editor').textContent()).toBe(before);
+});
+
+test('notebook: close-button schliesst popover und traegt aria-label', async ({ page }) => {
+  await page.goto(HARNESS, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.__harnessReady === true);
+  await waitForSquiggles(page);
+  await clickFirstSquiggle(page);
+  await page.waitForSelector('.lt-popover');
+  const closeBtn = page.locator('.lt-popover__close');
+  // i18n im Harness ist Identity → der rohe Key belegt, dass uebersetzt wird.
+  await expect(closeBtn).toHaveAttribute('aria-label', 'spellcheck.popover.close');
+  // Trefferflaeche >= 24x24.
+  const box = await closeBtn.boundingBox();
+  expect(box.width).toBeGreaterThanOrEqual(24);
+  expect(box.height).toBeGreaterThanOrEqual(24);
+  await closeBtn.click();
+  await expect.poll(() => page.locator('.lt-popover').count()).toBe(0);
+});
+
+test('notebook: close-button ist per tastatur erreichbar + aktivierbar', async ({ page }) => {
+  await page.goto(HARNESS, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.__harnessReady === true);
+  await waitForSquiggles(page);
+  await clickFirstSquiggle(page);
+  await page.waitForSelector('.lt-popover');
+  // Caret sitzt im contenteditable vor dem Popover-Subtree → Tab landet auf dem
+  // ersten fokussierbaren Element darin, dem Close-Button.
+  await page.keyboard.press('Tab');
+  const focusedClass = await page.evaluate(() => document.activeElement?.className || '');
+  expect(focusedClass).toContain('lt-popover__close');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.locator('.lt-popover').count()).toBe(0);
+});
+
+test('notebook: popover-markup landet nicht im gespeicherten HTML', async ({ page }) => {
+  await page.goto(HARNESS, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.__harnessReady === true);
+  await waitForSquiggles(page);
+  await clickFirstSquiggle(page);
+  await page.waitForSelector('.lt-popover');
+  const res = await page.evaluate(() => {
+    const root = document.getElementById('editor');
+    return {
+      inDom: root.innerHTML.indexOf('lt-popover') !== -1,
+      saved: window.__stripLektoratMarks(root.innerHTML),
+    };
+  });
+  // Vorbedingung: der Popover haengt wirklich im contenteditable (Notebook-Mount).
+  expect(res.inDom).toBe(true);
+  expect(res.saved).not.toContain('lt-popover');
+  expect(res.saved).not.toContain('lt-badge');
+  expect(res.saved).not.toContain('<button');
+});
+
 test('notebook: replacement-klick ersetzt text', async ({ page }) => {
   await page.goto(HARNESS, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__harnessReady === true);

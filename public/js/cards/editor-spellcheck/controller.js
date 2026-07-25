@@ -24,6 +24,7 @@
 // im DOM existieren.
 
 import { buildOffsetTable, rangeFromOffset } from './mapping.js';
+import { resolvePopoverHost, positionPopover } from './position.js';
 import { EVT } from '../../events.js';
 
 const DEFAULT_DEBOUNCE_MS = 1500;
@@ -90,6 +91,7 @@ export function createSpellcheckController({
   let popover = null;
   let popoverHost = null;
   let popoverAnchorRange = null;
+  let popoverKeyCtrl = null;
 
   let badge = null;
   let badgeState = 'idle';
@@ -242,10 +244,25 @@ export function createSpellcheckController({
   // ─── Popover ─────────────────────────────────────────────────────────────
 
   function _closePopover() {
+    if (popoverKeyCtrl) { popoverKeyCtrl.abort(); popoverKeyCtrl = null; }
     if (popover && popover.parentNode) popover.parentNode.removeChild(popover);
     popover = null;
     popoverHost = null;
     popoverAnchorRange = null;
+  }
+
+  // Bei Notebook/Focus haengt der Popover als contenteditable="false"-Insel IM
+  // Editier-Root (Scroll-Layer == Schreibflaeche). Jede Operation, die den
+  // Root-Inhalt aus HTML neu aufbaut oder Bloecke teilt (Enter-Split, Undo,
+  // `content.innerHTML = …`, Laden von HTML, in dem Popover-Markup mit-
+  // gespeichert wurde), kann eine Kopie erzeugen, die die `popover`-Closure nicht
+  // kennt: ein Knoten ohne jeden Handler, den `_closePopover` nie abtraegt —
+  // unschliessbar bis zum Reload. Darum wird nie nur die eigene Referenz
+  // entfernt, sondern jedes Popover-/Badge-Markup im Root. Das echte Badge ist
+  // Sibling von root (siehe `_ensureBadge`) und damit nicht betroffen.
+  function _purgeStrayUi() {
+    if (!root.querySelectorAll) return;
+    root.querySelectorAll('.lt-popover, .lt-badge').forEach((n) => n.remove());
   }
 
   function _scheduleCheck(opts) {
@@ -380,6 +397,7 @@ export function createSpellcheckController({
 
   function _openPopover(matchId) {
     _closePopover();
+    _purgeStrayUi();
     const entry = squiggles.get(matchId);
     if (!entry) return;
     const m = entry.match;
@@ -407,6 +425,22 @@ export function createSpellcheckController({
       title.textContent = m.shortMessage;
       header.appendChild(title);
     }
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'lt-popover__close';
+    // Sichtbar bleibt das Glyph, nicht der uebersetzte Label-Text: der
+    // macOS-Client speist die Popover-Strings aus seiner eigenen Bridge-i18n-Map
+    // und faellt bei ihm unbekannten Keys auf den rohen Key zurueck — ein
+    // Label-Text stuende dort bis zum naechsten Client-Release als
+    // „spellcheck.popover.close" im Button. Die Uebersetzung traegt darum nur
+    // aria-label/Tooltip.
+    closeBtn.textContent = '×';
+    const closeLabel = i18n('spellcheck.popover.close');
+    closeBtn.setAttribute('aria-label', closeLabel);
+    closeBtn.setAttribute('data-tip', closeLabel);
+    closeBtn.addEventListener('mousedown', (ev) => ev.preventDefault());
+    closeBtn.addEventListener('click', () => _closePopover());
+    header.appendChild(closeBtn);
     popover.appendChild(header);
 
     if (m.message) {
@@ -503,6 +537,22 @@ export function createSpellcheckController({
 
     _mountPopover();
 
+    // Escape schliesst den Popover. Capture auf document, damit der Handler VOR
+    // den Editor-eigenen Escape-Handlern laeuft — der Focus-Editor haengt seinen
+    // an `window` in der Bubble-Phase (editor/focus/card.js) und wuerde sonst
+    // gleichzeitig den Fokus-Modus verlassen. stopPropagation neutralisiert ihn
+    // fuer genau diesen Tastendruck: erstes Escape schliesst nur den Popover,
+    // zweites verhaelt sich wieder normal (cancelEdit / Exit Fokus-Modus).
+    // Bewusst nicht ueber ein `app`-Flag wie bei Synonym-/Figur-Overlay — der
+    // Controller ist host-agnostisch und kennt keinen Alpine-Root.
+    popoverKeyCtrl = new AbortController();
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Escape') return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      _closePopover();
+    }, { capture: true, signal: popoverKeyCtrl.signal });
+
     // Outside-Click schliesst. setTimeout: aktueller mousedown soll nicht
     // gleich wieder schliessen.
     setTimeout(() => {
@@ -523,95 +573,18 @@ export function createSpellcheckController({
     if (!popover || !popoverAnchorRange) return;
     const anchorRect = popoverAnchorRange.getBoundingClientRect();
 
-    // Strategie: Popover wird ins Scroll-Layer eingehaengt, damit Scroll den
-    // Popover physisch mitnimmt (kein JS-Reposition, kein 1-Frame-Trail).
-    //
-    //   - scrollEl == window/scrollingElement: Popover an body, position
-    //     absolute, document-Koordinaten (anchorRect + window.scrollX/Y).
-    //     Window-Scroll bewegt body-Kinder nativ.
-    //   - scrollEl interner Container (Notebook=.page-content-view--editing,
-    //     Focus=.focus-editor__content, beide gleichzeitig contenteditable):
-    //     Popover als Kind dort einhaengen, position absolute in
-    //     Scroll-Content-Koordinaten. Popover ist contenteditable="false"
-    //     und damit eine nicht-editbare Insel; Caret/Selection greift nicht
-    //     hinein. MutationObserver filtert popover-eigene Mutationen heraus
-    //     (sonst triggert das Anhaengen einen Re-Check, der die Squiggles
-    //     wegnimmt bevor der User klicken kann).
-    const useScrollerHost = scrollEl
-      && scrollEl !== window
-      && scrollEl !== document.scrollingElement
-      && scrollEl !== document.documentElement
-      && scrollEl !== document.body;
-
-    if (useScrollerHost) {
-      // Offset-Parent fuer absolute child sicherstellen.
-      if (getComputedStyle(scrollEl).position === 'static') {
-        scrollEl.style.position = 'relative';
-      }
-      popoverHost = scrollEl;
-      popoverHost.appendChild(popover);
-      _positionInsideScroller(popover, anchorRect, popoverHost);
-    } else {
-      popoverHost = document.body;
-      popoverHost.appendChild(popover);
-      _positionInBodyAbsolute(popover, anchorRect);
-    }
-  }
-
-  function _positionInsideScroller(el, anchorRect, host) {
-    const hostRect = host.getBoundingClientRect();
-    const padding = 8;
-    const pr = el.getBoundingClientRect();
-    // Vertical: clamp/flip gegen den SICHTBAREN Host-Bereich, nicht gegen das
-    // Window. Der Notebook-Scroller hat max-height:70vh + overflow-y:auto; sein
-    // sichtbarer Boden liegt darum meist deutlich oberhalb von innerHeight.
-    // Ein nach unten platziertes Popover an den letzten Zeilen passt zwar ins
-    // Window, ragt aber unter den Scroller-Sichtbereich — overflow:auto clippt
-    // es weg ("verrutscht ganz unten", v.a. Edge). Schnittmenge Host∩Window.
-    const visTop = Math.max(hostRect.top, 0);
-    const visBottom = Math.min(hostRect.bottom, window.innerHeight);
-    let viewportTop = anchorRect.bottom + 4;
-    if (viewportTop + pr.height + padding > visBottom) {
-      viewportTop = anchorRect.top - pr.height - 4;
-    }
-    if (viewportTop < visTop + padding) viewportTop = visTop + padding;
-    // Horizontal: clamp gegen Host-Sichtbereich (Popover bleibt im Scroll-Slot).
-    let viewportLeft = anchorRect.left;
-    const hostRight = hostRect.left + host.clientWidth;
-    if (viewportLeft + pr.width + padding > hostRight) {
-      viewportLeft = Math.max(hostRect.left + padding, hostRight - pr.width - padding);
-    }
-    if (viewportLeft < hostRect.left + padding) viewportLeft = hostRect.left + padding;
-    el.style.left = `${viewportLeft - hostRect.left + host.scrollLeft}px`;
-    el.style.top  = `${viewportTop  - hostRect.top  + host.scrollTop}px`;
-  }
-
-  function _positionInBodyAbsolute(el, anchorRect) {
-    const padding = 8;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const pr = el.getBoundingClientRect();
-    let viewportLeft = anchorRect.left;
-    let viewportTop = anchorRect.bottom + 4;
-    if (viewportLeft + pr.width + padding > vw) {
-      viewportLeft = Math.max(padding, vw - pr.width - padding);
-    }
-    if (viewportTop + pr.height + padding > vh) {
-      viewportTop = anchorRect.top - pr.height - 4;
-    }
-    if (viewportTop < padding) viewportTop = padding;
-    el.style.left = `${viewportLeft + window.scrollX}px`;
-    el.style.top  = `${viewportTop  + window.scrollY}px`;
+    // Host-Wahl + Geometrie in position.js. Beim Scroller-Host wird der Popover
+    // Kind des contenteditable; der MutationObserver filtert popover-eigene
+    // Mutationen heraus (sonst triggert das Anhaengen einen Re-Check, der die
+    // Squiggles wegnimmt bevor der User klicken kann).
+    popoverHost = resolvePopoverHost(scrollEl);
+    popoverHost.appendChild(popover);
+    positionPopover(popover, anchorRect, popoverHost);
   }
 
   function _remountPopover() {
     if (!popover || !popoverAnchorRange || !popoverHost) return;
-    const anchorRect = popoverAnchorRange.getBoundingClientRect();
-    if (popoverHost === document.body) {
-      _positionInBodyAbsolute(popover, anchorRect);
-    } else {
-      _positionInsideScroller(popover, anchorRect, popoverHost);
-    }
+    positionPopover(popover, popoverAnchorRange.getBoundingClientRect(), popoverHost);
   }
 
   function _applyReplacement(matchId, text) {
@@ -688,6 +661,11 @@ export function createSpellcheckController({
     if (attached) return;
     attached = true;
 
+    // Popover-/Badge-Markup, das aus gespeichertem HTML zurueckkam (Altbestand
+    // vor dem Save-Filter), ist reiner Waisen-Knoten — beim Mount wegraeumen,
+    // bevor der erste Check laeuft.
+    _purgeStrayUi();
+
     if (!supportsHighlightApi) {
       // Stiller Skip — App laeuft, nur ohne LT-Markierungen.
       _updateBadge('disabled');
@@ -749,6 +727,7 @@ export function createSpellcheckController({
     root.removeEventListener('click', _onRootClick, true);
     scrollEl = null;
     _closePopover();
+    _purgeStrayUi();
     _clearHighlights();
     squiggles.clear();
     lastCheckedText = null;

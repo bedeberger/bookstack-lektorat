@@ -49,7 +49,7 @@ const CATEGORIES = [
     ext: '.js',
     cap: 600,
     allow: {
-      'public/js/cards/editor-spellcheck/controller.js': 773,
+      'public/js/cards/editor-spellcheck/controller.js': 752,
       'public/js/editor/notebook/stt-dictation.js': 769,
       'public/js/share-reader.js': 658,
       'public/js/editor/focus/card.js': 601,

@@ -11,7 +11,7 @@
 
 import {
   BLOCK_TAGS, BLOCK_SEL,
-  POINTER_GRACE_MS, VV_DEBOUNCE_MS, CURSOR_HIDE_MS,
+  POINTER_GRACE_MS, VV_DEBOUNCE_MS, CURSOR_HIDE_MS, CURSOR_KEEP_SEL,
   HAS_IO, HAS_MO,
   TYPEWRITER_DEADZONE_RATIO,
   reportError,
@@ -203,17 +203,19 @@ export const focusCardMethods = {
       this._focusUpdateActive(!isPointer);
     };
 
-    // Auto-Hide-Cursor: Maus 2s ruhig → Cursor unsichtbar. Nächste Bewegung
-    // bringt ihn zurück. Nur Klassentoggle, kein Style-Reset.
+    // Auto-Hide-Cursor: Maus 2s ruhig → Cursor unsichtbar, nächste Bewegung bringt
+    // ihn zurück (nur Klassentoggle). Bei offenem Popover/Menü (CURSOR_KEEP_SEL) wird
+    // neu bewaffnet statt versteckt — der Zeiger muss sichtbar bleiben, solange man
+    // Vorschläge liest; nach dem Schliessen greift Auto-Hide ohne Mausbewegung wieder.
+    const armCursorHide = () => {
+      if (this._focusState !== 'active') return;
+      if (document.querySelector(CURSOR_KEEP_SEL)) { ctx.cursorTimer = setTimeout(armCursorHide, CURSOR_HIDE_MS); return; }
+      document.querySelector('.focus-editor')?.classList.add('focus-cursor-hidden');
+    };
     const showCursor = () => {
-      const focusEl = document.querySelector('.focus-editor');
-      focusEl?.classList.remove('focus-cursor-hidden');
+      document.querySelector('.focus-editor')?.classList.remove('focus-cursor-hidden');
       clearTimeout(ctx.cursorTimer);
-      ctx.cursorTimer = setTimeout(() => {
-        if (this._focusState === 'active') {
-          document.querySelector('.focus-editor')?.classList.add('focus-cursor-hidden');
-        }
-      }, CURSOR_HIDE_MS);
+      ctx.cursorTimer = setTimeout(armCursorHide, CURSOR_HIDE_MS);
     };
 
     // Input-Event fängt Fälle, die selectionchange nicht abdeckt: undo/redo

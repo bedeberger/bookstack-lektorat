@@ -14,6 +14,14 @@ export const POINTER_GRACE_MS = 300;
 export const VV_DEBOUNCE_MS = 100;
 export const CURSOR_HIDE_MS = 2000;
 
+// Popover-/Menü-Wurzeln, die den Auto-Hide-Cursor pausieren: solange eines davon
+// offen ist, muss der Zeiger sichtbar bleiben — man liest gerade Vorschläge und
+// will sie anklicken. `.tip-layer` steht bewusst NICHT drin: der Tooltip-Layer
+// wird einmal erzeugt und bleibt dauerhaft im DOM (nur Inhalt/Position wechseln),
+// er würde Auto-Hide permanent aushebeln. Pendant im CSS:
+// `.focus-cursor-hidden`-Regel in public/css/editor/focus/focus-mode.css.
+export const CURSOR_KEEP_SEL = '.lt-popover, .synonym-menu, .synonym-picker, .figur-lookup';
+
 // Schwelle dynamisch aus computed line-height. Im Fokusmodus ist font-size
 // 1.45rem, line-height 1.85 → ~42px. Statisches 16px scrollte schon bei
 // subpixel-Jitter; halbe Zeilenhöhe ist die natürliche Grenze für „echter

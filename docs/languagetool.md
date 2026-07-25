@@ -122,12 +122,16 @@ Fallback bei fehlendem API-Support: `_updateBadge('disabled')`, sonst läuft die
 
 **Click-Hit-Test:** Kein DOM-Element pro Match — `mousedown` auf root → `caretPositionFromPoint`/`caretRangeFromPoint` liefert Caret-Position; `_findMatchAtCaret` iteriert `squiggles`-Map und vergleicht via `Range.compareBoundaryPoints(START_TO_START)` und `START_TO_END`. Treffer öffnet Popover.
 
-**Popover-Mounting:**
+**Popover-Mounting** (Host-Wahl + Geometrie in [position.js](../public/js/cards/editor-spellcheck/position.js), pure DOM-Mathematik ohne Controller-State — `resolvePopoverHost(scrollEl)` + `positionPopover(el, anchorRect, host)`):
 - Interner Scroll-Container (Notebook/Focus): Popover als Kind des Scroll-Containers, `position: absolute` in Scroll-Content-Koordinaten. Popover ist `contenteditable="false"` (nicht-editbare Insel), MutationObserver filtert popover-eigene Mutationen (sonst trigger das Anhängen einen Re-Check, der Squiggles vor dem User-Klick verwirft).
 - Window-Scroll (Bucheditor): Popover an `document.body`, position absolute in Document-Koordinaten.
 - Vertical/Horizontal Clamp + Flip gegen Viewport bzw. Host-Sichtbereich.
 
 **MutationObserver-Filter `_isPopoverOnlyMutation`** — Mutationen, deren betroffene Knoten ausschliesslich im Popover-Subtree liegen, triggern keinen Re-Check.
+
+**Drei Schliesswege** — Outside-`mousedown` (einmaliger document-Listener in Capture), **Escape** und der **Close-Button** im Header (`.lt-popover__close`, Glyph `×` + `aria-label`/`data-tip` aus `spellcheck.popover.close`); dazu die Aktionen Vorschlag-Anwenden / Ignorieren / Zum-Wörterbuch. Escape hängt als document-**Capture**-Listener (per `AbortController` beim Schliessen abgemeldet) und ruft `stopPropagation()`: der Focus-Editor hört Escape an `window` in der Bubble-Phase ([editor/focus/card.js](../public/js/editor/focus/card.js)), würde also gleichzeitig den Fokus-Modus verlassen. Erstes Escape schliesst nur den Popover, zweites wirkt wieder normal. Bewusst nicht über ein `app`-Flag (wie Synonym-/Figur-Overlay) — der Controller ist host-agnostisch.
+
+**Waisen-Knoten-Schutz `_purgeStrayUi()`** — bei Notebook/Focus hängt der Popover IM contenteditable. Jede Operation, die den Root-Inhalt aus HTML neu aufbaut oder Blöcke teilt (Enter-Split, Undo, `content.innerHTML = …`, Laden von HTML mit mitgespeichertem UI-Markup), kann eine Kopie erzeugen, die die `popover`-Closure nicht kennt — ein Knoten ohne jeden Handler, den `_closePopover` nie abträgt: unschliessbar bis zum Reload. Darum entfernen `_openPopover`, `attach()` und `detach()` **jedes** `.lt-popover`/`.lt-badge` im Root, nicht nur die eigene Referenz. Das echte Badge ist Sibling von `root` und damit nicht betroffen.
 
 **Apply-Replacement** läuft über editor-spezifischen Callback (`onApplyReplacement(range, text)`), zentral in [dispatch.js#_onApply](../public/js/cards/editor-spellcheck/dispatch.js): `range.deleteContents()` + `insertNode(textNode)` + Selection hinter Insertion + `input`-Event-Dispatch (Editor-Save-Pipeline triggert).
 
@@ -180,6 +184,8 @@ Shared für alle Editoren + Form-Felder. Pflicht-Token: `--z-overlay-spellcheck`
 
 Pro-Editor-Tweaks via `[data-editor="focus"]`/`[data-editor="book"]` auf Popover/Badge.
 
+`.lt-popover__close` sitzt via `margin-left: auto` rechts im Header, 24×24 Trefferfläche (Mobile 32×32).
+
 ## Tests
 
 | Layer | Datei | Scope |
@@ -188,9 +194,11 @@ Pro-Editor-Tweaks via `[data-editor="focus"]`/`[data-editor="book"]` auf Popover
 | Unit | [tests/unit/languagetool-chunk.test.mjs](../tests/unit/languagetool-chunk.test.mjs) | Paragraph-/Satz-/Hard-Split, `adjustMatches`-Offset-Shift |
 | Unit | [tests/unit/user-dictionary-filter.test.mjs](../tests/unit/user-dictionary-filter.test.mjs) | `dict.filterMatches`: Case-Insensitive-Match, Set-Lookup |
 | Integration | [tests/integration/languagetool-proxy.test.js](../tests/integration/languagetool-proxy.test.js) | Mock-LT: Forward, Disabled-404, Upstream-502, Timeout-408, Cache-Hit |
-| E2E | [tests/e2e/spellcheck-notebook.spec.js](../tests/e2e/spellcheck-notebook.spec.js) | Tippen → Debounce → Squiggle → Popover → Replace → Save |
-| E2E | [tests/e2e/spellcheck-focus.spec.js](../tests/e2e/spellcheck-focus.spec.js) | Focus-Enter/Exit-Lifecycle, internes Scrollen (Container-Scroll, nicht Window) |
-| E2E | [tests/e2e/spellcheck-book.spec.js](../tests/e2e/spellcheck-book.spec.js) | Block-Activate-Switch: Squiggle wandert mit aktivem Block |
+| Unit | [tests/unit/editor-shared-save.test.mjs](../tests/unit/editor-shared-save.test.mjs) | `stripLektoratMarks`: `.lt-popover`/`.lt-badge` raus (inkl. Fast-Path-Regression), `normalizeForCompare` bleibt stabil |
+| Unit | [tests/unit/html-clean.test.js](../tests/unit/html-clean.test.js) | `stripEditorUiArtefacts` + `cleanPageHtml`: UI-Markup eines alten Clients landet nicht im Content |
+| E2E | [tests/e2e/spellcheck-notebook.spec.js](../tests/e2e/spellcheck-notebook.spec.js) | Tippen → Debounce → Squiggle → Popover → Replace → Save; Escape, Close-Button (Maus + Tab/Enter), kein UI-Markup im Save |
+| E2E | [tests/e2e/spellcheck-focus.spec.js](../tests/e2e/spellcheck-focus.spec.js) | Focus-Enter/Exit-Lifecycle, internes Scrollen (Container-Scroll, nicht Window); Escape-Priorität gegen den Editor-Handler, Waisen-Popover-Purge bei Open + Mount |
+| E2E | [tests/e2e/spellcheck-book.spec.js](../tests/e2e/spellcheck-book.spec.js) | Block-Activate-Switch: Squiggle wandert mit aktivem Block; Escape/Close am `<body>`-gemounteten Popover |
 
 ## Pflicht-Invarianten
 
@@ -202,6 +210,10 @@ Pro-Editor-Tweaks via `[data-editor="focus"]`/`[data-editor="book"]` auf Popover
 - **Dictionary-Add purgt nur betroffene Pages.** `body_html LIKE %word%` — kein Pauschal-Wipe. Beim Edit von `user-dictionary.js`-Lookup-Queries: Granularität pro `book_id`/`lang` muss zur Cache-Purge-Query passen.
 - **Dict-Filter läuft auch auf Cache-Hits.** Der `body_html`-basierte Purge ist eine Best-Effort-Optimierung; der eigentliche Wahrheits-Anker ist der Re-Filter im Proxy beim Cache-Lookup. Wer den Cache-Hit-Pfad anfasst, darf das `dict.filterMatches` davor nicht entfernen — sonst überleben Dict-Wörter, deren `body_html` beim Add ungespeichert war.
 - **Popover ist `contenteditable="false"`.** MutationObserver filtert Popover-Mutationen (`_isPopoverOnlyMutation`), sonst verschwinden Squiggles vor dem Klick. Gilt für jede neue UI, die der Controller in den Editor-Subtree einhängt.
+- **Nie nur die eigene Popover-Referenz entfernen.** Wer den Popover-Lifecycle anfasst, räumt beim Öffnen/Mount/Unmount **alle** `.lt-popover`/`.lt-badge` im Root weg (`_purgeStrayUi`). Eine Kopie, die kein Controller mehr kennt, ist per Definition unschliessbar — sie hat keinen einzigen Handler.
+- **Mindestens ein Schliessweg ohne Maus und einer ohne Tastatur.** Escape **und** sichtbarer Close-Button sind Pflicht, nicht nur Outside-Click: der Popover sitzt im contenteditable, auf Touch ist „daneben tippen" ein Klick in den Text.
+- **Escape-Handler in Capture + `stopPropagation`.** Nicht in der Bubble-Phase registrieren — der Focus-Editor-Handler an `window` würde sonst zusätzlich feuern und den Fokus-Modus verlassen. Listener beim Schliessen abmelden (`AbortController`), sonst frisst ein toter Handler das nächste Escape.
+- **UI-Markup nie persistieren.** `.lt-popover`/`.lt-badge` fliegen client-seitig in `stripLektoratMarks` ([editor/shared/html-clean.js](../public/js/editor/shared/html-clean.js)) und server-seitig in `stripEditorUiArtefacts` (Teil von `cleanPageHtml`, [lib/html-clean.js](../lib/html-clean.js)) raus. Der Client-Filter hat einen Fast-Path — ein neuer UI-Klassenname muss **auch in die `hasLtUi`-Trigger-Bedingung**, sonst greift der Early-Return und der Filter läuft nie.
 - **`seq` + `htmlSnapshot` doppelte Staleness.** Both checks sind Pflicht: Race „User tippt während Fetch" + Race „mehrere Checks parallel". AbortController allein reicht nicht (Response kann durch sein, bevor abort durchläuft).
 - **Apply geht über `input`-Event, nicht direkt an Editor-State.** Save-Pipeline muss triggern (Notebook-Autosave/Focus-Save/Bucheditor-`_markDirty`). Direkter State-Write umgeht Stale-Write-Schutz und Draft-Storage.
 - **CSS-Highlights sind global.** `CSS.highlights.set(name, …)` ist Document-scoped. Bei mehreren parallelen Editoren (theoretisch — Dispatcher verbietet's) würden Buckets kollidieren. Single-Active-Constraint ist die Garantie.

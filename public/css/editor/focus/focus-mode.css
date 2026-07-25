@@ -433,10 +433,26 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
 
 /* Auto-Hide-Cursor: 2s ohne Mausbewegung → unsichtbar (JS toggelt Klasse).
    Bei Mausbewegung wird die Klasse entfernt. Nur im Editor-Container, damit
-   Header-Buttons weiterhin normalen Cursor zeigen, wenn Maus dorthin geht. */
+   Header-Buttons weiterhin normalen Cursor zeigen, wenn Maus dorthin geht.
+   Popover-/Menü-Wurzeln und deren Inhalt sind ausgenommen: das
+   LanguageTool-Popover hängt als Kind im Scroll-Container (damit Scrollen es
+   physisch mitnimmt), würde von einem nackten `*` also mitgetroffen — und wer
+   Vorschläge anklicken will, braucht den Zeiger. */
 .focus-editor.is-active.focus-cursor-hidden .focus-editor__content,
-.focus-editor.is-active.focus-cursor-hidden .focus-editor__content * {
+.focus-editor.is-active.focus-cursor-hidden .focus-editor__content
+  *:not(.lt-popover, .synonym-menu, .synonym-picker, .figur-lookup, .tip-layer,
+        .lt-popover *, .synonym-menu *, .synonym-picker *, .figur-lookup *, .tip-layer *) {
   cursor: none;
+}
+
+/* Zeiger über der Popover-Fläche: normaler Pfeil. Nötig, weil `cursor` erbt —
+   ohne diese Deklaration zöge sich das `none` des Containers in das
+   ausgenommene Popover hinein. Buttons darin (`.lt-popover__replacement` &
+   Footer-Links) deklarieren `cursor: pointer` selbst; eine eigene Deklaration
+   gewinnt immer gegen einen geerbten Wert, unabhängig von Spezifität. */
+.focus-editor.is-active.focus-cursor-hidden .focus-editor__content
+  :is(.lt-popover, .synonym-menu, .synonym-picker, .figur-lookup, .tip-layer) {
+  cursor: default;
 }
 
 /* Live-Counter im Header (nur Fokus + Edit). Rückt da rein, wo sonst die

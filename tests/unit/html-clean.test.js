@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { cleanPageHtml, wrapOrphanBlocks, collapseEmptyBlocks, stripTrailingEmptyBlocks, stripBlockEdgeNbsp, flattenDivBlocks, linkifyBareUrls } = require('../../lib/html-clean');
+const { cleanPageHtml, wrapOrphanBlocks, collapseEmptyBlocks, stripTrailingEmptyBlocks, stripBlockEdgeNbsp, flattenDivBlocks, linkifyBareUrls, stripEditorUiArtefacts } = require('../../lib/html-clean');
 
 test('collapseEmptyBlocks: leere <p>-Runs auf einen kollabieren', () => {
   assert.equal(
@@ -292,4 +292,41 @@ test('linkifyBareUrls: kein http im Text → no-op', () => {
 test('cleanPageHtml: linkifiziert URLs im Save-Pfad', () => {
   const out = cleanPageHtml('<p>Siehe https://example.com bla.</p>');
   assert.match(out, /<a href="https:\/\/example\.com">/);
+});
+
+// ─── LanguageTool-UI-Artefakte (Popover/Badge im contenteditable) ───
+
+test('stripEditorUiArtefacts: entfernt .lt-popover samt Buttons/SVG', () => {
+  const html = '<p>Der Jungen ging</p>'
+    + '<div class="lt-popover" role="dialog" contenteditable="false">'
+    + '<div class="lt-popover__header"><button class="lt-popover__close">×</button></div>'
+    + '<div class="lt-popover__replacements"><button class="lt-popover__replacement">Junge</button></div>'
+    + '</div>';
+  const out = stripEditorUiArtefacts(html);
+  assert.equal(out.indexOf('lt-popover'), -1);
+  assert.equal(out.indexOf('<button'), -1);
+  assert.equal(out, '<p>Der Jungen ging</p>');
+});
+
+test('stripEditorUiArtefacts: entfernt .lt-badge samt Icon-SVG', () => {
+  const html = '<p>Text</p><div class="lt-badge" data-state="matches">'
+    + '<span class="lt-badge__icon"><svg class="icon"><use href="/icons.svg#check"></use></svg></span>'
+    + '<span class="lt-badge__label">3</span></div>';
+  assert.equal(stripEditorUiArtefacts(html), '<p>Text</p>');
+});
+
+test('stripEditorUiArtefacts: kein lt-Markup → no-op (identische Referenz-Bytes)', () => {
+  const html = '<p>Nichts zu tun.</p>';
+  assert.equal(stripEditorUiArtefacts(html), html);
+});
+
+test('cleanPageHtml: Popover-Markup eines alten Clients landet nicht im Content', () => {
+  const out = cleanPageHtml(
+    '<p>Erster Absatz</p>'
+    + '<div class="lt-popover"><p class="lt-popover__message">Meinten Sie …</p></div>'
+    + '<p>Zweiter Absatz</p>'
+  );
+  assert.equal(out.indexOf('lt-popover'), -1);
+  assert.equal(out.indexOf('Meinten Sie'), -1);
+  assert.equal(out, '<p>Erster Absatz</p><p>Zweiter Absatz</p>');
 });

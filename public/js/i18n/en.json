@@ -4089,6 +4089,7 @@
   "spellcheck.popover.add_to_dict": "Add to dictionary",
   "spellcheck.popover.no_suggestions": "No suggestions",
   "spellcheck.popover.rule_info": "Rule info",
+  "spellcheck.popover.close": "Close",
   "spellcheck.error.server": "LanguageTool server unreachable",
   "spellcheck.status.active": "LanguageTool active",
   "spellcheck.status.disabled": "LanguageTool disabled",

@@ -78,6 +78,43 @@ test('stripLektoratMarks: leerer String → leerer String, kein Throw', () => {
   assert.equal(stripLektoratMarks(''), '');
 });
 
+// LanguageTool-UI lebt als Kind im contenteditable — bei offenem Popover
+// gespeichert landete sie sonst als Inhalt in der Revision.
+test('stripLektoratMarks: entfernt .lt-popover komplett (Buttons + Text weg)', () => {
+  const html = '<p>Der Jungen ging</p>'
+    + '<div class="lt-popover" role="dialog" contenteditable="false">'
+    + '<div class="lt-popover__header"><span class="lt-popover__badge">Typo</span>'
+    + '<button class="lt-popover__close" aria-label="Schliessen">×</button></div>'
+    + '<div class="lt-popover__replacements"><button class="lt-popover__replacement">Junge</button></div>'
+    + '</div>';
+  const out = stripLektoratMarks(html);
+  assert.equal(out.indexOf('lt-popover'), -1);
+  assert.equal(out.indexOf('<button'), -1);
+  assert.equal(out.indexOf('Junge<'), -1, 'Vorschlagstext darf nicht als Inhalt bleiben');
+  assert.ok(out.indexOf('Der Jungen ging') !== -1);
+});
+
+test('stripLektoratMarks: entfernt .lt-badge komplett', () => {
+  const html = '<p>Text</p><div class="lt-badge" data-state="matches"><span class="lt-badge__label">3</span></div>';
+  const out = stripLektoratMarks(html);
+  assert.equal(out.indexOf('lt-badge'), -1);
+  assert.equal(out.indexOf('>3<'), -1);
+  assert.ok(out.indexOf('<p>Text</p>') !== -1);
+});
+
+// Regression: Ohne lt-Trigger in der hasMark/hasIns-Bedingung greift der
+// Early-Return und der Filter läuft nie.
+test('stripLektoratMarks: lt-Markup ohne Lektorat-Marks wird trotzdem gefiltert', () => {
+  const out = stripLektoratMarks('<p>A</p><div class="lt-popover">X</div>');
+  assert.equal(out.indexOf('lt-popover'), -1);
+});
+
+test('normalizeForCompare: lt-Popover kippt den Dirty-Vergleich nicht', () => {
+  const clean = '<p>Der Jungen ging</p>';
+  const withUi = '<p>Der Jungen ging</p><div class="lt-popover"><button class="lt-popover__close">×</button></div>';
+  assert.equal(normalizeForCompare(withUi), normalizeForCompare(clean));
+});
+
 // ────────── normalizeEditorBlocks ──────────
 
 test('normalizeEditorBlocks: orphan Text-Node wird in <p> gewrapt', () => {

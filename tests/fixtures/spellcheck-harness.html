@@ -26,6 +26,7 @@
   <script type="module">
     import { createSpellcheckController } from '/public/js/cards/editor-spellcheck/controller.js';
     import { applySpellcheckReplacement } from '/public/js/editor/shared/apply-replacement.js';
+    import { stripLektoratMarks } from '/public/js/editor/shared/html-clean.js';
 
     const params = new URLSearchParams(location.search);
     const kind = params.get('kind') || 'notebook';
@@ -37,9 +38,16 @@
       book: 'book-editor-page-body',
     }[kind]);
 
+    // Wie dispatch.js: bei Notebook/Focus ist der Editier-Root gleichzeitig der
+    // Scroll-Container — der Popover haengt dort als Kind IM contenteditable.
+    // Der Bucheditor scrollt am Window (Popover an <body>). Diese Aufteilung
+    // muss der Harness spiegeln, sonst testet er den Popover-Mount nie am Ort,
+    // an dem er in Produktion Waisen-Knoten erzeugen kann.
+    const scrollContainer = kind === 'book' ? null : root;
+
     const ctl = createSpellcheckController({
       root,
-      scrollContainer: window,
+      scrollContainer,
       getHtml: () => root.innerHTML,
       onApplyReplacement: (range, text) => applySpellcheckReplacement(range, text),
       editorKind: kind,
@@ -54,6 +62,9 @@
 
     window.__spellcheckCtl = ctl;
     window.__applySpellcheckReplacement = applySpellcheckReplacement;
+    // Save-Pfad-Stellvertreter: beide Editoren serialisieren via
+    // stripLektoratMarks(content.innerHTML).
+    window.__stripLektoratMarks = stripLektoratMarks;
     window.__harnessReady = true;
   </script>
 </body>

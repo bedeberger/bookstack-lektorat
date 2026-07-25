@@ -85,6 +85,36 @@
   color: var(--color-text);
 }
 
+/* Sichtbarer Schliess-Knopf, rechts im Header (`margin-left: auto` schiebt ihn
+   an die Kante, egal wie viele Header-Chips davor stehen). Nur Outside-Click
+   und Escape zu haben reicht nicht: der Popover haengt im contenteditable, auf
+   Touch ist „daneben tippen" ein Klick in den Text, und Escape erwartet nicht
+   jeder. 24x24 als Trefferflaeche (Glyph selbst ist kleiner). */
+.lt-popover__close {
+  appearance: none;
+  margin-left: auto;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  font-size: var(--font-size-md);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lt-popover__close:hover,
+.lt-popover__close:focus-visible {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
 .lt-popover__message {
   margin: 0;
   color: var(--color-muted);
@@ -103,13 +133,21 @@
   gap: var(--space-3);
 }
 
+/* Trefferfläche: `min-height` statt reinem Padding, damit ein Chip auch bei
+   kurzem Wort und im Fokus-Modus (grosse Schreibfläche, Maus wandert weit)
+   bequem zu treffen ist. `inline-flex` + `align-items: center` zentriert den
+   Text in der grösseren Box, ohne das Chip-Raster (`gap: var(--space-3)`)
+   optisch auseinanderzuziehen. */
 .lt-popover__replacement {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
   border: 1px solid var(--color-border);
   background: var(--color-hover);
   color: var(--color-text);
   border-radius: var(--radius-sm);
-  padding: var(--space-2xs) var(--space-6);
+  padding: var(--space-xs) var(--space-sm);
   font-size: var(--font-size-sm);
   cursor: pointer;
   line-height: var(--lh-tight);
@@ -131,16 +169,21 @@
   padding-top: var(--space-6);
 }
 
+/* Footer-Links: gleiche Trefferhöhe wie die Vorschlags-Chips (28 px), sonst
+   sind sie die kleinsten Ziele im Popover. */
 .lt-popover__ignore,
 .lt-popover__dict,
 .lt-popover__info {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
   background: transparent;
   border: none;
   color: var(--color-muted);
   cursor: pointer;
   font-size: var(--font-size-mini);
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-1) var(--space-6);
   text-decoration: none;
 }
 
@@ -331,9 +374,12 @@
 .lt-popover[data-editor="focus"] { /* Focus-spezifische Anpassungen hier */ }
 .lt-popover[data-editor="book"]  { /* Bucheditor-spezifische Anpassungen hier */ }
 
-/* Mobile: Popover-Breite gegen Viewport begrenzen. */
+/* Mobile: Popover-Breite gegen Viewport begrenzen, Schliess-Knopf auf
+   Finger-Groesse (auf Touch ist „daneben tippen" ein Klick in den Text — der
+   Knopf ist dort der primaere Schliessweg, nicht der Notausgang). */
 @media (max-width: 640px) {
   .lt-popover { max-width: calc(100vw - 24px); }
+  .lt-popover__close { width: 32px; height: 32px; }
 }
 
 /* ─── Form-Field-Variante (input/textarea, [data-spellcheck="spelling"]) ──

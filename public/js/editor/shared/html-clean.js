@@ -37,14 +37,25 @@ function parseFragment(html) {
 // Entfernt Korrekturvorschlags-Markup:
 //   - .lektorat-ins / .chat-mark-ins → komplett entfernen (nur Vorschlagstext)
 //   - .lektorat-mark / .chat-mark → unwrap (Originaltext behalten)
+//   - .lt-popover / .lt-badge → komplett entfernen (LanguageTool-UI, s.u.)
 // Danach via collapse/cleaner durch die gleichen Filter wie der Save-Pfad.
 export function stripLektoratMarks(html) {
   let out = html;
   const hasMark = out && (out.indexOf('lektorat-mark') !== -1 || out.indexOf('chat-mark') !== -1);
   const hasIns = out && (out.indexOf('lektorat-ins') !== -1 || out.indexOf('chat-mark-ins') !== -1);
-  if (hasMark || hasIns) {
+  // LanguageTool-UI haengt zur Laufzeit als contenteditable="false"-Insel IM
+  // Editier-Root (damit Scroll sie nativ mitnimmt). Wer bei offenem Popover
+  // speichert, persistiert sonst das komplette UI-Markup samt <button>/<svg> in
+  // die Revision — und bekommt es beim naechsten Laden als Inhalt zurueck.
+  // Der Trigger gehoert zwingend in diese Bedingung: sonst greift der
+  // Early-Return und der Filter unten laeuft nie.
+  const hasLtUi = out && (out.indexOf('lt-popover') !== -1 || out.indexOf('lt-badge') !== -1);
+  if (hasMark || hasIns || hasLtUi) {
     const tmp = parseFragment(out);
     if (tmp) {
+      tmp.querySelectorAll('.lt-popover, .lt-badge').forEach(ui => {
+        ui.parentNode?.removeChild(ui);
+      });
       tmp.querySelectorAll('.lektorat-ins, .chat-mark-ins').forEach(ins => {
         ins.parentNode?.removeChild(ins);
       });
