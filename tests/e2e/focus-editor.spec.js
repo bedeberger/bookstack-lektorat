@@ -168,6 +168,23 @@ test('Schreiblinie ruht auf der Bildschirmmitte (kein Abdriften nach unten)', as
   }
 });
 
+test('Letzter Absatz erreicht die Schreiblinie (Tail-Puffer reicht)', async ({ page }) => {
+  await enter(page);
+  // Tail-Puffer unter dem Text (padding-bottom) muss so gross sein, dass auch
+  // die letzte Zeile bis auf die Schreiblinie hochscrollen kann. Ist er zu
+  // kurz, klemmt der Scroll am Anschlag und die letzten Absätze bleiben tiefer
+  // stehen — genau der „zu weit unten"-Effekt am Seitenende.
+  const { padBottom, needed } = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const cr = el.getBoundingClientRect();
+    // Anker = Mitte des sichtbaren Bereichs; darunter liegt der Rest der
+    // Scroll-Box, der als Tail scrollbar sein muss.
+    const anchor = (window.visualViewport?.offsetTop || 0) + (window.visualViewport?.height || window.innerHeight) * 0.5;
+    return { padBottom: parseFloat(getComputedStyle(el).paddingBottom), needed: cr.bottom - anchor };
+  }, EDITOR);
+  expect(padBottom).toBeGreaterThanOrEqual(needed - 1);
+});
+
 test('Pointer-Schonfrist verhindert Recenter (Klick-Verhalten)', async ({ page }) => {
   await enter(page);
 
