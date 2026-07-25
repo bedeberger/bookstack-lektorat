@@ -83,6 +83,13 @@ test('P3: Intl.Segmenter nicht pro Keystroke neu konstruiert', async ({ page }) 
   await page.evaluate(() => { window.harness.focusGranularity = 'sentence'; });
   await enter(page);
   await placeCaretInParagraph(page, 2);
+  // Warm-up-Tick vor der Messung: beim Fokus-Eintritt sitzt der Caret im leeren
+  // Auto-<p>-Slot, dort segmentiert nichts (findSentenceRanges('') → []). Der
+  // Erstbau des Segmenters fällt also auf den ersten Tick mit Caret in einem
+  // nicht-leeren Block — ohne diesen expliziten Tick wäre das der asynchrone
+  // selectionchange-Tick, der je nach Maschinenlast in die Messschleife rutscht.
+  await page.evaluate(() => window.harness._focusUpdateActive(false));
+  await page.waitForTimeout(30);
   const ctorCalls = await page.evaluate(async () => {
     const Orig = Intl.Segmenter;
     let n = 0;
