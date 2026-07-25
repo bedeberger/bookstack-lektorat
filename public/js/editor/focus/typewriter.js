@@ -113,16 +113,21 @@ export function typewriterScroll(container, targetRect, ctx, threshold = TYPEWRI
   if (!container || !targetRect) return 0;
   const delta = computeTypewriterDelta(container.getBoundingClientRect(), targetRect, threshold, anchorRatio, deadZoneRatio);
   if (delta === 0) return 0;
-  // Programmatischen Scroll vorab im Counter ankündigen, damit onScroll uns
-  // nicht für eine User-Interaktion hält und unnötig recentert.
-  if (ctx) ctx.expectedScroll++;
-  // prefers-reduced-motion: User hat System-Weit angegeben „kein Animation-
+  const before = container.scrollTop;
+  // prefers-reduced-motion: User hat System-weit angegeben „kein Animation-
   // Overhead". Zwei-Schritt-Scroll überspringen und direkt den Zielwert
   // setzen, damit aktiver Absatz trotzdem passt.
-  if (prefersReducedMotion()) {
-    container.scrollTop += delta;
-    return delta;
-  }
-  container.scrollBy({ top: delta, behavior: 'auto' });
-  return delta;
+  if (prefersReducedMotion()) container.scrollTop = before + delta;
+  else container.scrollBy({ top: delta, behavior: 'auto' });
+  // `behavior: 'auto'` schreibt scrollTop synchron — die tatsächlich gefahrene
+  // Strecke ist hier bereits messbar. Nur ein Scroll, der die Position wirklich
+  // verschoben hat, feuert später ein scroll-Event; nur der darf im Counter
+  // angekündigt werden. Am Scroll-Anschlag (kurzer Tail-Puffer, letzter Absatz)
+  // ist der Aufruf ein No-op: würde er trotzdem gezählt, bliebe `expectedScroll`
+  // dauerhaft > 0 und `onScroll` verschluckte danach jeden echten User-Scroll —
+  // das Spotlight bliebe beim Blättern stehen und der Zähler wüchse pro
+  // Tastendruck weiter.
+  const moved = container.scrollTop - before;
+  if (ctx && moved !== 0) ctx.expectedScroll++;
+  return moved;
 }

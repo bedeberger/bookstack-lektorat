@@ -12,6 +12,7 @@ const {
   getCaretRect,
   setActiveBlock,
   dynamicTypewriterThreshold,
+  typewriterScroll,
 } = await import('../../public/js/editor/focus.js');
 
 // --- findBlockFromNode ------------------------------------------------------
@@ -292,6 +293,68 @@ test('computeTypewriterDelta: deadZoneRatio auf <halbe Höhe gedeckelt', () => {
   const cRect = { top: 0, bottom: 1000, height: 1000 };
   // 0.9 wird auf 0.5 → Band 500. Caret-Mitte 950, rawDelta 450 < 500 → im Band → 0.
   assert.equal(computeTypewriterDelta(cRect, { top: 930, bottom: 970, height: 40 }, 16, 0.5, 0.9), 0);
+});
+
+// --- typewriterScroll -------------------------------------------------------
+
+// Fake-Scroll-Container mit echter Anschlag-Semantik: scrollTop clamped auf
+// [0, max], scrollBy schreibt synchron (wie behavior:'auto' im Browser).
+function mkScroller({ scrollTop = 0, max = 1000, height = 1000 } = {}) {
+  const el = {
+    scrollTop,
+    getBoundingClientRect: () => ({ top: 0, bottom: height, height }),
+    scrollBy({ top }) { el.scrollTop = Math.max(0, Math.min(max, el.scrollTop + top)); },
+  };
+  return el;
+}
+
+test('typewriterScroll: echter Scroll kündigt genau einen prog-Scroll an', () => {
+  const el = mkScroller({ scrollTop: 100 });
+  const ctx = { expectedScroll: 0 };
+  const moved = typewriterScroll(el, { top: 800, bottom: 840, height: 40 }, ctx, 16, 0.5, 0);
+  assert.equal(moved, 320);
+  assert.equal(el.scrollTop, 420);
+  assert.equal(ctx.expectedScroll, 1);
+});
+
+test('typewriterScroll: am Anschlag geklemmt → kein Counter-Increment', () => {
+  // Container steht am Maximum; der Caret sitzt unter dem Anker, das Delta ist
+  // also positiv — scrollBy kann aber nichts mehr fahren und feuert darum auch
+  // kein scroll-Event. Ein Increment hier liesse `expectedScroll` dauerhaft
+  // stehen; onScroll verschluckte danach jeden echten User-Scroll (Spotlight
+  // bleibt beim Blättern stehen).
+  const el = mkScroller({ scrollTop: 1000, max: 1000 });
+  const ctx = { expectedScroll: 0 };
+  const moved = typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5, 0);
+  assert.equal(moved, 0);
+  assert.equal(el.scrollTop, 1000);
+  assert.equal(ctx.expectedScroll, 0);
+});
+
+test('typewriterScroll: teilweise geklemmt → zählt einmal (Scroll-Event feuert)', () => {
+  const el = mkScroller({ scrollTop: 950, max: 1000 });
+  const ctx = { expectedScroll: 0 };
+  const moved = typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5, 0);
+  assert.equal(moved, 50);
+  assert.equal(ctx.expectedScroll, 1);
+});
+
+test('typewriterScroll: Tippen am Scroll-Ende leakt den Counter nicht', () => {
+  // 20 Tastendrücke gegen den Anschlag — der Counter darf bei 0 bleiben.
+  const el = mkScroller({ scrollTop: 1000, max: 1000 });
+  const ctx = { expectedScroll: 0 };
+  for (let i = 0; i < 20; i++) {
+    typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5, 0.08);
+  }
+  assert.equal(ctx.expectedScroll, 0);
+});
+
+test('typewriterScroll: Delta unter Schwelle → kein Scroll, kein Counter', () => {
+  const el = mkScroller({ scrollTop: 100 });
+  const ctx = { expectedScroll: 0 };
+  assert.equal(typewriterScroll(el, { top: 495, bottom: 505, height: 10 }, ctx, 16, 0.5, 0), 0);
+  assert.equal(el.scrollTop, 100);
+  assert.equal(ctx.expectedScroll, 0);
 });
 
 // --- getCaretRect -----------------------------------------------------------
