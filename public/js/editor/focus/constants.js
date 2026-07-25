@@ -28,20 +28,6 @@ export const CURSOR_KEEP_SEL = '.lt-popover, .synonym-menu, .synonym-picker, .fi
 // Zeilenwechsel". 16 dient als Fallback, falls computed style nicht greifbar.
 export const TYPEWRITER_THRESHOLD_PX = 16;
 
-// Dead-Zone-Band um den Typewriter-Anker, als Anteil der Container-Höhe. Solange
-// der Caret innerhalb dieses Bands liegt, wird gar nicht recentert; erst beim
-// Verlassen zieht der Scroll nur bis zur Bandkante (nicht auf den exakten Anker).
-// Verhindert den Mini-Ruck, wenn beim ersten Tippen ein bereits sichtbarer Caret
-// unnötig auf die Mitte gezogen würde (z.B. nach Klick mitten in den Text).
-// Bewusst klein gehalten: ein grosses Band macht die Ruheposition
-// unvorhersehbar (sie hängt von der Scroll-Richtung ab) und parkt den Caret beim
-// kontinuierlichen Abwärtsschreiben an der unteren Bandkante — bei 0.3 wären das
-// 80 % der Viewporthöhe, die Schreibzeile klebte am unteren Rand. 0.08 hält die
-// Ruhezeile knapp unterhalb der exakten Mitte (~58 %): konstante, vorhersehbare
-// Schreibposition (ablenkungsfrei/typewriter), genug geschriebener Kontext oben,
-// und der Threshold (halbe Zeilenhöhe) fängt den Intra-Zeilen-Jitter ohnehin.
-export const TYPEWRITER_DEADZONE_RATIO = 0.08;
-
 export const HAS_IO = typeof IntersectionObserver !== 'undefined';
 export const HAS_MO = typeof MutationObserver !== 'undefined';
 

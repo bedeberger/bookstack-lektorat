@@ -134,6 +134,40 @@ test('Manueller Scroll verschiebt Spotlight auf Viewport-Center-Absatz (preferCe
   expect(Math.abs(activeIdx - centerIdx)).toBeLessThanOrEqual(1);  // folgt dem Viewport-Center
 });
 
+test('Schreiblinie ruht auf der Bildschirmmitte (kein Abdriften nach unten)', async ({ page }) => {
+  await enter(page);
+  await placeCaretInParagraph(page, 30);
+  await page.evaluate(() => window.harness._focusUpdateActive(true));
+  await page.waitForTimeout(80);
+
+  // Mehrere Zeilenwechsel simulieren: nach jedem Enter muss der Typewriter die
+  // Caret-Zeile wieder auf den Anker ziehen. Die Ruheposition darf nicht mit
+  // jedem Schritt tiefer wandern und nicht dauerhaft unter der Mitte parken.
+  const offsets = [];
+  for (let i = 0; i < 4; i++) {
+    await page.evaluate(() => {
+      document.querySelector('#editor-card .focus-editor__content').focus();
+      document.execCommand('insertParagraph');
+      document.execCommand('insertText', false, 'Neue Zeile');
+    });
+    await page.waitForTimeout(80);
+    offsets.push(await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      const cr = el.getBoundingClientRect();
+      const caret = getSelection().getRangeAt(0).getClientRects()[0];
+      const lh = parseFloat(getComputedStyle(el).lineHeight) || 24;
+      return { off: (caret.top + caret.height / 2) - (cr.top + cr.height / 2), lh };
+    }, EDITOR));
+  }
+
+  // Toleranz = halbe Zeilenhöhe: genau die Schwelle, unter der der Typewriter
+  // absichtlich nicht nachzieht (Jitter-Filter). Alles darüber wäre ein Anker,
+  // der nicht mehr die Mitte ist.
+  for (const { off, lh } of offsets) {
+    expect(Math.abs(off)).toBeLessThanOrEqual(lh * 0.5 + 1);
+  }
+});
+
 test('Pointer-Schonfrist verhindert Recenter (Klick-Verhalten)', async ({ page }) => {
   await enter(page);
 

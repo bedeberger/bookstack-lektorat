@@ -13,7 +13,6 @@ import {
   BLOCK_TAGS, BLOCK_SEL,
   POINTER_GRACE_MS, VV_DEBOUNCE_MS, CURSOR_HIDE_MS, CURSOR_KEEP_SEL,
   HAS_IO, HAS_MO,
-  TYPEWRITER_DEADZONE_RATIO,
   reportError,
 } from './constants.js';
 import {
@@ -299,13 +298,11 @@ export const focusCardMethods = {
         if (this._focusState === 'active') this.exitFocusMode();
         else if (this._focusState === 'idle') this.enterFocusMode();
       } else if ((e.key === 'l' || e.key === 'L') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
-        // Vim/emacs-Konvention: Ctrl+L recentert Cursor-Zeile in Viewport-Mitte.
+        // Vim/emacs-Konvention: Ctrl+L recentert Cursor-Zeile auf den Anker.
         // Browser-Default (Adress-Leiste fokussieren) wird im Fokus-Modus
         // unterdrückt — User wollte ohnehin im Editor bleiben.
-        // `exact: true` umgeht die Typewriter-Dead-Zone: explizites Recenter muss
-        // immer exakt auf den Anker ziehen, auch wenn der Caret schon sichtbar ist.
         e.preventDefault();
-        this._focusUpdateActive(true, { exact: true });
+        this._focusUpdateActive(true);
       }
     };
 
@@ -497,8 +494,6 @@ export const focusCardMethods = {
     if (this._focusState !== 'active') return;
     if (this._focusRaf) cancelAnimationFrame(this._focusRaf);
     const preferCenter = opts.preferCenter === true;
-    // Explizites Recenter (Ctrl+L) zieht exakt auf den Anker — Dead-Zone aus.
-    const exact = opts.exact === true;
     const gen = this._focusGen;
     this._focusRaf = requestAnimationFrame(() => {
       this._focusRaf = null;
@@ -585,12 +580,7 @@ export const focusCardMethods = {
             // Anker-Position des Typewriter-Scrolls (Mitte vs. oberes Drittel).
             // Host-/Config-gesteuert; nicht gesetzt → Default 0.5 (Mitte).
             const anchorRatio = editorHost()?.typewriterAnchor;
-            // Dead-Zone um den Anker: bereits sichtbarer Caret wird beim ersten
-            // Tippen nicht unnötig auf die Mitte gezogen (Mini-Ruck auf kurzen
-            // Seiten). Kontinuierliches Schreiben bleibt unverändert mitgeführt.
-            // Explizites Recenter (Ctrl+L) umgeht das Band und zieht exakt.
-            const deadZone = exact ? 0 : TYPEWRITER_DEADZONE_RATIO;
-            typewriterScroll(container, targetRect, ctx, threshold, anchorRatio, deadZone);
+            typewriterScroll(container, targetRect, ctx, threshold, anchorRatio);
           }
         }
       } catch (err) {

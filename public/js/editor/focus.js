@@ -25,5 +25,5 @@ export {
 } from './focus/sentence.js';
 export {
   TYPEWRITER_THRESHOLD_PX, dynamicTypewriterThreshold,
-  getCaretRect, computeTypewriterDelta, typewriterScroll,
+  getCaretRect, computeTypewriterDelta, typewriterScroll, visibleViewportRect,
 } from './focus/typewriter.js';

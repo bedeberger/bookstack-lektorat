@@ -1,5 +1,6 @@
 // Typewriter-Scroll: hält die Cursor-Zeile auf einer konfigurierbaren
-// vertikalen Anker-Position (Default Viewport-Mitte, anchorRatio 0.5).
+// vertikalen Anker-Position des sichtbaren Bildschirms (Default Mitte,
+// anchorRatio 0.5).
 //
 // Schwelle dynamisch aus computed line-height — Tippen innerhalb derselben
 // Zeile löst dank Caret-Rect-Jitter sonst Mini-Scrolls aus, die den Editor
@@ -78,40 +79,47 @@ export function getCaretRect(container, selection) {
   return expandRangeRect(range);
 }
 
+// Sichtbarer Bildschirmausschnitt in Client-Koordinaten (`{ top, height }`).
+// `visualViewport` ist die Wahrheit: die Mobile-Tastatur schrumpft ihn und Android
+// Chrome verschiebt ihn zusätzlich (`offsetTop`). Ohne API → Layout-Window.
+export function visibleViewportRect() {
+  if (typeof window === 'undefined') return null;
+  const vv = window.visualViewport;
+  if (vv && vv.height > 0) return { top: vv.offsetTop || 0, height: vv.height };
+  const h = window.innerHeight;
+  return h > 0 ? { top: 0, height: h } : null;
+}
+
+// Anker-Y in Client-Koordinaten. Bezug ist der sichtbare Bildschirm, NICHT die
+// Scroll-Box: die Box beginnt unter der Focus-Topbar, ihre Mitte liegt damit um
+// die halbe Topbar-Höhe unter der Bildschirmmitte — die Schreiblinie wirkt „zu
+// tief". Mobil mit offener Tastatur ist der Unterschied gross, weil die Box
+// hinter der Tastatur weiterläuft. In die Box geclampt, damit der Anker vom
+// Caret überhaupt erreichbar bleibt.
+function anchorY(containerRect, viewportRect, ratio) {
+  const base = viewportRect && viewportRect.height > 0 ? viewportRect : containerRect;
+  const y = base.top + base.height * ratio;
+  return Math.min(Math.max(y, containerRect.top), containerRect.top + containerRect.height);
+}
+
 // Pure: wie weit muss gescrollt werden, damit targetRect auf der Anker-Position
-// des containerRect sitzt? `anchorRatio` ist der relative vertikale Anker
-// (0 = oben, 0.5 = Mitte [Default], 0.33 = oberes Drittel). Unter Schwelle →
-// no-op. Schwelle ist grob eine Zeilenhöhe, damit Tippen innerhalb derselben
-// Textzeile (Caret-Rect-Jitter, subpixel-Shifts) keinen Mini-Scroll auslöst und
-// der Editor „ruhig" wirkt.
-//
-// `deadZoneRatio` (0 = aus [Default], sonst Anteil der Container-Höhe) spannt ein
-// Sichtband um den Anker: Liegt der Caret darin, wird gar nicht recentert
-// (Mini-Ruck beim ersten Tippen auf bereits sichtbarem Caret vermieden). Verlässt
-// er das Band, wird nur bis zur Bandkante gescrollt — nicht auf den exakten Anker.
-// Beim kontinuierlichen Schreiben sitzt der Caret so an der unteren Bandkante und
-// wird Zeile für Zeile wie bisher mitgeführt. deadZoneRatio = 0 reproduziert das
-// exakte alte Anker-Verhalten.
-export function computeTypewriterDelta(containerRect, targetRect, threshold = TYPEWRITER_THRESHOLD_PX, anchorRatio = 0.5, deadZoneRatio = 0) {
+// sitzt? `anchorRatio` ist der relative vertikale Anker (0 = oben, 0.5 = Mitte
+// [Default], 0.33 = oberes Drittel), `viewportRect` der Bezugsausschnitt (ohne
+// Angabe: containerRect). Unter Schwelle → no-op. Schwelle ist grob eine halbe
+// Zeilenhöhe, damit Tippen innerhalb derselben Textzeile (Caret-Rect-Jitter,
+// subpixel-Shifts) keinen Mini-Scroll auslöst und der Editor „ruhig" wirkt; die
+// Ruheposition der Schreibzeile bleibt dadurch exakt der Anker.
+export function computeTypewriterDelta(containerRect, targetRect, threshold = TYPEWRITER_THRESHOLD_PX, anchorRatio = 0.5, viewportRect = null) {
   if (!containerRect || !targetRect) return 0;
   const ratio = normAnchorRatio(anchorRatio);
   const targetCenter = targetRect.top + targetRect.height / 2;
-  const containerAnchor = containerRect.top + containerRect.height * ratio;
-  const rawDelta = targetCenter - containerAnchor;
-  // Band auf < halbe Container-Höhe deckeln, damit es nie über den verfügbaren
-  // Raum hinaus wächst; <= 0 → Dead-Zone aus.
-  const band = deadZoneRatio > 0 ? containerRect.height * Math.min(deadZoneRatio, 0.5) : 0;
-  let delta = rawDelta;
-  if (band > 0) {
-    if (Math.abs(rawDelta) <= band) return 0;
-    delta = rawDelta - Math.sign(rawDelta) * band;
-  }
+  const delta = targetCenter - anchorY(containerRect, viewportRect, ratio);
   return Math.abs(delta) < threshold ? 0 : delta;
 }
 
-export function typewriterScroll(container, targetRect, ctx, threshold = TYPEWRITER_THRESHOLD_PX, anchorRatio = 0.5, deadZoneRatio = 0) {
+export function typewriterScroll(container, targetRect, ctx, threshold = TYPEWRITER_THRESHOLD_PX, anchorRatio = 0.5) {
   if (!container || !targetRect) return 0;
-  const delta = computeTypewriterDelta(container.getBoundingClientRect(), targetRect, threshold, anchorRatio, deadZoneRatio);
+  const delta = computeTypewriterDelta(container.getBoundingClientRect(), targetRect, threshold, anchorRatio, visibleViewportRect());
   if (delta === 0) return 0;
   const before = container.scrollTop;
   // prefers-reduced-motion: User hat System-weit angegeben „kein Animation-
