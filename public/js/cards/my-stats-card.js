@@ -285,10 +285,14 @@ export function registerMyStatsCard() {
 
     // Stundenlabel: nur jede dritte Stunde beschriften (0,3,…21) — sonst zu dicht.
     myStatsHourLabel(h) { return (h % 3 === 0) ? String(h) : ''; },
-    // Tooltip: „07:00–08:00 · 25 min".
+    // Tooltip: „07:00–08:00 · 25 min gesamt". Das „gesamt" ist Pflicht, nicht
+    // Kosmetik: der Balken ist die lebenslange Summe dieser Stunde (writing_hour
+    // hat keine Datums-Dimension), sieht aber wie ein Tageswert aus. Ohne den
+    // Qualifier liest man einen 10-h-Balken als „10 h an einem Tag geschrieben".
+    // Gleiche Konvention wie `mystats.weekdayTip`.
     myStatsHourTip(h, min) {
-      const a = String(h).padStart(2, '0'), b = String((h + 1) % 24).padStart(2, '0');
-      return `${a}:00–${b}:00 · ${this.myStatsMinFmt(min)}`;
+      const from = String(h).padStart(2, '0'), to = String((h + 1) % 24).padStart(2, '0');
+      return window.__app.t('mystats.hourTip', { from, to, time: this.myStatsMinFmt(min) });
     },
 
     // ── Tagesziel (Minuten/Tag) ─────────────────────────────────────────────

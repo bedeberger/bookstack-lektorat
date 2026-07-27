@@ -144,11 +144,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw-version.outputs.version }}
+          # Der Browser-Satz gehört in den Key: ein Cache-Treffer überspringt den
+          # Install-Schritt komplett, ein alter Chromium-only-Eintrag liesse WebKit
+          # also dauerhaft fehlen ("Executable doesn't exist").
+          key: playwright-${{ runner.os }}-${{ steps.pw-version.outputs.version }}-chromium-webkit
 
-      - name: Chromium installieren (nur bei Cache-Miss)
+      # Zwei Engines: die Suite läuft auf Chromium, `*.webkit.spec.js` deckt die
+      # Fehlerklassen ab, die nur WebKit zeigt (contenteditable-Selektion bei
+      # Padding-Summe >= clientHeight) — siehe projects in playwright.config.js.
+      - name: Browser installieren (nur bei Cache-Miss)
         if: steps.cache-playwright.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
 
       - name: E2E-Tests ausführen
         run: npx playwright test --reporter=list

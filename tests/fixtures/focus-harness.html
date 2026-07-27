@@ -34,7 +34,18 @@
              Editor ohne Normal-Editor-Container (Test fokussiert
              ausschliesslich auf Focus-Verhalten). -->
         <div id="partial-editor-body-focus">
+          <!-- Topbar-Stellvertreter aus partials/editor-focus.html. Ohne sie wäre
+               `.focus-editor__content` exakt 100vh hoch — genau der Sonderfall, in
+               dem die alte Tail-Puffer-Formel (`100vh − …`) durch Float-Rundung
+               zufällig knapp unter der WebKit-Selektions-Schwelle landete. Real
+               ist die Box immer kleiner als der Viewport. -->
           <div class="focus-editor is-active">
+            <div class="focus-editor__topbar">
+              <div class="focus-editor__title-row">
+                <span class="focus-editor__title">Testseite</span>
+              </div>
+              <div class="focus-editor__actions"></div>
+            </div>
             <div class="focus-editor__content" contenteditable="true"></div>
           </div>
         </div>

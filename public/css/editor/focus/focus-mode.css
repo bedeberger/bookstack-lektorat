@@ -183,29 +183,50 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
   /* Oben/unten Puffer, damit die Schreibzeile über die GANZE Seite auf dem Anker
      ruhen kann — erste und letzte Zeile inklusive (Invariante 9 in
      docs/focus-editor.md).
-     Beide Formeln leiten sich aus drei JS-gesetzten Variablen ab, keine eigenen
+     Beide Formeln leiten sich aus vier JS-gesetzten Variablen ab, keine eigenen
      Magic Numbers: `--focus-anchor` (0–1, aus dem host-Anker `typewriterAnchor`,
      gesetzt in focus/card.js#markFocusChrome), `--focus-vh` (sichtbare Höhe,
-     folgt der Tastatur) und `--focus-box-h` (clientHeight dieser Box) — die
-     letzten beiden aus focus/viewport.js. Fallback 0.5 / 100vh / 100vh.
-     Kopf: die erste Zeile muss um `Anker × sichtbare Höhe` nach unten wandern,
-     um auf der Linie zu landen — negativen Scroll gibt es nicht, also muss genau
-     diese Strecke oberhalb des Textes liegen. Ein kürzerer Kopf-Puffer klemmt den
-     Seitenanfang über der Linie (auch mobil: darum hier KEIN Media-Query-Wert).
+     folgt der Tastatur), `--focus-box-h` (Layout-Slot dieser Box) und
+     `--focus-box-top` (Versatz der Boxoberkante gegen den sichtbaren Bereich,
+     im Normalfall die Topbar-Höhe) — die letzten drei aus focus/viewport.js.
+     Fallback 0.5 / 100vh / 100vh / 0.
+     Kopf: die erste Zeile muss bis auf den Anker hinunterwandern, um auf der
+     Linie zu landen — negativen Scroll gibt es nicht, also muss genau diese
+     Strecke oberhalb des Textes liegen. Sie misst sich AB BOXOBERKANTE
+     (`Anker − Boxoberkante`), denn der Anker ist eine Bildschirmposition
+     (typewriter.js#anchorY), die Box beginnt aber unter der Topbar. Ein kürzerer
+     Kopf-Puffer klemmt den Seitenanfang über der Linie (auch mobil: darum hier
+     KEIN Media-Query-Wert), ein längerer frisst dem Tail dieselbe Strecke weg.
      Tail: unter der letzten Zeile muss der Rest der Box scrollbar bleiben, also
-     `Box-Höhe − Anker × sichtbare Höhe`. Ein kürzerer Tail klemmt das Seitenende
-     („man kommt nur bis zum zweitletzten Absatz").
-     Bezug ist die BOX-Höhe, nicht `100vh`, und davon gehen 4 px ab: WebKit
+     `Box-Höhe − Kopf`. Ein kürzerer Tail klemmt das Seitenende („man kommt nur
+     bis zum zweitletzten Absatz").
+     Die Summe beider Puffer ist damit IMMER exakt
+     `--focus-box-h − --focus-pad-reserve`, und genau darauf kommt es an: WebKit
      (Safari/iOS/WKWebView) zerlegt die Textselektion im contenteditable, sobald
      `padding-top + padding-bottom >= clientHeight` der Scroll-Box ist —
      Doppelklick selektiert dann vom Klickpunkt bis zum Absatzende statt das Wort,
-     Zieh-Select liefert gar nichts. `100vh − Anker × vh + Anker × vh == 100vh`
-     traf das exakt; mit Topbar (Box < 100vh) sogar mit Reserve. Chromium ist
-     nicht betroffen — darum der WebKit-Spec in tests/e2e/focus-selection.spec.js.
-     Die 4 px liegen unter der Typewriter-Schwelle (`max(4px, lineHeight × 0.5)`),
-     Invariante 9 (letzte Zeile erreicht den Anker) bleibt also erhalten. */
-  padding-top: calc(var(--focus-vh, 100vh) * var(--focus-anchor, 0.5));
-  padding-bottom: calc(var(--focus-box-h, 100vh) - var(--focus-vh, 100vh) * var(--focus-anchor, 0.5) - 4px);
+     Zieh-Select liefert gar nichts. Ein `100vh`-Bezug traf das zwangsläufig (die
+     Box ist wegen der Topbar kleiner als der Viewport). Chromium selektiert
+     korrekt weiter — der Regressions-Schutz liegt darum in
+     tests/e2e/focus-selection.webkit.spec.js.
+     Die Reserve ist der EINZIGE Fehler, den das Modell zulässt: der ideale Tail
+     wäre exakt `Box-Höhe − Kopf` und stünde damit genau auf der WebKit-Schwelle.
+     Sie geht deshalb vom Tail ab (der Kopf bleibt exakt) und bleibt unter der
+     Typewriter-Schwelle (`max(4px, lineHeight × 0.5)`, focus/typewriter.js) —
+     Invariante 9 (Zeile erreicht den Anker) bleibt also erhalten. Als Variable,
+     weil die Puffer-Matrix in tests/e2e/focus-editor.spec.js dieselbe Zahl als
+     erlaubte Tail-Abweichung liest, statt sie zu duplizieren.
+     Die `clamp()`-Grenzen im Kopf sind Randfälle, keine Normalfälle: 0 greift bei
+     einem Anker oberhalb der Boxoberkante (Anker ≈ 0 mit Topbar), die Obergrenze
+     bei einem Anker nahe 1 — dort risse der Kopf allein die ganze Box-Höhe, der
+     Tail fiele auf 0 und die Summe stünde wieder auf der Schwelle. */
+  --focus-pad-reserve: 4px;
+  --focus-head: clamp(
+    0px,
+    calc(var(--focus-vh, 100vh) * var(--focus-anchor, 0.5) - var(--focus-box-top, 0px)),
+    calc(var(--focus-box-h, 100vh) - var(--focus-pad-reserve)));
+  padding-top: var(--focus-head);
+  padding-bottom: max(0px, calc(var(--focus-box-h, 100vh) - var(--focus-head) - var(--focus-pad-reserve)));
   /* Die Textspalte (60ch) wird über das seitliche Padding zentriert, NICHT über
      `max-width` + `margin:0 auto`: nur so gehört die gesamte Overlay-Breite zur
      Box — und damit zur Scroll- UND zur Klickfläche. Eine 60ch-breite Box liess

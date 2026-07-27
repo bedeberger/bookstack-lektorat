@@ -166,18 +166,35 @@ function visibleBoxRect(container) {
   return bottom - top > 1 ? { top, height: bottom - top } : r;
 }
 
+// Liegt der Block überhaupt im Bezugsband? Pure. Die Sichtbarkeits-Gegenprobe
+// zum IO-Set — siehe findBlockAtViewportCenter.
+export function overlapsBand(el, band) {
+  if (!el || !band) return false;
+  const r = el.getBoundingClientRect();
+  return r.height > 0 && r.bottom > band.top && r.top < band.top + band.height;
+}
+
 export function findBlockAtViewportCenter(container, visibleBlocks, blockSel = BLOCK_SEL) {
   if (!container) return null;
   const containerRect = visibleBoxRect(container);
-  // Bevorzugt das IO-getrackte Set (günstig, keine QSA). ABER: das Set kann
-  // transient nur Höhe-0/abgehängte Einträge halten (Mutation vor IO-Callback,
-  // oder eine entfernte Node, die noch nicht ge-unobserve't wurde) — dann liefert
-  // pickCenterBlock null, obwohl on-screen valide Blöcke existieren. In dem Fall
-  // auf den vollständigen QSA-Scan zurückfallen, statt die Hervorhebung zu
-  // verlieren (block===null → setActiveBlock clear't alles).
+  // Bevorzugt das IO-getrackte Set (günstig, keine QSA). Zwei Fälle erzwingen
+  // trotzdem den vollständigen QSA-Scan — sonst verliert oder verfälscht der Pick
+  // die Hervorhebung:
+  //   1. Das Set hält transient nur Höhe-0/abgehängte Einträge (Mutation vor dem
+  //      IO-Callback, oder eine entfernte Node, die noch nicht ge-unobserve't
+  //      wurde) → pickCenterBlock liefert null, obwohl on-screen valide Blöcke
+  //      existieren (block===null → setActiveBlock clear't alles).
+  //   2. Das Set ist einen Frame alt und nach einem SPRUNG-Scroll (Page-Down,
+  //      Scrollbar-Zug, programmatischer Sprung) komplett off-screen. IO-Callbacks
+  //      laufen asynchron, der Recenter-Tick im RAF sieht also noch die Blöcke der
+  //      alten Position — der Pick landete weit ausserhalb des Bildes und der
+  //      ganze sichtbare Text blieb gedimmt. Ein IO-Callback allein löst keinen
+  //      neuen Tick aus, der Fehlstand blieb bis zum nächsten Event stehen.
+  // Kostet die Gegenprobe nichts im Normalfall: beim laufenden Scroll überlappen
+  // die Sets zweier Frames fast vollständig, der Pick liegt also im Band.
   if (visibleBlocks && visibleBlocks.size > 0) {
     const fromVisible = pickCenterBlock(containerRect, visibleBlocks);
-    if (fromVisible) return fromVisible;
+    if (fromVisible && overlapsBand(fromVisible, containerRect)) return fromVisible;
   }
   return pickCenterBlock(containerRect, container.querySelectorAll(blockSel));
 }

@@ -61,4 +61,5 @@ export function unmarkFocusChrome() {
   document.documentElement.style.removeProperty('--focus-vh');
   document.documentElement.style.removeProperty('--focus-vh-top');
   document.documentElement.style.removeProperty('--focus-box-h');
+  document.documentElement.style.removeProperty('--focus-box-top');
 }

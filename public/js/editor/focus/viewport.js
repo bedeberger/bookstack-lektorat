@@ -1,7 +1,7 @@
 // Viewport-Synchronisation des Fokusmodus: hält `--focus-vh` / `--focus-vh-top`
-// / `--focus-box-h` am sichtbaren Bereich (Mobile-Tastatur, Rotation,
-// Desktop-Resize) und entscheidet, wann ein Viewport-Tick einen Recenter
-// verdient.
+// / `--focus-box-h` / `--focus-box-top` am sichtbaren Bereich (Mobile-Tastatur,
+// Rotation, Desktop-Resize) und entscheidet, wann ein Viewport-Tick einen
+// Recenter verdient.
 //
 // Eigenes Modul, weil das Thema quer zur Block-/Spotlight-Logik in card.js
 // liegt: Bezug ist der Bildschirm, nicht der Text.
@@ -28,6 +28,44 @@ export function shouldRecenterOnViewport(prev, next, isWriting) {
   return Math.abs(next.h - prev.h) > 1 || Math.abs(next.top - prev.top) > 1;
 }
 
+// Geometrie der Schreibfläche als `{ h, top }`: die Höhe, die ihr das Layout
+// tatsächlich zuweist, und ihre Oberkante in Client-Koordinaten — beides mit
+// kurzzeitig neutralisiertem Kopf-/Tail-Puffer gemessen.
+//
+// Warum die Höhe nicht einfach `clientHeight` ist: die Puffer sind zusammen ~eine
+// Bildschirmhöhe und damit grösser als der Flex-Slot der Box (die Focus-Topbar
+// nimmt oben Platz weg). Ein Border-Box-Element kann aber nicht kleiner werden
+// als seine eigenen Paddings — die Box wird also auf die Puffer-Summe
+// aufgeblasen und `clientHeight` liefert exakt diese Summe zurück, nicht den
+// Slot. Die Puffer-Formeln in focus-mode.css leiten sich aus dieser Zahl ab; mit
+// dem geblähten Wert wären sie zirkulär (jede Messung bestätigt das aktuelle
+// Padding) und die WebKit-Bedingung `pt + pb < clientHeight` bliebe für immer
+// verletzt. Kein Chrome-vs-WebKit-Unterschied — das Clamping ist Spec.
+//
+// `top` ist die zweite Hälfte derselben Rechnung: der Anker ist eine
+// BILDSCHIRM-Position (`vvTop + vvH × ratio`, typewriter.js#anchorY), die Puffer
+// wirken aber innerhalb der Box — und die beginnt unter der Topbar. Ohne diesen
+// Versatz rechnen beide Formeln mit „Boxoberkante == Bildschirmoberkante": der
+// Kopf-Puffer wird um die Topbar-Höhe zu lang und nimmt dem Tail genau diese
+// Strecke weg, die letzte Zeile bleibt darum um eine Topbar-Höhe unter der
+// Schreiblinie stehen („man kommt nur bis zum zweitletzten Absatz").
+//
+// Setzen → lesen → zurücksetzen läuft synchron in einem Task: es erzwingt ein
+// Zwischen-Layout, aber keinen Paint, also kein sichtbares Springen. Der Preis
+// ist ein zusätzliches Layout pro Viewport-Tick (debounced), nicht pro Anschlag.
+export function measureBoxGeometry(box) {
+  if (!box || !box.style) return { h: 0, top: 0 };
+  const pt = box.style.paddingTop;
+  const pb = box.style.paddingBottom;
+  box.style.paddingTop = '0px';
+  box.style.paddingBottom = '0px';
+  const h = box.clientHeight;
+  const top = box.getBoundingClientRect().top;
+  box.style.paddingTop = pt;
+  box.style.paddingBottom = pb;
+  return { h, top: Number.isFinite(top) ? top : 0 };
+}
+
 // Baut das Paar `applyViewport` (sofort) / `syncViewport` (debounced) für den
 // Focus-Controller. `ctx` liefert den Zustandsspeicher (`_lastViewport`,
 // `scrollBox`, `_twCache`, `vvTimer`), `isActive()` den State-Machine-Guard und
@@ -44,24 +82,27 @@ export function makeViewportSync({ ctx, container, isActive, updateActive }) {
     // Media-Query umhängen (Kompakt-Layout bei kleiner Höhe), und dann scrollt
     // ab hier ein anderes Element als beim Mount.
     ctx.scrollBox = resolveScrollBox(container);
-    // Höhe der Box, die tatsächlich scrollt (Padding-Box, ohne Scrollbar). Der
-    // Tail-Puffer in focus-mode.css leitet sich daraus ab statt aus `100vh`,
+    // Layout-Slot der Schreibfläche + ihr Versatz gegen den sichtbaren Bereich.
+    // Beide Puffer in focus-mode.css leiten sich daraus ab statt aus `100vh`,
     // weil WebKit die Textselektion im contenteditable kaputt macht, sobald
     // `padding-top + padding-bottom >= clientHeight` der Scroll-Box ist
     // (Doppelklick selektiert bis zum Absatzende statt das Wort, Zieh-Select
-    // liefert eine leere Selektion). Mit Topbar ist die Box ohnehin kleiner als
-    // 100vh — die alte Formel lag also garantiert über der Schwelle.
+    // liefert eine leere Selektion) — mit den gemessenen Werten ist die Summe
+    // strukturell `Box-Höhe − Reserve`.
     // Bezug ist bewusst die Scroll-Box und nicht stur der Container: gibt eine
     // fremde Schale den Scroll an einen Vorfahr ab, wächst der Container mit dem
-    // Inhalt und `clientHeight` wäre die ganze Buchseite — der Tail-Puffer
-    // blähte sich auf Buchlänge auf und man scrollte nach dem letzten Absatz
-    // durch eine ebenso lange Leerfläche. Im Normalfall sind beide dasselbe
-    // Element. Kein Circular-Layout: die Höhe kommt aus der Flex-Kette
-    // (`flex: 1 1 auto` unter fixer Overlay-Höhe), das Padding geht nicht ein.
-    // 0 wird nicht publiziert (Element noch nicht gelayoutet) — dann bleibt der
-    // letzte gute Wert bzw. der CSS-Fallback stehen.
-    const boxH = ctx.scrollBox ? ctx.scrollBox.clientHeight : 0;
-    if (boxH > 0) document.documentElement.style.setProperty('--focus-box-h', boxH + 'px');
+    // Inhalt und seine Höhe wäre die ganze Buchseite — der Tail-Puffer blähte
+    // sich auf Buchlänge auf und man scrollte nach dem letzten Absatz durch eine
+    // ebenso lange Leerfläche. Im Normalfall sind beide dasselbe Element.
+    // Höhe 0 wird nicht publiziert (Element noch nicht gelayoutet) — dann bleibt
+    // der letzte gute Wert bzw. der CSS-Fallback stehen. Beim Versatz ist 0 ein
+    // legitimer Messwert (Schale ohne Topbar), er hängt darum am Höhen-Gate.
+    const box = measureBoxGeometry(ctx.scrollBox);
+    if (box.h > 0) {
+      const st = document.documentElement.style;
+      st.setProperty('--focus-box-h', box.h + 'px');
+      st.setProperty('--focus-box-top', (box.top - top) + 'px');
+    }
     const prev = ctx._lastViewport;
     ctx._lastViewport = { h, top };
     if (!isActive()) return;

@@ -113,7 +113,7 @@ test('Manueller Scroll verschiebt Spotlight auf Viewport-Center-Absatz (preferCe
   // Spotlight muss dem Viewport-Center folgen, nicht beim Caret-Absatz 0 bleiben.
   const { activeIdx, centerIdx } = await page.evaluate((sel) => {
     const el = document.querySelector(sel);
-    if (window.harness._focusListeners) window.harness._focusListeners.progScrollTop = null;
+    if (window.harness._focusListeners) window.harness._focusListeners.progScroll = null;
     el.dispatchEvent(new Event('scroll'));
     return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
       const ps = [...el.querySelectorAll('p')];
@@ -153,10 +153,16 @@ test('Schreiblinie ruht auf der Bildschirmmitte (kein Abdriften nach unten)', as
     await page.waitForTimeout(80);
     offsets.push(await page.evaluate((sel) => {
       const el = document.querySelector(sel);
-      const cr = el.getBoundingClientRect();
       const caret = getSelection().getRangeAt(0).getClientRects()[0];
       const lh = parseFloat(getComputedStyle(el).lineHeight) || 24;
-      return { off: (caret.top + caret.height / 2) - (cr.top + cr.height / 2), lh };
+      // Bezug ist die BILDSCHIRM-Mitte, nicht die Box-Mitte: die Schreibfläche
+      // beginnt unter der Focus-Topbar, ihre Mitte liegt also um die halbe
+      // Topbar-Höhe tiefer. Genau diese Definition fährt der Typewriter an
+      // (typewriter.js#anchorY: „Bezug ist der sichtbare Bildschirm, NICHT die
+      // Scroll-Box"), und genau darum misst der Test hier gegen sie.
+      const vvTop = window.visualViewport?.offsetTop || 0;
+      const vvH = window.visualViewport?.height || window.innerHeight;
+      return { off: (caret.top + caret.height / 2) - (vvTop + vvH / 2), lh };
     }, EDITOR));
   }
 
@@ -170,10 +176,18 @@ test('Schreiblinie ruht auf der Bildschirmmitte (kein Abdriften nach unten)', as
 
 // Kopf- und Tail-Puffer sind die Layout-Voraussetzung dafür, dass die
 // Schreibzeile über die GANZE Seite auf dem Anker ruht (Invariante 9). Beide
-// leiten sich aus `--focus-anchor` × `--focus-vh` ab; die Matrix prüft genau die
-// Dimensionen, in denen das schon einmal auseinandergedriftet ist: der
-// Mobile-Breakpoint (eigene padding-Regeln) und ein Anker ≠ 0.5 (host-gesetzt,
-// z.B. nativer Client).
+// leiten sich aus `--focus-anchor` × `--focus-vh` gegen die gemessene Box-Geometrie
+// ab; die Matrix prüft genau die Dimensionen, in denen das schon einmal
+// auseinandergedriftet ist: der Mobile-Breakpoint (eigene padding-Regeln) und ein
+// Anker ≠ 0.5 (host-gesetzt, z.B. nativer Client).
+//
+// Die Puffer-Summe ist per Konstruktion `Box-Höhe − Reserve`, denn beide Bedarfe
+// zusammen ergeben exakt die Box-Höhe und WebKit verlangt eine Summe STRIKT
+// darunter (sonst zerfällt die Textselektion im contenteditable, siehe
+// focus-selection.webkit.spec.js). Genau ein Puffer darf also um diese Reserve zu
+// kurz sein — sie liegt unter der Typewriter-Schwelle (`max(4px, lineHeight ×
+// 0.5)`), die Zeile landet damit weiterhin auf dem Anker. Die Zahl wird aus
+// `--focus-pad-reserve` gelesen statt hier gespiegelt; SSoT bleibt focus-mode.css.
 const BUFFER_CASES = [
   { label: 'Desktop', viewport: { width: 1024, height: 768 }, anchor: undefined },
   { label: 'Mobile', viewport: { width: 390, height: 844 }, anchor: undefined },
@@ -190,11 +204,11 @@ for (const c of BUFFER_CASES) {
     }
     await enter(page);
     // Kopf: um die ERSTE Zeile auf die Linie zu senken, bräuchte es negativen
-    // Scroll — den gibt es nicht, also muss der Puffer oberhalb des Textes
-    // mindestens `Anker − Boxoberkante` betragen. Tail: unter der LETZTEN Zeile
-    // muss der Rest der Box scrollbar bleiben, sonst klemmt der Scroll am
-    // Anschlag und die letzten Absätze bleiben tiefer stehen („man kommt nur bis
-    // zum zweitletzten").
+    // Scroll — den gibt es nicht, also muss der Puffer oberhalb des Textes die
+    // Strecke `Anker − Boxoberkante` abdecken. Tail: unter der LETZTEN Zeile muss
+    // der Rest der Box scrollbar bleiben (`Box-Höhe − dieselbe Strecke`), sonst
+    // klemmt der Scroll am Anschlag und die letzten Absätze bleiben tiefer stehen
+    // („man kommt nur bis zum zweitletzten").
     const m = await page.evaluate(({ sel, ratio }) => {
       const el = document.querySelector(sel);
       const cr = el.getBoundingClientRect();
@@ -202,17 +216,34 @@ for (const c of BUFFER_CASES) {
       const vvH = window.visualViewport?.height || window.innerHeight;
       const anchor = vvTop + vvH * ratio;
       const cs = getComputedStyle(el);
+      // Bezug ist die Box, nicht der Bildschirm: der Anker ist eine
+      // Bildschirmposition, die Box beginnt aber unter der Topbar. Genau dieser
+      // Versatz fehlte in der alten Formel und ging dem Tail verloren.
+      // Ausserhalb der Box wird die Erwartung geklemmt wie die CSS-Formel: liegt
+      // die Linie über der Boxoberkante (Anker 0 mit Topbar) oder unter ihrer
+      // Unterkante, kann kein Puffer sie dorthin schieben.
+      const boxH = el.clientHeight;
+      const head = Math.min(Math.max(anchor - cr.top, 0), boxH);
       return {
         padTop: parseFloat(cs.paddingTop),
         padBottom: parseFloat(cs.paddingBottom),
-        neededTop: anchor - cr.top,
-        neededBottom: cr.bottom - anchor,
+        boxH,
+        neededTop: head,
+        neededBottom: boxH - head,
+        reserve: parseFloat(cs.getPropertyValue('--focus-pad-reserve')),
         cssAnchor: parseFloat(cs.getPropertyValue('--focus-anchor')),
       };
     }, { sel: EDITOR, ratio: c.anchor === undefined ? 0.5 : c.anchor });
     expect(m.cssAnchor).toBeCloseTo(c.anchor === undefined ? 0.5 : c.anchor, 5);
+    expect(m.reserve).toBeGreaterThan(0);
+    // Der Kopf trägt die Reserve nicht (der Seitenanfang muss exakt aufgehen),
+    // der Tail darf um sie zu kurz sein.
     expect(m.padTop).toBeGreaterThanOrEqual(m.neededTop - 1);
-    expect(m.padBottom).toBeGreaterThanOrEqual(m.neededBottom - 1);
+    expect(m.padBottom).toBeGreaterThanOrEqual(m.neededBottom - m.reserve - 1);
+    // Gegenprobe in die andere Richtung — dieselbe Summe, die WebKit begrenzt:
+    // ein wieder aufgeblähter Kopf-Puffer (Bezug Bildschirm statt Box) nähme dem
+    // Tail die Topbar-Höhe weg und sprengte hier die Schwelle.
+    expect(m.padTop + m.padBottom).toBeLessThan(m.boxH);
   });
 }
 
@@ -668,7 +699,7 @@ test('Scroll (preferCenter) ohne auffindbaren Center-Block verliert Hervorhebung
     const el = document.querySelector(sel);
     el.querySelectorAll('p').forEach(p => { p.style.display = 'none'; });
     window.harness._focusListeners?.visibleBlocks.clear();
-    if (window.harness._focusListeners) window.harness._focusListeners.progScrollTop = null;
+    if (window.harness._focusListeners) window.harness._focusListeners.progScroll = null;
     el.dispatchEvent(new Event('scroll'));
   }, EDITOR);
   await page.waitForTimeout(80);
@@ -1095,47 +1126,89 @@ test('MO: removedNodes → visibleBlocks räumt Ref ab (kein Leak)', async ({ pa
   expect(stillThere).toBe(false);
 });
 
-test('prefers-reduced-motion: typewriter-scroll via scrollTop-assign, nicht scrollBy', async ({ page }) => {
-  // matchMedia stubben, bevor wir enter aufrufen. Verifiziert, dass Recenter
-  // trotzdem den scrollTop bewegt (Funktionalität erhalten), aber den
-  // scrollBy-Pfad umgeht (kein smooth-scroll, wenn System es nicht will).
+test('Typewriter-Scroll ist immer instant: scrollTo(behavior:instant), nie scrollBy', async ({ page }) => {
+  // Der Scroll darf NIE animiert werden — unabhängig von `prefers-reduced-motion`
+  // (das war nur der halbe Fall) und unabhängig davon, was das Host-CSS einer
+  // fremden Schale in `scroll-behavior` schreibt. Erlaubt ist genau ein Weg:
+  // `scrollTo({ behavior: 'instant' })`. `'auto'` und `scrollBy` ohne Verhalten
+  // delegieren laut CSSOM-View an die CSS-Property; animiert stünde `scrollTop`
+  // direkt danach noch auf dem Altwert, die gefahrene Strecke wäre 0 und die
+  // prog-Scroll-Marke bliebe aus → das eigene scroll-Event gälte als User-Scroll
+  // und risse das Spotlight weg.
   await page.evaluate(() => {
-    window.__origMM = window.matchMedia;
-    window.matchMedia = (q) => ({
-      matches: q.includes('prefers-reduced-motion: reduce'),
-      media: q, onchange: null,
-      addEventListener() {}, removeEventListener() {},
-      addListener() {}, removeListener() {}, dispatchEvent() { return false; },
-    });
     window.__scrollByCalls = 0;
+    window.__scrollToBehaviors = [];
     const proto = HTMLElement.prototype;
-    const orig = proto.scrollBy;
-    window.__origScrollBy = orig;
+    window.__origScrollBy = proto.scrollBy;
+    window.__origScrollTo = proto.scrollTo;
     proto.scrollBy = function (...args) {
       window.__scrollByCalls++;
-      return orig.apply(this, args);
+      return window.__origScrollBy.apply(this, args);
+    };
+    proto.scrollTo = function (...args) {
+      if (args[0] && typeof args[0] === 'object') window.__scrollToBehaviors.push(args[0].behavior);
+      return window.__origScrollTo.apply(this, args);
     };
   });
 
   await enter(page);
-  await page.evaluate((sel) => { document.querySelector(sel).scrollTop = 0; }, EDITOR);
+  await page.evaluate((sel) => { document.querySelector(sel).scrollTo({ top: 0, behavior: 'instant' }); }, EDITOR);
   await page.waitForTimeout(50);
   await placeCaretInParagraph(page, 30);
   await page.keyboard.type('x');
   await page.waitForTimeout(200);
 
-  const [scrolled, scrollByCalls] = await Promise.all([
+  const [scrolled, calls] = await Promise.all([
     scrollTop(page),
-    page.evaluate(() => window.__scrollByCalls),
+    page.evaluate(() => ({ by: window.__scrollByCalls, behaviors: window.__scrollToBehaviors })),
   ]);
   expect(scrolled).toBeGreaterThan(200);
-  expect(scrollByCalls).toBe(0);
+  expect(calls.by).toBe(0);
+  // Mindestens der Recenter-Scroll; alle Aufrufe explizit instant.
+  expect(calls.behaviors.length).toBeGreaterThan(0);
+  expect(calls.behaviors.every(b => b === 'instant')).toBe(true);
 
   // Restore, damit Folgetests sauber laufen.
   await page.evaluate(() => {
-    if (window.__origMM) window.matchMedia = window.__origMM;
     HTMLElement.prototype.scrollBy = window.__origScrollBy;
+    HTMLElement.prototype.scrollTo = window.__origScrollTo;
   });
+});
+
+test('Sprung-Scroll: Spotlight folgt sofort, ohne auf den IntersectionObserver zu warten', async ({ page }) => {
+  // Regression gegen den einen Frame alten IO-Pool: bei einem Sprung (Page-Down,
+  // Scrollbar-Zug) ist das Set der alten Position komplett off-screen. Ohne
+  // Sichtbarkeits-Gegenprobe pickte der Center-Pick daraus — Hervorhebung
+  // ausserhalb des Bildes, gesamter sichtbarer Text gedimmt, und zwar bis zum
+  // nächsten Event (ein IO-Callback allein löst keinen Tick aus).
+  // Bewusst KEIN synthetisches zweites scroll-Event und keine IO-Wartezeit.
+  await enter(page);
+  await placeCaretInParagraph(page, 0);
+  await page.waitForTimeout(80);
+
+  await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    el.scrollTo({ top: Math.round(el.scrollHeight * 0.6), behavior: 'instant' });
+  }, EDITOR);
+  await page.waitForTimeout(120);
+
+  const { activeText, centerText } = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const active = el.querySelector('.focus-paragraph-active');
+    const cr = el.getBoundingClientRect();
+    const centerY = Math.max(cr.top, 0) + (Math.min(cr.bottom, window.innerHeight) - Math.max(cr.top, 0)) / 2;
+    let best = null, bestDist = Infinity;
+    for (const p of el.querySelectorAll('p')) {
+      const r = p.getBoundingClientRect();
+      if (r.height <= 0) continue;
+      const d = Math.abs((r.top + r.bottom) / 2 - centerY);
+      if (d < bestDist) { bestDist = d; best = p; }
+    }
+    return { activeText: active?.textContent || '', centerText: best?.textContent || '' };
+  }, EDITOR);
+
+  expect(activeText).not.toBe('');
+  expect(activeText).toBe(centerText);
 });
 
 // --- Verlassen-Semantik + State-Machine-Robustheit --------------------------

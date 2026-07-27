@@ -21,7 +21,7 @@ const {
   resolveGutterCaretPoint,
 } = await import('../../public/js/editor/focus.js');
 
-const { shouldRecenterOnViewport } = await import('../../public/js/editor/focus/viewport.js');
+const { shouldRecenterOnViewport, measureBoxGeometry } = await import('../../public/js/editor/focus/viewport.js');
 
 // --- findBlockFromNode ------------------------------------------------------
 
@@ -204,6 +204,34 @@ test('findBlockAtViewportCenter: visibleBlocks alle Höhe 0 → QSA-Fallback sta
     querySelectorAll: () => [onScreen],
   };
   assert.equal(findBlockAtViewportCenter(container, visibleAllZero), onScreen);
+});
+
+test('findBlockAtViewportCenter: IO-Set komplett off-screen (Sprung-Scroll) → QSA-Fallback', () => {
+  // IntersectionObserver-Callbacks laufen asynchron: nach einem Sprung-Scroll
+  // (Page-Down, Scrollbar-Zug, programmatischer Sprung) sieht der Recenter-Tick
+  // im RAF noch das Set der ALTEN Position. Ohne Sichtbarkeits-Gegenprobe liefert
+  // pickCenterBlock daraus einen Block weit ausserhalb des Bildes — der ganze
+  // sichtbare Text bliebe gedimmt, und weil ein IO-Callback selbst keinen Tick
+  // auslöst, bis zum nächsten Event.
+  const onScreen = mkRectEl(40, 60);
+  const stale = new Set([mkRectEl(-800, -700), mkRectEl(-690, -600)]);
+  const container = {
+    getBoundingClientRect: () => ({ top: 0, bottom: 100, height: 100 }),
+    querySelectorAll: () => [onScreen],
+  };
+  assert.equal(findBlockAtViewportCenter(container, stale), onScreen);
+});
+
+test('findBlockAtViewportCenter: teilweise sichtbarer Pick bleibt (kein QSA)', () => {
+  // Abgrenzung: beim laufenden Scroll ist das Set höchstens einen Frame alt und
+  // überlappt fast vollständig. Ein Pick, der das Band noch anschneidet, gilt —
+  // sonst liefe der QSA-Vollscan in jedem Scroll-Frame.
+  const partly = new Set([mkRectEl(-20, 10)]);
+  const container = {
+    getBoundingClientRect: () => ({ top: 0, bottom: 100, height: 100 }),
+    querySelectorAll: () => { throw new Error('nicht aufrufen'); },
+  };
+  assert.equal(findBlockAtViewportCenter(container, partly), [...partly][0]);
 });
 
 test('findBlockAtViewportCenter: visibleBlocks Höhe 0 UND QSA leer → null', () => {
@@ -507,6 +535,48 @@ test('shouldRecenterOnViewport: ohne Schreibfokus nie', () => {
 
 test('shouldRecenterOnViewport: erster Tick (Mount) recentert nicht', () => {
   assert.equal(shouldRecenterOnViewport(null, { h: 800, top: 0 }, true), false);
+});
+
+// --- measureBoxGeometry -----------------------------------------------------
+
+// Fake-Box, die das CSS-Border-Box-Clamping nachbildet: `clientHeight` kann nie
+// kleiner werden als die eigene Padding-Summe, `top` verschiebt sich davon nicht
+// (die Flex-Kette darüber bestimmt sie).
+function mkBox({ slot, padTop, padBottom, top = 40 }) {
+  const style = { paddingTop: padTop, paddingBottom: padBottom };
+  const px = (v) => parseFloat(v) || 0;
+  return {
+    style,
+    get clientHeight() { return Math.max(slot, px(style.paddingTop) + px(style.paddingBottom)); },
+    getBoundingClientRect: () => ({ top }),
+  };
+}
+
+test('measureBoxGeometry: liefert den Layout-Slot, nicht die aufgeblähte Padding-Summe', () => {
+  // Der Kern der Messung: mit gesetzten Puffern (~eine Bildschirmhöhe) meldet
+  // `clientHeight` genau diese Summe zurück. Direkt gelesen wäre die
+  // Puffer-Formel zirkulär und die Summe schrumpfte pro Viewport-Tick um die
+  // Reserve, bis Kopf- und Tail-Puffer nicht mehr bis zum Anker reichen.
+  const wide = mkBox({ slot: 700, padTop: '400px', padBottom: '400px' });
+  assert.equal(wide.clientHeight, 800);            // aufgebläht: Padding-Summe gewinnt
+  assert.equal(measureBoxGeometry(wide).h, 700);   // gemessen: der Slot
+});
+
+test('measureBoxGeometry: stellt die Inline-Puffer danach wieder her', () => {
+  // Die Messung darf keinen Zustand hinterlassen — eine leere Inline-Angabe muss
+  // leer bleiben, sonst überschreibt sie ab dann die CSS-Formel.
+  const box = mkBox({ slot: 700, padTop: '', padBottom: '' });
+  measureBoxGeometry(box);
+  assert.equal(box.style.paddingTop, '');
+  assert.equal(box.style.paddingBottom, '');
+});
+
+test('measureBoxGeometry: Oberkante kommt mit (Basis des --focus-box-top-Abzugs)', () => {
+  assert.equal(measureBoxGeometry(mkBox({ slot: 700, padTop: '', padBottom: '', top: 45 })).top, 45);
+});
+
+test('measureBoxGeometry: ohne Box neutral (kein Wurf im Viewport-Tick)', () => {
+  assert.deepEqual(measureBoxGeometry(null), { h: 0, top: 0 });
 });
 
 // --- normAnchorRatio --------------------------------------------------------
