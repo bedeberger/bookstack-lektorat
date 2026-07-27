@@ -24,9 +24,8 @@ export function htmlToText(html) {
 /**
  * Entfernt Fokus-Modus-Artefakte aus BookStack-HTML. Browser friert bei
  * contenteditable-Edits die computed `font-size` des Fokus-Containers als
- * inline `<span style="font-size:1.45rem">` ein; die Klasse
- * `focus-paragraph-active` ist eine rein interne UI-Markierung, die nie ins
- * persistierte HTML gehört. Idempotent – auch auf bereits sauberem HTML
+ * inline `<span style="font-size:1.45rem">` ein; die `focus-paragraph-*`-Klassen
+ * sind rein interne UI-Markierungen, die nie ins persistierte HTML gehören. Idempotent – auch auf bereits sauberem HTML
  * sicher aufrufbar. Aufruf an allen Seams: nach dem Laden von BookStack und
  * vor dem Speichern an BookStack.
  */
@@ -37,7 +36,7 @@ export function stripFocusArtefacts(html) {
   // diesen Branch erzeugt Focus-Mode-Aktiv-Markierung beim Save eine Revision,
   // obwohl semantisch nichts geändert wurde.
   if (
-    !html.includes('focus-paragraph-active') &&
+    !html.includes('focus-paragraph') &&
     !html.includes('hr-selected') &&
     !/font-size|background-color\s*:\s*transparent/i.test(html) &&
     !/\sclass\s*=\s*""/.test(html)
@@ -48,11 +47,22 @@ export function stripFocusArtefacts(html) {
   const tmp = document.createElement('div');
   tmp.innerHTML = html;
 
-  // Transiente Editor-UI-Markierungen (Focus-Aktiv-Absatz, per Klick selektierte
-  // <hr>) sind reine Laufzeit-Dekoration — nie persistieren, sonst falsch-dirty
-  // im Vergleich + landen in der Revision.
-  tmp.querySelectorAll('.focus-paragraph-active, .hr-selected').forEach(el => {
-    el.classList.remove('focus-paragraph-active', 'hr-selected');
+  // Transiente Editor-UI-Markierungen (Focus-Spotlight-Klassen, per Klick
+  // selektierte <hr>) sind reine Laufzeit-Dekoration — nie persistieren, sonst
+  // falsch-dirty im Vergleich + landen in der Revision.
+  //
+  // Praefix-basiert statt Klassenliste: der Focus-Editor markiert heute den
+  // aktiven Absatz (`-active`) und in der Granularitaet window-3 zusaetzlich
+  // dessen Nachbarn (`-near`); beide haengen waehrend der ganzen Edit-Session im
+  // DOM, also auch wenn Autosave oder der Exit-Save mitten drin speichert. Die
+  // Erweitern-Checkliste in docs/focus-editor.md nennt diese Stelle nicht — eine
+  // gepflegte Liste driftet beim naechsten Granularitaetsmodus zwangslaeufig
+  // wieder auseinander, das Praefix nicht.
+  tmp.querySelectorAll('[class*="focus-paragraph"], .hr-selected').forEach(el => {
+    for (const c of Array.from(el.classList)) {
+      if (c.startsWith('focus-paragraph-')) el.classList.remove(c);
+    }
+    el.classList.remove('hr-selected');
     if (el.classList.length === 0) el.removeAttribute('class');
   });
 
