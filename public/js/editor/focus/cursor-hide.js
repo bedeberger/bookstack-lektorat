@@ -1,5 +1,7 @@
 // Auto-Hide des Mauszeigers im Fokusmodus: Maus 2 s ruhig → Zeiger unsichtbar,
-// nächste Bewegung bringt ihn zurück (reiner Klassentoggle auf `.focus-editor`).
+// die nächste Zeiger-Aktivität bringt ihn zurück (reiner Klassentoggle auf
+// `.focus-editor`). Aktivität ist Bewegung **und** Klick/Tap — siehe
+// `onPointerActivity` in listeners.js.
 // Bei offenem Popover/Menü (CURSOR_KEEP_SEL) wird neu bewaffnet statt versteckt —
 // der Zeiger muss sichtbar bleiben, solange man Vorschläge liest; nach dem
 // Schliessen greift Auto-Hide ohne Mausbewegung wieder.

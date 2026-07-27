@@ -1370,3 +1370,53 @@ test('Mausrad über der Seitenfläche scrollt die Schreibfläche', async ({ page
   );
   expect(await scrollTop(page)).toBeGreaterThan(before + 200);
 });
+
+test('Doppelklick markiert ein einzelnes Wort (und behält die Markierung)', async ({ page }) => {
+  // Regression: das Recenter-Overlay (Block-Klassen, Satz-Highlight, Typewriter)
+  // hängt am `selectionchange` — es darf eine Wort-Selektion weder verhindern
+  // noch einen Tick später wieder kollabieren. Deshalb wird nach der Gestik UND
+  // nach dem RAF-Tick gemessen.
+  await enter(page);
+  const p = page.locator(`${EDITOR} p`).nth(30);
+  await p.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(50);
+  // Zielpunkt über die Range-Geometrie des Wortes, nicht über eine geratene
+  // Pixel-Position: sonst landet der Klick je nach Umbruch auf einem Space und
+  // der Browser markiert korrekt „nur das Leerzeichen".
+  const pt = await page.evaluate((sel) => {
+    const el = document.querySelectorAll(`${sel} p`)[30].firstChild;
+    const off = el.nodeValue.indexOf('consectetur');
+    const r = document.createRange();
+    r.setStart(el, off);
+    r.setEnd(el, off + 'consectetur'.length);
+    const rc = r.getBoundingClientRect();
+    return { x: rc.left + rc.width / 2, y: rc.top + rc.height / 2 };
+  }, EDITOR);
+  await page.mouse.dblclick(pt.x, pt.y);
+  expect(await page.evaluate(() => getSelection().toString())).toBe('consectetur');
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => getSelection().toString())).toBe('consectetur');
+});
+
+test('Cursor-Auto-Hide: Klick ohne Mausbewegung macht den Zeiger sichtbar', async ({ page }) => {
+  // Regression: `showCursor` hing nur an `pointermove`. Zeiger auf einem Wort
+  // ruhen lassen → Auto-Hide (`cursor: none`) → klicken: der Zeiger blieb
+  // unsichtbar, solange die Maus stillstand. Markieren wurde damit zum
+  // Blindflug (Doppelklick aufs Wort, Auswahl aufziehen).
+  await enter(page);
+  const box = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }, EDITOR);
+  await page.mouse.move(box.x, box.y);
+  // CURSOR_HIDE_MS = 2000 (focus/constants.js) — auf die Klasse warten statt
+  // fix zu schlafen.
+  await page.waitForFunction(() =>
+    document.querySelector('.focus-editor')?.classList.contains('focus-cursor-hidden'));
+  // Klick OHNE Bewegung: down/up an derselben Position.
+  await page.mouse.down();
+  await page.mouse.up();
+  expect(await page.evaluate(() =>
+    document.querySelector('.focus-editor').classList.contains('focus-cursor-hidden'))).toBe(false);
+});

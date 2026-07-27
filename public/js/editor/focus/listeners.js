@@ -126,6 +126,15 @@ export function installFocusListeners({ ctrl, container }) {
 
   const { showCursor } = makeCursorHide({ ctx, isActive });
 
+  // Klick/Tap ist Zeiger-Aktivität und macht den Zeiger wieder sichtbar.
+  //
+  // Why: `showCursor` hing ausschliesslich an `pointermove`. Wer den Zeiger auf
+  // einem Wort ruhen lässt, bis Auto-Hide greift, und dann klickt, markiert
+  // blind — die Selektion entsteht korrekt, aber Zeiger und I-Beam bleiben
+  // unsichtbar, solange die Maus stillsteht. Genau das braucht man beim
+  // Doppelklick auf ein Wort und beim Aufziehen einer Auswahl.
+  const onPointerActivity = (e) => { markPointer(e); showCursor(); };
+
   // Markierung SYNCHRON reparieren, solange sie kaputt ist — `input` feuert im
   // selben Task nach der DOM-Mutation und vor dem Paint, hier Korrigiertes
   // rendert also nie als Zwischenzustand. Deckt zwei Strukturwechsel ab, die der
@@ -287,8 +296,8 @@ export function installFocusListeners({ ctrl, container }) {
   container.addEventListener('compositionstart', onCompositionStart, { signal });
   container.addEventListener('compositionend', onCompositionEnd, { signal });
   container.addEventListener('scroll', onScroll, { passive: true, signal });
-  container.addEventListener('pointerdown', markPointer, { signal });
-  container.addEventListener('pointerup', markPointer, { signal });
+  container.addEventListener('pointerdown', onPointerActivity, { signal });
+  container.addEventListener('pointerup', onPointerActivity, { signal });
   container.addEventListener('mousedown', onGutterMousedown, { signal });
   container.addEventListener('blur', onBlur, { signal, capture: true });
   container.addEventListener('focus', onFocus, { signal, capture: true });

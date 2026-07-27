@@ -155,7 +155,7 @@ Eigener Stack in [editor/notebook/history.js](../public/js/editor/notebook/histo
 | Autosave (silent) | Idle nach letztem Edit | Server (`quickSave`) | 60 s | 120 s ab erstem Dirty |
 | Manual Save | Save-Button (`saveEdit`) | Server (mit Dialog bei Konflikt/Kürzung) | — | — |
 
-Konstanten (`AUTOSAVE_IDLE_MS`, `AUTOSAVE_MAX_MS`, `DRAFT_DEBOUNCE_MS`) in [edit/_shared.js](../public/js/editor/notebook/edit/_shared.js). `_scheduleAutosave` resettet den Idle-Timer; Max-Timer läuft ab erstem Dirty durch und schlägt zu, wenn der User dauerhaft tippt.
+`AUTOSAVE_IDLE_MS`/`AUTOSAVE_MAX_MS` liegen in [editor/shared/autosave.js](../public/js/editor/shared/autosave.js) (geteilt mit dem Bucheditor, damit beide Editoren im selben Rhythmus speichern); [edit/_shared.js](../public/js/editor/notebook/edit/_shared.js) re-exportiert sie und deklariert `DRAFT_DEBOUNCE_MS`. Die Timer-Handles bleiben am Root-Host (siehe unten). `_scheduleAutosave` resettet den Idle-Timer; Max-Timer läuft ab erstem Dirty durch und schlägt zu, wenn der User dauerhaft tippt.
 
 `_flushDraftSaveNow` schreibt sofort + bricht Debounce ab. Aufruf vor jedem Übergang, der den Editor-Inhalt nicht mehr einfängt — insbesondere Focus-Mode-Entry ([focus/card.js](../public/js/editor/focus/card.js)).
 

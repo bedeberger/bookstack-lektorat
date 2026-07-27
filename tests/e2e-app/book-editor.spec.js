@@ -71,15 +71,16 @@ test('Klick aktiviert den Block, Tippen macht dirty, Save-All persistiert', asyn
   guard.assertClean('Bucheditor: Tippen + Save-All');
 });
 
-test('Klick ins Padding setzt trotzdem einen Caret (Tippen läuft nicht ins Leere)', async ({ page }) => {
+test('Ohne caretRangeFromPoint setzt der Fallback den Caret (Tippen läuft nicht ins Leere)', async ({ page }) => {
   const guard = attachConsoleGuard(page);
+  // Deterministisch den Fallback-Pfad erzwingen: ohne die API (bzw. bei einem
+  // Klick, der kein Textnode trifft) muss der Caret trotzdem im Block landen —
+  // sonst ist der Block zwar fokussiert, aber jede Eingabe verpufft.
+  await page.addInitScript(() => { delete Document.prototype.caretRangeFromPoint; });
   await openBookEditor(page);
 
-  // Bewusst in die linke obere Ecke des Blocks — dort liegt Padding, kein
-  // Textnode: caretRangeFromPoint trifft nichts und der Fallback muss greifen.
   const body = card(page).locator('.book-editor-page-body').first();
-  const box = await body.boundingBox();
-  await page.mouse.click(box.x + 2, box.y + 2);
+  await body.click();
   await expect(body).toHaveAttribute('contenteditable', 'true');
   await expect.poll(
     () => page.evaluate(() => {
