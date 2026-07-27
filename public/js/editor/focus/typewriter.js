@@ -12,8 +12,26 @@ export { TYPEWRITER_THRESHOLD_PX };
 
 // Normalisiert den Anker-Ratio auf [0,1]. Ungültig/nicht gesetzt → 0.5 (Mitte),
 // damit das Default-Verhalten pixelidentisch zur fixen Mitten-Variante bleibt.
-function normAnchorRatio(r) {
+export function normAnchorRatio(r) {
   return Number.isFinite(r) && r >= 0 && r <= 1 ? r : 0.5;
+}
+
+// Der Anker ist zugleich Scroll-Ziel (hier) und Layout-Grösse (Kopf-/Tail-Puffer
+// in focus-mode.css). Damit es dafür genau EINE Zahl gibt, schreibt der
+// Controller ihn beim Eintritt als Custom-Property auf `:root`; die Puffer-
+// Formeln leiten sich daraus ab (Invariante 9). Ohne diese Kopplung müsste jede
+// Anker-Änderung in CSS nachgezogen werden — und ein Anker ≠ 0.5 klemmte den
+// Typewriter an Seitenanfang/-ende.
+export const ANCHOR_CSS_VAR = '--focus-anchor';
+
+export function publishAnchorRatio(ratio) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.style.setProperty(ANCHOR_CSS_VAR, String(normAnchorRatio(ratio)));
+}
+
+export function clearAnchorRatio() {
+  if (typeof document === 'undefined') return;
+  document.documentElement.style.removeProperty(ANCHOR_CSS_VAR);
 }
 
 export function dynamicTypewriterThreshold(block, fallback = TYPEWRITER_THRESHOLD_PX) {
@@ -155,6 +173,24 @@ function scrollFallbackTarget(container) {
   return canScroll(doc) ? doc : null;
 }
 
+// Toleranz beim Wiedererkennen des eigenen Scrolls: `scrollTop` ist in Chromium
+// subpixel-genau, ein Rundungsrest darf die Marke nicht entwerten.
+const PROG_SCROLL_EPS = 1;
+
+// Hat dieses `scroll`-Event der Typewriter selbst ausgelöst? Die Marke ist die
+// zuletzt selbst geschriebene Scroll-Position (`ctx.progScrollTop`) und wird bei
+// JEDEM Event verbraucht — Position statt Zähler, damit ein verlorenes oder
+// zusätzliches Event höchstens einen Tick kostet. Ein Zähler bliebe im Fehlerfall
+// dauerhaft desynchron und liesse `onScroll` danach jeden echten User-Scroll
+// verschlucken (Spotlight bleibt beim Blättern stehen).
+export function consumeProgrammaticScroll(container, ctx) {
+  if (!ctx) return false;
+  const expected = ctx.progScrollTop;
+  ctx.progScrollTop = null;
+  if (expected == null || !container) return false;
+  return Math.abs(container.scrollTop - expected) <= PROG_SCROLL_EPS;
+}
+
 export function typewriterScroll(container, targetRect, ctx, threshold = TYPEWRITER_THRESHOLD_PX, anchorRatio = 0.5) {
   if (!container || !targetRect) return 0;
   const delta = computeTypewriterDelta(container.getBoundingClientRect(), targetRect, threshold, anchorRatio, visibleViewportRect());
@@ -165,14 +201,10 @@ export function typewriterScroll(container, targetRect, ctx, threshold = TYPEWRI
   // setzen, damit aktiver Absatz trotzdem passt.
   if (prefersReducedMotion()) container.scrollTop = before + delta;
   else container.scrollBy({ top: delta, behavior: 'auto' });
-  // `behavior: 'auto'` schreibt scrollTop synchron — die tatsächlich gefahrene
-  // Strecke ist hier bereits messbar. Nur ein Scroll, der die Position wirklich
-  // verschoben hat, feuert später ein scroll-Event; nur der darf im Counter
-  // angekündigt werden. Am Scroll-Anschlag (kurzer Tail-Puffer, letzter Absatz)
-  // ist der Aufruf ein No-op: würde er trotzdem gezählt, bliebe `expectedScroll`
-  // dauerhaft > 0 und `onScroll` verschluckte danach jeden echten User-Scroll —
-  // das Spotlight bliebe beim Blättern stehen und der Zähler wüchse pro
-  // Tastendruck weiter.
+  // `behavior: 'auto'` schreibt scrollTop synchron — die gefahrene Strecke ist
+  // hier bereits messbar. Nur ein Scroll, der die Position wirklich verschoben
+  // hat, feuert später ein scroll-Event; nur der darf eine Marke setzen. Am
+  // Scroll-Anschlag (letzter Absatz) ist der Aufruf ein No-op.
   const moved = container.scrollTop - before;
   // Container hat sich nicht bewegt UND kann grundsätzlich nicht scrollen →
   // fremde Scroll-Box (siehe scrollFallbackTarget). Am regulären Scroll-Anschlag
@@ -183,11 +215,11 @@ export function typewriterScroll(container, targetRect, ctx, threshold = TYPEWRI
       const fbBefore = fb.scrollTop;
       if (prefersReducedMotion()) fb.scrollTop = fbBefore + delta;
       else fb.scrollBy({ top: delta, behavior: 'auto' });
-      // Kein expectedScroll-Increment: das scroll-Event feuert am Fallback-Ziel,
-      // nicht am Container — `onScroll` hängt aber nur am Container.
+      // Keine Marke: das scroll-Event feuert am Fallback-Ziel, nicht am
+      // Container — `onScroll` hängt aber nur am Container.
       return fb.scrollTop - fbBefore;
     }
   }
-  if (ctx && moved !== 0) ctx.expectedScroll++;
+  if (ctx && moved !== 0) ctx.progScrollTop = container.scrollTop;
   return moved;
 }

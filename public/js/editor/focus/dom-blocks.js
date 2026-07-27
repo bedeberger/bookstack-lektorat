@@ -6,6 +6,7 @@
 //   (würde sonst BookStack-Revisionen beim nächsten Save erzeugen).
 
 import { BLOCK_TAGS, BLOCK_SEL } from './constants.js';
+import { clearSentenceHighlight } from './sentence.js';
 import { ensureTrailingParagraph } from '../shared/auto-slot.js';
 import { getActiveEditorContainer } from '../shared/active-editor.js';
 export { isEmptyParagraph, removeAutoAddedParagraph } from '../shared/auto-slot.js';
@@ -13,8 +14,14 @@ export { isEmptyParagraph, removeAutoAddedParagraph } from '../shared/auto-slot.
 // Beim Eintritt in den Fokusmodus: Caret an Buchende. Letzter Absatz schon
 // leer → wiederverwenden, sonst neuen `<p><br></p>` anhängen. Slot-DOM-Logik
 // lebt in shared/auto-slot.js — gemeinsam mit dem Normal-Editor. Hier bleibt
-// nur die Focus-spezifische Erweiterung: Caret an den Slot, Container
-// re-fokussieren (Chrome-Caret-Paint-Bug nach Mid-Focus-Mutation), scrollIntoView.
+// nur die Focus-spezifische Erweiterung: Caret an den Slot und Container
+// re-fokussieren (Chrome-Caret-Paint-Bug nach Mid-Focus-Mutation).
+//
+// Positioniert NICHT: das Scrollen auf die Schreiblinie macht der Aufrufer über
+// `scrollEntryTargetToAnchor` (recenter.js) mit der Anker-Geometrie des
+// Typewriters. Ein `scrollIntoView({block:'center'})` hier wäre eine zweite,
+// abweichende Definition von „Zeile in die Mitte" (Box-Mitte statt
+// Bildschirm-Anker, Anker ≠ 0.5 ignoriert).
 //
 // NICHT als dirty markieren – der neue Absatz ist nur ein „Schreib-Slot".
 // Bleibt er leer und der User schliesst Focus-Mode wieder, räumt
@@ -39,19 +46,12 @@ export function jumpToTrailingParagraph(container) {
     sel.addRange(range);
   }
   // Chrome verliert nach Mid-Focus-Mutation den Caret-Paint — explizit den
-  // contenteditable-Container re-fokussieren. `preventScroll: true` damit
-  // der nachfolgende scrollIntoView die Centerung übernimmt (sonst zwei
-  // konkurrierende Scrolls).
+  // contenteditable-Container re-fokussieren. `preventScroll: true`, damit der
+  // Browser nicht selbst scrollt: die Positionierung gehört dem Aufrufer.
   if (typeof container.focus === 'function') {
     try { container.focus({ preventScroll: true }); }
     catch { container.focus(); }
   }
-  // Direkter Sync-Scroll auf den Ziel-Absatz. scrollIntoView ist synchron,
-  // triggert Reflow und ist deterministisch — verlässlicher als ein späterer
-  // RAF-getriebener Delta-Check, der je nach Layout-Timing knapp unter der
-  // Schwelle bleiben kann.
-  try { target.scrollIntoView({ block: 'center', behavior: 'auto' }); }
-  catch { /* alte Browser ohne ScrollIntoViewOptions */ }
   return added;
 }
 
@@ -168,7 +168,5 @@ export function clearAllFocusMarks(container) {
     el.classList.remove('focus-paragraph-near');
     if (el.classList.length === 0) el.removeAttribute('class');
   }
-  if (typeof CSS !== 'undefined' && CSS.highlights) {
-    CSS.highlights.delete('focus-sentence-dim');
-  }
+  clearSentenceHighlight();
 }

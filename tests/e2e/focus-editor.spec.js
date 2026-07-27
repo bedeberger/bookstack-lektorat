@@ -109,11 +109,11 @@ test('Manueller Scroll verschiebt Spotlight auf Viewport-Center-Absatz (preferCe
   }, EDITOR);
   await page.waitForTimeout(150);
 
-  // expectedScroll=0 → echter User-Scroll, kein programmatischer Typewriter.
+  // Keine prog-Scroll-Marke → echter User-Scroll, kein Typewriter-Scroll.
   // Spotlight muss dem Viewport-Center folgen, nicht beim Caret-Absatz 0 bleiben.
   const { activeIdx, centerIdx } = await page.evaluate((sel) => {
     const el = document.querySelector(sel);
-    if (window.harness._focusListeners) window.harness._focusListeners.expectedScroll = 0;
+    if (window.harness._focusListeners) window.harness._focusListeners.progScrollTop = null;
     el.dispatchEvent(new Event('scroll'));
     return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
       const ps = [...el.querySelectorAll('p')];
@@ -168,35 +168,88 @@ test('Schreiblinie ruht auf der Bildschirmmitte (kein Abdriften nach unten)', as
   }
 });
 
-test('Letzter Absatz erreicht die Schreiblinie (Tail-Puffer reicht)', async ({ page }) => {
-  await enter(page);
-  // Tail-Puffer unter dem Text (padding-bottom) muss so gross sein, dass auch
-  // die letzte Zeile bis auf die Schreiblinie hochscrollen kann. Ist er zu
-  // kurz, klemmt der Scroll am Anschlag und die letzten Absätze bleiben tiefer
-  // stehen — genau der „zu weit unten"-Effekt am Seitenende.
-  const { padBottom, needed } = await page.evaluate((sel) => {
-    const el = document.querySelector(sel);
-    const cr = el.getBoundingClientRect();
-    // Anker = Mitte des sichtbaren Bereichs; darunter liegt der Rest der
-    // Scroll-Box, der als Tail scrollbar sein muss.
-    const anchor = (window.visualViewport?.offsetTop || 0) + (window.visualViewport?.height || window.innerHeight) * 0.5;
-    return { padBottom: parseFloat(getComputedStyle(el).paddingBottom), needed: cr.bottom - anchor };
-  }, EDITOR);
-  expect(padBottom).toBeGreaterThanOrEqual(needed - 1);
-});
+// Kopf- und Tail-Puffer sind die Layout-Voraussetzung dafür, dass die
+// Schreibzeile über die GANZE Seite auf dem Anker ruht (Invariante 9). Beide
+// leiten sich aus `--focus-anchor` × `--focus-vh` ab; die Matrix prüft genau die
+// Dimensionen, in denen das schon einmal auseinandergedriftet ist: der
+// Mobile-Breakpoint (eigene padding-Regeln) und ein Anker ≠ 0.5 (host-gesetzt,
+// z.B. nativer Client).
+const BUFFER_CASES = [
+  { label: 'Desktop', viewport: { width: 1024, height: 768 }, anchor: undefined },
+  { label: 'Mobile', viewport: { width: 390, height: 844 }, anchor: undefined },
+  { label: 'Mobile mit Tastatur', viewport: { width: 390, height: 420 }, anchor: undefined },
+  { label: 'Anker oberes Drittel', viewport: { width: 1024, height: 768 }, anchor: 0.33 },
+  { label: 'Anker am oberen Rand', viewport: { width: 1024, height: 768 }, anchor: 0 },
+];
 
-test('Erster Absatz erreicht die Schreiblinie (Kopf-Puffer reicht)', async ({ page }) => {
+for (const c of BUFFER_CASES) {
+  test(`Erste + letzte Zeile erreichen die Schreiblinie — ${c.label}`, async ({ page }) => {
+    await page.setViewportSize(c.viewport);
+    if (c.anchor !== undefined) {
+      await page.evaluate((a) => { window.harness.typewriterAnchor = a; }, c.anchor);
+    }
+    await enter(page);
+    // Kopf: um die ERSTE Zeile auf die Linie zu senken, bräuchte es negativen
+    // Scroll — den gibt es nicht, also muss der Puffer oberhalb des Textes
+    // mindestens `Anker − Boxoberkante` betragen. Tail: unter der LETZTEN Zeile
+    // muss der Rest der Box scrollbar bleiben, sonst klemmt der Scroll am
+    // Anschlag und die letzten Absätze bleiben tiefer stehen („man kommt nur bis
+    // zum zweitletzten").
+    const m = await page.evaluate(({ sel, ratio }) => {
+      const el = document.querySelector(sel);
+      const cr = el.getBoundingClientRect();
+      const vvTop = window.visualViewport?.offsetTop || 0;
+      const vvH = window.visualViewport?.height || window.innerHeight;
+      const anchor = vvTop + vvH * ratio;
+      const cs = getComputedStyle(el);
+      return {
+        padTop: parseFloat(cs.paddingTop),
+        padBottom: parseFloat(cs.paddingBottom),
+        neededTop: anchor - cr.top,
+        neededBottom: cr.bottom - anchor,
+        cssAnchor: parseFloat(cs.getPropertyValue('--focus-anchor')),
+      };
+    }, { sel: EDITOR, ratio: c.anchor === undefined ? 0.5 : c.anchor });
+    expect(m.cssAnchor).toBeCloseTo(c.anchor === undefined ? 0.5 : c.anchor, 5);
+    expect(m.padTop).toBeGreaterThanOrEqual(m.neededTop - 1);
+    expect(m.padBottom).toBeGreaterThanOrEqual(m.neededBottom - 1);
+  });
+}
+
+test('Erste Zeile ruht tatsächlich auf der Schreiblinie (Mobile)', async ({ page }) => {
+  // Ergänzung zur Puffer-Rechnung oben: der Caret sitzt im ersten Absatz und
+  // muss nach dem Recenter auf dem Anker liegen. Mit gekürztem Kopf-Puffer stand
+  // die Zeile hier mehrere Zeilen zu hoch und `scrollTop` klemmte bei 0.
+  await page.setViewportSize({ width: 390, height: 844 });
   await enter(page);
-  // Spiegelbild zum Tail: um die erste Zeile auf die Schreiblinie zu senken,
-  // bräuchte es negativen Scroll — den gibt es nicht. Also muss der Puffer
-  // oberhalb des Textes mindestens Anker − Boxoberkante betragen.
-  const { padTop, needed } = await page.evaluate((sel) => {
+  const { off, lh } = await page.evaluate((sel) => {
     const el = document.querySelector(sel);
-    const cr = el.getBoundingClientRect();
-    const anchor = (window.visualViewport?.offsetTop || 0) + (window.visualViewport?.height || window.innerHeight) * 0.5;
-    return { padTop: parseFloat(getComputedStyle(el).paddingTop), needed: anchor - cr.top };
+    el.focus();
+    const tn = el.querySelector('p').firstChild;
+    const r = document.createRange();
+    r.setStart(tn, 3);
+    r.setEnd(tn, 4);
+    const s = getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    s.collapseToEnd();
+    return new Promise((resolve) => {
+      window.harness._focusUpdateActive(true);
+      setTimeout(() => {
+        const rr = getSelection().getRangeAt(0);
+        const rect = rr.getClientRects()[0] || rr.getBoundingClientRect();
+        const vvH = window.visualViewport?.height || window.innerHeight;
+        const anchor = (window.visualViewport?.offsetTop || 0) + vvH * 0.5;
+        resolve({
+          off: (rect.top + rect.height / 2) - anchor,
+          lh: parseFloat(getComputedStyle(el).lineHeight),
+        });
+      }, 150);
+    });
   }, EDITOR);
-  expect(padTop).toBeGreaterThanOrEqual(needed - 1);
+  // Toleranz = halbe Zeilenhöhe (die Typewriter-Schwelle, unter der bewusst
+  // nicht nachgezogen wird).
+  expect(Math.abs(off)).toBeLessThanOrEqual(lh * 0.5 + 1);
 });
 
 test('Pointer-Schonfrist verhindert Recenter (Klick-Verhalten)', async ({ page }) => {
@@ -610,12 +663,12 @@ test('Scroll (preferCenter) ohne auffindbaren Center-Block verliert Hervorhebung
     document.querySelector('#editor-card .focus-editor__content .focus-paragraph-active')?.textContent);
 
   // Worst case erzwingen: alle Absätze Höhe 0 (auch QSA liefert null) + IO-Set
-  // leeren, dann echten User-Scroll auslösen (expectedScroll=0 → kein prog-Scroll).
+  // leeren, dann echten User-Scroll auslösen (keine prog-Scroll-Marke).
   await page.evaluate((sel) => {
     const el = document.querySelector(sel);
     el.querySelectorAll('p').forEach(p => { p.style.display = 'none'; });
     window.harness._focusVisibleBlocks.clear();
-    if (window.harness._focusListeners) window.harness._focusListeners.expectedScroll = 0;
+    if (window.harness._focusListeners) window.harness._focusListeners.progScrollTop = null;
     el.dispatchEvent(new Event('scroll'));
   }, EDITOR);
   await page.waitForTimeout(80);

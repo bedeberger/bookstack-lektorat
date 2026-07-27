@@ -111,10 +111,19 @@ function rangeFromOffsets(block, startOffset, endOffset) {
   return r;
 }
 
+// Ein Name für das Highlight-Register, ein Ort zum Löschen — Recenter, Exit und
+// clearAllFocusMarks teilen sich diesen Aufruf.
+export const SENTENCE_HL = 'focus-sentence-dim';
+
+export function clearSentenceHighlight() {
+  if (typeof CSS === 'undefined' || !CSS.highlights) return;
+  CSS.highlights.delete(SENTENCE_HL);
+}
+
 // Nicht-aktive Sätze im aktiven Block werden via CSS-Custom-Highlight gedimmt.
 export function applySentenceHighlight(block, selection) {
   if (typeof CSS === 'undefined' || !CSS.highlights || typeof Highlight === 'undefined') return;
-  CSS.highlights.delete('focus-sentence-dim');
+  clearSentenceHighlight();
   if (!block) return;
   const text = block.textContent || '';
   let active = null;
@@ -145,6 +154,6 @@ export function applySentenceHighlight(block, selection) {
   if (dimRanges.length === 0) return;
   try {
     const hl = new Highlight(...dimRanges);
-    CSS.highlights.set('focus-sentence-dim', hl);
+    CSS.highlights.set(SENTENCE_HL, hl);
   } catch { /* unsupported / Range invalid */ }
 }

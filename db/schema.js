@@ -36,6 +36,20 @@ function _normFaktKategorie(raw) {
   return FAKT_KATEGORIE_WL.has(k) ? k : 'sonstiges';
 }
 
+// Schreib-Guard für user_email auf den Tabellen mit FK auf app_users(email)
+// (job_checkpoints, zeitstrahl_events und die Delta-Caches für Extract, Review,
+// Makro-Review, Lektorat, Synonyme, Finetune-Augmentation). Die Spalten tragen
+// dort ein NOT NULL DEFAULT '' — ein Leerstring ist aber keine app_users-Zeile,
+// der Write liefe also in einen FK-Constraint-Fehler aus dem Prepared Statement,
+// der nicht verrät, welcher Aufrufer ohne User-Kontext lief. Deshalb hier hart
+// abbrechen statt auf '' zu coalescen. Lese- und Löschpfade behalten das
+// Coalescing: dort ist der Effekt ein Cache-Miss bzw. ein No-Op.
+function _requireUserEmail(userEmail, what) {
+  const e = userEmail == null ? '' : String(userEmail).trim();
+  if (!e) throw new Error(`${what}: user_email fehlt — Schreibzugriff ohne User-Kontext.`);
+  return e;
+}
+
 // Strukturierte Datums-Felder aus AI-Output extrahieren; fehlt etwas, parseDatum
 // als Fallback. Liefert Felder, die direkt in zeitstrahl_events/figure_events
 // eingefügt werden können.
@@ -138,13 +152,14 @@ function _clampCoord(v, max) {
 // pageNameToIdByChapter: optionaler Map chapter_id → (page_name → page_id) für
 // kapitel-scoped Auflösung der seiten-Einträge. Fehlt er, bleiben page_ids leer.
 function saveZeitstrahlEvents(bookId, userEmail, ereignisse, chNameToId = {}, pageNameToIdByChapter = null) {
+  const email = _requireUserEmail(userEmail, 'saveZeitstrahlEvents');
   db.transaction(() => {
     // Nur AI-generierte Rows (manually_edited=0) ersetzen — user-kuratierte
     // Events bleiben über Re-Runs hinweg erhalten. CASCADE löscht ihre Child-
     // Rows (chapters/pages/figures) mit; AI-Re-Run baut sie neu auf.
     db.prepare(
       'DELETE FROM zeitstrahl_events WHERE book_id = ? AND user_email = ? AND manually_edited = 0'
-    ).run(bookId, userEmail || '');
+    ).run(bookId, email);
     const ins = db.prepare(`INSERT INTO zeitstrahl_events
       (book_id, user_email, datum, datum_label,
        datum_year, datum_month, datum_day,
@@ -166,7 +181,7 @@ function saveZeitstrahlEvents(bookId, userEmail, ereignisse, chNameToId = {}, pa
       const ev = ereignisse[i];
       const sd = _structuredDatum(ev);
       const { lastInsertRowid: eventId } = ins.run(
-        bookId, userEmail || '',
+        bookId, email,
         ev.datum || sd.datum_label || '', sd.datum_label,
         sd.datum_year, sd.datum_month, sd.datum_day,
         sd.datum_ende_year, sd.datum_ende_month, sd.datum_ende_day,
@@ -571,8 +586,9 @@ function backfillLocationChaptersFromScenes(bookId, userEmail) {
 // ── Job-Checkpoints ───────────────────────────────────────────────────────────
 // Speichert Zwischenergebnisse für Multi-Pass-Jobs, damit diese nach einem
 // Server-Neustart fortgesetzt werden können statt von vorne zu beginnen.
-// user_email wird als '' (Leerstring) gespeichert wenn null, damit der
-// UNIQUE-Constraint über (job_type, book_id, user_email) korrekt greift.
+// user_email ist Teil des UNIQUE-Constraints (job_type, book_id, user_email)
+// und FK auf app_users(email) — der Schreibpfad verlangt deshalb einen echten
+// User (siehe _requireUserEmail).
 
 const _saveCheckpoint = db.prepare(`
   INSERT INTO job_checkpoints (job_type, book_id, user_email, data, updated_at)
@@ -588,7 +604,8 @@ const _deleteCheckpoint = db.prepare(
 );
 
 function saveCheckpoint(jobType, bookId, userEmail, data) {
-  _saveCheckpoint.run(jobType, parseInt(bookId), userEmail || '', JSON.stringify(data));
+  const email = _requireUserEmail(userEmail, `saveCheckpoint(${jobType})`);
+  _saveCheckpoint.run(jobType, parseInt(bookId), email, JSON.stringify(data));
 }
 function loadCheckpoint(jobType, bookId, userEmail) {
   const row = _loadCheckpoint.get(jobType, parseInt(bookId), userEmail || '');
@@ -656,12 +673,13 @@ function loadChapterExtractCache(bookId, userEmail, chapterKey, pagesSig, provid
 function saveChapterExtractCache(bookId, userEmail, chapterKey, pagesSig, extract, provider = '') {
   const parsed = _parseChapterKey(chapterKey);
   if (!parsed) return;
+  const email = _requireUserEmail(userEmail, 'saveChapterExtractCache');
   const json = JSON.stringify(extract);
   const now = new Date().toISOString();
   if (parsed.book) {
-    _saveBookCache.run(parseInt(bookId), userEmail || '', provider || '', pagesSig, json, now);
+    _saveBookCache.run(parseInt(bookId), email, provider || '', pagesSig, json, now);
   } else {
-    _saveChapterCache.run(parseInt(bookId), userEmail || '', parsed.chapterId, parsed.phase, provider || '', pagesSig, json, now);
+    _saveChapterCache.run(parseInt(bookId), email, parsed.chapterId, parsed.phase, provider || '', pagesSig, json, now);
   }
 }
 
@@ -714,8 +732,9 @@ function loadChapterReviewCache(bookId, userEmail, chapterKey, pagesSig, provide
 function saveChapterReviewCache(bookId, userEmail, chapterKey, pagesSig, review, provider = '') {
   const parsed = _parseChapterKey(chapterKey);
   if (!parsed || parsed.book) return;
+  const email = _requireUserEmail(userEmail, 'saveChapterReviewCache');
   _saveChapterReviewCache.run(
-    parseInt(bookId), userEmail || '', parsed.chapterId, parsed.phase, provider || '',
+    parseInt(bookId), email, parsed.chapterId, parsed.phase, provider || '',
     pagesSig, JSON.stringify(review), new Date().toISOString(),
   );
 }
@@ -727,8 +746,9 @@ function loadBookReviewCache(bookId, userEmail, pagesSig, provider = '') {
 }
 
 function saveBookReviewCache(bookId, userEmail, pagesSig, review, provider = '') {
+  const email = _requireUserEmail(userEmail, 'saveBookReviewCache');
   _saveBookReviewCache.run(
-    parseInt(bookId), userEmail || '', provider || '', pagesSig,
+    parseInt(bookId), email, provider || '', pagesSig,
     JSON.stringify(review), new Date().toISOString(),
   );
 }
@@ -771,8 +791,9 @@ function loadChapterMacroReviewCache(bookId, userEmail, chapterId, pagesSig, pro
 }
 
 function saveChapterMacroReviewCache(bookId, userEmail, chapterId, pagesSig, review, provider = '') {
+  const email = _requireUserEmail(userEmail, 'saveChapterMacroReviewCache');
   _saveChapterMacroReviewCache.run(
-    parseInt(bookId), userEmail || '', parseInt(chapterId), provider || '',
+    parseInt(bookId), email, parseInt(chapterId), provider || '',
     pagesSig, JSON.stringify(review), new Date().toISOString(),
   );
 }
@@ -893,7 +914,8 @@ function loadSynonymCache(userEmail, keyHash, provider = '') {
 }
 
 function saveSynonymCache(userEmail, keyHash, result, provider = '') {
-  _saveSynonymCache.run(userEmail || '', provider || '', keyHash, JSON.stringify(result), new Date().toISOString());
+  const email = _requireUserEmail(userEmail, 'saveSynonymCache');
+  _saveSynonymCache.run(email, provider || '', keyHash, JSON.stringify(result), new Date().toISOString());
 }
 
 function deleteSynonymCache(userEmail) {
@@ -925,8 +947,9 @@ function loadLektoratCache(bookId, userEmail, pageId, ctxSig, provider = '') {
 }
 
 function saveLektoratCache(bookId, userEmail, pageId, ctxSig, result, provider = '') {
+  const email = _requireUserEmail(userEmail, 'saveLektoratCache');
   _saveLektoratCache.run(
-    parseInt(bookId), userEmail || '', parseInt(pageId), provider || '',
+    parseInt(bookId), email, parseInt(pageId), provider || '',
     ctxSig, JSON.stringify(result), new Date().toISOString(),
   );
 }
@@ -962,8 +985,9 @@ function loadFinetuneAiCache(bookId, userEmail, scope, scopeKey, sig, version) {
 }
 
 function saveFinetuneAiCache(bookId, userEmail, scope, scopeKey, sig, version, result) {
+  const email = _requireUserEmail(userEmail, `saveFinetuneAiCache(${scope})`);
   _saveFtAiCache.run(
-    parseInt(bookId), userEmail || '', scope, scopeKey, sig, version,
+    parseInt(bookId), email, scope, scopeKey, sig, version,
     JSON.stringify(result), new Date().toISOString(),
   );
 }

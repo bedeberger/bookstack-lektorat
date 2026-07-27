@@ -132,14 +132,16 @@ test('bindInlineFormattingShortcuts: onCommand-Callback fires bei Match', () => 
 
 // ────────── Focus-Editor-Integration: Whitelist B/I/U enforced ──────────
 
-test('focus/card.js bindet Whitelist B/I/U via shared/shortcuts.js', async () => {
+test('focus/listeners.js bindet Whitelist B/I/U via shared/shortcuts.js', async () => {
   const { readFileSync } = await import('node:fs');
   const path = await import('node:path');
-  const src = readFileSync(path.join(process.cwd(), 'public/js/editor/focus/card.js'), 'utf8');
+  // Wiring sitzt beim übrigen Listener-Setup (focus/listeners.js), nicht in der
+  // State-Machine (focus/card.js).
+  const src = readFileSync(path.join(process.cwd(), 'public/js/editor/focus/listeners.js'), 'utf8');
   assert.match(src, /import\s*\{[^}]*bindInlineFormattingShortcuts[^}]*\}\s*from\s*['"]\.\.\/shared\/shortcuts\.js['"]/,
-    'focus/card.js muss bindInlineFormattingShortcuts aus shared/ importieren');
+    'focus/listeners.js muss bindInlineFormattingShortcuts aus shared/ importieren');
   assert.match(src, /bindInlineFormattingShortcuts\s*\(\s*container[\s\S]*?allowedCommands:\s*\[\s*['"]bold['"]\s*,\s*['"]italic['"]\s*,\s*['"]underline['"]\s*\]/,
-    'focus/card.js muss bindInlineFormattingShortcuts(container, { allowedCommands: ["bold","italic","underline"] }) rufen');
+    'focus/listeners.js muss bindInlineFormattingShortcuts(container, { allowedCommands: ["bold","italic","underline"] }) rufen');
   assert.match(src, /bindInlineFormattingShortcuts\([\s\S]*?signal[\s\S]*?\}\)/,
     'Wiring muss signal an den AbortController hängen — sonst Listener-Leak bei Exit');
 });

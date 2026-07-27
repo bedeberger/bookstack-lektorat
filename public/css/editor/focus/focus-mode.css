@@ -1,8 +1,9 @@
 @layer components {
 /* === Fokus-Modus (Vollbild, Serif, Absatz-Spotlight, Typewriter-Scroll) === */
-/* --focus-vh wird in editor-focus.js aus visualViewport.height gesetzt und
-   folgt der iOS-Tastatur. Fallback: 100vh (dvh wäre besser, existiert aber
-   erst ab Safari 15.4 — JS setzt --focus-vh ohnehin nach einem Frame). */
+/* --focus-vh / --focus-vh-top setzt focus/viewport.js aus visualViewport
+   (Höhe + offsetTop) und folgt damit der Mobile-Tastatur. Fallback: 100vh
+   (dvh wäre besser, existiert aber erst ab Safari 15.4 — JS setzt --focus-vh
+   ohnehin nach einem Frame). --focus-anchor (0–1) kommt aus focus/card.js. */
 /* Globaler Scroll-Lock: bleibt am Body (Browser-Default für overflow-Lock). */
 body.focus-mode { overflow: hidden; overscroll-behavior: contain; }
 body.palette-open { overflow: hidden; overscroll-behavior: contain; }
@@ -161,18 +162,23 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
   width: 100%;
   max-width: 60ch;
   margin: 0 auto;
-  /* Oben/unten Puffer, damit der aktive Absatz auf der Schreiblinie stehen kann.
-     --focus-vh folgt der Tastatur (sichtbare Höhe), Fallback vh.
-     Tail-Formel: die Schreiblinie liegt in der Mitte des SICHTBAREN Bereichs
-     (`--focus-vh` * 0.5), die Box reicht aber bis zum Layout-Ende (100vh, mobil
-     hinter der Tastatur). Unter der letzten Zeile müssen also `100vh −
-     --focus-vh * 0.5` scrollbar bleiben, sonst erreicht sie die Linie nie und
-     die letzten Absätze werden nicht mehr nachgezogen. Desktop: 50 vh.
-     Oben spiegelbildlich: `--focus-vh * 0.5` ist die Strecke, die die ERSTE
-     Zeile nach unten braucht, um auf der Linie zu landen (negativer Scroll gibt
-     es nicht). Weniger Puffer klemmt den Seitenanfang leicht über der Linie. */
-  padding-top: calc(var(--focus-vh, 100vh) * 0.5);
-  padding-bottom: calc(100vh - var(--focus-vh, 100vh) * 0.5 + env(safe-area-inset-bottom, 0px));
+  /* Oben/unten Puffer, damit die Schreibzeile über die GANZE Seite auf dem Anker
+     ruhen kann — erste und letzte Zeile inklusive (Invariante 9 in
+     docs/focus-editor.md).
+     Beide Formeln leiten sich aus zwei JS-gesetzten Variablen ab, keine eigenen
+     Magic Numbers: `--focus-anchor` (0–1, aus dem host-Anker `typewriterAnchor`,
+     gesetzt in focus/card.js#markFocusChrome) und `--focus-vh` (sichtbare Höhe,
+     folgt der Tastatur; gesetzt in focus/viewport.js). Fallback 0.5 / 100vh.
+     Kopf: die erste Zeile muss um `Anker × sichtbare Höhe` nach unten wandern,
+     um auf der Linie zu landen — negativen Scroll gibt es nicht, also muss genau
+     diese Strecke oberhalb des Textes liegen. Ein kürzerer Kopf-Puffer klemmt den
+     Seitenanfang über der Linie (auch mobil: darum hier KEIN Media-Query-Wert).
+     Tail: unter der letzten Zeile muss der Rest der Box scrollbar bleiben; die
+     Box endet spätestens am Layout-Ende, also `100vh − Anker × sichtbare Höhe`.
+     Ein kürzerer Tail klemmt das Seitenende („man kommt nur bis zum
+     zweitletzten Absatz"). */
+  padding-top: calc(var(--focus-vh, 100vh) * var(--focus-anchor, 0.5));
+  padding-bottom: calc(100vh - var(--focus-vh, 100vh) * var(--focus-anchor, 0.5) + env(safe-area-inset-bottom, 0px));
   padding-left: max(2rem, env(safe-area-inset-left, 0px));
   padding-right: max(2rem, env(safe-area-inset-right, 0px));
   background: transparent;
@@ -199,14 +205,16 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
   caret-color: var(--color-primary);
 }
 
-/* Auf schmalen Screens: kompaktere Schrift, weniger Puffer oben. Der Tail unten
-   bleibt bei der Formel aus der Basisregel — bei offener Tastatur wächst er dort
-   automatisch mit (die Box läuft hinter die Tastatur, die Schreiblinie nicht). */
+/* Auf schmalen Screens: kompaktere Schrift und schmalere Seitenränder. Kopf- und
+   Tail-Puffer bleiben bei den Formeln aus der Basisregel — sie sind die
+   Voraussetzung dafür, dass die Schreibzeile auch am Seitenanfang/-ende auf dem
+   Anker ruht. Wer mobil weniger Leerraum über dem ersten Absatz will, senkt den
+   ANKER (`typewriterAnchor` im host) statt den Puffer: dann wandern Schreiblinie
+   und Puffer gemeinsam, und der Typewriter klemmt nicht. */
 @media (max-width: 600px) {
   .focus-editor__content {
     font-size: var(--font-size-lg);
     line-height: 1.7;
-    padding-top: calc(var(--focus-vh, 100vh) * 0.25);
     padding-left: max(1.1rem, env(safe-area-inset-left, 0px));
     padding-right: max(1.1rem, env(safe-area-inset-right, 0px));
   }

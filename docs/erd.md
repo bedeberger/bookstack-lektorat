@@ -1,6 +1,6 @@
 # ERD — schreibwerkstatt
 
-Stand: Schema-Version 249, 133 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
+Stand: Schema-Version 251, 133 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
 
 Quelle: Squashed-Schema-Snapshot in [db/squashed-schema.js](../db/squashed-schema.js) (regeneriert via `node tools/dump-schema.js`) + [db/migrations.js](../db/migrations.js). Drift gegen die Legacy-Migration-Kette ist durch [tests/unit/squash-drift.test.mjs](../tests/unit/squash-drift.test.mjs) gegated. Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -136,6 +136,11 @@ erDiagram
   pages ||--o{ page_revisions        : has
   books ||--o{ page_revisions        : has
   books ||--|| book_order            : has
+  pages ||--o{ user_page_usage       : "recency of"
+
+  pages         ||--o{ semantic_chunks : "ist (kind=page)"
+  figure_scenes ||--o{ semantic_chunks : "ist (kind=scene)"
+  figures       ||--o{ semantic_chunks : "ist (kind=figure)"
 
   app_users ||--o{ book_access       : grants
   app_users ||--o{ page_locks        : holds
@@ -1449,8 +1454,8 @@ erDiagram
     INTEGER use_count
   }
   user_page_usage {
-    TEXT    user_email PK
-    INTEGER page_id    PK
+    TEXT    user_email PK,FK
+    INTEGER page_id    PK,FK
     INTEGER book_id    FK
     INTEGER last_used
     INTEGER use_count
@@ -1648,9 +1653,12 @@ erDiagram
 
   semantic_chunks {
     INTEGER id           PK "AUTOINCREMENT"
-    TEXT    kind         "page | scene | figure"
-    INTEGER entity_id    "polymorph nach kind (kein FK)"
+    TEXT    kind         "page | scene | figure (CHECK)"
     INTEGER book_id      FK "→ books ON DELETE CASCADE"
+    INTEGER page_id      FK "→ pages CASCADE — nur bei kind=page"
+    INTEGER scene_id     FK "→ figure_scenes CASCADE — nur bei kind=scene"
+    INTEGER figure_id    FK "→ figures CASCADE — nur bei kind=figure"
+    INTEGER entity_id    "GENERATED VIRTUAL = COALESCE(page_id, scene_id, figure_id) — polymorpher Lesezugriff"
     INTEGER chunk_ix
     TEXT    content_hash "Delta-Cache"
     TEXT    model        "Mehr-Modell-Koexistenz"

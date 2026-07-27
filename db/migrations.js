@@ -9495,6 +9495,183 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 249 abgeschlossen (Plot-Werkstatt: plot_beat_relations).');
   }
 
+  if (version < 250) {
+    // Zwei lose *_id-Spalten nachgeruestet (harte Regel „Relationale Integritaet"):
+    // beide waren NOT NULL und Teil des PK, aber ohne REFERENCES. SQLite kennt kein
+    // ALTER TABLE ADD CONSTRAINT → Recreate-Pattern.
+    //
+    // user_page_usage.page_id → pages CASCADE: die Zeile ist eine reine Ableitung
+    // (Recency-Sortierung der Command-Palette) und gehoert der Seite. Ohne FK
+    // ueberlebt sie deren Loeschung und liefert einen Palette-Eintrag ins Nichts;
+    // gedeckt war nur der Buch-Delete (book_id CASCADE).
+    // chapter_extract_cache.book_id → books CASCADE: Cache gehoert dem Buch. Gedeckt
+    // war er nur transitiv ueber chapter_id, also nicht fuer Pfade, die Buch-Zeilen
+    // ohne zugehoerige Kapitel-Zeilen entfernen.
+    db.pragma('foreign_keys = OFF');
+
+    // Pre-Cleanup, sonst schlaegt der foreign_key_check am Blockende fehl.
+    db.exec('DELETE FROM user_page_usage WHERE page_id NOT IN (SELECT page_id FROM pages)');
+    db.exec('DELETE FROM chapter_extract_cache WHERE book_id NOT IN (SELECT book_id FROM books)');
+
+    db.exec('DROP TABLE IF EXISTS user_page_usage_new');
+    db.exec(`
+      CREATE TABLE user_page_usage_new (
+        user_email TEXT    NOT NULL,
+        page_id    INTEGER NOT NULL REFERENCES pages(page_id) ON DELETE CASCADE,
+        book_id    INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        last_used  INTEGER NOT NULL,
+        use_count  INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (user_email, page_id),
+        FOREIGN KEY (user_email) REFERENCES app_users(email) ON DELETE CASCADE
+      );
+    `);
+    db.exec(`INSERT INTO user_page_usage_new (user_email, page_id, book_id, last_used, use_count)
+               SELECT user_email, page_id, book_id, last_used, use_count FROM user_page_usage`);
+    db.exec('DROP TABLE user_page_usage');
+    db.exec('ALTER TABLE user_page_usage_new RENAME TO user_page_usage');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_upu_user_book_lastused ON user_page_usage(user_email, book_id, last_used DESC)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_upu_page ON user_page_usage(page_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_upu_book ON user_page_usage(book_id)');
+
+    db.exec('DROP TABLE IF EXISTS chapter_extract_cache_new');
+    db.exec(`
+      CREATE TABLE chapter_extract_cache_new (
+        book_id      INTEGER NOT NULL REFERENCES books(book_id)          ON DELETE CASCADE,
+        user_email   TEXT    NOT NULL DEFAULT '',
+        chapter_id   INTEGER NOT NULL REFERENCES chapters(chapter_id)    ON DELETE CASCADE,
+        phase        TEXT    NOT NULL DEFAULT '',
+        provider     TEXT    NOT NULL DEFAULT '',
+        pages_sig    TEXT    NOT NULL,
+        extract_json TEXT    NOT NULL,
+        cached_at    TEXT    NOT NULL,
+        PRIMARY KEY (book_id, user_email, chapter_id, phase, provider),
+        FOREIGN KEY (user_email) REFERENCES app_users(email) ON DELETE CASCADE
+      );
+    `);
+    db.exec(`INSERT INTO chapter_extract_cache_new
+        (book_id, user_email, chapter_id, phase, provider, pages_sig, extract_json, cached_at)
+        SELECT book_id, user_email, chapter_id, phase, provider, pages_sig, extract_json, cached_at
+          FROM chapter_extract_cache`);
+    db.exec('DROP TABLE chapter_extract_cache');
+    db.exec('ALTER TABLE chapter_extract_cache_new RENAME TO chapter_extract_cache');
+
+    db.pragma('foreign_keys = ON');
+
+    // FK-Spalten ohne jede Index-Deckung: ein Parent-Delete musste das Kind voll
+    // scannen, um CASCADE/SET NULL anzuwenden.
+    db.exec('CREATE INDEX IF NOT EXISTS idx_page_checks_chapter ON page_checks(chapter_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_locations_erste_page ON locations(erste_erwaehnung_page_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_songs_erste_page ON songs(erste_erwaehnung_page_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_share_comments_author ON share_comments(author_email)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_regreq_invite ON registration_requests(invite_id)');
+
+    // FK-Spalten, die nur an nicht-fuehrender Position eines Composite-PK lagen —
+    // fuer den Index unbrauchbar. Nachgezogen werden die Kanten, die bei
+    // alltaeglichen Inhalts-Loeschungen (Seite, Kapitel, Ort, Figur, Geraet)
+    // cascaden. Die verbleibenden user_email-Kanten bleiben bewusst unindiziert:
+    // sie greifen nur beim Loeschen eines Users (Admin-Einzelfall) und die Spalte
+    // ist so niedrig-kardinal, dass ein Index dort nichts spart.
+    db.exec('CREATE INDEX IF NOT EXISTS idx_cec_chapter ON chapter_extract_cache(chapter_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_crc_chapter ON chapter_review_cache(chapter_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_cmrc_chapter ON chapter_macro_review_cache(chapter_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_chapter_reviews_chapter ON chapter_reviews(chapter_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_lektorat_cache_page ON lektorat_cache(page_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_job_checkpoints_book ON job_checkpoints(book_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_scene_locations_location ON scene_locations(location_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_song_figures_figure ON song_figures(figure_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_page_presence_device ON page_presence(device_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_book_presence_device ON book_presence(device_id)');
+
+    const fkErrors250 = db.pragma('foreign_key_check');
+    if (fkErrors250.length) {
+      throw new Error(`Migration 250: foreign_key_check meldet ${fkErrors250.length} Verstoesse: ${JSON.stringify(fkErrors250.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 250').run();
+    logger.info('DB-Migration auf Version 250 abgeschlossen (FK user_page_usage.page_id + chapter_extract_cache.book_id, 15 fehlende FK-Indexe).');
+  }
+
+  if (version < 251) {
+    // semantic_chunks referenziert seine Quell-Entitaet jetzt DB-erzwungen. Die
+    // Tabelle ist mit Abstand der groesste Ableitungs-Index des Schemas; die
+    // Referenz hing bisher an einer untypisierten entity_id ohne REFERENCES,
+    // durchgesetzt allein von der Disziplin des embed-index-Jobs.
+    //
+    // Modelliert nach motif_occurrences: `kind` als Diskriminator, dazu drei
+    // typisierte nullable Spalten mit CASCADE-FK und ein CHECK, der genau die zu
+    // `kind` passende Spalte verlangt (sentinel-frei, siehe CLAUDE.md
+    // „Sentinel-freie Modellierung"). Ein Seiten-/Szenen-/Figuren-Delete raeumt
+    // seine Vektoren damit selbst auf.
+    //
+    // entity_id bleibt als VIRTUAL GENERATED COLUMN (COALESCE der drei) erhalten:
+    // die Lesepfade in db/semantic-chunks.js fragen polymorph ab (WHERE kind = ?
+    // AND entity_id = ?, COUNT(DISTINCT entity_id), JOIN figures ON f.id =
+    // sc.entity_id) und bleiben unveraendert gueltig, waehrend Schreibzugriffe
+    // ueber die typisierten Spalten laufen. Die Spalte ist damit abgeleitet statt
+    // dupliziert — sie kann nicht von den FK-Spalten abdriften. UNIQUE sitzt als
+    // benannter Index auf der generierten Spalte (Table-Constraints koennen keine
+    // generierte Spalte referenzieren).
+    db.pragma('foreign_keys = OFF');
+    db.exec('DROP TABLE IF EXISTS semantic_chunks_new');
+    db.exec(`
+      CREATE TABLE semantic_chunks_new (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind         TEXT    NOT NULL CHECK(kind IN ('page','scene','figure')),
+        book_id      INTEGER NOT NULL REFERENCES books(book_id)       ON DELETE CASCADE,
+        page_id      INTEGER REFERENCES pages(page_id)                ON DELETE CASCADE,
+        scene_id     INTEGER REFERENCES figure_scenes(id)             ON DELETE CASCADE,
+        figure_id    INTEGER REFERENCES figures(id)                   ON DELETE CASCADE,
+        entity_id    INTEGER GENERATED ALWAYS AS (COALESCE(page_id, scene_id, figure_id)) VIRTUAL,
+        chunk_ix     INTEGER NOT NULL DEFAULT 0,
+        content_hash TEXT    NOT NULL,
+        model        TEXT    NOT NULL,
+        dim          INTEGER NOT NULL,
+        vector       BLOB    NOT NULL,
+        text         TEXT    NOT NULL,
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        CHECK (
+          (kind = 'page'   AND page_id   IS NOT NULL AND scene_id IS NULL AND figure_id IS NULL) OR
+          (kind = 'scene'  AND scene_id  IS NOT NULL AND page_id  IS NULL AND figure_id IS NULL) OR
+          (kind = 'figure' AND figure_id IS NOT NULL AND page_id  IS NULL AND scene_id  IS NULL)
+        )
+      );
+    `);
+    // Fan-out der bisherigen entity_id in die typisierte Spalte. Die WHERE-Klausel
+    // ist gleichzeitig das Pre-Cleanup: Chunks ohne existierende Quell-Entitaet
+    // fallen weg. Verlustfrei, weil der Index jederzeit per embed-index-Job neu
+    // berechenbar ist.
+    db.exec(`INSERT INTO semantic_chunks_new
+        (id, kind, book_id, page_id, scene_id, figure_id, chunk_ix, content_hash, model, dim, vector, text, created_at)
+        SELECT id, kind, book_id,
+               CASE WHEN kind = 'page'   THEN entity_id END,
+               CASE WHEN kind = 'scene'  THEN entity_id END,
+               CASE WHEN kind = 'figure' THEN entity_id END,
+               chunk_ix, content_hash, model, dim, vector, text, created_at
+          FROM semantic_chunks
+         WHERE (kind = 'page'   AND entity_id IN (SELECT page_id FROM pages))
+            OR (kind = 'scene'  AND entity_id IN (SELECT id FROM figure_scenes))
+            OR (kind = 'figure' AND entity_id IN (SELECT id FROM figures))`);
+    const scDropped = db.prepare('SELECT COUNT(*) AS n FROM semantic_chunks').get().n
+                    - db.prepare('SELECT COUNT(*) AS n FROM semantic_chunks_new').get().n;
+    db.exec('DROP TABLE semantic_chunks');
+    db.exec('ALTER TABLE semantic_chunks_new RENAME TO semantic_chunks');
+
+    // idx_semchunk_entity (kind, entity_id) entfaellt: der UNIQUE-Index hat
+    // dieselbe fuehrende Spaltenfolge und deckt jede Abfrage darauf mit ab.
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_semchunk_uniq ON semantic_chunks(kind, entity_id, chunk_ix, model)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_semchunk_book ON semantic_chunks(book_id, kind)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_semchunk_page ON semantic_chunks(page_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_semchunk_scene ON semantic_chunks(scene_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_semchunk_figure ON semantic_chunks(figure_id)');
+
+    db.pragma('foreign_keys = ON');
+    const fkErrors251 = db.pragma('foreign_key_check');
+    if (fkErrors251.length) {
+      throw new Error(`Migration 251: foreign_key_check meldet ${fkErrors251.length} Verstoesse: ${JSON.stringify(fkErrors251.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 251').run();
+    logger.info(`DB-Migration auf Version 251 abgeschlossen (semantic_chunks: typisierte FK-Spalten + kind-CHECK, entity_id generiert; ${scDropped} verwaiste Chunks entfernt).`);
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

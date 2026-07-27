@@ -275,21 +275,21 @@ test('I10: Focus-Submodule importieren/rufen nicht contentRepo.savePage', () => 
 
 // ── Bonus: Hotkey-Routing (CLAUDE.md Punkt 7) ────────────────────────────────
 test('Cmd+Shift+E Hotkey routet zustandsabhängig (focus → exit, edit → enter)', () => {
-  // Der Hotkey-Handler lebt in editor/focus/trampoline.js oder card.js.
-  // Wir prüfen nur die Routing-Logik (keys exit/enter/start).
-  const srcCard = read('public/js/editor/focus/card.js');
-  const trampolinePath = path.join(repo, 'public/js/editor/focus/trampoline.js');
-  const srcTramp = fs.existsSync(trampolinePath) ? fs.readFileSync(trampolinePath, 'utf8') : '';
-  const combined = srcCard + '\n' + srcTramp;
-  // Sub-internes Cmd+Shift+E im Focus-Container muss zwischen
-  // `_focusState === 'active'` (→ exit) und `_focusState === 'idle'`
-  // (→ enter) routen. Root-Hotkey (handleFocusHotkey) prüft analog
-  // `focusActive` (→ exit) und `editMode` (→ enter), sonst dispatcht er
-  // `editor:focus:enter-from-pageview`.
-  assert.match(combined, /_focusState\s*===\s*['"]active['"][\s\S]*?exitFocusMode/,
-    'Hotkey: active-Branch ruft exitFocusMode');
-  assert.match(combined, /_focusState\s*===\s*['"]idle['"][\s\S]*?enterFocusMode/,
-    'Hotkey: idle-Branch ruft enterFocusMode');
+  // Der Hotkey-Handler lebt in editor/focus/trampoline.js (Root) bzw.
+  // editor/focus/listeners.js (Sub-internes onKey). Wir prüfen nur die
+  // Routing-Logik (keys exit/enter/start).
+  const combined = ['public/js/editor/focus/card.js',
+    'public/js/editor/focus/listeners.js',
+    'public/js/editor/focus/trampoline.js']
+    .map(f => (fs.existsSync(path.join(repo, f)) ? read(f) : '')).join('\n');
+  // Sub-internes Cmd+Shift+E im Focus-Container feuert exit — der onKey-Handler
+  // läuft nur im `active`-State (Guard am Handler-Kopf), der enter-Weg gehört
+  // dem Root-Hotkey. Der prüft `focusActive` (→ exit) und `editMode` (→ enter),
+  // sonst dispatcht er `editor:focus:enter-from-pageview`.
+  assert.match(combined, /_focusState\s*!==\s*['"]active['"][\s\S]*?KeyE[\s\S]*?exitFocusMode/,
+    'Hotkey: active-State ruft exitFocusMode');
+  assert.match(combined, /editMode[\s\S]*?enterFocusMode/,
+    'Hotkey: edit-Branch ruft enterFocusMode');
   assert.match(combined, /editor:focus:enter-from-pageview|EVT\.EDITOR_FOCUS_ENTER_FROM_PAGEVIEW/,
     'Hotkey: Page-View-Branch dispatcht editor:focus:enter-from-pageview');
 });

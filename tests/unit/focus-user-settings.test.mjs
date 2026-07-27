@@ -89,12 +89,15 @@ test('Klasse hängt am Focus-Cardroot, nicht am body (Schritt 1+ Architektur)', 
 
 // ── enterFocusMode setzt Initial-Granularität auf Cardroot ───────────────────
 
-test('enterFocusMode hängt focus-mode--<granularity> initial an .focus-editor', () => {
-  const enter = focusModuleSrc.match(/enterFocusMode\s*\(\)\s*\{[\s\S]*?\n  \},/);
-  assert.ok(enter, 'enterFocusMode nicht gefunden');
-  const body = enter[0];
-  assert.match(body, /querySelector\s*\(\s*['"]\.focus-editor['"]/,
-    'enterFocusMode muss Granularitäts-Klasse am .focus-editor setzen');
-  assert.match(body, /focus-mode--['"]\s*\+\s*\(\s*app\.focusGranularity/,
-    'Granularitäts-Klasse muss aus app.focusGranularity gebaut werden');
+test('Eintritt hängt focus-mode--<granularity> initial an .focus-editor', () => {
+  // Chrome-Setup (body-/Host-Klassen, Granularität, --focus-anchor) liegt im
+  // Helper markFocusChrome; enterFocusMode ruft ihn mit der Host-Granularität.
+  const mark = focusModuleSrc.match(/function markFocusChrome\s*\([\s\S]*?\n\}/);
+  assert.ok(mark, 'markFocusChrome nicht gefunden');
+  assert.match(mark[0], /querySelector\s*\(\s*['"]\.focus-editor['"]/,
+    'markFocusChrome muss die Granularitäts-Klasse am .focus-editor setzen');
+  assert.match(mark[0], /focus-mode--['"]\s*\+\s*\(\s*granularity/,
+    'Granularitäts-Klasse muss aus der übergebenen Granularität gebaut werden');
+  assert.match(focusModuleSrc, /markFocusChrome\s*\(\s*app\.focusGranularity\s*,\s*app\.typewriterAnchor\s*\)/,
+    'enterFocusMode muss markFocusChrome(app.focusGranularity, app.typewriterAnchor) rufen');
 });

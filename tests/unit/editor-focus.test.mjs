@@ -14,6 +14,9 @@ const {
   dynamicTypewriterThreshold,
   typewriterScroll,
   caretWithinViewport,
+  consumeProgrammaticScroll,
+  normAnchorRatio,
+  resolveActiveBlock,
 } = await import('../../public/js/editor/focus.js');
 
 // --- findBlockFromNode ------------------------------------------------------
@@ -310,53 +313,57 @@ function mkScroller({ scrollTop = 0, max = 1000, height = 1000, parentElement = 
   return el;
 }
 
-test('typewriterScroll: echter Scroll kündigt genau einen prog-Scroll an', () => {
+test('typewriterScroll: echter Scroll markiert die eigene Zielposition', () => {
   const el = mkScroller({ scrollTop: 100 });
-  const ctx = { expectedScroll: 0 };
+  const ctx = { progScrollTop: null };
   const moved = typewriterScroll(el, { top: 800, bottom: 840, height: 40 }, ctx, 16, 0.5);
   assert.equal(moved, 320);
   assert.equal(el.scrollTop, 420);
-  assert.equal(ctx.expectedScroll, 1);
+  assert.equal(ctx.progScrollTop, 420);
+  // Das folgende scroll-Event ist das eigene → wird verschluckt, Marke gelöscht.
+  assert.equal(consumeProgrammaticScroll(el, ctx), true);
+  assert.equal(ctx.progScrollTop, null);
 });
 
-test('typewriterScroll: am Anschlag geklemmt → kein Counter-Increment', () => {
+test('typewriterScroll: am Anschlag geklemmt → keine Marke', () => {
   // Container steht am Maximum; der Caret sitzt unter dem Anker, das Delta ist
   // also positiv — scrollBy kann aber nichts mehr fahren und feuert darum auch
-  // kein scroll-Event. Ein Increment hier liesse `expectedScroll` dauerhaft
-  // stehen; onScroll verschluckte danach jeden echten User-Scroll (Spotlight
-  // bleibt beim Blättern stehen).
+  // kein scroll-Event. Eine Marke dafür bliebe stehen und liesse onScroll den
+  // nächsten echten User-Scroll verschlucken.
   const el = mkScroller({ scrollTop: 1000, max: 1000 });
-  const ctx = { expectedScroll: 0 };
+  const ctx = { progScrollTop: null };
   const moved = typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5);
   assert.equal(moved, 0);
   assert.equal(el.scrollTop, 1000);
-  assert.equal(ctx.expectedScroll, 0);
+  assert.equal(ctx.progScrollTop, null);
 });
 
-test('typewriterScroll: teilweise geklemmt → zählt einmal (Scroll-Event feuert)', () => {
+test('typewriterScroll: teilweise geklemmt → Marke auf der erreichten Position', () => {
   const el = mkScroller({ scrollTop: 950, max: 1000 });
-  const ctx = { expectedScroll: 0 };
+  const ctx = { progScrollTop: null };
   const moved = typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5);
   assert.equal(moved, 50);
-  assert.equal(ctx.expectedScroll, 1);
+  assert.equal(ctx.progScrollTop, 1000);
 });
 
-test('typewriterScroll: Tippen am Scroll-Ende leakt den Counter nicht', () => {
-  // 20 Tastendrücke gegen den Anschlag — der Counter darf bei 0 bleiben.
+test('typewriterScroll: Tippen am Scroll-Ende hinterlässt keine Marke', () => {
+  // 20 Tastendrücke gegen den Anschlag — danach darf kein User-Scroll als
+  // „eigener" gelten.
   const el = mkScroller({ scrollTop: 1000, max: 1000 });
-  const ctx = { expectedScroll: 0 };
+  const ctx = { progScrollTop: null };
   for (let i = 0; i < 20; i++) {
     typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5);
   }
-  assert.equal(ctx.expectedScroll, 0);
+  assert.equal(ctx.progScrollTop, null);
+  assert.equal(consumeProgrammaticScroll(el, ctx), false);
 });
 
-test('typewriterScroll: Delta unter Schwelle → kein Scroll, kein Counter', () => {
+test('typewriterScroll: Delta unter Schwelle → kein Scroll, keine Marke', () => {
   const el = mkScroller({ scrollTop: 100 });
-  const ctx = { expectedScroll: 0 };
+  const ctx = { progScrollTop: null };
   assert.equal(typewriterScroll(el, { top: 495, bottom: 505, height: 10 }, ctx, 16, 0.5), 0);
   assert.equal(el.scrollTop, 100);
-  assert.equal(ctx.expectedScroll, 0);
+  assert.equal(ctx.progScrollTop, null);
 });
 
 test('typewriterScroll: nicht scrollbare Box → scrollbarer Vorfahr übernimmt', () => {
@@ -365,14 +372,14 @@ test('typewriterScroll: nicht scrollbare Box → scrollbarer Vorfahr übernimmt'
   // der Typewriter dort komplett tot.
   const ancestor = mkScroller({ scrollTop: 100, max: 1000 });
   const el = mkScroller({ max: 0, parentElement: ancestor });   // scrollHeight === clientHeight
-  const ctx = { expectedScroll: 0 };
+  const ctx = { progScrollTop: null };
   const moved = typewriterScroll(el, { top: 800, bottom: 840, height: 40 }, ctx, 16, 0.5);
   assert.equal(moved, 320);
   assert.equal(ancestor.scrollTop, 420);
   assert.equal(el.scrollTop, 0);
   // Der Container feuert kein scroll-Event (gescrollt hat der Vorfahr) — sonst
   // verschluckt onScroll später einen echten User-Scroll.
-  assert.equal(ctx.expectedScroll, 0);
+  assert.equal(ctx.progScrollTop, null);
 });
 
 test('typewriterScroll: scrollbare Box am Anschlag → kein Vorfahr-Fallback', () => {
@@ -381,10 +388,129 @@ test('typewriterScroll: scrollbare Box am Anschlag → kein Vorfahr-Fallback', (
   // wegziehen.
   const ancestor = mkScroller({ scrollTop: 100, max: 1000 });
   const el = mkScroller({ scrollTop: 1000, max: 1000, parentElement: ancestor });
-  const ctx = { expectedScroll: 0 };
+  const ctx = { progScrollTop: null };
   assert.equal(typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5), 0);
   assert.equal(ancestor.scrollTop, 100);
-  assert.equal(ctx.expectedScroll, 0);
+  assert.equal(ctx.progScrollTop, null);
+});
+
+// --- consumeProgrammaticScroll ----------------------------------------------
+
+test('consumeProgrammaticScroll: User-Scroll wird nicht verschluckt', () => {
+  const el = mkScroller({ scrollTop: 420 });
+  const ctx = { progScrollTop: 420 };
+  el.scrollTop = 700;                      // User rollt weg
+  assert.equal(consumeProgrammaticScroll(el, ctx), false);
+  assert.equal(ctx.progScrollTop, null);
+});
+
+test('consumeProgrammaticScroll: Subpixel-Rest gilt als eigener Scroll', () => {
+  const el = mkScroller({ scrollTop: 420.4 });
+  assert.equal(consumeProgrammaticScroll(el, { progScrollTop: 420 }), true);
+});
+
+test('consumeProgrammaticScroll: Marke wird immer verbraucht (kein Leak)', () => {
+  // Kernunterschied zum früheren Zähler: ein verlorenes/zusätzliches Event kostet
+  // höchstens einen Tick. Zweites Event ohne neuen prog-Scroll ist User-Scroll.
+  const el = mkScroller({ scrollTop: 420 });
+  const ctx = { progScrollTop: 420 };
+  assert.equal(consumeProgrammaticScroll(el, ctx), true);
+  assert.equal(consumeProgrammaticScroll(el, ctx), false);
+});
+
+// --- normAnchorRatio --------------------------------------------------------
+
+test('normAnchorRatio: gültige Ratios durch, ungültige auf 0.5', () => {
+  assert.equal(normAnchorRatio(0), 0);
+  assert.equal(normAnchorRatio(0.33), 0.33);
+  assert.equal(normAnchorRatio(1), 1);
+  assert.equal(normAnchorRatio(undefined), 0.5);
+  assert.equal(normAnchorRatio(-0.2), 0.5);
+  assert.equal(normAnchorRatio(1.5), 0.5);
+  assert.equal(normAnchorRatio(NaN), 0.5);
+  assert.equal(normAnchorRatio('0.3'), 0.5);
+});
+
+// --- resolveActiveBlock -----------------------------------------------------
+
+// Fake-Container mit Block-Kindern: `contains` über die parentNode-Kette,
+// getBoundingClientRect für den Center-Pick.
+function mkBlockHost(blocks) {
+  const container = {
+    nodeType: 1, tagName: 'DIV', parentNode: null,
+    getBoundingClientRect: () => ({ top: 0, bottom: 300, height: 300 }),
+    querySelectorAll: () => blocks,
+    contains(node) {
+      let cur = node;
+      while (cur) { if (cur === container) return true; cur = cur.parentNode; }
+      return false;
+    },
+  };
+  return container;
+}
+function mkHostedBlock(container, top, height = 40) {
+  return {
+    nodeType: 1, tagName: 'P', parentNode: container,
+    getBoundingClientRect: () => ({ top, bottom: top + height, height }),
+  };
+}
+
+test('resolveActiveBlock: Caret-Anchor gewinnt', () => {
+  const container = mkBlockHost([]);
+  const p1 = mkHostedBlock(container, 0);
+  const p2 = mkHostedBlock(container, 140);
+  const sel = { rangeCount: 1, anchorNode: mkText(p1) };
+  const block = resolveActiveBlock({
+    container, sel, visibleBlocks: new Set([p1, p2]), granularity: 'paragraph', lastBlock: null,
+  });
+  assert.equal(block, p1);
+});
+
+test('resolveActiveBlock: preferCenter ignoriert den Caret', () => {
+  const container = mkBlockHost([]);
+  const p1 = mkHostedBlock(container, 0);
+  const p2 = mkHostedBlock(container, 130);   // Mitte 150 → Container-Center
+  const sel = { rangeCount: 1, anchorNode: mkText(p1) };
+  const block = resolveActiveBlock({
+    container, sel, visibleBlocks: new Set([p1, p2]),
+    granularity: 'paragraph', lastBlock: null, preferCenter: true,
+  });
+  assert.equal(block, p2);
+});
+
+test('resolveActiveBlock: fremde Selection → Viewport-Center', () => {
+  const container = mkBlockHost([]);
+  const p = mkHostedBlock(container, 130);
+  const foreign = mkText(mkEl('INPUT'));   // ausserhalb des Containers
+  const block = resolveActiveBlock({
+    container, sel: { rangeCount: 1, anchorNode: foreign },
+    visibleBlocks: new Set([p]), granularity: 'paragraph', lastBlock: null,
+  });
+  assert.equal(block, p);
+});
+
+test('resolveActiveBlock: transienter null-Tick behält den letzten Block', () => {
+  const container = mkBlockHost([]);           // keine Blöcke auffindbar
+  const last = mkHostedBlock(container, 0);
+  const block = resolveActiveBlock({
+    container, sel: null, visibleBlocks: new Set(),
+    granularity: 'paragraph', lastBlock: last,
+  });
+  assert.equal(block, last);
+});
+
+test('resolveActiveBlock: kein Halten in typewriter-only / bei abgehängtem Block', () => {
+  const container = mkBlockHost([]);
+  const last = mkHostedBlock(container, 0);
+  assert.equal(resolveActiveBlock({
+    container, sel: null, visibleBlocks: new Set(),
+    granularity: 'typewriter-only', lastBlock: last,
+  }), null);
+  const detached = mkHostedBlock(null, 0);          // nicht mehr im Container
+  assert.equal(resolveActiveBlock({
+    container, sel: null, visibleBlocks: new Set(),
+    granularity: 'paragraph', lastBlock: detached,
+  }), null);
 });
 
 // --- caretWithinViewport ----------------------------------------------------

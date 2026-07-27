@@ -2,8 +2,16 @@
 // Datenzugriff auf semantic_chunks (semantische Suche). Der Vektor liegt als
 // Float32-BLOB; (De)Serialisierung + Cosinus kommen aus lib/embed-chunk.js.
 // Reiner Ableitungs-Index — jederzeit über routes/jobs/embed-index.js neu
-// berechenbar. Aufräumung: remove() beim Entity-Delete + book_id-CASCADE beim
-// Buch-Delete (Migration 240).
+// berechenbar.
+//
+// Die Quell-Entität hängt an einer der drei typisierten Spalten page_id/scene_id/
+// figure_id (CASCADE-FK, passend zu `kind` per CHECK erzwungen) — ein Entity- oder
+// Buch-Delete räumt seine Vektoren selbst auf. Gelesen wird polymorph über die
+// generierte Spalte entity_id (COALESCE der drei), geschrieben ausschliesslich über
+// die typisierten Spalten; _entityCols() ist der einzige Übersetzer dafür.
+// pruneMissing() bleibt zuständig für Entitäten, die noch existieren, aber nicht
+// mehr indizierbar sind (stale-Figur, Seite in anderes Buch verschoben) — das deckt
+// kein FK ab.
 
 const { db } = require('./connection');
 const { NOW_ISO_SQL } = require('./now');
@@ -19,9 +27,19 @@ const _delEntityAll = db.prepare(
   'DELETE FROM semantic_chunks WHERE kind = ? AND entity_id = ?'
 );
 const _ins = db.prepare(`
-  INSERT INTO semantic_chunks (kind, entity_id, book_id, chunk_ix, content_hash, model, dim, vector, text, created_at)
-  VALUES (@kind, @entity_id, @book_id, @chunk_ix, @content_hash, @model, @dim, @vector, @text, ${NOW_ISO_SQL})
+  INSERT INTO semantic_chunks (kind, page_id, scene_id, figure_id, book_id, chunk_ix, content_hash, model, dim, vector, text, created_at)
+  VALUES (@kind, @page_id, @scene_id, @figure_id, @book_id, @chunk_ix, @content_hash, @model, @dim, @vector, @text, ${NOW_ISO_SQL})
 `);
+
+// kind + entityId → die drei typisierten FK-Spalten. Genau eine ist gesetzt; der
+// CHECK auf der Tabelle weist jede andere Kombination ab.
+function _entityCols(kind, entityId) {
+  return {
+    page_id: kind === 'page' ? entityId : null,
+    scene_id: kind === 'scene' ? entityId : null,
+    figure_id: kind === 'figure' ? entityId : null,
+  };
+}
 
 // Bestehende Chunks einer Entität (unter einem Modell) als Map chunk_ix →
 // { content_hash, vector }. Basis des Delta-Caches im Index-Job: bei
@@ -39,9 +57,10 @@ function getEntityChunks(kind, entityId, model) {
 // nur Löschung (Entität hat keinen indizierbaren Text mehr).
 const _replaceTx = db.transaction((kind, entityId, bookId, model, dim, rows) => {
   _delEntityModel.run(kind, entityId, model);
+  const cols = _entityCols(kind, entityId);
   for (const row of rows) {
     _ins.run({
-      kind, entity_id: entityId, book_id: bookId, chunk_ix: row.chunk_ix,
+      kind, ...cols, book_id: bookId, chunk_ix: row.chunk_ix,
       content_hash: row.content_hash, model, dim,
       vector: vectorToBlob(row.vector), text: row.text,
     });

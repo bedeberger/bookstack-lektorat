@@ -85,13 +85,15 @@ Erstlauf kann dauern (embeddet alles); Folgeläufe embetten nur Geändertes. Feh
 
 ## Datenmodell — `semantic_chunks`
 
-Migration **240** ([db/migrations.js](../db/migrations.js)). Polymorph nach `kind` (`page`/`scene`/`figure`) → **kein einzelner FK** auf die Quelltabelle möglich; Aufräumung deshalb explizit + Netz:
+Migrationen **240** + **251** ([db/migrations.js](../db/migrations.js)). Polymorph nach `kind` (`page`/`scene`/`figure`), modelliert wie `motif_occurrences` — **typisierte FK-Spalten statt einer untypisierten Ref**, sodass die DB die Referenz selbst durchsetzt:
 
-- `entity_id` (polymorph), `book_id` → `books(book_id)` **ON DELETE CASCADE**, `chunk_ix`, `content_hash`, `model`, `dim`, `vector BLOB` (Float32 LE), `text`.
-- `UNIQUE(kind, entity_id, chunk_ix, model)` — Mehr-Modell-Koexistenz, Query filtert aufs aktive Modell.
-- Indexe: `idx_semchunk_book(book_id, kind)`, `idx_semchunk_entity(kind, entity_id)`.
+- `kind` (`CHECK` auf die drei Werte) plus je eine nullable FK-Spalte: `page_id` → `pages(page_id)`, `scene_id` → `figure_scenes(id)`, `figure_id` → `figures(id)`, alle **ON DELETE CASCADE**. Ein `CHECK` erzwingt, dass genau die zu `kind` passende Spalte gesetzt ist (sentinel-frei).
+- `entity_id` ist eine **`GENERATED … VIRTUAL`-Spalte** (`COALESCE(page_id, scene_id, figure_id)`). Alle Lesepfade fragen polymorph darüber ab (`WHERE kind = ? AND entity_id = ?`, `COUNT(DISTINCT entity_id)`, `JOIN figures ON f.id = sc.entity_id`); geschrieben wird ausschliesslich über die typisierten Spalten (`_entityCols()` in [db/semantic-chunks.js](../db/semantic-chunks.js) ist der einzige Übersetzer). Abgeleitet statt dupliziert → kann nicht abdriften.
+- `book_id` → `books(book_id)` **ON DELETE CASCADE**, `chunk_ix`, `content_hash`, `model`, `dim`, `vector BLOB` (Float32 LE), `text`.
+- `UNIQUE(kind, entity_id, chunk_ix, model)` als benannter Index `idx_semchunk_uniq` (Table-Constraints können keine generierte Spalte referenzieren) — Mehr-Modell-Koexistenz, Query filtert aufs aktive Modell.
+- Weitere Indexe: `idx_semchunk_book(book_id, kind)` + je einer auf `page_id`/`scene_id`/`figure_id` (FK-Deckung für den CASCADE-Scan).
 
-**Cleanup-Hooks** (Entity-Delete räumt Chunks proaktiv): [db/pages.js:154](../db/pages.js) (`remove('page', …)`), [routes/figures.js](../routes/figures.js) (`remove('scene'/'figure', …)`). `book_id`-CASCADE ist das Netz beim Buch-Delete.
+**Cleanup:** Der Entity-Delete cascadet in der DB. Die expliziten Hooks in [db/pages.js:154](../db/pages.js) (`remove('page', …)`) und [routes/figures.js](../routes/figures.js) (`remove('scene'/'figure', …)`) bleiben als sofortige Freigabe im selben Transaktionsschritt. `pruneMissing()` deckt den Fall ab, den kein FK sieht: die Entität existiert noch, ist aber nicht mehr indizierbar (stale-Figur, Seite in ein anderes Buch verschoben).
 
 ## Nacht-Cron
 
