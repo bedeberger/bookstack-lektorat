@@ -1,8 +1,9 @@
-// Unit-Tests für public/js/editor/notebook/quote-normalize.js.
+// Unit-Tests für public/js/editor/shared/quote-normalize.js.
 // Stellt sicher: Locale-Map liefert pro Region die richtigen Quotes,
-// Walker erkennt Open/Close anhand Kontext, Apostroph zwischen
-// Buchstaben/Ziffern wird zu U+2019, <pre>/<code> bleiben unangetastet,
-// Block-Boundary resettet den Open/Close-State.
+// Walker erkennt Open/Close anhand Kontext + Nesting-Stack, falsch gesetzte
+// Glyphen-Cluster werden repariert, Apostroph zwischen Buchstaben/Ziffern wird
+// zu U+2019, <pre>/<code> bleiben unangetastet, Block-Boundary resettet den
+// Open/Close-State.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -457,20 +458,65 @@ test('normalizeQuotes: Quote über <em> hinweg → next-Kontext aus folgendem Te
   assert.equal(root.querySelector('p').textContent, 'Er rief «Hallo Welt» laut.');
 });
 
-test('normalizeQuotes: adjazente Mixed-Style Quotes lösen keinen Infinite-Loop aus', () => {
-  // Regression: `„«` adjacent. Erste Iteration emittiert `«` für `„`. Bei der
-  // zweiten Iteration ist out[-1]=`«` und repl=`«` (single-char) — alte Idempotenz-
-  // Heuristik setzte matchOffset=1 → `repl.slice(1)=''` → `startsWith('', i)=true`
-  // → emitted='' → `i += -1` → hang. Fix: matchOffset nur bei space-prefix repls.
+test('normalizeQuotes: adjazenter Mixed-Style-Cluster wird zum einen Schliesser', () => {
+  // `„«` klebt aneinander, davor ein Space, dahinter ein Komma. Jede Glyphe für
+  // sich wirkt öffnend — als Run ist die Stelle eindeutig der Schliesser der
+  // offenen Rede. Überzählige Glyphe fällt weg, Space davor wird gestrippt.
   const root = makeRoot('<p>„Die Wohnung? „«, fragte er.</p>');
   const style = resolveQuoteStyle('de', 'CH');
   const count = normalizeQuotes(root, style);
-  // Beide `„` und `«` klassifizieren sich kontextuell als öffnend → 2 Glyphen
-  // werden zu `«` umgeschrieben (das dritte `«` ist bereits style-konform).
-  // Wichtig: kein Hang, alle Glyphen sind Swiss.
-  const text = root.querySelector('p').textContent;
-  assert.ok(!/[„“”‚‘]/.test(text), `non-Swiss quote remained: ${text}`);
+  assert.equal(root.querySelector('p').textContent, '«Die Wohnung?», fragte er.');
   assert.ok(count > 0);
+});
+
+// --- Reparatur bereits falsch gesetzter Anführungszeichen ---
+
+test('normalizeQuotes: Space vor Schliesser macht ihn nicht zum inneren Öffner', () => {
+  const root = makeRoot('<p>«Die Wohnung? «, fragte ich.</p>');
+  const style = resolveQuoteStyle('de', 'CH');
+  normalizeQuotes(root, style);
+  assert.equal(root.querySelector('p').textContent, '«Die Wohnung?», fragte ich.');
+});
+
+test('normalizeQuotes: Cluster ‹« mitten im Satz wird repariert', () => {
+  const root = makeRoot('<p>«Die Wohnung? ‹«, fragte ich ganz erstaunt.</p>');
+  const style = resolveQuoteStyle('de', 'CH');
+  normalizeQuotes(root, style);
+  assert.equal(
+    root.querySelector('p').textContent,
+    '«Die Wohnung?», fragte ich ganz erstaunt.',
+  );
+});
+
+test('normalizeQuotes: repariertes Ergebnis ist idempotent', () => {
+  const root = makeRoot('<p>«Die Wohnung? ‹«, fragte ich.</p>');
+  const style = resolveQuoteStyle('de', 'CH');
+  normalizeQuotes(root, style);
+  const once = root.querySelector('p').textContent;
+  assert.equal(normalizeQuotes(root, style), 0);
+  assert.equal(root.querySelector('p').textContent, once);
+});
+
+test('normalizeQuotes: Cluster »« ohne Space schliesst und öffnet neu', () => {
+  // Zwei Reden ohne Trennzeichen — der Run klebt beidseitig an Inhalt.
+  const root = makeRoot('<p>»Komm rein.««Danke», sagte er.</p>');
+  const style = resolveQuoteStyle('de', 'CH');
+  normalizeQuotes(root, style);
+  assert.equal(root.querySelector('p').textContent, '«Komm rein.»«Danke», sagte er.');
+});
+
+test('normalizeQuotes: legitime adjazente Schliesser bleiben beide erhalten', () => {
+  const root = makeRoot('<p>«Er sagte ‹hallo›», rief sie.</p>');
+  const style = resolveQuoteStyle('de', 'CH');
+  assert.equal(normalizeQuotes(root, style), 0);
+  assert.equal(root.querySelector('p').textContent, '«Er sagte ‹hallo›», rief sie.');
+});
+
+test('normalizeQuotes: Schliesser ohne Öffner bleibt Schliesser (Rede über Absätze)', () => {
+  const root = makeRoot('<p>Fortsetzung», sagte er.</p>');
+  const style = resolveQuoteStyle('de', 'CH');
+  assert.equal(normalizeQuotes(root, style), 0);
+  assert.equal(root.querySelector('p').textContent, 'Fortsetzung», sagte er.');
 });
 
 test('normalizeQuotes: Page-105-Corpus → alle non-Swiss Quotes weg', () => {
