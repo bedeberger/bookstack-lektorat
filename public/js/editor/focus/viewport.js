@@ -53,17 +53,33 @@ export function shouldRecenterOnViewport(prev, next, isWriting) {
 // Setzen → lesen → zurücksetzen läuft synchron in einem Task: es erzwingt ein
 // Zwischen-Layout, aber keinen Paint, also kein sichtbares Springen. Der Preis
 // ist ein zusätzliches Layout pro Viewport-Tick (debounced), nicht pro Anschlag.
+//
+// Die Messung ist scroll-NEUTRAL, und das muss sie von Hand sein: die Puffer
+// sind zusammen ~eine Boxhöhe, ohne sie fällt `scrollHeight` um genau diesen
+// Betrag und der Browser klemmt `scrollTop` beim erzwungenen Layout auf das
+// neue Maximum (bei kurzem Text auf 0). Das Zurücksetzen des Paddings hebt den
+// Klemm-Vorgang NICHT auf — der Editor sprang sonst pro Viewport-Tick nach oben,
+// am Seitenende um fast eine volle Bildschirmhöhe. Reihenfolge zwingend: erst
+// Paddings zurück (danach ist `scrollHeight` wieder gross genug), dann
+// `scrollTop`. `restored` meldet dem Aufrufer, dass geklemmt wurde — der Write
+// hinterlässt trotz Netto-Null ein pending `scroll`-Event.
 export function measureBoxGeometry(box) {
-  if (!box || !box.style) return { h: 0, top: 0 };
+  if (!box || !box.style) return { h: 0, top: 0, restored: false };
   const pt = box.style.paddingTop;
   const pb = box.style.paddingBottom;
+  const st = box.scrollTop;
   box.style.paddingTop = '0px';
   box.style.paddingBottom = '0px';
   const h = box.clientHeight;
   const top = box.getBoundingClientRect().top;
   box.style.paddingTop = pt;
   box.style.paddingBottom = pb;
-  return { h, top: Number.isFinite(top) ? top : 0 };
+  let restored = false;
+  if (Number.isFinite(st) && box.scrollTop !== st) {
+    box.scrollTop = st;
+    restored = true;
+  }
+  return { h, top: Number.isFinite(top) ? top : 0, restored };
 }
 
 // Baut das Paar `applyViewport` (sofort) / `syncViewport` (debounced) für den
@@ -102,6 +118,16 @@ export function makeViewportSync({ ctx, container, isActive, updateActive }) {
       const st = document.documentElement.style;
       st.setProperty('--focus-box-h', box.h + 'px');
       st.setProperty('--focus-box-top', (box.top - top) + 'px');
+    }
+    // Musste die Messung `scrollTop` zurückstellen, steht die Position zwar
+    // wieder richtig, das Schreiben hat die Box aber in die pending scroll
+    // targets gehängt: es kommt noch ein `scroll`-Event. Ohne Marke gälte es als
+    // User-Scroll und risse das Spotlight per `preferCenter` auf den
+    // Center-Absatz (typewriter.js#consumeProgrammaticScroll). Eine bereits
+    // gesetzte Marke bleibt stehen — ihr `top` ist dieselbe Position und deckt
+    // das Event mit ab.
+    if (box.restored && !ctx.progScroll && ctx.scrollBox) {
+      ctx.progScroll = { box: ctx.scrollBox, top: ctx.scrollBox.scrollTop };
     }
     const prev = ctx._lastViewport;
     ctx._lastViewport = { h, top };

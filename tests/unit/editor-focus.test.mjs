@@ -552,6 +552,26 @@ function mkBox({ slot, padTop, padBottom, top = 40 }) {
   };
 }
 
+// Wie mkBox, plus das Scroll-Clamping echter Engines: `scrollTop` kann nie über
+// `scrollHeight - clientHeight` stehen, und `scrollHeight` ist Inhalt + Puffer.
+// Nullt die Messung die Puffer, fällt das Maximum — und der Browser zieht
+// `scrollTop` mit.
+function mkScrollBox({ slot, padTop, padBottom, content, scrollTop, top = 40 }) {
+  const style = { paddingTop: padTop, paddingBottom: padBottom };
+  const px = (v) => parseFloat(v) || 0;
+  let st = scrollTop;
+  const clientHeight = () => Math.max(slot, px(style.paddingTop) + px(style.paddingBottom));
+  const scrollHeight = () => content + px(style.paddingTop) + px(style.paddingBottom);
+  const clamp = () => { st = Math.max(0, Math.min(st, scrollHeight() - clientHeight())); };
+  return {
+    style,
+    get clientHeight() { clamp(); return clientHeight(); },
+    get scrollTop() { clamp(); return st; },
+    set scrollTop(v) { st = v; clamp(); },
+    getBoundingClientRect: () => { clamp(); return { top }; },
+  };
+}
+
 test('measureBoxGeometry: liefert den Layout-Slot, nicht die aufgeblähte Padding-Summe', () => {
   // Der Kern der Messung: mit gesetzten Puffern (~eine Bildschirmhöhe) meldet
   // `clientHeight` genau diese Summe zurück. Direkt gelesen wäre die
@@ -576,7 +596,26 @@ test('measureBoxGeometry: Oberkante kommt mit (Basis des --focus-box-top-Abzugs)
 });
 
 test('measureBoxGeometry: ohne Box neutral (kein Wurf im Viewport-Tick)', () => {
-  assert.deepEqual(measureBoxGeometry(null), { h: 0, top: 0 });
+  assert.deepEqual(measureBoxGeometry(null), { h: 0, top: 0, restored: false });
+});
+
+test('measureBoxGeometry: Scroll-Position übersteht das Nullen der Puffer', () => {
+  // Am Seitenende (mit Puffern max. 1200) klemmt das Zwischen-Layout `scrollTop`
+  // auf das Maximum ohne Puffer (1200 − 700 = 500) — der Editor spränge pro
+  // Viewport-Tick um 600 px nach oben.
+  const box = mkScrollBox({ slot: 700, padTop: '400px', padBottom: '400px', content: 1200, scrollTop: 1100 });
+  const geo = measureBoxGeometry(box);
+  assert.equal(geo.h, 700);
+  assert.equal(box.scrollTop, 1100);
+  assert.equal(geo.restored, true);
+});
+
+test('measureBoxGeometry: ohne Klemmen keine Rückstellung gemeldet', () => {
+  // Genug Inhalt, dass das Maximum auch ohne Puffer über der Position liegt →
+  // kein Write, kein pending scroll-Event, keine prog-Marke nötig.
+  const box = mkScrollBox({ slot: 700, padTop: '400px', padBottom: '400px', content: 9000, scrollTop: 300 });
+  assert.equal(measureBoxGeometry(box).restored, false);
+  assert.equal(box.scrollTop, 300);
 });
 
 // --- normAnchorRatio --------------------------------------------------------
@@ -1023,6 +1062,55 @@ test('resolveGutterCaretPoint: Klick in die Absatz-Lücke nimmt den nächsten Bl
 test('resolveGutterCaretPoint: Höhe-0-Blöcke zählen nicht, leerer Satz → null', () => {
   assert.equal(resolveGutterCaretPoint(GUTTER_BOX, [mkBlockRect(100, 100)], 40, 100), null);
   assert.equal(resolveGutterCaretPoint(GUTTER_BOX, [], 40, 120), null);
+});
+
+// Ohne `lineRectsOf` ist die Block-Rect das Band (Default) — die Fälle oben.
+// Mit echten Zeilenrechtecken muss der Punkt IN der Zeile landen: bei
+// `line-height` > 1 liegt oben/unten Halb-Leading ausserhalb jeder Zeile, und
+// dort ignoriert WebKits caretPositionFromPoint das x und liefert das
+// Absatzende — der Klick links warf den Caret nach rechts.
+// Block trägt seine Zeilenrechtecke selbst, `LINES_OF` reicht sie durch — so wie
+// `blockLineRects` es im Browser aus einer Range über den Blockinhalt holt.
+const mkLineBlock = (top, bottom, lines) => ({
+  getBoundingClientRect: () => ({ top, bottom, height: bottom - top }),
+  __lines: lines.map(([t, b]) => ({ top: t, bottom: b })),
+});
+const LINES_OF = (el) => el.__lines || [];
+
+test('resolveGutterCaretPoint: cy landet in der Zeilenbox, nicht im Halb-Leading', () => {
+  // Gemessen im macOS-Client: Block 35–68 (33 px), Zeilenbox 39–63 (24 px) —
+  // je ~5 px Leading oben und unten. Klick 2 px über der Block-Unterkante.
+  const blocks = [mkLineBlock(35, 68, [[39, 63]]), mkLineBlock(90, 123, [[94, 118]])];
+  const pt = resolveGutterCaretPoint(GUTTER_BOX, blocks, 40, 66, LINES_OF);
+  assert.ok(pt, 'Klick im Block trifft');
+  assert.ok(pt.y > 39 && pt.y < 63, `cy ${pt.y} muss in der Zeilenbox 39–63 liegen`);
+  assert.equal(pt.y, 62, 'Zeilen-Unterkante − 1, nicht Block-Unterkante − 1 (67)');
+});
+
+test('resolveGutterCaretPoint: Absatz-Zwischenraum clampt in die letzte Zeile', () => {
+  // y=145 liegt zwischen den Blöcken, näher an Block 1 (100–140); dessen letzte
+  // Zeile endet bei 134.
+  const blocks = [mkLineBlock(100, 140, [[106, 134]]), mkLineBlock(160, 200, [[166, 194]])];
+  const pt = resolveGutterCaretPoint(GUTTER_BOX, blocks, 40, 145, LINES_OF);
+  assert.equal(pt.y, 133, 'nicht 139 (Block-Unterkante − 1, im Leading)');
+});
+
+test('resolveGutterCaretPoint: mehrzeiliger Block nimmt die y-nächste Zeile', () => {
+  const blocks = [mkLineBlock(100, 200, [[106, 134], [140, 168], [174, 194]])];
+  const at = (y) => resolveGutterCaretPoint(GUTTER_BOX, blocks, 40, y, LINES_OF).y;
+  assert.equal(at(120), 120, 'y in Zeile 1 bleibt stehen');
+  assert.equal(at(136), 133, 'y in der Lücke, näher an Zeile 1 → deren Unterkante − 1');
+  assert.equal(at(138), 141, 'y in der Lücke, näher an Zeile 2 → deren Oberkante + 1');
+  assert.equal(at(190), 190, 'y in der letzten Zeile bleibt stehen');
+});
+
+test('resolveGutterCaretPoint: ohne Zeilenrechtecke bleibt die Block-Rect das Band', () => {
+  // Leerer Absatz (`<p><br></p>`) → keine verwertbaren Rects; und ein werfender
+  // Aufruf (abgehängter Knoten) darf den Caret ebenso wenig kippen.
+  const blocks = [mkLineBlock(100, 140, []), mkLineBlock(160, 200, [[166, 194]])];
+  assert.equal(resolveGutterCaretPoint(GUTTER_BOX, blocks, 40, 145, LINES_OF).y, 139);
+  const boom = () => { throw new Error('detached'); };
+  assert.equal(resolveGutterCaretPoint(GUTTER_BOX, blocks, 40, 145, boom).y, 139);
 });
 
 test('resolveGutterCaretPoint: kaputte Content-Box → null (kein Caret-Sprung)', () => {
