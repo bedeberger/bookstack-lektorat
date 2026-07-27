@@ -69,6 +69,10 @@ function register(router) {
         server_updated_at: e.serverUpdatedAt || null,
         server_editor_email: e.serverEditorEmail || null,
         server_editor_name: e.serverEditorDisplay || e.serverEditorEmail || null,
+        // Eigenes Zweit-Geraet statt fremder User: der Editor formuliert das
+        // Konflikt-Banner danach.
+        server_is_self: !!email && e.serverEditorEmail === email,
+        server_editor_device: e.serverEditorDevice || null,
       });
       _fail(res, e, 'PUT /content/pages/:id');
     }

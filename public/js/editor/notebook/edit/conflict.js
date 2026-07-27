@@ -3,6 +3,19 @@ import { FEATURE_BLOCK_MERGE, buildResolvedHtml, contentRepo, editorHost, isPage
 
 export const conflictMethods = {
 
+  // Text des Konflikt-Banners. Eigenes Zweit-Gerät (Mac-Client, zweiter Laptop,
+  // Android) nennt das Gerät statt eines Usernamens — sonst liest ein Solo-Autor
+  // seinen eigenen Namen als „fremder Bearbeiter".
+  editConflictBannerText() {
+    const app = editorHost();
+    const c = app?.editConflict;
+    if (!c) return '';
+    const time = c.remoteUpdatedAt ? app.formatDate(c.remoteUpdatedAt) : '';
+    return c.remoteIsSelf
+      ? app.t('edit.conflict.bannerSelf', { device: c.remoteDevice || app.t('presence.device.unknown'), time })
+      : app.t('edit.conflict.banner', { user: c.remoteUserName || app.t('edit.conflict.unknownUser'), time });
+  },
+
   // Pre-Save-Conflict-Check für Read-Modify-Write-Pfade. Vor PUT die Seite
   // frisch lesen und `updated_at` mit Editor-Snapshot vergleichen; Mismatch =
   // anderer User hat zwischendrin gespeichert. Liefert null bei keiner
@@ -26,9 +39,16 @@ export const conflictMethods = {
       return null;
     }
     if (remote.updated_at === expectedUpdatedAt) return null;
+    // Eigenes Zweit-Gerät (Mac-Client, zweiter Laptop, Android) vs. fremder
+    // ACL-User: `last_editor.device_name` ist serverseitig ohnehin nur für die
+    // eigenen Geräte des Anfragers gefüllt.
+    const selfEmail = editorHost()?.$store?.session?.currentUser?.email || null;
+    const remoteIsSelf = !!selfEmail && remote.last_editor_email === selfEmail;
     return {
       remoteUpdatedAt: remote.updated_at,
       remoteUserName: remote.updated_by_name || null,
+      remoteIsSelf,
+      remoteDevice: remote.last_editor?.device_name || null,
       remoteHtml: remote.html || '',
     };
   },

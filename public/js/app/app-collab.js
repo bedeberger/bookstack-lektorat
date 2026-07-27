@@ -11,6 +11,11 @@
 // Serverseitig wird nur der Echo DIESES Geraets ausgefiltert (per device_id):
 // Edits eines anderen ACL-Users ODER eines eigenen Zweit-Geraets (z.B. nativer
 // Mac-Client) kommen als Remote-Change durch, der Save des eigenen Browsers nicht.
+//
+// Die Change-Row unterscheidet beide Faelle (`is_self` + `device_label`), und
+// jede User-sichtbare Meldung (Toast, Tree-Tooltip, Konflikt-Banner) hat eine
+// Self-Variante: ein Solo-Autor mit mehreren Geraeten liest „auf <Geraet>
+// geaendert", nicht „von anderen Usern geaendert".
 
 import { getDeviceId } from '../device-id.js';
 
@@ -67,7 +72,7 @@ export const appCollabMethods = {
       this.$store.collab._collabPollTimer = null;
     }
     this.$store.collab._collabSince = null;
-    this.$store.collab.recentRemoteEdits = new Set();
+    this.$store.collab.recentRemoteEdits = new Map();
     this.$store.collab.livePresenceByPage = {};
     this.$store.collab.foreignEditLock = null;
     this._dismissCollabToast();
@@ -243,12 +248,15 @@ export const appCollabMethods = {
       if (this.currentPage?.id && ch.page_id === this.currentPage.id) {
         touchedCurrent = ch;
       } else {
-        this.$store.collab.recentRemoteEdits.add(ch.page_id);
+        this.$store.collab.recentRemoteEdits.set(ch.page_id, {
+          isSelf: !!ch.is_self,
+          device: ch.device_label || null,
+        });
         others.push(ch);
       }
     }
-    // Set-Mutation: neue Reference triggert Alpine-Reaktivitaet.
-    this.$store.collab.recentRemoteEdits = new Set(this.$store.collab.recentRemoteEdits);
+    // Map-Mutation: neue Reference triggert Alpine-Reaktivitaet.
+    this.$store.collab.recentRemoteEdits = new Map(this.$store.collab.recentRemoteEdits);
 
     if (touchedCurrent) this._onCurrentPageRemoteEdit(touchedCurrent);
     if (others.length === 1) {
@@ -256,24 +264,40 @@ export const appCollabMethods = {
         user: others[0].last_editor_name || others[0].last_editor_email,
         pageName: others[0].page_name,
         pageId: others[0].page_id,
+        isSelf: !!others[0].is_self,
+        device: others[0].device_label || null,
       });
     } else if (others.length > 1) {
-      this._showCollabToast({ user: null, pageName: null, pageId: null, count: others.length });
+      // Nur wenn ALLE Rows vom eigenen Account stammen, ist der Batch ein
+      // Multi-Device-Sync; gemischt bleibt die neutrale Fremd-Formulierung.
+      this._showCollabToast({
+        user: null,
+        pageName: null,
+        pageId: null,
+        count: others.length,
+        isSelf: others.every(o => !!o.is_self),
+        device: null,
+      });
     }
   },
 
   _onCurrentPageRemoteEdit(change) {
     const name = change.last_editor_name || change.last_editor_email;
+    const isSelf = !!change.is_self;
+    const device = change.device_label || null;
     if (this.editMode && this.editDirty) {
       // Dirty-Editor: kein Auto-Reload — Banner setzen, naechster Save triggert
       // die optimistische DB-Concurrency-Pruefung (Phase 2).
       this.editConflict = {
         remoteUserName: name,
         remoteUpdatedAt: change.updated_at,
+        remoteIsSelf: isSelf,
+        remoteDevice: device,
       };
-      this.setStatus(this.t('edit.conflict.unsavedHint', {
-        user: name || this.t('edit.conflict.unknownUser'),
-      }), false, 8000);
+      this.setStatus(isSelf
+        ? this.t('edit.conflict.unsavedHintSelf', { device: device || this.t('presence.device.unknown') })
+        : this.t('edit.conflict.unsavedHint', { user: name || this.t('edit.conflict.unknownUser') }),
+      false, 8000);
       return;
     }
     // Clean-Editor oder Read-Only: frischen Stand holen + Toast.
@@ -283,7 +307,42 @@ export const appCollabMethods = {
       pageName: change.page_name,
       pageId: change.page_id,
       currentPage: true,
+      isSelf,
+      device,
     });
+  },
+
+  // Toast-Text als Methode statt Template-Ternary-Kaskade: drei Faelle
+  // (aktuelle Seite / Batch / Einzelseite) mal Self-vs-Fremd.
+  collabToastText() {
+    const c = this.$store.collab.collabToast;
+    if (!c) return '';
+    const device = c.device || this.t('presence.device.unknown');
+    const user = c.user || this.t('edit.conflict.unknownUser');
+    if (c.currentPage) {
+      return c.isSelf
+        ? this.t('collab.toast.currentPageSelf', { device })
+        : this.t('collab.toast.currentPage', { user });
+    }
+    if (c.count && c.count > 1) {
+      return c.isSelf
+        ? this.t('collab.toast.batchSelf', { count: c.count })
+        : this.t('collab.toast.batch', { count: c.count });
+    }
+    const page = c.pageName || '';
+    return c.isSelf
+      ? this.t('collab.toast.otherPageSelf', { device, page })
+      : this.t('collab.toast.otherPage', { user, page });
+  },
+
+  // Tooltip des Tree-Markers. Ohne Eintrag (Marker nicht gesetzt) null, damit
+  // `:data-tip` nichts rendert.
+  remoteEditTip(pageId) {
+    const meta = this.$store.collab.recentRemoteEdits.get(pageId);
+    if (!meta) return null;
+    return meta.isSelf
+      ? this.t('collab.tree.remoteEditTipSelf', { device: meta.device || this.t('presence.device.unknown') })
+      : this.t('collab.tree.remoteEditTip');
   },
 
   _showCollabToast(payload) {
@@ -307,7 +366,7 @@ export const appCollabMethods = {
   _clearRemoteEditMark(pageId) {
     if (!pageId || !this.$store.collab.recentRemoteEdits.has(pageId)) return;
     this.$store.collab.recentRemoteEdits.delete(pageId);
-    this.$store.collab.recentRemoteEdits = new Set(this.$store.collab.recentRemoteEdits);
+    this.$store.collab.recentRemoteEdits = new Map(this.$store.collab.recentRemoteEdits);
   },
 
   // Liefert das Presence-Array fuer eine Seite. Eigene aktuelle Session ist

@@ -3,15 +3,7 @@
        role="status"
        aria-live="polite"
        x-cloak>
-    <span class="job-toast-msg"
-          x-text="$store.collab.collabToast.currentPage
-            ? t('collab.toast.currentPage', { user: $store.collab.collabToast.user || t('edit.conflict.unknownUser') })
-            : ($store.collab.collabToast.count && $store.collab.collabToast.count > 1
-                ? t('collab.toast.batch', { count: $store.collab.collabToast.count })
-                : t('collab.toast.otherPage', {
-                    user: $store.collab.collabToast.user || t('edit.conflict.unknownUser'),
-                    page: $store.collab.collabToast.pageName || ''
-                  }))"></span>
+    <span class="job-toast-msg" x-text="collabToastText()"></span>
     <button type="button"
             class="job-toast-close"
             :aria-label="t('common.close')"

@@ -178,9 +178,7 @@
 
             <div x-show="block.conflict" x-cloak class="book-editor-conflict">
               <svg class="icon book-editor-conflict__icon" aria-hidden="true"><use href="/icons.svg?v=690#alert-triangle"/></svg>
-              <span x-text="$app.t('bookEditor.conflict.banner', {
-                user: block.conflict?.remoteUserName || $app.t('edit.conflict.unknownUser')
-              })"></span>
+              <span x-text="conflictBanner(block.conflict)"></span>
               <button type="button" class="danger" @click="resolveConflictOverwrite(block)"
                       x-text="$app.t('bookEditor.conflict.overwrite')"></button>
               <button type="button" @click="resolveConflictTakeRemote(block)"

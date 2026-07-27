@@ -72,6 +72,23 @@ Facade re-exportiert; externer Import läuft über [editor/focus.js](../public/j
 
 ## Recenter-Pipeline
 
+### Zielverhalten (Typewriter)
+
+**Die Schreibzeile ruht auf dem Anker.** Schreibzeile = die visuelle Zeile, in der der Caret sitzt. Anker = `typewriterAnchor` × Höhe des **sichtbaren** Bereichs (Default `0.5` → Bildschirmmitte). Die Position ist über die ganze Seite konstant — erster Absatz, Mitte, letzter Absatz gleich. Beim Schreiben wandert der Text unter der Zeile nach oben, nicht die Zeile im Bild.
+
+- **Anker-Knopf `typewriterAnchor`**: Root-`shellState` ([app-state.js](../public/js/app/app-state.js), Default `0.5`) und Teil des editor-host-Vertrags ([shared/editor-host.js](../public/js/editor/shared/editor-host.js)) — eine fremde Schale (Mac-Client via [standalone.js](../public/js/editor/focus/standalone.js)) setzt ihn beim Bootstrap. Kein SPA-UI-Setting. `0` = oberer Rand, `0.5` = Mitte, `0.33` = oberes Drittel; ungültig/fehlend → `0.5` (`normAnchorRatio` in [typewriter.js](../public/js/editor/focus/typewriter.js)).
+- **Seitenanfang und Seitenende sind keine Ausnahme**: die Puffer-Formeln (Invariante 9) sind so gesetzt, dass auch die erste und die letzte Zeile den Anker erreichen. Klemmt es dort, ist der Puffer falsch — nicht der Typewriter.
+
+**Abschliessende Liste der Fälle, in denen die Zeile bewusst nicht auf den Anker gezogen wird** — alles andere ist ein Bug:
+
+1. **Unter der Schwelle** `max(16px, line-height × 0.5)`: Tippen innerhalb derselben Zeile scrollt nicht (Jitter-Filter, Details unten).
+2. **Klick-Schonfrist** `POINTER_GRACE_MS`: der Caret sitzt, wo der User hingeklickt hat.
+3. **Aktive Textmarkierung**: kein Recenter, solange eine Auswahl offen ist.
+4. **Lese-Scroll** (`preferCenter`): Spotlight folgt dem Viewport-Center, Typewriter-Scroll läuft gar nicht.
+5. **Kein Caret-Rect ermittelbar**: Scroll bleibt aus statt auf die Block-Mitte auszuweichen (Invariante 13).
+
+### Ablauf
+
 Trigger feuern `_focusUpdateActive(scroll: boolean)`. Recenter passiert in einem **gecancelten RAF** — Burst-Inputs (Paste, Auto-Korrektur, IME) kollabieren auf einen Frame.
 
 ```

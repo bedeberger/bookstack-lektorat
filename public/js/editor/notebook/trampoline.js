@@ -29,6 +29,8 @@ export const notebookTrampoline = {
   notebookRedo() { card()?.notebookRedo(); },
   notebookCanUndo() { return !!card()?.notebookCanUndo(); },
   notebookCanRedo() { return !!card()?.notebookCanRedo(); },
+  // Banner rendert im Root-Scope, bevor die Sub gemountet ist → '' statt undefined.
+  editConflictBannerText() { return card()?.editConflictBannerText() ?? ''; },
 
   // Half-public — von Templates/anderen Modulen (synonyme, find, focus, toolbar,
   // app-view, book-editor-card) erwartet.

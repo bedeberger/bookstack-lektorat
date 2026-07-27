@@ -22,7 +22,7 @@ import { bookEditorFindMethods, clearHighlights } from './book-editor/find.js';
 import { bookEditorOutlineMethods } from './book-editor/outline.js';
 import { stripFocusArtefacts, htmlToText, fetchJson, escHtml } from '../utils.js';
 import { handleEditorPaste, handleEditorCopy, handleEditorCut } from '../editor/shared/paste.js';
-import { savePage } from '../editor/shared/page-api.js';
+import { readConflictBody, savePage } from '../editor/shared/page-api.js';
 import { EVT } from '../events.js';
 
 const AUTOSAVE_IDLE_MS = 60000;
@@ -411,11 +411,11 @@ export function registerBookEditorCard() {
           block.conflict = {
             remoteUserName: conflict.remoteUserName,
             remoteUpdatedAt: conflict.remoteUpdatedAt,
+            remoteIsSelf: conflict.remoteIsSelf,
+            remoteDevice: conflict.remoteDevice,
             remoteHtml: conflict.remoteHtml,
           };
-          block.saveError = app.t('bookEditor.conflictHint', {
-            user: conflict.remoteUserName || app.t('edit.conflict.unknownUser'),
-          });
+          block.saveError = this._conflictHint(block.conflict);
           return;
         }
         const saved = await savePage(block.pageId, {
@@ -433,14 +433,8 @@ export function registerBookEditorCard() {
         app._syncPageStatsAfterSave?.({ id: block.pageId, updated_at: block.originalUpdatedAt }, newHtml);
       } catch (e) {
         if (e?.status === 409 && e?.code === 'PAGE_CONFLICT') {
-          block.conflict = {
-            remoteUserName: e.body?.server_editor_name || null,
-            remoteUpdatedAt: e.body?.server_updated_at || null,
-            remoteHtml: null,
-          };
-          block.saveError = app.t('bookEditor.conflictHint', {
-            user: e.body?.server_editor_name || app.t('edit.conflict.unknownUser'),
-          });
+          block.conflict = { ...readConflictBody(e), remoteHtml: null };
+          block.saveError = this._conflictHint(block.conflict);
         } else {
           block.saveError = e.message || app.t('bookEditor.saveFailed');
         }
@@ -565,12 +559,35 @@ export function registerBookEditorCard() {
       return '';
     },
 
+    // Konflikt-Wortlaut: eigenes Zweit-Gerät (Mac-Client, zweiter Laptop,
+    // Android) nennt das Gerät, fremder ACL-User den Namen. SSoT für
+    // saveError-Hinweis, Statuszeile und Block-Banner.
+    _conflictHint(conflict) {
+      const app = window.__app;
+      if (!app || !conflict) return '';
+      return conflict.remoteIsSelf
+        ? app.t('bookEditor.conflictHintSelf', { device: conflict.remoteDevice || app.t('presence.device.unknown') })
+        : app.t('bookEditor.conflictHint', { user: conflict.remoteUserName || app.t('edit.conflict.unknownUser') });
+    },
+
+    conflictBanner(conflict) {
+      const app = window.__app;
+      if (!app || !conflict) return '';
+      return conflict.remoteIsSelf
+        ? app.t('bookEditor.conflict.bannerSelf', { device: conflict.remoteDevice || app.t('presence.device.unknown') })
+        : app.t('bookEditor.conflict.banner', { user: conflict.remoteUserName || app.t('edit.conflict.unknownUser') });
+    },
+
     blockStatusLine(block) {
       if (block.kind !== 'page') return '';
       const app = window.__app;
       if (!app) return '';
       if (block.saving) return escHtml(app.t('bookEditor.status.saving'));
-      if (block.conflict) return escHtml(app.t('bookEditor.status.conflict', { user: block.conflict.remoteUserName || app.t('edit.conflict.unknownUser') }));
+      if (block.conflict) {
+        return escHtml(block.conflict.remoteIsSelf
+          ? app.t('bookEditor.status.conflictSelf', { device: block.conflict.remoteDevice || app.t('presence.device.unknown') })
+          : app.t('bookEditor.status.conflict', { user: block.conflict.remoteUserName || app.t('edit.conflict.unknownUser') }));
+      }
       if (block.saveError) return escHtml(block.saveError);
       if (block.dirty) return escHtml(app.t('bookEditor.status.dirty'));
       if (block.savedAt) return escHtml(app.t('bookEditor.status.saved'));

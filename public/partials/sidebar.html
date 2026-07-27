@@ -128,7 +128,7 @@
                :class="{ selected: currentPage?.id === page.id, 'page-item--empty': tokEsts[page.id] && tokEsts[page.id].words === 0, 'page-item--kb-active': _pageSearchActiveId === page.id, 'page-item--remote-edit': $store.collab.recentRemoteEdits.has(page.id) }"
                :data-page-id="page.id" role="button" tabindex="0"
                :aria-current="currentPage?.id === page.id ? 'page' : null"
-               :data-tip="$store.collab.recentRemoteEdits.has(page.id) ? t('collab.tree.remoteEditTip') : null"
+               :data-tip="remoteEditTip(page.id)"
                @click="selectPage(page); _clearRemoteEditMark(page.id)"
                @contextmenu="_openPagetreeContextMenu($event, { kind: 'page', id: page.id, name: page.name })">
             <span class="page-name">

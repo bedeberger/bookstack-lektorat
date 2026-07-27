@@ -12,9 +12,13 @@
 // Feld-Bedeutung:
 //   _collabSince        — Server-„now"-Stempel als Baseline des nächsten /changes-Polls.
 //   _collabPollTimer    — 5s-Voll-Poll (changes + presence); nur bei Zweit-Partei aktiv.
-//   recentRemoteEdits   — Set von page_id, die der Tree als „extern geändert"
-//                         markiert. Set-Reassignment triggert die Reaktivität.
-//   collabToast         — { user, pageName, pageId, count?, currentPage? } | null.
+//   recentRemoteEdits   — Map<page_id, { isSelf, device }> der Seiten, die der
+//                         Tree als „extern geändert" markiert; `isSelf` trennt
+//                         eigenes Zweit-Gerät von fremdem User (Tooltip-Wortlaut,
+//                         Root-Methode `remoteEditTip`). Map-Reassignment
+//                         triggert die Reaktivität.
+//   collabToast         — { user, pageName, pageId, count?, currentPage?,
+//                         isSelf, device } | null. Text via `collabToastText()`.
 //   _collabToastTimer   — Auto-Dismiss-Timer des Toasts.
 //   livePresenceByPage  — Map<pageId, [{ user_email, user_display_name, device_id,
 //                         device_label, is_self, last_ping_at }]>. Gelesen via
@@ -37,7 +41,7 @@ export function registerCollabStore() {
   window.Alpine.store('collab', {
     _collabSince: null,
     _collabPollTimer: null,
-    recentRemoteEdits: new Set(),
+    recentRemoteEdits: new Map(),
     collabToast: null,
     _collabToastTimer: null,
     livePresenceByPage: {},

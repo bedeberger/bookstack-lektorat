@@ -34,10 +34,14 @@ export function isPageConflict(err) {
 }
 
 // Extrahiert die remote-User-/Timestamp-Felder aus einem PAGE_CONFLICT-Error.
-// Liefert { remoteUserName, remoteUpdatedAt } — beide Felder können null sein.
+// `remoteIsSelf` trennt das eigene Zweit-Gerät (Mac-Client, zweiter Laptop,
+// Android) vom fremden ACL-User; `remoteDevice` trägt dessen Label. Alle
+// Felder können null sein.
 export function readConflictBody(err) {
   return {
     remoteUserName: err?.body?.server_editor_name || null,
     remoteUpdatedAt: err?.body?.server_updated_at || null,
+    remoteIsSelf: !!err?.body?.server_is_self,
+    remoteDevice: err?.body?.server_editor_device || null,
   };
 }

@@ -306,7 +306,7 @@ function mkScroller({ scrollTop = 0, max = 1000, height = 1000 } = {}) {
 test('typewriterScroll: echter Scroll kündigt genau einen prog-Scroll an', () => {
   const el = mkScroller({ scrollTop: 100 });
   const ctx = { expectedScroll: 0 };
-  const moved = typewriterScroll(el, { top: 800, bottom: 840, height: 40 }, ctx, 16, 0.5, 0);
+  const moved = typewriterScroll(el, { top: 800, bottom: 840, height: 40 }, ctx, 16, 0.5);
   assert.equal(moved, 320);
   assert.equal(el.scrollTop, 420);
   assert.equal(ctx.expectedScroll, 1);
@@ -320,7 +320,7 @@ test('typewriterScroll: am Anschlag geklemmt → kein Counter-Increment', () => 
   // bleibt beim Blättern stehen).
   const el = mkScroller({ scrollTop: 1000, max: 1000 });
   const ctx = { expectedScroll: 0 };
-  const moved = typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5, 0);
+  const moved = typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5);
   assert.equal(moved, 0);
   assert.equal(el.scrollTop, 1000);
   assert.equal(ctx.expectedScroll, 0);
@@ -329,7 +329,7 @@ test('typewriterScroll: am Anschlag geklemmt → kein Counter-Increment', () => 
 test('typewriterScroll: teilweise geklemmt → zählt einmal (Scroll-Event feuert)', () => {
   const el = mkScroller({ scrollTop: 950, max: 1000 });
   const ctx = { expectedScroll: 0 };
-  const moved = typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5, 0);
+  const moved = typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5);
   assert.equal(moved, 50);
   assert.equal(ctx.expectedScroll, 1);
 });
@@ -339,7 +339,7 @@ test('typewriterScroll: Tippen am Scroll-Ende leakt den Counter nicht', () => {
   const el = mkScroller({ scrollTop: 1000, max: 1000 });
   const ctx = { expectedScroll: 0 };
   for (let i = 0; i < 20; i++) {
-    typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5, 0.08);
+    typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5);
   }
   assert.equal(ctx.expectedScroll, 0);
 });
@@ -347,7 +347,7 @@ test('typewriterScroll: Tippen am Scroll-Ende leakt den Counter nicht', () => {
 test('typewriterScroll: Delta unter Schwelle → kein Scroll, kein Counter', () => {
   const el = mkScroller({ scrollTop: 100 });
   const ctx = { expectedScroll: 0 };
-  assert.equal(typewriterScroll(el, { top: 495, bottom: 505, height: 10 }, ctx, 16, 0.5, 0), 0);
+  assert.equal(typewriterScroll(el, { top: 495, bottom: 505, height: 10 }, ctx, 16, 0.5), 0);
   assert.equal(el.scrollTop, 100);
   assert.equal(ctx.expectedScroll, 0);
 });

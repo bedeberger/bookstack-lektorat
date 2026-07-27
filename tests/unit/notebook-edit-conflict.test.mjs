@@ -54,8 +54,26 @@ test('_checkPageConflict: abweichender Stand → Konfliktobjekt', async () => {
   assert.deepEqual(r, {
     remoteUpdatedAt: '2026-02-02T10:00:00Z',
     remoteUserName: 'Bob',
+    // Ohne Session-Email im Test-Host kein Self-Match → Fremd-Formulierung.
+    remoteIsSelf: false,
+    remoteDevice: null,
     remoteHtml: '<p>remote</p>',
   });
+});
+
+test('_checkPageConflict: eigenes Zweit-Geraet → remoteIsSelf + Geraetename', async () => {
+  window.__app = { $store: { session: { currentUser: { email: 'me@example.com' } } } };
+  mockLoadPage(async () => ({
+    updated_at: '2026-02-02T10:00:00Z',
+    updated_by_name: 'Ich',
+    last_editor_email: 'me@example.com',
+    last_editor: { device_name: 'MacBook' },
+    html: '<p>remote</p>',
+  }));
+  const r = await notebookEditMethods._checkPageConflict(1, '2026-01-01T00:00:00Z');
+  assert.equal(r.remoteIsSelf, true);
+  assert.equal(r.remoteDevice, 'MacBook');
+  delete window.__app;
 });
 
 test('_checkPageConflict: fehlender updated_by_name/html → null/leer normalisiert', async () => {
@@ -212,7 +230,11 @@ test('submitConflictResolution: 2. 409 + Merge null → Draft behalten + editCon
   await notebookEditMethods.submitConflictResolution();
 
   assert.equal(app.saveOffline, true);
-  assert.deepEqual(app.editConflict, { remoteUserName: 'Carol', remoteUpdatedAt: '2026-04-04T00:00:00Z' });
+  assert.deepEqual(app.editConflict, {
+    remoteUserName: 'Carol', remoteUpdatedAt: '2026-04-04T00:00:00Z',
+    // Fremder User (kein server_is_self im 409-Body) → Geraete-Variante aus.
+    remoteIsSelf: false, remoteDevice: null,
+  });
   assert.ok(app.conflictResolution, 'Auflösungs-State bleibt für erneuten Versuch erhalten');
   assert.equal(app.editSaving, false);
 });

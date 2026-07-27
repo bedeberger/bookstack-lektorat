@@ -297,12 +297,19 @@ export const lifecycleMethods = {
         app.editConflict = {
           remoteUserName: conflict.remoteUserName,
           remoteUpdatedAt: conflict.remoteUpdatedAt,
+          remoteIsSelf: conflict.remoteIsSelf,
+          remoteDevice: conflict.remoteDevice,
         };
         const okOverwrite = await app.appConfirm({
-          message: app.t('edit.conflict.message', {
-            user: conflict.remoteUserName || app.t('edit.conflict.unknownUser'),
-            time: app.formatDate(conflict.remoteUpdatedAt),
-          }),
+          message: conflict.remoteIsSelf
+            ? app.t('edit.conflict.messageSelf', {
+              device: conflict.remoteDevice || app.t('presence.device.unknown'),
+              time: app.formatDate(conflict.remoteUpdatedAt),
+            })
+            : app.t('edit.conflict.message', {
+              user: conflict.remoteUserName || app.t('edit.conflict.unknownUser'),
+              time: app.formatDate(conflict.remoteUpdatedAt),
+            }),
           confirmLabel: app.t('edit.conflict.saveAnyway'),
           danger: true,
         });
@@ -438,10 +445,16 @@ export const lifecycleMethods = {
           app.editConflict = {
             remoteUserName: conflict.remoteUserName,
             remoteUpdatedAt: conflict.remoteUpdatedAt,
+            remoteIsSelf: conflict.remoteIsSelf,
+            remoteDevice: conflict.remoteDevice,
           };
-          app.setStatus(app.t('edit.conflict.unsavedHint', {
-            user: conflict.remoteUserName || app.t('edit.conflict.unknownUser'),
-          }), false, 8000);
+          app.setStatus(conflict.remoteIsSelf
+            ? app.t('edit.conflict.unsavedHintSelf', {
+              device: conflict.remoteDevice || app.t('presence.device.unknown'),
+            })
+            : app.t('edit.conflict.unsavedHint', {
+              user: conflict.remoteUserName || app.t('edit.conflict.unknownUser'),
+            }), false, 8000);
           return;
         }
       }
@@ -475,9 +488,13 @@ export const lifecycleMethods = {
         }
         app.saveOffline = true;
         app.editConflict = readConflictBody(e);
-        app.setStatus(app.t('edit.conflict.unsavedHint', {
-          user: e.body?.server_editor_name || app.t('edit.conflict.unknownUser'),
-        }), false, 8000);
+        app.setStatus(app.editConflict.remoteIsSelf
+          ? app.t('edit.conflict.unsavedHintSelf', {
+            device: app.editConflict.remoteDevice || app.t('presence.device.unknown'),
+          })
+          : app.t('edit.conflict.unsavedHint', {
+            user: app.editConflict.remoteUserName || app.t('edit.conflict.unknownUser'),
+          }), false, 8000);
         return;
       }
       console.error('[quickSave]', e);

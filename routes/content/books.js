@@ -77,6 +77,9 @@ function register(router) {
   // Ohne `device_id` (Legacy-Client) faellt der Filter auf reine E-Mail-Exklusion
   // zurueck. Polling-Endpoint fuer das Collab-Toast-Signal. Ohne `since` liefert er
   // den Server-„jetzt"-Stempel + leeres Array (Baseline-Sync). Cap 200 Rows.
+  // Jede Change-Row traegt `is_self` (gleicher User, anderes Geraet) + das
+  // `device_label` des schreibenden Geraets, damit der Client Multi-Device-Edits
+  // nicht als Fremd-Edits formuliert.
   router.get('/books/:book_id/changes', aclParamGuard('viewer'), (req, res) => {
     const email = _userEmail(req);
     const sinceRaw = (req.query?.since || '').toString().trim();
@@ -99,16 +102,21 @@ function register(router) {
       rows = db.prepare(`
         SELECT p.page_id, p.page_name, p.chapter_id,
                p.updated_at, p.last_editor_email,
-               u.display_name AS last_editor_name
+               u.display_name AS last_editor_name,
+               d.label        AS last_editor_device_label
           FROM pages p
-          LEFT JOIN app_users u ON u.email = p.last_editor_email
+          LEFT JOIN app_users         u ON u.email = p.last_editor_email
+          -- Geraete-Label nur fuer die EIGENEN Geraete des Anfragers (gleicher
+          -- Join-Scope wie loadPage) — fremde Geraetenamen leaken nicht.
+          LEFT JOIN app_users_devices d ON d.device_id = p.last_editor_device_id
+                                       AND d.user_email = ?
          WHERE p.book_id = ?
            AND p.updated_at > ?
            AND p.last_editor_email IS NOT NULL
            ${selfFilter}
          ORDER BY p.updated_at ASC
          LIMIT 200
-      `).all(req.bookId, since, ...selfArgs);
+      `).all(email, req.bookId, since, ...selfArgs);
     } catch (e) {
       return _fail(res, e, 'GET /content/books/:id/changes');
     }
@@ -121,6 +129,10 @@ function register(router) {
         updated_at: r.updated_at,
         last_editor_email: r.last_editor_email,
         last_editor_name: r.last_editor_name || r.last_editor_email,
+        // Eigenes Zweit-Geraet vs. fremder ACL-User: der Client formuliert die
+        // Meldung danach („auf Mac-Client geaendert" statt „anderer User").
+        is_self: !!email && r.last_editor_email === email,
+        device_label: r.last_editor_device_label || null,
       })),
     });
   });

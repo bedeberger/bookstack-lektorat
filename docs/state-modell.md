@@ -44,7 +44,7 @@ Verbindlicher Aufbau des Alpine-State. Vor jeder UI-Änderung die richtige Ebene
 | `chatsState` | `_checkDoneBeforeChat` |
 | `featuresUsageState` | recentFeatureKeys (Top-3 Quick-Pills), recentPageIds (Palette) |
 | ~~`bookCreateState`~~ | **migriert → Karte `bookCreateCard`** ([book-create-card.js](../public/js/cards/book-create-card.js) auf dem `<dialog>`); Root-Trigger `openCreateBook()` dispatcht `book-create:open` |
-| `collabState` | `_collabSince`, `_collabPollTimer`, recentRemoteEdits (Set), collabToast/`_collabToastTimer`, livePresenceByPage, Heartbeat-Timer (`_presencePingTimer`/`_presencePingPageId`), Geraete-Ping (`_bookDevicePingTimer`/`_bookDevicePingBookId`/`_selfPageDeviceCount` — page-scoped Multi-Device-Erkennung), Lock-State (`_currentEditLock`, `_lockHeartbeatTimer`, foreignEditLock) |
+| `collabState` | `_collabSince`, `_collabPollTimer`, recentRemoteEdits (`Map<page_id, { isSelf, device }>` — `isSelf` trennt eigenes Zweit-Gerät von fremdem User, Tooltip via `remoteEditTip()`), collabToast/`_collabToastTimer`, livePresenceByPage, Heartbeat-Timer (`_presencePingTimer`/`_presencePingPageId`), Geraete-Ping (`_bookDevicePingTimer`/`_bookDevicePingBookId`/`_selfPageDeviceCount` — page-scoped Multi-Device-Erkennung), Lock-State (`_currentEditLock`, `_lockHeartbeatTimer`, foreignEditLock) |
 | ~~`dailyProgressState`~~ | **migriert → `$store.progress`** ([progress-store.js](../public/js/cards/progress-store.js); Header-Donut neben Avatar). Loader/Reset/`headerTodayRing()` bleiben Root-Methoden (app-view/bookscope.js) |
 | `entitiesState` | entitiesEnabledForCurrentBook, entityPanelOpen (localStorage-persistiert `sw:entityPanelOpen`), `_entitiesBusy` (Inline-Entitäten-Panel im Editor) |
 
