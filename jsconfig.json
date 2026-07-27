@@ -1,0 +1,27 @@
+{
+  "//": "Nur fuer Editor-/LSP-Navigation (Go-to-Definition, Find-References). Kein Build, kein Typecheck: checkJs=false. Deckt den SERVER-Teil ab (CommonJS). Der Browser-ESM-Teil hat seine eigene public/js/jsconfig.json.",
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2023", "dom"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "maxNodeModuleJsDepth": 0
+  },
+  "include": [
+    "server.js",
+    "logger.js",
+    "playwright.config.js",
+    "playwright.app.config.js",
+    "lib/**/*.js",
+    "db/**/*.js",
+    "routes/**/*.js",
+    "scripts/**/*.js",
+    "tools/**/*.js",
+    "tests/**/*.js",
+    "tests/**/*.mjs"
+  ],
+  "exclude": ["node_modules", "public", "test-results", "playwright-report", "ai_parse_fails"]
+}

@@ -1,0 +1,15 @@
+{
+  "//": "Nur fuer Editor-/LSP-Navigation im Browser-ESM-Teil. Eigene Config, weil package.json CommonJS ist und der Server-Teil unter ../../jsconfig.json mit nodenext laeuft — hier sind es native ES-Module mit relativen ./x.js-Importen. Kein Build, kein Typecheck.",
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "maxNodeModuleJsDepth": 0,
+    "module": "esnext",
+    "moduleResolution": "bundler"
+  },
+  "include": ["**/*.js"],
+  "exclude": ["../vendor"]
+}
