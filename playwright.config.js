@@ -3,6 +3,17 @@
 // Harness-Objekt bindet. Reicht aus, um die DOM-Logik (Toggle, Recenter,
 // Pointer-Schonfrist, Cleanup) abzudecken.
 
+// Snap-verpackte Editoren (VS Code als Snap) setzen `GIO_MODULE_DIR` auf ihren
+// eigenen gio-modules-Cache. Dessen Module linken gegen das glibc/glib aus
+// /snap/core20 und sind mit dem Host-glibc inkompatibel. WebKit lädt GIO-Module
+// nur im **Netzwerk**prozess (TLS/Proxy-Resolver): der stirbt mit
+// `symbol lookup error: … __libc_pthread_init, version GLIBC_PRIVATE`, jedes
+// `page.goto` scheitert an „WebKit encountered an internal error", während
+// `setContent` grün bleibt. Chromium bringt seine Netzwerk-Stack selbst mit und
+// ist nicht betroffen — darum fällt es nur in der WebKit-Suite auf. Ausserhalb
+// eines Snaps (CI, normales Terminal) ist die Variable nicht gesetzt → no-op.
+delete process.env.GIO_MODULE_DIR;
+
 module.exports = {
   testDir: './tests/e2e',
   testMatch: '**/*.spec.js',

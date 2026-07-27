@@ -40,8 +40,9 @@ const EXTRA_FILES = ['icons.svg'];
 
 // Excluded by exact public-relative path: dynamic or self-referential assets.
 const EXCLUDE = new Set([
-  'js/plausible-init.js', // server-rendered from app_settings; never cache
-  'js/jsconfig.json',     // Editor-/LSP-Config, nie vom Browser geladen
+  'js/plausible-init.js',      // server-rendered from app_settings; never cache
+  'js/jsconfig.json',          // Editor-/LSP-Config, nie vom Browser geladen
+  'js/tsconfig.check.json',    // Import-Gate-Config (npm run test:imports), nie vom Browser geladen
   'sw.js',
   'sw-manifest.js',
 ]);

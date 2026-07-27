@@ -23,6 +23,7 @@
 
 import { focusCardMethods } from './card.js';
 import { normGranularity } from './chrome.js';
+import { collapseSoftNewlines } from './soft-newlines.js';
 import { setEditorHost } from '../shared/editor-host.js';
 import { isNoChange } from '../shared/save-pipeline.js';
 import { stripLektoratMarks } from '../shared/html-clean.js';
@@ -140,6 +141,11 @@ export async function mountStandaloneFocus({ mount, bridge, autosaveMs = DEFAULT
   // Pfad (kein fremder Input).
   const page = await bridge.loadPage();
   content.innerHTML = (page && page.html) || '<p><br></p>';
+  // Vor dem originalHtml-Capture normalisieren (Invariante 11c): sonst zeigt
+  // der pre-wrap-Block rohe Umbrüche aus Alt-Beständen als Phantom-Zeilen —
+  // und ein späteres Einebnen wäre gegenüber `originalHtml` eine Änderung, die
+  // ohne Zutun des Users speichert.
+  collapseSoftNewlines(content);
   host.currentPage = page ? { id: page.id, name: page.name } : null;
   host.renderedPageHtml = content.innerHTML;
   host.originalHtml = content.innerHTML;
@@ -186,6 +192,7 @@ export async function mountStandaloneFocus({ mount, bridge, autosaveMs = DEFAULT
       controller._focusTeardown();
       controller._focusState = 'idle';
       content.innerHTML = (next && next.html) || '<p><br></p>';
+      collapseSoftNewlines(content);   // wie beim Mount, vor originalHtml
       host.currentPage = next ? { id: next.id, name: next.name } : null;
       host.renderedPageHtml = content.innerHTML;
       host.originalHtml = content.innerHTML;

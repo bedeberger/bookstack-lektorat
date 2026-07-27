@@ -56,22 +56,51 @@ export function jumpToTrailingParagraph(container) {
   return added;
 }
 
+// Zeilenrechtecke eines Blocks. Range über den Inhalt statt `getBoundingClientRect()`
+// des Elements: die Element-Rect umfasst das Halb-Leading (`line-height` > 1) und
+// bei mehrzeiligen Absätzen alle Zeilen als EINE Box — beides genau das, was
+// `resolveGutterCaretPoint` nicht gebrauchen kann.
+export function blockLineRects(el) {
+  try {
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    const rects = r.getClientRects();
+    if (rects && rects.length) return Array.from(rects);
+  } catch { /* detached/exotischer Knoten → Fallback unten */ }
+  return [el.getBoundingClientRect()];
+}
+
 // Klick in die leere Seitenfläche links/rechts der Textspalte → Punkt AUF
-// derselben Zeile, an den der Caret gehört: y bleibt (geclamped in den
-// getroffenen Block), x wandert an den Rand der Textspalte. `caretRangeFromPoint`
-// trifft dort das erste bzw. letzte Zeichen der angeklickten Zeile.
+// derselben Zeile, an den der Caret gehört: y bleibt (geclamped in die
+// getroffene Zeilenbox), x wandert an den Rand der Textspalte.
+// `caretRangeFromPoint` trifft dort das erste bzw. letzte Zeichen der Zeile.
+//
+// Geclamped wird in die ZEILENBOX, nicht in die Block-Rect: bei `line-height` > 1
+// liegt oben und unten Halb-Leading ausserhalb jeder Zeile, und ein Punkt im
+// unteren Leading-Streifen (bzw. im Absatz-Zwischenraum, der auf `bottom - 1`
+// clampt) ignoriert in WebKit das x — `caretPositionFromPoint` liefert dann das
+// ABSATZENDE, auch bei einem Klick ganz links. Der Caret sprang also nach rechts,
+// statt an den Zeilenanfang zu gehen.
 //
 // `null` heisst „hier keinen Caret setzen": der Klick liegt im vertikalen Puffer
 // über dem ersten oder unter dem letzten Block. Die Puffer sind Anker-hoch
-// (Invariante 9), ein Sprung an Buchanfang/-ende ist dort nie gemeint.
+// (Invariante 9), ein Sprung an Buchanfang/-ende ist dort nie gemeint. Diese
+// Prüfung bleibt bewusst auf den Block-Rects — sie fragt nach der Textfläche,
+// nicht nach einer Zeile.
 //
 // Pure Geometrie: `contentBox` ist `{ left, right }` der *Content*-Box (innerhalb
-// des Paddings), `blocks` ein Iterable mit `getBoundingClientRect()`.
-export function resolveGutterCaretPoint(contentBox, blocks, x, y) {
+// des Paddings), `blocks` ein Iterable mit `getBoundingClientRect()`. `lineRectsOf`
+// liefert die Zeilenrechtecke eines Blocks; der Default (Block-Rect als einzige
+// „Zeile") hält die Funktion ohne DOM testbar — der echte Aufrufer reicht
+// `blockLineRects` durch.
+export function resolveGutterCaretPoint(
+  contentBox, blocks, x, y, lineRectsOf = (el) => [el.getBoundingClientRect()],
+) {
   if (!contentBox || !(contentBox.right > contentBox.left)) return null;
   let firstTop = Infinity;
   let lastBottom = -Infinity;
   let hit = null;
+  let hitEl = null;
   let hitDist = Infinity;
   for (const el of blocks) {
     const r = el.getBoundingClientRect();
@@ -81,16 +110,35 @@ export function resolveGutterCaretPoint(contentBox, blocks, x, y) {
     // 0 = y liegt im Block; sonst Abstand zur nächsten Kante (Klick in den
     // Absatz-Zwischenraum landet am nächstgelegenen Block).
     const dist = y < r.top ? r.top - y : (y > r.bottom ? y - r.bottom : 0);
-    if (dist < hitDist) { hitDist = dist; hit = r; }
+    if (dist < hitDist) { hitDist = dist; hit = r; hitEl = el; }
   }
   if (!hit || y < firstTop || y > lastBottom) return null;
-  // 1 px in den Block hineinziehen, damit der Punkt nicht auf der Kante zum
-  // Nachbarblock liegt; sehr flache Blöcke fallen auf ihre Mitte zurück.
-  const cy = hit.height > 2
-    ? Math.min(Math.max(y, hit.top + 1), hit.bottom - 1)
-    : (hit.top + hit.bottom) / 2;
+  const band = pickLineRect(hitEl, hit, lineRectsOf, y);
+  // 1 px in die Zeile hineinziehen, damit der Punkt nicht auf ihrer Kante liegt;
+  // sehr flache Bänder fallen auf ihre Mitte zurück.
+  const bandH = band.bottom - band.top;
+  const cy = bandH > 2
+    ? Math.min(Math.max(y, band.top + 1), band.bottom - 1)
+    : (band.top + band.bottom) / 2;
   const cx = Math.min(Math.max(x, contentBox.left + 1), contentBox.right - 1);
   return { x: cx, y: cy };
+}
+
+// Die y-nächste Zeilenbox des getroffenen Blocks (0 = y liegt darin). Ohne
+// verwertbare Zeilen — leerer Absatz, `<hr>`, abgehängter Knoten — bleibt die
+// Block-Rect das Band.
+function pickLineRect(el, blockRect, lineRectsOf, y) {
+  let rects = null;
+  try { rects = el ? lineRectsOf(el) : null; } catch { rects = null; }
+  if (!rects || !rects.length) return blockRect;
+  let best = null;
+  let bestDist = Infinity;
+  for (const r of rects) {
+    if (!(r.bottom - r.top > 0)) continue;
+    const dist = y < r.top ? r.top - y : (y > r.bottom ? y - r.bottom : 0);
+    if (dist < bestDist) { bestDist = dist; best = r; }
+  }
+  return best || blockRect;
 }
 
 // Punkt → collapsed Range. Standard-API (`caretPositionFromPoint`) zuerst,

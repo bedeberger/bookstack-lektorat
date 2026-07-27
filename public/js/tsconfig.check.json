@@ -1,0 +1,10 @@
+{
+  "//": "Import-Gate fuer den Browser-ESM-Teil, gefahren von scripts/check-imports.js (npm run test:imports). Bewusst EIGENE Datei statt eines Umbaus von jsconfig.json: die bleibt reine Editor-/LSP-Config ohne Typecheck (checkJs:false), damit sich das Verhalten der LSP nicht aendert. Hier ist checkJs nur deshalb an, weil TypeScript undefinierte Namen ausschliesslich im Check-Modus meldet — ausgewertet werden aber NUR TS2304/TS2552 ('Cannot find name'), alle uebrigen Typfehler verwirft der Runner. Kein Build, kein Emit.",
+  "extends": "./jsconfig.json",
+  "compilerOptions": {
+    "checkJs": true,
+    "noEmit": true
+  },
+  "include": ["**/*.js", "_globals.d.ts"],
+  "exclude": ["../vendor"]
+}

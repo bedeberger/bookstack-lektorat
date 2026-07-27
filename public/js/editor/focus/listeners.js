@@ -12,7 +12,7 @@ import {
   POINTER_GRACE_MS, POINTER_GRACE_TOUCH_MS,
   HAS_IO, HAS_MO, isFocusToggleChord, isFocusExitBlocked,
 } from './constants.js';
-import { findBlockFromNode, resolveGutterCaretPoint, caretRangeAtPoint } from './dom-blocks.js';
+import { findBlockFromNode, resolveGutterCaretPoint, caretRangeAtPoint, blockLineRects } from './dom-blocks.js';
 import { applyBlockMarks, repairBlockMarks } from './recenter.js';
 import { consumeProgrammaticScroll, resolveScrollBox } from './typewriter.js';
 import { makeCursorHide } from './cursor-hide.js';
@@ -20,6 +20,7 @@ import { makeViewportSync } from './viewport.js';
 import { editorHost } from '../shared/editor-host.js';
 import { bindInlineFormattingShortcuts } from '../shared/shortcuts.js';
 import { insertSoftBreak } from '../shared/soft-break.js';
+import { collapseSoftNewlines } from './soft-newlines.js';
 
 function makeCtx(container) {
   const abort = new AbortController();
@@ -178,8 +179,17 @@ export function installFocusListeners({ ctrl, container }) {
 
   // Input fängt, was selectionchange nicht abdeckt: undo/redo ohne Caret-Move,
   // Paste mit stabiler Caret-Position, Content-Rewrite durch externe Module.
-  const onInput = () => {
+  const onInput = (e) => {
     if (!isActive()) return;
+    // Eingefügtes Fremd-HTML bringt Zeilenumbrüche und Einrückungen aus seiner
+    // Quellformatierung mit; unter pre-wrap rendern die als Phantom-Zeilen
+    // (Invariante 11c). Gleich hier einebnen, im selben Task wie die Mutation.
+    // Auf den Paste-/Drop-`inputType` gefiltert, weil dies der einzige Weg ist,
+    // auf dem solcher Whitespace mitten in einer Session entsteht — beim Tippen
+    // liefe der Vollscan sonst bei jedem Zeichen.
+    if (e?.inputType === 'insertFromPaste' || e?.inputType === 'insertFromDrop') {
+      collapseSoftNewlines(container);
+    }
     repairMarksNow();
     // Composition läuft: das DOM sonst nicht anfassen (Kandidatenfenster/
     // Composition darf nicht gestört werden), aber der Typewriter bleibt als
@@ -325,6 +335,7 @@ export function installFocusListeners({ ctrl, container }) {
       { left: box.left + pad(cs.paddingLeft), right: box.right - pad(cs.paddingRight) },
       container.querySelectorAll(BLOCK_SEL),
       e.clientX, e.clientY,
+      blockLineRects,
     );
     if (!pt) return;
     const range = caretRangeAtPoint(pt.x, pt.y);

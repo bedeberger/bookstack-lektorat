@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "78a98f742e4fab59";
+self.__SHELL_BUILD = "56bdb918295bc946";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -393,6 +393,7 @@ self.__SHELL_MANIFEST = [
   "/js/editor/focus/mirror.js",
   "/js/editor/focus/recenter.js",
   "/js/editor/focus/sentence.js",
+  "/js/editor/focus/soft-newlines.js",
   "/js/editor/focus/standalone.js",
   "/js/editor/focus/storage.js",
   "/js/editor/focus/trampoline.js",

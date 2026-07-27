@@ -28,6 +28,8 @@ import { installFocusListeners } from './listeners.js';
 import { writeFocusSnapshot, clearFocusSnapshot } from './storage.js';
 import { markFocusChrome, unmarkFocusChrome, applyGranularity } from './chrome.js';
 import { mirrorToFocus, mirrorToNormal } from './mirror.js';
+import { collapseSoftNewlines } from './soft-newlines.js';
+import { FOCUS_SELECTOR } from '../shared/active-editor.js';
 import { editorHost } from '../shared/editor-host.js';
 import { installEditCounter } from '../shared/edit-counter.js';
 
@@ -68,6 +70,11 @@ export const focusCardMethods = {
       if (gen !== this._focusGen || this._focusState !== 'entering') return;
       try {
         mirrorToFocus();
+        // Rohe Umbrüche/Rand-Whitespace aus Alt-Beständen einebnen, BEVOR die
+        // pre-wrap-Blöcke sie als Phantom-Zeilen und Einzüge zeigen
+        // (Invariante 11c). Nur auf dem Fokus-Klon — der Normal-Container
+        // bleibt unberührt, bis der Exit zurückspiegelt.
+        collapseSoftNewlines(document.querySelector(FOCUS_SELECTOR));
         // Live-Counter ist Container-gebunden — beim Mode-Wechsel teardown
         // und am neuen aktiven Container (Smart-Switch via shared/active-
         // editor.js) neu installieren. Andernfalls misst der Counter den

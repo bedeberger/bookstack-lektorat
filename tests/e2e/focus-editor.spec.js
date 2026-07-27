@@ -1694,3 +1694,59 @@ test('Cursor-Auto-Hide: Klick ohne Mausbewegung macht den Zeiger sichtbar', asyn
   expect(await page.evaluate(() =>
     document.querySelector('.focus-editor').classList.contains('focus-cursor-hidden'))).toBe(false);
 });
+
+test('Alt-Bestand: rohe Umbrueche im Blockinneren rendern nicht als Phantom-Zeilen', async ({ page }) => {
+  // Unter `white-space: pre-wrap` (Invariante 11c) wird sichtbar, was in jeder
+  // anderen Ansicht kollabiert: ein `\n` im Blockinneren rendert als Umbruch,
+  // fuehrende Leerzeichen als Einzug. Solche Bestaende kommen aus Importen und
+  // huebsch formatiertem Quell-HTML. Gemessen ohne Normalisierung: aus einer
+  // Zeile werden drei (41 -> 122 px), Einzug 15 px.
+  await page.evaluate(() => window.harness.startEdit());
+
+  // Vor dem Eintritt setzen — collapseSoftNewlines laeuft im Mount-Pfad.
+  await page.evaluate(() => {
+    const p = document.querySelectorAll('#editor-card .focus-editor__content > p')[2];
+    p.textContent = '\n  Erste Zeile\n  Fortsetzung im selben Absatz.\n';
+  });
+
+  await enter(page);
+  await page.waitForTimeout(80);
+
+  const m = await page.evaluate(() => {
+    const c = document.querySelector('#editor-card .focus-editor__content');
+    const p = c.querySelectorAll(':scope > p')[2];
+    const plain = c.querySelectorAll(':scope > p')[1];
+    return {
+      newlines: (p.textContent.match(/\n/g) || []).length,
+      text: p.textContent,
+      height: Math.round(p.getBoundingClientRect().height),
+      oneLine: Math.round(plain.getBoundingClientRect().height),
+    };
+  });
+
+  expect(m.newlines, 'rohe Umbrueche nicht eingeebnet').toBe(0);
+  expect(m.text.startsWith(' '), 'fuehrender Whitespace nicht getrimmt').toBe(false);
+  expect(m.text).toBe('Erste Zeile Fortsetzung im selben Absatz.');
+  // Gegenprobe an einem normalen Absatz: gleiche Zeilenzahl, keine Phantom-Zeilen.
+  expect(m.height).toBeLessThanOrEqual(m.oneLine);
+});
+
+test('Gedicht behaelt seine Umbrueche (kein Kollaps in .poem)', async ({ page }) => {
+  // Die Kehrseite des vorigen Tests: in `.poem` ist `\n` echte Struktur, ein
+  // Kollaps waere Datenverlust — und wuerde beim naechsten Save persistiert.
+  await page.evaluate(() => window.harness.startEdit());
+  await page.evaluate(() => {
+    const p = document.querySelectorAll('#editor-card .focus-editor__content > p')[2];
+    const poem = document.createElement('div');
+    poem.className = 'poem';
+    poem.innerHTML = '<p>Vers eins\nVers zwei\nVers drei</p>';
+    p.replaceWith(poem);
+  });
+
+  await enter(page);
+  await page.waitForTimeout(80);
+
+  const newlines = await page.evaluate(() =>
+    (document.querySelector('#editor-card .focus-editor__content .poem').textContent.match(/\n/g) || []).length);
+  expect(newlines, 'Verse wurden eingeebnet').toBe(2);
+});

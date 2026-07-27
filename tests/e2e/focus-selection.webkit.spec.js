@@ -97,3 +97,74 @@ test('Zieh-Selektion über ein Wort liefert eine nicht-leere Selektion', async (
   expect(sel.length).toBeGreaterThan(0);
   expect(r.text).toContain(sel.trim());
 });
+
+// Zweite WebKit-Eigenheit derselben Familie: `caretPositionFromPoint` ignoriert
+// das x, sobald der Punkt UNTER der letzten Zeilenbox eines Absatzes liegt — im
+// Halb-Leading, das `line-height: 1.85` unten stehen lässt. Zurück kommt dann
+// das Absatzende, auch bei einem Klick ganz links. Der Gutter-Klick
+// (resolveGutterCaretPoint) clampt deshalb in die Zeilenbox statt in die
+// Block-Rect. Chromium ist nicht betroffen; der Test gehört darum hierher.
+test('Gutter-Klick im unteren Halb-Leading setzt den Caret an den Zeilenanfang', async ({ page }) => {
+  const probe = await page.evaluate((sel) => {
+    const box = document.querySelector(sel);
+    const boxRect = box.getBoundingClientRect();
+    for (const p of box.querySelectorAll('p')) {
+      const node = p.firstChild;
+      if (!node || node.nodeType !== 3) continue;
+      const pr = p.getBoundingClientRect();
+      // Absatz komfortabel im Bild, sonst scrollt der Klick das Ziel weg.
+      if (!(pr.top > boxRect.top + 60 && pr.bottom < boxRect.bottom - 60)) continue;
+      const r = document.createRange();
+      r.selectNodeContents(p);
+      const lines = Array.from(r.getClientRects()).filter((l) => l.height > 0);
+      if (!lines.length) continue;
+      const last = lines[lines.length - 1];
+      // Der Leading-Streifen unter der letzten Zeile — die Bug-Zone.
+      const strip = pr.bottom - last.bottom;
+      if (!(strip >= 3)) continue;
+      // Offset des ersten Zeichens der letzten Zeile (Erwartung für den Caret).
+      let lineStart = null;
+      for (let i = 0; i < node.nodeValue.length; i++) {
+        const cr = document.createRange();
+        cr.setStart(node, i);
+        cr.setEnd(node, i + 1);
+        const cb = cr.getBoundingClientRect();
+        if (cb.height > 0 && cb.top >= last.top - 1) { lineStart = i; break; }
+      }
+      if (lineStart === null) continue;
+      return {
+        // 1 px innerhalb des Streifens, 8 px vom linken Overlay-Rand: das ist
+        // Container-Padding, also der Gutter-Pfad (target === container).
+        x: boxRect.left + 8,
+        y: pr.bottom - 1,
+        lineStart,
+        len: node.nodeValue.length,
+        lastTop: last.top,
+        lastBottom: last.bottom,
+      };
+    }
+    return null;
+  }, EDITOR);
+  expect(probe, 'Absatz mit Leading-Streifen unter der letzten Zeile gefunden').not.toBeNull();
+  expect(probe.lineStart).toBeGreaterThan(0);   // mehrzeilig, Zeilenanfang ≠ Absatzanfang
+
+  await page.mouse.click(probe.x, probe.y);
+
+  const caret = await page.evaluate((sel) => {
+    const s = getSelection();
+    if (!s || !s.anchorNode) return null;
+    const box = document.querySelector(sel);
+    return {
+      inside: box.contains(s.anchorNode),
+      offset: s.anchorOffset,
+      collapsed: s.isCollapsed,
+    };
+  }, EDITOR);
+  expect(caret).not.toBeNull();
+  expect(caret.inside).toBe(true);
+  expect(caret.collapsed).toBe(true);
+  // Der Bug: Caret landet am Absatzende statt am Anfang der letzten Zeile.
+  expect(caret.offset).toBeLessThan(probe.len);
+  // ±1, weil das Leerzeichen am Ende der Vorzeile je nach Affinität mitzählt.
+  expect(Math.abs(caret.offset - probe.lineStart)).toBeLessThanOrEqual(1);
+});
