@@ -22,16 +22,13 @@ function isoDaysAgo(n) { return localIsoDaysAgo(n); }
 function makeCtx(stats = [], tokEsts = null) {
   if (tokEsts !== null) globalThis.window.__app.tokEsts = tokEsts;
   else globalThis.window.__app.tokEsts = {};
+  // Ganze Facade spreaden statt Methoden einzeln durchzureichen: die Stats-
+  // Methoden greifen quer auf Helper anderer Submodule zu (_memo aus load,
+  // _uiLocale/_numFmt/_dateFmt aus format).
   return {
     overviewStats: stats,
     _memos: {},
-    _memo: bookOverviewMethods._memo,
-    _memoN: bookOverviewMethods._memoN,
-    _charsTodayDelta: bookOverviewMethods._charsTodayDelta,
-    overviewStreakHeatmap: bookOverviewMethods.overviewStreakHeatmap,
-    overviewTodayRing: bookOverviewMethods.overviewTodayRing,
-    overviewLast7Days: bookOverviewMethods.overviewLast7Days,
-    overview7DayCharDelta: bookOverviewMethods.overview7DayCharDelta,
+    ...bookOverviewMethods,
   };
 }
 

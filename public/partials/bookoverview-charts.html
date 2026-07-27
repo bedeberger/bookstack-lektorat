@@ -177,11 +177,7 @@
           <template x-for="(cell, di) in week" :key="di">
             <div class="overview-streak-cell"
                  :class="cell ? ('overview-streak-cell--lvl' + cell.level + (cell.future ? ' overview-streak-cell--future' : '')) : 'overview-streak-cell--empty'"
-                 :data-tip="cell && cell.iso
-                   ? (cell.delta != null && cell.delta > 0
-                       ? $app.t('overview.streak.cellTip', { date: cell.iso, chars: _fmtNum(cell.delta) })
-                       : (cell.hasSnapshot ? $app.t('overview.streak.cellTipNoChange', { date: cell.iso }) : $app.t('overview.streak.cellTipNone', { date: cell.iso })))
-                   : null"></div>
+                 :data-tip="cell?.tip ?? null"></div>
           </template>
         </div>
       </template>

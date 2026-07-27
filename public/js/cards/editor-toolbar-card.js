@@ -88,6 +88,11 @@ export function registerEditorToolbarCard() {
       // Edit-Container; kollabierte Selektion wird nicht behandelt (dort greift
       // die hr-selected-Klick-Logik).
       document.addEventListener('selectionchange', () => {
+        // Ohne Edit-Session nichts zu tun: der Handler liefe sonst bei JEDER
+        // Selektionsänderung der App (Chat, Suche, Findings) mit DOM-Scan mit.
+        // Die Klasse wirkt nur im `--editing`-Scope, ein Rest im Lesemodus ist
+        // wirkungslos und wird beim nächsten Edit-Selektionswechsel geräumt.
+        if (!window.__app?.editMode) return;
         document.querySelectorAll('.page-content-view--editing.hr-in-selection')
           .forEach((el) => el.classList.remove('hr-in-selection'));
         const sel = document.getSelection();

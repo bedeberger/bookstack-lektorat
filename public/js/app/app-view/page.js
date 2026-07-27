@@ -12,7 +12,14 @@ export const pageMethods = {
       return;
     }
     if (this.editMode && this.editDirty) {
-      if (!confirm(this.t('app.switchPageConfirm'))) return;
+      // appConfirm statt native confirm(): gleicher Dialog wie cancelEdit /
+      // discardDraft. Nicht `danger` — der Entwurf bleibt erhalten (resetPage
+      // baut die Session mit `keepDraft` ab), es geht nichts verloren.
+      const ok = await this.appConfirm({
+        message: this.t('app.switchPageConfirm'),
+        confirmLabel: this.t('app.switchPageConfirmBtn'),
+      });
+      if (!ok) return;
     }
     // Alle Buchkarten schliessen + Editor-State resetten – nur eine Ebene
     // (Buch oder Seite) aktiv. Helper deckt alle showXxxCard-Flags ab und
@@ -306,6 +313,16 @@ export const pageMethods = {
     this.closeSynonymPicker?.();
     this.closeFigurLookup?.();
     if (this.focusActive) this.exitFocusMode();
+    // Volles Edit-Session-Teardown über die SSoT im Notebook-Card (Pflicht-
+    // Invariante #11): Autosave, Online-Retry, Steuerzeichen-Overlay, Counter,
+    // Presence-Heartbeat, Edit-Lock, Undo-Stack, Konflikt-State. Ein
+    // Teilabbau hier liesse Lock-Heartbeat und Presence-Ping der verlassenen
+    // Seite weiterlaufen — andere User sähen sie dauerhaft als „in Bearbeitung".
+    // `keepDraft`: der localStorage-Entwurf ist beim Seitenwechsel die einzige
+    // Kopie ungespeicherter Arbeit; der pendingDraft-Banner bietet sie wieder an.
+    this._teardownEditSession?.({ keepDraft: true });
+    // Defensiver Rest-Reset: greift, wenn die Notebook-Card (noch) nicht
+    // gemountet ist und der Teardown oben ins Leere lief.
     this._stopAutosave?.();
     this._uninstallOnlineRetry?.();
     this.resetChat();
@@ -339,6 +356,12 @@ export const pageMethods = {
     this.editMode = false;
     this.editDirty = false;
     this.editSaving = false;
+    this.saveOffline = false;
+    this.draftPersistFailed = false;
+    // Konflikt-State ist seiten-gebunden: der Banner hängt nicht an editMode und
+    // würde sonst mit den Daten der verlassenen Seite weiterstehen.
+    this.editConflict = null;
+    this.conflictResolution = null;
     this.pendingDraft = null;
     this.lastAutosaveAt = null;
     this.lastDraftSavedAt = null;

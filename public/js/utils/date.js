@@ -21,6 +21,20 @@ export function tzOpts(opts = {}) {
   return opts.timeZone ? opts : { ...opts, timeZone: appTimezone };
 }
 
+// Pro (Locale, Options) gecachter Intl.DateTimeFormat, `timeZone` immer via
+// tzOpts gemergt (harte Regel „Frontend-Datums-Display nur via tzOpts"). Spart
+// die Formatter-Konstruktion in Schleifen (Wochentags-Labels, Sparkline-Punkte,
+// Heatmap-Zellen) und macht das tzOpts-Wrapping unvergesslich.
+const _DTF_CACHE = new Map();
+export function dateTimeFormat(uiLocale, opts = {}) {
+  const tag = localeTag(uiLocale);
+  const merged = tzOpts(opts);
+  const key = tag + '|' + JSON.stringify(merged);
+  let dtf = _DTF_CACHE.get(key);
+  if (!dtf) { dtf = new Intl.DateTimeFormat(tag, tzOpts(merged)); _DTF_CACHE.set(key, dtf); }
+  return dtf;
+}
+
 // Pro Locale gecacht — Intl.RelativeTimeFormat-Konstruktion ist nicht gratis,
 // und _fmtRelativeLine wird pro Sidebar-Render mehrfach aufgerufen.
 const _RTF_CACHE = new Map();

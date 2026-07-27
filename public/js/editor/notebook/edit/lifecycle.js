@@ -1,5 +1,5 @@
 // Teil von notebookEditMethods (siehe Facade edit.js).
-import { FEATURE_BLOCK_MERGE, clearDraft, clearNormalSnapshot, editorHost, ensureTrailingParagraph, findInHtml, getActiveEditorContainer, htmlToText, installEditCounter, isNoChange, isPageConflict, normalizeEditorBlocks, readConflictBody, readDraft, readEditorPrefs, savePage, sortByPosition, stripLektoratMarks, trackMerge, tzOpts, writeDraft, writeNormalSnapshot } from './_shared.js';
+import { clearDraft, clearNormalSnapshot, editorHost, findInHtml, getActiveEditorContainer, htmlToText, installEditCounter, isNoChange, isPageConflict, localeTag, mountEditorHtml, readConflictBody, readDraft, readEditorPrefs, savePage, sortByPosition, stripLektoratMarks, tzOpts, writeNormalSnapshot } from './_shared.js';
 
 export const lifecycleMethods = {
   // Container-Lookup: einziger Eintrittspunkt für beide Modi.
@@ -28,6 +28,11 @@ export const lifecycleMethods = {
     // Sidebar-Lektorat-Status flippt auf 'warn' (updated_at > checkedAt) — Server-Map nachladen.
     app.refreshPageAges?.();
     clearDraft(pageId ?? app.currentPage?.id);
+    // Autosave-Zyklus schliessen: der Max-Timer läuft ab dem ERSTEN Dirty-Mark
+    // und wird von `_scheduleAutosave` nur neu gesetzt, wenn er null ist. Ohne
+    // Reset hier würde der 120-s-Cap der nächsten Tipp-Serie noch von der
+    // Baseline vor diesem Save gemessen.
+    this._clearAutosaveTimers();
     app.lastAutosaveAt = Date.now();
     app.lastDraftSavedAt = null;
     app.draftPersistFailed = false;
@@ -39,16 +44,28 @@ export const lifecycleMethods = {
 
 
   // Vollständiges Teardown einer Edit-Session: stoppt Autosave/Draft/Retry/
-  // Marks/Counter/Presence/Lock, verwirft Snapshot + Draft und setzt die
-  // Session-Flags zurück. Reihenfolge = Pflicht-Invariante #11 (Draft →
+  // Marks/Counter/Presence/Lock, verwirft Snapshot (+ optional Draft) und setzt
+  // die Session-Flags zurück. Reihenfolge = Pflicht-Invariante #11 (Draft →
   // Snapshot → Autosave → OnlineRetry → Marks → Counter → Presence → Lock →
   // History → editMode=false); frühes editMode=false liesse Teardowns auf
-  // bereits genullten Refs laufen. Aufrufer: cancelEdit + saveEdit
-  // (Non-Focus-Pfad). SSoT für den Session-Abbau — kein Copy-Paste je Pfad.
-  _teardownEditSession() {
+  // bereits genullten Refs laufen.
+  //
+  // SSoT für den Session-Abbau — Aufrufer: cancelEdit, saveEdit (Non-Focus-Pfad)
+  // und `resetPage` (Seitenwechsel/Karten-Schliessen, via Trampoline). Ohne den
+  // resetPage-Aufruf blieben Edit-Lock-Heartbeat und Presence-Ping der
+  // verlassenen Seite laufen — andere User sähen dort dauerhaft „wird bearbeitet".
+  //
+  // `keepDraft: true` behält den localStorage-Entwurf: beim Seitenwechsel mit
+  // ungespeicherten Änderungen ist der Draft die einzige Kopie der Arbeit, und
+  // der `pendingDraft`-Banner bietet sie beim nächsten Besuch wieder an.
+  // cancelEdit verwirft ihn dagegen bewusst (User hat „verwerfen" bestätigt).
+  _teardownEditSession({ keepDraft = false } = {}) {
     const app = editorHost();
     if (!app) return;
-    if (app.currentPage) clearDraft(app.currentPage.id);
+    if (!keepDraft) {
+      if (app.currentPage) clearDraft(app.currentPage.id);
+      app.pendingDraft = null;
+    }
     clearNormalSnapshot();
     this._stopAutosave();
     this._uninstallOnlineRetry();
@@ -62,8 +79,14 @@ export const lifecycleMethods = {
     app.editSaving = false;
     app.saveOffline = false;
     app.draftPersistFailed = false;
-    app.pendingDraft = null;
     app.lastDraftSavedAt = null;
+    // Konflikt-State gehört zur Session: der Banner (`x-show="editConflict"` in
+    // editor-notebook.html) ist nicht an editMode gekoppelt und würde sonst im
+    // Lesemodus stehen bleiben — mit einem Button, der `saveEdit()` auf dem noch
+    // im DOM hängenden (nur display:none) contenteditable auslöst und damit
+    // gerade verworfenen Text zurückschreibt.
+    app.editConflict = null;
+    app.conflictResolution = null;
     app.pageEditorFullscreen = false;
     app.pageEditorFitWidth = false;
     app.closeSynonymMenu?.();
@@ -108,6 +131,11 @@ export const lifecycleMethods = {
   startEdit() {
     const app = editorHost();
     if (!app || !app.currentPage || app.originalHtml === null) return;
+    // Re-Entry würde `el.innerHTML` überschreiben und die Undo-Baseline neu
+    // setzen. Aktuell hält kein Aufrufer den Button im Edit-Modus sichtbar
+    // (`<template x-if="!editMode">`), aber ein zweiter Aufruf darf niemals
+    // laufende Arbeit anfassen.
+    if (app.editMode) return;
     if (app.checkLoading || app.saveApplying != null) return;
     // Prüfmodus blockt Edit (Invariante: editMode + checkDone forbidden).
     // Findings-Apply-Pfad bleibt via saveCorrections, ohne contenteditable.
@@ -145,47 +173,19 @@ export const lifecycleMethods = {
 
     const el = this._getEditEl();
     if (el) {
-      if (initialHtml) {
-        el.innerHTML = initialHtml;
-      } else {
-        // Leere Seite: Platzhalter-Absatz, damit der Cursor einen Block hat
-        // (sonst landen erste Zeichen als orphan-Textnode direkt unter dem
-        // Editor-Root und Focus-Mode-Absatz-Erkennung greift erst nach Enter).
-        const p = document.createElement('p');
-        p.appendChild(document.createElement('br'));
-        el.replaceChildren(p);
-      }
-      // Pre-Normalize-Snapshot: weicht die Fassung nach normalizeEditorBlocks
-      // davon ab, hat der Normalizer Legacy-HTML repariert (orphan Text-/
-      // Inline-Nodes direkt unter dem Editor-Root). Ohne Persistenz kehrt
-      // der Defekt nach jedem Reload zurück und bricht Focus-Mode-Absatz-
-      // Hervorhebung erneut. `editDirty=true` sorgt dafür, dass der nächste
-      // Auto- oder Manual-Save die bereinigte Fassung nach BookStack schreibt.
-      const beforeNormalize = el.innerHTML;
-      normalizeEditorBlocks(el);
-      if (el.innerHTML !== beforeNormalize) {
+      // Einhängen inkl. Block-Normalisierung + Caret-Slot über die geteilte
+      // Pipeline (shared/mount-html.js) — dieselbe, die Undo/Redo-Restore und
+      // das Spiegeln eines gemergten Stands nutzen.
+      //
+      // `repaired` heisst: der Normalizer hat Legacy-HTML reparieren müssen
+      // (orphan Text-/Inline-Nodes direkt unter dem Editor-Root). Ohne
+      // Persistenz kehrt der Defekt nach jedem Reload zurück und bricht die
+      // Focus-Mode-Absatz-Hervorhebung erneut — `editDirty=true` sorgt dafür,
+      // dass der nächste Auto- oder Manual-Save die bereinigte Fassung schreibt.
+      const { repaired } = mountEditorHtml(el, initialHtml);
+      if (repaired) {
         app.editDirty = true;
         this._scheduleDraftSave();
-      }
-      // Caret-Slot: Server liefert neue Seiten als `<p></p>` ohne Kinder
-      // (cleanPageHtml-Fallback). Selection auf Element-Offset 0 in einem
-      // leeren `<p>` empfängt keinen Caret und keine input-Events → User
-      // sieht nichts und kann nicht tippen. `<br>` als Schreib-Slot ergänzen;
-      // html-clean strippt `<p><br></p>` beim nächsten Save wieder.
-      // Pendant zu jumpToTrailingParagraph im Fokus-Modus; hier vorab, weil
-      // auch normaler Edit-Modus den Bug zeigt.
-      const lastBlock = el.lastElementChild;
-      if (lastBlock && lastBlock.tagName === 'P' && !lastBlock.hasChildNodes()) {
-        lastBlock.appendChild(document.createElement('br'));
-      } else if (lastBlock && lastBlock.tagName === 'HR') {
-        // Trailing <hr> ist ein void-Element ohne Caret-Slot. Endet die Seite
-        // damit, gibt es keinen Block, um dahinter weiterzuschreiben — ein
-        // Klick ans Seitenende landet vor der Linie. Folge-Absatz als
-        // Schreib-Anker ergänzen (gleicher Slot wie insertHorizontalRule).
-        // html-clean strippt das leere <p><br></p> beim nächsten Save wieder,
-        // und normalizeForCompare ignoriert es im Dirty-Vergleich → kein
-        // Persistenz- oder Falsch-Dirty-Effekt.
-        ensureTrailingParagraph(el);
       }
     }
     setTimeout(() => this._getEditEl()?.focus(), 0);
@@ -211,14 +211,17 @@ export const lifecycleMethods = {
     // wird bei cancel/save (non-focus) wieder geclear't.
     if (el) this._historyReset?.(el.innerHTML);
 
-    // Layout-Prefs (Fullscreen + Seitenbreite) aus localStorage restoren.
-    // Fit-Width skaliert die Schrift jetzt per CSS Container-Query (cqi) —
-    // kein JS-Pfad, kein Zoom-Vorab-Compute mehr.
+    // Layout-Prefs (Fullscreen, Seitenbreite, Steuerzeichen, Zoom) aus
+    // localStorage restoren. Fit-Width skaliert die Schrift per CSS
+    // Container-Query (cqi); der Zoom-Faktor multipliziert sich orthogonal dazu.
     const prefs = readEditorPrefs();
     app.pageEditorFullscreen = prefs.fullscreen;
     app.pageEditorFitWidth = prefs.fitWidth;
     app.pageEditorShowMarks = prefs.showMarks;
-    if (app.pageEditorShowMarks) this._installFormatMarks();
+    app.pageEditorZoom = prefs.zoom;
+    // Marks-Layer erst nach dem Alpine-x-show-Flush vermessen: der
+    // Editor-Wrapper ist in diesem Tick noch display:none, alle Rects wären 0.
+    if (app.pageEditorShowMarks) setTimeout(() => { if (app.editMode) this._installFormatMarks(); }, 0);
   },
 
 
@@ -242,6 +245,11 @@ export const lifecycleMethods = {
   async saveEdit() {
     const app = editorHost();
     if (!app || !app.currentPage) return;
+    // Ohne offene Edit-Session gibt es nichts zu speichern. Das contenteditable
+    // hängt nach dem Teardown weiter im DOM (nur `display:none`) und trägt noch
+    // den letzten Stand — ein Aufruf von aussen (z. B. der Konflikt-Banner)
+    // würde sonst verworfenen Text zurückschreiben. Spiegelt den quickSave-Guard.
+    if (!app.editMode) return;
     if (!app.canEdit?.()) return;
     const el = this._getEditEl();
     if (!el) return;
@@ -258,7 +266,7 @@ export const lifecycleMethods = {
       // unterscheidet. cancelEdit darf hier NICHT den Verwerfen-Dialog
       // zeigen — wir sind im Save-Flow, nicht im Cancel-Flow.
       app.editDirty = false;
-      this.cancelEdit();
+      await this.cancelEdit();
       return;
     }
 
@@ -267,117 +275,69 @@ export const lifecycleMethods = {
       app.setStatus(app.t('edit.emptyTextAbort'), false, 5000);
       return;
     }
-    const origText = htmlToText(app.originalHtml || '').trim();
-    if (origText.length > 50 && newText.length < origText.length * 0.2) {
-      const okShort = await app.appConfirm({
-        message: app.t('edit.shorterConfirm', { newLen: newText.length, oldLen: origText.length }),
-      });
-      if (!okShort) return;
-    }
 
-    let saveHtml = newHtml;
-    let expectedAt = app.currentPage.updated_at;
-    const source = app.focusActive ? 'focus' : 'main';
-    const conflict = await this._checkPageConflict(app.currentPage.id, app.currentPage.updated_at);
-    if (conflict) {
-      const merge = await this._attemptBlockMerge({
-        localHtml: newHtml, source,
-        remoteHtml: conflict.remoteHtml, remoteUpdatedAt: conflict.remoteUpdatedAt,
-      });
-      if (merge?.conflict) return; // Auflösungs-Banner offen
-      if (merge?.merged) {
-        // Stiller Auto-Merge: nicht-kollidierende Block-Edits zusammengeführt.
-        saveHtml = merge.saveHtml;
-        expectedAt = merge.expectedAt;
-        app.editConflict = null;
-        app.setStatus(app.t('edit.conflict.merged.silent'), false, 3000);
-      }
-      if (!merge?.merged) {
-        // Klassischer Fallback (Flag off / leere Base / kein Merge): Überschreiben-Modal.
-        app.editConflict = {
-          remoteUserName: conflict.remoteUserName,
-          remoteUpdatedAt: conflict.remoteUpdatedAt,
-          remoteIsSelf: conflict.remoteIsSelf,
-          remoteDevice: conflict.remoteDevice,
-        };
-        const okOverwrite = await app.appConfirm({
-          message: conflict.remoteIsSelf
-            ? app.t('edit.conflict.messageSelf', {
-              device: conflict.remoteDevice || app.t('presence.device.unknown'),
-              time: app.formatDate(conflict.remoteUpdatedAt),
-            })
-            : app.t('edit.conflict.message', {
-              user: conflict.remoteUserName || app.t('edit.conflict.unknownUser'),
-              time: app.formatDate(conflict.remoteUpdatedAt),
-            }),
-          confirmLabel: app.t('edit.conflict.saveAnyway'),
-          danger: true,
-        });
-        if (!okOverwrite) {
-          writeDraft(app.currentPage.id, newHtml, app.originalHtml, app.currentPage.updated_at);
-          app.lastDraftSavedAt = Date.now();
-          app.saveOffline = true;
-          app.setStatus(app.t('edit.conflict.kept'), false, 6000);
-          return;
-        }
-        if (FEATURE_BLOCK_MERGE) trackMerge('fallback_overwrite');
-      }
-    }
-
+    // Pflicht-Invariante #6: `editSaving` VOR dem ersten `await` setzen. Der
+    // Kürzungs-Dialog und der Pre-Save-Conflict-Read sind Wartezeiten, in denen
+    // sonst der Autosave-Tick (`_fireAutosave` prüft nur `!editSaving`) einen
+    // parallelen PUT absetzt — dessen Save verschiebt `updated_at`, und der
+    // hier schon gefangene Stempel läuft garantiert in einen 409 gegen den
+    // eigenen Schreibvorgang.
     app.editSaving = true;
-    app.setStatus(app.t('edit.saving'), true);
+    const source = app.focusActive ? 'focus' : 'main';
     try {
-      const saved = await savePage(app.currentPage.id, {
-        html: saveHtml,
-        pageName: app.currentPage.name,
-        source,
-        expectedUpdatedAt: expectedAt,
-      });
-      this._applySaveSuccess(saved, saveHtml);
-      // Kein extra setStatus vor dem Teardown — Save-Indicator in der Subline
-      // zeigt schon "gespeichert HH:MM"; doppelte Notification wäre redundant.
-      if (app.focusActive) {
-        // Fokus bleibt aktiv — User schreibt weiter; editMode/Listener bleiben.
-      } else {
-        this._teardownEditSession();
+      const origText = htmlToText(app.originalHtml || '').trim();
+      if (origText.length > 50 && newText.length < origText.length * 0.2) {
+        const okShort = await app.appConfirm({
+          message: app.t('edit.shorterConfirm', { newLen: newText.length, oldLen: origText.length }),
+        });
+        if (!okShort) return;
       }
-      app.setStatus('');
-    } catch (e) {
-      if (isPageConflict(e)) {
-        // Race: zwischen Pre-Check und PUT hat anderer User geschrieben.
-        // Erneuter Block-Merge gegen den jetzt frischen Remote-Stand.
-        app.editSaving = false;
-        const merge = await this._attemptBlockMerge({ localHtml: newHtml, source });
-        if (merge?.conflict) return;
-        if (merge?.merged) {
-          // Kollisionsfrei: gemergten Stand direkt nachspeichern.
-          try {
-            const saved = await savePage(app.currentPage.id, {
-              html: merge.saveHtml, pageName: app.currentPage.name, source,
-              expectedUpdatedAt: merge.expectedAt,
-            });
-            this._applySaveSuccess(saved, merge.saveHtml);
+
+      const pre = await this._resolveConflictBeforeSave({ localHtml: newHtml, source, silent: false });
+      if (!pre.proceed) return;
+
+      app.setStatus(app.t('edit.saving'), true);
+      try {
+        const saved = await savePage(app.currentPage.id, {
+          html: pre.saveHtml,
+          pageName: app.currentPage.name,
+          source,
+          expectedUpdatedAt: pre.expectedAt,
+        });
+        this._applySaveSuccess(saved, pre.saveHtml);
+        // Kein extra setStatus vor dem Teardown — Save-Indicator in der Subline
+        // zeigt schon "gespeichert HH:MM"; doppelte Notification wäre redundant.
+        // Im Fokus bleibt die Session offen (User schreibt weiter).
+        if (!app.focusActive) this._teardownEditSession();
+        // Auto-Merge-Hinweis NACH dem Save melden (wie im 409-Pfad): vor dem PUT
+        // gesetzt, überschreibt ihn die „speichere…"-Zeile sofort wieder.
+        if (pre.merged) app.setStatus(app.t('edit.conflict.merged.silent'), false, 3000);
+        else app.setStatus('');
+      } catch (e) {
+        if (isPageConflict(e)) {
+          // Race: zwischen Pre-Check und PUT hat anderer User geschrieben.
+          const retry = await this._retryAfterConflict({
+            localHtml: newHtml, source, pageId: app.currentPage.id,
+            pageName: app.currentPage.name, tag: 'saveEdit',
+          });
+          if (retry?.conflict) return;
+          if (retry) {
+            this._applySaveSuccess(retry.saved, retry.html);
             app.setStatus(app.t('edit.conflict.merged.silent'), false, 3000);
             return;
-          } catch (e2) { console.warn('[saveEdit] merged re-save failed', e2); }
+          }
+          this._keepAsDraft({
+            pageId: app.currentPage.id, html: newHtml, banner: readConflictBody(e),
+          });
+          return;
         }
-        // Fallback: Draft sichern + klassischer Conflict-Banner.
-        writeDraft(app.currentPage.id, newHtml, app.originalHtml, app.currentPage.updated_at);
-        app.lastDraftSavedAt = Date.now();
-        app.saveOffline = true;
-        app.editConflict = readConflictBody(e);
-        app.setStatus(app.t('edit.conflict.kept'), false, 8000);
-        return;
-      }
-      console.error('[saveEdit]', e);
-      // Netzwerkfehler → Draft behalten, Offline-Modus aktivieren, Auto-Retry.
-      writeDraft(app.currentPage.id, newHtml, app.originalHtml, app.currentPage.updated_at);
-      app.lastDraftSavedAt = Date.now();
-      app.saveOffline = true;
-      if (!navigator.onLine) {
-        app.setStatus(app.t('edit.offlineSaved'), false, 8000);
-      } else {
-        app.setStatus(app.t('edit.saveFailed', { msg: e.message }), false, 8000);
+        console.error('[saveEdit]', e);
+        // Netzwerkfehler → Draft behalten, Offline-Modus aktivieren, Auto-Retry.
+        this._keepAsDraft({
+          pageId: app.currentPage.id, html: newHtml,
+          statusKey: navigator.onLine ? null : 'edit.offlineSaved',
+        });
+        if (navigator.onLine) app.setStatus(app.t('edit.saveFailed', { msg: e.message }), false, 8000);
       }
     } finally {
       app.editSaving = false;
@@ -422,49 +382,21 @@ export const lifecycleMethods = {
     // (oder exitFocusMode-quickSave + Auto-Save-Timer) den gleichen PUT zweimal
     // absetzen.
     app.editSaving = true;
-    let saveHtml = newHtml;
-    let expectedAt = app.currentPage.updated_at;
     const source = app.focusActive ? 'focus' : 'main';
     try {
-      // Silent-Path: Auto-Save darf keinen Modal triggern. Bei Cross-User-Konflikt
-      // versucht der Block-Merge still zusammenzuführen; nur echte Block-Kollisionen
-      // öffnen das Auflösungs-Banner (auch im Fokusmodus sichtbar). Ohne Merge
-      // (Flag off / leere Base) bleibt der editConflict-Hinweis wie gehabt.
-      const conflict = await this._checkPageConflict(app.currentPage.id, app.currentPage.updated_at);
-      if (conflict) {
-        const merge = await this._attemptBlockMerge({
-          localHtml: newHtml, source,
-          remoteHtml: conflict.remoteHtml, remoteUpdatedAt: conflict.remoteUpdatedAt,
-        });
-        if (merge?.conflict) return; // Auflösungs-Banner offen
-        if (merge?.merged) {
-          saveHtml = merge.saveHtml;
-          expectedAt = merge.expectedAt;
-        } else {
-          app.saveOffline = true;
-          app.editConflict = {
-            remoteUserName: conflict.remoteUserName,
-            remoteUpdatedAt: conflict.remoteUpdatedAt,
-            remoteIsSelf: conflict.remoteIsSelf,
-            remoteDevice: conflict.remoteDevice,
-          };
-          app.setStatus(conflict.remoteIsSelf
-            ? app.t('edit.conflict.unsavedHintSelf', {
-              device: conflict.remoteDevice || app.t('presence.device.unknown'),
-            })
-            : app.t('edit.conflict.unsavedHint', {
-              user: conflict.remoteUserName || app.t('edit.conflict.unknownUser'),
-            }), false, 8000);
-          return;
-        }
-      }
+      // Silent-Path: Auto-Save darf keinen Modal triggern (Pflicht-Invariante #9).
+      // Bei Cross-User-Konflikt versucht der Block-Merge still zusammenzuführen;
+      // nur echte Block-Kollisionen öffnen das Auflösungs-Banner (auch im
+      // Fokusmodus sichtbar). Ohne Merge bleibt der editConflict-Hinweis.
+      const pre = await this._resolveConflictBeforeSave({ localHtml: newHtml, source, silent: true });
+      if (!pre.proceed) return;
       const saved = await savePage(app.currentPage.id, {
-        html: saveHtml,
+        html: pre.saveHtml,
         pageName: app.currentPage.name,
         source,
-        expectedUpdatedAt: expectedAt,
+        expectedUpdatedAt: pre.expectedAt,
       });
-      this._applySaveSuccess(saved, saveHtml);
+      this._applySaveSuccess(saved, pre.saveHtml);
       // Kein setStatus — Save-Indicator in der Subline zeigt schon
       // "gespeichert HH:MM"; doppelte Notification wäre redundant.
       app.setStatus('');
@@ -473,28 +405,20 @@ export const lifecycleMethods = {
         // Race nach Pre-Check: anderer User war im selben Tick schneller.
         // Block-Merge gegen den frischen Remote-Stand; nur Block-Kollisionen
         // öffnen das Banner. Quiet-Pfad, kein Modal.
-        app.editSaving = false;
-        const merge = await this._attemptBlockMerge({ localHtml: newHtml, source });
-        if (merge?.conflict) return;
-        if (merge?.merged) {
-          try {
-            const saved = await savePage(app.currentPage.id, {
-              html: merge.saveHtml, pageName: app.currentPage.name, source,
-              expectedUpdatedAt: merge.expectedAt,
-            });
-            this._applySaveSuccess(saved, merge.saveHtml);
-            return;
-          } catch (e2) { console.warn('[quickSave] merged re-save failed', e2); }
+        const retry = await this._retryAfterConflict({
+          localHtml: newHtml, source, pageId: app.currentPage.id,
+          pageName: app.currentPage.name, tag: 'quickSave',
+        });
+        if (retry?.conflict) return;
+        if (retry) {
+          this._applySaveSuccess(retry.saved, retry.html);
+          return;
         }
-        app.saveOffline = true;
-        app.editConflict = readConflictBody(e);
-        app.setStatus(app.editConflict.remoteIsSelf
-          ? app.t('edit.conflict.unsavedHintSelf', {
-            device: app.editConflict.remoteDevice || app.t('presence.device.unknown'),
-          })
-          : app.t('edit.conflict.unsavedHint', {
-            user: app.editConflict.remoteUserName || app.t('edit.conflict.unknownUser'),
-          }), false, 8000);
+        const banner = readConflictBody(e);
+        this._keepAsDraft({
+          pageId: app.currentPage.id, html: newHtml, banner, statusKey: null,
+        });
+        app.setStatus(this._conflictHintText(banner), false, 8000);
         return;
       }
       console.error('[quickSave]', e);
@@ -502,8 +426,8 @@ export const lifecycleMethods = {
       // navigator.onLine ist hier nur noch Hinweis fuer die Wortwahl, kein Gate:
       // bei echtem Offline die freundlichere Meldung, sonst generischer Retry-Hinweis.
       if (!navigator.onLine) {
-        const localeTag = (app.$store.shell.uiLocale === 'en') ? 'en-US' : 'de-CH';
-        app.setStatus(app.t('edit.offlineSavedAt', { time: new Date().toLocaleTimeString(localeTag, tzOpts()) }), false, 3000);
+        const tag = localeTag(app.$store.shell.uiLocale);
+        app.setStatus(app.t('edit.offlineSavedAt', { time: new Date().toLocaleTimeString(tag, tzOpts()) }), false, 3000);
       } else {
         app.setStatus(app.t('edit.saveFailedRetry'), false, 6000);
       }

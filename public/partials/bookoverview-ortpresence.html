@@ -1,45 +1,11 @@
 <!-- Schauplatz-Präsenz-Matrix: Kapitel (Zeilen) × Top-Schauplätze (Spalten).
-     Cell-Wert = location_chapters.haeufigkeit. Cell-Intensität = per Spalte
-     skaliert. Match primär per chapter_id, Fallback chapter_name.
-     Immer medium — Matrix mit Spalten-Header braucht Breite (siehe DESIGN.md). -->
-<template x-if="!overviewIsTagebuch() && overviewOrtPresence().places.length > 0">
-  <div class="overview-tile overview-tile--medium">
-    <div class="overview-tile-label" x-text="$app.t('overview.ortPresence')"></div>
-    <div class="overview-presence-wrap">
-      <table class="overview-presence-matrix">
-        <thead>
-          <tr>
-            <th></th>
-            <template x-for="p in overviewOrtPresence().places" :key="p.id">
-              <th class="overview-presence-col-head"
-                  :data-tip="p.name"
-                  x-text="p.name"></th>
-            </template>
-          </tr>
-        </thead>
-        <tbody>
-          <template x-for="row in overviewOrtPresence().rows" :key="row.id">
-            <tr>
-              <th class="overview-presence-row-head" :data-tip="row.name" x-text="row.name"></th>
-              <template x-for="cell in row.cells" :key="cell.ortId">
-                <td class="overview-presence-cell"
-                    :class="{
-                      'overview-presence-cell--empty': cell.value === 0,
-                      'internal-link': cell.value > 0
-                    }"
-                    :style="{ '--cell-pct': cell.pct }"
-                    :data-tip="cell.value > 0
-                      ? $app.t('overview.ortPresenceOpen', { ort: cell.ortName, kapitel: row.name })
-                      : cell.ortName + ' · ' + row.name + ': ' + cell.value"
-                    @click="cell.value > 0 && $app.openOrtMitKapitel(cell.ortId, row.name)">
-                  <span class="overview-presence-fill"></span>
-                  <span class="overview-presence-num" x-show="cell.value > 0" x-text="cell.value"></span>
-                </td>
-              </template>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-    </div>
+     Cell-Wert = location_chapters.haeufigkeit, Intensität global skaliert.
+     Match primär per chapter_id, Fallback chapter_name.
+     Immer medium — Matrix mit Spalten-Header braucht Breite (siehe DESIGN.md).
+     Das Tabellen-Markup teilen sich alle drei Matrizen (Fragment-Include). -->
+<template x-if="!overviewIsTagebuch() && overviewPresence('orte').cols.length > 0">
+  <div class="overview-tile overview-tile--medium"
+       x-data="{ kind: 'orte', labelKey: 'overview.ortPresence' }">
+    <!-- @include bookoverview-presence-matrix -->
   </div>
 </template>

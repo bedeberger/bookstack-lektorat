@@ -29,7 +29,7 @@ Verbindlicher Aufbau des Alpine-State. Vor jeder UI-Änderung die richtige Ebene
 | `shellState` | **Residual-Root-State** (Auth/Session → `$store.session`, App-Meta → `$store.shell`): nur noch `focusGranularity`, `typewriterAnchor` (editor-host-Vertrag, von `window.__app`/Standalone-Host gelesen) + `_abortCtrl`, `_usersByEmail`/Loading (interne Lazy-Caches) |
 | `navigationState` | books, bookFilter\*, selectedBookId, bookRoles/currentBookRole/bookSharedFlags (ACL), pages, tree, Hash-Router-Internals (`_applyingHash`, `_hashInitialized`, `_inHashApply`, `_hashUpdatePending`, `_navDepth`), Order-Maps (`_chapterOrderMap`, `_pageOrderMap`, `_pageIdOrderMap`), pageSearch, newChapter-Felder |
 | `pageState` | Mode-agnostischer Seiten-Inhalt: currentPage, currentPageEmpty/IdeenOpenCount/ChatSessionCount, renderedPageHtml, originalHtml, chapterFigures/showChapterFigures, newPage-Felder. Notebook, Focus und View lesen alle hier |
-| `notebookState` | Notebook-Editor-Lifecycle: editMode, editDirty, editSaving, saveOffline, editConflict, pendingDraft, lastAutosaveAt/lastDraftSavedAt, Auto-Save-Timer (`_autosaveIdleTimer`, `_autosaveMaxTimer`, `_draftTimer`, `_onlineHandler`), pageEditorFullscreen/Zoom/FitWidth |
+| `notebookState` | Notebook-Editor-Lifecycle: editMode, editDirty, editSaving, saveOffline, editConflict, pendingDraft, lastAutosaveAt/lastDraftSavedAt, Auto-Save-Timer (`_autosaveIdleTimer`, `_autosaveMaxTimer`, `_draftTimer`) + Online-Retry-Handles (`_onlineHandler` für window `online`/`focus`, `_onlineVisHandler` für document `visibilitychange`), conflictResolution, draftPersistFailed, pageEditorFullscreen/Zoom/FitWidth/ShowMarks |
 | `focusState` | Focus-Editor: focusActive (SSoT „Fokusmodus an"), focusCountWords/Chars + Deltas (Live-Counter im Fokus-Header). Dirty-/Saving-Zustand kommt aus `notebookState` — der Focus-Editor läuft auf der Notebook-Save-Pipeline |
 | `editorPopupState` | Spiegel-Flags `_figurLookupOpen`, `_synonymMenuOpen`, `_synonymPickerOpen` (für Escape-Routing in `editor-focus-onKey`) + `_figurLookupIndex` (Lookup-Cache) |
 | `cardsState` | **Alle `showXxxCard`-Flags** inkl. Admin-Karten (showAdminUsers/Settings/Usage/Categories/BooksCard), showSongsCard, showKontinuitaetCard, showSearchCard, showKomplettStatus, showAvatarMenu, adminUsageTab — exklusiv via `_closeOtherMainCards(keep)` |
@@ -176,7 +176,7 @@ Vier orthogonale Modi am **Notebook-Editor** (nicht am Bucheditor) — kein Sing
 
 **Begleit-State pro Modus:**
 - Prüfmodus: `lektoratFindings`, `selectedFindings`, `correctedHtml`, `hasErrors`, `analysisOut`, `appliedOriginals`, `appliedHistoricCorrections`, `lastCheckId`, `activeHistoryEntryId`, `checkProgress`, `checkStatus`, `_checkPollTimer`.
-- Editmodus: `editDirty`, `editSaving`, `saveOffline`, `lastAutosaveAt`, `lastDraftSavedAt`, `_autosaveIdleTimer`, `_autosaveMaxTimer`, `_draftTimer`, `_onlineHandler` (`notebookState`) + `originalHtml` (`pageState`, da Mode-agnostisch).
+- Editmodus: `editDirty`, `editSaving`, `saveOffline`, `lastAutosaveAt`, `lastDraftSavedAt`, `_autosaveIdleTimer`, `_autosaveMaxTimer`, `_draftTimer`, `_onlineHandler`, `_onlineVisHandler` (`notebookState`) + `originalHtml` (`pageState`, da Mode-agnostisch).
 - Fokusmodus: `focusCountWords/Chars/*Delta` (`focusState`) + `focusGranularity` (`shellState`) + Sub-Maschine `_focusState` (`idle`/`entering`/`active`/`exiting`) + `_focusGen` (Re-Entry-Guard) in [editorFocusCard](../public/js/cards/editor-focus-card.js).
 
 **Erlaubte Kombinationen** (8 Bool-Tripel, 4 erlaubt):

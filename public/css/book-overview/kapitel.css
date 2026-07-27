@@ -48,17 +48,6 @@
 .overview-chapter-row--best {
   border-left-color: var(--color-success);
 }
-/* Findings-Tile: ungeprüfte Kapitel ausgrauen. */
-.overview-chapter-row--nocheck {
-  cursor: default;
-}
-.overview-chapter-row--nocheck .overview-chapter-name,
-.overview-chapter-row--nocheck .overview-chapter-meta {
-  opacity: var(--opacity-muted);
-}
-.overview-chapter-row--nocheck .overview-chapter-bar-fill {
-  background: var(--color-border);
-}
 .overview-chapter-name {
   white-space: nowrap;
   overflow: hidden;

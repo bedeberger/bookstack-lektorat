@@ -3,36 +3,18 @@
 // `showBookOverviewCard` lebt im Root (Hash-Router, Exklusivität).
 
 import { bookOverviewMethods } from '../book-overview.js';
-import { EVT } from '../events.js';
+import { initialOverviewState } from '../book-overview/load.js';
+import { setupCardLifecycle } from './card-lifecycle.js';
 
 export function registerBookOverviewCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
   window.Alpine.data('bookOverviewCard', () => ({
-    overviewLoading: false,
-    overviewBookId: null,
-    overviewStats: [],
-    overviewCoverage: null,
-    overviewHeat: null,
-    overviewLastReview: null,
-    overviewPrevReview: null,
-    overviewRecent: [],
-    overviewFiguren: [],
-    overviewSzenen: [],
-    overviewOrte: [],
-    overviewSongs: [],
-    overviewLektoratTime: null,
-    overviewIsFinished: false,
-    overviewDailyGoalChars: null,
-    overviewGoalTargetChars: null,
-    overviewGoalDeadline: null,
-    overviewBuchtyp: null,
-    overviewRueckblickCoverage: null,
-    overviewPlot: null,
-    overviewMotifs: null,
-    overviewLoadErrors: [],
+    // Tile-State: SSoT ist initialOverviewState() in book-overview/load.js —
+    // dieselbe Quelle, die resetBookOverview() beim Buchwechsel zurückschreibt.
+    ...initialOverviewState(),
 
-    _onBookChanged: null,
-    _onViewReset: null,
+    _lifecycle: null,
+    // Re-Entry-Guard für die Microtask-Koaleszierung unten (kein fachlicher State).
     _pendingBookId: null,
 
     init() {
@@ -54,28 +36,30 @@ export function registerBookOverviewCard() {
         });
       };
 
-      this.$watch(() => window.__app.showBookOverviewCard, (visible) => {
-        if (visible) scheduleLoad();
+      this._lifecycle = setupCardLifecycle(this, {
+        // `name` matcht `card:refresh { name }` — der Registry-Eintrag hat
+        // `onReclick: 'refresh'`, ohne diesen Listener wäre der Re-Klick auf die
+        // bereits offene Übersicht ein stiller No-Op.
+        name: 'bookOverview',
+        showFlag: 'showBookOverviewCard',
+        onShow: scheduleLoad,
+        // Arrays NICHT beim Buchwechsel leeren: alte Daten bleiben sichtbar,
+        // bis der neue Load assignt — verhindert Tile-Flackern. Stale Antworten
+        // verwirft loadBookOverview über den overviewBookId-Guard. Darum kein
+        // `resetState`, sondern nur ein erneutes scheduleLoad.
+        onBookChanged: scheduleLoad,
+        // resetView setzt zuerst showBookOverviewCard=false, dann
+        // _maybeOpenBookOverview wieder true — Alpine $watch coalesciert
+        // false→true zu no-op, daher explizit nachschieben.
+        onViewReset: scheduleLoad,
+        // Re-Klick auf die offene Karte: harter Reload vom Server (der
+        // Dedupe-Guard in loadBookOverview greift nur bei laufendem Load).
+        onCardRefresh: () => this.loadBookOverview(Alpine.store('nav').selectedBookId),
       });
-
-      this._onBookChanged = () => {
-        // Arrays nicht hier leeren: alte Daten bleiben sichtbar, bis der neue
-        // Load assignt — verhindert Tile-Flackern. Stale Antworten werden im
-        // loadBookOverview via overviewBookId-Guard verworfen.
-        scheduleLoad();
-      };
-      window.addEventListener(EVT.BOOK_CHANGED, this._onBookChanged);
-
-      // resetView setzt zuerst showBookOverviewCard=false, dann _maybeOpenBookOverview
-      // wieder true — Alpine $watch coalesciert false→true zu no-op, daher
-      // explizit nachschieben.
-      this._onViewReset = () => { scheduleLoad(); };
-      window.addEventListener(EVT.VIEW_RESET, this._onViewReset);
     },
 
     destroy() {
-      if (this._onBookChanged) window.removeEventListener(EVT.BOOK_CHANGED, this._onBookChanged);
-      if (this._onViewReset)   window.removeEventListener(EVT.VIEW_RESET, this._onViewReset);
+      this._lifecycle?.destroy();
     },
 
     ...bookOverviewMethods,

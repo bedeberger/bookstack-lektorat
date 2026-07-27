@@ -199,6 +199,16 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
   -webkit-text-size-adjust: 100%;
   hyphens: none;
   -webkit-hyphens: none;
+  /* Umbruch-Algorithmus festgenagelt. `pretty`/`balance` bewerten den GANZEN
+     Absatz und dürfen dafür bereits gesetzte Zeilen neu umbrechen — beim Tippen
+     rutscht dabei ein Wort eine Zeile runter und beim nächsten Zeichen wieder
+     zurück. `wrap` ist greedy und zeilenweise: eine einmal gesetzte Zeile bleibt
+     stehen, egal was danach noch kommt. `text-wrap` ist eine vererbte Property,
+     die Deklaration gilt also für ALLE Blöcke der Schreibfläche (p, li,
+     blockquote, h1–h6) — eine Regel statt einer pro Block-Tag, und kein Block
+     kann durch einen künftigen UA-Default oder ein Host-Stylesheet still auf
+     `pretty` kippen. */
+  text-wrap: wrap;
   /* Lange Tokens ohne Whitespace brechen im Container statt horizontal zu
      overflowen. Vererbt an Descendants; `pre`/`code` bleiben via white-space. */
   overflow-wrap: anywhere;
@@ -321,12 +331,12 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
 }
 
 /* Absätze: explizite Margins (Browser-Default = 1em zu gross für Fokus-Optik),
-   kein text-indent (Fokus = nüchtern, kein Buchsatz), text-wrap normal weil
-   pretty/balance beim Tippen rebalanciert und Glyphen sichtbar springen. */
+   kein text-indent (Fokus = nüchtern, kein Buchsatz). Den Umbruch-Algorithmus
+   erbt der Absatz vom Container (`text-wrap: wrap` auf .focus-editor__content) —
+   hier bewusst nicht wiederholt, sonst gilt die Garantie wieder nur für `p`. */
 .focus-editor__content p {
   margin: 0.4em 0;
   text-indent: 0;
-  text-wrap: wrap;
 }
 
 

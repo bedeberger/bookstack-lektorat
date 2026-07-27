@@ -17,7 +17,7 @@
 // `stripLektoratMarks` gelaufen ist. Kein externer/user-fremder String
 // landet hier.
 
-import { normalizeEditorBlocks } from '../shared/html-clean.js';
+import { mountEditorHtml } from '../shared/mount-html.js';
 import { editorHost } from '../shared/editor-host.js';
 
 const HISTORY_DEBOUNCE_MS = 500;
@@ -157,20 +157,14 @@ export const notebookHistoryMethods = {
     if (!el || !snap) return;
     this._undoApplying = true;
     try {
-      el.innerHTML = snap.html || '';
       // Block-Konsistenz wahren: ein Snapshot kann einen transienten
       // contenteditable-Zwischenstand eingefangen haben (orphan Text-/Inline-
-      // Runs direkt unter dem Editor-Root, leerer <p> ohne Caret-Slot). Ohne
-      // Re-Normalisierung reproduziert das Restore den Defekt → der <p>-Block
-      // ist nach Undo/Redo korrumpiert. Spiegelt die startEdit-Pipeline:
-      // normalizeEditorBlocks (orphan-Runs in <p> wrappen) + Caret-Slot-<br>.
-      // Text-Offsets bleiben gültig (Wrapping ändert keine Textinhalte, <br>
-      // ist kein Text) → Caret-Restore danach.
-      normalizeEditorBlocks(el);
-      const lastBlock = el.lastElementChild;
-      if (lastBlock && lastBlock.tagName === 'P' && !lastBlock.hasChildNodes()) {
-        lastBlock.appendChild((el.ownerDocument || document).createElement('br'));
-      }
+      // Runs direkt unter dem Editor-Root, leerer <p> ohne Caret-Slot, trailing
+      // <hr>). Ohne Re-Normalisierung reproduziert das Restore den Defekt.
+      // `mountEditorHtml` ist dieselbe Pipeline, die startEdit nutzt — Text-
+      // Offsets bleiben gültig (Wrapping ändert keine Textinhalte, <br>/<p>
+      // sind kein Text), darum Caret-Restore danach.
+      mountEditorHtml(el, snap.html || '');
       restoreCaretAtOffset(el, snap.caretOffset);
       el.focus?.();
       const app = editorHost();

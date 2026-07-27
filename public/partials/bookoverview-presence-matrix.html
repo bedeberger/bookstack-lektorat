@@ -1,0 +1,51 @@
+<!-- SSoT-Fragment der drei Präsenz-Matrizen (Figuren / Schauplätze / Motive).
+     Wird via `<!-- @include bookoverview-presence-matrix -->` in
+     bookoverview-{figpresence,ortpresence,motiv}.html eingesetzt.
+
+     Erwartet im umgebenden x-data nur zwei Strings:
+       kind      → 'figuren' | 'orte' | 'motive'
+       labelKey  → i18n-Key der Tile-Überschrift
+     Alles andere läuft über die Dispatcher der Karte (js/book-overview/presence.js):
+       overviewPresence(kind)                 → { cols, rows }
+       overviewPresenceTip(kind, cell, row)   → Tooltip einer belegten Zelle
+       overviewOpenPresence(kind, cell, row)  → Klick-Ziel einer belegten Zelle
+
+     Kein Sorting via sortableTable — Heatmap-Matrix, siehe CLAUDE.md
+     „sortableTable Pflicht" → „Wann nicht". -->
+<div class="overview-tile-label" x-text="$app.t(labelKey)"></div>
+<div class="overview-presence-wrap">
+  <table class="overview-presence-matrix">
+    <thead>
+      <tr>
+        <th></th>
+        <template x-for="col in overviewPresence(kind).cols" :key="col.id">
+          <th class="overview-presence-col-head"
+              :data-tip="col.name"
+              x-text="col.name"></th>
+        </template>
+      </tr>
+    </thead>
+    <tbody>
+      <template x-for="row in overviewPresence(kind).rows" :key="row.id">
+        <tr>
+          <th class="overview-presence-row-head" :data-tip="row.name" x-text="row.name"></th>
+          <template x-for="cell in row.cells" :key="cell.id">
+            <td class="overview-presence-cell"
+                :class="{
+                  'overview-presence-cell--empty': cell.value === 0,
+                  'internal-link': cell.value > 0
+                }"
+                :style="{ '--cell-pct': cell.pct }"
+                :data-tip="cell.value > 0
+                  ? overviewPresenceTip(kind, cell, row)
+                  : cell.name + ' · ' + row.name + ': ' + cell.value"
+                @click="cell.value > 0 && overviewOpenPresence(kind, cell, row)">
+              <span class="overview-presence-fill"></span>
+              <span class="overview-presence-num" x-show="cell.value > 0" x-text="cell.value"></span>
+            </td>
+          </template>
+        </tr>
+      </template>
+    </tbody>
+  </table>
+</div>

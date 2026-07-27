@@ -4,7 +4,7 @@
 // konsumiert hat — dann bricht der Dispatcher ab. `this` = Sub-Komponente
 // (editorToolbarCard), Root-Zugriffe via window.__app.
 
-import { getEditEl, placeCaretIn, _brLeftOfCaret, _formatStamp, findTodoLi, findPoemP, findBlock, caretAtBlockStart, caretAtBlockEnd, MERGE_BLOCK_TAGS } from './_shared.js';
+import { getEditEl, placeCaretIn, _brLeftOfCaret, _formatStamp, findTodoLi, findPoemP, findBlock, topLevelBlock, caretAtBlockStart, caretAtBlockEnd, MERGE_BLOCK_TAGS } from './_shared.js';
 
 export const keydownMethods = {
   // Reihenfolge ist verhaltensrelevant (z.B. Shift+Enter vor Enter-in-Todo).
@@ -228,8 +228,7 @@ export const keydownMethods = {
     // Eine <hr> ist Direktkind von editEl; der Caret-Block kann tiefer liegen
     // (z.B. <li> in einer Liste). Nachbar daher auf der Ebene des umschliessenden
     // Top-Level-Childs suchen, nicht am Block selbst.
-    let top = block;
-    while (top.parentNode && top.parentNode !== editEl) top = top.parentNode;
+    const top = topLevelBlock(block, editEl);
     const neighbour = e.key === 'Backspace'
       ? (caretAtBlockStart(range, block) ? top.previousElementSibling : null)
       : (caretAtBlockEnd(range, block) ? top.nextElementSibling : null);

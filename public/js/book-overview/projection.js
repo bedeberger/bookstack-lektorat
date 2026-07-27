@@ -131,11 +131,12 @@ export const projectionMethods = {
     return this.overviewGoalProjection().active;
   },
 
-  // Projiziertes Fertigdatum / Deadline lesbar formatieren (TZ-aware via tzOpts
-  // wird hier nicht gebraucht — Datum ohne Uhrzeit, lokaler Kalendertag).
+  // Projiziertes Fertigdatum / Deadline lesbar formatieren. Mittags-Anker plus
+  // Formatter in appTimezone (via _dateFmt → tzOpts): ein Mitternachts-Anker
+  // würde bei abweichender App-Zeitzone auf den Vortag kippen.
   overviewGoalDateLabel(iso) {
     if (!iso) return '';
-    const tag = Alpine.store('shell').uiLocale === 'en' ? 'en-US' : 'de-CH';
-    return new Date(iso + 'T12:00:00').toLocaleDateString(tag, { day: 'numeric', month: 'short', year: 'numeric' });
+    return this._dateFmt({ day: 'numeric', month: 'short', year: 'numeric' })
+      .format(new Date(iso + 'T12:00:00'));
   },
 };

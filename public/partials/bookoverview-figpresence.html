@@ -1,45 +1,11 @@
 <!-- Figuren-Präsenz-Matrix: Kapitel (Zeilen) × Top-Figuren (Spalten).
-     Cell-Wert = Anzahl Szenen pro (Figur, Kapitel). Cell-Intensität = per Spalte skaliert.
+     Cell-Wert = Anzahl Szenen pro (Figur, Kapitel), Intensität global skaliert.
      Horizontaler Scroll bei vielen Figuren. Leere Zellen = Figur fehlt im Kapitel.
-     Immer medium — Matrix mit Spalten-Header braucht Breite (siehe DESIGN.md). -->
-<template x-if="!overviewIsTagebuch() && overviewFigurePresence().figures.length > 0">
-  <div class="overview-tile overview-tile--medium">
-    <div class="overview-tile-label" x-text="$app.t('overview.figPresence')"></div>
-    <div class="overview-presence-wrap">
-      <table class="overview-presence-matrix">
-        <thead>
-          <tr>
-            <th></th>
-            <template x-for="fig in overviewFigurePresence().figures" :key="fig.id">
-              <th class="overview-presence-col-head"
-                  :data-tip="fig.name"
-                  x-text="fig.name"></th>
-            </template>
-          </tr>
-        </thead>
-        <tbody>
-          <template x-for="row in overviewFigurePresence().rows" :key="row.id">
-            <tr>
-              <th class="overview-presence-row-head" :data-tip="row.name" x-text="row.name"></th>
-              <template x-for="cell in row.cells" :key="cell.figureId">
-                <td class="overview-presence-cell"
-                    :class="{
-                      'overview-presence-cell--empty': cell.value === 0,
-                      'internal-link': cell.value > 0
-                    }"
-                    :style="{ '--cell-pct': cell.pct }"
-                    :data-tip="cell.value > 0
-                      ? $app.t('overview.figPresenceOpen', { figur: cell.figureName, kapitel: row.name })
-                      : cell.figureName + ' · ' + row.name + ': ' + cell.value"
-                    @click="cell.value > 0 && $app.openFigurMitKapitel(cell.figureId, row.name)">
-                  <span class="overview-presence-fill"></span>
-                  <span class="overview-presence-num" x-show="cell.value > 0" x-text="cell.value"></span>
-                </td>
-              </template>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-    </div>
+     Immer medium — Matrix mit Spalten-Header braucht Breite (siehe DESIGN.md).
+     Das Tabellen-Markup teilen sich alle drei Matrizen (Fragment-Include). -->
+<template x-if="!overviewIsTagebuch() && overviewPresence('figuren').cols.length > 0">
+  <div class="overview-tile overview-tile--medium"
+       x-data="{ kind: 'figuren', labelKey: 'overview.figPresence' }">
+    <!-- @include bookoverview-presence-matrix -->
   </div>
 </template>

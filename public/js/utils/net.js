@@ -6,15 +6,41 @@
  * damit der `.then(r => r.json())`-Pattern nicht stillschweigend HTML-
  * Fehlerseiten als JSON parst. 401 läuft durch den globalen fetch-Wrapper
  * in app.js (dispatcht `session-expired`) und wirft hier dann einen Fehler.
+ *
+ * Der geworfene Error trägt `status` (HTTP-Code) bzw. `status = 0` bei
+ * Netzwerk-/Offline-Fehlern. Aufrufer können damit zwischen „Server sagt
+ * nein" (4xx, Retry sinnlos) und „Blip" (5xx/Netzwerk, Retry sinnvoll)
+ * unterscheiden, statt jeden Fehler gleich zu behandeln.
  */
 export async function fetchJson(url, opts) {
-  const r = await fetch(url, opts);
+  let r;
+  try {
+    r = await fetch(url, opts);
+  } catch (e) {
+    e.status = 0;
+    throw e;
+  }
   if (!r.ok) {
     let detail = '';
     try { const e = await r.clone().json(); detail = e.error || e.message || ''; } catch (_) {}
-    throw new Error(detail ? `HTTP ${r.status}: ${detail}` : `HTTP ${r.status}`);
+    const err = new Error(detail ? `HTTP ${r.status}: ${detail}` : `HTTP ${r.status}`);
+    err.status = r.status;
+    throw err;
   }
   return r.json();
+}
+
+/**
+ * True, wenn ein `fetchJson`-Fehler ein transienter Blip ist (Netzwerk-Ausfall
+ * oder 5xx) und ein Retry Sinn ergibt. 4xx sind bewusst ausgenommen: ein 403
+ * (fehlendes Recht) oder 404 antwortet beim zweiten Versuch identisch, und ein
+ * wiederholter 401 löst über den globalen fetch-Wrapper ein zweites
+ * `session-expired` aus.
+ */
+export function isRetriableFetchError(err) {
+  const s = err?.status;
+  if (s == null) return true;      // unbekannte Fehlerquelle → einmal nachfassen
+  return s === 0 || s >= 500;
 }
 
 /**

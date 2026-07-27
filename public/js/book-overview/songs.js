@@ -18,7 +18,7 @@ export const songsMethods = {
             total,
           };
         })
-        .filter(s => s.total > 0 || (this.overviewSongs || []).length <= 6)
+        .filter(s => s.total > 0 || songs.length <= 6)
         .sort((a, b) => b.total - a.total)
         .slice(0, 6);
     });

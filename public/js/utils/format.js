@@ -17,6 +17,19 @@ export function localeTag(uiLocale) {
   return uiLocale === 'en' ? 'en-US' : 'de-CH';
 }
 
+// Pro (Locale, Options) gecachter Intl.NumberFormat. `Number#toLocaleString`
+// baut intern bei JEDEM Aufruf einen Formatter — in Grids/Heatmaps (Buch-
+// Übersicht: bis 364 Streak-Zellen pro Render) ist das messbar. Cache-Key
+// über den Options-Bag, der in der Praxis aus einer Handvoll Varianten besteht.
+const _NF_CACHE = new Map();
+export function numberFormat(uiLocale, opts = {}) {
+  const tag = localeTag(uiLocale);
+  const key = tag + '|' + JSON.stringify(opts);
+  let nf = _NF_CACHE.get(key);
+  if (!nf) { nf = new Intl.NumberFormat(tag, opts); _NF_CACHE.set(key, nf); }
+  return nf;
+}
+
 // Klassische Normseite (DIN): 30 Zeilen × ~50 Zeichen ≈ 1500 Zeichen.
 // Sekundäre Umfangs-Kennzahl neben Zeichen/Wörter.
 export const CHARS_PER_NORMSEITE = 1500;

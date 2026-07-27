@@ -67,7 +67,7 @@ test('I2: cancelEdit ruft exitFocusMode wenn focusActive + delegiert Teardown', 
   assert.match(body, /this\._teardownEditSession\(\)/,
     'cancelEdit baut die Session über _teardownEditSession() ab (SSoT)');
   // editMode/editDirty-Reset lebt jetzt zentral im Teardown-Helper — dort gated.
-  const td = src.match(/_teardownEditSession\s*\(\)\s*\{[\s\S]*?\n  \}/);
+  const td = src.match(/_teardownEditSession\s*\([^)]*\)\s*\{[\s\S]*?\n  \}/);
   assert.ok(td, '_teardownEditSession gefunden');
   assert.match(td[0], /app\.editMode\s*=\s*false/, '_teardownEditSession räumt editMode');
   assert.match(td[0], /app\.editDirty\s*=\s*false/, '_teardownEditSession räumt editDirty');
@@ -79,21 +79,19 @@ test('I3: saveEdit hat Fokus-Branch, der editMode NICHT räumt', () => {
   const m = src.match(/async saveEdit\s*\(\)\s*\{[\s\S]*?\n  \}/);
   assert.ok(m, 'saveEdit gefunden');
   const body = m[0];
-  // Branch-Struktur: nach erfolgreichem PUT muss `if (app.focusActive) { … } else { … app.editMode = false; … }`
-  // existieren. Im if-Zweig darf editMode NICHT auf false gehen.
-  const ifElseMatch = body.match(/if\s*\(\s*app\.focusActive\s*\)\s*\{([\s\S]*?)\}\s*else\s*\{([\s\S]*?)\}/);
-  assert.ok(ifElseMatch,
-    'saveEdit braucht if(focusActive){...}else{...}-Branch für Fokus-Stay');
-  const focusBranch = ifElseMatch[1];
-  const exitBranch = ifElseMatch[2];
-  assert.doesNotMatch(focusBranch, /app\.editMode\s*=\s*false/,
-    'Fokus-Branch darf editMode NICHT räumen (User soll weiterschreiben)');
-  assert.doesNotMatch(focusBranch, /_teardownEditSession/,
-    'Fokus-Branch darf die Session NICHT abbauen (User soll weiterschreiben)');
-  assert.match(exitBranch, /this\._teardownEditSession\(\)/,
-    'Nicht-Fokus-Branch baut die Session via _teardownEditSession ab');
+  // Der Teardown im Erfolgspfad MUSS an `!focusActive` gekoppelt sein: im Fokus
+  // schreibt der User weiter, die Session bleibt offen. Geprüft wird die
+  // Kopplung selbst (nicht eine bestimmte if/else-Schreibweise) — und dass es
+  // im ganzen saveEdit keinen ungegateten Teardown-Aufruf gibt.
+  const teardownCalls = body.match(/this\._teardownEditSession\([^)]*\)/g) || [];
+  assert.equal(teardownCalls.length, 1,
+    'saveEdit baut die Session an genau einer Stelle ab');
+  assert.match(body, /if\s*\(\s*!app\.focusActive\s*\)\s*this\._teardownEditSession\(\)/,
+    'Teardown muss an !focusActive gekoppelt sein (im Fokus schreibt der User weiter)');
+  assert.doesNotMatch(body, /app\.editMode\s*=\s*false/,
+    'saveEdit räumt editMode nicht selbst — das lebt zentral im Teardown-Helper');
   // editMode=false lebt zentral im Teardown-Helper.
-  const td = src.match(/_teardownEditSession\s*\(\)\s*\{[\s\S]*?\n  \}/);
+  const td = src.match(/_teardownEditSession\s*\([^)]*\)\s*\{[\s\S]*?\n  \}/);
   assert.ok(td, '_teardownEditSession gefunden');
   assert.match(td[0], /app\.editMode\s*=\s*false/, '_teardownEditSession räumt editMode');
 });

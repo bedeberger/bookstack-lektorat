@@ -16,8 +16,28 @@
 // pageEditorZoom*-Methoden rufen _scheduleFormatMarks explizit.
 
 import { editorHost } from '../shared/editor-host.js';
+import { NORMAL_SELECTOR } from '../shared/active-editor.js';
 
-const NOTEBOOK_EDIT_SEL = '#editor-card .page-content-view--editing';
+// Container-Selektor kommt aus shared/active-editor.js (SSoT) — eine zweite
+// String-Kopie hier wäre genau die Drift, gegen die der Export dort existiert.
+// Bewusst NICHT `getActiveEditorContainer()`: das Marks-Overlay ist
+// notebook-only und darf nie auf den Focus-Container umschalten.
+const NOTEBOOK_EDIT_SEL = NORMAL_SELECTOR;
+const MARKS_LAYER_SEL = '.page-editor-marks-layer';
+
+// Overlay-Layer des Notebook-Editors. Über den Editor-Wrapper gesucht, nicht
+// global — sonst träfe ein zweiter Layer (z.B. künftig im Bucheditor) zuerst.
+function marksLayer() {
+  const editEl = document.querySelector(NOTEBOOK_EDIT_SEL);
+  return editEl?.parentElement?.querySelector(MARKS_LAYER_SEL) || null;
+}
+
+// White-space-Modi, in denen ein `\n` im Text ein echter Zeilenumbruch ist.
+const PRESERVING_WS = /^(pre|pre-wrap|pre-line|break-spaces)$/;
+// Blöcke, die Newlines als Zeichen tragen statt als <br> (Gedichte, Code).
+// Vorfilter für den Textknoten-Walk: ohne ihn liefe getComputedStyle pro
+// Textknoten der ganzen Seite — bei jedem Tastendruck.
+const PRESERVING_BLOCK_SEL = 'div.poem, pre';
 
 // Auto-Slot-<br> als einziges Kind eines leeren Text-Blocks ist strukturell
 // (Caret-Slot, vgl. ensureTrailingParagraph) — kein echter Zeilenumbruch, keine
@@ -47,7 +67,7 @@ export const formatMarksMethods = {
     const app = editorHost();
     const editEl = document.querySelector(NOTEBOOK_EDIT_SEL);
     if (!editEl) return;
-    const layer = editEl.parentElement?.querySelector('.page-editor-marks-layer');
+    const layer = editEl.parentElement?.querySelector(MARKS_LAYER_SEL);
     if (!layer) return;
 
     const active = !!(app?.pageEditorShowMarks && app?.editMode && !app?.focusActive);
@@ -92,19 +112,22 @@ export const formatMarksMethods = {
 
     // 2) \n-Zeilenumbrüche in Blöcken, die Newlines erhalten (white-space:
     //    pre-line/pre/pre-wrap) — Gedichte (div.poem) und <pre> haben kein
-    //    <br>, der Umbruch steckt als Zeichen im Text.
-    const walker = document.createTreeWalker(editEl, NodeFilter.SHOW_TEXT);
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const text = node.nodeValue;
-      if (!text || text.indexOf('\n') === -1 || !node.parentElement) continue;
-      const ws = getComputedStyle(node.parentElement).whiteSpace;
-      if (!/^(pre|pre-wrap|pre-line|break-spaces)$/.test(ws)) continue;
-      for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) {
-        range.setStart(node, i);
-        range.setEnd(node, i + 1);
-        place(range.getClientRects()[0]);
+    //    <br>, der Umbruch steckt als Zeichen im Text. Nur diese Blöcke werden
+    //    durchlaufen (statt aller Textknoten des Editors), und getComputedStyle
+    //    läuft einmal pro Block statt einmal pro Textknoten.
+    editEl.querySelectorAll(PRESERVING_BLOCK_SEL).forEach((blk) => {
+      if (!PRESERVING_WS.test(getComputedStyle(blk).whiteSpace)) return;
+      const walker = document.createTreeWalker(blk, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.nodeValue;
+        if (!text || text.indexOf('\n') === -1) continue;
+        for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) {
+          range.setStart(node, i);
+          range.setEnd(node, i + 1);
+          place(range.getClientRects()[0]);
+        }
       }
-    }
+    });
 
     // 3) Absatzmarken (¶) für Blöcke mit direktem <br>. CSS lässt die bewusst
     //    aus (`:not(:has(> br))`), weil ::after hinter dem <br> auf eine
@@ -167,7 +190,7 @@ export const formatMarksMethods = {
     this._formatMarksRO = null;
     this._formatMarksAbort?.abort?.();
     this._formatMarksAbort = null;
-    const layer = document.querySelector('.page-editor-marks-layer');
+    const layer = marksLayer();
     if (layer) { layer.replaceChildren(); layer.hidden = true; }
   },
 };

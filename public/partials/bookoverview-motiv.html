@@ -1,47 +1,13 @@
 <!-- Motiv-Präsenz-Matrix: Kapitel (Zeilen) × Top-Motive (Spalten).
      Cell-Wert = Ist-Fundstellen des Motivs im Kapitel (motif_occurrences,
-     score-floor-gefiltert). Cell-Intensität global skaliert. Match primär per
-     chapter_id, Sub-Kapitel auf Wurzel-Kapitel aggregiert. Klick → Motiv in der
+     score-floor-gefiltert), Intensität global skaliert. Match per chapter_id,
+     Sub-Kapitel auf Wurzel-Kapitel aggregiert. Klick → Motiv in der
      Motiv-Werkstatt öffnen. Immer medium — Matrix mit Spalten-Header braucht
-     Breite (siehe DESIGN.md, analog Figuren-/Schauplatz-Matrix). -->
-<template x-if="!overviewIsTagebuch() && overviewMotifPresence().motifs.length > 0">
-  <div class="overview-tile overview-tile--medium">
-    <div class="overview-tile-label" x-text="$app.t('overview.motifPresence')"></div>
-    <div class="overview-presence-wrap">
-      <table class="overview-presence-matrix">
-        <thead>
-          <tr>
-            <th></th>
-            <template x-for="m in overviewMotifPresence().motifs" :key="m.id">
-              <th class="overview-presence-col-head"
-                  :data-tip="m.name"
-                  x-text="m.name"></th>
-            </template>
-          </tr>
-        </thead>
-        <tbody>
-          <template x-for="row in overviewMotifPresence().rows" :key="row.id">
-            <tr>
-              <th class="overview-presence-row-head" :data-tip="row.name" x-text="row.name"></th>
-              <template x-for="cell in row.cells" :key="cell.motifId">
-                <td class="overview-presence-cell"
-                    :class="{
-                      'overview-presence-cell--empty': cell.value === 0,
-                      'internal-link': cell.value > 0
-                    }"
-                    :style="{ '--cell-pct': cell.pct }"
-                    :data-tip="cell.value > 0
-                      ? $app.t('overview.motifPresenceOpen', { motiv: cell.motifName, kapitel: row.name })
-                      : cell.motifName + ' · ' + row.name + ': ' + cell.value"
-                    @click="cell.value > 0 && $app.openMotifById(cell.motifId)">
-                  <span class="overview-presence-fill"></span>
-                  <span class="overview-presence-num" x-show="cell.value > 0" x-text="cell.value"></span>
-                </td>
-              </template>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-    </div>
+     Breite (siehe DESIGN.md, analog Figuren-/Schauplatz-Matrix).
+     Das Tabellen-Markup teilen sich alle drei Matrizen (Fragment-Include). -->
+<template x-if="!overviewIsTagebuch() && overviewPresence('motive').cols.length > 0">
+  <div class="overview-tile overview-tile--medium"
+       x-data="{ kind: 'motive', labelKey: 'overview.motifPresence' }">
+    <!-- @include bookoverview-presence-matrix -->
   </div>
 </template>

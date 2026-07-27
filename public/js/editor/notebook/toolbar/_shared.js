@@ -4,8 +4,12 @@
 
 import { getEditEl, placeCaretIn, WORD_RE } from '../../utils.js';
 import { tzOpts, localeTag } from '../../../utils.js';
+import { BLOCK_SEL, findBlock, topLevelBlock } from '../../shared/dom-block.js';
 
 export { getEditEl, placeCaretIn, WORD_RE };
+// Block-Lookup lebt in shared/dom-block.js (auch von edit/view.js konsumiert) —
+// hier nur re-exportiert, damit die Toolbar-Submodule ihren Import behalten.
+export { BLOCK_SEL, findBlock, topLevelBlock };
 
 // Blocktyp-Definitionen für Slash-Transform. `tag` ist das Zielelement;
 // `className` optional (aktuell für .poem + .todo). `list: true` wrappt den
@@ -113,22 +117,11 @@ export function findAnchor(node, root) {
   return null;
 }
 
-export const BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, blockquote, pre, li, div.poem';
-
 // Absatz-artige Top-Level-Blöcke, deren Verschmelzung über eine Absatzgrenze
 // hinweg (Backspace am Anfang / Delete am Ende) wir bei weichen Umbrüchen
 // selbst übernehmen. Listen, Tabellen, Gedichte, <pre>, <hr> bleiben aussen
 // vor — dort ist das native bzw. das HR-Verhalten gewünscht.
 export const MERGE_BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
-
-export function findBlock(node, root) {
-  let cur = node && node.nodeType === 3 ? node.parentNode : node;
-  while (cur && cur !== root) {
-    if (cur.nodeType === 1 && cur.matches?.(BLOCK_SEL)) return cur;
-    cur = cur.parentNode;
-  }
-  return null;
-}
 
 // Liegt der collapsed Caret am Block-Anfang bzw. -Ende? Genutzt, um eine
 // direkt angrenzende <hr> per Backspace/Delete zu löschen — das void-Element

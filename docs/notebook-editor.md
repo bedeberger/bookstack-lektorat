@@ -60,28 +60,42 @@ view  ──startEdit──▶ edit  ──saveEdit──▶ view
 ```
 
 ### startEdit
-1. Guards: `currentPage && originalHtml !== null`, kein laufender Check / Save, **nicht im Prüfmodus** (`checkDone === false`), `canEdit()`.
+1. Guards: `currentPage && originalHtml !== null`, **nicht bereits im Edit-Modus** (Re-Entry würde `innerHTML` überschreiben und die Undo-Baseline neu setzen), kein laufender Check / Save, **nicht im Prüfmodus** (`checkDone === false`), `canEdit()`.
 2. `editMode=true`, Reset `editDirty/editSaving/saveOffline/pendingDraft`.
 3. `execCommand('defaultParagraphSeparator', false, 'p')` einmalig — sonst erzeugt Chrome/Safari `<div>` statt `<p>` bei Enter und Block-Erkennung greift nicht.
 4. Draft aus localStorage lesen ([editor/draft-storage.js](../public/js/editor/draft-storage.js)); wenn vorhanden und ungleich Original → übernehmen + `editDirty=true`.
-5. `el.innerHTML` setzen: Roh-HTML oder Platzhalter-`<p><br></p>` bei leerer Seite.
-6. `normalizeEditorBlocks(el)` — orphan Text-/Inline-Runs in `<p>` wrappen. Weicht `innerHTML` ab → `editDirty=true` + Draft schreiben (Legacy-Reparatur persistieren).
-7. Caret-Slot: leerer letzter `<p>` ohne Kinder bekommt `<br>` — sonst kein Caret + keine `input`-Events.
-8. `_startAutosave` + `_installOnlineRetry`.
-9. `_startPresenceHeartbeat` + `_acquireEditLock` (Soft-Lock).
-10. `installEditCounter` (zählt in beiden Modi, sichtbar nur im Focus).
-11. `writeNormalSnapshot(pageId)` — sessionStorage für Reload-Restore.
+5. `mountEditorHtml(el, initialHtml)` ([shared/mount-html.js](../public/js/editor/shared/mount-html.js)) — setzt das HTML (bzw. Platzhalter-`<p><br></p>` bei leerer Seite), wrappt orphan Text-/Inline-Runs via `normalizeEditorBlocks` und stellt den Caret-Slot her (kindloser letzter `<p>` → `<br>`; trailing `<hr>` → Folge-Absatz). Meldet `{ repaired }`; bei `true` → `editDirty=true` + Draft schreiben (Legacy-Reparatur persistieren, sonst kehrt der Defekt nach jedem Reload zurück). Derselbe Helper bedient Undo/Redo-Restore und das Spiegeln eines gemergten Stands.
+6. `_startAutosave` + `_installOnlineRetry`.
+7. `_startPresenceHeartbeat` + `_acquireEditLock` (Soft-Lock).
+8. `installEditCounter` (zählt in beiden Modi, sichtbar nur im Focus).
+9. `writeNormalSnapshot(pageId)` — sessionStorage für Reload-Restore.
+10. Layout-Prefs aus localStorage restoren: Fullscreen, Fit-Width, Steuerzeichen, **Zoom** ([notebook/storage.js](../public/js/editor/notebook/storage.js)). Persistenz läuft über `_persistEditorPrefs()` als SSoT — jeder Toggle schreibt den vollen Satz, weil localStorage den JSON-Eintrag komplett ersetzt. Steuerzeichen-Overlay erst nach dem Alpine-`x-show`-Flush installieren (`setTimeout 0`), sonst vermisst es einen `display:none`-Container (alle Rects 0).
 
-### saveEdit ([edit.js:202-328](../public/js/editor/notebook/edit.js#L202-L328))
-1. `stripLektoratMarks(el.innerHTML)` → kanonisches HTML (entfernt `.lektorat-ins`/`.chat-mark-ins`, unwrappt `.lektorat-mark`/`.chat-mark`, läuft durch Cleaner-Kette).
-2. `isNoChange` → kein PUT; Save aus Focus bleibt im Focus, sonst `cancelEdit`-Pfad ohne Dialog.
-3. Kürzungs-Safety: neuer Text < 20 % vom alten und Original > 50 Z → `appConfirm` „kürzer speichern?".
-4. `_checkPageConflict` — Pre-Check via `contentRepo.loadPage(id, { fresh: true })`; `remote.updated_at !== currentPage.updated_at` → Konflikt-Modal mit Überschreib-/Behalt-Option.
-5. `contentRepo.savePage(id, buildSavePayload({ source: focusActive ? 'focus' : 'main', expectedUpdatedAt }))` (siehe [shared/save-pipeline.js](../public/js/editor/shared/save-pipeline.js)).
-6. `_applySaveSuccess(saved, savedHtml)` — **SSoT für die Save-Erfolgs-Nachbereitung** (Lifecycle): übernimmt `currentPage.updated_at`, setzt `originalHtml`/`currentPageEmpty`, ruft `_filterFindingsAfterSave` + `_syncPageStatsAfterSave` + `refreshPageAges`, räumt Draft + `editDirty`/`saveOffline`/`editConflict`, `updatePageView`. Alle sechs Save-Pfade (saveEdit/quickSave/submitConflictResolution × Haupt- + 409-Re-Merge) rufen denselben Helper — keine Copy-Paste-Drift. `applyToEditor:true` spiegelt zusätzlich den gemergten Stand in den Editor (Konflikt-Auflösung).
-7. `_filterFindingsAfterSave(newHtml)` — Findings, deren `original` nicht mehr matcht (Überlebens-Check via `findInHtml`, tolerant gegen Tag-/Whitespace-Differenzen, identisch zu `sortByPosition`), fliegen raus + selectedFindings + appliedOriginals + correctedHtml resetten.
-8. Teardown **nur wenn nicht im Focus** via `_teardownEditSession()` (s.u.). Im Focus bleibt `editMode=true`.
-10. Fehlerpfade: 409 `PAGE_CONFLICT` (Race nach Pre-Check) → Block-Merge-Versuch (s.u.); kollisionsfrei = stille Re-Save, sonst Auflösungs-Banner; bei Flag-off/Fehlschlag Draft sichern + klassischer Banner. Netzwerkfehler → Draft + `saveOffline=true`, Online-Retry feuert `quickSave`.
+### saveEdit ([edit/lifecycle.js](../public/js/editor/notebook/edit/lifecycle.js))
+1. Guards: `currentPage`, **`editMode`** (ohne offene Session gibt es nichts zu speichern — das contenteditable hängt nach dem Teardown weiter im DOM und trüge sonst verworfenen Text zurück), `canEdit()`, Container vorhanden.
+2. `stripLektoratMarks(el.innerHTML)` → kanonisches HTML (entfernt `.lektorat-ins`/`.chat-mark-ins`, unwrappt `.lektorat-mark`/`.chat-mark`, läuft durch Cleaner-Kette).
+3. `isNoChange` → kein PUT; Save aus Focus bleibt im Focus, sonst `await cancelEdit()` ohne Dialog.
+4. `editSaving = true` — **vor** dem ersten `await` (Pflicht-Invariante #6).
+5. Kürzungs-Safety: neuer Text < 20 % vom alten und Original > 50 Z → `appConfirm` „kürzer speichern?".
+6. `_resolveConflictBeforeSave({ silent: false })` — Pre-Check + Merge + ggf. Überschreib-Modal (s.u.).
+7. `contentRepo.savePage(id, buildSavePayload({ source: focusActive ? 'focus' : 'main', expectedUpdatedAt }))` (siehe [shared/save-pipeline.js](../public/js/editor/shared/save-pipeline.js)).
+8. `_applySaveSuccess(saved, savedHtml)` — **SSoT für die Save-Erfolgs-Nachbereitung** (Lifecycle): übernimmt `currentPage.updated_at`, setzt `originalHtml`/`currentPageEmpty`, ruft `_filterFindingsAfterSave` + `_syncPageStatsAfterSave` + `refreshPageAges`, räumt Draft + Autosave-Timer + `editDirty`/`saveOffline`/`editConflict`, `updatePageView`. Alle sechs Save-Pfade (saveEdit/quickSave/submitConflictResolution × Haupt- + 409-Re-Merge) rufen denselben Helper — keine Copy-Paste-Drift. `applyToEditor:true` spiegelt zusätzlich den gemergten Stand in den Editor (Konflikt-Auflösung). **Timer-Reset ist Pflicht:** der Autosave-Max-Timer wird von `_scheduleAutosave` nur gesetzt, wenn er `null` ist — bliebe er armiert, messe der 120-s-Cap der nächsten Tipp-Serie noch von der Baseline vor diesem Save.
+9. `_filterFindingsAfterSave(newHtml)` — Findings, deren `original` nicht mehr matcht (Überlebens-Check via `findInHtml`, tolerant gegen Tag-/Whitespace-Differenzen, identisch zu `sortByPosition`), fliegen raus + selectedFindings + appliedOriginals + correctedHtml resetten.
+10. Teardown **nur wenn nicht im Focus** via `_teardownEditSession()` (s.u.). Im Focus bleibt `editMode=true`.
+11. Fehlerpfade: 409 `PAGE_CONFLICT` (Race nach Pre-Check) → `_retryAfterConflict` (s.u.); kollisionsfrei = stille Re-Save, sonst Auflösungs-Banner; bei Flag-off/Fehlschlag `_keepAsDraft` + klassischer Banner. Netzwerkfehler → `_keepAsDraft` (`saveOffline=true`), Online-Retry feuert `quickSave`.
+
+### Konflikt-Pipeline (geteilt von allen drei Save-Pfaden)
+
+`saveEdit`, `quickSave` und `submitConflictResolution` unterscheiden sich nur in Modal-vs-Banner und den Statustexten — die Konfliktlogik selbst liegt einmal in [edit/conflict.js](../public/js/editor/notebook/edit/conflict.js):
+
+| Helper | Aufgabe |
+|---|---|
+| `_resolveConflictBeforeSave({ localHtml, source, silent })` | Pre-Check → Block-Merge → bei nicht-mergebarem Konflikt Modal (`silent:false`) bzw. Banner (`silent:true`). Liefert `{ proceed, saveHtml, expectedAt, merged }`. |
+| `_retryAfterConflict({ localHtml, source, pageId, pageName, tag })` | 409-Race nach dem PUT: Merge gegen den frischen Remote-Stand + Re-Save. Liefert `{ saved, html }`, `{ conflict:true }` oder `null`. Setzt `editSaving=false`, **bevor** ein Auflösungs-Modal aufgehen kann (`submitConflictResolution` bricht bei gesetztem Flag früh ab → sonst Sackgasse). |
+| `_keepAsDraft({ pageId, html, banner, statusKey })` | Fallback: Draft zuerst, dann `saveOffline` + Banner + Status. |
+| `_conflictBannerFrom(conflict)` / `_conflictHintText(banner)` | Banner-Feldsatz bzw. Statuszeile (Gerät vs. User). |
+
+**Überschreib-Stempel:** bestätigt der User „trotzdem speichern", geht `expectedUpdatedAt = conflict.remoteUpdatedAt` mit — **nicht** der stale Editor-Stempel. Der OCC-Guard im Backend prüft `WHERE updated_at = expected_updated_at` ([content-store/backends/localdb.js](../lib/content-store/backends/localdb.js)); mit dem alten Wert liefe der PUT erneut in 409 und die Entscheidung wäre wirkungslos.
 
 ### Block-Level-Merge bei Stale-Write ([shared/block-merge.js](../public/js/editor/shared/block-merge.js))
 Flag `FEATURE_BLOCK_MERGE` ([app-state.js](../public/js/app/app-state.js)). Greift in `saveEdit`/`quickSave` an beiden Konflikt-Punkten (Pre-Check + 409-Race) — Notebook **und** Focus teilen den Pfad.
@@ -91,7 +105,7 @@ Flag `FEATURE_BLOCK_MERGE` ([app-state.js](../public/js/app/app-state.js)). Grei
 - **Echte Block-Kollision** → `conflictResolution`-State + Modal ([partials/conflict-resolution.html](../public/partials/conflict-resolution.html)): pro Block Meine/Andere/Beide + Bulk; `submitConflictResolution` baut finales HTML via `buildResolvedHtml`. Block-Previews via `x-text` (escaped, kein x-html-Sink).
 - **Fallback** auf klassisches Überschreib-Modal: Flag off, leere Base (frische Page → 2-Way) oder Merge wirft.
 
-### quickSave ([edit.js:331-421](../public/js/editor/notebook/edit.js#L331-L421))
+### quickSave ([edit/lifecycle.js](../public/js/editor/notebook/edit/lifecycle.js))
 - Silent-Pfad: kein Modal, kein „bist du sicher". Auslöser: Ctrl+S, Autosave-Timer, Focus-Exit, Online-Retry.
 - **Reihenfolge:** Erst Draft schreiben → dann Netzwerk versuchen. Offline-Tab kann jederzeit ohne Datenverlust geschlossen werden.
 - `editSaving=true` früh setzen (Race-Schutz vs. Auto-Save-Tick + Ctrl+S + exitFocusMode-Save).
@@ -102,8 +116,18 @@ Flag `FEATURE_BLOCK_MERGE` ([app-state.js](../public/js/app/app-state.js)). Grei
 - Bei `editDirty` → `appConfirm` „verwerfen?". Klick „nein" → kein Cleanup, Editor bleibt.
 - Volles Teardown via `_teardownEditSession()`. Wenn `focusActive` → zusätzlich `exitFocusMode` (Focus folgt Edit aus dem Notebook-Pfad; gilt nur, solange Invariante `focusMode ⇒ editMode` aktiv ist).
 
-### `_teardownEditSession` (SSoT für den Session-Abbau)
-`cancelEdit` und der Non-Focus-Pfad von `saveEdit` bauen die Edit-Session über **denselben** Helper ab — kein Copy-Paste je Pfad, sonst leckt ein vergessener Teardown-Schritt Listener/Lock/Observer. Reihenfolge = Pflicht-Invariante #11: Draft → Snapshot → Autosave → OnlineRetry → FormatMarks → Counter → Presence → Lock → History → `editMode=false` (+ Flags-Reset + Synonym-/Figur-Menüs schliessen). Der Focus-Branch von `saveEdit` ruft ihn **nicht** (User schreibt weiter).
+### `_teardownEditSession({ keepDraft })` (SSoT für den Session-Abbau)
+**Drei** Aufrufer bauen die Edit-Session über **denselben** Helper ab — kein Copy-Paste je Pfad, sonst leckt ein vergessener Teardown-Schritt Listener/Lock/Observer:
+
+| Aufrufer | Draft | Warum |
+|---|---|---|
+| `cancelEdit` | verworfen | User hat „verwerfen" bestätigt. |
+| `saveEdit` (Non-Focus-Pfad) | schon von `_applySaveSuccess` geräumt | Inhalt liegt auf dem Server. |
+| `resetPage` ([app-view/page.js](../public/js/app/app-view/page.js), via Trampoline) | **`keepDraft: true`** | Seitenwechsel/Karten-Schliessen: der Draft ist die einzige Kopie ungespeicherter Arbeit, der `pendingDraft`-Banner bietet sie beim nächsten Besuch wieder an. |
+
+Reihenfolge = Pflicht-Invariante #11: Draft → Snapshot → Autosave → OnlineRetry → FormatMarks → Counter → Presence → Lock → History → `editMode=false` (+ Flags-Reset inkl. `editConflict`/`conflictResolution` + Synonym-/Figur-Menüs schliessen). Der Focus-Branch von `saveEdit` ruft ihn **nicht** (User schreibt weiter).
+
+**Warum `resetPage` zwingend delegiert:** Lock- und Presence-Heartbeat erneuern sich selbst (5 min bzw. 30 s) und werden ausschliesslich hier abgeräumt. Ein Teilabbau im Root liesse beide auf der verlassenen Seite weiterlaufen — andere ACL-User sähen sie für den Rest der Session als „wird bearbeitet". Gegated: [tests/unit/notebook-teardown.test.mjs](../tests/unit/notebook-teardown.test.mjs).
 
 ## Undo/Redo (Session-scoped, pro Seite)
 
@@ -131,7 +155,7 @@ Eigener Stack in [editor/notebook/history.js](../public/js/editor/notebook/histo
 | Autosave (silent) | Idle nach letztem Edit | Server (`quickSave`) | 60 s | 120 s ab erstem Dirty |
 | Manual Save | Save-Button (`saveEdit`) | Server (mit Dialog bei Konflikt/Kürzung) | — | — |
 
-Konstanten in [edit.js:18-20](../public/js/editor/notebook/edit.js#L18-L20). `_scheduleAutosave` resettet den Idle-Timer; Max-Timer läuft ab erstem Dirty durch und schlägt zu, wenn der User dauerhaft tippt.
+Konstanten (`AUTOSAVE_IDLE_MS`, `AUTOSAVE_MAX_MS`, `DRAFT_DEBOUNCE_MS`) in [edit/_shared.js](../public/js/editor/notebook/edit/_shared.js). `_scheduleAutosave` resettet den Idle-Timer; Max-Timer läuft ab erstem Dirty durch und schlägt zu, wenn der User dauerhaft tippt.
 
 `_flushDraftSaveNow` schreibt sofort + bricht Debounce ab. Aufruf vor jedem Übergang, der den Editor-Inhalt nicht mehr einfängt — insbesondere Focus-Mode-Entry ([focus/card.js](../public/js/editor/focus/card.js)).
 
@@ -180,7 +204,7 @@ Manche Block-Elemente nehmen keinen Caret an (`<hr>` ist void; künftig denkbar:
 
 ## Paste-Handler
 
-`_onEditPaste` ([edit.js#L429-442](../public/js/editor/notebook/edit.js#L429-L442)) verhindert, dass Computed-Styles inline aus anderen BookStack-Seiten / Websites in die DB wandern (sonst überschreiben sie `.poem` & Co.).
+`_onEditPaste` ([edit/input.js](../public/js/editor/notebook/edit/input.js)) verhindert, dass Computed-Styles inline aus anderen BookStack-Seiten / Websites in die DB wandern (sonst überschreiben sie `.poem` & Co.).
 
 1. `e.preventDefault`.
 2. Clipboard-HTML lesen → `cleanContentArtefacts(html)` ([public/js/utils.js](../public/js/utils.js)) — Cleaner-Kette zieht Font/Color/Span-Hüllen ab.
@@ -195,14 +219,17 @@ Manche Block-Elemente nehmen keinen Caret an (`<hr>` ist void; künftig denkbar:
 3. **`stripLektoratMarks` vor jedem Save + jedem Dirty-Vergleich.** Verbindlich aus [shared/html-clean.js](../public/js/editor/shared/html-clean.js). Lokales Strip wäre Drift vs. Server-Sicht.
 4. **`normalizeForCompare` für Dirty-Check.** `editDirty` darf nicht byte-genau vergleichen — Whitespace/Attribut-Ordnung weichen identisch-semantisch ab. Verwendet identische Cleaner-Kette wie Save.
 5. **Draft IMMER zuerst.** `quickSave` schreibt erst localStorage, dann Netzwerk. Offline-Tab-Close darf nichts verlieren.
-6. **`editSaving` früh setzen.** Race vs. parallelem Autosave-Tick + Ctrl+S + exitFocusMode-quickSave. Pre-saveEdit/quickSave noch vor dem ersten `await`.
+6. **`editSaving` früh setzen.** Race vs. parallelem Autosave-Tick + Ctrl+S + exitFocusMode-quickSave. In `saveEdit` **und** `quickSave` vor dem ersten `await` des Save-Vorgangs — insbesondere vor Kürzungs-Dialog und Pre-Save-Conflict-Read, die beide Wartezeit erzeugen. `_fireAutosave` gated nur auf `!editSaving`; steht das Flag noch auf false, setzt der Timer-Tick einen zweiten PUT ab, verschiebt `updated_at` und der bereits gefangene Stempel läuft garantiert in einen 409 gegen den eigenen Schreibvorgang. Gegated: [tests/unit/notebook-teardown.test.mjs](../tests/unit/notebook-teardown.test.mjs).
 7. **`defaultParagraphSeparator='p'` einmal pro Edit-Session.** Sonst erzeugen WebKit/Blink `<div>` und Focus-`BLOCK_TAGS` (ohne DIV) erkennt den Block nicht.
 8. **Caret-Slot `<br>` in leerem `<p>`.** Bei frischen Seiten / `cleanPageHtml`-`<p></p>`-Fallback hat eine kindlose `<p>` zero-height; Caret rendert nicht. Pendant: `ensureTrailingParagraph` aus [shared/auto-slot.js](../public/js/editor/shared/auto-slot.js).
 9. **Conflict-Modal nur im manuellen `saveEdit`.** `quickSave` zeigt Banner statt Modal — Hintergrund-Save darf den User nicht unterbrechen.
 10. **Counter `installEditCounter` läuft ab `startEdit`.** Tagesdelta muss alle Edits zählen, sonst sieht der Focus-Counter beim Wiedereintritt falsche Werte. Anzeige nur im Focus-Header (`x-show=focusActive`).
-11. **Cleanup-Reihenfolge bei `cancelEdit`/`saveEdit` (clean):** Draft → Snapshot → Autosave → OnlineRetry → Counter → Presence → Lock → `editMode=false`. Frühes `editMode=false` lässt Teardowns auf bereits genullten Refs laufen.
+11. **Cleanup-Reihenfolge bei `cancelEdit`/`saveEdit`/`resetPage`:** Draft → Snapshot → Autosave → OnlineRetry → FormatMarks → Counter → Presence → Lock → History → `editMode=false`. Frühes `editMode=false` lässt Teardowns auf bereits genullten Refs laufen. **Jeder** Pfad, der den Edit-Modus verlässt, geht durch `_teardownEditSession` — auch der Seitenwechsel (`resetPage`, mit `keepDraft: true`). Ein handgepflegter Teilabbau leckt Lock- und Presence-Heartbeat.
 12. **Edit + Prüfmodus forbidden.** `startEdit` bricht bei `checkDone === true` ab; Edit/Fokus-Buttons sind im Prüfmodus per `x-show="!checkDone"` ausgeblendet. Findings landen damit nie im contenteditable — Korrekturen werden ausschliesslich via `saveCorrections` aus dem Prüfmodus-Header angewandt.
 13. **Findings-Filter nach jedem Save** (`_filterFindingsAfterSave`): Defensive Restbereinigung, falls Findings doch existieren — `original` per `findInHtml` (tolerant, gleiche Match-Funktion wie `sortByPosition`) nicht mehr im neuen HTML → raus. **Kein rohes `indexOf`** — sonst verwirft eine reine Markup-Änderung (z.B. `data-bid`) rund um den Textausschnitt ein noch gültiges Finding. Mit Invariante #12 üblicherweise No-Op.
+14. **Konflikt-State ist session-gebunden.** `editConflict` und `conflictResolution` räumt ausschliesslich `_teardownEditSession` bzw. `_applySaveSuccess`. Der Banner in [editor-notebook.html](../public/partials/editor-notebook.html) hängt an `x-show="editConflict"` ohne `editMode`-Gate — bleibt der State stehen, zeigt der Lesemodus einen Banner, dessen Button `saveEdit()` auf dem noch im DOM hängenden (`display:none`) contenteditable auslöst. Gegenprobe dazu ist der `editMode`-Guard in `saveEdit` (Invariante-Paar).
+15. **Overwrite schickt den frischen Remote-Stempel.** „Trotzdem speichern" → `expectedUpdatedAt = conflict.remoteUpdatedAt`. Der stale Editor-Stempel würde am OCC-Guard (`WHERE updated_at = expected_updated_at`) erneut 409 auslösen; die User-Entscheidung wäre wirkungslos und landete im Merge-/Draft-Fallback.
+16. **Container-Selektor nur aus `shared/active-editor.js`.** `NORMAL_SELECTOR` ist SSoT; notebook-only Konsumenten (Steuerzeichen-Overlay) importieren ihn statt den String zu kopieren. Ebenso Block-Lookup: `BLOCK_SEL`/`findBlock`/`topLevelBlock` kommen aus [shared/dom-block.js](../public/js/editor/shared/dom-block.js), nicht aus einer zweiten lokalen Definition.
 
 ## Entity-Linking (Figuren/Orte-Highlights + Kontext-Panel)
 
@@ -243,6 +270,8 @@ Beide Editoren (Notebook + Focus) konsumieren ausschliesslich aus `shared/`:
 | [save-pipeline.js](../public/js/editor/shared/save-pipeline.js) | `buildSavePayload({ html, pageName, source, expectedUpdatedAt })`, `isNoChange` — pure, ohne DOM |
 | [page-api.js](../public/js/editor/shared/page-api.js) | `savePage` (PUT-Wrapper über Content-Store), `isPageConflict`, `readConflictBody` (409 PAGE_CONFLICT) |
 | [auto-slot.js](../public/js/editor/shared/auto-slot.js) | `ensureTrailingParagraph` + `removeAutoAddedParagraph` — Schreib-Slot bei leerer `<p>` |
+| [mount-html.js](../public/js/editor/shared/mount-html.js) | `mountEditorHtml` (HTML setzen + Block-Normalisierung + Caret-Slot, meldet `repaired`), `ensureCaretSlot` — SSoT aller Pfade, die den Editor-Inhalt komplett ersetzen (startEdit, Undo/Redo-Restore, Merge-Spiegelung) |
+| [dom-block.js](../public/js/editor/shared/dom-block.js) | `BLOCK_SEL`, `findBlock`, `topLevelBlock` — Block-Lookup im contenteditable (Toolbar-Keydown + HR-Insert) |
 | [edit-counter.js](../public/js/editor/shared/edit-counter.js) | `installEditCounter` (Re-Export; Container-Per-Instance) |
 | [active-editor.js](../public/js/editor/shared/active-editor.js) | `getActiveEditorContainer`, `getActiveEditorMode` — Smart-Switch zwischen Notebook + Focus |
 | [shortcuts.js](../public/js/editor/shared/shortcuts.js) | `matchInlineCommand` (Whitelist-Test), `bindInlineFormattingShortcuts` (Cmd/Ctrl+B/I/U Bindings) |
@@ -255,8 +284,10 @@ Neuer Toolbar-Button / Slash-Item / Shortcut:
 1. Slash-Item: `SLASH_ITEMS` in [toolbar/_shared.js](../public/js/editor/notebook/toolbar/_shared.js) ergänzen + i18n-Key `editor.slash.<key>` in beiden Locale-Dateien.
 2. Toolbar-Button: in [partials/editor-toolbar.html](../public/partials/editor-toolbar.html) — Bubble-Layer; Handler in [toolbar/bubble.js](../public/js/editor/notebook/toolbar/bubble.js) + im Focus `x-show="!focusActive"`-Guard (Bubble selbst schon gated).
 3. Shortcut: neuen `_kb*`-Handler in [toolbar/keydown.js](../public/js/editor/notebook/toolbar/keydown.js) anlegen (gibt `true` bei Konsum zurück) und an der richtigen Stelle in die `_onEditKeydown`-Dispatcher-Kette hängen — wenn Focus auch reagieren soll, **vor** dem `if (app.focusActive) return;`-Branch. Sonst danach.
-4. Save-Pfad anfassen: jede Mutation läuft durch `stripLektoratMarks` + `buildSavePayload`. Niemals direkt PUT — Content-Store-Facade ist Pflicht.
-5. Tests: bei Save-/Dirty-Pfaden → [tests/unit/stale-write.test.mjs](../tests/unit/stale-write.test.mjs) / [tests/unit/html-clean.test.js](../tests/unit/html-clean.test.js) erweitern.
+4. Save-Pfad anfassen: jede Mutation läuft durch `stripLektoratMarks` + `buildSavePayload`. Niemals direkt PUT — Content-Store-Facade ist Pflicht. Konflikt-Verhalten **nie** in `saveEdit`/`quickSave` duplizieren, sondern in den geteilten Helpern (`_resolveConflictBeforeSave` / `_retryAfterConflict` / `_keepAsDraft`) ändern — sonst driften Manual- und Silent-Pfad wieder auseinander.
+5. Editor-Inhalt komplett ersetzen (neuer Restore-/Merge-Pfad): über `mountEditorHtml`, nie per rohem `el.innerHTML =`. Sonst fehlen Block-Normalisierung und Caret-Slot.
+6. Session verlassen: über `_teardownEditSession` (mit `keepDraft`, wenn der Entwurf überleben soll), nie per Hand-Reset der Flags.
+7. Tests: bei Save-/Dirty-Pfaden → [tests/unit/stale-write.test.mjs](../tests/unit/stale-write.test.mjs) / [tests/unit/html-clean.test.js](../tests/unit/html-clean.test.js) erweitern; bei Session-/Konflikt-Pfaden → [tests/unit/notebook-teardown.test.mjs](../tests/unit/notebook-teardown.test.mjs).
 
 ## Tests
 
@@ -266,6 +297,8 @@ Neuer Toolbar-Button / Slash-Item / Shortcut:
 | [tests/unit/notebook-autosave.test.mjs](../tests/unit/notebook-autosave.test.mjs) | Autosave-Timing (Idle/Max/Reset via mock.timers), `_fireAutosave`-Gating, Online-Retry-Gating, `_flushDraftSaveNow` |
 | [tests/unit/notebook-toolbar.test.mjs](../tests/unit/notebook-toolbar.test.mjs) | Slash-Transforms (`_applySlashItem` pro Blocktyp), `slashItems`-Filter, `_normalizeLinkUrl`, `_brLeftOfCaret`-Dedup |
 | [tests/unit/notebook-restore.test.mjs](../tests/unit/notebook-restore.test.mjs) | Reload-Wiederaufnahme (`_tryRestoreNotebook`): Draft-Gating, richtige Seite, Snapshot-Einmal-Konsum |
+| [tests/unit/notebook-teardown.test.mjs](../tests/unit/notebook-teardown.test.mjs) | Session-Abbau: Lock-/Presence-/Counter-/Overlay-Teardown + Reihenfolge, `keepDraft`-Semantik, `resetPage`-Delegation, Konflikt-State-Reset, `editMode`-Guard in `saveEdit`, Overwrite-Stempel, silent-Pfad ohne Modal, Autosave-Timer-Reset, `editSaving`-vor-`await` |
+| [tests/unit/notebook-mount-html.test.mjs](../tests/unit/notebook-mount-html.test.mjs) | `mountEditorHtml` (Caret-Slot bei leerem `<p>`/trailing `<hr>`, `repaired`-Flag, Idempotenz) + Layout-Prefs inkl. Zoom-Clamping |
 | [tests/unit/stale-write.test.mjs](../tests/unit/stale-write.test.mjs) | Pre-Save-Conflict-Check (`fresh: true`), 409 PAGE_CONFLICT-Handling |
 | [tests/unit/page-stats-normalization.test.mjs](../tests/unit/page-stats-normalization.test.mjs) | `_syncPageStatsAfterSave` Frontend/Server-Parität |
 | [tests/e2e/lektorat.spec.js](../tests/e2e/lektorat.spec.js) | Edit-Mode-Flow inkl. Findings-Apply, Save-Source `main` |

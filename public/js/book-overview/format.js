@@ -1,13 +1,36 @@
-import { EVT } from '../events.js';
-import { charsToNormseiten } from '../utils.js';
 // Format-Helper + Tile-Click-Handler (Cross-Card-Routings).
+//
+// Alle Locale-abhängigen Formatierungen der Buch-Übersicht laufen über
+// `_uiLocale()` und die gecachten Intl-Fabriken aus utils — nicht über
+// `toLocaleString`. Grund: Tiles wie die Streak-Heatmap formatieren pro Render
+// dreistellig viele Werte, und `Number#toLocaleString` baut bei jedem Aufruf
+// intern einen neuen Formatter.
+import { EVT } from '../events.js';
+import { charsToNormseiten, numberFormat, dateTimeFormat } from '../utils.js';
+
 export const formatMethods = {
+  // Aktuelle UI-Sprache ('de' | 'en'). Eine Stelle, damit die
+  // Store-Zugriffs-Kette nicht durch alle Overview-Module wandert.
+  _uiLocale() {
+    return Alpine.store('shell').uiLocale;
+  },
+
+  // Gecachter Zahlen-Formatter für die aktuelle UI-Sprache.
+  _numFmt(opts) {
+    return numberFormat(this._uiLocale(), opts);
+  },
+
+  // Gecachter Datums-Formatter für die aktuelle UI-Sprache (timeZone via tzOpts).
+  _dateFmt(opts) {
+    return dateTimeFormat(this._uiLocale(), opts);
+  },
+
   // Zeichen → lokalisierte Normseiten-Zahl (1 Dezimale). Kapselt die
   // CHARS_PER_NORMSEITE-Umrechnung, damit die Formel nicht in jedem Tile
   // inline dupliziert wird.
   _fmtNormseiten(chars) {
-    const tag = Alpine.store('shell').uiLocale === 'en' ? 'en-US' : 'de-CH';
-    return charsToNormseiten(chars).toLocaleString(tag, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    return this._numFmt({ minimumFractionDigits: 1, maximumFractionDigits: 1 })
+      .format(charsToNormseiten(chars));
   },
 
   // Fehler-Typ-Label: i18n-Key versuchen; Fallback humanisiert.
@@ -29,8 +52,7 @@ export const formatMethods = {
   },
 
   _fmtNum(n) {
-    const tag = Alpine.store('shell').uiLocale === 'en' ? 'en-US' : 'de-CH';
-    return Number(n || 0).toLocaleString(tag);
+    return this._numFmt().format(Number(n) || 0);
   },
 
   // ── Tile-Click-Handler ───────────────────────────────────────────────────

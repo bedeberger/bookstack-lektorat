@@ -6,7 +6,7 @@
 //
 // Compute-Bodies sind als pure `_computeXxx` extrahiert (Alpine-frei testbar);
 // die memoizierten Wrapper nutzen den gemeinsamen `this._memo` aus load.js.
-import { localIsoDate, tzOpts } from '../utils.js';
+import { localIsoDate } from '../utils.js';
 import { quartileLevelFor, currentMonthKey } from '../book/ymheatmap.js';
 
 // Tagebuch-Seitennamen sind 'YYYY-MM-DD' (gleiche Mechanik wie diary-calendar).
@@ -119,17 +119,16 @@ export const diaryMethods = {
     const app = window.__app;
     const pages = Alpine.store('nav').pages || [];
     const tokEsts = app?.tokEsts || {};
-    return this._memo('diaryWeekday', [pages, tokEsts], () => {
+    return this._memo('diaryWeekday', [pages, tokEsts, this._uiLocale()], () => {
       const entries = [];
       for (const p of pages) {
         const m = ISO_DATE_RE.exec(p?.name || '');
         if (!m) continue;
         entries.push({ iso: `${m[1]}-${m[2]}-${m[3]}`, chars: Number(tokEsts[p.id]?.chars || 0) });
       }
-      const en = Alpine.store('shell').uiLocale === 'en';
+      const en = this._uiLocale() === 'en';
       const rows = this._computeDiaryWeekdayRhythm(entries, !en);
-      const tag = en ? 'en-US' : 'de-CH';
-      const fmt = new Intl.DateTimeFormat(tag, tzOpts({ weekday: 'short' }));
+      const fmt = this._dateFmt({ weekday: 'short' });
       // 2024-01-01 ist ein Montag — daraus jsDay → Label-Map ableiten.
       const labelByDay = {};
       for (let i = 0; i < 7; i++) {
@@ -195,9 +194,8 @@ export const diaryMethods = {
 
   // 12 lokalisierte Kurz-Monatsnamen (Spaltenköpfe + Tooltip-Zeitraum).
   rueckblickMonthLabels() {
-    const locale = Alpine.store('shell').uiLocale === 'en' ? 'en-US' : 'de-CH';
-    return this._memo('rbMonthLabels', [locale], () => {
-      const fmt = new Intl.DateTimeFormat(locale, tzOpts({ month: 'short' }));
+    return this._memo('rbMonthLabels', [this._uiLocale()], () => {
+      const fmt = this._dateFmt({ month: 'short' });
       const out = [];
       for (let m = 0; m < 12; m++) out.push(fmt.format(new Date(2024, m, 15, 12)));
       return out;
@@ -206,9 +204,8 @@ export const diaryMethods = {
 
   rueckblickCreatedLabel(iso) {
     if (!iso) return '';
-    const locale = Alpine.store('shell').uiLocale === 'en' ? 'en-US' : 'de-CH';
     try {
-      return new Date(iso).toLocaleDateString(locale, tzOpts({ day: '2-digit', month: '2-digit', year: 'numeric' }));
+      return this._dateFmt({ day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso));
     } catch { return ''; }
   },
 

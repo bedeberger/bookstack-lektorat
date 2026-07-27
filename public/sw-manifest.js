@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "7509bf1da5ce46f3";
+self.__SHELL_BUILD = "2edad3d5bc8af7e5";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -178,6 +178,7 @@ self.__SHELL_MANIFEST = [
   "/js/book-overview.js",
   "/js/book-overview/coverage.js",
   "/js/book-overview/diary.js",
+  "/js/book-overview/diverging.js",
   "/js/book-overview/figuren.js",
   "/js/book-overview/format.js",
   "/js/book-overview/kapitel.js",
@@ -185,6 +186,7 @@ self.__SHELL_MANIFEST = [
   "/js/book-overview/motiv.js",
   "/js/book-overview/orte.js",
   "/js/book-overview/plot.js",
+  "/js/book-overview/presence.js",
   "/js/book-overview/projection.js",
   "/js/book-overview/recent.js",
   "/js/book-overview/review.js",
@@ -419,10 +421,12 @@ self.__SHELL_MANIFEST = [
   "/js/editor/shared/apply-replacement.js",
   "/js/editor/shared/auto-slot.js",
   "/js/editor/shared/block-merge.js",
+  "/js/editor/shared/dom-block.js",
   "/js/editor/shared/edit-counter.js",
   "/js/editor/shared/editor-host.js",
   "/js/editor/shared/html-clean.js",
   "/js/editor/shared/merge-telemetry.js",
+  "/js/editor/shared/mount-html.js",
   "/js/editor/shared/page-api.js",
   "/js/editor/shared/paste.js",
   "/js/editor/shared/quote-normalize.js",
@@ -574,6 +578,7 @@ self.__SHELL_MANIFEST = [
   "/partials/book-settings-stats.html",
   "/partials/book-settings-sync.html",
   "/partials/book-settings.html",
+  "/partials/bookoverview-chapter-bars.html",
   "/partials/bookoverview-chapter-quality.html",
   "/partials/bookoverview-chapterdist.html",
   "/partials/bookoverview-charts.html",
@@ -584,6 +589,7 @@ self.__SHELL_MANIFEST = [
   "/partials/bookoverview-motiv.html",
   "/partials/bookoverview-ortpresence.html",
   "/partials/bookoverview-plot.html",
+  "/partials/bookoverview-presence-matrix.html",
   "/partials/bookoverview-recent.html",
   "/partials/bookoverview-review.html",
   "/partials/bookoverview-rueckblick-heatmap.html",

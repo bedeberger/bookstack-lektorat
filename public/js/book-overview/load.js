@@ -1,14 +1,50 @@
 // Load-Pipeline + Memo-Helper.
-// loadBookOverview ruft 10 Endpoints parallel und schreibt das Resultat in den
-// State. _checkBookStatsStaleness läuft anschliessend silent im Hintergrund;
-// resetBookOverview leert State + Memos beim Buchwechsel.
-import { fetchJson } from '../utils.js';
+// `loadBookOverview` holt alle voneinander unabhängigen Tile-Endpoints parallel
+// und schreibt das Resultat in den State. `_checkBookStatsStaleness` läuft
+// anschliessend silent im Hintergrund; `resetBookOverview` setzt State + Memos
+// beim Buchwechsel auf den Initialstand zurück.
+import { fetchJson, isRetriableFetchError } from '../utils.js';
 
-// Retry once mit kurzem Backoff: bei 9 parallelen Endpoints fängt das
-// 5xx-/Netzwerk-Blips ab, ohne dass das Tile stumm leer rendert.
+// Initialer Tile-State der Karte. SSoT für BEIDE Seiten: die Card-Registrierung
+// spreadet das Objekt als Startzustand, `resetBookOverview` weist es beim
+// Buchwechsel erneut zu. Vorher waren das zwei handgepflegte Listen mit je 19
+// Feldern, die synchron bleiben mussten.
+export function initialOverviewState() {
+  return {
+    overviewLoading: false,
+    overviewBookId: null,
+    overviewStats: [],
+    overviewCoverage: null,
+    overviewHeat: null,
+    overviewLastReview: null,
+    overviewPrevReview: null,
+    overviewRecent: [],
+    overviewFiguren: [],
+    overviewSzenen: [],
+    overviewOrte: [],
+    overviewSongs: [],
+    overviewLektoratTime: null,
+    overviewIsFinished: false,
+    overviewDailyGoalChars: null,
+    overviewGoalTargetChars: null,
+    overviewGoalDeadline: null,
+    overviewBuchtyp: null,
+    overviewRueckblickCoverage: null,
+    overviewPlot: null,
+    overviewMotifs: null,
+    overviewLoadErrors: [],
+  };
+}
+
+// Ein Retry mit kurzem Backoff — aber nur bei transienten Fehlern (Netzwerk
+// oder 5xx). 4xx sind bewusst ausgenommen: der erwartbare 403 auf /plot für
+// Reader ohne Editor-Recht würde sonst jedes Overview-Laden verdoppeln, und
+// ein wiederholter 401 löst über den globalen fetch-Wrapper ein zweites
+// `session-expired` aus.
 async function fetchJsonRetry(url, opts) {
   try { return await fetchJson(url, opts); }
   catch (e1) {
+    if (!isRetriableFetchError(e1)) throw e1;
     await new Promise(r => setTimeout(r, 250));
     try { return await fetchJson(url, opts); }
     catch (e2) {
@@ -101,14 +137,20 @@ export const loadMethods = {
     this._checkBookStatsStaleness(bookId);
   },
 
+  // True, sobald die Karte zerstört wurde (Lifecycle-AbortController). Die
+  // Hintergrund-Kette unten prüft das an jedem await-Punkt, damit ein Unmount
+  // während des Wartens keinen /sync/book mehr nachschiebt.
+  _overviewAborted() {
+    return this._lifecycle?.signal?.aborted === true;
+  },
+
   // Silent background staleness check + auto-sync. Re-Entry-sicher via _staleCheckBookId
   // und _statsSyncBookId. Während des Post-Sync-Reloads bleibt _statsSyncBookId gesetzt,
   // damit der rekursive Check sofort returnt (kein Loop).
   //
   // Das Stale-Urteil fällt der Server (`POST /history/stats-stale`) — SSoT über
   // page_stats + book_stats_history. Der Client liefert nur seine autoritative
-  // Content-Store-Seitenliste ({ id, updated_at }); die frühere dreistufige
-  // Client-Heuristik (a/b/c) ist damit entfallen.
+  // Content-Store-Seitenliste ({ id, updated_at }).
   async _checkBookStatsStaleness(bookId) {
     if (!bookId) return;
     if (typeof window === 'undefined') return;
@@ -122,6 +164,7 @@ export const loadMethods = {
       // Kurz pollen, dann aufgeben.
       for (let i = 0; i < 30 && (!Alpine.store('nav').pages || !Alpine.store('nav').pages.length); i++) {
         await new Promise(r => setTimeout(r, 100));
+        if (this._overviewAborted()) return;
         if (Alpine.store('nav').selectedBookId !== bookId) return;
       }
       const pages = Alpine.store('nav').pages || [];
@@ -133,14 +176,16 @@ export const loadMethods = {
         body: JSON.stringify({ pages: payload }),
       }).catch(() => null);
       if (!verdict?.stale) return;
+      if (this._overviewAborted()) return;
       if (Alpine.store('nav').selectedBookId !== bookId) return;
       this._statsSyncBookId = bookId;
       try {
         const res = await fetch(`/sync/book/${bookId}`, { method: 'POST' });
         if (!res.ok) return;
+        if (this._overviewAborted()) return;
         if (!app.showBookOverviewCard || Alpine.store('nav').selectedBookId !== bookId) return;
         // Gezielter Reload: nur die stats-abhängigen Tiles + tokEsts, NICHT alle
-        // 11 Endpoints — Figuren/Orte/Szenen/Reviews/… ändert ein Stats-Sync nicht.
+        // Endpoints — Figuren/Orte/Szenen/Reviews/… ändert ein Stats-Sync nicht.
         await this._reloadStatsTiles(bookId, pages, app);
       } finally {
         if (this._statsSyncBookId === bookId) this._statsSyncBookId = null;
@@ -163,6 +208,7 @@ export const loadMethods = {
       fetchJsonRetry(`/history/coverage/${bookId}`).catch(() => null),
       fetchJsonRetry(`/history/page-stats/${bookId}`).catch(() => null),
     ]);
+    if (this._overviewAborted()) return;
     if (this.overviewBookId !== bookId || Alpine.store('nav').selectedBookId !== bookId) return;
     if (Array.isArray(stats)) this.overviewStats = stats;
     if (coverage) this.overviewCoverage = coverage;
@@ -201,27 +247,7 @@ export const loadMethods = {
   },
 
   resetBookOverview() {
-    this.overviewStats = [];
-    this.overviewCoverage = null;
-    this.overviewHeat = null;
-    this.overviewLastReview = null;
-    this.overviewPrevReview = null;
-    this.overviewRecent = [];
-    this.overviewFiguren = [];
-    this.overviewSzenen = [];
-    this.overviewOrte = [];
-    this.overviewSongs = [];
-    this.overviewLektoratTime = null;
-    this.overviewIsFinished = false;
-    this.overviewDailyGoalChars = null;
-    this.overviewGoalTargetChars = null;
-    this.overviewGoalDeadline = null;
-    this.overviewBuchtyp = null;
-    this.overviewRueckblickCoverage = null;
-    this.overviewPlot = null;
-    this.overviewMotifs = null;
-    this.overviewLoadErrors = [];
-    this.overviewBookId = null;
+    Object.assign(this, initialOverviewState());
     this._memos = {};
   },
 
@@ -269,7 +295,8 @@ export const loadMethods = {
   // Wichtig für Tiles, die zusätzlich zu `overviewXxx` auch `Alpine.store('nav').tree`/
   // `app.figuren` lesen — sonst wird ein Compute mit leerem `tree` (während
   // loadPages noch läuft) als `null` cached und Tile bleibt aus, obwohl
-  // tree danach befüllt wird (Haupt-Source-Ref unverändert).
+  // tree danach befüllt wird (Haupt-Source-Ref unverändert). Memos, die
+  // lokalisierte Strings backen, führen zusätzlich `_uiLocale()` in den Deps.
   _memo(key, deps, compute) {
     const memos = (this._memos ||= {});
     const hit = memos[key];

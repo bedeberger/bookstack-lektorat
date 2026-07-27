@@ -101,8 +101,8 @@ test('overviewChapterFindings: heat.matrix-rows auf Root gemerged', () => {
   assert.equal(a.words, 300 + 100 + 20);
   assert.equal(a.pages_total, 2 + 2 + 1);
   assert.equal(a.pages_checked, 2 + 1 + 1);
-  // Root B nicht in enriched-Output (noCheck → gefiltert), Existenz aber im Set
-  assert.equal(b, undefined, 'noCheck-Kapitel werden gefiltert');
+  // Ungeprüfte Kapitel (pages_checked = 0) fallen aus dem Output.
+  assert.equal(b, undefined, 'ungeprüfte Kapitel werden gefiltert');
   assert.equal(out.length, 1);
 });
 
@@ -119,7 +119,7 @@ test('overviewChapterLektoratTime: per_chapter-rows auf Root summiert', () => {
     ],
   };
   const out = ctx.overviewChapterLektoratTime();
-  // enriched filtert noTime raus; beide Roots haben tracked time
+  // Kapitel ohne erfasste Zeit fallen raus; hier haben beide Roots Zeit.
   const a = out.find(r => r.id === 1);
   const b = out.find(r => r.id === 5);
   assert.equal(a.seconds, 100 + 50 + 30 + 20);
@@ -158,11 +158,11 @@ test('overviewFigurePresence: Szenen aus Sub-Kapiteln in Root-Spalte', () => {
   assert.equal(out.rows.length, 2, 'nur zwei Root-Zeilen');
   const rowA = out.rows.find(r => r.id === 1);
   const rowB = out.rows.find(r => r.id === 5);
-  const cellAnnaA = rowA.cells.find(c => c.figureId === 'f1');
-  const cellAnnaB = rowB.cells.find(c => c.figureId === 'f1');
+  const cellAnnaA = rowA.cells.find(c => c.id === 'f1');
+  const cellAnnaB = rowB.cells.find(c => c.id === 'f1');
   assert.equal(cellAnnaA.value, 3, 'Anna: 1 (Root) + 1 (Sub A1) + 1 (Sub A2a)');
   assert.equal(cellAnnaB.value, 0);
-  const cellBertA = rowA.cells.find(c => c.figureId === 'f2');
+  const cellBertA = rowA.cells.find(c => c.id === 'f2');
   assert.equal(cellBertA.value, 1);
 });
 
@@ -179,7 +179,7 @@ test('overviewFigurePresence: Einmal-Szenen-Statisten verdrängen Hauptfiguren n
     { chapter_id: 1, fig_ids: ['statist'] },
   ];
   const out = ctx.overviewFigurePresence();
-  assert.deepEqual(out.figures.map(f => f.id), ['haupt'], 'nur die mehrfach auftretende Figur');
+  assert.deepEqual(out.cols.map(f => f.id), ['haupt'], 'nur die mehrfach auftretende Figur');
 });
 
 test('overviewTopFiguren: bevorzugt Figuren mit mehreren Szenen', () => {
@@ -236,7 +236,7 @@ test('overviewOrtPresence: Einmal-Nennungen verdrängen wiederkehrende Orte nich
     ] },
   ];
   const out = ctx.overviewOrtPresence();
-  assert.deepEqual(out.places.map(p => p.id), ['wieder'], 'nur der mehrfach erwähnte Ort');
+  assert.deepEqual(out.cols.map(p => p.id), ['wieder'], 'nur der mehrfach erwähnte Ort');
 });
 
 test('overviewOrtPresence: Fallback zeigt Einmal-Nennungen, wenn kein Ort wiederkehrt', () => {
@@ -247,7 +247,7 @@ test('overviewOrtPresence: Fallback zeigt Einmal-Nennungen, wenn kein Ort wieder
     { id: 'b', name: 'Brunnen', typ: 'andere', kapitel: [{ chapter_id: 5, name: 'Root B', haeufigkeit: 1 }] },
   ];
   const out = ctx.overviewOrtPresence();
-  assert.equal(out.places.length, 2, 'Fallback: beide Einmal-Orte sichtbar');
+  assert.equal(out.cols.length, 2, 'Fallback: beide Einmal-Orte sichtbar');
 });
 
 test('overviewTopOrte: bevorzugt mehrfach erwähnte Schauplätze', () => {

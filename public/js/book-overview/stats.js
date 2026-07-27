@@ -1,7 +1,11 @@
 // Schreibstatistik-Tiles: Hero-Snapshot, Sparkline, 7-Tage-Bars, Heute-Ring,
 // Streak-Heatmap. Visualisierungen als reines Inline-SVG (kein Chart.js) —
 // Overview soll instant beim Buchwechsel sichtbar sein, ohne Lazy-Lib-Load.
-import { localIsoDate, localIsoDaysAgo, tzOpts, aggregateLiveBookStats, CHARS_PER_NORMSEITE } from '../utils.js';
+//
+// Memos, die lokalisierte Strings (Wochentage, Datums-Labels, Tooltips) mit
+// backen, führen `this._uiLocale()` in ihren Deps — sonst bleiben die Labels
+// nach einem Sprachwechsel auf der alten Sprache stehen.
+import { localIsoDate, localIsoDaysAgo, aggregateLiveBookStats, CHARS_PER_NORMSEITE } from '../utils.js';
 import { computeTodayRing, computeCharsTodayDelta } from '../today-ring.js';
 
 export const statsMethods = {
@@ -16,7 +20,11 @@ export const statsMethods = {
     const tokEsts = app?.tokEsts || {};
     const pages = Alpine.store('nav').pages || [];
     const stats = this.overviewStats || [];
-    return this._memo('latest', [stats, tokEsts, pages], () => {
+    // `tree` gehört in die Deps, weil chapter_count über _chapterRollup daraus
+    // kommt: ein Umhängen/Umbenennen im Buchorganizer ändert den Tree, ohne
+    // dass `pages` neu zugewiesen wird.
+    const tree = Alpine.store('nav').tree || [];
+    return this._memo('latest', [stats, tokEsts, pages, tree], () => {
       const ids = Object.keys(tokEsts);
       const histLast = stats.length ? stats[stats.length - 1] : null;
       if (!ids.length) return histLast;
@@ -56,11 +64,10 @@ export const statsMethods = {
   overviewLast7Days() {
     const a = this.overviewStats || [];
     const tokEsts = window.__app?.tokEsts || {};
-    return this._memo('last7Days', [a, tokEsts], () => {
+    return this._memo('last7Days', [a, tokEsts, this._uiLocale()], () => {
       const charsByDate = new Map();
       for (const s of a) charsByDate.set(s.recorded_at, Number(s.chars) || 0);
-      const tag = Alpine.store('shell').uiLocale === 'en' ? 'en-US' : 'de-CH';
-      const fmt = new Intl.DateTimeFormat(tag, tzOpts({ weekday: 'short' }));
+      const fmt = this._dateFmt({ weekday: 'short' });
       const todayIso = localIsoDate();
       const todayDelta = this._charsTodayDelta();
       const days = [];
@@ -117,7 +124,7 @@ export const statsMethods = {
   // `points`: pro Datenpunkt { chars, iso, label } für Hover-Overlay mit Datum + exaktem Wert.
   overviewSparkline() {
     const stats = this.overviewStats || [];
-    return this._memo('sparkline', [stats], () => {
+    return this._memo('sparkline', [stats, this._uiLocale()], () => {
       const W = 240, H = 48, PAD = 3;
       const slice = stats.slice(-30);
       const data = slice.map(s => Number(s.chars) || 0);
@@ -143,18 +150,19 @@ export const statsMethods = {
                   :                'var(--color-accent)';
       const endX = pts[pts.length - 1][0];
       const endY = pts[pts.length - 1][1];
-      const tag = Alpine.store('shell').uiLocale === 'en' ? 'en-US' : 'de-CH';
-      const dateFmt = new Intl.DateTimeFormat(tag, tzOpts({ day: 'numeric', month: 'short', year: 'numeric' }));
-      const numFmt = (n) => Number(n || 0).toLocaleString(tag);
+      const dateFmt = this._dateFmt({ day: 'numeric', month: 'short', year: 'numeric' });
+      const numFmt = this._numFmt();
       const unit = window.__app?.t?.('bookstats.unit.z') || 'Z';
       const points = slice.map((s, i) => {
         const iso = s.recorded_at;
         let label;
         if (iso) {
-          const dt = new Date(iso + 'T00:00:00');
-          label = dateFmt.format(dt) + ': ' + numFmt(data[i]) + ' ' + unit;
+          // Mittags-Anker: der Formatter rendert in appTimezone, ein
+          // Mitternachts-Anker könnte dort auf den Vortag kippen.
+          const dt = new Date(iso + 'T12:00:00');
+          label = dateFmt.format(dt) + ': ' + numFmt.format(data[i]) + ' ' + unit;
         } else {
-          label = numFmt(data[i]) + ' ' + unit;
+          label = numFmt.format(data[i]) + ' ' + unit;
         }
         return { chars: data[i], iso, label };
       });
@@ -167,14 +175,16 @@ export const statsMethods = {
   // zum Vortag aus overviewStats. Cells ohne Snapshot oder Future-Tage =
   // null (gerendert als leere Box, kein Tile). Level 0..4 nach Quartilen
   // der positiven Deltas; 0 = inactive (kein Schreiben), 1..4 = wachsende
-  // Intensität.
+  // Intensität. Der Zell-Tooltip wird hier einmal gebaut, nicht im Template:
+  // 364 Zellen × Formatter + t() pro Reactive-Tick wäre die teuerste Schleife
+  // der ganzen Karte.
   // Streak: konsekutive Tage mit positivem Delta endend HEUTE oder GESTERN
   // (heute ohne Eintrag bricht den Streak nicht — User hat nur noch nicht
   // geschrieben). Longest = Max-Run im Fenster.
   overviewStreakHeatmap() {
     const a = this.overviewStats || [];
     const tokEsts = window.__app?.tokEsts || {};
-    return this._memo('streakHeatmap', [a, tokEsts], () => {
+    return this._memo('streakHeatmap', [a, tokEsts, this._uiLocale()], () => {
       const WEEKS = 52;
       const charsByDate = new Map();
       for (const s of a) charsByDate.set(s.recorded_at, Number(s.chars) || 0);
@@ -190,7 +200,15 @@ export const statsMethods = {
       const isoToday = localIsoDate(todayLocal);
       const todayDelta = this._charsTodayDelta();
 
-      const cells = [];
+      const t = window.__app?.t || ((k) => k);
+      const numFmt = this._numFmt();
+      const tipFor = (iso, delta, hasSnapshot) => {
+        if (delta != null && delta > 0) return t('overview.streak.cellTip', { date: iso, chars: numFmt.format(delta) });
+        return hasSnapshot
+          ? t('overview.streak.cellTipNoChange', { date: iso })
+          : t('overview.streak.cellTipNone', { date: iso });
+      };
+
       const grid = []; // weeks[col][row]
       const positive = [];
       for (let w = 0; w < WEEKS; w++) grid.push([null, null, null, null, null, null, null]);
@@ -202,7 +220,7 @@ export const statsMethods = {
         const daysFromTodayRow = dowMon - row;
         const offsetDays = daysFromTodayCol * 7 + daysFromTodayRow;
         if (offsetDays < 0) {
-          grid[col][row] = { iso: null, delta: null, level: 0, future: true };
+          grid[col][row] = { iso: null, delta: null, level: 0, future: true, tip: null };
           continue;
         }
         const iso = localIsoDaysAgo(offsetDays, todayLocal);
@@ -216,10 +234,10 @@ export const statsMethods = {
         } else {
           delta = (hasSnapshot && prev != null) ? (cur - prev) : (hasSnapshot ? 0 : null);
         }
-        const cell = { iso, delta, level: 0, future: false, hasSnapshot: hasSnapshot || (iso === isoToday && todayDelta > 0) };
+        const snap = hasSnapshot || (iso === isoToday && todayDelta > 0);
+        const cell = { iso, delta, level: 0, future: false, hasSnapshot: snap, tip: tipFor(iso, delta, snap) };
         if (delta != null && delta > 0) positive.push(delta);
         grid[col][row] = cell;
-        cells.push(cell);
       }
 
       // Quartil-Bucketing für Level 1..4 auf positiven Deltas
@@ -271,8 +289,7 @@ export const statsMethods = {
       }
       const totalActiveDays = linear.filter(x => x.delta != null && x.delta > 0).length;
 
-      const tag = Alpine.store('shell').uiLocale === 'en' ? 'en-US' : 'de-CH';
-      const dayFmt = new Intl.DateTimeFormat(tag, tzOpts({ weekday: 'short' }));
+      const dayFmt = this._dateFmt({ weekday: 'short' });
       const dayLabels = [];
       // Wochenstart Mo: nehme einen Mo als Referenz (z.B. 4. Jan 2027 ist Mo)
       const monRef = new Date(2027, 0, 4); // 2027-01-04 ist Mo

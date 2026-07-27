@@ -3,6 +3,11 @@
 // (sortiert haeufigkeit desc) und `figuren: [fig_id]`. Kein Geo, keine Koordinaten.
 // Ranking: Summe der Kapitel-Häufigkeiten = Gesamt-Präsenz im Buch. Bevorzugt
 // mehrfach erwähnte Schauplätze (total >= 2); Einmal-Nennungen nur als Fallback.
+//
+// Spaltenauswahl, Skalierung und Zeilen-Aufbau der Matrix teilt sich das Modul
+// mit Figuren und Motiven — siehe ./presence.js.
+import { buildPresenceMatrix, bucketByRoot } from './presence.js';
+
 export const orteMethods = {
   overviewOrteCount() { return (this.overviewOrte || []).length; },
 
@@ -26,74 +31,26 @@ export const orteMethods = {
   },
 
   // Schauplatz-Präsenz-Matrix: Kapitel (Zeilen) × Top-Schauplätze (Spalten).
-  // Cell-Wert = location_chapters.haeufigkeit. Match primär per chapter_id
-  // (stabil), Fallback auf chapter_name (Backfill-Lücken: alte Einträge ohne
-  // aufgelöste ID). Skalierung global über alle Cells.
+  // Cell-Wert = location_chapters.haeufigkeit; Sub-Kapitel auf ihr Wurzel-Kapitel
+  // aggregiert, Kapitel-Match primär per chapter_id mit Namens-Fallback
+  // (Backfill-Lücken: alte Einträge ohne aufgelöste ID).
   overviewOrtPresence() {
     const orte = this.overviewOrte || [];
     const tree = Alpine.store('nav').tree || [];
-    return this._memo('ortPresence', [orte, tree], () => {
-      const empty = { places: [], rows: [] };
-      const app = window.__app;
-      if (!app || orte.length === 0) return empty;
-      // Sub-Kapitel werden auf ihr Wurzel-Kapitel aggregiert — kapitel-rows
-      // landen via rootOf bzw. rootOfName im Root-Bucket.
-      const { roots, rootOf, rootOfName } = this._chapterRollup();
-      const chapters = roots.map(c => ({ id: c.id, name: c.name }));
-      if (chapters.length === 0) return empty;
+    return this._memo('ortPresence', [orte, tree],
+      () => this._computeOrtPresence(orte));
+  },
 
-      const MAX_COLS = 20;
-
-      const candidates = orte.map(o => {
-        const kap = Array.isArray(o.kapitel) ? o.kapitel : [];
-        const byRootId = new Map();
-        for (const k of kap) {
-          const h = Number(k?.haeufigkeit) || 0;
-          if (h <= 0) continue;
-          const root = (k?.chapter_id != null ? rootOf(k.chapter_id) : null)
-                     || rootOfName(k?.name);
-          if (!root) continue;
-          const rid = Number(root.id);
-          byRootId.set(rid, (byRootId.get(rid) || 0) + h);
-        }
-        let total = 0;
-        for (const v of byRootId.values()) total += v;
-        return { id: o.id, name: o.name, typ: o.typ || 'andere', byRootId, total };
-      }).filter(c => c.total > 0);
-
-      if (candidates.length === 0) return empty;
-      candidates.sort((a, b) => b.total - a.total);
-      // Nur mehrfach erwähnte Schauplätze in die Matrix. Einmal-Nennungen aus einem
-      // einzelnen Kapitel würden die Top-Spalten sonst fluten und die wiederkehrenden
-      // Orte verdrängen. Fallback auf alle, falls kein Ort mehrfach vorkommt.
-      const recurring = candidates.filter(c => c.total >= 2);
-      const selected = (recurring.length ? recurring : candidates).slice(0, MAX_COLS);
-
-      const lookup = (c, ch) => c.byRootId.get(Number(ch.id)) ?? 0;
-
-      const places = selected.map(c => ({ id: c.id, name: c.name, typ: c.typ }));
-      let globalMax = 0;
-      for (const c of selected) {
-        for (const ch of chapters) {
-          const v = lookup(c, ch);
-          if (v > globalMax) globalMax = v;
-        }
-      }
-      globalMax = Math.max(1, globalMax);
-      const rows = chapters.map(ch => ({
-        id: ch.id,
-        name: ch.name,
-        cells: selected.map((c) => {
-          const v = lookup(c, ch);
-          return {
-            ortId: c.id,
-            ortName: c.name,
-            value: v,
-            pct: v > 0 ? Math.max(8, Math.round((v / globalMax) * 100)) : 0,
-          };
-        }),
-      }));
-      return { places, rows };
+  _computeOrtPresence(orte) {
+    const { chapters, resolveRoot } = this._presenceContext();
+    const candidates = (orte || []).map(o => {
+      const kap = Array.isArray(o.kapitel) ? o.kapitel : [];
+      const { byRootId, total } = bucketByRoot(
+        kap.map(k => ({ chapterId: k?.chapter_id, chapterName: k?.name, n: k?.haeufigkeit })),
+        resolveRoot,
+      );
+      return { id: o.id, name: o.name, byRootId, total };
     });
+    return buildPresenceMatrix(candidates, chapters);
   },
 };

@@ -211,7 +211,14 @@ const notebookState = () => ({
   _autosaveIdleTimer: null,
   _autosaveMaxTimer: null,
   _draftTimer: null,
+  // Retry-Trigger für einen haengengebliebenen Offline-Save (edit/autosave.js).
+  // Zwei Handles, weil zwei Anlaesse: `_onlineHandler` haengt an window
+  // `online`+`focus`, `_onlineVisHandler` an document `visibilitychange`.
+  // Beide leben am Root (nicht an der Card), weil `_uninstallOnlineRetry` auch
+  // aus Root-Kontext gerufen wird (app-view/page.js#resetPage) und dieselben
+  // Handles treffen muss.
   _onlineHandler: null,
+  _onlineVisHandler: null,
   // Re-Entry-Guard der Reconnect-Outbox (app-outbox.js): verhindert, dass
   // sich überlappende online/focus/visibilitychange-Trigger den Draft-Flush
   // parallel starten. Kurzlebig, nur innerhalb von _flushOutbox gesetzt.

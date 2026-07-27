@@ -4,15 +4,16 @@
 // abstützt.
 
 import { getActiveEditorContainer } from './active-editor.js';
+import { localIsoDate } from '../../utils.js';
 
 const COUNTER_DEBOUNCE_MS = 220;
 const DAILY_BASELINE_KEY = 'focus.dailyBaseline';
 
+// Tages-Bucket in `app.timezone`, nicht in Browser-TZ. Browser-Datumsteile
+// (getFullYear/getMonth/getDate) würden die Baseline in einer abweichenden
+// Zeitzone am falschen Tag zurücksetzen — mitten im Abend-Schreibfenster.
 function todayKey() {
-  const d = new Date();
-  return d.getFullYear() + '-'
-       + String(d.getMonth() + 1).padStart(2, '0') + '-'
-       + String(d.getDate()).padStart(2, '0');
+  return localIsoDate();
 }
 
 function readDailyBaselines() {

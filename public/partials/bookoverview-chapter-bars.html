@@ -1,0 +1,43 @@
+<!-- SSoT-Fragment der Kapitel-Balken-Tiles mit Wertungs-Semantik
+     (Lektorat-Findings, Lektoratszeit). Wird via
+     `<!-- @include bookoverview-chapter-bars -->` in
+     bookoverview-chapter-quality.html zweimal eingesetzt.
+
+     Erwartet im umgebenden x-data nur zwei Strings:
+       kind      → 'findings' | 'lektoratTime'
+       labelKey  → i18n-Key der Tile-Überschrift
+     Daten + Beschriftung liefern die Dispatcher der Karte
+     (js/book-overview/kapitel.js): overviewChapterBars / -BarMedian / -BarValue.
+
+     Farb-Semantik ist hier invertiert: über dem Median = schlechter (rot).
+     Die Verteilungs-Tile nutzt dasselbe Bar-Layout mit neutraler Semantik und
+     eigenen Meta-Spalten — siehe bookoverview-chapterdist.html. -->
+<div class="overview-tile-head">
+  <div class="overview-tile-label" x-text="$app.t(labelKey)"></div>
+  <span class="overview-tile-median"
+        x-show="overviewChapterBarMedian(kind)"
+        x-text="$app.t('overview.medianTick') + ': ' + overviewChapterBarMedian(kind)"></span>
+</div>
+<ul class="overview-chapter-list">
+  <template x-for="ch in overviewChapterBars(kind)" :key="ch.id">
+    <li class="overview-chapter-row"
+        :class="{ 'overview-chapter-row--worst': ch.isMax, 'overview-chapter-row--best': ch.isMin }">
+      <span class="overview-chapter-name" :data-tip="ch.name" x-text="ch.name"></span>
+      <div class="overview-chapter-bar-track overview-chapter-bar-track--diverge"
+           x-show="ch.showMedian">
+        <div class="overview-chapter-bar-fill"
+             :class="ch.isAbove ? 'overview-chapter-bar-fill--findings-pos' : 'overview-chapter-bar-fill--findings-neg'"
+             :style="{ left: ch.barLeftPct + '%', width: ch.barWidthPct + '%' }"></div>
+        <div class="overview-chapter-median-tick"
+             :data-tip="$app.t('overview.medianTick') + ': ' + overviewChapterBarMedian(kind)"></div>
+      </div>
+      <span class="overview-chapter-meta">
+        <span class="overview-chapter-delta"
+              x-show="ch.showMedian"
+              :class="ch.deltaPct > 0 ? 'overview-trend-pct--down' : ch.deltaPct < 0 ? 'overview-trend-pct--up' : ''"
+              x-text="(ch.deltaPct >= 0 ? '+' : '') + ch.deltaPct + '%'"></span>
+        <span class="overview-chapter-count" x-text="overviewChapterBarValue(kind, ch)"></span>
+      </span>
+    </li>
+  </template>
+</ul>

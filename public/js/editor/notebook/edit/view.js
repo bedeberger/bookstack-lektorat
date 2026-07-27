@@ -1,13 +1,28 @@
 // Teil von notebookEditMethods (siehe Facade edit.js).
-import { EVT, editorHost, runQuoteNormalize, writeEditorPrefs } from './_shared.js';
+import { EVT, ZOOM_MAX, ZOOM_MIN, editorHost, findBlock, runQuoteNormalize, writeEditorPrefs } from './_shared.js';
 
 export const viewMethods = {
+
+  // Alle Layout-Prefs am Stück persistieren. SSoT für die vier Toggles/Zoom-
+  // Aktionen: würde jeder Aufrufer das Objekt selbst zusammenbauen, löscht eine
+  // vergessene Property die anderen Prefs still (JSON wird komplett ersetzt).
+  _persistEditorPrefs() {
+    const app = editorHost();
+    if (!app) return;
+    writeEditorPrefs({
+      fullscreen: app.pageEditorFullscreen,
+      fitWidth: app.pageEditorFitWidth,
+      showMarks: app.pageEditorShowMarks,
+      zoom: app.pageEditorZoom,
+    });
+  },
+
 
   togglePageEditorFullscreen() {
     const app = editorHost();
     if (!app) return;
     app.pageEditorFullscreen = !app.pageEditorFullscreen;
-    writeEditorPrefs({ fullscreen: app.pageEditorFullscreen, fitWidth: app.pageEditorFitWidth, showMarks: app.pageEditorShowMarks });
+    this._persistEditorPrefs();
   },
 
 
@@ -18,7 +33,7 @@ export const viewMethods = {
     const app = editorHost();
     if (!app) return;
     app.pageEditorFitWidth = !app.pageEditorFitWidth;
-    writeEditorPrefs({ fullscreen: app.pageEditorFullscreen, fitWidth: app.pageEditorFitWidth, showMarks: app.pageEditorShowMarks });
+    this._persistEditorPrefs();
   },
 
 
@@ -29,34 +44,30 @@ export const viewMethods = {
     const app = editorHost();
     if (!app) return;
     app.pageEditorShowMarks = !app.pageEditorShowMarks;
-    writeEditorPrefs({ fullscreen: app.pageEditorFullscreen, fitWidth: app.pageEditorFitWidth, showMarks: app.pageEditorShowMarks });
+    this._persistEditorPrefs();
     if (app.pageEditorShowMarks) this._installFormatMarks();
     else this._uninstallFormatMarks();
   },
 
 
-  pageEditorZoomIn() {
+  // Zoom-Stufen. Persistiert wie die übrigen Layout-Prefs — der Editor soll
+  // beim nächsten Eintritt in der gewählten Schriftgrösse öffnen.
+  _setPageEditorZoom(value) {
     const app = editorHost();
     if (!app) return;
-    app.pageEditorZoom = Math.min(2.5, Math.round((app.pageEditorZoom + 0.1) * 100) / 100);
+    app.pageEditorZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
+    this._persistEditorPrefs();
     this._scheduleFormatMarks?.();
   },
 
 
-  pageEditorZoomOut() {
-    const app = editorHost();
-    if (!app) return;
-    app.pageEditorZoom = Math.max(0.7, Math.round((app.pageEditorZoom - 0.1) * 100) / 100);
-    this._scheduleFormatMarks?.();
-  },
+  pageEditorZoomIn() { this._setPageEditorZoom((editorHost()?.pageEditorZoom ?? 1) + 0.1); },
 
 
-  pageEditorZoomReset() {
-    const app = editorHost();
-    if (!app) return;
-    app.pageEditorZoom = 1;
-    this._scheduleFormatMarks?.();
-  },
+  pageEditorZoomOut() { this._setPageEditorZoom((editorHost()?.pageEditorZoom ?? 1) - 0.1); },
+
+
+  pageEditorZoomReset() { this._setPageEditorZoom(1); },
 
 
   async normalizeQuotes() {
@@ -91,15 +102,11 @@ export const viewMethods = {
     if (!editEl) return;
     editEl.focus();
     const sel = document.getSelection();
-    let block = null;
-    if (sel && sel.rangeCount) {
-      let cur = sel.getRangeAt(0).startContainer;
-      if (cur && cur.nodeType === 3) cur = cur.parentNode;
-      while (cur && cur !== editEl) {
-        if (cur.nodeType === 1 && cur.matches?.('p, h1, h2, h3, h4, h5, h6, blockquote, pre, li, div.poem')) { block = cur; break; }
-        cur = cur.parentNode;
-      }
-    }
+    // Block-Lookup über shared/dom-block.js — gleiche Definition wie der
+    // Keydown-Dispatcher der Toolbar (vorher zwei Selektor-Kopien).
+    const block = (sel && sel.rangeCount)
+      ? findBlock(sel.getRangeAt(0).startContainer, editEl)
+      : null;
     const hr = document.createElement('hr');
     const next = document.createElement('p');
     next.appendChild(document.createElement('br'));

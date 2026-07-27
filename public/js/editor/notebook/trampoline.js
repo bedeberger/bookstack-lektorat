@@ -41,6 +41,10 @@ export const notebookTrampoline = {
   _flushDraftSaveNow() { card()?._flushDraftSaveNow(); },
   _stopAutosave() { card()?._stopAutosave(); },
   _uninstallOnlineRetry() { card()?._uninstallOnlineRetry(); },
+  // Seitenwechsel / Karten-Schliessen (app-view/page.js#resetPage): dieselbe
+  // Abbau-Sequenz wie cancelEdit, aber mit Draft-Erhalt — ohne diesen Aufruf
+  // liefen Edit-Lock-Heartbeat und Presence-Ping der verlassenen Seite weiter.
+  _teardownEditSession(opts) { card()?._teardownEditSession(opts); },
   _filterFindingsAfterSave(html) { card()?._filterFindingsAfterSave(html); },
   _checkPageConflict(pageId, expectedUpdatedAt) {
     return card()?._checkPageConflict(pageId, expectedUpdatedAt) ?? null;

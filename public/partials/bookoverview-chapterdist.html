@@ -17,7 +17,7 @@
           <span class="overview-chapter-name" :data-tip="ch.name" x-text="ch.name"></span>
           <div class="overview-chapter-bar-track overview-chapter-bar-track--diverge">
             <div class="overview-chapter-bar-fill"
-                 :class="ch.isPositive ? 'overview-chapter-bar-fill--pos' : 'overview-chapter-bar-fill--neg'"
+                 :class="ch.isAbove ? 'overview-chapter-bar-fill--pos' : 'overview-chapter-bar-fill--neg'"
                  :style="{ left: ch.barLeftPct + '%', width: ch.barWidthPct + '%' }"></div>
             <div class="overview-chapter-median-tick"
                  :data-tip="$app.t('overview.medianTick') + ': ' + _fmtNum(ch.median) + ' ' + $app.t('bookstats.unit.z')"></div>
@@ -29,7 +29,7 @@
             <span class="overview-chapter-chars" x-text="_fmtNum(ch.chars) + ' ' + $app.t('bookstats.unit.z')"></span>
             <span class="overview-chapter-ns"
                   :data-tip="$app.t('bookstats.metric.normseiten')"
-                  x-text="ch.normseiten.toLocaleString($store.shell.uiLocale === 'en' ? 'en-US' : 'de-CH', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ' + $app.t('bookstats.unit.ns')"></span>
+                  x-text="_fmtNormseiten(ch.chars) + ' ' + $app.t('bookstats.unit.ns')"></span>
             <span class="overview-chapter-words" x-text="_fmtNum(ch.words) + ' ' + $app.t('bookstats.unit.w')"></span>
             <span class="overview-chapter-pages" x-text="ch.pages + ' ' + $app.t('bookstats.unit.s')"></span>
           </span>
