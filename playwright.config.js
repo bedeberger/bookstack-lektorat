@@ -21,7 +21,13 @@ module.exports = {
     actionTimeout: 30000,
   },
   projects: [
-    { name: 'chromium', use: { browserName: 'chromium' } },
+    { name: 'chromium', use: { browserName: 'chromium' }, testIgnore: '**/*.webkit.spec.js' },
+    // `*.webkit.spec.js` deckt Engine-spezifische Fehlerklassen ab, die Chromium
+    // strukturell nicht sieht — z.B. die kaputte contenteditable-Selektion, wenn
+    // die Padding-Summe die clientHeight der Scroll-Box erreicht
+    // (focus-selection.webkit.spec.js). Eigenes Projekt statt zweitem Durchlauf
+    // aller Specs: die übrige Suite ist auf Chromium geeicht.
+    { name: 'webkit', use: { browserName: 'webkit' }, testMatch: '**/*.webkit.spec.js' },
   ],
   webServer: {
     command: 'node tests/server.js',

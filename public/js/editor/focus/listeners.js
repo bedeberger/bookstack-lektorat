@@ -14,7 +14,7 @@ import {
 } from './constants.js';
 import { findBlockFromNode, resolveGutterCaretPoint, caretRangeAtPoint } from './dom-blocks.js';
 import { applyBlockMarks, repairBlockMarks } from './recenter.js';
-import { consumeProgrammaticScroll } from './typewriter.js';
+import { consumeProgrammaticScroll, resolveScrollBox } from './typewriter.js';
 import { makeCursorHide } from './cursor-hide.js';
 import { makeViewportSync } from './viewport.js';
 import { editorHost } from '../shared/editor-host.js';
@@ -34,7 +34,13 @@ function makeCtx(container) {
     pointerIntent: false,
     pointerTimer: 0,
     composing: false,       // IME-Composition aktiv
-    progScrollTop: null,    // zuletzt selbst geschriebene Scroll-Position
+    // Zuletzt selbst geschriebene Scroll-Position samt Box (`{ box, top }`) —
+    // im Fallback-Fall scrollt ein Vorfahr, nicht der Container.
+    progScroll: null,
+    // Box, die tatsächlich scrollt (Container oder — bei fremdem Host-CSS —
+    // ein Vorfahr/das Dokument). Wird im Viewport-Tick neu aufgelöst, weil
+    // Host-CSS die Kette per Media-Query umhängen kann.
+    scrollBox: null,
     vvTimer: 0,
     cursorTimer: 0,
     // Short-circuit-Cache für den Recenter: bleibt der aktive Block gleich
@@ -47,7 +53,8 @@ function makeCtx(container) {
     // also in jedem Tick ausserhalb von window-3.
     _marks: { near: false },
     _twCache: { block: null, value: null },  // cachedTypewriterThreshold
-    _lastViewportH: null,   // letzte sichtbare Viewport-Höhe (Tastatur-Erkennung)
+    // Letzter sichtbarer Ausschnitt `{ h, top }` (Tastatur-/Pan-Erkennung).
+    _lastViewport: null,
   };
 }
 
@@ -59,12 +66,18 @@ function makeCtx(container) {
 function installObservers(ctx) {
   const { container, visibleBlocks } = ctx;
   if (HAS_IO) {
+    // Root ist die Box, die wirklich scrollt. Hat fremdes Host-CSS den Scroll an
+    // einen Vorfahr abgegeben, wäre `root: container` eine Box, die mit dem
+    // Inhalt mitwächst — sie „sieht" dann alle Blöcke gleichzeitig und der
+    // Center-Pick verliert seine Vorauswahl. `null` (= Viewport) ist in dem Fall
+    // der richtige Bezug und deckt sich mit dem Anker-Bezug in typewriter.js.
+    const root = ctx.scrollBox === container ? container : null;
     ctx.io = new IntersectionObserver((entries) => {
       for (const e of entries) {
         if (e.isIntersecting) visibleBlocks.add(e.target);
         else visibleBlocks.delete(e.target);
       }
-    }, { root: container, threshold: 0 });
+    }, { root, threshold: 0 });
     for (const el of container.querySelectorAll(BLOCK_SEL)) ctx.io.observe(el);
   }
   if (!HAS_MO) return;
@@ -94,6 +107,7 @@ export function installFocusListeners({ ctrl, container }) {
   const ctx = makeCtx(container);
   const signal = ctx.abort.signal;
   const isActive = () => ctrl._focusState === 'active';
+  ctx.scrollBox = resolveScrollBox(container);
   installObservers(ctx);
 
   // Touch bekommt eine längere Karenz als Maus/Stift: der Fingertipp ist auf
@@ -184,9 +198,21 @@ export function installFocusListeners({ ctrl, container }) {
     if (isActive()) ctrl._focusUpdateActive(true, { force: true });
   };
 
-  const onScroll = () => {
+  // Welche Box hat gescrollt? Ein Scroll des Dokuments feuert mit `document` als
+  // Target; für alle anderen ist das Target die Box selbst.
+  const scrollBoxOf = (e) => {
+    const t = e.target;
+    if (!t || t === document) return document.scrollingElement || document.documentElement;
+    return t;
+  };
+
+  const onScroll = (e) => {
     if (!isActive()) return;
-    if (consumeProgrammaticScroll(container, ctx)) return;
+    const box = scrollBoxOf(e);
+    // Nur Boxen, in denen der Editor liegt (`contains` schliesst die Box selbst
+    // ein). Filtert fremde Scroller — Sidebar, Modal, Popover — heraus.
+    if (!box || !box.contains?.(container)) return;
+    if (consumeProgrammaticScroll(box, ctx)) return;
     // Manueller Scroll: Spotlight auf den Absatz in der Viewport-Mitte setzen
     // (preferCenter), nicht auf den Caret. scroll=false → kein programmatischer
     // Typewriter-Scroll, der gegen den User-Scroll kämpft.
@@ -295,7 +321,14 @@ export function installFocusListeners({ ctrl, container }) {
   container.addEventListener('input', onInput, { signal });
   container.addEventListener('compositionstart', onCompositionStart, { signal });
   container.addEventListener('compositionend', onCompositionEnd, { signal });
-  container.addEventListener('scroll', onScroll, { passive: true, signal });
+  // Scroll-Events bubbeln nicht — der Listener hängt darum am `document` in der
+  // CAPTURE-Phase: die läuft für jedes dispatchte Event den vollen Pfad von
+  // document zum Ziel ab, unabhängig vom bubbles-Flag. Ein einziger Listener
+  // erwischt damit den Container UND die Box, an die eine fremde Schale den
+  // Scroll abgegeben hat (Vorfahr oder Dokument, siehe `resolveScrollBox`). Hing
+  // er nur am Container, wäre in genau diesen Schalen der Lese-Scroll unsichtbar
+  // und das Spotlight bliebe beim Blättern stehen.
+  document.addEventListener('scroll', onScroll, { capture: true, passive: true, signal });
   container.addEventListener('pointerdown', onPointerActivity, { signal });
   container.addEventListener('pointerup', onPointerActivity, { signal });
   container.addEventListener('mousedown', onGutterMousedown, { signal });

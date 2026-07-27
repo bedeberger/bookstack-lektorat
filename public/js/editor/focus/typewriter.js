@@ -6,7 +6,7 @@
 // Zeile löst dank Caret-Rect-Jitter sonst Mini-Scrolls aus, die den Editor
 // unruhig wirken lassen.
 
-import { TYPEWRITER_THRESHOLD_PX, prefersReducedMotion } from './constants.js';
+import { TYPEWRITER_THRESHOLD_PX } from './constants.js';
 
 export { TYPEWRITER_THRESHOLD_PX };
 
@@ -173,53 +173,82 @@ function scrollFallbackTarget(container) {
   return canScroll(doc) ? doc : null;
 }
 
+// Welche Box scrollt tatsächlich? Normalfall ist der Container selbst; kann er
+// grundsätzlich nicht scrollen, hat eine fremde Schale das Layout umgebogen und
+// der nächste scrollbare Vorfahr bzw. das Dokument übernimmt.
+//
+// `canScroll` ist dafür ein verlässlicher Diskriminator, obwohl es nur den
+// Ist-Zustand misst: die Kopf-/Tail-Puffer auf `.focus-editor__content`
+// (Invariante 9) sind zusammen ~1.5 Bildschirmhöhen, eine Box mit intakter
+// Höhenkette ist damit auch bei leerer Seite scrollbar. Bleibt scrollHeight ===
+// clientHeight, ist die Kette gebrochen — und genau dann greift der Rettungspfad.
+//
+// SSoT für alle Konsumenten: der Typewriter scrollt sie, `installFocusListeners`
+// hängt IntersectionObserver-`root` daran und `onScroll` filtert darauf.
+export function resolveScrollBox(container) {
+  if (!container) return null;
+  if (canScroll(container)) return container;
+  return scrollFallbackTarget(container) || container;
+}
+
+// Scrollt `box` auf eine absolute Position, garantiert ohne Animation, und
+// liefert die tatsächlich gefahrene Strecke.
+//
+// `behavior: 'instant'` ist Pflicht und NICHT `'auto'`: `'auto'` delegiert laut
+// CSSOM-View an die computed `scroll-behavior` des Elements. Eine fremde Schale
+// mit unlayered `scroll-behavior: smooth` im Host-CSS (Bundle-CSS liegt in
+// `@layer components` und verliert dagegen) animierte den Scroll dann — direkt
+// danach steht `scrollTop` noch auf dem alten Wert, die gefahrene Strecke misst
+// 0, es wird keine prog-Marke gesetzt, und das später eintreffende scroll-Event
+// gilt als User-Scroll und reisst das Spotlight auf den Center-Block. Im Web
+// deckt das nur der `prefers-reduced-motion`-Block in layout/base.css ab, den
+// weder die Schalen noch die Test-Harness laden.
+//
+// Der catch-Zweig fängt Engines, die den Enum-Wert `'instant'` nicht kennen —
+// dort wirft schon die Options-Dictionary-Konversion (TypeError).
+function scrollBoxTo(box, top) {
+  const before = box.scrollTop;
+  try { box.scrollTo({ top, behavior: 'instant' }); }
+  catch { box.scrollTop = top; }
+  return box.scrollTop - before;
+}
+
 // Toleranz beim Wiedererkennen des eigenen Scrolls: `scrollTop` ist in Chromium
 // subpixel-genau, ein Rundungsrest darf die Marke nicht entwerten.
 const PROG_SCROLL_EPS = 1;
 
 // Hat dieses `scroll`-Event der Typewriter selbst ausgelöst? Die Marke ist die
-// zuletzt selbst geschriebene Scroll-Position (`ctx.progScrollTop`) und wird bei
-// JEDEM Event verbraucht — Position statt Zähler, damit ein verlorenes oder
-// zusätzliches Event höchstens einen Tick kostet. Ein Zähler bliebe im Fehlerfall
-// dauerhaft desynchron und liesse `onScroll` danach jeden echten User-Scroll
-// verschlucken (Spotlight bleibt beim Blättern stehen).
-export function consumeProgrammaticScroll(container, ctx) {
+// zuletzt selbst geschriebene Scroll-Position **samt der Box, die sie trägt**
+// (`ctx.progScroll = { box, top }`) — im Fallback-Fall scrollt nicht der
+// Container, sondern ein Vorfahr, und das Event feuert dort.
+//
+// Die Marke wird bei JEDEM Event verbraucht, auch wenn sie zu einer anderen Box
+// gehört: Position statt Zähler, damit ein verlorenes oder zusätzliches Event
+// höchstens einen Tick kostet. Ein Zähler bliebe im Fehlerfall dauerhaft
+// desynchron und liesse `onScroll` danach jeden echten User-Scroll verschlucken
+// (Spotlight bleibt beim Blättern stehen).
+export function consumeProgrammaticScroll(box, ctx) {
   if (!ctx) return false;
-  const expected = ctx.progScrollTop;
-  ctx.progScrollTop = null;
-  if (expected == null || !container) return false;
-  return Math.abs(container.scrollTop - expected) <= PROG_SCROLL_EPS;
+  const mark = ctx.progScroll;
+  ctx.progScroll = null;
+  if (!mark || !box || mark.box !== box) return false;
+  return Math.abs(box.scrollTop - mark.top) <= PROG_SCROLL_EPS;
 }
 
 export function typewriterScroll(container, targetRect, ctx, threshold = TYPEWRITER_THRESHOLD_PX, anchorRatio = 0.5) {
   if (!container || !targetRect) return 0;
+  // Geometrie bleibt am Container gemessen — das Delta ist eine Bildschirm-
+  // Strecke und gilt unabhängig davon, welche Box sie danach fährt.
   const delta = computeTypewriterDelta(container.getBoundingClientRect(), targetRect, threshold, anchorRatio, visibleViewportRect());
   if (delta === 0) return 0;
-  const before = container.scrollTop;
-  // prefers-reduced-motion: User hat System-weit angegeben „kein Animation-
-  // Overhead". Zwei-Schritt-Scroll überspringen und direkt den Zielwert
-  // setzen, damit aktiver Absatz trotzdem passt.
-  if (prefersReducedMotion()) container.scrollTop = before + delta;
-  else container.scrollBy({ top: delta, behavior: 'auto' });
-  // `behavior: 'auto'` schreibt scrollTop synchron — die gefahrene Strecke ist
-  // hier bereits messbar. Nur ein Scroll, der die Position wirklich verschoben
-  // hat, feuert später ein scroll-Event; nur der darf eine Marke setzen. Am
-  // Scroll-Anschlag (letzter Absatz) ist der Aufruf ein No-op.
-  const moved = container.scrollTop - before;
-  // Container hat sich nicht bewegt UND kann grundsätzlich nicht scrollen →
-  // fremde Scroll-Box (siehe scrollFallbackTarget). Am regulären Scroll-Anschlag
-  // (Box ist scrollbar, steht nur am Ende) greift der Pfad bewusst nicht.
-  if (moved === 0 && !canScroll(container)) {
-    const fb = scrollFallbackTarget(container);
-    if (fb) {
-      const fbBefore = fb.scrollTop;
-      if (prefersReducedMotion()) fb.scrollTop = fbBefore + delta;
-      else fb.scrollBy({ top: delta, behavior: 'auto' });
-      // Keine Marke: das scroll-Event feuert am Fallback-Ziel, nicht am
-      // Container — `onScroll` hängt aber nur am Container.
-      return fb.scrollTop - fbBefore;
-    }
-  }
-  if (ctx && moved !== 0) ctx.progScrollTop = container.scrollTop;
+  const box = resolveScrollBox(container);
+  if (!box) return 0;
+  // Nur ein Scroll, der die Position wirklich verschoben hat, feuert später ein
+  // scroll-Event; nur der darf eine Marke setzen. Am Scroll-Anschlag (letzter
+  // Absatz) ist der Aufruf ein No-op — und `resolveScrollBox` liefert dort
+  // weiterhin den Container, nicht den Vorfahr: die Box KANN scrollen, sie steht
+  // nur am Ende. Ein Fallback zöge sonst die Seite unter dem Editor weg.
+  const moved = scrollBoxTo(box, box.scrollTop + delta);
+  if (ctx && moved !== 0) ctx.progScroll = { box, top: box.scrollTop };
   return moved;
 }

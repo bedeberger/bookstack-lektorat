@@ -33,7 +33,7 @@ export {
 export {
   TYPEWRITER_THRESHOLD_PX, dynamicTypewriterThreshold,
   getCaretRect, computeTypewriterDelta, typewriterScroll, visibleViewportRect,
-  caretWithinViewport, consumeProgrammaticScroll,
+  caretWithinViewport, consumeProgrammaticScroll, resolveScrollBox,
   normAnchorRatio, publishAnchorRatio, clearAnchorRatio, ANCHOR_CSS_VAR,
 } from './focus/typewriter.js';
 export {

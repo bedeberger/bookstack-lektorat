@@ -47,11 +47,6 @@ export function isFocusToggleChord(e) {
 export const HAS_IO = typeof IntersectionObserver !== 'undefined';
 export const HAS_MO = typeof MutationObserver !== 'undefined';
 
-export function prefersReducedMotion() {
-  try { return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches; }
-  catch { return false; }
-}
-
 export function reportError(tag, err) {
   // Zentraler Error-Sink, damit späteres Telemetry-Hook an einer Stelle eingeklinkt werden kann.
   try { console.error('[focus:' + tag + ']', err); } catch { /* last-resort swallow */ }

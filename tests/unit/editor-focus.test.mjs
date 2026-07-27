@@ -15,10 +15,13 @@ const {
   typewriterScroll,
   caretWithinViewport,
   consumeProgrammaticScroll,
+  resolveScrollBox,
   normAnchorRatio,
   resolveActiveBlock,
   resolveGutterCaretPoint,
 } = await import('../../public/js/editor/focus.js');
+
+const { shouldRecenterOnViewport } = await import('../../public/js/editor/focus/viewport.js');
 
 // --- findBlockFromNode ------------------------------------------------------
 
@@ -298,89 +301,127 @@ test('computeTypewriterDelta: viewportRect fehlt/leer → Box als Bezug', () => 
 // --- typewriterScroll -------------------------------------------------------
 
 // Fake-Scroll-Container mit echter Anschlag-Semantik: scrollTop clamped auf
-// [0, max], scrollBy schreibt synchron (wie behavior:'auto' im Browser).
-// `scrollHeight`/`clientHeight` sind Pflicht: daran erkennt typewriterScroll,
+// [0, max], `scrollTo` schreibt synchron (wie behavior:'instant' im Browser).
+// `scrollHeight`/`clientHeight` sind Pflicht: daran erkennt `resolveScrollBox`,
 // ob die Box überhaupt scrollen KANN — nur eine grundsätzlich nicht scrollbare
-// Box aktiviert den Fallback auf einen scrollbaren Vorfahr.
-function mkScroller({ scrollTop = 0, max = 1000, height = 1000, parentElement = null } = {}) {
+// Box gibt an einen scrollbaren Vorfahr ab.
+// `smooth: true` simuliert eine Schale mit `scroll-behavior: smooth` im
+// Host-CSS: dort verschiebt nur `behavior:'instant'` die Position synchron,
+// `'auto'` (und die Kurzform) delegieren an die CSS-Property und animieren.
+function mkScroller({ scrollTop = 0, max = 1000, height = 1000, parentElement = null, smooth = false } = {}) {
   const el = {
     scrollTop,
     clientHeight: height,
     scrollHeight: height + max,
     parentElement,
     getBoundingClientRect: () => ({ top: 0, bottom: height, height }),
-    scrollBy({ top }) { el.scrollTop = Math.max(0, Math.min(max, el.scrollTop + top)); },
+    scrollTo({ top, behavior }) {
+      if (smooth && behavior !== 'instant') return;    // animiert → noch keine Bewegung
+      el.scrollTop = Math.max(0, Math.min(max, top));
+    },
   };
   return el;
 }
 
-test('typewriterScroll: echter Scroll markiert die eigene Zielposition', () => {
+// --- resolveScrollBox -------------------------------------------------------
+
+test('resolveScrollBox: scrollbarer Container ist selbst die Box', () => {
+  const ancestor = mkScroller({ max: 1000 });
+  const el = mkScroller({ max: 1000, parentElement: ancestor });
+  assert.equal(resolveScrollBox(el), el);
+});
+
+test('resolveScrollBox: nicht scrollbarer Container gibt an den Vorfahr ab', () => {
+  const ancestor = mkScroller({ max: 1000 });
+  const el = mkScroller({ max: 0, parentElement: ancestor });
+  assert.equal(resolveScrollBox(el), ancestor);
+});
+
+test('resolveScrollBox: Container am Anschlag bleibt die Box', () => {
+  // Abgrenzung: die Box KANN scrollen (scrollHeight > clientHeight), sie steht
+  // nur am Ende. Gäbe sie hier ab, zöge der Typewriter die Seite unter dem
+  // Editor weg.
+  const ancestor = mkScroller({ max: 1000 });
+  const el = mkScroller({ scrollTop: 1000, max: 1000, parentElement: ancestor });
+  assert.equal(resolveScrollBox(el), el);
+});
+
+test('resolveScrollBox: kein scrollbarer Vorfahr → Container als letzte Instanz', () => {
+  const el = mkScroller({ max: 0 });
+  assert.equal(resolveScrollBox(el), el);
+});
+
+// --- typewriterScroll -------------------------------------------------------
+
+test('typewriterScroll: echter Scroll markiert Box + eigene Zielposition', () => {
   const el = mkScroller({ scrollTop: 100 });
-  const ctx = { progScrollTop: null };
+  const ctx = { progScroll: null };
   const moved = typewriterScroll(el, { top: 800, bottom: 840, height: 40 }, ctx, 16, 0.5);
   assert.equal(moved, 320);
   assert.equal(el.scrollTop, 420);
-  assert.equal(ctx.progScrollTop, 420);
+  assert.deepEqual(ctx.progScroll, { box: el, top: 420 });
   // Das folgende scroll-Event ist das eigene → wird verschluckt, Marke gelöscht.
   assert.equal(consumeProgrammaticScroll(el, ctx), true);
-  assert.equal(ctx.progScrollTop, null);
+  assert.equal(ctx.progScroll, null);
 });
 
 test('typewriterScroll: am Anschlag geklemmt → keine Marke', () => {
   // Container steht am Maximum; der Caret sitzt unter dem Anker, das Delta ist
-  // also positiv — scrollBy kann aber nichts mehr fahren und feuert darum auch
+  // also positiv — die Box kann aber nichts mehr fahren und feuert darum auch
   // kein scroll-Event. Eine Marke dafür bliebe stehen und liesse onScroll den
   // nächsten echten User-Scroll verschlucken.
   const el = mkScroller({ scrollTop: 1000, max: 1000 });
-  const ctx = { progScrollTop: null };
+  const ctx = { progScroll: null };
   const moved = typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5);
   assert.equal(moved, 0);
   assert.equal(el.scrollTop, 1000);
-  assert.equal(ctx.progScrollTop, null);
+  assert.equal(ctx.progScroll, null);
 });
 
 test('typewriterScroll: teilweise geklemmt → Marke auf der erreichten Position', () => {
   const el = mkScroller({ scrollTop: 950, max: 1000 });
-  const ctx = { progScrollTop: null };
+  const ctx = { progScroll: null };
   const moved = typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5);
   assert.equal(moved, 50);
-  assert.equal(ctx.progScrollTop, 1000);
+  assert.deepEqual(ctx.progScroll, { box: el, top: 1000 });
 });
 
 test('typewriterScroll: Tippen am Scroll-Ende hinterlässt keine Marke', () => {
   // 20 Tastendrücke gegen den Anschlag — danach darf kein User-Scroll als
   // „eigener" gelten.
   const el = mkScroller({ scrollTop: 1000, max: 1000 });
-  const ctx = { progScrollTop: null };
+  const ctx = { progScroll: null };
   for (let i = 0; i < 20; i++) {
     typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5);
   }
-  assert.equal(ctx.progScrollTop, null);
+  assert.equal(ctx.progScroll, null);
   assert.equal(consumeProgrammaticScroll(el, ctx), false);
 });
 
 test('typewriterScroll: Delta unter Schwelle → kein Scroll, keine Marke', () => {
   const el = mkScroller({ scrollTop: 100 });
-  const ctx = { progScrollTop: null };
+  const ctx = { progScroll: null };
   assert.equal(typewriterScroll(el, { top: 495, bottom: 505, height: 10 }, ctx, 16, 0.5), 0);
   assert.equal(el.scrollTop, 100);
-  assert.equal(ctx.progScrollTop, null);
+  assert.equal(ctx.progScroll, null);
 });
 
-test('typewriterScroll: nicht scrollbare Box → scrollbarer Vorfahr übernimmt', () => {
+test('typewriterScroll: nicht scrollbare Box → scrollbarer Vorfahr übernimmt, MIT Marke', () => {
   // Fremde Schale (nativer Client) überschreibt das Layout so, dass nicht das
   // contenteditable die Scroll-Box ist, sondern ein Vorfahr. Ohne Fallback wäre
-  // der Typewriter dort komplett tot.
+  // der Typewriter dort komplett tot. Die Marke muss den Vorfahr benennen: das
+  // scroll-Event feuert dort, und der document-Capture-Listener in listeners.js
+  // fragt sie mit genau dieser Box ab. Ohne Box-Bezug gälte der eigene Scroll
+  // als User-Scroll und risse das Spotlight auf den Center-Block.
   const ancestor = mkScroller({ scrollTop: 100, max: 1000 });
   const el = mkScroller({ max: 0, parentElement: ancestor });   // scrollHeight === clientHeight
-  const ctx = { progScrollTop: null };
+  const ctx = { progScroll: null };
   const moved = typewriterScroll(el, { top: 800, bottom: 840, height: 40 }, ctx, 16, 0.5);
   assert.equal(moved, 320);
   assert.equal(ancestor.scrollTop, 420);
   assert.equal(el.scrollTop, 0);
-  // Der Container feuert kein scroll-Event (gescrollt hat der Vorfahr) — sonst
-  // verschluckt onScroll später einen echten User-Scroll.
-  assert.equal(ctx.progScrollTop, null);
+  assert.deepEqual(ctx.progScroll, { box: ancestor, top: 420 });
+  assert.equal(consumeProgrammaticScroll(ancestor, ctx), true);
 });
 
 test('typewriterScroll: scrollbare Box am Anschlag → kein Vorfahr-Fallback', () => {
@@ -389,34 +430,83 @@ test('typewriterScroll: scrollbare Box am Anschlag → kein Vorfahr-Fallback', (
   // wegziehen.
   const ancestor = mkScroller({ scrollTop: 100, max: 1000 });
   const el = mkScroller({ scrollTop: 1000, max: 1000, parentElement: ancestor });
-  const ctx = { progScrollTop: null };
+  const ctx = { progScroll: null };
   assert.equal(typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5), 0);
   assert.equal(ancestor.scrollTop, 100);
-  assert.equal(ctx.progScrollTop, null);
+  assert.equal(ctx.progScroll, null);
+});
+
+test('typewriterScroll: Host-CSS mit scroll-behavior:smooth bremst nicht', () => {
+  // Fremde Schale setzt unlayered `scroll-behavior: smooth`. Nur
+  // `behavior: 'instant'` verschiebt dann synchron; `'auto'` und die Kurzform
+  // delegieren laut CSSOM-View an die CSS-Property. Animiert stünde scrollTop
+  // direkt danach noch auf dem Altwert → gefahrene Strecke 0 → keine Marke →
+  // das eigene scroll-Event gälte als User-Scroll.
+  const el = mkScroller({ scrollTop: 100, smooth: true });
+  const ctx = { progScroll: null };
+  const moved = typewriterScroll(el, { top: 800, bottom: 840, height: 40 }, ctx, 16, 0.5);
+  assert.equal(moved, 320);
+  assert.equal(el.scrollTop, 420);
+  assert.deepEqual(ctx.progScroll, { box: el, top: 420 });
 });
 
 // --- consumeProgrammaticScroll ----------------------------------------------
 
 test('consumeProgrammaticScroll: User-Scroll wird nicht verschluckt', () => {
   const el = mkScroller({ scrollTop: 420 });
-  const ctx = { progScrollTop: 420 };
+  const ctx = { progScroll: { box: el, top: 420 } };
   el.scrollTop = 700;                      // User rollt weg
   assert.equal(consumeProgrammaticScroll(el, ctx), false);
-  assert.equal(ctx.progScrollTop, null);
+  assert.equal(ctx.progScroll, null);
 });
 
 test('consumeProgrammaticScroll: Subpixel-Rest gilt als eigener Scroll', () => {
   const el = mkScroller({ scrollTop: 420.4 });
-  assert.equal(consumeProgrammaticScroll(el, { progScrollTop: 420 }), true);
+  assert.equal(consumeProgrammaticScroll(el, { progScroll: { box: el, top: 420 } }), true);
 });
 
 test('consumeProgrammaticScroll: Marke wird immer verbraucht (kein Leak)', () => {
   // Kernunterschied zum früheren Zähler: ein verlorenes/zusätzliches Event kostet
   // höchstens einen Tick. Zweites Event ohne neuen prog-Scroll ist User-Scroll.
   const el = mkScroller({ scrollTop: 420 });
-  const ctx = { progScrollTop: 420 };
+  const ctx = { progScroll: { box: el, top: 420 } };
   assert.equal(consumeProgrammaticScroll(el, ctx), true);
   assert.equal(consumeProgrammaticScroll(el, ctx), false);
+});
+
+test('consumeProgrammaticScroll: Marke einer fremden Box verschluckt nichts', () => {
+  // Position allein reicht als Kriterium nicht: Container und Vorfahr können
+  // zufällig auf demselben scrollTop stehen. Ohne Box-Vergleich verschluckte der
+  // Container-Scroll die Marke des Vorfahren (und umgekehrt).
+  const ancestor = mkScroller({ scrollTop: 420 });
+  const el = mkScroller({ scrollTop: 420, parentElement: ancestor });
+  const ctx = { progScroll: { box: ancestor, top: 420 } };
+  assert.equal(consumeProgrammaticScroll(el, ctx), false);
+});
+
+// --- shouldRecenterOnViewport -----------------------------------------------
+
+test('shouldRecenterOnViewport: Höhenwechsel beim Schreiben recentert', () => {
+  assert.equal(shouldRecenterOnViewport({ h: 800, top: 0 }, { h: 400, top: 0 }, true), true);
+});
+
+test('shouldRecenterOnViewport: reiner Versatz recentert ebenfalls', () => {
+  // Der Anker ist `offsetTop + height × ratio` — Android Chrome schiebt den
+  // sichtbaren Ausschnitt bei Tastatur/URL-Leiste auch ohne Höhenwechsel nach
+  // unten. Ohne diesen Zweig driftet die Schreibzeile vom Anker weg.
+  assert.equal(shouldRecenterOnViewport({ h: 800, top: 0 }, { h: 800, top: 120 }, true), true);
+});
+
+test('shouldRecenterOnViewport: Sub-Pixel-Rauschen recentert nicht', () => {
+  assert.equal(shouldRecenterOnViewport({ h: 800, top: 0 }, { h: 800.4, top: 0.6 }, true), false);
+});
+
+test('shouldRecenterOnViewport: ohne Schreibfokus nie', () => {
+  assert.equal(shouldRecenterOnViewport({ h: 800, top: 0 }, { h: 400, top: 120 }, false), false);
+});
+
+test('shouldRecenterOnViewport: erster Tick (Mount) recentert nicht', () => {
+  assert.equal(shouldRecenterOnViewport(null, { h: 800, top: 0 }, true), false);
 });
 
 // --- normAnchorRatio --------------------------------------------------------

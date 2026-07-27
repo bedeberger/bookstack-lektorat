@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+  <meta charset="UTF-8">
+  <title>Focus Shell-Host Harness</title>
+  <!-- Die FEINDLICHE Variante von standalone-harness.html: dieselbe Schale
+       (mountStandaloneFocus + Bridge-Stub, kein Alpine), aber mit Host-CSS, das
+       die Annahmen des Editors bricht — genau so, wie es macOS-/Android-Client
+       tun dürfen (docs/clients.md: „Host-CSS schlägt Bundle-CSS").
+
+       Zwei Brüche, beide bewusst:
+         1. Der Scroll wandert vom contenteditable auf einen Vorfahr
+            (`#shell-scroll`). Der Typewriter muss dorthin ausweichen UND der
+            Lese-Scroll muss weiter das Spotlight verschieben.
+         2. `scroll-behavior: smooth`. Programmatische Scrolls animieren dann,
+            wenn sie nicht explizit `behavior: 'instant'` verlangen — die
+            gefahrene Strecke misst direkt danach 0 und die prog-Scroll-Marke
+            bliebe aus.
+
+       Das reguläre focus-harness.html deckt genau das NICHT ab: es lädt die
+       Bundle-CSS-Dateien und damit die heile Konstellation. -->
+  <link rel="stylesheet" href="/public/css/tokens.css">
+  <link rel="stylesheet" href="/public/css/editor/focus/focus-mode.css">
+  <style>
+    /* ── „Host-CSS" der Schale ──────────────────────────────────────────────
+       BEWUSST UNLAYERED: schlägt jede Regel aus focus-mode.css
+       (`@layer components`), unabhängig von Spezifität. Der Editor kann sich
+       dagegen nicht per CSS wehren — nur im JS. */
+    body { margin: 0; font: 16px/1.6 system-ui, sans-serif; }
+    html { scroll-behavior: smooth; }
+
+    /* Der Scroller der Schale. */
+    #shell-scroll {
+      height: 100vh;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+
+    /* Overlay + contenteditable verlieren ihre Scroll-/Höhen-Rolle: beide
+       wachsen jetzt mit dem Inhalt, gescrollt wird ausschliesslich oben. */
+    .focus-editor.is-active {
+      position: static;
+      height: auto;
+      min-height: 0;
+    }
+    .focus-editor__content {
+      overflow-y: visible;
+      flex: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="shell-scroll">
+    <div id="mount"></div>
+  </div>
+
+  <script type="module">
+    import { mountStandaloneFocus } from '/public/js/editor/focus/standalone.js';
+
+    // 60 Absätze, damit der Schalen-Scroller weit über die Höhe hinausgeht.
+    let html = '';
+    for (let i = 0; i < 60; i++) {
+      html += `<p>Absatz ${i}: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>`;
+    }
+
+    const saveLog = [];
+    const bridge = {
+      granularity: 'paragraph',
+      loadPage: async () => ({ id: 7, name: 'Schalen-Seite', html }),
+      savePage: async (p) => { saveLog.push({ id: p.id, html: p.html }); return { updated_at: '2026-01-01T00:00:00.000Z' }; },
+    };
+    window.__saveLog = saveLog;
+
+    window.__standalone = await mountStandaloneFocus({ mount: document.getElementById('mount'), bridge, autosaveMs: 150 });
+    window.shellReady = true;
+  </script>
+</body>
+</html>

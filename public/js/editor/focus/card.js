@@ -100,8 +100,12 @@ export const focusCardMethods = {
     if (!container) throw new Error('focus: no scroll container');
 
     // Der Fokusmodus ist ein fixed Overlay; ein mitgeschleppter Dokument-Scroll
-    // würde darunter stehenbleiben und beim Exit sichtbar.
-    window.scrollTo(0, 0);
+    // würde darunter stehenbleiben und beim Exit sichtbar. `behavior: 'instant'`
+    // statt der Kurzform: eine fremde Schale mit `scroll-behavior: smooth` im
+    // Host-CSS animierte den Sprung sonst quer durch den Editor-Eintritt (die
+    // Kurzform und `behavior: 'auto'` delegieren beide an die CSS-Property).
+    try { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); }
+    catch { window.scrollTo(0, 0); }
 
     const ctx = installFocusListeners({ ctrl: this, container });
     this._focusListeners = ctx;
