@@ -389,12 +389,12 @@ test('Enter in <p> splittet sauber in zwei <p> (Standardfall)', async ({ page })
 });
 
 test('Shift+Enter erzeugt <br> im selben <p> (kein neuer Absatz, kein <div>)', async ({ page }) => {
-  // Gegenstück zum insertParagraph-Test: Shift+Enter löst insertLineBreak aus.
-  // Der onInput-Handler in card.js behandelt insertLineBreak wie
-  // insertParagraph (synchrone Block-Markierung, kein Dim-Flash), darf aber
-  // KEINEN neuen <p> erzeugen — der Soft-Break bleibt als <br> im selben
-  // Absatz. Bisher war nur der Output-Cleaner (collapseEmptyBlocks) auf <br>
-  // getestet, nicht der Eingabepfad im Fokus-Editor.
+  // Gegenstück zum insertParagraph-Test: Shift+Enter geht durch insertSoftBreak.
+  // Der onInput-Handler in card.js behandelt den Soft-Break wie insertParagraph
+  // (synchrone Block-Markierung, kein Dim-Flash), darf aber KEINEN neuen <p>
+  // erzeugen — der Soft-Break bleibt als <br> im selben Absatz. Bisher war nur
+  // der Output-Cleaner (collapseEmptyBlocks) auf <br> getestet, nicht der
+  // Eingabepfad im Fokus-Editor.
   await page.evaluate(() => window.harness.startEdit());
   await enter(page);
 
@@ -431,6 +431,123 @@ test('Shift+Enter erzeugt <br> im selben <p> (kein neuer Absatz, kein <div>)', a
     return active === p3;
   });
   expect(activeIsP3).toBe(true);
+
+  // Der Umbruch ist ein <br>-ELEMENT, kein rohes `\n`. Unter der pre-wrap-Regel
+  // auf den Schreibblöcken (Invariante 11c) sieht ein `\n` im Fokus wie ein
+  // Umbruch aus, kollabiert aber in Leseansicht, Share-Reader und Exporten zum
+  // Leerzeichen — der Umbruch wäre nach dem Speichern still weg. Diese
+  // Assertion ist der Stolperdraht, falls jemand insertSoftBreak wieder gegen
+  // den Browser-Default tauscht.
+  const newlines = await page.evaluate(() =>
+    (document.querySelectorAll('#editor-card .focus-editor__content > p')[3].textContent.match(/\n/g) || []).length);
+  expect(newlines).toBe(0);
+});
+
+test('Shift+Enter am Blockende: sichtbare neue Zeile, <br> statt \\n', async ({ page }) => {
+  // Am Blockende ist `insertHTML('<br>')` ein No-Op — insertSoftBreak fällt dort
+  // auf den manuellen Zweig zurück und setzt <br> plus Platzhalter-<br>, weil ein
+  // einzelnes <br> am Blockende keine sichtbare Leerzeile erzeugt (gemessen:
+  // Blockhöhe wächst erst beim Paar). Genau der Handgriff beim Verse-Schreiben.
+  await page.evaluate(() => window.harness.startEdit());
+  await enter(page);
+
+  const before = await page.locator(`${EDITOR} > p`).count();
+
+  const heightBefore = await page.evaluate(() => {
+    const p = document.querySelectorAll('#editor-card .focus-editor__content > p')[3];
+    const t = p.firstChild;
+    const range = document.createRange();
+    range.setStart(t, t.nodeValue.length);
+    range.collapse(true);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+    return p.getBoundingClientRect().height;
+  });
+
+  await page.keyboard.press('Shift+Enter');
+  await page.waitForTimeout(50);
+
+  const after = await page.evaluate(() => {
+    const p = document.querySelectorAll('#editor-card .focus-editor__content > p')[3];
+    return {
+      height: p.getBoundingClientRect().height,
+      br: p.querySelectorAll('br').length,
+      newlines: (p.textContent.match(/\n/g) || []).length,
+      activeIsP3: p.classList.contains('focus-paragraph-active'),
+    };
+  });
+
+  // Kein Absatz-Split, kein <div>.
+  expect(await page.locator(`${EDITOR} > p`).count()).toBe(before);
+  expect(await page.locator(`${EDITOR} > div`).count()).toBe(0);
+  // Sichtbare neue Zeile — der eigentliche Zweck des Handgriffs.
+  expect(after.height).toBeGreaterThan(heightBefore);
+  expect(after.br).toBeGreaterThanOrEqual(1);
+  // Persistiert als <br>, nicht als `\n`.
+  expect(after.newlines).toBe(0);
+  // Markierung im selben Task repariert (Invariante 15b) — der manuelle Zweig
+  // reicht dafür ein synthetisches `input` nach.
+  expect(after.activeIsP3).toBe(true);
+});
+
+test('Zweites Shift+Enter direkt hintereinander stapelt keine <br>', async ({ page }) => {
+  // brLeftOfCaret-Dedup: ein zweiter <br> direkt hinter dem ersten würde beim
+  // Save von collapseEmptyBlocks wieder eingedampft — der User sähe zwei
+  // Umbrüche, von denen nach dem Reload nur einer überlebt.
+  await page.evaluate(() => window.harness.startEdit());
+  await enter(page);
+
+  await page.evaluate(() => {
+    const p = document.querySelectorAll('#editor-card .focus-editor__content > p')[3];
+    const range = document.createRange();
+    range.setStart(p.firstChild, 10);
+    range.collapse(true);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+  });
+
+  await page.keyboard.press('Shift+Enter');
+  await page.waitForTimeout(50);
+  const once = await page.evaluate(() =>
+    document.querySelectorAll('#editor-card .focus-editor__content > p')[3].querySelectorAll('br').length);
+
+  await page.keyboard.press('Shift+Enter');
+  await page.waitForTimeout(50);
+  const twice = await page.evaluate(() =>
+    document.querySelectorAll('#editor-card .focus-editor__content > p')[3].querySelectorAll('br').length);
+
+  expect(twice).toBe(once);
+});
+
+test('Shift+Enter ersetzt eine Auswahl durch den Umbruch', async ({ page }) => {
+  // Nicht-kollabierte Auswahl: erst löschen (eigener Undo-Eintrag), dann den
+  // Umbruch setzen — sonst bliebe der markierte Text stehen.
+  await page.evaluate(() => window.harness.startEdit());
+  await enter(page);
+
+  const before = await page.locator(`${EDITOR} > p`).count();
+  const selected = await page.evaluate(() => {
+    const p = document.querySelectorAll('#editor-card .focus-editor__content > p')[3];
+    const t = p.firstChild;
+    const range = document.createRange();
+    range.setStart(t, 5);
+    range.setEnd(t, 15);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+    return t.nodeValue.slice(5, 15);
+  });
+
+  await page.keyboard.press('Shift+Enter');
+  await page.waitForTimeout(50);
+
+  const after = await page.evaluate(() => {
+    const p = document.querySelectorAll('#editor-card .focus-editor__content > p')[3];
+    return { text: p.textContent, br: p.querySelectorAll('br').length };
+  });
+
+  expect(after.text).not.toContain(selected);
+  expect(after.br).toBeGreaterThanOrEqual(1);
+  expect(await page.locator(`${EDITOR} > p`).count()).toBe(before);
 });
 
 test('Enter im Fokus-Mode zentriert auf den neuen Absatz (Typewriter-Scroll)', async ({ page }) => {

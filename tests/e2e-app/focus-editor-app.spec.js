@@ -527,3 +527,78 @@ test('Exit raeumt Overlay + Chrome ab', async ({ page }) => {
   expect(state.marks, 'keine Restmarkierungen').toBe(0);
   guard.assertClean('Exit');
 });
+
+test('Leerschlag an der Umbruchkante: Wort bleibt stehen, kein &nbsp;', async ({ page }) => {
+  // Der Bug: unter `white-space: normal` schreibt Blink fuer einen Leerschlag,
+  // der am Zeilenende kollabieren wuerde, ein `&nbsp;` in den Text und wandelt
+  // es beim naechsten Zeichen zurueck ("whitespace rebalancing"). Ein `&nbsp;`
+  // ist umbruchfest — passt Wort + `&nbsp;` nicht mehr in die Zeile, faellt das
+  // ganze Wort eine Zeile runter und springt beim naechsten Zeichen zurueck.
+  // Dagegen steht die pre-wrap-Regel auf den Schreibbloecken (Invariante 11c):
+  // ein Leerschlag am Zeilenende haengt dann ueber den Rand hinaus, statt das
+  // Wort mitzureissen.
+  //
+  // Deterministisch gemacht, weil das Symptom sonst positionsabhaengig ist: die
+  // Zeile wird per Layout-Messung exakt bis an die Kante gefuellt (letztes Wort
+  // passt gerade noch), dann faellt EIN Leerschlag. Der darf die Blockhoehe
+  // nicht veraendern — ein Leerschlag allein braucht nie eine neue Zeile.
+  // Erst das darauf folgende echte Zeichen darf umbrechen.
+  //
+  // Mutationsgeprueft: `white-space: normal !important` auf die Bloecke
+  // injiziert (unlayered schlaegt @layer) → Hoehe springt 81 → 122 beim blossen
+  // Leerschlag und nbsp=1, beide Assertions rot.
+  //
+  // Diese Schicht, nicht das Harness: die Zeilenbreite haengt an der echten
+  // Spaltenbreite (`padding-inline`-Formel, Invariante 11a) und an der echten
+  // Schriftmetrik — im Minimal-CSS des Harness ist die Kante eine andere.
+  const guard = attachConsoleGuard(page);
+  await enterFocus(page);
+  await seedParagraphs(page, 12);
+
+  // Absatz so fuellen, dass das letzte Wort gerade noch auf die Zeile passt.
+  const fitted = await page.evaluate((sel) => {
+    const p = document.querySelector(sel).querySelectorAll('p')[4];
+    const base = 'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda my ny xi omikron pi rho sigma tau ypsilon phi chi psi omega ';
+    p.textContent = base;
+    const oneLine = p.getBoundingClientRect().height;
+    let word = '';
+    for (let i = 0; i < 80; i++) {
+      p.textContent = base + word + 'x';
+      if (p.getBoundingClientRect().height > oneLine) break;
+      word += 'x';
+    }
+    p.textContent = base + word;
+    // Caret ans Textende.
+    const t = p.firstChild;
+    const r = document.createRange();
+    r.setStart(t, t.nodeValue.length);
+    r.collapse(true);
+    const s = getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    return { height: p.getBoundingClientRect().height, wordLen: word.length };
+  }, FOCUS);
+
+  expect(fitted.wordLen, 'Zeile liess sich nicht bis an die Kante fuellen').toBeGreaterThan(0);
+  await page.waitForTimeout(120);
+
+  const read = () => page.evaluate((sel) => {
+    const p = document.querySelector(sel).querySelectorAll('p')[4];
+    return {
+      height: p.getBoundingClientRect().height,
+      nbsp: (p.textContent.match(/ /g) || []).length,
+    };
+  }, FOCUS);
+
+  await page.keyboard.type(' ');
+  const afterSpace = await read();
+  await page.keyboard.type('y');
+  const afterChar = await read();
+
+  expect(afterSpace.nbsp, 'Blink hat den Leerschlag zu &nbsp; umgeschrieben').toBe(0);
+  expect(afterSpace.height, 'blosser Leerschlag hat das Wort eine Zeile runtergerissen')
+    .toBeCloseTo(fitted.height, 0);
+  // Gegenprobe: das echte Zeichen darf und soll umbrechen.
+  expect(afterChar.height, 'Zeichen nach der Kante bricht nicht um').toBeGreaterThan(fitted.height);
+  guard.assertClean('Umbruchkante');
+});

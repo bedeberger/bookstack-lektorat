@@ -19,7 +19,7 @@ Beliebiges Buch, eine Seite mit **mindestens 30 Absätzen** (kurze Seiten verste
 genau die Tail-Puffer-Fehler). Fokusmodus über den Button in der Seiten-Kopfzeile
 bzw. Cmd/Ctrl+Shift+E.
 
-## Die zehn Griffe
+## Die elf Griffe
 
 | # | Handgriff | Erwartung |
 |---|-----------|-----------|
@@ -33,10 +33,11 @@ bzw. Cmd/Ctrl+Shift+E.
 | 8 | Granularität in den Einstellungen umschalten (Absatz ↔ Satz) | Umschaltung sofort, ohne Exit/Re-Entry, Markierung korrekt |
 | 9 | Escape (bzw. Exit-Button) | Speichert, Overlay weg, zurück in die Leseansicht, Kennzahlen aktualisiert |
 | 10 | Wieder betreten, Fenster schmal ziehen (< 500 px) | Schreiblinie sitzt weiter auf der Mitte, kein horizontaler Overflow |
+| 11 | Kurz vor der Umbruchkante weiterschreiben (Wörter mit Leerschlag), danach Shift+Enter mitten im Absatz **und** am Absatzende; Escape, Seite erneut öffnen | Das letzte Wort bleibt beim Leerschlag auf seiner Zeile (fällt nicht ab und springt zurück). Shift+Enter erzeugt an beiden Stellen eine sichtbare neue Zeile, die nach dem erneuten Öffnen noch da ist |
 
 Zusätzlich bei Änderungen an Save/Draft/Exit:
 
-- **11** — Tippen, dann Netzwerk in den DevTools offline schalten, Escape drücken:
+- **12** — Tippen, dann Netzwerk in den DevTools offline schalten, Escape drücken:
   User bleibt im Edit-Modus, Draft ist erhalten (kein stiller Verlust).
 
 Bei Änderungen, die Mobile/Tastatur berühren (`viewport.js`, `--focus-vh`,
@@ -51,7 +52,7 @@ npm run test:focus     # Harness-Suite + App-Suite (echtes CSS)
 
 Grün ist die **Untergrenze**, nicht der Beweis: die App-Suite deckt Höhenkette,
 Schreiblinie, erste/letzte Zeile, Tipp-Recenter, Spotlight-bei-Scroll und Exit-Cleanup
-ab. Punkt 6 ist im Harness gegated; von 7, 8 und 11 jeweils nur die eine Hälfte
+ab. Punkt 6 ist im Harness gegated, Punkt 11 in beiden Suiten; von 7, 8 und 12 jeweils nur die eine Hälfte
 (Doppelklick / Klassen-Tausch / Save-Reject-Stub), und **Punkt 10 gar nicht** —
 die Aufschlüsselung steht in [focus-editor.md](focus-editor.md#tests).
 

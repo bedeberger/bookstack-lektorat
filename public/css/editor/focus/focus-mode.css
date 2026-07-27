@@ -398,6 +398,35 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
   text-indent: 0;
 }
 
+/* Leerschläge nicht kollabieren lassen (Invariante 11c). Unter `normal` schreibt
+   Blink für einen Leerschlag, der am Zeilenende kollabieren würde, ein `&nbsp;`
+   in den Text und wandelt es beim nächsten Zeichen zurück ("whitespace
+   rebalancing"). Ein `&nbsp;` ist umbruchfest: passt Wort + `&nbsp;` nicht mehr
+   in die Zeile, fällt das ganze Wort eine Zeile runter und springt beim nächsten
+   Zeichen zurück — ein Zucken bei jedem Leerschlag an der Umbruchkante. Unter
+   `pre-wrap` hängt der Leerschlag stattdessen über den Zeilenrand hinaus und das
+   Wort bleibt stehen. Gemessen: ein einzelner Leerschlag an der Kante erhöht die
+   Blockhöhe unter `normal` um eine Zeile, unter `pre-wrap` gar nicht.
+
+   PRO BLOCK, nie auf dem Container: das gespeicherte Seiten-HTML trennt die
+   Blöcke mit `\n`-Textknoten, die Kinder des Containers sind — mit `pre-wrap`
+   auf `.focus-editor__content` würde jede dieser Trennungen als Leerzeile
+   rendern. Damit ist dies die Ausnahme zur Container-Konvention von Invariante
+   11b, und keine Verletzung: `white-space` ist das Kurzschreiben für
+   `white-space-collapse` + `text-wrap-mode`; es setzt `text-wrap-mode` auf den
+   ohnehin geltenden Wert `wrap` und lässt das vererbte `text-wrap-style` in
+   Ruhe — der Container-Guard gegen `pretty`/`balance` gilt weiter für alle
+   Blöcke.
+
+   `pre` fehlt bewusst in der Liste: dort regelt `white-space: inherit` weiter
+   unten. GEKOPPELT an den Soft-Break-Handler (focus/listeners.js): unter
+   `pre-wrap` schreibt Chromiums `insertLineBreak` ein rohes `\n` statt `<br>` —
+   das kollabiert in jeder anderen Ansicht zum Leerzeichen. Fällt diese Regel,
+   fällt auch der Handler; und umgekehrt. */
+.focus-editor__content :is(p, h1, h2, h3, h4, h5, h6, blockquote, li) {
+  white-space: pre-wrap;
+}
+
 
 /* Bold/Italic im Fokus-Modus sichtbar lassen — Ctrl+B/Ctrl+I sind als
    Shortcut explizit dokumentiert. <u> bleibt geplättet, weil Underline mit
@@ -473,7 +502,11 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
   background: transparent !important;
   text-align: inherit !important;
   font-family: inherit !important;
-  white-space: normal !important;
+  /* `pre-wrap`, nicht `normal`: der Selektor greift auch auf Block-Elementen
+     (z.B. `<p style="text-align:center">` aus dem Import). Mit `normal` hätte
+     genau dieser Absatz das nbsp-Rebalancing und damit das Wort-Zucken zurück
+     (Invariante 11c). */
+  white-space: pre-wrap !important;
 }
 /* font-weight / font-style absichtlich NICHT geplättet — execCommand('bold')
    in Chrome mit styleWithCSS=true schreibt inline-styles statt <b>; sonst

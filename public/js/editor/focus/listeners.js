@@ -19,6 +19,7 @@ import { makeCursorHide } from './cursor-hide.js';
 import { makeViewportSync } from './viewport.js';
 import { editorHost } from '../shared/editor-host.js';
 import { bindInlineFormattingShortcuts } from '../shared/shortcuts.js';
+import { insertSoftBreak } from '../shared/soft-break.js';
 
 function makeCtx(container) {
   const abort = new AbortController();
@@ -277,6 +278,29 @@ export function installFocusListeners({ ctrl, container }) {
     }
   };
 
+  // Shift+Enter = weicher Umbruch, hier selbst gesetzt statt dem Browser
+  // überlassen. Grund ist die pre-wrap-Regel auf den Schreibblöcken (Invariante
+  // 11c): unter ihr schreibt Chromiums Default ein rohes `\n` statt eines <br>,
+  // das ausserhalb des Fokusmodus zum Leerzeichen kollabiert — der Umbruch wäre
+  // nach dem Speichern still weg.
+  //
+  // Am Container, nicht am Window: der Handler muss VOR dem delegierten
+  // Keydown-Dispatcher der Toolbar-Karte laufen (document-Level, Bubble-Phase),
+  // dessen `_kbSoftBreak` sonst zusätzlich `insertLineBreak` absetzen würde.
+  // `stopPropagation` erledigt das. Zugleich deckt der Container-Listener die
+  // Standalone-Shell der nativen Clients ab, die gar keine Toolbar-Karte hat —
+  // dort galt bisher der blosse Browser-Default.
+  const onSoftBreak = (e) => {
+    if (!isActive()) return;
+    if (e.key !== 'Enter' || !e.shiftKey) return;
+    // Während einer IME-Composition nichts abfangen: Enter schliesst dort die
+    // Kandidatenauswahl ab und darf den Editor nicht erreichen.
+    if (e.isComposing || ctx.composing) return;
+    e.preventDefault();
+    e.stopPropagation();
+    insertSoftBreak(container);
+  };
+
   const onPointerMove = () => { if (isActive()) showCursor(); };
 
   // Klick in die leere Seitenfläche der Schreibspalte. Das Target ist genau dann
@@ -335,6 +359,7 @@ export function installFocusListeners({ ctrl, container }) {
 
   document.addEventListener('selectionchange', onSelection, { signal });
   container.addEventListener('input', onInput, { signal });
+  container.addEventListener('keydown', onSoftBreak, { signal });
   container.addEventListener('compositionstart', onCompositionStart, { signal });
   container.addEventListener('compositionend', onCompositionEnd, { signal });
   // Scroll-Events bubbeln nicht — der Listener hängt darum am `document` in der
