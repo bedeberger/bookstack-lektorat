@@ -18,7 +18,8 @@ globalThis.document = window.document;
 globalThis.NodeFilter = window.NodeFilter || { SHOW_TEXT: 4 };
 
 const {
-  findSentenceAtCaret, clearAllFocusMarks, blockMarksIntact, repairBlockMarks,
+  findSentenceAtCaret, findSentenceRanges,
+  clearAllFocusMarks, blockMarksIntact, repairBlockMarks,
 } = await import('../../public/js/editor/focus.js');
 
 function blockWith(html) {
@@ -172,4 +173,38 @@ test('clearAllFocusMarks: erhält fremde Klassen', () => {
 
 test('clearAllFocusMarks: null-Container → kein Wurf', () => {
   assert.doesNotThrow(() => clearAllFocusMarks(null));
+});
+
+// Der Exit-Pfad ruft `clearAllFocusMarks()` ohne Argument: der Focus-Container
+// ist da schon ausgeblendet, dieselben Klassen können im zurückgespiegelten
+// Normal-Container hängen. Ohne Dokument-Default bliebe die Leiche stehen.
+test('clearAllFocusMarks: ohne Argument räumt dokumentweit ab', () => {
+  const ed = window.document.getElementById('ed');
+  ed.innerHTML = '<p class="focus-paragraph-active">a</p><p class="focus-paragraph-near">b</p>';
+  clearAllFocusMarks();
+  assert.equal(window.document.querySelectorAll(
+    '.focus-paragraph-active, .focus-paragraph-near').length, 0);
+});
+
+// --- Satz-Locale ------------------------------------------------------------
+
+// Die Locale kommt aus dem editor-host (`contentLocale`) und muss bis in den
+// Segmenter durchschlagen — ein englisches Buch darf nicht mit deutschen
+// Abkürzungsregeln segmentiert werden. Der Memo-Key enthält sie deshalb
+// ebenfalls, sonst lieferte ein Locale-Wechsel den alten Schnitt zurück.
+test('findSentenceRanges: Memo unterscheidet Locales', () => {
+  const text = 'Erster Satz. Zweiter Satz.';
+  const de = findSentenceRanges(text, 'de');
+  const en = findSentenceRanges(text, 'en');
+  assert.ok(de.length > 0);
+  assert.notEqual(de, en, 'zweites Locale darf nicht den de-Memo-Treffer liefern');
+  assert.deepEqual(findSentenceRanges(text, 'en'), en, 'gleiches Locale → Memo-Treffer');
+});
+
+test('findSentenceAtCaret: reicht die Locale an die Segmentierung durch', () => {
+  const block = blockWith('<p>Erster Satz. Zweiter Satz.</p>');
+  const node = block.firstChild;
+  const info = findSentenceAtCaret(block, caretSel(node, 20), 'en');
+  assert.ok(info, 'Satz muss gefunden werden');
+  assert.ok(info.sentence[0] > 0, 'Caret sitzt im zweiten Satz');
 });

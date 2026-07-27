@@ -70,10 +70,12 @@
       _focusState: 'idle',
       _focusGen: 0,
       _focusListeners: null,
-      _focusVisibleBlocks: null,
       _focusRaf: null,
+      _focusAutoAddedP: null,
       // Root-gespiegelte Felder (sub-methods greifen via window.__app)
       focusActive: false,
+      focusGranularity: 'paragraph',
+      contentLocale: 'de',
       editMode: true,
       showEditorCard: true,
       checkDone: false,

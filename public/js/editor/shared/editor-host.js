@@ -13,7 +13,8 @@
 // Vertrag (vom Editor-Kern konsumiert — Spiegel der Felder, die die SPA-Root und
 // die Test-Harness in tests/fixtures/focus-harness.html bereitstellen):
 //   Lesefelder:  editMode, showEditorCard, focusActive, editDirty, editSaving,
-//                focusGranularity, typewriterAnchor, currentPage{ id }, renderedPageHtml,
+//                focusGranularity, typewriterAnchor, contentLocale,
+//                currentPage{ id }, renderedPageHtml,
 //                originalHtml, _figurLookupOpen, _synonymMenuOpen,
 //                _synonymPickerOpen, _editCounterCtx
 //   Schreibfelder: focusActive, editMode, editSaving, saveOffline, lastDraftSavedAt

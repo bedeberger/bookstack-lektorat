@@ -15,11 +15,14 @@
 //   granularity?: string                        — initiale Fokus-Granularität
 //   typewriterAnchor?: number                   — vertikaler Typewriter-Anker
 //                                                 0–1 (0.5 Mitte, 0.33 oberes Drittel)
+//   locale?: string                             — Sprache des Textes ('de'/'en'),
+//                                                 speist die Satz-Segmentierung
 //
 // Der Bridge-Host erfüllt denselben Vertrag wie window.__app (siehe
 // shared/editor-host.js): die Engine merkt keinen Unterschied.
 
 import { focusCardMethods } from './card.js';
+import { normGranularity } from './chrome.js';
 import { setEditorHost } from '../shared/editor-host.js';
 import { isNoChange } from '../shared/save-pipeline.js';
 import { stripLektoratMarks } from '../shared/html-clean.js';
@@ -55,10 +58,12 @@ function makeHost(bridge, scheduleSave) {
     focusActive: false,        // enterFocusMode setzt true
     editDirty: false,
     editSaving: false,
-    focusGranularity: bridge.granularity || 'paragraph',
+    focusGranularity: normGranularity(bridge.granularity),
     // Vertikaler Typewriter-Anker (0–1). Roh durchgereicht — typewriter.js
     // normalisiert ungültige/fehlende Werte auf 0.5 (Mitte).
     typewriterAnchor: bridge.typewriterAnchor,
+    // Roh durchgereicht — sentence.js fällt ohne Wert auf DEFAULT_LOCALE zurück.
+    contentLocale: bridge.locale,
     currentPage: null,
     renderedPageHtml: null,
     originalHtml: null,
@@ -96,8 +101,9 @@ function makeHost(bridge, scheduleSave) {
         this.editSaving = false;
       }
     },
-    // cancelEdit bewusst NICHT gesetzt → Escape fällt im onKey-Handler auf
-    // exitFocusMode (im Controller standalone-überschrieben: speichern, bleiben).
+    // cancelEdit (Verwerfen) existiert standalone nicht: es gibt keinen
+    // Lese-Modus zum Zurückfallen. Escape läuft über exitFocusMode, das der
+    // Controller unten überschreibt (speichern, im Editor bleiben).
     startEdit() {},
     _flushDraftSaveNow() {},
     _stopAutosave() {},
@@ -145,7 +151,6 @@ export async function mountStandaloneFocus({ mount, bridge, autosaveMs = DEFAULT
     _focusState: 'idle',
     _focusGen: 0,
     _focusListeners: null,
-    _focusVisibleBlocks: null,
     _focusRaf: null,
     _focusAutoAddedP: null,
     $nextTick: (fn) => Promise.resolve().then(fn),
@@ -194,17 +199,9 @@ export async function mountStandaloneFocus({ mount, bridge, autosaveMs = DEFAULT
     // Fokus-Overlay neu rechnen. Kapselt den internen `_focusUpdateActive`-
     // Aufruf, damit die Schale nicht auf Engine-Interna zugreifen muss.
     setGranularity(g) {
-      const valid = ['paragraph', 'sentence', 'window-3', 'typewriter-only'];
-      const gran = valid.indexOf(g) >= 0 ? g : 'paragraph';
+      const gran = normGranularity(g);
       host.focusGranularity = gran;
-      const focusEl = mount.querySelector('.focus-editor');
-      if (focusEl) {
-        focusEl.classList.remove(
-          'focus-mode--paragraph', 'focus-mode--sentence',
-          'focus-mode--window-3', 'focus-mode--typewriter-only');
-        focusEl.classList.add('focus-mode--' + gran);
-      }
-      try { controller._focusUpdateActive(false); } catch (_) {}
+      try { controller.applyFocusGranularity(gran, mount); } catch (_) {}
     },
     // Sofort speichern (z.B. vor Fenster-Schliessen / Seitenwechsel).
     async save() {

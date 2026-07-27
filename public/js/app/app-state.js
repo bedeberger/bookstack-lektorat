@@ -36,6 +36,12 @@ const shellState = () => ({
   // (0 = oben, 0.5 = Mitte, 0.33 = oberes Drittel). Default 0.5 = unveraendertes
   // Verhalten. Primaer fuer fremde Schalen (macOS-Client via Bridge) gedacht.
   typewriterAnchor: 0.5,
+  // Locale des bearbeiteten Textes — Teil des editor-host-Vertrags. Speist die
+  // Satz-Segmentierung im Focus-Sentence-Modus (Intl.Segmenter kennt pro
+  // Sprache eigene Abkuerzungsregeln). Spiegelt `$store.shell.uiLocale`, weil
+  // der Editor-Kern nicht auf Alpine-Stores zugreifen darf (Invariante 0) und
+  // der Standalone-Host (Mac-Client) das Feld selbst setzt.
+  contentLocale: 'de',
   _abortCtrl: null,
   // Email → Display-Name-Map fuer Revision-Listen, Tree-Toasts, Konflikt-Hinweise.
   // Lazy gefuellt via `/me/users-light` beim ersten Zugriff in `userDisplayName`.
@@ -156,9 +162,10 @@ const pageState = () => ({
 });
 
 // Notebook-Slice: Lifecycle des Normal-Editors (Edit-Mode, Autosave, Draft,
-// Zoom, Fullscreen, Konflikt). Pendant zu `focusState`. Diese Felder gehören
-// strikt dem Notebook-Editor — Focus pflegt `focusActive/focusDirty/focusSaving`
-// in `focusState`.
+// Zoom, Fullscreen, Konflikt). Der Focus-Editor läuft auf derselben
+// Save-Pipeline und liest/schreibt dieselben Felder (`editMode`, `editDirty`,
+// `editSaving`) — `focusState` hält nur, was ausschliesslich den Fokusmodus
+// betrifft.
 const notebookState = () => ({
   editMode: false,
   editDirty: false,
@@ -217,13 +224,11 @@ const notebookState = () => ({
 // lebt in editorFocusCard.
 //
 // `focusActive` ist Single Source of Truth für „Fokusmodus an" (Templates, CSS,
-// Body-Class). `focusDirty`/`focusSaving` sind Mode-spezifische Pendants zu
-// `editDirty`/`editSaving` (Plan: Quick-Save-Pfad im Focus läuft eigenständig,
-// ohne den Normal-Editor-Save-State zu kreuzen).
+// Body-Class). Dirty-/Saving-Zustand kommt aus `notebookState` (`editDirty`/
+// `editSaving`) — der Focus-Editor läuft auf der Notebook-Save-Pipeline und
+// braucht keine eigenen Spiegel-Flags.
 const focusState = () => ({
   focusActive: false,
-  focusDirty: false,
-  focusSaving: false,
   focusCountWords: 0,
   focusCountChars: 0,
   focusCountWordsDelta: '±0',

@@ -45,10 +45,14 @@ function computeSentenceRanges(text, locale) {
 // Block (Text unverändert), wird nicht neu segmentiert — der teure Segmenter-
 // Lauf entfällt pro Keystroke im Satz-Modus. Rückgabe read-only (kein Caller
 // mutiert das Array).
+// Fallback, wenn der Host keine Locale liefert (fremde Schale ohne das Feld,
+// Unit-Test). Die App-Default-Sprache.
+export const DEFAULT_LOCALE = 'de';
+
 let _memoText = null;
 let _memoLocale = null;
 let _memoRanges = null;
-export function findSentenceRanges(text, locale = 'de') {
+export function findSentenceRanges(text, locale = DEFAULT_LOCALE) {
   if (!text) return [];
   if (text === _memoText && locale === _memoLocale) return _memoRanges;
   const ranges = computeSentenceRanges(text, locale);
@@ -98,13 +102,13 @@ function caretOffsetInBlock(block, node, offset) {
 }
 
 // Findet die Satz-Range im Block, die den Caret enthält.
-export function findSentenceAtCaret(block, selection) {
+export function findSentenceAtCaret(block, selection, locale = DEFAULT_LOCALE) {
   if (!block || !selection || selection.rangeCount === 0) return null;
   const range = selection.getRangeAt(0);
   if (!block.contains(range.startContainer)) return null;
   const caretPos = caretOffsetInBlock(block, range.startContainer, range.startOffset);
   const text = block.textContent || '';
-  const ranges = findSentenceRanges(text);
+  const ranges = findSentenceRanges(text, locale);
   if (ranges.length === 0) return { sentence: [0, text.length], totalLength: text.length };
   // Halboffenes Intervall [start, end): sitzt der Caret exakt auf einer
   // Satzgrenze, gewinnt der Satz, der dort BEGINNT. Der Segmenter schlägt den
@@ -155,7 +159,7 @@ export function clearSentenceHighlight() {
 }
 
 // Nicht-aktive Sätze im aktiven Block werden via CSS-Custom-Highlight gedimmt.
-export function applySentenceHighlight(block, selection) {
+export function applySentenceHighlight(block, selection, locale = DEFAULT_LOCALE) {
   if (typeof CSS === 'undefined' || !CSS.highlights || typeof Highlight === 'undefined') return;
   clearSentenceHighlight();
   // Abgehängter Block (gerade weggelöscht/gemerged): Ranges darauf wären für den
@@ -164,7 +168,7 @@ export function applySentenceHighlight(block, selection) {
   if (!block || block.isConnected === false) return;
   const text = block.textContent || '';
   let active = null;
-  const info = findSentenceAtCaret(block, selection);
+  const info = findSentenceAtCaret(block, selection, locale);
   if (info) {
     active = info.sentence;
   } else {
@@ -174,7 +178,7 @@ export function applySentenceHighlight(block, selection) {
     // nehmen, damit das Satz-Dimming sichtbar bleibt, statt den ganzen Block
     // voll aufleuchten zu lassen (sonst stünden 3 Grautöne nebeneinander:
     // andere Blöcke gedimmt, zentraler Block voll hell, kein Satz-Spotlight).
-    const sentences = findSentenceRanges(text);
+    const sentences = findSentenceRanges(text, locale);
     if (sentences.length === 0) return;
     active = sentences[0];
   }

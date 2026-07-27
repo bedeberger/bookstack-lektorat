@@ -155,8 +155,18 @@ export function setActiveBlock(container, block) {
 // Idempotent: nur mutieren, wenn sich das near-Set gegenüber dem aktuellen DOM
 // ändert. Beim Tippen im selben Absatz (gleiche Nachbarn) fällt so die sonst
 // unbedingte remove-/re-add-Churn (Style-/Paint-Invalidierung) pro Keystroke weg.
-export function setNearBlocks(container, block, blockSel = BLOCK_SEL) {
-  if (!container) return;
+//
+// `marks` ist ein optionaler Zustandsspeicher (`ctx._marks`), der mitführt, ob
+// aktuell überhaupt near-Marks im Baum hängen. Ist nichts gewünscht UND nichts
+// gesetzt, entfällt der `querySelectorAll` komplett — das ist der Normalfall
+// jedes Ticks in paragraph/sentence/typewriter-only, wo near nie vorkommt.
+// Ohne den Speicher müsste jeder Keystroke den ganzen Baum absuchen, nur um
+// festzustellen, dass es nichts abzuräumen gibt.
+//
+// Rückgabe: ob nach dem Aufruf near-Marks gesetzt sind.
+export function setNearBlocks(container, block, marks = null, blockSel = BLOCK_SEL) {
+  if (!container) return false;
+  if (!block && marks && marks.near === false) return false;
   const sib = (el, dir) => {
     let n = el?.[dir];
     while (n && (n.nodeType !== 1 || !n.matches(blockSel))) n = n[dir];
@@ -169,6 +179,9 @@ export function setNearBlocks(container, block, blockSel = BLOCK_SEL) {
     if (prev && prev !== block) want.add(prev);
     if (next && next !== block) want.add(next);
   }
+  // Der End-Zustand ist exakt `want` — die Schleifen unten stellen ihn nur her.
+  // Deshalb steht das Ergebnis schon vor der Mutation fest.
+  const hasNear = want.size > 0;
   // Stale near-Marks abräumen (alles, was nicht mehr gewünscht ist).
   for (const el of container.querySelectorAll('.focus-paragraph-near')) {
     if (want.has(el)) { want.delete(el); continue; }  // schon korrekt markiert
@@ -177,12 +190,19 @@ export function setNearBlocks(container, block, blockSel = BLOCK_SEL) {
   }
   // Fehlende Marks setzen (in `want` verbliebene = noch nicht markiert).
   for (const el of want) el.classList.add('focus-paragraph-near');
+  if (marks) marks.near = hasNear;
+  return hasNear;
 }
 
 // Räumt sowohl active- als auch near-Klassen + Custom-Highlight ab.
-export function clearAllFocusMarks(container) {
-  if (!container) return;
-  for (const el of container.querySelectorAll('.focus-paragraph-active, .focus-paragraph-near')) {
+//
+// `root` ist per Default das ganze Dokument: der Exit-Pfad räumt auf, wenn der
+// Focus-Container bereits ausgeblendet ist und dieselben Klassen zusätzlich im
+// zurückgespiegelten Normal-Container hängen können. Ein Container-Scope
+// (Aufrufer übergibt ihn explizit) bleibt für gezieltes Aufräumen möglich.
+export function clearAllFocusMarks(root = document) {
+  if (!root) return;
+  for (const el of root.querySelectorAll('.focus-paragraph-active, .focus-paragraph-near')) {
     el.classList.remove('focus-paragraph-active');
     el.classList.remove('focus-paragraph-near');
     if (el.classList.length === 0) el.removeAttribute('class');

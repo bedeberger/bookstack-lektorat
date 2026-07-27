@@ -5,9 +5,11 @@
 // (_focusGen) invalidiert asynchrone Nachzügler (RAFs, die nach einem schnellen
 // exit noch feuern wollen).
 //
-// Hier wohnt nur der Lifecycle. Das Listener-/Observer-Setup liegt in
-// listeners.js, die Recenter-Schritte (Block-Auflösung, Markierung, Typewriter)
-// in recenter.js.
+// Hier wohnt nur der Lifecycle. Die Nachbarn tragen die Einzelschritte:
+//   listeners.js — Listener-/Observer-Setup (wann gerechnet wird)
+//   recenter.js  — die Recenter-Schritte (was gerechnet wird)
+//   chrome.js    — body-/Cardroot-Klassen, Granularität, Anker-Variable
+//   mirror.js    — DOM-Roundtrip Normal ↔ Focus
 //
 // `this` zeigt auf Alpine.data('editorFocusCard'). Root-Zugriff läuft
 // ausschliesslich über `editorHost()` (../shared/editor-host.js) — in der SPA
@@ -16,52 +18,18 @@
 import { reportError } from './constants.js';
 import {
   removeAutoAddedParagraph, jumpToTrailingParagraph, getScrollContainer,
+  clearAllFocusMarks,
 } from './dom-blocks.js';
-import { clearSentenceHighlight } from './sentence.js';
-import { publishAnchorRatio, clearAnchorRatio } from './typewriter.js';
 import {
   resolveActiveBlock, applyBlockMarks, syncSentenceMarks, repairBlockMarks,
   runTypewriter, scrollEntryTargetToAnchor,
 } from './recenter.js';
 import { installFocusListeners } from './listeners.js';
 import { writeFocusSnapshot, clearFocusSnapshot } from './storage.js';
+import { markFocusChrome, unmarkFocusChrome, applyGranularity } from './chrome.js';
+import { mirrorToFocus, mirrorToNormal } from './mirror.js';
 import { editorHost } from '../shared/editor-host.js';
 import { installEditCounter } from '../shared/edit-counter.js';
-
-const GRANULARITY_CLASSES = [
-  'focus-mode--paragraph', 'focus-mode--sentence',
-  'focus-mode--window-3', 'focus-mode--typewriter-only',
-];
-
-// Overlay-Chrome an: body-Klasse, Host-Karte, Granularitäts-Klasse und der
-// Anker als CSS-Variable (Kopf-/Tail-Puffer leiten sich daraus ab — deshalb VOR
-// dem ersten Render des Focus-Containers).
-//
-// `is-active` wird synchron gesetzt, damit `getActiveEditorContainer` im
-// folgenden $nextTick den Focus-Container findet: Alpine's
-// `:class="{'is-active': focusActive}"` flushed erst danach und liesse das
-// Listener-Setup sonst auf den Normal-Container greifen (alle Listener am
-// falschen Element → Typewriter/Highlight/Counter/Cursor-Hide tot).
-function markFocusChrome(granularity, anchorRatio) {
-  document.body.classList.add('focus-mode');
-  document.getElementById('editor-card')?.classList.add('focus-host');
-  publishAnchorRatio(anchorRatio);
-  const el = document.querySelector('.focus-editor');
-  if (!el) return;
-  el.classList.remove(...GRANULARITY_CLASSES);
-  el.classList.add('focus-mode--' + (granularity || 'paragraph'));
-  el.classList.add('is-active');
-}
-
-function unmarkFocusChrome() {
-  document.body.classList.remove('focus-mode');
-  document.getElementById('editor-card')?.classList.remove('focus-host');
-  document.querySelector('.focus-editor')?.classList.remove(
-    'is-active', 'focus-cursor-hidden', ...GRANULARITY_CLASSES);
-  clearAnchorRatio();
-  document.documentElement.style.removeProperty('--focus-vh');
-  document.documentElement.style.removeProperty('--focus-vh-top');
-}
 
 export const focusCardMethods = {
   // Page-View-Direkteinstieg: Edit-Mode hochfahren (falls nicht bereits aktiv)
@@ -99,17 +67,7 @@ export const focusCardMethods = {
       // re-entered hat → abbrechen.
       if (gen !== this._focusGen || this._focusState !== 'entering') return;
       try {
-        // DOM-Roundtrip Normal → Focus: Inhalt aus dem Normal-Container in
-        // den Focus-Container klonen (kein innerHTML — XSS-Trust kommt vom
-        // eigenen contenteditable; cloneNode bleibt strukturidentisch ohne
-        // Re-Parsing). Container-Klassen sind entkoppelt: Normal-Editor nutzt
-        // `.page-content-view--editing`, Focus-Editor `.focus-editor__content`.
-        const normalC = document.querySelector('#editor-card .page-content-view--editing');
-        const focusC = document.querySelector('.focus-editor .focus-editor__content');
-        if (normalC && focusC && focusC !== normalC) {
-          const clones = Array.from(normalC.childNodes).map(n => n.cloneNode(true));
-          focusC.replaceChildren(...clones);
-        }
+        mirrorToFocus();
         // Live-Counter ist Container-gebunden — beim Mode-Wechsel teardown
         // und am neuen aktiven Container (Smart-Switch via shared/active-
         // editor.js) neu installieren. Andernfalls misst der Counter den
@@ -127,6 +85,11 @@ export const focusCardMethods = {
         clearFocusSnapshot();
         app.focusActive = false;
         unmarkFocusChrome();
+        // Counter zurück auf den Normal-Container: er hängt an dieser Stelle am
+        // gerade wieder ausgeblendeten Focus-Container und würde dort dauerhaft
+        // einen unsichtbaren Baum messen (Live-Anzeige im Header friert ein).
+        app._editCounterCtx?.teardown?.();
+        if (app.editMode) installEditCounter(app);
         this._focusState = 'idle';
       }
     });
@@ -142,7 +105,6 @@ export const focusCardMethods = {
 
     const ctx = installFocusListeners({ ctrl: this, container });
     this._focusListeners = ctx;
-    this._focusVisibleBlocks = ctx.visibleBlocks;
 
     // container ist via shared/active-editor.js: bei aktiver Focus-Karte der
     // Focus-Cardroot, sonst der Normal-Editor-Container.
@@ -166,8 +128,17 @@ export const focusCardMethods = {
       clearTimeout(ctx.cursorTimer);
       this._focusListeners = null;
     }
-    this._focusVisibleBlocks = null;
     if (this._focusRaf) { cancelAnimationFrame(this._focusRaf); this._focusRaf = null; }
+  },
+
+  // Granularität live umschalten, ohne exit/enter: Cardroot-Klasse tauschen und
+  // das Overlay neu rechnen. Aufrufer sind der `$watch` der SPA-Karte und
+  // `setGranularity` einer fremden Schale — beide über diesen einen Weg, damit
+  // ein neuer Modus nur an einer Stelle nachgezogen werden muss.
+  applyFocusGranularity(granularity, root = document) {
+    if (this._focusState !== 'active') return;
+    applyGranularity(granularity, root);
+    this._focusUpdateActive(false);
   },
 
   async exitFocusMode() {
@@ -177,84 +148,101 @@ export const focusCardMethods = {
     this._focusState = 'exiting';
     const gen = ++this._focusGen;
 
-    // Auto-Slot vom Focus-Entry abräumen, falls User nichts reingeschrieben
-    // hat. Sonst würde der leere `<p>` als „Änderung" gespeichert und bei jedem
-    // Focus-Open eine Phantom-Revision erzeugen.
-    removeAutoAddedParagraph(this._focusAutoAddedP);
-    this._focusAutoAddedP = null;
+    // `finally` ist Pflicht: bleibt der State auf 'exiting' stehen (weil
+    // irgendein Cleanup-Schritt wirft), sind beide Türen zu — `enterFocusMode`
+    // verlangt 'idle', `exitFocusMode` verlangt 'active'. Das Overlay hinge
+    // samt body-Klasse bis zum Reload fest, ohne Tastatur-Ausweg (die Listener
+    // sind zu dem Zeitpunkt schon abgeräumt).
+    try {
+      // Auto-Slot vom Focus-Entry abräumen, falls User nichts reingeschrieben
+      // hat. Sonst würde der leere `<p>` als „Änderung" gespeichert und bei jedem
+      // Focus-Open eine Phantom-Revision erzeugen.
+      removeAutoAddedParagraph(this._focusAutoAddedP);
+      this._focusAutoAddedP = null;
 
-    // Immer speichern beim Verlassen. UI bleibt optisch bis Save durch,
-    // Event-Handler sind via _focusState='exiting' bereits stumm-geschaltet.
-    // Bei Offline/Fehler bleibt editDirty true + Draft im LocalStorage →
-    // User bleibt im Edit-Modus und kann manuell retten.
-    if (app.editMode && app.editDirty && !app.editSaving) {
-      try { await app.quickSave?.(); }
-      catch (e) { reportError('exitFocusMode:save', e); }
-    }
-    // Race: jemand hat während await enter() gerufen → abbrechen.
-    if (gen !== this._focusGen) return;
+      // Immer speichern beim Verlassen. UI bleibt optisch bis Save durch,
+      // Event-Handler sind via _focusState='exiting' bereits stumm-geschaltet.
+      // Bei Offline/Fehler bleibt editDirty true + Draft im LocalStorage →
+      // User bleibt im Edit-Modus und kann manuell retten.
+      if (app.editMode && app.editDirty && !app.editSaving) {
+        try { await app.quickSave?.(); }
+        catch (e) { reportError('exitFocusMode:save', e); }
+      }
+      // Race-Guard: sollte je ein Pfad entstehen, der während des `await` die
+      // Generation bumpt, gehört das Cleanup dem neueren Aufruf.
+      if (gen !== this._focusGen) return;
 
-    this._focusTeardown();
-    clearFocusSnapshot();
+      this._focusTeardown();
+      clearFocusSnapshot();
 
-    // DOM-Roundtrip Focus → Normal: aktuellen Focus-Inhalt zurück in den
-    // Normal-Container klonen, bevor focusActive=false greift und Alpine den
-    // Focus-Cardroot via x-show ausblendet. Smart-Switch springt mit
-    // `focusActive=false` automatisch zurück auf den Normal-Container.
-    const focusC = document.querySelector('.focus-editor.is-active .focus-editor__content');
-    const normalC = document.querySelector('#editor-card .page-editor-wrap .page-content-view--editing');
-    if (focusC && normalC && focusC !== normalC) {
-      const clones = Array.from(focusC.childNodes).map(n => n.cloneNode(true));
-      normalC.replaceChildren(...clones);
-    }
-    // Counter wechselt zurück auf den Normal-Container.
-    app._editCounterCtx?.teardown?.();
-
-    app.focusActive = false;
-    unmarkFocusChrome();
-
-    // Restklassen defensiv abräumen (document-weit, nicht container-scoped: der
-    // Focus-Container ist zu diesem Zeitpunkt schon ausgeblendet, die Klassen
-    // können auch im Normal-Container-Klon stecken).
-    document.querySelectorAll('.focus-paragraph-active, .focus-paragraph-near')
-      .forEach(el => {
-        el.classList.remove('focus-paragraph-active');
-        el.classList.remove('focus-paragraph-near');
-        if (el.classList.length === 0) el.removeAttribute('class');
-      });
-    clearSentenceHighlight();
-
-    // Nichts Ungespeichertes → zurück in die Ansicht (Save im Fokus impliziert
-    // Ende der Edit-Session; unsaubere Exits behalten den Edit-Modus).
-    if (app.editMode && !app.editDirty) {
-      app._stopAutosave?.();
-      app._uninstallOnlineRetry?.();
+      // DOM-Roundtrip Focus → Normal, bevor focusActive=false greift und Alpine
+      // den Focus-Cardroot via x-show ausblendet. Smart-Switch springt mit
+      // `focusActive=false` automatisch zurück auf den Normal-Container.
+      mirrorToNormal();
+      // Counter wechselt zurück auf den Normal-Container.
       app._editCounterCtx?.teardown?.();
-      app.editMode = false;
-      app.editSaving = false;
-      app.saveOffline = false;
-      app.lastDraftSavedAt = null;
-      app.closeSynonymMenu?.();
-      app.closeSynonymPicker?.();
-      app.closeFigurLookup?.();
-    } else if (app.editMode) {
-      // Unsauberer Exit (Save fehlgeschlagen, editDirty bleibt) — User landet
-      // wieder im Normal-Editor. Counter neu am Normal-Container installieren,
-      // damit Live-Anzeige + Tagesdelta weiterzählen.
-      installEditCounter(app);
-    }
 
-    // View-Mode + Kennzahlen (Wörter/Zeichen/Token) immer auffrischen, egal
-    // ob Save erfolgte, no-op war oder fehlschlug. Garantie: beim Verlassen
-    // des Fokusmodus reflektieren View-Mode-HTML und tokEsts-Badges den
-    // aktuellen originalHtml. Idempotent zu den Save-Pfaden, die diese
-    // Calls ohnehin bereits feuern.
-    if (app.currentPage && app.originalHtml != null) {
-      app._syncPageStatsAfterSave?.(app.currentPage, app.originalHtml);
-    }
-    app.updatePageView?.();
+      app.focusActive = false;
+      unmarkFocusChrome();
 
-    this._focusState = 'idle';
+      // Restklassen defensiv abräumen (document-weit, nicht container-scoped: der
+      // Focus-Container ist zu diesem Zeitpunkt schon ausgeblendet, die Klassen
+      // können auch im Normal-Container-Klon stecken).
+      clearAllFocusMarks();
+
+      // Nichts Ungespeichertes → zurück in die Ansicht (Save im Fokus impliziert
+      // Ende der Edit-Session; unsaubere Exits behalten den Edit-Modus).
+      if (app.editMode && !app.editDirty) {
+        app._stopAutosave?.();
+        app._uninstallOnlineRetry?.();
+        app.editMode = false;
+        app.editSaving = false;
+        app.saveOffline = false;
+        app.lastDraftSavedAt = null;
+        app.closeSynonymMenu?.();
+        app.closeSynonymPicker?.();
+        app.closeFigurLookup?.();
+      } else if (app.editMode) {
+        // Unsauberer Exit (Save fehlgeschlagen, editDirty bleibt) — User landet
+        // wieder im Normal-Editor. Counter neu am Normal-Container installieren,
+        // damit Live-Anzeige + Tagesdelta weiterzählen.
+        installEditCounter(app);
+      }
+
+      // View-Mode + Kennzahlen (Wörter/Zeichen/Token) immer auffrischen, egal
+      // ob Save erfolgte, no-op war oder fehlschlug. Garantie: beim Verlassen
+      // des Fokusmodus reflektieren View-Mode-HTML und tokEsts-Badges den
+      // aktuellen originalHtml. Idempotent zu den Save-Pfaden, die diese
+      // Calls ohnehin bereits feuern.
+      if (app.currentPage && app.originalHtml != null) {
+        app._syncPageStatsAfterSave?.(app.currentPage, app.originalHtml);
+      }
+      app.updatePageView?.();
+    } catch (err) {
+      reportError('exitFocusMode', err);
+    } finally {
+      // Nur die eigene Generation aufräumen — ein zwischenzeitlich gestarteter
+      // Nachfolger besitzt den State dann bereits.
+      if (gen === this._focusGen) {
+        // Zuerst und wurffrei: der State ist das, was den Editor sonst
+        // dauerhaft sperrt.
+        this._focusState = 'idle';
+        // Danach das Sicherheitsnetz für die Sichtbarkeit. Alle vier Schritte
+        // sind idempotent, im Normalfall also No-ops (sie liefen oben bereits).
+        // Ist die Sequenz oben aber vorzeitig ausgestiegen, wäre der User sonst
+        // in einem Overlay gefangen, das keine Listener mehr hat. Reihenfolge
+        // wie oben: spiegeln, solange `.is-active` den Focus-Container noch
+        // findet — erst danach die Flag umlegen.
+        try {
+          mirrorToNormal();
+          this._focusTeardown();
+          app.focusActive = false;
+          unmarkFocusChrome();
+        } catch (err) {
+          reportError('exitFocusMode:cleanup', err);
+        }
+      }
+    }
   },
 
   // Ein Recenter-Tick, gecancelt-gerafft: Burst-Inputs (Paste, Auto-Korrektur,
@@ -298,7 +286,7 @@ export const focusCardMethods = {
         });
 
         if (imeSafe) {
-          if (repairBlockMarks(container, block, granularity)) {
+          if (repairBlockMarks(container, block, granularity, ctx._marks)) {
             syncSentenceMarks({ block, sel, granularity, recompute: true });
             ctx._lastBlock = block;
             ctx._lastGranularity = granularity;
@@ -308,7 +296,7 @@ export const focusCardMethods = {
             || block !== ctx._lastBlock
             || granularity !== ctx._lastGranularity
             || granularity === 'sentence';
-          applyBlockMarks(container, block, granularity);
+          applyBlockMarks(container, block, granularity, ctx._marks);
           syncSentenceMarks({ block, sel, granularity, recompute });
           ctx._lastBlock = block;
           ctx._lastGranularity = granularity;

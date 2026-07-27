@@ -97,6 +97,70 @@ test('setNearBlocks: null-container → no-op', () => {
   setNearBlocks(null, mkBlock());
 });
 
+// --- marks-Zustandsspeicher (Vollscan-Ersparnis ausserhalb von window-3) -----
+
+function mkCountingContainer(allBlocks) {
+  const c = {
+    scans: 0,
+    querySelectorAll: () => {
+      c.scans++;
+      return allBlocks.filter(b => b.classList.contains('focus-paragraph-near'));
+    },
+  };
+  return c;
+}
+
+test('setNearBlocks: marks spiegelt, ob near-Marks gesetzt sind', () => {
+  const prev = mkBlock();
+  const next = mkBlock();
+  const active = mkBlock();
+  active.previousElementSibling = prev;
+  active.nextElementSibling = next;
+  const container = mkContainer([prev, next, active]);
+  const marks = { near: false };
+
+  assert.equal(setNearBlocks(container, active, marks), true);
+  assert.equal(marks.near, true);
+
+  assert.equal(setNearBlocks(container, null, marks), false);
+  assert.equal(marks.near, false);
+});
+
+test('setNearBlocks: kein Block gewünscht + nichts gesetzt → kein Vollscan', () => {
+  const container = mkCountingContainer([]);
+  const marks = { near: false };
+  setNearBlocks(container, null, marks);
+  setNearBlocks(container, null, marks);
+  assert.equal(container.scans, 0, 'darf den Baum gar nicht erst absuchen');
+});
+
+test('setNearBlocks: ohne marks bleibt der Vollscan (Abräum-Garantie)', () => {
+  const container = mkCountingContainer([]);
+  setNearBlocks(container, null);
+  assert.equal(container.scans, 1);
+});
+
+test('setNearBlocks: nach window-3 → einmal noch scannen, dann ruhig', () => {
+  const prev = mkBlock();
+  const active = mkBlock();
+  active.previousElementSibling = prev;
+  const all = [prev, active];
+  const container = mkCountingContainer(all);
+  const marks = { near: false };
+
+  setNearBlocks(container, active, marks);          // window-3: markiert prev
+  assert.equal(prev.classList.contains('focus-paragraph-near'), true);
+
+  const afterMark = container.scans;
+  setNearBlocks(container, null, marks);            // Wechsel auf paragraph
+  assert.equal(prev.classList.contains('focus-paragraph-near'), false);
+  assert.equal(container.scans, afterMark + 1, 'ein Abräum-Scan');
+
+  setNearBlocks(container, null, marks);            // weitere Ticks
+  setNearBlocks(container, null, marks);
+  assert.equal(container.scans, afterMark + 1, 'danach kein Scan mehr');
+});
+
 // --- findSentenceRanges -----------------------------------------------------
 
 test('findSentenceRanges: leerer Text → leeres Array', () => {

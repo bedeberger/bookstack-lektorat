@@ -50,15 +50,18 @@ export function resolveActiveBlock({ container, sel, visibleBlocks, granularity,
 //
 // Einzige Quelle für „welche Klasse bei welcher Granularität": der Recenter-Tick
 // und der synchrone insertParagraph-Pfad im input-Handler rufen dieselbe Funktion.
-export function applyBlockMarks(container, block, granularity) {
+//
+// `marks` (`ctx._marks`) ist der Zustandsspeicher für die near-Marks — siehe
+// setNearBlocks. Optional, damit die Funktion ohne ctx testbar bleibt.
+export function applyBlockMarks(container, block, granularity, marks = null) {
   if (!container) return;
   if (granularity === 'typewriter-only') {
     setActiveBlock(container, null);
-    setNearBlocks(container, null);
+    setNearBlocks(container, null, marks);
     return;
   }
   setActiveBlock(container, block);
-  setNearBlocks(container, granularity === 'window-3' ? block : null);
+  setNearBlocks(container, granularity === 'window-3' ? block : null, marks);
 }
 
 // Ist-Zustand des DOM gegen das Soll prüfen — Grundlage der Repair-Pfade, die
@@ -86,9 +89,9 @@ export function blockMarksIntact(container, block, granularity) {
 // im kaputten Zustand anfasst, ist billig genug für jeden Keystroke und sicher
 // genug für eine laufende Composition (reiner Attribut-Toggle, kein
 // Struktur-Eingriff → das IME-Kandidatenfenster hängt am Caret und bleibt).
-export function repairBlockMarks(container, block, granularity) {
+export function repairBlockMarks(container, block, granularity, marks = null) {
   if (blockMarksIntact(container, block, granularity)) return false;
-  applyBlockMarks(container, block, granularity);
+  applyBlockMarks(container, block, granularity, marks);
   return true;
 }
 
@@ -97,7 +100,10 @@ export function repairBlockMarks(container, block, granularity) {
 // eine Satzgrenze im selben Block überqueren kann).
 export function syncSentenceMarks({ block, sel, granularity, recompute }) {
   if (!recompute) return;
-  if (granularity === 'sentence') applySentenceHighlight(block, sel);
+  // Locale aus dem Host: Intl.Segmenter kennt pro Sprache eigene
+  // Abkürzungsregeln („z. B." vs. „e.g."), sonst würde ein englisches Buch mit
+  // deutschen Satzgrenzen segmentiert.
+  if (granularity === 'sentence') applySentenceHighlight(block, sel, editorHost()?.contentLocale);
   else clearSentenceHighlight();
 }
 

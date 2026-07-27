@@ -11,6 +11,8 @@
 //   - listeners.js   – Listener-/Observer-Setup (ctx-Aufbau) im Fokusmodus
 //   - viewport.js    – --focus-vh/-top + Recenter-Entscheid bei Viewport-Ticks
 //   - cursor-hide.js – Auto-Hide des Mauszeigers
+//   - chrome.js      – body-/Cardroot-Klassen, Granularität, Anker-Variable
+//   - mirror.js      – DOM-Roundtrip Normal ↔ Focus
 //   - trampoline.js  – Root-Methoden (Event-Dispatch an die Sub)
 //   - card.js        – State-Machine in Alpine.data('editorFocusCard')
 // Counter-Logik (fmtSigned/dailyDelta/installEditCounter) lebt in
@@ -38,3 +40,8 @@ export {
   resolveActiveBlock, applyBlockMarks, syncSentenceMarks,
   blockMarksIntact, repairBlockMarks,
 } from './focus/recenter.js';
+export {
+  GRANULARITIES, normGranularity, applyGranularity,
+  markFocusChrome, unmarkFocusChrome,
+} from './focus/chrome.js';
+export { mirrorToFocus, mirrorToNormal } from './focus/mirror.js';

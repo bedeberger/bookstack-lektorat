@@ -6,9 +6,13 @@
 
 import { editorHost } from './editor-host.js';
 
-const NORMAL_SELECTOR = '#editor-card .page-content-view--editing';
+// Exportiert, damit der DOM-Roundtrip des Fokusmodus (focus/mirror.js) dieselben
+// beiden Selektoren benutzt wie der Smart-Switch. Zwei Definitionen desselben
+// Containers wären genau die Drift, die den Roundtrip in einen leeren Klon
+// laufen liesse.
+export const NORMAL_SELECTOR = '#editor-card .page-content-view--editing';
 // `.is-active` filtert den Skeleton-Cardroot (x-show=false, ohne `.is-active`) aus.
-const FOCUS_SELECTOR = '.focus-editor.is-active .focus-editor__content';
+export const FOCUS_SELECTOR = '.focus-editor.is-active .focus-editor__content';
 
 // Liefert das contenteditable des aktiven Editors oder null, wenn kein
 // Editor offen ist. Focus-Container greift nur, wenn er nicht display:none

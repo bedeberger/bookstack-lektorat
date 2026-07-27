@@ -117,6 +117,7 @@ export const appInitMethods = {
     try {
       await configureI18n(fallbackLocale);
       this.$store.shell.uiLocale = fallbackLocale;
+      this.contentLocale = fallbackLocale;
       document.documentElement.setAttribute('lang', fallbackLocale);
       await this._loadEssentialPartials();
       this._initSidebarResize();
@@ -143,6 +144,7 @@ export const appInitMethods = {
         await configureI18n(locale);
         this.$store.shell.uiLocale = locale;
       }
+      this.contentLocale = locale;
       document.documentElement.setAttribute('lang', `${locale}-${region}`);
       if (cfg.claudeModel) this.$store.config.claudeModel = cfg.claudeModel;
       if (cfg.claudeMaxTokens) this.$store.config.claudeMaxTokens = cfg.claudeMaxTokens;

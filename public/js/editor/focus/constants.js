@@ -33,6 +33,17 @@ export const CURSOR_KEEP_SEL = '.lt-popover, .synonym-menu, .synonym-picker, .fi
 // Zeilenwechsel". 16 dient als Fallback, falls computed style nicht greifbar.
 export const TYPEWRITER_THRESHOLD_PX = 16;
 
+// Der Toggle-Chord des Fokusmodus, Cmd/Ctrl+Shift+E. Zwei Handler hören darauf:
+// der Body-Listener im Lese-/Edit-Modus (trampoline.js#handleFocusHotkey) und
+// der Window-Listener innerhalb des Fokusmodus (listeners.js#onKey). Eine
+// gemeinsame Definition, damit die beiden nicht auseinanderdriften und der
+// Modus per Tastatur nur noch in eine Richtung erreichbar wäre.
+// `code` statt `key`: auf nicht-QWERTZ-Layouts (und mit Shift) liefert `key`
+// nicht zuverlässig 'E'.
+export function isFocusToggleChord(e) {
+  return !!e && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.code === 'KeyE';
+}
+
 export const HAS_IO = typeof IntersectionObserver !== 'undefined';
 export const HAS_MO = typeof MutationObserver !== 'undefined';
 

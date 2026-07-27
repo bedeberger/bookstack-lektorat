@@ -10,7 +10,7 @@
 import {
   BLOCK_TAGS, BLOCK_SEL,
   POINTER_GRACE_MS, POINTER_GRACE_TOUCH_MS,
-  HAS_IO, HAS_MO,
+  HAS_IO, HAS_MO, isFocusToggleChord,
 } from './constants.js';
 import { findBlockFromNode } from './dom-blocks.js';
 import { applyBlockMarks, repairBlockMarks } from './recenter.js';
@@ -42,6 +42,10 @@ function makeCtx(container) {
     // _lastGranularity invalidiert bei Live-Mode-Switch.
     _lastBlock: null,
     _lastGranularity: null,
+    // Hängen aktuell near-Marks im Baum? Erlaubt setNearBlocks, den Vollscan zu
+    // überspringen, solange keine gesetzt sind und keine gewünscht werden —
+    // also in jedem Tick ausserhalb von window-3.
+    _marks: { near: false },
     _twCache: { block: null, value: null },  // cachedTypewriterThreshold
     _lastViewportH: null,   // letzte sichtbare Viewport-Höhe (Tastatur-Erkennung)
   };
@@ -145,7 +149,7 @@ export function installFocusListeners({ ctrl, container }) {
     // entscheidet der reguläre Tick mit `_lastBlock`-Schutz.
     if (!block) return;
     const granularity = editorHost()?.focusGranularity || 'paragraph';
-    if (repairBlockMarks(container, block, granularity)) ctx._lastBlock = block;
+    if (repairBlockMarks(container, block, granularity, ctx._marks)) ctx._lastBlock = block;
   };
 
   // Input fängt, was selectionchange nicht abdeckt: undo/redo ohne Caret-Move,
@@ -185,24 +189,32 @@ export function installFocusListeners({ ctrl, container }) {
   // null-Tick-Schutz im Recenter die Markierung fest.
   const onBlur = () => {
     if (!isActive()) return;
-    applyBlockMarks(container, null, editorHost()?.focusGranularity || 'paragraph');
+    applyBlockMarks(container, null, editorHost()?.focusGranularity || 'paragraph', ctx._marks);
     ctx._lastBlock = null;
   };
   const onFocus = () => {
     if (isActive()) ctrl._focusUpdateActive(true);
   };
 
+  // Beide Verlassen-Wege — Escape und der Toggle-Chord — münden in
+  // `exitFocusMode`, also in „speichern und zurück".
+  //
+  // Why: Escape ist im ablenkungsfreien Vollbild die intuitivste Verlassen-Taste.
+  // Würde sie bei ungespeichertem Inhalt auf `cancelEdit` (Verwerfen-Dialog)
+  // umbiegen, hätten die zwei Tasten gegensätzliche Ausgänge — und die
+  // naheliegendste wäre die einzige, die Text wegwerfen kann. Verwerfen gehört
+  // dem expliziten Abbrechen-Knopf.
   const onKey = (e) => {
     if (!isActive()) return;
     const app = editorHost();
     if (e.key === 'Escape') {
+      // Offene Popover haben Vorrang: Escape schliesst erst sie.
       if (app?._synonymMenuOpen || app?._synonymPickerOpen) return;
       if (app?._figurLookupOpen) { app.closeFigurLookup?.(); return; }
       if (app?.editSaving) return;   // während Save-Request kein Exit
       e.preventDefault();
-      if (app?.editMode && app?.editDirty && app?.cancelEdit) app.cancelEdit();
-      else ctrl.exitFocusMode();
-    } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.code === 'KeyE') {
+      ctrl.exitFocusMode();
+    } else if (isFocusToggleChord(e)) {
       e.preventDefault();
       ctrl.exitFocusMode();
     } else if ((e.key === 'l' || e.key === 'L') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {

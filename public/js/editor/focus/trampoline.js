@@ -1,4 +1,5 @@
 import { EVT } from '../../events.js';
+import { isFocusToggleChord } from './constants.js';
 // Root-Trampoline: dispatcht Events an Alpine.data('editorFocusCard').
 // Root hält `focusActive` als sichtbare Flag (CSS, body-Class, Template-Checks)
 // und die Live-Counter `focusCountWords`/`focusCountChars`, die der Header im
@@ -27,10 +28,7 @@ export const focusMethods = {
   // damit der Fokusmodus auch aus dem Lesemodus heraus einschaltbar ist.
   // Cmd+Shift+F ist für die BookStack-Volltextsuche reserviert.
   handleFocusHotkey(event) {
-    const isCmdShiftE = (event.ctrlKey || event.metaKey)
-      && event.shiftKey && !event.altKey
-      && event.code === 'KeyE';
-    if (!isCmdShiftE) return;
+    if (!isFocusToggleChord(event)) return;
     if (!this.showEditorCard) return;
     event.preventDefault();
     if (this.focusActive) {

@@ -278,18 +278,33 @@ test('Cmd+Shift+E Hotkey routet zustandsabhängig (focus → exit, edit → ente
   // Der Hotkey-Handler lebt in editor/focus/trampoline.js (Root) bzw.
   // editor/focus/listeners.js (Sub-internes onKey). Wir prüfen nur die
   // Routing-Logik (keys exit/enter/start).
-  const combined = ['public/js/editor/focus/card.js',
-    'public/js/editor/focus/listeners.js',
-    'public/js/editor/focus/trampoline.js']
-    .map(f => (fs.existsSync(path.join(repo, f)) ? read(f) : '')).join('\n');
+  const constantsSrc  = read('public/js/editor/focus/constants.js');
+  const listenersSrc  = read('public/js/editor/focus/listeners.js');
+  const trampolineSrc = read('public/js/editor/focus/trampoline.js');
+
+  // Der Chord selbst ist SSoT in constants.js (`isFocusToggleChord`) — beide
+  // Handler konsumieren ihn, statt die Tastenprüfung zu duplizieren. Sonst
+  // driften sie auseinander und der Modus ist per Tastatur nur noch in eine
+  // Richtung erreichbar.
+  assert.match(constantsSrc, /export function isFocusToggleChord/,
+    'Chord-Prädikat muss in constants.js leben');
+  assert.match(constantsSrc, /e\.code === ['"]KeyE['"]/,
+    'Chord prüft e.code === KeyE (layout-unabhängig)');
+  for (const [name, src] of [['listeners.js', listenersSrc], ['trampoline.js', trampolineSrc]]) {
+    assert.match(src, /isFocusToggleChord/, `${name} muss das geteilte Prädikat nutzen`);
+    assert.doesNotMatch(src, /['"]KeyE['"]/, `${name} darf den Chord nicht selbst buchstabieren`);
+  }
+
   // Sub-internes Cmd+Shift+E im Focus-Container feuert exit — der onKey-Handler
   // läuft nur im `active`-State (Guard am Handler-Kopf), der enter-Weg gehört
   // dem Root-Hotkey. Der prüft `focusActive` (→ exit) und `editMode` (→ enter),
   // sonst dispatcht er `editor:focus:enter-from-pageview`.
-  assert.match(combined, /_focusState\s*!==\s*['"]active['"][\s\S]*?KeyE[\s\S]*?exitFocusMode/,
-    'Hotkey: active-State ruft exitFocusMode');
-  assert.match(combined, /editMode[\s\S]*?enterFocusMode/,
-    'Hotkey: edit-Branch ruft enterFocusMode');
-  assert.match(combined, /editor:focus:enter-from-pageview|EVT\.EDITOR_FOCUS_ENTER_FROM_PAGEVIEW/,
-    'Hotkey: Page-View-Branch dispatcht editor:focus:enter-from-pageview');
+  assert.match(listenersSrc, /isFocusToggleChord\(e\)[\s\S]{0,120}?exitFocusMode/,
+    'Hotkey im Fokus ruft exitFocusMode');
+  assert.match(trampolineSrc, /focusActive[\s\S]*?EDITOR_FOCUS_EXIT/,
+    'Root-Hotkey: focusActive-Branch dispatcht exit');
+  assert.match(trampolineSrc, /editMode[\s\S]*?EDITOR_FOCUS_ENTER\b/,
+    'Root-Hotkey: edit-Branch dispatcht enter');
+  assert.match(trampolineSrc, /EVT\.EDITOR_FOCUS_ENTER_FROM_PAGEVIEW/,
+    'Root-Hotkey: Page-View-Branch dispatcht enter-from-pageview');
 });

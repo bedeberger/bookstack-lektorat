@@ -303,7 +303,7 @@ test('Cleanup: exit nullt State, entfernt Klassen + CSS-Vars', async ({ page }) 
 
   const state = await page.evaluate(() => ({
     listeners: window.harness._focusListeners,
-    visible:   window.harness._focusVisibleBlocks,
+    visible:   window.harness._focusListeners?.visibleBlocks ?? null,
     raf:       window.harness._focusRaf,
   }));
   expect(state.listeners).toBeNull();
@@ -561,7 +561,7 @@ test('5× Toggle leakt keine Observer/Listeners', async ({ page }) => {
   // Nach dem letzten Exit: alles sauber zurück.
   const state = await page.evaluate(() => ({
     listeners: window.harness._focusListeners,
-    visible:   window.harness._focusVisibleBlocks,
+    visible:   window.harness._focusListeners?.visibleBlocks ?? null,
   }));
   expect(state.listeners).toBeNull();
   expect(state.visible).toBeNull();
@@ -667,7 +667,7 @@ test('Scroll (preferCenter) ohne auffindbaren Center-Block verliert Hervorhebung
   await page.evaluate((sel) => {
     const el = document.querySelector(sel);
     el.querySelectorAll('p').forEach(p => { p.style.display = 'none'; });
-    window.harness._focusVisibleBlocks.clear();
+    window.harness._focusListeners?.visibleBlocks.clear();
     if (window.harness._focusListeners) window.harness._focusListeners.progScrollTop = null;
     el.dispatchEvent(new Event('scroll'));
   }, EDITOR);
@@ -1072,14 +1072,14 @@ test('MO: removedNodes → visibleBlocks räumt Ref ab (kein Leak)', async ({ pa
   await page.evaluate((sel) => { document.querySelector(sel).scrollTop = 0; }, EDITOR);
   await page.waitForTimeout(100);
 
-  const before = await page.evaluate(() => window.harness._focusVisibleBlocks.size);
+  const before = await page.evaluate(() => window.harness._focusListeners.visibleBlocks.size);
   expect(before).toBeGreaterThan(0);
 
   // Ersten sichtbaren Absatz entfernen → MO-removedNodes feuert → IO.unobserve
   // + visibleBlocks.delete. Ohne diesen Pfad behielte Set die Referenz bis
   // exit – bei langen Edit-Sessions relevant.
   const removed = await page.evaluate(() => {
-    const first = [...window.harness._focusVisibleBlocks][0];
+    const first = [...window.harness._focusListeners.visibleBlocks][0];
     const txt = first.textContent;
     first.remove();
     return txt;
@@ -1087,7 +1087,7 @@ test('MO: removedNodes → visibleBlocks räumt Ref ab (kein Leak)', async ({ pa
   await page.waitForTimeout(100);
 
   const stillThere = await page.evaluate((needle) => {
-    for (const b of window.harness._focusVisibleBlocks) {
+    for (const b of window.harness._focusListeners.visibleBlocks) {
       if (b.textContent === needle) return true;
     }
     return false;
@@ -1136,4 +1136,110 @@ test('prefers-reduced-motion: typewriter-scroll via scrollTop-assign, nicht scro
     if (window.__origMM) window.matchMedia = window.__origMM;
     HTMLElement.prototype.scrollBy = window.__origScrollBy;
   });
+});
+
+// --- Verlassen-Semantik + State-Machine-Robustheit --------------------------
+
+test('Escape speichert und verlässt, auch bei ungespeichertem Inhalt', async ({ page }) => {
+  // Escape und Cmd/Ctrl+Shift+E müssen dasselbe tun: speichern und zurück.
+  // Ein Umbiegen auf `cancelEdit` (Verwerfen-Dialog) machte die intuitivste
+  // Verlassen-Taste zur einzigen, die den Text wegwerfen kann (Invariante 16).
+  await enter(page);
+  await page.evaluate(() => {
+    window.harness.editDirty = true;
+    window.__cancelCalls = 0;
+    window.__saveCalls = 0;
+    window.harness.cancelEdit = () => { window.__cancelCalls++; };
+    window.harness.quickSave = async () => {
+      window.__saveCalls++;
+      window.harness.editDirty = false;
+    };
+  });
+
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => window.harness._focusState === 'idle');
+
+  const out = await page.evaluate(() => ({
+    saves: window.__saveCalls,
+    cancels: window.__cancelCalls,
+    focusActive: window.harness.focusActive,
+  }));
+  expect(out.saves).toBe(1);
+  expect(out.cancels).toBe(0);
+  expect(out.focusActive).toBe(false);
+});
+
+test('Wirft ein Cleanup-Schritt im Exit, bleibt der Editor bedienbar', async ({ page, consoleGuard }) => {
+  // Der Exit muss immer in 'idle' enden (Invariante 15): bleibt der State auf
+  // 'exiting', sind beide Türen zu — enterFocusMode verlangt 'idle',
+  // exitFocusMode verlangt 'active', und das Overlay hängt bis zum Reload.
+  consoleGuard.ignore(/\[focus:exitFocusMode\]/);   // Fehler ist der Testgegenstand
+  await enter(page);
+  await page.evaluate(() => {
+    window.harness.updatePageView = () => { throw new Error('boom'); };
+  });
+
+  await page.evaluate(() => window.harness.exitFocusMode());
+  await page.waitForFunction(() => window.harness._focusState === 'idle');
+
+  // Reparieren und beweisen, dass ein erneuter Eintritt wieder funktioniert.
+  await page.evaluate(() => { window.harness.updatePageView = () => {}; });
+  await enter(page);
+  const state = await page.evaluate(() => ({
+    state: window.harness._focusState,
+    listeners: window.harness._focusListeners !== null,
+  }));
+  expect(state.state).toBe('active');
+  expect(state.listeners).toBe(true);
+});
+
+test('Exit räumt body-/Cardroot-Chrome ab, auch wenn ein früher Schritt wirft', async ({ page, consoleGuard }) => {
+  // Wurfstelle bewusst VOR `unmarkFocusChrome`: nur so beweist der Test, dass
+  // das Sicherheitsnetz im `finally` greift und nicht bloss die reguläre
+  // Sequenz durchlief. Sonst bliebe der User in einem sichtbaren Overlay ohne
+  // Listener sitzen.
+  consoleGuard.ignore(/\[focus:exitFocusMode\]/);
+  await enter(page);
+  await page.evaluate(() => {
+    window.harness._editCounterCtx = {
+      teardown() { throw new Error('boom'); },
+    };
+    window.harness.exitFocusMode();
+  });
+  await page.waitForFunction(() => window.harness._focusState === 'idle');
+
+  const chrome = await page.evaluate(() => ({
+    body: document.body.classList.contains('focus-mode'),
+    active: document.querySelector('.focus-editor')?.classList.contains('is-active'),
+    anchor: document.documentElement.style.getPropertyValue('--focus-anchor'),
+    focusActive: window.harness.focusActive,
+    listeners: window.harness._focusListeners,
+  }));
+  expect(chrome.body).toBe(false);
+  expect(chrome.active).toBe(false);
+  expect(chrome.anchor).toBe('');
+  expect(chrome.focusActive).toBe(false);
+  expect(chrome.listeners).toBeNull();
+});
+
+test('Granularitäts-Switch tauscht die Klasse, statt sie zu stapeln', async ({ page }) => {
+  // Eine Instanz der SSoT-Umschaltung (focus/chrome.js#applyGranularity), die
+  // SPA-Karte und Mac-Client teilen.
+  await enter(page);
+  const classes = await page.evaluate(async () => {
+    const seen = [];
+    for (const g of ['sentence', 'window-3', 'typewriter-only', 'paragraph']) {
+      window.harness.focusGranularity = g;
+      window.harness.applyFocusGranularity(g);
+      const el = document.querySelector('.focus-editor');
+      seen.push([...el.classList].filter(c => c.startsWith('focus-mode--')));
+    }
+    return seen;
+  });
+  expect(classes).toEqual([
+    ['focus-mode--sentence'],
+    ['focus-mode--window-3'],
+    ['focus-mode--typewriter-only'],
+    ['focus-mode--paragraph'],
+  ]);
 });

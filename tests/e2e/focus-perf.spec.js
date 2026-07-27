@@ -104,3 +104,74 @@ test('P3: Intl.Segmenter nicht pro Keystroke neu konstruiert', async ({ page }) 
   });
   expect(ctorCalls).toBe(0);
 });
+
+// P4: `.focus-paragraph-near` wird ausserhalb von window-3 gar nicht erst
+// gesucht. Der Recenter ruft `applyBlockMarks` bewusst jeden Tick auf (Defense
+// gegen Ghost-Klassen aus dem Chromium-Split-Bug) — in paragraph/sentence/
+// typewriter-only gibt es aber nie near-Marks, der Vollscan über den ganzen
+// Baum wäre also pro Keystroke reine Verschwendung. `ctx._marks.near` merkt
+// sich, ob überhaupt welche hängen.
+test('P4: kein near-Vollscan pro Keystroke im paragraph-Modus', async ({ page }) => {
+  await enter(page);
+  await placeCaretInParagraph(page, 10);
+  await page.waitForTimeout(80);
+
+  await page.evaluate(() => {
+    window.__nearScans = 0;
+    const orig = Element.prototype.querySelectorAll;
+    window.__origQSA = orig;
+    Element.prototype.querySelectorAll = function (sel) {
+      if (sel === '.focus-paragraph-near') window.__nearScans++;
+      return orig.call(this, sel);
+    };
+  });
+
+  await page.keyboard.type('abcdef');
+  await page.waitForTimeout(200);
+
+  const scans = await page.evaluate(() => {
+    Element.prototype.querySelectorAll = window.__origQSA;
+    return window.__nearScans;
+  });
+  expect(scans).toBe(0);
+});
+
+// Gegenprobe: in window-3 MUSS weiter gescannt werden — sonst blieben die
+// Nachbar-Marks beim Blockwechsel stehen.
+test('P4b: window-3 scannt weiterhin (Nachbar-Marks bleiben korrekt)', async ({ page }) => {
+  await enter(page);
+  await page.evaluate(() => {
+    window.harness.focusGranularity = 'window-3';
+    window.harness.applyFocusGranularity('window-3');
+  });
+  await placeCaretInParagraph(page, 10);
+  await page.waitForTimeout(80);
+
+  await page.evaluate(() => {
+    window.__nearScans = 0;
+    const orig = Element.prototype.querySelectorAll;
+    window.__origQSA = orig;
+    Element.prototype.querySelectorAll = function (sel) {
+      if (sel === '.focus-paragraph-near') window.__nearScans++;
+      return orig.call(this, sel);
+    };
+  });
+
+  await placeCaretInParagraph(page, 20);
+  await page.waitForTimeout(150);
+
+  const out = await page.evaluate(() => {
+    Element.prototype.querySelectorAll = window.__origQSA;
+    const near = [...document.querySelectorAll('.focus-paragraph-near')];
+    const active = document.querySelector('.focus-paragraph-active');
+    return {
+      scans: window.__nearScans,
+      nearCount: near.length,
+      neighbours: near.every(el =>
+        el === active?.previousElementSibling || el === active?.nextElementSibling),
+    };
+  });
+  expect(out.scans).toBeGreaterThan(0);
+  expect(out.nearCount).toBe(2);
+  expect(out.neighbours).toBe(true);
+});

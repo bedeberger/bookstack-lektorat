@@ -2,7 +2,7 @@
 // mit Absatz-Hervorhebung und Typewriter-Scroll.
 //
 // Eigener State: _focusState ('idle'|'entering'|'active'|'exiting'),
-//   _focusGen, _focusListeners, _focusVisibleBlocks, _focusRaf.
+//   _focusGen, _focusListeners, _focusRaf.
 // Root behält: `focusActive` (als sichtbare Flag für Templates, CSS, body-Class,
 //   editor-toolbar/figur-lookup-Checks), `editMode`, `editDirty`, `editSaving`,
 //   `saveOffline`, `lastDraftSavedAt`. Die Sub schreibt `window.__app.focusActive`.
@@ -23,9 +23,10 @@ export function registerEditorFocusCard() {
     _focusState: 'idle',
     _focusGen: 0,
     _focusListeners: null,
-    _focusVisibleBlocks: null,
     _focusRaf: null,
     _focusAbort: null,
+    // Auto-`<p>`-Schreibslot vom Eintritt — Exit räumt ihn ab, falls leer.
+    _focusAutoAddedP: null,
 
     _restoreSnapshot: null,
 
@@ -39,14 +40,9 @@ export function registerEditorFocusCard() {
 
       // Live-Switch: User ändert Granularität in den Settings, während Focus
       // aktiv ist → Cardroot-Class + State sofort umstellen, ohne Exit/Re-Enter.
-      this.$watch(() => window.__app?.focusGranularity, (g) => {
-        if (this._focusState !== 'active') return;
-        const focusEl = document.querySelector('.focus-editor');
-        if (!focusEl) return;
-        focusEl.classList.remove('focus-mode--paragraph', 'focus-mode--sentence', 'focus-mode--window-3', 'focus-mode--typewriter-only');
-        focusEl.classList.add('focus-mode--' + (g || 'paragraph'));
-        this._focusUpdateActive(false);
-      });
+      // Die Umschaltung selbst liegt in focus/chrome.js (SSoT, geteilt mit dem
+      // Standalone-Pfad); hier steht nur der Alpine-Trigger.
+      this.$watch(() => window.__app?.focusGranularity, (g) => this.applyFocusGranularity(g));
 
       // Auto-Restore: Reload (z.B. via Session-Banner-Relogin oder manuelles
       // F5) soll den Fokusmodus wieder einnehmen, wenn die ursprüngliche Seite

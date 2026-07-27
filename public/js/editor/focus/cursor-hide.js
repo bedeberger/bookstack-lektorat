@@ -27,5 +27,7 @@ export function makeCursorHide({ ctx, isActive }) {
     ctx.cursorTimer = setTimeout(armCursorHide, CURSOR_HIDE_MS);
   };
 
-  return { armCursorHide, showCursor };
+  // Nur `showCursor` nach aussen: das Scharfmachen ist ein interner Schritt,
+  // den ausschliesslich `showCursor` und der Popover-Retry anstossen.
+  return { showCursor };
 }
