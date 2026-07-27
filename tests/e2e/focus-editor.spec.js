@@ -1121,6 +1121,49 @@ test('Editor-Focus nach Blur → Recenter (Modal-Zurückkehr-Szenario)', async (
   expect(await page.locator('.focus-paragraph-active').count()).toBeGreaterThan(0);
 });
 
+test('Editor-Focus per KLICK nach Blur → kein Recenter (Pointer-Schonfrist)', async ({ page }) => {
+  // Gegenstück zum Modal-Szenario darüber: kommt der Fokus von einem Klick,
+  // ist die Caret-Position eine absichtliche Wahl des Users und darf nicht auf
+  // den Anker gerissen werden. Der Fall entsteht bei jedem Klick in den Editor
+  // nach einem Ausflug (Sidebar, Topbar, Modal) und beim Gutter-Klick, der
+  // `container.focus()` selbst aufruft.
+  //
+  // Die Schonfrist hing bisher allein am `selectionchange`; `focus` läuft davor
+  // und recenterte bedingungslos. Ob der Sprung passierte, war damit ein
+  // Wettlauf zwischen beiden Events — daher „manchmal".
+  await enter(page);
+
+  // Ausgangslage: Caret weit oben, danach weit nach unten scrollen. Ein
+  // Recenter wäre jetzt eine sichtbare Sprungstrecke zurück nach oben.
+  await placeCaretInParagraph(page, 5);
+  await page.evaluate(() => window.harness._focusUpdateActive(true));
+  await page.waitForTimeout(120);
+
+  await page.evaluate(() => {
+    const el = document.querySelector('#editor-card .focus-editor__content');
+    el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+  });
+  await page.waitForTimeout(50);
+
+  await page.evaluate((sel) => { document.querySelector(sel).scrollTop += 900; }, EDITOR);
+  await page.waitForTimeout(100);
+  const before = await scrollTop(page);
+
+  // Klick: pointerdown setzt die Schonfrist, DANN kommt der Fokus — genau die
+  // Reihenfolge des echten Klicks (pointerdown → focus → selectionchange).
+  await page.evaluate(() => {
+    const el = document.querySelector('#editor-card .focus-editor__content');
+    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    el.dispatchEvent(new FocusEvent('focus', { bubbles: true }));
+  });
+  await page.waitForTimeout(150);
+
+  expect(Math.abs(await scrollTop(page) - before),
+    'Klick-Fokus reisst die Ansicht nicht zum Caret').toBeLessThan(20);
+  // Die Markierung kommt trotzdem zurück — nur gescrollt wird nicht.
+  expect(await page.locator('.focus-paragraph-active').count()).toBeGreaterThan(0);
+});
+
 test('MO: removedNodes → visibleBlocks räumt Ref ab (kein Leak)', async ({ page }) => {
   await enter(page);
   // Erst scrollen, damit IO die sichtbaren Blöcke meldet.

@@ -227,8 +227,19 @@ export function installFocusListeners({ ctrl, container }) {
     applyBlockMarks(container, null, editorHost()?.focusGranularity || 'paragraph', ctx._marks);
     ctx._lastBlock = null;
   };
+  // Fokus zurück im Editor (Modal zu, Tab-Navigation, Gutter-Klick) → Markierung
+  // wieder setzen. Recentert wird dabei nur, wenn der Fokus NICHT von einem
+  // Klick kommt: dieselbe Schonfrist wie im `selectionchange`-Pfad, denn ein
+  // Klick ist eine absichtliche Positionswahl.
+  //
+  // Why: die Schonfrist hing bisher allein am `selectionchange`, das `focus`
+  // aber läuft davor. Ob der Klick die angeklickte Zeile auf den Anker riss, war
+  // damit ein Wettlauf — auf Touch und langsamen Geräten kommt der
+  // `selectionchange` deutlich später (darum POINTER_GRACE_TOUCH_MS), der
+  // Focus-Tick war längst durch. `pointerIntent` wird hier bewusst NICHT
+  // verbraucht: der folgende `selectionchange` braucht es noch.
   const onFocus = () => {
-    if (isActive()) ctrl._focusUpdateActive(true);
+    if (isActive()) ctrl._focusUpdateActive(!ctx.pointerIntent);
   };
 
   // Beide Verlassen-Wege — Escape und der Toggle-Chord — münden in
