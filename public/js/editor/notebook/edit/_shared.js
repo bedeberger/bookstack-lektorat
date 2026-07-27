@@ -19,11 +19,11 @@ import { mountEditorHtml } from '../../shared/mount-html.js';
 import { findBlock } from '../../shared/dom-block.js';
 import { EVT } from '../../../events.js';
 
-// Auto-Save nach BookStack: idle-debounce + max-Cap. Jede Schreibaktion
-// resettet den Idle-Timer; läuft der User durchgehend, greift der Max-Timer.
-// Reduziert Revision-Spam (vorher fester 30-s-Tick → ~120 Revisions/h Tippen).
-export const AUTOSAVE_IDLE_MS = 60000;
-export const AUTOSAVE_MAX_MS = 120000;
+// Auto-Save: idle-debounce + max-Cap. Regel und Werte liegen in
+// editor/shared/autosave.js — geteilt mit dem Bucheditor, damit die beiden
+// Editoren nicht mit unterschiedlichem Rhythmus speichern. Die Timer-Handles
+// bleiben hier am Root-Host (siehe autosave.js in diesem Ordner).
+export { AUTOSAVE_IDLE_MS, AUTOSAVE_MAX_MS } from '../../shared/autosave.js';
 export const DRAFT_DEBOUNCE_MS = 500;
 // stripLektoratMarks / normalizeForCompare / normalizeEditorBlocks /
 // ROOT_BLOCK_TAGS leben in public/js/editor/shared/html-clean.js — dieselbe

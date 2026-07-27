@@ -155,13 +155,17 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
   max-height: none;
   flex: 1 1 auto;
   min-height: 0;
-  /* width:100% Pflicht — in flex-column-Parent kollabiert `margin:0 auto`
-     ohne explizite Breite auf den intrinsischen Inhalts-Wert (Auto-Margin
-     triggert Shrink-Wrap). Leere Seite (`<p><br></p>`) hat intrinsisch w=0,
-     Container schrumpft auf Padding → Caret rendert in 0-px-Spalte. */
+  /* width:100% Pflicht — ohne explizite Breite kollabiert die Box im
+     flex-column-Parent auf den intrinsischen Inhalts-Wert. Leere Seite
+     (`<p><br></p>`) hat intrinsisch w=0, Container schrumpft auf Padding →
+     Caret rendert in 0-px-Spalte.
+     `box-sizing` explizit, nicht auf den globalen `*`-Reset verlassen: die
+     Textspalte wird unten über seitliches Padding zentriert, im content-box-
+     Modell addiert sich das auf die 100% und die Box läuft breiter als das
+     Fenster (horizontaler Overflow). Der Reset lebt in layout/base.css — die
+     laden weder die Test-Harness noch die nativen Client-Schalen. */
+  box-sizing: border-box;
   width: 100%;
-  max-width: 60ch;
-  margin: 0 auto;
   /* Oben/unten Puffer, damit die Schreibzeile über die GANZE Seite auf dem Anker
      ruhen kann — erste und letzte Zeile inklusive (Invariante 9 in
      docs/focus-editor.md).
@@ -179,8 +183,17 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
      zweitletzten Absatz"). */
   padding-top: calc(var(--focus-vh, 100vh) * var(--focus-anchor, 0.5));
   padding-bottom: calc(100vh - var(--focus-vh, 100vh) * var(--focus-anchor, 0.5) + env(safe-area-inset-bottom, 0px));
-  padding-left: max(2rem, env(safe-area-inset-left, 0px));
-  padding-right: max(2rem, env(safe-area-inset-right, 0px));
+  /* Die Textspalte (60ch) wird über das seitliche Padding zentriert, NICHT über
+     `max-width` + `margin:0 auto`: nur so gehört die gesamte Overlay-Breite zur
+     Box — und damit zur Scroll- UND zur Klickfläche. Eine 60ch-breite Box liess
+     die Flächen links/rechts daneben als toten Raum zurück (Klick traf
+     `.focus-editor`, Mausrad fand keinen scrollbaren Vorfahr). Das Umlenken
+     eines Klicks aus dem Seitenpadding auf den Zeilenrand macht der
+     mousedown-Handler in focus/listeners.js (`resolveGutterCaretPoint`).
+     Die Aussenränder bleiben mindestens 2rem (mobil 1.1rem) bzw. so breit wie
+     die Safe-Area es verlangt. */
+  padding-left: max(2rem, env(safe-area-inset-left, 0px), calc((100% - 60ch) / 2));
+  padding-right: max(2rem, env(safe-area-inset-right, 0px), calc((100% - 60ch) / 2));
   background: transparent;
   border: none;
   outline: none;
@@ -225,8 +238,8 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
   .focus-editor__content {
     font-size: var(--font-size-lg);
     line-height: 1.7;
-    padding-left: max(1.1rem, env(safe-area-inset-left, 0px));
-    padding-right: max(1.1rem, env(safe-area-inset-right, 0px));
+    padding-left: max(1.1rem, env(safe-area-inset-left, 0px), calc((100% - 60ch) / 2));
+    padding-right: max(1.1rem, env(safe-area-inset-right, 0px), calc((100% - 60ch) / 2));
   }
   /* Live-Counter im Header braucht Platz, der mobil knapp ist. Ausblenden. */
   .focus-editor__topbar .focus-live-counter { display: none; }
@@ -242,10 +255,11 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
   margin-left: 0;
 }
 
-/* Caret-Sprung beim Klick ins Padding wird via mousedown-Handler in
-   focus/card.js unterdrueckt (target === container → preventDefault).
-   pointer-events bleibt 'auto', sonst targetiert das Mausrad das Padding nicht
-   und Scroll funktioniert nur ueber dem Text. */
+/* Klicks ins Padding behandelt der mousedown-Handler in focus/listeners.js
+   (target === container → immer preventDefault, dann Caret selbst setzen):
+   seitlich neben einer Zeile auf deren Anfang/Ende, im Kopf-/Tail-Puffer gar
+   nicht. pointer-events bleibt 'auto', sonst targetiert das Mausrad das Padding
+   nicht und Scroll funktioniert nur ueber dem Text. */
 
 /* Im Fokus-Modus liegt #editor-card auf --z-overlay (2000). Popovers, die
    nach <body> teleportiert sind (Synonym-Menu/Picker, Figur-Lookup),

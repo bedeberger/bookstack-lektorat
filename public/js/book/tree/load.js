@@ -6,11 +6,41 @@ import { EVT } from '../../events.js';
 // Token-Estimate-Backfill (Server-Push + IntersectionObserver-Lazy).
 // `this` = die Alpine-Komponente.
 
-// Tree-Sort-Invariante: Solo-Seiten (ohne Kapitel) immer vor Kapiteln.
-// Innerhalb der Gruppen nach `priority`.
-export function _sortSoloFirst(a, b) {
-  if (!!a.solo !== !!b.solo) return a.solo ? -1 : 1;
-  return (a.priority ?? 0) - (b.priority ?? 0);
+// Ordnungs-Invariante von nav.tree: flach, aber DEPTH-FIRST — Solo-Seiten
+// zuerst, dann Kapitel in Lese-Reihenfolge, Sub-Kapitel direkt hinter ihrem
+// Parent. Die Sidebar (app.js#filteredTree) filtert nur und rendert in
+// Array-Reihenfolge. Deshalb wird der Tree NIE global nach `priority` sortiert:
+// priority ist die Position INNERHALB des Parents und wuerde Sub-Kapitel aus
+// ihrem Parent herausreissen. Neue Items werden stattdessen an der berechneten
+// Stelle eingefuegt.
+//
+// `afterChapterId` → direkt hinter dieses Kapitel UND seinen kompletten Subtree.
+// `beforeChapterId` → an dessen Position (Fallback, wenn es kein Vorgaenger-
+// Kapitel gibt). Ohne beides → ans Ende (neues Top-Level-Kapitel ist
+// depth-first das letzte Item).
+export function insertChapterItem(tree, item, { afterChapterId = null, beforeChapterId = null } = {}) {
+  const idxOf = (id) => tree.findIndex(
+    i => i.type === 'chapter' && !i.solo && String(i.id) === String(id));
+  if (afterChapterId != null) {
+    const at = idxOf(afterChapterId);
+    if (at >= 0) {
+      const anchorDepth = tree[at].depth || 1;
+      let end = at + 1;
+      while (end < tree.length && (tree[end].depth || 1) > anchorDepth) end++;
+      const next = [...tree];
+      next.splice(end, 0, item);
+      return next;
+    }
+  }
+  if (beforeChapterId != null) {
+    const at = idxOf(beforeChapterId);
+    if (at >= 0) {
+      const next = [...tree];
+      next.splice(at, 0, item);
+      return next;
+    }
+  }
+  return [...tree, item];
 }
 
 export const treeLoadMethods = {
@@ -374,11 +404,16 @@ export const treeLoadMethods = {
         id: created.id,
         name: created.name,
         priority: localPriority,
+        depth: 1,
+        parent_id: null,
+        hasChildren: false,
         open: true,
         solo: false,
         pages: [],
       };
-      this.$store.nav.tree = [...this.$store.nav.tree, chapterItem].sort(_sortSoloFirst);
+      this.$store.nav.tree = insertChapterItem(this.$store.nav.tree, chapterItem, {
+        afterChapterId: afterItem?.id ?? null,
+      });
       if (this._chapterOrderMap) this._chapterOrderMap.set(chapterItem.name, this._chapterOrderMap.size);
       this._persistTreeOpenState();
       return chapterItem;

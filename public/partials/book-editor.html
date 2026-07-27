@@ -75,6 +75,9 @@
     <aside class="book-editor-outline" x-show="outlineOpen" x-cloak>
       <div class="book-editor-outline-title" x-text="$app.t('bookEditor.outline.title')"></div>
       <nav class="book-editor-outline-nav" :aria-label="$app.t('bookEditor.outline.title')">
+        <!-- Kapitel-Knoten und Solo-Bucket tragen dieselbe `pages`-Liste
+             (outlineNodes) — darum EIN Listen-Zweig statt zwei identischer.
+             Solos haben chapterId null und sind damit nie eingeklappt. -->
         <template x-for="node in outlineNodes" :key="node.kind === 'chapter' ? ('c-' + node.chapterId) : ('s-' + (node.pages?.[0]?.pageId || 0))">
           <div class="book-editor-outline-group">
 
@@ -83,33 +86,15 @@
                       class="book-editor-outline-chapter"
                       :class="{ 'book-editor-outline-chapter--collapsed': !!collapsedChapters[node.chapterId] }"
                       @click="toggleChapterCollapse(node.chapterId)">
-                <span class="book-editor-outline-chevron" x-text="collapsedChapters[node.chapterId] ? '›' : '⌄'"></span>
+                <span class="history-chevron" :class="{ open: !collapsedChapters[node.chapterId] }" aria-hidden="true"></span>
                 <span class="book-editor-outline-chapter-name" x-text="node.name"></span>
                 <span class="book-editor-outline-count" x-text="node.pages.length"></span>
               </button>
             </template>
 
-            <template x-if="node.kind === 'chapter' && !collapsedChapters[node.chapterId]">
-              <ul class="book-editor-outline-pages">
-                <template x-for="pg in node.pages" :key="pg.pageId">
-                  <li>
-                    <button type="button"
-                            class="book-editor-outline-page"
-                            :class="{
-                              'book-editor-outline-page--active': visiblePageId === pg.pageId,
-                              ['book-editor-outline-page--' + outlinePageStatus(pg.block)]: !!outlinePageStatus(pg.block),
-                            }"
-                            @click="scrollToBlock(pg.pageId)">
-                      <span class="book-editor-outline-dot" aria-hidden="true"></span>
-                      <span class="book-editor-outline-page-name" x-text="pg.name"></span>
-                    </button>
-                  </li>
-                </template>
-              </ul>
-            </template>
-
-            <template x-if="node.kind === 'solos'">
-              <ul class="book-editor-outline-pages book-editor-outline-pages--solo">
+            <template x-if="!collapsedChapters[node.chapterId]">
+              <ul class="book-editor-outline-pages"
+                  :class="{ 'book-editor-outline-pages--solo': node.kind === 'solos' }">
                 <template x-for="pg in node.pages" :key="pg.pageId">
                   <li>
                     <button type="button"
@@ -155,8 +140,8 @@
             <div class="book-editor-page-header">
               <span class="book-editor-page-name" x-text="block.name"></span>
               <span class="book-editor-page-status"
-                    :class="'book-editor-page-status--' + blockStatusKey(block)"
-                    x-html="blockStatusLine(block)"></span>
+                    :class="'book-editor-page-status--' + blockStatus(block)"
+                    x-text="blockStatusLine(block)"></span>
             </div>
 
             <!-- Body wird imperativ via _mountBlockEl gefüllt; _maybeRehydrate
@@ -172,9 +157,9 @@
                  @click="onStreamCommentClick($event); activateBlock(block)"
                  @keydown="onBlockKeydown(block, $event)"
                  @input="_onBlockInput(block, $event)"
-                 @paste="_onBlockPaste(block, $event)"
-                 @copy="_onBlockCopy(block, $event)"
-                 @cut="_onBlockCut(block, $event)"></div>
+                 @paste="onBlockClipboard(block, $event, 'paste')"
+                 @copy="onBlockClipboard(block, $event, 'copy')"
+                 @cut="onBlockClipboard(block, $event, 'cut')"></div>
 
             <div x-show="block.conflict" x-cloak class="book-editor-conflict">
               <svg class="icon book-editor-conflict__icon" aria-hidden="true"><use href="/icons.svg?v=690#alert-triangle"/></svg>

@@ -28,7 +28,7 @@ globalThis.document = globalThis.document || {
   },
 };
 
-const { buildBlocksFromPages } = await import('../../public/js/cards/book-editor-card.js');
+const { buildBlocksFromPages, applySaveOutcome } = await import('../../public/js/cards/book-editor-card.js');
 
 test('buildBlocksFromPages: leeres Input → leeres Array', () => {
   assert.deepEqual(buildBlocksFromPages([]), []);
@@ -92,4 +92,47 @@ test('buildBlocksFromPages: aufeinanderfolgende Pages im selben Kapitel → NUR 
   const headers = blocks.filter(b => b.kind === 'chapter');
   assert.equal(headers.length, 1);
   assert.equal(headers[0].chapterId, 10);
+});
+
+// ── applySaveOutcome ─────────────────────────────────────────────────────────
+// Übernahme des Save-Ergebnisses auf den Block. Kritisch ist der Dirty-Ausgang:
+// wer während des laufenden PUT weitertippt, darf sein Dirty-Flag nicht
+// verlieren — sonst lehnt _enqueueSave den nachlaufenden Autosave ab
+// (`!block.dirty`) und die getippten Zeichen werden nie geschrieben.
+
+const savedBlock = (html) => ({
+  kind: 'page', pageId: 1, name: 'P',
+  html, originalHtml: '<p>alt</p>', originalUpdatedAt: 'T0',
+  dirty: true, saving: true, saveError: 'vorher', conflict: { remoteUserName: 'x' }, savedAt: null,
+});
+
+test('applySaveOutcome: unveränderter Block → dirty aus, Snapshot übernommen', () => {
+  const block = savedBlock('<p>neu</p>');
+  const stillDirty = applySaveOutcome(block, {
+    snapshot: '<p>neu</p>', savedHtml: '<p>neu</p>', savedUpdatedAt: 'T1',
+  });
+  assert.equal(stillDirty, false);
+  assert.equal(block.dirty, false);
+  assert.equal(block.originalHtml, '<p>neu</p>');
+  assert.equal(block.originalUpdatedAt, 'T1');
+  assert.equal(block.conflict, null);
+  assert.equal(block.saveError, '');
+  assert.ok(block.savedAt > 0);
+});
+
+test('applySaveOutcome: während des Saves weitergetippt → bleibt dirty', () => {
+  const block = savedBlock('<p>neu</p>');
+  block.html = '<p>neu und noch mehr</p>';   // Eingabe während des PUT
+  const stillDirty = applySaveOutcome(block, {
+    snapshot: '<p>neu</p>', savedHtml: '<p>neu</p>', savedUpdatedAt: 'T1',
+  });
+  assert.equal(stillDirty, true);
+  assert.equal(block.dirty, true, 'sonst geht die Eingabe während des Saves verloren');
+  assert.equal(block.originalHtml, '<p>neu</p>', 'Vergleichsbasis ist der geschriebene Stand');
+});
+
+test('applySaveOutcome: ohne updated_at bleibt der bisherige Stempel stehen', () => {
+  const block = savedBlock('<p>neu</p>');
+  applySaveOutcome(block, { snapshot: '<p>neu</p>', savedHtml: '<p>neu</p>' });
+  assert.equal(block.originalUpdatedAt, 'T0');
 });

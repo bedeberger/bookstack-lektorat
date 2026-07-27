@@ -65,14 +65,14 @@ In [lib/content-mapper.js](../lib/content-mapper.js): `mapChapter` exposed `pare
 
 [public/js/book-organizer/](../public/js/book-organizer/) — alle Slices nested-aware.
 
-- **`workTree`-Shape** ([persist.js](../public/js/book-organizer/persist.js)): rekursiv, `{ id, name, depth, parent_id, pages, subchapters }`. Snapshot via `_snapshotFromServer` fetcht frisch `contentRepo.bookTree({ fresh: true })` — root.tree ist flach, Organizer braucht eigene nested-Quelle.
-- **3-Level-Render** ([public/partials/buchorganizer.html](../public/partials/buchorganizer.html)): Unrolled (Alpine kennt keine Template-Rekursion). Identisches Markup mit Aliasnamen `ch` / `sub` / `subsub`.
+- **`workTree`-Shape** ([persist.js](../public/js/book-organizer/persist.js)): rekursiv, `{ id, name, depth, parent_id, pages, subchapters }`. Snapshot via `_snapshotFromNav` rekonstruiert das Nesting aus `nav.tree` — der ist flach, enthält aber alle Kapitel jeder Tiefe mit `depth` + `parent_id` (kein eigener Tree-Fetch nötig). `depth` wird aus dem rekonstruierten Nesting neu abgeleitet.
+- **3-Level-Render** ([public/partials/buchorganizer.html](../public/partials/buchorganizer.html)): Unrolled (Alpine kennt keine Template-Rekursion), aber der Zeileninhalt ist SSoT im Fragment-Include [organizer-chapter-body.html](../public/partials/organizer-chapter-body.html). **Alle Tiefen nutzen denselben x-for-Alias `ch`** (Level 2/3: `ch in (ch.subchapters || [])`, Alpine shadowed im Kind-Scope) — nur dadurch ist das Fragment tiefenunabhängig. Gegated: [tests/e2e/organizer-hierarchy.spec.js](../tests/e2e/organizer-hierarchy.spec.js).
 - **DnD** ([dnd.js](../public/js/book-organizer/dnd.js)): Alle Chapter-Listen teilen Gruppe `chapters`. `_validateChapterMove` (Sortable.onMove) blockt:
   - Drop in eigenen Subtree (via `_descendantIdsOf`)
-  - Tiefe-Überschreitung (`targetDepth + subtreeDepth - 1 > 3`)
+  - Tiefe-Überschreitung (`targetDepth + subtreeDepth - 1 > MAX_CHAPTER_DEPTH`, Konstante aus [constants.js](../public/js/book-organizer/constants.js))
 - **Tab / Shift+Tab** ([view.js](../public/js/book-organizer/view.js#onChapterTab)): Im Kapitel-Input ruft `onChapterTab` → `demoteChapter` / `promoteChapter`. preventDefault nur wenn Aktion möglich, sonst native Tab-Navigation.
-- **`promoteChapter` / `demoteChapter`** ([crud.js](../public/js/book-organizer/crud.js)): mutieren workTree (raus aus aktueller parentList, in neuer einfügen), `_reassignDepth` rekursiv für Subtree, dann `_persistOrder({ fullReload: true })`.
-- **Persist-Strategie** — `_persistOrder({ fullReload: bool })`. Bei Subchapter-Mutationen `fullReload: true` ruft `root.loadPages()`. Begründung: root.tree ist flach + materialisiert; granulare Mirror-Pfade decken Sub-Kapitel nicht ab. **Top-Level-Reorder + Page-Bucket-Moves nutzen weiter granularen Mirror** (kein Sidebar-Flicker).
+- **`promoteChapter` / `demoteChapter`** ([dnd.js](../public/js/book-organizer/dnd.js)): mutieren workTree (raus aus aktueller parentList, in neuer einfügen), `_setSubtreeDepth` rekursiv für Subtree (Tiefe + `parent_id`), dann `_persistOrder({ mirror: 'chapters' })` + `_reattachSortables()`.
+- **Persist-Strategie** — `_persistOrder({ mirror })` mit vier Modi (`'chapters'`/`'pages'`/`'both'`/`'reload'`, Tabelle in [buchorganizer.md](buchorganizer.md#mirror-modi)). Der Mirror ist tiefen-vollständig: `_mirrorChapterOrderInRoot` schreibt `priority`/`depth`/`parent_id`/`hasChildren` aller Kapitel und ordnet `nav.tree` depth-first (`_reorderNavTree`), `_mirrorPageMembershipInRoot` sammelt Seiten rekursiv. Deshalb laufen **auch Cross-Level-Moves und Seiten in Sub-Kapiteln über den granularen Mirror** (kein Sidebar-Flicker); `'reload'` bleibt allein für `createSubchapter` (neues Kapitel, Position im flachen Store nicht aus dem Workstate ableitbar).
 - **`canPromoteChapter` / `canDemoteChapter`** — Demote braucht Vor-Geschwister + `newDepth + movingSubtreeDepth - 1 ≤ MAX_CHAPTER_DEPTH`.
 
 ## Frontend: Sidebar-Tree

@@ -1243,3 +1243,130 @@ test('Granularitäts-Switch tauscht die Klasse, statt sie zu stapeln', async ({ 
     ['focus-mode--paragraph'],
   ]);
 });
+
+// --- Klickbare Seitenfläche (leerer Raum links/rechts der Textspalte) --------
+
+async function caretInfo(page) {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const s = getSelection();
+    if (!s || s.rangeCount === 0) return null;
+    const r = s.getRangeAt(0);
+    const rect = r.getClientRects()[0] || r.getBoundingClientRect();
+    return {
+      inEditor: el.contains(r.startContainer),
+      collapsed: r.collapsed,
+      offset: r.startOffset,
+      rect: { top: rect.top, bottom: rect.bottom, left: rect.left },
+    };
+  }, EDITOR);
+}
+
+// Geometrie der ersten voll sichtbaren, mehrzeilig umbrechenden Absatz-Zeile
+// plus die Ränder der Textspalte und der Seitenfläche daneben.
+async function gutterGeometry(page) {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const box = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    for (const p of el.querySelectorAll('p')) {
+      // Zeilenboxen gibt es nur über einen Range — `getClientRects()` auf einem
+      // Block-Element liefert genau ein Rect (die Border-Box).
+      const rng = document.createRange();
+      rng.selectNodeContents(p);
+      const rects = [...rng.getClientRects()];
+      if (rects.length < 2) continue;   // muss umbrechen, sonst ist „Zeile" == Absatz
+      const line = rects[0];
+      if (line.top < box.top + 80) continue;
+      if (line.bottom > box.top + box.height - 80) continue;
+      return {
+        contentLeft: box.left + parseFloat(cs.paddingLeft),
+        contentRight: box.right - parseFloat(cs.paddingRight),
+        gutterLeftX: box.left + 8,
+        gutterRightX: box.right - 8,
+        line: { top: line.top, bottom: line.bottom, left: line.left, right: line.right },
+      };
+    }
+    return null;
+  }, EDITOR);
+}
+
+test('Klick in die Seitenfläche landet am Anfang bzw. Ende derselben Zeile', async ({ page }) => {
+  // Der Browser-Default würde beim Klick daneben an Buchanfang/-ende springen
+  // (Container ist der nächste Treffer). Erwartung des Users: erstes Zeichen
+  // links, letztes Zeichen rechts — auf der angeklickten Zeile.
+  await enter(page);
+  const geo = await gutterGeometry(page);
+  expect(geo).not.toBeNull();
+  // Es MUSS eine Seitenfläche neben der Spalte geben (60ch-Spalte via Padding
+  // zentriert) — sonst testet der Rest nichts.
+  expect(geo.gutterLeftX).toBeLessThan(geo.contentLeft - 4);
+  expect(geo.gutterRightX).toBeGreaterThan(geo.contentRight + 4);
+  const midY = (geo.line.top + geo.line.bottom) / 2;
+
+  await page.mouse.click(geo.gutterLeftX, midY);
+  const left = await caretInfo(page);
+  expect(left.inEditor).toBe(true);
+  expect(left.collapsed).toBe(true);
+  expect(left.offset).toBe(0);
+
+  await page.mouse.click(geo.gutterRightX, midY);
+  const right = await caretInfo(page);
+  expect(right.inEditor).toBe(true);
+  expect(right.collapsed).toBe(true);
+  expect(right.offset).toBeGreaterThan(10);
+  // Auf DERSELBEN Zeile (nicht Absatz-/Buchende) und am rechten Zeilenende.
+  expect(right.rect.top).toBeGreaterThan(geo.line.top - 2);
+  expect(right.rect.bottom).toBeLessThan(geo.line.bottom + 2);
+  expect(right.rect.left).toBeGreaterThan(geo.line.right - 40);
+});
+
+test('Klick in den Kopf-Puffer bewegt den Caret nicht', async ({ page }) => {
+  // Kopf-/Tail-Puffer sind Anker-hoch (Invariante 9). Ein Caret-Sprung an
+  // Buchanfang/-ende ist dort nie gemeint — die Fläche bleibt inert.
+  await enter(page);
+  const start = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    el.scrollTop = 0;                       // Kopf-Puffer ins Sichtfeld
+    window.__selChanges = 0;
+    document.addEventListener('selectionchange', () => { window.__selChanges++; });
+    const box = el.getBoundingClientRect();
+    return { x: box.left + 8, y: box.top + 20 };
+  }, EDITOR);
+  await page.waitForTimeout(50);
+  const before = await caretInfo(page);
+
+  await page.mouse.click(start.x, start.y);
+  await page.waitForTimeout(50);
+
+  const after = await caretInfo(page);
+  expect(await page.evaluate(() => window.__selChanges)).toBe(0);
+  expect(after.rect.top).toBeCloseTo(before.rect.top, 0);
+  expect(await scrollTop(page)).toBe(0);
+});
+
+test('Mausrad über der Seitenfläche scrollt die Schreibfläche', async ({ page }) => {
+  // Die Spalte wird über Padding zentriert, damit die ganze Overlay-Breite zur
+  // Scroll-Box gehört. Mit `max-width` + `margin:0 auto` waren die Flächen
+  // daneben toter Raum: kein scrollbarer Vorfahr, Mausrad wirkungslos.
+  await enter(page);
+  // Der Eintritt landet am Buchende (Schreib-Slot) — dort ist nach unten kaum
+  // Weg. Für den Test an den Anfang zurück.
+  const pos = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    el.scrollTop = 0;
+    const box = el.getBoundingClientRect();
+    return { x: box.left + 8, y: box.top + box.height / 2 };
+  }, EDITOR);
+  await page.waitForTimeout(50);
+  const before = await scrollTop(page);
+  await page.mouse.move(pos.x, pos.y);
+  await page.mouse.wheel(0, 240);
+  // Chromium animiert den Wheel-Scroll — auf die Zielposition warten, nicht auf
+  // einen festen Timeout.
+  await page.waitForFunction(
+    ([sel, from]) => document.querySelector(sel).scrollTop > from + 200,
+    [EDITOR, before],
+  );
+  expect(await scrollTop(page)).toBeGreaterThan(before + 200);
+});

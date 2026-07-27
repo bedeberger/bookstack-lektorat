@@ -5,7 +5,7 @@
 // Storage-Zugriff via contentRepo (Domain-Repository, /content/*).
 //
 // Speicher-Strategie: nach jeder erfolgreichen Mutation patchen wir den
-// Root-Tree IN-PLACE. Kein `loadPages()` (würde Alpine.store('nav').pages + Alpine.store('nav').tree
+// Sidebar-Store IN-PLACE. Kein `loadPages()` (würde nav.pages + nav.tree
 // reassignen → ganze App-UI re-rendert, sichtbarer Flicker). Sidebar liest
 // dieselben Items, die wir mutieren, und re-rendert nur die betroffenen Stellen
 // via Alpine-Deep-Reactivity.
@@ -16,41 +16,48 @@
 // Reassignments im Tree zur Selbst-Reentry führen.
 //
 // Methoden-Pool kommt aus ../book-organizer.js (Slices: dnd, persist, mirror,
-// crud, history).
+// crud, history, view).
 
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { loadSortable } from '../lazy-libs.js';
 import { bookOrganizerMethods } from '../book-organizer.js';
+import { MAX_CHAPTER_DEPTH } from '../book-organizer/constants.js';
+
+// Buch-skopierter State — SSoT fuer Initial-Wert, `book:changed` und
+// `view:reset`. Factory (keine Konstante): Object.assign wuerde sonst dieselben
+// Array-/Object-Referenzen ueber mehrere Resets hinweg teilen.
+const freshState = () => ({
+  workTree: [],      // [{ id, name, depth, parent_id, pages: [...], subchapters: [...] }]
+  soloPages: [],     // [{ id, name, chapter_id: 0 }]
+  chapterOpen: {},   // { [chapter_id]: bool } — per-Buch UI-Sicht
+  organizerSearch: '',
+  jumpToChapterId: '',
+  organizerStatus: '',
+  organizerSaving: false,
+  _undoStack: [],
+  _redoStack: [],
+  _inHistoryFlight: false,
+  _memos: {},        // Cache für chapterLengthDist (siehe view.js#_memo)
+});
 
 export function registerBookOrganizerCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
   window.Alpine.data('bookOrganizerCard', () => ({
-    organizerSaving: false,
-    organizerStatus: '',
-    organizerProgress: 0,
-    workTree: [],      // [{ id, name, pages: [{ id, name, chapter_id }] }]
-    soloPages: [],     // [{ id, name, chapter_id: 0 }]
-    chapterOpen: {},   // { [chapter_id]: bool } — per-Buch UI-Sicht
-    organizerSearch: '',
-    jumpToChapterId: '',
+    ...freshState(),
+    maxChapterDepth: MAX_CHAPTER_DEPTH, // Template-Guard fuer Sub-Kapitel-Button
     _sortables: [],
     _lifecycle: null,
-    _undoStack: [],
-    _redoStack: [],
-    _inHistoryFlight: false,
     _onHistoryKeydown: null,
-    _memos: {},        // Cache für chapterLengthDist (siehe view.js#_memo)
 
     init() {
+      // Kein `resetState` im Lifecycle-Cfg (auch nicht als Factory, die der
+      // Helper inzwischen unterstuetzt): beide Reset-Pfade sind hier
+      // ueberschrieben, weil sie zusaetzlich Sortable destroyen muessen — ein
+      // Override skippt `applyReset`, das Feld waere also toter Code. Wer die
+      // Overrides je aufloest, gibt stattdessen `resetState: freshState` mit.
       this._lifecycle = setupCardLifecycle(this, {
         name: 'bookOrganizer',
         showFlag: 'showBookOrganizerCard',
-        resetState: {
-          workTree: [], soloPages: [],
-          chapterOpen: {}, organizerSearch: '', jumpToChapterId: '',
-          organizerStatus: '', organizerProgress: 0, organizerSaving: false,
-          _undoStack: [], _redoStack: [], _inHistoryFlight: false, _memos: {},
-        },
         onShow: async () => {
           await loadSortable();
           await this._rerender();
@@ -59,26 +66,17 @@ export function registerBookOrganizerCard() {
         // der pages:loaded-Listener unten greift, sobald loadPages fertig ist.
         onBookChanged: (e, ctx) => {
           ctx._destroySortables();
-          Object.assign(ctx, {
-            workTree: [], soloPages: [],
-            chapterOpen: {}, organizerSearch: '', jumpToChapterId: '',
-            organizerStatus: '', organizerProgress: 0, organizerSaving: false,
-            _undoStack: [], _redoStack: [], _inHistoryFlight: false, _memos: {},
-          });
+          Object.assign(ctx, freshState());
         },
         // Re-Klick auf offene Karte: lokaler Snapshot reicht — Drag/Rename/CRUD
-        // mutieren Alpine.store('nav').tree in-place, Server-Stand und Card-State sind in
-        // sync. `loadPages` würde Sidebar-Tree clearen + neu fetchen → Flicker.
+        // mutieren nav.tree in-place, Server-Stand und Card-State sind in sync.
+        // `loadPages` würde Sidebar-Tree clearen + neu fetchen → Flicker.
         onCardRefresh: async (e, ctx) => {
           await ctx._rerender();
         },
         onViewReset: (e, ctx) => {
           ctx._destroySortables();
-          Object.assign(ctx, {
-            workTree: [], soloPages: [],
-            chapterOpen: {}, organizerSearch: '', jumpToChapterId: '',
-            _undoStack: [], _redoStack: [], _inHistoryFlight: false, _memos: {},
-          });
+          Object.assign(ctx, freshState());
         },
         extraListeners: [
           { type: 'pages:loaded', handler: async () => {
@@ -114,7 +112,7 @@ export function registerBookOrganizerCard() {
       // selbst zu sperren. Such-Toggle erzeugt/entfernt zusätzlich x-if-gated
       // Page-ULs im DOM → Sortable danach neu binden.
       this.$watch('organizerSearch', () => {
-        this._refreshSortablesAfterTick();
+        this._reattachSortables();
       });
     },
 

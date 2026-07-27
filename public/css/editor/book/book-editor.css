@@ -193,31 +193,12 @@
     width: 100%;
   }
   .book-editor-outline-chapter:hover { background: color-mix(in srgb, var(--card-accent, currentColor) 6%, transparent); }
-  /* Chevron via CSS-Pseudo statt Glyph-Swap: gleiche Box-Größe in beiden
-     Zuständen → keine Sub-Pixel-Breitenwacklung beim Kollabieren. */
-  .book-editor-outline-chevron {
-    width: 10px;
-    height: 10px;
+  /* Klapp-Marker ist das App-Pattern .history-chevron (Mask-Icon + Rotation,
+     siehe DESIGN.md) — hier nur auf Outline-Grösse gebracht. */
+  .book-editor-outline-chapter > .history-chevron {
     flex-shrink: 0;
-    position: relative;
-    /* Verstecke das Text-Glyph aus dem Markup — wir zeichnen die Spitze hier. */
-    color: transparent;
-    font-size: 0;
-  }
-  .book-editor-outline-chevron::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 5px;
-    height: 5px;
-    border-right: 1.5px solid var(--color-muted);
-    border-bottom: 1.5px solid var(--color-muted);
-    transform: translate(-60%, -70%) rotate(45deg);
-    transition: transform 0.12s ease;
-  }
-  .book-editor-outline-chapter--collapsed .book-editor-outline-chevron::before {
-    transform: translate(-30%, -50%) rotate(-45deg);
+    font-size: var(--font-size-xs);
+    color: var(--color-muted);
   }
   .book-editor-outline-chapter-name {
     flex: 1;

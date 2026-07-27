@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+  <meta charset="UTF-8">
+  <title>Buchorganizer Test Harness</title>
+  <!-- Minimal-CSS: nur was der Organizer-DOM konsumiert. tree-history.css
+       liefert `.history-chevron` (Mask-Icon) — ohne das hat der Collapse-Button
+       Groesse 0 und ist fuer Playwright unklickbar. -->
+  <link rel="stylesheet" href="/public/css/tokens.css">
+  <link rel="stylesheet" href="/public/css/components/icons.css">
+  <link rel="stylesheet" href="/public/css/page/tree-history.css">
+  <link rel="stylesheet" href="/public/css/book/buchorganizer.css">
+  <style>
+    body { margin: 0; padding: 24px; font: 16px/1.5 system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <!--
+    Anders als die uebrigen Harnesses baut dieses KEINE Slim-Kopie des Partials,
+    sondern laedt `partials/buchorganizer.html` im Original und loest die
+    `<!-- @include -->`-Marker genauso auf wie app-ui.js#_resolveIncludes.
+    Genau das ist hier der Testgegenstand: die drei Kapitel-Tiefen teilen ein
+    Fragment und nutzen alle denselben x-for-Alias `ch` (Alpine-Shadowing).
+    Eine Slim-Kopie wuerde das nicht abdecken.
+  -->
+  <div id="mount"></div>
+
+  <script type="module">
+    const { registerBookOrganizerCard } = await import('/public/js/cards/book-organizer-card.js');
+    const { registerCollapsible } = await import('/public/js/collapsible.js');
+
+    // ── Mock-Daten: 3 Kapitel-Tiefen + eine kapitellose Seite ──────────────
+    // Shape wie tree/load.js#loadPages: nav.tree flach + depth-first, jedes
+    // Kapitel mit depth/parent_id, Seiten aus nav.pages gefiltert.
+    const PAGES = [
+      { id: 900, name: 'Solo-Seite', chapter_id: 0,  priority: 1, chapterName: null },
+      { id: 901, name: 'L1-Seite',   chapter_id: 1,  priority: 1, chapterName: 'Kapitel Eins' },
+      { id: 911, name: 'L2-Seite',   chapter_id: 11, priority: 1, chapterName: 'Unter Eins' },
+      { id: 921, name: 'L3-Seite',   chapter_id: 111, priority: 1, chapterName: 'Tief Eins' },
+      { id: 902, name: 'L1b-Seite',  chapter_id: 2,  priority: 1, chapterName: 'Kapitel Zwei' },
+    ];
+    const pagesOf = (id) => PAGES.filter(p => p.chapter_id === id);
+    const CHAPTERS = [
+      { id: 1,   name: 'Kapitel Eins', depth: 1, parent_id: null, priority: 1, hasChildren: true,  stats: { chars: 1000, words: 150, count: 1, normseiten: 0.6 } },
+      { id: 11,  name: 'Unter Eins',   depth: 2, parent_id: 1,    priority: 1, hasChildren: true,  stats: { chars: 500,  words: 80,  count: 1, normseiten: 0.3 } },
+      { id: 111, name: 'Tief Eins',    depth: 3, parent_id: 11,   priority: 1, hasChildren: false, stats: { chars: 300,  words: 50,  count: 1, normseiten: 0.2 } },
+      { id: 2,   name: 'Kapitel Zwei', depth: 1, parent_id: null, priority: 2, hasChildren: false, stats: { chars: 3000, words: 450, count: 1, normseiten: 1.8 } },
+    ];
+    const TREE = [
+      { type: 'chapter', id: 'solo-900', name: 'Solo-Seite', priority: 1, depth: 1, parent_id: null, open: true, solo: true, pages: [PAGES[0]] },
+      ...CHAPTERS.map(c => ({ type: 'chapter', solo: false, open: true, ...c, pages: pagesOf(c.id) })),
+    ];
+
+    const app = {
+      showBookOrganizerCard: true,
+      selectedBookName: 'Testbuch',
+      currentPage: null,
+      tokEsts: {},
+      // t() gibt den Key zurueck — Tests greifen auf Struktur, nicht auf Text.
+      t: (k) => k,
+      setStatus() {},
+      loadPages: async () => {},
+      appPrompt: async () => null,
+      appConfirm: async () => false,
+      _refreshChapterStats() {},
+    };
+    window.__app = app;
+
+    document.addEventListener('alpine:init', () => {
+      Alpine.magic('app', () => app);
+      // Sync-Provider-Spalte bleibt leer (Blog/HubSpot nicht Teil des Tests).
+      Alpine.magic('syncProviders', () => []);
+      Alpine.magic('blog', () => ({ conflictOpen: false, conflictData: null }));
+      Alpine.store('nav', {
+        selectedBookId: 7,
+        books: [{ id: 7, name: 'Testbuch' }, { id: 8, name: 'Zweitbuch' }],
+        tree: TREE,
+        pages: PAGES,
+      });
+      Alpine.store('shell', { uiLocale: 'de', appName: 'Test' });
+      // Combobox-Stub: die echte Implementierung lebt in app.js (ganze App) und
+      // ersetzt ihr innerHTML selbst — fuer die Baum-Struktur irrelevant.
+      Alpine.data('combobox', () => ({ value: '', options: [], init() {} }));
+      registerCollapsible();
+      registerBookOrganizerCard();
+    });
+
+    // Fragment-Includes wie app-ui.js#_resolveIncludes (rekursiv, Zyklenbruch
+    // by name) — bewusst nachgebaut statt importiert: _resolveIncludes ist eine
+    // Methode des Root-Scopes und fetcht relativ zu `/partials/`.
+    async function resolveIncludes(html, seen = new Set()) {
+      const re = /<!--\s*@include\s+([\w-]+)\s*-->/g;
+      const matches = [...html.matchAll(re)];
+      if (!matches.length) return html;
+      const cache = {};
+      for (const m of matches) {
+        const frag = m[1];
+        if (frag in cache) continue;
+        if (seen.has(frag)) { cache[frag] = ''; continue; }
+        const txt = await (await fetch(`/public/partials/${frag}.html`)).text();
+        cache[frag] = await resolveIncludes(txt, new Set([...seen, frag]));
+      }
+      return html.replace(re, (_, frag) => cache[frag] ?? '');
+    }
+
+    const raw = await (await fetch('/public/partials/buchorganizer.html')).text();
+    document.getElementById('mount').innerHTML = await resolveIncludes(raw);
+
+    await import('/public/vendor/alpine-3.15.12.min.js');
+    // Alpine.initTree laeuft ueber den bereits injizierten DOM; auf das Ende
+    // des ersten Ticks warten, damit x-for/x-if-Klone stehen.
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const card = Alpine.$data(document.querySelector('[x-data="bookOrganizerCard"]'));
+    await card._rerender();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    window.__card = card;
+    window.harnessReady = true;
+  </script>
+</body>
+</html>

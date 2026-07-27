@@ -3,71 +3,13 @@
 // Cmd/Ctrl+F. Wird in Alpine.data('editorFindCard') gespread; `this` zeigt
 // auf die Sub-Komponente, Root-Zugriffe via window.__app.
 
-import { getEditEl, isWordChar, attachReflow } from './utils.js';
+import { getEditEl, attachReflow } from './utils.js';
+import { collectMatches, createHighlightPair, rangeOf } from './shared/text-find.js';
 
-// Flache Liste aller Text-Nodes im Editor (keine Scripts/Styles – die
-// gibt's hier ohnehin nicht, TreeWalker reicht).
-function collectTextNodes(root) {
-  const nodes = [];
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-  let n;
-  while ((n = walker.nextNode())) nodes.push(n);
-  return nodes;
-}
-
-// Alle Match-Positionen im konkatenierten Text berechnen und auf
-// (Text-Node, Offset)-Tupel zurückmappen.
-function findMatches(root, term, caseSensitive, wholeWord) {
-  if (!term) return [];
-  const nodes = collectTextNodes(root);
-  const full = nodes.map(n => n.nodeValue).join('');
-  const hay = caseSensitive ? full : full.toLowerCase();
-  const needle = caseSensitive ? term : term.toLowerCase();
-  // Ganzes Wort: Nachbar-Zeichen prüfen. _ zählt als Wort (z.B. Identifier).
-  const isWord = (ch) => isWordChar(ch || '') || ch === '_';
-
-  // Offsets jedes Nodes im konkatenierten String – für Rückmapping.
-  const starts = new Array(nodes.length);
-  let acc = 0;
-  for (let i = 0; i < nodes.length; i++) {
-    starts[i] = acc;
-    acc += nodes[i].nodeValue.length;
-  }
-
-  const matches = [];
-  let from = 0;
-  while (from <= hay.length - needle.length) {
-    const idx = hay.indexOf(needle, from);
-    if (idx === -1) break;
-    if (wholeWord) {
-      const before = idx > 0 ? hay[idx - 1] : '';
-      const after  = hay[idx + needle.length] || '';
-      if (isWord(before) || isWord(after)) { from = idx + 1; continue; }
-    }
-    matches.push(mapOffset(nodes, starts, idx, needle.length));
-    from = idx + Math.max(1, needle.length);
-  }
-  return matches;
-}
-
-function mapOffset(nodes, starts, globalStart, length) {
-  const globalEnd = globalStart + length;
-  let startNode = null, startOffset = 0, endNode = null, endOffset = 0;
-  for (let i = 0; i < nodes.length; i++) {
-    const s = starts[i];
-    const e = s + nodes[i].nodeValue.length;
-    if (startNode == null && globalStart >= s && globalStart <= e) {
-      startNode = nodes[i];
-      startOffset = globalStart - s;
-    }
-    if (globalEnd >= s && globalEnd <= e) {
-      endNode = nodes[i];
-      endOffset = globalEnd - s;
-      break;
-    }
-  }
-  return { startNode, startOffset, endNode, endOffset };
-}
+// Match-Suche + Offset-Rückmapping + Highlight-Registrierung liegen in
+// shared/text-find.js — geteilt mit dem Bucheditor (cards/book-editor/find.js).
+const findMatches = (root, term, caseSensitive, wholeWord) =>
+  collectMatches(root, term, { caseSensitive, wholeWord });
 
 // Nächster scrollbarer Vorfahre — wichtig für Focus-Mode, wo das
 // Edit-Element selbst scrollt statt das Window.
@@ -83,35 +25,11 @@ function findScrollContainer(node) {
   return null;
 }
 
-function rangeOf(m) {
-  const r = document.createRange();
-  r.setStart(m.startNode, m.startOffset);
-  r.setEnd(m.endNode, m.endOffset);
-  return r;
-}
-
-// CSS Custom Highlight API – registriert einmalig leere Highlight-Objekte
-// unter festen Namen. Die gehören zum Dokument, nicht zum DOM-Baum, landen
-// also nicht in BookStack beim Speichern.
-const HIGHLIGHT_ALL = 'edit-find-match';
-const HIGHLIGHT_CURRENT = 'edit-find-current';
-let _hlAll = null, _hlCurrent = null;
-function ensureHighlights() {
-  if (typeof CSS === 'undefined' || !CSS.highlights || typeof Highlight === 'undefined') return false;
-  if (!_hlAll) {
-    _hlAll = new Highlight();
-    CSS.highlights.set(HIGHLIGHT_ALL, _hlAll);
-  }
-  if (!_hlCurrent) {
-    _hlCurrent = new Highlight();
-    CSS.highlights.set(HIGHLIGHT_CURRENT, _hlCurrent);
-  }
-  return true;
-}
-function clearHighlights() {
-  if (_hlAll) _hlAll.clear();
-  if (_hlCurrent) _hlCurrent.clear();
-}
+// CSS Custom Highlight API – Paar aus „alle Treffer" und „aktueller Treffer".
+// Die Highlights gehören zum Dokument, nicht zum DOM-Baum, landen also nicht
+// im gespeicherten Seiten-HTML.
+const highlights = createHighlightPair('edit-find-match', 'edit-find-current');
+const clearHighlights = highlights.clear;
 
 export const editorFindCardMethods = {
   openFind() {
@@ -194,23 +112,11 @@ export const editorFindCardMethods = {
     this._refreshFindHighlights();
   },
 
-  // Alle Treffer hervorheben via CSS Custom Highlight API (reine Render-
-  // Ebene, kein DOM-Eingriff). Läuft komplett ohne Effekt, falls der
-  // Browser die API nicht kennt – native Selektion des aktuellen Treffers
-  // bleibt immer bestehen.
+  // Alle Treffer hervorheben (reine Render-Ebene, kein DOM-Eingriff). Läuft
+  // ohne Effekt, falls der Browser die API nicht kennt – native Selektion des
+  // aktuellen Treffers bleibt immer bestehen.
   _refreshFindHighlights() {
-    if (!ensureHighlights()) return;
-    clearHighlights();
-    if (!this.findMatches || this.findMatches.length === 0) return;
-    for (let i = 0; i < this.findMatches.length; i++) {
-      const m = this.findMatches[i];
-      if (!m.startNode || !m.endNode) continue;
-      try {
-        const r = rangeOf(m);
-        if (i === this.findIndex) _hlCurrent.add(r);
-        else _hlAll.add(r);
-      } catch (e) { /* ignorieren */ }
-    }
+    highlights.paint(this.findMatches, this.findIndex);
   },
 
   findNext() {

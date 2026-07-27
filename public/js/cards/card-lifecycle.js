@@ -25,6 +25,7 @@ import { EVT } from '../events.js';
 //   onViewReset(e, ctx, r)   — full override; skips the default reset
 //   onCardRefresh(e, ctx, r) — runs in place of cfg.load on `card:refresh`
 //                              (name-match + book-id check are handled by helper)
+//   resetState               — object or factory `() => ({…})` (see applyReset)
 //   resetStateView           — override resetState specifically on `view:reset`
 //   refreshNeedsBookId       — default true; set false if cfg.load checks itself
 //   showNeedsBookId          — default true; set false to call onShow without book
@@ -43,10 +44,16 @@ export function setupCardLifecycle(ctx, cfg) {
       if (ctx[k]) { clearInterval(ctx[k]); ctx[k] = null; }
     }
   };
+  // resetState darf ein Objekt ODER eine Factory sein. Factory bevorzugen,
+  // sobald der Reset Arrays/Objekte enthält, die in-place mutiert werden
+  // (`saveQueue.push`, `drafts[id] = …`): ein einmalig gebautes Literal teilt
+  // seine Referenzen mit dem Live-State und schleppt beim nächsten Reset die
+  // Mutationen des letzten Buchs wieder ein.
   const applyReset = (which) => {
-    const state = which === 'view' && cfg.resetStateView
+    const src = which === 'view' && cfg.resetStateView
       ? cfg.resetStateView
       : cfg.resetState;
+    const state = typeof src === 'function' ? src() : src;
     if (state) Object.assign(ctx, state);
   };
 

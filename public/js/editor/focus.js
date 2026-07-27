@@ -24,7 +24,7 @@ export { readFocusSnapshot, clearFocusSnapshot } from './focus/storage.js';
 export { fmtSigned, dailyDelta, installEditCounter } from './shared/edit-counter.js';
 export {
   findBlockFromNode, pickCenterBlock, findBlockAtViewportCenter,
-  setActiveBlock, setNearBlocks, clearAllFocusMarks,
+  setActiveBlock, setNearBlocks, clearAllFocusMarks, resolveGutterCaretPoint,
 } from './focus/dom-blocks.js';
 export {
   findSentenceRanges, findSentenceAtCaret, applySentenceHighlight,

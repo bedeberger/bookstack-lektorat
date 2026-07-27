@@ -1,4 +1,5 @@
-// DnD-Slice: Sortable-Setup, Page-/Chapter-Drop-Handler.
+// DnD- + Struktur-Slice: Sortable-Setup, Page-/Chapter-Drop-Handler und die
+// tastatur-/button-getriebenen Struktur-Moves (promote/demote, Combobox-Move).
 //
 // Geteilter SortableJS-Kern (Patch, Revert, Tuning, x-ignore) liegt in
 // [public/js/sortable-dnd.js] — beim Sortable-Bump dort verifizieren.
@@ -10,6 +11,7 @@ import {
   unmarkDragIgnore,
   BASE_SORTABLE_OPTS,
 } from '../sortable-dnd.js';
+import { MAX_CHAPTER_DEPTH } from './constants.js';
 
 export const dndMethods = {
   _destroySortables() {
@@ -17,11 +19,11 @@ export const dndMethods = {
     this._sortables = [];
   },
 
-  // Nach jedem erfolgreichen Drop: Sortable-Instanzen frisch an aktuelles DOM
-  // binden. Alpine-x-for rekonziliert nach workTree-Reassignment (Chapter-Drop)
-  // bzw. loadPages-Reload (Cross-Level) und kann Container-Elemente austauschen
-  // — Sortable-Refs zeigen sonst auf stale Nodes und folgende Drops verschieben
-  // Items in unsichtbaren alten Listen.
+  // Sortable-Instanzen frisch an das aktuelle DOM binden. Alpine-x-for
+  // rekonziliert nach Workstate-Mutationen und kann Container-Elemente
+  // austauschen — Sortable-Refs zeigen sonst auf stale Nodes und folgende Drops
+  // verschieben Items in unsichtbaren alten Listen. Einziger zugelassener Weg
+  // zum Re-Init: enthaelt zwingend `_refreshSortableDisabled` (Such-Invariante).
   async _reattachSortables() {
     this._destroySortables();
     await this.$nextTick();
@@ -95,10 +97,8 @@ export const dndMethods = {
     // Kein Drop in eigenen Subtree.
     const descIds = this._descendantIdsOf(found.node);
     if (targetParentId != null && descIds.has(targetParentId)) return false;
-    // Max-Depth-Check: targetDepth + (subtreeDepth - 1) <= 3.
-    const subDepth = this._subtreeDepth(found.node);
-    if (targetDepth + subDepth - 1 > 3) return false;
-    return true;
+    // Max-Depth-Check: targetDepth + (subtreeDepth - 1) darf MAX nicht sprengen.
+    return targetDepth + this._subtreeDepth(found.node) - 1 <= MAX_CHAPTER_DEPTH;
   },
 
   _parseChapterIdAttr(el) {
@@ -107,9 +107,14 @@ export const dndMethods = {
     return parseInt(raw, 10) || 0;
   },
 
-  _setSubtreeDepth(node, depth) {
+  // Tiefe (und optional parent_id) eines Subtrees neu setzen. `parentId`
+  // weglassen laesst die Parent-Referenz des Wurzelknotens unberuehrt.
+  _setSubtreeDepth(node, depth, parentId) {
     node.depth = depth;
-    for (const sub of (node.subchapters || [])) this._setSubtreeDepth(sub, depth + 1);
+    if (parentId !== undefined) node.parent_id = parentId;
+    for (const sub of (node.subchapters || [])) {
+      this._setSubtreeDepth(sub, depth + 1, node.id);
+    }
   },
 
   async _onChapterDrop(evt) {
@@ -140,12 +145,14 @@ export const dndMethods = {
       if (!parent.subchapters) parent.subchapters = [];
       targetList = parent.subchapters;
     }
-    node.parent_id = toParentId;
-    this._setSubtreeDepth(node, targetDepth);
+    this._setSubtreeDepth(node, targetDepth, toParentId);
     targetList.splice(Math.max(0, Math.min(newIndex, targetList.length)), 0, node);
 
-    const ok = await this._persistOrder({ fullReload: !sameBucket });
+    const ok = await this._persistOrder({ mirror: 'chapters' });
     if (ok) this._recordReorder(before);
+    // Kapitel kann den Container gewechselt haben (x-if-gated Subchapter-Divs
+    // erscheinen/verschwinden) → Sortable neu binden.
+    if (!sameBucket) await this._reattachSortables();
   },
 
   async _onPageDrop(evt) {
@@ -167,24 +174,16 @@ export const dndMethods = {
     // dem DOM lesen — DOM wurde gerade revertet und ist nicht mehr massgeblich.
     const targetIdx = Number.isFinite(evt.newIndex) ? evt.newIndex : bucket.length;
     bucket.splice(Math.max(0, Math.min(targetIdx, bucket.length)), 0, pageObj);
-    // Subchapter-Pages koennen tief liegen → fullReload, damit Alpine.store('nav').tree
-    // (flach) konsistent bleibt.
-    const fullReload = toChapId !== 0 && this._chapterDepth(toChapId) > 1;
-    const affected = [toChapId, fromChapId !== toChapId ? fromChapId : null].filter(v => v != null);
-    const ok = await this._persistOrder(fullReload ? { fullReload: true } : { affectedChapters: affected });
+    const ok = await this._persistOrder({
+      mirror: 'pages',
+      affectedChapters: [toChapId, fromChapId],
+    });
     if (ok) this._recordReorder(before);
-    if (fullReload) await this._reattachSortables();
   },
 
   _pagesBucket(chapId) {
     if (chapId === 0) return this.soloPages;
-    const found = this._findChapter(chapId);
-    return found?.node?.pages || null;
-  },
-
-  _chapterDepth(chapId) {
-    const found = this._findChapter(chapId);
-    return found?.node?.depth || 1;
+    return this._findChapter(chapId)?.node?.pages || null;
   },
 
   _removePageFromBucket(chapId, pageId) {
@@ -221,18 +220,52 @@ export const dndMethods = {
     if (!removed) return;
     removed.chapter_id = targetChId;
     const bucket = this._pagesBucket(targetChId);
-    if (!bucket) {
-      const src = this._pagesBucket(fromChapId);
-      src?.push(removed);
+    if (!bucket) { this._pagesBucket(fromChapId)?.push(removed); return; } // Rollback
+    bucket.push(removed);
+    const ok = await this._persistOrder({
+      mirror: 'pages',
+      affectedChapters: [fromChapId, targetChId],
+    });
+    if (ok) this._recordReorder(before);
+  },
+
+  // Promote: Kapitel ein Level hoeher (rueckt aus dem Eltern-Kapitel raus,
+  // wird Geschwister des bisherigen Elternteils). Top-Level: no-op.
+  async promoteChapter(id) {
+    if (this.organizerSaving) return;
+    const found = this._findChapter(id);
+    if (!found || found.node.depth <= 1) return;
+    const before = this._snapshotWorkstate();
+    const node = found.node;
+    found.parentList.splice(found.index, 1);
+    // Elternteil suchen → in dessen Liste direkt hinter ihm eintragen.
+    const parentLoc = this._findChapter(found.parent.id);
+    if (!parentLoc) {
+      found.parentList.splice(found.index, 0, node); // Rollback
       return;
     }
-    bucket.push(removed);
-    const fullReload = (targetChId !== 0 && this._chapterDepth(targetChId) > 1)
-                   || (fromChapId !== 0 && this._chapterDepth(fromChapId) > 1);
-    const ok = await this._persistOrder(fullReload
-      ? { fullReload: true }
-      : { affectedChapters: [fromChapId, targetChId] });
+    parentLoc.parentList.splice(parentLoc.index + 1, 0, node);
+    this._setSubtreeDepth(node, node.depth - 1, parentLoc.parent ? parentLoc.parent.id : null);
+    const ok = await this._persistOrder({ mirror: 'chapters' });
     if (ok) this._recordReorder(before);
-    if (fullReload) await this._reattachSortables();
+    await this._reattachSortables();
+  },
+
+  // Demote: Kapitel ein Level tiefer (wird Sub-Kapitel des Vor-Geschwisters).
+  async demoteChapter(id) {
+    if (this.organizerSaving) return;
+    if (!this.canDemoteChapter(id)) return;
+    const found = this._findChapter(id);
+    if (!found) return;
+    const before = this._snapshotWorkstate();
+    const node = found.node;
+    const newParent = found.parentList[found.index - 1];
+    found.parentList.splice(found.index, 1);
+    newParent.subchapters = [...(newParent.subchapters || []), node];
+    this._setSubtreeDepth(node, newParent.depth + 1, newParent.id);
+    this.chapterOpen = { ...this.chapterOpen, [newParent.id]: true };
+    const ok = await this._persistOrder({ mirror: 'chapters' });
+    if (ok) this._recordReorder(before);
+    await this._reattachSortables();
   },
 };

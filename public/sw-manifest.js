@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "2edad3d5bc8af7e5";
+self.__SHELL_BUILD = "428bd5ffb9a8be60";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -169,6 +169,7 @@ self.__SHELL_MANIFEST = [
   "/js/app/register-cards.js",
   "/js/avatar.js",
   "/js/book-organizer.js",
+  "/js/book-organizer/constants.js",
   "/js/book-organizer/crud.js",
   "/js/book-organizer/dnd.js",
   "/js/book-organizer/history.js",
@@ -274,6 +275,7 @@ self.__SHELL_MANIFEST = [
   "/js/cards/book-editor-card.js",
   "/js/cards/book-editor/find.js",
   "/js/cards/book-editor/outline.js",
+  "/js/cards/book-editor/save.js",
   "/js/cards/book-organizer-card.js",
   "/js/cards/book-overview-card.js",
   "/js/cards/book-review-card.js",
@@ -420,6 +422,7 @@ self.__SHELL_MANIFEST = [
   "/js/editor/shared/active-editor.js",
   "/js/editor/shared/apply-replacement.js",
   "/js/editor/shared/auto-slot.js",
+  "/js/editor/shared/autosave.js",
   "/js/editor/shared/block-merge.js",
   "/js/editor/shared/dom-block.js",
   "/js/editor/shared/edit-counter.js",
@@ -436,6 +439,8 @@ self.__SHELL_MANIFEST = [
   "/js/editor/shared/quote-normalize/walk.js",
   "/js/editor/shared/save-pipeline.js",
   "/js/editor/shared/shortcuts.js",
+  "/js/editor/shared/text-find.js",
+  "/js/editor/shared/timers.js",
   "/js/editor/shortcuts.js",
   "/js/editor/synonyme.js",
   "/js/editor/utils.js",
@@ -647,7 +652,9 @@ self.__SHELL_MANIFEST = [
   "/partials/my-stats-rhythm.html",
   "/partials/my-stats.html",
   "/partials/onboarding.html",
+  "/partials/organizer-chapter-body.html",
   "/partials/organizer-page-actions.html",
+  "/partials/organizer-page-row.html",
   "/partials/orte.html",
   "/partials/page-history.html",
   "/partials/page-revisions.html",

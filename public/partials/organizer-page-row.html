@@ -1,0 +1,16 @@
+<!--
+  Eine Seitenzeile im Organizer: Drag-Handle, Rename-Input, Aktions-Spalte.
+  Identisch in der Solo-Liste und in jeder Kapitel-Seitenliste → SSoT als
+  string-seitiger Fragment-Include (Marker @include organizer-page-row).
+  Vertrag: `page` kommt aus dem umschliessenden x-for-Scope.
+-->
+<li class="organizer-page" :data-page-id="page.id">
+  <span class="organizer-drag-handle" :data-tip="$app.t('bookOrganizer.dragHint')" aria-hidden="true">⋮⋮</span>
+  <input type="text" class="organizer-name" :value="page.name"
+         @blur="onRenamePage(page.id, $event)"
+         @keydown.enter.prevent="$event.target.blur()"
+         :disabled="organizerSaving"
+         autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" data-form-type="other" data-spellcheck="spelling"
+         :aria-label="$app.t('bookOrganizer.renamePage')">
+  <!-- @include organizer-page-actions -->
+</li>

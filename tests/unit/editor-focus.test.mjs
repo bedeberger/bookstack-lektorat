@@ -17,6 +17,7 @@ const {
   consumeProgrammaticScroll,
   normAnchorRatio,
   resolveActiveBlock,
+  resolveGutterCaretPoint,
 } = await import('../../public/js/editor/focus.js');
 
 // --- findBlockFromNode ------------------------------------------------------
@@ -822,4 +823,49 @@ test('jumpToTrailingParagraph: kein leerer Trailing-Block → neuer <p><br>', ()
   assert.ok(added, 'neuer <p> wurde angehängt');
   assert.equal(added.tagName, 'P');
   assert.equal(added.childNodes[0].tagName, 'BR');
+});
+
+// --- resolveGutterCaretPoint ------------------------------------------------
+//
+// Klick in die leere Seitenfläche: y bleibt auf der Zeile, x wandert an den Rand
+// der Textspalte (dort trifft caretRangeFromPoint erstes/letztes Zeichen).
+
+// Textspalte 300–700 px; zwei Blöcke à 40 px Höhe mit 20 px Lücke.
+const GUTTER_BOX = { left: 300, right: 700 };
+const mkBlockRect = (top, bottom) => ({
+  getBoundingClientRect: () => ({ top, bottom, height: bottom - top }),
+});
+const GUTTER_BLOCKS = [mkBlockRect(100, 140), mkBlockRect(160, 200)];
+
+test('resolveGutterCaretPoint: Klick links neben einer Zeile → linker Spaltenrand', () => {
+  const pt = resolveGutterCaretPoint(GUTTER_BOX, GUTTER_BLOCKS, 40, 120);
+  assert.deepEqual(pt, { x: 301, y: 120 }, 'x an den Spaltenanfang, y unverändert');
+});
+
+test('resolveGutterCaretPoint: Klick rechts neben einer Zeile → rechter Spaltenrand', () => {
+  const pt = resolveGutterCaretPoint(GUTTER_BOX, GUTTER_BLOCKS, 1200, 180);
+  assert.deepEqual(pt, { x: 699, y: 180 });
+});
+
+test('resolveGutterCaretPoint: Kopf-/Tail-Puffer bleibt inert', () => {
+  assert.equal(resolveGutterCaretPoint(GUTTER_BOX, GUTTER_BLOCKS, 40, 20), null, 'über dem ersten Block');
+  assert.equal(resolveGutterCaretPoint(GUTTER_BOX, GUTTER_BLOCKS, 40, 900), null, 'unter dem letzten Block');
+});
+
+test('resolveGutterCaretPoint: Klick in die Absatz-Lücke nimmt den nächsten Block', () => {
+  // y=145 liegt 5 px unter Block 1 und 15 px über Block 2 → Block 1, geclamped
+  // auf dessen Unterkante − 1.
+  assert.deepEqual(resolveGutterCaretPoint(GUTTER_BOX, GUTTER_BLOCKS, 40, 145), { x: 301, y: 139 });
+  // y=155 liegt näher an Block 2 → dessen Oberkante + 1.
+  assert.deepEqual(resolveGutterCaretPoint(GUTTER_BOX, GUTTER_BLOCKS, 40, 155), { x: 301, y: 161 });
+});
+
+test('resolveGutterCaretPoint: Höhe-0-Blöcke zählen nicht, leerer Satz → null', () => {
+  assert.equal(resolveGutterCaretPoint(GUTTER_BOX, [mkBlockRect(100, 100)], 40, 100), null);
+  assert.equal(resolveGutterCaretPoint(GUTTER_BOX, [], 40, 120), null);
+});
+
+test('resolveGutterCaretPoint: kaputte Content-Box → null (kein Caret-Sprung)', () => {
+  assert.equal(resolveGutterCaretPoint({ left: 500, right: 500 }, GUTTER_BLOCKS, 40, 120), null);
+  assert.equal(resolveGutterCaretPoint(null, GUTTER_BLOCKS, 40, 120), null);
 });

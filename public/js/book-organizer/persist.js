@@ -1,49 +1,54 @@
-// Persist-Slice: Snapshot-Rebuild, _runMutation, _persistOrder, Workstate-Clone.
+// Persist-Slice: Snapshot-Aufbau, _runMutation, _persistOrder, Workstate-Clone.
 import { contentRepo } from '../repo/content.js';
 
 export const persistMethods = {
   async _rerender() {
     this._destroySortables();
-    await this._snapshotFromServer();
+    this._snapshotFromNav();
     await this.$nextTick();
     this._initSortables();
     this._refreshSortableDisabled();
   },
 
-  // Holt frischen nested bookTree vom Server und baut workTree (rekursiv mit
-  // subchapters). Alpine.store('nav').tree ist flach (Phase 3b haengt nested an); deshalb
-  // fetcht der Organizer eigenstaendig — sonst saehe er keine Sub-Kapitel.
-  async _snapshotFromServer() {
-    const root = window.__app;
-    const bookId = parseInt(Alpine.store('nav').selectedBookId, 10);
-    if (!bookId) {
-      this.workTree = [];
-      this.soloPages = [];
-      this._recomputeInitialOpenState();
-      return;
+  // Baut den genesteten Edit-Tree (workTree/soloPages) aus dem Sidebar-Store.
+  // `nav.tree` ist flach, enthaelt aber ALLE Kapitel jeder Tiefe mit `depth`
+  // und `parent_id` (tree/load.js#loadPages, depth-first) — das Nesting laesst
+  // sich daraus verlustfrei rekonstruieren, ein eigener Tree-Fetch ist unnoetig.
+  // Erst-Render vor abgeschlossenem loadPages liefert einen leeren Snapshot;
+  // das anschliessende `pages:loaded` triggert den echten (Card-Listener).
+  _snapshotFromNav() {
+    const nav = Alpine.store('nav');
+    const nodes = [];
+    const byId = new Map();
+    for (const it of (nav.tree || [])) {
+      if (it.type !== 'chapter' || it.solo) continue;
+      const node = {
+        id: it.id,
+        name: it.name,
+        depth: it.depth || 1,
+        parent_id: it.parent_id ?? null,
+        pages: (it.pages || []).map(p => ({ id: p.id, name: p.name, chapter_id: it.id })),
+        subchapters: [],
+      };
+      nodes.push(node);
+      byId.set(it.id, node);
     }
-    try {
-      const tree = await contentRepo.bookTree(bookId, { fresh: true });
-      this._snapshotFromTree(tree);
-    } catch (e) {
-      console.error('[bookOrganizer] bookTree fetch failed', e);
-      this.workTree = [];
-      this.soloPages = [];
-      this._recomputeInitialOpenState();
+    // Zweiter Pass: verlinken. Array-Reihenfolge liefert die Geschwister-
+    // Reihenfolge, `parent_id` das Nesting — bewusst zwei Paesse, damit die
+    // Rekonstruktion nicht von depth-first-Sortierung des Stores abhaengt.
+    const roots = [];
+    for (const node of nodes) {
+      const parent = node.parent_id != null ? byId.get(node.parent_id) : null;
+      if (parent) parent.subchapters.push(node);
+      else roots.push(node);
     }
-  },
-
-  _snapshotFromTree(tree) {
-    const cloneChapter = (c, depth, parentId) => ({
-      id: c.id,
-      name: c.name,
-      depth,
-      parent_id: parentId,
-      pages: (c.pages || []).map(p => ({ id: p.id, name: p.name, chapter_id: c.id })),
-      subchapters: (c.subchapters || []).map(s => cloneChapter(s, depth + 1, c.id)),
-    });
-    this.workTree = (tree?.chapters || []).map(c => cloneChapter(c, 1, null));
-    this.soloPages = (tree?.topPages || []).map(p => ({ id: p.id, name: p.name, chapter_id: 0 }));
+    // depth aus dem rekonstruierten Nesting neu ableiten statt dem Store zu
+    // vertrauen (haelt promote/demote-Mirror und Snapshot konsistent).
+    for (const r of roots) this._setSubtreeDepth(r, 1);
+    this.workTree = roots;
+    this.soloPages = (nav.pages || [])
+      .filter(p => !p.chapter_id)
+      .map(p => ({ id: p.id, name: p.name, chapter_id: 0 }));
     this._recomputeInitialOpenState();
   },
 
@@ -67,11 +72,11 @@ export const persistMethods = {
     } catch (e) {
       root.setStatus(root.t(errKey, { detail: e.message }));
       // Bei Fehler einmal voll resynchronisieren — Server-Zustand könnte
-      // partiell mutiert sein.
+      // partiell mutiert sein. loadPages feuert `pages:loaded`, der Card-
+      // Listener zieht den Snapshot nach.
       await root.loadPages();
     } finally {
       this.organizerSaving = false;
-      this.organizerProgress = 0;
       this.organizerStatus = '';
     }
     return ok;
@@ -95,28 +100,36 @@ export const persistMethods = {
     return tree;
   },
 
-  // Phase-3-Vereinfachung: subchapter-Mutationen koennen Alpine.store('nav').tree (flach) nicht
-  // konsistent in-place mirrorn — wir reloaden stattdessen root komplett. Fuer
-  // reine Top-Level-Reorder oder Page-Bucket-Moves bleibt der granulare Mirror,
-  // damit Sidebar nicht flackert.
-  async _persistOrder({ affectedChapters = null, fullReload = false } = {}) {
+  // `mirror` waehlt, wie der Sidebar-Store nachgezogen wird:
+  //   'chapters' — Kapitel-Struktur (Order/Tiefe/Parent) hat sich geaendert.
+  //   'pages'    — Seiten-Zugehoerigkeit/-Reihenfolge; `affectedChapters` grenzt
+  //                den Rebuild der treeCh.pages-Arrays ein (null = alle).
+  //   'both'     — beides (History-Replay: Snapshot kann alles enthalten).
+  //   'reload'   — voller loadPages. Nur noetig, wenn ein Kapitel NEU ist und
+  //                seine Einsortierungsposition im flachen Store nicht aus dem
+  //                Workstate ableitbar ist (createSubchapter).
+  async _persistOrder({ mirror = 'chapters', affectedChapters = null } = {}) {
     const root = window.__app;
     const bookId = parseInt(Alpine.store('nav').selectedBookId, 10);
     if (!bookId) return false;
     const tree = this._buildTreeFromWorkstate();
     return await this._runMutation(async () => {
-      this.organizerProgress = 0;
       this.organizerStatus = root.t('bookOrganizer.savingOrder');
       await contentRepo.saveOrder(bookId, tree);
-      this.organizerProgress = 100;
-      if (fullReload) {
-        // Subchapter-Move/Indent/Outdent: kompletter Reload (Sidebar flach, OK).
-        await root.loadPages?.();
-      } else if (affectedChapters) {
-        this._mirrorPageMembershipInRoot(affectedChapters);
-      } else {
-        this._mirrorChapterOrderInRoot();
-      }
+      await this._applyMirror(mirror, affectedChapters);
     });
+  },
+
+  async _applyMirror(mirror, affectedChapters = null) {
+    if (mirror === 'reload') {
+      await window.__app.loadPages?.();
+      return;
+    }
+    if (mirror === 'pages') {
+      this._mirrorPageMembershipInRoot(affectedChapters);
+      return;
+    }
+    this._mirrorChapterOrderInRoot();
+    if (mirror === 'both') this._mirrorPageMembershipInRoot(null);
   },
 };

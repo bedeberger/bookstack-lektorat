@@ -78,7 +78,7 @@ export const bookEditorOutlineMethods = {
     // Container (nie das Fenster), sonst springt das Manuskript. `block: 'nearest'`-
     // Äquivalent: nur scrollen, wenn der Eintrag oben/unten aus dem Viewport ragt.
     _scrollOutlineToActive() {
-      const outline = this.$el?.querySelector?.('.book-editor-outline');
+      const outline = this.$root?.querySelector?.('.book-editor-outline');
       if (!outline) return;
       const active = outline.querySelector('.book-editor-outline-page--active');
       if (!active) return;
@@ -99,12 +99,12 @@ export const bookEditorOutlineMethods = {
       this.collapsedChapters = next;
     },
 
+    // Mini-Status-Punkt pro Outline-Eintrag. Leitet sich aus derselben
+    // Zustandsmaschine ab wie der Block-Status (`blockStatus` in der Card) —
+    // die Outline kennt nur einen Fehler-Zustand, darum faltet sie
+    // conflict → error. Keine zweite Ableitung, die auseinanderlaufen kann.
     outlinePageStatus(block) {
-      if (!block) return '';
-      if (block.saving) return 'saving';
-      if (block.conflict || block.saveError) return 'error';
-      if (block.dirty) return 'dirty';
-      if (block.savedAt && (Date.now() - block.savedAt) < 4000) return 'saved';
-      return '';
+      const status = this.blockStatus(block);
+      return status === 'conflict' ? 'error' : status;
     },
 };

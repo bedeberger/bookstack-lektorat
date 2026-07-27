@@ -1,32 +1,23 @@
 // Teil von bookEditorCard (Facade cards/book-editor-card.js): Find/Replace
 // über den ganzen Manuskript-Stream via CSS Custom Highlights. Methoden in
 // den Card-Scope gespreadet (gemeinsames `this`).
+//
+// Match-Suche, Offset-Rückmapping und Highlight-Registrierung kommen aus
+// editor/shared/text-find.js (geteilt mit dem Notebook-Finder). Hier bleibt
+// nur die Bucheditor-Eigenheit: N Block-Roots statt einem, Replace über
+// Range-Mutation (statt execCommand) und die Anbindung an die Save-Queue.
 
-const HIGHLIGHT_ALL = 'book-editor-find-match';
-const HIGHLIGHT_CURRENT = 'book-editor-find-current';
-let _hlAll = null, _hlCurrent = null;
-function ensureHighlights() {
-  if (typeof CSS === 'undefined' || !CSS.highlights || typeof Highlight === 'undefined') return false;
-  if (!_hlAll) { _hlAll = new Highlight(); CSS.highlights.set(HIGHLIGHT_ALL, _hlAll); }
-  if (!_hlCurrent) { _hlCurrent = new Highlight(); CSS.highlights.set(HIGHLIGHT_CURRENT, _hlCurrent); }
-  return true;
-}
-export function clearHighlights() {
-  if (_hlAll) _hlAll.clear();
-  if (_hlCurrent) _hlCurrent.clear();
-}
+import { collectMatches, createHighlightPair, rangeOf } from '../../editor/shared/text-find.js';
 
-function isWordCharBE(ch) {
-  if (!ch) return false;
-  return /[\p{L}\p{N}_]/u.test(ch);
-}
+const highlights = createHighlightPair('book-editor-find-match', 'book-editor-find-current');
+export const clearHighlights = highlights.clear;
 
 export const bookEditorFindMethods = {
     // ── Find / Replace ────────────────────────────────────────────────────
     openFind() {
       this.findOpen = true;
       this.$nextTick(() => {
-        const inp = document.querySelector('.book-editor-find-input');
+        const inp = this.$root.querySelector('.book-editor-find-input');
         if (inp) { inp.focus(); inp.select(); }
         this.recomputeFindMatches();
       });
@@ -50,98 +41,29 @@ export const bookEditorFindMethods = {
     },
 
     _allBlockEls() {
-      return Array.from(document.querySelectorAll('[data-book-editor-page]'));
+      return Array.from(this.$root.querySelectorAll('[data-book-editor-page]'));
     },
 
+    // Treffer aller Blöcke in Stream-Reihenfolge; jeder Match trägt seine
+    // Herkunft (pageId + Container) mit, damit Replace den Block wiederfindet.
     recomputeFindMatches() {
-      if (!this.findTerm) {
-        this.findMatches = [];
-        this.findIndex = -1;
-        this._refreshFindHighlights();
-        return;
-      }
-      const els = this._allBlockEls();
+      const opts = { caseSensitive: this.findCaseSensitive, wholeWord: this.findWholeWord };
       const matches = [];
-      for (const el of els) {
-        const pageId = parseInt(el.dataset.bookEditorPage, 10);
-        const found = this._matchesIn(el, this.findTerm, this.findCaseSensitive, this.findWholeWord);
-        for (const m of found) matches.push({ ...m, pageId, container: el });
+      if (this.findTerm) {
+        for (const el of this._allBlockEls()) {
+          const pageId = parseInt(el.dataset.bookEditorPage, 10);
+          for (const m of collectMatches(el, this.findTerm, opts)) {
+            matches.push({ ...m, pageId, container: el });
+          }
+        }
       }
       this.findMatches = matches;
       this.findIndex = matches.length > 0 ? 0 : -1;
       this._refreshFindHighlights();
     },
 
-    _matchesIn(root, term, caseSensitive, wholeWord) {
-      const nodes = [];
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-      let n;
-      while ((n = walker.nextNode())) nodes.push(n);
-      const full = nodes.map(x => x.nodeValue).join('');
-      const hay = caseSensitive ? full : full.toLowerCase();
-      const needle = caseSensitive ? term : term.toLowerCase();
-      const isWord = (ch) => isWordCharBE(ch) || ch === '_';
-      const starts = new Array(nodes.length);
-      let acc = 0;
-      for (let i = 0; i < nodes.length; i++) {
-        starts[i] = acc;
-        acc += nodes[i].nodeValue.length;
-      }
-      const out = [];
-      let from = 0;
-      while (from <= hay.length - needle.length) {
-        const idx = hay.indexOf(needle, from);
-        if (idx === -1) break;
-        if (wholeWord) {
-          const before = idx > 0 ? hay[idx - 1] : '';
-          const after = hay[idx + needle.length] || '';
-          if (isWord(before) || isWord(after)) { from = idx + 1; continue; }
-        }
-        out.push(this._mapOffset(nodes, starts, idx, needle.length));
-        from = idx + Math.max(1, needle.length);
-      }
-      return out;
-    },
-
-    _mapOffset(nodes, starts, globalStart, length) {
-      const globalEnd = globalStart + length;
-      let startNode = null, startOffset = 0, endNode = null, endOffset = 0;
-      for (let i = 0; i < nodes.length; i++) {
-        const s = starts[i];
-        const e = s + nodes[i].nodeValue.length;
-        if (startNode == null && globalStart >= s && globalStart <= e) {
-          startNode = nodes[i];
-          startOffset = globalStart - s;
-        }
-        if (globalEnd >= s && globalEnd <= e) {
-          endNode = nodes[i];
-          endOffset = globalEnd - s;
-          break;
-        }
-      }
-      return { startNode, startOffset, endNode, endOffset };
-    },
-
-    _rangeOf(m) {
-      const r = document.createRange();
-      r.setStart(m.startNode, m.startOffset);
-      r.setEnd(m.endNode, m.endOffset);
-      return r;
-    },
-
     _refreshFindHighlights() {
-      if (!ensureHighlights()) return;
-      clearHighlights();
-      if (!this.findMatches?.length) return;
-      for (let i = 0; i < this.findMatches.length; i++) {
-        const m = this.findMatches[i];
-        if (!m.startNode || !m.endNode) continue;
-        try {
-          const r = this._rangeOf(m);
-          if (i === this.findIndex) _hlCurrent.add(r);
-          else _hlAll.add(r);
-        } catch { /* noop */ }
-      }
+      highlights.paint(this.findMatches, this.findIndex);
     },
 
     findNext() {
@@ -162,8 +84,7 @@ export const bookEditorFindMethods = {
       const m = this.findMatches[i];
       if (!m?.startNode) return;
       try {
-        const range = this._rangeOf(m);
-        const rect = range.getBoundingClientRect();
+        const rect = rangeOf(m).getBoundingClientRect();
         if (rect && (rect.top < 120 || rect.bottom > window.innerHeight - 120)) {
           (m.startNode.parentElement || m.container)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
         }
@@ -187,6 +108,8 @@ export const bookEditorFindMethods = {
       if (!this.findTerm) return;
       this.recomputeFindMatches();
       if (this.findMatches.length === 0) return;
+      // Von hinten nach vorne: Ersetzungen weiter hinten lassen die Ranges der
+      // früheren Treffer intakt (sonst verschieben sich deren Offsets).
       const matches = this.findMatches.slice().reverse();
       let count = 0;
       for (const m of matches) {
@@ -202,19 +125,13 @@ export const bookEditorFindMethods = {
       const container = m.container || m.startNode.parentElement?.closest('[data-book-editor-page]');
       if (!container) return false;
       try {
-        const range = this._rangeOf(m);
+        const range = rangeOf(m);
         range.deleteContents();
-        const textNode = document.createTextNode(this.findReplace);
-        range.insertNode(textNode);
-        const pageId = parseInt(container.dataset.bookEditorPage, 10);
-        const block = this.blocks.find(b => b.kind === 'page' && b.pageId === pageId);
+        range.insertNode(document.createTextNode(this.findReplace));
+        const block = this._blockById(parseInt(container.dataset.bookEditorPage, 10));
         if (block) {
           block.html = container.innerHTML;
-          if (!block.dirty) {
-            block.dirty = true;
-            this.dirtyCount++;
-          }
-          this._scheduleAutosave(block.pageId);
+          this._markBlockDirty(block);
         }
         return true;
       } catch {

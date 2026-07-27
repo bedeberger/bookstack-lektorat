@@ -12,7 +12,7 @@ import {
   POINTER_GRACE_MS, POINTER_GRACE_TOUCH_MS,
   HAS_IO, HAS_MO, isFocusToggleChord,
 } from './constants.js';
-import { findBlockFromNode } from './dom-blocks.js';
+import { findBlockFromNode, resolveGutterCaretPoint, caretRangeAtPoint } from './dom-blocks.js';
 import { applyBlockMarks, repairBlockMarks } from './recenter.js';
 import { consumeProgrammaticScroll } from './typewriter.js';
 import { makeCursorHide } from './cursor-hide.js';
@@ -228,12 +228,47 @@ export function installFocusListeners({ ctrl, container }) {
 
   const onPointerMove = () => { if (isActive()) showCursor(); };
 
-  // Klick ins Padding (oberhalb/unterhalb/neben der Textspalte) soll den Caret
-  // nicht an Anfang/Ende der Seite werfen. Wheel-Scroll braucht aber
-  // pointer-events:auto am Container — preventDefault nur, wenn das Target
-  // wirklich der Container selbst ist (nicht ein Absatz darin).
-  const onPaddingMousedown = (e) => {
-    if (e.target === container) e.preventDefault();
+  // Klick in die leere Seitenfläche der Schreibspalte. Das Target ist genau dann
+  // der Container selbst, wenn kein Block getroffen wurde — also im Padding.
+  // Zwei Fälle, ein Handler:
+  //   - seitlich neben einer Zeile → Caret an deren erstes (links) bzw. letztes
+  //     (rechts) Zeichen. Der Browser-Default würde stattdessen an Buchanfang
+  //     oder -ende springen, weil der Container der nächste Treffer ist.
+  //   - im Kopf-/Tail-Puffer (über dem ersten, unter dem letzten Block) → nichts.
+  //     Die Puffer sind Anker-hoch (Invariante 9); ein Caret-Sprung an
+  //     Buchanfang/-ende ist dort nie gemeint.
+  // Darum `preventDefault` in BEIDEN Fällen und der Caret danach selbst gesetzt.
+  // `pointer-events` bleibt auto, sonst targetiert das Mausrad das Padding nicht
+  // und Scroll funktioniert nur über dem Text.
+  const onGutterMousedown = (e) => {
+    if (e.target !== container || e.button !== 0) return;
+    e.preventDefault();
+    const box = container.getBoundingClientRect();
+    const cs = getComputedStyle(container);
+    const pad = (v) => parseFloat(v) || 0;
+    const pt = resolveGutterCaretPoint(
+      { left: box.left + pad(cs.paddingLeft), right: box.right - pad(cs.paddingRight) },
+      container.querySelectorAll(BLOCK_SEL),
+      e.clientX, e.clientY,
+    );
+    if (!pt) return;
+    const range = caretRangeAtPoint(pt.x, pt.y);
+    if (!range || !container.contains(range.startContainer)) return;
+    // Fokus VOR der Selection: `preventDefault` hat den Browser-Fokuswechsel
+    // mitgeschluckt, und ein `focus()` danach würde den Caret erneut setzen.
+    if (document.activeElement !== container) {
+      try { container.focus({ preventScroll: true }); } catch { container.focus(); }
+    }
+    const sel = document.getSelection();
+    if (!sel) return;
+    // Shift-Klick erweitert die bestehende Auswahl bis zum Zeilenrand (links-
+    // klick + Shift-Rechtsklick markiert damit genau eine Zeile).
+    if (e.shiftKey && sel.rangeCount > 0 && sel.focusNode && container.contains(sel.focusNode)) {
+      sel.extend(range.startContainer, range.startOffset);
+      return;
+    }
+    sel.removeAllRanges();
+    sel.addRange(range);
   };
 
   // Mobile-Tastatur: visualViewport schrumpft UND kann scrollen (Android Chrome
@@ -254,7 +289,7 @@ export function installFocusListeners({ ctrl, container }) {
   container.addEventListener('scroll', onScroll, { passive: true, signal });
   container.addEventListener('pointerdown', markPointer, { signal });
   container.addEventListener('pointerup', markPointer, { signal });
-  container.addEventListener('mousedown', onPaddingMousedown, { signal });
+  container.addEventListener('mousedown', onGutterMousedown, { signal });
   container.addEventListener('blur', onBlur, { signal, capture: true });
   container.addEventListener('focus', onFocus, { signal, capture: true });
   window.addEventListener('keydown', onKey, { signal });

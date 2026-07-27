@@ -1,14 +1,13 @@
-// View-Slice: UI-State (collapse, search, jump) + Filter-Getter + Helper für
-// die Move-Combobox. Keine Daten-Mutation — alles, was Server-State ändert,
-// lebt in dnd/persist/crud.
+// View-Slice: UI-State (collapse, search, jump) + Filter + Helper für die
+// Comboboxen. Keine Daten-Mutation — alles, was Server-State ändert, lebt in
+// dnd/persist/crud.
 //
 // chapterOpen ist ein per-chapter-id Object-Map. Beim ersten Snapshot wird
 // COLLAPSE_THRESHOLD geprüft: > N Kapitel → alle zu, sonst alle auf. Inkremen-
 // telle Re-Snapshots (z.B. nach pages:loaded) übernehmen den User-Zustand und
 // ergänzen nur neue/entfernte IDs.
 
-const COLLAPSE_THRESHOLD = 8;
-const MAX_CHAPTER_DEPTH = 3; // SSoT in db/book-order.js — Frontend-Mirror.
+import { MAX_CHAPTER_DEPTH, COLLAPSE_THRESHOLD } from './constants.js';
 
 function _walkAllIds(chapters, out = []) {
   for (const c of chapters) {
@@ -38,33 +37,27 @@ export const viewMethods = {
     this.chapterOpen = next;
   },
 
+  // Pages-UL ist x-if-gated: nach Open/Close erscheinen/verschwinden ULs im DOM,
+  // Sortable muss daher neu gebunden werden (_reattachSortables wartet auf den
+  // nextTick und zieht die Such-Disable-Invariante mit).
   toggleChapter(id) {
     this.chapterOpen = { ...this.chapterOpen, [id]: !this.chapterOpen[id] };
-    this._refreshSortablesAfterTick();
+    this._reattachSortables();
   },
 
   expandAll() {
-    const next = {};
-    for (const id of _walkAllIds(this.workTree)) next[id] = true;
-    this.chapterOpen = next;
-    this._refreshSortablesAfterTick();
+    this._setAllChaptersOpen(true);
   },
 
   collapseAll() {
-    const next = {};
-    for (const id of _walkAllIds(this.workTree)) next[id] = false;
-    this.chapterOpen = next;
-    this._refreshSortablesAfterTick();
+    this._setAllChaptersOpen(false);
   },
 
-  // Pages-UL ist x-if-gated: nach Open/Close erscheinen/verschwinden ULs im DOM,
-  // Sortable muss daher neu gebunden werden. Debounce via nextTick.
-  _refreshSortablesAfterTick() {
-    this.$nextTick(() => {
-      this._destroySortables();
-      this._initSortables();
-      this._refreshSortableDisabled();
-    });
+  _setAllChaptersOpen(open) {
+    const next = {};
+    for (const id of _walkAllIds(this.workTree)) next[id] = open;
+    this.chapterOpen = next;
+    this._reattachSortables();
   },
 
   // Rekursiver Suchfilter: zeigt Kapitel, wenn Name-Match ODER ein Sub-/Page
@@ -80,27 +73,36 @@ export const viewMethods = {
     return { ...ch, pages, subchapters: subs };
   },
 
+  _searchQuery() {
+    return (this.organizerSearch || '').trim().toLowerCase();
+  },
+
+  // Methoden, keine Getter: beim {...viewMethods}-Spread in der Facade wuerden
+  // Getter-Definitionen sofort ausgefuehrt (this = POJO) und das Ergebnis als
+  // statisches Property eingefroren. Methoden bleiben reaktiv.
   filteredWorkTree() {
-    const q = (this.organizerSearch || '').trim().toLowerCase();
+    const q = this._searchQuery();
     if (!q) return this.workTree;
     return this.workTree.map(ch => this._filterChapter(ch, q)).filter(Boolean);
   },
 
   filteredSoloPages() {
-    const q = (this.organizerSearch || '').trim().toLowerCase();
+    const q = this._searchQuery();
     if (!q) return this.soloPages;
     return this.soloPages.filter(p => p.name.toLowerCase().includes(q));
   },
 
-  // Findet ein Kapitel im workTree (rekursiv) + liefert Pfad fuer Parent-Lookups.
+  // Findet ein Kapitel im workTree (rekursiv). Liefert den Knoten, seine
+  // Geschwister-Liste (`parentList`), den Index darin und den Eltern-Knoten
+  // (`parent`, null bei Top-Level) — genug fuer splice-basierte Struktur-Moves.
   _findChapter(id) {
-    const stack = [{ list: this.workTree, parent: null, parentList: null }];
+    const stack = [{ list: this.workTree, parent: null }];
     while (stack.length) {
-      const { list, parent, parentList } = stack.pop();
+      const { list, parent } = stack.pop();
       for (let i = 0; i < list.length; i++) {
         const c = list[i];
         if (c.id === id) return { node: c, parent, parentList: list, index: i };
-        if (c.subchapters?.length) stack.push({ list: c.subchapters, parent: c, parentList: list });
+        if (c.subchapters?.length) stack.push({ list: c.subchapters, parent: c });
       }
     }
     return null;
@@ -126,10 +128,10 @@ export const viewMethods = {
   },
 
   // SortableJS bei aktiver Suche disablen — gefilterter DOM-Zustand würde
-  // Reorder verfälschen. Wird via $watch('organizerSearch') und nach jedem
-  // _initSortables-Lauf getriggert.
+  // Reorder verfälschen. Teil von _reattachSortables, damit kein Re-Init die
+  // Invariante vergisst.
   _refreshSortableDisabled() {
-    const disabled = !!(this.organizerSearch || '').trim();
+    const disabled = !!this._searchQuery();
     for (const s of (this._sortables || [])) {
       try { s.option('disabled', disabled); } catch {}
     }
@@ -139,65 +141,58 @@ export const viewMethods = {
     const chId = parseInt(chIdRaw, 10);
     if (!chId) return;
     // Alle Vorfahren oeffnen, damit das Kapitel sichtbar ist.
-    const found = this._findChapter(chId);
-    if (found) {
-      const opens = { ...this.chapterOpen, [chId]: true };
-      let cur = found.parent;
-      while (cur) {
-        opens[cur.id] = true;
-        const up = this._findChapter(cur.id);
-        cur = up?.parent || null;
-      }
-      this.chapterOpen = opens;
-    } else {
-      this.chapterOpen = { ...this.chapterOpen, [chId]: true };
+    const opens = { ...this.chapterOpen, [chId]: true };
+    let cur = this._findChapter(chId)?.parent || null;
+    while (cur) {
+      opens[cur.id] = true;
+      cur = this._findChapter(cur.id)?.parent || null;
     }
+    this.chapterOpen = opens;
     await this.$nextTick();
-    const el = this.$root.querySelector(`[data-chapter-id="${chId}"]`);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    this.$root.querySelector(`[data-chapter-id="${chId}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     this.jumpToChapterId = '';
   },
 
-  // Options-Array für Move-Combobox pro Page. Listet alle Kapitel rekursiv mit
-  // Einrueckungspraefix, damit die Hierarchie im Picker erkennbar bleibt.
-  chapterMoveOptions(currentChId) {
-    const root = window.__app;
+  // Alle Kapitel als Combobox-Optionen, rekursiv mit Einrueckungspraefix, damit
+  // die Hierarchie im Picker erkennbar bleibt. `exclude` haelt das eigene
+  // Kapitel aus der Move-Liste.
+  _chapterOptions({ exclude = null } = {}) {
     const opts = [];
-    if (currentChId !== 0) opts.push({ value: 0, label: root.t('bookOrganizer.soloHeader') });
-    function walk(list, depth) {
+    const walk = (list, depth) => {
       for (const ch of list) {
-        if (ch.id !== currentChId) {
-          const prefix = depth > 1 ? '— '.repeat(depth - 1) : '';
-          opts.push({ value: ch.id, label: prefix + ch.name });
+        if (ch.id !== exclude) {
+          opts.push({ value: ch.id, label: (depth > 1 ? '— '.repeat(depth - 1) : '') + ch.name });
         }
         walk(ch.subchapters || [], depth + 1);
       }
-    }
+    };
     walk(this.workTree, 1);
     return opts;
+  },
+
+  // Move-Combobox pro Page. Wird im x-effect aufgerufen — die gelesenen
+  // Reactive-Felder (workTree, ch.name) sind damit Alpine-getrackt.
+  chapterMoveOptions(currentChId) {
+    const opts = this._chapterOptions({ exclude: currentChId });
+    if (currentChId !== 0) {
+      opts.unshift({ value: 0, label: window.__app.t('bookOrganizer.soloHeader') });
+    }
+    return opts;
+  },
+
+  jumpChapterOptions() {
+    return this._chapterOptions();
   },
 
   // Options-Array fuer die „In anderes Buch"-Combobox: alle zugaenglichen
   // Buecher ausser dem aktuellen. ACL aufs Ziel erzwingt der Server (editor).
   bookMoveOptions() {
-    const cur = String(Alpine.store('nav').selectedBookId);
-    return (Alpine.store('nav').books || [])
+    const nav = Alpine.store('nav');
+    const cur = String(nav.selectedBookId);
+    return (nav.books || [])
       .filter(b => String(b.id) !== cur)
       .map(b => ({ value: b.id, label: b.name || ('#' + b.id) }));
-  },
-
-  // Alle Top-Level-Kapitel als Optionen fuer die Jump-Combobox (rekursiv).
-  jumpChapterOptions() {
-    const opts = [];
-    function walk(list, depth) {
-      for (const ch of list) {
-        const prefix = depth > 1 ? '— '.repeat(depth - 1) : '';
-        opts.push({ value: ch.id, label: prefix + ch.name });
-        walk(ch.subchapters || [], depth + 1);
-      }
-    }
-    walk(this.workTree, 1);
-    return opts;
   },
 
   // Promote-Validierung: Kapitel auf Top-Level (depth=1) hat keinen Parent.
@@ -212,59 +207,35 @@ export const viewMethods = {
     const found = this._findChapter(id);
     if (!found) return false;
     if (found.index === 0) return false; // kein Vor-Geschwister
-    const movingSubtreeDepth = this._subtreeDepth(found.node);
     const newDepth = found.node.depth + 1;
-    return (newDepth + movingSubtreeDepth - 1) <= MAX_CHAPTER_DEPTH;
+    return (newDepth + this._subtreeDepth(found.node) - 1) <= MAX_CHAPTER_DEPTH;
+  },
+
+  // Tab / Shift+Tab im Kapitel-Input: bei moeglicher Aktion preventDefault +
+  // promote/demote; sonst native Tab durchlassen (Fokus-Move).
+  onChapterTab(ev, id) {
+    if (ev.shiftKey) {
+      if (this.canPromoteChapter(id)) {
+        ev.preventDefault();
+        this.promoteChapter(id);
+      }
+    } else if (this.canDemoteChapter(id)) {
+      ev.preventDefault();
+      this.demoteChapter(id);
+    }
   },
 
   // Kapitel-Längenverteilung (Zeichen) für die Collapse-Tile am Organizer-Fuss.
-  // Quelle: Alpine.store('nav').tree Top-Level-Kapitel mit .stats (von _refreshChapterStats
+  // Quelle: nav.tree Top-Level-Kapitel mit .stats (von _refreshChapterStats
   // gefüllt, Sub-Kapitel-Zeichen sind bereits aufaggregiert). Diverging-Bar um
   // Median analog overviewChapterDistribution. Reihenfolge = Lese-Reihenfolge.
   chapterLengthDist() {
-    const tree = Alpine.store('nav').tree || [];
-    const roots = tree.filter(it => it.type === 'chapter' && !it.solo && it.parent_id == null);
+    const roots = (Alpine.store('nav').tree || [])
+      .filter(it => it.type === 'chapter' && !it.solo && it.parent_id == null);
     // Signatur statt tree-Ref: stats wird in-place mutiert (kein neuer Ref),
     // sonst bliebe das Memo nach DnD/Stats-Refresh stale.
     const sig = roots.map(c => c.id + ':' + (c.stats?.chars || 0)).join('|');
-    return this._memo('chapterLenDist', [sig], () => {
-      const out = roots
-        .map(c => ({
-          id: c.id,
-          name: c.name,
-          chars: c.stats?.chars || 0,
-          words: c.stats?.words || 0,
-          pages: c.stats?.count || 0,
-          normseiten: c.stats?.normseiten || 0,
-        }))
-        .filter(c => c.chars > 0);
-      if (out.length === 0) return [];
-      const maxChars = Math.max(1, ...out.map(c => c.chars));
-      const minChars = Math.min(...out.map(c => c.chars));
-      const sorted = out.map(c => c.chars).sort((a, b) => a - b);
-      const mid = Math.floor(sorted.length / 2);
-      const median = sorted.length % 2 === 0
-        ? (sorted[mid - 1] + sorted[mid]) / 2
-        : sorted[mid];
-      const withDelta = out.map(c => ({
-        ...c,
-        deltaPct: median > 0 ? Math.round(((c.chars - median) / median) * 100) : 0,
-        isMax: c.chars === maxChars && maxChars > 0,
-        isMin: c.chars === minChars && maxChars !== minChars,
-      }));
-      const maxAbsDelta = Math.max(1, ...withDelta.map(c => Math.abs(c.deltaPct)));
-      const HALF = 48; // % of full track (cap, damit Bars nicht an Rand stossen)
-      return withDelta.map(c => {
-        const halfPct = (Math.abs(c.deltaPct) / maxAbsDelta) * HALF;
-        return {
-          ...c,
-          median,
-          barWidthPct: halfPct,
-          barLeftPct: c.deltaPct >= 0 ? 50 : 50 - halfPct,
-          isPositive: c.deltaPct >= 0,
-        };
-      });
-    });
+    return this._memo('chapterLenDist', [sig], () => _computeChapterLengthDist(roots));
   },
 
   _fmtNum(n) {
@@ -285,20 +256,46 @@ export const viewMethods = {
     memos[key] = { deps: [...deps], value };
     return value;
   },
-
-  // Tab / Shift+Tab im Kapitel-Input: bei moeglicher Aktion preventDefault +
-  // promote/demote; sonst native Tab durchlassen (Fokus-Move).
-  onChapterTab(ev, id) {
-    if (ev.shiftKey) {
-      if (this.canPromoteChapter(id)) {
-        ev.preventDefault();
-        this.promoteChapter(id);
-      }
-    } else {
-      if (this.canDemoteChapter(id)) {
-        ev.preventDefault();
-        this.demoteChapter(id);
-      }
-    }
-  },
 };
+
+// Reiner Compute-Body des Memos (CLAUDE.md „Memo-Pattern"): nimmt die
+// Top-Level-Kapitel-Items des Sidebar-Trees und liefert die Zeilen der
+// Diverging-Bar. Ohne `this` → unit-testbar (tests/unit/book-organizer.test.mjs).
+export function _computeChapterLengthDist(roots) {
+  const out = roots
+    .map(c => ({
+      id: c.id,
+      name: c.name,
+      chars: c.stats?.chars || 0,
+      words: c.stats?.words || 0,
+      pages: c.stats?.count || 0,
+      normseiten: c.stats?.normseiten || 0,
+    }))
+    .filter(c => c.chars > 0);
+  if (out.length === 0) return [];
+  const maxChars = Math.max(1, ...out.map(c => c.chars));
+  const minChars = Math.min(...out.map(c => c.chars));
+  const sorted = out.map(c => c.chars).sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+  const withDelta = out.map(c => ({
+    ...c,
+    deltaPct: median > 0 ? Math.round(((c.chars - median) / median) * 100) : 0,
+    isMax: c.chars === maxChars && maxChars > 0,
+    isMin: c.chars === minChars && maxChars !== minChars,
+  }));
+  const maxAbsDelta = Math.max(1, ...withDelta.map(c => Math.abs(c.deltaPct)));
+  const HALF = 48; // % of full track (cap, damit Bars nicht an Rand stossen)
+  return withDelta.map(c => {
+    const halfPct = (Math.abs(c.deltaPct) / maxAbsDelta) * HALF;
+    return {
+      ...c,
+      median,
+      barWidthPct: halfPct,
+      barLeftPct: c.deltaPct >= 0 ? 50 : 50 - halfPct,
+      isPositive: c.deltaPct >= 0,
+    };
+  });
+}

@@ -1,14 +1,13 @@
 // Create/Rename/Delete-Slice. Server-Calls via contentRepo + In-Place-Mirror
-// in Alpine.store('nav').tree/Alpine.store('nav').pages. History-Push pro erfolgreichem Schritt.
+// in nav.tree/nav.pages. History-Push pro erfolgreichem Schritt.
 import { contentRepo } from '../repo/content.js';
-import { _sortSoloFirst } from '../book/tree.js';
 import { localIsoDate } from '../utils.js';
+import { MAX_CHAPTER_DEPTH } from './constants.js';
 
 export const crudMethods = {
   onRenameChapter(id, ev) {
     const newName = (ev?.target?.value || '').trim();
-    const found = this._findChapter(id);
-    const ch = found?.node;
+    const ch = this._findChapter(id)?.node;
     if (!ch || !newName || ch.name === newName) {
       if (ch && ev?.target) ev.target.value = ch.name;
       return;
@@ -25,8 +24,8 @@ export const crudMethods = {
       await contentRepo.updateChapter(id, { name: newName });
       const ch = this._findChapter(id)?.node;
       if (ch) ch.name = newName;
-      // In-place mirror: chapter entry in Alpine.store('nav').tree + _chapterOrderMap (nur
-      // Top-Level — Sub-Kapitel sind in Alpine.store('nav').tree noch nicht abgebildet).
+      // In-place mirror: Kapitel-Eintrag in nav.tree (enthaelt alle Tiefen)
+      // + _chapterOrderMap (keyt auf den Namen).
       for (const it of Alpine.store('nav').tree) {
         if (it.type === 'chapter' && !it.solo && it.id === id) it.name = newName;
       }
@@ -55,17 +54,16 @@ export const crudMethods = {
 
   async _doRenamePage(id, newName, inputEl) {
     const root = window.__app;
+    const nav = Alpine.store('nav');
     try {
       await contentRepo.updatePage(id, { name: newName });
       const page = this._findPage(id);
       if (page) page.name = newName;
-      // In-place mirror: page in Alpine.store('nav').pages + ggf. solo-Tree-Entry.
-      const rp = Alpine.store('nav').pages.find(p => p.id === id);
+      // In-place mirror: Page in nav.pages + ggf. solo-Tree-Entry.
+      const rp = nav.pages.find(p => p.id === id);
       if (rp) rp.name = newName;
-      for (const it of Alpine.store('nav').tree) {
-        if (it.type === 'chapter' && it.solo && it.pages?.[0]?.id === id) {
-          it.name = newName;
-        }
+      for (const it of nav.tree) {
+        if (it.type === 'chapter' && it.solo && it.pages?.[0]?.id === id) it.name = newName;
       }
       // Pages-Maps neu aufbauen (Reihenfolge unverändert, aber Name-Index drin).
       this._rebuildPageOrderMaps();
@@ -122,7 +120,6 @@ export const crudMethods = {
 
   // Reine Create-Operation ohne Prompt — auch von History-Redo nutzbar.
   async _createPageRaw({ name, chapterId }) {
-    const root = window.__app;
     const body = {
       book_id: parseInt(Alpine.store('nav').selectedBookId, 10),
       name,
@@ -145,31 +142,34 @@ export const crudMethods = {
   },
 
   _mirrorCreatedChapter(created, name) {
-    const root = window.__app;
-    const treeEntry = {
+    const nav = Alpine.store('nav');
+    // Neues Top-Level-Kapitel steht in Depth-First-Reihenfolge am Ende — push
+    // trifft die richtige Position, kein Re-Sort (der wuerde Sub-Kapitel aus
+    // ihrem Parent reissen, siehe mirror.js Ordnungs-Invariante).
+    nav.tree.push({
       type: 'chapter',
       id: created.id,
       name: created.name || name,
       priority: created.priority ?? Number.MAX_SAFE_INTEGER,
+      depth: 1,
+      parent_id: null,
+      hasChildren: false,
       open: true,
       solo: false,
       pages: [],
-    };
-    Alpine.store('nav').tree.push(treeEntry);
-    Alpine.store('nav').tree.sort(_sortSoloFirst);
+    });
     this._rebuildChapterOrderMap();
-    if (typeof root._refreshChapterStats === 'function') root._refreshChapterStats();
+    this._refreshChapterStats();
   },
 
   _mirrorCreatedPage(created, chapterId) {
-    const root = window.__app;
-    const chapName = chapterId
-      ? Alpine.store('nav').tree.find(it => it.type === 'chapter' && !it.solo && String(it.id) === String(chapterId))?.name || null
-      : null;
-    const newPage = { ...created, chapterName: chapName };
-    Alpine.store('nav').pages.push(newPage);
+    const nav = Alpine.store('nav');
+    const findChapterEntry = (id) => nav.tree.find(
+      it => it.type === 'chapter' && !it.solo && String(it.id) === String(id));
+    const newPage = { ...created, chapterName: chapterId ? (findChapterEntry(chapterId)?.name || null) : null };
+    nav.pages.push(newPage);
     if (chapterId) {
-      const treeCh = Alpine.store('nav').tree.find(it => it.type === 'chapter' && !it.solo && String(it.id) === String(chapterId));
+      const treeCh = findChapterEntry(chapterId);
       if (treeCh) {
         // Reassignment statt push: Alpine-Reaktivität greift bei nested
         // Arrays nicht immer zuverlässig, wenn das Parent-Item kürzlich
@@ -178,29 +178,27 @@ export const crudMethods = {
         treeCh.pages = [...treeCh.pages, newPage];
         treeCh.open = true;
       }
+      // nav.pages haengt die neue Seite hinten an, obwohl sie hinter die Seiten
+      // ihres Kapitels gehoert → nach Kapitel-Rang neu sortieren.
+      this._resortRootPages();
     } else {
-      Alpine.store('nav').tree.push({
-        type: 'chapter',
-        id: 'solo-' + newPage.id,
-        name: newPage.name,
-        priority: newPage.priority ?? Number.MAX_SAFE_INTEGER,
-        open: true,
-        solo: true,
-        url: null,
-        pages: [newPage],
-      });
-      Alpine.store('nav').tree.sort(_sortSoloFirst);
+      // Solo-Entry direkt hinter den bestehenden Solo-Items einsetzen (die
+      // stehen per Invariante vor allen Kapiteln).
+      let lastSolo = -1;
+      for (let i = 0; i < nav.tree.length; i++) {
+        if (nav.tree[i].type === 'chapter' && nav.tree[i].solo) lastSolo = i;
+      }
+      nav.tree.splice(lastSolo + 1, 0, this._buildSoloEntry(newPage));
     }
-    root.tokEsts[newPage.id] = { tok: 0, words: 0, chars: 0 };
+    window.__app.tokEsts[newPage.id] = { tok: 0, words: 0, chars: 0 };
     this._rebuildPageOrderMaps();
     this._invalidateDiaryCache();
-    if (typeof root._refreshChapterStats === 'function') root._refreshChapterStats();
+    this._refreshChapterStats();
   },
 
   async deleteChapter(id) {
     const root = window.__app;
-    const found = this._findChapter(id);
-    const ch = found?.node;
+    const ch = this._findChapter(id)?.node;
     if (!ch) return;
     if (ch.pages.length > 0) {
       root.setStatus(root.t('bookOrganizer.chapterNotEmpty', { name: ch.name, n: ch.pages.length }));
@@ -225,36 +223,24 @@ export const crudMethods = {
     this._clearHistory();
   },
 
+  // Loescht ein LEERES Kapitel (Vorbedingung beider Aufrufer: deleteChapter
+  // prueft pages/subchapters, Create-Undo betrifft ein frisch erstelltes).
   async _deleteChapterRaw(id) {
-    const root = window.__app;
+    const nav = Alpine.store('nav');
     const found = this._findChapter(id);
-    const ch = found?.node;
-    if (!ch) return false;
+    if (!found) return false;
     return await this._runMutation(async () => {
       await contentRepo.deleteChapter(id);
-      // Cascade: Kapitel + dessen Seiten landen im Papierkorb.
-      const deletedPageIds = new Set(ch.pages.map(p => p.id));
-      for (let i = Alpine.store('nav').pages.length - 1; i >= 0; i--) {
-        if (deletedPageIds.has(Alpine.store('nav').pages[i].id)) Alpine.store('nav').pages.splice(i, 1);
+      for (let i = nav.tree.length - 1; i >= 0; i--) {
+        const it = nav.tree[i];
+        if (it.type === 'chapter' && !it.solo && it.id === id) nav.tree.splice(i, 1);
       }
-      for (let i = Alpine.store('nav').tree.length - 1; i >= 0; i--) {
-        if (Alpine.store('nav').tree[i].type === 'chapter' && !Alpine.store('nav').tree[i].solo && Alpine.store('nav').tree[i].id === id) {
-          Alpine.store('nav').tree.splice(i, 1);
-        }
-      }
-      // Aus workTree entfernen (nested-aware).
-      if (found.parentList && found.index >= 0) {
-        found.parentList.splice(found.index, 1);
-      }
-      this._rebuildChapterOrderMap();
-      this._rebuildPageOrderMaps();
+      found.parentList.splice(found.index, 1);
+      // Struktur-Mirror zieht priority/depth/parent_id/hasChildren der
+      // verbleibenden Kapitel nach (der Parent verliert ggf. sein letztes Kind).
+      this._mirrorChapterOrderInRoot();
       this._invalidateDiaryCache();
-      if (typeof root._refreshChapterStats === 'function') root._refreshChapterStats();
-      // Subchapter-Delete: Sidebar (flach) ist inkonsistent → fullReload.
-      if (found.node.depth > 1) await root.loadPages?.();
-      await this.$nextTick();
-      this._destroySortables();
-      this._initSortables();
+      await this._reattachSortables();
     }, 'bookOrganizer.deleteFailed');
   },
 
@@ -263,7 +249,7 @@ export const crudMethods = {
     const root = window.__app;
     const parent = this._findChapter(parentChapterId)?.node;
     if (!parent) return;
-    if (parent.depth >= 3) {
+    if (parent.depth >= MAX_CHAPTER_DEPTH) {
       root.setStatus(root.t('bookOrganizer.maxDepthReached'));
       return;
     }
@@ -283,62 +269,13 @@ export const crudMethods = {
       if (!created?.id) return;
       createdId = created.id;
       this.chapterOpen = { ...this.chapterOpen, [parent.id]: true, [created.id]: true };
-      // Alpine.store('nav').tree ist flach + depth-first; ein in-place-Mirror muesste die
-      // Insertion-Position rekonstruieren. Stattdessen fullReload — gleicher
-      // Pfad wie _deleteChapterRaw fuer Sub-Kapitel. pages:loaded triggert
-      // anschliessend _rerender via Card-Listener und befuellt workTree.
-      await root.loadPages?.();
+      // Einziger verbleibende fullReload-Pfad: das neue Kapitel existiert im
+      // Workstate noch nicht, seine Einsortierungsposition im flachen nav.tree
+      // ist daraus nicht ableitbar. pages:loaded triggert anschliessend
+      // _rerender via Card-Listener und befuellt workTree.
+      await this._applyMirror('reload');
     }, 'bookOrganizer.createFailed');
     if (ok && createdId != null) this._recordCreateChapter(createdId, name);
-  },
-
-  // Promote: Kapitel ein Level hoeher (rueckt aus dem Eltern-Kapitel raus,
-  // wird Geschwister des bisherigen Elternteils). Top-Level: no-op.
-  async promoteChapter(id) {
-    if (this.organizerSaving) return;
-    const found = this._findChapter(id);
-    if (!found || found.node.depth <= 1) return;
-    const before = this._snapshotWorkstate();
-    // Aus aktuellem parentList entfernen.
-    const node = found.node;
-    found.parentList.splice(found.index, 1);
-    // Eltern-Suchen → in dessen parentList eintragen, direkt nach dem Elternteil.
-    const parentLoc = this._findChapter(found.parent.id);
-    if (!parentLoc) {
-      // Theoretisch unmoeglich; sicherheitshalber zurueckschieben.
-      found.parentList.splice(found.index, 0, node);
-      return;
-    }
-    parentLoc.parentList.splice(parentLoc.index + 1, 0, node);
-    // depth/parent_id aktualisieren rekursiv.
-    this._reassignDepth(node, node.depth - 1, parentLoc.parent ? parentLoc.parent.id : null);
-    const ok = await this._persistOrder({ fullReload: true });
-    if (ok) this._recordReorder(before);
-  },
-
-  // Demote: Kapitel ein Level tiefer (wird Sub-Kapitel des Vor-Geschwisters).
-  async demoteChapter(id) {
-    if (this.organizerSaving) return;
-    if (!this.canDemoteChapter(id)) return;
-    const found = this._findChapter(id);
-    if (!found) return;
-    const before = this._snapshotWorkstate();
-    const node = found.node;
-    const newParent = found.parentList[found.index - 1];
-    found.parentList.splice(found.index, 1);
-    newParent.subchapters = [...(newParent.subchapters || []), node];
-    this._reassignDepth(node, newParent.depth + 1, newParent.id);
-    this.chapterOpen = { ...this.chapterOpen, [newParent.id]: true };
-    const ok = await this._persistOrder({ fullReload: true });
-    if (ok) this._recordReorder(before);
-  },
-
-  _reassignDepth(node, depth, parentId) {
-    node.depth = depth;
-    node.parent_id = parentId;
-    for (const sub of (node.subchapters || [])) {
-      this._reassignDepth(sub, depth + 1, node.id);
-    }
   },
 
   async deletePage(id) {
@@ -365,9 +302,7 @@ export const crudMethods = {
     return await this._runMutation(async () => {
       await contentRepo.deletePage(id);
       this._forgetPageLocally(id);
-      await this.$nextTick();
-      this._destroySortables();
-      this._initSortables();
+      await this._reattachSortables();
     }, 'bookOrganizer.deleteFailed');
   },
 
@@ -375,14 +310,14 @@ export const crudMethods = {
   // Geteilt von _deletePageRaw (Seite geloescht) und movePageToBook (Seite hat
   // dieses Buch verlassen). Rebuild der Maps + Chapter-Stats inklusive.
   _forgetPageLocally(id) {
-    const root = window.__app;
-    const pi = Alpine.store('nav').pages.findIndex(p => p.id === id);
-    if (pi >= 0) Alpine.store('nav').pages.splice(pi, 1);
-    for (let i = Alpine.store('nav').tree.length - 1; i >= 0; i--) {
-      const it = Alpine.store('nav').tree[i];
+    const nav = Alpine.store('nav');
+    const pi = nav.pages.findIndex(p => p.id === id);
+    if (pi >= 0) nav.pages.splice(pi, 1);
+    for (let i = nav.tree.length - 1; i >= 0; i--) {
+      const it = nav.tree[i];
       if (it.type !== 'chapter') continue;
       if (it.solo && it.pages?.[0]?.id === id) {
-        Alpine.store('nav').tree.splice(i, 1);
+        nav.tree.splice(i, 1);
       } else if (!it.solo) {
         const j = it.pages.findIndex(p => p.id === id);
         if (j >= 0) it.pages.splice(j, 1);
@@ -403,7 +338,7 @@ export const crudMethods = {
     }
     this._rebuildPageOrderMaps();
     this._invalidateDiaryCache();
-    if (typeof root._refreshChapterStats === 'function') root._refreshChapterStats();
+    this._refreshChapterStats();
   },
 
   // Seite in ein anderes Buch verschieben. Bestaetigung mit Warnung (Buchwelt-
@@ -412,6 +347,7 @@ export const crudMethods = {
   // Kapitel erfolgt dort im Organizer. Nicht via History rueckgaengig.
   async movePageToBook(pageId, targetBookIdRaw) {
     const root = window.__app;
+    const nav = Alpine.store('nav');
     if (this.organizerSaving) return;
     const targetBookId = parseInt(targetBookIdRaw, 10);
     if (!targetBookId) return;
@@ -421,7 +357,7 @@ export const crudMethods = {
       root.setStatus(root.t('bookOrganizer.pageInEditorWarn'));
       return;
     }
-    const book = (Alpine.store('nav').books || []).find(b => String(b.id) === String(targetBookId));
+    const book = (nav.books || []).find(b => String(b.id) === String(targetBookId));
     const bookName = book?.name || ('#' + targetBookId);
     const ok = await root.appConfirm({
       message: root.t('bookOrganizer.moveToBookConfirm', { page: page.name, book: bookName }),
@@ -430,14 +366,12 @@ export const crudMethods = {
       danger: true,
     });
     if (!ok) return;
-    const sourceBookId = parseInt(Alpine.store('nav').selectedBookId, 10);
+    const sourceBookId = parseInt(nav.selectedBookId, 10);
     const pageName = page.name;
     const done = await this._runMutation(async () => {
       await contentRepo.movePage(pageId, { target_book_id: targetBookId }, { sourceBookId });
       this._forgetPageLocally(pageId);
-      await this.$nextTick();
-      this._destroySortables();
-      this._initSortables();
+      await this._reattachSortables();
     }, 'bookOrganizer.moveToBookFailed');
     if (done) {
       // Cross-Book-Move ist nicht reversibel → History invalidieren.

@@ -8,7 +8,7 @@
 
 import { contentRepo } from '../repo/content.js';
 import { fetchJson, localIsoDate, tzOpts } from '../utils.js';
-import { _sortSoloFirst } from './tree.js';
+import { insertChapterItem } from './tree/load.js';
 
 const _CACHE_KEY = '_diaryCalendarCache';
 
@@ -298,11 +298,24 @@ export const diaryCalendarMethods = {
       id: created.id,
       name: created.name,
       priority: created.position ?? parseInt(yearStr, 10),
+      depth: 1,
+      parent_id: null,
+      hasChildren: false,
       open: true,
       solo: false,
       pages: [],
     };
-    this.$store.nav.tree = [...this.$store.nav.tree, chapterItem].sort(_sortSoloFirst);
+    // Jahr-Kapitel sind chronologisch sortiert: hinter das letzte frühere Jahr
+    // einfuegen, sonst vor das erste spaetere. Kein globaler priority-Sort —
+    // der wuerde Sub-Kapitel aus ihrem Parent reissen (siehe tree/load.js).
+    const topLevel = this.$store.nav.tree.filter(
+      i => i.type === 'chapter' && !i.solo && (i.depth || 1) === 1);
+    const prev = topLevel.filter(i => (i.priority ?? 0) < chapterItem.priority).pop();
+    const next = topLevel.find(i => (i.priority ?? 0) > chapterItem.priority);
+    this.$store.nav.tree = insertChapterItem(this.$store.nav.tree, chapterItem, {
+      afterChapterId: prev?.id ?? null,
+      beforeChapterId: next?.id ?? null,
+    });
     return created.id;
   },
 

@@ -1,0 +1,59 @@
+<!--
+  Kopfzeile + Seitenliste eines Organizer-Kapitels. Identisch auf allen drei
+  Kapitel-Tiefen → SSoT als string-seitiger Fragment-Include (Marker
+  @include organizer-chapter-body, app-ui.js#_resolveIncludes), pro
+  x-for-Iteration geklont.
+
+  Vertrag: der umschliessende x-for-Scope stellt `ch` bereit — auf JEDER Tiefe
+  unter demselben Namen (Level 2/3 iterieren `ch in (ch.subchapters || [])`,
+  Alpine shadowed den aeusseren Alias im Kind-Scope). Tiefenabhaengiges kommt
+  aus `ch.depth`, nicht aus dem Markup; die Level-Wrapper im Haupt-Partial
+  liefern nur `data-organizer-depth` + `data-parent-chapter-id` fuer die
+  Sortable-Drop-Validierung.
+-->
+<div class="organizer-chapter-header">
+  <span class="organizer-drag-handle organizer-drag-handle--chapter" :data-tip="$app.t('bookOrganizer.dragHint')" aria-hidden="true">⋮⋮</span>
+  <button type="button" class="organizer-chapter-toggle"
+          @click.stop="toggleChapter(ch.id)"
+          :aria-expanded="!!chapterOpen[ch.id]"
+          :aria-label="$app.t(chapterOpen[ch.id] ? 'sidebar.collapseAll' : 'sidebar.expandAll')">
+    <span class="history-chevron" :class="{ open: organizerSearch ? true : chapterOpen[ch.id] }"></span>
+  </button>
+  <input type="text" class="organizer-name organizer-name--chapter" :value="ch.name"
+         @blur="onRenameChapter(ch.id, $event)"
+         @keydown.enter.prevent="$event.target.blur()"
+         @keydown.tab="onChapterTab($event, ch.id)"
+         :disabled="organizerSaving"
+         autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" data-form-type="other" data-spellcheck="spelling"
+         :aria-label="$app.t('bookOrganizer.renameChapter')">
+  <span class="organizer-chapter-meta tag" x-text="ch.pages.length === 1 ? $app.t('sidebar.pagesCountOne') : $app.t('sidebar.pagesCount', { n: ch.pages.length })"></span>
+  <span class="organizer-chapter-meta tag" x-show="ch.subchapters?.length"
+        x-text="$app.t('bookOrganizer.subchaptersCount', { n: ch.subchapters?.length || 0 })"></span>
+  <div class="organizer-chapter-actions">
+    <button type="button" class="icon-btn icon-btn--ghost" @click="createPage(ch.id)" :disabled="organizerSaving" :data-tip="$app.t('bookOrganizer.addPageHere')" :aria-label="$app.t('bookOrganizer.addPageHere')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#file-plus"/></svg></button>
+    <button type="button" class="icon-btn icon-btn--ghost" @click="createSubchapter(ch.id)"
+            :disabled="organizerSaving || ch.depth >= maxChapterDepth"
+            :data-tip="ch.depth >= maxChapterDepth ? $app.t('bookOrganizer.maxDepthReached') : $app.t('bookOrganizer.addSubchapter')"
+            :aria-label="$app.t('bookOrganizer.addSubchapter')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#folder-plus"/></svg></button>
+    <button type="button" class="icon-btn icon-btn--ghost"
+            @click="promoteChapter(ch.id)" :disabled="organizerSaving || !canPromoteChapter(ch.id)"
+            :data-tip="$app.t('bookOrganizer.promote')"
+            :aria-label="$app.t('bookOrganizer.promote')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#arrow-left"/></svg></button>
+    <button type="button" class="icon-btn icon-btn--ghost"
+            @click="demoteChapter(ch.id)" :disabled="organizerSaving || !canDemoteChapter(ch.id)"
+            :data-tip="$app.t('bookOrganizer.demote')"
+            :aria-label="$app.t('bookOrganizer.demote')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#arrow-right"/></svg></button>
+    <button type="button" class="organizer-delete-btn organizer-delete-btn--chapter" @click="deleteChapter(ch.id)"
+            :disabled="organizerSaving || ch.pages.length > 0 || (ch.subchapters?.length || 0) > 0"
+            :data-tip="(ch.pages.length > 0 || (ch.subchapters?.length || 0) > 0) ? $app.t('bookOrganizer.deleteChapterNotEmptyHint') : $app.t('bookOrganizer.deleteChapter')"
+            :aria-label="$app.t('bookOrganizer.deleteChapter')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#trash"/></svg></button>
+  </div>
+</div>
+<template x-if="organizerSearch ? true : chapterOpen[ch.id]">
+<ul class="organizer-pages" data-organizer="page-list" :data-chapter-id="ch.id">
+  <template x-for="page in ch.pages" :key="page.id">
+    <!-- @include organizer-page-row -->
+  </template>
+  <li class="organizer-empty" x-show="ch.pages.length === 0 && !(ch.subchapters?.length)" x-text="$app.t('bookOrganizer.noPagesInChapter')"></li>
+</ul>
+</template>

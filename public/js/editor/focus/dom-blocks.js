@@ -56,6 +56,59 @@ export function jumpToTrailingParagraph(container) {
   return added;
 }
 
+// Klick in die leere Seitenfläche links/rechts der Textspalte → Punkt AUF
+// derselben Zeile, an den der Caret gehört: y bleibt (geclamped in den
+// getroffenen Block), x wandert an den Rand der Textspalte. `caretRangeFromPoint`
+// trifft dort das erste bzw. letzte Zeichen der angeklickten Zeile.
+//
+// `null` heisst „hier keinen Caret setzen": der Klick liegt im vertikalen Puffer
+// über dem ersten oder unter dem letzten Block. Die Puffer sind Anker-hoch
+// (Invariante 9), ein Sprung an Buchanfang/-ende ist dort nie gemeint.
+//
+// Pure Geometrie: `contentBox` ist `{ left, right }` der *Content*-Box (innerhalb
+// des Paddings), `blocks` ein Iterable mit `getBoundingClientRect()`.
+export function resolveGutterCaretPoint(contentBox, blocks, x, y) {
+  if (!contentBox || !(contentBox.right > contentBox.left)) return null;
+  let firstTop = Infinity;
+  let lastBottom = -Infinity;
+  let hit = null;
+  let hitDist = Infinity;
+  for (const el of blocks) {
+    const r = el.getBoundingClientRect();
+    if (!(r.height > 0)) continue;
+    if (r.top < firstTop) firstTop = r.top;
+    if (r.bottom > lastBottom) lastBottom = r.bottom;
+    // 0 = y liegt im Block; sonst Abstand zur nächsten Kante (Klick in den
+    // Absatz-Zwischenraum landet am nächstgelegenen Block).
+    const dist = y < r.top ? r.top - y : (y > r.bottom ? y - r.bottom : 0);
+    if (dist < hitDist) { hitDist = dist; hit = r; }
+  }
+  if (!hit || y < firstTop || y > lastBottom) return null;
+  // 1 px in den Block hineinziehen, damit der Punkt nicht auf der Kante zum
+  // Nachbarblock liegt; sehr flache Blöcke fallen auf ihre Mitte zurück.
+  const cy = hit.height > 2
+    ? Math.min(Math.max(y, hit.top + 1), hit.bottom - 1)
+    : (hit.top + hit.bottom) / 2;
+  const cx = Math.min(Math.max(x, contentBox.left + 1), contentBox.right - 1);
+  return { x: cx, y: cy };
+}
+
+// Punkt → collapsed Range. Standard-API (`caretPositionFromPoint`) zuerst,
+// WebKit-Legacy (`caretRangeFromPoint`) als Fallback — Safari kennt die
+// Standard-Variante erst ab 17.4, und der macOS-Client läuft in einer WKWebView.
+export function caretRangeAtPoint(x, y) {
+  if (document.caretPositionFromPoint) {
+    const p = document.caretPositionFromPoint(x, y);
+    if (p && p.offsetNode) {
+      const r = document.createRange();
+      r.setStart(p.offsetNode, p.offset);
+      r.collapse(true);
+      return r;
+    }
+  }
+  return document.caretRangeFromPoint ? document.caretRangeFromPoint(x, y) : null;
+}
+
 export function getScrollContainer() {
   // Fokusmodus läuft ausschliesslich im Edit-Modus (Guard in enterFocusMode),
   // also ist `--editing` immer der gewünschte Scroll-Container.

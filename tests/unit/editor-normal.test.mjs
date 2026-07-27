@@ -58,16 +58,23 @@ test('Dirty-Check: _markEditDirty existiert', () => {
 
 // ── Auto-Save-Konstanten ─────────────────────────────────────────────────────
 
+// Die Werte liegen in editor/shared/autosave.js (geteilt mit dem Bucheditor,
+// damit beide Editoren im selben Rhythmus speichern); der Notebook-Editor
+// re-exportiert sie nur.
+const autosaveSrc = read('public/js/editor/shared/autosave.js');
+
 test('Auto-Save: AUTOSAVE_IDLE_MS + AUTOSAVE_MAX_MS deklariert', () => {
-  assert.match(editSrc, /const AUTOSAVE_IDLE_MS\s*=\s*\d+/,
+  assert.match(autosaveSrc, /const AUTOSAVE_IDLE_MS\s*=\s*\d+/,
     'AUTOSAVE_IDLE_MS fehlt — Idle-Debounce greift sonst nicht');
-  assert.match(editSrc, /const AUTOSAVE_MAX_MS\s*=\s*\d+/,
+  assert.match(autosaveSrc, /const AUTOSAVE_MAX_MS\s*=\s*\d+/,
     'AUTOSAVE_MAX_MS fehlt — Dauer-Tipper hat keinen Save-Cap');
+  assert.match(editSrc, /export\s*\{[^}]*AUTOSAVE_IDLE_MS[^}]*\}\s*from\s*['"][^'"]*shared\/autosave\.js['"]/,
+    'Notebook-Editor muss die geteilten Konstanten beziehen, nicht eigene definieren');
 });
 
 test('Auto-Save: IDLE < MAX (sonst Cap nutzlos)', () => {
-  const idle = Number(editSrc.match(/const AUTOSAVE_IDLE_MS\s*=\s*(\d+)/)?.[1]);
-  const max  = Number(editSrc.match(/const AUTOSAVE_MAX_MS\s*=\s*(\d+)/)?.[1]);
+  const idle = Number(autosaveSrc.match(/const AUTOSAVE_IDLE_MS\s*=\s*(\d+)/)?.[1]);
+  const max  = Number(autosaveSrc.match(/const AUTOSAVE_MAX_MS\s*=\s*(\d+)/)?.[1]);
   assert.ok(idle && max, 'Konstanten nicht gefunden');
   assert.ok(idle < max, `IDLE (${idle}) muss < MAX (${max}) sein`);
 });

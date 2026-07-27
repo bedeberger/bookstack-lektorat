@@ -29,15 +29,20 @@ router.get('/:book_id/contents', async (req, res) => {
     // Flat-Liste in Lesereihenfolge: Seiten ohne Kapitel zuerst, dann Kapitel
     // depth-first (gleiche Reihenfolge wie pagetree, siehe public/js/book/tree.js).
     // _chapterName ist das direkt umschliessende Kapitel.
-    const flatRaw = contentStore.flattenTree(tree);
-    const flatMetas = [
-      ...flatRaw.filter(r => r.chapterId == null),
-      ...flatRaw.filter(r => r.chapterId != null),
-    ].map(({ page, chapterName }) => ({ ...page, _chapterName: chapterName }));
+    const solos = [];
+    const inChapters = [];
+    for (const { page, chapterId, chapterName } of contentStore.flattenTree(tree)) {
+      (chapterId == null ? solos : inChapters).push({ ...page, _chapterName: chapterName });
+    }
+    const flatMetas = [...solos, ...inChapters];
 
     const details = await contentStore.loadPagesBatch(flatMetas, req, { batchSize: 15 });
 
     // Reihenfolge erhalten: loadPagesBatch garantiert keine Ordnung (Promise.allSettled).
+    // Feldliste bewusst schmal — bei einem grossen Buch geht jedes zusätzliche
+    // Feld mal Seitenzahl über die Leitung. Konsumenten: Bucheditor
+    // (public/js/cards/book-editor-card.js) und der Fassungen-Reader als
+    // Diff-Basis (public/js/cards/snapshots-card.js, liest pageId + html).
     const byId = new Map(details.map(d => [d.id, d]));
     const ordered = flatMetas
       .map(meta => {
@@ -51,9 +56,6 @@ router.get('/:book_id/contents', async (req, res) => {
           chapterName: meta._chapterName,
           html: d.html || '',
           updated_at: d.updated_at,
-          revision_count: d.revision_count || 0,
-          book_slug: d.book_slug || null,
-          slug: d.slug || null,
         };
       })
       .filter(Boolean);

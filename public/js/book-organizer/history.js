@@ -18,7 +18,6 @@
 // Delete (Kapitel/Seite) ist ebenfalls nicht reversibel (Hard-Delete in SQLite,
 // keine Content-Snapshots). Delete-Operationen rufen `_clearHistory()` und
 // blocken damit Undo komplett, statt einen inkonsistenten Stack zu hinterlassen.
-import { contentRepo } from '../repo/content.js';
 
 const HISTORY_MAX = 10;
 
@@ -117,27 +116,14 @@ export const historyMethods = {
     return false;
   },
 
+  // Snapshot einspielen: Workstate ersetzen, Sortables neu binden, dann derselbe
+  // Single-Tree-PUT wie jede andere Reorder-Mutation. `mirror: 'both'`, weil ein
+  // Snapshot sowohl Kapitel-Struktur als auch Seiten-Zugehoerigkeit enthalten
+  // kann (Chapter-Prio/Tiefe zuerst, danach Page-Membership mit neuen Prios).
   async _applyReorderSnapshot(snap) {
-    const root = window.__app;
-    const bookId = parseInt(Alpine.store('nav').selectedBookId, 10);
-    if (!bookId) return false;
     this.workTree = JSON.parse(JSON.stringify(snap.workTree));
     this.soloPages = JSON.parse(JSON.stringify(snap.soloPages));
-    await this.$nextTick();
-    this._destroySortables();
-    this._initSortables();
-    const tree = this._buildTreeFromWorkstate();
-    return await this._runMutation(async () => {
-      this.organizerProgress = 0;
-      this.organizerStatus = root.t('bookOrganizer.savingOrder');
-      await contentRepo.saveOrder(bookId, tree);
-      this.organizerProgress = 100;
-      // Snapshot kann sowohl Chapter-Reorder als auch Page-Movement enthalten —
-      // beide Mirror-Pfade laufen lassen (Chapter-Prio zuerst, danach
-      // Page-Membership-Rebuild mit aktualisierten Prios).
-      this._mirrorChapterOrderInRoot();
-      const allChapIds = this.workTree.map(c => c.id);
-      this._mirrorPageMembershipInRoot([...allChapIds, 0]);
-    });
+    await this._reattachSortables();
+    return await this._persistOrder({ mirror: 'both' });
   },
 };
