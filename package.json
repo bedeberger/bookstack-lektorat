@@ -14,9 +14,10 @@
     "sw:manifest": "node scripts/sw-manifest.js",
     "test": "npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:smoke",
     "test:unit": "DB_FSYNC=off node --test --test-concurrency=4 \"tests/unit/*.test.js\" \"tests/unit/*.test.mjs\"",
-    "test:integration": "DB_FSYNC=off node --test \"tests/integration/*.test.js\"",
+    "test:integration": "DB_FSYNC=off node --test --test-concurrency=4 \"tests/integration/*.test.js\"",
     "test:e2e": "playwright test",
     "test:smoke": "playwright test --config=playwright.app.config.js",
+    "test:focus": "playwright test tests/e2e/focus-editor.spec.js && playwright test --config=playwright.app.config.js tests/e2e-app/focus-editor-app.spec.js",
     "cache:cleanup": "node scripts/cache-cleanup.js",
     "squash:regen": "node tools/regen-squashed.js",
     "eval:lektorat": "node scripts/eval-lektorat.js"

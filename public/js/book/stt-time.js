@@ -8,6 +8,8 @@
 //
 // `this` zeigt auf die Alpine-Komponente (via spread in app.js).
 
+import { acquireTickLease, clampTickSeconds, releaseTickLease } from './heartbeat.js';
+
 const HEARTBEAT_MS = 15000;
 
 export const sttTimeMethods = {
@@ -52,6 +54,7 @@ export const sttTimeMethods = {
     }
     this._flushSttTime(useBeacon);
     this._sttActiveSince = null;
+    releaseTickLease('stt');
   },
 
   // Zählt die Zeichen eines eingefügten Transkript-Segments. Wird auch
@@ -68,8 +71,12 @@ export const sttTimeMethods = {
     let seconds = 0;
     if (this._sttActiveSince != null) {
       const now = Date.now();
-      seconds = Math.max(0, Math.round((now - this._sttActiveSince) / 1000));
+      // Clamp gegen gestallte Timer — siehe heartbeat.js.
+      seconds = clampTickSeconds((now - this._sttActiveSince) / 1000);
       this._sttActiveSince = now;
+      // Lease nur auf die Sekunden: die Zeichen zählt der Tab, der sie
+      // tatsächlich eingefügt hat, und sie dürfen nie verfallen.
+      if (seconds > 0 && !acquireTickLease('stt', now)) seconds = 0;
     }
     const chars = this._sttCharsPending || 0;
     this._sttCharsPending = 0;

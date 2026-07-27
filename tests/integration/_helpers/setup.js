@@ -5,8 +5,22 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+// Wegwerf-DB moeglichst auf ein RAM-Dateisystem legen. Auf CI-Runnern mit
+// Netz-Storage (Ceph-RBD) kostet jede SQLite-Datei sonst Netz-Latenz pro
+// Write — bei parallel laufenden Test-Files summiert sich das zu Sekunden.
+// TEST_TMPDIR erlaubt ein explizites Override.
+function _tmpBase() {
+  if (process.env.TEST_TMPDIR) return process.env.TEST_TMPDIR;
+  try {
+    fs.accessSync('/dev/shm', fs.constants.W_OK);
+    return '/dev/shm';
+  } catch (_) {
+    return os.tmpdir();
+  }
+}
+
 function bootstrap() {
-  const dbFile = path.join(os.tmpdir(), `lektorat-test-${process.pid}-${Date.now()}.db`);
+  const dbFile = path.join(_tmpBase(), `lektorat-test-${process.pid}-${Date.now()}.db`);
   process.env.DB_PATH = dbFile;
   process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'error';
 
@@ -61,6 +75,16 @@ function bootstrap() {
   const shared = require('../../../routes/jobs/shared');
   const dbSchema = require('../../../db/schema');
 
+  // Warm-up: Module, die sonst erst *waehrend* des ersten Jobs lazy geladen
+  // werden (lib/notify zieht die komplette nodemailer-Kette, ~140 Files), hier
+  // im before-Hook cold-requiren. `require` ist synchrones FS-I/O und blockiert
+  // den Event-Loop — passiert das im Test, frisst es dessen waitForJob-Budget,
+  // obwohl der Job selbst nichts dafuer kann. Prompts-ESM-Graph parallel
+  // anstossen (Promise ist in prompts-loader gecacht).
+  require('../../../lib/notify');
+  require('../../../lib/budget');
+  require('../../../lib/prompts-loader').getPrompts().catch(() => {});
+
   function cleanup() {
     try { fs.unlinkSync(dbFile); } catch (_) {}
     try { fs.unlinkSync(`${dbFile}-wal`); } catch (_) {}
@@ -70,14 +94,47 @@ function bootstrap() {
   return { mockAi, dbSeed, komplett, review, kapitel, rueckblick, lektorat, synonyme, shared, dbSchema, dbFile, cleanup };
 }
 
+const POLL_MS = 10;
+// Timer-Jitter unter Last ist normal; erst darueber gilt der Tick als Stall.
+const STALL_THRESHOLD_MS = 200;
+
+// Das Budget zaehlt *nicht* Wandzeit, sondern Zeit, in der der Event-Loop
+// verfuegbar war. Stand die Loop (synchrone Cold-Requires, ueberbuchter
+// CI-Runner, Swap), konnte der Job in dieser Zeit ohnehin nicht laufen — sie
+// als Timeout zu werten produziert genau die Flakes, die dieser Helper
+// verhindern soll. Ein echt haengender Job blockiert die Loop nicht: seine
+// Timer feuern puenktlich, das Budget laeuft normal ab.
+// Absolute Wandzeit-Obergrenze als Backstop, damit ein dauerhaft ausgehungerter
+// Runner nicht endlos wartet.
 async function waitForJob(shared, jobId, { timeoutMs = 5000 } = {}) {
   const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
+  const hardCapMs = Math.max(60_000, timeoutMs * 20);
+  let budgetMs = timeoutMs;
+  let stalledMs = 0;
+  let last = start;
+
+  for (;;) {
     const job = shared.jobs.get(jobId);
     if (job && (job.status === 'done' || job.status === 'error' || job.status === 'cancelled')) return job;
-    await new Promise(r => setTimeout(r, 10));
+
+    const wallMs = Date.now() - start;
+    if (budgetMs <= 0 || wallMs >= hardCapMs) {
+      const status = job ? job.status : 'unknown (job nicht in shared.jobs)';
+      const stall = stalledMs > 0 ? `, davon ${Math.round(stalledMs)}ms Event-Loop-Stall` : '';
+      throw new Error(
+        `waitForJob: timeout after ${timeoutMs}ms Loop-Budget (Wandzeit ${wallMs}ms${stall}), `
+        + `Job-Status: ${status}`,
+      );
+    }
+
+    await new Promise(r => setTimeout(r, POLL_MS));
+
+    const now = Date.now();
+    const tickMs = now - last;
+    last = now;
+    if (tickMs > STALL_THRESHOLD_MS) stalledMs += tickMs - POLL_MS;
+    else budgetMs -= tickMs;
   }
-  throw new Error(`waitForJob: timeout after ${timeoutMs}ms`);
 }
 
 module.exports = { bootstrap, waitForJob };

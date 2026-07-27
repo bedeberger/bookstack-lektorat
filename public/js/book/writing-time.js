@@ -11,6 +11,7 @@
 // `this` zeigt auf die Alpine-Komponente (via spread in app.js).
 
 import { fetchJson } from '../utils.js';
+import { acquireTickLease, clampTickSeconds, releaseTickLease } from './heartbeat.js';
 
 const HEARTBEAT_MS = 15000;
 const IDLE_MS = 180000; // 3 min ohne bewusste Eingabe → Editor gilt als untätig
@@ -65,12 +66,15 @@ export const writingTimeMethods = {
     }
     this._flushWritingTime(useBeacon);
     this._writingActiveSince = null;
+    releaseTickLease('writing');
   },
 
   _flushWritingTime(useBeacon) {
     if (this._writingActiveSince == null) return;
     const now = Date.now();
-    const seconds = Math.round((now - this._writingActiveSince) / 1000);
+    // Clamp: bei gestalltem Timer (Suspend, Freeze) wäre der Rohdelta die ganze
+    // Lücke — siehe heartbeat.js. Der Rest verfällt bewusst.
+    const seconds = clampTickSeconds((now - this._writingActiveSince) / 1000);
     this._writingActiveSince = now;
     if (seconds <= 0) return;
     // Idle-Cutoff: letzte bewusste Eingabe liegt länger als IDLE_MS zurück →
@@ -78,6 +82,8 @@ export const writingTimeMethods = {
     if (this._writingLastActivity == null || now - this._writingLastActivity > IDLE_MS) return;
     const bookId = this.$store.nav.selectedBookId;
     if (!bookId) return;
+    // Nach dem Idle-Cutoff, damit ein untätiger Tab das Lease nicht hält.
+    if (!acquireTickLease('writing', now)) return;
     const payload = { book_id: Number(bookId), seconds };
     if (useBeacon && navigator.sendBeacon) {
       const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });

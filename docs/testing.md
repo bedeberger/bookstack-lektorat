@@ -5,7 +5,7 @@ Vier Suiten, sequenziell via `npm test`. Erstmaliges Setup: `npx playwright inst
 | Suite | Runner | Pfad | Befehl | Charakter |
 |-------|--------|------|--------|-----------|
 | Unit | `node --test` | [tests/unit/](../tests/unit/) | `npm run test:unit` | Pure, parallelisiert (concurrency 4), kein Browser |
-| Integration | `node --test` | [tests/integration/](../tests/integration/) | `npm run test:integration` | Sequenziell, Mock-AI, Content-Store gegen Test-SQLite |
+| Integration | `node --test` | [tests/integration/](../tests/integration/) | `npm run test:integration` | Parallelisiert (concurrency 4), Mock-AI, Content-Store gegen Test-SQLite |
 | E2E | Playwright | [tests/e2e/](../tests/e2e/) | `npm run test:e2e` | Chromium gegen `tests/server.js` mit Fixture-Harness |
 | Smoke | Playwright | [tests/e2e-app/](../tests/e2e-app/) | `npm run test:smoke` | Chromium gegen die **echte** App (`node server.js`, `LOCAL_DEV_MODE`) |
 
@@ -28,10 +28,18 @@ Vier Suiten, sequenziell via `npm test`. Erstmaliges Setup: `npx playwright inst
 - PDF-Export-Profile-CRUD inkl. Cover-Upload.
 - Paste-Artefakt-Stripping (`cleanContentArtefacts`).
 
-**Smoke:**
+**Smoke ([smoke.spec.js](../tests/e2e-app/smoke.spec.js)):**
 - Brüche, die nur über dem **kompletten** Template-Baum auftauchen: kaputte `$app`-Verdrahtung, fehlende Methode/`t()`-Key in einem Template, falsch gemountete Sub-Komponente.
 - Boot der echten SPA + Öffnen jeder Hauptkarte + aller drei Editoren ohne Browser-Fehler.
-- **Nicht** für gezielte Verhaltens-Assertions (das machen E2E-Harnesses) — Smoke ist reine „rendert ohne Crash"-Absicherung.
+- Reine „rendert ohne Crash"-Absicherung — gezielte Verhaltens-Assertions gehören nicht in diese Datei.
+
+**App-Verhaltens-Specs (übrige Dateien in [tests/e2e-app/](../tests/e2e-app/)):**
+- Verhalten, dessen geprüfte Eigenschaft von der **echten Shell** abhängt und die ein Fixture-Harness deshalb nicht sehen kann: CSS-Höhenkette, Overlay-/Anker-Geometrie, echter Alpine-Baum, echtes Backend.
+- **Entscheidungsregel:** Hängt die Assertion an vollständigem CSS oder am kompletten Template-/Store-/Backend-Zusammenspiel? → hierher. Ist sie reine DOM-/Modul-Logik? → E2E-Harness (schneller, isolierter).
+- Leitfall [focus-editor-app.spec.js](../tests/e2e-app/focus-editor-app.spec.js): die Schreiblinien-Geometrie des Focus-Editors leitet sich aus `--focus-anchor`/`--focus-vh`/`--focus-box-h`/`--focus-box-top` gegen die gemessene Box ab. [focus-harness.html](../tests/fixtures/focus-harness.html) lädt bewusst nur Minimal-CSS — die 52 Harness-Tests können vollständig grün bleiben, während im echten Editor die Zeile abdriftet. Genau dieser Fall ist eingetreten.
+- Weitere: [book-editor.spec.js](../tests/e2e-app/book-editor.spec.js), [motiv.spec.js](../tests/e2e-app/motiv.spec.js), [offline-outbox.spec.js](../tests/e2e-app/offline-outbox.spec.js), [radio-reactivity.spec.js](../tests/e2e-app/radio-reactivity.spec.js), [plot-dnd.spec.js](../tests/e2e-app/plot-dnd.spec.js).
+- Boot-/Buchauswahl-Sequenz nicht kopieren: SSoT in [tests/e2e-app/_helpers/app.js](../tests/e2e-app/_helpers/app.js).
+- **Pflicht bei neuem Geometrie-/Layout-Test: einmal mutationsprüfen.** Das geprüfte Verhalten absichtlich brechen (Funktion no-op, CSS-Property killen), Suite laufen lassen, rot sehen, zurückrollen. Ein Test, der nie rot war, ist keine Absicherung — die erste Fassung des Tipp-Recenter-Tests blieb mit komplett abgeschaltetem `runTypewriter` grün, weil sie nur `scrollTop != 0` prüfte (der native Caret-Scroll des Browsers erfüllt das auch).
 
 ## Unit-Test-Konventionen
 
@@ -98,7 +106,8 @@ Specs importieren `test`/`expect` aus [tests/e2e/_helpers/fixtures.js](../tests/
 
 - **Playwright fehlt Chromium**: `npx playwright install chromium`.
 - **Mock-AI nach echtem `lib/ai`-Require geladen**: stubt nicht. Mock-AI muss als allerstes oben in der Test-Datei geladen werden.
-- **DB-Lock zwischen Tests**: Integration-Suite ist `--test-concurrency=1` (Default fuer `node --test` ohne explizites Flag im script ist 1, aber bestaetigt durch `fullyParallel:false`-Aequivalent). Bei Race-Conditions: `node --test --test-concurrency=1`.
+- **`node --test` ohne `--test-concurrency` ist NICHT sequenziell**: der Default ist `os.availableParallelism() - 1` — auf einem 24-Kern-Host also 23 gleichzeitige Test-Prozesse. Unit **und** Integration pinnen das Flag darum explizit auf `4`. Jedes Test-File bekommt seine eigene Wegwerf-DB (`bootstrap()`), es gibt also keinen DB-Lock zwischen Files; die Begrenzung schützt vor I/O-/CPU-Ueberbuchung auf dem CI-Runner. Bei Race-Conditions in einem File-Set: `node --test --test-concurrency=1 "tests/integration/*.test.js"`.
+- **`waitForJob`-Timeout obwohl der Job korrekt laeuft**: das Budget in [_helpers/setup.js](../tests/integration/_helpers/setup.js) zaehlt Event-Loop-Zeit, nicht Wandzeit — Ticks > 200 ms gelten als Stall und werden abgezogen (siehe Kommentar dort). Meldet die Fehlermeldung viel Wandzeit + Stall, ist der Runner ueberbucht oder ein synchroner Cold-Require blockiert die Loop; Warm-up dann in `bootstrap()` (before-Hook) ziehen, nicht das Budget hochdrehen. Meldet sie kaum Stall, haengt der Job wirklich.
 - **SHELL_CACHE nicht gebumpt**: E2E lädt Harness aus `public/` — falls du JS/CSS während eines Test-Runs änderst, hartes Reload nötig oder `SHELL_CACHE` bumpen ([public/sw.js](../public/sw.js)).
 - **Tests anpassen statt Bug fixen**: bei UI-Änderungen am Editor/Fokus-Modus/Lektorat-Flow `npm test` laufen lassen. Schlägt etwas fehl, Ursache klären — nicht den Test entschärfen.
 

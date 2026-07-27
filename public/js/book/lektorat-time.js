@@ -6,6 +6,8 @@
 //
 // `this` zeigt auf die Alpine-Komponente (via spread in app.js).
 
+import { acquireTickLease, clampTickSeconds, releaseTickLease } from './heartbeat.js';
+
 const HEARTBEAT_MS = 15000;
 
 export const lektoratTimeMethods = {
@@ -58,17 +60,20 @@ export const lektoratTimeMethods = {
     this._lektoratActiveSince = null;
     this._lektoratActivePageId = null;
     this._lektoratActiveBookId = null;
+    releaseTickLease('lektorat');
   },
 
   _flushLektoratTime(useBeacon) {
     if (this._lektoratActiveSince == null) return;
     const now = Date.now();
-    const seconds = Math.round((now - this._lektoratActiveSince) / 1000);
+    // Clamp gegen gestallte Timer, Lease gegen parallele Tabs — siehe heartbeat.js.
+    const seconds = clampTickSeconds((now - this._lektoratActiveSince) / 1000);
     this._lektoratActiveSince = now;
     if (seconds <= 0) return;
     const bookId = this._lektoratActiveBookId;
     const pageId = this._lektoratActivePageId;
     if (!bookId || !pageId) return;
+    if (!acquireTickLease('lektorat', now)) return;
     const payload = { book_id: Number(bookId), page_id: Number(pageId), seconds };
     if (useBeacon && navigator.sendBeacon) {
       const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
