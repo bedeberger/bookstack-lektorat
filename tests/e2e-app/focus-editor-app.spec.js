@@ -319,6 +319,189 @@ test('Manueller Scroll verschiebt das Spotlight auf die Viewport-Mitte', async (
   guard.assertClean('manueller Scroll');
 });
 
+test('Schmales Fenster: Schreiblinie haelt, kein horizontaler Overflow (Akzeptanz #10)', async ({ page }) => {
+  // Punkt 10 der Klickliste — bis hierher die einzige Position ohne jede
+  // automatische Abdeckung. Zwei Eigenschaften, die nur mit echtem Shell-CSS
+  // messbar sind:
+  //
+  //   a) KEIN horizontaler Overflow. Die Textspalte wird ueber `padding-inline:
+  //      max(2rem, safe-area, calc((100% - 60ch) / 2))` zentriert (Invariante
+  //      11a) — im content-box-Modell addiert sich dieses Prozent-Padding auf
+  //      `width: 100%` und die Box laeuft breiter als das Fenster. Dagegen steht
+  //      ein explizites `box-sizing: border-box` am Container, denn der globale
+  //      `*`-Reset lebt in layout/base.css, die weder das Harness noch die
+  //      nativen Client-Schalen laden. Genau diese Absicherung war ungetestet.
+  //      Mutationsgeprueft: `content-box` am Container → box=500 bei win=480.
+  //
+  //   b) Die Schreiblinie liegt weiter auf dem Anker. Bei 480px greifen andere
+  //      Zweige der Puffer-Formel (schmalere Spalte → mehr Zeilen pro Absatz,
+  //      kleinere Box), und ein Media-Query-Override der Puffer waere hier
+  //      sofort sichtbar (Invariante 9 verbietet ihn deshalb).
+  const guard = attachConsoleGuard(page);
+  await page.setViewportSize({ width: 480, height: 800 });
+  await enterFocus(page);
+  await seedParagraphs(page, 40);
+
+  const overflow = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const de = document.documentElement;
+    const cs = getComputedStyle(el);
+    return {
+      boxOverflow: el.scrollWidth - el.clientWidth,
+      docOverflow: de.scrollWidth - de.clientWidth,
+      bodyOverflow: document.body.scrollWidth - document.body.clientWidth,
+      boxSizing: cs.boxSizing,
+      boxWidth: Math.round(el.getBoundingClientRect().width),
+      winWidth: window.innerWidth,
+    };
+  }, FOCUS);
+
+  // Die Box darf nicht breiter sein als das Fenster — sonst schiebt das Padding
+  // die Spalte aus dem Bild und der Text wird seitlich abgeschnitten.
+  expect(overflow.boxSizing, 'border-box am Container (Invariante 11a)').toBe('border-box');
+  expect(overflow.boxWidth,
+    `Schreibflaeche passt ins Fenster (box=${overflow.boxWidth} win=${overflow.winWidth})`)
+    .toBeLessThanOrEqual(overflow.winWidth);
+  expect(overflow.boxOverflow, 'kein H-Scroll in der Schreibflaeche').toBeLessThanOrEqual(1);
+  expect(overflow.docOverflow, 'kein H-Scroll im Dokument').toBeLessThanOrEqual(1);
+  expect(overflow.bodyOverflow, 'kein H-Scroll im Body').toBeLessThanOrEqual(1);
+
+  // …und die Geometrie haelt trotzdem, an beiden Enden der Seite.
+  await placeCaret(page, 0);
+  await recenter(page);
+  let m = await caretOffsetFromAnchor(page);
+  expect(m?.invalid, 'Caret-Zeilenbox vorhanden (erste Zeile)').toBeFalsy();
+  expect(Math.abs(m.off), geom('schmal: erste Zeile auf dem Anker', m)).toBeLessThanOrEqual(m.lh * 0.5 + 1);
+
+  await placeCaret(page, -1);
+  await recenter(page);
+  m = await caretOffsetFromAnchor(page);
+  expect(m?.invalid, 'Caret-Zeilenbox vorhanden (letzte Zeile)').toBeFalsy();
+  expect(Math.abs(m.off), geom('schmal: letzte Zeile auf dem Anker', m)).toBeLessThanOrEqual(m.lh * 0.5 + 1);
+
+  guard.assertClean('schmales Fenster');
+});
+
+test('Offene Textauswahl blockt den Recenter (Akzeptanz #7)', async ({ page }) => {
+  // Zweite Haelfte von Punkt 7: der Doppelklick-Fall ist im Harness und im
+  // WebKit-Projekt gegated, „Auswahl offen → Viewport springt nicht" war es
+  // nicht. Der Guard sitzt in card.js#_focusUpdateActive (`hasSelection` →
+  // runTypewriter wird uebersprungen); ohne ihn reisst jeder Tick, den die
+  // Auswahl selbst ausloest, die markierte Passage aus dem Bild.
+  // Mutationsgeprueft: `hasSelection` auf false gezwungen → scrollTop springt.
+  const guard = attachConsoleGuard(page);
+  await enterFocus(page);
+  await seedParagraphs(page, 40);
+
+  // Ausgangslage weit weg vom Anker erzeugen: Caret oben, dann manuell in die
+  // Mitte scrollen. Ein Recenter waere jetzt eine sichtbare Sprungstrecke.
+  await placeCaret(page, 0);
+  await recenter(page, false);
+  await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    el.scrollTop = Math.round(el.scrollHeight * 0.5);
+  }, FOCUS);
+  await page.waitForTimeout(200);
+
+  // Referenzposition VOR dem Aufziehen nehmen. Das Setzen der Auswahl feuert
+  // selbst ein `selectionchange` und damit einen Recenter-Tick — wird erst danach
+  // gemessen, ist der verbotene Sprung schon passiert und der Test bliebe gruen,
+  // obwohl der Guard fehlt (genau so lief die erste Fassung ins Leere).
+  const before = await page.evaluate((sel) => document.querySelector(sel).scrollTop, FOCUS);
+
+  // Auswahl ueber zwei Absaetze aufziehen (nicht kollabiert).
+  const spanned = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const vis = [...el.querySelectorAll('p')].filter(p => {
+      const r = p.getBoundingClientRect();
+      return r.top > el.getBoundingClientRect().top + 40 && r.bottom < window.innerHeight - 40;
+    });
+    if (vis.length < 2) return false;
+    const a = vis[0]; const b = vis[1];
+    const r = document.createRange();
+    r.setStart(a.firstChild, 2);
+    r.setEnd(b.firstChild, Math.min(6, b.firstChild.length));
+    const s = getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    return !s.isCollapsed;
+  }, FOCUS);
+  expect(spanned, 'Auswahl ueber zwei Absaetze aufgezogen').toBe(true);
+
+  // Den selectionchange-Tick auslaufen lassen, dann zusaetzlich explizit einen
+  // Recenter MIT scroll-Wunsch anstossen — beide Wege muessen am Guard scheitern.
+  await page.waitForTimeout(300);
+  await recenter(page);
+  const after = await page.evaluate((sel) => ({
+    top: document.querySelector(sel).scrollTop,
+    collapsed: getSelection().isCollapsed,
+    text: getSelection().toString().length,
+  }), FOCUS);
+
+  expect(after.collapsed, 'Auswahl steht noch').toBe(false);
+  expect(after.text, 'Auswahl hat Inhalt').toBeGreaterThan(0);
+  expect(Math.abs(after.top - before),
+    `Viewport springt nicht (scrollTop ${before} → ${after.top})`).toBeLessThanOrEqual(1);
+  guard.assertClean('Auswahl blockt Recenter');
+});
+
+test('Viewport-Tick laesst die Scroll-Position stehen (kein Sprung nach oben)', async ({ page }) => {
+  // Die Slot-Messung in viewport.js#measureBoxGeometry nullt kurz die Kopf-/
+  // Tail-Puffer und liest dann `clientHeight` — das erzwingt ein Layout, in dem
+  // `scrollHeight` um die Puffersumme (~eine Boxhoehe) faellt. Der Browser klemmt
+  // `scrollTop` dabei auf das neue Maximum, und das Zuruecksetzen des Paddings
+  // hebt den Klemm-Vorgang NICHT auf: ohne manuelle Rueckstellung sprang der
+  // Editor bei JEDEM Viewport-Tick nach oben, weit unten in der Seite um fast
+  // eine Bildschirmhoehe. Auf Mobile feuert der Tick bei jedem vv-Scroll — daher
+  // das „nervoese" Scrollen beim Schreiben.
+  //
+  // Nur mit echtem Shell-CSS pruefbar: das Harness hat keine Puffer-Formel, und
+  // in jsdom gibt es kein Layout und damit kein Clamping.
+  //
+  // Zwei Ausloeser, beide ohne Recenter-Reparatur: `shouldRecenterOnViewport`
+  // verlangt eine Aenderung von Hoehe ODER Versatz > 1px, hier aendert sich
+  // keines von beiden. Genau darum blieb der Sprung stehen.
+  const guard = attachConsoleGuard(page);
+  await enterFocus(page);
+  await seedParagraphs(page, 40);
+
+  // Weit unten positionieren — nur dort ist die Klemm-Strecke gross.
+  await placeCaret(page, -1);
+  await recenter(page);
+
+  const paraOf = (sel) => {
+    const el = document.querySelector(sel);
+    const active = el.querySelector('.focus-paragraph-active');
+    return { top: Math.round(el.scrollTop), idx: active ? [...el.querySelectorAll('p')].indexOf(active) : -1 };
+  };
+
+  const before = await page.evaluate(paraOf, FOCUS);
+  expect(before.top, 'Ausgangslage weit unten (sonst misst der Test nichts)').toBeGreaterThan(400);
+
+  // a) Tick ohne jede Dimensionsaenderung — der Mobile-Fall (vv-scroll bei
+  //    offener Tastatur), reflow-frei und damit exakt messbar.
+  await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+  await page.waitForTimeout(300);   // > VV_DEBOUNCE_MS (100)
+  let after = await page.evaluate(paraOf, FOCUS);
+  expect(after.top, `Scroll-Position haelt ueber den Viewport-Tick (${before.top} → ${after.top})`)
+    .toBeLessThanOrEqual(before.top + 2);
+  expect(after.top, `kein Sprung nach oben (${before.top} → ${after.top})`)
+    .toBeGreaterThanOrEqual(before.top - 2);
+  expect(after.idx, 'Spotlight bleibt auf dem Caret-Absatz').toBe(before.idx);
+
+  // b) Echter Resize, nur in der BREITE. Der Text laeuft dabei um (mehr Zeilen →
+  //    hoehere Box), aber `scrollTop` ist eine Pixel-Position und wird davon
+  //    nicht renormalisiert — nur das Clamping koennte sie bewegen.
+  const w = page.viewportSize().width;
+  await page.setViewportSize({ width: w - 160, height: page.viewportSize().height });
+  await page.waitForTimeout(300);
+  after = await page.evaluate(paraOf, FOCUS);
+  expect(after.top, `Breiten-Resize verschiebt die Position nicht (${before.top} → ${after.top})`)
+    .toBeGreaterThanOrEqual(before.top - 2);
+
+  guard.assertClean('Viewport-Tick haelt die Scroll-Position');
+});
+
 test('Exit raeumt Overlay + Chrome ab', async ({ page }) => {
   const guard = attachConsoleGuard(page);
   await enterFocus(page);
