@@ -40,6 +40,11 @@ Zusätzlich bei Änderungen an Save/Draft/Exit:
 - **12** — Tippen, dann Netzwerk in den DevTools offline schalten, Escape drücken:
   User bleibt im Edit-Modus, Draft ist erhalten (kein stiller Verlust).
 
+Bei Änderungen an der pre-wrap-/Umbruch-Kette (Invariante 11c) zusätzlich eine Seite
+mit Alt-Bestand öffnen (importierter oder aus dem Web eingefügter Text): keine
+Phantom-Umbrüche mitten im Absatz, kein Einzug in der ersten Zeile — und ein
+Gedicht (`.poem`) behält seine Verszeilen.
+
 Bei Änderungen, die Mobile/Tastatur berühren (`viewport.js`, `--focus-vh`,
 `cursor-hide.js`): Punkt 1–5 zusätzlich in der Chrome-Device-Emulation (iPhone-Profil)
 mit eingeblendeter Tastatur-Simulation.
