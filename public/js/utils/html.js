@@ -24,10 +24,10 @@ export function htmlToText(html) {
 /**
  * Entfernt Fokus-Modus-Artefakte aus BookStack-HTML. Browser friert bei
  * contenteditable-Edits die computed `font-size` des Fokus-Containers als
- * inline `<span style="font-size:1.45rem">` ein; die `focus-paragraph-*`-Klassen
- * sind rein interne UI-Markierungen, die nie ins persistierte HTML gehören. Idempotent – auch auf bereits sauberem HTML
- * sicher aufrufbar. Aufruf an allen Seams: nach dem Laden von BookStack und
- * vor dem Speichern an BookStack.
+ * inline `<span style="font-size:…">` ein; die `focus-paragraph-*`-Klassen sind
+ * rein interne UI-Markierungen, die nie ins persistierte HTML gehören.
+ * Idempotent – auch auf bereits sauberem HTML sicher aufrufbar. Aufruf an allen
+ * Seams: nach dem Laden von BookStack und vor dem Speichern an BookStack.
  */
 export function stripFocusArtefacts(html) {
   if (!html) return html;

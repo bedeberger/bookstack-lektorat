@@ -51,4 +51,9 @@ npm run test:focus     # Harness-Suite + App-Suite (echtes CSS)
 
 Grün ist die **Untergrenze**, nicht der Beweis: die App-Suite deckt Höhenkette,
 Schreiblinie, erste/letzte Zeile, Tipp-Recenter, Spotlight-bei-Scroll und Exit-Cleanup
-ab — die Punkte 6, 7, 8, 10 und 11 dieser Liste hat noch kein Test.
+ab. Punkt 6 ist im Harness gegated; von 7, 8 und 11 jeweils nur die eine Hälfte
+(Doppelklick / Klassen-Tausch / Save-Reject-Stub), und **Punkt 10 gar nicht** —
+die Aufschlüsselung steht in [focus-editor.md](focus-editor.md#tests).
+
+Darum bleibt diese Liste geklickt: was hier fehlt, fehlt in der Automatisierung
+genau dort, wo sich der Editor falsch anfühlen kann, ohne rot zu werden.

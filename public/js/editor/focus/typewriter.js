@@ -179,7 +179,7 @@ function scrollFallbackTarget(container) {
 //
 // `canScroll` ist dafür ein verlässlicher Diskriminator, obwohl es nur den
 // Ist-Zustand misst: die Kopf-/Tail-Puffer auf `.focus-editor__content`
-// (Invariante 9) sind zusammen ~1.5 Bildschirmhöhen, eine Box mit intakter
+// (Invariante 9) sind zusammen ~eine Bildschirmhöhe, eine Box mit intakter
 // Höhenkette ist damit auch bei leerer Seite scrollbar. Bleibt scrollHeight ===
 // clientHeight, ist die Kette gebrochen — und genau dann greift der Rettungspfad.
 //

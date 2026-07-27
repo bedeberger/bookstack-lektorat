@@ -5,7 +5,8 @@
    (dvh wäre besser, existiert aber erst ab Safari 15.4 — JS setzt --focus-vh
    ohnehin nach einem Frame). --focus-box-h kommt aus demselben Sync-Pfad und
    trägt die gemessene clientHeight der Schreibfläche (Tail-Puffer, siehe dort).
-   --focus-anchor (0–1) kommt aus focus/card.js. */
+   --focus-anchor (0–1) publiziert focus/chrome.js#markFocusChrome beim Eintritt
+   (via focus/typewriter.js#publishAnchorRatio). */
 /* Globaler Scroll-Lock: bleibt am Body (Browser-Default für overflow-Lock). */
 body.focus-mode { overflow: hidden; overscroll-behavior: contain; }
 body.palette-open { overflow: hidden; overscroll-behavior: contain; }
@@ -212,7 +213,7 @@ body.palette-open { overflow: hidden; overscroll-behavior: contain; }
      Die Reserve ist der EINZIGE Fehler, den das Modell zulässt: der ideale Tail
      wäre exakt `Box-Höhe − Kopf` und stünde damit genau auf der WebKit-Schwelle.
      Sie geht deshalb vom Tail ab (der Kopf bleibt exakt) und bleibt unter der
-     Typewriter-Schwelle (`max(4px, lineHeight × 0.5)`, focus/typewriter.js) —
+     Typewriter-Schwelle (`max(16px, lineHeight × 0.5)`, focus/typewriter.js) —
      Invariante 9 (Zeile erreicht den Anker) bleibt also erhalten. Als Variable,
      weil die Puffer-Matrix in tests/e2e/focus-editor.spec.js dieselbe Zahl als
      erlaubte Tail-Abweichung liest, statt sie zu duplizieren.
