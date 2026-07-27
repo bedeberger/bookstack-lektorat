@@ -159,14 +159,15 @@ export const ACTIONS = [
 // (enthält zusätzlich nicht-Palette-Karten wie kapitelReview und userSettings,
 // die via Sidebar bzw. Avatar-Menu geöffnet werden, aber dieselbe „eine Karte
 // gleichzeitig"-Regel folgen). Wird von `_closeOtherMainCards`, `resetView`,
-// `_maybeOpenBookOverview` und vom generischen `_toggleCard` in
-// [public/js/app-view.js](public/js/app-view.js) gelesen — neue Hauptkarte
-// braucht nur einen Eintrag hier, die View-Logik bleibt drift-frei.
+// `_maybeOpenBookOverview` und vom generischen `_toggleCardGeneric` in
+// [public/js/app/app-view/_shared.js](public/js/app/app-view/_shared.js)
+// gelesen — neue Hauptkarte braucht nur einen Eintrag hier, die View-Logik
+// bleibt drift-frei.
 //
 // Felder:
 //   `key`     – Argument für `_closeOtherMainCards(keep)` + `card:refresh`-detail.name.
 //   `flag`    – Show-State-Flag am Root.
-//   `toggle`  – Methodenname am Root. `_toggleCard` generiert die Methode aus
+//   `toggle`  – Methodenname am Root. `_toggleCardGeneric` generiert die Methode aus
 //               diesem Eintrag (Alpine-spread-fähig), Aufrufer (Template, Hash-
 //               Router, Palette) rufen sie wie eine handgeschriebene Methode.
 //   `bespoke` – true: keine Generierung, die Methode lebt in einem anderen
