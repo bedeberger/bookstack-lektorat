@@ -4,13 +4,14 @@
 
 import { getEditEl, placeCaretIn, WORD_RE } from '../../utils.js';
 import { tzOpts, localeTag } from '../../../utils.js';
-import { BLOCK_SEL, findBlock, topLevelBlock } from '../../shared/dom-block.js';
+import { BLOCK_SEL, findBlock, topLevelBlock, caretAtBlockStart, caretAtBlockEnd } from '../../shared/dom-block.js';
 import { brLeftOfCaret } from '../../shared/soft-break.js';
 
 export { getEditEl, placeCaretIn, WORD_RE };
-// Block-Lookup lebt in shared/dom-block.js (auch von edit/view.js konsumiert) —
-// hier nur re-exportiert, damit die Toolbar-Submodule ihren Import behalten.
-export { BLOCK_SEL, findBlock, topLevelBlock };
+// Block-Lookup + Caret-Randlage leben in shared/dom-block.js (auch von
+// edit/view.js und shared/soft-break.js konsumiert) — hier nur re-exportiert,
+// damit die Toolbar-Submodule ihren Import behalten.
+export { BLOCK_SEL, findBlock, topLevelBlock, caretAtBlockStart, caretAtBlockEnd };
 // Soft-Break-Dedup lebt in shared/soft-break.js (auch vom Focus-Editor
 // konsumiert, der den Toolbar-Modulgraph nicht importieren darf) — hier unter
 // dem eingeführten Unterstrich-Namen re-exportiert.
@@ -103,23 +104,6 @@ export function findAnchor(node, root) {
 // vor — dort ist das native bzw. das HR-Verhalten gewünscht.
 export const MERGE_BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
 
-// Liegt der collapsed Caret am Block-Anfang bzw. -Ende? Genutzt, um eine
-// direkt angrenzende <hr> per Backspace/Delete zu löschen — das void-Element
-// lässt sich nicht selektieren, deshalb gibt es sonst keinen Lösch-Pfad.
-export function caretAtBlockStart(range, block) {
-  if (!range.collapsed) return false;
-  const r = document.createRange();
-  r.selectNodeContents(block);
-  r.setEnd(range.startContainer, range.startOffset);
-  return r.toString().length === 0;
-}
-export function caretAtBlockEnd(range, block) {
-  if (!range.collapsed) return false;
-  const r = document.createRange();
-  r.selectNodeContents(block);
-  r.setStart(range.startContainer, range.startOffset);
-  return r.toString().length === 0;
-}
 
 // Liefert das umschliessende <li class="todo-item">, falls die Caret-Position
 // in einer Checkbox-Liste liegt. Sonst null.

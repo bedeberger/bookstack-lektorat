@@ -30,3 +30,22 @@ export function topLevelBlock(block, root) {
   while (top?.parentNode && top.parentNode !== root) top = top.parentNode;
   return top;
 }
+
+// Liegt der collapsed Caret am Block-Anfang bzw. -Ende? Genutzt, um eine
+// direkt angrenzende <hr> per Backspace/Delete zu löschen — das void-Element
+// lässt sich nicht selektieren, deshalb gibt es sonst keinen Lösch-Pfad — und
+// um den Blockende-Fall beim weichen Umbruch zu erkennen (shared/soft-break.js).
+export function caretAtBlockStart(range, block) {
+  if (!range.collapsed) return false;
+  const r = document.createRange();
+  r.selectNodeContents(block);
+  r.setEnd(range.startContainer, range.startOffset);
+  return r.toString().length === 0;
+}
+export function caretAtBlockEnd(range, block) {
+  if (!range.collapsed) return false;
+  const r = document.createRange();
+  r.selectNodeContents(block);
+  r.setStart(range.startContainer, range.startOffset);
+  return r.toString().length === 0;
+}
