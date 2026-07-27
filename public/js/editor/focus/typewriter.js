@@ -117,6 +117,44 @@ export function computeTypewriterDelta(containerRect, targetRect, threshold = TY
   return Math.abs(delta) < threshold ? 0 : delta;
 }
 
+// Liegt die Caret-Zeile im sichtbaren Bereich, mit `margin` Sicherheitsband an
+// beiden Rändern? Pure. Ohne Bezugsrechteck → true (nichts zu retten). Das Band
+// wird auf ein Viertel der Höhe geklemmt, damit es auf sehr flachen Viewports
+// (Mobile mit offener Tastatur) nicht die ganze Fläche auffrisst und damit
+// jede Position als „ausserhalb" gälte.
+export function caretWithinViewport(targetRect, viewportRect, margin = 0) {
+  if (!targetRect || !viewportRect || !(viewportRect.height > 0)) return true;
+  const m = Math.max(0, Math.min(margin, viewportRect.height / 4));
+  return targetRect.top >= viewportRect.top + m
+    && targetRect.bottom <= viewportRect.top + viewportRect.height - m;
+}
+
+function canScroll(el) {
+  return !!el && el.scrollHeight > el.clientHeight + 1;
+}
+
+// Fremde Schalen (native Clients) bringen eigenes Host-CSS mit und können das
+// Layout so überschreiben, dass nicht `.focus-editor__content` die Scroll-Box
+// ist, sondern ein Vorfahr oder das Dokument. Unlayered Host-Regeln schlagen
+// dabei jede Regel aus focus-mode.css (`@layer components`), unabhängig von
+// Spezifität — der Editor kann sich also nicht per CSS dagegen wehren. Ohne
+// diesen Rettungspfad wäre `container.scrollBy` dort ein No-op und der
+// Typewriter komplett tot.
+function scrollFallbackTarget(container) {
+  let el = container && container.parentElement;
+  while (el) {
+    if (canScroll(el)) {
+      let oy = 'auto';
+      try { oy = window.getComputedStyle(el).overflowY; } catch { /* ignore */ }
+      if (oy === 'auto' || oy === 'scroll' || oy === 'overlay') return el;
+    }
+    el = el.parentElement;
+  }
+  if (typeof document === 'undefined') return null;
+  const doc = document.scrollingElement || document.documentElement;
+  return canScroll(doc) ? doc : null;
+}
+
 export function typewriterScroll(container, targetRect, ctx, threshold = TYPEWRITER_THRESHOLD_PX, anchorRatio = 0.5) {
   if (!container || !targetRect) return 0;
   const delta = computeTypewriterDelta(container.getBoundingClientRect(), targetRect, threshold, anchorRatio, visibleViewportRect());
@@ -136,6 +174,20 @@ export function typewriterScroll(container, targetRect, ctx, threshold = TYPEWRI
   // das Spotlight bliebe beim Blättern stehen und der Zähler wüchse pro
   // Tastendruck weiter.
   const moved = container.scrollTop - before;
+  // Container hat sich nicht bewegt UND kann grundsätzlich nicht scrollen →
+  // fremde Scroll-Box (siehe scrollFallbackTarget). Am regulären Scroll-Anschlag
+  // (Box ist scrollbar, steht nur am Ende) greift der Pfad bewusst nicht.
+  if (moved === 0 && !canScroll(container)) {
+    const fb = scrollFallbackTarget(container);
+    if (fb) {
+      const fbBefore = fb.scrollTop;
+      if (prefersReducedMotion()) fb.scrollTop = fbBefore + delta;
+      else fb.scrollBy({ top: delta, behavior: 'auto' });
+      // Kein expectedScroll-Increment: das scroll-Event feuert am Fallback-Ziel,
+      // nicht am Container — `onScroll` hängt aber nur am Container.
+      return fb.scrollTop - fbBefore;
+    }
+  }
   if (ctx && moved !== 0) ctx.expectedScroll++;
   return moved;
 }

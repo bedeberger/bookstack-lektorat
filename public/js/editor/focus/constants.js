@@ -11,6 +11,11 @@ export const BLOCK_TAGS = new Set([
 export const BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, blockquote, li, pre, td, th, figure, figcaption';
 
 export const POINTER_GRACE_MS = 300;
+// Touch-Eingabe braucht mehr Karenz: das Setzen des Carets per Fingertipp
+// erzeugt auf langsamen Geräten (und über die Soft-Keyboard-Animation hinweg)
+// erst deutlich nach `pointerup` ein `selectionchange`. Mit der Maus-Karenz
+// wäre das Flag dann schon abgelaufen und die getippte Stelle würde weggerissen.
+export const POINTER_GRACE_TOUCH_MS = 700;
 export const VV_DEBOUNCE_MS = 100;
 export const CURSOR_HIDE_MS = 2000;
 

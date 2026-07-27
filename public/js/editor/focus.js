@@ -26,4 +26,5 @@ export {
 export {
   TYPEWRITER_THRESHOLD_PX, dynamicTypewriterThreshold,
   getCaretRect, computeTypewriterDelta, typewriterScroll, visibleViewportRect,
+  caretWithinViewport,
 } from './focus/typewriter.js';

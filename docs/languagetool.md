@@ -58,6 +58,7 @@ Admin-UI: [public/partials/admin-settings.html](../public/partials/admin-setting
 - **Cache-Write:** gefilterte Matches landen via `ltCache.setCached(…)` in `page_languagetool_cache`.
 - **Timeout:** `UPSTREAM_TIMEOUT_MS = 10_000`, AbortController bricht alle Worker. Upstream-Fehler → `502 { error: 'languagetool_upstream', upstream_status }`. Timeout → `408 { error: 'languagetool_timeout' }`.
 - **Logging-Context:** `setContext({ book: bookId })` nach `toIntId`-Validierung.
+- **Auth-Vertrag:** `/languagetool/` steht in `API_PREFIXES` ([server.js](../server.js)) → abgelaufene Session bzw. ungültiges Device-Token (`swd_…`) liefert `401 { error_code: 'NOT_LOGGED_IN' }` statt Login-HTML-Redirect. Nötig, damit der Android-Client den Auth-Fehler erkennt (Token verwerfen → Pairing) statt nur ein generisches Fehler-Badge zu zeigen.
 
 ### Dictionary [routes/dictionary.js](../routes/dictionary.js) + [db/user-dictionary.js](../db/user-dictionary.js)
 
@@ -65,6 +66,7 @@ Admin-UI: [public/partials/admin-settings.html](../public/partials/admin-setting
 
 - **Scope:** `book_id = 0` → User-global, `> 0` → nur dieses Buch. `lang = '*'` → alle Sprachen, sonst LT-Locale-Tag (`de-CH`, `en-US`, …). `'auto'` ist **kein** gültiger Wert (Migration 142 normalisiert auf `'*'`).
 - **Lookup im Proxy:** `getCheckSet(userEmail, bookId, lang)` matched `(book_id = 0 OR book_id = ?) AND (lang = '*' OR lang = ?)`. Case-insensitive via lower-cased Set.
+- **Auth-Vertrag:** `/dictionary` steht (ohne Trailing-Slash — der Router bedient die Wurzel) in `API_PREFIXES` ([server.js](../server.js)) → `401 JSON` statt Redirect, gleiche Begründung wie beim Proxy.
 - **Cache-Invalidierung beim Add/Remove:** word-scoped Purge — nur Pages, deren `body_html LIKE %word% COLLATE NOCASE` enthält, verlieren ihren `page_languagetool_cache`-Eintrag. Bei `bookId=0` über alle Bücher des Users (via `book_access`), sonst nur das gewählte Buch.
 - **Word-Cap:** 80 Zeichen.
 

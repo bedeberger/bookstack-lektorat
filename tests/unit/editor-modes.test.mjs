@@ -258,6 +258,8 @@ test('I10: Focus-Submodule importieren/rufen nicht contentRepo.savePage', () => 
     'public/js/editor/focus/storage.js',
     'public/js/editor/focus/trampoline.js',
     'public/js/editor/focus/constants.js',
+    'public/js/editor/focus/viewport.js',
+    'public/js/editor/focus/cursor-hide.js',
     'public/js/cards/editor-focus-card.js',
   ];
   for (const f of focusFiles) {

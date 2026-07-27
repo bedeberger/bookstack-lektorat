@@ -13,6 +13,7 @@ const {
   setActiveBlock,
   dynamicTypewriterThreshold,
   typewriterScroll,
+  caretWithinViewport,
 } = await import('../../public/js/editor/focus.js');
 
 // --- findBlockFromNode ------------------------------------------------------
@@ -294,9 +295,15 @@ test('computeTypewriterDelta: viewportRect fehlt/leer → Box als Bezug', () => 
 
 // Fake-Scroll-Container mit echter Anschlag-Semantik: scrollTop clamped auf
 // [0, max], scrollBy schreibt synchron (wie behavior:'auto' im Browser).
-function mkScroller({ scrollTop = 0, max = 1000, height = 1000 } = {}) {
+// `scrollHeight`/`clientHeight` sind Pflicht: daran erkennt typewriterScroll,
+// ob die Box überhaupt scrollen KANN — nur eine grundsätzlich nicht scrollbare
+// Box aktiviert den Fallback auf einen scrollbaren Vorfahr.
+function mkScroller({ scrollTop = 0, max = 1000, height = 1000, parentElement = null } = {}) {
   const el = {
     scrollTop,
+    clientHeight: height,
+    scrollHeight: height + max,
+    parentElement,
     getBoundingClientRect: () => ({ top: 0, bottom: height, height }),
     scrollBy({ top }) { el.scrollTop = Math.max(0, Math.min(max, el.scrollTop + top)); },
   };
@@ -350,6 +357,61 @@ test('typewriterScroll: Delta unter Schwelle → kein Scroll, kein Counter', () 
   assert.equal(typewriterScroll(el, { top: 495, bottom: 505, height: 10 }, ctx, 16, 0.5), 0);
   assert.equal(el.scrollTop, 100);
   assert.equal(ctx.expectedScroll, 0);
+});
+
+test('typewriterScroll: nicht scrollbare Box → scrollbarer Vorfahr übernimmt', () => {
+  // Fremde Schale (nativer Client) überschreibt das Layout so, dass nicht das
+  // contenteditable die Scroll-Box ist, sondern ein Vorfahr. Ohne Fallback wäre
+  // der Typewriter dort komplett tot.
+  const ancestor = mkScroller({ scrollTop: 100, max: 1000 });
+  const el = mkScroller({ max: 0, parentElement: ancestor });   // scrollHeight === clientHeight
+  const ctx = { expectedScroll: 0 };
+  const moved = typewriterScroll(el, { top: 800, bottom: 840, height: 40 }, ctx, 16, 0.5);
+  assert.equal(moved, 320);
+  assert.equal(ancestor.scrollTop, 420);
+  assert.equal(el.scrollTop, 0);
+  // Der Container feuert kein scroll-Event (gescrollt hat der Vorfahr) — sonst
+  // verschluckt onScroll später einen echten User-Scroll.
+  assert.equal(ctx.expectedScroll, 0);
+});
+
+test('typewriterScroll: scrollbare Box am Anschlag → kein Vorfahr-Fallback', () => {
+  // Abgrenzung zum Test darüber: die Box KANN scrollen, steht nur am Ende.
+  // Dann ist der No-op korrekt — ein Fallback würde die Seite unter dem Editor
+  // wegziehen.
+  const ancestor = mkScroller({ scrollTop: 100, max: 1000 });
+  const el = mkScroller({ scrollTop: 1000, max: 1000, parentElement: ancestor });
+  const ctx = { expectedScroll: 0 };
+  assert.equal(typewriterScroll(el, { top: 900, bottom: 940, height: 40 }, ctx, 16, 0.5), 0);
+  assert.equal(ancestor.scrollTop, 100);
+  assert.equal(ctx.expectedScroll, 0);
+});
+
+// --- caretWithinViewport ----------------------------------------------------
+
+test('caretWithinViewport: innerhalb / ausserhalb / ohne Bezug', () => {
+  const vp = { top: 0, height: 400 };
+  assert.equal(caretWithinViewport({ top: 180, bottom: 220 }, vp), true);
+  assert.equal(caretWithinViewport({ top: 420, bottom: 460 }, vp), false);   // unter der Tastatur
+  assert.equal(caretWithinViewport({ top: -40, bottom: 0 }, vp), false);     // über dem Rand
+  // Kein Bezugsrechteck (kein visualViewport, Höhe 0) → nichts zu retten.
+  assert.equal(caretWithinViewport({ top: 999, bottom: 1040 }, null), true);
+  assert.equal(caretWithinViewport({ top: 999, bottom: 1040 }, { top: 0, height: 0 }), true);
+});
+
+test('caretWithinViewport: Sicherheitsband zieht den Rand nach innen', () => {
+  const vp = { top: 0, height: 400 };
+  // Ohne Band noch drin, mit 40px Band (eine Zeile) bereits „zu nah am Rand".
+  assert.equal(caretWithinViewport({ top: 350, bottom: 390 }, vp), true);
+  assert.equal(caretWithinViewport({ top: 350, bottom: 390 }, vp, 40), false);
+});
+
+test('caretWithinViewport: Band auf Viewport-Viertel geklemmt', () => {
+  // Flacher Viewport (Mobile mit offener Tastatur) + grosses Band würde sonst
+  // die ganze Fläche auffressen → jede Position gälte als ausserhalb und der
+  // Typewriter würde während der Composition bei jedem Zeichen scrollen.
+  const vp = { top: 0, height: 100 };
+  assert.equal(caretWithinViewport({ top: 40, bottom: 60 }, vp, 400), true);
 });
 
 // --- getCaretRect -----------------------------------------------------------

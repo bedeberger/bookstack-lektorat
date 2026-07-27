@@ -384,7 +384,10 @@ app.use('/metrics', require('./routes/metrics'));
 
 // ── Auth-Guard ────────────────────────────────────────────────────────────────
 // API-Pfade → 401 JSON; HTML-Pfade → Redirect zu /auth/login
-const API_PREFIXES = ['/history/', '/figures/', '/locations/', '/world-facts/', '/songs/', '/jobs/', '/sync/', '/chat/', '/booksettings/', '/publication/', '/content/', '/stt/', '/tts/', '/books/', '/me/', '/admin/', '/local/', '/config', '/share/api/', '/name-guard/', '/research', '/research/'];
+// `/dictionary` steht ohne Trailing-Slash in der Liste: der Router bedient die
+// Wurzel (GET/POST/DELETE `/dictionary`), ein `/dictionary/`-Prefix wuerde sie
+// verfehlen und den Client auf /auth/login redirecten.
+const API_PREFIXES = ['/history/', '/figures/', '/locations/', '/world-facts/', '/songs/', '/jobs/', '/sync/', '/chat/', '/booksettings/', '/publication/', '/content/', '/stt/', '/tts/', '/languagetool/', '/dictionary', '/books/', '/me/', '/admin/', '/local/', '/config', '/share/api/', '/name-guard/', '/research', '/research/'];
 
 app.use((req, res, next) => {
   // Device-Token (native Clients, z.B. Mac-Focus-Writer): Bearer swd_… loest auf

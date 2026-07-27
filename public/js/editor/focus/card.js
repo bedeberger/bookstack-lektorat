@@ -11,7 +11,7 @@
 
 import {
   BLOCK_TAGS, BLOCK_SEL,
-  POINTER_GRACE_MS, VV_DEBOUNCE_MS, CURSOR_HIDE_MS, CURSOR_KEEP_SEL,
+  POINTER_GRACE_MS, POINTER_GRACE_TOUCH_MS,
   HAS_IO, HAS_MO,
   reportError,
 } from './constants.js';
@@ -23,7 +23,10 @@ import {
 import { applySentenceHighlight } from './sentence.js';
 import {
   cachedTypewriterThreshold, getCaretRect, typewriterScroll,
+  caretWithinViewport, visibleViewportRect,
 } from './typewriter.js';
+import { makeCursorHide } from './cursor-hide.js';
+import { makeViewportSync } from './viewport.js';
 import { writeFocusSnapshot, clearFocusSnapshot } from './storage.js';
 import { editorHost } from '../shared/editor-host.js';
 import { installEditCounter } from '../shared/edit-counter.js';
@@ -185,37 +188,30 @@ export const focusCardMethods = {
       _lastBlock: null,
       _lastGranularity: null,
       _twCache: { block: null, value: null },  // cachedTypewriterThreshold
+      _lastViewportH: null,   // letzte sichtbare Viewport-Höhe (Tastatur-Erkennung)
     };
 
-    const markPointer = () => {
+    // Touch bekommt eine längere Karenz als Maus/Stift: der Fingertipp ist auf
+    // Mobile die einzige Art, den Caret zu setzen, und das `selectionchange`
+    // kommt dort spät.
+    const markPointer = (e) => {
       ctx.pointerIntent = true;
       clearTimeout(ctx.pointerTimer);
-      ctx.pointerTimer = setTimeout(() => { ctx.pointerIntent = false; }, POINTER_GRACE_MS);
+      const grace = e?.pointerType === 'touch' ? POINTER_GRACE_TOUCH_MS : POINTER_GRACE_MS;
+      ctx.pointerTimer = setTimeout(() => { ctx.pointerIntent = false; }, grace);
     };
 
     const onSelection = () => {
       if (this._focusState !== 'active') return;
-      if (ctx.composing) return;  // IME: nicht recentern während CJK-Composition
       const isPointer = ctx.pointerIntent;
       ctx.pointerIntent = false;
       clearTimeout(ctx.pointerTimer);
-      this._focusUpdateActive(!isPointer);
+      this._focusUpdateActive(!isPointer, ctx.composing ? { imeSafe: true } : undefined);
     };
 
-    // Auto-Hide-Cursor: Maus 2s ruhig → Cursor unsichtbar, nächste Bewegung bringt
-    // ihn zurück (nur Klassentoggle). Bei offenem Popover/Menü (CURSOR_KEEP_SEL) wird
-    // neu bewaffnet statt versteckt — der Zeiger muss sichtbar bleiben, solange man
-    // Vorschläge liest; nach dem Schliessen greift Auto-Hide ohne Mausbewegung wieder.
-    const armCursorHide = () => {
-      if (this._focusState !== 'active') return;
-      if (document.querySelector(CURSOR_KEEP_SEL)) { ctx.cursorTimer = setTimeout(armCursorHide, CURSOR_HIDE_MS); return; }
-      document.querySelector('.focus-editor')?.classList.add('focus-cursor-hidden');
-    };
-    const showCursor = () => {
-      document.querySelector('.focus-editor')?.classList.remove('focus-cursor-hidden');
-      clearTimeout(ctx.cursorTimer);
-      ctx.cursorTimer = setTimeout(armCursorHide, CURSOR_HIDE_MS);
-    };
+    const { showCursor } = makeCursorHide({
+      ctx, isActive: () => this._focusState === 'active',
+    });
 
     // Input-Event fängt Fälle, die selectionchange nicht abdeckt: undo/redo
     // ohne Caret-Move, Paste mit stabiler Caret-Position, Content-Rewrite
@@ -224,7 +220,12 @@ export const focusCardMethods = {
     // hier nötig.
     const onInput = (e) => {
       if (this._focusState !== 'active') return;
-      if (ctx.composing) return;
+      // Composition läuft: kein Markup anfassen (Kandidatenfenster/Composition
+      // darf nicht gestört werden), aber der Typewriter bleibt als Notnagel
+      // scharf — Android-Soft-Keyboards halten auch für gewöhnliche lateinische
+      // Wörter eine Composition offen, teils über ganze Sätze. Ein harter Block
+      // liesse die Schreibzeile dort minutenlang nach unten weglaufen.
+      if (ctx.composing) { this._focusUpdateActive(true, { imeSafe: true }); return; }
       // Paragraph-/Zeilen-Split: aktiven Block SYNCHRON neu setzen, statt erst
       // im RAF einen Frame später. Chromium kopiert beim Split die
       // .focus-paragraph-active-Klasse auf beide <p>; würde der RAF erst im
@@ -325,23 +326,12 @@ export const focusCardMethods = {
     // (scroll-events bei 60Hz) nicht permanent Recenter triggert.
     // Desktop: window.resize (Sidebar, DevTools, Orientation) feuert,
     // visualViewport evtl. nicht – beide Pfade abonnieren.
-    const applyViewport = () => {
-      const vv = window.visualViewport;
-      const h = vv ? vv.height : window.innerHeight;
-      const top = vv ? vv.offsetTop : 0;
-      document.documentElement.style.setProperty('--focus-vh', h + 'px');
-      document.documentElement.style.setProperty('--focus-vh-top', top + 'px');
-      ctx._twCache.value = null;  // Resize kann via Media-Query line-height ändern
-      // Nur den aktiven Absatz re-validieren, NICHT recentern. Ein Recenter
-      // bei jedem Viewport-Tick würde den Editor bei jedem Mobile-KB-Frame
-      // oder Desktop-Resize springen lassen („flattern"). Scrollt der User
-      // selbst, greifen onScroll/onSelection ohnehin.
-      if (this._focusState === 'active') this._focusUpdateActive(false);
-    };
-    const syncViewport = () => {
-      clearTimeout(ctx.vvTimer);
-      ctx.vvTimer = setTimeout(applyViewport, VV_DEBOUNCE_MS);
-    };
+    const { applyViewport, syncViewport } = makeViewportSync({
+      ctx,
+      container,
+      isActive: () => this._focusState === 'active',
+      updateActive: (scroll) => this._focusUpdateActive(scroll),
+    });
     // Initial: direkt anwenden (ohne Debounce), damit erster Frame korrekt.
     window.scrollTo(0, 0);
     applyViewport();
@@ -494,6 +484,8 @@ export const focusCardMethods = {
     if (this._focusState !== 'active') return;
     if (this._focusRaf) cancelAnimationFrame(this._focusRaf);
     const preferCenter = opts.preferCenter === true;
+    // IME-Composition aktiv: Markup einfrieren, Typewriter nur als Notnagel.
+    const imeSafe = opts.imeSafe === true;
     const gen = this._focusGen;
     this._focusRaf = requestAnimationFrame(() => {
       this._focusRaf = null;
@@ -539,31 +531,39 @@ export const focusCardMethods = {
         const blockChanged = block !== ctx._lastBlock;
         const granularityChanged = granularity !== ctx._lastGranularity;
 
-        // Block-Markierungen jeden Tick neu setzen — beide Setter sind idempotent
-        // (mutieren nur, wenn sich active-/near-Set wirklich ändert), also beim
-        // Tippen im selben Absatz mutationsfrei. Der unbedingte Aufruf bleibt die
-        // Defense gegen Ghost-Klassen (Chromium-Split-Bug, undo/redo, Paste): er
-        // räumt jede fremde `.focus-paragraph-active` im nächsten Tick ab.
-        if (granularity === 'typewriter-only') {
-          setActiveBlock(container, null);
-          setNearBlocks(container, null);
-        } else {
-          setActiveBlock(container, block);
-          setNearBlocks(container, granularity === 'window-3' ? block : null);
-        }
-
-        // Sentence-Highlight ist der teure Pfad (Range-Iteration über Text-
-        // knoten). Nur neu rechnen bei Block-/Granularitätswechsel oder in
-        // Sentence-Mode (Caret kann Satzgrenze im selben Block überqueren).
-        if (blockChanged || granularityChanged || granularity === 'sentence') {
-          if (granularity === 'sentence') {
-            applySentenceHighlight(block, sel);
-          } else if (typeof CSS !== 'undefined' && CSS.highlights) {
-            CSS.highlights.delete('focus-sentence-dim');
+        // Während einer Composition wird NICHTS am DOM angefasst — weder
+        // Block-Klassen noch Satz-Highlight. Beides würde das Kandidatenfenster
+        // versetzen bzw. auf Composition-empfindlichen IMEs die Eingabe
+        // abbrechen. `_lastBlock`/`_lastGranularity` bleiben absichtlich stehen,
+        // damit `compositionend` als Blockwechsel durchschlägt und einmal sauber
+        // reconciliiert. Der Scroll-Teil unten läuft weiter (Notnagel).
+        if (!imeSafe) {
+          // Block-Markierungen jeden Tick neu setzen — beide Setter sind idempotent
+          // (mutieren nur, wenn sich active-/near-Set wirklich ändert), also beim
+          // Tippen im selben Absatz mutationsfrei. Der unbedingte Aufruf bleibt die
+          // Defense gegen Ghost-Klassen (Chromium-Split-Bug, undo/redo, Paste): er
+          // räumt jede fremde `.focus-paragraph-active` im nächsten Tick ab.
+          if (granularity === 'typewriter-only') {
+            setActiveBlock(container, null);
+            setNearBlocks(container, null);
+          } else {
+            setActiveBlock(container, block);
+            setNearBlocks(container, granularity === 'window-3' ? block : null);
           }
+
+          // Sentence-Highlight ist der teure Pfad (Range-Iteration über Text-
+          // knoten). Nur neu rechnen bei Block-/Granularitätswechsel oder in
+          // Sentence-Mode (Caret kann Satzgrenze im selben Block überqueren).
+          if (blockChanged || granularityChanged || granularity === 'sentence') {
+            if (granularity === 'sentence') {
+              applySentenceHighlight(block, sel);
+            } else if (typeof CSS !== 'undefined' && CSS.highlights) {
+              CSS.highlights.delete('focus-sentence-dim');
+            }
+          }
+          ctx._lastBlock = block;
+          ctx._lastGranularity = granularity;
         }
-        ctx._lastBlock = block;
-        ctx._lastGranularity = granularity;
 
         // Aktive Textmarkierung: nicht recentern, sonst springt der Viewport
         // während der User die Auswahl aufzieht oder an ihr arbeitet.
@@ -577,10 +577,19 @@ export const focusCardMethods = {
           const targetRect = getCaretRect(container);
           if (targetRect) {
             const threshold = cachedTypewriterThreshold(block, ctx._twCache);
-            // Anker-Position des Typewriter-Scrolls (Mitte vs. oberes Drittel).
-            // Host-/Config-gesteuert; nicht gesetzt → Default 0.5 (Mitte).
-            const anchorRatio = editorHost()?.typewriterAnchor;
-            typewriterScroll(container, targetRect, ctx, threshold, anchorRatio);
+            // Während einer Composition nur eingreifen, wenn die Caret-Zeile den
+            // sichtbaren Bereich (samt einer Zeile Sicherheitsband) verlassen hat.
+            // Zeilen-Jitter und ein einzelner Umbruch bleiben unbeantwortet, damit
+            // das IME-Kandidatenfenster stehen bleibt; läuft die Zeile aber unter
+            // die Tastatur, wird sie geholt.
+            const imeQuiet = imeSafe
+              && caretWithinViewport(targetRect, visibleViewportRect(), threshold * 2);
+            if (!imeQuiet) {
+              // Anker-Position des Typewriter-Scrolls (Mitte vs. oberes Drittel).
+              // Host-/Config-gesteuert; nicht gesetzt → Default 0.5 (Mitte).
+              const anchorRatio = editorHost()?.typewriterAnchor;
+              typewriterScroll(container, targetRect, ctx, threshold, anchorRatio);
+            }
           }
         }
       } catch (err) {

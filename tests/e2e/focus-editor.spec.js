@@ -780,17 +780,51 @@ test('Enter-Error (fehlender Scroll-Container) → sauberer Rollback', async ({ 
   });
 });
 
-test('IME-Composition: selectionchange während compositionstart/end kein Recenter', async ({ page }) => {
-  // Japanisch/Chinesisch/Koreanisch: IME feuert während Kandidatenfenster
-  // selectionchange + input. Recenter würde den Kandidaten-Popup verschieben.
+test('IME-Composition: Caret bleibt sichtbar → kein Recenter (Kandidatenfenster ruhig)', async ({ page }) => {
+  // Japanisch/Chinesisch/Koreanisch: IME feuert während des Kandidatenfensters
+  // selectionchange + input. Solange die Caret-Zeile sichtbar bleibt, darf der
+  // Typewriter nicht eingreifen — sonst wandert das Popup unter den Fingern weg.
   await enter(page);
   await placeCaretInParagraph(page, 10);
   await page.evaluate(() => window.harness._focusUpdateActive(true));
   await page.waitForTimeout(100);
   const before = await scrollTop(page);
 
-  // compositionstart → caret weit unten setzen → selectionchange feuert, darf
-  // aber während IME nicht recentern.
+  // compositionstart → Caret eine Zeile tiefer (bleibt im Sichtfeld) → input.
+  await page.evaluate(() => {
+    const editor = document.querySelector('#editor-card .focus-editor__content');
+    editor.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    const p = document.querySelectorAll('#editor-card .focus-editor__content p')[11];
+    const range = document.createRange();
+    range.selectNodeContents(p);
+    range.collapse(true);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+    editor.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+  await page.waitForTimeout(100);
+  expect(Math.abs(await scrollTop(page) - before)).toBeLessThan(20);
+
+  // compositionend → jetzt volles Reconcile inkl. Recenter.
+  await page.evaluate(() => {
+    const editor = document.querySelector('#editor-card .focus-editor__content');
+    editor.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+  });
+  await page.waitForTimeout(100);
+  expect(Math.abs(await scrollTop(page) - before)).toBeGreaterThan(20);
+});
+
+test('IME-Composition: Caret ausserhalb des Sichtfelds → Typewriter greift trotzdem', async ({ page }) => {
+  // Android-Soft-Keyboards halten auch für gewöhnliche lateinische Wörter eine
+  // Composition offen, teils über ganze Sätze. Ein harter Block liesse die
+  // Schreibzeile dort unter die Tastatur weglaufen. Notnagel: verlässt der
+  // Caret das Sichtfeld, wird er auch während der Composition geholt.
+  await enter(page);
+  await placeCaretInParagraph(page, 10);
+  await page.evaluate(() => window.harness._focusUpdateActive(true));
+  await page.waitForTimeout(100);
+  const before = await scrollTop(page);
+
   await page.evaluate(() => {
     const editor = document.querySelector('#editor-card .focus-editor__content');
     editor.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
@@ -803,17 +837,48 @@ test('IME-Composition: selectionchange während compositionstart/end kein Recent
     editor.dispatchEvent(new InputEvent('input', { bubbles: true }));
   });
   await page.waitForTimeout(100);
-  const during = await scrollTop(page);
-  expect(Math.abs(during - before)).toBeLessThan(20);
+  expect(Math.abs(await scrollTop(page) - before)).toBeGreaterThan(100);
 
-  // compositionend → jetzt Recenter.
-  await page.evaluate(() => {
-    const editor = document.querySelector('#editor-card .focus-editor__content');
-    editor.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
-  });
+  // Markup bleibt während der Composition eingefroren — nur gescrollt wird.
+  const marked = await page.evaluate(() =>
+    document.querySelectorAll('#editor-card .focus-editor__content .focus-paragraph-active').length);
+  expect(marked).toBeLessThanOrEqual(1);
+});
+
+test('Viewport-Höhenwechsel (Tastatur/Rotation) holt den abgedrifteten Caret zurück', async ({ page }) => {
+  // Mobile: die Tastatur halbiert den sichtbaren Bereich. Sass der Caret exakt
+  // auf dem Anker, kompensiert die Puffer-Formel (Invariante 9/10) das von
+  // selbst — `--focus-vh` schrumpft, Kopf-Puffer und Anker wandern gleich weit.
+  // Ist der Caret aber vorher weggescrollt (Lese-Scroll, lange IME-Composition),
+  // stünde er nach dem Tastatur-Öffnen irgendwo — im Zweifel dahinter. Der
+  // Höhenwechsel ist deshalb der eine Viewport-Tick, der einmal recentert.
+  const caretLineOffset = async () => page.evaluate((sel) => {
+    const p = document.querySelector(sel).querySelectorAll('p')[20];
+    const line = p.getClientRects()[0] || p.getBoundingClientRect();
+    const vv = window.visualViewport;
+    const anchor = (vv ? vv.offsetTop : 0) + (vv ? vv.height : window.innerHeight) * 0.5;
+    return Math.abs(line.top + line.height / 2 - anchor);
+  }, EDITOR);
+
+  await enter(page);
+  await page.evaluate((sel) => document.querySelector(sel).focus(), EDITOR);
+  await placeCaretInParagraph(page, 20);
+  await page.evaluate(() => window.harness._focusUpdateActive(true));
+  await page.waitForTimeout(150);
+  expect(await caretLineOffset()).toBeLessThan(60);
+
+  // Weg-Scrollen wie beim Lesen — Caret bleibt in Absatz 20 zurück.
+  await page.evaluate((sel) => { document.querySelector(sel).scrollTop -= 400; }, EDITOR);
   await page.waitForTimeout(100);
-  const after = await scrollTop(page);
-  expect(Math.abs(after - before)).toBeGreaterThan(100);
+  expect(await caretLineOffset()).toBeGreaterThan(200);
+
+  const size = page.viewportSize();
+  await page.setViewportSize({ width: size.width, height: Math.round(size.height / 2) });
+  await page.waitForTimeout(300);   // VV_DEBOUNCE_MS + RAF
+  expect(await caretLineOffset()).toBeLessThan(60);
+
+  await page.setViewportSize(size);
+  await page.waitForTimeout(300);
 });
 
 test('Input-Event triggert Recenter (Undo/Redo-Pfad ohne Caret-Move)', async ({ page }) => {
