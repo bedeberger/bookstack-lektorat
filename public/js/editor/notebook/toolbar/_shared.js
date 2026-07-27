@@ -5,11 +5,16 @@
 import { getEditEl, placeCaretIn, WORD_RE } from '../../utils.js';
 import { tzOpts, localeTag } from '../../../utils.js';
 import { BLOCK_SEL, findBlock, topLevelBlock } from '../../shared/dom-block.js';
+import { brLeftOfCaret } from '../../shared/soft-break.js';
 
 export { getEditEl, placeCaretIn, WORD_RE };
 // Block-Lookup lebt in shared/dom-block.js (auch von edit/view.js konsumiert) —
 // hier nur re-exportiert, damit die Toolbar-Submodule ihren Import behalten.
 export { BLOCK_SEL, findBlock, topLevelBlock };
+// Soft-Break-Dedup lebt in shared/soft-break.js (auch vom Focus-Editor
+// konsumiert, der den Toolbar-Modulgraph nicht importieren darf) — hier unter
+// dem eingeführten Unterstrich-Namen re-exportiert.
+export { brLeftOfCaret as _brLeftOfCaret };
 
 // Blocktyp-Definitionen für Slash-Transform. `tag` ist das Zielelement;
 // `className` optional (aktuell für .poem + .todo). `list: true` wrappt den
@@ -48,31 +53,6 @@ export function _formatStamp(kind) {
   const date = d.toLocaleDateString(tag, tzOpts({ day: '2-digit', month: '2-digit', year: 'numeric' }));
   const time = d.toLocaleTimeString(tag, tzOpts({ hour: '2-digit', minute: '2-digit' }));
   return `${date} ${time}`;
-}
-
-// Steht links vom (kollabierten) Caret schon ein <br>? Dann würde ein weiterer
-// Soft-Break einen zweiten aufeinanderfolgenden <br> erzeugen, den
-// collapseEmptyBlocks (utils.js) beim Save ohnehin wegräumt — der User sähe zwei
-// Umbrüche, von denen nach dem Reload nur einer überlebt. Whitespace-Textknoten
-// zwischen <br> und Caret werden übersprungen (exakt die, die der Collapse auch
-// ignoriert). Inline-Element-Grenzen werden bewusst nicht überstiegen; den
-// seltenen Rest fängt der Cleaner verlustfrei ab.
-export function _brLeftOfCaret(sel) {
-  if (!sel || !sel.isCollapsed || sel.rangeCount === 0) return false;
-  const range = sel.getRangeAt(0);
-  const c = range.startContainer;
-  const o = range.startOffset;
-  let probe;
-  if (c.nodeType === 3) {
-    if (c.nodeValue.slice(0, o).trim() !== '') return false; // echter Text links → erlauben
-    probe = c.previousSibling;
-  } else {
-    probe = o > 0 ? c.childNodes[o - 1] : null;
-  }
-  while (probe && probe.nodeType === 3 && !probe.nodeValue.trim()) {
-    probe = probe.previousSibling;
-  }
-  return !!(probe && probe.nodeType === 1 && probe.tagName === 'BR');
 }
 
 // Link-URL normalisieren: leerer/whitespace-only String → ''. Bekannte Schemes
