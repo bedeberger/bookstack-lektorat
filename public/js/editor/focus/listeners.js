@@ -10,7 +10,7 @@
 import {
   BLOCK_TAGS, BLOCK_SEL,
   POINTER_GRACE_MS, POINTER_GRACE_TOUCH_MS,
-  HAS_IO, HAS_MO, isFocusToggleChord,
+  HAS_IO, HAS_MO, isFocusToggleChord, isFocusExitBlocked,
 } from './constants.js';
 import { findBlockFromNode, resolveGutterCaretPoint, caretRangeAtPoint } from './dom-blocks.js';
 import { applyBlockMarks, repairBlockMarks } from './recenter.js';
@@ -250,6 +250,11 @@ export function installFocusListeners({ ctrl, container }) {
       e.preventDefault();
       ctrl.exitFocusMode();
     } else if (isFocusToggleChord(e)) {
+      // Dieselbe Vorrang-Regel wie bei Escape (Invariante 16): laufender Save
+      // und offene Popover gehen vor. Ohne den Guard riss der Chord den Editor
+      // mitten im PUT ab — `exitFocusMode` überspringt dann seinen eigenen Save
+      // (`!app.editSaving`) und räumt die Listener trotzdem weg.
+      if (isFocusExitBlocked(app)) return;
       e.preventDefault();
       ctrl.exitFocusMode();
     } else if ((e.key === 'l' || e.key === 'L') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {

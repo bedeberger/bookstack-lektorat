@@ -44,6 +44,22 @@ export function isFocusToggleChord(e) {
   return !!e && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.code === 'KeyE';
 }
 
+// Vorrang-Regel aus Invariante 16: ein laufender Save und offene Popover gehen
+// dem Verlassen per Tastatur vor. Geteilt von den BEIDEN Wegen, auf denen der
+// Toggle-Chord im Fokusmodus ankommt — dem Body-Listener
+// (trampoline.js#handleFocusHotkey) und dem Container-Listener
+// (listeners.js#onKey). Ein Guard in nur einem der beiden wäre wirkungslos: der
+// jeweils andere ruft `exitFocusMode` trotzdem, und die Methode selbst kennt
+// ausser dem State-Guard keine Vorbedingung.
+//
+// Der Escape-Zweig in listeners.js#onKey prüft dieselben Felder bewusst inline:
+// er blockt nicht nur, sondern schliesst zusätzlich den Figur-Lookup. Wer diese
+// Liste erweitert, zieht ihn mit.
+export function isFocusExitBlocked(app) {
+  if (!app) return false;
+  return !!(app._synonymMenuOpen || app._synonymPickerOpen || app._figurLookupOpen || app.editSaving);
+}
+
 export const HAS_IO = typeof IntersectionObserver !== 'undefined';
 export const HAS_MO = typeof MutationObserver !== 'undefined';
 

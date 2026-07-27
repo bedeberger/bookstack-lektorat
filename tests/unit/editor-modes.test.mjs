@@ -297,10 +297,22 @@ test('Cmd+Shift+E Hotkey routet zustandsabhängig (focus → exit, edit → ente
   // läuft nur im `active`-State (Guard am Handler-Kopf), der enter-Weg gehört
   // dem Root-Hotkey. Der prüft `focusActive` (→ exit) und `editMode` (→ enter),
   // sonst dispatcht er `editor:focus:enter-from-pageview`.
-  assert.match(listenersSrc, /isFocusToggleChord\(e\)[\s\S]{0,120}?exitFocusMode/,
+  assert.match(listenersSrc, /isFocusToggleChord\(e\)[\s\S]*?exitFocusMode/,
     'Hotkey im Fokus ruft exitFocusMode');
   assert.match(trampolineSrc, /focusActive[\s\S]*?EDITOR_FOCUS_EXIT/,
     'Root-Hotkey: focusActive-Branch dispatcht exit');
+
+  // Vorrang-Regel (Invariante 16) gilt für BEIDE Wege, auf denen der Chord im
+  // Fokusmodus ankommt. Ein Guard in nur einem wäre wirkungslos: der andere ruft
+  // `exitFocusMode` trotzdem, und die Methode kennt ausser dem State-Guard keine
+  // Vorbedingung. Das Prädikat ist darum SSoT in constants.js, genau wie der
+  // Chord selbst.
+  assert.match(constantsSrc, /export function isFocusExitBlocked/,
+    'Exit-Vorbedingung muss in constants.js leben');
+  for (const [name, src] of [['listeners.js', listenersSrc], ['trampoline.js', trampolineSrc]]) {
+    assert.match(src, /isFocusExitBlocked/,
+      `${name}: Chord-Exit muss die geteilte Vorrang-Regel prüfen (kein Exit mitten im Save)`);
+  }
   assert.match(trampolineSrc, /editMode[\s\S]*?EDITOR_FOCUS_ENTER\b/,
     'Root-Hotkey: edit-Branch dispatcht enter');
   assert.match(trampolineSrc, /EVT\.EDITOR_FOCUS_ENTER_FROM_PAGEVIEW/,

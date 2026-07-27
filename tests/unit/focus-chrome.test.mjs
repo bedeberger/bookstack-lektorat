@@ -12,8 +12,16 @@ import assert from 'node:assert/strict';
 
 const { GRANULARITIES, normGranularity, applyGranularity } =
   await import('../../public/js/editor/focus/chrome.js');
-const { isFocusToggleChord } =
+const { isFocusToggleChord, isFocusExitBlocked } =
   await import('../../public/js/editor/focus/constants.js');
+
+// trampoline.js dispatcht aufs window — Stub vor dem Import, damit der
+// Hotkey-Router ohne Browser testbar bleibt.
+const dispatched = [];
+globalThis.window = globalThis.window || {};
+globalThis.window.dispatchEvent = (e) => { dispatched.push(e.type); return true; };
+globalThis.CustomEvent = globalThis.CustomEvent || class { constructor(type) { this.type = type; } };
+const { focusMethods } = await import('../../public/js/editor/focus/trampoline.js');
 
 // --- normGranularity --------------------------------------------------------
 
@@ -112,4 +120,59 @@ test('isFocusToggleChord: andere Taste → nein', () => {
 test('isFocusToggleChord: kein Event → nein', () => {
   assert.equal(isFocusToggleChord(null), false);
   assert.equal(isFocusToggleChord(undefined), false);
+});
+
+// --- isFocusExitBlocked (Invariante 16, geteilt von beiden Chord-Pfaden) -----
+
+test('isFocusExitBlocked: laufender Save und jedes offene Popover blocken', () => {
+  for (const flag of ['editSaving', '_synonymMenuOpen', '_synonymPickerOpen', '_figurLookupOpen']) {
+    assert.equal(isFocusExitBlocked({ [flag]: true }), true, `${flag} blockt nicht`);
+  }
+});
+
+test('isFocusExitBlocked: ruhiger Zustand und fehlender Host → nicht geblockt', () => {
+  assert.equal(isFocusExitBlocked({}), false);
+  assert.equal(isFocusExitBlocked({ editSaving: false, _figurLookupOpen: false }), false);
+  assert.equal(isFocusExitBlocked(null), false);
+});
+
+// --- handleFocusHotkey: der zweite Chord-Pfad respektiert die Vorrang-Regel ---
+
+function hotkeyRun(state) {
+  dispatched.length = 0;
+  let prevented = false;
+  const ev = { ...chord({ ctrlKey: true }), preventDefault() { prevented = true; } };
+  focusMethods.handleFocusHotkey.call(state, ev);
+  return { dispatched: [...dispatched], prevented };
+}
+
+test('handleFocusHotkey: im Fokus mit laufendem Save wird der Chord ignoriert', () => {
+  // Ohne diesen Guard verliesse der Chord den Modus mitten im PUT, obwohl
+  // listeners.js#onKey ihn korrekt abgelehnt hat — der Body-Listener ist der
+  // zweite Weg zum selben Exit.
+  const out = hotkeyRun({ showEditorCard: true, focusActive: true, editSaving: true });
+  assert.deepEqual(out.dispatched, []);
+  assert.equal(out.prevented, false);
+});
+
+test('handleFocusHotkey: im Fokus mit offenem Popover wird der Chord ignoriert', () => {
+  const out = hotkeyRun({ showEditorCard: true, focusActive: true, _figurLookupOpen: true });
+  assert.deepEqual(out.dispatched, []);
+});
+
+test('handleFocusHotkey: im ruhigen Fokus-Zustand verlässt der Chord den Modus', () => {
+  const out = hotkeyRun({ showEditorCard: true, focusActive: true });
+  assert.deepEqual(out.dispatched, ['editor:focus:exit']);
+  assert.equal(out.prevented, true);
+});
+
+test('handleFocusHotkey: Eintritt bleibt von der Vorrang-Regel unberührt', () => {
+  // Die Regel gilt fürs Verlassen. Ein laufender Save ausserhalb des Fokus darf
+  // den Eintritt nicht blockieren, sonst ist der Modus während jedes Autosaves
+  // per Tastatur unerreichbar.
+  const fromEdit = hotkeyRun({ showEditorCard: true, focusActive: false, editMode: true, editSaving: true });
+  assert.deepEqual(fromEdit.dispatched, ['editor:focus:enter']);
+
+  const fromRead = hotkeyRun({ showEditorCard: true, focusActive: false, editMode: false, editSaving: true });
+  assert.deepEqual(fromRead.dispatched, ['editor:focus:enter-from-pageview']);
 });

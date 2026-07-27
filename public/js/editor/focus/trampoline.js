@@ -1,5 +1,5 @@
 import { EVT } from '../../events.js';
-import { isFocusToggleChord } from './constants.js';
+import { isFocusToggleChord, isFocusExitBlocked } from './constants.js';
 // Root-Trampoline: dispatcht Events an Alpine.data('editorFocusCard').
 // Root hält `focusActive` als sichtbare Flag (CSS, body-Class, Template-Checks)
 // und die Live-Counter `focusCountWords`/`focusCountChars`, die der Header im
@@ -30,6 +30,11 @@ export const focusMethods = {
   handleFocusHotkey(event) {
     if (!isFocusToggleChord(event)) return;
     if (!this.showEditorCard) return;
+    // Vorrang-Regel (Invariante 16) vor dem `preventDefault`: dieser Listener
+    // ist der zweite Weg, auf dem der Chord im Fokusmodus ankommt — der erste
+    // ist listeners.js#onKey. Fehlt der Guard hier, verlässt der Chord den
+    // Modus mitten im Save trotzdem, obwohl onKey ihn korrekt abgelehnt hat.
+    if (this.focusActive && isFocusExitBlocked(this)) return;
     event.preventDefault();
     if (this.focusActive) {
       window.dispatchEvent(new CustomEvent(EVT.EDITOR_FOCUS_EXIT));

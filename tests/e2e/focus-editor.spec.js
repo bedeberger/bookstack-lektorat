@@ -627,6 +627,30 @@ test('Escape während editSaving wird ignoriert (kein Exit mitten im Save)', asy
   await page.evaluate(() => { window.harness.editSaving = false; });
 });
 
+test('Toggle-Chord während editSaving wird ignoriert (Invariante 16 gilt für beide Exit-Wege)', async ({ page }) => {
+  // Escape hatte den Guard, der Chord nicht: er riss den Editor mitten im PUT
+  // ab — `exitFocusMode` überspringt dann seinen eigenen Save (`!editSaving`)
+  // und räumt die Listener trotzdem weg.
+  await enter(page);
+  await page.evaluate(() => { window.harness.editSaving = true; });
+  await page.keyboard.press('Control+Shift+E');
+  await page.waitForTimeout(50);
+  const still = await page.evaluate(() => ({
+    focusActive: window.harness.focusActive,
+    state: window.harness._focusState,
+    listeners: window.harness._focusListeners !== null,
+  }));
+  expect(still.focusActive).toBe(true);
+  expect(still.state).toBe('active');
+  expect(still.listeners).toBe(true);
+
+  // Gegenprobe: ohne laufenden Save verlässt derselbe Griff den Modus.
+  await page.evaluate(() => { window.harness.editSaving = false; });
+  await page.keyboard.press('Control+Shift+E');
+  await page.waitForFunction(() => window.harness._focusState === 'idle');
+  expect(await page.evaluate(() => window.harness.focusActive)).toBe(false);
+});
+
 test('Blur des Editors entfernt aktive Markierung', async ({ page }) => {
   await enter(page);
   await placeCaretInParagraph(page, 5);
