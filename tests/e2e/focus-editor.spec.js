@@ -1273,6 +1273,17 @@ test('Exit räumt body-/Cardroot-Chrome ab, auch wenn ein früher Schritt wirft'
   // Listener sitzen.
   consoleGuard.ignore(/\[focus:exitFocusMode\]/);
   await enter(page);
+  const before = await page.evaluate(() => {
+    // Nachbar-Mark zusätzlich setzen: die Wurfstelle liegt vor
+    // `clearAllFocusMarks`, und window-3 hinterlässt beide Klassen. Ohne den
+    // expliziten Mark wäre die Assertion unten von der Default-Granularität
+    // abhängig.
+    document.querySelectorAll('.focus-editor__content > :nth-child(2)')
+      .forEach(el => el.classList.add('focus-paragraph-near'));
+    return document.querySelectorAll('.focus-paragraph-active, .focus-paragraph-near').length;
+  });
+  expect(before).toBeGreaterThan(0);   // sonst prüft der Assert unten nichts
+
   await page.evaluate(() => {
     window.harness._editCounterCtx = {
       teardown() { throw new Error('boom'); },
@@ -1287,12 +1298,18 @@ test('Exit räumt body-/Cardroot-Chrome ab, auch wenn ein früher Schritt wirft'
     anchor: document.documentElement.style.getPropertyValue('--focus-anchor'),
     focusActive: window.harness.focusActive,
     listeners: window.harness._focusListeners,
+    // Die Dim-Regel ist ein `:not(.focus-paragraph-active)` und die Marks
+    // wandern via mirrorToNormal in den Normal-Container: bleiben sie stehen,
+    // sitzt der User in einer Leseansicht mit einem hellen und sonst
+    // durchgehend gedimmtem Text — und der nächste Save persistiert sie.
+    marks: document.querySelectorAll('.focus-paragraph-active, .focus-paragraph-near').length,
   }));
   expect(chrome.body).toBe(false);
   expect(chrome.active).toBe(false);
   expect(chrome.anchor).toBe('');
   expect(chrome.focusActive).toBe(false);
   expect(chrome.listeners).toBeNull();
+  expect(chrome.marks).toBe(0);
 });
 
 test('Granularitäts-Switch tauscht die Klasse, statt sie zu stapeln', async ({ page }) => {

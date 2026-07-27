@@ -231,17 +231,24 @@ export const focusCardMethods = {
         // Zuerst und wurffrei: der State ist das, was den Editor sonst
         // dauerhaft sperrt.
         this._focusState = 'idle';
-        // Danach das Sicherheitsnetz für die Sichtbarkeit. Alle vier Schritte
+        // Danach das Sicherheitsnetz für die Sichtbarkeit. Alle fünf Schritte
         // sind idempotent, im Normalfall also No-ops (sie liefen oben bereits).
         // Ist die Sequenz oben aber vorzeitig ausgestiegen, wäre der User sonst
         // in einem Overlay gefangen, das keine Listener mehr hat. Reihenfolge
         // wie oben: spiegeln, solange `.is-active` den Focus-Container noch
         // findet — erst danach die Flag umlegen.
+        //
+        // `clearAllFocusMarks` gehört mit ins Netz: die Dim-Regel ist ein
+        // `:not(.focus-paragraph-active)`, die Marks wandern über
+        // `mirrorToNormal` in den Normal-Container. Bleiben sie nach einem Wurf
+        // stehen, sitzt der User in einer Leseansicht, in der ein Absatz hell
+        // und alles andere gedimmt ist — und der nächste Save persistiert sie.
         try {
           mirrorToNormal();
           this._focusTeardown();
           app.focusActive = false;
           unmarkFocusChrome();
+          clearAllFocusMarks();
         } catch (err) {
           reportError('exitFocusMode:cleanup', err);
         }
