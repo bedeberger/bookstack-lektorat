@@ -61,6 +61,37 @@ export function applyBlockMarks(container, block, granularity) {
   setNearBlocks(container, granularity === 'window-3' ? block : null);
 }
 
+// Ist-Zustand des DOM gegen das Soll prüfen — Grundlage der Repair-Pfade, die
+// nur mutieren dürfen, wenn die Hervorhebung wirklich kaputt ist (synchron im
+// `input`-Handler und während einer laufenden IME-Composition).
+//
+// `block === null` gilt als intakt: es gibt kein Soll, über das Ausgrauen
+// entscheidet dann der reguläre Tick (inkl. `_lastBlock`-Schutz und Blur-Clear).
+export function blockMarksIntact(container, block, granularity) {
+  if (!container) return true;
+  const actives = container.querySelectorAll('.focus-paragraph-active');
+  if (granularity === 'typewriter-only') return actives.length === 0;
+  if (!block) return true;
+  return actives.length === 1 && actives[0] === block;
+}
+
+// Setzt die Block-Markierungen NUR, wenn der Ist-Zustand vom Soll abweicht.
+// Rückgabe: `true` = es wurde mutiert (der Aufrufer zieht dann seinen Cache und
+// das Satz-Highlight nach).
+//
+// Why: Löschen kann den markierten Block aus dem DOM ziehen (Backspace am
+// Absatzanfang merged zwei `<p>`, der zweite verschwindet samt Klasse). Danach
+// trägt KEIN Element mehr `.focus-paragraph-active` → die Dim-Regel greift für
+// den ganzen Text und die Hervorhebung ist optisch weg. Ein Repair-Pfad, der nur
+// im kaputten Zustand anfasst, ist billig genug für jeden Keystroke und sicher
+// genug für eine laufende Composition (reiner Attribut-Toggle, kein
+// Struktur-Eingriff → das IME-Kandidatenfenster hängt am Caret und bleibt).
+export function repairBlockMarks(container, block, granularity) {
+  if (blockMarksIntact(container, block, granularity)) return false;
+  applyBlockMarks(container, block, granularity);
+  return true;
+}
+
 // Satz-Highlight ist der teure Pfad (Range-Iteration über Textknoten), darum nur
 // bei `recompute` (Block-/Granularitätswechsel oder Sentence-Mode, wo der Caret
 // eine Satzgrenze im selben Block überqueren kann).

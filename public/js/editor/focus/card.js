@@ -20,7 +20,7 @@ import {
 import { clearSentenceHighlight } from './sentence.js';
 import { publishAnchorRatio, clearAnchorRatio } from './typewriter.js';
 import {
-  resolveActiveBlock, applyBlockMarks, syncSentenceMarks,
+  resolveActiveBlock, applyBlockMarks, syncSentenceMarks, repairBlockMarks,
   runTypewriter, scrollEntryTargetToAnchor,
 } from './recenter.js';
 import { installFocusListeners } from './listeners.js';
@@ -261,17 +261,22 @@ export const focusCardMethods = {
   // IME) kollabieren auf einen Frame.
   //
   // `opts.preferCenter` — User-Scroll: aktiver Block kommt aus der Viewport-Mitte
-  // statt vom Caret. `opts.imeSafe` — Composition läuft: das DOM wird NICHT
-  // angefasst (weder Block-Klassen noch Satz-Highlight), weil beides das
-  // Kandidatenfenster versetzen bzw. die Eingabe abbrechen würde;
-  // `_lastBlock`/`_lastGranularity` bleiben absichtlich stehen, damit
-  // `compositionend` als Blockwechsel durchschlägt und einmal sauber
-  // reconciliiert. Der Typewriter läuft als Notnagel weiter (siehe runTypewriter).
+  // statt vom Caret. `opts.imeSafe` — Composition läuft: das DOM wird im
+  // Normalfall NICHT angefasst (weder Block-Klassen noch Satz-Highlight), weil
+  // beides das Kandidatenfenster versetzen bzw. die Eingabe abbrechen würde.
+  // Einzige Ausnahme ist der Repair-Pfad: ist die Markierung nachweislich kaputt
+  // (der markierte Block wurde weggelöscht/gemerged), wird sie wiederhergestellt
+  // — Attribut-Toggle statt Struktur-Eingriff, und der Alternativzustand wäre ein
+  // komplett gedimmter Text bis zum `compositionend` (Gboard hält die Composition
+  // über ganze Wörter/Sätze offen). Der Typewriter läuft als Notnagel weiter
+  // (siehe runTypewriter). `opts.force` — Recompute des Satz-Highlights
+  // erzwingen, auch wenn der Block gleich blieb (`compositionend`).
   _focusUpdateActive(scroll, opts = {}) {
     if (this._focusState !== 'active') return;
     if (this._focusRaf) cancelAnimationFrame(this._focusRaf);
     const preferCenter = opts.preferCenter === true;
     const imeSafe = opts.imeSafe === true;
+    const force = opts.force === true;
     const gen = this._focusGen;
     this._focusRaf = requestAnimationFrame(() => {
       this._focusRaf = null;
@@ -292,8 +297,15 @@ export const focusCardMethods = {
           lastBlock: ctx._lastBlock,
         });
 
-        if (!imeSafe) {
-          const recompute = block !== ctx._lastBlock
+        if (imeSafe) {
+          if (repairBlockMarks(container, block, granularity)) {
+            syncSentenceMarks({ block, sel, granularity, recompute: true });
+            ctx._lastBlock = block;
+            ctx._lastGranularity = granularity;
+          }
+        } else {
+          const recompute = force
+            || block !== ctx._lastBlock
             || granularity !== ctx._lastGranularity
             || granularity === 'sentence';
           applyBlockMarks(container, block, granularity);

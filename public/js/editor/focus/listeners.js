@@ -13,7 +13,7 @@ import {
   HAS_IO, HAS_MO,
 } from './constants.js';
 import { findBlockFromNode } from './dom-blocks.js';
-import { applyBlockMarks } from './recenter.js';
+import { applyBlockMarks, repairBlockMarks } from './recenter.js';
 import { consumeProgrammaticScroll } from './typewriter.js';
 import { makeCursorHide } from './cursor-hide.js';
 import { makeViewportSync } from './viewport.js';
@@ -109,7 +109,11 @@ export function installFocusListeners({ ctrl, container }) {
     if (!isActive()) return;
     const sel = document.getSelection();
     const anchor = sel && sel.rangeCount > 0 ? sel.anchorNode : null;
-    if (anchor && !container.contains(anchor)) return;
+    // Abgehängter Anker (`!isConnected`) ist KEIN Fremd-Selection-Fall, sondern
+    // die Nachwehe einer Löschung: der Knoten, in dem der Caret sass, ist gerade
+    // aus dem DOM geflogen. Der Tick muss laufen, sonst bleibt die Markierung
+    // auf dem verschwundenen Block stehen bzw. ganz weg.
+    if (anchor && anchor.isConnected !== false && !container.contains(anchor)) return;
     const isPointer = ctx.pointerIntent;
     ctx.pointerIntent = false;
     clearTimeout(ctx.pointerTimer);
@@ -118,38 +122,53 @@ export function installFocusListeners({ ctrl, container }) {
 
   const { showCursor } = makeCursorHide({ ctx, isActive });
 
+  // Markierung SYNCHRON reparieren, solange sie kaputt ist — `input` feuert im
+  // selben Task nach der DOM-Mutation und vor dem Paint, hier Korrigiertes
+  // rendert also nie als Zwischenzustand. Deckt zwei Strukturwechsel ab, die der
+  // RAF erst einen Frame später sähe:
+  //   - **Split** (`insertParagraph`/`insertLineBreak`): Chromium kopiert
+  //     `.focus-paragraph-active` auf beide `<p>` → kurz leuchten zwei Absätze.
+  //   - **Merge/Löschen** (`deleteContentBackward` & Co.): Backspace am
+  //     Absatzanfang zieht den markierten `<p>` aus dem DOM → KEIN Element trägt
+  //     die Klasse mehr → die Dim-Regel greift für den ganzen Text.
+  // Nicht auf einzelne `inputType`-Werte gefiltert: Android-IMEs ersetzen ganze
+  // Wörter über `insertCompositionText`, Undo/Redo und Paste bauen ebenfalls
+  // Blöcke um. Der Ist-Soll-Vergleich (`repairBlockMarks`) macht den Aufruf im
+  // Normalfall zum reinen Lesevorgang, deshalb ist „immer prüfen" billiger als
+  // eine unvollständige Whitelist.
+  const repairMarksNow = () => {
+    const sel = document.getSelection();
+    const anchor = sel && sel.rangeCount > 0 ? sel.anchorNode : null;
+    const block = anchor && container.contains(anchor)
+      ? findBlockFromNode(anchor, container) : null;
+    // Kein Block auflösbar → transienter null-Tick; hier NICHT clearen, das
+    // entscheidet der reguläre Tick mit `_lastBlock`-Schutz.
+    if (!block) return;
+    const granularity = editorHost()?.focusGranularity || 'paragraph';
+    if (repairBlockMarks(container, block, granularity)) ctx._lastBlock = block;
+  };
+
   // Input fängt, was selectionchange nicht abdeckt: undo/redo ohne Caret-Move,
   // Paste mit stabiler Caret-Position, Content-Rewrite durch externe Module.
-  const onInput = (e) => {
+  const onInput = () => {
     if (!isActive()) return;
-    // Composition läuft: kein Markup anfassen (Kandidatenfenster/Composition darf
-    // nicht gestört werden), aber der Typewriter bleibt als Notnagel scharf —
-    // Android-Soft-Keyboards halten auch für gewöhnliche lateinische Wörter eine
-    // Composition offen, teils über ganze Sätze.
+    repairMarksNow();
+    // Composition läuft: das DOM sonst nicht anfassen (Kandidatenfenster/
+    // Composition darf nicht gestört werden), aber der Typewriter bleibt als
+    // Notnagel scharf — Android-Soft-Keyboards halten auch für gewöhnliche
+    // lateinische Wörter eine Composition offen, teils über ganze Sätze.
     if (ctx.composing) { ctrl._focusUpdateActive(true, { imeSafe: true }); return; }
-    // Absatz-/Zeilen-Split: aktiven Block SYNCHRON neu setzen, statt erst im RAF
-    // einen Frame später. Chromium kopiert beim Split die
-    // .focus-paragraph-active-Klasse auf beide <p>; würde der RAF erst im nächsten
-    // Frame aufräumen, leuchteten kurz zwei Absätze. Ein Clear im `beforeinput`
-    // vermied den Doppel-, erzeugte aber einen Dim-Flash (für einen Frame ist
-    // NICHTS aktiv → ganzer Text snappt auf opacity 0.35 und zurück). `input`
-    // feuert synchron im selben Task VOR dem Paint — hier markiert rendert keinen
-    // Zwischenzustand. Der RAF reconciliiert danach und scrollt.
-    if (e?.inputType === 'insertParagraph' || e?.inputType === 'insertLineBreak') {
-      const sel = document.getSelection();
-      const anchor = sel && sel.rangeCount > 0 ? sel.anchorNode : null;
-      const block = anchor && container.contains(anchor)
-        ? findBlockFromNode(anchor, container) : null;
-      applyBlockMarks(container, block, editorHost()?.focusGranularity || 'paragraph');
-      ctx._lastBlock = block;
-    }
     ctrl._focusUpdateActive(true);
   };
 
   const onCompositionStart = () => { ctx.composing = true; };
+  // `force`: während der Composition wurde das Satz-Highlight übersprungen, der
+  // Block kann sich trotzdem geändert haben (Merge). Ohne erzwungenes Recompute
+  // liesse der Short-Circuit-Cache das Highlight auf dem Stand von vor der
+  // Composition stehen.
   const onCompositionEnd = () => {
     ctx.composing = false;
-    if (isActive()) ctrl._focusUpdateActive(true);
+    if (isActive()) ctrl._focusUpdateActive(true, { force: true });
   };
 
   const onScroll = () => {

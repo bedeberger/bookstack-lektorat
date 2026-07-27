@@ -724,6 +724,71 @@ test('Chromium-Split: zwei .focus-paragraph-active → setActiveBlock räumt ab'
   expect(await page.locator('.focus-paragraph-active').count()).toBe(1);
 });
 
+test('Merge-Löschung reisst den markierten Block weg → synchroner Repair im input-Handler', async ({ page }) => {
+  // Backspace am Absatzanfang: Chromium merged die beiden <p>, der markierte
+  // fliegt samt Klasse aus dem DOM. Ohne synchronen Repair trüge für einen Frame
+  // KEIN Element `.focus-paragraph-active` → die Dim-Regel greift für den ganzen
+  // Text (sichtbarer „Hervorhebung weg"-Blitz). Der Repair läuft im
+  // `input`-Handler, also noch vor dem Paint.
+  await enter(page);
+  await placeCaretInParagraph(page, 5);
+  await page.waitForTimeout(50);
+  expect(await page.locator('.focus-paragraph-active').count()).toBe(1);
+
+  const marked = await page.evaluate(() => {
+    const c = document.querySelector('#editor-card .focus-editor__content');
+    const ps = [...c.querySelectorAll('p')];
+    const prev = ps[4], cur = ps[5];
+    // Merge nachbauen: Text von cur an prev anhängen, cur entfernen, Caret an
+    // die Nahtstelle — exakt der DOM-Zustand nach deleteContentBackward.
+    const seam = prev.firstChild.nodeValue.length;
+    prev.firstChild.nodeValue += cur.textContent;
+    cur.remove();
+    const range = document.createRange();
+    range.setStart(prev.firstChild, seam);
+    range.collapse(true);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+    c.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+    // SYNCHRON messen — vor dem nächsten RAF/Paint.
+    return c.querySelectorAll('.focus-paragraph-active').length;
+  });
+  expect(marked).toBe(1);
+});
+
+test('Löschen während laufender IME-Composition verliert die Hervorhebung nicht', async ({ page }) => {
+  // Android-Report: Gboard hält die Composition über ganze Wörter/Sätze offen.
+  // Der imeSafe-Pfad fasst das DOM bewusst nicht an — riss eine Löschung den
+  // markierten Block mit weg, blieb die Hervorhebung deshalb bis zum
+  // compositionend verschwunden (alles gedimmt). Der Repair-Pfad stellt sie her.
+  await enter(page);
+  await placeCaretInParagraph(page, 5);
+  await page.waitForTimeout(50);
+  expect(await page.locator('.focus-paragraph-active').count()).toBe(1);
+
+  await page.evaluate(() => {
+    const c = document.querySelector('#editor-card .focus-editor__content');
+    c.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    const ps = [...c.querySelectorAll('p')];
+    const prev = ps[4], cur = ps[5];
+    const seam = prev.firstChild.nodeValue.length;
+    prev.firstChild.nodeValue += cur.textContent;
+    cur.remove();
+    const range = document.createRange();
+    range.setStart(prev.firstChild, seam);
+    range.collapse(true);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+    c.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+  });
+  await page.waitForTimeout(60);
+
+  // Composition läuft weiterhin — die Hervorhebung muss trotzdem stehen.
+  const composing = await page.evaluate(() => window.harness._focusListeners.composing);
+  expect(composing).toBe(true);
+  expect(await page.locator('.focus-paragraph-active').count()).toBe(1);
+});
+
 test('Save-Fail beim Exit: User bleibt im Edit-Modus (Draft retten)', async ({ page, consoleGuard }) => {
   // Negativ-Test: provoziert absichtlich einen Save-Fehler ("offline"), den der
   // Editor erwartungsgemaess via console.error loggt — kein echter Bug.

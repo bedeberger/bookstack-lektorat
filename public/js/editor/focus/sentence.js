@@ -58,29 +58,63 @@ export function findSentenceRanges(text, locale = 'de') {
   return ranges;
 }
 
+// Zeichen im Block VOR dem Element `el` (Dokument-Reihenfolge).
+function textBefore(block, el) {
+  if (el === block) return 0;
+  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
+  let pos = 0;
+  let node;
+  while ((node = walker.nextNode())) {
+    if (el.contains(node)) break;
+    pos += (node.nodeValue || '').length;
+  }
+  return pos;
+}
+
+// Caret als Zeichen-Offset im Block-Text.
+//
+// Der Caret-Container ist nicht immer ein Textknoten: nach dem Leeren eines
+// Absatzes, direkt nach einem `<br>` und unmittelbar nach einem Merge setzt
+// Chromium ihn aufs Element und zählt dann KINDKNOTEN statt Zeichen. Eine reine
+// Textknoten-Suche findet den Container dann nie und fiele auf 0 zurück — als
+// aktiv gälte der erste Satz, obwohl der Caret im letzten steht: beim Löschen
+// sprang das Satz-Spotlight an den Absatzanfang.
+function caretOffsetInBlock(block, node, offset) {
+  if (!node) return 0;
+  if (node.nodeType === 3) {
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
+    let pos = 0;
+    let n;
+    while ((n = walker.nextNode())) {
+      if (n === node) return pos + Math.max(0, Math.min(offset, (n.nodeValue || '').length));
+      pos += (n.nodeValue || '').length;
+    }
+    return pos;
+  }
+  let chars = 0;
+  const kids = node.childNodes || [];
+  for (let i = 0; i < offset && i < kids.length; i++) chars += kids[i].textContent?.length || 0;
+  return textBefore(block, node) + chars;
+}
+
 // Findet die Satz-Range im Block, die den Caret enthält.
 export function findSentenceAtCaret(block, selection) {
   if (!block || !selection || selection.rangeCount === 0) return null;
   const range = selection.getRangeAt(0);
   if (!block.contains(range.startContainer)) return null;
-  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
-  let pos = 0;
-  let caretPos = -1;
-  let node;
-  while ((node = walker.nextNode())) {
-    if (node === range.startContainer) {
-      caretPos = pos + range.startOffset;
-      break;
-    }
-    pos += node.nodeValue.length;
-  }
-  if (caretPos < 0) caretPos = 0;
+  const caretPos = caretOffsetInBlock(block, range.startContainer, range.startOffset);
   const text = block.textContent || '';
   const ranges = findSentenceRanges(text);
   if (ranges.length === 0) return { sentence: [0, text.length], totalLength: text.length };
+  // Halboffenes Intervall [start, end): sitzt der Caret exakt auf einer
+  // Satzgrenze, gewinnt der Satz, der dort BEGINNT. Der Segmenter schlägt den
+  // Trennraum dem Vorgänger zu — mit `<= end` galt nach jedem getippten Punkt
+  // plus Leerzeichen noch der abgeschlossene Satz als aktiv, und beim
+  // Rückwärtslöschen über eine Grenze sprang das Spotlight einen Satz zurück.
   for (const r of ranges) {
-    if (caretPos >= r[0] && caretPos <= r[1]) return { sentence: r, totalLength: text.length };
+    if (caretPos >= r[0] && caretPos < r[1]) return { sentence: r, totalLength: text.length };
   }
+  // Caret hinter dem letzten Satz (Blockende, Trailing-Whitespace).
   return { sentence: ranges[ranges.length - 1], totalLength: text.length };
 }
 
@@ -124,7 +158,10 @@ export function clearSentenceHighlight() {
 export function applySentenceHighlight(block, selection) {
   if (typeof CSS === 'undefined' || !CSS.highlights || typeof Highlight === 'undefined') return;
   clearSentenceHighlight();
-  if (!block) return;
+  // Abgehängter Block (gerade weggelöscht/gemerged): Ranges darauf wären für den
+  // Renderer wertlos und hielten den Knoten am Leben. Nächster Tick hat einen
+  // frischen Block.
+  if (!block || block.isConnected === false) return;
   const text = block.textContent || '';
   let active = null;
   const info = findSentenceAtCaret(block, selection);

@@ -36,4 +36,5 @@ export {
 } from './focus/typewriter.js';
 export {
   resolveActiveBlock, applyBlockMarks, syncSentenceMarks,
+  blockMarksIntact, repairBlockMarks,
 } from './focus/recenter.js';

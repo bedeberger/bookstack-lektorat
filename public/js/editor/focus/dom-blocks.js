@@ -7,6 +7,7 @@
 
 import { BLOCK_TAGS, BLOCK_SEL } from './constants.js';
 import { clearSentenceHighlight } from './sentence.js';
+import { visibleViewportRect } from './typewriter.js';
 import { ensureTrailingParagraph } from '../shared/auto-slot.js';
 import { getActiveEditorContainer } from '../shared/active-editor.js';
 export { isEmptyParagraph, removeAutoAddedParagraph } from '../shared/auto-slot.js';
@@ -94,9 +95,27 @@ export function pickCenterBlock(containerRect, blocks) {
   return best;
 }
 
+// Bezugsrechteck für den Center-Pick: Überschneidung von Scroll-Box und
+// SICHTBAREM Bildschirm — derselbe Bezug, den der Typewriter für seinen Anker
+// nimmt (`visibleViewportRect`). Die Box läuft mobil hinter der Tastatur weiter
+// (der Tail-Puffer ist bewusst ~100vh hoch, Invariante 9), ihre geometrische
+// Mitte liegt bei offener Tastatur also weit unter dem, was der User sieht: der
+// Pick landete auf einem Absatz hinter der Tastatur, und alles Sichtbare war
+// gedimmt — für den User nicht von „Hervorhebung weg" zu unterscheiden.
+// Kein Überlapp (Box ganz off-screen) → Box-Bezug, damit der Pick nie leer
+// ausgeht. Ohne `visualViewport` (Node-Tests, alte Browser) ebenfalls Box-Bezug.
+function visibleBoxRect(container) {
+  const r = container.getBoundingClientRect();
+  const vv = visibleViewportRect();
+  if (!vv || !(vv.height > 0)) return r;
+  const top = Math.max(r.top, vv.top);
+  const bottom = Math.min(r.top + r.height, vv.top + vv.height);
+  return bottom - top > 1 ? { top, height: bottom - top } : r;
+}
+
 export function findBlockAtViewportCenter(container, visibleBlocks, blockSel = BLOCK_SEL) {
   if (!container) return null;
-  const containerRect = container.getBoundingClientRect();
+  const containerRect = visibleBoxRect(container);
   // Bevorzugt das IO-getrackte Set (günstig, keine QSA). ABER: das Set kann
   // transient nur Höhe-0/abgehängte Einträge halten (Mutation vor IO-Callback,
   // oder eine entfernte Node, die noch nicht ge-unobserve't wurde) — dann liefert
