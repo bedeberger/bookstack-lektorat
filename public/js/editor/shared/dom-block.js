@@ -1,22 +1,33 @@
 // Block-Lookup im contenteditable — SSoT für beide Editoren, die auf dem
 // Seiten-Container laufen (Notebook-Toolbar + Notebook-Edit-Pfade).
 //
-// Lag vorher doppelt: einmal in notebook/toolbar/_shared.js (Slash/Keydown),
-// einmal inline in notebook/edit/view.js (insertHorizontalRule). Ein neuer
-// Blocktyp hätte an zwei Stellen nachgezogen werden müssen — genau die Drift,
-// die shared/ verhindert.
+// Ausserdem Vokabular-SSoT für die Blockselektoren der Editor-/Reader-Pfade:
+// `TEXT_BLOCK_TAGS` ist der gemeinsame Kern, jeder Konsument komponiert seinen
+// Selektor daraus mit einem EXPLIZITEN Zusatz. **Why:** die Selektoren hiessen
+// vorher alle `BLOCK_SEL`, hatten aber vier verschiedene Inhalte — gleicher
+// Name suggeriert Gleichheit, die nicht besteht, und ein Aufrufer griff
+// dadurch (unbemerkt) zum Selektor der falschen Familie. Sie unterscheiden sich
+// weiterhin, aber jetzt sichtbar am Namen und an der Zusatzliste. Wer eine
+// Familie ändert, ändert genau die eine.
+export const TEXT_BLOCK_TAGS = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'li'];
+
+// Kern + explizite Zusätze zu einem CSS-Selektor.
+export function composeBlockSel(...extra) {
+  return [...TEXT_BLOCK_TAGS, ...extra.flat()].join(', ');
+}
 
 // Block-artige Elemente, in denen ein Caret sitzen kann. `li` und `div.poem`
 // sind absichtlich dabei: der Caret-Block ist dort das tief verschachtelte
-// Element, nicht das Top-Level-Child von editEl.
-export const BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, blockquote, pre, li, div.poem';
+// Element, nicht das Top-Level-Child von editEl. Konsumenten: Notebook-Toolbar
+// (Slash/Keydown/Grenz-Handler), Notebook-Edit-Pfade, focus/soft-newlines.js.
+export const CARET_BLOCK_SEL = composeBlockSel('pre', 'div.poem');
 
 // Nächstliegender Block ab `node` aufwärts, innerhalb von `root` (exklusive).
 // null, wenn zwischen node und root kein Block liegt.
 export function findBlock(node, root) {
   let cur = node && node.nodeType === 3 ? node.parentNode : node;
   while (cur && cur !== root) {
-    if (cur.nodeType === 1 && cur.matches?.(BLOCK_SEL)) return cur;
+    if (cur.nodeType === 1 && cur.matches?.(CARET_BLOCK_SEL)) return cur;
     cur = cur.parentNode;
   }
   return null;

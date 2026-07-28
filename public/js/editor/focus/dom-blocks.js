@@ -5,7 +5,7 @@
 // - active/near-Markierungen samt Cleanup ohne residuales `class=""`-Attribut
 //   (würde sonst BookStack-Revisionen beim nächsten Save erzeugen).
 
-import { BLOCK_TAGS, BLOCK_SEL } from './constants.js';
+import { BLOCK_TAGS, FOCUS_BLOCK_SEL } from './constants.js';
 import { clearSentenceHighlight } from './sentence.js';
 import { visibleViewportRect } from './typewriter.js';
 import { ensureTrailingParagraph } from '../shared/auto-slot.js';
@@ -222,7 +222,7 @@ export function overlapsBand(el, band) {
   return r.height > 0 && r.bottom > band.top && r.top < band.top + band.height;
 }
 
-export function findBlockAtViewportCenter(container, visibleBlocks, blockSel = BLOCK_SEL) {
+export function findBlockAtViewportCenter(container, visibleBlocks, blockSel = FOCUS_BLOCK_SEL) {
   if (!container) return null;
   const containerRect = visibleBoxRect(container);
   // Bevorzugt das IO-getrackte Set (günstig, keine QSA). Zwei Fälle erzwingen
@@ -282,7 +282,7 @@ export function setActiveBlock(container, block) {
 // festzustellen, dass es nichts abzuräumen gibt.
 //
 // Rückgabe: ob nach dem Aufruf near-Marks gesetzt sind.
-export function setNearBlocks(container, block, marks = null, blockSel = BLOCK_SEL) {
+export function setNearBlocks(container, block, marks = null, blockSel = FOCUS_BLOCK_SEL) {
   if (!container) return false;
   if (!block && marks && marks.near === false) return false;
   const sib = (el, dir) => {

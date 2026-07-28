@@ -5,6 +5,15 @@ on:
   push:
     branches: [main]
 
+# Der Runner teilt sich den LXC mit der Prod-App (und Bookstack) auf Ceph-RBD.
+# Zwei gleichzeitige Laeufe verdoppeln die IO-Last exakt dort, wo sie am meisten
+# weh tut. Darum serialisieren statt parallelisieren: PR-Laeufe werden vom
+# Nachfolger abgeloest, main-Pushes reihen sich an (ein laufender Deploy darf
+# nicht mittendrin abgebrochen werden).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   checks-and-unit:
     name: Static Checks + Unit-Tests
@@ -17,23 +26,36 @@ jobs:
       DB_PATH: /dev/shm/lektorat-ci-${{ github.run_id }}.db
 
     steps:
+      # clean: false — der Default (`git clean -ffdx`) loescht node_modules, was
+      # auf dem Netz-Storage 12k Datei-Deletes + anschliessend 12k Neuschreibungen
+      # bedeutet. Der Workspace wird stattdessen unten gezielt geputzt.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          clean: false
+
+      - name: Workspace putzen (node_modules bewusst ausgenommen)
+        run: git clean -ffdx -e node_modules
 
       - name: Frische DB pro Run (self-hosted Runner persistiert sonst schreibwerkstatt.db)
         run: rm -f "$DB_PATH" "${DB_PATH}-shm" "${DB_PATH}-wal"
 
-      - name: Cache node_modules
-        id: cache-node-modules
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-
-      - name: Install deps
-        if: steps.cache-node-modules.outputs.cache-hit != 'true'
-        run: npm ci --prefer-offline --no-audit --no-fund
+      # Kein actions/cache: auf einem Self-hosted-Runner ueberlebt node_modules
+      # den Lauf ohnehin (siehe clean: false). Ein Cache-Restore wuerde 189 MB
+      # ueber exakt die Dateien entpacken, die schon dastehen. Stattdessen
+      # Stempel im node_modules-Baum: faellt der Ordner weg, faellt der Stempel
+      # mit und `npm ci` laeuft automatisch wieder.
+      - name: Deps installieren (nur bei geaendertem Lockfile)
+        run: |
+          set -e
+          stamp=node_modules/.ci-lock-sha
+          want=$(sha256sum package-lock.json | cut -d' ' -f1)
+          if [ "$(cat "$stamp" 2>/dev/null)" = "$want" ]; then
+            echo "node_modules aktuell (${want:0:12}) — Install uebersprungen"
+          else
+            npm ci --prefer-offline --no-audit --no-fund
+            echo "$want" > "$stamp"
+          fi
 
       - name: Syntax-Check (node --check auf allen JS-Dateien)
         run: |
@@ -127,40 +149,40 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          clean: false
 
-      - name: Cache node_modules
-        id: cache-node-modules
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Workspace putzen (node_modules bewusst ausgenommen)
+        run: git clean -ffdx -e node_modules
 
-      - name: Install deps
-        if: steps.cache-node-modules.outputs.cache-hit != 'true'
-        run: npm ci --prefer-offline --no-audit --no-fund
-
-      - name: Playwright-Version ermitteln
-        id: pw-version
+      - name: Deps installieren (nur bei geaendertem Lockfile)
         run: |
-          ver=$(node -p "require('@playwright/test/package.json').version")
-          echo "version=$ver" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Playwright-Browser
-        id: cache-playwright
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          # Der Browser-Satz gehört in den Key: ein Cache-Treffer überspringt den
-          # Install-Schritt komplett, ein alter Chromium-only-Eintrag liesse WebKit
-          # also dauerhaft fehlen ("Executable doesn't exist").
-          key: playwright-${{ runner.os }}-${{ steps.pw-version.outputs.version }}-chromium-webkit
+          set -e
+          stamp=node_modules/.ci-lock-sha
+          want=$(sha256sum package-lock.json | cut -d' ' -f1)
+          if [ "$(cat "$stamp" 2>/dev/null)" = "$want" ]; then
+            echo "node_modules aktuell (${want:0:12}) — Install uebersprungen"
+          else
+            npm ci --prefer-offline --no-audit --no-fund
+            echo "$want" > "$stamp"
+          fi
 
       # Zwei Engines: die Suite läuft auf Chromium, `*.webkit.spec.js` deckt die
       # Fehlerklassen ab, die nur WebKit zeigt (contenteditable-Selektion bei
       # Padding-Summe >= clientHeight) — siehe projects in playwright.config.js.
-      - name: Browser installieren (nur bei Cache-Miss)
-        if: steps.cache-playwright.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium webkit
+      #
+      # Kein actions/cache: ~/.cache/ms-playwright liegt ausserhalb des
+      # Workspaces und ueberlebt auf einem Self-hosted-Runner jeden Lauf — ein
+      # Restore wuerde ~500 MB ueber bereits vorhandene Dateien entpacken.
+      # `playwright install` ist selbst idempotent und laedt nur fehlende
+      # Browser-Versionen nach. `--with-deps` (apt-get, jedes Mal IO + Netz) nur
+      # beim allerersten Lauf auf einem frischen Runner.
+      - name: Browser sicherstellen
+        run: |
+          if [ -d "$HOME/.cache/ms-playwright" ]; then
+            npx playwright install chromium webkit
+          else
+            npx playwright install --with-deps chromium webkit
+          fi
 
       - name: E2E-Tests ausführen
         run: npx playwright test --reporter=list
@@ -174,10 +196,17 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
+      # clean: false auch hier — sonst loescht der Deploy-Job das node_modules,
+      # das die beiden Test-Jobs im selben Workspace stehen lassen, und der
+      # naechste Lauf muesste zwingend neu installieren.
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          clean: false
+
+      - name: Workspace putzen (node_modules bewusst ausgenommen)
+        run: git clean -ffdx -e node_modules
 
       - name: Deploy
         run: bash deploy/deploy.sh

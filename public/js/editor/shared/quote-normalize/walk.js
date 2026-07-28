@@ -12,8 +12,13 @@
 
 import { SPACES, isDoubleQuote, isSingleQuote, isQuoteGlyph } from './styles.js';
 import { isApostrophe, resolveRun } from './classify.js';
+import { composeBlockSel } from '../dom-block.js';
 
-const BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, blockquote, li, td, th, div.poem';
+// Blöcke, innerhalb derer Anführungszeichen normalisiert werden. Kein `pre`
+// (steht in SKIP_SEL — Code bleibt unangetastet), dafür Tabellenzellen und
+// Gedichtzeilen. Eigener Name, weil der Inhalt sich von den Editor-Selektoren
+// unterscheidet; Kern kommt aus shared/dom-block.js.
+const QUOTE_BLOCK_SEL = composeBlockSel('td', 'th', 'div.poem');
 const SKIP_SEL  = 'pre, code, script, style';
 
 // Eigene Walk-Logik statt TreeWalker — linkedom (Unit-Test-Umgebung) ignoriert
@@ -41,13 +46,13 @@ function _isBr(node) {
   return node.nodeType === 1 && node.nodeName === 'BR';
 }
 
-// Nächster BLOCK_SEL-Ancestor. Nur im Range-Scope nötig, wo über Block-Grenzen
+// Nächster QUOTE_BLOCK_SEL-Ancestor. Nur im Range-Scope nötig, wo über Block-Grenzen
 // hinweg gesammelt wird, der Zustand aber je Block frisch sein muss.
 function _closestBlock(node, root) {
   let n = node.parentElement;
   while (n) {
     if (n === root) return root;
-    if (n.matches && n.matches(BLOCK_SEL)) return n;
+    if (n.matches && n.matches(QUOTE_BLOCK_SEL)) return n;
     n = n.parentElement;
   }
   return root;
@@ -276,7 +281,7 @@ function _process(textNodes, style, range, common) {
 
 export function normalizeQuotes(rootEl, style) {
   if (!rootEl || !style) return 0;
-  let blocks = Array.from(rootEl.querySelectorAll(BLOCK_SEL));
+  let blocks = Array.from(rootEl.querySelectorAll(QUOTE_BLOCK_SEL));
   if (!blocks.length) blocks = [rootEl];
   let total = 0;
   for (const b of blocks) {
@@ -286,7 +291,7 @@ export function normalizeQuotes(rootEl, style) {
     const nodes = [];
     // Innere Blocks (z.B. <p> in <blockquote>) laufen als eigener Durchgang —
     // kein Doppel-Processing, kein Zustands-Leak.
-    _collectTextNodes(b, nodes, BLOCK_SEL);
+    _collectTextNodes(b, nodes, QUOTE_BLOCK_SEL);
     if (nodes.length) total += _process(nodes, style, null, null);
   }
   return total;

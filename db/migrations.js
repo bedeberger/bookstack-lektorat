@@ -9672,6 +9672,105 @@ function _runMigrationsLocked() {
     logger.info(`DB-Migration auf Version 251 abgeschlossen (semantic_chunks: typisierte FK-Spalten + kind-CHECK, entity_id generiert; ${scDropped} verwaiste Chunks entfernt).`);
   }
 
+  if (version < 252) {
+    // Quellenverzeichnis (wissenschaftliche Arbeiten + Blog mit Belegen).
+    //
+    // book_sources: die Quelle selbst, buchweit GETEILT (wie research_items) —
+    // `user_email` ist reine Ersteller-Attribution, kein Sichtbarkeits-Scope.
+    // Zwingend so: der Beleg-Marker lebt im Seiten-HTML und ist damit fuer alle
+    // Editoren des Buchs sichtbar; eine user-private Quelle wuerde bei einem
+    // Co-Autor als Beleg ohne Ziel erscheinen.
+    //
+    // Feldschnitt an CSL-JSON angelehnt (csl_type + authors/editors als JSON-
+    // Array [{family,given}|{literal}]). Damit sind BibTeX-/RIS-Import, DOI-
+    // Lookup und ein Zitierstil-Wechsel reine Mappings statt Schema-Aenderungen.
+    // `year` ist TEXT, nicht INTEGER: Literaturangaben tragen 'o. J.',
+    // '2019/2021' oder 'im Druck'. citekey ist nullable + UNIQUE pro Buch
+    // (SQLite zaehlt NULLs in UNIQUE als verschieden → beliebig viele ohne Key).
+    db.exec(`CREATE TABLE IF NOT EXISTS book_sources (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id         INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        user_email      TEXT    NOT NULL,
+        csl_type        TEXT    NOT NULL DEFAULT 'book'
+                          CHECK(csl_type IN ('book','chapter','article','website','thesis',
+                                             'report','legal','interview','film','dataset','other')),
+        citekey         TEXT,
+        authors         TEXT    NOT NULL DEFAULT '[]',
+        editors         TEXT    NOT NULL DEFAULT '[]',
+        title           TEXT,
+        container_title TEXT,
+        publisher       TEXT,
+        place           TEXT,
+        year            TEXT,
+        edition         TEXT,
+        volume          TEXT,
+        issue           TEXT,
+        pages           TEXT,
+        doi             TEXT,
+        isbn            TEXT,
+        issn            TEXT,
+        url             TEXT,
+        accessed_at     TEXT,
+        note            TEXT,
+        archived        INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_book_sources_book ON book_sources(book_id, archived)');
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_book_sources_citekey ON book_sources(book_id, citekey)');
+
+    // source_citations: reiner Ableitungs-Index „welche Quelle wird auf welcher
+    // Seite belegt". Wahrheit ist der Marker im Seiten-HTML; diese Tabelle wird
+    // pro Seiten-Write per Full-Replace neu geschrieben (Muster
+    // page_figure_mentions / motif_occurrences). Beide FKs CASCADE — der Index
+    // ist jederzeit aus dem Seiten-HTML neu berechenbar.
+    //
+    // Kein book_id: der Schreibpfad arbeitet pro Seite (DELETE … WHERE page_id),
+    // Buch-Abfragen laufen ueber den JOIN auf book_sources. Eine zweite
+    // Buch-Referenz koennte von source_id abdriften.
+    db.exec(`CREATE TABLE IF NOT EXISTS source_citations (
+        source_id    INTEGER NOT NULL REFERENCES book_sources(id) ON DELETE CASCADE,
+        page_id      INTEGER NOT NULL REFERENCES pages(page_id)   ON DELETE CASCADE,
+        count        INTEGER NOT NULL DEFAULT 0,
+        first_offset INTEGER,
+        PRIMARY KEY (source_id, page_id)
+      )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_source_citations_page ON source_citations(page_id)');
+
+    // Verzeichnis-Einstellungen pro Buch — bewusst in book_settings und NICHT im
+    // Exportprofil: Zitierstil und Verzeichnis gelten fuer alle Ausgabewege
+    // (PDF, DOCX, WordPress, HubSpot) gleichzeitig. Ein Buch darf nicht je
+    // Exportprofil anders zitieren.
+    //   citation_style       apa7 | chicago-ad | numeric
+    //   bibliography_scope   cited = nur belegte Quellen | all = auch unzitierte
+    //   bibliography_in_blog Verzeichnis an Blog-/HubSpot-Posts anhaengen
+    //                        (dort ist die gerenderte Einheit die Seite = ein Post)
+    // Alles additiv: nullable bzw. NOT NULL DEFAULT, kein FK, kein Recreate.
+    const bsCols252 = db.pragma('table_info(book_settings)').map(c => c.name);
+    if (!bsCols252.includes('citation_style')) {
+      db.exec("ALTER TABLE book_settings ADD COLUMN citation_style TEXT DEFAULT 'apa7'");
+    }
+    if (!bsCols252.includes('bibliography_enabled')) {
+      db.exec('ALTER TABLE book_settings ADD COLUMN bibliography_enabled INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!bsCols252.includes('bibliography_title')) {
+      db.exec('ALTER TABLE book_settings ADD COLUMN bibliography_title TEXT');
+    }
+    if (!bsCols252.includes('bibliography_scope')) {
+      db.exec("ALTER TABLE book_settings ADD COLUMN bibliography_scope TEXT DEFAULT 'cited'");
+    }
+    if (!bsCols252.includes('bibliography_in_blog')) {
+      db.exec('ALTER TABLE book_settings ADD COLUMN bibliography_in_blog INTEGER NOT NULL DEFAULT 0');
+    }
+
+    const fkErrors252 = db.pragma('foreign_key_check');
+    if (fkErrors252.length) {
+      throw new Error(`Migration 252: foreign_key_check meldet ${fkErrors252.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 252').run();
+    logger.info('DB-Migration auf Version 252 abgeschlossen (Quellenverzeichnis: book_sources + source_citations + book_settings.citation_*/bibliography_*).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

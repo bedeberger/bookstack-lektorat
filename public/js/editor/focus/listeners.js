@@ -8,7 +8,7 @@
 // `_focusUpdateActive` / `enter`- und `exitFocusMode` gebraucht.
 
 import {
-  BLOCK_TAGS, BLOCK_SEL,
+  BLOCK_TAGS, FOCUS_BLOCK_SEL,
   POINTER_GRACE_MS, POINTER_GRACE_TOUCH_MS,
   HAS_IO, HAS_MO, isFocusToggleChord, isFocusExitBlocked,
 } from './constants.js';
@@ -80,20 +80,20 @@ function installObservers(ctx) {
         else visibleBlocks.delete(e.target);
       }
     }, { root, threshold: 0 });
-    for (const el of container.querySelectorAll(BLOCK_SEL)) ctx.io.observe(el);
+    for (const el of container.querySelectorAll(FOCUS_BLOCK_SEL)) ctx.io.observe(el);
   }
   if (!HAS_MO) return;
   const observeSubtree = (node) => {
     if (!ctx.io || node.nodeType !== 1) return;
     if (BLOCK_TAGS.has(node.tagName)) ctx.io.observe(node);
-    const nested = node.querySelectorAll?.(BLOCK_SEL);
+    const nested = node.querySelectorAll?.(FOCUS_BLOCK_SEL);
     if (nested) for (const el of nested) ctx.io.observe(el);
   };
   const unobserveSubtree = (node) => {
     if (!ctx.io || node.nodeType !== 1) return;
     visibleBlocks.delete(node);
     if (BLOCK_TAGS.has(node.tagName)) ctx.io.unobserve(node);
-    const nested = node.querySelectorAll?.(BLOCK_SEL);
+    const nested = node.querySelectorAll?.(FOCUS_BLOCK_SEL);
     if (nested) for (const el of nested) { visibleBlocks.delete(el); ctx.io.unobserve(el); }
   };
   ctx.mo = new MutationObserver((mutations) => {
@@ -333,7 +333,7 @@ export function installFocusListeners({ ctrl, container }) {
     const pad = (v) => parseFloat(v) || 0;
     const pt = resolveGutterCaretPoint(
       { left: box.left + pad(cs.paddingLeft), right: box.right - pad(cs.paddingRight) },
-      container.querySelectorAll(BLOCK_SEL),
+      container.querySelectorAll(FOCUS_BLOCK_SEL),
       e.clientX, e.clientY,
       blockLineRects,
     );

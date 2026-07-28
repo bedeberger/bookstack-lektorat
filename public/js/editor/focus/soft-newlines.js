@@ -17,7 +17,7 @@
 // Zeilenumbruch echte Struktur (`white-space: pre-line`/`pre-wrap` auch in der
 // Leseansicht), ein Kollaps wäre dort Datenverlust.
 
-import { BLOCK_SEL } from '../shared/dom-block.js';
+import { CARET_BLOCK_SEL } from '../shared/dom-block.js';
 
 // Blöcke, in denen `\n` Struktur ist und bleiben muss.
 const PRESERVE_SEL = 'pre, .poem';
@@ -67,7 +67,7 @@ export function collapseSoftNewlines(root) {
   let changed = false;
   let caret = null;
 
-  for (const block of root.querySelectorAll(BLOCK_SEL)) {
+  for (const block of root.querySelectorAll(CARET_BLOCK_SEL)) {
     if (block.closest(PRESERVE_SEL)) continue;
     const nodes = textNodesOf(block, root);
     if (!nodes.length) continue;

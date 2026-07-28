@@ -1,6 +1,9 @@
 'use strict';
 const express = require('express');
-const { getBookSettings, saveBookSettings, setBookEntitiesEnabled } = require('../db/schema');
+const {
+  getBookSettings, saveBookSettings, setBookEntitiesEnabled,
+  setBookCitationSettings, VALID_CITATION_STYLES, VALID_BIBLIOGRAPHY_SCOPES,
+} = require('../db/schema');
 const { aclParamGuard } = require('../lib/acl');
 const logger = require('../logger');
 const { captureSnapshot } = require('./snapshots');
@@ -29,6 +32,9 @@ const DAILY_GOAL_MAX = 50000;
 // als praktisches Maximum gegen Tippfehler.
 const GOAL_TARGET_MIN = 1000;
 const GOAL_TARGET_MAX = 20000000;
+// Verzeichnis-Ueberschrift ("Literaturverzeichnis", "Quellen", …). Leer =
+// Sprach-Default des Renderers.
+const BIBLIOGRAPHY_TITLE_MAX = 200;
 
 /** Gibt Sprache, Region, Buchtyp und Buchkontext für ein Buch zurück. */
 router.get('/:book_id', aclParamGuard('viewer'), (req, res) => {
@@ -152,6 +158,47 @@ router.put('/:book_id/entities-enabled', aclParamGuard('editor'), jsonBody, (req
   const enabled = req.body?.enabled ? 1 : 0;
   setBookEntitiesEnabled(bookId, enabled);
   res.json({ ok: true, entities_enabled: enabled });
+});
+
+/** Quellenverzeichnis-Einstellungen (Quellen-Tab). Eigener Endpunkt statt
+ *  weiterer Felder im Haupt-Body: der Tab speichert unabhaengig, und der
+ *  Zitierstil gilt buchweit fuer ALLE Ausgabewege (PDF, DOCX, WordPress,
+ *  HubSpot) — er gehoert deshalb nicht in ein Exportprofil. */
+router.put('/:book_id/citation', aclParamGuard('editor'), jsonBody, (req, res) => {
+  const bookId = req.bookId;
+  const b = req.body || {};
+
+  if (b.citation_style !== undefined && !VALID_CITATION_STYLES.includes(b.citation_style)) {
+    return res.status(400).json({ error_code: 'INVALID_VALUE', params: { field: 'citation_style', allowed: VALID_CITATION_STYLES.join(', ') } });
+  }
+  if (b.bibliography_scope !== undefined && !VALID_BIBLIOGRAPHY_SCOPES.includes(b.bibliography_scope)) {
+    return res.status(400).json({ error_code: 'INVALID_VALUE', params: { field: 'bibliography_scope', allowed: VALID_BIBLIOGRAPHY_SCOPES.join(', ') } });
+  }
+  if (b.bibliography_title && String(b.bibliography_title).length > BIBLIOGRAPHY_TITLE_MAX) {
+    return res.status(400).json({ error_code: 'INVALID_VALUE', params: { field: 'bibliography_title', allowed: `max ${BIBLIOGRAPHY_TITLE_MAX}` } });
+  }
+
+  // Vorwerte als Basis: der Tab darf einzelne Felder patchen, ohne die uebrigen
+  // auf ihren Default zurueckzusetzen.
+  const cur = getBookSettings(bookId, req.session?.user?.email || null);
+  setBookCitationSettings(bookId, {
+    citation_style:       b.citation_style       !== undefined ? b.citation_style       : cur.citation_style,
+    bibliography_enabled: b.bibliography_enabled !== undefined ? b.bibliography_enabled : cur.bibliography_enabled,
+    bibliography_title:   b.bibliography_title   !== undefined ? b.bibliography_title   : cur.bibliography_title,
+    bibliography_scope:   b.bibliography_scope   !== undefined ? b.bibliography_scope   : cur.bibliography_scope,
+    bibliography_in_blog: b.bibliography_in_blog !== undefined ? b.bibliography_in_blog : cur.bibliography_in_blog,
+  });
+
+  const next = getBookSettings(bookId, req.session?.user?.email || null);
+  logger.info(`[quellen] settings book=${bookId} stil=${next.citation_style} verzeichnis=${next.bibliography_enabled} scope=${next.bibliography_scope} blog=${next.bibliography_in_blog}`);
+  res.json({
+    ok: true,
+    citation_style: next.citation_style,
+    bibliography_enabled: next.bibliography_enabled,
+    bibliography_title: next.bibliography_title,
+    bibliography_scope: next.bibliography_scope,
+    bibliography_in_blog: next.bibliography_in_blog,
+  });
 });
 
 module.exports = router;

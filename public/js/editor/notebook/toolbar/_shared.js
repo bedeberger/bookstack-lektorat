@@ -4,7 +4,7 @@
 
 import { getEditEl, placeCaretIn, WORD_RE } from '../../utils.js';
 import { tzOpts, localeTag } from '../../../utils.js';
-import { BLOCK_SEL, findBlock, topLevelBlock, caretAtBlockStart, caretAtBlockEnd } from '../../shared/dom-block.js';
+import { CARET_BLOCK_SEL, findBlock, topLevelBlock, caretAtBlockStart, caretAtBlockEnd } from '../../shared/dom-block.js';
 import { brLeftOfCaret } from '../../shared/soft-break.js';
 import { TODO_ITEM_SEL, TODO_LIST_CLASS } from '../../shared/todo-html.js';
 
@@ -12,7 +12,7 @@ export { getEditEl, placeCaretIn, WORD_RE };
 // Block-Lookup + Caret-Randlage leben in shared/dom-block.js (auch von
 // edit/view.js und shared/soft-break.js konsumiert) — hier nur re-exportiert,
 // damit die Toolbar-Submodule ihren Import behalten.
-export { BLOCK_SEL, findBlock, topLevelBlock, caretAtBlockStart, caretAtBlockEnd };
+export { CARET_BLOCK_SEL, findBlock, topLevelBlock, caretAtBlockStart, caretAtBlockEnd };
 // Soft-Break-Dedup lebt in shared/soft-break.js (auch vom Focus-Editor
 // konsumiert, der den Toolbar-Modulgraph nicht importieren darf) — hier unter
 // dem eingeführten Unterstrich-Namen re-exportiert.
@@ -141,11 +141,11 @@ export const BOUNDARY_WRAPPER_SEL = `blockquote, div.poem, pre, ul:not(.${TODO_L
 export function wrapperInnerBlocks(wrapper) {
   if (!wrapper) return [];
   if (wrapper.tagName === 'PRE') return [wrapper];
-  return Array.from(wrapper.children).filter((c) => c.matches?.(BLOCK_SEL));
+  return Array.from(wrapper.children).filter((c) => c.matches?.(CARET_BLOCK_SEL));
 }
 
 // Nächstliegende `<figcaption>` ab `node` aufwärts, innerhalb von `root`.
-// `figcaption` steht bewusst NICHT in BLOCK_SEL (sonst würde `findBlock` sie
+// `figcaption` steht bewusst NICHT in CARET_BLOCK_SEL (sonst würde `findBlock` sie
 // als Absatz-artigen Block behandeln und die Merge-Pfade würden greifen).
 export function findFigcaption(node, root) {
   return findAncestor(node, root, 'figcaption');

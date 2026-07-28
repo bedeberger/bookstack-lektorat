@@ -27,23 +27,45 @@ fi
 # --delete: entfernt aus dem Repo geloeschte Dateien auch auf Prod. Ohne diesen
 # Flag bleiben Stale-Module liegen und Node-Resolution kann sie statt der
 # neuen Variante laden (z.B. lib/foo.js maskiert lib/foo/index.js).
-rsync -a --delete \
+#
+# --chown: setzt die Ziel-Ownership direkt beim Transfer. Ohne das uebernimmt
+# rsync (als root) den Owner aus dem Runner-Workspace und der chown-Pass unten
+# muesste jede synchronisierte Datei nochmal anfassen.
+rsync -a --delete --chown=github-runner:github-runner \
   --exclude='.env' --exclude='node_modules' --exclude='.git' \
   --exclude='schreibwerkstatt.db' --exclude='schreibwerkstatt.db-wal' --exclude='schreibwerkstatt.db-shm' \
   --exclude='schreibwerkstatt.log*' --exclude='backup' --exclude='backups' --exclude='ai_parse_fails' \
   ./ "$INSTALL_DIR/"
 
-# Ownership auf github-runner setzen
-chown -R github-runner:github-runner "$INSTALL_DIR"
+# Ownership auf github-runner setzen — aber nur dort, wo sie abweicht.
+# Ein pauschales `chown -R` schreibt sonst bei jedem Deploy ~12k Inodes in
+# node_modules neu; auf dem Ceph-RBD-Storage ist das ein Metadaten-Write-Sturm,
+# der die parallel laufende Prod-App in den IO-Stall zieht. Der find-Pass liest
+# nur Metadaten (page-cached) und schreibt im Normalfall nichts.
+find "$INSTALL_DIR" \( ! -user github-runner -o ! -group github-runner \) \
+  -exec chown -h github-runner:github-runner {} +
 
 # Deploy-Migrations: einmalige Scripts unter deploy/migrations/ (z.B. Dateisystem-
 # Cleanup, chown-Fixes, sqlite3-Touches). Marker-Datei .deploy-migrations-applied
 # in $INSTALL_DIR verhindert Doppellauf. Konvention + Beispiele siehe README.md.
 bash "$INSTALL_DIR/deploy/apply-migrations.sh" "$INSTALL_DIR"
 
-# Abhängigkeiten aktualisieren
+# Abhängigkeiten aktualisieren — nur wenn sich das Lockfile geaendert hat.
+# `npm install` stat't sonst bei jedem Deploy den kompletten node_modules-Baum,
+# um dann nichts zu tun. Der Stempel liegt IM Baum: verschwindet node_modules,
+# verschwindet er mit und die Installation laeuft wieder an.
 cd "$INSTALL_DIR"
-npm install --omit=dev --quiet
+LOCK_STAMP="node_modules/.deployed-lock-sha"
+LOCK_WANT=$(sha256sum package-lock.json | cut -d' ' -f1)
+if [ "$(cat "$LOCK_STAMP" 2>/dev/null)" = "$LOCK_WANT" ]; then
+  echo "→ Dependencies unveraendert (${LOCK_WANT:0:12}) – npm install uebersprungen"
+else
+  npm install --omit=dev --quiet
+  echo "$LOCK_WANT" > "$LOCK_STAMP"
+  # npm laeuft als root — Ownership hier nachziehen, solange der Baum warm ist.
+  # Der find-Pass oben laeuft vorher und sieht diese Dateien nicht mehr.
+  chown -R github-runner:github-runner node_modules
+fi
 
 # Service-Unit startet via `node server.js` (nicht `npm start`) → das prestart-Hook
 # läuft auf Prod nie. Darum den Shell-Cache-Hash hier explizit aus dem deployten

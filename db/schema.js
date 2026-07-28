@@ -14,6 +14,7 @@ const books = require('./books');
 const tokenUsage = require('./token-usage');
 const { recordJobLedger } = require('./cost-ledger');
 const draftFigures = require('./draft-figures');
+const sources = require('./sources');
 const motifs = require('./motifs');
 const { parseDatum } = require('../lib/datum-parse');
 const { normEventSubtyp } = require('./event-subtyp');
@@ -998,7 +999,21 @@ function deleteFinetuneAiCache(bookId, userEmail) {
 
 // ── Buch-Einstellungen (Sprache + Region) ─────────────────────────────────────
 
-const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, entities_enabled, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats FROM book_settings WHERE book_id = ?');
+// Quellenverzeichnis-Defaults: einmal deklariert, von Row-Mapping und beiden
+// Fallback-Pfaden in getBookSettings geteilt. Die Werte spiegeln die
+// Spalten-Defaults aus Migration 252 — driften sie auseinander, sieht ein Buch
+// ohne book_settings-Zeile andere Einstellungen als eines mit.
+const CITATION_DEFAULTS = Object.freeze({
+  citation_style: 'apa7',
+  bibliography_enabled: 0,
+  bibliography_title: null,
+  bibliography_scope: 'cited',
+  bibliography_in_blog: 0,
+});
+const VALID_CITATION_STYLES = ['apa7', 'chicago-ad', 'numeric'];
+const VALID_BIBLIOGRAPHY_SCOPES = ['cited', 'all'];
+
+const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, entities_enabled, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog FROM book_settings WHERE book_id = ?');
 const _upsertBookSettings = db.prepare(`
   INSERT INTO book_settings (book_id, language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, updated_at)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1033,6 +1048,22 @@ const _updateBookStilprofil = db.prepare(`
     stilprofil=excluded.stilprofil,
     updated_at=excluded.updated_at
 `);
+// Quellenverzeichnis-Einstellungen als eigener Schreibpfad (Muster
+// entities_enabled/stilprofil) statt als weitere Positionsargumente an
+// saveBookSettings: der Quellen-Tab speichert unabhaengig vom Haupt-Formular,
+// und die 18-stellige Positionsliste von saveBookSettings soll nicht weiter
+// wachsen.
+const _updateBookCitationSettings = db.prepare(`
+  INSERT INTO book_settings (book_id, citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(book_id) DO UPDATE SET
+    citation_style=excluded.citation_style,
+    bibliography_enabled=excluded.bibliography_enabled,
+    bibliography_title=excluded.bibliography_title,
+    bibliography_scope=excluded.bibliography_scope,
+    bibliography_in_blog=excluded.bibliography_in_blog,
+    updated_at=excluded.updated_at
+`);
 
 /** Gibt {language, region, buchtyp, buch_kontext, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, entities_enabled} für ein Buch zurück.
  *  Fehlt die book_settings-Zeile, werden – wenn vorhanden – die User-Defaults
@@ -1049,16 +1080,21 @@ function getBookSettings(bookId, userEmail = null) {
     zeitlinie_real: row.zeitlinie_real ? 1 : 0,
     weltfakten_real_pruefen: row.weltfakten_real_pruefen ? 1 : 0,
     exclude_from_stats: row.exclude_from_stats ? 1 : 0,
+    citation_style: row.citation_style || CITATION_DEFAULTS.citation_style,
+    bibliography_enabled: row.bibliography_enabled ? 1 : 0,
+    bibliography_title: row.bibliography_title || null,
+    bibliography_scope: row.bibliography_scope || CITATION_DEFAULTS.bibliography_scope,
+    bibliography_in_blog: row.bibliography_in_blog ? 1 : 0,
   };
   if (userEmail) {
     const u = require('./app-users').getUser(userEmail);
     if (u && (u.default_language || u.default_buchtyp)) {
       const language = u.default_language || 'de';
       const region   = u.default_region   || (language === 'en' ? 'US' : 'CH');
-      return { language, region, buchtyp: u.default_buchtyp || null, buch_kontext: null, stilprofil: null, erzaehlperspektive: null, erzaehlzeit: null, is_finished: 0, allow_lektor_book_chat: 0, daily_goal_chars: null, goal_target_chars: null, goal_deadline: null, entities_enabled: 0, orte_real: 0, schauplatz_land: null, zeitlinie_real: 0, weltfakten_real_pruefen: 0, exclude_from_stats: 0 };
+      return { language, region, buchtyp: u.default_buchtyp || null, buch_kontext: null, stilprofil: null, erzaehlperspektive: null, erzaehlzeit: null, is_finished: 0, allow_lektor_book_chat: 0, daily_goal_chars: null, goal_target_chars: null, goal_deadline: null, entities_enabled: 0, orte_real: 0, schauplatz_land: null, zeitlinie_real: 0, weltfakten_real_pruefen: 0, exclude_from_stats: 0, ...CITATION_DEFAULTS };
     }
   }
-  return { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null, stilprofil: null, erzaehlperspektive: null, erzaehlzeit: null, is_finished: 0, allow_lektor_book_chat: 0, daily_goal_chars: null, goal_target_chars: null, goal_deadline: null, entities_enabled: 0, orte_real: 0, schauplatz_land: null, zeitlinie_real: 0, weltfakten_real_pruefen: 0, exclude_from_stats: 0 };
+  return { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null, stilprofil: null, erzaehlperspektive: null, erzaehlzeit: null, is_finished: 0, allow_lektor_book_chat: 0, daily_goal_chars: null, goal_target_chars: null, goal_deadline: null, entities_enabled: 0, orte_real: 0, schauplatz_land: null, zeitlinie_real: 0, weltfakten_real_pruefen: 0, exclude_from_stats: 0, ...CITATION_DEFAULTS };
 }
 
 /** Locale-Key für ein Buch: z.B. "de-CH", "en-US". */
@@ -1096,6 +1132,27 @@ function setBookEntitiesEnabled(bookId, enabled) {
     parseInt(bookId),
     enabled ? 1 : 0,
     new Date().toISOString()
+  );
+}
+
+/** Quellenverzeichnis-Einstellungen pro Buch (Quellen-Tab der Bucheinstellungen).
+ *  Eigener Schreibpfad — beruehrt keine anderen Settings. Enum-Werte werden hier
+ *  hart auf die Whitelist gezwungen, damit ein Fremdwert nie in der DB landet
+ *  (der Formatter kennt nur diese Stile und wuerde sonst still auf apa7 fallen). */
+function setBookCitationSettings(bookId, {
+  citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog,
+} = {}) {
+  const style = VALID_CITATION_STYLES.includes(citation_style)
+    ? citation_style : CITATION_DEFAULTS.citation_style;
+  const scope = VALID_BIBLIOGRAPHY_SCOPES.includes(bibliography_scope)
+    ? bibliography_scope : CITATION_DEFAULTS.bibliography_scope;
+  const title = bibliography_title ? String(bibliography_title).trim().slice(0, 200) : null;
+  _updateBookCitationSettings.run(
+    parseInt(bookId), style,
+    bibliography_enabled ? 1 : 0,
+    title || null, scope,
+    bibliography_in_blog ? 1 : 0,
+    new Date().toISOString(),
   );
 }
 
@@ -1619,6 +1676,7 @@ module.exports = {
   getDailyTokenUsage:    tokenUsage.getDailyTokenUsage,
   getDailyTotalsByUser:  tokenUsage.getDailyTotalsByUser,
   getBookSettings, getBookLocale, saveBookSettings, setBookEntitiesEnabled, setBookStilprofil,
+  setBookCitationSettings, VALID_CITATION_STYLES, VALID_BIBLIOGRAPHY_SCOPES,
   loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache,
   loadChapterReviewCache, saveChapterReviewCache,
   loadBookReviewCache, saveBookReviewCache, deleteReviewCache,
@@ -1651,6 +1709,18 @@ module.exports = {
   createDraftFigure:       draftFigures.createDraftFigure,
   updateDraftFigure:       draftFigures.updateDraftFigure,
   deleteDraftFigure:       draftFigures.deleteDraftFigure,
+  // Quellenverzeichnis (book_sources + abgeleiteter Fund-Index source_citations)
+  CSL_TYPES:              sources.CSL_TYPES,
+  normalizeSourcePersons: sources.normalizePersons,
+  listSources:            sources.listSources,
+  getSource:              sources.getSource,
+  countSources:           sources.countSources,
+  createSource:           sources.createSource,
+  updateSource:           sources.updateSource,
+  deleteSource:           sources.deleteSource,
+  replacePageCitations:   sources.replacePageCitations,
+  listBookCitations:      sources.listBookCitations,
+  listPageCitations:      sources.listPageCitations,
   insertWerkstattRun:      draftFigures.insertWerkstattRun,
   listWerkstattRuns:       draftFigures.listWerkstattRuns,
   getWerkstattRun:         draftFigures.getWerkstattRun,

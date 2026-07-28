@@ -33,7 +33,15 @@ const RETRYABLE_STATUS = new Set([408, 500, 502, 503]);
 const ERROR_SHOW_MS = 4000;        // wie lange der Fehler-Status stehen bleibt
 // Prosa-Bloecke, die vorgelesen werden. Leaf-Filter (siehe readableBlocks)
 // verhindert Doppel-Lesen bei Verschachtelung (z.B. blockquote > p).
-const BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, figcaption';
+//
+// BEWUSSTE KOPIE des Kerns aus editor/shared/dom-block.js: der Reader muss
+// pre-auth ladbar sein und darf nur aus /js/share-reader/ importieren (siehe
+// PUBLIC_ASSET_PREFIXES in server.js) — ein Import aus editor/shared/ kaeme
+// beim anonymen Leser als HTML vom Auth-Guard zurueck und der Browser wuerde
+// das Modul wegen MIME-Type verweigern. Eigener Name, damit die Kopie nicht
+// wie der Editor-Selektor aussieht; gegen Drift gesichert durch
+// tests/unit/block-sel-consolidation.test.mjs.
+const READER_BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, blockquote, li, pre, figcaption';
 
 export function setupTts({ token, article, t, locale, pause }) {
   if (!token || !article) return;
@@ -130,7 +138,7 @@ export function setupTts({ token, article, t, locale, pause }) {
   // Leaf-Prosa-Bloecke: Bloecke, die keinen anderen passenden Block enthalten
   // (blockquote > p -> nur p), sonst wuerde Text doppelt gelesen.
   function readableBlocks() {
-    const all = Array.from(article.querySelectorAll(BLOCK_SEL)).filter(b => !b.querySelector(BLOCK_SEL));
+    const all = Array.from(article.querySelectorAll(READER_BLOCK_SEL)).filter(b => !b.querySelector(READER_BLOCK_SEL));
     return all.length ? all : [article];
   }
   function collectSegments() {

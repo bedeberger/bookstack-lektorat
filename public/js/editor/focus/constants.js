@@ -1,3 +1,5 @@
+import { composeBlockSel } from '../shared/dom-block.js';
+
 // Block-Elemente, die als „aktiver Absatz" erkannt werden. TABLE-Zellen und
 // FIGURE/FIGCAPTION zählen mit, damit Klicks in Tabellen/Bildunterschriften
 // nicht auf Viewport-Center zurückfallen. DIV bewusst NICHT drin – Chromium-
@@ -8,7 +10,13 @@ export const BLOCK_TAGS = new Set([
   'BLOCKQUOTE', 'LI', 'PRE',
   'TD', 'TH', 'FIGURE', 'FIGCAPTION',
 ]);
-export const BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, blockquote, li, pre, td, th, figure, figcaption';
+// Selektor-Pendant zu BLOCK_TAGS oben, komponiert aus dem gemeinsamen Kern in
+// shared/dom-block.js. Unterscheidet sich bewusst von `CARET_BLOCK_SEL`
+// (Notebook-Caret-Lookup): hier zählen `td`/`th`/`figure`/`figcaption` mit,
+// `div.poem` dagegen nicht. Deshalb trägt er einen eigenen Namen — vorher hiess
+// er wie der Notebook-Selektor und `focus/soft-newlines.js` griff unbemerkt zum
+// anderen.
+export const FOCUS_BLOCK_SEL = composeBlockSel('pre', 'td', 'th', 'figure', 'figcaption');
 
 export const POINTER_GRACE_MS = 300;
 // Touch-Eingabe braucht mehr Karenz: das Setzen des Carets per Fingertipp
