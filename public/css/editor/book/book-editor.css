@@ -419,9 +419,10 @@
   .book-editor-page-body p { margin-block: 0.7em; }
   .book-editor-page-body p:first-child { margin-block-start: 0.3em; }
   .book-editor-page-body p:last-child { margin-block-end: 0.3em; }
-  .book-editor-page-body h1,
-  .book-editor-page-body h2,
-  .book-editor-page-body h3 {
+  /* Alle sechs Ebenen, nicht nur h1–h3: Grössen kommen aus der geteilten SSoT
+     (components/manuscript-content.css), Gewicht/Abstand/Schnitt sind hier
+     Stream-spezifisch und müssen über die Ebenen hinweg gleich laufen. */
+  .book-editor-page-body :is(h1, h2, h3, h4, h5, h6) {
     font-weight: var(--fw-semibold);
     margin-block: 1em 0.4em;
     font-family: var(--font-serif);
@@ -433,14 +434,10 @@
     color: var(--color-muted);
     font-style: italic;
   }
-  /* Aufzählungen/Nummerierungen: Marker innerhalb des Reading-Frames halten.
-     Browser-Default (~40px padding-inline-start) schiebt sie zu weit raus. */
-  .book-editor-page-body ul,
-  .book-editor-page-body ol {
-    padding-inline-start: 1.5em;
-    margin-block: 0.4em;
-  }
-  .book-editor-page-body li { margin-block: 0.15em; }
+  /* Listen, Tabellen, Bilder/Figuren, Trenner (inkl. Seitenumbruch-Marker),
+     Code, Gedichte, Checkbox-Listen und Callouts liegen in der geteilten SSoT
+     components/manuscript-content.css — dieselben Blöcke rendert die
+     Notebook-Leseansicht und der Share-Reader. */
 
   /* Find-Highlights — gedämpft. */
   ::highlight(book-editor-find-match) {

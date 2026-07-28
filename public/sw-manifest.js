@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "56bdb918295bc946";
+self.__SHELL_BUILD = "f67a2a5daf9fa3ee";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -62,6 +62,7 @@ self.__SHELL_MANIFEST = [
   "/css/components/icon-btn.css",
   "/css/components/icons.css",
   "/css/components/job-toast.css",
+  "/css/components/manuscript-content.css",
   "/css/components/manuscript-stream.css",
   "/css/components/my-stats.css",
   "/css/components/onboarding.css",
@@ -444,6 +445,7 @@ self.__SHELL_MANIFEST = [
   "/js/editor/shared/soft-break.js",
   "/js/editor/shared/text-find.js",
   "/js/editor/shared/timers.js",
+  "/js/editor/shared/todo-html.js",
   "/js/editor/shortcuts.js",
   "/js/editor/synonyme.js",
   "/js/editor/utils.js",

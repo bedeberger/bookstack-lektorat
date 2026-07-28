@@ -3,23 +3,88 @@
 // hinter dem Focus-Hard-Stop).
 
 import { getEditEl, placeCaretIn, SLASH_ITEMS, _formatStamp } from './_shared.js';
+import { createTodoList } from '../../shared/todo-html.js';
 import { contentRepo } from '../../../repo/content.js';
 
+const SLASH_GAP = 4;
+// Deckungsgleich mit `max-height` in css/editor/notebook/edit-toolbar.css.
+const SLASH_MAX_H = 360;
+// Unter dieser Höhe wird die Liste unbrauchbar: dann darf das Menü den
+// Trigger-Block überlappen und das ganze sichtbare Band nutzen (bleibt scrollbar).
+const SLASH_MIN_H = 140;
+
+// Sichtbares Band in Client-Koordinaten (dieselbe Bezugsebene wie
+// `getBoundingClientRect`). Auf Mobile ist das der `visualViewport`: die
+// Bildschirmtastatur schrumpft ihn (und kann ihn verschieben), während
+// `window.innerHeight` unverändert bleibt — würde man danach positionieren,
+// landet das Menü hinter der Tastatur.
+function visibleBand() {
+  const vv = window.visualViewport;
+  return {
+    top: vv ? vv.offsetTop : 0,
+    left: vv ? vv.offsetLeft : 0,
+    height: vv ? vv.height : window.innerHeight,
+    width: vv ? vv.width : window.innerWidth,
+  };
+}
+
 export const slashMethods = {
+  // Neu messen, sobald der DOM den aktuellen Stand zeigt. Bewusst per
+  // `requestAnimationFrame` und nicht per `$nextTick`: die Trefferliste ist ein
+  // verschachtelter `x-for` mit eigenem `x-show` je Gruppen-Header — dessen
+  // Effekte laufen erst im Flush NACH dem äusseren Tick, ein einzelnes
+  // `$nextTick` misst also eine veraltete Höhe. Vor dem nächsten Frame sind alle
+  // Microtasks durch.
+  _schedSlashPosition() {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => this._updateSlashPosition());
+    } else {
+      this._updateSlashPosition();
+    }
+  },
+
+  // Positioniert das (nach <body> teleportierte) Menü am Trigger-Block.
+  // Vorzugsrichtung bleibt oberhalb (näher am Caret in langen Texten, springt
+  // nicht unter den Fold); reicht der Platz dort nicht, klappt es nach unten.
+  // Die eigene Höhe wird gemessen, nicht geschätzt — sie hängt an der
+  // gefilterten Trefferliste und am gedeckelten `max-height`.
   _updateSlashPosition() {
     if (!this.slashShow || !this._slashBlock || !this._slashBlock.isConnected) return;
     const rect = this._slashBlock.getBoundingClientRect();
-    // Block komplett ausserhalb des Viewports → schliessen.
-    if (rect.bottom < 0 || rect.top > window.innerHeight) {
+    const band = visibleBand();
+    // Block komplett ausserhalb des sichtbaren Bandes → schliessen.
+    if (rect.bottom < band.top || rect.top > band.top + band.height) {
       this._closeSlash();
       return;
     }
-    // Menü oberhalb des Blocks (näher am Caret in langen Texten, springt nicht
-    // unter Fold). Position als Distanz vom Viewport-Boden, damit das Menü
-    // mit seiner Unterkante am Block-Top „klebt" und nach oben wächst —
-    // unabhängig von eigener Höhe.
-    this.slashX = rect.left;
-    this.slashY = Math.max(4, window.innerHeight - rect.top + 4);
+    const above = rect.top - band.top - SLASH_GAP;
+    const below = (band.top + band.height) - rect.bottom - SLASH_GAP;
+    // Höhe deckeln, damit das Menü in sein Fach passt statt aus dem Band zu
+    // ragen — mit offener Tastatur bleiben oft weniger als 360 px übrig.
+    const avail = Math.min(
+      SLASH_MAX_H,
+      Math.max(above, below, Math.min(SLASH_MIN_H, band.height - 2 * SLASH_GAP)),
+    );
+    this.slashMaxH = avail;
+
+    const menu = this.$refs?.slashMenu;
+    // `max-height` vor dem Messen anwenden (Alpine schreibt denselben Wert im
+    // nächsten Tick via `:style`); versteckt/ungerendert → Deckel als Schätzung.
+    if (menu) menu.style.maxHeight = avail + 'px';
+    const h = menu?.offsetHeight || avail;
+    const w = menu?.offsetWidth || 240;
+
+    const top = (h <= above || above >= below)
+      ? rect.top - h - SLASH_GAP
+      : rect.bottom + SLASH_GAP;
+    this.slashY = Math.max(
+      band.top + SLASH_GAP,
+      Math.min(top, band.top + band.height - h - SLASH_GAP),
+    );
+    this.slashX = Math.max(
+      band.left + SLASH_GAP,
+      Math.min(rect.left, band.left + band.width - w - SLASH_GAP),
+    );
   },
 
   // ── Slash-Menü ────────────────────────────────────────────────────────
@@ -79,10 +144,16 @@ export const slashMethods = {
     // Labels einmalig in der aktuellen Sprache auflösen; Filter-Cache leeren.
     this._slashLabels = this._buildSlashLabels();
     this._slashFilterCache = null;
+    // Beim Öffnen ist das Menü noch `display:none` → keine messbare Höhe.
+    // Mit dem Deckel als Schätzung vorpositionieren, damit kein Frame an alter
+    // Stelle sichtbar wird, und im nächsten Tick auf die echte Höhe nachziehen.
     const rect = block.getBoundingClientRect();
+    const band = visibleBand();
+    this.slashMaxH = SLASH_MAX_H;
     this.slashX = rect.left;
-    this.slashY = Math.max(4, window.innerHeight - rect.top + 4);
+    this.slashY = Math.max(band.top + SLASH_GAP, rect.top - SLASH_MAX_H - SLASH_GAP);
     this.slashShow = true;
+    this._schedSlashPosition();
   },
 
   // Bild-Upload: Datei-Dialog → Upload → <figure>-Insert. Der Trigger-Block
@@ -196,22 +267,11 @@ export const slashMethods = {
       replacement.insertAdjacentElement('afterend', next);
       caretTarget = next;
     } else if (item.todoList) {
-      // Checkbox-Liste: <ul class="todo"><li class="todo-item">
-      //   <input type=checkbox><span class="todo-text"><br></span></li></ul>
-      replacement = document.createElement('ul');
-      replacement.className = 'todo';
-      const li = document.createElement('li');
-      li.className = 'todo-item';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      const span = document.createElement('span');
-      span.className = 'todo-text';
-      span.appendChild(document.createElement('br'));
-      li.appendChild(cb);
-      li.appendChild(span);
-      replacement.appendChild(li);
+      // Struktur kommt aus der Markup-SSoT editor/shared/todo-html.js.
+      const todo = createTodoList();
+      replacement = todo.list;
       block.parentNode.replaceChild(replacement, block);
-      caretTarget = span;
+      caretTarget = todo.text;
     } else if (item.list) {
       replacement = document.createElement(item.tag);
       const li = document.createElement('li');

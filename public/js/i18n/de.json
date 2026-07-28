@@ -286,6 +286,8 @@
   "page.aha.text": "Tipp: Lass diese Seite vom KI-Lektorat auf Stil, Wiederholungen und schwache Verben prüfen.",
   "page.aha.action": "Seite lektorieren",
   "page.aha.dismiss": "Hinweis ausblenden",
+  "page.todo.conflict": "Häkchen nicht gespeichert – die Seite wurde inzwischen anderswo geändert. Aktueller Stand wurde geladen.",
+  "page.todo.saveFailed": "Häkchen konnte nicht gespeichert werden. Fehler: {msg}",
   "empty.figuren.hint": "Figuren werden automatisch aus deinem Manuskript extrahiert – mit Steckbrief, Beziehungen und Entwicklungsbogen. Starte die Buchanalyse, sobald Text geschrieben ist.",
   "empty.orte.hint": "Schauplätze werden automatisch aus deinem Text erkannt – inklusive Karte und Kapitelauftritten. Starte die Buchanalyse, sobald Text geschrieben ist.",
   "empty.szenen.hint": "Szenen werden automatisch aus deinem Manuskript abgeleitet – mit Beteiligten, Ort und Funktion. Starte die Buchanalyse, sobald Text geschrieben ist.",

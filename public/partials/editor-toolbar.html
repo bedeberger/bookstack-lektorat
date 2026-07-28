@@ -62,10 +62,11 @@
   <template x-teleport="body">
     <div x-show="slashShow && $app.editMode && !$app.focusActive" x-cloak
          class="edit-slash-menu"
+         x-ref="slashMenu"
          role="listbox"
          :aria-label="$app.t('editor.slash.ariaLabel')"
          :aria-activedescendant="slashShow ? ('edit-slash-opt-' + slashIdx) : null"
-         :style="{ left: slashX + 'px', bottom: slashY + 'px' }"
+         :style="{ left: slashX + 'px', top: slashY + 'px', maxHeight: slashMaxH + 'px' }"
          @click.outside="_closeSlash()">
       <div class="edit-slash-hint" :class="{ 'edit-slash-hint--query': slashQuery }">
         <span x-show="!slashQuery" x-text="$app.t('editor.slash.hint')"></span>

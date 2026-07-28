@@ -21,7 +21,13 @@ module.exports = {
   // CI läuft auf lokalem Runner über Ceph-RBD-Storage; IO-Stalls bremsen
   // Chromium → reine Setup/Navigations-Timeouts. Sequenziell (worker=1)
   // hält die IO-Last niedrig, höhere Timeouts + 3 Retries fangen Spikes.
-  workers: process.env.CI ? 1 : undefined,
+  //
+  // Lokal fest auf 2 statt Playwright-Default (= halbe Kernzahl): auf einer
+  // 24-Kern-Maschine wären das 12 parallele Chromium-Instanzen, was bei
+  // knappem RAM den OOM-Killer auslöst — der trifft dann den Editor, aus
+  // dessen Terminal der Lauf gestartet wurde, nicht den Testrunner. Bei
+  // Bedarf pro Lauf überschreibbar: `npm run test:e2e -- --workers=4`.
+  workers: process.env.CI ? 1 : 2,
   retries: process.env.CI ? 3 : 0,
   timeout: 90000,
   expect: { timeout: 10000 },

@@ -1,3 +1,11 @@
+/* Block-Typografie des gespeicherten Seiten-HTML (Listen, Tabellen, Bilder,
+   Trenner, Code, Gedichte, Checkbox-Listen, Callouts) liegt in der geteilten
+   SSoT public/css/components/manuscript-content.css — dieselben Blöcke rendert
+   die Notebook-Leseansicht und der Bucheditor. Hier stehen nur die
+   Reader-Abweichungen: Überschriftengrössen in px (eigene Lese-Skala), das
+   Prosa-Absatzmodell, Drop Cap und der Szenentrenner-Asterismus.
+   Die Regeln hier sind unlayered und gewinnen deshalb gegen die
+   `@layer components`-Defaults der SSoT — unabhängig von der Lade-Reihenfolge. */
 
 .share-content h1, .share-content h2, .share-content h3 {
   font-family: inherit;
@@ -23,6 +31,19 @@
   .share-flash { animation-duration: 0.01ms; }
 }
 .share-content h3 { font-size: 19px; }
+/* h4–h6 setzen die px-Lese-Skala des Readers fort (die SSoT rechnet in em und
+   landete sonst mit h4 ≈ h3 auf einer Stufe). Gewicht wie h1–h3; die
+   Unterscheidungsmerkmale von h5 (Versalien) und h6 (gedämpft) kommen aus der
+   SSoT und bleiben. */
+.share-content h4, .share-content h5, .share-content h6 {
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1.5em 0 0.6em;
+}
+.share-content h4 { font-size: 17px; }
+.share-content h5 { font-size: 15px; }
+.share-content h6 { font-size: 14px; }
 .share-content p { margin: 0 0 1em; hyphens: auto; }
 .share-content blockquote {
   margin: 1.2em 0;
@@ -31,27 +52,10 @@
   color: var(--share-muted);
   font-style: italic;
 }
-.share-content ul, .share-content ol { padding-left: 1.6em; }
-.share-content img { max-width: 100%; height: auto; border-radius: var(--share-radius-sm); }
-/* Eingefügte Manuskript-Bilder: zentrierte figure + Bildunterschrift — gespiegelt
-   aus der Notebook-Leseansicht (.page-content-view figure/figcaption), mit
-   Share-Tokens statt App-Tokens. */
-.share-content figure { margin: 1em 0; text-align: center; }
-.share-content figure img { display: block; margin: 0 auto; }
-.share-content figcaption { margin-top: 8px; font-size: 14px; color: var(--share-muted); font-style: italic; text-align: center; }
 .share-content a { color: var(--share-accent); }
-.share-content hr {
-  border: 0;
-  border-top: 1px solid var(--share-border);
-  margin: 2em 0;
-}
-.share-content pre {
-  overflow-x: auto;
-  background: var(--share-hover);
-  padding: 10px 14px;
-  border-radius: var(--share-radius);
-  font-size: 14px;
-}
+/* Reader-Luft um den Trenner (SSoT setzt 1em). Seitenumbruch-/Leere-Seite-Marker
+   ausgenommen — die tragen ihre eigenen Abstände aus der SSoT. */
+.share-content hr:not(.pagebreak):not(.blankpage) { margin: 2em 0; }
 
 /* Prosa-Absatzmodell (Belletristik): Absätze (<p>) durch eine Leerzeile getrennt,
    harte Umbrüche (<br>, Shift-Enter) ohne Zusatzabstand — so bleibt im Lesefluss
@@ -78,14 +82,18 @@
 }
 
 /* Szenentrenner: <hr> als zentrierter Asterismus (* * *) statt technischer Rule —
-   in Prosa markiert ein <hr> fast immer einen Szenenwechsel. */
-.share-content--prose hr {
+   in Prosa markiert ein <hr> fast immer einen Szenenwechsel.
+   `hr.pagebreak`/`hr.blankpage` sind KEINE Szenentrenner, sondern Layout-Marker
+   für den PDF-Export (gestrichelt bzw. doppelt aus der SSoT) — sie müssen als
+   solche erkennbar bleiben und werden hier ausgenommen, sonst verschluckt der
+   Asterismus die Unterscheidung. */
+.share-content--prose hr:not(.pagebreak):not(.blankpage) {
   border: 0;
   height: auto;
   text-align: center;
   margin: 1.8em 0;
 }
-.share-content--prose hr::before {
+.share-content--prose hr:not(.pagebreak):not(.blankpage)::before {
   content: "* * *";
   color: var(--share-muted);
   letter-spacing: 0.5em;

@@ -80,6 +80,9 @@
   padding: var(--space-xs);
   min-width: 240px;
   max-width: 360px;
+  /* Deckel; das JS setzt beim Öffnen einen kleineren Inline-Wert, wenn im
+     sichtbaren Band weniger Platz ist (Mobile-Tastatur) — Konstante
+     SLASH_MAX_H in js/editor/notebook/toolbar/slash.js muss dazu passen. */
   max-height: 360px;
   overflow-y: auto;
 }

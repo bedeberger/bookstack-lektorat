@@ -6,6 +6,7 @@ import { getEditEl, placeCaretIn, WORD_RE } from '../../utils.js';
 import { tzOpts, localeTag } from '../../../utils.js';
 import { BLOCK_SEL, findBlock, topLevelBlock, caretAtBlockStart, caretAtBlockEnd } from '../../shared/dom-block.js';
 import { brLeftOfCaret } from '../../shared/soft-break.js';
+import { TODO_ITEM_SEL, TODO_LIST_CLASS } from '../../shared/todo-html.js';
 
 export { getEditEl, placeCaretIn, WORD_RE };
 // Block-Lookup + Caret-Randlage leben in shared/dom-block.js (auch von
@@ -29,7 +30,7 @@ export const SLASH_ITEMS = [
   { key: 'blockquote', tag: 'blockquote', wrapP: true,                   group: 'block' },
   { key: 'poem',       tag: 'div', className: 'poem', wrapP: true,       group: 'block' },
   { key: 'list',       tag: 'ul', list: true,                           group: 'block' },
-  { key: 'todo',       tag: 'ul', className: 'todo', todoList: true,     group: 'block' },
+  { key: 'todo',       tag: 'ul', className: TODO_LIST_CLASS, todoList: true, group: 'block' },
   { key: 'hr',         tag: 'hr',                          group: 'break' },
   { key: 'pagebreak',  tag: 'hr', className: 'pagebreak',  group: 'break' },
   { key: 'blankpage',  tag: 'hr', className: 'blankpage',  group: 'break' },
@@ -87,15 +88,22 @@ export function _applyLinkAtRange(range, url) {
   }
 }
 
+// Nächstliegender Vorfahr ab `node` (Textknoten erlaubt), der `selector`
+// matcht — begrenzt auf echte Nachfahren von `root`. `root` selbst zählt
+// bewusst NICHT mit: sonst könnte der Editor-Container als Treffer durchgehen
+// und die Aufrufer würden ihn wie einen Block behandeln. Basis der find*-Familie
+// darunter; `closest` löst dabei auch Kind-Kombinatoren auf, sodass „li in einer
+// Todo-Liste" bzw. „p in einem Gedicht" ein Selektor statt einer Handschleife ist.
+export function findAncestor(node, root, selector) {
+  const el = node && node.nodeType === 3 ? node.parentNode : node;
+  const hit = el?.closest?.(selector);
+  return hit && hit !== root && root?.contains(hit) ? hit : null;
+}
+
 // Nächstliegendes <a>-Element ab node aufwärts, innerhalb von root. null wenn
 // node nicht in einem Link sitzt.
 export function findAnchor(node, root) {
-  let cur = node && node.nodeType === 3 ? node.parentNode : node;
-  while (cur && cur !== root) {
-    if (cur.nodeType === 1 && cur.nodeName === 'A') return cur;
-    cur = cur.parentNode;
-  }
-  return null;
+  return findAncestor(node, root, 'a');
 }
 
 // Absatz-artige Top-Level-Blöcke, deren Verschmelzung über eine Absatzgrenze
@@ -104,33 +112,54 @@ export function findAnchor(node, root) {
 // vor — dort ist das native bzw. das HR-Verhalten gewünscht.
 export const MERGE_BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
 
+// Blöcke, die sich wie ein einzelnes Zeichen verhalten, aber keinen Caret
+// aufnehmen: sie lassen sich nicht selektieren, also gibt es ohne eigenen
+// Lösch-Pfad überhaupt keinen. `<hr>` ist ein echtes void-Element; ein
+// `<figure>` ist es nicht, hat aber dieselbe Eigenschaft — die einzige
+// Caret-Position darin ist die `<figcaption>`, und für das Bild selbst gibt es
+// (anders als bei `<hr>`, siehe `hr-selected`) keine Klick-Auswahl.
+export const ATOMIC_BLOCK_TAGS = new Set(['HR', 'FIGURE']);
 
-// Liefert das umschliessende <li class="todo-item">, falls die Caret-Position
-// in einer Checkbox-Liste liegt. Sonst null.
+// Wrapper-Blöcke mit eigener Formatierung. Chromium bäckt beim Merge über deren
+// Grenze die BERECHNETEN CSS-Werte des Quellblocks als Inline-`style` ein („um
+// das Aussehen zu erhalten") — das verstösst gegen die Regel „Styles nur in
+// public/css", brennt Light-Mode-Farben fest und wird mitgespeichert, weil
+// `cleanPageHtml` `style`-Attribute nicht strippt. Darum bedient der Editor
+// diese Grenzen selbst. `ul.todo` ist ausgenommen: dafür ist der spezifischere
+// `_kbTodoDelete` zuständig (Checkbox als Struktur).
+// Muss mit den Wrapper-erzeugenden Einträgen aus SLASH_ITEMS synchron bleiben —
+// ein neuer Wrapper-Blocktyp im Slash-Menü, der hier fehlt, verliert lautlos
+// seine Grenz-Behandlung. Gegated durch tests/unit/notebook-toolbar.test.mjs.
+// `pre` und `ol` stehen vorsorglich drin, obwohl (noch) kein Slash-Item sie
+// erzeugt — sie entstehen über Paste/Import.
+export const BOUNDARY_WRAPPER_SEL = `blockquote, div.poem, pre, ul:not(.${TODO_LIST_CLASS}), ol`;
+
+// Die text-tragenden Kind-Blöcke eines Wrapper-Blocks, in Dokumentordnung.
+// `<pre>` trägt seinen Text direkt und ist damit sein eigener einziger
+// Kind-Block — dadurch behandeln die Grenz-Handler es wie die übrigen Wrapper,
+// ohne Sonderzweig.
+export function wrapperInnerBlocks(wrapper) {
+  if (!wrapper) return [];
+  if (wrapper.tagName === 'PRE') return [wrapper];
+  return Array.from(wrapper.children).filter((c) => c.matches?.(BLOCK_SEL));
+}
+
+// Nächstliegende `<figcaption>` ab `node` aufwärts, innerhalb von `root`.
+// `figcaption` steht bewusst NICHT in BLOCK_SEL (sonst würde `findBlock` sie
+// als Absatz-artigen Block behandeln und die Merge-Pfade würden greifen).
+export function findFigcaption(node, root) {
+  return findAncestor(node, root, 'figcaption');
+}
+
+// Liefert die umschliessende Zeile einer Checkbox-Liste, falls die
+// Caret-Position darin liegt. Sonst null. Struktur-Selektor aus der
+// Markup-SSoT `editor/shared/todo-html.js`.
 export function findTodoLi(node, root) {
-  let cur = node && node.nodeType === 3 ? node.parentNode : node;
-  while (cur && cur !== root) {
-    if (cur.nodeType === 1 && cur.tagName === 'LI'
-        && cur.parentNode?.tagName === 'UL'
-        && cur.parentNode.classList?.contains('todo')) {
-      return cur;
-    }
-    cur = cur.parentNode;
-  }
-  return null;
+  return findAncestor(node, root, TODO_ITEM_SEL);
 }
 
 // Liefert das <p> innerhalb eines <div class="poem">, falls die Caret-Position
 // in einem Gedicht liegt. Sonst null.
 export function findPoemP(node, root) {
-  let cur = node && node.nodeType === 3 ? node.parentNode : node;
-  while (cur && cur !== root) {
-    if (cur.nodeType === 1 && cur.tagName === 'P'
-        && cur.parentNode?.tagName === 'DIV'
-        && cur.parentNode.classList?.contains('poem')) {
-      return cur;
-    }
-    cur = cur.parentNode;
-  }
-  return null;
+  return findAncestor(node, root, 'div.poem > p');
 }

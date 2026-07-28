@@ -3,6 +3,9 @@
 
 import { escHtml, htmlToText, fetchJson, findInHtml, decorateMentions } from '../utils.js';
 import { handleEditorCopy } from '../editor/shared/paste.js';
+import { isPageConflict, savePage } from '../editor/shared/page-api.js';
+import { setTodoCheckedAt, todoBoxIndex } from '../editor/shared/todo-html.js';
+import { contentRepo } from '../repo/content.js';
 import { tRaw } from '../i18n.js';
 import { _sanitizeFigur } from './figuren.js';
 
@@ -266,8 +269,83 @@ export const pageViewMethods = {
     }
   },
 
+  /** Klick auf eine Todo-Checkbox in der LESEANSICHT: der Browser hat den Haken
+   *  schon visuell umgelegt (natives Input, kein contenteditable) — hier wird er
+   *  ins gespeicherte Seiten-HTML nachgezogen und persistiert. Ohne diesen Pfad
+   *  wirkt das Abhaken erledigt und ist beim nächsten Laden wieder weg (im
+   *  Edit-Modus pflegt der Toggle-Handler in cards/editor-toolbar-card.js das
+   *  `checked`-Attribut). Liefert true, wenn der Klick behandelt wurde. */
+  _handleViewTodoClick(e) {
+    const box = e.target;
+    if (!box || box.tagName !== 'INPUT' || box.type !== 'checkbox') return false;
+    const view = box.closest('.page-content-view');
+    if (!view || view.classList.contains('page-content-view--editing')) return false;
+    // Ohne Schreibrecht (viewer/lektor) nichts persistieren und den nativen
+    // Toggle zurückdrehen — sonst zeigt die Ansicht einen Haken, den der Server
+    // nie bekommt. CSS macht die Box für diese Rollen zusätzlich klick-inert
+    // (.page-content-view--readonly in page-view.css); das hier ist die Defense
+    // dahinter. `_todoSaving` ist ein kurzlebiger Re-Entry-Guard: zwei Haken in
+    // schneller Folge würden sonst mit demselben `expectedUpdatedAt` speichern
+    // und der zweite PUT liefe garantiert in einen 409 gegen den ersten.
+    if (!this.canEdit?.() || this._todoSaving) {
+      box.checked = !box.checked;
+      return true;
+    }
+    this._saveViewTodo(view, box, box.checked);
+    return true;
+  },
+
+
+  /** Persistiert den Haken des angeklickten Todo-Kastens. Fehlerpfade drehen den
+   *  visuellen Toggle zurück, damit Ansicht und Persistenz nie auseinanderlaufen. */
+  async _saveViewTodo(view, box, checked) {
+    const page = this.currentPage;
+    const idx = page && this.originalHtml ? todoBoxIndex(view, box) : -1;
+    const html = idx < 0 ? null : setTodoCheckedAt(this.originalHtml, idx, checked);
+    if (html == null) { box.checked = !checked; return; }
+    this._todoSaving = true;
+    try {
+      const saved = await savePage(page.id, {
+        html,
+        pageName: page.name,
+        source: 'main',
+        expectedUpdatedAt: page.updated_at || null,
+      });
+      if (saved?.updated_at) page.updated_at = saved.updated_at;
+      this.originalHtml = html;
+      this._syncPageStatsAfterSave?.(page, html);
+      // Sidebar-Lektorat-Status hängt an `updated_at` (Server-Map) — nachladen.
+      this.refreshPageAges?.();
+      this.updatePageView();
+    } catch (err) {
+      box.checked = !checked;
+      if (isPageConflict(err)) {
+        // Fremder Schreibvorgang dazwischen: kein Merge-Aufwand für ein Bit —
+        // frischen Stand holen, User setzt den Haken erneut.
+        try {
+          const remote = await contentRepo.loadPage(page.id, { fresh: true });
+          if (remote?.html != null) {
+            this.originalHtml = remote.html;
+            if (remote.updated_at) page.updated_at = remote.updated_at;
+            this.updatePageView();
+          }
+        } catch (reloadErr) {
+          console.error('[viewTodoConflictReload]', reloadErr);
+        }
+        this.setStatus(this.t('page.todo.conflict'), false, 6000);
+        return;
+      }
+      console.error('[viewTodoToggle]', err);
+      this.setStatus(this.t('page.todo.saveFailed', { msg: err.message }), false, 6000);
+    } finally {
+      this._todoSaving = false;
+    }
+  },
+
+
   /** Click-Handler für Inline-Marks → togglet Selektion. Links → neuer Tab. */
   handleMarkClick(e) {
+    if (this._handleViewTodoClick(e)) return;
     const link = e.target.closest('a[href]');
     if (link && !link.classList.contains('lektorat-mark')) {
       const href = link.getAttribute('href');

@@ -1,7 +1,7 @@
 // Alpine.data('editorToolbarCard') — Sub-Komponente für Bubble-Toolbar
 // (Inline-Formate auf Selektion) und Slash-Menü (Block-Transforms).
 //
-// Eigener State: bubbleShow, bubbleX/Y, slashShow, slashX/Y, slashIdx,
+// Eigener State: bubbleShow, bubbleX/Y, slashShow, slashX/Y/slashMaxH, slashIdx,
 //   _slashBlock, _slashLabels (Label-Cache), _slashFilterCache (Filter-Memo).
 // Root behält: editMode, focusActive, _markEditDirty (→ $app / window.__app).
 //
@@ -10,6 +10,7 @@
 // keine Toolbar-spezifischen Handler mehr benötigt.
 
 import { toolbarCardMethods } from '../editor/notebook/toolbar.js';
+import { TODO_LIST_SEL } from '../editor/shared/todo-html.js';
 
 export function registerEditorToolbarCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
@@ -21,6 +22,7 @@ export function registerEditorToolbarCard() {
     slashShow: false,
     slashX: 0,
     slashY: 0,
+    slashMaxH: 360,
     slashIdx: 0,
     slashQuery: '',
     _slashBlock: null,
@@ -47,6 +49,20 @@ export function registerEditorToolbarCard() {
         if (this.slashShow) this._updateSlashPosition();
       }, { capture: true, signal });
 
+      // Mobile-Tastatur: sie schrumpft/verschiebt den visualViewport, ohne dass
+      // ein window-scroll/resize feuert — das Slash-Menü positioniert sich aber
+      // gegen dieses sichtbare Band und muss deshalb hier nachziehen.
+      const vvSync = () => { if (this.slashShow) this._updateSlashPosition(); };
+      window.visualViewport?.addEventListener('resize', vvSync, { signal });
+      window.visualViewport?.addEventListener('scroll', vvSync, { signal });
+
+      // Filtern ändert die Menühöhe. Da das Menü mit seiner Oberkante gesetzt
+      // wird, muss es nach jedem Query-Wechsel neu gemessen werden — sonst löst
+      // es sich beim Schrumpfen vom Trigger-Block.
+      this.$watch('slashQuery', () => {
+        if (this.slashShow) this._schedSlashPosition();
+      });
+
       // Delegierter Keydown-Listener auf dem contenteditable — filtert per
       // closest() auf Normal- bzw. Focus-Container, damit wir nur im Edit-
       // Bereich reagieren. Beide Container haben getrennte Klassen
@@ -63,7 +79,7 @@ export function registerEditorToolbarCard() {
       document.addEventListener('click', (e) => {
         const t = e.target;
         if (!t || t.tagName !== 'INPUT' || t.type !== 'checkbox') return;
-        if (!t.closest('.page-content-view--editing ul.todo, .focus-editor__content ul.todo')) return;
+        if (!t.closest(`.page-content-view--editing ${TODO_LIST_SEL}, .focus-editor__content ${TODO_LIST_SEL}`)) return;
         if (t.hasAttribute('checked')) t.removeAttribute('checked');
         else t.setAttribute('checked', '');
         window.__app?._markEditDirty?.();

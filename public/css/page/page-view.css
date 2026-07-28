@@ -48,12 +48,10 @@
      Ligaturen/Mediävalziffern liefern die `font-variant-*`-Props oben unabhängig. */
   text-rendering: auto;
 }
-.page-content-view h1 { font-size: var(--font-em-150); margin: 0.6em 0 0.3em; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
-.page-content-view h2 { font-size: var(--font-em-130); margin: 0.5em 0 0.3em; font-weight: 700; letter-spacing: -0.005em; text-wrap: balance; }
-.page-content-view h3 { font-size: var(--font-em-115); margin: 0.4em 0 0.2em; font-weight: 700; text-wrap: balance; }
-.page-content-view h4 { font-size: var(--font-em-105); margin: 0.3em 0 0.2em; font-weight: 700; text-wrap: balance; }
-.page-content-view h5 { font-size: var(--font-em-95); margin: 0.3em 0 0.2em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
-.page-content-view h6 { font-size: var(--font-em-90); margin: 0.3em 0 0.2em; font-weight: 700; color: var(--color-muted); }
+/* Überschriften, Inline-Auszeichnung, Listen, Tabellen, Bilder, Trenner, Code,
+   Gedichte, Checkbox-Listen und Callouts liegen in der geteilten SSoT
+   components/manuscript-content.css (dieselben Blöcke zeigen Bucheditor und
+   Share-Reader). Hier stehen nur die Notebook-Abweichungen. */
 .page-content-view p { margin: 0.6em 0; text-wrap: pretty; }
 
 /* Marginalia: Absätze mit Lektorats-Markierungen bekommen rechts einen
@@ -84,35 +82,9 @@
   opacity: 0.85;
 }
 
-.page-content-view u { text-decoration: underline; }
-.page-content-view s, .page-content-view del, .page-content-view strike { text-decoration: line-through; }
-.page-content-view sup { vertical-align: super; font-size: var(--font-em-75); line-height: 0; }
-.page-content-view sub { vertical-align: sub; font-size: var(--font-em-75); line-height: 0; }
+/* Zitat-Einzug ist Notebook-spezifisch (Lesekasten mit 12px-Innenabstand); die
+   Innenabstände der Kinder + das orphan-<br>-Artefakt liegen in der SSoT. */
 .page-content-view blockquote { border-left: 3px solid var(--color-border); padding: 0.3em 0 0.3em 12px; margin: 0.4em 0; color: var(--color-subtle); font-style: italic; }
-.page-content-view blockquote > :first-child { margin-top: 0; }
-.page-content-view blockquote > :last-child { margin-bottom: 0; }
-/* WordPress-Import-Artefakt: BookStack-HTML hat oft ein orphan <br> direkt
-   nach <blockquote>, das eine ganze Zeilenhöhe Lücke erzeugt. Visuell
-   schlucken — Original-HTML bleibt unverändert (nur Display-Stripping). */
-.page-content-view blockquote + br { display: none; }
-.page-content-view table { border-collapse: collapse; margin: 0.6em 0; width: 100%; }
-/* Tabellenzellen: Versal-/Tabellenziffern statt Mediävalziffern — fluchten
-   spaltenweise und gleichbreit, sonst tanzen Zahlen in Datenspalten. */
-.page-content-view th, .page-content-view td { border: 1px solid var(--color-border); padding: var(--space-6) 10px; text-align: left; font-variant-numeric: lining-nums tabular-nums; }
-.page-content-view th { background: var(--color-bg); font-weight: 700; }
-.page-content-view ul, .page-content-view ol { padding-left: 1.5em; margin: 0.4em 0; }
-.page-content-view img { max-width: 100%; height: auto; border-radius: var(--radius-md); }
-/* Eingefügte Manuskript-Bilder: zentrierte figure + optionale Bildunterschrift. */
-.page-content-view figure { margin: 1em 0; text-align: center; }
-.page-content-view figure img { display: block; margin: 0 auto; }
-.page-content-view figcaption { margin-top: var(--space-6); font-size: var(--font-size-sm); color: var(--color-subtle); font-style: italic; text-align: center; }
-.page-content-view hr { border: none; border-top: 1px solid var(--color-border); margin: 1em 0; }
-/* Seitenumbruch-Marker: nur im Editor sichtbar, im PDF-Export erzeugt er addPage().
-   Dashed + Akzentfarbe grenzt ihn klar von der soliden Trennlinie ab. */
-.page-content-view hr.pagebreak { border-top: 2px dashed var(--color-accent); margin: 1.6em 0; }
-/* Leere-Seite-Marker: erzeugt im PDF eine leere Seite + Umbruch. Doppellinie
-   grenzt ihn vom einfachen Seitenumbruch ab. */
-.page-content-view hr.blankpage { border-top: 3px double var(--color-accent); margin: 1.6em 0; }
 .page-content-view--editing hr { cursor: pointer; }
 .page-content-view--editing hr.hr-selected { border-top-color: var(--color-accent); border-top-width: 2px; outline: 2px solid var(--color-accent); outline-offset: 4px; }
 /* hr ist void ohne Caret-Slot: der Caret landet quer zwischen Linie und
@@ -121,111 +93,29 @@
    (hr-in-selection, gesetzt in editor-toolbar-card.js). */
 .page-content-view--editing:has(hr.hr-selected),
 .page-content-view--editing.hr-in-selection { caret-color: transparent; }
-.page-content-view pre { background: var(--color-bg); padding: var(--space-10) 12px; border-radius: var(--radius-md); overflow-x: auto; font-size: var(--font-size-sm); }
-.page-content-view code { background: var(--color-bg); padding: var(--space-1) 4px; border-radius: var(--radius-sm); font-size: var(--font-em-90); }
-.page-content-view pre code { background: none; padding: 0; }
-
-/* Gedichte (div.poem) – an blockquote angelehnt, aber mit erhaltenen
-   Zeilenumbrüchen und ohne Silbentrennung (Verse sind verslängen-gebunden). */
-.page-content-view .poem {
-  border-left: 3px solid var(--color-border);
-  padding-left: var(--space-md);
-  margin: 0.6em 0;
-  color: var(--color-subtle);
-  font-style: italic;
-  white-space: pre-line;
-  hyphens: none;
-}
-.page-content-view .poem p { margin: 0 0 0.3em 0; text-indent: 0; }
-
-/* Checkbox-Listen (Slash `/todo`). Markup:
-   <ul class="todo">
-     <li class="todo-item"><input type="checkbox"><span class="todo-text">…</span></li>
-   </ul>
-   Checkbox bleibt klickbar im contenteditable, weil das Default-Bullet weg
-   ist und Toggle-Handler in editor-toolbar-card.js das `checked`-Attribut
-   serialisierungs-stabil pflegt. */
-.page-content-view ul.todo {
-  list-style: none;
-  padding-left: 0;
-  margin: 0.4em 0;
-}
-.page-content-view ul.todo > li.todo-item {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-xs);
-  margin: 0.15em 0;
-}
+/* Checkbox-Listen (`/todo`): Basis-Layout liegt in der SSoT
+   (components/manuscript-content.css) und ist dort bewusst inert. Die
+   Notebook-Leseansicht ist die einzige Oberfläche mit Schreibpfad
+   (page-view.js#_handleViewTodoClick pflegt das `checked`-ATTRIBUT
+   serialisierungs-stabil) — hier also klickbar schalten. `line-height` explizit,
+   damit der Text neben der Box denselben Zeilenabstand hat wie der Fliesstext. */
 .page-content-view ul.todo > li.todo-item > input[type="checkbox"] {
-  font: inherit;
-  width: 1em;
-  height: 1em;
-  /* Auf die erste Textzeile zentrieren: halbe Differenz zwischen Zeilenhöhe
-     (1lh = line-height × font-size) und Box-Höhe (1em). Skaliert mit der
-     Reading-Font-Size statt Magic-Offset, bleibt über die ganze Seitenbreite
-     bündig — auch bei umbrechendem mehrzeiligem Text. */
-  margin-top: calc((1lh - 1em) / 2);
-  accent-color: var(--color-primary);
+  pointer-events: auto;
   cursor: pointer;
-  flex: 0 0 auto;
+  accent-color: var(--color-primary);
 }
-.page-content-view ul.todo > li.todo-item > .todo-text {
-  flex: 1 1 auto;
-  min-width: 0;
-  line-height: var(--lh-relaxed);
-}
-.page-content-view ul.todo > li.todo-item > input[type="checkbox"]:checked + .todo-text {
-  text-decoration: line-through;
-  color: var(--color-muted);
-}
-
-/* Touch: native Checkbox (1em ≈ 16–18px) ist als Tap-Ziel zu schmal. Box,
-   Gap und vertikales Row-Spacing nur auf Pointer-coarse anheben — gibt dem
-   Daumen mehr Trefferfläche, ohne Desktop zu verändern. Pointer-Typ statt
-   Viewport-Breite, weil es um Touch geht, nicht um Bildschirmgrösse. */
-@media (pointer: coarse) {
-  .page-content-view ul.todo > li.todo-item {
-    gap: var(--space-sm);
-    margin: 0.35em 0;
-  }
-  .page-content-view ul.todo > li.todo-item > input[type="checkbox"] {
-    width: 1.4em;
-    height: 1.4em;
-    margin-top: calc((1lh - 1.4em) / 2);
-  }
+.page-content-view ul.todo > li.todo-item > .todo-text { line-height: var(--lh-relaxed); }
+/* Ohne Schreibrecht (viewer/lektor) kann der Haken nicht persistiert werden —
+   Box nicht als Klickziel anbieten, sonst toggelt sie nativ und wird nie
+   gespeichert. Gate sitzt zusaetzlich in page-view.js#_handleViewTodoClick. */
+.page-content-view--readonly ul.todo > li.todo-item > input[type="checkbox"] {
+  pointer-events: none;
+  cursor: default;
 }
 
-/* BookStack-Callouts (div.callout.info / .warning / .danger / .success) */
-.page-content-view .callout {
-  border-left: 4px solid var(--color-border);
-  background: var(--color-bg);
-  padding: var(--space-10) 14px;
-  margin: 0.6em 0;
-  border-radius: var(--radius-sm);
-}
-.page-content-view .callout.info    { border-left-color: var(--color-primary); background: var(--color-history-active-bg); }
-.page-content-view .callout.success { border-left-color: var(--color-ok-border, var(--color-stark)); background: var(--color-ok-bg); color: var(--color-ok-text); }
-.page-content-view .callout.warning { border-left-color: var(--color-mittel); background: var(--color-warn-bg); color: var(--color-warn-text); }
-.page-content-view .callout.danger  { border-left-color: var(--color-err-border, var(--color-schwach-text)); background: var(--color-err-bg); color: var(--color-err-text); }
-
-/* Pull-Quote: zentrierte, gross gesetzte Hervorhebung zwischen Absätzen.
-   Kein Border, kein Background — Typografie trägt allein. */
-.page-content-view .callout.pullquote {
-  border: none;
-  background: transparent;
-  text-align: center;
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: var(--font-em-140);
-  line-height: 1.4;
-  color: var(--color-text);
-  padding: 1.2em clamp(8px, 4vw, 32px);
-  margin: 1em 0;
-  text-wrap: balance;
-  hyphens: none;
-}
-.page-content-view .callout.pullquote::before { content: "\201C"; margin-right: 0.05em; color: var(--color-accent-text); }
-.page-content-view .callout.pullquote::after  { content: "\201D"; margin-left: 0.05em;  color: var(--color-accent-text); }
+/* Pull-Quote: Serif-Schnitt explizit, weil der Notebook-Lesekasten seinen
+   Textkörper ohnehin in --font-serif setzt und die Initiale-Optik daran hängt. */
+.page-content-view .callout.pullquote { font-family: var(--font-serif); }
 
 /* Edit-Modus: contenteditable-Preview. Linkes Rail + Background-Tint
    signalisieren Edit-Status; kein 2-px-Outline-Ring (zu laut um den Text). */

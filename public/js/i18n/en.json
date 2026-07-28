@@ -286,6 +286,8 @@
   "page.aha.text": "Tip: let the AI editor check this page for style, repetition and weak verbs.",
   "page.aha.action": "Proofread page",
   "page.aha.dismiss": "Dismiss hint",
+  "page.todo.conflict": "Checkbox not saved – the page was changed elsewhere in the meantime. The current version has been loaded.",
+  "page.todo.saveFailed": "Could not save the checkbox. Error: {msg}",
   "empty.figuren.hint": "Characters are extracted automatically from your manuscript – with profiles, relationships and arcs. Start the book analysis once you have written some text.",
   "empty.orte.hint": "Locations are detected automatically from your text – including a map and chapter appearances. Start the book analysis once you have written some text.",
   "empty.szenen.hint": "Scenes are derived automatically from your manuscript – with participants, place and function. Start the book analysis once you have written some text.",

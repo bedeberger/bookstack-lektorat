@@ -17,8 +17,12 @@
     </div>
   </template>
 
+  <!-- --readonly macht nur die Todo-Checkboxen klick-inert: ohne Schreibrecht
+       kann der Haken nicht persistiert werden, also soll er auch nicht wie ein
+       Klickziel aussehen (Persistenz-Pfad: page-view.js#_handleViewTodoClick). -->
   <div x-show="renderedPageHtml"
        class="page-content-view"
+       :class="{ 'page-content-view--readonly': !canEdit() }"
        x-html="renderedPageHtml"
        @click="handleMarkClick($event)"
        @copy="handleViewCopy($event)"

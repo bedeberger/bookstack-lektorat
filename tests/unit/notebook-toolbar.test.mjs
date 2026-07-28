@@ -23,7 +23,8 @@ globalThis.Alpine = { store: () => ({ uiLocale: 'de' }) };
 if (typeof document.getSelection !== 'function') document.getSelection = () => null;
 
 const { toolbarCardMethods } = await import('../../public/js/editor/notebook/toolbar.js');
-const { _normalizeLinkUrl, _brLeftOfCaret } = await import('../../public/js/editor/notebook/toolbar/_shared.js');
+const { _normalizeLinkUrl, _brLeftOfCaret, SLASH_ITEMS, BOUNDARY_WRAPPER_SEL } = await import('../../public/js/editor/notebook/toolbar/_shared.js');
+const { createTodoList, TODO_LIST_SEL, TODO_ITEM_SEL, TODO_TEXT_SEL, TODO_BOX_SEL } = await import('../../public/js/editor/shared/todo-html.js');
 
 window.__app = { focusActive: false, _markEditDirty() {}, t: (k) => k };
 
@@ -177,4 +178,58 @@ test('_brLeftOfCaret: echter Text links vom Caret → false (Break erlaubt)', ()
 test('_brLeftOfCaret: nicht-collapsed Selection → false', () => {
   const sel = { isCollapsed: false, rangeCount: 1, getRangeAt: () => ({}) };
   assert.equal(_brLeftOfCaret(sel), false);
+});
+
+// ── Kopplung BOUNDARY_WRAPPER_SEL ↔ SLASH_ITEMS ──────────────────────────────
+// Warum dieses Gate: `SLASH_ITEMS` bestimmt, welche Blocktypen der Editor
+// erzeugt; `BOUNDARY_WRAPPER_SEL` listet die formatierten Wrapper, deren
+// Löschgrenzen `_kbBlockBoundary` selbst bedient (siehe docs/notebook-editor.md
+// „Löschen an Blockgrenzen"). Die beiden Listen sind unabhängig gepflegt — ein
+// neuer Wrapper im Slash-Menü, der im Selektor fehlt, fällt lautlos auf den
+// Browser-Default zurück und bäckt dort Inline-`style` ein. Genau das fängt
+// dieser Test, statt es erst im echten Editor auffallen zu lassen.
+
+test('jeder Wrapper-erzeugende SLASH_ITEM ist in BOUNDARY_WRAPPER_SEL erfasst', () => {
+  // Wrapper-erzeugend = der Slash-Block ist ein Container mit Kind-Blöcken
+  // (`wrapP` → <p> darin, `list`/`todoList` → <li> darin).
+  const wrappers = SLASH_ITEMS.filter((i) => i.wrapP || i.list || i.todoList);
+  assert.ok(wrappers.length >= 4, 'Fixture-Annahme: es gibt Wrapper-Slash-Items');
+
+  for (const item of wrappers) {
+    const el = document.createElement(item.tag);
+    if (item.className) el.className = item.className;
+    const covered = el.matches(BOUNDARY_WRAPPER_SEL);
+    // `ul.todo` ist die EINE bewusste Ausnahme: dafür ist der spezifischere
+    // `_kbTodoDelete` zuständig, der zusätzlich die Checkbox als Struktur
+    // behandelt. Wäre sie im generischen Selektor, würden beide greifen.
+    const expected = !(item.key === 'todo');
+    assert.equal(covered, expected,
+      `Slash-Item "${item.key}" (<${item.tag}${item.className ? ' class=' + item.className : ''}>) `
+      + `${expected ? 'MUSS' : 'darf NICHT'} von BOUNDARY_WRAPPER_SEL erfasst sein`);
+  }
+});
+
+test('BOUNDARY_WRAPPER_SEL erfasst auch die nicht per Slash erzeugbaren Wrapper', () => {
+  // `pre` und `ol` entstehen über Paste/Import, nicht über das Slash-Menü —
+  // ihre Grenzen brauchen dieselbe Behandlung. Ohne diese Zeile könnte man sie
+  // beim Aufräumen des Selektors für „ungenutzt" halten und entfernen.
+  for (const tag of ['pre', 'ol']) {
+    assert.ok(document.createElement(tag).matches(BOUNDARY_WRAPPER_SEL),
+      `<${tag}> muss von BOUNDARY_WRAPPER_SEL erfasst sein (Paste-/Import-Pfad)`);
+  }
+});
+
+test('Todo-Markup der Factory passt zu den Lookup-Selektoren', () => {
+  // Erzeugung (createTodoList) und Suche (TODO_*_SEL, TODO_BOX_SEL) liegen in
+  // derselben SSoT — dieser Test hält sie zueinander konsistent, damit ein
+  // umbenannter Klassenname nicht die eine Seite still verfehlt.
+  const { list, item, text } = createTodoList();
+  const host = document.createElement('div');
+  host.appendChild(list);
+  assert.ok(list.matches(TODO_LIST_SEL), 'Liste matcht TODO_LIST_SEL');
+  assert.ok(item.matches(TODO_ITEM_SEL), 'Zeile matcht TODO_ITEM_SEL');
+  assert.ok(text.matches(TODO_TEXT_SEL), 'Text-Span matcht TODO_TEXT_SEL');
+  assert.equal(host.querySelectorAll(TODO_BOX_SEL).length, 1, 'Checkbox zählt für den Persistenz-Index');
+  // Der <br> ist Caret-Platzhalter: ohne ihn hat die leere Zeile keine Höhe.
+  assert.equal(text.firstChild?.nodeName, 'BR', 'Text-Span trägt den Caret-Platzhalter');
 });

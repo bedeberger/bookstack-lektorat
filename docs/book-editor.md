@@ -160,6 +160,7 @@ Neue Aktion / neuer Block-Typ / neuer Find-Modus:
 4. Save-Pfad anfassen: Pflicht `stripLektoratMarks` + `isNoChange` + `_checkPageConflict` + `savePage` (shared/page-api). Niemals direkt `fetch('/content/pages/...')`.
 5. Neuer Block-Zustand: **nur** `blockStatus` erweitern — `blockStatusLine`, die CSS-Klasse am Block und `outlinePageStatus` hängen daran. Keine parallele Ableitung aufmachen.
 6. CSS für neue Marker-Klasse: in [public/css/editor/book/book-editor.css](../public/css/editor/book/book-editor.css), Layer `components`. Karten-Akzent ist Sepia (`--card-accent`), Body-Tokens `--color-book-editor-bg/-text`.
+7. CSS für **Inhalts**-Blöcke des Seiten-HTML (Listen, Checkbox-Listen, Bilder/Figuren, Tabellen, Trenner inkl. `hr.pagebreak`, Code, Gedichte, Callouts): **nicht** hier, sondern in der geteilten SSoT [public/css/components/manuscript-content.css](../public/css/components/manuscript-content.css). Der Bucheditor rendert dasselbe gespeicherte HTML wie Notebook-Leseansicht und Share-Reader — was nur hier landet, fehlt den beiden anderen. `book-editor.css` behält nur die Stream-Abweichungen (Überschriften-Gewicht/-Abstand, Zitat-Einzug, Absatzmodell).
 7. CLAUDE.md „Vertiefende Dokus" zeigt auf diese Datei — bei strukturellen Änderungen (neuer Modus, neue Invariante) hier ergänzen.
 
 ## Tests

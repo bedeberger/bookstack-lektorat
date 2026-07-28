@@ -1,0 +1,322 @@
+/* Geteilte Block-Typografie für persistiertes Seiten-HTML (SSoT).
+   Pendant zu manuscript-stream.css: das dort stylt die *Rahmung* (Kapitel- und
+   Seiten-Blöcke des Streams), hier steht der *Inhalt* — jedes Element, das der
+   Notebook-Editor in `pages.html` schreiben kann (Slash-Blöcke, Bubble-Toolbar,
+   Bild-Upload) plus die Import-Artefakte (BookStack-Callouts, Tabellen).
+
+   Drei Konsumenten rendern dasselbe gespeicherte HTML und müssen es gleich
+   zeigen:
+     .page-content-view      Notebook-Editor (Lese- + Edit-Modus)
+     .book-editor-page-body  Bucheditor-Stream + Fassungs-Reader
+     .share-content          Share-Reader-SSR (standalone, ohne App-Bundle)
+
+   Why: ohne SSoT bekommt jeder neue Editor-Block nur die Oberfläche, auf der er
+   gebaut wurde — Bucheditor und Share-Reader zeigten Checkbox-Listen als
+   Bullet-Liste mit nacktem Kasten, Bilder in Originalgrösse über den Lesekasten
+   hinaus, Gedichte ohne Verszeilen, Seitenumbruch-Marker als gewöhnliche Linie.
+
+   Token-Brücke: neutrale --mc-*-Variablen, jeder Kontext mappt sie auf seine
+   eigenen Tokens (App: --color-*, Share: --share-*). Fallbacks in den Mappings,
+   weil der Share-Reader die App-Tokens nicht lädt und umgekehrt.
+
+   Kontext-spezifische Abweichungen (Absatzmodell, Zitat-Einzug, Reader-
+   Überschriftengrössen, Edit-Modus-Zustände) bleiben in den jeweiligen Dateien
+   und überschreiben von dort — die App-Konsumenten laden nach dieser Datei
+   (gleicher @layer → Quell-Reihenfolge entscheidet), die Share-Regeln sind
+   unlayered und gewinnen dadurch ohnehin. */
+@layer components {
+
+  /* --- Token-Brücke: App-Konsumenten --- */
+  :is(.page-content-view, .book-editor-page-body) {
+    --mc-border: var(--color-border);
+    --mc-muted: var(--color-muted);
+    --mc-subtle: var(--color-subtle);
+    --mc-text: var(--color-text);
+    --mc-accent: var(--color-accent);
+    --mc-accent-text: var(--color-accent-text);
+    --mc-surface-alt: var(--color-bg);
+    --mc-radius: var(--radius-md);
+    --mc-radius-sm: var(--radius-sm);
+    --mc-callout-info: var(--color-primary);
+    --mc-callout-info-bg: var(--color-history-active-bg);
+    --mc-callout-info-text: inherit;
+    --mc-callout-ok: var(--color-ok-border, var(--color-stark));
+    --mc-callout-ok-bg: var(--color-ok-bg);
+    --mc-callout-ok-text: var(--color-ok-text);
+    --mc-callout-warn: var(--color-mittel);
+    --mc-callout-warn-bg: var(--color-warn-bg);
+    --mc-callout-warn-text: var(--color-warn-text);
+    --mc-callout-err: var(--color-err-border, var(--color-schwach-text));
+    --mc-callout-err-bg: var(--color-err-bg);
+    --mc-callout-err-text: var(--color-err-text);
+  }
+
+  /* --- Token-Brücke: Share-Reader (eigene Mini-Palette, keine App-Tokens) --- */
+  .share-content {
+    --mc-border: var(--share-border);
+    --mc-muted: var(--share-muted);
+    --mc-subtle: var(--share-muted);
+    --mc-text: var(--share-text);
+    --mc-accent: var(--share-accent);
+    --mc-accent-text: var(--share-accent);
+    --mc-surface-alt: var(--share-hover);
+    --mc-radius: var(--share-radius);
+    --mc-radius-sm: var(--share-radius-sm);
+    /* Der Reader hat keine Status-Achse; Callout-Hues deshalb literal, in der
+       Tönung der Paper/Ink-Palette (share/theme.css) gehalten. Hintergrund
+       jeweils als 8%-Mix derselben Hue → trägt Light und Dark. */
+    --mc-callout-info: var(--share-accent);
+    --mc-callout-info-bg: color-mix(in srgb, var(--share-accent) 8%, transparent);
+    --mc-callout-info-text: inherit;
+    --mc-callout-ok: #4a7d52;
+    --mc-callout-ok-bg: color-mix(in srgb, #4a7d52 8%, transparent);
+    --mc-callout-ok-text: inherit;
+    --mc-callout-warn: #a8761c;
+    --mc-callout-warn-bg: color-mix(in srgb, #a8761c 8%, transparent);
+    --mc-callout-warn-text: inherit;
+    --mc-callout-err: #b4483c;
+    --mc-callout-err-bg: color-mix(in srgb, #b4483c 8%, transparent);
+    --mc-callout-err-text: inherit;
+  }
+
+  /* --- Überschriften --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) h1 {
+    font-size: var(--font-em-150, 1.5em); margin: 0.6em 0 0.3em; font-weight: 700;
+    letter-spacing: -0.01em; text-wrap: balance;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) h2 {
+    font-size: var(--font-em-130, 1.3em); margin: 0.5em 0 0.3em; font-weight: 700;
+    letter-spacing: -0.005em; text-wrap: balance;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) h3 {
+    font-size: var(--font-em-115, 1.15em); margin: 0.4em 0 0.2em; font-weight: 700;
+    text-wrap: balance;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) h4 {
+    font-size: var(--font-em-105, 1.05em); margin: 0.3em 0 0.2em; font-weight: 700;
+    text-wrap: balance;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) h5 {
+    font-size: var(--font-em-95, 0.95em); margin: 0.3em 0 0.2em; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) h6 {
+    font-size: var(--font-em-90, 0.9em); margin: 0.3em 0 0.2em; font-weight: 700;
+    color: var(--mc-muted);
+  }
+
+  /* --- Inline-Auszeichnung (Bubble-Toolbar) --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) u { text-decoration: underline; }
+  :is(.page-content-view, .book-editor-page-body, .share-content) :is(s, del, strike) { text-decoration: line-through; }
+  :is(.page-content-view, .book-editor-page-body, .share-content) sup { vertical-align: super; font-size: var(--font-em-75, 0.75em); line-height: 0; }
+  :is(.page-content-view, .book-editor-page-body, .share-content) sub { vertical-align: sub; font-size: var(--font-em-75, 0.75em); line-height: 0; }
+
+  /* --- Zitat: nur die Innenabstände + Import-Artefakt; der Einzug selbst ist
+         kontext-spezifisch (Lesekasten vs. Stream vs. Reader). --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) blockquote > :first-child { margin-top: 0; }
+  :is(.page-content-view, .book-editor-page-body, .share-content) blockquote > :last-child { margin-bottom: 0; }
+  /* BookStack-Import-Artefakt: orphan <br> direkt nach </blockquote> erzeugt
+     eine ganze Zeilenhöhe Lücke. Visuell schlucken — HTML bleibt unverändert. */
+  :is(.page-content-view, .book-editor-page-body, .share-content) blockquote + br { display: none; }
+
+  /* --- Listen --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) :is(ul, ol) {
+    padding-inline-start: 1.5em;
+    margin-block: 0.4em;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) li { margin-block: 0.15em; }
+
+  /* --- Tabellen. Zellen mit Versal-/Tabellenziffern statt Mediävalziffern:
+         fluchten spaltenweise und gleichbreit. --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) table {
+    border-collapse: collapse;
+    margin: 0.6em 0;
+    width: 100%;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) :is(th, td) {
+    border: 1px solid var(--mc-border);
+    padding: var(--space-6, 6px) 10px;
+    text-align: left;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) th {
+    background: var(--mc-surface-alt);
+    font-weight: 700;
+  }
+
+  /* --- Bilder. `max-width: 100%` ist die eigentliche Schutzregel: ohne sie
+         rendert ein eingefügtes Manuskript-Bild in Originalbreite und sprengt
+         den Lesekasten. --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--mc-radius);
+  }
+  /* Eingefügte Manuskript-Bilder: zentrierte figure + optionale Bildunterschrift. */
+  :is(.page-content-view, .book-editor-page-body, .share-content) figure {
+    margin: 1em 0;
+    text-align: center;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) figure img { display: block; margin: 0 auto; }
+  :is(.page-content-view, .book-editor-page-body, .share-content) figcaption {
+    margin-top: var(--space-6, 6px);
+    font-size: var(--font-size-sm, 13px);
+    color: var(--mc-subtle);
+    font-style: italic;
+    text-align: center;
+  }
+
+  /* --- Trenner. `hr.pagebreak` erzeugt im PDF-Export addPage(), `hr.blankpage`
+         zusätzlich eine leere Seite — beide müssen sich vom gewöhnlichen
+         Szenentrenner unterscheiden, sonst setzt der Autor sie blind. --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) hr {
+    border: none;
+    border-top: 1px solid var(--mc-border);
+    margin: 1em 0;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) hr.pagebreak {
+    border-top: 2px dashed var(--mc-accent);
+    margin: 1.6em 0;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) hr.blankpage {
+    border-top: 3px double var(--mc-accent);
+    margin: 1.6em 0;
+  }
+
+  /* --- Code --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) pre {
+    background: var(--mc-surface-alt);
+    padding: var(--space-10, 10px) 12px;
+    border-radius: var(--mc-radius);
+    overflow-x: auto;
+    font-size: var(--font-size-sm, 13px);
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) code {
+    background: var(--mc-surface-alt);
+    padding: var(--space-1, 1px) 4px;
+    border-radius: var(--mc-radius-sm);
+    font-size: var(--font-em-90, 0.9em);
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) pre code { background: none; padding: 0; }
+
+  /* --- Gedichte (Slash `/poem`, div.poem). An blockquote angelehnt, aber mit
+         erhaltenen Zeilenumbrüchen und ohne Silbentrennung — Verse sind
+         verslängen-gebunden. --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) .poem {
+    border-inline-start: 3px solid var(--mc-border);
+    padding-inline-start: var(--space-md, 16px);
+    margin: 0.6em 0;
+    color: var(--mc-subtle);
+    font-style: italic;
+    white-space: pre-line;
+    hyphens: none;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) .poem p { margin: 0 0 0.3em 0; text-indent: 0; }
+
+  /* --- Checkbox-Listen (Slash `/todo`). Markup-SSoT:
+         <ul class="todo">
+           <li class="todo-item"><input type="checkbox"><span class="todo-text">…</span></li>
+         </ul>
+         Ohne diese Regeln zeigen Bucheditor und Reader eine Bullet-Liste mit
+         nacktem Kasten daneben. --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) ul.todo {
+    list-style: none;
+    padding-inline-start: 0;
+    margin-block: 0.4em;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) ul.todo > li.todo-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-xs, 4px);
+    margin: 0.15em 0;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) ul.todo > li.todo-item > input[type="checkbox"] {
+    font: inherit;
+    width: 1em;
+    height: 1em;
+    /* Auf die erste Textzeile zentrieren: halbe Differenz zwischen Zeilenhöhe
+       (1lh) und Box-Höhe (1em). Skaliert mit der Schriftgrösse statt
+       Magic-Offset, bleibt auch bei mehrzeiligem Text bündig. */
+    margin-top: calc((1lh - 1em) / 2);
+    accent-color: var(--mc-accent);
+    flex: 0 0 auto;
+    /* Inert als Default: nur die Notebook-Leseansicht persistiert den Haken
+       (page-view.js#_handleViewTodoClick). Im Bucheditor und im Reader gibt es
+       keinen Schreibpfad — eine klickbare Box würde nativ toggeln und den
+       Haken nie speichern. page-view.css hebt das für ihren Scope auf. */
+    pointer-events: none;
+    cursor: default;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) ul.todo > li.todo-item > .todo-text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) ul.todo > li.todo-item > input[type="checkbox"]:checked + .todo-text {
+    text-decoration: line-through;
+    color: var(--mc-muted);
+  }
+  /* Touch: native Checkbox (1em ≈ 16–18px) ist als Tap-Ziel zu schmal. Box, Gap
+     und Row-Spacing nur auf pointer:coarse anheben. */
+  @media (pointer: coarse) {
+    :is(.page-content-view, .book-editor-page-body, .share-content) ul.todo > li.todo-item {
+      gap: var(--space-sm, 8px);
+      margin: 0.35em 0;
+    }
+    :is(.page-content-view, .book-editor-page-body, .share-content) ul.todo > li.todo-item > input[type="checkbox"] {
+      width: 1.4em;
+      height: 1.4em;
+      margin-top: calc((1lh - 1.4em) / 2);
+    }
+  }
+
+  /* --- BookStack-Callouts (div.callout.info/.warning/.danger/.success) --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) .callout {
+    border-inline-start: 4px solid var(--mc-border);
+    background: var(--mc-surface-alt);
+    padding: var(--space-10, 10px) 14px;
+    margin: 0.6em 0;
+    border-radius: var(--mc-radius-sm);
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) .callout.info {
+    border-inline-start-color: var(--mc-callout-info);
+    background: var(--mc-callout-info-bg);
+    color: var(--mc-callout-info-text);
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) .callout.success {
+    border-inline-start-color: var(--mc-callout-ok);
+    background: var(--mc-callout-ok-bg);
+    color: var(--mc-callout-ok-text);
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) .callout.warning {
+    border-inline-start-color: var(--mc-callout-warn);
+    background: var(--mc-callout-warn-bg);
+    color: var(--mc-callout-warn-text);
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) .callout.danger {
+    border-inline-start-color: var(--mc-callout-err);
+    background: var(--mc-callout-err-bg);
+    color: var(--mc-callout-err-text);
+  }
+
+  /* Pull-Quote: zentrierte, gross gesetzte Hervorhebung zwischen Absätzen.
+     Kein Border, kein Background — Typografie trägt allein. */
+  :is(.page-content-view, .book-editor-page-body, .share-content) .callout.pullquote {
+    border: none;
+    background: transparent;
+    text-align: center;
+    font-style: italic;
+    font-size: var(--font-em-140, 1.4em);
+    line-height: 1.4;
+    color: var(--mc-text);
+    padding: 1.2em clamp(8px, 4vw, 32px);
+    margin: 1em 0;
+    text-wrap: balance;
+    hyphens: none;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) .callout.pullquote::before {
+    content: "\201C"; margin-right: 0.05em; color: var(--mc-accent-text);
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) .callout.pullquote::after {
+    content: "\201D"; margin-left: 0.05em; color: var(--mc-accent-text);
+  }
+}
