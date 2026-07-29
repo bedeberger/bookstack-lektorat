@@ -36,6 +36,13 @@ export const pageMethods = {
       this._ensurePartial('editor-synonyme'),
       this._ensurePartial('editor-focus'),
     ]);
+    // Zweite Exklusivitäts-Runde: die Partial-Awaits oben sind Netz-Fetches und
+    // können bei schlechter Verbindung hängen. In dieser Zeit kann ein parallel
+    // laufender Landing-Pfad (`_maybeOpenBookOverview`) eine Buchkarte geöffnet
+    // haben — ohne diesen Re-Assert stünden Übersicht und Editor gleichzeitig
+    // offen. Kein `resetPage()`: das lief oben schon, ein zweiter Lauf würde die
+    // gerade aufgebaute Editor-Session wieder abräumen.
+    this._closeOtherMainCards(null, { resetPage: false });
     this.currentPage = p;
     this.showEditorCard = true;
     this.$nextTick(() => this._scrollToEditorCard());

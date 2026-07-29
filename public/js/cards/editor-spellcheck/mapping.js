@@ -1,11 +1,13 @@
 // Plain-Text-Extraktion + Offset->Range-Mapping fuer LanguageTool-Overlay.
 //
 // buildOffsetTable(root):
-//   Walks Text-/Element-Nodes innerhalb von `root` und baut zwei Outputs:
+//   Walks Text-/Element-Nodes innerhalb von `root` und baut drei Outputs:
 //     - text:      Plain-Text-Stream, der ans LT-API geht.
 //     - positions: Array von { node, start, end } pro Text-Node — start/end
 //                  sind Offsets im `text`-Stream (UTF-16 Code Units = JS
 //                  String.length = LT-Offset-Semantik).
+//     - protectedRanges: [start,end]-Intervalle der Quellen-Chips. Ihr Text bleibt
+//                  IM Stream (siehe unten), Treffer darin werden verworfen.
 //   Block-Element-Boundaries fuegen `\n\n` ein (LT interpretiert das als
 //   Paragraph-Break), `<br>` fuegt `\n` ein. Whitespace innerhalb von
 //   Text-Nodes bleibt unangetastet — LT-Engine handhabt Tokenisierung.
@@ -37,25 +39,57 @@ function _isSkippedIsland(el) {
   return cl.contains('lt-popover') || cl.contains('lt-badge');
 }
 
+// Quellen-Chips (Quellennachweise) werden NICHT aus dem Stream geschnitten, sondern
+// als geschuetzte Intervalle markiert. Zwei Gruende:
+//   - Schneiden hinterliesse ein doppeltes Leerzeichen zwischen den Nachbar-
+//     Textknoten, und genau darauf hat LanguageTool eine Regel — der Chip
+//     erzeugte also selbst den Fehler, den er vermeiden soll.
+//   - Der Satz bleibt fuer LTs Grammatik-Regeln vollstaendig; nur Treffer, die
+//     die Quellenangabe beruehren, fallen weg. Wichtig, weil ein angewandter Vorschlag
+//     den Bereich ersetzt und damit den Chip samt Zeiger zerstoeren wuerde.
+// Selektor ist eine bewusste Kopie von CITE_SEL (public/js/sources/cite-html.js);
+// dieses Modul haelt sich frei von App-Bundle-Importen. Gegen Drift gesichert
+// durch tests/unit/cite-guard-drift.test.mjs.
+const CITE_SKIP_SEL = 'span.cite[data-src]';
+
+function _isCiteChip(el) {
+  return !!(el && el.nodeType === 1 && el.matches && el.matches(CITE_SKIP_SEL));
+}
+
 export function buildOffsetTable(root) {
-  if (!root) return { text: '', positions: [] };
+  if (!root) return { text: '', positions: [], protectedRanges: [] };
   const doc = root.ownerDocument || document;
   const walker = doc.createTreeWalker(root, SHOW_ELEMENT_AND_TEXT, null);
 
   let text = '';
   const positions = [];
+  const protectedRanges = [];
   let pendingBreak = '';
   let skipRoot = null; // gesetzt solange Walker im Subtree einer LT-Insel laeuft
+  // Offener Quellen-Chip: Start wird beim ERSTEN Textknoten darin gesetzt (nicht
+  // beim Element), damit ein vorher eingefuegter Block-Break nicht ins Intervall
+  // rutscht.
+  let citeRoot = null;
+  let citeStart = -1;
+  const closeCite = () => {
+    if (citeRoot && citeStart >= 0 && text.length > citeStart) {
+      protectedRanges.push([citeStart, text.length]);
+    }
+    citeRoot = null;
+    citeStart = -1;
+  };
   let cur = walker.nextNode();
   while (cur) {
     if (skipRoot && !skipRoot.contains(cur)) skipRoot = null;
     if (skipRoot) { cur = walker.nextNode(); continue; }
+    if (citeRoot && !citeRoot.contains(cur)) closeCite();
     if (cur.nodeType === 1 /* ELEMENT */) {
       if (_isSkippedIsland(cur)) {
         skipRoot = cur;
         cur = walker.nextNode();
         continue;
       }
+      if (!citeRoot && _isCiteChip(cur)) { citeRoot = cur; citeStart = -1; }
       const tag = cur.tagName;
       if (tag === 'BR') {
         pendingBreak = '\n';
@@ -73,11 +107,35 @@ export function buildOffsetTable(root) {
         const start = text.length;
         text += v;
         positions.push({ node: cur, start, end: start + v.length });
+        if (citeRoot && citeStart < 0) citeStart = start;
       }
     }
     cur = walker.nextNode();
   }
-  return { text, positions };
+  closeCite();
+  return { text, positions, protectedRanges };
+}
+
+/** Ueberlappt der LT-Treffer [offset, offset+length) einen geschuetzten Bereich?
+ *  Bewusst Ueberlappung, nicht Enthaltensein: ein Treffer, der nur teilweise in
+ *  die Quellenangabe reicht, wuerde beim Anwenden ebenfalls Chip-Zeichen ersetzen. */
+/** Treffer in Quellen-Chips wegfiltern. Genau EIN Aufrufpunkt im Controller,
+ *  damit Squiggles und Badge-Zahl dieselbe Menge sehen — wird nur beim Rendern
+ *  gefiltert, meldet das Badge Fehler, die nirgends markiert sind. */
+export function filterProtectedMatches(matches, ranges) {
+  if (!Array.isArray(matches) || !matches.length) return [];
+  if (!Array.isArray(ranges) || !ranges.length) return matches;
+  return matches.filter((m) => !overlapsProtected(m.offset, m.length, ranges));
+}
+
+export function overlapsProtected(offset, length, ranges) {
+  if (!Array.isArray(ranges) || !ranges.length) return false;
+  const s = Number(offset) || 0;
+  const e = s + Math.max(0, Number(length) || 0);
+  for (const [ps, pe] of ranges) {
+    if (s < pe && e > ps) return true;
+  }
+  return false;
 }
 
 // Positions sind nach `start` aufsteigend + nicht-ueberlappend (TreeWalker-

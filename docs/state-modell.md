@@ -32,7 +32,7 @@ Verbindlicher Aufbau des Alpine-State. Vor jeder UI-Änderung die richtige Ebene
 | `notebookState` | Notebook-Editor-Lifecycle: editMode, editDirty, editSaving, saveOffline, editConflict, pendingDraft, lastAutosaveAt/lastDraftSavedAt, Auto-Save-Timer (`_autosaveIdleTimer`, `_autosaveMaxTimer`, `_draftTimer`) + Online-Retry-Handles (`_onlineHandler` für window `online`/`focus`, `_onlineVisHandler` für document `visibilitychange`), conflictResolution, draftPersistFailed, pageEditorFullscreen/Zoom/FitWidth/ShowMarks |
 | `focusState` | Focus-Editor: focusActive (SSoT „Fokusmodus an"), focusCountWords/Chars + Deltas (Live-Counter im Fokus-Header). Dirty-/Saving-Zustand kommt aus `notebookState` — der Focus-Editor läuft auf der Notebook-Save-Pipeline |
 | `editorPopupState` | Spiegel-Flags `_figurLookupOpen`, `_synonymMenuOpen`, `_synonymPickerOpen` (für Escape-Routing in `editor-focus-onKey`) + `_figurLookupIndex` (Lookup-Cache) |
-| `cardsState` | **Alle `showXxxCard`-Flags** inkl. Admin-Karten (showAdminUsers/Settings/Usage/Categories/BooksCard), showSongsCard, showKontinuitaetCard, showSearchCard, showKomplettStatus, showAvatarMenu, adminUsageTab — exklusiv via `_closeOtherMainCards(keep)` |
+| `cardsState` | **Alle `showXxxCard`-Flags** inkl. Admin-Karten (showAdminUsers/Settings/Usage/Categories/BooksCard), showSongsCard, showKontinuitaetCard, showSearchCard, showKomplettStatus, showAvatarMenu, adminUsageTab — exklusiv via `_closeOtherMainCards(keep)` (siehe Exklusivität über `await`-Grenzen) |
 | `statusState` | status, statusSpinner, `_statusTimer` |
 | `confirmDialogState` | Native-`<dialog>`-Modal-Ersatz für `window.confirm`/prompt (verhindert macOS-Vollbild-Bug) inkl. Input-Mode + Resolver |
 | `lektoratState` | analysisOut, correctedHtml, hasErrors, lektoratFindings, selectedFindings, appliedOriginals, appliedHistoricCorrections, checkDone/Loading/Progress/Status, saveApplying, batchLoading/Progress/Status, lastCheckId, pageHistory, activeHistoryEntryId, Token-Estimates (`tokEsts`, `_tokenEstGen`), pageLastChecked, ideenCounts/chapterIdeenCounts, ideenScope/ideenChapterId/currentChapterIdeenOpenCount, showTokLegend/tokTooltipData/showPageStatusTip, `_statsObserver*` |
@@ -162,6 +162,19 @@ Die App hat **drei unabhängige Editoren**. Bei Änderungen muss der User benenn
 | **Bucheditor** | ganzes Buch (eigene Karte `bookEditor`) | `toggleBookEditorCard()` aus Palette/Quick-Pills | Card-lokal in [`bookEditorCard`](../public/js/cards/book-editor-card.js); Root-Flag `showBookEditorCard` (`cardsState`) | [book-editor.md](book-editor.md) |
 
 Bucheditor ist **kein Modus** auf einer Einzelseite — er ist eine eigenständige Karte mit eigener Save-Pipeline (`saveQueue`, pro Block) und keiner Verbindung zu `editMode`/`focusActive`. Exklusivität zum Notebook/Focus läuft über `_closeOtherMainCards` (`EXCLUSIVE_CARDS`-Eintrag in [feature-registry.js](../public/js/cards/feature-registry.js)), nicht über die Modus-Flags.
+
+## Exklusivität über `await`-Grenzen (Pflicht)
+
+Buchkarte und Editor schliessen sich aus — geprüft wird das in Methoden, die vor dem Setzen ihres Flags **awaiten** (Partial-Load = Netz-Fetch). Eine Prüfung vor dem `await` ist deshalb wertlos, sobald das Netz langsam ist oder abbricht: mehrere Pfade laufen dann gleichzeitig durch und öffnen zwei Ansichten übereinander.
+
+Regel für jede Methode, die eine Hauptansicht öffnet:
+
+1. **Vor dem `await`** prüfen (Fast-Path, spart den Fetch).
+2. **Nach dem letzten `await`, unmittelbar vor dem Flag-Set**, erneut prüfen: `selectedBookId` unverändert, `showEditorCard` false, kein `EXCLUSIVE_CARDS`-Flag gesetzt. Trifft eines nicht mehr zu → abbrechen, nicht öffnen.
+3. Umgekehrt gilt dasselbe für `selectPage`: nach den Editor-Partial-Awaits re-assertet es via `_closeOtherMainCards(null, { resetPage: false })` (Flags ohne Seiten-Teardown), weil während des Ladens eine Buchkarte aufgegangen sein kann.
+4. Landing-Pfade werden zusätzlich dedupliziert: `_maybeOpenBookOverview` hält einen buch-skopierten Re-Entry-Guard (`_bookOverviewLandingBookId`), weil ein Buchwechsel **zwei** Pfade triggert — `resetView()` aus der Buchwahl-Combobox (`restoreLastPage: false`) und den `selectedBookId`-`$watch` (`restoreLastPage: true`). Ohne Guard entscheidet die Netz-Latenz, ob die Übersicht oder die zuletzt offene Seite gewinnt — oder beide.
+
+Gegated: [tests/unit/card-exclusivity.test.mjs](../tests/unit/card-exclusivity.test.mjs) (hängender Partial-Load, Seitenöffnung während des Awaits, Buchwechsel während des Awaits, fehlgeschlagener Partial-Load).
 
 ## Editor-Modi des Notebook-Editors (4 Stück, **Konsistenz kritisch**)
 

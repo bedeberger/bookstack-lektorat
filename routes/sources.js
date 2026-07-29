@@ -4,10 +4,10 @@
 //
 // Skopierung wie das Recherche-Board: buchweit GETEILT, `user_email` ist reine
 // Ersteller-Attribution. Zugriff regelt die Buch-ACL — Lesen ab 'viewer'
-// (die Leseansicht muss den Beleg-Marker aufloesen koennen, auch fuer einen
+// (die Leseansicht muss den Quellen-Marker aufloesen koennen, auch fuer einen
 // Lektor), Schreiben ab 'editor'.
 //
-// Rein kuratierend: nie generativ im Buchtext. Der Beleg im Seiten-HTML ist die
+// Rein kuratierend: nie generativ im Buchtext. Die Quellenangabe im Seiten-HTML ist die
 // Wahrheit darueber, wo zitiert wird; diese Routen verwalten nur die Quelle.
 
 const express = require('express');
@@ -174,8 +174,8 @@ router.put('/:id', jsonBody, (req, res) => {
 });
 
 // ── Loeschen ─────────────────────────────────────────────────────────────────
-// Fundstellen verschwinden per FK-CASCADE. Beleg-Marker im Seiten-HTML bleiben
-// stehen und werden zu Belegen ohne Ziel — bewusst: die Seiten werden nicht
+// Fundstellen verschwinden per FK-CASCADE. Quellen-Marker im Seiten-HTML bleiben
+// stehen und werden zu Quellenangaben ohne Ziel — bewusst: die Seiten werden nicht
 // hinter dem Ruecken des Users umgeschrieben. Die Antwort meldet die Zahl der
 // betroffenen Fundstellen, damit die Karte davor warnen kann.
 router.delete('/:id', (req, res) => {

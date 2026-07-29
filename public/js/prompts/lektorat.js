@@ -24,6 +24,7 @@ import {
   _buildTempuswechselBlock,
   _buildErzaehlformBlock,
   _buildAiSmellBlock,
+  _buildBelegBlock,
 } from './blocks.js';
 import { STOPWORDS, ERKLAERUNG_RULE, KORREKTUR_REGELN } from './core.js';
 
@@ -41,6 +42,7 @@ function _buildLektoratPromptBody(text, textLabel, {
   erzaehlzeit = null,
   buchtyp = null,
   previousExcerpt = null,
+  hatBelege = false,
   langCode = 'de',
   mode = 'full',
 } = {}) {
@@ -113,6 +115,12 @@ function _buildLektoratPromptBody(text, textLabel, {
         if (m.trigger_terms?.length) parts.push(`Schlüsselbegriffe: ${m.trigger_terms.join(', ')}`);
         return '- ' + parts.join(' | ');
       }).join('\n')}\nHinweis: Formulierungen, wiederkehrende Bilder, Symbole oder Schlüsselbegriffe, die bewusst eines dieser Motive tragen, NICHT als Wiederholung, Klischee, Füllwort oder Stilschwäche anstreichen – motivische Wiederholung ist gewollt. Bewerte weiterhin echte handwerkliche Schwächen; nur den bewussten Motiv-Bezug nicht wegkorrigieren.\n`;
+
+  // Quellennachweis-Schutz: nur wenn die Seite tatsächlich Belege trägt. Anders
+  // als die übrigen Kontextblöcke AUCH lokal — kleine Modelle korrigieren
+  // Klammer-Einschübe besonders gern weg, und ein zerstörter Beleg verliert den
+  // Zeiger auf die Quelle.
+  const belegBlock = hatBelege ? `\n${_buildBelegBlock(langCode)}\n` : '';
 
   // Vorseiten-Absatz dient Tempus-/Perspektiv-Übergang – lokal nicht geprüft.
   const previousBlock = (_isLocal || !previousExcerpt)
@@ -324,7 +332,7 @@ ${_buildStilBlock()}
 ${_buildWiederholungBlock(stopwords)}
 ${_buildSchwacheVerbenBlock()}
 ${_buildFuellwortBlock()}
-${spezialBlocks}${figurenBlock}${beziehungenBlock}${orteBlock}${motivBlock}${previousBlock}
+${spezialBlocks}${figurenBlock}${beziehungenBlock}${orteBlock}${motivBlock}${belegBlock}${previousBlock}
 ${selbstkontrollBlock}
 <originaltext label="${textLabel.replace(/:\s*$/, '')}">
 ${text}
@@ -362,6 +370,7 @@ export function buildObjektivLektoratPrompt(text, {
   orte = [],
   pageName = null,
   chapterName = null,
+  hatBelege = false,
   langCode = 'de',
 } = {}) {
   const en = langCode === 'en';
@@ -434,6 +443,10 @@ Enthält der Text keine objektiven Fehler, gib { "fehler": [] } zurück.`;
       : `\nBeziehungen zwischen diesen Figuren (Kontext für Anreden):\n${figurenBeziehungen.map(b => `- ${b.von} → ${b.zu}: ${b.typ}${b.beschreibung ? ' – ' + b.beschreibung : ''}`).join('\n')}\n`)
     : '';
 
+  // Quellennachweis-Schutz auch hier: dieser Pass prueft Rechtschreibung und
+  // Grammatik und wuerde „Mueller 2020" bzw. „[12]" sonst anstreichen.
+  const belegBlock = hatBelege ? `\n${_buildBelegBlock(langCode)}\n` : '';
+
   const selbstkontroll = en
     ? `
 SELF-CHECK (before answering):
@@ -463,7 +476,7 @@ ${schemaBlock}
 ${_buildRechtschreibungBlock(langCode)}
 ${_buildGrammatikBlock(langCode)}
 ${_buildDialogformatBlock(langCode)}
-${figurenkonsistenzBlock}${figurenBlock}${beziehungenBlock}${orteBlock}
+${figurenkonsistenzBlock}${figurenBlock}${beziehungenBlock}${orteBlock}${belegBlock}
 ${selbstkontroll}
 <originaltext label="${en ? 'Original text' : 'Originaltext'}">
 ${text}

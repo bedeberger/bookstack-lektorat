@@ -106,3 +106,48 @@ export function chunkTtsRanges(ranges, text, minLen = TTS_MIN_CHUNK_CHARS, maxLe
 export function normalizeForSpeech(text) {
   return text.replace(/[«»]/g, '"').replace(/[‹›]/g, "'");
 }
+
+// ── Sprech-Text eines Blocks (Beleg-Chips ausgelassen) ──────────────────────
+// Quellennachweise sollen nicht mitgelesen werden: „(Kafka, 1915, S. 44)" mitten
+// im Satz zerreisst den Hoerfluss und ist genau die Information, die beim
+// Vorlesen nichts beitraegt.
+//
+// Text UND Highlight muessen dabei in EINEM Offsetraum leben — beide Konsumenten
+// bauen ihre Satz-Range aus Zeichen-Offsets in denselben Textknoten. Darum
+// liefert `ttsTextNodes` die Knotenliste, aus der beide arbeiten: `ttsBlockText`
+// verkettet sie zum Sprech-Text, und der Range-Bau der Konsumenten laeuft ueber
+// dieselbe Liste statt ueber einen eigenen TreeWalker. Wuerde nur der Sprechtext
+// gefiltert, driftete das Highlight um die Chip-Laenge.
+//
+// Der Selektor ist eine bewusste KOPIE von CITE_SEL (public/js/sources/
+// cite-html.js): dieses Modul muss pre-auth ladbar bleiben (PUBLIC_ASSETS in
+// server.js, der Share-Reader importiert es) und darf deshalb nichts aus dem
+// App-Bundle importieren — dieselbe Begruendung wie bei READER_BLOCK_SEL in
+// share-reader/tts.js. Gegen Drift gesichert durch tests/unit/tts-cite-skip.test.mjs.
+export const TTS_SKIP_SEL = 'span.cite[data-src]';
+
+// Textknoten unter `root` in Dokumentordnung, Teilbaeume von `skipSel` uebersprungen.
+export function ttsTextNodes(root, skipSel = TTS_SKIP_SEL) {
+  const out = [];
+  if (!root) return out;
+  const walk = (node) => {
+    const kids = node.childNodes;
+    if (!kids) return;
+    for (const child of kids) {
+      if (child.nodeType === 3) {
+        if (child.nodeValue) out.push(child);
+        continue;
+      }
+      if (child.nodeType !== 1) continue;
+      if (skipSel && child.matches && child.matches(skipSel)) continue;
+      walk(child);
+    }
+  };
+  walk(root);
+  return out;
+}
+
+// Sprech-Text eines Blocks: `textContent` minus der uebersprungenen Teilbaeume.
+export function ttsBlockText(root, skipSel = TTS_SKIP_SEL) {
+  return ttsTextNodes(root, skipSel).map(n => n.nodeValue).join('');
+}

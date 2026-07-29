@@ -23,7 +23,7 @@
 // LT-Browser-Extension-Detection pausiert Highlights solange Extension-Marker
 // im DOM existieren.
 
-import { buildOffsetTable, rangeFromOffset } from './mapping.js';
+import { buildOffsetTable, rangeFromOffset, filterProtectedMatches } from './mapping.js';
 import { resolvePopoverHost, positionPopover } from './position.js';
 import { EVT } from '../../events.js';
 
@@ -315,7 +315,7 @@ export function createSpellcheckController({
     if (result && result.disabled) { _renderMatches([]); _updateBadge('disabled'); return; }
     const currentSnap = getHtml ? getHtml() : root.innerHTML;
     if (currentSnap !== lastHtmlSnapshot) return; // DOM mutated mid-flight
-    const matches = (result && Array.isArray(result.matches)) ? result.matches : [];
+    const matches = filterProtectedMatches((result && Array.isArray(result.matches)) ? result.matches : [], table.protectedRanges);
     _renderMatches(matches, table);
     lastCheckedText = table.text;
     const visibleCount = matches.filter((m) => !ignored.has(_matchId(m))).length;

@@ -27,6 +27,15 @@ function buildLektoratCtxSig(parts) {
 }
 
 const { narrativeLabels } = require('./narrative-labels');
+
+// Traegt die Seite Quellennachweise? Steuert den Beleg-Schutzblock im Prompt
+// (siehe prompts/blocks.js#_buildBelegBlock). Indizierter Lookup auf dem
+// abgeleiteten Fund-Index — in Buechern ohne Quellen kostenlos.
+const _stmtHasCites = db.prepare('SELECT 1 AS x FROM source_citations WHERE page_id = ? LIMIT 1');
+function _pageHasCitations(pageId) {
+  try { return !!_stmtHasCites.get(parseInt(pageId, 10)); }
+  catch { return false; }
+}
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
 const { requireBookAccess, sendACLError } = require('../../lib/acl');
@@ -216,6 +225,9 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     // Geplante Soll-Motive dieser Seite/dieses Kapitels als passiver Stil-Pass-Kontext
     // (nur Cloud – der Motiv-Block wird für _isLocal ohnehin gedroppt).
     const motive            = (!local && bookId) ? getPageMotifs(bookId, pd.chapter_id, pageId, userEmail) : [];
+    // Quellennachweise: auch lokal relevant (kleine Modelle korrigieren
+    // Klammer-Einschuebe besonders gern weg).
+    const hatBelege         = _pageHasCitations(pageId);
 
     // Kapitelname: zuerst aus lokaler chapters-Tabelle (kein BookStack-Call nötig),
     // Fallback: null wenn Kapitel fehlt oder Buch noch nicht synchronisiert wurde.
@@ -255,6 +267,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
       sw: lektoratStopwords, er: lektoratErklaerungRule, kr: lektoratKorrekturRegeln,
       stp: bookSettings?.stilprofil || '',
       pe: previousExcerpt, cn: chapterName, pn: pd.name, cv: cacheVersion, lc: langCode,
+      bl: hatBelege,
     }) : null;
     const cached = ctxSig ? loadLektoratCache(bookId, userEmail, pageId, ctxSig, effectiveProvider) : null;
 
@@ -277,7 +290,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
           stopwords: lektoratStopwords,
           erklaerungRule: lektoratErklaerungRule,
           korrekturRegeln: lektoratKorrekturRegeln,
-          figuren, figurenBeziehungen, orte, motive,
+          figuren, figurenBeziehungen, orte, motive, hatBelege,
           pageName: pd.name, chapterName,
           ...narrativeLabels(bookSettings),
           previousExcerpt,
@@ -381,6 +394,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
         const batchBeziehungen = local ? [] : getChapterFigureRelations(bookId, pd.chapter_id, userEmail);
         const batchOrte        = getChapterLocations(bookId, pd.chapter_id, userEmail);
         const batchMotive      = local ? [] : getPageMotifs(bookId, pd.chapter_id, p.id, userEmail);
+        const batchHatBelege   = _pageHasCitations(p.id);
 
         // Lokale Provider: Vorseiten-Kontext wird im Prompt nicht verwendet – kompletter
         // Block überspringen, spart einen BookStack-Fetch pro Seite.
@@ -412,6 +426,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
           sw: batchStopwords, er: batchErklaerungRule, kr: batchKorrekturRegeln,
           stp: bookSettings?.stilprofil || '',
           pe: previousExcerpt, cn: chapterName, pn: p.name, cv: cacheVersion, lc: langCode,
+          bl: batchHatBelege,
         });
         const cached = loadLektoratCache(bookId, userEmail, p.id, ctxSig, effectiveProvider);
 
@@ -438,6 +453,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
               figurenBeziehungen: batchBeziehungen,
               orte: batchOrte,
               motive: batchMotive,
+              hatBelege: batchHatBelege,
               pageName: p.name,
               chapterName,
               erzaehlperspektive: bookSettings?.erzaehlperspektive || null,

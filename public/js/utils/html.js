@@ -113,11 +113,11 @@ const PASTE_ALLOWED_TAGS = new Set([
 const PASTE_ALLOWED_ATTRS = {
   A: new Set(['href']),
   DIV: new Set(['class']),  // nur .poem (siehe Filter unten)
-  // SPAN ist ausschliesslich fuer den Beleg-Chip erlaubt, nicht als
+  // SPAN ist ausschliesslich fuer den Quellen-Chip erlaubt, nicht als
   // allgemeiner Inline-Container — Word-/Web-Pastes bestehen zur Haelfte aus
   // <span>-Huellen. Der Filter unten unwrappt jeden Span, der kein gueltiger
   // Chip ist. Der Chip selbst MUSS ueberleben: Kopiert man einen Satz mit
-  // Beleg an eine andere Stelle, soll der Beleg mitwandern statt zu reinem
+  // Quellenangabe an eine andere Stelle, soll sie mitwandern statt zu reinem
   // Text zu zerfallen (der Zeiger auf die Quelle waere sonst weg).
   SPAN: new Set(['class', CITE_ATTR_SRC, CITE_ATTR_LOC]),
 };
@@ -166,7 +166,7 @@ export function sanitizePasteHtml(html) {
         if (!allowedAttrs || !allowedAttrs.has(attr.name)) el.removeAttribute(attr.name);
       }
       if (tag === 'DIV') el.setAttribute('class', 'poem');
-      // Span nur als Beleg-Chip zulassen; alles andere verliert die Huelle.
+      // Span nur als Quellen-Chip zulassen; alles andere verliert die Huelle.
       // Muss NACH dem Attribut-Filter laufen — isCiteEl prueft class+data-src,
       // die vorher noch mit Fremdattributen vermischt sein koennten.
       if (tag === 'SPAN' && !isCiteEl(el)) {

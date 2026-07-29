@@ -1,5 +1,5 @@
 // Facade: toolbarCardMethods aus thematischen Submodulen in toolbar/.
-// Bubble-Toolbar + Link-Bar (bubble.js), Slash-Menü (slash.js), Beleg-Picker
+// Bubble-Toolbar + Link-Bar (bubble.js), Slash-Menü (slash.js), Quellen-Picker
 // (cite.js) und der zentrale Keydown-Dispatcher (keydown.js) teilen sich zur
 // Laufzeit ein `this` (in das
 // Card-Objekt gespreadet). Geteilte Modul-Helfer + Konstanten in

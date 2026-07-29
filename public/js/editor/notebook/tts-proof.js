@@ -1,7 +1,8 @@
 import { EVT } from '../../events.js';
 import {
   computeTtsSentences, coalesceTtsRanges, splitLongRange, chunkTtsRanges,
-  normalizeForSpeech, TTS_MIN_CHUNK_CHARS, TTS_MAX_CHUNK_CHARS,
+  normalizeForSpeech, ttsTextNodes, ttsBlockText,
+  TTS_MIN_CHUNK_CHARS, TTS_MAX_CHUNK_CHARS,
 } from '../../tts-segment.js';
 'use strict';
 // Proof-Listening / Text-to-Speech (Notebook-Seitenansicht, Read-Modus). Liest
@@ -134,7 +135,11 @@ export const ttsProofMethods = {
     const blocks = editEl.children.length ? Array.from(editEl.children) : [editEl];
     const segs = [];
     for (const block of blocks) {
-      const text = block.textContent || '';
+      // Sprech-Text OHNE Beleg-Chips (SSoT tts-segment.js#ttsBlockText) — ein
+      // vorgelesenes „(Kafka, 1915, S. 44)" zerreisst den Hoerfluss. Der
+      // Range-Bau unten laeuft ueber dieselbe Knotenliste, sonst driftet das
+      // Highlight um die Chip-Laenge.
+      const text = ttsBlockText(block);
       if (!text.trim()) continue;
       const ranges = this._computeTtsSentences(text, locale);
       const base = ranges.length ? ranges : [[0, text.length]];
@@ -147,14 +152,13 @@ export const ttsProofMethods = {
     return segs;
   },
 
-  // Range aus Block + Zeichen-Offsets (Tree-Walk ueber die Textknoten des Blocks).
+  // Range aus Block + Zeichen-Offsets. Knotenliste kommt aus ttsTextNodes —
+  // derselbe Offsetraum, aus dem _ttsCollectSegments seinen Text zieht.
   _ttsBuildRange(block, startOffset, endOffset) {
     if (!block) return null;
-    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
     let pos = 0;
     let startNode = null, startOff = 0, endNode = null, endOff = 0;
-    let node;
-    while ((node = walker.nextNode())) {
+    for (const node of ttsTextNodes(block)) {
       const len = node.nodeValue.length;
       if (!startNode && pos + len >= startOffset) {
         startNode = node;

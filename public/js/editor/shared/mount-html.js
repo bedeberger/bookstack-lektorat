@@ -38,9 +38,9 @@ export function mountEditorHtml(el, html) {
   normalizeEditorBlocks(el);
   const repaired = el.innerHTML !== beforeNormalize;
   ensureCaretSlot(el);
-  // Beleg-Chips atomar machen (Caret springt darueber, Backspace loescht ganz).
+  // Quellen-Chips atomar machen (Caret springt darueber, Backspace loescht ganz).
   // Bewusst NACH der Repaired-Messung: `contenteditable="false"` ist
-  // Editor-Laufzeit, keine Inhaltsreparatur — sonst gaelte jede Seite mit Beleg
+  // Editor-Laufzeit, keine Inhaltsreparatur — sonst gaelte jede Seite mit Quellenangabe
   // beim Oeffnen als veraendert und wuerde ungefragt neu gespeichert.
   markCitesAtomic(el);
   return { repaired };

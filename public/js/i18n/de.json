@@ -2505,7 +2505,7 @@
   "editor.toolbar.linkPlaceholder": "https://… oder mail@adresse.tld",
   "editor.toolbar.linkApply": "Übernehmen (Enter)",
   "editor.toolbar.linkRemove": "Link entfernen",
-  "editor.toolbar.citeTitle": "Beleg einfügen",
+  "editor.toolbar.citeTitle": "Quelle einfügen",
   "editor.toolbar.citeFilterPlaceholder": "Quelle suchen …",
   "editor.toolbar.citeLocPlaceholder": "Stelle (z.B. 44)",
   "editor.toolbar.citeEmpty": "Keine Quellen im Buch. Erst im Quellenverzeichnis anlegen.",

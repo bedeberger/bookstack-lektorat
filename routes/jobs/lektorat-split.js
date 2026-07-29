@@ -77,6 +77,10 @@ async function lektoratAnalyze({ jobId, tok, text, local, prompts, system, promp
   const objektivOpts = {
     figuren: promptOpts.figuren, figurenBeziehungen: promptOpts.figurenBeziehungen,
     orte: promptOpts.orte, pageName: promptOpts.pageName, chapterName: promptOpts.chapterName,
+    // Quellennachweis-Schutz gilt in BEIDEN Pässen: der Objektiv-Pass prüft
+    // Rechtschreibung/Grammatik und würde Autorennamen + Jahreszahlen im
+    // Kurzbeleg sonst anstreichen.
+    hatBelege: promptOpts.hatBelege,
     langCode: promptOpts.langCode,
   };
   const objektivPrompt = buildObjektivLektoratPrompt(text, objektivOpts);

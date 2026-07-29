@@ -17,7 +17,7 @@ const AUTO_FINISH_LABEL = '__i18n:snapshots.autoFinishLabel__';
 
 const VALID_LANGUAGES = ['de', 'en'];
 const VALID_REGIONS   = ['CH', 'DE', 'US', 'GB'];
-const VALID_BUCHTYPEN = ['roman', 'kurzgeschichten', 'gesellschaft', 'krimi', 'historisch', 'fantasy_scifi', 'erotik', 'jugend', 'autobiografie', 'tagebuch', 'sachbuch', 'lyrik', 'essay', 'blog', 'satire', 'andere'];
+const VALID_BUCHTYPEN = ['roman', 'kurzgeschichten', 'gesellschaft', 'krimi', 'historisch', 'fantasy_scifi', 'erotik', 'jugend', 'autobiografie', 'tagebuch', 'sachbuch', 'wissenschaft', 'lyrik', 'essay', 'blog', 'satire', 'andere'];
 const VALID_POV     = ['ich', 'er_sie_personal', 'er_sie_auktorial', 'du', 'wir', 'gemischt'];
 const VALID_TEMPUS  = ['praeteritum', 'praesens', 'gemischt'];
 const BUCH_KONTEXT_MAX = 1000;

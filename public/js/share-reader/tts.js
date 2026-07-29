@@ -20,7 +20,7 @@
 // liest die Reader-Config (#share-config) selbst und baut den Dock nur, wenn der
 // Betreiber Vorlesen aktiviert hat (tts.enabled) und Lesetext vorhanden ist.
 
-import { computeTtsSentences, chunkTtsRanges, normalizeForSpeech } from '../tts-segment.js';
+import { computeTtsSentences, chunkTtsRanges, normalizeForSpeech, ttsTextNodes, ttsBlockText } from '../tts-segment.js';
 import { el } from './dom.js';
 
 const HIGHLIGHT = 'tts-sentence';
@@ -144,7 +144,10 @@ export function setupTts({ token, article, t, locale, pause }) {
   function collectSegments() {
     const segs = [];
     for (const block of readableBlocks()) {
-      const text = block.textContent || '';
+      // Sprech-Text OHNE Beleg-Chips (SSoT tts-segment.js#ttsBlockText). Der
+      // Range-Bau in buildRange laeuft ueber dieselbe Knotenliste — sonst
+      // driftet das Satz-Highlight um die Chip-Laenge.
+      const text = ttsBlockText(block);
       if (!text.trim()) continue;
       const ranges = computeTtsSentences(text, locale);
       const base = ranges.length ? ranges : [[0, text.length]];
@@ -159,9 +162,8 @@ export function setupTts({ token, article, t, locale, pause }) {
   // Highlight gebaut -> ueberlebt minimale Reflows.
   function buildRange(block, startOffset, endOffset) {
     if (!block || !block.isConnected) return null;
-    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
-    let pos = 0, startNode = null, startOff = 0, endNode = null, endOff = 0, node;
-    while ((node = walker.nextNode())) {
+    let pos = 0, startNode = null, startOff = 0, endNode = null, endOff = 0;
+    for (const node of ttsTextNodes(block)) {
       const len = node.nodeValue.length;
       if (!startNode && pos + len >= startOffset) { startNode = node; startOff = startOffset - pos; }
       if (pos + len >= endOffset) { endNode = node; endOff = endOffset - pos; break; }

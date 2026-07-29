@@ -3,9 +3,9 @@
 // abgeleiteten Fund-Index source_citations.
 //
 // Skopierung: buchweit GETEILT. `user_email` ist Ersteller-Attribution, kein
-// Sichtbarkeits-Scope — der Beleg-Marker lebt im Seiten-HTML und ist damit fuer
+// Sichtbarkeits-Scope — der Quellen-Marker lebt im Seiten-HTML und ist damit fuer
 // jeden Editor des Buchs sichtbar; eine user-private Quelle waere fuer einen
-// Co-Autor ein Beleg ohne Ziel. Zugriffsschutz liegt beim ACL-Guard der Route.
+// Co-Autor eine Quellenangabe ohne Ziel. Zugriffsschutz liegt beim ACL-Guard der Route.
 //
 // authors/editors sind JSON-Arrays [{family, given} | {literal}] nach CSL-JSON.
 // `literal` fuer Koerperschaften ("Bundesamt fuer Statistik"), die kein
@@ -173,14 +173,14 @@ function deleteSource(id) {
 }
 
 // ── Fund-Index source_citations ──────────────────────────────────────────────
-// Wahrheit ist der Beleg-Marker im Seiten-HTML; diese Tabelle ist reine
+// Wahrheit ist der Quellen-Marker im Seiten-HTML; diese Tabelle ist reine
 // Ableitung und wird pro Seiten-Write komplett ersetzt (Muster
 // page_figure_mentions). Nie inkrementell fortschreiben.
 
 const _stmtDelCitesForPage = db.prepare('DELETE FROM source_citations WHERE page_id = ?');
 
 // INSERT mit Buch-Guard im SELECT: eine Quelle wird nur indiziert, wenn sie zum
-// Buch der Seite gehoert. Faengt den Fall „Seite mit Belegen in ein anderes Buch
+// Buch der Seite gehoert. Faengt den Fall „Seite mit Quellenangaben in ein anderes Buch
 // kopiert" ab — der Marker zeigt dann auf eine buchfremde id und darf keine
 // Fundstelle erzeugen.
 const _stmtInsCite = db.prepare(`

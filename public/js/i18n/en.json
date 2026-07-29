@@ -2505,7 +2505,7 @@
   "editor.toolbar.linkPlaceholder": "https://… or mail@address.tld",
   "editor.toolbar.linkApply": "Apply (Enter)",
   "editor.toolbar.linkRemove": "Remove link",
-  "editor.toolbar.citeTitle": "Insert citation",
+  "editor.toolbar.citeTitle": "Insert source",
   "editor.toolbar.citeFilterPlaceholder": "Search source …",
   "editor.toolbar.citeLocPlaceholder": "Locator (e.g. 44)",
   "editor.toolbar.citeEmpty": "No sources in this book yet. Add one in the bibliography first.",

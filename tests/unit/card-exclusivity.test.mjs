@@ -8,6 +8,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { appViewMethods } from '../../public/js/app/app-view.js';
+import { setLastPageId } from '../../public/js/local-prefs.js';
+
+// localStorage-Stub: `getLastPageId`/`setLastPageId` (local-prefs) sind
+// quota-tolerant und liefern ohne Storage still `null` — der Landing-Pfad
+// „letzte Seite restaurieren" wäre dann untestbar.
+if (!globalThis.localStorage) {
+  const mem = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+    setItem: (k, v) => mem.set(k, String(v)),
+    removeItem: (k) => mem.delete(k),
+  };
+}
 
 // Minimal-DOM-Stubs für Module die window.dispatchEvent nutzen.
 globalThis.window = globalThis.window || { dispatchEvent: () => {} };
@@ -225,6 +238,118 @@ test('resetView: kein zweiter Tab offen → bookOverview öffnet', async () => {
   assert.equal(c.showExportCard, false);
   assert.equal(c.showPdfExportCard, false);
   assert.equal(c.showBookOverviewCard, true);
+});
+
+// ── Landing-Race: Übersicht vs. offene Seite ────────────────────────────────
+// Ein Buchwechsel triggert zwei Landing-Pfade (resetView aus der Combobox +
+// selectedBookId-$watch). Beide awaiten Netz-Fetches (Partial-Load bzw.
+// Editor-Partials). Hängt einer davon (Verbindungsverlust), dürfen sie nicht
+// beide durchlaufen — sonst stehen Buch-Übersicht UND letzte Seite offen.
+
+// Promise, deren Auflösung der Test kontrolliert (simuliert hängenden Fetch).
+function deferred() {
+  let resolve;
+  const promise = new Promise(r => { resolve = r; });
+  return { promise, resolve };
+}
+
+function makeLandingCtx() {
+  const c = makeCtx();
+  c.currentPage = null;
+  c.$store.session = { currentUser: { email: 'a@b.ch' } };
+  c.selectPageCalls = [];
+  c.selectPage = async (p) => { c.selectPageCalls.push(p.id); c.showEditorCard = true; };
+  return c;
+}
+
+test('_maybeOpenBookOverview: zweiter Landing-Pfad wird dedupliziert (hängender Partial-Load)', async () => {
+  const c = makeLandingCtx();
+  c.$store.nav.pages = [{ id: 7 }];
+  setLastPageId('a@b.ch', 42, 7); // Pfad B würde diese Seite restaurieren
+  const d = deferred();
+  c._ensurePartial = () => d.promise;
+
+  // Pfad A (resetView aus der Buchwahl-Combobox) hängt im Partial-Fetch.
+  const pA = c._maybeOpenBookOverview({ restoreLastPage: false });
+  // Pfad B (selectedBookId-$watch) läuft los, während A noch hängt.
+  await c._maybeOpenBookOverview();
+  assert.deepEqual(c.selectPageCalls, [],
+    'zweiter Landing-Pfad darf keine Seite restaurieren, solange der erste läuft');
+
+  d.resolve(true);
+  await pA;
+  assert.equal(c.showBookOverviewCard, true);
+  assert.equal(c.showEditorCard, false, 'Übersicht UND Seite dürfen nie gleichzeitig offen sein');
+});
+
+test('_maybeOpenBookOverview: öffnet nicht über eine während des Awaits geöffnete Seite', async () => {
+  const c = makeLandingCtx();
+  const d = deferred();
+  c._ensurePartial = () => d.promise;
+
+  const p = c._maybeOpenBookOverview({ restoreLastPage: false });
+  // Während der Partial-Fetch hängt, öffnet ein anderer Pfad (Sidebar-Klick,
+  // Hash-Router) die Seite.
+  c.showEditorCard = true;
+  d.resolve(true);
+  await p;
+  assert.equal(c.showBookOverviewCard, false,
+    'Re-Check nach dem await muss das blinde Öffnen verhindern');
+  assert.equal(c.showEditorCard, true);
+});
+
+test('_maybeOpenBookOverview: Buchwechsel während des Awaits → keine Übersicht des alten Buchs', async () => {
+  const c = makeLandingCtx();
+  const d = deferred();
+  c._ensurePartial = () => d.promise;
+
+  const p = c._maybeOpenBookOverview({ restoreLastPage: false });
+  c.$store.nav.selectedBookId = 43;
+  d.resolve(true);
+  await p;
+  assert.equal(c.showBookOverviewCard, false);
+});
+
+test('_maybeOpenBookOverview: fehlgeschlagener Partial-Load öffnet keine leere Hülle', async () => {
+  const c = makeLandingCtx();
+  c._ensurePartial = async () => false;
+  await c._maybeOpenBookOverview({ restoreLastPage: false });
+  assert.equal(c.showBookOverviewCard, false);
+});
+
+test('selectPage: re-assertet Exklusivität nach den Partial-Awaits', async (t) => {
+  // Gegenrichtung des Races: der Editor lädt seine Partials, währenddessen
+  // schaltet ein Landing-Pfad die Übersicht sichtbar. Ohne Re-Assert bliebe
+  // sie neben dem Editor stehen.
+  const c = makeCtx();
+  c.currentPage = null;
+  c.editMode = false;
+  c.editDirty = false;
+  c.$store.session = { currentUser: { email: 'a@b.ch' } };
+  const d = deferred();
+  c._ensurePartial = () => d.promise;
+  c.$nextTick = (fn) => { if (fn) fn(); };
+  c._scrollToEditorCard = () => {};
+  c._loadPageBadgeCounts = () => {};
+  c._loadCurrentPageContent = async () => true;
+  c.loadChapterFigures = () => {};
+  c.loadPageHistory = async () => {};
+  c.startCheckPoll = () => {};
+  c.t = (k) => k;
+  // selectPage fragt am Ende `/jobs/active` ab — hier stumm beantworten,
+  // sonst rauscht der echte fetch (relative URL) in die Testausgabe.
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({}) });
+  t.after(() => { globalThis.fetch = realFetch; });
+
+  const p = c.selectPage({ id: 7 });
+  c.showBookOverviewCard = true; // Landing-Pfad kommt dazwischen
+  d.resolve(true);
+  await p;
+  assert.equal(c.showEditorCard, true);
+  assert.equal(c.showBookOverviewCard, false,
+    'Buchkarte, die während des Partial-Loads aufging, muss beim Editor-Commit schliessen');
+  assert.equal(c.currentPage.id, 7);
 });
 
 test('toggleKontinuitaetCard: refresh-Pattern beim erneuten Klick', async () => {

@@ -10,11 +10,15 @@ export const cardsMethods = {
   // das Ziel-Partial bei Cold-Open meist noch leer (Selector findet nichts).
   // Caller scrollt explizit via `_scrollToCardByKey(key)` nach `await _ensurePartial`
   // + Flag-Set.
-  _closeOtherMainCards(keep) {
+  // `resetPage: false` schliesst nur die Kartenflags, ohne den Seiten-State
+  // abzuräumen. Einziger Anwendungsfall: `selectPage` re-assertet die
+  // Exklusivität nach seinen Partial-Awaits — dort ist `resetPage()` bereits
+  // gelaufen und würde die halb aufgebaute Editor-Session wieder abbauen.
+  _closeOtherMainCards(keep, { resetPage = true } = {}) {
     for (const c of EXCLUSIVE_CARDS) {
       if (keep !== c.key) this[c.flag] = false;
     }
-    this.resetPage();
+    if (resetPage) this.resetPage();
   },
 
 
@@ -52,24 +56,53 @@ export const cardsMethods = {
   // Hauptkarte/Editor aktiv. Wird beim Buchwechsel + bei `#book/:id`-Deeplink
   // ohne View aufgerufen.
   async _maybeOpenBookOverview({ restoreLastPage = true } = {}) {
-    if (!this.$store.nav.selectedBookId) return;
+    const bookId = this.$store.nav.selectedBookId;
+    if (!bookId) return;
     if (this.showEditorCard) return;
     const anyOpen = EXCLUSIVE_CARDS.some(c => this[c.flag]);
     if (anyOpen) return;
-    // Letzte Seite restaurieren, falls vorhanden und im aktuellen Buch noch
-    // existiert. Bei explizitem Home-Klick (resetView) übersprungen.
-    if (restoreLastPage) {
-      const lastId = getLastPageId(this.$store.session.currentUser?.email, this.$store.nav.selectedBookId);
-      if (lastId && Array.isArray(this.$store.nav.pages) && this.$store.nav.pages.length) {
-        const page = this.$store.nav.pages.find(p => p.id === lastId);
-        if (page) {
-          await this.selectPage(page);
-          return;
+    // Re-Entry-Guard (kurzlebig, nur hier gelesen): ein Buchwechsel triggert
+    // ZWEI Landing-Pfade — `resetView()` aus der Buchwahl-Combobox
+    // (restoreLastPage:false) und den `selectedBookId`-$watch
+    // (restoreLastPage:true). Beide prüfen die Exklusivität, bevor sie awaiten;
+    // ohne Dedupe entscheidet allein die Netz-Latenz, wer zuerst fertig wird —
+    // hängt einer der Awaits (Verbindungsverlust), laufen beide durch und
+    // öffnen Übersicht UND letzte Seite gleichzeitig. Erster Aufrufer gewinnt
+    // (= Übersicht beim Combobox-Wechsel). Ein Aufruf für ein ANDERES Buch darf
+    // durch — der ältere fällt am Re-Check nach dem await raus.
+    if (this._bookOverviewLandingBookId != null
+        && String(this._bookOverviewLandingBookId) === String(bookId)) return;
+    this._bookOverviewLandingBookId = bookId;
+    try {
+      // Letzte Seite restaurieren, falls vorhanden und im aktuellen Buch noch
+      // existiert. Bei explizitem Home-Klick (resetView) übersprungen.
+      if (restoreLastPage) {
+        const lastId = getLastPageId(this.$store.session.currentUser?.email, bookId);
+        if (lastId && Array.isArray(this.$store.nav.pages) && this.$store.nav.pages.length) {
+          const page = this.$store.nav.pages.find(p => p.id === lastId);
+          if (page) {
+            await this.selectPage(page);
+            return;
+          }
         }
       }
+      const ok = await this._ensurePartial('bookoverview');
+      // Nach dem await erneut prüfen: der Partial-Load ist ein Netz-Fetch und
+      // kann bei schlechter Verbindung sekundenlang hängen. In dieser Zeit kann
+      // der User eine Seite geöffnet oder eine andere Karte aufgeschlagen haben
+      // (oder das Buch gewechselt) — die Übersicht darf dann nicht mehr blind
+      // darüber aufgehen. Ohne Partial (Fetch fehlgeschlagen) gar nicht öffnen,
+      // sonst steht eine leere Karten-Hülle da.
+      if (!ok) return;
+      if (String(this.$store.nav.selectedBookId) !== String(bookId)) return;
+      if (this.showEditorCard) return;
+      if (EXCLUSIVE_CARDS.some(c => this[c.flag])) return;
+      this.showBookOverviewCard = true;
+    } finally {
+      if (String(this._bookOverviewLandingBookId) === String(bookId)) {
+        this._bookOverviewLandingBookId = null;
+      }
     }
-    await this._ensurePartial('bookoverview');
-    this.showBookOverviewCard = true;
   },
 
 

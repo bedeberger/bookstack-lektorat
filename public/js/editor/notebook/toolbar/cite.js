@@ -1,7 +1,7 @@
-// Beleg einfügen (Notebook-Editor). Inline am Caret, nicht als Block —
+// Quelle einfügen (Notebook-Editor). Inline am Caret, nicht als Block —
 // darum bewusst KEIN Slash-Menü-Eintrag: das Slash-Menü triggert auf einem
-// leeren Block und *ersetzt* ihn (siehe slash.js), ein Beleg gehört aber
-// mitten in den fertigen Satz. Vorbild ist deshalb der Link-Input in
+// leeren Block und *ersetzt* ihn (siehe slash.js), eine Quellenangabe gehört
+// aber mitten in den fertigen Satz. Vorbild ist deshalb der Link-Input in
 // bubble.js: Range sichern → kleines Panel → an der gesicherten Range einfügen.
 //
 // Der eingefügte Chip trägt seinen Kurzbeleg als Text (Cache) und `data-src`
@@ -176,14 +176,14 @@ export const citeMethods = {
     range.insertNode(frag);
 
     // Der eingefügte Chip ist noch nicht atomar (markCitesAtomic läuft sonst nur
-    // beim Mount). Direkt hier nachziehen, sonst tippt der User in den frisch
-    // eingefügten Beleg hinein statt dahinter. Idempotent — schon markierte
+    // beim Mount). Direkt hier nachziehen, sonst tippt der User in die frisch
+    // eingefügte Quelle hinein statt dahinter. Idempotent — schon markierte
     // Chips bleiben unverändert.
     markCitesAtomic(editEl);
 
-    // Caret hinter den Beleg (hinter das angehängte Trennzeichen), damit der
+    // Caret hinter die Quelle (hinter das angehängte Trennzeichen), damit der
     // User direkt weiterschreiben kann. Chromium macht aus dem Leerzeichen am
-    // Blockende ein `&nbsp;`; steht der Beleg am Absatzende, trimmt der
+    // Blockende ein `&nbsp;`; steht die Quelle am Absatzende, trimmt der
     // Server-Cleaner es beim Speichern weg (stripBlockEdgeNbsp).
     const sel = doc.getSelection();
     if (sel && lastNode) {

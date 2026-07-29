@@ -161,6 +161,26 @@ Füllwort-Regeln (typ: «fuellwort»):
 - Selbsttest: Verliert der Satz durch die Streichung an Rhythmus, Stimme oder Bedeutungsnuance? Dann weglassen.`;
 }
 
+// Quellennachweise im Text (Quellenverzeichnis-Feature). PASSIVER Kontext, kein
+// eigener Fehlertyp: das Modell sieht den Beleg nur als Klartext im Satz —
+// „(Müller, 2020, S. 44)" bzw. „[12]" — und würde ihn sonst als Füllwerk,
+// Klammer-Einschub oder Stilbruch anstreichen und wegkorrigieren. Ein
+// angewandter Vorschlag zerstört dabei den Zeiger auf die Quelle.
+// Wird nur eingehängt, wenn die Seite tatsächlich Belege trägt (Option
+// `hatBelege`) — in einem Roman wäre die Regel sinnloser Ballast.
+export function _buildBelegBlock(langCode = 'de') {
+  const beispiele = langCode === 'en'
+    ? '"(Müller, 2020, p. 44)", "(Müller 2020, 44)", "[12]"'
+    : '«(Müller, 2020, S. 44)», «(Müller 2020, 44)», «[12]»';
+  return `
+Quellennachweise (WICHTIG — nicht anfassen):
+- Dieser Text enthält wissenschaftliche Kurzbelege, z.B. ${beispiele}
+- Kurzbelege sind KEIN Stilproblem: nicht als Füllwort, Klammer-Einschub, Wiederholung, Satzbaufehler oder Klischee melden
+- Kurzbelege NICHT umformulieren, kürzen, verschieben oder entfernen — auch nicht innerhalb eines «korrektur»-Vorschlags
+- Enthält ein Satz einen Kurzbeleg und hat er einen echten Fehler daneben, muss der Beleg im «korrektur»-Feld ZEICHENGENAU unverändert erhalten bleiben
+- Namen und Jahreszahlen in Kurzbelegen sind keine Rechtschreib- oder Grammatikfehler`;
+}
+
 export function _buildShowVsTellBlock() {
   return `
 Show-vs-Tell-Regeln (typ: «show_vs_tell»):

@@ -485,9 +485,9 @@ erDiagram
   source_citations {
     INTEGER source_id    PK,FK "ON DELETE CASCADE"
     INTEGER page_id      PK,FK "ON DELETE CASCADE"
-    INTEGER count        "Belege dieser Quelle auf der Seite"
-    INTEGER first_offset "Textoffset des ersten Belegs (Reihenfolge für numerischen Zitierstil)"
-    %% Reiner Ableitungs-Index: Wahrheit ist der Beleg-Marker im Seiten-HTML.
+    INTEGER count        "Nennungen dieser Quelle auf der Seite"
+    INTEGER first_offset "Textoffset der ersten Nennung (Reihenfolge für numerischen Zitierstil)"
+    %% Reiner Ableitungs-Index: Wahrheit ist der Quellen-Marker im Seiten-HTML.
     %% Full-Replace pro Seiten-Write (Muster page_figure_mentions). Kein book_id —
     %% Buch-Abfragen laufen über den JOIN auf book_sources.
   }
