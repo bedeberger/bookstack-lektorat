@@ -19,8 +19,10 @@ import { parseHTML } from 'linkedom';
 
 import {
   CITE_CLASS, CITE_ATTR_SRC, CITE_ATTR_LOC, CITE_SEL,
-  isCiteEl, buildCiteHtml, collectCites, citationsFromCites,
-  markCitesAtomic, closestCiteEl,
+  CITE_MODES, CITE_MODE_DEFAULT, CITED_QUOTE_SEL,
+  isCiteEl, citeModeOf, isQuoteBlockEl, buildCiteHtml,
+  collectCites, collectCiteIndex, collectQuoteBlocks, citationsFromCites,
+  markCitesAtomic, closestCiteEl, closestQuoteBlock, setQuoteBlockSource,
 } from '../../public/js/sources/cite-html.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -128,10 +130,154 @@ test('citationsFromCites fasst Mehrfachbelege zusammen', () => {
   assert.equal(rows.length, 2);
   const seven = rows.find(r => r.sourceId === 7);
   assert.equal(seven.count, 2);
-  // firstOffset ist der ERSTE gefundene, nicht der kleinste: collectCites
-  // liefert Dokumentordnung, damit ist der erste auch der frueheste.
-  assert.equal(seven.firstOffset, 100);
+  // firstOffset ist das MINIMUM, nicht der erste gefundene Eintrag. Bei den Chips
+  // allein waere beides gleich (collectCites liefert Dokumentordnung); die
+  // Blockzitate kommen aber als zweite Liste dazu, und ein Blockzitat weit vorn
+  // im Text darf den Wert eines spaeter gefundenen Chips nicht stehen lassen.
+  assert.equal(seven.firstOffset, 10);
   assert.deepEqual(citationsFromCites(null), []);
+});
+
+// ── Zitat-Kategorien: Modus am Chip, Zeiger am Blockzitat ────────────────────
+// Warum eigene Tests: an diesen zwei Attributen haengen drei Dinge, die man erst
+// im fertigen Export bemerkt — das „vgl."-Praefix, die Zitat-Typografie und der
+// Zitat-Anteil. Faellt eines still weg, sieht der Text im Editor korrekt aus.
+
+test('data-mode steht nur im Markup, wenn es vom Default abweicht', () => {
+  // Der Default darf NICHT persistiert werden: sonst braeuchten alle bestehenden
+  // Chips eine Migration, und jede Seite mit Beleg gilt beim Oeffnen als dirty.
+  assert.equal(
+    buildCiteHtml({ id: 7, text: '(Kafka, 1915)', mode: 'quote' }),
+    '<span class="cite" data-src="7">(Kafka, 1915)</span>'
+  );
+  assert.equal(
+    buildCiteHtml({ id: 7, loc: '44', text: '(vgl. Kafka, 1915, S. 44)', mode: 'paraphrase' }),
+    '<span class="cite" data-src="7" data-loc="44" data-mode="paraphrase">(vgl. Kafka, 1915, S. 44)</span>'
+  );
+  // Unbekannter Modus faellt auf den Default zurueck statt ins Markup zu lecken.
+  assert.equal(
+    buildCiteHtml({ id: 7, text: 'x', mode: 'nonsense' }),
+    '<span class="cite" data-src="7">x</span>'
+  );
+  assert.ok(CITE_MODES.includes(CITE_MODE_DEFAULT));
+});
+
+test('citeModeOf: fehlender oder kaputter Wert ergibt den Default', () => {
+  const r = root('<p>'
+    + '<span class="cite" data-src="1">a</span>'
+    + '<span class="cite" data-src="2" data-mode="paraphrase">b</span>'
+    + '<span class="cite" data-src="3" data-mode="PARAPHRASE">c</span>'
+    + '<span class="cite" data-src="4" data-mode="quatsch">d</span>'
+    + '</p>');
+  const modes = Array.from(r.querySelectorAll(CITE_SEL)).map(citeModeOf);
+  assert.deepEqual(modes, ['quote', 'paraphrase', 'paraphrase', 'quote']);
+});
+
+test('isQuoteBlockEl: nur blockquote mit numerischem data-src', () => {
+  const r = root('<blockquote data-src="7"><p>a</p></blockquote>'
+    + '<blockquote><p>b</p></blockquote>'
+    + '<blockquote data-src="0"><p>c</p></blockquote>'
+    + '<blockquote data-src="x"><p>d</p></blockquote>'
+    + '<div data-src="7">e</div>');
+  const all = Array.from(r.children);
+  assert.deepEqual(all.map(isQuoteBlockEl), [true, false, false, false, false]);
+  assert.equal(r.querySelectorAll(CITED_QUOTE_SEL).length, 3); // Selektor ist grob …
+  assert.equal(Array.from(r.querySelectorAll(CITED_QUOTE_SEL)).filter(isQuoteBlockEl).length, 1); // … isQuoteBlockEl entscheidet
+});
+
+test('collectQuoteBlocks zaehlt Zitatzeichen ohne die Kurzbeleg-Chips', () => {
+  const quote = '<blockquote data-src="7"><p>abcde'
+    + '<span class="cite" data-src="7" data-loc="44">(Kafka, 1915, S. 44)</span>'
+    + '</p></blockquote>';
+  const [q] = collectQuoteBlocks(root(quote));
+  assert.equal(q.id, 7);
+  // Nur „abcde" — der Beleg ist der Nachweis, nicht das Zitat. Zaehlte er mit,
+  // waere der Zitat-Anteil systematisch zu hoch.
+  assert.equal(q.chars, 5);
+  assert.deepEqual([...q.citeIds], [7]);
+});
+
+test('collectCiteIndex: Chips und Blockzitate teilen einen Offset-Raum', () => {
+  const html = '<p>vorher</p>'
+    + '<blockquote data-src="7"><p>zitat</p></blockquote>'
+    + '<p>nachher<span class="cite" data-src="3">(A, 2020)</span></p>';
+  const { cites, quotes } = collectCiteIndex(root(html));
+  assert.equal(quotes.length, 1);
+  assert.equal(quotes[0].offset, 'vorher'.length);
+  assert.equal(cites.length, 1);
+  assert.equal(cites[0].offset, 'vorher'.length + 'zitat'.length + 'nachher'.length);
+  // Die Bequemlichkeits-Wrapper liefern dasselbe wie der Ein-Durchlauf.
+  assert.deepEqual(collectCites(root(html)).map(c => c.id), [3]);
+});
+
+test('collectCiteIndex fuehrt ein verschachteltes Blockzitat nicht doppelt', () => {
+  // Sonst waere derselbe Text zweimal Zitat und der Anteil > 100 % moeglich.
+  const html = '<blockquote data-src="7"><p>aussen</p>'
+    + '<blockquote data-src="8"><p>innen</p></blockquote></blockquote>';
+  const { quotes } = collectCiteIndex(root(html));
+  assert.equal(quotes.length, 1);
+  assert.equal(quotes[0].id, 7);
+  assert.equal(quotes[0].chars, 'aussen'.length + 'innen'.length);
+});
+
+test('citationsFromCites: Blockzitat mit eigenem Chip zaehlt einmal', () => {
+  const html = '<blockquote data-src="7"><p>zitat'
+    + '<span class="cite" data-src="7">(A, 2020)</span></p></blockquote>';
+  const { cites, quotes } = collectCiteIndex(root(html));
+  const [row] = citationsFromCites(cites, quotes);
+  assert.equal(row.sourceId, 7);
+  assert.equal(row.count, 1);                       // NICHT 2
+  assert.equal(row.quoteChars, 'zitat'.length);
+  assert.equal(row.paraphraseCount, 0);
+});
+
+test('citationsFromCites: Blockzitat ohne Chip ist selbst die Fundstelle', () => {
+  const html = '<blockquote data-src="7"><p>zitat</p></blockquote>';
+  const { cites, quotes } = collectCiteIndex(root(html));
+  const [row] = citationsFromCites(cites, quotes);
+  assert.equal(row.count, 1);
+  assert.equal(row.firstOffset, 0);
+  assert.equal(row.quoteChars, 'zitat'.length);
+});
+
+test('citationsFromCites: Blockzitat und Chip auf verschiedene Quellen', () => {
+  // Zitat aus Quelle 7, im Zitat ein Beleg auf Quelle 8 (Zitat im Zitat) —
+  // beide bekommen eine Fundstelle, die Zeichen gehoeren nur der 7.
+  const html = '<blockquote data-src="7"><p>zitat'
+    + '<span class="cite" data-src="8">(B, 2021)</span></p></blockquote>';
+  const { cites, quotes } = collectCiteIndex(root(html));
+  const rows = citationsFromCites(cites, quotes);
+  assert.equal(rows.length, 2);
+  assert.equal(rows.find(r => r.sourceId === 7).count, 1);
+  assert.equal(rows.find(r => r.sourceId === 7).quoteChars, 'zitat'.length);
+  assert.equal(rows.find(r => r.sourceId === 8).count, 1);
+  assert.equal(rows.find(r => r.sourceId === 8).quoteChars, 0);
+});
+
+test('citationsFromCites zaehlt Paraphrasen als Teilmenge von count', () => {
+  const html = '<p>'
+    + '<span class="cite" data-src="7">(A, 2020)</span>'
+    + '<span class="cite" data-src="7" data-mode="paraphrase">(vgl. A, 2020)</span>'
+    + '</p>';
+  const { cites, quotes } = collectCiteIndex(root(html));
+  const [row] = citationsFromCites(cites, quotes);
+  assert.equal(row.count, 2);
+  assert.equal(row.paraphraseCount, 1);
+});
+
+test('closestQuoteBlock + setQuoteBlockSource', () => {
+  const r = root('<blockquote><p>text</p></blockquote>');
+  const p = r.querySelector('p');
+  const bq = closestQuoteBlock(p.firstChild, r);
+  assert.equal(bq, r.querySelector('blockquote'));
+  assert.equal(closestQuoteBlock(r.querySelector('blockquote'), r.querySelector('blockquote')), null);
+
+  assert.equal(setQuoteBlockSource(bq, 7), true);
+  assert.equal(bq.getAttribute(CITE_ATTR_SRC), '7');
+  assert.equal(isQuoteBlockEl(bq), true);
+  // Ungueltiger Zeiger entfernt die Bindung statt sie kaputt zu setzen.
+  assert.equal(setQuoteBlockSource(bq, 0), false);
+  assert.equal(bq.hasAttribute(CITE_ATTR_SRC), false);
 });
 
 // ── Editor-Laufzeit ──────────────────────────────────────────────────────────
@@ -190,15 +336,23 @@ test('cleanPageHtml: Chip als einziger Inhalt eines Blocks kollabiert nicht', ()
 // stattdessen gegen die Quelle geprueft — der Filter selbst ist im
 // App-E2E-Test abgedeckt (tests/e2e-app/notebook-cite.spec.js).
 
-test('Paste-Allowlist laesst SPAN nur als Beleg-Chip zu', () => {
+test('Paste-Allowlist laesst SPAN nur als Beleg-Chip oder Querverweis zu', () => {
   const src = readFileSync(resolve(ROOT, 'public', 'js', 'utils', 'html.js'), 'utf8');
   assert.ok(/PASTE_ALLOWED_TAGS[\s\S]*?'SPAN'/.test(src), 'SPAN muss in der Tag-Allowlist stehen');
-  assert.ok(/SPAN:\s*new Set\(\['class', CITE_ATTR_SRC, CITE_ATTR_LOC\]\)/.test(src),
-    'SPAN darf genau class/data-src/data-loc behalten');
+  // Zwei Marker teilen sich das SPAN: der Beleg-Chip (data-src/-loc/-mode) und
+  // der Querverweis (data-xref/-id/-fmt, public/js/xrefs/xref-html.js). Beide
+  // Zeiger muessen den Paste ueberleben — sonst zerfaellt ein kopierter Satz zu
+  // Text, der nicht mehr mitnummeriert bzw. seine Quelle verloren hat.
+  assert.ok(/SPAN:\s*new Set\(\['class', CITE_ATTR_SRC, CITE_ATTR_LOC, CITE_ATTR_MODE,\s*XREF_ATTR_KIND, XREF_ATTR_ID, XREF_ATTR_FMT\]\)/.test(src),
+    'SPAN darf genau die Chip- und Querverweis-Attribute behalten');
+  // Belegtes Blockzitat: der Zeiger muss den Paste ueberleben, sonst faellt ein
+  // verschobenes Blockzitat zum unbelegten Einzug zurueck.
+  assert.ok(/BLOCKQUOTE:\s*new Set\(\['class', CITE_ATTR_SRC\]\)/.test(src),
+    'BLOCKQUOTE darf class + data-src behalten');
   // Der Unwrap-Zweig ist die eigentliche Absicherung: ohne ihn wuerde jede
   // Word-<span>-Huelle den Paste ueberleben.
-  assert.ok(/tag === 'SPAN' && !isCiteEl\(el\)[\s\S]{0,120}_unwrap\(el\)/.test(src),
-    'Nicht-Chip-Spans muessen unwrapped werden');
+  assert.ok(/tag === 'SPAN' && !isCiteEl\(el\) && !isXrefEl\(el\)[\s\S]{0,160}_unwrap\(el\)/.test(src),
+    'Spans, die weder Chip noch Querverweis sind, muessen unwrapped werden');
 });
 
 test('Dirty-Vergleich strippt contenteditable (Struktur-Tripwire)', () => {

@@ -14,6 +14,7 @@ const blogs = require('../../db/blogs');
 const contentStore = require('../../lib/content-store');
 const { createWpClient } = require('../../lib/wp-client');
 const { wpToAppHtml, appToWpHtmlWithMedia } = require('../../lib/wp-html');
+const { buildBibliography, resolveCitesInHtml } = require('../../lib/bibliography');
 const { makeImageResolver } = require('../../lib/wp-media');
 const { classifyPull } = require('../../lib/blog-merge');
 const { assertBlogBook } = require('../../lib/buchtyp');
@@ -94,6 +95,9 @@ async function runBlogImportJob(jobId, bookId, userEmail) {
     let totalCount = 0;
     let imported = 0;
     const chapterCache = new Map();
+    // Zaehlt Quellen-Chips, die ohne `data-src` zurueckkamen (KSES, siehe
+    // lib/wp-html.js#_degradeCitesWithoutPointer) und darum zu Klartext wurden.
+    const citeStats = {};
 
     do {
       if (_abortSignal(jobId)?.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -107,7 +111,7 @@ async function runBlogImportJob(jobId, bookId, userEmail) {
         const year = _postYear(post);
         const chapterId = await _resolveYearChapter(bookId, year, chapterCache);
         const rawHtml = (post.content && (post.content.raw || post.content.rendered)) || '';
-        const appHtml = wpToAppHtml(rawHtml) || '<p></p>';
+        const appHtml = await wpToAppHtml(rawHtml, citeStats) || '<p></p>';
         const created = await contentStore.createPage({
           book_id: bookId,
           chapter_id: chapterId,
@@ -160,8 +164,12 @@ async function runBlogImportJob(jobId, bookId, userEmail) {
       }
     }
 
+    if (citeStats.citesDegraded) {
+      logger.warn(`Blog-Import: ${citeStats.citesDegraded} Quellenangabe(n) ohne Zeiger — als Klartext uebernommen (WP-Benutzer ohne unfiltered_html?).`);
+    }
     logger.info(`Initial-Import: ${imported} Posts importiert.`);
-    completeJob(jobId, { imported, totalCount }, null, `${imported} Posts importiert`);
+    completeJob(jobId, { imported, totalCount, citesDegraded: citeStats.citesDegraded || 0 }, null,
+      `${imported} Posts importiert`);
   } catch (e) {
     if (e.name !== 'AbortError') makeJobLogger(jobId).error(`Blog-Import-Fehler: ${e.message}`);
     failJob(jobId, e);
@@ -192,6 +200,8 @@ async function runBlogPullJob(jobId, bookId, userEmail) {
     let conflicts = 0;
     let skipped = 0;
     const chapterCache = new Map();
+    // Siehe runBlogImportJob: Chips, die KSES den Zeiger genommen hat.
+    const citeStats = {};
 
     do {
       if (_abortSignal(jobId)?.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -207,7 +217,7 @@ async function runBlogPullJob(jobId, bookId, userEmail) {
         const wpModified = post.modified_gmt || post.date_gmt || '';
         const pageName = _postPageName(post);
         const rawHtml = (post.content && (post.content.raw || post.content.rendered)) || '';
-        const appHtml = wpToAppHtml(rawHtml) || '<p></p>';
+        const appHtml = await wpToAppHtml(rawHtml, citeStats) || '<p></p>';
 
         if (!link) {
           const year = _postYear(post);
@@ -266,8 +276,11 @@ async function runBlogPullJob(jobId, bookId, userEmail) {
     } while (page <= totalPages);
 
     blogs.touchPull(conn.id);
+    if (citeStats.citesDegraded) {
+      logger.warn(`Blog-Pull: ${citeStats.citesDegraded} Quellenangabe(n) ohne Zeiger — als Klartext uebernommen (WP-Benutzer ohne unfiltered_html?).`);
+    }
     logger.info(`Pull: ${updated} aktualisiert, ${created} neu, ${conflicts} Konflikt, ${skipped} unverändert.`);
-    completeJob(jobId, { updated, created, conflicts, skipped }, null,
+    completeJob(jobId, { updated, created, conflicts, skipped, citesDegraded: citeStats.citesDegraded || 0 }, null,
       `${updated} aktualisiert / ${created} neu / ${conflicts} Konflikt`);
   } catch (e) {
     if (e.name !== 'AbortError') makeJobLogger(jobId).error(`Blog-Pull-Fehler: ${e.message}`);
@@ -336,7 +349,23 @@ async function runBlogPushJob(jobId, bookId, userEmail, pageIds) {
         continue;
       }
 
-      const wpHtml = await appToWpHtmlWithMedia(pageRow.html || pageRow.body_html || '<p></p>', { resolveImage });
+      // Quellen: die Einheit ist die SEITE — ein WP-Post ist genau eine Seite.
+      // Darum `pageIds: [pageId]`: die Nummern des numerischen Stils folgen den
+      // Fundstellen dieses einen Posts ab 1, und Chip-Text und Verzeichnis
+      // stimmen zusammen. `resolveCitesInHtml` setzt den Kurzbeleg frisch (der
+      // gespeicherte Text ist nur ein Cache) und laeuft VOR dem Block-Emitter.
+      //
+      // Bewusst pro Seite gebaut statt einmal fuer den Job: die Nummern sind
+      // per Definition seiten-spezifisch, und der Aufwand (drei indizierte
+      // SQLite-Reads) ist neben dem HTTP-Round-Trip pro Post nicht messbar.
+      const bib = await buildBibliography({ bookId, pageIds: [pageId], userEmail });
+      const appHtml = await resolveCitesInHtml(pageRow.html || pageRow.body_html || '<p></p>', bib);
+      const wpHtml = await appToWpHtmlWithMedia(appHtml, {
+        resolveImage,
+        // Verzeichnis nur bei ausdruecklich aktiviertem Blog-Anhang. Ohne das
+        // Flag bleibt es Sache der Datei-Exporte.
+        bibliography: bib.inBlog ? bib : null,
+      });
 
       // Beim Create: der Datum-Prefix `YYYY-MM-DD:` ist app-intern. Der lokale
       // page_name bekommt `YYYY-MM-DD: Rest` (oder nur `YYYY-MM-DD`, falls Rest

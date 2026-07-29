@@ -14,7 +14,7 @@
     "sw:manifest": "node scripts/sw-manifest.js",
     "test": "npm run test:imports && npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:smoke",
     "test:imports": "node scripts/check-imports.js",
-    "test:unit": "DB_FSYNC=off node --test --test-concurrency=4 \"tests/unit/*.test.js\" \"tests/unit/*.test.mjs\"",
+    "test:unit": "DB_FSYNC=off node --test --test-concurrency=4 \"tests/unit/**/*.test.js\" \"tests/unit/**/*.test.mjs\"",
     "test:integration": "DB_FSYNC=off node --test --test-concurrency=4 \"tests/integration/*.test.js\"",
     "test:e2e": "playwright test",
     "test:smoke": "playwright test --config=playwright.app.config.js",

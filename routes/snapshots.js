@@ -357,9 +357,25 @@ router.get('/:bookId/:id/export/:fmt', async (req, res) => {
   // Eingefrorene Publikation der Fassung bevorzugen (fmt='epub' konsumiert sie);
   // fehlt sie, faellt buildExportMeta auf die Live-book_publication zurueck.
   const publication = snapshotPublication(row.publication_json);
+
+  // Quellen-Fundstellen der FASSUNG aus deren eingefrorenem HTML, nicht aus
+  // `source_citations`: der Fund-Index beschreibt den heutigen Seitenstand, die
+  // Fassung aber einen alten — sonst traegt ein Chip im numerischen Stil eine
+  // Nummer, die zum Verzeichnis dieser Fassung nicht passt. Die Quellen-Stammdaten
+  // bleiben bewusst live (eine korrigierte ISBN soll auch hier stimmen).
+  let citations = null;
+  try {
+    const { citationsFromGroups } = require('../lib/bibliography');
+    citations = await citationsFromGroups(bundle.groups);
+  } catch (e) {
+    logger.warn(`Fassungs-Export: Fundstellen nicht lesbar (book=${bookId}, id=${id}): ${e.message}`);
+  }
+
   let buf;
   try {
-    buf = await spec.build(bundle, buildExportMeta(bookId, fmt, { publication }));
+    buf = await spec.build(bundle, await buildExportMeta(bookId, fmt, {
+      publication, citations, userEmail: req.session?.user?.email || null,
+    }));
   } catch (e) {
     logger.error(`Fassungs-Export-Build fehlgeschlagen (book=${bookId}, id=${id}, fmt=${fmt}): ${e.message}`);
     return res.status(502).json({ error_code: 'EXPORT_FAILED' });

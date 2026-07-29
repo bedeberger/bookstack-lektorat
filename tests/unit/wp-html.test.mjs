@@ -1,11 +1,15 @@
 // Unit tests for lib/wp-html.js: Gutenberg block strip on import + wrap on export.
+//
+// `wpToAppHtml` ist async, weil es die Chip-Selektoren aus der ESM-SSoT
+// public/js/sources/cite-html.js laedt (statt eine Kopie zu halten) — jeder
+// Aufruf hier wird darum awaited.
 
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 
 const { wpToAppHtml, appToWpHtml, appToWpHtmlWithMedia } = await import('../../lib/wp-html.js');
 
-test('wpToAppHtml: strips wp:* comments', () => {
+test('wpToAppHtml: strips wp:* comments', async () => {
   const wp = `
 <!-- wp:paragraph -->
 <p>Hallo Welt.</p>
@@ -15,15 +19,15 @@ test('wpToAppHtml: strips wp:* comments', () => {
 <h2 class="wp-block-heading">Kapitel 1</h2>
 <!-- /wp:heading -->
   `;
-  const app = wpToAppHtml(wp);
+  const app = await wpToAppHtml(wp);
   assert.doesNotMatch(app, /wp:/);
   assert.match(app, /<p>Hallo Welt\.<\/p>/);
   assert.match(app, /<h2>Kapitel 1<\/h2>/);
 });
 
-test('wpToAppHtml: keeps images/figures, strips non-image embeds', () => {
+test('wpToAppHtml: keeps images/figures, strips non-image embeds', async () => {
   const wp = `<p>vorher</p><figure class="wp-block-image"><img src="https://blog.test/a.jpg" alt="A" srcset="x 2x" width="800"/></figure><iframe src="y"></iframe><p>nachher</p>`;
-  const app = wpToAppHtml(wp);
+  const app = await wpToAppHtml(wp);
   assert.match(app, /<img/);
   assert.match(app, /src="https:\/\/blog\.test\/a\.jpg"/);
   assert.match(app, /alt="A"/);
@@ -35,30 +39,30 @@ test('wpToAppHtml: keeps images/figures, strips non-image embeds', () => {
   assert.match(app, /nachher/);
 });
 
-test('wpToAppHtml: keeps wp-image-<n> class (attachment id) but strips other wp- classes', () => {
+test('wpToAppHtml: keeps wp-image-<n> class (attachment id) but strips other wp- classes', async () => {
   const wp = `<figure class="wp-block-image size-large"><img class="wp-image-42 has-shadow" src="https://blog.test/a.jpg"/></figure>`;
-  const app = wpToAppHtml(wp);
+  const app = await wpToAppHtml(wp);
   assert.match(app, /wp-image-42/);
   assert.doesNotMatch(app, /wp-block-image/);
   assert.doesNotMatch(app, /has-shadow/);
 });
 
-test('wpToAppHtml: drops empty figure left over from stripped video', () => {
+test('wpToAppHtml: drops empty figure left over from stripped video', async () => {
   const wp = `<figure class="wp-block-video"><video src="v.mp4"></video></figure><p>text</p>`;
-  const app = wpToAppHtml(wp);
+  const app = await wpToAppHtml(wp);
   assert.doesNotMatch(app, /<figure/);
   assert.doesNotMatch(app, /<video/);
   assert.match(app, /text/);
 });
 
-test('wpToAppHtml: empty/null returns empty string', () => {
-  assert.equal(wpToAppHtml(''), '');
-  assert.equal(wpToAppHtml(null), '');
+test('wpToAppHtml: empty/null returns empty string', async () => {
+  assert.equal(await wpToAppHtml(''), '');
+  assert.equal(await wpToAppHtml(null), '');
 });
 
-test('wpToAppHtml: removes wp-* utility classes', () => {
+test('wpToAppHtml: removes wp-* utility classes', async () => {
   const wp = `<!-- wp:paragraph --><p class="wp-block has-text-color">x</p><!-- /wp:paragraph -->`;
-  const app = wpToAppHtml(wp);
+  const app = await wpToAppHtml(wp);
   assert.doesNotMatch(app, /wp-block/);
   assert.doesNotMatch(app, /has-text-color/);
 });
@@ -182,10 +186,10 @@ test('appToWpHtml: preserves inline formatting inside paragraph', () => {
   assert.match(out, /<a href="https:\/\/x">link<\/a>/);
 });
 
-test('round-trip: app → wp → app yields plain blocks', () => {
+test('round-trip: app → wp → app yields plain blocks', async () => {
   const original = '<h2>Titel</h2><p>Eins.</p><ul><li>a</li><li>b</li></ul><p>Zwei.</p>';
   const wp = appToWpHtml(original);
-  const back = wpToAppHtml(wp);
+  const back = await wpToAppHtml(wp);
   assert.doesNotMatch(back, /wp:/);
   assert.match(back, /<h2>Titel<\/h2>/);
   assert.match(back, /<p>Eins\.<\/p>/);
@@ -202,4 +206,149 @@ test('appToWpHtml: unknown block tag falls back to paragraph if it has text', ()
   const out = appToWpHtml('<div>orphan text</div>');
   assert.match(out, /<!-- wp:paragraph -->/);
   assert.match(out, /orphan text/);
+});
+
+// ── Quellenverzeichnis-Anhang + die Akkumulations-Invariante ─────────────────
+//
+// Der WordPress-Sync ist bidirektional mit Last-Write-Wins (docs/blog-sync.md).
+// Ein angehaengtes Verzeichnis ist ein Render-Artefakt und MUSS beim Pull wieder
+// verschwinden — sonst steht es nach einem Pull im Manuskript, der naechste Push
+// haengt ein zweites an, und es wachsen pro Zyklus weitere hinzu.
+//
+// Der Beweis dafuer ist der Vergleich MIT gegen OHNE Verzeichnis: nach einem
+// Round-Trip muessen beide Wege buchstabengleich denselben Seitenstand liefern.
+// Wird der Pull-Strip in lib/wp-html.js entfernt, faellt genau dieser Vergleich.
+
+const { buildCiteHtml } = await import('../../public/js/sources/cite-html.js');
+
+// Form wie die Rueckgabe von buildBibliography (lib/bibliography.js) — hier von
+// Hand, damit der Test keine DB braucht.
+function bib(style = 'apa7') {
+  return {
+    enabled: true,
+    inBlog: true,
+    style,
+    title: 'Quellenverzeichnis',
+    titleHtml: 'Quellenverzeichnis',
+    entries: [
+      { id: 1, num: 1, text: 'Kafka, F. (1915). Die Verwandlung.', html: 'Kafka, F. (1915). <em>Die Verwandlung</em>.' },
+      { id: 2, num: 2, text: 'Zweig, S. (1942). Schachnovelle.', html: 'Zweig, S. (1942). <em>Schachnovelle</em>.' },
+    ],
+  };
+}
+
+const CHIP = buildCiteHtml({ id: 1, loc: '44', text: '(Kafka, 1915, S. 44)' });
+const PAGE = `<p>Ein Satz ${CHIP} mit Beleg.</p><p>Und noch einer.</p>`;
+
+test('appToWpHtml: haengt das Verzeichnis als markierten wp:group-Block an', () => {
+  const out = appToWpHtml(PAGE, { bibliography: bib() });
+  // Marker-Klasse steht sowohl in den Block-Attributen (content.raw) als auch in
+  // der Klassenliste des div (content.rendered) — beides muss der Pull finden.
+  assert.match(out, /<!-- wp:group \{"className":"sw-bibliography"\} -->/);
+  assert.match(out, /<div class="wp-block-group sw-bibliography">/);
+  assert.match(out, /<!-- wp:heading -->\n<h2 class="wp-block-heading">Quellenverzeichnis<\/h2>/);
+  // Autor-Jahr-Stil → Liste; der kursive Werktitel bleibt erhalten.
+  assert.match(out, /<!-- wp:list -->/);
+  assert.match(out, /<li>Kafka, F\. \(1915\)\. <em>Die Verwandlung<\/em>\.<\/li>/);
+  // Verzeichnis steht HINTER dem Seitentext.
+  assert.ok(out.indexOf('Und noch einer.') < out.indexOf('sw-bibliography'));
+});
+
+test('appToWpHtml: numerischer Stil als Absaetze mit [n], nicht als <ol>', () => {
+  // Eine auto-numerierte <ol> waere falsch: bei bibliography_scope="all" haengen
+  // unzitierte Quellen ohne Nummer hinten an (sortEntries), die Liste zaehlte
+  // dann weiter und widersprache den Chips im Text.
+  const out = appToWpHtml(PAGE, { bibliography: bib('numeric') });
+  assert.doesNotMatch(out, /<!-- wp:list/);
+  assert.match(out, /<p>\[1\] Kafka/);
+  assert.match(out, /<p>\[2\] Zweig/);
+});
+
+test('appToWpHtml: kein Anhang ohne Verzeichnis, ohne Eintraege oder abgeschaltet', () => {
+  assert.equal(appToWpHtml(PAGE), appToWpHtml(PAGE, { bibliography: null }));
+  assert.equal(appToWpHtml(PAGE), appToWpHtml(PAGE, { bibliography: { ...bib(), enabled: false } }));
+  assert.equal(appToWpHtml(PAGE), appToWpHtml(PAGE, { bibliography: { ...bib(), entries: [] } }));
+});
+
+test('INVARIANTE: Pull entfernt das Verzeichnis wieder — Round-Trip ist identisch', async () => {
+  const withBib = await wpToAppHtml(appToWpHtml(PAGE, { bibliography: bib() }));
+  const without = await wpToAppHtml(appToWpHtml(PAGE));
+
+  // Der Kern: das Verzeichnis hinterlaesst keine Spur im Seitentext.
+  assert.equal(withBib, without,
+    'Verzeichnis ueberlebt den Pull → es wandert in den Seitentext und akkumuliert bei jedem Push');
+  assert.doesNotMatch(withBib, /Quellenverzeichnis/);
+  assert.doesNotMatch(withBib, /sw-bibliography/);
+  assert.doesNotMatch(withBib, /Schachnovelle/);
+
+  // Und der Chip im Text bleibt vollstaendig — mit Zeiger und Stellenangabe.
+  assert.match(withBib, /<span class="cite" data-src="1" data-loc="44">\(Kafka, 1915, S\. 44\)<\/span>/);
+  assert.match(withBib, /Ein Satz/);
+  assert.match(withBib, /Und noch einer\./);
+});
+
+test('INVARIANTE: Verzeichnis akkumuliert auch ueber mehrere Push/Pull-Zyklen nicht', async () => {
+  let page = PAGE;
+  for (let i = 0; i < 3; i++) {
+    page = await wpToAppHtml(appToWpHtml(page, { bibliography: bib() }));
+  }
+  assert.doesNotMatch(page, /Quellenverzeichnis/);
+  assert.equal((page.match(/data-src="1"/g) || []).length, 1, 'Chip wurde vervielfaeltigt');
+  assert.equal(page, await wpToAppHtml(appToWpHtml(PAGE)));
+});
+
+test('wpToAppHtml: Verzeichnis aus WPs gerendertem HTML (ohne Block-Kommentare) fliegt auch raus', async () => {
+  // `content.rendered` liefert keine wp:*-Kommentare, aber die Klassenliste des
+  // Group-Div — inklusive der Layout-Klassen, die WP selbst dazuschreibt.
+  const rendered = '<p>Text.</p>\n<div class="wp-block-group sw-bibliography is-layout-flow wp-block-group-is-layout-flow">'
+                 + '<h2 class="wp-block-heading">Quellenverzeichnis</h2><ul><li>Kafka, F. (1915).</li></ul></div>';
+  const app = await wpToAppHtml(rendered);
+  assert.match(app, /<p>Text\.<\/p>/);
+  assert.doesNotMatch(app, /Quellenverzeichnis/);
+  assert.doesNotMatch(app, /Kafka/);
+});
+
+// ── KSES-Guard: Chip ohne Zeiger ────────────────────────────────────────────
+
+test('wpToAppHtml: Chip ohne data-src wird zu reinem Text degradiert und gezaehlt', async () => {
+  // WordPress' KSES strippt `data-*`, wenn dem verbundenen Benutzer
+  // `unfiltered_html` fehlt. Dann ist der Chip eine Quellenangabe ohne Ziel.
+  const stats = {};
+  const app = await wpToAppHtml('<p>Ein Satz <span class="cite">(Kafka, 1915, S. 44)</span> mit Beleg.</p>', stats);
+
+  // Der lesbare Kurzbeleg bleibt im Satz stehen — er ist das einzige, was noch da
+  // ist. Aber ohne Chip-Markup, damit nichts vorgibt, ein Nachweis zu sein.
+  assert.match(app, /Ein Satz \(Kafka, 1915, S\. 44\) mit Beleg\./);
+  assert.doesNotMatch(app, /class="cite"/);
+  // NIE auf eine Quelle raten: kein data-src darf erfunden werden.
+  assert.doesNotMatch(app, /data-src/);
+  assert.equal(stats.citesDegraded, 1);
+});
+
+test('wpToAppHtml: intakter Chip wird nicht angetastet und nicht gezaehlt', async () => {
+  const stats = {};
+  const app = await wpToAppHtml(`<p>a ${CHIP} b</p>`, stats);
+  assert.match(app, /<span class="cite" data-src="1" data-loc="44">/);
+  assert.equal(stats.citesDegraded, undefined);
+});
+
+test('wpToAppHtml: mehrere zeigerlose Chips werden alle gezaehlt, stats ist optional', async () => {
+  const html = '<p><span class="cite">(A, 2020)</span> und <span class="cite">(B, 2021)</span></p>';
+  const stats = {};
+  await wpToAppHtml(html, stats);
+  assert.equal(stats.citesDegraded, 2);
+  // Ohne stats-Objekt darf nichts werfen (routes/blog.js ruft so auf).
+  const app = await wpToAppHtml(html);
+  assert.match(app, /\(A, 2020\) und \(B, 2021\)/);
+});
+
+test('wpToAppHtml: Chip mit unbrauchbarem data-src verliert das Chip-Markup', async () => {
+  // `data-src="0"`/`"abc"` ist kein gueltiger Zeiger (public/js/sources/cite-html.js)
+  // — das Element ist Fremdmarkup und wird entpackt, nicht als KSES-Verlust
+  // gezaehlt (das Attribut ist ja da, es ist nur wertlos).
+  const stats = {};
+  const app = await wpToAppHtml('<p>x <span class="cite" data-src="abc">(?)</span> y</p>', stats);
+  assert.doesNotMatch(app, /class="cite"/);
+  assert.match(app, /x \(\?\) y/);
+  assert.equal(stats.citesDegraded, undefined);
 });

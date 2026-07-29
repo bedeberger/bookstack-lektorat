@@ -3,47 +3,10 @@
    Die Vorschau-Zeile `.sources-preview` wird auch im Quellen-Tab der
    Bucheinstellungen benutzt (dieselbe Formatter-Ausgabe, gleiche Optik). */
 
-.sources-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-md);
-}
-.sources-toolbar .btn-compact {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-.sources-toolbar .btn-compact .icon { width: 1em; height: 1em; }
-
-.sources-filter-bar { flex: 1; }
-
-/* Suchfeld auf Compact-Höhe zwingen: ohne den Scope gewinnt die generische
-   `input[type=text]`-Regel (card-form.css, Spezifität 0,1,1) über die nackte
-   `.filter-search-input`-Klasse (0,1,0) und das Feld rendert in Default-Grösse,
-   höher als Combobox und Archiv-Schalter daneben. Vier Werte müssen mit den
-   Nachbarn übereinstimmen: font-size, vertikales Padding, Border, line-height. */
-.sources-filter-bar .filter-search-input {
-  font-size: var(--font-size-mini);
-  line-height: 1.4;
-  padding: var(--space-xs) 8px;
-  padding-right: 26px;
-  border: 0.5px solid var(--color-border);
-  border-radius: var(--radius-md);
-  min-width: 12rem;
-  flex: 1;
-}
-
-.sources-archive-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--font-size-mini);
-  line-height: 1.4;
-  color: var(--color-muted);
-  cursor: pointer;
-}
+/* Toolbar (Neu · Aus Bibliothek · Filterleiste), Filterleiste, breites Suchfeld
+   und Archiv-Schalter kommen vollstaendig aus den geteilten Bausteinen
+   `.card-toolbar` (card-form/card-shell.css) + `.filter-bar--inline` /
+   `.filter-search-input--wide` / `.filter-toggle` (entity-list.css). */
 
 /* Refetch bei bereits geladener Liste: Tabelle bleibt stehen, wird nur gedimmt
    und klick-inert — kein Skeleton-Swap, der bei jedem Reload flackert. */
@@ -59,13 +22,22 @@
   border-collapse: collapse;
   font-size: var(--font-size-sm);
 }
+/* Die Zeilenhoehe diktiert mal die Titel-Spalte (Titel + Container + Archiv-
+   Badge, bis zu drei Zeilen), mal die Aktionsspalte (28 px Icon-Buttons) —
+   darum zentriert jede Zelle vertikal statt oben zu kleben, sonst haengen
+   Jahr, Typ-Tag und Zitier-Badge je nach Zeile auf unterschiedlicher Hoehe. */
 .sources-table th,
 .sources-table td {
   padding: var(--space-xs) var(--space-sm);
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
   border-bottom: 0.5px solid var(--color-border);
 }
+/* Chevron-Platzreservierung aus `.sortable-th` (0,1,0) muss die th-Default-Regel
+   darueber (0,1,1) schlagen, sonst laeuft der Sortier-Chevron in kurze
+   Header-Labels („Jahr") hinein. Specificity 0,2,1 gewinnt. */
+.sources-table th.sortable-th { padding-right: calc(var(--space-md) + 14px); }
+
 .sources-table tbody tr:hover { background: var(--color-tag-bg); }
 
 .sources-row--archived { opacity: var(--opacity-hint); }
@@ -73,11 +45,14 @@
 
 .sources-cell-author { white-space: nowrap; }
 
-.sources-cell-title {
+/* Flex sitzt auf dem inneren `.sources-title-stack`, nicht auf der Zelle: eine
+   `display:flex`-<td> ist keine Tabellenzelle mehr (anonyme Zelle darunter),
+   damit waere `vertical-align: middle` auf ihr wirkungslos. */
+.sources-cell-title { min-width: 14rem; }
+.sources-title-stack {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
-  min-width: 14rem;
 }
 .sources-title { font-weight: 600; }
 .sources-container {
@@ -90,10 +65,13 @@
 /* Zitier-Badge in der Tabelle. Unzitiert bleibt bewusst neutral-grau statt rot:
    eine noch nicht belegte Quelle ist kein Fehler, sondern ein Vorrat. */
 .sources-cite-badge {
+  display: inline-flex;
+  align-items: center;
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: 2px 6px;
   font-size: var(--font-size-mini);
+  line-height: 1.4;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -103,11 +81,23 @@
   cursor: default;
 }
 
+/* Typ-Tag: `.entity-typ-tag` ist fuer Flex-Entity-Listen gedacht (feste 96 px,
+   inline). In der Tabelle bestimmt der Inhalt die Breite; inline-flex macht die
+   Badge-Box Teil der Zeilenhoehe, damit sie mittig zur Nachbarzelle sitzt. */
+.sources-table .entity-typ-tag,
+.sources-picker-meta .entity-typ-tag {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  line-height: 1.4;
+}
+
+.sources-cell-actions { white-space: nowrap; }
 .sources-row-actions {
   display: flex;
+  align-items: center;
   gap: var(--space-6);
   justify-content: flex-end;
-  white-space: nowrap;
 }
 
 /* ── Formular ─────────────────────────────────────────────────────────────── */
@@ -276,12 +266,44 @@
 }
 .sources-picker-books { font-variant-numeric: tabular-nums; }
 
+/* Zitat-Kennzahlen unter der Tabelle: Zitat-Anteil + Nachweis-Aufteilung.
+   Bewusst eine schlichte Wert/Label-Reihe und kein Tile-Grid — es sind vier
+   Zahlen am Fuss einer Verwaltungstabelle, keine eigene Statistik-Ansicht. */
+.sources-quote-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-lg);
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+.sources-quote-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sources-quote-stat-value {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--card-accent, var(--color-accent));
+}
+.sources-quote-stat-label {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+}
+/* Hinweis bricht in eine eigene Zeile: er erklaert alle vier Werte, nicht den
+   letzten. */
+.sources-quote-stats-hint { flex: 1 0 100%; margin: 0; }
+
 /* Mobile: Urheber darf umbrechen, Aktionsspalte rutscht unter den Titel. */
 @media (max-width: 600px) {
   .sources-cell-author { white-space: normal; }
+  .sources-quote-stats { gap: var(--space-md); }
   .sources-table th,
   .sources-table td { padding: var(--space-xs) var(--space-6); }
-  .sources-toolbar .btn-compact { width: 100%; justify-content: center; }
+  .card--sources .card-toolbar .btn-compact { width: 100%; justify-content: center; }
   .sources-picker-item { flex-direction: column; align-items: stretch; }
   .sources-picker-item .btn-compact { width: 100%; justify-content: center; }
 }

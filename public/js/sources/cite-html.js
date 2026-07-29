@@ -5,11 +5,34 @@
 //
 // Persistiertes Markup:
 //   <span class="cite" data-src="7" data-loc="44">(Müller, 2020, S. 44)</span>
+//   <span class="cite" data-src="7" data-loc="44" data-mode="paraphrase">(vgl. …)</span>
+//   <blockquote data-src="7"> … woertliches Blockzitat … </blockquote>
 //
 // `data-src` ist die WAHRHEIT (Zeiger auf sources.id), der Text ist ein
 // CACHE des Kurzbelegs. Bei Stilwechsel oder Quellenkorrektur schreibt ein
 // Regenerierungs-Pass die Texte neu; bis dahin steht dort ein veralteter, aber
 // lesbarer Kurzbeleg. Deshalb darf keine Schicht den Text als Wahrheit behandeln.
+//
+// DREI ZITAT-KATEGORIEN, ZWEI MARKUP-TRAEGER
+//
+// Wissenschaftliches Schreiben unterscheidet Kurzzitat (woertlich, im laufenden
+// Text in Anfuehrungszeichen), Blockzitat (woertlich, ab ~3 Zeilen eingerueckt und
+// kleiner, OHNE Anfuehrungszeichen) und Paraphrase („vgl."). Getragen wird das von
+// genau zwei Attributen:
+//
+//   `data-mode` am Chip   — Art des NACHWEISES. Nur `paraphrase` wird
+//                           persistiert; die Abwesenheit bedeutet `quote`
+//                           (woertlich/Belegstelle, kein Praefix). Daraus folgt:
+//                           Alt-Inhalte sind ohne Migration gueltig, und
+//                           formatShort setzt das „vgl."/„cf."-Praefix.
+//   `data-src` am blockquote — Art des ABSATZES: dieses Blockzitat ist woertlich
+//                           aus Quelle N uebernommen. Treibt die Zitat-Typografie
+//                           in den Renderern (aufrecht + kleiner + kein
+//                           Anfuehrungszeichen) und die Kennzahl „Zitat-Anteil".
+//
+// Bewusst KEIN `data-loc` am blockquote: die Stellenangabe gehoert zum sichtbaren
+// Kurzbeleg, und der steht im Chip am Ende des Blockzitats. Zwei Traeger fuer
+// dieselbe Angabe wuerden auseinanderdriften.
 //
 // Bewusst NICHT im persistierten Markup: `contenteditable="false"`. Das setzt der
 // Editor erst beim Mount (markCitesAtomic), und lib/html-clean.js strippt es beim
@@ -24,11 +47,27 @@ import { escHtml } from '../utils/escape.js';
 export const CITE_CLASS = 'cite';
 export const CITE_ATTR_SRC = 'data-src';
 export const CITE_ATTR_LOC = 'data-loc';
+export const CITE_ATTR_MODE = 'data-mode';
 
 /** Selektor fuer Quellenangaben mit Zeiger. Ein `span.cite` OHNE `data-src` ist
  *  keine Quellenangabe, sondern Fremdmarkup — er wird nirgends als Fundstelle
  *  gezaehlt. */
 export const CITE_SEL = `span.${CITE_CLASS}[${CITE_ATTR_SRC}]`;
+
+/** Art des Nachweises. `quote` ist der Default und steht NICHT im Markup (siehe
+ *  Modulkopf) — nur `paraphrase` wird persistiert. Neue Werte hier ergaenzen,
+ *  nicht in Konsumenten hart hinschreiben. */
+export const CITE_MODES = ['quote', 'paraphrase'];
+export const CITE_MODE_DEFAULT = 'quote';
+
+/** Belegtes Blockzitat: ein `<blockquote>` mit Zeiger auf seine Quelle.
+ *
+ *  Heisst bewusst NICHT `QUOTE_BLOCK_SEL` — der Name ist in
+ *  editor/shared/dom-block.js schon fuer die Anfuehrungszeichen-Normalisierung
+ *  belegt und meint dort etwas voellig anderes (siehe harte Regel
+ *  „Blockselektoren komponieren aus TEXT_BLOCK_TAGS": gleicher Name suggeriert
+ *  Gleichheit und fuehrt zum Griff in die falsche Familie). */
+export const CITED_QUOTE_SEL = `blockquote[${CITE_ATTR_SRC}]`;
 
 /** Positive Ganzzahl aus einem Attributwert, sonst null. */
 function _srcId(raw) {
@@ -46,74 +85,154 @@ export function isCiteEl(el) {
   return _srcId(el.getAttribute(CITE_ATTR_SRC)) !== null;
 }
 
+/** Art des Nachweises eines Chips. Fehlender oder unbekannter Wert →
+ *  `CITE_MODE_DEFAULT`; ein verschriebenes `data-mode` darf den Kurzbeleg nicht
+ *  kaputtmachen. */
+export function citeModeOf(el) {
+  const raw = String(el?.getAttribute?.(CITE_ATTR_MODE) || '').trim().toLowerCase();
+  return CITE_MODES.includes(raw) ? raw : CITE_MODE_DEFAULT;
+}
+
+/** Ist das Element ein Blockzitat mit Quellen-Zeiger? */
+export function isQuoteBlockEl(el) {
+  if (!el || el.nodeType !== 1) return false;
+  if (String(el.tagName || '').toUpperCase() !== 'BLOCKQUOTE') return false;
+  return _srcId(el.getAttribute(CITE_ATTR_SRC)) !== null;
+}
+
 /** Chip-Markup als String. Text und Stellenangabe werden escapet — beide
- *  stammen aus User-Eingaben (Quellenfelder bzw. Eingabefeld). */
-export function buildCiteHtml({ id, loc = '', text = '' }) {
+ *  stammen aus User-Eingaben (Quellenfelder bzw. Eingabefeld). `mode` landet nur
+ *  im Markup, wenn es vom Default abweicht (siehe Modulkopf). */
+export function buildCiteHtml({ id, loc = '', text = '', mode = CITE_MODE_DEFAULT }) {
   const sid = _srcId(id);
   if (sid === null) return '';
   const locAttr = String(loc ?? '').trim();
+  const md = CITE_MODES.includes(mode) ? mode : CITE_MODE_DEFAULT;
   const attrs = [
     `class="${CITE_CLASS}"`,
     `${CITE_ATTR_SRC}="${sid}"`,
     locAttr ? `${CITE_ATTR_LOC}="${escHtml(locAttr)}"` : '',
+    md === CITE_MODE_DEFAULT ? '' : `${CITE_ATTR_MODE}="${md}"`,
   ].filter(Boolean).join(' ');
   return `<span ${attrs}>${escHtml(String(text ?? ''))}</span>`;
 }
 
-/** Alle Quellenangaben unter `root` in Dokumentordnung.
+/** Quellenangaben UND belegte Blockzitate unter `root`, in Dokumentordnung und in
+ *  EINEM Durchlauf — beide Listen brauchen denselben Offset-Zaehler, zwei Walks
+ *  waeren zwei Koordinatensysteme.
  *
- *  Liefert je Quellenangabe `{ id, loc, text, offset, el }`. `offset` ist die Position im
- *  Klartext des Containers — dieselbe Groesse wie `page_figure_mentions
- *  .first_offset`, damit „erste Fundstelle" ueber alle Index-Tabellen dasselbe
- *  bedeutet. Der Chip-Text zaehlt dabei mit, weil er auch im Seitentext steht
- *  (und in die Zeichenzahl eingeht — bei akademischen Zeichenvorgaben richtig).
+ *  `cites`: je Chip `{ id, loc, mode, text, offset, el }`. `offset` ist die
+ *  Position im Klartext des Containers — dieselbe Groesse wie
+ *  `page_figure_mentions.first_offset`, damit „erste Fundstelle" ueber alle
+ *  Index-Tabellen dasselbe bedeutet. Der Chip-Text zaehlt dabei mit, weil er auch
+ *  im Seitentext steht (und in die Zeichenzahl eingeht — bei akademischen
+ *  Zeichenvorgaben richtig).
+ *
+ *  `quotes`: je belegtes Blockzitat `{ id, offset, chars, citeIds, el }`. `chars`
+ *  ist die Laenge des woertlich uebernommenen Textes OHNE die Chip-Texte darin —
+ *  der Kurzbeleg ist der Nachweis, nicht das Zitat, und darf den Zitat-Anteil
+ *  nicht aufblasen. `citeIds` sind die Quellen, die im Block per Chip belegt sind;
+ *  daran haengt die Fundstellen-Zaehlung (siehe citationsFromCites).
  *
  *  In Chips wird NICHT abgestiegen: sie sind atomar, verschachtelte
- *  Quellenangaben gibt es nicht. */
-export function collectCites(root) {
-  const out = [];
-  if (!root) return out;
+ *  Quellenangaben gibt es nicht. Ein belegtes Blockzitat INNERHALB eines belegten
+ *  Blockzitats wird nicht als zweiter Eintrag gefuehrt — sein Text zaehlt zum
+ *  aeusseren, sonst waere derselbe Text zweimal Zitat. */
+export function collectCiteIndex(root) {
+  const cites = [];
+  const quotes = [];
+  if (!root) return { cites, quotes };
   let offset = 0;
 
-  const walk = (node) => {
+  const walk = (node, quote) => {
     const kids = node.childNodes;
     if (!kids) return;
     for (const child of Array.from(kids)) {
       if (child.nodeType === 3) {
-        offset += String(child.textContent || '').length;
+        const len = String(child.textContent || '').length;
+        offset += len;
+        if (quote) quote.chars += len;
         continue;
       }
       if (child.nodeType !== 1) continue;
       if (isCiteEl(child)) {
         const text = String(child.textContent || '');
-        out.push({
-          id: _srcId(child.getAttribute(CITE_ATTR_SRC)),
+        const id = _srcId(child.getAttribute(CITE_ATTR_SRC));
+        cites.push({
+          id,
           loc: child.getAttribute(CITE_ATTR_LOC) || '',
+          mode: citeModeOf(child),
           text,
           offset,
           el: child,
         });
+        if (quote && id !== null) quote.citeIds.add(id);
         offset += text.length;
         continue;
       }
-      walk(child);
+      if (!quote && isQuoteBlockEl(child)) {
+        const q = {
+          id: _srcId(child.getAttribute(CITE_ATTR_SRC)),
+          offset,
+          chars: 0,
+          citeIds: new Set(),
+          el: child,
+        };
+        quotes.push(q);
+        walk(child, q);
+        continue;
+      }
+      walk(child, quote);
     }
   };
-  walk(root);
-  return out;
+  walk(root, null);
+  return { cites, quotes };
+}
+
+/** Nur die Chips (Rueckwaerts-kompatible Sicht auf collectCiteIndex). */
+export function collectCites(root) {
+  return collectCiteIndex(root).cites;
+}
+
+/** Nur die belegten Blockzitate. */
+export function collectQuoteBlocks(root) {
+  return collectCiteIndex(root).quotes;
 }
 
 /** Fundstellen je Quelle — die Form, die db/sources.js#replacePageCitations
  *  erwartet. Mehrfachnennungen derselben Quelle werden zusammengefasst, damit
  *  der Primaerschluessel (source_id, page_id) nicht kollidiert; `firstOffset`
- *  ist die fruehste Nennung. Chips ohne gueltigen Zeiger fallen weg. */
-export function citationsFromCites(cites) {
+ *  ist die fruehste Nennung. Chips ohne gueltigen Zeiger fallen weg.
+ *
+ *  `quoteChars` und `paraphraseCount` sind die Kennzahl-Seite: wie viel woertlich
+ *  uebernommener Text haengt an dieser Quelle, und wie viele der Nachweise sind
+ *  Paraphrasen. Ein belegtes Blockzitat OHNE eigenen Chip zaehlt selbst als
+ *  Fundstelle — dann ist das `data-src` am Absatz der einzige Nachweis. Traegt es
+ *  einen Chip auf dieselbe Quelle, zaehlt nur der Chip (sonst doppelt). */
+export function citationsFromCites(cites, quoteBlocks = []) {
   const byId = new Map();
+  const ensure = (id, offset) => {
+    let cur = byId.get(id);
+    if (!cur) {
+      cur = { sourceId: id, count: 0, firstOffset: offset, quoteChars: 0, paraphraseCount: 0 };
+      byId.set(id, cur);
+      return cur;
+    }
+    if (offset != null && (cur.firstOffset == null || offset < cur.firstOffset)) cur.firstOffset = offset;
+    return cur;
+  };
+
   for (const c of cites || []) {
     if (!c || !c.id) continue;
-    const cur = byId.get(c.id);
-    if (cur) cur.count += 1;
-    else byId.set(c.id, { sourceId: c.id, count: 1, firstOffset: c.offset });
+    const cur = ensure(c.id, c.offset);
+    cur.count += 1;
+    if (c.mode === 'paraphrase') cur.paraphraseCount += 1;
+  }
+  for (const q of quoteBlocks || []) {
+    if (!q || !q.id) continue;
+    const cur = ensure(q.id, q.offset);
+    cur.quoteChars += Math.max(0, q.chars || 0);
+    if (!q.citeIds || !q.citeIds.has(q.id)) cur.count += 1;
   }
   return [...byId.values()];
 }
@@ -141,4 +260,31 @@ export function closestCiteEl(node, root = null) {
     n = n.parentNode;
   }
   return null;
+}
+
+/** Das `<blockquote>`, in dem `node` liegt (oder null) — mit oder ohne Zeiger.
+ *  Der Einfuegepfad des Editors braucht beides: ein bereits belegtes Blockzitat
+ *  bekommt einen neuen Zeiger, ein unbelegtes wird belegt. Steht hier statt als
+ *  `closest('blockquote')` im Editor, damit das Tag-Literal des Zitat-Traegers
+ *  nur an dieser einen Stelle existiert. */
+export function closestQuoteBlock(node, root = null) {
+  let n = node;
+  while (n && n !== root) {
+    if (n.nodeType === 1 && String(n.tagName || '').toUpperCase() === 'BLOCKQUOTE') return n;
+    n = n.parentNode;
+  }
+  return null;
+}
+
+/** `node` als belegtes Blockzitat markieren. Setzt ausschliesslich den Zeiger —
+ *  kein `data-loc` (siehe Modulkopf). `null`/0 entfernt den Zeiger wieder. */
+export function setQuoteBlockSource(el, id) {
+  if (!el || el.nodeType !== 1) return false;
+  const sid = _srcId(id);
+  if (sid === null) {
+    el.removeAttribute(CITE_ATTR_SRC);
+    return false;
+  }
+  el.setAttribute(CITE_ATTR_SRC, String(sid));
+  return true;
 }

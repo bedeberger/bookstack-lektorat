@@ -1013,7 +1013,15 @@ const CITATION_DEFAULTS = Object.freeze({
 const VALID_CITATION_STYLES = ['apa7', 'chicago-ad', 'numeric'];
 const VALID_BIBLIOGRAPHY_SCOPES = ['cited', 'all'];
 
-const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, entities_enabled, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog FROM book_settings WHERE book_id = ?');
+// Querverweis-Defaults (Migration 255). Steht aus demselben Grund in
+// book_settings wie der Zitierstil: ob ein Werk seine Abbildungen nummeriert,
+// gilt fuer ALLE Ausgabewege gleichzeitig und darf nicht je Exportprofil
+// abweichen. Default 0 — ein Roman mit Bildern will keine „Abb. 1:"-Praefixe.
+const XREF_DEFAULTS = Object.freeze({
+  figure_numbering: 0,
+});
+
+const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, entities_enabled, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog, figure_numbering FROM book_settings WHERE book_id = ?');
 const _upsertBookSettings = db.prepare(`
   INSERT INTO book_settings (book_id, language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, updated_at)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1064,6 +1072,14 @@ const _updateBookCitationSettings = db.prepare(`
     bibliography_in_blog=excluded.bibliography_in_blog,
     updated_at=excluded.updated_at
 `);
+// Querverweis-Einstellungen, eigener Schreibpfad aus demselben Grund.
+const _updateBookXrefSettings = db.prepare(`
+  INSERT INTO book_settings (book_id, figure_numbering, updated_at)
+  VALUES (?, ?, ?)
+  ON CONFLICT(book_id) DO UPDATE SET
+    figure_numbering=excluded.figure_numbering,
+    updated_at=excluded.updated_at
+`);
 
 /** Gibt {language, region, buchtyp, buch_kontext, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, entities_enabled} für ein Buch zurück.
  *  Fehlt die book_settings-Zeile, werden – wenn vorhanden – die User-Defaults
@@ -1085,16 +1101,17 @@ function getBookSettings(bookId, userEmail = null) {
     bibliography_title: row.bibliography_title || null,
     bibliography_scope: row.bibliography_scope || CITATION_DEFAULTS.bibliography_scope,
     bibliography_in_blog: row.bibliography_in_blog ? 1 : 0,
+    figure_numbering: row.figure_numbering ? 1 : 0,
   };
   if (userEmail) {
     const u = require('./app-users').getUser(userEmail);
     if (u && (u.default_language || u.default_buchtyp)) {
       const language = u.default_language || 'de';
       const region   = u.default_region   || (language === 'en' ? 'US' : 'CH');
-      return { language, region, buchtyp: u.default_buchtyp || null, buch_kontext: null, stilprofil: null, erzaehlperspektive: null, erzaehlzeit: null, is_finished: 0, allow_lektor_book_chat: 0, daily_goal_chars: null, goal_target_chars: null, goal_deadline: null, entities_enabled: 0, orte_real: 0, schauplatz_land: null, zeitlinie_real: 0, weltfakten_real_pruefen: 0, exclude_from_stats: 0, ...CITATION_DEFAULTS };
+      return { language, region, buchtyp: u.default_buchtyp || null, buch_kontext: null, stilprofil: null, erzaehlperspektive: null, erzaehlzeit: null, is_finished: 0, allow_lektor_book_chat: 0, daily_goal_chars: null, goal_target_chars: null, goal_deadline: null, entities_enabled: 0, orte_real: 0, schauplatz_land: null, zeitlinie_real: 0, weltfakten_real_pruefen: 0, exclude_from_stats: 0, ...CITATION_DEFAULTS, ...XREF_DEFAULTS };
     }
   }
-  return { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null, stilprofil: null, erzaehlperspektive: null, erzaehlzeit: null, is_finished: 0, allow_lektor_book_chat: 0, daily_goal_chars: null, goal_target_chars: null, goal_deadline: null, entities_enabled: 0, orte_real: 0, schauplatz_land: null, zeitlinie_real: 0, weltfakten_real_pruefen: 0, exclude_from_stats: 0, ...CITATION_DEFAULTS };
+  return { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null, stilprofil: null, erzaehlperspektive: null, erzaehlzeit: null, is_finished: 0, allow_lektor_book_chat: 0, daily_goal_chars: null, goal_target_chars: null, goal_deadline: null, entities_enabled: 0, orte_real: 0, schauplatz_land: null, zeitlinie_real: 0, weltfakten_real_pruefen: 0, exclude_from_stats: 0, ...CITATION_DEFAULTS, ...XREF_DEFAULTS };
 }
 
 /** Locale-Key für ein Buch: z.B. "de-CH", "en-US". */
@@ -1152,6 +1169,16 @@ function setBookCitationSettings(bookId, {
     bibliography_enabled ? 1 : 0,
     title || null, scope,
     bibliography_in_blog ? 1 : 0,
+    new Date().toISOString(),
+  );
+}
+
+/** Querverweis-Einstellungen pro Buch. Eigener Schreibpfad — beruehrt keine
+ *  anderen Settings. */
+function setBookXrefSettings(bookId, { figure_numbering } = {}) {
+  _updateBookXrefSettings.run(
+    parseInt(bookId),
+    figure_numbering ? 1 : 0,
     new Date().toISOString(),
   );
 }
@@ -1677,6 +1704,7 @@ module.exports = {
   getDailyTotalsByUser:  tokenUsage.getDailyTotalsByUser,
   getBookSettings, getBookLocale, saveBookSettings, setBookEntitiesEnabled, setBookStilprofil,
   setBookCitationSettings, VALID_CITATION_STYLES, VALID_BIBLIOGRAPHY_SCOPES,
+  setBookXrefSettings,
   loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache,
   loadChapterReviewCache, saveChapterReviewCache,
   loadBookReviewCache, saveBookReviewCache, deleteReviewCache,
@@ -1727,6 +1755,7 @@ module.exports = {
   replacePageCitations:   sources.replacePageCitations,
   listBookCitations:      sources.listBookCitations,
   listPageCitations:      sources.listPageCitations,
+  getBookQuoteStats:      sources.getBookQuoteStats,
   insertWerkstattRun:      draftFigures.insertWerkstattRun,
   listWerkstattRuns:       draftFigures.listWerkstattRuns,
   getWerkstattRun:         draftFigures.getWerkstattRun,

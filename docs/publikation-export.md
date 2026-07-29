@@ -80,9 +80,9 @@ Der PDF-Job ([routes/jobs/pdf-export.js](../routes/jobs/pdf-export.js)) spiegelt
 
 Die PDF-Export-Card editiert die Titelei-/Cover-Felder **nicht** mehr (Hinweis auf den Publikation-Tab).
 
-## Quellenverzeichnis im PDF
+## Quellenverzeichnis in den Exporten
 
-Datenquelle ist [lib/bibliography.js](../lib/bibliography.js)#`buildBibliography({ bookId, pageIds, userEmail })` — Einstellungen aus `book_settings` (`citation_style`, `bibliography_enabled`, `bibliography_title`, `bibliography_scope`), Quellen aus dem User-Pool `sources` (dem Buch über `book_source_links` zugeordnet), Fundstellen aus dem abgeleiteten Index `source_citations`, formatiert über die Zitierstil-SSoT [public/js/sources/format.js](../public/js/sources/format.js) (ESM, per dynamic `import()` geladen — Muster [lib/prompts-loader.js](../lib/prompts-loader.js)).
+Datenquelle ist [lib/bibliography.js](../lib/bibliography.js)#`buildBibliography({ bookId, pageIds, citations, userEmail })` — Einstellungen aus `book_settings` (`citation_style`, `bibliography_enabled`, `bibliography_title`, `bibliography_scope`), Quellen aus dem User-Pool `sources` (dem Buch über `book_source_links` zugeordnet), Fundstellen aus dem abgeleiteten Index `source_citations`, formatiert über die Zitierstil-SSoT [public/js/sources/format.js](../public/js/sources/format.js) (ESM, per dynamic `import()` geladen — Muster [lib/prompts-loader.js](../lib/prompts-loader.js)).
 
 **Zwei harte Invarianten:**
 
@@ -92,6 +92,28 @@ Datenquelle ist [lib/bibliography.js](../lib/bibliography.js)#`buildBibliography
 **Pflicht im Render-Pfad:** `resolveCitesInGroups(groups, bib)` läuft in [lib/pdf-render/index.js](../lib/pdf-render/index.js), **bevor** `_coalesceGroups`/der HTML-Walker die Seiten anfassen. Grund: `data-src` ist die Wahrheit, der Chip-Text nur ein Cache vom Einfüge-Zeitpunkt — im numerischen Stil steht dort noch die Autor-Jahr-Form, weil die Nummer erst beim Rendern feststeht.
 
 **Nummern folgen der gerenderten Einheit:** `scope='book'` → Buch-Leserichtung (`listBookCitations`); `scope='chapter'/'page'` → nur die Fundstellen dieser Seiten, beginnend bei 1 (`pageIdsFromGroups(groups)` im Job). Damit stimmen Chip-Text und Verzeichnisnummer in jedem Fall zusammen.
+
+**Jahres-Buchstaben folgen dem BUCH**, nicht der Einheit ([format/sort.js](../public/js/sources/format/sort.js)#`assignYearSuffixes`): Hat derselbe Urheber im selben Jahr zwei Titel, zeigt „(Müller, 2020)" in den Autor-Jahr-Stilen auf zwei Verzeichniseinträge gleichzeitig — APA und Chicago hängen darum einen Kleinbuchstaben an, im Kurzbeleg **und** im Eintrag (`suffixes`-Map im Rückgabeobjekt, von beiden Seiten gelesen). Vergeben wird alphabetisch nach Titel innerhalb der Gruppe, nicht nach Erstzitat — sonst verschiebt sich der Buchstabe beim Umstellen eines Kapitels. Bezugsmenge sind alle Quellen des Buchs, damit `2020a` im Kapitel-PDF dasselbe Werk meint wie im Buch-PDF. Eindeutige und undatierte Werke bleiben ohne Buchstaben; der numerische Stil bekommt keinen (die Nummer ist bereits eindeutig). Der Editor setzt beim Einfügen **keinen** Buchstaben — er hängt an allen Quellen des Buchs, nicht an der ausgewählten, und entsteht wie die Nummer erst im Render-Pfad.
+
+**Fassungs-Export liest die Fundstellen aus dem eingefrorenen HTML** (`citationsFromGroups(groups)` in [routes/snapshots.js](../routes/snapshots.js), übersteuert `pageIds`): `source_citations` beschreibt den heutigen Seitenstand, die Fassung aber einen alten — sonst trägt ein Chip im numerischen Stil eine Nummer, die zum Verzeichnis dieser Fassung nicht passt. Die Quellen-Stammdaten bleiben bewusst live (eine korrigierte ISBN soll auch dort stimmen).
+
+### Die übrigen Ausgabewege
+
+Alle Builder in [lib/export-builders/](../lib/export-builders/) rufen als erstes `prepareCitations(bundle, opts)` ([shared.js](../lib/export-builders/shared.js)) und rendern danach dessen `groups` statt `bundle.groups`. Der Helper kapselt die drei Regeln, die für jeden Weg gleich gelten: Chips auflösen, Verzeichnis nur bei `scope='book'`, ohne `opts.bibliography` unverändert durchreichen. `opts.bibliography` befüllt [lib/export-send.js](../lib/export-send.js)#`buildExportMeta` zentral für beide Sync-Routen (`/export`, Fassungs-Export).
+
+| Weg | Verzeichnis-Form |
+|-----|------------------|
+| PDF (Job + Sync) | synthetische Kapitel-Gruppe, siehe unten |
+| DOCX | eigener Absatz-Style `BIB_STYLE_ID`, Überschrift als Heading-1 (erscheint im Word-TOC) |
+| EPUB | eigene Backmatter-Datei `back_bibliography.xhtml`, **im** Inhaltsverzeichnis (anders als Autor-Bio/Impressum), hängender Einzug via `.bibliography p` |
+| HTML | `<section class="bibliography">` mit `<h2>`, hängender Einzug im Print-CSS |
+| Markdown | `## <Titel>` + Einträge durch denselben Walker wie der Buchtext (kursiver Titel wird `*…*` statt rohem `<em>`) |
+| Plaintext | Klartext-Form `entries[].text`, `[n]`-Präfix vorangestellt |
+| Substack | Einträge durch den Block-Serializer (überlebt Substacks Paste-Filter: nur `<p>`/`<em>`) |
+
+Eintrags-Markup kommt überall aus `bibliographyItemHtml(bib)` — die `[n]`-Spalte des numerischen Stils entsteht dort einmal, nicht je Renderer.
+
+### PDF im Detail
 
 **Render-Weg:** Das Verzeichnis wird als **synthetische Kapitel-Gruppe** hinter die Buchkapitel in `blocks` geschoben (`{ isChapter: true, isBibliography: true, unnumbered: true, items: [{ html: bibliographyItemHtml(bib) }] }`, Eintrags-Markup ein `<p>` pro Eintrag, im numerischen Stil mit `[n]`-Präfix). Ab da ist es ein Block wie jeder andere: `computeChapterLabels` → `tocPlan` → `renderBody` liefern Kolumnentitel, Seitenzahlen und TOC-Eintrag ohne Sonderpfad. Angehängt nur bei `bibliography_enabled` **und** `scope='book'` — bei Kapitel-/Seiten-Export werden die Chips zwar aufgelöst, aber kein Verzeichnis angehängt.
 
@@ -104,5 +126,7 @@ Migration 166 seedet `book_publication` je Buch aus dem Gewinner-PDF-Profil (`is
 ## Tests
 
 - Unit Quellenverzeichnis: [tests/unit/bibliography.test.mjs](../tests/unit/bibliography.test.mjs) (Buch- vs. Seiten-Scope, Nummernvergabe, `cited`/`all`, Titel-Default je Sprache, abgeschaltet → leer, Chip-Text-Ersetzung + Attribut-Invariante); PDF-Seite in [tests/unit/pdf-render.test.mjs](../tests/unit/pdf-render.test.mjs) (eigene Seite + Outline-Eintrag, nur bei `scope='book'`, ersetzter Kurzbeleg im gerenderten Text via `extractPdfText`).
+- Unit übrige Ausgabewege: [tests/unit/export-builders/bibliography.test.mjs](../tests/unit/export-builders/bibliography.test.mjs) — fährt HTML/TXT/MD/Substack/EPUB gegen **dieselbe** Zusage (frischer Kurzbeleg statt Cache, Verzeichnis nur beim Buch, abgeschaltetes Verzeichnis löst trotzdem auf, ohne `bibliography`-Option unverändert). Genau hier lief das Feature zuletzt auseinander: PDF und DOCX konnten es, der Rest nicht.
+- Unit Jahres-Buchstaben: [tests/unit/sources-format.test.mjs](../tests/unit/sources-format.test.mjs) (`assignYearSuffixes`: nur mehrdeutige Paare, Reihenfolge nach Titel, undatiert bleibt aussen vor, >26 Werke kollidieren nicht, Buchstabe in Kurzbeleg **und** Eintrag, numerischer Stil unberührt).
 - Unit: [tests/unit/publication-meta.test.mjs](../tests/unit/publication-meta.test.mjs) (Validator/ISBN-Checksum, `author_file_as`/`co_authors`/`extra_sections`-Normalisierung), [tests/unit/epub-export.test.mjs](../tests/unit/epub-export.test.mjs) (Meta-Resolver, Frontmatter/Backmatter, Bild-Zähler, ISBN-`dc:identifier`, Accessibility-Meta, Landmarks-nav, file-as-Override + Co-Autoren-`dc:creator`, freie Vor-/Nachsatz-Seiten, genEpub-Smoke).
 - E2E: [tests/e2e/publication.spec.js](../tests/e2e/publication.spec.js) (Tab, Speichern, Cover-Upload, EPUB-Download) — Harness [tests/fixtures/publication-harness.html](../tests/fixtures/publication-harness.html), Mocks in [tests/server.js](../tests/server.js).

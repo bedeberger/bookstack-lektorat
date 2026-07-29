@@ -82,9 +82,9 @@ test('snapshotToBundle: srcId wird als p.id durchgereicht', () => {
   assert.equal(groups[3].pages[0].p.id, 14);
 });
 
-test('snapshotToBundle: Roundtrip durch buildHtml mappt Heading-Tiefen', () => {
+test('snapshotToBundle: Roundtrip durch buildHtml mappt Heading-Tiefen', async () => {
   const bundle = snapshotToBundle(CONTENT, { bookId: 1 });
-  const html = buildHtml(bundle).toString('utf8');
+  const html = (await buildHtml(bundle)).toString('utf8');
   // Top-Level-Kapitel → h2, Unterkapitel → h3.
   assert.match(html, /<h2>Erstes Kapitel<\/h2>/);
   assert.match(html, /<h3>Unterkapitel<\/h3>/);

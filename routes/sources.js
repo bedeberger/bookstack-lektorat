@@ -23,18 +23,27 @@ const express = require('express');
 const {
   db, CSL_TYPES,
   listSources, listPoolSources, getSource, createSource, updateSource, deleteSource,
-  linkSource, unlinkSource, isSourceLinked, listSourceBooks,
+  linkSource, unlinkSource, isSourceLinked, listSourceBooks, getBookQuoteStats,
 } = require('../db/schema');
 const { hasMinRole } = require('../db/book-access');
 const { toIntId } = require('../lib/validate');
 const { setContext } = require('../lib/log-context');
 const { requireBookAccess, resolveBookRole, sendACLError } = require('../lib/acl');
+const { BIB_FORMATS, parseBib } = require('../lib/bib-parse');
+const { lookupDoi, lookupIsbn, normalizeDoi, normalizeIsbn } = require('../lib/source-lookup');
+const { localIsoDate } = require('../lib/local-date');
 const logger = require('../logger');
 
 const router = express.Router();
 const jsonBody = express.json({ limit: '256kb' });
+// Import-Text ist eine hochgeladene Datei im JSON-Feld — eine Zotero-Bibliothek
+// sprengt das CRUD-Limit muehelos. Eigener Parser mit eigenem Limit statt das
+// CRUD-Limit fuer alle Routen anzuheben.
+const importBody = express.json({ limit: '4mb' });
 
 const Q_MAX = 200;
+const IMPORT_MAX_CHARS = 2_000_000;
+const IMPORT_MAX_ENTRIES = 500;
 
 function _guard(req, res, bookId, minRole) {
   setContext({ book: bookId });
@@ -135,6 +144,208 @@ router.get('/pool', (req, res) => {
     excludeBookId: excludeBookId || null,
   });
   res.json(_applyFilters(rows, req.query));
+});
+
+// ── Zitat-Kennzahlen eines Buchs ─────────────────────────────────────────────
+// GET /sources/stats?book_id=
+// Zitat-Anteil (woertlich uebernommene Zeichen gegen Manuskript-Zeichen) plus die
+// Aufteilung der Nachweise in woertlich vs. Paraphrase. Reine Ableitung aus dem
+// Fund-Index + page_stats, kein Scan ueber die Seiten-HTMLs.
+//
+// Steht VOR /:id, sonst faengt der Id-Handler 'stats' ab.
+router.get('/stats', (req, res) => {
+  const bookId = toIntId(req.query.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
+  if (!_guard(req, res, bookId, 'viewer')) return;
+  res.json(getBookQuoteStats(bookId));
+});
+
+// ── Import aus BibTeX/RIS ────────────────────────────────────────────────────
+// POST /sources/import  Body: { book_id, format: 'bibtex'|'ris', text }
+// Legt je Eintrag eine Quelle im Pool des Users an und ordnet sie dem Buch zu.
+// Parser: lib/bib-parse.js (pure, kein Netz, kein KI-Call).
+//
+// Antwort: { total, imported, skipped, linked, errors: [{ index, error_code }] }
+//   total     geparste Eintraege (Grundlage der `index`-Werte in `errors`)
+//   imported  neu angelegte Quellen
+//   skipped   Eintraege, die es in der Bibliothek schon gibt (Zitierschluessel
+//             belegt) — davon `linked` neu diesem Buch zugeordnet
+//   errors    Eintraege, die nicht importierbar waren
+//
+// EIN kaputter Eintrag bricht den Import NICHT ab: ein Fremd-Export ist entweder
+// ganz oder gar nicht brauchbar, und ein Abbruch bei Eintrag 37 von 200 hinterlaesst
+// einen halb gefuellten Pool, dessen Rest der User nicht nachladen kann, ohne die
+// ersten 36 als Duplikate zu riskieren.
+//
+// Der Zitierschluessel ist in der BIBLIOTHEK eindeutig (UNIQUE(owner_email,
+// citekey)), nicht pro Buch. Ein Treffer wird darum nicht dupliziert, sondern —
+// falls noch nicht vorhanden — dem Zielbuch zugeordnet: dieselbe .bib zweimal in
+// zwei Arbeiten importiert soll in der zweiten Arbeit die Quellen sichtbar machen,
+// nicht 200 Zeilen „uebersprungen" melden.
+//
+// Eintraege OHNE Zitierschluessel (RIS-Exporte haben oft keinen) werden ueber
+// Gattung + Titel + Jahr erkannt. Sonst wuerde derselbe Import zweimal
+// ausgefuehrt die Bibliothek verdoppeln, und der einzige Weg zurueck waere
+// Loeschen von Hand. Zwei Werke gleicher Gattung mit identischem Titel UND
+// identischem Jahr in einer Bibliothek sind praktisch immer dasselbe Werk.
+//
+// Steht VOR /:id, sonst faengt der Id-Handler 'import' ab.
+router.post('/import', importBody, (req, res) => {
+  const userEmail = _userEmail(req);
+  if (!userEmail) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+
+  const body = req.body || {};
+  const bookId = toIntId(body.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
+  if (!_guard(req, res, bookId, 'editor')) return;
+
+  const format = String(body.format || '').toLowerCase();
+  if (!BIB_FORMATS.includes(format)) {
+    return res.status(400).json({ error_code: 'IMPORT_FORMAT_INVALID', params: { allowed: BIB_FORMATS.join(', ') } });
+  }
+  const text = typeof body.text === 'string' ? body.text : '';
+  if (!text.trim()) return res.status(400).json({ error_code: 'IMPORT_TEXT_REQUIRED' });
+  if (text.length > IMPORT_MAX_CHARS) return res.status(400).json({ error_code: 'IMPORT_TOO_LARGE' });
+
+  const parsed = parseBib(format, text);
+  if (!parsed.length) return res.status(400).json({ error_code: 'IMPORT_EMPTY' });
+
+  const errors = [];
+  const entries = parsed.slice(0, IMPORT_MAX_ENTRIES);
+  if (parsed.length > entries.length) {
+    // Kein stiller Cap: der Rest wird als Fehler-Zeile gemeldet, damit die Karte
+    // „Eintrag 500 und folgende nicht importiert" anzeigen kann.
+    errors.push({ index: entries.length, error_code: 'IMPORT_TOO_MANY', params: { max: IMPORT_MAX_ENTRIES } });
+  }
+
+  const findByCitekey = db.prepare(
+    'SELECT id FROM sources WHERE owner_email = ? AND citekey = ? LIMIT 1'
+  );
+  const findByTitle = db.prepare(`
+    SELECT id FROM sources
+     WHERE owner_email = ? AND csl_type = ?
+       AND title IS NOT NULL AND LOWER(title) = LOWER(?)
+       AND COALESCE(year, '') = COALESCE(?, '')
+     LIMIT 1
+  `);
+  let imported = 0, skipped = 0, linked = 0;
+
+  entries.forEach((entry, index) => {
+    try {
+      if (!_hasIdentity(entry)) { errors.push({ index, error_code: 'SOURCE_IDENTITY_REQ' }); return; }
+      const existing = entry.citekey
+        ? findByCitekey.get(userEmail, entry.citekey)
+        : (entry.title ? findByTitle.get(userEmail, entry.csl_type, entry.title, entry.year) : null);
+      if (existing) {
+        skipped++;
+        if (linkSource(bookId, existing.id, userEmail)) linked++;
+        return;
+      }
+      const created = createSource(userEmail, entry);
+      linkSource(bookId, created.id, userEmail);
+      imported++;
+    } catch (e) {
+      // Wettlauf gegen einen parallelen Import derselben Datei: der UNIQUE-Index
+      // ist die Wahrheit, die Vorab-Abfrage nur die Abkuerzung.
+      if (/UNIQUE/i.test(e.message || '')) { skipped++; return; }
+      logger.warn(`[quellen] import eintrag ${index} fehlgeschlagen: ${e.message}`);
+      errors.push({ index, error_code: 'IMPORT_ENTRY_FAILED' });
+    }
+  });
+
+  logger.info(
+    `[quellen] import format=${format} book=${bookId} eintraege=${parsed.length} `
+    + `neu=${imported} vorhanden=${skipped} (davon zugeordnet=${linked}) fehler=${errors.length}`
+  );
+  res.json({ total: parsed.length, imported, skipped, linked, errors });
+});
+
+// ── DOI-/ISBN-Lookup ─────────────────────────────────────────────────────────
+// GET /sources/lookup?doi=…  bzw.  ?isbn=…
+// Liefert einen Quellen-ENTWURF (nichts wird gespeichert) — der User bestaetigt
+// ihn in der Quellen-Karte. Proxy gegen Crossref bzw. OpenLibrary; kein KI-Call,
+// darum keine Job-Queue (Begruendung im Modulkopf von lib/source-lookup.js).
+//
+// Steht VOR /:id, sonst faengt der Id-Handler 'lookup' ab.
+router.get('/lookup', async (req, res) => {
+  const rawDoi = String(req.query.doi || '').trim();
+  const rawIsbn = String(req.query.isbn || '').trim();
+  if (!rawDoi && !rawIsbn) return res.status(400).json({ error_code: 'LOOKUP_PARAM_REQUIRED' });
+  if (rawDoi && rawIsbn) return res.status(400).json({ error_code: 'LOOKUP_PARAM_AMBIGUOUS' });
+
+  if (rawDoi && !normalizeDoi(rawDoi)) return res.status(400).json({ error_code: 'INVALID_DOI' });
+  if (rawIsbn && !normalizeIsbn(rawIsbn)) return res.status(400).json({ error_code: 'INVALID_ISBN' });
+
+  try {
+    const draft = rawDoi ? await lookupDoi(rawDoi) : await lookupIsbn(rawIsbn);
+    if (!draft) return res.status(404).json({ error_code: 'LOOKUP_NOT_FOUND' });
+    res.json(draft);
+  } catch (e) {
+    // Der Fremd-Dienst ist nicht unser Ausfall — 502 statt 500, und der User kann
+    // die Quelle jederzeit per Hand erfassen (non-fatal, wie beim Geocoding).
+    logger.warn(`[quellen] lookup fehlgeschlagen (${rawDoi ? 'doi' : 'isbn'}): ${e.message}`);
+    res.status(502).json({ error_code: e.code === 'LOOKUP_UNAVAILABLE' ? 'LOOKUP_UNAVAILABLE' : 'LOOKUP_FAILED' });
+  }
+});
+
+// ── Recherche-Fundstueck → Quelle ────────────────────────────────────────────
+// POST /sources/from-research  Body: { item_id }
+// Uebernimmt ein Fundstueck des Recherche-Boards als Quellen-Entwurf in die
+// Bibliothek und ordnet es dem Buch des Fundstuecks zu. Die Felder sind
+// VORBELEGT, nicht fertig — der User schaerft sie danach in der Karte nach.
+// Das Fundstueck bleibt unangetastet (es ist die Notiz, die Quelle ist der Nachweis).
+//
+// Bewusst nicht idempotent: derselbe Fund darf zweimal uebernommen werden (zwei
+// Zitate aus derselben Seite mit unterschiedlichen Angaben). Damit ein
+// versehentlicher Doppel-Klick nachvollziehbar bleibt, meldet das Log einen
+// bereits vorhandenen Treffer mit gleicher URL/gleichem Titel.
+//
+// Steht VOR /:id, sonst faengt der Id-Handler 'from-research' ab.
+router.post('/from-research', jsonBody, (req, res) => {
+  const userEmail = _userEmail(req);
+  if (!userEmail) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+
+  const itemId = toIntId(req.body?.item_id);
+  if (!itemId) return res.status(400).json({ error_code: 'INVALID_ID' });
+
+  const item = db.prepare(
+    'SELECT id, book_id, kind, title, body, source FROM research_items WHERE id = ?'
+  ).get(itemId);
+  if (!item) return res.status(404).json({ error_code: 'RESEARCH_ITEM_NOT_FOUND' });
+  if (!_guard(req, res, item.book_id, 'editor')) return;
+
+  const firstUrl = db.prepare(
+    'SELECT url FROM research_item_urls WHERE item_id = ? ORDER BY position, id LIMIT 1'
+  ).get(itemId)?.url || null;
+
+  const draft = {
+    // Mit URL ist es ein Online-Nachweis, ohne URL bleibt die Gattung offen —
+    // der User waehlt sie in der Karte. Nichts wird geraten.
+    csl_type: firstUrl ? 'website' : 'other',
+    title: item.title || null,
+    url: firstUrl,
+    note: item.source || null,
+    // Abrufdatum ist bei einem Online-Nachweis Pflichtangabe und heute die
+    // Wahrheit: der Fund wurde eben uebernommen. lib/local-date.js statt
+    // toISOString(), damit das Datum der App-Zeitzone folgt.
+    accessed_at: firstUrl ? localIsoDate() : null,
+  };
+  if (!_hasIdentity(draft)) return res.status(400).json({ error_code: 'SOURCE_IDENTITY_REQ' });
+
+  const dupe = db.prepare(`
+    SELECT id FROM sources
+     WHERE owner_email = ?
+       AND ((? IS NOT NULL AND url = ?) OR (? IS NOT NULL AND title = ?))
+     LIMIT 1
+  `).get(userEmail, draft.url, draft.url, draft.title, draft.title);
+  if (dupe) {
+    logger.info(`[quellen] from-research doppelt? item=${itemId} aehnlich zu quelle id=${dupe.id}`);
+  }
+
+  const created = createSource(userEmail, draft);
+  linkSource(item.book_id, created.id, userEmail);
+  logger.info(`[quellen] from-research item=${itemId} book=${item.book_id} quelle=${created.id}`);
+  res.json(getSource(created.id, item.book_id));
 });
 
 // ── Liste eines Buchs ────────────────────────────────────────────────────────

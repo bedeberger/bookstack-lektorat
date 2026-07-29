@@ -33,6 +33,69 @@ export function assignNumbers(citations) {
   return out;
 }
 
+/** Jahres-Buchstaben („2020a" / „2020b") fuer Quellen, die im Kurzbeleg sonst
+ *  nicht unterscheidbar waeren.
+ *
+ *  DAS PROBLEM: In den Autor-Jahr-Stilen ist „(Müller, 2020)" der Zeiger ins
+ *  Verzeichnis. Hat derselbe Urheber im selben Jahr zwei Titel veroeffentlicht,
+ *  zeigt der Beleg auf zwei Eintraege gleichzeitig — die Angabe ist dann in
+ *  beide Richtungen unaufloesbar. APA und Chicago haengen darum einen
+ *  Kleinbuchstaben an, im Kurzbeleg UND im Verzeichniseintrag.
+ *
+ *  Vergeben wird nach der Verzeichnis-Reihenfolge der Gruppe, also alphabetisch
+ *  nach Titel — nicht nach Erstzitat. Sonst haengt der Buchstabe daran, in welcher
+ *  Reihenfolge der Autor die Belege gesetzt hat, und verschiebt sich beim
+ *  Umstellen eines Kapitels.
+ *
+ *  BEZUGSMENGE IST DAS BUCH, nicht die gerenderte Einheit: `2020a` soll im
+ *  Kapitel-PDF dasselbe Werk meinen wie im Buch-PDF. Anders als die Nummern des
+ *  numerischen Stils (die der Einheit folgen, siehe assignNumbers) ist der
+ *  Buchstabe damit stabil.
+ *
+ *  Nur datierte Werke bekommen einen Buchstaben: ohne vierstellige Jahreszahl
+ *  gibt es nichts zu disambiguieren, was ein Buchstabe loesen wuerde („o. J.a"
+ *  waere eine eigene Konvention und ist bewusst nicht drin).
+ *
+ *  Gruppen aus genau einem Werk bleiben leer — ein einzelnes „Müller 2020a" ohne
+ *  ein „2020b" daneben waere eine Falschmeldung an den Leser.
+ *
+ *  @param {Array} sources  alle Quellen des Buchs
+ *  @returns {Map<number,string>} sources.id → 'a' | 'b' | … (nur Mehrdeutige) */
+export function assignYearSuffixes(sources, { lang = 'de' } = {}) {
+  const out = new Map();
+  const list = Array.isArray(sources) ? sources : [];
+  const collator = new Intl.Collator(lang === 'en' ? 'en' : 'de', { sensitivity: 'base', numeric: true });
+
+  const groups = new Map();
+  for (const s of list) {
+    if (!s || s.id == null) continue;
+    const y = _yearNum(s);
+    if (y < 0) continue;
+    const key = `${sortKeyOf(s).trim().toLowerCase()}|${y}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(s);
+  }
+
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    group.sort((a, b) => collator.compare(String(a.title || ''), String(b.title || '')));
+    group.forEach((s, i) => out.set(s.id, _letter(i)));
+  }
+  return out;
+}
+
+// 0→'a', 25→'z', 26→'aa'. Mehr als 26 Titel desselben Urhebers im selben Jahr
+// sind Theorie, sollen aber keine Kollision erzeugen.
+function _letter(i) {
+  let n = i;
+  let s = '';
+  do {
+    s = String.fromCharCode(97 + (n % 26)) + s;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return s;
+}
+
 /** Verzeichnis-Reihenfolge. Mutiert die Eingabe nicht.
  *
  *  apa7/chicago-ad: alphabetisch nach Sortierschluessel (Collator der

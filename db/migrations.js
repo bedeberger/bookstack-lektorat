@@ -9898,6 +9898,127 @@ function _runMigrationsLocked() {
     logger.info(`DB-Migration auf Version 253 abgeschlossen (Quellen als User-Pool: sources + book_source_links; ${moved253} Quelle(n) uebernommen).`);
   }
 
+  if (version < 254) {
+    // Woertliche Zitate als eigene Kategorie: der Fund-Index bekommt zwei
+    // Kennzahl-Spalten, damit „Zitat-Anteil" und „wie viel davon ist Paraphrase"
+    // ohne einen zweiten Scan ueber alle Seiten-HTMLs beantwortbar sind.
+    //
+    //   quote_chars       Zeichen woertlich uebernommenen Textes dieser Quelle auf
+    //                     dieser Seite — Summe der `<blockquote data-src>`-Bloecke
+    //                     OHNE die Kurzbeleg-Chips darin.
+    //   paraphrase_count  wie viele der Nachweise `data-mode="paraphrase"` tragen
+    //                     (Teilmenge von `count`).
+    //
+    // Beides bleibt reine Ableitung aus dem Seiten-HTML und wird pro Seiten-Write
+    // per Full-Replace mitgeschrieben (lib/cite-index.js). Ein Backfill ist
+    // deshalb nicht noetig: bis eine Seite wieder gespeichert wird, stehen dort
+    // die Defaults, danach der echte Wert. Additiv — kein Recreate, kein FK.
+    const scCols254 = db.pragma('table_info(source_citations)').map(c => c.name);
+    if (scCols254.length > 0 && !scCols254.includes('quote_chars')) {
+      db.exec('ALTER TABLE source_citations ADD COLUMN quote_chars INTEGER NOT NULL DEFAULT 0');
+    }
+    if (scCols254.length > 0 && !scCols254.includes('paraphrase_count')) {
+      db.exec('ALTER TABLE source_citations ADD COLUMN paraphrase_count INTEGER NOT NULL DEFAULT 0');
+    }
+
+    const fkErrors254 = db.pragma('foreign_key_check');
+    if (fkErrors254.length) {
+      throw new Error(`Migration 254: foreign_key_check meldet ${fkErrors254.length} Verstoesse: ${JSON.stringify(fkErrors254.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 254').run();
+    logger.info('DB-Migration auf Version 254 abgeschlossen (source_citations.quote_chars + paraphrase_count: Zitat-Kennzahlen).');
+  }
+
+  if (version < 255) {
+    // Querverweise („siehe Kapitel 3", „vgl. Abb. 3.2"). Bauplan wie beim
+    // Quellen-Chip: der Marker im Seiten-HTML ist die Wahrheit, beide Tabellen
+    // hier sind reine Ableitung und werden pro Seiten-Write per Full-Replace neu
+    // geschrieben (Muster source_citations / page_figure_mentions /
+    // motif_occurrences). Nie inkrementell fortschreiben.
+
+    // xref_anchors: die nummerierbaren ZIELE, die im HTML leben. Zur Zeit nur
+    // `figure`. Der Zeiger ist das `data-bid`, das ensureBlockIds ohnehin auf
+    // jeden Block setzt — es gibt also kein eigenes Anker-Attribut und keinen
+    // zusaetzlichen Write-Path.
+    //
+    // Kapitel stehen bewusst NICHT hier: chapters.chapter_id ist selbst schon
+    // der stabile Zeiger und die Reihenfolge steht im Tree. Eine zweite Kopie
+    // koennte davon abdriften.
+    //
+    // `ord` ist die Position innerhalb der Seite; die buchweite Nummer entsteht
+    // erst beim Rendern (sie haengt am Exportprofil, siehe
+    // public/js/xrefs/xref-number.js) und wird darum nirgends persistiert.
+    db.exec(`CREATE TABLE IF NOT EXISTS xref_anchors (
+        page_id INTEGER NOT NULL REFERENCES pages(page_id) ON DELETE CASCADE,
+        kind    TEXT    NOT NULL CHECK(kind IN ('figure')),
+        bid     TEXT    NOT NULL,
+        ord     INTEGER NOT NULL DEFAULT 0,
+        caption TEXT,
+        PRIMARY KEY (page_id, kind, bid)
+      )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_xref_anchors_page ON xref_anchors(page_id, ord)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_xref_anchors_bid ON xref_anchors(bid)');
+
+    // xref_links: die VERWEISE selbst — „auf welcher Seite wird worauf gezeigt".
+    //
+    // Sentinel-frei modelliert (siehe CLAUDE.md „Sentinel-freie Modellierung"):
+    // ein `kind`-Diskriminator plus je Typ eine eigene, echt referenzierte
+    // Spalte statt einer polymorphen TEXT-Zielspalte. So bleibt der
+    // Kapitel-Verweis ein FK — loescht jemand ein Kapitel, verschwindet die
+    // Index-Zeile mit, statt auf eine tote ID zu zeigen.
+    //
+    // Der Marker im HTML bleibt davon unberuehrt und wird zum verwaisten
+    // Verweis. Das ist Absicht: der Text des Autors gehoert ihm. Sichtbar wird
+    // es beim Rendern (lib/xref-render.js meldet ihn, ueberschreibt ihn nie).
+    //
+    // anchor_bid traegt bewusst KEINEN FK auf xref_anchors: das Ziel darf auf
+    // einer noch nicht neu indizierten Seite liegen, und die Reihenfolge, in der
+    // zwei Seiten gespeichert werden, darf nicht darueber entscheiden, ob ein
+    // Verweis erhalten bleibt.
+    db.exec(`CREATE TABLE IF NOT EXISTS xref_links (
+        page_id      INTEGER NOT NULL REFERENCES pages(page_id)       ON DELETE CASCADE,
+        kind         TEXT    NOT NULL CHECK(kind IN ('chapter','figure')),
+        chapter_id   INTEGER          REFERENCES chapters(chapter_id) ON DELETE CASCADE,
+        anchor_bid   TEXT,
+        count        INTEGER NOT NULL DEFAULT 0,
+        first_offset INTEGER,
+        CHECK (
+          (kind = 'chapter' AND chapter_id IS NOT NULL AND anchor_bid IS NULL) OR
+          (kind = 'figure'  AND anchor_bid IS NOT NULL AND chapter_id IS NULL)
+        )
+      )`);
+    // Zwei partielle Unique-Indexe statt eines PK: ein PK muesste eine der
+    // beiden Zielspalten NULL enthalten, und SQLite erzwingt NOT NULL in
+    // nicht-INTEGER-PKs aus Legacy-Gruenden nicht — die Eindeutigkeit waere dann
+    // nur behauptet, nicht durchgesetzt.
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_xref_links_ch  ON xref_links(page_id, chapter_id) WHERE kind = 'chapter'");
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_xref_links_fig ON xref_links(page_id, anchor_bid) WHERE kind = 'figure'");
+    db.exec('CREATE INDEX IF NOT EXISTS idx_xref_links_page ON xref_links(page_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_xref_links_chapter ON xref_links(chapter_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_xref_links_anchor ON xref_links(anchor_bid)');
+
+    // Nummerierte Abbildungslegenden („Abb. 3.2: Der Kaefer") — bewusst in
+    // book_settings und NICHT im Exportprofil, aus demselben Grund wie der
+    // Zitierstil in Migration 252: ob ein Werk seine Abbildungen nummeriert, ist
+    // eine Eigenschaft des Werks und gilt fuer alle Ausgabewege gleichzeitig.
+    // Ein Buch darf nicht je Exportprofil anders nummerieren.
+    //
+    // Default 0: ein Roman mit Bildern will keine „Abb. 1:"-Praefixe. Wer
+    // Querverweise auf Abbildungen setzt, schaltet es in den Bucheinstellungen
+    // ein.
+    const bsCols255 = db.pragma('table_info(book_settings)').map(c => c.name);
+    if (!bsCols255.includes('figure_numbering')) {
+      db.exec('ALTER TABLE book_settings ADD COLUMN figure_numbering INTEGER NOT NULL DEFAULT 0');
+    }
+
+    const fkErrors255 = db.pragma('foreign_key_check');
+    if (fkErrors255.length) {
+      throw new Error(`Migration 255: foreign_key_check meldet ${fkErrors255.length} Verstoesse: ${JSON.stringify(fkErrors255.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 255').run();
+    logger.info('DB-Migration auf Version 255 abgeschlossen (Querverweise: xref_anchors + xref_links + book_settings.figure_numbering).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

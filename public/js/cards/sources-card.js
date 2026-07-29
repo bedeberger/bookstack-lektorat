@@ -37,6 +37,10 @@ export function registerSourcesCard() {
     srcDraft: draftFromSource(null),
     srcFormError: '',
 
+    // Zitat-Kennzahlen des Buchs (GET /sources/stats). null = noch nicht/nicht
+    // ermittelbar; die Leiste bleibt dann weg statt eine 0 zu behaupten.
+    quoteStats: null,
+
     // Fundstellen-Panel („n× zitiert" aufgeklappt).
     srcCitationsId: null,
     srcCitations: [],

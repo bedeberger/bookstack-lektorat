@@ -448,6 +448,14 @@
   color: var(--color-accent);
   font-weight: 600;
 }
+/* Gesperrtes Segment: ein Wert, der im aktuellen Kontext nicht setzbar ist
+   (z.B. „Blockzitat", wenn der Caret in einer Liste steht). Sichtbar bleiben statt
+   verschwinden — sonst springt die Reihe in der Breite und der User weiss nicht,
+   dass es die Option gibt. */
+.seg-toggle button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 /* Stilprofil-Sektion: Generieren-Button + Zeichenzähler nebeneinander. */
 .book-settings-stilprofil-actions {

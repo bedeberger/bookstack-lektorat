@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { parseHTML } from 'linkedom';
 
 import { CITE_SEL, buildCiteHtml } from '../../public/js/sources/cite-html.js';
+import { XREF_SEL, buildXrefHtml } from '../../public/js/xrefs/xref-html.js';
 import { TTS_SKIP_SEL, ttsTextNodes, ttsBlockText } from '../../public/js/tts-segment.js';
 import {
   buildOffsetTable, overlapsProtected, filterProtectedMatches,
@@ -46,6 +47,34 @@ test('LanguageTool-Mapping traegt denselben Chip-Selektor', () => {
   const m = /CITE_SKIP_SEL\s*=\s*'([^']+)'/.exec(src);
   assert.ok(m, 'CITE_SKIP_SEL in mapping.js nicht gefunden');
   assert.equal(m[1], CITE_SEL);
+});
+
+test('LanguageTool-Mapping traegt denselben Querverweis-Selektor', () => {
+  // Ein angewandter LT-Vorschlag ersetzt den Bereich und wuerde den Zeiger
+  // mitnehmen — der Verweis nummerierte danach nicht mehr mit.
+  const src = readFileSync(
+    resolve(ROOT, 'public', 'js', 'cards', 'editor-spellcheck', 'mapping.js'), 'utf8');
+  const m = /XREF_SKIP_SEL\s*=\s*'([^']+)'/.exec(src);
+  assert.ok(m, 'XREF_SKIP_SEL in mapping.js nicht gefunden');
+  assert.equal(m[1], XREF_SEL);
+});
+
+test('Querverweise sind fuer LanguageTool geschuetzte Bereiche', () => {
+  const r = root(`<p>Wie in ${buildXrefHtml({ kind: 'chapter', target: '42', text: 'Kapitel 3' })} gezeigt.</p>`);
+  const { text, protectedRanges } = buildOffsetTable(r);
+  assert.ok(protectedRanges.length > 0, 'kein geschuetzter Bereich fuer den Verweis');
+  // Der Satz bleibt fuer LTs Grammatikregeln vollstaendig — nicht herausgeschnitten.
+  assert.match(text, /Wie in Kapitel 3 gezeigt\./);
+  // Ein Treffer, der den Verweis beruehrt, faellt weg.
+  const start = text.indexOf('Kapitel 3');
+  assert.equal(overlapsProtected(start, 'Kapitel 3'.length, protectedRanges), true);
+});
+
+test('TTS liest Querverweise MIT — anders als Belege', () => {
+  // „siehe Kapitel 3" ist Teil des Satzes und gehoert vorgelesen; ein
+  // Klammerbeleg nicht. Darum steht der Verweis bewusst NICHT in TTS_SKIP_SEL.
+  const r = root(`<p>Siehe ${buildXrefHtml({ kind: 'chapter', target: '42', text: 'Kapitel 3' })}.</p>`);
+  assert.match(ttsBlockText(r.querySelector('p')), /Siehe Kapitel 3\./);
 });
 
 test('tts-segment.js bleibt frei von App-Bundle-Importen', () => {

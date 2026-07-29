@@ -64,6 +64,7 @@ const chatRouter = require('./routes/chat');
 const ideenRouter = require('./routes/ideen');
 const researchRouter = require('./routes/research');
 const sourcesRouter = require('./routes/sources');
+const xrefsRouter = require('./routes/xrefs');
 const plotRouter = require('./routes/plot');
 const motifsRouter = require('./routes/motifs');
 const bookSettingsRouter = require('./routes/booksettings');
@@ -388,7 +389,7 @@ app.use('/metrics', require('./routes/metrics'));
 // `/dictionary` steht ohne Trailing-Slash in der Liste: der Router bedient die
 // Wurzel (GET/POST/DELETE `/dictionary`), ein `/dictionary/`-Prefix wuerde sie
 // verfehlen und den Client auf /auth/login redirecten.
-const API_PREFIXES = ['/history/', '/figures/', '/locations/', '/world-facts/', '/songs/', '/jobs/', '/sync/', '/chat/', '/booksettings/', '/publication/', '/content/', '/stt/', '/tts/', '/languagetool/', '/dictionary', '/books/', '/me/', '/admin/', '/local/', '/config', '/share/api/', '/name-guard/', '/research', '/research/', '/sources', '/sources/'];
+const API_PREFIXES = ['/history/', '/figures/', '/locations/', '/world-facts/', '/songs/', '/jobs/', '/sync/', '/chat/', '/booksettings/', '/publication/', '/content/', '/stt/', '/tts/', '/languagetool/', '/dictionary', '/books/', '/me/', '/admin/', '/local/', '/config', '/share/api/', '/name-guard/', '/research', '/research/', '/sources', '/sources/', '/xrefs', '/xrefs/'];
 
 app.use((req, res, next) => {
   // Device-Token (native Clients, z.B. Mac-Focus-Writer): Bearer swd_… loest auf
@@ -488,6 +489,7 @@ app.use('/chat', chatRouter);
 app.use('/ideen', ideenRouter);
 app.use('/research', researchRouter);
 app.use('/sources', sourcesRouter);
+app.use('/xrefs', xrefsRouter);
 app.use('/plot', plotRouter);
 app.use('/motifs', motifsRouter);
 app.use('/booksettings', bookSettingsRouter);

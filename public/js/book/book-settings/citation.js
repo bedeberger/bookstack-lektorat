@@ -1,5 +1,6 @@
 // Teil von bookSettingsMethods (siehe Facade book-settings.js).
-// Quellen-Tab der Bucheinstellungen: Zitierstil + Quellenverzeichnis.
+// Quellen-Tab der Bucheinstellungen: Zitierstil, Quellenverzeichnis und
+// Abbildungs-Nummerierung (Grundlage der Querverweise auf Abbildungen).
 //
 // Eigener Schreibpfad `PUT /booksettings/:book_id/citation` (PATCH-artig) statt
 // weiterer Felder im Haupt-Body: der Zitierstil gilt buchweit fuer ALLE
@@ -25,6 +26,10 @@ const PREVIEW_SOURCE = Object.freeze({
   publisher: 'Kurt Wolff',
 });
 
+export const XREF_DEFAULTS = Object.freeze({
+  figure_numbering: 0,
+});
+
 export const CITATION_DEFAULTS = Object.freeze({
   citation_style: DEFAULT_STYLE,
   bibliography_enabled: 0,
@@ -46,7 +51,35 @@ export const citationMethods = {
       bibliography_scope: data?.bibliography_scope === 'all' ? 'all' : 'cited',
       bibliography_in_blog: data?.bibliography_in_blog ? 1 : 0,
     };
+    this.bookXref = { figure_numbering: data?.figure_numbering ? 1 : 0 };
     this.bookCitationLoaded = true;
+  },
+
+  /** Abbildungs-Nummerierung. Eigener Endpunkt (`PUT /booksettings/:id/xrefs`),
+   *  weil es keine Zitier-Einstellung ist — es steht nur im selben Tab, weil
+   *  beides zur Fachtext-Ausstattung gehoert und buchweit fuer alle Ausgabewege
+   *  gilt. `saveActiveTab` ruft beide Speicherpfade nebeneinander auf. */
+  async saveXrefSettings() {
+    const bookId = Alpine.store('nav').selectedBookId;
+    if (!bookId || !this.bookCitationLoaded) return;
+    try {
+      const r = await fetch(`/booksettings/${bookId}/xrefs`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ figure_numbering: this.bookXref?.figure_numbering ? 1 : 0 }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(window.__app.tError(d) || `HTTP ${r.status}`);
+      }
+      const data = await r.json();
+      this.bookXref = { figure_numbering: data?.figure_numbering ? 1 : 0 };
+      // Der Ziel-Picker im Editor cacht die Abbildungen samt Vorschau-Nummer;
+      // ohne Nummerierung zeigt er den Legendentext. Cache verwerfen.
+      window.dispatchEvent(new CustomEvent(EVT.XREFS_CHANGED, { detail: { bookId } }));
+    } catch (e) {
+      this.citationError = e.message;
+    }
   },
 
   async saveCitationSettings() {

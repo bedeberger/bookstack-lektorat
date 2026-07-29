@@ -67,7 +67,7 @@ CREATE INDEX idx_blog_page_links_blog ON blog_page_links(blog_id);
 | File | Inhalt |
 |---|---|
 | `lib/wp-client.js` | Basic-Auth-Header, HTTPS-Pflicht + SSRF-Guard (`validateBaseUrl`), Pagination via `X-WP-TotalPages`, Retry/Backoff bei 429/5xx. Methoden: `me()`, `listPosts({ page, perPage, modifiedAfter? })`, `getPost(id)`, `createPost(payload)`, `updatePost(id, payload)`, `uploadMedia({ data, filename, mimeType })` (Binär-Upload via `raw`-Body + `Content-Disposition`). Keine Categories/Tags-Endpoints. |
-| `lib/wp-html.js` | `wpToAppHtml(raw)`: strip alle `<!-- wp:* -->`/`<!-- /wp:* -->` Kommentare, `img` auf `src`/`alt`/`class`(`wp-image-<n>`) reduzieren, Nicht-Bild-Embeds + bild-lose Figuren entfernen, dann durch `lib/html-clean.js` (Single Chokepoint). `appToWpHtml(html)`: parse via linkedom, pro Block-Element passenden Gutenberg-Kommentar wrappen (siehe Block-Mapping); `<figure>`/`<img>` → `wp:image`. `appToWpHtmlWithMedia(html, { resolveImage })`: async Variante mit vorgelagertem Media-Pass (jedes `<img>` durch `resolveImage(src)` → src ersetzen / verwerfen). |
+| `lib/wp-html.js` | `wpToAppHtml(raw, stats?)` (**async**): strip alle `<!-- wp:* -->`/`<!-- /wp:* -->` Kommentare, **angehängtes Quellenverzeichnis entfernen** (`div.sw-bibliography`, siehe „Quellenverzeichnis im Post"), **Quellen-Chips ohne `data-src` zu Klartext degradieren** (zählt in `stats.citesDegraded`), `img` auf `src`/`alt`/`class`(`wp-image-<n>`) reduzieren, Nicht-Bild-Embeds + bild-lose Figuren entfernen, dann durch `lib/html-clean.js` (Single Chokepoint). Async, weil die Chip-Selektoren aus der ESM-SSoT `public/js/sources/cite-html.js` kommen statt aus einer Kopie. `appToWpHtml(html, { bibliography? })`: parse via linkedom, pro Block-Element passenden Gutenberg-Kommentar wrappen (siehe Block-Mapping); `<figure>`/`<img>` → `wp:image`. `appToWpHtmlWithMedia(html, { resolveImage, bibliography? })`: async Variante mit vorgelagertem Media-Pass (jedes `<img>` durch `resolveImage(src)` → src ersetzen / verwerfen). |
 | `lib/wp-media.js` | `makeImageResolver({ wp, blogOrigin, signal, logger, fetchImpl? })` → async `resolveImage(src)`: blog-gehostet → unverändert behalten; data-URI/fremde URL → Bytes holen (SSRF-Guard `assertPublicUrl` pro Hop; Redirects via `redirect: 'manual'` selbst gefolgt + jeder Hop neu validiert, Hop-Limit 5 — verhindert Redirect-Bypass auf interne IPs) + `wp.uploadMedia`. MIME-Allowlist (jpeg/png/gif/webp/avif) + 20-MB-Cap. Fehler → Bild verwerfen (`null`), nie Job-Abbruch. |
 | `lib/blog-merge.js` | Pure `classifyPull({ hasLink, wpModifiedAt, linkModifiedAt, pageUpdatedAt, lastPulledAt })` → `'create'`/`'update'`/`'conflict'`/`'skip'` + `newer(a,b)`. Ausgelagert für testbare LWW-Logik ohne Job-/DB-Kontext. |
 | `db/blogs.js` | CRUD für `blog_connections` + `blog_page_links`. Passwort beim Read via `lib/crypto.js` entschlüsseln, nie an Client returnen. |
@@ -94,6 +94,37 @@ App-HTML → WP-Block-HTML:
 
 Unit-Test pro Mapping in `tests/unit/wp-html.test.mjs`.
 
+## Quellenverzeichnis im Post
+
+Bei `bibliography_enabled && bibliography_in_blog` (Bucheinstellungen → Quellen) hängt der Push das Quellenverzeichnis an den Post. **Einheit ist die Seite** — ein Post ist genau eine Seite, also läuft `buildBibliography({ bookId, pageIds: [pageId], userEmail })`; die Nummern des numerischen Stils folgen den Fundstellen dieses einen Posts ab 1. Davor läuft `resolveCitesInHtml` über das Seiten-HTML, damit der Kurzbeleg im Chip den aktuellen Zitierstil zeigt (der gespeicherte Text ist nur ein Cache — siehe [publikation-export.md](publikation-export.md) und `lib/bibliography.js`).
+
+Markup: ein `wp:group` mit der Marker-Klasse, darin `wp:heading` + `wp:list` (Autor-Jahr-Stile) bzw. `wp:paragraph` je Eintrag (numerischer Stil — sein `[n]`-Präfix ist selbst das Label, und eine auto-numerierte `<ol>` würde bei `bibliography_scope='all'` falsch zählen, weil unzitierte Quellen ohne Nummer hinten anhängen).
+
+```
+<!-- wp:group {"className":"sw-bibliography"} -->
+<div class="wp-block-group sw-bibliography">
+<!-- wp:heading --><h2 class="wp-block-heading">Quellenverzeichnis</h2><!-- /wp:heading -->
+<!-- wp:list --><ul><!-- wp:list-item --><li>Kafka, F. (1915). <em>Die Verwandlung</em>.</li><!-- /wp:list-item --></ul><!-- /wp:list -->
+</div>
+<!-- /wp:group -->
+```
+
+### Pflicht-Invariante: der Pull entfernt es wieder
+
+**Das angehängte Verzeichnis MUSS beim Pull verschwinden.** Der Sync ist bidirektional mit LWW: bleibt es stehen, liest der nächste Pull es als Seitentext ins Manuskript, der Push danach hängt ein zweites an — und es wächst pro Zyklus weiter. Das Verzeichnis ist ein **Render-Artefakt** und darf nie in `pages.content` landen (Invariante A in `lib/bibliography.js`).
+
+Umsetzung: `appToWpHtml` schreibt den Marker (`BIBLIOGRAPHY_MARKER_CLASS`), `wpToAppHtml` entfernt `div.sw-bibliography` wie die `_DROP_EMBEDS`. Beide Richtungen stehen **bewusst in derselben Datei** — auf zwei Module verteilt hält die Invariante nicht. Gutenberg schreibt `className` in die Klassenliste des gerenderten `<div>`, der Marker ist also in `content.raw` **und** `content.rendered` zu finden; der Klassenfilter von `wpToAppHtml` behält ihn (nur `wp-`/`has-`/`is-style-`-Klassen fliegen raus).
+
+Gegated durch `tests/unit/wp-html.test.mjs`: `appToWpHtml → wpToAppHtml` mit Verzeichnis muss buchstabengleich dasselbe liefern wie ohne, über drei Zyklen hinweg, mit erhaltenem `data-src`/`data-loc` am Chip. Der Pull-Strip ist mutationsgeprüft (Strip deaktivieren ⇒ drei Tests rot).
+
+### KSES: Chip ohne Zeiger
+
+WordPress' KSES entfernt `data-*`-Attribute, wenn dem verbundenen Benutzer die Capability `unfiltered_html` fehlt (bei Multisite fehlt sie auch Admins). Dann kommt vom Pull ein `<span class="cite">(Kafka, 1915, S. 44)</span>` **ohne Zeiger** zurück — eine Quellenangabe, die auf nichts zeigt.
+
+`wpToAppHtml` degradiert solche Chips zu reinem Text: der lesbare Kurzbeleg bleibt im Satz (er ist das einzige, was noch da ist), das Chip-Markup fällt weg. **Es wird nie auf eine Quelle geraten** — nicht über den Chip-Text (der ist explizit nur ein Cache und unterscheidet zwei Quellen desselben Autors im selben Jahr nicht) und nicht über die Quellenliste des Buchs; ein falscher Zeiger wäre schlimmer als keiner, weil er unbemerkt ins Verzeichnis wanderte. Der Fall wird gezählt (`stats.citesDegraded`), landet in `job.result.citesDegraded` von Import und Pull, geht als Warnung ins Log und erscheint im Blog-Tab als `.card-form-warn`-Hinweis (`blog.status.citesDegraded`).
+
+Ein `span.cite` mit unbrauchbarem `data-src` (`"0"`, `"abc"`) ist laut SSoT kein Nachweis, sondern Fremdmarkup — es wird ebenfalls entpackt, aber **nicht** als KSES-Verlust gezählt.
+
 ## Sync-Jobs
 
 ### `runBlogImportJob(bookId)` — einmalig
@@ -117,7 +148,7 @@ Voraussetzung: Initial-Import durch. Sonst 400 `IMPORT_FIRST`.
 
 ### `runBlogPushJob(bookId, pageIds[])` — manuell, Multi-Select
 
-Vor dem Upload läuft `appToWpHtmlWithMedia(html, { resolveImage })` mit einem `makeImageResolver` (Blog-Origin aus `conn.base_url`): Inline-Bilder werden ggf. in die WP-Mediathek geladen (`job.result.imagesUploaded` zählt neue Uploads). Upload-Fehler verwerfen nur das Bild, nicht den Push.
+Vor dem Upload läuft `appToWpHtmlWithMedia(html, { resolveImage, bibliography })` mit einem `makeImageResolver` (Blog-Origin aus `conn.base_url`): Inline-Bilder werden ggf. in die WP-Mediathek geladen (`job.result.imagesUploaded` zählt neue Uploads). Upload-Fehler verwerfen nur das Bild, nicht den Push. Quellen-Chips werden vorher per `resolveCitesInHtml` aktualisiert, das Verzeichnis kommt bei aktivem `bibliography_in_blog` als markierter Block dazu (siehe „Quellenverzeichnis im Post").
 
 1. pro `pageId`:
    - kein Link → `createPost({ title, content: appToWpHtmlWithMedia, status: conn.default_status, slug })` → Link anlegen.
@@ -217,7 +248,7 @@ Buchtyp-Label in [prompt-config.json](../prompt-config.json):
 ## Tests
 
 ### Unit (`tests/unit/`)
-- `wp-html.test.mjs` — Block-Wrap/Unwrap Round-Trip, Inline-Erhalt, Bild-Erhalt bei Import + `wp:image`-Wrap bei Export (inkl. Attachment-ID + figcaption), Nicht-Bild-Embed-Strip, async Media-Pass (`appToWpHtmlWithMedia`)
+- `wp-html.test.mjs` — Block-Wrap/Unwrap Round-Trip, Inline-Erhalt, Bild-Erhalt bei Import + `wp:image`-Wrap bei Export (inkl. Attachment-ID + figcaption), Nicht-Bild-Embed-Strip, async Media-Pass (`appToWpHtmlWithMedia`); **Quellenverzeichnis:** markierter `wp:group`-Anhang, Listen- vs. Absatz-Form je Zitierstil, die Akkumulations-Invariante (Round-Trip mit == ohne Verzeichnis, auch über drei Zyklen, `data-src` erhalten — mutationsgeprüft) und der KSES-Guard (Chip ohne `data-src` → Klartext + gezählt, nie geraten)
 - `wp-client.test.mjs` — Pagination via `X-WP-TotalPages`, 401-Handling, HTTPS-Reject, Backoff bei 429/5xx
 - `wp-media.test.mjs` — Resolver: blog-gehostet unverändert, data-URI/fremde URL → Upload, MIME-Reject, Fetch-Fehler → `null`
 - `blog-merge.test.mjs` — alle 4 LWW-Fälle (`classifyPull`) + `newer`-Vergleich

@@ -27,7 +27,7 @@
   <div x-show="sourcesNotice" x-cloak class="card-status" x-text="sourcesNotice"></div>
 
   <!-- Toolbar: Anlegen + aus der Bibliothek uebernehmen + Filter -->
-  <div class="sources-toolbar">
+  <div class="card-toolbar">
     <button type="button" class="btn-compact" @click="srcEditingId === 'new' ? cancelSourceEdit() : startCreateSource()" :disabled="sourcesBusy">
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#plus"/></svg>
       <span x-text="$app.t('sources.new')"></span>
@@ -37,9 +37,9 @@
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#book-open"/></svg>
       <span x-text="$app.t('sources.fromLibrary')"></span>
     </button>
-    <div class="filter-bar sources-filter-bar">
+    <div class="filter-bar filter-bar--inline">
       <span class="filter-search-wrap">
-        <input type="text" class="filter-search-input" x-model="srcFilterText"
+        <input type="text" class="filter-search-input filter-search-input--wide" x-model="srcFilterText"
                :placeholder="$app.t('sources.filter.search')" :aria-label="$app.t('sources.filter.search')">
         <button type="button" class="search-clear--icon" x-show="srcFilterText" @click="srcFilterText = ''"
                 :aria-label="$app.t('search.clear')" :data-tip="$app.t('search.clear')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#x"/></svg></button>
@@ -47,7 +47,7 @@
       <div x-data="combobox($app.t('sources.filter.type'), $app.t('sources.filter.allTypes'))"
            x-modelable="value" x-model="srcFilterType"
            x-effect="options = sourceTypeOptions()"></div>
-      <label class="sources-archive-toggle">
+      <label class="filter-toggle">
         <input type="checkbox" x-model="srcShowArchived">
         <span x-text="$app.t('sources.showArchived')"></span>
       </label>
@@ -120,6 +120,30 @@
   <p class="muted-msg muted-msg--sm" x-show="sources.length > 0 && sourceRows().length === 0" x-cloak
      x-text="$app.t('sources.noMatch')"></p>
 
+  <!-- Zitat-Kennzahlen: Anteil woertlich uebernommenen Textes (Blockzitate mit
+       Quellen-Zeiger) und Aufteilung der Nachweise woertlich vs. Paraphrase.
+       Der Anteil bleibt weg, solange kein Nenner synchronisiert ist — siehe
+       quoteSharePercent() in public/js/sources/manage.js. -->
+  <div class="sources-quote-stats" x-show="quoteStats && quoteStats.cite_count > 0" x-cloak>
+    <div class="sources-quote-stat" x-show="quoteSharePercent()">
+      <span class="sources-quote-stat-value" x-text="quoteSharePercent()"></span>
+      <span class="sources-quote-stat-label" x-text="$app.t('sources.stats.quoteShare')"></span>
+    </div>
+    <div class="sources-quote-stat">
+      <span class="sources-quote-stat-value" x-text="(quoteStats?.direct_count ?? 0).toLocaleString()"></span>
+      <span class="sources-quote-stat-label" x-text="$app.t('sources.stats.direct')"></span>
+    </div>
+    <div class="sources-quote-stat">
+      <span class="sources-quote-stat-value" x-text="(quoteStats?.paraphrase_count ?? 0).toLocaleString()"></span>
+      <span class="sources-quote-stat-label" x-text="$app.t('sources.stats.paraphrase')"></span>
+    </div>
+    <div class="sources-quote-stat">
+      <span class="sources-quote-stat-value" x-text="(quoteStats?.cited_sources ?? 0).toLocaleString()"></span>
+      <span class="sources-quote-stat-label" x-text="$app.t('sources.stats.citedSources')"></span>
+    </div>
+    <p class="muted-msg muted-msg--sm sources-quote-stats-hint" x-text="$app.t('sources.stats.hint')"></p>
+  </div>
+
   <div class="table-scroll sources-table-wrap" x-show="sourceRows().length > 0" :class="{ 'is-refreshing': sourcesRefreshing }">
     <table class="sources-table"
            x-data="sortableTable({
@@ -148,10 +172,17 @@
         <template x-for="s in sorted" :key="s.id">
           <tr :class="{ 'sources-row--archived': s.archived, 'sources-row--active': srcEditingId === s.id }">
             <td class="sources-cell-author" x-text="s._author || '—'"></td>
+            <!-- Titel/Container/Archiv-Badge stapeln in einem inneren Wrapper,
+                 nicht per display:flex auf der <td>: eine Flex-<td> ist keine
+                 Tabellenzelle mehr (der Browser schiebt eine anonyme Zelle
+                 darunter), damit greift vertical-align auf ihr nicht und die
+                 Zelle klebt unabhaengig von der Zeilenhoehe oben. -->
             <td class="sources-cell-title">
-              <span class="sources-title internal-link" @click="startEditSource(s)" x-text="s.title || $app.t('sources.untitled')"></span>
-              <span class="sources-container" x-show="s.container_title" x-text="s.container_title"></span>
-              <span class="badge-warn sources-archived-badge" x-show="s.archived" x-cloak x-text="$app.t('sources.archived')"></span>
+              <span class="sources-title-stack">
+                <span class="sources-title internal-link" @click="startEditSource(s)" x-text="s.title || $app.t('sources.untitled')"></span>
+                <span class="sources-container" x-show="s.container_title" x-text="s.container_title"></span>
+                <span class="badge-warn sources-archived-badge" x-show="s.archived" x-cloak x-text="$app.t('sources.archived')"></span>
+              </span>
             </td>
             <td x-text="s.year || '—'"></td>
             <td><span class="tag entity-typ-tag" x-text="s._typeLabel"></span></td>
@@ -168,16 +199,18 @@
                  ihn sichtbar (der Server setzt dieselbe Grenze). „Aus der Arbeit
                  entfernen" bleibt fuer jeden Editor da: das ist eine Aussage
                  ueber dieses Buch, nicht ueber fremde Bibliotheken. -->
-            <td class="sources-row-actions">
-              <button type="button" class="icon-btn icon-btn--ghost" x-show="srcIsOwner(s)" @click="startEditSource(s)"
-                      :data-tip="$app.t('sources.edit')" :aria-label="$app.t('sources.edit')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#pencil"/></svg></button>
-              <button type="button" class="icon-btn icon-btn--ghost" x-show="srcIsOwner(s)" @click="toggleSourceArchived(s)" :disabled="sourcesBusy"
-                      :data-tip="s.archived ? $app.t('sources.unarchive') : $app.t('sources.archive')"
-                      :aria-label="s.archived ? $app.t('sources.unarchive') : $app.t('sources.archive')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#archive"/></svg></button>
-              <button type="button" class="icon-btn icon-btn--ghost" @click="unlinkSourceFromBook(s)" :disabled="sourcesBusy"
-                      :data-tip="$app.t('sources.remove')" :aria-label="$app.t('sources.remove')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#unlink"/></svg></button>
-              <button type="button" class="icon-btn icon-btn--ghost" x-show="srcIsOwner(s)" @click="deleteSource(s)" :disabled="sourcesBusy"
-                      :data-tip="$app.t('sources.deleteFromLibrary')" :aria-label="$app.t('sources.deleteFromLibrary')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#trash"/></svg></button>
+            <td class="sources-cell-actions">
+              <span class="sources-row-actions">
+                <button type="button" class="icon-btn icon-btn--ghost" x-show="srcIsOwner(s)" @click="startEditSource(s)"
+                        :data-tip="$app.t('sources.edit')" :aria-label="$app.t('sources.edit')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#pencil"/></svg></button>
+                <button type="button" class="icon-btn icon-btn--ghost" x-show="srcIsOwner(s)" @click="toggleSourceArchived(s)" :disabled="sourcesBusy"
+                        :data-tip="s.archived ? $app.t('sources.unarchive') : $app.t('sources.archive')"
+                        :aria-label="s.archived ? $app.t('sources.unarchive') : $app.t('sources.archive')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#archive"/></svg></button>
+                <button type="button" class="icon-btn icon-btn--ghost" @click="unlinkSourceFromBook(s)" :disabled="sourcesBusy"
+                        :data-tip="$app.t('sources.remove')" :aria-label="$app.t('sources.remove')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#unlink"/></svg></button>
+                <button type="button" class="icon-btn icon-btn--ghost" x-show="srcIsOwner(s)" @click="deleteSource(s)" :disabled="sourcesBusy"
+                        :data-tip="$app.t('sources.deleteFromLibrary')" :aria-label="$app.t('sources.deleteFromLibrary')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#trash"/></svg></button>
+              </span>
             </td>
           </tr>
         </template>

@@ -30,6 +30,7 @@ Token-Referenz (Farben, Radien, Spacing, Schriftgrössen): [public/css/tokens.cs
 - [Form-Patterns](#form-patterns-settings--und-export-karten) — `.card-form-grid` + Wertspalten
 - [Progress-Bar](#progress-bar) — `--progress` Custom-Prop
 - [Entity-List](#entity-list-listendarstellung) — Listen mit Detail-Drawer
+- [Karten-Toolbar](#karten-toolbar-card-toolbar) — Aktionszeile im Karten-Body
 - [Filter-Bar](#filter-bar-listenfilter) — Such-/Sort-Eingaben
 - [Heatmap-Visualisierung](#heatmap-visualisierung) — Daten-Intensität
 - [Jahr×Monat-Heatmap](#jahrmonat-heatmap) — Jahre × 12 Monate, Dichte-Raster
@@ -876,11 +877,19 @@ Referenz: [folder-import.html](public/partials/folder-import.html) (Drop-Modus),
 - `.pub-matter-card` — eckige Sub-Karte für reichere Einträge (Kopf + mehrere Felder).
 - Mutation per Alpine `x-for="(s, i) in arr"` + `x-model="s.feld"` (Loop-Var ist reaktive Referenz ins Array) + `arr.push(...)` / `arr.splice(i, 1)`. `:key="i"`. Kein Server-Call beim Add/Remove — der Karten-Save schreibt das volle Array.
 
-`.seg-toggle` — **binärer Inline-Umschalter** (zwei aneinanderliegende, eckige Buttons; aktiver Zustand getintet via `--color-tag-bg` + `--color-accent`). Reuse statt nativem `<select>`/Combobox, wenn genau 2–3 sich gegenseitig ausschliessende Werte direkt in einer dichten Repeater-Zeile gesetzt werden. Markup: `<div class="seg-toggle"><button :class="{ 'seg-toggle--active': v==='a' }" @click="v='a'">…</button>…</div>`.
+`.seg-toggle` — **binärer Inline-Umschalter** (zwei aneinanderliegende, eckige Buttons; aktiver Zustand getintet via `--color-tag-bg` + `--color-accent`). Reuse statt nativem `<select>`/Combobox, wenn genau 2–3 sich gegenseitig ausschliessende Werte direkt in einer dichten Repeater-Zeile gesetzt werden. Markup: `<div class="seg-toggle"><button :class="{ 'seg-toggle--active': v==='a' }" @click="v='a'">…</button>…</div>`. Ein Wert, der im aktuellen Kontext nicht setzbar ist, bekommt `:disabled` (gedimmt, `not-allowed`) plus ein `:data-tip`, das den Grund nennt — **sichtbar bleiben statt verschwinden**, sonst springt die Reihe in der Breite und der User erfährt nie, dass es die Option gibt. Beispiel: „Blockzitat" im Quellen-Picker des Notebook-Editors, wenn der Caret in einer Liste steht.
 
 ### Hint / Error / Saved unterhalb der Form
 
 `.card-form-hint` (12 px, muted, italic), `.card-form-error` (rot), `.card-form-saved` (success — ✓-Prefix via `::before`, fade via `x-transition.opacity.duration.250ms`, Auto-Dismiss 2500 ms via `_savedAtTimer` in der Karte).
+
+`.card-form-warn` (amber, getönter Hintergrund + linker 3 px-Border) ist die dritte Stufe: die Aktion **lief durch**, hat aber eine Folge, die der User kennen muss. Kein Auto-Dismiss (ein Hinweis, der verschwindet, bevor er gelesen ist, ist keiner) und `role="status"`. Getönte Box statt bloss farbigem Text, weil solche Hinweise mehrzeilig sind und als reiner Farbtext neben `.card-form-saved` untergehen. CSS in [card-form/form-elements.css](public/css/components/card-form/form-elements.css).
+
+```html
+<p class="card-form-warn" x-show="blogCiteWarning" x-cloak role="status" x-text="blogCiteWarning"></p>
+```
+
+**Use:** Teil-Erfolg mit Datenfolge — Beispiel: der WordPress-Pull lief, aber WordPress hat die Quellen-Verweise entfernt (KSES ohne `unfiltered_html`), die Belege im Text sind zu Klartext degradiert. **Nicht** für Validation (→ `.card-form-error` + `aria-invalid`) und nicht für abgeleitete Vorschau-Konsequenzen einer Einstellung (→ `.admin-settings-budget`).
 
 ### Abgeleiteter Severity-Hinweis (`.admin-settings-budget`)
 
@@ -1285,6 +1294,31 @@ Kein Skeleton ohne Shimmer-Animation. CSS-File-Referenzen: [entity-list.css](pub
 
 ---
 
+## Karten-Toolbar (`.card-toolbar`)
+
+**Use:** Aktionszeile im Karten-**Body** (nicht im Header): Anlege-/Import-Buttons, danach optional eine eingebettete Filterleiste. Abgrenzung: `.card-actions` ist die Icon-Leiste im Header.
+
+**Markup:**
+```html
+<div class="card-toolbar">
+  <button type="button" class="btn-compact">
+    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#plus"/></svg>
+    <span x-text="$app.t('xxx.new')"></span>
+  </button>
+  <div class="filter-bar filter-bar--inline">…</div>
+</div>
+```
+
+`.card-toolbar` ([card-form/card-shell.css](public/css/components/card-form/card-shell.css)) setzt Flex + `flex-wrap` + `gap: --space-sm` + `align-items: center` + `margin-bottom: --space-md` und richtet enthaltene `.btn-compact` inkl. `1em`-Icon aus. **Kein Nachbau pro Karte** — die Zeile mischt Buttons mit Compact-Controls, deren gemeinsame Mittellinie an genau diesen Werten hängt.
+
+**Nicht darauf umstellen:** Toolbars mit bewusst eigener Geometrie — `.organizer-toolbar` (`nowrap`), `.figuren-graph-toolbar` (`space-between`), `.motiv-toolbar` (`padding` statt `margin`), `.page-editor-toolbar`/`.edit-bubble-toolbar` (Editor-Chrome).
+
+**Mobile:** karten-eigene Abweichungen über die Akzent-Klasse der Karte scopen (`.card--sources .card-toolbar .btn-compact { width: 100% }`), nicht durch eine zweite Toolbar-Klasse.
+
+**Konsumenten:** [sources.html](public/partials/sources.html), [recherche.html](public/partials/recherche.html).
+
+---
+
 ## Filter-Bar (Listenfilter)
 
 **Use:** Such-/Filtereingaben oberhalb von `.entity-list`-Listen.
@@ -1306,6 +1340,18 @@ Kein Skeleton ohne Shimmer-Animation. CSS-File-Referenzen: [entity-list.css](pub
 Das Suchfeld sitzt in einem `.filter-search-wrap` (position:relative) zusammen mit dem
 Clear-X. `.search-clear--icon` ist der wiederverwendbare X-Button (aus [search.css](public/css/search.css),
 geteilt mit der Sidebar-Page-Suche) — nur sichtbar (`x-show`), wenn das Suchfeld befüllt ist.
+
+**Bausteine** (alle in [entity-list.css](public/css/entities/entity-list.css), frei kombinierbar):
+
+| Klasse | Wirkung | Wann |
+|---|---|---|
+| `.filter-bar` | Eigenständige Filterzeile über der Liste, mit Unterrand als Abschluss | Default — direktes Kind der Karte |
+| `.filter-bar--inline` | Nimmt das Standalone-Chrome zurück (kein Unterrand/`padding-bottom`/`margin-bottom`) + `flex: 1` | Leiste sitzt in einer `.card-toolbar` neben Buttons |
+| `.filter-search-input--wide` | Suchfeld wird 12rem breit + wachsend statt der 120px-Default-Spalte | Freitext ist das Hauptfilter der Leiste |
+| `.filter-toggle` | `<label>` mit Checkbox in Compact-Typografie der Nachbarn | Boolean-Filter („Archivierte anzeigen") |
+| `.filter-count` | Trefferzähler, per `margin-left: auto` ans rechte Ende | Optional, immer letztes Kind |
+
+**`.filter-bar--inline` ist Pflicht in einer Toolbar-Zeile.** Ohne den Modifier zählen die 10 px `padding-bottom` + 1 px Unterrand der Standalone-Variante bei `align-items: center` zur Box-Höhe: alle Controls sitzen ~5,5 px über der Mittellinie der Buttons daneben, und die Trennlinie läuft nur unter dem Filter-Teil der Zeile. Konsumenten: [sources.html](public/partials/sources.html), [recherche.html](public/partials/recherche.html).
 
 **Severity-/Wertungs-Filter:** generisches `.tabs` / `.tabs-btn` (siehe Tabs-Sektion oben). Kein eigenes Filter-Pattern. Beispiele: [public/partials/kontinuitaet.html](public/partials/kontinuitaet.html), [public/partials/szenen.html](public/partials/szenen.html).
 
@@ -1596,6 +1642,7 @@ Editor-spezifische Patterns. Greifen nur in der Editor-Card und im Fokus-Modus; 
 - [Focus-Mode](#focus-mode) (Vollbild + Typewriter-Dimming)
 - [Edit-Bubble-Toolbar](#edit-bubble-toolbar-inline-formatierung) (Inline-Format + Slash-Menu)
 - [Beleg-Chip + Beleg-Picker](#beleg-chip--beleg-picker-quellenverzeichnis) (Quellennachweis im Text)
+- [Querverweis + Ziel-Picker](#querverweis--ziel-picker) („siehe Kapitel 3“, „vgl. Abb. 3.2“)
 - [Find-and-Replace](#find-and-replace) (Cmd+F-Panel)
 - [Lookup-Popover](#lookup-popover-figur-lookup) (Figuren-Detail bei Ctrl+Click)
 
@@ -1697,6 +1744,37 @@ Spezifisch für Editor — bei neuer Inline-Toolbar erst prüfen, ob die Edit-Kl
 - **`contenteditable` nie in der Persistenz.** Setzt der Editor beim Mount (`markCitesAtomic`); [lib/html-clean.js](lib/html-clean.js) strippt es beim Speichern und die Dirty-Vergleichsform ignoriert es. Ohne beides gilt jede Seite mit Beleg beim Öffnen als geändert.
 - **Zurückhaltend stylen.** Kein Hintergrund, keine Border, kein eigener Font — der Kurzbeleg ist Lesetext, kein Badge. Sonst zerhackt jeder Nachweis den Absatz optisch.
 - **Nur Notebook-Editor hat den Einfügepfad.** Focus-Editor und Bucheditor stellen Chips dar und zerstören sie nicht (`.edit-cite-panel` ist im Fokus-Modus strukturell gesperrt).
+
+**Beispiele:** [editor-toolbar.html](public/partials/editor-toolbar.html)
+
+### Querverweis + Ziel-Picker
+
+**Use:** „siehe Kapitel 3", „vgl. Abb. 3.2" — ein Zeiger auf eine Stelle im eigenen Buch, der beim Umbauen automatisch mitnummeriert. Derselbe Bauplan wie der Beleg-Chip (Marker mit Zeiger, aufgelöst beim Rendern), nur zeigt er ins Buch statt in die Bibliothek. Kein Slash-Menü-Eintrag: der Verweis ist inline und gehört an den Caret.
+
+**Markup** — SSoT [public/js/xrefs/xref-html.js](public/js/xrefs/xref-html.js), nie von Hand schreiben:
+```html
+<span class="xref" data-xref="chapter" data-xref-id="42">Kapitel 3</span>
+<span class="xref" data-xref="figure" data-xref-id="a1b2c3d4e5f6a7b8" data-xref-fmt="number">3.2</span>
+```
+
+**Klassen Verweis** [components/manuscript-content.css](public/css/components/manuscript-content.css):
+- `span.xref` — gepunktete Grundlinie in `--mc-muted`, `white-space: nowrap`. Gilt in allen drei Oberflächen (`.page-content-view`, `.book-editor-page-body`, `.share-content`).
+- `span.xref[contenteditable="false"]` — nur im Editor: `cursor: default` + `user-select: none` (atomar).
+
+**Klassen Picker** [editor/notebook/edit-toolbar.css](public/css/editor/notebook/edit-toolbar.css) — teilt Panel, Liste und Aktiv-Zustand mit dem Beleg-Picker (`.edit-cite-*`), es ist dieselbe Interaktion:
+- `.edit-xref-panel` — Variante des `.edit-cite-panel` (breiter)
+- `.edit-xref-item`, `.edit-xref-preview`, `.edit-xref-title` — zweispaltige Trefferzeile (Vorschau + Titel)
+- `.edit-xref-item[data-depth="2|3"]` — Einrückung nach Kapiteltiefe
+- `.edit-bubble-btn--xref` — Auslöser in der Bubble-Toolbar (Icon `#list-tree`)
+
+**Regeln:**
+- **Der Zeiger ist die Wahrheit, der Verweistext ist Cache.** Wie beim Beleg-Chip — nur schärfer: **Nummern folgen der gerenderten Einheit, nicht dem Ziel.** Dasselbe Kapitel heisst im PDF-Profil mit römischer Nummerierung „Kapitel III", bei `numbering: 'none'` gar nicht (dann fällt der Verweis auf den Kapiteltitel zurück), und im Kapitel-Scope-Export zählt es ab 1. Jeder Ausgabeweg ruft darum [lib/xref-render.js](lib/xref-render.js)#`applyXrefsInHtml`, bevor sein Walker läuft.
+- **Kein zweiter Zählautomat.** Der PDF-Renderer reicht seine bereits berechneten Kapitel-Labels herein ([lib/pdf-render/numbering.js](lib/pdf-render/numbering.js) bleibt SSoT); sonst nennte der Verweis eine andere Nummer als die Überschrift.
+- **Verwaiste Verweise werden nie überschrieben.** Zeigt ein Marker auf ein gelöschtes Kapitel, bleibt der Text des Autors stehen und der Fund wird gemeldet (`meta.xrefUnresolved`) — nie ein „???" im Manuskript.
+- **Die Nummer im Editor ist eine Vorschau** (nested-arabisch). Was im Dokument steht, entscheidet der Export.
+- **`contenteditable` nie in der Persistenz** — identisch zum Beleg-Chip (`markXrefsAtomic` beim Mount, Server strippt beim Speichern).
+- **Zurückhaltender stylen als den Beleg.** Ein Querverweis ist Teil des Satzes, kein Apparat: nur Grundlinie, keine Akzentfarbe. Sonst leuchtet ein Fachtext mit vielen Verweisen wie ein Weihnachtsbaum.
+- **Nur Notebook-Editor hat den Einfügepfad** — wie beim Beleg.
 
 **Beispiele:** [editor-toolbar.html](public/partials/editor-toolbar.html)
 
@@ -2366,7 +2444,7 @@ Drei Editoren leben in eigenen Subfoldern (`book/`, `focus/`, `notebook/`); edit
 | [entities/entity-list.css](public/css/entities/entity-list.css) | `.entity-list` / `-row`, `.severity-tag*`, `.collapsible-*`, Skeleton, `.ort-*` Schauplätze. |
 | [entities/orte-map.css](public/css/entities/orte-map.css) | Orte-Karte View-Mode `map` (Geo-Karte via Leaflet): `.ort-map*` Container + Geocode-Liste. Nur bei `book_settings.orte_real`. |
 | [entities/recherche.css](public/css/entities/recherche.css) | Recherche-/Wissensboard: Toolbar/Filter, Anlege-/Edit-Formular, einspaltige Schnipsel-Liste (`.recherche-list` + `.research-item`), Kind-Badges, Verknüpfungs-/Tag-Chips, KI-Vorschläge, Link-Picker. Native-Vollbild (`.card--recherche:fullscreen`, Toggle via `fullscreen.js` wie Plot-Board) → Liste zentriert mit Lese-Maximalbreite. |
-| [entities/sources.css](public/css/entities/sources.css) | Quellenverzeichnis-Karte: Toolbar/Filter-Bar (Compact-Höhen-Scope für `.filter-search-input`), Quellen-Tabelle (`.sources-table` via `sortableTable`), Zitier-Badge (`.sources-cite-badge`, Hue aus `--card-accent`), Detail-Formular, Fundstellen-Panel. Enthält ausserdem `.sources-preview` (hängend eingerückte Formatter-Vorschau) — **geteilt** mit dem Quellen-Tab der Bucheinstellungen. |
+| [entities/sources.css](public/css/entities/sources.css) | Quellenverzeichnis-Karte: Toolbar/Filter-Bar (Compact-Höhen-Scope für `.filter-search-input`), Quellen-Tabelle (`.sources-table` via `sortableTable`), Zitier-Badge (`.sources-cite-badge`, Hue aus `--card-accent`), Detail-Formular, Fundstellen-Panel, Zitat-Kennzahlen-Reihe (`.sources-quote-stats` / `-stat` / `-stat-value` / `-stat-label` / `-stats-hint`: Zitat-Anteil + wörtlich/Paraphrase/belegte Quellen — schlichte Wert/Label-Reihe am Tabellenfuss, bewusst kein Tile-Grid). Enthält ausserdem `.sources-preview` (hängend eingerückte Formatter-Vorschau) — **geteilt** mit dem Quellen-Tab der Bucheinstellungen. |
 | [entities/ereignisse-subtyp.css](public/css/entities/ereignisse-subtyp.css) | Event-Subtyp-Badges + Marker-Farbe im Zeitstrahl: Mapping `.gz-item--subtyp-<typ>` auf die gemeinsame `--gz-subtyp-color`-Prop (SSoT der Hues = `--card-accent-event-*` in `tokens/colors.css`), konsumiert von Marker (`.gz-marker`) und Badge. |
 | [entities/ereignisse-span.css](public/css/entities/ereignisse-span.css) | Spannen-Events im Zeitstrahl: `.gz-item--span` verlängert den Marker vertikal proportional zur Jahr-Differenz (CSS-Custom-Prop `--span-years`); reine Punkt-Events unverändert. |
 

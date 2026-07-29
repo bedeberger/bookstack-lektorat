@@ -64,11 +64,42 @@ export const sourcesMethods = {
       this.sourcesLoading = false;
       this.sourcesRefreshing = false;
     }
+    // Kennzahlen hinterher und ohne await auf den Listenpfad: sie sind ein
+    // Nebenwert, ihr Fehlschlag darf die Tabelle nicht blockieren.
+    this.loadQuoteStats();
+  },
+
+  /** Zitat-Kennzahlen des Buchs (Zitat-Anteil + woertlich/Paraphrase).
+   *  Fehler bleiben still — die Zahlen sind Zusatzinformation, kein Inhalt. */
+  async loadQuoteStats() {
+    const bookId = _bookId();
+    if (!bookId) { this.quoteStats = null; return; }
+    try {
+      const s = await fetchJson(`/sources/stats?book_id=${encodeURIComponent(bookId)}`);
+      this.quoteStats = s && typeof s === 'object' ? s : null;
+    } catch (e) {
+      this.quoteStats = null;
+      console.error('[sources] Zitat-Kennzahlen fehlgeschlagen:', e);
+    }
+  },
+
+  /** Zitat-Anteil als Prozent-String, oder '' wenn er nicht aussagekräftig ist.
+   *
+   *  Der Nenner kommt aus `page_stats`; ist noch keine Seite synchronisiert
+   *  (`stat_pages === 0`), gäbe es einen Anteil ohne Grundgesamtheit — dann lieber
+   *  nichts anzeigen als eine erfundene Quote. */
+  quoteSharePercent() {
+    const s = this.quoteStats;
+    if (!s || !s.stat_pages || s.quote_share == null) return '';
+    const pct = s.quote_share * 100;
+    const locale = this._uiLocale() === 'en' ? 'en-US' : 'de-CH';
+    return `${pct.toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
   },
 
   resetSources() {
     this.sources = [];
     this.sourcesError = '';
+    this.quoteStats = null;
     this._memos = {};
     this.cancelSourceEdit();
     this.closeSourceCitations();

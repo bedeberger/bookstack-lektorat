@@ -139,12 +139,12 @@
   </div>
 
   <!-- Toolbar: Anlegen + Filter -->
-  <div class="recherche-toolbar">
-    <button type="button" class="btn-compact recherche-new-btn" @click="creating ? cancelCreate() : startCreate()" :disabled="busy">
+  <div class="card-toolbar">
+    <button type="button" class="btn-compact" @click="creating ? cancelCreate() : startCreate()" :disabled="busy">
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#plus"/></svg>
       <span x-text="$app.t('recherche.new')"></span>
     </button>
-    <div class="recherche-filters">
+    <div class="filter-bar filter-bar--inline">
       <div x-data="combobox($app.t('recherche.filter.allKinds'), $app.t('recherche.filter.allKinds'))"
            x-modelable="value" x-model="filterKind"
            x-effect="options = kindOptions()"
@@ -163,7 +163,7 @@
            x-modelable="value" x-model="filterLinkedTargetId"
            @combobox-change="applyLinkedFilter()"></div>
       <span class="filter-search-wrap">
-        <input type="text" class="filter-search-input recherche-search"
+        <input type="text" class="filter-search-input filter-search-input--wide"
                x-model.debounce.400ms="filterText"
                @input.debounce.400ms="applyFilters()"
                :placeholder="$app.t('recherche.filter.search')"
@@ -174,7 +174,7 @@
            x-modelable="value" x-model="sortBy"
            x-effect="options = sortOptions()"
            @combobox-change="applySort()"></div>
-      <label class="recherche-archived-toggle">
+      <label class="filter-toggle">
         <input type="checkbox" x-model="showArchived" @change="applyFilters()">
         <span x-text="$app.t('recherche.filter.showArchived')"></span>
       </label>

@@ -90,15 +90,23 @@ const _BOOK_COUNT_SQL = `
     WHERE sc.source_id = s.id AND p.book_id = @book) AS cite_count,
   (SELECT COUNT(*) FROM source_citations sc
      JOIN pages p ON p.page_id = sc.page_id
-    WHERE sc.source_id = s.id AND p.book_id = @book) AS cite_pages
+    WHERE sc.source_id = s.id AND p.book_id = @book) AS cite_pages,
+  (SELECT COALESCE(SUM(sc.quote_chars), 0) FROM source_citations sc
+     JOIN pages p ON p.page_id = sc.page_id
+    WHERE sc.source_id = s.id AND p.book_id = @book) AS quote_chars,
+  (SELECT COALESCE(SUM(sc.paraphrase_count), 0) FROM source_citations sc
+     JOIN pages p ON p.page_id = sc.page_id
+    WHERE sc.source_id = s.id AND p.book_id = @book) AS paraphrase_count
 `;
 
 // Pool-Sicht: ueber alle Buecher summiert, plus in wie vielen Buechern die
 // Quelle liegt (die Zahl entscheidet, ob Loeschen woanders weh tut).
 const _POOL_COUNT_SQL = `
-  (SELECT COALESCE(SUM(sc.count), 0) FROM source_citations sc WHERE sc.source_id = s.id) AS cite_count,
-  (SELECT COUNT(*)                   FROM source_citations sc WHERE sc.source_id = s.id) AS cite_pages,
-  (SELECT COUNT(*) FROM book_source_links l WHERE l.source_id = s.id)                    AS book_count
+  (SELECT COALESCE(SUM(sc.count), 0)            FROM source_citations sc WHERE sc.source_id = s.id) AS cite_count,
+  (SELECT COUNT(*)                              FROM source_citations sc WHERE sc.source_id = s.id) AS cite_pages,
+  (SELECT COALESCE(SUM(sc.quote_chars), 0)      FROM source_citations sc WHERE sc.source_id = s.id) AS quote_chars,
+  (SELECT COALESCE(SUM(sc.paraphrase_count), 0) FROM source_citations sc WHERE sc.source_id = s.id) AS paraphrase_count,
+  (SELECT COUNT(*) FROM book_source_links l WHERE l.source_id = s.id)                               AS book_count
 `;
 
 const _stmtListForBook = db.prepare(`
@@ -165,6 +173,10 @@ function _row(r) {
     updated_at: r.updated_at,
     cite_count: r.cite_count || 0,
     cite_pages: r.cite_pages || 0,
+    // Kennzahl-Seite: woertlich uebernommene Zeichen und wie viele der Nachweise
+    // Paraphrasen sind. Beides im selben Scope wie cite_count (Buch bzw. Pool).
+    quote_chars: r.quote_chars || 0,
+    paraphrase_count: r.paraphrase_count || 0,
   };
   if (r.book_count !== undefined) out.book_count = r.book_count || 0;
   for (const f of TEXT_FIELDS) out[f] = r[f] || null;
@@ -304,16 +316,17 @@ const _stmtDelCitesForPage = db.prepare('DELETE FROM source_citations WHERE page
 // angaben in ein anderes Buch kopiert" und „Quelle aus dem Buch entfernt, Marker
 // steht noch im Text". Beide duerfen keine Fundstelle erzeugen.
 const _stmtInsCite = db.prepare(`
-  INSERT INTO source_citations (source_id, page_id, count, first_offset)
-  SELECT l.source_id, p.page_id, ?, ?
+  INSERT INTO source_citations (source_id, page_id, count, first_offset, quote_chars, paraphrase_count)
+  SELECT l.source_id, p.page_id, ?, ?, ?, ?
     FROM book_source_links l
     JOIN pages p ON p.page_id = ?
    WHERE l.source_id = ? AND l.book_id = p.book_id
 `);
 
 /** Fundstellen einer Seite komplett ersetzen.
- *  entries: [{ sourceId, count, firstOffset }] — Duplikate pro sourceId sind
- *  Aufrufer-Fehler; der PK wuerde sie ablehnen, darum vorher zusammengefasst.
+ *  entries: [{ sourceId, count, firstOffset, quoteChars, paraphraseCount }] —
+ *  Duplikate pro sourceId sind Aufrufer-Fehler; der PK wuerde sie ablehnen, darum
+ *  vorher zusammengefasst (public/js/sources/cite-html.js#citationsFromCites).
  *  Gibt die Anzahl tatsaechlich indizierter Quellen zurueck (< entries.length,
  *  wenn eine id dem Buch nicht zugeordnet oder verschwunden ist). */
 const replacePageCitations = db.transaction((pageId, entries = []) => {
@@ -328,6 +341,8 @@ const replacePageCitations = db.transaction((pageId, entries = []) => {
     const info = _stmtInsCite.run(
       Math.max(0, parseInt(e.count) || 0),
       e.firstOffset == null ? null : parseInt(e.firstOffset),
+      Math.max(0, parseInt(e.quoteChars) || 0),
+      Math.max(0, parseInt(e.paraphraseCount) || 0),
       pid, sid
     );
     written += info.changes;
@@ -363,6 +378,58 @@ function listPageCitations(pageId) {
   return _stmtCitesForPage.all(parseInt(pageId));
 }
 
+// ── Zitat-Kennzahlen des Buchs ───────────────────────────────────────────────
+// Der Zitat-Anteil ist eine Verhaeltniszahl: woertlich uebernommene Zeichen
+// gegen die Zeichen des Manuskripts. Der Zaehler kommt aus dem Fund-Index, der
+// Nenner aus `page_stats` — derselben Quelle, aus der auch die Buchstatistik
+// ihre Zeichenzahl nimmt (siehe harte Regel „HTML→Text-Normalisierung fuer
+// Stats"). Nur so ist der Prozentwert mit der angezeigten Zeichenzahl
+// konsistent; ein eigener Scan ueber die Seiten-HTMLs waere ein zweites,
+// abweichendes Mass.
+//
+// Seiten ohne page_stats-Zeile (nie synchronisiert) fehlen im Nenner. Darum
+// liefert die Abfrage `stat_pages` mit: das Frontend kann den Anteil
+// unterdruecken, solange noch nichts synchronisiert ist, statt eine zu hohe
+// Quote zu zeigen.
+const _stmtBookQuoteStats = db.prepare(`
+  SELECT
+    (SELECT COALESCE(SUM(sc.quote_chars), 0)      FROM source_citations sc
+       JOIN pages p ON p.page_id = sc.page_id WHERE p.book_id = @book) AS quote_chars,
+    (SELECT COALESCE(SUM(sc.count), 0)            FROM source_citations sc
+       JOIN pages p ON p.page_id = sc.page_id WHERE p.book_id = @book) AS cite_count,
+    (SELECT COALESCE(SUM(sc.paraphrase_count), 0) FROM source_citations sc
+       JOIN pages p ON p.page_id = sc.page_id WHERE p.book_id = @book) AS paraphrase_count,
+    (SELECT COUNT(DISTINCT sc.source_id)          FROM source_citations sc
+       JOIN pages p ON p.page_id = sc.page_id WHERE p.book_id = @book) AS cited_sources,
+    (SELECT COALESCE(SUM(ps.chars), 0) FROM page_stats ps WHERE ps.book_id = @book) AS total_chars,
+    (SELECT COUNT(*)                   FROM page_stats ps WHERE ps.book_id = @book) AS stat_pages
+`);
+
+/** Zitat-Kennzahlen eines Buchs.
+ *  @returns {{quote_chars:number, cite_count:number, paraphrase_count:number,
+ *             direct_count:number, cited_sources:number, total_chars:number,
+ *             stat_pages:number, quote_share:number|null}}
+ *  `quote_share` ist der Anteil woertlich uebernommener Zeichen (0..1) oder null,
+ *  wenn kein Nenner vorliegt. */
+function getBookQuoteStats(bookId) {
+  const bid = parseInt(bookId);
+  const r = (Number.isInteger(bid) ? _stmtBookQuoteStats.get({ book: bid }) : null) || {};
+  const quoteChars = r.quote_chars || 0;
+  const totalChars = r.total_chars || 0;
+  const citeCount = r.cite_count || 0;
+  const paraphrase = r.paraphrase_count || 0;
+  return {
+    quote_chars: quoteChars,
+    cite_count: citeCount,
+    paraphrase_count: paraphrase,
+    direct_count: Math.max(0, citeCount - paraphrase),
+    cited_sources: r.cited_sources || 0,
+    total_chars: totalChars,
+    stat_pages: r.stat_pages || 0,
+    quote_share: totalChars > 0 ? quoteChars / totalChars : null,
+  };
+}
+
 module.exports = {
   CSL_TYPES, TEXT_FIELDS,
   normalizePersons,
@@ -370,4 +437,5 @@ module.exports = {
   createSource, updateSource, deleteSource,
   linkSource, unlinkSource, isSourceLinked, listSourceBooks,
   replacePageCitations, listBookCitations, listPageCitations,
+  getBookQuoteStats,
 };

@@ -68,6 +68,22 @@
         </div>
       </div>
 
+      <!-- Abbildungs-Nummerierung: keine Zitier-Einstellung, steht aber im
+           selben Tab, weil beides zur Fachtext-Ausstattung gehoert und buchweit
+           fuer alle Ausgabewege gilt (eigener Endpunkt /booksettings/:id/xrefs). -->
+      <div class="card-form-row">
+        <label class="card-form-label" x-text="$app.t('book.settings.xref.group')"></label>
+        <div class="form-stack">
+          <label class="form-check">
+            <input type="checkbox" id="bs-figure-numbering" x-model="bookXref.figure_numbering">
+            <span>
+              <span class="form-check-title" x-text="$app.t('book.settings.xref.figureNumbering')"></span>
+              <span class="form-check-desc" x-text="$app.t('book.settings.xref.figureNumbering.desc')"></span>
+            </span>
+          </label>
+        </div>
+      </div>
+
       <div class="card-form-row">
         <label class="card-form-label" x-text="$app.t('book.settings.cite.manage')"></label>
         <div class="card-form-field">

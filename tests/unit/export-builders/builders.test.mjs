@@ -42,8 +42,8 @@ const pageBundle = {
 
 const bookBundle = { scope: 'book', book, groups: bookGroups };
 
-test('txt: HTML-Tags entfernt, Buchtitel oben, Whitespace collapsed', () => {
-  const buf = buildTxt(bookBundle);
+test('txt: HTML-Tags entfernt, Buchtitel oben, Whitespace collapsed', async () => {
+  const buf = await buildTxt(bookBundle);
   const s = buf.toString('utf8');
   assert.ok(s.startsWith('Mein Buch'));
   assert.ok(s.includes('Text eins.'));
@@ -52,22 +52,22 @@ test('txt: HTML-Tags entfernt, Buchtitel oben, Whitespace collapsed', () => {
   assert.ok(!/\s{3,}/.test(s));
 });
 
-test('txt scope=chapter rendert Kapitelnamen als Titel', () => {
-  const buf = buildTxt(chapterBundle);
+test('txt scope=chapter rendert Kapitelnamen als Titel', async () => {
+  const buf = await buildTxt(chapterBundle);
   const s = buf.toString('utf8');
   assert.ok(s.startsWith('Erstes Kapitel'));
   assert.ok(s.includes('Kapitelinhalt.'));
 });
 
-test('md: Headings + Markdown-Escape', () => {
-  const buf = buildMd(bookBundle);
+test('md: Headings + Markdown-Escape', async () => {
+  const buf = await buildMd(bookBundle);
   const s = buf.toString('utf8');
   assert.ok(s.startsWith('# Mein Buch'));
   assert.ok(s.includes('## K1'));
   assert.ok(/Text eins\./.test(s));
 });
 
-test('md scope=page leitet immer aus body_html ab (ignoriert Alt-markdown-Feld)', () => {
+test('md scope=page leitet immer aus body_html ab (ignoriert Alt-markdown-Feld)', async () => {
   const bundle = {
     scope: 'page', book, chapter, page,
     groups: [{ chapterId: 10, chapter, pages: [
@@ -75,13 +75,13 @@ test('md scope=page leitet immer aus body_html ab (ignoriert Alt-markdown-Feld)'
       { p: page, pd: { ...page, html: '<p>Aus <strong>HTML</strong>.</p>', markdown: '# Stale' } },
     ] }],
   };
-  const s = buildMd(bundle).toString('utf8');
+  const s = (await buildMd(bundle)).toString('utf8');
   assert.ok(s.includes('Aus **HTML**.'));
   assert.ok(!s.includes('Stale'));
 });
 
-test('html: Wohlgeformtheit (DOCTYPE + body)', () => {
-  const buf = buildHtml(bookBundle);
+test('html: Wohlgeformtheit (DOCTYPE + body)', async () => {
+  const buf = await buildHtml(bookBundle);
   const s = buf.toString('utf8');
   assert.ok(s.startsWith('<!DOCTYPE html>'));
   assert.ok(s.includes('<title>Mein Buch</title>'));
@@ -90,15 +90,15 @@ test('html: Wohlgeformtheit (DOCTYPE + body)', () => {
   assert.ok(s.includes('</body></html>'));
 });
 
-test('html scope=page: Page-Name als Haupttitel', () => {
-  const buf = buildHtml(pageBundle);
+test('html scope=page: Page-Name als Haupttitel', async () => {
+  const buf = await buildHtml(pageBundle);
   const s = buf.toString('utf8');
   assert.ok(s.includes('<title>Seite eins</title>'));
   assert.ok(s.includes('<h1>Seite eins</h1>'));
 });
 
-test('substack: Titel in Meta-Box statt Body-h1, Kapitel-Heading als h2', () => {
-  const s = buildSubstack(bookBundle, { lang: 'de' }).toString('utf8');
+test('substack: Titel in Meta-Box statt Body-h1, Kapitel-Heading als h2', async () => {
+  const s = (await buildSubstack(bookBundle, { lang: 'de' })).toString('utf8');
   // Titel liegt in der Meta-Box (kopierbar ins Titelfeld), NICHT als <h1> im Body.
   assert.ok(s.includes('substack-meta'));
   assert.ok(s.includes('Mein Buch'));
@@ -112,14 +112,14 @@ test('substack: Titel in Meta-Box statt Body-h1, Kapitel-Heading als h2', () => 
   assert.ok(s.includes('Text eins.'));
 });
 
-test('substack: en-Locale + Bild-Warnung bei nicht-öffentlicher URL', () => {
+test('substack: en-Locale + Bild-Warnung bei nicht-öffentlicher URL', async () => {
   const bundle = {
     scope: 'page', book, chapter, page,
     groups: [{ chapterId: 10, chapter, pages: [
       { p: page, pd: { html: '<p><strong>Hi</strong></p><img src="/local/pic.png" alt="x">' } },
     ] }],
   };
-  const s = buildSubstack(bundle, { lang: 'en' }).toString('utf8');
+  const s = (await buildSubstack(bundle, { lang: 'en' })).toString('utf8');
   assert.ok(s.includes('lang="en"'));
   assert.ok(s.includes('class="stk-warn"'));   // Warn-Element gerendert
   assert.ok(s.includes('<strong>Hi</strong>'));
@@ -130,7 +130,7 @@ test('substack: en-Locale + Bild-Warnung bei nicht-öffentlicher URL', () => {
       { p: page, pd: { html: '<img src="https://cdn.example.com/pic.png" alt="x">' } },
     ] }],
   };
-  const s2 = buildSubstack(bundle2, { lang: 'en' }).toString('utf8');
+  const s2 = (await buildSubstack(bundle2, { lang: 'en' })).toString('utf8');
   assert.ok(!s2.includes('class="stk-warn"'));
 });
 

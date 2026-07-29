@@ -119,6 +119,23 @@
      eine ganze Zeilenhöhe Lücke. Visuell schlucken — HTML bleibt unverändert. */
   :is(.page-content-view, .book-editor-page-body, .share-content) blockquote + br { display: none; }
 
+  /* --- Belegtes Blockzitat (`<blockquote data-src>`, Markup-SSoT
+         public/js/sources/cite-html.js). Wissenschaftliche Konvention für das
+         wörtliche Zitat ab ~3 Zeilen: eingerückt, kleiner, AUFRECHT und ohne
+         Anführungszeichen — die Einrückung ersetzt sie. Das unterscheidet es vom
+         stilistischen Zitat/Motto, das ein blockquote ohne Zeiger bleibt.
+         Der Zeiger selbst ist unsichtbar; sichtbar wird die Quelle über den
+         Kurzbeleg-Chip am Ende des Blocks. --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) blockquote[data-src] {
+    font-size: var(--font-em-95, 0.95em);
+    font-style: normal;
+    quotes: none;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) blockquote[data-src]::before,
+  :is(.page-content-view, .book-editor-page-body, .share-content) blockquote[data-src]::after {
+    content: none;
+  }
+
   /* --- Listen --- */
   :is(.page-content-view, .book-editor-page-body, .share-content) :is(ul, ol) {
     padding-inline-start: 1.5em;
@@ -293,6 +310,23 @@
     cursor: default;
     /* Atomarer Chip: der Caret springt darüber, eine Teil-Selektion innerhalb
        des Belegs wäre irreführend. */
+    user-select: none;
+  }
+
+  /* --- Querverweise (span.xref, siehe public/js/xrefs/xref-html.js) --- */
+  /* Bewusst leiser als der Beleg-Chip: ein Querverweis ist Teil des Satzes
+     („siehe Kapitel 3“), kein Apparat am Rand. Darum nur eine gepunktete
+     Grundlinie in Textfarbe statt Akzentfarbe — sonst leuchtet ein Fachtext mit
+     vielen Verweisen wie ein Weihnachtsbaum. */
+  :is(.page-content-view, .book-editor-page-body, .share-content) span.xref {
+    border-bottom: 1px dotted var(--mc-muted);
+    /* Umbruch innerhalb des Verweises vermeiden: „Kapitel“ am Zeilenende und
+       „3“ auf der nächsten liest sich nicht als eine Angabe. */
+    white-space: nowrap;
+  }
+  :is(.page-content-view, .book-editor-page-body) span.xref[contenteditable="false"] {
+    cursor: default;
+    /* Atomarer Verweis — wie der Beleg-Chip. */
     user-select: none;
   }
 

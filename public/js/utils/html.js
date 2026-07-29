@@ -2,7 +2,8 @@
 // Inline-Style-/Leerblock-Cleanup. DOMParser-basiert (inert, keine
 // Resource-Loads). Idempotent aufrufbar.
 
-import { isCiteEl, CITE_ATTR_SRC, CITE_ATTR_LOC } from '../sources/cite-html.js';
+import { isCiteEl, CITE_ATTR_SRC, CITE_ATTR_LOC, CITE_ATTR_MODE } from '../sources/cite-html.js';
+import { isXrefEl, XREF_ATTR_KIND, XREF_ATTR_ID, XREF_ATTR_FMT } from '../xrefs/xref-html.js';
 
 // Sicherheitscheck vor dem Speichern: < 50 % wirkt unvollständig → Abbruch
 export const SAFETY_HTML_RATIO = 0.5;
@@ -119,7 +120,16 @@ const PASTE_ALLOWED_ATTRS = {
   // Chip ist. Der Chip selbst MUSS ueberleben: Kopiert man einen Satz mit
   // Quellenangabe an eine andere Stelle, soll sie mitwandern statt zu reinem
   // Text zu zerfallen (der Zeiger auf die Quelle waere sonst weg).
-  SPAN: new Set(['class', CITE_ATTR_SRC, CITE_ATTR_LOC]),
+  // Ebenso der Querverweis: kopiert man einen Satz mit „siehe Kapitel 3",
+  // muss der Zeiger mitwandern, sonst steht dort eine tote Zahl, die beim
+  // naechsten Umbau des Buchs nicht mehr mitnummeriert.
+  SPAN: new Set(['class', CITE_ATTR_SRC, CITE_ATTR_LOC, CITE_ATTR_MODE,
+                 XREF_ATTR_KIND, XREF_ATTR_ID, XREF_ATTR_FMT]),
+  // Belegtes Blockzitat: derselbe Grund wie beim Chip — verschiebt man ein
+  // Blockzitat, muss der Zeiger auf die Quelle mitwandern, sonst faellt es zum
+  // stilistischen Einzug ohne Beleg zurueck (und aus dem Zitat-Anteil heraus).
+  // `class` fuer .poem als <blockquote class="poem"> (siehe html-walker).
+  BLOCKQUOTE: new Set(['class', CITE_ATTR_SRC]),
 };
 
 /**
@@ -166,10 +176,10 @@ export function sanitizePasteHtml(html) {
         if (!allowedAttrs || !allowedAttrs.has(attr.name)) el.removeAttribute(attr.name);
       }
       if (tag === 'DIV') el.setAttribute('class', 'poem');
-      // Span nur als Quellen-Chip zulassen; alles andere verliert die Huelle.
-      // Muss NACH dem Attribut-Filter laufen — isCiteEl prueft class+data-src,
-      // die vorher noch mit Fremdattributen vermischt sein koennten.
-      if (tag === 'SPAN' && !isCiteEl(el)) {
+      // Span nur als Quellen-Chip ODER Querverweis zulassen; alles andere verliert
+      // die Huelle. Muss NACH dem Attribut-Filter laufen — die Praedikate pruefen
+      // class+data-*, die vorher noch mit Fremdattributen vermischt sein koennten.
+      if (tag === 'SPAN' && !isCiteEl(el) && !isXrefEl(el)) {
         _unwrap(el);
         changed = true;
         continue;

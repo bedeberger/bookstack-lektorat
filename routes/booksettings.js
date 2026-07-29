@@ -3,6 +3,7 @@ const express = require('express');
 const {
   getBookSettings, saveBookSettings, setBookEntitiesEnabled,
   setBookCitationSettings, VALID_CITATION_STYLES, VALID_BIBLIOGRAPHY_SCOPES,
+  setBookXrefSettings,
 } = require('../db/schema');
 const { aclParamGuard } = require('../lib/acl');
 const logger = require('../logger');
@@ -199,6 +200,23 @@ router.put('/:book_id/citation', aclParamGuard('editor'), jsonBody, (req, res) =
     bibliography_scope: next.bibliography_scope,
     bibliography_in_blog: next.bibliography_in_blog,
   });
+});
+
+/** Querverweis-Einstellungen. Eigener Endpunkt aus demselben Grund wie
+ *  /citation: ob ein Werk seine Abbildungen nummeriert, gilt buchweit fuer alle
+ *  Ausgabewege und gehoert deshalb nicht in ein Exportprofil. */
+router.put('/:book_id/xrefs', aclParamGuard('editor'), jsonBody, (req, res) => {
+  const bookId = req.bookId;
+  const b = req.body || {};
+  const cur = getBookSettings(bookId, req.session?.user?.email || null);
+
+  setBookXrefSettings(bookId, {
+    figure_numbering: b.figure_numbering !== undefined ? b.figure_numbering : cur.figure_numbering,
+  });
+
+  const next = getBookSettings(bookId, req.session?.user?.email || null);
+  logger.info(`[querverweise] settings book=${bookId} abbNummerierung=${next.figure_numbering}`);
+  res.json({ ok: true, figure_numbering: next.figure_numbering });
 });
 
 module.exports = router;

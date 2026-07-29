@@ -26,6 +26,8 @@ const DE = {
   inWord: 'In',
   editedBy: 'herausgegeben von',
   accessed: 'Abgerufen am',
+  // Paraphrase-Praefix im Kurzbeleg (data-mode="paraphrase" am Chip).
+  cfWord: 'vgl.',
   andApa: '&',
   andChicago: 'und',
   etAlApa: 'et al.',
@@ -48,6 +50,7 @@ const EN = {
   inWord: 'In',
   editedBy: 'edited by',
   accessed: 'Accessed',
+  cfWord: 'cf.',
   andApa: '&',
   andChicago: 'and',
   etAlApa: 'et al.',

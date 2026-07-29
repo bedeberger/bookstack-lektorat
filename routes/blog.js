@@ -146,7 +146,7 @@ router.get('/:book_id/pages/:page_id/remote', aclParamGuard('viewer'), async (re
     return res.json({
       wpPostId: link.wp_post_id,
       title: (remote.title && (remote.title.raw || remote.title.rendered)) || '',
-      html: wpToAppHtml((remote.content && (remote.content.raw || remote.content.rendered)) || ''),
+      html: await wpToAppHtml((remote.content && (remote.content.raw || remote.content.rendered)) || ''),
       status: remote.status,
       modifiedAt: remote.modified_gmt || remote.date_gmt || '',
     });
@@ -184,7 +184,7 @@ router.post('/:book_id/pages/:page_id/resolve', aclParamGuard('editor'), jsonBod
       const remote = await wp.getPost(link.wp_post_id);
       const { wpToAppHtml } = require('../lib/wp-html');
       const contentStore = require('../lib/content-store');
-      const html = wpToAppHtml((remote.content && (remote.content.raw || remote.content.rendered)) || '') || '<p></p>';
+      const html = await wpToAppHtml((remote.content && (remote.content.raw || remote.content.rendered)) || '') || '<p></p>';
       const title = (remote.title && (remote.title.raw || remote.title.rendered)) || undefined;
       await contentStore.savePage(pageId, { html, ...(title ? { name: title } : {}) }, null);
       blogs.markLinkPulled(pageId, {

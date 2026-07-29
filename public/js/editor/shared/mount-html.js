@@ -16,6 +16,7 @@
 import { normalizeEditorBlocks } from './html-clean.js';
 import { ensureTrailingParagraph } from './auto-slot.js';
 import { markCitesAtomic } from '../../sources/cite-html.js';
+import { markXrefsAtomic } from '../../xrefs/xref-html.js';
 
 // Setzt `html` in `el` und stellt Block-Konsistenz + Caret-Slot her.
 // Liefert `{ repaired }` — true, wenn `normalizeEditorBlocks` am gelieferten
@@ -43,6 +44,7 @@ export function mountEditorHtml(el, html) {
   // Editor-Laufzeit, keine Inhaltsreparatur — sonst gaelte jede Seite mit Quellenangabe
   // beim Oeffnen als veraendert und wuerde ungefragt neu gespeichert.
   markCitesAtomic(el);
+  markXrefsAtomic(el);
   return { repaired };
 }
 

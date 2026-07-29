@@ -178,6 +178,21 @@ textarea:disabled,
   font-size: var(--font-size-mini);
   color: var(--color-err-text);
 }
+/* Nicht-fataler Hinweis in einer Karten-Form: die Aktion lief durch, hat aber
+   eine Folge, die der User kennen muss (Beispiel: WordPress hat beim Pull die
+   Quellen-Verweise entfernt). Dritte Stufe neben `.card-form-saved` (ok) und
+   `.card-form-error` (Fehlschlag); operational-status-Achse. Getönter
+   Hintergrund statt bloss farbigem Text, weil so ein Hinweis mehrzeilig ist und
+   sonst neben dem Erfolgs-Text untergeht. */
+.card-form-warn {
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-6) var(--space-sm);
+  border-left: 3px solid var(--color-warn-text);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--color-warn-bg);
+  font-size: var(--font-size-mini);
+  color: var(--color-warn-text);
+}
 
 /* Empty-State mit CTA — Karte hat keine Daten und bietet einen Knopf, um
    welche zu erstellen. Verwendet von Figuren-Werkstatt; weitere Karten

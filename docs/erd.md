@@ -1,6 +1,6 @@
 # ERD — schreibwerkstatt
 
-Stand: Schema-Version 253, 136 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
+Stand: Schema-Version 255, 138 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
 
 Quelle: Squashed-Schema-Snapshot in [db/squashed-schema.js](../db/squashed-schema.js) (regeneriert via `node tools/dump-schema.js`) + [db/migrations.js](../db/migrations.js). Drift gegen die Legacy-Migration-Kette ist durch [tests/unit/squash-drift.test.mjs](../tests/unit/squash-drift.test.mjs) gegated. Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -41,6 +41,9 @@ erDiagram
   sources ||--o{ book_source_links   : "used by"
   sources ||--o{ source_citations    : "cited in"
   pages ||--o{ source_citations      : cites
+  pages ||--o{ xref_anchors          : "numbers"
+  pages ||--o{ xref_links            : "refers from"
+  chapters ||--o{ xref_links         : "referred to"
   books ||--o{ pdf_export_profile    : has
   books ||--o{ docx_export_profile   : has
   books ||--|| book_publication      : has
@@ -493,17 +496,42 @@ erDiagram
   source_citations {
     INTEGER source_id    PK,FK "ON DELETE CASCADE"
     INTEGER page_id      PK,FK "ON DELETE CASCADE"
-    INTEGER count        "Nennungen dieser Quelle auf der Seite"
-    INTEGER first_offset "Textoffset der ersten Nennung (Reihenfolge für numerischen Zitierstil)"
+    INTEGER count            "Nennungen dieser Quelle auf der Seite"
+    INTEGER first_offset     "Textoffset der ersten Nennung (Reihenfolge für numerischen Zitierstil)"
+    INTEGER quote_chars      "Zeichen wörtlich übernommenen Textes (blockquote[data-src], ohne die Chip-Texte) → Zitat-Anteil"
+    INTEGER paraphrase_count "Nennungen mit data-mode=paraphrase (Teilmenge von count) → „vgl.“-Anteil"
     %% Reiner Ableitungs-Index: Wahrheit ist der Quellen-Marker im Seiten-HTML.
     %% Full-Replace pro Seiten-Write (Muster page_figure_mentions). Kein book_id —
     %% Buch-Abfragen laufen über den JOIN auf pages.
+  }
+
+  xref_anchors {
+    INTEGER page_id PK,FK "ON DELETE CASCADE"
+    TEXT    kind    PK "CHECK: figure"
+    TEXT    bid     PK "data-bid des Ziel-Blocks (ensureBlockIds), kein eigenes Anker-Attribut"
+    INTEGER ord     "Position innerhalb der Seite; die buchweite Nummer entsteht erst beim Rendern"
+    TEXT    caption
+    %% Reiner Ableitungs-Index der nummerierbaren Ziele. Kapitel stehen NICHT hier —
+    %% chapters.chapter_id ist selbst der stabile Zeiger.
+  }
+  xref_links {
+    INTEGER page_id      FK "ON DELETE CASCADE — Seite, die verweist"
+    TEXT    kind         "CHECK: chapter | figure"
+    INTEGER chapter_id   FK "ON DELETE CASCADE — nur bei kind=chapter, sonst NULL"
+    TEXT    anchor_bid   "nur bei kind=figure, sonst NULL; bewusst kein FK auf xref_anchors"
+    INTEGER count
+    INTEGER first_offset
+    %% Sentinel-frei: kind-Diskriminator + je Typ eine echte Zielspalte, CHECK erzwingt
+    %% die Kombination. Eindeutigkeit über zwei partielle UNIQUE-Indexe statt PK.
   }
 
   books   ||--o{ book_source_links  : uses
   sources ||--o{ book_source_links  : "used by"
   sources ||--o{ source_citations   : "cited in"
   pages   ||--o{ source_citations   : cites
+  pages   ||--o{ xref_anchors       : numbers
+  pages   ||--o{ xref_links         : "refers from"
+  chapters ||--o{ xref_links        : "referred to"
 
   books     ||--o{ book_snapshots : has
   books     ||--o{ name_guard_ignores : has

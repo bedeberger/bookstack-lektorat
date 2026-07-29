@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "465c45c56a10f0bc";
+self.__SHELL_BUILD = "cbe2e5d938149a81";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -424,6 +424,7 @@ self.__SHELL_MANIFEST = [
   "/js/editor/notebook/toolbar/cite.js",
   "/js/editor/notebook/toolbar/keydown.js",
   "/js/editor/notebook/toolbar/slash.js",
+  "/js/editor/notebook/toolbar/xref.js",
   "/js/editor/notebook/trampoline.js",
   "/js/editor/notebook/tts-proof.js",
   "/js/editor/shared/active-editor.js",
@@ -568,6 +569,10 @@ self.__SHELL_MANIFEST = [
   "/js/utils/html.js",
   "/js/utils/markdown.js",
   "/js/utils/net.js",
+  "/js/xrefs/xref-anchor.js",
+  "/js/xrefs/xref-format.js",
+  "/js/xrefs/xref-html.js",
+  "/js/xrefs/xref-number.js",
   "/partials/admin-backup.html",
   "/partials/admin-books.html",
   "/partials/admin-categories.html",

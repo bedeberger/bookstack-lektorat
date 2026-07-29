@@ -21,6 +21,9 @@ const hubspot = require('../../db/hubspot');
 const contentStore = require('../../lib/content-store');
 const { createHubspotClient } = require('../../lib/hubspot-client');
 const { hubspotToAppHtml, appToHubspotHtml } = require('../../lib/hubspot-html');
+const {
+  buildBibliography, resolveCitesInHtml, bibliographySectionHtml,
+} = require('../../lib/bibliography');
 const { assertBlogBook } = require('../../lib/buchtyp');
 const { requireBookAccess, sendACLError } = require('../../lib/acl');
 const { toIntId } = require('../../lib/validate');
@@ -241,7 +244,25 @@ async function runHubspotPushJob(jobId, bookId, userEmail, pageIds) {
       }
 
       let existing = hubspot.getLinkByPage(pageId);
-      const postBody = appToHubspotHtml(pageRow.html || pageRow.body_html || '<p></p>');
+
+      // Quellen: Einheit ist die SEITE (ein Post = eine Seite), darum
+      // `pageIds: [pageId]` — die Nummern des numerischen Stils folgen den
+      // Fundstellen dieses Posts ab 1. `resolveCitesInHtml` setzt den
+      // Kurzbeleg im aktuellen Zitierstil, bevor der Serializer laeuft.
+      //
+      // Der Chip selbst ueberlebt die HubSpot-Allowlist nicht: `span` steht
+      // nicht in INLINE_MAP/BLOCK_MAP (lib/hubspot-html.js), also wird das
+      // Element entpackt und der Kurzbeleg-Text bleibt als Klartext im Satz.
+      // Genau richtig — HubSpot ist Push-only.
+      //
+      // KEIN Marker-Wrapper um das Verzeichnis (anders als bei WordPress):
+      // HubSpot liest nie zurueck (kein Pull, kein Update-vom-Remote, siehe
+      // docs/hubspot-sync.md), es kann also nichts akkumulieren. Ein `<div>`
+      // wuerde die Allowlist ausserdem ohnehin entpacken.
+      const bib = await buildBibliography({ bookId, pageIds: [pageId], userEmail });
+      const appHtml = await resolveCitesInHtml(pageRow.html || pageRow.body_html || '<p></p>', bib);
+      const bibSection = bib.inBlog ? bibliographySectionHtml(bib, { list: true }) : '';
+      const postBody = appToHubspotHtml(appHtml + bibSection);
       const name = (pageRow.name || `Page ${pageId}`).trim();
       let revivedThis = false;
 

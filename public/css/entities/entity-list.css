@@ -10,6 +10,38 @@
   border-bottom: 1px solid var(--color-border);
 }
 .filter-count { font-size: var(--font-size-xs); color: var(--color-muted); margin-left: auto; }
+
+/* Eingebettete Variante: die Leiste steht nicht als eigener Abschnitt über der
+   Liste, sondern als Glied in einer `.card-toolbar` neben den Aktions-Buttons.
+   Das Standalone-Chrome (Unterrand + padding-/margin-bottom) muss dann weg — es
+   zählt bei `align-items: center` der Toolbar zur Box-Höhe und kippt alle
+   Controls gegenüber der Button-Mittellinie nach oben, plus eine Trennlinie
+   unter nur einem Teil der Zeile. Konsumenten: Quellen, Recherche. */
+.filter-bar--inline {
+  flex: 1;
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+/* Breites Suchfeld statt der 120px-Default-Spalte — für Leisten, in denen das
+   Suchfeld das Hauptfilter ist (Freitext über Titel/Autor/Body) und den freien
+   Platz der Zeile aufnehmen soll. */
+.filter-search-input--wide { min-width: 12rem; flex: 1; }
+
+/* Checkbox-Schalter in der Filterleiste („Archivierte anzeigen"). Trägt dieselbe
+   Compact-Typografie wie Suchfeld und Combobox daneben — siehe Höhen-Invariante
+   in DESIGN.md. */
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-mini);
+  line-height: 1.4;
+  color: var(--color-muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
 /* Scope auf .filter-bar nötig: die generische `input[type=text]`-Regel
    (card-form.css) hat höhere Spezifität (0,1,1) als eine nackte Klasse (0,1,0)
    und würde sonst font-size/padding/width überschreiben — das Suchfeld käme

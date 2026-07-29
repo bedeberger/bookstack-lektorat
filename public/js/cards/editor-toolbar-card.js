@@ -12,6 +12,7 @@
 import { toolbarCardMethods } from '../editor/notebook/toolbar.js';
 import { TODO_LIST_SEL } from '../editor/shared/todo-html.js';
 import { invalidateSourceCache } from '../editor/notebook/toolbar/cite.js';
+import { invalidateXrefTargetCache } from '../editor/notebook/toolbar/xref.js';
 import { EVT } from '../events.js';
 
 export function registerEditorToolbarCard() {
@@ -44,12 +45,31 @@ export function registerEditorToolbarCard() {
     citeY: 0,
     citeQuery: '',
     citeLoc: '',
+    // Zitat-Art des Panels: 'quote' | 'block' | 'paraphrase' (siehe
+    // editor/notebook/toolbar/cite.js). `citeBlockOk` sperrt 'block', wenn der
+    // Caret nicht in einem umhuellbaren Absatz steht.
+    citeKind: 'quote',
+    citeBlockOk: false,
     citeIdx: 0,
     citeSources: [],
     citeHits: [],
     citeLoading: false,
     citeError: false,
     _citeRange: null,
+    // Querverweis-Picker (Kapitel + Abbildungen) — Aufbau wie der Beleg-Picker.
+    // `xrefTargets` ist die Zielliste des Buchs (gecacht im Modul), `xrefFmt`
+    // die Anzeigeform des Verweises ('label' | 'number' | 'title').
+    xrefShow: false,
+    xrefX: 0,
+    xrefY: 0,
+    xrefQuery: '',
+    xrefFmt: 'label',
+    xrefIdx: 0,
+    xrefTargets: [],
+    xrefHits: [],
+    xrefLoading: false,
+    xrefError: false,
+    _xrefRange: null,
     _toolbarAbort: null,
 
     init() {
@@ -85,6 +105,11 @@ export function registerEditorToolbarCard() {
         if (this.citeShow) this._recomputeCiteHits();
       });
 
+      // Querverweis-Picker: dieselbe Begründung wie beim Beleg-Picker.
+      this.$watch('xrefQuery', () => {
+        if (this.xrefShow) this._recomputeXrefHits();
+      });
+
       // Quellenliste des Quellen-Pickers ist modulweit gecacht (ein Fetch pro
       // Buch). Die Quellen-Karte dispatcht `sources:changed`, wenn sie eine
       // Quelle anlegt/ändert/löscht — sonst zeigt der Picker die alte Liste,
@@ -93,6 +118,13 @@ export function registerEditorToolbarCard() {
         invalidateSourceCache(e?.detail?.bookId ?? null);
       }, { signal });
       window.addEventListener(EVT.BOOK_CHANGED, () => invalidateSourceCache(), { signal });
+
+      // Zielliste des Querverweis-Pickers ebenso modulweit gecacht: Umbauten im
+      // Buchorganizer und neue Abbildungen verschieben die Nummern.
+      window.addEventListener(EVT.XREFS_CHANGED, (e) => {
+        invalidateXrefTargetCache(e?.detail?.bookId ?? null);
+      }, { signal });
+      window.addEventListener(EVT.BOOK_CHANGED, () => invalidateXrefTargetCache(), { signal });
 
       // Delegierter Keydown-Listener auf dem contenteditable — filtert per
       // closest() auf Normal- bzw. Focus-Container, damit wir nur im Edit-

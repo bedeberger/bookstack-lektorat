@@ -123,3 +123,73 @@ test('appToHubspotHtml round-trips hr + pre from editor', () => {
   assert.match(out, /<pre>code\n  indent<\/pre>/);
   assert.match(out, /<p>y<\/p>/);
 });
+
+// ── Quellenangaben + Verzeichnis (Push-only) ────────────────────────────────
+//
+// HubSpot ist Push-only (kein Pull, kein Update-vom-Remote — docs/hubspot-sync.md).
+// Darum braucht das angehaengte Verzeichnis KEINEN Marker: es kann nichts
+// zurueckwandern und damit nichts akkumulieren. Der Chip selbst ueberlebt die
+// Allowlist nicht (`span` steht in keiner Map) und wird zu Klartext — genau
+// richtig, ein Verweis auf `sources.id` waere im HubSpot-Post ohnehin toter Ballast.
+
+const { buildCiteHtml } = await import('../../public/js/sources/cite-html.js');
+const { bibliographySectionHtml } = await import('../../lib/bibliography.js');
+
+const HUB_BIB = {
+  enabled: true, inBlog: true, style: 'apa7',
+  title: 'Quellenverzeichnis', titleHtml: 'Quellenverzeichnis',
+  entries: [
+    { id: 1, num: 1, text: 'Kafka, F. (1915). Die Verwandlung.', html: 'Kafka, F. (1915). <em>Die Verwandlung</em>.' },
+  ],
+};
+
+test('appToHubspotHtml: Quellen-Chip wird zu Klartext, Zeiger fliegt raus', () => {
+  const chip = buildCiteHtml({ id: 7, loc: '44', text: '(Kafka, 1915, S. 44)' });
+  const out = appToHubspotHtml(`<p>Ein Satz ${chip} mit Beleg.</p>`);
+  assert.match(out, /<p>Ein Satz \(Kafka, 1915, S\. 44\) mit Beleg\.<\/p>/);
+  assert.doesNotMatch(out, /<span/);
+  assert.doesNotMatch(out, /data-src/);
+  assert.doesNotMatch(out, /class=/);
+});
+
+test('appToHubspotHtml: angehaengtes Verzeichnis ueberlebt als h2 + Liste', () => {
+  // So baut der Push-Job den Body: Seiten-HTML + Verzeichnis-Abschnitt, dann
+  // einmal durch den Serializer (routes/jobs/hubspot-sync.js).
+  const section = bibliographySectionHtml(HUB_BIB, { list: true });
+  const out = appToHubspotHtml(`<p>Text.</p>${section}`);
+  assert.match(out, /<p>Text\.<\/p>/);
+  assert.match(out, /<h2>Quellenverzeichnis<\/h2>/);
+  assert.match(out, /<li>Kafka, F\. \(1915\)\. <em>Die Verwandlung<\/em>\.<\/li>/);
+  // Der Marker-<div> waere hier ohnehin sinnlos — die Allowlist entpackt ihn.
+  assert.doesNotMatch(out, /<div/);
+  assert.ok(out.indexOf('Text.') < out.indexOf('Quellenverzeichnis'));
+});
+
+test('bibliographySectionHtml: numerischer Stil bleibt bei Absaetzen mit [n]', () => {
+  const numeric = { ...HUB_BIB, style: 'numeric', entries: [
+    { id: 1, num: 1, text: 'A.', html: 'A.' },
+    { id: 2, num: 2, text: 'B.', html: 'B.' },
+  ] };
+  const out = appToHubspotHtml(`<p>x</p>${bibliographySectionHtml(numeric, { list: true })}`);
+  assert.doesNotMatch(out, /<ul>/);
+  assert.match(out, /<p>\[1\] A\.<\/p>/);
+  assert.match(out, /<p>\[2\] B\.<\/p>/);
+});
+
+test('bibliographySectionHtml: leer, wenn abgeschaltet oder ohne Eintraege', () => {
+  assert.equal(bibliographySectionHtml(null), '');
+  assert.equal(bibliographySectionHtml({ ...HUB_BIB, enabled: false }), '');
+  assert.equal(bibliographySectionHtml({ ...HUB_BIB, entries: [] }), '');
+});
+
+test('bibliographySectionHtml: Marker-Wrapper nur auf Verlangen', () => {
+  assert.doesNotMatch(bibliographySectionHtml(HUB_BIB), /sw-bibliography/);
+  assert.match(bibliographySectionHtml(HUB_BIB, { marker: true }), /^<div class="sw-bibliography">/);
+});
+
+test('bibliographySectionHtml: Titel ist escapet (User-Eingabe in HTML-Senke)', () => {
+  const evil = { ...HUB_BIB, title: '<script>x</script>', titleHtml: '&lt;script&gt;x&lt;/script&gt;' };
+  const out = bibliographySectionHtml(evil);
+  assert.match(out, /<h2>&lt;script&gt;x&lt;\/script&gt;<\/h2>/);
+  assert.doesNotMatch(out, /<script>/);
+});

@@ -133,7 +133,7 @@ export const settingsMethods = {
   async saveActiveTab() {
     const taxErr = this._taxonomyError();
     if (taxErr) { this.bookSettingsError = window.__app.t(taxErr); return; }
-    await Promise.all([this.saveBookSettings(), this.savePublication(), this.saveCitationSettings()]);
+    await Promise.all([this.saveBookSettings(), this.savePublication(), this.saveCitationSettings(), this.saveXrefSettings()]);
   },
 
   headerSaving()   { return this.bookSettingsSaving || this.pubSaving || this.citationSaving; },

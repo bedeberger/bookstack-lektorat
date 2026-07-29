@@ -3,7 +3,7 @@
 // im Root. Daten werden beim Öffnen / Buchwechsel nachgeladen.
 
 import { bookSettingsMethods } from '../book/book-settings.js';
-import { CITATION_DEFAULTS } from '../book/book-settings/citation.js';
+import { CITATION_DEFAULTS, XREF_DEFAULTS } from '../book/book-settings/citation.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { EVT } from '../events.js';
 
@@ -59,6 +59,7 @@ export function registerBookSettingsCard() {
     // Quellen-Tab (Zitierstil + Quellenverzeichnis). Eigener Schreibpfad
     // /booksettings/:id/citation — siehe book/book-settings/citation.js.
     bookCitation: { ...CITATION_DEFAULTS },
+    bookXref: { ...XREF_DEFAULTS },
     bookCitationLoaded: false,
     citationSaving: false,
     citationSaved: false,
@@ -100,6 +101,10 @@ export function registerBookSettingsCard() {
     blogAction: null,
     blogMessage: '',
     blogError: '',
+    // Hinweis nach Import/Pull: WordPress hat Quellen-Verweise entfernt (KSES
+    // ohne `unfiltered_html`), die Belege im Text sind zu Klartext degradiert.
+    // Kein Fehler — der Sync lief durch —, aber der User muss es erfahren.
+    blogCiteWarning: '',
     blogImportJobId: null,
     blogPullJobId: null,
     blogReconcileJobId: null,
@@ -170,6 +175,7 @@ export function registerBookSettingsCard() {
           blogBusy: false,
           blogMessage: '',
           blogError: '',
+          blogCiteWarning: '',
           blogImportJobId: null,
           blogPullJobId: null,
           blogReconcileJobId: null,
@@ -189,6 +195,7 @@ export function registerBookSettingsCard() {
           pubCoverError: '',
           pubAuthorError: '',
           bookCitation: { ...CITATION_DEFAULTS },
+          bookXref: { ...XREF_DEFAULTS },
           bookCitationLoaded: false,
           citationError: '',
         }),
@@ -205,6 +212,7 @@ export function registerBookSettingsCard() {
           shareInviteMessage: '',
           blogMessage: '',
           blogError: '',
+          blogCiteWarning: '',
           hubspotMessage: '',
           hubspotError: '',
           citationError: '',
@@ -221,6 +229,10 @@ export function registerBookSettingsCard() {
         this.blogImportJobId = null;
         this.blogPullJobId = null;
         this.blogReconcileJobId = null;
+        const degraded = ev.detail.job?.result?.citesDegraded || 0;
+        this.blogCiteWarning = degraded
+          ? window.__app.t('blog.status.citesDegraded', { n: degraded })
+          : '';
         this.loadBlogStatus();
         if (t === 'blog-import' || t === 'blog-pull') {
           window.__app.loadPages?.();

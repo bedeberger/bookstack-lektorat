@@ -1,57 +1,11 @@
 /* Recherche-/Wissensboard — buchweit geteiltes Schnipsel-Archiv.
    Akzentfarbe via var(--card-accent) (Mapping in card-accents.css). */
 
-.recherche-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-md);
-}
-
-.recherche-new-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-.recherche-new-btn .icon { width: 1em; height: 1em; }
-
-.recherche-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
-  flex: 1;
-}
-.recherche-search { min-width: 12rem; flex: 1; }
-
-/* Alle Filter-Controls auf identische Höhe bringen, ausgerichtet am Suchfeld.
-   Ohne Scope gewinnt die generische `input[type=text]`-Regel (card-form.css,
-   Spezifität 0,1,1) über die nackte `.filter-search-input`-Klasse → Suchfeld
-   in Default-Grösse (14px/8px), höher als die Compact-Comboboxen. Font, Padding
-   und line-height hier mit den Comboboxen synchronisieren. */
-.recherche-filters .filter-search-input {
-  font-size: var(--font-size-mini);
-  line-height: 1.4;
-  padding: var(--space-xs) 8px;
-  padding-right: 26px;
-  border: 0.5px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg);
-  color: var(--color-text);
-  box-sizing: border-box;
-}
-.recherche-filters .filter-search-input:focus { outline: none; border-color: var(--color-border-focus); }
-.recherche-filters .combobox-wrap--compact .combobox-trigger { line-height: 1.4; }
-
-.recherche-archived-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-  white-space: nowrap;
-}
+/* Toolbar (Neu + Filterleiste), Filterleiste, breites Suchfeld und
+   Archiv-Schalter kommen vollstaendig aus den geteilten Bausteinen
+   `.card-toolbar` (card-form/card-shell.css) + `.filter-bar--inline` /
+   `.filter-search-input--wide` / `.filter-toggle` (entity-list.css) — dieselbe
+   Bauform wie die Quellen-Karte. */
 
 /* ── Formular (Anlegen/Bearbeiten) ─────────────────────────────────────── */
 .recherche-form {
@@ -561,16 +515,19 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
 
 /* ── Mobile ─────────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  .recherche-toolbar { flex-direction: column; align-items: stretch; }
+  /* Eigener Breakpoint (640 statt der 600 aus entity-list.css): die vier
+     Comboboxen der Recherche brauchen frueher Platz. Deshalb hier gescoped
+     wiederholt statt auf die geteilten Mobile-Regeln zu warten — 0,3,0, damit
+     die Reihenfolge der <link>-Tags nicht mitentscheidet. */
+  .card--recherche .card-toolbar { flex-direction: column; align-items: stretch; }
   /* Filter bleiben ein umbrechendes Raster (2 Comboboxen pro Zeile), analog zum
      entity-list-Muster — kein hoher Full-Width-Stack. Suchfeld + Archiv-Schalter
      spannen die volle Breite. */
-  .recherche-filters { align-items: stretch; gap: var(--space-xs); }
-  .recherche-filters > .combobox-wrap--compact { flex: 1 1 45%; min-width: 0; }
-  .recherche-filters .filter-search-wrap { flex: 1 1 100%; }
-  .recherche-filters .filter-search-input { width: 100%; }
-  .recherche-archived-toggle { flex: 1 1 100%; }
-  .recherche-search { min-width: 0; }
+  .card--recherche .filter-bar { align-items: stretch; gap: var(--space-xs); }
+  .card--recherche .filter-bar > .combobox-wrap--compact { flex: 1 1 45%; min-width: 0; }
+  .card--recherche .filter-bar .filter-search-wrap { flex: 1 1 100%; }
+  .card--recherche .filter-bar .filter-search-input { width: 100%; min-width: 0; }
+  .card--recherche .filter-bar .filter-toggle { flex: 1 1 100%; }
   .research-item-actions { margin-left: 0; }
   .research-item-head { gap: var(--space-2xs); }
   /* iOS-Zoom-Schutz: Prosa-Inputs ≥16px (Klassen-font-size kann darunter liegen). */

@@ -105,6 +105,11 @@
 }
 .edit-cite-input--filter { flex: 1 1 auto; min-width: 0; }
 .edit-cite-input--loc    { flex: 0 0 9em; }
+/* Zitat-Art (Kurzzitat / Blockzitat / vgl.) auf Panelbreite verteilt. Das Basis-
+   Pattern `.seg-toggle` ist `inline-flex`; die Zwei-Klassen-Spezifitaet hier ist
+   noetig, weil book-settings.css (Pattern-SSoT) nach dieser Datei geladen wird. */
+.edit-cite-panel .edit-cite-kind { display: flex; }
+.edit-cite-panel .edit-cite-kind button { flex: 1 1 0; text-align: center; }
 .edit-cite-hint {
   padding: var(--space-5) var(--space-2xs);
   font-size: var(--font-size-xs);
@@ -132,6 +137,33 @@
   background: var(--color-hover);
   border-left-color: var(--color-accent, var(--color-text));
 }
+
+/* --- Querverweis-Picker ---------------------------------------------------
+   Teilt Panel, Liste und Aktiv-Zustand mit dem Beleg-Picker (.edit-cite-*) —
+   es ist dieselbe Interaktion. Eigen sind nur zwei Dinge: die Zeile trägt
+   Vorschau UND Titel, und Unterkapitel werden nach ihrer Tiefe eingerückt,
+   damit die Buchstruktur beim Scannen sichtbar bleibt. */
+.edit-xref-panel { min-width: 280px; }
+.edit-xref-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+}
+/* Die Vorschau ist das, was gleich im Text steht — sie führt die Zeile an. */
+.edit-xref-preview {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+.edit-xref-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-muted);
+}
+.edit-xref-item[data-depth="2"] { padding-left: calc(var(--space-10) + var(--space-10)); }
+.edit-xref-item[data-depth="3"] { padding-left: calc(var(--space-10) + var(--space-10) * 2); }
 
 .edit-slash-menu {
   position: fixed;

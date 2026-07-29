@@ -9,6 +9,7 @@ Spec für den HubSpot-Blog-Workflow eines Buchs vom Typ `blog`. Halbierte Funkti
 - **Auth:** Private Access Token (PAT, `pat-…`) via Bearer-Header. Token pro Buch verschlüsselt in der DB (`lib/crypto.js`).
 - **Trigger:** manuell. Einmaliger Initial-Import + ad-hoc Per-Page-Push (Erst-Push + Re-Push) + on-demand Reconcile (Link-Drift-Check). Kein Cron, keine Pull-Operation.
 - **Bilder:** konsequent gestrippt — Whitelist erlaubt nur Inline-/Block-Tags, kein `<img>`, kein Featured-Image-Upload, keine Medien-Embeds.
+- **Quellen:** Quellen-Chips werden zu Klartext (`span` steht in keiner Whitelist-Map, das Element wird entpackt, der Kurzbeleg bleibt im Satz) — im HubSpot-Post wäre ein Zeiger auf `sources.id` toter Ballast. Bei aktivem `bibliography_in_blog` hängt der Push das Quellenverzeichnis als `<h2>` + Liste an. **Kein Marker-Wrapper, anders als bei WordPress** ([blog-sync.md](blog-sync.md) → „Pflicht-Invariante: der Pull entfernt es wieder"): HubSpot liest nie zurück, es kann also nichts akkumulieren — und ein `<div>` würde die Allowlist ohnehin entpacken.
 - **Erst-Push:** `state: 'DRAFT'` via `POST /cms/v3/blogs/posts`. Finalisieren, Einplanen, Publizieren passiert in HubSpot.
 - **Re-Push:** `PATCH /cms/v3/blogs/posts/{id}/draft` aktualisiert den Buffer eines existierenden Posts. Live-Version drüben bleibt unverändert, bis der User den Buffer in HubSpot publiziert. Der UI-Warn-Dialog macht klar, dass HubSpot-spezifische Formatierungen (Module, CTAs, Bilder, Forms, Tags) im Buffer durch den App-HTML-Body ersetzt werden.
 - **Out-of-Scope:** Pull-Back von HubSpot-Änderungen, Featured-Image, Inline-Bilder, Tags/Topics/Categories, OAuth (PAT only), mehrere HubSpot-Blogs pro Buch.
@@ -119,7 +120,8 @@ Multi-Select-Push. Sequentiell, da gemeinsame Rate-Limit-Quota.
 2. Pro `pageId`:
    - `updateJob` mit Key `job.hubspot.push.upload`, Params `{ current, total }`.
    - Page laden via `contentStore.loadPage(pageId)`; Mismatch `book_id` → `PAGE_WRONG_BOOK`-Error im Errors-Array.
-   - `appToHubspotHtml(pageRow.html)` (Fallback `<p></p>`).
+   - **Quellen:** `buildBibliography({ bookId, pageIds: [pageId], userEmail })` (Einheit ist die Seite — ein Post ist eine Seite, die Nummern des numerischen Stils folgen den Fundstellen dieses Posts ab 1), dann `resolveCitesInHtml` über das Seiten-HTML (der gespeicherte Chip-Text ist nur ein Cache). Bei `bibliography_enabled && bibliography_in_blog` kommt `bibliographySectionHtml(bib, { list: true })` dahinter.
+   - `appToHubspotHtml(appHtml + bibSection)` (Fallback `<p></p>`).
    - **Erst-Push (kein Link):** `client.createPost({ name, postBody, contentGroupId, blogAuthorId, authorName, state: 'DRAFT' })` — kein `publishDate`, kein `slug`, kein `metaDescription`; User finalisiert drüben. `authorName` einmal pro Job aus `listAuthors()` resolved (HubSpot v3 ignoriert `blogAuthorId` allein bei manchen Portalen — Name muss mit).
    - **Re-Push (Link existiert):** `client.updatePostDraft(hubspot_post_id, { name, postBody })` → `PATCH /cms/v3/blogs/posts/{id}/draft` aktualisiert nur den Buffer; Live-Version drüben unverändert. UI hat User vorher via `appConfirm` über Verlust HubSpot-spezifischer Formatierungen aufgeklärt.
    - **Auto-Revive bei 404 im Re-Push:** Schlägt `updatePostDraft` mit `HUBSPOT_HTTP_404` fehl (User hat Draft drüben gelöscht), wird der Link entfernt und derselbe Push als Create neu ausgeführt — Page bekommt einen frischen Draft-Post, kein Sackgassen-Status.
@@ -208,7 +210,7 @@ Server-Fehler-Codes werden 1:1 als i18n-Keys gemappt (`hubspot.error.${code}`). 
 ## Tests
 
 - **Unit** ([tests/unit/](../tests/unit/)):
-  - [hubspot-html.test.mjs](../tests/unit/hubspot-html.test.mjs) — `hubspotToAppHtml` / `appToHubspotHtml`: Whitelist, Image-Strip, Jinja-Strip, https-only Links, Heading-Normalize, leerer Input.
+  - [hubspot-html.test.mjs](../tests/unit/hubspot-html.test.mjs) — `hubspotToAppHtml` / `appToHubspotHtml`: Whitelist, Image-Strip, Jinja-Strip, https-only Links, Heading-Normalize, leerer Input; **Quellen:** Chip → Klartext ohne `data-src`, angehängtes Verzeichnis überlebt als `<h2>` + `<ul>` (numerisch: Absätze mit `[n]`), Marker-`<div>` wird entpackt, Titel escapet.
   - [hubspot-db.test.js](../tests/unit/hubspot-db.test.js) — Connection + Link CRUD, Token-Encrypt/Decrypt-Roundtrip, `UNIQUE(hub_id, hubspot_post_id)`-Constraint.
 - **Integration** ([tests/integration/](../tests/integration/)):
   - [hubspot-sync.test.js](../tests/integration/hubspot-sync.test.js) — Initial-Import (Year-Chapter-Aggregation, Link-Eintrag) gegen [mock-hubspot.js](../tests/integration/_helpers/mock-hubspot.js); `HUBSPOT_ALREADY_IMPORTED` bei zweitem Run; Push-Job (Draft + Link) + `HUBSPOT_ALREADY_PUSHED` bei Re-Push; `HUBSPOT_REQUIRES_BLOG_TYPE` bei falschem Buchtyp.

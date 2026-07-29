@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import {
   CITATION_STYLES, DEFAULT_STYLE,
   formatFull, formatFullHtml, formatFullRuns, formatShort,
-  sortEntries, assignNumbers, sortKeyOf, labelsFor,
+  sortEntries, assignNumbers, assignYearSuffixes, sortKeyOf, labelsFor,
 } from '../../public/js/sources/format.js';
 import {
   initialsOf, personInverted, personNormal, familyOf,
@@ -359,6 +359,25 @@ test('formatShort: ohne Urheber traegt der Titel den Beleg, ohne Jahr die Sprach
   assert.equal(formatShort(null, {}), '');
 });
 
+test('formatShort: Paraphrase-Modus setzt das vgl./cf.-Praefix', () => {
+  const s = src({ authors: [{ family: 'Kafka' }], year: '1915' });
+  const p = { mode: 'paraphrase' };
+  // Autor-Jahr-Stile: Praefix INNERHALB der Klammer.
+  assert.equal(formatShort(s, { style: 'apa7', ...p }), '(vgl. Kafka, 1915)');
+  assert.equal(formatShort(s, { style: 'apa7', loc: '44', ...p }), '(vgl. Kafka, 1915, S. 44)');
+  assert.equal(formatShort(s, { style: 'chicago-ad', ...p }), '(vgl. Kafka 1915)');
+  assert.equal(formatShort(s, { style: 'apa7', lang: 'en', ...p }), '(cf. Kafka, 1915)');
+  // Numerisch: Praefix VOR der Klammer, die Klammerform selbst unveraendert.
+  assert.equal(formatShort(s, { style: 'numeric', num: 12, ...p }), 'vgl. [12]');
+  assert.equal(formatShort(s, { style: 'numeric', num: 12, loc: '44', ...p }), 'vgl. [12, S. 44]');
+  assert.equal(formatShort(s, { style: 'numeric', num: 12, lang: 'en', ...p }), 'cf. [12]');
+  // Default und unbekannter Modus bleiben praefixfrei — sonst wanderte ein „vgl."
+  // in jeden Alt-Beleg, sobald der Regenerierungs-Pass laeuft.
+  assert.equal(formatShort(s, { style: 'apa7' }), '(Kafka, 1915)');
+  assert.equal(formatShort(s, { style: 'apa7', mode: 'quote' }), '(Kafka, 1915)');
+  assert.equal(formatShort(s, { style: 'apa7', mode: 'quatsch' }), '(Kafka, 1915)');
+});
+
 // ── Sortierung + Nummern ─────────────────────────────────────────────────────
 
 test('sortKeyOf: Autor, sonst Herausgeber, sonst Titel', () => {
@@ -422,4 +441,78 @@ test('assignNumbers: Nummer nach Erstzitat, Wiederholungen behalten ihre', () =>
   assert.equal(n.get(9), 3);
   assert.equal(n.size, 3);
   assert.equal(assignNumbers(null).size, 0);
+});
+
+// ── Jahres-Disambiguierung ───────────────────────────────────────────────────
+// Ohne sie zeigt „(Müller, 2020)" bei zwei Werken desselben Jahres auf zwei
+// Verzeichniseintraege gleichzeitig — der Beleg ist dann in beide Richtungen
+// unaufloesbar.
+
+test('assignYearSuffixes: nur mehrdeutige Autor-Jahr-Paare bekommen Buchstaben', () => {
+  const list = [
+    src({ id: 1, authors: [{ family: 'Müller' }], year: '2020', title: 'Zweiter Titel' }),
+    src({ id: 2, authors: [{ family: 'Müller' }], year: '2020', title: 'Erster Titel' }),
+    src({ id: 3, authors: [{ family: 'Müller' }], year: '2019', title: 'Anderes Jahr' }),
+    src({ id: 4, authors: [{ family: 'Schmidt' }], year: '2020', title: 'Anderer Autor' }),
+  ];
+  const m = assignYearSuffixes(list, { lang: 'de' });
+  // Buchstabe folgt der Verzeichnis-Reihenfolge der Gruppe (Titel alphabetisch),
+  // NICHT der Eingabe-Reihenfolge — sonst wandert er beim Umstellen des Textes.
+  assert.equal(m.get(2), 'a');
+  assert.equal(m.get(1), 'b');
+  // Eindeutige Eintraege bleiben ohne Buchstaben: ein „2019a" ohne „2019b"
+  // daneben waere eine Falschmeldung an den Leser.
+  assert.equal(m.has(3), false);
+  assert.equal(m.has(4), false);
+});
+
+test('assignYearSuffixes: undatierte Werke bleiben aussen vor', () => {
+  const list = [
+    src({ id: 1, authors: [{ family: 'Müller' }], year: '', title: 'A' }),
+    src({ id: 2, authors: [{ family: 'Müller' }], year: 'o. J.', title: 'B' }),
+  ];
+  assert.equal(assignYearSuffixes(list, {}).size, 0);
+  assert.equal(assignYearSuffixes(null, {}).size, 0);
+});
+
+test('assignYearSuffixes: Herausgeber-/Titel-Sortierschluessel greifen wie im Verzeichnis', () => {
+  // Ohne Urheber traegt der Titel den Sortierschluessel (title-first-Eintrag);
+  // zwei solche Werke desselben Jahres sind NICHT mehrdeutig, weil ihr Kurzbeleg
+  // bereits verschiedene Titel zeigt.
+  const list = [
+    src({ id: 1, authors: [], editors: [{ family: 'Weber' }], year: '2021', title: 'B' }),
+    src({ id: 2, authors: [], editors: [{ family: 'Weber' }], year: '2021', title: 'A' }),
+  ];
+  const m = assignYearSuffixes(list, {});
+  assert.equal(m.get(2), 'a');
+  assert.equal(m.get(1), 'b');
+});
+
+test('assignYearSuffixes: mehr als 26 Werke kollidieren nicht', () => {
+  const list = Array.from({ length: 28 }, (_, i) =>
+    src({ id: i + 1, authors: [{ family: 'Vielschreiber' }], year: '2020', title: `T${String(i).padStart(2, '0')}` }));
+  const m = assignYearSuffixes(list, {});
+  assert.equal(new Set(m.values()).size, 28);
+  assert.equal(m.get(1), 'a');
+  assert.equal(m.get(26), 'z');
+  assert.equal(m.get(27), 'aa');
+});
+
+test('suffix erscheint in Kurzbeleg UND Verzeichniseintrag — sonst zeigt er ins Leere', () => {
+  const s = src({ id: 1, authors: [{ family: 'Müller', given: 'Anna' }], year: '2020', title: 'Ein Titel', publisher: 'Verlag' });
+  assert.match(formatShort(s, { style: 'apa7', suffix: 'b' }), /Müller, 2020b/);
+  assert.match(formatShort(s, { style: 'chicago-ad', suffix: 'b' }), /Müller 2020b/);
+  assert.match(formatFull(s, { style: 'apa7', suffix: 'b' }), /\(2020b\)/);
+});
+
+test('numerischer Stil bleibt ohne Buchstaben — die Nummer ist bereits eindeutig', () => {
+  const s = src({ id: 1, authors: [{ family: 'Müller' }], year: '2020', title: 'T', publisher: 'V' });
+  assert.equal(formatShort(s, { style: 'numeric', num: 3, suffix: 'a' }), '[3]');
+  assert.ok(!formatFull(s, { style: 'numeric', suffix: 'a' }).includes('2020a'));
+});
+
+test('ohne suffix bleibt alles wie bisher (Default-Pfad unveraendert)', () => {
+  const s = src({ id: 1, authors: [{ family: 'Müller' }], year: '2020', title: 'T', publisher: 'V' });
+  assert.equal(formatShort(s, { style: 'apa7' }), formatShort(s, { style: 'apa7', suffix: '' }));
+  assert.equal(formatFull(s, { style: 'apa7' }), formatFull(s, { style: 'apa7', suffix: '' }));
 });

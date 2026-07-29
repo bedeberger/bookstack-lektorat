@@ -194,6 +194,30 @@
   font-variant-numeric: tabular-nums;
   margin-left: var(--space-2xs);
 }
+
+/* === Karten-Toolbar ===
+   Aktionszeile im Karten-Body (nicht im Header): Anlege-/Import-Buttons links,
+   danach optional eine eingebettete Filterleiste (`.filter-bar--inline`, siehe
+   entity-list.css). Bewusst hier und nicht pro Karte: die Zeile mischt Buttons
+   mit Compact-Controls, und deren gemeinsame Mittellinie hängt an genau diesen
+   Werten — eine Karten-Kopie driftet davon ab.
+   Abgrenzung: `.card-actions` ist die Icon-Leiste IM Header; Toolbars mit
+   eigener Geometrie (`.organizer-toolbar` nowrap, `.figuren-graph-toolbar`
+   space-between, `.motiv-toolbar` padding statt margin) bleiben eigenständig. */
+.card-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+.card-toolbar .btn-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.card-toolbar .btn-compact .icon { width: 1em; height: 1em; }
+
 /* Mobile: Header mit Titelspalte bleibt eine Zeile — die Aktionen (Icon-Buttons
    in .card-actions / .card-header-aside) bleiben oben rechts verankert statt in
    eine eigene Zeile darunter umzubrechen. Die Titelspalte schrumpft

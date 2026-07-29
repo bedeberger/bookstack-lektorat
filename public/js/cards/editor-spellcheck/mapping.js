@@ -52,8 +52,15 @@ function _isSkippedIsland(el) {
 // durch tests/unit/cite-guard-drift.test.mjs.
 const CITE_SKIP_SEL = 'span.cite[data-src]';
 
+// Querverweise („siehe Kapitel 3") aus demselben Grund geschuetzt: ein
+// angewandter Vorschlag ersetzt den Bereich und zerstoert dabei den Zeiger — der
+// Verweis nummerierte danach nicht mehr mit. Ebenfalls eine bewusste Kopie
+// (XREF_SEL in public/js/xrefs/xref-html.js), gegated durch denselben Test.
+const XREF_SKIP_SEL = 'span.xref[data-xref-id]';
+
 function _isCiteChip(el) {
-  return !!(el && el.nodeType === 1 && el.matches && el.matches(CITE_SKIP_SEL));
+  return !!(el && el.nodeType === 1 && el.matches
+    && (el.matches(CITE_SKIP_SEL) || el.matches(XREF_SKIP_SEL)));
 }
 
 export function buildOffsetTable(root) {

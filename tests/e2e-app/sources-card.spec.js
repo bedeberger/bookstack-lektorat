@@ -16,11 +16,23 @@ test('quellen: anlegen, filtern, bearbeiten, archivieren, loeschen, Fundstellen 
   const bookId = await selectSeededBook(page);
 
   // Zwei Quellen via API anlegen (eine mit Koerperschaft).
+  //
+  // Vorher aufraeumen: die App-Suite fährt EINEN Server auf EINER Wegwerf-DB
+  // (playwright.app.config.js, `workers: 1`), und notebook-cite.spec.js legt im
+  // selben Seed-Buch eigene Quellen an. Diese Spec zaehlt aber exakte
+  // Tabellenzeilen — ohne Reset haengt sie von der Spec-Reihenfolge ab und wird
+  // rot, sobald eine andere Spec eine Quelle mehr erzeugt. Geloescht wird aus der
+  // BIBLIOTHEK (nicht nur entknuepft), damit auch der Pool-Picker weiter unten
+  // von einem bekannten Stand ausgeht.
   await page.evaluate(async (id) => {
     const post = (b) => fetch('/sources', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ book_id: id, ...b }),
     }).then(r => r.json());
+    const pool = await fetch('/sources/pool?archived=1').then(r => r.json());
+    for (const s of Array.isArray(pool) ? pool : []) {
+      await fetch(`/sources/${s.id}`, { method: 'DELETE' });
+    }
     await post({ csl_type: 'book', title: 'Die Verwandlung', year: '1915', place: 'Leipzig', publisher: 'Kurt Wolff', authors: [{ family: 'Kafka', given: 'Franz' }] });
     await post({ csl_type: 'article', title: 'Zur Lage', year: '2020', container_title: 'Merkur', volume: '12', pages: '44-51', authors: [{ literal: 'Bundesamt fuer Statistik' }] });
   }, bookId);
@@ -39,9 +51,9 @@ test('quellen: anlegen, filtern, bearbeiten, archivieren, loeschen, Fundstellen 
   await expect(page.locator('.sources-title').first()).toHaveText('Die Verwandlung');
 
   // Filter auf Zeitschriftenaufsatz.
-  await page.fill('.sources-filter-bar .filter-search-input', 'Merkur');
+  await page.fill('#sources-card .filter-bar .filter-search-input', 'Merkur');
   await expect(page.locator('.sources-table tbody tr')).toHaveCount(1);
-  await page.click('.sources-filter-bar .search-clear--icon');
+  await page.click('#sources-card .filter-bar .search-clear--icon');
   await expect(page.locator('.sources-table tbody tr')).toHaveCount(2);
 
   // Bearbeiten: Formular oeffnet, typabhaengige Felder + Vorschau.
@@ -62,7 +74,7 @@ test('quellen: anlegen, filtern, bearbeiten, archivieren, loeschen, Fundstellen 
   await page.waitForFunction(() => [...document.querySelectorAll('.sources-table tbody tr td')].some(td => td.textContent.trim() === '1916'));
 
   // Neu anlegen ueber das Formular.
-  await page.locator('.sources-toolbar button.btn-compact').first().click();
+  await page.locator('#sources-card .card-toolbar button.btn-compact').first().click();
   await expect(page.locator('.sources-form-title')).toHaveText('Neue Quelle');
   // Ohne Titel/Person kein Speichern.
   await expect(page.locator('.sources-form-actions button.primary')).toBeDisabled();
@@ -80,7 +92,7 @@ test('quellen: anlegen, filtern, bearbeiten, archivieren, loeschen, Fundstellen 
   const testRow = page.locator('.sources-table tbody tr').filter({ hasText: 'Testquelle' });
   await testRow.getByRole('button', { name: 'Archivieren', exact: true }).click();
   await page.waitForFunction(() => document.querySelectorAll('.sources-table tbody tr').length === 2);
-  await page.check('.sources-archive-toggle input');
+  await page.check('#sources-card .filter-toggle input');
   await page.waitForFunction(() => document.querySelectorAll('.sources-table tbody tr').length === 3);
   // x-show → alle drei Badges liegen im DOM, nur eines ist sichtbar.
   await expect(page.locator('.sources-archived-badge:visible')).toHaveCount(1);

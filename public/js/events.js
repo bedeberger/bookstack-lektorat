@@ -42,6 +42,12 @@ export const EVT = {
   // verwirft sie darauf — sonst zeigt er die alte Liste bis zum Buchwechsel.
   SOURCES_CHANGED: 'sources:changed',           // detail: { bookId }
 
+  // ── Querverweise ─────────────────────────────────────────────────────────
+  // Die verweisbaren Ziele eines Buchs (Kapitel + Abbildungen) ändern sich beim
+  // Umbauen im Buchorganizer und beim Einfügen/Löschen einer Abbildung. Der
+  // Ziel-Picker cacht sie je Buch und verwirft sie darauf.
+  XREFS_CHANGED: 'xrefs:changed',               // detail: { bookId }
+
   // ── Semantische Suche ────────────────────────────────────────────────────
   SEARCH_SIMILAR: 'search:similar',             // detail: { kind, id, label }
 

@@ -49,7 +49,13 @@ router.get('/:scope/:id/:fmt', async (req, res) => {
     catch (e) { if (sendACLError(res, e)) return; throw e; }
   }
 
-  const buildOpts = buildExportMeta(bundle.book?.id, fmt);
+  const { pageIdsFromGroups } = require('../lib/bibliography');
+  const buildOpts = await buildExportMeta(bundle.book?.id, fmt, {
+    // Buch-Scope numeriert ueber das ganze Buch, Kapitel-/Seiten-Scope nur ueber
+    // die exportierte Einheit (lib/bibliography.js).
+    pageIds: scope === 'book' ? null : pageIdsFromGroups(bundle.groups),
+    userEmail: req.session?.user?.email || null,
+  });
 
   let buf;
   try {
