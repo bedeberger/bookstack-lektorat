@@ -177,9 +177,14 @@ test('endnoteItemHtml stellt die Ziffer vor den Eintrag', () => {
 });
 
 test('Modus-Enum deckt sich mit dem, was die Schicht darunter kennt', async () => {
-  assert.deepEqual(CITATION_NOTES_MODES, ['inline', 'endnotes']);
+  assert.deepEqual(CITATION_NOTES_MODES, ['inline', 'endnotes', 'footnotes']);
   const { VALID_CITATION_NOTES } = await import('../../db/schema.js').then(m => m.default || m);
   assert.deepEqual([...VALID_CITATION_NOTES].sort(), [...CITATION_NOTES_MODES].sort());
+  // Dritte Stelle: die Frontend-Liste, aus der die Combobox ihre Optionen baut.
+  // Laeuft sie auseinander, bietet die Oberflaeche einen Modus an, den der
+  // Endpunkt mit 400 verwirft (oder verschweigt einen, den es gibt).
+  const { CITATION_NOTES } = await import('../../public/js/book/book-settings/citation.js');
+  assert.deepEqual([...CITATION_NOTES].sort(), [...CITATION_NOTES_MODES].sort());
 });
 
 // ── Reine Note-Logik ─────────────────────────────────────────────────────────

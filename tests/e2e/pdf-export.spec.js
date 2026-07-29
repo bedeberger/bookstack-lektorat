@@ -56,6 +56,20 @@ test.describe('pdf-export-card', () => {
     await expect(activeTab).toHaveText(/Druck/);
   });
 
+  test('Apparat-Tab zeigt die Fussnoten-Regler', async ({ page }) => {
+    await createProfile(page, 'X');
+    await page.locator('.export-tabs .tabs-btn').filter({ hasText: 'Apparat' }).click();
+    await expect(page.locator('.export-tabs .tabs-btn--active')).toHaveText(/Apparat/);
+    // `.export-tab-panel` gibt es siebenmal im DOM (nur eines ist sichtbar), und
+    // „Trennlinie" steht auch in anderen Panels — darum ueber das sichtbare.
+    const panel = page.locator('.export-tab-panel:visible');
+    await expect(panel).toContainText('Trennlinie');
+    await expect(panel).toContainText('Maximale Höhe');
+    // Die Laenge der Trennlinie haengt an einem x-show: sie erscheint nur mit
+    // aktivierter Linie. Default ist an, also muss das Feld da sein.
+    await expect(panel).toContainText('Länge der Linie');
+  });
+
   test('Cover-Tab: Umschlag-Sektion berechnet Live-Rückenbreite', async ({ page }) => {
     await createProfile(page, 'Umschlag');
     await page.locator('.export-tabs .tabs-btn').filter({ hasText: 'Cover' }).click();

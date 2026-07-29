@@ -306,6 +306,126 @@
    letzten. */
 .sources-quote-stats-hint { flex: 1 0 100%; margin: 0; }
 
+/* ── Quellen-Erkennung ────────────────────────────────────────────────────────
+   Panel des Jobs `source-detect`: gefundene Werkerwaehnungen als Vorschlaege.
+   Sitzt an derselben Stelle wie der Bibliotheks-Picker und teilt dessen
+   Rahmenoptik — es sind zwei Wege zu derselben Handlung („Quelle aufnehmen"),
+   und sie sollen nicht wie zwei verschiedene Bauteile wirken. */
+.sources-detect {
+  margin: var(--space-md) 0;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--card-accent);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.sources-detect-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
+  flex-wrap: wrap;
+}
+.sources-detect-head .icon { width: 1em; height: 1em; }
+.sources-detect-title {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  flex: 1;
+}
+
+.sources-detect-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin: var(--space-sm) 0;
+}
+.sources-detect-controls .combobox-wrap { min-width: 12rem; }
+
+.sources-detect-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin: var(--space-sm) 0;
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+}
+
+.sources-detect-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-height: 28rem;
+  overflow-y: auto;
+}
+.sources-detect-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.sources-detect-item:last-child { border-bottom: none; }
+/* Bereits erfasst: sichtbar zurueckgenommen, aber nicht ausgeblendet — der
+   Hinweis „diese Stelle waere belegbar" ist die eigentliche Information. */
+.sources-detect-item--known { opacity: var(--opacity-disabled); }
+
+.sources-detect-entry {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sources-detect-entry-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+.sources-detect-entry-title { font-weight: 600; }
+.sources-detect-byline,
+.sources-detect-container {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+}
+
+/* Fundstelle: Kapitel-Badge + woertlicher Satz, als Sprung in den Text. */
+.sources-detect-quote {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+  font-style: italic;
+}
+.sources-detect-quote:disabled { cursor: default; }
+.sources-detect-quote:disabled:hover { opacity: 1; text-decoration: none; }
+.sources-detect-quote-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.sources-detect-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  white-space: nowrap;
+}
+
 /* Mobile: Urheber darf umbrechen, Aktionsspalte rutscht unter den Titel. */
 @media (max-width: 600px) {
   .sources-cell-author { white-space: normal; }
@@ -315,4 +435,7 @@
   .card--sources .card-toolbar .btn-compact { width: 100%; justify-content: center; }
   .sources-picker-item { flex-direction: column; align-items: stretch; }
   .sources-picker-item .btn-compact { width: 100%; justify-content: center; }
+  .sources-detect-item { flex-direction: column; align-items: stretch; }
+  .sources-detect-actions { justify-content: flex-end; }
+  .sources-detect-controls .combobox-wrap { min-width: 0; width: 100%; }
 }

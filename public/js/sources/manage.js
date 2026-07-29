@@ -328,6 +328,9 @@ export const sourcesMethods = {
     if (this.srcPickerOpen) { this.closeSourcePicker(); return; }
     this.cancelSourceEdit();
     this.closeSourceCitations();
+    // Beide Panels sitzen an derselben Stelle unter der Toolbar — nebeneinander
+    // offen wuerden sie den Blick auf die Tabelle verstellen.
+    this.closeSourceDetect();
     this.srcPickerOpen = true;
     await this.loadSourcePool();
   },

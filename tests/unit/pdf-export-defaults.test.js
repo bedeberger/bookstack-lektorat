@@ -298,3 +298,41 @@ test('validateConfig: coverSpec — Clamps, Integer-pageCount, Hex-Default', () 
   // Unbekannte Keys verworfen.
   assert.equal(validateConfig({ coverSpec: { evil: 1 } }).coverSpec.evil, undefined);
 });
+
+// ── Fussnotenapparat ─────────────────────────────────────────────────────────
+// `maxHeightPct` ist kein Kosmetik-Regler: er begrenzt, wie viel Satzspiegel der
+// Apparat frisst, und garantiert damit, dass auf jeder Seite Text Platz hat.
+// Darum eine harte Untergrenze statt 0.
+
+test('defaultConfig: footnotes-Block vorhanden', () => {
+  const f = defaultConfig().footnotes;
+  assert.equal(f.separator, true);
+  assert.equal(f.separatorWidthMm, 30);
+  assert.equal(f.gapMm, 2);
+  assert.equal(f.hangMm, 4);
+  assert.equal(f.maxHeightPct, 45);
+});
+
+test('validateConfig: footnotes — Clamps, Bools, Junk', () => {
+  const f = validateConfig({ footnotes: { separatorWidthMm: 12, gapMm: 3.5, hangMm: 6, maxHeightPct: 30, separator: false } }).footnotes;
+  assert.equal(f.separatorWidthMm, 12);
+  assert.equal(f.gapMm, 3.5);
+  assert.equal(f.hangMm, 6);
+  assert.equal(f.maxHeightPct, 30);
+  assert.equal(f.separator, false);
+
+  const clamped = validateConfig({ footnotes: { maxHeightPct: 999, gapMm: -5, separatorWidthMm: 0 } }).footnotes;
+  assert.equal(clamped.maxHeightPct, 70);
+  assert.equal(clamped.gapMm, 0);
+  assert.equal(clamped.separatorWidthMm, 5);
+
+  assert.equal(validateConfig({ footnotes: { evil: 1 } }).footnotes.evil, undefined);
+  assert.deepEqual(validateConfig({ footnotes: 'kaputt' }).footnotes, defaultConfig().footnotes);
+});
+
+test('defaultConfig: Font-Rolle footnote vorhanden und kleiner als der Fliesstext', () => {
+  const font = defaultConfig().font;
+  assert.equal(typeof font.footnote.family, 'string');
+  assert.ok(font.footnote.sizePt < font.body.sizePt, 'Apparat wird kleiner gesetzt als der Fliesstext');
+  assert.equal(validateConfig({ font: { footnote: { sizePt: 999 } } }).font.footnote.sizePt, 72);
+});

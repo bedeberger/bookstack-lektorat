@@ -25,6 +25,7 @@ const JOB_NAV_CARD = {
   'book-chat':         'bookChat',
   'research-chat':     'recherche',
   'research-link':     'recherche',
+  'source-detect':     'sources',
   'rueckblick':        'tagebuchRueckblick',
   'finetune-export':   'finetuneExport',
   'pdf-export':        'pdfExport',

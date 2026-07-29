@@ -289,6 +289,7 @@ const JOB_TYPE_LABELS = {
   'research-chat':         'job.label.researchChat',
   'research-link':         'job.label.researchLink',
   'rueckblick':            'job.label.rueckblick',
+  'source-detect':         'job.label.sourceDetect',
   'stilprofil':            'job.label.stilprofil',
 };
 

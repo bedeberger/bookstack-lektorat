@@ -103,11 +103,32 @@ test('_tokenize: klebt Satzzeichen nach Formatierung ans Wort (kein loser Punkt,
   // Häufig: WYSIWYG-Auswahl formatiert das Wort, der Punkt bleibt roman → eigener Run.
   const noSpace = _tokenize([{ text: 'Das war ' }, { text: 'wichtig', italic: true }, { text: '.' }]);
   assert.deepEqual(noSpace.map(i => i.br ? 'br' : i.space ? '_' : i.word), ['Das', '_', 'war', '_', 'wichtig.']);
-  assert.equal(noSpace[noSpace.length - 1].style.italic, true, 'Style bleibt am geklebten Wort');
+
+  // Geklebt heisst NICHT gleich formatiert: der Verbund hält beide Teile mit
+  // ihrem eigenen Style. Sonst würde der Punkt die Kursive des Worts erben —
+  // und hinter einer hochgestellten Notenziffer wäre er hochgestellt.
+  const glued = noSpace[noSpace.length - 1];
+  assert.deepEqual(glued.parts.map(p => [p.text, !!p.style.italic]), [['wichtig', true], ['.', false]]);
 
   // Autor hat das trennende Leerzeichen mitformatiert → Space vor dem Punkt muss weg.
   const withSpace = _tokenize([{ text: 'Das war ' }, { text: 'wichtig ', italic: true }, { text: '.' }]);
   assert.deepEqual(withSpace.map(i => i.br ? 'br' : i.space ? '_' : i.word), ['Das', '_', 'war', '_', 'wichtig.']);
+});
+
+test('_tokenize: Notenziffer klebt ans Vorgängerwort — sonst landet sie auf der falschen Seite', () => {
+  // Der Marker aus lib/endnotes.js steht ohne Leerzeichen hinter dem belegten
+  // Wort. Ungeklebt bricht der Layouter genau dazwischen um; bei einem
+  // SEITENumbruch stünde die Ziffer dann auf einer anderen Seite als ihre Note.
+  const items = _tokenize([{ text: 'Ein Satz' }, { text: '12', sup: true }, { text: '.' }]);
+  assert.deepEqual(items.map(i => i.space ? '_' : i.word), ['Ein', '_', 'Satz12.']);
+  const glued = items[items.length - 1];
+  assert.deepEqual(glued.parts.map(p => [p.text, !!p.style.sup]), [['Satz', false], ['12', true], ['.', false]]);
+
+  // Ein vom Autor gesetztes Leerzeichen vor dem Marker bleibt respektiert —
+  // dann ist der Umbruch dort erlaubt und die Ziffer ein eigenes Token.
+  const spaced = _tokenize([{ text: 'Ein Satz ' }, { text: '12', sup: true }]);
+  assert.deepEqual(spaced.map(i => i.space ? '_' : i.word), ['Ein', '_', 'Satz', '_', '12']);
+  assert.equal(spaced[spaced.length - 1].parts, undefined);
 });
 
 test('_renderLine: führender Boundary-Space nach Kursiv bleibt erhalten (Regression: "Heimatund")', () => {

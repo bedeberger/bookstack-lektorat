@@ -33,7 +33,7 @@ export const XREF_DEFAULTS = Object.freeze({
 /** Belegdarstellung. Deckungsgleich mit lib/endnotes.js#CITATION_NOTES_MODES und
  *  db/schema.js#VALID_CITATION_NOTES — laeuft es auseinander, verwirft der
  *  Endpunkt den Wert mit 400. */
-export const CITATION_NOTES = ['inline', 'endnotes'];
+export const CITATION_NOTES = ['inline', 'endnotes', 'footnotes'];
 export const DEFAULT_NOTES = 'inline';
 
 export const CITATION_DEFAULTS = Object.freeze({

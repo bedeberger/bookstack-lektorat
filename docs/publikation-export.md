@@ -122,6 +122,41 @@ Datenquelle ist [lib/bibliography.js](../lib/bibliography.js)#`buildBibliography
 
 **Nicht im Blog-Push:** [lib/wp-html.js](../lib/wp-html.js) bleibt auf dem Inline-Pfad. Ein Blog-Post ist genau eine Seite; ein Apparat „pro Kapitel" hat dort keinen Bezugsrahmen.
 
+## Fussnoten am Seitenfuss
+
+Dritter Wert von `citation_notes`: `footnotes`. Datenseitig identisch zu `endnotes` — derselbe Notenpass, dieselbe Nummerierung pro Kapitel, dieselben Kurzformen. Unterschied ist allein die **Platzierung**.
+
+| Ausgabeweg | Was passiert |
+|-----------|--------------|
+| PDF | echter Apparat am Seitenfuss ([lib/pdf-render/footnotes.js](../lib/pdf-render/footnotes.js)) |
+| DOCX | **native Word-Fussnoten** (`FootnoteReferenceRun` + `Document({ footnotes })`) — Word übernimmt Platz, Umbruch und Anzeige-Nummerierung selbst |
+| EPUB · HTML · MD · TXT · Substack | Kapitelapparat wie bei `endnotes` — diese Formate haben keine Seiten ([shared.js](../lib/export-builders/shared.js)) |
+
+**Der Hebel im PDF:** `doc.page.margins.bottom`. Das ist der einzige Wert, den *alle* Umbruchprüfungen sehen — [justify.js](../lib/pdf-render/justify.js) über `doc.page.maxY()`, Witwenkontrolle, Bild-Umbruch und DropCap über `height - margins.bottom` von Hand. Wer ihn aufbläht, verkleinert den Satzspiegel für jeden Konsumenten auf einmal. Das summiert sich nicht über Seiten: pdfkit leitet die Ränder einer neuen Seite aus `doc.options` ab, nicht von der Vorseite.
+
+**`margins.bottom` ist der Hebel, nicht die Wahrheit.** Zurückgelesen wird er nie — [chrome.js](../lib/pdf-render/chrome.js) setzt die Ränder jeder Body-Seite am Ende auf die Basiswerte (`origMargins = outerMargins`, eine Überschreibung, keine Restauration). Die Wahrheit ist das seiteninterne Register in `footnotes.js`.
+
+**Umbruchentscheidung:** Trägt eine Zeile Notenmarker, steckt der Platz ihrer Noten schon in der Passt-noch-Prüfung — sonst passt die Zeile, die Reserve wächst danach, und die letzte Zeile der Seite steht im Apparat. **Terminierung ist strukturell:** pro Zeile gibt es höchstens einen Seitenumbruch (kein Re-Check nach dem `addPage`), und der Deckel (`maxHeightPct`, Default 45 %) hält die Reserve unter einem Bruchteil des Satzspiegels.
+
+**Gezeichnet wird nachgelagert**, in einem Stamp-Pass nach dem Body (Muster [stamp.js](../lib/pdf-render/stamp.js)) — der Platz ist da längst reserviert. Zwei harte Regeln dort: die Ränder für die Dauer auf 0 (sonst hängt pdfkit mitten im Stamp eine Seite an und kippt `padToEvenPages` samt Seitenzahlen), und die Notenbreite aus den **Basis**-Rändern ableiten, nie aus `doc.page.margins` (im Blockquote ist `left` verschoben).
+
+**Mess- und Zeichenweg sind derselbe Code:** beide laufen durch `_tokenize`/`_breakLines`/`_renderLine` aus justify.js. Weichen sie um eine Zeile ab, ragt der Apparat in die Fusszeile oder die Seite verschenkt Platz.
+
+### Was der Apparat nicht kann
+
+- **Nummerierung pro Kapitel, nicht pro Seite.** Seitenweise ab 1 ist strukturell ausgeschlossen: die Nummer wird vor dem Layout vergeben und ihre Glyphenbreite geht in den Zeilenumbruch ein — nachträglich umnummerieren würde den Umbruch invalidieren.
+- **Keine Fortsetzung auf die Folgeseite.** Eine Note über dem Deckel wird trotzdem vollständig gesetzt und kann in den unteren Rand ragen; der Job meldet das als `meta.footnoteOverflowPages` (non-fatal, Muster `dpiWarnings`).
+- **Zweispaltensatz** fällt auf den Kapitelapparat zurück (`meta.footnoteFallback`) — pdfkit paginiert die Spalten selbst, es gibt dort keinen Per-Zeilen-Hook.
+
+### Nebenbefunde, die dabei behoben wurden
+
+Beide betrafen schon den Endnoten-Modus:
+
+- **Marker konnte auf die falsche Seite rutschen.** `_tokenize` machte aus `Text<sup>12</sup>` zwei benachbarte Tokens ohne Leerzeichen; der Layouter brach genau dort um. Jetzt bilden sie einen **Verbund** (`parts`), der nur gemeinsam umbrochen wird.
+- **Hochgestellter Satzpunkt.** Die Klebelogik hängte den Punkt *nach* dem Marker ans Marker-Token und vererbte dessen `sup`-Style. Verbund-Teile behalten jetzt ihren eigenen Style — was auch den Punkt nach `</em>` aufrecht setzt.
+
+Ausserdem geschlossen: [dropcap.js](../lib/pdf-render/dropcap.js) und der poem/pre-Zweig in [blocks.js](../lib/pdf-render/blocks.js) setzen ihren Text aus `runs.map(r => r.text).join('')` — dort wäre eine Note **lautlos verschwunden**. Beide weichen bei einem Notenmarker auf den normalen Absatzpfad aus. Listen laufen aus demselben Grund über `_renderRunsJustified` mit `align: 'left'`.
+
 ### Die übrigen Ausgabewege
 
 Alle Builder in [lib/export-builders/](../lib/export-builders/) rufen als erstes `prepareCitations(bundle, opts)` ([shared.js](../lib/export-builders/shared.js)) und rendern danach dessen `groups` statt `bundle.groups`. Der Helper kapselt die drei Regeln, die für jeden Weg gleich gelten: Chips auflösen, Verzeichnis nur bei `scope='book'`, ohne `opts.bibliography` unverändert durchreichen. `opts.bibliography` befüllt [lib/export-send.js](../lib/export-send.js)#`buildExportMeta` zentral für beide Sync-Routen (`/export`, Fassungs-Export).
@@ -152,6 +187,7 @@ Migration 166 seedet `book_publication` je Buch aus dem Gewinner-PDF-Profil (`is
 
 - Unit Quellenverzeichnis: [tests/unit/bibliography.test.mjs](../tests/unit/bibliography.test.mjs) (Buch- vs. Seiten-Scope, Nummernvergabe, `cited`/`all`, Titel-Default je Sprache, abgeschaltet → leer, Chip-Text-Ersetzung + Attribut-Invariante); PDF-Seite in [tests/unit/pdf-render.test.mjs](../tests/unit/pdf-render.test.mjs) (eigene Seite + Outline-Eintrag, nur bei `scope='book'`, ersetzter Kurzbeleg im gerenderten Text via `extractPdfText`).
 - Unit übrige Ausgabewege: [tests/unit/export-builders/bibliography.test.mjs](../tests/unit/export-builders/bibliography.test.mjs) — fährt HTML/TXT/MD/Substack/EPUB gegen **dieselbe** Zusage (frischer Kurzbeleg statt Cache, Verzeichnis nur beim Buch, abgeschaltetes Verzeichnis löst trotzdem auf, ohne `bibliography`-Option unverändert). Genau hier lief das Feature zuletzt auseinander: PDF und DOCX konnten es, der Rest nicht.
+- Unit Fussnotenapparat: [tests/unit/footnotes.test.mjs](../tests/unit/footnotes.test.mjs) — Reserve/Deckel/Separator als Einheiten, dazu drei Zusagen am gerenderten PDF: jede Note auf der Seite ihres Markers, der Apparat **überlagert den Fliesstext nicht** (geometrisch über die y-Positionen aus pdf.js — im reinen Text sieht eine Überlappung genauso aus wie ein sauberer Seitenfuss), und überlange Noten werden gemeldet statt zu verschwinden. Mutationsprobe gemacht: Reserve abschalten ⇒ Geometrie-Test rot.
 - Unit Anmerkungsapparat: [tests/unit/endnotes.test.mjs](../tests/unit/endnotes.test.mjs) (Zählung pro Kapitel inkl. unterbrochener Kapitel-Läufe, Ebd./a. a. O.-Auswahl, Stellenangabe nur bei Änderung, Blockzitat mit/ohne eigenen Chip, unbekannte Quelle, Zeiger-Invariante, Enum-Deckung gegen `db/schema.js`); PDF-Seite in [tests/unit/pdf-render.test.mjs](../tests/unit/pdf-render.test.mjs) (Notenziffer statt Klammerform, Apparat hinter jedem Kapitel, Vollform pro Kapitel).
 - Unit Jahres-Buchstaben: [tests/unit/sources-format.test.mjs](../tests/unit/sources-format.test.mjs) (`assignYearSuffixes`: nur mehrdeutige Paare, Reihenfolge nach Titel, undatiert bleibt aussen vor, >26 Werke kollidieren nicht, Buchstabe in Kurzbeleg **und** Eintrag, numerischer Stil unberührt).
 - Unit: [tests/unit/publication-meta.test.mjs](../tests/unit/publication-meta.test.mjs) (Validator/ISBN-Checksum, `author_file_as`/`co_authors`/`extra_sections`-Normalisierung), [tests/unit/epub-export.test.mjs](../tests/unit/epub-export.test.mjs) (Meta-Resolver, Frontmatter/Backmatter, Bild-Zähler, ISBN-`dc:identifier`, Accessibility-Meta, Landmarks-nav, file-as-Override + Co-Autoren-`dc:creator`, freie Vor-/Nachsatz-Seiten, genEpub-Smoke).

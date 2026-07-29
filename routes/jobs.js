@@ -29,6 +29,7 @@ const { motifScanRouter } = require('./jobs/motif-scan');
 const { motifBrainstormRouter } = require('./jobs/motif-brainstorm');
 const { beatAnchorRouter } = require('./jobs/beat-anchor');
 const { redundancyRouter } = require('./jobs/redundancy');
+const { sourceDetectRouter } = require('./jobs/source-detect');
 
 // Budget-Enforcement greift VOR allen Sub-Routern, sonst lassen sich
 // die Job-POSTs unter /jobs/* nicht mit einer einzigen Middleware kapseln.
@@ -66,6 +67,7 @@ router.use('/', motifScanRouter);
 router.use('/', motifBrainstormRouter);
 router.use('/', beatAnchorRouter);
 router.use('/', redundancyRouter);
+router.use('/', sourceDetectRouter);
 router.use('/', sharedRouter);
 
 module.exports = { router, runKomplettAnalyseAll };

@@ -237,10 +237,13 @@ test('nur die zwei festen Hosts sind Request-Ziele', () => {
   const hosts = [...src.matchAll(/https?:\/\/[a-z0-9.-]+/gi)].map(m => m[0]);
   const targets = new Set(hosts.filter(h => !/doi\.org$/.test(h)));   // doi.org nur als Praefix-Strip
   assert.deepEqual([...targets].sort(), ['https://api.crossref.org', 'https://openlibrary.org']);
-  // fetch bekommt ausschliesslich eine der beiden Basis-Konstanten.
+  // fetch bekommt ausschliesslich eine der Host-Konstanten. Vier Stueck: je ein
+  // ID-Endpunkt (DOI/ISBN) und ein Such-Endpunkt (bibliografische Suche) pro
+  // Register — der Suchpfad nimmt Freitext aus einem KI-Fund entgegen und darf
+  // deshalb erst recht kein Ziel durchreichen.
   const fetchArgs = [...src.matchAll(/_fetchJson\(([^)]*)\)/g)].map(m => m[1]).filter(a => !a.startsWith('url'));
-  assert.ok(fetchArgs.length >= 2);
+  assert.ok(fetchArgs.length >= 4);
   for (const arg of fetchArgs) {
-    assert.match(arg, /^`\$\{(CROSSREF_BASE|OPENLIBRARY_BASE)\}/);
+    assert.match(arg, /^`\$\{(CROSSREF_BASE|CROSSREF_SEARCH|OPENLIBRARY_BASE|OPENLIBRARY_SEARCH)\}/);
   }
 });

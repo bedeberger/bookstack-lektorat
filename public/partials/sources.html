@@ -37,6 +37,14 @@
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#book-open"/></svg>
       <span x-text="$app.t('sources.fromLibrary')"></span>
     </button>
+    <!-- Quellen-Erkennung: findet im Buchtext erwaehnte Werke und schlaegt sie
+         zur Aufnahme vor. Setzt nie einen Quellen-Marker — das bleibt der
+         Editor. Panel-Fragment: partials/sources-detect.html -->
+    <button type="button" class="btn-compact" @click="toggleSourceDetect()" :disabled="sourcesBusy"
+            :aria-expanded="srcDetectOpen">
+      <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#scan"/></svg>
+      <span x-text="$app.t('sources.detect.open')"></span>
+    </button>
     <div class="filter-bar filter-bar--inline">
       <span class="filter-search-wrap">
         <input type="text" class="filter-search-input filter-search-input--wide" x-model="srcFilterText"
@@ -55,49 +63,9 @@
     </div>
   </div>
 
-  <!-- Bibliotheks-Picker: die eigene Bibliothek minus dem, was dieser Arbeit
-       schon zugeordnet ist. Uebernehmen kopiert nicht — beide Arbeiten zeigen
-       danach auf denselben Eintrag. -->
-  <div class="sources-picker" x-show="srcPickerOpen" x-cloak>
-    <div class="sources-picker-head">
-      <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#book-open"/></svg>
-      <span class="sources-picker-title" x-text="$app.t('sources.picker.title')"></span>
-      <span class="filter-search-wrap sources-picker-search">
-        <input type="text" class="filter-search-input" x-model="srcPoolFilter"
-               :placeholder="$app.t('sources.picker.search')" :aria-label="$app.t('sources.picker.search')">
-        <button type="button" class="search-clear--icon" x-show="srcPoolFilter" @click="srcPoolFilter = ''"
-                :aria-label="$app.t('search.clear')" :data-tip="$app.t('search.clear')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#x"/></svg></button>
-      </span>
-      <button type="button" class="icon-btn icon-btn--ghost" @click="closeSourcePicker()"
-              :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#x"/></svg></button>
-    </div>
-    <div class="muted-msg muted-msg--sm" x-show="srcPoolLoading" x-text="$app.t('sources.picker.loading')"></div>
-    <p class="card-form-error" x-show="srcPoolError" x-cloak x-text="srcPoolError"></p>
-    <p class="muted-msg muted-msg--sm" x-show="!srcPoolLoading && !srcPoolError && srcPool.length === 0" x-cloak
-       x-text="$app.t('sources.picker.empty')"></p>
-    <p class="muted-msg muted-msg--sm" x-show="srcPool.length > 0 && srcPoolRows().length === 0" x-cloak
-       x-text="$app.t('sources.noMatch')"></p>
-    <ul class="sources-picker-list" x-show="srcPoolRows().length > 0">
-      <template x-for="p in srcPoolRows()" :key="p.id">
-        <li class="sources-picker-item">
-          <span class="sources-picker-entry">
-            <span class="sources-picker-author" x-text="p._author || '—'"></span>
-            <span class="sources-picker-entry-title" x-text="p.title || $app.t('sources.untitled')"></span>
-            <span class="sources-picker-meta">
-              <span class="tag entity-typ-tag" x-text="p._typeLabel"></span>
-              <span x-show="p.year" x-text="p.year"></span>
-              <span class="sources-picker-books" x-show="p.book_count > 0"
-                    x-text="$app.t('sources.picker.usedInN', { n: p.book_count })"></span>
-            </span>
-          </span>
-          <button type="button" class="btn-compact" @click="addSourceFromLibrary(p)" :disabled="sourcesBusy">
-            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#plus"/></svg>
-            <span x-text="$app.t('sources.picker.add')"></span>
-          </button>
-        </li>
-      </template>
-    </ul>
-  </div>
+<!-- @include sources-picker -->
+
+  <!-- @include sources-detect -->
 
   <!-- @include sources-form -->
 

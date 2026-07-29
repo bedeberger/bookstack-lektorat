@@ -133,7 +133,7 @@
   </div>
 
   <template x-if="_formMounted && activeProfile">
-    <div x-data="tabs(['layout','font','chapter','pagination','frontmatter','cover','print'])"
+    <div x-data="tabs(['layout','font','chapter','pagination','frontmatter','apparat','cover','print'])"
          x-modelable="value" x-model="activeTab">
       <!-- Tabs (DESIGN.md .tabs / Alpine.data('tabs')) -->
       <div class="tabs tabs--scrollable export-tabs" x-bind="tablist">
@@ -149,6 +149,7 @@
       <!-- @include pdf-export-chapter -->
       <!-- @include pdf-export-pagination -->
       <!-- @include pdf-export-frontmatter -->
+      <!-- @include pdf-export-apparat -->
       <!-- @include pdf-export-cover -->
       <!-- @include pdf-export-print -->
 

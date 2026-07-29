@@ -1014,7 +1014,7 @@ const CITATION_DEFAULTS = Object.freeze({
 const VALID_CITATION_STYLES = ['apa7', 'chicago-ad', 'numeric'];
 // Deckungsgleich mit CITATION_NOTES_MODES in lib/endnotes.js — laufen die
 // auseinander, faellt der Schreibpfad stumm auf 'inline' zurueck.
-const VALID_CITATION_NOTES = ['inline', 'endnotes'];
+const VALID_CITATION_NOTES = ['inline', 'endnotes', 'footnotes'];
 const VALID_BIBLIOGRAPHY_SCOPES = ['cited', 'all'];
 
 // Querverweis-Defaults (Migration 255). Steht aus demselben Grund in

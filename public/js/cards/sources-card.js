@@ -8,11 +8,13 @@
 // im Root.
 //
 // Methoden in public/js/sources/manage.js, Feld-Inventar + Draft-Umrechnung in
-// public/js/sources/fields.js (pure, testbar ohne Alpine).
+// public/js/sources/fields.js (pure, testbar ohne Alpine). Die Quellen-Erkennung
+// (Job `source-detect`, Vorschlagsliste) liegt in public/js/sources/detect.js.
 
 import { EVT } from '../events.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { sourcesMethods } from '../sources/manage.js';
+import { sourcesDetectMethods } from '../sources/detect.js';
 import { draftFromSource } from '../sources/fields.js';
 
 export function registerSourcesCard() {
@@ -56,6 +58,19 @@ export function registerSourcesCard() {
     srcPoolError: '',
     srcPoolFilter: '',
 
+    // Quellen-Erkennung (Job `source-detect`): Panel, Lauf, Funde. `srcDetected`
+    // lebt nur im Client — ein Fund wird erst zur Quelle, wenn er uebernommen
+    // wird, und ein verworfener Lauf soll spurlos verschwinden.
+    srcDetectOpen: false,
+    srcDetectRunning: false,
+    srcDetectProgress: 0,
+    srcDetectStatus: '',
+    srcDetectError: '',
+    srcDetectChapterId: '',     // '' = ganzes Buch
+    srcDetected: [],
+    srcDetectRan: false,        // trennt „noch nie gelaufen" von „nichts gefunden"
+    srcDetectMeta: null,        // { verified, lookupSkipped, scopeName }
+
     // Deep-Link-Ziel (#book/X/quellen/<sourceId>) aus dem Quellen-Tab des
     // Referenz-Slots: gemerkt, bis die Liste geladen ist — loadSources
     // fokussiert es danach (_focusSourceById in sources/manage.js).
@@ -66,6 +81,7 @@ export function registerSourcesCard() {
     _memos: {},
     _sourcesSavedTimer: null,
     _sourcesNoticeTimer: null,
+    _srcDetectPollTimer: null,
     _lifecycle: null,
 
     init() {
@@ -98,6 +114,17 @@ export function registerSourcesCard() {
           srcPool: [],
           srcPoolError: '',
           srcPoolFilter: '',
+          // Buchwechsel verwirft die Funde: sie beziehen sich auf den Text des
+          // alten Buchs und waeren im neuen sinnlos (und uebernehmbar!).
+          srcDetectOpen: false,
+          srcDetectRunning: false,
+          srcDetectProgress: 0,
+          srcDetectStatus: '',
+          srcDetectError: '',
+          srcDetectChapterId: '',
+          srcDetected: [],
+          srcDetectRan: false,
+          srcDetectMeta: null,
           _pendingFocusSourceId: null,
           _memos: {},
         }),
@@ -111,6 +138,7 @@ export function registerSourcesCard() {
           srcCitations: [],
           srcPickerOpen: false,
           srcPool: [],
+          srcDetectError: '',
         }),
       });
     },
@@ -118,9 +146,13 @@ export function registerSourcesCard() {
     destroy() {
       if (this._sourcesSavedTimer) { clearTimeout(this._sourcesSavedTimer); this._sourcesSavedTimer = null; }
       if (this._sourcesNoticeTimer) { clearTimeout(this._sourcesNoticeTimer); this._sourcesNoticeTimer = null; }
+      // startPoll fährt setInterval — beim Kartenabbau stoppen, sonst pollt der
+      // Lauf weiter gegen eine Komponente, die es nicht mehr gibt.
+      if (this._srcDetectPollTimer) { clearInterval(this._srcDetectPollTimer); this._srcDetectPollTimer = null; }
       this._lifecycle?.destroy();
     },
 
     ...sourcesMethods,
+    ...sourcesDetectMethods,
   }));
 }

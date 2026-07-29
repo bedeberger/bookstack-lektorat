@@ -1,0 +1,97 @@
+<!-- Quellen-Erkennung: Funde des Jobs `source-detect` als Vorschlagsliste.
+     Fragment der Quellen-Karte (via `<!-- @include sources-detect -->` in
+     partials/sources.html), kein eigener x-data-Scope — die Methoden liegen in
+     public/js/sources/detect.js und sind in `sourcesCard` gespreadet.
+     Vorschlagend, nie schreibend: der Job fasst den Buchtext nicht an, und ein
+     Fund wird erst zur Quelle, wenn der Autor ihn uebernimmt. -->
+<div class="sources-detect" x-show="srcDetectOpen" x-cloak>
+  <div class="sources-detect-head">
+    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#search"/></svg>
+    <span class="sources-detect-title" x-text="$app.t('sources.detect.title')"></span>
+    <button type="button" class="icon-btn icon-btn--ghost" @click="closeSourceDetect()"
+            :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#x"/></svg></button>
+  </div>
+
+  <p class="muted-msg muted-msg--sm" x-text="$app.t('sources.detect.hint')"></p>
+
+  <div class="sources-detect-controls">
+    <div x-data="combobox($app.t('sources.detect.scopeChapter'), $app.t('sources.detect.scopeBook'))"
+         x-modelable="value" x-model="srcDetectChapterId"
+         x-effect="options = srcDetectChapterOptions()"></div>
+    <button type="button" class="btn-compact sources-detect-run" @click="runSourceDetect()"
+            :disabled="srcDetectRunning || sourcesBusy">
+      <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#scan"/></svg>
+      <span x-text="srcDetectRunning ? $app.t('sources.detect.running') : $app.t('sources.detect.start')"></span>
+    </button>
+  </div>
+
+  <div class="progress-bar-wrap" x-show="srcDetectRunning" x-cloak>
+    <div class="progress-bar" :style="{ '--progress': srcDetectProgress + '%' }"></div>
+    <span class="muted-msg muted-msg--sm" x-text="srcDetectStatus"></span>
+  </div>
+
+  <p class="card-form-error" x-show="srcDetectError" x-cloak x-text="srcDetectError"></p>
+
+  <p class="muted-msg muted-msg--sm" x-show="srcDetectRan && !srcDetectRunning && srcDetected.length === 0" x-cloak
+     x-text="$app.t('sources.detect.none')"></p>
+
+  <!-- Ergebniszeile: was der Lauf gefunden und was er nicht mehr geprueft hat.
+       Der uebergangene Rest wird ausgewiesen, nicht verschwiegen. -->
+  <div class="sources-detect-summary" x-show="srcDetected.length > 0" x-cloak>
+    <span x-text="$app.t('sources.detect.summary', { n: srcDetected.length, verified: srcDetectMeta?.verified || 0 })"></span>
+    <span x-show="srcDetectMeta?.scopeName" x-text="$app.t('sources.detect.summaryScope', { chapter: srcDetectMeta?.scopeName })"></span>
+    <span class="badge-warn" x-show="srcDetectMeta?.lookupSkipped > 0" x-cloak
+          x-text="$app.t('sources.detect.summarySkipped', { n: srcDetectMeta?.lookupSkipped })"></span>
+    <button type="button" class="btn-compact" @click="adoptAllDetected()"
+            :disabled="sourcesBusy || detectedAdoptable().length === 0"
+            x-text="$app.t('sources.detect.adoptAll', { n: detectedAdoptable().length })"></button>
+  </div>
+
+  <ul class="sources-detect-list" x-show="srcDetected.length > 0" x-cloak>
+    <template x-for="(v, i) in srcDetected" :key="i">
+      <li class="sources-detect-item" :class="{ 'sources-detect-item--known': v.existing_source_id }">
+        <div class="sources-detect-entry">
+          <span class="sources-detect-entry-head">
+            <span class="sources-detect-entry-title" x-text="v.title || $app.t('sources.untitled')"></span>
+            <span class="tag entity-typ-tag" x-text="$app.t('sources.type.' + v.csl_type)"></span>
+            <!-- Bestaetigt = im Register wiedergefunden. Unbestaetigt heisst
+                 nicht falsch, nur ungeprueft — darum Hinweis statt Warnung. -->
+            <span class="badge-ok" x-show="v.verified" x-cloak
+                  :data-tip="$app.t('sources.detect.verifiedTip', { register: v.register })"
+                  x-text="$app.t('sources.detect.verified')"></span>
+            <span class="tag" x-show="!v.verified && !v.existing_source_id" x-cloak
+                  :data-tip="$app.t('sources.detect.unverifiedTip')"
+                  x-text="$app.t('sources.detect.unverified')"></span>
+            <span class="badge-warn" x-show="v.existing_source_id" x-cloak
+                  x-text="v.existing_linked ? $app.t('sources.detect.known') : $app.t('sources.detect.knownUnlinked')"></span>
+          </span>
+          <span class="sources-detect-byline" x-show="detectedByline(v)" x-text="detectedByline(v)"></span>
+          <span class="sources-detect-container" x-show="v.container_title" x-text="v.container_title"></span>
+          <!-- Fundstelle: der woertliche Satz aus dem Text, ueber den der Job
+               das Werk gefunden hat. Klickbar, wenn die Seite bestimmbar war. -->
+          <button type="button" class="sources-detect-quote internal-link" x-show="v.erwaehnung"
+                  :disabled="v.page_id == null" @click="gotoDetected(v)">
+            <span class="kapitel-badge kapitel-badge--primary" x-show="v.chapter_name" x-text="v.chapter_name"></span>
+            <span class="sources-detect-quote-text" x-text="'„' + v.erwaehnung + '“'"></span>
+          </button>
+        </div>
+        <span class="sources-detect-actions">
+          <button type="button" class="btn-compact" x-show="!v.existing_source_id"
+                  @click="adoptDetected(v)" :disabled="sourcesBusy">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#plus"/></svg>
+            <span x-text="$app.t('sources.detect.adopt')"></span>
+          </button>
+          <!-- Liegt schon im Pool, aber in einer anderen Arbeit: nur zuordnen,
+               nicht neu anlegen (sonst Dublette in der Bibliothek). -->
+          <button type="button" class="btn-compact" x-show="v.existing_source_id && !v.existing_linked" x-cloak
+                  @click="linkDetected(v)" :disabled="sourcesBusy">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#book-open"/></svg>
+            <span x-text="$app.t('sources.detect.link')"></span>
+          </button>
+          <button type="button" class="icon-btn icon-btn--ghost" @click="dismissDetected(v)"
+                  :data-tip="$app.t('sources.detect.dismiss')" :aria-label="$app.t('sources.detect.dismiss')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#x"/></svg></button>
+        </span>
+      </li>
+    </template>
+  </ul>
+</div>

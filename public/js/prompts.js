@@ -270,6 +270,13 @@ export {
 } from './prompts/motiv.js';
 
 export {
+  buildSourceDetectSystemPrompt,
+  buildSourceDetectPrompt,
+  SCHEMA_SOURCE_DETECT,
+  SOURCE_DETECT_TYPES,
+} from './prompts/sources.js';
+
+export {
   buildDateDetectPrompt,
   SCHEMA_DATE_DETECT,
 } from './prompts/import.js';

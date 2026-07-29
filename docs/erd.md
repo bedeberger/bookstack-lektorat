@@ -384,7 +384,7 @@ erDiagram
     TEXT    bibliography_title       "Überschrift des Verzeichnisses (NULL = Sprach-Default des Renderers)"
     TEXT    bibliography_scope       "cited = nur belegte Quellen | all = auch unzitierte"
     INTEGER bibliography_in_blog     "0|1, Verzeichnis an Blog-/HubSpot-Posts anhängen (dort ist die Einheit die Seite = ein Post)"
-    TEXT    citation_notes           "inline = Kurzbeleg im Fliesstext | endnotes = nummerierter Anmerkungsapparat pro Kapitel"
+    TEXT    citation_notes           "inline = Kurzbeleg im Fliesstext | endnotes = Anmerkungsapparat pro Kapitel | footnotes = Apparat am Seitenfuss (PDF/Word; übrige Formate zeigen den Kapitelapparat)"
     TEXT    updated_at
   }
   book_snapshots {

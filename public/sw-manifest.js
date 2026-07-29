@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "48ce6e33218d0e42";
+self.__SHELL_BUILD = "03b7aac77f9a858c";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -514,6 +514,7 @@ self.__SHELL_MANIFEST = [
   "/js/prompts/recherche.js",
   "/js/prompts/review.js",
   "/js/prompts/schema-utils.js",
+  "/js/prompts/sources.js",
   "/js/prompts/state.js",
   "/js/prompts/stilprofil.js",
   "/js/prompts/synonym.js",
@@ -548,6 +549,7 @@ self.__SHELL_MANIFEST = [
   "/js/sources/cite-html.js",
   "/js/sources/cite-popover.js",
   "/js/sources/cited-index.js",
+  "/js/sources/detect.js",
   "/js/sources/fields.js",
   "/js/sources/format.js",
   "/js/sources/format/labels.js",
@@ -690,6 +692,7 @@ self.__SHELL_MANIFEST = [
   "/partials/page-history.html",
   "/partials/page-revisions.html",
   "/partials/palette.html",
+  "/partials/pdf-export-apparat.html",
   "/partials/pdf-export-chapter.html",
   "/partials/pdf-export-cover.html",
   "/partials/pdf-export-font.html",
@@ -718,7 +721,9 @@ self.__SHELL_MANIFEST = [
   "/partials/snapshots-reader.html",
   "/partials/snapshots.html",
   "/partials/songs.html",
+  "/partials/sources-detect.html",
   "/partials/sources-form.html",
+  "/partials/sources-picker.html",
   "/partials/sources.html",
   "/partials/stil-heatmap.html",
   "/partials/szenen.html",
