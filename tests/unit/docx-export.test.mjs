@@ -88,3 +88,78 @@ test('builder: title.none omits generated title page but still renders body', as
   const s = await build(validateConfig({ title: { mode: 'none' }, header: { mode: 'none', pageNumber: 'none' } }));
   assert.ok(s.includes('word/document.xml'));
 });
+
+// ── Quellenverzeichnis (lib/bibliography.js) ─────────────────────────────────
+// Anders als die Tests oben wird hier in das ZIP hineingeschaut: der Style und
+// die Eintragstexte müssen wirklich in document.xml/styles.xml landen.
+const JSZip = require('jszip');
+
+async function buildXml(config, opts = {}) {
+  const buf = await buildDocxProfile(bundle, { author: 'Franz Kafka', lang: 'de', meta, config, ...opts });
+  const zip = await JSZip.loadAsync(buf);
+  return {
+    doc: await zip.file('word/document.xml').async('string'),
+    styles: await zip.file('word/styles.xml').async('string'),
+  };
+}
+
+const bibFixture = {
+  enabled: true,
+  title: 'Quellenverzeichnis',
+  style: 'numeric',
+  lang: 'de',
+  numbers: new Map([[7, 1]]),
+  sourcesById: new Map([[7, {
+    id: 7, csl_type: 'book', title: 'Die Verwandlung', year: '1915',
+    authors: [{ family: 'Kafka', given: 'Franz' }], editors: [],
+    publisher: 'Kurt Wolff', place: 'Leipzig',
+  }]]),
+  entries: [{
+    id: 7, num: 1,
+    text: 'Kafka, Franz: Die Verwandlung. Leipzig: Kurt Wolff, 1915.',
+    html: 'Kafka, Franz: <em>Die Verwandlung</em>. Leipzig: Kurt Wolff, 1915.',
+    runs: [{ text: 'Kafka, Franz: ' }, { text: 'Die Verwandlung', italic: true }],
+  }],
+};
+
+test('builder: Quellenverzeichnis als eigener Style mit hängendem Einzug', async () => {
+  const { doc, styles } = await buildXml(defaultConfig(), { bibliography: bibFixture });
+  // Benannter Style existiert und hängt ein (left == hanging).
+  assert.ok(styles.includes('w:styleId="Bibliography"'));
+  assert.match(styles, /w:styleId="Bibliography"[\s\S]*?w:hanging="\d+"/);
+  // Überschrift als Heading-1 (landet damit im Word-TOC-Feld) + Eintragstext.
+  assert.ok(doc.includes('Quellenverzeichnis'));
+  assert.ok(doc.includes('w:pStyle w:val="Bibliography"'));
+  assert.ok(doc.includes('[1] Kafka, Franz:'));
+  // Kursiver Werktitel bleibt kursiv (der Walker liefert den Run als italic).
+  assert.match(doc, /w:i[ /][\s\S]{0,200}Die Verwandlung/);
+});
+
+test('builder: ohne/abgeschaltetes Verzeichnis kein Eintrag im Dokument', async () => {
+  const off = await buildXml(defaultConfig(), { bibliography: { ...bibFixture, enabled: false } });
+  assert.equal(off.doc.includes('w:pStyle w:val="Bibliography"'), false);
+  assert.equal(off.doc.includes('Quellenverzeichnis'), false);
+  const none = await buildXml(defaultConfig());
+  assert.equal(none.doc.includes('w:pStyle w:val="Bibliography"'), false);
+});
+
+test('builder: Verzeichnis nur bei scope=book, Chips werden trotzdem aufgelöst', async () => {
+  const chipBundle = {
+    ...bundle,
+    scope: 'chapter',
+    groups: [{ chapterId: 10, chapter: { id: 10, name: 'Verhaftung', parent_chapter_id: null }, pages: [
+      { p: { id: 1, name: 'Szene 1' }, pd: {
+        html: '<p>Satz <span class="cite" data-src="7" data-loc="44">(Kafka, 1915, S. 44)</span> Ende.</p>',
+      } },
+    ] }],
+  };
+  const buf = await buildDocxProfile(chipBundle, {
+    author: 'Franz Kafka', lang: 'de', meta, config: defaultConfig(), bibliography: bibFixture,
+  });
+  const doc = await (await JSZip.loadAsync(buf)).file('word/document.xml').async('string');
+  // Kein Verzeichnis (Kapitel-Scope) …
+  assert.equal(doc.includes('w:pStyle w:val="Bibliography"'), false);
+  // … aber der Kurzbeleg im Text ist auf den numerischen Stil aktualisiert.
+  assert.ok(doc.includes('[1, S. 44]'));
+  assert.equal(doc.includes('(Kafka, 1915, S. 44)'), false);
+});

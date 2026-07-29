@@ -26,6 +26,10 @@ export const settingsMethods = {
       this.bookSettingsZeitlinieReal      = !!data.zeitlinie_real;
       this.bookSettingsWeltfaktenRealPruefen = !!data.weltfakten_real_pruefen;
       this.bookSettingsExcludeFromStats   = !!data.exclude_from_stats;
+      // Quellen-Tab: derselbe Response traegt Zitierstil + Verzeichnis-Optionen
+      // (kein zweiter Fetch), gespeichert wird sie aber ueber den eigenen
+      // /citation-Endpunkt — siehe book-settings/citation.js.
+      this._applyCitationSettings(data);
     } catch (e) {
       console.error('[book-settings] Laden fehlgeschlagen:', e);
     } finally {
@@ -106,11 +110,13 @@ export const settingsMethods = {
   },
 
 
-  // Ein Header-Save-Button schreibt BEIDE Stores: book_settings (/booksettings)
-  // UND book_publication (/publication). Beide sind unabhängige Full-Replace-
-  // Writes auf getrennte Tabellen — ein Klick persistiert alles, egal in welchem
-  // Tab editiert wurde (Titelei/Klappentext im Publikation-Tab + Sprache/Kontext/
-  // Tagesziel in den anderen Tabs). Beide laufen parallel; die Header-Status-
+  // Ein Header-Save-Button schreibt ALLE Stores der Karte: book_settings
+  // (/booksettings), book_publication (/publication) und die Quellenverzeichnis-
+  // Felder (/booksettings/:id/citation). Drei unabhängige Writes auf getrennte
+  // Spalten/Tabellen — ein Klick persistiert alles, egal in welchem
+  // Tab editiert wurde (Titelei/Klappentext im Publikation-Tab, Zitierstil im
+  // Quellen-Tab, Sprache/Kontext/Tagesziel in den anderen). Alle laufen
+  // parallel; die Header-Status-
   // Getter aggregieren über beide. Methoden (keine Getter) — bookSettingsMethods
   // wird gespreadet, Getter würden beim Spread eval't statt durchgereicht.
   // Pflichtfelder beim Speichern: Buchtyp immer (alle KI-Jobs ziehen den Genre-
@@ -127,16 +133,16 @@ export const settingsMethods = {
   async saveActiveTab() {
     const taxErr = this._taxonomyError();
     if (taxErr) { this.bookSettingsError = window.__app.t(taxErr); return; }
-    await Promise.all([this.saveBookSettings(), this.savePublication()]);
+    await Promise.all([this.saveBookSettings(), this.savePublication(), this.saveCitationSettings()]);
   },
 
-  headerSaving()   { return this.bookSettingsSaving || this.pubSaving; },
+  headerSaving()   { return this.bookSettingsSaving || this.pubSaving || this.citationSaving; },
 
-  headerError()    { return this.bookSettingsError || this.pubError; },
+  headerError()    { return this.bookSettingsError || this.pubError || this.citationError; },
 
-  headerSaved()    { return (this.bookSettingsSaved || this.pubSaved) && !this.headerError(); },
+  headerSaved()    { return (this.bookSettingsSaved || this.pubSaved || this.citationSaved) && !this.headerError(); },
 
-  headerDisabled() { return this.bookSettingsSaving || this.pubSaving || this.bookSettingsLoading; },
+  headerDisabled() { return this.bookSettingsSaving || this.pubSaving || this.citationSaving || this.bookSettingsLoading; },
 
 
   async saveBookSettings() {

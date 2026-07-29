@@ -9771,6 +9771,133 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 252 abgeschlossen (Quellenverzeichnis: book_sources + source_citations + book_settings.citation_*/bibliography_*).');
   }
 
+  if (version < 253) {
+    // Quellen werden zur persoenlichen Bibliothek: User-Pool + M:N-Bruecke ans Buch.
+    //
+    // Warum: eine Literaturbibliothek ist personen-, nicht werkgebunden. Wer drei
+    // Arbeiten mit ueberlappender Literatur schreibt, gibt dieselbe Quelle sonst
+    // dreimal ein und pflegt sie dreimal. Dasselbe Muster faehrt die App schon
+    // beim Kategorie-Pool (book_categories); Quellen brauchen zusaetzlich eine
+    // Bruecke, weil ein Buch viele Pool-Quellen nutzt.
+    //
+    //   sources             die Quelle, EINMAL pro User (`owner_email`)
+    //   book_source_links   welches Buch nutzt welche Quelle (M:N)
+    //
+    // `owner_email` ist echter Besitz-Scope (nicht bloss Attribution wie zuvor
+    // `book_sources.user_email`): geschrieben wird eine Quelle nur vom Besitzer,
+    // sonst aendert ein Co-Autor sie in dessen anderen Buechern mit. Lesen und
+    // Ver-/Entknuepfen bleiben an der Buch-ACL — der Quellen-Marker im Seiten-HTML
+    // muss fuer jeden Editor des Buchs aufloesbar bleiben.
+    //
+    // Bewusst KEIN FK auf app_users(email): E-Mail-Spalten sind in diesem Schema
+    // durchgehend FK-frei (pdf_export_profile.user_email, research_items.user_email,
+    // book_sources.user_email zuvor). Ein CASCADE haette hier ausserdem die
+    // Bibliothek eines geloeschten Users samt aller Buch-Verknuepfungen
+    // mitgerissen, auch in Buechern von Co-Autoren.
+    db.exec(`CREATE TABLE IF NOT EXISTS sources (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_email     TEXT    NOT NULL,
+        csl_type        TEXT    NOT NULL DEFAULT 'book'
+                          CHECK(csl_type IN ('book','chapter','article','website','thesis',
+                                             'report','legal','interview','film','dataset','other')),
+        citekey         TEXT,
+        authors         TEXT    NOT NULL DEFAULT '[]',
+        editors         TEXT    NOT NULL DEFAULT '[]',
+        title           TEXT,
+        container_title TEXT,
+        publisher       TEXT,
+        place           TEXT,
+        year            TEXT,
+        edition         TEXT,
+        volume          TEXT,
+        issue           TEXT,
+        pages           TEXT,
+        doi             TEXT,
+        isbn            TEXT,
+        issn            TEXT,
+        url             TEXT,
+        accessed_at     TEXT,
+        note            TEXT,
+        archived        INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      )`);
+
+    // Bruecke Buch ↔ Pool-Quelle. `added_by` ist reine Attribution (wer hat die
+    // Quelle diesem Buch hinzugefuegt) und deshalb ohne FK — siehe oben.
+    db.exec(`CREATE TABLE IF NOT EXISTS book_source_links (
+        book_id    INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        source_id  INTEGER NOT NULL REFERENCES sources(id)    ON DELETE CASCADE,
+        added_by   TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        PRIMARY KEY (book_id, source_id)
+      )`);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_book_source_links_source ON book_source_links(source_id)');
+
+    // Umzug der Bestandsdaten. `id` wird BEWUSST uebernommen: der Quellen-Marker
+    // im Seiten-HTML traegt sie als `data-src`, und source_citations.source_id
+    // zeigt darauf. Eine Neuvergabe wuerde jeden bereits gesetzten Beleg ins
+    // Leere zeigen lassen.
+    const hasOld253 = db.prepare(
+      "SELECT 1 AS x FROM sqlite_master WHERE type='table' AND name='book_sources'"
+    ).get();
+    let moved253 = 0;
+    if (hasOld253) {
+      const cols253 = [
+        'csl_type', 'citekey', 'authors', 'editors', 'title', 'container_title',
+        'publisher', 'place', 'year', 'edition', 'volume', 'issue', 'pages',
+        'doi', 'isbn', 'issn', 'url', 'accessed_at', 'note', 'archived',
+        'created_at', 'updated_at',
+      ].join(', ');
+      moved253 = db.prepare(
+        `INSERT INTO sources (id, owner_email, ${cols253})
+         SELECT id, user_email, ${cols253} FROM book_sources`
+      ).run().changes;
+      db.exec(`INSERT INTO book_source_links (book_id, source_id, added_by, created_at)
+               SELECT book_id, id, user_email, created_at FROM book_sources`);
+    }
+
+    // Der Zitierschluessel war pro BUCH eindeutig und wird pro POOL eindeutig.
+    // Wer denselben Key in zwei Buechern benutzt hat, haette sonst einen
+    // UNIQUE-Verstoss — der spaetere Eintrag verliert den Key statt die Quelle.
+    db.exec(`
+      UPDATE sources SET citekey = NULL
+       WHERE citekey IS NOT NULL
+         AND id NOT IN (SELECT MIN(id) FROM sources
+                         WHERE citekey IS NOT NULL GROUP BY owner_email, citekey)
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_sources_owner ON sources(owner_email, archived)');
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_citekey ON sources(owner_email, citekey)');
+
+    // source_citations zeigte auf book_sources — FK umhaengen via Recreate.
+    db.pragma('foreign_keys = OFF');
+    db.exec('DROP TABLE IF EXISTS source_citations_new');
+    db.exec(`CREATE TABLE source_citations_new (
+        source_id    INTEGER NOT NULL REFERENCES sources(id)   ON DELETE CASCADE,
+        page_id      INTEGER NOT NULL REFERENCES pages(page_id) ON DELETE CASCADE,
+        count        INTEGER NOT NULL DEFAULT 0,
+        first_offset INTEGER,
+        PRIMARY KEY (source_id, page_id)
+      )`);
+    db.exec(`INSERT INTO source_citations_new (source_id, page_id, count, first_offset)
+             SELECT sc.source_id, sc.page_id, sc.count, sc.first_offset
+               FROM source_citations sc
+               JOIN sources s ON s.id = sc.source_id`);
+    db.exec('DROP TABLE source_citations');
+    db.exec('ALTER TABLE source_citations_new RENAME TO source_citations');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_source_citations_page ON source_citations(page_id)');
+
+    if (hasOld253) db.exec('DROP TABLE book_sources');
+    db.pragma('foreign_keys = ON');
+
+    const fkErrors253 = db.pragma('foreign_key_check');
+    if (fkErrors253.length) {
+      throw new Error(`Migration 253: foreign_key_check meldet ${fkErrors253.length} Verstoesse: ${JSON.stringify(fkErrors253.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 253').run();
+    logger.info(`DB-Migration auf Version 253 abgeschlossen (Quellen als User-Pool: sources + book_source_links; ${moved253} Quelle(n) uebernommen).`);
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

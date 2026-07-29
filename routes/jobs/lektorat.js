@@ -87,14 +87,6 @@ function findPreviousPage(pages, currentPageId, currentChapterId) {
   return null;
 }
 
-// Gültige Fehlertypen und Validierung für Lektorat-Ergebnisse
-const VALID_TYPEN = new Set([
-  'rechtschreibung', 'grammatik', 'stil', 'satzbau', 'wiederholung',
-  'schwaches_verb', 'fuellwort', 'filterwort', 'klischee', 'pleonasmus', 'ki_geruch',
-  'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel', 'dialogformat',
-  'namenskonsistenz', 'figurenmerkmal', 'anrede', 'schauplatzmerkmal',
-]);
-
 // Erklärungs-Phrasen die darauf hindeuten, dass der Eintrag kein echter Fehler ist.
 // Sprach-agnostisches letztes Sicherheitsnetz: Lokale Modelle (Ollama/Llama)
 // ignorieren die FILTER-PFLICHT im Prompt häufig, und bei englischsprachigen
@@ -118,14 +110,18 @@ function dedupFehler(fehler) {
 }
 
 // Subjektiv-stilistische Fehlertypen: exakt die Liste, für die der Prompt
-// (SCHWERE-SCHWELLE-Block in public/js/prompts/lektorat.js) eine Mengen-
-// Obergrenze verhängt. Mechanische/objektive Fehler (rechtschreibung,
-// grammatik inkl. Zeichensetzung, tempuswechsel, perspektivbruch, dialogformat)
-// und Konsistenz-Findings (namens-/figuren-/schauplatzmerkmal, anrede) fehlen
+// (SCHWERE-SCHWELLE-Block) eine Mengen-Obergrenze verhängt. Mechanische/objektive
+// Fehler (rechtschreibung, grammatik inkl. Zeichensetzung, tempuswechsel,
+// perspektivbruch, dialogformat) und Konsistenz-Befunde (namens-/figuren-/
+// schauplatzmerkmal, anrede, begriffsinkonsistenz, autorenform, unbelegt) fehlen
 // hier bewusst – sie werden NIE gekappt.
+// CJS-Spiegel von STILISTISCHE_TYPEN in public/js/prompts/lektorat-typen.js (der
+// Prompt-Text wird dort erzeugt); Drift ist durch
+// tests/unit/lektorat-typen-drift.test.mjs gegated.
 const STYLISTIC_TYPEN = new Set([
   'stil', 'satzbau', 'schwaches_verb', 'fuellwort', 'filterwort',
   'klischee', 'ki_geruch', 'show_vs_tell', 'passiv', 'pleonasmus', 'wiederholung',
+  'hedging',
 ]);
 
 const DEFAULT_STYLISTIC_CAP = 20;
@@ -156,8 +152,19 @@ function stylisticCap() {
 // Vollständige Nachbearbeitung eines rohen fehler-Arrays: validieren → dedupen →
 // stilistischen Cap anwenden. Einziger Chokepoint für alle vier Aufruf-Stellen
 // (fresh/cached × Einzel/Batch), damit die Pipeline nicht auseinanderdriftet.
-function finalizeFehler(fehler, locale) {
-  return capStylisticFehler(dedupFehler(validateLektoratFehler(fehler, locale)), stylisticCap());
+// `validTypen` ist das Typ-Set des Buchtyp-Profils (siehe _validTypen) – Findings
+// mit profilfremdem Typ werden verworfen. Greift auch auf dem Cache-Pfad: eine
+// Buchtyp-Umstellung soll narrativ geprägte Alt-Findings nicht durchlassen.
+function finalizeFehler(fehler, locale, validTypen) {
+  return capStylisticFehler(dedupFehler(validateLektoratFehler(fehler, locale, validTypen)), stylisticCap());
+}
+
+// Erlaubte Fehlertypen für dieses Buch. SSoT ist das Buchtyp-Profil in
+// public/js/prompts/lektorat-typen.js – dieselbe Funktion, die das Typ-Enum des
+// Prompts baut. Damit kann der Server nie mehr Typen akzeptieren, als der Prompt
+// überhaupt angefragt hat.
+function _validTypen(prompts, buchtyp, local) {
+  return new Set(prompts.lektoratTypen(buchtyp || null, { local }));
 }
 
 // Letzter History-Eintrag dieser Seite (für History-Insert-Dedup).
@@ -168,14 +175,14 @@ const _lastPageCheckStmt = db.prepare(`
    LIMIT 1
 `);
 
-function validateLektoratFehler(fehler, locale) {
+function validateLektoratFehler(fehler, locale, validTypen) {
   const isCH = locale === 'de-CH';
   return fehler
     // `kontext` ist Legacy-Feld aus PROMPTS_VERSION <=15: nirgends gerendert,
     // AI halluzinierte oft (nicht-substring von `original`). Defensiv strippen,
     // damit alte Cache-Rows und vereinzelte AI-Antworten kein totes Feld mitschleppen.
     .map(f => { const { kontext, ...rest } = f; return { ...rest, typ: rest.typ?.toLowerCase?.() }; })
-    .filter(f => VALID_TYPEN.has(f.typ))
+    .filter(f => validTypen.has(f.typ))
     // Vorschlag == Original (1:1, nach trim) ist kein Fehler – für alle Typen skippen
     .filter(f => !f.korrektur || f.korrektur.trim() !== f.original?.trim())
     // stil braucht zusätzlich eine nicht-leere Korrektur
@@ -270,6 +277,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
       bl: hatBelege,
     }) : null;
     const cached = ctxSig ? loadLektoratCache(bookId, userEmail, pageId, ctxSig, effectiveProvider) : null;
+    const validTypen = _validTypen(prompts, bookSettings?.buchtyp, local);
 
     let result;
     if (cached) {
@@ -280,11 +288,12 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
       // das tote `kontext`-Feld oder 1:1-Vorschläge (== Original) enthalten.
       // validateLektoratFehler strippt `kontext` und filtert 1:1 mit.
       if (Array.isArray(result?.fehler)) {
-        result.fehler = finalizeFehler(result.fehler, locale);
+        result.fehler = finalizeFehler(result.fehler, locale, validTypen);
       }
     } else {
       result = await lektoratAnalyze({
         jobId, tok, text, local, prompts, system: SYSTEM_LEKTORAT, single: true,
+        buchtyp: bookSettings?.buchtyp || null,
         fromPct: 10, toPct: 97,
         promptOpts: {
           stopwords: lektoratStopwords,
@@ -298,7 +307,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
         },
       });
 
-      result.fehler = finalizeFehler(result.fehler, locale);
+      result.fehler = finalizeFehler(result.fehler, locale, validTypen);
 
       if (ctxSig) saveLektoratCache(bookId, userEmail, pageId, ctxSig, result, effectiveProvider);
     }
@@ -360,6 +369,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
   const chapterRows = db.prepare('SELECT chapter_id, chapter_name FROM chapters WHERE book_id = ?').all(parseInt(bookId));
   const chapterNameById = Object.fromEntries(chapterRows.map(r => [String(r.chapter_id), r.chapter_name]));
   const local = _isLocalProvider();
+  const validTypen = _validTypen(prompts, bookSettings?.buchtyp, local);
   try {
     updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     const pages = await contentStore.listPages(bookId, userToken).catch(e => { throw contentHttpError(e); });
@@ -423,6 +433,9 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
           fig: batchFiguren, ort: batchOrte, bez: batchBeziehungen, mot: batchMotive,
           ep: bookSettings?.erzaehlperspektive || null,
           ez: bookSettings?.erzaehlzeit || null,
+          // Buchtyp wählt das Fehlertyp-Profil → gehört in die Signatur, sonst
+          // liefert der Cache nach einer Buchtyp-Umstellung das alte Typ-Set.
+          bt: bookSettings?.buchtyp || null,
           sw: batchStopwords, er: batchErklaerungRule, kr: batchKorrekturRegeln,
           stp: bookSettings?.stilprofil || '',
           pe: previousExcerpt, cn: chapterName, pn: p.name, cv: cacheVersion, lc: langCode,
@@ -436,7 +449,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
           result = cached;
           // Re-Validate (strippt `kontext`, filtert 1:1) + Dedup auf Cached-Path.
           if (Array.isArray(result?.fehler)) {
-            result.fehler = finalizeFehler(result.fehler, locale);
+            result.fehler = finalizeFehler(result.fehler, locale, validTypen);
           }
         } else {
           // Bei Pool>1 sind feinere Pct-Ranges pro Item nicht sinnvoll
@@ -444,6 +457,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
           // unten aus done/total nach jedem fertigen Item gesetzt.
           result = await lektoratAnalyze({
             jobId, tok, text, local, prompts, system: SYSTEM_LEKTORAT, single: false,
+            buchtyp: bookSettings?.buchtyp || null,
             fromPct: null, toPct: null,
             promptOpts: {
               stopwords: batchStopwords,
@@ -456,14 +470,13 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
               hatBelege: batchHatBelege,
               pageName: p.name,
               chapterName,
-              erzaehlperspektive: bookSettings?.erzaehlperspektive || null,
-              erzaehlzeit: bookSettings?.erzaehlzeit || null,
+              ...narrativeLabels(bookSettings),
               previousExcerpt,
               langCode,
             },
           });
 
-          result.fehler = finalizeFehler(result.fehler, locale);
+          result.fehler = finalizeFehler(result.fehler, locale, validTypen);
           saveLektoratCache(bookId, userEmail, p.id, ctxSig, result, effectiveProvider);
         }
         const fehler = result.fehler || [];

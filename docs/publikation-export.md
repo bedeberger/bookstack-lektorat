@@ -80,11 +80,29 @@ Der PDF-Job ([routes/jobs/pdf-export.js](../routes/jobs/pdf-export.js)) spiegelt
 
 Die PDF-Export-Card editiert die Titelei-/Cover-Felder **nicht** mehr (Hinweis auf den Publikation-Tab).
 
+## Quellenverzeichnis im PDF
+
+Datenquelle ist [lib/bibliography.js](../lib/bibliography.js)#`buildBibliography({ bookId, pageIds, userEmail })` — Einstellungen aus `book_settings` (`citation_style`, `bibliography_enabled`, `bibliography_title`, `bibliography_scope`), Quellen aus dem User-Pool `sources` (dem Buch über `book_source_links` zugeordnet), Fundstellen aus dem abgeleiteten Index `source_citations`, formatiert über die Zitierstil-SSoT [public/js/sources/format.js](../public/js/sources/format.js) (ESM, per dynamic `import()` geladen — Muster [lib/prompts-loader.js](../lib/prompts-loader.js)).
+
+**Zwei harte Invarianten:**
+
+- Das Verzeichnis wird **nie** in `pages.content` persistiert — es ist ein Render-Artefakt und entsteht bei jedem Export neu.
+- `resolveCitesInHtml` ersetzt ausschliesslich den **Textknoten** eines Quellen-Chips; `class`/`data-src`/`data-loc` bleiben unberührt, und bei unveränderter Ausgabe kommt der Eingabe-String zurück (keine Neu-Serialisierung).
+
+**Pflicht im Render-Pfad:** `resolveCitesInGroups(groups, bib)` läuft in [lib/pdf-render/index.js](../lib/pdf-render/index.js), **bevor** `_coalesceGroups`/der HTML-Walker die Seiten anfassen. Grund: `data-src` ist die Wahrheit, der Chip-Text nur ein Cache vom Einfüge-Zeitpunkt — im numerischen Stil steht dort noch die Autor-Jahr-Form, weil die Nummer erst beim Rendern feststeht.
+
+**Nummern folgen der gerenderten Einheit:** `scope='book'` → Buch-Leserichtung (`listBookCitations`); `scope='chapter'/'page'` → nur die Fundstellen dieser Seiten, beginnend bei 1 (`pageIdsFromGroups(groups)` im Job). Damit stimmen Chip-Text und Verzeichnisnummer in jedem Fall zusammen.
+
+**Render-Weg:** Das Verzeichnis wird als **synthetische Kapitel-Gruppe** hinter die Buchkapitel in `blocks` geschoben (`{ isChapter: true, isBibliography: true, unnumbered: true, items: [{ html: bibliographyItemHtml(bib) }] }`, Eintrags-Markup ein `<p>` pro Eintrag, im numerischen Stil mit `[n]`-Präfix). Ab da ist es ein Block wie jeder andere: `computeChapterLabels` → `tocPlan` → `renderBody` liefern Kolumnentitel, Seitenzahlen und TOC-Eintrag ohne Sonderpfad. Angehängt nur bei `bibliography_enabled` **und** `scope='book'` — bei Kapitel-/Seiten-Export werden die Chips zwar aufgelöst, aber kein Verzeichnis angehängt.
+
+**Satz der Einträge:** eigene Font-Rolle `bibliography` ([lib/pdf-export-defaults.js](../lib/pdf-export-defaults.js), Schrift-Tab-Gruppe „Backmatter"; Profile ohne den Key fallen in [lib/pdf-render/fonts.js](../lib/pdf-render/fonts.js) auf `body` zurück) plus **hängender Einzug** statt Erstzeilen-Einzug: [body.js](../lib/pdf-render/body.js) gibt den Verzeichnis-Items einen eigenen Render-Kontext (`textRole: 'bibliography'`, `bodyFirstLineIndentPt: 0`, `hangingIndentPt`), den der Blocksatz-Layouter [justify.js](../lib/pdf-render/justify.js) pro Zeile auswertet (erste Zeile am Rand, Folgezeilen eingerückt — im numerischen Stil sitzt die Nummer damit in eigener Spalte). Der hängende Einzug hängt am Einspalten-Blocksatz-Layouter; bei `layout.columns > 1` läuft der pdfkit-Pfad und der Einzug entfällt.
+
 ## Seed
 
 Migration 166 seedet `book_publication` je Buch aus dem Gewinner-PDF-Profil (`is_default`, sonst zuletzt aktualisiert) — Metadaten aus `config.extras` + Cover/Autorfoto-BLOBs. Hält PDF + EPUB ab Einführung konsistent.
 
 ## Tests
 
+- Unit Quellenverzeichnis: [tests/unit/bibliography.test.mjs](../tests/unit/bibliography.test.mjs) (Buch- vs. Seiten-Scope, Nummernvergabe, `cited`/`all`, Titel-Default je Sprache, abgeschaltet → leer, Chip-Text-Ersetzung + Attribut-Invariante); PDF-Seite in [tests/unit/pdf-render.test.mjs](../tests/unit/pdf-render.test.mjs) (eigene Seite + Outline-Eintrag, nur bei `scope='book'`, ersetzter Kurzbeleg im gerenderten Text via `extractPdfText`).
 - Unit: [tests/unit/publication-meta.test.mjs](../tests/unit/publication-meta.test.mjs) (Validator/ISBN-Checksum, `author_file_as`/`co_authors`/`extra_sections`-Normalisierung), [tests/unit/epub-export.test.mjs](../tests/unit/epub-export.test.mjs) (Meta-Resolver, Frontmatter/Backmatter, Bild-Zähler, ISBN-`dc:identifier`, Accessibility-Meta, Landmarks-nav, file-as-Override + Co-Autoren-`dc:creator`, freie Vor-/Nachsatz-Seiten, genEpub-Smoke).
 - E2E: [tests/e2e/publication.spec.js](../tests/e2e/publication.spec.js) (Tab, Speichern, Cover-Upload, EPUB-Download) — Harness [tests/fixtures/publication-harness.html](../tests/fixtures/publication-harness.html), Mocks in [tests/server.js](../tests/server.js).

@@ -11,6 +11,7 @@ import { _rebuildLektoratSchema } from './prompts/lektorat.js';
 import { _rebuildKomplettSchemas } from './prompts/komplett.js';
 import { configureLocales, _setPromptsContentHash, _allLocalePromptsSnapshot } from './prompts/core.js';
 import * as lektoratNs from './prompts/lektorat.js';
+import * as lektoratTypenNs from './prompts/lektorat-typen.js';
 import * as reviewNs from './prompts/review.js';
 import * as komplettNs from './prompts/komplett.js';
 import * as synonymNs from './prompts/synonym.js';
@@ -65,7 +66,11 @@ function _promptsContentHash() {
     // gecacht — Schema-Änderung muss die Cache-Version (PROMPTS_VERSION) bumpen.
     motivNs.SCHEMA_MOTIV_BRAINSTORM,
   ]);
-  return _hashContent(_allLocalePromptsSnapshot() + schemaPart);
+  // Lektorat-Typ-Profile: die Prompt-BODYS hängen an Call-Argumenten (buchtyp) und
+  // fliessen darum nicht in den Locale-Snapshot. Ohne diese Signatur würde eine
+  // Profil-Änderung den `lektorat_cache` eines wissenschaftlichen Buchs nicht
+  // invalidieren – das Buch behielte seine narrativ geprägten Alt-Findings.
+  return _hashContent(_allLocalePromptsSnapshot() + schemaPart + lektoratTypenNs.PROFIL_SIGNATUR);
 }
 
 /**
@@ -112,11 +117,26 @@ export {
 export {
   buildLektoratPrompt,
   buildBatchLektoratPrompt,
-  buildObjektivLektoratPrompt,
   buildStilLektoratPrompt,
+  buildLektoratSchema,
   SCHEMA_LEKTORAT,
-  SCHEMA_LEKTORAT_OBJEKTIV,
 } from './prompts/lektorat.js';
+
+export {
+  buildObjektivLektoratPrompt,
+  buildObjektivLektoratSchema,
+} from './prompts/lektorat-objektiv.js';
+
+// Fehlertyp-Profile pro Buchtyp – SSoT auch für die Server-Seite (Validierung des
+// AI-Outputs in routes/jobs/lektorat.js).
+export {
+  lektoratProfil,
+  lektoratTypen,
+  lektoratObjektivTypen,
+  ALLE_LEKTORAT_TYPEN,
+  STILISTISCHE_TYPEN,
+  TYP_PRIORITAET,
+} from './prompts/lektorat-typen.js';
 
 export {
   buildBookReviewSinglePassPrompt,

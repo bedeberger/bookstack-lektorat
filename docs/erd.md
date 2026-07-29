@@ -1,6 +1,6 @@
 # ERD — schreibwerkstatt
 
-Stand: Schema-Version 252, 135 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
+Stand: Schema-Version 253, 136 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
 
 Quelle: Squashed-Schema-Snapshot in [db/squashed-schema.js](../db/squashed-schema.js) (regeneriert via `node tools/dump-schema.js`) + [db/migrations.js](../db/migrations.js). Drift gegen die Legacy-Migration-Kette ist durch [tests/unit/squash-drift.test.mjs](../tests/unit/squash-drift.test.mjs) gegated. Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -37,8 +37,9 @@ erDiagram
   books ||--o{ ai_cost_ledger        : has
   books ||--o{ chat_sessions         : has
   books ||--o{ ideen                 : has
-  books ||--o{ book_sources          : has
-  book_sources ||--o{ source_citations : "cited in"
+  books ||--o{ book_source_links     : uses
+  sources ||--o{ book_source_links   : "used by"
+  sources ||--o{ source_citations    : "cited in"
   pages ||--o{ source_citations      : cites
   books ||--o{ pdf_export_profile    : has
   books ||--o{ docx_export_profile   : has
@@ -455,12 +456,11 @@ erDiagram
     TEXT    created_at
     %% UNIQUE(item_id, target_kind, COALESCE(alle *_id,0))
   }
-  book_sources {
+  sources {
     INTEGER id              PK
-    INTEGER book_id         FK "ON DELETE CASCADE"
-    TEXT    user_email      "Ersteller-Attribution (kein Sichtbarkeits-Scope; buchweit geteilt wie research_items)"
+    TEXT    owner_email     "Besitzer der Bibliothek (kein FK, wie alle E-Mail-Spalten); Schreibrecht liegt allein beim Besitzer"
     TEXT    csl_type        "book|chapter|article|website|thesis|report|legal|interview|film|dataset|other (CSL-Vokabular)"
-    TEXT    citekey         "Zitierschlüssel, UNIQUE pro Buch (NULL beliebig oft)"
+    TEXT    citekey         "Zitierschlüssel, UNIQUE pro Bibliothek/owner_email (NULL beliebig oft)"
     TEXT    authors         "JSON [{family,given}|{literal}] nach CSL-JSON"
     TEXT    editors         "JSON, gleiche Form wie authors"
     TEXT    title
@@ -482,6 +482,14 @@ erDiagram
     TEXT    created_at
     TEXT    updated_at
   }
+  book_source_links {
+    INTEGER book_id    PK,FK "ON DELETE CASCADE"
+    INTEGER source_id  PK,FK "ON DELETE CASCADE"
+    TEXT    added_by   "wer die Quelle diesem Buch hinzugefügt hat (Attribution, kein FK)"
+    TEXT    created_at
+    %% M:N Buch ↔ Pool-Quelle. Entknüpfen ist eine Buch-Operation (ab 'editor'),
+    %% Löschen im Pool trifft alle Bücher und kann nur der Besitzer.
+  }
   source_citations {
     INTEGER source_id    PK,FK "ON DELETE CASCADE"
     INTEGER page_id      PK,FK "ON DELETE CASCADE"
@@ -489,12 +497,13 @@ erDiagram
     INTEGER first_offset "Textoffset der ersten Nennung (Reihenfolge für numerischen Zitierstil)"
     %% Reiner Ableitungs-Index: Wahrheit ist der Quellen-Marker im Seiten-HTML.
     %% Full-Replace pro Seiten-Write (Muster page_figure_mentions). Kein book_id —
-    %% Buch-Abfragen laufen über den JOIN auf book_sources.
+    %% Buch-Abfragen laufen über den JOIN auf pages.
   }
 
-  books        ||--o{ book_sources     : has
-  book_sources ||--o{ source_citations : "cited in"
-  pages        ||--o{ source_citations : cites
+  books   ||--o{ book_source_links  : uses
+  sources ||--o{ book_source_links  : "used by"
+  sources ||--o{ source_citations   : "cited in"
+  pages   ||--o{ source_citations   : cites
 
   books     ||--o{ book_snapshots : has
   books     ||--o{ name_guard_ignores : has

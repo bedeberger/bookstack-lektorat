@@ -33,6 +33,7 @@ import { registerChatCard } from '../cards/chat-card.js';
 import { registerIdeenCard } from '../cards/ideen-card.js';
 import { registerReferenceCard } from '../cards/reference-card.js';
 import { registerRechercheCard } from '../cards/recherche-card.js';
+import { registerSourcesCard } from '../cards/sources-card.js';
 import { registerBookChatCard } from '../cards/book-chat-card.js';
 import { registerKontinuitaetCard } from '../cards/kontinuitaet-card.js';
 import { registerErzaehlprofilCard } from '../cards/erzaehlprofil-card.js';
@@ -186,6 +187,7 @@ export function registerAllCards() {
   registerIdeenCard();
   registerReferenceCard();
   registerRechercheCard();
+  registerSourcesCard();
   registerBookChatCard();
   registerEditorFindCard();
   registerEditorFigurLookupCard();

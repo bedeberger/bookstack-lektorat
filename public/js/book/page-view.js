@@ -9,8 +9,11 @@ import { contentRepo } from '../repo/content.js';
 import { tRaw } from '../i18n.js';
 import { _sanitizeFigur } from './figuren.js';
 
-// Weiche Typen: standardmässig nicht vorausgewählt (User entscheidet pro Finding)
-export const SOFT_TYPEN = new Set(['satzbau', 'wiederholung', 'schwaches_verb', 'fuellwort', 'filterwort', 'klischee', 'pleonasmus', 'ki_geruch', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel']);
+// Weiche Typen: standardmässig nicht vorausgewählt (User entscheidet pro Finding).
+// `hedging` ist weich (Absicherungs-Mass ist Autorenentscheid); die übrigen
+// Fach-Typen (unbelegt, begriffsinkonsistenz, autorenform) sind hart – das sind
+// Belegs- und Formbefunde, keine Geschmacksfragen.
+export const SOFT_TYPEN = new Set(['satzbau', 'wiederholung', 'schwaches_verb', 'fuellwort', 'filterwort', 'klischee', 'pleonasmus', 'ki_geruch', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel', 'hedging']);
 
 // Harte Typen = Default-selektiert → rote Einfärbung (Badge, Border, Inline-Mark --selected).
 // Weiche Typen und 'stil' = Default-unselektiert → orange Einfärbung.

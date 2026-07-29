@@ -6,7 +6,7 @@
 // Persistiertes Markup:
 //   <span class="cite" data-src="7" data-loc="44">(Müller, 2020, S. 44)</span>
 //
-// `data-src` ist die WAHRHEIT (Zeiger auf book_sources.id), der Text ist ein
+// `data-src` ist die WAHRHEIT (Zeiger auf sources.id), der Text ist ein
 // CACHE des Kurzbelegs. Bei Stilwechsel oder Quellenkorrektur schreibt ein
 // Regenerierungs-Pass die Texte neu; bis dahin steht dort ein veralteter, aber
 // lesbarer Kurzbeleg. Deshalb darf keine Schicht den Text als Wahrheit behandeln.

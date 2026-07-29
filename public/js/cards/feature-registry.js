@@ -67,6 +67,13 @@ export const FEATURES = [
     aliases: ['facts','fakten','weltregeln','worldbuilding','lore','magiesystem','rules','kanon','canon','regeln'] },
   { key: 'recherche',      kind: 'toggle', group: 'world',  labelKey: 'tile.recherche',      descKey: 'tile.recherche.desc',      flag: 'showRechercheCard',      toggle: 'toggleRechercheCard',      requiresBook: true, minRole: 'editor',
     aliases: ['research','wissen','knowledge','notizen','notes','quellen','sources','zitate','quotes','links','material','archiv','board'] },
+  // Quellenverzeichnis: kuratierte Quellen + Fund-Index. minRole editor — die
+  // Karte ist eine Verwaltungsoberflaeche (Anlegen/Bearbeiten/Loeschen), und
+  // genau das gated der Server ab 'editor'. Dass `GET /sources` schon ab
+  // 'viewer' antwortet, ist fuer die Leseansicht gedacht (sie muss den
+  // Quellen-Marker aufloesen), nicht fuer diese Karte.
+  { key: 'sources',        kind: 'toggle', group: 'world',  labelKey: 'tile.sources',        descKey: 'tile.sources.desc',        flag: 'showSourcesCard',        toggle: 'toggleSourcesCard',        requiresBook: true, minRole: 'editor',
+    aliases: ['quellen','quellenverzeichnis','quellenangabe','quellennachweis','literatur','literaturverzeichnis','bibliografie','bibliographie','bibliography','sources','citation','zitieren','zitat','beleg','belege','apa','chicago','fussnote','isbn','doi'] },
   // Werkzeug
   { key: 'bookchat',       kind: 'toggle', group: 'tools',  labelKey: 'tile.bookchat',       descKey: 'tile.bookchat.desc',       flag: 'showBookChatCard',       toggle: 'toggleBookChatCard',       requiresPages: true, minRole: 'editor',
     aliases: ['ai','frage','question','rag','assistant'] },
@@ -206,6 +213,7 @@ export const EXCLUSIVE_CARDS = [
     loadDeps: [{ method: 'loadFiguren', skipIfNonEmpty: 'figuren' }] },
   { key: 'weltfakten',     flag: 'showWorldFactsCard',     toggle: 'toggleWorldFactsCard',     onReclick: 'refresh', extraRefreshOnOpen: true, partial: 'world-facts' },
   { key: 'recherche',      flag: 'showRechercheCard',      toggle: 'toggleRechercheCard',      onReclick: 'refresh', requiresBook: true, partial: 'recherche' },
+  { key: 'sources',        flag: 'showSourcesCard',        toggle: 'toggleSourcesCard',        onReclick: 'refresh', requiresBook: true, partial: 'sources' },
   { key: 'bookStats',      flag: 'showBookStatsCard',      toggle: 'toggleBookStatsCard',      onReclick: 'close', partial: 'bookstats' },
   { key: 'stil',           flag: 'showStilCard',           toggle: 'toggleStilCard',           onReclick: 'close', partial: 'stil-heatmap' },
   { key: 'fehlerHeatmap',  flag: 'showFehlerHeatmapCard',  toggle: 'toggleFehlerHeatmapCard',  onReclick: 'close', partial: 'fehler-heatmap' },

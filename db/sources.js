@@ -1,11 +1,17 @@
 'use strict';
-// CRUD fuer book_sources (Quellenverzeichnis) + Schreib-/Lesepfade des
-// abgeleiteten Fund-Index source_citations.
+// Quellen als persoenliche Bibliothek: CRUD auf dem User-Pool `sources`, die
+// M:N-Bruecke `book_source_links` (welches Buch nutzt welche Quelle) und die
+// Schreib-/Lesepfade des abgeleiteten Fund-Index `source_citations`.
 //
-// Skopierung: buchweit GETEILT. `user_email` ist Ersteller-Attribution, kein
-// Sichtbarkeits-Scope — der Quellen-Marker lebt im Seiten-HTML und ist damit fuer
-// jeden Editor des Buchs sichtbar; eine user-private Quelle waere fuer einen
-// Co-Autor eine Quellenangabe ohne Ziel. Zugriffsschutz liegt beim ACL-Guard der Route.
+// Skopierung: die Quelle gehoert dem User (`owner_email`) — eine Literatur-
+// bibliothek ist personen-, nicht werkgebunden. Ein Buch referenziert sie ueber
+// die Bruecke; dieselbe Quelle liegt in beliebig vielen Buechern, ohne dass sie
+// dort erneut erfasst wird.
+//
+// Daraus folgen zwei getrennte Operationen, die nicht verwechselt werden duerfen:
+//   unlinkSource  entfernt die Quelle aus EINEM Buch (Bruecke), Pool bleibt
+//   deleteSource  loescht sie aus der Bibliothek — und damit aus ALLEN Buechern
+// Die Zugriffsregeln dazu liegen in routes/sources.js.
 //
 // authors/editors sind JSON-Arrays [{family, given} | {literal}] nach CSL-JSON.
 // `literal` fuer Koerperschaften ("Bundesamt fuer Statistik"), die kein
@@ -71,35 +77,75 @@ function _persons(json) {
   } catch { return []; }
 }
 
-// Die Liste liefert die Zitier-Kennzahlen mit (wie oft / auf wie vielen Seiten
+// Zitier-Kennzahlen kommen mit der Liste (wie oft / auf wie vielen Seiten
 // belegt). Ohne sie muesste die Karte pro Zeile nachfragen, und das Badge
 // „nicht zitiert" ist der Hauptgrund, warum der Fund-Index existiert.
-const _SELECT_SQL = `
-  SELECT s.*,
-         (SELECT COALESCE(SUM(sc.count), 0) FROM source_citations sc WHERE sc.source_id = s.id) AS cite_count,
-         (SELECT COUNT(*)                   FROM source_citations sc WHERE sc.source_id = s.id) AS cite_pages
-    FROM book_sources s
+//
+// Sie sind BUCH-skopiert: dieselbe Pool-Quelle ist in Arbeit A zwanzigmal und in
+// Arbeit B gar nicht belegt. Eine globale Zahl waere in der Buchansicht falsch —
+// die globale Sicht liefert getSourceTotals fuer die Loesch-Warnung.
+const _BOOK_COUNT_SQL = `
+  (SELECT COALESCE(SUM(sc.count), 0) FROM source_citations sc
+     JOIN pages p ON p.page_id = sc.page_id
+    WHERE sc.source_id = s.id AND p.book_id = @book) AS cite_count,
+  (SELECT COUNT(*) FROM source_citations sc
+     JOIN pages p ON p.page_id = sc.page_id
+    WHERE sc.source_id = s.id AND p.book_id = @book) AS cite_pages
 `;
 
-const _stmtList = db.prepare(
-  `${_SELECT_SQL} WHERE s.book_id = ? ORDER BY s.updated_at DESC, s.id DESC`
+// Pool-Sicht: ueber alle Buecher summiert, plus in wie vielen Buechern die
+// Quelle liegt (die Zahl entscheidet, ob Loeschen woanders weh tut).
+const _POOL_COUNT_SQL = `
+  (SELECT COALESCE(SUM(sc.count), 0) FROM source_citations sc WHERE sc.source_id = s.id) AS cite_count,
+  (SELECT COUNT(*)                   FROM source_citations sc WHERE sc.source_id = s.id) AS cite_pages,
+  (SELECT COUNT(*) FROM book_source_links l WHERE l.source_id = s.id)                    AS book_count
+`;
+
+const _stmtListForBook = db.prepare(`
+  SELECT s.*, ${_BOOK_COUNT_SQL}
+    FROM sources s
+    JOIN book_source_links l ON l.source_id = s.id AND l.book_id = @book
+   ORDER BY s.updated_at DESC, s.id DESC
+`);
+const _stmtListForBookActive = db.prepare(`
+  SELECT s.*, ${_BOOK_COUNT_SQL}
+    FROM sources s
+    JOIN book_source_links l ON l.source_id = s.id AND l.book_id = @book
+   WHERE s.archived = 0
+   ORDER BY s.updated_at DESC, s.id DESC
+`);
+
+// Pool des Users. `exclude_book` blendet aus, was im Zielbuch schon liegt —
+// der „aus Bibliothek hinzufuegen"-Picker soll keine Zeilen zeigen, deren
+// Auswahl nichts tut.
+const _stmtPool = db.prepare(`
+  SELECT s.*, ${_POOL_COUNT_SQL}
+    FROM sources s
+   WHERE s.owner_email = @owner
+     AND (@include_archived = 1 OR s.archived = 0)
+     AND (@exclude_book IS NULL
+          OR NOT EXISTS (SELECT 1 FROM book_source_links l
+                          WHERE l.source_id = s.id AND l.book_id = @exclude_book))
+   ORDER BY s.updated_at DESC, s.id DESC
+`);
+
+const _stmtGetPool = db.prepare(`SELECT s.*, ${_POOL_COUNT_SQL} FROM sources s WHERE s.id = @id`);
+const _stmtGetForBook = db.prepare(`SELECT s.*, ${_BOOK_COUNT_SQL} FROM sources s WHERE s.id = @id`);
+
+const _stmtDelete = db.prepare('DELETE FROM sources WHERE id = ?');
+const _stmtCount = db.prepare(
+  'SELECT COUNT(*) AS n FROM book_source_links WHERE book_id = ?'
 );
-const _stmtListActive = db.prepare(
-  `${_SELECT_SQL} WHERE s.book_id = ? AND s.archived = 0 ORDER BY s.updated_at DESC, s.id DESC`
-);
-const _stmtGet = db.prepare(`${_SELECT_SQL} WHERE s.id = ?`);
-const _stmtDelete = db.prepare('DELETE FROM book_sources WHERE id = ?');
-const _stmtCount = db.prepare('SELECT COUNT(*) AS n FROM book_sources WHERE book_id = ?');
 
 const _stmtInsert = db.prepare(`
-  INSERT INTO book_sources
-    (book_id, user_email, csl_type, authors, editors, archived,
+  INSERT INTO sources
+    (owner_email, csl_type, authors, editors, archived,
      ${TEXT_FIELDS.join(', ')}, created_at, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ${TEXT_FIELDS.map(() => '?').join(', ')}, ${NOW_ISO_SQL}, ${NOW_ISO_SQL})
+  VALUES (?, ?, ?, ?, ?, ${TEXT_FIELDS.map(() => '?').join(', ')}, ${NOW_ISO_SQL}, ${NOW_ISO_SQL})
 `);
 
 const _stmtUpdate = db.prepare(`
-  UPDATE book_sources
+  UPDATE sources
      SET csl_type = ?, authors = ?, editors = ?, archived = ?,
          ${TEXT_FIELDS.map(f => `${f} = ?`).join(', ')},
          updated_at = ${NOW_ISO_SQL}
@@ -110,8 +156,7 @@ function _row(r) {
   if (!r) return null;
   const out = {
     id: r.id,
-    book_id: r.book_id,
-    user_email: r.user_email,
+    owner_email: r.owner_email,
     csl_type: r.csl_type,
     authors: _persons(r.authors),
     editors: _persons(r.editors),
@@ -121,6 +166,7 @@ function _row(r) {
     cite_count: r.cite_count || 0,
     cite_pages: r.cite_pages || 0,
   };
+  if (r.book_count !== undefined) out.book_count = r.book_count || 0;
   for (const f of TEXT_FIELDS) out[f] = r[f] || null;
   return out;
 }
@@ -139,23 +185,41 @@ function _values(src, base = null) {
   };
 }
 
+/** Quellen, die einem Buch zugeordnet sind. Kennzahlen buch-skopiert. */
 function listSources(bookId, { includeArchived = false } = {}) {
-  const stmt = includeArchived ? _stmtList : _stmtListActive;
-  return stmt.all(parseInt(bookId)).map(_row);
+  const stmt = includeArchived ? _stmtListForBook : _stmtListForBookActive;
+  return stmt.all({ book: parseInt(bookId) }).map(_row);
 }
 
-function getSource(id) {
-  return _row(_stmtGet.get(parseInt(id)));
+/** Die persoenliche Bibliothek eines Users. Kennzahlen ueber alle Buecher. */
+function listPoolSources(ownerEmail, { includeArchived = false, excludeBookId = null } = {}) {
+  const excl = excludeBookId == null ? null : parseInt(excludeBookId);
+  return _stmtPool.all({
+    owner: ownerEmail,
+    include_archived: includeArchived ? 1 : 0,
+    exclude_book: Number.isInteger(excl) ? excl : null,
+  }).map(_row);
 }
 
+/** Eine Quelle. Ohne `bookId` mit Pool-Kennzahlen (inkl. `book_count`), mit
+ *  `bookId` mit den Kennzahlen dieses Buchs — dieselbe Sicht wie in der Liste. */
+function getSource(id, bookId = null) {
+  const sid = parseInt(id);
+  if (bookId == null) return _row(_stmtGetPool.get({ id: sid }));
+  return _row(_stmtGetForBook.get({ id: sid, book: parseInt(bookId) }));
+}
+
+/** Anzahl der einem Buch zugeordneten Quellen (inkl. archivierter). */
 function countSources(bookId) {
   return _stmtCount.get(parseInt(bookId)).n;
 }
 
-function createSource(bookId, userEmail, fields = {}) {
+/** Neue Quelle im Pool des Users. Die Buch-Zuordnung ist ein eigener Schritt
+ *  (linkSource) — eine Quelle kann ohne Buch in der Bibliothek liegen. */
+function createSource(ownerEmail, fields = {}) {
   const v = _values(fields);
   const info = _stmtInsert.run(
-    parseInt(bookId), userEmail, v.csl_type, v.authors, v.editors, v.archived, ...v.text
+    ownerEmail, v.csl_type, v.authors, v.editors, v.archived, ...v.text
   );
   return getSource(info.lastInsertRowid);
 }
@@ -168,8 +232,64 @@ function updateSource(id, fields = {}) {
   return getSource(id);
 }
 
+/** Aus der Bibliothek loeschen — wirkt in ALLEN Buechern. Bruecken-Zeilen und
+ *  Fundstellen verschwinden per CASCADE. Fuer „nur hier weg" ist unlinkSource
+ *  zustaendig. */
 function deleteSource(id) {
   _stmtDelete.run(parseInt(id));
+}
+
+// ── Bruecke Buch ↔ Quelle ────────────────────────────────────────────────────
+
+const _stmtLink = db.prepare(`
+  INSERT OR IGNORE INTO book_source_links (book_id, source_id, added_by, created_at)
+  VALUES (?, ?, ?, ${NOW_ISO_SQL})
+`);
+const _stmtUnlink = db.prepare('DELETE FROM book_source_links WHERE book_id = ? AND source_id = ?');
+const _stmtIsLinked = db.prepare(
+  'SELECT 1 AS x FROM book_source_links WHERE book_id = ? AND source_id = ? LIMIT 1'
+);
+const _stmtSourceBooks = db.prepare(`
+  SELECT b.book_id, b.name
+    FROM book_source_links l
+    JOIN books b ON b.book_id = l.book_id
+   WHERE l.source_id = ?
+   ORDER BY b.name
+`);
+
+/** Quelle einem Buch zuordnen. Idempotent (INSERT OR IGNORE) — der Picker darf
+ *  eine bereits zugeordnete Quelle nicht mit 500 quittieren.
+ *  @returns {boolean} true, wenn die Zuordnung neu war. */
+function linkSource(bookId, sourceId, addedBy = null) {
+  return _stmtLink.run(parseInt(bookId), parseInt(sourceId), addedBy).changes > 0;
+}
+
+/** Quelle aus EINEM Buch entfernen. Der Pool-Eintrag bleibt, ebenso die
+ *  Zuordnungen in anderen Buechern.
+ *
+ *  Die Fundstellen dieses Buchs werden mit entfernt: sie sind Ableitung der
+ *  Zuordnung, und der Buch-Guard in replacePageCitations wuerde sie beim
+ *  naechsten Seiten-Write ohnehin nicht mehr schreiben. Blieben sie stehen,
+ *  zaehlte das Verzeichnis eine Quelle mit, die dem Buch nicht mehr gehoert. */
+const unlinkSource = db.transaction((bookId, sourceId) => {
+  const bid = parseInt(bookId);
+  const sid = parseInt(sourceId);
+  db.prepare(`
+    DELETE FROM source_citations
+     WHERE source_id = ?
+       AND page_id IN (SELECT page_id FROM pages WHERE book_id = ?)
+  `).run(sid, bid);
+  return _stmtUnlink.run(bid, sid).changes > 0;
+});
+
+function isSourceLinked(bookId, sourceId) {
+  return !!_stmtIsLinked.get(parseInt(bookId), parseInt(sourceId));
+}
+
+/** Buecher, die diese Quelle nutzen. Grundlage der Loesch-Warnung („wird in
+ *  3 Buechern verwendet") und des ACL-Fallbacks fuer Co-Autoren. */
+function listSourceBooks(sourceId) {
+  return _stmtSourceBooks.all(parseInt(sourceId));
 }
 
 // ── Fund-Index source_citations ──────────────────────────────────────────────
@@ -179,23 +299,23 @@ function deleteSource(id) {
 
 const _stmtDelCitesForPage = db.prepare('DELETE FROM source_citations WHERE page_id = ?');
 
-// INSERT mit Buch-Guard im SELECT: eine Quelle wird nur indiziert, wenn sie zum
-// Buch der Seite gehoert. Faengt den Fall „Seite mit Quellenangaben in ein anderes Buch
-// kopiert" ab — der Marker zeigt dann auf eine buchfremde id und darf keine
-// Fundstelle erzeugen.
+// INSERT mit Buch-Guard im SELECT: eine Quelle wird nur indiziert, wenn sie dem
+// Buch der Seite zugeordnet ist. Faengt zwei Faelle ab — „Seite mit Quellen-
+// angaben in ein anderes Buch kopiert" und „Quelle aus dem Buch entfernt, Marker
+// steht noch im Text". Beide duerfen keine Fundstelle erzeugen.
 const _stmtInsCite = db.prepare(`
   INSERT INTO source_citations (source_id, page_id, count, first_offset)
-  SELECT s.id, p.page_id, ?, ?
-    FROM book_sources s
+  SELECT l.source_id, p.page_id, ?, ?
+    FROM book_source_links l
     JOIN pages p ON p.page_id = ?
-   WHERE s.id = ? AND s.book_id = p.book_id
+   WHERE l.source_id = ? AND l.book_id = p.book_id
 `);
 
 /** Fundstellen einer Seite komplett ersetzen.
  *  entries: [{ sourceId, count, firstOffset }] — Duplikate pro sourceId sind
  *  Aufrufer-Fehler; der PK wuerde sie ablehnen, darum vorher zusammengefasst.
  *  Gibt die Anzahl tatsaechlich indizierter Quellen zurueck (< entries.length,
- *  wenn eine id buchfremd oder verschwunden ist). */
+ *  wenn eine id dem Buch nicht zugeordnet oder verschwunden ist). */
 const replacePageCitations = db.transaction((pageId, entries = []) => {
   const pid = parseInt(pageId);
   _stmtDelCitesForPage.run(pid);
@@ -218,9 +338,8 @@ const replacePageCitations = db.transaction((pageId, entries = []) => {
 const _stmtCitesForBook = db.prepare(`
   SELECT sc.source_id, sc.page_id, sc.count, sc.first_offset
     FROM source_citations sc
-    JOIN book_sources s ON s.id = sc.source_id
-    JOIN pages p        ON p.page_id = sc.page_id
-   WHERE s.book_id = ?
+    JOIN pages p ON p.page_id = sc.page_id
+   WHERE p.book_id = ?
    ORDER BY p.position, sc.first_offset
 `);
 
@@ -247,7 +366,8 @@ function listPageCitations(pageId) {
 module.exports = {
   CSL_TYPES, TEXT_FIELDS,
   normalizePersons,
-  listSources, getSource, countSources,
+  listSources, listPoolSources, getSource, countSources,
   createSource, updateSource, deleteSource,
+  linkSource, unlinkSource, isSourceLinked, listSourceBooks,
   replacePageCitations, listBookCitations, listPageCitations,
 };

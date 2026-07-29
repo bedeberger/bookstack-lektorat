@@ -1,0 +1,83 @@
+    <!-- Quellen-Tab: Zitierstil + Quellenverzeichnis. Gilt buchweit für ALLE
+         Ausgabewege (PDF, DOCX, EPUB, WordPress, HubSpot) — darum hier und nicht
+         in einem Exportprofil. Eigener Schreibpfad
+         PUT /booksettings/:book_id/citation (siehe book/book-settings/citation.js);
+         der Header-Speichern-Button der Karte schreibt ihn mit. -->
+    <div class="card-form-grid" x-bind="panel('sources')" x-cloak>
+
+    <section class="book-settings-section">
+      <h3 class="book-settings-section-title" x-text="$app.t('book.settings.section.cite')"></h3>
+      <p class="form-lead" x-text="$app.t('book.settings.cite.lead')"></p>
+
+      <div class="card-form-row">
+        <label class="card-form-label" x-text="$app.t('book.settings.cite.style')"></label>
+        <div class="card-form-field">
+          <div x-data="combobox({ placeholder: $app.t('book.settings.cite.style'), compact: false })"
+               x-modelable="value" x-model="bookCitation.citation_style"
+               x-effect="options = citationStyleOptions()"></div>
+          <p class="card-form-field-note" x-text="$app.t('book.settings.cite.style.hint')"></p>
+        </div>
+      </div>
+
+      <div class="card-form-row card-form-row--top">
+        <label class="card-form-label" x-text="$app.t('book.settings.cite.preview')"></label>
+        <div class="card-form-field">
+          <p class="sources-preview" x-text="citationPreview()"></p>
+          <p class="card-form-field-note" x-text="$app.t('book.settings.cite.preview.hint')"></p>
+        </div>
+      </div>
+
+      <div class="card-form-row">
+        <label class="card-form-label" x-text="$app.t('book.settings.cite.bibliography')"></label>
+        <div class="form-stack">
+          <label class="form-check">
+            <input type="checkbox" id="bs-bib-enabled" x-model="bookCitation.bibliography_enabled">
+            <span>
+              <span class="form-check-title" x-text="$app.t('book.settings.cite.bibEnabled')"></span>
+              <span class="form-check-desc" x-text="$app.t('book.settings.cite.bibEnabled.desc')"></span>
+            </span>
+          </label>
+          <label class="form-check" x-show="bookCitation.bibliography_enabled" x-cloak>
+            <input type="checkbox" id="bs-bib-blog" x-model="bookCitation.bibliography_in_blog">
+            <span>
+              <span class="form-check-title" x-text="$app.t('book.settings.cite.bibInBlog')"></span>
+              <span class="form-check-desc" x-text="$app.t('book.settings.cite.bibInBlog.desc')"></span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card-form-row" x-show="bookCitation.bibliography_enabled" x-cloak>
+        <label class="card-form-label" for="bs-bib-title" x-text="$app.t('book.settings.cite.bibTitle')"></label>
+        <div class="card-form-field">
+          <input type="text" id="bs-bib-title" class="card-form-input"
+                 x-model="bookCitation.bibliography_title"
+                 :placeholder="$app.t('book.settings.cite.bibTitle.placeholder')"
+                 maxlength="200" data-spellcheck="spelling">
+          <p class="card-form-field-note" x-text="$app.t('book.settings.cite.bibTitle.hint')"></p>
+        </div>
+      </div>
+
+      <div class="card-form-row" x-show="bookCitation.bibliography_enabled" x-cloak>
+        <label class="card-form-label" x-text="$app.t('book.settings.cite.scope')"></label>
+        <div class="card-form-field">
+          <div x-data="radioGroup()"
+               x-modelable="value" x-model="bookCitation.bibliography_scope"
+               x-effect="options = citationScopeOptions()"></div>
+          <p class="card-form-field-note" x-text="$app.t('book.settings.cite.scope.hint')"></p>
+        </div>
+      </div>
+
+      <div class="card-form-row">
+        <label class="card-form-label" x-text="$app.t('book.settings.cite.manage')"></label>
+        <div class="card-form-field">
+          <button type="button" class="btn-compact" @click="openSourcesCard()">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#quote"/></svg>
+            <span x-text="$app.t('book.settings.cite.manageBtn')"></span>
+          </button>
+          <p class="card-form-field-note" x-text="$app.t('book.settings.cite.manage.hint')"></p>
+        </div>
+      </div>
+    </section>
+
+    </div><!-- /tab: sources -->

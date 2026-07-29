@@ -33,6 +33,7 @@ const ALLOWED_KEYS = new Set([
   'motiv',
   'weltfakten',
   'recherche',
+  'sources',
   'bookchat',
   'stats',
   'bookSettings',

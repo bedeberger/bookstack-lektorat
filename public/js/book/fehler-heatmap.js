@@ -33,12 +33,16 @@ export function _destroyFehlerTrendChart() {
 }
 
 // Cluster-Gruppierung der Typen-Spalten. Reihenfolge in den Cluster-Arrays = Spalten-Reihenfolge.
-// Muss mit VALID_TYPEN in routes/jobs/lektorat.js kompatibel sein.
+// Muss alle Typen aus ALLE_LEKTORAT_TYPEN (public/js/prompts/lektorat-typen.js) abdecken —
+// die Heatmap zeigt alle Spalten, unabhängig vom Buchtyp des Buchs: bei einem Roman
+// bleiben die Fach-Spalten leer, bei einer wissenschaftlichen Arbeit die Erzähl-Spalten.
+// Vollständigkeit gegated durch tests/unit/lektorat-typen-drift.test.mjs.
 const FEHLER_CLUSTERS = [
   { key: 'sprache',    typen: ['rechtschreibung', 'grammatik', 'dialogformat'] },
   { key: 'wort',       typen: ['wiederholung', 'schwaches_verb', 'fuellwort', 'filterwort'] },
   { key: 'stil',       typen: ['stil', 'satzbau', 'pleonasmus', 'klischee', 'ki_geruch', 'passiv'] },
   { key: 'erzaehlung', typen: ['show_vs_tell', 'perspektivbruch', 'tempuswechsel'] },
+  { key: 'fach',       typen: ['unbelegt', 'begriffsinkonsistenz', 'autorenform', 'hedging'] },
   { key: 'welt',       typen: ['namenskonsistenz', 'figurenmerkmal', 'schauplatzmerkmal', 'anrede'] },
 ];
 const FEHLER_TYPEN = FEHLER_CLUSTERS.flatMap(c => c.typen);

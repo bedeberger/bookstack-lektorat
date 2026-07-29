@@ -23,6 +23,14 @@ const OTHER_BOOK = 5002;
 schema.upsertBookByName(BOOK, 'Beleg-Testbuch');
 schema.upsertBookByName(OTHER_BOOK, 'Fremdbuch');
 
+// Quelle in der Bibliothek anlegen UND dem Buch zuordnen — nur die Zuordnung
+// macht sie fuer den Buch-Guard des Indexers sichtbar.
+function mkSource(bookId, fields) {
+  const s = schema.createSource('me@x.test', fields);
+  schema.linkSource(bookId, s.id, 'me@x.test');
+  return s;
+}
+
 function chip(id, text = '(Beleg)', loc = null) {
   const locAttr = loc ? ` data-loc="${loc}"` : '';
   return `<span class="cite" data-src="${id}"${locAttr}>${text}</span>`;
@@ -45,8 +53,8 @@ test('MARKER_HINT entspricht CITE_ATTR_SRC', async () => {
 });
 
 test('savePage indiziert Belege, Full-Replace bei jedem Save', async () => {
-  const a = schema.createSource(BOOK, 'me@x.test', { title: 'Quelle A' });
-  const b = schema.createSource(BOOK, 'me@x.test', { title: 'Quelle B' });
+  const a = mkSource(BOOK,{ title: 'Quelle A' });
+  const b = mkSource(BOOK,{ title: 'Quelle B' });
   const pageId = await newPage('<p>leer</p>');
   assert.deepEqual(citesOf(pageId), []);
 
@@ -67,7 +75,7 @@ test('savePage indiziert Belege, Full-Replace bei jedem Save', async () => {
 });
 
 test('Mehrfachbeleg derselben Quelle wird gezaehlt, nicht dupliziert', async () => {
-  const s = schema.createSource(BOOK, 'me@x.test', { title: 'Oft zitiert' });
+  const s = mkSource(BOOK,{ title: 'Oft zitiert' });
   const pageId = await newPage(`<p>${chip(s.id, '[1]')} x ${chip(s.id, '[1]')} y ${chip(s.id, '[1]')}</p>`);
   const rows = schema.listPageCitations(pageId);
   assert.equal(rows.length, 1);
@@ -76,14 +84,14 @@ test('Mehrfachbeleg derselben Quelle wird gezaehlt, nicht dupliziert', async () 
 });
 
 test('createPage indiziert mit — Import/Blog-Pull laufen nicht ueber savePage', async () => {
-  const s = schema.createSource(BOOK, 'me@x.test', { title: 'Aus Import' });
+  const s = mkSource(BOOK,{ title: 'Aus Import' });
   const pageId = await newPage(`<p>importiert ${chip(s.id, '[1]')}</p>`);
   assert.deepEqual(citesOf(pageId), [[s.id, 1, 11]]);  // "importiert " = 11 Zeichen
 });
 
 test('buchfremde und tote Zeiger erzeugen keine Fundstelle', async () => {
-  const own = schema.createSource(BOOK, 'me@x.test', { title: 'Eigen' });
-  const foreign = schema.createSource(OTHER_BOOK, 'me@x.test', { title: 'Fremd' });
+  const own = mkSource(BOOK,{ title: 'Eigen' });
+  const foreign = mkSource(OTHER_BOOK,{ title: 'Fremd' });
   const pageId = await newPage(
     `<p>${chip(own.id)} ${chip(foreign.id)} ${chip(999999)}</p>`
   );
@@ -102,7 +110,7 @@ test('Seite ohne Marker loest keine Schreib-Transaktion aus', async () => {
 });
 
 test('Rename-/Reorder-Save laesst den Index unberuehrt', async () => {
-  const s = schema.createSource(BOOK, 'me@x.test', { title: 'Bleibt' });
+  const s = mkSource(BOOK,{ title: 'Bleibt' });
   const pageId = await newPage(`<p>${chip(s.id, '[1]')}</p>`);
   assert.deepEqual(citesOf(pageId), [[s.id, 1, 0]]);
   // Save ohne html-Feld: der Hook darf nicht laufen (sonst wuerde er gegen
@@ -112,7 +120,7 @@ test('Rename-/Reorder-Save laesst den Index unberuehrt', async () => {
 });
 
 test('Chip im Editor-Zustand wird gesaeubert und trotzdem indiziert', async () => {
-  const s = schema.createSource(BOOK, 'me@x.test', { title: 'Aus dem Editor' });
+  const s = mkSource(BOOK,{ title: 'Aus dem Editor' });
   const pageId = await newPage('<p>leer</p>');
   await contentStore.savePage(pageId, {
     html: `<p>Text <span class="cite" data-src="${s.id}" data-loc="44" contenteditable="false">(X, 2020, S. 44)</span></p>`,
@@ -124,7 +132,7 @@ test('Chip im Editor-Zustand wird gesaeubert und trotzdem indiziert', async () =
 });
 
 test('movePage verwirft die Belege beim Buchwechsel', async () => {
-  const s = schema.createSource(BOOK, 'me@x.test', { title: 'Wandert nicht mit' });
+  const s = mkSource(BOOK,{ title: 'Wandert nicht mit' });
   const pageId = await newPage(`<p>${chip(s.id, '[1]')}</p>`);
   assert.equal(citesOf(pageId).length, 1);
 
@@ -138,7 +146,7 @@ test('movePage verwirft die Belege beim Buchwechsel', async () => {
 });
 
 test('Quelle loeschen raeumt die Fundstellen, Marker bleibt', async () => {
-  const s = schema.createSource(BOOK, 'me@x.test', { title: 'Wird geloescht' });
+  const s = mkSource(BOOK,{ title: 'Wird geloescht' });
   const pageId = await newPage(`<p>${chip(s.id, '[1]')}</p>`);
   assert.equal(citesOf(pageId).length, 1);
   schema.deleteSource(s.id);

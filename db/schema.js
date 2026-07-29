@@ -1709,15 +1709,21 @@ module.exports = {
   createDraftFigure:       draftFigures.createDraftFigure,
   updateDraftFigure:       draftFigures.updateDraftFigure,
   deleteDraftFigure:       draftFigures.deleteDraftFigure,
-  // Quellenverzeichnis (book_sources + abgeleiteter Fund-Index source_citations)
+  // Quellen-Bibliothek (User-Pool `sources` + Bruecke `book_source_links`
+  // + abgeleiteter Fund-Index `source_citations`)
   CSL_TYPES:              sources.CSL_TYPES,
   normalizeSourcePersons: sources.normalizePersons,
   listSources:            sources.listSources,
+  listPoolSources:        sources.listPoolSources,
   getSource:              sources.getSource,
   countSources:           sources.countSources,
   createSource:           sources.createSource,
   updateSource:           sources.updateSource,
   deleteSource:           sources.deleteSource,
+  linkSource:             sources.linkSource,
+  unlinkSource:           sources.unlinkSource,
+  isSourceLinked:         sources.isSourceLinked,
+  listSourceBooks:        sources.listSourceBooks,
   replacePageCitations:   sources.replacePageCitations,
   listBookCitations:      sources.listBookCitations,
   listPageCitations:      sources.listPageCitations,

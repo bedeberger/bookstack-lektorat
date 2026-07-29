@@ -22,7 +22,7 @@
   <div x-show="bookSettingsLoading" class="muted-msg" x-text="$app.t('common.loading')"></div>
 
   <div x-show="!bookSettingsLoading"
-       x-data="tabs(['book','context','share','publication','sync','stats','danger'])"
+       x-data="tabs(['book','context','sources','share','publication','sync','stats','danger'])"
        x-modelable="value" x-model="bookSettingsTab">
 
     <!-- Tabs (DESIGN.md .tabs / Alpine.data('tabs')) -->
@@ -31,6 +31,8 @@
               x-text="$app.t('book.settings.tab.book')"></button>
       <button class="tabs-btn" x-bind="tabBtn('context')"
               x-text="$app.t('book.settings.tab.context')"></button>
+      <button class="tabs-btn" x-bind="tabBtn('sources')"
+              x-text="$app.t('book.settings.tab.sources')"></button>
       <button class="tabs-btn" x-bind="tabBtn('share')"
               x-text="$app.t('book.settings.tab.share')"></button>
       <button class="tabs-btn" x-bind="tabBtn('publication')"
@@ -47,6 +49,8 @@
     <!-- @include book-settings-book -->
 
     <!-- @include book-settings-context -->
+
+    <!-- @include book-settings-sources -->
 
     <!-- @include book-settings-danger -->
 

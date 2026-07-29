@@ -660,3 +660,92 @@ test('Manuell hinzugefügte Nicht-Kapitel-Seite beginnt auf eigener Seite (wie e
   // Strukturell identisch zu «Kapitel am Ende» → gleicher Satzspiegel/Recto-Verso.
   assert.equal(pageCount(withCustom), pageCount(withChapter), 'Custom-Seite muss wie ein Kapitel auf eigener Seite starten');
 });
+
+// ── Quellenverzeichnis (lib/bibliography.js) ─────────────────────────────────
+// Die synthetische Gruppe hinter den Buchkapiteln muss wie ein Kapitel behandelt
+// werden: eigene Seite, Outline-/TOC-Eintrag, unnummeriert. Und sie darf nur beim
+// ganzen Buch erscheinen.
+
+const bibFixture = {
+  enabled: true,
+  title: 'Quellenverzeichnis',
+  style: 'numeric',
+  lang: 'de',
+  numbers: new Map([[7, 1]]),
+  sourcesById: new Map([[7, {
+    id: 7, csl_type: 'book', title: 'Die Verwandlung', year: '1915',
+    authors: [{ family: 'Kafka', given: 'Franz' }], editors: [],
+    publisher: 'Kurt Wolff', place: 'Leipzig',
+  }]]),
+  entries: [{
+    id: 7, num: 1,
+    text: 'Kafka, Franz: Die Verwandlung. Leipzig: Kurt Wolff, 1915.',
+    html: 'Kafka, Franz: <em>Die Verwandlung</em>. Leipzig: Kurt Wolff, 1915.',
+    runs: [{ text: 'Kafka, Franz: ' }, { text: 'Die Verwandlung', italic: true }],
+  }],
+};
+
+function bibCfg() {
+  const c = parityOff(defaultConfig());
+  c.cover.enabled = false;
+  return c;
+}
+
+test('Quellenverzeichnis hängt als eigenes Kapitel mit Outline-Eintrag hinten an', async () => {
+  const withBib = await renderPdfBuffer({
+    book: baseBook, groups: baseGroups, profile: { config: bibCfg() },
+    coverBuf: null, token: null, scope: 'book', bibliography: bibFixture,
+  });
+  const withoutBib = await renderPdfBuffer({
+    book: baseBook, groups: baseGroups, profile: { config: bibCfg() },
+    coverBuf: null, token: null, scope: 'book',
+    bibliography: { ...bibFixture, enabled: false },
+  });
+  assert.equal(withBib.slice(0, 5).toString(), '%PDF-');
+  // Eigene Seite (breakBefore='always' greift wie bei jedem Top-Level-Kapitel).
+  assert.equal(pageCount(withBib), pageCount(withoutBib) + 1);
+  // Titel steht als PDF-Outline-Eintrag im Dokument (ASCII-Literal-String).
+  assert.ok(withBib.toString('binary').includes('Quellenverzeichnis'), 'Verzeichnistitel fehlt im PDF');
+  assert.equal(withoutBib.toString('binary').includes('Quellenverzeichnis'), false);
+});
+
+test('Quellenverzeichnis erscheint nur bei scope=book', async () => {
+  const bookScope = await renderPdfBuffer({
+    book: baseBook, groups: baseGroups, profile: { config: bibCfg() },
+    coverBuf: null, token: null, scope: 'book', bibliography: bibFixture,
+  });
+  const chapterScope = await renderPdfBuffer({
+    book: baseBook, groups: baseGroups, profile: { config: bibCfg() },
+    coverBuf: null, token: null, scope: 'chapter', chapter: { id: 1, name: 'Eins' },
+    bibliography: bibFixture,
+  });
+  assert.ok(bookScope.toString('binary').includes('Quellenverzeichnis'));
+  assert.equal(chapterScope.toString('binary').includes('Quellenverzeichnis'), false);
+});
+
+test('Quellen-Chip im Seitentext bekommt den frisch formatierten Kurzbeleg', async () => {
+  // Der gespeicherte Chip-Text ist ein Cache vom Einfüge-Zeitpunkt; im
+  // numerischen Stil steht dort noch die Autor-Jahr-Form. Der Renderer muss ihn
+  // vor dem Walker durch «[1, S. 44]» ersetzen — sonst steht im PDF ein falscher
+  // Kurzbeleg neben einem numerischen Verzeichnis.
+  const chip = '<span class="cite" data-src="7" data-loc="44">(Kafka, 1915, S. 44)</span>';
+  const groups = [{ chapter: { id: 1, name: 'Eins' }, pages: [
+    { p: { id: 1, name: 'A' }, pd: { html: `<p>Ein Satz ${chip} und weiter.</p>` } },
+  ]}];
+  const cfg = bibCfg();
+  cfg.toc.enabled = false;
+  // Ohne Silbentrennung/Ligaturen bleibt der Text als zusammenhängendes
+  // Fragment im Content-Stream messbar.
+  cfg.layout.hyphenate = false;
+  const buf = await renderPdfBuffer({
+    book: baseBook, groups, profile: { config: cfg },
+    coverBuf: null, token: null, scope: 'book', bibliography: bibFixture,
+  });
+  assert.equal(buf.slice(0, 5).toString(), '%PDF-');
+  // Der Kurzbeleg ist Teil des Fliesstext-Fragments; die Autor-Jahr-Form darf
+  // nicht mehr im Dokument stehen. Geprüft am gerenderten Text via pdf-extract.
+  const { extractPdfText } = (await import('../../lib/pdf-extract.js')).default;
+  const text = (await extractPdfText(buf)).text.replace(/\s+/g, ' ');
+  assert.ok(text.includes('[1, S. 44]'), `Kurzbeleg nicht ersetzt: ${text.slice(0, 300)}`);
+  assert.equal(text.includes('(Kafka, 1915, S. 44)'), false);
+});

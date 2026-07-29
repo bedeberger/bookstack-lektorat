@@ -3,6 +3,7 @@
 // gemeinsames `this` (in das Objekt gespreadet). Geteilte Imports/Konstanten
 // in book-settings/_shared.js.
 import { settingsMethods } from './book-settings/settings.js';
+import { citationMethods } from './book-settings/citation.js';
 import { adminMethods } from './book-settings/admin.js';
 import { accessMethods } from './book-settings/access.js';
 import { blogMethods } from './book-settings/blog.js';
@@ -10,6 +11,7 @@ import { hubspotMethods } from './book-settings/hubspot.js';
 
 export const bookSettingsMethods = {
   ...settingsMethods,
+  ...citationMethods,
   ...adminMethods,
   ...accessMethods,
   ...blogMethods,

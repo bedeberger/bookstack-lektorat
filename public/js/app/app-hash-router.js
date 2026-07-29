@@ -72,6 +72,7 @@ export const appHashRouterMethods = {
     else if (this.showMotivCard) parts.push('motiv');
     else if (this.showWorldFactsCard) parts.push('fakten');
     else if (this.showRechercheCard) parts.push('recherche');
+    else if (this.showSourcesCard) parts.push('quellen');
     else if (this.showKontinuitaetCard) parts.push('kontinuitaet');
     else if (this.showErzaehlprofilCard) parts.push('erzaehlprofil');
     else if (this.showTagebuchRueckblickCard) parts.push('rueckblick');
@@ -433,6 +434,10 @@ export const appHashRouterMethods = {
           else { this._closeOtherMainCards('recherche'); this._scrollToCardByKey('recherche'); }
           if (arg) window.dispatchEvent(new CustomEvent(EVT.RECHERCHE_FOCUS_ITEM, { detail: { itemId: arg } }));
           break;
+        case 'quellen':
+          if (!this.showSourcesCard) await this.toggleSourcesCard();
+          else { this._closeOtherMainCards('sources'); this._scrollToCardByKey('sources'); }
+          break;
         case 'kontinuitaet':
           if (!this.showKontinuitaetCard) await this.toggleKontinuitaetCard();
           break;
@@ -530,6 +535,7 @@ export const appHashRouterMethods = {
       'currentPage', 'showEditorCard',
       'showFiguresCard', 'showFigurWerkstattCard', 'showOrteCard', 'showSongsCard', 'showSzenenCard', 'showEreignisseCard', 'showPlotCard', 'showMotivCard', 'showWorldFactsCard',
       'showRechercheCard',
+      'showSourcesCard',
       'showKontinuitaetCard', 'showErzaehlprofilCard', 'showTagebuchRueckblickCard', 'showBookReviewCard', 'showBookChatCard',
       'showKapitelReviewCard', 'kapitelReviewChapterId',
       'showBookStatsCard', 'showStilCard', 'showFehlerHeatmapCard', 'showRedundanzCard',

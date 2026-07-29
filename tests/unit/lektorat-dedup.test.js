@@ -18,6 +18,13 @@ require('../../db/migrations');
 
 const { dedupFehler, validateLektoratFehler, capStylisticFehler, STYLISTIC_TYPEN } = require('../../routes/jobs/lektorat');
 
+// validateLektoratFehler filtert gegen das Typ-Set des Buchtyp-Profils (SSoT:
+// public/js/prompts/lektorat-typen.js, ESM — hier nicht importierbar, weil diese
+// Suite CJS ist; die Uebereinstimmung Profil <-> Server gated
+// tests/unit/lektorat-typen-drift.test.mjs). Die Tests hier pruefen die UEBRIGEN
+// Filter, darum ein Set, das die verwendeten Typen deckt.
+const NARRATIV = new Set(['rechtschreibung', 'grammatik', 'stil', 'show_vs_tell', 'hedging']);
+
 test('dedupFehler entfernt byte-gleiche Duplikate (gleicher typ+original+korrektur)', () => {
   const input = [
     { typ: 'rechtschreibung', original: 'warscheinlich', korrektur: 'wahrscheinlich', kontext: 'irgendwas', erklaerung: 'Tippfehler' },
@@ -60,7 +67,7 @@ test('validateLektoratFehler strippt Legacy-Feld `kontext` (PROMPTS_VERSION 16: 
   const input = [
     { typ: 'rechtschreibung', original: 'foo', korrektur: 'bar', kontext: 'halluzinierter Satz', erklaerung: 'x' },
   ];
-  const out = validateLektoratFehler(input, 'de-CH');
+  const out = validateLektoratFehler(input, 'de-CH', NARRATIV);
   assert.equal(out.length, 1);
   assert.equal('kontext' in out[0], false, 'kontext-Feld muss entfernt sein');
   assert.equal(out[0].original, 'foo');
@@ -80,7 +87,7 @@ test('validateLektoratFehler verwirft Selbst-Widerruf-Einträge (DE + EN)', () =
     { typ: 'grammatik', original: 'it buzzed', korrektur: 'it buzzed', erklaerung: 'This is not an error; leave as is.' },
     { typ: 'stil', original: 'she ran fast', korrektur: 'she sprinted', erklaerung: 'No correction needed, the sentence is fine.' },
   ];
-  const out = validateLektoratFehler(input, 'en-US');
+  const out = validateLektoratFehler(input, 'en-US', NARRATIV);
   assert.equal(out.length, 1, 'nur der echte Genitiv-Fehler bleibt');
   assert.equal(out[0].original, 'wegen dem Regen');
 });
@@ -148,4 +155,23 @@ test('capStylisticFehler: gemischte Liste – nur stilistische Ueberzahl faellt 
 test('capStylisticFehler: nicht-Array bleibt unveraendert (defensiv)', () => {
   assert.equal(capStylisticFehler(null), null);
   assert.equal(capStylisticFehler(undefined), undefined);
+});
+
+// ── Profil-Filter: nur Typen des Buchtyp-Profils passieren ────────────────────
+
+test('validateLektoratFehler verwirft profilfremde Typen', () => {
+  const input = [
+    { typ: 'grammatik',   original: 'wegen dem Regen', korrektur: 'wegen des Regens', erklaerung: 'Genitiv.' },
+    { typ: 'show_vs_tell', original: 'Er war wuetend.', korrektur: 'Seine Faust traf den Tisch.', erklaerung: 'Telling.' },
+    { typ: 'hedging',     original: 'moeglicherweise unter Umstaenden', korrektur: 'moeglicherweise', erklaerung: 'Stapel.' },
+  ];
+  // Wissenschaftliches Profil: show_vs_tell existiert dort nicht, hedging schon.
+  const wissenschaft = new Set(['rechtschreibung', 'grammatik', 'stil', 'hedging']);
+  const wiss = validateLektoratFehler(input, 'de-CH', wissenschaft);
+  assert.deepEqual(wiss.map(f => f.typ), ['grammatik', 'hedging']);
+
+  // Narratives Profil: umgekehrt – show_vs_tell bleibt, hedging faellt weg.
+  const narrativ = new Set(['rechtschreibung', 'grammatik', 'stil', 'show_vs_tell']);
+  const nar = validateLektoratFehler(input, 'de-CH', narrativ);
+  assert.deepEqual(nar.map(f => f.typ), ['grammatik', 'show_vs_tell']);
 });

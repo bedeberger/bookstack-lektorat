@@ -1,0 +1,130 @@
+<!-- Detail-Formular des Quellenverzeichnisses. Fragment-Include von
+     sources.html (`<!-- @include sources-form -->`), kein eigenständiges
+     Partial — es lebt im Scope von `sourcesCard`.
+     Welche Felder erscheinen, entscheidet der Quellentyp:
+     public/js/sources/fields.js#fieldsForType. -->
+<div class="sources-form" x-show="srcEditingId !== null" x-cloak>
+  <div class="sources-form-head">
+    <span class="sources-form-title"
+          x-text="srcEditingId === 'new' ? $app.t('sources.form.newTitle') : $app.t('sources.form.editTitle')"></span>
+    <button type="button" class="icon-btn icon-btn--ghost" @click="cancelSourceEdit()"
+            :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#x"/></svg></button>
+  </div>
+
+  <div class="card-form-grid">
+    <div class="card-form-row">
+      <label class="card-form-label" x-text="$app.t('sources.field.cslType')"></label>
+      <div class="card-form-field">
+        <div x-data="combobox({ placeholder: $app.t('sources.field.cslType'), compact: false })"
+             x-modelable="value" x-model="srcDraft.csl_type"
+             x-effect="options = sourceTypeOptions()"></div>
+        <p class="card-form-field-note" x-text="$app.t('sources.field.cslType.hint')"></p>
+      </div>
+    </div>
+
+    <!-- Urheber + Herausgeber. Eine Zeile trägt entweder Nachname/Vorname ODER
+         eine Körperschaft; `literal` gefüllt gewinnt (siehe fields.js). -->
+    <template x-for="kind in ['authors', 'editors']" :key="kind">
+      <div class="card-form-row card-form-row--top">
+        <label class="card-form-label"
+               x-text="$app.t(kind === 'authors' ? 'sources.field.authors' : 'sources.field.editors')"></label>
+        <div class="pub-repeater">
+          <template x-for="(p, i) in srcDraft[kind]" :key="i">
+            <div class="pub-repeater-row sources-person-row">
+              <input type="text" x-model="p.family" :placeholder="$app.t('sources.person.family')"
+                     :aria-label="$app.t('sources.person.family')" maxlength="200" :disabled="!!p.literal">
+              <input type="text" x-model="p.given" :placeholder="$app.t('sources.person.given')"
+                     :aria-label="$app.t('sources.person.given')" maxlength="200" :disabled="!!p.literal">
+              <input type="text" x-model="p.literal" :placeholder="$app.t('sources.person.literal')"
+                     :aria-label="$app.t('sources.person.literal')" maxlength="200">
+              <button type="button" class="btn-compact danger" @click="removeSourcePerson(kind, i)"
+                      :aria-label="$app.t('common.remove')" x-text="$app.t('common.remove')"></button>
+            </div>
+          </template>
+          <button type="button" class="btn-compact" @click="addSourcePerson(kind)">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#plus"/></svg>
+            <span x-text="$app.t('sources.person.add')"></span>
+          </button>
+          <p class="card-form-hint" x-show="kind === 'authors'" x-text="$app.t('sources.person.hint')"></p>
+        </div>
+      </div>
+    </template>
+
+    <!-- Typabhängige Freitext-Felder -->
+    <template x-for="f in srcVisibleFields()" :key="f.key">
+      <div class="card-form-row">
+        <label class="card-form-label" x-text="$app.t(f.labelKey)"></label>
+        <div class="card-form-field">
+          <!-- Zwei x-if-Varianten statt eines Inputs mit `:data-spellcheck`:
+               der Spellcheck-Dispatcher greift Felder über einen statischen
+               Attribut-Selektor (MutationObserver beim Einhängen + focusin) —
+               ein reaktiv umgeschaltetes Attribut würde er beim Typwechsel nicht
+               mitbekommen und einen Controller auf einem Nicht-Prosafeld
+               stehenlassen. `f.spell` ist pro Feld-Key konstant, die beiden
+               Zweige flippen also nie für denselben Knoten. -->
+          <template x-if="f.spell">
+            <input type="text" class="card-form-input" x-model="srcDraft[f.key]"
+                   :aria-label="$app.t(f.labelKey)" maxlength="500" data-spellcheck="spelling">
+          </template>
+          <template x-if="!f.spell">
+            <input type="text" class="card-form-input" x-model="srcDraft[f.key]"
+                   :aria-label="$app.t(f.labelKey)" maxlength="500"
+                   :placeholder="f.key === 'accessed_at' ? $app.t('sources.field.accessedAt.ph') : ''">
+          </template>
+        </div>
+      </div>
+    </template>
+
+    <p class="card-form-section-divider" x-text="$app.t('sources.form.adminSection')"></p>
+
+    <div class="card-form-row">
+      <label class="card-form-label" x-text="$app.t('sources.field.citekey')"></label>
+      <div class="card-form-field">
+        <input type="text" class="card-form-input" x-model="srcDraft.citekey"
+               :aria-label="$app.t('sources.field.citekey')" maxlength="500">
+        <p class="card-form-field-note" x-text="$app.t('sources.field.citekey.hint')"></p>
+      </div>
+    </div>
+
+    <div class="card-form-row card-form-row--top">
+      <label class="card-form-label" x-text="$app.t('sources.field.note')"></label>
+      <div class="card-form-field">
+        <textarea class="card-form-textarea" x-model="srcDraft.note" rows="3" maxlength="4000"
+                  :aria-label="$app.t('sources.field.note')" data-spellcheck="spelling"></textarea>
+        <p class="card-form-field-note" x-text="$app.t('sources.field.note.hint')"></p>
+      </div>
+    </div>
+
+    <div class="card-form-row">
+      <label class="card-form-label" x-text="$app.t('sources.field.status')"></label>
+      <div class="form-stack">
+        <label class="form-check">
+          <input type="checkbox" x-model="srcDraft.archived">
+          <span>
+            <span class="form-check-title" x-text="$app.t('sources.archived')"></span>
+            <span class="form-check-desc" x-text="$app.t('sources.archived.desc')"></span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="card-form-row card-form-row--top">
+      <label class="card-form-label" x-text="$app.t('sources.preview')"></label>
+      <div class="card-form-field">
+        <p class="sources-preview" x-text="srcPreview()"></p>
+        <p class="card-form-field-note" x-text="$app.t('sources.preview.hint')"></p>
+      </div>
+    </div>
+  </div>
+
+  <p class="card-form-error" x-show="srcFormError" x-cloak x-text="srcFormError"></p>
+  <p class="card-form-hint" x-show="!srcCanSave() && !srcFormError" x-cloak x-text="$app.t('sources.form.identityHint')"></p>
+
+  <div class="sources-form-actions">
+    <button type="button" class="primary" @click="saveSource()" :disabled="!srcCanSave()">
+      <span x-show="sourcesBusy" class="spinner"></span>
+      <span x-text="sourcesBusy ? $app.t('common.saving') : $app.t('common.save')"></span>
+    </button>
+    <button type="button" @click="cancelSourceEdit()" x-text="$app.t('common.cancel')"></button>
+  </div>
+</div>

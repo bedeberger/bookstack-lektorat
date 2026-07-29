@@ -11,6 +11,10 @@
 
 const DE = {
   lang: 'de',
+  // Ueberschrift des Verzeichnisses, wenn book_settings.bibliography_title leer
+  // ist (lib/bibliography.js). Steht hier und nicht in i18n/*.json, weil sie im
+  // gerenderten Dokument landet — siehe Modulkopf.
+  bibliographyTitle: 'Quellenverzeichnis',
   noYear: 'o. J.',
   noTitle: '[ohne Titel]',
   // Ein/mehrere Herausgeber — APA klammert das hinter die Namen.
@@ -33,6 +37,7 @@ const DE = {
 
 const EN = {
   lang: 'en',
+  bibliographyTitle: 'Sources',
   noYear: 'n.d.',
   noTitle: '[untitled]',
   editorSuffix1: 'Ed.',

@@ -21,6 +21,7 @@
   .card--ideen            { --card-accent: var(--card-accent-ideen); }
   .card--erzaehlprofil    { --card-accent: var(--card-accent-erzaehlprofil); }
   .card--recherche        { --card-accent: var(--card-accent-recherche); }
+  .card--sources          { --card-accent: var(--card-accent-sources); }
   .card--finetune         { --card-accent: var(--card-accent-finetune); }
   .card--snapshots        { --card-accent: var(--card-accent-snapshots); }
   .card--pdfexport        { --card-accent: var(--card-accent-pdfexport); }

@@ -1,0 +1,287 @@
+/* Quellenverzeichnis — kuratierte Quellen + Fund-Index („n× zitiert").
+   Akzentfarbe via var(--card-accent) (Mapping in card-accents.css).
+   Die Vorschau-Zeile `.sources-preview` wird auch im Quellen-Tab der
+   Bucheinstellungen benutzt (dieselbe Formatter-Ausgabe, gleiche Optik). */
+
+.sources-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+.sources-toolbar .btn-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.sources-toolbar .btn-compact .icon { width: 1em; height: 1em; }
+
+.sources-filter-bar { flex: 1; }
+
+/* Suchfeld auf Compact-Höhe zwingen: ohne den Scope gewinnt die generische
+   `input[type=text]`-Regel (card-form.css, Spezifität 0,1,1) über die nackte
+   `.filter-search-input`-Klasse (0,1,0) und das Feld rendert in Default-Grösse,
+   höher als Combobox und Archiv-Schalter daneben. Vier Werte müssen mit den
+   Nachbarn übereinstimmen: font-size, vertikales Padding, Border, line-height. */
+.sources-filter-bar .filter-search-input {
+  font-size: var(--font-size-mini);
+  line-height: 1.4;
+  padding: var(--space-xs) 8px;
+  padding-right: 26px;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  min-width: 12rem;
+  flex: 1;
+}
+
+.sources-archive-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-mini);
+  line-height: 1.4;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+/* Refetch bei bereits geladener Liste: Tabelle bleibt stehen, wird nur gedimmt
+   und klick-inert — kein Skeleton-Swap, der bei jedem Reload flackert. */
+.sources-table-wrap.is-refreshing {
+  opacity: var(--opacity-disabled);
+  pointer-events: none;
+}
+
+/* ── Tabelle ──────────────────────────────────────────────────────────────── */
+
+.sources-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.sources-table th,
+.sources-table td {
+  padding: var(--space-xs) var(--space-sm);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 0.5px solid var(--color-border);
+}
+.sources-table tbody tr:hover { background: var(--color-tag-bg); }
+
+.sources-row--archived { opacity: var(--opacity-hint); }
+.sources-row--active { box-shadow: inset 3px 0 0 var(--card-accent); }
+
+.sources-cell-author { white-space: nowrap; }
+
+.sources-cell-title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 14rem;
+}
+.sources-title { font-weight: 600; }
+.sources-container {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+  font-style: italic;
+}
+.sources-archived-badge { align-self: flex-start; }
+
+/* Zitier-Badge in der Tabelle. Unzitiert bleibt bewusst neutral-grau statt rot:
+   eine noch nicht belegte Quelle ist kein Fehler, sondern ein Vorrat. */
+.sources-cite-badge {
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: var(--font-size-mini);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sources-cite-badge--cited { --badge-hue: var(--card-accent); }
+.sources-cite-badge--uncited {
+  --badge-hue: var(--palette-gray);
+  cursor: default;
+}
+
+.sources-row-actions {
+  display: flex;
+  gap: var(--space-6);
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+/* ── Formular ─────────────────────────────────────────────────────────────── */
+
+.sources-form {
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--card-accent);
+  border-radius: var(--radius-md);
+  background: var(--color-card-bg);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.sources-form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+.sources-form-title {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.sources-person-row input { min-width: 6rem; }
+
+.sources-form-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+/* Verzeichniseintrag-Vorschau: Klartext des Formatters, hängend eingerückt wie
+   im gedruckten Literaturverzeichnis. */
+.sources-preview {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  background: var(--color-tag-bg);
+  padding-left: calc(var(--space-sm) + 1.5em);
+  text-indent: -1.5em;
+  min-height: 1.5em;
+}
+
+/* ── Fundstellen-Panel ────────────────────────────────────────────────────── */
+
+.sources-citations {
+  margin-top: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--card-accent);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.sources-citations-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
+}
+.sources-citations-head .icon { width: 1em; height: 1em; }
+.sources-citations-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.sources-citation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+.sources-citation {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.sources-citation-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font-size: var(--font-size-sm);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.sources-citation-link:hover .sources-citation-page { text-decoration: underline; }
+.sources-citation-count {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Bibliotheks-Picker ───────────────────────────────────────────────────── */
+/* Gleiche Panel-Form wie das Fundstellen-Panel (gerahmt, Akzentkante links) —
+   beide sind Aufklapp-Bereiche der Karte, nur mit anderem Inhalt. */
+
+.sources-picker {
+  margin: var(--space-md) 0;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--card-accent);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.sources-picker-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
+  flex-wrap: wrap;
+}
+.sources-picker-head .icon { width: 1em; height: 1em; }
+.sources-picker-title {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+.sources-picker-search { flex: 1; min-width: 8rem; }
+
+.sources-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-height: 22rem;
+  overflow-y: auto;
+}
+.sources-picker-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-6) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.sources-picker-item:last-child { border-bottom: none; }
+
+.sources-picker-entry {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sources-picker-author {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+}
+.sources-picker-entry-title { font-weight: 600; }
+.sources-picker-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+}
+.sources-picker-books { font-variant-numeric: tabular-nums; }
+
+/* Mobile: Urheber darf umbrechen, Aktionsspalte rutscht unter den Titel. */
+@media (max-width: 600px) {
+  .sources-cell-author { white-space: normal; }
+  .sources-table th,
+  .sources-table td { padding: var(--space-xs) var(--space-6); }
+  .sources-toolbar .btn-compact { width: 100%; justify-content: center; }
+  .sources-picker-item { flex-direction: column; align-items: stretch; }
+  .sources-picker-item .btn-compact { width: 100%; justify-content: center; }
+}

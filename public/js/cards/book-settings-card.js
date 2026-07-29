@@ -3,6 +3,7 @@
 // im Root. Daten werden beim Öffnen / Buchwechsel nachgeladen.
 
 import { bookSettingsMethods } from '../book/book-settings.js';
+import { CITATION_DEFAULTS } from '../book/book-settings/citation.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { EVT } from '../events.js';
 
@@ -55,6 +56,14 @@ export function registerBookSettingsCard() {
     bookSettingsZeitlinieReal: false,
     bookSettingsWeltfaktenRealPruefen: false,
     bookSettingsExcludeFromStats: false,
+    // Quellen-Tab (Zitierstil + Quellenverzeichnis). Eigener Schreibpfad
+    // /booksettings/:id/citation — siehe book/book-settings/citation.js.
+    bookCitation: { ...CITATION_DEFAULTS },
+    bookCitationLoaded: false,
+    citationSaving: false,
+    citationSaved: false,
+    citationError: '',
+    _citationSavedTimer: null,
     // Sharing: Access-Liste + Invite-Form.
     bookAccessList: [],
     bookAccessLoading: false,
@@ -132,7 +141,12 @@ export function registerBookSettingsCard() {
         showFlag: 'showBookSettingsCard',
         onShow: () => Promise.all([this.loadBookSettings(), this.loadBookJobStats(), this.loadBookAccess(), this.loadBookCategory(), this.loadBlogStatus(), this.loadHubspotStatus(), this.loadPublication()]),
         load: () => Promise.all([this.loadBookSettings(), this.loadBookJobStats(), this.loadBookAccess(), this.loadBookCategory(), this.loadBlogStatus(), this.loadHubspotStatus(), this.loadPublication()]),
-        resetState: {
+        // Factory, nicht Objekt-Literal: der Reset enthält Objekte, die danach
+        // per x-model in-place mutiert werden (blogForm, hubspotForm,
+        // bookPublication, bookCitation). Ein einmalig gebautes Literal würde
+        // seine Referenzen mit dem Live-State teilen und beim nächsten
+        // Buchwechsel die Eingaben des letzten Buchs wieder einschleppen.
+        resetState: () => ({
           bookSettingsTab: 'book',
           bookSettingsStilprofil: '',
           stilprofilGenerating: false,
@@ -174,7 +188,10 @@ export function registerBookSettingsCard() {
           pubError: '',
           pubCoverError: '',
           pubAuthorError: '',
-        },
+          bookCitation: { ...CITATION_DEFAULTS },
+          bookCitationLoaded: false,
+          citationError: '',
+        }),
         resetStateView: {
           bookSettingsSaved: false,
           bookSettingsError: '',
@@ -190,6 +207,7 @@ export function registerBookSettingsCard() {
           blogError: '',
           hubspotMessage: '',
           hubspotError: '',
+          citationError: '',
         },
       });
 
@@ -247,6 +265,7 @@ export function registerBookSettingsCard() {
       if (this._staleMsgTimer) { clearTimeout(this._staleMsgTimer); this._staleMsgTimer = null; }
       if (this._shareInviteMsgTimer) { clearTimeout(this._shareInviteMsgTimer); this._shareInviteMsgTimer = null; }
       if (this._pubSavedTimer) { clearTimeout(this._pubSavedTimer); this._pubSavedTimer = null; }
+      if (this._citationSavedTimer) { clearTimeout(this._citationSavedTimer); this._citationSavedTimer = null; }
       if (this._onBlogJobFinished) {
         window.removeEventListener(EVT.JOB_FINISHED, this._onBlogJobFinished);
         this._onBlogJobFinished = null;

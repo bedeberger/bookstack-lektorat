@@ -5,7 +5,7 @@
             { key: 'runningHead', roles: ['header','footer'] },
             { key: 'titlePages', roles: ['title','subtitle','byline','dedication','frontMatter','year'] },
             { key: 'toc',        roles: ['tocTitle','toc'] },
-            { key: 'backmatter', roles: ['authorBio'] },
+            { key: 'backmatter', roles: ['authorBio','bibliography'] },
             { key: 'imprint',    roles: ['imprint'] }
           ]" :key="group.key">
           <div class="pdfx-font-group">
@@ -124,7 +124,7 @@
                     </div>
                   </div>
 
-                  <template x-if="['dedication','frontMatter','authorBio','imprint','year'].includes(role)">
+                  <template x-if="['dedication','frontMatter','authorBio','bibliography','imprint','year'].includes(role)">
                     <div class="card-form-row">
                       <label class="card-form-label">&nbsp;</label>
                       <div class="card-form-field">

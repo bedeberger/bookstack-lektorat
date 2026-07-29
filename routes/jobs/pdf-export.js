@@ -28,6 +28,7 @@ const { loadContents } = require('../../lib/load-contents');
 const { getSnapshot } = require('../../db/book-snapshots');
 const { snapshotToBundle, snapshotPublication } = require('../../lib/snapshot-export');
 const { renderPdfBuffer } = require('../../lib/pdf-render');
+const { buildBibliography, pageIdsFromGroups } = require('../../lib/bibliography');
 const { renderCoverBuffer, computeSpineMm } = require('../../lib/pdf-cover-render');
 const { validatePdfa } = require('../../lib/pdfa-validate');
 const { convertToPdfX } = require('../../lib/pdfx-convert');
@@ -151,12 +152,21 @@ async function runPdfExportJob(jobId, { scope, entityId, profileId, includeSubch
       const coverBuf = (scope === 'book' && profile.config.cover.enabled) ? pubCoverBuf : null;
       const authorImageBuf = (scope === 'book') ? pubAuthorBuf : null;
 
+      // Quellenverzeichnis + Kurzbeleg-Kontext der gerenderten Einheit. Nummern
+      // im numerischen Stil folgen der Einheit: ganzes Buch → Buch-Leserichtung,
+      // Kapitel-/Seiten-Scope → nur deren Fundstellen ab 1 (lib/bibliography.js).
+      const bibliography = await buildBibliography({
+        bookId: book.id,
+        pageIds: scope === 'book' ? null : pageIdsFromGroups(groups),
+        userEmail,
+      });
+
       updateJob(jobId, { progress: 40, statusText: 'job.phase.renderPdf' });
       const meta = {};
       buffer = await renderPdfBuffer({
         book, groups, profile,
         coverBuf, authorImageBuf, token: userToken, lang: bookLang,
-        scope, chapter, page, meta,
+        scope, chapter, page, meta, bibliography,
       });
       lowResImages = Array.isArray(meta.dpiWarnings) ? meta.dpiWarnings.length : 0;
       interiorPages = Number.isInteger(meta.totalPages) ? meta.totalPages : null;

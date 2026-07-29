@@ -192,6 +192,8 @@
   --card-accent-ideen: var(--card-accent-ideen-base);
   --card-accent-recherche-base: #1f7a73;
   --card-accent-recherche: var(--card-accent-recherche-base);
+  --card-accent-sources-base: #7a6a2f;
+  --card-accent-sources: var(--card-accent-sources-base);
   --card-accent-finetune-base: #5a5a5a;
   --card-accent-finetune: var(--card-accent-finetune-base);
   --card-accent-snapshots-base: #3f6f7a;
@@ -439,6 +441,7 @@
   --card-accent-chat: oklch(from var(--card-accent-chat-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-ideen: oklch(from var(--card-accent-ideen-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-recherche: oklch(from var(--card-accent-recherche-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
+  --card-accent-sources: oklch(from var(--card-accent-sources-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-finetune: oklch(from var(--card-accent-finetune-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-snapshots: oklch(from var(--card-accent-snapshots-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-pdfexport: oklch(from var(--card-accent-pdfexport-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);

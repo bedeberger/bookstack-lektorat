@@ -23,6 +23,7 @@ const { loadContents } = require('../../lib/load-contents');
 const { getSnapshot } = require('../../db/book-snapshots');
 const { snapshotToBundle } = require('../../lib/snapshot-export');
 const { buildDocxProfile, DOCX_MIME } = require('../../lib/export-builders/docx');
+const { buildBibliography, pageIdsFromGroups } = require('../../lib/bibliography');
 const { buildExportFilename } = require('../../lib/filenames');
 const { resolveSlug } = require('../../lib/export-builders/shared');
 const { toIntId } = require('../../lib/validate');
@@ -78,8 +79,15 @@ async function runDocxExportJob(jobId, { scope, entityId, profileId, includeSubc
 
     updateJob(jobId, { progress: 50, statusText: 'job.phase.renderDocx' });
     const lang = (book?.id ? getBookSettings(book.id)?.language : null) || 'de';
-    const opts = { lang, config: profile.config };
+    const opts = { lang, config: profile.config, scope };
     if (book?.id) {
+      // Quellenverzeichnis + Kurzbeleg-Kontext der gerenderten Einheit
+      // (lib/bibliography.js). Nummern im numerischen Stil folgen der Einheit.
+      opts.bibliography = await buildBibliography({
+        bookId: book.id,
+        pageIds: scope === 'book' ? null : pageIdsFromGroups(bundle.groups),
+        userEmail,
+      });
       const meta = bp.getMeta(book.id);
       opts.meta = meta;
       // Publikationsname (book_publication.author_name) uebersteuert den Account-Namen.
