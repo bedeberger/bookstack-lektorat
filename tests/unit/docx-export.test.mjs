@@ -163,3 +163,56 @@ test('builder: Verzeichnis nur bei scope=book, Chips werden trotzdem aufgelöst'
   assert.ok(doc.includes('[1, S. 44]'));
   assert.equal(doc.includes('(Kafka, 1915, S. 44)'), false);
 });
+
+// ── Anmerkungsapparat (citation_notes='endnotes') ────────────────────────────
+// Word war der einzige Ausgabeweg, der die Buch-Einstellung ignoriert und
+// stattdessen die Klammerform gesetzt hat — PDF, HTML, MD, TXT und EPUB folgen
+// ihr. Ein Autor in Geschichte/Jura/Theologie haette in der Abgabedatei eine
+// andere Belegform gehabt als im Korrekturausdruck, ohne Hinweis.
+const notesBundle = {
+  ...bundle,
+  scope: 'book',
+  groups: [{ chapterId: 10, chapter: { id: 10, name: 'Verhaftung', parent_chapter_id: null }, pages: [
+    { p: { id: 1, name: 'Szene 1' }, pd: {
+      html: '<p>Satz <span class="cite" data-src="7" data-loc="44">(Kafka, 1915, S. 44)</span> Ende.</p>',
+    } },
+  ] }],
+};
+
+async function buildNotesXml(notesMode) {
+  const buf = await buildDocxProfile(notesBundle, {
+    author: 'Franz Kafka', lang: 'de', meta, config: defaultConfig(),
+    bibliography: { ...bibFixture, notesMode, notesTitle: 'Anmerkungen' },
+  });
+  const zip = await JSZip.loadAsync(buf);
+  return {
+    doc: await zip.file('word/document.xml').async('string'),
+    styles: await zip.file('word/styles.xml').async('string'),
+  };
+}
+
+test('builder: notesMode=endnotes setzt Notenziffer + Apparat statt Klammerform', async () => {
+  const { doc, styles } = await buildNotesXml('endnotes');
+
+  // Hochgestellte Notenziffer statt Kurzbeleg im Fliesstext.
+  assert.match(doc, /vertAlign[^>]*superscript/i);
+  assert.equal(doc.includes('[1, S. 44]'), false);
+  assert.equal(doc.includes('(Kafka, 1915, S. 44)'), false);
+
+  // Apparat am Kapitelende, mit eigenem benannten Style (in Word unabhaengig
+  // vom Verzeichnis umformatierbar) und haengendem Einzug.
+  assert.ok(doc.includes('Anmerkungen'));
+  assert.ok(doc.includes('w:pStyle w:val="Endnotes"'));
+  assert.ok(styles.includes('w:styleId="Endnotes"'));
+  assert.match(styles, /w:styleId="Endnotes"[\s\S]{0,400}w:hanging/);
+
+  // Verzeichnis bleibt zusaetzlich erhalten — Apparat ersetzt es nicht.
+  assert.ok(doc.includes('w:pStyle w:val="Bibliography"'));
+});
+
+test('builder: notesMode=inline bleibt bei der Klammerform, ohne Apparat', async () => {
+  const { doc } = await buildNotesXml('inline');
+  assert.ok(doc.includes('[1, S. 44]'));
+  assert.equal(doc.includes('w:pStyle w:val="Endnotes"'), false);
+  assert.equal(doc.includes('Anmerkungen'), false);
+});

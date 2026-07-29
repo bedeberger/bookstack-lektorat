@@ -17,7 +17,7 @@
       <div class="card-actions card-actions--grouped">
         <span class="card-form-saved" x-show="sourcesSaved" x-cloak x-transition.opacity.duration.250ms
               x-text="$app.t('common.settingsSaved')"></span>
-        <button type="button" class="icon-btn icon-btn--ghost" @click="$app.toggleSourcesCard()"
+        <button type="button" class="icon-btn icon-btn--ghost" @click="$app.closeCard('sources')"
                 :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#x"/></svg></button>
       </div>
     </div>

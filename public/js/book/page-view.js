@@ -5,6 +5,7 @@ import { escHtml, htmlToText, fetchJson, findInHtml, decorateMentions } from '..
 import { handleEditorCopy } from '../editor/shared/paste.js';
 import { isPageConflict, savePage } from '../editor/shared/page-api.js';
 import { setTodoCheckedAt, todoBoxIndex } from '../editor/shared/todo-html.js';
+import { closestCiteEl } from '../sources/cite-html.js';
 import { contentRepo } from '../repo/content.js';
 import { tRaw } from '../i18n.js';
 import { _sanitizeFigur } from './figuren.js';
@@ -349,6 +350,10 @@ export const pageViewMethods = {
   /** Click-Handler für Inline-Marks → togglet Selektion. Links → neuer Tab. */
   handleMarkClick(e) {
     if (this._handleViewTodoClick(e)) return;
+    // Beleg-Chip: gehört dem Quellen-Popover (cards/editor-entities-card.js).
+    // Liegt der Chip innerhalb eines Lektorat-Marks, würde derselbe Klick sonst
+    // zusätzlich das Finding auf-/zuklappen.
+    if (closestCiteEl(e.target, e.currentTarget)) return;
     const link = e.target.closest('a[href]');
     if (link && !link.classList.contains('lektorat-mark')) {
       const href = link.getAttribute('href');

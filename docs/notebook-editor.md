@@ -318,6 +318,16 @@ Code: pure Helpers + CSS-Highlight-API in [public/js/editor/notebook/entities.js
 
 **Tests:** [entities-highlight.test.mjs](../tests/unit/entities-highlight.test.mjs) (`buildRanges`: Wortgrenzen, Case, Overlap, Figur/Ort-Kollision), [entities-panel-filter.test.mjs](../tests/unit/entities-panel-filter.test.mjs) (`selectScenesForView` / `selectEventsForView`), [entities-save-invariant.test.mjs](../tests/unit/entities-save-invariant.test.mjs) (kein Highlight-Markup im Save-Output).
 
+### Quellen-Popover in der Leseansicht (dieselbe Sub-Karte, eigener Pfad)
+
+Klick auf einen Beleg-Chip (`span.cite[data-src]`) in der **Leseansicht** öffnet dasselbe `.entity-popover` mit `kind: 'source'` — read-only: voller Verzeichniseintrag im Zitierstil des Buchs, Stellenangabe, „vgl."-Marke, Belegzahl, DOI/URL, Weg ins Quellenverzeichnis (`#book/<id>/quellen/<sourceId>`). Anzeigemodell pure in [sources/cite-popover.js](../public/js/sources/cite-popover.js), Klick-Pfad + `openSourcePopoverForChip` in der Sub-Karte, Quellenliste geteilt über [sources/source-cache.js](../public/js/sources/source-cache.js). Details: [docs/quellen.md](quellen.md).
+
+Vier Abgrenzungen, die keine Schicht verwischen darf:
+1. **Nicht am Entity-Toggle.** `entities_enabled` schaltet die Figuren-/Orte-Hervorhebung; ein Quellennachweis steht unabhängig davon im Text. Der Chip-Pfad prüft das Flag deshalb nicht.
+2. **Lesen vs. Ändern.** Im **Edit-Modus** gehört der Chip-Klick dem Beleg-Picker ([cards/editor-toolbar-card.js](../public/js/cards/editor-toolbar-card.js)); der Lese-Pfad grenzt über `editMode`/`focusActive` ab. Zwei Pfade, ein Chip — nie beide gleichzeitig.
+3. **`handleMarkClick` lässt Chips liegen.** Sonst klappt derselbe Klick zusätzlich ein Lektorat-Finding auf, wenn der Chip in einem Mark steht (Guard in [book/page-view.js](../public/js/book/page-view.js)).
+4. **Der mousedown-Outside-Close lässt Chips durch** — räumt er den Anker vorher weg, öffnet der zweite Klick auf denselben Chip neu statt zu schliessen.
+
 ## Shared-Lib `public/js/editor/shared/`
 
 Beide Editoren (Notebook + Focus) konsumieren ausschliesslich aus `shared/`:

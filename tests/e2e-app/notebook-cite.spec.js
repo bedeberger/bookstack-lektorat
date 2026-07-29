@@ -405,3 +405,68 @@ test('Chip erscheint in der Leseansicht', async ({ page }) => {
   }, srcId);
   expect(inView).toBe(1);
 });
+
+test('Klick auf einen Chip in der Leseansicht schlägt die Quelle nach (und schliesst wieder)', async ({ page }) => {
+  // Der Voll-Eintrag im Popover kommt aus der QUELLE, nicht aus dem Chip-Text:
+  // der Chip trägt bewusst einen veralteten Kurzbeleg („Alt, 1900"), das Popover
+  // muss trotzdem den aktuellen Stand zeigen (Text ist Cache, `data-src` ist die
+  // Wahrheit).
+  await boot(page);
+  const srcId = await createSource(page, 'Popover-Probe');
+  await openPageInEdit(page, 2);
+  await appendAndSave(page,
+    `<p id="popover-probe">Belegt <span class="cite" data-src="${srcId}" data-loc="44">(Alt, 1900, S. 44)</span></p>`);
+
+  const chip = page.locator(`#editor-card .page-content-view:not(.page-content-view--editing) #popover-probe span.cite[data-src="${srcId}"]`);
+  await expect(chip).toHaveCount(1);
+  await chip.click();
+
+  const popover = page.locator('.entity-popover.entity-popover--source');
+  await expect(popover).toBeVisible();
+  await expect(popover.locator('.entity-popover-name')).toHaveText('Kafka, Franz');
+  // Voll-Eintrag im Zitierstil des Buchs, nicht der Chip-Text.
+  await expect(popover.locator('.entity-popover-entry')).toContainText('Popover-Probe');
+  await expect(popover.locator('.entity-popover-entry')).toContainText('1915');
+  // Stellenangabe wird qualifiziert („44" → „S. 44").
+  await expect(popover.locator('.entity-popover-tag:visible').first()).toHaveText('S. 44');
+  // Genau eine sichtbare Aktion: ohne DOI/URL bleibt der Weg ins Verzeichnis.
+  // (Die Aktionen der anderen `kind`-Varianten stehen im selben DOM, x-show-aus.)
+  await expect(popover.locator('.entity-popover-link:visible')).toHaveCount(1);
+
+  // Erneuter Klick auf denselben Chip schliesst (Toggle) — der mousedown-
+  // Outside-Close darf den Anker vorher nicht wegräumen.
+  await chip.click();
+  await expect(popover).toBeHidden();
+
+  // Der Klick bleibt beim Nachschlagen: keine Edit-Session, kein Picker.
+  const state = await page.evaluate(() => ({
+    editMode: window.__app.editMode,
+    picker: window.Alpine.$data(document.querySelector('[x-data="editorToolbarCard"]')).citeShow,
+  }));
+  expect(state.editMode).toBe(false);
+  expect(state.picker).toBe(false);
+});
+
+test('Leseansicht: Chip einer aus dem Buch entfernten Quelle sagt es statt leer aufzugehen', async ({ page }) => {
+  await boot(page);
+  const srcId = await createSource(page, 'Verwaiste Probe');
+  await openPageInEdit(page, 3);
+  await appendAndSave(page,
+    `<p id="orphan-probe">Verwaist <span class="cite" data-src="${srcId}">(Kafka, 1915)</span></p>`);
+
+  // Quelle aus dem Buch entfernen (Pool-Eintrag bleibt) — der Marker steht noch
+  // im Text. Der Cache des Popovers hängt an `sources:changed`, das der Unlink-
+  // Pfad der Karte dispatcht; hier direkt, weil der Test die Route ruft.
+  await page.evaluate(async (id) => {
+    const bookId = window.Alpine.store('nav').selectedBookId;
+    await fetch(`/sources/${id}/link?book_id=${bookId}`, { method: 'DELETE' });
+    window.dispatchEvent(new CustomEvent('sources:changed', { detail: { bookId } }));
+  }, srcId);
+
+  await page.locator(`#editor-card .page-content-view:not(.page-content-view--editing) #orphan-probe span.cite[data-src="${srcId}"]`).click();
+  const popover = page.locator('.entity-popover.entity-popover--source');
+  await expect(popover).toBeVisible();
+  await expect(popover.locator('.entity-popover-hint:visible')).toHaveCount(1);
+  // Kein Weg ins Verzeichnis, wo die Quelle für dieses Buch nicht steht.
+  await expect(popover.locator('.entity-popover-link:visible')).toHaveCount(0);
+});

@@ -396,6 +396,13 @@ router.get('/:id', (req, res) => {
 // Namen kommen per JOIN zur Lesezeit (keine Snapshot-Spalten im Index).
 // `book_id` grenzt auf ein Buch ein — die Quellen-Karte ist buchweit, und die
 // Fundstellen aus einer anderen Arbeit gehoeren dort nicht in die Liste.
+//
+// OHNE `book_id` ist die Antwort buch-UEBERGREIFEND und darum nur fuer den
+// Besitzer der Quelle. `_canRead` reicht hier NICHT: es laesst jeden durch, der
+// auf IRGENDEINEM verknuepften Buch Viewer ist — ein Mitarbeiter am geteilten
+// Blog bekaeme damit Seiten- und Kapitelnamen aus der privaten Dissertation,
+// sobald dort dieselbe Quelle haengt. Gleiche Begruendung und gleiche Schranke
+// wie bei GET /:id/books darunter.
 router.get('/:id/citations', (req, res) => {
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
@@ -405,8 +412,8 @@ router.get('/:id/citations', (req, res) => {
   const bookId = toIntId(req.query.book_id);
   if (bookId) {
     if (!_guard(req, res, bookId, 'viewer')) return;
-  } else if (!_canRead(req, src)) {
-    return res.status(403).json({ error_code: 'NO_BOOK_ACCESS' });
+  } else if (!_isOwner(req, src)) {
+    return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
   }
 
   const rows = db.prepare(`

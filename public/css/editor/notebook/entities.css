@@ -48,6 +48,9 @@
   .entity-popover--location::before { background: var(--color-accent-location); }
   .entity-popover--scene::before    { background: var(--card-accent-szenen); }
   .entity-popover--event::before    { background: var(--card-accent-ereignisse); }
+  /* Beleg-Chip in der Leseansicht: Akzent der Quellen-Karte, damit Popover und
+     Quellenverzeichnis erkennbar dasselbe Thema sind. */
+  .entity-popover--source::before   { background: var(--card-accent-sources); }
 
   /* Card haelt Head/Footer fixiert, der Body skrollt. Ohne max-height: inherit
      wuerde die Card unbegrenzt wachsen und den Body-Overflow-Auto entwerten;
@@ -99,6 +102,11 @@
     color: var(--card-accent-ereignisse);
   }
 
+  .entity-popover--source .entity-popover-avatar {
+    background: color-mix(in srgb, var(--card-accent-sources) 22%, var(--color-neutral-bg));
+    color: var(--card-accent-sources);
+  }
+
   .entity-popover-headtext {
     flex: 1 1 auto;
     min-width: 0;
@@ -145,6 +153,11 @@
   .entity-popover--event .entity-popover-kind {
     background: color-mix(in srgb, var(--card-accent-ereignisse) 18%, transparent);
     color: var(--card-accent-ereignisse);
+  }
+
+  .entity-popover--source .entity-popover-kind {
+    background: color-mix(in srgb, var(--card-accent-sources) 18%, transparent);
+    color: var(--card-accent-sources);
   }
 
   .entity-popover-tag {
@@ -195,6 +208,23 @@
     color: var(--color-text);
   }
 
+  /* Voller Verzeichniseintrag des Belegs: haengender Einzug wie im
+     Quellenverzeichnis — die Folgezeilen ruecken ein, damit der Urheber am
+     Anfang steht und der Eintrag als Literaturangabe lesbar ist. */
+  .entity-popover-entry {
+    padding-left: var(--space-md);
+    text-indent: calc(-1 * var(--space-md));
+  }
+
+  /* Erklaerender Nebensatz statt Inhalt (verwaister Quellen-Zeiger, Ladefehler).
+     Leiser als .entity-popover-desc — er sagt, warum hier nichts steht. */
+  .entity-popover-hint {
+    margin: 0;
+    line-height: 1.45;
+    font-size: 0.92em;
+    color: var(--color-muted);
+  }
+
   .entity-popover-meta-grid {
     margin: 0;
     display: grid;
@@ -226,11 +256,19 @@
     flex: 0 0 auto;
     display: flex;
     justify-content: flex-end;
+    /* Beim Beleg stehen zwei Aktionen an (externer Zeiger + Verzeichnis). Passen
+       sie nicht in eine Zeile, bricht die zweite um — die Beschriftung selbst
+       bleibt einzeilig (siehe .entity-popover-link), sonst rutscht das Icon vom
+       Text weg. */
+    flex-wrap: wrap;
+    gap: var(--space-xs);
     padding: var(--space-sm) var(--space-md) var(--space-10);
     border-top: 1px solid var(--color-border);
     background: var(--color-neutral-bg);
   }
 
+  /* Gilt fuer <button> UND <a> (externer DOI-/URL-Zeiger des Belegs) — beide
+     sehen im Footer gleich aus, darum hier kein Unterstrich. */
   .entity-popover-link {
     display: inline-flex;
     align-items: center;
@@ -243,6 +281,8 @@
     padding: var(--space-xs) var(--space-6);
     border-radius: var(--radius-sm);
     font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
   }
 
   .entity-popover-link .icon {

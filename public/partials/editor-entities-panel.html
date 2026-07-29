@@ -10,10 +10,11 @@
        reference.html). Hier bleibt nur der Popover, den die Inline-Highlights
        im contenteditable per Klick öffnen. -->
 
-  <!-- Popover (teleport): wird von Highlight-Klicks im Editor befuellt. Vier
+  <!-- Popover (teleport): wird von Highlight-Klicks im Editor befuellt. Fuenf
        `kind`-Varianten: figure,
        location, scene, event — Accent-Bar und Avatar-Toenung pro kind in
-       entities.css. -->
+       entities.css — plus `source` (Beleg-Chip in der Leseansicht, read-only:
+       Voll-Eintrag + Weg ins Quellenverzeichnis). -->
   <template x-teleport="body">
     <div x-show="entityPopover" x-cloak class="entity-popover"
          :class="entityPopover ? 'entity-popover--' + entityPopover.kind : ''"
@@ -30,13 +31,26 @@
                     x-text="entityPopover.kind === 'figure' ? (entityPopover.data?.name || entityPopover.name)
                           : entityPopover.kind === 'location' ? (entityPopover.data?.name || entityPopover.name)
                           : entityPopover.kind === 'scene' ? (entityPopover.data?.titel || entityPopover.name || $app.t('entities.scene'))
+                          : entityPopover.kind === 'source' ? (entityPopover.name || $app.t('entities.source'))
                           : (entityPopover.data?.ereignis || entityPopover.name)"></span>
               <span class="entity-popover-badges">
                 <span class="entity-popover-kind"
                       x-text="entityPopover.kind === 'figure' ? $app.t('entities.figure')
                             : entityPopover.kind === 'location' ? $app.t('entities.location')
                             : entityPopover.kind === 'scene' ? $app.t('entities.scene')
+                            : entityPopover.kind === 'source' ? $app.t('entities.source')
                             : $app.t('entities.event')"></span>
+                <!-- Beleg: Stellenangabe („S. 44"), Paraphrase-Marke („vgl.") und
+                     wie oft die Quelle im ganzen Buch belegt ist. -->
+                <template x-if="entityPopover.kind === 'source' && entityPopover.data?.locLabel">
+                  <span class="entity-popover-tag" x-text="entityPopover.data.locLabel"></span>
+                </template>
+                <template x-if="entityPopover.kind === 'source' && entityPopover.data?.paraphrase">
+                  <span class="entity-popover-tag" x-text="$app.t('editor.toolbar.citeKindParaphrase')"></span>
+                </template>
+                <template x-if="entityPopover.kind === 'source' && entityPopover.data?.citeCount > 0">
+                  <span class="entity-popover-tag" x-text="$app.t('sources.citedN', { n: entityPopover.data.citeCount })"></span>
+                </template>
                 <template x-if="(entityPopover.kind === 'figure' || entityPopover.kind === 'location') && entityPopover.data?.typ">
                   <span class="entity-popover-tag" x-text="entityPopover.data.typ"></span>
                 </template>
@@ -83,6 +97,21 @@
               </dl>
             </template>
 
+            <!-- Beleg: der VOLLE Verzeichniseintrag im Zitierstil des Buchs.
+                 `x-html` ist hier zulaessig — das Markup kommt aus
+                 sources/format.js#formatFullHtml, das jedes Quellenfeld escapet
+                 und als einzigen Tag <em> (Titel-Kursive) erzeugt. -->
+            <template x-if="entityPopover.kind === 'source'">
+              <div class="display-contents">
+                <p class="entity-popover-desc entity-popover-entry" x-show="entityPopover.data?.entryHtml"
+                   x-html="entityPopover.data?.entryHtml"></p>
+                <p class="entity-popover-hint" x-show="entityPopover.data?.missing"
+                   x-text="$app.t('entities.sourceMissing')"></p>
+                <p class="entity-popover-hint" x-show="entityPopover.data?.loadError"
+                   x-text="$app.t('reference.quellen.loadError')"></p>
+              </div>
+            </template>
+
             <template x-if="entityPopover.kind === 'event'">
               <dl class="entity-popover-meta-grid">
                 <template x-if="entityPopover.data?.datum_label || entityPopover.data?.datum">
@@ -124,6 +153,21 @@
                     x-show="entityPopover.kind === 'event'"
                     @click="openEvent(entityPopover.data?.figure_id); closePopover()">
               <span x-text="$app.t('entities.gotoCard')"></span>
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#arrow-right"/></svg>
+            </button>
+            <!-- Beleg: externer Zeiger (DOI/URL) und der Weg ins
+                 Quellenverzeichnis, wo die Quelle gepflegt wird. -->
+            <a class="entity-popover-link"
+               x-show="entityPopover.kind === 'source' && entityPopover.data?.url"
+               :href="entityPopover.data?.url || '#'"
+               target="_blank" rel="noopener noreferrer">
+              <span x-text="$app.t('entities.sourceOpenUrl')"></span>
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#external-link"/></svg>
+            </a>
+            <button type="button" class="entity-popover-link"
+                    x-show="entityPopover.kind === 'source' && !entityPopover.data?.missing"
+                    @click="openSourceInList(entityPopover.data?.srcId)">
+              <span x-text="$app.t('entities.sourceGoto')"></span>
               <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#arrow-right"/></svg>
             </button>
           </div>

@@ -56,6 +56,7 @@ function bootstrap() {
   for (const email of [
     'alice@example.com', 'bob@example.com', 'admin@example.com', 'test@example.com',
     'tester@test.dev', 'autor@test.dev', 'owner@test.dev', 'eindringling@test.dev',
+    'mitarbeit@test.dev',
     'autor@werk.dev', 'me@werk.dev', 'other@werk.dev',
   ]) {
     insUser.run(email, email.split('@')[0]);

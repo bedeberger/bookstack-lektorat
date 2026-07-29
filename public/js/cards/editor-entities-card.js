@@ -2,6 +2,9 @@ import { EVT } from '../events.js';
 // editorEntitiesCard — Entity-Linking-Sub-Komponente (Notebook-Editor):
 //   - Inline-Highlights (Figuren, Orte) im contenteditable.
 //   - Popover (teleport) bei Klick auf ein Highlight.
+//   - Quellen-Popover bei Klick auf einen Beleg-Chip in der LESEANSICHT
+//     (read-only; der Edit-Modus oeffnet stattdessen den Beleg-Picker in
+//     cards/editor-toolbar-card.js).
 // Die Kontext-Listen (Figuren/Szenen/Ereignisse) leben im Referenz-Slot
 // (cards/reference-card.js), nicht mehr hier.
 //
@@ -22,9 +25,15 @@ import {
   applyHighlights, clearHighlights, findHighlightAtPoint,
   toEntitiesList,
 } from '../editor/notebook/entities.js';
+import { closestCiteEl, CITE_ATTR_SRC, CITE_ATTR_LOC, citeModeOf } from '../sources/cite-html.js';
+import { loadBookSources, invalidateSourceCache } from '../sources/source-cache.js';
+import { buildCitePopoverModel } from '../sources/cite-popover.js';
 
 const RECOMPUTE_DEBOUNCE_MS = 400;
 const EDIT_SELECTOR = '#editor-card .page-content-view--editing';
+// Leseansicht derselben Karte. Der Edit-Container traegt zusaetzlich
+// `--editing`, darum wird der Klick-Pfad ueber `app.editMode` abgegrenzt.
+const VIEW_SELECTOR = '#editor-card .page-content-view';
 
 export function registerEditorEntitiesCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
@@ -101,6 +110,30 @@ export function registerEditorEntitiesCard() {
         this._maybeOpenPopoverFromClick(e);
       }, { signal });
 
+      // Klick auf einen Beleg-Chip in der LESEANSICHT → Quellen-Popover
+      // (read-only). Bewusst NICHT an `entitiesEnabledForCurrentBook` gebunden:
+      // das Flag schaltet die Figuren-/Orte-Hervorhebung, ein Quellennachweis
+      // steht dagegen unabhaengig davon im Text. Der Edit-Modus gehoert dem
+      // Beleg-Picker (cards/editor-toolbar-card.js) — dort wird der Chip
+      // geaendert, hier nur nachgeschlagen.
+      document.addEventListener('click', (e) => {
+        const app = window.__app;
+        if (!app || app.editMode || app.focusActive) return;
+        const viewEl = e.target?.closest?.(VIEW_SELECTOR);
+        if (!viewEl) return;
+        const chip = closestCiteEl(e.target, viewEl);
+        if (!chip) return;
+        this.openSourcePopoverForChip(chip);
+      }, { signal });
+
+      // Quellenliste ist modulweit gecacht (ein Fetch pro Buch, geteilt mit dem
+      // Beleg-Picker). Ohne diese Invalidierung zeigt das Popover nach einer
+      // Aenderung in der Quellen-Karte weiter den alten Eintrag.
+      window.addEventListener(EVT.SOURCES_CHANGED, (e) => {
+        invalidateSourceCache(e?.detail?.bookId ?? null);
+      }, { signal });
+      window.addEventListener(EVT.BOOK_CHANGED, () => invalidateSourceCache(), { signal });
+
       // Outside-Close auf mousedown statt click. Why: der LT-Spellcheck-
       // Controller stoppt das click-Event in der capture-Phase auf .page-content-
       // view--editing, damit Links unter Squiggles nicht gefolgt werden. Dadurch
@@ -111,6 +144,12 @@ export function registerEditorEntitiesCard() {
       document.addEventListener('mousedown', (e) => {
         if (!this.entityPopover) return;
         if (e.target?.closest?.('.entity-popover')) return;
+        // Beleg-Chips durchlassen: sonst raeumt dieses mousedown den Anker weg,
+        // bevor der Klick-Handler ihn mit dem offenen Popover vergleichen kann —
+        // der zweite Klick auf denselben Chip wuerde neu oeffnen statt zu
+        // schliessen. Ein Klick auf einen ANDEREN Chip ueberschreibt das Popover
+        // im Klick-Handler ohnehin.
+        if (e.target?.closest?.(VIEW_SELECTOR) && closestCiteEl(e.target, null)) return;
         this.closePopover();
       }, { capture: true, signal });
 
@@ -216,6 +255,69 @@ export function registerEditorEntitiesCard() {
         data,
         x, y,
       };
+    },
+
+    // Quellen-Popover eines Beleg-Chips in der Leseansicht. Derselbe State-Sink
+    // (`entityPopover`) wie die Entity-Varianten, `kind: 'source'` — damit gelten
+    // Positionierung, Scroll-Nachfuehrung, Outside- und Escape-Close unveraendert.
+    //
+    // Der Voll-Eintrag wird aus der Quelle gebaut, nicht aus dem Chip-Text: der
+    // Text ist nur ein Cache des Kurzbelegs (siehe sources/cite-html.js).
+    async openSourcePopoverForChip(chip) {
+      if (!chip) return;
+      // Erneuter Klick auf denselben Chip schliesst (Toggle) — wie bei den
+      // Chips der Kontext-Leiste.
+      if (this.entityPopover && this._popoverAnchor === chip) {
+        this.closePopover();
+        return;
+      }
+      const app = window.__app;
+      const bookId = Alpine.store('nav').selectedBookId;
+      const srcId = parseInt(chip.getAttribute(CITE_ATTR_SRC), 10);
+      const loc = chip.getAttribute(CITE_ATTR_LOC) || '';
+      const mode = citeModeOf(chip);
+
+      let sources = [];
+      let loadError = false;
+      if (bookId) {
+        try {
+          sources = await loadBookSources(bookId);
+        } catch (_) {
+          loadError = true;
+        }
+      } else {
+        loadError = true;
+      }
+      // Waehrend des Fetches kann der User weitergeklickt, die Seite gewechselt
+      // oder den Edit-Modus betreten haben — dann ist dieses Popover veraltet.
+      if (!chip.isConnected || app?.editMode || app?.focusActive) return;
+      if (String(Alpine.store('nav').selectedBookId) !== String(bookId)) return;
+
+      const model = buildCitePopoverModel({
+        srcId: Number.isInteger(srcId) ? srcId : null,
+        loc, mode, sources, loadError,
+        style: app?.citationStyleForCurrentBook || 'apa7',
+        lang: app?.citationLangForCurrentBook || 'de',
+      });
+      const { x, y } = this._computePopoverXY(chip.getBoundingClientRect());
+      this._popoverRange = null;
+      this._popoverAnchor = chip;
+      this.entityPopover = {
+        kind: 'source',
+        id: model.srcId,
+        name: model.name,
+        data: model,
+        x, y,
+      };
+    },
+
+    // Vom Popover ins Quellenverzeichnis (Pflege der Quelle passiert dort, nicht
+    // im Popover). Gleicher Permalink wie im Quellen-Tab des Referenz-Slots.
+    openSourceInList(id) {
+      const bookId = Alpine.store('nav').selectedBookId;
+      this.closePopover();
+      if (!bookId || id == null) return;
+      location.hash = `#book/${bookId}/quellen/${id}`;
     },
 
     openFigure(id) {

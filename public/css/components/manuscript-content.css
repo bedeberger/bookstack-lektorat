@@ -315,9 +315,18 @@
   /* Im Notebook-Edit-Modus ist der Chip ein Klickziel: er öffnet den
      Beleg-Picker auf sich selbst (Quelle wechseln, Stelle korrigieren,
      entfernen — siehe cards/editor-toolbar-card.js). Nur dort, weil nur der
-     Notebook-Editor einen Bearbeitungspfad für Quellen hat; Leseansicht,
-     Bucheditor und Reader lassen den Kurzbeleg normaler Text sein. */
+     Notebook-Editor einen Bearbeitungspfad für Quellen hat; Bucheditor und
+     Reader lassen den Kurzbeleg normaler Text sein. */
   .page-content-view--editing span.cite[contenteditable="false"] {
+    cursor: pointer;
+  }
+  /* In der Notebook-LESEANSICHT ist der Chip ebenfalls ein Klickziel, aber ein
+     nachschlagendes: er öffnet das read-only Quellen-Popover (Voll-Eintrag,
+     DOI/URL, Weg ins Quellenverzeichnis — siehe cards/editor-entities-card.js).
+     Im Lesemodus trägt der Chip kein `contenteditable`, deshalb greift die
+     `cursor: default`-Regel oben hier nicht. Bewusst auf den Editor-Scope
+     begrenzt: Bucheditor und Share-Reader haben diesen Pfad nicht. */
+  #editor-card .page-content-view:not(.page-content-view--editing) span.cite {
     cursor: pointer;
   }
 

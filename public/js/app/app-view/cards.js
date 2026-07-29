@@ -1,5 +1,5 @@
 // Teil von appViewMethods (siehe Facade app-view.js).
-import { EVT, EXCLUSIVE_CARDS, _toggleCardGeneric, fetchJson, generatedToggles, getLastPageId } from './_shared.js';
+import { EVT, EXCLUSIVE_CARDS, _toggleCardGeneric, _withCardTransition, fetchJson, generatedToggles, getLastPageId } from './_shared.js';
 
 export const cardsMethods = {
 
@@ -19,6 +19,21 @@ export const cardsMethods = {
       if (keep !== c.key) this[c.flag] = false;
     }
     if (resetPage) this.resetPage();
+  },
+
+
+  // Close-Button einer Hauptkarte (das `x` im Karten-Header). SSoT für alle
+  // solchen Buttons — NICHT `toggleXxxCard()` verdrahten: Karten mit
+  // `onReclick: 'refresh'` deuten den zweiten Aufruf als Neuladen, das `x`
+  // würde dort nur die Liste refreshen und die Karte offen stehen lassen.
+  // Nach dem Schliessen bleibt keine leere Spalte zurück, sondern die
+  // Buchübersicht (ohne letzte Seite zu restaurieren — der User wollte die
+  // Karte weg, nicht in den Editor).
+  async closeCard(key) {
+    const entry = EXCLUSIVE_CARDS.find(c => c.key === key);
+    if (!entry || !this[entry.flag]) return;
+    await _withCardTransition(this, () => { this[entry.flag] = false; });
+    await this._maybeOpenBookOverview({ restoreLastPage: false });
   },
 
 

@@ -11,7 +11,7 @@
 
 import { toolbarCardMethods } from '../editor/notebook/toolbar.js';
 import { TODO_LIST_SEL } from '../editor/shared/todo-html.js';
-import { invalidateSourceCache } from '../editor/notebook/toolbar/cite.js';
+import { invalidateSourceCache } from '../sources/source-cache.js';
 import { closestCiteEl } from '../sources/cite-html.js';
 import { invalidateXrefTargetCache } from '../editor/notebook/toolbar/xref.js';
 import { EVT } from '../events.js';

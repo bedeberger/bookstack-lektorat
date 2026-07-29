@@ -500,7 +500,13 @@ export const sourcesMethods = {
     this.srcCitationsError = '';
     this.srcCitationsLoading = true;
     try {
-      const rows = await fetchJson(`/sources/${s.id}/citations`);
+      // `book_id` ist Pflicht, nicht Kosmetik: die Karte ist buchweit, und die
+      // Fundstellen einer anderen Arbeit gehoeren hier nicht in die Liste. Ohne
+      // den Parameter antwortet die Route buchuebergreifend und laesst dann nur
+      // den Besitzer der Quelle durch — ein Mitarbeiter am Buch bekaeme 403.
+      const bookId = _bookId();
+      if (!bookId) { this.srcCitations = []; return; }
+      const rows = await fetchJson(`/sources/${s.id}/citations?book_id=${encodeURIComponent(bookId)}`);
       // Nach dem await gegenpruefen: der User kann in der Zwischenzeit eine
       // andere Zeile aufgeklappt haben.
       if (this.srcCitationsId !== s.id) return;

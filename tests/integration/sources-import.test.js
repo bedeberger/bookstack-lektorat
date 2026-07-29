@@ -313,3 +313,45 @@ test('from-research: unbekanntes Item und fremdes Buch', async () => {
   assert.ok(status === 403 || status === 404, `unerwarteter Status ${status}`);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM sources').get().n, 0);
 });
+
+// ── Fundstellen-Sichtbarkeit ────────────────────────────────────────────────
+// Die buchuebergreifende Antwort (ohne `book_id`) ist nur fuer den Besitzer der
+// Quelle. Sonst leitet ein Mitarbeiter, der nur EIN gemeinsames Buch sehen darf,
+// aus der Quelle die Seiten- und Kapitelnamen der uebrigen Arbeiten ab.
+test('citations: ohne book_id nur der Besitzer, mit book_id buch-skopiert', async () => {
+  const PRIVAT = seedBook(9500, 'autor@test.dev', 'Private Dissertation');
+  const GETEILT = seedBook(9501, 'autor@test.dev', 'Geteilter Blog');
+  const { grantAccess } = require('../../db/book-access');
+  grantAccess(GETEILT, 'mitarbeit@test.dev', 'editor', 'autor@test.dev');
+
+  db.prepare('INSERT INTO pages (page_id, book_id, page_name, position, updated_at) VALUES (?,?,?,?,?)')
+    .run(95001, PRIVAT, 'Geheimes Kapitel 3', 1, NOW);
+  db.prepare('INSERT INTO pages (page_id, book_id, page_name, position, updated_at) VALUES (?,?,?,?,?)')
+    .run(95002, GETEILT, 'Blogpost', 1, NOW);
+
+  const schema = require('../../db/schema');
+  const src = schema.createSource('autor@test.dev', { title: 'In beiden zitiert' });
+  schema.linkSource(PRIVAT, src.id, 'autor@test.dev');
+  schema.linkSource(GETEILT, src.id, 'autor@test.dev');
+  schema.replacePageCitations(95001, [{ sourceId: src.id, count: 1, firstOffset: 0 }]);
+  schema.replacePageCitations(95002, [{ sourceId: src.id, count: 1, firstOffset: 0 }]);
+
+  // Besitzer: sieht buchuebergreifend beide Fundstellen.
+  const own = await api('GET', `/sources/${src.id}/citations`);
+  assert.equal(own.status, 200);
+  assert.deepEqual(own.json.map(r => r.book_id).sort(), [PRIVAT, GETEILT].sort());
+
+  // Mitarbeiter am geteilten Buch: buchuebergreifend verwehrt …
+  sessionUser = 'mitarbeit@test.dev';
+  const cross = await api('GET', `/sources/${src.id}/citations`);
+  assert.equal(cross.status, 403);
+  assert.equal(cross.json.error_code, 'NOT_SOURCE_OWNER');
+
+  // … mit book_id sieht er genau das Buch, an dem er mitarbeitet.
+  const scoped = await api('GET', `/sources/${src.id}/citations?book_id=${GETEILT}`);
+  assert.equal(scoped.status, 200);
+  assert.deepEqual(scoped.json.map(r => r.page_name), ['Blogpost']);
+
+  // … und nicht das andere.
+  assert.equal((await api('GET', `/sources/${src.id}/citations?book_id=${PRIVAT}`)).status, 403);
+});

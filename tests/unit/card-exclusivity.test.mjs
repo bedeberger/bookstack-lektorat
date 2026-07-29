@@ -364,3 +364,28 @@ test('toggleKontinuitaetCard: refresh-Pattern beim erneuten Klick', async () => 
   assert.equal(last.type, 'card:refresh');
   assert.equal(last.detail.name, 'kontinuitaet');
 });
+
+test('closeCard: schliesst eine Refresh-Karte wirklich und landet auf der Übersicht', async () => {
+  // Das `x` im Karten-Header darf NICHT den Toggle rufen: Karten mit
+  // `onReclick: 'refresh'` (hier Quellenverzeichnis) deuten den zweiten Aufruf
+  // als Neuladen — die Karte bliebe offen. closeCard schliesst hart und öffnet
+  // danach die Buchübersicht, damit keine leere Spalte stehenbleibt.
+  const c = makeCtx();
+  const events = [];
+  globalThis.window.dispatchEvent = (e) => events.push({ type: e.type, detail: e.detail });
+  c.showSourcesCard = true;
+  await c.closeCard('sources');
+  assert.equal(c.showSourcesCard, false, 'Karte muss geschlossen sein');
+  assert.equal(c.showBookOverviewCard, true, 'Buchübersicht übernimmt');
+  assert.ok(!events.some(e => e.type === 'card:refresh'),
+    'kein Refresh-Dispatch — das wäre der Toggle-Pfad');
+});
+
+test('closeCard: unbekannter Key + bereits geschlossene Karte sind No-Ops', async () => {
+  const c = makeCtx();
+  await c.closeCard('gibtsnicht');
+  assert.equal(c.showBookOverviewCard, false, 'kein Landing-Pfad ohne geschlossene Karte');
+  c.showSourcesCard = false;
+  await c.closeCard('sources');
+  assert.equal(c.showBookOverviewCard, false);
+});

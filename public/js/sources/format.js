@@ -93,8 +93,9 @@ function _loc(loc, labels) {
  *  `num` ist nur im numerischen Stil relevant und kommt aus assignNumbers().
  *  Fehlt er dort (Chip gerade eingefuegt, Fund-Index noch nicht neu gebaut),
  *  faellt der Kurzbeleg bewusst auf die Autor-Jahr-Form zurueck statt auf ein
- *  "[?]": der Chip-Text ist ohnehin ein Cache, den der Regenerierungs-Pass
- *  richtigstellt — bis dahin soll dort etwas Lesbares stehen.
+ *  "[?]": der Chip-Text ist ohnehin ein Cache, den jeder Ausgabeweg beim Rendern
+ *  frisch setzt (lib/bibliography.js#resolveCitesInHtml) — bis dahin soll dort
+ *  etwas Lesbares stehen.
  *
  *  `suffix` ist der Jahres-Buchstabe aus assignYearSuffixes ("a" → „Müller,
  *  2020a"). Er MUSS derselbe sein wie im Verzeichniseintrag — sonst zeigt der

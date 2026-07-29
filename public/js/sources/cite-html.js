@@ -9,9 +9,13 @@
 //   <blockquote data-src="7"> … woertliches Blockzitat … </blockquote>
 //
 // `data-src` ist die WAHRHEIT (Zeiger auf sources.id), der Text ist ein
-// CACHE des Kurzbelegs. Bei Stilwechsel oder Quellenkorrektur schreibt ein
-// Regenerierungs-Pass die Texte neu; bis dahin steht dort ein veralteter, aber
-// lesbarer Kurzbeleg. Deshalb darf keine Schicht den Text als Wahrheit behandeln.
+// CACHE des Kurzbelegs. Jeder Ausgabeweg setzt ihn beim Rendern frisch
+// (lib/bibliography.js#resolveCitesInHtml, im Anmerkungsmodus lib/endnotes.js) —
+// im Export steht damit immer die aktuelle Form, egal was gespeichert ist.
+// IN DER APP bleibt der gespeicherte Text stehen: nach einem Stilwechsel oder
+// einer Quellenkorrektur zeigt der Editor bis zum naechsten Einfuegen die alte
+// Form. Bewusst so — es gibt keinen Pass, der Seiten hinter dem Ruecken des
+// Autors umschreibt. Deshalb darf keine Schicht den Text als Wahrheit behandeln.
 //
 // DREI ZITAT-KATEGORIEN, ZWEI MARKUP-TRAEGER
 //

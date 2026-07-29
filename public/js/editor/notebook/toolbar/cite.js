@@ -41,6 +41,7 @@ import {
   citeModeOf, isQuoteBlockEl, CITE_ATTR_SRC, CITE_ATTR_LOC,
 } from '../../../sources/cite-html.js';
 import { formatShort } from '../../../sources/format.js';
+import { loadBookSources } from '../../../sources/source-cache.js';
 
 // Nur ein normaler Absatz lässt sich zu einem Blockzitat umhüllen. Überschrift,
 // Listenpunkt, Codeblock und Gedicht (`div.poem`) sind keine Zitatabsätze — dort
@@ -52,28 +53,6 @@ const WRAPPABLE_TAGS = new Set(['P']);
 // Deckel der Trefferliste: mehr als 40 Zeilen scannt niemand, und der Picker
 // soll bei dreistelligen Literaturverzeichnissen nicht zur Endlosliste werden.
 const CITE_MAX_HITS = 40;
-
-// Quellenliste je Buch nur einmal holen. Sie ändert sich nur über die
-// Quellen-Karte; die dispatcht `sources:changed`, was den Cache verwirft.
-const _sourceCache = new Map();
-
-export function invalidateSourceCache(bookId = null) {
-  if (bookId == null) _sourceCache.clear();
-  else _sourceCache.delete(String(bookId));
-}
-
-async function loadSources(bookId) {
-  const key = String(bookId);
-  if (_sourceCache.has(key)) return _sourceCache.get(key);
-  const res = await fetch(`/sources?book_id=${encodeURIComponent(key)}`, {
-    headers: { Accept: 'application/json' },
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const list = await res.json();
-  const arr = Array.isArray(list) ? list : [];
-  _sourceCache.set(key, arr);
-  return arr;
-}
 
 // Anzeigezeile im Picker: „Kafka, Franz — Die Verwandlung (1915)".
 function pickerLabel(s) {
@@ -209,7 +188,7 @@ export const citeMethods = {
     if (!bookId) { this.citeSources = []; this.citeHits = []; return; }
     this.citeLoading = true;
     try {
-      this.citeSources = await loadSources(bookId);
+      this.citeSources = await loadBookSources(bookId);
     } catch (_) {
       this.citeSources = [];
       this.citeError = true;
@@ -270,7 +249,7 @@ export const citeMethods = {
   // `num` bleibt null: die Nummer im numerischen Stil kommt aus der
   // Erstzitat-Reihenfolge des Fund-Index, der erst beim Speichern neu gebaut
   // wird. formatShort fällt darum bewusst auf die Autor-Jahr-Form zurück; der
-  // Regenerierungs-Pass stellt den Text später richtig (der Chip-Text ist
+  // Render-Pfad stellt den Text beim Export richtig (der Chip-Text ist
   // Cache, `data-src` ist die Wahrheit).
   //
   // Aus demselben Grund kein `suffix`: der Jahres-Buchstabe („Müller, 2020a")
