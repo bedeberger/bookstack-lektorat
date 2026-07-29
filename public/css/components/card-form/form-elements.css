@@ -1,10 +1,19 @@
 @layer components {
 /* === Form elements === */
+/* KEIN `margin-bottom` hier. Vertikale Abstaende zwischen Label und Feld kommen
+   ausschliesslich aus dem `gap` des umgebenden Containers (`.form-stack`,
+   `.card-form-row`, `.form-inline`, `.admin-*-filter`, …). Eine einseitige
+   Bottom-Margin am Label ist in einer Zeile mit `align-items: center` ein
+   Zentrierungsfehler: der Flex-Algorithmus zentriert die **Aussen**box, die
+   sichtbare Box kippt dadurch um die halbe Margin nach oben — der Toggle in der
+   Filterleiste stand so 3px ueber der Mittellinie von Suchfeld und Combobox
+   daneben. Braucht ein Label als Block-Ueberschrift Abstand nach unten, setzt
+   das seine eigene Klasse (siehe `.book-export-scope-label`), nicht die
+   globale Regel. */
 label {
   font-size: var(--font-size-sm);
   color: var(--color-muted);
   display: block;
-  margin-bottom: var(--space-6);
 }
 
 input[type=text],

@@ -26,7 +26,7 @@
 
   <!-- Tabs (DESIGN.md .tabs / Alpine.data('tabs')). Nur der Tablist im tabs-
        Scope; die Panels lesen referenceTab direkt aus der Karte. -->
-  <div x-data="tabs(['figuren','orte','szenen','ereignisse','recherche','verwandt'])"
+  <div x-data="tabs(['figuren','orte','szenen','ereignisse','recherche','quellen','verwandt'])"
        x-modelable="value" x-model="referenceTab">
     <div class="tabs tabs--scrollable" x-bind="tablist">
       <button class="tabs-btn" x-bind="tabBtn('figuren')">
@@ -48,6 +48,10 @@
       <button class="tabs-btn" x-bind="tabBtn('recherche')">
         <span x-text="$app.t('reference.tab.recherche')"></span>
         <span class="reference-tab-count" x-show="referenceCount('recherche') > 0" x-text="referenceCount('recherche')"></span>
+      </button>
+      <button class="tabs-btn" x-bind="tabBtn('quellen')" x-show="referenceHasSources()">
+        <span x-text="$app.t('reference.tab.quellen')"></span>
+        <span class="reference-tab-count" x-show="referenceCount('quellen') > 0" x-text="referenceCount('quellen')"></span>
       </button>
       <button class="tabs-btn" x-bind="tabBtn('verwandt')" x-show="$store.config.semanticSearchEnabled">
         <span x-text="$app.t('reference.tab.verwandt')"></span>
@@ -138,6 +142,30 @@
           </div>
           <div class="reference-row-desc" x-show="item.title && item.body" x-text="item.body"></div>
           <div class="reference-row-sub" x-show="item.source" x-text="item.source"></div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Quellen: welche Quellen sind hier belegt (Seite/Kapitel bzw. ganzes Buch).
+         Der Fund-Index ist die Ableitung der Quellennachweise im Seiten-HTML;
+         gepflegt wird die Quelle im Quellenverzeichnis — dorthin verlinkt jede
+         Zeile. Read-only. -->
+    <div x-show="referenceTab === 'quellen'" class="reference-panel">
+      <div x-show="referenceSourcesLoading" class="reference-empty" x-text="$app.t('reference.loading')"></div>
+      <div class="search-status search-status--error" x-show="referenceSourcesError && !referenceSourcesLoading"
+           x-text="referenceSourcesError"></div>
+      <template x-if="!referenceSourcesLoading && !referenceSourcesError && referenceQuellen().length === 0">
+        <div class="reference-empty" x-text="$app.t('reference.empty.quellen')"></div>
+      </template>
+      <template x-for="row in referenceQuellen()" :key="'rq-' + row.source.id">
+        <div class="reference-row reference-row--clickable internal-link" @click="openReferenceSource(row)"
+             :data-tip="$app.t('reference.quellen.openTip')">
+          <div class="reference-row-head">
+            <span class="reference-row-title" x-text="referenceQuelleTitle(row)"></span>
+            <span class="tag" x-text="referenceQuelleCount(row)"></span>
+          </div>
+          <div class="reference-row-sub" x-show="referenceQuelleMeta(row)" x-text="referenceQuelleMeta(row)"></div>
+          <div class="reference-row-sub" x-show="referenceQuelleWhere(row)" x-text="referenceQuelleWhere(row)"></div>
         </div>
       </template>
     </div>

@@ -1,8 +1,22 @@
-// Quelle einfügen (Notebook-Editor). Inline am Caret, nicht als Block —
-// darum bewusst KEIN Slash-Menü-Eintrag: das Slash-Menü triggert auf einem
-// leeren Block und *ersetzt* ihn (siehe slash.js), eine Quellenangabe gehört
-// aber mitten in den fertigen Satz. Vorbild ist deshalb der Link-Input in
+// Quelle einfügen und bearbeiten (Notebook-Editor). Inline am Caret, nicht als
+// Block — darum bewusst KEIN Slash-Menü-Eintrag: das Slash-Menü triggert auf
+// einem leeren Block und *ersetzt* ihn (siehe slash.js), eine Quellenangabe
+// gehört aber mitten in den fertigen Satz. Vorbild ist deshalb der Link-Input in
 // bubble.js: Range sichern → kleines Panel → an der gesicherten Range einfügen.
+//
+// DREI EINSTIEGE, EIN PANEL:
+//   • Button in der Seiten-Toolbar (editor-page-toolbar.html) — der Weg für den
+//     laufenden Satz, ohne vorher etwas markieren zu müssen. Kommt über
+//     EVT.EDITOR_CITE_OPEN, weil der Auslöser im Root-Scope sitzt und der Picker
+//     in `editorToolbarCard`.
+//   • Button in der Bubble-Toolbar — wenn eine Textstelle markiert ist.
+//   • Klick auf einen bestehenden Chip → `openCiteForChip` (Quelle wechseln,
+//     Stelle korrigieren, Zitat-Art ändern, Beleg entfernen). Pendant zum
+//     Link-Input, der einen bestehenden `<a>` vorbefüllt.
+//
+// EINE SELEKTION WIRD NIE ERSETZT: der Beleg gehört HINTER die belegte Stelle,
+// nicht an ihre Stelle (siehe `_commitCite`). Wer „Kafka schrieb X" markiert und
+// belegt, will den Satz behalten.
 //
 // Der eingefügte Chip trägt seinen Kurzbeleg als Text (Cache) und `data-src`
 // als Wahrheit — Markup-SSoT ist public/js/sources/cite-html.js.
@@ -24,6 +38,7 @@
 import { getEditEl, findBlock } from './_shared.js';
 import {
   buildCiteHtml, markCitesAtomic, closestQuoteBlock, setQuoteBlockSource,
+  citeModeOf, isQuoteBlockEl, CITE_ATTR_SRC, CITE_ATTR_LOC,
 } from '../../../sources/cite-html.js';
 import { formatShort } from '../../../sources/format.js';
 
@@ -77,34 +92,33 @@ function haystack(s) {
 }
 
 export const citeMethods = {
-  // Panel öffnen: Caret-Range sichern, positionieren, Quellen laden.
+  // Panel am Caret (oder an der Selektion) öffnen: Range sichern,
+  // positionieren, Quellen laden.
   async openCiteInput() {
     const app = window.__app;
     if (!app?.editMode || app.focusActive) return;
     const editEl = getEditEl();
     if (!editEl) return;
-    const sel = document.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    const range = sel.getRangeAt(0);
-    if (!editEl.contains(range.commonAncestorContainer) && editEl !== range.commonAncestorContainer) return;
+    // Der Auslöser kann ein Button in der Seiten-Toolbar sein — dann liegt der
+    // Fokus dort und nicht im contenteditable. Erst fokussieren, dann die
+    // Selection lesen (Chromium stellt dabei die letzte Caret-Position wieder
+    // her); gleiche Reihenfolge wie `insertHorizontalRule`. Die Bubble-Toolbar
+    // verliert den Fokus nie (`@mousedown.prevent`), dort ist es ein No-Op.
+    editEl.focus();
+    let range = this._caretRangeIn(editEl);
+    // Kein Caret im Editor (Edit-Modus gerade betreten, noch nirgends
+    // hingeklickt): ans Ende des Inhalts ankern statt gar nichts zu tun — wie
+    // der Diktat-Anker in stt-dictation.js#_sttAnchorToEnd.
+    if (!range) {
+      range = (editEl.ownerDocument || document).createRange();
+      range.selectNodeContents(editEl);
+      range.collapse(false);
+    }
 
     this._citeRange = range.cloneRange();
-
-    let rect = this._citeRange.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) {
-      const block = findBlock(this._citeRange.startContainer, editEl) || editEl;
-      rect = block.getBoundingClientRect();
-    }
-    this.citeX = rect.left + rect.width / 2;
-    this.citeY = rect.top;
-
-    this.citeQuery = '';
-    this.citeLoc = '';
-    this.citeIdx = 0;
-    this.citeError = false;
-    // Zitat-Art bewusst bei jedem Öffnen zurücksetzen: „vgl." darf nicht aus dem
-    // vorigen Beleg hängen bleiben — das Präfix ist eine inhaltliche Aussage.
-    this.citeKind = 'quote';
+    this._citeEditEl = null;
+    this.citeEditing = false;
+    this._resetCiteFields();
     // Blockzitat nur anbieten, wo es strukturell geht: Caret schon in einem
     // <blockquote> (bekommt nur den Zeiger) oder in einem umhüllbaren Absatz.
     const caretBlock = findBlock(this._citeRange.startContainer, editEl);
@@ -112,9 +126,85 @@ export const citeMethods = {
       closestQuoteBlock(this._citeRange.startContainer, editEl)
       || (caretBlock && WRAPPABLE_TAGS.has(String(caretBlock.tagName || '').toUpperCase()))
     );
+    this._placeCitePanel(this._citeRange, editEl);
     this.bubbleShow = false;
     this.citeShow = true;
 
+    await this._fillCiteSources();
+    this._focusCiteFilter();
+  },
+
+  // Bestehenden Chip bearbeiten (Klick-Handler in cards/editor-toolbar-card.js).
+  // Die Range umfasst den Chip selbst — der Commit-Pfad ersetzt genau ihn.
+  async openCiteForChip(chip) {
+    const app = window.__app;
+    if (!app?.editMode || app.focusActive) return;
+    const editEl = getEditEl();
+    if (!editEl || !chip || !editEl.contains(chip)) return;
+    const doc = editEl.ownerDocument || document;
+
+    const range = doc.createRange();
+    range.selectNode(chip);
+    this._citeRange = range;
+    this._citeEditEl = chip;
+    this.citeEditing = true;
+    this._resetCiteFields();
+    this.citeLoc = chip.getAttribute(CITE_ATTR_LOC) || '';
+
+    // Zitat-Art aus dem Markup zurücklesen. Ein Chip in einem Blockzitat, das
+    // auf DIESELBE Quelle zeigt, ist der Blockzitat-Fall; zeigt der Absatz
+    // woanders hin (oder nirgendwohin), ist der Chip ein eigener Nachweis.
+    const bq = closestQuoteBlock(chip, editEl);
+    const blockCited = !!bq && isQuoteBlockEl(bq)
+      && bq.getAttribute(CITE_ATTR_SRC) === chip.getAttribute(CITE_ATTR_SRC);
+    this.citeKind = blockCited ? 'block'
+      : (citeModeOf(chip) === 'paraphrase' ? 'paraphrase' : 'quote');
+    const chipBlock = findBlock(chip, editEl);
+    this.citeBlockOk = !!(
+      bq || (chipBlock && WRAPPABLE_TAGS.has(String(chipBlock.tagName || '').toUpperCase()))
+    );
+
+    this._placeCitePanel(range, editEl);
+    this.bubbleShow = false;
+    this.citeShow = true;
+
+    await this._fillCiteSources();
+    this._focusCiteFilter();
+  },
+
+  // Caret-/Selektions-Range, sofern sie im Edit-Feld liegt.
+  _caretRangeIn(editEl) {
+    const sel = document.getSelection();
+    if (!sel || sel.rangeCount === 0) return null;
+    const range = sel.getRangeAt(0);
+    const c = range.commonAncestorContainer;
+    return (editEl === c || editEl.contains(c)) ? range : null;
+  },
+
+  // Panel über der Range verankern; eine kollabierte Range hat kein Rechteck →
+  // auf den umgebenden Block ausweichen.
+  _placeCitePanel(range, editEl) {
+    let rect = range.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) {
+      const block = findBlock(range.startContainer, editEl) || editEl;
+      rect = block.getBoundingClientRect();
+    }
+    this.citeX = rect.left + rect.width / 2;
+    this.citeY = rect.top;
+  },
+
+  // Eingabefelder/Auswahl in den Ausgangszustand. Die Zitat-Art wird bewusst
+  // bei jedem Öffnen zurückgesetzt: „vgl." darf nicht aus dem vorigen Beleg
+  // hängen bleiben — das Präfix ist eine inhaltliche Aussage.
+  _resetCiteFields() {
+    this.citeQuery = '';
+    this.citeLoc = '';
+    this.citeIdx = 0;
+    this.citeError = false;
+    this.citeKind = 'quote';
+  },
+
+  async _fillCiteSources() {
     const bookId = window.Alpine?.store('nav')?.selectedBookId;
     if (!bookId) { this.citeSources = []; this.citeHits = []; return; }
     this.citeLoading = true;
@@ -127,6 +217,9 @@ export const citeMethods = {
       this.citeLoading = false;
       this._recomputeCiteHits();
     }
+  },
+
+  _focusCiteFilter() {
     this.$nextTick(() => {
       const inp = this.$refs?.citeFilter;
       if (inp) inp.focus();
@@ -141,7 +234,16 @@ export const citeMethods = {
   _recomputeCiteHits() {
     const q = (this.citeQuery || '').trim().toLowerCase();
     const list = this.citeSources || [];
-    const hits = q ? list.filter(s => haystack(s).includes(q)) : list;
+    let hits = q ? list.filter(s => haystack(s).includes(q)) : list;
+    // Beim Bearbeiten eines Chips steht die aktuell verknüpfte Quelle ohne
+    // Suchbegriff vorne — sonst liegt sie bei dreistelligen Bibliotheken hinter
+    // dem CITE_MAX_HITS-Deckel und Enter träfe eine fremde Quelle. Mit
+    // Suchbegriff gilt die Suche: dann WILL der User wechseln.
+    if (!q && this._citeEditEl) {
+      const editId = Number(this._citeEditEl.getAttribute(CITE_ATTR_SRC));
+      const cur = hits.find(s => s.id === editId);
+      if (cur) hits = [cur, ...hits.filter(s => s !== cur)];
+    }
     this.citeHits = hits.slice(0, CITE_MAX_HITS).map(s => ({ id: s.id, label: pickerLabel(s), src: s }));
     if (this.citeIdx >= this.citeHits.length) this.citeIdx = 0;
   },
@@ -198,6 +300,14 @@ export const citeMethods = {
 
     editEl.focus();
 
+    // Bestehenden Chip bearbeiten statt einen zweiten daneben setzen.
+    if (this._citeEditEl) {
+      this._commitCiteEdit(editEl, this._citeEditEl, source, kind, html);
+      window.__app?._markEditDirty?.();
+      this._closeCite();
+      return;
+    }
+
     if (kind === 'block') {
       this._commitCiteAsBlock(editEl, range, source, html);
       window.__app?._markEditDirty?.();
@@ -220,7 +330,10 @@ export const citeMethods = {
     while (holder.firstChild) frag.appendChild(holder.firstChild);
     const lastNode = frag.lastChild;
 
-    range.deleteContents();
+    // Eine Selektion wird NICHT gelöscht, sondern am Ende verlassen: der Beleg
+    // weist die markierte Stelle NACH, er ersetzt sie nicht. (Anders als beim
+    // Link, wo die Selektion der Linktext ist.)
+    if (!range.collapsed) range.collapse(false);
     range.insertNode(frag);
 
     // Der eingefügte Chip ist noch nicht atomar (markCitesAtomic läuft sonst nur
@@ -291,6 +404,87 @@ export const citeMethods = {
     }
   },
 
+  // Bestehenden Chip auf die neue Auswahl umschreiben. `data-src` ist die
+  // Wahrheit, der Text ein Cache — beides wird hier neu gesetzt, statt am alten
+  // Knoten Attribute zu flicken (eine Quelle für das Chip-Markup, buildCiteHtml).
+  _commitCiteEdit(editEl, chip, source, kind, html) {
+    const doc = editEl.ownerDocument || document;
+    const oldId = chip.getAttribute(CITE_ATTR_SRC);
+
+    // Zur Blockzitat-Form gewechselt: der Kurzbeleg gehört ans ENDE des Zitats,
+    // nicht dorthin, wo der Chip zufällig stand. Also raus damit und denselben
+    // Pfad wie beim Einfügen laufen lassen — die Range bleibt beim Entfernen
+    // gültig (Browser zieht Live-Ranges mit) und zeigt in den Absatz.
+    if (kind === 'block') {
+      const range = doc.createRange();
+      range.setStartBefore(chip);
+      range.collapse(true);
+      chip.remove();
+      this._commitCiteAsBlock(editEl, range, source, html);
+      return;
+    }
+
+    const holder = doc.createElement('div');
+    holder.innerHTML = html;
+    const fresh = holder.firstElementChild;
+    if (!fresh || !chip.parentNode) return;
+    chip.parentNode.replaceChild(fresh, chip);
+
+    // Zeigte der umgebende Absatz als Blockzitat auf die ALTE Quelle, folgt sein
+    // Zeiger mit: „dieser Absatz ist wörtlich aus Quelle N" und der sichtbare
+    // Kurzbeleg darunter dürfen nicht auseinanderlaufen. Zeigt er woanders hin,
+    // bleibt er unangetastet — dann sind es zwei getrennte Aussagen.
+    const bq = closestQuoteBlock(fresh, editEl);
+    if (bq && isQuoteBlockEl(bq) && bq.getAttribute(CITE_ATTR_SRC) === oldId) {
+      setQuoteBlockSource(bq, source.id);
+    }
+
+    markCitesAtomic(editEl);
+
+    const sel = doc.getSelection();
+    if (sel) {
+      const after = doc.createRange();
+      after.setStartAfter(fresh);
+      after.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(after);
+    }
+  },
+
+  // Beleg entfernen (nur im Bearbeiten-Fall sichtbar).
+  _removeCite() {
+    const editEl = getEditEl();
+    const chip = this._citeEditEl;
+    if (!editEl || !chip || !editEl.contains(chip)) { this._closeCite(); return; }
+    const doc = editEl.ownerDocument || document;
+    const srcId = chip.getAttribute(CITE_ATTR_SRC);
+    const bq = closestQuoteBlock(chip, editEl);
+
+    editEl.focus();
+    const sel = doc.getSelection();
+    if (sel) {
+      const at = doc.createRange();
+      at.setStartBefore(chip);
+      at.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(at);
+    }
+    chip.remove();
+
+    // Der Zeiger am Blockzitat ist derselbe Nachweis in Blockform: zeigt er auf
+    // die entfernte Quelle, geht er mit. Sonst zählte der Absatz weiter als
+    // wörtliches Zitat aus einer Quelle, die im Text nicht mehr belegt ist (ein
+    // belegtes Blockzitat OHNE Chip ist selbst eine Fundstelle, siehe
+    // cite-html.js#citationsFromCites). Das `<blockquote>` selbst bleibt stehen —
+    // die Einrückung ist eine Formatierung des Autors, kein Nachweis.
+    if (bq && isQuoteBlockEl(bq) && bq.getAttribute(CITE_ATTR_SRC) === srcId) {
+      setQuoteBlockSource(bq, null);
+    }
+
+    window.__app?._markEditDirty?.();
+    this._closeCite();
+  },
+
   _closeCite() {
     this.citeShow = false;
     this.citeQuery = '';
@@ -300,6 +494,8 @@ export const citeMethods = {
     this.citeError = false;
     this.citeKind = 'quote';
     this.citeBlockOk = false;
+    this.citeEditing = false;
+    this._citeEditEl = null;
     this._citeRange = null;
     getEditEl()?.focus();
   },

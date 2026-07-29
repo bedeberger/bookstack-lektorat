@@ -121,3 +121,32 @@ test('Seite ohne Marker loest keinen Parse und keine Schreib-Transaktion aus', a
   const res = await reindexPageXrefs(8090, '<p>Ganz normaler Text ohne alles.</p>');
   assert.deepEqual(res, { anchors: 0, links: 0 });
 });
+
+// ── Nachindizierung von Bestandsinhalten ─────────────────────────────────────
+
+test('Bestandsbuch: reindexBookXrefs holt Anker nach, die nie ueber den Write-Pfad liefen', async () => {
+  const { reindexBookXrefs, ensureBookXrefsIndexed } = require('../../lib/xref-index');
+  // Seite direkt in die DB schreiben — genau der Zustand vor Einfuehrung des
+  // Features: Inhalt da, Index leer.
+  db.prepare(`INSERT INTO pages (page_id, book_id, chapter_id, page_name, position, body_html)
+              VALUES (8020, 900, 7011, 'Altbestand', 5, ?)`).run(
+    `<p>Alt.</p>${FIG.replace('aaaaaaaaaaaaaaaa', 'cccccccccccccccc')}`);
+  db.prepare('DELETE FROM xref_anchors WHERE page_id = 8020').run();
+  assert.equal(xrefs.listBookAnchors(900).some(a => a.bid === 'cccccccccccccccc'), false);
+
+  const res = await reindexBookXrefs(900);
+  assert.ok(res.pages > 0);
+  assert.equal(xrefs.listBookAnchors(900).some(a => a.bid === 'cccccccccccccccc'), true);
+
+  // ensureBookXrefsIndexed laeuft pro Buch nur einmal je Prozess — der zweite
+  // Aufruf darf nicht erneut ueber alle Seiten gehen.
+  assert.equal(await ensureBookXrefsIndexed(900), false, 'bereits indiziert → kein zweiter Lauf');
+  assert.equal(await ensureBookXrefsIndexed(900), false, 'Set verhindert Wiederholung');
+});
+
+test('reindexAllXrefs laeuft ueber alle Buecher', async () => {
+  const { reindexAllXrefs } = require('../../lib/xref-index');
+  const r = await reindexAllXrefs();
+  assert.ok(r.books >= 2, `erwartet >= 2 Buecher, war ${r.books}`);
+  assert.ok(r.pages >= 3);
+});

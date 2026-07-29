@@ -12,9 +12,11 @@
 const express = require('express');
 const { db } = require('../db/schema');
 const { listBookAnchors, listXrefBacklinks } = require('../db/xrefs');
+const { ensureBookXrefsIndexed } = require('../lib/xref-index');
 const { toIntId } = require('../lib/validate');
 const { setContext } = require('../lib/log-context');
 const { requireBookAccess, sendACLError } = require('../lib/acl');
+const logger = require('../logger');
 
 const router = express.Router();
 
@@ -39,10 +41,17 @@ const _stmtChapters = db.prepare(`
  *  Alles, worauf ein Querverweis zeigen kann — in EINER Antwort, damit der
  *  Picker im Editor nicht zwei Quellen zusammenstueckeln muss.
  *  Ab Rolle 'viewer': auch ein Lektor muss Verweise setzen und lesen koennen. */
-router.get('/targets', (req, res) => {
+router.get('/targets', async (req, res) => {
   const bookId = toIntId(req.query.book_id);
   if (!bookId) return res.status(400).json({ error: 'book_id fehlt' });
   if (!_guard(req, res, bookId, 'viewer')) return;
+
+  // Bestandsinhalte nachindizieren, falls noch nie geschehen. Ohne das zeigt der
+  // Picker in einem gewachsenen Buch keine Abbildung, weil `xref_anchors` nur am
+  // Seiten-Write waechst. Einmal pro Buch und Prozess-Leben (siehe
+  // lib/xref-index.js); der Nacht-Cron holt die uebrigen Buecher.
+  try { await ensureBookXrefsIndexed(bookId); }
+  catch (e) { logger.warn(`[xref] Nachindizierung fehlgeschlagen (book=${bookId}): ${e.message}`); }
 
   const chapters = _stmtChapters.all(bookId).map(c => ({
     kind: 'chapter',

@@ -238,7 +238,7 @@ export const cardsMethods = {
   },
 
   // Referenz-Slot: read-only Begleitpanel (Figuren/Orte/Szenen/Ereignisse/
-  // Recherche), Mutex mit Seiten-Chat + Ideen im selben Slot neben dem Editor.
+  // Recherche/Quellen/Verwandt), Mutex mit Seiten-Chat + Ideen im selben Slot.
   // Kein currentPage-Zwang — der Buch-Scope funktioniert auch ohne offene Seite;
   // erreichbar ist der Toggle ohnehin nur aus der Editor-Toolbar.
   async toggleReferenceCard() {

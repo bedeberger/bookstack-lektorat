@@ -1005,12 +1005,16 @@ function deleteFinetuneAiCache(bookId, userEmail) {
 // ohne book_settings-Zeile andere Einstellungen als eines mit.
 const CITATION_DEFAULTS = Object.freeze({
   citation_style: 'apa7',
+  citation_notes: 'inline',
   bibliography_enabled: 0,
   bibliography_title: null,
   bibliography_scope: 'cited',
   bibliography_in_blog: 0,
 });
 const VALID_CITATION_STYLES = ['apa7', 'chicago-ad', 'numeric'];
+// Deckungsgleich mit CITATION_NOTES_MODES in lib/endnotes.js — laufen die
+// auseinander, faellt der Schreibpfad stumm auf 'inline' zurueck.
+const VALID_CITATION_NOTES = ['inline', 'endnotes'];
 const VALID_BIBLIOGRAPHY_SCOPES = ['cited', 'all'];
 
 // Querverweis-Defaults (Migration 255). Steht aus demselben Grund in
@@ -1021,7 +1025,7 @@ const XREF_DEFAULTS = Object.freeze({
   figure_numbering: 0,
 });
 
-const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, entities_enabled, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog, figure_numbering FROM book_settings WHERE book_id = ?');
+const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, entities_enabled, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog, citation_notes, figure_numbering FROM book_settings WHERE book_id = ?');
 const _upsertBookSettings = db.prepare(`
   INSERT INTO book_settings (book_id, language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, updated_at)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1062,14 +1066,15 @@ const _updateBookStilprofil = db.prepare(`
 // und die 18-stellige Positionsliste von saveBookSettings soll nicht weiter
 // wachsen.
 const _updateBookCitationSettings = db.prepare(`
-  INSERT INTO book_settings (book_id, citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO book_settings (book_id, citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog, citation_notes, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(book_id) DO UPDATE SET
     citation_style=excluded.citation_style,
     bibliography_enabled=excluded.bibliography_enabled,
     bibliography_title=excluded.bibliography_title,
     bibliography_scope=excluded.bibliography_scope,
     bibliography_in_blog=excluded.bibliography_in_blog,
+    citation_notes=excluded.citation_notes,
     updated_at=excluded.updated_at
 `);
 // Querverweis-Einstellungen, eigener Schreibpfad aus demselben Grund.
@@ -1101,6 +1106,7 @@ function getBookSettings(bookId, userEmail = null) {
     bibliography_title: row.bibliography_title || null,
     bibliography_scope: row.bibliography_scope || CITATION_DEFAULTS.bibliography_scope,
     bibliography_in_blog: row.bibliography_in_blog ? 1 : 0,
+    citation_notes: row.citation_notes || CITATION_DEFAULTS.citation_notes,
     figure_numbering: row.figure_numbering ? 1 : 0,
   };
   if (userEmail) {
@@ -1158,6 +1164,7 @@ function setBookEntitiesEnabled(bookId, enabled) {
  *  (der Formatter kennt nur diese Stile und wuerde sonst still auf apa7 fallen). */
 function setBookCitationSettings(bookId, {
   citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog,
+  citation_notes,
 } = {}) {
   const style = VALID_CITATION_STYLES.includes(citation_style)
     ? citation_style : CITATION_DEFAULTS.citation_style;
@@ -1169,6 +1176,7 @@ function setBookCitationSettings(bookId, {
     bibliography_enabled ? 1 : 0,
     title || null, scope,
     bibliography_in_blog ? 1 : 0,
+    VALID_CITATION_NOTES.includes(citation_notes) ? citation_notes : CITATION_DEFAULTS.citation_notes,
     new Date().toISOString(),
   );
 }
@@ -1703,7 +1711,7 @@ module.exports = {
   getDailyTokenUsage:    tokenUsage.getDailyTokenUsage,
   getDailyTotalsByUser:  tokenUsage.getDailyTotalsByUser,
   getBookSettings, getBookLocale, saveBookSettings, setBookEntitiesEnabled, setBookStilprofil,
-  setBookCitationSettings, VALID_CITATION_STYLES, VALID_BIBLIOGRAPHY_SCOPES,
+  setBookCitationSettings, VALID_CITATION_STYLES, VALID_BIBLIOGRAPHY_SCOPES, VALID_CITATION_NOTES,
   setBookXrefSettings,
   loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache,
   loadChapterReviewCache, saveChapterReviewCache,

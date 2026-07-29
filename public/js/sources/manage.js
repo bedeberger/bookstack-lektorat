@@ -67,6 +67,43 @@ export const sourcesMethods = {
     // Kennzahlen hinterher und ohne await auf den Listenpfad: sie sind ein
     // Nebenwert, ihr Fehlschlag darf die Tabelle nicht blockieren.
     this.loadQuoteStats();
+    // Deep-Link-Ziel (#…/quellen/<sourceId>), das vor dem Load ankam, jetzt
+    // fokussieren — die Quelle existiert erst nach diesem Load in `sources`.
+    if (this._pendingFocusSourceId != null) this._focusSourceById(this._pendingFocusSourceId);
+  },
+
+  /** Deep-Link-Ziel (#book/X/quellen/<sourceId>) aus dem Quellen-Tab des
+   *  Referenz-Slots: Zeile ins Bild holen, kurz hervorheben und ihre Fundstellen
+   *  aufklappen — der Sprung kam aus „hier wird belegt", die Fundstellen sind die
+   *  Fortsetzung derselben Frage. Noch nicht geladene Liste → ID merken,
+   *  loadSources ruft uns danach erneut auf.
+   *
+   *  Filter werden zurueckgesetzt, sonst zeigt der Permalink auf eine Zeile, die
+   *  hinter Textfilter, Typfilter oder dem Archiv-Schalter verborgen bleibt.
+   *
+   *  Sprungziel ist `[data-source-id]` an der Tabellenzeile in
+   *  public/partials/sources.html — das Attribut existiert nur dafuer. */
+  _focusSourceById(rawId) {
+    const id = parseInt(rawId, 10);
+    this._pendingFocusSourceId = null;
+    if (!Number.isInteger(id)) return;
+    const s = (this.sources || []).find(x => x.id === id);
+    if (!s) { this._pendingFocusSourceId = id; return; }
+
+    this.srcFilterText = '';
+    this.srcFilterType = '';
+    if (s.archived) this.srcShowArchived = true;
+    if (s.cite_count > 0 && this.srcCitationsId !== s.id) this.openSourceCitations(s);
+
+    this.$nextTick(() => {
+      const el = this.$root?.querySelector(`[data-source-id="${id}"]`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('sources-row--flash');
+      void el.offsetWidth; // Reflow → Animation startet auch beim zweiten Klick neu
+      el.classList.add('sources-row--flash');
+      setTimeout(() => el.classList.remove('sources-row--flash'), 1600);
+    });
   },
 
   /** Zitat-Kennzahlen des Buchs (Zitat-Anteil + woertlich/Paraphrase).
@@ -100,6 +137,7 @@ export const sourcesMethods = {
     this.sources = [];
     this.sourcesError = '';
     this.quoteStats = null;
+    this._pendingFocusSourceId = null;
     this._memos = {};
     this.cancelSourceEdit();
     this.closeSourceCitations();

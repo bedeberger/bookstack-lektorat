@@ -29,6 +29,7 @@ import { STYLE_BUILDERS } from './format/styles.js';
 export { LANGS, labelsFor } from './format/labels.js';
 export { runsToText, runsToHtml } from './format/runs.js';
 export { sortEntries, assignNumbers, assignYearSuffixes, sortKeyOf } from './format/sort.js';
+export { noteForm, noteRuns, locatorRuns } from './format/notes.js';
 
 /** Unterstuetzte Zitierstile. Deckungsgleich mit VALID_CITATION_STYLES in
  *  db/schema.js und dem CHECK-freien Enum in book_settings.citation_style —

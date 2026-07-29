@@ -48,6 +48,13 @@
   padding-top: 16px;
   border-top: 1px solid var(--color-border);
 }
+/* Hier ist das Label eine Block-Ueberschrift ueber dem Hinweistext, kein
+   Zeilen-Baustein: der Abstand nach unten muss lokal kommen, weil die globale
+   `label`-Regel keine Bottom-Margin mehr traegt (Zentrierungsfehler in Zeilen,
+   siehe form-elements.css) und der Eltern-Container kein `gap` hat. */
+.book-export-migration > .book-export-scope-label {
+  margin-bottom: var(--space-6);
+}
 .book-export-migration-options {
   margin: 12px 0;
 }

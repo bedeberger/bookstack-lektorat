@@ -749,3 +749,37 @@ test('Quellen-Chip im Seitentext bekommt den frisch formatierten Kurzbeleg', asy
   assert.ok(text.includes('[1, S. 44]'), `Kurzbeleg nicht ersetzt: ${text.slice(0, 300)}`);
   assert.equal(text.includes('(Kafka, 1915, S. 44)'), false);
 });
+
+// ── Anmerkungsapparat (lib/endnotes.js) ──────────────────────────────────────
+// Im Modus `citation_notes='endnotes'` traegt der Chip die Notenziffer statt der
+// Klammerform, und hinter jedem Kapitel steht dessen Notenliste. Die beiden
+// Belegdarstellungen duerfen sich nie ueberlagern.
+
+test('Anmerkungsmodus: Notenziffer im Text, Notenliste hinter dem Kapitel', async () => {
+  const chip = (loc) => `<span class="cite" data-src="7" data-loc="${loc}">(Kafka, 1915)</span>`;
+  const groups = [
+    { chapter: { id: 1, name: 'Erstes Kapitel', parent_chapter_id: null }, chapterId: 1,
+      pages: [{ p: { id: 1, name: 'S1' }, pd: { html: `<p>Ein Satz ${chip('44')} und noch einer ${chip('51')}.</p>` } }] },
+    { chapter: { id: 2, name: 'Zweites Kapitel', parent_chapter_id: null }, chapterId: 2,
+      pages: [{ p: { id: 2, name: 'S2' }, pd: { html: `<p>Anderes Kapitel ${chip('7')}.</p>` } }] },
+  ];
+  const cfg = bibCfg();
+  cfg.toc.enabled = false;
+  cfg.layout.hyphenate = false;
+  const buf = await renderPdfBuffer({
+    book: baseBook, groups, profile: { config: cfg },
+    coverBuf: null, token: null, scope: 'book',
+    bibliography: { ...bibFixture, notesMode: 'endnotes', notesTitle: 'Anmerkungen', enabled: false, entries: [] },
+  });
+  const { extractPdfText } = (await import('../../lib/pdf-extract.js')).default;
+  const text = (await extractPdfText(buf)).text.replace(/\s+/g, ' ');
+
+  // Klammerform ist verschwunden — der Chip traegt jetzt die Ziffer.
+  assert.equal(text.includes('(Kafka, 1915, S. 44)'), false, `Klammerform noch da: ${text.slice(0, 400)}`);
+  // Apparat steht hinter JEDEM Kapitel, mit Ueberschrift.
+  assert.ok(text.split('Anmerkungen').length - 1 >= 2, `Apparat fehlt bei einem Kapitel: ${text.slice(0, 600)}`);
+  // Erstnennung voll, Wiederholung als „Ebd." — und pro Kapitel neu ab 1, darum
+  // steht die Vollform zweimal im Dokument (einmal je Kapitel).
+  assert.ok(text.includes('Ebd.'), `Wiederholungs-Kurzform fehlt: ${text.slice(0, 600)}`);
+  assert.ok(text.split('Die Verwandlung').length - 1 >= 2, 'Erstnennung muss pro Kapitel voll stehen');
+});

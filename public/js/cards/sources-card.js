@@ -10,6 +10,7 @@
 // Methoden in public/js/sources/manage.js, Feld-Inventar + Draft-Umrechnung in
 // public/js/sources/fields.js (pure, testbar ohne Alpine).
 
+import { EVT } from '../events.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { sourcesMethods } from '../sources/manage.js';
 import { draftFromSource } from '../sources/fields.js';
@@ -55,6 +56,11 @@ export function registerSourcesCard() {
     srcPoolError: '',
     srcPoolFilter: '',
 
+    // Deep-Link-Ziel (#book/X/quellen/<sourceId>) aus dem Quellen-Tab des
+    // Referenz-Slots: gemerkt, bis die Liste geladen ist — loadSources
+    // fokussiert es danach (_focusSourceById in sources/manage.js).
+    _pendingFocusSourceId: null,
+
     // Memo-Speicher der Aggregat-Methoden (sourceRows/srcVisibleFields).
     // Wird bei jedem loadSources/resetSources geleert.
     _memos: {},
@@ -67,6 +73,12 @@ export function registerSourcesCard() {
         name: 'sources',
         showFlag: 'showSourcesCard',
         load: () => this.loadSources(),
+        extraListeners: [
+          // Permalink #book/X/quellen/<sourceId>: der Hash-Router dispatcht das
+          // Event, _focusSourceById hebt die Zeile hervor (bzw. merkt sie bis
+          // zum Load vor).
+          { type: EVT.SOURCES_FOCUS_SOURCE, handler: (e) => this._focusSourceById(e.detail?.sourceId) },
+        ],
         resetState: () => ({
           sources: [],
           sourcesBusy: false,
@@ -86,6 +98,7 @@ export function registerSourcesCard() {
           srcPool: [],
           srcPoolError: '',
           srcPoolFilter: '',
+          _pendingFocusSourceId: null,
           _memos: {},
         }),
         resetStateView: () => ({

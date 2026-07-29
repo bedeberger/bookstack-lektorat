@@ -2,7 +2,7 @@
 const express = require('express');
 const {
   getBookSettings, saveBookSettings, setBookEntitiesEnabled,
-  setBookCitationSettings, VALID_CITATION_STYLES, VALID_BIBLIOGRAPHY_SCOPES,
+  setBookCitationSettings, VALID_CITATION_STYLES, VALID_BIBLIOGRAPHY_SCOPES, VALID_CITATION_NOTES,
   setBookXrefSettings,
 } = require('../db/schema');
 const { aclParamGuard } = require('../lib/acl');
@@ -175,6 +175,9 @@ router.put('/:book_id/citation', aclParamGuard('editor'), jsonBody, (req, res) =
   if (b.bibliography_scope !== undefined && !VALID_BIBLIOGRAPHY_SCOPES.includes(b.bibliography_scope)) {
     return res.status(400).json({ error_code: 'INVALID_VALUE', params: { field: 'bibliography_scope', allowed: VALID_BIBLIOGRAPHY_SCOPES.join(', ') } });
   }
+  if (b.citation_notes !== undefined && !VALID_CITATION_NOTES.includes(b.citation_notes)) {
+    return res.status(400).json({ error_code: 'INVALID_VALUE', params: { field: 'citation_notes', allowed: VALID_CITATION_NOTES.join(', ') } });
+  }
   if (b.bibliography_title && String(b.bibliography_title).length > BIBLIOGRAPHY_TITLE_MAX) {
     return res.status(400).json({ error_code: 'INVALID_VALUE', params: { field: 'bibliography_title', allowed: `max ${BIBLIOGRAPHY_TITLE_MAX}` } });
   }
@@ -188,10 +191,11 @@ router.put('/:book_id/citation', aclParamGuard('editor'), jsonBody, (req, res) =
     bibliography_title:   b.bibliography_title   !== undefined ? b.bibliography_title   : cur.bibliography_title,
     bibliography_scope:   b.bibliography_scope   !== undefined ? b.bibliography_scope   : cur.bibliography_scope,
     bibliography_in_blog: b.bibliography_in_blog !== undefined ? b.bibliography_in_blog : cur.bibliography_in_blog,
+    citation_notes:       b.citation_notes       !== undefined ? b.citation_notes       : cur.citation_notes,
   });
 
   const next = getBookSettings(bookId, req.session?.user?.email || null);
-  logger.info(`[quellen] settings book=${bookId} stil=${next.citation_style} verzeichnis=${next.bibliography_enabled} scope=${next.bibliography_scope} blog=${next.bibliography_in_blog}`);
+  logger.info(`[quellen] settings book=${bookId} stil=${next.citation_style} verzeichnis=${next.bibliography_enabled} scope=${next.bibliography_scope} blog=${next.bibliography_in_blog} noten=${next.citation_notes}`);
   res.json({
     ok: true,
     citation_style: next.citation_style,
@@ -199,6 +203,7 @@ router.put('/:book_id/citation', aclParamGuard('editor'), jsonBody, (req, res) =
     bibliography_title: next.bibliography_title,
     bibliography_scope: next.bibliography_scope,
     bibliography_in_blog: next.bibliography_in_blog,
+    citation_notes: next.citation_notes,
   });
 });
 

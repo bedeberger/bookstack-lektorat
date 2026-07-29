@@ -27,6 +27,12 @@
   margin: var(--space-sm) 0;
   flex-wrap: wrap;
 }
+/* `.card-form-label` traegt ein `padding-top`, damit die fette Beschriftung im
+   zweispaltigen `.card-form-row`-Raster (`align-items: start`) optisch auf der
+   ersten Feldzeile sitzt. Hier ist die Leiste einzeilig und zentriert — das
+   Padding wuerde die Beschriftung gegenueber Combobox und Buttons nach unten
+   kippen. */
+.export-profile-bar > .card-form-label { padding-top: 0; }
 .export-profile-pick { min-width: 200px; }
 .export-profile-btn {
   display: inline-flex;

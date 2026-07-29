@@ -34,7 +34,10 @@
               @click="openCiteInput()"
               :data-tip="$app.t('editor.toolbar.citeTitle')"
               :aria-label="$app.t('editor.toolbar.citeTitle')">
-        <svg class="icon" aria-hidden="true"><use href="/icons.svg#quote"/></svg>
+        <!-- Dasselbe Icon wie die Quellen-Karte und der Toolbar-Einstieg; `#quote`
+             steht in der Seiten-Toolbar für die Anführungszeichen-Normalisierung
+             und wäre hier eine falsche Fährte. -->
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg#book-open"/></svg>
       </button>
       <button type="button"
               class="edit-bubble-btn edit-bubble-btn--xref"
@@ -102,12 +105,14 @@
     </div>
   </template>
 
-  <!-- Quellen-Picker (Quellenverzeichnis): Quelle waehlen + Stellenangabe -->
+  <!-- Quellen-Picker (Quellenverzeichnis): Quelle waehlen + Stellenangabe.
+       Zwei Zustaende: Einfuegen am Caret/an der Selektion und Bearbeiten eines
+       angeklickten Chips (`citeEditing` → anderer Titel + Entfernen-Button). -->
   <template x-teleport="body">
     <div x-show="citeShow && $app.editMode && !$app.focusActive" x-cloak
          class="edit-cite-panel"
          role="dialog"
-         :aria-label="$app.t('editor.toolbar.citeTitle')"
+         :aria-label="citeEditing ? $app.t('editor.toolbar.citeEditTitle') : $app.t('editor.toolbar.citeTitle')"
          :style="{ left: citeX + 'px', top: citeY + 'px' }"
          @click.outside="_closeCite()"
          @keydown="_onCiteKeydown($event)"
@@ -157,6 +162,13 @@
               x-text="hit.label"></li>
         </template>
       </ul>
+      <!-- Beleg loeschen: nur beim Bearbeiten eines bestehenden Chips. -->
+      <button type="button" x-show="citeEditing"
+              class="edit-cite-remove"
+              @click="_removeCite()">
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#trash"/></svg>
+        <span x-text="$app.t('editor.toolbar.citeRemove')"></span>
+      </button>
     </div>
   </template>
 

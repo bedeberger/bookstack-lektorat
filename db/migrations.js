@@ -10019,6 +10019,35 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 255 abgeschlossen (Querverweise: xref_anchors + xref_links + book_settings.figure_numbering).');
   }
 
+  if (version < 256) {
+    // Belegdarstellung: Kurzbeleg im Fliesstext („inline", bisheriges und
+    // Default-Verhalten) oder nummerierter Anmerkungsapparat pro Kapitel
+    // („endnotes", lib/endnotes.js).
+    //
+    // Steht in book_settings und nicht im Exportprofil, aus demselben Grund wie
+    // `citation_style`: ob ein Werk mit Klammerbelegen oder mit Anmerkungen
+    // arbeitet, ist eine Eigenschaft DES WERKS und muss in PDF, DOCX, EPUB, HTML
+    // und Blog gleichzeitig gelten. Pro Exportprofil waere es beliebig — derselbe
+    // Text zitierte dann je nach Datei anders.
+    //
+    // Kein CHECK-Constraint: die gueltigen Werte stehen in
+    // lib/endnotes.js#CITATION_NOTES_MODES und werden auf dem Schreibpfad
+    // (db/schema.js#setBookCitationSettings) auf den Default zurueckgefaltet —
+    // dieselbe Linie wie bei citation_style/bibliography_scope. Ein CHECK
+    // erzwaenge bei jedem neuen Modus eine Tabellen-Neuanlage.
+    const bsCols256 = db.pragma('table_info(book_settings)').map(c => c.name);
+    if (bsCols256.length > 0 && !bsCols256.includes('citation_notes')) {
+      db.exec("ALTER TABLE book_settings ADD COLUMN citation_notes TEXT NOT NULL DEFAULT 'inline'");
+    }
+
+    const fkErrors256 = db.pragma('foreign_key_check');
+    if (fkErrors256.length) {
+      throw new Error(`Migration 256: foreign_key_check meldet ${fkErrors256.length} Verstoesse: ${JSON.stringify(fkErrors256.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 256').run();
+    logger.info('DB-Migration auf Version 256 abgeschlossen (book_settings.citation_notes: Kurzbeleg inline vs. Anmerkungsapparat).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

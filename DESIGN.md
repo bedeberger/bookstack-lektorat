@@ -1359,6 +1359,8 @@ geteilt mit der Sidebar-Page-Suche) — nur sichtbar (`x-show`), wenn das Suchfe
 
 **Höhen-Invariante (Pflicht):** Alle Controls in einer `.filter-bar` — Suchfeld (`.filter-search-input`), Compact-Combobox (`.combobox-wrap--compact`) und Tabs (`.tabs` / `.tabs-btn`) — rendern auf **identischer Höhe** (~26.8px). Sie teilen font-size 12px (`--font-size-mini` / `--size-compact-font-size`), vertikales Padding 4px (`--space-xs` / `--size-compact-padding`), 0.5px-Border **und** `line-height: 1.4`. Die Angleichung lebt in [public/css/entities/entity-list.css](public/css/entities/entity-list.css) und greift automatisch für alle Filter-Bars. **Spezifitäts-Falle:** Das Suchfeld ist ein `<input type="text">` und wird daher von der generischen Form-Regel `input[type=text]` (card-form.css, Spezifität 0,1,1) getroffen — eine nackte `.filter-search-input`-Klasse (0,1,0) verliert dagegen und das Feld käme in Default-Grösse (14px/8px → höher als die Combobox). Darum ist die Compact-Regel als `.filter-bar .filter-search-input` (0,2,0) gescoped. Combobox-Trigger und Tabs-Button sind `<button>`, von der Input-Regel nicht betroffen, brauchen aber explizites `line-height: 1.4` (sonst geerbtes `normal` ~1.2 → niedriger). **Neuer Control-Typ in einer Filter-Bar** → dieselben 4 Werte (Font/Padding/Border/line-height) treffen und auf genügend Spezifität achten, sonst sitzt er höher/tiefer als die Nachbarn.
 
+**Mittellinien-Invariante (Pflicht, gilt für jede zentrierte Zeile):** Ein Control in einer Zeile mit `align-items: center` darf **keine einseitige vertikale Margin** tragen. Flex zentriert die **Aussen**box; eine Margin nur unten (oder nur oben) kippt die sichtbare Box um die halbe Margin gegen die Mittellinie der Nachbarn — bei 6px also 3px, genug um als „nicht zentriert" aufzufallen, und ohne Messen nicht als Margin erkennbar. Betrifft vor allem `<label>`: die globale `label`-Regel ([card-form/form-elements.css](public/css/components/card-form/form-elements.css)) trägt deshalb **bewusst kein `margin-bottom`** — vertikale Abstände zwischen Label und Feld kommen ausschliesslich aus dem `gap` des Containers (`.form-stack`, `.card-form-row`, `.form-inline`, `.setting-field`, `.admin-logs-filter`). Braucht ein Label als Block-Überschrift Abstand nach unten (Container ohne `gap`), setzt das seine eigene Klasse lokal — Muster: `.book-export-migration > .book-export-scope-label`. Gegated: [tests/unit/label-margin-drift.test.mjs](tests/unit/label-margin-drift.test.mjs). Dieselbe Falle bei `padding`: `.card-form-label` trägt `padding-top` für das zweispaltige `.card-form-row`-Raster (`align-items: start`); wird dieselbe Klasse in einer zentrierten Zeile wiederverwendet, muss sie dort auf `0` (Muster: `.export-profile-bar > .card-form-label`).
+
 ---
 
 ## Heatmap-Visualisierung
@@ -1722,7 +1724,9 @@ Spezifisch für Editor — bei neuer Inline-Toolbar erst prüfen, ob die Edit-Kl
 
 ### Beleg-Chip + Beleg-Picker (Quellenverzeichnis)
 
-**Use:** Quellennachweis mitten im Satz. Der **Chip** ist der Beleg im gespeicherten Seiten-HTML, der **Picker** das Panel zum Einfügen (Quelle wählen + Stellenangabe). Kein Slash-Menü-Eintrag: der Beleg ist inline und gehört an den Caret, das Slash-Menü ersetzt dagegen einen leeren Block.
+**Use:** Quellennachweis mitten im Satz. Der **Chip** ist der Beleg im gespeicherten Seiten-HTML, der **Picker** das Panel zum Einfügen **und Bearbeiten** (Quelle wählen/wechseln + Stellenangabe + Zitat-Art + Entfernen). Kein Slash-Menü-Eintrag: der Beleg ist inline und gehört an den Caret, das Slash-Menü ersetzt dagegen einen leeren Block.
+
+**Drei Einstiege, ein Panel:** Button in der Seiten-Toolbar (am blossen Caret — der Weg für den laufenden Satz), Button in der Bubble-Toolbar (bei markiertem Text) und **Klick auf einen bestehenden Chip** (`openCiteForChip`, Pendant zum Link-Input, der einen bestehenden `<a>` vorbefüllt). `citeEditing` unterscheidet die beiden Zustände im Template.
 
 **Markup Chip** — SSoT [public/js/sources/cite-html.js](public/js/sources/cite-html.js), nie von Hand schreiben:
 ```html
@@ -1732,14 +1736,17 @@ Spezifisch für Editor — bei neuer Inline-Toolbar erst prüfen, ob die Edit-Kl
 **Klassen Chip** [components/manuscript-content.css](public/css/components/manuscript-content.css):
 - `span.cite` — Akzentfarbe + gepunktete Grundlinie, `white-space: nowrap`. Gilt in allen drei Oberflächen (`.page-content-view`, `.book-editor-page-body`, `.share-content`).
 - `span.cite[contenteditable="false"]` — nur im Editor: `cursor: default` + `user-select: none` (atomarer Chip).
+- `.page-content-view--editing span.cite[contenteditable="false"]` — im Notebook-Edit-Modus `cursor: pointer`: dort ist der Chip ein Klickziel (öffnet den Picker auf sich selbst).
 
 **Klassen Picker** [editor/notebook/edit-toolbar.css](public/css/editor/notebook/edit-toolbar.css):
 - `.edit-cite-panel` — teleportiertes fixed-Panel über dem Caret (Aufbau wie `.edit-link-bar`, aber mit Trefferliste)
 - `.edit-cite-row`, `.edit-cite-input--filter`, `.edit-cite-input--loc` — Filter- und Stellenangabe-Feld
 - `.edit-cite-list`, `.edit-cite-item`, `.edit-cite-item.is-active` — Trefferliste mit Tastatur-Auswahl
-- `.edit-bubble-btn--cite` — Auslöser in der Bubble-Toolbar (Icon `#quote`)
+- `.edit-cite-remove` — „Beleg entfernen", nur im Bearbeiten-Zustand (zurückhaltend wie `.edit-link-btn`; Hauptaktion bleibt die Quellenauswahl)
+- `.edit-bubble-btn--cite` — Auslöser in der Bubble-Toolbar (Icon `#book-open`, wie die Quellen-Karte; `#quote` steht in der Seiten-Toolbar für die Anführungszeichen-Normalisierung)
 
 **Regeln:**
+- **Eine Selektion wird belegt, nicht ersetzt.** Der Kurzbeleg landet am Ende der Selektion; er weist die Stelle nach, statt an ihre Stelle zu treten. Unterschied zum Link-Input, wo die Selektion der Linktext ist.
 - **`data-src` ist die Wahrheit, der Chip-Text ist Cache.** Bei Stilwechsel oder Quellenkorrektur schreibt ein Regenerierungs-Pass den Text neu — keine Schicht darf den Text als Quelle lesen.
 - **`contenteditable` nie in der Persistenz.** Setzt der Editor beim Mount (`markCitesAtomic`); [lib/html-clean.js](lib/html-clean.js) strippt es beim Speichern und die Dirty-Vergleichsform ignoriert es. Ohne beides gilt jede Seite mit Beleg beim Öffnen als geändert.
 - **Zurückhaltend stylen.** Kein Hintergrund, keine Border, kein eigener Font — der Kurzbeleg ist Lesetext, kein Badge. Sonst zerhackt jeder Nachweis den Absatz optisch.

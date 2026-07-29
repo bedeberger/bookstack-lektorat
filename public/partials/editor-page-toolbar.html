@@ -40,6 +40,16 @@
             @click="insertHorizontalRule()">
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#separator-horizontal"/></svg>
     </button>
+    <!-- Quelle einfügen (Quellenverzeichnis). Zweiter Einstieg neben der
+         Bubble-Toolbar, und der einzige, der ohne markierten Text funktioniert —
+         ein Beleg gehört mitten in den laufenden Satz. `@mousedown.prevent` hält
+         den Fokus (und damit den Caret) im contenteditable. -->
+    <button type="button" class="icon-btn"
+            :data-tip="t('editor.toolbar.citeTitle')" :aria-label="t('editor.toolbar.citeTitle')"
+            @mousedown.prevent
+            @click="openCitePicker()">
+      <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#book-open"/></svg>
+    </button>
     <button type="button" class="icon-btn"
             :class="{ 'is-active': quotesNormalizedFlash }"
             :data-tip="quotesNormalizedFlash
@@ -114,6 +124,11 @@
               @click="insertHorizontalRule()">
         <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#separator-horizontal"/></svg>
         <span x-text="t('editor.toolbar.hrTitle')"></span>
+      </button>
+      <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem"
+              @click="openCitePicker()">
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#book-open"/></svg>
+        <span x-text="t('editor.toolbar.citeTitle')"></span>
       </button>
       <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem"
               :class="{ 'context-menu-item--on': quotesNormalizedFlash }"

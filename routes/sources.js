@@ -24,6 +24,7 @@ const {
   db, CSL_TYPES,
   listSources, listPoolSources, getSource, createSource, updateSource, deleteSource,
   linkSource, unlinkSource, isSourceLinked, listSourceBooks, getBookQuoteStats,
+  listBookCitations,
 } = require('../db/schema');
 const { hasMinRole } = require('../db/book-access');
 const { toIntId } = require('../lib/validate');
@@ -158,6 +159,26 @@ router.get('/stats', (req, res) => {
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   if (!_guard(req, res, bookId, 'viewer')) return;
   res.json(getBookQuoteStats(bookId));
+});
+
+// ── Fund-Index eines Buchs ───────────────────────────────────────────────────
+// GET /sources/citations?book_id=
+// Alle Fundstellen des Buchs flach, in Buch-Leserichtung (Seitenposition, dann
+// Offset). Die Gegenrichtung zu /:id/citations („wo steht DIESE Quelle") und
+// Grundlage des Quellen-Tabs im Referenz-Slot neben dem Notebook-Editor: welche
+// Quellen sind auf dieser Seite bzw. in diesem Kapitel belegt.
+//
+// Bewusst OHNE Seiten-/Kapitelnamen: die kennt das Frontend aus dem Buchtree
+// (`Alpine.store('nav').pages`), und ein JOIN waere hier ein zweiter Weg zum
+// selben Namen. Ein Buch, ein Roundtrip — die Scope-Umschaltung des Slots
+// (Seite/Kapitel/Buch) filtert danach clientseitig ohne Nachladen.
+//
+// Steht VOR /:id, sonst faengt der Id-Handler 'citations' ab.
+router.get('/citations', (req, res) => {
+  const bookId = toIntId(req.query.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
+  if (!_guard(req, res, bookId, 'viewer')) return;
+  res.json(listBookCitations(bookId));
 });
 
 // ── Import aus BibTeX/RIS ────────────────────────────────────────────────────

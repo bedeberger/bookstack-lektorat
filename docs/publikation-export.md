@@ -97,6 +97,31 @@ Datenquelle ist [lib/bibliography.js](../lib/bibliography.js)#`buildBibliography
 
 **Fassungs-Export liest die Fundstellen aus dem eingefrorenen HTML** (`citationsFromGroups(groups)` in [routes/snapshots.js](../routes/snapshots.js), übersteuert `pageIds`): `source_citations` beschreibt den heutigen Seitenstand, die Fassung aber einen alten — sonst trägt ein Chip im numerischen Stil eine Nummer, die zum Verzeichnis dieser Fassung nicht passt. Die Quellen-Stammdaten bleiben bewusst live (eine korrigierte ISBN soll auch dort stimmen).
 
+## Anmerkungsapparat (Endnoten pro Kapitel)
+
+`book_settings.citation_notes` (Migration 256) wählt die **Belegdarstellung** — buchweit, wie `citation_style`, weil sie eine Eigenschaft des Werks ist und nicht des Exports:
+
+| Wert | Wirkung |
+|------|---------|
+| `inline` (Default) | Kurzbeleg in Klammern im Fliesstext — bisheriges Verhalten |
+| `endnotes` | hochgestellte Notenziffer im Text, Notenliste am Ende **jedes Kapitels** |
+
+**Nie beide:** `prepareCitations` ([shared.js](../lib/export-builders/shared.js)) und [pdf-render/index.js](../lib/pdf-render/index.js) rufen entweder `resolveCitesInGroups` **oder** `buildEndnotes` — hintereinander würde der Notenpass den frisch gesetzten Kurzbeleg wieder überschreiben.
+
+**Engine:** [lib/endnotes.js](../lib/endnotes.js) (DOM-Seite, linkedom) + [public/js/sources/format/notes.js](../public/js/sources/format/notes.js) (pure Note-Form). Aufteilung wie bei bibliography.js/format.js: der Server macht den Walk, die Form ist ein reines Modul.
+
+- **Zählung pro Kapitel**, nicht pro Seite und nicht pro Buch — ein Apparat, der bei 340 anfängt, ist unlesbar. Ein Kapitel, das durch Unterkapitel in mehrere Gruppen zerfällt, zählt trotzdem durch; der Apparat hängt an der **letzten** Gruppe des Kapitels.
+- **Drei Formen:** `full` (Erstnennung im Kapitel: voller Eintrag + Stellenangabe) → `ibid` (unmittelbar davor dieselbe Quelle: „Ebd."/„Ibid.", Stellenangabe nur bei Änderung) → `opCit` (im Kapitel schon belegt, aber nicht direkt davor: Kurzname + „a. a. O."/„op. cit.").
+- **Kein „ders."/„dies."** — die Kurzform existiert im Deutschen nur grammatisch gegendert, und das Geschlecht einer realen Person steht nicht im Datenmodell (`authors` führt family/given/literal). Ein geratenes „Ders." vergendert Autorinnen in einem gedruckten Buch; der Apparat wiederholt stattdessen den Nachnamen, was in jedem Stil zulässig ist.
+- **Belegte Blockzitate ohne eigenen Chip** bekommen ihre Note ans Ende des letzten Absatzes im Zitat — sonst wäre `<blockquote data-src>` die einzige Zitat-Kategorie ohne sichtbaren Nachweis.
+- **Der Zeiger bleibt unberührt:** ersetzt wird nur der Chip-**Inhalt** (`<sup>n</sup>` statt Kurzbeleg), `data-src`/`data-loc` bleiben. Das weicht bewusst von Invariante B ab (die gilt für den Inline-Pfad). Wie das Verzeichnis ist der Apparat ein **Render-Artefakt** und wird nie persistiert — darum steht `sup` auch in keiner html-clean-Allowlist.
+
+**Hochstellung durch alle Renderer:** der Walker ([html-walker.js](../lib/pdf-render/html-walker.js)) mappt `<sup>` auf ein Run-Flag `sup`; PDF rechnet Grösse (`SUP_SCALE`) und Grundlinien-Anhebung (`SUP_RISE`) selbst ([justify.js](../lib/pdf-render/justify.js) — pdfkit setzt `y` auf die Zeilenoberkante, nicht auf die Grundlinie, darum die Rückrechnung über die Oberlänge der Schrift), DOCX nutzt `superScript`, HTML/EPUB/Substack/Markdown geben `<sup>` aus, Plaintext die blosse Ziffer. **Bewusst keine Unicode-Hochzahlen** (¹²³): die gibt es nur für wenige Ziffern zuverlässig in jeder Schrift, und eine fehlende Glyphe wäre im PDF eine Leerstelle mitten im Satz.
+
+**PDF-Einbau:** der Apparat ist ein zusätzliches **Item am Ende des Kapitel-Blocks**, kein eigener Block — sonst bekäme er Kolumnentitel und TOC-Eintrag und stünde als Pseudo-Kapitel im Verzeichnis. Über `isEndnotes` erbt das Item den Verzeichnis-Satz aus [body.js](../lib/pdf-render/body.js) (Font-Rolle `bibliography`, hängender Einzug).
+
+**Nicht im Blog-Push:** [lib/wp-html.js](../lib/wp-html.js) bleibt auf dem Inline-Pfad. Ein Blog-Post ist genau eine Seite; ein Apparat „pro Kapitel" hat dort keinen Bezugsrahmen.
+
 ### Die übrigen Ausgabewege
 
 Alle Builder in [lib/export-builders/](../lib/export-builders/) rufen als erstes `prepareCitations(bundle, opts)` ([shared.js](../lib/export-builders/shared.js)) und rendern danach dessen `groups` statt `bundle.groups`. Der Helper kapselt die drei Regeln, die für jeden Weg gleich gelten: Chips auflösen, Verzeichnis nur bei `scope='book'`, ohne `opts.bibliography` unverändert durchreichen. `opts.bibliography` befüllt [lib/export-send.js](../lib/export-send.js)#`buildExportMeta` zentral für beide Sync-Routen (`/export`, Fassungs-Export).
@@ -127,6 +152,7 @@ Migration 166 seedet `book_publication` je Buch aus dem Gewinner-PDF-Profil (`is
 
 - Unit Quellenverzeichnis: [tests/unit/bibliography.test.mjs](../tests/unit/bibliography.test.mjs) (Buch- vs. Seiten-Scope, Nummernvergabe, `cited`/`all`, Titel-Default je Sprache, abgeschaltet → leer, Chip-Text-Ersetzung + Attribut-Invariante); PDF-Seite in [tests/unit/pdf-render.test.mjs](../tests/unit/pdf-render.test.mjs) (eigene Seite + Outline-Eintrag, nur bei `scope='book'`, ersetzter Kurzbeleg im gerenderten Text via `extractPdfText`).
 - Unit übrige Ausgabewege: [tests/unit/export-builders/bibliography.test.mjs](../tests/unit/export-builders/bibliography.test.mjs) — fährt HTML/TXT/MD/Substack/EPUB gegen **dieselbe** Zusage (frischer Kurzbeleg statt Cache, Verzeichnis nur beim Buch, abgeschaltetes Verzeichnis löst trotzdem auf, ohne `bibliography`-Option unverändert). Genau hier lief das Feature zuletzt auseinander: PDF und DOCX konnten es, der Rest nicht.
+- Unit Anmerkungsapparat: [tests/unit/endnotes.test.mjs](../tests/unit/endnotes.test.mjs) (Zählung pro Kapitel inkl. unterbrochener Kapitel-Läufe, Ebd./a. a. O.-Auswahl, Stellenangabe nur bei Änderung, Blockzitat mit/ohne eigenen Chip, unbekannte Quelle, Zeiger-Invariante, Enum-Deckung gegen `db/schema.js`); PDF-Seite in [tests/unit/pdf-render.test.mjs](../tests/unit/pdf-render.test.mjs) (Notenziffer statt Klammerform, Apparat hinter jedem Kapitel, Vollform pro Kapitel).
 - Unit Jahres-Buchstaben: [tests/unit/sources-format.test.mjs](../tests/unit/sources-format.test.mjs) (`assignYearSuffixes`: nur mehrdeutige Paare, Reihenfolge nach Titel, undatiert bleibt aussen vor, >26 Werke kollidieren nicht, Buchstabe in Kurzbeleg **und** Eintrag, numerischer Stil unberührt).
 - Unit: [tests/unit/publication-meta.test.mjs](../tests/unit/publication-meta.test.mjs) (Validator/ISBN-Checksum, `author_file_as`/`co_authors`/`extra_sections`-Normalisierung), [tests/unit/epub-export.test.mjs](../tests/unit/epub-export.test.mjs) (Meta-Resolver, Frontmatter/Backmatter, Bild-Zähler, ISBN-`dc:identifier`, Accessibility-Meta, Landmarks-nav, file-as-Override + Co-Autoren-`dc:creator`, freie Vor-/Nachsatz-Seiten, genEpub-Smoke).
 - E2E: [tests/e2e/publication.spec.js](../tests/e2e/publication.spec.js) (Tab, Speichern, Cover-Upload, EPUB-Download) — Harness [tests/fixtures/publication-harness.html](../tests/fixtures/publication-harness.html), Mocks in [tests/server.js](../tests/server.js).

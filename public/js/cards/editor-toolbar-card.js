@@ -12,6 +12,7 @@
 import { toolbarCardMethods } from '../editor/notebook/toolbar.js';
 import { TODO_LIST_SEL } from '../editor/shared/todo-html.js';
 import { invalidateSourceCache } from '../editor/notebook/toolbar/cite.js';
+import { closestCiteEl } from '../sources/cite-html.js';
 import { invalidateXrefTargetCache } from '../editor/notebook/toolbar/xref.js';
 import { EVT } from '../events.js';
 
@@ -56,6 +57,11 @@ export function registerEditorToolbarCard() {
     citeLoading: false,
     citeError: false,
     _citeRange: null,
+    // Bearbeiten statt Einfügen: `_citeEditEl` ist der angeklickte Chip (null =
+    // Einfügen), `citeEditing` dasselbe als reaktive Flag fürs Template
+    // (Panel-Titel + „Beleg entfernen"-Button).
+    citeEditing: false,
+    _citeEditEl: null,
     // Querverweis-Picker (Kapitel + Abbildungen) — Aufbau wie der Beleg-Picker.
     // `xrefTargets` ist die Zielliste des Buchs (gecacht im Modul), `xrefFmt`
     // die Anzeigeform des Verweises ('label' | 'number' | 'title').
@@ -119,6 +125,11 @@ export function registerEditorToolbarCard() {
       }, { signal });
       window.addEventListener(EVT.BOOK_CHANGED, () => invalidateSourceCache(), { signal });
 
+      // Beleg-Picker aus der Seiten-Toolbar (Root-Scope → Trampoline-Event, wie
+      // der Fokus-Modus). Der Einstieg über die Bubble-Toolbar setzt eine
+      // Selektion voraus; dieser hier arbeitet am blossen Caret.
+      window.addEventListener(EVT.EDITOR_CITE_OPEN, () => this.openCiteInput(), { signal });
+
       // Zielliste des Querverweis-Pickers ebenso modulweit gecacht: Umbauten im
       // Buchorganizer und neue Abbildungen verschieben die Nummern.
       window.addEventListener(EVT.XREFS_CHANGED, (e) => {
@@ -146,6 +157,26 @@ export function registerEditorToolbarCard() {
         if (t.hasAttribute('checked')) t.removeAttribute('checked');
         else t.setAttribute('checked', '');
         window.__app?._markEditDirty?.();
+      }, { signal });
+
+      // Klick auf einen Quellen-Chip öffnet den Beleg-Picker auf diesem Chip
+      // (Quelle wechseln, Stelle korrigieren, Beleg entfernen). Chips sind
+      // `contenteditable="false"`, ein Klick würde sonst gar nichts tun — es gäbe
+      // keinen Weg, einen gesetzten Beleg zu korrigieren.
+      //
+      // Nur im Notebook-Edit-Container (`.page-content-view--editing`): Quellen-
+      // Handling ist notebook-only, Focus-Editor und Bucheditor stellen Chips nur
+      // dar. Der Aufruf läuft bewusst deferred — das `@click.outside` des Panels
+      // hängt am selben document-Klick und würde ein direkt geöffnetes Panel
+      // sofort wieder schliessen (Chip B anklicken, während Chip A offen ist).
+      document.addEventListener('click', (e) => {
+        const app = window.__app;
+        if (!app?.editMode || app.focusActive) return;
+        const editEl = e.target?.closest?.('.page-content-view--editing');
+        if (!editEl) return;
+        const chip = closestCiteEl(e.target, editEl);
+        if (!chip) return;
+        setTimeout(() => this.openCiteForChip(chip), 0);
       }, { signal });
 
       // <hr> ist ein void-Element ohne Caret-Slot — per Klick als

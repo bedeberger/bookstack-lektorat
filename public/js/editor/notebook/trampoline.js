@@ -9,6 +9,8 @@
 // `this`-Binding: Forwarder rufen die Sub-Methode via `card.X(...args)`, sodass
 // `this` innerhalb der Sub korrekt der Sub-Proxy ist (Alpine bindet automatisch).
 
+import { EVT } from '../../events.js';
+
 const card = () => window.__notebookCard;
 
 export const notebookTrampoline = {
@@ -25,6 +27,11 @@ export const notebookTrampoline = {
   pageEditorZoomOut() { card()?.pageEditorZoomOut(); },
   pageEditorZoomReset() { card()?.pageEditorZoomReset(); },
   normalizeQuotes() { return card()?.normalizeQuotes(); },
+  // Beleg-Picker (Quellenverzeichnis) am Caret öffnen. Einziger Forwarder hier,
+  // der NICHT auf `editorNotebookCard` zeigt: der Picker liegt in
+  // `editorToolbarCard`, die keinen Selbst-Ref auslegt — darum per Event
+  // (Muster: editor/focus/trampoline.js).
+  openCitePicker() { window.dispatchEvent(new CustomEvent(EVT.EDITOR_CITE_OPEN)); },
   notebookUndo() { card()?.notebookUndo(); },
   notebookRedo() { card()?.notebookRedo(); },
   notebookCanUndo() { return !!card()?.notebookCanUndo(); },

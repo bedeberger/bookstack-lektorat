@@ -58,6 +58,7 @@ const locationsRouter = require('./routes/locations');
 const songsRouter = require('./routes/songs');
 const { router: jobsRouter, runKomplettAnalyseAll } = require('./routes/jobs');
 const { reindexAllBooks } = require('./routes/jobs/embed-index');
+const { reindexAllXrefs } = require('./lib/xref-index');
 const { scanAllBooks: scanAllMotifs } = require('./routes/jobs/motif-scan');
 const { anchorAllBooks: anchorAllBeats } = require('./routes/jobs/beat-anchor');
 const chatRouter = require('./routes/chat');
@@ -706,6 +707,13 @@ try {
       // Motiv-Ist-Index + Plot-Beat-Verankerung nachziehen (motif-scan / beat-anchor
       // pro Buch/User) — beide reihen sich hinter die Embed-Jobs ein und lesen den
       // frischen Index. Keiner ruft callAI; sie nutzen nur den Embedding-/FTS-Index.
+      // Querverweis-Index nachziehen: holt Bestandsinhalte nach, die seit
+      // Einfuehrung des Features nie gespeichert wurden, und heilt Drift, die
+      // kein Seiten-Write mehr anfassen wuerde (Verweis auf ein Ziel, das erst
+      // spaeter angelegt wurde — siehe Buch-Guard in db/xrefs.js). Kein Job:
+      // reine Klempnerei ohne callAI, wie der FTS-Index.
+      reindexAllXrefs().catch(e => logger.error('Cron Querverweis-Index Fehler: ' + e.message));
+
       reindexAllBooks()
         .then(() => scanAllMotifs())
         .then(() => anchorAllBeats())

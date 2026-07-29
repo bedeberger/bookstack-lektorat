@@ -312,6 +312,14 @@
        des Belegs wäre irreführend. */
     user-select: none;
   }
+  /* Im Notebook-Edit-Modus ist der Chip ein Klickziel: er öffnet den
+     Beleg-Picker auf sich selbst (Quelle wechseln, Stelle korrigieren,
+     entfernen — siehe cards/editor-toolbar-card.js). Nur dort, weil nur der
+     Notebook-Editor einen Bearbeitungspfad für Quellen hat; Leseansicht,
+     Bucheditor und Reader lassen den Kurzbeleg normaler Text sein. */
+  .page-content-view--editing span.cite[contenteditable="false"] {
+    cursor: pointer;
+  }
 
   /* --- Querverweise (span.xref, siehe public/js/xrefs/xref-html.js) --- */
   /* Bewusst leiser als der Beleg-Chip: ein Querverweis ist Teil des Satzes

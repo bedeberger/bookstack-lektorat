@@ -43,6 +43,15 @@
 .sources-row--archived { opacity: var(--opacity-hint); }
 .sources-row--active { box-shadow: inset 3px 0 0 var(--card-accent); }
 
+/* Kurzes Hervorheben beim Sprung aus dem Quellen-Tab des Referenz-Slots.
+   Hintergrund statt box-shadow: eine <tr> hat keine eigene Box fuer den Schatten
+   (die Zellen tragen ihn), ein Ring bliebe stellenweise unsichtbar. */
+@keyframes sourcesRowFlash {
+  0%, 100% { background: transparent; }
+  20%, 65% { background: var(--color-tag-bg); }
+}
+.sources-row--flash { animation: sourcesRowFlash 1.6s ease; }
+
 .sources-cell-author { white-space: nowrap; }
 
 /* Flex sitzt auf dem inneren `.sources-title-stack`, nicht auf der Zelle: eine

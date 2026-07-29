@@ -435,8 +435,12 @@ export const appHashRouterMethods = {
           if (arg) window.dispatchEvent(new CustomEvent(EVT.RECHERCHE_FOCUS_ITEM, { detail: { itemId: arg } }));
           break;
         case 'quellen':
+          // Optionaler Quellen-Permalink (#…/quellen/<sourceId>, Sprung aus dem
+          // Referenz-Slot). Kein Store-Spiegel: der Fokus ist ein einmaliger Zeiger
+          // auf eine Zeile, kein Kartenzustand — `_updateHash` normalisiert zurück.
           if (!this.showSourcesCard) await this.toggleSourcesCard();
           else { this._closeOtherMainCards('sources'); this._scrollToCardByKey('sources'); }
+          if (arg) window.dispatchEvent(new CustomEvent(EVT.SOURCES_FOCUS_SOURCE, { detail: { sourceId: arg } }));
           break;
         case 'kontinuitaet':
           if (!this.showKontinuitaetCard) await this.toggleKontinuitaetCard();

@@ -170,7 +170,7 @@
       </thead>
       <tbody>
         <template x-for="s in sorted" :key="s.id">
-          <tr :class="{ 'sources-row--archived': s.archived, 'sources-row--active': srcEditingId === s.id }">
+          <tr :data-source-id="s.id" :class="{ 'sources-row--archived': s.archived, 'sources-row--active': srcEditingId === s.id }">
             <td class="sources-cell-author" x-text="s._author || '—'"></td>
             <!-- Titel/Container/Archiv-Badge stapeln in einem inneren Wrapper,
                  nicht per display:flex auf der <td>: eine Flex-<td> ist keine

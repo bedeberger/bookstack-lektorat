@@ -173,8 +173,10 @@ Sub-Karte `editorToolbarCard` ([cards/editor-toolbar-card.js](../public/js/cards
 
 | Layer | Trigger | Sichtbar wenn | Funktion |
 |---|---|---|---|
-| Bubble | non-collapsed Selection im Editor | `editMode && !focusActive && !sel.isCollapsed` | Bold/Italic (Inline) — Single-Word-Flag steuert zusätzliche Aktionen |
+| Bubble | non-collapsed Selection im Editor | `editMode && !focusActive && !sel.isCollapsed` | Bold/Italic (Inline) — Single-Word-Flag steuert zusätzliche Aktionen; dazu Link-, Beleg- und Querverweis-Einstieg |
 | Slash | `/` in leerem Block | `editMode && !focusActive` | Block-Transform: `p`, `h2`, `h3`, `blockquote`, `.poem`, `ul/li`, `hr` |
+| Beleg-Picker | Toolbar-Button, Bubble-Button oder **Klick auf einen bestehenden Chip** | `citeShow && editMode && !focusActive` | Quelle wählen/wechseln, Stellenangabe, Zitat-Art, Beleg entfernen |
+| Querverweis-Picker | Bubble-Button | `xrefShow && editMode && !focusActive` | Kapitel/Abbildung als Ziel + Anzeigeform |
 
 **Im Focus deaktiviert.** Bubble/Slash gaten via `if (app.focusActive) return;` ([toolbar.js#L56](../public/js/editor/notebook/toolbar.js#L56), [#L148](../public/js/editor/notebook/toolbar.js#L148)). Cmd/Ctrl+B/I und Cmd/Ctrl+Shift+H laufen weiter, weil B/I auch im Focus-Notwendig-Whitelist sind.
 

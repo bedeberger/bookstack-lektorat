@@ -30,8 +30,15 @@ export const XREF_DEFAULTS = Object.freeze({
   figure_numbering: 0,
 });
 
+/** Belegdarstellung. Deckungsgleich mit lib/endnotes.js#CITATION_NOTES_MODES und
+ *  db/schema.js#VALID_CITATION_NOTES — laeuft es auseinander, verwirft der
+ *  Endpunkt den Wert mit 400. */
+export const CITATION_NOTES = ['inline', 'endnotes'];
+export const DEFAULT_NOTES = 'inline';
+
 export const CITATION_DEFAULTS = Object.freeze({
   citation_style: DEFAULT_STYLE,
+  citation_notes: DEFAULT_NOTES,
   bibliography_enabled: 0,
   bibliography_title: '',
   bibliography_scope: 'cited',
@@ -46,6 +53,8 @@ export const citationMethods = {
     this.bookCitation = {
       citation_style: CITATION_STYLES.includes(data?.citation_style)
         ? data.citation_style : DEFAULT_STYLE,
+      citation_notes: CITATION_NOTES.includes(data?.citation_notes)
+        ? data.citation_notes : DEFAULT_NOTES,
       bibliography_enabled: data?.bibliography_enabled ? 1 : 0,
       bibliography_title: data?.bibliography_title || '',
       bibliography_scope: data?.bibliography_scope === 'all' ? 'all' : 'cited',
@@ -86,7 +95,7 @@ export const citationMethods = {
     const bookId = Alpine.store('nav').selectedBookId;
     if (!bookId) return;
     // Nicht speichern, bevor der Stand geladen ist: der Endpunkt ist zwar
-    // PATCH-artig, wir senden aber alle fuenf Felder — ein ungeladener Default
+    // PATCH-artig, wir senden aber alle Felder — ein ungeladener Default
     // wuerde den DB-Stand ueberschreiben. saveActiveTab ruft uns bei JEDEM
     // Speichern-Klick auf, auch ohne Quellen-Edit.
     if (!this.bookCitationLoaded) return;
@@ -100,6 +109,7 @@ export const citationMethods = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           citation_style: c.citation_style,
+          citation_notes: c.citation_notes,
           bibliography_enabled: c.bibliography_enabled ? 1 : 0,
           bibliography_title: (c.bibliography_title || '').trim() || null,
           bibliography_scope: c.bibliography_scope,
@@ -134,6 +144,11 @@ export const citationMethods = {
   citationStyleOptions() {
     const app = window.__app;
     return CITATION_STYLES.map(s => ({ value: s, label: app.t(`sources.style.${s}`) }));
+  },
+
+  citationNotesOptions() {
+    const app = window.__app;
+    return CITATION_NOTES.map(v => ({ value: v, label: app.t(`book.settings.cite.notes.${v}`) }));
   },
 
   citationScopeOptions() {

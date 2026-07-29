@@ -21,6 +21,9 @@
 //   5. Paste behält den eigenen Chip und wirft fremde <span>-Hüllen weg.
 //   6. Der Fund-Index (source_citations) folgt dem Save.
 //   7. Der Beleg-Picker fügt am Caret ein und markiert die Seite als geändert.
+//   8. Eine Selektion wird belegt, nicht ersetzt (der Kurzbeleg landet dahinter).
+//   9. Klick auf einen Chip öffnet den Picker auf ihm (Stelle/Zitat-Art zurück-
+//      gelesen, verknüpfte Quelle vorne) und „Beleg entfernen" räumt ihn weg.
 //
 // Konventionen dieser Suite (übernommen von notebook-todo-readmode.spec.js):
 //   - Inhalt wird ANGEHÄNGT, nie ersetzt: ein Save, der den Text auf < 20 %
@@ -300,6 +303,91 @@ test('Beleg-Picker fügt einen Chip am Caret ein', async ({ page }) => {
   // _commitCite über die Range-API ein.
   expect(res.styleAttrs).toBe(0);
   expect(res.spans).toBe(1);
+});
+
+test('Beleg-Picker ersetzt eine Selektion nicht, sondern belegt sie', async ({ page }) => {
+  await boot(page);
+  await createSource(page, 'Selektions-Probe');
+  await openPageInEdit(page, 0);
+
+  await page.evaluate(() => {
+    const editEl = document.querySelector('#editor-card .page-content-view--editing');
+    editEl.insertAdjacentHTML('beforeend', '<p id="sel-target">Kafka schrieb das</p>');
+    const p = editEl.querySelector('#sel-target');
+    editEl.focus({ preventScroll: true });
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    const sel = document.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  });
+
+  await page.evaluate(async () => {
+    const ctx = window.Alpine.$data(document.querySelector('[x-data="editorToolbarCard"]'));
+    await ctx.openCiteInput();
+    ctx._commitCite(ctx.citeHits[0].src);
+  });
+  await page.waitForTimeout(200);
+
+  // Der belegte Satz muss stehen bleiben: ein Kurzbeleg weist die Stelle NACH,
+  // er ersetzt sie nicht (anders als der Linktext beim Link-Input). Vorher
+  // löschte `range.deleteContents()` genau den markierten Satz.
+  const res = await page.evaluate(() => {
+    const t = document.querySelector('#editor-card .page-content-view--editing #sel-target');
+    return {
+      text: t.textContent,
+      chips: t.querySelectorAll('span.cite[data-src]').length,
+      chipAfterText: t.textContent.indexOf('Kafka schrieb das') === 0,
+    };
+  });
+  expect(res.text).toContain('Kafka schrieb das');
+  expect(res.chips).toBe(1);
+  expect(res.chipAfterText).toBe(true);
+});
+
+test('Klick auf einen Chip öffnet den Picker auf ihm; Entfernen räumt ihn weg', async ({ page }) => {
+  await boot(page);
+  const srcId = await createSource(page, 'Klick-Probe');
+  await openPageInEdit(page, 1);
+
+  await page.evaluate((id) => {
+    const editEl = document.querySelector('#editor-card .page-content-view--editing');
+    editEl.insertAdjacentHTML('beforeend',
+      `<p id="click-probe">Satz <span class="cite" data-src="${id}" data-loc="77">(Kafka, 1915, S. 77)</span></p>`);
+    for (const el of editEl.querySelectorAll('span.cite[data-src]')) {
+      el.setAttribute('contenteditable', 'false');
+    }
+  }, srcId);
+
+  await page.click('#editor-card .page-content-view--editing #click-probe span.cite');
+  await page.waitForFunction(() => {
+    const ctx = window.Alpine.$data(document.querySelector('[x-data="editorToolbarCard"]'));
+    return ctx.citeShow === true && ctx.citeLoading === false;
+  }, null, { timeout: 15000 });
+
+  const state = await page.evaluate(() => {
+    const ctx = window.Alpine.$data(document.querySelector('[x-data="editorToolbarCard"]'));
+    return { editing: ctx.citeEditing, loc: ctx.citeLoc, kind: ctx.citeKind, firstHit: ctx.citeHits[0]?.id };
+  });
+  expect(state.editing).toBe(true);
+  // Stelle + Zitat-Art kommen aus dem Markup zurück …
+  expect(state.loc).toBe('77');
+  expect(state.kind).toBe('quote');
+  // … und die verknüpfte Quelle steht ohne Suchbegriff vorne, damit Enter nicht
+  // eine fremde Quelle trifft (die Liste ist auf CITE_MAX_HITS gedeckelt).
+  expect(state.firstHit).toBe(srcId);
+
+  await page.evaluate(() => {
+    const ctx = window.Alpine.$data(document.querySelector('[x-data="editorToolbarCard"]'));
+    ctx._removeCite();
+  });
+  const after = await page.evaluate(() => {
+    const p = document.querySelector('#editor-card .page-content-view--editing #click-probe');
+    return { chips: p.querySelectorAll('span.cite').length, text: p.textContent.trim(), dirty: window.__app.editDirty };
+  });
+  expect(after.chips).toBe(0);
+  expect(after.text).toBe('Satz');
+  expect(after.dirty).toBe(true);
 });
 
 test('Chip erscheint in der Leseansicht', async ({ page }) => {

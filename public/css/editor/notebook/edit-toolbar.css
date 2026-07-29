@@ -137,6 +137,24 @@
   background: var(--color-hover);
   border-left-color: var(--color-accent, var(--color-text));
 }
+/* „Beleg entfernen" (nur im Bearbeiten-Zustand). Zurückhaltend wie der
+   Entfernen-Button der Link-Bar — die Hauptaktion des Panels bleibt die
+   Quellenauswahl in der Liste darüber. */
+.edit-cite-remove {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  background: transparent;
+  border: none;
+  padding: var(--space-xs) var(--space-2xs);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  cursor: pointer;
+  text-align: left;
+}
+.edit-cite-remove:hover { background: var(--color-hover); color: var(--color-text); }
+.edit-cite-remove .icon { width: 1em; height: 1em; }
 
 /* --- Querverweis-Picker ---------------------------------------------------
    Teilt Panel, Liste und Aktiv-Zustand mit dem Beleg-Picker (.edit-cite-*) —

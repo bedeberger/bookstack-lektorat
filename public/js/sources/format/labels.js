@@ -28,6 +28,12 @@ const DE = {
   accessed: 'Abgerufen am',
   // Paraphrase-Praefix im Kurzbeleg (data-mode="paraphrase" am Chip).
   cfWord: 'vgl.',
+  // Wiederholungs-Kurzformen im Anmerkungsapparat (format/notes.js).
+  // `ibid` = unmittelbar davor dieselbe Quelle, `opCit` = im selben Kapitel schon
+  // belegt, aber nicht direkt davor.
+  ibidWord: 'Ebd.',
+  opCitWord: 'a. a. O.',
+  notesTitle: 'Anmerkungen',
   andApa: '&',
   andChicago: 'und',
   etAlApa: 'et al.',
@@ -51,6 +57,9 @@ const EN = {
   editedBy: 'edited by',
   accessed: 'Accessed',
   cfWord: 'cf.',
+  ibidWord: 'Ibid.',
+  opCitWord: 'op. cit.',
+  notesTitle: 'Notes',
   andApa: '&',
   andChicago: 'and',
   etAlApa: 'et al.',

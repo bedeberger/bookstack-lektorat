@@ -41,6 +41,10 @@ export const EVT = {
   // Beleg-Picker im Notebook-Editor cacht die Quellenliste je Buch und
   // verwirft sie darauf — sonst zeigt er die alte Liste bis zum Buchwechsel.
   SOURCES_CHANGED: 'sources:changed',           // detail: { bookId }
+  // Permalink #book/:id/quellen/<sourceId> — aus dem Quellen-Tab des Referenz-
+  // Slots. Der Hash-Router dispatcht, die Quellen-Karte hebt die Zeile hervor
+  // und klappt ihre Fundstellen auf.
+  SOURCES_FOCUS_SOURCE: 'sources:focus-source', // detail: { sourceId }
 
   // ── Querverweise ─────────────────────────────────────────────────────────
   // Die verweisbaren Ziele eines Buchs (Kapitel + Abbildungen) ändern sich beim
@@ -55,6 +59,12 @@ export const EVT = {
   EDITOR_FOCUS_ENTER: 'editor:focus:enter',     // detail: { granularity? }
   EDITOR_FOCUS_EXIT: 'editor:focus:exit',       // kein detail
   EDITOR_FOCUS_ENTER_FROM_PAGEVIEW: 'editor:focus:enter-from-pageview', // kein detail
+
+  // ── Editor: Beleg-Picker (Trampoline aus dem Root) ────────────────────────
+  // Der Picker lebt in `editorToolbarCard`, sein Button aber in der
+  // Seiten-Toolbar (Root-Scope). Event statt Card-Ref-Forwarder, weil die
+  // Toolbar-Karte — anders als `editorNotebookCard` — keinen Selbst-Ref auslegt.
+  EDITOR_CITE_OPEN: 'editor:cite:open',         // kein detail
 
   // ── Editor: Draft/Offline-Sync ───────────────────────────────────────────
   DRAFT_CHANGED: 'draft:changed',               // kein detail (Draft-Bestand hat sich geändert)

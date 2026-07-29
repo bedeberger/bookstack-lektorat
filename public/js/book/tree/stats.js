@@ -1,5 +1,6 @@
 import { CHARS_PER_TOKEN, localeTag, relativeDay, tzOpts } from '../../utils.js';
 import { htmlToPlainText } from '../../html-text.js';
+import { EVT } from '../../events.js';
 
 // Seiten-Status (Lektorat-Aktualität), Tooltip-Zeilen, Page-Stats-Sync nach Save
 // und Kapitel-Stat-Aggregation. `this` = die Alpine-Komponente (tree-Methoden
@@ -94,6 +95,16 @@ export const treeStatsMethods = {
   // routes/sync.js#computeStats). tok = chars / CHARS_PER_TOKEN.
   _syncPageStatsAfterSave(page, html) {
     if (!page?.id) return;
+    // Gespeicherte Seite kann Abbildungen hinzugefuegt oder entfernt haben — die
+    // Anker im Index sind jetzt andere, also darf der Ziel-Picker seine
+    // gecachte Liste nicht behalten. Bewusst UNGATED (nicht „nur wenn <figure>
+    // im neuen HTML steht"): beim Entfernen der letzten Abbildung enthaelt das
+    // neue HTML gerade keine mehr, die Zielliste hat sich aber trotzdem
+    // geaendert. Der Cache spart einen Fetch pro Picker-Oeffnung, nicht pro Save.
+    // Dieser Hook laeuft aus allen drei Editoren — ein Signal deckt alle ab.
+    window.dispatchEvent(new CustomEvent(EVT.XREFS_CHANGED, {
+      detail: { bookId: this.$store?.nav?.selectedBookId ?? null },
+    }));
     const normalized = htmlToPlainText(String(html || ''));
     const words = normalized === '' ? 0 : normalized.split(/\s+/).length;
     const stat = {
