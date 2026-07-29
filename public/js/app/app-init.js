@@ -256,7 +256,7 @@ export const appInitMethods = {
       }
       await this._applyHash();
       if (!this.isAdminOnly && this.$store.nav.selectedBookId) this._loadBookRole(this.$store.nav.selectedBookId);
-      if (!this.isAdminOnly && this.$store.nav.selectedBookId) this._loadEntitiesEnabledForBook(this.$store.nav.selectedBookId);
+      if (!this.isAdminOnly && this.$store.nav.selectedBookId) this._loadBookFlagsForCurrentBook(this.$store.nav.selectedBookId);
       if (!this.isAdminOnly) await this._maybeOpenBookOverview();
       this._syncUrlNow();
       this._applyingHash = false;
@@ -301,7 +301,7 @@ export const appInitMethods = {
         } catch (_) {}
         this._resetBookScopedState();
         this._loadBookRole(newVal);
-        this._loadEntitiesEnabledForBook(newVal);
+        this._loadBookFlagsForCurrentBook(newVal);
         await this.loadPages({ source: 'bookSwitch' });
         await this._reloadVisibleBookCards();
         this._maybeOpenBookOverview();

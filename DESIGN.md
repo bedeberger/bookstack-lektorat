@@ -1595,6 +1595,7 @@ Editor-spezifische Patterns. Greifen nur in der Editor-Card und im Fokus-Modus; 
 - [Page-Content-View](#page-content-view-reading-frame) (Reading-Frame, Buchsatz, Callouts)
 - [Focus-Mode](#focus-mode) (Vollbild + Typewriter-Dimming)
 - [Edit-Bubble-Toolbar](#edit-bubble-toolbar-inline-formatierung) (Inline-Format + Slash-Menu)
+- [Beleg-Chip + Beleg-Picker](#beleg-chip--beleg-picker-quellenverzeichnis) (Quellennachweis im Text)
 - [Find-and-Replace](#find-and-replace) (Cmd+F-Panel)
 - [Lookup-Popover](#lookup-popover-figur-lookup) (Figuren-Detail bei Ctrl+Click)
 
@@ -1671,6 +1672,33 @@ Granularität (paragraph/sentence) und Timings sind über Tests abgesichert ([te
 - Slash-Menu: `.edit-slash-menu`, `.edit-slash-hint`, `.edit-slash-item`, `.edit-slash-item--active`
 
 Spezifisch für Editor — bei neuer Inline-Toolbar erst prüfen, ob die Edit-Klassen passen.
+
+### Beleg-Chip + Beleg-Picker (Quellenverzeichnis)
+
+**Use:** Quellennachweis mitten im Satz. Der **Chip** ist der Beleg im gespeicherten Seiten-HTML, der **Picker** das Panel zum Einfügen (Quelle wählen + Stellenangabe). Kein Slash-Menü-Eintrag: der Beleg ist inline und gehört an den Caret, das Slash-Menü ersetzt dagegen einen leeren Block.
+
+**Markup Chip** — SSoT [public/js/sources/cite-html.js](public/js/sources/cite-html.js), nie von Hand schreiben:
+```html
+<span class="cite" data-src="7" data-loc="44">(Müller, 2020, S. 44)</span>
+```
+
+**Klassen Chip** [components/manuscript-content.css](public/css/components/manuscript-content.css):
+- `span.cite` — Akzentfarbe + gepunktete Grundlinie, `white-space: nowrap`. Gilt in allen drei Oberflächen (`.page-content-view`, `.book-editor-page-body`, `.share-content`).
+- `span.cite[contenteditable="false"]` — nur im Editor: `cursor: default` + `user-select: none` (atomarer Chip).
+
+**Klassen Picker** [editor/notebook/edit-toolbar.css](public/css/editor/notebook/edit-toolbar.css):
+- `.edit-cite-panel` — teleportiertes fixed-Panel über dem Caret (Aufbau wie `.edit-link-bar`, aber mit Trefferliste)
+- `.edit-cite-row`, `.edit-cite-input--filter`, `.edit-cite-input--loc` — Filter- und Stellenangabe-Feld
+- `.edit-cite-list`, `.edit-cite-item`, `.edit-cite-item.is-active` — Trefferliste mit Tastatur-Auswahl
+- `.edit-bubble-btn--cite` — Auslöser in der Bubble-Toolbar (Icon `#quote`)
+
+**Regeln:**
+- **`data-src` ist die Wahrheit, der Chip-Text ist Cache.** Bei Stilwechsel oder Quellenkorrektur schreibt ein Regenerierungs-Pass den Text neu — keine Schicht darf den Text als Quelle lesen.
+- **`contenteditable` nie in der Persistenz.** Setzt der Editor beim Mount (`markCitesAtomic`); [lib/html-clean.js](lib/html-clean.js) strippt es beim Speichern und die Dirty-Vergleichsform ignoriert es. Ohne beides gilt jede Seite mit Beleg beim Öffnen als geändert.
+- **Zurückhaltend stylen.** Kein Hintergrund, keine Border, kein eigener Font — der Kurzbeleg ist Lesetext, kein Badge. Sonst zerhackt jeder Nachweis den Absatz optisch.
+- **Nur Notebook-Editor hat den Einfügepfad.** Focus-Editor und Bucheditor stellen Chips dar und zerstören sie nicht (`.edit-cite-panel` ist im Fokus-Modus strukturell gesperrt).
+
+**Beispiele:** [editor-toolbar.html](public/partials/editor-toolbar.html)
 
 ### Find-and-Replace
 

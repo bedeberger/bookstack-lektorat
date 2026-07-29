@@ -269,6 +269,33 @@
     }
   }
 
+  /* --- Beleg-Chip (Quellenverzeichnis). Markup-SSoT:
+         <span class="cite" data-src="7" data-loc="44">(Müller, 2020, S. 44)</span>
+         public/js/sources/cite-html.js.
+
+         Bewusst zurückhaltend: der Kurzbeleg ist Teil des Lesetexts, kein
+         Hinweis-Badge. Nur eine feine Grundlinie und die Akzentfarbe zeigen,
+         dass dahinter eine Quelle hängt — sonst zerhackt jede Fussnote den
+         Absatz optisch. Kein Hintergrund, keine Border, kein eigener Font.
+
+         `contenteditable="false"` setzt der Editor erst beim Mount
+         (markCitesAtomic); es steht nie in der Persistenz. Der Cursor-Wechsel
+         hängt deshalb an diesem Attribut, nicht an der Klasse — im Lesemodus
+         und im Reader bleibt der Chip normaler Text. --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) span.cite {
+    color: var(--mc-accent-text);
+    border-bottom: 1px dotted var(--mc-accent);
+    /* Umbruch innerhalb des Belegs vermeiden: "(Müller, 2020," am Zeilenende
+       und "S. 44)" auf der nächsten liest sich als zwei Belege. */
+    white-space: nowrap;
+  }
+  :is(.page-content-view, .book-editor-page-body) span.cite[contenteditable="false"] {
+    cursor: default;
+    /* Atomarer Chip: der Caret springt darüber, eine Teil-Selektion innerhalb
+       des Belegs wäre irreführend. */
+    user-select: none;
+  }
+
   /* --- BookStack-Callouts (div.callout.info/.warning/.danger/.success) --- */
   :is(.page-content-view, .book-editor-page-body, .share-content) .callout {
     border-inline-start: 4px solid var(--mc-border);

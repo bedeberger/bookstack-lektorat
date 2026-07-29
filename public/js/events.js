@@ -36,6 +36,12 @@ export const EVT = {
   PALETTE_CLOSE: 'palette:close',               // kein detail
   PALETTE_RERENDER: 'palette:rerender',         // kein detail
 
+  // ── Quellenverzeichnis ───────────────────────────────────────────────────
+  // Die Quellen-Karte broadcastet Anlage/Änderung/Löschung einer Quelle. Der
+  // Beleg-Picker im Notebook-Editor cacht die Quellenliste je Buch und
+  // verwirft sie darauf — sonst zeigt er die alte Liste bis zum Buchwechsel.
+  SOURCES_CHANGED: 'sources:changed',           // detail: { bookId }
+
   // ── Semantische Suche ────────────────────────────────────────────────────
   SEARCH_SIMILAR: 'search:similar',             // detail: { kind, id, label }
 

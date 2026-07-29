@@ -1,27 +1,42 @@
 import { EVT } from '../../events.js';
 
-// ACL-Rolle + Entity-Linking-Flag pro Buch + abgeleitete Rechte-Getter
-// (canEdit/canReview/isViewer) + Buchtyp-Helfer. `this` = die Alpine-Komponente.
+// ACL-Rolle + editor-relevante book_settings-Spiegel pro Buch + abgeleitete
+// Rechte-Getter (canEdit/canReview/isViewer) + Buchtyp-Helfer.
+// `this` = die Alpine-Komponente.
+
+// Defaults der Zitier-Spiegel — muessen zu CITATION_DEFAULTS in db/schema.js
+// passen, damit ein Buch ohne book_settings-Zeile im Editor nicht anders
+// formatiert als eines mit.
+const CITE_FALLBACK = { style: 'apa7', lang: 'de' };
 
 export const treePermissionsMethods = {
-  // Entity-Linking-Toggle pro Buch laden — Spiegel von
-  // book_settings.entities_enabled. Wird beim Buchwechsel gesetzt; der
-  // Toolbar-Toggle pflegt die Flag danach selbst (optimistisch + PUT).
-  // Failsafe: bei Netz/Permission-Fehler aus.
-  async _loadEntitiesEnabledForBook(bookId) {
+  // Editor-relevante book_settings in den Root spiegeln: Entity-Linking-Toggle
+  // sowie Zitierstil + Buchsprache (fuer den Beleg-Chip). Ein Fetch fuer alle
+  // drei — beim Buchwechsel. Den Entity-Toggle pflegt die Toolbar danach selbst
+  // (optimistisch + PUT). Failsafe: bei Netz-/Permission-Fehler Defaults.
+  async _loadBookFlagsForCurrentBook(bookId) {
     const id = bookId ? String(bookId) : '';
-    if (!id) { this.entitiesEnabledForCurrentBook = false; return; }
+    const reset = () => {
+      this.entitiesEnabledForCurrentBook = false;
+      this.citationStyleForCurrentBook = CITE_FALLBACK.style;
+      this.citationLangForCurrentBook = CITE_FALLBACK.lang;
+    };
+    if (!id) { reset(); return; }
     try {
       const res = await fetch('/booksettings/' + encodeURIComponent(id), {
         headers: { Accept: 'application/json' },
       });
-      if (!res.ok) { this.entitiesEnabledForCurrentBook = false; return; }
+      if (!res.ok) { reset(); return; }
       const data = await res.json();
+      // Buch kann waehrend des Fetch gewechselt haben → nur uebernehmen, wenn
+      // die Antwort noch zum ausgewaehlten Buch gehoert.
       if (String(this.$store.nav.selectedBookId) === id) {
         this.entitiesEnabledForCurrentBook = !!data.entities_enabled;
+        this.citationStyleForCurrentBook = data.citation_style || CITE_FALLBACK.style;
+        this.citationLangForCurrentBook = data.language || CITE_FALLBACK.lang;
       }
     } catch (_) {
-      this.entitiesEnabledForCurrentBook = false;
+      reset();
     }
   },
 

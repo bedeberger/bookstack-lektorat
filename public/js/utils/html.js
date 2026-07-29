@@ -2,6 +2,8 @@
 // Inline-Style-/Leerblock-Cleanup. DOMParser-basiert (inert, keine
 // Resource-Loads). Idempotent aufrufbar.
 
+import { isCiteEl, CITE_ATTR_SRC, CITE_ATTR_LOC } from '../sources/cite-html.js';
+
 // Sicherheitscheck vor dem Speichern: < 50 % wirkt unvollständig → Abbruch
 export const SAFETY_HTML_RATIO = 0.5;
 
@@ -104,13 +106,20 @@ const PASTE_ALLOWED_TAGS = new Set([
   'P', 'BR', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
   'BLOCKQUOTE', 'UL', 'OL', 'LI', 'HR', 'PRE',
   'STRONG', 'B', 'EM', 'I', 'U', 'S', 'STRIKE', 'CODE', 'MARK', 'SUB', 'SUP',
-  'A', 'DIV',
+  'A', 'DIV', 'SPAN',
 ]);
 // Attribute, die pro Tag erhalten bleiben. Alles andere wird gestrippt
 // (insbesondere on*-Handler, style, id, class, data-*).
 const PASTE_ALLOWED_ATTRS = {
   A: new Set(['href']),
-  DIV: new Set(['class']), // nur .poem (siehe Filter unten)
+  DIV: new Set(['class']),  // nur .poem (siehe Filter unten)
+  // SPAN ist ausschliesslich fuer den Beleg-Chip erlaubt, nicht als
+  // allgemeiner Inline-Container — Word-/Web-Pastes bestehen zur Haelfte aus
+  // <span>-Huellen. Der Filter unten unwrappt jeden Span, der kein gueltiger
+  // Chip ist. Der Chip selbst MUSS ueberleben: Kopiert man einen Satz mit
+  // Beleg an eine andere Stelle, soll der Beleg mitwandern statt zu reinem
+  // Text zu zerfallen (der Zeiger auf die Quelle waere sonst weg).
+  SPAN: new Set(['class', CITE_ATTR_SRC, CITE_ATTR_LOC]),
 };
 
 /**
@@ -157,6 +166,14 @@ export function sanitizePasteHtml(html) {
         if (!allowedAttrs || !allowedAttrs.has(attr.name)) el.removeAttribute(attr.name);
       }
       if (tag === 'DIV') el.setAttribute('class', 'poem');
+      // Span nur als Beleg-Chip zulassen; alles andere verliert die Huelle.
+      // Muss NACH dem Attribut-Filter laufen — isCiteEl prueft class+data-src,
+      // die vorher noch mit Fremdattributen vermischt sein koennten.
+      if (tag === 'SPAN' && !isCiteEl(el)) {
+        _unwrap(el);
+        changed = true;
+        continue;
+      }
       if (tag === 'A' && !el.getAttribute('href')) {
         _unwrap(el);
         changed = true;

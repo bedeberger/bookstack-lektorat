@@ -11,6 +11,8 @@
 
 import { toolbarCardMethods } from '../editor/notebook/toolbar.js';
 import { TODO_LIST_SEL } from '../editor/shared/todo-html.js';
+import { invalidateSourceCache } from '../editor/notebook/toolbar/cite.js';
+import { EVT } from '../events.js';
 
 export function registerEditorToolbarCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
@@ -34,6 +36,20 @@ export function registerEditorToolbarCard() {
     linkUrl: '',
     linkCanRemove: false,
     _linkRange: null,
+    // Beleg-Picker (Quellenverzeichnis) — Inline-Insert am Caret, Aufbau wie
+    // die Link-Bar. citeSources ist die Quellenliste des Buchs (gecacht im
+    // Modul), citeLoc die Stellenangabe („44", „Kap. 3").
+    citeShow: false,
+    citeX: 0,
+    citeY: 0,
+    citeQuery: '',
+    citeLoc: '',
+    citeIdx: 0,
+    citeSources: [],
+    citeHits: [],
+    citeLoading: false,
+    citeError: false,
+    _citeRange: null,
     _toolbarAbort: null,
 
     init() {
@@ -62,6 +78,21 @@ export function registerEditorToolbarCard() {
       this.$watch('slashQuery', () => {
         if (this.slashShow) this._schedSlashPosition();
       });
+
+      // Beleg-Picker: Trefferliste einmal pro Query neu berechnen statt bei
+      // jedem Render dreimal im Template (x-for + zwei Leer-Zustände).
+      this.$watch('citeQuery', () => {
+        if (this.citeShow) this._recomputeCiteHits();
+      });
+
+      // Quellenliste des Beleg-Pickers ist modulweit gecacht (ein Fetch pro
+      // Buch). Die Quellen-Karte dispatcht `sources:changed`, wenn sie eine
+      // Quelle anlegt/ändert/löscht — sonst zeigt der Picker die alte Liste,
+      // bis der User das Buch wechselt.
+      window.addEventListener(EVT.SOURCES_CHANGED, (e) => {
+        invalidateSourceCache(e?.detail?.bookId ?? null);
+      }, { signal });
+      window.addEventListener(EVT.BOOK_CHANGED, () => invalidateSourceCache(), { signal });
 
       // Delegierter Keydown-Listener auf dem contenteditable — filtert per
       // closest() auf Normal- bzw. Focus-Container, damit wir nur im Edit-

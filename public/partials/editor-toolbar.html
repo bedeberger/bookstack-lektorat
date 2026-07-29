@@ -29,6 +29,53 @@
               :aria-label="$app.t('editor.toolbar.linkTitle')">
         <svg class="icon" aria-hidden="true"><use href="/icons.svg#external-link"/></svg>
       </button>
+      <button type="button"
+              class="edit-bubble-btn edit-bubble-btn--cite"
+              @click="openCiteInput()"
+              :data-tip="$app.t('editor.toolbar.citeTitle')"
+              :aria-label="$app.t('editor.toolbar.citeTitle')">
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg#quote"/></svg>
+      </button>
+    </div>
+  </template>
+
+  <!-- Beleg-Picker (Quellenverzeichnis): Quelle waehlen + Stellenangabe -->
+  <template x-teleport="body">
+    <div x-show="citeShow && $app.editMode && !$app.focusActive" x-cloak
+         class="edit-cite-panel"
+         role="dialog"
+         :aria-label="$app.t('editor.toolbar.citeTitle')"
+         :style="{ left: citeX + 'px', top: citeY + 'px' }"
+         @click.outside="_closeCite()"
+         @keydown="_onCiteKeydown($event)"
+         @mousedown.stop>
+      <div class="edit-cite-row">
+        <input type="text" x-ref="citeFilter"
+               x-model="citeQuery"
+               :placeholder="$app.t('editor.toolbar.citeFilterPlaceholder')"
+               :aria-label="$app.t('editor.toolbar.citeFilterPlaceholder')"
+               class="edit-cite-input edit-cite-input--filter">
+        <input type="text"
+               x-model="citeLoc"
+               :placeholder="$app.t('editor.toolbar.citeLocPlaceholder')"
+               :aria-label="$app.t('editor.toolbar.citeLocPlaceholder')"
+               class="edit-cite-input edit-cite-input--loc">
+      </div>
+      <div class="edit-cite-hint" x-show="citeLoading" x-text="$app.t('common.loading')"></div>
+      <div class="edit-cite-hint" x-show="citeError" x-text="$app.t('editor.toolbar.citeLoadError')"></div>
+      <div class="edit-cite-hint" x-show="!citeLoading && !citeError && citeHits.length === 0"
+           x-text="$app.t('editor.toolbar.citeEmpty')"></div>
+      <ul class="edit-cite-list" role="listbox" x-show="citeHits.length > 0">
+        <template x-for="(hit, i) in citeHits" :key="hit.id">
+          <li role="option"
+              :aria-selected="i === citeIdx"
+              class="edit-cite-item"
+              :class="{ 'is-active': i === citeIdx }"
+              @mouseenter="citeIdx = i"
+              @click="_commitCite(hit.src)"
+              x-text="hit.label"></li>
+        </template>
+      </ul>
     </div>
   </template>
 

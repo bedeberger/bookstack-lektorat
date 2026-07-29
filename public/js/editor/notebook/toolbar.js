@@ -1,6 +1,7 @@
 // Facade: toolbarCardMethods aus thematischen Submodulen in toolbar/.
-// Bubble-Toolbar + Link-Bar (bubble.js), Slash-Menü (slash.js) und der zentrale
-// Keydown-Dispatcher (keydown.js) teilen sich zur Laufzeit ein `this` (in das
+// Bubble-Toolbar + Link-Bar (bubble.js), Slash-Menü (slash.js), Beleg-Picker
+// (cite.js) und der zentrale Keydown-Dispatcher (keydown.js) teilen sich zur
+// Laufzeit ein `this` (in das
 // Card-Objekt gespreadet). Geteilte Modul-Helfer + Konstanten in
 // toolbar/_shared.js. Extern importiert nur editor-toolbar-card.js
 // { toolbarCardMethods } — die Aufteilung ist internes Implementierungsdetail.
@@ -12,9 +13,11 @@
 import { bubbleMethods } from './toolbar/bubble.js';
 import { slashMethods } from './toolbar/slash.js';
 import { keydownMethods } from './toolbar/keydown.js';
+import { citeMethods } from './toolbar/cite.js';
 
 export const toolbarCardMethods = {
   ...bubbleMethods,
   ...slashMethods,
   ...keydownMethods,
+  ...citeMethods,
 };

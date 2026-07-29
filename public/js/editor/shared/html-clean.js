@@ -50,11 +50,21 @@ export function stripLektoratMarks(html) {
   // Der Trigger gehoert zwingend in diese Bedingung: sonst greift der
   // Early-Return und der Filter unten laeuft nie.
   const hasLtUi = out && (out.indexOf('lt-popover') !== -1 || out.indexOf('lt-badge') !== -1);
-  if (hasMark || hasIns || hasLtUi) {
+  // `contenteditable` ist Editor-Laufzeit, kein Inhalt: der Beleg-Chip
+  // (public/js/sources/cite-html.js) bekommt es beim Mount gesetzt, damit der
+  // Caret ihn ueberspringt. Bliebe es in der Vergleichsform stehen, gaelte jede
+  // Seite mit Beleg direkt beim Oeffnen als veraendert — Autosave, Revision und
+  // updated_at-Bump bei jedem blossen Hinsehen. Server-Pendant:
+  // lib/html-clean.js#stripEditorUiArtefacts.
+  const hasEditableAttr = out && out.indexOf('contenteditable') !== -1;
+  if (hasMark || hasIns || hasLtUi || hasEditableAttr) {
     const tmp = parseFragment(out);
     if (tmp) {
       tmp.querySelectorAll('.lt-popover, .lt-badge').forEach(ui => {
         ui.parentNode?.removeChild(ui);
+      });
+      tmp.querySelectorAll('[contenteditable]').forEach(el => {
+        el.removeAttribute('contenteditable');
       });
       tmp.querySelectorAll('.lektorat-ins, .chat-mark-ins').forEach(ins => {
         ins.parentNode?.removeChild(ins);

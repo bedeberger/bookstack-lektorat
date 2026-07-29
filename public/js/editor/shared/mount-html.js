@@ -15,6 +15,7 @@
 
 import { normalizeEditorBlocks } from './html-clean.js';
 import { ensureTrailingParagraph } from './auto-slot.js';
+import { markCitesAtomic } from '../../sources/cite-html.js';
 
 // Setzt `html` in `el` und stellt Block-Konsistenz + Caret-Slot her.
 // Liefert `{ repaired }` — true, wenn `normalizeEditorBlocks` am gelieferten
@@ -37,6 +38,11 @@ export function mountEditorHtml(el, html) {
   normalizeEditorBlocks(el);
   const repaired = el.innerHTML !== beforeNormalize;
   ensureCaretSlot(el);
+  // Beleg-Chips atomar machen (Caret springt darueber, Backspace loescht ganz).
+  // Bewusst NACH der Repaired-Messung: `contenteditable="false"` ist
+  // Editor-Laufzeit, keine Inhaltsreparatur — sonst gaelte jede Seite mit Beleg
+  // beim Oeffnen als veraendert und wuerde ungefragt neu gespeichert.
+  markCitesAtomic(el);
   return { repaired };
 }
 

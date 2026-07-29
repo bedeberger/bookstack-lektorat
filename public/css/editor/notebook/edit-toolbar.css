@@ -32,6 +32,8 @@
 .edit-bubble-btn--syn    { font-size: var(--font-size-mini); padding-inline: var(--space-sm); border-left: 1px solid var(--color-border); }
 .edit-bubble-btn--link   { display: inline-flex; align-items: center; padding-inline: var(--space-sm); border-left: 1px solid var(--color-border); }
 .edit-bubble-btn--link .icon { width: 1em; height: 1em; }
+.edit-bubble-btn--cite   { display: inline-flex; align-items: center; padding-inline: var(--space-sm); border-left: 1px solid var(--color-border); }
+.edit-bubble-btn--cite .icon { width: 1em; height: 1em; }
 
 .edit-link-bar {
   position: fixed;
@@ -70,6 +72,66 @@
 }
 .edit-link-btn:hover { background: var(--color-hover); }
 .edit-link-btn .icon { width: 1em; height: 1em; }
+
+/* Beleg-Picker: Quelle wählen + Stellenangabe. Aufbau wie die Link-Bar
+   (teleportiert, fixed, über dem Caret), aber mit Trefferliste — darum eigene
+   Klasse statt einer Variante von .edit-link-bar. */
+.edit-cite-panel {
+  position: fixed;
+  z-index: var(--z-toolbar);
+  transform: translate(-50%, calc(-100% - 8px));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-3);
+  min-width: 22em;
+  max-width: 32em;
+}
+.edit-cite-row { display: flex; gap: var(--space-2xs); }
+.edit-cite-input {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  color: var(--color-text);
+}
+.edit-cite-input:focus {
+  outline: none;
+  border-color: var(--color-accent, var(--color-text));
+}
+.edit-cite-input--filter { flex: 1 1 auto; min-width: 0; }
+.edit-cite-input--loc    { flex: 0 0 9em; }
+.edit-cite-hint {
+  padding: var(--space-5) var(--space-2xs);
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+}
+.edit-cite-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.edit-cite-item {
+  padding: var(--space-5) var(--space-10);
+  border-left: 2px solid transparent;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  /* Lange Angaben nicht umbrechen lassen — die Liste soll scannbar bleiben. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.edit-cite-item.is-active {
+  background: var(--color-hover);
+  border-left-color: var(--color-accent, var(--color-text));
+}
 
 .edit-slash-menu {
   position: fixed;
@@ -224,6 +286,7 @@
 #editor-card.focus-host .edit-bubble-toolbar,
 #editor-card.focus-host .edit-slash-menu,
 #editor-card.focus-host .edit-link-bar,
+#editor-card.focus-host .edit-cite-panel,
 #editor-card.focus-host .edit-find { display: none !important; }
 
 }

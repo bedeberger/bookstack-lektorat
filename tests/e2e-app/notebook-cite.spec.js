@@ -1,0 +1,319 @@
+// Beleg-Chip (Quellenverzeichnis) im NOTEBOOK-Editor, gegen die ECHTE App.
+//
+// WARUM DIESE SCHICHT: die kritischen Zusagen des Chips lassen sich in keinem
+// Fixture-Harness zeigen.
+//   - Der Paste-Filter (`sanitizePasteHtml`) läuft auf `DOMParser` und wird von
+//     einem echten Paste-Event getrieben.
+//   - `contenteditable="false"` ist eine Editing-Eigenschaft: dass der Caret
+//     den Chip überspringt und Backspace ihn ganz löscht, entscheidet Chromium,
+//     nicht unser Code.
+//   - Die Dirty-Erkennung vergleicht den gemounteten Editor-DOM (mit
+//     Editor-Attribut) gegen den gespeicherten Stand (ohne). Ein Fehler dort
+//     zeigt sich als „Seite gilt beim Öffnen als geändert" — sichtbar nur in
+//     der gebooteten App mit echtem Save-Pfad.
+//
+// Geprüfte Invarianten:
+//   1. Chip überlebt Speichern → Neuladen → Edit-Modus (Zeiger + Stelle + Text).
+//   2. `contenteditable` landet NIE in der Persistenz.
+//   3. Öffnen + Speichern ohne Änderung erzeugt keine neue Fassung
+//      (`isNoChange` erkennt den Chip-Zustand als unverändert).
+//   4. Backspace hinter dem Chip löscht ihn vollständig (kein halber Beleg).
+//   5. Paste behält den eigenen Chip und wirft fremde <span>-Hüllen weg.
+//   6. Der Fund-Index (source_citations) folgt dem Save.
+//   7. Der Beleg-Picker fügt am Caret ein und markiert die Seite als geändert.
+//
+// Konventionen dieser Suite (übernommen von notebook-todo-readmode.spec.js):
+//   - Inhalt wird ANGEHÄNGT, nie ersetzt: ein Save, der den Text auf < 20 %
+//     kürzt, öffnet den Bestätigungsdialog und `saveEdit()` würde nie
+//     zurückkehren.
+//   - Jeder Test arbeitet auf einer eigenen Seite (`pageIdx`): die Smoke-DB
+//     lebt über den ganzen Lauf, sonst stapeln sich die Belege übereinander.
+
+const { test, expect } = require('@playwright/test');
+const { bootApp, selectSeededBook } = require('./_helpers/app');
+
+const EDIT_SEL = '#editor-card .page-content-view--editing';
+
+async function boot(page) {
+  await bootApp(page);
+  await selectSeededBook(page);
+}
+
+// Quelle im Testbuch anlegen und ihre id zurückgeben.
+async function createSource(page, title) {
+  return page.evaluate(async (t) => {
+    const bookId = window.Alpine.store('nav').selectedBookId;
+    const res = await fetch('/sources', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        book_id: bookId, csl_type: 'book', title: t, year: '1915',
+        authors: [{ family: 'Kafka', given: 'Franz' }],
+      }),
+    });
+    return (await res.json()).id;
+  }, title);
+}
+
+async function openPageInEdit(page, pageIdx) {
+  await page.evaluate(async (i) => {
+    await window.__app.selectPage(window.Alpine.store('nav').pages[i]);
+  }, pageIdx);
+  await page.waitForFunction(() => window.__app.showEditorCard === true, null, { timeout: 15000 });
+  await page.evaluate(() => window.__app.startEdit());
+  await page.waitForSelector(EDIT_SEL, { timeout: 15000 });
+}
+
+// Markup ans Seitenende anhängen (Chips atomar machen wie der Mount-Pfad) und
+// speichern. Wartet, bis der Editor die Session verlassen hat.
+async function appendAndSave(page, html) {
+  await page.evaluate((h) => {
+    const editEl = document.querySelector('#editor-card .page-content-view--editing');
+    editEl.insertAdjacentHTML('beforeend', h);
+    for (const el of editEl.querySelectorAll('span.cite[data-src]')) {
+      el.setAttribute('contenteditable', 'false');
+    }
+    window.__app._markEditDirty();
+  }, html);
+  await page.evaluate(async () => { await window.__app.saveEdit(); });
+  await page.waitForFunction(() => window.__app.editMode === false, null, { timeout: 15000 });
+}
+
+async function serverHtml(page) {
+  return page.evaluate(async () => {
+    const id = window.__app.currentPage.id;
+    const r = await fetch(`/content/pages/${id}`, { headers: { Accept: 'application/json' } });
+    return (await r.json()).html || '';
+  });
+}
+
+async function citationsOf(page, srcId) {
+  return page.evaluate(async (id) => {
+    const r = await fetch(`/sources/${id}/citations`, { headers: { Accept: 'application/json' } });
+    return r.json();
+  }, srcId);
+}
+
+test('Chip überlebt Speichern und Wieder-Öffnen, ohne Editor-Attribut zu persistieren', async ({ page }) => {
+  await boot(page);
+  const srcId = await createSource(page, 'Die Verwandlung');
+  await openPageInEdit(page, 0);
+
+  await appendAndSave(page,
+    `<p>Belegsatz <span class="cite" data-src="${srcId}" data-loc="44">(Kafka, 1915, S. 44)</span> Ende.</p>`);
+
+  const saved = await serverHtml(page);
+  expect(saved).toContain(`data-src="${srcId}"`);
+  expect(saved).toContain('data-loc="44"');
+  expect(saved).toContain('(Kafka, 1915, S. 44)');
+  // Invariante 2: Editor-Laufzeit darf nicht in die Persistenz.
+  expect(saved).not.toContain('contenteditable');
+
+  // Neu laden und wieder in den Edit-Modus: der Chip muss atomar zurückkommen.
+  await page.reload();
+  await boot(page);
+  await openPageInEdit(page, 0);
+  const chip = await page.evaluate(() => {
+    const el = document.querySelector('#editor-card .page-content-view--editing span.cite[data-src]');
+    return el ? {
+      src: el.getAttribute('data-src'), loc: el.getAttribute('data-loc'),
+      editable: el.getAttribute('contenteditable'), text: el.textContent,
+    } : null;
+  });
+  expect(chip).not.toBeNull();
+  expect(chip.src).toBe(String(srcId));
+  expect(chip.loc).toBe('44');
+  expect(chip.editable).toBe('false');
+  expect(chip.text).toBe('(Kafka, 1915, S. 44)');
+
+  // Invariante 3: Speichern ohne Änderung muss als No-Op erkannt werden.
+  // `stripLektoratMarks(editorHtml)` trägt am Chip `contenteditable="false"`,
+  // der Server-Stand nicht — bleibt das Attribut in der Vergleichsform stehen,
+  // schlägt `isNoChange` fehl und jedes Öffnen+Speichern erzeugt eine neue
+  // Fassung und verschiebt `updated_at`.
+  const before = await page.evaluate(() => window.__app.currentPage.updated_at);
+  await page.evaluate(() => window.__app._markEditDirty());
+  await page.evaluate(async () => { await window.__app.saveEdit(); });
+  await page.waitForFunction(() => window.__app.editMode === false, null, { timeout: 15000 });
+  const after = await page.evaluate(() => window.__app.currentPage.updated_at);
+  expect(after).toBe(before);
+});
+
+test('Backspace hinter dem Chip löscht ihn vollständig', async ({ page }) => {
+  await boot(page);
+  const srcId = await createSource(page, 'Loeschprobe');
+  await openPageInEdit(page, 1);
+
+  await page.evaluate((id) => {
+    const editEl = document.querySelector('#editor-card .page-content-view--editing');
+    editEl.insertAdjacentHTML('beforeend',
+      `<p id="cite-probe">Satz <span class="cite" data-src="${id}">(Kafka, 1915)</span></p>`);
+    for (const el of editEl.querySelectorAll('span.cite[data-src]')) {
+      el.setAttribute('contenteditable', 'false');
+    }
+    const p = editEl.querySelector('#cite-probe');
+    editEl.focus({ preventScroll: true });
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    r.collapse(false);
+    const sel = document.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }, srcId);
+
+  await page.keyboard.press('Backspace');
+  await page.waitForTimeout(200);
+
+  // Invariante 4: kein halber Beleg — entweder ganz da oder ganz weg.
+  const state = await page.evaluate(() => {
+    const p = document.querySelector('#editor-card .page-content-view--editing #cite-probe');
+    return { chips: p.querySelectorAll('span.cite').length, text: p.textContent.trim() };
+  });
+  expect(state.chips).toBe(0);
+  expect(state.text).toBe('Satz');
+});
+
+test('Paste behält den eigenen Chip und wirft fremde Span-Hüllen weg', async ({ page }) => {
+  await boot(page);
+  const srcId = await createSource(page, 'Paste-Probe');
+  await openPageInEdit(page, 2);
+
+  await page.evaluate(() => {
+    const editEl = document.querySelector('#editor-card .page-content-view--editing');
+    editEl.insertAdjacentHTML('beforeend', '<p id="paste-target">Ziel</p>');
+    const p = editEl.querySelector('#paste-target');
+    editEl.focus({ preventScroll: true });
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    r.collapse(false);
+    const sel = document.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  });
+
+  // Clipboard-HTML mit eigenem Chip + Word-typischer Span-Hülle.
+  await page.evaluate((id) => {
+    const html = ` mit <span class="cite" data-src="${id}" data-loc="9">(Kafka, 1915, S. 9)</span>`
+      + ' und <span style="font-family:Calibri" lang="DE">Fremdmarkup</span>';
+    const dt = new DataTransfer();
+    dt.setData('text/html', html);
+    dt.setData('text/plain', ' mit (Kafka, 1915, S. 9) und Fremdmarkup');
+    const editEl = document.querySelector('#editor-card .page-content-view--editing');
+    editEl.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, srcId);
+  await page.waitForTimeout(300);
+
+  const res = await page.evaluate(() => {
+    const p = document.querySelector('#editor-card .page-content-view--editing #paste-target');
+    const chip = p.querySelector('span.cite[data-src]');
+    return {
+      chips: p.querySelectorAll('span.cite[data-src]').length,
+      otherSpans: p.querySelectorAll('span:not(.cite)').length,
+      src: chip ? chip.getAttribute('data-src') : null,
+      loc: chip ? chip.getAttribute('data-loc') : null,
+      hasStyleAttr: !!p.querySelector('[style]'),
+      text: p.textContent,
+    };
+  });
+  // Invariante 5: Beleg wandert beim Kopieren mit (sonst wäre der Zeiger weg),
+  // Fremdhüllen verlieren ihre Hülle, Text bleibt.
+  expect(res.chips).toBe(1);
+  expect(res.src).toBe(String(srcId));
+  expect(res.loc).toBe('9');
+  expect(res.otherSpans).toBe(0);
+  expect(res.hasStyleAttr).toBe(false);
+  expect(res.text).toContain('Fremdmarkup');
+});
+
+test('Fund-Index folgt dem Save', async ({ page }) => {
+  await boot(page);
+  const srcId = await createSource(page, 'Index-Probe');
+  await openPageInEdit(page, 3);
+
+  await appendAndSave(page,
+    `<p id="idx-probe">A <span class="cite" data-src="${srcId}">(K, 1915)</span> B `
+    + `<span class="cite" data-src="${srcId}">(K, 1915)</span></p>`);
+
+  const cites = await citationsOf(page, srcId);
+  expect(cites.length).toBe(1);
+  expect(cites[0].count).toBe(2);
+
+  // Belege entfernen → Fundstellen verschwinden (Full-Replace pro Save).
+  await openPageInEdit(page, 3);
+  await page.evaluate(() => {
+    const el = document.querySelector('#editor-card .page-content-view--editing #idx-probe');
+    el.innerHTML = 'A B ohne Belege';
+    window.__app._markEditDirty();
+  });
+  await page.evaluate(async () => { await window.__app.saveEdit(); });
+  await page.waitForFunction(() => window.__app.editMode === false, null, { timeout: 15000 });
+
+  expect((await citationsOf(page, srcId)).length).toBe(0);
+});
+
+test('Beleg-Picker fügt einen Chip am Caret ein', async ({ page }) => {
+  await boot(page);
+  await createSource(page, 'Picker-Probe');
+  await openPageInEdit(page, 4);
+
+  await page.evaluate(() => {
+    const editEl = document.querySelector('#editor-card .page-content-view--editing');
+    editEl.insertAdjacentHTML('beforeend', '<p id="picker-target">Ein Satz</p>');
+    const p = editEl.querySelector('#picker-target');
+    editEl.focus({ preventScroll: true });
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    r.collapse(false);
+    const sel = document.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  });
+
+  // Über den Toolbar-Scope: die Bubble braucht eine Selektion, der Picker-Pfad
+  // selbst ist hier der Testgegenstand.
+  await page.evaluate(async () => {
+    const ctx = window.Alpine.$data(document.querySelector('[x-data="editorToolbarCard"]'));
+    await ctx.openCiteInput();
+    ctx.citeLoc = '44';
+    ctx._commitCite(ctx.citeHits[0].src);
+  });
+  await page.waitForTimeout(200);
+
+  const res = await page.evaluate(() => {
+    const target = document.querySelector('#editor-card .page-content-view--editing #picker-target');
+    const chip = target.querySelector('span.cite[data-src]');
+    return chip ? {
+      loc: chip.getAttribute('data-loc'), text: chip.textContent,
+      editable: chip.getAttribute('contenteditable'), dirty: window.__app.editDirty,
+      styleAttrs: target.querySelectorAll('[style]').length,
+      spans: target.querySelectorAll('span').length,
+    } : null;
+  });
+  expect(res).not.toBeNull();
+  expect(res.loc).toBe('44');
+  expect(res.text).toBe('(Kafka, 1915, S. 44)');
+  expect(res.editable).toBe('false');
+  expect(res.dirty).toBe(true);
+  // Regressionsschutz: mit `execCommand('insertHTML')` schleust Chromium das
+  // Fragment durch seinen Editing-Sanitizer — `class`/`data-*` fallen weg und
+  // die CSS-Werte der Klasse landen als Inline-`style` im Text. Deshalb fügt
+  // _commitCite über die Range-API ein.
+  expect(res.styleAttrs).toBe(0);
+  expect(res.spans).toBe(1);
+});
+
+test('Chip erscheint in der Leseansicht', async ({ page }) => {
+  await boot(page);
+  const srcId = await createSource(page, 'Leseansicht-Probe');
+  await openPageInEdit(page, 4);
+  await appendAndSave(page,
+    `<p id="read-probe">Gelesen <span class="cite" data-src="${srcId}">(Kafka, 1915)</span></p>`);
+
+  // appendAndSave verlässt den Edit-Modus → die Leseansicht rendert bereits.
+  await page.waitForSelector('#editor-card .page-content-view:not(.page-content-view--editing)', { timeout: 15000 });
+  const inView = await page.evaluate((id) => {
+    const view = document.querySelector('#editor-card .page-content-view:not(.page-content-view--editing)');
+    return view ? view.querySelectorAll(`span.cite[data-src="${id}"]`).length : -1;
+  }, srcId);
+  expect(inView).toBe(1);
+});
