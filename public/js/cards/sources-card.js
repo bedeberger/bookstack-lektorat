@@ -70,6 +70,11 @@ export function registerSourcesCard() {
     srcDetected: [],
     srcDetectRan: false,        // trennt „noch nie gelaufen" von „nichts gefunden"
     srcDetectMeta: null,        // { verified, lookupSkipped, scopeName }
+    // Lauf-Historie (source_detect_runs). `srcDetectRunId` markiert, welcher
+    // Lauf gerade im Vorschlagsfeld steht — frisch gelaufener wie wieder-
+    // geoeffneter, beides derselbe Zustand.
+    srcDetectRuns: [],
+    srcDetectRunId: null,
 
     // Deep-Link-Ziel (#book/X/quellen/<sourceId>) aus dem Quellen-Tab des
     // Referenz-Slots: gemerkt, bis die Liste geladen ist — loadSources
@@ -94,6 +99,12 @@ export function registerSourcesCard() {
           // Event, _focusSourceById hebt die Zeile hervor (bzw. merkt sie bis
           // zum Load vor).
           { type: EVT.SOURCES_FOCUS_SOURCE, handler: (e) => this._focusSourceById(e.detail?.sourceId) },
+          // Quellen-Erkennung lief beim Reload noch → Panel oeffnen und
+          // weiterpollen, statt den Lauf ins Leere laufen zu lassen.
+          { type: EVT.JOB_RECONNECT, handler: (e) => {
+            if (e.detail?.type !== 'source-detect') return;
+            this.reconnectSourceDetect(e.detail.job, e.detail.jobId);
+          } },
         ],
         resetState: () => ({
           sources: [],
@@ -125,6 +136,8 @@ export function registerSourcesCard() {
           srcDetected: [],
           srcDetectRan: false,
           srcDetectMeta: null,
+          srcDetectRuns: [],
+          srcDetectRunId: null,
           _pendingFocusSourceId: null,
           _memos: {},
         }),

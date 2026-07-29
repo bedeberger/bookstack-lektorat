@@ -10048,6 +10048,55 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 256 abgeschlossen (book_settings.citation_notes: Kurzbeleg inline vs. Anmerkungsapparat).');
   }
 
+  if (version < 257) {
+    // Quellen-Erkennung: historisierte Laeufe des Jobs `source-detect`
+    // (routes/jobs/source-detect.js). Ein Lauf liest das ganze Buch mit dem
+    // Modell und ist damit teuer genug, dass sein Ergebnis einen Reload
+    // ueberleben muss — ohne diese Tabelle lebte es nur im Browser-State und in
+    // der In-Memory-Job-Map (2 h).
+    //
+    // `result_json` haelt die Fundliste als Ganzes statt in Einzelzeilen: die
+    // Funde sind ein unbestaetigter Modell-Output, kein Katalog. Erst das
+    // Uebernehmen macht daraus eine Quelle (`sources` + `book_source_links`) —
+    // und nur die ist Stammdatum. Genauso wie motif_brainstorm_runs.
+    //
+    // KEINE Statusspalten am Fund („schon erfasst", „bestaetigt"): der Abgleich
+    // gegen die Bibliothek altert und wird beim Oeffnen eines Laufs neu
+    // gerechnet. Persistiert waere er beim zweiten Blick falsch.
+    //
+    // Scope sentinel-frei: `scope` sagt WAS durchsucht wurde,
+    // `scope_chapter_id` WELCHES Kapitel. Nur so bleibt „ganzes Buch" von
+    // „Kapitel, das es nicht mehr gibt" unterscheidbar (der FK wird beim
+    // Kapitel-Loeschen genullt, der Lauf selbst bleibt lesbar). Kein
+    // chapter_name-Snapshot — der Name kommt zur Lesezeit per JOIN.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS source_detect_runs (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id          INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        user_email       TEXT    NOT NULL,
+        scope            TEXT    NOT NULL DEFAULT 'book' CHECK(scope IN ('book','chapter')),
+        scope_chapter_id INTEGER REFERENCES chapters(chapter_id) ON DELETE SET NULL,
+        created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        found_count      INTEGER NOT NULL DEFAULT 0,
+        verified_count   INTEGER NOT NULL DEFAULT 0,
+        result_json      TEXT    NOT NULL,
+        model            TEXT,
+        -- Ein Buch-Lauf hat kein Kapitel. Umgekehrt darf ein Kapitel-Lauf sehr
+        -- wohl ohne Kapitel dastehen: das ist der ON-DELETE-SET-NULL-Fall.
+        CHECK (scope <> 'book' OR scope_chapter_id IS NULL)
+      );
+      CREATE INDEX IF NOT EXISTS idx_sdr_book_user_date ON source_detect_runs(book_id, user_email, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_sdr_chapter ON source_detect_runs(scope_chapter_id);
+    `);
+
+    const fkErrors257 = db.pragma('foreign_key_check');
+    if (fkErrors257.length) {
+      throw new Error(`Migration 257: foreign_key_check meldet ${fkErrors257.length} Verstoesse: ${JSON.stringify(fkErrors257.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 257').run();
+    logger.info('DB-Migration auf Version 257 abgeschlossen (source_detect_runs: historisierte Laeufe der Quellen-Erkennung).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

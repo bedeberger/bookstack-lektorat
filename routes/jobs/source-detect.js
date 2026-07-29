@@ -23,9 +23,12 @@ const {
   aiCall, getPrompts, getBookPrompts,
   loadOrderedBookContents, loadPageContents,
   groupByChapter, splitGroupsIntoChunks, buildSinglePassBookText,
-  SINGLE_PASS_LIMIT, PER_CHUNK_LIMIT, tps,
+  SINGLE_PASS_LIMIT, PER_CHUNK_LIMIT, tps, _modelName,
 } = require('./shared');
-const { listPoolSources, listSources } = require('../../db/sources');
+const {
+  listPoolSources, listSources,
+  insertDetectRun, listDetectRuns, getDetectRun, deleteDetectRun,
+} = require('../../db/sources');
 const { getBookSettings } = require('../../db/schema');
 const { parsePersonName } = require('../../lib/bib-parse');
 const { searchWork } = require('../../lib/source-lookup');
@@ -102,13 +105,39 @@ function _locatePage(snippet, pageContents) {
   return null;
 }
 
-/** Kandidat gegen die Bibliothek des Users abgleichen. Trifft er einen
- *  vorhandenen Eintrag, wird er nicht verworfen, sondern markiert — die Karte
- *  zeigt „steht schon in der Bibliothek" statt ihn stillschweigend zu schlucken
- *  (der Autor sieht dann, dass die Stelle belegbar waere). */
-function _matchExisting(c, poolIndex) {
-  const byTitle = c.title ? poolIndex.get(`t:${_norm(c.title)}`) : null;
-  return byTitle || null;
+/** Bibliothek des Users + die Zuordnungen DIESES Buchs, in Nachschlage-Form. */
+function _libraryIndex(userEmail, bookId) {
+  const pool = listPoolSources(userEmail, { includeArchived: true });
+  const byTitle = new Map();
+  for (const s of pool) if (s.title) byTitle.set(`t:${_norm(s.title)}`, s);
+  return {
+    pool,
+    byTitle,
+    // Erfasst heisst nicht zugeordnet: liegt das Werk in einer anderen Arbeit
+    // des Users, fehlt hier nur die Bruecke — dann ist die richtige Handlung
+    // „zuordnen", nicht „neu anlegen" (das gaebe eine Dublette im Pool).
+    linkedIds: new Set(listSources(bookId, { includeArchived: true }).map(s => s.id)),
+  };
+}
+
+/** Bibliotheks-Status an die Funde schreiben. Ein Treffer wird markiert, nicht
+ *  verworfen — die Aussage „diese Stelle waere belegbar" ist der eigentliche
+ *  Wert des Fundes.
+ *
+ *  WIRD BEI JEDEM LESEN NEU GERECHNET, auch beim Oeffnen eines historisierten
+ *  Laufs: der Status altert (uebernommen, geloescht, zugeordnet), waehrend der
+ *  Fund selbst stehen bleibt. Persistiert waere er beim zweiten Blick falsch —
+ *  darum stehen `existing_source_id`/`existing_linked` in keiner Spalte. */
+function annotateExisting(items, userEmail, bookId) {
+  const { byTitle, linkedIds } = _libraryIndex(userEmail, bookId);
+  return (Array.isArray(items) ? items : []).map((v) => {
+    const existing = v?.title ? byTitle.get(`t:${_norm(v.title)}`) : null;
+    return {
+      ...v,
+      existing_source_id: existing ? existing.id : null,
+      existing_linked: existing ? linkedIds.has(existing.id) : false,
+    };
+  });
 }
 
 async function runSourceDetectJob(jobId, bookId, userEmail, { chapterId = null } = {}) {
@@ -147,14 +176,8 @@ async function runSourceDetectJob(jobId, bookId, userEmail, { chapterId = null }
     // Prompt UND den Abgleich danach. Der Pool, nicht die Buchliste — eine
     // Quelle, die in einer anderen Arbeit liegt, ist trotzdem schon erfasst;
     // sie muss dann nur noch diesem Buch zugeordnet werden.
-    const pool = listPoolSources(userEmail, { includeArchived: true });
-    const poolIndex = new Map();
-    for (const s of pool) if (s.title) poolIndex.set(`t:${_norm(s.title)}`, s);
-    const bekannteTitel = pool.map(s => s.title).filter(Boolean);
-    // Erfasst heisst nicht zugeordnet: liegt das Werk in einer anderen Arbeit
-    // des Users, fehlt hier nur die Bruecke — dann ist die richtige Handlung
-    // „zuordnen", nicht „neu anlegen" (das gaebe eine Dublette im Pool).
-    const linkedIds = new Set(listSources(bookId, { includeArchived: true }).map(s => s.id));
+    const lib = _libraryIndex(userEmail, bookId);
+    const bekannteTitel = lib.pool.map(s => s.title).filter(Boolean);
 
     const settings = getBookSettings(bookId, userEmail);
     const { BUCH_KONTEXT } = await getBookPrompts(bookId, userEmail);
@@ -196,7 +219,7 @@ async function runSourceDetectJob(jobId, bookId, userEmail, { chapterId = null }
     const AI_TO = 85;
 
     if (totalChars <= SINGLE_PASS_LIMIT) {
-      logger.info(`Quellen-Erkennung Single-Pass: book=${bookId} text=${totalChars} Zeichen, Bibliothek=${pool.length}`);
+      logger.info(`Quellen-Erkennung Single-Pass: book=${bookId} text=${totalChars} Zeichen, Bibliothek=${lib.pool.length}`);
       updateJob(jobId, { statusText: 'job.phase.sourceDetectScan', progress: 12 });
       await detectChunk(buildSinglePassBookText(groups, groupOrder), 12, AI_TO);
     } else {
@@ -222,15 +245,13 @@ async function runSourceDetectJob(jobId, bookId, userEmail, { chapterId = null }
     for (let i = 0; i < kandidaten.length; i++) {
       if (signal()?.aborted) break;
       const c = kandidaten[i];
-      const existing = _matchExisting(c, poolIndex);
+      const existing = c.title ? lib.byTitle.get(`t:${_norm(c.title)}`) : null;
       const item = {
         ...c,
         ...( _locatePage(c.erwaehnung, pageContents) || { page_id: null, page_name: null, chapter_name: null }),
         publisher: null, place: null, edition: null, volume: null, issue: null, pages: null,
         doi: null, isbn: null, issn: null, url: null,
         verified: false, register: null,
-        existing_source_id: existing ? existing.id : null,
-        existing_linked: existing ? linkedIds.has(existing.id) : false,
       };
 
       // Bereits erfasste Werke brauchen keinen Register-Request — sie werden
@@ -270,16 +291,40 @@ async function runSourceDetectJob(jobId, bookId, userEmail, { chapterId = null }
     }
 
     const scopeName = chapterId != null ? (chMap[chapterId] || null) : null;
+
+    // Lauf historisieren — best-effort: ein DB-Fehler darf das Ergebnis nicht
+    // verschlucken, der Client hat es im Job-Payload ohnehin. Gespeichert wird
+    // OHNE Bibliotheks-Status; der wird bei jedem Lesen frisch gerechnet.
+    // Leere Laeufe sind nichts zum Wiederoeffnen.
+    let runId = null;
+    if (vorschlaege.length) {
+      try {
+        runId = insertDetectRun({
+          bookId, userEmail,
+          scope: chapterId != null ? 'chapter' : 'book',
+          scopeChapterId: chapterId,
+          foundCount: vorschlaege.length,
+          verifiedCount: verified,
+          result: { vorschlaege },
+          model: _modelName(),
+        });
+      } catch (e) { logger.warn(`Lauf-Historisierung fehlgeschlagen book=${bookId}: ${e.message}`); }
+    }
+
+    // Erst jetzt der Bibliotheks-Abgleich — derselbe Aufruf wie beim Oeffnen
+    // eines alten Laufs, damit es dafuer nur eine Implementierung gibt.
+    const annotated = annotateExisting(vorschlaege, userEmail, bookId);
+
     logger.info(
       `Quellen-Erkennung fertig: book=${bookId}${scopeName ? ` kapitel="${scopeName}"` : ''} `
-      + `funde=${vorschlaege.length} bestaetigt=${verified} `
-      + `bekannt=${vorschlaege.filter(v => v.existing_source_id).length} lookupSkipped=${lookupSkipped}`,
+      + `funde=${annotated.length} bestaetigt=${verified} `
+      + `bekannt=${annotated.filter(v => v.existing_source_id).length} lookupSkipped=${lookupSkipped} run=${runId ?? '-'}`,
     );
 
     completeJob(jobId, {
-      vorschlaege, verified, lookupSkipped, scopeName,
+      vorschlaege: annotated, verified, lookupSkipped, scopeName, runId,
       tokensIn: tok.in, tokensOut: tok.out,
-    }, tps(tok), `${vorschlaege.length} Funde`);
+    }, tps(tok), `${annotated.length} Funde`);
   } catch (e) {
     if (e.name !== 'AbortError') logger.error(`Quellen-Erkennung Fehler book=${bookId}: ${e.message}`, { stack: e.cause?.stack || e.stack });
     failJob(jobId, e);
@@ -311,4 +356,56 @@ sourceDetectRouter.post('/source-detect', jsonBody, (req, res) => {
   res.json({ jobId });
 });
 
-module.exports = { sourceDetectRouter, runSourceDetectJob };
+// ── Lauf-Historie ────────────────────────────────────────────────────────────
+// Zweisegmentig (/source-detect/runs[/:id]) — kollidiert weder mit dem
+// einsegmentigen POST /source-detect noch mit dem GET /jobs/:id des
+// sharedRouter, der ohnehin spaeter gemountet ist.
+//
+// Ein Lauf gehoert seinem Ausloeser (`user_email`): die Funde stammen aus SEINER
+// Bibliothek-Perspektive („was fehlt MIR noch"), und in einem geteilten Buch
+// waere die Liste eines Co-Autors fuer die anderen nur Rauschen.
+
+function _runGuard(req, res) {
+  const userEmail = req.session?.user?.email || null;
+  if (!userEmail) { res.status(401).json({ error_code: 'LOGIN_REQ' }); return null; }
+  const id = toIntId(req.params.id);
+  if (!id) { res.status(400).json({ error_code: 'INVALID_ID' }); return null; }
+  const run = getDetectRun(id);
+  // Fremder Lauf → 404 statt 403: die Existenz einer fremden Historie ist
+  // nichts, was preisgegeben werden muesste.
+  if (!run || run.user_email !== userEmail) { res.status(404).json({ error_code: 'RUN_NOT_FOUND' }); return null; }
+  setContext({ book: run.book_id });
+  try { requireBookAccess(req, run.book_id, 'editor'); }
+  catch (e) { if (sendACLError(res, e)) return null; throw e; }
+  return { run, userEmail };
+}
+
+sourceDetectRouter.get('/source-detect/runs', (req, res) => {
+  const userEmail = req.session?.user?.email || null;
+  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
+  const bookId = toIntId(req.query.book_id);
+  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
+  setContext({ book: bookId });
+  try { requireBookAccess(req, bookId, 'editor'); }
+  catch (e) { if (sendACLError(res, e)) return; throw e; }
+  res.json(listDetectRuns(bookId, userEmail));
+});
+
+sourceDetectRouter.get('/source-detect/runs/:id', (req, res) => {
+  const ok = _runGuard(req, res);
+  if (!ok) return;
+  const { run, userEmail } = ok;
+  // Bibliotheks-Status frisch: seit dem Lauf koennen Funde uebernommen,
+  // Quellen geloescht oder dem Buch zugeordnet worden sein.
+  const vorschlaege = annotateExisting(run.result?.vorschlaege || [], userEmail, run.book_id);
+  res.json({ ...run, result: { ...(run.result || {}), vorschlaege } });
+});
+
+sourceDetectRouter.delete('/source-detect/runs/:id', (req, res) => {
+  const ok = _runGuard(req, res);
+  if (!ok) return;
+  deleteDetectRun(ok.run.id, ok.userEmail);
+  res.json({ ok: true });
+});
+
+module.exports = { sourceDetectRouter, runSourceDetectJob, annotateExisting };

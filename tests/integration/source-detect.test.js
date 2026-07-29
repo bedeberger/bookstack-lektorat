@@ -230,6 +230,144 @@ test('fehlendes werke-Feld ist ein Fehler, leeres Array nicht', async () => {
   assert.deepEqual(ok.result.vorschlaege, []);
 });
 
+// ── Lauf-Historie ────────────────────────────────────────────────────────────
+
+test('ein Lauf mit Funden wird historisiert, ein leerer nicht', async () => {
+  const BOOK_ID = 909;
+  ctx.dbSeed.setBook({
+    chapters: [{ id: 9040, book_id: BOOK_ID, name: 'K' }],
+    pages: [{ id: 9041, book_id: BOOK_ID, chapter_id: 9040, name: 'S', updated_at: '' }],
+    pageBodies: { 9041: '<p>' + 'Text. '.repeat(60) + '</p>' },
+  });
+  const { listDetectRuns, getDetectRun } = require('../../db/sources');
+
+  onDetect({ werke: [
+    { typ: 'buch', titel: 'Das Kapital', autoren: ['Karl Marx'], jahr: '1867', container: '', erwaehnung: 'x' },
+  ] });
+  const job = await runJob(BOOK_ID);
+  assert.ok(job.result.runId, 'runId im Job-Payload erwartet');
+
+  const runs = listDetectRuns(BOOK_ID, USER);
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].found_count, 1);
+  assert.equal(runs[0].scope, 'book');
+  assert.equal(runs[0].scope_chapter_id, null);
+  // Die Liste traegt bewusst kein result_json (grosse Laeufe, Kopfzeilen reichen).
+  assert.ok(!('result_json' in runs[0]));
+
+  const detail = getDetectRun(runs[0].id);
+  assert.equal(detail.result.vorschlaege[0].title, 'Das Kapital');
+  // Bibliotheks-Status wird NICHT mitgespeichert — er altert.
+  assert.ok(!('existing_source_id' in detail.result.vorschlaege[0]));
+
+  ctx.mockAi.reset();
+  onDetect({ werke: [] });
+  const leer = await runJob(BOOK_ID);
+  assert.equal(leer.result.runId, null);
+  assert.equal(listDetectRuns(BOOK_ID, USER).length, 1, 'leerer Lauf legt keine Zeile an');
+});
+
+test('Kapitel-Lauf haelt seinen Scope, ein geloeschtes Kapitel macht ihn nicht zum Buch-Lauf', async () => {
+  const BOOK_ID = 910;
+  ctx.dbSeed.setBook({
+    chapters: [{ id: 9050, book_id: BOOK_ID, name: 'Kap X' }],
+    pages: [{ id: 9051, book_id: BOOK_ID, chapter_id: 9050, name: 'S', updated_at: '' }],
+    pageBodies: { 9051: '<p>' + 'Text. '.repeat(60) + '</p>' },
+  });
+  const { listDetectRuns, getDetectRun } = require('../../db/sources');
+  const { db } = require('../../db/connection');
+
+  onDetect({ werke: [
+    { typ: 'buch', titel: 'Das Kapital', autoren: ['Karl Marx'], jahr: '', container: '', erwaehnung: 'x' },
+  ] });
+  const job = await runJob(BOOK_ID, { chapterId: 9050 });
+  const run = getDetectRun(job.result.runId);
+  assert.equal(run.scope, 'chapter');
+  assert.equal(run.scope_chapter_id, 9050);
+  assert.equal(run.scope_chapter_name, 'Kap X');   // Name kommt per JOIN, nicht als Snapshot
+
+  db.prepare('DELETE FROM chapters WHERE chapter_id = ?').run(9050);
+  const [after] = listDetectRuns(BOOK_ID, USER);
+  assert.equal(after.scope, 'chapter', 'Scope bleibt — sonst laese sich der Lauf als Buch-Lauf');
+  assert.equal(after.scope_chapter_id, null);
+  assert.equal(after.scope_chapter_name, null);
+});
+
+test('Historie wird auf DETECT_RUN_KEEP begrenzt', () => {
+  const BOOK_ID = 911;
+  ctx.dbSeed.setBook({
+    chapters: [{ id: 9060, book_id: BOOK_ID, name: 'K' }],
+    pages: [{ id: 9061, book_id: BOOK_ID, chapter_id: 9060, name: 'S', updated_at: '' }],
+    pageBodies: { 9061: '<p>kurz</p>' },
+  });
+  const { insertDetectRun, listDetectRuns, DETECT_RUN_KEEP } = require('../../db/sources');
+  for (let i = 0; i < DETECT_RUN_KEEP + 4; i++) {
+    insertDetectRun({ bookId: BOOK_ID, userEmail: USER, foundCount: i, result: { vorschlaege: [] } });
+  }
+  const runs = listDetectRuns(BOOK_ID, USER);
+  assert.equal(runs.length, DETECT_RUN_KEEP);
+  // Die neuesten bleiben: der aelteste Fund-Zaehler ist weg.
+  assert.ok(runs.every(r => r.found_count >= 4));
+});
+
+test('Buch loeschen raeumt seine Laeufe mit weg (CASCADE)', () => {
+  const BOOK_ID = 912;
+  ctx.dbSeed.setBook({
+    chapters: [{ id: 9070, book_id: BOOK_ID, name: 'K' }],
+    pages: [{ id: 9071, book_id: BOOK_ID, chapter_id: 9070, name: 'S', updated_at: '' }],
+    pageBodies: { 9071: '<p>kurz</p>' },
+  });
+  const { insertDetectRun, listDetectRuns } = require('../../db/sources');
+  const { db } = require('../../db/connection');
+  insertDetectRun({ bookId: BOOK_ID, userEmail: USER, foundCount: 1, result: { vorschlaege: [] } });
+  assert.equal(listDetectRuns(BOOK_ID, USER).length, 1);
+  db.prepare('DELETE FROM books WHERE book_id = ?').run(BOOK_ID);
+  assert.equal(listDetectRuns(BOOK_ID, USER).length, 0);
+});
+
+test('Buch-Lauf mit Kapitel-ID ist per CHECK ausgeschlossen', () => {
+  const BOOK_ID = 913;
+  ctx.dbSeed.setBook({
+    chapters: [{ id: 9080, book_id: BOOK_ID, name: 'K' }],
+    pages: [{ id: 9081, book_id: BOOK_ID, chapter_id: 9080, name: 'S', updated_at: '' }],
+    pageBodies: { 9081: '<p>kurz</p>' },
+  });
+  const { db } = require('../../db/connection');
+  assert.throws(() => db.prepare(`
+    INSERT INTO source_detect_runs (book_id, user_email, scope, scope_chapter_id, result_json)
+    VALUES (?, ?, 'book', ?, '{}')
+  `).run(BOOK_ID, USER, 9080), /CHECK/i);
+});
+
+test('annotateExisting rechnet den Bibliotheks-Status frisch', () => {
+  const BOOK_ID = 914;
+  ctx.dbSeed.setBook({
+    chapters: [{ id: 9090, book_id: BOOK_ID, name: 'K' }],
+    pages: [{ id: 9091, book_id: BOOK_ID, chapter_id: 9090, name: 'S', updated_at: '' }],
+    pageBodies: { 9091: '<p>kurz</p>' },
+  });
+  const { annotateExisting } = ctx.sourceDetect;
+  const { createSource, linkSource } = require('../../db/sources');
+  const items = [{ title: 'Der Prozess' }, { title: 'Nie gehoertes Werk' }];
+
+  // Vorher: nichts in der Bibliothek.
+  let out = annotateExisting(items, USER, BOOK_ID);
+  assert.equal(out[0].existing_source_id, null);
+  assert.equal(out[0].existing_linked, false);
+
+  // Erfasst, aber einem anderen Buch zugeordnet → bekannt, nicht verknuepft.
+  const s = createSource(USER, { csl_type: 'book', title: 'Der Prozess' });
+  out = annotateExisting(items, USER, BOOK_ID);
+  assert.equal(out[0].existing_source_id, s.id);
+  assert.equal(out[0].existing_linked, false);
+
+  // Zugeordnet → verknuepft.
+  linkSource(BOOK_ID, s.id, USER);
+  out = annotateExisting(items, USER, BOOK_ID);
+  assert.equal(out[0].existing_linked, true);
+  assert.equal(out[1].existing_source_id, null, 'unbekanntes Werk bleibt unbekannt');
+});
+
 test('Kapitel-Scope durchsucht nur dieses Kapitel', async () => {
   const BOOK_ID = 908;
   ctx.dbSeed.setBook({

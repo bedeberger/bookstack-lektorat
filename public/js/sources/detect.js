@@ -12,16 +12,29 @@
 // `existing_source_id` (steht schon in der Bibliothek). Beides ist Anzeige, kein
 // Filter: auch ein unbestaetigter Fund ist uebernehmbar, er ist nur mit Vorsicht
 // zu geniessen.
+//
+// Ein Lauf ueberlebt den Reload: der Job historisiert ihn (source_detect_runs),
+// die Liste unter dem Panel oeffnet ihn wieder. Der Bibliotheks-Status kommt
+// dabei frisch vom Server — seit dem Lauf kann uebernommen, geloescht oder
+// zugeordnet worden sein.
 
-import { fetchJson } from '../utils.js';
+import { fetchJson, tzOpts, localeTag } from '../utils.js';
 import { startPoll } from '../cards/job-helpers.js';
 import { draftToPayload, draftFromSource } from './fields.js';
+
+// Reconnect-Anker: ueberlebt den Reload, damit ein laufender Buch-Lauf nach
+// F5 weiterverfolgt wird (app-jobs-core.js#checkPendingJobs liest denselben Key).
+const DETECT_LS_KEY = bookId => `lektorat_source_detect_job_${bookId}`;
 
 export const sourcesDetectMethods = {
   // ── Panel ──────────────────────────────────────────────────────────────────
   toggleSourceDetect() {
     this.srcDetectOpen = !this.srcDetectOpen;
-    if (this.srcDetectOpen) this.closeSourcePicker();
+    if (!this.srcDetectOpen) return;
+    this.closeSourcePicker();
+    // Historie erst beim Aufklappen holen — die Karte oeffnet oft, ohne dass
+    // die Erkennung ueberhaupt gebraucht wird.
+    this.loadDetectRuns();
   },
 
   closeSourceDetect() {
@@ -63,44 +76,64 @@ export const sourcesDetectMethods = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      startPoll(this, {
-        timerProp: '_srcDetectPollTimer',
-        jobId,
-        progressProp: 'srcDetectProgress',
-        onProgress: (job) => {
-          this.srcDetectStatus = window.__app.t(job.statusText, job.statusParams);
-        },
-        onDone: (job) => {
-          this.srcDetectRunning = false;
-          this.srcDetectProgress = 0;
-          this.srcDetectStatus = '';
-          this.srcDetected = Array.isArray(job.result?.vorschlaege) ? job.result.vorschlaege : [];
-          this.srcDetectRan = true;
-          this.srcDetectMeta = {
-            verified: job.result?.verified || 0,
-            lookupSkipped: job.result?.lookupSkipped || 0,
-            scopeName: job.result?.scopeName || null,
-          };
-        },
-        onNotFound: () => {
-          this.srcDetectRunning = false;
-          this.srcDetectProgress = 0;
-          this.srcDetectStatus = '';
-          this.srcDetectError = window.__app.t('sources.detect.interrupted');
-        },
-        onError: (job) => {
-          this.srcDetectRunning = false;
-          this.srcDetectProgress = 0;
-          this.srcDetectStatus = '';
-          this.srcDetectError = window.__app.t(job.error, job.errorParams);
-        },
-      });
+      localStorage.setItem(DETECT_LS_KEY(bookId), jobId);
+      this._pollSourceDetect(jobId);
     } catch (e) {
-      this.srcDetectRunning = false;
-      this.srcDetectProgress = 0;
-      this.srcDetectStatus = '';
+      this._srcDetectIdle();
       this.srcDetectError = window.__app.t('sources.detect.error');
     }
+  },
+
+  /** Polling eines laufenden Laufs. Geteilt zwischen frischem Start und dem
+   *  Reconnect nach einem Reload (app-jobs-core.js#checkPendingJobs). */
+  _pollSourceDetect(jobId) {
+    const bookId = window.Alpine?.store('nav')?.selectedBookId;
+    startPoll(this, {
+      timerProp: '_srcDetectPollTimer',
+      jobId,
+      lsKey: DETECT_LS_KEY(bookId),
+      progressProp: 'srcDetectProgress',
+      onProgress: (job) => {
+        this.srcDetectStatus = window.__app.t(job.statusText, job.statusParams);
+      },
+      onDone: (job) => {
+        this._srcDetectIdle();
+        this.srcDetected = Array.isArray(job.result?.vorschlaege) ? job.result.vorschlaege : [];
+        this.srcDetectRan = true;
+        this.srcDetectMeta = {
+          verified: job.result?.verified || 0,
+          lookupSkipped: job.result?.lookupSkipped || 0,
+          scopeName: job.result?.scopeName || null,
+        };
+        // Frischen Lauf sofort als ausgewaehlt markieren + Historie nachziehen.
+        this.srcDetectRunId = job.result?.runId || null;
+        this.loadDetectRuns();
+      },
+      onNotFound: () => {
+        this._srcDetectIdle();
+        this.srcDetectError = window.__app.t('sources.detect.interrupted');
+      },
+      onError: (job) => {
+        this._srcDetectIdle();
+        this.srcDetectError = window.__app.t(job.error, job.errorParams);
+      },
+    });
+  },
+
+  /** Reconnect nach Reload: Loading-State wiederherstellen und weiterpollen. */
+  reconnectSourceDetect(job, jobId) {
+    this.srcDetectOpen = true;
+    this.srcDetectRunning = true;
+    this.srcDetectProgress = job?.progress || 0;
+    this.srcDetectError = '';
+    this.srcDetectStatus = window.__app.t(job?.statusText || 'common.analysisRunning', job?.statusParams);
+    this._pollSourceDetect(jobId);
+  },
+
+  _srcDetectIdle() {
+    this.srcDetectRunning = false;
+    this.srcDetectProgress = 0;
+    this.srcDetectStatus = '';
   },
 
   // ── Funde ──────────────────────────────────────────────────────────────────
@@ -241,5 +274,85 @@ export const sourcesDetectMethods = {
       throw new Error(window.__app.tError(data) || `HTTP ${r.status}`);
     }
     return r.json().catch(() => ({}));
+  },
+
+  // ── Lauf-Historie ──────────────────────────────────────────────────────────
+  // Ein Lauf kostet Minuten und Token; die Historie macht ihn wieder auffindbar,
+  // nachdem der Tab zu war. Die Liste kommt ohne Fundliste (Kopfzeilen), das
+  // Ergebnis erst beim Oeffnen.
+  async loadDetectRuns() {
+    const bookId = window.Alpine?.store('nav')?.selectedBookId;
+    if (!bookId) { this.srcDetectRuns = []; return; }
+    try {
+      const rows = await fetchJson(`/jobs/source-detect/runs?book_id=${encodeURIComponent(bookId)}`);
+      this.srcDetectRuns = Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      this.srcDetectRuns = [];
+      console.error('[sources] Lauf-Historie fehlgeschlagen:', e);
+    }
+  },
+
+  /** Toggle: Klick auf den offenen Lauf schliesst ihn, sonst laden. Waehrend
+   *  eines laufenden Jobs gesperrt — sonst ueberschreibt der Lauf beim
+   *  Fertigwerden die gerade geoeffnete Historie. */
+  async openDetectRun(run) {
+    if (!run || this.srcDetectRunning) return;
+    if (this.srcDetectRunId === run.id) {
+      this.srcDetected = [];
+      this.srcDetectRunId = null;
+      this.srcDetectMeta = null;
+      return;
+    }
+    this.srcDetectError = '';
+    try {
+      const detail = await fetchJson(`/jobs/source-detect/runs/${run.id}`);
+      // Der Server hat den Bibliotheks-Status beim Lesen frisch gerechnet —
+      // „schon erfasst" stimmt damit fuer JETZT, nicht fuer den Lauf-Zeitpunkt.
+      this.srcDetected = detail?.result?.vorschlaege || [];
+      this.srcDetectRunId = detail?.id || null;
+      this.srcDetectRan = true;
+      this.srcDetectMeta = {
+        verified: detail?.verified_count || 0,
+        lookupSkipped: 0,   // nur eine Eigenschaft des Laufs selbst, nicht des Wiederlesens
+        scopeName: detail?.scope === 'chapter'
+          ? (detail.scope_chapter_name || window.__app.t('sources.detect.chapterGone'))
+          : null,
+      };
+    } catch (e) {
+      this.srcDetectError = window.__app.t('sources.detect.runLoadError');
+    }
+  },
+
+  async deleteDetectRun(run) {
+    if (!run?.id) return;
+    if (!await window.__app.appConfirm({
+      message: window.__app.t('sources.detect.confirmDeleteRun'), danger: true,
+    })) return;
+    try {
+      await fetchJson(`/jobs/source-detect/runs/${run.id}`, { method: 'DELETE' });
+      this.srcDetectRuns = this.srcDetectRuns.filter(r => r.id !== run.id);
+      if (this.srcDetectRunId === run.id) {
+        this.srcDetected = [];
+        this.srcDetectRunId = null;
+        this.srcDetectMeta = null;
+      }
+    } catch (e) {
+      this.srcDetectError = window.__app.t('sources.detect.runDeleteError');
+    }
+  },
+
+  /** Kopfzeile eines Laufs: Zeitpunkt + Umfang. */
+  detectRunLabel(run) {
+    const scope = run?.scope === 'chapter'
+      ? (run.scope_chapter_name || window.__app.t('sources.detect.chapterGone'))
+      : window.__app.t('sources.detect.scopeBook');
+    return `${this.formatDetectRunDate(run?.created_at)} · ${scope}`;
+  },
+
+  formatDetectRunDate(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleString(localeTag(window.Alpine?.store('shell')?.uiLocale), tzOpts());
+    } catch { return iso; }
   },
 };

@@ -18,7 +18,7 @@
     <div x-data="combobox($app.t('sources.detect.scopeChapter'), $app.t('sources.detect.scopeBook'))"
          x-modelable="value" x-model="srcDetectChapterId"
          x-effect="options = srcDetectChapterOptions()"></div>
-    <button type="button" class="btn-compact sources-detect-run" @click="runSourceDetect()"
+    <button type="button" class="btn-compact sources-detect-start" @click="runSourceDetect()"
             :disabled="srcDetectRunning || sourcesBusy">
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#scan"/></svg>
       <span x-text="srcDetectRunning ? $app.t('sources.detect.running') : $app.t('sources.detect.start')"></span>
@@ -94,4 +94,27 @@
       </li>
     </template>
   </ul>
+
+  <!-- Lauf-Historie: ein Lauf kostet Minuten und Token, darum ueberlebt sein
+       Ergebnis den Reload (source_detect_runs). Klick oeffnet ihn wieder im
+       Vorschlagsfeld oben — mit frisch gerechnetem Bibliotheks-Status. -->
+  <div class="sources-detect-history" x-show="srcDetectRuns.length > 0" x-cloak>
+    <span class="sources-detect-history-title" x-text="$app.t('sources.detect.history')"></span>
+    <ul class="sources-detect-run-list">
+      <template x-for="run in srcDetectRuns" :key="run.id">
+        <li class="sources-detect-run" :class="{ 'sources-detect-run--active': srcDetectRunId === run.id }">
+          <button type="button" class="sources-detect-run-open internal-link"
+                  :aria-pressed="srcDetectRunId === run.id"
+                  :disabled="srcDetectRunning"
+                  @click="openDetectRun(run)">
+            <span class="sources-detect-run-label" x-text="detectRunLabel(run)"></span>
+            <span class="sources-detect-run-count"
+                  x-text="$app.t('sources.detect.runCount', { n: run.found_count, verified: run.verified_count })"></span>
+          </button>
+          <button type="button" class="icon-btn icon-btn--ghost" @click="deleteDetectRun(run)"
+                  :data-tip="$app.t('sources.detect.deleteRun')" :aria-label="$app.t('sources.detect.deleteRun')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#trash"/></svg></button>
+        </li>
+      </template>
+    </ul>
+  </div>
 </div>

@@ -567,6 +567,16 @@ export const appJobsCoreMethods = {
       this.startBatchPoll(jobId);
     });
 
+    // Quellen-Erkennung: ein Buch-Lauf dauert Minuten und kostet Token — ein
+    // versehentliches F5 darf ihn nicht ins Leere laufen lassen. Die Karte
+    // hängt sich wieder ans Polling und bekommt am Ende das Ergebnis.
+    await this._reconnectJob('lektorat_source_detect_job_' + bookId, (job, jobId) => {
+      if (canAutoOpenCard(this)) this.showSourcesCard = true;
+      window.dispatchEvent(new CustomEvent(EVT.JOB_RECONNECT, {
+        detail: { type: 'source-detect', jobId, job },
+      }));
+    });
+
     // Prüfen ob ein komplett-analyse Job vom Server noch läuft (z.B. Tab geschlossen)
     if (!this.$store.jobs.alleAktualisierenLoading) {
       try {

@@ -426,6 +426,55 @@
   white-space: nowrap;
 }
 
+/* Lauf-Historie am Fuss des Panels: dezent, es ist ein Archiv und keine
+   Hauptaktion. Der offene Lauf traegt die Akzentkante. */
+.sources-detect-history {
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+}
+.sources-detect-history-title {
+  display: block;
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+  margin-bottom: var(--space-6);
+}
+.sources-detect-run-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sources-detect-run {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  border-left: 2px solid transparent;
+  padding-left: var(--space-6);
+}
+.sources-detect-run--active { border-left-color: var(--card-accent); }
+.sources-detect-run-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  padding: var(--space-6) 0;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: var(--font-size-mini);
+}
+.sources-detect-run-open:disabled { cursor: default; }
+.sources-detect-run-open:disabled:hover { opacity: 1; text-decoration: none; }
+.sources-detect-run-count {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Mobile: Urheber darf umbrechen, Aktionsspalte rutscht unter den Titel. */
 @media (max-width: 600px) {
   .sources-cell-author { white-space: normal; }

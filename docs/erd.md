@@ -1,6 +1,6 @@
 # ERD — schreibwerkstatt
 
-Stand: Schema-Version 256, 138 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
+Stand: Schema-Version 257, 139 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
 
 Quelle: Squashed-Schema-Snapshot in [db/squashed-schema.js](../db/squashed-schema.js) (regeneriert via `node tools/dump-schema.js`) + [db/migrations.js](../db/migrations.js). Drift gegen die Legacy-Migration-Kette ist durch [tests/unit/squash-drift.test.mjs](../tests/unit/squash-drift.test.mjs) gegated. Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -41,6 +41,8 @@ erDiagram
   sources ||--o{ book_source_links   : "used by"
   sources ||--o{ source_citations    : "cited in"
   pages ||--o{ source_citations      : cites
+  books ||--o{ source_detect_runs    : "detection runs"
+  chapters ||--o{ source_detect_runs : "scoped to"
   pages ||--o{ xref_anchors          : "numbers"
   pages ||--o{ xref_links            : "refers from"
   chapters ||--o{ xref_links         : "referred to"
@@ -505,6 +507,21 @@ erDiagram
     %% Full-Replace pro Seiten-Write (Muster page_figure_mentions). Kein book_id —
     %% Buch-Abfragen laufen über den JOIN auf pages.
   }
+  source_detect_runs {
+    INTEGER id               PK
+    INTEGER book_id          FK "ON DELETE CASCADE"
+    TEXT    user_email       "Auslöser des Laufs (kein FK, wie alle E-Mail-Spalten); die Funde sind seine Bibliotheks-Perspektive"
+    TEXT    scope            "CHECK: book | chapter — WAS durchsucht wurde"
+    INTEGER scope_chapter_id FK "ON DELETE SET NULL — nur bei scope=chapter; genullt bleibt der Lauf lesbar"
+    TEXT    created_at
+    INTEGER found_count      "denormalisiert fürs Listen-Rendering (Liste lädt result_json nicht)"
+    INTEGER verified_count   "davon im Register bestätigt"
+    TEXT    result_json      "{ vorschlaege[] } — unbestätigter Modell-Output, kein Katalog"
+    TEXT    model
+    %% Historie des Jobs `source-detect`. Bewusst OHNE Bibliotheks-Status am Fund
+    %% („schon erfasst"/„zugeordnet"): der altert und wird bei jedem Lesen neu
+    %% gerechnet. CHECK(scope <> 'book' OR scope_chapter_id IS NULL).
+  }
 
   xref_anchors {
     INTEGER page_id PK,FK "ON DELETE CASCADE"
@@ -530,6 +547,8 @@ erDiagram
   sources ||--o{ book_source_links  : "used by"
   sources ||--o{ source_citations   : "cited in"
   pages   ||--o{ source_citations   : cites
+  books   ||--o{ source_detect_runs : "detection runs"
+  chapters ||--o{ source_detect_runs : "scoped to"
   pages   ||--o{ xref_anchors       : numbers
   pages   ||--o{ xref_links         : "refers from"
   chapters ||--o{ xref_links        : "referred to"
