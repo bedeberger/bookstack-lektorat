@@ -305,7 +305,8 @@ const PUBLIC_ASSETS = new Set([
   '/icons.svg',
   '/schreibwerkstatt_icon.ico',
   '/favicon.ico',
-  '/js/admin/admin-login.js',
+  // Handler der Passwort-Formen auf /login (Admin-Pfad + Demo-Zugang).
+  '/js/credential-login.js',
   '/js/share-reader.js',
   // share-reader.js importiert charOffset/locateRange/resolveCurrentQuote als
   // ES-Modul aus share-anchor.js (SSoT mit der Owner-Karte). Der Import-Request
@@ -330,11 +331,11 @@ const PUBLIC_ASSETS = new Set([
   // Ausfuehrung (nosniff) → kein Theme vor dem ersten Paint, gespeicherte Wahl
   // wird ignoriert.
   '/js/share-theme-init.js',
-  // Skripte der Pre-Auth-Seiten (register.html + admin-login). Ohne Freigabe
+  // Skripte der Pre-Auth-Seiten (register.html + /login). Ohne Freigabe
   // landet ihr Request im Auth-Guard und kommt als HTML (`/login?returnTo=...`)
   // zurück → Browser verweigert die Ausführung wegen falschem MIME-Type.
   '/js/register.js',
-  // ALTCHA-PoW-Widget (Custom-Element): von register.html + admin-login per
+  // ALTCHA-PoW-Widget (Custom-Element): von register.html + /login per
   // dynamic `<script type="module">` nachgeladen, sobald ALTCHA aktiv ist.
   '/vendor/altcha-3.0.11.min.js',
 ]);

@@ -152,6 +152,27 @@ Unter `/admin` für User mit `global_role = 'admin'`:
 
 `ADMIN_EMAIL` in `.env` wird beim Start als globale Admin-Rolle gespiegelt (idempotent). Passwort lebt ausschliesslich in der ENV (timing-safe Vergleich, Rate-Limit pro IP).
 
+## Demo-Zugang (Store-Reviews, Testinstanz)
+
+Dritter Login-Pfad neben Google-OIDC und Admin-Passwort: ein **fixer Passwort-Login mit Rolle `user`**. Existenzgrund sind die App-Store-Reviews — Apple (Guideline 2.1, Feld „Sign-in required") und Google Play (`App access`) verlangen einen funktionierenden Demo-Account als Pflichtangabe, der Chrome Web Store Test-Credentials in den Reviewer-Notes. Ein Google-Konto lässt sich Reviewern nicht geben (2FA, Googles ToS, Login-Blocks aus Datacenter-IPs), und der Admin-Pfad würde `/admin/*` und fremde Bücher freigeben.
+
+Aktivierung ausschliesslich über `.env` — fehlt eines der beiden, existiert der Pfad nicht:
+
+```bash
+DEMO_EMAIL=demo@example.com
+DEMO_PASSWORD=<langes Zufallspasswort>
+```
+
+Verhalten ([lib/demo-user.js](lib/demo-user.js), Route `POST /auth/demo-login` in [routes/auth.js](routes/auth.js)):
+
+- **Rolle ist immer `user`**, kein Invite-Recht. Wird die Row von Hand auf `admin` gehoben, drückt sie der nächste Demo-Login zurück — der Zugang ist öffentlich bekannt.
+- **Gleiche Härtung wie der Admin-Login** (geteilte Factory: Rate-Limit pro IP, ALTCHA, timing-safe Vergleich, Audit-Event mit `method: 'demo'`) und **derselbe IP-Bucket** — Brute-Force gegen den einen Pfad deckelt auch den anderen.
+- **Beispielbuch wird bei jedem Login geseedet** (idempotent über den Buchnamen, gemeinfreie Prosa, kein KI-Call). Ein Reviewer landet nie in einer leeren App, auch wenn der vorige alles gelöscht hat.
+- **Status-Gate greift:** `suspended`/`deleted` im Admin-Tab → `403 USER_NOT_ACTIVE`. So lässt sich der Zugang ohne ENV-Änderung stilllegen.
+- **`DEMO_EMAIL === ADMIN_EMAIL` deaktiviert den Demo-Pfad** (sonst streiten sich beide Routen um die Rolle derselben Row).
+
+> **Nur auf einer separaten Demo-Instanz setzen, nie auf Prod.** Reviewer schreiben, und KI-Jobs kosten Geld. Auf der Demo-Instanz zusätzlich: eigene DB, günstiger/lokaler `ai.provider`, Budget-Cap für den Demo-User, eigener API-Key mit Hard Limit — und ein Reset-Job, der die DB nachts auf einen Snapshot zurücksetzt.
+
 ## Backup
 
 Tägliches Online-Backup der SQLite-DB via systemd-Timer (`schreibwerkstatt-backup.timer`, Default 03:00). `sqlite3 .backup` (lock-frei, WAL-konsistent), gzip-komprimiert, Retention nach `mtime`. Pre-Deploy zusätzlicher Snapshot.

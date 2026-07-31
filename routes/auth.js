@@ -7,6 +7,7 @@ const rateLimit = require('../lib/admin-login-ratelimit');
 const appSettings = require('../lib/app-settings');
 const altcha = require('../lib/altcha');
 const avatarCache = require('../lib/avatar-cache');
+const demoUser = require('../lib/demo-user');
 const { tServer } = require('../lib/i18n-server');
 
 const router = express.Router();
@@ -64,6 +65,78 @@ function _passwordsMatch(expected, given) {
   const a = crypto.createHash('sha256').update(String(expected)).digest();
   const b = crypto.createHash('sha256').update(String(given)).digest();
   return crypto.timingSafeEqual(a, b);
+}
+
+// Gemeinsamer Kern der ENV-Passwort-Logins (Admin-Pfad + Demo-Zugang). Nur die
+// Konfiguration unterscheidet sich; die sicherheitsrelevante Sequenz
+// (Rate-Limit → ALTCHA → konstantzeit-Vergleich → Audit → Session) ist damit per
+// Konstruktion in beiden Pfaden identisch und kann nicht auseinanderdriften.
+//
+// Der Rate-Limit-Bucket ist bewusst GETEILT (lib/admin-login-ratelimit, Key =
+// IP): Brute-Force gegen den einen Pfad deckelt auch den anderen.
+//
+// cfg.ensureUser() liefert { role, name } oder { denied: 'suspended'|'deleted' }
+// und ist die einzige Stelle, die ueber die Rolle der Session entscheidet.
+function _credentialLogin(cfg) {
+  const { disabledCode, envEmailKey, envPasswordKey, method, ensureUser, onSuccess, logLabel } = cfg;
+  const isEnabled = cfg.isEnabled || (() => !!(process.env[envEmailKey] && process.env[envPasswordKey]));
+  return async (req, res) => {
+    if (!isEnabled()) return res.status(404).json({ error_code: disabledCode });
+    const ip = _clientIp(req);
+    const state = rateLimit.getState(ip);
+    if (state.blocked) {
+      res.set('Retry-After', String(state.retryAfterSec || 900));
+      return res.status(429).json({ error_code: 'RATE_LIMITED', retryAfter: state.retryAfterSec });
+    }
+    const { email, password, altcha: altchaSolution } = req.body || {};
+    // ALTCHA vor dem Credential-Check: ohne gueltige PoW-Loesung kein Versuch.
+    // Kein recordFailure hier — ein fehlendes/ungueltiges Token ist keine
+    // Credential-Brute-Force, und der Solver-CPU-Aufwand deckelt Bots bereits.
+    const captcha = await altcha.verify(altchaSolution);
+    if (!captcha.ok) {
+      return res.status(400).json({ error_code: 'CAPTCHA_FAILED' });
+    }
+    const givenEmail = (email || '').toLowerCase().trim();
+    const expectedEmail = (process.env[envEmailKey] || '').toLowerCase().trim();
+    const userAgent = req.headers['user-agent'] || null;
+
+    const emailMatch = givenEmail && expectedEmail && givenEmail === expectedEmail;
+    const passwordMatch = _passwordsMatch(process.env[envPasswordKey], password);
+
+    if (!emailMatch || !passwordMatch) {
+      const after = rateLimit.recordFailure(ip);
+      appUsers.recordAuditEvent(givenEmail || expectedEmail, 'login-denied', { ip, userAgent, meta: { method, failCount: after.failCount } });
+      logger.warn(`${logLabel} fehlgeschlagen.`, { user: givenEmail || expectedEmail });
+      return res.status(401).json({ error_code: 'INVALID_CREDENTIALS' });
+    }
+
+    rateLimit.recordSuccess(ip);
+    // app_users-Row sicherstellen. Status-Gate greift hier und nicht vor dem
+    // Credential-Check, damit die Antwort nicht verraet, ob ein Konto existiert.
+    const ensured = ensureUser();
+    if (ensured && ensured.denied) {
+      appUsers.recordAuditEvent(givenEmail, 'login-denied', { ip, userAgent, meta: { method, reason: ensured.denied } });
+      logger.warn(`${logLabel} verweigert (Status ${ensured.denied}).`, { user: givenEmail });
+      return res.status(403).json({ error_code: 'USER_NOT_ACTIVE', reason: ensured.denied });
+    }
+    appUsers.touchLogin(givenEmail);
+    appUsers.recordAuditEvent(givenEmail, 'login', { ip, userAgent, meta: { method } });
+
+    req.session.user = { email: givenEmail, name: ensured.name, picture: null, role: ensured.role };
+    req.session.loginAt = Date.now();
+    req.session.lastSeen = Date.now();
+    logger.info(`${logLabel}.`, { user: givenEmail });
+    // Post-Login-Hook (Demo-Seed). Non-fatal: ein Fehler darf den bereits
+    // erfolgreichen Login nicht in einen 500 verwandeln.
+    if (onSuccess) {
+      try { await onSuccess(givenEmail); }
+      catch (e) { logger.warn(`${logLabel}: Post-Login-Hook fehlgeschlagen: ${e.message}`, { user: givenEmail }); }
+    }
+    req.session.save(err => {
+      if (err) return res.status(500).json({ error_code: 'SESSION_SAVE_FAILED' });
+      res.json({ ok: true });
+    });
+  };
 }
 
 // Gemeinsames Pre-Auth-Page-Skeleton. Wird vor SPA-Boot ausgeliefert, darum
@@ -305,47 +378,75 @@ router.get('/login', (req, res) => {
   const lang = _bodyLang(req);
   const hasGoogle = !!(appSettings.get('auth.google.client_id') && appSettings.get('auth.google.client_secret'));
   const hasAdminPw = !!process.env.ADMIN_PASSWORD;
+  const hasDemo = demoUser.isEnabled();
   const returnTo = typeof req.query.returnTo === 'string' && req.query.returnTo.startsWith('/') && !req.query.returnTo.startsWith('//')
     ? req.query.returnTo : '/';
   const t = (k) => tServer(k, lang);
   const title = t('auth.login.title');
-  const googleBlock = hasGoogle ? `  <section class="public-actions">
+  const googleBlock = `  <section class="public-actions">
     <a class="public-btn public-btn--primary" href="/auth/login?returnTo=${encodeURIComponent(returnTo)}">${t('auth.login.google')}</a>
   </section>
-` : '';
-  const orBlock = hasGoogle && hasAdminPw ? `  <div class="public-sep">${t('auth.login.or')}</div>
-` : '';
+`;
   // ALTCHA-Widget nur einhaengen, wenn aktiv. Form-assoziiertes Custom-Element:
-  // der geloeste Wert landet als Feld `altcha` in der FormData (admin-login.js
-  // liest ihn raus). Das Modul registriert <altcha-widget> beim Laden.
-  const altchaOn = hasAdminPw && altcha.isEnabled();
+  // der geloeste Wert landet als Feld `altcha` in der FormData
+  // (credential-login.js liest ihn raus). Das Modul registriert <altcha-widget>
+  // beim Laden. Jede Form braucht ihre EIGENE Widget-Instanz — das Element ist
+  // an genau eine Form gebunden, ein geteiltes Widget wuerde nur in einer der
+  // beiden FormData landen.
+  const altchaOn = (hasAdminPw || hasDemo) && altcha.isEnabled();
   const altchaWidget = altchaOn
     ? `    <altcha-widget challenge="/altcha/challenge" name="altcha" auto="onload"></altcha-widget>\n`
     : '';
-  const adminBlock = hasAdminPw
-    ? `  <form id="admin-form" class="public-form" novalidate data-returnto="${_escAttr(returnTo)}" data-msg-invalid="${_escAttr(t('auth.login.errInvalid'))}" data-msg-rate-tpl="${_escAttr(t('auth.login.errRateTpl'))}" data-msg-captcha="${_escAttr(t('auth.login.errCaptcha'))}">
-    <h2 class="public-form-title">${t('auth.login.adminTitle')}</h2>
-    <label><span>${t('auth.login.email')}</span><input type="email" id="email" required autocomplete="username"></label>
-    <label><span>${t('auth.login.password')}</span><input type="password" id="password" required autocomplete="current-password"></label>
+  // Beide Passwort-Formen teilen Markup + Handler; sie unterscheiden sich nur in
+  // Endpoint, Labels und (beim Demo-Zugang) der vorbefuellten Adresse.
+  const pwForm = ({ id, endpoint, heading, hint, emailLabel, submitLabel, emailValue }) => `  <form id="${id}" class="public-form" novalidate data-login-endpoint="${_escAttr(endpoint)}" data-returnto="${_escAttr(returnTo)}" data-msg-invalid="${_escAttr(t('auth.login.errInvalid'))}" data-msg-rate-tpl="${_escAttr(t('auth.login.errRateTpl'))}" data-msg-captcha="${_escAttr(t('auth.login.errCaptcha'))}" data-msg-inactive="${_escAttr(t('auth.login.errInactive'))}">
+    <h2 class="public-form-title">${heading}</h2>
+${hint ? `    <p class="public-sub">${hint}</p>\n` : ''}    <label><span>${emailLabel}</span><input type="email" name="email" required autocomplete="username"${emailValue ? ` value="${_escAttr(emailValue)}"` : ''}></label>
+    <label><span>${t('auth.login.password')}</span><input type="password" name="password" required autocomplete="current-password"></label>
 ${altchaWidget}    <div class="public-form-actions">
-      <button type="submit" class="public-btn public-btn--primary">${t('auth.login.submit')}</button>
+      <button type="submit" class="public-btn public-btn--primary">${submitLabel}</button>
     </div>
-    <p class="public-msg public-msg--err" id="err" hidden></p>
+    <p class="public-msg public-msg--err" data-login-err hidden></p>
   </form>
-`
-    : (hasGoogle ? '' : `  <p class="public-sub">${t('auth.login.noAdmin')}</p>
-`);
+`;
+  const adminBlock = pwForm({
+    id: 'admin-form',
+    endpoint: '/auth/admin-login',
+    heading: t('auth.login.adminTitle'),
+    emailLabel: t('auth.login.email'),
+    submitLabel: t('auth.login.submit'),
+  });
+  // Demo-Adresse vorbefuellen: sie ist kein Geheimnis (steht in den
+  // Store-Reviewer-Notes) und ein Tippfehler des Reviewers kostet einen
+  // Rejection-Zyklus. Das Passwort wird nie vorbefuellt.
+  const demoBlock = pwForm({
+    id: 'demo-form',
+    endpoint: '/auth/demo-login',
+    heading: t('auth.login.demoTitle'),
+    hint: t('auth.login.demoHint'),
+    emailLabel: t('auth.login.demoEmail'),
+    submitLabel: t('auth.login.demoSubmit'),
+    emailValue: demoUser.demoEmail(),
+  });
+  const blocks = [];
+  if (hasGoogle) blocks.push(googleBlock);
+  if (hasAdminPw) blocks.push(adminBlock);
+  if (hasDemo) blocks.push(demoBlock);
+  const sep = `  <div class="public-sep">${t('auth.login.or')}</div>\n`;
+  const bodyHtml = blocks.length
+    ? blocks.join(sep)
+    : `  <p class="public-sub">${t('auth.login.noAdmin')}</p>\n`;
   res.set('Cache-Control', 'no-store');
-  const adminScripts = hasAdminPw
-    ? `${altchaOn ? '<script type="module" src="/vendor/altcha-3.0.11.min.js"></script>\n' : ''}<script src="/js/admin/admin-login.js"></script>\n`
+  const formScripts = (hasAdminPw || hasDemo)
+    ? `${altchaOn ? '<script type="module" src="/vendor/altcha-3.0.11.min.js"></script>\n' : ''}<script src="/js/credential-login.js"></script>\n`
     : '';
   res.send(_renderPublicShell({
     lang,
     title,
     mainHtml: `<main class="public-shell">
   <header class="public-header"><h1>${title}</h1></header>
-${googleBlock}${orBlock}${adminBlock}</main>`,
-    scripts: adminScripts,
+${bodyHtml}</main>`,
+    scripts: formScripts,
   }));
 });
 
@@ -355,53 +456,38 @@ ${googleBlock}${orBlock}${adminBlock}</main>`,
 // SHA-256-Hash beider Werte (gleiche Buffer-Laenge, konstantzeit-Vergleich).
 // Rate-Limit pro IP via lib/admin-login-ratelimit. Ohne ADMIN_PASSWORD-ENV
 // liefert die Route 404 (Login-Pfad B komplett deaktiviert).
-router.post('/auth/admin-login', express.json(), async (req, res) => {
-  if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
-    return res.status(404).json({ error_code: 'ADMIN_LOGIN_DISABLED' });
-  }
-  const ip = _clientIp(req);
-  const state = rateLimit.getState(ip);
-  if (state.blocked) {
-    res.set('Retry-After', String(state.retryAfterSec || 900));
-    return res.status(429).json({ error_code: 'RATE_LIMITED', retryAfter: state.retryAfterSec });
-  }
-  const { email, password, altcha: altchaSolution } = req.body || {};
-  // ALTCHA vor dem Credential-Check: ohne gueltige PoW-Loesung kein Versuch.
-  // Kein recordFailure hier — ein fehlendes/ungueltiges Token ist keine
-  // Credential-Brute-Force, und der Solver-CPU-Aufwand deckelt Bots bereits.
-  const captcha = await altcha.verify(altchaSolution);
-  if (!captcha.ok) {
-    return res.status(400).json({ error_code: 'CAPTCHA_FAILED' });
-  }
-  const givenEmail = (email || '').toLowerCase().trim();
-  const expectedEmail = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
-  const userAgent = req.headers['user-agent'] || null;
+router.post('/auth/admin-login', express.json(), _credentialLogin({
+  disabledCode: 'ADMIN_LOGIN_DISABLED',
+  envEmailKey: 'ADMIN_EMAIL',
+  envPasswordKey: 'ADMIN_PASSWORD',
+  method: 'env',
+  logLabel: 'Admin-Login (ENV-Pfad)',
+  // Sicherstellen, dass app_users-Row existiert + global_role='admin'. Kein
+  // Status-Gate: der ENV-Admin ist der Notfall-Zugang zur Instanz und darf sich
+  // nicht selbst aussperren koennen.
+  ensureUser: () => {
+    appUsers.ensureAdminFromEnv();
+    return { role: 'admin', name: 'Admin' };
+  },
+}));
 
-  const emailMatch = givenEmail && expectedEmail && givenEmail === expectedEmail;
-  const passwordMatch = _passwordsMatch(process.env.ADMIN_PASSWORD, password);
-
-  if (!emailMatch || !passwordMatch) {
-    const after = rateLimit.recordFailure(ip);
-    appUsers.recordAuditEvent(givenEmail || expectedEmail, 'login-denied', { ip, userAgent, meta: { method: 'env', failCount: after.failCount } });
-    logger.warn('Admin-Login fehlgeschlagen.', { user: givenEmail || expectedEmail });
-    return res.status(401).json({ error_code: 'INVALID_CREDENTIALS' });
-  }
-
-  rateLimit.recordSuccess(ip);
-  // Sicherstellen, dass app_users-Row existiert + global_role='admin'.
-  appUsers.ensureAdminFromEnv();
-  appUsers.touchLogin(givenEmail);
-  appUsers.recordAuditEvent(givenEmail, 'login', { ip, userAgent, meta: { method: 'env' } });
-
-  req.session.user = { email: givenEmail, name: 'Admin', picture: null, role: 'admin' };
-  req.session.loginAt = Date.now();
-  req.session.lastSeen = Date.now();
-  logger.info('Admin-Login (ENV-Pfad).', { user: givenEmail });
-  req.session.save(err => {
-    if (err) return res.status(500).json({ error_code: 'SESSION_SAVE_FAILED' });
-    res.json({ ok: true });
-  });
-});
+// POST /auth/demo-login → ENV-getriebener Demo-Zugang (Rolle 'user').
+//
+// Gleiche Haertung wie der Admin-Pfad (geteilte Factory + geteilter
+// Rate-Limit-Bucket), aber ohne Admin-Rechte. Existenzgrund: Store-Reviews
+// verlangen einen Demo-Account, und ein Google-Konto kann man Reviewern nicht
+// geben. Wahrheit in ENV: DEMO_EMAIL + DEMO_PASSWORD; ohne beides → 404.
+// Details + Betriebsregeln: lib/demo-user.js.
+router.post('/auth/demo-login', express.json(), _credentialLogin({
+  disabledCode: 'DEMO_LOGIN_DISABLED',
+  envEmailKey: 'DEMO_EMAIL',
+  envPasswordKey: 'DEMO_PASSWORD',
+  method: 'demo',
+  logLabel: 'Demo-Login',
+  isEnabled: () => demoUser.isEnabled(),
+  ensureUser: () => demoUser.ensureDemoUser(),
+  onSuccess: (email) => demoUser.seedDemoContent(email),
+}));
 
 // GET /auth/logout → Session löschen + Landing-Page anzeigen.
 // Kein Auto-Redirect zu /auth/login: Google-Session wäre meist noch aktiv und
