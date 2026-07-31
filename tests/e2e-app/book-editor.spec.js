@@ -82,9 +82,16 @@ test('Ohne caretRangeFromPoint setzt der Fallback den Caret (Tippen läuft nicht
   const body = card(page).locator('.book-editor-page-body').first();
   await body.click();
   await expect(body).toHaveAttribute('contenteditable', 'true');
+  // Auf den FOKUS warten, nicht auf „irgendeine Selektion im Block": der Browser
+  // setzt beim Mousedown selbst eine Selektion in den (noch nicht editierbaren)
+  // Block — die ist bereits da, bevor `activateBlock` im $nextTick fokussiert und
+  // den Fallback-Caret setzt. Wer darauf gated, tippt ins Leere und misst nichts.
+  // `el.focus()` läuft synchron vor `_placeCaret` im selben $nextTick: sobald der
+  // Block das aktive Element ist, steht auch der Fallback-Caret.
   await expect.poll(
     () => page.evaluate(() => {
       const el = document.querySelector('.book-editor-page-body');
+      if (document.activeElement !== el) return false;
       const s = document.getSelection();
       return !!(s && s.anchorNode && el.contains(s.anchorNode));
     }),
@@ -93,6 +100,12 @@ test('Ohne caretRangeFromPoint setzt der Fallback den Caret (Tippen läuft nicht
 
   await page.keyboard.type('X');
   expect((await state(page)).dirty).toBe(1);
+  // Der Fallback setzt den Caret an den Blockanfang — das Zeichen muss dort
+  // stehen, nicht an der Klickstelle. Sonst hätte auch die Browser-Selektion
+  // gereicht und der Fallback-Pfad wäre ungeprüft.
+  expect(await page.evaluate(
+    () => document.querySelector('.book-editor-page-body').textContent.startsWith('X'),
+  )).toBe(true);
   guard.assertClean('Bucheditor: Caret-Fallback');
 });
 
