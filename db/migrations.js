@@ -10097,6 +10097,56 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 257 abgeschlossen (source_detect_runs: historisierte Laeufe der Quellen-Erkennung).');
   }
 
+  if (version < 258) {
+    // Quellen-PDF: optionales PDF pro Quelle (User-Pool). Das Original liegt als
+    // BLOB an `sources.doc`, der extrahierte Plain-Text in `sources.doc_text` (für
+    // FTS + KI-Verknüpfung). `doc_indexed_at` markiert den letzten Embedding-Lauf
+    // (Nacht-Cron / Upload-Trigger) — bei `doc_text`-Änderung muss der Index neu
+    // gebaut werden. `doc_content_hash` deckt den Delta-Cache im Index-Job.
+    //
+    // `source_semantic_chunks` ist die User-Pool-Pendants zu `semantic_chunks`:
+    // Quellen sind personen-, nicht werkgebunden → kein `book_id`-FK, kein
+    // Pages/Scenes/Figures-FK. Stattdessen `source_id` (CASCADE) + `owner_email`
+    // (für billige Scopes pro User ohne JOIN). Vektoren liegen als Float32-BLOB;
+    // Der/Die Serialisierung kommt aus lib/embed-chunk.js (gleiche Form wie beim
+    // buchskopierten Index). `model` ist Teil des Chunk-Keys, ein Modellwechsel
+    // erzwingt Neu-Embedden und lässt alte Modell-Chunks liegen, bis ein Full-
+    // Reindex sie räumt.
+    const sourcesCols = db.pragma('table_info(sources)').map(c => c.name);
+    if (!sourcesCols.includes('doc'))              db.exec('ALTER TABLE sources ADD COLUMN doc BLOB');
+    if (!sourcesCols.includes('doc_mime'))         db.exec("ALTER TABLE sources ADD COLUMN doc_mime TEXT");
+    if (!sourcesCols.includes('doc_name'))         db.exec('ALTER TABLE sources ADD COLUMN doc_name TEXT');
+    if (!sourcesCols.includes('doc_text'))         db.exec('ALTER TABLE sources ADD COLUMN doc_text TEXT');
+    if (!sourcesCols.includes('doc_pages'))        db.exec('ALTER TABLE sources ADD COLUMN doc_pages INTEGER');
+    if (!sourcesCols.includes('doc_content_hash')) db.exec('ALTER TABLE sources ADD COLUMN doc_content_hash TEXT');
+    if (!sourcesCols.includes('doc_indexed_at'))   db.exec('ALTER TABLE sources ADD COLUMN doc_indexed_at TEXT');
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS source_semantic_chunks (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_id    INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+        owner_email  TEXT    NOT NULL,
+        chunk_ix     INTEGER NOT NULL DEFAULT 0,
+        content_hash TEXT    NOT NULL,
+        model        TEXT    NOT NULL,
+        dim          INTEGER NOT NULL,
+        vector       BLOB    NOT NULL,
+        text         TEXT    NOT NULL,
+        created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        UNIQUE (source_id, chunk_ix, model)
+      );
+      CREATE INDEX IF NOT EXISTS idx_sschunk_owner ON source_semantic_chunks(owner_email, model);
+      CREATE INDEX IF NOT EXISTS idx_sschunk_source ON source_semantic_chunks(source_id);
+    `);
+
+    const fkErrors258 = db.pragma('foreign_key_check');
+    if (fkErrors258.length) {
+      throw new Error(`Migration 258: foreign_key_check meldet ${fkErrors258.length} Verstoesse: ${JSON.stringify(fkErrors258.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 258').run();
+    logger.info('DB-Migration auf Version 258 abgeschlossen (Quellen-PDF: doc*-Spalten an sources + source_semantic_chunks).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

@@ -565,4 +565,14 @@ export const sourcesMethods = {
       this._sourcesNoticeTimer = null;
     }, SAVED_FLASH_MS * 2);
   },
+
+  /** Index-Stand-Label für das Form. Eigentliche PDF-Methoden in
+   *  public/js/sources/pdf.js, in der Karte gespreadet (s. cards/sources-card.js). */
+  srcPdfIndexLabel() {
+    const app = window.__app;
+    if (!this.srcDraft.has_pdf) return '';
+    return this.srcDraft.doc_indexed_at
+      ? app.t('sources.pdf.indexReady')
+      : app.t('sources.pdf.indexPending');
+  },
 };

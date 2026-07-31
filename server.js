@@ -58,6 +58,7 @@ const locationsRouter = require('./routes/locations');
 const songsRouter = require('./routes/songs');
 const { router: jobsRouter, runKomplettAnalyseAll } = require('./routes/jobs');
 const { reindexAllBooks } = require('./routes/jobs/embed-index');
+const { reindexAllUserSources } = require('./routes/jobs/source-embed-index');
 const { reindexAllXrefs } = require('./lib/xref-index');
 const { scanAllBooks: scanAllMotifs } = require('./routes/jobs/motif-scan');
 const { anchorAllBooks: anchorAllBeats } = require('./routes/jobs/beat-anchor');
@@ -718,6 +719,12 @@ try {
         .then(() => scanAllMotifs())
         .then(() => anchorAllBeats())
         .catch(e => logger.error('Cron Embedding-Reindex/Motiv-Scan/Beat-Anchor Fehler: ' + e.message));
+
+      // Quellen-PDF-Index zieht nach dem Buch-Index nach (eigene Tabelle, eigener
+      // Job — user-skopiert, nicht buchskopiert). Delta-Cache hält billig, was
+      // schon indiziert war; frisch hochgeladene PDFs bekommen Erst-Index.
+      reindexAllUserSources()
+        .catch(e => logger.error('Cron Quellen-Embedding-Reindex Fehler: ' + e.message));
     });
   }, { timezone: cronTz });
   logger.info(`Cron-Job registriert: Buchstatistik-Sync + Job-Cleanup + Cache-TTL-Cleanup + page_locks-Purge täglich 23:00 (${cronTz})`);

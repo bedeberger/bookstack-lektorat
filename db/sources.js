@@ -180,6 +180,11 @@ function _row(r) {
   };
   if (r.book_count !== undefined) out.book_count = r.book_count || 0;
   for (const f of TEXT_FIELDS) out[f] = r[f] || null;
+  // PDF-Anhang: Metadaten + Flag (BLOB selbst wird nur bei Download geholt).
+  out.has_pdf = !!(r.doc && r.doc.length);
+  if (r.doc_name) out.doc_name = r.doc_name;
+  if (r.doc_pages != null) out.doc_pages = r.doc_pages;
+  if (r.doc_indexed_at) out.doc_indexed_at = r.doc_indexed_at;
   return out;
 }
 
@@ -520,6 +525,46 @@ function deleteDetectRun(id, userEmail) {
   return _stmtDeleteDetectRun.run(parseInt(id), userEmail).changes;
 }
 
+// ── Quellen-PDF (User-Pool) ─────────────────────────────────────────────────
+// Original-PDF als BLOB an der Quelle + extrahierter Plain-Text (`doc_text`)
+// für FTS + semantische Suche. Anlegen/Aendern/Loeschen darf nur der Besitzer
+// (Pool-Hoheit) — s. _isOwner in routes/sources.js. Lesen (Download) ab
+// Buch-Viewer, sobald die Quelle einem Buch des Users zugeordnet ist, dessen
+// Chip im Text dann aufloesbar bleibt (vgl. _canRead).
+
+const _stmtSetPdf = db.prepare(`
+  UPDATE sources
+     SET doc = ?, doc_mime = ?, doc_name = ?, doc_text = ?, doc_pages = ?,
+         doc_content_hash = ?, updated_at = ${NOW_ISO_SQL}
+   WHERE id = ?
+`);
+const _stmtClearPdf = db.prepare(`
+  UPDATE sources
+     SET doc = NULL, doc_mime = NULL, doc_name = NULL, doc_text = NULL, doc_pages = NULL,
+         doc_content_hash = NULL, doc_indexed_at = NULL,
+         updated_at = ${NOW_ISO_SQL}
+   WHERE id = ?
+`);
+const _stmtDocMeta = db.prepare(
+  'SELECT id, owner_email, doc, doc_mime, doc_name, doc_pages FROM sources WHERE id = ?'
+);
+const _stmtMarkIndexed = db.prepare(
+  `UPDATE sources SET doc_indexed_at = ?, updated_at = updated_at WHERE id = ?`
+);
+function markSourceIndexed(sourceId, isoAt) {
+  _stmtMarkIndexed.run(isoAt, sourceId);
+}
+const _stmtSetDocHash = db.prepare(
+  'UPDATE sources SET doc_content_hash = ? WHERE id = ?'
+);
+function setDocHash(sourceId, hash) { _stmtSetDocHash.run(hash, sourceId); }
+
+function setSourcePdf(id, { mime, name, text, pages, contentHash, buffer }) {
+  _stmtSetPdf.run(buffer || null, mime || 'application/pdf', name || null, text || null, pages || null, contentHash || null, id);
+}
+function clearSourcePdf(id) { _stmtClearPdf.run(id); }
+function getSourceDocMeta(id) { return _stmtDocMeta.get(id) || null; }
+
 module.exports = {
   CSL_TYPES, TEXT_FIELDS,
   normalizePersons,
@@ -530,4 +575,5 @@ module.exports = {
   getBookQuoteStats,
   DETECT_RUN_KEEP,
   insertDetectRun, listDetectRuns, getDetectRun, deleteDetectRun,
+  setSourcePdf, clearSourcePdf, getSourceDocMeta, markSourceIndexed, setDocHash,
 };

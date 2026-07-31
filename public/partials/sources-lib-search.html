@@ -1,0 +1,48 @@
+<!-- Semantische Bibliothekssuche (Quellen-PDFs des Users, Pool-Scope):
+     Fragment-Include von sources.html (`<!-- @include sources-lib-search -->`),
+     lebt im Scope von `sourcesCard`. Durchsucht die via PDF hochgeladenen
+     Werke nach Sinn, nicht nur Stichwort. Endpoint: GET /search/sources-semantic
+     (user-skopiert, kein book_id). Ausgenommen, wenn Semantik-Suche deaktiviert. -->
+<div class="sources-lib-search" x-data="collapsible()" x-bind="panel">
+  <div class="sources-lib-search-head">
+    <button type="button" class="collapsible-toggle" x-bind="trigger">
+      <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#search"/></svg>
+      <span x-text="$app.t('sources.libSearch.title')"></span>
+      <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
+    </button>
+    <p class="muted-msg muted-msg--sm" x-show="!$store.config.semanticSearchEnabled" x-cloak x-text="$app.t('sources.libSearch.disabled')"></p>
+  </div>
+  <div class="sources-lib-search-body">
+    <div class="filter-bar filter-bar--inline">
+      <span class="filter-search-wrap">
+        <input type="text" class="filter-search-input filter-search-input--wide" x-model="srcLibQuery"
+               @keydown.enter.prevent="searchSourceLibrary()"
+               :placeholder="$app.t('sources.libSearch.placeholder')" :aria-label="$app.t('sources.libSearch.placeholder')"
+               :disabled="!$store.config.semanticSearchEnabled">
+        <button type="button" class="search-clear--icon" x-show="srcLibQuery" @click="srcLibQuery=''; srcLibHits=[]"
+                :aria-label="$app.t('search.clear')" :data-tip="$app.t('search.clear')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#x"/></svg></button>
+      </span>
+      <button type="button" class="btn-compact" @click="searchSourceLibrary()"
+              :disabled="!$store.config.semanticSearchEnabled || srcLibSearching || srcLibQuery.trim().length < 2">
+        <span x-show="srcLibSearching" class="spinner"></span>
+        <span x-text="$app.t('sources.libSearch.go')"></span>
+      </button>
+      <span class="filter-count" x-show="srcLibHits.length>0" x-text="srcLibHits.length"></span>
+    </div>
+    <p class="card-form-error" x-show="srcLibError" x-cloak x-text="srcLibError"></p>
+    <p class="muted-msg muted-msg--sm" x-show="!srcLibSearching && !srcLibError && srcLibRan && srcLibHits.length===0"
+       x-cloak x-text="$app.t('sources.libSearch.empty')"></p>
+    <ul class="sources-lib-hits" x-show="srcLibHits.length>0" x-cloak>
+      <template x-for="h in srcLibHits" :key="h.source_id">
+        <li class="sources-lib-hit">
+          <button type="button" class="sources-lib-hit-title internal-link" @click="openLibraryHit(h)">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#file-plus"/></svg>
+            <span x-text="h.title || $app.t('sources.untitled')"></span>
+            <span class="sources-lib-hit-citekey" x-show="h.citekey" x-text="h.citekey"></span>
+          </button>
+          <p class="sources-lib-hit-snippet" x-text="h.snippet"></p>
+        </li>
+      </template>
+    </ul>
+  </div>
+</div>

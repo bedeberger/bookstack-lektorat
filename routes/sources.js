@@ -25,6 +25,7 @@ const {
   listSources, listPoolSources, getSource, createSource, updateSource, deleteSource,
   linkSource, unlinkSource, isSourceLinked, listSourceBooks, getBookQuoteStats,
   listBookCitations,
+  setSourcePdf, clearSourcePdf, getSourceDocMeta,
 } = require('../db/schema');
 const { hasMinRole } = require('../db/book-access');
 const { toIntId } = require('../lib/validate');
@@ -33,10 +34,16 @@ const { requireBookAccess, resolveBookRole, sendACLError } = require('../lib/acl
 const { BIB_FORMATS, parseBib } = require('../lib/bib-parse');
 const { lookupDoi, lookupIsbn, normalizeDoi, normalizeIsbn } = require('../lib/source-lookup');
 const { localIsoDate } = require('../lib/local-date');
+const { extractPdfText } = require('../lib/pdf-extract');
+const sourceSemanticChunks = require('../db/source-semantic-chunks');
 const logger = require('../logger');
 
 const router = express.Router();
 const jsonBody = express.json({ limit: '256kb' });
+// PDF-Upload ist ein binary body — analog research.js.
+const rawPdf = express.raw({ type: ['application/pdf'], limit: '25mb' });
+// Upload/Trigger des Embed-Index-Jobs (asynchron, user-skopiert).
+const { enqueueSourceEmbedIndexJob } = require('./jobs/source-embed-index');
 // Import-Text ist eine hochgeladene Datei im JSON-Feld — eine Zotero-Bibliothek
 // sprengt das CRUD-Limit muehelos. Eigener Parser mit eigenem Limit statt das
 // CRUD-Limit fuer alle Routen anzuheben.
@@ -556,6 +563,98 @@ router.delete('/:id', (req, res) => {
   deleteSource(id);
   logger.info(`[quellen] delete id=${id} buecher=${books} fundstellen=${src.cite_pages}`);
   res.json({ ok: true, orphaned_citations: src.cite_pages, affected_books: books });
+});
+
+// ── Quellen-PDF (User-Pool) ───────────────────────────────────────────────────
+// Original-PDF als BLOB an der Quelle + extrahierter Plain-Text (`doc_text`)
+// für die semantische Suche über die Bibliothek. Anlegen/Aendern/Loeschen ist
+// Pool-Hoheit (nur Besitzer, s. `db/sources.js`), Lesen ab Buch-Viewer, sobald
+// die Quelle dem Buch zugeordnet ist (analog `_canRead`).
+//
+// Upload triggert asynchron den Embedding-Index-Job (user-skopiert) — der User
+// sieht in der Quellen-Karte, sobald der Index steht. Nie generativ im Buchtext.
+
+const DOCNAME_MAX = 200;
+function _cleanDocName(s) {
+  return String(s || '').trim().slice(0, DOCNAME_MAX) || 'Dokument.pdf';
+}
+function _contentHash(buf) {
+  // Einfacher deterministischer Hash des Original-PDF-Puffers (Delta-Cache-Key
+  // im Index-Job: bei unverändertem PDF werden die Chunks nicht neu embeddet).
+  let h = 5381;
+  const n = buf.length;
+  for (let i = 0; i < n; i++) h = ((h * 33) ^ buf[i]) >>> 0;
+  return h.toString(16);
+}
+
+// POST /sources/:id/pdf?name=Dokument.pdf   body: raw PDF bytes
+router.post('/:id/pdf', rawPdf, async (req, res) => {
+  const email = _userEmail(req);
+  if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+  const id = toIntId(req.params.id);
+  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
+  const src = getSource(id);
+  if (!src) return res.status(404).json({ error_code: 'NOT_FOUND' });
+  if (!_isOwner(req, src)) return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
+  if (!Buffer.isBuffer(req.body) || !req.body.length) {
+    return res.status(400).json({ error_code: 'NO_DOC' });
+  }
+  const docName = _cleanDocName(req.query.name);
+  try {
+    const { text, pages } = await extractPdfText(req.body);
+    setSourcePdf(id, {
+      mime: 'application/pdf', name: docName, text, pages,
+      contentHash: _contentHash(req.body), buffer: req.body,
+    });
+    const refreshed = getSource(id);
+    logger.info(`[quellen] pdf upload id=${id} pages=${pages} chars=${text.length}`);
+    try { enqueueSourceEmbedIndexJob(email, id); }
+    catch (e) { logger.warn(`[quellen] embed-index enqueue fehlgeschlagen: ${e.message}`); }
+    res.json(refreshed);
+  } catch (e) {
+    logger.warn(`[quellen] PDF-Upload fehlgeschlagen: ${e.message}`);
+    res.status(400).json({ error_code: 'DOC_INVALID' });
+  }
+});
+
+// GET /sources/:id/pdf  → BLOB-Stream, inline mit Original-Dateinamen (Viewer).
+router.get('/:id/pdf', (req, res) => {
+  const id = toIntId(req.params.id);
+  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
+  const meta = getSourceDocMeta(id);
+  if (!meta) return res.status(404).json({ error_code: 'NOT_FOUND' });
+  if (!meta.doc) return res.status(404).json({ error_code: 'NO_DOC' });
+  // ACL: Besitzer ODER Viewer auf einem verknüpften Buch (analog _canRead, aber
+  // auf den Doc-Meta-Row direkt — getSource erzeugt ein _canRead-Objekt teurer).
+  const email = _userEmail(req);
+  if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+  const allowed = meta.owner_email === email || listSourceBooks(id).some(
+    b => hasMinRole(resolveBookRole(req, b.book_id) || '', 'viewer')
+  );
+  if (!allowed) return res.status(403).json({ error_code: 'FORBIDDEN' });
+  const safeName = encodeURIComponent(meta.doc_name || 'dokument.pdf');
+  res.set('Content-Type', meta.doc_mime || 'application/pdf');
+  res.set('Content-Disposition', `inline; filename*=UTF-8''${safeName}`);
+  res.set('Cache-Control', 'private, max-age=3600');
+  res.send(meta.doc);
+});
+
+// DELETE /sources/:id/pdf  → PDF + extrahierten Text entfernen (Quelle bleibt).
+// Index-Chunks werden vom Index-Job bei nächstem Lauf via pruneMissing geräumt;
+// wir löschen sie hier sofort, damit die Suche keine Treffer auf ein entferntes
+// PDF liefert (und der User ein sauberes „Index steht"-Signal bekommt).
+router.delete('/:id/pdf', (req, res) => {
+  const email = _userEmail(req);
+  if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+  const id = toIntId(req.params.id);
+  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
+  const src = getSource(id);
+  if (!src) return res.status(404).json({ error_code: 'NOT_FOUND' });
+  if (!_isOwner(req, src)) return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
+  clearSourcePdf(id);
+  sourceSemanticChunks.removeSource(id);
+  logger.info(`[quellen] pdf removed id=${id}`);
+  res.json(getSource(id));
 });
 
 module.exports = router;

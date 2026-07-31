@@ -69,6 +69,8 @@
 
   <!-- @include sources-form -->
 
+  <!-- @include sources-lib-search -->
+
   <!-- Skeleton beim Erst-Laden -->
   <div x-show="sourcesLoading && sources.length === 0" x-cloak class="entity-skeleton">
     <template x-for="i in 5" :key="i">

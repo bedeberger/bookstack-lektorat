@@ -175,6 +175,49 @@ function htmlToText(html) {
     .replace(/\s+/g, ' ').trim();
 }
 
+// Paragraaf-preservende HTML→Text-Variante für Lektorat-Prompts. Während
+// `htmlToText` (oben) Absatzgrenzen einebnet — Tags → Space, alle Whitespace →
+// einerlei —, behält diese Variante Blockgrenzen als `\n\n` (und `<br>` als
+// `\n`). Why: die Dialogformat-Regel „Sprecherwechsel → neuer Absatz" kann
+// nur gegen Absatzgrenzen geprüft werden; die einzeilige Variante verhindert
+// dass die KI den Umbruch überhaupt sehen kann, so dass jeder Sprecherwechsel
+// als fehlender Umbruch gemeldet wird. Block-level-Tags: p, div, li, h1-h6,
+// blockquote, pre, ul, ol, figure, figcaption, table, tr, section, article.
+// Inline-Tags werden weiterhin zu Space — nur Blockgrenzen tragen einen
+// Umbruch. Entspricht der Sicht des Lektorats-Prompts, der die Seite als Prosa
+// mit Absätzen sieht.
+function htmlToTextForPrompt(html) {
+  return (html || '')
+    .replace(/<\/(p|div|li|h[1-6]|blockquote|pre|ul|ol|figure|figcaption|table|tr|section|article)\s*>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<hr\s*\/?>/gi, '\n\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&(?:#x([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]+));/g, (m, hex, dec, name) => {
+      if (hex !== undefined) {
+        const cp = parseInt(hex, 16);
+        if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10FFFF) {
+          try { return String.fromCodePoint(cp); } catch { return m; }
+        }
+        return m;
+      }
+      if (dec !== undefined) {
+        const cp = parseInt(dec, 10);
+        if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10FFFF) {
+          try { return String.fromCodePoint(cp); } catch { return m; }
+        }
+        return m;
+      }
+      return Object.prototype.hasOwnProperty.call(HTML_NAMED_ENTITIES, name)
+        ? HTML_NAMED_ENTITIES[name]
+        : m;
+    })
+    .replace(/ {2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^[ \t]+/gm, '')
+    .replace(/[ \t]+$/gm, '')
+    .trim();
+}
+
 // Konvertiert eine SYSTEM_*_BLOCKS-Variante (String oder Array aus prompts/core.js)
 // in ein Anthropic-Block-Array mit konfigurierbarem Default-TTL. Idempotent für
 // Array-Eingaben (TTL-Hints der Eingabe bleiben erhalten). Nutzung in Multi-Block-
@@ -298,7 +341,7 @@ module.exports = {
   settledAll,
   retryOnTransientAi, _isTransientAiError,
   HTML_NAMED_ENTITIES, _CLAUDE_ENTITY_MAP,
-  cleanPageTextForClaude, htmlToText,
+  cleanPageTextForClaude, htmlToText, htmlToTextForPrompt,
   PROGRESS_THROTTLE_MS,
   aiCall,
   toSystemBlocks,

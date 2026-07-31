@@ -115,6 +115,42 @@
         <p class="card-form-field-note" x-text="$app.t('sources.preview.hint')"></p>
       </div>
     </div>
+
+    <!-- PDF-Anhang an der Quelle (User-Pool). Das Form öffnet nur der
+         Besitzer (Bearbeiten-Klick ist Owner-only, s. sources.html), also
+         darf hier jeder Upload/Löschen — die Server-Route setzt die Grenze
+         nochmals (403 NOT_SOURCE_OWNER). Der extrahierte Plain-Text wird
+         semantisch indiziert; Upload triggert asynchron den Index-Job. -->
+    <template x-if="srcEditingId !== 'new'">
+      <div class="card-form-row card-form-row--top">
+        <label class="card-form-label" x-text="$app.t('sources.pdf.section')"></label>
+        <div class="card-form-field">
+          <template x-if="!srcDraft.has_pdf">
+            <div class="sources-pdf-empty">
+              <input type="file" accept="application/pdf"
+                     :aria-label="$app.t('sources.pdf.pick')" x-ref="pdfInput"
+                     @change="uploadSourcePdf($event)">
+              <p class="card-form-field-note" x-text="$app.t('sources.pdf.hint')"></p>
+            </div>
+          </template>
+          <template x-if="srcDraft.has_pdf">
+            <div class="sources-pdf-attached">
+              <button type="button" class="internal-link sources-pdf-link" @click="downloadSourcePdf(srcEditingId)">
+                <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#file-plus"/></svg>
+                <span x-text="srcDraft.doc_name || $app.t('sources.pdf.fallbackName')"></span>
+              </button>
+              <span class="sources-pdf-pages" x-show="srcDraft.doc_pages"
+                    x-text="$app.t('sources.pdf.pages', { n: srcDraft.doc_pages })"></span>
+              <button type="button" class="icon-btn icon-btn--ghost" @click="removeSourcePdf()" :disabled="srcPdfBusy"
+                      :data-tip="$app.t('sources.pdf.remove')" :aria-label="$app.t('sources.pdf.remove')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#trash"/></svg></button>
+            </div>
+          </template>
+          <div class="sources-pdf-busy" x-show="srcPdfBusy" x-cloak><span class="spinner"></span></div>
+          <p class="card-form-error" x-show="srcPdfError" x-cloak x-text="srcPdfError"></p>
+          <p class="sources-pdf-index" x-show="srcDraft.has_pdf" x-text="$app.t('sources.pdf.indexState', { state: srcPdfIndexLabel() })"></p>
+        </div>
+      </div>
+    </template>
   </div>
 
   <p class="card-form-error" x-show="srcFormError" x-cloak x-text="srcFormError"></p>

@@ -163,6 +163,13 @@ export function draftFromSource(src = null) {
     archived: src?.archived ? 1 : 0,
   };
   for (const f of TEXT_FIELDS) draft[f] = src?.[f] || '';
+  // PDF-Metadaten werden am Form gezeigt, aber nicht dauerhaft gespeichert (die
+  // CRUD-Route berührt nur TEXT_FIELDS). Upload/Löschen laufen über eigene
+  // Endpunkte (`/:id/pdf`); der Draft schleppt hier nur den Anzeige-State.
+  draft.has_pdf = !!src?.has_pdf;
+  draft.doc_name = src?.doc_name || '';
+  draft.doc_pages = src?.doc_pages ?? null;
+  draft.doc_indexed_at = src?.doc_indexed_at || null;
   return draft;
 }
 

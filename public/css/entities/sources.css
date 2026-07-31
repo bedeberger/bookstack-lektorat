@@ -488,3 +488,54 @@
   .sources-detect-actions { justify-content: flex-end; }
   .sources-detect-controls .combobox-wrap { min-width: 0; width: 100%; }
 }
+
+/* ── Quellen-PDF (Form-Anhang) ───────────────────────────────────────────── */
+.sources-pdf-empty { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.sources-pdf-empty input[type="file"] { font-size: var(--font-size-sm); }
+.sources-pdf-attached {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+}
+.sources-pdf-link { display: inline-flex; align-items: center; gap: var(--space-2xs); }
+.sources-pdf-pages {
+  color: var(--color-muted); font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+.sources-pdf-busy { display: inline-flex; align-items: center; }
+.sources-pdf-busy .spinner { width: 16px; height: 16px; }
+.sources-pdf-index { color: var(--color-muted); font-size: var(--font-size-xs); margin-top: var(--space-2xs); }
+
+/* ── Semantische Bibliothekssuche (Pool-Scope) ──────────────────────────── */
+.sources-lib-search {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-3) var(--space-6);
+}
+.sources-lib-search-head { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.sources-lib-search-head .collapsible-toggle {
+  display: inline-flex; align-items: center; gap: var(--space-2xs);
+  background: none; border: none; padding: 0; color: var(--color-text);
+  font-size: var(--font-size-sm); font-weight: 600; cursor: pointer;
+}
+.sources-lib-search-body { margin-top: var(--space-3); }
+.sources-lib-hits { list-style: none; padding: 0; margin: var(--space-3) 0 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.sources-lib-hit {
+  padding: var(--space-3); border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); background: var(--color-surface);
+}
+.sources-lib-hit-title {
+  display: inline-flex; align-items: center; gap: var(--space-2xs);
+  font-weight: 600; color: var(--color-text);
+}
+.sources-lib-hit-citekey {
+  color: var(--color-muted); font-size: var(--font-size-xs); font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.sources-lib-hit-snippet {
+  color: var(--color-muted); font-size: var(--font-size-xs);
+  margin-top: var(--space-2xs); line-height: 1.45;
+  max-height: calc(1.45em * 3); overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+}
+
+@media (max-width: 960px) {
+  .sources-lib-search { padding: var(--space-3); }
+}

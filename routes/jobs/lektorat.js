@@ -9,7 +9,7 @@ const {
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError, contentHttpError,
   aiCall, getPrompts, getBookPrompts,
-  htmlToText, jobAbortControllers,
+  htmlToText, htmlToTextForPrompt, jobAbortControllers,
   _modelName, tps,
   jobs, runningJobs, createJob, enqueueJob, jobKey, findActiveJobId,
   jsonBody,
@@ -220,7 +220,15 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     const pd = await contentStore.loadPage(pageId, userToken).catch(e => { throw contentHttpError(e); });
 
     const html = pd.html;
-    const text = htmlToText(html);
+    // Paragraaf-preservierende Variante statt der kompakte `htmlToText`:
+    // die Dialogformat-Regel „Sprecherwechsel → neuer Absatz" prüft gegen
+    // Absatzgrenzen, die hier als `\n\n` sichtbar bleiben — die kompakte
+    // Variante würdebnet jede Grenze ein, so dass jeder Sprecherwechsel als
+    // fehlender Umbruch gemeldet wird. Frontend findInHtml/replaceInHtml
+    // normalisieren `\s+` → ' ' beim Match, so dass `\n\n` in `original`
+    // sicher ist (und cross-block-Ersetzungen schon durch die Block-Grenze
+    // des Merge-Guards abgewiesen werden).
+    const text = htmlToTextForPrompt(html);
     if (!text.trim()) { completeJob(jobId, { empty: true }); return; }
 
     // Kapitelkontext laden: Figuren, Beziehungen, Schauplätze (falls Komplettanalyse gelaufen ist).
@@ -397,7 +405,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
       if (jobAbortControllers.get(jobId)?.signal.aborted) throw new DOMException('Aborted', 'AbortError');
       try {
         const pd = await contentStore.loadPage(p.id, userToken).catch(e => { throw contentHttpError(e); });
-        const text = htmlToText(pd.html).trim();
+        const text = htmlToTextForPrompt(pd.html).trim();
         if (!text) return;
 
         const batchFiguren     = getChapterFigures(bookId, pd.chapter_id, userEmail);
@@ -417,7 +425,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
             } else {
               try {
                 const prevPd = await contentStore.loadPage(prev.id, userToken);
-                previousExcerpt = lastParagraph(htmlToText(prevPd.html));
+                previousExcerpt = lastParagraph(htmlToTextForPrompt(prevPd.html));
                 lastParaCache.set(prev.id, previousExcerpt);
               } catch (_) { /* Vorseite fehlschlägt → kein Kontext, nicht kritisch */ }
             }

@@ -179,4 +179,36 @@ router.get('/semantic/status', (req, res) => {
   }
 });
 
+// Semantische Suche über die Quellen-PDFs des Users (Pool-Scope). Pendant zu
+// /search/semantic, aber **user-skopiert**: keine book_id, keine Buch-ACL —
+// der User durchsucht seine eigene Bibliothek. Trefferformat:
+//   { source_id, title, citekey, snippet, score }
+// Der Snippet fliesst im Frontend in einen x-html-Sink → server-seitig escapen
+// (Hard-Rule „x-html nur mit vorab-escaptem Content"). Kein <mark>.
+router.get('/sources-semantic', async (req, res) => {
+  const email = _userEmail(req);
+  if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+  if (!embed.isEnabled()) return res.status(400).json({ error_code: 'EMBED_DISABLED' });
+
+  const q = (req.query.q || '').toString().trim();
+  if (q.length < 2) return res.json({ hits: [], mode: 'sources-semantic' });
+  if (q.length > 500) return res.status(400).json({ error_code: 'QUERY_TOO_LONG' });
+
+  const topK = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
+
+  try {
+    const raw = await semanticRetrieval.semanticSourceQuery(email, q, { topK });
+    const hits = raw.map(h => ({
+      source_id: h.source_id,
+      title: h.title || '', citekey: h.citekey || '',
+      snippet: _escHtml(String(h.text || '').slice(0, 300)),
+      score: Math.round(h.score * 1000) / 1000,
+    }));
+    res.json({ hits, mode: 'sources-semantic' });
+  } catch (e) {
+    logger.error(`[search] GET /search/sources-semantic failed: ${e.message}`);
+    res.status(503).json({ error_code: 'EMBED_UNAVAILABLE', detail: e.message });
+  }
+});
+
 module.exports = router;

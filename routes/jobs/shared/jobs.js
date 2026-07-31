@@ -290,11 +290,12 @@ const JOB_TYPE_LABELS = {
   'research-link':         'job.label.researchLink',
   'rueckblick':            'job.label.rueckblick',
   'source-detect':         'job.label.sourceDetect',
+  'source-embed-index':    'job.label.sourceEmbedIndex',
   'stilprofil':            'job.label.stilprofil',
 };
 
 // Job-Typen, die vom Superjob (komplett-analyse) abgedeckt werden und nicht in der Statistik erscheinen sollen
-const STATS_EXCLUDED_TYPES = ['figures', 'soziogramm', 'szenen', 'locations', 'figure-events', 'consolidate-zeitstrahl', 'kontinuitaet'];
+const STATS_EXCLUDED_TYPES = ['figures', 'soziogramm', 'szenen', 'locations', 'figure-events', 'consolidate-zeitstrahl', 'kontinuitaet', 'source-embed-index'];
 
 module.exports = {
   makeJobLogger,

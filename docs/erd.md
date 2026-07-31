@@ -1,6 +1,6 @@
 # ERD — schreibwerkstatt
 
-Stand: Schema-Version 257, 139 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
+Stand: Schema-Version 258, 140 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
 
 Quelle: Squashed-Schema-Snapshot in [db/squashed-schema.js](../db/squashed-schema.js) (regeneriert via `node tools/dump-schema.js`) + [db/migrations.js](../db/migrations.js). Drift gegen die Legacy-Migration-Kette ist durch [tests/unit/squash-drift.test.mjs](../tests/unit/squash-drift.test.mjs) gegated. Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -43,6 +43,7 @@ erDiagram
   pages ||--o{ source_citations      : cites
   books ||--o{ source_detect_runs    : "detection runs"
   chapters ||--o{ source_detect_runs : "scoped to"
+  sources ||--o{ source_semantic_chunks : "PDF text embedded"
   pages ||--o{ xref_anchors          : "numbers"
   pages ||--o{ xref_links            : "refers from"
   chapters ||--o{ xref_links         : "referred to"
@@ -485,6 +486,13 @@ erDiagram
     TEXT    accessed_at     "Abrufdatum bei Online-Quellen"
     TEXT    note
     INTEGER archived
+    BLOB    doc            "Optional: Original-PDF (User-Pool). Anlegen/Aendern nur Besitzer; Lesen ab Buch-Viewer, sobald verknüpft"
+    TEXT    doc_mime       "Default 'application/pdf'"
+    TEXT    doc_name       "Dateiname beim Upload (gekürzt)"
+    TEXT    doc_text       "Extrahierter Plain-Text via lib/pdf-extract.js — Basis des semantischen Index"
+    INTEGER doc_pages     "Seitenzahl des Original-PDFs (Anzeige)"
+    TEXT    doc_content_hash "Hash des Original-PDF-Puffers — Delta-Cache-Key im Index-Job"
+    TEXT    doc_indexed_at "Timestamp des letzten Embedding-Laufs — null = nie indiziert / Index veraltet"
     TEXT    created_at
     TEXT    updated_at
   }
@@ -522,6 +530,22 @@ erDiagram
     %% („schon erfasst"/„zugeordnet"): der altert und wird bei jedem Lesen neu
     %% gerechnet. CHECK(scope <> 'book' OR scope_chapter_id IS NULL).
   }
+  source_semantic_chunks {
+    INTEGER id           PK
+    INTEGER source_id    FK "ON DELETE CASCADE — Quelle gelöscht → Vektoren weg"
+    TEXT    owner_email   "Denormalisiert (Quellenbesitzer) für billige User-Scopes ohne JOIN"
+    INTEGER chunk_ix     "Chunk-Reihenfolge innerhalb der Quelle (Text in chunk_ix-Erwartung)"
+    TEXT    content_hash  "Delta-Cache-Key — unveränderte Chunks behalten ihren Vektor"
+    TEXT    model         "Aktives Embedding-Modell (Modellwechsel → Neu-Embedden)"
+    INTEGER dim          "Vektor-Dimension (Modell-spezifisch)"
+    BLOB    vector        "Float32-BLOB (lib/embed-chunk.js de/serialisiert)"
+    TEXT    text          "Chunk-Text roh (Snippet-Quelle für Trefferanzeige)"
+    TEXT    created_at
+    %% User-skopierter Pendant zu `semantic_chunks` — Quellen gehören dem User
+    %% (sources.owner_email), keinem Buch. Bolivian-FILTER owner_email+model;
+    %% UNIQUE(source_id, chunk_ix, model). job source-embed-index pflegt,
+    %% Nacht-Cron reindiziert. Reiner Ableitungs-Index, jederzeit neu berechenbar.
+  }
 
   xref_anchors {
     INTEGER page_id PK,FK "ON DELETE CASCADE"
@@ -549,6 +573,7 @@ erDiagram
   pages   ||--o{ source_citations   : cites
   books   ||--o{ source_detect_runs : "detection runs"
   chapters ||--o{ source_detect_runs : "scoped to"
+  sources ||--o{ source_semantic_chunks : "PDF text embedded"
   pages   ||--o{ xref_anchors       : numbers
   pages   ||--o{ xref_links         : "refers from"
   chapters ||--o{ xref_links        : "referred to"

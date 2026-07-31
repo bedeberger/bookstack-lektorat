@@ -14,6 +14,7 @@
 import { EVT } from '../events.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { sourcesMethods } from '../sources/manage.js';
+import { sourcesPdfMethods } from '../sources/pdf.js';
 import { sourcesDetectMethods } from '../sources/detect.js';
 import { draftFromSource } from '../sources/fields.js';
 
@@ -39,6 +40,19 @@ export function registerSourcesCard() {
     srcEditingId: null,
     srcDraft: draftFromSource(null),
     srcFormError: '',
+
+    // PDF-Anhang (Quellen-PDF). `srcPdfBusy` während Upload/Löschen; Fehler
+    // zeigt das Form direkt unter dem Feld statt in der Karten-Statuszeile.
+    srcPdfBusy: false,
+    srcPdfError: '',
+
+    // Semantische Bibliothekssuche (Pool-Scope): Sucht die PDF-Volltexte der
+    // eigenen Quellen nach Sinn. UI ist ein Collapsible in der Quellen-Karte.
+    srcLibQuery: '',
+    srcLibHits: [],
+    srcLibSearching: false,
+    srcLibRan: false,
+    srcLibError: '',
 
     // Zitat-Kennzahlen des Buchs (GET /sources/stats). null = noch nicht/nicht
     // ermittelbar; die Leiste bleibt dann weg statt eine 0 zu behaupten.
@@ -147,6 +161,13 @@ export function registerSourcesCard() {
           srcEditingId: null,
           srcDraft: draftFromSource(null),
           srcFormError: '',
+          srcPdfBusy: false,
+          srcPdfError: '',
+          srcLibQuery: '',
+          srcLibHits: [],
+          srcLibSearching: false,
+          srcLibRan: false,
+          srcLibError: '',
           srcCitationsId: null,
           srcCitations: [],
           srcPickerOpen: false,
@@ -166,6 +187,7 @@ export function registerSourcesCard() {
     },
 
     ...sourcesMethods,
+    ...sourcesPdfMethods,
     ...sourcesDetectMethods,
   }));
 }

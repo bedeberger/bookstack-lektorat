@@ -58,6 +58,7 @@ module.exports = {
   retryOnTransientAi: ai.retryOnTransientAi,
 
   htmlToText: ai.htmlToText,
+  htmlToTextForPrompt: ai.htmlToTextForPrompt,
   cleanPageTextForClaude: ai.cleanPageTextForClaude,
 
   loadOrderedBookContents: loader.loadOrderedBookContents,
