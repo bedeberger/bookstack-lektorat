@@ -4,6 +4,7 @@
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { attachFullscreenSync } from '../fullscreen.js';
 import { rechercheMethods } from '../book/recherche.js';
+import { rechercheToSourceMethods } from '../sources/from-research.js';
 import { researchChatMethods } from '../chat/research-chat.js';
 import { EVT } from '../events.js';
 
@@ -49,6 +50,13 @@ export function registerRechercheCard() {
     linkPickerItemId: null,
     linkPickerKind: 'figure',
     linkPickerTargetId: '',
+
+    // Laufende „Link → Quelle"-Uebernahmen, Schluessel `${item.id}:${url_id}`
+    // (rechercheToSourceMethods). Reassign statt In-Place-Mutate, damit Alpine
+    // die Aenderung im verschachtelten x-for sicher sieht — wie _proposalSaving.
+    // Kein Eintrag in resetRecherche noetig: der finally-Block der Uebernahme
+    // raeumt jeden Schluessel, hier bleibt nichts liegen.
+    _toSourceBusy: {},
 
     suggestions: {},
     suggestItemId: null,
@@ -138,6 +146,7 @@ export function registerRechercheCard() {
     },
 
     ...rechercheMethods,
+    ...rechercheToSourceMethods,
     ...researchChatMethods,
   }));
 }

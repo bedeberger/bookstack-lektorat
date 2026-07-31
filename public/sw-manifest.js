@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "a8b781bb000a1f18";
+self.__SHELL_BUILD = "e60ed7b1cb62c9d9";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -77,6 +77,7 @@ self.__SHELL_MANIFEST = [
   "/css/components/year-month-heatmap.css",
   "/css/editor/book/book-editor.css",
   "/css/editor/figur-lookup.css",
+  "/css/editor/focus/focus-content.css",
   "/css/editor/focus/focus-mode.css",
   "/css/editor/notebook/comments-rail.css",
   "/css/editor/notebook/edit-toolbar.css",
@@ -243,6 +244,7 @@ self.__SHELL_MANIFEST = [
   "/js/book/plot/derived/coverage.js",
   "/js/book/plot/derived/tension.js",
   "/js/book/plot/dnd.js",
+  "/js/book/plot/history.js",
   "/js/book/plot/lifecycle.js",
   "/js/book/plot/threads.js",
   "/js/book/recherche.js",
@@ -550,6 +552,7 @@ self.__SHELL_MANIFEST = [
   "/js/sources/cite-popover.js",
   "/js/sources/cited-index.js",
   "/js/sources/detect.js",
+  "/js/sources/doc.js",
   "/js/sources/fields.js",
   "/js/sources/format.js",
   "/js/sources/format/labels.js",
@@ -558,8 +561,8 @@ self.__SHELL_MANIFEST = [
   "/js/sources/format/runs.js",
   "/js/sources/format/sort.js",
   "/js/sources/format/styles.js",
+  "/js/sources/from-research.js",
   "/js/sources/manage.js",
-  "/js/sources/pdf.js",
   "/js/sources/source-cache.js",
   "/js/tabs.js",
   "/js/theme-init.js",
@@ -567,6 +570,7 @@ self.__SHELL_MANIFEST = [
   "/js/toggle-switch.js",
   "/js/tooltip.js",
   "/js/tts-segment.js",
+  "/js/upload-pdf.js",
   "/js/user-settings.js",
   "/js/utils.js",
   "/js/utils/date.js",
@@ -707,8 +711,10 @@ self.__SHELL_MANIFEST = [
   "/partials/plot-board-flat.html",
   "/partials/plot-board-grid.html",
   "/partials/plot-ki-runs.html",
+  "/partials/plot-tension.html",
   "/partials/plot-thread-bar.html",
   "/partials/plot.html",
+  "/partials/recherche-item-urls.html",
   "/partials/recherche.html",
   "/partials/redundanz.html",
   "/partials/reference.html",
@@ -730,6 +736,7 @@ self.__SHELL_MANIFEST = [
   "/partials/stil-heatmap.html",
   "/partials/szenen.html",
   "/partials/tagebuch-rueckblick.html",
+  "/partials/user-settings-devices.html",
   "/partials/user-settings.html",
   "/partials/werkstatt-create-fields.html",
   "/partials/werkstatt-import-fields.html",

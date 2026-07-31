@@ -322,14 +322,7 @@
 
             <div class="research-item-text" x-show="item.body" :class="{ 'research-item-text--quote': item.kind === 'quote' }" x-text="item.body"></div>
 
-            <div class="research-item-urls" x-show="item.urls && item.urls.length">
-              <template x-for="u in item.urls" :key="u.url_id">
-                <a class="research-item-url" :href="u.url" target="_blank" rel="noopener noreferrer">
-                  <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#external-link"/></svg>
-                  <span x-text="u.label || u.url"></span>
-                </a>
-              </template>
-            </div>
+            <!-- @include recherche-item-urls -->
 
             <div x-show="item.source" class="research-item-source" x-text="item.source"></div>
 

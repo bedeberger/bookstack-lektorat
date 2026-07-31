@@ -1,4 +1,4 @@
-import { escHtml, fetchJson, SAFETY_HTML_RATIO, replaceInHtml, stripFocusArtefacts } from '../utils.js';
+import { escHtml, fetchJson, SAFETY_HTML_RATIO, replaceInHtml, skipReason, stripFocusArtefacts } from '../utils.js';
 import { sortByPosition, SOFT_TYPEN } from '../book/page-view.js';
 import { contentRepo } from '../repo/content.js';
 import { savePage } from './shared/page-api.js';
@@ -9,18 +9,40 @@ import { runQuoteNormalizeHtml } from './shared/quote-normalize.js';
 
 export const lektoratMethods = {
   // `outSkipped` (optional): sammelt Korrekturen, die replaceInHtml unangetastet
-  // liess (No-Op) — Ersetzung hätte eine Absatzgrenze gekreuzt oder einen Link
-  // umschlossen und wurde zum Schutz übersprungen. Aufrufer ohne Interesse an den
-  // Skips lassen den Parameter weg.
+  // liess (No-Op), als `{ f, reason }`. Drei Gründe, die der User auseinander
+  // halten MUSS — „Stelle existiert nicht mehr" (Seite wurde zwischenzeitlich
+  // umgeschrieben, typisch nach einem Write von einem Zweitgerät) verlangt keine
+  // manuelle Nachkontrolle, „Link/Absatzgrenze betroffen" schon. Reihenfolge des
+  // Entscheidungsbaums identisch zum Seiten-Chat (chat.js#applyChatVorschlag).
+  // Ausgewertet wird gegen `result`, den sequenziell mitwandernden Stand: ein
+  // Finding, dessen `original` erst durch eine vorherige Korrektur verschwindet,
+  // ist `notFound` und nicht `boundary`.
+  // Aufrufer ohne Interesse an den Skips lassen den Parameter weg.
   _applyCorrections(html, fehler, outSkipped) {
     let result = html;
     for (const f of fehler) {
       if (!f.original || !f.korrektur || f.original === f.korrektur) continue;
       const next = replaceInHtml(result, f.original, f.korrektur);
-      if (next === result) { if (outSkipped) outSkipped.push(f); continue; }
+      if (next === result) {
+        if (outSkipped) outSkipped.push({ f, reason: skipReason(result, f.original) });
+        continue;
+      }
       result = next;
     }
     return result;
+  },
+
+  // Fasst uebersprungene Korrekturen nach Grund zusammen: je vorkommender Grund
+  // ein lokalisierter Teilsatz, in fester Reihenfolge verbunden. Feste Reihenfolge
+  // statt Iteration ueber die Skip-Liste, damit die Meldung bei gleicher Ursache
+  // gleich lautet.
+  _skipSummary(skipped) {
+    const counts = {};
+    for (const s of skipped) counts[s.reason] = (counts[s.reason] || 0) + 1;
+    return ['notFound', 'spansLink', 'boundary']
+      .filter(k => counts[k] > 0)
+      .map(k => this.t('lektorat.skip.' + k, { count: counts[k] }))
+      .join(', ');
   },
 
   // Gemeinsamer Kern fuer Lektorat-Save und History-Apply:
@@ -192,19 +214,56 @@ export const lektoratMethods = {
           this.analysisOut = `<span class="muted-msg">${escHtml(this.t('job.pageEmpty'))}</span>`;
           return;
         }
-        // Staleness-Guard: Server-Snapshot stammt aus dem Moment, in dem der Job
-        // BookStack ausgelesen hat. Hat der User danach im Fokus-/Edit-Modus
-        // gespeichert (oder externe Änderung in BookStack), passt `r.originalHtml`
-        // nicht mehr zum aktuellen Stand und Findings-Positionen sind verschoben.
-        // Originals einzelner Findings landen dann beim Speichern auf altem Text
-        // → frische Edits werden überschrieben. Ergebnis verwerfen, User soll
-        // erneut prüfen lassen.
-        if (r.updatedAt && this.currentPage?.updated_at && r.updatedAt !== this.currentPage.updated_at) {
+        // Staleness: `r.originalHtml` ist der Seitenstand aus dem Moment, in dem
+        // der Job gelesen hat. Wurde danach geschrieben, sind die Findings gegen
+        // einen Text berechnet, den es nicht mehr gibt.
+        //
+        // `currentPage.updated_at` taugt als Vergleichswert NICHT allein: es ist
+        // eine browserlokale Kopie und rückt nur vor, wenn `_refetchCurrentPage`
+        // lief. Das setzt den 5s-Collab-Poll voraus, der am 40s-Buch-Device-Ping
+        // hängt und ganz schweigt, wenn ein Zweitgerät (Mac-/Android-Client)
+        // offline schrieb und beim Reconnect nur pusht. Darum den Stempel hier
+        // selbst holen statt der lokalen Kopie zu glauben.
+        let base = r.originalHtml;
+        let verified = false;
+        let staleRefiltered = false;
+        if (pageId != null) {
+          try {
+            const pd = await contentRepo.loadPage(pageId, { fresh: true });
+            if (this.currentPage?.id !== pageId) return;
+            verified = true;
+            if (r.updatedAt && pd.updated_at && pd.updated_at !== r.updatedAt) {
+              // Frischen Stand in die Seitenansicht ziehen (setzt originalHtml,
+              // renderedPageHtml und currentPage.updated_at über _applyPageData).
+              // Der interne _filterFindingsAfterSave-Zweig ist hier No-Op —
+              // runCheck hat die Findings geleert.
+              await this._refetchCurrentPage();
+              if (this.currentPage?.id !== pageId) return;
+              base = this.originalHtml;
+              staleRefiltered = true;
+            }
+          } catch (e) {
+            console.error('[lektorat staleness-check]', e);
+          }
+        }
+        // Verifikation nicht möglich (offline, SW-Fehler, kein pageId): auf den
+        // lokalen Vergleich zurückfallen und komplett verwerfen, statt ungeprüft
+        // auf dem Snapshot weiterzuarbeiten.
+        if (!verified && r.updatedAt && this.currentPage?.updated_at && r.updatedAt !== this.currentPage.updated_at) {
           this.analysisOut = `<span class="error-msg">${escHtml(this.t('lektorat.staleResultDropped'))}</span>`;
           return;
         }
-        this.originalHtml = r.originalHtml;
-        const findings = sortByPosition(r.originalHtml, fehler);
+        // `sortByPosition` IST der Survivor-Filter: es verwirft jedes Finding,
+        // dessen `original` per findInHtml nicht in `base` auffindbar ist, und
+        // berechnet die Position aus `base`. Im Stale-Fall bleibt damit genau die
+        // Teilmenge stehen, die den Fremd-Write verbatim überlebt hat — ihre
+        // Positionen zeigen auf den aktuellen Text, nicht ins Leere.
+        const findings = sortByPosition(base, fehler);
+        if (staleRefiltered && findings.length === 0) {
+          this.analysisOut = `<span class="error-msg">${escHtml(this.t('lektorat.staleResultDropped'))}</span>`;
+          return;
+        }
+        this.originalHtml = base;
         this.lektoratFindings = findings;
         // Default selected: nur „harte" Typen (rechtschreibung, grammatik). Weiche Typen und Stil default unselected.
         this.selectedFindings = findings.map(f => !SOFT_TYPEN.has(f.typ) && f.typ !== 'stil');
@@ -212,10 +271,16 @@ export const lektoratMethods = {
         const hardErrors = findings.filter(f => !SOFT_TYPEN.has(f.typ) && f.typ !== 'stil');
         this.hasErrors = hardErrors.length > 0;
         this.correctedHtml = hardErrors.length > 0
-          ? this._applyCorrections(r.originalHtml, hardErrors)
-          : r.originalHtml;
+          ? this._applyCorrections(base, hardErrors)
+          : base;
         this.updatePageView();
         let out = '';
+        if (staleRefiltered) {
+          out += `<div class="analysis-notice">${escHtml(this.t('lektorat.staleResultRefiltered', {
+            dropped: fehler.length - findings.length,
+            total: fehler.length,
+          }))}</div>`;
+        }
         const szenen = r.szenen || [];
         if (szenen.length > 0) {
           const wertungBadge = w => {
@@ -285,7 +350,13 @@ export const lektoratMethods = {
       this.saveApplying = null;
       this.setStatus(
         skipped.length > 0
-          ? this.t('lektorat.correctionsSavedWithSkips', { count: skipped.length })
+          ? this.t('lektorat.correctionsSavedWithSkips', {
+            details: this._skipSummary(skipped),
+            // Nachkontrolle nur, wo ein Schutzmechanismus gegriffen hat. Ein
+            // reiner `notFound` ist ein veralteter Textbezug — dort gibt es
+            // nichts zu prüfen.
+            hint: skipped.some(s => s.reason !== 'notFound') ? ' ' + this.t('lektorat.skipCheckHint') : '',
+          })
           : this.t('lektorat.correctionsSaved'),
         false,
         skipped.length > 0 ? 8000 : 5000,

@@ -9,7 +9,7 @@ const {
 const {
   makeJobLogger, updateJob, completeJob, failJob, i18nError, contentHttpError,
   aiCall, getPrompts, getBookPrompts,
-  htmlToText, htmlToTextForPrompt, jobAbortControllers,
+  htmlToTextForPrompt, jobAbortControllers,
   _modelName, tps,
   jobs, runningJobs, createJob, enqueueJob, jobKey, findActiveJobId,
   jsonBody,
@@ -220,10 +220,10 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     const pd = await contentStore.loadPage(pageId, userToken).catch(e => { throw contentHttpError(e); });
 
     const html = pd.html;
-    // Paragraaf-preservierende Variante statt der kompakte `htmlToText`:
+    // Absatz-erhaltende Variante statt des kompakten `htmlToText`:
     // die Dialogformat-Regel „Sprecherwechsel → neuer Absatz" prüft gegen
     // Absatzgrenzen, die hier als `\n\n` sichtbar bleiben — die kompakte
-    // Variante würdebnet jede Grenze ein, so dass jeder Sprecherwechsel als
+    // Variante ebnet jede Grenze ein, so dass jeder Sprecherwechsel als
     // fehlender Umbruch gemeldet wird. Frontend findInHtml/replaceInHtml
     // normalisieren `\s+` → ' ' beim Match, so dass `\n\n` in `original`
     // sicher ist (und cross-block-Ersetzungen schon durch die Block-Grenze
@@ -255,6 +255,10 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
     // ziehen – pages-Listing ist paginiert, aber typischerweise günstig (Metadaten).
     // Lokale Provider: komplett überspringen – wird für _isLocal im Prompt nicht verwendet
     // (dient nur Tempus-/Perspektiv-Prüfung, die lokal aus dem typ-Enum gedroppt ist).
+    // `htmlToTextForPrompt` ist hier Pflicht, nicht Geschmack: `lastParagraph`
+    // splittet auf `\n{2,}` – aus der einzeiligen Variante kann es keinen Absatz
+    // schneiden und liefert stattdessen die letzten 600 Zeichen der Vorseite.
+    // Gleiche Wahl wie im Batch-Pfad (runBatchCheckJob).
     let previousExcerpt = null;
     if (bookId && !local) {
       try {
@@ -262,7 +266,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
         const prev = findPreviousPage(allPages, pageId, pd.chapter_id);
         if (prev) {
           const prevPd = await contentStore.loadPage(prev.id, userToken);
-          previousExcerpt = lastParagraph(htmlToText(prevPd.html));
+          previousExcerpt = lastParagraph(htmlToTextForPrompt(prevPd.html));
         }
       } catch (e) {
         logger.warn(`Vorseiten-Kontext konnte nicht geladen werden (page=${pageId}): ${e.message}`);

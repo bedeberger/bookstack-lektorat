@@ -62,7 +62,7 @@ const CATEGORIES = [
     allow: {
       'public/partials/buchorganizer.html': 516,
       'public/partials/admin-usage.html': 452,
-      'public/partials/recherche.html': 437,
+      'public/partials/recherche.html': 430,
       'public/partials/editor-notebook.html': 350,
       'public/partials/figur-werkstatt.html': 406,
       'public/partials/figuren.html': 377,
@@ -70,7 +70,6 @@ const CATEGORIES = [
       'public/partials/admin-users.html': 351,
       'public/partials/epub-export.html': 321,
       'public/partials/plot-board-grid.html': 307,
-      'public/partials/user-settings.html': 268,
       'public/partials/motiv-panel.html': 271,
       'public/partials/szenen.html': 273,
       'public/partials/orte.html': 277,

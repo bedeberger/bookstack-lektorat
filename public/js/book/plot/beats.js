@@ -30,6 +30,7 @@ export const beatsMethods = {
       });
       this.beats = [...this.beats, beat];
       this._memos = {};
+      this._recordCreate('beat', beat?.id);
       this.newBeatTitel = '';
       this.errorMessage = '';
       if (keepAdding) this.$nextTick(refocus); else close();
@@ -221,22 +222,27 @@ export const beatsMethods = {
     const titel = (this.beatDraft.titel || '').trim();
     if (!titel) { this.errorMessage = app.t('plot.error.titelRequired'); return; }
     this.busy = true;
+    // Ausgangsstand VOR dem PATCH festhalten (Undo-Ziel) — der Draft ist das
+    // After, der Beat-Row-Snapshot das Before.
+    const before = this._beatFieldSnapshot(beat);
+    const after = {
+      titel,
+      beschreibung: this.beatDraft.beschreibung || '',
+      status: this.beatDraft.status,
+      chapter_id: this.beatDraft.chapter_id ? parseInt(this.beatDraft.chapter_id) : null,
+      intensitaet: this.beatDraft.intensitaet || null,
+      figure_ids: [...this.beatDraft.figure_ids],
+      draft_figure_ids: [...this.beatDraft.draft_figure_ids],
+      motif_ids: [...this.beatDraft.motif_ids],
+    };
     try {
       const updated = await fetchJson(`/plot/beats/${beat.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          titel,
-          beschreibung: this.beatDraft.beschreibung || '',
-          status: this.beatDraft.status,
-          chapter_id: this.beatDraft.chapter_id ? parseInt(this.beatDraft.chapter_id) : null,
-          intensitaet: this.beatDraft.intensitaet || null,
-          figure_ids: this.beatDraft.figure_ids,
-          draft_figure_ids: this.beatDraft.draft_figure_ids,
-          motif_ids: this.beatDraft.motif_ids,
-        }),
+        body: JSON.stringify(after),
       });
       this._replaceBeat(updated);
+      this._recordBeatFields(beat.id, before, after);
       this.editingBeatId = null;
       if (window.Alpine) window.Alpine.store('nav').plotBeatId = null;
       this.errorMessage = '';
@@ -258,6 +264,7 @@ export const beatsMethods = {
         body: JSON.stringify({ verworfen: beat.verworfen ? 0 : 1 }),
       });
       this._replaceBeat(updated);
+      this._recordBeatFields(beat.id, { verworfen: beat.verworfen ? 1 : 0 }, { verworfen: beat.verworfen ? 0 : 1 });
       // Verwerfen ändert, ob der Beat in den Page-Count zählt → Indikator syncen.
       app.refreshPlotBeatCounts?.();
     } catch (e) { this.errorMessage = app.t('plot.error.save'); }
@@ -273,6 +280,9 @@ export const beatsMethods = {
     this.busy = true;
     try {
       await fetchJson(`/plot/beats/${beat.id}`, { method: 'DELETE' });
+      // Hard-Delete ohne Snapshot: der Beat ist weg, und Records im Stack, die ihn
+      // referenzieren (Platzierung, Felder), wären danach Nieten → Historie leeren.
+      this._clearHistory();
       this.beats = this.beats.filter(b => b.id !== beat.id);
       // Server kaskadiert die Kanten dieses Beats — lokal nachziehen (ein- + ausgehend).
       this.relations = this.relations.filter(r => r.from_beat_id !== beat.id && r.to_beat_id !== beat.id);
@@ -311,7 +321,10 @@ export const beatsMethods = {
       });
       // Idempotent: bei bestehender Kante liefert der Server die vorhandene zurück —
       // nur einreihen, wenn sie noch nicht in der Liste ist.
-      if (rel && !this.relations.some(r => r.id === rel.id)) this.relations = [...this.relations, rel];
+      if (rel && !this.relations.some(r => r.id === rel.id)) {
+        this.relations = [...this.relations, rel];
+        this._recordCreate('relation', rel.id);
+      }
       this._memos = {};
       this.relDraftTarget = '';
       this.relDraftTyp = '';
@@ -326,6 +339,8 @@ export const beatsMethods = {
     if (!relId) return;
     try {
       await fetchJson(`/plot/beat-relations/${relId}`, { method: 'DELETE' });
+      // Wie jedes Löschen: nicht reversibel (Wiederanlegen vergibt eine neue ID).
+      this._clearHistory();
       this.relations = this.relations.filter(r => r.id !== relId);
       this._memos = {};
     } catch (e) {
@@ -348,6 +363,9 @@ export const beatsMethods = {
     const origThreadId = beat.thread_id ?? null;
     const tid = targetThreadId ?? null;
     if (beforeBeatId === beatId) { this._dragBeatId = null; return; }
+    // Undo-Ausgangsstand VOR der Mutation — die Beat-Objekte werden unten in place
+    // verändert, ein Snapshot danach wäre wertlos.
+    const placeBefore = this._snapshotPlacements();
 
     const target = this.beatsForCell(targetActId, tid).filter(b => b.id !== beatId);
     let insertIdx = target.length;
@@ -374,9 +392,12 @@ export const beatsMethods = {
     const cells = sameCell
       ? [{ actId: targetActId, threadId: tid }]
       : [{ actId: origActId, threadId: origThreadId }, { actId: targetActId, threadId: tid }];
-    await this._persistCells(cells);
+    const ok = await this._persistCells(cells);
+    if (ok) this._recordBeatPlace(placeBefore);
   },
 
+  // true = persistiert (Aufrufer darf den Undo-Record schreiben), false = Fehler,
+  // Board wird aus dem Server-Stand neu geladen (das leert auch die Historie).
   async _persistCells(cells) {
     const app = window.__app;
     const order = cells.map(({ actId, threadId }) => ({
@@ -390,9 +411,11 @@ export const beatsMethods = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ book_id: Alpine.store('nav').selectedBookId, order }),
       });
+      return true;
     } catch (e) {
       this.errorMessage = app.t('plot.error.save');
       this.loadBoard(); // Server-Stand wiederherstellen
+      return false;
     }
   },
 };

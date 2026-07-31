@@ -9,12 +9,16 @@
 // reine Vektoren. Delta-Cache: pro Chunk ein `content_hash`; unveränderte
 // Chunks behalten ihren Vektor (kein erneuter Embedding-Call). `model` steht
 // im Chunk-Key — ein Modellwechsel erzwingt vollständiges Neu-Embedden, alte
-// Modell-Chunks bleiben liegen bis clearOwner/pruneMissing sie räumt.
+// Modell-Chunks räumt `clearForeignModels` am Ende jedes Laufs.
 //
 // Zwei Eingänge:
-//   - reindexUserSources(userEmail)      → Job-Queue (User-Klick in der Karte)
 //   - enqueueSourceEmbedIndexJob(email)  → Trigger nach Upload (s. routes/sources.js)
+//                                          und POST /jobs/source-embed-index
 //   - reindexAllUserSources()            → Nacht-Cron: alle User mit Quellen-PDFs
+//
+// Der Job läuft IMMER über die ganze Bibliothek des Users, nie über eine
+// einzelne Quelle — der Delta-Cache macht den Ein-PDF-Fall genauso billig, und
+// eine zweite Skopierung wäre ein zweiter Pfad, der auseinanderdriften kann.
 
 const express = require('express');
 const { db } = require('../../db/schema');
@@ -25,8 +29,7 @@ const {
 const embed = require('../../lib/embed');
 const { chunkText, contentHash } = require('../../lib/embed-chunk');
 const sourceSemanticChunks = require('../../db/source-semantic-chunks');
-const { markSourceIndexed, getSource } = require('../../db/schema');
-const { toIntId } = require('../../lib/validate');
+const { markSourceIndexed, getSourceDocText } = require('../../db/schema');
 const { setContext } = require('../../lib/log-context');
 const logger = require('../../logger');
 
@@ -40,12 +43,12 @@ const JOB_LABEL = 'job.label.sourceEmbedIndex';
 // User-Job reused (sonst würde ein Mehrfach-Hochladen den Worker überfluten).
 function _dedupKey(userEmail) { return `user:${userEmail}`; }
 
-// Alle Quellen des Users mit PDF laden → [{ id, doc_text, owner_email }].
-// Text leer? skip (Quelle ohne indizierbaren Text — pruneMissing tut den Rest).
-async function _collectCandidates(userEmail) {
-  const rows = sourceSemanticChunks.listIndexedCandidates(userEmail);
-  return rows.map(r => ({ id: r.id, owner_email: userEmail, text: String(r.doc_text || '') }))
-    .filter(x => x.text.trim());
+// IDs der Quellen des Users mit PDF-Volltext. Bewusst nur die IDs: der
+// Volltext (bis 200k Zeichen je Quelle) wird pro Quelle nachgeladen und nach
+// dem Chunken wieder fallengelassen, statt die ganze Bibliothek gleichzeitig
+// im Job-Speicher zu halten.
+function _candidateIds(userEmail) {
+  return sourceSemanticChunks.listIndexedCandidates(userEmail).map(r => r.id);
 }
 
 async function runSourceEmbedIndexJob(jobId, userEmail) {
@@ -59,28 +62,29 @@ async function runSourceEmbedIndexJob(jobId, userEmail) {
     };
 
     updateJob(jobId, { statusText: 'job.phase.sourceEmbedCollect', progress: 5 });
-    const candidates = await _collectCandidates(userEmail);
 
     const rowsBySource = new Map();
     const pending = [];
     const presentIds = [];
     let totalChunks = 0;
 
-    for (const c of candidates) {
-      presentIds.push(c.id);
-      const chunks = chunkText(c.text);
+    for (const sourceId of _candidateIds(userEmail)) {
+      throwIfAborted();
+      presentIds.push(sourceId);
+      // Volltext nur fuer die Dauer des Chunkens im Speicher.
+      const chunks = chunkText(getSourceDocText(sourceId));
       if (!chunks.length) continue;
-      rowsBySource.set(c.id, []);
-      const existing = sourceSemanticChunks.getSourceChunks(c.id, model);
+      rowsBySource.set(sourceId, []);
+      const existing = sourceSemanticChunks.getSourceChunks(sourceId, model);
       chunks.forEach((text, ix) => {
         totalChunks++;
         const embedInput = passagePrefix ? passagePrefix + text : text;
         const hash = contentHash(embedInput);
         const prev = existing.get(ix);
         if (prev && prev.content_hash === hash && prev.vector.length === dim) {
-          rowsBySource.get(c.id).push({ chunk_ix: ix, content_hash: hash, vector: prev.vector, text });
+          rowsBySource.get(sourceId).push({ chunk_ix: ix, content_hash: hash, vector: prev.vector, text });
         } else {
-          pending.push({ sourceId: c.id, ix, text, embedInput, hash });
+          pending.push({ sourceId, ix, text, embedInput, hash });
         }
       });
     }
@@ -124,13 +128,19 @@ async function runSourceEmbedIndexJob(jobId, userEmail) {
     }
 
     for (const sid of [...rowsBySource.keys()]) persistSource(sid);
-    let pruned = sourceSemanticChunks.pruneMissing(userEmail, model, presentIds);
+    const pruned = sourceSemanticChunks.pruneMissing(userEmail, model, presentIds);
+    // Chunks unter einem frueher aktiven Modell raeumen. `pruneMissing` ist
+    // modell-skopiert und sieht sie per Definition nie — ohne diesen Schritt
+    // waechst die Tabelle bei jedem Modellwechsel monoton weiter.
+    const dropped = sourceSemanticChunks.clearForeignModels(userEmail, model);
+    if (dropped) l.info(`Fremdmodell-Chunks entfernt: ${dropped} (aktives Modell ${model}).`);
 
     updateJob(jobId, { progress: 98 });
     const stats = sourceSemanticChunks.indexStatus(userEmail, model);
     completeJob(jobId, {
       model, dim, totalChunks: stats.total, embedded: pending.length,
-      reused: totalChunks - pending.length, pruned, indexedSources: presentIds.length,
+      reused: totalChunks - pending.length, pruned, droppedForeignModel: dropped,
+      indexedSources: presentIds.length,
     }, null, `${stats.total} Chunks (${pending.length} neu, ${totalChunks - pending.length} aus Cache${pruned ? `, ${pruned} verwaist entfernt` : ''}) bei ${presentIds.length} Quellen`);
   } catch (e) {
     if (e.name !== 'AbortError') l.error(`Quellen-Embedding-Index Fehler: ${e.message}`, { stack: e.stack });
@@ -158,8 +168,9 @@ async function reindexAllUserSources() {
 }
 
 // Trigger nach Upload: erzeugt den Job (dedup gegen laufende User-Jobs).
-// Läuft schon einer → kein zweiter (Delta-Cache nimmt die neue PDF mit).
-function enqueueSourceEmbedIndexJob(userEmail, _sourceId) {
+// Läuft schon einer → kein zweiter (Delta-Cache nimmt die neue PDF mit); der
+// Aufrufer bekommt dessen Id und kann sie genauso pollen.
+function enqueueSourceEmbedIndexJob(userEmail) {
   if (!embed.isEnabled()) return null;
   const existing = findActiveJobId(JOB_TYPE, _dedupKey(userEmail), userEmail);
   if (existing) return existing;
@@ -173,13 +184,9 @@ sourceEmbedIndexRouter.post('/source-embed-index', jsonBody, (req, res) => {
   if (!userEmail) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
   setContext({ user: userEmail });
   if (!embed.isEnabled()) return res.status(400).json({ error_code: 'EMBED_DISABLED' });
-  // Optional: nur eine Quelle reindiziern (?source_id=N). Aktuell: Full-User-Job;
-  // der Delta-Cache macht den Ein-PDF-Fall identisch billig.
-  if (req.body?.source_id) toIntId(req.body.source_id); // nur Validierung, kein Effekt
   const existing = findActiveJobId(JOB_TYPE, _dedupKey(userEmail), userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });
-  const jobId = enqueueSourceEmbedIndexJob(userEmail);
-  res.json({ jobId });
+  res.json({ jobId: enqueueSourceEmbedIndexJob(userEmail) });
 });
 
 module.exports = {

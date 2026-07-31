@@ -27,6 +27,10 @@
 //   semanticSearchEnabled — Semantik-Suche/„ähnliche Stellen"/Chat-Tool
 //             `search_similar` (/config `semanticSearch.enabled`, true wenn
 //             Embedding-Backend konfiguriert). Provider-unabhängig.
+//   pdfMaxBytes — Upload-Limit fuer PDF-Anhaenge (Quelle + Recherche-Fundstueck),
+//             /config `pdfUpload.maxBytes`. SSoT ist der Server
+//             (lib/pdf-extract.js#MAX_INPUT_BYTES) — die Vorpruefung im Browser
+//             darf keine eigene Zahl fuehren.
 //   redundancyThresholds — Cosinus-Schwellen der drei Redundanz-Radar-Bänder
 //             (strict/medium/loose, /config `redundancy.*`). Modellabhängig; der
 //             Radar sendet den Wert des gewählten Bandes an /jobs/redundancy.
@@ -51,6 +55,7 @@ export function registerConfigStore() {
     semanticHybrid: false,
     semanticRerank: false,
     redundancyThresholds: { strict: 0.88, medium: 0.82, loose: 0.76 },
+    pdfMaxBytes: 25 * 1024 * 1024,
     factcheckEnabled: false,
     apiProvider: 'claude',
     effectiveProvider: 'claude',

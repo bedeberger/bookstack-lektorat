@@ -13,6 +13,8 @@
 const { db } = require('../../db/schema');
 const { _truncateResult } = require('./book-chat-tools/shared');
 const searchIndex = require('../../lib/search');
+const embed = require('../../lib/embed');
+const semanticRetrieval = require('../../lib/semantic-retrieval');
 const {
   PROPOSAL_KINDS, LIST_FILTER_KINDS, TITLE_MAX, BODY_MAX, SOURCE_MAX,
   cleanStr, normalizeUrls, normalizeTags,
@@ -100,6 +102,12 @@ function tool_read_research_item(input, ctx) {
   const tags = db.prepare('SELECT tag FROM research_item_tags WHERE item_id = ? ORDER BY tag').all(id).map(t => t.tag);
   const urls = db.prepare('SELECT url, label FROM research_item_urls WHERE item_id = ? ORDER BY position, id')
     .all(id).map(u => ({ url: u.url, label: u.label || '' }));
+  // Ein langes PDF passt nicht in ein Tool-Result. Die Kappung wird deshalb
+  // AUSGEWIESEN (doc_chars + doc_truncated) statt still zu passieren — sonst hält
+  // das Modell den Anfang für das ganze Dokument. Der Rest ist über
+  // search_research_passages(item_id) erreichbar.
+  const docText = String(row.doc_text || '');
+  const docTruncated = docText.length > DOC_TEXT_MAX;
   return {
     id: row.id,
     kind: row.kind,
@@ -109,8 +117,80 @@ function tool_read_research_item(input, ctx) {
     source: row.source || '',
     tags,
     ...(row.doc_name ? { doc_name: row.doc_name } : {}),
-    ...(row.doc_text ? { doc_text: String(row.doc_text).slice(0, DOC_TEXT_MAX) } : {}),
+    ...(docText ? {
+      doc_text: docText.slice(0, DOC_TEXT_MAX),
+      doc_chars: docText.length,
+      doc_truncated: docTruncated,
+      ...(docTruncated ? { hinweis: `Nur die ersten ${DOC_TEXT_MAX} von ${docText.length} Zeichen. Für Stellen weiter hinten: search_research_passages mit item_id=${row.id} und deiner Frage.` } : {}),
+    } : {}),
   };
+}
+
+// ── search_research_passages ─────────────────────────────────────────────────
+// Semantischer Zugriff aufs Archiv. Zwei Modi, ein Werkzeug:
+//   ohne item_id → beste Passage je Eintrag, über das ganze Board (semanticQuery,
+//                  kinds:['research'] → Hybrid-Fusion mit FTS + optional Rerank)
+//   mit item_id  → mehrere Passagen INNERHALB eines Eintrags (passagesInEntity).
+// Der zweite Modus ist der Grund für das Werkzeug: `read_research_item` liefert
+// von einem langen PDF nur den Anfang, hier kommen die zur Frage passenden
+// Stellen aus der Mitte. Setzt den Embedding-Index voraus (routes/jobs/embed-index)
+// — ist er leer, sind die Treffer leer und das Modell fällt auf die Wortsuche in
+// `list_research_items` zurück.
+const PASSAGE_MAX = 1200;
+const PASSAGE_TOPK_DEFAULT = 6;
+const PASSAGE_TOPK_MAX = 15;
+
+async function tool_search_research_passages(input, ctx) {
+  const q = String(input.q || '').trim();
+  if (!q) return { error: 'q fehlt.' };
+  if (!embed.isEnabled()) {
+    return { error: 'Semantische Suche ist nicht aktiviert. Nutze list_research_items (Wortsuche).' };
+  }
+  const topK = Math.min(Math.max(parseInt(input.top_k, 10) || PASSAGE_TOPK_DEFAULT, 1), PASSAGE_TOPK_MAX);
+  const itemId = input.item_id ? parseInt(input.item_id, 10) : null;
+
+  try {
+    if (itemId) {
+      // Buch-Guard: nur Einträge DIESES Buchs; sonst liesse sich über eine geratene
+      // id fremdes Material lesen (der Index selbst ist buchübergreifend).
+      const row = db.prepare(
+        "SELECT id, COALESCE(NULLIF(title,''), doc_name) AS title FROM research_items WHERE id = ? AND book_id = ?"
+      ).get(itemId, ctx.bookId);
+      if (!row) return { error: 'Eintrag nicht gefunden.' };
+      const passages = await semanticRetrieval.passagesInEntity('research', itemId, q, { topK, signal: ctx.jobSignal });
+      return {
+        item_id: itemId, title: row.title || '', q,
+        passages: passages.map(p => ({ passage: _snip(p.text, PASSAGE_MAX), score: Math.round(p.score * 1000) / 1000 })),
+        count: passages.length,
+        ...(passages.length ? {} : { hinweis: 'Keine Passage im Index — ist der Eintrag schon indexiert?' }),
+      };
+    }
+
+    const hits = await semanticRetrieval.semanticQuery(ctx.bookId, q, { kinds: ['research'], topK, signal: ctx.jobSignal });
+    if (!hits.length) return { q, results: [], count: 0 };
+    const ids = hits.map(h => h.entity_id);
+    const meta = new Map(
+      db.prepare(
+        `SELECT id, kind, COALESCE(NULLIF(title,''), doc_name) AS title, doc_name
+           FROM research_items WHERE book_id = ? AND id IN (${ids.map(() => '?').join(',')})`
+      ).all(ctx.bookId, ...ids).map(r => [r.id, r])
+    );
+    const results = hits
+      .filter(h => meta.has(h.entity_id))   // Fremdbuch-/Geister-Chunk überspringen
+      .map(h => {
+        const m = meta.get(h.entity_id);
+        return {
+          item_id: h.entity_id, kind: m.kind, title: m.title || '',
+          ...(m.doc_name ? { doc_name: m.doc_name } : {}),
+          passage: _snip(h.text, PASSAGE_MAX),
+          score: Math.round(h.score * 1000) / 1000,
+        };
+      });
+    return { q, results, count: results.length };
+  } catch (e) {
+    ctx.logger?.warn?.(`[research-chat] Passagen-Suche fehlgeschlagen: ${e.message}`);
+    return { error: `Semantische Suche nicht verfügbar (${e.message}). Nutze list_research_items (Wortsuche).` };
+  }
 }
 
 // ── list_book_entities ───────────────────────────────────────────────────────
@@ -176,6 +256,7 @@ function tool_propose_research_item(input, ctx) {
 const TOOLS = {
   list_research_items: tool_list_research_items,
   read_research_item:  tool_read_research_item,
+  search_research_passages: tool_search_research_passages,
   list_book_entities:  tool_list_book_entities,
   propose_research_item: tool_propose_research_item,
 };

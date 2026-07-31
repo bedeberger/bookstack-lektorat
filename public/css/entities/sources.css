@@ -489,20 +489,25 @@
   .sources-detect-controls .combobox-wrap { min-width: 0; width: 100%; }
 }
 
-/* ── Quellen-PDF (Form-Anhang) ───────────────────────────────────────────── */
-.sources-pdf-empty { display: flex; flex-direction: column; gap: var(--space-2xs); }
-.sources-pdf-empty input[type="file"] { font-size: var(--font-size-sm); }
-.sources-pdf-attached {
+/* ── Quellen-Dokument (Form-Anhang) ──────────────────────────────────────── */
+.sources-doc-empty { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.sources-doc-empty input[type="file"] { font-size: var(--font-size-sm); }
+.sources-doc-attached {
   display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
 }
-.sources-pdf-link { display: inline-flex; align-items: center; gap: var(--space-2xs); }
-.sources-pdf-pages {
+.sources-doc-link { display: inline-flex; align-items: center; gap: var(--space-2xs); }
+.sources-doc-pages {
   color: var(--color-muted); font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
 }
-.sources-pdf-busy { display: inline-flex; align-items: center; }
-.sources-pdf-busy .spinner { width: 16px; height: 16px; }
-.sources-pdf-index { color: var(--color-muted); font-size: var(--font-size-xs); margin-top: var(--space-2xs); }
+.sources-doc-busy { display: inline-flex; align-items: center; }
+.sources-doc-busy .spinner { width: 16px; height: 16px; }
+.sources-doc-index { color: var(--color-muted); font-size: var(--font-size-xs); margin-top: var(--space-2xs); }
+/* Gedeckelter Volltext: Warnton, nicht Fehlerton — die Quelle funktioniert,
+   nur der Index kennt nicht das ganze Werk. */
+.sources-doc-warn {
+  color: var(--color-warn-text); font-size: var(--font-size-xs); margin-top: var(--space-2xs);
+}
 
 /* ── Semantische Bibliothekssuche (Pool-Scope) ──────────────────────────── */
 .sources-lib-search {

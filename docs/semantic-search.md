@@ -1,6 +1,6 @@
 # Semantische Suche (Embeddings)
 
-Bedeutungs-basierte Suche über ein Buch: Seiten, Szenen und Figuren werden in Chunks zerlegt, über einen **self-hosted, OpenAI-kompatiblen `/v1/embeddings`-Endpunkt** (z.B. LocalAI, llama.cpp) in Float32-Vektoren übersetzt und per Cosinus-Ähnlichkeit durchsucht. **Rein rückwärtsgewandt** — liest bestehende Inhalte, schreibt nie in den Buchtext (analog Recherche-/Buch-Chat).
+Bedeutungs-basierte Suche über ein Buch: Seiten, Szenen, Figuren und Recherche-Schnipsel (inkl. des extrahierten Volltexts hochgeladener PDFs) werden in Chunks zerlegt, über einen **self-hosted, OpenAI-kompatiblen `/v1/embeddings`-Endpunkt** (z.B. LocalAI, llama.cpp) in Float32-Vektoren übersetzt und per Cosinus-Ähnlichkeit durchsucht. **Rein rückwärtsgewandt** — liest bestehende Inhalte, schreibt nie in den Buchtext (analog Recherche-/Buch-Chat).
 
 Der Index ist ein **reiner Ableitungs-Index** (wie FTS5): jederzeit aus den Quelltabellen neu berechenbar. Host/Model/Key liegen in `app_settings` (`embed.*`) und verlassen den Server nie.
 
@@ -12,7 +12,8 @@ Der **Freitext**-Query (`?q=…`, Such-Karte + Buch-Chat-Tool `search_similar`) 
 2. **Hybrid-Fusion (`embed.hybrid`, Default an)** — die lexikalische FTS5/bm25-Rangliste ([lib/search.js](../lib/search.js)) wird per **Reciprocal Rank Fusion** ([lib/semantic-fusion.js](../lib/semantic-fusion.js), pure, `RRF_K=60`) in die semantische gemischt. RRF fusioniert über die Rang-Position (nicht über inkompatible Score-Skalen) → exakte Begriffe/Eigennamen (die reine Embeddings verlieren) kommen zurück, Paraphrasen (die FTS verliert) bleiben.
 3. **Reranking (`rerank.*`, Default aus)** — ein Cross-Encoder ([lib/rerank.js](../lib/rerank.js), self-hosted OpenAI/Jina-`/v1/rerank`, z.B. LocalAI/TEI) ordnet die Top-`rerank.top_n` Fusions-Kandidaten neu, indem er (Anfrage, Textstelle) direkt bewertet — schärfere Relevanz als Vektor-Distanz allein. `rerank.min_score` filtert danach. **Non-fatal:** fällt der Endpunkt aus, greift still die RRF-/Cosinus-Reihenfolge. Setzt aktivierte semantische Suche voraus (`isEnabled()` prüft zusätzlich `embed.isEnabled()`).
 
-**Zwei weitere Pfade nutzen denselben Reranker** (beide in [lib/semantic-retrieval.js](../lib/semantic-retrieval.js), damit `lib/rerank.js` seinen einzigen Konsumenten behält):
+**Drei weitere Pfade nutzen denselben Reranker** (alle in [lib/semantic-retrieval.js](../lib/semantic-retrieval.js), damit `lib/rerank.js` seinen einzigen Konsumenten behält):
+- **„Passagen in einem Dokument"** (`passagesInEntity`): mehrere Chunks **innerhalb EINER** Entität, sortiert nach Nähe zur Frage — der Gegensatz zu `searchSimilar`, das pro Entität nur den besten Chunk liefert. Existiert für lange Recherche-PDFs: dort ist die Frage nicht „welcher Eintrag passt", sondern „welche Stelle **in diesem** Eintrag". Score-Floor wie im Freitext-Pfad, Rerank via `rerankOrder`, kein Hybrid (FTS kennt keine Chunk-Granularität). Einziger Konsument: das Recherche-Chat-Tool `search_research_passages`.
 - **„Ähnliche Stellen zu Entität"** (`similarToEntity`): das reine Vektor-Retrieval dieses Pfads ist am unschärfsten (gemittelter Entitäts-Vektor). Bei aktivem Reranker wird der Kandidatenpool anschliessend gegen den **Entitäts-Text** (`getEntityText`, Chunk-Texte verkettet, max. 2000 Zeichen) geschärft. Kein Hybrid (kein Anfragetext für FTS).
 - **Buch-Chat `search_passages`** (Wort-genaue FTS-Literalsuche): `rerankOrder` sortiert den bm25-Kandidatenpool per Cross-Encoder gegen das Suchmuster **nur um** (nichts wird verworfen), damit bei natürlichsprachlichen Mustern die relevantesten Seiten zuerst gescannt werden (`max_results`-/Deadline-Cut). Die Literal-/Regex-Treffer selbst bleiben unangetastet.
 
@@ -29,6 +30,7 @@ Alle drei sind nur sichtbar/aktiv, wenn das Backend konfiguriert ist (`config.se
 | **Modus „Sinngemäss"** | Such-Karte (`searchCard`), Modus-Zeile `.search-mode-row` | User schaltet in [search.html](../public/partials/search.html) von „Volltext" (`fts`) auf „Sinngemäss" (`semantic`) → `setMode('semantic')` |
 | **„Ähnliche Stellen"** | Button an Figuren- und Szenen-Karten | [figuren.html:133](../public/partials/figuren.html) / [szenen.html:181](../public/partials/szenen.html) → `$app.findSimilar(kind, id, label)` → öffnet Such-Karte, feuert Event `search:similar` |
 | **Buch-Chat-Tool** | Agentischer Buch-Chat | Tool `search_similar` ([book-chat-tools.js:68](../public/js/prompts/book-chat-tools.js)) — Gegenstück zu `search_passages` (Wort-genau vs. sinngemäss) |
+| **Recherche-Chat-Tool** | Agentischer Recherche-Chat | Tool `search_research_passages` ([recherche.js](../public/js/prompts/recherche.js)) — semantisch übers Archiv, mit `item_id` gezielt **in** ein langes PDF. Nur angeboten, wenn `embed.isEnabled()` (Filter in [research-chat.js](../routes/jobs/research-chat.js)) |
 
 Es gibt **keine eigene Karte** und **keinen Paletten-Prefix** — die semantische Suche lebt komplett in der bestehenden Such-Karte (`key: 'search'` in [feature-registry.js](../public/js/cards/feature-registry.js)).
 
@@ -85,13 +87,17 @@ Erstlauf kann dauern (embeddet alles); Folgeläufe embetten nur Geändertes. Feh
 
 ## Datenmodell — `semantic_chunks`
 
-Migrationen **240** + **251** ([db/migrations.js](../db/migrations.js)). Polymorph nach `kind` (`page`/`scene`/`figure`), modelliert wie `motif_occurrences` — **typisierte FK-Spalten statt einer untypisierten Ref**, sodass die DB die Referenz selbst durchsetzt:
+Migrationen **240** + **251** + **259** ([db/migrations.js](../db/migrations.js)). Polymorph nach `kind` (`page`/`scene`/`figure`/`research`), modelliert wie `motif_occurrences` — **typisierte FK-Spalten statt einer untypisierten Ref**, sodass die DB die Referenz selbst durchsetzt:
 
-- `kind` (`CHECK` auf die drei Werte) plus je eine nullable FK-Spalte: `page_id` → `pages(page_id)`, `scene_id` → `figure_scenes(id)`, `figure_id` → `figures(id)`, alle **ON DELETE CASCADE**. Ein `CHECK` erzwingt, dass genau die zu `kind` passende Spalte gesetzt ist (sentinel-frei).
-- `entity_id` ist eine **`GENERATED … VIRTUAL`-Spalte** (`COALESCE(page_id, scene_id, figure_id)`). Alle Lesepfade fragen polymorph darüber ab (`WHERE kind = ? AND entity_id = ?`, `COUNT(DISTINCT entity_id)`, `JOIN figures ON f.id = sc.entity_id`); geschrieben wird ausschliesslich über die typisierten Spalten (`_entityCols()` in [db/semantic-chunks.js](../db/semantic-chunks.js) ist der einzige Übersetzer). Abgeleitet statt dupliziert → kann nicht abdriften.
+- `kind` (`CHECK` auf die vier Werte) plus je eine nullable FK-Spalte: `page_id` → `pages(page_id)`, `scene_id` → `figure_scenes(id)`, `figure_id` → `figures(id)`, `research_item_id` → `research_items(id)`, alle **ON DELETE CASCADE**. Ein `CHECK` erzwingt, dass genau die zu `kind` passende Spalte gesetzt ist (sentinel-frei).
+- `entity_id` ist eine **`GENERATED … VIRTUAL`-Spalte** (`COALESCE(page_id, scene_id, figure_id, research_item_id)`). Alle Lesepfade fragen polymorph darüber ab (`WHERE kind = ? AND entity_id = ?`, `COUNT(DISTINCT entity_id)`, `JOIN figures ON f.id = sc.entity_id`); geschrieben wird ausschliesslich über die typisierten Spalten (`_entityCols()` in [db/semantic-chunks.js](../db/semantic-chunks.js) ist der einzige Übersetzer). Abgeleitet statt dupliziert → kann nicht abdriften.
 - `book_id` → `books(book_id)` **ON DELETE CASCADE**, `chunk_ix`, `content_hash`, `model`, `dim`, `vector BLOB` (Float32 LE), `text`.
 - `UNIQUE(kind, entity_id, chunk_ix, model)` als benannter Index `idx_semchunk_uniq` (Table-Constraints können keine generierte Spalte referenzieren) — Mehr-Modell-Koexistenz, Query filtert aufs aktive Modell.
-- Weitere Indexe: `idx_semchunk_book(book_id, kind)` + je einer auf `page_id`/`scene_id`/`figure_id` (FK-Deckung für den CASCADE-Scan).
+- Weitere Indexe: `idx_semchunk_book(book_id, kind)` + je einer auf `page_id`/`scene_id`/`figure_id`/`research_item_id` (FK-Deckung für den CASCADE-Scan).
+
+**`kind='research'` — warum im Buch-Index und nicht in einer eigenen Tabelle.** `research_items` ist buchgebunden wie Seite/Szene/Figur; eine zweite Tabelle wäre eine Kopie mit anderem FK. Der User-Pool `sources` bekam dagegen `source_semantic_chunks`, weil Quellen **personen**-gebunden sind (kein `book_id`) — das ist der Unterschied, an dem die Entscheidung hängt, nicht „PDF ja/nein". Indexgut ist `title + body + doc_text` am Stück; bei einem Dokument-Eintrag ist der PDF-Volltext der weitaus grösste Anteil. **Archivierte Einträge werden mitindexiert** — der FTS5-Index tut es auch, und die Hybrid-Fusion mischt beide Ranglisten: ein einseitiger Filter liesse FTS-Kandidaten ohne semantisches Gegenstück auftauchen.
+
+**Frische nach einem PDF-Upload:** `POST /research/:id/doc` ruft `enqueueEmbedIndexJob(bookId)` ([routes/jobs/embed-index.js](../routes/jobs/embed-index.js)) — non-fatal, dedupt gegen einen laufenden Job des Buchs. Ohne das bliebe ein frisch hochgeladenes PDF bis zum Nacht-Cron nur per Wortmatch auffindbar. Der Delta-Cache macht den Lauf billig: nur die Chunks des neuen Dokuments werden embeddet.
 
 **Cleanup:** Der Entity-Delete cascadet in der DB. Die expliziten Hooks in [db/pages.js:154](../db/pages.js) (`remove('page', …)`) und [routes/figures.js](../routes/figures.js) (`remove('scene'/'figure', …)`) bleiben als sofortige Freigabe im selben Transaktionsschritt. `pruneMissing()` deckt den Fall ab, den kein FK sieht: die Entität existiert noch, ist aber nicht mehr indizierbar (stale-Figur, Seite in ein anderes Buch verschoben).
 

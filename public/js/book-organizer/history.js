@@ -60,26 +60,29 @@ export const historyMethods = {
     this._pushUndo({ kind: 'create-page', id, chapterId, name });
   },
 
+  // Der Gegen-Stack wird ERST NACH dem Flight beschrieben: `_pushUndo` verwirft
+  // Records, solange `_inHistoryFlight` steht (das ist der Schutz davor, dass eine
+  // wiederhergestellte Mutation sich selbst wieder aufzeichnet). Innerhalb des
+  // try-Blocks aufgezeichnet, fiele der Redo→Undo-Rückweg genau darauf herein —
+  // nach einem Redo wäre nichts mehr rückgängig zu machen.
   async historyUndo() {
     if (this.organizerSaving || this._inHistoryFlight) return;
     const rec = this._undoStack.pop();
     if (!rec) return;
     this._inHistoryFlight = true;
+    let ok = false;
     try {
-      const ok = await this._applyInverse(rec);
-      if (!ok) {
-        this._undoStack.push(rec);
-        return;
-      }
-      if (rec.kind === 'create-chapter' || rec.kind === 'create-page') {
-        // Redo-Pfad wäre ein Recreate mit neuer ID → bestehende Records mit
-        // alter ID werden inkonsistent. Komplett invalidieren.
-        this._redoStack = [];
-      } else {
-        this._pushRedo(rec);
-      }
+      ok = await this._applyInverse(rec);
     } finally {
       this._inHistoryFlight = false;
+    }
+    if (!ok) { this._undoStack.push(rec); return; }
+    if (rec.kind === 'create-chapter' || rec.kind === 'create-page') {
+      // Redo-Pfad wäre ein Recreate mit neuer ID → bestehende Records mit
+      // alter ID werden inkonsistent. Komplett invalidieren.
+      this._redoStack = [];
+    } else {
+      this._pushRedo(rec);
     }
   },
 
@@ -88,16 +91,14 @@ export const historyMethods = {
     const rec = this._redoStack.pop();
     if (!rec) return;
     this._inHistoryFlight = true;
+    let ok = false;
     try {
-      const ok = await this._applyForward(rec);
-      if (!ok) {
-        this._redoStack.push(rec);
-        return;
-      }
-      this._pushUndo(rec, { clearRedo: false });
+      ok = await this._applyForward(rec);
     } finally {
       this._inHistoryFlight = false;
     }
+    if (!ok) { this._redoStack.push(rec); return; }
+    this._pushUndo(rec, { clearRedo: false });
   },
 
   async _applyInverse(rec) {

@@ -14,6 +14,7 @@ const { db } = require('../../db/schema');
 const { resolveProvider } = require('../../lib/ai');
 const { getPrompts, getBookPrompts, i18nError } = require('./shared');
 const { executeResearchTool, entityList } = require('./research-chat-tools');
+const embed = require('../../lib/embed');
 const { makeAgenticChatJob, stripTrailingEmptyJson } = require('./agentic-chat');
 const appSettings = require('../../lib/app-settings');
 
@@ -54,9 +55,16 @@ const runResearchChatJob = makeAgenticChatJob({
     // Per-Buch-Override (Buchtyp/Autoren-Freitext) als zusätzlichen Kontext anhängen.
     const systemPrompt = SYSTEM_BOOK_CHAT ? `${baseSystemPrompt}\n\n${SYSTEM_BOOK_CHAT}` : baseSystemPrompt;
 
+    // Ohne Embedding-Endpunkt hat die Passagen-Suche keine Datenbasis — das
+    // Werkzeug gar nicht erst anbieten, statt das Modell eine Runde an einen
+    // garantierten Fehlschlag zu verlieren.
+    const tools = embed.isEnabled()
+      ? RESEARCH_CHAT_TOOLS
+      : RESEARCH_CHAT_TOOLS.filter(t => t.name !== 'search_research_passages');
+
     return {
       systemPrompt,
-      tools: RESEARCH_CHAT_TOOLS,
+      tools,
       maxToolIter,
       tokenBudget: aiCfg.inputBudgetTokens,
       toolResultCap: null,   // kein Cap — Recherche-Tool-Results sind klein und truncieren würde Fundstücke verstümmeln

@@ -28,6 +28,9 @@ export function registerUserSettingsCard() {
     deviceTokensCreating: false,
     deviceTokensError: '',
     deviceTokensNewName: '',
+    // 'device' = native Clients (volle Rechte), 'capture' = Browser-Erweiterung
+    // (darf nur erfassen). Serverseitige Wahrheit: lib/device-scopes.js.
+    deviceTokensNewKind: 'device',
     deviceTokensJustCreated: null,
     // macOS-App-Download (schreibwerkstatt-focuseditor)
     macRelease: { available: false },

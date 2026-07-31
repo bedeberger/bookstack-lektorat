@@ -10,6 +10,21 @@
 }
 
 
+/* Warn-Hinweis über einem Analyse-Ergebnis — gleiches Pattern wie
+   `.overview-notice` (Warn-Tokens + linker 3 px-Border), zweiter Fundort.
+   Verhindert, dass ein unvollständiges Ergebnis als vollständig gelesen wird
+   (Findings, die ein Fremd-Write während der Analyse hinfällig gemacht hat). */
+.analysis-notice {
+  padding: var(--space-10) var(--space-md);
+  margin-bottom: var(--space-md);
+  border: 0.5px solid var(--color-warn-text);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+  background: var(--color-warn-bg);
+  color: var(--color-warn-text);
+  font-size: var(--font-size-sm);
+}
+
 .fazit {
   margin-top: var(--space-sm);
   margin-bottom: var(--space-lg);

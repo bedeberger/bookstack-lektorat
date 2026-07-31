@@ -1,6 +1,9 @@
 'use strict';
-// Embedding-Index-Job (semantische Suche): embeddet Seiten, Szenen und Figuren
-// eines Buches und legt die Vektoren in semantic_chunks ab. Rein rückwärts-
+// Embedding-Index-Job (semantische Suche): embeddet Seiten, Szenen, Figuren und
+// Recherche-Schnipsel eines Buches und legt die Vektoren in semantic_chunks ab
+// (research: Titel + Inhalt + der extrahierte PDF-Volltext eines hochgeladenen
+// Dokuments — damit ist eine lange PDF nicht nur über exakte Wörter auffindbar,
+// sondern passagenweise über Bedeutung). Rein rückwärts-
 // gewandt — liest bestehende Inhalte, schreibt NIE in den Buchtext. Kein KI-
 // Prompt: der Embedding-Endpunkt (embed.*, self-hosted) liefert reine Vektoren.
 //
@@ -30,13 +33,21 @@ const embedIndexRouter = express.Router();
 // Kinds, die indexiert werden. text() extrahiert den einbett­baren Rohtext je
 // Entität; leerer Text → Entität wird übersprungen (und via pruneMissing später
 // entfernt, falls sie mal Chunks hatte).
-const KINDS = ['page', 'scene', 'figure'];
+const KINDS = ['page', 'scene', 'figure', 'research'];
 
 function _sceneText(r) {
   return [r.titel, r.kommentar].map(s => String(s || '').trim()).filter(Boolean).join('. ');
 }
 function _figureText(r) {
   return [r.name, r.beschreibung].map(s => String(s || '').trim()).filter(Boolean).join('. ');
+}
+// Recherche-Schnipsel: Titel + Inhalt + PDF-Volltext am Stück. chunkText schneidet
+// daraus die Passagen — bei einem Dokument-Eintrag ist doc_text der weitaus
+// grösste Anteil und damit das eigentliche Indexgut. Archivierte Einträge werden
+// bewusst mitindexiert (der FTS5-Index tut es auch; sonst driftet die
+// Hybrid-Fusion, die beide Ranglisten zusammenführt).
+function _researchText(r) {
+  return [r.title, r.body, r.doc_text].map(s => String(s || '').trim()).filter(Boolean).join('\n\n');
 }
 
 // Alle indexierbaren Entitäten eines Buches laden → { page:[{id,text}], ... }.
@@ -51,7 +62,10 @@ async function _collectEntities(bookId, userToken, signal) {
   const figRows = db.prepare('SELECT id, name, beschreibung FROM figures WHERE book_id = ?').all(bookId);
   const figItems = figRows.map(r => ({ id: r.id, text: _figureText(r) })).filter(x => x.text);
 
-  return { page: pageItems, scene: sceneItems, figure: figItems };
+  const resRows = db.prepare('SELECT id, title, body, doc_text FROM research_items WHERE book_id = ?').all(bookId);
+  const resItems = resRows.map(r => ({ id: r.id, text: _researchText(r) })).filter(x => x.text);
+
+  return { page: pageItems, scene: sceneItems, figure: figItems, research: resItems };
 }
 
 async function runEmbedIndexJob(jobId, bookId, userEmail, userToken) {
@@ -74,7 +88,7 @@ async function runEmbedIndexJob(jobId, bookId, userEmail, userToken) {
     // pending in dieselbe Map einsortiert und die Entität am Stück ersetzt.
     const rowsByEntity = new Map();
     const pending = [];
-    const presentIds = { page: [], scene: [], figure: [] };
+    const presentIds = { page: [], scene: [], figure: [], research: [] };
     let totalChunks = 0;
 
     for (const kind of KINDS) {
@@ -164,6 +178,20 @@ async function runEmbedIndexJob(jobId, bookId, userEmail, userToken) {
   }
 }
 
+// Trigger nach einem Recherche-PDF-Upload (s. routes/research.js): reiht einen
+// Buch-Index-Job ein, damit der frische Volltext nicht bis zum Nacht-Cron nur
+// per Wortmatch auffindbar bleibt. Ein bereits laufender Job des Buchs wird
+// wiederverwendet (er nimmt die neue PDF im selben Lauf mit); der Delta-Cache
+// macht den Ein-Dokument-Fall so billig wie einen Einzel-Index.
+function enqueueEmbedIndexJob(bookId, userEmail = null) {
+  if (!embed.isEnabled()) return null;
+  const existing = findActiveJobId('embed-index', bookId, userEmail);
+  if (existing) return existing;
+  const jobId = createJob('embed-index', bookId, userEmail, 'job.label.embedIndex', null, bookId);
+  enqueueJob(jobId, () => runEmbedIndexJob(jobId, bookId, userEmail, null));
+  return jobId;
+}
+
 // Nacht-Cron: hält die Embedding-Indizes aller Bücher frisch. Reiht pro Buch
 // einen embed-index-Job ein (Dedup gegen laufende Jobs). Der Delta-Cache im Job
 // embeddet nur seit gestern geänderte Chunks neu — bereits indizierte Bücher
@@ -197,4 +225,4 @@ embedIndexRouter.post('/embed-index', jsonBody, (req, res) => {
   res.json({ jobId });
 });
 
-module.exports = { embedIndexRouter, runEmbedIndexJob, reindexAllBooks };
+module.exports = { embedIndexRouter, runEmbedIndexJob, reindexAllBooks, enqueueEmbedIndexJob };

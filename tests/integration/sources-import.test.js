@@ -283,6 +283,66 @@ test('from-research: URL-Fund wird zur Website-Quelle mit Abrufdatum', async () 
   assert.equal(board.find(i => i.id === item.id).title, 'Prozessakten im Landesarchiv');
 });
 
+test('from-research: url_id waehlt gezielt einen der Links', async () => {
+  const BOOK = seedBook(9412);
+  const item = await makeItem(BOOK, {
+    kind: 'link',
+    title: 'Prozessakten im Landesarchiv',
+    urls: [
+      { url: 'https://archiv.example.org/b44', label: 'Findbuch' },
+      { url: 'https://zweite.example.org/x', label: 'Digitalisat' },
+    ],
+  });
+  const zweite = (await api('GET', `/research?book_id=${BOOK}`)).json
+    .find(i => i.id === item.id).urls.find(u => u.url === 'https://zweite.example.org/x');
+
+  const { status, json } = await api('POST', '/sources/from-research', {
+    item_id: item.id, url_id: zweite.url_id,
+  });
+  assert.equal(status, 200, JSON.stringify(json));
+  assert.equal(json.url, 'https://zweite.example.org/x', 'der gewaehlte Link, nicht der erste');
+  assert.equal(json.csl_type, 'website');
+  // Der Titel des Fundstuecks benennt das Werk; das Link-Label ist nur Fallback.
+  assert.equal(json.title, 'Prozessakten im Landesarchiv');
+
+  // Beide Links duerfen nebeneinander in der Bibliothek liegen (zwei Nachweise).
+  const erste = (await api('GET', `/research?book_id=${BOOK}`)).json
+    .find(i => i.id === item.id).urls.find(u => u.url === 'https://archiv.example.org/b44');
+  assert.equal((await api('POST', '/sources/from-research', { item_id: item.id, url_id: erste.url_id })).status, 200);
+  const urls = (await api('GET', `/sources?book_id=${BOOK}`)).json.map(s => s.url).sort();
+  assert.deepEqual(urls, ['https://archiv.example.org/b44', 'https://zweite.example.org/x']);
+});
+
+test('from-research: fremdes url_id faellt NICHT auf die erste URL zurueck', async () => {
+  const BOOK = seedBook(9413);
+  const ziel = await makeItem(BOOK, { title: 'Eigener Fund', urls: [{ url: 'https://a.example.org/1' }] });
+  const fremd = await makeItem(BOOK, { title: 'Anderer Fund', urls: [{ url: 'https://b.example.org/2' }] });
+  const fremdUrl = (await api('GET', `/research?book_id=${BOOK}`)).json
+    .find(i => i.id === fremd.id).urls[0];
+
+  const { status, json } = await api('POST', '/sources/from-research', {
+    item_id: ziel.id, url_id: fremdUrl.url_id,
+  });
+  assert.equal(status, 404);
+  assert.equal(json.error_code, 'RESEARCH_URL_NOT_FOUND');
+  assert.equal((await api('GET', `/sources?book_id=${BOOK}`)).json.length, 0, 'nichts angelegt');
+
+  // Unbrauchbares url_id ist ein Fehler, kein stiller Fallback.
+  assert.equal((await api('POST', '/sources/from-research', { item_id: ziel.id, url_id: 'abc' })).json.error_code, 'INVALID_ID');
+});
+
+test('from-research: Link-Bezeichnung benennt eine Quelle, wenn das Fundstueck titellos ist', async () => {
+  const BOOK = seedBook(9414);
+  const item = await makeItem(BOOK, {
+    kind: 'link',
+    body: 'nur Fliesstext',
+    urls: [{ url: 'https://c.example.org/3', label: 'Meier 2019: Verjaehrung' }],
+  });
+  const { status, json } = await api('POST', '/sources/from-research', { item_id: item.id });
+  assert.equal(status, 200, JSON.stringify(json));
+  assert.equal(json.title, 'Meier 2019: Verjaehrung');
+});
+
 test('from-research: Fund ohne URL laesst die Gattung offen und setzt kein Abrufdatum', async () => {
   const BOOK = seedBook(9409);
   const item = await makeItem(BOOK, { kind: 'quote', title: 'Randnotiz aus dem Findbuch' });

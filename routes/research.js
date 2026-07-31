@@ -11,37 +11,36 @@
 
 const express = require('express');
 const { db } = require('../db/schema');
+const {
+  LINK_TARGETS, attachRelations, emitItem, replaceUrls, replaceTags, createItem,
+} = require('../db/research-items');
 const { toIntId } = require('../lib/validate');
 const { setContext } = require('../lib/log-context');
 const { requireBookAccess, sendACLError } = require('../lib/acl');
 const { prepareCover } = require('../lib/cover-prepare');
-const { extractPdfText } = require('../lib/pdf-extract');
+// PDF-Anhang: geteilter Stack mit routes/sources.js (Limit, Namen, Extraktion,
+// Fehler-Codes, Auslieferungs-Header).
+const { rawPdfBody, readDocUpload, sendDoc } = require('../lib/pdf-attachment');
+// Trigger des buchskopierten Embedding-Index-Jobs nach einem PDF-Upload.
+const { enqueueEmbedIndexJob } = require('./jobs/embed-index');
 const { NOW_ISO_SQL } = require('../db/now');
 const searchIndex = require('../lib/search');
 const {
-  RESEARCH_KINDS, TITLE_MAX, BODY_MAX, SOURCE_MAX, TAG_MAX,
-  cleanStr, normalizeUrls, normalizeTags,
+  RESEARCH_KINDS, TITLE_MAX, BODY_MAX, SOURCE_MAX, TAG_MAX, cleanStr,
 } = require('../lib/research-validate');
 const logger = require('../logger');
 
 const router = express.Router();
 const jsonBody = express.json();
 const rawImage = express.raw({ type: ['image/*'], limit: '12mb' });
-const rawDoc = express.raw({ type: ['application/pdf'], limit: '25mb' });
-const DOCNAME_MAX = 200;
 
-// target_kind → { col, table, pk, nameCol, orderCol } für Validierung,
-// Display-JOIN und Sortierung „nach verknüpfter Entität". orderCol ist die Spalte,
-// nach der die Entität in ihrer eigenen Ansicht geordnet ist (Buch-Reihenfolge).
-const LINK_TARGETS = {
-  chapter:  { col: 'chapter_id',  table: 'chapters',      pk: 'chapter_id', nameCol: 'chapter_name', orderCol: 'position' },
-  page:     { col: 'page_id',     table: 'pages',         pk: 'page_id',    nameCol: 'page_name',    orderCol: 'position' },
-  figure:   { col: 'figure_id',   table: 'figures',       pk: 'id',         nameCol: 'name',         orderCol: 'sort_order' },
-  location: { col: 'location_id', table: 'locations',     pk: 'id',         nameCol: 'name',         orderCol: 'sort_order' },
-  scene:    { col: 'scene_id',    table: 'figure_scenes', pk: 'id',         nameCol: 'titel',        orderCol: 'sort_order' },
-  beat:     { col: 'beat_id',     table: 'plot_beats',    pk: 'id',         nameCol: 'titel',        orderCol: 'sort_order' },
-  thread:   { col: 'thread_id',   table: 'plot_threads',  pk: 'id',         nameCol: 'name',         orderCol: 'position' },
-};
+// Item-Modell (Anlegen, Kind-Tabellen, Ausgabeform, LINK_TARGETS) liegt in
+// db/research-items.js, weil routes/capture.js (Browser-Erweiterung) denselben
+// Schreibpfad braucht. Aliase, damit die Aufrufstellen unveraendert bleiben.
+const _attachRelations = attachRelations;
+const _emitItem = emitItem;
+const _replaceUrls = replaceUrls;
+const _replaceTags = replaceTags;
 
 // Erlaubte Sortier-Modi: feste Felder + „link:<dimension>" (nach verknüpfter Entität).
 const FIXED_SORTS = {
@@ -64,93 +63,6 @@ function _guard(req, res, bookId, minRole) {
   setContext({ book: bookId });
   try { requireBookAccess(req, bookId, minRole); return true; }
   catch (e) { return !sendACLError(res, e); }
-}
-
-// Tags + Links für eine Menge Items nachladen und nach item_id gruppieren.
-function _attachRelations(items) {
-  if (!items.length) return items;
-  const ids = items.map(i => i.id);
-  const ph = ids.map(() => '?').join(',');
-
-  const tagRows = db.prepare(
-    `SELECT item_id, tag FROM research_item_tags WHERE item_id IN (${ph}) ORDER BY tag`
-  ).all(...ids);
-  const tagsByItem = new Map();
-  for (const r of tagRows) {
-    if (!tagsByItem.has(r.item_id)) tagsByItem.set(r.item_id, []);
-    tagsByItem.get(r.item_id).push(r.tag);
-  }
-
-  const urlRows = db.prepare(
-    `SELECT id AS url_id, item_id, url, label FROM research_item_urls
-      WHERE item_id IN (${ph}) ORDER BY item_id, position, id`
-  ).all(...ids);
-  const urlsByItem = new Map();
-  for (const r of urlRows) {
-    if (!urlsByItem.has(r.item_id)) urlsByItem.set(r.item_id, []);
-    urlsByItem.get(r.item_id).push({ url_id: r.url_id, url: r.url, label: r.label || '' });
-  }
-
-  // Links inkl. Display-Label per target_kind-spezifischem JOIN (ein Pass je Kind).
-  const linksByItem = new Map();
-  for (const [kind, t] of Object.entries(LINK_TARGETS)) {
-    const rows = db.prepare(
-      `SELECT l.id AS link_id, l.item_id, l.${t.col} AS target_id, e.${t.nameCol} AS label
-         FROM research_item_links l
-         JOIN ${t.table} e ON e.${t.pk} = l.${t.col}
-        WHERE l.item_id IN (${ph}) AND l.target_kind = ?`
-    ).all(...ids, kind);
-    for (const r of rows) {
-      if (!linksByItem.has(r.item_id)) linksByItem.set(r.item_id, []);
-      linksByItem.get(r.item_id).push({
-        link_id: r.link_id, target_kind: kind, target_id: r.target_id, label: r.label || '',
-      });
-    }
-  }
-
-  for (const it of items) {
-    it.tags = tagsByItem.get(it.id) || [];
-    it.urls = urlsByItem.get(it.id) || [];
-    it.links = linksByItem.get(it.id) || [];
-    it.has_image = !!it.image_mime;
-    it.has_doc = !!it.doc_mime;
-    delete it.image_mime;
-    delete it.doc_mime;
-  }
-  return items;
-}
-
-function _emitItem(id) {
-  const row = db.prepare(
-    `SELECT id, book_id, user_email, kind, title, body, source, image_mime,
-            doc_mime, doc_name, doc_pages, pinned, archived, created_at, updated_at
-       FROM research_items WHERE id = ?`
-  ).get(id);
-  if (!row) return null;
-  _attachRelations([row]);
-  return row;
-}
-
-// urls → geordnete Kind-Tabelle. Normalisierung (http(s)-only, Dedup, Cap, Label)
-// kommt aus lib/research-validate (geteilt mit dem Chat-Vorschlag).
-function _replaceUrls(itemId, urls) {
-  db.prepare('DELETE FROM research_item_urls WHERE item_id = ?').run(itemId);
-  const { urls: clean } = normalizeUrls(urls);
-  if (!clean.length) return;
-  const ins = db.prepare(
-    `INSERT INTO research_item_urls (item_id, url, label, position, created_at)
-     VALUES (?, ?, ?, ?, ${NOW_ISO_SQL})`
-  );
-  let pos = 0;
-  for (const { url, label } of clean) ins.run(itemId, url, label || null, pos++);
-}
-
-function _replaceTags(itemId, tags) {
-  db.prepare('DELETE FROM research_item_tags WHERE item_id = ?').run(itemId);
-  const clean = normalizeTags(tags);
-  if (!clean.length) return;
-  const ins = db.prepare('INSERT OR IGNORE INTO research_item_tags (item_id, tag) VALUES (?, ?)');
-  for (const tag of clean) ins.run(itemId, tag);
 }
 
 // ── Liste + Filter ─────────────────────────────────────────────────────────
@@ -222,7 +134,7 @@ router.get('/', (req, res) => {
 
   const rows = db.prepare(
     `SELECT ri.id, ri.book_id, ri.user_email, ri.kind, ri.title, ri.body,
-            ri.source, ri.image_mime, ri.doc_mime, ri.doc_name, ri.doc_pages,
+            ri.source, ri.image_mime, ri.doc_mime, ri.doc_name, ri.doc_pages, ri.doc_chars,
             ri.pinned, ri.archived, ri.created_at, ri.updated_at${selectExtra}
        FROM research_items ri
       WHERE ${where.join(' AND ')}
@@ -341,14 +253,9 @@ router.post('/', jsonBody, (req, res) => {
   const hasUrl = urls.some(u => /^https?:\/\//i.test(String(typeof u === 'string' ? u : u?.url || '').trim()));
   if (!title && !body && !hasUrl) return res.status(400).json({ error_code: 'EMPTY' });
 
-  const result = db.prepare(
-    `INSERT INTO research_items (book_id, user_email, kind, title, body, source, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ${NOW_ISO_SQL}, ${NOW_ISO_SQL})`
-  ).run(bookId, userEmail, kind, title, body, source);
-  const id = result.lastInsertRowid;
-  _replaceUrls(id, urls);
-  _replaceTags(id, req.body?.tags);
-  searchIndex.upsertResearch(id);
+  const id = createItem({
+    bookId, userEmail, kind, title, body, source, urls, tags: req.body?.tags,
+  });
   logger.info(`[research] create id=${id} kind=${kind}`);
   res.json(_emitItem(id));
 });
@@ -487,9 +394,10 @@ router.get('/:id/image', (req, res) => {
 });
 
 // ── Dokument (PDF) hochladen ─────────────────────────────────────────────────
-// Original-PDF als BLOB + extrahierter Plain-Text (FTS + KI-Verknuepfung).
-// Dateiname kommt als ?name= (URL-encoded). Rein lesend, nie generativ.
-router.post('/:id/doc', rawDoc, async (req, res) => {
+// Original-PDF als BLOB + extrahierter Plain-Text (FTS + Embedding-Index + KI-
+// Verknuepfung). Dateiname kommt als ?name= (URL-encoded). Rein lesend, nie
+// generativ.
+router.post('/:id/doc', rawPdfBody(), async (req, res) => {
   const userEmail = userEmailOrNull(req);
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const id = toIntId(req.params.id);
@@ -497,39 +405,41 @@ router.post('/:id/doc', rawDoc, async (req, res) => {
   const bookId = _itemBookId(id);
   if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
   if (!_guard(req, res, bookId, 'editor')) return;
-  if (!Buffer.isBuffer(req.body) || !req.body.length) {
-    return res.status(400).json({ error_code: 'NO_DOC' });
+
+  const up = await readDocUpload(req.body, req.query.name);
+  if (!up.ok) {
+    logger.warn(`[research] Dokument-Upload abgelehnt id=${id}: ${up.error_code} (${up.detail || '-'})`);
+    return res.status(up.status).json({ error_code: up.error_code });
   }
-  const docName = cleanStr(String(req.query.name || ''), DOCNAME_MAX) || 'Dokument.pdf';
-  try {
-    const { text, pages } = await extractPdfText(req.body);
-    db.prepare(
-      `UPDATE research_items
-          SET doc = ?, doc_mime = 'application/pdf', doc_name = ?, doc_text = ?, doc_pages = ?,
-              kind = 'document', updated_at = ${NOW_ISO_SQL}
-        WHERE id = ?`
-    ).run(req.body, docName, text, pages, id);
-    searchIndex.upsertResearch(id);
-    logger.info(`[research] doc upload id=${id} pages=${pages} chars=${text.length}`);
-    res.json(_emitItem(id));
-  } catch (e) {
-    logger.warn('[research] Dokument-Upload fehlgeschlagen: ' + e.message);
-    res.status(400).json({ error_code: 'DOC_INVALID' });
-  }
+  const { doc } = up;
+  db.prepare(
+    `UPDATE research_items
+        SET doc = ?, doc_mime = ?, doc_name = ?, doc_text = ?, doc_pages = ?, doc_chars = ?,
+            kind = 'document', updated_at = ${NOW_ISO_SQL}
+      WHERE id = ?`
+  ).run(doc.buffer, doc.mime, doc.name, doc.text, doc.pages, doc.chars, id);
+  searchIndex.upsertResearch(id);
+  // Semantik-Index nachziehen (non-fatal): ohne das waere der frische Volltext
+  // bis zum Nacht-Cron nur ueber exakten Wortmatch auffindbar.
+  try { enqueueEmbedIndexJob(bookId, userEmail); }
+  catch (e) { logger.warn(`[research] embed-index enqueue fehlgeschlagen: ${e.message}`); }
+  logger.info(`[research] doc upload id=${id} pages=${doc.pages} chars=${doc.chars}${doc.truncated ? ' (gedeckelt)' : ''}`);
+  res.json(_emitItem(id));
 });
 
 // Dokument ausliefern (BLOB-Stream, inline mit Original-Dateinamen).
+// Zweistufig: erst die Meta-Zeile fuer die ACL, den BLOB erst danach — ein 403
+// soll keine 25 MB durch den Prozess ziehen.
 router.get('/:id/doc', (req, res) => {
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const row = db.prepare('SELECT book_id, doc, doc_mime, doc_name FROM research_items WHERE id = ?').get(id);
-  if (!row || !row.doc) return res.status(404).json({ error_code: 'NO_DOC' });
+  const row = db.prepare(
+    'SELECT book_id, doc_mime, doc_name, (doc IS NOT NULL) AS has_doc FROM research_items WHERE id = ?'
+  ).get(id);
+  if (!row || !row.has_doc) return res.status(404).json({ error_code: 'NO_DOC' });
   if (!_guard(req, res, row.book_id, 'viewer')) return;
-  const safeName = encodeURIComponent(row.doc_name || 'dokument.pdf');
-  res.set('Content-Type', row.doc_mime || 'application/pdf');
-  res.set('Content-Disposition', `inline; filename*=UTF-8''${safeName}`);
-  res.set('Cache-Control', 'private, max-age=3600');
-  res.send(row.doc);
+  const blob = db.prepare('SELECT doc FROM research_items WHERE id = ?').get(id)?.doc;
+  sendDoc(res, { buffer: blob, mime: row.doc_mime, name: row.doc_name });
 });
 
 // Dokument entfernen (Item bleibt; kind faellt auf 'note' zurueck, falls es nur
@@ -545,6 +455,7 @@ router.delete('/:id/doc', (req, res) => {
   db.prepare(
     `UPDATE research_items
         SET doc = NULL, doc_mime = NULL, doc_name = NULL, doc_text = NULL, doc_pages = NULL,
+            doc_chars = NULL,
             kind = CASE WHEN kind = 'document' THEN 'note' ELSE kind END,
             updated_at = ${NOW_ISO_SQL}
       WHERE id = ?`

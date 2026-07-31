@@ -3,6 +3,7 @@ const express = require('express');
 const appUsers = require('../db/app-users');
 const { getUser, updateUserSettings } = appUsers;
 const deviceTokens = require('../db/device-tokens');
+const { TOKEN_KINDS, DEFAULT_KIND, scopesForKind } = require('../lib/device-scopes');
 const { db } = require('../db/schema');
 const { listBookIdsForUser } = require('../db/book-access');
 const bookCategories = require('../db/book-categories');
@@ -481,7 +482,10 @@ router.get('/device-tokens', (req, res) => {
   res.json({ tokens: deviceTokens.listDeviceTokens(email) });
 });
 
-/** Neuen Device-Token ausstellen. Body: { device_name, platform? }.
+/** Neuen Device-Token ausstellen. Body: { device_name, platform?, kind? }.
+ *  `kind` waehlt den Rechteumfang (siehe lib/device-scopes.js):
+ *    'device'  — native Clients, volle Rechte des Users (Default)
+ *    'capture' — Browser-Erweiterung, darf nur erfassen (Recherche + Quellen)
  *  Antwort enthaelt `plain_token` — wird nie wieder ausgegeben. */
 router.post('/device-tokens', jsonBody, (req, res) => {
   const email = req.session.user.email;
@@ -493,9 +497,22 @@ router.post('/device-tokens', jsonBody, (req, res) => {
   const deviceName = String(req.body?.device_name || '').trim();
   if (!deviceName) return res.status(400).json({ error_code: 'DEVICE_NAME_REQUIRED' });
   const platform = req.body?.platform ? String(req.body.platform).trim() : null;
+  // Unbekannte Art waere ein stiller Rechte-Unfall in beide Richtungen —
+  // 400 statt Default-Fallback.
+  const kind = req.body?.kind === undefined || req.body.kind === null
+    ? DEFAULT_KIND
+    : String(req.body.kind).trim();
+  if (!Object.prototype.hasOwnProperty.call(TOKEN_KINDS, kind)) {
+    return res.status(400).json({
+      error_code: 'INVALID_VALUE',
+      params: { field: 'kind', allowed: Object.keys(TOKEN_KINDS).join(', ') },
+    });
+  }
   try {
-    const tok = deviceTokens.createDeviceToken({ userEmail: email, deviceName, platform });
-    logger.info(`Device-Token ausgestellt: "${tok.device_name}"`, { user: email });
+    const tok = deviceTokens.createDeviceToken({
+      userEmail: email, deviceName, platform, scopes: scopesForKind(kind),
+    });
+    logger.info(`Device-Token ausgestellt: "${tok.device_name}" (${kind})`, { user: email });
     res.json({ token: tok });
   } catch (e) {
     logger.error(`Device-Token create: ${e.message}`, { user: email });

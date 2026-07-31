@@ -6,6 +6,7 @@
 import { fetchJson } from '../utils.js';
 import { startPoll } from '../cards/job-helpers.js';
 import { toggleWrapFullscreen } from '../fullscreen.js';
+import { checkPdfFile, uploadPdf } from '../upload-pdf.js';
 
 const KINDS = ['note', 'link', 'quote', 'fact', 'image', 'document'];
 // Verknüpfungs-Kategorien (Reihenfolge = Anzeige in Picker/Filter/Sortierung).
@@ -476,21 +477,20 @@ export const rechercheMethods = {
   imageUrl(item) { return `/research/${item.id}/image`; },
 
   // ── Dokument-Upload (PDF) ──────────────────────────────────────────────────
+  // Mechanik (Typ-/Groessenpruefung, Body, Fehleruebersetzung) kommt aus
+  // public/js/upload-pdf.js — dasselbe Modul bedient den Quellen-Anhang.
   async uploadDoc(item, file) {
-    const app = window.__app;
     if (!file) return;
+    const bad = checkPdfFile(file);
+    if (bad) { this.errorMessage = bad; return; }
     this.busy = true;
     try {
-      const buf = await file.arrayBuffer();
-      const qs = file.name ? `?name=${encodeURIComponent(file.name)}` : '';
-      const row = await fetchJson(`/research/${item.id}/doc${qs}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/pdf' },
-        body: buf,
-      });
-      this._replaceItem(row);
-    } catch { this.errorMessage = app.t('recherche.error.doc'); }
-    finally { this.busy = false; }
+      this._replaceItem(await uploadPdf(`/research/${item.id}/doc`, file));
+    } catch (e) {
+      // Die Server-Meldung ist praeziser als „Upload fehlgeschlagen" (zu gross /
+      // kein PDF / unlesbar) — sie hat den Vorrang.
+      this.errorMessage = e?.message || window.__app.t('recherche.error.doc');
+    } finally { this.busy = false; }
   },
   onDocPick(item, ev) {
     const file = ev?.target?.files?.[0];

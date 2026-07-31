@@ -1,6 +1,6 @@
 # ERD — schreibwerkstatt
 
-Stand: Schema-Version 258, 140 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
+Stand: Schema-Version 260, 140 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
 
 Quelle: Squashed-Schema-Snapshot in [db/squashed-schema.js](../db/squashed-schema.js) (regeneriert via `node tools/dump-schema.js`) + [db/migrations.js](../db/migrations.js). Drift gegen die Legacy-Migration-Kette ist durch [tests/unit/squash-drift.test.mjs](../tests/unit/squash-drift.test.mjs) gegated. Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -151,6 +151,7 @@ erDiagram
   pages         ||--o{ semantic_chunks : "ist (kind=page)"
   figure_scenes ||--o{ semantic_chunks : "ist (kind=scene)"
   figures       ||--o{ semantic_chunks : "ist (kind=figure)"
+  research_items ||--o{ semantic_chunks : "ist (kind=research)"
 
   app_users ||--o{ book_access       : grants
   app_users ||--o{ page_locks        : holds
@@ -432,6 +433,7 @@ erDiagram
     TEXT    doc_name    "Original-Dateiname"
     TEXT    doc_text    "extrahierter Plain-Text (FTS + KI-Verknuepfung)"
     INTEGER doc_pages
+    INTEGER doc_chars   "Laenge von doc_text — == MAX_TEXT_CHARS heisst: Volltext gedeckelt"
     INTEGER pinned
     INTEGER archived
     TEXT    created_at
@@ -491,8 +493,9 @@ erDiagram
     TEXT    doc_name       "Dateiname beim Upload (gekürzt)"
     TEXT    doc_text       "Extrahierter Plain-Text via lib/pdf-extract.js — Basis des semantischen Index"
     INTEGER doc_pages     "Seitenzahl des Original-PDFs (Anzeige)"
-    TEXT    doc_content_hash "Hash des Original-PDF-Puffers — Delta-Cache-Key im Index-Job"
-    TEXT    doc_indexed_at "Timestamp des letzten Embedding-Laufs — null = nie indiziert / Index veraltet"
+    INTEGER doc_chars     "Laenge von doc_text — == MAX_TEXT_CHARS heisst: Volltext gedeckelt, der Index kennt nur den Anfang"
+    TEXT    doc_content_hash "sha256 des Original-PDFs — identischer Re-Upload ueberspringt Extraktion + Index-Job"
+    TEXT    doc_indexed_at "Timestamp des letzten Embedding-Laufs; setSourceDoc nullt ihn. Stale = null ODER < updated_at"
     TEXT    created_at
     TEXT    updated_at
   }
@@ -1783,12 +1786,13 @@ erDiagram
 
   semantic_chunks {
     INTEGER id           PK "AUTOINCREMENT"
-    TEXT    kind         "page | scene | figure (CHECK)"
+    TEXT    kind         "page | scene | figure | research (CHECK)"
     INTEGER book_id      FK "→ books ON DELETE CASCADE"
     INTEGER page_id      FK "→ pages CASCADE — nur bei kind=page"
     INTEGER scene_id     FK "→ figure_scenes CASCADE — nur bei kind=scene"
     INTEGER figure_id    FK "→ figures CASCADE — nur bei kind=figure"
-    INTEGER entity_id    "GENERATED VIRTUAL = COALESCE(page_id, scene_id, figure_id) — polymorpher Lesezugriff"
+    INTEGER research_item_id FK "→ research_items CASCADE — nur bei kind=research (Titel+Inhalt+PDF-Volltext)"
+    INTEGER entity_id    "GENERATED VIRTUAL = COALESCE(page_id, scene_id, figure_id, research_item_id) — polymorpher Lesezugriff"
     INTEGER chunk_ix
     TEXT    content_hash "Delta-Cache"
     TEXT    model        "Mehr-Modell-Koexistenz"

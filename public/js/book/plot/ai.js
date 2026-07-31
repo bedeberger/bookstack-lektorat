@@ -77,6 +77,9 @@ export const aiMethods = {
       });
       this.beats = [...this.beats, beat];
       this._memos = {};
+      // Übernommener Vorschlag ist ein normaler Beat-Create → per Undo entfernbar
+      // (der Vorschlag selbst bleibt aus dem Panel raus, er steht in der Lauf-Historie).
+      this._recordCreate('beat', beat?.id);
       this.brainstormResult.vorschlaege = this.brainstormResult.vorschlaege.filter((_, i) => i !== idx);
       this.errorMessage = '';
     } catch (e) {
@@ -467,6 +470,7 @@ export const aiMethods = {
       // die Fundstellen bleiben in der DB. Vorhandene Werte übernehmen, damit das
       // Badge sofort von 'promote' auf 'confirmed' wechselt statt fälschlich 'drift'.
       this._replaceBeat({ ...updated, occ_count: beat.occ_count, occ_top: beat.occ_top });
+      this._recordBeatFields(beat.id, { status: beat.status }, { status: 'im_buch' });
       this.closeBeatOccPopover();
       app.refreshPlotBeatCounts?.();
       this.errorMessage = '';

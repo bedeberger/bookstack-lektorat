@@ -31,7 +31,7 @@ test('htmlToTextForPrompt: inline-Tags (em/strong/a) werden zu Space, kein Umbru
   assert.equal(out, 'Er sagte das magische Wort.');
 });
 
-test('htmlToTextForPrompt: blockquote li h2 gerespecteerd als Absatzgrenze', () => {
+test('htmlToTextForPrompt: blockquote li h2 gelten als Absatzgrenze', () => {
   const html = '<h2>Kapitel</h2><blockquote>Zitat</blockquote><ul><li>Eins</li><li>Zwei</li></ul>';
   const out = htmlToTextForPrompt(html);
   assert.ok(out.includes('Kapitel\n\nZitat'));
@@ -71,7 +71,7 @@ test('htmlToText (kompakt) bleibt einzeilig — Frontend-match-Invariante', () =
   assert.equal(htmlToText(html), 'A B');
 });
 
-test('htmlToTextForPrompt: fabrieks-Sprecherwechsel-Zeile bleibt Absatz-Umbruch', () => {
+test('htmlToTextForPrompt: Sprecherwechsel bleibt ein Absatz-Umbruch', () => {
   // Konkretes Bug-Szenario: zwei Sprecher-Blöcke müssen als zwei Absätze an
   // die KI geliefert werden, nicht als eine Lauftextzeile.
   const html = '<p>„Das ist meine Seite", sagte Anna.</p><p>„Dann geh", erwiderte Ben.</p>';

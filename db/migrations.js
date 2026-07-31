@@ -10147,6 +10147,98 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 258 abgeschlossen (Quellen-PDF: doc*-Spalten an sources + source_semantic_chunks).');
   }
 
+  if (version < 259) {
+    // Recherche-Schnipsel werden semantisch indexiert: vierter `kind` in
+    // semantic_chunks. Bis hierher lagen die hochgeladenen Recherche-PDFs nur im
+    // FTS5-Index — auffindbar allein ueber exakten Wortmatch, und der Recherche-
+    // Chat sah pro Eintrag nur die ersten Zeichen von doc_text. Ein Buch-Index
+    // statt einer eigenen Tabelle, weil `research_items` buchgebunden ist wie
+    // page/scene/figure (anders als der User-Pool `sources`, der deshalb
+    // source_semantic_chunks bekam).
+    //
+    // Recreate-Pattern, weil SQLite weder den kind-CHECK noch den Ausdruck der
+    // generierten Spalte entity_id per ALTER aendern kann. Der Datenbestand wird
+    // 1:1 uebernommen (kein Reindex noetig): die drei bestehenden kinds behalten
+    // ihre Vektoren, research-Chunks entstehen beim naechsten embed-index-Lauf.
+    db.pragma('foreign_keys = OFF');
+    db.exec('DROP TABLE IF EXISTS semantic_chunks_new');
+    db.exec(`
+      CREATE TABLE semantic_chunks_new (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind          TEXT    NOT NULL CHECK(kind IN ('page','scene','figure','research')),
+        book_id       INTEGER NOT NULL REFERENCES books(book_id)       ON DELETE CASCADE,
+        page_id       INTEGER REFERENCES pages(page_id)                ON DELETE CASCADE,
+        scene_id      INTEGER REFERENCES figure_scenes(id)             ON DELETE CASCADE,
+        figure_id     INTEGER REFERENCES figures(id)                   ON DELETE CASCADE,
+        research_item_id INTEGER REFERENCES research_items(id)         ON DELETE CASCADE,
+        entity_id     INTEGER GENERATED ALWAYS AS (COALESCE(page_id, scene_id, figure_id, research_item_id)) VIRTUAL,
+        chunk_ix      INTEGER NOT NULL DEFAULT 0,
+        content_hash  TEXT    NOT NULL,
+        model         TEXT    NOT NULL,
+        dim           INTEGER NOT NULL,
+        vector        BLOB    NOT NULL,
+        text          TEXT    NOT NULL,
+        created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        CHECK (
+          (kind = 'page'     AND page_id     IS NOT NULL AND scene_id IS NULL AND figure_id IS NULL AND research_item_id IS NULL) OR
+          (kind = 'scene'    AND scene_id    IS NOT NULL AND page_id  IS NULL AND figure_id IS NULL AND research_item_id IS NULL) OR
+          (kind = 'figure'   AND figure_id   IS NOT NULL AND page_id  IS NULL AND scene_id  IS NULL AND research_item_id IS NULL) OR
+          (kind = 'research' AND research_item_id IS NOT NULL AND page_id IS NULL AND scene_id IS NULL AND figure_id IS NULL)
+        )
+      );
+    `);
+    db.exec(`INSERT INTO semantic_chunks_new
+        (id, kind, book_id, page_id, scene_id, figure_id, chunk_ix, content_hash, model, dim, vector, text, created_at)
+        SELECT id, kind, book_id, page_id, scene_id, figure_id,
+               chunk_ix, content_hash, model, dim, vector, text, created_at
+          FROM semantic_chunks`);
+    db.exec('DROP TABLE semantic_chunks');
+    db.exec('ALTER TABLE semantic_chunks_new RENAME TO semantic_chunks');
+
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_semchunk_uniq ON semantic_chunks(kind, entity_id, chunk_ix, model)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_semchunk_book ON semantic_chunks(book_id, kind)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_semchunk_page ON semantic_chunks(page_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_semchunk_scene ON semantic_chunks(scene_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_semchunk_figure ON semantic_chunks(figure_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_semchunk_research ON semantic_chunks(research_item_id)');
+
+    db.pragma('foreign_keys = ON');
+    const fkErrors259 = db.pragma('foreign_key_check');
+    if (fkErrors259.length) {
+      throw new Error(`Migration 259: foreign_key_check meldet ${fkErrors259.length} Verstoesse: ${JSON.stringify(fkErrors259.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 259').run();
+    logger.info('DB-Migration auf Version 259 abgeschlossen (semantic_chunks: vierter kind research + research_item_id-FK).');
+  }
+
+  if (version < 260) {
+    // Laenge des extrahierten PDF-Volltexts an Quelle und Recherche-Fundstueck.
+    // Der Extraktor deckelt bei lib/pdf-extract.js#MAX_TEXT_CHARS; ohne
+    // festgehaltene Zeichenzahl faellt die zweite Haelfte eines dicken
+    // Fachbuchs lautlos aus Suche und Index, und der Autor haelt seine Quelle
+    // fuer vollstaendig indiziert. `doc_chars == MAX_TEXT_CHARS` ist damit das
+    // Trunkierungs-Signal fuer die Karte.
+    //
+    // Zweiter Zweck: die Listen-SELECTs koennen die Kennzahl mitgeben, ohne
+    // `doc_text` (bis 200k Zeichen) oder gar `doc` (bis 25 MB) pro Zeile aus
+    // der Tabelle zu ziehen.
+    const srcCols260 = db.pragma('table_info(sources)').map(c => c.name);
+    if (!srcCols260.includes('doc_chars')) db.exec('ALTER TABLE sources ADD COLUMN doc_chars INTEGER');
+    const riCols260 = db.pragma('table_info(research_items)').map(c => c.name);
+    if (!riCols260.includes('doc_chars')) db.exec('ALTER TABLE research_items ADD COLUMN doc_chars INTEGER');
+
+    // Bestand nachziehen, damit die Anzeige nicht erst nach einem Re-Upload stimmt.
+    db.exec("UPDATE sources SET doc_chars = LENGTH(doc_text) WHERE doc_text IS NOT NULL AND doc_chars IS NULL");
+    db.exec("UPDATE research_items SET doc_chars = LENGTH(doc_text) WHERE doc_text IS NOT NULL AND doc_chars IS NULL");
+
+    const fkErrors260 = db.pragma('foreign_key_check');
+    if (fkErrors260.length) {
+      throw new Error(`Migration 260: foreign_key_check meldet ${fkErrors260.length} Verstoesse: ${JSON.stringify(fkErrors260.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 260').run();
+    logger.info('DB-Migration auf Version 260 abgeschlossen (doc_chars an sources + research_items: Trunkierungs-Signal des PDF-Volltexts).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

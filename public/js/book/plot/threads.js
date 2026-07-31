@@ -19,6 +19,7 @@ export const threadsMethods = {
       });
       this.threads = [...this.threads, thread];
       this._memos = {};
+      this._recordCreate('thread', thread?.id);
       this.newThreadName = '';
       this.addingThread = false;
       this.errorMessage = '';
@@ -58,20 +59,31 @@ export const threadsMethods = {
     const name = (this.threadDraft.name || '').trim();
     if (!name) { this.errorMessage = app.t('plot.error.nameRequired'); return; }
     this.busy = true;
+    // Undo-Ausgangsstand in PATCH-Form: die Katalog-Bindung wird nach aussen als
+    // TEXT-fig_id geführt (thread.fig_id), der Server erwartet sie als figure_id.
+    const before = {
+      name: thread.name || '',
+      farbe: thread.farbe || null,
+      figure_id: thread.fig_id || null,
+      draft_figure_id: thread.draft_figure_id || null,
+      chapter_id: thread.chapter_id || null,
+    };
+    const after = {
+      name,
+      farbe: this.threadDraft.farbe || null,
+      figure_id: this.threadDraft.figure_id || null,
+      draft_figure_id: this.threadDraft.draft_figure_id || null,
+      chapter_id: this.threadDraft.chapter_id ? parseInt(this.threadDraft.chapter_id) : null,
+    };
     try {
       const updated = await fetchJson(`/plot/threads/${thread.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          farbe: this.threadDraft.farbe || null,
-          figure_id: this.threadDraft.figure_id || null,
-          draft_figure_id: this.threadDraft.draft_figure_id || null,
-          chapter_id: this.threadDraft.chapter_id ? parseInt(this.threadDraft.chapter_id) : null,
-        }),
+        body: JSON.stringify(after),
       });
       this.threads = this.threads.map(t => (t.id === updated.id ? updated : t));
       this._memos = {};
+      this._recordThreadFields(thread.id, before, after);
       this.editingThreadId = null;
       this.errorMessage = '';
     } catch (e) {
@@ -151,6 +163,7 @@ export const threadsMethods = {
       });
       this.threads = this.threads.map(t => (t.id === updated.id ? updated : t));
       this._memos = {};
+      this._recordThreadFields(thread.id, { farbe: thread.farbe || null }, { farbe });
       this.errorMessage = '';
     } catch (e) {
       this.errorMessage = app.t('plot.error.save');
@@ -168,6 +181,8 @@ export const threadsMethods = {
     this.busy = true;
     try {
       await fetchJson(`/plot/threads/${thread.id}`, { method: 'DELETE' });
+      // Löschen ist nicht reversibel (siehe plot/history.js) → Historie leeren.
+      this._clearHistory();
       this.threads = this.threads.filter(t => t.id !== thread.id);
       // Server setzt thread_id der Beats auf NULL (SET NULL) — lokal spiegeln,
       // die Beats fallen in die „ohne Strang"-Lane.
@@ -187,6 +202,7 @@ export const threadsMethods = {
     const idx = ordered.findIndex(t => t.id === thread.id);
     const swap = idx + dir;
     if (idx < 0 || swap < 0 || swap >= ordered.length) return;
+    const orderBefore = ordered.map(t => t.id); // Undo-Ziel
     [ordered[idx], ordered[swap]] = [ordered[swap], ordered[idx]];
     ordered.forEach((t, i) => { t.position = i; });
     this.threads = ordered;
@@ -197,6 +213,7 @@ export const threadsMethods = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ book_id: Alpine.store('nav').selectedBookId, order: ordered.map(t => t.id) }),
       });
+      this._recordThreadOrder(orderBefore, ordered.map(t => t.id));
     } catch (e) { this.errorMessage = app.t('plot.error.save'); }
   },
 };

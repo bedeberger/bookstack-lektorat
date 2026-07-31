@@ -115,6 +115,12 @@ export function registerPlotCard() {
     // beats.js#_dropBeat gelesen).
     _dragBeatId: null,
 
+    // Undo/Redo (max 10 Schritte, siehe book/plot/history.js). Gefüllt von den
+    // Mutations-Methoden, geleert von resetPlot/loadBoard und jedem Löschen.
+    _undoStack: [],
+    _redoStack: [],
+    _inHistoryFlight: false,
+
     // KI: Brainstorm
     brainstormActId: null,
     brainstormThreadId: null,
@@ -198,6 +204,25 @@ export function registerPlotCard() {
       this.$watch(() => window.__app.showPlotCard, (visible) => {
         if (!visible && this.editingBeatId != null) this.cancelEditBeat();
       });
+
+      // Cmd/Ctrl+Z / Cmd/Ctrl+Shift+Z + Cmd/Ctrl+Y (Muster wie im Buchorganizer).
+      // Nur bei sichtbarer Karte und Fokus ausserhalb von Eingabefeldern —
+      // sonst überschriebe man die native Edit-Undo-Funktion in Titel-/
+      // Beschreibungsfeldern (Beat-Edit, Akt-/Strang-Umbenennen).
+      window.addEventListener('keydown', (e) => {
+        if (!window.__app?.showPlotCard) return;
+        const tag = e.target?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
+        if (!(e.metaKey || e.ctrlKey)) return;
+        const key = (e.key || '').toLowerCase();
+        if (key === 'z' && !e.shiftKey) {
+          e.preventDefault();
+          this.plotHistoryUndo();
+        } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+          e.preventDefault();
+          this.plotHistoryRedo();
+        }
+      }, { signal: this._lifecycle.signal });
 
       // Native Fullscreen-API: Status spiegeln (Toggle-Button + Esc-Exit).
       // $root = die Karten-Wurzel (.card--plot), unabhängig vom Klick-Kontext.

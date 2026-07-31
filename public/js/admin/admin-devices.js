@@ -50,6 +50,16 @@ export const adminDevicesMethods = {
     return window.__app.t('admin.devices.statusActive');
   },
 
+  // Rechteumfang des Tokens. Gelesen wird der Scope-String, nicht die Plattform:
+  // welche Rechte ein Token hat, entscheidet lib/device-scopes.js, nicht wie sich
+  // der Client nennt. Labels geteilt mit der Benutzer-Ansicht (gleicher Begriff).
+  devicesScopeLabel(d) {
+    const scopes = String(d?.scopes || '').split(',').map(s => s.trim());
+    if (scopes.includes('content:write')) return window.__app.t('profile.devices.kind.device');
+    if (scopes.includes('capture:write')) return window.__app.t('profile.devices.kind.capture');
+    return window.__app.t('profile.devices.kind.none');
+  },
+
   // Anzeige-Label: der Android-Client meldet seine Version als `android/2.0.0`
   // (Plattform-Prefix), der macOS-Client als reines `2.9`. Prefix fuer Anzeige
   // und Vergleich wegnormalisieren — wir wollen nur den dotted-Numeric-Teil.

@@ -122,27 +122,27 @@ const _CLAUDE_ENTITY_MAP = {
   times: '×', divide: '÷', plusmn: '±', minus: '−',
 };
 
+// Entity-Decoder der drei Text-Varianten unten. Numerische Referenzen (&#x2014;,
+// &#8212;) werden immer aufgelöst, benannte nur, wenn sie in `map` stehen — eine
+// unbekannte Entity bleibt wörtlich stehen statt zu verschwinden. Ungültige
+// Codepoints (Range/`fromCodePoint`-Wurf) fallen ebenfalls auf den Rohtext
+// zurück. Die drei Aufrufer unterscheiden sich nur in `map`.
+function _decodeEntities(str, map) {
+  return str.replace(/&(?:#x([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]+));/g, (m, hex, dec, name) => {
+    const raw = hex !== undefined ? hex : dec;
+    if (raw !== undefined) {
+      const cp = parseInt(raw, hex !== undefined ? 16 : 10);
+      if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10FFFF) {
+        try { return String.fromCodePoint(cp); } catch { return m; }
+      }
+      return m;
+    }
+    return Object.prototype.hasOwnProperty.call(map, name) ? map[name] : m;
+  });
+}
+
 function cleanPageTextForClaude(text) {
-  return (text || '')
-    .replace(/&(?:#x([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]+));/g, (m, hex, dec, name) => {
-      if (hex !== undefined) {
-        const cp = parseInt(hex, 16);
-        if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10FFFF) {
-          try { return String.fromCodePoint(cp); } catch { return m; }
-        }
-        return m;
-      }
-      if (dec !== undefined) {
-        const cp = parseInt(dec, 10);
-        if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10FFFF) {
-          try { return String.fromCodePoint(cp); } catch { return m; }
-        }
-        return m;
-      }
-      return Object.prototype.hasOwnProperty.call(_CLAUDE_ENTITY_MAP, name)
-        ? _CLAUDE_ENTITY_MAP[name]
-        : m;
-    })
+  return _decodeEntities(text || '', _CLAUDE_ENTITY_MAP)
     .replace(/[​-‍﻿]/g, '')
     .replace(/­/g, '')
     .replace(/ /g, ' ')
@@ -151,66 +151,26 @@ function cleanPageTextForClaude(text) {
 }
 
 function htmlToText(html) {
-  return (html || '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&(?:#x([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]+));/g, (m, hex, dec, name) => {
-      if (hex !== undefined) {
-        const cp = parseInt(hex, 16);
-        if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10FFFF) {
-          try { return String.fromCodePoint(cp); } catch { return m; }
-        }
-        return m;
-      }
-      if (dec !== undefined) {
-        const cp = parseInt(dec, 10);
-        if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10FFFF) {
-          try { return String.fromCodePoint(cp); } catch { return m; }
-        }
-        return m;
-      }
-      return Object.prototype.hasOwnProperty.call(HTML_NAMED_ENTITIES, name)
-        ? HTML_NAMED_ENTITIES[name]
-        : m;
-    })
+  return _decodeEntities((html || '').replace(/<[^>]+>/g, ' '), HTML_NAMED_ENTITIES)
     .replace(/\s+/g, ' ').trim();
 }
 
-// Paragraaf-preservende HTML→Text-Variante für Lektorat-Prompts. Während
-// `htmlToText` (oben) Absatzgrenzen einebnet — Tags → Space, alle Whitespace →
-// einerlei —, behält diese Variante Blockgrenzen als `\n\n` (und `<br>` als
-// `\n`). Why: die Dialogformat-Regel „Sprecherwechsel → neuer Absatz" kann
-// nur gegen Absatzgrenzen geprüft werden; die einzeilige Variante verhindert
-// dass die KI den Umbruch überhaupt sehen kann, so dass jeder Sprecherwechsel
-// als fehlender Umbruch gemeldet wird. Block-level-Tags: p, div, li, h1-h6,
-// blockquote, pre, ul, ol, figure, figcaption, table, tr, section, article.
-// Inline-Tags werden weiterhin zu Space — nur Blockgrenzen tragen einen
-// Umbruch. Entspricht der Sicht des Lektorats-Prompts, der die Seite als Prosa
-// mit Absätzen sieht.
+// Absatz-erhaltende HTML→Text-Variante für Lektorat-Prompts. Während
+// `htmlToText` (oben) Absatzgrenzen einebnet — Tags → Space, danach jeder
+// Whitespace-Lauf → ein Space —, behält diese Variante Blockgrenzen als `\n\n`
+// (und `<br>` als `\n`). Why: die Dialogformat-Regel „Sprecherwechsel → neuer
+// Absatz" ist nur gegen Absatzgrenzen prüfbar; in der einzeiligen Variante kann
+// die KI den Umbruch gar nicht sehen und meldet jeden Sprecherwechsel als
+// fehlenden Umbruch. Block-Tags: p, div, li, h1-h6, blockquote, pre, ul, ol,
+// figure, figcaption, table, tr, section, article. Inline-Tags werden weiterhin
+// zu Space — nur Blockgrenzen tragen einen Umbruch. Entspricht damit der Sicht
+// des Lektorat-Prompts, der die Seite als Prosa mit Absätzen liest.
 function htmlToTextForPrompt(html) {
-  return (html || '')
+  return _decodeEntities((html || '')
     .replace(/<\/(p|div|li|h[1-6]|blockquote|pre|ul|ol|figure|figcaption|table|tr|section|article)\s*>/gi, '\n\n')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<hr\s*\/?>/gi, '\n\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&(?:#x([0-9a-fA-F]+)|#(\d+)|([a-zA-Z][a-zA-Z0-9]+));/g, (m, hex, dec, name) => {
-      if (hex !== undefined) {
-        const cp = parseInt(hex, 16);
-        if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10FFFF) {
-          try { return String.fromCodePoint(cp); } catch { return m; }
-        }
-        return m;
-      }
-      if (dec !== undefined) {
-        const cp = parseInt(dec, 10);
-        if (Number.isFinite(cp) && cp >= 0 && cp <= 0x10FFFF) {
-          try { return String.fromCodePoint(cp); } catch { return m; }
-        }
-        return m;
-      }
-      return Object.prototype.hasOwnProperty.call(HTML_NAMED_ENTITIES, name)
-        ? HTML_NAMED_ENTITIES[name]
-        : m;
-    })
+    .replace(/<[^>]+>/g, ' '), HTML_NAMED_ENTITIES)
     .replace(/ {2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .replace(/^[ \t]+/gm, '')

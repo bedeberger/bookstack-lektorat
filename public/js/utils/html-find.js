@@ -257,3 +257,23 @@ export function matchSpansLink(html, needle) {
   if (!m) return false;
   return _containsBalancedAnchor(html.slice(m.htmlStart, m.htmlEnd));
 }
+
+/**
+ * Klassifiziert, WARUM eine `replaceInHtml`-Ersetzung ein No-Op war — damit die
+ * User-Meldung die Wahrheit sagt statt pauschal „Link oder Absatzgrenze":
+ *
+ *   'notFound'  — `needle` steht nicht (mehr) im HTML. Kein Schutzmechanismus,
+ *                 sondern ein veralteter Textbezug: die Stelle wurde inzwischen
+ *                 umgeschrieben oder gelöscht. Braucht keine Nachkontrolle.
+ *   'spansLink' — der Match umschliesst ein vollständiges `<a>…</a>`; ersetzen
+ *                 würde das `href` verwerfen.
+ *   'boundary'  — der Match kreuzt eine Block-Grenze oder einen `<br>`.
+ *
+ * Nur für den No-Op-Fall gedacht; auf einer erfolgreich ersetzbaren Stelle
+ * aufgerufen liefert es 'boundary' (der Aufrufer fragt dort nicht).
+ * Reihenfolge = Entscheidungsbaum von chat.js#applyChatVorschlag.
+ */
+export function skipReason(html, needle) {
+  if (!findInHtml(html, needle)) return 'notFound';
+  return matchSpansLink(html, needle) ? 'spansLink' : 'boundary';
+}

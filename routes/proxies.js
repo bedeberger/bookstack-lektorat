@@ -9,6 +9,7 @@ const { getPromptConfig } = require('../lib/prompts-loader');
 const { toIntId } = require('../lib/validate');
 const appSettings = require('../lib/app-settings');
 const { getVersion, getShellBuild } = require('../lib/version');
+const { MAX_INPUT_BYTES: PDF_MAX_BYTES } = require('../lib/pdf-attachment');
 
 const router = express.Router();
 
@@ -130,6 +131,10 @@ router.get('/config', (req, res) => {
         && effectiveProvider === 'claude'
         && !!String(appSettings.get('ai.claude.api_key') || '').trim(),
     },
+    // PDF-Anhang (Quelle + Recherche-Fundstueck): Upload-Limit als SSoT vom
+    // Server. Ohne das steht dieselbe Zahl im Browser, im express.raw-Body und
+    // im Extraktor — und der Browser laedt 30 MB hoch, um dann ein 413 zu sehen.
+    pdfUpload: { maxBytes: PDF_MAX_BYTES },
     // Semantische Suche (Embeddings, self-hosted). enabled=true + host schaltet
     // den Semantik-Suchmodus, die „ähnliche Stellen"-Buttons und das Buch-Chat-
     // Tool `search_similar` frei. Provider-unabhängig (eigener Embedding-Endpunkt,

@@ -417,6 +417,7 @@ mit `myCardOptions() { return this.cardData.map(...); }` am Karten-Scope.
 - `.badge-ok` — grün, positive Info
 - `.badge-warn` — amber, Warnung
 - `.badge-err` — rot, Fehler
+- `.badge-neutral` — grau, wertfreie Einordnung ohne Status-Aussage (Art/Kategorie eines Eintrags, z.B. Rechteumfang eines Geräte-Tokens). Nicht für Zustände — dafür sind die drei Status-Varianten da.
 - `.btn-count` — Counter-Badge in Buttons
 
 **Severity-Tags** [public/css/entities/entity-list.css:143](public/css/entities/entity-list.css#L143):
@@ -1661,6 +1662,8 @@ Editor-spezifische Patterns. Greifen nur in der Editor-Card und im Fokus-Modus; 
 
 **Stilbox** (`.stilbox`, `.stilbox--review-summary`, `.stilbox--spaced`) — bordered Container für Analyse-Sektionen, in Reviews und Findings wiederverwendet.
 
+**Analyse-Warnhinweis** (`.analysis-notice`, [analysis/analysis.css](public/css/analysis/analysis.css)) — Warn-Zeile über einem Analyse-Ergebnis, das **unvollständig** ist. Gleiches Pattern wie `.overview-notice` (amber Warn-Tokens + linker 3 px-Border), zweiter Fundort. Use-Case: ein Fremd-Write während der Analyse hat einen Teil der Befunde hinfällig gemacht — ohne den Hinweis liest der User die gerettete Teilmenge als vollständiges Ergebnis. Kein Retry-Button (im Gegensatz zu `.overview-notice`), der Hinweis ist rein informativ.
+
 #### Marginalia-Stripe (Reading-Frame)
 
 **Use:** Visueller Rotstift-Akzent rechts an Absätzen, die Lektorats-Markierungen enthalten. Editorial-Manuskript-Anmutung.
@@ -2428,7 +2431,8 @@ Drei Editoren leben in eigenen Subfoldern (`book/`, `focus/`, `notebook/`); edit
 | [editor/shared/editor-chrome.css](public/css/editor/shared/editor-chrome.css) | `.save-indicator`, `.editor-conflict-banner`, `.editor-presence-banner`, `.editor-draft-banner` — von Notebook + Focus + Figur-Werkstatt konsumiert. |
 | [editor/shared/conflict-resolution.css](public/css/editor/shared/conflict-resolution.css) | Block-Level-Merge-Konflikt-Modal: `.conflict-overlay`, `.conflict-modal`, `.conflict-block`, Block-Previews. Notebook + Focus. |
 | [editor/book/book-editor.css](public/css/editor/book/book-editor.css) | Bucheditor (`.book-editor-*`): Outline + Manuskript-Stream. |
-| [editor/focus/focus-mode.css](public/css/editor/focus/focus-mode.css) | Fokus-Modus: `.focus-editor`, `.focus-editor__content`, Caret-Pulse, Live-Counter. |
+| [editor/focus/focus-mode.css](public/css/editor/focus/focus-mode.css) | Fokus-Modus, Geometrie + Zustände: `.focus-editor`, `.focus-editor__content`, Höhenkette/Schreiblinie, Spotlight, Auto-Hide-Cursor, Live-Counter. |
+| [editor/focus/focus-content.css](public/css/editor/focus/focus-content.css) | Fokus-Modus, Inhalts-Blöcke der Schreibfläche: geplättete Formatierungen, Block-Margins, Checkbox-Zeilen, Bild-Marker. **Lädt nach focus-mode.css** (gleicher `@layer`, Quell-Reihenfolge entscheidet). |
 | [editor/notebook/edit-toolbar.css](public/css/editor/notebook/edit-toolbar.css) | `.edit-bubble-toolbar`, `.edit-slash-menu`. |
 | [editor/notebook/find-replace.css](public/css/editor/notebook/find-replace.css) | Notebook-Find/Replace (`.edit-find*`). |
 | [editor/notebook/findings.css](public/css/editor/notebook/findings.css) | `.finding` / `.stilbox`. |
@@ -2451,7 +2455,7 @@ Drei Editoren leben in eigenen Subfoldern (`book/`, `focus/`, `notebook/`); edit
 | [entities/ideen.css](public/css/entities/ideen.css) | Ideen-Karte. |
 | [entities/entity-list.css](public/css/entities/entity-list.css) | `.entity-list` / `-row`, `.severity-tag*`, `.collapsible-*`, Skeleton, `.ort-*` Schauplätze. |
 | [entities/orte-map.css](public/css/entities/orte-map.css) | Orte-Karte View-Mode `map` (Geo-Karte via Leaflet): `.ort-map*` Container + Geocode-Liste. Nur bei `book_settings.orte_real`. |
-| [entities/recherche.css](public/css/entities/recherche.css) | Recherche-/Wissensboard: Toolbar/Filter, Anlege-/Edit-Formular, einspaltige Schnipsel-Liste (`.recherche-list` + `.research-item`), Kind-Badges, Verknüpfungs-/Tag-Chips, KI-Vorschläge, Link-Picker. Native-Vollbild (`.card--recherche:fullscreen`, Toggle via `fullscreen.js` wie Plot-Board) → Liste zentriert mit Lese-Maximalbreite. |
+| [entities/recherche.css](public/css/entities/recherche.css) | Recherche-/Wissensboard: Toolbar/Filter, Anlege-/Edit-Formular, einspaltige Schnipsel-Liste (`.recherche-list` + `.research-item`), Kind-Badges, Verknüpfungs-/Tag-Chips, KI-Vorschläge, Link-Picker, Link-Zeile (`.research-item-url-row`: Link + „als Quelle übernehmen"-`.icon-btn--ghost`, auf 22px kontext-verkleinert über `.research-url-tosource`, weil 28px die Zeilenhöhe einer `font-size-sm`-Liste bestimmen würde). Native-Vollbild (`.card--recherche:fullscreen`, Toggle via `fullscreen.js` wie Plot-Board) → Liste zentriert mit Lese-Maximalbreite. |
 | [entities/sources.css](public/css/entities/sources.css) | Quellenverzeichnis-Karte: Toolbar/Filter-Bar (Compact-Höhen-Scope für `.filter-search-input`), Quellen-Tabelle (`.sources-table` via `sortableTable`), Zitier-Badge (`.sources-cite-badge`, Hue aus `--card-accent`), Detail-Formular, Fundstellen-Panel, Zitat-Kennzahlen-Reihe (`.sources-quote-stats` / `-stat` / `-stat-value` / `-stat-label` / `-stats-hint`: Zitat-Anteil + wörtlich/Paraphrase/belegte Quellen — schlichte Wert/Label-Reihe am Tabellenfuss, bewusst kein Tile-Grid). Enthält ausserdem `.sources-preview` (hängend eingerückte Formatter-Vorschau) — **geteilt** mit dem Quellen-Tab der Bucheinstellungen. |
 | [entities/ereignisse-subtyp.css](public/css/entities/ereignisse-subtyp.css) | Event-Subtyp-Badges + Marker-Farbe im Zeitstrahl: Mapping `.gz-item--subtyp-<typ>` auf die gemeinsame `--gz-subtyp-color`-Prop (SSoT der Hues = `--card-accent-event-*` in `tokens/colors.css`), konsumiert von Marker (`.gz-marker`) und Badge. |
 | [entities/ereignisse-span.css](public/css/entities/ereignisse-span.css) | Spannen-Events im Zeitstrahl: `.gz-item--span` verlängert den Marker vertikal proportional zur Jahr-Differenz (CSS-Custom-Prop `--span-years`); reine Punkt-Events unverändert. |

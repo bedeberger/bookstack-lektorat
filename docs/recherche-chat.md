@@ -16,10 +16,13 @@ Keine neue Tabelle — die Sessions leben in `chat_sessions` mit **`kind='resear
 |------|----------|-------|
 | `web_search` | nein (Anthropic-Server-Tool, Typ `web_search_20250305`) | Echtzeit-Websuche; Ergebnis + Citations kommen in derselben Runde zurück |
 | `list_research_items` | ja | vorhandenes Board durchsuchen (FTS bei `q`) |
-| `read_research_item` | ja | Volltext eines Eintrags inkl. PDF-`doc_text` |
+| `read_research_item` | ja | Volltext eines Eintrags inkl. PDF-`doc_text` (auf 8 000 Zeichen gekappt — die Kappung wird als `doc_chars`/`doc_truncated` **ausgewiesen**, sonst hält das Modell den Anfang für das ganze Dokument) |
+| `search_research_passages` | ja | semantische Passagen-Suche; mit `item_id` **innerhalb** eines langen PDFs. Nur angeboten bei `embed.isEnabled()` |
 | `list_book_entities` | ja | Figuren/Orte/Szenen/Beats/Stränge als Recherche-Kontext |
 | `propose_research_item` | ja | sammelt EINEN Vorschlag in `ctx.proposals` — **persistiert nichts** |
 | `final_answer` | terminal | Pflicht-Endpunkt der Antwort |
+
+**Zwei Zugriffsarten aufs Archiv, bewusst getrennt:** `list_research_items` ist die **Wortsuche** (FTS5) und beantwortet „welche Einträge gibt es"; `search_research_passages` ist die **Bedeutungssuche** (Embeddings, [docs/semantic-search.md](semantic-search.md)) und beantwortet „welche Stelle passt zu dieser Frage". Der Fall, für den das zweite Werkzeug existiert, ist das lange PDF: ein 40-Seiten-Dokument ist über `read_research_item` nur mit seinem Anfang lesbar, über `search_research_passages` mit `item_id` dagegen an jeder Stelle. Ohne Embedding-Endpunkt wird das Werkzeug gar nicht erst angeboten (Filter in [research-chat.js](../routes/jobs/research-chat.js)) — das Modell bleibt dann bei der Wortsuche.
 
 `web_search` wird vom Loop **nicht** ausgeführt: in [lib/ai.js](../lib/ai.js) landen `server_tool_use`-Blöcke nicht in `result.toolUses` (nur `tool_use`), bleiben aber samt `web_search_tool_result` verbatim in `rawContentBlocks` (Re-Send-Pflicht, falls daneben ein Custom-Tool lief).
 

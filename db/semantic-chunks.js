@@ -4,11 +4,12 @@
 // Reiner Ableitungs-Index — jederzeit über routes/jobs/embed-index.js neu
 // berechenbar.
 //
-// Die Quell-Entität hängt an einer der drei typisierten Spalten page_id/scene_id/
-// figure_id (CASCADE-FK, passend zu `kind` per CHECK erzwungen) — ein Entity- oder
-// Buch-Delete räumt seine Vektoren selbst auf. Gelesen wird polymorph über die
-// generierte Spalte entity_id (COALESCE der drei), geschrieben ausschliesslich über
-// die typisierten Spalten; _entityCols() ist der einzige Übersetzer dafür.
+// Die Quell-Entität hängt an einer der vier typisierten Spalten page_id/scene_id/
+// figure_id/research_item_id (CASCADE-FK, passend zu `kind` per CHECK erzwungen) —
+// ein Entity- oder Buch-Delete räumt seine Vektoren selbst auf. Gelesen wird
+// polymorph über die generierte Spalte entity_id (COALESCE der vier), geschrieben
+// ausschliesslich über die typisierten Spalten; _entityCols() ist der einzige
+// Übersetzer dafür.
 // pruneMissing() bleibt zuständig für Entitäten, die noch existieren, aber nicht
 // mehr indizierbar sind (stale-Figur, Seite in anderes Buch verschoben) — das deckt
 // kein FK ab.
@@ -27,17 +28,18 @@ const _delEntityAll = db.prepare(
   'DELETE FROM semantic_chunks WHERE kind = ? AND entity_id = ?'
 );
 const _ins = db.prepare(`
-  INSERT INTO semantic_chunks (kind, page_id, scene_id, figure_id, book_id, chunk_ix, content_hash, model, dim, vector, text, created_at)
-  VALUES (@kind, @page_id, @scene_id, @figure_id, @book_id, @chunk_ix, @content_hash, @model, @dim, @vector, @text, ${NOW_ISO_SQL})
+  INSERT INTO semantic_chunks (kind, page_id, scene_id, figure_id, research_item_id, book_id, chunk_ix, content_hash, model, dim, vector, text, created_at)
+  VALUES (@kind, @page_id, @scene_id, @figure_id, @research_item_id, @book_id, @chunk_ix, @content_hash, @model, @dim, @vector, @text, ${NOW_ISO_SQL})
 `);
 
-// kind + entityId → die drei typisierten FK-Spalten. Genau eine ist gesetzt; der
+// kind + entityId → die vier typisierten FK-Spalten. Genau eine ist gesetzt; der
 // CHECK auf der Tabelle weist jede andere Kombination ab.
 function _entityCols(kind, entityId) {
   return {
     page_id: kind === 'page' ? entityId : null,
     scene_id: kind === 'scene' ? entityId : null,
     figure_id: kind === 'figure' ? entityId : null,
+    research_item_id: kind === 'research' ? entityId : null,
   };
 }
 
@@ -107,6 +109,24 @@ function searchSimilar(bookId, model, queryVec, { kinds = null, topK = 20, exclu
     }
   }
   return Array.from(best.values()).sort((a, b) => b.score - a.score).slice(0, topK);
+}
+
+// Beste Chunks INNERHALB einer Entität gegen queryVec. Gegenstück zu
+// searchSimilar, das pro Entität nur den besten Chunk liefert: hier zählt die
+// Verteilung im Inneren eines langen Dokuments (Recherche-PDF), von dem mehrere
+// Passagen zur Frage passen können. Kein Embedding-Call für die Chunks — die
+// Vektoren liegen schon; der Aufrufer bringt nur den Query-Vektor mit.
+function searchInEntity(kind, entityId, model, queryVec, { topK = 5, minScore = 0 } = {}) {
+  const rows = db.prepare(
+    'SELECT chunk_ix, text, vector FROM semantic_chunks WHERE kind = ? AND entity_id = ? AND model = ? ORDER BY chunk_ix'
+  ).all(kind, entityId, model);
+  const out = [];
+  for (const r of rows) {
+    const score = cosineSim(queryVec, blobToVector(r.vector));
+    if (!Number.isFinite(score) || score < minScore) continue;
+    out.push({ chunk_ix: r.chunk_ix, text: r.text, score });
+  }
+  return out.sort((a, b) => b.score - a.score).slice(0, topK);
 }
 
 // Alle Chunks eines Buches unter einem Modell für den Redundanz-Radar laden:
@@ -242,7 +262,8 @@ function indexStatus(bookId, model) {
   const _changedSince = (table) => db.prepare(
     `SELECT COUNT(*) AS n FROM ${table} WHERE book_id = ? AND updated_at > ?`
   ).get(bookId, last).n;
-  const staleCount = _changedSince('pages') + _changedSince('figure_scenes') + _changedSince('figures');
+  const staleCount = _changedSince('pages') + _changedSince('figure_scenes')
+                   + _changedSince('figures') + _changedSince('research_items');
   return { indexed: true, lastIndexedAt: last, staleCount, ...stats };
 }
 
@@ -254,7 +275,7 @@ function clearBook(bookId, model = null) {
 }
 
 module.exports = {
-  getEntityChunks, replaceEntity, remove, searchSimilar, getEntityVector, getEntityText,
+  getEntityChunks, replaceEntity, remove, searchSimilar, searchInEntity, getEntityVector, getEntityText,
   bookStats, clearBook, pruneMissing, indexStatus,
   loadChunksForPairing, loadFigureVectorsForPairing,
 };

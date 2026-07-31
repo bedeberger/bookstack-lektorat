@@ -216,6 +216,14 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
   flex-direction: column;
   gap: var(--space-2xs);
 }
+/* Eine Zeile = ein Link + seine „als Quelle übernehmen"-Aktion. Die Aktion hängt
+   an der Zeile, nicht am Fundstück (nur der User weiss, welcher Link der Nachweis
+   ist) — Markup in partials/recherche-item-urls.html. */
+.research-item-url-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+}
 .research-item-url {
   display: inline-flex;
   align-items: center;
@@ -225,6 +233,14 @@ textarea.recherche-input { resize: vertical; min-height: 2.75rem; }
   word-break: break-all;
 }
 .research-item-url .icon { width: 0.9em; height: 0.9em; flex-shrink: 0; }
+
+/* Kontext-Verkleinerung des generischen Icon-Buttons (28px wären in einer Liste
+   aus font-size-sm-Zeilen die höchste Zeile und würden die Liste auftreiben). */
+.research-url-tosource {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
 
 .research-item-doc {
   display: inline-flex;

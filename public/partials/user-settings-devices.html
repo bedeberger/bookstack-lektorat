@@ -1,0 +1,79 @@
+<!-- Geraete-Token-Abschnitt der Benutzer-Einstellungen (native Clients + Browser-
+     Erweiterung). Fragment von user-settings.html — laeuft im Scope von
+     `x-data="userSettingsCard"`, hat also KEIN eigenes x-data und ist allein nicht
+     mountbar. Eingebunden per `<!-- @include user-settings-devices -->`, wie die
+     Tab-Panels des PDF-Exports: reines Text-Splicing vor dem innerHTML-Set, also
+     ohne zusaetzlichen Wrapper-DIV, der die `.card-form-row`-Kette der Karte
+     aufbrechen wuerde. Rechteumfang/Scopes: docs/clients.md. -->
+    <!-- Device-Tokens (native Clients, z.B. Mac-Focus-Writer) -->
+    <div class="card-form-row card-form-row--devices" x-data="collapsible()">
+      <button type="button" class="collapsible-toggle" x-bind="trigger">
+        <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
+        <span x-text="$app.t('profile.devices.title')"></span>
+        <span class="lt-dict-count" x-text="deviceTokensList.filter(t => !t.revoked_at).length"></span>
+      </button>
+      <div class="device-tokens-body" x-bind="panel" x-cloak>
+        <p class="muted-msg muted-msg--sm" x-text="$app.t('profile.devices.intro')"></p>
+
+        <!-- Plain-Token-Anzeige direkt nach Create (NUR einmal sichtbar) -->
+        <div x-show="deviceTokensJustCreated" x-cloak class="success-msg device-tokens-reveal">
+          <strong x-text="$app.t('profile.devices.justCreatedTitle')"></strong>
+          <p class="muted-msg muted-msg--sm" x-text="$app.t('profile.devices.justCreatedHint')"></p>
+          <div class="device-tokens-reveal-row">
+            <code class="device-tokens-plain" x-text="deviceTokensJustCreated?.plain_token"></code>
+            <button x-data="copyButton({ text: () => deviceTokensJustCreated?.plain_token })"></button>
+            <button type="button" @click="deviceTokensDismissPlain()" x-text="$app.t('common.hide')"></button>
+          </div>
+        </div>
+
+        <!-- Neues Token erstellen -->
+        <div class="device-tokens-create">
+          <input type="text" x-model="deviceTokensNewName"
+                 :placeholder="$app.t('profile.devices.namePlaceholder')"
+                 maxlength="100"
+                 @keydown.enter.prevent="deviceTokensCreate()">
+          <div x-data="combobox($app.t('profile.devices.kindPlaceholder'))"
+               x-modelable="value" x-model="deviceTokensNewKind"
+               x-effect="options = [
+                 { value: 'device',  label: $app.t('profile.devices.kind.device') },
+                 { value: 'capture', label: $app.t('profile.devices.kind.capture') }
+               ]"></div>
+          <button type="button" @click="deviceTokensCreate()"
+                  :disabled="deviceTokensCreating || !deviceTokensNewName.trim()">
+            <span x-show="deviceTokensCreating" class="spinner"></span>
+            <span x-text="$app.t('profile.devices.createButton')"></span>
+          </button>
+        </div>
+
+        <p class="muted-msg muted-msg--sm" x-text="$app.t('profile.devices.kindHint')"></p>
+
+        <p class="card-form-error" x-show="deviceTokensError" x-text="deviceTokensError"></p>
+        <div x-show="deviceTokensLoading" class="muted-msg muted-msg--sm" x-text="$app.t('common.loading')"></div>
+        <p x-show="!deviceTokensLoading && deviceTokensList.length === 0"
+           class="muted-msg muted-msg--sm" x-text="$app.t('profile.devices.empty')"></p>
+
+        <div class="device-tokens-list" x-show="deviceTokensList.length">
+          <template x-for="t in deviceTokensList" :key="t.id">
+            <div class="device-tokens-row" :class="t.revoked_at ? 'is-revoked' : ''">
+              <div class="device-tokens-row-main">
+                <span class="device-tokens-name" x-text="t.device_name"></span>
+                <span class="badge badge-neutral" x-text="deviceTokenScopeLabel(t)"></span>
+                <span class="badge"
+                      :class="t.revoked_at ? 'badge-err' : (t.expires_at && t.expires_at < new Date().toISOString() ? 'badge-warn' : 'badge-ok')"
+                      x-text="t.revoked_at ? $app.t('profile.devices.status.revoked') : (t.expires_at && t.expires_at < new Date().toISOString() ? $app.t('profile.devices.status.expired') : $app.t('profile.devices.status.active'))"></span>
+              </div>
+              <span class="device-tokens-meta muted-msg muted-msg--sm">
+                <span x-text="$app.t('profile.devices.lastUsed') + ': '"></span>
+                <span x-text="t.last_used_at ? new Date(t.last_used_at).toLocaleString($store.shell.uiLocale, $app.tzOpts()) : $app.t('profile.devices.never')"></span>
+              </span>
+              <button type="button" class="device-tokens-action"
+                      x-show="!t.revoked_at" @click="deviceTokensRevoke(t.id)"
+                      x-text="$app.t('profile.devices.revokeButton')"></button>
+              <button type="button" class="device-tokens-action"
+                      x-show="t.revoked_at" @click="deviceTokensDelete(t.id)"
+                      x-text="$app.t('profile.devices.deleteButton')"></button>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>

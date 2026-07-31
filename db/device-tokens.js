@@ -10,6 +10,9 @@ const { db } = require('./connection');
 const { NOW_ISO_SQL } = require('./now');
 
 const TOKEN_PREFIX = 'swd_';
+// Bewusste KOPIE von TOKEN_KINDS.device aus lib/device-scopes.js: die DB-Schicht
+// soll nicht in lib/ greifen muessen, um einen Default zu kennen. Gegen Drift
+// gegated durch tests/unit/device-scopes.test.js.
 const DEFAULT_SCOPES = 'content:read,content:write';
 
 function generatePlainToken() {
@@ -83,7 +86,7 @@ function listDeviceTokens(userEmail) {
 function listAllDeviceTokens() {
   return db.prepare(`
     SELECT dt.id, dt.user_email, u.display_name AS user_display_name,
-           dt.device_name, dt.platform, dt.client_version, dt.use_count,
+           dt.device_name, dt.platform, dt.scopes, dt.client_version, dt.use_count,
            dt.last_used_at, dt.last_used_ip, dt.expires_at, dt.revoked_at, dt.created_at
     FROM device_tokens dt
     LEFT JOIN app_users u ON u.email = dt.user_email

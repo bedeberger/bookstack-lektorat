@@ -61,38 +61,43 @@ function removeSource(sourceId) {
   _delSourceAll.run(sourceId);
 }
 
-// Alle Quellen-IDs eines Users, die einen PDF-Text tragen (Index-Kandidaten).
-// Basis des Index-Jobs und des Nacht-Crons.
+// Index-Kandidaten eines Users: Quellen mit PDF-Volltext. Bewusst OHNE
+// `doc_text` — bei 40 angehaengten Werken laegen sonst mehrere MB Text
+// gleichzeitig im Job-Speicher, obwohl er sie einzeln nacheinander chunkt.
+// Den Text holt der Job pro Quelle (db/sources.js#getSourceDocText).
 function listIndexedCandidates(ownerEmail) {
   return db.prepare(
-    `SELECT id, doc_text, doc_content_hash, doc_indexed_at, updated_at
+    `SELECT id, doc_chars, doc_content_hash, doc_indexed_at, updated_at
        FROM sources
-      WHERE owner_email = ? AND doc_text IS NOT NULL AND doc_text <> ''`
+      WHERE owner_email = ? AND doc_text IS NOT NULL AND doc_text <> ''
+      ORDER BY id`
   ).all(ownerEmail);
 }
 
 // Index-Frische für die Quellen-Karte: lastIndexedAt = jüngster Chunk-Timestamp,
-// staleCount = Quellen mit PDF, deren `doc_indexed_at` (oder `updated_at`)
-// nach dem letzten Index-Lauf liegt. Billige Heuristik ohne Re-Hashing.
+// staleCount = Quellen mit PDF, die seit ihrem letzten Index-Lauf angefasst
+// wurden. Billige Heuristik ohne Re-Hashing.
+//
+// Der Vergleich läuft PRO QUELLE (`doc_indexed_at` gegen ihr eigenes
+// `updated_at`), nicht gegen einen benutzerweiten Maximal-Timestamp: die beiden
+// Stempel kommen aus verschiedenen Uhren (JS-`Date` im Job vs. `strftime` beim
+// Insert) und eine Gleichheitsprüfung darüber wäre nie erfüllt — jede Quelle
+// gälte dauerhaft als veraltet. `setSourceDoc` nullt `doc_indexed_at`, ein
+// frisch hochgeladenes PDF ist damit unabhängig von der Uhr stale.
 function indexStatus(ownerEmail, model) {
   const total = db.prepare(
     'SELECT COUNT(*) AS n FROM source_semantic_chunks WHERE owner_email = ? AND model = ?'
   ).get(ownerEmail, model)?.n || 0;
   const last = db.prepare(
-    `SELECT MAX(sc.created_at) AS last
-       FROM source_semantic_chunks sc
-       JOIN sources s ON s.id = sc.source_id
-      WHERE sc.owner_email = ? AND sc.model = ?`
+    'SELECT MAX(created_at) AS last FROM source_semantic_chunks WHERE owner_email = ? AND model = ?'
   ).get(ownerEmail, model)?.last || null;
-  if (!last) return { indexed: false, lastIndexedAt: null, staleCount: 0, total };
-  // Stale = Quellen mit PDF, deren doc_indexed_at NICHT dem letzten Lauf
-  // entspricht (nie indexiert oder seit/Index-Lauf geändert/getrennt).
-  const sources = db.prepare(
+  const staleCount = db.prepare(
     `SELECT COUNT(*) AS n FROM sources
       WHERE owner_email = ? AND doc_text IS NOT NULL AND doc_text <> ''
-        AND (doc_indexed_at IS NULL OR doc_indexed_at <> ?)`
-  ).get(ownerEmail, last).n;
-  return { indexed: true, lastIndexedAt: last, staleCount: sources, total };
+        AND (doc_indexed_at IS NULL OR doc_indexed_at < updated_at)`
+  ).get(ownerEmail).n;
+  if (!last) return { indexed: false, lastIndexedAt: null, staleCount, total };
+  return { indexed: true, lastIndexedAt: last, staleCount, total };
 }
 
 // Brute-Force-Ähnlichkeitssuche über alle Quellen-PDFs eines Users (unter dem
@@ -123,37 +128,39 @@ function searchSimilarSources(ownerEmail, model, queryVec, { topK = 20, minScore
 }
 
 // Verwaiste Chunks nach Full-Reindex entfernen: Quellen, die kein PDF mehr
-// haben oder gelöscht wurden (delete paar via FK nicht selbst erfasst). Mod-
-// Scoping gegen Fremdmodell-Reste.
+// haben (ein geloeschter Datensatz raeumt via FK-CASCADE selbst auf). Zaehlt
+// entfernte QUELLEN, nicht Chunks — das ist die Zahl, die der Job meldet.
 function pruneMissing(ownerEmail, model, keepSourceIds) {
-  const keep = new Set((keepSourceIds || []).map(Number));
-  const rows = db.prepare(
-    "SELECT DISTINCT source_id FROM source_semantic_chunks WHERE owner_email = ? AND model = ?"
-  ).all(ownerEmail, model);
-  const del = db.prepare(
-    'DELETE FROM source_semantic_chunks WHERE source_id = ? AND model = ?'
-  );
-  let removed = 0;
-  db.transaction(() => {
-    for (const r of rows) {
-      if (!keep.has(Number(r.source_id))) { del.run(r.source_id, model); removed++; }
-    }
-  })();
-  return removed;
+  const keep = (keepSourceIds || []).map(Number).filter(Number.isFinite);
+  const placeholders = keep.length ? keep.map(() => '?').join(',') : null;
+  const where = placeholders
+    ? `owner_email = ? AND model = ? AND source_id NOT IN (${placeholders})`
+    : 'owner_email = ? AND model = ?';
+  const args = placeholders ? [ownerEmail, model, ...keep] : [ownerEmail, model];
+  const stale = db.prepare(
+    `SELECT COUNT(DISTINCT source_id) AS n FROM source_semantic_chunks WHERE ${where}`
+  ).get(...args).n;
+  if (stale) db.prepare(`DELETE FROM source_semantic_chunks WHERE ${where}`).run(...args);
+  return stale;
 }
 
-// Aufräumen bei Modell-Wechsel: alle Chunks eines Users unter Fremdmodell
-// löschen, wenn ein Full-Reindex unter dem neuen Modell startet. Optional mit
-// `model = null` für „alle Modelle" (Admin-Reset).
-function clearOwner(ownerEmail, model = null) {
-  if (model) {
-    db.prepare('DELETE FROM source_semantic_chunks WHERE owner_email = ? AND model = ?').run(ownerEmail, model);
-  } else {
-    db.prepare('DELETE FROM source_semantic_chunks WHERE owner_email = ?').run(ownerEmail);
-  }
+// Aufräumen bei Modell-Wechsel: Chunks eines Users unter einem FREMDEN Modell
+// löschen. Ohne diesen Aufruf wächst die Tabelle bei jedem Modellwechsel
+// monoton weiter — `pruneMissing` ist modell-skopiert und sieht Alt-Modelle
+// per Definition nie. Der Index-Job ruft es, sobald er unter dem aktiven
+// Modell durch ist. Rückgabe: gelöschte Chunks.
+function clearForeignModels(ownerEmail, keepModel) {
+  return db.prepare(
+    'DELETE FROM source_semantic_chunks WHERE owner_email = ? AND model <> ?'
+  ).run(ownerEmail, keepModel).changes;
 }
+
+// Ein Voll-Reset pro User braucht es hier nicht: `source_id` haengt mit
+// ON DELETE CASCADE an `sources`, und wer alle Quellen eines Users loescht,
+// raeumt die Chunks damit mit. Kein `clearOwner` als toter Export.
 
 module.exports = {
   getSourceChunks, replaceSource, removeSource,
-  listIndexedCandidates, indexStatus, searchSimilarSources, pruneMissing, clearOwner,
+  listIndexedCandidates, indexStatus, searchSimilarSources,
+  pruneMissing, clearForeignModels,
 };

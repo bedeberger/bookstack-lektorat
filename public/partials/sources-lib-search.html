@@ -2,8 +2,12 @@
      Fragment-Include von sources.html (`<!-- @include sources-lib-search -->`),
      lebt im Scope von `sourcesCard`. Durchsucht die via PDF hochgeladenen
      Werke nach Sinn, nicht nur Stichwort. Endpoint: GET /search/sources-semantic
-     (user-skopiert, kein book_id). Ausgenommen, wenn Semantik-Suche deaktiviert. -->
-<div class="sources-lib-search" x-data="collapsible()" x-bind="panel">
+     (user-skopiert, kein book_id). Ausgenommen, wenn Semantik-Suche deaktiviert.
+
+     `x-bind="panel"` gehoert an den KOERPER, nie an das `x-data`-Element: dessen
+     x-show wuerde den Trigger mit ausblenden, und die zugeklappte Sektion waere
+     nicht mehr aufklappbar (s. public/js/collapsible.js). -->
+<div class="sources-lib-search" x-data="collapsible()">
   <div class="sources-lib-search-head">
     <button type="button" class="collapsible-toggle" x-bind="trigger">
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#search"/></svg>
@@ -12,14 +16,14 @@
     </button>
     <p class="muted-msg muted-msg--sm" x-show="!$store.config.semanticSearchEnabled" x-cloak x-text="$app.t('sources.libSearch.disabled')"></p>
   </div>
-  <div class="sources-lib-search-body">
+  <div class="sources-lib-search-body" x-bind="panel" x-cloak>
     <div class="filter-bar filter-bar--inline">
       <span class="filter-search-wrap">
         <input type="text" class="filter-search-input filter-search-input--wide" x-model="srcLibQuery"
                @keydown.enter.prevent="searchSourceLibrary()"
                :placeholder="$app.t('sources.libSearch.placeholder')" :aria-label="$app.t('sources.libSearch.placeholder')"
                :disabled="!$store.config.semanticSearchEnabled">
-        <button type="button" class="search-clear--icon" x-show="srcLibQuery" @click="srcLibQuery=''; srcLibHits=[]"
+        <button type="button" class="search-clear--icon" x-show="srcLibQuery" @click="srcLibQuery=''; srcLibHits=[]; srcLibRan=false"
                 :aria-label="$app.t('search.clear')" :data-tip="$app.t('search.clear')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=694#x"/></svg></button>
       </span>
       <button type="button" class="btn-compact" @click="searchSourceLibrary()"
@@ -40,6 +44,8 @@
             <span x-text="h.title || $app.t('sources.untitled')"></span>
             <span class="sources-lib-hit-citekey" x-show="h.citekey" x-text="h.citekey"></span>
           </button>
+          <!-- Roher Textausschnitt: `x-text` ist der Sink, der Server escapt
+               darum NICHT (sonst stuenden &amp;/&lt; sichtbar im Treffer). -->
           <p class="sources-lib-hit-snippet" x-text="h.snippet"></p>
         </li>
       </template>

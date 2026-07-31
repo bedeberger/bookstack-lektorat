@@ -27,7 +27,7 @@ const router = express.Router();
 
 const DEFAULT_KINDS = ['page', 'chapter'];
 // Kinds, für die ein Embedding-Index existiert (semantische Suche).
-const SEMANTIC_KINDS = ['page', 'scene', 'figure'];
+const SEMANTIC_KINDS = ['page', 'scene', 'figure', 'research'];
 
 function _userEmail(req) {
   return req.session?.user?.email || null;
@@ -106,6 +106,9 @@ function _resolveSemanticHits(hits) {
     if (h.kind === 'page') row = db.prepare('SELECT page_name AS title, book_id FROM pages WHERE page_id = ?').get(h.entity_id);
     else if (h.kind === 'scene') row = db.prepare('SELECT titel AS title, book_id FROM figure_scenes WHERE id = ?').get(h.entity_id);
     else if (h.kind === 'figure') row = db.prepare('SELECT name AS title, book_id FROM figures WHERE id = ?').get(h.entity_id);
+    // Recherche-Schnipsel haben keinen Pflichttitel — der Dateiname des
+    // hochgeladenen PDFs ist dann die einzige Beschriftung, die der Treffer hat.
+    else if (h.kind === 'research') row = db.prepare("SELECT COALESCE(NULLIF(title,''), doc_name) AS title, book_id FROM research_items WHERE id = ?").get(h.entity_id);
     if (!row) continue; // gelöschte Entität → Geister-Chunk überspringen
     out.push({
       kind: h.kind, entity_id: h.entity_id, book_id: row.book_id,
@@ -183,8 +186,12 @@ router.get('/semantic/status', (req, res) => {
 // /search/semantic, aber **user-skopiert**: keine book_id, keine Buch-ACL —
 // der User durchsucht seine eigene Bibliothek. Trefferformat:
 //   { source_id, title, citekey, snippet, score }
-// Der Snippet fliesst im Frontend in einen x-html-Sink → server-seitig escapen
-// (Hard-Rule „x-html nur mit vorab-escaptem Content"). Kein <mark>.
+// Der Snippet ist ROHTEXT und wird bewusst NICHT escapt: er landet in einem
+// `x-text`-Sink (public/partials/sources-lib-search.html), der selbst escapt —
+// ein zweiter Durchgang zeigte dem Leser sichtbare `&amp;`/`&lt;` im Zitat.
+// Anders als /search/semantic, dessen Snippet ein <mark>-Highlight traegt und
+// darum ueber x-html geht. Wer den Sink hier auf x-html umstellt, muss das
+// Escaping mit umstellen.
 router.get('/sources-semantic', async (req, res) => {
   const email = _userEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
@@ -201,7 +208,7 @@ router.get('/sources-semantic', async (req, res) => {
     const hits = raw.map(h => ({
       source_id: h.source_id,
       title: h.title || '', citekey: h.citekey || '',
-      snippet: _escHtml(String(h.text || '').slice(0, 300)),
+      snippet: String(h.text || '').slice(0, 300),
       score: Math.round(h.score * 1000) / 1000,
     }));
     res.json({ hits, mode: 'sources-semantic' });

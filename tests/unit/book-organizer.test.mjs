@@ -27,6 +27,7 @@ globalThis.window = { __app: rootStub };
 const { persistMethods } = await import('../../public/js/book-organizer/persist.js');
 const { mirrorMethods } = await import('../../public/js/book-organizer/mirror.js');
 const { dndMethods } = await import('../../public/js/book-organizer/dnd.js');
+const { historyMethods } = await import('../../public/js/book-organizer/history.js');
 const { viewMethods, _computeChapterLengthDist } = await import('../../public/js/book-organizer/view.js');
 const { MAX_CHAPTER_DEPTH } = await import('../../public/js/book-organizer/constants.js');
 const { insertChapterItem } = await import('../../public/js/book/tree/load.js');
@@ -41,8 +42,11 @@ function makeCard() {
     organizerSaving: false,
     _sortables: [],
     _memos: {},
+    _undoStack: [],
+    _redoStack: [],
+    _inHistoryFlight: false,
     async $nextTick() {},
-  }, persistMethods, mirrorMethods, dndMethods, viewMethods);
+  }, persistMethods, mirrorMethods, dndMethods, viewMethods, historyMethods);
 }
 
 // nav.tree-Fixture: Kapitel 1 „Eins" mit Sub 11 „Eins.A", Kapitel 2 „Zwei".
@@ -351,4 +355,62 @@ test('_memo cached auf Array-Deps und invalidiert bei Aenderung', () => {
   assert.equal(calls, 1);
   card._memo('k', ['other'], compute);
   assert.equal(calls, 2);
+});
+
+// ── Undo/Redo-Stacks ────────────────────────────────────────────────────────
+// Regression: der Gegen-Stack darf erst NACH dem Flight beschrieben werden.
+// `_pushUndo` verwirft Records, solange `_inHistoryFlight` steht (Schutz gegen
+// Selbst-Aufzeichnung der Applier) — innerhalb des try-Blocks aufgezeichnet
+// verschwand der Redo→Undo-Rückweg, nach einem Redo war nichts mehr undo-bar.
+test('historyRedo legt den Record zurueck auf den Undo-Stack', async () => {
+  const card = makeCard();
+  card._applyInverse = async () => true;
+  card._applyForward = async () => true;
+  card._pushUndo({ kind: 'rename-chapter', id: 1, oldName: 'A', newName: 'B' });
+
+  await card.historyUndo();
+  assert.equal(card._undoStack.length, 0);
+  assert.equal(card._redoStack.length, 1);
+
+  await card.historyRedo();
+  assert.equal(card._undoStack.length, 1, 'nach Redo ist der Schritt wieder undo-bar');
+  assert.equal(card._redoStack.length, 0);
+
+  await card.historyUndo();
+  assert.equal(card._undoStack.length, 0);
+  assert.equal(card._redoStack.length, 1);
+});
+
+test('historyUndo eines create invalidiert den Redo-Stack', async () => {
+  const card = makeCard();
+  card._applyInverse = async () => true;
+  card._pushUndo({ kind: 'reorder', before: {}, after: {} });
+  card._pushUndo({ kind: 'create-chapter', id: 5, name: 'Neu' }, { clearRedo: false });
+
+  await card.historyUndo();
+  assert.equal(card._redoStack.length, 0, 'kein Redo nach create-Undo (neue ID beim Wiederanlegen)');
+  assert.equal(card._undoStack.length, 1, 'aeltere Records bleiben undo-bar');
+});
+
+test('fehlgeschlagenes Undo/Redo laesst den Stack unveraendert', async () => {
+  const card = makeCard();
+  card._applyInverse = async () => false;
+  card._applyForward = async () => false;
+  card._pushUndo({ kind: 'rename-page', id: 9, oldName: 'A', newName: 'B' });
+
+  await card.historyUndo();
+  assert.equal(card._undoStack.length, 1);
+  assert.equal(card._redoStack.length, 0);
+
+  card._redoStack = [{ kind: 'reorder', before: {}, after: {} }];
+  await card.historyRedo();
+  assert.equal(card._redoStack.length, 1);
+  assert.equal(card._undoStack.length, 1);
+});
+
+test('waehrend eines Flights zeichnet _pushUndo nichts auf', () => {
+  const card = makeCard();
+  card._inHistoryFlight = true;
+  card._pushUndo({ kind: 'reorder', before: {}, after: {} });
+  assert.equal(card._undoStack.length, 0);
 });

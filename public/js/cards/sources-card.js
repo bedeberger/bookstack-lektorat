@@ -14,7 +14,7 @@
 import { EVT } from '../events.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { sourcesMethods } from '../sources/manage.js';
-import { sourcesPdfMethods } from '../sources/pdf.js';
+import { sourcesDocMethods } from '../sources/doc.js';
 import { sourcesDetectMethods } from '../sources/detect.js';
 import { draftFromSource } from '../sources/fields.js';
 
@@ -41,10 +41,15 @@ export function registerSourcesCard() {
     srcDraft: draftFromSource(null),
     srcFormError: '',
 
-    // PDF-Anhang (Quellen-PDF). `srcPdfBusy` während Upload/Löschen; Fehler
-    // zeigt das Form direkt unter dem Feld statt in der Karten-Statuszeile.
-    srcPdfBusy: false,
-    srcPdfError: '',
+    // PDF-Anhang der Quelle. `srcDocBusy` während Upload/Löschen, `srcDocIndexing`
+    // solange der Embedding-Job nach dem Upload läuft (die Karte pollt ihn, s.
+    // sources/doc.js). Fehler zeigt das Form direkt unter dem Feld statt in der
+    // Karten-Statuszeile. `_srcIndexTimer` ist der Poll-Handle — kurzlebiger
+    // Re-Entry-Guard, kein fachlicher State.
+    srcDocBusy: false,
+    srcDocError: '',
+    srcDocIndexing: false,
+    _srcIndexTimer: null,
 
     // Semantische Bibliothekssuche (Pool-Scope): Sucht die PDF-Volltexte der
     // eigenen Quellen nach Sinn. UI ist ein Collapsible in der Quellen-Karte.
@@ -107,6 +112,9 @@ export function registerSourcesCard() {
       this._lifecycle = setupCardLifecycle(this, {
         name: 'sources',
         showFlag: 'showSourcesCard',
+        // Buchwechsel/View-Reset stoppen den Index-Poll mit — sonst tickt er
+        // gegen ein Formular weiter, das es nicht mehr gibt.
+        timerKeys: ['_srcIndexTimer'],
         load: () => this.loadSources(),
         extraListeners: [
           // Permalink #book/X/quellen/<sourceId>: der Hash-Router dispatcht das
@@ -161,8 +169,9 @@ export function registerSourcesCard() {
           srcEditingId: null,
           srcDraft: draftFromSource(null),
           srcFormError: '',
-          srcPdfBusy: false,
-          srcPdfError: '',
+          srcDocBusy: false,
+          srcDocError: '',
+          srcDocIndexing: false,
           srcLibQuery: '',
           srcLibHits: [],
           srcLibSearching: false,
@@ -183,11 +192,12 @@ export function registerSourcesCard() {
       // startPoll fährt setInterval — beim Kartenabbau stoppen, sonst pollt der
       // Lauf weiter gegen eine Komponente, die es nicht mehr gibt.
       if (this._srcDetectPollTimer) { clearInterval(this._srcDetectPollTimer); this._srcDetectPollTimer = null; }
+      this._stopSourceIndexPoll();
       this._lifecycle?.destroy();
     },
 
     ...sourcesMethods,
-    ...sourcesPdfMethods,
+    ...sourcesDocMethods,
     ...sourcesDetectMethods,
   }));
 }

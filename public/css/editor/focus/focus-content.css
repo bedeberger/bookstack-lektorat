@@ -1,0 +1,209 @@
+/* Fokus-Modus: Inhalts-Blöcke der Schreibfläche.
+   Zweite Hälfte von focus-mode.css (dort steht die Geometrie: Overlay,
+   Höhenkette, Schreiblinie, Spotlight, Auto-Hide-Cursor) — hier ausschliesslich,
+   wie das gespeicherte Seiten-HTML in der Schreibfläche AUSSIEHT.
+
+   Bewusst NICHT components/manuscript-content.css (die SSoT der drei
+   Lese-Oberflächen): der Fokus-Modus plättet Formatierungen absichtlich auf
+   Fliesstext, und das OTA-Bundle der nativen Clients enthält nur die
+   focus-*-Dateien (lib/editor-bundle.js#CSS_FILES).
+
+   LADEREIHENFOLGE: direkt NACH focus-mode.css — in public/index.html, in
+   CSS_FILES des Bundles und in tests/fixtures/focus-harness.html. Gleicher
+   @layer, also entscheidet die Quell-Reihenfolge. */
+@layer components {
+/* === Fokus-Modus: Formatierungen auf Fliesstext plätten ===
+   Rein visuell – HTML bleibt intakt (Edit-Mode + Save-Pfad). Der User sieht
+   nur Absätze, damit nichts vom Rhythmus des Textes ablenkt.
+   Container-Gruppe via :is() — eine Rule statt zwei pro Block. */
+.focus-editor__content :is(h1, h2, h3, h4, h5, h6) {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-transform: none;
+  margin: 0.4em 0;
+  color: inherit;
+}
+
+/* Absätze: explizite Margins (Browser-Default = 1em zu gross für Fokus-Optik),
+   kein text-indent (Fokus = nüchtern, kein Buchsatz). Den Umbruch-Algorithmus
+   erbt der Absatz vom Container (`text-wrap: wrap` auf .focus-editor__content) —
+   hier bewusst nicht wiederholt, sonst gilt die Garantie wieder nur für `p`. */
+.focus-editor__content p {
+  margin: 0.4em 0;
+  text-indent: 0;
+}
+
+/* Leerschläge nicht kollabieren lassen (Invariante 11c). Unter `normal` schreibt
+   Blink für einen Leerschlag, der am Zeilenende kollabieren würde, ein `&nbsp;`
+   in den Text und wandelt es beim nächsten Zeichen zurück ("whitespace
+   rebalancing"). Ein `&nbsp;` ist umbruchfest: passt Wort + `&nbsp;` nicht mehr
+   in die Zeile, fällt das ganze Wort eine Zeile runter und springt beim nächsten
+   Zeichen zurück — ein Zucken bei jedem Leerschlag an der Umbruchkante. Unter
+   `pre-wrap` hängt der Leerschlag stattdessen über den Zeilenrand hinaus und das
+   Wort bleibt stehen. Gemessen: ein einzelner Leerschlag an der Kante erhöht die
+   Blockhöhe unter `normal` um eine Zeile, unter `pre-wrap` gar nicht.
+
+   PRO BLOCK, nie auf dem Container: das gespeicherte Seiten-HTML trennt die
+   Blöcke mit `\n`-Textknoten, die Kinder des Containers sind — mit `pre-wrap`
+   auf `.focus-editor__content` würde jede dieser Trennungen als Leerzeile
+   rendern. Damit ist dies die Ausnahme zur Container-Konvention von Invariante
+   11b, und keine Verletzung: `white-space` ist das Kurzschreiben für
+   `white-space-collapse` + `text-wrap-mode`; es setzt `text-wrap-mode` auf den
+   ohnehin geltenden Wert `wrap` und lässt das vererbte `text-wrap-style` in
+   Ruhe — der Container-Guard gegen `pretty`/`balance` gilt weiter für alle
+   Blöcke.
+
+   `pre` fehlt bewusst in der Liste: dort regelt `white-space: inherit` weiter
+   unten. GEKOPPELT an den Soft-Break-Handler (focus/listeners.js): unter
+   `pre-wrap` schreibt Chromiums `insertLineBreak` ein rohes `\n` statt `<br>` —
+   das kollabiert in jeder anderen Ansicht zum Leerzeichen. Fällt diese Regel,
+   fällt auch der Handler; und umgekehrt. */
+.focus-editor__content :is(p, h1, h2, h3, h4, h5, h6, blockquote, li) {
+  white-space: pre-wrap;
+}
+
+
+/* Bold/Italic im Fokus-Modus sichtbar lassen — Ctrl+B/Ctrl+I sind als
+   Shortcut explizit dokumentiert. <u> bleibt geplättet, weil Underline mit
+   Link-Styling kollidiert und Ctrl+U-Eingabe ohnehin geblockt ist. */
+.focus-editor__content :is(u, s, del, strike) {
+  text-decoration: none;
+  color: inherit;
+}
+
+.focus-editor__content :is(sup, sub) {
+  vertical-align: baseline;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.focus-editor__content :is(code, pre) {
+  background: transparent;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  font-family: inherit;
+  font-size: inherit;
+  white-space: inherit;
+  overflow-x: visible;
+}
+
+.focus-editor__content blockquote {
+  border: none;
+  padding: 0;
+  margin: 0.4em 0;
+  color: inherit;
+  font-style: inherit;
+}
+
+.focus-editor__content .callout {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0.4em 0;
+  color: inherit;
+  border-radius: 0;
+}
+
+/* Fokus-Modus: .poem-Wrapper aus dem Render-Tree entfernen, damit die inneren
+   <p> wie normale Absätze behandelt werden und focus-paragraph-active greift
+   (opacity 0.5 auf dem Wrapper würde sonst das aktive <p> mitdimmen). */
+.focus-editor__content .poem {
+  display: contents;
+}
+
+.focus-editor__content :is(ul, ol) {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.4em 0;
+}
+
+.focus-editor__content li {
+  margin: 0.4em 0;
+}
+
+/* Checkbox-Zeilen (`/todo`). Markup-SSoT: public/js/editor/shared/todo-html.js
+     <ul class="todo"><li class="todo-item"><input type="checkbox"><span class="todo-text">…</span></li></ul>
+   Eine native Checkbox richtet sich an der Grundlinie aus: ihre Unterkante sitzt
+   auf der Baseline, die Box steht damit komplett darüber und wirkt neben dem Text
+   nach oben verschoben. Deshalb Flex-Zeile und die Box auf die Mitte der ersten
+   Textzeile heben — halbe Differenz zwischen Zeilenhöhe (1lh) und Box-Höhe (1em),
+   dieselbe Formel wie in components/manuscript-content.css. Skaliert mit der
+   Schriftgrösse statt Magic-Offset und bleibt bei mehrzeiligem Text an der
+   ERSTEN Zeile hängen. */
+.focus-editor__content ul.todo > li.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs, 4px);
+}
+.focus-editor__content ul.todo > li.todo-item > input[type="checkbox"] {
+  font: inherit;
+  width: 1em;
+  height: 1em;
+  margin: calc((1lh - 1em) / 2) 0 0 0;
+  flex: 0 0 auto;
+}
+.focus-editor__content ul.todo > li.todo-item > .todo-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.focus-editor__content hr {
+  border: none;
+  margin: 0.8em 0;
+  height: 0;
+}
+
+/* Inline-Formatierungen aus BookStack (text-align, Farbe, Hintergrund via
+   style-Attribut). Attribut-Selektor greift auch bei beliebigen span-
+   Wrappern ohne dass wir den Stil parsen müssen. */
+.focus-editor__content
+  :is([style*="color"], [style*="background"], [style*="text-align"], [style*="font-family"], [style*="white-space"]) {
+  color: inherit !important;
+  background: transparent !important;
+  text-align: inherit !important;
+  font-family: inherit !important;
+  /* `pre-wrap`, nicht `normal`: der Selektor greift auch auf Block-Elementen
+     (z.B. `<p style="text-align:center">` aus dem Import). Mit `normal` hätte
+     genau dieser Absatz das nbsp-Rebalancing und damit das Wort-Zucken zurück
+     (Invariante 11c). */
+  white-space: pre-wrap !important;
+}
+/* font-weight / font-style absichtlich NICHT geplättet — execCommand('bold')
+   in Chrome mit styleWithCSS=true schreibt inline-styles statt <b>; sonst
+   wäre Bold im Fokus-Modus unsichtbar trotz funktionierendem Shortcut. */
+
+/* Tabellen-Layout stört den Lese-/Schreibfluss – komplett ausblenden.
+   Im Edit-Modus bleibt das Markup im DOM erhalten und wird beim Verlassen
+   wieder sichtbar. */
+.focus-editor__content table {
+  display: none;
+}
+
+/* Bilder (immer <figure><img><figcaption>) nicht spurlos verstecken – ein
+   per display:none entferntes Bild lässt eine bebilderte Seite im Fokus
+   leer/ignoriert wirken. Stattdessen das echte <img> ausblenden und am
+   <figure> einen kleinen, abstrakten, gedimmten Bild-Marker (Mask-Icon)
+   zeigen: bestätigt die Präsenz, ohne mit realem Bildinhalt vom Schreiben
+   abzulenken. Bare <img> ohne figure-Wrapper bleibt ausgeblendet. */
+.focus-editor__content img {
+  display: none;
+}
+.focus-editor__content figure {
+  text-align: center;
+  margin: 0.4em 0;
+}
+.focus-editor__content figure::before {
+  content: "";
+  display: block;
+  width: 1.8em;
+  height: 1.8em;
+  margin: 0 auto;
+  background: var(--color-subtle);
+  opacity: 0.5;
+  -webkit-mask: var(--icon-image) center / contain no-repeat;
+          mask: var(--icon-image) center / contain no-repeat;
+}
+}

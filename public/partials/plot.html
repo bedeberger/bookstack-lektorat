@@ -19,6 +19,13 @@
     </div>
     <div class="card-header-aside">
       <div class="card-actions card-actions--grouped">
+        <!-- Undo/Redo (max 10 Schritte, book/plot/history.js) -->
+        <button type="button" class="icon-btn icon-btn--ghost" @click="plotHistoryUndo()"
+                :disabled="!_undoStack.length || busy"
+                :data-tip="$app.t('plot.history.undoTip')" :aria-label="$app.t('plot.history.undo')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#undo"/></svg></button>
+        <button type="button" class="icon-btn icon-btn--ghost" @click="plotHistoryRedo()"
+                :disabled="!_redoStack.length || busy"
+                :data-tip="$app.t('plot.history.redoTip')" :aria-label="$app.t('plot.history.redo')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#redo"/></svg></button>
         <button type="button" class="icon-btn icon-btn--ghost"
                 @click="runConsistency()"
                 :disabled="consistencyLoading || !beats.length"
@@ -162,67 +169,8 @@
     </div>
   </div>
 
-  <!-- Spannungsbogen: Intensität der Beats (1–5) als Kurve. Ohne Stränge eine
-       globale Kurve in Board-Lesereihenfolge; mit Strängen je Strang eine eigene
-       farbige Kurve. Sichtbar ab 2 nicht-verworfenen Beats mit Intensität. -->
-  <div class="plot-tension" x-show="tensionCurve().count >= 2" x-cloak x-data="collapsible(true)">
-    <button type="button" class="collapsible-toggle plot-tension-toggle" x-bind="trigger">
-      <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
-      <span x-text="$app.t('plot.tension.title')"></span>
-    </button>
-    <div class="plot-tension-body" x-bind="panel" x-cloak>
-      <!-- Figur-Fokus: hebt die Beats einer Figur auf der Kurve hervor (Figurenbogen) -->
-      <div class="plot-tension-focus" x-show="(beats, threads, draftFiguren, tensionFigurOptions().length)">
-        <div x-data="entityPicker({ entity: 'custom', placeholder: $app.t('plot.tension.focusPlaceholder'), emptyLabel: $app.t('plot.tension.focusAll'), items: () => tensionFigurOptions() })"
-             x-modelable="value" x-model="tensionFocusFigur"></div>
-      </div>
-      <div class="plot-tension-chart" :class="{ 'plot-tension-chart--focused': tensionFocusActive() }">
-        <span class="plot-tension-axis plot-tension-axis--high" x-text="$app.t('plot.tension.high')"></span>
-        <span class="plot-tension-axis plot-tension-axis--low" x-text="$app.t('plot.tension.low')"></span>
-        <!-- Figur-Fokus-Kurve: Linie nur durch die Beats der fokussierten Figur
-             (strang-loser Modus). Eigenständiges überlagertes <svg> (kein x-if im <svg>). -->
-        <template x-if="!tensionCurve().series.length && tensionFocusActive()">
-          <svg class="plot-tension-svg plot-tension-svg--focus" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            <polyline :points="tensionFocusLine()" vector-effect="non-scaling-stroke" />
-          </svg>
-        </template>
-        <!-- ohne Stränge: eine Kurve (CSS-Stroke). x-for/x-if NIE direkt ins <svg>
-             (SVG-namespaced <template> hat keine .content → Alpine-importNode bricht);
-             darum pro Zweig ein eigenständiges, überlagertes <svg>. -->
-        <template x-if="!tensionCurve().series.length">
-          <svg class="plot-tension-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            <polyline :points="tensionCurve().polyline" vector-effect="non-scaling-stroke" />
-          </svg>
-        </template>
-        <!-- mit Strängen: pro Strang ein eigenes (überlagertes) <svg> mit farbiger Kurve -->
-        <template x-for="s in tensionCurve().series" :key="s.key">
-          <svg class="plot-tension-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            <polyline :points="s.polyline" vector-effect="non-scaling-stroke" :style="{ stroke: threadAccent(s.thread) }" />
-          </svg>
-        </template>
-        <!-- Punkte ohne Stränge -->
-        <template x-for="p in (tensionCurve().series.length ? [] : tensionCurve().points)" :key="p.beat.id">
-          <button type="button" class="plot-tension-dot"
-                  :class="{ 'plot-tension-dot--dim': tensionFocusActive() && !beatHasTensionFigur(p.beat), 'plot-tension-dot--focus': tensionFocusActive() && beatHasTensionFigur(p.beat) }"
-                  :style="{ left: p.xPct + '%', bottom: p.bottomPct + '%', '--col-accent': p.color }"
-                  @click="startEditBeat(p.beat)"
-                  :data-tip="(p.act ? p.act.name + ' · ' : '') + p.beat.titel + ' (' + p.beat.intensitaet + '/5)'"
-                  :aria-label="p.beat.titel"></button>
-        </template>
-        <!-- Punkte je Strang -->
-        <template x-for="s in tensionCurve().series" :key="s.key">
-          <template x-for="p in s.points" :key="p.beat.id">
-            <button type="button" class="plot-tension-dot"
-                    :class="{ 'plot-tension-dot--dim': tensionFocusActive() && !beatHasTensionFigur(p.beat), 'plot-tension-dot--focus': tensionFocusActive() && beatHasTensionFigur(p.beat) }"
-                    :style="{ left: p.xPct + '%', bottom: p.bottomPct + '%', '--col-accent': threadAccent(s.thread) }"
-                    @click="startEditBeat(p.beat)"
-                    :data-tip="s.label + ' · ' + p.beat.titel + ' (' + p.beat.intensitaet + '/5)'"
-                    :aria-label="p.beat.titel"></button>
-          </template>
-        </template>
-      </div>
-    </div>
-  </div>
+  <!-- Spannungsbogen: Intensitäts-Kurve der Beats (ausgelagert; File-Limit). -->
+  <div id="partial-plot-tension"></div>
 
   <!-- Strang-Leiste (Opt-in-Einstieg zu den Swimlanes) -->
   <div id="partial-plot-thread-bar"></div>

@@ -41,6 +41,8 @@
               @click="sortBy('device_name')" x-text="$app.t('admin.devices.col.device')"></th>
           <th class="sortable-th" :class="sortClass('platform')" :aria-sort="ariaSort('platform')"
               @click="sortBy('platform')" x-text="$app.t('admin.devices.col.platform')"></th>
+          <th class="sortable-th" :class="sortClass('scopes')" :aria-sort="ariaSort('scopes')"
+              @click="sortBy('scopes')" x-text="$app.t('admin.devices.col.scope')"></th>
           <th class="sortable-th" :class="sortClass('client_version')" :aria-sort="ariaSort('client_version')"
               @click="sortBy('client_version')" x-text="$app.t('admin.devices.col.version')"></th>
           <th class="admin-pool-num sortable-th" :class="sortClass('use_count')" :aria-sort="ariaSort('use_count')"
@@ -57,6 +59,7 @@
             <td x-text="d.user_display_name ? (d.user_display_name + ' (' + d.user_email + ')') : d.user_email"></td>
             <td x-text="d.device_name"></td>
             <td x-text="d.platform || '—'"></td>
+            <td><span class="badge badge-neutral" x-text="devicesScopeLabel(d)"></span></td>
             <td>
               <code x-show="d.client_version" x-text="devicesVersionLabel(d)"></code>
               <span x-show="!d.client_version" class="muted-msg muted-msg--sm">—</span>

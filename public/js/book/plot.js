@@ -13,6 +13,7 @@
 //   - threads.js   — Strang-CRUD (Swimlanes)
 //   - beats.js     — Beat-CRUD (flach + grid-zellen) + Drop-Mechanik (_dropBeat)
 //   - dnd.js       — SortableJS-Anbindung (Init/Reattach/Revert → _dropBeat)
+//   - history.js   — Undo/Redo (max 10 Schritte) über alle reversiblen Mutationen
 //   - ai.js        — KI-Jobs (Brainstorm/Consistency), Lauf-Historie, Fullscreen
 
 import { lifecycleMethods } from './plot/lifecycle.js';
@@ -21,6 +22,7 @@ import { actsMethods } from './plot/acts.js';
 import { threadsMethods } from './plot/threads.js';
 import { beatsMethods } from './plot/beats.js';
 import { dndMethods } from './plot/dnd.js';
+import { historyMethods } from './plot/history.js';
 import { aiMethods } from './plot/ai.js';
 
 export const plotMethods = {
@@ -30,5 +32,6 @@ export const plotMethods = {
   ...threadsMethods,
   ...beatsMethods,
   ...dndMethods,
+  ...historyMethods,
   ...aiMethods,
 };

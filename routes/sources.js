@@ -23,27 +23,28 @@ const express = require('express');
 const {
   db, CSL_TYPES,
   listSources, listPoolSources, getSource, createSource, updateSource, deleteSource,
+  findSourceByUrl,
   linkSource, unlinkSource, isSourceLinked, listSourceBooks, getBookQuoteStats,
   listBookCitations,
-  setSourcePdf, clearSourcePdf, getSourceDocMeta,
 } = require('../db/schema');
-const { hasMinRole } = require('../db/book-access');
 const { toIntId } = require('../lib/validate');
 const { setContext } = require('../lib/log-context');
-const { requireBookAccess, resolveBookRole, sendACLError } = require('../lib/acl');
+const { requireBookAccess, sendACLError } = require('../lib/acl');
 const { BIB_FORMATS, parseBib } = require('../lib/bib-parse');
+const { validateSourceBody, hasSourceIdentity } = require('../lib/source-validate');
+const { normalizeUrl } = require('../lib/url-normalize');
 const { lookupDoi, lookupIsbn, normalizeDoi, normalizeIsbn } = require('../lib/source-lookup');
 const { localIsoDate } = require('../lib/local-date');
-const { extractPdfText } = require('../lib/pdf-extract');
-const sourceSemanticChunks = require('../db/source-semantic-chunks');
+const { userEmail, canRead, isOwner } = require('./sources-acl');
+const sourcesDocRouter = require('./sources-doc');
 const logger = require('../logger');
 
 const router = express.Router();
 const jsonBody = express.json({ limit: '256kb' });
-// PDF-Upload ist ein binary body — analog research.js.
-const rawPdf = express.raw({ type: ['application/pdf'], limit: '25mb' });
-// Upload/Trigger des Embed-Index-Jobs (asynchron, user-skopiert).
-const { enqueueSourceEmbedIndexJob } = require('./jobs/source-embed-index');
+// PDF-Anhang der Quelle: eigener Router unter demselben Mount (Upload/Download/
+// Entfernen + Embed-Index-Trigger). Frueh eingehaengt, damit `/:id/doc` nicht
+// erst hinter den CRUD-Routen liegt.
+router.use('/', sourcesDocRouter);
 // Import-Text ist eine hochgeladene Datei im JSON-Feld — eine Zotero-Bibliothek
 // sprengt das CRUD-Limit muehelos. Eigener Parser mit eigenem Limit statt das
 // CRUD-Limit fuer alle Routen anzuheben.
@@ -59,53 +60,17 @@ function _guard(req, res, bookId, minRole) {
   catch (e) { return !sendACLError(res, e); }
 }
 
-function _userEmail(req) {
-  return req.session?.user?.email || null;
-}
+// Die zwei Zugriffsachsen liegen in routes/sources-acl.js — der Dokument-Router
+// (routes/sources-doc.js) braucht dieselbe Entscheidung, und eine kopierte
+// ACL-Pruefung faellt nicht auf, wenn nur eine der Kopien nachgezogen wird.
+const _userEmail = userEmail;
+const _canRead = canRead;
+const _isOwner = isOwner;
 
-/** Darf der User die Quelle sehen? Besitzer immer; sonst reicht Leserecht auf
- *  irgendeinem Buch, dem die Quelle zugeordnet ist — dort steht ihr Marker im
- *  Text und muss aufloesbar sein. */
-function _canRead(req, src) {
-  const email = _userEmail(req);
-  if (!email) return false;
-  if (src.owner_email === email) return true;
-  return listSourceBooks(src.id)
-    .some(b => hasMinRole(resolveBookRole(req, b.book_id) || '', 'viewer'));
-}
-
-function _isOwner(req, src) {
-  const email = _userEmail(req);
-  return !!email && src.owner_email === email;
-}
-
-// Body-Felder pruefen, bevor die DB-Schicht sie normalisiert. Die DB-Schicht
-// waehlt bei Fremdwerten stillschweigend den Default — fuer die API ist ein
-// 400 die ehrlichere Antwort, sonst speichert der Client scheinbar erfolgreich
-// einen Typ, den er nie zurueckbekommt.
-function _validateBody(body) {
-  if (body.csl_type !== undefined && !CSL_TYPES.includes(String(body.csl_type))) {
-    return { error_code: 'INVALID_VALUE', params: { field: 'csl_type', allowed: CSL_TYPES.join(', ') } };
-  }
-  for (const key of ['authors', 'editors']) {
-    if (body[key] !== undefined && body[key] !== null && !Array.isArray(body[key])) {
-      return { error_code: 'INVALID_VALUE', params: { field: key, allowed: 'array' } };
-    }
-  }
-  if (body.url) {
-    const u = String(body.url).trim();
-    if (u && !/^https?:\/\//i.test(u)) return { error_code: 'INVALID_URL' };
-  }
-  return null;
-}
-
-// Eine Quelle braucht mindestens einen Titel oder eine Person — sonst entsteht
-// ein Verzeichniseintrag, der nichts benennt.
-function _hasIdentity(src) {
-  if (src.title && String(src.title).trim()) return true;
-  const persons = [...(src.authors || []), ...(src.editors || [])];
-  return persons.some(p => p && (p.family || p.literal || typeof p === 'string'));
-}
+// Feldpruefung + Identitaets-Minimum liegen in lib/source-validate.js, weil
+// routes/capture.js (Browser-Erweiterung) durch dieselben Regeln gehen muss.
+const _validateBody = validateSourceBody;
+const _hasIdentity = hasSourceIdentity;
 
 // Freitextfilter clientnah in JS: die Liste ist klein (Literaturbibliotheken
 // liegen im zwei- bis dreistelligen Bereich) und die Personen stecken als JSON
@@ -316,12 +281,50 @@ router.get('/lookup', async (req, res) => {
   }
 });
 
+// ── Dublettenpruefung nach URL ───────────────────────────────────────────────
+// GET /sources/by-url?url=…&book_id=
+// „Liegt dieses Dokument schon in meiner Bibliothek?" — die Frage, die die
+// Browser-Erweiterung vor dem Erfassen stellt. Antwortet 404, wenn nicht.
+//
+// Nur der EIGENE Pool: eine fremde Bibliothek ist nirgends sichtbar, auch nicht
+// als Ja/Nein-Auskunft. `book_id` ist optional und entscheidet nur, ob die
+// Kennzahlen buch-skopiert kommen; `linked_to_book` sagt, ob die gefundene
+// Quelle diesem Buch schon zugeordnet ist (dann ist nichts mehr zu tun).
+//
+// Steht VOR /:id, sonst faengt der Id-Handler 'by-url' ab.
+router.get('/by-url', (req, res) => {
+  const email = _userEmail(req);
+  if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+
+  const raw = String(req.query.url || '').trim();
+  if (!raw) return res.status(400).json({ error_code: 'URL_REQ' });
+  if (!normalizeUrl(raw)) return res.status(400).json({ error_code: 'INVALID_URL' });
+
+  const bookId = req.query.book_id === undefined ? null : toIntId(req.query.book_id);
+  if (req.query.book_id !== undefined && !bookId) {
+    return res.status(400).json({ error_code: 'INVALID_ID' });
+  }
+  if (bookId && !_guard(req, res, bookId, 'viewer')) return;
+
+  const src = findSourceByUrl(email, raw, bookId);
+  if (!src) return res.status(404).json({ error_code: 'NOT_FOUND' });
+  res.json({
+    source: src,
+    linked_to_book: bookId ? isSourceLinked(bookId, src.id) : null,
+  });
+});
+
 // ── Recherche-Fundstueck → Quelle ────────────────────────────────────────────
-// POST /sources/from-research  Body: { item_id }
+// POST /sources/from-research  Body: { item_id, url_id? }
 // Uebernimmt ein Fundstueck des Recherche-Boards als Quellen-Entwurf in die
 // Bibliothek und ordnet es dem Buch des Fundstuecks zu. Die Felder sind
 // VORBELEGT, nicht fertig — der User schaerft sie danach in der Karte nach.
 // Das Fundstueck bleibt unangetastet (es ist die Notiz, die Quelle ist der Nachweis).
+//
+// `url_id` waehlt GEZIELT einen der Links des Fundstuecks: ein Fundstueck
+// sammelt beliebig viele URLs (`research_item_urls`), und welche davon der
+// Nachweis ist, weiss nur der User. Ohne Angabe bleibt es bei der ersten — das
+// ist der Aufruf „ganzes Fundstueck uebernehmen".
 //
 // Bewusst nicht idempotent: derselbe Fund darf zweimal uebernommen werden (zwei
 // Zitate aus derselben Seite mit unterschiedlichen Angaben). Damit ein
@@ -342,15 +345,31 @@ router.post('/from-research', jsonBody, (req, res) => {
   if (!item) return res.status(404).json({ error_code: 'RESEARCH_ITEM_NOT_FOUND' });
   if (!_guard(req, res, item.book_id, 'editor')) return;
 
-  const firstUrl = db.prepare(
-    'SELECT url FROM research_item_urls WHERE item_id = ? ORDER BY position, id LIMIT 1'
-  ).get(itemId)?.url || null;
+  const rawUrlId = req.body?.url_id;
+  const urlId = rawUrlId == null || rawUrlId === '' ? null : toIntId(rawUrlId);
+  if (rawUrlId != null && rawUrlId !== '' && !urlId) return res.status(400).json({ error_code: 'INVALID_ID' });
+
+  const urlRow = urlId
+    ? db.prepare('SELECT url, label FROM research_item_urls WHERE id = ? AND item_id = ?').get(urlId, itemId)
+    : db.prepare(
+        'SELECT url, label FROM research_item_urls WHERE item_id = ? ORDER BY position, id LIMIT 1'
+      ).get(itemId);
+  // Ein `url_id`, das nicht zu diesem Fundstueck gehoert, ist ein Fehler und
+  // KEIN stiller Rueckfall auf die erste URL — sonst landet der falsche Link
+  // mit dem Anschein des gewaehlten in der Bibliothek.
+  if (urlId && !urlRow) return res.status(404).json({ error_code: 'RESEARCH_URL_NOT_FOUND' });
+
+  const firstUrl = urlRow?.url || null;
 
   const draft = {
     // Mit URL ist es ein Online-Nachweis, ohne URL bleibt die Gattung offen —
     // der User waehlt sie in der Karte. Nichts wird geraten.
     csl_type: firstUrl ? 'website' : 'other',
-    title: item.title || null,
+    // Der Titel des Fundstuecks benennt das Werk und hat Vorrang; das Link-Label
+    // ist nur Fallback fuer ein unbenanntes Fundstueck (sonst scheitert die
+    // Identitaets-Pruefung an einem Fund, der als Link durchaus benannt ist).
+    // Nicht zusammengesetzt — geraten wird hier nichts.
+    title: item.title || urlRow?.label || null,
     url: firstUrl,
     note: item.source || null,
     // Abrufdatum ist bei einem Online-Nachweis Pflichtangabe und heute die
@@ -372,7 +391,7 @@ router.post('/from-research', jsonBody, (req, res) => {
 
   const created = createSource(userEmail, draft);
   linkSource(item.book_id, created.id, userEmail);
-  logger.info(`[quellen] from-research item=${itemId} book=${item.book_id} quelle=${created.id}`);
+  logger.info(`[quellen] from-research item=${itemId} url=${urlId ?? 'erste'} book=${item.book_id} quelle=${created.id}`);
   res.json(getSource(created.id, item.book_id));
 });
 
@@ -563,98 +582,6 @@ router.delete('/:id', (req, res) => {
   deleteSource(id);
   logger.info(`[quellen] delete id=${id} buecher=${books} fundstellen=${src.cite_pages}`);
   res.json({ ok: true, orphaned_citations: src.cite_pages, affected_books: books });
-});
-
-// ── Quellen-PDF (User-Pool) ───────────────────────────────────────────────────
-// Original-PDF als BLOB an der Quelle + extrahierter Plain-Text (`doc_text`)
-// für die semantische Suche über die Bibliothek. Anlegen/Aendern/Loeschen ist
-// Pool-Hoheit (nur Besitzer, s. `db/sources.js`), Lesen ab Buch-Viewer, sobald
-// die Quelle dem Buch zugeordnet ist (analog `_canRead`).
-//
-// Upload triggert asynchron den Embedding-Index-Job (user-skopiert) — der User
-// sieht in der Quellen-Karte, sobald der Index steht. Nie generativ im Buchtext.
-
-const DOCNAME_MAX = 200;
-function _cleanDocName(s) {
-  return String(s || '').trim().slice(0, DOCNAME_MAX) || 'Dokument.pdf';
-}
-function _contentHash(buf) {
-  // Einfacher deterministischer Hash des Original-PDF-Puffers (Delta-Cache-Key
-  // im Index-Job: bei unverändertem PDF werden die Chunks nicht neu embeddet).
-  let h = 5381;
-  const n = buf.length;
-  for (let i = 0; i < n; i++) h = ((h * 33) ^ buf[i]) >>> 0;
-  return h.toString(16);
-}
-
-// POST /sources/:id/pdf?name=Dokument.pdf   body: raw PDF bytes
-router.post('/:id/pdf', rawPdf, async (req, res) => {
-  const email = _userEmail(req);
-  if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const src = getSource(id);
-  if (!src) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (!_isOwner(req, src)) return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
-  if (!Buffer.isBuffer(req.body) || !req.body.length) {
-    return res.status(400).json({ error_code: 'NO_DOC' });
-  }
-  const docName = _cleanDocName(req.query.name);
-  try {
-    const { text, pages } = await extractPdfText(req.body);
-    setSourcePdf(id, {
-      mime: 'application/pdf', name: docName, text, pages,
-      contentHash: _contentHash(req.body), buffer: req.body,
-    });
-    const refreshed = getSource(id);
-    logger.info(`[quellen] pdf upload id=${id} pages=${pages} chars=${text.length}`);
-    try { enqueueSourceEmbedIndexJob(email, id); }
-    catch (e) { logger.warn(`[quellen] embed-index enqueue fehlgeschlagen: ${e.message}`); }
-    res.json(refreshed);
-  } catch (e) {
-    logger.warn(`[quellen] PDF-Upload fehlgeschlagen: ${e.message}`);
-    res.status(400).json({ error_code: 'DOC_INVALID' });
-  }
-});
-
-// GET /sources/:id/pdf  → BLOB-Stream, inline mit Original-Dateinamen (Viewer).
-router.get('/:id/pdf', (req, res) => {
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const meta = getSourceDocMeta(id);
-  if (!meta) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (!meta.doc) return res.status(404).json({ error_code: 'NO_DOC' });
-  // ACL: Besitzer ODER Viewer auf einem verknüpften Buch (analog _canRead, aber
-  // auf den Doc-Meta-Row direkt — getSource erzeugt ein _canRead-Objekt teurer).
-  const email = _userEmail(req);
-  if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
-  const allowed = meta.owner_email === email || listSourceBooks(id).some(
-    b => hasMinRole(resolveBookRole(req, b.book_id) || '', 'viewer')
-  );
-  if (!allowed) return res.status(403).json({ error_code: 'FORBIDDEN' });
-  const safeName = encodeURIComponent(meta.doc_name || 'dokument.pdf');
-  res.set('Content-Type', meta.doc_mime || 'application/pdf');
-  res.set('Content-Disposition', `inline; filename*=UTF-8''${safeName}`);
-  res.set('Cache-Control', 'private, max-age=3600');
-  res.send(meta.doc);
-});
-
-// DELETE /sources/:id/pdf  → PDF + extrahierten Text entfernen (Quelle bleibt).
-// Index-Chunks werden vom Index-Job bei nächstem Lauf via pruneMissing geräumt;
-// wir löschen sie hier sofort, damit die Suche keine Treffer auf ein entferntes
-// PDF liefert (und der User ein sauberes „Index steht"-Signal bekommt).
-router.delete('/:id/pdf', (req, res) => {
-  const email = _userEmail(req);
-  if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const src = getSource(id);
-  if (!src) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (!_isOwner(req, src)) return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
-  clearSourcePdf(id);
-  sourceSemanticChunks.removeSource(id);
-  logger.info(`[quellen] pdf removed id=${id}`);
-  res.json(getSource(id));
 });
 
 module.exports = router;

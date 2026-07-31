@@ -20,6 +20,8 @@
 
 const { db } = require('./connection');
 const { NOW_ISO_SQL } = require('./now');
+const { MAX_TEXT_CHARS } = require('../lib/pdf-extract');
+const { normalizeUrl } = require('../lib/url-normalize');
 
 const CSL_TYPES = [
   'book', 'chapter', 'article', 'website', 'thesis',
@@ -109,14 +111,27 @@ const _POOL_COUNT_SQL = `
   (SELECT COUNT(*) FROM book_source_links l WHERE l.source_id = s.id)                               AS book_count
 `;
 
+// Spaltenliste statt `s.*`: `doc` (bis 25 MB) und `doc_text` (bis 200k Zeichen)
+// duerfen NIE in einer Listenabfrage mitkommen — eine Bibliothek mit 40
+// angehaengten PDFs zoege sonst hunderte MB durch den Prozess, nur um pro Zeile
+// ein Boolean und eine Seitenzahl anzuzeigen. Das Vorhandensein des BLOBs kommt
+// als Flag aus SQLite, der Volltext gar nicht.
+const _SOURCE_COLS = `
+  s.id, s.owner_email, s.csl_type, s.authors, s.editors, s.archived,
+  s.created_at, s.updated_at,
+  ${TEXT_FIELDS.map(f => `s.${f}`).join(', ')},
+  s.doc_mime, s.doc_name, s.doc_pages, s.doc_chars, s.doc_indexed_at, s.doc_content_hash,
+  (s.doc IS NOT NULL) AS has_doc
+`;
+
 const _stmtListForBook = db.prepare(`
-  SELECT s.*, ${_BOOK_COUNT_SQL}
+  SELECT ${_SOURCE_COLS}, ${_BOOK_COUNT_SQL}
     FROM sources s
     JOIN book_source_links l ON l.source_id = s.id AND l.book_id = @book
    ORDER BY s.updated_at DESC, s.id DESC
 `);
 const _stmtListForBookActive = db.prepare(`
-  SELECT s.*, ${_BOOK_COUNT_SQL}
+  SELECT ${_SOURCE_COLS}, ${_BOOK_COUNT_SQL}
     FROM sources s
     JOIN book_source_links l ON l.source_id = s.id AND l.book_id = @book
    WHERE s.archived = 0
@@ -127,7 +142,7 @@ const _stmtListForBookActive = db.prepare(`
 // der „aus Bibliothek hinzufuegen"-Picker soll keine Zeilen zeigen, deren
 // Auswahl nichts tut.
 const _stmtPool = db.prepare(`
-  SELECT s.*, ${_POOL_COUNT_SQL}
+  SELECT ${_SOURCE_COLS}, ${_POOL_COUNT_SQL}
     FROM sources s
    WHERE s.owner_email = @owner
      AND (@include_archived = 1 OR s.archived = 0)
@@ -137,8 +152,8 @@ const _stmtPool = db.prepare(`
    ORDER BY s.updated_at DESC, s.id DESC
 `);
 
-const _stmtGetPool = db.prepare(`SELECT s.*, ${_POOL_COUNT_SQL} FROM sources s WHERE s.id = @id`);
-const _stmtGetForBook = db.prepare(`SELECT s.*, ${_BOOK_COUNT_SQL} FROM sources s WHERE s.id = @id`);
+const _stmtGetPool = db.prepare(`SELECT ${_SOURCE_COLS}, ${_POOL_COUNT_SQL} FROM sources s WHERE s.id = @id`);
+const _stmtGetForBook = db.prepare(`SELECT ${_SOURCE_COLS}, ${_BOOK_COUNT_SQL} FROM sources s WHERE s.id = @id`);
 
 const _stmtDelete = db.prepare('DELETE FROM sources WHERE id = ?');
 const _stmtCount = db.prepare(
@@ -180,11 +195,16 @@ function _row(r) {
   };
   if (r.book_count !== undefined) out.book_count = r.book_count || 0;
   for (const f of TEXT_FIELDS) out[f] = r[f] || null;
-  // PDF-Anhang: Metadaten + Flag (BLOB selbst wird nur bei Download geholt).
-  out.has_pdf = !!(r.doc && r.doc.length);
-  if (r.doc_name) out.doc_name = r.doc_name;
-  if (r.doc_pages != null) out.doc_pages = r.doc_pages;
-  if (r.doc_indexed_at) out.doc_indexed_at = r.doc_indexed_at;
+  // PDF-Anhang: nur Metadaten. Weder BLOB noch Volltext verlassen die Tabelle
+  // auf diesem Weg (s. _SOURCE_COLS) — das Original holt der Download-Endpunkt.
+  // `doc_truncated` sagt, dass der Extraktor gedeckelt hat und der Index damit
+  // nur den Anfang des Werks kennt.
+  out.has_doc = !!r.has_doc;
+  out.doc_name = r.doc_name || null;
+  out.doc_pages = r.doc_pages ?? null;
+  out.doc_chars = r.doc_chars ?? null;
+  out.doc_indexed_at = r.doc_indexed_at || null;
+  out.doc_truncated = (r.doc_chars ?? 0) >= MAX_TEXT_CHARS;
   return out;
 }
 
@@ -229,6 +249,32 @@ function getSource(id, bookId = null) {
 /** Anzahl der einem Buch zugeordneten Quellen (inkl. archivierter). */
 function countSources(bookId) {
   return _stmtCount.get(parseInt(bookId)).n;
+}
+
+const _stmtPoolUrls = db.prepare(
+  `SELECT id, url FROM sources
+    WHERE owner_email = ? AND url IS NOT NULL AND TRIM(url) != ''
+    ORDER BY id`
+);
+
+/** Erste Quelle der Bibliothek, deren `url` dasselbe Dokument bezeichnet wie
+ *  `rawUrl` — Grundlage der Dublettenpruefung beim Erfassen aus dem Browser.
+ *  Ohne `bookId` mit Pool-Kennzahlen, mit `bookId` buch-skopiert (wie getSource).
+ *
+ *  Verglichen wird NORMALISIERT (lib/url-normalize), und zwar in JS statt per
+ *  SQL-Vergleich auf der Rohspalte: `https://www.x.org/a/?utm_source=…` und
+ *  `http://x.org/a` sind dasselbe Dokument, fuer SQLite aber zwei Strings.
+ *  Dieselbe Begruendung wie beim Freitextfilter in routes/sources.js — eine
+ *  persoenliche Literaturbibliothek hat zwei- bis dreistellig viele Eintraege;
+ *  ein abgeleiteter `url_norm`-Spiegel waere ein Wert, der bei jedem Schreibpfad
+ *  mitgepflegt werden muesste, und genau dort driftet er dann weg. */
+function findSourceByUrl(ownerEmail, rawUrl, bookId = null) {
+  const target = normalizeUrl(rawUrl);
+  if (!ownerEmail || !target) return null;
+  for (const row of _stmtPoolUrls.all(ownerEmail)) {
+    if (normalizeUrl(row.url) === target) return getSource(row.id, bookId);
+  }
+  return null;
 }
 
 /** Neue Quelle im Pool des Users. Die Buch-Zuordnung ist ein eigener Schritt
@@ -531,49 +577,68 @@ function deleteDetectRun(id, userEmail) {
 // (Pool-Hoheit) — s. _isOwner in routes/sources.js. Lesen (Download) ab
 // Buch-Viewer, sobald die Quelle einem Buch des Users zugeordnet ist, dessen
 // Chip im Text dann aufloesbar bleibt (vgl. _canRead).
+//
+// Drei Lesepfade, bewusst getrennt nach Kosten:
+//   getSourceDocMeta  Metadaten OHNE BLOB — fuer ACL-Entscheidung und Anzeige
+//   getSourceDocBlob  das Original, erst NACH bestandener ACL
+//   getSourceDocText  der Volltext, nur fuer den Index-Job
 
-const _stmtSetPdf = db.prepare(`
+const _stmtSetDoc = db.prepare(`
   UPDATE sources
-     SET doc = ?, doc_mime = ?, doc_name = ?, doc_text = ?, doc_pages = ?,
-         doc_content_hash = ?, updated_at = ${NOW_ISO_SQL}
+     SET doc = ?, doc_mime = ?, doc_name = ?, doc_text = ?, doc_pages = ?, doc_chars = ?,
+         doc_content_hash = ?, doc_indexed_at = NULL, updated_at = ${NOW_ISO_SQL}
    WHERE id = ?
 `);
-const _stmtClearPdf = db.prepare(`
+const _stmtClearDoc = db.prepare(`
   UPDATE sources
      SET doc = NULL, doc_mime = NULL, doc_name = NULL, doc_text = NULL, doc_pages = NULL,
-         doc_content_hash = NULL, doc_indexed_at = NULL,
+         doc_chars = NULL, doc_content_hash = NULL, doc_indexed_at = NULL,
          updated_at = ${NOW_ISO_SQL}
    WHERE id = ?
 `);
+// Ohne `doc`: diese Zeile entscheidet nur, OB ausgeliefert werden darf.
 const _stmtDocMeta = db.prepare(
-  'SELECT id, owner_email, doc, doc_mime, doc_name, doc_pages FROM sources WHERE id = ?'
+  `SELECT id, owner_email, doc_mime, doc_name, doc_pages, doc_chars,
+          doc_content_hash, doc_indexed_at, (doc IS NOT NULL) AS has_doc
+     FROM sources WHERE id = ?`
 );
+const _stmtDocBlob = db.prepare('SELECT doc FROM sources WHERE id = ?');
+const _stmtDocText = db.prepare('SELECT doc_text FROM sources WHERE id = ?');
+// `updated_at` bleibt bewusst stehen: der Index-Lauf ist keine inhaltliche
+// Aenderung der Quelle, und `doc_indexed_at < updated_at` ist genau das
+// Stale-Signal (s. db/source-semantic-chunks.js#indexStatus). Wuerde der
+// Index-Lauf updated_at anfassen, koennte die Quelle nie stale werden.
 const _stmtMarkIndexed = db.prepare(
-  `UPDATE sources SET doc_indexed_at = ?, updated_at = updated_at WHERE id = ?`
+  'UPDATE sources SET doc_indexed_at = ? WHERE id = ?'
 );
 function markSourceIndexed(sourceId, isoAt) {
   _stmtMarkIndexed.run(isoAt, sourceId);
 }
-const _stmtSetDocHash = db.prepare(
-  'UPDATE sources SET doc_content_hash = ? WHERE id = ?'
-);
-function setDocHash(sourceId, hash) { _stmtSetDocHash.run(hash, sourceId); }
 
-function setSourcePdf(id, { mime, name, text, pages, contentHash, buffer }) {
-  _stmtSetPdf.run(buffer || null, mime || 'application/pdf', name || null, text || null, pages || null, contentHash || null, id);
+/** PDF anhaengen/ersetzen. Setzt `doc_indexed_at` zurueck — der neue Volltext
+ *  ist bis zum naechsten Index-Lauf nicht semantisch auffindbar, und die Karte
+ *  soll das ehrlich anzeigen statt den Stand des Vorgaengers zu behaupten. */
+function setSourceDoc(id, { mime, name, text, pages, chars, hash, buffer }) {
+  _stmtSetDoc.run(
+    buffer || null, mime || 'application/pdf', name || null, text || null,
+    pages || null, chars ?? (text ? text.length : null), hash || null, id,
+  );
 }
-function clearSourcePdf(id) { _stmtClearPdf.run(id); }
+function clearSourceDoc(id) { _stmtClearDoc.run(id); }
 function getSourceDocMeta(id) { return _stmtDocMeta.get(id) || null; }
+function getSourceDocBlob(id) { return _stmtDocBlob.get(id)?.doc || null; }
+function getSourceDocText(id) { return _stmtDocText.get(id)?.doc_text || ''; }
 
 module.exports = {
   CSL_TYPES, TEXT_FIELDS,
   normalizePersons,
-  listSources, listPoolSources, getSource, countSources,
+  listSources, listPoolSources, getSource, countSources, findSourceByUrl,
   createSource, updateSource, deleteSource,
   linkSource, unlinkSource, isSourceLinked, listSourceBooks,
   replacePageCitations, listBookCitations, listPageCitations,
   getBookQuoteStats,
   DETECT_RUN_KEEP,
   insertDetectRun, listDetectRuns, getDetectRun, deleteDetectRun,
-  setSourcePdf, clearSourcePdf, getSourceDocMeta, markSourceIndexed, setDocHash,
+  setSourceDoc, clearSourceDoc, markSourceIndexed,
+  getSourceDocMeta, getSourceDocBlob, getSourceDocText,
 };

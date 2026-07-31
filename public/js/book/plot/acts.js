@@ -21,6 +21,7 @@ export const actsMethods = {
         body: JSON.stringify({ farbe }),
       });
       this.acts = this.acts.map(a => (a.id === updated.id ? updated : a));
+      this._recordActFields(act.id, { farbe: act.farbe || null }, { farbe });
       this.errorMessage = '';
     } catch (e) {
       this.errorMessage = app.t('plot.error.save');
@@ -40,6 +41,7 @@ export const actsMethods = {
         body: JSON.stringify({ book_id: Alpine.store('nav').selectedBookId, name }),
       });
       this.acts = [...this.acts, act];
+      this._recordCreate('act', act?.id);
       this.newActName = '';
       this.addingAct = false;
       this.errorMessage = '';
@@ -87,6 +89,7 @@ export const actsMethods = {
         body: JSON.stringify({ name }),
       });
       this.acts = this.acts.map(a => (a.id === updated.id ? updated : a));
+      this._recordActFields(act.id, { name: act.name }, { name });
       this.editingActId = null;
       this.actDraft = '';
       this.errorMessage = '';
@@ -106,6 +109,9 @@ export const actsMethods = {
     this.busy = true;
     try {
       await fetchJson(`/plot/acts/${act.id}`, { method: 'DELETE' });
+      // Hard-Delete samt Beats des Akts → jeder Record im Stack kann ins Leere
+      // zeigen (siehe plot/history.js).
+      this._clearHistory();
       this.acts = this.acts.filter(a => a.id !== act.id);
       this.beats = this.beats.filter(b => b.act_id !== act.id);
       this._memos = {};
@@ -127,6 +133,7 @@ export const actsMethods = {
     const idx = ordered.findIndex(a => a.id === act.id);
     const swap = idx + dir;
     if (idx < 0 || swap < 0 || swap >= ordered.length) return;
+    const orderBefore = ordered.map(a => a.id); // Undo-Ziel (Reihenfolge dieses Scopes)
     [ordered[idx], ordered[swap]] = [ordered[swap], ordered[idx]];
     ordered.forEach((a, i) => { a.position = i; });
     // Nur die Akte dieses Scopes ersetzen, der Rest bleibt.
@@ -139,6 +146,7 @@ export const actsMethods = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ book_id: Alpine.store('nav').selectedBookId, order: ordered.map(a => a.id) }),
       });
+      this._recordActOrder(orderBefore, ordered.map(a => a.id));
     } catch (e) { this.errorMessage = app.t('plot.error.save'); }
   },
 
@@ -171,6 +179,7 @@ export const actsMethods = {
       });
       this.acts = [...this.acts, act];
       this._memos = {};
+      this._recordCreate('act', act?.id);
       this.newActName = '';
       this.addingActScope = false;
       this.errorMessage = '';

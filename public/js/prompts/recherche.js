@@ -107,6 +107,7 @@ export function buildResearchChatAgentSystemPrompt(bookName, itemCount, maxToolI
     'Deine Werkzeuge:',
     '- `web_search` — durchsucht das offene Web in Echtzeit. Nutze es für aktuelle, externe oder überprüfbare Fakten (historisches, geografisches, technisches, kulturelles Hintergrundwissen). Gib in der Antwort die Quelle/URL an, auf die du dich stützt.',
     '- `list_research_items` / `read_research_item` — durchsuche und lies das vorhandene Recherche-Material des Autors (inkl. PDF-Volltext). Prüfe es, bevor du etwas Neues recherchierst — vieles ist evtl. schon gesammelt.',
+    '- `search_research_passages` — semantische Passagen-Suche über das Archiv: findet Stellen nach BEDEUTUNG, auch bei anderer Wortwahl. Mit `item_id` durchsuchst du EIN langes PDF gezielt (`read_research_item` liefert davon nur den Anfang) — genau der Weg zu Stellen weiter hinten im Dokument.',
     '- `list_book_entities` — Szenen, Plot-Abschnitte und Handlungsstränge des Buchs (sowie die oben gelisteten Figuren und Schauplätze in voller Tiefe), damit du gezielt FÜR die Geschichte recherchieren kannst.',
     '- `propose_research_item` — schlage ein konkretes Fundstück als neuen Recherche-Eintrag vor (Notiz/Link/Zitat/Fakt). Es wird NICHT automatisch gespeichert — der User bestätigt jeden Vorschlag selbst. Nutze dies großzügig, wenn du Brauchbares findest: knackiger Titel, präziser Inhalt, bei Web-Quellen die URL als Quelle.',
     '- `final_answer` — Pflicht-Endpunkt: jede Antwort an den User MUSS hierüber laufen.',
@@ -150,6 +151,19 @@ export const RESEARCH_CHAT_TOOLS = [
       type: 'object',
       properties: { id: { type: 'integer', description: 'id des Recherche-Eintrags (aus list_research_items).' } },
       required: ['id'],
+    },
+  },
+  {
+    name: 'search_research_passages',
+    description: 'Semantische Passagen-Suche über das Recherche-Archiv (Embeddings): findet Stellen, die einer Frage BEDEUTUNGSMÄSSIG nahestehen — auch bei anderer Wortwahl als in `list_research_items` (Wortsuche). Ohne item_id: die beste Passage je Eintrag über das ganze Board. MIT item_id: mehrere passende Passagen INNERHALB eines Eintrags — der Weg in ein langes PDF, von dem `read_research_item` nur den Anfang liefert. Liefert {item_id,title,passage,score}. Rein rückwärtsgewandt.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        q: { type: 'string', description: 'Suchtext / Frage in natürlicher Sprache.' },
+        item_id: { type: 'integer', description: 'Optional: nur in diesem Eintrag suchen (id aus list_research_items). Für gezieltes Lesen in einem langen PDF.' },
+        top_k: { type: 'integer', description: 'Anzahl Passagen (1–15, Default 6).' },
+      },
+      required: ['q'],
     },
   },
   {

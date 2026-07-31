@@ -5,13 +5,16 @@
   <title>Focus Editor Test Harness</title>
   <!-- Minimal-CSS für Focus-Tests: tokens.css (Custom-Props + @layer-Ordnung)
        + focus-mode.css (Dim-Regel + .focus-paragraph-active + Container-
-       Basisstyles). Focus-Editor ist entkoppelt von .page-content-view —
-       eigene Klasse `.focus-editor__content`, alle Styles in focus-mode.css.
+       Basisstyles) + focus-content.css (Block-Margins der Absätze — die gehen in
+       jede gemessene Höhe ein; MUSS nach focus-mode.css stehen, gleicher
+       @layer). Focus-Editor ist entkoppelt von .page-content-view — eigene
+       Klasse `.focus-editor__content`.
        DOM unten spiegelt die reale Wrapper-Kette aus editor.html +
        editor-body-edit.html. -->
 
   <link rel="stylesheet" href="/public/css/tokens.css">
   <link rel="stylesheet" href="/public/css/editor/focus/focus-mode.css">
+  <link rel="stylesheet" href="/public/css/editor/focus/focus-content.css">
   <link rel="stylesheet" href="/public/css/components/job-toast.css">
   <link rel="stylesheet" href="/public/css/page/page-revision-viewer.css">
   <link rel="stylesheet" href="/public/css/components/user-chip.css">

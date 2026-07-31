@@ -1,0 +1,24 @@
+<!-- Link-Liste eines Recherche-Fundstuecks. Fragment (string-seitiger @include),
+     weil der Block im x-for-Template-Content von recherche.html steckt — ein
+     DOM-Placeholder greift dort nicht.
+     Je Zeile: der Link selbst + „als Quelle uebernehmen" (POST /sources/from-research
+     mit genau dieser url_id, siehe public/js/sources/from-research.js). Die Aktion
+     haengt an der EINZELNEN Zeile, weil nur der User weiss, welcher der Links der
+     Nachweis ist. -->
+<div class="research-item-urls" x-show="item.urls && item.urls.length">
+  <template x-for="u in item.urls" :key="u.url_id">
+    <div class="research-item-url-row">
+      <a class="research-item-url" :href="u.url" target="_blank" rel="noopener noreferrer">
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#external-link"/></svg>
+        <span x-text="u.label || u.url"></span>
+      </a>
+      <button type="button" class="icon-btn icon-btn--ghost research-url-tosource"
+              @click="urlToSource(item, u)"
+              :disabled="urlToSourceBusy(item, u)"
+              :data-tip="$app.t('recherche.toSource.tip')"
+              :aria-label="$app.t('recherche.toSource.tip')">
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#book-open"/></svg>
+      </button>
+    </div>
+  </template>
+</div>

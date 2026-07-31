@@ -24,6 +24,9 @@ export const lifecycleMethods = {
     if (!bookId) { this.acts = []; this.threads = []; this.beats = []; this.draftFiguren = []; this.motifsCatalog = []; this.themesCatalog = []; return; }
     this.loading = true;
     this._memos = {};
+    // Jeder Reload kann fremde/serverseitige Änderungen mitbringen (Fork/Unfork,
+    // Fehler-Rollback, zweites Gerät) — Undo-Records darauf wären inkonsistent.
+    this._clearHistory();
     try {
       const data = await fetchJson(`/plot?book_id=${bookId}`);
       this.acts = Array.isArray(data.acts) ? data.acts : [];
@@ -78,6 +81,7 @@ export const lifecycleMethods = {
 
   resetPlot() {
     this._clearJobs();
+    this._clearHistory();
     this.acts = [];
     this.threads = [];
     this.beats = [];

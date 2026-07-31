@@ -14,6 +14,7 @@ const { runWithContext, setContext } = require('./lib/log-context');
 const { db, cleanupStuckJobRuns, pruneStaleByAge } = require('./db/schema');
 const appUsers = require('./db/app-users');
 const { tryDeviceAuth, extractBearer } = require('./lib/device-auth');
+const { deviceScopeGate } = require('./lib/device-scopes');
 const deviceTokens = require('./db/device-tokens');
 const bookAccess = require('./db/book-access');
 const { ensureAdminFromEnv, touchUserLastSeen, addUserActivity } = appUsers;
@@ -391,7 +392,7 @@ app.use('/metrics', require('./routes/metrics'));
 // `/dictionary` steht ohne Trailing-Slash in der Liste: der Router bedient die
 // Wurzel (GET/POST/DELETE `/dictionary`), ein `/dictionary/`-Prefix wuerde sie
 // verfehlen und den Client auf /auth/login redirecten.
-const API_PREFIXES = ['/history/', '/figures/', '/locations/', '/world-facts/', '/songs/', '/jobs/', '/sync/', '/chat/', '/booksettings/', '/publication/', '/content/', '/stt/', '/tts/', '/languagetool/', '/dictionary', '/books/', '/me/', '/admin/', '/local/', '/config', '/share/api/', '/name-guard/', '/research', '/research/', '/sources', '/sources/', '/xrefs', '/xrefs/'];
+const API_PREFIXES = ['/history/', '/figures/', '/locations/', '/world-facts/', '/songs/', '/jobs/', '/sync/', '/chat/', '/booksettings/', '/publication/', '/content/', '/stt/', '/tts/', '/languagetool/', '/dictionary', '/books/', '/me/', '/admin/', '/local/', '/config', '/share/api/', '/name-guard/', '/research', '/research/', '/sources', '/sources/', '/xrefs', '/xrefs/', '/capture'];
 
 app.use((req, res, next) => {
   // Device-Token (native Clients, z.B. Mac-Focus-Writer): Bearer swd_… loest auf
@@ -450,6 +451,13 @@ app.use((req, res, next) => {
   return res.redirect(`/login?returnTo=${encodeURIComponent(req.originalUrl)}`);
 });
 
+// ── Device-Scope-Gate ────────────────────────────────────────────────────────
+// Muss direkt hinter dem Auth-Guard liegen (der setzt req.session.user samt
+// scopes) und VOR jedem Route-Mount. Betrifft nur Requests via Device-Token:
+// ein `capture:write`-Token (Browser-Erweiterung) kommt nur an die Erfassungs-
+// Endpunkte, `content:write` (native Clients) bleibt ungegated.
+app.use(deviceScopeGate);
+
 // ── Aktivitäts-Tracking ──────────────────────────────────────────────────────
 // Pro authentifiziertem Request wird die Differenz zum letzten Request als aktive
 // Zeit gezählt – aber nur, wenn die Lücke < 5 min ist (danach gilt der User als
@@ -491,6 +499,9 @@ app.use('/chat', chatRouter);
 app.use('/ideen', ideenRouter);
 app.use('/research', researchRouter);
 app.use('/sources', sourcesRouter);
+// Sammel-Endpunkt der Browser-Erweiterung: Fundstueck + Quelle in einem
+// transaktionalen Aufruf (siehe routes/capture.js).
+app.use('/capture', require('./routes/capture'));
 app.use('/xrefs', xrefsRouter);
 app.use('/plot', plotRouter);
 app.use('/motifs', motifsRouter);

@@ -18,11 +18,24 @@ Native Clients haben keine OAuth-Browser-Session, sondern authentisieren per **D
 - **Auflösung** ([lib/device-auth.js](../lib/device-auth.js) `tryDeviceAuth`): Anders als der admin-scoped Metrics-Bearer löst ein Device-Token auf den **echten User + dessen echte Rolle** auf und respektiert das Status-Gate (`suspended`/`deleted` → abgewiesen). Greift im globalen Auth-Guard ([server.js](../server.js)) — liefert es ein User-Objekt, wird der Request wie eine normale Session behandelt; sonst fällt der Guard auf 401/Redirect zurück.
 - **Pflege** (Profil `/me`, Routen in [routes/usersettings.js](../routes/usersettings.js)):
   - `GET /me/device-tokens` — eigene Tokens auflisten
-  - `POST /me/device-tokens` — Token ausstellen (gibt `plain_token` einmalig zurück). Ein Request, der **selbst per Device-Token** authentisiert ist, darf kein neues Token minten → `403 DEVICE_TOKEN_SELF_MINT_FORBIDDEN` (kein Token-Rollover ohne Browser-Login).
+  - `POST /me/device-tokens` — Token ausstellen (gibt `plain_token` einmalig zurück). Body `{ device_name, platform?, kind? }`; `kind` wählt den Rechteumfang (siehe „Scopes" unten), unbekannte Art → `400 INVALID_VALUE` statt stiller Default. Ein Request, der **selbst per Device-Token** authentisiert ist, darf kein neues Token minten → `403 DEVICE_TOKEN_SELF_MINT_FORBIDDEN` (kein Token-Rollover ohne Browser-Login).
   - `POST /me/device-tokens/:id/revoke` — Soft-Revoke (`revoked_at`)
   - `DELETE /me/device-tokens/:id` — endgültig löschen
 - **Nutzungs-Tracking:** jeder authentifizierte Request ruft `touchTokenUsage` → `last_used_at`, `last_used_ip`, `use_count +1` und persistiert die per `X-Client-Version` gemeldete Version (`COALESCE` hält den letzten bekannten Wert).
 - **Admin-Übersicht:** [routes/admin-devices.js](../routes/admin-devices.js) (`GET /admin/devices`) listet alle Tokens user-übergreifend (Admin-Tab „Geräte"), inkl. Version → erlaubt Versionsskew gegen das neueste Release zu erkennen.
+
+### Scopes: was ein Token darf ([lib/device-scopes.js](../lib/device-scopes.js))
+
+`device_tokens.scopes` ist **durchgesetzt**, nicht dekorativ: das Gate `deviceScopeGate` hängt im globalen Auth-Guard direkt hinter `tryDeviceAuth` und vor jedem Route-Mount ([server.js](../server.js)). Es greift **nur** bei Requests via Device-Token — Browser-Sessions und `api_token`-Requests (`/metrics`) haben ihr eigenes Rechtemodell.
+
+| `kind` beim Ausstellen | Scopes | Wirkung |
+|---|---|---|
+| `device` (Default) | `content:read,content:write` | Unbeschränkt — die vollen Rechte des Users. Für macOS/Android, die das Manuskript bearbeiten. **Ungegated**, damit bereits ausgestellte Client-Tokens unverändert weiterlaufen. |
+| `capture` | `content:read,capture:write` | Nur Erfassen: `GET /content/books`, `GET /research`, `GET /research/tags`, `POST /research`, `POST /research/:id/{image,doc}`, `GET /sources{,/pool,/stats,/lookup,/by-url}`, `POST /sources`, `POST /sources/:id/{link,pdf,doc}`, `POST /capture`. Alles andere → `403 DEVICE_SCOPE_FORBIDDEN`. |
+
+Für die Browser-Erweiterung ist `capture` **Pflicht**: sie lebt in fremden Tabs, und ein dort entwendetes Token darf nicht am Manuskript schreiben können. Ausgeschlossen sind damit u.a. `/content/books/:id/pages*`, `/book-editor/*`, `/me/*` (kein Weiter-Minten), `/admin/*`, `/jobs/*` (keine KI-Kosten auf Zuruf) und **jedes** `DELETE`.
+
+Ein Token ohne beide Schreib-Scopes darf nichts (Deny-by-default) — die restriktive Richtung, falls später ein dritter Scope entsteht und dieses Modul dabei vergessen wird. Die Allowlist ist bewusst eine explizite Liste und kein Präfix-Muster; Pfade werden vorher kleingeschrieben und um einen Trailing-Slash normalisiert, weil Express case-insensitiv routet.
 
 ### Client-Selbstidentifikation (Header)
 
@@ -95,3 +108,19 @@ Das Profil (`/me`) zeigt eingeloggten Usern Version + Download-Link der nativen 
 Das Fehlende auf Android-Seite (i18n-Override) ist **kein Gap, sondern Folge der Architektur**: die App verwaltet ihre Chrome-Strings nativ, der Editor-Kern bringt seine eigenen mit. Was beide gemeinsam tragen — Auth, Sync, Presence, Release-Discovery, Editor-Bundle — ist symmetrisch abgedeckt.
 
 **Push-Notifications** existieren auf keiner Plattform serverseitig (kein FCM/APNS). Falls künftig gewünscht, wäre das ein neuer Baustein (Token-Registry analog `device_tokens`, Notify-Trigger an den Sync-/Collab-Punkten).
+
+## Dritter Client: Browser-Erweiterung (Chrome, `capture`-Scope)
+
+`schreibwerkstatt-browser-extension` erfasst beim Surfen Webseiten ins Recherche-Board bzw. in die Quellen-Bibliothek. Sie ist **kein Editor-Client**: sie zieht kein Editor-Bundle, hat keinen Sync und keine Presence — sie schreibt nur nach vorne in zwei kuratierende Ablagen und **nie** in den Manuskripttext.
+
+Serverseitig braucht sie nichts Eigenes außer dem Scope und einem Sammel-Endpunkt:
+
+- **Auth** wie die nativen Clients (`swd_…`), aber mit `kind: 'capture'` → Allowlist oben. `X-Client-Platform: chrome`.
+- **Kein CORS nötig:** die App hat keine CORS-Middleware und braucht keine, solange alle Requests im MV3-Service-Worker laufen — mit `host_permissions` auf den App-Host ist der Worker CORS-exempt. Aus einem Content-Script heraus scheitert derselbe Request.
+- **`POST /capture`** ([routes/capture.js](../routes/capture.js)) — Fundstück und/oder Quelle in **einem** transaktionalen Aufruf. Body `{ book_id, mode: 'research'|'source'|'both', url, title, body, kind, tags, source, authors, container_title, year, doi, isbn, csl_type, accessed_at, note }`, Antwort `{ research_item, research_created, source, source_created, source_linked }`. Rolle `editor` auf dem Buch.
+  - **Warum nicht die drei Einzelaufrufe:** ein Popup, das der User nach der Quittung zuklappt, hinterlässt bei drei Requests nach Abbruch eine Quelle, die in keinem Buch liegt. Alles in einer `db.transaction`.
+  - **Idempotenz mit zwei verschiedenen Regeln, absichtlich:** eine **Quelle** darf pro Dokument nur einmal existieren (buchübergreifend, Bibliothek) → bekannte URL wird wiederverwendet und nur noch verlinkt. Ein **Fundstück** darf pro Dokument beliebig oft existieren (zwei Zitate aus derselben Seite sind zwei Funde) → deduped wird nur ein *wortgleicher* Fund (kind + Titel + Text + URL) aus einem 10-Minuten-Fenster, also der Doppelklick.
+- **`GET /sources/by-url?url=&book_id=`** ([routes/sources.js](../routes/sources.js)) — „liegt das schon in meiner Bibliothek?" vor dem Erfassen. Nur der eigene Pool; `linked_to_book` sagt, ob im Zielbuch schon zugeordnet.
+- **URL-Vergleich** über [lib/url-normalize.js](../lib/url-normalize.js) (pure): Fragment weg, `www.` weg, `http`→`https`, Standard-Port weg, Tracking-Parameter (`utm_*`, `fbclid`, …) weg, Query sortiert, Trailing-Slash weg. Bewusst konservativ — `ref` bleibt stehen, weil manche Seiten darüber ausliefern, was sie zeigen. Verglichen wird in JS über den Pool des Users, **nicht** über eine abgeleitete `url_norm`-Spalte: die müsste jeder Schreibpfad mitpflegen und würde genau dort wegdriften; eine persönliche Bibliothek hat zwei- bis dreistellig viele Einträge (gleiche Begründung wie der Freitextfilter in `routes/sources.js`).
+- **Metadaten-Ernte passiert im Client**, nicht hier: kein Endpunkt ruft fremde URLs ab (keine SSRF-Fläche), und die Erweiterung hat den DOM ohnehin — auch hinter Login und Paywall. Für kanonische Angaben reicht das vorhandene `GET /sources/lookup?doi=`.
+- **Kein Job, kein `callAI`:** erfassen erschließt nichts, es legt ab.

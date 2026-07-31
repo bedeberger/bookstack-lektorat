@@ -125,7 +125,7 @@ export const userSettingsMethods = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ device_name: name }),
+        body: JSON.stringify({ device_name: name, kind: this.deviceTokensNewKind || 'device' }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(window.__app.tError ? window.__app.tError(j) : (j.error_code || `HTTP ${r.status}`));
@@ -159,6 +159,18 @@ export const userSettingsMethods = {
 
   deviceTokensDismissPlain() {
     this.deviceTokensJustCreated = null;
+  },
+
+  // Rechteumfang eines bestehenden Tokens fuer die Liste. Gelesen wird der
+  // Scope-String vom Server, nicht die beim Anlegen gewaehlte Art — ein Token,
+  // dessen Scopes nicht mehr zu einer der beiden Arten passen, soll als solches
+  // sichtbar sein und nicht stillschweigend als „Gerät" durchgehen.
+  deviceTokenScopeLabel(t) {
+    const app = window.__app;
+    const scopes = String(t?.scopes || '').split(',').map(s => s.trim());
+    if (scopes.includes('content:write')) return app.t('profile.devices.kind.device');
+    if (scopes.includes('capture:write')) return app.t('profile.devices.kind.capture');
+    return app.t('profile.devices.kind.none');
   },
 
   // ── macOS-App-Download (schreibwerkstatt-focuseditor) ───────────────────────

@@ -1750,3 +1750,58 @@ test('Gedicht behaelt seine Umbrueche (kein Kollaps in .poem)', async ({ page })
     (document.querySelector('#editor-card .focus-editor__content .poem').textContent.match(/\n/g) || []).length);
   expect(newlines, 'Verse wurden eingeebnet').toBe(2);
 });
+
+test('Checkbox-Zeile: Kasten sitzt auf der Mitte der ersten Textzeile', async ({ page }) => {
+  // Regression: die drei Lese-Oberflaechen holen das Todo-Layout aus
+  // components/manuscript-content.css, der Fokus-Modus laedt die Datei nicht
+  // (siehe focus-content.css). Fehlte die Regel hier, richtete sich die native
+  // Box an der Grundlinie aus und stand sichtbar hoeher als der Text daneben —
+  // gemeldet aus dem Android-Client, der ausser dem OTA-Bundle nichts hat.
+  await page.evaluate(() => window.harness.startEdit());
+  await page.evaluate(() => {
+    const p = document.querySelectorAll('#editor-card .focus-editor__content > p')[2];
+    const ul = document.createElement('ul');
+    ul.className = 'todo';
+    // Zwei Zeilen: eine kurze und eine, die sicher umbricht. Der Kasten muss in
+    // beiden Faellen an der ERSTEN Zeile haengen, nicht an der Blockmitte.
+    ul.innerHTML =
+      '<li class="todo-item"><input type="checkbox"><span class="todo-text">Kurze Aufgabe</span></li>' +
+      '<li class="todo-item"><input type="checkbox"><span class="todo-text">' +
+      'Eine deutlich laengere Aufgabe, die im schmalen Lesekasten des Fokus-Modus ' +
+      'ueber mehrere Zeilen umbricht und den Kasten damit vom Blockmittelpunkt ' +
+      'wegzieht, falls die Ausrichtung an der Blockhoehe haengt.' +
+      '</span></li>';
+    p.replaceWith(ul);
+  });
+
+  await enter(page);
+  await page.waitForTimeout(80);
+
+  const rows = await page.evaluate(() => {
+    const items = [...document.querySelectorAll('#editor-card .focus-editor__content ul.todo > li.todo-item')];
+    return items.map((li) => {
+      const box = li.querySelector('input[type="checkbox"]').getBoundingClientRect();
+      const span = li.querySelector('.todo-text');
+      // Erste Zeilenbox des Textes (nicht das Span-Rect — das umfasst bei
+      // Umbruch alle Zeilen und haette denselben Mittelpunkt wie der Block).
+      const r = document.createRange();
+      r.selectNodeContents(span);
+      const first = r.getClientRects()[0];
+      return {
+        boxCenter: box.top + box.height / 2,
+        lineCenter: first.top + first.height / 2,
+        lines: r.getClientRects().length,
+        boxHeight: box.height,
+      };
+    });
+  });
+
+  expect(rows.length).toBe(2);
+  expect(rows[1].lines, 'zweite Zeile bricht nicht um — Testfall traegt nicht').toBeGreaterThan(1);
+  for (const [i, r] of rows.entries()) {
+    // Box skaliert mit der Schrift (1em), nicht mit dem UA-Default von 13px.
+    expect(r.boxHeight, `Zeile ${i}: Kasten nicht schriftgebunden`).toBeGreaterThan(14);
+    expect(Math.abs(r.boxCenter - r.lineCenter), `Zeile ${i}: Kasten nicht auf der ersten Textzeile`)
+      .toBeLessThanOrEqual(2);
+  }
+});

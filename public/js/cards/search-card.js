@@ -8,9 +8,9 @@ import { formatRelativeShort } from '../utils.js';
 
 const DEBOUNCE_MS = 220;
 const DEFAULT_KINDS = ['page', 'chapter'];
-const ALL_KINDS = ['page', 'chapter', 'book', 'figure', 'location', 'scene', 'idea'];
-// Semantische Suche kennt nur die drei indizierten Kinds (Embedding-Index).
-const SEMANTIC_KINDS = ['page', 'scene', 'figure'];
+const ALL_KINDS = ['page', 'chapter', 'book', 'figure', 'location', 'scene', 'idea', 'research'];
+// Semantische Suche kennt nur die indizierten Kinds (Embedding-Index).
+const SEMANTIC_KINDS = ['page', 'scene', 'figure', 'research'];
 
 export function registerSearchCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
@@ -376,6 +376,15 @@ export function registerSearchCard() {
             return root.openOrtById?.(hit.entity_id);
           case 'scene':
             return root.openSzeneById?.(hit.entity_id);
+          case 'research': {
+            // Deep-Link-Hash als SSoT (analog reference-card#openRechercheItem):
+            // der Hash-Router oeffnet die Karte, setzt Exklusivitaet und
+            // fokussiert das Item.
+            const bid = Number(hit.book_id) || Alpine.store('nav').selectedBookId;
+            if (!bid) return;
+            location.hash = `#book/${bid}/recherche/${hit.entity_id}`;
+            return;
+          }
           case 'idea':
             // Ideen sind seitengebunden; oeffne die Seite.
             if (hit.book_id) {

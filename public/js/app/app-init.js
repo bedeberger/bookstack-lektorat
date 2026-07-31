@@ -208,6 +208,9 @@ export const appInitMethods = {
       this.$store.config.semanticSearchEnabled = !!cfg.semanticSearch?.enabled;
       this.$store.config.semanticHybrid = !!cfg.semanticSearch?.hybrid;
       this.$store.config.semanticRerank = !!cfg.semanticSearch?.rerank;
+      if (Number(cfg.pdfUpload?.maxBytes) > 0) {
+        this.$store.config.pdfMaxBytes = Number(cfg.pdfUpload.maxBytes);
+      }
       if (cfg.redundancy) {
         const d = this.$store.config.redundancyThresholds;
         this.$store.config.redundancyThresholds = {
