@@ -156,6 +156,8 @@ Unter `/admin` für User mit `global_role = 'admin'`:
 
 Dritter Login-Pfad neben Google-OIDC und Admin-Passwort: ein **fixer Passwort-Login mit Rolle `user`**. Existenzgrund sind die App-Store-Reviews — Apple (Guideline 2.1, Feld „Sign-in required") und Google Play (`App access`) verlangen einen funktionierenden Demo-Account als Pflichtangabe, der Chrome Web Store Test-Credentials in den Reviewer-Notes. Ein Google-Konto lässt sich Reviewern nicht geben (2FA, Googles ToS, Login-Blocks aus Datacenter-IPs), und der Admin-Pfad würde `/admin/*` und fremde Bücher freigeben.
 
+Vollständig kommentierte Vorlage mit allen Variablen: **[.env.demo.example](.env.demo.example)** (nicht `.env.example` — das ist die Prod-Vorlage ohne Demo-Pfad). Sie ist gleichzeitig die Vorlage, aus der [deploy/install-demo.sh](deploy/install-demo.sh) generiert; wer eine Variable ergänzt, tut es dort und nirgends sonst.
+
 Aktivierung ausschliesslich über `.env` — fehlt eines der beiden, existiert der Pfad nicht:
 
 ```bash
@@ -190,7 +192,63 @@ Der Klartext gehört danach in die Store-Reviewer-Notes (zusammen mit der Server
 
 Ein Token teilt sich macOS und Android bewusst (dasselbe Device-Token darf laut [docs/clients.md](docs/clients.md) auf mehreren Geräten laufen, `X-Client-Platform` unterscheidet sie zur Laufzeit). Wer die beiden trennen will, ergänzt einen weiteren Slot in `TOKEN_SLOTS` ([lib/demo-user.js](lib/demo-user.js)).
 
-> **Nur auf einer separaten Demo-Instanz setzen, nie auf Prod.** Reviewer schreiben, und KI-Jobs kosten Geld. Auf der Demo-Instanz zusätzlich: eigene DB, günstiger/lokaler `ai.provider`, Budget-Cap für den Demo-User, eigener API-Key mit Hard Limit — und ein Reset-Job, der die DB nachts auf einen Snapshot zurücksetzt.
+> **Nur auf einer separaten Demo-Instanz setzen, nie auf Prod.** Reviewer schreiben, und KI-Jobs kosten Geld. Das Setup-Script unten richtet genau so eine Instanz ein (eigene DB, eigener Service, Budget-Cap, nächtlicher Reset); den KI-Provider wählt man danach in der Admin-Konsole.
+
+### Demo-Instanz aufsetzen (LXC)
+
+[deploy/install-demo.sh](deploy/install-demo.sh) ist das Pendant zu [deploy/install.sh](deploy/install.sh) und läuft genauso **im Container** aus einem Repo-Checkout. Es kann neben einer Prod-Installation auf demselben Host laufen — eigenes Verzeichnis (`/opt/schreibwerkstatt-demo`), eigener Service (`schreibwerkstatt-demo`), eigener Port (3738), eigener System-User (`swdemo`, nicht der CD-Runner).
+
+```bash
+# Im Container, als root, aus dem Checkout:
+bash deploy/install-demo.sh --domain demo.example.com
+```
+
+Der `pct create`-Aufruf zum Anlegen des LXC steht als Kommentar im Kopf des Scripts. Überschreibbar per Env-Var: `INSTALL_DIR`, `SERVICE`, `PORT`, `RUN_USER`, `DEMO_BUDGET_USD`. Optional `--with-export-tools` für veraPDF/Ghostscript/ICC/EPUBCheck (~200 MB inkl. JRE; ohne das laufen PDF-/EPUB-Export weiterhin, nur ohne Normvalidierung).
+
+Was das Script tut:
+
+1. Node 20 + `sqlite3`-CLI (letzteres ist hier **Pflicht**, nicht optional wie auf Prod — Snapshot und Reset laufen darüber), System-User, Dateien, `npm install --omit=dev`.
+2. **Generiert die `.env` aus [.env.demo.example](.env.demo.example)** — die Vorlage ist die SSoT des ENV-Layouts, der Installer ersetzt nur die `__PLATZHALTER__` durch frische Zufallswerte (`SESSION_SECRET`, Admin-Passwort, Demo-Passwort, beide Device-Tokens im `swd_`-Format). Bleibt ein Platzhalter stehen, bricht er ab statt eine Instanz mit 18-Zeichen-„Secret" zu starten. **Eine bestehende `.env` wird nie überschrieben** — sonst würden bei einer Neuinstallation die Zugangsdaten rotieren, die bereits bei Apple/Google eingetragen sind, und das Review scheitert an einem Login-Fehler.
+3. Installiert Service + **Reset-Timer** (04:30 lokal, nach dem Nacht-Cron der App) statt des Backup-Timers.
+4. Wartet, bis die App antwortet — erst dann existieren Demo-User, Device-Tokens und Beispielbuch (Boot-Bootstrap) —, setzt `app.public_url` und das **Monatsbudget des Demo-Users** (Default 5 USD, `mode: hard`), und schreibt den **Golden-Snapshot** fest.
+5. Gibt den **Credential-Block für die Store-Formulare** aus. Erneut abrufbar mit `bash deploy/install-demo.sh --print-credentials` (rotiert nichts).
+
+Reverse-Proxy: dieselbe Konfiguration wie Prod ([deploy/nginx.conf](deploy/nginx.conf) bzw. [deploy/nginx-npmplus.conf](deploy/nginx-npmplus.conf)), nur `<DOMAIN>` = Demo-Domain und Upstream-Port 3738. **TLS ist Pflicht** — Apples App Transport Security lässt einen nativen Client sonst nicht gegen den Server sprechen.
+
+#### Reset-Mechanik
+
+[deploy/demo-reset.sh](deploy/demo-reset.sh) hält einen **Golden-Snapshot** und setzt die Instanz darauf zurück. Ohne das sieht Reviewer Nr. 2 die Textreste von Nr. 1 — im schlimmsten Fall ein leeres Buch, weil Nr. 1 alles gelöscht hat.
+
+```bash
+bash deploy/demo-reset.sh capture   # aktuellen Stand als Ziel festschreiben (Service darf laufen)
+bash deploy/demo-reset.sh reset     # DESTRUKTIV: Service stoppen, Snapshot einsetzen, starten
+bash deploy/demo-reset.sh status    # Snapshot-Alter, Marker, Service- und Timer-Zustand
+```
+
+`capture` nutzt `sqlite3 .backup` (lock-frei, WAL-konsistent) und schwenkt die Datei atomar ein. `reset` löscht `-wal`/`-shm` mit — bleiben sie liegen, mischt SQLite die alten Transaktionen über die frisch eingesetzte DB und der Reset ist teilweise wieder aufgehoben. Nach jeder bewussten Verbesserung des Demo-Inhalts erneut `capture` aufrufen, sonst fällt die Nacht den Fortschritt wieder ab.
+
+`reset` verlangt **zwei** Bedingungen, sonst bricht es ab: die Marker-Datei `.demo-instance` neben der Live-DB **und** ein gesetztes `DEMO_EMAIL` in der `.env`. **Why:** das Script überschreibt eine Datenbank; ein versehentlicher Aufruf gegen `/opt/schreibwerkstatt` wäre der teuerste mögliche Fehler, und je einzelnes Kriterium wäre zu leicht erfüllt (der Marker kann mitkopiert werden, `DEMO_EMAIL` steht auch in einer Entwickler-`.env`). Fehlt der Golden-Snapshot, bricht es **vor** dem `systemctl stop` ab — sonst stünde die Demo still.
+
+#### CD: Demo-Instanz automatisch aktuell halten
+
+Die Demo bekommt bei jedem grünen `main`-Push denselben Stand wie Prod. Beide Deploys hängen an denselben Test-Jobs, laufen aber **unabhängig** (kein `needs` zwischen ihnen): ein Prod-Fehler darf die Demo nicht auf einem alten Stand einfrieren, und umgekehrt.
+
+Mechanik: ein **zweiter self-hosted Runner** auf der Demo-LXC, adressiert über das Label `demo`. Der Job `deploy-demo` in [.github/workflows/deploy.yml](.github/workflows/deploy.yml) ruft dasselbe [deploy/deploy.sh](deploy/deploy.sh) auf wie Prod, nur mit `SW_FLAVOUR=demo`.
+
+**Einrichtung** (einmalig, auf der Demo-LXC, nach `install-demo.sh`):
+
+1. **Label am bestehenden Runner nachtragen.** Zuerst, nicht danach: sobald ein zweiter Runner im Repo hängt, matcht ein blosses `runs-on: self-hosted` **beide** — die Testjobs würden auf der Demo-LXC landen und der Prod-Deploy dort ins Leere greifen. Der Prod-Runner braucht darum das Label `prod` (GitHub → Settings → Actions → Runners → Labels; kein Neu-Registrieren nötig), passend zu den `runs-on: [self-hosted, prod]` im Workflow.
+2. **Runner auf der Demo-LXC registrieren** mit `--labels self-hosted,demo`. Er braucht nur Node, `rsync` und die Rechte, die auch der Prod-Runner hat (`systemctl`, Schreiben nach `/etc/systemd/system`, `chown` auf `swdemo`) — also root bzw. eine passende sudo-Regel. **Kein** Playwright: auf der Demo-LXC laufen keine Tests.
+3. Fertig. `SW_INSTALL_DIR`/`SW_SERVICE`/`SW_OWNER`/`SW_PORT` stehen im Job-`env` und müssen zu den Werten der Installation passen — wer die Demo mit abweichendem `INSTALL_DIR` installiert hat, zieht sie dort nach.
+
+Was der Demo-Deploy **anders** macht als Prod (alles in `deploy.sh` am `SW_FLAVOUR` aufgehängt, damit kein zweites Deploy-Skript daneben driftet):
+
+- **Kein DB-Backup vorher** — der Golden-Snapshot ist die Sicherung. Ein `capture` an dieser Stelle wäre sogar schädlich: es würde festschreiben, was der letzte Reviewer hinterlassen hat.
+- **Zusätzliche rsync-Excludes** für `demo-golden.db`, `.demo-instance` und `.with-export-tools`. **Why:** diese Dateien leben im Installationsverzeichnis, stehen aber nicht im Repo — ohne Exclude räumt `--delete` sie beim ersten Deploy weg, und `demo-reset.sh` verweigert danach jeden Reset, weil sein Marker-Guard fehlt.
+- **Reset-Timer statt Backup-Timer**, Units über [deploy/demo-units.sh](deploy/demo-units.sh) (geteilte SSoT mit `install-demo.sh` — sonst zwei sed-Blöcke mit derselben heiklen Ersetzungsreihenfolge).
+- **Deploy-Migrations nur mit Marker:** die Scripts unter `deploy/migrations/` installieren veraPDF/Ghostscript/EPUBCheck (~200 MB inkl. JRE). Auf einer bewusst schlanken Demo laufen sie nur, wenn `install-demo.sh --with-export-tools` den Marker `.with-export-tools` gesetzt hat.
+
+**Der Golden-Snapshot altert mit dem Schema und wird nie automatisch neu aufgenommen.** Ein Reset setzt eine DB mit älterer `schema_version` ein; die Migrationen laufen beim nächsten Serverstart erneut durch, das ist unkritisch. Aber der *Inhalt* bleibt auf dem Stand des letzten `capture` — nach jeder bewussten Verbesserung des Demo-Inhalts (und vor einer Store-Einreichung) einmal `bash deploy/demo-reset.sh capture` aufrufen. Der Job gibt am Ende `demo-reset.sh status` aus, damit man das Alter im Actions-Log sieht.
 
 ## Backup
 

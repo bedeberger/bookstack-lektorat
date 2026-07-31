@@ -17,7 +17,46 @@
 (function () {
   var reveal = function () { document.documentElement.removeAttribute('data-app-loading'); };
   var RELOAD_KEY = 'bootReloadDone';
+  var HEAL_KEY = 'bootHealDone';
   setTimeout(reveal, 8000);
+
+  // Boot-Heal-Watchdog: der Reload-Pfad oben hängt an einem Script-LADEfehler.
+  // Es gibt aber einen Boot-Ausfall ohne jeden Ladefehler — eine
+  // Generations-Inkohärenz: das Markup der Shell stammt aus einer anderen
+  // Generation als die (fehlerfrei geladenen) JS-Module, sodass jede
+  // x-data-Expression auf Stores/Karten zeigt, die das geladene app.js nie
+  // registriert hat. Dann bleibt window.__app aus, und alle regulären
+  // Heilungswege sind tot: der Build-Guard (app-init.js) läuft in Alpines
+  // init(), das Update-Banner braucht Alpine, und der SW liefert die Shell
+  // cache-only weiter — auch ein Hard-Reload landet wieder dort.
+  //
+  // Darum hier hart heilen: Shell-Caches wegwerfen + SW abmelden + neu laden,
+  // damit der nächste Load garantiert eine kohärente Generation vom Netz zieht.
+  // Genau EINMAL pro Session (sessionStorage-Guard) und nur online — offline
+  // wäre nach dem Cache-Wurf gar nichts mehr ladbar. app.js#init() löscht das
+  // Flag nach erfolgreichem Boot.
+  setTimeout(function () {
+    if (window.__app) return;
+    var alreadyHealed = false;
+    try { alreadyHealed = !!sessionStorage.getItem(HEAL_KEY); } catch (_) {}
+    if (alreadyHealed || navigator.onLine === false) { reveal(); return; }
+    try { sessionStorage.setItem(HEAL_KEY, '1'); } catch (_) {}
+    var done = function () { location.reload(); };
+    var clearCaches = window.caches
+      ? caches.keys().then(function (keys) {
+          return Promise.all(keys.filter(function (k) {
+            return k.indexOf('schreibwerkstatt-shell-') === 0;
+          }).map(function (k) { return caches.delete(k); }));
+        }).catch(function () {})
+      : Promise.resolve();
+    clearCaches.then(function () {
+      if (!navigator.serviceWorker) return null;
+      return navigator.serviceWorker.getRegistrations()
+        .then(function (regs) {
+          return Promise.all(regs.map(function (r) { return r.unregister(); }));
+        }).catch(function () {});
+    }).then(done, done);
+  }, 10000);
   window.addEventListener('error', function (e) {
     if (!(e && e.target && e.target.tagName === 'SCRIPT')) return;
     // Boot noch nicht erfolgt? → einmaliger Reload-Versuch gegen transiente

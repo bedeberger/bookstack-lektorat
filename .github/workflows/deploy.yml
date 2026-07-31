@@ -17,7 +17,7 @@ concurrency:
 jobs:
   checks-and-unit:
     name: Static Checks + Unit-Tests
-    runs-on: self-hosted
+    runs-on: [self-hosted, prod]
     timeout-minutes: 5
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -140,7 +140,7 @@ jobs:
 
   e2e:
     name: Playwright-E2E
-    runs-on: self-hosted
+    runs-on: [self-hosted, prod]
     timeout-minutes: 15
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -188,10 +188,10 @@ jobs:
         run: npx playwright test --reporter=list
 
   deploy:
-    name: Deploy to LXC with bookstack
+    name: Deploy auf Prod-LXC
     needs: [checks-and-unit, e2e]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: self-hosted
+    runs-on: [self-hosted, prod]
     environment: production
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -210,3 +210,50 @@ jobs:
 
       - name: Deploy
         run: bash deploy/deploy.sh
+
+  # Demo-Instanz auf eigener LXC, eigener Runner (Label `demo`). Bewusst KEIN
+  # `needs: deploy`: die beiden Ziele sind unabhaengig, ein Prod-Fehler soll die
+  # Demo nicht auf einem alten Stand einfrieren (und umgekehrt). Beide haengen
+  # aber an denselben Tests — die Demo bekommt nie einen ungetesteten Commit.
+  #
+  # Auf der Demo-LXC laufen keine Tests: der Runner dort braucht nur Node +
+  # rsync + systemctl-Rechte, kein Playwright und kein node_modules im Workspace.
+  deploy-demo:
+    name: Deploy auf Demo-LXC
+    needs: [checks-and-unit, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, demo]
+    # Kein `environment:` wie bei Prod: die Demo braucht keine Repo-Secrets (ihre
+    # Credentials stehen in der .env auf der Instanz) und keine Approval-Gate.
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      # Muessen zur Installation passen (deploy/install-demo.sh, gleiche
+      # Defaults). Wer die Demo mit abweichendem INSTALL_DIR/SERVICE/PORT/
+      # RUN_USER installiert hat, zieht die Werte hier nach — sonst deployt der
+      # Job an einen Pfad, den kein Service liest.
+      SW_FLAVOUR: demo
+      SW_INSTALL_DIR: /opt/schreibwerkstatt-demo
+      SW_SERVICE: schreibwerkstatt-demo
+      SW_OWNER: swdemo
+      SW_PORT: '3738'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          clean: false
+
+      - name: Workspace putzen (node_modules bewusst ausgenommen)
+        run: git clean -ffdx -e node_modules
+
+      - name: Deploy
+        run: bash deploy/deploy.sh
+
+      # Der Golden-Snapshot wird hier absichtlich NICHT neu aufgenommen — er
+      # wuerde den Stand festschreiben, den der letzte Reviewer hinterlassen hat.
+      # Die Ausgabe zeigt stattdessen, wie alt er ist: ein Snapshot, der viele
+      # Schemaversionen zurueckliegt, ist ein Hinweis, ihn bewusst zu erneuern.
+      # `|| true`: rein informativ — ein fehlender Snapshot oder eine nicht
+      # lesbare .env darf einen erfolgreichen Deploy nicht rot faerben.
+      - name: Reset-Zustand anzeigen
+        run: bash deploy/demo-reset.sh status "$SW_INSTALL_DIR/.env" || true

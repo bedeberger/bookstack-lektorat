@@ -1,0 +1,23 @@
+[Unit]
+Description=Schreibwerkstatt (Demo-Instanz)
+After=network.target
+
+[Service]
+Type=simple
+# Eigener System-User, nicht der CD-Runner der Prod-Instanz: die Demo-Instanz
+# wird von Store-Reviewern beschrieben und soll auf nichts ausserhalb ihres
+# eigenen Verzeichnisses schreiben koennen. install-demo.sh legt ihn an.
+User=swdemo
+WorkingDirectory=/opt/schreibwerkstatt-demo
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+Environment=PORT=3738
+# Kein Backup-Timer auf der Demo-Instanz: der Golden-Snapshot
+# (deploy/demo-reset.sh capture) ist hier die Sicherung, und die Nutzdaten sind
+# per Definition wegwerfbar.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

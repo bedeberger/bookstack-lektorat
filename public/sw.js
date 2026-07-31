@@ -1,7 +1,11 @@
 // Service Worker: hält die SPA-Shell und Buch-Inhalte offline verfügbar (Zug-Szenario).
 // Strategie:
-//  - Navigate (/, /index.html): Stale-While-Revalidate im SHELL_CACHE
-//    → 0-Latenz-Render bei Repeat-Visit; neues HTML wird parallel geladen.
+//  - Navigate (/, /index.html): Cache-Only innerhalb der Generation, Netz nur
+//    bei kaltem Cache. Der Shell-HTML gehört zum kohärenz-kritischen Satz (s.u.)
+//    und wird beim Install mitgecacht. Bewusst KEIN Stale-While-Revalidate —
+//    eine Revalidierung schriebe nach einem Deploy das HTML der neuen Generation
+//    in den Cache des noch aktiven alten SW und erzeugte damit „neues Markup
+//    gegen alte JS-Module".
 //    Deploy-Update fliesst über `skip-waiting` + controllerchange-Reload.
 //  - Kohärenz-kritische Shell-Assets (App-JS + Partials + App-CSS + i18n +
 //    Icon-Sprite): Liste + Content-Hash kommen aus dem generierten
@@ -119,9 +123,20 @@ self.addEventListener('install', (event) => {
     // fremde Generation vom Netz. `cache: 'reload'` umgeht den HTTP-Cache, damit
     // der Precache wirklich diese Generation holt.
     await precacheWithRetry(cache, SHELL_MANIFEST);
-    // Einstiegspunkt (SPA-Shell) best-effort dazu — nicht im Manifest, da
-    // index.html SWR-bedient wird; offline-Install scheitert hier lautlos.
-    try { await cache.add(new Request('/', { cache: 'reload' })); } catch {}
+    // Einstiegspunkt (SPA-Shell) best-effort dazu — nicht im Manifest, weil er
+    // unter zwei Schlüsseln adressiert wird ('/' bei Navigation, SHELL_PATH beim
+    // Lookup); offline-Install scheitert hier lautlos. Unter BEIDEN Schlüsseln
+    // ablegen, damit der Lookup in handleNavigate deterministisch die Kopie
+    // DIESER Generation trifft. `ok`/`opaqueredirect`-Check statt `cache.add`:
+    // fällt die Session beim Install gerade aus, antwortet `/` mit einem
+    // Login-Redirect — der darf nie als SPA-Shell im Cache landen.
+    try {
+      const shellRes = await fetch(new Request('/', { cache: 'reload' }));
+      if (shellRes && shellRes.ok && shellRes.type !== 'opaqueredirect') {
+        await cache.put(SHELL_PATH, shellRes.clone());
+        await cache.put('/', shellRes.clone());
+      }
+    } catch {}
     // Bewusst KEIN skipWaiting hier: der neue SW bleibt `waiting`, bis der
     // User das Update-Banner klickt (applyUpdate → 'skip-waiting'-Message).
     // Sonst übernähme der neue SW eine laufende (Editor-)Seite sofort und
@@ -141,28 +156,42 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
-// Navigate (HTML-Shell): Stale-While-Revalidate. Repeat-Visits liefern Shell
-// 0-Latenz aus dem Cache, parallel läuft Network-Fetch und aktualisiert den
-// Cache für den nächsten Besuch. Deploy-Updates kommen via `skip-waiting`-
-// Pfad (controllerchange im Client → location.reload), nicht über
-// Per-Navigation-Revalidate — sonst wäre der TTFB-Vorteil weg.
+// Navigate (HTML-Shell): Cache-Only innerhalb der Generation, mit Netz-Fallback
+// nur bei kaltem Cache. Der Shell-HTML gehört zum kohärenz-kritischen Satz wie
+// jedes Modul und Partial — er wird beim Install dieser Generation gecacht und
+// danach unverändert ausgeliefert.
+//
+// KEIN Stale-While-Revalidate: eine Revalidierung würde das HTML vom Netz in den
+// SHELL_CACHE schreiben. Nach einem Deploy ist das aber das HTML der NEUEN
+// Generation, während der noch aktive ALTE SW (kein skipWaiting) jedes Modul,
+// Partial und CSS weiter cache-only aus SEINER Generation bedient. Die nächste
+// Navigation liefert dann neues Markup gegen alte JS-Module — genau der Skew,
+// den der atomare Cache-Only-Satz verhindern soll (Alpine-Expressions greifen
+// auf Stores/Karten zu, die das geladene app.js nicht registriert). Ein Login ist
+// dafür der typische Auslöser, weil er mehrere echte Navigationen hintereinander
+// macht: die erste schreibt das fremde HTML in den Cache, die zweite serviert es.
+// Deploy-Updates laufen ausschliesslich über `skip-waiting` + controllerchange-
+// Reload in die neu precachte, kohärente Generation.
+//
+// Innerhalb einer Generation ist das HTML ohnehin unveränderlich: seine Bytes
+// gehen in __SHELL_BUILD ein (scripts/sw-manifest.js), jede Änderung erzeugt also
+// eine neue Generation samt neuem Precache.
 async function handleNavigate(req) {
   const cache = await caches.open(SHELL_CACHE);
   const cached = await cache.match(SHELL_PATH) || await cache.match('/');
-  const netPromise = fetch(req).then((net) => {
-    if (net && net.ok && net.type !== 'opaqueredirect') {
-      cache.put(SHELL_PATH, net.clone());
-    }
-    return net;
-  }).catch(() => null);
+  if (cached) return cached;
 
-  if (cached) {
-    netPromise.catch(() => {});
-    return cached;
+  // Kalter Cache: der Install-Precache der Shell ist best-effort und kann
+  // scheitern (offline installiert, Session-Redirect). Hier einmalig aus dem Netz
+  // füllen — kein Skew-Risiko, denn es gibt keine gecachte Generation, die
+  // überschrieben würde, und genau dieses HTML wird gerendert.
+  try {
+    const net = await fetch(req);
+    if (net && net.ok && net.type !== 'opaqueredirect') cache.put(SHELL_PATH, net.clone());
+    return net;
+  } catch {
+    return new Response('Offline – Shell nicht im Cache.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
   }
-  const net = await netPromise;
-  if (net) return net;
-  return new Response('Offline – Shell nicht im Cache.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
 }
 
 // Meldet allen kontrollierten Tabs, dass der kohärente Asset-Satz dieser

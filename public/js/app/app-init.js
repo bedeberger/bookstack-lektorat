@@ -30,6 +30,9 @@ export const appInitMethods = {
     // damit ein künftiger echter Boot-Fehler wieder einmalig reloaden darf
     // und späte Lazy-Load-Fehler keinen Reload mehr auslösen.
     try { sessionStorage.removeItem('bootReloadDone'); } catch (_) {}
+    // Ebenso das Heal-Flag des Generations-Watchdogs: dieser Boot hat eine
+    // kohärente Shell gesehen, ein künftiger Skew darf wieder einmal heilen.
+    try { sessionStorage.removeItem('bootHealDone'); } catch (_) {}
     this._abortCtrl?.abort();
     this._abortCtrl = new AbortController();
     const signal = this._abortCtrl.signal;

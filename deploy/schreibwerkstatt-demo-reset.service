@@ -1,0 +1,12 @@
+[Unit]
+Description=Schreibwerkstatt Demo-Instanz auf Golden-Snapshot zuruecksetzen
+# Nach der App-Unit, damit ein Reset beim Boot nicht mit dem Start kollidiert.
+After=schreibwerkstatt-demo.service
+
+[Service]
+Type=oneshot
+# root: die Unit stoppt und startet den App-Service und schreibt die Live-DB.
+User=root
+ExecStart=/bin/bash /opt/schreibwerkstatt-demo/deploy/demo-reset.sh reset /opt/schreibwerkstatt-demo/.env
+StandardOutput=journal
+StandardError=journal

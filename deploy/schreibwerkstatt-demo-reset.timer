@@ -1,0 +1,15 @@
+[Unit]
+Description=Taeglicher Reset der Schreibwerkstatt-Demo-Instanz
+
+[Timer]
+# 04:30 lokal: nach dem Nacht-Cron der App (23:00 Sync, 02:30 Expire, 04:00
+# Stale-Cleanup), damit der Reset das letzte Wort hat und der Golden-Stand am
+# Morgen unberuehrt bereitsteht.
+OnCalendar=*-*-* 04:30:00
+# Nachholen, wenn der Container zum Termin aus war — ein Reviewer soll nie auf
+# den Resten des Vortags landen, bloss weil der Host nachts stand.
+Persistent=true
+Unit=schreibwerkstatt-demo-reset.service
+
+[Install]
+WantedBy=timers.target
