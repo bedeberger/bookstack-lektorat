@@ -3508,6 +3508,7 @@
   "admin.usage.time.date": "Datum",
   "common.saved": "Gespeichert",
   "error.BUDGET_EXCEEDED": "Monatsbudget aufgebraucht ({usd} / {budget} USD). Bitte Admin kontaktieren.",
+  "error.DEMO_TOKEN_FIXED": "Dieses Token ist über die Server-Konfiguration fest vergeben und kann hier nicht entzogen werden.",
   "auth.denied.notInvited": "Kein Zugang. Bitte Admin um eine Einladung.",
   "auth.denied.suspended": "Dein Konto ist gesperrt.",
   "auth.denied.deleted": "Dein Konto wurde gelöscht.",

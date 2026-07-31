@@ -103,3 +103,88 @@ test('deleteDeviceToken entfernt endgueltig', () => {
   assert.ok(deviceTokens.deleteDeviceToken(tok.id, email));
   assert.equal(deviceTokens.listDeviceTokens(email).length, 0);
 });
+
+// ── upsertFixedDeviceToken (ENV-vorgegebene Demo-Tokens) ─────────────────────
+
+const HEX_A = 'swd_' + 'a'.repeat(64);
+const HEX_B = 'swd_' + 'b'.repeat(64);
+
+test('isValidTokenFormat: nur swd_ + 64 Hex', () => {
+  assert.equal(deviceTokens.isValidTokenFormat(HEX_A), true);
+  assert.equal(deviceTokens.isValidTokenFormat('swd_test'), false);          // zu kurz
+  assert.equal(deviceTokens.isValidTokenFormat('sw_' + 'a'.repeat(64)), false); // falscher Prefix
+  assert.equal(deviceTokens.isValidTokenFormat('swd_' + 'z'.repeat(64)), false); // kein Hex
+  assert.equal(deviceTokens.isValidTokenFormat(null), false);
+  // Ein selbst generiertes Token muss die Form per Konstruktion erfuellen.
+  assert.equal(deviceTokens.isValidTokenFormat(deviceTokens.generatePlainToken()), true);
+});
+
+test('upsertFixedDeviceToken: registriert vorgegebenen Klartext, speichert nur Hash', () => {
+  const email = 'fixed@x.test';
+  appUsers.createUser({ email, displayName: 'Fixed', globalRole: 'user', status: 'active' });
+
+  const r = deviceTokens.upsertFixedDeviceToken({
+    userEmail: email, plain: HEX_A, deviceName: 'Demo-Client', platform: 'demo-native',
+    scopes: 'content:read,content:write',
+  });
+  assert.equal(r.action, 'created');
+  // Auth funktioniert mit dem vorgegebenen Klartext.
+  const auth = tryDeviceAuth(fakeReq(`Bearer ${HEX_A}`));
+  assert.equal(auth.email, email);
+  assert.equal(auth.scopes, 'content:read,content:write');
+  // Kein Klartext in der DB.
+  const row = deviceTokens.listDeviceTokens(email)[0];
+  assert.equal(row.plain_token, undefined);
+  assert.equal(row.device_name, 'Demo-Client');
+});
+
+test('upsertFixedDeviceToken: idempotent (zweiter Lauf mit gleichem Wert legt nichts Neues an)', () => {
+  const email = 'idem@x.test';
+  appUsers.createUser({ email, displayName: 'Idem', globalRole: 'user', status: 'active' });
+  const plain = 'swd_' + 'c'.repeat(64);
+
+  const first = deviceTokens.upsertFixedDeviceToken({ userEmail: email, plain, deviceName: 'Slot' });
+  const second = deviceTokens.upsertFixedDeviceToken({ userEmail: email, plain, deviceName: 'Slot' });
+  assert.equal(first.action, 'created');
+  assert.equal(second.action, 'updated');
+  assert.equal(second.id, first.id);
+  assert.equal(deviceTokens.listDeviceTokens(email).length, 1);
+});
+
+test('upsertFixedDeviceToken: ENV-Rotation entzieht das alte Token wirklich', () => {
+  const email = 'rot@x.test';
+  appUsers.createUser({ email, displayName: 'Rot', globalRole: 'user', status: 'active' });
+
+  deviceTokens.upsertFixedDeviceToken({ userEmail: email, plain: HEX_A, deviceName: 'Slot' });
+  assert.ok(deviceTokens.findActiveTokenByPlain(HEX_A));
+  // Neuer Wert im SELBEN Slot → alter Wert darf nicht weiter gelten, sonst
+  // entzieht Rotieren nichts.
+  const r = deviceTokens.upsertFixedDeviceToken({ userEmail: email, plain: HEX_B, deviceName: 'Slot' });
+  assert.equal(r.rotatedAway, 1);
+  assert.equal(deviceTokens.findActiveTokenByPlain(HEX_A), null);
+  assert.ok(deviceTokens.findActiveTokenByPlain(HEX_B));
+  assert.equal(deviceTokens.listDeviceTokens(email).length, 1);
+});
+
+test('upsertFixedDeviceToken: hebt einen Widerruf auf (ENV ist die Wahrheit)', () => {
+  const email = 'revfix@x.test';
+  appUsers.createUser({ email, displayName: 'RevFix', globalRole: 'user', status: 'active' });
+  const plain = 'swd_' + 'd'.repeat(64);
+
+  const r = deviceTokens.upsertFixedDeviceToken({ userEmail: email, plain, deviceName: 'Slot' });
+  assert.ok(deviceTokens.revokeDeviceToken(r.id, email));
+  assert.equal(deviceTokens.findActiveTokenByPlain(plain), null);
+
+  deviceTokens.upsertFixedDeviceToken({ userEmail: email, plain, deviceName: 'Slot' });
+  assert.ok(deviceTokens.findActiveTokenByPlain(plain), 'Neustart muss den ENV-Slot wieder aktivieren');
+});
+
+test('upsertFixedDeviceToken: ungueltiges Format wirft (fail closed)', () => {
+  const email = 'badfmt@x.test';
+  appUsers.createUser({ email, displayName: 'Bad', globalRole: 'user', status: 'active' });
+  assert.throws(
+    () => deviceTokens.upsertFixedDeviceToken({ userEmail: email, plain: 'swd_test', deviceName: 'Slot' }),
+    /token format invalid/,
+  );
+  assert.equal(deviceTokens.listDeviceTokens(email).length, 0);
+});

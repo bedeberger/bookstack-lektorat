@@ -171,6 +171,25 @@ Verhalten ([lib/demo-user.js](lib/demo-user.js), Route `POST /auth/demo-login` i
 - **Status-Gate greift:** `suspended`/`deleted` im Admin-Tab → `403 USER_NOT_ACTIVE`. So lässt sich der Zugang ohne ENV-Änderung stilllegen.
 - **`DEMO_EMAIL === ADMIN_EMAIL` deaktiviert den Demo-Pfad** (sonst streiten sich beide Routen um die Rolle derselben Row).
 
+### Fixe Device-Tokens für die Clients
+
+Die nativen Clients (macOS/Android) und die Browser-Erweiterung authentisieren per Bearer-Token und sehen die Login-Seite nie — ein Reviewer müsste sich sonst erst im Browser einloggen, im Profil ein Token minten und es in die App kopieren. Darum lassen sich beide Token-Arten in der ENV festnageln:
+
+```bash
+DEMO_DEVICE_TOKEN=swd_$(openssl rand -hex 32)    # macOS + Android (content:write)
+DEMO_CAPTURE_TOKEN=swd_$(openssl rand -hex 32)   # Chrome-Erweiterung (capture:write)
+```
+
+Der Klartext gehört danach in die Store-Reviewer-Notes (zusammen mit der Server-URL); die DB kennt weiter nur den SHA-256-Hash. Registriert werden sie beim **Serverstart** ([lib/demo-user.js](lib/demo-user.js)#`ensureDemoAccess`, aufgerufen in [server.js](server.js)) — nicht erst beim ersten Login, denn genau diese Clients loggen sich nie über den Browser ein. Die Scopes folgen den bestehenden Token-Arten aus [lib/device-scopes.js](lib/device-scopes.js); der Demo-Zugang bekommt damit **keine** Sonderrechte, die Erweiterung bleibt auf die Capture-Allowlist beschränkt.
+
+- **Format ist Pflicht:** `swd_` + 64 Hex-Zeichen. Ein formal ungültiger Wert wird abgelehnt und **nicht** registriert (Log-Error) — sonst wandert ein `swd_test` als vollwertiger Schreibzugang auf eine öffentlich erreichbare Instanz.
+- **Rotation entzieht wirklich:** neuer Wert in derselben Variable + Neustart → das alte Token gilt nicht mehr (der Slot wird über den `device_name` identifiziert und aufgeräumt).
+- **Nicht über die UI entziehbar:** die Tokens erscheinen im Demo-Profil wie jedes andere Gerät, aber Widerrufen/Löschen antwortet `403 DEMO_TOKEN_FIXED` — sonst schaltet ein neugieriger Reviewer den Zugang für alle folgenden ab. Entzogen wird über die ENV.
+- **Beide Slots brauchen unterschiedliche Werte** (`token_hash` ist UNIQUE — derselbe Wert in beiden würde die Scopes des ersten überschreiben). Wird das verletzt, bleibt der zweite Slot unregistriert.
+- Sichtbar im Admin-Tab „Geräte" unter `Demo-Client (macOS/Android)` bzw. `Demo-Erweiterung (Chrome)` — inkl. `last_used_at` und gemeldeter Client-Version, sodass man sieht, ob ein Reviewer die App tatsächlich gestartet hat.
+
+Ein Token teilt sich macOS und Android bewusst (dasselbe Device-Token darf laut [docs/clients.md](docs/clients.md) auf mehreren Geräten laufen, `X-Client-Platform` unterscheidet sie zur Laufzeit). Wer die beiden trennen will, ergänzt einen weiteren Slot in `TOKEN_SLOTS` ([lib/demo-user.js](lib/demo-user.js)).
+
 > **Nur auf einer separaten Demo-Instanz setzen, nie auf Prod.** Reviewer schreiben, und KI-Jobs kosten Geld. Auf der Demo-Instanz zusätzlich: eigene DB, günstiger/lokaler `ai.provider`, Budget-Cap für den Demo-User, eigener API-Key mit Hard Limit — und ein Reset-Job, der die DB nachts auf einen Snapshot zurücksetzt.
 
 ## Backup

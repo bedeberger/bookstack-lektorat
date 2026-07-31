@@ -36,6 +36,60 @@ function createDeviceToken({ userEmail, deviceName, platform = null, scopes = DE
   return { ...row, plain_token: plain };
 }
 
+// Format eines Klartext-Tokens: `swd_` + 64 Hex-Zeichen (32 Byte). Wird nur dort
+// geprueft, wo ein Token von AUSSEN vorgegeben wird (fixe Demo-Tokens aus ENV) —
+// generatePlainToken() erzeugt diese Form per Konstruktion.
+const TOKEN_RE = /^swd_[0-9a-fA-F]{64}$/;
+
+function isValidTokenFormat(plain) {
+  return typeof plain === 'string' && TOKEN_RE.test(plain);
+}
+
+/**
+ * Registriert ein VORGEGEBENES Klartext-Token (Hash in die DB, Klartext bleibt
+ * beim Aufrufer). Existenzgrund: fixe Demo-Tokens aus ENV, damit ein
+ * Store-Reviewer den nativen Client ohne Web-Login in Betrieb nehmen kann — der
+ * normale Pfad (`createDeviceToken`) generiert das Token selbst und gibt es
+ * genau einmal zurueck, was fuer einen ENV-vorgegebenen Wert nicht taugt.
+ *
+ * Idempotent und rotations-sicher: aeltere Tokens desselben Users mit demselben
+ * `device_name` (= derselbe ENV-Slot) werden geloescht. Ohne das bliebe nach
+ * einer ENV-Rotation das alte Token gueltig — Rotieren wuerde nichts entziehen.
+ *
+ * `revoked_at` wird bewusst geleert: bei einem ENV-vorgegebenen Token ist die ENV
+ * die Wahrheit. Entziehen heisst Variable entfernen, nicht Row widerrufen.
+ */
+function upsertFixedDeviceToken({ userEmail, plain, deviceName, platform = null, scopes = DEFAULT_SCOPES }) {
+  if (!userEmail) throw new Error('user_email required');
+  if (!deviceName || !String(deviceName).trim()) throw new Error('device_name required');
+  if (!isValidTokenFormat(plain)) throw new Error('token format invalid (expected swd_ + 64 hex chars)');
+  const hash = hashToken(plain);
+  const name = String(deviceName).trim().slice(0, 100);
+  const plat = platform ? String(platform).slice(0, 40) : null;
+  const sc = scopes || DEFAULT_SCOPES;
+  const run = db.transaction(() => {
+    const stale = db.prepare(`
+      DELETE FROM device_tokens
+      WHERE user_email = ? AND device_name = ? AND token_hash != ?
+    `).run(userEmail, name, hash);
+    const before = db.prepare('SELECT id FROM device_tokens WHERE token_hash = ?').get(hash);
+    db.prepare(`
+      INSERT INTO device_tokens (user_email, token_hash, device_name, platform, scopes, created_at)
+      VALUES (?, ?, ?, ?, ?, ${NOW_ISO_SQL})
+      ON CONFLICT(token_hash) DO UPDATE SET
+        user_email  = excluded.user_email,
+        device_name = excluded.device_name,
+        platform    = excluded.platform,
+        scopes      = excluded.scopes,
+        revoked_at  = NULL,
+        expires_at  = NULL
+    `).run(userEmail, hash, name, plat, sc);
+    const row = db.prepare('SELECT id FROM device_tokens WHERE token_hash = ?').get(hash);
+    return { id: row.id, action: before ? 'updated' : 'created', rotatedAway: stale.changes };
+  });
+  return run();
+}
+
 function findActiveTokenByPlain(plain) {
   if (!plain || typeof plain !== 'string') return null;
   if (!plain.startsWith(TOKEN_PREFIX)) return null;
@@ -112,7 +166,9 @@ module.exports = {
   DEFAULT_SCOPES,
   generatePlainToken,
   hashToken,
+  isValidTokenFormat,
   createDeviceToken,
+  upsertFixedDeviceToken,
   findActiveTokenByPlain,
   touchTokenUsage,
   getDeviceTokenById,

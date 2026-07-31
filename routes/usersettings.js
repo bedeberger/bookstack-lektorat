@@ -525,6 +525,12 @@ router.post('/device-tokens/:id/revoke', (req, res) => {
   const email = req.session.user.email;
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error_code: 'INVALID_ID' });
+  // Fixe Demo-Tokens aus ENV sind nicht ueber die UI entziehbar (siehe
+  // lib/demo-user.js#isFixedDemoToken) — sonst schaltet ein Klick im
+  // Demo-Profil den nativen Zugang bis zum naechsten Serverstart ab.
+  if (require('../lib/demo-user').isFixedDemoToken(id)) {
+    return res.status(403).json({ error_code: 'DEMO_TOKEN_FIXED' });
+  }
   const ok = deviceTokens.revokeDeviceToken(id, email);
   if (!ok) return res.status(404).json({ error_code: 'TOKEN_NOT_FOUND' });
   logger.info(`Device-Token widerrufen (id=${id})`, { user: email });
@@ -536,6 +542,9 @@ router.delete('/device-tokens/:id', (req, res) => {
   const email = req.session.user.email;
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error_code: 'INVALID_ID' });
+  if (require('../lib/demo-user').isFixedDemoToken(id)) {
+    return res.status(403).json({ error_code: 'DEMO_TOKEN_FIXED' });
+  }
   const ok = deviceTokens.deleteDeviceToken(id, email);
   if (!ok) return res.status(404).json({ error_code: 'TOKEN_NOT_FOUND' });
   logger.info(`Device-Token geloescht (id=${id})`, { user: email });

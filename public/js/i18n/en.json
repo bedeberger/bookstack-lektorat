@@ -3508,6 +3508,7 @@
   "admin.usage.time.date": "Date",
   "common.saved": "Saved",
   "error.BUDGET_EXCEEDED": "Monthly budget exhausted ({usd} / {budget} USD). Please contact admin.",
+  "error.DEMO_TOKEN_FIXED": "This token is fixed in the server configuration and cannot be revoked here.",
   "auth.denied.notInvited": "No access. Ask your administrator for an invite.",
   "auth.denied.suspended": "Your account is suspended.",
   "auth.denied.deleted": "Your account has been deleted.",

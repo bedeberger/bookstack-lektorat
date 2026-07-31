@@ -143,7 +143,7 @@ export const userSettingsMethods = {
     if (!confirm(window.__app.t('profile.devices.confirmRevoke'))) return;
     try {
       const r = await fetch(`/me/device-tokens/${id}/revoke`, { method: 'POST', credentials: 'same-origin' });
-      if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error_code || `HTTP ${r.status}`); }
+      if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(window.__app.tError(j) || `HTTP ${r.status}`); }
       await this.loadDeviceTokens();
     } catch (e) { this.deviceTokensError = e.message; }
   },
@@ -152,7 +152,7 @@ export const userSettingsMethods = {
     if (!confirm(window.__app.t('profile.devices.confirmDelete'))) return;
     try {
       const r = await fetch(`/me/device-tokens/${id}`, { method: 'DELETE', credentials: 'same-origin' });
-      if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error_code || `HTTP ${r.status}`); }
+      if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(window.__app.tError(j) || `HTTP ${r.status}`); }
       await this.loadDeviceTokens();
     } catch (e) { this.deviceTokensError = e.message; }
   },

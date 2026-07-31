@@ -43,6 +43,23 @@ try {
   runDevSeedIfNeeded();
 } catch (e) { logger.warn(`runDevSeedIfNeeded: ${e.message}`); }
 
+// Demo-Zugang-Bootstrap (nur wenn DEMO_EMAIL + DEMO_PASSWORD gesetzt sind):
+// app_users-Row + fixe Device-Tokens aus ENV. Muss beim BOOT laufen und nicht
+// erst beim ersten Login — die nativen Clients und die Browser-Erweiterung
+// authentisieren per Bearer-Token und rufen die Login-Seite nie auf. Idempotent.
+// Details + Betriebsregeln: lib/demo-user.js.
+try {
+  const demoUser = require('./lib/demo-user');
+  if (demoUser.isEnabled()) {
+    demoUser.ensureDemoAccess();
+    // Beispielbuch asynchron nachziehen (Content-Store ist async), damit auch ein
+    // Reviewer, der ausschliesslich im nativen Client arbeitet, Inhalt sieht.
+    setImmediate(() => {
+      demoUser.seedDemoContent(demoUser.demoEmail()).catch(() => {});
+    });
+  }
+} catch (e) { logger.warn(`demo-user.ensureDemoAccess: ${e.message}`); }
+
 // Initial-Reindex der FTS5-Tabellen, wenn die Marker-Row gesetzt ist.
 // In setImmediate, damit Boot nicht blockiert.
 setImmediate(() => {
