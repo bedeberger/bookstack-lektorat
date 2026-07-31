@@ -46,6 +46,18 @@ const PNG_1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0l
 
 const ORIGINAL_HTML = '<p>Der Jungen ging in den Walld. Die Sonne scheinet hell.</p>';
 
+// Fremd-Write-Szenario: der Seitenstand, den ein ZWEITGERAET waehrend der
+// laufenden Analyse geschrieben hat. Der erste Satz ist neu formuliert (das
+// Finding auf «Walld» ist damit hinfaellig), der zweite ist unveraendert (die
+// Findings auf «scheinet» und «Die» ueberleben wortgleich).
+const REWRITTEN_HTML = '<p>Der Junge lief zum Fluss. Die Sonne scheinet hell.</p>';
+
+// Aktueller Seitenstand, den GET /content/pages/:id ausliefert. Das
+// `stale`-Szenario schaltet ihn beim Job-Start auf REWRITTEN_HTML + neuen
+// Stempel um — simuliert „Mac-Client pusht, waehrend der Job laeuft".
+const PAGE_INITIAL = { html: ORIGINAL_HTML, updated_at: '2026-07-31T10:00:00.000Z' };
+let pageState = { ...PAGE_INITIAL };
+
 const SCENARIOS = {
   ok: () => ({
     status: 'done',
@@ -68,6 +80,30 @@ const SCENARIOS = {
   empty: () => ({
     status: 'done', progress: 100,
     result: { empty: true },
+  }),
+  // Wie `ok`, aber der Job-Snapshot ist veraltet: `updatedAt` traegt den Stempel
+  // VON VOR dem Fremd-Write, waehrend GET /content/pages/:id inzwischen
+  // REWRITTEN_HTML + neuen Stempel liefert. Erwartetes Client-Verhalten: die
+  // Findings werden gegen den frischen Text refiltert (2 von 3 ueberleben), nicht
+  // pauschal verworfen.
+  stale: () => ({
+    status: 'done',
+    progress: 100,
+    result: {
+      fehler: [
+        { typ: 'rechtschreibung', original: 'Walld',   korrektur: 'Wald',   erklaerung: 'Tippfehler' },
+        { typ: 'grammatik',       original: 'scheinet', korrektur: 'scheint', erklaerung: 'Konjugation' },
+        { typ: 'wiederholung',    original: 'Die',      korrektur: 'Eine',    erklaerung: 'Wortwiederholung' },
+      ],
+      szenen: [],
+      stilanalyse: null,
+      fazit: null,
+      originalHtml: ORIGINAL_HTML,
+      updatedAt: PAGE_INITIAL.updated_at,
+      pageName: 'Testseite',
+      checkId: 4712,
+      tokensIn: 100, tokensOut: 50,
+    },
   }),
   error: () => ({
     status: 'error', progress: 0,
@@ -98,6 +134,11 @@ async function handleMockRoute(req, res, urlPath) {
     let payload = {};
     try { payload = body ? JSON.parse(body) : {}; } catch (_) {}
     const scenario = SCENARIOS[payload._scenario] ? payload._scenario : 'ok';
+    // Fremd-Write simulieren: ab Job-Start liefert der Content-Endpoint den
+    // neuen Stand, waehrend das Job-Result den alten Snapshot traegt.
+    if (scenario === 'stale') {
+      pageState = { html: REWRITTEN_HTML, updated_at: '2026-07-31T10:05:00.000Z' };
+    }
     const jobId = 'mock-' + (++jobSeq);
     jobs.set(jobId, { scenario, pollsSeen: 0 });
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -123,7 +164,7 @@ async function handleMockRoute(req, res, urlPath) {
   if (pageMatch) {
     if (req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ id: 1, html: ORIGINAL_HTML, name: 'Testseite' }));
+      res.end(JSON.stringify({ id: 1, html: pageState.html, name: 'Testseite', updated_at: pageState.updated_at }));
       return true;
     }
     if (req.method === 'PUT') {
@@ -320,6 +361,7 @@ async function handleMockRoute(req, res, urlPath) {
     jobSeq = 0;
     lastBsPut = null;
     lastHistoryPatch = null;
+    pageState = { ...PAGE_INITIAL };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end('{}');
     return true;

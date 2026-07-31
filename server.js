@@ -63,6 +63,7 @@ const { reindexAllUserSources } = require('./routes/jobs/source-embed-index');
 const { reindexAllXrefs } = require('./lib/xref-index');
 const { scanAllBooks: scanAllMotifs } = require('./routes/jobs/motif-scan');
 const { anchorAllBooks: anchorAllBeats } = require('./routes/jobs/beat-anchor');
+const { scanAllBooks: scanAllLexicons } = require('./routes/jobs/lexicon-scan');
 const chatRouter = require('./routes/chat');
 const ideenRouter = require('./routes/ideen');
 const researchRouter = require('./routes/research');
@@ -505,6 +506,7 @@ app.use('/capture', require('./routes/capture'));
 app.use('/xrefs', xrefsRouter);
 app.use('/plot', plotRouter);
 app.use('/motifs', motifsRouter);
+app.use('/lexicon', require('./routes/lexicon'));
 app.use('/booksettings', bookSettingsRouter);
 app.use('/me', userSettingsRouter);
 app.use('/sync', syncRouter);
@@ -681,7 +683,14 @@ try {
   cron.schedule('0 23 * * *', () => {
     runWithContext({ job: 'cron', user: 'system' }, () => {
       logger.info('Cron: Starte täglichen Buchstatistik-Sync…');
-      syncAllBooks().catch(e => logger.error('Cron-Sync Fehler: ' + e.message));
+      // Wortschatz-Analyse hängt sich HINTER den Sync (nicht in die Embedding-
+      // Kette weiter unten): sie liest reinen Seitentext, keine Vektoren, und
+      // braucht dafür den frischen Stand aus dem Sync. Der Delta-Skip
+      // (content_sig über die Seiten in Leserichtung) macht den Lauf für
+      // unveränderte Bücher praktisch kostenlos.
+      syncAllBooks()
+        .then(() => scanAllLexicons())
+        .catch(e => logger.error('Cron-Sync/Wortschatz Fehler: ' + e.message));
 
       const stuck = cleanupStuckJobRuns();
       if (stuck > 0) logger.warn(`Cron: ${stuck} hängender Job-Run(s) auf 'error' gesetzt.`);

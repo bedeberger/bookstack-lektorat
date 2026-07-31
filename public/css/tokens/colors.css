@@ -212,6 +212,8 @@
   --card-accent-search: var(--card-accent-search-base);
   --card-accent-redundanz-base: #9a5a4a;
   --card-accent-redundanz: var(--card-accent-redundanz-base);
+  --card-accent-wortschatz-base: #6a5a9a;
+  --card-accent-wortschatz: var(--card-accent-wortschatz-base);
   --card-accent-songs-base: #a04a8e;
   --card-accent-songs: var(--card-accent-songs-base);
   --card-accent-folderimport-base: #5a7a4a;
@@ -451,6 +453,7 @@
   --card-accent-bookeditor: oklch(from var(--card-accent-bookeditor-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-search: oklch(from var(--card-accent-search-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-redundanz: oklch(from var(--card-accent-redundanz-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
+  --card-accent-wortschatz: oklch(from var(--card-accent-wortschatz-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-songs: oklch(from var(--card-accent-songs-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-folderimport: oklch(from var(--card-accent-folderimport-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);
   --card-accent-onboarding: oklch(from var(--card-accent-onboarding-base) max(var(--accent-dark-floor), calc(l + var(--accent-dark-lift))) calc(c * var(--accent-dark-chroma)) h);

@@ -1,6 +1,6 @@
 # ERD — schreibwerkstatt
 
-Stand: Schema-Version 260, 140 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
+Stand: Schema-Version 261, 143 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
 
 Quelle: Squashed-Schema-Snapshot in [db/squashed-schema.js](../db/squashed-schema.js) (regeneriert via `node tools/dump-schema.js`) + [db/migrations.js](../db/migrations.js). Drift gegen die Legacy-Migration-Kette ist durch [tests/unit/squash-drift.test.mjs](../tests/unit/squash-drift.test.mjs) gegated. Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -99,6 +99,11 @@ erDiagram
   motifs ||--o{ motif_chapters       : "soll chapter"
   motifs ||--o{ motif_pages          : "soll page"
   motifs ||--o{ motif_occurrences    : "detected (ist)"
+  books ||--o| book_lexicon          : "wortschatz (ist)"
+  books ||--o{ lexicon_terms         : "top terms"
+  books ||--o{ lexicon_ngrams        : "top phrases"
+  pages ||--o{ lexicon_terms         : "first occurrence"
+  pages ||--o{ lexicon_ngrams        : "first occurrence"
   plot_beats ||--o{ plot_beat_figures : has
   figures ||--o{ plot_beat_figures   : "appears in beat"
   plot_beats ||--o{ plot_beat_draft_figures : has
@@ -1960,6 +1965,59 @@ erDiagram
 ```
 
 ---
+
+### Wortschatz-Analyse (abgeleitet, Full-Replace pro Scan)
+
+```mermaid
+erDiagram
+  book_lexicon {
+    INTEGER book_id         PK "FK books, CASCADE — 1:1 zum Buch"
+    TEXT    scanned_at
+    INTEGER lexicon_version     "Rechenregel-Version (LEXICON_VERSION)"
+    TEXT    content_sig         "Hash Seiten+Reihenfolge → Delta-Skip"
+    INTEGER pages
+    INTEGER segments
+    INTEGER tokens
+    INTEGER types
+    INTEGER lemma_types         "nullable — Phase 1 ohne Lemmatisierung"
+    INTEGER hapax
+    INTEGER dislegomena
+    REAL    hapax_ratio
+    REAL    mattr
+    INTEGER mattr_window        "< 1000 ⇒ Wert ist einfache TTR, nicht laengenrobust"
+    INTEGER mattr_windows
+    REAL    mtld                "nullable — erst ab 100 Token"
+    REAL    yule_k
+    REAL    heaps_beta          "nullable — erst ab 200 Token"
+    REAL    heaps_k
+    REAL    lex_density
+    TEXT    freq_json           "Top-Terme als Referenzkorpus fuer ANDERE Buecher"
+  }
+  lexicon_terms {
+    INTEGER id             PK
+    INTEGER book_id        FK "CASCADE"
+    TEXT    term               "UNIQUE(book_id, term)"
+    INTEGER count
+    INTEGER chapter_spread     "in wie vielen Kapiteln"
+    REAL    keyness            "nullable — Log-Likelihood vs. andere Buecher"
+    INTEGER first_page_id  FK "SET NULL — Sprungziel"
+  }
+  lexicon_ngrams {
+    INTEGER id             PK
+    INTEGER book_id        FK "CASCADE"
+    TEXT    phrase             "UNIQUE(book_id, phrase)"
+    INTEGER n                  "2..5"
+    INTEGER count
+    INTEGER chapter_spread
+    REAL    log_dice           "Kohaesion der Bestandteile"
+    INTEGER first_page_id  FK "SET NULL — Sprungziel"
+  }
+  books ||--o| book_lexicon   : "wortschatz"
+  books ||--o{ lexicon_terms  : "top terms"
+  books ||--o{ lexicon_ngrams : "top phrases"
+  pages ||--o{ lexicon_terms  : "first occurrence"
+  pages ||--o{ lexicon_ngrams : "first occurrence"
+```
 
 ## 6 · Pflege
 

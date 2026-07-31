@@ -10239,6 +10239,97 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 260 abgeschlossen (doc_chars an sources + research_items: Trunkierungs-Signal des PDF-Volltexts).');
   }
 
+  if (version < 261) {
+    // Wortschatz-Analyse (quantitative Stilistik pro Buch): drei abgeleitete
+    // Tabellen, alle Full-Replace pro Scan (Job `lexicon-scan`, kein callAI).
+    //
+    // `book_lexicon` ist 1:1 zum Buch — die Kennzahlen gelten fuer das ganze Werk,
+    // nicht pro Seite. Das ist der Kern des Features und der Grund, dass es die
+    // Zahlen nicht schon gibt: MATTR, MTLD und Heaps sind Fenster- bzw. Praefix-
+    // Masse ueber die Token-SEQUENZ und lassen sich nicht aus `page_stats`
+    // aufsummieren (ein 1000-Token-Fenster liegt regelmaessig quer ueber eine
+    // Seitengrenze). `content_sig` deckt den Delta-Skip: Hash ueber die
+    // Seiten-Signaturen in Leserichtung + LEXICON_VERSION.
+    //
+    // `mattr_window` wird mitgespeichert, weil MATTR bei kurzen Buechern auf die
+    // einfache TTR mit Fenster = Textlaenge zurueckfaellt. Ohne diese Spalte sieht
+    // ein nicht laengenrobuster Wert genauso aus wie ein robuster.
+    //
+    // `lexicon_terms`/`lexicon_ngrams` sind gedeckelte Ranglisten (Top-N), keine
+    // vollstaendigen Frequenzlisten — der Wortschatz eines Buchs hat
+    // Zehntausende Types, davon sind ein paar hundert ein Befund. `first_page_id`
+    // ist das Sprungziel und darum SET NULL, nicht CASCADE: verschwindet die
+    // Seite, bleibt die Zeile bis zum naechsten Scan als Zahl gueltig.
+    //
+    // `freq_json` ist die Haeufigkeitstabelle dieses Buchs (Top-Terme als
+    // {term: count}) und dient AUSSCHLIESSLICH als Referenzkorpus fuer die
+    // Keyness der ANDEREN Buecher desselben Autors: „welche Woerter benutze ich
+    // hier auffaellig und sonst nicht". Ohne diese Spalte braeuchte jeder Scan
+    // die uebrigen Buecher neu tokenisiert (O(n²) pro Nacht). Bewusste
+    // Ungenauigkeit: ein Term unterhalb des Deckels zaehlt in der Referenz als 0,
+    // die Keyness ist dann leicht zu hoch — die Abweichung ist durch die
+    // Haeufigkeit des letzten aufgenommenen Terms nach oben begrenzt.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS book_lexicon (
+        book_id         INTEGER PRIMARY KEY REFERENCES books(book_id) ON DELETE CASCADE,
+        scanned_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        lexicon_version INTEGER NOT NULL DEFAULT 0,
+        content_sig     TEXT,
+        pages           INTEGER CHECK (pages IS NULL OR pages >= 0),
+        segments        INTEGER CHECK (segments IS NULL OR segments >= 0),
+        tokens          INTEGER CHECK (tokens IS NULL OR tokens >= 0),
+        types           INTEGER CHECK (types IS NULL OR types >= 0),
+        lemma_types     INTEGER CHECK (lemma_types IS NULL OR lemma_types >= 0),
+        hapax           INTEGER CHECK (hapax IS NULL OR hapax >= 0),
+        dislegomena     INTEGER CHECK (dislegomena IS NULL OR dislegomena >= 0),
+        hapax_ratio     REAL,
+        mattr           REAL,
+        mattr_window    INTEGER CHECK (mattr_window IS NULL OR mattr_window >= 0),
+        mattr_windows   INTEGER CHECK (mattr_windows IS NULL OR mattr_windows >= 0),
+        mtld            REAL,
+        yule_k          REAL,
+        heaps_beta      REAL,
+        heaps_k         REAL,
+        lex_density     REAL,
+        freq_json       TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS lexicon_terms (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id        INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        term           TEXT    NOT NULL,
+        count          INTEGER NOT NULL CHECK (count >= 0),
+        chapter_spread INTEGER NOT NULL DEFAULT 0 CHECK (chapter_spread >= 0),
+        keyness        REAL,
+        first_page_id  INTEGER REFERENCES pages(page_id) ON DELETE SET NULL,
+        UNIQUE (book_id, term)
+      );
+      CREATE INDEX IF NOT EXISTS idx_lexterm_book ON lexicon_terms(book_id);
+      CREATE INDEX IF NOT EXISTS idx_lexterm_page ON lexicon_terms(first_page_id);
+
+      CREATE TABLE IF NOT EXISTS lexicon_ngrams (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id        INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        phrase         TEXT    NOT NULL,
+        n              INTEGER NOT NULL CHECK (n >= 2),
+        count          INTEGER NOT NULL CHECK (count >= 0),
+        chapter_spread INTEGER NOT NULL DEFAULT 0 CHECK (chapter_spread >= 0),
+        log_dice       REAL,
+        first_page_id  INTEGER REFERENCES pages(page_id) ON DELETE SET NULL,
+        UNIQUE (book_id, phrase)
+      );
+      CREATE INDEX IF NOT EXISTS idx_lexngram_book ON lexicon_ngrams(book_id);
+      CREATE INDEX IF NOT EXISTS idx_lexngram_page ON lexicon_ngrams(first_page_id);
+    `);
+
+    const fkErrors261 = db.pragma('foreign_key_check');
+    if (fkErrors261.length) {
+      throw new Error(`Migration 261: foreign_key_check meldet ${fkErrors261.length} Verstoesse: ${JSON.stringify(fkErrors261.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 261').run();
+    logger.info('DB-Migration auf Version 261 abgeschlossen (Wortschatz-Analyse: book_lexicon + lexicon_terms + lexicon_ngrams).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

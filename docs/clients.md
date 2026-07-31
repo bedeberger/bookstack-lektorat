@@ -1,9 +1,10 @@
-# Native Clients (macOS + Android)
+# Clients (macOS, Android, Browser-Erweiterung)
 
-Neben der Web-SPA gibt es zwei native Offline-First-Clients, die in eigenen Repos leben und denselben Server konsumieren:
+Neben der Web-SPA gibt es drei Clients, die in eigenen Repos leben und denselben Server konsumieren — **zwei schreibende Offline-First-Editoren und eine erfassende Erweiterung**:
 
 - **macOS** — [schreibwerkstatt-focuseditor](https://github.com/bedeberger/schreibwerkstatt-focuseditor): der Focus-Writer in einer WKWebView-Schale, die den Editor-Kern per OTA zieht (siehe [docs/focus-editor.md](focus-editor.md) → `setEditorHost()`/Bridge).
 - **Android** — [schreibwerkstatt-mobile](https://github.com/bedeberger/schreibwerkstatt-mobile): native Mobile-App mit nativer Navigation/UI; der Schreibmodus selbst ist eine WebView, die denselben Editor-Kern per OTA zieht (eigenes Boot-HTML `assets/editor-host/host.html` + `editor-host.css`, Bundle-Load via `BundleManager`/`EditorViewModel`). Gleiche Auth + Sync.
+- **Chrome** — `schreibwerkstatt-browser-extension`: erfasst beim Surfen Webseiten ins Recherche-Board bzw. in die Quellen-Bibliothek. **Kein Editor-Client** — kein Editor-Bundle, kein Sync, keine Presence, und nie in den Manuskripttext. Teilt mit den nativen Clients nur das Device-Token, und auch das mit engerem Scope. Eigener Abschnitt: „[Dritter Client](#dritter-client-browser-erweiterung-chrome-capture-scope)".
 
 Diese Datei ist der **Überblick über die client-seitige Server-Schicht** (Auth, OTA, Sync, Presence, Release-Discovery). Der Editor-Kern selbst und die Bridge in fremde Schalen sind in [docs/focus-editor.md](focus-editor.md) dokumentiert; das Sync-/Konflikt-Modell der Seiten in [docs/notebook-editor.md](notebook-editor.md) (Block-Level-Merge).
 
@@ -79,6 +80,8 @@ Offline-First: der Client hält einen lokalen SQLite-Spiegel und synchronisiert 
 - **Collab-Signal (nicht Sync):** `GET /content/books/:book_id/changes?since=<iso>&device_id=<uuid>` — self-exkludierend, **ohne** HTML, nur für Collab-Toasts. „Andere Partei" = anderer User **oder** ein anderes eigenes Gerät; nur der Echo des anfragenden Geräts (gleiche `device_id`) wird ausgefiltert. Jede Row trägt `is_self` (gleicher Account, anderes Gerät) + `device_label` (nur für **eigene** Geräte gejoint, kein Leak fremder Gerätenamen) — die UI formuliert Multi-Device-Edits als „auf ⟨Gerät⟩ geändert" statt als Fremd-Edit.
 - **Presence-Heartbeat:** `POST/DELETE /content/pages/:page_id/presence` (Seiten-Edit-Marker) und `POST/DELETE /content/books/:book_id/device-ping` (leichter Buch-Heartbeat) + `GET /content/books/:book_id/presence` (aktive Sessions). Trägt die Multi-Device-Erkennung.
 
+> **Das Collab-Signal ist ein Komfort-Kanal, keine Wahrheitsquelle.** Der 5s-Poll auf `/changes` läuft im Browser erst, wenn der **40s**-Buch-Device-Ping eine zweite Partei gemeldet hat (`_selfBookDeviceCount > 1` bzw. geteiltes Buch, [app-collab.js](../public/js/app/app-collab.js#L135)) — ein Push eines Zweitgeräts wird also bis zu einer Ping-Periode später sichtbar, und gar nicht, wenn das Gerät offline schrieb und beim Reconnect nur pusht, ohne das Buch zu pingen. Folge für den Server-Konsumenten: **jeder Pfad, dessen Resultat an einem Seiten-Snapshot hängt** (Lektorat-Findings mit Positionen, Chat-`vorschlaege.original`), muss den aktuellen `updated_at` **selbst** nachfragen statt der browserlokalen `currentPage.updated_at` zu glauben. Siehe harte Regel „Job-Ergebnisse mit `updatedAt`-Staleness-Check" in [CLAUDE.md](../CLAUDE.md).
+
 ## Release-Discovery (Download-Hinweis im Profil)
 
 Das Profil (`/me`) zeigt eingeloggten Usern Version + Download-Link der nativen Apps. Beide Routen sind dünne Proxies auf die GitHub-Public-API über den generischen Fetcher [lib/github-release.js](../lib/github-release.js) (In-Memory-Cache):
@@ -93,19 +96,22 @@ Das Profil (`/me`) zeigt eingeloggten Usern Version + Download-Link der nativen 
 - **GitHub-Rate-Limit:** ohne Token 60 Req/h. Ein optionaler PAT hebt das auf 5000/h (Admin-Settings → Erweitert → `macclient.github_token`, verschlüsselt in `app_settings`; `GITHUB_TOKEN` in `.env` nur als einmaliger Boot-Seed). Siehe [README.md](../README.md).
 - Profil-UI-Strings: `profile.macApp.*` / `profile.androidApp.*` in [public/js/i18n/{de,en}.json](../public/js/i18n/).
 
-## macOS vs. Android — Abdeckung
+## Abdeckung im Vergleich
 
-| Aspekt | macOS (`focuseditor`) | Android (`mobile`) |
-|--------|----------------------|--------------------|
-| Architektur | WKWebView-Schale, Editor-Kern per OTA | native App + WebView-Schreibmodus, Editor-Kern per OTA |
-| Device-Token-Auth | ✅ | ✅ |
-| Sync (`/sync`) + Presence | ✅ | ✅ |
-| Release-Discovery | ✅ `.dmg` | ✅ `.apk` |
-| OTA-Editor-Bundle | ✅ | ✅ (eigenes Boot-HTML) |
-| OTA-i18n-Override | ✅ | — (native Strings) |
-| Push-Notifications | — | — (kein FCM/APNS im Server) |
+| Aspekt | macOS (`focuseditor`) | Android (`mobile`) | Chrome (`browser-extension`) |
+|--------|----------------------|--------------------|------------------------------|
+| Architektur | WKWebView-Schale, Editor-Kern per OTA | native App + WebView-Schreibmodus, Editor-Kern per OTA | MV3-Service-Worker + Popup, kein Editor |
+| Device-Token-Auth | ✅ `device` | ✅ `device` | ✅ `capture` (enge Allowlist) |
+| Schreibt ins Manuskript | ✅ | ✅ | — (Recherche + Quellen, nie Buchtext) |
+| Sync (`/sync`) + Presence | ✅ | ✅ | — (kein lokaler Spiegel) |
+| Release-Discovery | ✅ `.dmg` | ✅ `.apk` | — (Store bzw. Sideload, kein `release.json`) |
+| OTA-Editor-Bundle | ✅ | ✅ (eigenes Boot-HTML) | — |
+| OTA-i18n-Override | ✅ | — (native Strings) | — (eigene Strings) |
+| Push-Notifications | — | — (kein FCM/APNS im Server) | — |
 
-Das Fehlende auf Android-Seite (i18n-Override) ist **kein Gap, sondern Folge der Architektur**: die App verwaltet ihre Chrome-Strings nativ, der Editor-Kern bringt seine eigenen mit. Was beide gemeinsam tragen — Auth, Sync, Presence, Release-Discovery, Editor-Bundle — ist symmetrisch abgedeckt.
+Das Fehlende auf Android-Seite (i18n-Override) ist **kein Gap, sondern Folge der Architektur**: die App verwaltet ihre Oberflächen-Strings nativ, der Editor-Kern bringt seine eigenen mit. Was beide nativen Clients gemeinsam tragen — Auth, Sync, Presence, Release-Discovery, Editor-Bundle — ist symmetrisch abgedeckt.
+
+Die leere Spalte der Erweiterung ist ebenso wenig eine Lücke: sie ist **die Definition des Clients**. Wer nur erfasst, braucht keinen lokalen Spiegel (es gibt nichts zu mergen), kein Editor-Bundle (es wird nichts editiert) und keine Presence (niemand teilt eine Seite mit ihr). Käme eines davon dazu, wäre es ein zweiter Editor-Client und kein Erfassungswerkzeug mehr — und der enge Token-Scope, der genau das absichert, müsste fallen.
 
 **Push-Notifications** existieren auf keiner Plattform serverseitig (kein FCM/APNS). Falls künftig gewünscht, wäre das ein neuer Baustein (Token-Registry analog `device_tokens`, Notify-Trigger an den Sync-/Collab-Punkten).
 

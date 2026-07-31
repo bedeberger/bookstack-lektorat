@@ -51,22 +51,13 @@ test('S2: routes/jobs/chat/page-chat.js completeJob-Payload enthält updatedAt',
     'pageUpdatedAt muss aus dem Seiten-Read (pd.updated_at) stammen, nicht erfunden');
 });
 
-test('F1: editor/lektorat.js onDone hat Discard-Guard auf updatedAt-Mismatch', () => {
-  const src = read('public/js/editor/lektorat.js');
-  // Die Guard-Zeile vergleicht r.updatedAt mit this.currentPage?.updated_at
-  // und returnt früh (kein Apply auf stale Snapshot).
-  assert.match(
-    src,
-    /if\s*\(\s*r\.updatedAt\s*&&\s*this\.currentPage\?\.updated_at\s*&&\s*r\.updatedAt\s*!==\s*this\.currentPage\.updated_at\s*\)/,
-    'onDone braucht expliziten Mismatch-Guard auf r.updatedAt vs currentPage.updated_at',
-  );
-  // Im Block muss klar dokumentiert sein, dass NICHTS angewandt wird (return).
-  // Brace-Counting (Template-Literals & `${…}`-Expressions enthalten `}`,
-  // simples indexOf('}') würde mitten im Template-Literal stoppen).
-  const guardStart = src.search(/if\s*\(\s*r\.updatedAt/);
-  const afterGuard = src.indexOf('{', guardStart);
+// Extrahiert den Block-Body ab der ersten `{` nach `fromIdx`. Brace-Counting,
+// weil Template-Literals & `${…}`-Expressions eigene `}` enthalten — ein simples
+// indexOf('}') würde mitten im Template-Literal stoppen.
+function blockBodyAfter(src, fromIdx) {
+  const open = src.indexOf('{', fromIdx);
   let depth = 1;
-  let i = afterGuard + 1;
+  let i = open + 1;
   let inStr = null, inTpl = 0;
   while (i < src.length && depth > 0) {
     const ch = src[i];
@@ -85,13 +76,52 @@ test('F1: editor/lektorat.js onDone hat Discard-Guard auf updatedAt-Mismatch', (
     }
     i++;
   }
-  const guardBlock = src.slice(afterGuard + 1, i - 1);
-  assert.match(guardBlock, /\breturn\b/,
+  return src.slice(open + 1, i - 1);
+}
+
+test('F1: editor/lektorat.js onDone verifiziert den Stempel selbst (nicht via currentPage)', () => {
+  const src = read('public/js/editor/lektorat.js');
+  // `currentPage.updated_at` ist eine browserlokale Kopie und rückt nur vor,
+  // wenn der Collab-Poll lief (40s-Device-Ping als Voraussetzung) — ein Write
+  // von einem Zweitgerät erreicht sie nicht verlässlich. onDone MUSS den
+  // aktuellen Stempel darum selbst holen.
+  assert.match(src, /contentRepo\.loadPage\(\s*pageId\s*,\s*\{\s*fresh:\s*true\s*\}\s*\)/,
+    'onDone braucht einen eigenen fresh-Read der Seite für den Stempel-Vergleich');
+  assert.match(src, /pd\.updated_at\s*!==\s*r\.updatedAt/,
+    'Vergleich muss gegen den frisch geholten pd.updated_at laufen, nicht gegen die lokale Kopie');
+});
+
+test('F1b: Findings werden im Stale-Fall gegen den FRISCHEN Text refiltert', () => {
+  const src = read('public/js/editor/lektorat.js');
+  // Rettung statt Verwerfen: `sortByPosition` ist der Survivor-Filter (es
+  // verwirft jedes Finding, dessen `original` im übergebenen HTML nicht
+  // auffindbar ist). Basis muss darum die Variable sein, die im Stale-Fall auf
+  // den aufgefrischten Stand zeigt — NICHT r.originalHtml.
+  assert.match(src, /const\s+findings\s*=\s*sortByPosition\(\s*base\s*,\s*fehler\s*\)/,
+    'Findings-Basis muss `base` sein (im Stale-Fall der frische Text), nicht r.originalHtml');
+  assert.match(src, /base\s*=\s*this\.originalHtml/,
+    'im Stale-Zweig muss `base` auf den via _refetchCurrentPage aufgefrischten Stand zeigen');
+  assert.match(src, /await\s+this\._refetchCurrentPage\(\)/,
+    'Stale-Zweig muss den frischen Stand in die Seitenansicht ziehen');
+  // Überlebt nichts, wird trotzdem verworfen (keine leere Findings-Liste als
+  // „geprüft, alles gut" ausgeben).
+  assert.match(src, /staleRefiltered\s*&&\s*findings\.length\s*===\s*0/,
+    'sind alle Findings hinfällig, muss das Ergebnis komplett verworfen werden');
+});
+
+test('F1c: nicht verifizierbarer Stand wird komplett verworfen (Offline-Fallback)', () => {
+  const src = read('public/js/editor/lektorat.js');
+  // Schlägt der fresh-Read fehl (offline, SW-Fehler, kein pageId), darf NICHT
+  // ungeprüft auf dem Job-Snapshot weitergearbeitet werden — dann gilt das alte
+  // Verhalten: lokal vergleichen und bei Mismatch verwerfen.
+  const guardRe = /if\s*\(\s*!verified\s*&&\s*r\.updatedAt\s*&&\s*this\.currentPage\?\.updated_at\s*&&\s*r\.updatedAt\s*!==\s*this\.currentPage\.updated_at\s*\)/;
+  assert.match(src, guardRe, 'Fallback-Guard für den nicht verifizierbaren Fall fehlt');
+  const body = blockBodyAfter(src, src.search(guardRe));
+  assert.match(body, /\breturn\b/,
     'Discard-Branch muss return-en — sonst werden Findings doch angewandt');
-  // Kein .originalHtml / .lektoratFindings im Discard-Branch — Sicherheit.
-  assert.doesNotMatch(guardBlock, /this\.originalHtml\s*=/,
+  assert.doesNotMatch(body, /this\.originalHtml\s*=/,
     'Discard-Branch darf originalHtml nicht überschreiben');
-  assert.doesNotMatch(guardBlock, /this\.lektoratFindings\s*=/,
+  assert.doesNotMatch(body, /this\.lektoratFindings\s*=/,
     'Discard-Branch darf lektoratFindings nicht setzen');
 });
 

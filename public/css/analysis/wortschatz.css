@@ -1,0 +1,103 @@
+/* Wortschatz-Analyse (quantitative Stilistik pro Buch).
+   Das Kennzahlen-Grid kommt aus book-overview/ (.overview-grid/.overview-tile
+   + Hero-/Substat-Atome, siehe DESIGN.md „Book-Overview-Tiles") — hier stehen nur
+   die Zusaetze, die es dort nicht gibt: Erlaeuterungs-/Vergleichszeilen unter der
+   Zahl, die Ranglisten-Tabelle und die Keyness-Badges.
+   Akzentfarbe ueber var(--card-accent) (Mapping in card-accents.css). */
+@layer components {
+
+  .wortschatz-intro,
+  .wortschatz-list-hint {
+    margin: 0 0 var(--space-md);
+    color: var(--color-muted);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+  }
+
+  .wortschatz-kpis { margin-bottom: var(--space-lg); }
+
+  /* Erlaeuterung unter einer Kennzahl (was sie bedeutet, welche Richtung gut ist). */
+  .wortschatz-kpi-note {
+    margin: var(--space-xs) 0 0;
+    color: var(--color-muted);
+    font-size: var(--font-size-xs);
+    line-height: 1.4;
+  }
+
+  /* Vergleich gegen die uebrigen Buecher desselben Autors. Traegt den Akzent,
+     weil das die eigentliche Einordnung ist — eine nackte Zahl sagt nichts. */
+  .wortschatz-kpi-peer {
+    margin: var(--space-xs) 0 0;
+    color: var(--card-accent);
+    font-size: var(--font-size-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Warnung, dass eine Kennzahl NICHT belastbar ist (Text kuerzer als das
+     MATTR-Fenster bzw. unter der Mindestlaenge fuer MTLD/Heaps). Muss auffallen:
+     sonst haelt der Autor einen nicht vergleichbaren Wert fuer vergleichbar. */
+  .wortschatz-kpi-warn {
+    margin: var(--space-xs) 0 0;
+    color: var(--color-warn-text);
+    font-size: var(--font-size-xs);
+    line-height: 1.4;
+  }
+
+  .wortschatz-tabs { margin-bottom: var(--space-md); }
+
+  .wortschatz-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+  }
+
+  .wortschatz-table th,
+  .wortschatz-table td {
+    padding: var(--space-sm);
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .wortschatz-table th {
+    font-weight: 600;
+    color: var(--color-muted);
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .wortschatz-table tbody tr:last-child td { border-bottom: none; }
+  .wortschatz-table tbody tr:hover { background: var(--color-hover-light); }
+
+  .wortschatz-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* Das Wort bzw. die Wendung ist der Gegenstand der Zeile — kraeftiger als die
+     Zahlen daneben. */
+  .wortschatz-term { font-weight: 600; color: var(--color-text); }
+  .wortschatz-phrase { font-weight: 500; color: var(--color-text); }
+
+  /* Keyness-Baender: positiv = in diesem Buch auffaellig haeufig, negativ =
+     auffaellig gemieden. Drei Stufen, damit die Spalte auf einen Blick lesbar ist. */
+  .wortschatz-keyness--high {
+    border-color: var(--card-accent);
+    color: var(--card-accent);
+    font-weight: 600;
+  }
+
+  .wortschatz-keyness--mid { color: var(--color-text); }
+
+  .wortschatz-keyness--neg {
+    color: var(--color-muted);
+    font-style: italic;
+  }
+
+  @media (max-width: 640px) {
+    .wortschatz-table th,
+    .wortschatz-table td { padding: var(--space-xs); }
+  }
+}

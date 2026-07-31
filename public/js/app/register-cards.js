@@ -29,6 +29,7 @@ import { registerFigurWerkstattCard } from '../cards/figur-werkstatt-card.js';
 import { registerStilCard } from '../cards/stil-card.js';
 import { registerFehlerHeatmapCard } from '../cards/fehler-heatmap-card.js';
 import { registerRedundanzCard } from '../cards/redundanz-card.js';
+import { registerWortschatzCard } from '../cards/wortschatz-card.js';
 import { registerChatCard } from '../cards/chat-card.js';
 import { registerIdeenCard } from '../cards/ideen-card.js';
 import { registerReferenceCard } from '../cards/reference-card.js';
@@ -141,6 +142,7 @@ export function registerAllCards() {
   registerStilCard();
   registerFehlerHeatmapCard();
   registerRedundanzCard();
+  registerWortschatzCard();
   registerBookOverviewCard();
   registerBookStatsCard();
   registerBookSettingsCard();

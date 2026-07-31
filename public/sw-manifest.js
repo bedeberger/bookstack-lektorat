@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "e60ed7b1cb62c9d9";
+self.__SHELL_BUILD = "58287562c658607a";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -21,6 +21,7 @@ self.__SHELL_MANIFEST = [
   "/css/analysis/komplett-status.css",
   "/css/analysis/kontinuitaet.css",
   "/css/analysis/redundanz.css",
+  "/css/analysis/wortschatz.css",
   "/css/analysis/zeitleiste.css",
   "/css/book-overview/base.css",
   "/css/book-overview/coverage.css",
@@ -262,6 +263,7 @@ self.__SHELL_MANIFEST = [
   "/js/book/tree/permissions.js",
   "/js/book/tree/stats.js",
   "/js/book/tree/ui.js",
+  "/js/book/wortschatz.js",
   "/js/book/writing-time.js",
   "/js/book/ymheatmap.js",
   "/js/cards/admin-backup-card.js",
@@ -369,6 +371,7 @@ self.__SHELL_MANIFEST = [
   "/js/cards/tts-store.js",
   "/js/cards/user-settings-card.js",
   "/js/cards/world-facts-card.js",
+  "/js/cards/wortschatz-card.js",
   "/js/catalog-filter.js",
   "/js/chat/book-chat.js",
   "/js/chat/chat-base.js",
@@ -742,4 +745,5 @@ self.__SHELL_MANIFEST = [
   "/partials/werkstatt-import-fields.html",
   "/partials/werkstatt-run-row.html",
   "/partials/world-facts.html",
+  "/partials/wortschatz.html",
 ];

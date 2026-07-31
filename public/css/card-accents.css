@@ -34,6 +34,7 @@
   .card--bookeditor       { --card-accent: var(--card-accent-bookeditor); }
   .card--search           { --card-accent: var(--card-accent-search); }
   .card--redundanz        { --card-accent: var(--card-accent-redundanz); }
+  .card--wortschatz       { --card-accent: var(--card-accent-wortschatz); }
   .card--songs            { --card-accent: var(--card-accent-songs); }
   .card--folderimport     { --card-accent: var(--card-accent-folderimport); }
   .card--kontinuitaet     { --card-accent: var(--card-accent-kontinuitaet); }

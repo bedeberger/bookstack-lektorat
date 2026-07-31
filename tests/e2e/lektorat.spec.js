@@ -140,6 +140,60 @@ test.describe('Lektorat-Flow', () => {
     expect(snap.done).toBe(false);
   });
 
+  // Szenario: im Mac-Client schreiben → Lektorat starten → im Mac-Client
+  // weiterschreiben. Der Browser erfährt vom Fremd-Write NICHT verlässlich über
+  // den Collab-Poll (40s-Device-Ping als Voraussetzung), darum verifiziert
+  // onDone den Stempel selbst. Erwartung: nicht pauschal verwerfen, sondern die
+  // Findings gegen den frischen Text refiltern.
+  test('stale-Szenario: Fremd-Write während der Analyse → Findings refiltert, nicht verworfen', async ({ page }) => {
+    await loadHarness(page, 'stale');
+    await page.evaluate(() => window.harness.runCheck());
+    await waitUntil(page, 'h => h.checkDone === true');
+
+    const snap = await state(page, `h => ({
+      findings: h.lektoratFindings.map(f => f.original),
+      originalHtml: h.originalHtml,
+      correctedHtml: h.correctedHtml,
+      analysisOut: h.analysisOut,
+      updatedAt: h.currentPage.updated_at,
+    })`);
+
+    // Basis ist der FRISCHE Text, nicht der Job-Snapshot.
+    expect(snap.originalHtml).toContain('lief zum Fluss');
+    expect(snap.originalHtml).not.toContain('in den Walld');
+    expect(snap.updatedAt).toBe('2026-07-31T10:05:00.000Z');
+
+    // Das Finding auf «Walld» ist hinfällig und fliegt raus; die beiden
+    // Findings im unveränderten Satz überleben. Die Reihenfolge folgt der
+    // Position im FRISCHEN Text («Die» vor «scheinet») — im Job-Snapshot lagen
+    // sie in der Reihenfolge scheinet/Die. Beweis, dass die Positionen gegen
+    // `base` neu berechnet wurden und nicht aus dem Snapshot stammen.
+    expect(snap.findings).toEqual(['Die', 'scheinet']);
+
+    // Der Hinweis nennt die Zahl der verworfenen Befunde (1 von 3).
+    expect(snap.analysisOut).toContain('analysis-notice');
+    expect(snap.analysisOut).toContain('lektorat.staleResultRefiltered');
+    // Params escaped (`&quot;` statt `"`) — der Hinweis geht durch escHtml,
+    // bevor er in `analysisOut` (x-html-Sink) landet.
+    expect(snap.analysisOut).toContain('&quot;dropped&quot;:1');
+    expect(snap.analysisOut).toContain('&quot;total&quot;:3');
+
+    // Die überlebende harte Korrektur wird auf dem frischen Text angewandt —
+    // der Fremd-Write-Satz bleibt dabei unangetastet.
+    expect(snap.correctedHtml).toContain('scheint');
+    expect(snap.correctedHtml).toContain('lief zum Fluss');
+
+    // Übernehmen schreibt den frischen Text mit der Korrektur zurück; der im
+    // Mac-Client geschriebene Satz darf nicht überschrieben werden.
+    await page.evaluate(() => window.harness.saveCorrections());
+    await waitUntil(page, 'h => h.saveApplying === null && h.checkDone === false', 5000);
+
+    const mock = await page.request.get('http://localhost:8765/__mock/state').then(r => r.json());
+    expect(mock.lastBsPut.html).toContain('lief zum Fluss');
+    expect(mock.lastBsPut.html).toContain('scheint');
+    expect(mock.lastBsPut.html).not.toContain('scheinet');
+  });
+
   test('saveCorrections: sendet korrigiertes HTML an BookStack und räumt State ab', async ({ page }) => {
     await loadHarness(page, 'ok');
     await page.evaluate(() => window.harness.runCheck());

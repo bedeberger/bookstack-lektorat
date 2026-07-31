@@ -275,9 +275,13 @@ export const lektoratMethods = {
           : base;
         this.updatePageView();
         let out = '';
-        if (staleRefiltered) {
+        // Hinweis nur, wenn der Fremd-Write wirklich Befunde gekostet hat. Haben
+        // alle überlebt, gibt es nichts zu warnen — ein „0 von N verworfen"
+        // trainiert den User nur, die Warnbox zu überlesen.
+        const droppedByStale = staleRefiltered ? fehler.length - findings.length : 0;
+        if (droppedByStale > 0) {
           out += `<div class="analysis-notice">${escHtml(this.t('lektorat.staleResultRefiltered', {
-            dropped: fehler.length - findings.length,
+            dropped: droppedByStale,
             total: fehler.length,
           }))}</div>`;
         }

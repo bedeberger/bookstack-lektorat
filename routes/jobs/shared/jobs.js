@@ -285,6 +285,7 @@ const JOB_TYPE_LABELS = {
   'beat-anchor':           'job.label.beatAnchor',
   'erzaehlprofil':         'job.label.erzaehlprofil',
   'faktencheck':           'job.label.faktencheck',
+  'lexicon-scan':          'job.label.lexiconScan',
   'redundancy':            'job.label.redundancy',
   'research-chat':         'job.label.researchChat',
   'research-link':         'job.label.researchLink',

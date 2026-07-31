@@ -62,6 +62,18 @@
       _runningJobStatus(msg) { return msg || ''; },
       markPageChecked() {},
       refreshPageAges() {},
+
+      // Stub von app-view/page.js#_refetchCurrentPage: setzt genau die Felder,
+      // die der Staleness-Zweig in onDone danach liest (originalHtml als neue
+      // Findings-Basis, currentPage.updated_at als neuer Stempel). Der echte
+      // Pfad geht über contentRepo + _applyPageData + decorateMentions — das
+      // braucht Alpine-Kontext und ist für diesen Test nicht der Gegenstand.
+      async _refetchCurrentPage() {
+        const pd = await (await fetch('/content/pages/' + this.currentPage.id)).json();
+        if (pd.updated_at) this.currentPage.updated_at = pd.updated_at;
+        this.originalHtml = pd.html || '';
+        this.renderedPageHtml = pd.html || '';
+      },
       async loadPageHistory() {},
       async loadChapterFigures() {},
 

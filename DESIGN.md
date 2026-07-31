@@ -2471,6 +2471,7 @@ Drei Editoren leben in eigenen Subfoldern (`book/`, `focus/`, `notebook/`); edit
 | [analysis/zeitleiste.css](public/css/analysis/zeitleiste.css) | Globaler Zeitstrahl: Ereignis-Liste + selbstgebautes `.gz-band`-Jahres-Band. |
 | [analysis/kapitel-review.css](public/css/analysis/kapitel-review.css) | Kapitel-Review. |
 | [analysis/redundanz.css](public/css/analysis/redundanz.css) | Redundanz-Radar: Seiten-Paar-Liste mit Score-Badge + zwei Snippet-Spalten. |
+| [analysis/wortschatz.css](public/css/analysis/wortschatz.css) | Wortschatz-Analyse (quantitative Stilistik pro Buch): Kennzahlen-Grid **wiederverwendet** `.overview-grid`/`.overview-tile` + Hero-/Substat-Atome aus `book-overview/` (siehe „Book-Overview-Tiles") — eigen sind nur `.wortschatz-kpi-note` (was die Zahl bedeutet), `.wortschatz-kpi-peer` (Vergleich gegen die übrigen Bücher, trägt `var(--card-accent)`), `.wortschatz-kpi-warn` (Kennzahl **nicht** belastbar: Text kürzer als das MATTR-Fenster bzw. unter der MTLD-/Heaps-Mindestlänge), die Ranglisten-Tabelle `.wortschatz-table` (`sortableTable`, `.wortschatz-num` tabular-nums, `.wortschatz-term`/`-phrase`) und die Keyness-Bänder `.wortschatz-keyness--high/--mid/--neg`. |
 
 ### admin/
 | File | Inhalt |

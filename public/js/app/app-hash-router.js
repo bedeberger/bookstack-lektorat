@@ -1,4 +1,5 @@
 import { EVT } from '../events.js';
+import { EXCLUSIVE_CARDS } from '../cards/feature-registry.js';
 // URL-Hash-Permalinks + History-Management.
 // Schema: #profil | #admin/<users|settings|usage[/<tab>]> | #book/:bookId[/page/:pageId|/figur/:figId|/ort/:ortId|/werkstatt[/:draftId]|/kapitel[/:chapterId]|/<view>]
 // Views: figuren, werkstatt, orte, szenen, ereignisse, kontinuitaet, bewertung, kapitel, chat, stats, stil, fehler, suche, einstellungen, finetune, export
@@ -12,6 +13,36 @@ import { EVT } from '../events.js';
 //   zu EINEM History-Eintrag.
 // - `_applyHash` setzt `_inHashApply` + `_applyingHash`, damit während der
 //   Anwendung getriggerte Watcher keinen Rück-Schreibzyklus starten.
+// Hash-Views, deren Anwendung mechanisch identisch ist: „Karte oeffnen, falls sie
+// nicht offen ist". Nur die Zuordnung Hash-Name → Registry-Key steht hier; Flag und
+// Toggle-Methode kommen aus EXCLUSIVE_CARDS (SSoT) — sie werden bewusst NICHT
+// zusaetzlich aufgelistet, sonst driftet diese Datei gegen die Registry.
+// Views mit Eigenlogik (Argument, Store-Spiegel, Event, Scroll-bei-offen) bleiben
+// als eigener `case` im switch stehen.
+const SIMPLE_HASH_VIEWS = {
+  'ereignisse':   'ereignisse',
+  'kontinuitaet': 'kontinuitaet',
+  'erzaehlprofil':'erzaehlprofil',
+  'bewertung':    'bookReview',
+  'chat':         'bookChat',
+  'uebersicht':   'bookOverview',
+  'stats':        'bookStats',
+  'stil':         'stil',
+  'fehler':       'fehlerHeatmap',
+  'redundanz':    'redundanz',
+  'wortschatz':   'wortschatz',
+  'einstellungen':'bookSettings',
+  'finetune':     'finetuneExport',
+  'fassungen':    'snapshots',
+  'export':       'export',
+  'pdf':          'pdfExport',
+  'epub':         'epubExport',
+  'docx':         'docxExport',
+  'organize':     'bookOrganizer',
+  'bucheditor':   'bookEditor',
+  'share':        'shareLinks',
+};
+
 export const appHashRouterMethods = {
   _computeHash() {
     if (this.showUserSettingsCard) return '#profil';
@@ -84,6 +115,7 @@ export const appHashRouterMethods = {
     else if (this.showStilCard) parts.push('stil');
     else if (this.showFehlerHeatmapCard) parts.push('fehler');
     else if (this.showRedundanzCard) parts.push('redundanz');
+    else if (this.showWortschatzCard) parts.push('wortschatz');
     else if (this.showBookSettingsCard) parts.push('einstellungen');
     else if (this.showFinetuneExportCard) parts.push('finetune');
     else if (this.showSnapshotsCard) parts.push('fassungen');
@@ -333,6 +365,12 @@ export const appHashRouterMethods = {
         return;
       }
 
+      const simpleKey = SIMPLE_HASH_VIEWS[view];
+      if (simpleKey) {
+        const entry = EXCLUSIVE_CARDS.find(c => c.key === simpleKey);
+        if (entry && !this[entry.flag]) await this[entry.toggle]();
+        return;
+      }
       switch (view) {
         case 'page':
           if (arg) {
@@ -404,9 +442,6 @@ export const appHashRouterMethods = {
           if (!this.showSzenenCard) await this.toggleSzenenCard();
           else { this._closeOtherMainCards('szenen'); this._scrollToCardByKey('szenen'); }
           break;
-        case 'ereignisse':
-          if (!this.showEreignisseCard) await this.toggleEreignisseCard();
-          break;
         case 'plot':
           // Optionaler Beat-Permalink (#…/plot/<beatId>). Root-SSoT vor dem Toggle
           // setzen; die plotCard fokussiert den Beat nach dem Board-Load (bzw.
@@ -442,12 +477,6 @@ export const appHashRouterMethods = {
           else { this._closeOtherMainCards('sources'); this._scrollToCardByKey('sources'); }
           if (arg) window.dispatchEvent(new CustomEvent(EVT.SOURCES_FOCUS_SOURCE, { detail: { sourceId: arg } }));
           break;
-        case 'kontinuitaet':
-          if (!this.showKontinuitaetCard) await this.toggleKontinuitaetCard();
-          break;
-        case 'erzaehlprofil':
-          if (!this.showErzaehlprofilCard) await this.toggleErzaehlprofilCard();
-          break;
         case 'rueckblick':
           // Optionaler History-Eintrag-Permalink (#…/rueckblick/<entryId>). Root-
           // SSoT vor Toggle setzen; die Sub-Card öffnet den Eintrag im onOpen-Hook
@@ -455,9 +484,6 @@ export const appHashRouterMethods = {
           this.$store.nav.rueckblickEntryId = arg ? String(arg) : null;
           if (!this.showTagebuchRueckblickCard) await this.toggleTagebuchRueckblickCard();
           else this._scrollToCardByKey('tagebuchRueckblick');
-          break;
-        case 'bewertung':
-          if (!this.showBookReviewCard) await this.toggleBookReviewCard();
           break;
         case 'kapitel':
           // Root-SSoT vor Toggle setzen — `_openKapitelReview` validiert nach
@@ -467,24 +493,6 @@ export const appHashRouterMethods = {
           if (arg) this.kapitelReviewChapterId = String(arg);
           if (!this.showKapitelReviewCard) await this.toggleKapitelReviewCard();
           break;
-        case 'chat':
-          if (!this.showBookChatCard) await this.toggleBookChatCard();
-          break;
-        case 'uebersicht':
-          if (!this.showBookOverviewCard) await this.toggleBookOverviewCard();
-          break;
-        case 'stats':
-          if (!this.showBookStatsCard) await this.toggleBookStatsCard();
-          break;
-        case 'stil':
-          if (!this.showStilCard) await this.toggleStilCard();
-          break;
-        case 'fehler':
-          if (!this.showFehlerHeatmapCard) await this.toggleFehlerHeatmapCard();
-          break;
-        case 'redundanz':
-          if (!this.showRedundanzCard) await this.toggleRedundanzCard();
-          break;
         case 'suche':
           // Buch-skopierte Volltextsuche. Scope-Spiegel auf 'book' setzen, bevor
           // die Karte öffnet (onShow liest ihn), sonst bliebe der zuletzt genutzte
@@ -492,36 +500,6 @@ export const appHashRouterMethods = {
           this.$store.nav.searchScope = 'book';
           if (!this.showSearchCard) await this.toggleSearchCard();
           else { this._closeOtherMainCards('search'); this._scrollToCardByKey('search'); }
-          break;
-        case 'einstellungen':
-          if (!this.showBookSettingsCard) await this.toggleBookSettingsCard();
-          break;
-        case 'finetune':
-          if (!this.showFinetuneExportCard) await this.toggleFinetuneExportCard();
-          break;
-        case 'fassungen':
-          if (!this.showSnapshotsCard) await this.toggleSnapshotsCard();
-          break;
-        case 'export':
-          if (!this.showExportCard) await this.toggleExportCard();
-          break;
-        case 'pdf':
-          if (!this.showPdfExportCard) await this.togglePdfExportCard();
-          break;
-        case 'epub':
-          if (!this.showEpubExportCard) await this.toggleEpubExportCard();
-          break;
-        case 'docx':
-          if (!this.showDocxExportCard) await this.toggleDocxExportCard();
-          break;
-        case 'organize':
-          if (!this.showBookOrganizerCard) await this.toggleBookOrganizerCard();
-          break;
-        case 'bucheditor':
-          if (!this.showBookEditorCard) await this.toggleBookEditorCard();
-          break;
-        case 'share':
-          if (!this.showShareLinksCard) await this.toggleShareLinksCard();
           break;
       }
     } finally {
@@ -542,7 +520,7 @@ export const appHashRouterMethods = {
       'showSourcesCard',
       'showKontinuitaetCard', 'showErzaehlprofilCard', 'showTagebuchRueckblickCard', 'showBookReviewCard', 'showBookChatCard',
       'showKapitelReviewCard', 'kapitelReviewChapterId',
-      'showBookStatsCard', 'showStilCard', 'showFehlerHeatmapCard', 'showRedundanzCard',
+      'showBookStatsCard', 'showStilCard', 'showFehlerHeatmapCard', 'showRedundanzCard', 'showWortschatzCard',
       'showBookSettingsCard', 'showUserSettingsCard', 'showMyStatsCard', 'showHelpCard', 'showOnboardingCard',
       'showAdminUsersCard', 'showAdminSettingsCard', 'showAdminUsageCard', 'adminUsageTab',
       'showAdminCategoriesCard', 'showAdminBooksCard', 'showAdminLogsCard', 'showAdminParseFailsCard',

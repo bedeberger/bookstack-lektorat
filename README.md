@@ -65,6 +65,7 @@ Schreiben, Lektorat und Buchanalyse mit KI. Eigenständiger Node.js-Service, Mul
 ### Integrationen & Monitoring
 - **Blog-Sync (WordPress)** – Bücher vom Typ `blog` mit WordPress synchronisieren: Initial-Import, Pull, Push, LWW-Konfliktstrategie, Gutenberg-Block-Mapping. [docs/blog-sync.md](docs/blog-sync.md).
 - **HubSpot-Sync** – Initial-Import + Push als Blog-Draft (kein Update/Pull-back). [docs/hubspot-sync.md](docs/hubspot-sync.md).
+- **Browser-Erweiterung (Chrome)** – `schreibwerkstatt-browser-extension`: Webseiten beim Surfen als Recherche-Fundstück und/oder Quelle erfassen — ein transaktionaler Aufruf (`POST /capture`), Dublettenprüfung über die normalisierte URL, Metadaten liest die Erweiterung aus dem DOM (auch hinter Login/Paywall). Läuft mit einem eigenen Geräte-Token, das **ausschliesslich erfassen** darf und nie am Manuskript schreibt. [docs/clients.md](docs/clients.md).
 - **Metrics-API** – `GET /metrics` im Prometheus-Format (Bearer-Token mit Scopes); fertige Dashboards für Home Assistant und Grafana. [docs/metrics-api.md](docs/metrics-api.md).
 
 ## Voraussetzungen
