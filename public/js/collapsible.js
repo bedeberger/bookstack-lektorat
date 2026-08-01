@@ -19,6 +19,17 @@
 //
 // Der `.history-chevron`-Span braucht KEINEN Inhalt (CSS-Mask-Icon, rotiert via
 // `.open`); `aria-hidden` setzen, Label kommt als separates Geschwister.
+//
+// Das Panel animiert seine Höhe über `x-collapse` (@alpinejs/collapse, geladen
+// in index.html vor dem Alpine-Core) — die Direktive reist im `panel`-Spread
+// mit, Konsumenten-Markup bleibt unverändert. Zwei Folgen, die man wissen muss:
+//   1) Das Plugin hält `overflow: hidden` auf dem Panel. Absolut positionierte
+//      Kinder (Kebab-Menüs, Popover) würden darin abgeschnitten — die gehören
+//      ohnehin per x-teleport in den Top-Layer (Architektur-Regel), nicht ins
+//      Panel.
+//   2) Reduced-Motion braucht hier KEINEN Sonderfall: der globale Override in
+//      css/tokens/motion.css setzt `transition-duration: 0s !important`, und
+//      Alpines Transition-Helper liest die berechnete Dauer → klappt instant.
 
 export function registerCollapsible() {
   if (typeof window === 'undefined' || !window.Alpine) return;
@@ -41,9 +52,13 @@ export function registerCollapsible() {
       return { [':class']: () => ({ open: this.open }) };
     },
 
-    // Spread auf das aufklappbare Panel.
+    // Spread auf das aufklappbare Panel. `x-collapse` animiert die Höhe; die
+    // Direktive funktioniert im x-bind-Objekt inklusive Modifier-Suffix
+    // (`x-collapse.duration.200ms`), falls eine Sektion mal langsamer klappen
+    // soll — dann hier nicht global drehen, sondern beim Konsumenten das Panel
+    // von Hand verdrahten.
     get panel() {
-      return { ['x-show']: () => this.open };
+      return { ['x-show']: () => this.open, ['x-collapse']: () => '' };
     },
   }));
 }

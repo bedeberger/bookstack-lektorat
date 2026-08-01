@@ -427,24 +427,38 @@ router.get('/style-stats/:book_id', (req, res) => {
            ps.words, ps.chars, ps.sentences, ps.dialog_chars,
            ps.filler_count, ps.passive_count, ps.adverb_count,
            ps.avg_sentence_len, ps.sentence_len_p90, ps.repetition_data,
-           ps.lix, ps.flesch_de, ps.style_samples, ps.metrics_version, ps.cached_at
+           ps.lix, ps.flesch_de, ps.style_samples, ps.metrics_version, ps.cached_at,
+           ps.sentence_lens, ps.opener_counts
     FROM page_stats ps
     JOIN pages p ON p.page_id = ps.page_id
     LEFT JOIN chapters c ON c.chapter_id = p.chapter_id AND c.book_id = p.book_id
     WHERE ps.book_id = ?
     ORDER BY p.chapter_id, p.page_id
   `).all(bookId);
-  // repetition_data / style_samples aus JSON-String parsen; defensiv, damit eine
-  // korrupte Zeile die Antwort nicht kippt.
+  // JSON-Spalten parsen; defensiv, damit eine korrupte Zeile die Antwort nicht kippt.
+  // `sentence_lens` steht in LESERICHTUNG — die Reihenfolge der Zeilen (chapter_id,
+  // page_id) und die Reihenfolge innerhalb des Arrays tragen zusammen den Rhythmus.
   const pages = rows.map(r => {
-    let rep = null, samples = null;
+    let rep = null, samples = null, lens = null, openers = null;
     if (r.repetition_data) {
       try { rep = JSON.parse(r.repetition_data); } catch { rep = null; }
     }
     if (r.style_samples) {
       try { samples = JSON.parse(r.style_samples); } catch { samples = null; }
     }
-    return { ...r, repetition_data: rep, style_samples: samples };
+    if (r.sentence_lens) {
+      try { lens = JSON.parse(r.sentence_lens); } catch { lens = null; }
+    }
+    if (r.opener_counts) {
+      try { openers = JSON.parse(r.opener_counts); } catch { openers = null; }
+    }
+    return {
+      ...r,
+      repetition_data: rep,
+      style_samples: samples,
+      sentence_lens: Array.isArray(lens) ? lens : null,
+      opener_counts: (openers && typeof openers === 'object') ? openers : null,
+    };
   });
   // Neuestes cached_at = letzter Sync-Zeitpunkt für dieses Buch.
   const lastUpdated = pages.reduce((max, p) => {

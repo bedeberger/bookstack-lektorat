@@ -1,0 +1,58 @@
+<!-- Eine Schnipsel-Karte des Recherche-Boards — reiner Anriss. Lesen und
+     Bearbeiten passieren im Detail-Dialog (recherche-detail.html): ein Klick auf
+     den Eintrag oeffnet ihn. Deshalb steht hier nur Titel, Vorschaubild, ein
+     Zeilen-Cap-Anriss des Texts und die Chips.
+     Ausgelagert als string-seitiges Fragment (@include), damit der Inhalt Teil
+     des x-for-Template-Contents bleibt und pro Eintrag normal geklont wird.
+     Scope + Methoden kommen aus rechercheCard (public/partials/recherche.html).
+     Aktionsmenue und Verknuepfungs-/Tag-Block sind eigene Fragmente, weil der
+     Detail-Dialog sie wortgleich mitbenutzt. -->
+    <template x-for="item in items" :key="item.id">
+      <div class="research-item" :data-research-id="item.id" :class="{ 'research-item--pinned': item.pinned, 'research-item--archived': item.archived, 'research-item--open': detailItemId === item.id }">
+        <div class="research-item-body research-item-body--clickable" @click="onItemBodyClick(item, $event)">
+          <div class="research-item-head">
+            <span class="research-kind-badge palette-badge" :class="'research-kind-badge--' + item.kind" x-text="kindLabel(item.kind)"></span>
+            <!-- Titel als Button: der tastaturerreichbare Weg in die Detailansicht
+                 (der Klick auf die ganze Zeile ist nur Maus-Komfort). Ohne eigenen
+                 Titel steht die Typ-Bezeichnung da — sonst gaebe es kein Sprungziel. -->
+            <button type="button" class="research-item-title" @click="openDetail(item)"
+                    x-text="item.title || kindLabel(item.kind)"></button>
+            <div class="research-item-actions">
+              <button type="button" class="icon-btn" @click="openDetail(item, { edit: true })" :disabled="busy" :data-tip="$app.t('recherche.edit')" :aria-label="$app.t('recherche.edit')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#pencil"/></svg></button>
+              <!-- @include recherche-item-menu -->
+            </div>
+          </div>
+
+          <!-- Vorschaubild: klein (vier grosse Bilder waeren keine Uebersicht mehr)
+               und oeffnet den Detail-Dialog, nicht die Rohdatei im neuen Tab.
+               x-if statt x-show: ein `src`-Binding hinter display:none laedt
+               trotzdem und liefert bei Fundstuecken ohne Bild einen 404. -->
+          <template x-if="item.has_image">
+            <button type="button" class="research-item-thumb" @click="openDetail(item)"
+                    :data-tip="$app.t('recherche.detail.open')" :aria-label="$app.t('recherche.detail.open')">
+              <img class="research-item-image" :src="imageUrl(item)" :alt="item.title || ''" loading="lazy">
+            </button>
+          </template>
+
+          <a x-show="item.has_doc" class="research-item-doc" :href="docUrl(item)" target="_blank" rel="noopener noreferrer">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#file-plus"/></svg>
+            <span class="research-item-doc-name" x-text="item.doc_name || $app.t('recherche.doc.fallbackName')"></span>
+            <span class="research-item-doc-meta" x-show="item.doc_pages" x-text="$app.t('recherche.doc.pages', { n: item.doc_pages })"></span>
+          </a>
+
+          <!-- Anriss mit festem Zeilen-Cap (CSS). Kein Inline-Ausklappen: der
+               Volltext gehoert in die Detailansicht, wo er auch lesbar gesetzt ist
+               — ein erfasster Artikel mit 20 000 Zeichen macht die Liste sonst
+               unbenutzbar, egal wie viele Zeilen der Cap zulaesst. -->
+          <div class="research-item-text" x-show="item.body"
+               :class="{ 'research-item-text--quote': item.kind === 'quote' }"
+               x-text="item.body"></div>
+
+          <!-- @include recherche-item-urls -->
+
+          <div x-show="item.source" class="research-item-source" x-text="item.source"></div>
+
+          <!-- @include recherche-item-relations -->
+        </div>
+      </div>
+    </template>

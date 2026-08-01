@@ -1,6 +1,6 @@
 # ERD — schreibwerkstatt
 
-Stand: Schema-Version 262, 143 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
+Stand: Schema-Version 264, 144 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
 
 Quelle: Squashed-Schema-Snapshot in [db/squashed-schema.js](../db/squashed-schema.js) (regeneriert via `node tools/dump-schema.js`) + [db/migrations.js](../db/migrations.js). Drift gegen die Legacy-Migration-Kette ist durch [tests/unit/squash-drift.test.mjs](../tests/unit/squash-drift.test.mjs) gegated. Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -303,6 +303,8 @@ erDiagram
     TEXT    pronoun_counts   "JSON"
     TEXT    repetition_data  "JSON"
     TEXT    style_samples    "JSON"
+    TEXT    sentence_lens    "JSON, Satzlaengen in Leserichtung"
+    TEXT    opener_counts    "JSON, erstes Wort je Satz + Nachbar-Wiederholungen"
     INTEGER metrics_version
     TEXT    content_sig
     TEXT    updated_at
@@ -1752,6 +1754,16 @@ erDiagram
     TEXT    style     PK
     BLOB    ttf
     INTEGER fetched_at
+  }
+  mermaid_cache {
+    TEXT    code_hash    PK "sha1(Render-Version+Theme+Quelltext)"
+    TEXT    theme
+    TEXT    svg          "HTML/EPUB"
+    BLOB    png          "PDF/DOCX"
+    INTEGER width
+    INTEGER height
+    TEXT    created_at
+    TEXT    last_used_at
   }
 
   app_settings {

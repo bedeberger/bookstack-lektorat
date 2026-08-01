@@ -1,0 +1,103 @@
+<!-- Detail-Dialog eines Recherche-Fundstuecks: LESEN in Lesetypografie (Volltext
+     ungekappt, Bild gross) — und Bearbeiten als Schalter DARIN, ohne dass
+     Verknuepfungen, Tags und Anhaenge dabei verschwinden.
+     Natives <dialog> + showModal() (Focus-Trap, Inert-Hintergrund, Fokus-Restore
+     und ESC kommen vom Browser); geoeffnet in items.js#openDetail, das auch den
+     Permalink #…/recherche/<id> spiegelt. Der Dialog liegt im Top-Layer und ist
+     damit auch ueber der Vollbild-Karte sichtbar (harte Regel „Schwebende
+     Elemente gehoeren in den Top-Layer").
+     Der Inhalt laeuft ueber `x-for item in detailItems` (0 oder 1 Element),
+     damit die geteilten Fragmente (Menue/URLs/Verknuepfungen) denselben
+     `item`-Namen sehen wie in der Liste und nicht dupliziert werden muessen. -->
+<dialog class="research-dialog" x-ref="detailDialog"
+        @close="_onDetailClosed()"
+        @cancel.prevent="detailEditing ? cancelEdit() : closeDetail()"
+        @click="if ($event.target === $el && !detailEditing) closeDetail()">
+  <template x-for="item in detailItems" :key="item.id">
+    <div class="research-dialog__inner">
+
+      <header class="research-dialog__head">
+        <span class="research-kind-badge palette-badge" :class="'research-kind-badge--' + item.kind" x-text="kindLabel(item.kind)"></span>
+        <h2 class="research-dialog__title" x-text="item.title || kindLabel(item.kind)"></h2>
+        <div class="research-item-actions research-dialog__actions">
+          <button type="button" class="btn-compact" x-show="!detailEditing" @click="startEdit(item)" :disabled="busy">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#pencil"/></svg>
+            <span x-text="$app.t('recherche.edit')"></span>
+          </button>
+          <!-- @include recherche-item-menu -->
+          <button type="button" class="icon-btn icon-btn--ghost" @click="closeDetail()"
+                  :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
+        </div>
+      </header>
+
+      <div class="research-dialog__scroll">
+        <!-- Fehler MUSS im Dialog stehen: die Karten-Statuszeile liegt hinter dem
+             Backdrop (gleiche Zeile im Anlegen-Dialog). -->
+        <div x-show="errorMessage" class="card-status card-status--error" x-text="errorMessage"></div>
+        <!-- Bild gross statt Neuer-Tab-Rohdatei. „In neuem Tab oeffnen" bleibt
+             als Weg zum echten Pixel-Zoom (native Bildansicht des Browsers). -->
+        <!-- x-if statt x-show: ein `src`-Binding hinter display:none laedt trotzdem
+             und liefert bei Fundstuecken ohne Bild einen 404. -->
+        <template x-if="item.has_image">
+          <figure class="research-dialog__figure">
+            <img class="research-dialog__image" :src="imageUrl(item)" :alt="item.title || ''">
+            <!-- Entfernen sitzt am Anhang selbst, nicht nur im Kebab: Bild und PDF
+                 haengen unabhaengig am Fundstueck und gehen einzeln weg. -->
+            <figcaption class="research-dialog__figcaption">
+              <a :href="imageUrl(item)" target="_blank" rel="noopener noreferrer" x-text="$app.t('recherche.image.open')"></a>
+              <button type="button" class="icon-btn icon-btn--ghost" @click="removeImage(item)" :disabled="busy"
+                      :data-tip="$app.t('recherche.image.remove')" :aria-label="$app.t('recherche.image.remove')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#trash"/></svg></button>
+            </figcaption>
+          </figure>
+        </template>
+
+        <div class="research-dialog__doc" x-show="item.has_doc">
+          <a class="research-item-doc" :href="docUrl(item)" target="_blank" rel="noopener noreferrer">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#file-plus"/></svg>
+            <span class="research-item-doc-name" x-text="item.doc_name || $app.t('recherche.doc.fallbackName')"></span>
+            <span class="research-item-doc-meta" x-show="item.doc_pages" x-text="$app.t('recherche.doc.pages', { n: item.doc_pages })"></span>
+          </a>
+          <button type="button" class="icon-btn icon-btn--ghost" @click="removeDoc(item)" :disabled="busy"
+                  :data-tip="$app.t('recherche.doc.remove')" :aria-label="$app.t('recherche.doc.remove')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#trash"/></svg></button>
+        </div>
+
+        <!-- Lesen: ungekappt, Lesegroesse, begrenzter Satzspiegel -->
+        <div class="research-dialog__text" x-show="!detailEditing && item.body"
+             :class="{ 'research-dialog__text--quote': item.kind === 'quote' }"
+             x-text="item.body"></div>
+
+        <!-- Bearbeiten: nur die Textfelder tauschen. Die Felder selbst kommen aus
+             demselben Fragment wie der Anlegen-Dialog (recherche-form-fields) und
+             binden dasselbe `draft` — nur die Aktionszeile ist hier eine andere. -->
+        <div class="recherche-form" x-show="detailEditing" x-cloak>
+          <!-- @include recherche-form-fields -->
+          <div class="recherche-form-actions">
+            <button type="button" class="btn-compact recherche-primary" @click="saveEdit(item)" :disabled="busy" x-text="$app.t('recherche.save')"></button>
+            <button type="button" class="btn-compact" @click="cancelEdit()" :disabled="busy" x-text="$app.t('recherche.cancel')"></button>
+          </div>
+        </div>
+
+        <!-- Links + Quelle nur im Lesemodus: im Formular sind dieselben Angaben
+             als Eingabefelder da, beides gleichzeitig waere doppelt. -->
+        <div class="research-dialog__meta" x-show="!detailEditing">
+          <!-- @include recherche-item-urls -->
+          <div x-show="item.source" class="research-item-source" x-text="item.source"></div>
+        </div>
+
+        <!-- Verknuepfen/Tags/KI-Vorschlaege bleiben in BEIDEN Modi bedienbar. -->
+        <!-- @include recherche-item-relations -->
+
+        <div class="research-dialog__foot">
+          <button type="button" class="btn-compact" x-show="linkPickerItemId !== item.id" @click="openLinkPicker(item)">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#external-link"/></svg>
+            <span x-text="$app.t('recherche.link.add')"></span>
+          </button>
+          <button type="button" class="btn-compact" @click="suggestLinks(item)" :disabled="busy || suggestItemId === item.id">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#zap"/></svg>
+            <span x-text="$app.t('recherche.suggest.btn')"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </template>
+</dialog>

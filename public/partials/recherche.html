@@ -26,11 +26,16 @@
 
   <div x-show="errorMessage" class="card-status card-status--error" x-text="errorMessage"></div>
 
-  <!-- @include recherche-chat -->
+  <!-- Zweispaltiges Raster: Board links, Recherche-Chat rechts daneben (ab
+       1280px, Muster des Seiten-Chats neben dem Editor). Darunter klappt der
+       Chat per `order` wieder ueber das Board. Die Board-Kinder behalten ihre
+       Einrueckung — der Wrapper ist reine Layout-Klammer. -->
+  <div class="recherche-split" :class="{ 'recherche-split--chat': researchChatOpen }">
+  <div class="recherche-board">
 
   <!-- Toolbar: Anlegen + Filter -->
   <div class="card-toolbar">
-    <button type="button" class="btn-compact" @click="creating ? cancelCreate() : startCreate()" :disabled="busy">
+    <button type="button" class="btn-compact" @click="startCreate()" :disabled="busy">
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#plus"/></svg>
       <span x-text="$app.t('recherche.new')"></span>
     </button>
@@ -71,57 +76,6 @@
     </div>
   </div>
 
-  <!-- Anlegen-Formular -->
-  <div x-show="creating" x-cloak class="recherche-form">
-    <div class="recherche-form-row">
-      <div x-data="combobox($app.t('recherche.kindLabel'))"
-           x-modelable="value" x-model="draft.kind"
-           x-effect="options = kindOptions()" class="recherche-kind-combo"></div>
-      <input type="text" class="recherche-input recherche-title-input"
-             x-model="draft.title" :placeholder="$app.t('recherche.field.title')"
-             :aria-label="$app.t('recherche.field.title')" data-spellcheck="spelling">
-    </div>
-    <textarea class="recherche-input" x-model="draft.body" rows="4"
-              :placeholder="$app.t('recherche.field.body')" :aria-label="$app.t('recherche.field.body')"
-              data-spellcheck="spelling"></textarea>
-    <div class="recherche-urls">
-      <template x-for="(u, ui) in draft.urls" :key="ui">
-        <div class="recherche-url-row">
-          <input type="text" class="recherche-input recherche-url-input" x-model="u.url"
-                 :placeholder="$app.t('recherche.field.url')" :aria-label="$app.t('recherche.field.url')">
-          <input type="text" class="recherche-input recherche-url-label-input" x-model="u.label"
-                 :placeholder="$app.t('recherche.field.urlLabel')" :aria-label="$app.t('recherche.field.urlLabel')"
-                 data-spellcheck="spelling">
-          <button type="button" class="icon-btn" @click="removeUrlRow(draft, ui)"
-                  :data-tip="$app.t('recherche.field.urlRemove')" :aria-label="$app.t('recherche.field.urlRemove')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
-        </div>
-      </template>
-      <button type="button" class="btn-compact recherche-url-add" @click="addUrlRow(draft)">
-        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#plus"/></svg>
-        <span x-text="$app.t('recherche.field.urlAdd')"></span>
-      </button>
-    </div>
-    <input type="text" class="recherche-input" x-model="draft.source"
-           :placeholder="$app.t('recherche.field.source')" :aria-label="$app.t('recherche.field.source')"
-           data-spellcheck="spelling">
-    <input type="text" class="recherche-input" x-model="draft.tags"
-           :placeholder="$app.t('recherche.field.tags')" :aria-label="$app.t('recherche.field.tags')">
-    <div class="recherche-attach">
-      <label class="btn-compact recherche-attach-btn">
-        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#file-plus"/></svg>
-        <span x-text="$app.t('recherche.field.attach')"></span>
-        <input type="file" accept="image/*,application/pdf" x-ref="createFile" @change="onCreateFilePick($event)">
-      </label>
-      <span class="recherche-attach-name" x-show="draft.fileName" x-text="draft.fileName"></span>
-      <button type="button" class="icon-btn" x-show="draft.fileName" @click="clearCreateFile()"
-              :data-tip="$app.t('recherche.field.attachClear')" :aria-label="$app.t('recherche.field.attachClear')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
-    </div>
-    <div class="recherche-form-actions">
-      <button type="button" class="btn-compact recherche-primary" @click="createItem()" :disabled="busy" x-text="$app.t('recherche.save')"></button>
-      <button type="button" class="btn-compact" @click="cancelCreate()" :disabled="busy" x-text="$app.t('recherche.cancel')"></button>
-    </div>
-  </div>
-
   <!-- Skeleton während Loading vor erstem Datensatz -->
   <div x-show="loading" class="recherche-skeleton entity-list--accented" x-cloak>
     <template x-for="i in 4" :key="i">
@@ -137,7 +91,7 @@
   </div>
 
   <!-- Empty-State mit CTA: kein Eintrag → direkt anlegen. -->
-  <div x-show="!loading && items.length === 0 && !creating" class="card-empty" x-cloak>
+  <div x-show="!loading && items.length === 0" class="card-empty" x-cloak>
     <p class="card-empty-text" x-text="$app.t('recherche.empty')"></p>
     <p class="card-empty-hint" x-text="$app.t('recherche.emptyHint')"></p>
     <button type="button" class="primary card-empty-cta" @click="startCreate()" :disabled="busy">
@@ -148,192 +102,19 @@
 
   <!-- Schnipsel-Liste -->
   <div class="recherche-list" :class="{ 'is-refreshing': refreshing }" x-show="!loading && items.length > 0">
-    <template x-for="item in items" :key="item.id">
-      <div class="research-item" :data-research-id="item.id" :class="{ 'research-item--pinned': item.pinned, 'research-item--archived': item.archived }">
-
-        <!-- Anzeige-Modus -->
-        <template x-if="editingId !== item.id">
-          <div class="research-item-body research-item-body--clickable" @click="onItemBodyClick(item, $event)">
-            <div class="research-item-head">
-              <span class="research-kind-badge palette-badge" :class="'research-kind-badge--' + item.kind" x-text="kindLabel(item.kind)"></span>
-              <span class="research-item-title" x-show="item.title" x-text="item.title"></span>
-              <div class="research-item-actions">
-                <button type="button" class="icon-btn" @click="startEdit(item)" :disabled="busy" :data-tip="$app.t('recherche.edit')" :aria-label="$app.t('recherche.edit')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#pencil"/></svg></button>
-                <button type="button" class="icon-btn" @click.stop="menuOpenId = (menuOpenId === item.id ? null : item.id)" :disabled="busy" :aria-label="$app.t('recherche.actions')" aria-haspopup="menu"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#more-horizontal"/></svg></button>
-                <div class="context-menu context-menu--dropdown" x-show="menuOpenId === item.id" x-cloak @click.outside="menuOpenId = null" @keydown.escape.window="menuOpenId = null" role="menu">
-                  <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem" @click="menuOpenId = null; openLinkPicker(item)">
-                    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#external-link"/></svg>
-                    <span x-text="$app.t('recherche.link.add')"></span>
-                  </button>
-                  <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem" @click="suggestLinks(item)" :disabled="busy || suggestItemId === item.id">
-                    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#zap"/></svg>
-                    <span x-text="$app.t('recherche.suggest.btn')"></span>
-                  </button>
-                  <div class="context-menu-sep" role="separator"></div>
-                  <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem" @click="togglePin(item)">
-                    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#pin"/></svg>
-                    <span x-text="item.pinned ? $app.t('recherche.unpin') : $app.t('recherche.pin')"></span>
-                  </button>
-                  <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem" @click="toggleArchive(item)">
-                    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#archive"/></svg>
-                    <span x-text="item.archived ? $app.t('recherche.unarchive') : $app.t('recherche.archive')"></span>
-                  </button>
-                  <div class="context-menu-sep" role="separator"></div>
-                  <label class="context-menu-item context-menu-item--icon research-menu-upload" role="menuitem">
-                    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#image"/></svg>
-                    <span x-text="$app.t('recherche.image.upload')"></span>
-                    <input type="file" accept="image/*" @change="onImagePick(item, $event); menuOpenId = null">
-                  </label>
-                  <label class="context-menu-item context-menu-item--icon research-menu-upload" role="menuitem">
-                    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#file-plus"/></svg>
-                    <span x-text="$app.t('recherche.doc.upload')"></span>
-                    <input type="file" accept="application/pdf" @change="onDocPick(item, $event); menuOpenId = null">
-                  </label>
-                  <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem" x-show="item.has_doc" @click="removeDoc(item)">
-                    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg>
-                    <span x-text="$app.t('recherche.doc.remove')"></span>
-                  </button>
-                  <div class="context-menu-sep" role="separator"></div>
-                  <button type="button" class="context-menu-item context-menu-item--icon context-menu-item--danger" role="menuitem" @click="deleteItem(item)">
-                    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#trash"/></svg>
-                    <span x-text="$app.t('recherche.delete')"></span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Bild ist direkt klickbar: öffnet die Vollansicht in einem neuen Tab.
-                 Der <a> steht zugleich in der Allowlist von onItemBodyClick, der Klick
-                 wechselt also nicht in den Edit-Modus. -->
-            <a x-show="item.has_image" class="research-item-image-link" :href="imageUrl(item)"
-               target="_blank" rel="noopener noreferrer"
-               :data-tip="$app.t('recherche.image.open')" :aria-label="$app.t('recherche.image.open')">
-              <img class="research-item-image" :src="imageUrl(item)" :alt="item.title || ''" loading="lazy">
-            </a>
-
-            <a x-show="item.has_doc" class="research-item-doc" :href="docUrl(item)" target="_blank" rel="noopener noreferrer">
-              <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#file-plus"/></svg>
-              <span class="research-item-doc-name" x-text="item.doc_name || $app.t('recherche.doc.fallbackName')"></span>
-              <span class="research-item-doc-meta" x-show="item.doc_pages" x-text="$app.t('recherche.doc.pages', { n: item.doc_pages })"></span>
-            </a>
-
-            <!-- Text bleibt in der Übersicht gekappt (sonst füllt ein einziges Zitat
-                 die ganze Liste); Toggle darunter klappt ihn pro Fundstück auf und
-                 erscheint nur, wenn der Cap wirklich etwas abschneidet (gemessen,
-                 x-effect stösst die Messung an). -->
-            <div class="research-item-text" x-show="item.body"
-                 x-effect="noteBodyForClamp(item)"
-                 :class="{ 'research-item-text--quote': item.kind === 'quote',
-                           'research-item-text--clamped': !bodyExpanded(item) }"
-                 x-text="item.body"></div>
-            <button type="button" class="research-item-more" x-show="item.body && bodyClampable(item)"
-                    @click="toggleBodyExpanded(item)"
-                    :aria-expanded="bodyExpanded(item)"
-                    x-text="bodyExpanded(item) ? $app.t('recherche.body.less') : $app.t('recherche.body.more')"></button>
-
-            <!-- @include recherche-item-urls -->
-
-            <div x-show="item.source" class="research-item-source" x-text="item.source"></div>
-
-            <!-- Verknüpfungen -->
-            <div class="research-links" x-show="item.links && item.links.length">
-              <template x-for="link in item.links" :key="link.link_id">
-                <span class="research-link-chip" :class="'research-link-chip--' + link.target_kind">
-                  <button type="button" class="research-link-goto" @click="gotoLink(link)"
-                          :data-tip="$app.t('recherche.link.goto')"
-                          :aria-label="$app.t('recherche.link.goto') + ': ' + link.label">
-                    <span class="research-link-kind" x-text="linkKindLabel(link.target_kind)"></span>
-                    <span class="research-link-goto-label" x-text="link.label"></span>
-                  </button>
-                  <button type="button" class="research-chip-x" @click="removeLink(item, link)" :aria-label="$app.t('recherche.link.remove')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
-                </span>
-              </template>
-            </div>
-
-            <!-- Link-Picker (inline am Item, nur das aktive sichtbar) -->
-            <template x-if="linkPickerItemId === item.id">
-              <div class="recherche-linkpicker">
-                <span class="recherche-linkpicker-label" x-text="$app.t('recherche.link.pickerLabel')"></span>
-                <div x-data="combobox($app.t('recherche.link.pickKind'))"
-                     x-modelable="value" x-model="linkPickerKind"
-                     x-effect="options = linkPickerKinds()"
-                     @combobox-change="linkPickerTargetId = ''"></div>
-                <div x-data="entityPicker({ entity: 'target', placeholder: $app.t('recherche.link.pickTarget'), items: () => linkTargets, kind: () => linkPickerKind })"
-                     x-modelable="value" x-model="linkPickerTargetId" class="recherche-linkpicker-target"></div>
-                <button type="button" class="btn-compact recherche-primary" @click="confirmLinkPicker()" :disabled="!linkPickerTargetId" x-text="$app.t('recherche.link.confirm')"></button>
-                <button type="button" class="btn-compact" @click="cancelLinkPicker()" x-text="$app.t('recherche.cancel')"></button>
-              </div>
-            </template>
-
-            <!-- Tags -->
-            <div class="research-tags" x-show="item.tags && item.tags.length">
-              <template x-for="tag in item.tags" :key="tag">
-                <span class="research-tag internal-link" @click="filterTag = tag; applyFilters()" x-text="tag"></span>
-              </template>
-            </div>
-
-            <!-- KI-Verknüpfungsvorschläge -->
-            <div class="research-suggestions" x-show="itemSuggestions(item)" x-cloak>
-              <div class="research-suggestions-head" x-text="$app.t('recherche.suggest.heading')"></div>
-              <template x-if="itemSuggestions(item) && itemSuggestions(item).length === 0">
-                <div class="research-suggestions-empty" x-text="$app.t('recherche.suggest.none')"></div>
-              </template>
-              <template x-for="(sg, i) in (itemSuggestions(item) || [])" :key="sg.target_kind + ':' + sg.target_id">
-                <div class="research-suggestion">
-                  <span class="research-link-kind" x-text="linkKindLabel(sg.target_kind)"></span>
-                  <span class="research-suggestion-label" x-text="sg.label"></span>
-                  <span class="research-suggestion-reason" x-show="sg.grund" x-text="sg.grund"></span>
-                  <button type="button" class="btn-compact" @click="acceptSuggestion(item, sg)" x-text="$app.t('recherche.suggest.accept')"></button>
-                </div>
-              </template>
-              <button type="button" class="research-suggestions-dismiss" @click="dismissSuggestions(item)" x-text="$app.t('recherche.suggest.dismiss')"></button>
-            </div>
-          </div>
-        </template>
-
-        <!-- Bearbeiten-Modus -->
-        <template x-if="editingId === item.id">
-          <div class="recherche-form" @keydown.escape="cancelEdit()">
-            <div class="recherche-form-row">
-              <div x-data="combobox($app.t('recherche.kindLabel'))"
-                   x-modelable="value" x-model="editDraft.kind"
-                   x-effect="options = kindOptions()" class="recherche-kind-combo"></div>
-              <input type="text" class="recherche-input recherche-title-input"
-                     x-model="editDraft.title" :placeholder="$app.t('recherche.field.title')"
-                     :aria-label="$app.t('recherche.field.title')" data-spellcheck="spelling">
-            </div>
-            <textarea class="recherche-input" x-model="editDraft.body" rows="4"
-                      :placeholder="$app.t('recherche.field.body')" :aria-label="$app.t('recherche.field.body')"
-                      data-spellcheck="spelling"></textarea>
-            <div class="recherche-urls">
-              <template x-for="(u, ui) in editDraft.urls" :key="ui">
-                <div class="recherche-url-row">
-                  <input type="text" class="recherche-input recherche-url-input" x-model="u.url"
-                         :placeholder="$app.t('recherche.field.url')" :aria-label="$app.t('recherche.field.url')">
-                  <input type="text" class="recherche-input recherche-url-label-input" x-model="u.label"
-                         :placeholder="$app.t('recherche.field.urlLabel')" :aria-label="$app.t('recherche.field.urlLabel')"
-                         data-spellcheck="spelling">
-                  <button type="button" class="icon-btn" @click="removeUrlRow(editDraft, ui)"
-                          :data-tip="$app.t('recherche.field.urlRemove')" :aria-label="$app.t('recherche.field.urlRemove')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
-                </div>
-              </template>
-              <button type="button" class="btn-compact recherche-url-add" @click="addUrlRow(editDraft)">
-                <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#plus"/></svg>
-                <span x-text="$app.t('recherche.field.urlAdd')"></span>
-              </button>
-            </div>
-            <input type="text" class="recherche-input" x-model="editDraft.source"
-                   :placeholder="$app.t('recherche.field.source')" :aria-label="$app.t('recherche.field.source')"
-                   data-spellcheck="spelling">
-            <input type="text" class="recherche-input" x-model="editDraft.tags"
-                   :placeholder="$app.t('recherche.field.tags')" :aria-label="$app.t('recherche.field.tags')">
-            <div class="recherche-form-actions">
-              <button type="button" class="btn-compact recherche-primary" @click="saveEdit(item)" :disabled="busy" x-text="$app.t('recherche.save')"></button>
-              <button type="button" class="btn-compact" @click="cancelEdit()" :disabled="busy" x-text="$app.t('recherche.cancel')"></button>
-            </div>
-          </div>
-        </template>
-      </div>
-    </template>
+    <!-- @include recherche-item -->
   </div>
+
+  </div><!-- /.recherche-board -->
+
+  <!-- @include recherche-chat -->
+  </div><!-- /.recherche-split -->
+
+  <!-- Die zwei Dialoge der Karte (natives <dialog>, Top-Layer — also auch ueber
+       der Vollbild-Karte): Detailansicht eines Fundstuecks und Anlegen. Beide
+       stehen ausserhalb von .recherche-split: geschlossen sind sie display:none
+       und damit kein Layout-Kind, offen liegen sie im Top-Layer. Sie teilen die
+       Shell (.research-dialog*) UND die Formularfelder (recherche-form-fields). -->
+  <!-- @include recherche-detail -->
+  <!-- @include recherche-create -->
 </div>

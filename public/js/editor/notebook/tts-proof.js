@@ -1,7 +1,7 @@
 import { EVT } from '../../events.js';
 import {
   computeTtsSentences, coalesceTtsRanges, splitLongRange, chunkTtsRanges,
-  normalizeForSpeech, ttsTextNodes, ttsBlockText,
+  normalizeForSpeech, ttsTextNodes, ttsBlockText, isTtsSkippedBlock,
   TTS_MIN_CHUNK_CHARS, TTS_MAX_CHUNK_CHARS,
 } from '../../tts-segment.js';
 'use strict';
@@ -135,6 +135,8 @@ export const ttsProofMethods = {
     const blocks = editEl.children.length ? Array.from(editEl.children) : [editEl];
     const segs = [];
     for (const block of blocks) {
+      // Diagramme haben keinen Sprech-Text (SSoT tts-segment.js).
+      if (isTtsSkippedBlock(block)) continue;
       // Sprech-Text OHNE Beleg-Chips (SSoT tts-segment.js#ttsBlockText) — ein
       // vorgelesenes „(Kafka, 1915, S. 44)" zerreisst den Hoerfluss. Der
       // Range-Bau unten laeuft ueber dieselbe Knotenliste, sonst driftet das

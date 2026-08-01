@@ -4,6 +4,7 @@
 // (Hash-Router, Exklusivität).
 
 import { wortschatzMethods } from '../book/wortschatz.js';
+import { wortschatzCloudMethods } from '../book/wortschatz-cloud.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 
 // Stabile Leer-Referenz: ein frisch gebautes `[]` bei jedem Getter-Aufruf würde
@@ -20,8 +21,20 @@ export function registerWortschatzCard() {
     wortschatzProgress: 0,
     wortschatzStatus: '',
     wortschatzLoadError: false,
-    // Aktiver Reiter der Ranglisten: 'terms' | 'phrases' | 'hapax'
+    // Aktiver Reiter: 'terms' | 'phrases' | 'hapax' | 'cloud'
     wortschatzTab: 'terms',
+    // Wortwolke (vierter Reiter, siehe book/wortschatz-cloud.js).
+    // 'freq' = Häufigkeit, 'key' = Keyness.
+    wsCloudMode: 'freq',
+    // Von d3-cloud platzierte Wörter (x/y/rotate/size). Leer, solange nicht gebaut.
+    wsCloudLayout: [],
+    wsCloudBuilding: false,
+    wsCloudError: false,
+    // Wie viele Wörter d3-cloud mangels Platz weglassen musste.
+    wsCloudDropped: 0,
+    // Laufender Layout-Handle + Lauf-Nummer (verwirft Ergebnisse überholter Läufe).
+    _wsCloudLayout: null,
+    _wsCloudRun: 0,
     _wortschatzPollTimer: null,
     // Memo der Einmalwort-Zeilen (Wortlänge angereichert). Der Getter läuft pro
     // Render mehrfach — ohne Cache baut er bei jedem Aufruf ein neues Array und
@@ -68,7 +81,19 @@ export function registerWortschatzCard() {
         ctx.wortschatzProgress = 0;
         ctx.wortschatzStatus = '';
         ctx.wortschatzLoadError = false;
+        ctx._wsCloudStop();
+        ctx.wsCloudLayout = [];
+        ctx.wsCloudBuilding = false;
+        ctx.wsCloudError = false;
+        ctx.wsCloudDropped = 0;
       };
+
+      // Die Wolke wird nur gebaut, wenn ihr Reiter offen ist — der Layout-Lauf
+      // misst jedes Wort einzeln auf einem Canvas und ist zu teuer, um ihn bei
+      // jedem Kartenöffnen mitlaufen zu lassen.
+      this.$watch('wortschatzTab', (tab) => { if (tab === 'cloud') this.wsBuildCloud(); });
+      // Nach einem Scan/Reload zeigt die offene Wolke sonst den alten Stand.
+      this.$watch('wortschatzData', () => { if (this.wortschatzTab === 'cloud') this.wsBuildCloud(); });
 
       this._lifecycle = setupCardLifecycle(this, {
         name: 'wortschatz',
@@ -84,8 +109,12 @@ export function registerWortschatzCard() {
       });
     },
 
-    destroy() { this._lifecycle?.destroy(); },
+    destroy() {
+      this._wsCloudStop();
+      this._lifecycle?.destroy();
+    },
 
     ...wortschatzMethods,
+    ...wortschatzCloudMethods,
   }));
 }

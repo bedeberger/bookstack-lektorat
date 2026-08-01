@@ -216,6 +216,41 @@
   }
   :is(.page-content-view, .book-editor-page-body, .share-content) pre code { background: none; padding: 0; }
 
+  /* --- Diagramme (Slash `/diagramm`, pre.mermaid). Markup-SSoT:
+         <pre class="mermaid">flowchart TD …</pre>
+         public/js/diagram/mermaid-html.js
+
+         Der Quelltext ist die Wahrheit; das gerenderte SVG kommt zur Laufzeit
+         als Geschwister-Knoten (.mermaid-render) daneben, der <pre> wird dann
+         nur ausgeblendet. Ist mermaid nicht geladen (offline, Ladefehler) oder
+         der Code ungültig, steht der Quelltext da — genau die gewollte
+         Degradation, deshalb ist der Träger ein <pre>. --- */
+  :is(.page-content-view, .book-editor-page-body, .share-content) pre.mermaid {
+    white-space: pre;
+    font-size: var(--font-size-xs, 12px);
+    border-inline-start: 3px solid var(--mc-accent);
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) pre.mermaid.mermaid--rendered {
+    display: none;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) .mermaid-render {
+    margin: 1.2em 0;
+    text-align: center;
+    /* Breite Diagramme scrollen in ihrem eigenen Kasten, statt den Lesekasten
+       aufzuziehen (gleiche Regel wie bei Tabellen). */
+    overflow-x: auto;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) .mermaid-render svg {
+    max-width: 100%;
+    height: auto;
+  }
+  :is(.page-content-view, .book-editor-page-body, .share-content) .mermaid-render--error {
+    font-size: var(--font-size-sm, 13px);
+    color: var(--mc-subtle);
+    text-align: start;
+    font-style: italic;
+  }
+
   /* --- Gedichte (Slash `/poem`, div.poem). An blockquote angelehnt, aber mit
          erhaltenen Zeilenumbrüchen und ohne Silbentrennung — Verse sind
          verslängen-gebunden. --- */

@@ -234,6 +234,14 @@ export const slashMethods = {
       return;
     }
 
+    // Diagramm: oeffnet den Quelltext-Dialog. Wie beim Bild uebernimmt der
+    // Dialog — der leere Trigger-Block wird erst beim Bestaetigen ersetzt.
+    if (item.diagram) {
+      this.openDiagramDialog(block);
+      this._closeSlash();
+      return;
+    }
+
     // Datums-/Zeit-Stempel: ersetzt den (per Trigger leeren) Block durch
     // einen <p> mit dem formatierten Stempel-String. Caret hinter den Text,
     // damit der User direkt weiterschreiben kann.

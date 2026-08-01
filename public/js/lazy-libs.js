@@ -13,6 +13,8 @@ let _jsMindPromise = null;
 let _sortablePromise = null;
 let _diffPromise = null;
 let _leafletPromise = null;
+let _cloudPromise = null;
+let _mermaidPromise = null;
 
 function _loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -81,6 +83,43 @@ export function loadDiff() {
       .catch(err => { _diffPromise = null; throw err; });
   }
   return _diffPromise;
+}
+
+/** d3-cloud (Wortwolke der Wortschatz-Karte). Der UMD-Build hängt sich unter
+ *  `window.d3.layout.cloud` ein und bringt sein einziges Paket-Dependency
+ *  (d3-dispatch) gebundelt mit — es braucht kein d3 daneben.
+ *
+ *  Der Layout-Lauf misst jedes Wort auf einem Offscreen-Canvas; das ist der
+ *  Grund, warum er asynchron über mehrere Ticks arbeitet und nicht einfach ein
+ *  Array zurückgibt. Aufrufer warten auf das `end`-Event, siehe
+ *  public/js/book/wortschatz-cloud.js. */
+export function loadWordCloud() {
+  if (window.d3?.layout?.cloud) return Promise.resolve(window.d3.layout.cloud);
+  if (!_cloudPromise) {
+    _cloudPromise = _loadScript('vendor/d3-cloud-1.2.9.js')
+      .then(() => window.d3.layout.cloud)
+      .catch(err => { _cloudPromise = null; throw err; });
+  }
+  return _cloudPromise;
+}
+
+/** mermaid (Diagramm-Bloecke im Manuskript). Mit Abstand die groesste Lib im
+ *  Bestand (~3,5 MB, ~1 MB gzip) — sie laedt darum ausschliesslich, wenn eine
+ *  Seite tatsaechlich einen `pre.mermaid` enthaelt bzw. der Diagramm-Dialog
+ *  geoeffnet wird, nie beim Kartenwechsel „auf Verdacht".
+ *
+ *  Der UMD-Build haengt sich unter `window.mermaid` ein. Konfiguriert wird er
+ *  nicht hier, sondern in public/js/diagram/mermaid-view.js — die Optionen
+ *  (htmlLabels, securityLevel) sind fachlich und gehoeren zur SSoT, nicht zum
+ *  Loader. */
+export function loadMermaid() {
+  if (window.mermaid) return Promise.resolve(window.mermaid);
+  if (!_mermaidPromise) {
+    _mermaidPromise = _loadScript('vendor/mermaid-11.16.0.min.js')
+      .then(() => window.mermaid)
+      .catch(err => { _mermaidPromise = null; throw err; });
+  }
+  return _mermaidPromise;
 }
 
 export function loadLeaflet() {

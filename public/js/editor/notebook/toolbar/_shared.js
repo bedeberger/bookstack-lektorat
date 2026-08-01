@@ -23,6 +23,10 @@ export { brLeftOfCaret as _brLeftOfCaret };
 // Inhalt in ein <li>. `todoList: true` erzeugt eine Checkbox-Liste.
 // `insertText: 'date'|'time'|'datetime'` ersetzt den Block durch einen
 // formatierten Datums-/Zeit-Stempel.
+// `diagram: true` oeffnet den Diagramm-Dialog (Quelltext + Live-Vorschau) und
+// setzt danach einen `<pre class="mermaid">`. Bewusst kein Tag-Swap wie die
+// uebrigen Bloecke: Diagramm-Code ist mehrzeilig, und Enter in einem `<pre>`
+// erzeugt in Chromium `<div>`-Zeilen, die den Code zerlegen.
 export const SLASH_ITEMS = [
   { key: 'paragraph',  tag: 'p',          group: 'block' },
   { key: 'h2',         tag: 'h2',         group: 'block' },
@@ -35,6 +39,7 @@ export const SLASH_ITEMS = [
   { key: 'pagebreak',  tag: 'hr', className: 'pagebreak',  group: 'break' },
   { key: 'blankpage',  tag: 'hr', className: 'blankpage',  group: 'break' },
   { key: 'bild',       upload: 'image',        group: 'insert' },
+  { key: 'diagramm',   diagram: true,          group: 'insert' },
   { key: 'heute',      insertText: 'date',     group: 'insert' },
   { key: 'jetzt',      insertText: 'datetime', group: 'insert' },
   { key: 'zeit',       insertText: 'time',     group: 'insert' },

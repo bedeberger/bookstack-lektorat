@@ -1,0 +1,58 @@
+<!-- Verknuepfungen + Tags eines Recherche-Fundstuecks, dazu der inline Link-Picker
+     und die KI-Verknuepfungsvorschlaege. Fragment (string-seitiger @include),
+     weil der Block sowohl im x-for der Liste als auch im Detail-Dialog steht —
+     beide nennen das Fundstueck `item`, das Markup ist darum wortgleich teilbar.
+     Der Picker haengt an der Karten-SSoT `linkPickerItemId`, die Vorschlaege an
+     `suggestions[item.id]` — beides pro Fundstueck, nicht pro Oberflaeche. -->
+<div class="research-links" x-show="item.links && item.links.length">
+  <template x-for="link in item.links" :key="link.link_id">
+    <span class="research-link-chip" :class="'research-link-chip--' + link.target_kind">
+      <button type="button" class="research-link-goto" @click="gotoLink(link)"
+              :data-tip="$app.t('recherche.link.goto')"
+              :aria-label="$app.t('recherche.link.goto') + ': ' + link.label">
+        <span class="research-link-kind" x-text="linkKindLabel(link.target_kind)"></span>
+        <span class="research-link-goto-label" x-text="link.label"></span>
+      </button>
+      <button type="button" class="research-chip-x" @click="removeLink(item, link)" :aria-label="$app.t('recherche.link.remove')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
+    </span>
+  </template>
+</div>
+
+<!-- Link-Picker (inline am Fundstueck, nur das aktive sichtbar) -->
+<template x-if="linkPickerItemId === item.id">
+  <div class="recherche-linkpicker">
+    <span class="recherche-linkpicker-label" x-text="$app.t('recherche.link.pickerLabel')"></span>
+    <div x-data="combobox($app.t('recherche.link.pickKind'))"
+         x-modelable="value" x-model="linkPickerKind"
+         x-effect="options = linkPickerKinds()"
+         @combobox-change="linkPickerTargetId = ''"></div>
+    <div x-data="entityPicker({ entity: 'target', placeholder: $app.t('recherche.link.pickTarget'), items: () => linkTargets, kind: () => linkPickerKind })"
+         x-modelable="value" x-model="linkPickerTargetId" class="recherche-linkpicker-target"></div>
+    <button type="button" class="btn-compact recherche-primary" @click="confirmLinkPicker()" :disabled="!linkPickerTargetId" x-text="$app.t('recherche.link.confirm')"></button>
+    <button type="button" class="btn-compact" @click="cancelLinkPicker()" x-text="$app.t('recherche.cancel')"></button>
+  </div>
+</template>
+
+<!-- Tags -->
+<div class="research-tags" x-show="item.tags && item.tags.length">
+  <template x-for="tag in item.tags" :key="tag">
+    <span class="research-tag internal-link" @click="filterTag = tag; applyFilters()" x-text="tag"></span>
+  </template>
+</div>
+
+<!-- KI-Verknuepfungsvorschlaege -->
+<div class="research-suggestions" x-show="itemSuggestions(item)" x-cloak>
+  <div class="research-suggestions-head" x-text="$app.t('recherche.suggest.heading')"></div>
+  <template x-if="itemSuggestions(item) && itemSuggestions(item).length === 0">
+    <div class="research-suggestions-empty" x-text="$app.t('recherche.suggest.none')"></div>
+  </template>
+  <template x-for="(sg, i) in (itemSuggestions(item) || [])" :key="sg.target_kind + ':' + sg.target_id">
+    <div class="research-suggestion">
+      <span class="research-link-kind" x-text="linkKindLabel(sg.target_kind)"></span>
+      <span class="research-suggestion-label" x-text="sg.label"></span>
+      <span class="research-suggestion-reason" x-show="sg.grund" x-text="sg.grund"></span>
+      <button type="button" class="btn-compact" @click="acceptSuggestion(item, sg)" x-text="$app.t('recherche.suggest.accept')"></button>
+    </div>
+  </template>
+  <button type="button" class="research-suggestions-dismiss" @click="dismissSuggestions(item)" x-text="$app.t('recherche.suggest.dismiss')"></button>
+</div>

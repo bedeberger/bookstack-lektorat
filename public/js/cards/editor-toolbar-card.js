@@ -76,6 +76,17 @@ export function registerEditorToolbarCard() {
     xrefLoading: false,
     xrefError: false,
     _xrefRange: null,
+    // Diagramm-Dialog (siehe editor/notebook/toolbar/diagram.js). `diagramSource`
+    // ist der Quelltext im Textarea, `_diagramEditEl` der angeklickte Block
+    // (null = Einfügen), `_diagramBlock` der leere Trigger-Block des Slash-Menüs.
+    diagramSource: '',
+    diagramError: '',
+    diagramEditing: false,
+    diagramPreviewing: false,
+    _diagramBlock: null,
+    _diagramEditEl: null,
+    _diagramPreviewTimer: null,
+    _diagramPreviewRun: 0,
     _toolbarAbort: null,
 
     init() {
@@ -177,6 +188,21 @@ export function registerEditorToolbarCard() {
         const chip = closestCiteEl(e.target, editEl);
         if (!chip) return;
         setTimeout(() => this.openCiteForChip(chip), 0);
+      }, { signal });
+
+      // Klick auf einen Diagramm-Block öffnet den Diagramm-Dialog. Der Block ist
+      // `contenteditable="false"` (markDiagramsAtomic) — ohne diesen Weg gäbe es
+      // keine Möglichkeit, ein gesetztes Diagramm zu ändern oder zu löschen.
+      // Nur im Notebook-Edit-Container: Diagramm-Eingabe ist notebook-only,
+      // Focus-Editor und Bucheditor stellen Diagramme nur dar.
+      document.addEventListener('click', (e) => {
+        const app = window.__app;
+        if (!app?.editMode || app.focusActive) return;
+        const editEl = e.target?.closest?.('.page-content-view--editing');
+        if (!editEl) return;
+        const pre = e.target?.closest?.('pre.mermaid');
+        if (!pre || !editEl.contains(pre)) return;
+        this.openDiagramForEl(pre);
       }, { signal });
 
       // <hr> ist ein void-Element ohne Caret-Slot — per Klick als

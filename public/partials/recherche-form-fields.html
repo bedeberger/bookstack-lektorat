@@ -1,0 +1,44 @@
+<!-- Formularfelder eines Recherche-Fundstuecks — EINE Quelle fuer BEIDE Wege:
+     Anlegen (recherche-create.html) und Bearbeiten (recherche-detail.html,
+     Modus detailEditing). Warum als Fragment: die zwei Formulare waren wortgleiche
+     Kopien und drifteten bei jeder Feld-Aenderung auseinander (Feldreihenfolge,
+     Textfeldhoehe, Spellcheck-Attribut, URL-Zeilen).
+     Beide binden dasselbe Kartenfeld `draft` — mehr als ein Formular ist nie
+     offen, weil beide in einem modalen <dialog> stehen. Datei-Anhang und die
+     Aktionszeile stehen bewusst NICHT hier: der Anhang gilt nur beim Anlegen
+     (ein `x-ref` zweimal im gleichen Scope waere ausserdem ambig), und die
+     Aktionen unterscheiden sich (createItem vs. saveEdit).
+     Scope + Methoden kommen aus rechercheCard. -->
+    <div class="recherche-form-row">
+      <div x-data="combobox($app.t('recherche.kindLabel'))"
+           x-modelable="value" x-model="draft.kind"
+           x-effect="options = kindOptions()" class="recherche-kind-combo"></div>
+      <input type="text" class="recherche-input recherche-title-input"
+             x-model="draft.title" :placeholder="$app.t('recherche.field.title')"
+             :aria-label="$app.t('recherche.field.title')" data-spellcheck="spelling">
+    </div>
+    <textarea class="recherche-input recherche-input--tall" x-model="draft.body"
+              :placeholder="$app.t('recherche.field.body')" :aria-label="$app.t('recherche.field.body')"
+              data-spellcheck="spelling"></textarea>
+    <div class="recherche-urls">
+      <template x-for="(u, ui) in draft.urls" :key="ui">
+        <div class="recherche-url-row">
+          <input type="text" class="recherche-input recherche-url-input" x-model="u.url"
+                 :placeholder="$app.t('recherche.field.url')" :aria-label="$app.t('recherche.field.url')">
+          <input type="text" class="recherche-input recherche-url-label-input" x-model="u.label"
+                 :placeholder="$app.t('recherche.field.urlLabel')" :aria-label="$app.t('recherche.field.urlLabel')"
+                 data-spellcheck="spelling">
+          <button type="button" class="icon-btn" @click="removeUrlRow(draft, ui)"
+                  :data-tip="$app.t('recherche.field.urlRemove')" :aria-label="$app.t('recherche.field.urlRemove')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
+        </div>
+      </template>
+      <button type="button" class="btn-compact recherche-url-add" @click="addUrlRow(draft)">
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#plus"/></svg>
+        <span x-text="$app.t('recherche.field.urlAdd')"></span>
+      </button>
+    </div>
+    <input type="text" class="recherche-input" x-model="draft.source"
+           :placeholder="$app.t('recherche.field.source')" :aria-label="$app.t('recherche.field.source')"
+           data-spellcheck="spelling">
+    <input type="text" class="recherche-input" x-model="draft.tags"
+           :placeholder="$app.t('recherche.field.tags')" :aria-label="$app.t('recherche.field.tags')">

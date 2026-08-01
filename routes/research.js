@@ -417,6 +417,27 @@ router.get('/:id/image', (req, res) => {
   res.send(row.image);
 });
 
+// Bild entfernen (Item bleibt; kind faellt auf 'note' zurueck, falls es nur
+// wegen des Bildes 'image' war — Pendant zum Dokument-Loeschen weiter unten).
+// Kein FTS-/Embedding-Nachzug: das Bild traegt keinen indizierten Text.
+router.delete('/:id/image', (req, res) => {
+  const userEmail = userEmailOrNull(req);
+  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
+  const id = toIntId(req.params.id);
+  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
+  const bookId = _itemBookId(id);
+  if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
+  if (!_guard(req, res, bookId, 'editor')) return;
+  db.prepare(
+    `UPDATE research_items
+        SET image = NULL, image_mime = NULL,
+            kind = CASE WHEN kind = 'image' THEN 'note' ELSE kind END,
+            updated_at = ${NOW_ISO_SQL}
+      WHERE id = ?`
+  ).run(id);
+  res.json(_emitItem(id));
+});
+
 // ── Dokument (PDF) hochladen ─────────────────────────────────────────────────
 // Original-PDF als BLOB + extrahierter Plain-Text (FTS + Embedding-Index + KI-
 // Verknuepfung). Dateiname kommt als ?name= (URL-encoded). Rein lesend, nie

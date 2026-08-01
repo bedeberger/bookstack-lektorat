@@ -17,6 +17,7 @@ import { normalizeEditorBlocks } from './html-clean.js';
 import { ensureTrailingParagraph } from './auto-slot.js';
 import { markCitesAtomic } from '../../sources/cite-html.js';
 import { markXrefsAtomic } from '../../xrefs/xref-html.js';
+import { markDiagramsAtomic } from '../../diagram/mermaid-html.js';
 
 // Setzt `html` in `el` und stellt Block-Konsistenz + Caret-Slot her.
 // Liefert `{ repaired }` — true, wenn `normalizeEditorBlocks` am gelieferten
@@ -45,6 +46,10 @@ export function mountEditorHtml(el, html) {
   // beim Oeffnen als veraendert und wuerde ungefragt neu gespeichert.
   markCitesAtomic(el);
   markXrefsAtomic(el);
+  // Diagramm-Blöcke ebenfalls atomar: ihr Quelltext ist einrückungsempfindlich
+  // und wird ausschliesslich über den Diagramm-Dialog bearbeitet. Gleiche
+  // Begründung wie oben — Laufzeit-Attribut, keine Inhaltsreparatur.
+  markDiagramsAtomic(el);
   return { repaired };
 }
 

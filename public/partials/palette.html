@@ -8,8 +8,16 @@
 
 <div x-data="paletteCard" class="display-contents">
   <template x-teleport="body">
+    <!-- x-trap hält Tab im Panel und blendet den Hintergrund für Screenreader
+         aus (`.inert` → aria-hidden auf alle Geschwister bis zum Body).
+         `.noautofocus`/`.noreturn`, weil openPalette/closePalette Fokus und
+         Restore selbst fahren: das Ziel wird VOR dem Fokussieren des Inputs
+         gemerkt — der Trap aktiviert 15 ms später und würde als Restore-Ziel
+         das dann schon fokussierte Palette-Input sehen. Scroll-Lock läuft
+         weiter über `body.palette-open` (kein zweiter Mechanismus). -->
     <div x-show="paletteOpen" x-cloak
          class="palette-overlay"
+         x-trap.inert.noautofocus.noreturn="paletteOpen"
          @click="onOverlayClick($event)"
          @keydown.escape.window="if (paletteOpen) closePalette()">
       <div class="palette-panel" role="dialog" aria-modal="true" :aria-label="$app.t('palette.placeholder')">

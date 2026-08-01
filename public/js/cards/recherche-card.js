@@ -7,10 +7,7 @@ import { rechercheMethods } from '../book/recherche.js';
 import { rechercheToSourceMethods } from '../sources/from-research.js';
 import { researchChatMethods } from '../chat/research-chat.js';
 import { EVT } from '../events.js';
-
-function _emptyDraft() {
-  return { kind: 'note', title: '', body: '', url: '', source: '', tags: '', fileName: '' };
-}
+import { emptyDraft as _emptyDraft } from '../book/recherche/shared.js';
 
 export function registerRechercheCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
@@ -27,10 +24,20 @@ export function registerRechercheCard() {
     busy: false,
     errorMessage: '',
 
-    creating: false,
+    // EIN Formular-Draft für BEIDE Wege — Anlegen (recherche-create.html) und
+    // Bearbeiten im Detail-Dialog teilen Felder-Fragment, Dialog-Shell und diesen
+    // Draft. Kein `creating`-Boolean daneben: ob der Anlegen-Dialog offen ist, weiss
+    // das <dialog> selbst (items.js#startCreate/closeCreate fahren es per
+    // showModal()/close()); ein zweites Flag wäre nur eine Kopie zum Auseinanderlaufen.
     draft: _emptyDraft(),
-    editingId: null,
-    editDraft: _emptyDraft(),
+
+    // Detail-Dialog (recherche-detail.html): `detailItemId` ist die SSoT dafür,
+    // WELCHES Fundstück offen ist — der Dialog selbst wird daraus in
+    // items.js#openDetail per showModal() aufgezogen und spiegelt sich in
+    // #…/recherche/<itemId>. `detailEditing` schaltet darin auf das Formular;
+    // Verknüpfen/Tags/Anhänge bleiben in beiden Modi bedienbar.
+    detailItemId: null,
+    detailEditing: false,
 
     filterKind: '',
     filterTag: '',
@@ -42,15 +49,6 @@ export function registerRechercheCard() {
     showArchived: false,
 
     menuOpenId: null,
-
-    // Beschreibungstext-Cap der Übersicht (CSS: .research-item-text--clamped).
-    // `expanded…` = vom User aufgeklappte Fundstücke, `clampable…` = die, bei denen
-    // der Cap wirklich etwas abschneidet (gemessen in _measureBodyClamps, nicht
-    // aus der Textlänge geschätzt). Beide per Reassign, nicht In-Place-Mutate.
-    expandedBodyIds: {},
-    clampableBodyIds: {},
-    // Re-Entry-Guard der rAF-gebündelten Messung (kurzlebig, kein Fach-State).
-    _clampRaf: null,
 
     // Native-Fullscreen-Status (gespiegelt vom fullscreenchange-Listener) —
     // mehr Platz fürs Karten-Board. Toggle in rechercheMethods.toggleRechercheFullscreen.
@@ -98,12 +96,28 @@ export function registerRechercheCard() {
 
     _lifecycle: null,
 
+    // Das offene Fundstück, aus `items` gelesen statt kopiert: nach jedem
+    // _replaceItem (Speichern, Upload, Verknüpfen) zeigt der Dialog damit den
+    // frischen Datensatz, ohne eigenen Sync-Pfad.
+    get detailItem() {
+      if (this.detailItemId == null) return null;
+      return (this.items || []).find(i => i.id === this.detailItemId) || null;
+    },
+    // Alias-Vehikel für den Dialog: die geteilten Fragmente (Aktionsmenü,
+    // URL-Zeilen, Verknüpfungen) sprechen das Fundstück als `item` an, weil sie
+    // im x-for der Liste stehen. Ein x-for über 0 oder 1 Element gibt dem Dialog
+    // denselben Namen — so bleibt das Markup EINE Quelle statt zweier Kopien.
+    get detailItems() {
+      const it = this.detailItem;
+      return it ? [it] : [];
+    },
+
     init() {
       this._lifecycle = setupCardLifecycle(this, {
         name: 'recherche',
         showFlag: 'showRechercheCard',
         timerKeys: ['_suggestTimer', '_researchChatPollTimer'],
-        resetState: { creating: false, editingId: null, menuOpenId: null, linkPickerItemId: null, busy: false },
+        resetState: { detailEditing: false, menuOpenId: null, linkPickerItemId: null, busy: false },
         load: () => this.loadRecherche(),
         extraListeners: [
           { type: 'recherche:filter-page', handler: (e) => this.filterToPage(e.detail?.pageId) },
@@ -121,10 +135,15 @@ export function registerRechercheCard() {
         onViewReset: () => { this.resetRecherche(); this.resetResearchChat(); this.researchChatOpen = false; },
       });
 
-      // Spaltenbreite ändert, wie viel der Text-Cap abschneidet → Toggle-Sichtbarkeit
-      // neu messen (Pflicht-Signal aus dem Lifecycle, kein manuelles removeEventListener).
-      window.addEventListener('resize', () => this._scheduleBodyClampMeasure(),
-        { signal: this._lifecycle.signal });
+      // Karte zugeklappt (Exklusivität, Seitenwechsel, Hash-Navigation): BEIDE
+      // Dialoge ZWINGEND schliessen. Ein offenes <dialog> hält das restliche
+      // Dokument inert, und da es im Top-Layer liegt, verschwindet es mit der
+      // display:none-Karte nur optisch — die App wirkte danach eingefroren.
+      this.$watch(() => window.__app.showRechercheCard, (v) => {
+        if (v) return;
+        this.closeDetail();
+        this.closeCreate();
+      });
 
       // Native Fullscreen-API: Status spiegeln (Toggle-Button + Esc-Exit).
       // $root = die Karten-Wurzel (.card--recherche), unabhängig vom Klick-Kontext.
@@ -138,16 +157,18 @@ export function registerRechercheCard() {
     destroy() { this._lifecycle?.destroy(); },
 
     // Deep-Link-Item (#book/X/recherche/<itemId>) öffnen: Schnipsel suchen →
-    // Edit-Modus + zentriert ins Bild + kurz hervorheben. Noch nicht geladene
-    // Liste → ID merken, loadRecherche ruft uns danach erneut auf (analog
-    // _focusBeatById in der Plot-Werkstatt).
+    // Detailansicht (LESEN, nicht Bearbeiten — ein geteilter Link soll zeigen,
+    // nicht in ein Formular führen) + die Zeile dahinter zentriert ins Bild und
+    // kurz hervorheben, damit sie nach dem Schliessen unter dem Cursor liegt.
+    // Noch nicht geladene Liste → ID merken, loadRecherche ruft uns danach erneut
+    // auf (analog _focusBeatById in der Plot-Werkstatt).
     _focusRechercheItemById(rawId) {
       const id = parseInt(rawId, 10);
       this._pendingFocusItemId = null;
       if (!Number.isInteger(id)) return;
       const item = (this.items || []).find(i => i.id === id);
       if (!item) { this._pendingFocusItemId = id; return; }
-      this.startEdit(item);
+      this.openDetail(item);
       this.$nextTick(() => {
         const el = this.$root?.querySelector(`[data-research-id="${id}"]`);
         if (!el) return;

@@ -22,6 +22,10 @@
   <style>body { padding: 1rem; max-width: 1200px; margin: 0 auto; }</style>
 
   <!-- Alpine als globaler Script-Tag (gleich wie public/index.html) -->
+  <!-- collapse-Plugin vor dem Core: die geladenen Panel-Partials nutzen
+       `collapsible`, dessen panel-Spread `x-collapse` mitbringt. Ohne Plugin
+       registriert der Core einen warnenden Stub → Console-Guard rot. -->
+  <script src="/public/vendor/alpine-collapse-3.15.12.min.js" defer></script>
   <script src="/public/vendor/alpine-3.15.12.min.js" defer></script>
 </head>
 <body>

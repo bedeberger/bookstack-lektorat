@@ -20,7 +20,7 @@
 // liest die Reader-Config (#share-config) selbst und baut den Dock nur, wenn der
 // Betreiber Vorlesen aktiviert hat (tts.enabled) und Lesetext vorhanden ist.
 
-import { computeTtsSentences, chunkTtsRanges, normalizeForSpeech, ttsTextNodes, ttsBlockText } from '../tts-segment.js';
+import { computeTtsSentences, chunkTtsRanges, normalizeForSpeech, ttsTextNodes, ttsBlockText, isTtsSkippedBlock } from '../tts-segment.js';
 import { el } from './dom.js';
 
 const HIGHLIGHT = 'tts-sentence';
@@ -138,7 +138,10 @@ export function setupTts({ token, article, t, locale, pause }) {
   // Leaf-Prosa-Bloecke: Bloecke, die keinen anderen passenden Block enthalten
   // (blockquote > p -> nur p), sonst wuerde Text doppelt gelesen.
   function readableBlocks() {
-    const all = Array.from(article.querySelectorAll(READER_BLOCK_SEL)).filter(b => !b.querySelector(READER_BLOCK_SEL));
+    const all = Array.from(article.querySelectorAll(READER_BLOCK_SEL))
+      .filter(b => !b.querySelector(READER_BLOCK_SEL))
+      // Diagramme haben keinen Sprech-Text (SSoT tts-segment.js).
+      .filter(b => !isTtsSkippedBlock(b));
     return all.length ? all : [article];
   }
   function collectSegments() {

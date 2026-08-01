@@ -130,4 +130,86 @@
       </template>
     </div>
   </template>
+
+  <!--
+    Satzrhythmus-Band. Zeigt die Satzlängen-SEQUENZ pro Kapitel — das ist der
+    Teil, den die Heatmap oben nicht zeigen kann: dort steht ein Mittelwert, und
+    derselbe Mittelwert entsteht aus lauter gleich langen Sätzen wie aus dem
+    ständigen Wechsel kurz/lang. Der Unterschied ist der Rhythmus.
+    Berechnung: public/js/book/stil-rhythmus.js.
+  -->
+  <template x-if="stilData?.pages?.length > 0 && stilHasRhythm()">
+    <div class="stil-rhythm">
+      <div class="stil-rhythm-head">
+        <h3 class="stil-rhythm-title" x-text="$app.t('stil.rhythm.title')"></h3>
+        <p class="stil-rhythm-sub"
+           x-text="$app.t('stil.rhythm.sub', { max: stilNum(stilRhythmData().scaleMax, 0) })"></p>
+      </div>
+
+      <div class="stil-rhythm-rows">
+        <template x-for="r in stilRhythmData().rows" :key="r.key">
+          <div class="stil-rhythm-row">
+            <div class="stil-rhythm-label">
+              <span class="stil-rhythm-name"
+                    :class="{ 'internal-link': r.key !== '__uncat__' }"
+                    @click="r.key !== '__uncat__' && stilJumpToChapter(r.key)"
+                    x-text="r.name"></span>
+              <span class="stil-rhythm-meta"
+                    x-text="$app.t('stil.rhythm.meta', { n: r.count, avg: stilNum(r.mean), p90: r.p90 })"></span>
+            </div>
+
+            <svg class="stil-rhythm-band" :viewBox="stilRhythmData().viewBox"
+                 preserveAspectRatio="none" role="img"
+                 :aria-label="$app.t('stil.rhythm.bandAria', { chapter: r.name, avg: stilNum(r.mean), longest: r.longest })">
+              <polygon class="stil-rhythm-area" :points="r.points"></polygon>
+            </svg>
+
+            <div class="stil-rhythm-stats">
+              <span class="stil-rhythm-swing"
+                    :class="'stil-rhythm-swing--' + stilSwingKind(r.swing)"
+                    :data-tip="$app.t('stil.rhythm.swingTip')"
+                    x-text="stilNum(r.swing, 2)"></span>
+              <span class="stil-rhythm-swing-word" x-text="stilSwingLabel(r.swing)"></span>
+              <span class="stil-rhythm-repeat"
+                    :data-tip="$app.t('stil.rhythm.repeatTip')"
+                    x-text="stilPercent(r.repeatRatio)"></span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </template>
+
+  <!-- Satzanfänge: buchweite Rangliste des jeweils ersten Wortes. -->
+  <template x-if="stilOpenerData().total > 0">
+    <div class="stil-openers">
+      <div class="stil-rhythm-head">
+        <h3 class="stil-rhythm-title" x-text="$app.t('stil.openers.title')"></h3>
+        <p class="stil-rhythm-sub"
+           x-text="$app.t('stil.openers.sub', {
+             distinct: stilNum(stilOpenerData().distinct, 0),
+             total: stilNum(stilOpenerData().total, 0),
+             repeats: stilNum(stilOpenerData().repeats, 0),
+             pct: stilPercent(stilOpenerData().repeatRatio),
+           })"></p>
+      </div>
+      <ul class="stil-opener-list">
+        <template x-for="o in stilOpenerData().top" :key="o.word">
+          <li class="stil-opener-row">
+            <span class="stil-opener-word" x-text="o.word"></span>
+            <span class="stil-opener-bar">
+              <span class="stil-opener-fill" :style="{ '--opener-bar': (o.bar * 100) + '%' }"></span>
+            </span>
+            <span class="stil-opener-count" x-text="stilNum(o.count, 0)"></span>
+            <span class="stil-opener-share" x-text="stilPercent(o.share)"></span>
+          </li>
+        </template>
+      </ul>
+    </div>
+  </template>
+
+  <!-- Seiten da, aber noch keine Sequenz-Felder (Seiten auf älterer metrics_version). -->
+  <div class="muted-msg muted-msg--spaced"
+       x-show="stilData?.pages?.length > 0 && !stilHasRhythm() && !stilSyncing && !stilLoading"
+       x-text="$app.t('stil.rhythm.pending')"></div>
 </div>

@@ -1,7 +1,12 @@
 <!-- Reader: Fassung nur-lesend oeffnen (Modal-Charakter).
      Ausgelagert aus snapshots.html (LOC-Split), via `<!-- @include snapshots-reader -->`
      eingebunden — laeuft im Scope von snapshotsCard (siehe snapshots-card.js). -->
+<!-- x-trap: Tab bleibt im Reader, Hintergrund fuer Screenreader ausgeblendet
+     (`.inert`), Fokus-Restore auf den Ausloeser macht der Trap. Kein
+     `.noscroll` — das erledigt `body.snapshot-reader-open` (snapshots-card.js
+     toggelt die Klasse), kein zweiter Mechanismus. -->
 <div class="snapshot-reader" x-show="readerOpen" x-cloak
+     x-trap.inert="readerOpen"
      @keydown.escape.window="readerOpen && closeReader()"
      role="dialog" aria-modal="true" :aria-label="$app.t('snapshots.reader.title')">
   <div class="snapshot-reader__backdrop" @click="closeReader()"></div>

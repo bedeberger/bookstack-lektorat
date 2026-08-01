@@ -81,6 +81,7 @@
   <link rel="stylesheet" href="css/components/comment-rail.css">
   <link rel="stylesheet" href="css/editor/book/book-editor.css">
   <link rel="stylesheet" href="css/editor/notebook/edit-toolbar.css">
+  <link rel="stylesheet" href="css/editor/notebook/diagram-dialog.css">
   <link rel="stylesheet" href="css/editor/notebook/find-replace.css">
   <link rel="stylesheet" href="css/editor/notebook/findings.css">
   <link rel="stylesheet" href="css/editor/notebook/lektorat.css">
@@ -98,7 +99,9 @@
   <link rel="stylesheet" href="css/entities/world-facts.css">
   <link rel="stylesheet" href="css/entities/entity-grid.css">
   <link rel="stylesheet" href="css/entities/ideen.css">
-  <link rel="stylesheet" href="css/entities/recherche.css">
+  <link rel="stylesheet" href="css/entities/recherche/board.css">
+  <link rel="stylesheet" href="css/entities/recherche/dialog.css">
+  <link rel="stylesheet" href="css/entities/recherche/chat.css">
   <link rel="stylesheet" href="css/entities/sources.css">
   <link rel="stylesheet" href="css/entities/entity-list.css">
   <link rel="stylesheet" href="css/entities/orte-map.css">
@@ -308,9 +311,18 @@
   <!-- Alpine self-hosted statt CDN: spart externen Roundtrip beim First-Load,
        wird vom Service-Worker zusammen mit der Shell gecached und funktioniert
        offline (Zug-Szenario). Pin per Dateiname; bumpen + SHELL_CACHE erhöhen. -->
-  <!-- Anchor-Plugin (Floating UI) für Combobox-Positionierung — MUSS vor dem
-       Alpine-Core stehen, damit sein alpine:init-Listener vor Alpine.start läuft. -->
+  <!-- Alpine-Plugins — MÜSSEN vor dem Alpine-Core stehen, damit ihr
+       alpine:init-Listener vor Alpine.start läuft (kein Lazy-Load möglich:
+       der Core registriert für jede fehlende Plugin-Direktive einen Stub, der
+       nur warnt). Reihenfolge unter den Plugins selbst ist beliebig.
+         anchor   — Combobox-Positionierung (Floating UI), x-anchor
+         focus    — x-trap für Overlays, die kein natives <dialog> sind
+         collapse — x-collapse, animierte Höhe der `collapsible`-Panels
+         resize   — x-resize, ResizeObserver als Direktive (nur Neucode) -->
   <script defer src="vendor/alpine-anchor-3.15.12.min.js"></script>
+  <script defer src="vendor/alpine-focus-3.15.12.min.js"></script>
+  <script defer src="vendor/alpine-collapse-3.15.12.min.js"></script>
+  <script defer src="vendor/alpine-resize-3.15.12.min.js"></script>
   <script defer src="vendor/alpine-3.15.12.min.js"></script>
   <!-- Geteilter Tooltip-Layer für [data-tip]. -->
   <script type="module" src="js/tooltip.js"></script>

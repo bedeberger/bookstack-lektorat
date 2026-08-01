@@ -22,6 +22,7 @@ import { stripFocusArtefacts, fetchJson } from '../utils.js';
 import { handleEditorPaste, handleEditorCopy, handleEditorCut } from '../editor/shared/paste.js';
 import { createAutosaveTimers } from '../editor/shared/autosave.js';
 import { createTimerBag } from '../editor/shared/timers.js';
+import { renderDiagramsIn, clearRenderedDiagrams } from '../diagram/mermaid-view.js';
 import { EVT } from '../events.js';
 
 // Re-Export für Tests/Konsumenten: die Facade ist der Einstieg.
@@ -292,6 +293,27 @@ export function registerBookEditorCard() {
       if (!el) return;
       el.innerHTML = block.html;
       el.dataset.rev = String(block._rev || 0);
+      this._syncBlockDiagrams(el, block);
+    },
+
+    // Diagramme im Stream: inaktive Blöcke zeigen das Bild, der aktive den
+    // Quelltext.
+    //
+    // Warum der aktive Block das SVG NICHT behalten darf: `_onBlockInput` liest
+    // `el.innerHTML` in `block.html` — ein gerenderter Fremdknoten im aktiven
+    // Block landete beim ersten Tastendruck im Manuskript. Der Quelltext ist die
+    // Wahrheit, das Bild ein Artefakt (siehe public/js/diagram/mermaid-html.js).
+    //
+    // Bearbeitet wird der Code hier nur als Text — die geführte Eingabe mit
+    // Vorschau ist notebook-only (harte Regel „Editor-Spezifikation").
+    _syncBlockDiagrams(el, block) {
+      if (!el) return;
+      if (this.activePageId === block.pageId) {
+        clearRenderedDiagrams(el);
+        return;
+      }
+      renderDiagramsIn(el, { errorLabel: window.__app?.t?.('editor.diagram.invalid') })
+        .catch(() => {});
     },
 
     // Schreibt block.html in DOM-Container; läuft NICHT auf dem aktiven Block
@@ -305,6 +327,7 @@ export function registerBookEditorCard() {
       // Trusted Source: HTML kommt vom Content-Store (server-cleant).
       el.innerHTML = block.html;
       el.dataset.rev = String(block._rev);
+      this._syncBlockDiagrams(el, block);
     },
 
     // ── Klick-aktiviert-Block ─────────────────────────────────────────────
@@ -317,16 +340,26 @@ export function registerBookEditorCard() {
 
     async activateBlock(block) {
       if (this.activePageId === block.pageId) return;
-      if (this.activePageId != null) {
-        const prev = this._blockById(this.activePageId);
-        if (prev?.dirty) this._enqueueSave(prev.pageId);
+      const prevId = this.activePageId;
+      if (prevId != null) {
+        const prev = this._blockById(prevId);
+        if (prev?.dirty) this._enqueueSave(prevId);
       }
       this.activePageId = block.pageId;
       this.$nextTick(() => {
+        // Verlassener Block bekommt sein Bild zurück, der neue seinen Quelltext.
+        // Reihenfolge: erst räumen, dann Caret setzen — das Entfernen des SVG
+        // verschiebt die Höhe.
+        if (prevId != null) {
+          const prevEl = this.$root.querySelector(`[data-book-editor-page="${prevId}"]`);
+          const prevBlock = this._blockById(prevId);
+          if (prevEl && prevBlock) this._syncBlockDiagrams(prevEl, prevBlock);
+        }
         // $root, nicht $el: in einer aus @click gerufenen Methode zeigt $el auf
         // das auslösende Element (den Block-Body), $root auf die Karten-Wurzel.
         const el = this.$root.querySelector(`[data-book-editor-page="${block.pageId}"]`);
         if (!el) return;
+        clearRenderedDiagrams(el);
         el.focus({ preventScroll: true });
         const md = this._pendingMousedown?.pageId === block.pageId ? this._pendingMousedown : null;
         this._pendingMousedown = null;

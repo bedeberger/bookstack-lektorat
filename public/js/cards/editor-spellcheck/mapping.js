@@ -32,11 +32,21 @@ const SHOW_ELEMENT_AND_TEXT = 1 | 4;
 // LT-eigene UI-Inseln (Popover, Badge) leben innerhalb des Editor-Roots,
 // damit Scroll sie nativ mitnimmt. Ihre Texte (Regelmeldungen, Buttons) sollen
 // NICHT in den LT-Eingabe-Stream wandern — sonst pruefte LT seine eigene UI.
+// Diagramm-Bloecke fallen aus demselben Grund komplett raus wie die LT-eigene UI:
+// `flowchart TD` ist kein Deutsch, und jede Knotenbeschriftung ohne Satzzeichen
+// erzeugt eine Meldung. Anders als beim Quellen-Chip wird hier GESCHNITTEN statt
+// geschuetzt — der Block steht fuer sich, es gibt keine Nachbar-Textknoten, die
+// durch das Schneiden zusammenklebten. Selektor ist eine bewusste Kopie aus
+// public/js/diagram/mermaid-html.js (dieses Modul haelt sich frei von
+// App-Bundle-Importen), gegated durch tests/unit/mermaid-drift.test.mjs.
+const DIAGRAM_SKIP_SEL = 'pre.mermaid';
+
 function _isSkippedIsland(el) {
   if (!el || el.nodeType !== 1) return false;
   const cl = el.classList;
   if (!cl) return false;
-  return cl.contains('lt-popover') || cl.contains('lt-badge');
+  if (cl.contains('lt-popover') || cl.contains('lt-badge')) return true;
+  return !!el.matches && el.matches(DIAGRAM_SKIP_SEL);
 }
 
 // Quellen-Chips (Quellennachweise) werden NICHT aus dem Stream geschnitten, sondern

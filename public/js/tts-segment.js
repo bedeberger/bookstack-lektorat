@@ -126,6 +126,29 @@ export function normalizeForSpeech(text) {
 // share-reader/tts.js. Gegen Drift gesichert durch tests/unit/tts-cite-skip.test.mjs.
 export const TTS_SKIP_SEL = 'span.cite[data-src]';
 
+// ── Bloecke, die gar nicht vorgelesen werden ────────────────────────────────
+// Andere Frage als TTS_SKIP_SEL: der oben ueberspringt einen INLINE-Teilbaum
+// innerhalb eines Satzes, dieser hier verwirft einen ganzen Block.
+//
+// Ein Diagramm hat keinen Sprech-Text. Vorzulesen waere entweder sein Quelltext
+// („flowchart TD A eckige Klammer auf Ausgangslage") oder die Knoten-Labels des
+// gerenderten SVG in Layout-Reihenfolge — beides ist kein Satz und reisst den
+// Hoerfluss auseinander. Darum fallen Quelltext-Block UND Render-Knoten weg.
+// Die Bildbeschreibung fuer Screenreader haengt am SVG (`role="img"`), das ist
+// der richtige Kanal dafuer.
+//
+// `.mermaid-render` ist der zur Laufzeit eingefuegte Geschwister-Knoten (siehe
+// public/js/diagram/mermaid-view.js). Beide Selektoren sind bewusste KOPIEN aus
+// public/js/diagram/mermaid-html.js — dieses Modul muss pre-auth ladbar bleiben
+// (der Share-Reader importiert es) und darf nichts aus dem App-Bundle ziehen.
+// Gegen Drift gesichert durch tests/unit/mermaid-drift.test.mjs.
+export const TTS_SKIP_BLOCK_SEL = 'pre.mermaid, .mermaid-render';
+
+/** Ist `el` ein Block, der komplett uebersprungen wird? */
+export function isTtsSkippedBlock(el) {
+  return !!(el && el.nodeType === 1 && el.matches && el.matches(TTS_SKIP_BLOCK_SEL));
+}
+
 // Textknoten unter `root` in Dokumentordnung, Teilbaeume von `skipSel` uebersprungen.
 export function ttsTextNodes(root, skipSel = TTS_SKIP_SEL) {
   const out = [];

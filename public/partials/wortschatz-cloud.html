@@ -1,0 +1,49 @@
+<!-- Wortwolke der Wortschatz-Analyse. Fragment von wortschatz.html (String-Include
+     `<!-- @include wortschatz-cloud -->`) — Begründung siehe wortschatz-terms.html.
+
+     Keine eigene Auswahl: die Wolke zeichnet dieselben `lexicon_terms`-Zeilen wie
+     die Ranglisten, nur nach Gewicht skaliert. Zwei Modi, weil die Wortliste zwei
+     Auswahlachsen hat (Häufigkeit vs. Keyness, siehe docs/wortschatz.md).
+     Layout: d3-cloud, lazy geladen — siehe public/js/book/wortschatz-cloud.js. -->
+<div x-show="wortschatzTab === 'cloud'">
+  <div class="wortschatz-cloud-head">
+    <div class="seg-toggle" role="group" :aria-label="$app.t('wortschatz.cloud.modeLabel')">
+      <button type="button"
+              :class="{ 'seg-toggle--active': wsCloudMode === 'freq' }"
+              :aria-pressed="wsCloudMode === 'freq'"
+              @click="wsSetCloudMode('freq')"
+              x-text="$app.t('wortschatz.cloud.modeFreq')"></button>
+      <button type="button"
+              :class="{ 'seg-toggle--active': wsCloudMode === 'key' }"
+              :aria-pressed="wsCloudMode === 'key'"
+              :disabled="!wortschatzHasKeyness"
+              :data-tip="wortschatzHasKeyness ? '' : $app.t('wortschatz.cloud.keyUnavailable')"
+              @click="wsSetCloudMode('key')"
+              x-text="$app.t('wortschatz.cloud.modeKey')"></button>
+    </div>
+    <p class="wortschatz-list-hint"
+       x-text="$app.t(wsCloudMode === 'key' ? 'wortschatz.cloud.hintKey' : 'wortschatz.cloud.hintFreq')"></p>
+  </div>
+
+  <div x-show="wsCloudBuilding" class="card-status">
+    <span class="spinner"></span><span x-text="$app.t('wortschatz.cloud.building')"></span>
+  </div>
+  <div x-show="wsCloudError" class="muted-msg muted-msg--spaced" x-text="$app.t('wortschatz.cloud.error')"></div>
+  <div x-show="!wsCloudBuilding && !wsCloudError && !wsCloudLayout.length"
+       class="muted-msg muted-msg--spaced" x-text="$app.t('wortschatz.cloud.empty')"></div>
+
+  <!-- Die <text>-Knoten setzt JS (wsPaintCloud), nicht ein `<template x-for>`:
+       innerhalb von <svg> parst der Browser <template> als Fremdelement, Alpine
+       sieht dann kein echtes HTMLTemplateElement und initialisiert die Kinder
+       ausserhalb des Loop-Scopes („w is not defined"). Klicks laufen deshalb
+       ueber Delegation am <svg>. -->
+  <div class="wortschatz-cloud-wrap" x-show="wsCloudLayout.length && !wsCloudBuilding">
+    <svg class="wortschatz-cloud" x-ref="wsCloudSvg"
+         role="img" :aria-label="$app.t('wortschatz.cloud.aria', { n: wsCloudLayout.length })"
+         @click="wsCloudClick($event)"></svg>
+  </div>
+
+  <!-- Gekappte Wolke weist ihren Deckel aus (gleiche Regel wie die Einmalwort-Liste). -->
+  <p class="wortschatz-list-hint" x-show="wsCloudDropped > 0"
+     x-text="$app.t('wortschatz.cloud.dropped', { n: wsCloudDropped })"></p>
+</div>

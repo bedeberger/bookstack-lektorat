@@ -86,10 +86,11 @@ export const rechercheBoardMethods = {
     this.tagPool = [];
     this.linkTargets = {};
     this._linkTargetsBookId = null;
-    this.creating = false;
     this.draft = _emptyDraft();
-    this.editingId = null;
-    this.editDraft = _emptyDraft();
+    // Erst BEIDE Dialoge schliessen, dann die Marker nullen: ein offenes <dialog>
+    // bleibt sonst im Top-Layer stehen und hält das Dokument inert.
+    this.closeDetail();
+    this.closeCreate();
     this._pendingFocusItemId = null;
     if (window.Alpine) window.Alpine.store('nav').rechercheItemId = null;
     this.filterKind = '';
@@ -102,7 +103,6 @@ export const rechercheBoardMethods = {
     this.showArchived = false;
     this.menuOpenId = null;
     this.linkPickerItemId = null;
-    this.expandedBodyIds = {};
     this.suggestions = {};
     this.errorMessage = '';
     this.busy = false;

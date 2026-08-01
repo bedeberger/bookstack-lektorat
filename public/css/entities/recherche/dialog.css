@@ -1,0 +1,193 @@
+@layer components {
+/* === Dialog-Shell der Recherche-Karte ===
+   EINE Shell für BEIDE Dialoge der Karte, damit Panelbreite, Kopfzeile, Scroll-
+   Verhalten und das Mobile-Blatt nicht zweimal gepflegt werden:
+   - Detailansicht (public/partials/recherche-detail.html, items.js#openDetail):
+     den Fund LESEN — Volltext ungekappt, in Lesegrösse und mit begrenztem
+     Satzspiegel, Bild gross statt als Rohdatei im neuen Tab — und ihn darin
+     bearbeiten, ohne dass Verknüpfungen, Tags und Anhänge verschwinden.
+   - Anlegen (public/partials/recherche-create.html, items.js#startCreate): das
+     Formular als Modal statt als Block über der Liste. Warum: es ist dasselbe
+     Formular wie im Bearbeiten-Modus der Detailansicht (geteiltes Fragment
+     recherche-form-fields.html) — zwei verschiedene Rahmen um dieselben Felder
+     driften sonst auseinander (Textfeldhöhe, Feldreihenfolge, Aktionszeile).
+   Beide via showModal(); Backdrop über ::backdrop; Focus-Trap, Inert-Hintergrund
+   und ESC kommen vom Browser. Akzentfarbe via var(--card-accent) (Mapping in
+   card-accents.css). */
+
+.research-dialog {
+  background: var(--color-card-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  width: min(56rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 4rem);
+  padding: 0;
+  margin: auto;
+}
+.research-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.research-dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+
+/* Anlegen braucht keine 56rem: das Formular ist eine Spalte kurzer Felder, in
+   voller Panelbreite stehen Titel- und URL-Zeilen unangenehm weit auseinander. */
+.research-dialog--create { width: min(42rem, calc(100% - 2rem)); }
+
+/* Hintergrund-Scroll sperren, solange ein Dialog offen ist — nur
+   .research-dialog__scroll scrollt (Muster des Revisions-Viewers). */
+html:has(.research-dialog[open]) { overflow: hidden; }
+
+.research-dialog__inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ── Kopf: bleibt stehen, während der Inhalt scrollt ─────────────────────── */
+.research-dialog__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+.research-dialog__title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  min-width: 0;
+  word-break: break-word;
+}
+/* Erbt position: relative von .research-item-actions (das Aktionsmenü-Fragment
+   positioniert sein Dropdown absolut daran). */
+.research-dialog__actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.research-dialog__scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ── Bild ───────────────────────────────────────────────────────────────── */
+.research-dialog__figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  align-items: flex-start;
+}
+.research-dialog__image {
+  max-width: 100%;
+  max-height: 60vh;
+  width: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+/* Bildunterschrift trägt die Aktionen zum Bild: „in neuem Tab öffnen“ und das
+   Entfernen des Anhangs (Icon-only, Label im Tooltip). */
+.research-dialog__figcaption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+.research-dialog__figcaption a { color: var(--card-accent); }
+
+/* ── Dokument ───────────────────────────────────────────────────────────── */
+/* Anhang-Zeile: Link (.research-item-doc, geteilt mit dem Board) + Entfernen.
+   Der Button steht neben dem <a>, nicht darin — verschachtelte Interaktion. */
+.research-dialog__doc {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+/* ── Lesemodus ──────────────────────────────────────────────────────────── */
+/* Der eigentliche Grund für diese Ansicht: ein erfasster Artikel trägt bis zu
+   20 000 Zeichen. Lesegrösse, ruhige Zeilenhöhe und ein Satzspiegel um 70 Zeichen
+   (nicht die volle Panelbreite — lange Zeilen verliert das Auge beim Rücksprung).
+   `pre-wrap` erhält die Absatzumbrüche des erfassten Texts. */
+.research-dialog__text {
+  max-width: 34rem;
+  font-size: var(--font-size-reading);
+  line-height: var(--lh-relaxed);
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+.research-dialog__text--quote {
+  font-style: italic;
+  padding-left: var(--space-md);
+  border-left: 3px solid var(--card-accent);
+  color: color-mix(in srgb, var(--color-text) 88%, var(--color-muted));
+}
+
+.research-dialog__meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Verknüpfen + KI-Vorschlag als sichtbare Buttons (nicht nur im Kebab): dass man
+   ein Fundstück von hier aus verknüpfen kann, muss man sehen. */
+.research-dialog__foot {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
+/* ── Aktionsleiste am Fuss (aussERHALB von __scroll) ─────────────────────── */
+/* Speichern/Abbrechen bleiben stehen, während das Formular scrollt — ein Weg aus
+   dem Dialog muss ohne Scrollen erreichbar sein. Rechtsbündig, weil die primäre
+   Aktion hier den Dialog beendet (die Werkzeug-Buttons in __foot sind linksbündig,
+   sie arbeiten am Inhalt weiter). */
+.research-dialog__bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  padding: var(--space-sm) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+/* Grosses Textfeld in beiden Dialogen (geteiltes Formular-Fragment): ein Fund,
+   der gelesen werden musste, lässt sich nicht in vier Zeilen redigieren — und
+   beim Anlegen landet hier der Volltext eines erfassten Artikels. */
+textarea.recherche-input--tall { min-height: 40vh; }
+
+/* ── Mobile: Vollflächiges Blatt statt schwebendem Panel ─────────────────── */
+@media (max-width: 640px) {
+  .research-dialog {
+    width: 100%;
+    max-width: none;
+    max-height: 100dvh;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+  .research-dialog__head { padding: var(--space-sm) var(--space-md); }
+  .research-dialog__scroll { padding: var(--space-md); }
+  .research-dialog__bar { padding: var(--space-xs) var(--space-md); }
+  /* Satzspiegel gibt hier der Viewport vor; ein zweites Limit verschenkt Breite. */
+  .research-dialog__text { max-width: none; }
+  .research-dialog__image { max-height: 45vh; }
+}
+}

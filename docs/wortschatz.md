@@ -225,6 +225,35 @@ Die Ranglisten liegen als Fragmente daneben (`wortschatz-terms.html`,
 steckt in einem `<template x-if>`, und `querySelector` steigt nicht in
 Template-Content ab. Reiter `terms` | `phrases` | `hapax`.
 
+### Vierter Reiter: Wortwolke
+
+[public/js/book/wortschatz-cloud.js](../public/js/book/wortschatz-cloud.js),
+Fragment [wortschatz-cloud.html](../public/partials/wortschatz-cloud.html),
+Layout via d3-cloud (lazy, `loadWordCloud()` in
+[lazy-libs.js](../public/js/lazy-libs.js)).
+
+Die Wolke fügt **keine eigene Auswahl** hinzu: sie zeichnet dieselben
+`lexicon_terms`-Zeilen wie die Tabellen, nur nach Gewicht skaliert. Zwei Modi,
+weil die Wortliste zwei Auswahlachsen hat:
+
+- **Häufigkeit** — Grösse ∝ `count`.
+- **Auffälligkeit** — Grösse ∝ |`keyness`|; das Vorzeichen geht in die Farbe
+  (kursiv/grau = auffällig **gemieden**). Ohne Referenzkorpus ist der Modus
+  gesperrt statt leer, mit Begründung im Tooltip.
+
+Drei Entscheidungen, die den Unterschied machen:
+
+- **Wurzelskala statt linear.** Die Häufigkeitsverteilung eines Buchs ist
+  zipfverteilt; linear skaliert erdrückt das häufigste Wort alle anderen.
+- **Deterministisch.** d3-cloud würfelt per Default (`Math.random`) — dieselbe
+  Analyse ergäbe bei jedem Öffnen ein anderes Bild, und zwei Scans wären nicht
+  vergleichbar. Darum fixer `random()` und indexbasierte Rotation.
+- **Der Deckel wird ausgewiesen.** d3-cloud lässt Wörter weg, für die kein Platz
+  war; die Zahl steht unter der Wolke. Dieselbe Regel wie bei `hapax_listed` —
+  ein stillschweigend gekürzter Ausschnitt liest sich als Vollständigkeit.
+
+Klick auf ein Wort springt zu `first_page_id`, wie in den Tabellen.
+
 Die Einmalwort-Zeilen bekommen im Frontend die Wortlänge als eigenes Feld (`len`)
 — die einzige Zahl, nach der sich diese Liste sortieren lässt, die Häufigkeit ist
 per Definition überall 1. Der Getter ist memoisiert (Vergleich auf die Array-

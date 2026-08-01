@@ -8,6 +8,7 @@
 
 import { readNormalSnapshot, clearNormalSnapshot } from './storage.js';
 import { readDraft } from '../draft-storage.js';
+import { renderDiagramsIn } from '../../diagram/mermaid-view.js';
 
 // Restore nur, wenn für die Seite ein lokaler Draft (ungespeicherter Inhalt)
 // existiert. Ohne Draft hat der User keinen nennenswerten Edit-State —
@@ -49,5 +50,28 @@ export const notebookCardMethods = {
     clearNormalSnapshot();
     if (!hasUnsavedDraft(snap.pageId, app.renderedPageHtml)) return;
     app.startEdit?.();
+  },
+
+  // Diagramme in der Leseansicht rendern. `renderedPageHtml` hängt per x-html
+  // am Root-Scope, das DOM steht also erst nach dem Alpine-Effekt — darum
+  // `$nextTick` statt eines direkten Aufrufs im Watcher.
+  //
+  // NUR die Leseansicht (`.page-content-view` ohne `--editing`): im Edit-Modus
+  // bleibt der Quelltext sichtbar, weil er dort bearbeitet wird. Ein SVG neben
+  // dem `<pre>` im contenteditable wäre ausserdem ein Fremdknoten im
+  // Save-Pfad.
+  _setupNotebookDiagrams() {
+    const draw = () => this.$nextTick(() => {
+      const app = window.__app;
+      if (!app || app.editMode || app.focusActive) return;
+      const view = document.querySelector('.page-content-view:not(.page-content-view--editing)');
+      if (!view) return;
+      // Fehler bleiben lokal: ein ungültiges Diagramm zeigt seinen Quelltext.
+      renderDiagramsIn(view, { errorLabel: app.t?.('editor.diagram.invalid') })
+        .catch(() => {});
+    });
+    this.$watch(() => window.__app?.renderedPageHtml, draw);
+    this.$watch(() => window.__app?.editMode, draw);
+    queueMicrotask(draw);
   },
 };

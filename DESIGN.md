@@ -10,6 +10,7 @@ Token-Referenz (Farben, Radien, Spacing, Schriftgrössen): [public/css/tokens.cs
 - [Doku-Template](#doku-template-pflicht-für-neue-sections) — Pflicht-Aufbau pro Section
 - [Token-Pflicht](#token-pflicht-keine-ad-hoc-werte) — Schatten, Padding, Spacing, Transition, Opacity, Z-Index
 - [Motion-Patterns](#motion-patterns) — cardFadeIn, `@starting-style`-Eintritt, View Transition beim Kartenwechsel, Hover-Mechaniken
+- [Alpine-Plugins](#alpine-plugins-inventar) — was geladen ist (`x-anchor`/`x-trap`/`x-collapse`/`x-resize`), was mit Absicht nicht
 - [Mikro-Typografie](#mikro-typografie-memory-regeln) — Doppelpunkt, Zahlen, Icons, Konsistenz
 - [Mobile-Breakpoints + Darkmode](#mobile-breakpoints--darkmode) — 480/600/768/1024 + Token-Pflicht für Farben
 - [Container-Queries vs. Media-Queries](#container-queries-vs-media-queries)
@@ -29,8 +30,11 @@ Token-Referenz (Farben, Radien, Spacing, Schriftgrössen): [public/css/tokens.cs
 - [Tabs / Modus-Toggle](#tabs--modus-toggle) — `.tabs` + `.tabs-btn`
 - [Form-Patterns](#form-patterns-settings--und-export-karten) — `.card-form-grid` + Wertspalten
 - [Progress-Bar](#progress-bar) — `--progress` Custom-Prop
+- [Sequenz-Band](#sequenz-band-stil-rhythm-band) — lange Zahlenfolge in ihrer Reihenfolge (Satzrhythmus)
+- [Rangliste mit Balken](#rangliste-mit-balken-stil-opener-list) — Top-N ohne Tabelle
+- [Wortwolke](#wortwolke-wortschatz-cloud) — gewichtete Wortliste als Fläche (d3-cloud, lazy)
 - [Entity-List](#entity-list-listendarstellung) — Listen mit Detail-Drawer
-- [Gekappter Listentext + Mehr-Toggle](#gekappter-listentext--mehr-toggle) — Zeilen-Cap, gemessen
+- [Listen-Anriss + Detail-Dialog](#listen-anriss--detail-dialog) — Zeilen-Cap in der Liste, Volltext im `<dialog>`
 - [Karten-Toolbar](#karten-toolbar-card-toolbar) — Aktionszeile im Karten-Body
 - [Filter-Bar](#filter-bar-listenfilter) — Such-/Sort-Eingaben
 - [Heatmap-Visualisierung](#heatmap-visualisierung) — Daten-Intensität
@@ -61,6 +65,7 @@ Token-Referenz (Farben, Radien, Spacing, Schriftgrössen): [public/css/tokens.cs
 - [Chef-Taste / Boss-Key (`.boss-screen`)](#chef-taste--boss-key-boss-screen)
 - [Confirm-Dialog](#confirm-dialog-modal)
 - [Modal-Wrapper](#modal-wrapper-generisches-pattern) — Status: noch nicht konsolidiert
+- [Overlay-Focus-Trap](#overlay-focus-trap-x-trap) — `x-trap` für Overlays ohne natives `<dialog>`
 - [Sofort-Tooltip (`data-tip`)](#sofort-tooltip-data-tip--default-variante)
 - [Keyboard-Shortcut (`<kbd>`)](#keyboard-shortcut-anzeige-kbd)
 - [Loading-Overlay](#loading-overlay) — Status: kein generisches Pattern
@@ -144,6 +149,23 @@ Wiederkehrende Werte gehen über Tokens. Ad-hoc-Werte (`box-shadow: 0 4px 12px .
 
 ---
 
+## Alpine-Plugins (Inventar)
+
+**Use:** Vier offizielle Plugins sind geladen — vendored unter `public/vendor/alpine-<name>-3.15.12.min.js`, als `<script defer>` **vor** dem Alpine-Core in [index.html](public/index.html). Kein Lazy-Load: der Core registriert für jede nicht geladene Plugin-Direktive einen Stub, der beim Antreffen nur warnt.
+
+| Direktive | Plugin | Wofür — und wo die Regel steht |
+|---|---|---|
+| `x-anchor` | anchor | Popover am Trigger verankern (Floating UI). Siehe „Combobox". |
+| `x-trap` | focus | Focus-Trap in Overlays, die kein natives `<dialog>` sind. Siehe „Overlay-Focus-Trap". |
+| `x-collapse` | collapse | Animierte Panel-Höhe. Kommt automatisch über `collapsible` — siehe „Klappbarer Section-Toggle". |
+| `x-resize` | resize | ResizeObserver als Direktive. **Nur für neuen Code**, siehe unten. |
+
+**`x-resize` — Regel:** neue Grössen-Beobachtung im Template deklarieren (`x-resize="_bandWidth = $width"`), statt in der Karte einen `ResizeObserver` samt Teardown zu bauen. Die **bestehenden** sechs handgerollten Observer bleiben, wie sie sind ([ereignisse-card.js](public/js/cards/ereignisse-card.js), [comment-rail-layout.js](public/js/editor/comment-rail-layout.js), [format-marks.js](public/js/editor/notebook/format-marks.js), [editor-spellcheck/controller.js](public/js/cards/editor-spellcheck/controller.js), [share-reader/layout.js](public/js/share-reader/layout.js)) — sie brauchen eigenes rAF-/Doppel-rAF-Scheduling und beobachten teils Elemente, die es zur Init-Zeit noch nicht gibt; `x-resize` kann beides nicht. Kein Retrofit „weil man eh in der Datei ist".
+
+**Nicht geladen, mit Absicht:** `sort` (2D-DnD + Nesting → SortableJS, siehe [sortable-dnd.js](public/js/sortable-dnd.js)), `persist` (Keys sind pro User **und** Buch skopiert und stehen erst nach `/config` fest → [local-prefs.js](public/js/local-prefs.js)), `intersect` (die vorhandenen IntersectionObserver brauchen `root`/`rootMargin` und dynamische Element-Sets), `mask` (Zahlen-Formatierung gehört in `numInput`, sonst zwei Wahrheiten im selben Feld), `morph` (kein HTML-over-the-wire; Partials werden frisch gemountet). Neues Plugin ⇒ erst hier begründen, dann laden.
+
+---
+
 ## Klappbarer Section-Toggle (Accordion)
 
 **Use:** Sekundärer Inhalt in einer Karte, der per Default zu sein soll (Legenden, Zusammenfassungen, Details).
@@ -162,12 +184,16 @@ Eine eigenständige, per-Boolean klappbare Sektion nutzt **`Alpine.data('collaps
 ```
 
 - `x-data="collapsible()"` auf ein Element, das **Trigger und Panel umschliesst** (oft die bereits vorhandene `.collapsible-wrap`/`section`). `collapsible(true)` für per Default offen.
-- `x-bind="trigger"` (setzt `type`, `@click`→toggle, `:aria-expanded`), `x-bind="chevron"` (rotiert via `.open`), `x-bind="panel"` (`x-show`). Der `.history-chevron`-Span braucht **keinen** Inhalt (CSS-Mask-Icon) — kein `›`, kein `<svg>`.
+- `x-bind="trigger"` (setzt `type`, `@click`→toggle, `:aria-expanded`), `x-bind="chevron"` (rotiert via `.open`), `x-bind="panel"` (`x-show` + `x-collapse`). Der `.history-chevron`-Span braucht **keinen** Inhalt (CSS-Mask-Icon) — kein `›`, kein `<svg>`.
 - In `x-for`-Schleifen pro Item eine eigene `x-data="collapsible()"`-Instanz (Default-Wert darf die Loop-Variable lesen, z.B. `collapsible(role === 'body')`).
 
 **Parent-gesteuerter State** (persistiert, oder vom Parent zurückgesetzt — z.B. Reset bei Buchwechsel): zusätzlich `x-modelable="open" x-model="parentVar"` koppeln (analog combobox/numInput). Beispiel: Blog/HubSpot-Sektion in [public/partials/book-settings.html](public/partials/book-settings.html) (Card setzt `blogSectionOpen` bei Buchwechsel zurück).
 
 `.collapsible-wrap` (block-Container, Spacing pro Section) + `.collapsible-section` (border-left, padding, Inhaltsabstand) leben beide in [public/css/entities/entity-list.css](public/css/entities/entity-list.css).
+
+**Öffnen/Schliessen animiert die Panel-Höhe** — `x-collapse` (@alpinejs/collapse) reist im `panel`-Spread mit, Konsumenten-Markup bleibt unverändert. Zwei Folgen:
+- Das Plugin hält **`overflow: hidden`** auf dem Panel. Absolut positionierte Kinder (Kebab-Menü, Popover) würden darin abgeschnitten — die gehören ohnehin per `x-teleport` in den Top-Layer (siehe „Context-Menu"), nicht ins Panel.
+- **Kein `x-transition` zusätzlich** aufs Panel (analog `.card`/`cardFadeIn`): zwei konkurrierende Mechaniken auf demselben Element wirken wabbelig. Reduced-Motion braucht keinen Sonderfall — der globale `transition-duration: 0s !important`-Override in [tokens/motion.css](public/css/tokens/motion.css) greift, und Alpines Transition-Helper liest die berechnete Dauer.
 
 **Regeln:**
 - Chevron rotiert via `.history-chevron.open` (90°). CSS in [public/css/page/tree-history.css](public/css/page/tree-history.css). Nur die Klasse `.open` dreht — **nicht** `.is-open` o.ä.
@@ -175,7 +201,7 @@ Eine eigenständige, per-Boolean klappbare Sektion nutzt **`Alpine.data('collaps
 - Kein `<details>`/`<summary>` — nicht stylebar genug, andere optische Sprache.
 - **Nicht** für Listen-/Tree-Row-Chevrons verwenden, die per `selectedXId === item.id` oder einer Per-Item-Map (`chapterOpen[id]`, Tree-`item.open`) gesteuert werden — das ist Single-Select-/Tree-Expansion, kein eigenständiger Boolean-Toggle. Dort bleibt die `.history-chevron`-Rotation, der State aber im Selektionsmodell. Ebenso Sonderfälle mit eigener Persistenz (localStorage) oder State, der in eine Berechnung einfliesst.
 - **Toggle-Button NICHT lokal auf `display: flex; width: 100%` umstellen.** Hat in der Vergangenheit horizontalen Wackel-Shift beim Öffnen verursacht (PDF-Export-Karte). Block-Stapelung kommt vom `.collapsible-wrap`-Container, nicht vom Button selbst.
-- **„Wackelt beim Öffnen"-Symptom** = Chevron-Rotation läuft nicht ODER Toggle ist auf full-width gestreckt. Beides geprüft? Section snappt instant auf, ohne dass die `transform: rotate(90deg)`-Transition den Snap visuell trägt → der Sprung wirkt grob. Ursache 1 (vertikal): `--transition-slow` ist invalid (z.B. zirkuläre Definition) → in DevTools auf `0.15s ease` prüfen, Token reparieren reicht für die ganze Karte. Ursache 2 (horizontal nach rechts): Toggle ist `display: flex; width: 100%` und ändert beim Klick die Layout-Box → Default `inline-flex` zurücksetzen, in `.collapsible-wrap` einwickeln.
+- **„Wackelt beim Öffnen"-Symptom** = Chevron-Rotation läuft nicht ODER Toggle ist auf full-width gestreckt. Ursache 1 (vertikal): `--transition-slow` ist invalid (z.B. zirkuläre Definition) → in DevTools auf `0.15s ease` prüfen; Token reparieren reicht für die ganze Karte. Ursache 2 (horizontal nach rechts): Toggle ist `display: flex; width: 100%` und ändert beim Klick die Layout-Box → Default `inline-flex` zurücksetzen, in `.collapsible-wrap` einwickeln. Springt die **Höhe** statt zu gleiten, fehlt das collapse-Plugin (Core-Stub warnt in der Konsole) oder das Panel trägt eine eigene `height`/`max-height`-Regel, gegen die das Plugin anschreibt.
 
 **Beispiele:** Kontinuitäts-Zusammenfassung [public/partials/kontinuitaet.html](public/partials/kontinuitaet.html), Figuren-Legende [public/partials/figuren.html](public/partials/figuren.html), PDF-Export-Sektionen [public/partials/pdf-export.html](public/partials/pdf-export.html).
 
@@ -942,7 +968,7 @@ In einer Form-Zeile (Inputs, Comboboxes, Buttons nebeneinander in Flex/Grid mit 
 
 Stolperfalle: `combobox(placeholder)` ist **default compact**. Steht der combobox neben einem nackten `<input>` oder `<button>` ohne `.btn-compact`, sieht das ungleich aus → Object-Form `combobox({ placeholder, compact: false })` verwenden. Umgekehrt: wenn die Zeile sonst nur Compact-Elemente hat (Filter-Bars, Table-Row-Controls), bleibt der Default-Compact-Combobox richtig.
 
-**Spezifitäts-Falle bei nativen typed-Inputs (`<input type=date|number|month|datetime-local|…>`, `<select>`):** Diese werden von der generischen Form-Liste in [card-form/form-elements.css](public/css/components/card-form/form-elements.css) (`input[type=date], …, select { … }`, Spezifität **0,1,1**, volle Feldgrösse: `--font-size-base`, `--size-default-padding-y`, 1px Border, `width:100%`) getroffen. Eine eigene Compact-Klasse als **nackter** Selektor (`.xxx-date-input`, 0,1,0) **verliert** dagegen → das Feld rendert voll-gross und sitzt höher als die `.btn-compact`/Compact-Combobox daneben. Fix: Compact-Selektor höher scopen (`.parent .xxx-date-input`, 0,2,0) **und** `width: auto` setzen. Bei iOS-Zoom-Override (≥16px auf Mobile) die Mobile-Regel mit gleicher Spezifität + gleichem Breakpoint (768px) nachziehen, sonst überstimmt die neue Desktop-Regel sie. Referenz-Fix: [my-stats.css](public/css/components/my-stats.css) `.mystats-range-custom .mystats-date-input`, identisch in [recherche.css](public/css/entities/recherche.css) für `.filter-search-input`. (Gleiche Falle ist in der Filter-Bar-Sektion unten dokumentiert.)
+**Spezifitäts-Falle bei nativen typed-Inputs (`<input type=date|number|month|datetime-local|…>`, `<select>`):** Diese werden von der generischen Form-Liste in [card-form/form-elements.css](public/css/components/card-form/form-elements.css) (`input[type=date], …, select { … }`, Spezifität **0,1,1**, volle Feldgrösse: `--font-size-base`, `--size-default-padding-y`, 1px Border, `width:100%`) getroffen. Eine eigene Compact-Klasse als **nackter** Selektor (`.xxx-date-input`, 0,1,0) **verliert** dagegen → das Feld rendert voll-gross und sitzt höher als die `.btn-compact`/Compact-Combobox daneben. Fix: Compact-Selektor höher scopen (`.parent .xxx-date-input`, 0,2,0) **und** `width: auto` setzen. Bei iOS-Zoom-Override (≥16px auf Mobile) die Mobile-Regel mit gleicher Spezifität + gleichem Breakpoint (768px) nachziehen, sonst überstimmt die neue Desktop-Regel sie. Referenz-Fix: [my-stats.css](public/css/components/my-stats.css) `.mystats-range-custom .mystats-date-input`, identisch in [recherche/board.css](public/css/entities/recherche/board.css) für `.filter-search-input`. (Gleiche Falle ist in der Filter-Bar-Sektion unten dokumentiert.)
 
 Filter-Bars (`.filter-bar`, `.admin-usage-filter`, `.admin-users-requests-filter`) sind bewusst rein compact (Search-Input + Compact-Combobox + Compact-Buttons) — kein Mix zulässig.
 
@@ -975,6 +1001,73 @@ Wer eine neue Settings-/Export-Karte baut, nutzt diese Klassen direkt (siehe [pu
 ```
 
 **Regel (CLAUDE.md):** Breite kommt aus CSS-Custom-Prop `--progress`. Niemals `:style="'width:' + … + '%'"`.
+
+---
+
+## Sequenz-Band (`.stil-rhythm-band`)
+
+**Use:** eine lange Zahlenfolge in ihrer **Reihenfolge** zeigen, wo ein Aggregat sie plattdrückt. Eingesetzt für den Satzrhythmus pro Kapitel in der Stil-Karte: derselbe Mittelwert entsteht aus lauter gleich langen Sätzen wie aus dem Wechsel kurz/lang, und genau dieser Unterschied ist die Aussage. **Nicht** für Zeitreihen mit Achsenbezug (→ Chart.js) und nicht für Anteile (→ Proportions-Balken).
+
+**Markup:**
+```html
+<div class="stil-rhythm-row">
+  <div class="stil-rhythm-label">…Name + Kennzahlen…</div>
+  <svg class="stil-rhythm-band" :viewBox="…" preserveAspectRatio="none" role="img" :aria-label="…">
+    <polygon class="stil-rhythm-area" :points="r.points"></polygon>
+  </svg>
+  <div class="stil-rhythm-stats">…</div>
+</div>
+```
+
+CSS: [public/css/analysis/heatmap.css](public/css/analysis/heatmap.css). Regeln:
+
+- **Ein Knoten pro Zeile, nicht einer pro Wert.** Der Verlauf ist ein einzelnes `<polygon>` mit vorberechnetem `points`-String; bei 40 Kapiteln × 120 Spalten wären Einzel-Rects 4800 DOM-Knoten pro Render.
+- **Fläche, keine Linie.** `preserveAspectRatio="none"` streckt das SVG auf die Spaltenbreite — eine Strichstärke würde mitverzerrt, eine Fläche nicht.
+- **Downsampling per Bucket-Mittel**, nicht per Sampling: ein herausgegriffener Einzelwert würfelt das Band bei jedem Zuwachs neu.
+- **Skala buchweit, nicht pro Zeile** (sonst sind die Zeilen nicht vergleichbar) und über ein **Perzentil**, nicht das Maximum — ein einzelner Ausreisser drückt sonst alles an den Boden. Gekappte Werte sind als Vollausschlag lesbar.
+- Farbe aus `var(--card-accent)`, Hintergrund als getönte Fläche derselben Farbe.
+
+---
+
+## Rangliste mit Balken (`.stil-opener-list`)
+
+**Use:** Top-N einer Häufigkeitsverteilung als kompakte Liste mit Balken, Zahl und Anteil — wenn eine `sortableTable` zu schwer wäre (feste Sortierung, keine Interaktion). Eingesetzt für die Satzanfänge in der Stil-Karte.
+
+**Markup:**
+```html
+<li class="stil-opener-row">
+  <span class="stil-opener-word" x-text="o.word"></span>
+  <span class="stil-opener-bar"><span class="stil-opener-fill" :style="{ '--opener-bar': (o.bar * 100) + '%' }"></span></span>
+  <span class="stil-opener-count"></span><span class="stil-opener-share"></span>
+</li>
+```
+
+Breite über die Custom-Property `--opener-bar` (wie `.progress-bar` über `--progress`), **nie** über `:style="'width:'+…"`. Balkenlänge relativ zum **häufigsten** Eintrag, nicht zum Gesamtanteil — sonst sind alle Balken kurz.
+
+---
+
+## Wortwolke (`.wortschatz-cloud`)
+
+**Use:** eine gewichtete Wortliste als Fläche statt als Tabelle. Eingesetzt im vierten Reiter der Wortschatz-Karte. Ergänzt die Ranglisten, ersetzt sie nicht — die Wolke beantwortet „wie sieht mein Wortschatz aus", die Tabelle „welches Wort steht auf Platz 7".
+
+**Markup:** ein `<svg>` mit fester `viewBox` (Layout-Fläche) und `<text>`-Knoten aus dem d3-cloud-Ergebnis; Transform und Schriftgrösse kommen aus dem Layout, die Farbe aus einer Custom-Property.
+
+```html
+<svg class="wortschatz-cloud" :viewBox="wsCloudViewBox()" role="img" :aria-label="…">
+  <template x-for="w in wsCloudLayout" :key="w.text">
+    <text class="wortschatz-cloud-word" :style="wsCloudVars(w)" :transform="wsCloudTransform(w)"
+          :font-size="w.size" text-anchor="middle" @click="…" x-text="w.text"></text>
+  </template>
+</svg>
+```
+
+CSS: [public/css/analysis/wortschatz.css](public/css/analysis/wortschatz.css). Regeln:
+
+- **Feste Zeichenfläche, per `viewBox` skaliert** (`aspect-ratio`). Ein Neulauf des Layouts bei jedem Resize würde die Wolke jedes Mal neu anordnen.
+- **Farbe über `color-mix` mit `var(--card-accent)` und einer Gewichts-Property** — die Wolke muss in Light und Dark tragen, feste Hex-Werte scheiden aus.
+- **Deterministisch** (fixer `random()`, indexbasierte Rotation): dieselbe Analyse muss dasselbe Bild ergeben, sonst sind zwei Läufe nicht vergleichbar.
+- Schmal (≤ 640 px) scrollt der Kasten horizontal, statt die Wörter auf Unlesbarkeit zu schrumpfen.
+- Die Lib lädt lazy (`loadWordCloud()` in [lazy-libs.js](public/js/lazy-libs.js)) und **nur**, wenn der Reiter offen ist — der Layout-Lauf misst jedes Wort einzeln auf einem Canvas.
 
 ---
 
@@ -1013,30 +1106,36 @@ CSS: [public/css/entities/entity-list.css](public/css/entities/entity-list.css).
 
 ---
 
-## Gekappter Listentext + Mehr-Toggle
+## Listen-Anriss + Detail-Dialog
 
-**Use:** Freitext beliebiger Länge in einer Übersichtsliste (Recherche-Fundstück, Notiz, Zitat-Volltext). Der Text wird auf wenige Zeilen gekappt, damit die Liste scanbar bleibt, und ist pro Eintrag ausklappbar.
+**Use:** Einträge mit Freitext **beliebiger** Länge in einer Übersichtsliste (Recherche-Fundstück, erfasste Webseite, Zitat-Volltext). Die Liste zeigt einen Anriss, der Volltext lebt in einer Detailansicht — als natives `<dialog>` (Pattern [Modal-Shell](#modal-shell-modal)).
 
-**Markup:**
+**Markup** (Liste, [recherche-item.html](public/partials/recherche-item.html)):
 ```html
-<div class="research-item-text" x-effect="noteBodyForClamp(item)"
-     :class="{ 'research-item-text--clamped': !bodyExpanded(item) }" x-text="item.body"></div>
-<button type="button" class="research-item-more" x-show="bodyClampable(item)"
-        @click="toggleBodyExpanded(item)" :aria-expanded="bodyExpanded(item)"
-        x-text="bodyExpanded(item) ? $app.t('…body.less') : $app.t('…body.more')"></button>
+<button type="button" class="research-item-title" @click="openDetail(item)"
+        x-text="item.title || kindLabel(item.kind)"></button>
+<div class="research-item-text" x-show="item.body" x-text="item.body"></div>
 ```
 
-**Klassen** [public/css/entities/recherche.css](public/css/entities/recherche.css):
-- `.research-item-text--clamped` — `-webkit-line-clamp` + `overflow: hidden` (der Cap selbst)
-- `.research-item-more` — Link-artiger Toggle-Button unter dem Text (wie `.research-suggestions-dismiss`)
+**Klassen** [entities/recherche/board.css](public/css/entities/recherche/board.css) + [entities/recherche/dialog.css](public/css/entities/recherche/dialog.css):
+- `.research-item-text` — der Anriss: fester `-webkit-line-clamp` (3) + `overflow: hidden`
+- `.research-item-thumb` / `.research-item-image` — Vorschaubild, klein (`max-height: 6rem`), öffnet die Detailansicht
+- `.research-dialog` — die geteilte `<dialog>`-Shell; `.research-dialog__scroll` scrollt, `__head` bleibt stehen
+- `.research-dialog__text` — Lesesatz: `--font-size-reading`, `--lh-relaxed`, `max-width: 34rem`
+- `.research-dialog--create` — schmalere Variante fürs Anlegen (Formularspalte, keine Lesebreite)
+- `.research-dialog__bar` — Fussleiste **ausserhalb** von `__scroll`: Speichern/Abbrechen bleiben stehen, während das Formular scrollt
 
 **Regeln:**
-- **Der Cap gehört ins CSS, die Toggle-Sichtbarkeit wird gemessen.** Ob abgeschnitten wird, hängt an der Spaltenbreite (Karte im Vollbild vs. Handy, Sidebar offen/zu) — eine Zeichen-Schwelle zeigt auf breiten Schirmen ein „Mehr anzeigen", das nichts aufzuklappen hat. Messung: `el.scrollHeight > el.clientHeight + 1`, rAF-gebündelt, angestossen per `x-effect` (liest das Textfeld → läuft bei Render + Textänderung) plus `resize`-Listener am Lifecycle-Signal.
-- Ein aufgeklappter Eintrag **behält** seinen Toggle (im ausgeklappten Zustand ist nichts messbar) — sonst führt kein Weg zurück in den Cap.
-- Klickbare Zeile: der Toggle ist ein `<button>` und damit von der Zeilen-Klick-Allowlist (z.B. `onItemBodyClick`) automatisch ausgenommen — kein eigener `@click.stop`.
-- Kein `<details>`/`<summary>`; das ist keine klappbare Section (Pattern [Klappbarer Section-Toggle](#klappbarer-section-toggle-accordion)), sondern ein Overflow-Cap.
+- **Der Cap ist eine feste CSS-Zahl, kein gemessener Toggle.** Wo es eine Detailansicht gibt, ist „mehr anzeigen" dort — ein Inline-Ausklappen in der Liste macht bei einem 20 000-Zeichen-Fund aus der Übersicht wieder eine Wand, und die Zeilen-Messung (`scrollHeight > clientHeight`, rAF, `resize`-Listener), die nur die Toggle-Sichtbarkeit steuert, entfällt komplett.
+- **Volltext braucht Lesetypografie, nicht bloss mehr Platz:** Lesegrösse (`--font-size-reading`), ruhige Zeilenhöhe (`--lh-relaxed`) und ein Satzspiegel um 70 Zeichen. Panelbreite ≠ Zeilenbreite.
+- **Der tastaturerreichbare Weg in die Detailansicht ist ein `<button>`** (der Titel). Der Klick auf die ganze Zeile ist nur Maus-Komfort und liegt in einer Allowlist-Prüfung (`onItemBodyClick`), die interaktive Kinder und aktive Textselektion ausnimmt.
+- **Lesen und Bearbeiten teilen die Detailansicht, verdrängen sich aber nicht gegenseitig:** ein Modus-Flag (`detailEditing`) tauscht nur die Textfelder. Verknüpfungen, Tags und Anhänge bleiben in beiden Modi bedienbar — zwei exklusive `x-if`-Zweige (Anzeigen ODER Formular) nehmen dem User genau die Funktionen weg, die er beim Redigieren braucht.
+- **Ein offenes `<dialog>` muss mit seiner Karte schliessen** (`$watch` auf den Show-Flag): es liegt im Top-Layer, verschwindet mit der `display:none`-Karte also nur optisch und hält das restliche Dokument inert — die App wirkt eingefroren. Gilt für **jeden** Dialog der Karte, nicht nur den Detail-Dialog.
+- **Anlegen gehört in denselben Dialog-Rahmen wie Bearbeiten, nicht als Block über die Liste.** Es sind dieselben Felder: EIN Feld-Fragment (`recherche-form-fields.html`), EIN Draft (`draft`), EINE Shell (`.research-dialog*`) — nur Aktionszeile und Datei-Anhang unterscheiden sich. Zwei Rahmen um dieselben Felder driften auseinander (Feldreihenfolge, Textfeldhöhe, Spellcheck-Attribut), und ein Inline-Formular schiebt die Liste beim Anlegen weg. Voraussetzung dafür: beide Wege sind exklusiv (beide modal) und der Draft wird **nur** von den Öffnern (`startCreate`/`startEdit`) gefüllt — die `@close`-Handler räumen nur ihre Flags, weil das native `close`-Event als eigener Task feuert und sonst den Draft des gerade geöffneten zweiten Dialogs überschreibt.
+- **Fehlermeldungen gehören in den offenen Dialog.** Die Statuszeile der Karte liegt hinter dem `::backdrop` — ohne eigene `.card-status`-Zeile im Dialog ist „Speichern tut nichts" die ganze Rückmeldung.
+- Kein `<details>`/`<summary>` für den Anriss; das ist keine klappbare Section (Pattern [Klappbarer Section-Toggle](#klappbarer-section-toggle-accordion)), sondern ein Overflow-Cap.
 
-**Beispiele:** [recherche.html](public/partials/recherche.html) (Fundstück-Text), E2E: [tests/e2e-app/recherche-overview.spec.js](tests/e2e-app/recherche-overview.spec.js).
+**Beispiele:** [recherche-item.html](public/partials/recherche-item.html) + [recherche-detail.html](public/partials/recherche-detail.html) + [recherche-create.html](public/partials/recherche-create.html) (geteilte Felder: [recherche-form-fields.html](public/partials/recherche-form-fields.html)), E2E: [tests/e2e-app/recherche-overview.spec.js](tests/e2e-app/recherche-overview.spec.js).
 
 ---
 
@@ -1291,9 +1390,31 @@ CSS: [public/css/components/confirm-dialog.css](public/css/components/confirm-di
 - Öffnen: entweder `openOn`-Event (`window.dispatchEvent(new CustomEvent('…'))`) **oder** den per `x-model` gekoppelten Boolean auf `true` setzen. Schliessen: `close()` (oder Flag `false`). ESC/Backdrop schliessen automatisch (per `dismissable: false` abschaltbar, z. B. während eines Submits via `setDismissable(false)`).
 - Backdrop-Klick erkennt `event.target === <dialog>` — der Panel-Inhalt sollte ein Kind sein, nicht das `<dialog>` selbst stylen.
 - Für Dialoge mit **eigener Karten-Logik** (book-create) bleibt die Karten-`x-data` auf dem `<dialog>`; sie steuern `showModal()/close()` weiter selbst — das Primitiv ist für **präsentative** Modals.
+- **Dialog INNERHALB eines Karten-Scopes** (Detailansicht eines Listeneintrags, Revisions-Viewer): kein `modal()`, sondern `x-ref` + `showModal()` aus einer Karten-Methode, `@close` als **einziger** Aufräum-Punkt (ESC, Backdrop und Button laufen alle über `dlg.close()`). So bleibt ein einzelnes Feld die SSoT dafür, welcher Eintrag offen ist, statt Boolean + ID parallel zu führen. Referenzen: [recherche-detail.html](public/partials/recherche-detail.html) (+ `openDetail`/`closeDetail` in [recherche/items.js](public/js/book/recherche/items.js)), [page-revisions.html](public/partials/page-revisions.html). Pflicht dabei: den Dialog schliessen, wenn die Karte zugeht (`$watch` auf den Show-Flag) — ein offenes Dialog hält das Dokument inert, auch wenn die Karte darunter `display:none` ist.
+- **Verschachtelte Dialoge sind erlaubt und funktionieren:** `appConfirm` ist selbst ein `<dialog>` und landet im Top-Layer **über** einem bereits offenen — Löschen/Entfernen darf also aus einer Detailansicht heraus bestätigt werden. Ein z-index-basiertes Overlay dagegen läge hinter dem `::backdrop`.
 - Nicht für Bestätigungen/Prompts: dort `appConfirm`/`appPrompt`/`appAlert` (siehe „Confirm-Dialog").
 
 **Beispiele:** [shortcuts.html](public/partials/shortcuts.html) (Variante A/B kombiniert: `x-model="shortcutsOpen"`, `?`-Hotkey togglet den Root-Flag).
+
+---
+
+## Overlay-Focus-Trap (`x-trap`)
+
+**Use:** Ein Overlay, das **kein** natives `<dialog>` sein kann (weil es in eine Vollbild-Karte teleportiert wird oder im Top-Layer mit `showModal()` kollidieren würde), aber den Bildschirm blockiert. Erste Wahl bleibt `<dialog>` + `showModal()` — Trap, Inert-Hintergrund und ESC kommen dort vom Browser (siehe „Modal-Shell"). `x-trap` ist der Ersatz für die Fälle, in denen das nicht geht.
+
+```html
+<div class="palette-overlay" x-show="paletteOpen" x-cloak
+     x-trap.inert="paletteOpen">…</div>
+```
+
+**Modifier-Wahl:**
+- **`.inert` immer** — blendet alle Geschwister bis zum Body per `aria-hidden` aus. Ohne das liest ein Screenreader die Seite hinter dem Overlay weiter vor. (Setzt **kein** `inert`-Attribut, blockiert also keine Klicks.)
+- **`.noscroll` nur, wenn die Komponente den Hintergrund nicht schon selbst festhält.** Palette und Fassungs-Reader nutzen die Projekt-Konvention `body.<name>-open { overflow: hidden; overscroll-behavior: contain }` — dort **kein** `.noscroll`, sonst zwei Mechanismen für dieselbe Sache. Wo es genutzt wird, ist es sprungfrei: `html` trägt `scrollbar-gutter: stable` ([base.css](public/css/layout/base.css)), deshalb setzt das Plugin nur `overflow: hidden` und kompensiert keine Scrollbar-Breite.
+- **`.noautofocus.noreturn`**, wenn die Komponente Fokus und Restore selbst fährt (Palette: sie merkt sich das Rückkehr-Ziel **vor** dem Fokussieren ihres Suchfelds; der Trap aktiviert 15 ms später und würde als Ziel das Suchfeld selbst sehen). Sonst weglassen — dann erledigt der Trap beides.
+
+**Nicht auf nicht-blockierende Leisten.** Die Find-Leisten in Notebook- und Bucheditor liegen über dem Text, aber man klickt aus ihnen heraus ins Manuskript. focus-trap holt den Fokus in seinem `focusin`-Handler bedingungslos zurück (`allowOutsideClick` erlaubt nur den Klick, nicht den Fokuswechsel) — der Cursor käme nie im Text an. Dort bleibt der reine Tab-Zyklus `trapFocus($event, $el)` aus [editor/shortcuts.js](public/js/editor/shortcuts.js).
+
+**Beispiele:** [palette.html](public/partials/palette.html), [conflict-resolution.html](public/partials/conflict-resolution.html) (`.inert.noscroll`, Trap fährt auch Autofokus + Restore), [snapshots-reader.html](public/partials/snapshots-reader.html).
 
 ---
 
@@ -2315,6 +2436,8 @@ Pflicht-Patterns. Verstreute aria-Verwendungen werden hier zentralisiert; neue K
 
 `.confirm-overlay` → `role="dialog"` + `aria-modal="true"` + `aria-labelledby`/`aria-describedby` auf den Message-Container. Focus-Trap: erstes fokussierbares Element bekommt Fokus beim Open, Esc schliesst, Tab/Shift+Tab bleibt im Modal. Beim Close: Fokus zurück auf den auslösenden Trigger.
 
+Bei nativem `<dialog>` + `showModal()` liefert der Browser das (siehe „Modal-Shell"). Overlays, die kein `<dialog>` sein können, holen es sich per `x-trap.inert` — Pattern + Modifier-Wahl in „[Overlay-Focus-Trap](#overlay-focus-trap-x-trap)". Ein `aria-modal="true"` ohne eine der beiden Mechaniken ist eine Behauptung ohne Deckung.
+
 Gilt analog für Palette-Overlay, Token-Setup-Modal, Avatar-Menu (letzteres als `role="menu"`, Items `role="menuitem"`).
 
 ### Live-Regions (Status-Updates ohne Visual-Refocus)
@@ -2462,6 +2585,7 @@ Drei Editoren leben in eigenen Subfoldern (`book/`, `focus/`, `notebook/`); edit
 | [editor/focus/focus-mode.css](public/css/editor/focus/focus-mode.css) | Fokus-Modus, Geometrie + Zustände: `.focus-editor`, `.focus-editor__content`, Höhenkette/Schreiblinie, Spotlight, Auto-Hide-Cursor, Live-Counter. |
 | [editor/focus/focus-content.css](public/css/editor/focus/focus-content.css) | Fokus-Modus, Inhalts-Blöcke der Schreibfläche: geplättete Formatierungen, Block-Margins, Checkbox-Zeilen, Bild-Marker. **Lädt nach focus-mode.css** (gleicher `@layer`, Quell-Reihenfolge entscheidet). |
 | [editor/notebook/edit-toolbar.css](public/css/editor/notebook/edit-toolbar.css) | `.edit-bubble-toolbar`, `.edit-slash-menu`. |
+| [editor/notebook/diagram-dialog.css](public/css/editor/notebook/diagram-dialog.css) | Diagramm-Dialog des Notebook-Editors (`.diagram-dialog*`, `.diagram-source-input`, `.diagram-preview-host`): natives `<dialog>`, Quelltext links / Live-Vorschau rechts. Enthält zusätzlich die Klick-Affordanz auf `pre.mermaid` im Edit-Modus. Die Block-Typografie des Diagramms selbst steht in [components/manuscript-content.css](public/css/components/manuscript-content.css). |
 | [editor/notebook/find-replace.css](public/css/editor/notebook/find-replace.css) | Notebook-Find/Replace (`.edit-find*`). |
 | [editor/notebook/findings.css](public/css/editor/notebook/findings.css) | `.finding` / `.stilbox`. |
 | [editor/notebook/lektorat.css](public/css/editor/notebook/lektorat.css) | `.lektorat-mark`, Findings-Flash, Hover-Sync. |
@@ -2483,7 +2607,9 @@ Drei Editoren leben in eigenen Subfoldern (`book/`, `focus/`, `notebook/`); edit
 | [entities/ideen.css](public/css/entities/ideen.css) | Ideen-Karte. |
 | [entities/entity-list.css](public/css/entities/entity-list.css) | `.entity-list` / `-row`, `.severity-tag*`, `.collapsible-*`, Skeleton, `.ort-*` Schauplätze. |
 | [entities/orte-map.css](public/css/entities/orte-map.css) | Orte-Karte View-Mode `map` (Geo-Karte via Leaflet): `.ort-map*` Container + Geocode-Liste. Nur bei `book_settings.orte_real`. |
-| [entities/recherche.css](public/css/entities/recherche.css) | Recherche-/Wissensboard: Toolbar/Filter, Anlege-/Edit-Formular, einspaltige Schnipsel-Liste (`.recherche-list` + `.research-item`), Kind-Badges, Verknüpfungs-/Tag-Chips, KI-Vorschläge, Link-Picker, Link-Zeile (`.research-item-url-row`: Link + „als Quelle übernehmen"-`.icon-btn--ghost`, auf 22px kontext-verkleinert über `.research-url-tosource`, weil 28px die Zeilenhöhe einer `font-size-sm`-Liste bestimmen würde). Native-Vollbild (`.card--recherche:fullscreen`, Toggle via `fullscreen.js` wie Plot-Board) → Liste zentriert mit Lese-Maximalbreite. |
+| [entities/recherche/board.css](public/css/entities/recherche/board.css) | Recherche-/Wissensboard (Board-Teil): Toolbar/Filter, Anlege-/Edit-Formular, einspaltige Schnipsel-Liste (`.recherche-list` + `.research-item`), Kind-Badges, Verknüpfungs-/Tag-Chips, KI-Vorschläge, Link-Picker, Link-Zeile (`.research-item-url-row`: Link + „als Quelle übernehmen"-`.icon-btn--ghost`, auf 22px kontext-verkleinert über `.research-url-tosource`, weil 28px die Zeilenhöhe einer `font-size-sm`-Liste bestimmen würde). Native-Vollbild (`.card--recherche:fullscreen`, Toggle via `fullscreen.js` wie Plot-Board) → Liste zentriert mit Lese-Maximalbreite. |
+| [entities/recherche/dialog.css](public/css/entities/recherche/dialog.css) | Geteilte `<dialog>`-Shell der Recherche-Karte (`.research-dialog*`) für Detailansicht **und** Anlegen-Modal: Panelbreite, stehender `__head`, scrollender `__scroll`, `__bar`-Fussleiste, Mobile als vollflächiges Blatt. `__text` setzt den Volltext in Lesegrösse mit begrenztem Satzspiegel, `__figure`/`__image` zeigen das Bild gross (bis 60vh), `__doc`/`__figcaption` tragen die Anhang-Aktionen. Dazu `textarea.recherche-input--tall` fürs Redigieren langer Funde. |
+| [entities/recherche/chat.css](public/css/entities/recherche/chat.css) | Recherche-Chat derselben Karte: Spalten-Layout `.recherche-split` (ab 1280px Board links / Chat rechts als sticky Spalte `clamp(420px, 32vw, 620px)` — breiter als der 420px-Seiten-Chat, weil Web-Such-Antworten und Fundstück-Vorschläge mehr Zeilenbreite brauchen; darunter Flex-Spalte mit `order: -1`, Chat über dem Board) plus das Panel selbst (`.research-chat*`: Kopf, Nachrichtenhöhe, Quellenliste, Speicher-Vorschläge). |
 | [entities/sources.css](public/css/entities/sources.css) | Quellenverzeichnis-Karte: Toolbar/Filter-Bar (Compact-Höhen-Scope für `.filter-search-input`), Quellen-Tabelle (`.sources-table` via `sortableTable`), Zitier-Badge (`.sources-cite-badge`, Hue aus `--card-accent`), Detail-Formular, Fundstellen-Panel, Zitat-Kennzahlen-Reihe (`.sources-quote-stats` / `-stat` / `-stat-value` / `-stat-label` / `-stats-hint`: Zitat-Anteil + wörtlich/Paraphrase/belegte Quellen — schlichte Wert/Label-Reihe am Tabellenfuss, bewusst kein Tile-Grid). Enthält ausserdem `.sources-preview` (hängend eingerückte Formatter-Vorschau) — **geteilt** mit dem Quellen-Tab der Bucheinstellungen. |
 | [entities/ereignisse-subtyp.css](public/css/entities/ereignisse-subtyp.css) | Event-Subtyp-Badges + Marker-Farbe im Zeitstrahl: Mapping `.gz-item--subtyp-<typ>` auf die gemeinsame `--gz-subtyp-color`-Prop (SSoT der Hues = `--card-accent-event-*` in `tokens/colors.css`), konsumiert von Marker (`.gz-marker`) und Badge. |
 | [entities/ereignisse-span.css](public/css/entities/ereignisse-span.css) | Spannen-Events im Zeitstrahl: `.gz-item--span` verlängert den Marker vertikal proportional zur Jahr-Differenz (CSS-Custom-Prop `--span-years`); reine Punkt-Events unverändert. |

@@ -110,8 +110,57 @@
     vertical-align: middle;
   }
 
+  /* === Wortwolke (vierter Reiter) === */
+  .wortschatz-cloud-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-sm);
+  }
+  .wortschatz-cloud-head .wortschatz-list-hint { margin: 0; }
+
+  .wortschatz-cloud-wrap {
+    border: 0.5px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    padding: var(--space-sm);
+  }
+  /* Feste Zeichenfläche, per viewBox skaliert: d3-cloud rechnet auf einer
+     Pixelfläche, und ein Neulauf bei jedem Resize würde die Wolke jedes Mal neu
+     anordnen. Das Seitenverhältnis bleibt darum fix. */
+  .wortschatz-cloud {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 900 / 460;
+  }
+  /* Gewicht über eine Custom-Property statt fester Farben: die Wolke muss in
+     Light und Dark tragen, die Sättigung kommt aus dem Karten-Akzent. */
+  .wortschatz-cloud-word {
+    font-family: Inter, system-ui, sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    fill: color-mix(in oklab, var(--card-accent) var(--cloud-weight, 60%), var(--color-muted));
+    transition: fill var(--transition-base);
+  }
+  .wortschatz-cloud-word:hover {
+    fill: var(--color-accent);
+  }
+  /* Auffällig GEMIEDEN (negative Keyness) — dieselbe Grösse, andere Farbe.
+     Ohne die Unterscheidung liest sich „vermeidest du auffällig" wie
+     „benutzt du auffällig oft". */
+  .wortschatz-cloud-word--neg {
+    fill: color-mix(in oklab, var(--color-muted) var(--cloud-weight, 60%), transparent);
+    font-style: italic;
+  }
+
   @media (max-width: 640px) {
     .wortschatz-table th,
     .wortschatz-table td { padding: var(--space-xs); }
+    /* Schmal wird die feste Fläche unlesbar klein — lieber horizontal scrollen
+       lassen als 8-Pixel-Wörter zeigen. */
+    .wortschatz-cloud-wrap { overflow-x: auto; }
+    .wortschatz-cloud { width: 620px; max-width: none; }
   }
 }

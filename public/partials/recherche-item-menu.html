@@ -1,0 +1,53 @@
+<!-- Aktionsmenue eines Recherche-Fundstuecks (Kebab + Dropdown). Fragment
+     (string-seitiger @include), weil der Block sowohl im x-for der Liste als
+     auch im Detail-Dialog steht — ein DOM-Placeholder greift im Template-
+     Content nicht. Beide Kontexte nennen das Fundstueck `item`, das Markup ist
+     darum wortgleich teilbar; `menuOpenId` ist die geteilte Karten-SSoT.
+     Erwartet einen Vorfahren mit `position: relative` (.research-item-actions)
+     — .context-menu--dropdown positioniert absolut. -->
+<button type="button" class="icon-btn" @click.stop="menuOpenId = (menuOpenId === item.id ? null : item.id)" :disabled="busy" :aria-label="$app.t('recherche.actions')" aria-haspopup="menu"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#more-horizontal"/></svg></button>
+<div class="context-menu context-menu--dropdown" x-show="menuOpenId === item.id" x-cloak @click.outside="menuOpenId = null" @keydown.escape.window="menuOpenId = null" role="menu">
+  <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem" @click="menuOpenId = null; openLinkPicker(item)">
+    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#external-link"/></svg>
+    <span x-text="$app.t('recherche.link.add')"></span>
+  </button>
+  <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem" @click="suggestLinks(item)" :disabled="busy || suggestItemId === item.id">
+    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#zap"/></svg>
+    <span x-text="$app.t('recherche.suggest.btn')"></span>
+  </button>
+  <div class="context-menu-sep" role="separator"></div>
+  <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem" @click="togglePin(item)">
+    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#pin"/></svg>
+    <span x-text="item.pinned ? $app.t('recherche.unpin') : $app.t('recherche.pin')"></span>
+  </button>
+  <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem" @click="toggleArchive(item)">
+    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#archive"/></svg>
+    <span x-text="item.archived ? $app.t('recherche.unarchive') : $app.t('recherche.archive')"></span>
+  </button>
+  <div class="context-menu-sep" role="separator"></div>
+  <label class="context-menu-item context-menu-item--icon research-menu-upload" role="menuitem">
+    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#image"/></svg>
+    <span x-text="$app.t('recherche.image.upload')"></span>
+    <input type="file" accept="image/*" @change="onImagePick(item, $event); menuOpenId = null">
+  </label>
+  <label class="context-menu-item context-menu-item--icon research-menu-upload" role="menuitem">
+    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#file-plus"/></svg>
+    <span x-text="$app.t('recherche.doc.upload')"></span>
+    <input type="file" accept="application/pdf" @change="onDocPick(item, $event); menuOpenId = null">
+  </label>
+  <!-- Bild und PDF haengen unabhaengig voneinander am Fundstueck und werden
+       darum einzeln entfernt (das Fundstueck selbst bleibt). -->
+  <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem" x-show="item.has_image" @click="removeImage(item)">
+    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#trash"/></svg>
+    <span x-text="$app.t('recherche.image.remove')"></span>
+  </button>
+  <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem" x-show="item.has_doc" @click="removeDoc(item)">
+    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#trash"/></svg>
+    <span x-text="$app.t('recherche.doc.remove')"></span>
+  </button>
+  <div class="context-menu-sep" role="separator"></div>
+  <button type="button" class="context-menu-item context-menu-item--icon context-menu-item--danger" role="menuitem" @click="deleteItem(item)">
+    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#trash"/></svg>
+    <span x-text="$app.t('recherche.delete')"></span>
+  </button>
+</div>

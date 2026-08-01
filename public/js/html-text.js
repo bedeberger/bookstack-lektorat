@@ -25,8 +25,22 @@ function _decodeEntities(s) {
   });
 }
 
+// Diagramm-Bloecke fallen VOR dem Tag-Strip komplett raus. Ihr Inhalt ist
+// Quelltext einer Diagrammsprache, kein Prosatext: `flowchart TD` und
+// `A[Ausgangslage] --> B` wuerden sonst als Woerter zaehlen, in die Satzlaengen
+// der Stil-Metriken eingehen, im Wortschatz als Lieblingswoerter auftauchen und
+// im Volltextindex Treffer erzeugen. Die Aussage des Diagramms steht im Bild,
+// nicht in seiner Notation.
+//
+// Regex statt DOM-Parse, weil dieses Modul bewusst parserfrei ist (es laeuft im
+// Browser wie im Server, ohne linkedom). Selektor-Aequivalent zu
+// public/js/diagram/mermaid-html.js#DIAGRAM_SEL, gegated durch
+// tests/unit/mermaid-drift.test.mjs.
+const _DIAGRAM_BLOCK_RE = /<pre\b[^>]*\bclass\s*=\s*("[^"]*\bmermaid\b[^"]*"|'[^']*\bmermaid\b[^']*')[^>]*>[\s\S]*?<\/pre>/gi;
+
 export function htmlToPlainText(html) {
-  return _decodeEntities(String(html || '').replace(/<[^>]+>/g, ' '))
+  const src = String(html || '').replace(_DIAGRAM_BLOCK_RE, ' ');
+  return _decodeEntities(src.replace(/<[^>]+>/g, ' '))
     .replace(/\s+/g, ' ')
     .trim();
 }

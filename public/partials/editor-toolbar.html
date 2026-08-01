@@ -234,4 +234,9 @@
            x-text="$app.t('editor.slash.noMatch')"></div>
     </div>
   </template>
+
+  <!-- Diagramm-Dialog (Quelltext + Vorschau). Eigenes Partial, weil diese Datei
+       sonst über das 250-Zeilen-Limit läuft. Kein Teleport nötig: ein offenes
+       <dialog> rendert im Top-Layer, unabhängig davon, wo es im DOM hängt. -->
+  <div id="partial-editor-diagram-dialog"></div>
 </div>

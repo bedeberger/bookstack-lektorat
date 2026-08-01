@@ -310,7 +310,7 @@ Backup-Ordner offsite spiegeln (rsync nach NAS/S3) — sonst Single-Point-of-Fai
 
 ### Frontend-Libraries (vendored in [public/vendor/](public/vendor/))
 
-- **[Alpine.js](https://alpinejs.dev/)** (MIT), **[vis-network](https://visjs.github.io/vis-network/)** (Apache-2.0 + MIT), **[Chart.js](https://www.chartjs.org/)** (MIT), **[SortableJS](https://github.com/SortableJS/Sortable)** (MIT), **[jsMind](https://github.com/hizzgdev/jsmind)** (BSD-3-Clause).
+- **[Alpine.js](https://alpinejs.dev/)** (MIT), **[vis-network](https://visjs.github.io/vis-network/)** (Apache-2.0 + MIT), **[Chart.js](https://www.chartjs.org/)** (MIT), **[SortableJS](https://github.com/SortableJS/Sortable)** (MIT), **[jsMind](https://github.com/hizzgdev/jsmind)** (BSD-3-Clause), **[d3-cloud](https://github.com/jasondavies/d3-cloud)** (BSD-3-Clause), **[Mermaid](https://mermaid.js.org/)** (MIT).
 
 Originallizenztexte: [public/vendor/LICENSES/](public/vendor/LICENSES/).
 

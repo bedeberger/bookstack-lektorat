@@ -1,0 +1,158 @@
+@layer components {
+/* === Diagramm-Dialog (Notebook-Editor) ===
+   Zweispaltig: Quelltext links, Live-Vorschau rechts. Natives <dialog> —
+   Focus-Trap, inerter Hintergrund und ESC kommen vom Browser (siehe DESIGN.md
+   „Modal-Shell"). Markup: public/partials/editor-diagram-dialog.html */
+.diagram-dialog {
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0;
+  width: min(1040px, 94vw);
+  max-width: 94vw;
+  max-height: 90vh;
+}
+.diagram-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+.diagram-dialog-inner {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.diagram-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-10) var(--space-md);
+  border-bottom: 0.5px solid var(--color-border);
+}
+.diagram-dialog-title {
+  font-weight: 600;
+}
+
+/* Zwei gleich breite Spalten. Die Vorschau darf nicht schmaler sein als der
+   Quelltext — sie ist der Grund, warum es den Dialog gibt. */
+.diagram-dialog-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  overflow: auto;
+  min-height: 0;
+}
+.diagram-dialog-source {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+.diagram-tpl-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+.diagram-tpl-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+}
+.diagram-source-input {
+  flex: 1 1 auto;
+  min-height: 320px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  /* Diagramm-Code ist einrückungsempfindlich — Tabs dürfen nicht als vier
+     unsichtbare Zeichen davonlaufen. */
+  tab-size: 2;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  padding: var(--space-sm);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.diagram-dialog-error {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-err-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+.diagram-dialog-hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+}
+
+.diagram-dialog-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+.diagram-preview-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+}
+.diagram-preview-host {
+  flex: 1 1 auto;
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-sm);
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  overflow: auto;
+}
+.diagram-preview-host svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.diagram-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-10) var(--space-md);
+  border-top: 0.5px solid var(--color-border);
+}
+.diagram-dialog-spacer {
+  flex: 1 1 auto;
+}
+
+/* Diagramm-Block im Edit-Modus: er ist atomar (contenteditable="false"), also
+   muss sichtbar sein, dass ein Klick etwas tut — sonst wirkt er wie ein
+   eingefrorener Codeblock. */
+.page-content-view--editing pre.mermaid {
+  cursor: pointer;
+}
+.page-content-view--editing pre.mermaid:hover {
+  outline: 1px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Schmal: Vorschau unter den Quelltext, beide niedriger. */
+@media (max-width: 860px) {
+  .diagram-dialog-body {
+    grid-template-columns: 1fr;
+  }
+  .diagram-source-input,
+  .diagram-preview-host {
+    min-height: 190px;
+  }
+}
+
+}

@@ -355,6 +355,12 @@ const PUBLIC_ASSETS = new Set([
   // ALTCHA-PoW-Widget (Custom-Element): von register.html + /login per
   // dynamic `<script type="module">` nachgeladen, sobald ALTCHA aktiv ist.
   '/vendor/altcha-3.0.11.min.js',
+  // mermaid: share-reader/diagrams.js laedt die Lib nach, wenn der geteilte Text
+  // einen `pre.mermaid` enthaelt. Ohne Freigabe bekaeme der ANONYME Leser die
+  // Login-HTML statt des Skripts und saehe statt des Diagramms dessen Quelltext.
+  // Einzelfreigabe statt eines `/vendor/`-Prefix: der Reader braucht genau diese
+  // eine Datei, alle uebrigen Vendor-Libs gehoeren hinter den Auth-Guard.
+  '/vendor/mermaid-11.16.0.min.js',
 ]);
 // Pre-auth-erlaubte Prefixes: landing.html + register.html ziehen /css/tokens.css
 // + /css/landing.css (+ deren @import-Sub-Tokens) und Variable-Fonts aus /fonts/.

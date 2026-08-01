@@ -23,8 +23,9 @@ const STIL_METRICS = [
 const STIL_COUNT_FIELD = { filler: 'filler_count', passive: 'passive_count', adverb: 'adverb_count' };
 
 // Erwartete METRICS_VERSION aus lib/page-index.js. Muss mitgepflegt werden, damit
-// _stilNeedsSync bei einem Backend-Bump auto-resynct.
-const EXPECTED_METRICS_VERSION = 5;
+// _stilNeedsSync bei einem Backend-Bump auto-resynct. Gleichlauf ist durch
+// tests/unit/metrics-version-drift.test.mjs gegated.
+const EXPECTED_METRICS_VERSION = 7;
 
 export const stilMethods = {
   get stilMetricDefs() { return STIL_METRICS; },

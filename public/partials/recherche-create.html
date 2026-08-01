@@ -1,0 +1,54 @@
+<!-- Anlegen eines Fundstuecks — als Modal, nicht als Block ueber der Liste.
+     Warum: es ist DASSELBE Formular wie der Bearbeiten-Modus der Detailansicht
+     (geteiltes Fragment recherche-form-fields.html) und teilt jetzt auch dessen
+     Rahmen (Dialog-Shell .research-dialog*, public/css/entities/recherche/dialog.css)
+     — zwei verschiedene Rahmen um dieselben Felder driften auseinander. Nebeneffekt:
+     die Liste springt beim Anlegen nicht mehr nach unten weg.
+     Natives <dialog> + showModal() (Focus-Trap, Inert-Hintergrund, Fokus-Restore
+     und ESC kommen vom Browser); aufgezogen in items.js#startCreate, `@close` ist
+     der einzige Aufraeum-Punkt. Liegt im Top-Layer und ist damit auch ueber der
+     Vollbild-Karte sichtbar (harte Regel „Schwebende Elemente gehoeren in den
+     Top-Layer"). -->
+<dialog class="research-dialog research-dialog--create" x-ref="createDialog"
+        @close="_onCreateClosed()"
+        @cancel.prevent="closeCreate()">
+  <div class="research-dialog__inner">
+
+    <header class="research-dialog__head">
+      <h2 class="research-dialog__title" x-text="$app.t('recherche.new')"></h2>
+      <div class="research-item-actions research-dialog__actions">
+        <button type="button" class="icon-btn icon-btn--ghost" @click="closeCreate()"
+                :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
+      </div>
+    </header>
+
+    <div class="research-dialog__scroll">
+      <!-- Fehler MUSS im Dialog stehen: die Karten-Statuszeile liegt hinter dem
+           Backdrop, „Speichern tut nichts" waere sonst die ganze Rueckmeldung. -->
+      <div x-show="errorMessage" class="card-status card-status--error" x-text="errorMessage"></div>
+      <div class="recherche-form">
+        <!-- @include recherche-form-fields -->
+
+        <!-- Datei-Anhang nur beim Anlegen (Bild/PDF nachtraeglich haengt am
+             Fundstueck selbst, nicht am Formular). Das echte File bleibt im
+             Input — ein Alpine-Proxy bricht File.arrayBuffer. -->
+        <div class="recherche-attach">
+          <label class="btn-compact recherche-attach-btn">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#file-plus"/></svg>
+            <span x-text="$app.t('recherche.field.attach')"></span>
+            <input type="file" accept="image/*,application/pdf" x-ref="createFile" @change="onCreateFilePick($event)">
+          </label>
+          <span class="recherche-attach-name" x-show="draft.fileName" x-text="draft.fileName"></span>
+          <button type="button" class="icon-btn" x-show="draft.fileName" @click="clearCreateFile()"
+                  :data-tip="$app.t('recherche.field.attachClear')" :aria-label="$app.t('recherche.field.attachClear')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="research-dialog__bar">
+      <button type="button" class="btn-compact" @click="closeCreate()" :disabled="busy" x-text="$app.t('recherche.cancel')"></button>
+      <button type="button" class="btn-compact recherche-primary" @click="createItem()" :disabled="busy" x-text="$app.t('recherche.save')"></button>
+    </footer>
+
+  </div>
+</dialog>

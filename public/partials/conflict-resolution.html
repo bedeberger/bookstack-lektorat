@@ -2,7 +2,14 @@
      Geöffnet von editor/notebook/edit.js#_openConflictResolution, wenn beim
      Stale-Write einzelne Blöcke in beiden Versionen kollidieren. Block-Previews
      via x-text (escaped) — kein x-html-Sink. Läuft im lektorat-Root-Scope. -->
+<!-- x-trap: blockierendes Modal — Tab bleibt drin, Hintergrund für Screenreader
+     ausgeblendet (`.inert`), Fokus landet beim Öffnen auf dem ersten Button und
+     kehrt beim Schliessen an den Auslöser zurück (beides macht der Trap).
+     `.noscroll` friert den Hintergrund ein; weil `html` `scrollbar-gutter:
+     stable` trägt (css/layout/base.css), setzt das Plugin nur `overflow:
+     hidden` und kompensiert keine Scrollbar-Breite — kein Layout-Sprung. -->
 <div class="conflict-overlay" x-show="conflictResolution" x-cloak role="alert"
+     x-trap.inert.noscroll="conflictResolution"
      aria-modal="true" @keydown.escape.window="conflictResolution && cancelConflictResolution()">
   <div class="conflict-modal" @click.outside="cancelConflictResolution()">
     <header class="conflict-modal__head">

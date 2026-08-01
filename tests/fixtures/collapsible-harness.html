@@ -4,8 +4,11 @@
   <meta charset="UTF-8">
   <title>Collapsible Test Harness</title>
   <!-- Bootet echtes Alpine + die collapsible-Komponente, um das x-bind-Spread-
-       Pattern (trigger/chevron/panel inkl. x-show) gegen die reale Alpine-
-       Runtime zu verifizieren. tokens.css liefert [x-cloak] + .history-chevron. -->
+       Pattern (trigger/chevron/panel inkl. x-show + x-collapse) gegen die reale
+       Alpine-Runtime zu verifizieren. tokens.css liefert [x-cloak] +
+       .history-chevron. Das collapse-Plugin muss mit (unten vor dem Core
+       geladen): der `panel`-Spread bringt `x-collapse` mit, und ohne Plugin
+       registriert der Core dafuer einen warnenden Stub → Console-Guard rot. -->
   <link rel="stylesheet" href="/public/css/tokens.css">
   <link rel="stylesheet" href="/public/css/page/tree-history.css">
 </head>
@@ -33,6 +36,7 @@
     document.addEventListener('alpine:init', () => registerCollapsible());
     window.harnessReady = true;
   </script>
+  <script defer src="/public/vendor/alpine-collapse-3.15.12.min.js"></script>
   <script defer src="/public/vendor/alpine-3.15.12.min.js"></script>
 </body>
 </html>

@@ -34,6 +34,7 @@ export function registerEditorNotebookCard() {
       // einfache Festhalten der reaktiven Sub-Instanz reicht.
       window.__notebookCard = this;
       this._setupNotebookRestore();
+      this._setupNotebookDiagrams();
     },
 
     destroy() {

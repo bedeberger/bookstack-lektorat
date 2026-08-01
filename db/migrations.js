@@ -10393,6 +10393,78 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 262 abgeschlossen (Wortschatz: lexicon_terms.kind + book_lexicon.hapax_listed).');
   }
 
+  if (version < 263) {
+    // Satzrhythmus in der Stil-Heatmap: zwei abgeleitete Felder pro Seite.
+    //
+    // `sentence_lens` haelt die Satzlaengen in LESERICHTUNG als JSON-Array. Die
+    // vorhandenen `avg_sentence_len`/`sentence_len_p90` sind Aggregate und
+    // koennen den Rhythmus nicht zeigen: „Durchschnitt 14" entsteht sowohl aus
+    // lauter 14ern als auch aus dem Wechsel 3/25/3/25. Genau dieser Unterschied
+    // ist die Aussage des Bands, und er ist aus keinem Aggregat rekonstruierbar.
+    //
+    // `opener_counts` haelt `{ counts: {wort: n}, repeats: n }` — die Haeufigkeit
+    // des ersten Wortes je Satz plus die Zahl direkt benachbarter Saetze mit
+    // demselben Anfang.
+    //
+    // Beides ist im Gegensatz zu den Wortschatz-Massen (MATTR/MTLD) korrekt pro
+    // Seite berechenbar und ueber Kapitel aggregierbar: ein Satz laeuft nicht
+    // ueber eine Seitengrenze, ein MATTR-Fenster schon.
+    const psCols263 = db.pragma('table_info(page_stats)').map(c => c.name);
+    if (!psCols263.includes('sentence_lens')) db.exec('ALTER TABLE page_stats ADD COLUMN sentence_lens TEXT');
+    if (!psCols263.includes('opener_counts')) db.exec('ALTER TABLE page_stats ADD COLUMN opener_counts TEXT');
+
+    const fkErrors263 = db.pragma('foreign_key_check');
+    if (fkErrors263.length) {
+      throw new Error(`Migration 263: foreign_key_check meldet ${fkErrors263.length} Verstoesse: ${JSON.stringify(fkErrors263.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 263').run();
+    logger.info('DB-Migration auf Version 263 abgeschlossen (page_stats: sentence_lens + opener_counts fuer das Rhythmus-Band).');
+  }
+
+  if (version < 264) {
+    // Diagramm-Render-Cache (Mermaid). Reiner Funktionswert-Cache: derselbe
+    // Quelltext ergibt bei gleicher Render-Version dasselbe Bild — unabhaengig
+    // von Buch, Seite und Benutzer. Darum inhaltsadressiert und BEWUSST ohne
+    // Fremdschluessel; es gibt nichts, worauf er zeigen koennte (Muster wie
+    // `font_cache`). Der Schluessel enthaelt die Render-Version, ein Upgrade der
+    // mermaid-Lib entwertet die Eintraege also von selbst.
+    //
+    // Warum ueberhaupt: das Rendern faehrt ein Headless-Chromium hoch. Ohne
+    // Cache kostet jeder PDF-Export jedes Diagramm erneut, und ein Sachbuch mit
+    // vierzig Abbildungen wartet minutenlang auf Bilder, die sich nicht
+    // geaendert haben.
+    //
+    // `svg` fuer HTML/EPUB, `png` fuer PDF/DOCX (pdfkit und docx koennen kein
+    // SVG einbetten) — beide entstehen in EINEM Render-Lauf, weil das Aufsetzen
+    // der Seite die teure Operation ist.
+    //
+    // `last_used_at` treibt das Aufraeumen ueber die POLICIES-Liste in
+    // lib/cache-cleanup.js (90 Tage) — bewusst `last_used_at` und nicht
+    // `created_at`: ein Diagramm, das seit Jahren im Manuskript steht, wird bei
+    // jedem Export getroffen und darf nicht verfallen. Ohne die Spalte wuechse
+    // der Cache mit jedem je getippten Zwischenstand.
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS mermaid_cache (
+        code_hash    TEXT PRIMARY KEY,
+        theme        TEXT NOT NULL DEFAULT 'default',
+        svg          TEXT NOT NULL,
+        png          BLOB,
+        width        INTEGER,
+        height       INTEGER,
+        created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        last_used_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      )
+    `).run();
+    db.exec('CREATE INDEX IF NOT EXISTS idx_mermaid_cache_used ON mermaid_cache(last_used_at)');
+
+    const fkErrors264 = db.pragma('foreign_key_check');
+    if (fkErrors264.length) {
+      throw new Error(`Migration 264: foreign_key_check meldet ${fkErrors264.length} Verstoesse: ${JSON.stringify(fkErrors264.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 264').run();
+    logger.info('DB-Migration auf Version 264 abgeschlossen (mermaid_cache: Render-Cache fuer Diagramme im Export).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

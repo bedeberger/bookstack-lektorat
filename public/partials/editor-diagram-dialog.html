@@ -1,0 +1,57 @@
+<!-- Diagramm-Dialog des Notebook-Editors: Quelltext links, Live-Vorschau rechts.
+     Lebt im Scope von editorToolbarCard (Methoden in
+     public/js/editor/notebook/toolbar/diagram.js) — darum `x-ref` + showModal()
+     statt des modal()-Primitivs, und `@close` ist der einzige Aufräumpunkt
+     (ESC, Backdrop und Abbrechen laufen alle durch dlg.close()).
+
+     Der Vorschau-Knoten wird von JS befüllt (mermaid-SVG), nicht per x-html —
+     er steht deshalb bewusst leer im Markup. -->
+<dialog class="diagram-dialog" x-ref="diagramDlg" @close="onDiagramDialogClose()"
+        @click.self="closeDiagramDialog()">
+  <div class="diagram-dialog-inner">
+    <div class="diagram-dialog-head">
+      <span class="diagram-dialog-title"
+            x-text="$app.t(diagramEditing ? 'editor.diagram.titleEdit' : 'editor.diagram.titleNew')"></span>
+      <button type="button" class="icon-btn icon-btn--ghost" @click="closeDiagramDialog()"
+              :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')">
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg>
+      </button>
+    </div>
+
+    <div class="diagram-dialog-body">
+      <div class="diagram-dialog-source">
+        <div class="diagram-tpl-row" x-show="!diagramSource.trim()">
+          <span class="diagram-tpl-label" x-text="$app.t('editor.diagram.templates')"></span>
+          <template x-for="t in diagramTemplateList()" :key="t.key">
+            <button type="button" class="btn-compact" @click="diagramApplyTemplate(t.key)" x-text="t.label"></button>
+          </template>
+        </div>
+        <textarea class="diagram-source-input" x-ref="diagramInput"
+                  x-model="diagramSource" @input="onDiagramInput()"
+                  spellcheck="false" autocomplete="off"
+                  :placeholder="$app.t('editor.diagram.placeholder')"
+                  :aria-label="$app.t('editor.diagram.sourceLabel')"></textarea>
+        <p class="diagram-dialog-error" x-show="diagramError" x-text="diagramError"></p>
+        <p class="diagram-dialog-hint" x-text="$app.t('editor.diagram.hint')"></p>
+      </div>
+
+      <div class="diagram-dialog-preview">
+        <div class="diagram-preview-label">
+          <span x-text="$app.t('editor.diagram.preview')"></span>
+          <span x-show="diagramPreviewing" class="spinner"></span>
+        </div>
+        <div class="diagram-preview-host" x-ref="diagramPreview"></div>
+      </div>
+    </div>
+
+    <div class="diagram-dialog-actions">
+      <button type="button" class="danger" x-show="diagramEditing"
+              @click="removeDiagram()" x-text="$app.t('editor.diagram.remove')"></button>
+      <span class="diagram-dialog-spacer"></span>
+      <button type="button" @click="closeDiagramDialog()" x-text="$app.t('common.cancel')"></button>
+      <button type="button" class="primary" :disabled="!diagramSource.trim()"
+              @click="applyDiagram()"
+              x-text="$app.t(diagramEditing ? 'common.save' : 'editor.diagram.insert')"></button>
+    </div>
+  </div>
+</dialog>

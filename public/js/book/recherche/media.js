@@ -26,6 +26,22 @@ export const rechercheMediaMethods = {
     if (ev?.target) ev.target.value = '';
   },
   imageUrl(item) { return `/research/${item.id}/image`; },
+  // Bild und Dokument haengen unabhaengig am selben Fundstueck — darum zwei
+  // getrennte Entfernen-Wege statt eines pauschalen „Anhaenge loeschen".
+  async removeImage(item) {
+    const app = window.__app;
+    if (!await app.appConfirm({
+      message: app.t('recherche.image.confirmRemove'),
+      confirmLabel: app.t('common.delete'), danger: true,
+    })) return;
+    this.busy = true;
+    try {
+      const row = await fetchJson(`/research/${item.id}/image`, { method: 'DELETE' });
+      this._replaceItem(row);
+    } catch { this.errorMessage = app.t('recherche.error.imageRemove'); }
+    finally { this.busy = false; }
+    this.menuOpenId = null;
+  },
 
   // ── Dokument-Upload (PDF) ──────────────────────────────────────────────────
   // Mechanik (Typ-/Groessenpruefung, Body, Fehleruebersetzung) kommt aus
@@ -58,7 +74,7 @@ export const rechercheMediaMethods = {
     try {
       const row = await fetchJson(`/research/${item.id}/doc`, { method: 'DELETE' });
       this._replaceItem(row);
-    } catch { this.errorMessage = app.t('recherche.error.doc'); }
+    } catch { this.errorMessage = app.t('recherche.error.docRemove'); }
     this.menuOpenId = null;
   },
 };

@@ -128,11 +128,16 @@
                 :class="{ 'tabs-btn--active': wortschatzTab === 'hapax' }"
                 @click="wortschatzTab = 'hapax'"
                 x-text="$app.t('wortschatz.tab.hapax', { n: wortschatzHapax.length })"></button>
+        <button type="button" class="tabs-btn"
+                :class="{ 'tabs-btn--active': wortschatzTab === 'cloud' }"
+                @click="wortschatzTab = 'cloud'"
+                x-text="$app.t('wortschatz.tab.cloud')"></button>
       </div>
 
       <!-- @include wortschatz-terms -->
       <!-- @include wortschatz-phrases -->
       <!-- @include wortschatz-hapax -->
+      <!-- @include wortschatz-cloud -->
     </div>
   </template>
 </div>

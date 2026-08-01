@@ -5,14 +5,45 @@ import { fetchJson } from '../../utils.js';
 import { emptyDraft as _emptyDraft } from './shared.js';
 
 export const rechercheItemMethods = {
-  // ── Anlegen ────────────────────────────────────────────────────────────────
+  // ── Anlegen (Dialog) ──────────────────────────────────────────────────────
+  // Anlegen und Bearbeiten fahren auf DEMSELBEN `draft` und teilen dieselben
+  // Formularfelder (partials/recherche-form-fields.html) in derselben Dialog-Shell.
+  // Zwei Drafts + zwei Formular-Kopien waren die Drift-Quelle; exklusiv sind die
+  // beiden Wege ohnehin, weil beide in einem modalen <dialog> stehen.
   startCreate() {
-    this.creating = true;
     this.draft = _emptyDraft();
-    this.editingId = null;
+    // Anlegen und Detailansicht schliessen sich aus — sonst schreibt der User in
+    // ein Formular, während hinter dem Dialog ein zweites offen steht.
+    this.closeDetail();
     this.clearCreateFile();
+    // Native showModal() erst nach dem Render: der Dialog steht im selben Tick
+    // noch nicht am DOM (analog openDetail).
+    this.$nextTick(() => {
+      const dlg = this.$refs?.createDialog;
+      if (dlg && typeof dlg.showModal === 'function' && !dlg.open) dlg.showModal();
+    });
   },
-  cancelCreate() { this.creating = false; this.draft = _emptyDraft(); this.clearCreateFile(); },
+  // Über dlg.close() gehen, damit Schliessen-Knopf, Abbrechen und ESC denselben Weg
+  // nehmen — das close-Event ruft _onCreateClosed als einzigen Aufräum-Punkt (Muster
+  // closeDetail). Bewusst KEIN Backdrop-Klick am Anlegen-Dialog: hier steht ein
+  // frisch getippter (womöglich langer) Text, den ein Fehlklick daneben nicht
+  // wegwerfen darf — dieselbe Überlegung wie der `!detailEditing`-Guard am
+  // Detail-Dialog.
+  closeCreate() {
+    const dlg = this.$refs?.createDialog;
+    if (dlg?.open) dlg.close();
+    else this._onCreateClosed();
+  },
+  // Die close-Handler beider Dialoge fassen die Textfelder von `draft` NICHT an:
+  // das native close-Event feuert als eigener Task (nicht synchron zu dlg.close()),
+  // und `draft` teilen sich Anlegen und Bearbeiten — ein Reset hier würde den Draft
+  // überschreiben, den der gerade geöffnete zweite Dialog schon gefüllt hat
+  // (openDetail(item, { edit: true }) schliesst zuerst diesen Dialog). Gefüllt wird
+  // `draft` ausschliesslich von startCreate/startEdit.
+  _onCreateClosed() {
+    this.clearCreateFile();
+    this.errorMessage = '';
+  },
 
   // Datei-Auswahl beim Anlegen: File NICHT in reaktivem State halten (ein Alpine-
   // Proxy bricht File.arrayBuffer mit „Illegal invocation"), nur den Anzeige-Namen.
@@ -58,10 +89,8 @@ export const rechercheItemMethods = {
         if ((file.type || '').startsWith('image/')) await this.uploadImage(row, file);
         else if (file.type === 'application/pdf') await this.uploadDoc(row, file);
       }
-      this.creating = false;
-      this.draft = _emptyDraft();
-      this.clearCreateFile();
-      this.errorMessage = '';
+      // Dialog zu (raeumt draft + Datei-Input im close-Handler).
+      this.closeCreate();
       this._loadTags();
     } catch (e) {
       this.errorMessage = app.t('recherche.error.save');
@@ -70,33 +99,69 @@ export const rechercheItemMethods = {
     }
   },
 
-  // ── Bearbeiten ───────────────────────────────────────────────────────────
-  startEdit(item) {
-    this.editingId = item.id;
-    this.creating = false;
-    // Permalink-Spiegel: offenes Item → #…/recherche/<itemId>. editingId bleibt
-    // SSoT in der Karte (analog editingBeatId ↔ plotBeatId in der Plot-Werkstatt).
+  // ── Detail-Dialog (Lesen) ────────────────────────────────────────────────
+  // Ein Klick auf ein Fundstück ÖFFNET es, er bearbeitet es nicht: der Volltext
+  // eines erfassten Artikels (bis 20 000 Zeichen) ist in einem Formularfeld nicht
+  // lesbar. Bearbeiten ist im Dialog ein eigener Schalter — Verknüpfungen, Tags
+  // und Anhänge bleiben dabei sichtbar und bedienbar.
+  openDetail(item, { edit = false } = {}) {
+    if (!item) return;
+    this.detailItemId = item.id;
+    this.detailEditing = false;
+    this.menuOpenId = null;
+    // Anlegen-Dialog wirklich schliessen (nicht bloss das Flag): er liegt sonst
+    // als zweites Panel im Top-Layer.
+    this.closeCreate();
+    if (edit) this.startEdit(item);
+    // Permalink-Spiegel: offenes Fundstück → #…/recherche/<itemId>. detailItemId
+    // bleibt SSoT in der Karte (analog editingBeatId ↔ plotBeatId in der Plot-
+    // Werkstatt).
     if (window.Alpine) window.Alpine.store('nav').rechercheItemId = item.id;
-    this.editDraft = {
+    // Native showModal() erst nach dem Render: der Dialoginhalt hängt an
+    // detailItems (x-for über 0/1 Element) und existiert im selben Tick noch nicht.
+    this.$nextTick(() => {
+      const dlg = this.$refs?.detailDialog;
+      if (dlg && typeof dlg.showModal === 'function' && !dlg.open) dlg.showModal();
+    });
+  },
+  closeDetail() {
+    const dlg = this.$refs?.detailDialog;
+    // Über dlg.close() gehen, damit ESC/Backdrop/Button denselben Weg nehmen —
+    // das close-Event ruft _onDetailClosed als einzigen Aufräum-Punkt.
+    if (dlg?.open) dlg.close();
+    else this._onDetailClosed();
+  },
+  _onDetailClosed() {
+    this.detailItemId = null;
+    this.detailEditing = false;
+    this.linkPickerItemId = null;
+    if (window.Alpine) window.Alpine.store('nav').rechercheItemId = null;
+  },
+
+  // ── Bearbeiten (nur im Detail-Dialog) ────────────────────────────────────
+  startEdit(item) {
+    this.detailEditing = true;
+    this.draft = {
       kind: item.kind || 'note',
       title: item.title || '',
       body: item.body || '',
       urls: (item.urls || []).map(u => ({ url: u.url || '', label: u.label || '' })),
       source: item.source || '',
       tags: (item.tags || []).join(', '),
+      fileName: '',
     };
   },
+  // Zurück in den Lesemodus — der Dialog bleibt offen (und damit der Permalink).
   cancelEdit() {
-    this.editingId = null;
-    this.editDraft = _emptyDraft();
-    if (window.Alpine) window.Alpine.store('nav').rechercheItemId = null;
+    this.detailEditing = false;
+    this.draft = _emptyDraft();
   },
 
-  // URL-Zeilen im Anlegen-/Bearbeiten-Formular (geteilt über draft/editDraft).
+  // URL-Zeilen des geteilten Formular-Fragments (Anlegen + Bearbeiten, `draft`).
   addUrlRow(draft) { if (!Array.isArray(draft.urls)) draft.urls = []; draft.urls.push({ url: '', label: '' }); },
   removeUrlRow(draft, i) { (draft.urls || []).splice(i, 1); },
 
-  // Klick auf den Eintrag öffnet den Edit-Modus — ausser auf interaktiven
+  // Klick auf den Eintrag öffnet die Detailansicht — ausser auf interaktiven
   // Elementen (Aktions-Buttons, Links, Datei-Inputs, Tag-/Link-Chips) sowie
   // dem Verknüpfen-Picker (inkl. Combobox-Dropdown, dessen Optionen <li> sind
   // und sonst durchblubbern würden), die ihre eigene Aktion behalten.
@@ -104,10 +169,10 @@ export const rechercheItemMethods = {
     if (this.busy) return;
     if (ev.target.closest('a, button, input, label, .research-tag, .research-link-chip, .recherche-linkpicker, .combobox-wrap')) return;
     // Textselektion nicht abwürgen: hat der User Text markiert (Drag löst am
-    // Ende ebenfalls ein click aus), nicht in den Edit-Modus wechseln.
+    // Ende ebenfalls ein click aus), nicht den Dialog aufziehen.
     const sel = window.getSelection();
     if (sel && !sel.isCollapsed && sel.toString().trim()) return;
-    this.startEdit(item);
+    this.openDetail(item);
   },
 
   async saveEdit(item) {
@@ -117,12 +182,13 @@ export const rechercheItemMethods = {
       const row = await fetchJson(`/research/${item.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(this._draftBody(this.editDraft)),
+        body: JSON.stringify(this._draftBody(this.draft)),
       });
       this._replaceItem(row);
-      this.editingId = null;
-      this.editDraft = _emptyDraft();
-      if (window.Alpine) window.Alpine.store('nav').rechercheItemId = null;
+      // Nach dem Speichern zurück in den Lesemodus, Dialog bleibt offen: der
+      // User will sehen, was er geschrieben hat.
+      this.detailEditing = false;
+      this.draft = _emptyDraft();
       this.errorMessage = '';
       this._loadTags();
     } catch (e) {
@@ -162,8 +228,12 @@ export const rechercheItemMethods = {
         body: JSON.stringify({ archived: !item.archived }),
       });
       // Bei aktivem „nur aktive"-Filter verschwindet das Item aus der Liste.
-      if (!this.showArchived) this.items = this.items.filter(i => i.id !== item.id);
-      else { item.archived = item.archived ? 0 : 1; }
+      // Dann muss auch der Detail-Dialog zu: sein Inhalt hängt an `items`, er
+      // stünde sonst leer offen.
+      if (!this.showArchived) {
+        this.items = this.items.filter(i => i.id !== item.id);
+        if (this.detailItemId === item.id) this.closeDetail();
+      } else { item.archived = item.archived ? 0 : 1; }
       // Archivierte Items zählen nicht im Seiten-/Kapitel-Indikator.
       if ((item.links || []).some(l => l.target_kind === 'page')) this._refreshRecherchePageCounts();
       if ((item.links || []).some(l => l.target_kind === 'chapter')) this._refreshRechercheChapterCounts();
@@ -180,10 +250,7 @@ export const rechercheItemMethods = {
     try {
       await fetchJson(`/research/${item.id}`, { method: 'DELETE' });
       this.items = this.items.filter(i => i.id !== item.id);
-      if (this.editingId === item.id) {
-        this.editingId = null;
-        if (window.Alpine) window.Alpine.store('nav').rechercheItemId = null;
-      }
+      if (this.detailItemId === item.id) this.closeDetail();
       this._loadTags();
       if ((item.links || []).some(l => l.target_kind === 'page')) this._refreshRecherchePageCounts();
       if ((item.links || []).some(l => l.target_kind === 'chapter')) this._refreshRechercheChapterCounts();
@@ -191,55 +258,4 @@ export const rechercheItemMethods = {
     this.menuOpenId = null;
   },
 
-  // ── Beschreibungstext in der Übersicht ─────────────────────────────────────
-  // Ein Zitat-Volltext oder eine ausführliche Notiz treibt die Liste sonst so weit
-  // auf, dass sich die Übersicht nicht mehr scannen lässt. Der Text wird darum
-  // per CSS auf wenige Zeilen gekappt (.research-item-text--clamped) und ist pro
-  // Fundstück ausklappbar.
-  bodyExpanded(item) { return !!this.expandedBodyIds[item.id]; },
-  toggleBodyExpanded(item) {
-    // Reassign statt In-Place-Mutate: das x-for-Item liest über diese Map, und
-    // Alpine sieht die Änderung so garantiert (wie _proposalSaving).
-    const next = { ...this.expandedBodyIds };
-    if (next[item.id]) delete next[item.id]; else next[item.id] = true;
-    this.expandedBodyIds = next;
-  },
-
-  // Ob der Toggle überhaupt erscheint, wird GEMESSEN, nicht aus der Textlänge
-  // geschätzt: ob der Cap etwas abschneidet, hängt an der Spaltenbreite (Karte im
-  // Vollbild vs. Handy, Sidebar offen/zu). Eine Zeichen-Schwelle zeigte auf breiten
-  // Schirmen ein „Mehr anzeigen", das nichts aufzuklappen hatte.
-  bodyClampable(item) { return !!this.clampableBodyIds[item.id]; },
-  // Angestossen aus dem Template (x-effect am Textblock): der Lesezugriff auf
-  // item.body macht die Messung zur Alpine-Dependency — sie läuft beim Rendern der
-  // Liste und erneut, wenn sich ein Text ändert. Resize hängt in recherche-card.js.
-  noteBodyForClamp(item) {
-    void item?.body;
-    this._scheduleBodyClampMeasure();
-  },
-  _scheduleBodyClampMeasure() {
-    // Re-Entry-Guard: ein Frame bündelt alle Items einer Render-Runde.
-    if (this._clampRaf) return;
-    this._clampRaf = requestAnimationFrame(() => {
-      this._clampRaf = null;
-      this._measureBodyClamps();
-    });
-  },
-  _measureBodyClamps() {
-    const root = this.$root;
-    if (!root) return;
-    const next = {};
-    for (const el of root.querySelectorAll('.research-item-text')) {
-      const id = parseInt(el.closest('[data-research-id]')?.dataset.researchId || '', 10);
-      if (!id) continue;
-      // Aufgeklappt ist nichts messbar (es schneidet ja nichts ab) — der Toggle
-      // muss aber bleiben, sonst kommt der User nicht zurück in den Cap.
-      if (this.expandedBodyIds[id]) { next[id] = true; continue; }
-      if (el.scrollHeight > el.clientHeight + 1) next[id] = true;
-    }
-    const prev = this.clampableBodyIds || {};
-    const keys = Object.keys(next);
-    if (keys.length === Object.keys(prev).length && keys.every(k => prev[k])) return;
-    this.clampableBodyIds = next;
-  },
 };

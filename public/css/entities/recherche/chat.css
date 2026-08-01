@@ -1,0 +1,160 @@
+/* Recherche-Chat der Recherche-Karte (Claude-only, mit Web-Suche): Spalten-
+   Layout neben dem Board + das Panel selbst. Board/Liste: board.css. */
+
+/* ── Board + Chat nebeneinander ───────────────────────────────────────────
+   Schmal: Flex-Spalte, der Chat steht per `order` ueber dem Board (er wird
+   gezielt aufgeklappt und soll dann nicht unter einer langen Liste liegen).
+   Breit: zweispaltiges Raster wie Seiten-Chat neben dem Editor
+   (layout/twocolumn.css), nur breitere Chat-Spalte — Web-Such-Antworten und
+   Fundstueck-Vorschlaege brauchen mehr Zeilenbreite als eine Seiten-Antwort. */
+.recherche-split {
+  display: flex;
+  flex-direction: column;
+}
+.recherche-split > .research-chat { order: -1; }
+
+@media (min-width: 1280px) {
+  .recherche-split--chat {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(420px, 32vw, 620px);
+    column-gap: var(--space-md);
+    align-items: start;
+  }
+  .recherche-split--chat > .research-chat {
+    order: 0;
+    margin-bottom: 0;
+    position: sticky;
+    top: 1.5rem;
+    /* Panel selbst gedeckelt + scrollbar, damit auch die Session-Historie
+       darunter erreichbar bleibt, ohne aus dem Viewport zu laufen. */
+    max-height: calc(100vh - 3rem);
+    overflow-y: auto;
+  }
+  .recherche-split--chat .research-chat-messages { max-height: min(46vh, 34rem); }
+}
+
+/* ── Recherche-Chat-Panel (Claude-only, mit Web-Suche) ────────────────────── */
+.research-chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--card-accent);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+.research-chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+.research-chat-title { font-weight: 600; }
+.research-chat-head-actions { display: flex; gap: var(--space-2xs); }
+/* Mitwachsende, aber gedeckelte Chat-Höhe — das Board bleibt darunter sichtbar. */
+.research-chat-messages { max-height: 22rem; }
+.card--recherche:fullscreen .research-chat-messages { max-height: 48vh; }
+
+/* Speicher-Vorschläge unter einer Assistant-Antwort */
+.research-chat-proposals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+}
+.research-chat-proposals-head {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-muted);
+}
+.research-chat-proposal {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-2xs) 0;
+}
+/* Button als eigene rechte Spalte: feste Breite, oben ausgerichtet, schrumpft
+   nicht — der Vorschlagstext bricht davor um (saubere zweispaltige Optik). */
+.research-chat-proposal > .btn-compact,
+.research-chat-proposal > .research-chat-proposal-saved {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-left: auto;
+}
+.research-chat-proposal--saved { opacity: 0.6; }
+.research-chat-proposal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.research-chat-proposal-title { font-weight: 600; }
+.research-chat-proposal-snippet {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.research-chat-proposal-url {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--card-accent);
+  word-break: break-all;
+}
+.research-chat-proposal-saved {
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+/* Inline-Zitatmarker in der Antwort (aus den `<cite index>`-Tags des Modells) */
+.chat-cite {
+  font-size: 0.7em;
+  line-height: 0;
+  vertical-align: super;
+  white-space: nowrap;
+}
+.chat-cite a {
+  color: var(--card-accent);
+  text-decoration: none;
+  padding: 0 1px;
+}
+.chat-cite a:hover { text-decoration: underline; }
+.chat-cite--dim { color: var(--color-muted); }
+
+/* Quellenliste unter einer Assistant-Antwort */
+.research-chat-sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+}
+.research-chat-sources-head {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-muted);
+}
+.research-chat-source {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  font-size: var(--font-size-sm);
+  color: var(--card-accent);
+  text-decoration: none;
+}
+.research-chat-source:hover { text-decoration: underline; }
+.research-chat-source-num { color: var(--color-muted); flex-shrink: 0; }
+.research-chat-source-title { word-break: break-word; }
+
+/* ── Mobile ─────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .research-chat-proposal { flex-wrap: wrap; }
+}

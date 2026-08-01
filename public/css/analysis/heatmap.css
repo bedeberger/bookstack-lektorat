@@ -327,4 +327,147 @@
   }
 }
 
+/* === Satzrhythmus-Band + Satzanfänge (Stil-Karte) === */
+.stil-rhythm,
+.stil-openers {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+.stil-rhythm-head {
+  margin-bottom: var(--space-md);
+}
+.stil-rhythm-title {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+.stil-rhythm-sub {
+  margin: var(--space-2xs) 0 0;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-muted);
+}
+
+.stil-rhythm-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+/* Label | Band | Kennzahlen. Das Band nimmt den Rest — es ist die Aussage,
+   die beiden Textspalten sind die Beschriftung dazu. */
+.stil-rhythm-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 15rem) 1fr minmax(7rem, auto);
+  align-items: center;
+  gap: var(--space-md);
+}
+.stil-rhythm-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.stil-rhythm-name {
+  font-size: var(--font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stil-rhythm-meta {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.stil-rhythm-band {
+  display: block;
+  width: 100%;
+  height: 34px;
+  background: color-mix(in oklab, var(--card-accent, var(--color-accent)) 7%, transparent);
+  border-radius: var(--radius-sm);
+}
+.stil-rhythm-area {
+  fill: color-mix(in oklab, var(--card-accent, var(--color-accent)) 62%, transparent);
+}
+
+.stil-rhythm-stats {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--font-size-xs, 11px);
+}
+.stil-rhythm-swing {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+/* Drei Stufen — bewusst ohne Gut/Schlecht-Wertung: ein Sachtext darf monoton
+   sein. Nur „auffällig gleichförmig" bekommt eine warnende Tönung. */
+.stil-rhythm-swing--low  { color: var(--color-warn-text); }
+.stil-rhythm-swing--mid  { color: var(--color-text); }
+.stil-rhythm-swing--high { color: var(--color-accent); }
+.stil-rhythm-swing-word {
+  color: var(--color-muted);
+}
+.stil-rhythm-repeat {
+  color: var(--color-muted);
+  margin-left: var(--space-2xs);
+}
+
+.stil-opener-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.stil-opener-row {
+  display: grid;
+  grid-template-columns: minmax(5rem, 8rem) 1fr 4rem 4rem;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-size-xs, 11px);
+}
+.stil-opener-word {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stil-opener-bar {
+  display: block;
+  height: 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--card-accent, var(--color-accent)) 10%, transparent);
+  overflow: hidden;
+}
+.stil-opener-fill {
+  display: block;
+  height: 100%;
+  width: var(--opener-bar, 0%);
+  background: color-mix(in oklab, var(--card-accent, var(--color-accent)) 60%, transparent);
+}
+.stil-opener-count,
+.stil-opener-share {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+/* Mobile: Band unter das Label, Kennzahlen daneben. Ein 120-Spalten-Band bleibt
+   auch schmal lesbar, eine dreispaltige Zeile nicht. */
+@media (max-width: 700px) {
+  .stil-rhythm-row {
+    grid-template-columns: 1fr auto;
+    gap: var(--space-2xs) var(--space-sm);
+  }
+  .stil-rhythm-band {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+  .stil-opener-row {
+    grid-template-columns: minmax(4rem, 6rem) 1fr 3rem 3.5rem;
+  }
+}
+
 }

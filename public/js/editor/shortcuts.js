@@ -7,7 +7,16 @@ import { EVT } from '../events.js';
 // Dieses Modul liefert ausserdem:
 //  - Findings-Sprung Alt+J/K im Editor.
 //  - Tree-Pfeilnavigation für die Sidebar (auch ohne aktive Suche).
-//  - `trapFocus(event, rootEl)`-Helper (für nicht-<dialog>-Modals wie editor-find).
+//  - `trapFocus(event, rootEl)`-Helper für die Editor-Find-Leiste.
+//
+// WARUM hier ein eigener Tab-Zyklus und nicht `x-trap` (@alpinejs/focus):
+// Die Find-Leiste liegt ÜBER dem Editor, blockiert ihn aber nicht — man klickt
+// aus ihr heraus in den Text, um die gefundene Stelle direkt zu korrigieren.
+// focus-trap holt den Fokus in seinem `focusin`-Handler bedingungslos zurück
+// (`allowOutsideClick` erlaubt nur den Klick, nicht den Fokuswechsel), der
+// Cursor käme also nie im Manuskript an. `x-trap` gehört deshalb nur auf die
+// wirklich blockierenden Overlays (Palette, Konflikt-Modal, Fassungs-Reader);
+// hier bleibt es beim reinen Tab-Zyklus, der Klicks nach draussen zulässt.
 
 const FOCUSABLE = [
   'a[href]', 'button:not([disabled])', 'textarea:not([disabled])',

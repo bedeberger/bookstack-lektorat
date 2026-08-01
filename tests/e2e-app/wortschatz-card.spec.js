@@ -8,7 +8,8 @@
 // in einer Expression der Fragmente faende dort niemand.
 //
 // Der Test loest den Scan ueber die App selbst aus (Knopf → Job → Polling) und
-// prueft danach jeden der drei Reiter.
+// prueft danach jeden der vier Reiter. Die Wortwolke braucht diese Schicht
+// zusaetzlich, weil d3-cloud jedes Wort auf einem Canvas misst.
 
 const { test, expect } = require('@playwright/test');
 const { attachConsoleGuard } = require('../e2e/_helpers/console-guard');
@@ -16,7 +17,7 @@ const { bootApp, selectSeededBook } = require('./_helpers/app');
 
 test.describe.configure({ mode: 'serial' });
 
-test('Wortschatz: Scan laeuft, alle drei Reiter rendern mit Daten', async ({ page }) => {
+test('Wortschatz: Scan laeuft, alle vier Reiter rendern mit Daten', async ({ page }) => {
   const guard = attachConsoleGuard(page);
   await bootApp(page);
   await selectSeededBook(page);
@@ -55,6 +56,29 @@ test('Wortschatz: Scan laeuft, alle drei Reiter rendern mit Daten', async ({ pag
     (rows) => rows.map((r) => r.querySelector('td').textContent.trim().length),
   );
   expect(lengths[0]).toBeGreaterThanOrEqual(lengths[lengths.length - 1]);
+
+  // Reiter 4: Wortwolke. Braucht die echte App, weil d3-cloud jedes Wort auf
+  // einem Canvas misst — im Fixture-Harness gaebe es nichts zu messen. Der
+  // Keyness-Modus ist hier gesperrt (kein Referenzkorpus, siehe oben) und muss
+  // sichtbar bleiben statt zu verschwinden.
+  await card.getByRole('button', { name: /^Wolke$/ }).click();
+  const words = card.locator('.wortschatz-cloud .wortschatz-cloud-word');
+  await expect.poll(() => words.count(), { timeout: 30000 }).toBeGreaterThan(0);
+  await expect(card.getByRole('button', { name: /Auffälligkeit/ })).toBeDisabled();
+
+  // Deterministisch: derselbe Datenstand muss dieselbe Anordnung ergeben, sonst
+  // sind zwei Scans nicht vergleichbar.
+  const first = await words.evaluateAll(
+    (els) => els.map((e) => `${e.textContent}@${e.getAttribute('transform')}`),
+  );
+  await page.evaluate(() => {
+    window.Alpine.$data(document.querySelector('.card--wortschatz')).wsBuildCloud();
+  });
+  await expect.poll(() => words.count(), { timeout: 30000 }).toBe(first.length);
+  const second = await words.evaluateAll(
+    (els) => els.map((e) => `${e.textContent}@${e.getAttribute('transform')}`),
+  );
+  expect(second).toEqual(first);
 
   guard.assertClean('Wortschatz-Karte mit Analyse');
 });

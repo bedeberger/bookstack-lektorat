@@ -1,6 +1,7 @@
 // Alpine.data('stilCard') — Sub-Komponente der Stil-Heatmap.
 
 import { stilMethods } from '../book/stil-heatmap.js';
+import { stilRhythmusMethods } from '../book/stil-rhythmus.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 
 export function registerStilCard() {
@@ -11,6 +12,9 @@ export function registerStilCard() {
     stilSyncing: false,
     stilStatus: '',
     activeStilDetailKey: null,
+    // Speicher des _memo-Helpers aus stil-rhythmus.js (Band + Satzanfänge werden
+    // im Template mehrfach pro Render abgefragt).
+    _memos: {},
     _lifecycle: null,
 
     init() {
@@ -31,6 +35,7 @@ export function registerStilCard() {
           stilLoading: false,
           stilSyncing: false,
           activeStilDetailKey: null,
+          _memos: {},
         },
       });
     },
@@ -38,5 +43,6 @@ export function registerStilCard() {
     destroy() { this._lifecycle?.destroy(); },
 
     ...stilMethods,
+    ...stilRhythmusMethods,
   }));
 }
