@@ -151,13 +151,24 @@ apt-get install -y -qq curl ca-certificates tar git rsync >/dev/null
 # gesetzt — der Hinweis faengt die Reihenfolge "Runner zuerst" ab.
 command -v node >/dev/null || echo "  ! node fehlt — deploy.sh braucht es (deploy/install-demo.sh installiert es)."
 
+# Fallback, wenn die API nicht antwortet (unauthentifiziert sind es 60 Requests
+# pro Stunde und IP — auf einem Host mit mehreren LXC ist das schnell aufgebraucht).
+# Nur eine Notbremse: normal gewinnt die API, damit der Runner nicht veraltet.
+FALLBACK_VERSION="v2.336.0"
+
 if [ -z "$VERSION" ]; then
   echo "→ Neueste Runner-Version ermitteln…"
-  VERSION="$(curl -fsSL https://api.github.com/repos/actions/runner/releases/latest \
-             | grep -m1 '"tag_name"' | cut -d'"' -f4 || true)"
+  # Kein `|| true` mehr um die ganze Kette: das verschluckte curls Exit-Code und
+  # liess nur die nackte Fehlermeldung stehen, ohne zu sagen, WELCHER Aufruf sie
+  # erzeugt hat. Jetzt wird der API-Fehler benannt und der Fallback greift.
+  API_JSON="$(curl -fsSL https://api.github.com/repos/actions/runner/releases/latest)" || {
+    echo "  ! GitHub-API nicht erreichbar — weiter mit Fallback $FALLBACK_VERSION"
+    API_JSON=""
+  }
+  VERSION="$(printf '%s' "$API_JSON" | grep -m1 '"tag_name"' | cut -d'"' -f4 || true)"
   if [ -z "$VERSION" ]; then
-    echo "✗ Version nicht ermittelbar (API-Rate-Limit?) — bitte --version vXX.Y.Z setzen."
-    exit 1
+    VERSION="$FALLBACK_VERSION"
+    echo "  ! Kein tag_name in der API-Antwort — Fallback $VERSION (mit --version ueberschreibbar)"
   fi
 fi
 VER="${VERSION#v}"
@@ -173,9 +184,27 @@ if [ -x ./config.sh ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$VERSION" ]; then
   echo "→ Runner-Binaries $VERSION bereits vorhanden — Download uebersprungen."
 else
   TARBALL="actions-runner-linux-${ARCH}-${VER}.tar.gz"
-  echo "→ Lade $TARBALL…"
-  curl -fsSL -o "$TARBALL" \
-    "https://github.com/actions/runner/releases/download/${VERSION}/${TARBALL}"
+  URL="https://github.com/actions/runner/releases/download/${VERSION}/${TARBALL}"
+  # URL immer ausgeben: curl meldet im Fehlerfall nur "error: 404" ohne zu
+  # verraten, welche Adresse gemeint war — und im Script gibt es mehr als einen
+  # curl-Aufruf. Ohne diese Zeile ist ein 404 nicht zuzuordnen.
+  echo "→ Lade $URL"
+  if ! curl -fSL --retry 3 --retry-delay 2 -o "$TARBALL" "$URL"; then
+    echo "✗ Download fehlgeschlagen: $URL"
+    echo "  Existiert das Release-Asset? Pruefen mit:"
+    echo "    curl -fsSL https://api.github.com/repos/actions/runner/releases/tags/${VERSION} | grep browser_download_url"
+    echo "  Version explizit setzen: --version vXX.Y.Z"
+    rm -f "$TARBALL"
+    exit 1
+  fi
+  # Magic-Bytes statt blindem tar: liefert ein Proxy oder eine Fehlerseite HTML
+  # aus, ist die Datei da und tar bricht mit einer unverstaendlichen Meldung ab.
+  if [ "$(head -c2 "$TARBALL" | od -An -tx1 | tr -d ' \n')" != "1f8b" ]; then
+    echo "✗ Heruntergeladene Datei ist kein gzip — Anfang:"
+    head -c 200 "$TARBALL"; echo
+    rm -f "$TARBALL"
+    exit 1
+  fi
   tar xzf "$TARBALL"
   rm -f "$TARBALL"
   echo "$VERSION" > "$STAMP"
