@@ -32,6 +32,9 @@ export function registerUserSettingsCard() {
     // (darf nur erfassen). Serverseitige Wahrheit: lib/device-scopes.js.
     deviceTokensNewKind: 'device',
     deviceTokensJustCreated: null,
+    // Konto-Selbstloeschung (DELETE /me/account, Guideline 5.1.1(v))
+    accountDeleting: false,
+    accountDeleteError: '',
     // macOS-App-Download (schreibwerkstatt-focuseditor)
     macRelease: { available: false },
     // Android-App-Download (schreibwerkstatt-mobile)

@@ -109,6 +109,36 @@ Das Profil (`/me`) zeigt eingeloggten Usern Version + Download-Link der nativen 
 - **GitHub-Rate-Limit:** ohne Token 60 Req/h. Ein optionaler PAT hebt das auf 5000/h (Admin-Settings → Erweitert → `macclient.github_token`, verschlüsselt in `app_settings`; `GITHUB_TOKEN` in `.env` nur als einmaliger Boot-Seed). Siehe [README.md](../README.md).
 - Profil-UI-Strings: `profile.macApp.*` / `profile.androidApp.*` in [public/js/i18n/{de,en}.json](../public/js/i18n/).
 
+## Konto-Selbstlöschung (`DELETE /me/account`)
+
+App-Store-Guideline 5.1.1(v): ein Konto, das sich in der App anlegen lässt, muss sich **in der App** löschen lassen — nicht bloss deaktivieren. Der macOS-Client ruft dafür:
+
+```
+DELETE /me/account
+Authorization: Bearer swd_…
+Content-Type: application/json
+
+{ "confirm": "DELETE" }
+```
+
+- **`confirm` ist ein konstanter Protokollwert**, nicht lokalisiert und nicht der Kontoname. Die Absicherung gegen den Fehlklick sitzt im Client-UI; dieser Wert sichert nur gegen den versehentlichen Request.
+- **Device-Token genügt** — anders als `POST /me/device-tokens` (dort `403 DEVICE_TOKEN_SELF_MINT_FORBIDDEN`) gibt es hier kein Gate auf die Auth-Art: der Client hat keine Session. Ein `capture`-Token kommt trotzdem nicht durch (`/me/*` ist nicht allowlistet → `DEVICE_SCOPE_FORBIDDEN`).
+- **Nach dem `200` ist jedes Token des Kontos tot** → der nächste Request beantwortet der Guard mit `401 NOT_LOGGED_IN`. Der Client soll seinen lokalen Spiegel löschen und in den abgemeldeten Zustand wechseln.
+- **Keine Karenzfrist:** die Antwort trägt **kein** `scheduled_purge_at`. Das Feld bleibt im Client-Vertrag optional (falls der Server das später einführt, zeigt der Client das Datum an), aktuell wird sofort gelöscht.
+
+| `error_code` | HTTP | Wann |
+|---|---|---|
+| `CONFIRM_REQUIRED` | 400 | `confirm` fehlt oder ist nicht exakt `DELETE` |
+| `ACCOUNT_DELETE_FORBIDDEN` | 403 | Konto darf sich nicht selbst löschen: `ADMIN_EMAIL` aus der ENV (wird beim Serverstart neu angelegt) oder letzter aktiver Admin der Instanz |
+| `USER_NOT_FOUND` | 404 | keine `app_users`-Row zu dieser Anmeldung |
+| `ACCOUNT_DELETE_FAILED` | 500 | Löschung abgebrochen; trägt `detail`. Ein zweiter Aufruf räumt den Rest ab (jeder Schritt ist idempotent) |
+
+> **Ein 404 OHNE `error_code`** heisst „dieser Server kennt die Route nicht" (ältere Instanz). Der Client fällt dann auf den Browser zurück und öffnet `…/#profil` — dort steht in der Profil-Karte dieselbe Aktion. Jeder **fachliche** Fehler trägt dagegen immer einen `error_code`.
+
+**Was gelöscht wird:** eigene Bücher (Kapitel, Seiten, Fassungen, Analysen, Share-Links) samt allem, was daran hängt — auch für Mitarbeitende. Bücher, an denen der User nur beteiligt ist, bleiben ihren Besitzern; es fällt nur seine `book_access`-Zeile. Betriebsdaten (Kosten, Job- und Fehlerspur) bleiben **anonymisiert**, die Audit-Spur der Löschung bleibt als Nachweis. Vollständige Spaltenliste mit Begründungen: [lib/account-delete.js](../lib/account-delete.js).
+
+**Demo-Konto:** derselbe Aufruf setzt es **zurück** statt es zu löschen (Antwort zusätzlich `demo_reset: true`, Tokens bleiben gültig) — der Zugang ist geteilt und steht in den Reviewer-Notes. Ein Prüfer erlebt den vollständigen Ablauf, der nächste findet eine benutzbare Demo. Siehe [Demo-Instanz](#demo-instanz-ein-buch-zum-nicht-hineinschreiben).
+
 ## Abdeckung im Vergleich
 
 | Aspekt | macOS (`focuseditor`) | Android (`mobile`) | Chrome (`browser-extension`) |
@@ -120,6 +150,7 @@ Das Profil (`/me`) zeigt eingeloggten Usern Version + Download-Link der nativen 
 | Release-Discovery | ✅ `.dmg` | ✅ `.apk` | — (Store bzw. Sideload, kein `release.json`) |
 | OTA-Editor-Bundle | ✅ | ✅ (eigenes Boot-HTML) | — |
 | OTA-i18n-Override | ✅ | — (native Strings) | — (eigene Strings) |
+| Konto-Selbstlöschung | ✅ `DELETE /me/account` | — (Web-Profil) | — (`/me/*` nicht allowlistet) |
 | Push-Notifications | — | — (kein FCM/APNS im Server) | — |
 
 Das Fehlende auf Android-Seite (i18n-Override) ist **kein Gap, sondern Folge der Architektur**: die App verwaltet ihre Oberflächen-Strings nativ, der Editor-Kern bringt seine eigenen mit. Was beide nativen Clients gemeinsam tragen — Auth, Sync, Presence, Release-Discovery, Editor-Bundle — ist symmetrisch abgedeckt.

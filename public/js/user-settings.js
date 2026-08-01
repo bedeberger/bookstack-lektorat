@@ -4,6 +4,11 @@
 
 import { fetchJson } from './utils.js';
 
+// Protokollwert von DELETE /me/account. Bewusst NICHT lokalisiert und bewusst
+// derselbe String, den der native macOS-Client sendet — der Server kennt genau
+// diesen einen Wert (routes/usersettings.js).
+const ACCOUNT_DELETE_CONFIRM = 'DELETE';
+
 export const userSettingsMethods = {
   async loadUserSettings() {
     this.userSettingsLoading = true;
@@ -171,6 +176,65 @@ export const userSettingsMethods = {
     if (scopes.includes('content:write')) return app.t('profile.devices.kind.device');
     if (scopes.includes('capture:write')) return app.t('profile.devices.kind.capture');
     return app.t('profile.devices.kind.none');
+  },
+
+  // ── Konto-Selbstloeschung ───────────────────────────────────────────────────
+  // Gleicher Endpunkt wie im nativen macOS-Client (DELETE /me/account,
+  // App-Store-Guideline 5.1.1(v)). Zwei Stufen: Warnung bestaetigen, dann das
+  // Protokollwort tippen — ein einzelner Klick darf ein Manuskript nicht loeschen.
+  async deleteAccount() {
+    const app = window.__app;
+    this.accountDeleteError = '';
+
+    if (!await app.appConfirm({
+      message: app.t('profile.deleteAccount.confirm'),
+      confirmLabel: app.t('profile.deleteAccount.button'),
+      danger: true,
+    })) return;
+
+    const typed = await app.appPrompt({
+      message: app.t('profile.deleteAccount.typeToConfirm', { word: ACCOUNT_DELETE_CONFIRM }),
+      placeholder: ACCOUNT_DELETE_CONFIRM,
+      confirmLabel: app.t('profile.deleteAccount.button'),
+    });
+    if (typed === null) return;                       // abgebrochen — still
+    if (typed.toUpperCase() !== ACCOUNT_DELETE_CONFIRM) {
+      this.accountDeleteError = app.t('profile.deleteAccount.confirmMismatch');
+      return;
+    }
+
+    this.accountDeleting = true;
+    try {
+      const r = await fetch('/me/account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ confirm: ACCOUNT_DELETE_CONFIRM }),
+      });
+      let j = null;
+      try { j = await r.json(); } catch (_) {}
+      if (!r.ok) throw new Error(j ? app.tError(j) : `HTTP ${r.status}`);
+
+      // Demo-Zugang: das Konto besteht weiter, die Inhalte sind neu gesaet
+      // (Begruendung in lib/account-delete.js#resetDemoAccount). Kein Logout —
+      // stattdessen die Buchliste neu ziehen, damit die neuen Buecher erscheinen.
+      if (j?.demo_reset) {
+        app.setStatus(app.t('profile.deleteAccount.demoReset'), false, 8000);
+        Alpine.store('nav').selectedBookId = '';
+        app.resetView();
+        await app.loadBooks();
+        return;
+      }
+
+      // Session ist serverseitig zerstoert, Geraete-Tokens sind weg: harter
+      // Reload auf die Anmeldeseite statt SPA-Navigation, damit kein Karten-State
+      // eines nicht mehr existierenden Kontos weiterlebt.
+      window.location.href = '/login';
+    } catch (e) {
+      this.accountDeleteError = e.message;
+    } finally {
+      this.accountDeleting = false;
+    }
   },
 
   // ── macOS-App-Download (schreibwerkstatt-focuseditor) ───────────────────────

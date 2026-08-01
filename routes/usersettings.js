@@ -551,4 +551,91 @@ router.delete('/device-tokens/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Konto-Selbstloeschung ────────────────────────────────────────────────────
+//
+// DELETE /me/account, Body { confirm: 'DELETE' }.
+//
+// Anlass: App-Store-Guideline 5.1.1(v) — ein Konto, das sich in der App anlegen
+// laesst, muss sich in der App loeschen lassen. Aufrufer sind der native
+// macOS-Client (schreibwerkstatt-focuseditor) und das Profil der Web-App.
+//
+// AUTH BEWUSST OHNE EINSCHRAENKUNG DER ART: der Endpunkt muss mit Device-Token
+// (Bearer swd_…) funktionieren, weil der native Client keine Session hat und die
+// Guideline die Loeschung IN DER APP verlangt. Anders als POST /me/device-tokens
+// (dort 403 DEVICE_TOKEN_SELF_MINT_FORBIDDEN, kein Self-Minting offline) gibt es
+// hier also kein `via === 'device_token'`-Gate. Ein `capture:write`-Token der
+// Browser-Erweiterung kommt trotzdem nicht durch — /me/ steht in keiner
+// Allowlist von lib/device-scopes.js und faellt dort mit 403.
+//
+// `confirm` ist ein konstanter Protokollwert ('DELETE'), NICHT lokalisiert und
+// nicht der Buchtitel o.ae.: die Absicherung gegen den Fehlklick sitzt im UI,
+// dieser Wert sichert nur gegen den versehentlichen Request.
+//
+// Was geloescht wird, was anonymisiert bleibt und warum: siehe den Kopf von
+// lib/account-delete.js — dort liegt auch die vollstaendige Spaltenliste.
+//
+// Antwortformen (der Client wertet genau diese aus):
+//   200 { ok: true }                       — geloescht (bzw. Demo-Konto: zurueckgesetzt).
+//                                            Kein `scheduled_purge_at` — es gibt keine
+//                                            Karenzfrist, geloescht wird sofort.
+//   400 { error_code: 'CONFIRM_REQUIRED' }
+//   403 { error_code: 'ACCOUNT_DELETE_FORBIDDEN' }
+//   404 { error_code: 'USER_NOT_FOUND' }   — fachlicher Fehler MIT Code; ein 404
+//                                            OHNE error_code deutet der Client als
+//                                            „Server kennt die Route nicht".
+router.delete('/account', jsonBody, async (req, res) => {
+  const email = req.session.user.email;
+  const ip = (req.ip || '').toString() || null;
+  const userAgent = req.headers['user-agent'] || null;
+
+  if (String(req.body?.confirm || '') !== 'DELETE') {
+    return res.status(400).json({ error_code: 'CONFIRM_REQUIRED' });
+  }
+
+  const user = getUser(email);
+  if (!user) return res.status(404).json({ error_code: 'USER_NOT_FOUND' });
+
+  // Zwei Konten duerfen sich nicht selbst loeschen, beide aus demselben Grund:
+  // die Instanz waere danach nicht mehr administrierbar.
+  //   ADMIN_EMAIL — wird bei jedem Serverstart aus der ENV neu angelegt
+  //     (appUsers.ensureAdminFromEnv). Eine Loeschung raeumt die Inhalte ab und
+  //     der naechste Boot legt ein leeres Konto derselben Adresse wieder an: ein
+  //     Zustand, den niemand gewollt hat.
+  //   Letzter aktiver Admin — ohne ihn kann niemand mehr Nutzer freischalten
+  //     oder Einstellungen aendern.
+  const envAdmin = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  const isEnvAdmin = !!envAdmin && envAdmin === email.toLowerCase();
+  const admins = appUsers.getActiveAdminEmails().map(a => a.toLowerCase());
+  const isLastAdmin = user.global_role === 'admin'
+    && admins.length <= 1 && admins.includes(email.toLowerCase());
+  if (isEnvAdmin || isLastAdmin) {
+    logger.warn(`Konto-Selbstloeschung abgelehnt (${isEnvAdmin ? 'ENV-Admin' : 'letzter Admin'})`, { user: email });
+    return res.status(403).json({ error_code: 'ACCOUNT_DELETE_FORBIDDEN' });
+  }
+
+  // Demo-Zugang: echter Reset statt Loeschung (Begruendung in
+  // lib/account-delete.js#resetDemoAccount). Der Pruefer sieht den vollstaendigen
+  // Ablauf, die Demo bleibt fuer den naechsten nutzbar.
+  const demo = require('../lib/demo-user');
+  const isDemo = demo.isEnabled() && demo.demoEmail() === email.toLowerCase();
+
+  try {
+    const accountDelete = require('../lib/account-delete');
+    if (isDemo) {
+      const r = await accountDelete.resetDemoAccount(email, { ip, userAgent });
+      // Session NICHT zerstoeren und Tokens NICHT widerrufen: das Konto besteht
+      // weiter, und der Pruefer soll die neu gesaeten Buecher gleich sehen.
+      return res.json({ ok: true, demo_reset: true, books_removed: r.books, reseeded: r.reseeded });
+    }
+
+    await accountDelete.deleteAccount(email, { ip, userAgent });
+    // Session-Cookie entwerten. Device-Tokens sind bereits geloescht — ab hier
+    // beantwortet der Auth-Guard jeden Bearer-Request mit 401.
+    req.session.destroy(() => res.json({ ok: true }));
+  } catch (e) {
+    logger.error(`Konto-Selbstloeschung fehlgeschlagen: ${e.message}`, { user: email });
+    if (!res.headersSent) res.status(500).json({ error_code: 'ACCOUNT_DELETE_FAILED', detail: e.message });
+  }
+});
+
 module.exports = router;

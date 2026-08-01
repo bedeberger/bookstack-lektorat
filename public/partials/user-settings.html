@@ -192,6 +192,31 @@
       </div>
     </div>
 
+    <!--
+      Konto loeschen (App-Store-Guideline 5.1.1(v)). Gleicher Endpunkt wie im
+      nativen macOS-Client: DELETE /me/account. Der Client verlinkt auf #profil,
+      wenn der Server die Route nicht kennt — dieser Block ist das Ziel.
+    -->
+    <div class="card-form-row">
+      <div class="danger-zone">
+        <div class="danger-zone-title">
+          <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#alert-triangle"/></svg>
+          <span x-text="$app.t('profile.deleteAccount.title')"></span>
+        </div>
+        <div class="danger-zone-row">
+          <div class="danger-zone-text" x-text="$app.t('profile.deleteAccount.text')"></div>
+          <div class="danger-zone-actions">
+            <button type="button" class="danger-zone-btn"
+                    @click="deleteAccount()" :disabled="accountDeleting">
+              <span x-show="accountDeleting" class="spinner"></span>
+              <span x-text="accountDeleting ? $app.t('common.deleting') : $app.t('profile.deleteAccount.button')"></span>
+            </button>
+          </div>
+        </div>
+        <p class="card-form-error" x-show="accountDeleteError" x-text="accountDeleteError"></p>
+      </div>
+    </div>
+
     <!-- App-Version (SSoT: VERSION-Datei, vom Server via /config) -->
     <div class="card-form-row" x-show="$store.shell.appVersion" x-cloak>
       <p class="muted-msg muted-msg--sm">

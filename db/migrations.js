@@ -10465,6 +10465,57 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 264 abgeschlossen (mermaid_cache: Render-Cache fuer Diagramme im Export).');
   }
 
+  if (version < 265) {
+    // 'self-deleted' + 'demo-reset' im user_sessions_audit-Event-CHECK
+    // aufnehmen (Muster wie Migration 110 und 119: SQLite kann kein
+    // ALTER TABLE fuer einen CHECK, also Recreate).
+    //
+    // Anlass: die Konto-Selbstloeschung (DELETE /me/account, App-Store-Guideline
+    // 5.1.1(v), lib/account-delete.js). Der Eintrag ist dort nicht Beiwerk,
+    // sondern der einzige verbleibende NACHWEIS des Vorgangs — die app_users-Row
+    // ist danach weg, und `user_sessions_audit` traegt bewusst keinen FK darauf,
+    // damit die Spur die Kaskade ueberlebt.
+    //
+    // Zwei Events statt einem: 'self-deleted' fuer die echte Loeschung,
+    // 'demo-reset' fuer den geteilten Demo-Zugang, der stattdessen
+    // zurueckgesetzt wird. Sie im Log zu unterscheiden ist der Punkt — sonst
+    // liest sich ein Reset wie eine Loeschung, die nicht stattgefunden hat.
+    //
+    // Das bestehende 'deleted' bleibt: das ist die Admin-Sperre
+    // (appUsers.softDeleteUser via /admin/users), ein anderer Vorgang.
+    db.pragma('foreign_keys = OFF');
+    db.prepare('DROP TABLE IF EXISTS user_sessions_audit_new').run();
+    db.prepare(`
+      CREATE TABLE user_sessions_audit_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_email TEXT NOT NULL,
+        event      TEXT NOT NULL CHECK(event IN
+                       ('login','logout','login-denied','suspended','reactivated',
+                        'role-changed','deleted','budget-changed','usage-viewed',
+                        'ai-provider-changed','self-deleted','demo-reset')),
+        ip         TEXT,
+        user_agent TEXT,
+        meta_json  TEXT,
+        created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      )
+    `).run();
+    db.prepare(`
+      INSERT INTO user_sessions_audit_new (id, user_email, event, ip, user_agent, meta_json, created_at)
+      SELECT id, user_email, event, ip, user_agent, meta_json, created_at FROM user_sessions_audit
+    `).run();
+    db.prepare('DROP TABLE user_sessions_audit').run();
+    db.prepare('ALTER TABLE user_sessions_audit_new RENAME TO user_sessions_audit').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_user_audit_user ON user_sessions_audit(user_email, created_at DESC)').run();
+    db.pragma('foreign_keys = ON');
+
+    const fkErrors265 = db.pragma('foreign_key_check');
+    if (fkErrors265.length) {
+      throw new Error(`Migration 265: foreign_key_check meldet ${fkErrors265.length} Verstoesse: ${JSON.stringify(fkErrors265.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 265').run();
+    logger.info(`DB-Migration auf Version 265 abgeschlossen (audit-Events 'self-deleted' + 'demo-reset').`);
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

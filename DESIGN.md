@@ -64,6 +64,7 @@ Token-Referenz (Farben, Radien, Spacing, Schriftgrössen): [public/css/tokens.cs
 **Overlays**
 - [Chef-Taste / Boss-Key (`.boss-screen`)](#chef-taste--boss-key-boss-screen)
 - [Confirm-Dialog](#confirm-dialog-modal)
+- [Danger-Zone](#danger-zone-danger-zone) — abgesetzter Block für unwiderrufliche Aktionen
 - [Modal-Wrapper](#modal-wrapper-generisches-pattern) — Status: noch nicht konsolidiert
 - [Overlay-Focus-Trap](#overlay-focus-trap-x-trap) — `x-trap` für Overlays ohne natives `<dialog>`
 - [Sofort-Tooltip (`data-tip`)](#sofort-tooltip-data-tip--default-variante)
@@ -1369,6 +1370,36 @@ CSS: [public/css/components/confirm-dialog.css](public/css/components/confirm-di
 
 ---
 
+## Danger-Zone (`.danger-zone`)
+
+**Use:** unwiderrufliche Aktionen am Ende einer Karte sichtbar absetzen (Konto löschen, Buch löschen, Verlauf zurücksetzen, Restore). Nicht für „normale" Löschungen einzelner Listeneinträge — dort genügt der `--danger`-Icon-Button plus `appConfirm`.
+
+**Markup:**
+```html
+<div class="danger-zone">
+  <div class="danger-zone-title">
+    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#alert-triangle"/></svg>
+    <span x-text="$app.t('…')"></span>
+  </div>
+  <!-- mehrere Aktionen: je eine .danger-zone-section (Trennlinie kommt automatisch) -->
+  <div class="danger-zone-row">
+    <div class="danger-zone-text" x-text="$app.t('…')"></div>
+    <div class="danger-zone-actions">
+      <button type="button" class="danger-zone-btn" @click="…" :disabled="busy">…</button>
+    </div>
+  </div>
+  <p class="card-form-error" x-show="err" x-text="err"></p>
+</div>
+```
+
+CSS: [public/css/components/danger-zone.css](public/css/components/danger-zone.css). Farben aus den Fehler-Tokens (`--color-err-*`), **nicht** aus `--card-accent` — die Aussage ist „Achtung", nicht „gehört zu dieser Karte".
+
+**Bestätigung ist Pflicht** und läuft über `appConfirm`/`appPrompt`, nie über native `confirm()`. Bei Aktionen, die nicht nur Daten einer Ansicht, sondern ein ganzes Konto oder Buch treffen, zwei Stufen: Warnung bestätigen, dann ein Wort tippen (`appPrompt`). Beispiel: [user-settings.js#deleteAccount](public/js/user-settings.js).
+
+**Zwei Altbestände**, die dasselbe Muster handkopiert enthalten: `.book-settings-danger-*` ([analysis/kontinuitaet.css](public/css/analysis/kontinuitaet.css), Markup [partials/book-settings-danger.html](public/partials/book-settings-danger.html)) und `.admin-backup-danger*` ([admin/admin-backup.css](public/css/admin/admin-backup.css)). Sie ziehen bei der nächsten Berührung auf `.danger-zone` nach; **neue** Vorkommen nutzen ausschliesslich die generischen Klassen.
+
+---
+
 ## Modal-Shell (`modal`)
 
 **Use:** ein selbst-tragendes Overlay-Panel (Tastenkürzel-Hilfe, Info-/Detail-Dialog), das nicht der geteilte Confirm-Dialog (`appConfirm`/`appPrompt`) und keine generische Bestätigung ist. Kapselt das überall gleiche `<dialog>`-Boilerplate: `showModal()`/`close()` an einen Boolean koppeln, ESC-Routing, Backdrop-Klick und Fokus-Restore. **Alle App-Modals nutzen das native `<dialog>` + `showModal()`** — Focus-Trap, Inert-Hintergrund und ESC kommen vom Browser (kein eigener Overlay-Div, kein selbstgebauter Focus-Trap; `window.confirm()` reisst Chrome auf macOS aus dem Vollbild-Space).
@@ -2545,6 +2576,7 @@ Struktur: 8 thematische Subfolder unter [public/css/](public/css/) + Root-Solit�
 | [components/help.css](public/css/components/help.css) | „Hilfe & Funktionen"-Karte (`.card--help`) — statischer Funktionsüberblick für den Einstieg, buch-unabhängig. `.help-intro` (Lede), `.help-features` (2-Spalten-Grid, mobil 1-spaltig) mit `.help-feature`/`-title`/`-desc` (Accent-Border-Left = globaler `var(--color-accent)`), `.help-palette-hint` (muted Fusszeile). Inhalt = Landing-Feature-Texte (`landing.featNTitle/Desc`, SSoT). Dazu der globale Header-`?`-Button (`.header-help-btn[aria-pressed=true]`) und der Welcome-Empty-State: Textlink (`.welcome-help-link`) plus 3-Schritt-Ablauf (`.welcome-steps`/`.welcome-step`/`.welcome-step-num` eckig/`.welcome-step-body`/`-title`/`-desc`, Schreiben→Analysieren→Überarbeiten) und Philosophie-Zeile (`.welcome-philosophy`, muted) — vermittelt früh die rückwärtsgewandte KI. |
 | [components/onboarding.css](public/css/components/onboarding.css) | „Erste Schritte"-Karte (`.card--onboarding`, Accent `--card-accent-onboarding`) — Fortschritts-Checkliste für den Einstieg, buch-unabhängig. `.onboarding-intro` (Lede), `.onboarding-progress` (Zeile: globaler `.progress-bar` + `.onboarding-progress-count`), `.onboarding-steps`/`.onboarding-step` (Accent-Border-Left; `.is-done` = gedimmt + gefüllter `.onboarding-step-num` eckig; `.onboarding-step-state` „Erledigt"-Badge eckig vs. `.onboarding-step-cta` Button), `.onboarding-demo` (gestrichelte Beispielbuch-Box), `.onboarding-alldone`/`-error`/`-palette-hint`. Dazu der First-Login-`.onboarding-welcome-banner` (schlanke, wegklickbare Leiste in index.html, `-text`/`-actions`). Mobil (≤640px): Steps umbrechen, Demo-Box + Banner stapeln. |
 | [components/confirm-dialog.css](public/css/components/confirm-dialog.css) | `.confirm-overlay` / `-dialog`, Shortcuts-Overlay. |
+| [components/danger-zone.css](public/css/components/danger-zone.css) | `.danger-zone` + `-title`/`-row`/`-text`/`-actions`/`-section`/`-btn` — abgesetzter Block für unwiderrufliche Aktionen (Konto löschen, Buch löschen, Restore). Fehler-Tokens statt Karten-Akzent. Siehe „Danger-Zone"; zwei handkopierte Altbestände (`.book-settings-danger-*`, `.admin-backup-danger*`) ziehen bei Berührung nach. |
 | [components/snapshot-reader.css](public/css/components/snapshot-reader.css) | `.snapshot-reader*` — Vollbild-Overlay (Modal-Charakter) zum nur-lesenden Öffnen einer Fassung (`book_snapshots`) im **Bucheditor-Look** (reuse `.book-editor-*` aus `editor/book/book-editor.css`, read-only): Backdrop/Panel/Header, Export-Leiste (Schnell-Formate + PDF-Profil), Status-Badges (`--changed`/`--removed`), Inline-Wort-Diff gegen den aktuellen Buchstand (`.snapshot-reader__diff ins.diff-add`/`del.diff-del`). |
 | [components/manuscript-stream.css](public/css/components/manuscript-stream.css) | `.ms-chapter` / `.ms-page` / `.ms-page__title` / `.ms-page__body` — geteilter **read-only Manuskript-Stream-Look** (Kapitel + Seiten als Fluss), gespiegelt vom Bucheditor (`editor/book/book-editor.css` = editierbare Master-Variante). Markup aus [public/js/manuscript-render.js](public/js/manuscript-render.js). Neutrale `--ms-*`-Variablen, jeder Kontext bridged sie auf seine Tokens (Share: `--share-*` in `share.css`). Nur Stream-Rahmung; Body-Typografie bleibt kontext-spezifisch. Konsument: Share-Reader-SSR. |
 | [components/manuscript-content.css](public/css/components/manuscript-content.css) | **SSoT der Block-Typografie des gespeicherten Seiten-HTML** — jeder Block, den der Notebook-Editor schreiben kann (Überschriften h1–h6, Inline-Auszeichnung `u`/`s`/`sup`/`sub`, Listen, Checkbox-Listen `ul.todo`, Tabellen, Bilder + `figure`/`figcaption`, Trenner inkl. `hr.pagebreak`/`hr.blankpage`, `pre`/`code`, Gedichte `div.poem`) plus die Import-Artefakte (BookStack-`.callout` + `.pullquote`, orphan `<br>` nach `</blockquote>`). Pendant zu `manuscript-stream.css`: das stylt die *Rahmung*, hier steht der *Inhalt*. Drei Konsumenten rendern dasselbe HTML und teilen die Regeln: `.page-content-view` (Notebook), `.book-editor-page-body` (Bucheditor + Fassungs-Reader), `.share-content` (Share-Reader-SSR). Neutrale `--mc-*`-Variablen, je Kontext auf `--color-*` bzw. `--share-*` gemappt. Kontext-Abweichungen (Absatzmodell, Zitat-Einzug, Reader-Überschriftengrössen, Edit-Modus-Zustände) bleiben beim Konsumenten und überschreiben von dort — in `index.html` **vor** `page-view.css`/`book-editor.css` laden (gleicher `@layer`), Share-Regeln sind unlayered und gewinnen ohnehin. |

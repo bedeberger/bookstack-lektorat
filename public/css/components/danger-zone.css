@@ -1,0 +1,84 @@
+/* Danger-Zone: abgesetzter Block fuer unwiderrufliche Aktionen (Konto loeschen,
+   Buch loeschen, Restore). Generische Form des Musters, das vorher zweimal
+   handkopiert existierte (.book-settings-danger-* in analysis/kontinuitaet.css,
+   .admin-backup-danger in admin/admin-backup.css) — neue Vorkommen nutzen
+   ausschliesslich diese Klassen, die beiden Altbestaende ziehen bei der naechsten
+   Beruehrung nach. Pattern-Doku: DESIGN.md „Danger-Zone".
+
+   Farben kommen aus den Fehler-Tokens (--color-err-*), nicht aus dem
+   Karten-Akzent: die Bedeutung ist „Achtung", nicht „gehoert zu dieser Karte". */
+
+@layer components {
+  .danger-zone {
+    margin-top: var(--space-xl);
+    padding: var(--space-md) 14px;
+    border: 1px solid var(--color-err-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-err-bg);
+  }
+
+  .danger-zone-title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    font-size: var(--font-size-mini);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--color-err-text);
+    margin-bottom: var(--space-sm);
+  }
+
+  /* Text links, Aktion rechts; bricht auf schmalen Karten untereinander. */
+  .danger-zone-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-lg);
+    flex-wrap: wrap;
+  }
+
+  .danger-zone-text {
+    flex: 1;
+    min-width: 240px;
+    font-size: var(--font-size-mini);
+    color: var(--color-err-text);
+    line-height: 1.4;
+  }
+
+  .danger-zone-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+  }
+
+  /* Mehrere Aktionen im selben Block werden durch eine Linie getrennt. */
+  .danger-zone-section + .danger-zone-section {
+    margin-top: var(--space-14);
+    padding-top: var(--space-14);
+    border-top: 1px solid var(--color-err-border);
+  }
+
+  .danger-zone-btn {
+    padding: var(--space-6) 12px;
+    font-size: var(--font-size-mini);
+    font-weight: 500;
+    white-space: nowrap;
+    border: 1px solid var(--color-err-text);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-err-text);
+    cursor: pointer;
+  }
+
+  .danger-zone-btn:hover:not(:disabled) {
+    background: var(--color-err-text);
+    color: var(--color-surface);
+  }
+
+  .danger-zone-btn:disabled {
+    opacity: var(--opacity-disabled);
+    cursor: not-allowed;
+  }
+}

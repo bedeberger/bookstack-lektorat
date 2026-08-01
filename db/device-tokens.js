@@ -161,6 +161,19 @@ function deleteDeviceToken(id, userEmail) {
   return r.changes > 0;
 }
 
+/**
+ * Loescht ALLE Tokens eines Users und liefert die Anzahl.
+ *
+ * Existenzgrund: die Konto-Selbstloeschung (lib/account-delete.js) muss den
+ * Zugang der nativen Clients als ERSTEN Schritt kappen, bevor sie Inhalte
+ * abraeumt — der FK-CASCADE von app_users wuerde das erst am Ende tun, und bis
+ * dahin koennte ein noch laufender Client weiterschreiben. Loeschen statt
+ * Widerrufen: ein Konto, das es nicht mehr gibt, braucht keine Token-Historie.
+ */
+function deleteAllDeviceTokens(userEmail) {
+  return db.prepare('DELETE FROM device_tokens WHERE user_email = ? COLLATE NOCASE').run(userEmail).changes;
+}
+
 module.exports = {
   TOKEN_PREFIX,
   DEFAULT_SCOPES,
@@ -176,4 +189,5 @@ module.exports = {
   listAllDeviceTokens,
   revokeDeviceToken,
   deleteDeviceToken,
+  deleteAllDeviceTokens,
 };
