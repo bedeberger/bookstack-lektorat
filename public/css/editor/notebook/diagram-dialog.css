@@ -6,12 +6,17 @@
 .diagram-dialog {
   border: 0.5px solid var(--color-border);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   background: var(--color-surface);
   color: var(--color-text);
   padding: 0;
   width: min(1040px, 94vw);
   max-width: 94vw;
   max-height: 90vh;
+  /* Zentrierung. Pflicht, nicht Kosmetik: der globale Reset (layout/base.css,
+     `* { margin: 0 }`) schlaegt die UA-Regel `dialog { margin: auto }` und
+     setzt das Panel sonst in die linke obere Ecke des Viewports. */
+  margin: auto;
 }
 .diagram-dialog::backdrop {
   background: rgba(0, 0, 0, 0.45);

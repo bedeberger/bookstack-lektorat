@@ -68,6 +68,10 @@ export const notebookCardMethods = {
       if (!view) return;
       // Fehler bleiben lokal: ein ungültiges Diagramm zeigt seinen Quelltext.
       renderDiagramsIn(view, { errorLabel: app.t?.('editor.diagram.invalid') })
+        // Die Kastenhöhe (`--pcv-max-h`) wird aus dem Seiten-HTML geschätzt und
+        // kennt bis hierher nur eine Pauschale pro Diagramm. Jetzt steht das SVG
+        // im DOM und ist messbar — sonst deckelt der Kasten das Diagramm weg.
+        .then(() => app._updatePageViewHeight?.())
         .catch(() => {});
     });
     this.$watch(() => window.__app?.renderedPageHtml, draw);

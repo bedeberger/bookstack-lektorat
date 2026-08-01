@@ -1,14 +1,20 @@
 // Seitenansicht-Methoden: Formatierte HTML-Ansicht mit Inline-Fehlermarkierung
 // und Figurenkontext-Panel. `this` bezieht sich auf die Alpine-Komponente.
 
-import { escHtml, htmlToText, fetchJson, findInHtml, decorateMentions } from '../utils.js';
+import { escHtml, fetchJson, findInHtml, decorateMentions } from '../utils.js';
 import { handleEditorCopy } from '../editor/shared/paste.js';
 import { isPageConflict, savePage } from '../editor/shared/page-api.js';
 import { setTodoCheckedAt, todoBoxIndex } from '../editor/shared/todo-html.js';
 import { closestCiteEl } from '../sources/cite-html.js';
+import { DIAGRAM_SEL } from '../diagram/mermaid-html.js';
 import { contentRepo } from '../repo/content.js';
 import { tRaw } from '../i18n.js';
 import { _sanitizeFigur } from './figuren.js';
+
+// Pauschale Diagrammhöhe, solange nichts zu messen ist (mermaid rendert
+// asynchron nach dem ersten Höhen-Update). Grob ein mittleres Flowchart —
+// lieber etwas zu gross, `max-height` deckelt nur (siehe `_diagramsPx`).
+const DIAGRAM_FALLBACK_PX = 320;
 
 // Weiche Typen: standardmässig nicht vorausgewählt (User entscheidet pro Finding).
 // `hedging` ist weich (Absicherungs-Mass ist Autorenentscheid); die übrigen
@@ -195,14 +201,61 @@ export const pageViewMethods = {
   // chapterFigures: [],
   // showChapterFigures: false,
 
+  /** Ist-Höhe der Leseansicht, wenn ihr DOM zur aktuellen Seite gehört.
+   *
+   *  Nur für Seiten mit Diagramm: dessen Höhe lässt sich aus dem Quelltext
+   *  nicht ableiten (zwei Zeilen Code können 400 px Grafik sein), und in der
+   *  Leseansicht ist der `<pre>` ausgeblendet, taucht in der Wortzahl also
+   *  ohnehin nicht auf. Ohne Messung deckelt `--pcv-max-h` den Kasten auf die
+   *  Prosa-Höhe und das Diagramm verschwindet hinter einer inneren Scrollbar.
+   *
+   *  `scrollHeight` (inkl. Padding) statt einer Summe aus Einzelhöhen: das ist
+   *  genau die gesuchte Grösse, misst Ränder und Zeilenumbrüche korrekt mit und
+   *  hat keine Rückkopplung — `max-height` ändert die Inhaltshöhe nicht.
+   *
+   *  Liefert 0 (→ Aufrufer schätzt), solange nicht sicher ist, dass das DOM zum
+   *  aktuellen HTML gehört: nach einem Seitenwechsel steht bis zum nächsten
+   *  Alpine-Tick die Vorgängerseite da, und vor dem mermaid-Lauf fehlen die
+   *  Render-Knoten. Die Leseansicht ruft nach dem Rendern erneut hier durch. */
+  _measuredPageViewPx(diagramCount) {
+    const view = document.querySelector('.page-content-view:not(.page-content-view--editing)');
+    if (!view) return 0;
+    if (view.querySelectorAll(DIAGRAM_SEL).length !== diagramCount) return 0;
+    // Fehlgeschlagene Diagramme zählen mit: der Fehlerknoten trägt dieselbe
+    // Klasse, und der Quelltext daneben braucht ebenfalls Platz.
+    if (view.querySelectorAll('.mermaid-render').length !== diagramCount) return 0;
+    if (!view.scrollHeight) return 0;
+    // `max-height` rechnet border-box (globales box-sizing), `scrollHeight`
+    // nicht — ohne den Rahmenzuschlag bleiben 2 px Scrollrest stehen.
+    return view.scrollHeight + (view.offsetHeight - view.clientHeight);
+  },
+
   /** Berechnet max-height für die Seitenansicht basierend auf Textlänge */
   _updatePageViewHeight() {
     // Nach Edits ist tokEsts stale → aktuellen Text aus originalHtml ableiten,
     // sonst auf Cache fallback (bevor die Seite geladen ist).
     let words = 0;
+    let diagramPx = 0;
+    let measuredPx = 0;
     if (this.originalHtml) {
-      const text = htmlToText(this.originalHtml).trim();
+      const doc = new DOMParser().parseFromString(this.originalHtml, 'text/html');
+      const diagrams = [...(doc.body?.querySelectorAll(DIAGRAM_SEL) || [])];
+      // Diagramm-Notation zählt nirgends als Prosa (gleiche Regel wie
+      // html-text/TTS/LanguageTool): Quelltext raus aus der Wortzahl, die
+      // Blockhöhe kommt separat dazu.
+      for (const d of diagrams) d.remove();
+      const text = (doc.body?.textContent || '').trim();
       words = text ? text.split(/\s+/).length : 0;
+      if (diagrams.length) {
+        measuredPx = this._measuredPageViewPx(diagrams.length);
+        // Schätzung bis zum Render: Pauschale pro Grafik, mindestens aber die
+        // Quelltexthöhe (Edit-Modus, mermaid nicht geladen, ungültiger Code —
+        // dort steht der `<pre>` mit ~20 px Zeilenhöhe).
+        for (const d of diagrams) {
+          const codeLines = (d.textContent || '').split('\n').length;
+          diagramPx += Math.max(DIAGRAM_FALLBACK_PX, codeLines * 20 + 40);
+        }
+      }
     } else {
       words = this.tokEsts?.[this.currentPage?.id]?.words || 0;
     }
@@ -211,7 +264,7 @@ export const pageViewMethods = {
     // Vorher: 12 wpm + nur Content-Höhe → Box deutlich zu kurz, Inhalt
     // overflowte sichtbar unter den weissen Hintergrund.
     const estLines = Math.ceil(words / 7);
-    const contentPx = estLines * 29 + 56;
+    const contentPx = measuredPx || (estLines * 29 + 56 + diagramPx);
     const minPx = window.innerHeight * 0.20;
     const maxPx = window.innerHeight * 0.80;
     const px = Math.round(Math.min(maxPx, Math.max(minPx, contentPx)));

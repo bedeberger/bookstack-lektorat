@@ -1387,6 +1387,7 @@ CSS: [public/css/components/confirm-dialog.css](public/css/components/confirm-di
 
 **Regeln:**
 - Panel-CSS bleibt beim Konsumenten (eigene `.*-panel`-Klasse + `::backdrop`). Das Primitiv liefert nur Verhalten, kein Styling.
+- **`margin: auto` ist Pflicht in jeder Panel-Klasse** — der globale Reset ([layout/base.css](public/css/layout/base.css), `* { margin: 0 }`) schlägt die UA-Regel `dialog { margin: auto }`, und ein `showModal()`-Dialog mit `margin: 0` klebt bei `inset: 0` in der linken oberen Ecke statt in der Bildmitte. Nicht per `dialog { … }`-Regel global reparieren (das Primitiv liefert kein Styling); die Zeile gehört in jede `.*-dialog`/`.*-panel`-Klasse — so wie in `.confirm-dialog`, `.book-create-dialog`, `.research-dialog`, `.revision-viewer`, `.diagram-dialog`.
 - Öffnen: entweder `openOn`-Event (`window.dispatchEvent(new CustomEvent('…'))`) **oder** den per `x-model` gekoppelten Boolean auf `true` setzen. Schliessen: `close()` (oder Flag `false`). ESC/Backdrop schliessen automatisch (per `dismissable: false` abschaltbar, z. B. während eines Submits via `setDismissable(false)`).
 - Backdrop-Klick erkennt `event.target === <dialog>` — der Panel-Inhalt sollte ein Kind sein, nicht das `<dialog>` selbst stylen.
 - Für Dialoge mit **eigener Karten-Logik** (book-create) bleibt die Karten-`x-data` auf dem `<dialog>`; sie steuern `showModal()/close()` weiter selbst — das Primitiv ist für **präsentative** Modals.
