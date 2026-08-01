@@ -5,8 +5,10 @@
 //   - GET ?linked=<kind>:<id>-Filter + sort=link:<dimension>
 //   - /page-counts + /chapter-counts (Link-Aggregation)
 //   - POST/PATCH urls (http(s)-only, Dedup, Reihenfolge)
-// Fährt den echten Router unter Express hoch (Fake-Session liefert den User);
-// ACL via grantAccess.
+//   - GET / als Geräte-Token-Lesepfad (Browser-Erweiterung): Scope-Gate,
+//     reduzierte Ausgabeform, limit-Deckel
+// Fährt den echten Router unter Express hoch (Fake-Session liefert den User),
+// inklusive deviceScopeGate wie in server.js; ACL via grantAccess.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -19,14 +21,24 @@ let db;
 let server;
 let baseUrl;
 let sessionUser = 'autor@test.dev';
+// Zusatzfelder am Session-User. Ein Geräte-Token setzt hier `via`/`scopes` —
+// genau die zwei Felder, aus denen server.js seine Entscheidung zieht
+// (lib/device-auth#tryDeviceAuth füllt sie im Betrieb).
+let sessionExtra = null;
 
 const NOW = '2026-01-01T00:00:00.000Z';
 
 function startServer() {
   return new Promise((resolve, reject) => {
     const researchRouter = require('../../routes/research');
+    const { deviceScopeGate } = require('../../lib/device-scopes');
     const app = express();
-    app.use((req, _res, next) => { req.session = { user: { email: sessionUser } }; next(); });
+    app.use((req, _res, next) => {
+      req.session = { user: { email: sessionUser, ...(sessionExtra || {}) } };
+      next();
+    });
+    // Wie in server.js: direkt hinter dem Auth-Guard, vor jedem Route-Mount.
+    app.use(deviceScopeGate);
     app.use('/research', researchRouter);
     server = app.listen(0, () => {
       baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -60,6 +72,7 @@ test.after(() => {
 
 test.beforeEach(() => {
   sessionUser = 'autor@test.dev';
+  sessionExtra = null;
   for (const t of ['research_item_links', 'research_item_urls', 'research_items',
     'figure_scenes', 'locations', 'figures', 'pages', 'chapters', 'book_access', 'books']) {
     db.prepare(`DELETE FROM ${t}`).run();
@@ -251,4 +264,141 @@ test('GET /: ohne Buchzugriff → 403', async () => {
   sessionUser = 'eindringling@test.dev';
   const { status } = await api('GET', `/research?book_id=${BOOK}`);
   assert.equal(status, 403);
+});
+
+// ── Geräte-Token-Lesepfad (Browser-Erweiterung) ──────────────────────────────
+// Vertrag für `schreibwerkstatt-browser-extension`: GET /research liest den
+// Bestand eines Buchs, damit das Popup vor dem Erfassen (und das Warteschlangen-
+// Fenster) prüfen kann, ob eine Seite schon drin ist. Gegated auf `content:read`,
+// Buch-ACL wie bei einer Session, reduzierte Ausgabeform.
+
+const { TOKEN_KINDS, READ_SCOPE, CAPTURE_SCOPE } = require('../../lib/device-scopes');
+
+/** Session-User, wie tryDeviceAuth ihn für ein Token dieser Art aufsetzt. */
+function asDevice(scopes = TOKEN_KINDS.capture) {
+  sessionExtra = { via: 'device_token', scopes, tokenId: 1 };
+}
+
+test('Device-Token: GET / liefert die reduzierte Client-Form ohne body', async () => {
+  const BOOK = 8320;
+  seedBook(BOOK);
+  const long = 'Lange Passage. '.repeat(400);   // > 200 Zeichen Snippet-Deckel
+  await createItem(BOOK, {
+    kind: 'link', title: 'Erfasste Seite', body: long, source: 'example.com',
+    urls: [{ url: 'https://example.com/artikel', label: 'Artikel' }],
+    tags: ['recherche'],
+  });
+
+  asDevice();
+  const { status, json } = await api('GET', `/research?book_id=${BOOK}`);
+  assert.equal(status, 200);
+  assert.equal(json.length, 1);
+  const it = json[0];
+  assert.deepEqual(Object.keys(it).sort(), [
+    'body_snippet', 'created_at', 'id', 'kind', 'source', 'title', 'updated_at', 'urls',
+  ]);
+  assert.equal(it.title, 'Erfasste Seite');
+  assert.equal(it.kind, 'link');
+  assert.equal(it.source, 'example.com');
+  assert.equal(it.body, undefined);
+  assert.ok(it.body_snippet.length <= 200);
+  // Die URL ist der Grund für den Lesepfad — ohne sie ist keine Seite erkennbar.
+  assert.deepEqual(it.urls, [{ url: 'https://example.com/artikel', label: 'Artikel' }]);
+});
+
+test('Session: GET / bleibt unverändert (voller body, kein Deckel)', async () => {
+  const BOOK = 8321;
+  seedBook(BOOK);
+  for (let i = 0; i < 60; i++) await createItem(BOOK, { title: `Notiz ${i}`, body: 'Volltext' });
+
+  const { status, json } = await api('GET', `/research?book_id=${BOOK}`);
+  assert.equal(status, 200);
+  assert.equal(json.length, 60, 'die SPA lädt das Board ungedeckelt');
+  assert.equal(json[0].body, 'Volltext');
+  assert.ok('tags' in json[0] && 'links' in json[0]);
+});
+
+test('Device-Token: Default-Limit 50, limit-Parameter greift, Max 200', async () => {
+  const BOOK = 8322;
+  seedBook(BOOK);
+  for (let i = 0; i < 60; i++) await createItem(BOOK, { title: `Notiz ${i}` });
+
+  asDevice();
+  const dflt = await api('GET', `/research?book_id=${BOOK}`);
+  assert.equal(dflt.json.length, 50);
+
+  const small = await api('GET', `/research?book_id=${BOOK}&limit=5`);
+  assert.equal(small.json.length, 5);
+
+  // Über dem Maximum → auf 200 geklemmt (hier: alle 60 vorhandenen).
+  const big = await api('GET', `/research?book_id=${BOOK}&limit=9999`);
+  assert.equal(big.json.length, 60);
+
+  // Unsinniger Wert → Default, kein 400.
+  const junk = await api('GET', `/research?book_id=${BOOK}&limit=abc`);
+  assert.equal(junk.status, 200);
+  assert.equal(junk.json.length, 50);
+});
+
+test('Device-Token: q sucht im FTS-Index, kind filtert', async () => {
+  const BOOK = 8323;
+  seedBook(BOOK);
+  await createItem(BOOK, { kind: 'note', title: 'Hummelflug', body: 'Insektenkunde' });
+  await createItem(BOOK, { kind: 'link', title: 'Nashorn', body: 'Zoologie' });
+
+  asDevice();
+  const hit = await api('GET', `/research?book_id=${BOOK}&q=Hummelflug`);
+  assert.equal(hit.status, 200);
+  assert.equal(hit.json.length, 1);
+  assert.equal(hit.json[0].title, 'Hummelflug');
+
+  const miss = await api('GET', `/research?book_id=${BOOK}&q=Nichtvorhanden`);
+  assert.deepEqual(miss.json, []);
+
+  const byKind = await api('GET', `/research?book_id=${BOOK}&kind=link`);
+  assert.equal(byKind.json.length, 1);
+  assert.equal(byKind.json[0].kind, 'link');
+});
+
+test('Device-Token: fehlendes book_id → INVALID_ID', async () => {
+  asDevice();
+  const { status, json } = await api('GET', '/research');
+  assert.equal(status, 400);
+  assert.equal(json.error_code, 'INVALID_ID');
+});
+
+test('Device-Token: Buch-ACL greift wie bei einer Session → 403', async () => {
+  const BOOK = 8324;
+  seedBook(BOOK);                       // Zugriff nur für autor@test.dev
+  sessionUser = 'fremder@test.dev';
+  asDevice();
+  const { status } = await api('GET', `/research?book_id=${BOOK}`);
+  assert.equal(status, 403);
+});
+
+test('Token ohne Lese-Scope → DEVICE_SCOPE_FORBIDDEN, Route läuft gar nicht an', async () => {
+  const BOOK = 8325;
+  seedBook(BOOK);
+  asDevice(CAPTURE_SCOPE);              // schreiben ja, lesen nein
+  const { status, json } = await api('GET', `/research?book_id=${BOOK}`);
+  assert.equal(status, 403);
+  assert.equal(json.error_code, 'DEVICE_SCOPE_FORBIDDEN');
+});
+
+test('Nur-Lese-Token: liest, darf aber nicht schreiben', async () => {
+  const BOOK = 8326;
+  seedBook(BOOK);
+  await createItem(BOOK, { title: 'Bestand' });
+
+  asDevice(READ_SCOPE);
+  const read = await api('GET', `/research?book_id=${BOOK}`);
+  assert.equal(read.status, 200);
+  assert.equal(read.json.length, 1);
+
+  const write = await api('POST', '/research', { book_id: BOOK, title: 'Neu' });
+  assert.equal(write.status, 403);
+  assert.equal(write.json.error_code, 'DEVICE_SCOPE_FORBIDDEN');
+
+  const del = await api('DELETE', `/research/${read.json[0].id}`);
+  assert.equal(del.status, 403);
 });

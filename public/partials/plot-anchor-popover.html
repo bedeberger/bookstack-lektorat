@@ -1,9 +1,15 @@
-<!-- Anchor-Fundstellen-Popover: nach <body> teleportiertes, JS-positioniertes
-     .context-menu (openBeatOccPopover). Einmal auf Kartenebene für BEIDE Boards
-     (flach + Grid) — die Beat-Karte lebt in einem overflow/transform-Scrollcontainer,
-     in dem ein verankertes Popover geclippt würde. Offener Beat via beatOccPopoverBeat().
+<!-- Anchor-Fundstellen-Popover: aus der Beat-Karte heraus teleportiertes,
+     JS-positioniertes .context-menu (openBeatOccPopover). Einmal auf Kartenebene
+     für BEIDE Boards (flach + Grid) — die Beat-Karte lebt in einem
+     overflow/transform-Scrollcontainer, in dem ein verankertes Popover geclippt
+     würde. Offener Beat via beatOccPopoverBeat().
+     Ziel ist die Karten-Wurzel, NICHT <body>: im Native-Vollbild (togglePlotFullscreen
+     auf .card--plot) rendert nur der Teilbaum des Fullscreen-Elements über dem
+     ::backdrop — ein body-Kind läge dahinter und wäre unsichtbar. `position: fixed`
+     bleibt viewport-verankert (die Karte etabliert keinen Containing-Block: die
+     cardFadeIn-Animation läuft mit `backwards`, lässt also keinen Transform stehen).
      Content-Popover (reiche Zeilen), kein Aktions-Menü — Pattern-Ausnahme siehe DESIGN.md. -->
-<template x-teleport="body">
+<template x-teleport=".card--plot">
   <div class="context-menu plot-occ-popover" x-ref="occPopover" role="menu"
        x-show="beatOccPopoverBeatId !== null && !!beatOccPopoverBeat()" x-cloak
        :style="`top:${beatOccPopoverPos.top}px;left:${beatOccPopoverPos.left}px`"

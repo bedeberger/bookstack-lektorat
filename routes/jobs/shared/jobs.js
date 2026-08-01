@@ -251,7 +251,11 @@ function cancelJob(id, userEmail) {
 }
 
 // ── Statistik-Konfiguration ───────────────────────────────────────────────────
-// Werte sind i18n-Keys; Frontend übersetzt über t().
+// Werte sind i18n-Keys; Frontend übersetzt über t() — OHNE Parameter-Map. Die
+// Keys muessen daher platzhalterfrei sein; parametrisierte Job-Labels
+// ('job.label.docxExport' = "Word-Export ({profile})") brauchen hier ihren
+// eigenen Typ-Key, sonst steht "{profile}" in der Tabelle. Gegated durch
+// tests/unit/job-type-labels.test.mjs.
 const JOB_TYPE_LABELS = {
   'check':                 'job.label.check',
   'batch-check':           'job.label.batchCheck',
@@ -278,7 +282,7 @@ const JOB_TYPE_LABELS = {
   'werkstatt-consistency': 'job.label.werkstattConsistency',
   'plot-brainstorm':       'job.label.plotBrainstormType',
   'plot-consistency':      'job.label.plotConsistency',
-  'docx-export':           'job.label.docxExport',
+  'docx-export':           'job.label.docxExportType',
   'embed-index':           'job.label.embedIndex',
   'motif-scan':            'job.label.motivScan',
   'motif-brainstorm':      'job.label.motivBrainstorm',
@@ -289,7 +293,7 @@ const JOB_TYPE_LABELS = {
   'redundancy':            'job.label.redundancy',
   'research-chat':         'job.label.researchChat',
   'research-link':         'job.label.researchLink',
-  'rueckblick':            'job.label.rueckblick',
+  'rueckblick':            'job.label.rueckblickType',
   'source-detect':         'job.label.sourceDetect',
   'source-embed-index':    'job.label.sourceEmbedIndex',
   'stilprofil':            'job.label.stilprofil',

@@ -33,11 +33,23 @@ Native Clients haben keine OAuth-Browser-Session, sondern authentisieren per **D
 | `kind` beim Ausstellen | Scopes | Wirkung |
 |---|---|---|
 | `device` (Default) | `content:read,content:write` | Unbeschränkt — die vollen Rechte des Users. Für macOS/Android, die das Manuskript bearbeiten. **Ungegated**, damit bereits ausgestellte Client-Tokens unverändert weiterlaufen. |
-| `capture` | `content:read,capture:write` | Nur Erfassen: `GET /content/books`, `GET /research`, `GET /research/tags`, `POST /research`, `POST /research/:id/{image,doc}`, `GET /sources{,/pool,/stats,/lookup,/by-url}`, `POST /sources`, `POST /sources/:id/{link,pdf,doc}`, `POST /capture`. Alles andere → `403 DEVICE_SCOPE_FORBIDDEN`. |
+| `capture` | `content:read,capture:write` | Nur Erfassen — Lesen aus `READ_ALLOW`, Schreiben aus `CAPTURE_ALLOW` (Tabelle unten). Alles andere → `403 DEVICE_SCOPE_FORBIDDEN`. |
+
+**Die Scopes wirken additiv, Lesen und Schreiben hängen an getrennten Listen** ([lib/device-scopes.js](../lib/device-scopes.js)):
+
+| Scope | Öffnet | Endpunkte |
+|---|---|---|
+| `content:read` | `READ_ALLOW` (**nur** `GET`) | `GET /content/books`, `GET /research`, `GET /research/tags`, `GET /sources{,/pool,/stats,/lookup,/by-url}` |
+| `capture:write` | `CAPTURE_ALLOW` (kein `GET`) | `POST /research`, `POST /research/:id/{image,doc}`, `POST /sources`, `POST /sources/:id/{link,doc}`, `POST /capture` |
+| `content:write` | alles | ungegated |
+
+> **Die Allowlisten sind Rechte-Listen, keine Routen-Listen.** Sie sagen, was ein Scope *darf* — nicht, was es *gibt*, und nichts über Parameter, Body oder Antwortform. Verbindlich für Client-Autoren sind die Endpunkte und Fehlercodes weiter unten („[Dritter Client](#dritter-client-browser-erweiterung-chrome-capture-scope)"); ein Muster in [lib/device-scopes.js](../lib/device-scopes.js) ist keine Zusage, dass der Pfad existiert.
+
+**Why getrennt:** die Erweiterung fragt vor dem Erfassen „kenne ich diese Seite schon" — dafür soll kein Token nötig sein, das auch anlegen darf. Ein Token mit `content:read` allein ist damit ein echtes Nur-Lese-Token; die beiden ausstellbaren Arten tragen den Lese-Scope ohnehin, für sie ändert sich nichts. `READ_ALLOW` enthält ausschliesslich `GET`-Einträge — ein Schreib-Eintrag dort würde am `capture:write`-Gate vorbei schreiben lassen und ist durch [tests/unit/device-scopes.test.js](../tests/unit/device-scopes.test.js) verboten.
 
 Für die Browser-Erweiterung ist `capture` **Pflicht**: sie lebt in fremden Tabs, und ein dort entwendetes Token darf nicht am Manuskript schreiben können. Ausgeschlossen sind damit u.a. `/content/books/:id/pages*`, `/book-editor/*`, `/me/*` (kein Weiter-Minten), `/admin/*`, `/jobs/*` (keine KI-Kosten auf Zuruf) und **jedes** `DELETE`.
 
-Ein Token ohne beide Schreib-Scopes darf nichts (Deny-by-default) — die restriktive Richtung, falls später ein dritter Scope entsteht und dieses Modul dabei vergessen wird. Die Allowlist ist bewusst eine explizite Liste und kein Präfix-Muster; Pfade werden vorher kleingeschrieben und um einen Trailing-Slash normalisiert, weil Express case-insensitiv routet.
+Ein Token ohne einen der drei Scopes darf nichts (Deny-by-default) — die restriktive Richtung, falls später ein vierter Scope entsteht und dieses Modul dabei vergessen wird. Beide Allowlisten sind bewusst explizite Listen und keine Präfix-Muster; Pfade werden vorher kleingeschrieben und um einen Trailing-Slash normalisiert, weil Express case-insensitiv routet.
 
 ### Client-Selbstidentifikation (Header)
 
@@ -120,7 +132,7 @@ Die leere Spalte der Erweiterung ist ebenso wenig eine Lücke: sie ist **die Def
 
 `schreibwerkstatt-browser-extension` erfasst beim Surfen Webseiten ins Recherche-Board bzw. in die Quellen-Bibliothek. Sie ist **kein Editor-Client**: sie zieht kein Editor-Bundle, hat keinen Sync und keine Presence — sie schreibt nur nach vorne in zwei kuratierende Ablagen und **nie** in den Manuskripttext.
 
-Serverseitig braucht sie nichts Eigenes außer dem Scope und einem Sammel-Endpunkt:
+Serverseitig braucht sie nichts Eigenes außer dem Scope, einem Sammel-Endpunkt zum Schreiben und zwei Bestandsfragen zum Lesen:
 
 - **Auth** wie die nativen Clients (`swd_…`), aber mit `kind: 'capture'` → Allowlist oben. `X-Client-Platform: chrome`.
 - **Kein CORS nötig:** die App hat keine CORS-Middleware und braucht keine, solange alle Requests im MV3-Service-Worker laufen — mit `host_permissions` auf den App-Host ist der Worker CORS-exempt. Aus einem Content-Script heraus scheitert derselbe Request.
@@ -128,6 +140,127 @@ Serverseitig braucht sie nichts Eigenes außer dem Scope und einem Sammel-Endpun
   - **Warum nicht die drei Einzelaufrufe:** ein Popup, das der User nach der Quittung zuklappt, hinterlässt bei drei Requests nach Abbruch eine Quelle, die in keinem Buch liegt. Alles in einer `db.transaction`.
   - **Idempotenz mit zwei verschiedenen Regeln, absichtlich:** eine **Quelle** darf pro Dokument nur einmal existieren (buchübergreifend, Bibliothek) → bekannte URL wird wiederverwendet und nur noch verlinkt. Ein **Fundstück** darf pro Dokument beliebig oft existieren (zwei Zitate aus derselben Seite sind zwei Funde) → deduped wird nur ein *wortgleicher* Fund (kind + Titel + Text + URL) aus einem 10-Minuten-Fenster, also der Doppelklick.
 - **`GET /sources/by-url?url=&book_id=`** ([routes/sources.js](../routes/sources.js)) — „liegt das schon in meiner Bibliothek?" vor dem Erfassen. Nur der eigene Pool; `linked_to_book` sagt, ob im Zielbuch schon zugeordnet.
+- **`GET /research?book_id=&q=&kind=&limit=`** ([routes/research.js](../routes/research.js)) — Bestandsblick aufs Recherche-Board: „habe ich zu dieser Seite schon etwas erfasst?" vor dem Erfassen, plus Suche im Warteschlangen-Fenster. Rein lesend, keine Nebenwirkung. Scope `content:read`, Rolle `editor` auf dem Buch (Buch-ACL greift für ein Token exakt wie für eine Session — das Token löst auf den echten User auf).
+  - **Reduzierte Ausgabeform für Device-Token-Requests** (`toClientItem` in [lib/research-validate.js](../lib/research-validate.js)): `id, kind, title, source, created_at, updated_at, body_snippet, urls[{url,label}]`. Der volle `body` geht **nicht** mit — er trägt bis zu `BODY_MAX` (20 000) Zeichen Seitentext, den die Erweiterung selbst hochgeladen hat, und würde sich bei jeder Dublettenprüfung zurückschicken; `body_snippet` ist der auf 200 Zeichen normalisierte Anriss. `urls` bleibt drin, weil die Frage ohne sie nicht beantwortbar wäre. Board-Zubehör (`tags`, `links`, `doc_*`, `pinned`, `archived`) fällt weg. **Die SPA-Antwort ist unverändert** — die Verzweigung hängt allein an `session.user.via === 'device_token'`.
+  - **`limit`**: Default 50 für Device-Token-Requests, Maximum 200; ein unbrauchbarer Wert (0, negativ, Text) fällt auf den Default zurück statt 400 zu werfen. Ohne Token-Kontext (SPA) gilt weiterhin **kein** Limit, sofern keines mitgeschickt wird.
+  - **`q` deckelt vorher bei `FTS_PREFILTER_LIMIT` = 500**: die Suche läuft als FTS5-Vorfilter über den Index und holt höchstens 500 Treffer, die erst danach gefiltert, sortiert und auf `limit` gekürzt werden. Bei sehr breiten Queries in sehr grossen Büchern liegen Funde jenseits davon ausserhalb der Antwort — **der Client soll die Grenze spiegeln** und breite Queries als „unvollständig" kennzeichnen statt als „nicht vorhanden".
+  - **`kind`** filtert über `LIST_FILTER_KINDS` (`note, link, quote, fact, image, document`); ein unbekannter Wert wird ignoriert, nicht abgewiesen.
+  - Fehler: `400 INVALID_ID` (fehlendes/ungültiges `book_id`), `403 DEVICE_SCOPE_FORBIDDEN` (Scope fehlt — das Gate greift **vor** der Route, es wird nichts geladen), `403 NO_BOOK_ACCESS` (kein Zugriff aufs Buch), `403 INSUFFICIENT_ROLE` (nur `viewer`, `detail: { actual, required }`), `401 NOT_LOGGED_IN` (Token ungültig/widerrufen/abgelaufen).
 - **URL-Vergleich** über [lib/url-normalize.js](../lib/url-normalize.js) (pure): Fragment weg, `www.` weg, `http`→`https`, Standard-Port weg, Tracking-Parameter (`utm_*`, `fbclid`, …) weg, Query sortiert, Trailing-Slash weg. Bewusst konservativ — `ref` bleibt stehen, weil manche Seiten darüber ausliefern, was sie zeigen. Verglichen wird in JS über den Pool des Users, **nicht** über eine abgeleitete `url_norm`-Spalte: die müsste jeder Schreibpfad mitpflegen und würde genau dort wegdriften; eine persönliche Bibliothek hat zwei- bis dreistellig viele Einträge (gleiche Begründung wie der Freitextfilter in `routes/sources.js`).
 - **Metadaten-Ernte passiert im Client**, nicht hier: kein Endpunkt ruft fremde URLs ab (keine SSRF-Fläche), und die Erweiterung hat den DOM ohnehin — auch hinter Login und Paywall. Für kanonische Angaben reicht das vorhandene `GET /sources/lookup?doi=`.
 - **Kein Job, kein `callAI`:** erfassen erschließt nichts, es legt ab.
+
+### Fehlercodes: der verbindliche Vertrag
+
+Jede Fehlerantwort ist JSON mit dem Feld `error_code` (Ausnahmen unten). **Diese Tabelle ist vollständig** für alles, was ein `capture`-Token treffen kann — ein Client-Autor soll die Codes hier lesen und nicht aus dem Quelltext ableiten oder erfinden müssen. Kommt ein Code hinzu, gehört er in dieselbe Tabelle.
+
+**Gate und Auth** (laufen vor jeder Route, [server.js](../server.js) → [lib/device-scopes.js](../lib/device-scopes.js)):
+
+| `error_code` | HTTP | Wann | Endpunkt |
+|---|---|---|---|
+| `NOT_LOGGED_IN` | 401 | `swd_`-Token fehlt, ist unbekannt, widerrufen oder abgelaufen; oder der User ist `suspended`/`deleted` | alle |
+| `DEVICE_SCOPE_FORBIDDEN` | 403 | Methode+Pfad stehen in keiner Allowlist des Tokens. Greift **vor** der Route — es wird nichts geladen und nichts geschrieben | alle |
+| `DEMO_TOKEN_FIXED` | 403 | Versuch, ein ENV-festgenageltes Demo-Token zu widerrufen/löschen | `POST /me/device-tokens/:id/revoke`, `DELETE /me/device-tokens/:id`. **Mit einem `capture`-Token nicht erreichbar** (`/me/*` ist nicht allowlistet → vorher `DEVICE_SCOPE_FORBIDDEN`); nur über die Browser-Session des Demo-Users |
+
+**Buch-ACL** ([lib/acl.js](../lib/acl.js)) — greift auf jeder Route mit `book_id`, gleich ob Session oder Token:
+
+| `error_code` | HTTP | Wann | Endpunkt |
+|---|---|---|---|
+| `INVALID_BOOK_ID` | 400 | `book_id` keine positive Ganzzahl | nur `:book_id`-URL-Routen (`aclParamGuard`). Auf den Capture-Endpunkten unerreichbar: die validieren vorher selbst und antworten `BOOKID_REQ` bzw. `INVALID_ID` |
+| `NO_BOOK_ACCESS` | 403 | Buch existiert nicht **oder** der User hat gar keine `book_access`-Row darauf (beides ununterscheidbar — Absicht) | alle `book_id`-Routen |
+| `INSUFFICIENT_ROLE` | 403 | Rolle zu niedrig. Trägt `detail: { actual, required }`, z.B. `{ actual: 'viewer', required: 'editor' }` — **die Meldung, die dem Nutzer die Ursache nennt** | alle `book_id`-Routen |
+
+**`POST /capture`** ([routes/capture.js](../routes/capture.js), Rolle `editor`):
+
+| `error_code` | HTTP | Wann |
+|---|---|---|
+| `NOT_LOGGED_IN` | 401 | keine Session/kein gültiges Token |
+| `BOOKID_REQ` | 400 | `book_id` fehlt oder ist keine positive Ganzzahl |
+| `INVALID_VALUE` | 400 | Feldwert nicht in der Whitelist. Trägt `params: { field, allowed }` — `field: 'mode'` (`research\|source\|both`), `field: 'csl_type'`, `field: 'authors'\|'editors'` (`allowed: 'array'`) |
+| `INVALID_URL` | 400 | `url` ist nicht normalisierbar bzw. kein `http(s)` |
+| `EMPTY` | 400 | Fundstück ohne Titel **und** ohne Text **und** ohne URL (`mode` ≠ `source`) |
+| `SOURCE_IDENTITY_REQ` | 400 | Quellen-Entwurf ohne Titel und ohne Person (`mode` ∈ `source\|both`) |
+| `CITEKEY_TAKEN` | 409 | `UNIQUE(owner_email, citekey)` verletzt. Der Entwurf trägt bewusst keinen `citekey`, der Fall ist praktisch ein Wettlauf |
+
+**Recherche-Board** ([routes/research.js](../routes/research.js), Rolle `editor`) — `GET /research`, `GET /research/tags`, `POST /research`, `POST /research/:id/{image,doc}`:
+
+| `error_code` | HTTP | Wann | Endpunkt |
+|---|---|---|---|
+| `LOGIN_REQ` | 401 | keine Session/kein gültiges Token. **Achtung:** dieser Router sagt `LOGIN_REQ`, die Quellen-/Capture-Router sagen `NOT_LOGGED_IN` — beide behandeln, nicht raten | alle `POST` |
+| `BOOKID_REQ` | 400 | `book_id` fehlt/ungültig | `POST /research` |
+| `INVALID_ID` | 400 | `book_id` (Query) bzw. `:id` (Pfad) fehlt/ungültig | `GET /research`, `GET /research/tags`, alle `/:id/*` |
+| `EMPTY` | 400 | weder Titel noch Text noch `http(s)`-URL | `POST /research` |
+| `INVALID_KIND` | 400 | `kind` nicht in `note, link, quote, fact, image` | `PATCH /research/:id` — **nicht allowlistet** (kein `PATCH` im Capture-Scope); hier nur genannt, weil `kind` sonst wie ein prüfender Wert aussieht: bei `POST` wird ein unbekannter `kind` **still** auf `note` gesetzt, nicht abgewiesen |
+| `ITEM_NOT_FOUND` | 404 | Fundstück-Id existiert nicht | `/research/:id/{image,doc}` |
+| `NO_IMAGE` | 400 | leerer Body oder kein `image/*`-Content-Type | `POST /research/:id/image` |
+| `IMAGE_INVALID` | 400 | `sharp` kann das Bild nicht lesen/normalisieren | `POST /research/:id/image` |
+| `NO_DOC` | 400 | leerer Body, kein `application/pdf`-Content-Type, oder 0 Bytes | `POST /research/:id/doc` |
+| `DOC_TOO_LARGE` | 413 | PDF über 25 MB. **In der Praxis kommt der Client hier nicht an:** der Body-Parser hat dieselbe Schwelle und antwortet vorher mit 413 **ohne** `error_code` (siehe unten) | `POST /research/:id/doc` |
+| `DOC_NOT_PDF` | 415 | Magic-Bytes sind nicht `%PDF-` | `POST /research/:id/doc` |
+| `DOC_UNREADABLE` | 400 | Parser-Fehler (verschlüsselt, beschädigt) | `POST /research/:id/doc` |
+
+**Quellen-Bibliothek** ([routes/sources.js](../routes/sources.js), [routes/sources-doc.js](../routes/sources-doc.js)):
+
+| `error_code` | HTTP | Wann | Endpunkt |
+|---|---|---|---|
+| `NOT_LOGGED_IN` | 401 | keine Session/kein gültiges Token | `GET /sources/{pool,by-url}`, `POST /sources`, `POST /sources/:id/doc` |
+| `INVALID_ID` | 400 | `book_id`/`exclude_book_id`/`:id` fehlt oder ist keine positive Ganzzahl | `GET /sources`, `GET /sources/{pool,stats}`, `GET /sources/by-url`, `POST /sources`, `POST /sources/:id/{link,doc}` |
+| `INVALID_VALUE` | 400 | `csl_type` nicht in `CSL_TYPES`, oder `authors`/`editors` kein Array. Trägt `params: { field, allowed }` | `POST /sources` |
+| `INVALID_URL` | 400 | `url` ist kein `http(s)` bzw. nicht normalisierbar | `POST /sources`, `GET /sources/by-url` |
+| `SOURCE_IDENTITY_REQ` | 400 | weder Titel noch Person — ein Verzeichniseintrag, der nichts benennt | `POST /sources` |
+| `URL_REQ` | 400 | `?url=` fehlt | `GET /sources/by-url` |
+| `NOT_FOUND` | 404 | Quelle existiert nicht — bei `by-url`: **kein Treffer im eigenen Pool** (der Normalfall vor dem Erfassen, kein Fehler) | `GET /sources/by-url`, `POST /sources/:id/{link,doc}` |
+| `NOT_SOURCE_OWNER` | 403 | Quelle gehört einem anderen Konto. Zuordnen und Anhängen sind Pool-Hoheit, nicht Buch-Rechte — ein Buch-Editor darf fremde Bibliothekseinträge nicht verteilen | `POST /sources/:id/{link,doc}` |
+| `CITEKEY_TAKEN` | 409 | `UNIQUE(owner_email, citekey)` verletzt | `POST /sources` |
+| `NO_DOC` | 400 | leerer Body / kein `application/pdf` / 0 Bytes | `POST /sources/:id/doc` |
+| `DOC_TOO_LARGE` | 413 | PDF über 25 MB — dieselbe Einschränkung wie oben: der Body-Parser antwortet vorher mit 413 ohne `error_code` | `POST /sources/:id/doc` |
+| `DOC_NOT_PDF` | 415 | Magic-Bytes sind nicht `%PDF-` | `POST /sources/:id/doc` |
+| `DOC_UNREADABLE` | 400 | Parser-Fehler | `POST /sources/:id/doc` |
+| `LOOKUP_PARAM_REQUIRED` | 400 | weder `doi=` noch `isbn=` | `GET /sources/lookup` |
+| `LOOKUP_PARAM_AMBIGUOUS` | 400 | `doi=` **und** `isbn=` zugleich | `GET /sources/lookup` |
+| `INVALID_DOI` | 400 | `doi` nicht normalisierbar | `GET /sources/lookup` |
+| `INVALID_ISBN` | 400 | `isbn` nicht normalisierbar (Prüfziffer/Länge) | `GET /sources/lookup` |
+| `LOOKUP_NOT_FOUND` | 404 | Register kennt die Kennung nicht | `GET /sources/lookup` |
+| `LOOKUP_UNAVAILABLE` | 502 | Crossref/OpenLibrary nicht erreichbar | `GET /sources/lookup` |
+| `LOOKUP_FAILED` | 502 | Fremd-Dienst antwortet, aber unbrauchbar | `GET /sources/lookup` |
+
+**Zwei Antworten ohne `error_code`** — der Server hat keinen globalen Express-Fehler-Handler, der Body-Parser antwortet also mit Express' Default (HTML, kein JSON). Der Client darf beim Parsen der Fehlerantwort nicht davon ausgehen, JSON zu bekommen:
+
+| HTTP | Wann |
+|---|---|
+| 413 | Body über dem Parser-Limit (PDF > 25 MB, Bild > 12 MB, JSON > 256 kB) — **vor** dem Handler, also ohne `DOC_TOO_LARGE` |
+| 400 | JSON-Body syntaktisch kaputt |
+
+### Grenzwerte, die der Client spiegeln soll
+
+Textfelder werden **still gekürzt, nicht abgewiesen** (`cleanStr` in [lib/research-validate.js](../lib/research-validate.js)) — wer das nicht spiegelt, zeigt dem Nutzer einen Text, der so nie gespeichert wurde. Die Upload-Limits dagegen werfen.
+
+| Grenze | Wert | SSoT |
+|---|---|---|
+| `TITLE_MAX` | 300 Zeichen | [lib/research-validate.js](../lib/research-validate.js) |
+| `BODY_MAX` | 20 000 Zeichen | [lib/research-validate.js](../lib/research-validate.js) |
+| `SOURCE_MAX` | 1 000 Zeichen | [lib/research-validate.js](../lib/research-validate.js) |
+| `TAG_MAX` / `MAX_TAGS` | 60 Zeichen / 20 Tags | [lib/research-validate.js](../lib/research-validate.js) |
+| `URL_MAX` / `MAX_URLS` | 2 000 Zeichen / 20 URLs | [lib/research-validate.js](../lib/research-validate.js) |
+| `URL_LABEL_MAX` | 300 Zeichen | [lib/research-validate.js](../lib/research-validate.js) |
+| `SNIPPET_MAX` | 200 Zeichen (`body_snippet` in der Client-Form) | [lib/research-validate.js](../lib/research-validate.js) |
+| `CLIENT_LIST_LIMIT` / `LIST_LIMIT_MAX` | 50 (Default am Token) / 200 (Maximum) | [lib/research-validate.js](../lib/research-validate.js) |
+| `FTS_PREFILTER_LIMIT` | 500 Treffer vor Filter/Sortierung | [lib/research-validate.js](../lib/research-validate.js) |
+| Bild-Upload | 12 MB | [routes/research.js](../routes/research.js) (`rawImage`) |
+| PDF-Upload | 25 MB | [lib/pdf-extract.js](../lib/pdf-extract.js) (`MAX_INPUT_BYTES`) |
+| Gespeicherter PDF-Text | 200 000 Zeichen, danach `doc_truncated: true` | [lib/pdf-extract.js](../lib/pdf-extract.js) (`MAX_TEXT_CHARS`) |
+| Dateiname eines Anhangs (`?name=`) | 200 Zeichen | [lib/pdf-attachment.js](../lib/pdf-attachment.js) (`DOCNAME_MAX`) |
+| JSON-Body `POST /capture` | 256 kB | [routes/capture.js](../routes/capture.js) |
+
+### Demo-Instanz: ein Buch zum Nicht-Hineinschreiben
+
+Der Demo-Seed legt **zwei** Bücher an ([lib/demo-book.js](../lib/demo-book.js), aufgerufen aus [lib/demo-user.js](../lib/demo-user.js)#`seedDemoContent`):
+
+| Buch | Besitzer | Rolle des Demo-Users | Wofür |
+|---|---|---|---|
+| „Beispiel: Die Verwandlung" | der Demo-User selbst | `owner` | der normale Erfassungs-Pfad |
+| „Fremdes Buch" | ein erfundenes Konto auf `example.org` | `viewer` | der **verweigerte** Pfad |
+
+**Why:** eine Store-Prüfung soll sehen, dass die Erweiterung ein fehlendes Recht *benennt* statt stumm zu scheitern. Mit nur einem eigenen Buch ist das nicht vorführbar. Auf dem zweiten Buch beantwortet der Server jeden Schreibversuch mit `403 INSUFFICIENT_ROLE` + `detail: { actual: 'viewer', required: 'editor' }`, während `GET /content/books` **beide** Bücher listet (mit `role` und `owner_email` pro Zeile) — Lesen geht, Schreiben nicht, und der Grund steht in der Antwort.
+
+Die Besitzer-Adresse **muss** auf `example.org` lauten (RFC 2606, nie vergeben): `GET /content/books` gibt `owner_email` heraus, und der Prüfer sieht die Antwort — dort darf keine echte Adresse stehen, auch keine interne. Der Seed ist idempotent über die Besitz-Row, nicht über den Buchnamen: Serverstart und `demo-reset.timer` laufen beliebig oft, und den Namen darf der Prüfer ändern. Gegated durch [tests/unit/demo-foreign-book.test.js](../tests/unit/demo-foreign-book.test.js) und [tests/integration/demo-seed-acl.test.js](../tests/integration/demo-seed-acl.test.js).

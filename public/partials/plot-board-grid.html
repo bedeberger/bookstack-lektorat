@@ -259,11 +259,13 @@
     </template>
   </div>
 
-  <!-- Strang-Aktions-Dropdown: ein einzelnes, nach <body> teleportiertes
+  <!-- Strang-Aktions-Dropdown: ein einzelnes, aus der Lane heraus teleportiertes
        .context-menu (JS-positioniert in openThreadMenu). Die Lane sitzt in einem
        overflow-x/will-change-Scrollcontainer, in dem ein am Trigger verankertes
-       Popover geclippt bzw. eingesperrt würde. Die offene Lane via threadMenuLane(). -->
-  <template x-teleport="body">
+       Popover geclippt bzw. eingesperrt würde. Die offene Lane via threadMenuLane().
+       Ziel ist die Karten-Wurzel, NICHT <body> — sonst läge das Menü im Native-
+       Vollbild hinter dem ::backdrop (Begründung in plot-anchor-popover.html). -->
+  <template x-teleport=".card--plot">
     <div class="context-menu" x-ref="threadMenu" x-show="threadActionsOpenId !== null && !!threadMenuLane()" x-cloak
          :style="`top:${threadMenuPos.top}px;left:${threadMenuPos.left}px`"
          @click.outside="closeThreadMenu()" @keydown.escape.window="closeThreadMenu()" role="menu">

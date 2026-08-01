@@ -10,19 +10,19 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
-  FULL_SCOPE, CAPTURE_SCOPE, TOKEN_KINDS, DEFAULT_KIND,
-  scopeMode, scopesForKind, isDeviceRequestAllowed,
+  READ_SCOPE, FULL_SCOPE, CAPTURE_SCOPE, TOKEN_KINDS, DEFAULT_KIND,
+  READ_ALLOW, CAPTURE_ALLOW, scopeMode, scopesForKind, isDeviceRequestAllowed,
 } = require('../../lib/device-scopes');
 const { DEFAULT_SCOPES } = require('../../db/device-tokens');
 
 const allow = (method, path, scopes = TOKEN_KINDS.capture) =>
   isDeviceRequestAllowed({ scopes, method, path });
 
-test('scopeMode: content:write schlaegt capture:write', () => {
+test('scopeMode: content:write schlaegt capture:write schlaegt content:read', () => {
   assert.equal(scopeMode('content:read,content:write'), 'full');
   assert.equal(scopeMode('content:read,capture:write'), 'capture');
   assert.equal(scopeMode(`${FULL_SCOPE},${CAPTURE_SCOPE}`), 'full');
-  assert.equal(scopeMode('content:read'), 'none');
+  assert.equal(scopeMode('content:read'), 'read');
   assert.equal(scopeMode(''), 'none');
   assert.equal(scopeMode(null), 'none');
 });
@@ -56,7 +56,6 @@ test('capture-Token: die Erfassungs-Endpunkte sind erlaubt', () => {
     ['GET', '/sources/by-url'],
     ['POST', '/sources'],
     ['POST', '/sources/7/link'],
-    ['POST', '/sources/7/pdf'],
     ['POST', '/sources/7/doc'],
     ['POST', '/capture'],
   ];
@@ -81,8 +80,18 @@ test('capture-Token: Manuskript, Editor, Jobs, Admin und Self-Minting sind gespe
   for (const [m, p] of denied) assert.equal(allow(m, p), false, `${m} ${p} muss gesperrt sein`);
 });
 
+test('Allowlist enthaelt keine Phantom-Pfade (`/sources/:id/pdf` gibt es nicht)', () => {
+  // Der Anhang-Endpunkt der Quellen heisst `doc` (routes/sources-doc.js). Ein
+  // zusaetzlich gelisteter Aliasname kostet nicht nichts: die Allowlist ist der
+  // kompakteste Pfad-Ueberblick, den ein Client-Autor findet, und ein Name
+  // darin wird als Endpunkt gelesen und aufgerufen — der Router antwortet dann
+  // 404, und der Fehler wird beim Client gesucht.
+  assert.equal(allow('POST', '/sources/7/pdf'), false);
+  assert.equal(allow('POST', '/sources/7/doc'), true);
+});
+
 test('capture-Token: kein DELETE, auch nicht auf erlaubten Pfaden', () => {
-  for (const p of ['/research/9', '/sources/7', '/sources/7/link', '/sources/7/pdf', '/capture']) {
+  for (const p of ['/research/9', '/sources/7', '/sources/7/link', '/sources/7/doc', '/capture']) {
     assert.equal(allow('DELETE', p), false, `DELETE ${p} muss gesperrt sein`);
   }
   // PUT/PATCH aendern Bestehendes — die Erweiterung legt nur an.
@@ -101,17 +110,75 @@ test('capture-Token: Pfad-Normalisierung schliesst keine Umgehung auf', () => {
   assert.equal(allow('GET', '/content/books/7'), false);
 });
 
-test('capture-Token: nur die vier Id-Unterpfade, nicht beliebige', () => {
+test('capture-Token: nur die gelisteten Id-Unterpfade, nicht beliebige', () => {
   assert.equal(allow('POST', '/research/42/links'), false);
   assert.equal(allow('POST', '/sources/7/embed'), false);
   // Nicht-numerische Id greift die Allowlist nicht ab.
   assert.equal(allow('POST', '/sources/pool/link'), false);
 });
 
-test('Token ohne Schreib-Scope darf nichts (deny-by-default)', () => {
-  for (const [m, p] of [['GET', '/content/books'], ['POST', '/capture'], ['POST', '/research']]) {
-    assert.equal(allow(m, p, 'content:read'), false);
+test('Token ganz ohne bekannten Scope darf nichts (deny-by-default)', () => {
+  for (const [m, p] of [['GET', '/content/books'], ['GET', '/research'],
+    ['POST', '/capture'], ['POST', '/research']]) {
     assert.equal(allow(m, p, ''), false);
+    assert.equal(allow(m, p, 'irgendwas:sonst'), false);
+    assert.equal(allow(m, p, null), false);
+  }
+});
+
+// ── Lese-Scope ───────────────────────────────────────────────────────────────
+// Lesen haengt an content:read, nicht am Schreib-Scope: die Erweiterung fragt
+// vor dem Erfassen „kenne ich diese Seite schon", und dafuer soll kein Token
+// noetig sein, das auch anlegen darf.
+
+test('content:read allein oeffnet die Lesepfade — und nur die', () => {
+  const readOnly = READ_SCOPE;
+  for (const [m, p] of [
+    ['GET', '/content/books'],
+    ['GET', '/research'],
+    ['GET', '/research/tags'],
+    ['GET', '/sources'],
+    ['GET', '/sources/by-url'],
+  ]) {
+    assert.equal(allow(m, p, readOnly), true, `${m} ${p} sollte fuer content:read erlaubt sein`);
+  }
+  for (const [m, p] of [
+    ['POST', '/research'],
+    ['POST', '/capture'],
+    ['POST', '/sources'],
+    ['POST', '/sources/7/link'],
+    ['POST', '/research/42/doc'],
+    ['DELETE', '/research/9'],
+    ['GET', '/content/books/7/pages/42'],
+  ]) {
+    assert.equal(allow(m, p, readOnly), false, `${m} ${p} darf ohne Schreib-Scope nicht gehen`);
+  }
+});
+
+test('GET /research ohne content:read → verweigert, auch mit capture:write', () => {
+  // Der Fall, den die getrennten Listen absichern: Schreiben allein oeffnet das
+  // Lesen nicht. (Ausgestellte capture-Tokens tragen beide Scopes — hier geht es
+  // um ein von Hand beschnittenes Token.)
+  assert.equal(allow('GET', '/research', CAPTURE_SCOPE), false);
+  assert.equal(allow('GET', '/research?book_id=7', CAPTURE_SCOPE), false);
+  assert.equal(allow('POST', '/research', CAPTURE_SCOPE), true);
+});
+
+test('capture-Token traegt beide Scopes → liest und schreibt', () => {
+  assert.equal(allow('GET', '/research'), true);
+  assert.equal(allow('POST', '/research'), true);
+  assert.ok(TOKEN_KINDS.capture.includes(READ_SCOPE));
+  assert.ok(TOKEN_KINDS.device.includes(READ_SCOPE));
+});
+
+test('READ_ALLOW enthaelt ausschliesslich GET', () => {
+  // Ein Schreib-Eintrag in der Leseliste wuerde am capture:write-Gate vorbei
+  // schreiben lassen — die Trennung waere aufgehoben, ohne dass ein Test bricht.
+  for (const [m, re] of READ_ALLOW) {
+    assert.equal(m, 'GET', `READ_ALLOW-Eintrag ${m} ${re} ist kein GET`);
+  }
+  for (const [m, re] of CAPTURE_ALLOW) {
+    assert.notEqual(m, 'GET', `CAPTURE_ALLOW-Eintrag ${m} ${re} gehoert nach READ_ALLOW`);
   }
 });
 

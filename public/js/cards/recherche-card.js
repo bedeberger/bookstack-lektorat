@@ -43,6 +43,15 @@ export function registerRechercheCard() {
 
     menuOpenId: null,
 
+    // Beschreibungstext-Cap der Übersicht (CSS: .research-item-text--clamped).
+    // `expanded…` = vom User aufgeklappte Fundstücke, `clampable…` = die, bei denen
+    // der Cap wirklich etwas abschneidet (gemessen in _measureBodyClamps, nicht
+    // aus der Textlänge geschätzt). Beide per Reassign, nicht In-Place-Mutate.
+    expandedBodyIds: {},
+    clampableBodyIds: {},
+    // Re-Entry-Guard der rAF-gebündelten Messung (kurzlebig, kein Fach-State).
+    _clampRaf: null,
+
     // Native-Fullscreen-Status (gespiegelt vom fullscreenchange-Listener) —
     // mehr Platz fürs Karten-Board. Toggle in rechercheMethods.toggleRechercheFullscreen.
     rechercheFullscreen: false,
@@ -111,6 +120,11 @@ export function registerRechercheCard() {
         },
         onViewReset: () => { this.resetRecherche(); this.resetResearchChat(); this.researchChatOpen = false; },
       });
+
+      // Spaltenbreite ändert, wie viel der Text-Cap abschneidet → Toggle-Sichtbarkeit
+      // neu messen (Pflicht-Signal aus dem Lifecycle, kein manuelles removeEventListener).
+      window.addEventListener('resize', () => this._scheduleBodyClampMeasure(),
+        { signal: this._lifecycle.signal });
 
       // Native Fullscreen-API: Status spiegeln (Toggle-Button + Esc-Exit).
       // $root = die Karten-Wurzel (.card--recherche), unabhängig vom Klick-Kontext.

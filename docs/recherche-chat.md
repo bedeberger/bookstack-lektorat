@@ -1,6 +1,6 @@
 # Recherche-Chat
 
-Agentischer Chat als **Panel in der Recherche-Karte** ([public/partials/recherche.html](../public/partials/recherche.html)). Recherchiert im offenen Web **und** im vorhandenen Recherche-Material, kennt die Buch-Entitäten als Kontext und schlägt Fundstücke als neue Recherche-Items vor. **Rückwärtsgewandt**: schreibt nie in den Buchtext ([user_app_philosophy]).
+Agentischer Chat als **Panel in der Recherche-Karte** (Markup [public/partials/recherche-chat.html](../public/partials/recherche-chat.html), per `<!-- @include recherche-chat -->` in [recherche.html](../public/partials/recherche.html) eingesetzt; Scope + Methoden kommen aus `rechercheCard`). Recherchiert im offenen Web **und** im vorhandenen Recherche-Material, kennt die Buch-Entitäten als Kontext und schlägt Fundstücke als neue Recherche-Items vor. **Rückwärtsgewandt**: schreibt nie in den Buchtext ([user_app_philosophy]).
 
 ## Claude-only — warum
 

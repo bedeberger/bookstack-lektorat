@@ -26,117 +26,7 @@
 
   <div x-show="errorMessage" class="card-status card-status--error" x-text="errorMessage"></div>
 
-  <!-- Recherche-Chat-Panel (Claude-only, mit Web-Suche). Recherchiert + sammelt;
-       Fundstücke werden als Vorschläge angeboten und erst per Klick gespeichert. -->
-  <div x-show="researchChatOpen" x-cloak class="research-chat">
-    <div class="research-chat-head">
-      <span class="research-chat-title" x-text="$app.t('recherche.chat.heading')"></span>
-      <div class="research-chat-head-actions">
-        <button type="button" class="icon-btn icon-btn--ghost" @click="startNewResearchChatSession()" :disabled="researchChatLoading" :data-tip="$app.t('chat.newSessionTitle')" :aria-label="$app.t('chat.newSession')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#plus"/></svg></button>
-        <button type="button" class="icon-btn icon-btn--ghost" @click="researchChatOpen = false" :data-tip="$app.t('common.close')" :aria-label="$app.t('common.close')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg></button>
-      </div>
-    </div>
-
-    <div x-show="researchChatProgress > 0" class="progress-bar-wrap">
-      <div class="progress-bar" :style="{ '--progress': researchChatProgress + '%' }"></div>
-    </div>
-    <div x-show="researchChatStatus" class="card-status" x-html="researchChatStatus"></div>
-
-    <div id="research-chat-messages" class="chat-messages research-chat-messages">
-      <div x-show="researchChatMessages.length === 0 && !researchChatLoading" class="chat-empty" x-text="$app.t('recherche.chat.empty')"></div>
-
-      <template x-for="(msg, msgIdx) in researchChatMessages" :key="msgIdx">
-        <div :class="'chat-msg chat-msg--' + msg.role">
-          <div class="chat-msg-bubble">
-            <div x-show="msg.role === 'user'" class="chat-msg-text" x-text="msg.content"></div>
-            <div x-show="msg.role === 'assistant'" class="chat-msg-text" x-html="_renderResearchAnswer(msg)"></div>
-
-            <!-- Web-Such-/Tool-Hinweis -->
-            <template x-if="msg.role === 'assistant' && msg.context_info">
-              <div class="chat-context-info">
-                <template x-if="msg.context_info.web_searches > 0">
-                  <span class="chat-context-tool" x-text="$app.t('recherche.chat.webSearches', { n: msg.context_info.web_searches })"></span>
-                </template>
-                <template x-for="(entry, ei) in _researchToolSummary(msg.context_info.tool_calls)" :key="ei">
-                  <span class="chat-context-tool" x-text="entry.name + (entry.count > 1 ? ' ×' + entry.count : '')"></span>
-                </template>
-              </div>
-            </template>
-
-            <!-- Quellen: in der Antwort zitierte Web-Such-Fundstellen (klickbar) -->
-            <template x-if="msg.role === 'assistant' && researchCitedSources(msg).length">
-              <div class="research-chat-sources">
-                <div class="research-chat-sources-head" x-text="$app.t('recherche.chat.sourcesHead')"></div>
-                <template x-for="src in researchCitedSources(msg)" :key="src.n">
-                  <a class="research-chat-source" :href="src.url" target="_blank" rel="noopener noreferrer">
-                    <span class="research-chat-source-num" x-text="'[' + src.n + ']'"></span>
-                    <span class="research-chat-source-title" x-text="src.title"></span>
-                  </a>
-                </template>
-              </div>
-            </template>
-
-            <!-- Speicher-Vorschläge: erst beim Klick wird gespeichert (POST /research) -->
-            <template x-if="msg.role === 'assistant' && researchProposals(msg).length">
-              <div class="research-chat-proposals">
-                <div class="research-chat-proposals-head" x-text="$app.t('recherche.chat.proposalsHead')"></div>
-                <template x-for="(prop, pi) in researchProposals(msg)" :key="pi">
-                  <div class="research-chat-proposal" :class="{ 'research-chat-proposal--saved': isProposalSaved(msgIdx, pi) }">
-                    <span class="research-kind-badge palette-badge" :class="'research-kind-badge--' + prop.kind" x-text="kindLabel(prop.kind)"></span>
-                    <div class="research-chat-proposal-body">
-                      <span class="research-chat-proposal-title" x-show="prop.title" x-text="prop.title"></span>
-                      <span class="research-chat-proposal-snippet" x-show="prop.body" x-text="prop.body"></span>
-                      <template x-for="(u, ui) in (prop.urls || [])" :key="ui">
-                        <a class="research-chat-proposal-url" :href="u.url" target="_blank" rel="noopener noreferrer" x-text="u.label || u.url"></a>
-                      </template>
-                    </div>
-                    <button type="button" class="btn-compact" x-show="!isProposalSaved(msgIdx, pi)"
-                            @click="saveResearchProposal(msgIdx, pi, prop)" :disabled="isProposalSaving(msgIdx, pi)"
-                            x-text="$app.t('recherche.chat.proposalSave')"></button>
-                    <span class="research-chat-proposal-saved" x-show="isProposalSaved(msgIdx, pi)" x-text="$app.t('recherche.chat.proposalSaved')"></span>
-                  </div>
-                </template>
-              </div>
-            </template>
-
-            <div x-show="msg.role === 'assistant' && _chatTokenInfo(msg)" class="chat-token-info" x-text="_chatTokenInfo(msg)"></div>
-          </div>
-        </div>
-      </template>
-
-      <div x-show="researchChatLoading" class="chat-skeleton-wrapper">
-        <div class="chat-skeleton"></div>
-      </div>
-    </div>
-
-    <div class="chat-input-row">
-      <textarea class="chat-input research-chat-input" x-model="researchChatInput" rows="1"
-                :placeholder="$app.t('recherche.chat.placeholder')" :aria-label="$app.t('recherche.chat.placeholder')"
-                :disabled="researchChatLoading"
-                @keydown.enter="if(!$event.isComposing && $event.keyCode !== 229 && !$event.shiftKey && !$event.ctrlKey && !$event.metaKey) { $event.preventDefault(); sendResearchChatMessage(); }"></textarea>
-      <button type="button" class="chat-send-btn" @click="sendResearchChatMessage()" :disabled="researchChatLoading || !researchChatInput.trim()" :aria-label="$app.t('chat.send')">
-        <span x-show="researchChatLoading" class="spinner"></span>
-        <svg x-show="!researchChatLoading" class="icon" aria-hidden="true"><use href="/icons.svg?v=693#arrow-up"/></svg>
-      </button>
-    </div>
-    <div class="chat-input-hint" x-text="$app.t('recherche.chat.hint')"></div>
-
-    <!-- Session-Historie -->
-    <div x-show="researchChatSessions.length > 0" class="card-history-section">
-      <div class="chat-history-title" x-text="$app.t('chat.history')"></div>
-      <template x-for="s in researchChatSessions" :key="s.id">
-        <div
-          class="chat-session-item"
-          :class="s.id === researchChatSessionId ? 'chat-session-item--active' : ''"
-          @click="loadResearchChatSession(s.id)"
-        >
-          <div class="chat-session-preview" x-text="(s.title || s.preview || $app.t('recherche.chat.untitled')).slice(0, 80)"></div>
-          <div class="chat-session-meta" x-text="$app.formatDate(s.last_message_at)"></div>
-          <button type="button" class="chat-session-delete btn-card-close" @click.stop="deleteResearchChatSession(s.id)" :data-tip="$app.t('common.delete')" :aria-label="$app.t('common.delete')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#trash"/></svg></button>
-        </div>
-      </template>
-    </div>
-  </div>
+  <!-- @include recherche-chat -->
 
   <!-- Toolbar: Anlegen + Filter -->
   <div class="card-toolbar">
@@ -312,7 +202,14 @@
               </div>
             </div>
 
-            <img x-show="item.has_image" class="research-item-image" :src="imageUrl(item)" :alt="item.title || ''" loading="lazy">
+            <!-- Bild ist direkt klickbar: öffnet die Vollansicht in einem neuen Tab.
+                 Der <a> steht zugleich in der Allowlist von onItemBodyClick, der Klick
+                 wechselt also nicht in den Edit-Modus. -->
+            <a x-show="item.has_image" class="research-item-image-link" :href="imageUrl(item)"
+               target="_blank" rel="noopener noreferrer"
+               :data-tip="$app.t('recherche.image.open')" :aria-label="$app.t('recherche.image.open')">
+              <img class="research-item-image" :src="imageUrl(item)" :alt="item.title || ''" loading="lazy">
+            </a>
 
             <a x-show="item.has_doc" class="research-item-doc" :href="docUrl(item)" target="_blank" rel="noopener noreferrer">
               <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#file-plus"/></svg>
@@ -320,7 +217,19 @@
               <span class="research-item-doc-meta" x-show="item.doc_pages" x-text="$app.t('recherche.doc.pages', { n: item.doc_pages })"></span>
             </a>
 
-            <div class="research-item-text" x-show="item.body" :class="{ 'research-item-text--quote': item.kind === 'quote' }" x-text="item.body"></div>
+            <!-- Text bleibt in der Übersicht gekappt (sonst füllt ein einziges Zitat
+                 die ganze Liste); Toggle darunter klappt ihn pro Fundstück auf und
+                 erscheint nur, wenn der Cap wirklich etwas abschneidet (gemessen,
+                 x-effect stösst die Messung an). -->
+            <div class="research-item-text" x-show="item.body"
+                 x-effect="noteBodyForClamp(item)"
+                 :class="{ 'research-item-text--quote': item.kind === 'quote',
+                           'research-item-text--clamped': !bodyExpanded(item) }"
+                 x-text="item.body"></div>
+            <button type="button" class="research-item-more" x-show="item.body && bodyClampable(item)"
+                    @click="toggleBodyExpanded(item)"
+                    :aria-expanded="bodyExpanded(item)"
+                    x-text="bodyExpanded(item) ? $app.t('recherche.body.less') : $app.t('recherche.body.more')"></button>
 
             <!-- @include recherche-item-urls -->
 

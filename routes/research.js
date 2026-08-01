@@ -26,7 +26,8 @@ const { enqueueEmbedIndexJob } = require('./jobs/embed-index');
 const { NOW_ISO_SQL } = require('../db/now');
 const searchIndex = require('../lib/search');
 const {
-  RESEARCH_KINDS, TITLE_MAX, BODY_MAX, SOURCE_MAX, TAG_MAX, cleanStr,
+  RESEARCH_KINDS, LIST_FILTER_KINDS, TITLE_MAX, BODY_MAX, SOURCE_MAX, TAG_MAX, cleanStr,
+  FTS_PREFILTER_LIMIT, CLIENT_LIST_LIMIT, clampListLimit, toClientItem,
 } = require('../lib/research-validate');
 const logger = require('../logger');
 
@@ -66,17 +67,34 @@ function _guard(req, res, bookId, minRole) {
 }
 
 // ── Liste + Filter ─────────────────────────────────────────────────────────
-// GET /research?book_id=&kind=&tag=&linked=figure:42&q=
+// GET /research?book_id=&kind=&tag=&linked=figure:42&q=&limit=
+//
+// Zwei Konsumenten, EIN Lesepfad — die Filter sind fuer beide dieselben, nur die
+// Ausgabeform unterscheidet sich:
+//   Session (SPA)          volle Item-Form inkl. `body`, ohne LIMIT (das Board
+//                          zeigt den ganzen Bestand).
+//   Device-Token (Client)  reduzierte Form (lib/research-validate#toClientItem)
+//                          und CLIENT_LIST_LIMIT als Default. Der `body` traegt
+//                          bis zu 20 000 Zeichen Seitentext, den die Browser-
+//                          Erweiterung selbst hochgeladen hat; sie fragt hier
+//                          „kenne ich diese Seite schon", nicht nach dem Inhalt.
 router.get('/', (req, res) => {
   const bookId = toIntId(req.query.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   if (!_guard(req, res, bookId, 'editor')) return;
 
+  // Geraete-Token → Client-Form. Die ACL darueber ist dieselbe: `editor` auf dem
+  // Buch, gleich ob Session oder Token (das Token loest auf den echten User auf).
+  const asClient = req.session?.user?.via === 'device_token';
+  const limit = clampListLimit(req.query.limit, asClient ? CLIENT_LIST_LIMIT : null);
+
   const where = ['ri.book_id = ?'];
   const vals = [bookId];
 
+  // LIST_FILTER_KINDS statt RESEARCH_KINDS: 'document'/'image' entstehen nur ueber
+  // die Upload-Routen, sind aber filterbare Bestandstypen (wie im Chat-Tool).
   const kind = String(req.query.kind || '').trim();
-  if (RESEARCH_KINDS.has(kind)) { where.push('ri.kind = ?'); vals.push(kind); }
+  if (LIST_FILTER_KINDS.has(kind)) { where.push('ri.kind = ?'); vals.push(kind); }
 
   if (String(req.query.archived || '') !== '1') where.push('ri.archived = 0');
 
@@ -98,11 +116,14 @@ router.get('/', (req, res) => {
     }
   }
 
-  // q → FTS5-Vorfilter auf research-Kind dieses Buchs.
+  // q → FTS5-Vorfilter auf research-Kind dieses Buchs. Gedeckelt auf
+  // FTS_PREFILTER_LIMIT Treffer: eine sehr breite Suche in einem sehr grossen
+  // Buch sieht die Funde jenseits davon nicht (dokumentiert in docs/clients.md,
+  // damit der Client die Grenze spiegeln kann).
   const q = String(req.query.q || '').trim();
   if (q) {
     try {
-      const hits = searchIndex.query(q, { bookId, kinds: ['research'], limit: 500 });
+      const hits = searchIndex.query(q, { bookId, kinds: ['research'], limit: FTS_PREFILTER_LIMIT });
       const ids = (hits?.hits || []).map(h => h.entity_id).filter(Boolean);
       if (!ids.length) return res.json([]);
       where.push(`ri.id IN (${ids.map(() => '?').join(',')})`);
@@ -132,16 +153,19 @@ router.get('/', (req, res) => {
     orderBy = 'ri.pinned DESC, (link_rank IS NULL), link_rank, ri.updated_at DESC';
   }
 
+  const limitVals = limit ? [limit] : [];
   const rows = db.prepare(
     `SELECT ri.id, ri.book_id, ri.user_email, ri.kind, ri.title, ri.body,
             ri.source, ri.image_mime, ri.doc_mime, ri.doc_name, ri.doc_pages, ri.doc_chars,
             ri.pinned, ri.archived, ri.created_at, ri.updated_at${selectExtra}
        FROM research_items ri
       WHERE ${where.join(' AND ')}
-      ORDER BY ${orderBy}`
-  ).all(...selectVals, ...vals);
+      ORDER BY ${orderBy}${limit ? '\n      LIMIT ?' : ''}`
+  ).all(...selectVals, ...vals, ...limitVals);
   for (const r of rows) delete r.link_rank;
-  res.json(_attachRelations(rows));
+  // attachRelations laeuft auch fuer die Client-Form: sie braucht die `urls`.
+  const items = _attachRelations(rows);
+  res.json(asClient ? items.map(toClientItem) : items);
 });
 
 // Tag-Pool des Buchs (mit Häufigkeit) für die Filter-Combobox.
