@@ -9,7 +9,9 @@
 
 const express = require('express');
 const lexiconDb = require('../db/lexicon');
-const { LEXICON_VERSION, MATTR_WINDOW, MTLD_MIN_TOKENS, HEAPS_MIN_TOKENS } = require('../lib/lexicon');
+const {
+  LEXICON_VERSION, MATTR_WINDOW, MTLD_MIN_TOKENS, HEAPS_MIN_TOKENS, HAPAX_LIMIT,
+} = require('../lib/lexicon');
 const { toIntId } = require('../lib/validate');
 const { setContext } = require('../lib/log-context');
 const { requireBookAccess, sendACLError } = require('../lib/acl');
@@ -34,12 +36,18 @@ router.get('/:book_id', (req, res) => {
     mattrWindow: MATTR_WINDOW,
     mtldMinTokens: MTLD_MIN_TOKENS,
     heapsMinTokens: HEAPS_MIN_TOKENS,
+    // Deckel der Einmalwort-Liste. Die Karte stellt ihn neben `stats.hapax_listed`,
+    // sonst sieht ein Ausschnitt aus wie eine Vollständigkeit.
+    hapaxLimit: HAPAX_LIMIT,
   };
-  if (!stats) return res.json({ stats: null, terms: [], ngrams: [], peers: null, stale: false, thresholds });
+  if (!stats) return res.json({ stats: null, terms: [], hapax: [], ngrams: [], peers: null, stale: false, thresholds });
 
   return res.json({
     stats,
     terms: lexiconDb.listLexiconTerms(bookId),
+    // Einmalwörter als eigene Liste, nicht in `terms` gemischt: eigene Auswahlregel,
+    // eigener Reiter, und um ein Vielfaches länger als die Lieblingswörter.
+    hapax: lexiconDb.listLexiconHapax(bookId),
     ngrams: lexiconDb.listLexiconNgrams(bookId),
     // Vergleichs-Mediane der übrigen Bücher desselben Besitzers — eine nackte
     // Kennzahl ist für den Autor nicht interpretierbar.

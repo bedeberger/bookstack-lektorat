@@ -32,9 +32,22 @@ const logger = require('../../logger');
 
 const lexiconScanRouter = express.Router();
 
-// Grösse der gespeicherten Referenz-Frequenztabelle (`book_lexicon.freq_json`).
-// Nur für die Keyness ANDERER Bücher — nicht für die Anzeige.
-const REF_TERM_LIMIT = 5000;
+// Gespeicherte Referenz-Frequenztabelle (`book_lexicon.freq_json`). Nur für die
+// Keyness ANDERER Bücher — nicht für die Anzeige.
+//
+// Gekappt wird über eine MINDESTHÄUFIGKEIT, nicht über einen Rang. Der Unterschied
+// ist nicht kosmetisch: bei einem Rangdeckel liegt die Kappungsgrenze irgendwo im
+// zweistelligen Bereich, und ein Wort, das die Referenz deshalb nicht kennt, sieht
+// aus wie ein Wort, das es dort nie gibt. Solange die Keyness nur eine Spalte war,
+// blieb das eine dokumentierte Ungenauigkeit; seit sie über die AUSWAHL der Wortliste
+// mitentscheidet, wäre es ein systematischer Fehler — die Auswahl würde bevorzugt
+// Terme greifen, deren Wert allein aus der Kappung stammt.
+// Bei 3 ist der verbleibende Fehler auf zwei Vorkommen begrenzt. Der Rangdeckel
+// bleibt als Notbremse gegen ein absurd langes Buch stehen; greift er, steigt die
+// Kappungsgrenze wieder — `loadReferenceCorpus` liest sie aus der Tabelle selbst
+// (`floor`) und die Auswahl wird von allein vorsichtiger.
+const REF_MIN_COUNT = 3;
+const REF_TERM_LIMIT = 40000;
 
 // Nach jedem Yield-Punkt prüfen, ob der User abgebrochen hat.
 function _checkAbort(signal) {
@@ -70,11 +83,13 @@ function _nameStopwords(bookId) {
   return new Set([...raw].map(w => foldSharpS(w)));
 }
 
-// Top-Terme als kompakte Referenztabelle. Absteigend nach Häufigkeit gekappt,
-// damit die Kappungsgrenze (und damit der Fehler in der Keyness anderer Bücher)
-// beim seltensten Term liegt.
+// Referenztabelle dieses Buchs: alle Terme ab der Mindesthäufigkeit, absteigend
+// sortiert (damit ein greifender Notbremsen-Deckel die seltensten trifft).
 function _buildFreqJson(freq) {
-  const rows = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, REF_TERM_LIMIT);
+  const rows = [...freq.entries()]
+    .filter(([, count]) => count >= REF_MIN_COUNT)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, REF_TERM_LIMIT);
   const obj = {};
   for (const [term, count] of rows) obj[term] = count;
   return JSON.stringify(obj);
@@ -92,7 +107,7 @@ async function runLexiconScanJob(jobId, bookId, userEmail, opts = {}) {
       // Kein Text → alte Analyse räumen und ehrlich leer melden, statt die
       // Zahlen des letzten Stands stehen zu lassen.
       lexiconDb.replaceBookLexicon(bookId, {
-        stats: { version: LEXICON_VERSION, pages: 0, segments: 0, tokens: 0, types: 0, hapax: 0 },
+        stats: { version: LEXICON_VERSION, pages: 0, segments: 0, tokens: 0, types: 0, hapax: 0, hapax_listed: 0 },
         terms: [], phrases: [],
       });
       completeJob(jobId, { tokens: 0, types: 0, terms: 0, phrases: 0, skipped: false }, null, '0 Seiten');
@@ -138,15 +153,20 @@ async function runLexiconScanJob(jobId, bookId, userEmail, opts = {}) {
     lexiconDb.replaceBookLexicon(bookId, result);
 
     const s = result.stats;
+    const byKind = { freq: 0, key: 0, hapax: 0 };
+    for (const t of result.terms) byKind[t.kind || 'freq']++;
     log.info(`Wortschatz: ${s.tokens} Token, ${s.types} Types, MATTR ${s.mattr} (Fenster ${s.mattr_window}), `
       + `MTLD ${s.mtld}, Yule K ${s.yule_k}, β ${s.heaps_beta}, Dichte ${s.lex_density}, `
-      + `${result.terms.length} Terme, ${result.phrases.length} Wendungen`
-      + (reference ? `, Referenz aus ${reference.books} Buch/Büchern` : ', ohne Referenzkorpus'));
+      + `${byKind.freq} Terme + ${byKind.key} auffällige + ${byKind.hapax}/${s.hapax_listed} Einmalwörter, `
+      + `${result.phrases.length} Wendungen`
+      + (reference
+        ? `, Referenz aus ${reference.books} Buch/Büchern (Kappung bei ${reference.floor})`
+        : ', ohne Referenzkorpus'));
 
     completeJob(jobId, {
       skipped: false,
       tokens: s.tokens, types: s.types,
-      terms: result.terms.length, phrases: result.phrases.length,
+      terms: byKind.freq + byKind.key, hapax: byKind.hapax, phrases: result.phrases.length,
       hasReference: !!reference,
     }, null, `${s.types} Wortformen, ${result.phrases.length} Wendungen`);
   } catch (e) {
@@ -191,5 +211,5 @@ lexiconScanRouter.post('/lexicon-scan', jsonBody, (req, res) => {
 
 module.exports = {
   lexiconScanRouter, runLexiconScanJob, scanAllBooks,
-  computeContentSig, REF_TERM_LIMIT, _buildFreqJson,
+  computeContentSig, REF_TERM_LIMIT, REF_MIN_COUNT, _buildFreqJson,
 };

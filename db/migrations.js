@@ -10330,6 +10330,69 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 261 abgeschlossen (Wortschatz-Analyse: book_lexicon + lexicon_terms + lexicon_ngrams).');
   }
 
+  if (version < 262) {
+    // Wortschatz: die Wortliste bekommt eine zweite Auswahlachse und eine dritte
+    // Zeilensorte.
+    //
+    // `lexicon_terms.kind` ist der Diskriminator dafuer — KEIN Sentinel (etwa
+    // count=1 als „ist ein Einmalwort"), sondern eine explizite Spalte mit CHECK:
+    //   'freq'  ueber die Haeufigkeit ausgewaehlt (Lieblingswort)
+    //   'key'   ueber die Keyness ausgewaehlt (auffaellig gegen die anderen Buecher
+    //           desselben Autors) — ein Wort, das hier zwoelfmal steht und sonst
+    //           nie, ist nicht haeufig, sondern eigen, und faellt durch jeden
+    //           Haeufigkeitsdeckel
+    //   'hapax' Einmalwort (genau ein Vorkommen im ganzen Buch)
+    // Die drei teilen sich die Tabelle, weil sie dieselbe Form haben (Term, Zahl,
+    // Streuung, Sprungziel) und im selben Full-Replace geschrieben werden. Die
+    // UNIQUE(book_id, term) bleibt tragfaehig: ein Term kann nicht gleichzeitig
+    // einmal und dreimal vorkommen.
+    //
+    // Recreate-Pattern statt ALTER ADD COLUMN, weil SQLite eine CHECK-Bedingung
+    // nachtraeglich nicht anfuegen kann und die Spalte ohne sie nur eine Konvention
+    // waere. Bestandszeilen sind per Definition 'freq' (die alte Auswahl kannte
+    // nur die Haeufigkeit).
+    //
+    // `book_lexicon.hapax_listed` haelt fest, wie viele Einmalwoerter die Filter
+    // ueberhaupt passiert haben. Die Liste ist gedeckelt; ohne diese Zahl sieht ein
+    // Ausschnitt aus wie eine Vollstaendigkeit. Nicht dasselbe wie `hapax`: dort
+    // zaehlen Stoppwoerter, Eigennamen und kurze Woerter mit.
+    db.pragma('foreign_keys = OFF');
+    db.exec(`
+      DROP TABLE IF EXISTS lexicon_terms_new;
+      CREATE TABLE lexicon_terms_new (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id        INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        term           TEXT    NOT NULL,
+        kind           TEXT    NOT NULL DEFAULT 'freq' CHECK (kind IN ('freq','key','hapax')),
+        count          INTEGER NOT NULL CHECK (count >= 0),
+        chapter_spread INTEGER NOT NULL DEFAULT 0 CHECK (chapter_spread >= 0),
+        keyness        REAL,
+        first_page_id  INTEGER REFERENCES pages(page_id) ON DELETE SET NULL,
+        UNIQUE (book_id, term)
+      );
+      INSERT INTO lexicon_terms_new (id, book_id, term, kind, count, chapter_spread, keyness, first_page_id)
+        SELECT id, book_id, term, 'freq', count, chapter_spread, keyness, first_page_id FROM lexicon_terms;
+      DROP TABLE lexicon_terms;
+      ALTER TABLE lexicon_terms_new RENAME TO lexicon_terms;
+      CREATE INDEX IF NOT EXISTS idx_lexterm_book ON lexicon_terms(book_id);
+      CREATE INDEX IF NOT EXISTS idx_lexterm_page ON lexicon_terms(first_page_id);
+      CREATE INDEX IF NOT EXISTS idx_lexterm_kind ON lexicon_terms(book_id, kind);
+    `);
+    db.pragma('foreign_keys = ON');
+
+    const blCols262 = db.pragma('table_info(book_lexicon)').map(c => c.name);
+    if (!blCols262.includes('hapax_listed')) {
+      db.exec('ALTER TABLE book_lexicon ADD COLUMN hapax_listed INTEGER');
+    }
+
+    const fkErrors262 = db.pragma('foreign_key_check');
+    if (fkErrors262.length) {
+      throw new Error(`Migration 262: foreign_key_check meldet ${fkErrors262.length} Verstoesse: ${JSON.stringify(fkErrors262.slice(0, 5))}`);
+    }
+    db.prepare('UPDATE schema_version SET version = 262').run();
+    logger.info('DB-Migration auf Version 262 abgeschlossen (Wortschatz: lexicon_terms.kind + book_lexicon.hapax_listed).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

@@ -76,15 +76,41 @@ SSoT: [lib/lexicon/tokenize.js](../lib/lexicon/tokenize.js).
 
 ## Ranglisten
 
-**Lieblingswörter** (`lexicon_terms`, Top 200): Inhaltswörter ab 4 Zeichen und ab
-3 Vorkommen. Ausgeschlossen sind Stoppwörter ([lib/stopwords-de.js](../lib/stopwords-de.js))
-**und Eigennamen** (Figuren, Orte, Szenentitel via `tokenizeNamesForStopwords`) —
-die häufigste Figur führte sonst jede Liste an und ist kein Stilbefund. Für die
+`lexicon_terms` hält **drei Sorten Zeile**, getrennt über `kind` — gemeinsam ist
+ihnen die Form (Wort, Zahl, Streuung, Sprungziel) und der Filter: Inhaltswörter ab
+4 Zeichen, ohne Stoppwörter ([lib/stopwords-de.js](../lib/stopwords-de.js)) und
+ohne Eigennamen (Figuren, Orte, Szenentitel via `tokenizeNamesForStopwords`) — die
+häufigste Figur führte sonst jede Liste an und ist kein Stilbefund. Für die
 lexikalische Dichte zählt ein Eigenname dagegen **mit**: dort ist er ein Inhaltswort.
 
+**`kind='freq'` — Lieblingswörter** (Top 200 nach Häufigkeit, ab 3 Vorkommen).
 Jede Zeile trägt `chapter_spread` (in wie vielen Kapiteln) — der eigentliche
 Mehrwert gegenüber der seitenlokalen Wiederholungs-Metrik in `page_stats`:
 „40× im Buch, alle in Kapitel 3" ist ein anderer Befund als „40× gleichmässig".
+
+**`kind='key'` — auffällige Wörter** (Top 100 nach Keyness, zusätzlich zu den 200).
+Die Häufigkeit verfehlt genau die Wörter, die dieses Buch von den übrigen
+unterscheiden: ein Wort, das hier zwölfmal steht und sonst nie, ist nicht häufig,
+sondern eigen — es fällt durch jeden Häufigkeitsdeckel. Die zweite Achse kommt
+**dazu**, sie verdrängt keinen Häufigkeitsplatz.
+
+Ausgewählt wird mit der **vorsichtigen** Keyness (`refFloor`, siehe unten),
+angezeigt die schlichte. Der Unterschied ist die Existenzberechtigung der Achse:
+sobald die Keyness über die Auswahl entscheidet, greift sie ohne diese Schranke
+bevorzugt Terme, deren Wert allein aus der Kappung der Referenztabelle stammt.
+
+**`kind='hapax'` — Einmalwörter** (genau ein Vorkommen im ganzen Buch, Top 300).
+Der Deckel ist unvermeidlich: rund die Hälfte aller Types kommt genau einmal vor.
+Weil alle dieselbe Häufigkeit haben, muss die Rangfolge von woanders kommen —
+`_selectHapax` sortiert (1) Wörter, die in den übrigen Büchern des Autors **nicht**
+vorkommen, nach vorn („einmal hier UND sonst nie" ist die Frage, nicht „einmal
+hier"), dann (2) nach Länge, dann alphabetisch. Deterministisch, sonst zeigt
+derselbe Text nach jedem Scan eine andere Liste.
+
+`book_lexicon.hapax_listed` hält fest, wie viele Einmalwörter die Filter insgesamt
+passiert haben — die Karte stellt „300 von 4812" darüber. Ohne diese Zahl liest
+sich der Ausschnitt als Vollständigkeit. **Nicht** dasselbe wie `hapax`: dort
+zählen Stoppwörter, Eigennamen und kurze Wörter mit.
 
 **Wendungen** (`lexicon_ngrams`, Top 60 **pro Länge** n=2…5, ab 3 Vorkommen).
 Stoppwörter werden hier **nicht** gefiltert — „mit einem Ruck" besteht zu zwei
@@ -118,15 +144,27 @@ externes Frequenzkorpus: keine Lizenzfrage, und die Frage „was benutze ich *hi
 auffällig und sonst nicht" ist für den Schreibenden die interessantere.
 
 Damit das ohne O(n²)-Neutokenisierung pro Nacht geht, hält jedes Buch seine
-Häufigkeitstabelle (Top 5000) in `book_lexicon.freq_json`; die Referenz ist die
-Summe über die anderen Bücher. **Bewusste Ungenauigkeit:** ein Term unterhalb des
-Deckels zählt in der Referenz als 0, die Keyness ist dann leicht zu hoch — die
-Abweichung ist durch die Häufigkeit des letzten aufgenommenen Terms begrenzt.
+Häufigkeitstabelle in `book_lexicon.freq_json`; die Referenz ist die Summe über
+die anderen Bücher.
+
+**Gekappt wird über eine Mindesthäufigkeit (3), nicht über einen Rang.** Bei einem
+Rangdeckel liegt die Kappungsgrenze irgendwo im zweistelligen Bereich, und ein Wort,
+das die Referenz deshalb nicht kennt, sieht aus wie ein Wort, das es dort nie gibt.
+Als Anzeigespalte war das eine hinnehmbare Ungenauigkeit; als Auswahlkriterium wäre
+es ein systematischer Fehler. Bei 3 bleibt die Abweichung auf zwei Vorkommen
+begrenzt. Ein Rangdeckel steht nur noch als Notbremse dahinter.
+
+**`refFloor` macht den Restfehler unschädlich, wo er zählt.** `loadReferenceCorpus`
+liest die tatsächliche Kappungsgrenze aus den geladenen Tabellen (Maximum über die
+Bücher) und reicht sie als `floor` weiter; `keynessFor({ refFloor })` hebt jede
+Referenzhäufigkeit darauf an und liefert damit eine **untere Schranke** der
+Auffälligkeit. Nur die entscheidet über die Auswahl. Greift die Notbremse doch
+einmal, steigt `floor` und die Auswahl wird von allein vorsichtiger.
 
 Nur ein Buch im Bestand ⇒ keine Referenz ⇒ Spalte bleibt leer und die Karte blendet
 sie aus. Das ist der korrekte Zustand, kein Fehler.
 
-## Datenmodell (Migration 261)
+## Datenmodell (Migration 261, `kind` + `hapax_listed` in 262)
 
 Alle drei Tabellen sind **abgeleitet** und werden pro Scan als Ganzes ersetzt
 (`replaceBookLexicon`, eine Transaktion). Kein Delta: die Ranglisten sind gedeckelt
@@ -137,7 +175,7 @@ erzeugen.
 | Tabelle | Form |
 |---|---|
 | `book_lexicon` | 1:1 zum Buch (`book_id` PK, CASCADE) — Kennzahlen + `content_sig` + `freq_json` |
-| `lexicon_terms` | Top-Terme, `UNIQUE(book_id, term)`, `first_page_id` → `pages` **SET NULL** |
+| `lexicon_terms` | Wortlisten, `kind` CHECK `freq`\|`key`\|`hapax`, `UNIQUE(book_id, term)`, `first_page_id` → `pages` **SET NULL** |
 | `lexicon_ngrams` | Top-Wendungen, `UNIQUE(book_id, phrase)`, `first_page_id` **SET NULL** |
 
 `first_page_id` ist ein Sprungziel, kein Inhalt — darum SET NULL: verschwindet die
@@ -179,7 +217,19 @@ Methods [public/js/book/wortschatz.js](../public/js/book/wortschatz.js), Partial
 Route `#book/:id/wortschatz`, Lesepfad `GET /lexicon/:book_id`.
 
 Das Kennzahlen-Grid **wiederverwendet** `.overview-grid`/`.overview-tile` aus
-`book-overview/`; beide Ranglisten sind `sortableTable`.
+`book-overview/`; alle drei Ranglisten sind `sortableTable`.
+
+Die Ranglisten liegen als Fragmente daneben (`wortschatz-terms.html`,
+`-phrases.html`, `-hapax.html`) und kommen über den **String-Include**
+(`<!-- @include … -->`) herein, nicht über den DOM-Placeholder: der Einhängepunkt
+steckt in einem `<template x-if>`, und `querySelector` steigt nicht in
+Template-Content ab. Reiter `terms` | `phrases` | `hapax`.
+
+Die Einmalwort-Zeilen bekommen im Frontend die Wortlänge als eigenes Feld (`len`)
+— die einzige Zahl, nach der sich diese Liste sortieren lässt, die Häufigkeit ist
+per Definition überall 1. Der Getter ist memoisiert (Vergleich auf die Array-
+Referenz), sonst baut er bei jedem Render ein neues Array und `sortableTable`
+sortiert jedes Mal neu.
 
 **Die Analyse-Version kommt vom Server** (`thresholds.version` + `stale`-Flag), das
 Frontend hält **keine Kopie**. Genau an so einer Kopie driftet die Stil-Heatmap
@@ -198,6 +248,13 @@ dieser Fehler wird hier nicht wiederholt.
 6. **Eigennamen aus der Wortliste, aber in die Dichte.** Zwei verschiedene Fragen.
 7. **n-Gramme überspannen keine Segment-/Blockgrenze.**
 8. **Der Job schreibt nie in `pages`.** Rein ableitend.
+9. **Auswahl nach Keyness nur mit `refFloor`.** Ohne die Schranke wählt die Liste
+   bevorzugt Terme, deren Auffälligkeit nur aus der Kappung der Referenz stammt.
+10. **Gedeckelte Liste zeigt ihren Deckel.** Einmalwörter kommen mit
+    `hapax_listed`; ein Ausschnitt ohne diese Zahl liest sich als Vollständigkeit.
+11. **`kind` ist der Diskriminator, kein Sentinel.** Ein Einmalwort ist nicht „ein
+    Lieblingswort mit `count = 1`" — die drei Sorten haben verschiedene
+    Auswahlregeln und verschiedene Reiter.
 
 ## Phase 2 und später (nicht gebaut)
 

@@ -1,6 +1,6 @@
 # ERD — schreibwerkstatt
 
-Stand: Schema-Version 261, 143 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
+Stand: Schema-Version 262, 143 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
 
 Quelle: Squashed-Schema-Snapshot in [db/squashed-schema.js](../db/squashed-schema.js) (regeneriert via `node tools/dump-schema.js`) + [db/migrations.js](../db/migrations.js). Drift gegen die Legacy-Migration-Kette ist durch [tests/unit/squash-drift.test.mjs](../tests/unit/squash-drift.test.mjs) gegated. Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -1981,6 +1981,7 @@ erDiagram
     INTEGER types
     INTEGER lemma_types         "nullable — Phase 1 ohne Lemmatisierung"
     INTEGER hapax
+    INTEGER hapax_listed        "nullable — Einmalwoerter NACH den Listenfiltern (Deckel offenlegen)"
     INTEGER dislegomena
     REAL    hapax_ratio
     REAL    mattr
@@ -1991,12 +1992,13 @@ erDiagram
     REAL    heaps_beta          "nullable — erst ab 200 Token"
     REAL    heaps_k
     REAL    lex_density
-    TEXT    freq_json           "Top-Terme als Referenzkorpus fuer ANDERE Buecher"
+    TEXT    freq_json           "Terme ab Mindesthaeufigkeit als Referenzkorpus fuer ANDERE Buecher"
   }
   lexicon_terms {
     INTEGER id             PK
     INTEGER book_id        FK "CASCADE"
     TEXT    term               "UNIQUE(book_id, term)"
+    TEXT    kind               "CHECK freq|key|hapax — Auswahlachse der Zeile"
     INTEGER count
     INTEGER chapter_spread     "in wie vielen Kapiteln"
     REAL    keyness            "nullable — Log-Likelihood vs. andere Buecher"

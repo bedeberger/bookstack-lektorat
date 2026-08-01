@@ -96,6 +96,20 @@
     font-style: italic;
   }
 
+  /* Marke an Zeilen, die NICHT ueber die Haeufigkeit in die Liste gekommen sind,
+     sondern ueber die Auffaelligkeit. Ohne sie sieht ein Wort mit vier Vorkommen
+     am Tabellenende wie ein Ausreisser aus statt wie ein Befund. */
+  .wortschatz-kind {
+    margin-left: var(--space-xs);
+    border-color: var(--card-accent);
+    color: var(--card-accent);
+    font-weight: 500;
+    font-size: var(--font-size-xs);
+    text-transform: none;
+    letter-spacing: 0;
+    vertical-align: middle;
+  }
+
   @media (max-width: 640px) {
     .wortschatz-table th,
     .wortschatz-table td { padding: var(--space-xs); }

@@ -20,20 +20,20 @@ const _stmtDelNgrams = db.prepare('DELETE FROM lexicon_ngrams WHERE book_id = ?'
 const _stmtInsertStats = db.prepare(`
   INSERT INTO book_lexicon (
     book_id, scanned_at, lexicon_version, content_sig,
-    pages, segments, tokens, types, lemma_types, hapax, dislegomena, hapax_ratio,
+    pages, segments, tokens, types, lemma_types, hapax, hapax_listed, dislegomena, hapax_ratio,
     mattr, mattr_window, mattr_windows, mtld, yule_k, heaps_beta, heaps_k, lex_density,
     freq_json
   ) VALUES (
     @book_id, ${NOW_ISO_SQL}, @lexicon_version, @content_sig,
-    @pages, @segments, @tokens, @types, @lemma_types, @hapax, @dislegomena, @hapax_ratio,
+    @pages, @segments, @tokens, @types, @lemma_types, @hapax, @hapax_listed, @dislegomena, @hapax_ratio,
     @mattr, @mattr_window, @mattr_windows, @mtld, @yule_k, @heaps_beta, @heaps_k, @lex_density,
     @freq_json
   )
 `);
 
 const _stmtInsertTerm = db.prepare(`
-  INSERT INTO lexicon_terms (book_id, term, count, chapter_spread, keyness, first_page_id)
-  VALUES (@book_id, @term, @count, @chapter_spread, @keyness, @first_page_id)
+  INSERT INTO lexicon_terms (book_id, term, kind, count, chapter_spread, keyness, first_page_id)
+  VALUES (@book_id, @term, @kind, @count, @chapter_spread, @keyness, @first_page_id)
 `);
 
 const _stmtInsertNgram = db.prepare(`
@@ -71,6 +71,7 @@ const _replace = db.transaction((bookId, { stats, terms, phrases }) => {
     types: stats.types ?? null,
     lemma_types: stats.lemma_types ?? null,
     hapax: stats.hapax ?? null,
+    hapax_listed: stats.hapax_listed ?? null,
     dislegomena: stats.dislegomena ?? null,
     hapax_ratio: stats.hapax_ratio ?? null,
     mattr: stats.mattr ?? null,
@@ -88,6 +89,9 @@ const _replace = db.transaction((bookId, { stats, terms, phrases }) => {
     _stmtInsertTerm.run({
       book_id: bookId,
       term: t.term,
+      // Ohne `kind` gaebe es keinen Weg, die drei Zeilensorten wieder zu trennen —
+      // ein Einmalwort ist nicht „ein Lieblingswort mit count 1".
+      kind: t.kind || 'freq',
       count: t.count,
       chapter_spread: t.chapter_spread ?? 0,
       keyness: t.keyness ?? null,
@@ -116,7 +120,7 @@ function replaceBookLexicon(bookId, result) {
 // jedem Kartenaufruf mitgeschleppt.
 const _stmtGetStats = db.prepare(`
   SELECT book_id, scanned_at, lexicon_version, content_sig,
-         pages, segments, tokens, types, lemma_types, hapax, dislegomena, hapax_ratio,
+         pages, segments, tokens, types, lemma_types, hapax, hapax_listed, dislegomena, hapax_ratio,
          mattr, mattr_window, mattr_windows, mtld, yule_k, heaps_beta, heaps_k, lex_density
     FROM book_lexicon WHERE book_id = ?
 `);
@@ -124,13 +128,27 @@ const _stmtGetStats = db.prepare(`
 // Ranglisten kommen mit dem Seitennamen des Sprungziels, damit die Karte kein
 // zweites Roundtrip pro Zeile braucht. Snapshot-Spalten wären hier verboten
 // (siehe „Snapshot-Spalten verboten" in CLAUDE.md) — der Name kommt per JOIN.
+// Wortliste ohne die Einmalwörter: das ist eine eigene Rangliste mit eigener
+// Auswahlregel und eigenem Reiter, und sie ist um ein Vielfaches länger — in
+// derselben Tabelle gemischt würde sie die Lieblingswörter erschlagen.
 const _stmtListTerms = db.prepare(`
-  SELECT lt.term, lt.count, lt.chapter_spread, lt.keyness, lt.first_page_id,
+  SELECT lt.term, lt.kind, lt.count, lt.chapter_spread, lt.keyness, lt.first_page_id,
          p.page_name AS first_page_name
     FROM lexicon_terms lt
     LEFT JOIN pages p ON p.page_id = lt.first_page_id
-   WHERE lt.book_id = ?
+   WHERE lt.book_id = ? AND lt.kind != 'hapax'
    ORDER BY lt.count DESC, lt.term
+`);
+
+// Einmalwörter. Sortierung wie die Auswahl in lib/lexicon/analyze.js (lang zuerst)
+// — sonst zeigt die erste Tabellenseite eine andere Auswahl als die, die der Scan
+// getroffen hat.
+const _stmtListHapax = db.prepare(`
+  SELECT lt.term, lt.first_page_id, p.page_name AS first_page_name
+    FROM lexicon_terms lt
+    LEFT JOIN pages p ON p.page_id = lt.first_page_id
+   WHERE lt.book_id = ? AND lt.kind = 'hapax'
+   ORDER BY length(lt.term) DESC, lt.term
 `);
 
 const _stmtListNgrams = db.prepare(`
@@ -150,6 +168,10 @@ function listLexiconTerms(bookId) {
   return _stmtListTerms.all(bookId);
 }
 
+function listLexiconHapax(bookId) {
+  return _stmtListHapax.all(bookId);
+}
+
 function listLexiconNgrams(bookId) {
   return _stmtListNgrams.all(bookId);
 }
@@ -165,9 +187,17 @@ function getLexiconSignature(bookId) {
 // Scan (kein `freq_json`) tragen nichts bei — beim ersten Nacht-Lauf einer neuen
 // Installation ist die Referenz darum noch dünn und füllt sich mit jedem Buch.
 //
-// Rückgabe: { freq: Map<term,count>, total: number, books: number } oder null,
-// wenn es kein anderes gescanntes Buch gibt (dann bleibt die Keyness-Spalte leer —
-// siehe lib/lexicon/keyness.js).
+// Rückgabe: { freq: Map<term,count>, total: number, books: number, floor: number }
+// oder null, wenn es kein anderes gescanntes Buch gibt (dann bleibt die
+// Keyness-Spalte leer — siehe lib/lexicon/keyness.js).
+//
+// `floor` ist die Kappungsgrenze: die gespeicherten Frequenztabellen sind gedeckelt,
+// ein dort fehlender Term kommt im jeweiligen Buch also höchstens so oft vor wie
+// dessen seltenster aufgenommener Term. Das Maximum über die Bücher ist die
+// Schranke für die Auswahl nach Auffälligkeit (lib/lexicon/analyze.js) — ohne sie
+// stünden bevorzugt Wörter in der Liste, deren Auffälligkeit nur daher rührt, dass
+// die Referenztabelle sie nicht kennt. Sie stellt sich selbst nach: enthält ein
+// Buch seine Frequenzen vollständig bis zur Mindesthäufigkeit, ist der Wert klein.
 const _stmtRefRows = db.prepare(`
   SELECT bl.tokens, bl.freq_json
     FROM book_lexicon bl
@@ -182,16 +212,20 @@ function loadReferenceCorpus(bookId) {
   if (!rows.length) return null;
   const freq = new Map();
   let total = 0;
+  let floor = 0;
   for (const r of rows) {
     total += r.tokens || 0;
     let obj;
     try { obj = JSON.parse(r.freq_json); } catch { continue; }
+    let bookMin = Infinity;
     for (const [term, count] of Object.entries(obj || {})) {
       freq.set(term, (freq.get(term) || 0) + count);
+      if (count < bookMin) bookMin = count;
     }
+    if (Number.isFinite(bookMin)) floor = Math.max(floor, bookMin);
   }
   if (!total) return null;
-  return { freq, total, books: rows.length };
+  return { freq, total, books: rows.length, floor };
 }
 
 // Vergleichswerte aus den übrigen Büchern desselben Besitzers (Median je Kennzahl).
@@ -246,6 +280,6 @@ function listScanScopes() {
 }
 
 module.exports = {
-  replaceBookLexicon, getBookLexicon, listLexiconTerms, listLexiconNgrams,
+  replaceBookLexicon, getBookLexicon, listLexiconTerms, listLexiconHapax, listLexiconNgrams,
   getLexiconSignature, loadReferenceCorpus, loadPeerStats, listScanScopes,
 };

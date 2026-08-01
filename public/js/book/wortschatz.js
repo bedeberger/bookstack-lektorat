@@ -121,6 +121,19 @@ export const wortschatzMethods = {
     }));
   },
 
+  // Offenlegung des Deckels der Einmalwort-Liste: „300 von 4812". Ohne diese Zeile
+  // liest sich ein Ausschnitt als Vollständigkeit — rund die Hälfte aller
+  // Wortformen eines Buchs kommt genau einmal vor. Leerstring, solange die Liste
+  // wirklich vollständig ist (dann gibt es nichts offenzulegen).
+  wsHapaxCapped() {
+    const total = this.wortschatzData?.stats?.hapax_listed;
+    const shown = this.wortschatzHapax.length;
+    if (total == null || !shown || total <= shown) return '';
+    return window.__app?.t?.('wortschatz.hapax.capped', {
+      shown: this.wsNum(shown), total: this.wsNum(total),
+    }) || '';
+  },
+
   // Keyness-Band für die Badge-Färbung. Positiv = in diesem Buch auffällig
   // häufig, negativ = auffällig gemieden.
   wsKeynessClass(v) {

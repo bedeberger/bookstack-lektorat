@@ -1,0 +1,43 @@
+<!-- Einmalwörter der Wortschatz-Analyse: Wörter mit genau einem Vorkommen im
+     ganzen Buch (Hapax legomena). Fragment von wortschatz.html (String-Include
+     `<!-- @include wortschatz-hapax -->`) — Begründung siehe wortschatz-terms.html.
+
+     Die Liste ist gedeckelt, und der Deckel steht als erste Zeile drüber: rund die
+     Hälfte aller Wortformen eines Buchs kommt genau einmal vor: ein Ausschnitt, der
+     nicht als solcher gekennzeichnet ist, liest sich als Vollständigkeit. -->
+<div x-show="wortschatzTab === 'hapax'">
+  <p class="wortschatz-list-hint" x-text="$app.t('wortschatz.hapax.hint')"></p>
+  <p class="wortschatz-list-hint" x-show="wsHapaxCapped()" x-text="wsHapaxCapped()"></p>
+  <div x-show="!wortschatzHapax.length" class="muted-msg muted-msg--spaced" x-text="$app.t('wortschatz.hapax.empty')"></div>
+  <div class="table-scroll" x-show="wortschatzHapax.length">
+    <table class="wortschatz-table"
+           x-data="sortableTable({
+             rows: () => wortschatzHapax,
+             defaultKey: 'len',
+             defaultDir: 'desc',
+             persistKey: 'wortschatz.hapax',
+             types: { len: 'number', term: 'string' },
+           })">
+      <thead><tr>
+        <th class="sortable-th" :class="sortClass('term')" :aria-sort="ariaSort('term')"
+            @click="sortBy('term')" x-text="$app.t('wortschatz.col.term')"></th>
+        <th class="sortable-th" :class="sortClass('len')" :aria-sort="ariaSort('len')"
+            @click="sortBy('len')" x-text="$app.t('wortschatz.col.length')"></th>
+        <th x-text="$app.t('wortschatz.col.firstPage')"></th>
+      </tr></thead>
+      <tbody>
+        <template x-for="h in sorted" :key="h.term">
+          <tr>
+            <td class="wortschatz-term" x-text="h.term"></td>
+            <td class="wortschatz-num" x-text="wsNum(h.len)"></td>
+            <td>
+              <span class="tag internal-link" x-show="h.first_page_id"
+                    @click="wsGotoPage(h.first_page_id)"
+                    x-text="h.first_page_name || ('#' + h.first_page_id)"></span>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+</div>

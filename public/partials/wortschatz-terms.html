@@ -1,0 +1,61 @@
+<!-- Wortliste der Wortschatz-Analyse: Lieblingswörter + auffällige Wörter.
+     Fragment von wortschatz.html (String-Include `<!-- @include wortschatz-terms -->`),
+     weil das Ganze sonst über das 250-Zeilen-Limit für Partials liefe UND weil der
+     Einhängepunkt in einem <template x-if> liegt — dort greift der DOM-seitige
+     Placeholder-Mechanismus nicht (querySelector steigt nicht in Template-Content ab).
+
+     Zwei Auswahlachsen in einer Tabelle: `kind='freq'` steht wegen der Häufigkeit
+     drin, `kind='key'` wegen der Auffälligkeit gegen die übrigen Bücher desselben
+     Autors. Die zweite Sorte ist per Definition NICHT häufig — ohne die Markierung
+     sähe sie wie ein Ausreisser am Tabellenende aus. -->
+<div x-show="wortschatzTab === 'terms'">
+  <p class="wortschatz-list-hint" x-text="$app.t('wortschatz.terms.hint')"></p>
+  <p class="wortschatz-list-hint" x-show="wortschatzHasKeyness"
+     x-text="$app.t('wortschatz.terms.keyHint')"></p>
+  <div x-show="!wortschatzTerms.length" class="muted-msg muted-msg--spaced" x-text="$app.t('wortschatz.terms.empty')"></div>
+  <div class="table-scroll" x-show="wortschatzTerms.length">
+    <table class="wortschatz-table"
+           x-data="sortableTable({
+             rows: () => wortschatzTerms,
+             defaultKey: 'count',
+             defaultDir: 'desc',
+             persistKey: 'wortschatz.terms',
+             types: { count: 'number', chapter_spread: 'number', keyness: 'number', term: 'string' },
+           })">
+      <thead><tr>
+        <th class="sortable-th" :class="sortClass('term')" :aria-sort="ariaSort('term')"
+            @click="sortBy('term')" x-text="$app.t('wortschatz.col.term')"></th>
+        <th class="sortable-th" :class="sortClass('count')" :aria-sort="ariaSort('count')"
+            @click="sortBy('count')" x-text="$app.t('wortschatz.col.count')"></th>
+        <th class="sortable-th" :class="sortClass('chapter_spread')" :aria-sort="ariaSort('chapter_spread')"
+            @click="sortBy('chapter_spread')" x-text="$app.t('wortschatz.col.spread')"></th>
+        <th class="sortable-th" x-show="wortschatzHasKeyness"
+            :class="sortClass('keyness')" :aria-sort="ariaSort('keyness')"
+            @click="sortBy('keyness')" x-text="$app.t('wortschatz.col.keyness')"></th>
+        <th x-text="$app.t('wortschatz.col.firstPage')"></th>
+      </tr></thead>
+      <tbody>
+        <template x-for="t in sorted" :key="t.term">
+          <tr>
+            <td class="wortschatz-term">
+              <span x-text="t.term"></span>
+              <span class="tag wortschatz-kind" x-show="t.kind === 'key'"
+                    :title="$app.t('wortschatz.terms.kindKeyTitle')"
+                    x-text="$app.t('wortschatz.terms.kindKey')"></span>
+            </td>
+            <td class="wortschatz-num" x-text="wsNum(t.count)"></td>
+            <td class="wortschatz-num" x-text="wsNum(t.chapter_spread)"></td>
+            <td class="wortschatz-num" x-show="wortschatzHasKeyness">
+              <span class="tag" :class="wsKeynessClass(t.keyness)" x-text="wsNum(t.keyness, 1)"></span>
+            </td>
+            <td>
+              <span class="tag internal-link" x-show="t.first_page_id"
+                    @click="wsGotoPage(t.first_page_id)"
+                    x-text="t.first_page_name || ('#' + t.first_page_id)"></span>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+</div>

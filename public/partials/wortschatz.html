@@ -6,6 +6,10 @@
   (book_lexicon / lexicon_terms / lexicon_ngrams), schreibt nie in den Buchtext.
   Kennzahlen-Tiles nutzen das geteilte Tile-Grid der Buch-Übersicht
   (.overview-grid/.overview-tile, siehe DESIGN.md „Book-Overview-Tiles").
+
+  Die drei Ranglisten liegen als Fragmente daneben (wortschatz-terms/-phrases/
+  -hapax.html) und kommen über den String-Include herein: der Einhängepunkt steckt
+  in einem <template x-if>, wo der DOM-seitige Partial-Placeholder nicht greift.
 -->
 <div class="card card--wortschatz" x-data="wortschatzCard" x-show="$app.showWortschatzCard" x-cloak>
   <div class="card-header">
@@ -19,7 +23,7 @@
       <span class="muted-msg muted-msg--sm" x-show="wortschatzHasResult && !wortschatzLoading"
             x-text="$app.t('wortschatz.scannedAt', { at: wsScannedAt() })"></span>
       <button type="button" class="primary" data-label-ok
-              :disabled="wortschatzLoading || !$app.selectedBookId"
+              :disabled="wortschatzLoading || !$store.nav.selectedBookId"
               @click="runWortschatzScan()"
               x-text="$app.t(wortschatzHasResult ? 'wortschatz.rerun' : 'wortschatz.run')"></button>
     </div>
@@ -120,99 +124,15 @@
                 :class="{ 'tabs-btn--active': wortschatzTab === 'phrases' }"
                 @click="wortschatzTab = 'phrases'"
                 x-text="$app.t('wortschatz.tab.phrases', { n: wortschatzNgrams.length })"></button>
+        <button type="button" class="tabs-btn"
+                :class="{ 'tabs-btn--active': wortschatzTab === 'hapax' }"
+                @click="wortschatzTab = 'hapax'"
+                x-text="$app.t('wortschatz.tab.hapax', { n: wortschatzHapax.length })"></button>
       </div>
 
-      <!-- Lieblingswörter -->
-      <div x-show="wortschatzTab === 'terms'">
-        <p class="wortschatz-list-hint" x-text="$app.t('wortschatz.terms.hint')"></p>
-        <div x-show="!wortschatzTerms.length" class="muted-msg muted-msg--spaced" x-text="$app.t('wortschatz.terms.empty')"></div>
-        <div class="table-scroll" x-show="wortschatzTerms.length">
-          <table class="wortschatz-table"
-                 x-data="sortableTable({
-                   rows: () => wortschatzTerms,
-                   defaultKey: 'count',
-                   defaultDir: 'desc',
-                   persistKey: 'wortschatz.terms',
-                   types: { count: 'number', chapter_spread: 'number', keyness: 'number', term: 'string' },
-                 })">
-            <thead><tr>
-              <th class="sortable-th" :class="sortClass('term')" :aria-sort="ariaSort('term')"
-                  @click="sortBy('term')" x-text="$app.t('wortschatz.col.term')"></th>
-              <th class="sortable-th" :class="sortClass('count')" :aria-sort="ariaSort('count')"
-                  @click="sortBy('count')" x-text="$app.t('wortschatz.col.count')"></th>
-              <th class="sortable-th" :class="sortClass('chapter_spread')" :aria-sort="ariaSort('chapter_spread')"
-                  @click="sortBy('chapter_spread')" x-text="$app.t('wortschatz.col.spread')"></th>
-              <th class="sortable-th" x-show="wortschatzHasKeyness"
-                  :class="sortClass('keyness')" :aria-sort="ariaSort('keyness')"
-                  @click="sortBy('keyness')" x-text="$app.t('wortschatz.col.keyness')"></th>
-              <th x-text="$app.t('wortschatz.col.firstPage')"></th>
-            </tr></thead>
-            <tbody>
-              <template x-for="t in sorted" :key="t.term">
-                <tr>
-                  <td class="wortschatz-term" x-text="t.term"></td>
-                  <td class="wortschatz-num" x-text="wsNum(t.count)"></td>
-                  <td class="wortschatz-num" x-text="wsNum(t.chapter_spread)"></td>
-                  <td class="wortschatz-num" x-show="wortschatzHasKeyness">
-                    <span class="tag" :class="wsKeynessClass(t.keyness)" x-text="wsNum(t.keyness, 1)"></span>
-                  </td>
-                  <td>
-                    <span class="tag internal-link" x-show="t.first_page_id"
-                          @click="wsGotoPage(t.first_page_id)"
-                          x-text="t.first_page_name || ('#' + t.first_page_id)"></span>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Wendungen -->
-      <div x-show="wortschatzTab === 'phrases'">
-        <p class="wortschatz-list-hint" x-text="$app.t('wortschatz.phrases.hint')"></p>
-        <div x-show="!wortschatzNgrams.length" class="muted-msg muted-msg--spaced" x-text="$app.t('wortschatz.phrases.empty')"></div>
-        <div class="table-scroll" x-show="wortschatzNgrams.length">
-          <table class="wortschatz-table"
-                 x-data="sortableTable({
-                   rows: () => wortschatzNgrams,
-                   defaultKey: 'count',
-                   defaultDir: 'desc',
-                   persistKey: 'wortschatz.phrases',
-                   types: { count: 'number', n: 'number', chapter_spread: 'number', log_dice: 'number', phrase: 'string' },
-                 })">
-            <thead><tr>
-              <th class="sortable-th" :class="sortClass('phrase')" :aria-sort="ariaSort('phrase')"
-                  @click="sortBy('phrase')" x-text="$app.t('wortschatz.col.phrase')"></th>
-              <th class="sortable-th" :class="sortClass('n')" :aria-sort="ariaSort('n')"
-                  @click="sortBy('n')" x-text="$app.t('wortschatz.col.n')"></th>
-              <th class="sortable-th" :class="sortClass('count')" :aria-sort="ariaSort('count')"
-                  @click="sortBy('count')" x-text="$app.t('wortschatz.col.count')"></th>
-              <th class="sortable-th" :class="sortClass('chapter_spread')" :aria-sort="ariaSort('chapter_spread')"
-                  @click="sortBy('chapter_spread')" x-text="$app.t('wortschatz.col.spread')"></th>
-              <th class="sortable-th" :class="sortClass('log_dice')" :aria-sort="ariaSort('log_dice')"
-                  @click="sortBy('log_dice')" x-text="$app.t('wortschatz.col.logDice')"></th>
-              <th x-text="$app.t('wortschatz.col.firstPage')"></th>
-            </tr></thead>
-            <tbody>
-              <template x-for="p in sorted" :key="p.phrase">
-                <tr>
-                  <td class="wortschatz-phrase" x-text="p.phrase"></td>
-                  <td class="wortschatz-num" x-text="wsNum(p.n)"></td>
-                  <td class="wortschatz-num" x-text="wsNum(p.count)"></td>
-                  <td class="wortschatz-num" x-text="wsNum(p.chapter_spread)"></td>
-                  <td class="wortschatz-num" x-text="wsNum(p.log_dice, 2)"></td>
-                  <td>
-                    <span class="tag internal-link" x-show="p.first_page_id"
-                          @click="wsGotoPage(p.first_page_id)"
-                          x-text="p.first_page_name || ('#' + p.first_page_id)"></span>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <!-- @include wortschatz-terms -->
+      <!-- @include wortschatz-phrases -->
+      <!-- @include wortschatz-hapax -->
     </div>
   </template>
 </div>

@@ -3,6 +3,7 @@
 // positioniert und befüllt. Hält die Pseudo-Slots auf den Targets frei,
 // damit ::before/::after dort für eigene Decorations verfügbar bleiben.
 import { EVT } from './events.js';
+import { mountInTopLayer } from './fullscreen.js';
 
 (function () {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
@@ -41,12 +42,11 @@ import { EVT } from './events.js';
     document.body.appendChild(layer);
   }
 
-  // Native <dialog>.showModal() rendert im Top-Layer; Body-Kinder sind dahinter
-  // verdeckt. Layer in den offenen Dialog umhaengen, wenn das Target dort lebt.
+  // Offenes <dialog> UND Native-Vollbild (Plot-/Motiv-/Recherche-/Bucheditor-Karte)
+  // rendern im Top-Layer; Body-Kinder liegen dahinter und sind unsichtbar. Layer
+  // pro Anzeige zum Ziel umhaengen — Wahl der Ebene in fullscreen.js#topLayerHost.
   function reparentLayer(target) {
-    const dlg = target.closest('dialog[open]');
-    const parent = dlg || document.body;
-    if (layer.parentNode !== parent) parent.appendChild(layer);
+    mountInTopLayer(layer, target);
   }
 
   function hide() {

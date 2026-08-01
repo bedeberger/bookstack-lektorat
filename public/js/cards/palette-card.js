@@ -20,6 +20,7 @@ import {
 import { fuzzyMatch, highlight } from './palette-fuzzy.js';
 import { PROVIDERS, parseQuery } from './palette-providers.js';
 import { EVT } from '../events.js';
+import { mountInTopLayer } from '../fullscreen.js';
 
 // Score-Budget pro Query-Char für Provider-Treffer im Mix-Modus.
 // Höhere Query-Länge = grössere absolute fuzzyMatch-Scores (Gap-Penalty
@@ -72,6 +73,14 @@ export function registerPaletteCard() {
     openPalette() {
       const active = document.activeElement;
       this._returnFocusEl = (active && active !== document.body) ? active : null;
+      // Ist gerade eine Karte im Native-Vollbild (Plot/Motiv/Recherche/Bucheditor),
+      // muss das Overlay in deren Top-Layer — als <body>-Kind laege es hinter dem
+      // ::backdrop und Cmd+K wuerde scheinbar nichts tun. Bewusst umhaengen statt
+      // das Vollbild zu beenden: die Palette wird oft mit Esc wieder verworfen, und
+      // wer dafuer aus dem Vollbild-Board faellt, verliert seinen Kontext fuer
+      // nichts. Waehlt man wirklich ein Ziel, endet das Vollbild ohnehin von selbst
+      // (_closeOtherMainCards setzt die Karte auf display:none).
+      this._remountPaletteOverlay();
       this.paletteOpen = true;
       this.paletteQuery = '';
       this.paletteIdx = 0;
@@ -83,12 +92,23 @@ export function registerPaletteCard() {
       });
     },
 
+    // Overlay in den aktuell obersten Layer haengen (Fullscreen-Element, sonst
+    // <body>). Ebenen-Wahl in fullscreen.js#topLayerHost; hier ohne `target`,
+    // weil die Palette global ist und nicht an einem Trigger haengt.
+    _remountPaletteOverlay() {
+      mountInTopLayer(document.querySelector('.palette-overlay'));
+    },
+
     closePalette() {
       this.paletteOpen = false;
       this.paletteQuery = '';
       this.paletteIdx = 0;
       this.paletteToast = '';
       document.body.classList.remove('palette-open');
+      // Zurueck an <body>, solange kein Vollbild aktiv ist: sonst haengt das
+      // Overlay in einer Karte, die spaeter geschlossen (display:none) wird und
+      // es mit sich unsichtbar macht.
+      this._remountPaletteOverlay();
       const el = this._returnFocusEl;
       this._returnFocusEl = null;
       if (el && typeof el.focus === 'function' && document.contains(el)) {

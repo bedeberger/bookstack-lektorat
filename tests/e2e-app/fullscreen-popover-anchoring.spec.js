@@ -58,3 +58,59 @@ for (const c of CARDS) {
     }
   });
 }
+
+// Global lebende Schwebe-Elemente koennen kein statisches Teleport-Ziel haben und
+// werden zur Anzeigezeit umgehaengt (fullscreen.js#mountInTopLayer). Hier gegen die
+// Plot-Karte im echten Native-Vollbild geprueft.
+test('Vollbild: Tooltip und Palette erreichen den Top-Layer', async ({ page }) => {
+  await bootApp(page);
+  await selectSeededBook(page);
+  await page.evaluate(() => window.__app.togglePlotCard());
+  const trigger = '.card--plot .card-header-aside .icon-btn[data-tip]';
+  await page.waitForSelector(trigger);
+  // cardFadeIn abwarten: waehrend der Animation steht ein Transform auf der Karte
+  // und macht sie zum Containing-Block fuer position:fixed.
+  await page.waitForTimeout(1000);
+
+  await page.evaluate(() => document.querySelector('.card--plot').requestFullscreen());
+  await page.waitForFunction(() => document.fullscreenElement?.classList.contains('card--plot'));
+
+  // ── Tooltip: Pixel-Nachweis. `.tip-layer` hat `pointer-events: none`, ein
+  // Hit-Test taugt also nicht — stattdessen denselben Bildausschnitt mit und ohne
+  // Tooltip vergleichen. Am <body> haengend lag er hinter dem ::backdrop: gleiche
+  // Pixel, Test rot.
+  await page.hover(trigger);
+  await page.waitForFunction(() => document.querySelector('.tip-layer')?.classList.contains('tip-visible'));
+  const tip = await page.evaluate(() => {
+    const l = document.querySelector('.tip-layer');
+    const r = l.getBoundingClientRect();
+    return { inCard: document.querySelector('.card--plot').contains(l),
+             clip: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) } };
+  });
+  expect(tip.inCard, 'Tooltip-Layer liegt im Vollbild-Teilbaum').toBe(true);
+  expect(tip.clip.width, 'Tooltip hat eine messbare Flaeche').toBeGreaterThan(20);
+  const withTip = await page.screenshot({ clip: tip.clip });
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('tooltip:hide')));
+  await page.waitForTimeout(250); // opacity-Transition (0.08s) auslaufen lassen
+  const withoutTip = await page.screenshot({ clip: tip.clip });
+  expect(withTip.equals(withoutTip), 'Tooltip ist im Vollbild sichtbar (Pixel unterscheiden sich)').toBe(false);
+
+  // ── Palette: hat pointer-events, also echter Hit-Test. Ausserdem muss sie im
+  // Vollbild-Teilbaum haengen und das Vollbild darf NICHT beendet worden sein.
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('palette:open')));
+  await page.waitForFunction(() => {
+    const o = document.querySelector('.palette-overlay');
+    return o && getComputedStyle(o).display !== 'none';
+  });
+  const pal = await page.evaluate(() => {
+    const o = document.querySelector('.palette-overlay');
+    const r = o.getBoundingClientRect();
+    const hit = document.elementFromPoint(window.innerWidth / 2, r.top + r.height * 0.2);
+    return { inCard: document.querySelector('.card--plot').contains(o),
+             hitInOverlay: !!(hit && o.contains(hit)),
+             stillFullscreen: !!document.fullscreenElement };
+  });
+  expect(pal.inCard, 'Palette-Overlay liegt im Vollbild-Teilbaum').toBe(true);
+  expect(pal.hitInOverlay, 'Palette ist im Vollbild anklickbar').toBe(true);
+  expect(pal.stillFullscreen, 'Palette beendet das Vollbild nicht').toBe(true);
+});

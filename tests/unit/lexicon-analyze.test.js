@@ -6,7 +6,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { analyzeBook, blockTextsFromHtml, LEXICON_VERSION } = require('../../lib/lexicon/analyze');
+const {
+  analyzeBook, blockTextsFromHtml, LEXICON_VERSION, TERM_LIMIT, _selectHapax,
+} = require('../../lib/lexicon/analyze');
 const { frequencies, tokenize } = require('../../lib/lexicon/tokenize');
 
 // Baut eine Seite mit `count` Wiederholungen eines Satzes (für Masse mit Mindestlänge).
@@ -149,4 +151,113 @@ test('analyzeBook: onYield wird gerufen (Event-Loop-Rückgabe im Cron)', async (
   let calls = 0;
   await analyzeBook([page(1, 1, '<p>Ein Satz.</p>')], { onYield: async () => { calls++; } });
   assert.ok(calls >= 3, `mindestens einmal pro Phase, war ${calls}`);
+});
+
+// ── Zweite Auswahlachse: Auffälligkeit ────────────────────────────────────────
+// Die Häufigkeit allein verfehlt genau die Wörter, die dieses Buch von den
+// übrigen unterscheiden. Der Aufbau erzwingt das: mehr Füllwörter als Plätze in
+// der Häufigkeitsliste, dazu ein selteneres Wort, das die Referenz nicht kennt.
+
+function fillerWord(i) {
+  return 'blind' + String.fromCharCode(97 + Math.floor(i / 26)) + String.fromCharCode(97 + (i % 26));
+}
+
+// count Füllwörter à 4 Vorkommen + `sonderling` à 3 → Rang 201+, wenn nur die
+// Häufigkeit zählt.
+function keynessFixture(fillerCount = TERM_LIMIT + 5) {
+  const blocks = [];
+  const refFreq = new Map();
+  for (let i = 0; i < fillerCount; i++) {
+    const w = fillerWord(i);
+    blocks.push(`<p>${w} ${w} ${w} ${w}</p>`);
+    refFreq.set(w, 40); // in der Referenz zehnfach — also gleiche Rate, nicht auffällig
+  }
+  blocks.push('<p>sonderling sonderling sonderling</p>');
+  const targetTokens = fillerCount * 4 + 3;
+  return {
+    pages: [page(1, 1, blocks.join(''))],
+    reference: { freq: refFreq, total: targetTokens * 10 },
+  };
+}
+
+test('analyzeBook: auffälliges Wort kommt in die Liste, obwohl es nicht häufig genug ist', async () => {
+  const { pages, reference } = keynessFixture();
+
+  // Ohne Referenz entscheidet nur die Häufigkeit — das seltenere Wort fällt raus.
+  const solo = await analyzeBook(pages);
+  assert.equal(solo.terms.filter(t => t.kind === 'freq').length, TERM_LIMIT);
+  assert.equal(solo.terms.some(t => t.term === 'sonderling'), false);
+
+  const withRef = await analyzeBook(pages, { reference: { ...reference, floor: 3 } });
+  const row = withRef.terms.find(t => t.term === 'sonderling');
+  assert.ok(row, 'über die Auffälligkeit ausgewählt');
+  assert.equal(row.kind, 'key');
+  assert.equal(row.count, 3);
+  // Die Häufigkeitsplätze bleiben unangetastet — die zweite Achse kommt dazu,
+  // sie verdrängt nichts.
+  assert.equal(withRef.terms.filter(t => t.kind === 'freq').length, TERM_LIMIT);
+});
+
+test('analyzeBook: Auswahl ist vorsichtig gegen die Kappungsgrenze der Referenz', async () => {
+  // Dieselbe Lage, aber die Referenztabelle ist erst ab 60 Vorkommen gefüllt: ein
+  // dort fehlendes Wort kann trotzdem 59-mal vorkommen. Dann ist die Auffälligkeit
+  // nicht belegt, und die Zeile darf nicht in die Liste — sonst besteht sie
+  // bevorzugt aus Wörtern, deren Wert nur aus der Kappung stammt.
+  const { pages, reference } = keynessFixture();
+  const withFloor = await analyzeBook(pages, { reference: { ...reference, floor: 60 } });
+  assert.equal(withFloor.terms.some(t => t.term === 'sonderling'), false);
+});
+
+// ── Einmalwörter ──────────────────────────────────────────────────────────────
+
+test('analyzeBook: Einmalwörter als eigene Zeilensorte, mit Sprungziel', async () => {
+  const pages = [
+    page(1, 10, '<p>Der Morgennebelschleier lag über allem.</p>'),
+    page(2, 10, '<p>Nebel Nebel Nebel und ein Firnfeld.</p>'),
+  ];
+  const { terms, stats } = await analyzeBook(pages);
+  const hapax = terms.filter(t => t.kind === 'hapax');
+  const byTerm = new Map(hapax.map(h => [h.term, h]));
+
+  assert.ok(byTerm.has('morgennebelschleier'));
+  assert.ok(byTerm.has('firnfeld'));
+  assert.equal(byTerm.get('morgennebelschleier').count, 1);
+  assert.equal(byTerm.get('morgennebelschleier').first_page_id, 1);
+  assert.equal(byTerm.get('firnfeld').first_page_id, 2);
+  // Dreimal benutzt heisst: kein Einmalwort, sondern ein Lieblingswort.
+  assert.equal(byTerm.has('nebel'), false);
+  assert.equal(terms.find(t => t.term === 'nebel').kind, 'freq');
+  // Keyness bleibt leer: bei einem einzigen Vorkommen schlägt Log-Likelihood
+  // schon bei Zufallsschwankungen an.
+  assert.equal(byTerm.get('firnfeld').keyness, null);
+  // Die längsten zuerst — so trifft der Deckel die richtigen.
+  assert.equal(hapax[0].term, 'morgennebelschleier');
+  // hapax_listed zählt ALLE Einmalwörter nach den Listenfiltern, nicht nur die
+  // gezeigten; `stats.hapax` zählt zusätzlich Stoppwörter und kurze Wörter.
+  assert.equal(stats.hapax_listed, hapax.length);
+  assert.ok(stats.hapax > stats.hapax_listed, 'Stoppwörter zählen nur in stats.hapax');
+});
+
+test('analyzeBook: Stoppwörter, Eigennamen und kurze Wörter sind keine Einmalwörter', async () => {
+  const pages = [page(1, 1, '<p>Kassandra sah aber nur Eis und ein Alpenglühen.</p>')];
+  const { terms } = await analyzeBook(pages, { nameStopwords: new Set(['kassandra']) });
+  const hapax = terms.filter(t => t.kind === 'hapax').map(t => t.term);
+  assert.deepEqual(hapax, ['alpenglühen']);
+  assert.equal(hapax.includes('kassandra'), false); // Eigenname
+  assert.equal(hapax.includes('eis'), false);       // unter der Mindestlänge
+  assert.equal(hapax.includes('aber'), false);      // Stoppwort
+});
+
+test('_selectHapax: was der Autor anderswo benutzt, steht hinten — dann die längsten', () => {
+  const reference = { freq: new Map([['sonnenaufgangsfarbe', 12]]) };
+  const picked = _selectHapax(['kurzwort', 'sonnenaufgangsfarbe', 'nebelkrone'], reference, 2);
+  // Das Wort aus der Referenz fliegt trotz Länge raus: einmal HIER und sonst nie
+  // ist die Frage, nicht einfach „einmal hier".
+  assert.deepEqual(picked, ['nebelkrone', 'kurzwort']);
+});
+
+test('_selectHapax: Deckel greift, Reihenfolge ist deterministisch', () => {
+  const words = ['aaaaaa', 'bbbbbb', 'cccccc', 'ddddddd'];
+  assert.deepEqual(_selectHapax(words, null, 2), ['ddddddd', 'aaaaaa']);
+  assert.deepEqual(_selectHapax([...words].reverse(), null, 2), ['ddddddd', 'aaaaaa']);
 });

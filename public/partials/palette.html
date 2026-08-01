@@ -1,6 +1,9 @@
 <!-- Command-Palette: Modal mit Such-Input + gruppierter Feature-/Aktions-/Provider-Liste.
      Nach <body> teleportiert, damit fixed-Overlay nicht von einem
-     transformierten Eltern-Container eingefangen wird.
+     transformierten Eltern-Container eingefangen wird. Kein statisches Ziel möglich
+     (die Palette gehört zu keiner Karte): ist eine Karte im Native-Vollbild, hängt
+     `openPalette` das Overlay zur Anzeigezeit in dessen Top-Layer um
+     (fullscreen.js#mountInTopLayer) — als body-Kind läge es hinter dem ::backdrop.
      Alpine.data-Sub — siehe public/js/cards/palette-card.js. -->
 
 <div x-data="paletteCard" class="display-contents">

@@ -1,0 +1,46 @@
+<!-- Wendungen der Wortschatz-Analyse. Fragment von wortschatz.html (String-Include
+     `<!-- @include wortschatz-phrases -->`) — Begründung siehe wortschatz-terms.html. -->
+<div x-show="wortschatzTab === 'phrases'">
+  <p class="wortschatz-list-hint" x-text="$app.t('wortschatz.phrases.hint')"></p>
+  <div x-show="!wortschatzNgrams.length" class="muted-msg muted-msg--spaced" x-text="$app.t('wortschatz.phrases.empty')"></div>
+  <div class="table-scroll" x-show="wortschatzNgrams.length">
+    <table class="wortschatz-table"
+           x-data="sortableTable({
+             rows: () => wortschatzNgrams,
+             defaultKey: 'count',
+             defaultDir: 'desc',
+             persistKey: 'wortschatz.phrases',
+             types: { count: 'number', n: 'number', chapter_spread: 'number', log_dice: 'number', phrase: 'string' },
+           })">
+      <thead><tr>
+        <th class="sortable-th" :class="sortClass('phrase')" :aria-sort="ariaSort('phrase')"
+            @click="sortBy('phrase')" x-text="$app.t('wortschatz.col.phrase')"></th>
+        <th class="sortable-th" :class="sortClass('n')" :aria-sort="ariaSort('n')"
+            @click="sortBy('n')" x-text="$app.t('wortschatz.col.n')"></th>
+        <th class="sortable-th" :class="sortClass('count')" :aria-sort="ariaSort('count')"
+            @click="sortBy('count')" x-text="$app.t('wortschatz.col.count')"></th>
+        <th class="sortable-th" :class="sortClass('chapter_spread')" :aria-sort="ariaSort('chapter_spread')"
+            @click="sortBy('chapter_spread')" x-text="$app.t('wortschatz.col.spread')"></th>
+        <th class="sortable-th" :class="sortClass('log_dice')" :aria-sort="ariaSort('log_dice')"
+            @click="sortBy('log_dice')" x-text="$app.t('wortschatz.col.logDice')"></th>
+        <th x-text="$app.t('wortschatz.col.firstPage')"></th>
+      </tr></thead>
+      <tbody>
+        <template x-for="p in sorted" :key="p.phrase">
+          <tr>
+            <td class="wortschatz-phrase" x-text="p.phrase"></td>
+            <td class="wortschatz-num" x-text="wsNum(p.n)"></td>
+            <td class="wortschatz-num" x-text="wsNum(p.count)"></td>
+            <td class="wortschatz-num" x-text="wsNum(p.chapter_spread)"></td>
+            <td class="wortschatz-num" x-text="wsNum(p.log_dice, 2)"></td>
+            <td>
+              <span class="tag internal-link" x-show="p.first_page_id"
+                    @click="wsGotoPage(p.first_page_id)"
+                    x-text="p.first_page_name || ('#' + p.first_page_id)"></span>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+</div>
