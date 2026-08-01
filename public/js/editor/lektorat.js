@@ -9,10 +9,11 @@ import { runQuoteNormalizeHtml } from './shared/quote-normalize.js';
 
 export const lektoratMethods = {
   // `outSkipped` (optional): sammelt Korrekturen, die replaceInHtml unangetastet
-  // liess (No-Op), als `{ f, reason }`. Drei Gründe, die der User auseinander
+  // liess (No-Op), als `{ f, reason }`. Vier Gründe, die der User auseinander
   // halten MUSS — „Stelle existiert nicht mehr" (Seite wurde zwischenzeitlich
   // umgeschrieben, typisch nach einem Write von einem Zweitgerät) verlangt keine
-  // manuelle Nachkontrolle, „Link/Absatzgrenze betroffen" schon. Reihenfolge des
+  // manuelle Nachkontrolle, „Link/Quellenangabe/Absatzgrenze betroffen" schon.
+  // Reihenfolge des
   // Entscheidungsbaums identisch zum Seiten-Chat (chat.js#applyChatVorschlag).
   // Ausgewertet wird gegen `result`, den sequenziell mitwandernden Stand: ein
   // Finding, dessen `original` erst durch eine vorherige Korrektur verschwindet,
@@ -39,7 +40,7 @@ export const lektoratMethods = {
   _skipSummary(skipped) {
     const counts = {};
     for (const s of skipped) counts[s.reason] = (counts[s.reason] || 0) + 1;
-    return ['notFound', 'spansLink', 'boundary']
+    return ['notFound', 'spansLink', 'spansMarker', 'boundary']
       .filter(k => counts[k] > 0)
       .map(k => this.t('lektorat.skip.' + k, { count: counts[k] }))
       .join(', ');

@@ -112,6 +112,25 @@ test('substack: Titel in Meta-Box statt Body-h1, Kapitel-Heading als h2', async 
   assert.ok(s.includes('Text eins.'));
 });
 
+test('substack: Codeblock und Diagramm-Quelltext gehen nicht verloren', async () => {
+  // Ein Block, den der Serializer nicht kennt, fiel in den `default`-Zweig und
+  // verschwand spurlos. Fuer Diagramme verletzt das Invariante B aus
+  // lib/diagram-export.js (nicht renderbar ⇒ Quelltext bleibt stehen) — Substack
+  // kann weder ein `data:`-Bild noch Diagramm-Notation zeichnen.
+  const bundle = {
+    scope: 'page', book, chapter, page,
+    groups: [{ chapterId: 10, chapter, pages: [
+      { p: page, pd: { html: '<p>Davor.</p><pre class="mermaid">flowchart TD\n  A[Start] --&gt; B</pre><pre>echo hallo</pre><p>Danach.</p>' } },
+    ] }],
+  };
+  const s = (await buildSubstack(bundle, { lang: 'de' })).toString('utf8');
+  assert.ok(s.includes('Davor.') && s.includes('Danach.'));
+  assert.ok(s.includes('flowchart TD'), 'Diagramm-Quelltext muss im Export stehen');
+  assert.ok(s.includes('A[Start] --&gt; B'), 'Notation bleibt unescaped-frei und unveraendert');
+  assert.ok(s.includes('echo hallo'), 'gewoehnlicher Codeblock ebenso');
+  assert.ok(/<pre>flowchart TD/.test(s), 'als <pre>, ohne Klasse (Substack strippt sie ohnehin)');
+});
+
 test('substack: en-Locale + Bild-Warnung bei nicht-öffentlicher URL', async () => {
   const bundle = {
     scope: 'page', book, chapter, page,

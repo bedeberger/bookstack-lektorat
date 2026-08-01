@@ -1,4 +1,4 @@
-import { escHtml, findInHtml, countInHtml, replaceInHtml, matchSpansLink, clearStatusAfter } from '../utils.js';
+import { escHtml, findInHtml, countInHtml, replaceInHtml, skipReason, clearStatusAfter } from '../utils.js';
 import { makeChatMethods } from './chat-base.js';
 import { contentRepo } from '../repo/content.js';
 
@@ -121,14 +121,18 @@ export const chatMethods = {
         setErr(root.t('chat.originalAmbiguous'));
         return;
       }
-      // Block-Grenzen-/Link-Vorschlag: countInHtml findet ihn zwar (Tag-agnostische
-      // Text-View), aber replaceInHtml lässt ihn zum Schutz der Absatzstruktur bzw.
-      // des Hyperlinks unangetastet. Ohne Abfang wäre das ein stiller No-Op, der
-      // sich unten fälschlich wie „gespeichert" anfühlt (_applied + Erfolgsmeldung).
+      // Block-Grenzen-/Link-/Marker-Vorschlag: countInHtml findet ihn zwar
+      // (Tag-agnostische Text-View), aber replaceInHtml lässt ihn zum Schutz der
+      // Absatzstruktur, des Hyperlinks bzw. des Quellen-/Verweis-Zeigers
+      // unangetastet. Ohne Abfang wäre das ein stiller No-Op, der sich unten
+      // fälschlich wie „gespeichert" anfühlt (_applied + Erfolgsmeldung).
+      // Grund über `skipReason` statt eigener Fallunterscheidung — derselbe
+      // Entscheidungsbaum wie im Lektorat-Apply, nur andere Meldungs-Keys.
       if (replaceInHtml(page.html, vorschlag.original, vorschlag.ersatz) === page.html) {
-        setErr(matchSpansLink(page.html, vorschlag.original)
-          ? root.t('chat.spansLink')
-          : root.t('chat.crossesBlockBoundary'));
+        setErr(root.t({
+          spansLink: 'chat.spansLink',
+          spansMarker: 'chat.spansMarker',
+        }[skipReason(page.html, vorschlag.original)] || 'chat.crossesBlockBoundary'));
         return;
       }
     } catch (e) {

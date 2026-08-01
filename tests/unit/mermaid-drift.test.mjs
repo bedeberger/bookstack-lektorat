@@ -135,6 +135,51 @@ test('htmlToPlainText laesst gewoehnliche Codebloecke stehen', () => {
   assert.equal(htmlToPlainText('<pre>echo hallo</pre>'), 'echo hallo');
 });
 
+test('der KI-Prompt-Pfad schneidet Diagramme genauso aus wie die Textstatistik', async () => {
+  // Zweite, unabhaengige HTML→Text-Kette (routes/jobs/shared/ai.js): sie haelt
+  // Absatzgrenzen als `\n\n` und kann darum nicht htmlToPlainText sein, muss
+  // aber denselben Ausschnitt machen. Was sie durchlaesst, kostet Input-Tokens
+  // in jedem Job, landet im Embedding-Index (via loadPageContents) und wird vom
+  // Lektorat als Prosa gelesen — siehe docs/diagramme.md, Invariante 7.
+  process.env.DB_PATH = process.env.DB_PATH
+    || resolve('/tmp', `mermaid-drift-${process.pid}-${Date.now()}.db`);
+  process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret';
+  await import('../../db/schema.js');
+  const mod = await import('../../routes/jobs/shared/ai.js');
+  const { htmlToText, htmlToTextForPrompt } = mod.default || mod;
+
+  const code = 'flowchart TD\n  A[Ausgangslage] --> B{Entscheidung}';
+  const html = `<p>Davor.</p>${buildDiagramHtml(code)}<p>Danach.</p>`;
+
+  assert.equal(htmlToText(html), 'Davor. Danach.');
+
+  const prompt = htmlToTextForPrompt(html);
+  assert.equal(prompt, 'Davor.\n\nDanach.');
+  for (const token of ['flowchart', 'Ausgangslage', '-->']) {
+    assert.ok(!prompt.includes(token), `Diagramm-Notation "${token}" darf nicht in den Prompt`);
+  }
+
+  // Gewoehnliche Codebloecke bleiben Prosa-Kontext (der Autor hat sie als Inhalt
+  // geschrieben, nicht als Notation eines Bildes).
+  assert.equal(htmlToText('<pre>echo hallo</pre>'), 'echo hallo');
+});
+
+test('stripDiagramBlocks: Server- und Frontend-Kopie bleiben gleichauf', async () => {
+  const { stripDiagramBlocks: srv } = await import('../../lib/html-text.js');
+  const { stripDiagramBlocks: fe } = await import('../../public/js/html-text.js');
+  const cases = [
+    `<p>a</p>${buildDiagramHtml('graph TD; A-->B')}<p>b</p>`,
+    '<pre class="lang mermaid other">graph TD</pre>rest',
+    "<pre class='mermaid'>graph TD</pre>rest",
+    '<pre>normal</pre>',
+    '',
+  ];
+  for (const c of cases) {
+    assert.equal(srv(c), fe(c), c);
+    assert.ok(!srv(c).includes('graph TD;'), 'Diagramm-Quelltext muss weg sein');
+  }
+});
+
 test('Server- und Frontend-Kopie von htmlToPlainText bleiben gleichauf', async () => {
   const server = (await import('../../lib/html-text.js')).default
     || (await import('../../lib/html-text.js'));

@@ -111,6 +111,23 @@ test('appToWpHtml: code block', () => {
   assert.match(out, /<pre class="wp-block-code">console\.log\(1\)<\/pre>/);
 });
 
+test('Diagramm-Block ueberlebt den Push→Pull-Round-Trip', async () => {
+  // `<pre class="mermaid">` ist der persistierte Diagramm-Block (Markup-SSoT
+  // public/js/diagram/mermaid-html.js). Der Push muss die Klasse als Gutenberg-
+  // `className` mitschicken, sonst kommt vom LWW-Pull ein klassenloses `<pre>`
+  // zurueck und macht das Diagramm im Manuskript dauerhaft zum Codeblock.
+  const app = '<pre class="mermaid">flowchart TD\n  A[Start] --&gt; B[Ende]</pre>';
+  const wp = appToWpHtml(app);
+  assert.match(wp, /<!-- wp:code \{"className":"mermaid"\} -->/);
+  assert.match(wp, /<pre class="wp-block-code mermaid">/);
+
+  const back = await wpToAppHtml(wp);
+  assert.match(back, /<pre class="mermaid">/, 'die Diagramm-Klasse muss den Pull ueberleben');
+  assert.doesNotMatch(back, /wp-block-code/, 'WP-Utility-Klassen fliegen raus');
+  assert.match(back, /flowchart TD/);
+  assert.match(back, /A\[Start\] --&gt; B\[Ende\]/, 'der Quelltext bleibt unveraendert');
+});
+
 test('appToWpHtml: hr → separator', () => {
   const out = appToWpHtml('<hr>');
   assert.match(out, /<!-- wp:separator -->/);

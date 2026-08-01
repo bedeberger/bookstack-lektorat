@@ -103,6 +103,9 @@ die eigentliche Arbeit macht [lib/diagram-export.js](../lib/diagram-export.js).
 | DOCX | `png` | dito → `_resolvePageImages` → `ImageRun` |
 | Markdown | `code` | ```` ```mermaid ````-Fence (der Ziel-Renderer zeichnet selbst) |
 | Plaintext | `code` | Quelltext |
+| Substack | `code` | Quelltext in `<pre>` (Substack strippt Klassen, kann kein `data:`-Bild) |
+| WordPress | — | Quelltext als `wp:code`-Block, siehe unten |
+| HubSpot | — | Quelltext in `<pre>` |
 
 **Default ist `'code'`, also nichts tun.** Ein Builder, der Bilder tragen kann,
 wählt aktiv `svg` oder `png`. Bewusst diese Richtung: ein vergessenes Opt-in
@@ -118,6 +121,27 @@ Fussnoten-Mechanismus aktiv ist. Darum löst [docx.js](../lib/export-builders/do
 die Diagramme **vor** beiden Zweigen selbst auf — läge es nur im
 `prepareCitations`-Zweig, hätte ausgerechnet der Manuskript-Export für Lektorat
 und Verlag keine Abbildungen.
+
+## Blog-Sync: kein Bild, aber ein geschlossener Round-Trip
+
+WordPress und HubSpot gehen **nicht** durch `prepareCitations`/`diagram-export` —
+sie bekommen kein SVG und kein PNG, sondern den Quelltext als Codeblock
+([wp-html.js](../lib/wp-html.js), [hubspot-html.js](../lib/hubspot-html.js)). Ein
+Bild wäre ein Medien-Upload und damit ein eigener Mechanismus pro Plattform;
+solange den keiner braucht, ist der Codeblock die ehrliche Degradation.
+
+**Beim WordPress-Sync ist das aber nicht das Ende der Geschichte, denn er liest
+zurück** (LWW-Pull). Darum schickt der Push die App-Klassen des `<pre>` als
+Gutenberg-`className` mit (`<!-- wp:code {"className":"mermaid"} -->`), und der
+Klassenfilter des Pulls behält genau diese Klassen — beide Richtungen lesen
+`_isAppClass`, es gibt keine zweite Liste. Ohne das käme vom nächsten Pull ein
+klassenloses `<pre>` zurück und machte den Diagramm-Block **im Manuskript
+dauerhaft** zum gewöhnlichen Codeblock: derselbe Verlust-Mechanismus wie beim
+Quellen-Chip ohne `data-src`, nur ohne Rettungsanker (der Chip behält seinen
+lesbaren Text, ein Diagramm verliert sein Bild).
+
+HubSpot braucht das nicht — dort gibt es keinen Pull zurück (einmaliger
+Initial-Import, danach nur Create-Draft-Push).
 
 ## Serverseitiges Rendering
 
@@ -152,7 +176,7 @@ rein rekonstruierbar, es geht nichts verloren.
 
 ## Was Diagramme NICHT sind: Prosa
 
-Vier Schichten müssen den Quelltext auslassen, sonst zählt Diagramm-Notation als
+Fünf Schichten müssen den Quelltext auslassen, sonst zählt Diagramm-Notation als
 Text:
 
 1. **Textstatistik + Volltextindex** — [lib/html-text.js](../lib/html-text.js)
@@ -160,6 +184,10 @@ Text:
    schneidet `pre.mermaid` **vor** dem Tag-Strip aus. Ohne das zählte
    `flowchart TD` als Wörter, `A[Ausgangslage] --> B` ginge in die Satzlängen des
    Rhythmus-Bands ein, und der Wortschatz führte `TD` als Lieblingswort.
+   Konsumenten der SSoT sind alle Zähl-Pfade: `page_stats` (Server-Sync **und**
+   Frontend-Save-Pfad), Wortschatz, FTS, Revisions-Diff, der dem Share-Leser
+   gezeigte Umfang ([share-helpers.js](../lib/share-helpers.js)#`htmlToPlainLength`)
+   und die Wortzahl auf dem Shunn-Titelblatt des DOCX-Exports.
 2. **TTS / Vorlesen** — `TTS_SKIP_BLOCK_SEL` in
    [tts-segment.js](../public/js/tts-segment.js) verwirft Quelltext-Block **und**
    Render-Knoten. Vorzulesen wäre entweder die Notation oder die Knoten-Labels in
@@ -169,9 +197,22 @@ Text:
    [editor-spellcheck/mapping.js](../public/js/cards/editor-spellcheck/mapping.js).
    Anders als beim Quellen-Chip wird hier **geschnitten** statt geschützt: der
    Block steht für sich, es gibt keine Nachbar-Textknoten, die zusammenklebten.
-4. Die drei Selektor-Kopien (Reader, TTS, LanguageTool, html-text-Regex) sind
+4. **Der KI-Pfad** — die zweite, unabhängige HTML→Text-Kette in
+   [routes/jobs/shared/ai.js](../routes/jobs/shared/ai.js) (`htmlToText` +
+   `htmlToTextForPrompt`) ruft dieselbe SSoT-Funktion
+   `stripDiagramBlocks`. Sie kann nicht `htmlToPlainText` *sein* — die
+   Prompt-Variante hält Absatzgrenzen als `\n\n`, weil die Dialogformat-Regel nur
+   dagegen prüfbar ist —, muss aber denselben Ausschnitt machen. Der teuerste Ort
+   der Liste: hier kostet Notation echte Input-Tokens (und ließe die dem User
+   gezeigte Schätzung aus `page_stats.tok` zu klein aussehen), das Lektorat
+   meldete Findings auf dem Quelltext (ein angewendeter Fix schreibt in den
+   Diagramm-Code), und über `loadPageContents` speist derselbe Text den
+   **Embedding-Index** — Diagramm-Notation wäre eine semantisch auffindbare
+   Passage, während die FTS-Hälfte derselben Hybrid-Suche sie ausschneidet.
+5. Die Selektor-Kopien (Reader, TTS, LanguageTool, html-text-Regex) sind
    **bewusst** und gegated durch
-   [tests/unit/mermaid-drift.test.mjs](../tests/unit/mermaid-drift.test.mjs).
+   [tests/unit/mermaid-drift.test.mjs](../tests/unit/mermaid-drift.test.mjs) —
+   dort liegt auch der Funktionstest des KI-Pfads.
 
 ## Pflicht-Invarianten
 
@@ -186,9 +227,16 @@ Text:
 5. **`htmlLabels: false` in beiden Renderern.** Sonst ist das Export-SVG
    unbrauchbar und Bildschirm und Export driften auseinander.
 6. **Neuer Exportweg ⇒ `diagramMode` setzen.** Ohne den Schalter zeigt er den
-   Quelltext (korrekt, aber nicht gemeint).
-7. **Diagramm-Notation zählt nirgends als Prosa** (die vier Schichten oben).
-8. **Mermaid-Version aktualisieren heisst:** Vendor-Datei ersetzen, den Pfad in
+   Quelltext (korrekt, aber nicht gemeint). Und: **jeder Block-Serializer braucht
+   einen `pre`-Zweig** — ein `default: return ''` lässt das Diagramm nicht auf
+   den Quelltext zurückfallen, sondern verschwinden (Invariante 2).
+7. **Diagramm-Notation zählt nirgends als Prosa** (die fünf Schichten oben).
+   Neuer HTML→Text-Pfad ⇒ `stripDiagramBlocks` aus
+   [lib/html-text.js](../lib/html-text.js), keine eigene Regex-Kette.
+8. **Ein Sync-Weg, der zurückliest, muss die Diagramm-Klasse zurückbekommen.**
+   Sonst degradiert der Pull den Block im Manuskript dauerhaft (siehe
+   Blog-Sync-Abschnitt).
+9. **Mermaid-Version aktualisieren heisst:** Vendor-Datei ersetzen, den Pfad in
    [lazy-libs.js](../public/js/lazy-libs.js), [share-reader/diagrams.js](../public/js/share-reader/diagrams.js)
    und `PUBLIC_ASSETS` in [server.js](../server.js) mitziehen und
    `RENDER_VERSION` in [lib/mermaid-render.js](../lib/mermaid-render.js) erhöhen

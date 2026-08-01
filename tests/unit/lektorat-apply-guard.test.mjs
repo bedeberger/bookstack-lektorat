@@ -1,16 +1,19 @@
 // Regression: die Skip-Meldung des Lektorat-Apply muss den WAHREN Grund nennen.
 //
 // `_applyCorrections` (public/js/editor/lektorat.js) sammelt jede Korrektur, die
-// replaceInHtml unangetastet liess, in `outSkipped` — und zwar aus drei sehr
+// replaceInHtml unangetastet liess, in `outSkipped` — und zwar aus vier sehr
 // verschiedenen Gründen:
 //
-//   'notFound'  — der Textbezug ist veraltet: die Stelle wurde inzwischen
-//                 umgeschrieben oder gelöscht (typisch, wenn während der Analyse
-//                 von einem Zweitgerät geschrieben wurde). KEINE Nachkontrolle
-//                 nötig, es gibt nichts mehr zu prüfen.
-//   'spansLink' — Schutzmechanismus: die Ersetzung hätte ein `href` verworfen.
-//   'boundary'  — Schutzmechanismus: die Ersetzung hätte eine Block-Grenze bzw.
-//                 einen `<br>` gekreuzt.
+//   'notFound'    — der Textbezug ist veraltet: die Stelle wurde inzwischen
+//                   umgeschrieben oder gelöscht (typisch, wenn während der
+//                   Analyse von einem Zweitgerät geschrieben wurde). KEINE
+//                   Nachkontrolle nötig, es gibt nichts mehr zu prüfen.
+//   'spansLink'   — Schutzmechanismus: die Ersetzung hätte ein `href` verworfen.
+//   'spansMarker' — Schutzmechanismus: die Ersetzung hätte den Zeiger einer
+//                   Quellenangabe (`data-src`) oder eines Querverweises
+//                   (`data-xref-id`) verworfen und toten Klartext hinterlassen.
+//   'boundary'    — Schutzmechanismus: die Ersetzung hätte eine Block-Grenze
+//                   bzw. einen `<br>` gekreuzt.
 //
 // Die Unterscheidung lebt in `skipReason` (utils/html-find.js) und wird hier
 // direkt getestet — im Gegensatz zum Chat-Pendant braucht es keinen Mirror, die
@@ -45,10 +48,10 @@ function applyCorrections(html, fehler) {
 function skipOrder(skipped) {
   const counts = {};
   for (const s of skipped) counts[s.reason] = (counts[s.reason] || 0) + 1;
-  return ['notFound', 'spansLink', 'boundary'].filter(k => counts[k] > 0);
+  return ['notFound', 'spansLink', 'spansMarker', 'boundary'].filter(k => counts[k] > 0);
 }
 
-// ── skipReason: die drei Gründe ───────────────────────────────────────────────
+// ── skipReason: die vier Gründe ──────────────────────────────────────────────
 
 test('skipReason: fehlender Text -> notFound (kein Schutzmechanismus)', () => {
   const html = '<p>Der Hund bellt.</p>';
@@ -58,6 +61,16 @@ test('skipReason: fehlender Text -> notFound (kein Schutzmechanismus)', () => {
 test('skipReason: umschlossener Link -> spansLink', () => {
   const html = '<p>Siehe <a href="https://example.org">die Quelle</a> dazu.</p>';
   assert.equal(skipReason(html, 'Siehe die Quelle dazu.'), 'spansLink');
+});
+
+test('skipReason: umschlossene Quellenangabe -> spansMarker', () => {
+  const html = '<p>Das ist belegt <span class="cite" data-src="7" data-loc="44">(Müller, 2020, S. 44)</span> und gilt.</p>';
+  assert.equal(skipReason(html, 'Das ist belegt (Müller, 2020, S. 44) und gilt.'), 'spansMarker');
+});
+
+test('skipReason: umschlossener Querverweis -> spansMarker', () => {
+  const html = '<p>Siehe <span class="xref" data-xref="chapter" data-xref-id="42">Kapitel 3</span> dazu näher.</p>';
+  assert.equal(skipReason(html, 'Siehe Kapitel 3 dazu näher.'), 'spansMarker');
 });
 
 test('skipReason: Absatzgrenze -> boundary', () => {
@@ -101,14 +114,31 @@ test('Erfolgreiche Korrektur erzeugt keinen Skip', () => {
 
 test('Gemischte Skips: jeder Grund einzeln, in fester Reihenfolge', () => {
   const html = '<p>Er ging nach Hause.</p><p>Dann schlief er ein.</p>'
-    + '<p>Siehe <a href="https://example.org">die Quelle</a> dazu.</p>';
+    + '<p>Siehe <a href="https://example.org">die Quelle</a> dazu.</p>'
+    + '<p>Belegt ist <span class="cite" data-src="7">(Müller, 2020)</span> alles.</p>';
   const { skipped } = applyCorrections(html, [
     { original: 'nach Hause. Dann', korrektur: 'heim. Sofort', typ: 'stil' },
     { original: 'Siehe die Quelle dazu.', korrektur: 'Vgl. die Quelle.', typ: 'stil' },
+    { original: 'Belegt ist (Müller, 2020) alles.', korrektur: 'Belegt ist (Müller, 2020) vieles.', typ: 'stil' },
     { original: 'existiert hier nicht', korrektur: 'egal', typ: 'stil' },
   ]);
-  assert.equal(skipped.length, 3);
-  assert.deepEqual(skipOrder(skipped), ['notFound', 'spansLink', 'boundary']);
+  assert.equal(skipped.length, 4);
+  assert.deepEqual(skipOrder(skipped), ['notFound', 'spansLink', 'spansMarker', 'boundary']);
+});
+
+test('Quellenangabe ueberlebt den Lektorat-Batch, Nachbar-Korrektur greift', () => {
+  // Der praktisch häufigste Fall: das Modell meldet einen echten Fehler im
+  // selben Absatz wie ein Beleg. Die Nachbar-Korrektur muss durchgehen, der
+  // Zeiger stehen bleiben — sonst kostet jeder Tippfehler neben einem Beleg
+  // die Fundstelle.
+  const html = '<p>Das ist belegt <span class="cite" data-src="7" data-loc="44">(Müller, 2020, S. 44)</span> und gilt sicherlch.</p>';
+  const { html: out, skipped } = applyCorrections(html, [
+    { original: 'sicherlch', korrektur: 'sicherlich', typ: 'rechtschreibung' },
+  ]);
+  assert.deepEqual(skipped, []);
+  assert.ok(out.includes('data-src="7"'), 'Zeiger erhalten');
+  assert.ok(out.includes('data-loc="44"'), 'Stellenangabe erhalten');
+  assert.ok(out.includes('sicherlich'), 'Korrektur angewandt');
 });
 
 // ── Nicht-Regression: der Batch-Charakter des Lektorats ──────────────────────

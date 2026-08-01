@@ -1,6 +1,7 @@
 'use strict';
 const { callAI, parseJSON, CHARS_PER_TOKEN, getContextConfigFor, resolveProvider } = require('../../../lib/ai');
 const appSettings = require('../../../lib/app-settings');
+const { stripDiagramBlocks } = require('../../../lib/html-text');
 const { jobAbortControllers } = require('./state');
 const { updateJob, i18nError } = require('./jobs');
 
@@ -150,8 +151,24 @@ function cleanPageTextForClaude(text) {
     .trim();
 }
 
+// DIAGRAMME FALLEN IN BEIDEN VARIANTEN RAUS, vor dem Tag-Strip. Diagramm-
+// Notation ist nirgends Prosa (docs/diagramme.md, Invariante 7) — und dieser
+// Pfad ist der teuerste Ort, an dem sie es waere:
+//   - `flowchart TD` / `A[Ausgangslage] --> B{Entscheidung}` kostet echte
+//     Input-Tokens in jedem Job, der Buchtext schickt (Komplettanalyse, Review,
+//     Redundanz, Lektorat) — waehrend die dem User gezeigte Schaetzung
+//     (`page_stats.tok`, aus lib/html-text.js) sie korrekt nicht enthaelt. Die
+//     beiden Zahlen sollen nicht auseinanderlaufen.
+//   - Das Lektorat meldete Findings auf dem Quelltext. Wird so ein Finding
+//     angewendet, schreibt der Ersatz mitten in den Diagramm-Code.
+//   - loadPageContents (./loader) speist damit auch den Embedding-Index
+//     (routes/jobs/embed-index.js): Diagramm-Notation wurde zur semantisch
+//     auffindbaren Passage, waehrend die FTS-Haelfte derselben Hybrid-Suche sie
+//     ausschneidet (lib/search.js → htmlToPlainText). Zwei Indexe auf zwei
+//     verschiedenen Texten.
+// Ausschnitt-Regex ist die SSoT aus lib/html-text.js — keine Kopie hier.
 function htmlToText(html) {
-  return _decodeEntities((html || '').replace(/<[^>]+>/g, ' '), HTML_NAMED_ENTITIES)
+  return _decodeEntities(stripDiagramBlocks(html).replace(/<[^>]+>/g, ' '), HTML_NAMED_ENTITIES)
     .replace(/\s+/g, ' ').trim();
 }
 
@@ -166,7 +183,7 @@ function htmlToText(html) {
 // zu Space — nur Blockgrenzen tragen einen Umbruch. Entspricht damit der Sicht
 // des Lektorat-Prompts, der die Seite als Prosa mit Absätzen liest.
 function htmlToTextForPrompt(html) {
-  return _decodeEntities((html || '')
+  return _decodeEntities(stripDiagramBlocks(html)
     .replace(/<\/(p|div|li|h[1-6]|blockquote|pre|ul|ol|figure|figcaption|table|tr|section|article)\s*>/gi, '\n\n')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<hr\s*\/?>/gi, '\n\n')

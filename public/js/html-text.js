@@ -38,9 +38,15 @@ function _decodeEntities(s) {
 // tests/unit/mermaid-drift.test.mjs.
 const _DIAGRAM_BLOCK_RE = /<pre\b[^>]*\bclass\s*=\s*("[^"]*\bmermaid\b[^"]*"|'[^']*\bmermaid\b[^']*')[^>]*>[\s\S]*?<\/pre>/gi;
 
+/** Diagramm-Bloecke aus HTML entfernen (Block → ein Space). Parity-Pendant zu
+ *  lib/html-text.js#stripDiagramBlocks; dort steht, warum das ein eigener
+ *  Schritt ist. */
+export function stripDiagramBlocks(html) {
+  return String(html || '').replace(_DIAGRAM_BLOCK_RE, ' ');
+}
+
 export function htmlToPlainText(html) {
-  const src = String(html || '').replace(_DIAGRAM_BLOCK_RE, ' ');
-  return _decodeEntities(src.replace(/<[^>]+>/g, ' '))
+  return _decodeEntities(stripDiagramBlocks(html).replace(/<[^>]+>/g, ' '))
     .replace(/\s+/g, ' ')
     .trim();
 }

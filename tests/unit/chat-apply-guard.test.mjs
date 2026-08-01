@@ -8,13 +8,14 @@
 // Pre-Check-Entscheidungsbaums:
 //   countInHtml == 0  -> 'originalNotFound'
 //   countInHtml  > 1  -> 'originalAmbiguous'   (kein Blind-Ersatz)
-//   replaceInHtml No-Op + Link -> 'spansLink'  (Hyperlink umschlossen)
-//   replaceInHtml No-Op        -> 'crossesBlockBoundary' (Absatzgrenze)
+//   replaceInHtml No-Op + Link   -> 'spansLink'   (Hyperlink umschlossen)
+//   replaceInHtml No-Op + Marker -> 'spansMarker' (Quellenangabe/Querverweis)
+//   replaceInHtml No-Op          -> 'crossesBlockBoundary' (Absatzgrenze)
 //   sonst              -> 'ok'
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { countInHtml, replaceInHtml, matchSpansLink } from '../../public/js/utils.js';
+import { countInHtml, replaceInHtml, skipReason } from '../../public/js/utils.js';
 
 // 1:1-Mirror der Pre-Check-Reihenfolge in applyChatVorschlag.
 function guard(html, vorschlag) {
@@ -22,7 +23,8 @@ function guard(html, vorschlag) {
   if (occurrences === 0) return 'originalNotFound';
   if (occurrences > 1) return 'originalAmbiguous';
   if (replaceInHtml(html, vorschlag.original, vorschlag.ersatz) === html) {
-    return matchSpansLink(html, vorschlag.original) ? 'spansLink' : 'crossesBlockBoundary';
+    return { spansLink: 'spansLink', spansMarker: 'spansMarker' }[skipReason(html, vorschlag.original)]
+      || 'crossesBlockBoundary';
   }
   return 'ok';
 }
@@ -99,6 +101,62 @@ test('Guard: Korrektur neben dem Link (Link nicht umspannt) -> ok, Link bleibt e
   assert.ok(res.includes('href="https://example.com"'), 'Link muss erhalten bleiben');
   assert.ok(res.includes('gleich morgen'), 'Korrektur muss angewandt sein');
   assert.equal(guard(html, { original: 'heute unbedingt', ersatz: 'gleich morgen' }), 'ok');
+});
+
+// ── Marker-Schutz (Quellenangabe / Querverweis) ──────────────────────────────
+// Gleiche Ursache wie beim Link, andere Nutzlast: `data-src` bzw. `data-xref-id`
+// sind die Wahrheit, der sichtbare Chip-Text nur ihr Cache. Ein Vorschlag, der
+// den ganzen Marker umspannt, hätte den Zeiger ersatzlos verworfen und toten
+// Klartext hinterlassen — die Fundstelle wäre aus source_citations/xref_links
+// gefallen, das Quellenverzeichnis hätte den Beleg verloren.
+
+test('Guard: umspannte Quellenangabe -> spansMarker (data-src nicht verloren)', () => {
+  const html = '<p>Das ist belegt <span class="cite" data-src="7" data-loc="44">(Müller, 2020, S. 44)</span> und gilt.</p>';
+  const original = 'Das ist belegt (Müller, 2020, S. 44) und gilt.';
+  const res = replaceInHtml(html, original, 'Dies ist belegt (Müller, 2020, S. 44) und gilt.');
+  assert.equal(res, html, 'replaceInHtml darf den Marker-Bereich nicht verändern');
+  assert.equal(guard(html, { original, ersatz: 'Dies ist belegt (Müller, 2020, S. 44) und gilt.' }), 'spansMarker');
+});
+
+test('Guard: umspannter Querverweis -> spansMarker (data-xref-id nicht verloren)', () => {
+  const html = '<p>Siehe <span class="xref" data-xref="chapter" data-xref-id="42">Kapitel 3</span> dazu näher.</p>';
+  const original = 'Siehe Kapitel 3 dazu näher.';
+  assert.equal(replaceInHtml(html, original, 'Vergleiche Kapitel 3 dazu näher.'), html);
+  assert.equal(guard(html, { original, ersatz: 'Vergleiche Kapitel 3 dazu näher.' }), 'spansMarker');
+});
+
+test('Guard: Korrektur neben dem Marker -> ok, Zeiger bleibt erhalten', () => {
+  const html = '<p>Das ist belegt <span class="cite" data-src="7">(Müller, 2020)</span> und gilt sicherlich.</p>';
+  const res = replaceInHtml(html, 'gilt sicherlich', 'gilt zweifellos');
+  assert.ok(res.includes('data-src="7"'), 'Zeiger muss erhalten bleiben');
+  assert.ok(res.includes('gilt zweifellos'), 'Korrektur muss angewandt sein');
+  assert.equal(guard(html, { original: 'gilt sicherlich', ersatz: 'gilt zweifellos' }), 'ok');
+});
+
+test('span.cite OHNE data-src ist Fremdmarkup, kein Marker -> Ersetzung laeuft', () => {
+  // Gleiche Regel wie CITE_SEL: ohne Zeiger trägt der Span keine Information,
+  // die verloren gehen könnte. Sonst würde jedes fremde <span class="cite">
+  // (z.B. aus einem HTML-Import) die Korrektur grundlos blockieren.
+  const html = '<p>Er nannte <span class="cite">ein Werk</span> im Text.</p>';
+  const res = replaceInHtml(html, 'Er nannte ein Werk im Text.', 'Er erwähnte ein Werk im Text.');
+  assert.notEqual(res, html);
+  assert.ok(res.includes('Er erwähnte ein Werk im Text.'));
+});
+
+test('Gewoehnlicher <span> blockiert nicht (nur Marker-Spans zaehlen)', () => {
+  const html = '<p>Er sagte <span class="hervor">das magische</span> Wort.</p>';
+  const res = replaceInHtml(html, 'das magische Wort', 'das geheime Wort');
+  assert.ok(res.includes('das geheime Wort'));
+});
+
+test('Waisen-Marker (Open davor) wird wieder angeklebt statt blockiert', () => {
+  // Nur der Close liegt im Treffer: `_splitOrphanTags` rettet das Tag, der
+  // Zeiger überlebt. Blockieren wäre hier unnötig streng — der Chip-Text ist
+  // ohnehin nur ein Cache, den jeder Ausgabeweg frisch setzt.
+  const html = '<p><span class="cite" data-src="7">(Müller, 2020)</span> belegt das klar.</p>';
+  const res = replaceInHtml(html, '2020) belegt das klar', '2020) zeigt das klar');
+  assert.ok(res.includes('data-src="7"'), 'Zeiger überlebt');
+  assert.ok(res.includes('zeigt das klar'), 'Korrektur angewandt');
 });
 
 test('replaceInHtml: Waisen-</a> im Treffer (Open davor) wird wieder angeklebt', () => {

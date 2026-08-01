@@ -2,6 +2,9 @@
 // Findet KI-/User-Phrasen, die im HTML von Inline-Tags durchsetzt sind, und
 // ersetzt sie tag-balance-sicher (Block-Grenzen werden nie gekreuzt).
 
+import { CITE_CLASS, CITE_ATTR_SRC } from '../sources/cite-html.js';
+import { XREF_CLASS, XREF_ATTR_ID } from '../xrefs/xref-html.js';
+
 // Dekodiert eine einzelne HTML-Entity (z.B. &bdquo;) via Browser-Parser.
 // Gibt null zurück, wenn sich die Entity nicht auflöst.
 const _entityDecoder = typeof document !== 'undefined' ? document.createElement('textarea') : null;
@@ -179,6 +182,56 @@ function _containsBalancedAnchor(slice) {
   return false;
 }
 
+// Ist dieses Open-Tag ein Marker-Span (Quellenangabe oder Querverweis)?
+// Klasse UND Zeiger-Attribut muessen da sein — ein `span.cite` ohne `data-src`
+// bzw. ein `span.xref` ohne `data-xref-id` ist Fremdmarkup und traegt keine
+// Information, die der Ersatz verlieren koennte (gleiche Regel wie CITE_SEL /
+// XREF_SEL in den beiden SSoT-Modulen). Klassen- und Attributnamen kommen aus
+// eben diesen Modulen — dieses hier arbeitet parserfrei auf dem HTML-String und
+// kann die CSS-Selektoren nicht anwenden, darf die Namen aber auch nicht
+// abschreiben (harte Regel „Editor-Blockstruktur: Markup und Selektoren nur aus
+// ihrer SSoT").
+function _isMarkerSpanOpen(tagHtml) {
+  const cls = /\sclass\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(tagHtml);
+  const classes = String(cls ? (cls[1] ?? cls[2]) : '').split(/\s+/);
+  const hasAttr = (name) => new RegExp(`\\s${name}\\s*=`, 'i').test(tagHtml);
+  if (classes.includes(CITE_CLASS) && hasAttr(CITE_ATTR_SRC)) return true;
+  if (classes.includes(XREF_CLASS) && hasAttr(XREF_ATTR_ID)) return true;
+  return false;
+}
+
+// True, wenn der Slice einen VOLLSTAENDIG umschlossenen Marker-Span enthaelt
+// (Open UND Close im Bereich). Exakt dieselbe Ueberlegung wie beim Hyperlink
+// eine Funktion weiter oben: `data-src` bzw. `data-xref`/`data-xref-id` sind die
+// WAHRHEIT, der sichtbare Chip-Text ist nur ein Cache davon — und die Plaintext-
+// View, aus der die KI ihren Vorschlag baut, hat den Zeiger nie gesehen. Beim
+// Ersetzen faellt das Markup ersatzlos weg (`span` ist ein Inline-Tag, das Paar
+// ist balanciert, also rettet auch `_splitOrphanTags` nichts) und zurueck bliebe
+// toter Klartext: die Fundstelle verschwindet aus `source_citations` bzw.
+// `xref_links`, das Quellenverzeichnis verliert den Beleg, und der Querverweis
+// wird von keinem Ausgabeweg je wieder umnummeriert.
+//
+// Ein Waisen-Marker (Open oder Close ausserhalb des Slice) ist dagegen
+// ungefaehrlich: `_splitOrphanTags` klebt den fehlenden Partner wieder an, der
+// Zeiger ueberlebt — nur sein Text-Cache aendert sich, und den setzt ohnehin
+// jeder Renderer frisch.
+//
+// Marker verschachteln nicht, aber ein gewoehnlicher `<span>` kann einen
+// umschliessen (oder umgekehrt) — darum ein Stack statt einer Tiefenzahl.
+function _containsBalancedMarker(slice) {
+  const tagRe = /<\/?span\b[^>]*>/gi;
+  const stack = [];
+  let m;
+  while ((m = tagRe.exec(slice))) {
+    if (m[0].startsWith('</')) {
+      if (stack.length && stack.pop()) return true;
+    } else if (!/\/>$/.test(m[0])) {
+      stack.push(_isMarkerSpanOpen(m[0]));
+    }
+  }
+  return false;
+}
+
 /**
  * Findet im Slice Tags ohne Partner: Closes ohne vorheriges Open im Slice
  * (Open liegt VOR dem Slice, Tag muss nach dem Replacement erhalten bleiben),
@@ -212,18 +265,20 @@ function _splitOrphanTags(slice) {
  * dabei darf weder das öffnende noch das schliessende Tag verloren gehen).
  *
  * Kreuzt der Match dagegen eine BLOCK-Grenze (`</p><p>`, `</li><li>`, Heading,
- * Tabelle …), umschliesst er einen Zeilenumbruch (`<br>`) ODER einen vollständigen
- * Hyperlink (`<a>…</a>`), wird NICHT ersetzt: eine Block-Grenzen-Ersetzung würde
- * Absätze zerstören, ein umspannter `<br>` würde als sichtbarer Zeilenumbruch
- * ersatzlos verschwinden, eine Link-Ersetzung würde das nur der KI-Plaintext-View
- * unbekannte `href` verwerfen. In allen Fällen bleibt der Text unverändert statt
- * korrumpiert.
+ * Tabelle …), umschliesst er einen Zeilenumbruch (`<br>`), einen vollständigen
+ * Hyperlink (`<a>…</a>`) ODER einen vollständigen Marker-Span (Quellenangabe,
+ * Querverweis), wird NICHT ersetzt: eine Block-Grenzen-Ersetzung würde Absätze
+ * zerstören, ein umspannter `<br>` würde als sichtbarer Zeilenumbruch ersatzlos
+ * verschwinden, eine Link-Ersetzung würde das `href` verwerfen und eine
+ * Marker-Ersetzung den Zeiger auf Quelle bzw. Verweisziel — alles drei
+ * Information, die die KI-Plaintext-View nie gesehen hat. In allen Fällen bleibt
+ * der Text unverändert statt korrumpiert.
  *
  * `replacement` selbst wird von rohen Zeilenumbrüchen (`\n`/`\r`) befreit, damit
  * kein Umbruch hinzukommt, den `original` nicht hatte.
  *
  * Gibt das neue HTML zurück, oder das Original wenn nichts gefunden bzw. der
- * Match eine Block-Grenze, einen `<br>` oder einen Link kreuzt.
+ * Match eine Block-Grenze, einen `<br>`, einen Link oder einen Marker kreuzt.
  */
 export function replaceInHtml(html, needle, replacement) {
   if (!html || !needle) return html;
@@ -238,6 +293,7 @@ export function replaceInHtml(html, needle, replacement) {
     if (_crossesBlockBoundary(removed)) return html;
     if (_crossesLineBreak(removed)) return html;
     if (_containsBalancedAnchor(removed)) return html;
+    if (_containsBalancedMarker(removed)) return html;
     const { orphanOpens, orphanCloses } = _splitOrphanTags(removed);
     if (orphanOpens.length || orphanCloses.length) {
       inserted = orphanOpens.join('') + inserted + orphanCloses.join('');
@@ -259,15 +315,31 @@ export function matchSpansLink(html, needle) {
 }
 
 /**
+ * Pendant zu `matchSpansLink` für Marker-Spans: `true`, wenn der Match eine
+ * vollständige Quellenangabe oder einen vollständigen Querverweis umschliesst
+ * (und deshalb übersprungen wird).
+ */
+export function matchSpansMarker(html, needle) {
+  if (!html || !needle) return false;
+  const m = findInHtml(html, needle);
+  if (!m) return false;
+  return _containsBalancedMarker(html.slice(m.htmlStart, m.htmlEnd));
+}
+
+/**
  * Klassifiziert, WARUM eine `replaceInHtml`-Ersetzung ein No-Op war — damit die
  * User-Meldung die Wahrheit sagt statt pauschal „Link oder Absatzgrenze":
  *
- *   'notFound'  — `needle` steht nicht (mehr) im HTML. Kein Schutzmechanismus,
- *                 sondern ein veralteter Textbezug: die Stelle wurde inzwischen
- *                 umgeschrieben oder gelöscht. Braucht keine Nachkontrolle.
- *   'spansLink' — der Match umschliesst ein vollständiges `<a>…</a>`; ersetzen
- *                 würde das `href` verwerfen.
- *   'boundary'  — der Match kreuzt eine Block-Grenze oder einen `<br>`.
+ *   'notFound'    — `needle` steht nicht (mehr) im HTML. Kein Schutzmechanismus,
+ *                   sondern ein veralteter Textbezug: die Stelle wurde inzwischen
+ *                   umgeschrieben oder gelöscht. Braucht keine Nachkontrolle.
+ *   'spansLink'   — der Match umschliesst ein vollständiges `<a>…</a>`; ersetzen
+ *                   würde das `href` verwerfen.
+ *   'spansMarker' — der Match umschliesst eine vollständige Quellenangabe oder
+ *                   einen vollständigen Querverweis; ersetzen würde den Zeiger
+ *                   (`data-src` bzw. `data-xref-id`) verwerfen und nur toten
+ *                   Klartext zurücklassen.
+ *   'boundary'    — der Match kreuzt eine Block-Grenze oder einen `<br>`.
  *
  * Nur für den No-Op-Fall gedacht; auf einer erfolgreich ersetzbaren Stelle
  * aufgerufen liefert es 'boundary' (der Aufrufer fragt dort nicht).
@@ -275,5 +347,7 @@ export function matchSpansLink(html, needle) {
  */
 export function skipReason(html, needle) {
   if (!findInHtml(html, needle)) return 'notFound';
-  return matchSpansLink(html, needle) ? 'spansLink' : 'boundary';
+  if (matchSpansLink(html, needle)) return 'spansLink';
+  if (matchSpansMarker(html, needle)) return 'spansMarker';
+  return 'boundary';
 }
