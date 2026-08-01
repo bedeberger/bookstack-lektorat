@@ -30,6 +30,7 @@ Token-Referenz (Farben, Radien, Spacing, Schriftgrössen): [public/css/tokens.cs
 - [Form-Patterns](#form-patterns-settings--und-export-karten) — `.card-form-grid` + Wertspalten
 - [Progress-Bar](#progress-bar) — `--progress` Custom-Prop
 - [Entity-List](#entity-list-listendarstellung) — Listen mit Detail-Drawer
+- [Gekappter Listentext + Mehr-Toggle](#gekappter-listentext--mehr-toggle) — Zeilen-Cap, gemessen
 - [Karten-Toolbar](#karten-toolbar-card-toolbar) — Aktionszeile im Karten-Body
 - [Filter-Bar](#filter-bar-listenfilter) — Such-/Sort-Eingaben
 - [Heatmap-Visualisierung](#heatmap-visualisierung) — Daten-Intensität
@@ -1009,6 +1010,33 @@ CSS: [public/css/components/my-stats.css](public/css/components/my-stats.css). S
 - `.entity-meta-row` / `.entity-meta-label` / `.entity-meta-value` — Detail-Box
 
 CSS: [public/css/entities/entity-list.css](public/css/entities/entity-list.css). Wiederverwendbar für jede neue Listen-Karte; nicht selbst neu bauen.
+
+---
+
+## Gekappter Listentext + Mehr-Toggle
+
+**Use:** Freitext beliebiger Länge in einer Übersichtsliste (Recherche-Fundstück, Notiz, Zitat-Volltext). Der Text wird auf wenige Zeilen gekappt, damit die Liste scanbar bleibt, und ist pro Eintrag ausklappbar.
+
+**Markup:**
+```html
+<div class="research-item-text" x-effect="noteBodyForClamp(item)"
+     :class="{ 'research-item-text--clamped': !bodyExpanded(item) }" x-text="item.body"></div>
+<button type="button" class="research-item-more" x-show="bodyClampable(item)"
+        @click="toggleBodyExpanded(item)" :aria-expanded="bodyExpanded(item)"
+        x-text="bodyExpanded(item) ? $app.t('…body.less') : $app.t('…body.more')"></button>
+```
+
+**Klassen** [public/css/entities/recherche.css](public/css/entities/recherche.css):
+- `.research-item-text--clamped` — `-webkit-line-clamp` + `overflow: hidden` (der Cap selbst)
+- `.research-item-more` — Link-artiger Toggle-Button unter dem Text (wie `.research-suggestions-dismiss`)
+
+**Regeln:**
+- **Der Cap gehört ins CSS, die Toggle-Sichtbarkeit wird gemessen.** Ob abgeschnitten wird, hängt an der Spaltenbreite (Karte im Vollbild vs. Handy, Sidebar offen/zu) — eine Zeichen-Schwelle zeigt auf breiten Schirmen ein „Mehr anzeigen", das nichts aufzuklappen hat. Messung: `el.scrollHeight > el.clientHeight + 1`, rAF-gebündelt, angestossen per `x-effect` (liest das Textfeld → läuft bei Render + Textänderung) plus `resize`-Listener am Lifecycle-Signal.
+- Ein aufgeklappter Eintrag **behält** seinen Toggle (im ausgeklappten Zustand ist nichts messbar) — sonst führt kein Weg zurück in den Cap.
+- Klickbare Zeile: der Toggle ist ein `<button>` und damit von der Zeilen-Klick-Allowlist (z.B. `onItemBodyClick`) automatisch ausgenommen — kein eigener `@click.stop`.
+- Kein `<details>`/`<summary>`; das ist keine klappbare Section (Pattern [Klappbarer Section-Toggle](#klappbarer-section-toggle-accordion)), sondern ein Overflow-Cap.
+
+**Beispiele:** [recherche.html](public/partials/recherche.html) (Fundstück-Text), E2E: [tests/e2e-app/recherche-overview.spec.js](tests/e2e-app/recherche-overview.spec.js).
 
 ---
 

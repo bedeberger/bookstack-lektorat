@@ -5,7 +5,81 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { cleanPageHtml, wrapOrphanBlocks, collapseEmptyBlocks, stripTrailingEmptyBlocks, stripBlockEdgeNbsp, flattenDivBlocks, linkifyBareUrls, stripEditorUiArtefacts } = require('../../lib/html-clean');
+const { cleanPageHtml, wrapOrphanBlocks, collapseEmptyBlocks, stripTrailingEmptyBlocks, stripBlockEdgeNbsp, flattenDivBlocks, linkifyBareUrls, stripEditorUiArtefacts, stripActiveContent } = require('../../lib/html-clean');
+
+// ── stripActiveContent ───────────────────────────────────────────────────────
+// Zweite Schicht unter der CSP: Page-HTML landet unescaped in der öffentlichen
+// Share-Leseansicht, und die Schreibwege dorthin (API, Blog-Import, Migration,
+// Restore) tragen nicht zwingend Editor-Markup. Entfernt wird ausführbares
+// Script — Darstellungs-Markup bleibt unangetastet.
+
+test('stripActiveContent: <script> raus, Text bleibt', () => {
+  assert.equal(
+    stripActiveContent('<p>Vorher</p><script>alert(1)</script><p>Nachher</p>'),
+    '<p>Vorher</p><p>Nachher</p>'
+  );
+});
+
+test('stripActiveContent: Event-Handler-Attribute raus, Element bleibt', () => {
+  assert.equal(
+    stripActiveContent('<img src="/content/page-image/7" onerror="alert(1)" alt="x">'),
+    '<img src="/content/page-image/7" alt="x">'
+  );
+  assert.equal(
+    stripActiveContent('<p onclick="x()" data-bid="ab12">Text</p>'),
+    '<p data-bid="ab12">Text</p>'
+  );
+});
+
+test('stripActiveContent: javascript:-URL verliert das Attribut, Linktext bleibt', () => {
+  assert.equal(
+    stripActiveContent('<p><a href="javascript:alert(1)">klick</a></p>'),
+    '<p><a>klick</a></p>'
+  );
+});
+
+test('stripActiveContent: obfuskierte Schemes (Whitespace/Steuerzeichen, Grossschreibung)', () => {
+  // Der Browser ignoriert Tabs/Newlines im Scheme — der Vergleich muss das auch.
+  assert.equal(stripActiveContent('<a href="java\tscript:alert(1)">x</a>'), '<a>x</a>');
+  assert.equal(stripActiveContent('<a href="  JaVaScRiPt:alert(1)">x</a>'), '<a>x</a>');
+  assert.equal(stripActiveContent('<a href="data:text/html;base64,PHNjcmlwdD4=">x</a>'), '<a>x</a>');
+});
+
+test('stripActiveContent: Darstellungs-Markup bleibt (keine Tag-Allowlist)', () => {
+  // WordPress-Embeds in Blog-Büchern, data:-Bilder aus dem Fassungs-Export und
+  // die Marker-Spans der Quellen-SSoT dürfen NICHT fallen.
+  const keep = '<iframe src="https://example.com/e"></iframe>'
+    + '<img src="data:image/png;base64,iVBORw0KGgo=">'
+    + '<span class="cite" data-src="7" data-loc="44">(Müller, 2020, S. 44)</span>'
+    + '<a href="https://example.com/x">Link</a>';
+  assert.equal(stripActiveContent(keep), keep);
+});
+
+test('stripActiveContent: Fast-Path lässt unverdächtiges HTML byte-identisch', () => {
+  const html = '<p data-bid="aa11">Ein Satz mit <em>Kursivem</em> darin.</p>';
+  assert.equal(stripActiveContent(html), html);
+});
+
+test('stripActiveContent: Prosa über „JavaScript" bleibt inhaltlich unberührt', () => {
+  // Trifft den Vorab-Test (Falsch-Positiv) und läuft durch den Parser — der Text
+  // darf davon nichts abbekommen.
+  const html = '<p>Sie schrieb ein Kapitel über javascript: die Sprache.</p>';
+  assert.equal(stripActiveContent(html), html);
+});
+
+test('stripActiveContent: idempotent', () => {
+  const once = stripActiveContent('<p onclick="a()">x</p><script>b()</script>');
+  assert.equal(stripActiveContent(once), once);
+});
+
+test('cleanPageHtml: aktive Inhalte fallen auch über die Pipeline', () => {
+  // flattenDivBlocks klont Attribute vom <div> ans neue <p> — würde erst danach
+  // gestrippt, überlebte der Handler die Wandlung.
+  const out = cleanPageHtml('<div onclick="alert(1)">Absatz</div><script>x()</script>');
+  assert.equal(out.includes('onclick'), false);
+  assert.equal(out.includes('<script'), false);
+  assert.equal(out.includes('Absatz'), true);
+});
 
 test('collapseEmptyBlocks: leere <p>-Runs auf einen kollabieren', () => {
   assert.equal(

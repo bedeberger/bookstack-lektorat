@@ -216,6 +216,24 @@ Was das Script tut:
 
 Reverse-Proxy: dieselbe Konfiguration wie Prod ([deploy/nginx.conf](deploy/nginx.conf) bzw. [deploy/nginx-npmplus.conf](deploy/nginx-npmplus.conf)), nur `<DOMAIN>` = Demo-Domain und Upstream-Port 3738. **TLS ist Pflicht** — Apples App Transport Security lässt einen nativen Client sonst nicht gegen den Server sprechen.
 
+#### Was auf der Demo-Instanz bewusst offen ist
+
+Die Zugangsdaten stehen in Store-Formularen und sind damit öffentlich. Wer sie hat, hat einen vollwertigen `user`-Account: Bücher schreiben und löschen, Dateien hochladen (Cover bis 20 MB, Recherche-Anhänge), Inhalte über Share-Links öffentlich unter der Demo-Domain stellen (`noindex,nofollow`, siehe [docs/share-link.md](docs/share-link.md)) und sich eigene Device-Tokens ausstellen. Das ist Absicht — genau das soll ein Reviewer können. Eingegrenzt wird es durch die Trennung (eigener Container, eigene DB, eigenes `SESSION_SECRET`, Rolle nie `admin`), das Monatsbudget und den nächtlichen Reset, der alles davon zurücknimmt.
+
+Zwei Dinge, die der Reset **nicht** abdeckt und die darum auf Infrastruktur-Ebene gehören:
+
+- **Netz-Isolation des Containers.** Alles, was die App an ausgehenden Requests macht, macht sie aus diesem Container heraus — ein öffentlich bekannter Account ist damit ein Fuss im internen Netz. Anwendungsseitig ist der eine user-kontrollierte Pfad (Bild-URLs im Manuskript, geholt beim PDF-Export) über [lib/ssrf-guard.js](lib/ssrf-guard.js) geschlossen, ebenso die Blog-Connection. Verlassen sollte man sich darauf nicht: die Demo-LXC gehört in ein Segment, aus dem Prod und die Management-Oberflächen **nicht** erreichbar sind. **Achtung beim Egress-Filter:** eine pauschale Regel gegen RFC-1918-Ziele trifft auch den DNS-Resolver, wenn der das Default-Gateway ist — Resolver vorher auf einen öffentlichen Dienst umstellen oder die Regel um seine Adresse ausnehmen, sonst löst die Instanz keinen Namen mehr auf.
+- **Anfragen-Rate.** Innerhalb der App gibt es Rate-Limits nur für Login, Registrierung und Share-Reader; ein authentifizierter Aufrufer kann also Requests und Analyse-Jobs in beliebiger Zahl absetzen (parallel laufen davon `jobs.max_concurrent`, Default 2). Auf einer 2-Core-Demo genügt das, um sie unbenutzbar zu machen. Gehört an den Reverse-Proxy, nicht in die App — und **nicht** in die geteilte [deploy/nginx.conf](deploy/nginx.conf), sondern in den Demo-Vhost: die SPA pollt Job-Status und Presence im Sekundenbereich, eine zu knappe Zone bricht ihr die Live-Updates. Grosszügig ansetzen und beobachten:
+
+  ```nginx
+  # http-Block:
+  limit_req_zone $binary_remote_addr zone=swdemo:10m rate=20r/s;
+  # server-Block der Demo-Domain:
+  limit_req zone=swdemo burst=200 nodelay;
+  limit_conn_zone $binary_remote_addr zone=swdemoconn:10m;
+  limit_conn swdemoconn 24;
+  ```
+
 #### Reset-Mechanik
 
 [deploy/demo-reset.sh](deploy/demo-reset.sh) hält einen **Golden-Snapshot** und setzt die Instanz darauf zurück. Ohne das sieht Reviewer Nr. 2 die Textreste von Nr. 1 — im schlimmsten Fall ein leeres Buch, weil Nr. 1 alles gelöscht hat.

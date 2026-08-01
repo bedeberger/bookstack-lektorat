@@ -1,8 +1,13 @@
-<!-- Graph-Kontextmenü (Fragment-Include aus motiv.html) — ein einzelnes, nach
-     <body> teleportiertes .context-menu (JS-positioniert in openGraphMenu). Der
+<!-- Graph-Kontextmenü (Fragment-Include aus motiv.html) — ein einzelnes, aus dem
+     Graph heraus teleportiertes .context-menu (JS-positioniert in openGraphMenu). Der
      Graph sitzt in einem eigenen Canvas-Container; cursor-verankert an die
-     Rechtsklick-Position. Läuft im Scope der motivCard (Include vor Alpine-Init). -->
-<template x-teleport="body">
+     Rechtsklick-Position. Läuft im Scope der motivCard (Include vor Alpine-Init).
+     Ziel ist die Karten-Wurzel, NICHT <body>: im Native-Vollbild (toggleMotivFullscreen
+     auf .card--motiv) rendert nur der Teilbaum des Fullscreen-Elements über dem
+     ::backdrop — ein body-Kind läge dahinter und wäre unsichtbar. `position: fixed`
+     bleibt viewport-verankert (die Karte etabliert keinen Containing-Block: die
+     cardFadeIn-Animation läuft mit `backwards`, lässt also keinen Transform stehen). -->
+<template x-teleport=".card--motiv">
   <div class="context-menu" x-ref="graphMenu" x-show="graphMenuOpen" x-cloak
        :style="`top:${graphMenuPos.top}px;left:${graphMenuPos.left}px`"
        @click.outside="closeGraphMenu()" @keydown.escape.window="closeGraphMenu()" role="menu">

@@ -99,3 +99,31 @@ test('Buch-Share: Edit einer enthaltenen Seite ist nach erneutem GET sichtbar', 
   assert.match(after.body, /EDITIERT_BETA/, 'Reload des Buch-Shares MUSS die Seiten-Edit zeigen');
   assert.doesNotMatch(after.body, /URSPRUNG_BETA/, 'Alter Seitentext darf nicht mehr erscheinen');
 });
+
+// ── Aktive Inhalte erreichen die oeffentliche View nicht ─────────────────────
+// Der Schreibweg raeumt `<script>`/`on*`/`javascript:` bereits weg
+// (lib/html-clean.js#stripActiveContent, harte Regel „Aktive Inhalte fallen im
+// Sanitizer"). Dieser Test deckt den Fall ab, den der Schreibweg NICHT sieht:
+// eine Zeile, die schon vorher in der DB lag (Alt-Bestand, Import, Restore) und
+// nie erneut gespeichert wurde. Ausgeliefert wird sie hier ohne Login an Fremde.
+const PAGE_LEGACY = 7203;
+
+test('Share-Reader: Alt-Bestand mit aktivem Markup wird beim Ausliefern entschaerft', async () => {
+  const now = new Date().toISOString();
+  // Direkt per SQL, also bewusst UM den Sanitizer herum — genau der Alt-Zustand.
+  db.prepare(`INSERT INTO pages (page_id, book_id, page_name, chapter_id, position, priority, updated_at, body_html)
+              VALUES (?, ?, ?, ?, 2, 2, ?, ?)`)
+    .run(PAGE_LEGACY, BOOK_ID, 'Seite Alt', CHAPTER_ID, now,
+      '<p>SICHTBARER_TEXT</p><script>window.__pwn=1</script>'
+      + '<p onclick="window.__pwn=2">Klick</p>'
+      + '<p><a href="javascript:window.__pwn=3">Link</a></p>');
+
+  const link = sl.createShareLink({ kind: 'page', pageId: PAGE_LEGACY, bookId: BOOK_ID, ownerEmail: OWNER });
+  const r = await get(`/share/${link.token}`);
+  assert.equal(r.status, 200);
+  assert.match(r.body, /SICHTBARER_TEXT/, 'der Text selbst muss erhalten bleiben');
+  assert.match(r.body, /Klick/, 'Absatz bleibt, nur der Handler faellt');
+  assert.doesNotMatch(r.body, /window\.__pwn/, 'kein ausfuehrbares Fragment in der Antwort');
+  assert.doesNotMatch(r.body, /onclick/, 'kein Event-Handler-Attribut in der Antwort');
+  assert.doesNotMatch(r.body, /javascript:/, 'keine Script-URL in der Antwort');
+});
