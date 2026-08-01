@@ -238,7 +238,19 @@ Mechanik: ein **zweiter self-hosted Runner** auf der Demo-LXC, adressiert über 
 **Einrichtung** (einmalig, auf der Demo-LXC, nach `install-demo.sh`):
 
 1. **Label am bestehenden Runner nachtragen.** Zuerst, nicht danach: sobald ein zweiter Runner im Repo hängt, matcht ein blosses `runs-on: self-hosted` **beide** — die Testjobs würden auf der Demo-LXC landen und der Prod-Deploy dort ins Leere greifen. Der Prod-Runner braucht darum das Label `prod` (GitHub → Settings → Actions → Runners → Labels; kein Neu-Registrieren nötig), passend zu den `runs-on: [self-hosted, prod]` im Workflow.
-2. **Runner auf der Demo-LXC registrieren** mit `--labels self-hosted,demo`. Er braucht nur Node, `rsync` und die Rechte, die auch der Prod-Runner hat (`systemctl`, Schreiben nach `/etc/systemd/system`, `chown` auf `swdemo`) — also root bzw. eine passende sudo-Regel. **Kein** Playwright: auf der Demo-LXC laufen keine Tests.
+2. **Runner auf der Demo-LXC registrieren** via [deploy/install-runner.sh](deploy/install-runner.sh) (als root, aus dem Checkout):
+
+   ```bash
+   # Token holen (gilt eine Stunde) — lokal, mit gh:
+   gh api -X POST repos/bedeberger/schreibwerkstatt/actions/runners/registration-token --jq .token
+
+   # auf der Demo-LXC:
+   bash deploy/install-runner.sh --token <TOKEN> --label demo --name schreibwerkstatt-demo
+   ```
+
+   Das Script installiert die Systempakete, lädt das neueste Runner-Release passend zur Architektur, zieht dessen .NET-Abhängigkeiten (`libicu` — fehlt auf einem minimalen Debian-LXC und der Runner stirbt sonst mit einem Globalization-Fehler, der nicht nach fehlendem Paket aussieht), registriert und richtet den systemd-Service ein. Weiter: `--status`, `--uninstall`, `--force` (neu registrieren), `--version` (Release pinnen). Der Runner läuft **als root**, weil `deploy.sh` `systemctl`, `/etc/systemd/system` und `chown` ohne `sudo` benutzt — dieselbe Annahme wie auf Prod; `RUNNER_ALLOW_RUNASROOT` setzt das Script als systemd-Drop-in, damit es eine Neuinstallation des Service überlebt.
+
+   Nur das Zusatz-Label angeben: `self-hosted`, `Linux` und `X64` vergibt GitHub selbst. **Kein** Playwright nötig — auf der Demo-LXC laufen keine Tests.
 3. Fertig. `SW_INSTALL_DIR`/`SW_SERVICE`/`SW_OWNER`/`SW_PORT` stehen im Job-`env` und müssen zu den Werten der Installation passen — wer die Demo mit abweichendem `INSTALL_DIR` installiert hat, zieht sie dort nach.
 
 Was der Demo-Deploy **anders** macht als Prod (alles in `deploy.sh` am `SW_FLAVOUR` aufgehängt, damit kein zweites Deploy-Skript daneben driftet):
