@@ -17,7 +17,10 @@ concurrency:
 jobs:
   checks-and-unit:
     name: Static Checks + Unit-Tests
-    runs-on: [self-hosted, prod]
+    # Fork-PRs (head.repo.full_name != eigener Repo) laufen auf GitHub-Infra,
+    # damit fremder Code nie auf dem Prod-LXC-Runner landet. Eigene PRs und
+    # main-Pushes bleiben auf dem self-hosted Runner ( schnell, shared Cache).
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || fromJson('["self-hosted","prod"]') }}
     timeout-minutes: 5
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -140,7 +143,9 @@ jobs:
 
   e2e:
     name: Playwright-E2E
-    runs-on: [self-hosted, prod]
+    # Fork-PRs auf GitHub-Infra (siehe checks-and-unit) — fremder Code nie auf
+    # dem Prod-Runner. Eigene PRs/main-Pushes bleiben self-hosted (Browser-Cache).
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || fromJson('["self-hosted","prod"]') }}
     timeout-minutes: 15
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
