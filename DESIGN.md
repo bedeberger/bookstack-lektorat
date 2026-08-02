@@ -743,7 +743,7 @@ Neue Aktionen erweitern diese Tabelle und das Sprite (siehe [Icon-System](#icon-
 
 ### Grid (Label links, Wert rechts)
 
-`.card-form-grid` / `.card-form-row` / `.card-form-label` (CSS in [public/css/components/card-form.css](public/css/components/card-form/form-elements.css), 170 px-Label-Spalte). Modifier `.card-form-row--top` für oben-ausgerichtete Rows mit Textareas.
+`.card-form-grid` / `.card-form-row` / `.card-form-label` (CSS in [public/css/components/card-form.css](public/css/components/card-form/form-elements.css), 170 px-Label-Spalte). Modifier `.card-form-row--top` für oben-ausgerichtete Rows mit Textareas, `.card-form-row--full` für labellose Voll-Breite-Blöcke (Danger-Zone, Fusszeilen-Notiz) — ohne ihn landet der Inhalt in der 170 px-Label-Spalte und läuft über deren Rand hinaus.
 
 ```html
 <div class="card-form-grid">
@@ -1393,6 +1393,8 @@ CSS: [public/css/components/confirm-dialog.css](public/css/components/confirm-di
 ```
 
 CSS: [public/css/components/danger-zone.css](public/css/components/danger-zone.css). Farben aus den Fehler-Tokens (`--color-err-*`), **nicht** aus `--card-accent` — die Aussage ist „Achtung", nicht „gehört zu dieser Karte".
+
+**Im Form-Grid einer Karte braucht der Block die volle Breite:** Wrapper `<div class="card-form-row card-form-row--full">`. Ohne den Modifier landet die labellose Zone in der 170px-Label-Spalte des `.card-form-row`-Rasters und läuft über deren Rand hinaus. Gilt genauso für jeden anderen labellosen Voll-Breite-Inhalt (z.B. die Versions-Fusszeile im Profil).
 
 **Bestätigung ist Pflicht** und läuft über `appConfirm`/`appPrompt`, nie über native `confirm()`. Bei Aktionen, die nicht nur Daten einer Ansicht, sondern ein ganzes Konto oder Buch treffen, zwei Stufen: Warnung bestätigen, dann ein Wort tippen (`appPrompt`). Beispiel: [user-settings.js#deleteAccount](public/js/user-settings.js).
 

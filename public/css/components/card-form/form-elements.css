@@ -103,6 +103,13 @@ textarea:disabled,
   border-top: var(--border-thin) solid var(--color-border);
   padding-top: var(--space-10);
 }
+/* Labelloser Voll-Breite-Inhalt im Form-Grid (Danger-Zone, Fusszeilen-Notiz):
+   ein einziges Kind ohne .card-form-label landet sonst in der 170px-Spalte und
+   laeuft ueber deren Rand hinaus. Kein Border-Top wie bei --dict/--devices —
+   diese Bloecke bringen ihre eigene Absetzung mit. */
+.card-form-row--full {
+  display: block;
+}
 .card-form-label {
   font-weight: 700;
   font-size: var(--font-size-sm);

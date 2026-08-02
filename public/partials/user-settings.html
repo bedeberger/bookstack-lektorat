@@ -216,7 +216,7 @@
       nativen macOS-Client: DELETE /me/account. Der Client verlinkt auf #profil,
       wenn der Server die Route nicht kennt — dieser Block ist das Ziel.
     -->
-    <div class="card-form-row">
+    <div class="card-form-row card-form-row--full">
       <div class="danger-zone">
         <div class="danger-zone-title">
           <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#alert-triangle"/></svg>
@@ -237,7 +237,7 @@
     </div>
 
     <!-- App-Version (SSoT: VERSION-Datei, vom Server via /config) -->
-    <div class="card-form-row" x-show="$store.shell.appVersion" x-cloak>
+    <div class="card-form-row card-form-row--full" x-show="$store.shell.appVersion" x-cloak>
       <p class="muted-msg muted-msg--sm">
         <span x-text="$app.t('profile.appVersion') + ': v' + $store.shell.appVersion"></span>
         <span> · </span>
