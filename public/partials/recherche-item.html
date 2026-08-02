@@ -17,7 +17,7 @@
                  Titel steht die Typ-Bezeichnung da — sonst gaebe es kein Sprungziel. -->
             <button type="button" class="research-item-title" @click="openDetail(item)"
                     x-text="item.title || kindLabel(item.kind)"></button>
-            <div class="research-item-actions">
+            <div class="research-item-actions" x-data="{ menuCtx: 'list' }">
               <button type="button" class="icon-btn" @click="openDetail(item, { edit: true })" :disabled="busy" :data-tip="$app.t('recherche.edit')" :aria-label="$app.t('recherche.edit')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#pencil"/></svg></button>
               <!-- @include recherche-item-menu -->
             </div>

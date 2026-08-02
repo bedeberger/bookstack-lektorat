@@ -19,7 +19,7 @@
       <header class="research-dialog__head">
         <span class="research-kind-badge palette-badge" :class="'research-kind-badge--' + item.kind" x-text="kindLabel(item.kind)"></span>
         <h2 class="research-dialog__title" x-text="item.title || kindLabel(item.kind)"></h2>
-        <div class="research-item-actions research-dialog__actions">
+        <div class="research-item-actions research-dialog__actions" x-data="{ menuCtx: 'detail' }">
           <button type="button" class="btn-compact" x-show="!detailEditing" @click="startEdit(item)" :disabled="busy">
             <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#pencil"/></svg>
             <span x-text="$app.t('recherche.edit')"></span>

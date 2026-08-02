@@ -141,6 +141,13 @@ const createItem = db.transaction(({ bookId, userEmail, kind, title, body, sourc
   return id;
 });
 
+/** Buch-ID eines Items (oder null) — Lookup statt padden: ACL-/Media-Wege
+ *  brauchen diese Information, ohne die ganze Zeile zu laden. */
+function itemBookId(id) {
+  const r = db.prepare('SELECT book_id FROM research_items WHERE id = ?').get(id);
+  return r?.book_id || null;
+}
+
 module.exports = {
   LINK_TARGETS,
   attachRelations,
@@ -148,4 +155,5 @@ module.exports = {
   replaceUrls,
   replaceTags,
   createItem,
+  itemBookId,
 };

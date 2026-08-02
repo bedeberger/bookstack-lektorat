@@ -5,8 +5,8 @@
      darum wortgleich teilbar; `menuOpenId` ist die geteilte Karten-SSoT.
      Erwartet einen Vorfahren mit `position: relative` (.research-item-actions)
      — .context-menu--dropdown positioniert absolut. -->
-<button type="button" class="icon-btn" @click.stop="menuOpenId = (menuOpenId === item.id ? null : item.id)" :disabled="busy" :aria-label="$app.t('recherche.actions')" aria-haspopup="menu"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#more-horizontal"/></svg></button>
-<div class="context-menu context-menu--dropdown" x-show="menuOpenId === item.id" x-cloak @click.outside="menuOpenId = null" @keydown.escape.window="menuOpenId = null" role="menu">
+<button type="button" class="icon-btn" @click.stop="menuOpenId = (menuOpenId === menuCtx + ':' + item.id ? null : menuCtx + ':' + item.id)" :disabled="busy" :aria-label="$app.t('recherche.actions')" aria-haspopup="menu"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#more-horizontal"/></svg></button>
+<div class="context-menu context-menu--dropdown" x-show="menuOpenId === menuCtx + ':' + item.id" x-cloak @click.outside="menuOpenId = null" @keydown.escape.window="menuOpenId = null" role="menu">
   <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem" @click="menuOpenId = null; openLinkPicker(item)">
     <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#external-link"/></svg>
     <span x-text="$app.t('recherche.link.add')"></span>

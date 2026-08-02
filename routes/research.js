@@ -12,17 +12,11 @@
 const express = require('express');
 const { db } = require('../db/schema');
 const {
-  LINK_TARGETS, attachRelations, emitItem, replaceUrls, replaceTags, createItem,
+  LINK_TARGETS, attachRelations, emitItem, replaceUrls, replaceTags, createItem, itemBookId,
 } = require('../db/research-items');
 const { toIntId } = require('../lib/validate');
 const { setContext } = require('../lib/log-context');
 const { requireBookAccess, sendACLError } = require('../lib/acl');
-const { prepareCover } = require('../lib/cover-prepare');
-// PDF-Anhang: geteilter Stack mit routes/sources.js (Limit, Namen, Extraktion,
-// Fehler-Codes, Auslieferungs-Header).
-const { rawPdfBody, readDocUpload, sendDoc } = require('../lib/pdf-attachment');
-// Trigger des buchskopierten Embedding-Index-Jobs nach einem PDF-Upload.
-const { enqueueEmbedIndexJob } = require('./jobs/embed-index');
 const { NOW_ISO_SQL } = require('../db/now');
 const searchIndex = require('../lib/search');
 const {
@@ -30,10 +24,16 @@ const {
   FTS_PREFILTER_LIMIT, CLIENT_LIST_LIMIT, clampListLimit, toClientItem,
 } = require('../lib/research-validate');
 const logger = require('../logger');
+const { researchMediaRouter } = require('./research-media');
 
 const router = express.Router();
 const jsonBody = express.json();
-const rawImage = express.raw({ type: ['image/*'], limit: '12mb' });
+
+// Medien-Wege (Bild + PDF-Upload, Auslieferung, Löschung) liegen in einem
+// eigenen Modul — siehe routes/research-media.js. Mount unter '/' (kein Prefix),
+// damit die Pfade /:id/image und /:id/doc aus der bisherigen Route identisch
+// bleiben — der Client-Vertrag (docs/clients.md) ändert sich nicht.
+router.use('/', researchMediaRouter);
 
 // Item-Modell (Anlegen, Kind-Tabellen, Ausgabeform, LINK_TARGETS) liegt in
 // db/research-items.js, weil routes/capture.js (Browser-Erweiterung) denselben
@@ -51,13 +51,21 @@ const FIXED_SORTS = {
   kind:    'ri.pinned DESC, ri.kind, ri.updated_at DESC',
 };
 
+// PATCH-Feld-Deskriptoren für PATCH /:id. Reihenfolge bestimmt die
+// Validierungsreihenfolge (kind zuerst → early return bei INVALID_KIND, wie
+// vorher). `validate` retourniert false für einen 400; `clean` konvertiert den
+// Eingabewert in den SQL-Wert.
+const PATCH_FIELDS = [
+  { name: 'kind',     validate: (v) => RESEARCH_KINDS.has(v), error: 'INVALID_KIND' },
+  { name: 'title',    clean: (v) => cleanStr(v, TITLE_MAX) },
+  { name: 'body',     clean: (v) => cleanStr(v, BODY_MAX) },
+  { name: 'source',   clean: (v) => cleanStr(v, SOURCE_MAX) },
+  { name: 'pinned',   clean: (v) => v ? 1 : 0 },
+  { name: 'archived', clean: (v) => v ? 1 : 0 },
+];
+
 function userEmailOrNull(req) {
   return req.session?.user?.email || null;
-}
-
-function _itemBookId(id) {
-  const r = db.prepare('SELECT book_id FROM research_items WHERE id = ?').get(id);
-  return r?.book_id || null;
 }
 
 function _guard(req, res, bookId, minRole) {
@@ -290,22 +298,21 @@ router.patch('/:id', jsonBody, (req, res) => {
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = _itemBookId(id);
+  const bookId = itemBookId(id);
   if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
   if (!_guard(req, res, bookId, 'editor')) return;
 
   const sets = [];
   const vals = [];
   const b = req.body || {};
-  if (typeof b.kind !== 'undefined') {
-    if (!RESEARCH_KINDS.has(b.kind)) return res.status(400).json({ error_code: 'INVALID_KIND' });
-    sets.push('kind = ?'); vals.push(b.kind);
+  for (const f of PATCH_FIELDS) {
+    if (typeof b[f.name] === 'undefined') continue;
+    if (f.validate && !f.validate(b[f.name])) {
+      return res.status(400).json({ error_code: f.error || 'INVALID_FIELD' });
+    }
+    sets.push(`${f.name} = ?`);
+    vals.push(f.clean ? f.clean(b[f.name]) : b[f.name]);
   }
-  if (typeof b.title !== 'undefined')  { sets.push('title = ?');  vals.push(cleanStr(b.title, TITLE_MAX)); }
-  if (typeof b.body !== 'undefined')   { sets.push('body = ?');   vals.push(cleanStr(b.body, BODY_MAX)); }
-  if (typeof b.source !== 'undefined') { sets.push('source = ?'); vals.push(cleanStr(b.source, SOURCE_MAX)); }
-  if (typeof b.pinned !== 'undefined')   { sets.push('pinned = ?');   vals.push(b.pinned ? 1 : 0); }
-  if (typeof b.archived !== 'undefined') { sets.push('archived = ?'); vals.push(b.archived ? 1 : 0); }
 
   const hasTags = typeof b.tags !== 'undefined';
   const hasUrls = typeof b.urls !== 'undefined';
@@ -329,7 +336,7 @@ router.delete('/:id', (req, res) => {
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = _itemBookId(id);
+  const bookId = itemBookId(id);
   if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
   if (!_guard(req, res, bookId, 'editor')) return;
   db.prepare('DELETE FROM research_items WHERE id = ?').run(id);
@@ -343,7 +350,7 @@ router.post('/:id/links', jsonBody, (req, res) => {
   if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const id = toIntId(req.params.id);
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = _itemBookId(id);
+  const bookId = itemBookId(id);
   if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
   if (!_guard(req, res, bookId, 'editor')) return;
 
@@ -374,139 +381,12 @@ router.delete('/:id/links/:linkId', (req, res) => {
   const id = toIntId(req.params.id);
   const linkId = toIntId(req.params.linkId);
   if (!id || !linkId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = _itemBookId(id);
+  const bookId = itemBookId(id);
   if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
   if (!_guard(req, res, bookId, 'editor')) return;
   db.prepare('DELETE FROM research_item_links WHERE id = ? AND item_id = ?').run(linkId, id);
   res.json(_emitItem(id));
 });
 
-// ── Bild hochladen (sharp-normalisiert) ──────────────────────────────────────
-router.post('/:id/image', rawImage, async (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = _itemBookId(id);
-  if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
-  if (!_guard(req, res, bookId, 'editor')) return;
-  if (!Buffer.isBuffer(req.body) || !req.body.length) {
-    return res.status(400).json({ error_code: 'NO_IMAGE' });
-  }
-  try {
-    const { buffer, mime } = await prepareCover(req.body);
-    db.prepare(
-      `UPDATE research_items SET image = ?, image_mime = ?, kind = 'image', updated_at = ${NOW_ISO_SQL} WHERE id = ?`
-    ).run(buffer, mime, id);
-    res.json(_emitItem(id));
-  } catch (e) {
-    logger.warn('[research] Bild-Upload fehlgeschlagen: ' + e.message);
-    res.status(400).json({ error_code: 'IMAGE_INVALID' });
-  }
-});
-
-// Bild ausliefern (BLOB-Stream).
-router.get('/:id/image', (req, res) => {
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const row = db.prepare('SELECT book_id, image, image_mime FROM research_items WHERE id = ?').get(id);
-  if (!row || !row.image) return res.status(404).json({ error_code: 'NO_IMAGE' });
-  if (!_guard(req, res, row.book_id, 'viewer')) return;
-  res.set('Content-Type', row.image_mime || 'image/jpeg');
-  res.set('Cache-Control', 'private, max-age=3600');
-  res.send(row.image);
-});
-
-// Bild entfernen (Item bleibt; kind faellt auf 'note' zurueck, falls es nur
-// wegen des Bildes 'image' war — Pendant zum Dokument-Loeschen weiter unten).
-// Kein FTS-/Embedding-Nachzug: das Bild traegt keinen indizierten Text.
-router.delete('/:id/image', (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = _itemBookId(id);
-  if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
-  if (!_guard(req, res, bookId, 'editor')) return;
-  db.prepare(
-    `UPDATE research_items
-        SET image = NULL, image_mime = NULL,
-            kind = CASE WHEN kind = 'image' THEN 'note' ELSE kind END,
-            updated_at = ${NOW_ISO_SQL}
-      WHERE id = ?`
-  ).run(id);
-  res.json(_emitItem(id));
-});
-
-// ── Dokument (PDF) hochladen ─────────────────────────────────────────────────
-// Original-PDF als BLOB + extrahierter Plain-Text (FTS + Embedding-Index + KI-
-// Verknuepfung). Dateiname kommt als ?name= (URL-encoded). Rein lesend, nie
-// generativ.
-router.post('/:id/doc', rawPdfBody(), async (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = _itemBookId(id);
-  if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
-  if (!_guard(req, res, bookId, 'editor')) return;
-
-  const up = await readDocUpload(req.body, req.query.name);
-  if (!up.ok) {
-    logger.warn(`[research] Dokument-Upload abgelehnt id=${id}: ${up.error_code} (${up.detail || '-'})`);
-    return res.status(up.status).json({ error_code: up.error_code });
-  }
-  const { doc } = up;
-  db.prepare(
-    `UPDATE research_items
-        SET doc = ?, doc_mime = ?, doc_name = ?, doc_text = ?, doc_pages = ?, doc_chars = ?,
-            kind = 'document', updated_at = ${NOW_ISO_SQL}
-      WHERE id = ?`
-  ).run(doc.buffer, doc.mime, doc.name, doc.text, doc.pages, doc.chars, id);
-  searchIndex.upsertResearch(id);
-  // Semantik-Index nachziehen (non-fatal): ohne das waere der frische Volltext
-  // bis zum Nacht-Cron nur ueber exakten Wortmatch auffindbar.
-  try { enqueueEmbedIndexJob(bookId, userEmail); }
-  catch (e) { logger.warn(`[research] embed-index enqueue fehlgeschlagen: ${e.message}`); }
-  logger.info(`[research] doc upload id=${id} pages=${doc.pages} chars=${doc.chars}${doc.truncated ? ' (gedeckelt)' : ''}`);
-  res.json(_emitItem(id));
-});
-
-// Dokument ausliefern (BLOB-Stream, inline mit Original-Dateinamen).
-// Zweistufig: erst die Meta-Zeile fuer die ACL, den BLOB erst danach — ein 403
-// soll keine 25 MB durch den Prozess ziehen.
-router.get('/:id/doc', (req, res) => {
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const row = db.prepare(
-    'SELECT book_id, doc_mime, doc_name, (doc IS NOT NULL) AS has_doc FROM research_items WHERE id = ?'
-  ).get(id);
-  if (!row || !row.has_doc) return res.status(404).json({ error_code: 'NO_DOC' });
-  if (!_guard(req, res, row.book_id, 'viewer')) return;
-  const blob = db.prepare('SELECT doc FROM research_items WHERE id = ?').get(id)?.doc;
-  sendDoc(res, { buffer: blob, mime: row.doc_mime, name: row.doc_name });
-});
-
-// Dokument entfernen (Item bleibt; kind faellt auf 'note' zurueck, falls es nur
-// wegen des Dokuments 'document' war).
-router.delete('/:id/doc', (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = _itemBookId(id);
-  if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
-  if (!_guard(req, res, bookId, 'editor')) return;
-  db.prepare(
-    `UPDATE research_items
-        SET doc = NULL, doc_mime = NULL, doc_name = NULL, doc_text = NULL, doc_pages = NULL,
-            doc_chars = NULL,
-            kind = CASE WHEN kind = 'document' THEN 'note' ELSE kind END,
-            updated_at = ${NOW_ISO_SQL}
-      WHERE id = ?`
-  ).run(id);
-  searchIndex.upsertResearch(id);
-  res.json(_emitItem(id));
-});
-
 module.exports = router;
+

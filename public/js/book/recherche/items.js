@@ -5,6 +5,17 @@ import { fetchJson } from '../../utils.js';
 import { emptyDraft as _emptyDraft } from './shared.js';
 
 export const rechercheItemMethods = {
+  // ── Native-Dialog schliessen (geteilter Idiom) ────────────────────────────
+  // Dialog per dlg.close() schliessen, damit ESC/Backdrop/Button denselben Weg
+  // nehmen — das native close-Event ruft den onClosed-Hook als einzigen
+  // Aufräum-Punkt. Steht der Dialog noch nicht am DOM (oder wurde schon per
+  // close-Event abgeräumt), geht der Hook direkt durch.
+  _closeNativeDialog(refName, onClosed) {
+    const dlg = this.$refs?.[refName];
+    if (dlg?.open) dlg.close();
+    else onClosed.call(this);
+  },
+
   // ── Anlegen (Dialog) ──────────────────────────────────────────────────────
   // Anlegen und Bearbeiten fahren auf DEMSELBEN `draft` und teilen dieselben
   // Formularfelder (partials/recherche-form-fields.html) in derselben Dialog-Shell.
@@ -26,14 +37,10 @@ export const rechercheItemMethods = {
   // Über dlg.close() gehen, damit Schliessen-Knopf, Abbrechen und ESC denselben Weg
   // nehmen — das close-Event ruft _onCreateClosed als einzigen Aufräum-Punkt (Muster
   // closeDetail). Bewusst KEIN Backdrop-Klick am Anlegen-Dialog: hier steht ein
-  // frisch getippter (womöglich langer) Text, den ein Fehlklick daneben nicht
+  // frisch getippter (womöglicherweise langer) Text, den ein Fehlklick daneben nicht
   // wegwerfen darf — dieselbe Überlegung wie der `!detailEditing`-Guard am
   // Detail-Dialog.
-  closeCreate() {
-    const dlg = this.$refs?.createDialog;
-    if (dlg?.open) dlg.close();
-    else this._onCreateClosed();
-  },
+  closeCreate() { this._closeNativeDialog('createDialog', this._onCreateClosed); },
   // Die close-Handler beider Dialoge fassen die Textfelder von `draft` NICHT an:
   // das native close-Event feuert als eigener Task (nicht synchron zu dlg.close()),
   // und `draft` teilen sich Anlegen und Bearbeiten — ein Reset hier würde den Draft
@@ -124,17 +131,15 @@ export const rechercheItemMethods = {
       if (dlg && typeof dlg.showModal === 'function' && !dlg.open) dlg.showModal();
     });
   },
-  closeDetail() {
-    const dlg = this.$refs?.detailDialog;
-    // Über dlg.close() gehen, damit ESC/Backdrop/Button denselben Weg nehmen —
-    // das close-Event ruft _onDetailClosed als einzigen Aufräum-Punkt.
-    if (dlg?.open) dlg.close();
-    else this._onDetailClosed();
-  },
+  closeDetail() { this._closeNativeDialog('detailDialog', this._onDetailClosed); },
   _onDetailClosed() {
     this.detailItemId = null;
     this.detailEditing = false;
     this.linkPickerItemId = null;
+    // menuOpenId-Aufräum-Pflicht beim Schliessen: trägt noch den Kontext-Bezeichner
+    // ('detail:<id>'), sonst reopening wäre das Menü sofort offen. Liste vs. Detail
+    // sind über den menuCtx-Präfix im Markup getrennt, der Reset gilt beiden.
+    this.menuOpenId = null;
     if (window.Alpine) window.Alpine.store('nav').rechercheItemId = null;
   },
 
@@ -235,8 +240,8 @@ export const rechercheItemMethods = {
         if (this.detailItemId === item.id) this.closeDetail();
       } else { item.archived = item.archived ? 0 : 1; }
       // Archivierte Items zählen nicht im Seiten-/Kapitel-Indikator.
-      if ((item.links || []).some(l => l.target_kind === 'page')) this._refreshRecherchePageCounts();
-      if ((item.links || []).some(l => l.target_kind === 'chapter')) this._refreshRechercheChapterCounts();
+      if ((item.links || []).some(l => l.target_kind === 'page')) this._refreshRechercheCounts('page');
+      if ((item.links || []).some(l => l.target_kind === 'chapter')) this._refreshRechercheCounts('chapter');
     } catch { this.errorMessage = window.__app.t('recherche.error.save'); }
     this.menuOpenId = null;
   },
@@ -252,8 +257,8 @@ export const rechercheItemMethods = {
       this.items = this.items.filter(i => i.id !== item.id);
       if (this.detailItemId === item.id) this.closeDetail();
       this._loadTags();
-      if ((item.links || []).some(l => l.target_kind === 'page')) this._refreshRecherchePageCounts();
-      if ((item.links || []).some(l => l.target_kind === 'chapter')) this._refreshRechercheChapterCounts();
+      if ((item.links || []).some(l => l.target_kind === 'page')) this._refreshRechercheCounts('page');
+      if ((item.links || []).some(l => l.target_kind === 'chapter')) this._refreshRechercheCounts('chapter');
     } catch { this.errorMessage = app.t('recherche.error.delete'); }
     this.menuOpenId = null;
   },

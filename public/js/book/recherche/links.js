@@ -28,8 +28,8 @@ export const rechercheLinkMethods = {
       this._replaceItem(row);
       this.linkPickerItemId = null;
       this.linkPickerTargetId = '';
-      if (targetKind === 'page') this._refreshRecherchePageCounts();
-      if (targetKind === 'chapter') this._refreshRechercheChapterCounts();
+      if (targetKind === 'page') this._refreshRechercheCounts('page');
+      if (targetKind === 'chapter') this._refreshRechercheCounts('chapter');
     } catch { this.errorMessage = app.t('recherche.error.link'); }
   },
 
@@ -60,8 +60,8 @@ export const rechercheLinkMethods = {
     try {
       const row = await fetchJson(`/research/${item.id}/links/${link.link_id}`, { method: 'DELETE' });
       this._replaceItem(row);
-      if (link.target_kind === 'page') this._refreshRecherchePageCounts();
-      if (link.target_kind === 'chapter') this._refreshRechercheChapterCounts();
+      if (link.target_kind === 'page') this._refreshRechercheCounts('page');
+      if (link.target_kind === 'chapter') this._refreshRechercheCounts('chapter');
     } catch { this.errorMessage = window.__app.t('recherche.error.link'); }
   },
 

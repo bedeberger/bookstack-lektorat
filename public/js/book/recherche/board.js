@@ -199,26 +199,26 @@ export const rechercheBoardMethods = {
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   _replaceItem(row) { this.items = this.items.map(i => (i.id === row.id ? row : i)); },
-  // Seiten-Indikator-Map (Sidebar + Editor) nach Link-/Archiv-/Lösch-Änderungen
-  // frisch ziehen. Buchweit geteilt → ein leichter Request hält alle Editoren sync.
-  async _refreshRecherchePageCounts() {
+  // Indikator-Maps (Seiten + Kapitel) nach Link-/Archiv-/Lösch-Änderungen frisch
+  // ziehen. Buchweit geteilt → ein leichter Request hält alle Editoren sync.
+  // `targetKind` wählt die Achse: 'page' speist Sidebar + Editor, 'chapter' nur
+  // die Sidebar. Beide Endpunkte liefern eine id→n-Map; die Store-Keys liegen
+  // dicht beieinander, darum ein gemeinsamer Pfad statt zweier Methoden.
+  async _refreshRechercheCounts(targetKind) {
     const app = window.__app;
     const bookId = Alpine.store('nav').selectedBookId;
     if (!bookId) return;
+    const cfg = {
+      page:    { url: '/research/page-counts',    storeKey: 'rechercheCounts',        currentPage: true },
+      chapter: { url: '/research/chapter-counts', storeKey: 'chapterRechercheCounts', currentPage: false },
+    }[targetKind];
+    if (!cfg) return;
     try {
-      const map = await fetchJson(`/research/page-counts?book_id=${bookId}`);
-      Alpine.store('badges').rechercheCounts = map || {};
-      if (app.currentPage?.id) app.currentPageRechercheCount = (map || {})[app.currentPage.id] || 0;
-    } catch { /* Indikator-Refresh ist best-effort */ }
-  },
-  // Kapitel-Indikator-Map (Sidebar) nach Link-/Archiv-/Lösch-Änderungen frisch
-  // ziehen. Buchweit geteilt, analog zu _refreshRecherchePageCounts.
-  async _refreshRechercheChapterCounts() {
-    const bookId = Alpine.store('nav').selectedBookId;
-    if (!bookId) return;
-    try {
-      const map = await fetchJson(`/research/chapter-counts?book_id=${bookId}`);
-      Alpine.store('badges').chapterRechercheCounts = map || {};
+      const map = await fetchJson(`${cfg.url}?book_id=${bookId}`);
+      Alpine.store('badges')[cfg.storeKey] = map || {};
+      if (cfg.currentPage && app.currentPage?.id) {
+        app.currentPageRechercheCount = (map || {})[app.currentPage.id] || 0;
+      }
     } catch { /* Indikator-Refresh ist best-effort */ }
   },
   _sortItems(arr) {

@@ -1,16 +1,11 @@
 import { makeChatMethods } from './chat-base.js';
 import { fetchJson, escHtml, renderChatMarkdown } from '../utils.js';
-
-// Private-Use-Sentinels für Inline-Zitatmarker: überleben escHtml + die
-// Markdown-Transforms unverändert und werden NACH dem Render durch das
-// Superscript-HTML ersetzt. Kollisionsfrei in echtem Chat-/Markdown-Text.
-const CITE_OPEN = '';
-const CITE_CLOSE = '';
-// `<cite index="4-4,4-5">…</cite>` — das Modell schreibt diese Marker als
-// Klartext in die final_answer-Antwort (claude.ai-Zitatformat). Die erste Zahl
-// jedes Komma-Teils ist der Dokument-Index, die zweite ein Satz-Index (ignoriert).
-const CITE_TAG_RE = /<cite\b[^>]*\bindex="([^"]*)"[^>]*>([\s\S]*?)<\/cite>/gi;
-const CITE_INDEX_ONLY_RE = /<cite\b[^>]*\bindex="([^"]*)"[^>]*>/gi;
+import {
+  renderResearchAnswer as _renderResearchAnswerText,
+  citedSources as _citedSources,
+  parseCiteDocNums as _parseCiteDocNums,
+  resolveSource as _resolveSource,
+} from './research-chat-render.js';
 
 // Recherche-Chat-Methoden (gespreadet in die rechercheCard). Agentischer Chat
 // NEBEN dem Wissensboard: recherchiert im Netz + im vorhandenen Material und
@@ -53,78 +48,28 @@ export const researchChatMethods = {
     return (msg?.context_info?.sources) || [];
   },
 
-  // Dokument-Indizes aus einem `index="4-4,4-5"`-String: erste Zahl pro Komma-
-  // Teil (= Dokument), Satz-Index dahinter ignoriert. Distinkt, Reihenfolge erhalten.
-  _parseCiteDocNums(idxStr) {
-    const nums = [];
-    for (const part of String(idxStr || '').split(',')) {
-      const n = parseInt(part.trim(), 10); // parseInt stoppt am '-' → führende Zahl
-      if (Number.isFinite(n) && !nums.includes(n)) nums.push(n);
-    }
-    return nums;
-  },
+  // Dokument-Indizes aus `index="4-4,4-5"` (Delegation an pure Helper).
+  _parseCiteDocNums(idxStr) { return _parseCiteDocNums(idxStr); },
+  _resolveSource(sources, n) { return _resolveSource(sources, n); },
 
-  // 1-basiertes Mapping Modell-Index → gesammeltes Trefferdokument. Einzige
-  // Stelle der Basis-Annahme (falls je off-by-one, hier zentral korrigierbar).
-  _resolveSource(sources, n) {
-    return sources[n - 1] || null;
-  },
-
-  // Assistant-Antwort rendern: `<cite index="N-…">TEXT</cite>` → TEXT + klickbarer
-  // Superscript-Marker [N] (verlinkt auf das N-te Trefferdokument). Ohne Quellen
-  // werden die Tags still entfernt. Sentinels umgehen den XSS-Escape von
-  // renderChatMarkdown; das injizierte HTML escaped url/title selbst.
+  // Assistant-Antwort rendern. Delegiert an die pure Funktion (Unit-testbar);
+  // die Alpine-Methode bleibt Bindung-Ziel der Templates (Live-Export erhalten).
   _renderResearchAnswer(msg) {
     const app = window.__app;
-    let text = msg?.content || '';
-    const i18nMatch = /^__i18n:([a-zA-Z0-9_.-]+)__$/.exec(text);
-    if (i18nMatch) return renderChatMarkdown(app.t(i18nMatch[1]));
-
-    const sources = this.researchSources(msg);
-    text = text.replace(CITE_TAG_RE, (_full, idxStr, inner) => {
-      if (!sources.length) return inner; // nichts zu verlinken → Tag entfernen
-      const marks = this._parseCiteDocNums(idxStr)
-        .map(n => `${CITE_OPEN}${n}${CITE_CLOSE}`).join('');
-      return inner + marks;
+    return _renderResearchAnswerText({
+      text: msg?.content || '',
+      sources: this.researchSources(msg),
+      renderChatMarkdown,
+      escHtml,
+      t: (k) => app?.t?.(k) ?? k,
     });
-    // Defensiv: etwaige Rest-cite-Tags (ohne index / Fragmente) entwrappen.
-    text = text.replace(/<\/?cite\b[^>]*>/gi, '');
-
-    let html = renderChatMarkdown(text);
-    html = html.replace(new RegExp(`${CITE_OPEN}(\\d+)${CITE_CLOSE}`, 'g'), (_s, nStr) => {
-      const n = parseInt(nStr, 10);
-      const src = this._resolveSource(sources, n);
-      if (src && src.url) {
-        return `<sup class="chat-cite"><a href="${escHtml(src.url)}" target="_blank" rel="noopener noreferrer" data-tip="${escHtml(src.title || src.url)}">${n}</a></sup>`;
-      }
-      return `<sup class="chat-cite chat-cite--dim">${n}</sup>`;
-    });
-    return html;
   },
 
   // Distinkte, in der Antwort tatsächlich zitierte Quellen — für die Quellenliste
-  // unter der Antwort. Sortiert nach Index, je URL nur einmal.
+  // unter der Antwort. Pure Helper genutzt, das schliesst Drift zwischen Render
+  // und Digest aus (vorher zwei handgeschriebene Loops über denselben Regex).
   researchCitedSources(msg) {
-    const sources = this.researchSources(msg);
-    if (!sources.length) return [];
-    const text = msg?.content || '';
-    const nums = [];
-    let m;
-    CITE_INDEX_ONLY_RE.lastIndex = 0;
-    while ((m = CITE_INDEX_ONLY_RE.exec(text))) {
-      for (const n of this._parseCiteDocNums(m[1])) if (!nums.includes(n)) nums.push(n);
-    }
-    nums.sort((a, b) => a - b);
-    const seen = new Set();
-    const out = [];
-    for (const n of nums) {
-      const src = this._resolveSource(sources, n);
-      if (src && src.url && !seen.has(src.url)) {
-        seen.add(src.url);
-        out.push({ n, url: src.url, title: src.title || src.url });
-      }
-    }
-    return out;
+    return _citedSources(msg?.content || '', this.researchSources(msg));
   },
 
   // Stabiler Schlüssel für den Speicher-Status eines Vorschlags (pro Session,
