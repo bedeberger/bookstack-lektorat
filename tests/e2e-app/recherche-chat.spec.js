@@ -6,10 +6,17 @@
 // via Toggle-Icon. Kein echter Send: der Job-Worker ist Claude-only und ohne
 // API-Key im Devmode ohne Wert (Server-Return 404 researchChatClaudeOnly);
 // das Frontend-Refactoring ist der Gegenstand, nicht das Backend-Verhalten.
+//
+// Voraussetzung: /config liefert researchChat.enabled=true (effektiver Provider
+// ist Claude + API-Key gesetzt). Ist der Key nicht gesetzt, blendet der Server
+// das Feature ohnehin aus (routes/proxies.js#researchChat); ein Spec, der auf
+// false-branches pruefte, waere von der lokalen .env abhaengig und darum nicht
+// tragfaehig. Wir setzen den Store-Wert explizit auf true, um die
+// Frontend-Invariante isoliert zu testen.
 const { test, expect } = require('@playwright/test');
 const { bootApp, selectSeededBook } = require('./_helpers/app');
 
-test('recherche-chat: Toggle-Button sichtbar, Panel klappt auf, Eingabefeld + Close arbeiten', async ({ page }) => {
+test('recherche-chat: Toggle schaltet das Panel, Eingabefeld + Close arbeiten nach Render-Refactoring', async ({ page }) => {
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -19,10 +26,8 @@ test('recherche-chat: Toggle-Button sichtbar, Panel klappt auf, Eingabefeld + Cl
   await page.evaluate((id) => { location.hash = `#book/${id}/recherche`; }, bookId);
   await expect(page.locator('#recherche-card')).toBeVisible();
 
-  // /config liefert researchChat.enabled=false, wenn kein Claude-API-Key gesetzt
-  // ist (Devmode ohne Key). Der Spec prueft Frontend-Zugaenglichkeit nach dem
-  // Render-Refactoring, nicht das Feature-Enablement — darum den Store-Wert hier
-  // auf true legen, damit der Toggle-Button sichtbar wird.
+  // Store-Wert explizit true — isoliert die Frontend-Invariante von der
+  // Server-Enable-Lage (Provider + Key).
   await page.evaluate(() => { window.Alpine.store('config').researchChatEnabled = true; });
 
   // Toggle-Button: nur sichtbar, wenn /config researchChat.enabled true ist.
