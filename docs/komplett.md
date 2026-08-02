@@ -164,6 +164,7 @@ Drei unabhängige Mechanismen:
 - **Checkpoint-Resume nur bei `bookPagesSig`-Match** — verhindert stale Extraktion nach Edit/Version-Bump.
 - **P8-Fehler darf den Katalog nicht verwerfen** (read-only Endphase → Warnung, Job `done`).
 - **non-critical-Degradierungen als `warnings` ins Job-Result** (`{ key }`), nicht nur ins Log — User unterscheidet „Teilphase übersprungen" von „alles ok".
+- **In den Event-Datumsspalten heisst „unbekannt" `NULL`, nie `0`** — SSoT der Normalisierung ist [lib/datum-parse.js](../lib/datum-parse.js)#`normalizeDatumFields`, angewandt am geteilten Schreibpfad [db/event-datum.js](../db/event-datum.js)#`structuredDatum` (speist **beide** Tabellen: `zeitstrahl_events` und `figure_events`) sowie beim `.swbook`-Import. **Why:** die Modelle liefern für ein unbekanntes Zahlenfeld `0` statt `null` — Claude aus Neigung, lokale Provider strukturell erzwungen (das Schema-Atom für diese Felder ist deshalb `['number','null']`, nicht `_num`; `_obj` macht jede Property required, und unter Constrained Decoding kann ein reines `number` gar kein `null` erzeugen). Die gesamte Auswertung prüft auf `== null` bzw. `IS NOT NULL`, sodass eine 0 als echtes Datum durchgeht: Anzeige „00.00.1988 – 00.00.0", Jahres-Band ab Jahr 0, nie gefüllter „ohne Datum"-Bucket (`COALESCE(datum_year, 9999)` greift bei 0 nicht) und eine Buch-Epoche, die als „Jahr 0 bis …" in die nachgelagerten Prompts geht. Die Anzeige hält mit [public/js/cards/ereignisse/date.js](../public/js/cards/ereignisse/date.js) ein **bewusstes Gegenstück** dafür (`hasEventYear`, `formatEventDateParts`) — nicht konsolidierbar, weil die Karte auch einen nicht migrierten Bestand rendern können muss. Prompt-Regel („UNBEKANNT HEISST null, NIEMALS 0") in [schema-strings.js](../public/js/prompts/komplett/schema-strings.js) **und** [konsolidierung.js](../public/js/prompts/komplett/konsolidierung.js). Gegated: [tests/unit/event-datum-zero.test.mjs](../tests/unit/event-datum-zero.test.mjs).
 
 ## Tests
 
@@ -171,6 +172,7 @@ Drei unabhängige Mechanismen:
 |---|---|
 | Pipeline (Single/Multi-Pass, Delta-Cache, Checkpoint, P2/P3/P6, faktenFailed-Cache-**und**-Checkpoint-Skip, Rename-Invalidation des Chunk-Caches) | [tests/integration/komplett.test.js](../tests/integration/komplett.test.js) |
 | Event-Struktur (Datumsfelder, Subtyp-Whitelist, Sortierung) | [tests/integration/komplett-events-schema.test.js](../tests/integration/komplett-events-schema.test.js) |
+| Event-Datum: 0-statt-null-Platzhalter (Normalizer, Schreibpfad, Anzeige, Jahres-Band) | [tests/unit/event-datum-zero.test.mjs](../tests/unit/event-datum-zero.test.mjs) |
 | Kontinuität (Single-Pass, Verify-Stufe, Fehlerfälle) | [tests/integration/kontinuitaet.test.js](../tests/integration/kontinuitaet.test.js) |
 | Cross-Job-Regressionen (Truncation, AbortError) | [tests/integration/regression.test.js](../tests/integration/regression.test.js) |
 | Pure-Helper Figuren-Dedup/Merge (preMerge, mergeDuplicate, modeVote, Beschreibungs-Rescue) | [tests/unit/figuren-merge.test.js](../tests/unit/figuren-merge.test.js) |

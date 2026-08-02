@@ -3,8 +3,8 @@
    EINE Shell für BEIDE Dialoge der Karte, damit Panelbreite, Kopfzeile, Scroll-
    Verhalten und das Mobile-Blatt nicht zweimal gepflegt werden:
    - Detailansicht (public/partials/recherche-detail.html, items.js#openDetail):
-     den Fund LESEN — Volltext ungekappt, in Lesegrösse und mit begrenztem
-     Satzspiegel, Bild gross statt als Rohdatei im neuen Tab — und ihn darin
+     den Fund LESEN — Volltext ungekappt, in Lesegrösse über die volle
+     Panelbreite, Bild gross statt als Rohdatei im neuen Tab — und ihn darin
      bearbeiten, ohne dass Verknüpfungen, Tags und Anhänge verschwinden.
    - Anlegen (public/partials/recherche-create.html, items.js#startCreate): das
      Formular als Modal statt als Block über der Liste. Warum: es ist dasselbe
@@ -186,8 +186,6 @@ textarea.recherche-input--tall { min-height: 40vh; }
   .research-dialog__head { padding: var(--space-sm) var(--space-md); }
   .research-dialog__scroll { padding: var(--space-md); }
   .research-dialog__bar { padding: var(--space-xs) var(--space-md); }
-  /* Satzspiegel gibt hier der Viewport vor; ein zweites Limit verschenkt Breite. */
-  .research-dialog__text { max-width: none; }
   .research-dialog__image { max-height: 45vh; }
 }
 }

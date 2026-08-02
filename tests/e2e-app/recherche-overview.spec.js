@@ -69,17 +69,28 @@ test('recherche: Liste zeigt Anriss, Detailansicht zeigt Volltext und bleibt ver
   await expect(dialog).toBeVisible();
   const detailText = dialog.locator('.research-dialog__text');
   // Ungekappt: die sichtbare Hoehe ist die volle Inhaltshoehe.
-  const detail = await detailText.evaluate(el => ({
-    h: el.getBoundingClientRect().height,
-    full: el.scrollHeight,
-    w: el.getBoundingClientRect().width,
-    px: parseFloat(getComputedStyle(el).fontSize),
-  }));
+  const detail = await detailText.evaluate(el => {
+    const scroll = el.closest('.research-dialog__scroll');
+    const cs = getComputedStyle(scroll);
+    return {
+      h: el.getBoundingClientRect().height,
+      full: el.scrollHeight,
+      w: el.getBoundingClientRect().width,
+      px: parseFloat(getComputedStyle(el).fontSize),
+      // Verfuegbare Textbreite des Panels (Scroll-Container minus Innenabstand).
+      availW: scroll.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
+    };
+  });
   expect(detail.h).toBeGreaterThanOrEqual(detail.full - 1);
   expect(detail.h).toBeGreaterThan(teaserBox.h * 3);
-  // Lesetypografie: Lesegroesse und begrenzter Satzspiegel (nicht Panelbreite).
+  // Lesetypografie: Lesegroesse. Der Satzspiegel ist bewusst NICHT zusaetzlich
+  // gekappt — ein erfasster Artikel soll die Panelbreite nutzen statt in einer
+  // schmalen Column mit leerem rechten Raum zu brechen (siehe
+  // public/css/entities/recherche/dialog.css, Abschnitt Lesemodus). Geprueft wird
+  // darum: volle verfuegbare Breite, und kein Ausbrechen daraus.
   expect(detail.px).toBeGreaterThanOrEqual(15);
-  expect(detail.w).toBeLessThan(700);
+  expect(detail.w).toBeLessThanOrEqual(detail.availW + 1);
+  expect(detail.w).toBeGreaterThanOrEqual(detail.availW - 1);
   // Der Permalink zeigt aufs offene Fundstueck.
   expect(page.url()).toContain(`/recherche/${made.long}`);
 
