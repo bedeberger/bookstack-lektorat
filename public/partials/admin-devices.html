@@ -1,10 +1,12 @@
-<!-- Admin: Geraete (native Mac-Focus-Clients) -->
+<!-- Admin: Geraete (native Mac-Focus-Clients + Chrome-Erweiterung) -->
 <!--
   Alpine.data-Sub-Komponente — siehe public/js/cards/admin-devices-card.js.
   `showAdminDevicesCard` + `toggleAdminDevicesCard` im Root. Nur sichtbar bei
   $store.session.currentUser.role === 'admin'. Listet alle device_tokens mit gemeldeter
-  Client-Version (X-Client-Version), Nutzungszaehler und letzter Aktivitaet.
-  Read-only: Tokens ausstellen/widerrufen passiert beim User unter /me.
+  Client-Version (X-Client-Version), Nutzungszaehler und letzter Aktivitaet;
+  veraltete Versionen werden gegen das jeweilige Plattform-Release markiert
+  (macOS, Android, Chrome-Erweiterung). Read-only: Tokens ausstellen/widerrufen
+  passiert beim User unter /me.
 -->
 <div class="card card--admin-devices" x-data="adminDevicesCard" x-show="$app.showAdminDevicesCard" x-cloak>
   <div class="card-header">
@@ -15,11 +17,13 @@
   </div>
 
   <p class="muted-msg" x-text="$app.t('admin.devices.intro')"></p>
-  <p class="muted-msg muted-msg--sm" x-show="devicesLatestVersions.macos || devicesLatestVersions.android">
+  <p class="muted-msg muted-msg--sm" x-show="devicesLatestVersions.macos || devicesLatestVersions.android || devicesLatestVersions.extension">
     <span x-text="$app.t('admin.devices.latestRelease')"></span>
     <span x-show="devicesLatestVersions.macos">macOS <code x-text="devicesLatestVersions.macos"></code></span>
-    <span x-show="devicesLatestVersions.macos && devicesLatestVersions.android"> · </span>
+    <span x-show="devicesLatestVersions.macos && (devicesLatestVersions.android || devicesLatestVersions.extension)"> · </span>
     <span x-show="devicesLatestVersions.android">Android <code x-text="devicesLatestVersions.android"></code></span>
+    <span x-show="devicesLatestVersions.android && devicesLatestVersions.extension"> · </span>
+    <span x-show="devicesLatestVersions.extension">Chrome <code x-text="devicesLatestVersions.extension"></code></span>
   </p>
 
   <div x-show="devicesLoading" class="muted-msg" x-text="$app.t('common.loading')"></div>

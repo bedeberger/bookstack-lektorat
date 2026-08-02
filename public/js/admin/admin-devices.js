@@ -1,7 +1,10 @@
 // AdminDevicesCard-Methods. Wird im adminDevicesCard-Alpine-Scope gespreaded.
 // Root-Zugriffe via window.__app. Liest aus /admin/devices (alle Device-Tokens
-// der nativen Mac-Focus-Clients: gemeldete Client-Version, Nutzungszaehler,
-// letzte Aktivitaet). Read-only — Ausstellen/Widerrufen bleibt beim User unter /me.
+// der nativen Mac-Focus-Clients und der Chrome-Erweiterung: gemeldete
+// Client-Version, Nutzungszaehler, letzte Aktivitaet). Read-only —
+// Ausstellen/Widerrufen bleibt beim User unter /me. Veraltete Versionen werden
+// gegen das neueste Release der jeweiligen Plattform verglichen (macOS, Android,
+// Chrome-Erweiterung — drei eigene Repos, drei eigene Versionsstraenge).
 
 import { tzOpts } from '../utils.js';
 
@@ -83,10 +86,20 @@ export const adminDevicesMethods = {
     return /android/i.test(d.client_version || '') || /android/i.test(d.platform || '');
   },
 
-  // Neueste Version fuer die Plattform dieses Geraets (Android vs. macOS getrennt).
+  // Erkennt die Chrome-Erweiterung. Der Client meldet seine Version als
+  // `chrome/<version>` (Praefix, analog `android/…`); fehlt der Praefix, faellt
+  // die Erkennung auf das Freitext-`platform`-Feld zurueck (z.B. „Chrome").
+  _devicesIsChrome(d) {
+    return /chrome/i.test(d.client_version || '') || /chrome/i.test(d.platform || '');
+  },
+
+  // Neueste Version fuer die Plattform dieses Geraets (Chrome vs. Android vs.
+  // macOS getrennt — jeder Repo hat seinen eigenen Versionsstrang).
   _devicesLatestForPlatform(d) {
     const v = this.devicesLatestVersions || {};
-    return this._devicesIsAndroid(d) ? (v.android || null) : (v.macos || null);
+    if (this._devicesIsChrome(d)) return v.extension || null;
+    if (this._devicesIsAndroid(d)) return v.android || null;
+    return v.macos || null;
   },
 
   // Ist die installierte Version aelter als das neueste Release der jeweiligen

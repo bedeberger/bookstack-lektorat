@@ -100,6 +100,10 @@ function _renderLanding(req, res) {
     androidDesc:      t('landing.androidDesc'),
     androidLinkLabel: t('landing.androidLinkLabel'),
     androidUrl:       'https://github.com/bedeberger/schreibwerkstatt-mobile/releases/latest',
+    extensionTitle:     t('landing.extensionTitle'),
+    extensionDesc:      t('landing.extensionDesc'),
+    extensionLinkLabel: t('landing.extensionLinkLabel'),
+    extensionUrl:       'https://github.com/bedeberger/schreibwerkstatt-browser-extension/releases/latest',
   }));
 }
 

@@ -95,19 +95,21 @@ Offline-First: der Client hält einen lokalen SQLite-Spiegel und synchronisiert 
 
 > **Das Collab-Signal ist ein Komfort-Kanal, keine Wahrheitsquelle.** Der 5s-Poll auf `/changes` läuft im Browser erst, wenn der **40s**-Buch-Device-Ping eine zweite Partei gemeldet hat (`_selfBookDeviceCount > 1` bzw. geteiltes Buch, [app-collab.js](../public/js/app/app-collab.js#L135)) — ein Push eines Zweitgeräts wird also bis zu einer Ping-Periode später sichtbar, und gar nicht, wenn das Gerät offline schrieb und beim Reconnect nur pusht, ohne das Buch zu pingen. Folge für den Server-Konsumenten: **jeder Pfad, dessen Resultat an einem Seiten-Snapshot hängt** (Lektorat-Findings mit Positionen, Chat-`vorschlaege.original`), muss den aktuellen `updated_at` **selbst** nachfragen statt der browserlokalen `currentPage.updated_at` zu glauben. Siehe harte Regel „Job-Ergebnisse mit `updatedAt`-Staleness-Check" in [CLAUDE.md](../CLAUDE.md).
 
-## Release-Discovery (Download-Hinweis im Profil)
+## Release-Discovery (Download-Hinweis im Profil + Landing)
 
-Das Profil (`/me`) zeigt eingeloggten Usern Version + Download-Link der nativen Apps. Beide Routen sind dünne Proxies auf die GitHub-Public-API über den generischen Fetcher [lib/github-release.js](../lib/github-release.js) (In-Memory-Cache):
+Das Profil (`/me`) und die Landing-Page zeigen Logged-in-Usern bzw. Besucher:innen Version + Download-Link der nativen Apps und der Chrome-Erweiterung. Alle Routen sind dünne Proxies auf die GitHub-Public-API über den generischen Fetcher [lib/github-release.js](../lib/github-release.js) (In-Memory-Cache):
 
 | Plattform | Route | Lib | Asset |
 |-----------|-------|-----|-------|
 | macOS | `GET /content/macclient/release.json` | [lib/macclient-release.js](../lib/macclient-release.js) | `.dmg` |
 | Android | `GET /content/android/release.json` | [lib/androidclient-release.js](../lib/androidclient-release.js) | `.apk` (Sideload) |
+| Chrome | `GET /content/extension/release.json` | [lib/extension-release.js](../lib/extension-release.js) | `.zip` (Sideload bis zur Web-Store-Aufnahme) |
 
 - Die UI verlinkt direkt auf die GitHub-CDN-URL (kein Download-Proxy). Da die Client-Repos öffentlich sind, ist die Asset-URL selbst öffentlich; der Download wird nur Eingeloggten **angezeigt** (Anzeige-Gating, kein Hard-Gating).
 - ETag = sha256(Version) → 304.
-- **GitHub-Rate-Limit:** ohne Token 60 Req/h. Ein optionaler PAT hebt das auf 5000/h (Admin-Settings → Erweitert → `macclient.github_token`, verschlüsselt in `app_settings`; `GITHUB_TOKEN` in `.env` nur als einmaliger Boot-Seed). Siehe [README.md](../README.md).
-- Profil-UI-Strings: `profile.macApp.*` / `profile.androidApp.*` in [public/js/i18n/{de,en}.json](../public/js/i18n/).
+- **GitHub-Rate-Limit:** ohne Token 60 Req/h. Ein optionaler PAT hebt das auf 5000/h (Admin-Settings → Erweitert → `macclient.github_token`, verschlüsselt in `app_settings`; `GITHUB_TOKEN` in `.env` nur als einmaliger Boot-Seed). Das Token ist konto-weit gültig und deckt alle drei Client-Repos ab. Siehe [README.md](../README.md).
+- Profil-UI-Strings: `profile.macApp.*` / `profile.androidApp.*` / `profile.extensionApp.*` in [public/js/i18n/{de,en}.json](../public/js/i18n/). Landing-Strings: `landing.{mac,android,extension}{Title,Desc,LinkLabel}`.
+- **Veraltet-Vergleich im Admin-Tab:** `/admin/devices` liefert `latestVersions: { macos, android, extension }`. Der Client bestimmt pro Gerät anhand der gemeldeten `client_version` (Plattform-Prefix `android/…` bzw. `chrome/…`) und des Freitext-`platform`-Felds, welcher Referenzstrang gilt; fuer Chrome zeichnet `_devicesIsChrome` zuständig. `devicesIsOutdated(d)` vergleicht dotted-numeric und blendet dieselbe „veraltet"-Badge ein wie bei den nativen Clients.
 
 ## Konto-Selbstlöschung (`DELETE /me/account`)
 
@@ -147,7 +149,7 @@ Content-Type: application/json
 | Device-Token-Auth | ✅ `device` | ✅ `device` | ✅ `capture` (enge Allowlist) |
 | Schreibt ins Manuskript | ✅ | ✅ | — (Recherche + Quellen, nie Buchtext) |
 | Sync (`/sync`) + Presence | ✅ | ✅ | — (kein lokaler Spiegel) |
-| Release-Discovery | ✅ `.dmg` | ✅ `.apk` | — (Store bzw. Sideload, kein `release.json`) |
+| Release-Discovery | ✅ `.dmg` | ✅ `.apk` | ✅ `.zip` (Sideload bis Web-Store) |
 | OTA-Editor-Bundle | ✅ | ✅ (eigenes Boot-HTML) | — |
 | OTA-i18n-Override | ✅ | — (native Strings) | — (eigene Strings) |
 | Konto-Selbstlöschung | ✅ `DELETE /me/account` | — (Web-Profil) | — (`/me/*` nicht allowlistet) |
@@ -155,7 +157,7 @@ Content-Type: application/json
 
 Das Fehlende auf Android-Seite (i18n-Override) ist **kein Gap, sondern Folge der Architektur**: die App verwaltet ihre Oberflächen-Strings nativ, der Editor-Kern bringt seine eigenen mit. Was beide nativen Clients gemeinsam tragen — Auth, Sync, Presence, Release-Discovery, Editor-Bundle — ist symmetrisch abgedeckt.
 
-Die leere Spalte der Erweiterung ist ebenso wenig eine Lücke: sie ist **die Definition des Clients**. Wer nur erfasst, braucht keinen lokalen Spiegel (es gibt nichts zu mergen), kein Editor-Bundle (es wird nichts editiert) und keine Presence (niemand teilt eine Seite mit ihr). Käme eines davon dazu, wäre es ein zweiter Editor-Client und kein Erfassungswerkzeug mehr — und der enge Token-Scope, der genau das absichert, müsste fallen.
+Die leere Spalte der Erweiterung ist ebenso wenig eine Lücke: sie ist **die Definition des Clients**. Wer nur erfasst, braucht keinen lokalen Spiegel (es gibt nichts zu mergen), kein Editor-Bundle (es wird nichts editiert) und keine Presence (niemand teilt eine Seite mit ihr). Käme eines davon dazu, wäre es ein zweiter Editor-Client und kein Erfassungswerkzeug mehr — und der enge Token-Scope, der genau das absichert, müsste fallen. **Release-Discovery hat sie dagegen sehr wohl** (eigene Versionsstränge, eigener Veraltet-Vergleich) — ab dem Punkt, wo die Erweiterung ein Release-Asset auf GitHub trägt, erscheint es im Profil, in der Landing und im Admin-Geräte-Tab.
 
 **Push-Notifications** existieren auf keiner Plattform serverseitig (kein FCM/APNS). Falls künftig gewünscht, wäre das ein neuer Baustein (Token-Registry analog `device_tokens`, Notify-Trigger an den Sync-/Collab-Punkten).
 
@@ -165,7 +167,7 @@ Die leere Spalte der Erweiterung ist ebenso wenig eine Lücke: sie ist **die Def
 
 Serverseitig braucht sie nichts Eigenes außer dem Scope, einem Sammel-Endpunkt zum Schreiben und zwei Bestandsfragen zum Lesen:
 
-- **Auth** wie die nativen Clients (`swd_…`), aber mit `kind: 'capture'` → Allowlist oben. `X-Client-Platform: chrome`.
+- **Auth** wie die nativen Clients (`swd_…`), aber mit `kind: 'capture'` → Allowlist oben. Selbstidentifikation per `X-Client-Platform: chrome` und `X-Client-Version: chrome/<version>` (Prefix analog `android/…`), damit der Admin-Tab die Plattform erkennt und die gemeldete Version gegen das neueste Extension-Release vergleichen kann.
 - **Kein CORS nötig:** die App hat keine CORS-Middleware und braucht keine, solange alle Requests im MV3-Service-Worker laufen — mit `host_permissions` auf den App-Host ist der Worker CORS-exempt. Aus einem Content-Script heraus scheitert derselbe Request.
 - **`POST /capture`** ([routes/capture.js](../routes/capture.js)) — Fundstück und/oder Quelle in **einem** transaktionalen Aufruf. Body `{ book_id, mode: 'research'|'source'|'both', url, title, body, kind, tags, source, authors, container_title, year, doi, isbn, csl_type, accessed_at, note }`, Antwort `{ research_item, research_created, source, source_created, source_linked }`. Rolle `editor` auf dem Buch.
   - **Warum nicht die drei Einzelaufrufe:** ein Popup, das der User nach der Quittung zuklappt, hinterlässt bei drei Requests nach Abbruch eine Quelle, die in keinem Buch liegt. Alles in einer `db.transaction`.

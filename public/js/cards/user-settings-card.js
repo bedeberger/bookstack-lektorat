@@ -39,6 +39,8 @@ export function registerUserSettingsCard() {
     macRelease: { available: false },
     // Android-App-Download (schreibwerkstatt-mobile)
     androidRelease: { available: false },
+    // Chrome-Erweiterung (schreibwerkstatt-browser-extension, vor Web-Store: ZIP-Sideload)
+    extensionRelease: { available: false },
     _savedAtTimer: null,
 
     get dictEntriesFiltered() {
@@ -57,6 +59,7 @@ export function registerUserSettingsCard() {
         await this.loadDeviceTokens();
         await this.loadMacRelease();
         await this.loadAndroidRelease();
+        await this.loadExtensionRelease();
       });
 
       this._onViewReset = () => {

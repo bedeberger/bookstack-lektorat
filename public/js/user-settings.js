@@ -286,4 +286,26 @@ export const userSettingsMethods = {
   androidReleaseIsAndroidPlatform() {
     return /Android/i.test(navigator.userAgent || '');
   },
+
+  // ── Chrome-Erweiterung (schreibwerkstatt-browser-extension) ─────────────────
+  // latest-Release-Metadaten vom Server (GitHub-Public-API-Proxy). Wirft nie;
+  // bei { available:false } wird der Abschnitt schlicht nicht gerendert. Bis die
+  // Erweiterung im Chrome Web Store ist, wird sie als .zip-Sideload aus dem
+  // GitHub-Release ausgeliefert.
+  async loadExtensionRelease() {
+    try {
+      const data = await fetchJson('/content/extension/release.json');
+      this.extensionRelease = data && data.available ? data : { available: false };
+    } catch (e) {
+      console.error('[user-settings] Extension-Release laden fehlgeschlagen:', e);
+      this.extensionRelease = { available: false };
+    }
+  },
+
+  /** Dateigröße des .zip in MB, locale-formatiert. */
+  extensionReleaseSizeMb() {
+    const bytes = this.extensionRelease?.zip?.sizeBytes || 0;
+    if (!bytes) return '';
+    return (bytes / 1048576).toLocaleString(Alpine.store('shell').uiLocale === 'en' ? 'en-US' : 'de-CH', { maximumFractionDigits: 1 });
+  },
 };

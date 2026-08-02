@@ -192,6 +192,25 @@
       </div>
     </div>
 
+    <!-- Chrome-Erweiterung (schreibwerkstatt-browser-extension, vor Web-Store: ZIP-Sideload) -->
+    <div class="card-form-row card-form-row--devices" x-show="extensionRelease.available" x-cloak x-data="collapsible()">
+      <button type="button" class="collapsible-toggle" x-bind="trigger">
+        <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
+        <span x-text="$app.t('profile.extensionApp.title')"></span>
+        <span class="lt-dict-count" x-text="extensionRelease.version"></span>
+      </button>
+      <div class="device-tokens-body" x-bind="panel" x-cloak>
+        <p class="muted-msg muted-msg--sm" x-text="$app.t('profile.extensionApp.intro')"></p>
+        <div class="mac-app-meta muted-msg muted-msg--sm">
+          <span x-text="$app.t('profile.extensionApp.version') + ': ' + extensionRelease.version"></span>
+          <span x-show="extensionReleaseSizeMb()" x-text="' · ' + extensionReleaseSizeMb() + ' MB'"></span>
+          <span x-show="extensionRelease.publishedAt" x-text="' · ' + new Date(extensionRelease.publishedAt).toLocaleDateString($store.shell.uiLocale, $app.tzOpts())"></span>
+        </div>
+        <p x-show="extensionRelease.notes" class="mac-app-notes muted-msg muted-msg--sm" x-text="extensionRelease.notes"></p>
+        <a class="btn-compact" :href="extensionRelease.zip?.downloadUrl" :download="extensionRelease.zip?.name" x-text="$app.t('profile.extensionApp.download')"></a>
+      </div>
+    </div>
+
     <!--
       Konto loeschen (App-Store-Guideline 5.1.1(v)). Gleicher Endpunkt wie im
       nativen macOS-Client: DELETE /me/account. Der Client verlinkt auf #profil,

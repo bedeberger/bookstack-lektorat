@@ -8,6 +8,7 @@ const editorBundle = require('../../lib/editor-bundle');
 const macclientI18n = require('../../lib/macclient-i18n');
 const macclientRelease = require('../../lib/macclient-release');
 const androidclientRelease = require('../../lib/androidclient-release');
+const extensionRelease = require('../../lib/extension-release');
 const logger = require('../../logger');
 const { _clientLabel, _fail } = require('./shared');
 
@@ -122,6 +123,34 @@ function register(router) {
       res.set('Content-Type', 'application/json; charset=utf-8');
       res.send(body);
     } catch (e) { _fail(res, e, 'GET /content/android/release.json'); }
+  });
+
+  // GET /content/extension/release.json — latest-Release-Metadaten der Chrome-
+  // Erweiterung (schreibwerkstatt-browser-extension) fuer den Download-Hinweis
+  // im Profil + Landing und den Veraltet-Vergleich im Admin-Tab. Body:
+  // { available, version, notes, publishedAt, zip:{ name, sizeBytes,
+  // downloadUrl } } bzw. { available:false }. Quelle: GitHub-Public-API ueber
+  // [lib/extension-release.js](../lib/extension-release.js) (In-Memory-Cache).
+  //
+  // Bis die Erweiterung im Chrome Web Store ist, wird sie als .zip-Sideload
+  // ausgeliefert (Release-Asset auf dem GitHub-CDN). Die UI verlinkt direkt auf
+  // zip.downloadUrl — kein Download-Proxy. Da das Repo oeffentlich ist, ist die
+  // Asset-URL selbst oeffentlich; der Download wird nur Eingeloggten *angezeigt*
+  // (Anzeige-Gating, kein Hard-Gating).
+  //
+  // Auth: globaler Guard (server.js). ETag = sha256(version); bei If-None-Match
+  // mit passendem ETag → 304 ohne Body.
+  router.get('/extension/release.json', async (req, res) => {
+    try {
+      const rel = await extensionRelease.getLatestRelease();
+      const body = JSON.stringify(rel);
+      const etag = `"${createHash('sha256').update(`extension-release:${rel.available ? rel.version : 'none'}`).digest('hex')}"`;
+      res.set('ETag', etag);
+      res.set('Cache-Control', 'no-cache'); // immer revalidieren (via If-None-Match)
+      if (req.headers['if-none-match'] === etag) return res.status(304).end();
+      res.set('Content-Type', 'application/json; charset=utf-8');
+      res.send(body);
+    } catch (e) { _fail(res, e, 'GET /content/extension/release.json'); }
   });
 }
 
