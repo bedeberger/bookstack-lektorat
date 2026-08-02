@@ -119,11 +119,11 @@ html:has(.research-dialog[open]) { overflow: hidden; }
 
 /* ── Lesemodus ──────────────────────────────────────────────────────────── */
 /* Der eigentliche Grund für diese Ansicht: ein erfasster Artikel trägt bis zu
-   20 000 Zeichen. Lesegrösse, ruhige Zeilenhöhe und ein Satzspiegel um 70 Zeichen
-   (nicht die volle Panelbreite — lange Zeilen verliert das Auge beim Rücksprung).
+   20 000 Zeichen. Lesegrösse und ruhige Zeilenhöhe; volle Dialogbreite statt
+   eines begrenzten Satzspiegels, weil lang erfasste Extension-Texte in einer
+   schmalen Column sonst extrem früh umbrechen (leerer rechter Raum).
    `pre-wrap` erhält die Absatzumbrüche des erfassten Texts. */
 .research-dialog__text {
-  max-width: 34rem;
   font-size: var(--font-size-reading);
   line-height: var(--lh-relaxed);
   color: var(--color-text);

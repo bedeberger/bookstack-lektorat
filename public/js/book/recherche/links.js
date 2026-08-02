@@ -11,6 +11,15 @@ export const rechercheLinkMethods = {
     this.linkPickerItemId = item.id;
     this.linkPickerKind = 'page';
     this.linkPickerTargetId = '';
+    // Bei langem Fundstueck-Text steht der Picker (eingebettet vor dem Fuss)
+    // oft ausserhalb des sichtbaren Dialog-Abschnitts. Sanft in Sicht scrollen,
+    // damit der User nicht manuell suchen muss — nur im Detail-Dialog, in der
+    // Liste bleibt es beim automatischen Verhalten der Karten-Scroll-Logik.
+    this.$nextTick(() => {
+      const dlg = this.$refs?.detailDialog;
+      const picker = dlg?.querySelector?.('.recherche-linkpicker');
+      if (picker) picker.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
   },
   cancelLinkPicker() { this.linkPickerItemId = null; this.linkPickerTargetId = ''; },
 
