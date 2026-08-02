@@ -228,13 +228,13 @@ export const _ASSIGNMENTS_SCHEMA_BLOCK = `"assignments": [
         {
           "datum": "Original-Datum-Notation (JJJJ, JJJJ-MM, JJJJ-MM-TT, «Mai 1850», «Tag 3», «vor der Reise», …)",
           "datum_label": "User-lesbarer Original-String.",
-          "datum_year":  1850,         // null wenn unbekannt
-          "datum_month": null,
-          "datum_day":   null,
-          "datum_ende_year":  null,    // Spanne: Ende-Jahr
+          "datum_year":  1850,         // null wenn unbekannt – NIEMALS 0
+          "datum_month": null,         // 1-12 oder null – NIEMALS 0
+          "datum_day":   null,         // 1-31 oder null – NIEMALS 0
+          "datum_ende_year":  null,    // Spanne: Ende-Jahr; null wenn Punkt-Ereignis – NIEMALS 0
           "datum_ende_month": null,
           "datum_ende_day":   null,
-          "story_tag":   null,         // Relative Story-Zeit
+          "story_tag":   null,         // Relative Story-Zeit (ab 1) – NIEMALS 0
           "datum_unsicher": false,     // true NUR wenn datum_year aus dem Kontext abgeleitet (nicht explizit belegt) wurde
           "subtyp":      "sonstiges",  // geburt|tod|hochzeit|liebe|trennung|krankheit|reise|umzug|konflikt|wendepunkt|entdeckung|verlust|sieg|extern_politisch|extern_wirtschaftlich|extern_natur|extern_kulturell|extern_krieg|sonstiges
           "ereignis": "Was passierte – neutral formuliert. Gleiches Ereignis bei allen beteiligten Figuren identisch.",
@@ -251,6 +251,7 @@ export const _EREIGNIS_RULES = `Ereignis-Regeln:
 - VOLLSTÄNDIGKEIT vor Kürze: Gehe jede Figur einzeln durch und erfasse ALLE im Text belegten Ereignisse – kein Cap. Neben den grossen biografischen Wendepunkten (Geburt, Tod, Trauma, neue/beendete Beziehung, Jobwechsel, Umzug, wichtige Entscheidung) auch kleinere, aber belegte Vorfälle (erste Begegnung, Streit/Versöhnung, Reise-Etappe, Erkrankung/Genesung, Erfolg/Niederlage, prägende Beobachtung). Ziel ist die möglichst lückenlose Biografie jeder Figur. Im Zweifel aufnehmen statt weglassen – solange im Text belegt.
 - typ='persoenlich' = biografische Ereignisse der Figur; typ='extern' = gesellschaftliche/historische Ereignisse (Kriege, Politik, Wirtschaft, Kultur, Natur) – diese SEHR GROSSZÜGIG erfassen und ALLEN betroffenen Figuren zuweisen.
 - datum_label = Original-String; datum_year/month/day strukturiert zerlegen (null wenn unbekannt).
+- UNBEKANNT HEISST null, NIEMALS 0: Jedes unbekannte Zahlenfeld (datum_year, datum_month, datum_day, datum_ende_*, story_tag) MUSS exakt \`null\` sein. Eine 0 wird als echtes Datum gelesen und ergibt Unsinn wie «00.00.0». Gültige Bereiche: Monat 1-12, Tag 1-31, story_tag ab 1; Jahr 0 gibt es nicht (v. Chr. negativ schreiben). Kein Ereignis ist eine Spanne, nur weil das Feld existiert – datum_ende_* bleibt bei Punkt-Ereignissen komplett null.
 - JAHRES-INFERENZ (wichtig): Steht am Ereignis kein explizites Datum, das Jahr ist aber aus dem Kontext erschliessbar – z.B. aus einer vorher im Kapitel/Buch verankerten Jahreszahl plus relativen Angaben («zwei Jahre später», «im Frühjahr darauf», «als sie 30 war»), aus der Lebensspanne der Figur oder aus der etablierten Epoche/dem Setting – dann das abgeleitete Jahr (notfalls nur das Jahrzehnt, dann z.B. 1850) trotzdem in datum_year eintragen und datum_unsicher=true setzen. Sei dabei GROSSZÜGIG: lieber ein plausibel abgeleitetes Jahr (als unsicher markiert) als gar keins. Monat/Tag nur füllen, wenn ebenfalls ableitbar.
 - datum_unsicher=false NUR für explizit im Text belegte Datumsangaben. Ist auch das Jahr nicht erschliessbar, bleibt alles null (Event landet im «unbekannt»-Bucket, darf aber NICHT entfallen).
 - Spannen (Krieg, Reise, Studium, Schwangerschaft): Start in datum_*, Ende in datum_ende_*.

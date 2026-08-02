@@ -125,6 +125,27 @@ export const EVENT_SUBTYP_ENUM = [
   'sonstiges',
 ];
 
+// Datumsfelder eines Events sind NULLABLE-Zahlen. Zwingend so, nicht als _num:
+// `_obj` macht jede Property required, und mit `type: 'number'` kann ein lokaler
+// Provider unter Constrained Decoding gar kein `null` erzeugen — er muss dann
+// eine Zahl setzen und waehlt 0. Genau dieser 0-Platzhalter ist es, den
+// lib/datum-parse#normalizeDatumFields serverseitig wieder einfangen muss.
+// Claude ignoriert Schemas (callAI), dort traegt allein die Prompt-Regel.
+const _numOrNull = { type: ['number', 'null'] };
+
+const _EVENT_DATUM_FIELDS = {
+  datum:            _str,
+  datum_label:      _str,
+  datum_year:       _numOrNull,
+  datum_month:      _numOrNull,
+  datum_day:        _numOrNull,
+  datum_ende_year:  _numOrNull,
+  datum_ende_month: _numOrNull,
+  datum_ende_day:   _numOrNull,
+  story_tag:        _numOrNull,
+  datum_unsicher:   { type: 'boolean' },
+};
+
 function _assignmentsField() {
   return {
     type: 'array',
@@ -133,16 +154,7 @@ function _assignmentsField() {
       lebensereignisse: {
         type: 'array',
         items: _obj({
-          datum: _str,
-          datum_label: _str,
-          datum_year:  _num,
-          datum_month: _num,
-          datum_day:   _num,
-          datum_ende_year:  _num,
-          datum_ende_month: _num,
-          datum_ende_day:   _num,
-          story_tag:   _num,
-          datum_unsicher: { type: 'boolean' },
+          ..._EVENT_DATUM_FIELDS,
           subtyp: { type: 'string', enum: EVENT_SUBTYP_ENUM },
           ereignis: _str,
           typ: { type: 'string', enum: ['persoenlich', 'extern'] },
@@ -243,16 +255,7 @@ export const SCHEMA_ZEITSTRAHL = _obj({
   ereignisse: {
     type: 'array',
     items: _obj({
-      datum: _str,
-      datum_label: _str,
-      datum_year:  _num,
-      datum_month: _num,
-      datum_day:   _num,
-      datum_ende_year:  _num,
-      datum_ende_month: _num,
-      datum_ende_day:   _num,
-      story_tag:   _num,
-      datum_unsicher: { type: 'boolean' },
+      ..._EVENT_DATUM_FIELDS,
       subtyp: { type: 'string', enum: EVENT_SUBTYP_ENUM },
       ereignis: _str,
       typ: { type: 'string', enum: ['persoenlich', 'extern'] },

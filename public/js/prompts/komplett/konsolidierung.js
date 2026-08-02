@@ -33,6 +33,7 @@ Antworte mit diesem JSON-Schema:
 
 Regeln:
 - Strukturierte Datums-Felder PFLICHT: datum_year/month/day aus jedem datum_label extrahieren. Nur ein Teil bekannt? Restliche Felder null.
+- UNBEKANNT HEISST null, NIEMALS 0: Jedes unbekannte Zahlenfeld (datum_year, datum_month, datum_day, datum_ende_*, story_tag) MUSS exakt null sein. Eine 0 wird als echtes Datum gelesen und ergibt Unsinn wie «00.00.0». Gültige Bereiche: Monat 1–12, Tag 1–31, story_tag ab 1; Jahr 0 gibt es nicht (v.Chr. negativ). Punkt-Ereignisse lassen datum_ende_* komplett null – nur echte Spannen füllen es.
 - datum_unsicher unverändert aus den Eingabe-Ereignissen übernehmen. Beim Zusammenführen: ist mindestens ein zusammengeführtes Ereignis sicher datiert (datum_unsicher=false mit datum_year), gilt das Ergebnis als sicher (datum_unsicher=false); sonst datum_unsicher=true. Niemals ein abgeleitetes Jahr als sicher ausgeben.
 - Spannen (z.B. «Krieg 1914–1918», «Reise Mai–August 1850»): datum_*_year/month/day = Start, datum_ende_*_year/month/day = Ende.
 - Behalte die chronologische Reihenfolge (aufsteigend nach datum_year, dann _month, _day)

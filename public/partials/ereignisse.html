@@ -132,7 +132,7 @@
              ev.typ === 'extern' ? 'gz-item--extern' : '',
              'gz-item--subtyp-' + (ev.subtyp || 'sonstiges'),
              eventSpanYears(ev) > 0 ? 'gz-item--span' : '',
-             ev.datum_year == null && ev.story_tag == null ? 'gz-item--unknown' : '',
+             !eventHasYear(ev) && ev.story_tag == null ? 'gz-item--unknown' : '',
              ev.manually_edited ? 'gz-item--manual' : '',
              (i === firstUndatedIndex() && i > 0) ? 'gz-item--section-start' : '',
            ]"
@@ -141,10 +141,10 @@
         <div class="gz-content">
           <div class="gz-datum-row">
             <span class="gz-datum"
-                  :class="{ 'gz-datum--unsicher': ev.datum_unsicher && ev.datum_year != null, 'internal-link': ev.datum_year != null }"
-                  :title="ev.datum_unsicher && ev.datum_year != null ? $app.t('events.estimatedHint') : null"
-                  :data-tip="ev.datum_year != null ? $app.t('events.showOnTimeline') : null"
-                  @click="ev.datum_year != null && selectTimelineEvent(i)"
+                  :class="{ 'gz-datum--unsicher': ev.datum_unsicher && eventHasYear(ev), 'internal-link': eventHasYear(ev) }"
+                  :title="ev.datum_unsicher && eventHasYear(ev) ? $app.t('events.estimatedHint') : null"
+                  :data-tip="eventHasYear(ev) ? $app.t('events.showOnTimeline') : null"
+                  @click="eventHasYear(ev) && selectTimelineEvent(i)"
                   x-text="formatEventDate(ev)"></span>
             <span class="gz-subtyp-badge"
                   :class="'gz-subtyp-badge--' + (ev.subtyp || 'sonstiges')">

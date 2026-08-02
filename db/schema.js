@@ -16,8 +16,6 @@ const { recordJobLedger } = require('./cost-ledger');
 const draftFigures = require('./draft-figures');
 const sources = require('./sources');
 const motifs = require('./motifs');
-const { parseDatum } = require('../lib/datum-parse');
-const { normEventSubtyp } = require('./event-subtyp');
 const { matchLocations } = require('../lib/entity-match');
 const logger = require('../logger');
 
@@ -51,26 +49,9 @@ function _requireUserEmail(userEmail, what) {
   return e;
 }
 
-// Strukturierte Datums-Felder aus AI-Output extrahieren; fehlt etwas, parseDatum
-// als Fallback. Liefert Felder, die direkt in zeitstrahl_events/figure_events
-// eingefügt werden können.
-function _structuredDatum(ev) {
-  const labelSrc = ev.datum_label || ev.datum || '';
-  const p = parseDatum(labelSrc);
-  return {
-    datum_label:       (ev.datum_label || ev.datum || p.label || '').toString(),
-    datum_year:        ev.datum_year        ?? p.year      ?? null,
-    datum_month:       ev.datum_month       ?? p.month     ?? null,
-    datum_day:         ev.datum_day         ?? p.day       ?? null,
-    datum_ende_year:   ev.datum_ende_year   ?? null,
-    datum_ende_month:  ev.datum_ende_month  ?? null,
-    datum_ende_day:    ev.datum_ende_day    ?? null,
-    story_tag:         ev.story_tag         ?? p.story_tag ?? null,
-    // Nur sinnvoll, wenn ein Jahr vorliegt; ohne datum_year ist "unsicher" bedeutungslos.
-    datum_unsicher:    (ev.datum_unsicher && (ev.datum_year ?? p.year) != null) ? 1 : 0,
-    subtyp:            normEventSubtyp(ev.subtyp),
-  };
-}
+// Strukturierte Datums-Felder aus AI-Output extrahieren — SSoT in
+// db/event-datum.js, geteilt mit dem figure_events-Schreibpfad.
+const _structuredDatum = require('./event-datum').structuredDatum;
 
 // ── Job-Laufzeiten ────────────────────────────────────────────────────────────
 const _stmtInsJobRun = db.prepare(

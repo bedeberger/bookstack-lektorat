@@ -2039,6 +2039,7 @@
   "szenen.col.kommentar": "Comment",
   "events.title": "Events",
   "events.worldEvent": "World event",
+  "events.storyDay": "Day {n}",
   "events.unknownDate": "no date",
   "events.span": "{start} – {ende}",
   "events.circa": "approx. {date}",

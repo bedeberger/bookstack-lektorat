@@ -141,6 +141,21 @@ export function registerFigurenCard() {
         }
       });
 
+      // Figuren-Daten aendern sich auch bei OFFENER Karte: Einzel-Delete einer
+      // stale-Figur (root#deleteStaleFigur) und jeder loadFiguren nach einem Job,
+      // der Figuren neu abgleicht. Ohne diesen Watcher rendert der Graph nur beim
+      // Oeffnen/Buchwechsel/Modus-/Sprachwechsel — die geloeschte Figur bleibt als
+      // Knoten stehen, obwohl ihre Listenzeile weg ist. Die Render-Signatur in
+      // core.js#renderFigurGraph faengt den No-op-Fall ab, ein Watcher-Lauf ohne
+      // layout-relevante Aenderung kostet also nichts.
+      // Leeres Array bewusst uebersprungen (wie beim uiLocale-Watcher): waehrend
+      // book:changed steht figuren kurz auf [] — rendern wuerde dort nur den
+      // Leer-Platzhalter aufblitzen lassen. Faellt die letzte Figur weg, blendet
+      // das Partial den ganzen Graph-Block ohnehin aus (figuren.length > 0).
+      this.$watch(() => Alpine.store('catalog').figuren, (figuren) => {
+        if (window.__app.showFiguresCard && figuren?.length) this.renderFigurGraph();
+      });
+
       // Native Fullscreen-API: State spiegeln, Canvas neu fitten, beim Verlassen
       // (Esc / Browser-UI) Toggle-Flag sauber zurücksetzen.
       attachFullscreenSync({

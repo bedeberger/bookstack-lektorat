@@ -454,11 +454,10 @@ function _reconcileFiguren(bookId, figuren, em, idMaps, opts) {
 // Ersetzt alle Lebensereignisse für ein Buch/User anhand von fig_id-basierten Assignments.
 // assignments: [{ fig_id: "fig_1", lebensereignisse: [...] }]
 // Strukturierte Datumsfelder (datum_year/month/day/ende/story_tag/datum_label/subtyp)
-// werden vom AI-Pass mitgeliefert; parseDatum dient als Fallback. manually_edited=1
-// schützt vor Re-Run-Overwrite.
+// werden vom AI-Pass mitgeliefert; structuredDatum normalisiert sie und zieht
+// parseDatum als Fallback bei. manually_edited=1 schützt vor Re-Run-Overwrite.
 function updateFigurenEvents(bookId, assignments, userEmail, idMaps) {
-  const { parseDatum } = require('../lib/datum-parse');
-  const { normEventSubtyp } = require('./event-subtyp');
+  const { structuredDatum } = require('./event-datum');
   db.transaction(() => {
     const { rows: figRows, byFigId: figIdToRowId } = figIdMaps(bookId, userEmail);
     if (!figRows.length) return;
@@ -487,23 +486,15 @@ function updateFigurenEvents(bookId, assignments, userEmail, idMaps) {
         const pageId = effSeite
           ? (idMaps?.pageNameToIdByChapter?.[chId ?? 0]?.[effSeite] ?? null)
           : null;
-        const labelSrc = ev.datum_label || ev.datum || '';
-        const p = parseDatum(labelSrc);
-        const subtyp = normEventSubtyp(ev.subtyp);
+        const sd = structuredDatum(ev);
         insEvt.run(
-          rowId, ev.datum || labelSrc || '',
-          ev.datum_label || labelSrc || p.label || '',
-          ev.datum_year       ?? p.year       ?? null,
-          ev.datum_month      ?? p.month      ?? null,
-          ev.datum_day        ?? p.day        ?? null,
-          ev.datum_ende_year  ?? null,
-          ev.datum_ende_month ?? null,
-          ev.datum_ende_day   ?? null,
-          ev.story_tag        ?? p.story_tag  ?? null,
-          // "unsicher" nur sinnvoll mit Jahr; abgeleitetes Jahr von der KI markiert.
-          (ev.datum_unsicher && (ev.datum_year ?? p.year) != null) ? 1 : 0,
+          rowId, ev.datum || sd.datum_label || '',
+          sd.datum_label,
+          sd.datum_year, sd.datum_month, sd.datum_day,
+          sd.datum_ende_year, sd.datum_ende_month, sd.datum_ende_day,
+          sd.story_tag, sd.datum_unsicher,
           ev.ereignis || '', ev.bedeutung || null,
-          ev.typ || 'persoenlich', subtyp, chId, pageId, j,
+          ev.typ || 'persoenlich', sd.subtyp, chId, pageId, j,
         );
       }
     }

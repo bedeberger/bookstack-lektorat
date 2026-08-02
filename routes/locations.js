@@ -140,19 +140,22 @@ router.delete('/:book_id/stale', (req, res) => {
 // Zeilen). Nur stale erlaubt — aktive Orte überleben die Re-Analyse via Reconcile und
 // sollen nicht per Einzel-Delete aus dem Katalog fallen. CASCADE (foreign_keys=ON) räumt
 // location_figures/-chapters/scene_locations + research_item_links mit.
+// `:id` ist die oeffentliche Ort-Kennung `locations.loc_id` (TEXT) — dieselbe, die GET
+// als `id` ausliefert und die der Koordinaten-Patch erwartet; die INTEGER-PK verlaesst
+// die Route nie. Bei stale-Orten ist sie 'orphan_<rowid>', also nie eine Zahl.
 router.delete('/:book_id/:id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
-  const id = toIntId(req.params.id);
-  if (!bookId || !id) return res.status(400).json({ error_code: 'INVALID_ID' });
+  const locId = String(req.params.id || '').trim();
+  if (!bookId || !locId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const userEmail = req.session?.user?.email || null;
   const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
   const row = db.prepare(
-    `SELECT stale FROM locations WHERE id = ? AND book_id = ? AND ${emailCond}`
-  ).get(id, bookId, ...(userEmail ? [userEmail] : []));
+    `SELECT id, stale FROM locations WHERE loc_id = ? AND book_id = ? AND ${emailCond}`
+  ).get(locId, bookId, ...(userEmail ? [userEmail] : []));
   if (!row) return res.status(404).json({ error_code: 'NOT_FOUND' });
   if (!row.stale) return res.status(409).json({ error_code: 'NOT_STALE' });
-  db.prepare('DELETE FROM locations WHERE id = ?').run(id);
-  searchIndex.remove('location', id);
+  db.prepare('DELETE FROM locations WHERE id = ?').run(row.id);
+  searchIndex.remove('location', row.id);
   res.json({ ok: true });
 });
 

@@ -16,6 +16,10 @@
 // die app_users-FK gueltig (Quell-User existiert auf der Zielinstanz evtl. nicht).
 
 const { db } = require('./connection');
+// Bundles aus fremden Instanzen können Alt-Zeilen mit 0-Platzhaltern statt NULL
+// in den Datumsspalten tragen (siehe lib/datum-parse#normalizeDatumFields) —
+// beim Import bereinigen, sonst wandert der Defekt mit dem Buch mit.
+const { normalizeDatumFields } = require('../lib/datum-parse');
 
 function _now() { return new Date().toISOString(); }
 
@@ -162,8 +166,9 @@ function restoreAnalysis(bookId, data, ctx) {
   for (const r of arr('figureEvents')) {
     const fid = figMap.get(r.figure_id);
     if (!fid) continue;
-    insEv.run(fid, r.datum, r.datum_label ?? null, r.datum_year ?? null, r.datum_month ?? null, r.datum_day ?? null,
-      r.datum_ende_year ?? null, r.datum_ende_month ?? null, r.datum_ende_day ?? null, r.story_tag ?? null,
+    const d = normalizeDatumFields(r);
+    insEv.run(fid, r.datum, r.datum_label ?? null, d.datum_year, d.datum_month, d.datum_day,
+      d.datum_ende_year, d.datum_ende_month, d.datum_ende_day, d.story_tag,
       r.ereignis, r.bedeutung ?? null, r.typ ?? 'persoenlich', r.subtyp ?? 'sonstiges',
       r.storyline_id == null ? null : (slMap.get(r.storyline_id) ?? null),
       r.manually_edited ?? 0, r.sort_order ?? 0, chapterOf(r.chapter_id), pageOf(r.page_id), r.datum_unsicher ?? 0);
@@ -267,9 +272,10 @@ function restoreAnalysis(bookId, data, ctx) {
      story_tag,ereignis,typ,subtyp,bedeutung,storyline_id,manually_edited,sort_order,updated_at,datum_unsicher)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   for (const r of arr('zeitstrahlEvents')) {
-    const res = insZe.run(bookId, email, r.datum, r.datum_label ?? null, r.datum_year ?? null, r.datum_month ?? null,
-      r.datum_day ?? null, r.datum_ende_year ?? null, r.datum_ende_month ?? null, r.datum_ende_day ?? null,
-      r.story_tag ?? null, r.ereignis, r.typ ?? 'persoenlich', r.subtyp ?? 'sonstiges', r.bedeutung ?? null,
+    const d = normalizeDatumFields(r);
+    const res = insZe.run(bookId, email, r.datum, r.datum_label ?? null, d.datum_year, d.datum_month,
+      d.datum_day, d.datum_ende_year, d.datum_ende_month, d.datum_ende_day,
+      d.story_tag, r.ereignis, r.typ ?? 'persoenlich', r.subtyp ?? 'sonstiges', r.bedeutung ?? null,
       r.storyline_id == null ? null : (slMap.get(r.storyline_id) ?? null), r.manually_edited ?? 0, r.sort_order ?? 0,
       r.updated_at ?? null, r.datum_unsicher ?? 0);
     evMap.set(r.id, res.lastInsertRowid);

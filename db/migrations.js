@@ -10516,6 +10516,53 @@ function _runMigrationsLocked() {
     logger.info(`DB-Migration auf Version 265 abgeschlossen (audit-Events 'self-deleted' + 'demo-reset').`);
   }
 
+  if (version < 266) {
+    // Datenbereinigung (kein Schema-Change): 0-Platzhalter in den strukturierten
+    // Datumsspalten von figure_events + zeitstrahl_events auf NULL ziehen.
+    //
+    // Anlass: die Sprachmodelle liefern fuer ein unbekanntes Datumsfeld nicht
+    // `null`, sondern `0` — Opus durchgaengig, bei lokalen Providern erzwingt es
+    // das Constrained Decoding (`type: 'number'` + required) sogar strukturell.
+    // Die gesamte Auswertungskette prueft dagegen auf `== null` bzw.
+    // `IS NOT NULL`, sodass die 0 als echtes Datum durchrutschte: Anzeige
+    // "00.00.1988 – 00.00.0", Jahres-Band ab Jahr 0, nie gefuellter
+    // "ohne Datum"-Bucket (COALESCE(datum_year, 9999) greift bei 0 nicht) und
+    // eine Buch-Epoche, die als "Jahr 0 bis ..." in die nachgelagerten Prompts
+    // ging. Der Schreibpfad normalisiert seit lib/datum-parse#normalizeDatumFields
+    // (SSoT, geteilt ueber db/event-datum.js); hier der Bestand.
+    //
+    // Reihenfolge zwingend: Monat vor Tag und Ende-Jahr vor Ende-Monat/-Tag —
+    // die spaeteren Statements haengen am bereits bereinigten Zustand.
+    // Jahr 0 ist immer ungueltig: in der Jahreszaehlung folgt auf 1 v. Chr.
+    // direkt 1 n. Chr., und v.-Chr.-Jahre stehen negativ in der Spalte.
+    for (const tbl of ['figure_events', 'zeitstrahl_events']) {
+      db.exec(`
+        UPDATE ${tbl} SET datum_year  = NULL WHERE datum_year = 0;
+        UPDATE ${tbl} SET datum_month = NULL WHERE datum_month IS NOT NULL AND datum_month NOT BETWEEN 1 AND 12;
+        UPDATE ${tbl} SET datum_day   = NULL WHERE datum_day IS NOT NULL
+                                             AND (datum_day NOT BETWEEN 1 AND 31 OR datum_month IS NULL);
+        UPDATE ${tbl} SET datum_ende_year = NULL WHERE datum_ende_year IS NOT NULL
+                                                 AND (datum_ende_year = 0
+                                                      OR (datum_year IS NOT NULL AND datum_ende_year < datum_year));
+        UPDATE ${tbl} SET datum_ende_month = NULL WHERE datum_ende_month IS NOT NULL
+                                                  AND (datum_ende_month NOT BETWEEN 1 AND 12
+                                                       OR datum_ende_year IS NULL);
+        UPDATE ${tbl} SET datum_ende_day = NULL WHERE datum_ende_day IS NOT NULL
+                                                AND (datum_ende_day NOT BETWEEN 1 AND 31
+                                                     OR datum_ende_month IS NULL);
+        UPDATE ${tbl} SET story_tag = NULL WHERE story_tag IS NOT NULL AND story_tag < 1;
+        UPDATE ${tbl} SET datum_unsicher = 0 WHERE datum_unsicher = 1 AND datum_year IS NULL;
+      `);
+    }
+
+    const fkErrors266 = db.pragma('foreign_key_check');
+    if (fkErrors266.length) {
+      throw new Error(`Migration 266: foreign_key_check meldet ${fkErrors266.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 266').run();
+    logger.info('DB-Migration auf Version 266 abgeschlossen (Event-Datumsspalten: 0-Platzhalter zu NULL).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

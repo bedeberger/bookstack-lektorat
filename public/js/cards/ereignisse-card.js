@@ -34,6 +34,24 @@ export function applyEreignisseFilters(events, { suche = '', figurId = '', subty
   return result;
 }
 
+// ── Gültigkeit der strukturierten Datumsfelder ───────────────────────────────
+// Anzeige-seitiges Gegenstück zu lib/datum-parse#normalizeDatumFields. Der
+// Server normalisiert am Schreibpfad, aber die Karte darf sich nicht darauf
+// verlassen: ein einzelner 0-Platzhalter aus einem Alt-Bestand oder einem noch
+// nicht migrierten Backup rendert sonst wieder «00.00.0» und zieht das
+// Jahres-Band bis Jahr 0 auf. `== null` allein reicht dafür nicht.
+// Jahr 0 gibt es in der Jahreszählung nicht; v. Chr. steht negativ im Feld.
+function _validYear(v)  { return Number.isFinite(v) && v !== 0 ? Math.trunc(v) : null; }
+function _validMonth(v) { return Number.isFinite(v) && v >= 1 && v <= 12 ? Math.trunc(v) : null; }
+function _validDay(v)   { return Number.isFinite(v) && v >= 1 && v <= 31 ? Math.trunc(v) : null; }
+
+// Hat das Event ein verwertbares Kalenderjahr? SSoT für alle Stellen, die
+// zwischen „auf der Achse" und „nur in der Liste" unterscheiden — Karte wie
+// Template (eventHasYear).
+export function hasEventYear(ev) {
+  return _validYear(ev?.datum_year) !== null;
+}
+
 // Baut ein Date aus den strukturierten Jahr/Monat/Tag-Feldern. setFullYear
 // (statt new Date(year,…)) vermeidet das 0–99-Jahr-Mapping auf 1900+year und
 // trägt damit auch historische/frühe Jahre korrekt.
@@ -53,8 +71,8 @@ function _eventDate(year, month, day) {
 export function buildTimelineItems(events) {
   const items = [];
   (events || []).forEach((ev, i) => {
-    if (ev.datum_year == null) return;
-    const start = _eventDate(ev.datum_year, ev.datum_month, ev.datum_day);
+    if (!hasEventYear(ev)) return;
+    const start = _eventDate(_validYear(ev.datum_year), _validMonth(ev.datum_month), _validDay(ev.datum_day));
     const item = {
       id: i,
       start,
@@ -62,8 +80,8 @@ export function buildTimelineItems(events) {
       subtyp: ev.subtyp || 'sonstiges',
       content: ev.ereignis || '',
     };
-    if (ev.datum_ende_year != null && !POINT_SUBTYPES.has(item.subtyp)) {
-      const end = _eventDate(ev.datum_ende_year, ev.datum_ende_month, ev.datum_ende_day);
+    if (_validYear(ev.datum_ende_year) !== null && !POINT_SUBTYPES.has(item.subtyp)) {
+      const end = _eventDate(_validYear(ev.datum_ende_year), _validMonth(ev.datum_ende_month), _validDay(ev.datum_ende_day));
       if (end > start) { item.end = end; item.type = 'range'; }
       else item.type = 'point';
     } else {
@@ -315,23 +333,38 @@ export const POINT_SUBTYPES = new Set([
 // Formatiert das Anzeige-Datum aus den strukturierten Feldern. Punkt-Events
 // und Spannen werden unterschiedlich gerendert. Fallback auf datum_label
 // (Original-String) oder die i18n-Variante für "unbekannt".
-function _formatEventDate(ev, t) {
-  const yPart = (y, m, d) => {
-    if (y == null && m == null && d == null) return null;
-    const parts = [];
-    if (d != null) parts.push(String(d).padStart(2, '0') + '.');
-    if (m != null) parts.push(String(m).padStart(2, '0') + '.');
-    if (y != null) parts.push(String(y));
-    return parts.join(d != null && m != null ? '' : ' ').trim();
+//
+// Ausgabeformen: «17.10.1987» · «10.1987» · «1987» · «17.10.» (Tag/Monat ohne
+// Jahr) · «Tag 3» (relative Story-Zeit) · Original-Label · «ohne Datum».
+// Ungültige Teilfelder werden verworfen statt mitgerendert — ein unbekannter
+// Monat darf nicht als «00.» erscheinen und ein unbekanntes Jahr nicht als «0».
+// Exportiert für den Unit-Test (ereignisse-card-filter.test.mjs).
+export function formatEventDateParts(ev, t) {
+  const p2 = (n) => String(n).padStart(2, '0');
+  const part = (y, m, d) => {
+    const yy = _validYear(y);
+    const mm = _validMonth(m);
+    // Ein Tag ohne Monat ist nicht darstellbar und trägt keine Aussage.
+    const dd = mm === null ? null : _validDay(d);
+    if (yy === null && mm === null) return null;
+    if (yy === null) return dd !== null ? `${p2(dd)}.${p2(mm)}.` : `${p2(mm)}.`;
+    if (mm === null) return String(yy);
+    return dd !== null ? `${p2(dd)}.${p2(mm)}.${yy}` : `${p2(mm)}.${yy}`;
   };
-  const start = yPart(ev.datum_year, ev.datum_month, ev.datum_day);
-  const ende  = yPart(ev.datum_ende_year, ev.datum_ende_month, ev.datum_ende_day);
+  const start = part(ev.datum_year, ev.datum_month, ev.datum_day);
+  // Spannen-Ende nur mit eigenem Jahr — sonst ist es kein darstellbares Ende.
+  const ende  = _validYear(ev.datum_ende_year) === null
+    ? null : part(ev.datum_ende_year, ev.datum_ende_month, ev.datum_ende_day);
   // Aus dem Kontext abgeleitetes (unsicheres) Datum → «ca.»-Prefix; nur relevant
   // wenn ein Jahr vorliegt (Story-Tags/Labels bleiben unverändert).
-  const circa = (d) => ev.datum_unsicher ? t('events.circa', { date: d }) : d;
+  const circa = (d) => (ev.datum_unsicher && hasEventYear(ev)) ? t('events.circa', { date: d }) : d;
   if (ende && start) return circa(t('events.span', { start, ende }));
   if (start) return circa(start);
-  if (ev.story_tag != null) return String(ev.story_tag);
+  // Relative Story-Zeit beginnt bei Tag 1; alles darunter ist der
+  // Unbekannt-Platzhalter der KI, kein Datum.
+  if (Number.isFinite(ev.story_tag) && ev.story_tag >= 1) {
+    return t('events.storyDay', { n: Math.trunc(ev.story_tag) });
+  }
   if (ev.datum_label) return ev.datum_label;
   return t('events.unknownDate');
 }
@@ -449,7 +482,13 @@ export function registerEreignisseCard() {
     },
 
     formatEventDate(ev) {
-      return _formatEventDate(ev, (k, p) => window.__app.t(k, p));
+      return formatEventDateParts(ev, (k, p) => window.__app.t(k, p));
+    },
+
+    // Template-Gate für „hat ein Kalenderjahr" — steuert Achsen-Sprung,
+    // «ca.»-Hinweis und die Unbekannt-Klasse der Listenzeile.
+    eventHasYear(ev) {
+      return hasEventYear(ev);
     },
 
     subtypIcon(subtyp) {
@@ -459,9 +498,10 @@ export function registerEreignisseCard() {
     // Span-Höhe (Spannen-Events): proportional zur Jahr-Differenz, geclampt.
     // Wird per CSS-Custom-Prop --span-years konsumiert. 0 für Punkt-Events.
     eventSpanYears(ev) {
-      if (ev.datum_year == null || ev.datum_ende_year == null) return 0;
+      const y = _validYear(ev.datum_year), ye = _validYear(ev.datum_ende_year);
+      if (y === null || ye === null) return 0;
       if (POINT_SUBTYPES.has(ev.subtyp || 'sonstiges')) return 0;
-      const diff = ev.datum_ende_year - ev.datum_year;
+      const diff = ye - y;
       return diff > 0 ? Math.min(diff, 50) : 0;
     },
 
@@ -488,7 +528,7 @@ export function registerEreignisseCard() {
     // Listen-Trennlinie (gz-section-divider) und den klickbaren Achse-Hinweis.
     firstUndatedIndex() {
       const list = this.filteredEreignisse();
-      for (let i = 0; i < list.length; i++) if (list[i].datum_year == null) return i;
+      for (let i = 0; i < list.length; i++) if (!hasEventYear(list[i])) return i;
       return -1;
     },
 
