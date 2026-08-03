@@ -1,6 +1,8 @@
 'use strict';
 // Phase 2: Figuren konsolidieren + Soziogramm + Name→ID-Lookup.
 const { saveFigurenToDb, updateFigurenSoziogramm } = require('../../../../db/schema');
+const { planFigurenMatch } = require('../../../../db/figures');
+const { judgeEntityPairs } = require('../entity-reconcile');
 const { recomputeBookFigureMentions } = require('../../../../lib/page-index');
 const { i18nError, updateJob } = require('../../shared');
 const { buildFigNameLookup } = require('../utils');
@@ -113,7 +115,23 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments, chapterSzenen)
   // beibehalten, damit FK-Referenzen (Plot-Beats, Recherche, manuell editierte
   // Events …) die Re-Analyse überleben. Verschwundene Figuren werden stale-markiert,
   // nicht gelöscht.
-  saveFigurenToDb(bookIdInt, figuren, email, idMaps, { reconcile: true, onMissing: 'stale' });
+  // Graubereich des Cross-Run-Matchings vom Judge beurteilen lassen, BEVOR gespeichert
+  // wird: die Schreibfunktion darf keinen KI-Call machen, und ohne Urteil bliebe eine
+  // Namensvariante als zweiter Eintrag stehen (und die alte Zeile als stale-Dublette).
+  let figHint = null;
+  try {
+    const plan = planFigurenMatch(bookIdInt, figuren, email);
+    if (plan.unsure.length) {
+      figHint = await judgeEntityPairs(ctx, 'figur', { incoming: figuren, existing: plan.existing, unsure: plan.unsure });
+    }
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    log.warn(`Figuren-Match-Judge übersprungen (${e.message}) – Matching bleibt regelbasiert.`);
+  }
+  saveFigurenToDb(bookIdInt, figuren, email, idMaps, {
+    reconcile: true, onMissing: 'stale',
+    matchHint: figHint && figHint.size ? figHint : null,
+  });
   log.info(`${figuren.length} Figuren gespeichert (reconciled, id-stabil).`);
   try {
     const { figures: figCount, pagesProcessed } = recomputeBookFigureMentions(bookIdInt, email);

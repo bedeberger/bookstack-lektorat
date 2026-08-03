@@ -103,3 +103,66 @@ Konsolidierungs-Regeln:
 - Gleicher Name, aber klar verschiedene Orte (z.B. zwei verschiedene Gasthäuser «zum Löwen», zwei Städte gleichen Namens) bleiben getrennte Einträge.
 - Hierarchisch verschachtelte Orte (Raum in Gebäude in Stadt) nur zusammenführen, wenn der Text sie tatsächlich gleichsetzt – sonst als eigenständige Schauplätze behalten.`;
 }
+
+// ── Entitäten-Paar-Urteil (Graubereich des Matchings) ────────────────────────
+//
+// Die deterministische Schicht (lib/entity-match.js) entscheidet nur, was sie sicher
+// entscheiden kann: gleicher Name bzw. Token-Teilmenge mit Indizien → dieselbe
+// Entität, Qualifizierer-/Land-/Datums-Widerspruch → verschiedene. Der Rest ist
+// Graubereich, und genau dort ist eine Schwelle die falsche Antwort: ob «Schulhaus
+// Frohheim» und «Frohheim-Schule Olten» dasselbe Gebäude sind, weiss nur der Text.
+// Dieser Pass bekommt AUSSCHLIESSLICH die unsicheren Paare (nicht die Gesamtliste)
+// und urteilt pro Paar — wenige Tokens, und die Regel bleibt für die klaren Fälle
+// zuständig. `kind` steuert nur die Wortwahl; die Logik ist für Figuren, Schauplätze
+// und Szenen dieselbe.
+// Wortformen explizit pro Gattung: ein einziger Plural-String erzeugt sonst
+// «dieselbe Schauplatz» — der Prompt soll den Leser (das Modell) nicht über
+// Grammatikfehler stolpern lassen.
+const _KIND_LABEL = {
+  figur: { eintraege: 'Figuren-Einträgen',     akkusativ: 'dieselbe Figur',       plural: 'Figuren' },
+  ort:   { eintraege: 'Schauplatz-Einträgen',  akkusativ: 'denselben Schauplatz', plural: 'Schauplätze' },
+  szene: { eintraege: 'Szenen-Einträgen',      akkusativ: 'dieselbe Szene',       plural: 'Szenen' },
+};
+
+function _pairSide(side) {
+  const bits = [];
+  if (side.typ) bits.push(`Typ: ${side.typ}`);
+  if (side.kapitel) bits.push(`Kapitel: ${side.kapitel}`);
+  if (side.seite) bits.push(`Seite: ${side.seite}`);
+  if (side.figuren) bits.push(`Figuren: ${side.figuren}`);
+  if (side.land) bits.push(`Land: ${side.land}`);
+  if (side.geburtstag) bits.push(`Geburtsjahr: ${side.geburtstag}`);
+  if (side.beruf) bits.push(`Beruf: ${side.beruf}`);
+  const meta = bits.length ? ` [${bits.join(' · ')}]` : '';
+  const desc = side.beschreibung ? `\n    ${side.beschreibung}` : '';
+  return `«${side.name}»${meta}${desc}`;
+}
+
+export function buildEntityMatchJudgePrompt(bookName, kind, pairs) {
+  const label = _KIND_LABEL[kind] || _KIND_LABEL.ort;
+  const list = pairs.map(p =>
+    `${p.nr}. A: ${_pairSide(p.a)}\n   B: ${_pairSide(p.b)}`
+  ).join('\n\n');
+  return `Buch: «${bookName}»
+
+Unten stehen Paare von ${label.eintraege} aus dem Katalog dieses Buchs. Jedes Paar ist sich ähnlich, aber die automatische Prüfung konnte NICHT entscheiden, ob es sich um ${label.akkusativ} handelt oder um zwei verschiedene. Entscheide pro Paar.
+
+Paare:
+
+${list}
+
+Antworte mit diesem JSON-Schema:
+{
+  "paare": [
+    { "nr": 1, "_reasoning": "kurze Begründung aus den gegebenen Angaben", "gleich": true }
+  ]
+}
+
+Regeln:
+- Für JEDES oben genannte Paar genau einen Eintrag mit derselben Nummer ausgeben.
+- KONSERVATIV urteilen: «gleich» nur, wenn die Angaben die Identität stützen. Im Zweifel «gleich»: false — zwei getrennte Einträge sind ein kleiner Schönheitsfehler, ein falsches Zusammenführen verschmilzt zwei echte ${label.plural} unwiderruflich.
+- Ein unterschiedlicher ORTSZUSATZ (verschiedene Stadt, verschiedenes Quartier, verschiedenes Land) bedeutet verschiedene Einträge, auch bei identischem Kern-Namen.
+- Ober- und Unterbegriff sind NICHT dasselbe: Stadt vs. Quartier, Gebäude vs. Raum darin, Figur vs. Familie.
+- Ein unspezifischer Name («Bahnhof», «die Wohnung», «Gespräch») ist nur dann dieselbe Entität wie ein spezifischer, wenn Kapitel/Seite/Figuren das klar stützen.
+- Nichts erfinden: nur die oben angegebenen Informationen verwenden, keine Annahmen über den Buchinhalt darüber hinaus.`;
+}

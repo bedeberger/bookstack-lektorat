@@ -6,7 +6,7 @@ const {
 const { _modelName } = require('../shared');
 const { _refToString, _stelleQuote } = require('./utils');
 const { NOW_ISO_SQL } = require('../../../db/now');
-const { matchScenes } = require('../../../lib/entity-match');
+const { matchScenes, dedupeScenesWithinRun } = require('../../../lib/entity-match');
 const searchIndex = require('../../../lib/search');
 
 /** Mappt Szenen-Klarnamen (aus Phase 1) auf konsolidierte Figuren-/Ort-IDs.
@@ -106,8 +106,72 @@ function remapAssignments(chAssignments, figNameToId, figNameToIdLower, chNameTo
   return allAssignments;
 }
 
+/** Match-Planung Szenen (NUR LESEND) — SSoT fuer beide Seiten: `saveSzenenAndEvents`
+ *  ruft sie selbst, und der Job ruft sie VOR dem Speichern, um die unsicheren Paare vom
+ *  KI-Judge beurteilen zu lassen. `resolved` sind die auf chapterId/pageId aufgeloesten
+ *  Szenen (siehe resolveSzenenForSave), `locIdToDbId` die loc_id→locations.id-Map des
+ *  Laufs. `hint` = Map(sceneHintKey → figure_scenes.id) der bestaetigten Paare. */
+function planSzenenMatch(bookIdInt, email, resolved, locIdToDbId, hint = null) {
+  const existing = db.prepare(
+    'SELECT id, chapter_id, page_id, titel FROM figure_scenes WHERE book_id = ? AND user_email IS ?'
+  ).all(bookIdInt, email);
+  // Indizien fuers Matching (lib/entity-match.js#sceneEvidence): die Seite ist das
+  // staerkste Signal, dazu die beteiligten Figuren/Orte. Bestand haelt INTEGER-ids,
+  // die neuen Szenen fig_id/loc_id-Strings des Laufs — beide Seiten auf die
+  // Bestands-ids bringen, sonst findet der Vergleich nie eine Ueberschneidung.
+  const exFigRows = db.prepare(`
+    SELECT sf.scene_id AS sid, sf.figure_id AS fid FROM scene_figures sf
+    JOIN figure_scenes fs ON fs.id = sf.scene_id
+    WHERE fs.book_id = ? AND fs.user_email IS ?`).all(bookIdInt, email);
+  const exLocRows = db.prepare(`
+    SELECT sl.scene_id AS sid, sl.location_id AS lid FROM scene_locations sl
+    JOIN figure_scenes fs ON fs.id = sl.scene_id
+    WHERE fs.book_id = ? AND fs.user_email IS ?`).all(bookIdInt, email);
+  const exBridges = new Map();
+  const bucket = (sid) => {
+    if (!exBridges.has(sid)) exBridges.set(sid, { figures: [], locations: [] });
+    return exBridges.get(sid);
+  };
+  for (const r of exFigRows) bucket(r.sid).figures.push(r.fid);
+  for (const r of exLocRows) bucket(r.sid).locations.push(r.lid);
+  const exCands = existing.map(ex => {
+    const b = exBridges.get(ex.id) || { figures: [], locations: [] };
+    return { ...ex, figures: b.figures, locations: b.locations };
+  });
+  const figRows = db.prepare(
+    'SELECT id, fig_id FROM figures WHERE book_id = ? AND user_email IS ?'
+  ).all(bookIdInt, email);
+  const figIdToRowId = Object.fromEntries(figRows.map(r => [r.fig_id, r.id]));
+  const incoming = resolved.map(s => ({
+    titel: s.titel, chapterId: s.chapterId, pageId: s.pageId,
+    figures: (s.fig_ids || []).map(f => figIdToRowId[f]).filter(v => v != null),
+    locations: (s.ort_ids || []).map(l => locIdToDbId[l]).filter(Boolean),
+  }));
+  const plan = matchScenes(exCands, incoming, { hint });
+  return { ...plan, existing };
+}
+
+/** Loest Szenen auf chapterId/pageId auf und dedupliziert Varianten desselben Laufs.
+ *  Geteilt zwischen Match-Planung (Job) und Speichern — beide muessen auf DERSELBEN
+ *  Szenenliste arbeiten, sonst zeigen die geplanten Indizes ins Leere. */
+function resolveSzenenForSave(szenen, idMaps) {
+  const resolvedRaw = szenen.map(s => {
+    const chapterId = idMaps.chNameToId[s.kapitel] ?? null;
+    const pageId = s.seite
+      ? (idMaps.pageNameToIdByChapter[chapterId ?? 0]?.[s.seite] ?? null)
+      : null;
+    return { ...s, chapterId, pageId };
+  });
+  // Within-Run-Dedup: bisher gab es nur den EXAKTEN `titel|kapitel`-Schluessel im
+  // Szenen-Backfill — zwei Titel-Varianten derselben Szene aus zwei Extraktions-
+  // Paessen («Ankunft» / «Ankunft am Bahnhof», gleiche Seite) landeten als zwei
+  // Szenen und beim naechsten Lauf als stale-Dublette. Konservativ (Kapitel gleich +
+  // Titel-Teilmenge bzw. Seiten-Indiz), Pendant zu dedupeLocationsWithinRun.
+  return dedupeScenesWithinRun(resolvedRaw);
+}
+
 /** Speichert Szenen und Figuren-Events in die DB. Gibt { szenenCount, eventsCount } zurück. */
-function saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId, idMaps, log, jobId) {
+function saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId, idMaps, log, jobId, opts = {}) {
   db.transaction(() => {
     // Reconcile statt DELETE+INSERT, damit figure_scenes.id (und FK-Refs darauf:
     // research_item_links.scene_id, scene_locations) ueber Re-Analysen stabil bleibt.
@@ -117,18 +181,21 @@ function saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId,
     // stale=0, verschwundene → stale=1 statt Loeschen. Spiegelt das figures-/locations-
     // Reconcile-Netz.
     // Eingehende Szenen vorab auf chapter_id/page_id aufloesen (fuer Match-Key + Save).
-    const resolved = szenen.map(s => {
-      const chapterId = idMaps.chNameToId[s.kapitel] ?? null;
-      const pageId = s.seite
-        ? (idMaps.pageNameToIdByChapter[chapterId ?? 0]?.[s.seite] ?? null)
-        : null;
-      return { ...s, chapterId, pageId };
-    });
-
-    const existing = db.prepare(
-      'SELECT id, chapter_id, titel FROM figure_scenes WHERE book_id = ? AND user_email IS ?'
-    ).all(bookIdInt, email);
-    const matchOf = matchScenes(existing, resolved);   // resolvedIndex → existingId
+    // Aufloesen + Within-Run-Dedup: der Job hat (falls er geplant hat) auf genau
+    // dieser Liste geplant — siehe resolveSzenenForSave.
+    const { szenen: resolved, unsure: dedupUnsure } = opts.resolved || resolveSzenenForSave(szenen, idMaps);
+    if (szenen.length !== resolved.length) {
+      log.info(`Szenen-Within-Run-Dedup: ${szenen.length - resolved.length} Titel-Variante(n) derselben Szene verschmolzen.`);
+    }
+    // Within-Run-Verdachtsfaelle bleiben getrennt (Begruendung wie bei den Orten in
+    // phases/orte.js): der Judge-Hint zeigt auf eine Bestands-Zeile, nicht auf einen
+    // zweiten Eintrag desselben Laufs.
+    if (dedupUnsure?.length) {
+      log.info(`Szenen-Within-Run: ${dedupUnsure.length} aehnliche Titel-Paar(e) bewusst getrennt gelassen.`);
+    }
+    const sceneMatch = planSzenenMatch(bookIdInt, email, resolved, locIdToDbId, opts.matchHint || null);
+    const existing = sceneMatch.existing;
+    const matchOf = sceneMatch.matchOf;                // resolvedIndex → existingId
     const usedExisting = new Set(matchOf.values());
     // Verschwundene → stale=1 (Refs bleiben), statt Loeschen.
     const markStale = db.prepare('UPDATE figure_scenes SET stale = 1 WHERE id = ?');
@@ -282,4 +349,5 @@ function saveKontinuitaetResult(bookIdInt, email, kontResult, figNameToId, chNam
   return normalizedIssues;
 }
 
-module.exports = { remapSzenen, remapAssignments, saveSzenenAndEvents, saveKontinuitaetResult, _isSelfCancelled };
+module.exports = {
+  planSzenenMatch, resolveSzenenForSave, remapSzenen, remapAssignments, saveSzenenAndEvents, saveKontinuitaetResult, _isSelfCancelled };

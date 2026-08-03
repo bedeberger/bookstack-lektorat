@@ -33,7 +33,9 @@ const { setContext } = require('../../../lib/log-context');
 const { runNonCritical, buildBookSystemBlockText, buildBookPagesSig, _stelleQuote, makePhaseTimer,
   sampleChapters, computeCoverageScore, buildConsolidationSig } = require('./utils');
 const { loadAndValidateCheckpoint, restorePhase1FromCheckpoint } = require('./checkpoint');
-const { remapSzenen, remapAssignments, saveSzenenAndEvents, saveKontinuitaetResult } = require('./remap');
+const { remapSzenen, remapAssignments, saveSzenenAndEvents, saveKontinuitaetResult,
+        planSzenenMatch, resolveSzenenForSave } = require('./remap');
+const { judgeEntityPairs, isJudgeEnabled } = require('./entity-reconcile');
 const {
   runPhase1, runPhase2, runPhase3, runPhase3Songs, runPhase3b, runZeitstrahl,
   buildPrelimFigurenKompakt, runPhase3OrteCall, runErzaehlprofil, komplettMaxTokens,
@@ -275,6 +277,10 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     const consolFlags = {
       model: komplettModel || _modelName(effectiveProvider),
       attr: appSettings.get('ai.komplett.attribute_check') === true,
+      // Der Entitaeten-Judge veraendert das Matching und damit den Katalog — sein
+      // Toggle muss den Konsolidierungs-Checkpoint invalidieren, sonst wirkt das
+      // Umschalten erst beim naechsten Seiten-Edit.
+      matchJudge: isJudgeEnabled(effectiveProvider),
     };
     const consolidationSig = buildConsolidationSig(p1, cacheVersion, consolFlags);
     const consolMarker = loadCheckpoint(CONSOLIDATION_CP_TYPE, bookIdInt, email);
@@ -356,7 +362,25 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     const szenen = remapSzenen(chapterSzenen, figNameToId, figNameToIdLower, ortNameToId, ortNameToIdLower, idMaps.chNameToId, log);
     const assignments = remapAssignments(chapterAssignments, figNameToId, figNameToIdLower, idMaps.chNameToId, log, jobId);
     updateJob(jobId, { progress: 76, statusText: 'job.phase.savingScenes' });
-    const szenenResult = saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId, idMaps, log, jobId);
+    // Szenen: auflösen + Within-Run-Dedup EINMAL, damit Judge und Speichern auf
+    // derselben Liste arbeiten (die Plan-Indizes zeigen sonst ins Leere). Danach den
+    // Graubereich des Cross-Run-Matchings beurteilen lassen — Titel-Varianten derselben
+    // Szene sind der häufigste stale-Dubletten-Grund.
+    const szenenResolved = resolveSzenenForSave(szenen, idMaps);
+    let szeneHint = null;
+    try {
+      const plan = planSzenenMatch(bookIdInt, email, szenenResolved.szenen, locIdToDbId);
+      if (plan.unsure.length) {
+        szeneHint = await judgeEntityPairs(ctx, 'szene', {
+          incoming: szenenResolved.szenen, existing: plan.existing, unsure: plan.unsure,
+        });
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') throw e;
+      log.warn(`Szenen-Match-Judge übersprungen (${e.message}) – Matching bleibt regelbasiert.`);
+    }
+    const szenenResult = saveSzenenAndEvents(bookIdInt, email, szenen, assignments, locIdToDbId, idMaps, log, jobId,
+      { resolved: szenenResolved, matchHint: szeneHint && szeneHint.size ? szeneHint : null });
     backfillLocationChaptersFromScenes(bookIdInt, email);
     pt.mark('P5 Szenen');
 

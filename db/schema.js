@@ -239,6 +239,58 @@ function saveZeitstrahlEvents(bookId, userEmail, ereignisse, chNameToId = {}, pa
 }
 
 // ── Orte ──────────────────────────────────────────────────────────────────────
+// Match-Planung Orte (NUR LESEND) — SSoT fuer beide Seiten: `saveOrteToDb` ruft sie
+// selbst, und der Job ruft sie VOR dem Speichern, um die unsicheren Paare vom
+// KI-Judge beurteilen zu lassen (eine DB-Schreibfunktion darf keinen KI-Call machen).
+// Ohne diese gemeinsame Funktion gaebe es zwei Matcher, die auseinanderdriften.
+// Gibt { matchOf: Map(incomingIndex → locations.id), unsure: [...], existing: [...] }.
+function planOrteMatch(bookId, orte, userEmail, chNameToId = null, hint = null) {
+  const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
+  const emailVal = userEmail ? [userEmail] : [];
+  if (chNameToId == null) {
+    const rows = db.prepare('SELECT chapter_id, chapter_name FROM chapters WHERE book_id = ?').all(bookId);
+    chNameToId = Object.fromEntries(rows.map(r => [r.chapter_name, r.chapter_id]));
+  }
+  const existing = db.prepare(
+    `SELECT id, loc_id, name, typ, lat, lng, land FROM locations WHERE book_id = ? AND ${emailCond}`
+  ).all(bookId, ...emailVal);
+  // Indizien (lib/entity-match.js#locationEvidence): gemeinsames Kapitel und gemeinsame
+  // Figur unterscheiden zwei aehnlich benannte Orte deutlich besser als der Name allein.
+  const chapRows = db.prepare(`
+    SELECT lc.location_id AS lid, lc.chapter_id AS cid
+    FROM location_chapters lc JOIN locations l ON l.id = lc.location_id
+    WHERE l.book_id = ? AND l.${emailCond}`).all(bookId, ...emailVal);
+  const figRows = db.prepare(`
+    SELECT lf.location_id AS lid, lf.figure_id AS fid
+    FROM location_figures lf JOIN locations l ON l.id = lf.location_id
+    WHERE l.book_id = ? AND l.${emailCond}`).all(bookId, ...emailVal);
+  const byLoc = new Map();
+  const bucket = (lid) => {
+    if (!byLoc.has(lid)) byLoc.set(lid, { chapters: [], figures: [] });
+    return byLoc.get(lid);
+  };
+  for (const r of chapRows) bucket(r.lid).chapters.push(r.cid);
+  for (const r of figRows) bucket(r.lid).figures.push(r.fid);
+  // Beide Seiten auf IDs vergleichen (nicht auf Namen): Kapitel-/Figurennamen
+  // kollidieren, IDs nicht. Die neuen Orte tragen Kapitel als NAMEN und Figuren als
+  // TEXT-fig_id des Laufs — beides uebersetzen, sonst findet der Score nie eine
+  // Ueberschneidung.
+  const exCands = existing.map(ex => {
+    const e = byLoc.get(ex.id) || { chapters: [], figures: [] };
+    return { ...ex, chapters: e.chapters, figures: e.figures };
+  });
+  const { byFigId } = figures.figIdMaps(bookId, userEmail);
+  const incoming = orte.map(o => ({
+    id: o.id, name: o.name, typ: o.typ, land: o.land, lat: o.lat, lng: o.lng,
+    chapters: (o.kapitel || [])
+      .map(k => chNameToId?.[_toRefString(typeof k === 'object' && k ? (k.name ?? k) : k)])
+      .filter(v => v != null),
+    figures: (o.figuren || []).map(fid => byFigId[fid]).filter(v => v != null),
+  }));
+  const plan = matchLocations(exCands, incoming, { hint });
+  return { ...plan, existing };
+}
+
 // Reconcile statt Delete+Re-Insert, damit locations.id (und FK-Refs darauf:
 // research_item_links.location_id, scene_locations …) ueber Re-Analysen stabil bleibt.
 // chNameToId: optionaler Map Kapitelname → chapter_id. Wird er nicht übergeben,
@@ -247,6 +299,10 @@ function saveZeitstrahlEvents(bookId, userEmail, ereignisse, chNameToId = {}, pa
 // aufgebaut — kapitel-scoped gegen Namenskollisionen zwischen Kapiteln.
 // opts.matchBy 'name' (Komplettanalyse) | 'locId' (Default, Manual-Edit);
 // opts.onMissing 'stale' (markieren) | 'delete' (Default).
+// opts.matchHint (Map loc_id → locations.id): vom KI-Judge bestaetigte Paare, die die
+//   Regel allein nicht entscheiden konnte. Nur im 'name'-Modus wirksam. Kommt aus dem
+//   Job (routes/jobs/komplett/entity-reconcile.js), weil eine DB-Schreibfunktion keinen
+//   KI-Call machen darf (harte Regel „KI-Calls nur via Job-Queue").
 function saveOrteToDb(bookId, orte, userEmail, chNameToId = null, pageNameToIdByChapter = null, opts = {}) {
   if (chNameToId == null) {
     const rows = db.prepare('SELECT chapter_id, chapter_name FROM chapters WHERE book_id = ?').all(bookId);
@@ -292,7 +348,7 @@ function saveOrteToDb(bookId, orte, userEmail, chNameToId = null, pageNameToIdBy
 
   db.transaction(() => {
     const existing = db.prepare(
-      `SELECT id, loc_id, name, typ, lat, lng FROM locations WHERE book_id = ? AND ${emailCond}`
+      `SELECT id, loc_id, name, typ, lat, lng, land FROM locations WHERE book_id = ? AND ${emailCond}`
     ).all(bookId, ...emailVal);
     const prevById = Object.fromEntries(existing.map(r => [r.id, r]));
 
@@ -333,11 +389,11 @@ function saveOrteToDb(bookId, orte, userEmail, chNameToId = null, pageNameToIdBy
     const usedExisting = new Set();
     if (matchByName) {
       // Auch stale-Orte sind Match-Kandidaten — ein wiederaufgetauchter Ort wird revived.
-      // Zweistufig (matchLocations): exakter Name → Token-Teilmenge/-Overlap. Fängt
-      // Schreibvarianten zwischen Läufen ab («Mathys AG (Bettlach)» ~ «Mathys AG
-      // Produktionsstätte Bettlach»), die sonst als stale-Dublette akkumulieren.
-      const locMatch = matchLocations(existing, orte);
-      for (const [i, exId] of locMatch) { matchOf.set(i, exId); usedExisting.add(exId); }
+      // Geplant wird in planOrteMatch (dieselbe Funktion, die der Job vor dem Judge
+      // ruft): exakter Name → Token-Teilmenge/-Overlap + Indizien, Unsicheres bleibt
+      // getrennt. `opts.matchHint` sind die vom Judge bestaetigten Paare.
+      const locMatch = planOrteMatch(bookId, orte, userEmail, chNameToId, opts.matchHint || null);
+      for (const [i, exId] of locMatch.matchOf) { matchOf.set(i, exId); usedExisting.add(exId); }
     } else {
       const byLocId = new Map(existing.map(ex => [ex.loc_id, ex.id]));
       for (let i = 0; i < orte.length; i++) {
@@ -1650,6 +1706,7 @@ function getChapterNarrativeProfile(bookId, userEmail) {
 }
 
 module.exports = {
+  planOrteMatch,
   db,
   saveChapterNarrativeProfiles,
   getChapterNarrativeProfile,

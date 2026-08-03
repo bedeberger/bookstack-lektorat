@@ -47,6 +47,7 @@ export {
   buildZeitstrahlConsolidationPrompt,
   buildSongsConsolidationPrompt,
   buildLocationsConsolidationPrompt,
+  buildEntityMatchJudgePrompt,
 } from './komplett/konsolidierung.js';
 
 export {
@@ -85,6 +86,7 @@ export {
   SCHEMA_COVERAGE_AUDIT,
   SCHEMA_FIGUREN_ALIAS_CLUSTER,
   SCHEMA_ATTR_CONTRADICTION,
+  SCHEMA_ENTITY_MATCH,
   SCHEMA_FAKT_REALITY,
   SCHEMA_NAME_RESOLUTION,
   SCHEMA_ERZAEHLPROFIL,

@@ -59,6 +59,10 @@ function _promptsContentHash() {
     // Autoren-Befund läuft in derselben Phase; Prompt-/Schema-Wechsel soll die
     // Erzählprofil-Phase über den Konsolidierungs-Checkpoint (F5) re-triggern.
     komplettNs.SCHEMA_AUTOREN_BEFUND,
+    // Entitäten-Paar-Urteil: entscheidet den Graubereich des Matchings und damit den
+    // Katalog-Inhalt — über den Konsolidierungs-Checkpoint (F5) effektiv gecacht,
+    // Schema-Wechsel muss die Cache-Version bumpen.
+    komplettNs.SCHEMA_ENTITY_MATCH,
     synonymNs.SCHEMA_SYNONYM,
     tagebuchNs.SCHEMA_RUECKBLICK,
     tagebuchNs.SCHEMA_RUECKBLICK_SYNTH,
@@ -198,6 +202,7 @@ export {
   SCHEMA_COVERAGE_AUDIT,
   SCHEMA_FIGUREN_ALIAS_CLUSTER,
   SCHEMA_ATTR_CONTRADICTION,
+  SCHEMA_ENTITY_MATCH,
   SCHEMA_FAKT_REALITY,
   SCHEMA_NAME_RESOLUTION,
   buildCoverageAuditPrompt,
@@ -206,6 +211,7 @@ export {
   buildTargetedSzenenPrompt,
   buildNameResolutionPrompt,
   buildAttributeContradictionJudgePrompt,
+  buildEntityMatchJudgePrompt,
   buildWeltfaktRealityJudgePrompt,
   SYSTEM_FAKTENCHECK,
   buildErzaehlprofilSinglePassPrompt,

@@ -1,11 +1,12 @@
 'use strict';
 // Phase 3: Orte + Songs konsolidieren (inkl. regelbasierter Fallback-Merges) +
 // Prelim-figurenKompakt + paralleler Orte-Call (Multi-Pass).
-const { saveOrteToDb, saveSongsToDb } = require('../../../../db/schema');
+const { saveOrteToDb, saveSongsToDb, planOrteMatch } = require('../../../../db/schema');
 const { updateJob } = require('../../shared');
 const { _remapFigNames } = require('../utils');
 const { komplettMaxTokens } = require('./tokens');
 const { dedupeLocationsWithinRun } = require('../../../../lib/entity-match');
+const { judgeEntityPairs } = require('../entity-reconcile');
 
 /** Regelbasierter Orte-Merge als Fallback, wenn die KI-Konsolidierung scheitert (z.B.
  *  aiTruncated bei kleinem lokalem Modell). Flattet chapterOrte über alle Kapitel, dedupliziert
@@ -81,7 +82,15 @@ async function runPhase3(ctx, chapterOrte, figurenKompakt, isSinglePass, figName
     // aber die Completeness-Gap-Pässe ziehen Schreibvarianten desselben Orts nach
     // («Frohheim-Schule Olten» / «Frohheim-Schulhaus Olten»). Konservativ per Token-
     // Teilmenge verschmelzen, bevor IDs vergeben werden — sonst landen sie als Dubletten.
-    const deduped = dedupeLocationsWithinRun(raw);
+    const { orte: deduped, unsure: dedupUnsure } = dedupeLocationsWithinRun(raw);
+    // Within-Run-Verdachtsfaelle bleiben bewusst GETRENNT und gehen NICHT an den Judge:
+    // sein Hint-Mechanismus zeigt auf eine Bestands-Zeile (Cross-Run), zwei Eintraege
+    // desselben Laufs zusammenzufuehren waere ein anderer Eingriff. Sie fallen beim
+    // naechsten Lauf ohnehin in den Cross-Run-Graubereich, wo der Judge sie sieht.
+    if (dedupUnsure.length) {
+      log.info(`Orte-Within-Run: ${dedupUnsure.length} aehnliche Paar(e) bewusst getrennt gelassen `
+        + `(z.B. ${dedupUnsure.slice(0, 2).map(u => `«${u.a}» ~ «${u.b}»`).join(', ')}).`);
+    }
     orte = deduped.map((o, i) => ({
       ...o,
       // loc_id run-intern IMMER sequenziell neu vergeben (nicht o.id||-Fallback): der
@@ -141,8 +150,22 @@ async function runPhase3(ctx, chapterOrte, figurenKompakt, isSinglePass, figName
   // Name-Match + stale: locations.id bleibt ueber Re-Analysen stabil (FK-Refs wie
   // research_item_links.location_id ueberleben); verschwundene Orte werden als stale
   // markiert statt geloescht (kein CASCADE auf die Verknuepfungen).
+  // Graubereich des Cross-Run-Matchings vom Judge beurteilen lassen, BEVOR gespeichert
+  // wird (Begründung siehe entity-reconcile.js): «Kreuz (Olten)» vs. «Kreuz (Bern)»
+  // trennt die Regel selbst, «Schulhaus Frohheim» vs. «Frohheim-Schule Olten» nicht.
+  let ortHint = null;
+  try {
+    const plan = planOrteMatch(bookIdInt, orte, email, idMaps.chNameToId);
+    if (plan.unsure.length) {
+      ortHint = await judgeEntityPairs(ctx, 'ort', { incoming: orte, existing: plan.existing, unsure: plan.unsure });
+    }
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    log.warn(`Orte-Match-Judge übersprungen (${e.message}) – Matching bleibt regelbasiert.`);
+  }
   saveOrteToDb(bookIdInt, orte, email, idMaps.chNameToId, idMaps.pageNameToIdByChapter,
-    { preserveExistingCoords: true, matchBy: 'name', onMissing: 'stale' });
+    { preserveExistingCoords: true, matchBy: 'name', onMissing: 'stale',
+      matchHint: ortHint && ortHint.size ? ortHint : null });
   log.info(`${orte.length} Schauplätze gespeichert.`);
 
   const ortNameToId = {}, ortNameToIdLower = {};

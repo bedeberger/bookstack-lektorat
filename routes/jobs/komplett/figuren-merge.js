@@ -2,6 +2,7 @@
 
 const { _refToString } = require('./utils');
 const { normName: _normalizeName, nameTokens: _nameTokens } = require('../../../lib/name-normalize');
+const { figureEvidence } = require('../../../lib/entity-match');
 
 /** Mergt duplizierte Figuren anhand des normalisierten Namens (case-insensitive).
  *  Fängt Fälle ab, in denen kleine Modelle (Ollama/llama) die Dedup-Regel in
@@ -47,22 +48,17 @@ function _mergeFigurInto(canon, other) {
   canon.beziehungen = [...bzByFig.values()];
 }
 
-/** Zählt Indizienpunkte für zwei Figuren (Nachnamen-Match-Check). */
+/** Indizienpunkte für zwei Figuren. Rechnet `figureEvidence` (SSoT
+ *  lib/entity-match.js, geteilt mit dem Cross-Run-Matching) auf der Analyse-Form:
+ *  Kapitel liegen hier als [{ name }] vor, Beziehungen als [{ figur_id }].
+ *  Positiv wie bisher — und NEU negativ bei widersprüchlichem Geburtsjahr oder
+ *  Geschlecht, sodass zwei gleichnamige, aber verschieden datierte Figuren in Stufe 2
+ *  nicht mehr verschmelzen. */
 function _indicatorScore(a, b) {
-  let score = 0;
-  const ba = (a.beruf || '').toLowerCase().trim();
-  const bb = (b.beruf || '').toLowerCase().trim();
-  if (ba && bb && ba === bb) score += 1;
-  if (a.geburtstag && b.geburtstag && a.geburtstag === b.geburtstag) score += 2;
-  const kapA = new Set((a.kapitel || []).map(k => k.name));
-  for (const k of (b.kapitel || [])) if (kapA.has(k.name)) { score += 1; break; }
-  const ga = (a.geschlecht || '').toLowerCase();
-  const gb = (b.geschlecht || '').toLowerCase();
-  if (ga && gb && ga !== 'unbekannt' && gb !== 'unbekannt' && ga === gb) score += 1;
-  if (a.typ && b.typ && a.typ === b.typ && a.typ !== 'andere') score += 1;
-  const relA = new Set((a.beziehungen || []).map(x => x.figur_id));
-  for (const bz of (b.beziehungen || [])) if (relA.has(bz.figur_id)) { score += 2; break; }
-  return score;
+  return figureEvidence(
+    { ...a, chapters: (a.kapitel || []).map(k => k?.name ?? k), relations: (a.beziehungen || []).map(x => x.figur_id) },
+    { ...b, chapters: (b.kapitel || []).map(k => k?.name ?? k), relations: (b.beziehungen || []).map(x => x.figur_id) },
+  );
 }
 
 /** Stufe 2: Teilnamens-Fusion. Nur wenn ein Name Teilmenge des anderen ist

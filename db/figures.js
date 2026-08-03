@@ -1,7 +1,7 @@
 const { db } = require('./connection');
 const { NOW_ISO_SQL } = require('./now');
-const { normName: _normName, nameTokens: _nameTok } = require('../lib/name-normalize');
 const { mergeFigures } = require('./entity-merge');
+const { matchFiguren } = require('../lib/entity-match');
 require('./migrations');
 
 // Gerichtete Beziehungstypen und ihre Inverse. A→B elternteil ≡ B→A kind,
@@ -119,83 +119,62 @@ function _arcToFlat(arc) {
   return parts.join(' → ');
 }
 
-// Namens-Normalisierung fürs Cross-Run-Matching (_normName/_nameTok) kommt aus
-// lib/name-normalize — dieselbe SSoT wie der Intra-Run-Dedup in
-// routes/jobs/komplett/figuren-merge.js.
+// Cross-Run-Matching (Bestand ↔ neue Analyse-Figuren) liegt in
+// lib/entity-match.js#matchFiguren — dieselbe Verdikt-Schicht (gleich / unsicher /
+// verschieden), die auch Orte und Szenen benutzen, inkl. Indizien-Score
+// (figureEvidence) und Ambiguitaets-Guard. Hier bleibt nur die Adaption der
+// DB-/Analyse-Formen auf die Match-Kandidaten-Form.
+//
+// `unsure`-Paare werden hier NICHT gemergt: eine DB-Schreibfunktion darf keinen
+// KI-Call machen (harte Regel). Der Job beurteilt sie vorab und reicht das Ergebnis
+// als `opts.matchHint` herein (siehe routes/jobs/komplett/entity-reconcile.js).
 
-// Indizien-Score zwischen einer Bestands-Figur (DB) und einer neuen Analyse-Figur.
-// Nur lauf-stabile Signale (Beruf/Geburtstag/Geschlecht/Typ/gemeinsames Kapitel) —
-// die Beziehungs-Refs aus figuren-merge sind cross-run nicht vergleichbar (fig_ids
-// werden pro Lauf neu vergeben).
-function _crossRunScore(ex, inc) {
-  let score = 0;
-  const ba = (ex.beruf || '').toLowerCase().trim();
-  const bb = (inc.beruf || '').toLowerCase().trim();
-  if (ba && bb && ba === bb) score += 1;
-  if (ex.geburtstag && inc.geburtstag && ex.geburtstag === inc.geburtstag) score += 2;
-  const ga = (ex.geschlecht || '').toLowerCase();
-  const gb = (inc.geschlecht || '').toLowerCase();
-  if (ga && gb && ga !== 'unbekannt' && gb !== 'unbekannt' && ga === gb) score += 1;
-  if (ex.typ && inc.typ && ex.typ === inc.typ && ex.typ !== 'andere') score += 1;
-  const incKap = new Set((inc.kapitel || []).map(k => _cleanRefName(k.name)).filter(Boolean));
-  for (const c of ex.chapters) if (incKap.has(c)) { score += 1; break; }
-  return score;
+// Bestands-Row → Match-Kandidat. `chapters` kommt als Set von Kapitelnamen.
+function _figMatchCandidateFromRow(ex) {
+  return {
+    id: ex.id, name: ex.name, kurzname: ex.kurzname, beruf: ex.beruf,
+    geburtstag: ex.geburtstag, geschlecht: ex.geschlecht, typ: ex.typ,
+    chapters: ex.chapters,
+  };
 }
 
-// Cross-Run-Matching: ordnet jede neue Analyse-Figur einer bestehenden DB-Figur zu
-// (oder null = Neuanlage). Greedy, jede Bestands-Figur wird höchstens einmal vergeben.
-//   Stufe 1: exakter normalisierter Name.
-//   Stufe 2: Token-Teilmenge + Indizien-Score ≥ 2.
-//   Stufe 3 (Rename-Fallback): Name völlig anders, aber Indizien-Score ≥ 3 — fängt
-//            im Buch umbenannte Figuren ab, deren Referenzen sonst brechen würden.
-// existingRows: [{ id, fig_id, name, kurzname, beruf, geburtstag, geschlecht, typ, chapters:Set }]
-// Gibt Map(incomingIndex → existingId) zurück.
-function _matchFiguren(existingRows, incoming) {
-  const matchOf = new Map();      // incomingIndex → existingId
-  const usedExisting = new Set(); // existingId
-  const exByNorm = new Map();
-  for (const ex of existingRows) {
-    const k = _normName(ex.name);
-    if (k && !exByNorm.has(k)) exByNorm.set(k, ex);
-  }
+// Neue Analyse-Figur → Match-Kandidat. Kapitel liegen als [{ name, haeufigkeit }] vor
+// und brauchen dieselbe Namensreinigung wie beim Schreiben (Markdown-Header-Praefixe).
+function _figMatchCandidateFromIncoming(f) {
+  return {
+    id: f.id, name: f.name, kurzname: f.kurzname, beruf: f.beruf,
+    geburtstag: f.geburtstag, geschlecht: f.geschlecht, typ: f.typ,
+    chapters: (f.kapitel || []).map(k => _cleanRefName(typeof k === 'object' && k ? k.name : k)).filter(Boolean),
+  };
+}
 
-  // Stufe 1: exakter Name.
-  for (let i = 0; i < incoming.length; i++) {
-    const ex = exByNorm.get(_normName(incoming[i].name));
-    if (ex && !usedExisting.has(ex.id)) { matchOf.set(i, ex.id); usedExisting.add(ex.id); }
+// Match-Planung Figuren (NUR LESEND) — SSoT fuer beide Seiten: `_reconcileFiguren`
+// ruft sie selbst, und der Job ruft sie VOR dem Speichern, um die unsicheren Paare vom
+// KI-Judge beurteilen zu lassen (eine DB-Schreibfunktion darf keinen KI-Call machen).
+// `hint` = Map(fig_id → figures.id) der bestaetigten Paare.
+function planFigurenMatch(bookId, figuren, userEmail, hint = null) {
+  const em = userEmail || null;
+  const existingRows = db.prepare(
+    'SELECT id, fig_id, name, kurzname, beruf, geburtstag, geschlecht, typ FROM figures WHERE book_id = ? AND user_email IS ?'
+  ).all(bookId, em);
+  const chapRows = db.prepare(`
+    SELECT fa.figure_id AS fid, c.chapter_name AS cname
+    FROM figure_appearances fa
+    JOIN figures f ON f.id = fa.figure_id
+    JOIN chapters c ON c.chapter_id = fa.chapter_id
+    WHERE f.book_id = ? AND f.user_email IS ?`).all(bookId, em);
+  const chaptersByFig = new Map();
+  for (const r of chapRows) {
+    if (!chaptersByFig.has(r.fid)) chaptersByFig.set(r.fid, new Set());
+    chaptersByFig.get(r.fid).add(r.cname);
   }
-
-  // Stufe 2: Token-Teilmenge + Indizien.
-  for (let i = 0; i < incoming.length; i++) {
-    if (matchOf.has(i)) continue;
-    const ti = _nameTok(incoming[i].name);
-    if (!ti.length) continue;
-    let best = null, bestScore = 1;
-    for (const ex of existingRows) {
-      if (usedExisting.has(ex.id)) continue;
-      const te = _nameTok(ex.name);
-      if (!te.length) continue;
-      const sub = ti.every(t => te.includes(t)) || te.every(t => ti.includes(t));
-      if (!sub) continue;
-      const sc = _crossRunScore(ex, incoming[i]);
-      if (sc >= 2 && sc > bestScore) { best = ex; bestScore = sc; }
-    }
-    if (best) { matchOf.set(i, best.id); usedExisting.add(best.id); }
-  }
-
-  // Stufe 3: Rename-Fallback (Name verschieden, starke Indizien).
-  for (let i = 0; i < incoming.length; i++) {
-    if (matchOf.has(i)) continue;
-    let best = null, bestScore = 2;
-    for (const ex of existingRows) {
-      if (usedExisting.has(ex.id)) continue;
-      const sc = _crossRunScore(ex, incoming[i]);
-      if (sc >= 3 && sc > bestScore) { best = ex; bestScore = sc; }
-    }
-    if (best) { matchOf.set(i, best.id); usedExisting.add(best.id); }
-  }
-
-  return matchOf;
+  for (const ex of existingRows) ex.chapters = chaptersByFig.get(ex.id) || new Set();
+  const plan = matchFiguren(
+    existingRows.map(_figMatchCandidateFromRow),
+    figuren.map(_figMatchCandidateFromIncoming),
+    { hint },
+  );
+  return { ...plan, existing: existingRows };
 }
 
 // Pure-Compute der persistierbaren Figur-Felder (geteilt zwischen INSERT/UPDATE).
@@ -334,28 +313,22 @@ function _reconcileFiguren(bookId, figuren, em, idMaps, opts) {
   const matchBy = opts.matchBy === 'figId' ? 'figId' : 'identity';
   const keepStale = matchBy === 'figId';
   db.transaction(() => {
-    // 1. Bestand laden (inkl. Match-Felder + Kapitelnamen). Auch stale-Figuren sind
-    //    Match-Kandidaten — eine wiederaufgetauchte Figur soll revived werden.
-    const existingRows = db.prepare(
-      'SELECT id, fig_id, name, kurzname, beruf, geburtstag, geschlecht, typ FROM figures WHERE book_id = ? AND user_email IS ?'
-    ).all(bookId, em);
-    const chapRows = db.prepare(`
-      SELECT fa.figure_id AS fid, c.chapter_name AS cname
-      FROM figure_appearances fa
-      JOIN figures f ON f.id = fa.figure_id
-      JOIN chapters c ON c.chapter_id = fa.chapter_id
-      WHERE f.book_id = ? AND f.user_email IS ?`).all(bookId, em);
-    const chaptersByFig = new Map();
-    for (const r of chapRows) {
-      if (!chaptersByFig.has(r.fid)) chaptersByFig.set(r.fid, new Set());
-      chaptersByFig.get(r.fid).add(r.cname);
+    // 1./2. Bestand + Match: auch stale-Figuren sind Match-Kandidaten — eine
+    //    wiederaufgetauchte Figur soll revived werden.
+    // 2. Bestand laden + Match neue → bestehende. Der identity-Pfad geht durch
+    //    planFigurenMatch (dieselbe Funktion, die der Job vor dem Judge ruft).
+    let existingRows;
+    let matchOf;
+    if (matchBy === 'figId') {
+      existingRows = db.prepare(
+        'SELECT id, fig_id, name, kurzname, beruf, geburtstag, geschlecht, typ FROM figures WHERE book_id = ? AND user_email IS ?'
+      ).all(bookId, em);
+      matchOf = _matchFigurenByFigId(existingRows, figuren);
+    } else {
+      const plan = planFigurenMatch(bookId, figuren, em, opts.matchHint || null);
+      existingRows = plan.existing;
+      matchOf = plan.matchOf;
     }
-    for (const ex of existingRows) ex.chapters = chaptersByFig.get(ex.id) || new Set();
-
-    // 2. Match neue → bestehende.
-    const matchOf = matchBy === 'figId'
-      ? _matchFigurenByFigId(existingRows, figuren)
-      : _matchFiguren(existingRows, figuren);
     const matchedExisting = new Set([...matchOf.values()]);
 
     // 3. Verschwundene (nicht wiedergefundene) Bestands-Figuren behandeln.
@@ -846,6 +819,7 @@ function getFigureWithDetails(figureId) {
 }
 
 module.exports = {
+  planFigurenMatch,
   RELATION_INVERSES,
   dedupRelations,
   figIdMaps,

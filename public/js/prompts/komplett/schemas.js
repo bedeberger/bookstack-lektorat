@@ -339,6 +339,17 @@ export const SCHEMA_ATTR_CONTRADICTION = _obj({
   empfehlung: _str,
 });
 
+// Entitäten-Paar-Urteil: pro Graubereich-Paar des Matchings (Figur/Ort/Szene) sagt das
+// Modell, ob beide Einträge dieselbe Entität bezeichnen. Reasoning-First als
+// False-Positive-Abwehr (analog SCHEMA_ATTR_CONTRADICTION); nur `gleich === true`
+// führt zu einem Merge, alles andere lässt die Einträge getrennt.
+export const SCHEMA_ENTITY_MATCH = _obj({
+  paare: {
+    type: 'array',
+    items: _obj({ nr: _num, _reasoning: _str, gleich: { type: 'boolean' } }),
+  },
+});
+
 // Weltfakten-Realitätscheck (Faktencheck-Job): pro extrahiertem Welt-Fakt urteilt das
 // Modell, ob die Aussage der realen Faktenlage widerspricht — mit Web-Suche als Grundlage.
 // Reasoning-First als False-Positive-Abwehr (analog SCHEMA_ATTR_CONTRADICTION). `urteil`
