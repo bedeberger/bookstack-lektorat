@@ -465,6 +465,15 @@
   margin-top: var(--space-sm);
 }
 
+/* Merge-Panel (Danger-Zone): pro Gattung ein Block aus Gattungs-Label, den zwei
+   Auswahl-Zeilen (Quelle/Ziel) und dem Button. Nur der Abstand zwischen den
+   Gattungen — Zeilen-Layout kommt von .card-form-row. */
+.book-settings-merge-kind + .book-settings-merge-kind {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-err-border);
+}
+
 @media (max-width: 600px) {
   .pub-image-block { flex-direction: column; }
   .pub-image-preview { width: 100%; max-width: 200px; }

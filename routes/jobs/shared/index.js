@@ -69,6 +69,8 @@ module.exports = {
 
   aiCall: ai.aiCall,
   toSystemBlocks: ai.toSystemBlocks,
+  summarizeCostByPhase: ai.summarizeCostByPhase,
+  formatCostByPhase: ai.formatCostByPhase,
 
   getPrompts,
   getBookPrompts,

@@ -25,6 +25,7 @@ const {
   _modelName, fmtTok, tps,
   createJob, enqueueJob, findActiveJobId,
   retryOnTransientAi, settledAll,
+  summarizeCostByPhase, formatCostByPhase,
 } = require('../shared');
 const contentStore = require('../../../lib/content-store');
 const appSettings = require('../../../lib/app-settings');
@@ -45,7 +46,7 @@ const { buildAnachronismusData, verifyKontinuitaetProbleme, _komplettClaudeOverr
 // Rein diagnostisch (kein DB-Schreibzugriff), non-critical. Läuft auf dem Extraktions-Tier.
 // Gibt `{ score, erkannt, fehlend, missingFiguren, missingOrte, sampledChapters }` oder null.
 async function runCoverageAudit(ctx, figurenNames, orteNames) {
-  const { jobId, bookName, call, tok, log, prompts, sys, groups, groupOrder, extractModel } = ctx;
+  const { jobId, bookName, call, tok, log, prompts, sys, groups, groupOrder, extractTier } = ctx;
   const n = Math.max(0, Math.min(20, parseInt(appSettings.get('ai.komplett.coverage_audit_chapters'), 10) || 0));
   if (n <= 0) return null;
   const samples = sampleChapters(groups, groupOrder, n);
@@ -55,7 +56,7 @@ async function runCoverageAudit(ctx, figurenNames, orteNames) {
   const results = await settledAll(samples.map(s => () => retryOnTransientAi(() => call(jobId, tok,
     prompts.buildCoverageAuditPrompt(bookName, s.name, s.chText, figurenNames, orteNames),
     toSystemBlocks(sys.SYSTEM_KOMPLETT_EXTRAKTION_BLOCKS), null, null, cap, 0.2, null,
-    prompts.SCHEMA_COVERAGE_AUDIT, extractModel,
+    prompts.SCHEMA_COVERAGE_AUDIT, extractTier,
   ), { log, label: `Coverage «${s.name}»` })), { concurrency: 3 });
   const ok = results.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
   if (!ok.length) { log.warn('Coverage-Audit: keine auswertbare Stichprobe.'); return null; }
@@ -74,7 +75,13 @@ async function runCoverageAudit(ctx, figurenNames, orteNames) {
 //   P3b (Kapitelübergreifende Beziehungen, nur Multi-Pass, non-critical)
 //   P5 Szenen remappen
 //   P6 Zeitstrahl + P8 Kontinuität: parallel bei Claude (P8 ownt Progress-Bar), sonst sequentiell
-async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userToken, provider = undefined) {
+// opts.skipContinuity / opts.skipNarrativeProfile: die beiden read-only Endphasen
+// einzeln abwählbar (Teil-Lauf; siehe POST-Handler). Default = alles an.
+// ACHTUNG Positions-Reihenfolge: `provider` (Slot 6) wird vom Nacht-Cron gesetzt —
+// opts MUSS dahinter stehen, sonst landet das Options-Objekt im Provider-Slot.
+async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userToken, provider = undefined, opts = {}) {
+  const skipContinuity = opts.skipContinuity === true;
+  const skipNarrativeProfile = opts.skipNarrativeProfile === true;
   const bookIdInt = parseInt(bookId);
   const email = userEmail || null;
   const log = makeJobLogger(jobId);
@@ -93,15 +100,22 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     log.info(`Komplettanalyse-Claude-Override: ${JSON.stringify(overrides)} (global model=${appSettings.get('ai.claude.model')}, ctx=${appSettings.get('ai.claude.context_window')}, out=${appSettings.get('ai.claude.max_tokens_out')}, timeout=${appSettings.get('ai.claude.timeout_ms')}).`);
   }
   const komplettModel = overrides?.claudeModel || '';
-  // Tiered Model Routing (nur Claude): mechanische Extraktions-Calls dürfen ein günstigeres
-  // Modell nutzen als die Konsolidierung/das Urteil (letztere folgen dem job-weiten ALS-Modell
-  // = ai.claude.model.komplett). Leer → kein Tiering (extractModel folgt dem Komplett-Modell,
-  // modelOverride bleibt undefined → identisches Verhalten wie bisher).
-  const extractModel = effectiveProvider === 'claude'
-    ? (appSettings.get('ai.claude.model.komplett.extract') || '')
-    : '';
-  const call = (jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, schema, modelOverride) =>
-    aiCall(jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, effectiveProvider, schema, modelOverride);
+  // Tiered Routing (nur Claude): die mechanischen Extraktions-Calls laufen auf einem
+  // EIGENEN Tier — anderes Modell UND andere Denk-Tiefe — als die Konsolidierung und das
+  // Kontinuitäts-Urteil (die folgen dem job-weiten ALS-Modell/-Effort =
+  // ai.claude.model.komplett + ai.claude.effort.komplett).
+  //
+  // Warum ein Tier-Objekt und kein setContext: Extraktions- und Konsolidierungs-Calls
+  // laufen über `settledAll` parallel; ein ALS-Patch würde den Nachbar-Call mittreffen.
+  // Das `label` klassifiziert die Kosten (job.result.costByPhase) und beeinflusst den
+  // Request nicht. Beide Felder leer → Verhalten identisch zu vorher.
+  const extractTier = effectiveProvider === 'claude' ? {
+    model: String(appSettings.get('ai.claude.model.komplett.extract') || '').trim() || undefined,
+    effort: String(appSettings.get('ai.claude.effort.komplett.extract') || '').trim().toLowerCase() || undefined,
+    label: 'extract',
+  } : { label: 'extract' };
+  const call = (jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, schema, tier) =>
+    aiCall(jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, effectiveProvider, schema, tier);
   // Per-Provider-Skalierung aus dessen `ai.<p>.context_window` (lib/ai.js#getContextConfigFor).
   // Bei Claude 200K-Kontext ≈ 420K Zeichen Single-Pass – reicht für fast alle Bücher.
   const { singlePass: singlePassLimit, perChunk: perChunkLimit } = chunkLimitsFor(effectiveProvider);
@@ -205,14 +219,18 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     // die Single-Pass-Extraktions-Erweiterungen (Extraktions-Cap, Coverage-Feedback,
     // Szenen-Backfill). Ändert sich eins davon, werden alle persistierten Phase-1-Caches
     // automatisch verworfen (Hit-Test matcht den vollen Sig-String inkl. dieser Version).
-    // Das EXTRAKTIONS-Modell erzeugt den gecachten Phase-1-Inhalt → es (nicht das
-    // Konsolidierungs-Modell) gehört in die cacheVersion. Ohne Tiering ist extractModel
-    // leer und wir fallen wie bisher auf das Komplett-/Provider-Modell zurück.
-    const cacheModel = extractModel || komplettModel || _modelName(effectiveProvider);
+    // Das EXTRAKTIONS-Tier erzeugt den gecachten Phase-1-Inhalt → Modell UND Effort
+    // dieses Tiers (nicht die des Konsolidierungs-Modells) gehören in die cacheVersion.
+    // Der Effort verändert den extrahierten Katalog genauso wie das Modell — ohne ihn
+    // in der Signatur liefert ein Effort-Wechsel weiter den alten `__singlepass__`-Stand
+    // und die Umstellung sähe wirkungslos aus. Ohne Tiering sind beide Felder leer und
+    // wir fallen wie bisher auf das Komplett-/Provider-Modell zurück.
+    const cacheModel = extractTier.model || komplettModel || _modelName(effectiveProvider);
     const singlePassAug = effectiveProvider === 'claude'
       ? `:esp${extractCapChars}:cf${coverageFeedbackEnabled ? 1 : 0}:cac${coverageAuditChapters}:sb${sceneBackfillEnabled ? 1 : 0}:sbm${sceneBackfillMinChars}`
       : '';
-    const cacheVersion = `${cacheModel}:${prompts.PROMPTS_VERSION || ''}:cp${completenessPasses}${singlePassAug}`;
+    const effortAug = extractTier.effort ? `:ee${extractTier.effort}` : '';
+    const cacheVersion = `${cacheModel}:${prompts.PROMPTS_VERSION || ''}:cp${completenessPasses}${singlePassAug}${effortAug}`;
     // Buch-weite Signatur (Seitenstand + Settings + Modell/Prompt-Version) – dieselbe
     // Gate wie der chapter_extract_cache. Validiert den Checkpoint-Resume.
     const bookPagesSig = buildBookPagesSig(pageContents, getBookSettings(bookIdInt, email), cacheVersion);
@@ -226,7 +244,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       effectiveProvider, singlePassLimit, extractSinglePassLimit, perChunkLimit,
       cacheVersion, bookPagesSig, prompts, sys,
       idMaps, pageContents, groups, groupOrder, totalChars, fullBookText, warnings, completenessPasses,
-      extractModel,
+      extractTier,
       coverageFeedbackEnabled, coverageAuditChapters, sceneBackfillEnabled, sceneBackfillMinChars, figureBatchSize,
     };
     pt.mark('Laden');
@@ -397,7 +415,17 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
         warnings.push({ key: 'job.warn.timelineFailed' });
       }
     };
-    if (effectiveProvider === 'claude') {
+    if (skipContinuity) {
+      // Teil-Lauf: P8 abgewählt. Der Zeitstrahl (P6) ist Kern-Katalog und läuft weiter;
+      // das vorherige Kontinuitäts-Ergebnis bleibt unangetastet (P8 ist read-only).
+      // Die Bar muss über den P8-Bereich (82..97) hinweg selbst vorrücken — sonst
+      // hängt sie bei 82, bis completeJob auf 100 springt.
+      // Kein eigener statusText: runZeitstrahl (nicht-silent) setzt seinen eigenen.
+      log.info('Kontinuitätsprüfung (P8) auf Wunsch übersprungen – bestehendes Ergebnis bleibt.');
+      await runZeitstrahlSafe();
+      updateJob(jobId, { progress: 97 });
+      kontResult = null;
+    } else if (effectiveProvider === 'claude') {
       // Parallel: P6 silent, P8 ownt Bar (82..97).
       updateJob(jobId, { progress: 82, statusText: 'job.phase.checkContinuity' });
       const [, p8Out] = await Promise.all([
@@ -431,8 +459,11 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     // Deterministisch gefundene Cross-Chapter-Widersprüche (Lebensereignis-Jahre, Welt-Fakten),
     // die der fakten-basierte P8 pro Kapitel übersieht; das Modell (Konsolidierungs-Tier) urteilt.
     // Bereits geurteilt → NICHT durch die verify-Stufe schleusen, sondern nach ihr einmischen.
+    // Mit abgewähltem P8 entfällt er mit: er ist ein ERGÄNZENDER Kontinuitäts-Detektor
+    // (seine Befunde werden in denselben Check geschrieben) — ihn allein laufen zu
+    // lassen würde den bestehenden Check mit einem fast leeren neuen überschreiben.
     let attrFindings = [];
-    if (effectiveProvider === 'claude' && appSettings.get('ai.komplett.attribute_check') === true) {
+    if (!skipContinuity && effectiveProvider === 'claude' && appSettings.get('ai.komplett.attribute_check') === true) {
       try {
         attrFindings = await runAttributeContradictionCheck(ctx, 97, 98);
       } catch (e) {
@@ -480,7 +511,11 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     // oben komplett → das bestehende Profil bleibt gültig). Claude-only (wie
     // Kontinuität ausgeblendet für Nicht-Claude); Kill-Switch
     // `ai.komplett.narrative_profile` (Default an; in Integration-Tests aus).
-    if (effectiveProvider === 'claude' && appSettings.get('ai.komplett.narrative_profile') !== false) {
+    if (skipNarrativeProfile) {
+      // Teil-Lauf: read-only Endphase abgewählt, das bestehende Profil bleibt gültig.
+      // Nachziehen über POST /jobs/erzaehlprofil (rechnet nur diese Phase neu).
+      log.info('Erzählprofil auf Wunsch übersprungen – bestehendes Profil bleibt.');
+    } else if (effectiveProvider === 'claude' && appSettings.get('ai.komplett.narrative_profile') !== false) {
       await runNonCritical('Erzählprofil',
         () => runErzaehlprofil(ctx, { figNameToId, fromPct: 98, toPct: 99 }), log,
         { warnings, warnKey: 'job.warn.narrativeProfileFailed' });
@@ -490,12 +525,28 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     deleteCheckpoint('komplett-analyse', bookIdInt, email);
     // F5: Konsolidierungs-Checkpoint schreiben — ein unveränderter Folgelauf überspringt P2–P8.
     // Byte-identische Extraktion → identische Sig → HIT; jede Änderung verschiebt die Sig.
-    saveCheckpoint(CONSOLIDATION_CP_TYPE, bookIdInt, email, {
-      sig: consolidationSig,
-      figCount: figuren.length, orteCount: orte.length,
-      songsCount: songs.length, szenenCount: szenenResult.szenenCount,
-    });
+    //
+    // NICHT bei einem Teil-Lauf: der Marker behauptet „P2–P8 sind für diesen Stand
+    // erledigt". Nach einem Lauf ohne Kontinuität/Erzählprofil stimmt das nicht — der
+    // nächste Voll-Lauf würde am Short-Circuit hängen bleiben und die abgewählten
+    // Phasen nie nachholen. Symmetrisch zum `partialFailure`-Gate in Phase 1.
+    const partialRun = skipContinuity || skipNarrativeProfile;
+    if (partialRun) {
+      log.info('Konsolidierungs-Checkpoint übersprungen – Teil-Lauf (abgewählte Phasen sind nicht gelaufen).');
+    } else {
+      saveCheckpoint(CONSOLIDATION_CP_TYPE, bookIdInt, email, {
+        sig: consolidationSig,
+        figCount: figuren.length, orteCount: orte.length,
+        songsCount: songs.length, szenenCount: szenenResult.szenenCount,
+      });
+    }
     log.info(`Phasen-Timing: ${pt.summary()}`);
+    // Kosten-Aufschlüsselung: das ai_cost_ledger hält nur eine Summe pro Job, hier
+    // steht, WO sie entstand (Extraktions-Tier vs. Rest). Erst damit ist nachweisbar,
+    // ob eine Tier-/Effort-Umstellung wirklich gespart hat — und der Coverage-Score
+    // daneben zeigt, ob es Recall gekostet hat.
+    const costByPhase = summarizeCostByPhase(tok);
+    if (costByPhase) log.info(`Kosten: ${formatCostByPhase(costByPhase)} → $${costByPhase.totalUsd.toFixed(2)}`);
     completeJob(jobId, {
       figCount:    figuren.length,
       orteCount:   orte.length,
@@ -503,6 +554,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
       szenenCount: szenenResult.szenenCount,
       warnings,
       ...(coverage ? { coverage } : {}),
+      ...(costByPhase ? { costByPhase } : {}),
       tokensIn: tok.in, tokensOut: tok.out,
     }, tps(tok), `fig=${figuren.length} orte=${orte.length} songs=${songs.length} szenen=${szenenResult.szenenCount}${coverage?.score != null ? ` cov=${coverage.score}` : ''}${warnings.length ? ` warn=${warnings.length}` : ''}`);
   } catch (e) {

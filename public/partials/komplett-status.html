@@ -71,6 +71,34 @@
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=691#check"/></svg>
       <span x-text="t('komplett.coverageLabel', { score: Math.round(($store.jobs.alleAktualisierenCoverage?.score || 0) * 100) })"></span>
     </div>
+    <!-- Kosten pro Call-Klasse: bewusst NEBEN dem Coverage-Score. Eine Tier-/Effort-
+         Umstellung ist nur dann ein Gewinn, wenn die Summe sinkt UND der Recall hält —
+         beides muss im selben Blick lesbar sein. -->
+    <div class="komplett-cost" x-cloak
+         x-show="!$store.jobs.alleAktualisierenLoading && $store.jobs.alleAktualisierenCost">
+      <div class="komplett-cost-total">
+        <span x-text="t('komplett.costTotal', { usd: ($store.jobs.alleAktualisierenCost?.totalUsd ?? 0).toFixed(2) })"></span>
+      </div>
+      <ul class="komplett-cost-list">
+        <template x-for="p in ($store.jobs.alleAktualisierenCost?.phases || [])" :key="p.phase">
+          <li class="komplett-cost-item"
+              :data-tip="t('komplett.costTip', { calls: p.calls, models: (p.models || []).join(', ') || '–', seconds: p.seconds })">
+            <span class="komplett-cost-phase" x-text="t('komplett.costPhase.' + p.phase)"></span>
+            <span class="komplett-cost-usd" x-text="'$' + p.usd.toFixed(2)"></span>
+          </li>
+        </template>
+      </ul>
+    </div>
+    <!-- Teil-Lauf: die beiden read-only Endphasen abwählbar. Bewusst de-prominent im
+         ⋯-Menü — Default ist der vollständige Lauf; das hier ist die Abkürzung, wenn nur
+         der Katalog aufgefrischt werden soll. Beide Phasen sind einzeln nachziehbar. -->
+    <div class="komplett-status-phases" x-show="!$store.jobs.alleAktualisierenLoading" x-cloak>
+      <div class="komplett-status-phases-title" x-text="t('komplett.phasesTitle')"></div>
+      <div x-data="toggleSwitch({ label: () => t('komplett.skipContinuity') })"
+           x-modelable="value" x-model="komplettSkipContinuity"></div>
+      <div x-data="toggleSwitch({ label: () => t('komplett.skipNarrativeProfile') })"
+           x-modelable="value" x-model="komplettSkipNarrativeProfile"></div>
+    </div>
     <div class="komplett-status-actions">
       <button type="button"
               class="komplett-status-action-btn"

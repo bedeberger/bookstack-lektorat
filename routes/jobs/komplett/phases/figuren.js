@@ -40,7 +40,7 @@ async function runPhase2(ctx, chapterFiguren, chapterAssignments, chapterSzenen)
     // ── Alias-Cluster (F3, nur Claude): Namensvarianten derselben Figur (Epitheta/Spitznamen/
     // Umbenennungen) VOR der Konsolidierung auf einen kanonischen Namen vereinheitlichen, damit
     // die Konsolidierung sie zusammenführt statt als Dubletten zu behalten. Smart-Tier (das
-    // job-weite Komplett-Modell, kein extractModel-Override). Non-critical: bei Fehler bleibt
+    // job-weite Komplett-Modell, kein extractTier-Override). Non-critical: bei Fehler bleibt
     // die Konsolidierung wie bisher. Nur sinnvoll ab genügend Kandidaten. */
     if (effectiveProvider === 'claude') {
       const candidates = preMerged.flatMap(cf => (cf.figuren || []).map(f => ({

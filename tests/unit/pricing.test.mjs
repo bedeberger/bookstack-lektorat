@@ -1,6 +1,7 @@
 // PRICING + costUsd().
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { PRICING, WEB_SEARCH_USD_PER_1K, costUsd, fallbackFamily } from '../../lib/pricing.js';
 
 test('costUsd: lokale Provider liefern 0', () => {
@@ -66,6 +67,44 @@ test('fallbackFamily: dated model IDs auf Familie mappen', () => {
   assert.equal(fallbackFamily('claude-opus-4-7-20260101'),   'claude-opus-4-7');
   assert.equal(fallbackFamily('claude-haiku-4-5-2025xxxx'),  'claude-haiku-4-5');
   assert.equal(fallbackFamily('unknown-foo'),                null);
+});
+
+// Regression: der generische Fallback kannte nur `^claude-(opus|sonnet)-4-`. Ein
+// Wechsel des Komplett-Modells auf ein 5er-Modell wurde damit still mit 0 USD
+// verbucht (nur eine Logger-Warnung) — inkl. Budget-Gate, Admin-Usage, /metrics.
+test('fallbackFamily: 5er-Serie inkl. Suffix-/Punktversionen', () => {
+  assert.equal(fallbackFamily('claude-opus-5'),          'claude-opus-5');
+  assert.equal(fallbackFamily('claude-opus-5[1m]'),      'claude-opus-5');
+  assert.equal(fallbackFamily('claude-opus-5-1'),        'claude-opus-5');
+  assert.equal(fallbackFamily('claude-sonnet-5'),        'claude-sonnet-5');
+  assert.equal(fallbackFamily('claude-sonnet-5[1m]'),    'claude-sonnet-5');
+  assert.equal(fallbackFamily('claude-fable-5'),         'claude-fable-5');
+  assert.equal(fallbackFamily('claude-mythos-5'),        'claude-mythos-5');
+  // Die 4.x-Familien bleiben unberuehrt (5er-Regex darf nicht zu breit greifen).
+  assert.equal(fallbackFamily('claude-opus-4-8[1m]'),    'claude-opus-4-8');
+  assert.equal(fallbackFamily('claude-sonnet-4-6'),      'claude-sonnet-4-6');
+});
+
+// Drift-Gate: das Ledger friert die USD pro Call ein. Ein Modell OHNE Tarif
+// bucht still 0 — der Fehler faellt erst auf, wenn eine Monatsrechnung nicht zur
+// App-Anzeige passt. Darum muss JEDES Modell, das ueber ein App-Setting waehlbar
+// ist, hier einen Tarif haben.
+test('PRICING: jedes per Setting waehlbare Claude-Modell hat einen Tarif', () => {
+  // app-settings.js wird als TEXT gelesen, nicht importiert: das Modul oeffnet beim
+  // Laden die SQLite-Verbindung, und dieser Test soll seiteneffektfrei bleiben.
+  const src = readFileSync(new URL('../../lib/app-settings.js', import.meta.url), 'utf8');
+  const declared = [...src.matchAll(/'ai\.claude\.model[^']*':\s*'([^']*)'/g)]
+    .map(m => m[1].trim()).filter(Boolean);
+  // Die aktuell empfohlenen Modelle aus docs/komplett.md + docs/ai-providers.md.
+  // Neues Modell in einer Empfehlung ⇒ hier UND in lib/pricing.js ergaenzen.
+  const candidates = new Set([...declared,
+    'claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-4-6',
+    'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-haiku-4-5', 'claude-fable-5',
+  ]);
+  for (const model of candidates) {
+    const usd = costUsd({ provider: 'claude', model, tokensIn: 1_000_000 });
+    assert.ok(usd > 0, `Modell '${model}' hat keinen Tarif in lib/pricing.js (Kosten wuerden als 0 verbucht)`);
+  }
 });
 
 test('costUsd: Family-Fallback wirkt fuer dated model IDs', () => {

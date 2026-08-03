@@ -3,7 +3,7 @@
       <p class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.embed.hint')"></p>
       <div x-data="settingField({ k: 'embed.enabled', type: 'toggle', base: 'embed.enabled' })"></div>
       <div x-data="settingField({ k: 'embed.host', type: 'url', base: 'embed.host', help: true })"></div>
-      <div x-data="settingField({ k: 'embed.model', base: 'embed.model', help: true })"></div>
+      <div x-data="settingField({ k: 'embed.model', base: 'embed.model', help: true, models: { target: 'embed', hostKey: 'embed.host' } })"></div>
       <div x-data="settingField({ k: 'embed.dim', type: 'num', base: 'embed.dim', num: { integer: true, min: 64, max: 8192 }, help: true })"></div>
       <div x-data="settingField({ k: 'embed.timeout_ms', type: 'num', base: 'embed.timeoutMs', num: { integer: true, min: 5000, max: 600000 }, help: true })"></div>
       <div x-data="settingField({ k: 'embed.api_key', type: 'password', base: 'embed.apiKey', help: true })"></div>
@@ -37,7 +37,7 @@
       <p class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.rerank.hint')"></p>
       <div x-data="settingField({ k: 'rerank.enabled', type: 'toggle', base: 'rerank.enabled' })"></div>
       <div x-data="settingField({ k: 'rerank.host', type: 'url', base: 'rerank.host', help: true })"></div>
-      <div x-data="settingField({ k: 'rerank.model', base: 'rerank.model', help: true })"></div>
+      <div x-data="settingField({ k: 'rerank.model', base: 'rerank.model', help: true, models: { target: 'rerank', hostKey: 'rerank.host' } })"></div>
       <div x-data="settingField({ k: 'rerank.top_n', type: 'num', base: 'rerank.topN', num: { integer: true, min: 5, max: 100 }, help: true })"></div>
       <div x-data="settingField({ k: 'rerank.min_score', type: 'num', base: 'rerank.minScore', num: { min: 0, max: 1, step: 0.05 }, help: true })"></div>
       <div x-data="settingField({ k: 'rerank.timeout_ms', type: 'num', base: 'rerank.timeoutMs', num: { integer: true, min: 5000, max: 600000 }, help: true })"></div>

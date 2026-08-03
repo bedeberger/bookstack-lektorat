@@ -46,7 +46,7 @@ async function runCompletenessGap(ctx, {
   // via displayOf in die Prompt-Liste fliesst (beide werden mit _normalizeName normalisiert).
   keyOf = (it) => it.name, isValid = (it) => it && it.name, displayOf = (it) => it.name,
 }) {
-  const { call, jobId, tok, log, extractModel } = ctx;
+  const { call, jobId, tok, log, extractTier } = ctx;
   const seen = new Set((knownNames || []).map(n => _normalizeName(n)).filter(Boolean));
   const display = (knownNames || []).filter(Boolean);
   const fresh = [];
@@ -55,7 +55,7 @@ async function runCompletenessGap(ctx, {
     let res;
     try {
       res = await retryOnTransientAi(() => call(jobId, tok,
-        buildPrompt(display), systemBlocks, null, null, claudeExtractCap, 0.2, null, schema, extractModel,
+        buildPrompt(display), systemBlocks, null, null, claudeExtractCap, 0.2, null, schema, extractTier,
       ), { log, label: `${label} (Gap ${round}/${maxPasses})` });
     } catch (e) {
       if (e.name === 'AbortError') throw e;
@@ -185,13 +185,13 @@ async function runSinglePassCompletenessGaps(ctx, { bookSystemBlock, claudeExtra
  * angewendet (kein Totalverlust). Gibt `{ assignments, failed, batches }`.
  */
 async function runEventsPassBatched(ctx, { bookSystemBlock, claudeExtractCap, stammFiguren }) {
-  const { jobId, bookName, call, tok, log, prompts, sys, extractModel } = ctx;
+  const { jobId, bookName, call, tok, log, prompts, sys, extractTier } = ctx;
   const batches = _chunkArray(stammFiguren, ctx.figureBatchSize || 20);
   const multi = batches.length > 1;
   const settled = await settledAll(batches.map((batch, bi) => () => retryOnTransientAi(() => call(jobId, tok,
     prompts.buildExtraktionEventsPassPrompt(bookName, batch, null),
     [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_KOMPLETT_EVENTS_PASS_BLOCKS, '1h')],
-    null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_EVENTS, extractModel,
+    null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_EVENTS, extractTier,
   ), { log, label: `Single-Pass Lebensereignisse (E)${multi ? ` Batch ${bi + 1}/${batches.length}` : ''}` })),
     (multi ? { concurrency: _phase1Concurrency() } : {}));
   const assignments = [];
@@ -239,7 +239,7 @@ async function runRelationsPassBatched(ctx, { bookSystemBlock, claudeExtractCap,
  * Rein additiv, non-fatal. Mutiert nichts in place; gibt `{ stammFiguren, passB }` zurück.
  */
 async function runCoverageFeedback(ctx, { bookSystemBlock, claudeExtractCap, stammFiguren, passB }) {
-  const { jobId, bookName, call, tok, log, prompts, sys, groups, groupOrder, extractModel } = ctx;
+  const { jobId, bookName, call, tok, log, prompts, sys, groups, groupOrder, extractTier } = ctx;
   const n = ctx.coverageAuditChapters || 0;
   if (n <= 0) return { stammFiguren, passB };
   const samples = sampleChapters(groups, groupOrder, n);
@@ -250,7 +250,7 @@ async function runCoverageFeedback(ctx, { bookSystemBlock, claudeExtractCap, sta
   const audit = await settledAll(samples.map(s => () => retryOnTransientAi(() => call(jobId, tok,
     prompts.buildCoverageAuditPrompt(bookName, s.name, s.chText, figNames, orteNames),
     toSystemBlocks(sys.SYSTEM_KOMPLETT_EXTRAKTION_BLOCKS), null, null, claudeExtractCap, 0.2, null,
-    prompts.SCHEMA_COVERAGE_AUDIT, extractModel,
+    prompts.SCHEMA_COVERAGE_AUDIT, extractTier,
   ), { log, label: `Coverage-Feedback «${s.name}»` })), { concurrency: 3 });
   const ok = audit.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
   if (!ok.length) return { stammFiguren, passB };
@@ -268,12 +268,12 @@ async function runCoverageFeedback(ctx, { bookSystemBlock, claudeExtractCap, sta
     missFig.length ? () => retryOnTransientAi(() => call(jobId, tok,
       prompts.buildTargetedFigurenPrompt(bookName, missFig),
       [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_KOMPLETT_FIGUREN_STAMM_BLOCKS, '1h')],
-      null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_FIGUREN_STAMM, extractModel,
+      null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_FIGUREN_STAMM, extractTier,
     ), { log, label: 'Coverage-Feedback Figuren' }) : () => null,
     missOrt.length ? () => retryOnTransientAi(() => call(jobId, tok,
       prompts.buildTargetedOrtePrompt(bookName, missOrt),
       [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_KOMPLETT_ORTE_PASS_BLOCKS, '1h')],
-      null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_ORTE_PASS, extractModel,
+      null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_ORTE_PASS, extractTier,
     ), { log, label: 'Coverage-Feedback Orte' }) : () => null,
   ], { concurrency: 2 });
 
@@ -310,7 +310,7 @@ async function runCoverageFeedback(ctx, { bookSystemBlock, claudeExtractCap, sta
  * (ggf. ergänzte) passB zurück.
  */
 async function runSceneBackfill(ctx, { bookSystemBlock, claudeExtractCap, passB }) {
-  const { jobId, bookName, call, tok, log, prompts, sys, groups, groupOrder, extractModel } = ctx;
+  const { jobId, bookName, call, tok, log, prompts, sys, groups, groupOrder, extractTier } = ctx;
   const minChars = ctx.sceneBackfillMinChars || 3000;
   const sceneCountByChapter = new Map();
   for (const s of (passB.szenen || [])) {
@@ -333,7 +333,7 @@ async function runSceneBackfill(ctx, { bookSystemBlock, claudeExtractCap, passB 
     res = await retryOnTransientAi(() => call(jobId, tok,
       prompts.buildTargetedSzenenPrompt(bookName, targets),
       [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_KOMPLETT_ORTE_PASS_BLOCKS, '1h')],
-      null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_ORTE_PASS, extractModel,
+      null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_ORTE_PASS, extractTier,
     ), { log, label: 'Szenen-Backfill' });
   } catch (e) {
     if (e.name === 'AbortError') throw e;
@@ -365,7 +365,7 @@ async function runSceneBackfill(ctx, { bookSystemBlock, claudeExtractCap, passB 
  * Checkpoint-Skip-Gate).
  */
 async function extractSinglePassClaude(ctx, { claudeExtractCap }) {
-  const { jobId, bookName, call, tok, log, prompts, sys, pageContents, fullBookText, extractModel } = ctx;
+  const { jobId, bookName, call, tok, log, prompts, sys, pageContents, fullBookText, extractTier } = ctx;
   const failed = { relations: false, fakten: false, events: false };
 
   // Fakten als eigener Call (C): volle Modell-Aufmerksamkeit auf dichte Faktenerfassung
@@ -375,17 +375,17 @@ async function extractSinglePassClaude(ctx, { claudeExtractCap }) {
     () => retryOnTransientAi(() => call(jobId, tok,
       prompts.buildExtraktionFigurenStammPrompt('Gesamtbuch', bookName, pageContents.length, null),
       [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_KOMPLETT_FIGUREN_STAMM_BLOCKS, '1h')],
-      12, 20, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_FIGUREN_STAMM, extractModel,
+      12, 20, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_FIGUREN_STAMM, extractTier,
     ), { log, label: 'Single-Pass Figuren-Stamm (A1)' }),
     () => retryOnTransientAi(() => call(jobId, tok,
       prompts.buildExtraktionOrtePassPrompt('Gesamtbuch', bookName, pageContents.length, null),
       [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_KOMPLETT_ORTE_PASS_BLOCKS, '1h')],
-      12, 20, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_ORTE_PASS, extractModel,
+      12, 20, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_ORTE_PASS, extractTier,
     ), { log, label: 'Single-Pass Orte/Szenen (B)' }),
     () => retryOnTransientAi(() => call(jobId, tok,
       prompts.buildExtraktionFaktenPassPrompt('Gesamtbuch', bookName, pageContents.length, null),
       [bookSystemBlock, ...toSystemBlocks(sys.SYSTEM_KOMPLETT_FAKTEN_PASS_BLOCKS, '1h')],
-      12, 20, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_FAKTEN_PASS, extractModel,
+      12, 20, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_FAKTEN_PASS, extractTier,
     ), { log, label: 'Single-Pass Fakten (C)' }),
   // warmup: A1 seriell zuerst → schreibt den 1h-bookSystemBlock-Cache; B/C (und das
   // nachgelagerte A2/P8) lesen ihn statt ihn teuer neu zu erstellen (~1× cache_creation gespart).
@@ -569,10 +569,10 @@ async function extractSinglePass(ctx, { claudeExtractCap, callExtract }) {
  * Katalog aller Chunks (Cross-Chunk-Dedup) → nur der genuine Long-Tail wird nachgezogen.
  * Loop-until-dry pro Chunk bis completenessPasses. Rein ADDITIV (mutiert `chapters` in place,
  * hängt fresh items an den jeweiligen Chunk-Eintrag). Eigener `:gap`-Cache pro Chunk → die
- * Basis-Chunk-Caches bleiben gültig. Läuft auf dem Extraktions-Tier (extractModel). NON-FATAL.
+ * Basis-Chunk-Caches bleiben gültig. Läuft auf dem Extraktions-Tier (extractTier). NON-FATAL.
  */
 async function runMultiPassCompletenessGaps(ctx, { chunkTexts, chapters, concurrency }) {
-  const { jobId, bookIdInt, email, bookName, call, tok, log, effectiveProvider, prompts, sys, extractModel } = ctx;
+  const { jobId, bookIdInt, email, bookName, call, tok, log, effectiveProvider, prompts, sys, extractTier } = ctx;
   const completenessPasses = ctx.completenessPasses || 0;
   if (effectiveProvider !== 'claude' || completenessPasses <= 0 || !chunkTexts.length) return;
 
@@ -614,7 +614,7 @@ async function runMultiPassCompletenessGaps(ctx, { chunkTexts, chapters, concurr
           prompts.buildChunkGapPrompt(chunk.name, bookName, chunk.pages.length, chText, {
             figuren: disp.figuren, orte: disp.orte, fakten: disp.fakten, szenen: disp.szenen,
           }),
-          sys.SYSTEM_KOMPLETT_EXTRAKTION_BLOCKS, null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_EXTRAKTION, extractModel,
+          sys.SYSTEM_KOMPLETT_EXTRAKTION_BLOCKS, null, null, claudeExtractCap, 0.2, null, prompts.SCHEMA_KOMPLETT_EXTRAKTION, extractTier,
         ), { log, label: `${chunkLabel} (Gap ${round}/${completenessPasses})` });
       } catch (e) {
         if (e.name === 'AbortError') throw e;
@@ -856,7 +856,7 @@ function writePhase1Checkpoint(ctx, chapters, partialFailure) {
  */
 async function runPhase1(ctx) {
   const { jobId, call, tok, log, effectiveProvider, singlePassLimit, perChunkLimit: ctxPerChunkLimit,
-    prompts, groups, groupOrder, totalChars, extractModel } = ctx;
+    prompts, groups, groupOrder, totalChars, extractTier } = ctx;
 
   // EXTRAKTIONS-Schwelle (ai.komplett.extract_single_pass_cap, entkoppelt von der
   // Kontinuitäts-Schwelle singlePassLimit): entscheidet Single- vs. Multi-Pass UND – bei Claude –
@@ -880,7 +880,7 @@ async function runPhase1(ctx) {
   // darum die Claude-Extraktions-Calls direkt grosszügig aufs Provider-Ceiling deckeln.
   const claudeExtractCap = getContextConfigFor(effectiveProvider).maxTokensOut;
   const callExtract = (label, prompt, system, fromPct, toPct, expectedChars, schema) =>
-    retryOnTransientAi(() => call(jobId, tok, prompt, system, fromPct, toPct, expectedChars, 0.2, komplettMaxTokens(effectiveProvider), schema, extractModel),
+    retryOnTransientAi(() => call(jobId, tok, prompt, system, fromPct, toPct, expectedChars, 0.2, komplettMaxTokens(effectiveProvider), schema, extractTier),
       { log, label });
 
   log.info(`Phase 1 – ${totalChars} Zeichen, ${effectiveProvider} → ${totalChars <= extractLimit ? 'Single-Pass' : `Multi-Pass (${groupOrder.length} Kapitel → ${chunkOrder.length} Chunks)`}`);

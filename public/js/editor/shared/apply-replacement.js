@@ -1,10 +1,17 @@
-// Wendet einen Spellcheck-/LanguageTool-Ersetzungsvorschlag auf eine DOM-Range an.
+// Wendet ein Ersatzwort (Spellcheck-/LanguageTool-Vorschlag, Synonym) auf eine
+// DOM-Range an.
 //
-// Einzige Quelle für die Range-Mutation + Caret-Wiederherstellung — geteilt
-// zwischen SPA-Dispatcher ([cards/editor-spellcheck/dispatch.js]) und der
-// fremden Schale (nativer Mac-Focus-Writer, eigene onApplyReplacement-
-// Verdrahtung). Beide ziehen diese Funktion, damit die Caret-Logik nicht an
-// zwei Stellen driftet. Darum auch explizit im OTA-Bundle ([lib/editor-bundle.js]).
+// Einzige Quelle für die Range-Mutation + Caret-Wiederherstellung. Vier
+// Konsumenten: SPA-Spellcheck-Dispatcher ([cards/editor-spellcheck/dispatch.js]),
+// SPA-Synonym-Picker ([editor/synonyme.js]) und die fremde Schale (nativer
+// Mac-Focus-Writer: [cards/editor-spellcheck/controller.js] +
+// [cards/editor-synonyme/controller.js], eigene onApplyReplacement-Verdrahtung).
+// Alle ziehen diese Funktion, damit die Caret-Logik nicht an vier Stellen
+// driftet. Darum auch explizit im OTA-Bundle ([lib/editor-bundle.js]).
+//
+// Der Name nennt nur den ersten Konsumenten und bleibt trotzdem stehen: die
+// Funktion ist Teil des OTA-Editor-Bundles, ein Rename erreicht die nativen
+// Clients erst nach einem Server-Deploy — Risiko ohne Verhaltensgewinn.
 //
 // Caret landet am Ende des EINGEFÜGTEN Text-Knotens — also IN dem Absatz.
 // NICHT hinter `range.endContainer`: beim Text-Node-Split durch

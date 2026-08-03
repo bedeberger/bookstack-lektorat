@@ -322,7 +322,7 @@ function buildAttributeContradictions(bookIdInt, email) {
 }
 
 /** Beurteilt die Kandidaten aus buildAttributeContradictions per KI (Konsolidierungs-Tier,
- *  kein extractModel-Override) und gibt bestätigte Widersprüche in Problem-Form zurück
+ *  kein extractTier-Override) und gibt bestätigte Widersprüche in Problem-Form zurück
  *  (kompatibel zu kontResult.probleme → wird dort eingemischt und mit gespeichert). stelle_a/
  *  stelle_b bewusst OHNE «»-Zitate, damit die Beleg-Prüfung (requireQuoteEvidence) sie nicht als
  *  erfundenes Zitat verwirft. Concurrency-Cap + Warmup wie die Verify-Stufe. Non-fatal. */

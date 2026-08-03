@@ -193,7 +193,7 @@ Eine eigenständige, per-Boolean klappbare Sektion nutzt **`Alpine.data('collaps
 `.collapsible-wrap` (block-Container, Spacing pro Section) + `.collapsible-section` (border-left, padding, Inhaltsabstand) leben beide in [public/css/entities/entity-list.css](public/css/entities/entity-list.css).
 
 **Öffnen/Schliessen animiert die Panel-Höhe** — `x-collapse` (@alpinejs/collapse) reist im `panel`-Spread mit, Konsumenten-Markup bleibt unverändert. Zwei Folgen:
-- Das Plugin hält **`overflow: hidden`** auf dem Panel. Absolut positionierte Kinder (Kebab-Menü, Popover) würden darin abgeschnitten — die gehören ohnehin per `x-teleport` in den Top-Layer (siehe „Context-Menu"), nicht ins Panel.
+- Das Plugin hält **`overflow: hidden`** auf dem Panel. Absolut positionierte Kinder (Kebab-Menü, Popover) würden darin abgeschnitten — die gehören ohnehin per `x-teleport` in den Top-Layer (siehe „Context-Menu"), nicht ins Panel. **Daraus folgt: keine `combobox` in ein Collapsible-Panel** — sie rendert ihr Dropdown als eigenes Kind und kann es nicht teleportieren; die Optionsliste wäre abgeschnitten und unklickbar (der State sagt trotzdem korrekt „offen"). Braucht eine Sektion eine Auswahl-Combobox, bleibt sie flach.
 - **Kein `x-transition` zusätzlich** aufs Panel (analog `.card`/`cardFadeIn`): zwei konkurrierende Mechaniken auf demselben Element wirken wabbelig. Reduced-Motion braucht keinen Sonderfall — der globale `transition-duration: 0s !important`-Override in [tokens/motion.css](public/css/tokens/motion.css) greift, und Alpines Transition-Helper liest die berechnete Dauer.
 
 **Regeln:**
@@ -842,11 +842,21 @@ Pflicht-Pattern (Wrapper-Div leer lassen, nur Attribute setzen):
 <div x-data="settingField({ k: 'cron.stale_days', type: 'num', num: { step: 1, min: 1, max: 365 } })"></div>
 <div x-data="settingField({ k: 'pdfa.flavour', type: 'select', opts: [{ value: '2b', label: '2b' }, { value: '3b', label: '3b' }] })"></div>
 <div x-data="settingField({ k: 'tts.enabled', type: 'toggle', base: 'tts.enabled' })"></div>
+<!-- Modell-Feld: Freitext + Combobox mit der Modell-Liste des Hosts -->
+<div x-data="settingField({ k: 'embed.model', base: 'embed.model', help: true, models: { target: 'embed', hostKey: 'embed.host' } })"></div>
 ```
 
-**Config:** `k` (Pflicht, Setting-Key); `type` (`text` Default | `url` | `email` | `password` | `num` | `select` | `toggle`); `base` (i18n-Basis unter `admin.settings.` → Label `.label`, Placeholder `.placeholder`, Help `.help` nur bei `help: true`); `label`/`phKey`/`help` (volle i18n-Key-Overrides, wenn die Keys nicht der `.label`/`.placeholder`/`.help`-Konvention folgen); `ph` (Literal-Placeholder-String); `secret` (Masked-Placeholder + Masked-Hint; bei `type: 'password'` implizit); `num` (numInput-Config); `opts` (combobox-Options).
+**Modell-Picker (`models`):** Jedes Feld, in dem eine **Modell-ID** steht, bietet die Liste des zugehörigen Hosts an, statt Abtippen zu verlangen — `models` nennt das Ziel (`'claude'` als Kurzform oder `{ target, hostKey }`). `target` ist eines der in [lib/model-list.js](lib/model-list.js) deklarierten Ziele (`claude`, `ollama`, `openai-compat`, `embed`, `rerank`, `stt`, `tts`, `image`); welcher Endpunkt dahinter liegt (Anthropic `/v1/models`, Ollama `/api/tags`, sonst OpenAI-kompatibles `/v1/models`) weiss ausschliesslich der Server. Drei Eigenschaften sind Absicht:
 
-**Klassen:** `.setting-field` ([public/css/admin/admin-settings.css](public/css/admin/admin-settings.css)) — Grid-Item der Sektion (`min-width: 0` hält die Shrink-Kette; internes Grid stapelt Toggle + Help). Label/Input/Small erben die bestehenden `.admin-settings-section`-Descendant-Styles.
+- **Das Textfeld bleibt die Wahrheit**, die Combobox schreibt nur hinein (`transient`). Ein Modell, das der Host nicht meldet (noch nicht gezogen, Host gerade aus, nicht-konformer Server), bleibt damit eintippbar — die Liste ist eine Hilfe, kein Gate.
+- **Geladen wird erst auf Klick** („Modelle laden"), nicht beim Rendern: das Öffnen der Settings-Karte initialisiert alle Tabs und würde sonst acht fremde Hosts anpingen. Danach teilen sich alle Felder desselben Ziels die Liste (Prozess-Cache + Window-Event `admin-settings:models-loaded`) — die vier Claude-Modellfelder laden gemeinsam. Combobox-Footer „Liste neu laden" erzwingt einen frischen Abruf.
+- **`hostKey`** ist der Form-Key des zugehörigen Hosts. Er wird als Override mitgeschickt, damit ein gerade eingetippter, **noch nicht gespeicherter** Host schon abgefragt werden kann. Der API-Schlüssel kommt immer aus `app_settings` — Secrets verlassen den Server nicht und gehen daher auch nicht durch das Formular zurück.
+
+Ein nicht erreichbarer Host ist kein Fehler: `POST /admin/settings/models` antwortet mit `200 { ok: false, error_code }`, das Feld zeigt den Hinweis unter dem Input und behält das Textfeld.
+
+**Config:** `k` (Pflicht, Setting-Key); `type` (`text` Default | `url` | `email` | `password` | `num` | `select` | `toggle`); `models` (Modell-Picker, siehe unten); `base` (i18n-Basis unter `admin.settings.` → Label `.label`, Placeholder `.placeholder`, Help `.help` nur bei `help: true`); `label`/`phKey`/`help` (volle i18n-Key-Overrides, wenn die Keys nicht der `.label`/`.placeholder`/`.help`-Konvention folgen); `ph` (Literal-Placeholder-String); `secret` (Masked-Placeholder + Masked-Hint; bei `type: 'password'` implizit); `num` (numInput-Config); `opts` (combobox-Options).
+
+**Klassen:** `.setting-field` ([public/css/admin/admin-settings.css](public/css/admin/admin-settings.css)) — Grid-Item der Sektion (`min-width: 0` hält die Shrink-Kette; internes Grid stapelt Toggle + Help). `.setting-field__model-row` legt Input + Lade-Button/Combobox in eine umbrechende Flex-Zeile. Label/Input/Small erben die bestehenden `.admin-settings-section`-Descendant-Styles.
 
 **Beispiele:** [admin-settings-image.html](public/partials/admin-settings-image.html), [admin-settings-auth.html](public/partials/admin-settings-auth.html), [admin-settings-tts.html](public/partials/admin-settings-tts.html).
 

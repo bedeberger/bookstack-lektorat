@@ -93,6 +93,17 @@ export function registerBookSettingsCard() {
     staleCleanupLoading: false,
     staleCleanupMessage: '',
     staleCleanupError: '',
+    // Verwaiste Einträge zusammenführen (Danger-Zone) — siehe book/book-settings/merge.js.
+    // Kandidatenlisten karten-lokal: die Entitäten-Karten sind zu den Bucheinstellungen
+    // exklusiv und laden ihre Kataloge beim Öffnen selbst.
+    mergeCandidatesLoaded: false,
+    mergeLoading: false,
+    mergeBusy: false,
+    mergeMessage: '',
+    mergeError: '',
+    mergeLists: { figur: [], szene: [], ort: [] },
+    mergeSel: { figur: { source: '', target: '' }, szene: { source: '', target: '' }, ort: { source: '', target: '' } },
+    _mergeMsgTimer: null,
     // Blog-Sync (WordPress).
     blogSectionOpen: false,
     blogConnection: null,
@@ -163,6 +174,15 @@ export function registerBookSettingsCard() {
           bookDeleteError: '',
           staleCleanupMessage: '',
           staleCleanupError: '',
+          // Merge-Panel: Kandidaten gehören zum alten Buch → verwerfen, nicht
+          // weiterschleppen. Factory-Reset, darum frische Objekt-Literale.
+          mergeCandidatesLoaded: false,
+          mergeLoading: false,
+          mergeBusy: false,
+          mergeMessage: '',
+          mergeError: '',
+          mergeLists: { figur: [], szene: [], ort: [] },
+          mergeSel: { figur: { source: '', target: '' }, szene: { source: '', target: '' }, ort: { source: '', target: '' } },
           bookAccessList: [],
           bookAccessError: '',
           shareEmail: '',
@@ -208,6 +228,8 @@ export function registerBookSettingsCard() {
           bookDeleteError: '',
           staleCleanupMessage: '',
           staleCleanupError: '',
+          mergeMessage: '',
+          mergeError: '',
           bookAccessError: '',
           shareInviteMessage: '',
           blogMessage: '',
@@ -275,6 +297,7 @@ export function registerBookSettingsCard() {
       if (this._savedAtTimer) { clearTimeout(this._savedAtTimer); this._savedAtTimer = null; }
       if (this._resetMsgTimer) { clearTimeout(this._resetMsgTimer); this._resetMsgTimer = null; }
       if (this._staleMsgTimer) { clearTimeout(this._staleMsgTimer); this._staleMsgTimer = null; }
+      if (this._mergeMsgTimer) { clearTimeout(this._mergeMsgTimer); this._mergeMsgTimer = null; }
       if (this._shareInviteMsgTimer) { clearTimeout(this._shareInviteMsgTimer); this._shareInviteMsgTimer = null; }
       if (this._pubSavedTimer) { clearTimeout(this._pubSavedTimer); this._pubSavedTimer = null; }
       if (this._citationSavedTimer) { clearTimeout(this._citationSavedTimer); this._citationSavedTimer = null; }

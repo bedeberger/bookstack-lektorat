@@ -287,6 +287,7 @@ export const appJobsCoreMethods = {
       if (detail.job?.status === 'done') {
         this.$store.jobs.alleAktualisierenWarnings = Array.isArray(detail.job?.result?.warnings) ? detail.job.result.warnings : [];
         this.$store.jobs.alleAktualisierenCoverage = detail.job?.result?.coverage || null;
+        this.$store.jobs.alleAktualisierenCost = detail.job?.result?.costByPhase || null;
       }
       this.loadLastKomplettRun?.(this.$store.nav.selectedBookId);
     }

@@ -16,18 +16,19 @@
       <div x-show="adminSettingsProviderSubtab === 'claude'" class="admin-settings-subsection">
         <h4 class="admin-settings-subheading"><span x-text="$app.t('admin.settings.claude.standardTitle')"></span></h4>
         <div x-data="settingField({ k: 'ai.claude.api_key', type: 'password', label: 'admin.settings.label.apiKey' })"></div>
-        <div x-data="settingField({ k: 'ai.claude.model', label: 'admin.settings.label.model', ph: 'claude-sonnet-4-6' })"></div>
+        <div x-data="settingField({ k: 'ai.claude.model', label: 'admin.settings.label.model', ph: 'claude-sonnet-4-6', models: 'claude' })"></div>
         <div x-data="settingField({ k: 'ai.claude.context_window', type: 'num', label: 'admin.settings.label.contextWindow', num: { integer: true, min: 8000, max: 2000000 }, help: 'admin.settings.help.contextWindow' })"></div>
         <div x-data="settingField({ k: 'ai.claude.max_tokens_out', type: 'num', label: 'admin.settings.label.maxTokensOut', num: { integer: true, min: 1024, max: 200000 }, help: 'admin.settings.help.maxTokensOut' })"></div>
 
         <h4 class="admin-settings-subheading"><span x-text="$app.t('admin.settings.claude.komplettTitle')"></span></h4>
         <small class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.claude.komplettIntro')"></small>
-        <div x-data="settingField({ k: 'ai.claude.model.komplett', label: 'admin.settings.label.aiClaudeModelKomplett', ph: 'claude-opus-4-8', help: 'admin.settings.help.komplettModel' })"></div>
-        <div x-data="settingField({ k: 'ai.claude.model.komplett.extract', label: 'admin.settings.label.aiClaudeModelKomplettExtract', ph: 'claude-sonnet-5', help: 'admin.settings.help.komplettModelExtract' })"></div>
+        <div x-data="settingField({ k: 'ai.claude.model.komplett', label: 'admin.settings.label.aiClaudeModelKomplett', ph: 'claude-opus-4-8', help: 'admin.settings.help.komplettModel', models: 'claude' })"></div>
+        <div x-data="settingField({ k: 'ai.claude.model.komplett.extract', label: 'admin.settings.label.aiClaudeModelKomplettExtract', ph: 'claude-sonnet-5', help: 'admin.settings.help.komplettModelExtract', models: 'claude' })"></div>
         <div x-data="settingField({ k: 'ai.claude.context_window.komplett', type: 'num', label: 'admin.settings.label.aiClaudeContextWindowKomplett', num: { integer: true, min: 0, max: 2000000 }, help: 'admin.settings.help.komplettContextWindow' })"></div>
         <div x-data="settingField({ k: 'ai.claude.max_tokens_out.komplett', type: 'num', label: 'admin.settings.label.aiClaudeMaxTokensOutKomplett', num: { integer: true, min: 0, max: 200000 }, help: 'admin.settings.help.komplettMaxTokensOut' })"></div>
         <div x-data="settingField({ k: 'ai.claude.timeout_ms.komplett', type: 'num', label: 'admin.settings.label.aiClaudeTimeoutMsKomplett', num: { integer: true, min: 0, max: 3600000 }, help: 'admin.settings.help.komplettTimeoutMs' })"></div>
         <div x-data="settingField({ k: 'ai.claude.effort.komplett', label: 'admin.settings.label.aiClaudeEffortKomplett', ph: 'high', help: 'admin.settings.help.komplettEffort' })"></div>
+        <div x-data="settingField({ k: 'ai.claude.effort.komplett.extract', label: 'admin.settings.label.aiClaudeEffortKomplettExtract', ph: 'medium', help: 'admin.settings.help.komplettEffortExtract' })"></div>
         <div x-data="settingField({ k: 'ai.komplett.completeness_passes', type: 'num', label: 'admin.settings.label.komplettCompletenessPasses', num: { integer: true, min: 0, max: 3 }, help: 'admin.settings.help.completenessPasses' })"></div>
         <div x-data="settingField({ k: 'ai.komplett.coverage_audit_chapters', type: 'num', label: 'admin.settings.label.komplettCoverageAuditChapters', num: { integer: true, min: 0, max: 20 }, help: 'admin.settings.help.coverageAuditChapters' })"></div>
         <div x-data="settingField({ k: 'ai.komplett.coverage_min_score', type: 'num', label: 'admin.settings.label.komplettCoverageMinScore', num: { step: 0.05, min: 0, max: 1 }, help: 'admin.settings.help.coverageMinScore' })"></div>
@@ -42,7 +43,7 @@
 
         <h4 class="admin-settings-subheading"><span x-text="$app.t('admin.settings.claude.bookchatTitle')"></span></h4>
         <small class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.claude.bookchatIntro')"></small>
-        <div x-data="settingField({ k: 'ai.claude.model.bookchat', label: 'admin.settings.label.aiClaudeModelBookchat', ph: 'claude-opus-4-8', help: 'admin.settings.help.bookchatModel' })"></div>
+        <div x-data="settingField({ k: 'ai.claude.model.bookchat', label: 'admin.settings.label.aiClaudeModelBookchat', ph: 'claude-opus-4-8', help: 'admin.settings.help.bookchatModel', models: 'claude' })"></div>
         <div x-data="settingField({ k: 'ai.claude.context_window.bookchat', type: 'num', label: 'admin.settings.label.aiClaudeContextWindowBookchat', num: { integer: true, min: 0, max: 2000000 }, help: 'admin.settings.help.bookchatContextWindow' })"></div>
         <div x-data="settingField({ k: 'ai.claude.max_tokens_out.bookchat', type: 'num', label: 'admin.settings.label.aiClaudeMaxTokensOutBookchat', num: { integer: true, min: 0, max: 200000 }, help: 'admin.settings.help.bookchatMaxTokensOut' })"></div>
         <div x-data="settingField({ k: 'ai.claude.timeout_ms.bookchat', type: 'num', label: 'admin.settings.label.aiClaudeTimeoutMsBookchat', num: { integer: true, min: 0, max: 3600000 }, help: 'admin.settings.help.bookchatTimeoutMs' })"></div>
@@ -56,7 +57,7 @@
 
       <div x-show="adminSettingsProviderSubtab === 'ollama'" class="admin-settings-subsection">
         <div x-data="settingField({ k: 'ai.ollama.host', type: 'url', label: 'admin.settings.label.host', ph: 'http://localhost:11434' })"></div>
-        <div x-data="settingField({ k: 'ai.ollama.model', label: 'admin.settings.label.model' })"></div>
+        <div x-data="settingField({ k: 'ai.ollama.model', label: 'admin.settings.label.model', models: { target: 'ollama', hostKey: 'ai.ollama.host' } })"></div>
         <div x-data="settingField({ k: 'ai.ollama.temperature', type: 'num', label: 'admin.settings.label.temperature', num: { step: 0.01, decimals: 2, min: 0, max: 2 } })"></div>
         <div x-data="settingField({ k: 'ai.ollama.context_window', type: 'num', label: 'admin.settings.label.contextWindow', num: { integer: true, min: 2048, max: 2000000 }, help: 'admin.settings.help.contextWindow' })"></div>
         <div x-data="settingField({ k: 'ai.ollama.max_tokens_out', type: 'num', label: 'admin.settings.label.maxTokensOut', num: { integer: true, min: 512, max: 200000 }, help: 'admin.settings.help.maxTokensOut' })"></div>
@@ -66,7 +67,7 @@
 
       <div x-show="adminSettingsProviderSubtab === 'openai-compat'" class="admin-settings-subsection">
         <div x-data="settingField({ k: 'ai.openai-compat.host', type: 'url', label: 'admin.settings.label.host', ph: 'http://localhost:8080' })"></div>
-        <div x-data="settingField({ k: 'ai.openai-compat.model', label: 'admin.settings.label.model' })"></div>
+        <div x-data="settingField({ k: 'ai.openai-compat.model', label: 'admin.settings.label.model', models: { target: 'openai-compat', hostKey: 'ai.openai-compat.host' } })"></div>
         <div x-data="settingField({ k: 'ai.openai-compat.api_key', type: 'password', label: 'admin.settings.label.apiKey', help: 'admin.settings.help.openaiCompatApiKey' })"></div>
         <div x-data="settingField({ k: 'ai.openai-compat.temperature', type: 'num', label: 'admin.settings.label.temperature', num: { step: 0.01, decimals: 2, min: 0, max: 2 } })"></div>
         <div x-data="settingField({ k: 'ai.openai-compat.context_window', type: 'num', label: 'admin.settings.label.contextWindow', num: { integer: true, min: 2048, max: 2000000 }, help: 'admin.settings.help.contextWindow' })"></div>

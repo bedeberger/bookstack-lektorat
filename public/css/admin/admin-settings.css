@@ -84,6 +84,32 @@
   min-width: 0;
 }
 
+/* Modell-Felder: Freitext-Input + Lade-Button bzw. Modell-Combobox in einer
+   Zeile. Der Input traegt das Wachstum, der Picker bleibt kompakt; auf schmalen
+   Karten bricht die Zeile um (`flex-wrap`), statt den Input zu quetschen.
+   Keine einseitige Margin an den Kindern — `align-items: center` (siehe
+   Mittellinien-Invariante in DESIGN.md), Abstand kommt aus `gap`. */
+.setting-field__model-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.setting-field__model-row > input {
+  flex: 1 1 12rem;
+}
+
+.setting-field__model-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.setting-field__model-pick {
+  flex: 0 0 auto;
+}
+
 .setting-field__key {
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);

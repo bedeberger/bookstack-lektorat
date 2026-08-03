@@ -45,6 +45,9 @@ export function registerJobsStore() {
     alleAktualisierenPassMode: null,
     alleAktualisierenWarnings: [],
     alleAktualisierenCoverage: null,
+    // Kosten-Aufschluesselung des letzten Laufs (job.result.costByPhase): zeigt neben
+    // dem Coverage-Score, WO die Kosten entstanden sind (Extraktions-Tier vs. Rest).
+    alleAktualisierenCost: null,
     jobToast: null,
     _jobToastTimer: null,
     _toastedJobIds: new Set(),

@@ -1,6 +1,7 @@
 const express = require('express');
 const { db, saveFigurenToDb, saveZeitstrahlEvents, getChapterFigures, getBookSettings } = require('../db/schema');
 const { ensureTree } = require('../db/book-order');
+const { mergeFigures, mergeScenes } = require('../db/entity-merge');
 const { recomputeBookFigureMentions } = require('../lib/page-index');
 const { toIntId, inClause } = require('../lib/validate');
 const { aclParamGuard } = require('../lib/acl');
@@ -556,6 +557,72 @@ router.put('/:book_id', jsonBody, (req, res) => {
       logger.warn(`Figuren-Mentions-Neuberechnung für Buch ${bookId} fehlgeschlagen: ${e.message}`);
     }
   });
+});
+
+// Zwei Figuren zusammenführen: alle Referenzen der Quelle wandern aufs Ziel, die
+// Quelle wird gelöscht (Merge-Kern db/entity-merge.js). Gedacht für verwaiste
+// («nicht mehr im Text») Einträge, deren Verknüpfungen beim blossen Löschen
+// verloren gingen — bewusst OHNE stale-Gate, weil der Reconcile dieselbe Figur
+// gelegentlich auch als zwei aktive Einträge auseinanderhält.
+// `source`/`target` sind `figures.fig_id` (TEXT) — dieselbe Kennung, die GET als
+// `id` ausliefert und die der Einzel-Delete-Handler nimmt.
+router.post('/:book_id/merge', jsonBody, (req, res) => {
+  const bookId = toIntId(req.params.book_id);
+  const src = String(req.body?.source || '').trim();
+  const tgt = String(req.body?.target || '').trim();
+  if (!bookId || !src || !tgt) return res.status(400).json({ error_code: 'INVALID_ID' });
+  if (src === tgt) return res.status(409).json({ error_code: 'SAME_ENTITY' });
+  const userEmail = req.session?.user?.email || null;
+  const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
+  const emailVal = userEmail ? [userEmail] : [];
+  const get = db.prepare(`SELECT id FROM figures WHERE fig_id = ? AND book_id = ? AND ${emailCond}`);
+  const sRow = get.get(src, bookId, ...emailVal);
+  const tRow = get.get(tgt, bookId, ...emailVal);
+  if (!sRow) return res.status(404).json({ error_code: 'NOT_FOUND', side: 'source' });
+  if (!tRow) return res.status(404).json({ error_code: 'NOT_FOUND', side: 'target' });
+  if (sRow.id === tRow.id) return res.status(409).json({ error_code: 'SAME_ENTITY' });
+
+  const result = mergeFigures(bookId, userEmail, sRow.id, tRow.id);
+  // Index-Pflege wie beim Einzel-Delete: Quelle raus, Ziel neu schreiben (der
+  // Feld-Backfill kann seinen FTS-Text verändert haben).
+  searchIndex.remove('figure', sRow.id);
+  semanticChunks.remove('figure', sRow.id);
+  searchIndex.upsertFigure(tRow.id);
+  logger.info(`Figuren-Merge: «${result.sourceName}» → «${result.targetName}» (Buch ${bookId}).`);
+  res.json({ ok: true, ...result });
+  // page_figure_mentions ist abgeleitet: die Summe aus dem Merge hält den Stand
+  // brauchbar, korrekt wird er erst mit dem Neu-Scan (der auch den kurzname des
+  // Ziels berücksichtigt). Wie im PUT-Pfad im Hintergrund.
+  setImmediate(() => {
+    try {
+      recomputeBookFigureMentions(bookId, userEmail);
+    } catch (e) {
+      logger.warn(`Figuren-Mentions nach Merge (Buch ${bookId}) fehlgeschlagen: ${e.message}`);
+    }
+  });
+});
+
+// Zwei Szenen zusammenführen (Pendant zum Figuren-Merge). `source_id`/`target_id`
+// sind INTEGER `figure_scenes.id` — Szenen führen ihre PK öffentlich.
+router.post('/scenes/:book_id/merge', jsonBody, (req, res) => {
+  const bookId = toIntId(req.params.book_id);
+  const srcId = toIntId(req.body?.source_id);
+  const tgtId = toIntId(req.body?.target_id);
+  if (!bookId || !srcId || !tgtId) return res.status(400).json({ error_code: 'INVALID_ID' });
+  if (srcId === tgtId) return res.status(409).json({ error_code: 'SAME_ENTITY' });
+  const userEmail = req.session?.user?.email || null;
+  const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
+  const emailVal = userEmail ? [userEmail] : [];
+  const get = db.prepare(`SELECT id FROM figure_scenes WHERE id = ? AND book_id = ? AND ${emailCond}`);
+  if (!get.get(srcId, bookId, ...emailVal)) return res.status(404).json({ error_code: 'NOT_FOUND', side: 'source' });
+  if (!get.get(tgtId, bookId, ...emailVal)) return res.status(404).json({ error_code: 'NOT_FOUND', side: 'target' });
+
+  const result = mergeScenes(bookId, userEmail, srcId, tgtId);
+  searchIndex.remove('scene', srcId);
+  semanticChunks.remove('scene', srcId);
+  searchIndex.upsertScene(tgtId);
+  logger.info(`Szenen-Merge: «${result.sourceName}» → «${result.targetName}» (Buch ${bookId}).`);
+  res.json({ ok: true, ...result });
 });
 
 // Bulk-Cleanup: alle STALE Szenen eines Buchs auf einmal löschen (Danger-Zone). Pendant

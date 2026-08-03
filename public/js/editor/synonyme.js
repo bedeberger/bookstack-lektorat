@@ -2,6 +2,7 @@ import { fetchJson } from '../utils.js';
 import { WORD_RE, attachReflow, positionPopupNearRect, rangeForWordAtClientPoint } from './utils.js';
 import { startPoll } from '../cards/job-helpers.js';
 import { EVT } from '../events.js';
+import { applySpellcheckReplacement } from './shared/apply-replacement.js';
 
 // Synonym-Ermittler für den contenteditable-Editor.
 // Cmd/Ctrl+Shift+S auf markiertem Wort (oder Cursor in Wort) → Custom-Menü →
@@ -320,11 +321,11 @@ export const synonymCardMethods = {
     const editEl = app?._getEditEl?.();
     if (!editEl || !editEl.contains(range.startContainer)) { this.closeSynonymPicker(); return; }
     try {
-      range.deleteContents();
-      range.insertNode(document.createTextNode(entry.wort));
-      // Ersatzwort nach Einfügung selektieren, damit der User sieht, was passiert ist
-      const sel = window.getSelection();
-      sel.removeAllRanges();
+      // Range-Mutation + Caret-Restore + bubbelndes `input` über die geteilte
+      // SSoT — derselbe Weg, den Spellcheck-Apply und der Mac-Synonym-Controller
+      // nehmen. Caret landet am Ende des eingefügten Wortes (nicht hinter dem
+      // Block; Begründung im Header von shared/apply-replacement.js).
+      if (!applySpellcheckReplacement(range, entry.wort)) { this.closeSynonymPicker(); return; }
       app?._markEditDirty?.();
     } catch (e) {
       console.error('[applySynonym]', e);

@@ -129,6 +129,47 @@
   color: var(--color-warn-text);
 }
 
+/* Kosten-Aufschlüsselung des letzten Laufs (job.result.costByPhase). Steht direkt
+   unter dem Coverage-Score, weil beide zusammen gelesen werden müssen: billiger
+   allein ist kein Gewinn, wenn der Recall mitfällt. Gedämpft — Diagnose, kein Alarm. */
+.komplett-cost {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+  margin-top: var(--space-2xs);
+}
+.komplett-cost-total {
+  font-variant-numeric: tabular-nums;
+}
+.komplett-cost-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.komplett-cost-item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding-left: 0.75rem;
+}
+.komplett-cost-usd {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Teil-Lauf-Schalter (Kontinuität/Erzählprofil abwählen). Wie die Aktionen darunter
+   bewusst de-prominent: der vollständige Lauf bleibt der Default. */
+.komplett-status-phases {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 0.5px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+.komplett-status-phases-title {
+  font-size: var(--font-size-mini);
+  color: var(--color-muted);
+}
+
 /* Aktionen am Panel-Fuss (z.B. Delta-Cache leeren) — bewusst de-prominent,
    nur über das ⋯-Menü erreichbar statt als nackter Header-Button. */
 .komplett-status-actions {

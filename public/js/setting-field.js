@@ -23,6 +23,9 @@
 //   <div x-data="settingField({ k: 'pdfa.flavour', type: 'select', opts: [{ value:'2b', label:'2b' }, { value:'3b', label:'3b' }] })"></div>
 //   <div x-data="settingField({ k: 'tts.enabled', type: 'toggle', base: 'tts.enabled' })"></div>
 //
+//   <!-- Modell-Feld: Freitext + Combobox mit der Modell-Liste des Hosts -->
+//   <div x-data="settingField({ k: 'embed.model', base: 'embed.model', help: true, models: { target: 'embed', hostKey: 'embed.host' } })"></div>
+//
 // Config-Optionen:
 //   k       (Pflicht) Setting-Key → Form/Map-Bindung.
 //   type    'text' (Default) | 'url' | 'email' | 'password' | 'num' | 'select' | 'toggle'
@@ -35,11 +38,24 @@
 //   secret  true → Masked-Placeholder + Masked-Hint (bei type 'password' implizit).
 //   num     numInput-Config (type 'num').
 //   opts    combobox-Options `[{ value, label }]` (type 'select').
+//   models  Modell-Picker: Target-String (`'claude'`) oder `{ target, hostKey }`.
+//           `hostKey` ist der Form-Key des zugehoerigen Hosts — damit fragt der
+//           Picker den gerade eingetippten, noch nicht gespeicherten Host ab.
+//           Das Textfeld bleibt die Wahrheit; die Combobox schreibt nur hinein
+//           (Modelle, die der Host nicht meldet, bleiben tippbar).
 
 import { tRaw } from './i18n.js';
 
+// Prozessweiter Cache der geladenen Listen (Target → [{ id, label }]). Mehrere
+// Felder teilen sich dasselbe Target (vier Claude-Modellfelder) — sie sollen
+// den Host nicht je einzeln abfragen. Zusaetzlich meldet ein Window-Event die
+// frische Liste an bereits gemountete Geschwister-Felder.
+const _modelCache = new Map();
+const MODELS_EVENT = 'admin-settings:models-loaded';
+
 export function settingFieldData(cfg = {}) {
   const type = cfg.type || 'text';
+  const models = typeof cfg.models === 'string' ? { target: cfg.models } : (cfg.models || null);
   return {
     _k: cfg.k,
     _type: type,
@@ -52,9 +68,20 @@ export function settingFieldData(cfg = {}) {
     _num: cfg.num || null,
     _opts: cfg.opts || null,
 
+    // ── Modell-Picker (cfg.models) ────────────────────────────────────────
+    _modelsTarget: models?.target || null,
+    _modelsHostKey: models?.hostKey || null,
+    _models: [],
+    _modelsLoading: false,
+    _modelsLoaded: false,
+    _modelsErr: '',
+    _modelPick: null,   // transiente Combobox-Bindung (Auswahl → Textfeld)
+    _liveHost: '',      // via x-effect aus adminSettingsForm[hostKey] gespiegelt
+    _abortCtrl: null,
+
     // Touch die reaktive Locale, damit Alpine bei Sprachwechsel re-evaluiert;
     // fällt via tRaw auf die globale _locale zurück, wenn kein Store da ist.
-    _t(key) { void window.Alpine?.store('shell')?.uiLocale; return tRaw(key); },
+    _t(key, params) { void window.Alpine?.store('shell')?.uiLocale; return tRaw(key, params); },
 
     get labelText() {
       if (this._labelKey) return this._t(this._labelKey);
@@ -74,12 +101,72 @@ export function settingFieldData(cfg = {}) {
       return '';
     },
 
+    get modelOptions() {
+      return this._models.map(m => ({ value: m.id, label: m.label || m.id }));
+    },
+    get modelPickLabel() { return this._t('admin.settings.models.pick'); },
+    get modelReloadLabel() { return this._t('admin.settings.models.reload'); },
+    get modelLoadLabel() {
+      return this._t(this._modelsLoading ? 'admin.settings.models.loading' : 'admin.settings.models.load');
+    },
+
+    _applyModels(list, { fresh = false } = {}) {
+      this._models = list;
+      this._modelsLoaded = list.length > 0;
+      if (fresh && !list.length) this._modelsErr = this._t('admin.settings.models.empty');
+    },
+
+    // Holt die Modell-Liste des Hosts. `force` umgeht den geteilten Cache
+    // (Combobox-Footer „Liste neu laden" — nach einem Host-Wechsel oder einem
+    // frisch gezogenen Modell).
+    async loadModels(force = false) {
+      const target = this._modelsTarget;
+      if (!target || this._modelsLoading) return;
+      if (!force && _modelCache.has(target)) { this._applyModels(_modelCache.get(target)); return; }
+      this._modelsLoading = true;
+      this._modelsErr = '';
+      try {
+        const r = await fetch('/admin/settings/models', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ target, host: this._liveHost || '' }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) {
+          this._modelsErr = this._t('admin.settings.models.error', { err: j.error_code || `HTTP ${r.status}` });
+          return;
+        }
+        const list = Array.isArray(j.models) ? j.models : [];
+        _modelCache.set(target, list);
+        this._applyModels(list, { fresh: true });
+        // Geschwister-Felder desselben Targets mitziehen (4x Claude-Modell).
+        window.dispatchEvent(new CustomEvent(MODELS_EVENT, { detail: { target, models: list } }));
+      } catch (e) {
+        this._modelsErr = this._t('admin.settings.models.error', { err: e.message });
+      } finally {
+        this._modelsLoading = false;
+      }
+    },
+
     init() {
       this.$el.classList.add('setting-field');
       this.$el.innerHTML = this._render();
       // Frisch gesetztes Markup explizit initialisieren (nested numInput/
       // combobox/toggle + eigene x-model-Bindungen), analog combobox/toggle.
       window.Alpine.initTree(this.$el);
+      if (this._modelsTarget) {
+        if (_modelCache.has(this._modelsTarget)) this._applyModels(_modelCache.get(this._modelsTarget));
+        this._abortCtrl = new AbortController();
+        window.addEventListener(MODELS_EVENT, (e) => {
+          if (e.detail?.target === this._modelsTarget) this._applyModels(e.detail.models || []);
+        }, { signal: this._abortCtrl.signal });
+      }
+    },
+
+    destroy() {
+      this._abortCtrl?.abort();
+      this._abortCtrl = null;
     },
 
     _help_small() {
@@ -124,6 +211,31 @@ export function settingFieldData(cfg = {}) {
       } else {
         // text | url | email | password
         control = `<input type="${this._type}" x-model="${mkey}" :placeholder="placeholderText" autocomplete="off">`;
+      }
+
+      // Modell-Picker: Textfeld bleibt die Wahrheit, die Combobox schreibt nur
+      // hinein (`transient` → sie behaelt keinen eigenen Wert). Die Liste wird
+      // erst auf Klick geholt: ein Settings-Tab-Aufruf soll nicht acht fremde
+      // Hosts anpingen. Host-Spiegel via x-effect, weil der Form-Scope nur
+      // ueber die Alpine-Scope-Kette (Template) zuverlaessig erreichbar ist.
+      if (this._modelsTarget) {
+        const hostMirror = this._modelsHostKey
+          ? ` x-effect="_liveHost = adminSettingsForm['${this._modelsHostKey}'] ?? ''"`
+          : '';
+        control = [
+          `<div class="setting-field__model-row"${hostMirror}>`,
+          `  ${control}`,
+          '  <button type="button" class="setting-field__model-btn" x-show="!_modelsLoaded"',
+          '          :disabled="_modelsLoading" @click="loadModels()" x-text="modelLoadLabel"></button>',
+          '  <div class="setting-field__model-pick" x-show="_modelsLoaded" x-cloak',
+          '       x-data="combobox({ placeholder: () => modelPickLabel, transient: true,',
+          '                          footer: { label: () => modelReloadLabel, action: () => loadModels(true) } })"',
+          '       x-modelable="value" x-model="_modelPick"',
+          '       x-effect="options = modelOptions"',
+          `       @combobox-change="${mkey} = $event.detail"></div>`,
+          '</div>',
+          '<small x-show="_modelsErr" x-cloak class="muted-msg muted-msg--sm" x-text="_modelsErr"></small>',
+        ].join('\n');
       }
 
       const maskedSmall = this._secret

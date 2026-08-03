@@ -40,6 +40,10 @@
         <p class="card-form-error" x-show="staleCleanupError" x-text="staleCleanupError"></p>
       </div>
 
+      <!-- Gegenstück zum Aufräumen: verwaisten Eintrag in einen bestehenden
+           überführen, statt seine Verknüpfungen mit ihm zu verlieren. -->
+      <!-- @include book-settings-merge -->
+
       <div class="book-settings-danger-section">
         <div class="book-settings-danger-row">
           <div class="book-settings-danger-text" x-text="$app.t('book.settings.deleteBookText')"></div>

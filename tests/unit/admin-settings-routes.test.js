@@ -156,6 +156,32 @@ test('PUT /admin/settings/:key mit ungueltigem Enum → 400', async () => {
   assert.equal(r.body.error_code, 'INVALID_VALUE');
 });
 
+test('POST /admin/settings/models als User → 403', async () => {
+  const r = await _req('POST', '/admin/settings/models', {
+    user: 'bob@example.com', body: { target: 'openai-compat' },
+  });
+  assert.equal(r.status, 403);
+});
+
+test('POST /admin/settings/models mit unbekanntem Target → 400', async () => {
+  const r = await _req('POST', '/admin/settings/models', {
+    user: 'alice@example.com', role: 'admin', body: { target: 'nope' },
+  });
+  assert.equal(r.status, 400);
+  assert.equal(r.body.error_code, 'UNKNOWN_TARGET');
+});
+
+test('POST /admin/settings/models ohne Host → 200 mit ok:false (kein 500)', async () => {
+  appSettings.set('image.host', '', { updatedBy: 'test' });
+  const r = await _req('POST', '/admin/settings/models', {
+    user: 'alice@example.com', role: 'admin', body: { target: 'image' },
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ok, false);
+  assert.equal(r.body.error_code, 'NO_HOST');
+  assert.deepEqual(r.body.models, []);
+});
+
 test('GET /admin/settings/:key (encrypted) → maskiert', async () => {
   appSettings.set('ai.claude.api_key', 'sk-ant-secret', { updatedBy: 'test' });
   const r = await _req('GET', '/admin/settings/ai.claude.api_key', {

@@ -1,9 +1,14 @@
 'use strict';
-const { callAI, parseJSON, CHARS_PER_TOKEN, getContextConfigFor, resolveProvider } = require('../../../lib/ai');
+const {
+  callAI, parseJSON, CHARS_PER_TOKEN, getContextConfigFor, resolveProvider,
+  normalizeTier, _resolveClaudeModel,
+} = require('../../../lib/ai');
+const { costUsd } = require('../../../lib/pricing');
+const logger = require('../../../logger');
 const appSettings = require('../../../lib/app-settings');
 const { stripDiagramBlocks } = require('../../../lib/html-text');
 const { jobAbortControllers } = require('./state');
-const { updateJob, i18nError } = require('./jobs');
+const { updateJob, i18nError, fmtTok } = require('./jobs');
 
 // Transient-Klassifikator: Claude-Streams droppen gelegentlich mid-flight als
 // 'terminated' (Undici-Socket-Reset) oder werden vom Hard-Timeout (`AI_TIMEOUT`)
@@ -215,6 +220,81 @@ function toSystemBlocks(blocksOrString, defaultTtl) {
 // in der Praxis bei 200 ms nicht sichtbar.
 const PROGRESS_THROTTLE_MS = 200;
 
+// Kosten-Aufschlüsselung pro Call-Klasse.
+//
+// WARUM: das ai_cost_ledger schreibt EINE Zeile pro Job (bewusst — siehe
+// db/cost-ledger.js). Damit sieht man, dass ein Komplettanalyse-Lauf teuer war, aber
+// nicht WO: Extraktion, Konsolidierung, Kontinuität und Erzählprofil laufen alle in
+// demselben Job. Ohne diese Zuordnung ist jede Optimierung Raten — und der Effekt
+// einer Änderung (z.B. Extraktion auf ein günstigeres Tier) nicht nachweisbar.
+//
+// Aggregiert wird in `tok.byPhase` (in-memory, pro Job), NICHT als zweite
+// Ledger-Zeile: zwei Schreibpfade würden die Kosten doppelt zählen.
+// Der Bucket kommt aus `tier.label`; Calls ohne Label landen unter 'other'.
+//
+// Läuft VOR dem truncated-Guard — bewusst: Anthropic berechnet die Tokens eines
+// abgebrochenen Calls trotzdem, sie gehören also in die Aufschlüsselung. Deshalb
+// darf die Buchhaltung aber auch NIEMALS werfen: ein Fehler hier würde die
+// eigentliche Job-Exception (z.B. job.error.aiTruncated) verschlucken und durch
+// eine unverständliche ersetzen. Gleiche Regel wie in db/cost-ledger.js.
+function _recordCallCost(tok, tier, provider, m) {
+  try { _recordCallCostUnsafe(tok, tier, provider, m); }
+  catch (e) { logger.warn(`Kosten-Aufschluesselung uebersprungen: ${e.message}`); }
+}
+
+function _recordCallCostUnsafe(tok, tier, provider, m) {
+  if (!tok) return;
+  const { model: tierModel, label } = normalizeTier(tier);
+  const model = provider === 'claude' ? _resolveClaudeModel(tierModel) : null;
+  const usd = costUsd({
+    provider, model,
+    tokensIn: m.tokensIn, tokensOut: m.tokensOut,
+    cacheReadIn: m.cacheReadIn, cacheCreationIn: m.cacheCreationIn,
+    cacheCreation1hIn: m.cacheCreation1hIn,
+  });
+  const bucket = label || 'other';
+  tok.byPhase = tok.byPhase || {};
+  const e = tok.byPhase[bucket] || (tok.byPhase[bucket] = {
+    calls: 0, tokensIn: 0, tokensOut: 0, cacheReadIn: 0, cacheCreationIn: 0, usd: 0, ms: 0, models: [],
+  });
+  e.calls += 1;
+  e.tokensIn += m.tokensIn || 0;
+  e.tokensOut += m.tokensOut || 0;
+  e.cacheReadIn += m.cacheReadIn || 0;
+  e.cacheCreationIn += m.cacheCreationIn || 0;
+  e.usd += usd;
+  e.ms += m.genDurationMs || 0;
+  if (model && !e.models.includes(model)) e.models.push(model);
+}
+
+/** Aufbereitete Kosten-Aufschlüsselung fürs Job-Result: teuerster Bucket zuerst,
+ *  USD auf Cent gerundet (rohe Floats blähen das Result-JSON auf). Gibt null,
+ *  wenn kein Call ein Label trug (lokale Provider, Jobs ohne Tiering). */
+function summarizeCostByPhase(tok) {
+  const src = tok?.byPhase;
+  if (!src || !Object.keys(src).length) return null;
+  const phases = Object.entries(src)
+    .map(([phase, e]) => ({
+      phase, calls: e.calls,
+      tokensIn: e.tokensIn, tokensOut: e.tokensOut,
+      cacheReadIn: e.cacheReadIn, cacheCreationIn: e.cacheCreationIn,
+      usd: Math.round(e.usd * 100) / 100,
+      seconds: Math.round(e.ms / 1000),
+      models: e.models.slice(),
+    }))
+    .sort((a, b) => b.usd - a.usd);
+  const totalUsd = Math.round(phases.reduce((s, p) => s + p.usd, 0) * 100) / 100;
+  return { phases, totalUsd };
+}
+
+/** Einzeiler für das Job-Log: `extract 21 calls 512k↓ $12.40 (claude-sonnet-5) | …`. */
+function formatCostByPhase(summary) {
+  if (!summary) return '';
+  return summary.phases
+    .map(p => `${p.phase} ${p.calls}c ${fmtTok(p.tokensOut)}↓ $${p.usd.toFixed(2)}${p.models.length ? ` (${p.models.join('+')})` : ''}`)
+    .join(' | ');
+}
+
 // Hilfsfunktion: callAI aufrufen, Token-Zähler akkumulieren, Job aktualisieren.
 // fromPct/toPct: optionaler Fortschrittsbereich – während des Streamings wird der Balken
 // von fromPct auf toPct gefüllt (basierend auf akkumulierten Output-Zeichen vs. dynExpectedChars).
@@ -222,7 +302,10 @@ const PROGRESS_THROTTLE_MS = 200;
 //   Sobald tokIn bekannt ist (Claude: message_start; Ollama: erster Chunk), wird dynExpectedChars
 //   auf max(staticFallback, tokIn * 4 * outputRatio) gesetzt.
 // maxTokens: explizites Token-Limit (überschreibt die expectedChars-Formel). null = globalMax.
-async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars = 3000, outputRatio = 0.2, maxTokens = null, provider = undefined, jsonSchema = null, modelOverride = undefined) {
+// tier: Per-Call-Claude-Tier — nackter Modellname ODER `{ model, effort, label }`
+//   (normalizeTier in lib/ai/shared.js). `label` klassifiziert den Call für die
+//   Kosten-Aufschlüsselung in `tok.byPhase` → job.result.costByPhase.
+async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars = 3000, outputRatio = 0.2, maxTokens = null, provider = undefined, jsonSchema = null, tier = undefined) {
   let dynExpectedChars = expectedChars;
   let calibrated = false;
   // Eindeutige ID für diesen Call – wird in tok.inflight eingetragen wenn vorhanden
@@ -287,7 +370,7 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
     ? Math.min(maxTokens, providerMaxOut)
     : providerMaxOut;
   const signal = jobAbortControllers.get(jobId)?.signal;
-  const { text, truncated, tokensIn, tokensOut, cacheReadIn = 0, cacheCreationIn = 0, cacheCreation1hIn = 0, genDurationMs } = await callAI(prompt, system, onProgress, maxTokensOverride, signal, effProvider, jsonSchema, modelOverride);
+  const { text, truncated, tokensIn, tokensOut, cacheReadIn = 0, cacheCreationIn = 0, cacheCreation1hIn = 0, genDurationMs } = await callAI(prompt, system, onProgress, maxTokensOverride, signal, effProvider, jsonSchema, tier);
   tok.inflight?.delete(callId);
   tok.in += tokensIn;
   tok.out += tokensOut;
@@ -295,6 +378,9 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
   tok.cacheCreate = (tok.cacheCreate || 0) + cacheCreationIn;
   tok.cacheCreate1h = (tok.cacheCreate1h || 0) + cacheCreation1hIn;
   if (genDurationMs != null) tok.ms += genDurationMs;
+  _recordCallCost(tok, tier, effProvider, {
+    tokensIn, tokensOut, cacheReadIn, cacheCreationIn, cacheCreation1hIn, genDurationMs,
+  });
   const liveTps = tok.ms > 0 ? tok.out / (tok.ms / 1000) : null;
   const finalUpdates = {
     tokensIn: tok.in, tokensOut: tok.out,
@@ -322,4 +408,5 @@ module.exports = {
   PROGRESS_THROTTLE_MS,
   aiCall,
   toSystemBlocks,
+  summarizeCostByPhase, formatCostByPhase,
 };

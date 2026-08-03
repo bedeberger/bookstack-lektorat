@@ -7,6 +7,7 @@
 //   PUT   /admin/settings/:key      — Update (Sentinel "__unchanged__" fuer
 //                                    encrypted ohne Re-Eingabe)
 //   DELETE /admin/settings/:key     — Reset auf Default
+//   POST  /admin/settings/models   — Modell-Liste eines konfigurierten Hosts
 //   POST  /admin/settings/test-provider — 1-Token-Probecall (Latenz + ok)
 //   POST  /admin/settings/test-oauth    — Discovery-Doc-Fetch (Format-Check)
 //
@@ -17,6 +18,7 @@
 const express = require('express');
 const appSettings = require('../lib/app-settings');
 const { requireAdmin } = require('../lib/admin-mw');
+const modelList = require('../lib/model-list');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -303,6 +305,25 @@ router.post('/test-tiles', async (req, res) => {
   } catch (e) {
     return res.json({ ok: false, error: e.name === 'AbortError' ? 'TIMEOUT' : e.message, latency_ms: Date.now() - t0 });
   }
+});
+
+// POST /admin/settings/models { target, host? } — Modell-Liste des zum Target
+// gehoerenden Hosts (Anthropic /v1/models, Ollama /api/tags, sonst
+// OpenAI-kompatibles /v1/models). Fuellt die Modell-Combobox in den
+// Settings-Feldern; `host` uebersteuert den gespeicherten Wert, damit ein
+// gerade eingetippter, noch nicht gespeicherter Host schon abgefragt werden
+// kann (Schluessel kommt immer aus app_settings — Secrets verlassen den
+// Server nie und kommen daher auch nicht zurueck).
+// Unerreichbarer Host ist kein Fehler der Route: 200 mit ok:false.
+router.post('/models', express.json(), async (req, res) => {
+  const target = String(req.body?.target || '');
+  if (!modelList.isKnownTarget(target)) {
+    return res.status(400).json({ error_code: 'UNKNOWN_TARGET', target });
+  }
+  const host = String(req.body?.host || '').slice(0, 500);
+  const t0 = Date.now();
+  const r = await modelList.listModels(target, { host });
+  return res.json({ ...r, target, latency_ms: Date.now() - t0 });
 });
 
 // POST /admin/settings/smtp/test-send { to? } — sendet ein 'test'-Template

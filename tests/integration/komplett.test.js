@@ -1430,3 +1430,68 @@ test('Komplettanalyse #2: Coverage-Feedback zieht eine vom Audit gemeldete fehle
     appSettings.set('ai.komplett.coverage_audit_chapters', 0);
   }
 });
+
+// ── Teil-Lauf: read-only Endphasen abwählbar ─────────────────────────────────
+// Kontinuitätsprüfung (P8) und Erzählprofil sitzen am ENDE der seriellen Kette. Wer
+// nach einer Kapitel-Änderung nur den Katalog auffrischt, spart durch das Abwählen
+// Wartezeit und Geld, ohne an der Extraktionsqualität zu drehen.
+test('Komplettanalyse Teil-Lauf: skipContinuity überspringt P8 und friert den Konsolidierungs-Checkpoint NICHT ein', async () => {
+  const BOOK_ID = 131;
+  const email = 'tester@test.dev';
+  seedTinyBook(BOOK_ID);
+
+  ctx.mockAi.on((e) => e.schemaKeys.includes('figuren') && !e.schemaKeys.includes('assignments') && !e.schemaKeys.includes('orte'), figurenStammResponse());
+  ctx.mockAi.on((e) => e.schemaKeys.includes('orte') && e.schemaKeys.includes('szenen') && !e.schemaKeys.includes('figuren'), ortePassResponse());
+  ctx.mockAi.on((e) => e.schemaKeys.length === 1 && e.schemaKeys.includes('fakten'), faktenPassResponse());
+  ctx.mockAi.on((e) => e.schemaKeys.length === 1 && e.schemaKeys.includes('assignments'), eventsPassResponse());
+  ctx.mockAi.on((e) => e.schemaKeys.length === 1 && e.schemaKeys.includes('beziehungen'), beziehungenResponse());
+  ctx.mockAi.on((e) => e.schemaKeys.includes('zusammenfassung') && e.schemaKeys.includes('probleme'), kontinuitaetResponse());
+
+  const jobId = ctx.shared.createJob('komplett-analyse', BOOK_ID, email, 'job.label.komplett');
+  ctx.shared.enqueueJob(jobId, () =>
+    ctx.komplett.runKomplettAnalyseJob(jobId, BOOK_ID, 'Buch', email, { id: 'tok', pw: 'pw' }, 'claude',
+      { skipContinuity: true }));
+  const job = await waitForJob(ctx.shared, jobId, { timeoutMs: 8000 });
+
+  assert.equal(job.status, 'done', `expected done, got ${job.status}: ${job.error || ''}`);
+  assert.equal(job.progress, 100, 'die Bar muss trotz übersprungener Phase auf 100 kommen');
+  // Der Katalog ist vollständig — nur das Urteil fehlt.
+  assert.ok(job.result.figCount >= 2, `Katalog trotz Teil-Lauf gefüllt (fig=${job.result.figCount})`);
+
+  // KEIN Kontinuitäts-Call gelaufen.
+  const kontCalls = ctx.mockAi.log.filter(e => e.schemaKeys?.includes('probleme')).length;
+  assert.equal(kontCalls, 0, 'P8 darf bei skipContinuity gar nicht aufrufen');
+  // Und kein Check persistiert (das vorherige Ergebnis bleibt, hier: keins).
+  const checks = ctx.dbSchema.db.prepare('SELECT COUNT(*) n FROM continuity_checks WHERE book_id = ?').get(BOOK_ID);
+  assert.equal(checks.n, 0, 'skipContinuity darf keinen Kontinuitäts-Check schreiben');
+
+  // DIE zentrale Invariante: der Konsolidierungs-Marker behauptet „P2–P8 erledigt".
+  // Nach einem Teil-Lauf stimmt das nicht — sonst bliebe der nächste Voll-Lauf am
+  // Short-Circuit hängen und würde P8 nie nachholen.
+  const marker = ctx.dbSchema.loadCheckpoint('komplett-consolidation', BOOK_ID, email);
+  assert.equal(marker, null, 'Teil-Lauf darf keinen Konsolidierungs-Checkpoint schreiben');
+});
+
+test('Komplettanalyse Voll-Lauf schreibt den Konsolidierungs-Checkpoint (Gegenprobe)', async () => {
+  const BOOK_ID = 132;
+  const email = 'tester@test.dev';
+  seedTinyBook(BOOK_ID);
+
+  ctx.mockAi.on((e) => e.schemaKeys.includes('figuren') && !e.schemaKeys.includes('assignments') && !e.schemaKeys.includes('orte'), figurenStammResponse());
+  ctx.mockAi.on((e) => e.schemaKeys.includes('orte') && e.schemaKeys.includes('szenen') && !e.schemaKeys.includes('figuren'), ortePassResponse());
+  ctx.mockAi.on((e) => e.schemaKeys.length === 1 && e.schemaKeys.includes('fakten'), faktenPassResponse());
+  ctx.mockAi.on((e) => e.schemaKeys.length === 1 && e.schemaKeys.includes('assignments'), eventsPassResponse());
+  ctx.mockAi.on((e) => e.schemaKeys.length === 1 && e.schemaKeys.includes('beziehungen'), beziehungenResponse());
+  ctx.mockAi.on((e) => e.schemaKeys.includes('zusammenfassung') && e.schemaKeys.includes('probleme'), kontinuitaetResponse());
+
+  const jobId = ctx.shared.createJob('komplett-analyse', BOOK_ID, email, 'job.label.komplett');
+  ctx.shared.enqueueJob(jobId, () =>
+    ctx.komplett.runKomplettAnalyseJob(jobId, BOOK_ID, 'Buch', email, { id: 'tok', pw: 'pw' }, 'claude'));
+  const job = await waitForJob(ctx.shared, jobId, { timeoutMs: 8000 });
+
+  assert.equal(job.status, 'done', `expected done, got ${job.status}: ${job.error || ''}`);
+  const kontCalls = ctx.mockAi.log.filter(e => e.schemaKeys?.includes('probleme')).length;
+  assert.equal(kontCalls, 1, 'Voll-Lauf ruft P8 auf');
+  const marker = ctx.dbSchema.loadCheckpoint('komplett-consolidation', BOOK_ID, email);
+  assert.ok(marker && marker.sig, 'Voll-Lauf schreibt den Konsolidierungs-Checkpoint');
+});

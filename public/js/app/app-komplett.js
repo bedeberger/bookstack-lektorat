@@ -27,6 +27,7 @@ export const appKomplettMethods = {
     this.$store.jobs.alleAktualisierenPassMode = null;
     this.$store.jobs.alleAktualisierenWarnings = [];
     this.$store.jobs.alleAktualisierenCoverage = null;
+    this.$store.jobs.alleAktualisierenCost = null;
     this.showKomplettStatus = true;
     const bookId = this.$store.nav.selectedBookId;
     const bookName = this.selectedBookName;
@@ -35,7 +36,13 @@ export const appKomplettMethods = {
       const { jobId } = await fetchJson('/jobs/komplett-analyse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ book_id: parseInt(bookId), book_name: bookName }),
+        body: JSON.stringify({
+          book_id: parseInt(bookId), book_name: bookName,
+          // Teil-Lauf: read-only Endphasen abwählbar (Zeit + Kosten). Server-Default
+          // ist „alles an", die Flags werden nur gesetzt, wenn der User sie anklickt.
+          skip_continuity: !!this.komplettSkipContinuity,
+          skip_narrative_profile: !!this.komplettSkipNarrativeProfile,
+        }),
       });
       // Sofort-Refresh des Footer-Polls, sonst sieht die Job-Queue-Bar den Job
       // erst nach bis zu 5 s und driftet so lange gegen die 2-s-Karten-Bar.
@@ -76,6 +83,9 @@ export const appKomplettMethods = {
         this.$store.jobs.alleAktualisierenWarnings = Array.isArray(job?.result?.warnings) ? job.result.warnings : [];
         // Coverage-Self-Audit (F2): Recall-Score der Stichprobe im Status-Panel zeigen.
         this.$store.jobs.alleAktualisierenCoverage = job?.result?.coverage || null;
+        // Kosten pro Call-Klasse: neben dem Coverage-Score, damit „billiger geworden"
+        // und „schlechterer Recall" im selben Blick vergleichbar sind.
+        this.$store.jobs.alleAktualisierenCost = job?.result?.costByPhase || null;
         try {
           // _loadKontinuitaetHistory lebt auf kontinuitaetCard (nicht im Root) —
           // Card per card:refresh-Event reloaden lassen (Lifecycle hört darauf).

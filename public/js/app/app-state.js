@@ -321,6 +321,13 @@ const cardsState = () => ({
   showSearchCard: false,
   showShareLinksCard: false,
   showKomplettStatus: false,
+  // Teil-Lauf der Komplettanalyse: die beiden read-only Endphasen (Kontinuitätsprüfung
+  // P8, Erzählprofil) einzeln abwählbar. Sie sitzen am Ende der seriellen Kette und
+  // kosten damit Wartezeit UND Geld — wer nach einer Kapitel-Änderung nur den Katalog
+  // auffrischt, braucht sie nicht. Default false = alles läuft (unverändertes
+  // Verhalten); nachziehen geht über die Standalone-Jobs der jeweiligen Karte.
+  komplettSkipContinuity: false,
+  komplettSkipNarrativeProfile: false,
   showAvatarMenu: false,
   // Overflow-Menü ("⋯") der Seiten-Action-Leiste (Notebook-Seitenansicht).
   pageActionsMenuOpen: false,

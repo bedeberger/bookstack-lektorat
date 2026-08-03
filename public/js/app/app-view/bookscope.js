@@ -98,6 +98,7 @@ export const bookscopeMethods = {
     // Last-Run lädt loadPages()→loadLastKomplettRun() gleich für das neue Buch.
     this.$store.jobs.alleAktualisierenWarnings = [];
     this.$store.jobs.alleAktualisierenCoverage = null;
+    this.$store.jobs.alleAktualisierenCost = null;
     this.$store.jobs.alleAktualisierenPassMode = null;
     this.$store.jobs.alleAktualisierenLastRun = null;
     this.showKomplettStatus = false;

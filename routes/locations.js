@@ -1,6 +1,8 @@
 'use strict';
 const express = require('express');
 const { db, saveOrteToDb, patchOrtCoords } = require('../db/schema');
+const { mergeLocations } = require('../db/entity-merge');
+const logger = require('../logger');
 const { toIntId, inClause } = require('../lib/validate');
 const { aclParamGuard } = require('../lib/acl');
 const { bookParamHandler } = require('../lib/log-context');
@@ -113,6 +115,36 @@ router.patch('/:book_id/coords', jsonBody, (req, res) => {
   const patches = Array.isArray(req.body.patches) ? req.body.patches : [];
   const updated = patchOrtCoords(bookId, patches, userEmail);
   res.json({ ok: true, updated });
+});
+
+// Zwei Schauplätze zusammenführen: Referenzen der Quelle wandern aufs Ziel, die
+// Quelle wird gelöscht (Merge-Kern db/entity-merge.js). Pendant zum Figuren-Merge,
+// gleiche Begründung: beim blossen Löschen eines verwaisten Orts gingen seine
+// Verknüpfungen (scene_locations, Recherche-Links, Kapitel-Vorkommen) verloren.
+// `source`/`target` sind `locations.loc_id` (TEXT), wie beim Einzel-Delete.
+// Muss VOR '/:book_id/:id' stehen — schadet als POST nicht, hält aber die
+// Reihenfolge-Konvention dieser Datei.
+router.post('/:book_id/merge', jsonBody, (req, res) => {
+  const bookId = toIntId(req.params.book_id);
+  const src = String(req.body?.source || '').trim();
+  const tgt = String(req.body?.target || '').trim();
+  if (!bookId || !src || !tgt) return res.status(400).json({ error_code: 'INVALID_ID' });
+  if (src === tgt) return res.status(409).json({ error_code: 'SAME_ENTITY' });
+  const userEmail = req.session?.user?.email || null;
+  const emailCond = userEmail ? 'user_email = ?' : 'user_email IS NULL';
+  const emailVal = userEmail ? [userEmail] : [];
+  const get = db.prepare(`SELECT id FROM locations WHERE loc_id = ? AND book_id = ? AND ${emailCond}`);
+  const sRow = get.get(src, bookId, ...emailVal);
+  const tRow = get.get(tgt, bookId, ...emailVal);
+  if (!sRow) return res.status(404).json({ error_code: 'NOT_FOUND', side: 'source' });
+  if (!tRow) return res.status(404).json({ error_code: 'NOT_FOUND', side: 'target' });
+  if (sRow.id === tRow.id) return res.status(409).json({ error_code: 'SAME_ENTITY' });
+
+  const result = mergeLocations(bookId, userEmail, sRow.id, tRow.id);
+  searchIndex.remove('location', sRow.id);
+  searchIndex.upsertLocation(tRow.id);
+  logger.info(`Schauplatz-Merge: «${result.sourceName}» → «${result.targetName}» (Buch ${bookId}).`);
+  res.json({ ok: true, ...result });
 });
 
 // Bulk-Cleanup: alle STALE Schauplätze eines Buchs auf einmal löschen (Danger-Zone).

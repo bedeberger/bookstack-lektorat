@@ -3,7 +3,7 @@
       <p class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.stt.hint')"></p>
       <div x-data="settingField({ k: 'stt.enabled', type: 'toggle', base: 'stt.enabled' })"></div>
       <div x-data="settingField({ k: 'stt.host', type: 'url', base: 'stt.host', help: true })"></div>
-      <div x-data="settingField({ k: 'stt.model', base: 'stt.model', help: true })"></div>
+      <div x-data="settingField({ k: 'stt.model', base: 'stt.model', help: true, models: { target: 'stt', hostKey: 'stt.host' } })"></div>
       <div x-data="settingField({ k: 'stt.api_key', type: 'password', base: 'stt.apiKey', help: true })"></div>
       <div x-data="settingField({ k: 'stt.language', type: 'select', base: 'stt.language', help: true, opts: [{ value: 'de', label: 'Deutsch' }, { value: 'en', label: 'English' }] })"></div>
       <div x-data="settingField({ k: 'stt.temperature', type: 'num', base: 'stt.temperature', num: { step: 0.05, min: 0, max: 1, decimals: 2 }, help: true })"></div>

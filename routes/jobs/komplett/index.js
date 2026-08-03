@@ -34,10 +34,19 @@ komplettRouter.post('/komplett-analyse', jsonBody, (req, res) => {
   const userToken = null;
   const existing = findActiveJobId('komplett-analyse', book_id, userEmail);
   if (existing) return res.json({ jobId: existing, existing: true });
+  // Optionale Teil-Läufe: Kontinuitätsprüfung (P8) und Erzählprofil sind read-only
+  // Endphasen — wer nach einer Kapitel-Änderung nur den Katalog auffrischen will,
+  // spart hier Zeit UND Geld, ohne an der Extraktionsqualität zu drehen. Beide
+  // lassen sich einzeln nachziehen (POST /jobs/kontinuitaet, /jobs/erzaehlprofil).
+  // Default = alles an (unverändertes Verhalten für bestehende Aufrufer).
+  const skipContinuity = req.body?.skip_continuity === true;
+  const skipNarrativeProfile = req.body?.skip_narrative_profile === true;
   const label = book_name ? 'job.label.komplettBook' : 'job.label.komplett';
   const labelParams = book_name ? { name: book_name } : null;
   const jobId = createJob('komplett-analyse', book_id, userEmail, label, labelParams);
-  enqueueJob(jobId, () => runKomplettAnalyseJob(jobId, book_id, book_name || '', userEmail, userToken));
+  // provider bleibt undefined (Slot 6) — den setzt nur der Nacht-Cron; opts folgt dahinter.
+  enqueueJob(jobId, () => runKomplettAnalyseJob(jobId, book_id, book_name || '', userEmail, userToken,
+    undefined, { skipContinuity, skipNarrativeProfile }));
   res.json({ jobId });
 });
 

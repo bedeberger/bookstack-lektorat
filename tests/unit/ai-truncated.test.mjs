@@ -50,6 +50,12 @@ const fakeAI = {
   MAX_TOKENS_OUT: 64000,
   // aiCall leitet das Output-Ceiling pro Call aus dem Provider ab.
   getContextConfigFor: () => ({ maxTokensOut: 64000 }),
+  // Per-Call-Tier + Modell-Auflösung: aiCall braucht beide für die Kosten-
+  // Aufschlüsselung (tok.byPhase). Der Stub muss die lib/ai-Oberfläche
+  // vollständig spiegeln — fehlt hier etwas, wirft aiCall VOR dem
+  // truncated-Guard und der Test misst den falschen Fehler.
+  normalizeTier: (t) => (typeof t === 'string' ? { model: t } : (t || {})),
+  _resolveClaudeModel: (m) => m || 'test',
 };
 
 require.cache[aiPath] = {

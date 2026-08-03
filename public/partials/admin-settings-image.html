@@ -3,7 +3,7 @@
       <p class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.image.hint')"></p>
       <div x-data="settingField({ k: 'image.enabled', type: 'toggle', base: 'image.enabled' })"></div>
       <div x-data="settingField({ k: 'image.host', type: 'url', base: 'image.host', help: true })"></div>
-      <div x-data="settingField({ k: 'image.model', base: 'image.model', help: true })"></div>
+      <div x-data="settingField({ k: 'image.model', base: 'image.model', help: true, models: { target: 'image', hostKey: 'image.host' } })"></div>
       <div x-data="settingField({ k: 'image.size', base: 'image.size', help: true })"></div>
       <div x-data="settingField({ k: 'image.timeout_ms', type: 'num', base: 'image.timeoutMs', num: { integer: true, min: 5000, max: 600000 }, help: true })"></div>
       <div x-data="settingField({ k: 'image.api_key', type: 'password', base: 'image.apiKey', help: true })"></div>

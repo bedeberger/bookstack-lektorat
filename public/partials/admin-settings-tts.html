@@ -3,7 +3,7 @@
       <p class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.tts.hint')"></p>
       <div x-data="settingField({ k: 'tts.enabled', type: 'toggle', base: 'tts.enabled' })"></div>
       <div x-data="settingField({ k: 'tts.host', type: 'url', base: 'tts.host', help: true })"></div>
-      <div x-data="settingField({ k: 'tts.model', base: 'tts.model', help: true })"></div>
+      <div x-data="settingField({ k: 'tts.model', base: 'tts.model', help: true, models: { target: 'tts', hostKey: 'tts.host' } })"></div>
       <div x-data="settingField({ k: 'tts.voice', base: 'tts.voice', help: true })"></div>
       <div x-data="settingField({ k: 'tts.voice.de', label: 'admin.settings.tts.voiceDe.label', phKey: 'admin.settings.tts.voice.placeholder', help: 'admin.settings.tts.voiceLocale.help' })"></div>
       <div x-data="settingField({ k: 'tts.voice.en', label: 'admin.settings.tts.voiceEn.label', phKey: 'admin.settings.tts.voice.placeholder', help: 'admin.settings.tts.voiceLocale.help' })"></div>

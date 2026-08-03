@@ -1,6 +1,7 @@
 const { db } = require('./connection');
 const { NOW_ISO_SQL } = require('./now');
 const { normName: _normName, nameTokens: _nameTok } = require('../lib/name-normalize');
+const { mergeFigures } = require('./entity-merge');
 require('./migrations');
 
 // Gerichtete Beziehungstypen und ihre Inverse. A→B elternteil ≡ B→A kind,
@@ -565,10 +566,13 @@ function addFigurenBeziehungen(bookId, beziehungen, userEmail, idMaps) {
 }
 
 /** Post-Hoc-Cleanup für bereits gespeicherte Figuren-Daten eines Buchs/Users.
- *  1. Namens-Duplikate zusammenführen (case-insensitive, normalisiert).
- *     Referenzen (figure_tags, figure_appearances, figure_events, figure_relations,
- *     scene_figures, location_figures) werden auf die kanonische ID umgelenkt,
- *     das Duplikat-Figurenrecord gelöscht.
+ *  1. Namens-Duplikate zusammenführen (case-insensitive, normalisiert). Das
+ *     Umhängen aller Referenzen + Löschen der Dublette macht `mergeFigures`
+ *     ([db/entity-merge.js](entity-merge.js)) — dieselbe Funktion, die auch der
+ *     manuelle Merge aus den Bucheinstellungen nutzt. **Why:** eine zweite,
+ *     lokale Merge-Implementierung hier deckte nur sechs Brücken ab und liess
+ *     plot_beat_figures/research_item_links/song_figures/motif_figures per CASCADE
+ *     wegfallen; die Tabellenliste gehört an genau eine Stelle.
  *  2. figure_relations dedupliziert (pro ungeordnetem Paar max 1), Relations mit
  *     nicht-existierenden fig_ids oder Selbst-Referenz entfernt.
  *  3. Beziehungs-Beschreibungen geleert, die den Namen der Zielfigur nicht enthalten
@@ -598,80 +602,22 @@ function cleanupDuplicateFiguren(bookId, userEmail, onProgress = null) {
     groups.get(key).push(f);
   }
 
-  const updFig = db.prepare(
-    'UPDATE figures SET kurzname=?, typ=?, geburtstag=?, geschlecht=?, beruf=?, wohnadresse=?, sozialschicht=?, beschreibung=? WHERE id=?'
-  );
-  const moveTags = db.prepare(
-    'INSERT OR IGNORE INTO figure_tags (figure_id, tag) SELECT ?, tag FROM figure_tags WHERE figure_id = ?'
-  );
-  const delTags = db.prepare('DELETE FROM figure_tags WHERE figure_id = ?');
-  const getDupApps = db.prepare(
-    'SELECT chapter_id, haeufigkeit FROM figure_appearances WHERE figure_id = ?'
-  );
-  const upsertApp = db.prepare(`
-    INSERT INTO figure_appearances (figure_id, chapter_id, haeufigkeit) VALUES (?, ?, ?)
-    ON CONFLICT(figure_id, chapter_id) DO UPDATE SET haeufigkeit = haeufigkeit + excluded.haeufigkeit
-  `);
-  const delApps = db.prepare('DELETE FROM figure_appearances WHERE figure_id = ?');
-  const moveEvents = db.prepare('UPDATE figure_events SET figure_id = ? WHERE figure_id = ?');
-  // figure_relations.from/to_fig_id sind INTEGER (figures.id) seit Mig 72.
-  const remapRelFrom = db.prepare(
-    'UPDATE figure_relations SET from_fig_id = ? WHERE book_id = ? AND user_email IS ? AND from_fig_id = ?'
-  );
-  const remapRelTo = db.prepare(
-    'UPDATE figure_relations SET to_fig_id = ? WHERE book_id = ? AND user_email IS ? AND to_fig_id = ?'
-  );
-  // scene_figures/location_figures.figure_id sind INTEGER (figures.id) seit Mig 73.
-  const moveSceneFigs = db.prepare(`
-    INSERT OR IGNORE INTO scene_figures (scene_id, figure_id)
-    SELECT scene_id, ? FROM scene_figures sf WHERE sf.figure_id = ?
-      AND sf.scene_id IN (SELECT id FROM figure_scenes WHERE book_id = ? AND user_email = ?)
-  `);
-  const delSceneFigs = db.prepare(
-    'DELETE FROM scene_figures WHERE figure_id = ? AND scene_id IN (SELECT id FROM figure_scenes WHERE book_id = ? AND user_email = ?)'
-  );
-  const moveLocFigs = db.prepare(`
-    INSERT OR IGNORE INTO location_figures (location_id, figure_id)
-    SELECT location_id, ? FROM location_figures lf WHERE lf.figure_id = ?
-      AND lf.location_id IN (SELECT id FROM locations WHERE book_id = ? AND user_email IS ?)
-  `);
-  const delLocFigs = db.prepare(
-    'DELETE FROM location_figures WHERE figure_id = ? AND location_id IN (SELECT id FROM locations WHERE book_id = ? AND user_email IS ?)'
-  );
-  const delFig = db.prepare('DELETE FROM figures WHERE id = ?');
-
   // Phase 1: Duplikat-Gruppen mergen — eine Transaktion pro Gruppe, damit der
   // WAL-Lock zwischen Gruppen freigegeben wird (vorher: ein einziger Block über
   // alle Gruppen, der den Server für die Dauer aller Merges blockierte).
+  // Die Referenz-Arbeit pro Paar macht mergeFigures (geteilter Merge-Kern);
+  // hier bleibt nur die Gruppenbildung + die Wahl der kanonischen Figur.
   const groupArr = [...groups.values()].filter(g => g.length >= 2);
   const totalSteps = groupArr.length + 2; // +1 für Relations-Dedup, +1 für Description-Rescue
   let stepDone = 0;
   for (const group of groupArr) {
+    // Reichste Beschreibung gewinnt; die übrigen werden in sie hineingemergt
+    // (mergeFigures füllt leere Felder der kanonischen Figur aus der Dublette).
+    group.sort((a, b) => (b.beschreibung?.length || 0) - (a.beschreibung?.length || 0));
+    const canon = group[0];
     db.transaction(() => {
-      group.sort((a, b) => (b.beschreibung?.length || 0) - (a.beschreibung?.length || 0));
-      const canon = { ...group[0] };
-      for (const other of group.slice(1)) {
-        for (const field of ['kurzname', 'typ', 'geburtstag', 'geschlecht', 'beruf', 'wohnadresse', 'sozialschicht']) {
-          if (!canon[field] && other[field]) canon[field] = other[field];
-        }
-      }
-      updFig.run(canon.kurzname, canon.typ, canon.geburtstag, canon.geschlecht, canon.beruf, canon.wohnadresse, canon.sozialschicht, canon.beschreibung, canon.id);
-
       for (const dup of group.slice(1)) {
-        moveTags.run(canon.id, dup.id);
-        delTags.run(dup.id);
-        for (const a of getDupApps.all(dup.id)) {
-          upsertApp.run(canon.id, a.chapter_id, a.haeufigkeit);
-        }
-        delApps.run(dup.id);
-        moveEvents.run(canon.id, dup.id);
-        remapRelFrom.run(canon.id, bookId, em, dup.id);
-        remapRelTo.run(canon.id, bookId, em, dup.id);
-        moveSceneFigs.run(canon.id, dup.id, bookId, em || '');
-        delSceneFigs.run(dup.id, bookId, em || '');
-        moveLocFigs.run(canon.id, dup.id, bookId, em);
-        delLocFigs.run(dup.id, bookId, em);
-        delFig.run(dup.id);
+        mergeFigures(bookId, em, dup.id, canon.id);
         stats.figurenMerged++;
       }
     })();

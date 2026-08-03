@@ -8,6 +8,7 @@ import { adminMethods } from './book-settings/admin.js';
 import { accessMethods } from './book-settings/access.js';
 import { blogMethods } from './book-settings/blog.js';
 import { hubspotMethods } from './book-settings/hubspot.js';
+import { mergeMethods } from './book-settings/merge.js';
 
 export const bookSettingsMethods = {
   ...settingsMethods,
@@ -16,4 +17,5 @@ export const bookSettingsMethods = {
   ...accessMethods,
   ...blogMethods,
   ...hubspotMethods,
+  ...mergeMethods,
 };

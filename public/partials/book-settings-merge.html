@@ -1,0 +1,54 @@
+<!-- Verwaiste Einträge zusammenführen (Sektion in der Danger-Zone der
+     Bucheinstellungen). Methods: public/js/book/book-settings/merge.js,
+     Server: db/entity-merge.js + POST /figures|/figures/scenes|/locations …/merge.
+     Quelle wird gelöscht, ihre Verknüpfungen wandern aufs Ziel.
+
+     BEWUSST NICHT klappbar (`collapsible`): das x-collapse-Plugin hält
+     `overflow: hidden` auf dem Panel, und die Combobox rendert ihr Dropdown als
+     eigenes Kind (kein x-teleport möglich) — im Panel wäre die Optionsliste
+     abgeschnitten und unklickbar. Stattdessen flach wie die Nachbar-Sektionen der
+     Danger-Zone; die Kandidatenlisten lädt `x-effect` beim ersten Öffnen des
+     Gefahrenzone-Tabs. -->
+<div class="book-settings-danger-section"
+     x-effect="onMergeSectionVisible(bookSettingsTab)">
+  <div class="book-settings-danger-text">
+    <strong x-text="$app.t('merge.title')"></strong>
+    <span x-text="' — ' + $app.t('merge.text')"></span>
+  </div>
+
+  <div x-show="mergeLoading" x-cloak class="muted-msg" x-text="$app.t('common.loading')"></div>
+
+  <template x-for="k in mergeKinds" :key="k">
+    <div class="book-settings-merge-kind">
+      <div class="card-form-label" x-text="$app.t('merge.kind.' + k)"></div>
+
+      <div class="card-form-row">
+        <label class="card-form-label" x-text="$app.t('merge.source')"></label>
+        <div x-data="combobox($app.t('merge.sourcePlaceholder'))"
+             x-modelable="value" x-model="mergeSel[k].source"
+             x-effect="options = mergeLists[k].filter(e => e.id !== mergeSel[k].target).map(e => ({ value: e.id, label: e.stale ? e.name + ' · ' + $app.t('merge.staleSuffix') : e.name }))"
+  ></div>
+      </div>
+
+      <div class="card-form-row">
+        <label class="card-form-label" x-text="$app.t('merge.target')"></label>
+        <div x-data="combobox($app.t('merge.targetPlaceholder'))"
+             x-modelable="value" x-model="mergeSel[k].target"
+             x-effect="options = mergeLists[k].filter(e => e.id !== mergeSel[k].source).map(e => ({ value: e.id, label: e.stale ? e.name + ' · ' + $app.t('merge.staleSuffix') : e.name }))"
+  ></div>
+      </div>
+
+      <div class="book-settings-danger-actions">
+        <button type="button" class="book-settings-btn-danger"
+                @click="mergeEntity(k)" :disabled="!mergeReady(k)">
+          <span x-show="mergeBusy" class="spinner"></span>
+          <span x-text="$app.t('merge.button')"></span>
+        </button>
+      </div>
+    </div>
+  </template>
+
+  <p class="card-form-hint" x-text="$app.t('merge.hint')"></p>
+  <p class="card-form-saved" x-show="mergeMessage" x-cloak x-transition.opacity.duration.250ms x-text="mergeMessage"></p>
+  <p class="card-form-error" x-show="mergeError" x-text="mergeError"></p>
+</div>
