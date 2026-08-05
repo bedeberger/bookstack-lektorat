@@ -123,12 +123,18 @@ export const diaryCalendarMethods = {
     return list;
   },
 
-  // {year, month} — entweder explizite User-Wahl oder neuester verfügbarer Monat.
+  // {year, month} — entweder explizite User-Wahl oder aktueller Monat.
+  // Fällt zurück auf neuesten Monat mit Einträgen nur, wenn heute schon
+  // ein Eintrag existiert (damit der «heute hinzufügen»-Button den
+  // richtigen Monat im Grid anzeigt).
   diaryCalendarCurrentMonth() {
     if (this.diaryCalendarYearMonth) return this.diaryCalendarYearMonth;
+    const now = new Date();
+    if (!this.diaryHasTodayEntry()) {
+      return { year: now.getFullYear(), month: now.getMonth() + 1 };
+    }
     const months = this.diaryCalendarMonths();
     if (months[0]) return { year: months[0].year, month: months[0].month };
-    const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() + 1 };
   },
 
