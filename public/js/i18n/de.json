@@ -2876,6 +2876,7 @@
   "shortcuts.item.escape": "Offene Dialoge, Menüs und Picker schliessen",
   "shortcuts.item.bossScreen": "Chef-Taste: Bildschirm sofort schwärzen (im Editor); beliebige Taste/Klick blendet wieder ein",
   "shortcuts.item.runCheck": "Lektorat starten (wenn Editor offen)",
+  "shortcuts.item.editToggle": "Seite im Notebook-Editor bearbeiten (oder speichern, wenn bereits offen)",
   "shortcuts.item.saveEdit": "Seite speichern (im Bearbeiten-Modus)",
   "shortcuts.item.bold": "Fett (im Bearbeiten- und Fokus-Modus)",
   "shortcuts.item.italic": "Kursiv (im Bearbeiten- und Fokus-Modus)",

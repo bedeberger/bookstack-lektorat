@@ -2876,6 +2876,7 @@
   "shortcuts.item.escape": "Close open dialogs, menus and pickers",
   "shortcuts.item.bossScreen": "Boss key: instantly black out the screen (in the editor); any key/click brings it back",
   "shortcuts.item.runCheck": "Run review (when editor is open)",
+  "shortcuts.item.editToggle": "Edit page in notebook editor (or save if already editing)",
   "shortcuts.item.saveEdit": "Save page (in edit mode)",
   "shortcuts.item.bold": "Bold (edit and focus mode)",
   "shortcuts.item.italic": "Italic (edit and focus mode)",

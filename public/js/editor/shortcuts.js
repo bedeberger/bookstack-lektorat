@@ -157,13 +157,27 @@ export const shortcutsMethods = {
     });
   },
 
+  // Cmd/Ctrl+E → Notebook-Edit-Modus ein-/ausschalten (nur im Notebook, nicht im Focus)
   // Cmd/Ctrl+P → Seitenbaum-Filter
   // Cmd/Ctrl+K → Command-Palette
   // Greift auch in Inputs/Editor – preventDefault ist Pflicht (sonst Browser-Print/Find).
   handleNavHotkey(event) {
     if (!(event.ctrlKey || event.metaKey)) return;
     const key = (event.key || '').toLowerCase();
-    if (event.altKey || event.shiftKey) return;
+    if (event.altKey) return;
+    if (key === 'e') {
+      if (event.shiftKey) return;
+      // Ctrl+Shift+E ist belegt (Focus-Toggle), plain Ctrl+E → Notebook-Edit
+      if (!this.currentPage) return;
+      if (this.editMode) {
+        this.quickSave?.();
+      } else {
+        this.startEdit?.();
+      }
+      event.preventDefault();
+      return;
+    }
+    if (event.shiftKey) return;
     if (key === 'p') {
       if (!this.focusTreeSearch()) return;
       event.preventDefault();
