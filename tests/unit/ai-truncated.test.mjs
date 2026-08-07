@@ -27,6 +27,9 @@ const repo = path.resolve(__dirname, '..', '..');
 // Wir müssen die Fakes also EINSPRINGEN, bevor shared/ai.js geladen wird.
 
 const aiPath = require.resolve(path.join(repo, 'lib/ai'));
+// lib/ai/shared.js haengt nur an lib/app-settings (kein DB-Zugriff beim Load) und ist
+// damit auch ohne gebootete Test-DB ladbar.
+const aiShared = require(path.join(repo, 'lib/ai/shared'));
 
 let parseJSONCallCount = 0;
 const fakeAI = {
@@ -56,6 +59,12 @@ const fakeAI = {
   // truncated-Guard und der Test misst den falschen Fehler.
   normalizeTier: (t) => (typeof t === 'string' ? { model: t } : (t || {})),
   _resolveClaudeModel: (m) => m || 'test',
+  // Preflight-Guard: aiCall ruft ihn VOR callAI. Echte Implementierung durchreichen,
+  // damit dieser Test nicht am Guard vorbei den truncated-Pfad testet — die
+  // Prompts hier sind winzig, der Guard schlaegt also nicht an. Der Guard selbst
+  // ist in tests/unit/ai-context-guard.test.mjs geprueft.
+  estimatePromptTokens: aiShared.estimatePromptTokens,
+  assertPromptFitsContext: aiShared.assertPromptFitsContext,
 };
 
 require.cache[aiPath] = {

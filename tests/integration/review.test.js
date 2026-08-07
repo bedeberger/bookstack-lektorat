@@ -90,12 +90,13 @@ test('Buch-Review Single-Pass: 1 Kapitel → 1 AI-Call, book_reviews-Zeile', asy
 
 test('Buch-Review Multi-Pass: 3 Kapitel → 3 Analysen + 1 Final = 4 Calls', async () => {
   const BOOK_ID = 81;
-  // 3 chapters × ~9000 chars = 27K → multi-pass (SINGLE_PASS_LIMIT = 20K via setup).
+  // 3 Kapitel × ~40K Zeichen = 120K → Multi-Pass (SINGLE_PASS_LIMIT = 113400 aus
+  // dem Test-Token-Budget in _helpers/setup.js — beide Seiten zusammen ändern).
   const chapters = [], pages = [], bodies = {};
   for (let i = 0; i < 3; i++) {
     chapters.push({ id: 8300 + i, book_id: BOOK_ID, name: `Kap ${i + 1}` });
     pages.push({ id: 8400 + i, book_id: BOOK_ID, chapter_id: 8300 + i, name: `S ${i + 1}`, updated_at: '' });
-    bodies[8400 + i] = '<p>' + 'Anna ging weiter durch das Land. '.repeat(280) + '</p>';
+    bodies[8400 + i] = '<p>' + 'Anna ging weiter durch das Land. '.repeat(1215) + '</p>';
   }
   ctx.dbSeed.setBook({ chapters, pages, pageBodies: bodies });
 
@@ -190,7 +191,7 @@ test('Buch-Review Cache: Multi-Pass — geänderte Seite invalidiert nur 1 Kapit
   for (let i = 0; i < 3; i++) {
     chapters.push({ id: 8900 + i, book_id: BOOK_ID, name: `Kap ${i + 1}` });
     pages.push({ id: 8910 + i, book_id: BOOK_ID, chapter_id: 8900 + i, name: `S ${i + 1}`, updated_at: '2026-05-01T10:00:00Z' });
-    bodies[8910 + i] = '<p>' + 'Anna ging weiter durch das Land. '.repeat(280) + '</p>';
+    bodies[8910 + i] = '<p>' + 'Anna ging weiter durch das Land. '.repeat(1215) + '</p>';
   }
   ctx.dbSeed.setBook({ chapters, pages, pageBodies: bodies });
 

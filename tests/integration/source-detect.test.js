@@ -146,8 +146,10 @@ test('bereits erfasste Quelle wird markiert, nicht geschluckt', async () => {
 
 test('dasselbe Werk in zwei Kapiteln erscheint einmal', async () => {
   const BOOK_ID = 904;
-  // Enges Token-Budget im Test-Bootstrap → zwei Kapitel laufen als zwei Chunks.
-  const filler = 'Ein langer Satz mit vielen Woertern zum Fuellen des Kontingents. '.repeat(200);
+  // Enges Token-Budget im Test-Bootstrap (_helpers/setup.js) → die zwei Kapitel
+  // ueberschreiten SINGLE_PASS_LIMIT und laufen als mehrere Chunks. Der Mock liefert
+  // in JEDEM Chunk dasselbe Werk — geprueft wird die Dedup ueber die Chunks hinweg.
+  const filler = 'Ein langer Satz mit vielen Woertern zum Fuellen des Kontingents. '.repeat(900);
   ctx.dbSeed.setBook({
     chapters: [
       { id: 9014, book_id: BOOK_ID, name: 'Kap 1', priority: 1 },

@@ -377,8 +377,10 @@ function seedMultiChapterBook(bookId, chapters = 3) {
     const pid = 3000 + i;
     cs.push({ id: cid, book_id: bookId, name: `Kapitel ${i + 1}` });
     ps.push({ id: pid, book_id: bookId, chapter_id: cid, name: `Seite ${i + 1}`, updated_at: '2026-01-01' });
-    // ~9000 chars body each → 27K total → multi-pass with 3 chunks under PER_CHUNK_LIMIT=10000.
-    bodies[pid] = '<p>' + 'Anna ging weiter durch das Land. '.repeat(280) + '</p>';
+    // ~40K chars body each → 120K total → Multi-Pass (> SINGLE_PASS_LIMIT=113400),
+    // jedes Kapitel ein eigener Chunk (< PER_CHUNK_LIMIT=56700). Grenzen skalieren aus
+    // dem Test-Token-Budget in _helpers/setup.js — beide Seiten zusammen ändern.
+    bodies[pid] = '<p>' + 'Anna ging weiter durch das Land. '.repeat(1215) + '</p>';
   }
   ctx.dbSeed.setBook({ chapters: cs, pages: ps, pageBodies: bodies });
 }
@@ -513,9 +515,9 @@ test('Komplettanalyse Delta-Cache: Touch einer Seite → nur dieser Chunk re-ext
     { id: 3002, book_id: BOOK_ID, chapter_id: 2002, name: 'Seite 3', updated_at: '2026-01-01' },
   ];
   const bodies = {
-    3000: '<p>' + 'Anna ging weiter durch das Land. '.repeat(280) + '</p>',
-    3001: '<p>' + 'Anna ging weiter durch das Land. '.repeat(280) + '</p>',
-    3002: '<p>' + 'Anna ging weiter durch das Land. '.repeat(280) + '</p>',
+    3000: '<p>' + 'Anna ging weiter durch das Land. '.repeat(1215) + '</p>',
+    3001: '<p>' + 'Anna ging weiter durch das Land. '.repeat(1215) + '</p>',
+    3002: '<p>' + 'Anna ging weiter durch das Land. '.repeat(1215) + '</p>',
   };
   ctx.dbSeed.setBook({ chapters, pages, pageBodies: bodies });
 
@@ -582,7 +584,7 @@ test('Komplettanalyse Delta-Cache: Kapitel umbenannt → nur dessen Chunk re-ext
     { id: 3001, book_id: BOOK_ID, chapter_id: 2001, name: 'Seite 2', updated_at: '2026-01-01' },
     { id: 3002, book_id: BOOK_ID, chapter_id: 2002, name: 'Seite 3', updated_at: '2026-01-01' },
   ];
-  const body = '<p>' + 'Anna ging weiter durch das Land. '.repeat(280) + '</p>';
+  const body = '<p>' + 'Anna ging weiter durch das Land. '.repeat(1215) + '</p>';
   ctx.dbSeed.setBook({ chapters, pages, pageBodies: { 3000: body, 3001: body, 3002: body } });
 
   // Run 2: nur der Chunk des umbenannten Kapitels darf re-extrahieren (Kapitelname
@@ -1359,7 +1361,7 @@ test('Komplettanalyse #8: Remap-Rescue ordnet unauflösbaren Szenen-Namen dem Ka
 test('Komplettanalyse #3: Szenen-Backfill ergänzt Szenen für ein szenenloses Kapitel', async () => {
   const BOOK_ID = 122;
   const email = 'tester@test.dev';
-  // ~6000 Zeichen (> scene_backfill_min_chars=3000), Single-Pass (< 20000).
+  // ~6000 Zeichen (> scene_backfill_min_chars=3000), Single-Pass (< SINGLE_PASS_LIMIT).
   ctx.dbSeed.setBook({
     chapters: [{ id: 1300, book_id: BOOK_ID, name: 'Kapitel Eins' }],
     pages: [{ id: 1400, book_id: BOOK_ID, chapter_id: 1300, name: 'Seite Eins', updated_at: '2026-01-01' }],

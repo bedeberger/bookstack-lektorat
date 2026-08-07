@@ -2,6 +2,7 @@
 const {
   callAI, parseJSON, CHARS_PER_TOKEN, getContextConfigFor, resolveProvider,
   normalizeTier, _resolveClaudeModel,
+  estimatePromptTokens, assertPromptFitsContext,
 } = require('../../../lib/ai');
 const { costUsd } = require('../../../lib/pricing');
 const logger = require('../../../logger');
@@ -365,10 +366,22 @@ async function aiCall(jobId, tok, prompt, system, fromPct, toPct, expectedChars 
   // während callAI den echten Provider (z.B. openai-compat) anspricht → Cap und Call
   // divergieren und der Output wird vorzeitig auf den Claude-Default gekappt.
   const effProvider = provider || resolveProvider();
-  const providerMaxOut = getContextConfigFor(effProvider).maxTokensOut;
+  const aiCfg = getContextConfigFor(effProvider);
+  const providerMaxOut = aiCfg.maxTokensOut;
   const maxTokensOverride = maxTokens != null
     ? Math.min(maxTokens, providerMaxOut)
     : providerMaxOut;
+  // Preflight: geschaetzter Input + Output-Cap muessen ins Kontextfenster passen —
+  // VOR dem Netzwerk-Call, sonst kommt die Antwort als undurchsichtiger Provider-400
+  // (llama.cpp/vLLM) oder als still gekuerzter Prompt (Ollama) zurueck, mitten im Job.
+  // Hier, weil ALLE Job-Calls durch aiCall laufen und effProvider/maxTokensOverride
+  // an dieser Stelle schon aufgeloest sind. Wirft `job.error.aiContextOverflow`.
+  assertPromptFitsContext({
+    provider: effProvider,
+    cfg: aiCfg,
+    maxTokensOut: maxTokensOverride,
+    estTokIn: estimatePromptTokens([prompt, system], aiCfg.charsPerToken),
+  });
   const signal = jobAbortControllers.get(jobId)?.signal;
   const { text, truncated, tokensIn, tokensOut, cacheReadIn = 0, cacheCreationIn = 0, cacheCreation1hIn = 0, genDurationMs } = await callAI(prompt, system, onProgress, maxTokensOverride, signal, effProvider, jsonSchema, tier);
   tok.inflight?.delete(callId);

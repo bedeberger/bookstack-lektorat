@@ -128,8 +128,9 @@ test('Zeitraum-Filter: nur Einträge des gewählten Monats', async () => {
 
 test('Map-Reduce: Jahr über mehrere große Monate → Monats-Calls + Reduce', async () => {
   const BOOK_ID = 702;
-  // 3 Monate × große Einträge → totalChars überschreitet SINGLE_PASS_LIMIT (≈ 20K via Test-Budget).
-  seedDiary(BOOK_ID, ['2024-01-10', '2024-02-10', '2024-03-10'], { charsPerEntry: 600 });
+  // 3 Monate × große Einträge → totalChars (~120K) überschreitet SINGLE_PASS_LIMIT
+  // (113400 aus dem Test-Token-Budget in _helpers/setup.js).
+  seedDiary(BOOK_ID, ['2024-01-10', '2024-02-10', '2024-03-10'], { charsPerEntry: 2110 });
 
   ctx.mockAi.on((e) => e.schemaKeys.includes('zusammenfassung'), rueckblickResponse('Jahr.'));
 
@@ -147,7 +148,7 @@ test('Map-Reduce: ein einzelner überlanger Monat wird größenbasiert gechunkt'
   const BOOK_ID = 708;
   // Alle Einträge im selben Monat (byMonth.size == 1), Summe > SINGLE_PASS_LIMIT →
   // kein Monats-Split möglich, also Größen-Chunking statt eines übergroßen Single-Pass.
-  seedDiary(BOOK_ID, ['2024-03-01', '2024-03-08', '2024-03-15', '2024-03-22'], { charsPerEntry: 600 });
+  seedDiary(BOOK_ID, ['2024-03-01', '2024-03-08', '2024-03-15', '2024-03-22'], { charsPerEntry: 2110 });
 
   ctx.mockAi.on((e) => e.schemaKeys.includes('zusammenfassung'), rueckblickResponse('März.'));
 

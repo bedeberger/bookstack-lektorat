@@ -91,7 +91,7 @@ Abgeleitet:
 
 Hard-Check beim Boot: `MAX_TOKENS_OUT + 2000 < MODEL_CONTEXT`, sonst Crash (verhindert lokale-Provider-400-Fehler durch `max_tokens > num_ctx`).
 
-**Per-Provider via `getContextConfigFor(provider)`** ([lib/ai.js:968](../lib/ai.js#L968)): liefert `{ contextWindow, maxTokensOut, charsPerToken, inputBudgetTokens, inputBudgetChars }` aus `ai.<provider>.context_window` + `ai.<provider>.max_tokens_out`. Fallback-Defaults: `claude=200000`, `ollama=32000`, `llama=32000` (`PROVIDER_CONTEXT_DEFAULTS`). Boot-Konstanten bleiben Claude-spezifisch für Backwards-Compat; neue Code-Pfade mit auflösbarem `userEmail` nutzen den Helper.
+**Per-Provider via `getContextConfigFor(provider)`** ([lib/ai.js:968](../lib/ai.js#L968)): liefert `{ contextWindow, maxTokensOut, charsPerToken, safetyMargin, inputBudgetTokens, inputBudgetChars }` aus `ai.<provider>.context_window` + `ai.<provider>.max_tokens_out`. Fallback-Defaults: `claude=200000`, `ollama=32000`, `llama=32000` (`PROVIDER_CONTEXT_DEFAULTS`). Boot-Konstanten bleiben Claude-spezifisch für Backwards-Compat; neue Code-Pfade mit auflösbarem `userEmail` nutzen den Helper.
 
 Job-Konstanten skalieren automatisch:
 - `SINGLE_PASS_LIMIT = 0.7 × INPUT_BUDGET_CHARS`
@@ -184,6 +184,26 @@ Hard-Timeout via `ai.claude.timeout_ms` (Default 600 000 ms = 10 min). `_combine
 ## Connection-Fehler (lokal)
 
 `_connErrorCode` erkennt `ECONNREFUSED`/`ENOTFOUND`/`EHOSTUNREACH`/`ETIMEDOUT`/`EAI_AGAIN`/`ECONNRESET`/`ENETUNREACH` + node-fetch-`fetch failed`. Wirft i18n-keyed `error.OLLAMA_UNREACHABLE`/`error.OPENAI_COMPAT_UNREACHABLE` mit `i18nParams: { host, detail }`.
+
+## Preflight: Input-Deckel vor dem Absenden
+
+`assertPromptFitsContext` ([lib/ai/shared.js](../lib/ai/shared.js)) prüft **vor** jedem Call, ob geschätzter Input + Output-Cap + Sicherheitspuffer ins Kontextfenster passen:
+
+```
+estTokIn = promptChars / charsPerToken            // estimatePromptTokens(), zählt Prompt UND System-Blöcke
+budget   = contextWindow − maxTokensOut − safetyMargin   // maxTokensOut = Cap DIESES Calls
+estTokIn > budget  →  throw 'job.error.aiContextOverflow'
+```
+
+Der Wurf trägt `i18nParams: { provider, tokIn, window, maxOut, budget }` — die Meldung nennt die Zahlen und die drei Knöpfe (weniger Text, `ai.<provider>.context_window` höher, `ai.<provider>.max_tokens_out` tiefer).
+
+Drei Aufrufer, ein Helfer:
+- [routes/jobs/shared/ai.js](../routes/jobs/shared/ai.js)#`aiCall` — der Chokepoint, durch den alle Job-Calls laufen.
+- `_callOllama` / `_callOpenAICompat` — defensiv, weil `callAIChat` aus den Chat-Jobs direkt in die Provider geht.
+
+**Warum vorab:** ohne den Guard beantwortet llama.cpp/vLLM einen zu grossen Prompt mit `OpenAI-kompatibel 400: <Server-Text>` (kein Hinweis auf die Ursache), und Ollama kürzt still, weil es `num_ctx` selbst deckelt — der Job liefert dann ein Ergebnis über weniger Buch, als er behauptet. **Gekürzt wird darum nie automatisch**; der Job scheitert mit Ansage. Ist `contextWindow` unkonfiguriert, greift der Guard nicht (nicht raten).
+
+Der Preflight **ersetzt den `truncated`-Check nicht** (siehe [JSON-Pflicht](#json-pflicht)): der eine deckt „Input zu gross", der andere „Output abgeschnitten".
 
 ## Sicherheits-Abbruch (lokal)
 

@@ -35,9 +35,24 @@ function bootstrap() {
     VALUES (?, ?, 0, datetime('now'), 'test')
     ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json
   `);
-  // Tight token budget so multi-pass kicks in at ~20K chars instead of 600K.
-  upsert.run('ai.claude.context_window', JSON.stringify(10000));
-  upsert.run('ai.claude.max_tokens_out', JSON.stringify(2000));
+  // Kleines Token-Budget, damit Multi-Pass schon bei ~113K Zeichen einsetzt statt
+  // bei 600K — Chunk-Grenzen skalieren aus (context_window − max_tokens_out).
+  //
+  // NICHT WEITER RUNTERDREHEN: das Fenster muss die Prompts, die die Pipeline baut,
+  // physisch tragen. Der fixe System-Prompt-Overhead (Rollen + Basisregeln aus
+  // prompt-config.json) ist allein ~27K Zeichen ≈ 9K Tokens; dazu kommt der Buchtext.
+  // Die 70/30-Aufteilung in routes/jobs/shared/loader.js (70% Budget für Buchtext,
+  // 30% für System-Prompt + Schema) trägt nur, solange 30% des Budgets grösser sind
+  // als dieser Overhead — bei einem 10K-Fenster war das Gegenteil der Fall und JEDER
+  // Analyse-Call überschritt sein Kontextfenster um ein Mehrfaches. Aufgefallen ist das
+  // nie, weil der Mock-Provider kein Fenster hat; der Preflight-Guard
+  // (lib/ai/shared.js#assertPromptFitsContext) rechnet dagegen echt und wirft
+  // `job.error.aiContextOverflow`.
+  // Wer diese Werte ändert, zieht die Kapitelgrössen in seedMultiChapterBook
+  // (tests/integration/komplett.test.js) mit — Multi-Pass hängt am Verhältnis
+  // Buchgrösse zu SINGLE_PASS_LIMIT/PER_CHUNK_LIMIT.
+  upsert.run('ai.claude.context_window', JSON.stringify(60000));
+  upsert.run('ai.claude.max_tokens_out', JSON.stringify(4000));
   upsert.run('ai.provider', JSON.stringify('claude'));
   upsert.run('jobs.max_concurrent', JSON.stringify(1));
   // Claude-Split abschalten: ein kombinierter Lektorat-Call pro Seite statt

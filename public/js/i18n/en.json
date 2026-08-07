@@ -3762,6 +3762,7 @@
   "job.error.sessionNotFound": "Session not found.",
   "job.error.researchChatClaudeOnly": "The research chat requires Claude as the AI provider (web search).",
   "job.error.aiTruncated": "AI response truncated at {max} max_tokens (in={tokIn}, out={tokOut}, total={total}). JSON incomplete.",
+  "job.error.aiContextOverflow": "Prompt too large for the context window ({provider}): estimated input ~{tokIn} tokens, {budget} available (window {window} minus output cap {maxOut} minus safety margin). Fix: send less text (smaller section), raise ai.{provider}.context_window, or lower ai.{provider}.max_tokens_out.",
   "job.error.phase1Incomplete": "Phase 1 incomplete: {count} chunks failed ({details}).",
   "job.error.figurenMissing": "Character consolidation invalid: figuren array missing.",
   "job.error.orteMissing": "Location consolidation invalid: orte array missing.",

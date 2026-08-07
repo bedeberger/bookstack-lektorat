@@ -3762,6 +3762,7 @@
   "job.error.sessionNotFound": "Session nicht gefunden.",
   "job.error.researchChatClaudeOnly": "Der Recherche-Chat benötigt Claude als KI-Anbieter (Web-Suche).",
   "job.error.aiTruncated": "KI-Antwort bei {max} max_tokens abgeschnitten (in={tokIn}, out={tokOut}, total={total}). JSON unvollständig.",
+  "job.error.aiContextOverflow": "Prompt zu gross für das Kontextfenster ({provider}): geschätzter Input ~{tokIn} Tokens, verfügbar sind {budget} (Fenster {window} minus Output-Cap {maxOut} minus Sicherheitspuffer). Abhilfe: weniger Text schicken (kleinerer Abschnitt), ai.{provider}.context_window erhöhen oder ai.{provider}.max_tokens_out senken.",
   "job.error.phase1Incomplete": "Phase 1 unvollständig: {count} Chunks fehlgeschlagen ({details}).",
   "job.error.figurenMissing": "Figuren-Konsolidierung ungültig: figuren-Array fehlt.",
   "job.error.orteMissing": "Schauplatz-Konsolidierung ungültig: orte-Array fehlt.",
