@@ -348,8 +348,15 @@ function _toolResultCapChars(maxIter, aiCfg) {
   return Math.max(4000, Math.floor(aiCfg.inputBudgetChars / (maxIter * 6)));
 }
 
-function _bookChatUseAgent() {
-  const provider = appSettings.get('ai.provider') || 'claude';
+// Pfadwahl haengt am EFFEKTIVEN Provider (app_users.ai_provider_override vor
+// globalem `ai.provider`), nicht am globalen Setting: Tool-Use gibt es nur bei
+// Claude. Ein auf openai-compat uebersteuerter User landete bei global=claude
+// sonst im agentischen Pfad, wo lib/ai/core.js «Tool-Use nicht unterstuetzt»
+// wirft — ohne Rueckfall auf den klassischen Buch-Chat. userEmail ist im
+// Dispatch-Pfad vorhanden; ohne Argument zieht resolveProvider den User aus dem
+// ALS-Context des Job-Workers.
+function _bookChatUseAgent(userEmail) {
+  const provider = resolveProvider({ userEmail });
   const mode = String(appSettings.get('jobs.book_chat.mode') || 'auto').toLowerCase();
   if (mode === 'classic') return false;
   if (mode === 'agent')   return provider === 'claude';
@@ -479,7 +486,7 @@ const runBookChatJobAgent = makeAgenticChatJob({
 
 // Dispatcher: wählt zwischen Agent-Pfad und klassischem Pfad.
 function runBookChatJobDispatch(jobId, sessionId, userMsgId, message, userEmail, userToken) {
-  if (_bookChatUseAgent()) {
+  if (_bookChatUseAgent(userEmail)) {
     return runBookChatJobAgent(jobId, sessionId, userMsgId, message, userEmail, userToken);
   }
   return runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, userToken);
