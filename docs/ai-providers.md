@@ -86,10 +86,12 @@ Boot-Konstanten in `lib/ai.js` lesen den **Claude-Globalwert** beim Modul-Load:
 - `CHARS_PER_TOKEN`: Default `3` (Claude) / `4` (lokal), Override via `ai.chars_per_token`. Tokenizer-Heuristik für Char→Token-Umrechnung.
 
 Abgeleitet:
-- `INPUT_BUDGET_TOKENS = MODEL_CONTEXT − MAX_TOKENS_OUT − 2000` (`CONTEXT_SAFETY_MARGIN`).
+- `INPUT_BUDGET_TOKENS = MODEL_CONTEXT − MAX_TOKENS_OUT − contextSafetyMargin(MODEL_CONTEXT)`.
 - `INPUT_BUDGET_CHARS = INPUT_BUDGET_TOKENS × CHARS_PER_TOKEN`.
 
-Hard-Check beim Boot: `MAX_TOKENS_OUT + 2000 < MODEL_CONTEXT`, sonst Crash (verhindert lokale-Provider-400-Fehler durch `max_tokens > num_ctx`).
+`contextSafetyMargin(ctx) = max(2000, round(ctx × 0.03))` — **proportional zum Fenster**, weil der Fehler der Char→Token-Heuristik mit der Prompt-Länge mitwächst: bei 72 000 geschätzten Input-Tokens deckt ein absoluter Puffer von 2000 keine 3 % Abweichung ab, während 5 % dort 3600 Tokens sind. Untergrenze 2000 für kleine Fenster (3 % von 8000 wären wirkungslos). Konkret: 200 000 → 6000, 90 000 → 2700, 32 000 → 2000, 1 000 000 (Komplett-Override) → 30 000.
+
+Hard-Check beim Boot **pro Provider**: `max_tokens_out + contextSafetyMargin(context_window) < context_window`, sonst Crash (verhindert lokale-Provider-400-Fehler durch `max_tokens > num_ctx`). Derselbe Check läuft für den Komplett-Override (`ai.claude.max_tokens_out.komplett` gegen `ai.claude.context_window.komplett`) — Validierung und Budget-Rechnung lesen dieselbe Funktion, sonst divergieren sie. Der Frontend-Spiegel der Ableitung (`adminSettingsBudget` in [public/js/admin/admin-settings.js](../public/js/admin/admin-settings.js)) rechnet mit derselben Formel.
 
 **Per-Provider via `getContextConfigFor(provider)`** ([lib/ai.js:968](../lib/ai.js#L968)): liefert `{ contextWindow, maxTokensOut, charsPerToken, safetyMargin, inputBudgetTokens, inputBudgetChars }` aus `ai.<provider>.context_window` + `ai.<provider>.max_tokens_out`. Fallback-Defaults: `claude=200000`, `ollama=32000`, `llama=32000` (`PROVIDER_CONTEXT_DEFAULTS`). Boot-Konstanten bleiben Claude-spezifisch für Backwards-Compat; neue Code-Pfade mit auflösbarem `userEmail` nutzen den Helper.
 

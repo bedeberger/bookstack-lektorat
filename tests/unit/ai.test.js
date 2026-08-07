@@ -93,7 +93,9 @@ test('getContextConfigFor(claude): ALS-Override schlägt globalen Wert', () => {
     const cfg = getContextConfigFor('claude');
     assert.equal(cfg.contextWindow, 1000000);
     assert.equal(cfg.maxTokensOut, 128000);
-    assert.equal(cfg.inputBudgetTokens, 1000000 - 128000 - 2000);
+    // Sicherheitspuffer ist proportional (3 % des Fensters, min. 2000) — bei 1M also 30000.
+    assert.equal(cfg.safetyMargin, 30000);
+    assert.equal(cfg.inputBudgetTokens, 1000000 - 128000 - 30000);
     // Andere Provider ignorieren den Claude-Override.
     const oll = getContextConfigFor('ollama');
     assert.notEqual(oll.maxTokensOut, 128000);

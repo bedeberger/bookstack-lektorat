@@ -244,7 +244,9 @@ export const adminSettingsMethods = {
     if (!Number.isFinite(out) || out <= 0) out = p === 'claude' ? 64000 : 16000;
     const cptRaw = Number(this.adminSettingsForm['ai.chars_per_token']);
     const charsPerToken = Number.isFinite(cptRaw) && cptRaw > 0 ? cptRaw : (p === 'claude' ? 3 : 4);
-    const inputBudgetTokens = Math.max(2000, ctx - out - 2000);
+    // Sicherheitspuffer proportional — spiegelt contextSafetyMargin in lib/ai/config.js.
+    const safetyMargin = Math.max(2000, Math.round(ctx * 0.03));
+    const inputBudgetTokens = Math.max(2000, ctx - out - safetyMargin);
     const inputBudgetChars = inputBudgetTokens * charsPerToken;
     const singlePass = Math.max(20000, Math.min(2000000, Math.floor(inputBudgetChars * 0.70)));
     const perChunk = Math.max(10000, Math.min(200000, Math.floor(inputBudgetChars * 0.35)));

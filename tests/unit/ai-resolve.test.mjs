@@ -84,6 +84,40 @@ test('getContextConfigFor: claude liefert 200k Default, ollama 32k', () => {
   } finally { ctx.teardown(); }
 });
 
+test('contextSafetyMargin: proportional zum Fenster, Untergrenze 2000', () => {
+  const ctx = _bootstrap();
+  try {
+    const m = ctx.ai.contextSafetyMargin;
+    // 3 % des Fensters — der Fehler der Char→Token-Heuristik waechst mit der Prompt-Laenge.
+    assert.equal(m(200000), 6000);
+    assert.equal(m(90000), 2700);
+    assert.equal(m(1000000), 30000, 'Komplett-Override mit 1M-Fenster');
+    // Untergrenze: bei kleinen Fenstern waeren 3 % wirkungslos.
+    assert.equal(m(32000), 2000);
+    assert.equal(m(8000), 2000);
+    // Unkonfiguriert → Untergrenze, kein NaN.
+    assert.equal(m(0), 2000);
+    assert.equal(m(undefined), 2000);
+  } finally { ctx.teardown(); }
+});
+
+test('getContextConfigFor: safetyMargin und inputBudget rechnen mit demselben Puffer', () => {
+  const ctx = _bootstrap();
+  try {
+    // Validierung (Boot-Check) und Budget-Rechnung muessen dieselbe Funktion lesen —
+    // sonst laesst der Boot eine Kombination durch, die das Budget still kollabiert.
+    for (const [provider, win, out] of [['claude', 200000, 64000], ['openai-compat', 90000, 16000], ['ollama', 32000, 16000]]) {
+      ctx.appSettings.set(`ai.${provider}.context_window`, win);
+      ctx.appSettings.set(`ai.${provider}.max_tokens_out`, out);
+      const c = ctx.ai.getContextConfigFor(provider);
+      assert.equal(c.contextWindow, win, provider);
+      assert.equal(c.safetyMargin, ctx.ai.contextSafetyMargin(win), `${provider}: safetyMargin`);
+      assert.equal(c.inputBudgetTokens, win - out - c.safetyMargin, `${provider}: inputBudgetTokens`);
+      assert.equal(c.inputBudgetChars, c.inputBudgetTokens * c.charsPerToken, `${provider}: inputBudgetChars`);
+    }
+  } finally { ctx.teardown(); }
+});
+
 test('Synonym-Cache: provider trennt Eintraege', () => {
   const ctx = _bootstrap();
   try {
