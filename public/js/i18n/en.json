@@ -5311,6 +5311,8 @@
   "headline.tooShort": "This piece is too short for a headline set of its own.",
   "headline.editorHint": "Variants, teaser and the full channel limits",
   "headline.openWorkshop": "Open headline workshop",
+  "headline.head.on": "Show headline block",
+  "headline.head.off": "Hide headline block",
   "job.label.headlineVariants": "Headline variants",
   "job.phase.headlineDrafting": "Drafting variants…",
   "job.error.headlineArrayMissing": "The headline workshop returned no variants array.",

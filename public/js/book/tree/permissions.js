@@ -1,5 +1,5 @@
 import { EVT } from '../../events.js';
-import { komplettHiddenFor } from '../../cards/feature-registry.js';
+import { komplettHiddenFor, isJournalisticBuchtyp } from '../../cards/feature-registry.js';
 
 // ACL-Rolle + editor-relevante book_settings-Spiegel pro Buch + abgeleitete
 // Rechte-Getter (canEdit/canReview/isViewer) + Buchtyp-Helfer.
@@ -128,6 +128,14 @@ export const treePermissionsMethods = {
   },
   isTagebuch() {
     return this.currentBuchtyp?.() === 'tagebuch';
+  },
+  // Gate fuer den redaktionellen Apparat im Root-Scope: aktuell der Ein/Aus-
+  // Knopf des Titel-Kopfs in der Notebook-Toolbar und in der Lese-Kopfleiste.
+  // In einem Roman gibt es keine Dachzeile — der Knopf schaltete dort etwas,
+  // das gar nicht existiert. Dieselbe Typ-Liste wie die Titel-Werkstatt
+  // (feature-registry.js#JOURNALISTIC_BUCHTYPEN).
+  isJournalistischesBuch() {
+    return isJournalisticBuchtyp(this.currentBuchtyp?.());
   },
   // Gate fuer die Komplettanalyse-Einstiegspunkte im Root-Scope (Header-Button).
   // Palette und Overview-CTA lesen dasselbe Gate ueber `komplettHiddenFor`.

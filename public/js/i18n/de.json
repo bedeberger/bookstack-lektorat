@@ -5311,6 +5311,8 @@
   "headline.tooShort": "Der Beitrag ist zu kurz für einen eigenen Titelapparat.",
   "headline.editorHint": "Varianten, Teaser und die vollständigen Kanal-Limits",
   "headline.openWorkshop": "Titel-Werkstatt öffnen",
+  "headline.head.on": "Titel-Kopf einblenden",
+  "headline.head.off": "Titel-Kopf ausblenden",
   "job.label.headlineVariants": "Titel-Varianten",
   "job.phase.headlineDrafting": "Formuliere Varianten…",
   "job.error.headlineArrayMissing": "Die Titel-Werkstatt hat kein Varianten-Array geliefert.",

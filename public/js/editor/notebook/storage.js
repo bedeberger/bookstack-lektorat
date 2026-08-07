@@ -38,7 +38,7 @@ export function readNormalSnapshot() {
 }
 
 // User-Prefs für Notebook-Editor-Layout (Fullscreen, Seitenbreite,
-// Steuerzeichen, Zoom). Persistiert in localStorage über alle Tabs/Sessions
+// Steuerzeichen, Titel-Kopf, Zoom). Persistiert in localStorage über alle Tabs/Sessions
 // hinweg — der Editor soll beim nächsten Eintritt so aussehen wie beim letzten
 // Verlassen. Zoom multipliziert sich orthogonal zu Fit-Width (reines
 // CSS-cqi-Scaling, kein JS-Vorab-Compute), darum ist er eine eigene Pref.
@@ -49,7 +49,11 @@ const EDITOR_PREFS_KEY = 'notebook.editorPrefs';
 export const ZOOM_MIN = 0.7;
 export const ZOOM_MAX = 2.5;
 
-const DEFAULTS = { fullscreen: false, fitWidth: false, showMarks: false, zoom: 1 };
+// `showHead` ist die einzige Pref mit Default AN: der Titel-Kopf ist Inhalt des
+// Beitrags, nicht Dekoration wie die Steuerzeichen. Er wird ausgeblendet, wenn
+// jemand am Fliesstext arbeitet und ihn nicht braucht — nicht eingeschaltet,
+// wenn jemand ihn sucht.
+const DEFAULTS = { fullscreen: false, fitWidth: false, showMarks: false, showHead: true, zoom: 1 };
 
 function normalizeZoom(v) {
   const n = Number(v);
@@ -62,6 +66,10 @@ function normalizePrefs(prefs) {
     fullscreen: !!prefs?.fullscreen,
     fitWidth: !!prefs?.fitWidth,
     showMarks: !!prefs?.showMarks,
+    // Ausfallsicher zur Sichtbarkeit: ein alter localStorage-Eintrag ohne den
+    // Schlüssel (und ein noch nicht initialisierter State beim Persistieren
+    // einer NACHBAR-Pref) darf den Kopf nicht verschwinden lassen.
+    showHead: prefs?.showHead !== false,
     zoom: normalizeZoom(prefs?.zoom ?? 1),
   };
 }

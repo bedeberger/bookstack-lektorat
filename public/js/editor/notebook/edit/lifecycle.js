@@ -218,6 +218,7 @@ export const lifecycleMethods = {
     app.pageEditorFullscreen = prefs.fullscreen;
     app.pageEditorFitWidth = prefs.fitWidth;
     app.pageEditorShowMarks = prefs.showMarks;
+    app.pageEditorShowHead = prefs.showHead;
     app.pageEditorZoom = prefs.zoom;
     // Marks-Layer erst nach dem Alpine-x-show-Flush vermessen: der
     // Editor-Wrapper ist in diesem Tick noch display:none, alle Rects wären 0.

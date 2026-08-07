@@ -178,6 +178,12 @@ const notebookState = () => ({
   // CSS-Pseudo-Element-Dekoration auf dem contenteditable (page-view.css),
   // kein Markup im gespeicherten HTML. User-Wahl, in editorPrefs persistiert.
   pageEditorShowMarks: false,
+  // Titel-Kopf des Beitrags anzeigen (Dachzeile/Titel/Lead, nur publizistische
+  // Bücher — siehe editor-page-head-card.js). ANZEIGE-Wahl im Notebook-Editor,
+  // gilt für Lese- UND Bearbeitungsmodus: sie blendet den Kopf aus, wenn jemand
+  // am Fliesstext arbeitet, und ändert nichts an den gespeicherten Feldern und
+  // nichts an Share-Reader oder Export. Default AN, in editorPrefs persistiert.
+  pageEditorShowHead: true,
   // Cross-User-Konflikt aus _checkPageConflict. quickSave (Auto-Save / Exit-
   // Fokus) zeigt keinen Modal — der Banner ist im Fokus-Header sichtbar und
   // bleibt bis zum nächsten erfolgreichen Save oder bis User explizit

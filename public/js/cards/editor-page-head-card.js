@@ -27,6 +27,7 @@ import { EVT } from '../events.js';
 import { fetchJson, sendJson } from '../utils/net.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { isJournalisticBuchtyp } from './feature-registry.js';
+import { readEditorPrefs } from '../editor/notebook/storage.js';
 import {
   HEADLINE_HEAD_FIELDS, HEADLINE_LONG_FIELDS,
   channelFit, tightestLimit, fieldLabelKey,
@@ -55,6 +56,15 @@ export function registerEditorPageHeadCard() {
     _headFetchSeq: 0,
 
     init() {
+      // Anzeige-Wahl aus den Editor-Prefs holen. Der zweite Restore-Punkt sitzt
+      // in edit/lifecycle.js#startEdit — der greift aber erst beim ersten
+      // Eintritt in den Bearbeitungsmodus, und der Kopf steht auch im
+      // Lesemodus. Beide lesen dieselbe SSoT (notebook/storage.js).
+      try {
+        const app = window.__app;
+        if (app) app.pageEditorShowHead = readEditorPrefs().showHead;
+      } catch { /* Default aus app-state (an) bleibt stehen */ }
+
       this._headLifecycle = setupCardLifecycle(this, {
         name: 'editorPageHead',
         resetState: () => ({
@@ -72,12 +82,27 @@ export function registerEditorPageHeadCard() {
 
     // ── Sichtbarkeit ─────────────────────────────────────────────────────────
 
-    /** Der Kopf existiert nur in publizistischen Büchern — in einem Roman gibt
-     *  es keine Dachzeile. Gleiches Gate wie die Titel-Werkstatt. */
-    headVisible() {
+    /**
+     * Hat dieser Beitrag überhaupt einen Titelapparat? In einem Roman gibt es
+     * keine Dachzeile — gleiches Gate wie die Titel-Werkstatt, nicht
+     * abschaltbar. Steuert AUCH das Laden.
+     */
+    headAvailable() {
       const app = window.__app;
       if (!app?.currentPage) return false;
       return isJournalisticBuchtyp(app.currentBuchtyp?.());
+    },
+
+    /**
+     * Wird er gerade gezeigt? Zusätzlich zur Verfügbarkeit die Anzeige-Wahl des
+     * Users (Toolbar-Knopf, `pageEditorShowHead`). Sie blendet nur aus — die
+     * gespeicherten Felder, der Share-Reader und jeder Export bleiben unberührt.
+     *
+     * Bewusst NICHT die Lade-Bedingung: sonst stünde der Kopf nach dem
+     * Wiedereinschalten leer da, bis jemand die Seite wechselt.
+     */
+    headVisible() {
+      return this.headAvailable() && !!window.__app?.pageEditorShowHead;
     },
 
     headFields() { return HEADLINE_HEAD_FIELDS; },
@@ -100,7 +125,7 @@ export function registerEditorPageHeadCard() {
       this.headDraft = EMPTY();
       this.headSaved = EMPTY();
       this.headLoaded = false;
-      if (!id || !this.headVisible()) return;
+      if (!id || !this.headAvailable()) return;
       const seq = ++this._headFetchSeq;
       try {
         const data = await fetchJson(`/headline/page/${id}`);

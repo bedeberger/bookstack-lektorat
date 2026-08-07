@@ -181,6 +181,29 @@ Absicht alles aus, was nicht der laufende Satz ist. Der Bucheditor zeigt den
 Manuskript-Stream über das ganze Ressort — dort gehört der Kopf an jeden Beitrag
 im Stream und nicht an eine Karte; eigenes Vorhaben.
 
+**Ein-/ausblendbar** über das `heading`-Icon — in der Edit-Toolbar
+([editor-page-toolbar.html](../public/partials/editor-page-toolbar.html), inline
+plus Meatball-Menü) **und** in der Lese-Kopfleiste. Der zweite Knopf ist kein
+Luxus: die Edit-Toolbar gibt es nur im Bearbeitungsmodus, und wer den Kopf dort
+wegklappt, käme im Lesemodus sonst nicht mehr an ihn heran. Beide Knöpfe sind auf
+`isJournalistischesBuch()` gegatet — in einem Roman schalteten sie etwas, das
+nicht existiert.
+
+Der Zustand ist **reine Anzeige** (`pageEditorShowHead`, in `editorPrefs`
+persistiert wie Zoom und Steuerzeichen): er blendet den Kopf im Notebook-Editor
+aus, ändert aber weder die gespeicherten Felder noch Share-Reader oder Export.
+Wer beim Schreiben am Fliesstext den Kopf wegklappt, veröffentlicht ihn trotzdem.
+Zwei Dinge folgen daraus:
+
+- **Default AN** — als einzige der Editor-Prefs. Der Kopf ist Inhalt des
+  Beitrags, keine Dekoration wie die Steuerzeichen; er wird ausgeblendet, wenn
+  jemand ihn nicht braucht, nicht eingeschaltet, wenn jemand ihn sucht.
+  `normalizePrefs` fällt darum auf `showHead: prefs?.showHead !== false` zurück:
+  ein alter Eintrag ohne den Schlüssel lässt ihn stehen.
+- **Die Anzeige-Wahl ist nicht die Lade-Bedingung** (`headVisible()` vs.
+  `headAvailable()` in der Karte) — sonst stünde der Kopf nach dem
+  Wiedereinschalten leer da, bis jemand die Seite wechselt.
+
 **Zweiter Schreibpfad, bewusst getrennt:** gespeichert wird über
 `PUT /headline/page/:id`, dieselbe Route wie in der Titel-Werkstatt, **nicht**
 über den Seiten-Save. Der Kopf steht in `page_headline`, nicht in

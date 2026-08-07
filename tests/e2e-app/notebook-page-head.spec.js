@@ -22,6 +22,13 @@ const { bootApp, selectSeededBook } = require('./_helpers/app');
 
 const HEAD = '#editor-card .page-head';
 
+// Der Ein-/Aus-Knopf trägt den Zustand im aria-label (wie seine Geschwister in
+// der Toolbar): sichtbarer Kopf → „ausblenden", verborgener → „einblenden".
+// Aus den Locale-Dateien gelesen statt hier kopiert.
+const DE = require(process.cwd() + '/public/js/i18n/de.json');
+const TIP_OFF = DE['headline.head.off'];
+const TIP_ON = DE['headline.head.on'];
+
 async function setBuchtyp(page, buchtyp) {
   await page.evaluate(async (bt) => {
     const bookId = window.Alpine.store('nav').selectedBookId;
@@ -154,6 +161,56 @@ test.describe('Notebook: Titel-Kopf des Beitrags', () => {
     await expect(page.locator(`${HEAD} .page-head__kicker`)).toHaveText('Kultur');
     await expect(page.locator(`${HEAD} .page-head__title`)).toHaveText('Ein Abend im Depot');
     await expect(page.locator(`${HEAD} .page-head__lead`)).toHaveText('Was blieb.');
+  });
+
+  test('der heading-Knopf blendet den Kopf aus — in beiden Modi und über den Reload', async ({ page }) => {
+    await setBuchtyp(page, 'journalismus');
+    const pageId = await openPage(page, 4);
+    await page.evaluate(async (id) => {
+      await fetch(`/headline/page/${id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dachzeile: 'Sport', titel: 'Ein Satz zu viel', lead: 'Kurz.' }),
+      });
+    }, pageId);
+    await openPage(page, 0);
+    await openPage(page, 4);
+    await expect(page.locator(`${HEAD} .page-head__title`)).toBeVisible();
+
+    // Lese-Kopfleiste: der Knopf ist da (die Edit-Toolbar gibt es hier nicht).
+    const readBtn = page.locator(`#editor-card .card-actions button[aria-label="${TIP_OFF}"]`);
+    await readBtn.click();
+    await expect(page.locator(HEAD)).toBeHidden();
+
+    // Der Zustand gilt auch im Bearbeitungsmodus …
+    await startEdit(page);
+    await expect(page.locator(HEAD)).toBeHidden();
+
+    // … und der Knopf der Edit-Toolbar holt ihn zurück — MIT Inhalt. Die
+    // Anzeige-Wahl darf nie die Lade-Bedingung gewesen sein.
+    await page.locator(`.page-editor-toolbar button[aria-label="${TIP_ON}"]`).first().click();
+    await expect(page.locator(`${HEAD} #page-head-titel`)).toHaveValue('Ein Satz zu viel');
+
+    // Wieder aus, und über den Reload hinweg aus (editorPrefs).
+    await page.locator(`.page-editor-toolbar button[aria-label="${TIP_OFF}"]`).first().click();
+    await expect(page.locator(HEAD)).toBeHidden();
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await bootApp(page);
+    await selectSeededBook(page);
+    await openPage(page, 4);
+    await expect(page.locator(HEAD)).toBeHidden();
+
+    // Zurücksetzen für die übrigen Tests dieser Datei.
+    await page.locator(`#editor-card .card-actions button[aria-label="${TIP_ON}"]`).click();
+    await expect(page.locator(`${HEAD} .page-head__title`)).toBeVisible();
+  });
+
+  test('im Roman gibt es den Knopf nicht', async ({ page }) => {
+    // Er schaltete dort etwas, das gar nicht existiert.
+    await setBuchtyp(page, 'roman');
+    await openPage(page, 0);
+    await expect(page.locator(`#editor-card .card-actions button[aria-label="${TIP_OFF}"]`)).toBeHidden();
+    await startEdit(page);
+    await expect(page.locator(`.page-editor-toolbar button[aria-label="${TIP_OFF}"]`)).toBeHidden();
   });
 
   test('das Zeichen-Lineal färbt, sperrt aber nicht', async ({ page }) => {

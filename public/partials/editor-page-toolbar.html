@@ -94,6 +94,17 @@
             @click="togglePageEditorShowMarks()">
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=692#pilcrow"/></svg>
     </button>
+    <!-- Titel-Kopf des Beitrags ein-/ausblenden. Nur publizistische Buecher —
+         in einem Roman gibt es keine Dachzeile. Reine ANZEIGE-Wahl fuer Lese-
+         und Bearbeitungsmodus (State pageEditorShowHead, in editorPrefs):
+         aendert weder die gespeicherten Felder noch Share-Reader oder Export. -->
+    <button type="button" class="icon-btn" x-show="isJournalistischesBuch()"
+            :aria-pressed="pageEditorShowHead"
+            :data-tip="pageEditorShowHead ? t('headline.head.off') : t('headline.head.on')"
+            :aria-label="pageEditorShowHead ? t('headline.head.off') : t('headline.head.on')"
+            @click="togglePageEditorShowHead()">
+      <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=695#heading"/></svg>
+    </button>
     <span class="action-sep" aria-hidden="true"></span>
     <!-- Entity-Linking-Toggle (Figuren/Orte-Highlights + Szenen/Ereignisse-Panel). Aendert nur die
          Buch-Setting (book_settings.entities_enabled, PUT /booksettings/:id/entities-enabled, Event
@@ -170,6 +181,15 @@
               @click.stop="togglePageEditorShowMarks()">
         <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=692#pilcrow"/></svg>
         <span x-text="pageEditorShowMarks ? t('editor.toolbar.marksOff') : t('editor.toolbar.marksOn')"></span>
+      </button>
+      <!-- Titel-Kopf ein-/ausblenden. Nur publizistische Buecher; reine
+           Anzeige-Wahl (siehe Inline-Zwilling oben). -->
+      <button type="button" class="context-menu-item context-menu-item--icon" role="menuitem"
+              x-show="isJournalistischesBuch()"
+              :class="{ 'context-menu-item--on': pageEditorShowHead }"
+              @click.stop="togglePageEditorShowHead()">
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=695#heading"/></svg>
+        <span x-text="pageEditorShowHead ? t('headline.head.off') : t('headline.head.on')"></span>
       </button>
       <div class="context-menu-sep" role="separator"></div>
       <!-- Entity-Linking-Toggle (Figuren/Orte-Highlights + Szenen/Ereignisse-Panel). Aendert nur die

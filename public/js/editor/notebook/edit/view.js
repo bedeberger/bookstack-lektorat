@@ -13,6 +13,7 @@ export const viewMethods = {
       fullscreen: app.pageEditorFullscreen,
       fitWidth: app.pageEditorFitWidth,
       showMarks: app.pageEditorShowMarks,
+      showHead: app.pageEditorShowHead,
       zoom: app.pageEditorZoom,
     });
   },
@@ -47,6 +48,19 @@ export const viewMethods = {
     this._persistEditorPrefs();
     if (app.pageEditorShowMarks) this._installFormatMarks();
     else this._uninstallFormatMarks();
+  },
+
+
+  // Titel-Kopf des Beitrags ein-/ausblenden (nur publizistische Bücher, der
+  // Button ist sonst gar nicht da). Reine ANZEIGE-Wahl für Lese- UND
+  // Bearbeitungsmodus des Notebook-Editors: die gespeicherten Felder bleiben
+  // unberührt, Share-Reader und Export zeigen den Kopf weiter. Wer beim
+  // Schreiben am Fliesstext den Kopf wegklappt, veröffentlicht ihn trotzdem.
+  togglePageEditorShowHead() {
+    const app = editorHost();
+    if (!app) return;
+    app.pageEditorShowHead = !app.pageEditorShowHead;
+    this._persistEditorPrefs();
   },
 
 

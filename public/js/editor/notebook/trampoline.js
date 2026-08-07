@@ -23,6 +23,7 @@ export const notebookTrampoline = {
   togglePageEditorFullscreen() { card()?.togglePageEditorFullscreen(); },
   togglePageEditorFitWidth() { card()?.togglePageEditorFitWidth(); },
   togglePageEditorShowMarks() { card()?.togglePageEditorShowMarks(); },
+  togglePageEditorShowHead() { card()?.togglePageEditorShowHead(); },
   pageEditorZoomIn() { card()?.pageEditorZoomIn(); },
   pageEditorZoomOut() { card()?.pageEditorZoomOut(); },
   pageEditorZoomReset() { card()?.pageEditorZoomReset(); },

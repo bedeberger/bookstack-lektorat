@@ -137,6 +137,23 @@
             </button>
           </span>
           <span class="action-sep" aria-hidden="true" x-show="isTagebuch()"></span>
+          <!-- Titel-Kopf ein-/ausblenden, Zwilling des Knopfs in der
+               Edit-Toolbar (editor-page-toolbar.html). Er MUSS auch hier stehen:
+               die Edit-Toolbar gibt es nur im Bearbeitungsmodus, und wer den
+               Kopf dort ausblendet, käme im Lesemodus sonst nicht mehr an ihn
+               heran. Reine Anzeige-Wahl — Share-Reader und Export zeigen ihn
+               weiter. -->
+          <span class="action-group" x-show="isJournalistischesBuch()">
+            <button type="button" class="icon-btn icon-btn--ghost"
+                    :aria-pressed="pageEditorShowHead"
+                    :class="{ 'is-active': pageEditorShowHead }"
+                    :data-tip="pageEditorShowHead ? t('headline.head.off') : t('headline.head.on')"
+                    :aria-label="pageEditorShowHead ? t('headline.head.off') : t('headline.head.on')"
+                    @click="togglePageEditorShowHead()">
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=695#heading"/></svg>
+            </button>
+          </span>
+          <span class="action-sep" aria-hidden="true" x-show="isJournalistischesBuch()"></span>
           <span class="action-group" x-show="canReview()">
             <button type="button" class="icon-btn icon-btn--ghost" @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :data-tip="currentPageEmpty ? t('editor.btn.pageEmpty') : withHotkey(t('editor.btn.checkTitle'), 'runCheck')" :aria-label="t('editor.btn.check')">
               <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#spell-check"/></svg>
