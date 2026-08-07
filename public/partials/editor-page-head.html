@@ -1,8 +1,14 @@
 <!-- Titel-Kopf des Beitrags (Notebook-Editor). Nur in publizistischen Büchern.
-     Lesemodus: gesetzt wie im Ausgabeweg. Edit-Modus: die drei Felder als
-     Eingaben mit knappem Zeichen-Lineal. Der Teaser fehlt hier mit Absicht — er
-     gehört nicht in den Beitrag, sondern in Übersichten (channels.js#
-     HEADLINE_HEAD_FIELDS); gepflegt wird er in der Titel-Werkstatt. -->
+
+     Lese- und Bearbeitungsmodus tragen DIESELBE Typografie: die Felder sind
+     schon beim Tippen so gesetzt, wie der Beitrag später erscheint. Kein
+     Kasten, keine Labels, keine Rahmen — sonst liegt ein Formular auf dem
+     Manuskript, und man sieht gerade nicht, worauf der Text zuläuft. Die
+     Feldnamen tragen die Platzhalter.
+
+     Der Teaser fehlt hier mit Absicht — er gehört nicht in den Beitrag, sondern
+     in Übersichten (channels.js#HEADLINE_HEAD_FIELDS); gepflegt wird er in der
+     Titel-Werkstatt. -->
 <div x-data="editorPageHeadCard" class="page-head" x-show="headVisible() && (editMode || headHasContent())" x-cloak>
 
   <!-- Leseansicht -->
@@ -18,40 +24,64 @@
        jedem Anschlag — siehe Kopfkommentar in editor-page-head-card.js. -->
   <template x-if="editMode">
     <div class="page-head__edit">
+      <!-- Sprung in die Werkstatt (Varianten, Teaser, volle Kanal-Tabelle).
+           Erscheint erst beim Überfahren des Kopfes: im Ruhezustand soll hier
+           nichts stehen, was nicht der Beitrag ist. Oben LINKS, weil oben
+           rechts die Zeichenzahl der Dachzeile aufgeht. -->
+      <button type="button" class="page-head__more"
+              @click="$app.toggleTitelwerkstattCard()"
+              :data-tip="$app.t('headline.editorHint')"
+              x-text="$app.t('headline.openWorkshop')"></button>
+
       <template x-for="feld in headFields()" :key="feld">
         <div class="page-head__field" :class="'page-head__field--' + feld">
-          <label class="page-head__label" :for="'page-head-' + feld">
-            <span x-text="headFieldLabel(feld)"></span>
-            <span class="page-head__count"
-                  :class="'page-head__count--' + headFitState(feld)"
-                  :data-tip="headOverList(feld) || null"
-                  x-text="headLen(feld)"></span>
-          </label>
-
           <template x-if="!headIsLong(feld)">
             <input type="text" class="page-head__input"
                    :id="'page-head-' + feld"
                    x-model="headDraft[feld]"
                    @blur="headSaveField(feld)"
                    :disabled="!$app.canEdit()"
-                   :placeholder="$app.t('headline.placeholder.' + feld)"
+                   :placeholder="headFieldLabel(feld)"
+                   :data-tip="$app.t('headline.placeholder.' + feld)"
+                   :aria-label="headFieldLabel(feld)"
                    autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" data-form-type="other"
                    data-spellcheck="spelling">
           </template>
+          <!-- Der Lead wächst mit seinem Inhalt: eine feste Zeilenzahl wäre im
+               Lesemodus daneben (dort umbricht der Satz frei) und der Wechsel
+               würde springen. -->
           <template x-if="headIsLong(feld)">
-            <textarea class="page-head__input page-head__input--long" rows="2"
+            <textarea class="page-head__input page-head__input--long" rows="1"
                       :id="'page-head-' + feld"
                       x-model="headDraft[feld]"
+                      x-init="const fit = () => $nextTick(() => {
+                                if (!$el.offsetParent) return;
+                                $el.style.height = 'auto';
+                                const h = $el.scrollHeight;
+                                if (h > 0) $el.style.height = h + 'px';
+                              });
+                              fit();
+                              $watch('headPageId', fit);
+                              $watch('headLoaded', fit);"
+                      @input="$el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'"
                       @blur="headSaveField(feld)"
                       :disabled="!$app.canEdit()"
-                      :placeholder="$app.t('headline.placeholder.' + feld)"
+                      :placeholder="headFieldLabel(feld)"
+                      :data-tip="$app.t('headline.placeholder.' + feld)"
+                      :aria-label="headFieldLabel(feld)"
                       data-spellcheck="spelling"></textarea>
           </template>
 
-          <!-- Füllstand gegen den engsten Kanal. Anzeige, keine Validierung:
-               ein zu langer Titel ist ein unfertiger Titel, kein Fehler.
-               Progress-Bar-Pattern: Wrapper ist die Schiene, .progress-bar die
-               Füllung, Breite via --progress (DESIGN.md). -->
+          <!-- Zeichenzahl: erscheint bei Fokus und bleibt stehen, solange es
+               irgendwo nicht mehr passt. Anzeige, keine Validierung — ein zu
+               langer Titel ist ein unfertiger Titel, kein Fehler. -->
+          <span class="page-head__count"
+                :class="'page-head__count--' + headFitState(feld)"
+                :data-tip="headOverList(feld) || null"
+                x-text="headLen(feld)"></span>
+
+          <!-- Füllstand gegen den engsten Kanal. Progress-Bar-Pattern:
+               Wrapper ist die Schiene, .progress-bar die Füllung (DESIGN.md). -->
           <div class="page-head__ruler progress-bar-wrap"
                :class="'page-head__ruler--' + headFitState(feld)"
                role="presentation">
@@ -62,13 +92,6 @@
                 x-text="$app.t('common.saving')"></span>
         </div>
       </template>
-
-      <div class="page-head__foot">
-        <span class="page-head__hint" x-text="$app.t('headline.editorHint')"></span>
-        <button type="button" class="btn-compact page-head__more"
-                @click="$app.toggleTitelwerkstattCard()"
-                x-text="$app.t('headline.openWorkshop')"></button>
-      </div>
 
       <div class="page-head__error" role="alert" x-show="headError" x-cloak x-text="headError"></div>
     </div>

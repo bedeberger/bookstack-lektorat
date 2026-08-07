@@ -401,9 +401,13 @@
 /* Badge-Platz schon vor dem Lazy-Wrap reservieren: der Form-Controller wickelt
  * das Feld erst beim ersten focusin ein und setzt dabei padding-inline-end —
  * ohne Vorab-Reservierung springt das Padding einmalig und das Feld wackelt.
- * card-title--input ausgenommen (span-artige Optik mit padding:0). */
-input[data-spellcheck="spelling"]:not(.card-title--input),
-textarea[data-spellcheck="spelling"]:not(.card-title--input) {
+ * Ausgenommen sind die Felder mit span-artiger Optik (padding:0), die wie
+ * gesetzter Text aussehen sollen und nicht wie ein Formularfeld:
+ * card-title--input (Seitentitel) und page-head__input (Titel-Kopf des
+ * Beitrags, editor/notebook/page-head.css). Dort verschöbe die Reservierung
+ * den Satz gegenüber der Leseansicht. */
+input[data-spellcheck="spelling"]:not(.card-title--input, .page-head__input),
+textarea[data-spellcheck="spelling"]:not(.card-title--input, .page-head__input) {
   padding-inline-end: var(--space-2xl);
 }
 

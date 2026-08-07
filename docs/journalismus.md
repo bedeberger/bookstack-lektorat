@@ -161,10 +161,19 @@ einen in WordPress gepflegten Titel nicht überschreiben.
 `editorPageHeadCard` ([public/js/cards/editor-page-head-card.js](../public/js/cards/editor-page-head-card.js),
 Partial [editor-page-head.html](../public/partials/editor-page-head.html), CSS
 [editor/notebook/page-head.css](../public/css/editor/notebook/page-head.css)).
-Leseansicht: gesetzt wie im Ausgabeweg. Edit-Modus: die drei Felder als Eingaben
-mit knappem Zeichen-Lineal. Damit steht beim Schreiben sichtbar, worauf der Text
-zuläuft — bisher sah man den Titelapparat nur in der Titel-Werkstatt, also
-gerade nicht dort, wo man am Text arbeitet.
+Damit steht beim Schreiben sichtbar, worauf der Text zuläuft — bisher sah man
+den Titelapparat nur in der Titel-Werkstatt, also gerade nicht dort, wo man am
+Text arbeitet.
+
+**Die Eingabe sieht aus wie das Ergebnis.** Lese- und Bearbeitungsmodus teilen
+dieselbe Typografie; die Felder sind randlos, ohne Padding, ohne Labels (die
+Platzhalter tragen die Feldnamen), und beim Umschalten bewegt sich der Kopf
+nicht. Ein Kasten mit Labels und Rahmen wäre ein Formular, das auf dem
+Manuskript liegt — es verdeckte genau die Frage, die es beantworten soll. Alles,
+was Bedienung ist und nicht Beitrag, erscheint erst auf Anforderung: Zeichenzahl
+und Lineal bei Fokus (oder dauerhaft, sobald ein Kanal reisst), der Sprung in
+die Werkstatt beim Überfahren. Die volle Kanal-Tabelle, die Varianten und der
+Teaser bleiben dort — im Editor soll der Kopf schmal sein.
 
 **Nur der Notebook-Editor.** Der Focus-Editor ist der Vollbild-Schreibmodus: ein
 Kopf über der Schreiblinie griffe in seine Höhenkette ein, und er blendet mit
