@@ -464,6 +464,74 @@ export const citeMethods = {
     this._closeCite();
   },
 
+  /**
+   * O-TON EINFÜGEN — ein Redebeitrag aus einem Interview-Transkript wird zum
+   * belegten Blockzitat im Artikel.
+   *
+   * Bewusst KEIN eigener Markup-Weg: es entsteht dasselbe
+   * `<blockquote data-src>` + `span.cite`, das auch der Quellen-Picker erzeugt.
+   * Dadurch trägt der O-Ton ohne Zutun bis ins Quellenverzeichnis, in den
+   * Anmerkungsapparat, in die Zitat-Anteil-Kennzahl und in jeden Exportweg —
+   * und die Warnung bei fehlender Zitatautorisierung (`oton_auth`) greift
+   * überall dort, wo sie auch für jede andere Quelle greift.
+   *
+   * Die Stellenangabe ist die ZEITMARKE. Bei einem Gespräch ist sie das, was die
+   * Seitenzahl bei einem Buch ist: sie führt zur Stelle in der Aufnahme zurück.
+   *
+   * Einfügeort ist der zuletzt gesetzte Caret; ohne Caret hängt der O-Ton ans
+   * Ende des Editorfelds. Bewusst kein Abbruch in dem Fall — den Block danach zu
+   * verschieben ist ein Handgriff, ihn erneut herauszusuchen nicht.
+   *
+   * @returns {boolean} ob eingefügt wurde
+   */
+  insertOTonBlock({ source, text, loc = '' } = {}) {
+    const editEl = getEditEl();
+    const quote = String(text || '').trim();
+    if (!editEl || !source?.id || !quote) return false;
+
+    const app = window.__app;
+    const doc = editEl.ownerDocument || document;
+    const shortText = formatShort(source, {
+      style: app?.citationStyleForCurrentBook || 'apa7',
+      lang: app?.citationLangForCurrentBook || 'de',
+      loc,
+      num: null,
+      mode: 'quote',
+    });
+    const chipHtml = buildCiteHtml({ id: source.id, loc, text: shortText, mode: 'quote' });
+    if (!chipHtml) return false;
+
+    // Der Zitattext geht als TEXTKNOTEN in den Absatz, nie als HTML-String:
+    // er stammt aus einer Transkription und darf nie als Markup gedeutet werden.
+    const bq = doc.createElement('blockquote');
+    const p = doc.createElement('p');
+    p.appendChild(doc.createTextNode(quote + ' '));
+    bq.appendChild(p);
+    setQuoteBlockSource(bq, source.id);
+    const holder = doc.createElement('div');
+    holder.innerHTML = chipHtml;
+    while (holder.firstChild) p.appendChild(holder.firstChild);
+
+    editEl.focus();
+    const range = this._caretRangeIn(editEl);
+    const anchor = range ? findBlock(range.startContainer, editEl) : null;
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(bq, anchor.nextSibling);
+    else editEl.appendChild(bq);
+
+    markCitesAtomic(editEl);
+    const sel = doc.getSelection();
+    if (sel) {
+      const after = doc.createRange();
+      after.setStartAfter(bq);
+      after.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(after);
+    }
+    // Ohne das greift der Autosave nicht — der Block wäre beim Verlassen weg.
+    window.__app?._markEditDirty?.();
+    return true;
+  },
+
   _closeCite() {
     this.citeShow = false;
     this.citeQuery = '';

@@ -12,6 +12,16 @@
 //                     Hierarchie: viewer < lektor < editor < owner. Pflichtfeld.
 //   `requiresBuchtyp` – Karte erscheint nur bei diesem Buchtyp (z.B. 'tagebuch').
 //                     Gate greift in Palette (featuresVisibleFor) + isFeatureAvailable.
+//   `hiddenForBuchtyp` – Array von Buchtypen, bei denen die Karte VERSCHWINDET.
+//                     Gegenstueck zu `requiresBuchtyp`, fuer Karten, die es
+//                     ueberall ausser in einem Werktyp gibt. Anlass: ein
+//                     journalistisches Ressort hat keine Figuren, keinen Plot,
+//                     keine Motive und keinen Buchsatz — diese Karten dort
+//                     anzubieten liesse das Produkt wie ein Romanwerkzeug mit
+//                     Journalismus-Aufkleber wirken. Gate greift in Palette
+//                     (featuresVisibleFor), in isFeatureAvailable UND im
+//                     generischen Toggle (_toggleCardGeneric), damit auch ein
+//                     Deep-Link (#plot) die Karte nicht oeffnet.
 //   `dependsOnKomplett` – true: Karte konsumiert Komplettanalyse-Output
 //                     (Figuren/Orte/Szenen/Ereignisse/Fakten/Soziogramm/Kontinuität).
 //                     Palette zeigt dafür ein Hinweis-Badge.
@@ -26,6 +36,19 @@
 //
 // `aliases` (optional): zusätzliche Suchbegriffe (Synonyme, EN-Übersetzungen).
 
+// Buchtypen, in denen die Komplettanalyse gar nicht angeboten wird. Sie
+// produziert ausschliesslich narrative Ableitungen (Figuren, Soziogramm, Orte,
+// Songs, Weltfakten, Szenen, Zeitstrahl, Kontinuitaet, Erzaehlprofil) — und
+// genau deren Karten sind im Ressort via `hiddenForBuchtyp` schon weg. Ein Lauf
+// haette dort kein Ziel, wuerde aber Zeit und Tokens kosten. SSoT fuer die drei
+// Einstiegspunkte: Header-Button (komplett-status.html), Palette-Aktion
+// (`action.komplett`) und das CTA-Tile der Buch-Uebersicht.
+export const KOMPLETT_HIDDEN_BUCHTYPEN = ['journalismus'];
+
+export function komplettHiddenFor(buchtyp) {
+  return !!buchtyp && KOMPLETT_HIDDEN_BUCHTYPEN.includes(buchtyp);
+}
+
 export const FEATURES = [
   // Übersicht — Viewer darf read-only Buch-Overview sehen.
   { key: 'overview',       kind: 'toggle', group: 'tools',  labelKey: 'tile.overview',       descKey: 'tile.overview.desc',       flag: 'showBookOverviewCard',   toggle: 'toggleBookOverviewCard',   requiresBook: true, minRole: 'viewer',
@@ -37,35 +60,44 @@ export const FEATURES = [
     aliases: ['style','heatmap','passiv','fuellwoerter','filler','readability','lesbarkeit','metrik'] },
   { key: 'fehlerHeatmap',  kind: 'toggle', group: 'review', labelKey: 'tile.fehlerHeatmap',  descKey: 'tile.fehlerHeatmap.desc',  flag: 'showFehlerHeatmapCard',  toggle: 'toggleFehlerHeatmapCard',  requiresBook: true, minRole: 'editor',
     aliases: ['errors','heatmap','findings','lektorat','typo','tippfehler'] },
-  { key: 'kontinuitaet',   kind: 'toggle', group: 'review', labelKey: 'tile.kontinuitaet',   descKey: 'tile.kontinuitaet.desc',   flag: 'showKontinuitaetCard',   toggle: 'toggleKontinuitaetCard',   requiresBook: true, minRole: 'editor', dependsOnKomplett: true, requiresClaude: true,
+  { key: 'kontinuitaet',   kind: 'toggle', group: 'review', labelKey: 'tile.kontinuitaet',   descKey: 'tile.kontinuitaet.desc',   flag: 'showKontinuitaetCard',   toggle: 'toggleKontinuitaetCard',   requiresBook: true, minRole: 'editor', dependsOnKomplett: true, requiresClaude: true, hiddenForBuchtyp: ['journalismus'],
     aliases: ['continuity','widerspruch','plot-hole','contradiction','consistency'] },
   { key: 'redundanz',      kind: 'toggle', group: 'review', labelKey: 'tile.redundanz',      descKey: 'tile.redundanz.desc',      flag: 'showRedundanzCard',      toggle: 'toggleRedundanzCard',      requiresBook: true, minRole: 'editor',
     aliases: ['redundanz','redundancy','doppelung','doppelungen','duplicate','duplikate','wiederholung','wiederholungen','repetition','dupe','semantik','similar'] },
   { key: 'wortschatz',     kind: 'toggle', group: 'review', labelKey: 'tile.wortschatz',     descKey: 'tile.wortschatz.desc',     flag: 'showWortschatzCard',     toggle: 'toggleWortschatzCard',     requiresBook: true, minRole: 'editor',
     aliases: ['wortschatz','vocabulary','lexik','lexical','diversitaet','diversity','mattr','mtld','ttr','hapax','heaps','yule','lieblingswort','lieblingswoerter','phrasen','wendung','wendungen','tic','tics','ngram','kollokation','keyness','stilometrie','stylometry'] },
-  { key: 'erzaehlprofil',  kind: 'toggle', group: 'review', labelKey: 'tile.erzaehlprofil',  descKey: 'tile.erzaehlprofil.desc',  flag: 'showErzaehlprofilCard',  toggle: 'toggleErzaehlprofilCard',  requiresBook: true, minRole: 'editor', dependsOnKomplett: true, requiresClaude: true,
+  { key: 'erzaehlprofil',  kind: 'toggle', group: 'review', labelKey: 'tile.erzaehlprofil',  descKey: 'tile.erzaehlprofil.desc',  flag: 'showErzaehlprofilCard',  toggle: 'toggleErzaehlprofilCard',  requiresBook: true, minRole: 'editor', dependsOnKomplett: true, requiresClaude: true, hiddenForBuchtyp: ['journalismus'],
     aliases: ['pov','perspektive','erzählperspektive','erzaehlperspektive','narration','pacing','spannungskurve','themen','motive','narrative','point of view','erzählprofil'] },
   // Tagebuch-Rückblick: nur bei Buchtyp 'tagebuch'. Rückwärtsgewandte KI-Verdichtung.
   { key: 'tagebuchRueckblick', kind: 'toggle', group: 'review', labelKey: 'tile.tagebuchRueckblick', descKey: 'tile.tagebuchRueckblick.desc', flag: 'showTagebuchRueckblickCard', toggle: 'toggleTagebuchRueckblickCard', requiresBook: true, minRole: 'editor', requiresBuchtyp: 'tagebuch',
     aliases: ['rückblick','rueckblick','retrospective','diary','tagebuch','jahresrückblick','monatsrückblick','review'] },
+  // Struktur-Check: nur bei Buchtyp 'journalismus'. Prueft die FORM der Textsorte
+  // (Lead, Aufbau, Gegenposition), nicht die Sprache — das macht das Lektorat.
+  { key: 'struktur',       kind: 'toggle', group: 'review', labelKey: 'tile.struktur',       descKey: 'tile.struktur.desc',       flag: 'showStrukturCard',       toggle: 'toggleStrukturCard',       requiresBook: true, minRole: 'editor', requiresBuchtyp: 'journalismus',
+    aliases: ['struktur','textsorte','textsorten','lead','vorspann','aufbau','nachricht','bericht','reportage','kommentar','glosse','interview','portraet','porträt','feature','rezension','w-fragen','pyramide','redaktion','journalismus','structure','genre'] },
+  // Titel-Werkstatt: Dachzeile/Titel/Lead/Teaser als Metadata der Seite. Gilt
+  // fuer beide publizistischen Buchtypen — ein Blog braucht denselben
+  // Titelapparat wie ein Ressort, nur mit WordPress statt Druck als Ziel.
+  { key: 'titelwerkstatt', kind: 'toggle', group: 'manuscript', labelKey: 'tile.titelwerkstatt', descKey: 'tile.titelwerkstatt.desc', flag: 'showTitelwerkstattCard', toggle: 'toggleTitelwerkstattCard', requiresBook: true, minRole: 'editor', requiresBuchtyp: ['journalismus', 'blog'],
+    aliases: ['titel','titelwerkstatt','dachzeile','ueberzeile','überzeile','kicker','lead','vorspann','teaser','anreisser','anreisser','schlagzeile','headline','seo','meta','varianten','zeichenlimit'] },
   // Welt & Plot — World-Cards: editor+ (für Viewer/Lektor nicht relevant).
-  { key: 'figuren',        kind: 'toggle', group: 'world',  labelKey: 'tile.figuren',        descKey: 'tile.figuren.desc',        flag: 'showFiguresCard',        toggle: 'toggleFiguresCard',        requiresBook: true, minRole: 'editor', dependsOnKomplett: true,
+  { key: 'figuren',        kind: 'toggle', group: 'world',  labelKey: 'tile.figuren',        descKey: 'tile.figuren.desc',        flag: 'showFiguresCard',        toggle: 'toggleFiguresCard',        requiresBook: true, minRole: 'editor', dependsOnKomplett: true, hiddenForBuchtyp: ['journalismus'],
     aliases: ['characters','personen','cast','protagonist','antagonist','soziogramm','graph'] },
-  { key: 'werkstatt',      kind: 'toggle', group: 'world',  labelKey: 'tile.werkstatt',      descKey: 'tile.werkstatt.desc',      flag: 'showFigurWerkstattCard', toggle: 'toggleFigurWerkstattCard', requiresBook: true, minRole: 'editor',
+  { key: 'werkstatt',      kind: 'toggle', group: 'world',  labelKey: 'tile.werkstatt',      descKey: 'tile.werkstatt.desc',      flag: 'showFigurWerkstattCard', toggle: 'toggleFigurWerkstattCard', requiresBook: true, minRole: 'editor', hiddenForBuchtyp: ['journalismus'],
     aliases: ['workshop','mindmap','draft','entwurf','brainstorm','character','figur','vorwaerts'] },
-  { key: 'szenen',         kind: 'toggle', group: 'world',  labelKey: 'tile.szenen',         descKey: 'tile.szenen.desc',         flag: 'showSzenenCard',         toggle: 'toggleSzenenCard',         requiresBook: true, minRole: 'editor', dependsOnKomplett: true,
+  { key: 'szenen',         kind: 'toggle', group: 'world',  labelKey: 'tile.szenen',         descKey: 'tile.szenen.desc',         flag: 'showSzenenCard',         toggle: 'toggleSzenenCard',         requiresBook: true, minRole: 'editor', dependsOnKomplett: true, hiddenForBuchtyp: ['journalismus'],
     aliases: ['scenes','beats','sequences','akt'] },
-  { key: 'orte',           kind: 'toggle', group: 'world',  labelKey: 'tile.orte',           descKey: 'tile.orte.desc',           flag: 'showOrteCard',           toggle: 'toggleOrteCard',           requiresBook: true, minRole: 'editor', dependsOnKomplett: true,
+  { key: 'orte',           kind: 'toggle', group: 'world',  labelKey: 'tile.orte',           descKey: 'tile.orte.desc',           flag: 'showOrteCard',           toggle: 'toggleOrteCard',           requiresBook: true, minRole: 'editor', dependsOnKomplett: true, hiddenForBuchtyp: ['journalismus'],
     aliases: ['locations','schauplaetze','places','setting','welt','world'] },
-  { key: 'songs',          kind: 'toggle', group: 'world',  labelKey: 'tile.songs',          descKey: 'tile.songs.desc',          flag: 'showSongsCard',          toggle: 'toggleSongsCard',          requiresBook: true, minRole: 'editor', dependsOnKomplett: true,
+  { key: 'songs',          kind: 'toggle', group: 'world',  labelKey: 'tile.songs',          descKey: 'tile.songs.desc',          flag: 'showSongsCard',          toggle: 'toggleSongsCard',          requiresBook: true, minRole: 'editor', dependsOnKomplett: true, hiddenForBuchtyp: ['journalismus'],
     aliases: ['musik','music','songs','musikstuecke','musikstücke','playlist','soundtrack','band','interpret','tracks'] },
-  { key: 'ereignisse',     kind: 'toggle', group: 'world',  labelKey: 'tile.events',         descKey: 'tile.events.desc',         flag: 'showEreignisseCard',     toggle: 'toggleEreignisseCard',     requiresBook: true, minRole: 'editor', dependsOnKomplett: true,
+  { key: 'ereignisse',     kind: 'toggle', group: 'world',  labelKey: 'tile.events',         descKey: 'tile.events.desc',         flag: 'showEreignisseCard',     toggle: 'toggleEreignisseCard',     requiresBook: true, minRole: 'editor', dependsOnKomplett: true, hiddenForBuchtyp: ['journalismus'],
     aliases: ['events','timeline','zeitstrahl','plot','chronologie'] },
-  { key: 'plot',           kind: 'toggle', group: 'world',  labelKey: 'tile.plot',           descKey: 'tile.plot.desc',           flag: 'showPlotCard',           toggle: 'togglePlotCard',           requiresBook: true, minRole: 'editor',
+  { key: 'plot',           kind: 'toggle', group: 'world',  labelKey: 'tile.plot',           descKey: 'tile.plot.desc',           flag: 'showPlotCard',           toggle: 'togglePlotCard',           requiresBook: true, minRole: 'editor', hiddenForBuchtyp: ['journalismus'],
     aliases: ['plot','handlung','beat','beat-board','board','akt','struktur','outline','dramaturgie','story','plotten','beats','skizze','wendepunkt'] },
-  { key: 'motiv',          kind: 'toggle', group: 'world',  labelKey: 'tile.motiv',          descKey: 'tile.motiv.desc',          flag: 'showMotivCard',          toggle: 'toggleMotivCard',          requiresBook: true, minRole: 'editor',
+  { key: 'motiv',          kind: 'toggle', group: 'world',  labelKey: 'tile.motiv',          descKey: 'tile.motiv.desc',          flag: 'showMotivCard',          toggle: 'toggleMotivCard',          requiresBook: true, minRole: 'editor', hiddenForBuchtyp: ['journalismus'],
     aliases: ['motiv','motive','thema','themen','theme','motif','leitmotiv','symbol','symbolik','konstellation','bildsprache','metapher'] },
-  { key: 'weltfakten',     kind: 'toggle', group: 'world',  labelKey: 'tile.weltfakten',     descKey: 'tile.weltfakten.desc',     flag: 'showWorldFactsCard',     toggle: 'toggleWorldFactsCard',     requiresBook: true, minRole: 'editor', dependsOnKomplett: true,
+  { key: 'weltfakten',     kind: 'toggle', group: 'world',  labelKey: 'tile.weltfakten',     descKey: 'tile.weltfakten.desc',     flag: 'showWorldFactsCard',     toggle: 'toggleWorldFactsCard',     requiresBook: true, minRole: 'editor', dependsOnKomplett: true, hiddenForBuchtyp: ['journalismus'],
     aliases: ['facts','fakten','weltregeln','worldbuilding','lore','magiesystem','rules','kanon','canon','regeln'] },
   { key: 'recherche',      kind: 'toggle', group: 'world',  labelKey: 'tile.recherche',      descKey: 'tile.recherche.desc',      flag: 'showRechercheCard',      toggle: 'toggleRechercheCard',      requiresBook: true, minRole: 'editor',
     aliases: ['research','wissen','knowledge','notizen','notes','quellen','sources','zitate','quotes','links','material','archiv','board'] },
@@ -90,9 +122,9 @@ export const FEATURES = [
   // Export: viewer reicht (Lese-Zugang impliziert Export).
   { key: 'export',         kind: 'toggle', group: 'export', labelKey: 'tile.export',         descKey: 'tile.export.desc',         flag: 'showExportCard',         toggle: 'toggleExportCard',         requiresBook: true, minRole: 'viewer',
     aliases: ['download','pdf','epub','html','txt','markdown','md','herunterladen','speichern'] },
-  { key: 'pdfExport',      kind: 'toggle', group: 'export', labelKey: 'tile.pdfExport',      descKey: 'tile.pdfExport.desc',      flag: 'showPdfExportCard',      toggle: 'togglePdfExportCard',      requiresBook: true, minRole: 'viewer',
+  { key: 'pdfExport',      kind: 'toggle', group: 'export', labelKey: 'tile.pdfExport',      descKey: 'tile.pdfExport.desc',      flag: 'showPdfExportCard',      toggle: 'togglePdfExportCard',      requiresBook: true, minRole: 'viewer', hiddenForBuchtyp: ['journalismus'],
     aliases: ['pdf','pdfa','custom','layout','schrift','font','cover','titelbild','print','druck'] },
-  { key: 'epubExport',     kind: 'toggle', group: 'export', labelKey: 'tile.epubExport',     descKey: 'tile.epubExport.desc',     flag: 'showEpubExportCard',     toggle: 'toggleEpubExportCard',     requiresBook: true, minRole: 'viewer',
+  { key: 'epubExport',     kind: 'toggle', group: 'export', labelKey: 'tile.epubExport',     descKey: 'tile.epubExport.desc',     flag: 'showEpubExportCard',     toggle: 'toggleEpubExportCard',     requiresBook: true, minRole: 'viewer', hiddenForBuchtyp: ['journalismus'],
     aliases: ['epub','ebook','e-book','reader','reflow','kindle','blocksatz','toc','inhaltsverzeichnis'] },
   { key: 'docxExport',     kind: 'toggle', group: 'export', labelKey: 'tile.docxExport',     descKey: 'tile.docxExport.desc',     flag: 'showDocxExportCard',     toggle: 'toggleDocxExportCard',     requiresBook: true, minRole: 'viewer',
     aliases: ['word','docx','manuskript','manuscript','lektorat','verlag','normseite','doc','review','einreichen'] },
@@ -147,7 +179,7 @@ export const ACTIONS = [
     aliases: ['esc','dismiss','reset','schliessen'],
     run: (root) => { root._closeOtherMainCards(null); root._maybeOpenBookOverview({ restoreLastPage: false }); } },
   { key: 'action.komplett',       kind: 'action', group: 'app', labelKey: 'palette.action.komplett',  descKey: 'palette.action.komplett.desc',
-    requiresBook: true,
+    requiresBook: true, hiddenForBuchtyp: KOMPLETT_HIDDEN_BUCHTYPEN,
     aliases: ['analyse','vollanalyse','reload','aktualisieren','refresh','komplett'],
     run: (root) => { root.alleAktualisieren(); } },
   { key: 'action.swReload',       kind: 'action', group: 'app', labelKey: 'palette.action.swReload',  descKey: 'palette.action.swReload.desc',
@@ -203,17 +235,17 @@ export const EXCLUSIVE_CARDS = [
   { key: 'bookOverview',   flag: 'showBookOverviewCard',   toggle: 'toggleBookOverviewCard',   onReclick: 'refresh', requiresBook: true, partial: 'bookoverview' },
   { key: 'bookReview',     flag: 'showBookReviewCard',     toggle: 'toggleBookReviewCard',     onReclick: 'refresh', partial: 'buchreview' },
   { key: 'kapitelReview',  flag: 'showKapitelReviewCard',  toggle: 'toggleKapitelReviewCard',  bespoke: true, partial: 'kapitelreview' },
-  { key: 'figures',        flag: 'showFiguresCard',        toggle: 'toggleFiguresCard',        onReclick: 'refresh', refreshName: 'figuren', partial: 'figuren' },
-  { key: 'figurWerkstatt', flag: 'showFigurWerkstattCard', toggle: 'toggleFigurWerkstattCard', onReclick: 'refresh', requiresBook: true, extraRefreshOnOpen: true, partial: 'figur-werkstatt' },
-  { key: 'szenen',         flag: 'showSzenenCard',         toggle: 'toggleSzenenCard',         onReclick: 'refresh', partial: 'szenen',
+  { key: 'figures',        flag: 'showFiguresCard',        toggle: 'toggleFiguresCard',        onReclick: 'refresh', refreshName: 'figuren', partial: 'figuren', hiddenForBuchtyp: ['journalismus'] },
+  { key: 'figurWerkstatt', flag: 'showFigurWerkstattCard', toggle: 'toggleFigurWerkstattCard', onReclick: 'refresh', requiresBook: true, extraRefreshOnOpen: true, partial: 'figur-werkstatt', hiddenForBuchtyp: ['journalismus'] },
+  { key: 'szenen',         flag: 'showSzenenCard',         toggle: 'toggleSzenenCard',         onReclick: 'refresh', partial: 'szenen', hiddenForBuchtyp: ['journalismus'],
     loadDeps: [{ method: 'loadFiguren', skipIfNonEmpty: 'figuren' }, { method: 'loadOrte', skipIfNonEmpty: 'orte' }] },
-  { key: 'ereignisse',     flag: 'showEreignisseCard',     toggle: 'toggleEreignisseCard',     onReclick: 'refresh', partial: 'ereignisse',
+  { key: 'ereignisse',     flag: 'showEreignisseCard',     toggle: 'toggleEreignisseCard',     onReclick: 'refresh', partial: 'ereignisse', hiddenForBuchtyp: ['journalismus'],
     loadDeps: [{ method: 'loadFiguren', skipIfNonEmpty: 'figuren' }] },
-  { key: 'plot',           flag: 'showPlotCard',           toggle: 'togglePlotCard',           onReclick: 'refresh', requiresBook: true, partial: 'plot',
+  { key: 'plot',           flag: 'showPlotCard',           toggle: 'togglePlotCard',           onReclick: 'refresh', requiresBook: true, partial: 'plot', hiddenForBuchtyp: ['journalismus'],
     loadDeps: [{ method: 'loadFiguren', skipIfNonEmpty: 'figuren' }] },
-  { key: 'motiv',          flag: 'showMotivCard',          toggle: 'toggleMotivCard',          onReclick: 'refresh', requiresBook: true, partial: 'motiv',
+  { key: 'motiv',          flag: 'showMotivCard',          toggle: 'toggleMotivCard',          onReclick: 'refresh', requiresBook: true, partial: 'motiv', hiddenForBuchtyp: ['journalismus'],
     loadDeps: [{ method: 'loadFiguren', skipIfNonEmpty: 'figuren' }] },
-  { key: 'weltfakten',     flag: 'showWorldFactsCard',     toggle: 'toggleWorldFactsCard',     onReclick: 'refresh', extraRefreshOnOpen: true, partial: 'world-facts' },
+  { key: 'weltfakten',     flag: 'showWorldFactsCard',     toggle: 'toggleWorldFactsCard',     onReclick: 'refresh', extraRefreshOnOpen: true, partial: 'world-facts', hiddenForBuchtyp: ['journalismus'] },
   { key: 'recherche',      flag: 'showRechercheCard',      toggle: 'toggleRechercheCard',      onReclick: 'refresh', requiresBook: true, partial: 'recherche' },
   { key: 'sources',        flag: 'showSourcesCard',        toggle: 'toggleSourcesCard',        onReclick: 'refresh', requiresBook: true, partial: 'sources' },
   { key: 'bookStats',      flag: 'showBookStatsCard',      toggle: 'toggleBookStatsCard',      onReclick: 'close', partial: 'bookstats' },
@@ -221,13 +253,15 @@ export const EXCLUSIVE_CARDS = [
   { key: 'fehlerHeatmap',  flag: 'showFehlerHeatmapCard',  toggle: 'toggleFehlerHeatmapCard',  onReclick: 'close', partial: 'fehler-heatmap' },
   { key: 'redundanz',      flag: 'showRedundanzCard',      toggle: 'toggleRedundanzCard',      onReclick: 'close', requiresBook: true, partial: 'redundanz' },
   { key: 'wortschatz',     flag: 'showWortschatzCard',     toggle: 'toggleWortschatzCard',     onReclick: 'refresh', requiresBook: true, partial: 'wortschatz' },
+  { key: 'struktur',       flag: 'showStrukturCard',       toggle: 'toggleStrukturCard',       onReclick: 'refresh', requiresBook: true, requiresBuchtyp: 'journalismus', partial: 'struktur' },
+  { key: 'titelwerkstatt', flag: 'showTitelwerkstattCard', toggle: 'toggleTitelwerkstattCard', onReclick: 'refresh', requiresBook: true, requiresBuchtyp: ['journalismus', 'blog'], partial: 'titelwerkstatt' },
   { key: 'bookChat',       flag: 'showBookChatCard',       toggle: 'toggleBookChatCard',       onReclick: 'refresh', requiresBook: true, auditEvent: 'bookChatOpened', partial: 'chat' },
-  { key: 'orte',           flag: 'showOrteCard',           toggle: 'toggleOrteCard',           onReclick: 'refresh', partial: 'orte',
+  { key: 'orte',           flag: 'showOrteCard',           toggle: 'toggleOrteCard',           onReclick: 'refresh', partial: 'orte', hiddenForBuchtyp: ['journalismus'],
     loadDeps: [{ method: 'loadFiguren', skipIfNonEmpty: 'figuren' }] },
-  { key: 'songs',          flag: 'showSongsCard',          toggle: 'toggleSongsCard',          onReclick: 'refresh', partial: 'songs',
+  { key: 'songs',          flag: 'showSongsCard',          toggle: 'toggleSongsCard',          onReclick: 'refresh', partial: 'songs', hiddenForBuchtyp: ['journalismus'],
     loadDeps: [{ method: 'loadFiguren', skipIfNonEmpty: 'figuren' }] },
-  { key: 'kontinuitaet',   flag: 'showKontinuitaetCard',   toggle: 'toggleKontinuitaetCard',   onReclick: 'refresh', extraRefreshOnOpen: true, partial: 'kontinuitaet', requiresClaude: true },
-  { key: 'erzaehlprofil',  flag: 'showErzaehlprofilCard',  toggle: 'toggleErzaehlprofilCard',  onReclick: 'refresh', extraRefreshOnOpen: true, partial: 'erzaehlprofil', requiresClaude: true },
+  { key: 'kontinuitaet',   flag: 'showKontinuitaetCard',   toggle: 'toggleKontinuitaetCard',   onReclick: 'refresh', extraRefreshOnOpen: true, partial: 'kontinuitaet', requiresClaude: true, hiddenForBuchtyp: ['journalismus'] },
+  { key: 'erzaehlprofil',  flag: 'showErzaehlprofilCard',  toggle: 'toggleErzaehlprofilCard',  onReclick: 'refresh', extraRefreshOnOpen: true, partial: 'erzaehlprofil', requiresClaude: true, hiddenForBuchtyp: ['journalismus'] },
   { key: 'tagebuchRueckblick', flag: 'showTagebuchRueckblickCard', toggle: 'toggleTagebuchRueckblickCard', onReclick: 'refresh', requiresBook: true, requiresBuchtyp: 'tagebuch', partial: 'tagebuch-rueckblick' },
   { key: 'bookSettings',   flag: 'showBookSettingsCard',   toggle: 'toggleBookSettingsCard',   onReclick: 'close', partial: 'book-settings' },
   { key: 'userSettings',   flag: 'showUserSettingsCard',   toggle: 'toggleUserSettingsCard',   onReclick: 'close', partial: 'user-settings' },
@@ -245,8 +279,8 @@ export const EXCLUSIVE_CARDS = [
   { key: 'finetuneExport', flag: 'showFinetuneExportCard', toggle: 'toggleFinetuneExportCard', onReclick: 'close', partial: 'finetune-export' },
   { key: 'snapshots',      flag: 'showSnapshotsCard',      toggle: 'toggleSnapshotsCard',      onReclick: 'refresh', requiresBook: true, partial: 'snapshots' },
   { key: 'export',         flag: 'showExportCard',         toggle: 'toggleExportCard',         onReclick: 'close', partial: 'export' },
-  { key: 'pdfExport',      flag: 'showPdfExportCard',      toggle: 'togglePdfExportCard',      onReclick: 'close', partial: 'pdf-export' },
-  { key: 'epubExport',     flag: 'showEpubExportCard',     toggle: 'toggleEpubExportCard',     onReclick: 'close', partial: 'epub-export' },
+  { key: 'pdfExport',      flag: 'showPdfExportCard',      toggle: 'togglePdfExportCard',      onReclick: 'close', partial: 'pdf-export', hiddenForBuchtyp: ['journalismus'] },
+  { key: 'epubExport',     flag: 'showEpubExportCard',     toggle: 'toggleEpubExportCard',     onReclick: 'close', partial: 'epub-export', hiddenForBuchtyp: ['journalismus'] },
   { key: 'docxExport',     flag: 'showDocxExportCard',     toggle: 'toggleDocxExportCard',     onReclick: 'close', partial: 'docx-export' },
   { key: 'folderImport',   flag: 'showFolderImportCard',   toggle: 'toggleFolderImportCard',   onReclick: 'close', partial: 'folder-import' },
   { key: 'bookOrganizer',  flag: 'showBookOrganizerCard',  toggle: 'toggleBookOrganizerCard',  onReclick: 'refresh', requiresBook: true, partial: 'buchorganizer' },
@@ -282,11 +316,32 @@ export function allFeatures() {
 // Default-Set für neuen User ohne Tracking-Daten.
 export const DEFAULT_RECENT_KEYS = ['review', 'figuren', 'bookchat'];
 
+/** Ist die Karte fuer diesen Buchtyp ausgeblendet? Zentraler Helper, damit die
+ *  drei Gates (Palette-Sichtbarkeit, Verfuegbarkeit, Toggle) dieselbe Antwort
+ *  geben. */
+export function hiddenForBuchtyp(feature, buchtyp) {
+  return !!(buchtyp && feature?.hiddenForBuchtyp?.includes(buchtyp));
+}
+
+/** Passt der Buchtyp zu `requiresBuchtyp`? Das Feld nimmt einen einzelnen Key
+ *  ODER eine Liste — der Titelapparat gilt fuer 'journalismus' UND 'blog', die
+ *  Tagebuch-Rueckschau nur fuer 'tagebuch'. Ohne Angabe passt jeder Typ.
+ *
+ *  Eigener Helper statt eines `===` an drei Stellen: die drei Gates
+ *  (Palette-Sichtbarkeit, Verfuegbarkeit, Toggle) muessen dieselbe Antwort
+ *  geben, sonst zeigt die Palette eine Karte, die der Toggle verweigert. */
+export function matchesRequiredBuchtyp(feature, buchtyp) {
+  const req = feature?.requiresBuchtyp;
+  if (!req) return true;
+  return Array.isArray(req) ? req.includes(buchtyp) : req === buchtyp;
+}
+
 export function isFeatureAvailable(feature, ctx) {
   if (!feature) return false;
   if (feature.requiresBook && !ctx.selectedBookId) return false;
   if (feature.requiresPages && !(ctx.pages && ctx.pages.length > 0)) return false;
-  if (feature.requiresBuchtyp && ctx.buchtyp !== feature.requiresBuchtyp) return false;
+  if (!matchesRequiredBuchtyp(feature, ctx.buchtyp)) return false;
+  if (hiddenForBuchtyp(feature, ctx.buchtyp)) return false;
   if (feature.requiresClaude && !ctx.claudeEffective) return false;
   return true;
 }
@@ -296,7 +351,7 @@ export function unavailabilityReasonKey(feature, ctx) {
   if (!feature) return null;
   if (feature.requiresBook && !ctx.selectedBookId) return 'palette.disabled.needBook';
   if (feature.requiresPages && !(ctx.pages && ctx.pages.length > 0)) return 'palette.disabled.needPages';
-  if (feature.requiresBuchtyp && ctx.buchtyp !== feature.requiresBuchtyp) return 'palette.disabled.needBook';
+  if (!matchesRequiredBuchtyp(feature, ctx.buchtyp)) return 'palette.disabled.needBook';
   if (feature.requiresClaude && !ctx.claudeEffective) return 'palette.disabled.needClaude';
   if (feature.minRole && ctx.bookRole && !hasMinRole(ctx.bookRole, feature.minRole)) return 'palette.disabled.insufficientRole';
   return null;
@@ -317,11 +372,12 @@ export function hasMinRole(actual, required) {
 
 // Filter `features` aufs sichtbare Subset für eine Buchrolle. Cards ohne
 // `minRole` sind nur für editor+ sichtbar (defensive: kein impliziter Viewer).
-// `buchtyp` (optional): blendet `requiresBuchtyp`-Cards aus, deren Typ nicht passt.
+// `buchtyp` (optional): blendet `requiresBuchtyp`-Cards aus, deren Typ nicht passt,
+// und `hiddenForBuchtyp`-Cards, deren Typ genannt ist.
 // `claudeEffective` (optional, Default true): blendet `requiresClaude`-Cards aus,
 // wenn der effektive Provider nicht Claude ist (Kontinuität/Erzählprofil).
 export function featuresVisibleFor(features, role, buchtyp = null, claudeEffective = true) {
-  const byBuchtyp = (f) => !f.requiresBuchtyp || f.requiresBuchtyp === buchtyp;
+  const byBuchtyp = (f) => matchesRequiredBuchtyp(f, buchtyp) && !hiddenForBuchtyp(f, buchtyp);
   const byClaude = (f) => !f.requiresClaude || claudeEffective;
   if (!role) return features.filter(f => !f.requiresBook && !f.requiresPages && byBuchtyp(f) && byClaude(f));
   return features.filter(f => {

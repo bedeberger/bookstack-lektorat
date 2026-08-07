@@ -1,0 +1,41 @@
+<!--
+  O-Töne eines Interview-Transkripts im Referenz-Panel neben dem Notebook-Editor.
+  Fragment-Include (Marker @include reference-oton), `item` kommt aus dem
+  umschliessenden x-for-Scope (reference.html, Recherche-Tab).
+
+  Jeder Redebeitrag geht per Klick als BELEGTES Blockzitat in den Artikel — die
+  Quelle (CSL-Typ `interview`) legt der Server dabei an bzw. verwendet die des
+  Sprechers wieder. Ein O-Ton ohne Beleg soll auf diesem Weg nicht entstehen.
+-->
+<!-- O-TÖNE: Redebeiträge des Gesprächs, jeder per Klick als belegtes
+     Blockzitat in den Artikel. Nur hier und nicht im Recherche-Board —
+     das Board ist eine Hauptkarte und schliesst den Editor, in den der
+     O-Ton soll. -->
+<div class="reference-oton" x-show="refIsTranscript(item) && refIvOpenId === item.id" x-cloak>
+  <div class="reference-empty" x-show="refIvLoading" x-text="$app.t('reference.loading')"></div>
+  <div class="search-status search-status--error" x-show="refIvError" x-text="refIvError"></div>
+  <template x-if="!refIvLoading && !refIvError && refIvSegments.length === 0">
+    <div class="reference-empty" x-text="$app.t('interview.noTranscript')"></div>
+  </template>
+
+  <input type="text" class="filter-search-input" x-show="refIvSegments.length > 8"
+         x-model="refIvQuery" :placeholder="$app.t('interview.filterSegments')"
+         :aria-label="$app.t('interview.filterSegments')"
+         autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" data-form-type="other">
+
+  <template x-for="seg in refIvFiltered()" :key="'ro-' + seg.id">
+    <div class="reference-oton-row">
+      <div class="reference-oton-meta">
+        <span class="reference-oton-tc" x-show="seg.start_s !== null" x-text="refIvTimecode(seg.start_s)"></span>
+        <span class="reference-oton-who" x-show="seg.speaker" x-text="refIvSpeakerLabel(seg.speaker)"></span>
+      </div>
+      <div class="reference-oton-text" x-text="seg.text"></div>
+      <button type="button" class="btn-compact reference-oton-insert"
+              :disabled="refIvBusyId === seg.id || !$app.editMode"
+              @click="refIvInsert(item.id, seg)"
+              :data-tip="$app.editMode ? $app.t('interview.insertTip') : $app.t('interview.needEditMode')"
+              x-text="$app.t('interview.insert')"></button>
+    </div>
+  </template>
+</div>
+

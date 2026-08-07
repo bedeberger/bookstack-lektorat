@@ -67,7 +67,7 @@ Token-Referenz (Farben, Radien, Spacing, Schriftgrössen): [public/css/tokens.cs
 - [Danger-Zone](#danger-zone-danger-zone) — abgesetzter Block für unwiderrufliche Aktionen
 - [Modal-Wrapper](#modal-wrapper-generisches-pattern) — Status: noch nicht konsolidiert
 - [Overlay-Focus-Trap](#overlay-focus-trap-x-trap) — `x-trap` für Overlays ohne natives `<dialog>`
-- [Sofort-Tooltip (`data-tip`)](#sofort-tooltip-data-tip--default-variante)
+- [Sofort-Tooltip (`data-tip`)](#sofort-tooltip-data-tip--default-variante) — inkl. [Tastenkürzel im Tooltip](#tastenkürzel-im-tooltip)
 - [Keyboard-Shortcut (`<kbd>`)](#keyboard-shortcut-anzeige-kbd)
 - [Loading-Overlay](#loading-overlay) — Status: kein generisches Pattern
 - [Empty-State mit CTA](#empty-state-mit-cta) — `.card-empty` + CTA-Button
@@ -2094,6 +2094,16 @@ Markup: [public/partials/avatar-menu.html](public/partials/avatar-menu.html). Be
 - Neue Wert- oder Erklärungs-Tooltips als `:title=` ohne `data-tip` daneben — User-Präferenz, weil 500ms-Delay als störend empfunden wird.
 - **Keine** `[data-tip]:hover::before` / `::after`-Selektoren — Pseudos auf dem Target gehören dem Element.
 
+### Tastenkürzel im Tooltip
+
+Hat eine Aktion ein Tastenkürzel, nennt ihr Tooltip es mit: `Bearbeiten (⌘E)` / `Bearbeiten (Strg+E)`. **Nie von Hand in den i18n-String schreiben** — sonst steht dort beides parallel („(⌘K / Strg+K)"), und die Übersetzung driftet gegen das Binding.
+
+**Markup:** `:data-tip="withHotkey(t('editor.btn.editTitle'), 'edit')"` (aus einer Karte `$app.withHotkey(…)`). Das `aria-label` bleibt das reine Label — die Taste ist Sichthilfe, kein Teil des zugänglichen Namens.
+
+**SSoT der IDs + Formatierung:** [public/js/hotkeys.js](public/js/hotkeys.js) (`HOTKEYS`). Plattform-Weiche über `$store.shell.isMac`: Mac zeigt Modifier-Glyphen in der dortigen Reihenfolge ⌃⌥⇧⌘ direkt am Key (`⌘⇧E`), sonst lokalisierte Namen mit `+` (`Strg+Shift+E`).
+
+Die Tabelle listet **nur Kürzel, die an einem Element hängen** — die vollständige Dokumentation ist das Kürzel-Overlay ([partials/shortcuts.html](public/partials/shortcuts.html), `?`). Neues Kürzel an einem Icon: Eintrag in `HOTKEYS` **und** Zeile im Overlay; beides gegated durch [tests/unit/hotkey-tips.test.mjs](tests/unit/hotkey-tips.test.mjs) (Kürzel identisch in beiden Quellen, keine unbekannte oder unbenutzte ID).
+
 ---
 
 ## Header-Actions
@@ -2670,6 +2680,7 @@ Drei Editoren leben in eigenen Subfoldern (`book/`, `focus/`, `notebook/`); edit
 | [analysis/zeitleiste.css](public/css/analysis/zeitleiste.css) | Globaler Zeitstrahl: Ereignis-Liste + selbstgebautes `.gz-band`-Jahres-Band. |
 | [analysis/kapitel-review.css](public/css/analysis/kapitel-review.css) | Kapitel-Review. |
 | [analysis/redundanz.css](public/css/analysis/redundanz.css) | Redundanz-Radar: Seiten-Paar-Liste mit Score-Badge + zwei Snippet-Spalten. |
+| [analysis/struktur.css](public/css/analysis/struktur.css) | Struktur-Werkstatt (Textsorte je Beitrag + Formbefund, nur Buchtyp `journalismus`): Tabelle `.struktur-table` (`sortableTable`) mit Textsorten-Combobox je Zeile, Urteil-Badges `.struktur-urteil--traegt/--lueckenhaft/--verfehlt` (Tag-Variante der Status-Achse ok/warn/err), und der Befund-Block `.struktur-detail` UNTER der Tabelle (linker Rand in `var(--card-accent)`) mit `.struktur-regel--erfuellt/--teilweise/--fehlt/--nicht_anwendbar` als farbige Randmarke je Formregel. |
 | [analysis/wortschatz.css](public/css/analysis/wortschatz.css) | Wortschatz-Analyse (quantitative Stilistik pro Buch): Kennzahlen-Grid **wiederverwendet** `.overview-grid`/`.overview-tile` + Hero-/Substat-Atome aus `book-overview/` (siehe „Book-Overview-Tiles") — eigen sind nur `.wortschatz-kpi-note` (was die Zahl bedeutet), `.wortschatz-kpi-peer` (Vergleich gegen die übrigen Bücher, trägt `var(--card-accent)`), `.wortschatz-kpi-warn` (Kennzahl **nicht** belastbar: Text kürzer als das MATTR-Fenster bzw. unter der MTLD-/Heaps-Mindestlänge), die Ranglisten-Tabelle `.wortschatz-table` (`sortableTable`, `.wortschatz-num` tabular-nums, `.wortschatz-term`/`-phrase`) und die Keyness-Bänder `.wortschatz-keyness--high/--mid/--neg`. |
 
 ### admin/
@@ -2691,6 +2702,7 @@ Drei Editoren leben in eigenen Subfoldern (`book/`, `focus/`, `notebook/`); edit
 | [book/book-settings.css](public/css/book/book-settings.css) | Buch-Einstellungen Job-Stats-Tabellen. |
 | [book/header-actions.css](public/css/book/header-actions.css) | `.header-actions`-Cluster, Update-All-Panel. |
 | [book/buchorganizer.css](public/css/book/buchorganizer.css) | Buch-Organisations-Karte. |
+| [book/titelwerkstatt.css](public/css/book/titelwerkstatt.css) | Titel-Werkstatt (Dachzeile/Titel/Lead/Teaser als Metadata des Beitrags, publizistische Buchtypen): Übersichtszeile `.tw-row` als Grid-Button in einer `colspan`-Zelle (Sortierung über `sortableTable` bleibt, der Detail-Block bekommt die volle Breite), Feld-Block `.tw-field` mit Zeichenzähler, Kanal-Lineal `.tw-ruler-track` + `.tw-channel--fits/--over` (Print/Web/Suche/Social) und Varianten-Liste `.tw-variant` mit Herkunfts-Marke `--user`/`--ki`. Akzent via `var(--card-accent)` (`.card--titelwerkstatt`). |
 | [book/plot/board.css](public/css/book/plot/board.css) | Plot-Werkstatt (Beat-Board / Kanban): Board-Layout, Spalten, Beat-Karten, Beat-Edit, Add-Beat/Akt, Vollbild + Mobile. |
 | [book/plot/widgets.css](public/css/book/plot/widgets.css) | Plot-Werkstatt-Widgets: KI-Brainstorm, Consistency-Panel, Coverage, Status-Verteilungsbalken, Akt-Farbpalette, Beat-Intensität, Spannungsbogen. Ergänzt plot/board.css. |
 | [book/plot/swimlane.css](public/css/book/plot/swimlane.css) | Plot-Werkstatt: Swimlane-Grid (Akte × Stränge) + Strang-Leiste. Ergänzt plot/board.css + plot/widgets.css. |
@@ -2905,6 +2917,8 @@ Shortcut: <kbd>⌘</kbd>+<kbd>K</kbd>
 ```
 
 **Klasse-Stil** existiert pro Konsument: `.palette-hero-kbd`, `.palette-mode-pill kbd`. Globaler Reset ist gesetzt — neue Konsumenten erben automatisch und überschreiben nur, wenn nötig.
+
+**Im Tooltip eines Action-Icons** gibt es kein `<kbd>` (der Tooltip-Layer rendert `textContent`) — dort läuft die Anzeige über `withHotkey()`, siehe [Tastenkürzel im Tooltip](#tastenkürzel-im-tooltip).
 
 ---
 

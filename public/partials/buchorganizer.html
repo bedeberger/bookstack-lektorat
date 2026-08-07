@@ -30,12 +30,12 @@
       <button type="button" class="icon-btn"
               @click="historyUndo()"
               :disabled="_undoStack.length === 0 || organizerSaving"
-              :data-tip="$app.t('bookOrganizer.undoTip')"
+              :data-tip="$app.withHotkey($app.t('bookOrganizer.undoTip'), 'undo')"
               :aria-label="$app.t('bookOrganizer.undo')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#undo"/></svg></button>
       <button type="button" class="icon-btn"
               @click="historyRedo()"
               :disabled="_redoStack.length === 0 || organizerSaving"
-              :data-tip="$app.t('bookOrganizer.redoTip')"
+              :data-tip="$app.withHotkey($app.t('bookOrganizer.redoTip'), 'redo')"
               :aria-label="$app.t('bookOrganizer.redo')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#redo"/></svg></button>
       <button type="button" class="icon-btn"
               @click="expandAll()"

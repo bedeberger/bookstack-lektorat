@@ -140,6 +140,12 @@ export function registerEditorToolbarCard() {
       // der Fokus-Modus). Der Einstieg über die Bubble-Toolbar setzt eine
       // Selektion voraus; dieser hier arbeitet am blossen Caret.
       window.addEventListener(EVT.EDITOR_CITE_OPEN, () => this.openCiteInput(), { signal });
+      // O-Ton aus dem Referenz-Panel: der Markup-Weg liegt hier (cite.js ist
+      // die SSoT fuer Quellen-Markup im Editor), der Ausloeser drueben.
+      window.addEventListener(EVT.EDITOR_OTON_INSERT, (e) => {
+        const ok = this.insertOTonBlock(e.detail || {});
+        if (e.detail?.ack) e.detail.ack.ok = ok;
+      }, { signal });
 
       // Zielliste des Querverweis-Pickers ebenso modulweit gecacht: Umbauten im
       // Buchorganizer und neue Abbildungen verschieben die Nummern.

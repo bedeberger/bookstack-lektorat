@@ -1062,7 +1062,7 @@ const XREF_DEFAULTS = Object.freeze({
   figure_numbering: 0,
 });
 
-const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, entities_enabled, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog, citation_notes, figure_numbering FROM book_settings WHERE book_id = ?');
+const _getBookSettings = db.prepare('SELECT language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, entities_enabled, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog, citation_notes, figure_numbering, textsorte FROM book_settings WHERE book_id = ?');
 const _upsertBookSettings = db.prepare(`
   INSERT INTO book_settings (book_id, language, region, buchtyp, buch_kontext, stilprofil, erzaehlperspektive, erzaehlzeit, is_finished, allow_lektor_book_chat, daily_goal_chars, goal_target_chars, goal_deadline, orte_real, schauplatz_land, zeitlinie_real, weltfakten_real_pruefen, exclude_from_stats, updated_at)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1145,16 +1145,17 @@ function getBookSettings(bookId, userEmail = null) {
     bibliography_in_blog: row.bibliography_in_blog ? 1 : 0,
     citation_notes: row.citation_notes || CITATION_DEFAULTS.citation_notes,
     figure_numbering: row.figure_numbering ? 1 : 0,
+    textsorte: row.textsorte || null,
   };
   if (userEmail) {
     const u = require('./app-users').getUser(userEmail);
     if (u && (u.default_language || u.default_buchtyp)) {
       const language = u.default_language || 'de';
       const region   = u.default_region   || (language === 'en' ? 'US' : 'CH');
-      return { language, region, buchtyp: u.default_buchtyp || null, buch_kontext: null, stilprofil: null, erzaehlperspektive: null, erzaehlzeit: null, is_finished: 0, allow_lektor_book_chat: 0, daily_goal_chars: null, goal_target_chars: null, goal_deadline: null, entities_enabled: 0, orte_real: 0, schauplatz_land: null, zeitlinie_real: 0, weltfakten_real_pruefen: 0, exclude_from_stats: 0, ...CITATION_DEFAULTS, ...XREF_DEFAULTS };
+      return { language, region, buchtyp: u.default_buchtyp || null, buch_kontext: null, stilprofil: null, erzaehlperspektive: null, erzaehlzeit: null, is_finished: 0, allow_lektor_book_chat: 0, daily_goal_chars: null, goal_target_chars: null, goal_deadline: null, entities_enabled: 0, orte_real: 0, schauplatz_land: null, zeitlinie_real: 0, weltfakten_real_pruefen: 0, exclude_from_stats: 0, textsorte: null, ...CITATION_DEFAULTS, ...XREF_DEFAULTS };
     }
   }
-  return { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null, stilprofil: null, erzaehlperspektive: null, erzaehlzeit: null, is_finished: 0, allow_lektor_book_chat: 0, daily_goal_chars: null, goal_target_chars: null, goal_deadline: null, entities_enabled: 0, orte_real: 0, schauplatz_land: null, zeitlinie_real: 0, weltfakten_real_pruefen: 0, exclude_from_stats: 0, ...CITATION_DEFAULTS, ...XREF_DEFAULTS };
+  return { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null, stilprofil: null, erzaehlperspektive: null, erzaehlzeit: null, is_finished: 0, allow_lektor_book_chat: 0, daily_goal_chars: null, goal_target_chars: null, goal_deadline: null, entities_enabled: 0, orte_real: 0, schauplatz_land: null, zeitlinie_real: 0, weltfakten_real_pruefen: 0, exclude_from_stats: 0, textsorte: null, ...CITATION_DEFAULTS, ...XREF_DEFAULTS };
 }
 
 /** Locale-Key für ein Buch: z.B. "de-CH", "en-US". */
@@ -1199,6 +1200,20 @@ function setBookEntitiesEnabled(bookId, enabled) {
  *  Eigener Schreibpfad — beruehrt keine anderen Settings. Enum-Werte werden hier
  *  hart auf die Whitelist gezwungen, damit ein Fremdwert nie in der DB landet
  *  (der Formatter kennt nur diese Stile und wuerde sonst still auf apa7 fallen). */
+// Default-Textsorte des Buchs. Eigener Setter statt eines weiteren Positions-
+// arguments an saveBookSettings — dessen 18-stellige Liste soll nicht wachsen.
+const _updateBookTextsorte = db.prepare(
+  'UPDATE book_settings SET textsorte = ?, updated_at = ? WHERE book_id = ?',
+);
+function setBookTextsorte(bookId, textsorte) {
+  const value = textsorte == null || textsorte === '' ? null : String(textsorte);
+  // Kein UPSERT: ohne book_settings-Zeile gibt es noch keinen Buchtyp, und eine
+  // Textsorte ohne Buchtyp waere eine Angabe ohne Wirkung. Das Formular legt die
+  // Zeile ohnehin beim ersten Speichern an.
+  _updateBookTextsorte.run(value, new Date().toISOString(), parseInt(bookId));
+  return value;
+}
+
 function setBookCitationSettings(bookId, {
   citation_style, bibliography_enabled, bibliography_title, bibliography_scope, bibliography_in_blog,
   citation_notes,
@@ -1749,6 +1764,7 @@ module.exports = {
   getDailyTokenUsage:    tokenUsage.getDailyTokenUsage,
   getDailyTotalsByUser:  tokenUsage.getDailyTotalsByUser,
   getBookSettings, getBookLocale, saveBookSettings, setBookEntitiesEnabled, setBookStilprofil,
+  setBookTextsorte,
   setBookCitationSettings, VALID_CITATION_STYLES, VALID_BIBLIOGRAPHY_SCOPES, VALID_CITATION_NOTES,
   setBookXrefSettings,
   loadChapterExtractCache, saveChapterExtractCache, deleteChapterExtractCache,

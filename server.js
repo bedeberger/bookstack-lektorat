@@ -417,7 +417,7 @@ app.use('/metrics', require('./routes/metrics'));
 // `/dictionary` steht ohne Trailing-Slash in der Liste: der Router bedient die
 // Wurzel (GET/POST/DELETE `/dictionary`), ein `/dictionary/`-Prefix wuerde sie
 // verfehlen und den Client auf /auth/login redirecten.
-const API_PREFIXES = ['/history/', '/figures/', '/locations/', '/world-facts/', '/songs/', '/jobs/', '/sync/', '/chat/', '/booksettings/', '/publication/', '/content/', '/stt/', '/tts/', '/languagetool/', '/dictionary', '/books/', '/me/', '/admin/', '/local/', '/config', '/share/api/', '/name-guard/', '/research', '/research/', '/sources', '/sources/', '/xrefs', '/xrefs/', '/capture'];
+const API_PREFIXES = ['/history/', '/figures/', '/locations/', '/world-facts/', '/songs/', '/jobs/', '/sync/', '/chat/', '/booksettings/', '/publication/', '/content/', '/stt/', '/tts/', '/languagetool/', '/dictionary', '/books/', '/me/', '/admin/', '/local/', '/config', '/share/api/', '/name-guard/', '/research', '/research/', '/sources', '/sources/', '/xrefs', '/xrefs/', '/capture', '/textsorte/', '/redaktion/', '/headline/'];
 
 app.use((req, res, next) => {
   // Device-Token (native Clients, z.B. Mac-Focus-Writer): Bearer swd_… loest auf
@@ -531,6 +531,9 @@ app.use('/xrefs', xrefsRouter);
 app.use('/plot', plotRouter);
 app.use('/motifs', motifsRouter);
 app.use('/lexicon', require('./routes/lexicon'));
+app.use('/textsorte', require('./routes/textsorte'));
+app.use('/redaktion', require('./routes/redaktion'));
+app.use('/headline', require('./routes/headline'));
 app.use('/booksettings', bookSettingsRouter);
 app.use('/me', userSettingsRouter);
 app.use('/sync', syncRouter);

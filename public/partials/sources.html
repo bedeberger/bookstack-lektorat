@@ -151,6 +151,17 @@
               <span class="sources-title-stack">
                 <span class="sources-title internal-link" @click="startEditSource(s)" x-text="s.title || $app.t('sources.untitled')"></span>
                 <span class="sources-container" x-show="s.container_title" x-text="s.container_title"></span>
+                <!-- O-Ton: Rolle der sprechenden Person + Autorisierungsstand.
+                     Das Warn-Badge greift nur, wenn der O-Ton auch wirklich im
+                     Text belegt ist — ein noch nicht freigegebenes Zitat, das
+                     nirgends steht, ist kein Problem. -->
+                <span class="sources-container" x-show="s.csl_type === 'interview' && s.oton_role" x-text="s.oton_role"></span>
+                <span class="badge-warn sources-archived-badge"
+                      x-show="otonBlocking(s) && s.cite_count > 0" x-cloak
+                      x-text="$app.t('sources.oton.blocked.' + (s.oton_auth || 'ausstehend'))"></span>
+                <span class="badge-ok sources-archived-badge"
+                      x-show="s.csl_type === 'interview' && s.oton_auth === 'freigegeben'" x-cloak
+                      x-text="$app.t('sources.otonAuth.freigegeben')"></span>
                 <span class="badge-warn sources-archived-badge" x-show="s.archived" x-cloak x-text="$app.t('sources.archived')"></span>
               </span>
             </td>

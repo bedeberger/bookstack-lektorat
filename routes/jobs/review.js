@@ -16,7 +16,8 @@ const {
   jsonBody,
 } = require('./shared');
 const { narrativeLabels } = require('./narrative-labels');
-const { loadReviewKomplettContext, loadReviewMotivContext } = require('./review-context');
+const { loadReviewKomplettContext, loadReviewMotivContext, loadStrukturContext } = require('./review-context');
+const { applyQuoteVerification, belegHaystack } = require('../../lib/quote-verify');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
 const appSettings = require('../../lib/app-settings');
@@ -50,7 +51,11 @@ const reviewRouter = express.Router();
 async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
   const prompts = await getPrompts();
-  const { buildBookReviewSinglePassPrompt, buildChapterAnalysisPrompt, buildBookReviewMultiPassPrompt, SCHEMA_REVIEW, SCHEMA_CHAPTER_ANALYSIS, getBuchtypReviewSchwerpunkt, PROMPTS_VERSION } = prompts;
+  const {
+    buildBookReviewSinglePassPrompt, buildChapterAnalysisPrompt, buildBookReviewMultiPassPrompt,
+    buildReviewSchema, buildChapterAnalysisSchema, reviewProfil,
+    getBuchtypReviewSchwerpunkt, PROMPTS_VERSION,
+  } = prompts;
   const { SYSTEM_BUCHBEWERTUNG_BLOCKS: SYSTEM_BUCHBEWERTUNG, SYSTEM_KAPITELANALYSE_BLOCKS: SYSTEM_KAPITELANALYSE } = await getBookPrompts(bookId, userEmail);
   const bookSettings = getBookSettings(bookId, userEmail);
   const narrative = narrativeLabels(bookSettings);
@@ -64,7 +69,12 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
   // Motiv-Werkstatt-Daten (Themen & Motive, Soll/Ist) — nur Buchbewertung, als
   // Autor-Absicht gerahmt (nicht Textwahrheit). Ohne Motiv-Werkstatt leer.
   const motivContext = loadReviewMotivContext(bookId, userEmail);
-  const reviewOptions = { ...narrative, reviewSchwerpunkt, komplettContext, motivContext };
+  const reviewBaseOptions = { ...narrative, reviewSchwerpunkt, komplettContext, motivContext };
+  // Achsen-Set, Notenanker und Schema hängen am Bewertungsprofil des Buchtyps.
+  const buchtyp = narrative.buchtyp || null;
+  const profil = reviewProfil(buchtyp);
+  const SCHEMA_REVIEW = buildReviewSchema({ buchtyp });
+  const SCHEMA_CHAPTER_ANALYSIS = buildChapterAnalysisSchema({ buchtyp });
 
   const bookIdInt = parseInt(bookId);
   const email = userEmail || '';
@@ -76,7 +86,7 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
   const narrativeSig = _sigHash(narrative);
   // Stilprofil fliesst in SYSTEM_BUCHBEWERTUNG (Referenz-Framing) → muss den
   // Cache invalidieren, wenn der Autor das Profil ändert.
-  const optionsSig = _sigHash({ schwerpunkt: reviewSchwerpunkt, komplettContext, motivContext, narrative, stilprofil: bookSettings?.stilprofil || '' });
+  let optionsSig = _sigHash({ schwerpunkt: reviewSchwerpunkt, komplettContext, motivContext, narrative, stilprofil: bookSettings?.stilprofil || '' });
   try {
     updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     const { chMap, pages } = await loadOrderedBookContents(bookId, userToken)
@@ -93,10 +103,24 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
       });
     }, userToken, jobAbortControllers.get(jobId)?.signal);
 
+    // Ist-Befunde des Struktur-Checks (nur journalistische Bücher; sonst null).
+    // Erst hier ladbar, weil der Scope über die geladene Seitenliste läuft — und
+    // damit auch erst hier in die Cache-Signatur einrechenbar.
+    const strukturContext = loadStrukturContext(bookIdInt, pageContents, { scope: 'book' });
+    if (strukturContext) {
+      optionsSig = _sigHash({ optionsSig, strukturContext });
+      logger.info(`Struktur-Befunde: ${strukturContext.geprueft}/${strukturContext.gesamt} Beiträge geprüft – fliessen in die Bewertung ein.`);
+    }
+    const reviewOptions = { ...reviewBaseOptions, strukturContext };
+
     updateJob(jobId, { progress: 65 });
     const { groupOrder, groups } = groupByChapter(pageContents);
     const totalChars = pageContents.reduce((s, p) => s + p.text.length, 0);
     let r;
+    // Auf welcher Grundlage die Note steht: Volltext oder verdichtete
+    // Kapitelanalysen. Die beiden sind nicht vergleichbar (Zusammenfassungen
+    // glätten Schwächen) — das Ergebnis muss es darum mitführen.
+    let basis;
 
     if (totalChars <= SINGLE_PASS_LIMIT) {
       updateJob(jobId, { progress: 65, statusText: 'job.phase.aiBookReview' });
@@ -113,8 +137,14 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
           SYSTEM_BUCHBEWERTUNG,
           65, 97, 5000, 0.2, null, undefined, SCHEMA_REVIEW,
         );
+        // Belegzitate gegen den tatsächlichen Buchtext prüfen. Ein nicht
+        // auffindbares Zitat ist erfunden — es hat kein Sprungziel, an dem das
+        // auffallen würde, also fällt es hier still heraus.
+        const droppedQ = applyQuoteVerification(r, bookText);
+        if (droppedQ) logger.warn(`${droppedQ} Belegzitat(e) nicht im Buchtext gefunden – verworfen.`);
         saveBookReviewCache(bookIdInt, email, bookPagesSig, r, effectiveProvider);
       }
+      basis = 'single';
     } else {
       const { chunkOrder, chunks } = splitGroupsIntoChunks(groups, groupOrder, PER_CHUNK_LIMIT);
       const chapterAnalyses = [];
@@ -150,6 +180,11 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
           SYSTEM_KAPITELANALYSE,
           fromPct, toPct, 1500, 0.2, null, undefined, SCHEMA_CHAPTER_ANALYSIS,
         );
+        // Belegzitate der Zwischenstufe verifizieren, BEVOR sie in den Cache und
+        // damit in die Synthese gehen: ab hier sieht keine Schicht den Volltext
+        // dieses Kapitels wieder.
+        const droppedQ = applyQuoteVerification(ca, chText, 'zitate');
+        if (droppedQ) logger.warn(`«${chunk.name}»: ${droppedQ} Belegzitat(e) nicht im Kapiteltext gefunden – verworfen.`);
         saveChapterReviewCache(bookIdInt, email, key, pagesSig, ca, effectiveProvider);
         completed++;
         logger.info(`[${completed}/${chunkOrder.length}] «${chunk.name}» analysiert (${chunk.pages.length} Seiten)`);
@@ -174,9 +209,19 @@ async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
         SYSTEM_BUCHBEWERTUNG,
         90, 97, 5000, 0.2, null, undefined, SCHEMA_REVIEW,
       );
+      // Im Multi-Pass gibt es keinen Volltext mehr; zitierfähig sind nur die
+      // Belegzitate der Kapitelanalysen.
+      const droppedQ = applyQuoteVerification(r, belegHaystack(chapterAnalyses));
+      if (droppedQ) logger.warn(`${droppedQ} Belegzitat(e) stammen nicht aus den Kapitelanalysen – verworfen.`);
+      basis = 'multi';
     }
 
     if (r?.gesamtnote == null) throw i18nError('job.error.gesamtnoteMissing');
+    // Grundlage + Achsen-Profil ins Ergebnis: das Frontend rendert die Achsen
+    // dieses Laufs, nicht die des heute eingestellten Buchtyps — sonst fehlen
+    // einer Alt-Bewertung nach einem Buchtyp-Wechsel die Abschnitte.
+    r.basis = basis;
+    r.profil = profil;
 
     const model = _modelName(appSettings.get('ai.provider') || 'claude');
     if (bookName) upsertBookByName(parseInt(bookId), bookName);

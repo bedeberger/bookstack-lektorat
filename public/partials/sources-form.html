@@ -62,14 +62,20 @@
                mitbekommen und einen Controller auf einem Nicht-Prosafeld
                stehenlassen. `f.spell` ist pro Feld-Key konstant, die beiden
                Zweige flippen also nie für denselben Knoten. -->
-          <template x-if="f.spell">
+          <template x-if="f.options">
+            <div x-data="combobox($app.t(f.labelKey), $app.t('sources.oton.unset'))"
+                 x-modelable="value" x-model="srcDraft[f.key]"
+                 x-effect="options = f.options.map(o => ({ value: o, label: $app.t(f.optionPrefix + o) }))"></div>
+          </template>
+          <template x-if="!f.options && f.spell">
             <input type="text" class="card-form-input" x-model="srcDraft[f.key]"
                    :aria-label="$app.t(f.labelKey)" maxlength="500" data-spellcheck="spelling">
           </template>
-          <template x-if="!f.spell">
+          <template x-if="!f.options && !f.spell">
             <input type="text" class="card-form-input" x-model="srcDraft[f.key]"
                    :aria-label="$app.t(f.labelKey)" maxlength="500"
-                   :placeholder="f.key === 'accessed_at' ? $app.t('sources.field.accessedAt.ph') : ''">
+                   :placeholder="f.key === 'accessed_at' ? $app.t('sources.field.accessedAt.ph')
+                               : f.key === 'oton_date' ? $app.t('sources.field.otonDate.ph') : ''">
           </template>
         </div>
       </div>

@@ -25,6 +25,7 @@ const {
 } = require('../lib/research-validate');
 const logger = require('../logger');
 const { researchMediaRouter } = require('./research-media');
+const { interviewMediaRouter } = require('./interview');
 
 const router = express.Router();
 const jsonBody = express.json();
@@ -34,6 +35,7 @@ const jsonBody = express.json();
 // damit die Pfade /:id/image und /:id/doc aus der bisherigen Route identisch
 // bleiben — der Client-Vertrag (docs/clients.md) ändert sich nicht.
 router.use('/', researchMediaRouter);
+router.use('/', interviewMediaRouter);
 
 // Item-Modell (Anlegen, Kind-Tabellen, Ausgabeform, LINK_TARGETS) liegt in
 // db/research-items.js, weil routes/capture.js (Browser-Erweiterung) denselben

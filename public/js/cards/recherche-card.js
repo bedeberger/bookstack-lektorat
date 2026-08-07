@@ -8,6 +8,7 @@ import { rechercheToSourceMethods } from '../sources/from-research.js';
 import { researchChatMethods } from '../chat/research-chat.js';
 import { EVT } from '../events.js';
 import { emptyDraft as _emptyDraft } from '../book/recherche/shared.js';
+import { rechercheInterviewMethods, rechercheInterviewState } from '../book/recherche/interview.js';
 
 export function registerRechercheCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
@@ -94,6 +95,11 @@ export function registerRechercheCard() {
     _proposalSaved: {},
     _proposalSaving: {},
 
+    // Interview-Transkription (Slice book/recherche/interview.js): Aufnahme,
+    // Wortlaut, Sprecher. Buch-skopiert, darum aus der Factory.
+    ...rechercheInterviewState(),
+    _ivPollTimer: null,
+
     _lifecycle: null,
 
     // Das offene Fundstück, aus `items` gelesen statt kopiert: nach jedem
@@ -116,7 +122,7 @@ export function registerRechercheCard() {
       this._lifecycle = setupCardLifecycle(this, {
         name: 'recherche',
         showFlag: 'showRechercheCard',
-        timerKeys: ['_suggestTimer', '_researchChatPollTimer'],
+        timerKeys: ['_suggestTimer', '_researchChatPollTimer', '_ivPollTimer'],
         resetState: { detailEditing: false, menuOpenId: null, linkPickerItemId: null, busy: false },
         load: () => this.loadRecherche(),
         extraListeners: [
@@ -125,14 +131,24 @@ export function registerRechercheCard() {
           // Deep-Link-Permalink #book/X/recherche/<itemId>: Hash-Router dispatcht das
           // Event; _focusRechercheItemById öffnet das Item (bzw. merkt es bis zum Load vor).
           { type: EVT.RECHERCHE_FOCUS_ITEM, handler: (e) => this._focusRechercheItemById(e.detail?.itemId) },
+          // Transkriptionslauf nach Reload/Tab-Wechsel wieder aufnehmen.
+          { type: 'job:reconnect', handler: (e) => {
+            if (e.detail?.type !== 'interview-transcribe') return;
+            const itemId = parseInt(String(e.detail.job?.entityId || '').replace(/^i/, ''));
+            if (itemId) this.ivReconnect(e.detail.jobId, itemId);
+          } },
         ],
         onBookChanged: (e, ctx, root) => {
+          Object.assign(this, rechercheInterviewState());
           this.resetRecherche();
           this.resetResearchChat();
           this.researchChatOpen = false;
           if (root.showRechercheCard && Alpine.store('nav').selectedBookId) this.loadRecherche();
         },
-        onViewReset: () => { this.resetRecherche(); this.resetResearchChat(); this.researchChatOpen = false; },
+        onViewReset: () => {
+          this.resetRecherche(); this.resetResearchChat(); this.researchChatOpen = false;
+          Object.assign(this, rechercheInterviewState());
+        },
       });
 
       // Karte zugeklappt (Exklusivität, Seitenwechsel, Hash-Navigation): BEIDE
@@ -181,6 +197,8 @@ export function registerRechercheCard() {
     },
 
     ...rechercheMethods,
+
+    ...rechercheInterviewMethods,
     ...rechercheToSourceMethods,
     ...researchChatMethods,
   }));

@@ -134,6 +134,14 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule, buchKontext = '
   // (das Profil wird gerade ERST aus dem Text destilliert; VORRANGIGE-ANGABEN
   // sollen die Beschreibung nicht einfärben).
   const SYS_STILPROFIL_CORE       = buildSystem(sp.stilprofil        || 'Du bist ein literarischer Stilanalytiker. Du destillierst aus einer Leseprobe den unverwechselbaren Stil des Autors – rein deskriptiv, ohne zu werten und ohne den Text fortzuschreiben.', rules);
+  // Struktur-Check journalistischer Beitraege: prueft die FORM der Textsorte,
+  // nicht die Sprache. Bewusst ohne Buch-Kontext-Block — der Soll-Katalog kommt
+  // aus der Textsorte (prompts/textsorten.js), nicht aus den Buch-Angaben.
+  // Titel-Werkstatt: schlaegt Formulierungen vor, entscheidet aber nichts. Wie
+  // beim Struktur-Check bewusst ohne Buch-Kontext-Block — was den Titel traegt,
+  // steht im Beitrag, nicht in den Buch-Angaben.
+  const SYS_HEADLINE_CORE         = buildSystem(sp.headline          || 'Du bist Blattmacherin einer Tageszeitung und textest den Titelapparat: Dachzeile, Titel, Lead, Teaser. Du arbeitest ausschliesslich mit dem, was im Beitrag steht – du spitzt nicht über die Faktenlage hinaus zu, erfindest keine Zahl und keinen Namen und stellst keine Frage, wo eine Aussage hingehört. Du lieferst Vorschläge zur Auswahl, keine Entscheidung.', rules);
+  const SYS_STRUKTUR_CORE         = buildSystem(sp.struktur          || 'Du bist Schlussredakteurin einer Tageszeitung und prüfst einen Beitrag auf die Form seiner Textsorte. Du bewertest AUSSCHLIESSLICH den Aufbau: Aufhänger, Lead, Reihenfolge der Information, Zuschreibung, Gegenposition, Schluss. Sprache, Rechtschreibung und Stil sind NICHT dein Thema – dafür gibt es das Lektorat. Du schreibst den Text nicht um und schlägst keine Formulierungen vor. Leerer Output ist besser als ein erfundener Mangel.', rules);
   // Komplett-Extraktion enthält das Schema; buchKontext fliesst in das Schema-Embedding ein,
   // bleibt aber für die _toCacheBlocks-Split-Logik separat sichtbar — der Core ist
   // bewusst der Builder-Output OHNE bookContextStr-Section (siehe getLocalePromptsForBook).
@@ -178,6 +186,10 @@ function _buildLocalePrompts(localeConfig, globalErklaerungRule, buchKontext = '
     SYSTEM_BUCHBEWERTUNG_BLOCKS: _toCacheBlocks(SYS_BUCHBEWERTUNG_CORE, reviewCtx),
     // Stilprofil-Extraktion: deskriptive Analyse, kein Buch-Kontext-Block.
     SYSTEM_STILPROFIL:           SYS_STILPROFIL_CORE,
+    // Struktur-Check: Formpruefung gegen die Textsorte, kein Buch-Kontext-Block.
+    SYSTEM_STRUKTUR:             SYS_STRUKTUR_CORE,
+    // Titel-Werkstatt: Vorschlaege zur Auswahl, kein Buch-Kontext-Block.
+    SYSTEM_HEADLINE:             SYS_HEADLINE_CORE,
     SYSTEM_KAPITELANALYSE:       _aug(SYS_KAPITELANALYSE_CORE),
     SYSTEM_KAPITELANALYSE_BLOCKS:_toCacheBlocks(SYS_KAPITELANALYSE_CORE, bookContextStr),
     // Kapitel-Review nutzt die gleiche Bewerter-Rolle wie die Buchbewertung,

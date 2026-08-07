@@ -39,6 +39,28 @@
     </template>
   </span>
 </template>
+<!--
+  Redaktions-Status (nur journalistische Buecher, Gate kommt vom Server als
+  `redaktionEnabled`). Zwei Elemente mit klarer Rollenteilung: die Plakette ZEIGT
+  die Stufe, die transiente Combobox SETZT sie. Ein einzelnes gebundenes
+  Auswahlfeld waere schmaler, koennte aber den Stale-Zustand nicht ausdruecken —
+  und genau der ist der Grund fuer die Spalte.
+-->
+<template x-if="redaktionEnabled">
+  <span class="organizer-redaktion display-contents">
+    <template x-if="redaktionOf(page.id)">
+      <span class="badge organizer-redaktion-badge"
+            :class="'badge--redaktion-' + redaktionOf(page.id).status
+                    + (redaktionOf(page.id).stale ? ' organizer-redaktion-badge--stale' : '')"
+            :data-tip="redaktionTip(page.id)"
+            x-text="redaktionLabel(redaktionOf(page.id).status)"></span>
+    </template>
+    <div class="organizer-redaktion-combo"
+         x-data="combobox({ placeholder: $app.t('redaktion.setStatus'), transient: true })"
+         x-effect="options = redaktionOptions()"
+         @combobox-change="setRedaktion(page.id, $event.detail)"></div>
+  </span>
+</template>
 <div class="organizer-move-combo"
      x-data="combobox({ placeholder: $app.t('bookOrganizer.moveTo'), transient: true })"
      x-effect="options = chapterMoveOptions(page.chapter_id || 0)"

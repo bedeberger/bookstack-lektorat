@@ -4,6 +4,7 @@
 // anschliessend silent im Hintergrund; `resetBookOverview` setzt State + Memos
 // beim Buchwechsel auf den Initialstand zurück.
 import { fetchJson, isRetriableFetchError } from '../utils.js';
+import { komplettHiddenFor } from '../cards/feature-registry.js';
 
 // Initialer Tile-State der Karte. SSoT für BEIDE Seiten: die Card-Registrierung
 // spreadet das Objekt als Startzustand, `resetBookOverview` weist es beim
@@ -237,9 +238,12 @@ export const loadMethods = {
   // True, wenn das Buch Seiten hat, die Komplettanalyse (Figuren/Schauplätze/
   // Szenen) aber noch nie gelaufen ist — dann zeigt die Overview ein einzelnes
   // CTA-Tile statt drei leerer Zählkacheln kommentarlos auszublenden. Tagebücher
-  // haben bewusst keine narrative Analyse und sind ausgenommen.
+  // haben bewusst keine narrative Analyse und sind ausgenommen; Buchtypen, in
+  // denen die Komplettanalyse gar nicht angeboten wird (Ressort), ebenfalls —
+  // ein Handlungsaufruf ohne erreichbares Ziel wäre eine Sackgasse.
   overviewNeedsAnalysis() {
     if (this.overviewIsTagebuch()) return false;
+    if (komplettHiddenFor(this.overviewBuchtyp)) return false;
     if (!(Alpine.store('nav').pages || []).length) return false;
     return this.overviewFigurenCount() === 0
       && this.overviewSzenenCount() === 0

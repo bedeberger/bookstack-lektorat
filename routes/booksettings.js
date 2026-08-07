@@ -3,8 +3,9 @@ const express = require('express');
 const {
   getBookSettings, saveBookSettings, setBookEntitiesEnabled,
   setBookCitationSettings, VALID_CITATION_STYLES, VALID_BIBLIOGRAPHY_SCOPES, VALID_CITATION_NOTES,
-  setBookXrefSettings,
+  setBookXrefSettings, setBookTextsorte,
 } = require('../db/schema');
+const { isValidTextsorte } = require('../db/textsorte');
 const { aclParamGuard } = require('../lib/acl');
 const logger = require('../logger');
 const { captureSnapshot } = require('./snapshots');
@@ -18,7 +19,7 @@ const AUTO_FINISH_LABEL = '__i18n:snapshots.autoFinishLabel__';
 
 const VALID_LANGUAGES = ['de', 'en'];
 const VALID_REGIONS   = ['CH', 'DE', 'US', 'GB'];
-const VALID_BUCHTYPEN = ['roman', 'kurzgeschichten', 'gesellschaft', 'krimi', 'historisch', 'fantasy_scifi', 'erotik', 'jugend', 'autobiografie', 'tagebuch', 'sachbuch', 'wissenschaft', 'lyrik', 'essay', 'blog', 'satire', 'andere'];
+const VALID_BUCHTYPEN = ['roman', 'kurzgeschichten', 'gesellschaft', 'krimi', 'historisch', 'fantasy_scifi', 'erotik', 'jugend', 'autobiografie', 'tagebuch', 'sachbuch', 'wissenschaft', 'lyrik', 'essay', 'blog', 'satire', 'journalismus', 'andere'];
 const VALID_POV     = ['ich', 'er_sie_personal', 'er_sie_auktorial', 'du', 'wir', 'gemischt'];
 const VALID_TEMPUS  = ['praeteritum', 'praesens', 'gemischt'];
 const BUCH_KONTEXT_MAX = 1000;
@@ -222,6 +223,21 @@ router.put('/:book_id/xrefs', aclParamGuard('editor'), jsonBody, (req, res) => {
   const next = getBookSettings(bookId, req.session?.user?.email || null);
   logger.info(`[querverweise] settings book=${bookId} abbNummerierung=${next.figure_numbering}`);
   res.json({ ok: true, figure_numbering: next.figure_numbering });
+});
+
+/** Vorherrschende Textsorte des Buchs (journalistische Projekte). Default fuer
+ *  jede Seite ohne eigenen Override — den setzt `PUT /textsorte/page/:page_id`.
+ *  Eigener Endpunkt wie /citation und /xrefs. */
+router.put('/:book_id/textsorte', aclParamGuard('editor'), jsonBody, (req, res) => {
+  const bookId = req.bookId;
+  const raw = req.body?.textsorte;
+  const value = raw == null || raw === '' ? null : String(raw);
+  if (value !== null && !isValidTextsorte(value)) {
+    return res.status(400).json({ error_code: 'INVALID_VALUE', params: { field: 'textsorte' } });
+  }
+  setBookTextsorte(bookId, value);
+  logger.info(`[textsorte] book=${bookId} default=${value || '–'}`);
+  res.json({ ok: true, textsorte: value });
 });
 
 module.exports = router;

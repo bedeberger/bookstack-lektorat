@@ -25,7 +25,7 @@
           <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#list"/></svg>
         </button>
         <button type="button" class="icon-btn icon-btn--ghost" @click="openFind()"
-                :data-tip="$app.t('bookEditor.btn.findTitle')"
+                :data-tip="$app.withHotkey($app.t('bookEditor.btn.findTitle'), 'find')"
                 :aria-label="$app.t('bookEditor.btn.find')">
           <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#search"/></svg>
         </button>
@@ -42,7 +42,7 @@
         <span class="icon-btn-badge-wrap">
           <button type="button" class="icon-btn icon-btn--ghost icon-btn--success" @click="saveAllDirty()"
                   :disabled="saveAllRunning || dirtyCount === 0"
-                  :data-tip="saveAllRunning ? $app.t('bookEditor.btn.saveAllProgress', { done: saveAllDone, total: saveAllTotal }) : $app.t('bookEditor.btn.saveAllTitle')"
+                  :data-tip="saveAllRunning ? $app.t('bookEditor.btn.saveAllProgress', { done: saveAllDone, total: saveAllTotal }) : $app.withHotkey($app.t('bookEditor.btn.saveAllTitle'), 'save')"
                   :aria-label="$app.t('bookEditor.btn.saveAll')">
             <span x-show="saveAllRunning" class="spinner"></span>
             <svg x-show="!saveAllRunning" class="icon" aria-hidden="true"><use href="/icons.svg?v=693#check"/></svg>
@@ -300,11 +300,11 @@
                 : ''"></span>
         <button type="button" class="book-editor-find-btn" @click="findPrev()"
                 :disabled="findMatches.length === 0"
-                :data-tip="$app.t('find.prev')" :aria-label="$app.t('find.prev')">
+                :data-tip="$app.withHotkey($app.t('find.prev'), 'findPrev')" :aria-label="$app.t('find.prev')">
           <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#chevron-up"/></svg></button>
         <button type="button" class="book-editor-find-btn" @click="findNext()"
                 :disabled="findMatches.length === 0"
-                :data-tip="$app.t('find.next')" :aria-label="$app.t('find.next')">
+                :data-tip="$app.withHotkey($app.t('find.next'), 'findNext')" :aria-label="$app.t('find.next')">
           <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#chevron-down"/></svg></button>
         <button type="button" class="book-editor-find-btn"
                 :class="{ 'book-editor-find-btn--active': findCaseSensitive }"

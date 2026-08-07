@@ -20,7 +20,7 @@ const DIAGRAM_FALLBACK_PX = 320;
 // `hedging` ist weich (Absicherungs-Mass ist Autorenentscheid); die übrigen
 // Fach-Typen (unbelegt, begriffsinkonsistenz, autorenform) sind hart – das sind
 // Belegs- und Formbefunde, keine Geschmacksfragen.
-export const SOFT_TYPEN = new Set(['satzbau', 'wiederholung', 'schwaches_verb', 'fuellwort', 'filterwort', 'klischee', 'pleonasmus', 'ki_geruch', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel', 'hedging']);
+export const SOFT_TYPEN = new Set(['satzbau', 'wiederholung', 'schwaches_verb', 'fuellwort', 'filterwort', 'klischee', 'pleonasmus', 'ki_geruch', 'show_vs_tell', 'passiv', 'perspektivbruch', 'tempuswechsel', 'hedging', 'amtsdeutsch']);
 
 // Harte Typen = Default-selektiert → rote Einfärbung (Badge, Border, Inline-Mark --selected).
 // Weiche Typen und 'stil' = Default-unselektiert → orange Einfärbung.

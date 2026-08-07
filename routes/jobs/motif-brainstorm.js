@@ -11,7 +11,7 @@ const {
   aiCall, getPrompts, getBookPrompts,
   loadOrderedBookContents, loadPageContents,
   groupByChapter, splitGroupsIntoChunks, buildSinglePassBookText,
-  SINGLE_PASS_LIMIT, PER_CHUNK_LIMIT, tps, _modelName,
+  chunkLimitsFor, tps, _modelName,
 } = require('./shared');
 const motifsDb = require('../../db/motifs');
 const { getBookSettings } = require('../../db/schema');
@@ -42,6 +42,9 @@ async function runMotifBrainstormJob(jobId, bookId, userEmail, { force = false }
   try {
     const signal = () => jobAbortControllers.get(jobId)?.signal;
     const provider = resolveProvider({ userEmail });
+    // Chunk-Grenzen aus dem Kontextfenster dieses Providers — die boot-eingefrorenen
+    // Konstanten rechnen mit ai.claude.context_window und sprengen lokale Fenster.
+    const { singlePass: SINGLE_PASS_LIMIT, perChunk: PER_CHUNK_LIMIT } = chunkLimitsFor(provider);
 
     // Force-Refresh (Neu einlesen): den ganzen Buch-Cache verwerfen, sodass auch
     // unveränderte Kapitel neu gebrainstormt werden (frische kreative Vorschläge).
@@ -155,7 +158,7 @@ async function runMotifBrainstormJob(jobId, bookId, userEmail, { force = false }
       try {
         runId = motifsDb.insertBrainstormRun({
           bookId, userEmail, vorschlagCount: vorschlaege.length,
-          result: { vorschlaege }, model: _modelName(),
+          result: { vorschlaege }, model: _modelName(provider),
         });
       } catch (e) { logger.warn(`Motiv-Brainstorm-Run-Insert fehlgeschlagen book=${bookId}: ${e.message}`); }
     }

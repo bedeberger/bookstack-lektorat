@@ -2,7 +2,7 @@
 // die vier Fach-Submodule (board/items/links/media) sie ohne Ringimport teilen.
 
 // Fundstueck-Arten (Reihenfolge = Anzeige in Combobox/Filter).
-export const KINDS = ['note', 'link', 'quote', 'fact', 'image', 'document'];
+export const KINDS = ['note', 'link', 'quote', 'fact', 'image', 'document', 'transcript'];
 // Verknuepfungs-Kategorien (Reihenfolge = Anzeige in Picker/Filter/Sortierung).
 export const LINK_KINDS = ['figure', 'location', 'scene', 'beat', 'thread', 'chapter', 'page'];
 

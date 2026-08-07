@@ -16,7 +16,8 @@ const {
 } = require('./shared');
 const contentStore = require('../../lib/content-store');
 const { narrativeLabels } = require('./narrative-labels');
-const { loadChapterReviewKomplettContext } = require('./review-context');
+const { loadChapterReviewKomplettContext, loadStrukturContext } = require('./review-context');
+const { applyQuoteVerification, belegHaystack } = require('../../lib/quote-verify');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
 const appSettings = require('../../lib/app-settings');
@@ -36,7 +37,7 @@ async function runChapterReviewJob(jobId, bookId, chapterId, chapterName, bookNa
   const {
     buildChapterReviewPrompt, buildChapterReviewMultiPassPrompt,
     buildChapterAnalysisPrompt,
-    SCHEMA_CHAPTER_REVIEW, SCHEMA_CHAPTER_ANALYSIS,
+    buildChapterReviewSchema, buildChapterAnalysisSchema, reviewProfil,
     getBuchtypReviewSchwerpunkt,
     PROMPTS_VERSION,
   } = prompts;
@@ -45,6 +46,11 @@ async function runChapterReviewJob(jobId, bookId, chapterId, chapterName, bookNa
   const narrative = narrativeLabels(bookSettings);
   const locale = `${bookSettings?.language || 'de'}-${bookSettings?.region || 'CH'}`;
   const reviewSchwerpunkt = getBuchtypReviewSchwerpunkt(locale, bookSettings?.buchtyp || null);
+  // Achsen-Set, Notenanker und Schema hängen am Bewertungsprofil des Buchtyps.
+  const buchtyp = narrative.buchtyp || null;
+  const profil = reviewProfil(buchtyp);
+  const SCHEMA_CHAPTER_REVIEW = buildChapterReviewSchema({ buchtyp });
+  const SCHEMA_CHAPTER_ANALYSIS = buildChapterAnalysisSchema({ buchtyp });
 
   const bookIdInt = parseInt(bookId);
   const chapterIdInt = parseInt(chapterId);
@@ -86,6 +92,15 @@ async function runChapterReviewJob(jobId, bookId, chapterId, chapterName, bookNa
       chapterIds: [...chapterIds], chapterNames,
     });
 
+    // Ist-Befunde des Struktur-Checks, auf die Seiten dieses Kapitels gescopt
+    // (nur journalistische Bücher; sonst null). Anders als in der Buchbewertung
+    // wird hier jeder auffällige Beitrag einzeln gelistet — auf Kapitelebene ist
+    // das die brauchbare Auflösung, und die Menge bleibt klein.
+    const strukturContext = loadStrukturContext(bookIdInt, pages, { scope: 'chapter' });
+    if (strukturContext) {
+      logger.info(`Struktur-Befunde: ${strukturContext.geprueft}/${strukturContext.gesamt} Beiträge im Kapitel geprüft – fliessen in die Bewertung ein.`);
+    }
+
     // Position in der Lesereihenfolge: erlaubt dem Modell, Dramaturgie/Pacing
     // relativ zur Funktion des Kapitels im Buch zu bewerten statt absolut.
     const chapterOrder = [];
@@ -109,7 +124,7 @@ async function runChapterReviewJob(jobId, bookId, chapterId, chapterName, bookNa
     // Kartei-/Kontinuitätsstand bzw. eine Umgruppierung den Cache invalidiert.
     const optionsSig = _sigHash({
       narrative, schwerpunkt: reviewSchwerpunkt, includeSubchapters,
-      stilprofil: bookSettings?.stilprofil || '', komplettContext, position,
+      stilprofil: bookSettings?.stilprofil || '', komplettContext, position, strukturContext,
     });
 
     // pages_sig: jede Seite + ihr updated_at + Sub-Tree-Kapitelmenge inkl. deren
@@ -190,15 +205,20 @@ async function runChapterReviewJob(jobId, bookId, chapterId, chapterName, bookNa
       return out.join('\n\n---\n\n');
     }
     let r;
+    // Grundlage der Note: Volltext des Kapitels oder verdichtete Teil-Analysen.
+    let basis;
 
     if (totalChars <= SINGLE_PASS_LIMIT) {
       const chText = _buildText(contents);
       updateJob(jobId, { progress: 65, statusText: 'job.phase.aiChapterReview' });
       r = await aiCall(jobId, tok,
-        buildChapterReviewPrompt(chapterName, bookName, contents.length, chText, { ...narrative, reviewSchwerpunkt, komplettContext, position }),
+        buildChapterReviewPrompt(chapterName, bookName, contents.length, chText, { ...narrative, reviewSchwerpunkt, komplettContext, position, strukturContext }),
         SYSTEM_KAPITELREVIEW,
         65, 97, 5000, 0.2, null, undefined, SCHEMA_CHAPTER_REVIEW,
       );
+      const droppedQ = applyQuoteVerification(r, chText);
+      if (droppedQ) logger.warn(`${droppedQ} Belegzitat(e) nicht im Kapiteltext gefunden – verworfen.`);
+      basis = 'single';
     } else {
       // Kapitel sprengt Input-Budget → in Sub-Chunks zerlegen, je Analyse, dann synthetisieren.
       const groupKey = String(chapterId);
@@ -223,18 +243,28 @@ async function runChapterReviewJob(jobId, bookId, chapterId, chapterName, bookNa
           SYSTEM_KAPITELANALYSE,
           fromPct, toPct, 1500, 0.2, null, undefined, SCHEMA_CHAPTER_ANALYSIS,
         );
+        // Vor der Synthese verifizieren: die Belegzitate der Teil-Analysen sind
+        // ab hier die einzige Zitatquelle der Kapitelbewertung.
+        const droppedQ = applyQuoteVerification(ca, chunkText, 'zitate');
+        if (droppedQ) logger.warn(`Abschnitt ${i + 1}: ${droppedQ} Belegzitat(e) nicht im Text gefunden – verworfen.`);
         subAnalyses.push({ pageCount: chunk.pages.length, ...ca });
       }
 
       updateJob(jobId, { progress: 90, statusText: 'job.phase.finalReview' });
       r = await aiCall(jobId, tok,
-        buildChapterReviewMultiPassPrompt(chapterName, bookName, subAnalyses, contents.length, { ...narrative, reviewSchwerpunkt, komplettContext, position }),
+        buildChapterReviewMultiPassPrompt(chapterName, bookName, subAnalyses, contents.length, { ...narrative, reviewSchwerpunkt, komplettContext, position, strukturContext }),
         SYSTEM_KAPITELREVIEW,
         90, 97, 5000, 0.2, null, undefined, SCHEMA_CHAPTER_REVIEW,
       );
+      const droppedQ = applyQuoteVerification(r, belegHaystack(subAnalyses));
+      if (droppedQ) logger.warn(`${droppedQ} Belegzitat(e) stammen nicht aus den Teil-Analysen – verworfen.`);
+      basis = 'multi';
     }
 
     if (r?.gesamtnote == null) throw i18nError('job.error.gesamtnoteMissing');
+    // Grundlage + Achsen-Profil ins Ergebnis (siehe routes/jobs/review.js).
+    r.basis = basis;
+    r.profil = profil;
 
     saveChapterMacroReviewCache(bookIdInt, email, chapterIdInt, pagesSig, r, effectiveProvider);
 

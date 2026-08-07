@@ -65,6 +65,12 @@ export const EVT = {
   // Seiten-Toolbar (Root-Scope). Event statt Card-Ref-Forwarder, weil die
   // Toolbar-Karte — anders als `editorNotebookCard` — keinen Selbst-Ref auslegt.
   EDITOR_CITE_OPEN: 'editor:cite:open',         // kein detail
+  // O-Ton aus einem Interview-Transkript als belegtes Blockzitat einsetzen.
+  // detail: { source, text, loc, ack } — `ack` ist ein Objekt, in das der
+  // Listener SYNCHRON `{ ok: true|false }` schreibt. dispatchEvent laeuft
+  // synchron, der Sender liest das Ergebnis also direkt danach; ein
+  // Rueckkanal-Event waere fuer eine Ja/Nein-Antwort zu viel Apparat.
+  EDITOR_OTON_INSERT: 'editor:oton:insert',     // detail: { source, text, loc, ack }
 
   // ── Editor: Draft/Offline-Sync ───────────────────────────────────────────
   DRAFT_CHANGED: 'draft:changed',               // kein detail (Draft-Bestand hat sich geändert)

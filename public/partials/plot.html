@@ -22,10 +22,10 @@
         <!-- Undo/Redo (max 10 Schritte, book/plot/history.js) -->
         <button type="button" class="icon-btn icon-btn--ghost" @click="plotHistoryUndo()"
                 :disabled="!_undoStack.length || busy"
-                :data-tip="$app.t('plot.history.undoTip')" :aria-label="$app.t('plot.history.undo')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#undo"/></svg></button>
+                :data-tip="$app.withHotkey($app.t('plot.history.undoTip'), 'undo')" :aria-label="$app.t('plot.history.undo')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#undo"/></svg></button>
         <button type="button" class="icon-btn icon-btn--ghost" @click="plotHistoryRedo()"
                 :disabled="!_redoStack.length || busy"
-                :data-tip="$app.t('plot.history.redoTip')" :aria-label="$app.t('plot.history.redo')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#redo"/></svg></button>
+                :data-tip="$app.withHotkey($app.t('plot.history.redoTip'), 'redo')" :aria-label="$app.t('plot.history.redo')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#redo"/></svg></button>
         <button type="button" class="icon-btn icon-btn--ghost"
                 @click="runConsistency()"
                 :disabled="consistencyLoading || !beats.length"

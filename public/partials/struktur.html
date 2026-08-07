@@ -1,0 +1,148 @@
+<!-- Struktur-Werkstatt: Textsorte pro Beitrag + Formprüfung dagegen -->
+<!--
+  Alpine.data-Sub-Komponente — siehe public/js/cards/struktur-card.js.
+  `showStrukturCard` + `toggleStrukturCard` bleiben im Root (Hash-Router,
+  Exklusivität). Nur bei Buchtyp 'journalismus' erreichbar (feature-registry
+  `requiresBuchtyp`).
+
+  Rein rückwärtsgewandt: setzt das SOLL (Textsorte) und zeigt das IST
+  (Struktur-Befund aus `page_structure_checks`) — schreibt nie in den Buchtext.
+-->
+<div class="card card--struktur" x-data="strukturCard" x-show="$app.showStrukturCard" x-cloak>
+  <div class="card-header">
+    <div class="card-header-titlebar">
+      <span class="card-eyebrow" x-text="$app.selectedBookName"></span>
+      <span class="card-title" x-text="$app.t('struktur.title')"></span>
+    </div>
+    <div class="card-actions">
+      <button type="button" class="primary" data-label-ok
+              :disabled="strukturRunning || !$store.nav.selectedBookId || !strukturHasRows"
+              @click="runStrukturCheck()"
+              x-text="$app.t(strukturMitBefund > 0 ? 'struktur.rerun' : 'struktur.run')"></button>
+    </div>
+  </div>
+
+  <p class="struktur-intro" x-text="$app.t('struktur.intro')"></p>
+
+  <!-- Buch-Default: gilt für jeden Beitrag ohne eigene Angabe -->
+  <div class="card-form-row struktur-default-row">
+    <label class="card-form-label" x-text="$app.t('struktur.bookDefault')"></label>
+    <div class="card-form-field">
+      <div x-data="combobox($app.t('struktur.bookDefault'), $app.t('struktur.noTextsorte'))"
+           x-modelable="value" x-model="strukturBookTextsorte"
+           x-effect="options = strukturTextsorteOptions()"
+           @combobox-change="setBookTextsorte(strukturBookTextsorte)"></div>
+      <p class="card-form-field-note" x-text="$app.t('struktur.bookDefault.hint')"></p>
+    </div>
+  </div>
+
+  <div x-show="strukturRunning && strukturProgress > 0" class="progress-bar-wrap">
+    <div class="progress-bar" :style="{ '--progress': strukturProgress + '%' }"></div>
+  </div>
+  <div x-show="strukturStatus" class="card-status" x-text="strukturStatus"></div>
+  <div x-show="strukturError" class="muted-msg muted-msg--spaced" x-text="strukturError"></div>
+  <div x-show="strukturLoadError" class="muted-msg muted-msg--spaced" x-text="$app.t('struktur.loadError')"></div>
+
+  <div x-show="strukturLastRun && !strukturRunning" x-cloak class="card-status"
+       x-text="$app.t('struktur.lastRun', {
+         geprueft: strukturLastRun?.geprueft ?? 0,
+         uebersprungen: strukturLastRun?.uebersprungen ?? 0,
+         ohne: strukturLastRun?.ohneTextsorte ?? 0
+       })"></div>
+
+  <div x-show="strukturOhneTextsorte > 0" x-cloak class="muted-msg muted-msg--spaced"
+       x-text="$app.t('struktur.missingHint', { n: strukturOhneTextsorte })"></div>
+
+  <div x-show="!strukturHasRows" class="muted-msg muted-msg--spaced" x-text="$app.t('struktur.empty')"></div>
+
+  <table class="data-table struktur-table" x-show="strukturHasRows"
+         x-data="sortableTable({
+           rows: () => strukturRows(),
+           defaultKey: '_rank',
+           types: { name: 'string', chapter: 'string', textsorteLabel: 'string', _rank: 'number' },
+           persistKey: 'strukturTable'
+         })">
+    <thead>
+      <tr>
+        <th class="sortable-th" :class="sortClass('name')" :aria-sort="ariaSort('name')"
+            @click="sortBy('name')" x-text="$app.t('struktur.col.title')"></th>
+        <th class="sortable-th" :class="sortClass('chapter')" :aria-sort="ariaSort('chapter')"
+            @click="sortBy('chapter')" x-text="$app.t('struktur.col.chapter')"></th>
+        <th x-text="$app.t('struktur.col.textsorte')"></th>
+        <th class="sortable-th" :class="sortClass('_rank')" :aria-sort="ariaSort('_rank')"
+            @click="sortBy('_rank')" x-text="$app.t('struktur.col.urteil')"></th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <template x-for="row in sorted" :key="row.id">
+        <tr>
+          <td class="struktur-cell-title">
+            <span class="internal-link" @click="strukturOpenPage(row)" x-text="row.name || $app.t('struktur.untitled')"></span>
+          </td>
+          <td class="muted-msg muted-msg--sm" x-text="row.chapter || '—'"></td>
+          <td class="struktur-cell-textsorte">
+            <!-- Leerwert = „Buch-Default gilt". Das Label zeigt darum die
+                 GELTENDE Textsorte, auch wenn die Seite keinen Override hat. -->
+            <div x-data="combobox($app.t('struktur.col.textsorte'), $app.t('struktur.inherit'))"
+                 x-modelable="value" x-model="row.ownTextsorte"
+                 x-effect="options = strukturTextsorteOptions()"
+                 @combobox-change="setPageTextsorte(row, row.ownTextsorte)"></div>
+            <span class="muted-msg muted-msg--sm" x-show="!row.ownTextsorte && row.textsorteLabel"
+                  x-text="row.textsorteLabel"></span>
+          </td>
+          <td>
+            <span class="tag" x-show="row.urteil"
+                  :class="'struktur-urteil--' + row.urteil"
+                  x-text="$app.t('struktur.urteil.' + row.urteil)"></span>
+            <span class="muted-msg muted-msg--sm" x-show="!row.urteil" x-text="'—'"></span>
+          </td>
+          <td class="struktur-cell-actions">
+            <button type="button" class="secondary" x-show="row.check"
+                    :aria-expanded="strukturOpenId === row.id"
+                    @click="strukturOpenRow(row)"
+                    x-text="$app.t(strukturOpenId === row.id ? 'struktur.hideDetail' : 'struktur.showDetail')"></button>
+            <button type="button" class="secondary" :disabled="strukturRunning || !row.textsorte"
+                    @click="runStrukturCheck(row.id)"
+                    x-text="$app.t('struktur.checkOne')"></button>
+          </td>
+        </tr>
+      </template>
+    </tbody>
+  </table>
+
+  <!-- Detail des offenen Befunds. Bewusst UNTER der Tabelle statt als
+       aufgeklappte Zeile: die Regel-Liste ist mehrzeilig und sprengt jede
+       Tabellenzelle. -->
+  <template x-for="row in strukturRows().filter(r => r.id === strukturOpenId && r.check)" :key="row.id">
+    <div class="struktur-detail">
+      <div class="struktur-detail-head">
+        <span class="card-subtitle" x-text="row.name"></span>
+        <span class="tag" x-text="row.textsorteLabel"></span>
+        <span class="tag" :class="'struktur-urteil--' + row.urteil"
+              x-text="$app.t('struktur.urteil.' + row.urteil)"></span>
+      </div>
+
+      <p class="struktur-summary" x-show="row.check?.result?.zusammenfassung"
+         x-text="row.check?.result?.zusammenfassung"></p>
+
+      <p class="struktur-wfragen" x-show="(row.check?.result?.fehlendeWFragen || []).length > 0"
+         x-text="$app.t('struktur.wfragen', {
+           list: (row.check?.result?.fehlendeWFragen || []).map(w => $app.t('struktur.wfrage.' + w)).join(', ')
+         })"></p>
+
+      <ul class="struktur-regeln">
+        <template x-for="r in strukturDetailRegeln(row)" :key="r.nr">
+          <li class="struktur-regel" :class="'struktur-regel--' + r.status">
+            <div class="struktur-regel-head">
+              <span class="tag struktur-regel-status" x-text="$app.t('struktur.status.' + r.status)"></span>
+              <span class="struktur-regel-text" x-text="r.text"></span>
+            </div>
+            <p class="struktur-regel-befund" x-show="r.befund" x-text="r.befund"></p>
+            <p class="struktur-regel-massnahme" x-show="r.massnahme" x-text="r.massnahme"></p>
+          </li>
+        </template>
+      </ul>
+    </div>
+  </template>
+</div>

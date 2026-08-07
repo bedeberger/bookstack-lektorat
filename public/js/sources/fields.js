@@ -27,7 +27,20 @@ export const TEXT_FIELDS = [
   'citekey', 'title', 'container_title', 'publisher', 'place', 'year',
   'edition', 'volume', 'issue', 'pages', 'doi', 'isbn', 'issn', 'url',
   'accessed_at', 'note',
+  'oton_role', 'oton_channel', 'oton_date', 'oton_auth',
 ];
+
+/** O-Ton-Enums – deckungsgleich mit OTON_CHANNELS/OTON_AUTH in db/sources.js.
+ *  Werte sind i18n-Suffixe unter `sources.otonChannel.` bzw. `sources.otonAuth.`. */
+export const OTON_CHANNELS = ['persoenlich', 'telefon', 'video', 'mail', 'medienkonferenz', 'andere'];
+export const OTON_AUTH = ['keine', 'ausstehend', 'freigegeben', 'abgelehnt'];
+
+/** Autorisierungsstand, der einen O-Ton im Text blockieren sollte. `null` zaehlt
+ *  wie `keine` – ohne Angabe ist nichts freigegeben, aber auch nichts abgelehnt. */
+export function otonBlocking(src) {
+  if (src?.csl_type !== 'interview') return false;
+  return src?.oton_auth === 'ausstehend' || src?.oton_auth === 'abgelehnt';
+}
 
 // Immer sichtbar, vor den typspezifischen Feldern.
 const HEAD_FIELDS = ['title', 'year'];
@@ -43,7 +56,9 @@ const TYPE_FIELDS = {
   thesis:    ['publisher', 'place', 'doi'],
   report:    ['publisher', 'place', 'volume', 'doi', 'isbn'],
   legal:     ['container_title', 'place', 'pages'],
-  interview: ['publisher', 'place'],
+  // O-Ton/Interview: Medium + Ort bleiben (Publikationsort des Gespraechs),
+  // dazu die vier redaktionellen Angaben aus db/sources.js#TEXT_FIELDS.
+  interview: ['oton_role', 'oton_channel', 'oton_date', 'oton_auth', 'publisher', 'place'],
   film:      ['publisher', 'place'],
   dataset:   ['publisher', 'volume', 'doi'],
   other:     ['container_title', 'publisher', 'place', 'pages', 'doi'],
@@ -87,7 +102,7 @@ function _camel(field) {
 // (`data-spellcheck="spelling"`, harte Regel in CLAUDE.md). Bewusst NICHT
 // dabei: Ort, Verlag, Auflage, Band, Seiten, DOI/ISBN/ISSN, URL, Abrufdatum —
 // Eigennamen und Kennungen, die der Pruefer sonst als Tippfehler anmeckert.
-const SPELLCHECK_FIELDS = new Set(['title', 'container_title', 'note']);
+const SPELLCHECK_FIELDS = new Set(['title', 'container_title', 'note', 'oton_role']);
 
 /** Sichtbare Freitext-Felder eines Typs, in Formular-Reihenfolge.
  *  Rueckgabe: [{ key, labelKey, spell }] — das Template rendert daraus die Rows. */
@@ -98,6 +113,15 @@ export function fieldsForType(cslType) {
     key,
     labelKey: fieldLabelKey(key, t),
     spell: SPELLCHECK_FIELDS.has(key),
+    // `options` != null → das Formular rendert eine Combobox statt eines
+    // Textfelds. i18n-Praefix haengt am Feld, damit das Template nur EINEN
+    // Ausdruck braucht.
+    options: key === 'oton_channel' ? OTON_CHANNELS
+           : key === 'oton_auth'    ? OTON_AUTH
+           : null,
+    optionPrefix: key === 'oton_channel' ? 'sources.otonChannel.'
+                : key === 'oton_auth'    ? 'sources.otonAuth.'
+                : null,
   }));
 }
 

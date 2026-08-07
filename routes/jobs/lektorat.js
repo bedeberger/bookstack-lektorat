@@ -27,6 +27,7 @@ function buildLektoratCtxSig(parts) {
 }
 
 const { narrativeLabels } = require('./narrative-labels');
+const { effectiveTextsorte } = require('../../db/textsorte');
 
 // Traegt die Seite Quellennachweise? Steuert den Beleg-Schutzblock im Prompt
 // (siehe prompts/blocks.js#_buildBelegBlock). Indizierter Lookup auf dem
@@ -121,7 +122,7 @@ function dedupFehler(fehler) {
 const STYLISTIC_TYPEN = new Set([
   'stil', 'satzbau', 'schwaches_verb', 'fuellwort', 'filterwort',
   'klischee', 'ki_geruch', 'show_vs_tell', 'passiv', 'pleonasmus', 'wiederholung',
-  'hedging',
+  'hedging', 'amtsdeutsch',
 ]);
 
 const DEFAULT_STYLISTIC_CAP = 20;
@@ -163,8 +164,8 @@ function finalizeFehler(fehler, locale, validTypen) {
 // public/js/prompts/lektorat-typen.js – dieselbe Funktion, die das Typ-Enum des
 // Prompts baut. Damit kann der Server nie mehr Typen akzeptieren, als der Prompt
 // überhaupt angefragt hat.
-function _validTypen(prompts, buchtyp, local) {
-  return new Set(prompts.lektoratTypen(buchtyp || null, { local }));
+function _validTypen(prompts, buchtyp, local, textsorte = null) {
+  return new Set(prompts.lektoratTypen(buchtyp || null, { local, textsorte }));
 }
 
 // Letzter History-Eintrag dieser Seite (für History-Insert-Dedup).
@@ -278,18 +279,25 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
 
     // Cache nur wenn bookId vorhanden (FK auf books).
     const langCode = (locale || 'de-CH').split('-')[0];
+    // Geltende Textsorte der Seite (Override vor Buch-Default). Ausserhalb des
+    // journalistischen Profils bleibt sie null und aendert nichts.
+    const pageTextsorte = effectiveTextsorte(pageId, bookSettings);
     const ctxSig = bookId ? buildLektoratCtxSig({
       upd: pd.updated_at || '',
       text_sha: crypto.createHash('sha1').update(text).digest('hex').slice(0, 16),
       fig: figuren, ort: orte, bez: figurenBeziehungen, mot: motive,
       nar: narrativeLabels(bookSettings),
+      // Textsorte schneidet das Typ-Set (journalistisches Profil) — ohne sie in
+      // der Signatur behielte ein zum Kommentar umgewidmeter Beitrag seine
+      // `wertung`-Findings aus der Bericht-Fassung.
+      ts: pageTextsorte,
       sw: lektoratStopwords, er: lektoratErklaerungRule, kr: lektoratKorrekturRegeln,
       stp: bookSettings?.stilprofil || '',
       pe: previousExcerpt, cn: chapterName, pn: pd.name, cv: cacheVersion, lc: langCode,
       bl: hatBelege,
     }) : null;
     const cached = ctxSig ? loadLektoratCache(bookId, userEmail, pageId, ctxSig, effectiveProvider) : null;
-    const validTypen = _validTypen(prompts, bookSettings?.buchtyp, local);
+    const validTypen = _validTypen(prompts, bookSettings?.buchtyp, local, pageTextsorte);
 
     let result;
     if (cached) {
@@ -314,6 +322,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
           figuren, figurenBeziehungen, orte, motive, hatBelege,
           pageName: pd.name, chapterName,
           ...narrativeLabels(bookSettings),
+          textsorte: pageTextsorte,
           previousExcerpt,
           langCode,
         },
@@ -381,7 +390,6 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
   const chapterRows = db.prepare('SELECT chapter_id, chapter_name FROM chapters WHERE book_id = ?').all(parseInt(bookId));
   const chapterNameById = Object.fromEntries(chapterRows.map(r => [String(r.chapter_id), r.chapter_name]));
   const local = _isLocalProvider();
-  const validTypen = _validTypen(prompts, bookSettings?.buchtyp, local);
   try {
     updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
     const pages = await contentStore.listPages(bookId, userToken).catch(e => { throw contentHttpError(e); });
@@ -391,8 +399,11 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
     // Cloud-Provider verträgt parallele Calls; lokale Provider (Ollama/llama.cpp) sind
     // bereits via Mutex in lib/ai.js serialisiert – Pool=1 verhindert pile-up im aiCall.
     // Split-Modus (Cloud): jede Seite fächert in K Objektiv-Läufe + 1 Stil-Lauf auf.
-    // Damit die Gesamt-Concurrency (Seiten-Pool × Calls/Seite) im konfigurierten
-    // Rahmen bleibt, den Seiten-Pool entsprechend teilen (Rate-Limit-Schutz).
+    // `ai.lektorat_batch_concurrency` deckelt die gleichzeitigen CALLS, nicht die Seiten –
+    // der Seiten-Pool ist der Quotient daraus (Rate-Limit-Schutz). Der Default (4) ist
+    // bewusst so gewählt, dass er mit dem Split-Default noch zwei Seiten parallel zulässt;
+    // wer den Regler auf die Zahl der Calls pro Seite herunterdreht, bekommt bewusst
+    // einen seriellen Batch.
     const rawConcurrency = local ? 1 : (parseInt(appSettings.get('ai.lektorat_batch_concurrency'), 10) || 4);
     const split = !local && splitEnabled();
     const callsPerPage = split ? objektivRuns() + 1 : 1;
@@ -438,6 +449,10 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
         }
 
         const chapterName = pd.chapter_id ? (chapterNameById[String(pd.chapter_id)] || null) : null;
+        // Textsorte ist SEITEN-, nicht buchweit — darum hier je Seite aufloesen
+        // und das gueltige Typ-Set daraus ableiten, statt einmal fuers Buch.
+        const pageTextsorte = effectiveTextsorte(p.id, bookSettings);
+        const validTypen = _validTypen(prompts, bookSettings?.buchtyp, local, pageTextsorte);
 
         const ctxSig = buildLektoratCtxSig({
           upd: pd.updated_at || '',
@@ -445,6 +460,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
           fig: batchFiguren, ort: batchOrte, bez: batchBeziehungen, mot: batchMotive,
           ep: bookSettings?.erzaehlperspektive || null,
           ez: bookSettings?.erzaehlzeit || null,
+          ts: pageTextsorte,
           // Buchtyp wählt das Fehlertyp-Profil → gehört in die Signatur, sonst
           // liefert der Cache nach einer Buchtyp-Umstellung das alte Typ-Set.
           bt: bookSettings?.buchtyp || null,
@@ -483,6 +499,7 @@ async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
               pageName: p.name,
               chapterName,
               ...narrativeLabels(bookSettings),
+              textsorte: pageTextsorte,
               previousExcerpt,
               langCode,
             },

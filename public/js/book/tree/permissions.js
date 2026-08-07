@@ -1,4 +1,5 @@
 import { EVT } from '../../events.js';
+import { komplettHiddenFor } from '../../cards/feature-registry.js';
 
 // ACL-Rolle + editor-relevante book_settings-Spiegel pro Buch + abgeleitete
 // Rechte-Getter (canEdit/canReview/isViewer) + Buchtyp-Helfer.
@@ -127,5 +128,10 @@ export const treePermissionsMethods = {
   },
   isTagebuch() {
     return this.currentBuchtyp?.() === 'tagebuch';
+  },
+  // Gate fuer die Komplettanalyse-Einstiegspunkte im Root-Scope (Header-Button).
+  // Palette und Overview-CTA lesen dasselbe Gate ueber `komplettHiddenFor`.
+  komplettAvailable() {
+    return !komplettHiddenFor(this.currentBuchtyp?.());
   },
 };

@@ -1,0 +1,114 @@
+<!--
+  Interview-Transkription im Detail-Dialog eines Recherche-Fundstücks.
+  Fragment-Include (Marker @include recherche-transcript), `item` kommt aus dem
+  umschliessenden x-for-Scope (recherche-detail.html).
+
+  Vier Zustände, bewusst getrennt sichtbar: keine Aufnahme · Aufnahme ohne Lauf ·
+  Lauf läuft · Wortlaut da. Ein einziger „Transkribieren"-Knopf ohne Zustand
+  liesse den Nutzer im Unklaren, ob gerade etwas passiert oder das Backend fehlt.
+-->
+<div class="research-transcript" x-show="item.kind === 'transcript' || ivTranscript">
+  <div class="research-transcript__head">
+    <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#mic"/></svg>
+    <span class="research-transcript__title" x-text="$app.t('interview.section')"></span>
+    <span class="badge" x-show="ivTranscript?.status"
+          :class="'badge--iv-' + (ivTranscript?.status || 'pending')"
+          x-text="$app.t('interview.status.' + (ivTranscript?.status || 'pending'))"></span>
+    <span class="research-transcript__meta" x-show="ivTranscript?.duration_s"
+          x-text="ivDuration(ivTranscript?.duration_s)"></span>
+  </div>
+
+  <div class="card-status card-status--error" x-show="ivError" x-text="ivError"></div>
+
+  <!-- Aufnahme: Player + Verwalten. Range-fähig ausgeliefert, damit ein Klick
+       auf eine Zeitmarke springen kann statt neu zu laden. -->
+  <template x-if="ivTranscript?.has_audio">
+    <div class="research-transcript__audio">
+      <audio controls preload="none" x-ref="ivAudio" :src="'/research/' + item.id + '/audio'"></audio>
+      <button type="button" class="btn-compact" @click="ivDropAudio(item.id)"
+              :data-tip="$app.t('interview.dropAudioTip')"
+              x-text="$app.t('interview.dropAudio')"></button>
+    </div>
+  </template>
+
+  <!-- Hochladen (auch erneut: eine bessere Aufnahme ersetzt die alte) -->
+  <div class="research-transcript__upload">
+    <label class="btn-compact">
+      <span x-text="ivUploading ? $app.t('interview.uploading')
+                                : (ivTranscript?.has_audio ? $app.t('interview.replaceAudio') : $app.t('interview.uploadAudio'))"></span>
+      <input type="file" class="visually-hidden" accept="audio/*,video/mp4,video/webm"
+             :disabled="ivUploading"
+             @change="ivUploadAudio(item.id, $event.target.files[0]); $event.target.value = ''">
+    </label>
+    <button type="button" class="btn-compact recherche-primary"
+            x-show="ivTranscript?.has_audio && ivCanTranscribe"
+            :disabled="!!ivRunningItemId"
+            @click="ivTranscribe(item.id)"
+            x-text="ivSegments.length ? $app.t('interview.retranscribe') : $app.t('interview.transcribe')"></button>
+    <!-- Ohne Backend gibt es keinen Lauf. Das sagt die Karte, statt einen Knopf
+         anzubieten, der mit 404 antwortet. -->
+    <span class="muted-msg muted-msg--sm" x-show="ivTranscript?.has_audio && !ivCanTranscribe"
+          x-text="$app.t('interview.noBackend')"></span>
+  </div>
+
+  <div class="progress-bar-wrap" x-show="ivBusy(item.id)">
+    <div class="progress-bar" :style="{ '--progress': ivProgress + '%' }"></div>
+  </div>
+  <div class="card-status" x-show="ivBusy(item.id)" x-text="ivStatus"></div>
+  <div class="card-status card-status--error" x-show="ivTranscript?.status === 'error' && ivTranscript?.fehler"
+       x-text="ivTranscript?.fehler"></div>
+
+  <!-- Sprecher benennen. Aus «SPEAKER_01» wird «Maria Keller, Stadträtin» — und
+       zwar auch im Volltext, damit die Suche den Namen findet. -->
+  <div class="research-transcript__speakers" x-show="ivSpeakerKeys.length">
+    <span class="research-transcript__subhead" x-text="$app.t('interview.speakers')"></span>
+    <template x-for="key in ivSpeakerKeys" :key="'sp-' + key">
+      <div class="research-transcript__speaker">
+        <span class="tag" x-text="key"></span>
+        <input type="text" class="tw-input tw-input--sm"
+               :value="ivSpeakerDraft[key]?.label ?? (ivSpeakers[key]?.label || '')"
+               @focus="ivEditSpeaker(key)"
+               @input="ivSpeakerDraft[key] = { ...(ivSpeakerDraft[key] || {}), label: $event.target.value }"
+               @blur="ivRenameSpeaker(item.id, key)"
+               @keydown.enter.prevent="$event.target.blur()"
+               :placeholder="$app.t('interview.speakerName')"
+               :aria-label="$app.t('interview.speakerName')"
+               autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"
+               data-form-type="other" data-spellcheck="spelling">
+        <input type="text" class="tw-input tw-input--sm"
+               :value="ivSpeakerDraft[key]?.rolle ?? (ivSpeakers[key]?.rolle || '')"
+               @focus="ivEditSpeaker(key)"
+               @input="ivSpeakerDraft[key] = { ...(ivSpeakerDraft[key] || {}), rolle: $event.target.value }"
+               @blur="ivRenameSpeaker(item.id, key)"
+               @keydown.enter.prevent="$event.target.blur()"
+               :placeholder="$app.t('interview.speakerRole')"
+               :aria-label="$app.t('interview.speakerRole')"
+               autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"
+               data-form-type="other" data-spellcheck="spelling">
+      </div>
+    </template>
+  </div>
+
+  <!-- Ohne Sprechertrennung sagt die Karte das ausdrücklich: ein Transkript, in
+       dem alles einer Stimme zugeschrieben wäre, wäre eine Falschangabe. -->
+  <p class="muted-msg muted-msg--sm" x-show="ivSegments.length && !ivTranscript?.diarisiert"
+     x-text="$app.t('interview.noDiarization')"></p>
+
+  <!-- Wortlaut -->
+  <ol class="research-transcript__segments" x-show="ivSegments.length">
+    <template x-for="seg in ivSegments" :key="'seg-' + seg.id">
+      <li class="research-transcript__segment">
+        <button type="button" class="research-transcript__tc internal-link"
+                x-show="seg.start_s !== null"
+                @click="if ($refs.ivAudio) { $refs.ivAudio.currentTime = seg.start_s; $refs.ivAudio.play(); }"
+                :data-tip="$app.t('interview.jumpTip')"
+                x-text="ivTimecode(seg.start_s)"></button>
+        <span class="research-transcript__who" x-show="seg.speaker" x-text="ivSpeakerLabel(seg.speaker)"></span>
+        <span class="research-transcript__text" x-text="seg.text"></span>
+      </li>
+    </template>
+  </ol>
+
+  <p class="muted-msg muted-msg--sm" x-show="ivSegments.length"
+     x-text="$app.t('interview.otonHint')"></p>
+</div>

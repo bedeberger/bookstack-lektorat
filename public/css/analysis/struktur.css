@@ -1,0 +1,159 @@
+/* Struktur-Werkstatt (Karte `struktur`) — Textsorte pro Beitrag + Formbefund.
+   Akzentfarbe kommt über var(--card-accent) aus card-accents.css. */
+
+@layer components {
+  .struktur-intro {
+    margin: 0 0 var(--space-lg);
+    color: var(--color-muted);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+  }
+
+  .struktur-default-row {
+    margin-bottom: var(--space-lg);
+  }
+
+  .struktur-table {
+    width: 100%;
+  }
+
+  .struktur-cell-title .internal-link {
+    font-weight: 600;
+  }
+
+  /* Die Textsorten-Combobox bleibt schmal: die Spalte soll die Tabelle nicht
+     dominieren, und die neun Labels sind kurz. */
+  .struktur-cell-textsorte {
+    min-width: 11rem;
+  }
+
+  .struktur-cell-actions {
+    white-space: nowrap;
+    text-align: right;
+  }
+
+  .struktur-cell-actions button + button {
+    margin-left: var(--space-sm);
+  }
+
+  /* Urteil-Badges: dieselbe Semantik wie überall (ok / warn / bad), aber als
+     Tag-Variante statt als Button. */
+  .tag.struktur-urteil--traegt {
+    background: var(--color-ok-bg);
+    color: var(--color-ok-text);
+  }
+
+  .tag.struktur-urteil--lueckenhaft {
+    background: var(--color-warn-bg);
+    color: var(--color-warn-text);
+  }
+
+  .tag.struktur-urteil--verfehlt {
+    background: var(--color-err-bg);
+    color: var(--color-err-text);
+  }
+
+  .struktur-detail {
+    margin-top: var(--space-20);
+    padding: var(--space-lg);
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--card-accent, var(--color-border));
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+  }
+
+  .struktur-detail-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
+  }
+
+  .struktur-summary,
+  .struktur-wfragen {
+    margin: 0 0 var(--space-md);
+    font-size: var(--font-size-sm);
+    line-height: 1.55;
+  }
+
+  .struktur-wfragen {
+    color: var(--color-warn-text);
+  }
+
+  .struktur-regeln {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+
+  .struktur-regel {
+    padding-left: var(--space-md);
+    border-left: 2px solid var(--color-border);
+  }
+
+  .struktur-regel--fehlt {
+    border-left-color: var(--color-err-text);
+  }
+
+  .struktur-regel--teilweise {
+    border-left-color: var(--color-warn-text);
+  }
+
+  .struktur-regel--erfuellt {
+    border-left-color: var(--color-ok-text);
+  }
+
+  /* Erfüllte Regeln sind der Normalfall und sollen die Aufmerksamkeit nicht
+     binden — sie bleiben lesbar, treten aber zurück. */
+  .struktur-regel--erfuellt .struktur-regel-text,
+  .struktur-regel--nicht_anwendbar .struktur-regel-text {
+    color: var(--color-muted);
+  }
+
+  .struktur-regel-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+  }
+
+  .struktur-regel-text {
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+  }
+
+  .struktur-regel-status {
+    flex: 0 0 auto;
+  }
+
+  .struktur-regel-befund,
+  .struktur-regel-massnahme {
+    margin: var(--space-xs) 0 0;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+  }
+
+  .struktur-regel-befund {
+    color: var(--color-text);
+  }
+
+  .struktur-regel-massnahme {
+    color: var(--color-muted);
+    font-style: italic;
+  }
+
+  @media (max-width: 640px) {
+    .struktur-cell-actions {
+      text-align: left;
+      white-space: normal;
+    }
+
+    .struktur-cell-actions button + button {
+      margin-left: 0;
+      margin-top: var(--space-xs);
+    }
+  }
+}

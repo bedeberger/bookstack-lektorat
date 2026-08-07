@@ -7,7 +7,7 @@
 //   - `bookReviewHistory` (tree.js/loadPages schreibt, user-settings liest)
 //   - `loadBookReviewHistory` (history.js), `_closeOtherMainCards`, `t`
 
-import { renderReviewHtml, BOOK_REVIEW_AXES } from '../book/review.js';
+import { renderReviewHtml, bookReviewAxesFor } from '../book/review.js';
 import { escHtml, renderStars, noteTip } from '../utils.js';
 import { createCardJobFeature } from './job-feature-card.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
@@ -71,7 +71,7 @@ export function registerBookReviewCard() {
     },
 
     _renderReviewHtml(r) {
-      return renderReviewHtml(r, BOOK_REVIEW_AXES, (k, p) => window.__app.t(k, p));
+      return renderReviewHtml(r, bookReviewAxesFor(r), (k, p) => window.__app.t(k, p));
     },
 
     renderStars(note) { return renderStars(note); },

@@ -10,6 +10,7 @@ import { mirrorMethods } from './book-organizer/mirror.js';
 import { crudMethods } from './book-organizer/crud.js';
 import { historyMethods } from './book-organizer/history.js';
 import { viewMethods } from './book-organizer/view.js';
+import { redaktionMethods } from './book-organizer/redaktion.js';
 
 export const bookOrganizerMethods = {
   ...dndMethods,
@@ -18,4 +19,5 @@ export const bookOrganizerMethods = {
   ...crudMethods,
   ...historyMethods,
   ...viewMethods,
+  ...redaktionMethods,
 };

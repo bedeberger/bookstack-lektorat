@@ -6,7 +6,7 @@
 // laufenden Reviews.
 
 import { fetchJson, escHtml, renderStars, noteTip } from '../utils.js';
-import { renderReviewHtml, CHAPTER_REVIEW_AXES } from '../book/review.js';
+import { renderReviewHtml, chapterReviewAxesFor } from '../book/review.js';
 import { startPoll, runningJobStatus } from './job-helpers.js';
 import { setupCardLifecycle } from './card-lifecycle.js';
 import { contentRepo } from '../repo/content.js';
@@ -128,7 +128,7 @@ export function registerKapitelReviewCard() {
     noteTip(note) { return noteTip(note); },
 
     _renderKapitelReviewHtml(r) {
-      return renderReviewHtml(r, CHAPTER_REVIEW_AXES, (k, p) => window.__app.t(k, p));
+      return renderReviewHtml(r, chapterReviewAxesFor(r), (k, p) => window.__app.t(k, p));
     },
 
     startKapitelReviewPoll(jobId, chapterId) {

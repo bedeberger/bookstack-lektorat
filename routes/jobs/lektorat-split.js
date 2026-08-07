@@ -44,9 +44,14 @@ async function lektoratAnalyze({ jobId, tok, text, local, prompts, system, promp
   } = prompts;
   const split = local ? false : splitEnabled();
   const K = split ? Math.max(1, objektivRuns()) : 1;
+  // Textsorte schneidet das Typ-Set im journalistischen Profil zusaetzlich zu
+  // (kein `wertung` im Kommentar). Sie steht in promptOpts, damit sie ueber
+  // dieselbe Struktur fliesst wie die uebrigen Prompt-Argumente — Schema und
+  // Prompt duerfen hier nicht auseinanderlaufen.
+  const textsorte = promptOpts?.textsorte || null;
   // Schema und Prompt-Enum müssen dasselbe Buchtyp-Profil sehen (Grammar vs. Text) —
   // sonst bietet die Grammar Typen an, die der Prompt verbietet.
-  const kombiSchema = buildLektoratSchema({ buchtyp });
+  const kombiSchema = buildLektoratSchema({ buchtyp, textsorte });
 
   if (!split) {
     const prompt = single ? buildLektoratPrompt(text, promptOpts) : buildBatchLektoratPrompt(text, promptOpts);
@@ -88,10 +93,11 @@ async function lektoratAnalyze({ jobId, tok, text, local, prompts, system, promp
     // Buchtyp entscheidet, welche objektiven Typen es überhaupt gibt (Fach-Profile:
     // nur rechtschreibung + grammatik, kein Dialogformat/Figurenkonsistenz).
     buchtyp,
+    textsorte,
   };
   const objektivPrompt = buildObjektivLektoratPrompt(text, objektivOpts);
   const objektivSchema = buildObjektivLektoratSchema({
-    buchtyp, hasFiguren: (promptOpts.figuren || []).length > 0,
+    buchtyp, textsorte, hasFiguren: (promptOpts.figuren || []).length > 0,
   });
   const stilPrompt = buildStilLektoratPrompt(text, promptOpts);
   const objCall = () => aiCall(jobId, tok, objektivPrompt, system, null, null, 4000, 0.2, null, undefined, objektivSchema).then(tick);
@@ -99,7 +105,7 @@ async function lektoratAnalyze({ jobId, tok, text, local, prompts, system, promp
   // Stil-Pass parallel starten – eigener User-Prompt, profitiert nicht vom
   // Objektiv-Cache (teilt nur den kleinen System-Block). Eigenes Schema: das
   // Enum lässt die objektiven Typen weg, die der Objektiv-Pass liefert.
-  const stilSchema = buildLektoratSchema({ buchtyp, stilOnly: true });
+  const stilSchema = buildLektoratSchema({ buchtyp, textsorte, stilOnly: true });
   const stilPromise = aiCall(jobId, tok, stilPrompt, system, null, null, 5000, 0.2, null, undefined, stilSchema).then(tick);
 
   // Objektiv-Läufe STAFFELN statt sofort alle parallel: den ersten Lauf voll
@@ -107,6 +113,11 @@ async function lektoratAnalyze({ jobId, tok, text, local, prompts, system, promp
   // identischer Objektiv-Prompt). Erst danach die restlichen K-1 parallel – die
   // lesen dann den warmen Cache (cache_read statt K× Voll-Input). Gleichzeitiges
   // Feuern verfehlt den Cache komplett (jeder Lauf zahlt den vollen Input).
+  // Betrifft NUR die Objektiv-Läufe untereinander und greift folglich erst ab K>1.
+  // Der Stil-Pass läuft bewusst von Anfang an daneben: er hat einen eigenen
+  // User-Prompt und teilt mit dem Objektiv-Pass nur den System-Block, kann also
+  // von dessen Cache-Eintrag ohnehin nicht profitieren – ihn hinten anzustellen
+  // würde nur Latenz kosten.
   const objRuns = [await objCall()];
   if (K > 1) {
     const rest = await Promise.all(Array.from({ length: K - 1 }, objCall));

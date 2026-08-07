@@ -58,6 +58,11 @@
       tokEsts: {},
       // t() gibt den Key zurueck — Tests greifen auf Struktur, nicht auf Text.
       t: (k) => k,
+      // Tooltip mit Tastenkuerzel (editor/shortcuts.js#withHotkey). Im Harness
+      // reicht das blosse Label: geprueft wird die Baumstruktur, nicht der
+      // Tooltip-Text. Ohne den Stub wirft jede Zeile mit `$app.withHotkey(…)`
+      // im Organizer-Partial einen Alpine-Expression-Fehler.
+      withHotkey: (label) => label,
       setStatus() {},
       loadPages: async () => {},
       appPrompt: async () => null,

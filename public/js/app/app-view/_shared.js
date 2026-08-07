@@ -1,7 +1,7 @@
 // Geteilte Imports + Modul-Konstanten der appViewMethods-Submodule.
 import { htmlToText, fetchJson, escHtml, decorateMentions } from '../../utils.js';
 import { computeTodayRing, computeWeekBars, computeWritingStreak } from '../../today-ring.js';
-import { EXCLUSIVE_CARDS } from '../../cards/feature-registry.js';
+import { EXCLUSIVE_CARDS, hiddenForBuchtyp, matchesRequiredBuchtyp } from '../../cards/feature-registry.js';
 import { contentRepo } from '../../repo/content.js';
 import { readDraft, clearDraft } from '../../editor/draft-storage.js';
 import { setLastPageId, getLastPageId, getFilters } from '../../local-prefs.js';
@@ -61,6 +61,15 @@ export async function _toggleCardGeneric(entry) {
   // Claude-only-Karten (Kontinuität/Erzählprofil) für Nicht-Claude gar nicht öffnen —
   // deckt Deep-Links (#kontinuitaet) + Palette-Klicks ab, falls sie durchrutschen.
   if (entry.requiresClaude && (this.$store.config?.effectiveProvider || 'claude') !== 'claude') return;
+  // Buchtyp-Ausschluss (z.B. Figuren/Plot/Buchsatz in einem journalistischen
+  // Ressort) auch hier pruefen, nicht nur in der Palette — sonst oeffnet ein
+  // Deep-Link (#plot) eine Karte, die es fuer dieses Buch nicht geben soll.
+  if (hiddenForBuchtyp(entry, this.currentBuchtyp?.())) return;
+  // Und der positive Fall: eine Karte mit `requiresBuchtyp` (Titel-Werkstatt,
+  // Struktur, Tagebuch-Rueckschau) darf ein Deep-Link nicht in einem Buch
+  // oeffnen, fuer dessen Typ es sie nicht gibt — die Palette blendet sie dort
+  // aus, `#titel` im Roman kam bisher trotzdem durch.
+  if (!matchesRequiredBuchtyp(entry, this.currentBuchtyp?.())) return;
   // Partial VOR der Transition laden — Netzwerk gehört nicht in den
   // View-Transition-Callback (der friert das Rendering ein).
   if (entry.partial) await this._ensurePartial(entry.partial);

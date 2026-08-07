@@ -18,6 +18,7 @@ import { setupCardLifecycle } from './card-lifecycle.js';
 import { selectScenesForView } from '../editor/notebook/entities.js';
 import { groupCitedSources } from '../sources/cited-index.js';
 import { primaryPersonLabel } from '../sources/fields.js';
+import { referenceInterviewMethods, referenceInterviewState } from './reference-interview.js';
 
 const TABS = ['figuren', 'orte', 'szenen', 'ereignisse', 'recherche', 'quellen', 'verwandt'];
 
@@ -25,6 +26,8 @@ export function registerReferenceCard() {
   if (typeof window === 'undefined' || !window.Alpine) return;
   window.Alpine.data('referenceCard', () => ({
     referenceTab: 'figuren',
+    // O-Toene aus Interview-Transkripten (Slice cards/reference-interview.js).
+    ...referenceInterviewState(),
     referenceScope: 'page',            // 'page' (aktueller Kontext) | 'book'
     referenceRecherche: [],
     referenceRechercheLoading: false,
@@ -508,5 +511,7 @@ export function registerReferenceCard() {
       if (!bookId || item?.id == null) return;
       location.hash = `#book/${bookId}/recherche/${item.id}`;
     },
+
+    ...referenceInterviewMethods,
   }));
 }

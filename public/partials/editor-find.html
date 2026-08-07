@@ -29,10 +29,10 @@
                 : ''"></span>
         <button type="button" class="edit-find-btn" @click="findPrev()"
                 :disabled="findMatches.length === 0"
-                :data-tip="$app.t('find.prev')" :aria-label="$app.t('find.prev')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#chevron-up"/></svg></button>
+                :data-tip="$app.withHotkey($app.t('find.prev'), 'findPrev')" :aria-label="$app.t('find.prev')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#chevron-up"/></svg></button>
         <button type="button" class="edit-find-btn" @click="findNext()"
                 :disabled="findMatches.length === 0"
-                :data-tip="$app.t('find.next')" :aria-label="$app.t('find.next')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#chevron-down"/></svg></button>
+                :data-tip="$app.withHotkey($app.t('find.next'), 'findNext')" :aria-label="$app.t('find.next')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#chevron-down"/></svg></button>
         <button type="button" class="edit-find-btn edit-find-btn--toggle"
                 :class="{ 'edit-find-btn--active': findCaseSensitive }"
                 @click="findCaseSensitive = !findCaseSensitive; recomputeFindMatches()"

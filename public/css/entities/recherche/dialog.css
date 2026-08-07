@@ -188,4 +188,104 @@ textarea.recherche-input--tall { min-height: 40vh; }
   .research-dialog__bar { padding: var(--space-xs) var(--space-md); }
   .research-dialog__image { max-height: 45vh; }
 }
+
+/* === Interview-Transkription im Detail-Dialog ===
+   Vier Zustände (keine Aufnahme · Aufnahme ohne Lauf · Lauf läuft · Wortlaut da)
+   sind bewusst getrennt sichtbar, darum eigener Block statt einer Zeile beim
+   PDF-Anhang. */
+.research-transcript {
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 0.5px solid var(--color-border);
+}
+.research-transcript__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-bottom: var(--space-xs);
+}
+.research-transcript__head .icon { width: 1em; height: 1em; }
+.research-transcript__title { font-weight: 600; }
+.research-transcript__meta {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+  font-size: var(--size-compact-font-size);
+}
+.badge--iv-pending { background: var(--color-tag-bg);  color: var(--color-muted); }
+.badge--iv-running { background: var(--color-warn-bg); color: var(--color-warn-text); }
+.badge--iv-ready   { background: var(--color-ok-bg);   color: var(--color-ok-text); }
+.badge--iv-error   { background: var(--color-err-bg);  color: var(--color-err-text); }
+
+.research-transcript__audio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-bottom: var(--space-xs);
+}
+.research-transcript__audio audio { flex: 1; min-width: 0; max-width: 100%; }
+.research-transcript__upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-bottom: var(--space-xs);
+}
+/* Datei-Auswahl als Knopf: das native Feld trägt in jedem Browser ein anderes
+   Label und lässt sich nicht übersetzen. */
+.research-transcript__upload label { cursor: pointer; }
+
+.research-transcript__subhead {
+  display: block;
+  font-weight: 600;
+  font-size: var(--size-compact-font-size);
+  margin-bottom: var(--space-2xs);
+}
+.research-transcript__speakers { margin: var(--space-sm) 0; }
+.research-transcript__speaker {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-bottom: var(--space-2xs);
+}
+
+.research-transcript__segments {
+  list-style: none;
+  margin: var(--space-xs) 0 0;
+  padding: 0;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+.research-transcript__segment {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: var(--space-2xs);
+  align-items: baseline;
+  padding: var(--space-2xs) 0;
+}
+.research-transcript__segment + .research-transcript__segment {
+  border-top: 0.5px solid var(--color-border);
+}
+/* Die Zeitmarke ist ein Sprungziel in der Aufnahme, kein Etikett — sie sieht
+   darum anklickbar aus. */
+.research-transcript__tc {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--size-compact-font-size);
+  color: var(--card-accent);
+  cursor: pointer;
+}
+.research-transcript__who {
+  font-weight: 600;
+  font-size: var(--size-compact-font-size);
+}
+.research-transcript__text { overflow-wrap: anywhere; }
+
+@media (max-width: 700px) {
+  .research-transcript__speaker { grid-template-columns: 1fr; }
+  .research-transcript__segment { grid-template-columns: auto 1fr; }
+}
 }

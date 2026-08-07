@@ -138,7 +138,7 @@
           </span>
           <span class="action-sep" aria-hidden="true" x-show="isTagebuch()"></span>
           <span class="action-group" x-show="canReview()">
-            <button type="button" class="icon-btn icon-btn--ghost" @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :data-tip="currentPageEmpty ? t('editor.btn.pageEmpty') : t('editor.btn.checkTitle')" :aria-label="t('editor.btn.check')">
+            <button type="button" class="icon-btn icon-btn--ghost" @click="runCheck()" :disabled="checkLoading || currentPageEmpty" :data-tip="currentPageEmpty ? t('editor.btn.pageEmpty') : withHotkey(t('editor.btn.checkTitle'), 'runCheck')" :aria-label="t('editor.btn.check')">
               <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#spell-check"/></svg>
             </button>
             <button type="button" class="icon-btn icon-btn--ghost" @click="closeFindings()" x-show="checkDone" :data-tip="t('editor.btn.exitCheckTitle')" :aria-label="t('editor.btn.exitCheck')">
@@ -151,10 +151,10 @@
           </span>
           <span class="action-sep" aria-hidden="true" x-show="canReview() && canEdit() && !checkDone"></span>
           <span class="action-group" x-show="canEdit() && !checkDone">
-            <button type="button" class="icon-btn icon-btn--ghost" @click="startEdit()" :disabled="checkLoading || saveApplying != null || originalHtml === null" :data-tip="t('editor.btn.editTitle')" :aria-label="t('editor.btn.edit')">
+            <button type="button" class="icon-btn icon-btn--ghost" @click="startEdit()" :disabled="checkLoading || saveApplying != null || originalHtml === null" :data-tip="withHotkey(t('editor.btn.editTitle'), 'edit')" :aria-label="t('editor.btn.edit')">
               <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#pencil"/></svg>
             </button>
-            <button type="button" class="icon-btn icon-btn--ghost" @click="enterFocusFromPageview()" :disabled="checkLoading || saveApplying != null || originalHtml === null" :data-tip="t('editor.btn.focusTitle')" :aria-label="t('editor.btn.focus')">
+            <button type="button" class="icon-btn icon-btn--ghost" @click="enterFocusFromPageview()" :disabled="checkLoading || saveApplying != null || originalHtml === null" :data-tip="withHotkey(t('editor.btn.focusTitle'), 'focusToggle')" :aria-label="t('editor.btn.focus')">
               <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#focus"/></svg>
             </button>
           </span>
@@ -216,7 +216,7 @@
       <template x-if="editMode">
         <span class="display-contents">
           <span class="action-group">
-            <button type="button" class="icon-btn icon-btn--ghost icon-btn--success" @click="saveEdit()" :disabled="editSaving" :data-tip="t('editor.btn.saveEditTitle')" :aria-label="t('common.save')">
+            <button type="button" class="icon-btn icon-btn--ghost icon-btn--success" @click="saveEdit()" :disabled="editSaving" :data-tip="withHotkey(t('editor.btn.saveEditTitle'), 'save')" :aria-label="t('common.save')">
               <span x-show="editSaving" class="spinner"></span>
               <svg x-show="!editSaving" class="icon" aria-hidden="true"><use href="/icons.svg?v=693#check"/></svg>
             </button>
@@ -226,7 +226,7 @@
           </span>
           <span class="action-sep" aria-hidden="true"></span>
           <span class="action-group">
-            <button type="button" class="icon-btn icon-btn--ghost" @click="focusActive ? exitFocusMode() : enterFocusMode()" :class="{ 'is-active': focusActive }" :aria-pressed="focusActive" :data-tip="focusActive ? t('editor.btn.leaveFocusTitle') : t('editor.btn.enterFocusTitle')" :aria-label="focusActive ? t('editor.btn.leaveFocus') : t('editor.btn.focusShort')">
+            <button type="button" class="icon-btn icon-btn--ghost" @click="focusActive ? exitFocusMode() : enterFocusMode()" :class="{ 'is-active': focusActive }" :aria-pressed="focusActive" :data-tip="focusActive ? withHotkey(t('editor.btn.leaveFocusTitle'), 'focusExit') : withHotkey(t('editor.btn.enterFocusTitle'), 'focusToggle')" :aria-label="focusActive ? t('editor.btn.leaveFocus') : t('editor.btn.focusShort')">
               <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#focus"/></svg>
             </button>
           </span>

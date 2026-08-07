@@ -33,7 +33,10 @@ function chapterAnalysisResponse() {
   return {
     themen: 'Aufbruch',
     stil: 'erzählerisch',
-    qualitaet: 'gut',
+    funktion_kurz: 'führt Anna ein',
+    dramaturgie_kurz: 'ruhiger Auftakt',
+    figuren_kurz: 'Anna',
+    pacing_kurz: 'gemächlich',
     staerken: ['Bilder'],
     schwaechen: ['kurz'],
   };
@@ -102,7 +105,7 @@ test('Buch-Review Multi-Pass: 3 Kapitel → 3 Analysen + 1 Final = 4 Calls', asy
 
   // Chapter analysis schema (no gesamtnote).
   ctx.mockAi.on(
-    (e) => e.schemaKeys.includes('themen') && e.schemaKeys.includes('qualitaet'),
+    (e) => e.schemaKeys.includes('themen') && e.schemaKeys.includes('funktion_kurz'),
     chapterAnalysisResponse(),
   );
   // Final review schema (with gesamtnote + struktur).
@@ -196,7 +199,7 @@ test('Buch-Review Cache: Multi-Pass — geänderte Seite invalidiert nur 1 Kapit
   ctx.dbSeed.setBook({ chapters, pages, pageBodies: bodies });
 
   ctx.mockAi.on(
-    (e) => e.schemaKeys.includes('themen') && e.schemaKeys.includes('qualitaet'),
+    (e) => e.schemaKeys.includes('themen') && e.schemaKeys.includes('funktion_kurz'),
     chapterAnalysisResponse(),
   );
   ctx.mockAi.on(
@@ -224,7 +227,7 @@ test('Buch-Review Cache: Multi-Pass — geänderte Seite invalidiert nur 1 Kapit
 
   ctx.mockAi.reset();
   ctx.mockAi.on(
-    (e) => e.schemaKeys.includes('themen') && e.schemaKeys.includes('qualitaet'),
+    (e) => e.schemaKeys.includes('themen') && e.schemaKeys.includes('funktion_kurz'),
     chapterAnalysisResponse(),
   );
   ctx.mockAi.on(

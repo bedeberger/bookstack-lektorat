@@ -18,6 +18,8 @@
 // im `lektorat_cache` und in den i18n-Keys `finding.<typ>` / `fehlerHeatmap.typ.<typ>`.
 // Keys werden nur ergänzt, nie umbenannt — sonst rendern Alt-Findings ohne Label.
 
+import { istMeinungsform } from './textsorten.js';
+
 // ── Kanonische Reihenfolge pro Profil ────────────────────────────────────────
 // Reihenfolge = Reihenfolge im Prompt-Enum. Objektive Typen zuerst, damit der
 // Stil-Pass-Filter (ohne Objektive) eine zusammenhängende Restliste ergibt.
@@ -54,10 +56,30 @@ export const WISSENSCHAFT_TYPEN = [
   'tempuswechsel', 'unbelegt', 'begriffsinkonsistenz', 'autorenform',
 ];
 
+// Journalistischer Text (Nachricht, Bericht, Reportage, Porträt, Kommentar):
+// argumentierend wie der Sachtext, aber mit vier eigenen Pflichten, die weder
+// das narrative noch das wissenschaftliche Profil kennt — indirekte Rede im
+// Konjunktiv I, Zuschreibung jeder fremden Aussage, Trennung von Nachricht und
+// Meinung, Übersetzung von Amts- und PR-Sprache. `unbelegt` fehlt bewusst: der
+// Beleg ist hier die genannte Person oder Stelle im Satz, nicht der Kurzbeleg —
+// das deckt `zuschreibung` ab. `hedging` ebenfalls nicht: die Absicherung im
+// Verdachtsfall («soll», «mutmasslich») ist presserechtlich geboten, nicht
+// Stapelung. Erzähl-Handwerk (show_vs_tell, filterwort, Figuren-/Schauplatz-
+// Konsistenz) entfällt wie im Sachprofil; starke Verben, Aktiv und frische
+// Bilder bleiben Ziel.
+export const JOURNALISTISCH_TYPEN = [
+  'rechtschreibung', 'grammatik', 'konjunktiv',
+  'stil', 'satzbau', 'wiederholung', 'schwaches_verb', 'fuellwort',
+  'klischee', 'pleonasmus', 'ki_geruch', 'passiv', 'amtsdeutsch',
+  'tempuswechsel', 'begriffsinkonsistenz',
+  'zuschreibung', 'wertung',
+];
+
 const PROFILE = {
-  narrativ:     NARRATIV_TYPEN,
-  sachlich:     SACHLICH_TYPEN,
-  wissenschaft: WISSENSCHAFT_TYPEN,
+  narrativ:      NARRATIV_TYPEN,
+  sachlich:      SACHLICH_TYPEN,
+  wissenschaft:  WISSENSCHAFT_TYPEN,
+  journalistisch: JOURNALISTISCH_TYPEN,
 };
 
 // buchtyp-Key (prompt-config.json `buchtypen`) → Profil. Alles Ungenannte,
@@ -65,10 +87,11 @@ const PROFILE = {
 // `lyrik` bleibt bewusst narrativ: Wiederholung und starke Bildsprache sind dort
 // Kunstmittel, das braucht ein eigenes Profil statt einer Sachbuch-Näherung.
 const PROFIL_BY_BUCHTYP = {
-  wissenschaft: 'wissenschaft',
-  sachbuch:     'sachlich',
-  essay:        'sachlich',
-  blog:         'sachlich',
+  wissenschaft:  'wissenschaft',
+  sachbuch:      'sachlich',
+  essay:         'sachlich',
+  blog:          'sachlich',
+  journalismus:  'journalistisch',
 };
 
 /** Profilname für einen Buchtyp. Unbekannt/null → 'narrativ'. */
@@ -78,8 +101,12 @@ export function lektoratProfil(buchtyp) {
 
 // Objektive/mechanische Typen: werden im Claude-Split im fokussierten Objektiv-Pass
 // geprüft und sind im Stil-Pass verboten. Reihenfolge = Enum-Reihenfolge dort.
+// `konjunktiv` gehört hierher, weil der Modus der indirekten Rede eine
+// Formfrage ist wie Kasus oder Kongruenz — nicht Geschmack. Er steht nur im
+// journalistischen Profil und fällt in allen anderen über den `aktiv`-Filter
+// von lektoratObjektivTypen() heraus.
 export const OBJEKTIV_TYPEN = [
-  'rechtschreibung', 'grammatik', 'dialogformat',
+  'rechtschreibung', 'grammatik', 'konjunktiv', 'dialogformat',
   'namenskonsistenz', 'figurenmerkmal', 'anrede',
 ];
 const OBJEKTIV_SET = new Set(OBJEKTIV_TYPEN);
@@ -97,25 +124,32 @@ const LOCAL_SET = new Set([
 
 /**
  * Aktive Fehlertypen für einen Prompt-Lauf, in Enum-Reihenfolge.
+ *
+ * `textsorte` greift nur im journalistischen Profil: in den meinungsbetonten
+ * Formen (Kommentar, Glosse, Rezension) fällt `wertung` ersatzlos weg — dort ist
+ * die Wertung der Zweck des Textes. Ohne diesen Schnitt meldete das Lektorat
+ * einen Kommentar Satz für Satz als fehlerhaft.
+ *
  * @param {string|null} buchtyp
- * @param {{local?: boolean, stilOnly?: boolean}} opts
+ * @param {{local?: boolean, stilOnly?: boolean, textsorte?: string|null}} opts
  */
-export function lektoratTypen(buchtyp, { local = false, stilOnly = false } = {}) {
+export function lektoratTypen(buchtyp, { local = false, stilOnly = false, textsorte = null } = {}) {
   let typen = PROFILE[lektoratProfil(buchtyp)];
+  if (istMeinungsform(textsorte)) typen = typen.filter(t => t !== 'wertung');
   if (local)    typen = typen.filter(t => LOCAL_SET.has(t));
   if (stilOnly) typen = typen.filter(t => !OBJEKTIV_SET.has(t));
   return typen;
 }
 
 /** Enum des fokussierten Objektiv-Passes (buildObjektivLektoratPrompt). */
-export function lektoratObjektivTypen(buchtyp, { hasFiguren = false } = {}) {
-  const aktiv = new Set(lektoratTypen(buchtyp));
+export function lektoratObjektivTypen(buchtyp, { hasFiguren = false, textsorte = null } = {}) {
+  const aktiv = new Set(lektoratTypen(buchtyp, { textsorte }));
   return OBJEKTIV_TYPEN.filter(t => aktiv.has(t) && (hasFiguren || !FIGUREN_TYPEN.has(t)));
 }
 
 /** Im Objektiv-Pass verbotene Typen (= alles Nicht-Objektive des Profils). */
-export function lektoratStilTypen(buchtyp) {
-  return lektoratTypen(buchtyp, { stilOnly: true });
+export function lektoratStilTypen(buchtyp, { textsorte = null } = {}) {
+  return lektoratTypen(buchtyp, { stilOnly: true, textsorte });
 }
 
 // ── Anti-Doppelungs-Priorität ────────────────────────────────────────────────
@@ -124,11 +158,11 @@ export function lektoratStilTypen(buchtyp) {
 // lib/lektorat-consolidate.js (dort als CJS-Kopie, gegated durch
 // tests/unit/lektorat-typen-drift.test.mjs).
 export const TYP_PRIORITAET = [
-  'dialogformat', 'rechtschreibung', 'grammatik',
+  'dialogformat', 'rechtschreibung', 'konjunktiv', 'grammatik',
   'namenskonsistenz', 'figurenmerkmal', 'schauplatzmerkmal', 'anrede',
-  'begriffsinkonsistenz', 'autorenform', 'unbelegt',
+  'begriffsinkonsistenz', 'autorenform', 'zuschreibung', 'unbelegt', 'wertung',
   'pleonasmus', 'wiederholung', 'perspektivbruch', 'tempuswechsel',
-  'klischee', 'ki_geruch', 'passiv', 'show_vs_tell',
+  'klischee', 'amtsdeutsch', 'ki_geruch', 'passiv', 'show_vs_tell',
   'hedging', 'filterwort', 'schwaches_verb', 'fuellwort', 'satzbau', 'stil',
 ];
 
@@ -136,6 +170,31 @@ export const TYP_PRIORITAET = [
 export function typPrioritaetString(typen) {
   const aktiv = new Set(typen);
   return TYP_PRIORITAET.filter(t => aktiv.has(t)).join(' > ');
+}
+
+// ── Querverweise zwischen Typen ──────────────────────────────────────────────
+// Die Regelblöcke grenzen ihren Typ gegen die Nachbartypen ab («Grammatikfehler
+// → grammatik, NICHT stil»). Im Stil-Pass des Claude-Splits sind die objektiven
+// Typen aber gar nicht im Enum — ein Verweis auf sie ist dort eine Sackgasse:
+// das Modell etikettiert den Fund dann eher um (Kommafehler als «satzbau»), statt
+// ihn dem Objektiv-Pass zu überlassen. Darum wird jede Verweisliste gegen die
+// aktiven Typen gefiltert und der Rest durch den expliziten Hinweis ersetzt.
+
+/** Verweisliste auf die aktiven Typen eines Laufs filtern. */
+export function verweisTypen(kandidaten, typen) {
+  const aktiv = new Set(typen);
+  return kandidaten.filter(t => aktiv.has(t));
+}
+
+/** Ersatz-Verweis für Typen, die in diesem Lauf nicht gemeldet werden dürfen. */
+export const OBJEKTIV_VERWEIS = 'gehört in den separaten Objektiv-Pass – hier NICHT melden';
+
+/**
+ * Ein Verweisziel rendern: der Typname, solange er im Lauf gemeldet werden darf,
+ * sonst der Hinweis auf den Objektiv-Pass.
+ */
+export function verweisZiel(typ, typen) {
+  return typen.includes(typ) ? typ : OBJEKTIV_VERWEIS;
 }
 
 // ── Cap-Zuständigkeit ────────────────────────────────────────────────────────
@@ -147,38 +206,51 @@ export function typPrioritaetString(typen) {
 export const STILISTISCHE_TYPEN = [
   'stil', 'satzbau', 'schwaches_verb', 'fuellwort', 'filterwort',
   'klischee', 'ki_geruch', 'show_vs_tell', 'passiv', 'pleonasmus', 'wiederholung',
-  'hedging',
+  'hedging', 'amtsdeutsch',
 ];
 
 // Union aller je gültigen Typen — Basis der Server-Validierung und Referenz für
 // die i18n-Vollständigkeit (`finding.<typ>` / `fehlerHeatmap.typ.<typ>`).
 export const ALLE_LEKTORAT_TYPEN = [
-  ...new Set([...NARRATIV_TYPEN, ...SACHLICH_TYPEN, ...WISSENSCHAFT_TYPEN]),
+  ...new Set([...NARRATIV_TYPEN, ...SACHLICH_TYPEN, ...WISSENSCHAFT_TYPEN, ...JOURNALISTISCH_TYPEN]),
 ];
 
 // ── Span-Typ pro Fehlertyp ───────────────────────────────────────────────────
-// Welche Textspanne «original»/«korrektur» tragen müssen. Nur für die
-// Fach-Profile aus dieser Map generiert; die narrativen Span-Regeln stehen als
-// gewachsener Prosatext in prompts/lektorat.js.
+// Welche Textspanne «original»/«korrektur» tragen müssen. Deckt ALLE Profile ab
+// (auch die narrativen und die lokal geprüften Typen) — die Span-Regeln im
+// Prompt werden daraus generiert, statt als Prosatext pro Profil dazustehen.
+// Why: der handgeschriebene narrative Block nannte Pflicht-Spannen für Typen,
+// die der Stil-Pass gar nicht melden darf (rechtschreibung, grammatik,
+// dialogformat, namenskonsistenz) — eine Anweisung, die dem Verbot in der
+// <aufgabe> direkt widerspricht. Generiert kann das nicht mehr driften.
 const SPAN_KIND = {
   rechtschreibung: 'wort', grammatik: 'wort',
+  namenskonsistenz: 'name',
   pleonasmus: 'phrase', hedging: 'phrase',
   begriffsinkonsistenz: 'phrase', autorenform: 'phrase',
+  figurenmerkmal: 'phrase', anrede: 'phrase', schauplatzmerkmal: 'phrase',
+  dialogformat: 'phrase',
   wiederholung: 'satz', fuellwort: 'satz', passiv: 'satz', tempuswechsel: 'satz',
   schwaches_verb: 'satz', unbelegt: 'satz',
+  filterwort: 'satz', show_vs_tell: 'satz', perspektivbruch: 'satz',
+  // Journalistisch: der Modus und die Zuschreibung hängen am ganzen Satz der
+  // referierten Rede; Wertung und Amtsdeutsch können Satz oder Phrase sein.
+  konjunktiv: 'satz', zuschreibung: 'satz',
+  wertung: 'satz_oder_phrase', amtsdeutsch: 'satz_oder_phrase',
   stil: 'satz_oder_phrase', satzbau: 'satz_oder_phrase',
   klischee: 'satz_oder_phrase', ki_geruch: 'satz_oder_phrase',
 };
 
 const SPAN_LABEL = {
   wort:             'Phrase oder Wort (genau die fehlerhafte Stelle)',
-  phrase:           'Phrase (genau die redundante / absichernde / abweichende Stelle)',
+  name:             'einzelnes Wort (der falsch geschriebene Name)',
+  phrase:           'Phrase (genau die widersprüchliche / redundante / absichernde / typografisch falsche Stelle)',
   satz:             'vollständiger Satz',
   satz_oder_phrase: 'vollständiger Satz ODER eindeutig abgrenzbare Phrase – beide Felder müssen denselben Span-Typ haben',
 };
 
-/** Span-Typ-Pflichtzeilen für die Fach-Profile, aus SPAN_KIND generiert. */
-export function spanRegelnFach(typen) {
+/** Span-Typ-Pflichtzeilen eines Laufs, aus SPAN_KIND auf die aktiven Typen gefiltert. */
+export function spanRegeln(typen) {
   const aktiv = new Set(typen);
   return Object.keys(SPAN_LABEL)
     .map(kind => {

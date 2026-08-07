@@ -13,19 +13,19 @@
          :aria-label="$app.t('editor.toolbar.ariaLabel')"
          :style="{ left: bubbleX + 'px', top: bubbleY + 'px' }"
          @mousedown.prevent>
-      <button type="button" class="edit-bubble-btn edit-bubble-btn--bold"   @click="toolbarBold()"   :data-tip="$app.t('editor.toolbar.boldTitle')"   :aria-label="$app.t('editor.toolbar.boldTitle')">B</button>
-      <button type="button" class="edit-bubble-btn edit-bubble-btn--italic" @click="toolbarItalic()" :data-tip="$app.t('editor.toolbar.italicTitle')" :aria-label="$app.t('editor.toolbar.italicTitle')">I</button>
+      <button type="button" class="edit-bubble-btn edit-bubble-btn--bold"   @click="toolbarBold()"   :data-tip="$app.withHotkey($app.t('editor.toolbar.boldTitle'), 'bold')"     :aria-label="$app.t('editor.toolbar.boldTitle')">B</button>
+      <button type="button" class="edit-bubble-btn edit-bubble-btn--italic" @click="toolbarItalic()" :data-tip="$app.withHotkey($app.t('editor.toolbar.italicTitle'), 'italic')" :aria-label="$app.t('editor.toolbar.italicTitle')">I</button>
       <button type="button"
               x-show="bubbleSingleWord"
               class="edit-bubble-btn edit-bubble-btn--syn"
               @click="$app.openSynonymForCurrentSelection()"
-              :data-tip="$app.t('editor.toolbar.synonymTitle')"
+              :data-tip="$app.withHotkey($app.t('editor.toolbar.synonymTitle'), 'synonym')"
               :aria-label="$app.t('editor.toolbar.synonymTitle')"
               x-text="$app.t('editor.toolbar.synonymLabel')"></button>
       <button type="button"
               class="edit-bubble-btn edit-bubble-btn--link"
               @click="openLinkInput()"
-              :data-tip="$app.t('editor.toolbar.linkTitle')"
+              :data-tip="$app.withHotkey($app.t('editor.toolbar.linkTitle'), 'link')"
               :aria-label="$app.t('editor.toolbar.linkTitle')">
         <svg class="icon" aria-hidden="true"><use href="/icons.svg#external-link"/></svg>
       </button>

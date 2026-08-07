@@ -61,6 +61,10 @@
                   :data-tip="$app.t('recherche.doc.remove')" :aria-label="$app.t('recherche.doc.remove')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#trash"/></svg></button>
         </div>
 
+        <!-- Interview-Transkription: Aufnahme, Sprecher, Wortlaut. Eigenes
+             Fragment, weil der Block sein eigenes Zustandsmodell hat. -->
+        <!-- @include recherche-transcript -->
+
         <!-- Lesen: ungekappt, Lesegroesse, begrenzter Satzspiegel -->
         <div class="research-dialog__text" x-show="!detailEditing && item.body"
              :class="{ 'research-dialog__text--quote': item.kind === 'quote' }"

@@ -15,7 +15,7 @@ import { _isLocal } from './state.js';
 import { _obj, _str } from './schema-utils.js';
 import {
   lektoratProfil, lektoratTypen,
-  typPrioritaetString, spanRegelnFach, STILISTISCHE_TYPEN,
+  typPrioritaetString, spanRegeln, STILISTISCHE_TYPEN,
 } from './lektorat-typen.js';
 import {
   _buildUnbelegtBlock,
@@ -29,6 +29,13 @@ import {
   _buildFachSeverityBlock,
   _buildFachSelbstkontrollBlock,
   _buildFachAbschnittRegelnBlock,
+  _buildKonjunktivBlock,
+  _buildZuschreibungBlock,
+  _buildWertungBlock,
+  _buildAmtsdeutschBlock,
+  _buildJournalTempusBlock,
+  _buildJournalStilBlock,
+  _buildZitattreueBlock,
 } from './blocks-fach.js';
 import {
   _buildRechtschreibungBlock,
@@ -52,6 +59,7 @@ import {
   _buildAiSmellBlock,
   _buildBelegBlock,
 } from './blocks.js';
+import { textsorteLabel } from './textsorten.js';
 import { STOPWORDS, ERKLAERUNG_RULE, KORREKTUR_REGELN } from './core.js';
 
 function _buildLektoratPromptBody(text, textLabel, {
@@ -67,6 +75,7 @@ function _buildLektoratPromptBody(text, textLabel, {
   erzaehlperspektive = null,
   erzaehlzeit = null,
   buchtyp = null,
+  textsorte = null,
   previousExcerpt = null,
   hatBelege = false,
   langCode = 'de',
@@ -81,11 +90,15 @@ function _buildLektoratPromptBody(text, textLabel, {
   // Rahmenblöcke. 'narrativ' ist der Default (auch bei buchtyp === null).
   const profil = lektoratProfil(buchtyp);
   const fach = profil !== 'narrativ';
-  const typen = lektoratTypen(buchtyp, { local: _isLocal, stilOnly });
+  // Journalistisch: die Textsorte schneidet zusaetzlich (kein `wertung` im
+  // Kommentar) und benennt sich in den Regelbloecken selbst.
+  const journal = profil === 'journalistisch';
+  const typen = lektoratTypen(buchtyp, { local: _isLocal, stilOnly, textsorte });
   const aktiv = (t) => typen.includes(t);
   const metaParts = [];
   if (chapterName) metaParts.push(`Kapitel: «${chapterName}»`);
   if (pageName)    metaParts.push(`Seite: «${pageName}»`);
+  if (journal && textsorte) metaParts.push(`Textsorte: «${textsorteLabel(textsorte)}»`);
   const metaBlock = metaParts.length ? `\nVerortung im Buch: ${metaParts.join(' · ')}\n` : '';
 
   // Erzählform-Block dient nur perspektivbruch/tempuswechsel – lokal ohnehin nicht
@@ -105,7 +118,9 @@ function _buildLektoratPromptBody(text, textLabel, {
           if (f.kurzname && f.kurzname !== f.name) parts.push(f.kurzname);
           return '- ' + parts.join(' / ');
         }).join('\n')}\n`
-      : `\nBekannte Figuren in diesem Kapitel (Kontext für Namenskonsistenz und Perspektivprüfung):\n${figuren.map(f => {
+      // Zweck-Angabe muss zum Lauf passen: im Stil-Pass ist «namenskonsistenz»
+      // nicht im Enum, der Block dient dort nur der Perspektiv-/Anreden-Prüfung.
+      : `\nBekannte Figuren in diesem Kapitel (Kontext für ${aktiv('namenskonsistenz') ? 'Namenskonsistenz und Perspektivprüfung' : 'Perspektivprüfung – Namens- und Anredekonsistenz prüft ein separater Pass'}):\n${figuren.map(f => {
           const parts = [f.name];
           if (f.kurzname) parts.push(`Kurzname: ${f.kurzname}`);
           if (f.geschlecht) parts.push(f.geschlecht);
@@ -177,7 +192,9 @@ function _buildLektoratPromptBody(text, textLabel, {
 EIN-EINTRAG-PRO-STELLE (Anti-Doppelung, alle Typen):
 - Pro Textspanne (überlappendes Wort oder überlappende Phrase) maximal EIN Eintrag im «fehler»-Array.
 - Typ-Priorität bei Überlappung (spezifisch schlägt generisch): ${dedupTypen}.
-- Beispiel ${fach
+- Beispiel ${journal
+  ? '«Müller sagte, die Sanierung ist im Rahmen der Massnahme zur Durchführung gebracht worden»: NICHT als «konjunktiv» (ist statt sei) UND «amtsdeutsch» (zur Durchführung gebracht) UND «passiv» UND «stil» (ganzer Satz)'
+  : fach
   ? '«Die Daten deuten möglicherweise unter Umständen darauf hin»: NICHT als «hedging» (Absicherungs-Stapel) UND «fuellwort» (unter Umständen) UND «stil» (ganze Phrase)'
   : '«Er war eigentlich wütend»: NICHT als «fuellwort» (eigentlich) UND «show_vs_tell» (war wütend) UND «stil» (ganze Phrase)'} melden. Den treffendsten Typ wählen; die anderen Aspekte können knapp in «erklaerung» mitschwingen, aber KEIN zweiter Eintrag am gleichen Span.
 - Mehrere Einträge zum selben Satz sind erlaubt NUR bei klar getrennten, nicht-überlappenden Textspannen (z.B. Fehler am Satzanfang UND unabhängiger Fehler am Satzende).
@@ -215,22 +232,17 @@ SPAN-TYP-KONSISTENZ (zwischen «original» und «korrektur», zwingend):
 - VERBOTEN: «original» = «wegen dem Regen», «korrektur» = «Wegen des Regens blieben wir zu Hause.» (Phrase vs. ganzer Satz). Richtig: «korrektur» = «wegen des Regens».
 - VERBOTEN: «original» = ganzer Satz, «korrektur» = nur die ersetzte Phrase ohne Satzrest.
 - Pflicht-Span-Typ pro Typ:
-${fach
-  ? spanRegelnFach(typen)
-  : (_isLocal
-    ? `  · rechtschreibung, grammatik: Phrase oder Wort (genau die fehlerhafte Stelle)
-  · wiederholung, schwaches_verb, fuellwort: vollständiger Satz
-  · stil: vollständiger Satz ODER eindeutig abgrenzbare Phrase – beide Felder müssen denselben Span-Typ haben`
-    : `  · rechtschreibung, grammatik: Phrase oder Wort (genau die fehlerhafte Stelle)
-  · namenskonsistenz: einzelnes Wort (der falsch geschriebene Name)
-  · figurenmerkmal, anrede, schauplatzmerkmal, pleonasmus, dialogformat: Phrase (genau die widersprüchliche / redundante / typografisch falsche Stelle)
-  · wiederholung, schwaches_verb, fuellwort, filterwort, passiv, show_vs_tell, perspektivbruch, tempuswechsel: vollständiger Satz
-  · klischee, ki_geruch, stil, satzbau: vollständiger Satz ODER eindeutig abgrenzbare Phrase – beide Felder müssen denselben Span-Typ haben`)}
+${spanRegeln(typen)}
 `;
 
   const filterBlock = _isLocal
     ? ''
     : `${erklaerungRule ? `\nFILTER-PFLICHT: ${erklaerungRule}\n` : ''}${korrekturRegeln ? `\n${korrekturRegeln}\n` : ''}`;
+
+  // Zitat-Schutz: bewusst AUCH lokal (kleine Modelle glätten Zitate besonders
+  // gern) und bewusst als Rahmen-Verbot statt als Fehlertyp — er verbietet eine
+  // ganze Klasse von Korrekturen, statt einen Mangel zu melden.
+  const zitattreueBlock = journal ? _buildZitattreueBlock() : '';
 
   // Zuständigkeit des Mengen-Caps, aus dem Profil abgeleitet: subjektiv-stilistische
   // Typen unterliegen Schwere-Schwelle + Obergrenze, alle übrigen (mechanische Fehler
@@ -241,22 +253,29 @@ ${fach
 
   // Severity + Findings-Obergrenze: Anti-Pedanterie. Cloud-only – kleine Modelle
   // produzieren ohnehin weniger und sollten nicht zusätzlich gefiltert werden.
+  // Der erläuternde Mechanik-Nachsatz darf nur stehen, wenn Rechtschreibung/Grammatik
+  // in diesem Lauf überhaupt gemeldet werden dürfen — im Stil-Pass sind sie verboten,
+  // und «werden IMMER und VOLLSTÄNDIG gemeldet» widerspräche direkt der <aufgabe>.
+  const objektivSet = new Set(objektivAktiv);
+  const mechDetail = (objektivSet.has('rechtschreibung') || objektivSet.has('grammatik'))
+    ? ' Dazu zählen Rechtschreibung, Grammatik (Kongruenz, Kasus, Rektion, Verbformen, Modus) und ZEICHENSETZUNG/INTERPUNKTION (fehlende oder falsch gesetzte Kommas, Satzschlusszeichen, Apostroph, Gedankenstrich).'
+    : ' Rechtschreibung, Grammatik und Zeichensetzung/Interpunktion prüft ein SEPARATER Pass – sie gehören NICHT in diese Antwort, auch nicht unter einem anderen Typ.';
   const severityBlock = _isLocal ? '' : (fach ? _buildFachSeverityBlock(stilistischAktiv, objektivAktiv) : `
 SCHWERE-SCHWELLE (Anti-Pedanterie, Pflicht-Filter vor dem Aufnehmen ins «fehler»-Array):
 - Melde NUR Schwächen, die einem ernsthaften Leser spürbar ins Auge fallen oder das Lese-Erlebnis nachweislich beeinträchtigen.
 - Selbsttest pro Eintrag: «Würde ein professioneller Lektor diese Stelle in einem bezahlten Lektorat anstreichen?» Wenn die Antwort «vielleicht», «Geschmacksache» oder «nur am Rand» wäre → weglassen.
 - VERWORFEN-Kandidaten: minimal alternative Synonyme ohne klaren Gewinn, Mikro-Stilpräferenzen, ein einzelnes «sehr» / «ein bisschen» wenn der Satz sonst rund läuft, vollkommen idiomatische Wendungen, regional übliche Formulierungen, ironisch oder bewusst eingesetzte «Schwächen».
-- MECHANISCHE FEHLER unterliegen der Schwere-Schwelle UND der Mengen-Obergrenze NICHT – sie werden IMMER und VOLLSTÄNDIG gemeldet, egal wie viele es sind: Rechtschreibung, Grammatik (Kongruenz, Kasus, Rektion, Verbformen, Modus), ZEICHENSETZUNG/INTERPUNKTION (fehlende oder falsch gesetzte Kommas, Satzschlusszeichen, Apostroph, Gedankenstrich), TEMPUSBRÜCHE (typ «tempuswechsel»), PERSPEKTIVBRÜCHE (typ «perspektivbruch») und Dialogformat-Typografie (typ «dialogformat»). Das sind objektive Fehler, keine Geschmacksfragen – nie als «vielleicht» / «Geschmacksache» / «nur am Rand» abtun, nie wegen einer Obergrenze streichen.
-- Die Schwere-Schwelle und die Mengen-Obergrenze gelten NUR für subjektive/stilistische Findings (stil, satzbau, schwaches_verb, fuellwort, filterwort, klischee, ki_geruch, show_vs_tell, passiv, pleonasmus, wiederholung). Dort gilt: lieber 5 starke, präzise Findings als 25 schwache. Wenn nach dem Selbsttest mehr als ~20 solcher stilistischen Einträge übrig bleiben, hart priorisieren: nur die schwersten ~20 behalten, restliche weglassen. Mechanische Fehler (oben) zählen NICHT gegen dieses Limit und werden nie gestrichen.
+- MECHANISCHE FEHLER UND KONSISTENZ-BEFUNDE unterliegen der Schwere-Schwelle UND der Mengen-Obergrenze NICHT – sie werden IMMER und VOLLSTÄNDIG gemeldet, egal wie viele es sind: ${objektivAktiv.join(', ')}.${mechDetail} Das sind objektive Fehler, keine Geschmacksfragen – nie als «vielleicht» / «Geschmacksache» / «nur am Rand» abtun, nie wegen einer Obergrenze streichen.
+- Die Schwere-Schwelle und die Mengen-Obergrenze gelten NUR für subjektive/stilistische Findings (${stilistischAktiv.join(', ')}). Dort gilt: lieber 5 starke, präzise Findings als 25 schwache. Wenn nach dem Selbsttest mehr als ~20 solcher stilistischen Einträge übrig bleiben, hart priorisieren: nur die schwersten ~20 behalten, restliche weglassen. Die oben genannten objektiven Befunde zählen NICHT gegen dieses Limit und werden nie gestrichen.
 `);
 
   // Selbstkontroll-Pass: Sortierung + Schluss-Review. Hat bei Claude messbaren
   // Effekt; bei lokalen Modellen erhöht es Halluzinationsrisiko und wird
   // weggelassen.
-  const selbstkontrollBlock = _isLocal ? '' : (fach ? _buildFachSelbstkontrollBlock(objektivAktiv) : `
+  const selbstkontrollBlock = _isLocal ? '' : (fach ? _buildFachSelbstkontrollBlock(objektivAktiv, profil) : `
 SELBSTKONTROLL-PASS (Pflicht vor dem Antworten):
 Bevor du die JSON-Antwort ausgibst, gehe deine gesammelten Findings einmal durch und prüfe:
-1. SCHWERE: Hat jeder stilistische Eintrag den Selbsttest «professioneller Lektor anstreichen?» bestanden? Wenn nein → streichen. AUSNAHME: mechanische Fehler (rechtschreibung, grammatik inkl. Zeichensetzung/Interpunktion, tempuswechsel, perspektivbruch, dialogformat) bestehen diesen Test immer und werden NIE gestrichen – auch nicht, um unter eine Mengen-Obergrenze zu kommen.
+1. SCHWERE: Hat jeder stilistische Eintrag den Selbsttest «professioneller Lektor anstreichen?» bestanden? Wenn nein → streichen. AUSNAHME: ${objektivAktiv.join(', ')} bestehen diesen Test immer und werden NIE gestrichen – auch nicht, um unter eine Mengen-Obergrenze zu kommen.
 2. DOPPELUNG: Überlappt «original» eines Eintrags textlich mit dem «original» eines anderen Eintrags? Wenn ja → nur den mit dem treffendsten Typ (gemäss Typ-Priorität oben) behalten.
 3. PURITÄT: Enthält «korrektur» Meta-Präfixe / Guillemets / Begründungs-Anhänge? Wenn ja → korrigieren oder Eintrag streichen.
 4. ZEICHENGENAUIGKEIT: Liesse sich «original» mit einem String-Find im Originaltext genau einmal finden? Wenn nein → korrigieren oder streichen.
@@ -272,11 +291,20 @@ Bevor du die JSON-Antwort ausgibst, gehe deine gesammelten Findings einmal durch
   // — extra Beispiel wäre Token-Redundanz. Das Korrektur-Purität-Beispiel bleibt,
   // weil es einzigartig die IN-PLACE-Korrektur (Meta-Präfix raus + Reformulierung)
   // demonstriert, die keine Regel-Beschreibung gleichwertig zeigt.
+  // Das GUTE Beispiel muss einen Typ tragen, den der Lauf auch ausgeben darf.
+  // Im Stil-Pass ist «grammatik» verboten – ein Few-Shot mit verbotenem Typ wiegt
+  // schwerer als jede Regel und lädt zur Umetikettierung ein. «fuellwort» steht in
+  // allen vier Profilen und ist nie objektiv.
+  const gutesBeispiel = stilOnly
+    ? '{ "typ": "fuellwort", "original": "Das Ergebnis war dann letztlich eigentlich eindeutig.", "korrektur": "Das Ergebnis war eindeutig.", "erklaerung": "«dann letztlich eigentlich» stapelt Füllwörter ohne Aussagegewinn." }'
+    : '{ "typ": "grammatik", "original": "wegen dem Regen", "korrektur": "wegen des Regens", "erklaerung": "«wegen» verlangt den Genitiv." }';
   const beispielBlock = _isLocal ? '' : `
 Beispiel eines GUTEN Eintrags:
-{ "typ": "grammatik", "original": "wegen dem Regen", "korrektur": "wegen des Regens", "erklaerung": "«wegen» verlangt den Genitiv." }
+${gutesBeispiel}
 Beispiel eines VERWORFENEN Eintrags (Korrektur-Purität verletzt):
-${fach
+${journal
+  ? `{ "typ": "amtsdeutsch", "original": "Die Inbetriebnahme der Anlage erfolgt im Rahmen einer Massnahme des Kantons.", "korrektur": "Satz übersetzen auf: «Der Kanton nimmt die Anlage in Betrieb.» – Amtsdeutsch verdeckt, wer handelt.", "erklaerung": "..." } → «korrektur» enthält Meta-Präfix, Guillemets und Begründungs-Anhang → KORRIGIEREN zu: { "korrektur": "Der Kanton nimmt die Anlage in Betrieb.", "erklaerung": "Streckform «Inbetriebnahme erfolgt» verdeckt den Handelnden." }`
+  : fach
   ? `{ "typ": "stil", "original": "Im Rahmen der vorliegenden Untersuchung wird der Aspekt der Wirksamkeit einer Betrachtung unterzogen.", "korrektur": "Satz straffen auf: «Die Untersuchung prüft die Wirksamkeit.» – die Abstrakta verdecken die Aussage.", "erklaerung": "..." } → «korrektur» enthält Meta-Präfix, Guillemets und Begründungs-Anhang → KORRIGIEREN zu: { "korrektur": "Die Untersuchung prüft die Wirksamkeit.", "erklaerung": "Gestapelte Abstrakta verdecken die Aussage – Satz straffen." }`
   : `{ "typ": "show_vs_tell", "original": "Dort versteckte er sich vor der Konfrontation, vor der eigentlich normalsten Auseinandersetzung zwischen Ehepartnern.", "korrektur": "Satz kürzen auf: «Dort versteckte er sich vor der Konfrontation.» – der erklärende Nachsatz nimmt dem Leser die Deutung vorweg.", "erklaerung": "..." } → «korrektur» enthält Meta-Präfix, Guillemets und Begründungs-Anhang → KORRIGIEREN zu: { "korrektur": "Dort versteckte er sich vor der Konfrontation.", "erklaerung": "Der erklärende Nachsatz nimmt dem Leser die Deutung vorweg – Satz kürzen." }`}
 `;
@@ -301,7 +329,7 @@ ${fach
   const spezialBlocks = _isLocal
     ? ''
     : [
-      _buildSatzbauBlock(),
+      _buildSatzbauBlock(typen),
       aktiv('filterwort')           && _buildFilterwortBlock(),
       aktiv('klischee')             && _buildKlischeeBlock(),
       aktiv('pleonasmus')           && _buildPleonasmusBlock(),
@@ -309,12 +337,17 @@ ${fach
       aktiv('dialogformat')         && _buildDialogformatBlock(langCode),
       aktiv('passiv')               && _buildPassivBlock(),
       aktiv('perspektivbruch')      && _buildPerspektivbruchBlock(),
-      aktiv('tempuswechsel')        && (fach ? _buildFachTempusBlock() : _buildTempuswechselBlock()),
+      aktiv('tempuswechsel')        && (journal ? _buildJournalTempusBlock()
+                                        : fach ? _buildFachTempusBlock() : _buildTempuswechselBlock()),
       aktiv('ki_geruch')            && _buildAiSmellBlock(),
       aktiv('hedging')              && _buildHedgingBlock(),
       aktiv('unbelegt')             && _buildUnbelegtBlock(),
       aktiv('begriffsinkonsistenz') && _buildBegriffsinkonsistenzBlock(),
       aktiv('autorenform')          && _buildAutorenformBlock(),
+      aktiv('konjunktiv')           && _buildKonjunktivBlock(),
+      aktiv('zuschreibung')         && _buildZuschreibungBlock(),
+      aktiv('wertung')              && _buildWertungBlock(textsorteLabel(textsorte)),
+      aktiv('amtsdeutsch')          && _buildAmtsdeutschBlock(),
       figurenkonsistenzBlock,
       schauplatzkonsistenzBlock,
     ].filter(Boolean).join('\n') + '\n';
@@ -360,7 +393,7 @@ ${fach
     : '"ein Satz Gesamtfazit zur literarischen Qualität – KEINE Fehler aus dem «fehler»-Array wiederholen, zusammenfassen oder als Gruppe charakterisieren («viele Stilbrüche», «zahlreiche Wiederholungen» o.Ä.). Nur Gesamtwirkung, nicht das Findings-Resultat paraphrasieren."'}
 }`;
 
-  const szenenRegelnBlock = _isLocal ? '' : (fach ? _buildFachAbschnittRegelnBlock() : `
+  const szenenRegelnBlock = _isLocal ? '' : (fach ? _buildFachAbschnittRegelnBlock(profil) : `
 Szenen-Regeln:
 - Eine Szene ist ein abgegrenzter Handlungsabschnitt mit eigenem Anfang und Ende
 - Wenn die Seite keine erkennbaren Szenen enthält (z.B. rein beschreibender Text, Exposition): «szenen» als leeres Array zurückgeben
@@ -385,14 +418,14 @@ Szenen-Regeln:
   return `<aufgabe>
 ${aufgabeSatz}
 </aufgabe>
-${metaBlock}${povBlock}${wichtigBlock}${korrekturPuritaetBlock}${severityBlock}${filterBlock}
+${metaBlock}${povBlock}${wichtigBlock}${korrekturPuritaetBlock}${zitattreueBlock}${severityBlock}${filterBlock}
 <output_format>
 ${schemaBlock}
 </output_format>
 ${beispielSection}${szenenRegelnBlock}
 ${aktiv('rechtschreibung') ? _buildRechtschreibungBlock(langCode) : ''}
 ${aktiv('grammatik') ? _buildGrammatikBlock(langCode) : ''}
-${fach ? _buildFachStilBlock() : _buildStilBlock()}
+${journal ? _buildJournalStilBlock(typen) : fach ? _buildFachStilBlock(typen) : _buildStilBlock(typen)}
 ${fach ? _buildFachWiederholungBlock(stopwords) : _buildWiederholungBlock(stopwords)}
 ${aktiv('schwaches_verb') ? _buildSchwacheVerbenBlock() : ''}
 ${_buildFuellwortBlock()}
@@ -443,10 +476,10 @@ function _fehlerField(typen) {
  * Schema für den kombinierten bzw. den Stil-Pass. Lokale Provider erhalten ein
  * reduziertes Schema ohne szenen/stilanalyse/fazit (kleine Modelle halluzinieren
  * diese Felder generisch und das Generieren kostet spürbar Output-Tokens).
- * @param {{buchtyp?: string|null, stilOnly?: boolean}} opts
+ * @param {{buchtyp?: string|null, stilOnly?: boolean, textsorte?: string|null}} opts
  */
-export function buildLektoratSchema({ buchtyp = null, stilOnly = false } = {}) {
-  const fehlerField = _fehlerField(lektoratTypen(buchtyp, { local: _isLocal, stilOnly: stilOnly && !_isLocal }));
+export function buildLektoratSchema({ buchtyp = null, stilOnly = false, textsorte = null } = {}) {
+  const fehlerField = _fehlerField(lektoratTypen(buchtyp, { local: _isLocal, stilOnly: stilOnly && !_isLocal, textsorte }));
   if (_isLocal) return _obj({ fehler: fehlerField });
   return _obj({
     fehler: fehlerField,

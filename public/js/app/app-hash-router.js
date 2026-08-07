@@ -31,6 +31,8 @@ const SIMPLE_HASH_VIEWS = {
   'fehler':       'fehlerHeatmap',
   'redundanz':    'redundanz',
   'wortschatz':   'wortschatz',
+  'struktur':     'struktur',
+  'titel':        'titelwerkstatt',
   'einstellungen':'bookSettings',
   'finetune':     'finetuneExport',
   'fassungen':    'snapshots',
@@ -116,6 +118,8 @@ export const appHashRouterMethods = {
     else if (this.showFehlerHeatmapCard) parts.push('fehler');
     else if (this.showRedundanzCard) parts.push('redundanz');
     else if (this.showWortschatzCard) parts.push('wortschatz');
+    else if (this.showStrukturCard) parts.push('struktur');
+    else if (this.showTitelwerkstattCard) parts.push('titel');
     else if (this.showBookSettingsCard) parts.push('einstellungen');
     else if (this.showFinetuneExportCard) parts.push('finetune');
     else if (this.showSnapshotsCard) parts.push('fassungen');
@@ -520,7 +524,7 @@ export const appHashRouterMethods = {
       'showSourcesCard',
       'showKontinuitaetCard', 'showErzaehlprofilCard', 'showTagebuchRueckblickCard', 'showBookReviewCard', 'showBookChatCard',
       'showKapitelReviewCard', 'kapitelReviewChapterId',
-      'showBookStatsCard', 'showStilCard', 'showFehlerHeatmapCard', 'showRedundanzCard', 'showWortschatzCard',
+      'showBookStatsCard', 'showStilCard', 'showFehlerHeatmapCard', 'showRedundanzCard', 'showWortschatzCard', 'showStrukturCard', 'showTitelwerkstattCard',
       'showBookSettingsCard', 'showUserSettingsCard', 'showMyStatsCard', 'showHelpCard', 'showOnboardingCard',
       'showAdminUsersCard', 'showAdminSettingsCard', 'showAdminUsageCard', 'adminUsageTab',
       'showAdminCategoriesCard', 'showAdminBooksCard', 'showAdminLogsCard', 'showAdminParseFailsCard',

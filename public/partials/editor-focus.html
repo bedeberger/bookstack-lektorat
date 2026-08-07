@@ -39,14 +39,14 @@
         <button type="button" class="icon-btn icon-btn--ghost icon-btn--success"
                 @click="$app.saveEdit()"
                 :disabled="$app.editSaving"
-                :data-tip="$app.t('editor.btn.saveEditTitle')"
+                :data-tip="$app.withHotkey($app.t('editor.btn.saveEditTitle'), 'save')"
                 :aria-label="$app.t('common.save')">
           <span x-show="$app.editSaving" class="spinner"></span>
           <svg x-show="!$app.editSaving" class="icon" aria-hidden="true"><use href="/icons.svg?v=693#check"/></svg>
         </button>
         <button type="button" class="icon-btn icon-btn--ghost"
                 @click="exitFocusMode()"
-                :data-tip="$app.t('editor.btn.leaveFocusTitle')"
+                :data-tip="$app.withHotkey($app.t('editor.btn.leaveFocusTitle'), 'focusExit')"
                 :aria-label="$app.t('editor.btn.leaveFocus')">
           <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#minimize-2"/></svg>
         </button>

@@ -34,6 +34,13 @@ const freshState = () => ({
   jumpToChapterId: '',
   organizerStatus: '',
   organizerSaving: false,
+  // Redaktions-Status (Slice book-organizer/redaktion.js). `redaktionEnabled`
+  // haengt am Buchtyp und kommt vom Server — solange es false ist, rendert die
+  // Zeile keine Stufen-Spalte.
+  redaktionEnabled: false,
+  redaktionByPage: {},   // { [page_id]: { status, stale, updated_by, … } }
+  redaktionCounts: null, // { roh, gegengelesen, …, ohne } oder null
+  redaktionSaving: {},   // { [page_id]: true } waehrend des PUT
   _undoStack: [],
   _redoStack: [],
   _inHistoryFlight: false,
@@ -61,6 +68,9 @@ export function registerBookOrganizerCard() {
         onShow: async () => {
           await loadSortable();
           await this._rerender();
+          // Parallel zum Render, nicht davor: die Seitenliste soll nicht auf
+          // eine Metadaten-Abfrage warten, die sie auch nachtragen kann.
+          this.loadRedaktion();
         },
         // book:changed feuert VOR loadPages — Sortable cleanen + State leeren,
         // der pages:loaded-Listener unten greift, sobald loadPages fertig ist.
@@ -73,6 +83,7 @@ export function registerBookOrganizerCard() {
         // `loadPages` würde Sidebar-Tree clearen + neu fetchen → Flicker.
         onCardRefresh: async (e, ctx) => {
           await ctx._rerender();
+          ctx.loadRedaktion();
         },
         onViewReset: (e, ctx) => {
           ctx._destroySortables();
@@ -83,6 +94,9 @@ export function registerBookOrganizerCard() {
             if (!window.__app.showBookOrganizerCard) return;
             await loadSortable();
             await this._rerender();
+            // Buchwechsel bei offener Karte: `book:changed` hat den Slice-State
+            // geleert, hier kommt der des neuen Buchs.
+            this.loadRedaktion();
           } },
         ],
       });

@@ -14,6 +14,9 @@ import {
   featureByKey,
   isFeatureAvailable,
   unavailabilityReasonKey,
+  KOMPLETT_HIDDEN_BUCHTYPEN,
+  komplettHiddenFor,
+  matchesRequiredBuchtyp,
 } from '../../public/js/cards/feature-registry.js';
 
 test('jeder FEATURES-Eintrag hat ein gültiges minRole', () => {
@@ -51,17 +54,93 @@ test('featuresVisibleFor(lektor): viewer-Set (lektor hat keine zusätzlichen FEA
 });
 
 // `requiresBuchtyp`-Karten sind nur sichtbar, wenn der Buchtyp passt — auch für
-// editor/owner. Ohne passenden Buchtyp fallen sie raus.
-test('featuresVisibleFor(editor, buchtyp=tagebuch): alle FEATURES', () => {
-  const all = FEATURES.map(f => f.key).sort();
-  const visible = featuresVisibleFor(FEATURES, 'editor', 'tagebuch').map(f => f.key).sort();
-  assert.deepEqual(visible, all);
+// editor/owner. Ohne passenden Buchtyp fallen sie raus. Umgekehrt blendet
+// `hiddenForBuchtyp` Karten in genau einem Werktyp aus.
+function _visibleAt(role, buchtyp) {
+  return featuresVisibleFor(FEATURES, role, buchtyp).map(f => f.key).sort();
+}
+// Erwartung ueber die SSoT bilden, nicht ueber eine zweite Kopie der Regel:
+// `requiresBuchtyp` nimmt einen Key ODER eine Liste (die Titel-Werkstatt gilt
+// fuer 'journalismus' UND 'blog'). Ein nachgebautes `===` hier haette genau die
+// Drift erzeugt, gegen die der Helper existiert.
+function _expectedAt(buchtyp) {
+  return FEATURES
+    .filter(f => matchesRequiredBuchtyp(f, buchtyp)
+      && !(f.hiddenForBuchtyp || []).includes(buchtyp))
+    .map(f => f.key).sort();
+}
+
+test('featuresVisibleFor(editor, buchtyp=tagebuch): alle ausser den fremd-typisierten', () => {
+  assert.deepEqual(_visibleAt('editor', 'tagebuch'), _expectedAt('tagebuch'));
+  // Tagebuch blendet NICHTS aus (kein hiddenForBuchtyp nennt es) — die
+  // Gegenprobe zum journalistischen Fall. Es fehlen nur die Karten, die einen
+  // ANDEREN Buchtyp verlangen.
+  const nurFremdTypisiert = FEATURES
+    .filter(f => f.requiresBuchtyp && !matchesRequiredBuchtyp(f, 'tagebuch'))
+    .map(f => f.key).sort();
+  assert.deepEqual(nurFremdTypisiert, ['struktur', 'titelwerkstatt']);
+  assert.ok(FEATURES.every(f => !(f.hiddenForBuchtyp || []).includes('tagebuch')));
 });
 
-test('featuresVisibleFor(owner, buchtyp=tagebuch): alle FEATURES', () => {
-  const all = FEATURES.map(f => f.key).sort();
-  const visible = featuresVisibleFor(FEATURES, 'owner', 'tagebuch').map(f => f.key).sort();
-  assert.deepEqual(visible, all);
+// Die Listen-Form von `requiresBuchtyp`: der Titelapparat gilt fuer BEIDE
+// publizistischen Typen, der Struktur-Check nur fuers Ressort. Ohne diesen Fall
+// faellt eine Rueckkehr zum Einzel-Key nicht auf — die Karte verschwaende dann
+// lautlos aus dem Blog.
+test('featuresVisibleFor(editor, buchtyp=blog): Titel-Werkstatt ja, Struktur nein', () => {
+  const visible = new Set(_visibleAt('editor', 'blog'));
+  assert.ok(visible.has('titelwerkstatt'), 'titelwerkstatt muss im Blog erscheinen');
+  assert.ok(!visible.has('struktur'), 'struktur ist ressort-eigen');
+  assert.deepEqual(_visibleAt('editor', 'blog'), _expectedAt('blog'));
+});
+
+test('featuresVisibleFor(owner, buchtyp=tagebuch): wie editor', () => {
+  assert.deepEqual(_visibleAt('owner', 'tagebuch'), _expectedAt('tagebuch'));
+});
+
+// Journalistisches Ressort: die Buchwelt-Karten (Figuren, Plot, Motive, Orte,
+// Songs, Ereignisse, Szenen, Weltfakten, Kontinuität, Erzählprofil) und der
+// Buchsatz (PDF/EPUB) verschwinden; die Struktur-Karte kommt dafür dazu.
+test('featuresVisibleFor(editor, buchtyp=journalismus): Buchwelt weg, Struktur da', () => {
+  const visible = new Set(_visibleAt('editor', 'journalismus'));
+  for (const k of ['figuren', 'werkstatt', 'szenen', 'orte', 'songs', 'ereignisse',
+    'plot', 'motiv', 'weltfakten', 'kontinuitaet', 'erzaehlprofil',
+    'pdfExport', 'epubExport']) {
+    assert.ok(!visible.has(k), `${k} darf im journalistischen Ressort nicht erscheinen`);
+  }
+  assert.ok(visible.has('struktur'), 'struktur fehlt');
+  assert.ok(visible.has('titelwerkstatt'), 'titelwerkstatt fehlt');
+  // Was bleibt, bleibt: Recherche, Quellen, Lektorat-Auswertung, Export, Editor.
+  for (const k of ['recherche', 'sources', 'fehlerHeatmap', 'export', 'bookEditor']) {
+    assert.ok(visible.has(k), `${k} muss bleiben`);
+  }
+  assert.deepEqual(_visibleAt('editor', 'journalismus'), _expectedAt('journalismus'));
+});
+
+// Die Komplettanalyse wird dort nicht angeboten, wo alle ihre Abnehmer-Karten
+// ausgeblendet sind — beide Richtungen muessen zusammenpassen, sonst verlangt
+// eine Karte einen Lauf, den es nicht zu starten gibt (oder umgekehrt bleibt ein
+// Einstiegspunkt stehen, der nur Kosten produziert).
+test('kein dependsOnKomplett-Feature ist sichtbar, wo die Komplettanalyse fehlt', () => {
+  for (const bt of KOMPLETT_HIDDEN_BUCHTYPEN) {
+    assert.ok(komplettHiddenFor(bt), `komplettHiddenFor(${bt}) muss true sein`);
+    const visible = new Set(_visibleAt('owner', bt));
+    for (const f of FEATURES.filter(f => f.dependsOnKomplett)) {
+      assert.ok(!visible.has(f.key), `${f.key} braucht die Komplettanalyse, die es bei ${bt} nicht gibt`);
+    }
+    assert.ok(!visible.has('action.komplett'), `action.komplett muss bei ${bt} weg sein`);
+  }
+});
+
+test('komplettHiddenFor gilt nur fuer die genannten Buchtypen', () => {
+  for (const bt of ['roman', 'sachbuch', 'tagebuch', 'blog', 'lyrik', null]) {
+    assert.ok(!komplettHiddenFor(bt), `komplettHiddenFor(${bt}) muss false sein`);
+  }
+});
+
+test('struktur ist ausserhalb des journalistischen Ressorts unsichtbar', () => {
+  for (const bt of ['roman', 'sachbuch', 'tagebuch', null]) {
+    assert.ok(!_visibleAt('editor', bt).includes('struktur'), `struktur bei ${bt} sichtbar`);
+  }
 });
 
 // requiresClaude: Kontinuität + Erzählprofil sind Claude-only (die Qualitätsstufen

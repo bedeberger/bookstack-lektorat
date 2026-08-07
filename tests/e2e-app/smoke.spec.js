@@ -34,23 +34,41 @@ test('jede Hauptkarte oeffnet ohne Konsolenfehler', async ({ page }) => {
   // Toggle-Namen aus der Feature-Registry (SSoT EXCLUSIVE_CARDS) ziehen — kein
   // Drift, neue Karte ⇒ automatisch dabei. Nur Toggles, die am Root als
   // Funktion existieren (bespoke/admin inkl.).
+  // Buchtyp-gegatete Karten (Titel-Werkstatt, Struktur, Tagebuch-Rueckschau)
+  // brauchen ihren Typ, sonst bricht `_toggleCardGeneric` ab und die Karte wird
+  // nie gerendert — sie waere lautlos aus dem Smoke gefallen, statt gedeckt zu
+  // sein. Der Typ kommt aus `$store.nav.books` (tree/permissions.js#currentBuchtyp),
+  // wird pro Karte gesetzt und danach zurueckgedreht.
   const toggles = await page.evaluate(async () => {
     const reg = await import('/js/cards/feature-registry.js');
     return reg.EXCLUSIVE_CARDS
-      .map((c) => c.toggle)
-      .filter((t) => typeof window.__app[t] === 'function')
-      .sort();
+      .filter((c) => typeof window.__app[c.toggle] === 'function')
+      .map((c) => ({
+        toggle: c.toggle,
+        buchtyp: Array.isArray(c.requiresBuchtyp) ? c.requiresBuchtyp[0] : (c.requiresBuchtyp || null),
+      }))
+      .sort((a, b) => a.toggle.localeCompare(b.toggle));
   });
   expect(toggles.length, 'mind. eine Toggle-Karte gefunden').toBeGreaterThan(5);
+  expect(
+    toggles.filter((t) => t.buchtyp).length,
+    'buchtyp-gegatete Karten muessen im Smoke mitlaufen',
+  ).toBeGreaterThan(0);
 
   const failures = [];
-  for (const name of toggles) {
+  for (const { toggle: name, buchtyp } of toggles) {
     // Vorherige Karte schliessen, damit Exklusivitaet sauber durchlaeuft.
     await page.evaluate(() => window.__app._closeOtherMainCards?.(null));
     await page.waitForTimeout(80);
     const before = guard.unmatched().length;
     try {
-      await page.evaluate((n) => Promise.resolve(window.__app[n]()), name);
+      await page.evaluate(({ n, bt }) => {
+        const nav = window.Alpine.store('nav');
+        const book = (nav.books || []).find((b) => String(b.id) === String(nav.selectedBookId));
+        window.__smokePrevBuchtyp = book ? book.buchtyp : undefined;
+        if (book && bt) book.buchtyp = bt;
+        return Promise.resolve(window.__app[n]());
+      }, { n: name, bt: buchtyp });
     } catch (e) {
       failures.push(`${name}: toggle warf ${e.message}`);
       continue;
@@ -61,6 +79,11 @@ test('jede Hauptkarte oeffnet ohne Konsolenfehler', async ({ page }) => {
     if (fresh.length) {
       failures.push(`${name}:\n    ${fresh.map((f) => `[${f.channel}] ${f.text}`).join('\n    ')}`);
     }
+    await page.evaluate(() => {
+      const nav = window.Alpine.store('nav');
+      const book = (nav.books || []).find((b) => String(b.id) === String(nav.selectedBookId));
+      if (book && window.__smokePrevBuchtyp !== undefined) book.buchtyp = window.__smokePrevBuchtyp;
+    });
   }
 
   expect(failures, `Karten mit Fehlern:\n${failures.join('\n')}`).toEqual([]);

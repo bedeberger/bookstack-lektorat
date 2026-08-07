@@ -1,0 +1,197 @@
+@layer components {
+/* === Titel-Werkstatt ===
+   Dachzeile / Titel / Lead / Teaser als Metadata des Beitrags.
+   Akzentfarbe = --card-accent-titelwerkstatt, Mapping in card-accents.css.
+
+   Zwei Ebenen: Übersichtszeile pro Beitrag, aufgeklappter Block mit den vier
+   Feldern. Die Zeile ist ein <button> in einer Tabellenzelle mit colspan —
+   dadurch bleibt die Sortierung über sortableTable möglich, während der Detail-
+   Block die volle Breite bekommt statt in eine Spalte gequetscht zu werden.
+*/
+
+.tw-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--space-xs);
+}
+.tw-cell-group {
+  padding: 0;
+  border-bottom: 0.5px solid var(--color-border);
+}
+.tw-col-num { text-align: right; }
+
+/* ── Übersichtszeile ─────────────────────────────────────────────────────── */
+
+.tw-row {
+  display: grid;
+  grid-template-columns: auto minmax(8rem, 1fr) minmax(6rem, 1fr) minmax(10rem, 2fr) auto;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-xs) var(--space-2xs);
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.tw-row:hover { background: color-mix(in srgb, var(--card-accent) 8%, transparent); }
+.tw-row-name { font-weight: 500; }
+.tw-row-dach,
+.tw-row-titel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tw-row-dach { color: var(--color-muted); font-size: var(--size-compact-font-size); }
+/* Ein Beitrag ohne Titel ist die Zeile, die man sucht — sie darf nicht aussehen
+   wie eine mit Titel. */
+.tw-row-titel--empty { color: var(--color-muted); font-style: italic; }
+.tw-row-count { justify-self: end; }
+.tw-row-count--0 { background: var(--color-tag-bg); color: var(--color-muted); }
+.tw-row-count--1,
+.tw-row-count--2,
+.tw-row-count--3 { background: var(--color-warn-bg); color: var(--color-warn-text); }
+.tw-row-count--4 { background: var(--color-ok-bg); color: var(--color-ok-text); }
+
+/* ── Aufgeklappter Block ─────────────────────────────────────────────────── */
+
+.tw-detail {
+  padding: var(--space-xs) var(--space-sm) var(--space-sm);
+  border-top: 0.5px dashed var(--color-border);
+  background: color-mix(in srgb, var(--card-accent) 4%, transparent);
+}
+.tw-field + .tw-field {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 0.5px solid var(--color-border);
+}
+.tw-field-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  margin-bottom: var(--space-2xs);
+}
+.tw-field-label { font-weight: 600; font-size: var(--size-compact-font-size); }
+.tw-field-count {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--size-compact-font-size);
+  color: var(--color-muted);
+}
+.tw-field-count--passt     { color: var(--color-ok-text); }
+.tw-field-count--teilweise { color: var(--color-warn-text); }
+.tw-field-count--zulang    { color: var(--color-err-text); }
+
+.tw-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.tw-input--long { resize: vertical; min-height: 4.5em; }
+.tw-input--sm { font-size: var(--size-compact-font-size); }
+
+/* ── Kanal-Lineal ────────────────────────────────────────────────────────── */
+
+.tw-ruler { margin-top: var(--space-2xs); }
+/* Der Balken misst gegen den ENGSTEN Kanal — der reisst zuerst. Die Zahlen pro
+   Kanal stehen darunter; der Balken allein sagt nur „wie voll".
+   Eigene Spur statt .progress-bar-wrap: die bringt vertikale Margins mit, die
+   hier zwischen Eingabefeld und Kanal-Liste eine Lücke reissen würden. */
+.tw-ruler-track {
+  height: 3px;
+  background: var(--color-tag-bg);
+  overflow: hidden;
+}
+.tw-ruler-bar--passt     { background: var(--color-ok-text); }
+.tw-ruler-bar--teilweise { background: var(--color-warn-text); }
+.tw-ruler-bar--zulang    { background: var(--color-err-text); }
+.tw-ruler-bar--leer      { background: transparent; }
+.tw-channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  margin-top: var(--space-2xs);
+}
+.tw-channel {
+  display: inline-flex;
+  gap: 0.35em;
+  font-variant-numeric: tabular-nums;
+}
+.tw-channel--fits { background: var(--color-tag-bg); color: var(--color-muted); }
+.tw-channel--over { background: var(--color-err-bg); color: var(--color-err-text); }
+.tw-channel-num { font-weight: 600; }
+
+/* ── Varianten ───────────────────────────────────────────────────────────── */
+
+.tw-variants {
+  list-style: none;
+  margin: var(--space-2xs) 0 0;
+  padding: 0;
+}
+.tw-variant {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs) 0;
+}
+.tw-variant + .tw-variant { border-top: 0.5px solid var(--color-border); }
+/* Herkunft der Variante bleibt sichtbar: ein Vorschlag der Maschine ist kein
+   Vorschlag der Redaktion, auch wenn er daneben steht. */
+.tw-variant-src {
+  font-size: var(--size-compact-font-size);
+  text-transform: lowercase;
+}
+.tw-variant-src--user { background: var(--color-tag-bg); color: var(--color-muted); }
+.tw-variant-src--ki   { background: color-mix(in srgb, var(--card-accent) 18%, transparent); color: var(--card-accent); }
+.tw-variant-text { overflow-wrap: anywhere; }
+.tw-variant-len {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--size-compact-font-size);
+  color: var(--color-muted);
+}
+.tw-variant-add {
+  display: flex;
+  gap: var(--space-2xs);
+  margin-top: var(--space-2xs);
+}
+.tw-variant-add .tw-input { flex: 1; }
+
+.tw-suggest {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  flex-wrap: wrap;
+  margin-top: var(--space-sm);
+  padding-top: var(--space-xs);
+  border-top: 0.5px solid var(--color-border);
+}
+.tw-suggest .progress-bar-wrap { flex: 1 1 8rem; margin: 0; }
+
+/* Schmale Viewports: die Übersichtszeile fällt auf zwei Zeilen zusammen, der
+   Detail-Block behält seine Struktur (er ist ohnehin einspaltig). */
+@media (max-width: 760px) {
+  .tw-row {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "chev name  count"
+      ".    dach  dach"
+      ".    titel titel";
+  }
+  .tw-row > .history-chevron { grid-area: chev; }
+  .tw-row-name  { grid-area: name; }
+  .tw-row-dach  { grid-area: dach; }
+  .tw-row-titel { grid-area: titel; white-space: normal; }
+  .tw-row-count { grid-area: count; }
+  .tw-variant {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "src  text text"
+      "len  prom del";
+  }
+  .tw-variant-src  { grid-area: src; }
+  .tw-variant-text { grid-area: text; }
+  .tw-variant-len  { grid-area: len; }
+}
+}

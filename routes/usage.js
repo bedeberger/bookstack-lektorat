@@ -21,6 +21,8 @@ const ALLOWED_KEYS = new Set([
   'fehlerHeatmap',
   'redundanz',
   'wortschatz',
+  'struktur',
+  'titelwerkstatt',
   'kontinuitaet',
   'erzaehlprofil',
   'tagebuchRueckblick',

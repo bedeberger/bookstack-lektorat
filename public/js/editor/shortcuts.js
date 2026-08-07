@@ -1,4 +1,5 @@
 import { EVT } from '../events.js';
+import { hotkeyTip } from '../hotkeys.js';
 // Tastenkürzel-Overlay: globaler `?`-Hotkey + Modal (natives <dialog>).
 // Liste der Shortcuts kommt aus i18n (shortcuts.item.*), Bindings selbst leben
 // dort, wo sie gebraucht werden (index.html, editor/focus.js etc.) – das
@@ -27,6 +28,15 @@ const FOCUSABLE = [
 const visible = (el) => !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
 
 export const shortcutsMethods = {
+  // Tooltip-Text eines Action-Icons um sein Tastenkürzel ergänzen:
+  // `:data-tip="withHotkey(t('editor.btn.editTitle'), 'edit')"` (aus einer
+  // Karte: `$app.withHotkey(…)`). IDs + Formatierung: js/hotkeys.js.
+  // Plattform-Weiche liest `$store.shell.isMac`; die Locale-Reaktivität kommt
+  // vom `t()` im Argument.
+  withHotkey(label, id) {
+    return hotkeyTip(label, id, !!this?.$store?.shell?.isMac);
+  },
+
   // Overlay-Steuerung: nur Flag flippen. Das native <dialog> hängt via
   // Alpine.data('modal') (x-model="shortcutsOpen") an diesem Boolean —
   // showModal()/close(), ESC, Backdrop und Fokus-Restore macht das Primitiv.

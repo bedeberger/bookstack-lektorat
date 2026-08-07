@@ -10563,6 +10563,297 @@ function _runMigrationsLocked() {
     logger.info('DB-Migration auf Version 266 abgeschlossen (Event-Datumsspalten: 0-Platzhalter zu NULL).');
   }
 
+  if (version < 267) {
+    // Journalistisches Arbeiten: Textsorte (Soll-Form eines Textes), der
+    // abgeleitete Struktur-Befund dazu und die O-Ton-Felder an der Quelle.
+    //
+    // Textsorte auf ZWEI Ebenen, weil beides gebraucht wird und keins das
+    // andere ersetzt: `book_settings.textsorte` ist die vorherrschende Form des
+    // Buchs (= Ressort/Projekt) und der Default fuer neue Seiten;
+    // `page_textsorte` ist die Ausnahme pro Artikel — ein Ressort enthaelt
+    // Bericht UND Kommentar, und genau dieser Unterschied entscheidet, ob eine
+    // Wertung im Text ein Mangel oder der Zweck ist.
+    //
+    // Eigene Tabelle statt Spalte an `pages`: `pages` gehoert der
+    // Content-Store-Facade (Sync, Migration-Bundle, Snapshot-Restore laufen
+    // ueber ihre Spaltenliste). Die Textsorte ist redaktionelle Metadata daneben,
+    // kein Inhalt — sie soll den Content-Vertrag nicht anfassen.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS page_textsorte (
+        page_id    INTEGER PRIMARY KEY REFERENCES pages(page_id) ON DELETE CASCADE,
+        book_id    INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        textsorte  TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_page_textsorte_book ON page_textsorte(book_id);
+    `);
+
+    // Struktur-Befund: abgeleitet, ein Datensatz pro Seite (Full-Replace je
+    // Lauf). `content_sig` haelt fest, gegen WELCHEN Textstand geprueft wurde —
+    // sonst zeigt die Karte einen Befund zu einer Fassung, die es nicht mehr gibt.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS page_structure_checks (
+        page_id      INTEGER PRIMARY KEY REFERENCES pages(page_id) ON DELETE CASCADE,
+        book_id      INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        textsorte    TEXT NOT NULL,
+        gesamturteil TEXT,
+        result_json  TEXT NOT NULL,
+        content_sig  TEXT,
+        created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_page_structure_checks_book ON page_structure_checks(book_id);
+    `);
+
+    const bsCols267 = db.pragma('table_info(book_settings)').map(c => c.name);
+    if (!bsCols267.includes('textsorte')) {
+      db.exec('ALTER TABLE book_settings ADD COLUMN textsorte TEXT');
+    }
+
+    // O-Ton an der Quelle: eine Aussage aus einem Gespraech ist eine Quelle vom
+    // CSL-Typ `interview` — sie braucht aber vier Angaben, die keine Publikation
+    // hat. `oton_auth` (Zitatautorisierung) ist der Grund fuer die ganze Uebung:
+    // im deutschsprachigen Raum ist die Freigabe eines Zitats redaktioneller
+    // Alltag, und ein nicht freigegebener O-Ton darf nicht in den Druck.
+    const srcCols267 = db.pragma('table_info(sources)').map(c => c.name);
+    for (const col of ['oton_role', 'oton_channel', 'oton_date', 'oton_auth']) {
+      if (!srcCols267.includes(col)) db.exec(`ALTER TABLE sources ADD COLUMN ${col} TEXT`);
+    }
+
+    const fkErrors267 = db.pragma('foreign_key_check');
+    if (fkErrors267.length) {
+      throw new Error(`Migration 267: foreign_key_check meldet ${fkErrors267.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 267').run();
+    logger.info('DB-Migration auf Version 267 abgeschlossen (Textsorte, Struktur-Befund, O-Ton-Felder).');
+  }
+
+  if (version < 268) {
+    // Redaktions-Status pro Beitrag: Rohfassung → gegengelesen →
+    // schlussredigiert → freigegeben.
+    //
+    // Warum neben `book_snapshots` (Fassungen) und nicht darin: eine Fassung ist
+    // ein Zustand des TEXTES (Archiv, wiederherstellbar), der Redaktions-Status
+    // eine Aussage ueber den PROZESS („darf das raus?"). Der Text kann sich nach
+    // der Freigabe nicht mehr aendern, ohne dass die Freigabe hinfaellig wird —
+    // genau darum haelt die Zeile mit `content_updated_at` fest, WORAUF sich der
+    // Status bezog. Die Fassungs-Mechanik bleibt unangetastet.
+    //
+    // Anker ist `pages.updated_at` und NICHT `page_stats.content_sig`: den
+    // Signatur-Index schreibt nur der Sync (lib/page-index.js#writePageIndex,
+    // aufgerufen aus routes/sync.js), er hinkt dem Speichern also bis zum
+    // naechsten Lauf hinterher. Ein Beitrag, der vor einer Stunde ueberarbeitet
+    // wurde, saehe darueber weiterhin „freigegeben, unveraendert" aus.
+    //
+    // Eigene Tabelle statt Spalte an `pages` — gleiche Begruendung wie bei
+    // `page_textsorte` in Migration 267: `pages` gehoert der Content-Store-
+    // Facade, redaktionelle Metadata soll deren Vertrag nicht anfassen.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS page_editorial_status (
+        page_id     INTEGER PRIMARY KEY REFERENCES pages(page_id) ON DELETE CASCADE,
+        book_id     INTEGER NOT NULL REFERENCES books(book_id)    ON DELETE CASCADE,
+        status      TEXT    NOT NULL
+                      CHECK(status IN ('roh','gegengelesen','schlussredigiert','freigegeben')),
+        note        TEXT,
+        content_updated_at TEXT,
+        updated_by  TEXT    REFERENCES app_users(email) ON DELETE SET NULL,
+        updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_page_editorial_status_book ON page_editorial_status(book_id);
+      CREATE INDEX IF NOT EXISTS idx_page_editorial_status_by   ON page_editorial_status(updated_by);
+    `);
+
+    const fkErrors268 = db.pragma('foreign_key_check');
+    if (fkErrors268.length) {
+      throw new Error(`Migration 268: foreign_key_check meldet ${fkErrors268.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 268').run();
+    logger.info('DB-Migration auf Version 268 abgeschlossen (Redaktions-Status).');
+  }
+
+  if (version < 269) {
+    // Titel-Werkstatt: Dachzeile, Titel, Lead und Teaser eines Beitrags als
+    // METADATA der Seite — nicht als deren erste Absaetze.
+    //
+    // Warum das der Kern des Features ist: stehen die vier im Fliesstext, sind
+    // sie fuer jede Maschine Prosa. Sie zaehlen dann in die Zeichenstatistik, in
+    // den Wortschatz und ins Lektorat; der Blog-Sync muss den Titel aus der
+    // ersten Zeile raten, und ein Zeichenlimit pro Kanal laesst sich gar nicht
+    // pruefen, weil niemand weiss, wo der Titel aufhoert. Als Spalten sind sie
+    // adressierbar.
+    //
+    // ZWEI TABELLEN, weil zwei verschiedene Dinge:
+    //   `page_headline`          — der GELTENDE Stand, genau eine Zeile je Seite.
+    //   `page_headline_variants` — die VORSCHLAEGE daneben, beliebig viele.
+    // Eine Variante ist kein halber Titel, sondern ein Kandidat; sie wird durch
+    // Uebernehmen zum geltenden Stand befoerdert und bleibt daneben stehen.
+    // Zusammengelegt (etwa ueber ein `aktiv`-Flag) waere jede Leseabfrage ein
+    // Filter, und „genau einer ist aktiv" nur noch Konvention statt Constraint.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS page_headline (
+        page_id    INTEGER PRIMARY KEY REFERENCES pages(page_id) ON DELETE CASCADE,
+        book_id    INTEGER NOT NULL    REFERENCES books(book_id) ON DELETE CASCADE,
+        dachzeile  TEXT,
+        titel      TEXT,
+        lead       TEXT,
+        teaser     TEXT,
+        updated_by TEXT REFERENCES app_users(email) ON DELETE SET NULL,
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_page_headline_book ON page_headline(book_id);
+      CREATE INDEX IF NOT EXISTS idx_page_headline_by   ON page_headline(updated_by);
+
+      CREATE TABLE IF NOT EXISTS page_headline_variants (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        page_id    INTEGER NOT NULL REFERENCES pages(page_id) ON DELETE CASCADE,
+        book_id    INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        feld       TEXT    NOT NULL
+                     CHECK(feld IN ('dachzeile','titel','lead','teaser')),
+        text       TEXT    NOT NULL,
+        herkunft   TEXT    NOT NULL DEFAULT 'user'
+                     CHECK(herkunft IN ('user','ki')),
+        created_by TEXT REFERENCES app_users(email) ON DELETE SET NULL,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_headline_variants_page ON page_headline_variants(page_id, feld);
+      CREATE INDEX IF NOT EXISTS idx_headline_variants_book ON page_headline_variants(book_id);
+      CREATE INDEX IF NOT EXISTS idx_headline_variants_by   ON page_headline_variants(created_by);
+    `);
+
+    const fkErrors269 = db.pragma('foreign_key_check');
+    if (fkErrors269.length) {
+      throw new Error(`Migration 269: foreign_key_check meldet ${fkErrors269.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 269').run();
+    logger.info('DB-Migration auf Version 269 abgeschlossen (Titel-Werkstatt).');
+  }
+
+  if (version < 270) {
+    // Interview-Transkription.
+    //
+    // DAS TRANSKRIPT IST EIN RECHERCHE-FUNDSTUECK, keine eigene Insel. Genau
+    // dadurch ist es ohne eine Zeile Extra-Code durchsuchbar: `doc_text` traegt
+    // den Volltext, und daran haengen bereits der FTS-Index
+    // (lib/search.js#upsertResearch) und der Embedding-Index
+    // (semantic_chunks, kind 'research'). Eine eigene Transkript-Tabelle mit
+    // eigenem Text-Feld haette beide Indexe erneut anschliessen muessen.
+    //
+    // `kind` bekommt darum den Wert 'transcript' — und weil SQLite einen
+    // CHECK-Constraint nicht per ALTER aendern kann, laeuft das ueber das
+    // Recreate-Pattern. Der Wert steht bewusst NICHT als 'document' mit
+    // Audio-Anhang daneben: die Oberflaeche muss ein Gespraech von einem PDF
+    // unterscheiden koennen (Abspielen und Sprecher statt Seitenzahlen), und ein
+    // `kind`, das zwei Dinge meint, ist an jeder Abfrage eine Fallunterscheidung.
+    db.pragma('foreign_keys = OFF');
+    db.exec('DROP TABLE IF EXISTS research_items_new');
+    db.exec(`
+      CREATE TABLE research_items_new (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id     INTEGER NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+        user_email  TEXT    NOT NULL,
+        kind        TEXT    NOT NULL DEFAULT 'note'
+                      CHECK(kind IN ('note','link','quote','fact','image','document','transcript')),
+        title       TEXT,
+        body        TEXT,
+        source      TEXT,
+        image       BLOB,
+        image_mime  TEXT,
+        doc         BLOB,
+        doc_mime    TEXT,
+        doc_name    TEXT,
+        doc_text    TEXT,
+        doc_pages   INTEGER,
+        doc_chars   INTEGER,
+        pinned      INTEGER NOT NULL DEFAULT 0,
+        archived    INTEGER NOT NULL DEFAULT 0,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+    `);
+    db.exec(`
+      INSERT INTO research_items_new
+        (id, book_id, user_email, kind, title, body, source, image, image_mime,
+         doc, doc_mime, doc_name, doc_text, doc_pages, doc_chars, pinned, archived,
+         created_at, updated_at)
+      SELECT
+         id, book_id, user_email, kind, title, body, source, image, image_mime,
+         doc, doc_mime, doc_name, doc_text, doc_pages, doc_chars, pinned, archived,
+         created_at, updated_at
+        FROM research_items
+    `);
+    db.exec('DROP TABLE research_items');
+    db.exec('ALTER TABLE research_items_new RENAME TO research_items');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_research_items_book ON research_items(book_id)');
+
+    // Audio + Lauf-Metadaten neben dem Fundstueck. Eigene Tabelle statt weiterer
+    // Spalten an `research_items`: die Audiodatei ist gross, und `research_items`
+    // wird bei jeder Board-Abfrage gelesen — eine BLOB-Spalte mehr in der
+    // Haupttabelle kostet dort bei jedem SELECT * Bandbreite.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS interview_transcripts (
+        item_id       INTEGER PRIMARY KEY REFERENCES research_items(id) ON DELETE CASCADE,
+        book_id       INTEGER NOT NULL    REFERENCES books(book_id)     ON DELETE CASCADE,
+        audio         BLOB,
+        audio_mime    TEXT,
+        audio_name    TEXT,
+        audio_bytes   INTEGER,
+        duration_s    REAL,
+        status        TEXT NOT NULL DEFAULT 'pending'
+                        CHECK(status IN ('pending','running','ready','error')),
+        fehler        TEXT,
+        sprache       TEXT,
+        modell        TEXT,
+        diarisiert    INTEGER NOT NULL DEFAULT 0,
+        created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_interview_transcripts_book ON interview_transcripts(book_id);
+    `);
+
+    // Segmente: Zeitmarke + Sprecher + Wortlaut. Full-Replace pro Lauf.
+    // `idx` haelt die Reihenfolge fest, damit ein Transkript ohne Sortierung
+    // nach Gleitkomma-Sekunden auskommt.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS interview_segments (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id  INTEGER NOT NULL REFERENCES interview_transcripts(item_id) ON DELETE CASCADE,
+        book_id  INTEGER NOT NULL REFERENCES books(book_id)                 ON DELETE CASCADE,
+        idx      INTEGER NOT NULL,
+        start_s  REAL,
+        end_s    REAL,
+        speaker  TEXT,
+        text     TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_interview_segments_item ON interview_segments(item_id, idx);
+      CREATE INDEX IF NOT EXISTS idx_interview_segments_book ON interview_segments(book_id);
+    `);
+
+    // Sprecher-Zuordnung: aus «SPEAKER_01» wird «Maria Keller, Stadträtin».
+    // Getrennt von den Segmenten, weil das Umbenennen sonst jedes Segment
+    // anfassen muesste — und weil hier die Bruecke zur Quelle haengt: ein
+    // benannter Sprecher IST eine Quelle vom CSL-Typ `interview`, samt
+    // Zitatautorisierung (sources.oton_auth).
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS interview_speakers (
+        item_id    INTEGER NOT NULL REFERENCES interview_transcripts(item_id) ON DELETE CASCADE,
+        speaker    TEXT    NOT NULL,
+        label      TEXT,
+        rolle      TEXT,
+        source_id  INTEGER REFERENCES sources(id) ON DELETE SET NULL,
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        PRIMARY KEY (item_id, speaker)
+      );
+      CREATE INDEX IF NOT EXISTS idx_interview_speakers_source ON interview_speakers(source_id);
+    `);
+
+    db.pragma('foreign_keys = ON');
+    const fkErrors270 = db.pragma('foreign_key_check');
+    if (fkErrors270.length) {
+      throw new Error(`Migration 270: foreign_key_check meldet ${fkErrors270.length} Verstoesse.`);
+    }
+    db.prepare('UPDATE schema_version SET version = 270').run();
+    logger.info('DB-Migration auf Version 270 abgeschlossen (Interview-Transkription).');
+  }
+
   // Schutzchecks: idempotent bei jedem Start.
   const feColsCheck = db.pragma('table_info(figure_events)').map(c => c.name);
   if (feColsCheck.length > 0 && !feColsCheck.includes('typ')) {

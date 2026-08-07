@@ -4,6 +4,9 @@
 // Empfehlungen/Zitate/Fazit) – nur die Achsen-Liste unterscheidet sich.
 
 import { escHtml, escMd, renderStars, noteTip } from '../utils.js';
+import {
+  bookAxesByProfil, chapterAxesByProfil, ALLE_BOOK_AXES, ALLE_CHAPTER_AXES,
+} from '../prompts/review-typen.js';
 
 // Mapping Prio → severity-tag-Variante. Reuse statt eigene Badge-Klassen.
 // hoch = rot (kritisch), mittel = amber, niedrig = grau.
@@ -13,24 +16,30 @@ const PRIO_TO_SEVERITY = {
   niedrig: 'niedrig',
 };
 
-// Achsen-Sets: [feldname-in-review-JSON, i18n-key-für-Section-Title]
-export const BOOK_REVIEW_AXES = [
-  ['struktur',    'review.section.struktur'],
-  ['stil',        'review.section.stil'],
-  ['plot',        'review.section.plot'],
-  ['figuren',     'review.section.figuren'],
-  ['dramaturgie', 'review.section.dramaturgie'],
-  ['pacing',      'review.section.pacing'],
-  ['thema',       'review.section.thema'],
-];
+// Achsen-Sets: [feldname-in-review-JSON, i18n-key-für-Section-Title].
+//
+// Welche Achsen eine Bewertung hat, entscheidet ihr Bewertungsprofil
+// (prompts/review-typen.js) — die Buchbewertung einer Dissertation hat keine
+// Achse «plot». Massgeblich ist `review.profil` aus dem Lauf, NICHT der heute
+// eingestellte Buchtyp: sonst verschwänden nach einem Buchtyp-Wechsel die
+// Abschnitte aller Alt-Bewertungen aus der Historie. Achsen, die im Profil
+// fehlen, im gespeicherten JSON aber stehen (Alt-Bewertung, geänderte Profile),
+// werden hinten angehängt statt verschluckt.
+function _axesFor(profilAxes, alleKeys, prefix, r) {
+  const inProfile = profilAxes.map(a => a.key);
+  const extra = alleKeys.filter(k => !inProfile.includes(k) && r && r[k]);
+  return [...inProfile, ...extra].map(key => [key, `${prefix}.${key}`]);
+}
 
-export const CHAPTER_REVIEW_AXES = [
-  ['dramaturgie', 'kapitelReview.section.dramaturgie'],
-  ['pacing',      'kapitelReview.section.pacing'],
-  ['kohaerenz',   'kapitelReview.section.kohaerenz'],
-  ['perspektive', 'kapitelReview.section.perspektive'],
-  ['figuren',     'kapitelReview.section.figuren'],
-];
+/** Achsen einer Buchbewertung, aus deren eigenem Profil. */
+export function bookReviewAxesFor(r) {
+  return _axesFor(bookAxesByProfil(r?.profil), ALLE_BOOK_AXES, 'review.section', r);
+}
+
+/** Achsen einer Kapitelbewertung, aus deren eigenem Profil. */
+export function chapterReviewAxesFor(r) {
+  return _axesFor(chapterAxesByProfil(r?.profil), ALLE_CHAPTER_AXES, 'kapitelReview.section', r);
+}
 
 function renderEmpfehlungItem(item, translate) {
   // Backward-Compat: alte Reviews speichern empfehlungen als string[].
@@ -62,10 +71,16 @@ export function renderReviewHtml(r, axes, translate) {
   const stars = renderStars(r.gesamtnote);
   const tip = noteTip(r.gesamtnote);
   const tipAttr = tip ? ` data-tip="${escHtml(tip)}"` : '';
+  // Multi-Pass: die Note steht auf verdichteten Kapitelanalysen, nicht auf dem
+  // Volltext. Das ist eine andere Grundlage – sichtbar machen statt verschweigen.
+  const basisBadge = r.basis === 'multi'
+    ? `<span class="badge badge-neutral" data-tip="${escHtml(translate('review.basis.multiTip'))}">${escHtml(translate('review.basis.multi'))}</span>`
+    : '';
   let html = `
       <div class="bewertung-header">
         <span class="bewertung-stars"${tipAttr}>${stars}</span>
         <span class="bewertung-header-note">${escMd(r.gesamtnote_begruendung || '')}</span>
+        ${basisBadge}
       </div>
       <div class="stilbox stilbox--review-summary">${escMd(r.zusammenfassung || '')}</div>`;
   for (const [key, i18n] of axes) {

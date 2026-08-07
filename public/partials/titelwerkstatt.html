@@ -1,0 +1,161 @@
+<!-- Titel-Werkstatt -->
+<!--
+  Alpine.data-Sub-Komponente — siehe public/js/cards/titelwerkstatt-card.js.
+  Zwei Ebenen: Übersichtstabelle aller Beiträge, aufgeklappte Zeile mit den vier
+  Feldern (Dachzeile/Titel/Lead/Teaser), ihren Kanal-Linealen und den Varianten.
+  Die Karte schreibt nie in den Manuskript-Text.
+-->
+<div class="card card--titelwerkstatt" x-data="titelwerkstattCard" x-show="$app.showTitelwerkstattCard" x-cloak>
+  <div class="card-header">
+    <div class="card-header-titlebar">
+      <span class="card-eyebrow" x-text="$app.selectedBookName"></span>
+      <span class="card-title" x-text="$app.t('headline.title')"></span>
+    </div>
+    <div class="card-actions">
+      <span class="muted-msg muted-msg--sm" x-show="twRows().length"
+            x-text="$app.t('headline.progress', { done: twMitTitel(), total: twRows().length })"></span>
+    </div>
+  </div>
+
+  <p class="muted-msg muted-msg--sm" x-text="$app.t('headline.intro')"></p>
+
+  <div x-show="twLoadError" class="card-status card-status--error" x-text="$app.t('headline.loadError')"></div>
+  <div x-show="twError" class="card-status card-status--error" x-text="twError"></div>
+
+  <div x-show="!twRows().length && !twLoadError" class="muted-msg muted-msg--spaced"
+       x-text="$app.t('headline.empty')"></div>
+
+  <table class="tw-table" x-show="twRows().length"
+         x-data="sortableTable({ rows: () => twRows(), defaultKey: 'name', persistKey: 'titelwerkstatt',
+                                 types: { name: 'string', dachzeile: 'string', titel: 'string', gesetzt: 'number' } })">
+    <thead>
+      <tr>
+        <th class="sortable-th" :class="sortClass('name')" :aria-sort="ariaSort('name')" @click="sortBy('name')"
+            x-text="$app.t('headline.col.beitrag')"></th>
+        <th class="sortable-th" :class="sortClass('dachzeile')" :aria-sort="ariaSort('dachzeile')" @click="sortBy('dachzeile')"
+            x-text="$app.t('headline.field.dachzeile')"></th>
+        <th class="sortable-th" :class="sortClass('titel')" :aria-sort="ariaSort('titel')" @click="sortBy('titel')"
+            x-text="$app.t('headline.field.titel')"></th>
+        <th class="sortable-th tw-col-num" :class="sortClass('gesetzt')" :aria-sort="ariaSort('gesetzt')" @click="sortBy('gesetzt')"
+            :data-tip="$app.t('headline.col.gesetztTip')" x-text="$app.t('headline.col.gesetzt')"></th>
+      </tr>
+    </thead>
+    <tbody>
+      <template x-for="row in sorted" :key="row.id">
+        <tr class="tw-row-group">
+          <td colspan="4" class="tw-cell-group">
+            <button type="button" class="tw-row internal-link" @click="twToggleRow(row.id)"
+                    :aria-expanded="twOpenId === row.id ? 'true' : 'false'">
+              <span class="history-chevron" :class="{ open: twOpenId === row.id }" aria-hidden="true"></span>
+              <span class="tw-row-name" x-text="row.name"></span>
+              <span class="tw-row-dach" x-text="row.dachzeile || '—'"></span>
+              <span class="tw-row-titel" :class="{ 'tw-row-titel--empty': !row.titel }"
+                    x-text="row.titel || $app.t('headline.noTitle')"></span>
+              <span class="badge tw-row-count"
+                    :class="'tw-row-count--' + row.gesetzt"
+                    x-text="row.gesetzt + '/4'"></span>
+            </button>
+
+            <!-- Aufgeklappte Zeile: die vier Felder + Varianten -->
+            <div class="tw-detail" x-show="twOpenId === row.id" x-cloak>
+              <template x-for="feld in twFields" :key="feld">
+                <div class="tw-field">
+                  <div class="tw-field-head">
+                    <label class="tw-field-label" :for="'tw-' + feld + '-' + row.id" x-text="twFieldLabel(feld)"></label>
+                    <span class="tw-field-count" :class="'tw-field-count--' + twFitState(feld)"
+                          x-text="twLen(feld)"></span>
+                    <span class="spinner" x-show="twSaving[feld]" aria-hidden="true"></span>
+                  </div>
+
+                  <!-- Kurzfelder als Input, Lead/Teaser als Textarea. Gespeichert
+                       wird beim Verlassen des Feldes, nicht bei jedem Anschlag. -->
+                  <template x-if="!twIsLong(feld)">
+                    <input type="text" class="tw-input" :id="'tw-' + feld + '-' + row.id"
+                           x-model="twDraft[feld]" @blur="twSaveField(row.id, feld)"
+                           @keydown.enter.prevent="$event.target.blur()"
+                           :placeholder="$app.t('headline.placeholder.' + feld)"
+                           autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"
+                           data-form-type="other" data-spellcheck="spelling">
+                  </template>
+                  <template x-if="twIsLong(feld)">
+                    <textarea class="tw-input tw-input--long" :id="'tw-' + feld + '-' + row.id" rows="3"
+                              x-model="twDraft[feld]" @blur="twSaveField(row.id, feld)"
+                              :placeholder="$app.t('headline.placeholder.' + feld)"
+                              data-spellcheck="spelling"></textarea>
+                  </template>
+
+                  <!-- Kanal-Lineal: in welche Ausspielung passt die Formulierung.
+                       Zeigt an, verhindert nichts — ein zu langer Titel ist ein
+                       unfertiger Titel, kein Fehler. -->
+                  <div class="tw-ruler">
+                    <div class="tw-ruler-track" aria-hidden="true">
+                      <div class="progress-bar tw-ruler-bar" :class="'tw-ruler-bar--' + twFitState(feld)"
+                           :style="{ '--progress': twFillPct(feld) + '%' }"></div>
+                    </div>
+                    <div class="tw-channels">
+                      <template x-for="c in twFit(feld)" :key="c.key">
+                        <span class="badge tw-channel" :class="c.fits ? 'tw-channel--fits' : 'tw-channel--over'"
+                              :data-tip="twChannelLabel(c.key) + ': ' + c.len + '/' + c.limit">
+                          <span x-text="twChannelLabel(c.key)"></span>
+                          <span class="tw-channel-num"
+                                x-text="c.fits ? c.limit - c.len : '+' + c.over"></span>
+                        </span>
+                      </template>
+                    </div>
+                  </div>
+
+                  <!-- Varianten dieses Feldes -->
+                  <ul class="tw-variants" x-show="twVariantsFor(feld).length">
+                    <template x-for="v in twVariantsFor(feld)" :key="v.id">
+                      <li class="tw-variant">
+                        <span class="tw-variant-src" :class="'tw-variant-src--' + v.herkunft"
+                              :data-tip="$app.t('headline.origin.' + v.herkunft)"
+                              x-text="$app.t('headline.origin.' + v.herkunft)"></span>
+                        <span class="tw-variant-text" x-text="v.text"></span>
+                        <span class="tw-variant-len" x-text="v.text.length"></span>
+                        <button type="button" class="btn-compact" @click="twPromote(v.id)"
+                                :data-tip="$app.t('headline.promoteTip')"
+                                x-text="$app.t('headline.promote')"></button>
+                        <button type="button" class="organizer-delete-btn" @click="twDeleteVariant(v.id)"
+                                :data-tip="$app.t('common.delete')" :aria-label="$app.t('common.delete')">
+                          <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#trash"/></svg>
+                        </button>
+                      </li>
+                    </template>
+                  </ul>
+
+                  <div class="tw-variant-add">
+                    <input type="text" class="tw-input tw-input--sm"
+                           x-model="twNewVariant[feld]"
+                           @keydown.enter.prevent="twAddVariant(row.id, feld)"
+                           :placeholder="$app.t('headline.addVariant')"
+                           :aria-label="$app.t('headline.addVariant')"
+                           autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"
+                           data-form-type="other" data-spellcheck="spelling">
+                    <button type="button" class="btn-compact" @click="twAddVariant(row.id, feld)"
+                            x-text="$app.t('headline.addVariantBtn')"></button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- KI-Vorschläge: legen Varianten an, übernehmen nie selbst. -->
+              <div class="tw-suggest">
+                <button type="button" @click="twSuggest(row.id)" :disabled="twRunning"
+                        x-text="twRunning ? $app.t('headline.suggesting') : $app.t('headline.suggest')"></button>
+                <span class="muted-msg muted-msg--sm" x-show="twRunning" x-text="twStatus"></span>
+                <div class="progress-bar-wrap" x-show="twRunning">
+                  <div class="progress-bar" :style="{ '--progress': twProgress + '%' }"></div>
+                </div>
+                <span class="muted-msg muted-msg--sm" x-show="!twRunning && twLastRun"
+                      x-text="twLastRun?.zuKurz
+                        ? $app.t('headline.tooShort')
+                        : $app.t('headline.lastRun', { angelegt: twLastRun?.angelegt || 0 })"></span>
+              </div>
+              <p class="muted-msg muted-msg--sm" x-text="$app.t('headline.suggestHint')"></p>
+            </div>
+          </td>
+        </tr>
+      </template>
+    </tbody>
+  </table>
+</div>

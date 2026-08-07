@@ -124,6 +124,10 @@ export const rechercheItemMethods = {
     // bleibt SSoT in der Karte (analog editingBeatId ↔ plotBeatId in der Plot-
     // Werkstatt).
     if (window.Alpine) window.Alpine.store('nav').rechercheItemId = item.id;
+    // Transkript-Block des Dialogs fuellen. Nur fuer Transkript-Fundstuecke —
+    // fuer eine Notiz waere es ein 404 bei jedem Oeffnen.
+    if (item.kind === 'transcript') this.ivLoadTranscript?.(item.id);
+    else { this.ivTranscript = null; this.ivSegments = []; this.ivSpeakerKeys = []; }
     // Native showModal() erst nach dem Render: der Dialoginhalt hängt an
     // detailItems (x-for über 0/1 Element) und existiert im selben Tick noch nicht.
     this.$nextTick(() => {

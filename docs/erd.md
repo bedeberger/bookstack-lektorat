@@ -1,6 +1,6 @@
 # ERD — schreibwerkstatt
 
-Stand: Schema-Version 266, 144 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
+Stand: Schema-Version 270, 152 Tabellen (ohne `sqlite_*`/`schema_version`/FTS5-Shadow-Tables; inkl. FTS5-Virtual `search_index`/`search_trigram` + `search_meta`).
 
 Quelle: Squashed-Schema-Snapshot in [db/squashed-schema.js](../db/squashed-schema.js) (regeneriert via `node tools/dump-schema.js`) + [db/migrations.js](../db/migrations.js). Drift gegen die Legacy-Migration-Kette ist durch [tests/unit/squash-drift.test.mjs](../tests/unit/squash-drift.test.mjs) gegated. Mermaid-Diagramme — in VSCode mit „Markdown Preview Mermaid Support" (oder GitHub) direkt sichtbar.
 
@@ -133,6 +133,11 @@ erDiagram
   draft_figures ||--o{ werkstatt_runs : "ki-history"
 
   pages ||--o{ page_checks           : has
+  pages ||--|| page_textsorte        : has
+  pages ||--|| page_structure_checks : has
+  pages ||--|| page_editorial_status : has
+  pages ||--|| page_headline        : has
+  pages ||--o{ page_headline_variants : has
   pages ||--|| page_stats            : has
   pages ||--o{ chat_sessions         : has
   pages ||--o{ page_figure_mentions  : has
@@ -157,6 +162,10 @@ erDiagram
   figure_scenes ||--o{ semantic_chunks : "ist (kind=scene)"
   figures       ||--o{ semantic_chunks : "ist (kind=figure)"
   research_items ||--o{ semantic_chunks : "ist (kind=research)"
+  research_items ||--|| interview_transcripts : "ist (kind=transcript)"
+  interview_transcripts ||--o{ interview_segments : has
+  interview_transcripts ||--o{ interview_speakers : has
+  sources ||--o{ interview_speakers   : "O-Ton-Quelle"
 
   app_users ||--o{ book_access       : grants
   app_users ||--o{ page_locks        : holds
@@ -358,6 +367,50 @@ erDiagram
     INTEGER saved
     TEXT    saved_at
   }
+  page_textsorte {
+    INTEGER page_id     PK,FK "ON DELETE CASCADE"
+    INTEGER book_id     FK "ON DELETE CASCADE"
+    TEXT    textsorte   "Override der Buch-Textsorte für genau diesen Beitrag"
+    TEXT    updated_at
+  }
+  page_structure_checks {
+    INTEGER page_id      PK,FK "ON DELETE CASCADE"
+    INTEGER book_id      FK "ON DELETE CASCADE"
+    TEXT    textsorte    "Textsorte, gegen deren Soll-Katalog geprüft wurde"
+    TEXT    gesamturteil "traegt|lueckenhaft|verfehlt"
+    TEXT    result_json  "Regel-für-Regel-Befund + fehlende W-Fragen + Zusammenfassung"
+    TEXT    content_sig  "Text+Textsorte+Prompt-Stand — Delta-Skip und Stale-Erkennung"
+    TEXT    created_at
+  }
+  page_headline {
+    INTEGER page_id    PK,FK "ON DELETE CASCADE"
+    INTEGER book_id    FK "ON DELETE CASCADE"
+    TEXT    dachzeile  "Zeile ueber dem Titel"
+    TEXT    titel      "Schlagzeile — Quelle fuer den Blog-Push"
+    TEXT    lead       "Vorspann"
+    TEXT    teaser     "Anreisser — Quelle fuer WP-excerpt"
+    TEXT    updated_by FK "app_users(email), ON DELETE SET NULL"
+    TEXT    updated_at
+  }
+  page_headline_variants {
+    INTEGER id         PK
+    INTEGER page_id    FK "ON DELETE CASCADE"
+    INTEGER book_id    FK "ON DELETE CASCADE"
+    TEXT    feld       "dachzeile|titel|lead|teaser (CHECK)"
+    TEXT    text       "Kandidat, wird durch Uebernehmen geltender Stand"
+    TEXT    herkunft   "user|ki (CHECK)"
+    TEXT    created_by FK "app_users(email), ON DELETE SET NULL"
+    TEXT    created_at
+  }
+  page_editorial_status {
+    INTEGER page_id            PK,FK "ON DELETE CASCADE"
+    INTEGER book_id            FK "ON DELETE CASCADE"
+    TEXT    status             "roh|gegengelesen|schlussredigiert|freigegeben (CHECK)"
+    TEXT    note               "Freitext der Redaktion, max. 500 Zeichen"
+    TEXT    content_updated_at "pages.updated_at beim Setzen — Anker der Stale-Erkennung"
+    TEXT    updated_by         FK "app_users(email), ON DELETE SET NULL"
+    TEXT    updated_at
+  }
   ideen {
     INTEGER id          PK
     INTEGER book_id     FK
@@ -396,6 +449,7 @@ erDiagram
     TEXT    bibliography_scope       "cited = nur belegte Quellen | all = auch unzitierte"
     INTEGER bibliography_in_blog     "0|1, Verzeichnis an Blog-/HubSpot-Posts anhängen (dort ist die Einheit die Seite = ein Post)"
     TEXT    citation_notes           "inline = Kurzbeleg im Fliesstext | endnotes = Anmerkungsapparat pro Kapitel | footnotes = Apparat am Seitenfuss (PDF/Word; übrige Formate zeigen den Kapitelapparat)"
+    TEXT    textsorte                "vorherrschende journalistische Textsorte (nachricht|bericht|reportage|interview|portraet|feature|kommentar|glosse|rezension) — Default für jede Seite ohne eigenen Override"
     TEXT    updated_at
   }
   book_snapshots {
@@ -429,7 +483,7 @@ erDiagram
     INTEGER id          PK
     INTEGER book_id     FK "ON DELETE CASCADE"
     TEXT    user_email  "Ersteller-Attribution (kein Sichtbarkeits-Scope; buchweit geteilt)"
-    TEXT    kind        "note|link|quote|fact|image|document"
+    TEXT    kind        "note|link|quote|fact|image|document|transcript"
     TEXT    title
     TEXT    body        "Plain-Text"
     TEXT    source      "Quellen-/Zitatnachweis"
@@ -444,6 +498,40 @@ erDiagram
     INTEGER pinned
     INTEGER archived
     TEXT    created_at
+    TEXT    updated_at
+  }
+  interview_transcripts {
+    INTEGER item_id     PK,FK "research_items(id), ON DELETE CASCADE"
+    INTEGER book_id     FK "ON DELETE CASCADE"
+    BLOB    audio       "Original-Aufnahme, loeschbar ohne den Wortlaut zu verlieren"
+    TEXT    audio_mime
+    TEXT    audio_name
+    INTEGER audio_bytes
+    REAL    duration_s
+    TEXT    status      "pending|running|ready|error (CHECK)"
+    TEXT    fehler      "Grund bei status=error, an der Zeile statt nur im Job-Log"
+    TEXT    sprache
+    TEXT    modell
+    INTEGER diarisiert  "0|1 — ob das Backend Sprecher geliefert hat"
+    TEXT    created_at
+    TEXT    updated_at
+  }
+  interview_segments {
+    INTEGER id      PK
+    INTEGER item_id FK "interview_transcripts(item_id), ON DELETE CASCADE"
+    INTEGER book_id FK "ON DELETE CASCADE"
+    INTEGER idx     "Reihenfolge im Gespraech (Full-Replace pro Lauf)"
+    REAL    start_s "Zeitmarke — Stellenangabe eines O-Tons"
+    REAL    end_s
+    TEXT    speaker "roher Schluessel des Backends, z.B. SPEAKER_01"
+    TEXT    text
+  }
+  interview_speakers {
+    INTEGER item_id   PK,FK "ON DELETE CASCADE"
+    TEXT    speaker   PK "Schluessel aus den Segmenten"
+    TEXT    label     "Anzeigename der Person"
+    TEXT    rolle     "Funktion/Amt"
+    INTEGER source_id FK "sources(id), ON DELETE SET NULL — die O-Ton-Quelle"
     TEXT    updated_at
   }
   research_item_tags {
@@ -494,6 +582,10 @@ erDiagram
     TEXT    url
     TEXT    accessed_at     "Abrufdatum bei Online-Quellen"
     TEXT    note
+    TEXT    oton_role      "O-Ton: Funktion der sprechenden Person („Stadtpräsidentin\")"
+    TEXT    oton_channel   "O-Ton: persoenlich|telefon|video|mail|medienkonferenz|andere"
+    TEXT    oton_date      "O-Ton: Datum des Gesprächs"
+    TEXT    oton_auth      "O-Ton: Zitatautorisierung — keine|ausstehend|freigegeben|abgelehnt. Nicht freigegeben + im Text belegt = Warnung"
     INTEGER archived
     BLOB    doc            "Optional: Original-PDF (User-Pool). Anlegen/Aendern nur Besitzer; Lesen ab Buch-Viewer, sobald verknüpft"
     TEXT    doc_mime       "Default 'application/pdf'"

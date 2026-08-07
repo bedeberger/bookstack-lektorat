@@ -23,8 +23,9 @@ const {
   aiCall, getPrompts, getBookPrompts,
   loadOrderedBookContents, loadPageContents,
   groupByChapter, splitGroupsIntoChunks, buildSinglePassBookText,
-  SINGLE_PASS_LIMIT, PER_CHUNK_LIMIT, tps, _modelName,
+  chunkLimitsFor, tps, _modelName,
 } = require('./shared');
+const { resolveProvider } = require('../../lib/ai');
 const {
   listPoolSources, listSources,
   insertDetectRun, listDetectRuns, getDetectRun, deleteDetectRun,
@@ -147,6 +148,11 @@ async function runSourceDetectJob(jobId, bookId, userEmail, { chapterId = null }
     buildSourceDetectSystemPrompt, buildSourceDetectPrompt,
     SCHEMA_SOURCE_DETECT, SOURCE_DETECT_TYPES,
   } = prompts;
+  // Chunk-Grenzen aus dem Kontextfenster des EFFEKTIVEN Providers (per-User-Override
+  // eingeschlossen). Die boot-eingefrorenen Konstanten leiten sich aus den
+  // ai.claude.*-Settings ab und passen bei lokalen Modellen nicht ins Fenster.
+  const effectiveProvider = resolveProvider({ userEmail });
+  const { singlePass: SINGLE_PASS_LIMIT, perChunk: PER_CHUNK_LIMIT } = chunkLimitsFor(effectiveProvider);
   try {
     const signal = () => jobAbortControllers.get(jobId)?.signal;
 
@@ -306,7 +312,7 @@ async function runSourceDetectJob(jobId, bookId, userEmail, { chapterId = null }
           foundCount: vorschlaege.length,
           verifiedCount: verified,
           result: { vorschlaege },
-          model: _modelName(),
+          model: _modelName(effectiveProvider),
         });
       } catch (e) { logger.warn(`Lauf-Historisierung fehlgeschlagen book=${bookId}: ${e.message}`); }
     }

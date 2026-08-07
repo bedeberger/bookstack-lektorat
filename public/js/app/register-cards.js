@@ -30,6 +30,8 @@ import { registerStilCard } from '../cards/stil-card.js';
 import { registerFehlerHeatmapCard } from '../cards/fehler-heatmap-card.js';
 import { registerRedundanzCard } from '../cards/redundanz-card.js';
 import { registerWortschatzCard } from '../cards/wortschatz-card.js';
+import { registerStrukturCard } from '../cards/struktur-card.js';
+import { registerTitelwerkstattCard } from '../cards/titelwerkstatt-card.js';
 import { registerChatCard } from '../cards/chat-card.js';
 import { registerIdeenCard } from '../cards/ideen-card.js';
 import { registerReferenceCard } from '../cards/reference-card.js';
@@ -143,6 +145,8 @@ export function registerAllCards() {
   registerFehlerHeatmapCard();
   registerRedundanzCard();
   registerWortschatzCard();
+  registerStrukturCard();
+  registerTitelwerkstattCard();
   registerBookOverviewCard();
   registerBookStatsCard();
   registerBookSettingsCard();

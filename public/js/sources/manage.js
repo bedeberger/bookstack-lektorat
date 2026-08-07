@@ -16,7 +16,7 @@ import { EVT } from '../events.js';
 import { formatFull } from './format.js';
 import {
   SOURCE_TYPES, DEFAULT_SOURCE_TYPE,
-  fieldsForType, draftFromSource, draftToPayload, draftHasIdentity,
+  fieldsForType, draftFromSource, draftToPayload, draftHasIdentity, otonBlocking,
   primaryPersonLabel,
 } from './fields.js';
 
@@ -252,6 +252,11 @@ export const sourcesMethods = {
     return this._memo('fields', [this.srcDraft.csl_type, this._uiLocale()],
       () => fieldsForType(this.srcDraft.csl_type));
   },
+
+  /** Traegt dieser O-Ton einen Autorisierungsstand, der ihn im Text blockiert?
+   *  Pure Weiterreichung an fields.js — das Template braucht die Funktion im
+   *  Karten-Scope. */
+  otonBlocking(s) { return otonBlocking(s); },
 
   srcCanSave() {
     return !this.sourcesBusy && draftHasIdentity(this.srcDraft);

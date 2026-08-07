@@ -12,13 +12,13 @@
 <div class="page-editor-toolbar" x-show="editMode && !focusActive" x-cloak>
   <button type="button" class="icon-btn"
           :disabled="!notebookCanUndo()"
-          :data-tip="t('editor.toolbar.undoTitle')" :aria-label="t('editor.toolbar.undoTitle')"
+          :data-tip="withHotkey(t('editor.toolbar.undoTitle'), 'undo')" :aria-label="t('editor.toolbar.undoTitle')"
           @click="notebookUndo()">
     <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#undo"/></svg>
   </button>
   <button type="button" class="icon-btn"
           :disabled="!notebookCanRedo()"
-          :data-tip="t('editor.toolbar.redoTitle')" :aria-label="t('editor.toolbar.redoTitle')"
+          :data-tip="withHotkey(t('editor.toolbar.redoTitle'), 'redo')" :aria-label="t('editor.toolbar.redoTitle')"
           @click="notebookRedo()">
     <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#redo"/></svg>
   </button>
@@ -36,7 +36,7 @@
   <span class="page-editor-toolbar__expanded">
     <span class="action-sep" aria-hidden="true"></span>
     <button type="button" class="icon-btn"
-            :data-tip="t('editor.toolbar.hrTitle')" :aria-label="t('editor.toolbar.hrTitle')"
+            :data-tip="withHotkey(t('editor.toolbar.hrTitle'), 'hr')" :aria-label="t('editor.toolbar.hrTitle')"
             @click="insertHorizontalRule()">
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#separator-horizontal"/></svg>
     </button>

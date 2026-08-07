@@ -16,6 +16,7 @@ import {
   DEFAULT_RECENT_KEYS,
   featureByKey, isFeatureAvailable, unavailabilityReasonKey,
   featuresVisibleFor,
+  hiddenForBuchtyp, matchesRequiredBuchtyp,
 } from './feature-registry.js';
 import { fuzzyMatch, highlight } from './palette-fuzzy.js';
 import { PROVIDERS, parseQuery } from './palette-providers.js';
@@ -204,7 +205,8 @@ export function registerPaletteCard() {
       // disabled.
       const visibleFeatures = ctx.bookRole
         ? featuresVisibleFor(FEATURES, ctx.bookRole, ctx.buchtyp, ctx.claudeEffective)
-        : FEATURES.filter(f => (!f.requiresBuchtyp || f.requiresBuchtyp === ctx.buchtyp)
+        : FEATURES.filter(f => matchesRequiredBuchtyp(f, ctx.buchtyp)
+            && !hiddenForBuchtyp(f, ctx.buchtyp)
             && (!f.requiresClaude || ctx.claudeEffective));
 
       // Provider-Modus: nur dieser eine Provider.

@@ -34,7 +34,19 @@ const TEXT_FIELDS = [
   'citekey', 'title', 'container_title', 'publisher', 'place', 'year',
   'edition', 'volume', 'issue', 'pages', 'doi', 'isbn', 'issn', 'url',
   'accessed_at', 'note',
+  // O-Ton: vier Angaben, die eine Publikation nicht hat, eine Aussage aus einem
+  // Gespraech aber braucht. Sie haengen am CSL-Typ `interview` — Rolle/Funktion
+  // der sprechenden Person, Kanal des Gespraechs, Datum und der
+  // Autorisierungsstand des Zitats. Letzterer ist der Grund fuer die Felder:
+  // ein nicht freigegebenes Zitat darf nicht in den Druck.
+  'oton_role', 'oton_channel', 'oton_date', 'oton_auth',
 ];
+
+// Kanal des Gespraechs und Autorisierungsstand sind Enums, keine Freitexte —
+// sonst kann die Karte nicht filtern und kein Badge zuverlaessig warnen.
+// Deckungsgleich mit OTON_CHANNELS/OTON_AUTH in public/js/sources/fields.js.
+const OTON_CHANNELS = ['persoenlich', 'telefon', 'video', 'mail', 'medienkonferenz', 'andere'];
+const OTON_AUTH = ['keine', 'ausstehend', 'freigegeben', 'abgelehnt'];
 
 const MAX_FIELD_LEN = 500;
 const MAX_NOTE_LEN = 4000;
@@ -218,7 +230,15 @@ function _values(src, base = null) {
     authors: JSON.stringify(normalizePersons(pick('authors', base?.authors) || [])),
     editors: JSON.stringify(normalizePersons(pick('editors', base?.editors) || [])),
     archived: pick('archived', base?.archived) ? 1 : 0,
-    text: TEXT_FIELDS.map(f => _str(pick(f, base?.[f]), f === 'note' ? MAX_NOTE_LEN : MAX_FIELD_LEN)),
+    text: TEXT_FIELDS.map(f => {
+      const v = _str(pick(f, base?.[f]), f === 'note' ? MAX_NOTE_LEN : MAX_FIELD_LEN);
+      // Enum-Felder auf die Allowlist klemmen statt den Request abzulehnen: ein
+      // unbekannter Wert soll den Import einer Quelle nicht scheitern lassen,
+      // aber auch nicht als Freitext im Badge landen.
+      if (f === 'oton_channel') return OTON_CHANNELS.includes(v) ? v : null;
+      if (f === 'oton_auth')    return OTON_AUTH.includes(v) ? v : null;
+      return v;
+    }),
   };
 }
 
@@ -630,6 +650,7 @@ function getSourceDocBlob(id) { return _stmtDocBlob.get(id)?.doc || null; }
 function getSourceDocText(id) { return _stmtDocText.get(id)?.doc_text || ''; }
 
 module.exports = {
+  OTON_CHANNELS, OTON_AUTH,
   CSL_TYPES, TEXT_FIELDS,
   normalizePersons,
   listSources, listPoolSources, getSource, countSources, findSourceByUrl,

@@ -12,7 +12,9 @@ import { _rebuildKomplettSchemas } from './prompts/komplett.js';
 import { configureLocales, _setPromptsContentHash, _allLocalePromptsSnapshot } from './prompts/core.js';
 import * as lektoratNs from './prompts/lektorat.js';
 import * as lektoratTypenNs from './prompts/lektorat-typen.js';
+import * as textsortenNs from './prompts/textsorten.js';
 import * as reviewNs from './prompts/review.js';
+import * as reviewTypenNs from './prompts/review-typen.js';
 import * as komplettNs from './prompts/komplett.js';
 import * as synonymNs from './prompts/synonym.js';
 import * as tagebuchNs from './prompts/tagebuch.js';
@@ -74,7 +76,17 @@ function _promptsContentHash() {
   // fliessen darum nicht in den Locale-Snapshot. Ohne diese Signatur würde eine
   // Profil-Änderung den `lektorat_cache` eines wissenschaftlichen Buchs nicht
   // invalidieren – das Buch behielte seine narrativ geprägten Alt-Findings.
-  return _hashContent(_allLocalePromptsSnapshot() + schemaPart + lektoratTypenNs.PROFIL_SIGNATUR);
+  // Textsorten-Katalog: dieselbe Lage — die Soll-Regeln und die Meinungs-Flagge
+  // gehen nur über Call-Argumente in Lektorat- und Struktur-Prompt. Ohne die
+  // Signatur behielte ein Beitrag nach einer Regel-Änderung seine Alt-Findings.
+  // Bewertungsprofile: ebenso — Achsen, Notenanker und Schema hängen am buchtyp
+  // des Calls. Ohne die Signatur behielte ein Sachbuch nach einer Achsen-Änderung
+  // seinen Alt-Stand aus `book_review_cache` / `chapter_review_cache` /
+  // `chapter_macro_review_cache`; die statischen SCHEMA_* oben decken nur das
+  // narrative Profil ab.
+  return _hashContent(_allLocalePromptsSnapshot() + schemaPart
+    + lektoratTypenNs.PROFIL_SIGNATUR + textsortenNs.TEXTSORTEN_SIGNATUR
+    + reviewTypenNs.REVIEW_PROFIL_SIGNATUR);
 }
 
 /**
@@ -142,16 +154,53 @@ export {
   TYP_PRIORITAET,
 } from './prompts/lektorat-typen.js';
 
+// Journalistische Textsorten – SSoT für Lektorat-Zuschnitt, Struktur-Check und
+// die Validierung in routes/booksettings.js bzw. routes/textsorte.js.
+export {
+  TEXTSORTEN,
+  TEXTSORTE_KEYS,
+  DEFAULT_TEXTSORTE,
+  textsorte,
+  istMeinungsform,
+  textsorteLabel,
+  textsorteRegelnListe,
+} from './prompts/textsorten.js';
+
+export {
+  buildStrukturCheckPrompt,
+  buildStrukturSchema,
+} from './prompts/struktur.js';
+
+export {
+  buildHeadlineVariantsPrompt,
+  buildHeadlineVariantsSchema,
+} from './prompts/headline.js';
+
 export {
   buildBookReviewSinglePassPrompt,
   buildChapterAnalysisPrompt,
   buildChapterReviewPrompt,
   buildChapterReviewMultiPassPrompt,
   buildBookReviewMultiPassPrompt,
+  buildReviewSchema,
+  buildChapterReviewSchema,
+  buildChapterAnalysisSchema,
   SCHEMA_REVIEW,
   SCHEMA_CHAPTER_ANALYSIS,
   SCHEMA_CHAPTER_REVIEW,
 } from './prompts/review.js';
+
+// Bewertungsprofile pro Buchtyp – SSoT auch für die Server-Seite (das Profil
+// wandert ins Ergebnis-JSON) und für den Renderer (Achsen-Reihenfolge).
+export {
+  reviewProfil,
+  bookReviewAxes,
+  chapterReviewAxes,
+  empfehlungKategorien,
+  ALLE_BOOK_AXES,
+  ALLE_CHAPTER_AXES,
+  ALLE_KATEGORIEN,
+} from './prompts/review-typen.js';
 
 export {
   figurenBasisRules,

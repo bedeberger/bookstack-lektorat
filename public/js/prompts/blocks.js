@@ -11,6 +11,12 @@
 //   · KEINE Ausnahme (auch im Dialog voll melden): mechanische Fehler – rechtschreibung,
 //     grammatik (inkl. Zeichensetzung), dialogformat; Ausnahme nur bei klar erkennbarem,
 //     bewusst gesetztem Dialekt/Idiolekt.
+//
+// Blöcke, die andere Fehlertypen als Abgrenzung nennen, bekommen das aktive
+// Typ-Enum des Laufs (`typen`) und filtern ihre Verweise darauf – im Stil-Pass
+// des Claude-Splits existieren die objektiven Typen nicht.
+
+import { verweisTypen, verweisZiel, OBJEKTIV_VERWEIS } from './lektorat-typen.js';
 
 // Grammatik + Zeichensetzung/Interpunktion (beide unter typ «grammatik»). Locale-scharf.
 // Beide Fehlergruppen sind objektiv und mechanisch – sie werden SYSTEMATISCH geprüft und
@@ -86,13 +92,29 @@ Rechtschreib-Regeln (typ: «rechtschreibung»):
 - AUCH in direkter Rede / Dialog melden – Ausnahme nur bei klar erkennbarer, bewusst gesetzter Figurensprache/Dialekt.`;
 }
 
-export function _buildStilBlock() {
+// `typen` = aktives Typ-Enum des Laufs. Die Abgrenzungs-Verweise werden darauf
+// gefiltert, weil im Stil-Pass grammatik/rechtschreibung nicht gemeldet werden
+// dürfen (siehe verweisTypen in prompts/lektorat-typen.js).
+export function _buildStilBlock(typen = []) {
+  const spezifisch = verweisTypen(
+    ['satzbau', 'schwaches_verb', 'fuellwort', 'wiederholung', 'passiv', 'show_vs_tell', 'grammatik', 'rechtschreibung'],
+    typen,
+  ).join(', ');
+  const nichtAbgedeckt = [
+    'holprige Wortstellung / schwerfälliger oder verschachtelter Satzbau / monotoner Satzrhythmus (→ satzbau)',
+    'einzelne schwache Verben (→ schwaches_verb)',
+    'einzelne Füllwörter (→ fuellwort)',
+    'Wortwiederholung (→ wiederholung)',
+    'abstraktes Telling (→ show_vs_tell)',
+    'Passivkonstruktion (→ passiv)',
+    `Grammatikfehler (→ ${verweisZiel('grammatik', typen)})`,
+  ].join(', ');
   return `
 Stil-Regeln (typ: «stil»):
 - «stil» ist KEIN Auffang-Eimer. Er greift NUR für stilistische Schwächen, die KEINEM spezifischeren Typ zugeordnet werden können.
-- Wenn ein spezifischerer Typ passt (satzbau, schwaches_verb, fuellwort, wiederholung, passiv, show_vs_tell, grammatik, rechtschreibung) → diesen Typ verwenden, NICHT «stil».
+- Wenn ein spezifischerer Typ passt (${spezifisch}) → diesen Typ verwenden, NICHT «stil».
 - «stil» deckt ab: gestelzte oder umständliche Wortwahl, Stilbruch im Register (z.B. Bürokratendeutsch in literarischem Text), unklare Bezüge / Mehrdeutigkeit, falsch gewählte Idiomatik / Kollokation, übermässige Adjektiv-/Adverb-Häufung.
-- «stil» deckt NICHT ab: holprige Wortstellung / schwerfälliger oder verschachtelter Satzbau / monotoner Satzrhythmus (→ satzbau), einzelne schwache Verben (→ schwaches_verb), einzelne Füllwörter (→ fuellwort), Wortwiederholung (→ wiederholung), abstraktes Telling (→ show_vs_tell), Passivkonstruktion (→ passiv), Grammatikfehler (→ grammatik).
+- «stil» deckt NICHT ab: ${nichtAbgedeckt}.
 - In direkter Rede / Dialog NICHT melden: Figurensprache darf holprig, gestelzt oder unidiomatisch sein – das charakterisiert die Figur. «stil» gilt ausschliesslich für Erzähltext.
 - «original»: vollständiger Satz oder eindeutig abgrenzbare Phrase zeichengenau aus dem Text.
 - PFLICHT: «korrektur» muss immer eine konkrete Umformulierung enthalten – nicht leer lassen, nicht dasselbe wie «original». Keine Stilanmerkung ohne konkreten Verbesserungsvorschlag.
@@ -100,12 +122,18 @@ Stil-Regeln (typ: «stil»):
 - Selbsttest: Lässt sich die Schwäche präzise mit einem der spezifischen Typen benennen? Wenn ja → spezifischen Typ verwenden, «stil» weglassen.`;
 }
 
-export function _buildSatzbauBlock() {
+export function _buildSatzbauBlock(typen = []) {
+  // Ohne aktives «grammatik» (Stil-Pass) muss die Abgrenzung ins Leere zeigen,
+  // nicht auf einen Typ, den der Lauf nicht ausgeben darf – sonst wird der
+  // Grammatikfehler als «satzbau» umetikettiert statt weggelassen.
+  const grammatikZiel = typen.includes('grammatik')
+    ? 'typ «grammatik», NICHT «satzbau»'
+    : `${OBJEKTIV_VERWEIS} (weder «satzbau» noch «stil»)`;
   return `
 Satzbau-Regeln (typ: «satzbau»):
 - «satzbau» greift, wenn ein Satz GRAMMATISCH KORREKT, aber ungeschickt KONSTRUIERT ist und dadurch schwer lesbar wirkt. Es geht um die Architektur des Satzes (Reihenfolge, Verschachtelung, Rhythmus), nicht um Wortwahl.
 - Abgrenzung (Pflicht):
-  · Ist die Wortstellung grammatisch FALSCH (Verbzweit-/Verbletztstellung verletzt, falscher Bezug) → typ «grammatik», NICHT «satzbau».
+  · Ist die Wortstellung grammatisch FALSCH (Verbzweit-/Verbletztstellung verletzt, falscher Bezug) → ${grammatikZiel}.
   · Geht es um Register, Idiomatik, Adjektiv-Häufung, Nominalstil eines Einzelworts, Mehrdeutigkeit → typ «stil».
   · «satzbau» = der Satz ist regelkonform, liest sich aber holprig wegen seiner Konstruktion.
 - Typische Muster:

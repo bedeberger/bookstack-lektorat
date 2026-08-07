@@ -430,4 +430,49 @@
   border-top: 0.5px solid var(--color-border);
 }
 .organizer-lengthdist .overview-chapter-list { margin-top: var(--space-2xs); }
+
+/* Redaktions-Status (journalistische Bücher) — Plakette zeigt, Combobox setzt.
+   Subklassen von .badge (components/buttons-badges.css), gleiche Bauform wie die
+   Sync-Pills darüber. Die vier Stufen laufen als Farbverlauf von „unfertig"
+   (gedämpft) zu „raus damit" (grün); Zwischenstufen tönen den Karten-Akzent
+   auf, damit die Kette als eine Skala lesbar bleibt und nicht als vier Zustände
+   ohne Richtung. */
+.organizer-redaktion-combo {
+  min-width: 118px;
+  flex-shrink: 0;
+}
+.organizer-redaktion-combo .combobox-trigger {
+  box-sizing: border-box;
+  height: 28px;
+  line-height: 1.2;
+  font-size: var(--size-compact-font-size);
+  padding: var(--space-xs) 8px;
+}
+.organizer-redaktion-badge { flex: none; }
+.badge--redaktion-roh {
+  background: var(--color-tag-bg);
+  color: var(--color-muted);
+}
+.badge--redaktion-gegengelesen {
+  background: color-mix(in srgb, var(--card-accent) 14%, transparent);
+  color: var(--card-accent);
+}
+.badge--redaktion-schlussredigiert {
+  background: color-mix(in srgb, var(--card-accent) 28%, transparent);
+  color: var(--card-accent);
+  font-weight: 600;
+}
+.badge--redaktion-freigegeben {
+  background: var(--color-ok-bg);
+  color: var(--color-ok-text);
+  font-weight: 600;
+}
+/* Text nach dem Setzen der Stufe bearbeitet. Bewusst additiv statt als eigene
+   Farbe: die Stufe bleibt ablesbar, der gestrichelte Rahmen sagt „gilt so nicht
+   mehr". Ein umgefärbtes Badge würde die Information verschlucken, die es
+   gerade zu zeigen gilt. */
+.organizer-redaktion-badge--stale {
+  outline: 1px dashed var(--color-warn-text);
+  outline-offset: 1px;
+}
 }

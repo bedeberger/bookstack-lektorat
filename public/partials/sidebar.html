@@ -26,7 +26,7 @@
   <div class="search-wrap sidebar-search-wrap">
     <span class="search-affix">
       <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#search"/></svg>
-      <input type="text" x-model.debounce.200ms="pageSearch" @keydown="onPageSearchKeydown($event)" :placeholder="t('sidebar.searchPage')" :aria-label="t('sidebar.searchPage')" :data-tip="t('sidebar.searchPageTitle')" class="page-search">
+      <input type="text" x-model.debounce.200ms="pageSearch" @keydown="onPageSearchKeydown($event)" :placeholder="t('sidebar.searchPage')" :aria-label="t('sidebar.searchPage')" :data-tip="withHotkey(t('sidebar.searchPageTitle'), 'treeSearch')" class="page-search">
       <button type="button" class="search-clear--icon" x-show="pageSearch" @click="pageSearch=''" :aria-label="t('search.clear')" :data-tip="t('search.clear')"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=690#x"/></svg></button>
     </span>
     <div class="btn-group sidebar-action-group">

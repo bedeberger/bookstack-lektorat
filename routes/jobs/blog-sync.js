@@ -18,6 +18,7 @@ const { buildBibliography, resolveCitesInHtml } = require('../../lib/bibliograph
 const { makeImageResolver } = require('../../lib/wp-media');
 const { classifyPull } = require('../../lib/blog-merge');
 const { assertBlogBook } = require('../../lib/buchtyp');
+const { getHeadline } = require('../../db/headline');
 const { requireBookAccess, sendACLError } = require('../../lib/acl');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
@@ -384,13 +385,30 @@ async function runBlogPushJob(jobId, bookId, userEmail, pageIds) {
         if (localNameForCreate !== pageRow.name) renamedLocally = true;
       }
 
+      // Titel-Werkstatt: hat der Beitrag einen ausformulierten Titel bzw. Teaser
+      // (`page_headline`), gewinnen die. Genau dafuer gibt es die Felder — der
+      // Seitenname ist ein Arbeitstitel mit Datumspraefix, der Titel im WP-Post
+      // ist eine redaktionelle Formulierung mit Zeichenlimit.
+      //
+      // Nur GESETZTE Felder gehen mit: ohne Titel-Werkstatt bleibt der Push Byte
+      // fuer Byte der alte (`content` allein beim Update, abgeleiteter Titel beim
+      // Create). Ein leeres Feld darf einen in WordPress gepflegten Titel nicht
+      // ueberschreiben.
+      const hl = getHeadline(pageId);
+      const hlTitle = (hl?.titel || '').trim();
+      const hlExcerpt = (hl?.teaser || '').trim();
+      const hlPayload = {};
+      if (hlTitle) hlPayload.title = hlTitle;
+      if (hlExcerpt) hlPayload.excerpt = hlExcerpt;
+
       try {
         const remote = link
-          ? await wp.updatePost(link.wp_post_id, { content: wpHtml })
+          ? await wp.updatePost(link.wp_post_id, { content: wpHtml, ...hlPayload })
           : await wp.createPost({
-              title: wpTitleForCreate,
+              title: hlTitle || wpTitleForCreate,
               content: wpHtml,
               status: conn.defaultStatus,
+              ...(hlExcerpt ? { excerpt: hlExcerpt } : {}),
             });
         if (renamedLocally) {
           await contentStore.savePage(pageId, { name: localNameForCreate }, null);

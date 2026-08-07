@@ -8,9 +8,10 @@ const {
   createJob, enqueueJob, findActiveJobId,
   jsonBody,
   loadOrderedBookContents, loadPageContents, groupByChapter, buildSinglePassBookText,
-  contentHttpError,
+  contentHttpError, chunkLimitsFor,
 } = require('./shared');
-const { SINGLE_PASS_LIMIT, BATCH_SIZE } = require('./shared/loader');
+const { BATCH_SIZE } = require('./shared/loader');
+const { resolveProvider } = require('../../lib/ai');
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
 
@@ -39,6 +40,11 @@ async function runStilprofilJob(jobId, bookId, userEmail, userToken) {
   const prompts = await getPrompts();
   const { buildStilprofilPrompt, SCHEMA_STILPROFIL } = prompts;
   const { SYSTEM_STILPROFIL } = await getBookPrompts(bookId, userEmail);
+  // Leseproben-Budget aus dem Kontextfenster des EFFEKTIVEN Providers, nicht aus der
+  // boot-eingefrorenen Claude-Konstante: bei einem lokalen 90K-Modell laege die
+  // Claude-Ableitung (200K − 64K) ueber dem gesamten Fenster und der Slice unten
+  // wuerde einen Prompt bauen, den der Server gar nicht annehmen kann.
+  const singlePassLimit = chunkLimitsFor(resolveProvider({ userEmail })).singlePass;
   try {
     logger.info(`Start: Stilprofil Buch #${bookId}`);
     updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
@@ -56,13 +62,13 @@ async function runStilprofilJob(jobId, bookId, userEmail, userToken) {
     }, userToken);
     if (!pageContents.length) { completeJob(jobId, { empty: true }); return; }
 
-    const { pages: sampledPages, total, sampled } = sampleForStyle(pageContents, SINGLE_PASS_LIMIT);
+    const { pages: sampledPages, total, sampled } = sampleForStyle(pageContents, singlePassLimit);
     if (sampled) {
-      logger.info(`Leseprobe gesampelt: ${sampledPages.length}/${pageContents.length} Seiten (Buch ${total} Zeichen > Budget ${SINGLE_PASS_LIMIT}).`);
+      logger.info(`Leseprobe gesampelt: ${sampledPages.length}/${pageContents.length} Seiten (Buch ${total} Zeichen > Budget ${singlePassLimit}).`);
     }
     const { groupOrder, groups } = groupByChapter(sampledPages);
     let bookText = buildSinglePassBookText(groups, groupOrder);
-    if (bookText.length > SINGLE_PASS_LIMIT) bookText = bookText.slice(0, SINGLE_PASS_LIMIT);
+    if (bookText.length > singlePassLimit) bookText = bookText.slice(0, singlePassLimit);
 
     updateJob(jobId, { progress: 60, statusText: 'job.phase.distillingStyle' });
     const tok = { in: 0, out: 0, ms: 0 };

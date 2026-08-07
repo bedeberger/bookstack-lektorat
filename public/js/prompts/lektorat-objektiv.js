@@ -27,11 +27,13 @@ export function buildObjektivLektoratPrompt(text, {
   hatBelege = false,
   langCode = 'de',
   buchtyp = null,
+  textsorte = null,
 } = {}) {
   const en = langCode === 'en';
   // Objektiv-Enum aus dem Buchtyp-Profil: in den Fach-Profilen bleiben nur
-  // rechtschreibung + grammatik (kein Dialogformat, keine Figurenkonsistenz).
-  const objektivTypen = lektoratObjektivTypen(buchtyp, { hasFiguren: figuren.length > 0 });
+  // rechtschreibung + grammatik (kein Dialogformat, keine Figurenkonsistenz);
+  // im journalistischen Profil kommt der Modus der indirekten Rede dazu.
+  const objektivTypen = lektoratObjektivTypen(buchtyp, { hasFiguren: figuren.length > 0, textsorte });
   const hasFiguren = objektivTypen.includes('namenskonsistenz');
   const hatDialogformat = objektivTypen.includes('dialogformat');
 
@@ -43,7 +45,7 @@ export function buildObjektivLektoratPrompt(text, {
   const typEnum = objektivTypen.join('|');
   const dedupPrio = typPrioritaetString(objektivTypen);
   // Verbotene Typen = alles Nicht-Objektive des Profils; die prüft der Stil-Pass.
-  const verboten = lektoratStilTypen(buchtyp).join(', ');
+  const verboten = lektoratStilTypen(buchtyp, { textsorte }).join(', ');
   const scopeDe = [
     'Rechtschreibung, Grammatik, Zeichensetzung/Interpunktion',
     hatDialogformat ? 'Dialogformat-Typografie' : null,
@@ -153,12 +155,12 @@ ${text}
 </originaltext>`;
 }
 // Schema des Objektiv-Passes. Trägt dasselbe Typ-Set wie das Enum im Prompt-Text.
-export function buildObjektivLektoratSchema({ buchtyp = null, hasFiguren = true } = {}) {
+export function buildObjektivLektoratSchema({ buchtyp = null, hasFiguren = true, textsorte = null } = {}) {
   return _obj({
     fehler: {
       type: 'array',
       items: _obj({
-        typ: { type: 'string', enum: lektoratObjektivTypen(buchtyp, { hasFiguren }) },
+        typ: { type: 'string', enum: lektoratObjektivTypen(buchtyp, { hasFiguren, textsorte }) },
         original: _str,
         korrektur: _str,
         erklaerung: _str,
