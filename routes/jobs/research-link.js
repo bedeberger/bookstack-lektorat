@@ -55,7 +55,7 @@ async function runResearchLinkJob(jobId, itemId, bookId, userEmail) {
       for (const c of cands[art]) byArtId.set(`${art}:${c.id}`, { kind, id: c.id, label: c.label || '' });
     }
 
-    const { buildSystemResearchLink, buildResearchLinkPrompt, SCHEMA_RESEARCH_LINK } = await getPrompts();
+    const { buildSystemResearchLink, buildResearchLinkPrompt, SCHEMA_RESEARCH_LINK } = await getPrompts(userEmail);
     const tok = { in: 0, out: 0, ms: 0 };
     const maxOut = 600 + Math.min(total, 60) * 40;
     const result = await aiCall(jobId, tok,

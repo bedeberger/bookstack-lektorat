@@ -50,7 +50,7 @@ const reviewRouter = express.Router();
 // ── Job: Buchbewertung ────────────────────────────────────────────────────────
 async function runReviewJob(jobId, bookId, bookName, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
-  const prompts = await getPrompts();
+  const prompts = await getPrompts(userEmail);
   const {
     buildBookReviewSinglePassPrompt, buildChapterAnalysisPrompt, buildBookReviewMultiPassPrompt,
     buildReviewSchema, buildChapterAnalysisSchema, reviewProfil,

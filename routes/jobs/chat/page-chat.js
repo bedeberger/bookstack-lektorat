@@ -17,7 +17,7 @@ const { _parseChatResponse } = require('./shared');
 
 async function runChatJob(jobId, sessionId, userMsgId, message, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
-  const { buildChatSystemPrompt, SCHEMA_CHAT } = await getPrompts();
+  const { buildChatSystemPrompt, SCHEMA_CHAT } = await getPrompts(userEmail);
   const aiCfg = getContextConfigFor(resolveProvider({ userEmail }));
   try {
     updateJob(jobId, { statusText: 'job.phase.preparing', progress: 5 });

@@ -178,7 +178,7 @@ async function _loadFigurTextbelege(draft, userEmail, logger) {
 
 async function runBrainstormJob(jobId, draftId, knotenId, userEmail) {
   const logger = makeJobLogger(jobId);
-  const { buildBrainstormPrompt, SCHEMA_BRAINSTORM } = await getPrompts();
+  const { buildBrainstormPrompt, SCHEMA_BRAINSTORM } = await getPrompts(userEmail);
 
   try {
     const draft = getDraftFigure(draftId);
@@ -245,7 +245,7 @@ async function runBrainstormJob(jobId, draftId, knotenId, userEmail) {
 
 async function runConsistencyJob(jobId, draftId, userEmail) {
   const logger = makeJobLogger(jobId);
-  const { buildConsistencyPrompt, SCHEMA_CONSISTENCY } = await getPrompts();
+  const { buildConsistencyPrompt, SCHEMA_CONSISTENCY } = await getPrompts(userEmail);
 
   try {
     const draft = getDraftFigure(draftId);

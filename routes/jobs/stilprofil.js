@@ -37,7 +37,7 @@ function sampleForStyle(pageContents, budget) {
 
 async function runStilprofilJob(jobId, bookId, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
-  const prompts = await getPrompts();
+  const prompts = await getPrompts(userEmail);
   const { buildStilprofilPrompt, SCHEMA_STILPROFIL } = prompts;
   const { SYSTEM_STILPROFIL } = await getBookPrompts(bookId, userEmail);
   // Leseproben-Budget aus dem Kontextfenster des EFFEKTIVEN Providers, nicht aus der

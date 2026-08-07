@@ -41,7 +41,7 @@ const runResearchChatJob = makeAgenticChatJob({
   `).get(parseInt(sessionId), userEmail),
 
   async prepare({ session, userEmail, userToken, aiCfg, logger, jobSignal }) {
-    const { buildResearchChatAgentSystemPrompt, RESEARCH_CHAT_TOOLS, RESEARCH_CHAT_FORCE_FINAL_INSTRUCTION } = await getPrompts();
+    const { buildResearchChatAgentSystemPrompt, RESEARCH_CHAT_TOOLS, RESEARCH_CHAT_FORCE_FINAL_INSTRUCTION } = await getPrompts(userEmail);
     const itemCount = db.prepare('SELECT COUNT(*) AS n FROM research_items WHERE book_id = ? AND archived = 0').get(session.book_id)?.n || 0;
     const { SYSTEM_BOOK_CHAT } = await getBookPrompts(session.book_id, userEmail);
     const maxToolIter = _maxToolIter();

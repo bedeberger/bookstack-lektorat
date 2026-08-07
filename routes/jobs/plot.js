@@ -335,7 +335,7 @@ async function _commonPlotContext(bookId, userEmail) {
 
 async function runPlotBrainstormJob(jobId, bookId, actId, threadId, userEmail) {
   const logger = makeJobLogger(jobId);
-  const { buildPlotSystemPrompt, buildPlotBrainstormPrompt, SCHEMA_PLOT_BRAINSTORM } = await getPrompts();
+  const { buildPlotSystemPrompt, buildPlotBrainstormPrompt, SCHEMA_PLOT_BRAINSTORM } = await getPrompts(userEmail);
 
   try {
     const acts = plotDb.listActs(bookId, userEmail);
@@ -401,7 +401,7 @@ async function runPlotBrainstormJob(jobId, bookId, actId, threadId, userEmail) {
 
 async function runPlotConsistencyJob(jobId, bookId, userEmail) {
   const logger = makeJobLogger(jobId);
-  const { buildPlotSystemPrompt, buildPlotConsistencyPrompt, SCHEMA_PLOT_CONSISTENCY } = await getPrompts();
+  const { buildPlotSystemPrompt, buildPlotConsistencyPrompt, SCHEMA_PLOT_CONSISTENCY } = await getPrompts(userEmail);
 
   try {
     const acts = plotDb.listActs(bookId, userEmail);

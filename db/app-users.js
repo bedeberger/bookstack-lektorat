@@ -98,8 +98,17 @@ function setAiProviderOverride(email, provider) {
   const e = _normEmail(email);
   if (!e) throw new Error('setAiProviderOverride: email required');
   const v = (provider === null || provider === undefined || provider === '') ? null : String(provider).toLowerCase();
-  if (v !== null && !['claude','ollama','llama'].includes(v)) {
-    throw new Error("setAiProviderOverride: provider must be null|'claude'|'ollama'|'llama'");
+  // Allowlist aus lib/ai/config (VALID_PROVIDERS) statt einer eigenen Liste — die
+  // driftete auseinander: sie kannte 'openai-compat' nicht (Admin-Route erlaubt es,
+  // hier scheiterte es mit 400 AI_PROVIDER_INVALID → der Override war gar nicht
+  // setzbar) und akzeptierte umgekehrt ein 'llama', das resolveProvider verwirft
+  // (Row bliebe wirkungslos). Lazy require: lib/ai/config zieht seinerseits
+  // db/app-users, ein Top-Level-require ergaebe einen Zyklus.
+  if (v !== null) {
+    const { VALID_PROVIDERS } = require('../lib/ai/config');
+    if (!VALID_PROVIDERS.has(v)) {
+      throw new Error(`setAiProviderOverride: provider must be null|${[...VALID_PROVIDERS].map(p => `'${p}'`).join('|')}`);
+    }
   }
   _stmtSetAiProvider.run(v, e);
 }

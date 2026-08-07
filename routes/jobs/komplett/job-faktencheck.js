@@ -119,7 +119,7 @@ async function runFaktencheckJob(jobId, bookId, bookName, userEmail, userToken, 
   if (overrides) setContext(overrides);
 
   try {
-    const prompts = await getPrompts();
+    const prompts = await getPrompts(userEmail);
     // Judge nutzt einen schlanken statischen System-Prompt (der Fakt steht vollständig
     // im User-Prompt) — bewusst NICHT der teure SYSTEM_KONTINUITAET_BLOCKS mit
     // eingebettetem Buchtext.

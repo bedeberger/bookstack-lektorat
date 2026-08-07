@@ -371,3 +371,64 @@ test('buildKontinuitaetSinglePassPrompt: leere Entitäten-Listen → kein Block 
     { minYear: 1985, maxYear: 1987, songs: [], technik: [], ereignisse: [] });
   assert.doesNotMatch(out, /Zeitliche Verortung/);
 });
+
+// ── Provider-Varianten: zwei Instanzen gleichzeitig ──────────────────────────
+// Deckt den Mischbetrieb ab (app_users.ai_provider_override): die Prompt-Schicht
+// muss cloud- UND local-Variante NEBENEINANDER halten können, sonst bekommt ein
+// User die Prompts des jeweils anderen Providers. Fährt bewusst über den
+// Produktions-Loader-Hook (lib/prompts-variant-hooks.mjs) — ein blosser
+// Query-Cache-Buster dupliziert nur die Einstiegsdatei, während `prompts/state.js`
+// mit dem `_isLocal`-Flag geteilt bliebe (genau die Falle, die der Hook schliesst).
+async function bothVariants() {
+  const { register } = await import('node:module');
+  register(new URL('../../lib/prompts-variant-hooks.mjs', import.meta.url).href,
+    { parentURL: import.meta.url, data: { param: 'promptVariant' } });
+  const cloud = await import(`${promptsUrl}?promptVariant=cloud`);
+  const local = await import(`${promptsUrl}?promptVariant=local`);
+  cloud.configurePrompts(cfg, 'claude');
+  local.configurePrompts(cfg, 'ollama');   // nach cloud: darf cloud NICHT umkonfigurieren
+  return { cloud, local };
+}
+
+test('Provider-Varianten: getrennte Instanzen, JSON_ONLY nur in der Cloud-Variante', async () => {
+  const { cloud, local } = await bothVariants();
+  assert.notEqual(cloud, local, 'beide Varianten sind dieselbe Modul-Instanz');
+  for (const key of ['SYSTEM_LEKTORAT', 'SYSTEM_BUCHBEWERTUNG', 'SYSTEM_FIGUREN', 'SYSTEM_SYNONYM']) {
+    assert.match(cloud[key], /Antworte ausschliesslich mit einem JSON-Objekt/,
+      `${key}: JSON_ONLY fehlt in der Cloud-Variante (von der local-Konfiguration überschrieben?)`);
+    assert.doesNotMatch(local[key], /Antworte ausschliesslich mit einem JSON-Objekt/,
+      `${key}: JSON_ONLY steht in der Local-Variante`);
+  }
+});
+
+test('Provider-Varianten: machtverhaltnis nur im Cloud-Schema', async () => {
+  const { cloud, local } = await bothVariants();
+  const bez = m => m.SCHEMA_KOMPLETT_FIGUREN_PASS.properties.figuren.items.properties
+    .beziehungen.items.properties;
+  assert.ok(bez(cloud).machtverhaltnis, 'machtverhaltnis fehlt im Cloud-Schema');
+  assert.equal(bez(local).machtverhaltnis, undefined, 'machtverhaltnis steht im Local-Schema');
+  // Tiefe-Felder: dasselbe Gating eine Ebene höher.
+  const fig = m => m.SCHEMA_KOMPLETT_FIGUREN_PASS.properties.figuren.items.properties;
+  assert.ok(fig(cloud).aeusseres && fig(cloud).stimme && fig(cloud).arc);
+  assert.equal(fig(local).aeusseres, undefined);
+  assert.equal(fig(local).arc, undefined);
+});
+
+test('Provider-Varianten: Builder lesen _isLocal pro Instanz (Call-Zeit, nicht Configure-Zeit)', async () => {
+  const { cloud, local } = await bothVariants();
+  // buildLektoratSchema liest _isLocal beim Aufruf – ein reiner Werte-Snapshot
+  // pro Variante würde diesen Pfad NICHT abdecken.
+  const cloudTypen = cloud.buildLektoratSchema({ buchtyp: null }).properties.fehler.items.properties.typ.enum;
+  const localTypen = local.buildLektoratSchema({ buchtyp: null }).properties.fehler.items.properties.typ.enum;
+  assert.ok(cloudTypen.length > localTypen.length,
+    `Cloud-Enum (${cloudTypen.length}) muss reicher sein als Local-Enum (${localTypen.length})`);
+  // Prompt-Body ebenfalls Call-Zeit-abhängig.
+  const args = ['Buch', 'Kap', 'Seite', 'Ein Satz.', [], []];
+  assert.ok(cloud.buildLektoratPrompt(...args).length > local.buildLektoratPrompt(...args).length);
+});
+
+test('Provider-Varianten: PROMPTS_VERSION unterscheidet sich (Cache-Trennung)', async () => {
+  const { cloud, local } = await bothVariants();
+  assert.ok(cloud.PROMPTS_VERSION && local.PROMPTS_VERSION);
+  assert.notEqual(cloud.PROMPTS_VERSION, local.PROMPTS_VERSION);
+});

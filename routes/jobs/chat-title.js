@@ -7,7 +7,7 @@
 
 const { db } = require('../../db/schema');
 const { callAI, parseJSON } = require('../../lib/ai');
-const { getPrompts } = require('../../lib/prompts-loader');
+const { getPromptsForProvider } = require('../../lib/prompts-loader');
 
 const MAX_TITLE_LEN = 80;
 
@@ -25,7 +25,7 @@ async function generateSessionTitle({ session, userMessage, assistantAnswer, pro
   const uMsg = (userMessage || '').trim();
   if (!uMsg) return null;
   try {
-    const { buildChatTitlePrompt, SCHEMA_CHAT_TITLE } = await getPrompts();
+    const { buildChatTitlePrompt, SCHEMA_CHAT_TITLE } = await getPromptsForProvider(provider);
     const systemPrompt = buildChatTitlePrompt();
     const convo = [
       `Nutzer: ${uMsg}`,

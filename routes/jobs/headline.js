@@ -56,7 +56,7 @@ function _bestand(pageId, felder) {
 
 async function runHeadlineJob(jobId, bookId, pageId, userEmail, userToken, felder, anzahl) {
   const logger = makeJobLogger(jobId);
-  const prompts = await getPrompts();
+  const prompts = await getPrompts(userEmail);
   const { buildHeadlineVariantsPrompt, buildHeadlineVariantsSchema } = prompts;
   const { SYSTEM_HEADLINE } = await getBookPrompts(bookId, userEmail);
 

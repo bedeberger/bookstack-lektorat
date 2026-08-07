@@ -39,7 +39,7 @@ async function runKontinuitaetJob(jobId, bookId, bookName, userEmail, userToken,
   const call = (jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, schema) =>
     aiCall(jobId_, tok_, prompt_, system_, fromPct, toPct, expectedChars, outputRatio, maxTokens, effectiveProvider, schema);
   const { singlePass: singlePassLimit } = chunkLimitsFor(effectiveProvider);
-  const prompts = await getPrompts();
+  const prompts = await getPrompts(userEmail);
   const sys = await getBookPrompts(bookId, email);
 
   try {

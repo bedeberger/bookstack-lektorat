@@ -37,7 +37,7 @@ function _normalizeSuggestion(v) {
 
 async function runMotifBrainstormJob(jobId, bookId, userEmail, { force = false } = {}) {
   const logger = makeJobLogger(jobId);
-  const prompts = await getPrompts();
+  const prompts = await getPrompts(userEmail);
   const { buildMotivSystemPrompt, buildMotivBrainstormPrompt, SCHEMA_MOTIV_BRAINSTORM } = prompts;
   try {
     const signal = () => jobAbortControllers.get(jobId)?.signal;

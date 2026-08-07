@@ -18,7 +18,9 @@ const { getBookSettings } = require('../../../db/schema');
 // Buch-Locale-Prompts mit Buchtyp + Buchkontext augmentieren. Liest
 // book_settings, fallback auf User-Defaults wenn `userEmail` gesetzt.
 async function getBookPrompts(bookId, userEmail = null) {
-  const { getLocalePromptsForBook } = await getPrompts();
+  // userEmail waehlt zusaetzlich die Prompt-VARIANTE (cloud/local) nach dem
+  // effektiven Provider dieses Users — siehe lib/prompts-loader.js.
+  const { getLocalePromptsForBook } = await getPrompts(userEmail);
   const settings = bookId
     ? getBookSettings(bookId, userEmail)
     : { language: 'de', region: 'CH', buchtyp: null, buch_kontext: null, is_finished: 0, schauplatz_land: null, zeitlinie_real: 0 };

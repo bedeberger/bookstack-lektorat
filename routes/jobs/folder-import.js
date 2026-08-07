@@ -140,7 +140,7 @@ async function runFolderImportJob(jobId, { userEmail, mode, bookName, bookId, gr
           year: f.year,
           month: _monthFromRaw(f.monthRaw),
         }));
-        const prompts = await getPrompts();
+        const prompts = await getPrompts(userEmail);
         const { buildDateDetectPrompt, SCHEMA_DATE_DETECT } = prompts;
         const SYSTEM = 'Du bist ein Assistent fuer das Erkennen von Datumsformaten in Dateinamen. Antworte ausschliesslich mit einem JSON-Objekt.';
         const tok = { in: 0, out: 0, ms: 0 };

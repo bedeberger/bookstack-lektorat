@@ -228,6 +228,18 @@ Lokale Provider: bei vollständigem Cache-Hit (`prompt_eval_count=0`) Fallback a
 
 Schemas werden per `_rebuildLektoratSchema()`/`_rebuildKomplettSchemas()` provider-spezifisch neu gebaut **vor** `configureLocales`.
 
+### Zwei Instanzen, weil der Provider pro User auflöst
+
+`_isLocal` ist ein **Modul-Flag**, die Provider-Auflösung aber **pro User** (`resolveProvider`, s.o.). [lib/prompts-loader.js](../lib/prompts-loader.js) hält darum zwei getrennte Modulgraphen — `cloud` (claude) und `local` (ollama/openai-compat) — und konfiguriert jeden **einmal**. `getPrompts(userEmail)` wählt die Instanz zum effektiven Provider; `getPromptsForProvider(provider)` für Aufrufer, die ihn schon aufgelöst haben (Chat-Titel-Job).
+
+Ohne diese Trennung bekäme im Mischbetrieb jeder User die Prompts des jeweils anderen Providers: ein lokales Modell die Cloud-Felder, die das `_isLocal`-Gating bewusst weglässt, weil kleine Modelle sie halluzinieren (`machtverhaltnis`, `aeusseres`/`stimme`/`hintergrund`/`arc`) — und Claude die Slim-Variante **ohne** die `JSON_ONLY`-Pflichtanweisung, womit bei Claude-Modellen ohne Structured-Output-Support keine Schicht mehr reines JSON erzwingt.
+
+**Nicht pro Call umkonfigurieren:** die Job-Queue läuft parallel, und Konsumenten halten die Namespace-Referenz über `await`-Grenzen hinweg (`const prompts = await getPrompts(u)` … später `prompts.SCHEMA_X`). Ein Flip zwischendurch zöge ihnen den Boden weg.
+
+Die Isolation trägt der ESM-Resolve-Hook [lib/prompts-variant-hooks.mjs](../lib/prompts-variant-hooks.mjs): er zieht die Varianten-Query vom Eltern- auf jedes Kindmodul. **Ein blosser Query-Cache-Buster genügt nicht** — er dupliziert nur die Einstiegsdatei, die Dependencies (und damit `state.js` mit `_isLocal`) blieben geteilt. Fehlt `module.register` (Node < 20.6), fällt der Loader mit Warnung auf **eine** Instanz nach globalem Provider zurück. Gegated: die `Provider-Varianten`-Tests in [tests/unit/prompts.test.mjs](../tests/unit/prompts.test.mjs).
+
+`PROMPTS_VERSION` unterscheidet sich zwischen den Instanzen (Content-Hash über die gebauten Prompts). Das ist korrekt und braucht **keinen** Bump des Basis-Prefix: alle provider-partitionierten Cache-Tabellen führen `provider` im PRIMARY KEY, und jeder `cacheVersion`-String enthält zusätzlich `_modelName(effectiveProvider)`.
+
 ## Chat-Temperatur
 
 `ai.chat_temperature` (app_settings) überschreibt Provider-Defaults nur für Seiten-Chat und Buch-Chat. Andere Job-Typen (Review, Lektorat, Komplett) bleiben deterministisch (Provider-Defaults: Ollama 0.2, Llama 0.1).

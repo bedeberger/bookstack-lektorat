@@ -64,7 +64,7 @@ async function runRueckblickJob(jobId, bookId, userEmail, userToken, zeitraum) {
   const email = userEmail || '';
   try {
     if (!z) throw i18nError('job.error.rueckblickEmpty');
-    const prompts = await getPrompts();
+    const prompts = await getPrompts(userEmail);
     const {
       buildRueckblickPrompt, buildRueckblickReducePrompt, mergeRueckblickFacets,
       SCHEMA_RUECKBLICK, SCHEMA_RUECKBLICK_SYNTH, PROMPTS_VERSION,

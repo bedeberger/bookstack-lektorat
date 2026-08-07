@@ -31,7 +31,7 @@ function _synonymKeyHash(wort, satz, bookSettings, cacheVersion) {
 async function runSynonymJob(jobId, wort, satz, bookId, userEmail, pageId) {
   const logger = makeJobLogger(jobId);
   const pageTag = pageId ? ` page=${pageId}` : '';
-  const prompts = await getPrompts();
+  const prompts = await getPrompts(userEmail);
   const { buildSynonymPrompt, SCHEMA_SYNONYM, PROMPTS_VERSION } = prompts;
   const { SYSTEM_SYNONYM } = await getBookPrompts(bookId, userEmail);
   const bookSettings = bookId ? getBookSettings(bookId, userEmail) : null;

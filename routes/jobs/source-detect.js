@@ -143,7 +143,7 @@ function annotateExisting(items, userEmail, bookId) {
 
 async function runSourceDetectJob(jobId, bookId, userEmail, { chapterId = null } = {}) {
   const logger = makeJobLogger(jobId);
-  const prompts = await getPrompts();
+  const prompts = await getPrompts(userEmail);
   const {
     buildSourceDetectSystemPrompt, buildSourceDetectPrompt,
     SCHEMA_SOURCE_DETECT, SOURCE_DETECT_TYPES,

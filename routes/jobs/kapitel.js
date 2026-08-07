@@ -33,7 +33,7 @@ const kapitelRouter = express.Router();
 // ── Job: Kapitel-Review (Makrobewertung eines einzelnen Kapitels) ────────────
 async function runChapterReviewJob(jobId, bookId, chapterId, chapterName, bookName, userEmail, userToken, { includeSubchapters = false } = {}) {
   const logger = makeJobLogger(jobId);
-  const prompts = await getPrompts();
+  const prompts = await getPrompts(userEmail);
   const {
     buildChapterReviewPrompt, buildChapterReviewMultiPassPrompt,
     buildChapterAnalysisPrompt,

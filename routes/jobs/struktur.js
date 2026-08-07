@@ -95,7 +95,7 @@ function _normalizeResult(raw, regelnCount) {
  */
 async function runStrukturJob(jobId, bookId, userEmail, userToken, onlyPageId = null) {
   const logger = makeJobLogger(jobId);
-  const prompts = await getPrompts();
+  const prompts = await getPrompts(userEmail);
   const { buildStrukturCheckPrompt, buildStrukturSchema, textsorte: textsorteDef, PROMPTS_VERSION } = prompts;
   const { SYSTEM_STRUKTUR } = await getBookPrompts(bookId, userEmail);
   const effectiveProvider = resolveProvider({ userEmail });

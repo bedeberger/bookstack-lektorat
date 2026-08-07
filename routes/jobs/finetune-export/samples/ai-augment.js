@@ -56,7 +56,7 @@ async function buildAiAugmentSamples(ctx) {
   const ai = opts.ai || {};
   if (!ai.reversePrompts && !ai.factQA && !ai.reasoningBackfill) return;
 
-  const prompts = await getPrompts();
+  const prompts = await getPrompts(ctx.userEmail);
   const provider = appSettings.get('ai.provider') || 'claude';
   const subCtx = {
     ...ctx,

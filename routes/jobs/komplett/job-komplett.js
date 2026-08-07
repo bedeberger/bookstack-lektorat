@@ -130,7 +130,7 @@ async function runKomplettAnalyseJob(jobId, bookId, bookName, userEmail, userTok
     ? Math.max(0, parseInt(appSettings.get('ai.komplett.extract_single_pass_cap'), 10) || 0)
     : 0;
   const extractSinglePassLimit = resolveExtractSinglePassLimit(singlePassLimit, extractCapChars);
-  const prompts = await getPrompts();
+  const prompts = await getPrompts(userEmail);
   const sys = await getBookPrompts(bookId, email);
   const tok = { in: 0, out: 0, ms: 0, inflight: new Map() };
 

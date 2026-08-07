@@ -207,7 +207,7 @@ const lektoratRouter = express.Router();
 // ── Job: Seiten-Lektorat ──────────────────────────────────────────────────────
 async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
-  const prompts = await getPrompts();
+  const prompts = await getPrompts(userEmail);
   const { PROMPTS_VERSION } = prompts;
   const { SYSTEM_LEKTORAT_BLOCKS: SYSTEM_LEKTORAT, STOPWORDS: lektoratStopwords, ERKLAERUNG_RULE: lektoratErklaerungRule, KORREKTUR_REGELN: lektoratKorrekturRegeln } = await getBookPrompts(bookId, userEmail);
   const locale = bookId ? getBookLocale(bookId, userEmail) : 'de-CH';
@@ -378,7 +378,7 @@ async function runCheckJob(jobId, pageId, bookId, userEmail, userToken) {
 // ── Job: Batch-Lektorat ───────────────────────────────────────────────────────
 async function runBatchCheckJob(jobId, bookId, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
-  const prompts = await getPrompts();
+  const prompts = await getPrompts(userEmail);
   const { PROMPTS_VERSION } = prompts;
   const effectiveProvider = resolveProvider({ userEmail });
   const cacheVersion = `${_modelName(effectiveProvider)}:${PROMPTS_VERSION || ''}`;

@@ -126,7 +126,7 @@ function _applyBookChatClaudeOverrides(effectiveProvider, logger) {
 
 async function runBookChatJob(jobId, sessionId, userMsgId, message, userEmail, userToken) {
   const logger = makeJobLogger(jobId);
-  const { buildBookChatSystemPrompt, SCHEMA_BOOK_CHAT } = await getPrompts();
+  const { buildBookChatSystemPrompt, SCHEMA_BOOK_CHAT } = await getPrompts(userEmail);
   const effectiveProvider = resolveProvider({ userEmail });
   _applyBookChatClaudeOverrides(effectiveProvider, logger);
   const aiCfg = getContextConfigFor(effectiveProvider);
@@ -427,7 +427,7 @@ const runBookChatJobAgent = makeAgenticChatJob({
   `).get(parseInt(sessionId), userEmail),
 
   async prepare({ session, userEmail, userToken, aiCfg, logger, jobSignal }) {
-    const { buildBookChatAgentSystemPrompt, BOOK_CHAT_TOOLS, BOOK_CHAT_FORCE_FINAL_INSTRUCTION } = await getPrompts();
+    const { buildBookChatAgentSystemPrompt, BOOK_CHAT_TOOLS, BOOK_CHAT_FORCE_FINAL_INSTRUCTION } = await getPrompts(userEmail);
     const figuren = getFiguren(session.book_id, userEmail);
     const review  = getLatestReview(session.book_id, userEmail);
     const { SYSTEM_BOOK_CHAT: bookChatSys } = await getBookPrompts(session.book_id, userEmail);
