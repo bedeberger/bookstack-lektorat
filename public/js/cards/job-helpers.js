@@ -86,13 +86,22 @@ export function startPoll(ctx, config) {
 
 // Baut das Status-HTML für einen laufenden Job. `translate` ist die i18n-Funktion
 // (in Root: this.t, in Sub: window.__app.t) — via expliziten Parameter entkoppelt.
-export function runningJobStatus(translate, statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams) {
+// cacheReadIn (optional, letzter Parameter — Bestandsaufrufer lassen ihn weg):
+// Anteil der Input-Tokens, der aus dem Prompt-Cache gelesen wurde. Sichtbar
+// machen lohnt sich bei Jobs, deren tokensIn über mehrere Provider-Calls
+// aufsummiert wird (agentischer Tool-Loop) — dort ist der Präfix ab dem zweiten
+// Call vollständig gecacht und die rohe Summe wirkt sonst dramatischer als der
+// Preis. Gleiche Darstellung wie das persistierte Badge (_chatTokenInfo).
+export function runningJobStatus(translate, statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams, cacheReadIn) {
   let tokInfo = '';
   if ((tokIn || 0) + (tokOut || 0) > 0) {
     const pctPart = (progress > 0 && progress < 100) ? ` ~${progress}%` : '';
     const tpsPart = tokPerSec ? ` · ${Math.round(tokPerSec)} tok/s` : '';
     const inPart = (tokIn || 0) > 0 ? `↑${fmtTok(tokIn)} ` : '';
-    tokInfo = ` · ${inPart}↓${fmtTok(tokOut || 0)} Tokens${pctPart}${tpsPart}`;
+    const cachePart = ((tokIn || 0) > 0 && (cacheReadIn || 0) > 0)
+      ? ` · ${translate('chat.tokenCacheShare', { pct: Math.round((cacheReadIn / tokIn) * 100) })}`
+      : '';
+    tokInfo = ` · ${inPart}↓${fmtTok(tokOut || 0)} Tokens${pctPart}${cachePart}${tpsPart}`;
   }
   // statusText kann ein i18n-Key sein (z.B. 'job.phase.extracting') oder freier
   // Text — tRaw liefert unbekannte Keys 1:1 zurück.

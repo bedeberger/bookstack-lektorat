@@ -48,7 +48,7 @@ export const bookChatMethods = {
       await this.loadBookChatSessions();
     },
     onPollProgress: function (job) {
-      this.bookChatStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec, job.statusParams);
+      this.bookChatStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec, job.statusParams, job.cacheReadIn);
     },
     onPollDone: async function () {
       const sid = this.bookChatSessionId;

@@ -13,9 +13,15 @@
 //
 // StreamEntry =
 //   | { kind:'chapter', name, depth, key, chapterId? }
-//   | { kind:'page',    name, depth, key, id, html, chapterId? }
+//   | { kind:'page',    name, depth, key, id, html, chapterId?, headBefore?, headAfter?, article? }
 // `id` = einheitliche Seiten-Identität (pageId | srcId | pd.id), am Adapter-Rand
 // normalisiert. `key` = positionsbasiert, deterministisch ('c'+i / 'p'+i).
+//
+// `headBefore`/`headAfter` sind FERTIGES Markup, das der Renderer über bzw.
+// unter die Seitenüberschrift stellt (Dachzeile und Lead der Titel-Werkstatt).
+// Dieses Modul baut es NICHT selbst: die Markup-SSoT ist lib/headline-render.js,
+// und die ist CommonJS — hier stünde sonst eine zweite Kopie der Klassennamen.
+// Der Adapter bekommt sie deshalb als Callback herein (siehe `opts.pageHead`).
 
 function _str(v) {
   return typeof v === 'string' ? v : '';
@@ -25,8 +31,12 @@ function _pushChapter(out, name, depth, chapterId) {
   out.push({ kind: 'chapter', name: name || '', depth, key: 'c' + out.length, chapterId: chapterId ?? null });
 }
 
-function _pushPage(out, { name, html, id, depth, chapterId }) {
-  out.push({ kind: 'page', name: name || '', html: html || '', id: id ?? null, depth, key: 'p' + out.length, chapterId: chapterId ?? null });
+function _pushPage(out, { name, html, id, depth, chapterId, headBefore, headAfter, article }) {
+  out.push({
+    kind: 'page', name: name || '', html: html || '', id: id ?? null,
+    depth, key: 'p' + out.length, chapterId: chapterId ?? null,
+    headBefore: headBefore || '', headAfter: headAfter || '', article: !!article,
+  });
 }
 
 // Bucheditor-Quelle: server-vorsortierte Page-Liste aus /book-editor/:id/contents.
@@ -70,16 +80,27 @@ export function fromSnapshotTree(tree) {
   return out;
 }
 
-// Share-/Export-Quelle: loadContents().groups = [{ chapterId, chapter, pages:[{ pd }] }].
+// Share-/Export-Quelle: loadContents().groups = [{ chapterId, chapter, pages:[{ p, pd }] }].
 // Bereits kapitel-gruppiert + flach (keine Sub-Kapitel-Tiefe) → depth 0,
 // Chapter-Header nur bei gesetztem chapter. pd.id → id.
-export function fromGroups(groups) {
+//
+// `opts.pageHead(p, pd)` darf je Seite `{ name, before, after }` liefern und
+// damit den Titel-Kopf beisteuern (Aufrufer: lib/share-helpers.js mit
+// lib/headline-render.js). Fehlt der Callback, bleibt alles wie gehabt — dieses
+// Modul kennt die Titel-Werkstatt nicht.
+export function fromGroups(groups, opts = {}) {
+  const head = typeof opts.pageHead === 'function' ? opts.pageHead : null;
   const out = [];
   for (const g of (groups || [])) {
     if (g && g.chapter) _pushChapter(out, g.chapter.name || g.chapter.chapter_name, 0, g.chapterId ?? g.chapter.id ?? null);
-    for (const { pd } of (g && g.pages ? g.pages : [])) {
+    for (const { p, pd } of (g && g.pages ? g.pages : [])) {
       if (!pd) continue;
-      _pushPage(out, { name: pd.name, html: pd.html, id: pd.id, depth: 0, chapterId: g.chapterId ?? null });
+      const h = head ? (head(p || pd, pd) || null) : null;
+      _pushPage(out, {
+        name: (h && h.name) || pd.name,
+        html: pd.html, id: pd.id, depth: 0, chapterId: g.chapterId ?? null,
+        headBefore: h && h.before, headAfter: h && h.after, article: !!h,
+      });
     }
   }
   return out;

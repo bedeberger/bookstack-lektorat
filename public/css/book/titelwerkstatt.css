@@ -9,8 +9,18 @@
    Block die volle Breite bekommt statt in eine Spalte gequetscht zu werden.
 */
 
+/* Kopfzeile und Datenzeile teilen dasselbe Spaltenraster — die Prozentwerte
+   stehen genau einmal hier. Die Datenzeile ist EINE Zelle mit colspan; die
+   Spaltenbreiten der Tabelle sagen darum nichts darüber, wo im Grid der Zeile
+   etwas landet. Ohne `table-layout: fixed` misst der Browser die Kopfspalten
+   allein an den Überschriften und die Titel stehen irgendwo über den Daten. */
 .tw-table {
+  --tw-w-beitrag: 32%;
+  --tw-w-dach: 22%;
+  --tw-w-titel: 34%;
+  --tw-w-num: 12%;
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   margin-top: var(--space-xs);
 }
@@ -18,17 +28,34 @@
   padding: 0;
   border-bottom: 0.5px solid var(--color-border);
 }
-.tw-col-num { text-align: right; }
+.tw-table th {
+  text-align: left;
+  font-weight: 600;
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 0.5px solid var(--color-border);
+}
+.tw-table .sortable-th { padding-right: calc(var(--space-md) + 14px); }
+/* Die Überschrift steht über dem Namen, nicht über dem Chevron davor. */
+.tw-col-beitrag {
+  width: var(--tw-w-beitrag);
+  padding-left: calc(var(--space-sm) + var(--font-size-reading) + var(--space-2xs));
+}
+.tw-col-dach  { width: var(--tw-w-dach); }
+.tw-col-titel { width: var(--tw-w-titel); }
+.tw-table .tw-col-num {
+  width: var(--tw-w-num);
+  text-align: right;
+}
 
 /* ── Übersichtszeile ─────────────────────────────────────────────────────── */
 
 .tw-row {
   display: grid;
-  grid-template-columns: auto minmax(8rem, 1fr) minmax(6rem, 1fr) minmax(10rem, 2fr) auto;
+  grid-template-columns: var(--tw-w-beitrag) var(--tw-w-dach) var(--tw-w-titel) var(--tw-w-num);
   align-items: center;
-  gap: var(--space-xs);
+  gap: 0;
   width: 100%;
-  padding: var(--space-xs) var(--space-2xs);
+  padding: var(--space-xs) 0;
   background: transparent;
   border: 0;
   text-align: left;
@@ -36,8 +63,25 @@
   color: inherit;
   font: inherit;
 }
-.tw-row:hover { background: color-mix(in srgb, var(--card-accent) 8%, transparent); }
-.tw-row-name { font-weight: 500; }
+.tw-row:hover { background: color-mix(in srgb, var(--card-accent) 10%, transparent); }
+.tw-row:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+/* Innenabstand liegt in den Zellen, nicht an der Zeile: sonst zählte das Grid
+   Prozente einer schmaleren Box als die Tabelle und das Raster driftet. */
+.tw-row-name,
+.tw-row-dach,
+.tw-row-titel {
+  min-width: 0;
+  padding-inline: var(--space-sm);
+}
+/* Eigene Spur für das Chevron: ein umbrechender Beitragsname soll unter sich
+   selbst weiterlaufen, nicht unter das Chevron rutschen. */
+.tw-row-name {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2xs);
+  align-items: baseline;
+  font-weight: 500;
+}
 .tw-row-dach,
 .tw-row-titel {
   overflow: hidden;
@@ -48,7 +92,9 @@
 /* Ein Beitrag ohne Titel ist die Zeile, die man sucht — sie darf nicht aussehen
    wie eine mit Titel. */
 .tw-row-titel--empty { color: var(--color-muted); font-style: italic; }
-.tw-row-count { justify-self: end; }
+/* Die Plakette steht unter der Überschrift, nicht unter deren Sortierpfeil —
+   darum derselbe rechte Abstand, den `.sortable-th` für den Pfeil freihält. */
+.tw-row-count { justify-self: end; margin-inline-end: calc(var(--space-md) + 14px); }
 .tw-row-count--0 { background: var(--color-tag-bg); color: var(--color-muted); }
 .tw-row-count--1,
 .tw-row-count--2,
@@ -139,10 +185,9 @@
 .tw-variant + .tw-variant { border-top: 0.5px solid var(--color-border); }
 /* Herkunft der Variante bleibt sichtbar: ein Vorschlag der Maschine ist kein
    Vorschlag der Redaktion, auch wenn er daneben steht. */
-.tw-variant-src {
-  font-size: var(--size-compact-font-size);
-  text-transform: lowercase;
-}
+/* Plakette wie überall (`.badge` bringt Innenabstand + Blockfluss mit) — ohne
+   sie klebte der Herkunftsvermerk ohne Rand am Variantentext. */
+.tw-variant-src { align-self: center; }
 .tw-variant-src--user { background: var(--color-tag-bg); color: var(--color-muted); }
 .tw-variant-src--ki   { background: color-mix(in srgb, var(--card-accent) 18%, transparent); color: var(--card-accent); }
 .tw-variant-text { overflow-wrap: anywhere; }
@@ -169,21 +214,25 @@
 }
 .tw-suggest .progress-bar-wrap { flex: 1 1 8rem; margin: 0; }
 
-/* Schmale Viewports: die Übersichtszeile fällt auf zwei Zeilen zusammen, der
-   Detail-Block behält seine Struktur (er ist ohnehin einspaltig). */
-@media (max-width: 760px) {
+/* Schmale Viewports: die Übersichtszeile fällt auf drei Zeilen zusammen, der
+   Detail-Block behält seine Struktur (er ist ohnehin einspaltig). Der
+   Tabellenkopf verschwindet — er beschriftet Spalten, die es hier nicht mehr
+   gibt. */
+@media (max-width: 768px) {
+  .tw-table thead { display: none; }
   .tw-row {
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: 1fr auto;
     grid-template-areas:
-      "chev name  count"
-      ".    dach  dach"
-      ".    titel titel";
+      "name  count"
+      "dach  dach"
+      "titel titel";
   }
-  .tw-row > .history-chevron { grid-area: chev; }
   .tw-row-name  { grid-area: name; }
   .tw-row-dach  { grid-area: dach; }
   .tw-row-titel { grid-area: titel; white-space: normal; }
-  .tw-row-count { grid-area: count; }
+  /* Ohne Kopfzeile gibt es keinen Sortierpfeil, an dem sich die Plakette
+     ausrichten müsste. */
+  .tw-row-count { grid-area: count; margin-inline-end: var(--space-sm); }
   .tw-variant {
     grid-template-columns: auto 1fr auto;
     grid-template-areas:

@@ -30,7 +30,7 @@
         <div class="chat-msg-bubble">
           <div x-show="msg.role === 'user'" class="chat-msg-text" x-text="msg.content"></div>
           <div x-show="msg.role === 'assistant'" class="chat-msg-text" x-html="_renderChatMarkdown(msg.content)"></div>
-          <div x-show="msg.role === 'assistant' && _chatTokenInfo(msg)" class="chat-token-info" x-text="_chatTokenInfo(msg)"></div>
+          <div x-show="msg.role === 'assistant' && _chatTokenInfo(msg)" class="chat-token-info" :title="_chatTokenTitle(msg)" x-text="_chatTokenInfo(msg)"></div>
         </div>
 
         <!-- Änderungsvorschläge (nur Seiten-Chat) -->
@@ -200,7 +200,7 @@
               </template>
             </div>
           </template>
-          <div x-show="msg.role === 'assistant' && _chatTokenInfo(msg)" class="chat-token-info" x-text="_chatTokenInfo(msg)"></div>
+          <div x-show="msg.role === 'assistant' && _chatTokenInfo(msg)" class="chat-token-info" :title="_chatTokenTitle(msg)" x-text="_chatTokenInfo(msg)"></div>
         </div>
       </div>
     </template>

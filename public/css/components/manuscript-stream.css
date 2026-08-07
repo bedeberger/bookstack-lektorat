@@ -48,4 +48,52 @@
   /* Sprungziele nicht hinter sticky Headern verstecken. */
   .ms-chapter[id],
   .ms-page__title[id] { scroll-margin-top: 96px; }
+
+  /* ── Beitrag mit Titel-Kopf (publizistische Bücher) ─────────────────────────
+     Markup: public/js/manuscript-render.js (Variantenklassen) + der Kopf selbst
+     aus lib/headline-render.js (.ms-head__kicker / .ms-head__lead).
+
+     Die Seiten-Caption oben ist eine Marginalie — der Ordnungsname der Seite,
+     absichtlich klein. Trägt die Seite dagegen eine Schlagzeile, IST sie die
+     Überschrift des Beitrags und muss auch so gesetzt sein. Darum hier die
+     Umkehrung: Serifen statt Sans, gross statt klein, keine Versalien, keine
+     Punktlinie (die Dachzeile darüber trennt bereits). */
+  .ms-page--article { margin-block-start: var(--ms-space-lg, 28px); }
+
+  .ms-page__title--headline {
+    padding-block-end: 0;
+    border-bottom: 0;
+    font-family: var(--ms-serif, Georgia, serif);
+    font-size: var(--ms-article-title-size, 27px);
+    font-weight: 700;
+    line-height: 1.18;
+    letter-spacing: -0.01em;
+    text-transform: none;
+    color: var(--ms-text, inherit);
+  }
+
+  .ms-head__kicker {
+    margin: 0 0 var(--ms-space-xs, 4px);
+    font-family: var(--ms-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+    font-size: var(--ms-caption-size, 13px);
+    line-height: 1.3;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ms-accent, var(--ms-muted, #6b6258));
+  }
+  /* Das <strong> im Kopf-Markup ist der Fallback für Ausgabewege ohne
+     Stylesheet (PDF, Word, Markdown). Hier trägt die Klasse die Auszeichnung. */
+  .ms-head__kicker strong { font-weight: 600; }
+
+  .ms-head__lead {
+    margin: var(--ms-space-xs, 4px) 0 0;
+    font-family: var(--ms-serif, Georgia, serif);
+    font-size: var(--ms-lead-size, 18px);
+    line-height: 1.5;
+    color: var(--ms-text, inherit);
+  }
+  .ms-head__lead em { font-style: normal; font-weight: 600; }
+
+  /* Der Body folgt hier direkt auf den Lead, nicht auf eine Trennlinie. */
+  .ms-page--article .ms-page__body { padding-block-start: var(--ms-space-md, 18px); }
 }

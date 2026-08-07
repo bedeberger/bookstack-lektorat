@@ -49,6 +49,17 @@ export function komplettHiddenFor(buchtyp) {
   return !!buchtyp && KOMPLETT_HIDDEN_BUCHTYPEN.includes(buchtyp);
 }
 
+// Buchtypen mit redaktionellem Apparat (Textsorte, Titel-Werkstatt,
+// Redaktions-Status). Frontend-Spiegel von JOURNALISTIC in lib/buchtyp.js —
+// gegated durch tests/unit/headline-drift.test.mjs. Zwei Typen mit Absicht: ein
+// Blog laeuft durch dieselbe Schleife aus Dachzeile/Titel/Lead, nur mit
+// WordPress statt Druck als Ziel.
+export const JOURNALISTIC_BUCHTYPEN = ['journalismus', 'blog'];
+
+export function isJournalisticBuchtyp(buchtyp) {
+  return !!buchtyp && JOURNALISTIC_BUCHTYPEN.includes(buchtyp);
+}
+
 export const FEATURES = [
   // Übersicht — Viewer darf read-only Buch-Overview sehen.
   { key: 'overview',       kind: 'toggle', group: 'tools',  labelKey: 'tile.overview',       descKey: 'tile.overview.desc',       flag: 'showBookOverviewCard',   toggle: 'toggleBookOverviewCard',   requiresBook: true, minRole: 'viewer',
@@ -78,7 +89,7 @@ export const FEATURES = [
   // Titel-Werkstatt: Dachzeile/Titel/Lead/Teaser als Metadata der Seite. Gilt
   // fuer beide publizistischen Buchtypen — ein Blog braucht denselben
   // Titelapparat wie ein Ressort, nur mit WordPress statt Druck als Ziel.
-  { key: 'titelwerkstatt', kind: 'toggle', group: 'manuscript', labelKey: 'tile.titelwerkstatt', descKey: 'tile.titelwerkstatt.desc', flag: 'showTitelwerkstattCard', toggle: 'toggleTitelwerkstattCard', requiresBook: true, minRole: 'editor', requiresBuchtyp: ['journalismus', 'blog'],
+  { key: 'titelwerkstatt', kind: 'toggle', group: 'manuscript', labelKey: 'tile.titelwerkstatt', descKey: 'tile.titelwerkstatt.desc', flag: 'showTitelwerkstattCard', toggle: 'toggleTitelwerkstattCard', requiresBook: true, minRole: 'editor', requiresBuchtyp: JOURNALISTIC_BUCHTYPEN,
     aliases: ['titel','titelwerkstatt','dachzeile','ueberzeile','überzeile','kicker','lead','vorspann','teaser','anreisser','anreisser','schlagzeile','headline','seo','meta','varianten','zeichenlimit'] },
   // Welt & Plot — World-Cards: editor+ (für Viewer/Lektor nicht relevant).
   { key: 'figuren',        kind: 'toggle', group: 'world',  labelKey: 'tile.figuren',        descKey: 'tile.figuren.desc',        flag: 'showFiguresCard',        toggle: 'toggleFiguresCard',        requiresBook: true, minRole: 'editor', dependsOnKomplett: true, hiddenForBuchtyp: ['journalismus'],

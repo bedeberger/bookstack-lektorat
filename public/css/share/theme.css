@@ -43,6 +43,11 @@
   --ms-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --ms-chapter-size: 30px;
   --ms-caption-size: 13px;
+  /* Titel-Kopf eines Beitrags (publizistische Buecher): Schlagzeile eine Stufe
+     unter der Kapitel-Ueberschrift, Lead deutlich ueber dem Fliesstext. */
+  --ms-article-title-size: 27px;
+  --ms-lead-size: 18px;
+  --ms-accent: var(--share-accent, var(--share-muted));
   --ms-space-xs: 4px;
   --ms-space: 12px;
   --ms-space-md: 18px;

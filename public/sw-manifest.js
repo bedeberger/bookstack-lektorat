@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "79daa21680bc600a";
+self.__SHELL_BUILD = "beb2d9af49d96136";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -90,6 +90,7 @@ self.__SHELL_MANIFEST = [
   "/css/editor/notebook/find-replace.css",
   "/css/editor/notebook/findings.css",
   "/css/editor/notebook/lektorat.css",
+  "/css/editor/notebook/page-head.css",
   "/css/editor/reference-slot.css",
   "/css/editor/shared/conflict-resolution.css",
   "/css/editor/shared/editor-chrome.css",
@@ -319,6 +320,7 @@ self.__SHELL_MANIFEST = [
   "/js/cards/editor-find-card.js",
   "/js/cards/editor-focus-card.js",
   "/js/cards/editor-notebook-card.js",
+  "/js/cards/editor-page-head-card.js",
   "/js/cards/editor-spellcheck-card.js",
   "/js/cards/editor-spellcheck/controller.js",
   "/js/cards/editor-spellcheck/dispatch.js",
@@ -703,6 +705,7 @@ self.__SHELL_MANIFEST = [
   "/partials/editor-findings.html",
   "/partials/editor-focus.html",
   "/partials/editor-notebook.html",
+  "/partials/editor-page-head.html",
   "/partials/editor-page-toolbar.html",
   "/partials/editor-synonyme.html",
   "/partials/editor-toolbar.html",

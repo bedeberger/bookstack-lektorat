@@ -1,0 +1,157 @@
+/* Titel-Kopf des Beitrags im NOTEBOOK-EDITOR (publizistische Bücher).
+   Markup: public/partials/editor-page-head.html, State:
+   public/js/cards/editor-page-head-card.js.
+
+   Zwei Gesichter derselben Sache: im Lesemodus so gesetzt, wie der Beitrag
+   später erscheint (Dachzeile · Schlagzeile · Lead), im Bearbeitungsmodus als
+   Eingabefelder mit knappem Zeichen-Lineal. Der Wechsel soll nicht überraschen —
+   darum in beiden Fällen dieselbe Kopfzone über dem Text, nur einmal gesetzt
+   und einmal befüllbar.
+
+   Der Kopf im AUSGABEWEG (.ms-head__*) lebt woanders
+   (public/css/components/manuscript-stream.css): er gehört zum HTML, das der
+   Server für Share-Reader und Export erzeugt, nicht zum Editor-Chrome. */
+@layer components {
+  .page-head { margin-block-end: var(--space-lg); }
+
+  /* ── Leseansicht ─────────────────────────────────────────────────────────── */
+
+  .page-head__read {
+    padding-block-end: var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .page-head__kicker {
+    margin: 0 0 var(--space-xs);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1.3;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--card-accent, var(--color-muted));
+  }
+
+  .page-head__title {
+    margin: 0;
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    line-height: 1.18;
+    letter-spacing: -0.01em;
+    color: var(--color-text);
+  }
+
+  .page-head__lead {
+    margin: var(--space-sm) 0 0;
+    font-size: var(--font-size-reading);
+    font-weight: 500;
+    line-height: 1.5;
+    color: var(--color-text);
+  }
+
+  /* ── Bearbeiten ──────────────────────────────────────────────────────────── */
+
+  .page-head__edit {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-tag-bg);
+  }
+
+  .page-head__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .page-head__label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-muted);
+  }
+
+  /* Zeichenzahl: reine Anzeige. Ein zu langer Titel ist ein unfertiger Titel,
+     kein Fehler — deshalb Färbung statt Fehlermeldung, und nie eine Sperre. */
+  .page-head__count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--color-muted);
+  }
+  .page-head__count--passt     { color: var(--color-success); }
+  .page-head__count--teilweise { color: var(--color-mittel); }
+  .page-head__count--zulang    { color: var(--color-schwach); }
+
+  .page-head__input {
+    width: 100%;
+    padding: var(--space-sm);
+    border: 1px solid var(--color-border-input);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font: inherit;
+  }
+  .page-head__input:focus {
+    border-color: var(--color-border-focus);
+    outline: none;
+  }
+  .page-head__input--long { resize: vertical; min-height: 3.2em; line-height: 1.45; }
+
+  /* Die Schlagzeile ist das Hauptfeld — sie soll sich beim Tippen schon wie
+     eine Überschrift anfühlen, nicht wie ein Formularfeld unter vielen. */
+  .page-head__field--titel .page-head__input {
+    font-size: var(--font-size-xl);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  /* Füllstand gegen den engsten Kanal. Progress-Bar-Pattern aus DESIGN.md:
+     .progress-bar-wrap ist die Schiene, .progress-bar die Füllung, deren Breite
+     aus --progress kommt. Hier nur flacher als der Standard — das Lineal soll
+     mitlaufen, nicht die Aufmerksamkeit vom Feld ziehen. */
+  .page-head__ruler { height: 2px; }
+  .page-head__ruler .progress-bar { background: var(--color-muted); }
+  .page-head__ruler--passt     .progress-bar { background: var(--color-success); }
+  .page-head__ruler--teilweise .progress-bar { background: var(--color-mittel); }
+  .page-head__ruler--zulang    .progress-bar { background: var(--color-schwach); }
+
+  .page-head__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+  }
+
+  .page-head__hint {
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+    color: var(--color-muted);
+  }
+
+  .page-head__saving {
+    font-size: var(--font-size-xs);
+    color: var(--color-muted);
+  }
+
+  .page-head__error {
+    font-size: var(--font-size-sm);
+    color: var(--color-schwach);
+  }
+
+  /* Schmale Viewports: die Zeichenzahl rutscht unter das Label, sonst drückt
+     sie den Feldnamen ab. */
+  @media (max-width: 600px) {
+    .page-head__label { flex-direction: column; align-items: flex-start; gap: var(--space-2xs); }
+    .page-head__title { font-size: var(--font-size-xl); }
+    .page-head__field--titel .page-head__input { font-size: var(--font-size-lg); }
+  }
+}

@@ -138,7 +138,7 @@ export const researchChatMethods = {
     }),
     sendUrl: '/jobs/research-chat',
     onPollProgress: function (job) {
-      this.researchChatStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec, job.statusParams);
+      this.researchChatStatus = this._runningJobStatus(job.statusText, job.tokensIn, job.tokensOut, job.maxTokensOut, job.progress, job.tokensPerSec, job.statusParams, job.cacheReadIn);
     },
     onPollDone: async function () {
       const sid = this.researchChatSessionId;

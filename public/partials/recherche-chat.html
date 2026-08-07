@@ -75,7 +75,7 @@
             </div>
           </template>
 
-          <div x-show="msg.role === 'assistant' && _chatTokenInfo(msg)" class="chat-token-info" x-text="_chatTokenInfo(msg)"></div>
+          <div x-show="msg.role === 'assistant' && _chatTokenInfo(msg)" class="chat-token-info" :title="_chatTokenTitle(msg)" x-text="_chatTokenInfo(msg)"></div>
         </div>
       </div>
     </template>

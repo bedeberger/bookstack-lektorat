@@ -25,6 +25,18 @@ export const HEADLINE_FIELDS = ['dachzeile', 'titel', 'lead', 'teaser'];
  *  Input). Reine Darstellungsfrage, deshalb hier und nicht im Schema. */
 export const HEADLINE_LONG_FIELDS = ['lead', 'teaser'];
 
+/**
+ * Die Felder, die AM BEITRAG stehen — im Editor-Kopf, im Share-Reader und in
+ * jedem Export. Der Teaser fehlt hier mit Absicht: er ist der Anreisser für
+ * Übersichten und Vorschaukarten, nicht Teil des Artikels; im Beitrag selbst
+ * wäre er die Wiederholung des Leads mit anderen Worten. Er verlässt die App
+ * nur als WordPress-`excerpt` und wird darum ausschliesslich in der
+ * Titel-Werkstatt gepflegt.
+ *
+ * Serverseitiges Gegenstück: lib/headline-render.js.
+ */
+export const HEADLINE_HEAD_FIELDS = ['dachzeile', 'titel', 'lead'];
+
 export const HEADLINE_CHANNELS = [
   { key: 'print',  limits: { dachzeile: 32, titel: 48, lead: 280, teaser: 180 } },
   { key: 'web',    limits: { dachzeile: 40, titel: 70, lead: 400, teaser: 220 } },

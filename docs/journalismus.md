@@ -91,6 +91,63 @@ Prompt [prompts/headline.js](../public/js/prompts/headline.js), Rolle
 - Vorschläge landen als Varianten (`herkunft='ki'`), **übernommen wird von
   Hand**. Ein Titel ist eine redaktionelle Entscheidung.
 
+### Der Kopf am Beitrag — SSoT [lib/headline-render.js](../lib/headline-render.js)
+
+Dachzeile, Titel und Lead stehen über dem Beitrag: in der Notebook-Leseansicht,
+im Share-Reader und in **jedem** Export. Weil sie Metadata sind und nicht die
+ersten Absätze, sieht sie kein Ausgabeweg von selbst — jeder muss sie auflösen,
+bevor sein Walker läuft. Das ist dieselbe Eigenschaft, die `prepareCitations`
+(Quellen) und `applyXrefsInGroups` (Querverweise) begründet, und derselbe Grund,
+warum es genau **eine** Stelle dafür gibt.
+
+**Der Titel ERSETZT den Seitennamen, er tritt nicht daneben.** `pages.page_name`
+ist der Ordnungsname im Buchorganizer („Beitrag 12"), der Titel die Schlagzeile;
+nebeneinander trüge jeder Beitrag zwei Überschriften. Ohne gesetzten Titel bleibt
+der Seitenname — ein leerer Kopf wäre schlimmer als ein technischer Name. Der
+Blog-Sync entscheidet seit jeher so; alle übrigen Wege folgen jetzt derselben
+Regel. Der **Dateiname** (`resolveSlug`) folgt ihr bewusst *nicht*: eine Adresse
+soll sich nicht ändern, weil jemand den Titel umformuliert hat.
+
+**Der Teaser gehört nicht in den Beitrag.** Er ist der Anreisser für Übersichten
+und Vorschaukarten; im Artikel selbst wäre er die Wiederholung des Leads mit
+anderen Worten. Er verlässt die App weiterhin nur als WordPress-`excerpt` und
+wird ausschliesslich in der Titel-Werkstatt gepflegt (Feldliste
+[channels.js](../public/js/headline/channels.js)#`HEADLINE_HEAD_FIELDS` vs.
+`HEADLINE_FIELDS`).
+
+**Markup-Invariante:** der Kopf trägt seine Klasse (`ms-head__kicker` /
+`ms-head__lead`) **und** eine Auszeichnung (`<strong>`/`<em>`). Beides mit
+Absicht — die Wege mit eigenem Stylesheet (HTML, EPUB, Substack, Share-Reader)
+hängen sich an die Klasse, die Wege durch den HTML-Walker (PDF, Word, Markdown)
+kennen nur die Auszeichnung. Nicht das eine gegen das andere eintauschen.
+
+**Angehängt wird an genau einer Stelle:** `attachHeadlines` in
+[lib/load-contents.js](../lib/load-contents.js) hängt den geltenden Stand an die
+Seiten-Metadaten (`x.p.hl`) — damit tragen alle Export-Wege und der Buch-/
+Kapitel-Share ihn ohne eigenen Nachladepfad. Der **Seiten-Share** und die
+Kapitel-Variante laufen nicht über `loadContents` und ziehen ihn selbst
+(`attachPageHeadline`, [lib/share-helpers.js](../lib/share-helpers.js)).
+No-op ausserhalb publizistischer Bücher, non-fatal bei Lookup-Fehlern: ein
+Titelapparat ist Zutat, kein Inhalt.
+
+**Wo die Ausgabewege sich unterscheiden** (und warum):
+
+| Weg | Überschrift | Dachzeile / Lead |
+|---|---|---|
+| Share-Reader (Buch/Kapitel) | Stream-Titel, Klasse `ms-page__title--headline` — die Seiten-Caption ist sonst eine kleine gesperrte Marginalie, als Schlagzeile wäre das falsch | eigene Blöcke um die Überschrift |
+| Share-Reader (Seite) | H1 der Leseansicht | Block über dem Text (eine zweite Überschrift wäre doppelt) |
+| HTML · EPUB · Substack | eigene Überschrift, Kopf darum herum | eigenes Stylesheet |
+| Markdown · Plaintext | Überschrift bzw. Zeile | `**…**` / `*…*` bzw. blosse Stellung — im Plaintext bewusst **keine** Versalien: das wäre eine Änderung am Wortlaut, um eine Formatierung zu ersetzen |
+| Word | `_chapterHeading` | benannte Absatzformate `ArticleKicker` / `ArticleLead` (`allCaps` setzt Word, der gespeicherte Text bleibt unangetastet) |
+| PDF `nested` | `it.heading` | `it.kicker` zeichnet [body.js](../lib/pdf-render/body.js), der Lead geht als HTML voran |
+| PDF `flatten` / Seite ohne Kapitel | — | der Renderer zeichnet dort gar keine Seitenüberschrift, also geht der **komplette** Kopf inkl. `h3` ins HTML; sonst verschwände die Schlagzeile spurlos |
+
+**Der Kopf zählt nirgends als Prosa.** Umfang und Lesezeit des Share-Readers
+messen den Beitrag und schneiden ihn vorher heraus (`stripHeadBlocks`) — dieselbe
+Regel, die ihn aus `page_stats`, Wortschatz und Lektorat heraushält, und genau der
+Grund, warum er nicht im Fliesstext steht. Aus `pages.content` muss nichts
+geschnitten werden: dort kommt er nie an.
+
 ### Blog-Sync
 
 [routes/jobs/blog-sync.js](../routes/jobs/blog-sync.js) im Push-Pfad: ist ein
@@ -98,6 +155,30 @@ Titel bzw. Teaser gesetzt, gewinnen sie über den abgeleiteten Seitennamen und
 gehen als `title`/`excerpt` an WordPress. **Nur gesetzte Felder** — ohne
 Titel-Werkstatt bleibt der Push Byte für Byte der alte, und ein leeres Feld darf
 einen in WordPress gepflegten Titel nicht überschreiben.
+
+### Kopf im Notebook-Editor
+
+`editorPageHeadCard` ([public/js/cards/editor-page-head-card.js](../public/js/cards/editor-page-head-card.js),
+Partial [editor-page-head.html](../public/partials/editor-page-head.html), CSS
+[editor/notebook/page-head.css](../public/css/editor/notebook/page-head.css)).
+Leseansicht: gesetzt wie im Ausgabeweg. Edit-Modus: die drei Felder als Eingaben
+mit knappem Zeichen-Lineal. Damit steht beim Schreiben sichtbar, worauf der Text
+zuläuft — bisher sah man den Titelapparat nur in der Titel-Werkstatt, also
+gerade nicht dort, wo man am Text arbeitet.
+
+**Nur der Notebook-Editor.** Der Focus-Editor ist der Vollbild-Schreibmodus: ein
+Kopf über der Schreiblinie griffe in seine Höhenkette ein, und er blendet mit
+Absicht alles aus, was nicht der laufende Satz ist. Der Bucheditor zeigt den
+Manuskript-Stream über das ganze Ressort — dort gehört der Kopf an jeden Beitrag
+im Stream und nicht an eine Karte; eigenes Vorhaben.
+
+**Zweiter Schreibpfad, bewusst getrennt:** gespeichert wird über
+`PUT /headline/page/:id`, dieselbe Route wie in der Titel-Werkstatt, **nicht**
+über den Seiten-Save. Der Kopf steht in `page_headline`, nicht in
+`pages.content` — er kann den Konflikt-/Stale-Pfad des Editors also weder
+auslösen noch stören, und `pages.updated_at` bewegt sich durch ihn nicht. Nach
+dem Speichern feuert er `card:refresh` auf `titelwerkstatt`: die zeigt dieselben
+Felder in ihrer Übersicht und stünde sonst auf dem alten Titel.
 
 ### Karte
 
@@ -293,6 +374,15 @@ verwerfen, ohne den Wortlaut zu verlieren — sie ist der grosse Teil im Backup.
 - **Keine erfundene Sprecherzuordnung**, keine erfundenen Quellen-Metadaten,
   keine geratene Formtreue.
 - **Zeichenlimits validieren nicht.** Wer das ändert, dreht das Feature um.
+- **Der Titel-Kopf wird nie in `pages.content` persistiert.** Er ist ein
+  Render-Artefakt aus `page_headline` — dieselbe Regel wie beim
+  Quellenverzeichnis und beim Anmerkungsapparat. Wer ihn in den Fliesstext
+  schreibt, macht ihn zu Prosa und nimmt dem Feature seinen Zweck.
+- **Neuer Ausgabeweg ⇒ [lib/headline-render.js](../lib/headline-render.js)
+  aufrufen, keine eigene Auflös-Logik.** Wer den Seitennamen direkt rendert,
+  zeigt „Beitrag 12" statt der Schlagzeile.
+- **Der Kopf zählt nirgends als Prosa** — messende Schichten schneiden ihn über
+  `stripHeadBlocks` heraus.
 - Neue Stufe/neues Feld/neue Textsorte ⇒ ESM-SSoT **und** CJS-Spiegel **und**
   CHECK-Constraint **und** beide Locales. Gegated durch
   [redaktion-status.test.mjs](../tests/unit/redaktion-status.test.mjs),

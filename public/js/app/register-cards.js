@@ -73,6 +73,7 @@ import { registerEditorToolbarCard } from '../cards/editor-toolbar-card.js';
 import { registerEditorFocusCard } from '../cards/editor-focus-card.js';
 import { registerEditorNotebookCard } from '../cards/editor-notebook-card.js';
 import { registerEditorEntitiesCard } from '../cards/editor-entities-card.js';
+import { registerEditorPageHeadCard } from '../cards/editor-page-head-card.js';
 import { registerEditorSpellcheckCard } from '../cards/editor-spellcheck-card.js';
 import { registerLektoratFindingsCard } from '../cards/lektorat-findings-card.js';
 import { registerEditorCommentsCard } from '../cards/editor-comments-card.js';
@@ -202,6 +203,7 @@ export function registerAllCards() {
   registerEditorFocusCard();
   registerEditorNotebookCard();
   registerEditorEntitiesCard();
+  registerEditorPageHeadCard();
   registerEditorSpellcheckCard();
   registerLektoratFindingsCard();
   registerEditorCommentsCard();

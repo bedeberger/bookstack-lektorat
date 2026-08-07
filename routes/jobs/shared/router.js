@@ -176,6 +176,10 @@ sharedRouter.get('/:id', (req, res) => {
     progress: job.progress, statusText, statusParams,
     label: job.label, labelParams: job.labelParams,
     tokensIn: job.tokensIn, tokensOut: job.tokensOut,
+    // tokensIn ist cache-inklusiv (lib/ai/claude.js) und im agentischen Tool-Loop
+    // über alle Provider-Calls aufsummiert — ohne den Cache-Anteil ist die Zahl
+    // im Live-Status nicht einzuordnen.
+    cacheReadIn: job.cacheReadIn || 0,
     maxTokensOut: job.maxTokensOut,
     tokensPerSec: job.tokensPerSec,
     result: job.result, error: job.error, errorParams: job.errorParams,

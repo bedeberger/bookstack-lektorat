@@ -8,7 +8,9 @@
 // ESCAPING-INVARIANTE: Entry-Namen werden via escHtml escaped; entry.html wird
 // VERBATIM eingefügt (bereits via lib/html-clean.js sanitisiert, trägt data-bid
 // für Kommentar-Anker). Niemals beides vertauschen — roher Name = XSS-Sink,
-// doppelt-escaptes html = kaputte Anzeige.
+// doppelt-escaptes html = kaputte Anzeige. Dasselbe gilt für
+// entry.headBefore/headAfter: fertiges Markup aus lib/headline-render.js, das
+// seine Textwerte dort bereits escaped hat.
 
 function escHtml(s) {
   return String(s == null ? '' : s)
@@ -53,8 +55,19 @@ export function renderStreamHtml(entries, opts = {}) {
       const a = o.anchorPrefix + (++n);
       const level = (e.chapterId && !o.omitChapterHeaders) ? 2 : 1;
       toc.push({ level, label: e.name || '', anchor: a, chapterId: e.chapterId ?? null, pageId: e.id ?? null });
-      sections.push(`<section class="${o.pageSectionClass}">
-            <${o.pageTag} id="${a}" class="${o.pageTitleClass}">${escHtml(e.name || '')}</${o.pageTag}>
+      // headBefore/headAfter (Dachzeile bzw. Lead) sind FERTIGES Markup aus
+      // lib/headline-render.js und werden — wie e.html — verbatim eingefügt.
+      // Nicht escapen: escHtml gilt hier nur für die Entry-Namen.
+      // `article`: die Seite ist ein Beitrag mit eigener Schlagzeile. Die
+      // Seiten-Caption ist sonst eine kleine gesperrte Marginalie — als
+      // Schlagzeile gesetzt wäre das falsch, darum die Variantenklasse statt
+      // eines zweiten Renderers.
+      const secCls = e.article ? `${o.pageSectionClass} ${o.pageSectionClass}--article` : o.pageSectionClass;
+      const titleCls = e.article ? `${o.pageTitleClass} ${o.pageTitleClass}--headline` : o.pageTitleClass;
+      sections.push(`<section class="${secCls}">
+            ${e.headBefore || ''}
+            <${o.pageTag} id="${a}" class="${titleCls}">${escHtml(e.name || '')}</${o.pageTag}>
+            ${e.headAfter || ''}
             <div class="${o.pageBodyClass}">${e.html || ''}</div>
           </section>`);
     }

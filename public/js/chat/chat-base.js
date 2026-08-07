@@ -246,18 +246,48 @@ export function makeChatMethods(cfg) {
     return renderChatMarkdown(match ? window.__app.t(match[1]) : text);
   };
 
+  // `tokens_in` ist cache-INKLUSIV (input + cache_read + cache_creation, siehe
+  // lib/ai/claude.js) und im agentischen Pfad zusätzlich über alle Tool-Iterationen
+  // aufsummiert. Ohne den Cache-Anteil liest sich die Zahl wie voll bezahlter Input,
+  // obwohl der gelesene Cache nur ein Zehntel des Tarifs kostet — darum die Quote
+  // sichtbar am Badge, die vollständige Aufschlüsselung im title.
   m._chatTokenInfo = function (msg) {
     if (!msg.tokens_in && !msg.tokens_out) return '';
+    const tokIn = msg.tokens_in || 0;
+    const cached = msg.cache_read_in || 0;
     const tpsPart = msg.tps ? ` · ${Math.round(msg.tps)} tok/s` : '';
-    return `↑${fmtTok(msg.tokens_in || 0)} ↓${fmtTok(msg.tokens_out || 0)}${tpsPart}`;
+    const cachePart = (tokIn > 0 && cached > 0)
+      ? ` · ${window.__app.t('chat.tokenCacheShare', { pct: Math.round((cached / tokIn) * 100) })}`
+      : '';
+    return `↑${fmtTok(tokIn)} ↓${fmtTok(msg.tokens_out || 0)}${cachePart}${tpsPart}`;
+  };
+
+  // Vollständige Input-Aufschlüsselung als title (Hover) — die drei Posten haben
+  // drei verschiedene Tarife (frisch 1x, Cache-Schreiben 1.25x, Cache-Lesen 0.1x).
+  m._chatTokenTitle = function (msg) {
+    const tokIn = msg.tokens_in || 0;
+    if (!tokIn) return '';
+    const cached  = msg.cache_read_in || 0;
+    const written = msg.cache_creation_in || 0;
+    const fresh   = Math.max(0, tokIn - cached - written);
+    if (!cached && !written) return '';
+    const t = (k, p2) => window.__app.t(k, p2);
+    return [
+      t('chat.tokenBreakdownTotal',  { n: fmtTok(tokIn) }),
+      t('chat.tokenBreakdownFresh',  { n: fmtTok(fresh) }),
+      t('chat.tokenBreakdownWrite',  { n: fmtTok(written) }),
+      t('chat.tokenBreakdownRead',   { n: fmtTok(cached) }),
+    ].join(' · ');
   };
 
   // Status-HTML für laufende Jobs — wird von onPollProgress-Callbacks der
   // konkreten Chats genutzt (sie rufen this._runningJobStatus).
-  m._runningJobStatus = function (statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams) {
+  // cacheReadIn (optional): Cache-Anteil der bisher gezählten Input-Tokens; im
+  // agentischen Tool-Loop wächst tokensIn pro Iteration um den ganzen Präfix.
+  m._runningJobStatus = function (statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams, cacheReadIn) {
     return runningJobStatus(
       (k, p2) => window.__app.t(k, p2),
-      statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams,
+      statusText, tokIn, tokOut, maxTokOut, progress, tokPerSec, statusParams, cacheReadIn,
     );
   };
 

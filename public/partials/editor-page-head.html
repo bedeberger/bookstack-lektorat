@@ -1,0 +1,76 @@
+<!-- Titel-Kopf des Beitrags (Notebook-Editor). Nur in publizistischen Büchern.
+     Lesemodus: gesetzt wie im Ausgabeweg. Edit-Modus: die drei Felder als
+     Eingaben mit knappem Zeichen-Lineal. Der Teaser fehlt hier mit Absicht — er
+     gehört nicht in den Beitrag, sondern in Übersichten (channels.js#
+     HEADLINE_HEAD_FIELDS); gepflegt wird er in der Titel-Werkstatt. -->
+<div x-data="editorPageHeadCard" class="page-head" x-show="headVisible() && (editMode || headHasContent())" x-cloak>
+
+  <!-- Leseansicht -->
+  <template x-if="!editMode">
+    <div class="page-head__read">
+      <p class="page-head__kicker" x-show="headSaved.dachzeile" x-text="headSaved.dachzeile"></p>
+      <h2 class="page-head__title" x-show="headSaved.titel" x-text="headSaved.titel"></h2>
+      <p class="page-head__lead" x-show="headSaved.lead" x-text="headSaved.lead"></p>
+    </div>
+  </template>
+
+  <!-- Bearbeiten. Gespeichert wird beim Verlassen des Feldes (@blur), nicht bei
+       jedem Anschlag — siehe Kopfkommentar in editor-page-head-card.js. -->
+  <template x-if="editMode">
+    <div class="page-head__edit">
+      <template x-for="feld in headFields()" :key="feld">
+        <div class="page-head__field" :class="'page-head__field--' + feld">
+          <label class="page-head__label" :for="'page-head-' + feld">
+            <span x-text="headFieldLabel(feld)"></span>
+            <span class="page-head__count"
+                  :class="'page-head__count--' + headFitState(feld)"
+                  :data-tip="headOverList(feld) || null"
+                  x-text="headLen(feld)"></span>
+          </label>
+
+          <template x-if="!headIsLong(feld)">
+            <input type="text" class="page-head__input"
+                   :id="'page-head-' + feld"
+                   x-model="headDraft[feld]"
+                   @blur="headSaveField(feld)"
+                   :disabled="!$app.canEdit()"
+                   :placeholder="$app.t('headline.placeholder.' + feld)"
+                   autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" data-form-type="other"
+                   data-spellcheck="spelling">
+          </template>
+          <template x-if="headIsLong(feld)">
+            <textarea class="page-head__input page-head__input--long" rows="2"
+                      :id="'page-head-' + feld"
+                      x-model="headDraft[feld]"
+                      @blur="headSaveField(feld)"
+                      :disabled="!$app.canEdit()"
+                      :placeholder="$app.t('headline.placeholder.' + feld)"
+                      data-spellcheck="spelling"></textarea>
+          </template>
+
+          <!-- Füllstand gegen den engsten Kanal. Anzeige, keine Validierung:
+               ein zu langer Titel ist ein unfertiger Titel, kein Fehler.
+               Progress-Bar-Pattern: Wrapper ist die Schiene, .progress-bar die
+               Füllung, Breite via --progress (DESIGN.md). -->
+          <div class="page-head__ruler progress-bar-wrap"
+               :class="'page-head__ruler--' + headFitState(feld)"
+               role="presentation">
+            <div class="progress-bar" :style="{ '--progress': headFillPct(feld) + '%' }"></div>
+          </div>
+
+          <span class="page-head__saving" x-show="headSaving[feld]" x-cloak
+                x-text="$app.t('common.saving')"></span>
+        </div>
+      </template>
+
+      <div class="page-head__foot">
+        <span class="page-head__hint" x-text="$app.t('headline.editorHint')"></span>
+        <button type="button" class="btn-compact page-head__more"
+                @click="$app.toggleTitelwerkstattCard()"
+                x-text="$app.t('headline.openWorkshop')"></button>
+      </div>
+
+      <div class="page-head__error" role="alert" x-show="headError" x-cloak x-text="headError"></div>
+    </div>
+  </template>
+</div>

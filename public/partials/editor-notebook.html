@@ -304,6 +304,9 @@
        editMode zeigt contenteditable statt Preview (Findings bleiben rechts sichtbar). -->
   <div class="editor-body-wrap" :class="{ 'lektorat-split': checkDone, 'comments-split': pageCommentRailOpen && !checkDone }">
     <div class="editor-preview-wrap" :class="checkDone ? 'lektorat-split-preview' : ''">
+      <!-- Titel-Kopf des Beitrags (nur publizistische Buecher). Steht ueber
+           BEIDEN Koerpern, weil er in Lese- und Bearbeitungsmodus gehoert. -->
+      <div id="partial-editor-page-head" class="display-contents"></div>
       <div id="partial-editor-body-edit"></div>
       <div id="partial-editor-body-view"></div>
     </div>

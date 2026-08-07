@@ -30,11 +30,11 @@
                                  types: { name: 'string', dachzeile: 'string', titel: 'string', gesetzt: 'number' } })">
     <thead>
       <tr>
-        <th class="sortable-th" :class="sortClass('name')" :aria-sort="ariaSort('name')" @click="sortBy('name')"
+        <th class="sortable-th tw-col-beitrag" :class="sortClass('name')" :aria-sort="ariaSort('name')" @click="sortBy('name')"
             x-text="$app.t('headline.col.beitrag')"></th>
-        <th class="sortable-th" :class="sortClass('dachzeile')" :aria-sort="ariaSort('dachzeile')" @click="sortBy('dachzeile')"
+        <th class="sortable-th tw-col-dach" :class="sortClass('dachzeile')" :aria-sort="ariaSort('dachzeile')" @click="sortBy('dachzeile')"
             x-text="$app.t('headline.field.dachzeile')"></th>
-        <th class="sortable-th" :class="sortClass('titel')" :aria-sort="ariaSort('titel')" @click="sortBy('titel')"
+        <th class="sortable-th tw-col-titel" :class="sortClass('titel')" :aria-sort="ariaSort('titel')" @click="sortBy('titel')"
             x-text="$app.t('headline.field.titel')"></th>
         <th class="sortable-th tw-col-num" :class="sortClass('gesetzt')" :aria-sort="ariaSort('gesetzt')" @click="sortBy('gesetzt')"
             :data-tip="$app.t('headline.col.gesetztTip')" x-text="$app.t('headline.col.gesetzt')"></th>
@@ -44,10 +44,15 @@
       <template x-for="row in sorted" :key="row.id">
         <tr class="tw-row-group">
           <td colspan="4" class="tw-cell-group">
-            <button type="button" class="tw-row internal-link" @click="twToggleRow(row.id)"
+            <!-- Ein echter <button>, darum ohne `.internal-link`: die Klasse ist die
+                 Tastatur-Kruecke fuer klickbare Nicht-Buttons und bringt hier nur ihr
+                 Link-Hover (Unterstreichung + Ausgrauen der ganzen Zeile) mit. -->
+            <button type="button" class="tw-row" @click="twToggleRow(row.id)"
                     :aria-expanded="twOpenId === row.id ? 'true' : 'false'">
-              <span class="history-chevron" :class="{ open: twOpenId === row.id }" aria-hidden="true"></span>
-              <span class="tw-row-name" x-text="row.name"></span>
+              <span class="tw-row-name">
+                <span class="history-chevron" :class="{ open: twOpenId === row.id }" aria-hidden="true"></span>
+                <span x-text="row.name"></span>
+              </span>
               <span class="tw-row-dach" x-text="row.dachzeile || '—'"></span>
               <span class="tw-row-titel" :class="{ 'tw-row-titel--empty': !row.titel }"
                     x-text="row.titel || $app.t('headline.noTitle')"></span>
@@ -108,8 +113,7 @@
                   <ul class="tw-variants" x-show="twVariantsFor(feld).length">
                     <template x-for="v in twVariantsFor(feld)" :key="v.id">
                       <li class="tw-variant">
-                        <span class="tw-variant-src" :class="'tw-variant-src--' + v.herkunft"
-                              :data-tip="$app.t('headline.origin.' + v.herkunft)"
+                        <span class="badge tw-variant-src" :class="'tw-variant-src--' + v.herkunft"
                               x-text="$app.t('headline.origin.' + v.herkunft)"></span>
                         <span class="tw-variant-text" x-text="v.text"></span>
                         <span class="tw-variant-len" x-text="v.text.length"></span>
