@@ -81,13 +81,24 @@ test('ensureCaretSlot: leerer Container bleibt unangetastet', () => {
 
 test('Prefs: Defaults ohne gespeicherten Eintrag', () => {
   store.clear();
-  assert.deepEqual(readEditorPrefs(), { fullscreen: false, fitWidth: false, showMarks: false, zoom: 1 });
+  // `showHead` ist die einzige Pref mit Default AN: der Titel-Kopf ist Inhalt
+  // des Beitrags, keine Dekoration. Ein Nutzer ohne gespeicherte Wahl soll ihn
+  // sehen, nicht suchen muessen.
+  assert.deepEqual(readEditorPrefs(), { fullscreen: false, fitWidth: false, showMarks: false, showHead: true, zoom: 1 });
+});
+
+test('Prefs: ein Alt-Eintrag ohne showHead laesst den Titel-Kopf stehen', () => {
+  // Ausfallsicher zur Sichtbarkeit — sonst waere der Kopf fuer jeden, der die
+  // App schon benutzt hat, beim ersten Start nach dem Update weg.
+  store.clear();
+  store.set('notebook.editorPrefs', JSON.stringify({ fullscreen: false, fitWidth: true, showMarks: false, zoom: 1 }));
+  assert.equal(readEditorPrefs().showHead, true);
 });
 
 test('Prefs: Zoom wird persistiert (Editor öffnet in gewählter Schriftgrösse)', () => {
   store.clear();
-  writeEditorPrefs({ fullscreen: true, fitWidth: false, showMarks: true, zoom: 1.4 });
-  assert.deepEqual(readEditorPrefs(), { fullscreen: true, fitWidth: false, showMarks: true, zoom: 1.4 });
+  writeEditorPrefs({ fullscreen: true, fitWidth: false, showMarks: true, showHead: false, zoom: 1.4 });
+  assert.deepEqual(readEditorPrefs(), { fullscreen: true, fitWidth: false, showMarks: true, showHead: false, zoom: 1.4 });
 });
 
 test('Prefs: Zoom wird auf den Slider-Bereich geklemmt', () => {

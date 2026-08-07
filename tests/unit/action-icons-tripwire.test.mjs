@@ -1,6 +1,6 @@
 // Tripwire fuer das Format der Action-Icons in den Karten-Kopf-Clustern
 // (`.card-actions`), wie es der Notebook-Editor-Pageview als Referenz vorgibt
-// (public/partials/editor-notebook.html, `.card-actions--grouped`).
+// (public/partials/editor-page-actions.html, `.card-actions--grouped`).
 //
 // Ein Icon-only-Button (sichtbarer Inhalt = nur ein `<svg class="icon">`, kein
 // Text/`x-text`) hat keinen sichtbaren Namen — Tooltip + a11y-Label sind Pflicht,
@@ -128,9 +128,11 @@ test('scanner actually finds card-actions icon buttons (no vacuous pass)', () =>
   const total = FILES.map(scan).reduce((n, r) => n + r.found, 0);
   assert.ok(total >= 30, `Nur ${total} Action-Icons gefunden — Scanner vermutlich defekt.`);
 
-  const notebook = scan(join(PARTIALS_DIR, 'editor-notebook.html'));
+  // Referenz ist die Lese-Aktionsleiste des Notebook-Editors — sie sass frueher
+  // in editor-notebook.html und ist von dort ausgelagert (LOC-Limit).
+  const notebook = scan(join(PARTIALS_DIR, 'editor-page-actions.html'));
   assert.ok(
     notebook.found >= 10,
-    `Referenz editor-notebook.html: nur ${notebook.found} Action-Icons gefunden.`,
+    `Referenz editor-page-actions.html: nur ${notebook.found} Action-Icons gefunden.`,
   );
 });

@@ -1,5 +1,6 @@
 // Drift-Guard für die beiden Feature-Aktions-Meatballs:
-//   - Seiten-Meatball   → public/partials/editor-notebook.html (Notebook-Editor)
+//   - Seiten-Meatball   → public/partials/editor-page-actions.html (Notebook-Editor,
+//                         aus editor-notebook.html ausgelagert)
 //   - Kapitel-Meatball  → public/partials/kapitelreview.html (Kapitelbewertung)
 //
 // Beide bieten dieselbe geteilte Aktionsfolge an (Ideen, Recherche, Plot,
@@ -19,7 +20,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseHTML } from 'linkedom';
 
-const PAGE_PARTIAL = fileURLToPath(new URL('../../public/partials/editor-notebook.html', import.meta.url));
+const PAGE_PARTIAL = fileURLToPath(new URL('../../public/partials/editor-page-actions.html', import.meta.url));
 const CHAPTER_PARTIAL = fileURLToPath(new URL('../../public/partials/kapitelreview.html', import.meta.url));
 
 // Icon-Token von Aktionen, die NUR im Kapitel-Meatball vorkommen dürfen.

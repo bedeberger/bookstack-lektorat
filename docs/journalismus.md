@@ -181,13 +181,16 @@ Absicht alles aus, was nicht der laufende Satz ist. Der Bucheditor zeigt den
 Manuskript-Stream über das ganze Ressort — dort gehört der Kopf an jeden Beitrag
 im Stream und nicht an eine Karte; eigenes Vorhaben.
 
-**Ein-/ausblendbar** über das `heading`-Icon — in der Edit-Toolbar
+**Ein-/ausblendbar** über das `heading`-Icon, und zwar **nur im
+Bearbeitungsmodus** — Edit-Toolbar
 ([editor-page-toolbar.html](../public/partials/editor-page-toolbar.html), inline
-plus Meatball-Menü) **und** in der Lese-Kopfleiste. Der zweite Knopf ist kein
-Luxus: die Edit-Toolbar gibt es nur im Bearbeitungsmodus, und wer den Kopf dort
-wegklappt, käme im Lesemodus sonst nicht mehr an ihn heran. Beide Knöpfe sind auf
-`isJournalistischesBuch()` gegatet — in einem Roman schalteten sie etwas, das
-nicht existiert.
+plus Meatball-Menü), gegatet auf `isJournalistischesBuch()` (in einem Roman
+schaltete er etwas, das nicht existiert). Die Lese-Kopfleiste
+([editor-page-actions.html](../public/partials/editor-page-actions.html)) trägt
+den Knopf bewusst **nicht**: beim Lesen gehört der Kopf zum Beitrag, man liest
+ihn mit — der Schalter bewirkt dort nichts Nützliches und kostet einen Platz in
+einer Leiste, die auf eine Zeile passen soll. Die Wahl wirkt trotzdem auf beide
+Modi; wer den Kopf im Lesemodus zurückholen will, tut das im Bearbeitungsmodus.
 
 Der Zustand ist **reine Anzeige** (`pageEditorShowHead`, in `editorPrefs`
 persistiert wie Zoom und Steuerzeichen): er blendet den Kopf im Notebook-Editor
