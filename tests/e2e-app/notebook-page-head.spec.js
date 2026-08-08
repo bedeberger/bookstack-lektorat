@@ -65,6 +65,19 @@ async function startEdit(page) {
   await page.waitForSelector('#editor-card .page-content-view--editing', { timeout: 15000 });
 }
 
+// Zurück in die Leseansicht. `cancelEdit` fragt nur bei ungespeicherten
+// Änderungen nach — die Tests hier fassen den Fliesstext nicht an, der Dialog
+// kommt also nicht.
+//
+// Gewartet wird auf den ZUSTAND, nicht auf das Verschwinden des Knotens: das
+// contenteditable bleibt nach dem Teardown im DOM stehen und wird nur
+// ausgeblendet (siehe den quickSave-Guard in editor/notebook/edit/lifecycle.js).
+async function stopEdit(page) {
+  await page.evaluate(() => window.__app.cancelEdit());
+  await page.waitForFunction(() => window.__app.editMode === false, null, { timeout: 15000 });
+  await page.waitForSelector(READ_SHEET, { state: 'visible', timeout: 15000 });
+}
+
 async function headlineOf(page, pageId) {
   return page.evaluate(async (id) => {
     const r = await fetch(`/headline/page/${id}`);
@@ -113,9 +126,17 @@ test.describe('Notebook: Titel-Kopf des Beitrags', () => {
     const stampBefore = await page.evaluate(() => window.__app.currentPage.updated_at);
 
     // Gespeichert wird beim VERLASSEN des Feldes, nicht bei jedem Anschlag: der
-    // Cursor steht nach dem Tippen noch im Feld, also darf nichts in der DB sein.
+    // Cursor steht nach dem Tippen noch im Feld, also darf der Wert nicht in der
+    // DB stehen.
+    //
+    // Geprüft wird der WERT, nicht die Abwesenheit der Zeile: ein `toBe(null)`
+    // setzte voraus, dass diese Seite noch nie einen Titel hatte — und derselbe
+    // Seitenindex wird weiter unten vom Geometrie-Test beschrieben. Die Zusage
+    // hängt an der Reihenfolge der Tests und an einer frischen DB, und beides
+    // gilt nicht: `reuseExistingServer` lässt einen zweiten Lauf auf die
+    // vollgeschriebene smoke.db des ersten treffen.
     await page.fill(`${HEAD} #page-head-dachzeile`, 'Politik · Bundeshaus');
-    expect(await headlineOf(page, pageId)).toBe(null);
+    expect((await headlineOf(page, pageId))?.dachzeile).not.toBe('Politik · Bundeshaus');
 
     // Jeder Feldwechsel schreibt genau das verlassene Feld.
     await page.fill(`${HEAD} #page-head-titel`, 'Der lange Weg zum Referendum');
@@ -179,17 +200,23 @@ test.describe('Notebook: Titel-Kopf des Beitrags', () => {
     await openPage(page, 4);
     await expect(page.locator(`${HEAD} .page-head__title`)).toBeVisible();
 
-    // Lese-Kopfleiste: der Knopf ist da (die Edit-Toolbar gibt es hier nicht).
-    const readBtn = page.locator(`#editor-card .card-actions button[aria-label="${TIP_OFF}"]`);
-    await readBtn.click();
-    await expect(page.locator(HEAD)).toBeHidden();
-
-    // Der Zustand gilt auch im Bearbeitungsmodus …
+    // DER SCHALTER LEBT NUR IN DER EDIT-TOOLBAR. Im Lesemodus gibt es ihn
+    // bewusst nicht: dort wäre er eine Anzeige-Wahl ohne Wirkung auf den Text
+    // und kostete einen Platz in einer Leiste, die auf eine Zeile passen soll
+    // (Begründung im Markup, editor-page-actions.html). Seine WIRKUNG gilt
+    // weiterhin für beide Modi — genau das prüft dieser Test, nur eben in der
+    // Richtung, die es noch gibt: im Editor schalten, im Lesemodus nachsehen.
     await startEdit(page);
+    await page.locator(`.page-editor-toolbar button[aria-label="${TIP_OFF}"]`).first().click();
     await expect(page.locator(HEAD)).toBeHidden();
 
-    // … und der Knopf der Edit-Toolbar holt ihn zurück — MIT Inhalt. Die
-    // Anzeige-Wahl darf nie die Lade-Bedingung gewesen sein.
+    // … und der Zustand überlebt den Rückweg in die Leseansicht.
+    await stopEdit(page);
+    await expect(page.locator(HEAD)).toBeHidden();
+
+    // Der Knopf holt ihn zurück — MIT Inhalt. Die Anzeige-Wahl darf nie die
+    // Lade-Bedingung gewesen sein.
+    await startEdit(page);
     await page.locator(`.page-editor-toolbar button[aria-label="${TIP_ON}"]`).first().click();
     await expect(page.locator(`${HEAD} #page-head-titel`)).toHaveValue('Ein Satz zu viel');
 
@@ -202,8 +229,12 @@ test.describe('Notebook: Titel-Kopf des Beitrags', () => {
     await openPage(page, 4);
     await expect(page.locator(HEAD)).toBeHidden();
 
-    // Zurücksetzen für die übrigen Tests dieser Datei.
-    await page.locator(`#editor-card .card-actions button[aria-label="${TIP_ON}"]`).click();
+    // Zurücksetzen für die übrigen Tests dieser Datei — und zugleich die
+    // Gegenprobe zum Reload: die Wahl liegt in den Editor-Prefs, nicht am
+    // Beitrag, und lässt sich von dort wieder umlegen.
+    await startEdit(page);
+    await page.locator(`.page-editor-toolbar button[aria-label="${TIP_ON}"]`).first().click();
+    await stopEdit(page);
     await expect(page.locator(`${HEAD} .page-head__title`)).toBeVisible();
   });
 
@@ -267,11 +298,16 @@ test.describe('Notebook: Titel-Kopf des Beitrags', () => {
 
   test('im Roman gibt es den Knopf nicht', async ({ page }) => {
     // Er schaltete dort etwas, das gar nicht existiert.
+    //
+    // Geprüft wird nur die Edit-Toolbar: in der Lese-Kopfleiste steht der
+    // Schalter seit 810f2e40 für KEINEN Buchtyp mehr, eine Zusicherung dort
+    // wäre also immer wahr und unterschiede Roman und Ressort nicht — sie sähe
+    // aus wie Abdeckung, ohne welche zu sein.
     await setBuchtyp(page, 'roman');
     await openPage(page, 0);
-    await expect(page.locator(`#editor-card .card-actions button[aria-label="${TIP_OFF}"]`)).toBeHidden();
     await startEdit(page);
     await expect(page.locator(`.page-editor-toolbar button[aria-label="${TIP_OFF}"]`)).toBeHidden();
+    await expect(page.locator(`.page-editor-toolbar button[aria-label="${TIP_ON}"]`)).toBeHidden();
   });
 
   test('das Zeichen-Lineal färbt, sperrt aber nicht', async ({ page }) => {
