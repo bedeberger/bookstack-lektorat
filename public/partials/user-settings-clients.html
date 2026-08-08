@@ -1,0 +1,93 @@
+<!--
+  Client-Downloads im Profil: macOS-App, Android-App und Chrome-Erweiterung.
+  Fragment-Include aus user-settings.html (`<!-- @include user-settings-clients -->`,
+  app-ui.js#_resolveIncludes) — ausgelagert, damit der Profil-Partial unter dem
+  250-LOC-Cap bleibt. Scope ist unveraendert `userSettingsCard`; die drei Zeilen
+  lesen macRelease/androidRelease/extensionRelease aus [public/js/user-settings.js].
+-->
+    <!-- macOS-App-Download (schreibwerkstatt-focuseditor) -->
+    <div class="card-form-row card-form-row--devices" x-show="macRelease.available" x-cloak x-data="collapsible()">
+      <button type="button" class="collapsible-toggle" x-bind="trigger">
+        <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
+        <span x-text="$app.t('profile.macApp.title')"></span>
+        <span class="lt-dict-count" x-text="macRelease.version"></span>
+      </button>
+      <div class="device-tokens-body" x-bind="panel" x-cloak>
+        <p class="muted-msg muted-msg--sm" x-text="$app.t('profile.macApp.intro')"></p>
+
+        <div class="mac-app-meta muted-msg muted-msg--sm">
+          <span x-text="$app.t('profile.macApp.version') + ': ' + macRelease.version"></span>
+          <span x-show="macReleaseSizeMb()" x-text="' · ' + macReleaseSizeMb() + ' MB'"></span>
+          <span x-show="macRelease.publishedAt"
+                x-text="' · ' + new Date(macRelease.publishedAt).toLocaleDateString($store.shell.uiLocale, $app.tzOpts())"></span>
+        </div>
+
+        <p x-show="macRelease.notes" class="mac-app-notes muted-msg muted-msg--sm" x-text="macRelease.notes"></p>
+
+        <div class="mac-app-download">
+          <a class="btn-compact" :href="macRelease.dmg?.downloadUrl" :download="macRelease.dmg?.name"
+             x-text="$app.t('profile.macApp.download')"></a>
+          <span x-show="!macReleaseIsMacPlatform()" class="muted-msg muted-msg--sm"
+                x-text="$app.t('profile.macApp.forMacOnly')"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Android-App-Download (schreibwerkstatt-mobile) -->
+    <div class="card-form-row card-form-row--devices" x-show="androidRelease.available" x-cloak x-data="collapsible()">
+      <button type="button" class="collapsible-toggle" x-bind="trigger">
+        <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
+        <span x-text="$app.t('profile.androidApp.title')"></span>
+        <span class="lt-dict-count" x-text="androidRelease.version"></span>
+      </button>
+      <div class="device-tokens-body" x-bind="panel" x-cloak>
+        <p class="muted-msg muted-msg--sm" x-text="$app.t('profile.androidApp.intro')"></p>
+
+        <div class="mac-app-meta muted-msg muted-msg--sm">
+          <span x-text="$app.t('profile.androidApp.version') + ': ' + androidRelease.version"></span>
+          <span x-show="androidReleaseSizeMb()" x-text="' · ' + androidReleaseSizeMb() + ' MB'"></span>
+          <span x-show="androidRelease.publishedAt"
+                x-text="' · ' + new Date(androidRelease.publishedAt).toLocaleDateString($store.shell.uiLocale, $app.tzOpts())"></span>
+        </div>
+
+        <p x-show="androidRelease.notes" class="mac-app-notes muted-msg muted-msg--sm" x-text="androidRelease.notes"></p>
+
+        <div class="mac-app-download">
+          <a class="btn-compact" :href="androidRelease.apk?.downloadUrl" :download="androidRelease.apk?.name"
+             x-text="$app.t('profile.androidApp.download')"></a>
+          <span x-show="!androidReleaseIsAndroidPlatform()" class="muted-msg muted-msg--sm"
+                x-text="$app.t('profile.androidApp.forAndroidOnly')"></span>
+        </div>
+      </div>
+    </div>
+
+    <!--
+      Chrome-Erweiterung (schreibwerkstatt-browser-extension). Regulaerer Weg ist
+      der Chrome Web Store (`storeUrl`, steht immer in der release.json-Antwort);
+      das ZIP-Release ist der Zweitweg und haengt am GitHub-Fetch — darum gaten
+      Zeile und Store-Link auf `storeUrl`, die Versions-/ZIP-Teile auf `available`.
+    -->
+    <div class="card-form-row card-form-row--devices" x-show="extensionRelease.storeUrl || extensionRelease.available" x-cloak x-data="collapsible()">
+      <button type="button" class="collapsible-toggle" x-bind="trigger">
+        <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
+        <span x-text="$app.t('profile.extensionApp.title')"></span>
+        <span class="lt-dict-count" x-show="extensionRelease.available" x-text="extensionRelease.version"></span>
+      </button>
+      <div class="device-tokens-body" x-bind="panel" x-cloak>
+        <p class="muted-msg muted-msg--sm" x-text="$app.t('profile.extensionApp.intro')"></p>
+        <a class="btn-compact" x-show="extensionRelease.storeUrl" :href="extensionRelease.storeUrl"
+           target="_blank" rel="noopener noreferrer" x-text="$app.t('profile.extensionApp.store')"></a>
+        <template x-if="extensionRelease.available">
+          <div>
+            <p class="muted-msg muted-msg--sm" x-text="$app.t('profile.extensionApp.zipHint')"></p>
+            <div class="mac-app-meta muted-msg muted-msg--sm">
+              <span x-text="$app.t('profile.extensionApp.version') + ': ' + extensionRelease.version"></span>
+              <span x-show="extensionReleaseSizeMb()" x-text="' · ' + extensionReleaseSizeMb() + ' MB'"></span>
+              <span x-show="extensionRelease.publishedAt" x-text="' · ' + new Date(extensionRelease.publishedAt).toLocaleDateString($store.shell.uiLocale, $app.tzOpts())"></span>
+            </div>
+            <p x-show="extensionRelease.notes" class="mac-app-notes muted-msg muted-msg--sm" x-text="extensionRelease.notes"></p>
+            <a class="btn-compact" :href="extensionRelease.zip?.downloadUrl" :download="extensionRelease.zip?.name" x-text="$app.t('profile.extensionApp.download')"></a>
+          </div>
+        </template>
+      </div>
+    </div>

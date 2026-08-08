@@ -39,8 +39,9 @@ export function registerUserSettingsCard() {
     macRelease: { available: false },
     // Android-App-Download (schreibwerkstatt-mobile)
     androidRelease: { available: false },
-    // Chrome-Erweiterung (schreibwerkstatt-browser-extension, vor Web-Store: ZIP-Sideload)
-    extensionRelease: { available: false },
+    // Chrome-Erweiterung (schreibwerkstatt-browser-extension): storeUrl = Chrome
+    // Web Store (regulaerer Weg), available/zip = ZIP-Release als Zweitweg
+    extensionRelease: { available: false, storeUrl: '' },
     _savedAtTimer: null,
 
     get dictEntriesFiltered() {

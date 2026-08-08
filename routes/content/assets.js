@@ -125,26 +125,30 @@ function register(router) {
     } catch (e) { _fail(res, e, 'GET /content/android/release.json'); }
   });
 
-  // GET /content/extension/release.json — latest-Release-Metadaten der Chrome-
-  // Erweiterung (schreibwerkstatt-browser-extension) fuer den Download-Hinweis
-  // im Profil + Landing und den Veraltet-Vergleich im Admin-Tab. Body:
-  // { available, version, notes, publishedAt, zip:{ name, sizeBytes,
-  // downloadUrl } } bzw. { available:false }. Quelle: GitHub-Public-API ueber
+  // GET /content/extension/release.json — Installationswege der Chrome-
+  // Erweiterung (schreibwerkstatt-browser-extension) fuer das Profil und den
+  // Veraltet-Vergleich im Admin-Tab. Body: { storeUrl, available, version,
+  // notes, publishedAt, zip:{ name, sizeBytes, downloadUrl } } bzw.
+  // { storeUrl, available:false }. Release-Quelle: GitHub-Public-API ueber
   // [lib/extension-release.js](../lib/extension-release.js) (In-Memory-Cache).
   //
-  // Bis die Erweiterung im Chrome Web Store ist, wird sie als .zip-Sideload
-  // ausgeliefert (Release-Asset auf dem GitHub-CDN). Die UI verlinkt direkt auf
-  // zip.downloadUrl — kein Download-Proxy. Da das Repo oeffentlich ist, ist die
-  // Asset-URL selbst oeffentlich; der Download wird nur Eingeloggten *angezeigt*
-  // (Anzeige-Gating, kein Hard-Gating).
+  // `storeUrl` steht IMMER im Body, auch bei available:false — der Chrome Web
+  // Store ist der regulaere Installationsweg und darf nicht an einem GitHub-
+  // Ausfall haengen. Das .zip ist der Zweitweg (Chromium ohne Store-Zugang,
+  // Vorabversionen); die UI verlinkt direkt auf zip.downloadUrl — kein Download-
+  // Proxy. Da das Repo oeffentlich ist, ist die Asset-URL selbst oeffentlich;
+  // der Download wird nur Eingeloggten *angezeigt* (Anzeige-Gating, kein
+  // Hard-Gating).
   //
-  // Auth: globaler Guard (server.js). ETag = sha256(version); bei If-None-Match
-  // mit passendem ETag → 304 ohne Body.
+  // Auth: globaler Guard (server.js). ETag = sha256(version + storeUrl) — die
+  // Store-URL gehoert hinein, sonst liefert ein 304 einem Client mit altem
+  // Cache-Body weiterhin die alte Antwort. Bei If-None-Match mit passendem ETag
+  // → 304 ohne Body.
   router.get('/extension/release.json', async (req, res) => {
     try {
-      const rel = await extensionRelease.getLatestRelease();
+      const rel = { storeUrl: extensionRelease.CHROME_STORE_URL, ...(await extensionRelease.getLatestRelease()) };
       const body = JSON.stringify(rel);
-      const etag = `"${createHash('sha256').update(`extension-release:${rel.available ? rel.version : 'none'}`).digest('hex')}"`;
+      const etag = `"${createHash('sha256').update(`extension-release:${rel.available ? rel.version : 'none'}:${rel.storeUrl}`).digest('hex')}"`;
       res.set('ETag', etag);
       res.set('Cache-Control', 'no-cache'); // immer revalidieren (via If-None-Match)
       if (req.headers['if-none-match'] === etag) return res.status(304).end();

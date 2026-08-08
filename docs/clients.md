@@ -103,10 +103,10 @@ Das Profil (`/me`) und die Landing-Page zeigen Logged-in-Usern bzw. Besucher:inn
 |-----------|-------|-----|-------|
 | macOS | `GET /content/macclient/release.json` | [lib/macclient-release.js](../lib/macclient-release.js) | `.dmg` |
 | Android | `GET /content/android/release.json` | [lib/androidclient-release.js](../lib/androidclient-release.js) | `.apk` (Sideload) |
-| Chrome | `GET /content/extension/release.json` | [lib/extension-release.js](../lib/extension-release.js) | `.zip` (Sideload bis zur Web-Store-Aufnahme) |
+| Chrome | `GET /content/extension/release.json` | [lib/extension-release.js](../lib/extension-release.js) | `.zip` (Zweitweg neben dem Chrome Web Store) |
 
 - Die UI verlinkt direkt auf die GitHub-CDN-URL (kein Download-Proxy). Da die Client-Repos öffentlich sind, ist die Asset-URL selbst öffentlich; der Download wird nur Eingeloggten **angezeigt** (Anzeige-Gating, kein Hard-Gating).
-- ETag = sha256(Version) → 304.
+- ETag = sha256(Version) → 304. Bei Chrome geht zusätzlich die Store-URL in den Hash: sie steht als `storeUrl` **immer** im Body (auch bei `available:false`, denn der Store darf nicht an einem GitHub-Ausfall hängen), und ohne sie im ETag bekäme ein Client mit altem Cache-Body weiterhin ein 304. SSoT der URL: `CHROME_STORE_URL` in [lib/extension-release.js](../lib/extension-release.js) — die Landing liest sie direkt.
 - **GitHub-Rate-Limit:** ohne Token 60 Req/h. Ein optionaler PAT hebt das auf 5000/h (Admin-Settings → Erweitert → `macclient.github_token`, verschlüsselt in `app_settings`; `GITHUB_TOKEN` in `.env` nur als einmaliger Boot-Seed). Das Token ist konto-weit gültig und deckt alle drei Client-Repos ab. Siehe [README.md](../README.md).
 - Profil-UI-Strings: `profile.macApp.*` / `profile.androidApp.*` / `profile.extensionApp.*` in [public/js/i18n/{de,en}.json](../public/js/i18n/). Landing-Strings: `landing.{mac,android,extension}{Title,Desc,LinkLabel}`.
 - **Veraltet-Vergleich im Admin-Tab:** `/admin/devices` liefert `latestVersions: { macos, android, extension }`. Der Client bestimmt pro Gerät anhand der gemeldeten `client_version` (Plattform-Prefix `android/…` bzw. `chrome/…`) und des Freitext-`platform`-Felds, welcher Referenzstrang gilt; fuer Chrome zeichnet `_devicesIsChrome` zuständig. `devicesIsOutdated(d)` vergleicht dotted-numeric und blendet dieselbe „veraltet"-Badge ein wie bei den nativen Clients.
@@ -149,7 +149,7 @@ Content-Type: application/json
 | Device-Token-Auth | ✅ `device` | ✅ `device` | ✅ `capture` (enge Allowlist) |
 | Schreibt ins Manuskript | ✅ | ✅ | — (Recherche + Quellen, nie Buchtext) |
 | Sync (`/sync`) + Presence | ✅ | ✅ | — (kein lokaler Spiegel) |
-| Release-Discovery | ✅ `.dmg` | ✅ `.apk` | ✅ `.zip` (Sideload bis Web-Store) |
+| Release-Discovery | ✅ `.dmg` | ✅ `.apk` | ✅ Chrome Web Store (+ `.zip` als Zweitweg) |
 | OTA-Editor-Bundle | ✅ | ✅ (eigenes Boot-HTML) | — |
 | OTA-i18n-Override | ✅ | — (native Strings) | — (eigene Strings) |
 | Konto-Selbstlöschung | ✅ `DELETE /me/account` | — (Web-Profil) | — (`/me/*` nicht allowlistet) |

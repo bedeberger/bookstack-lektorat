@@ -94,6 +94,9 @@
   }
   .ms-head__lead em { font-style: normal; font-weight: 600; }
 
-  /* Der Body folgt hier direkt auf den Lead, nicht auf eine Trennlinie. */
-  .ms-page--article .ms-page__body { padding-block-start: var(--ms-space-md, 18px); }
+  /* Der Body folgt hier direkt auf den Lead, nicht auf eine Trennlinie — der
+     Abstand ist das einzige Trennmittel und darf darum nicht knapp sein: klebt
+     der erste Absatz am Lead, liest sich der Einstieg beengt statt als
+     Vorspann. Gleiche Stufe wie im Notebook-Editor (page-head.css). */
+  .ms-page--article .ms-page__body { padding-block-start: var(--ms-space-lg, 28px); }
 }

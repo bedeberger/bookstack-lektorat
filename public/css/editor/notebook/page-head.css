@@ -94,8 +94,10 @@
   }
 
   /* Das Blatt kappt seine Oberkante, solange der Kopf sie fortsetzt, und rückt
-     dicht an ihn heran: der Abstand nach oben steht schon im Kopf, und 36px
-     zwischen Lead und erstem Absatz rissen den Bogen wieder in zwei Teile.
+     an ihn heran: der Abstand nach oben steht schon im Kopf, und der volle
+     Blattrand (36px) zwischen Lead und erstem Absatz riss den Bogen wieder in
+     zwei Teile. Eine Stufe über dem Minimum bleibt es trotzdem — klebt der
+     erste Absatz am Lead, liest sich der Einstieg beengt statt als Vorspann.
      `position: relative` ist NICHT Layout, sondern Malreihenfolge — der Kopf
      ist positioniert und läge sonst mitsamt seinem Schlagschatten über dem
      Blatt, also quer über der Nahtstelle. Kein Versatz, keine Verschiebung.
@@ -104,7 +106,7 @@
   .editor-preview-wrap:has(.page-head--shown) .page-content-view {
     position: relative;
     margin-block-start: 0;
-    padding-block-start: var(--space-lg);
+    padding-block-start: var(--space-xl);
     border-start-start-radius: 0;
     border-start-end-radius: 0;
   }

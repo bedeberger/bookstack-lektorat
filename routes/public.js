@@ -31,6 +31,7 @@ const regRequests = require('../db/registration-requests');
 const mailer = require('../lib/mailer');
 const rateLimit = require('../lib/register-ratelimit');
 const altcha = require('../lib/altcha');
+const extensionRelease = require('../lib/extension-release');
 const { tServer } = require('../lib/i18n-server');
 
 const router = express.Router();
@@ -123,7 +124,7 @@ function _renderLanding(req, res) {
     extensionTitle:     t('landing.extensionTitle'),
     extensionDesc:      t('landing.extensionDesc'),
     extensionLinkLabel: t('landing.extensionLinkLabel'),
-    extensionUrl:       'https://github.com/bedeberger/schreibwerkstatt-browser-extension/releases/latest',
+    extensionUrl:       extensionRelease.CHROME_STORE_URL,
   }));
 }
 

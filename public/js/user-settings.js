@@ -288,17 +288,20 @@ export const userSettingsMethods = {
   },
 
   // ── Chrome-Erweiterung (schreibwerkstatt-browser-extension) ─────────────────
-  // latest-Release-Metadaten vom Server (GitHub-Public-API-Proxy). Wirft nie;
-  // bei { available:false } wird der Abschnitt schlicht nicht gerendert. Bis die
-  // Erweiterung im Chrome Web Store ist, wird sie als .zip-Sideload aus dem
-  // GitHub-Release ausgeliefert.
+  // Installationswege vom Server. Wirft nie. `storeUrl` (Chrome Web Store) ist
+  // der regulaere Weg und kommt immer mit — auch wenn der GitHub-Fetch des
+  // ZIP-Releases nichts liefert; darum wird bei available:false nur der Release-
+  // Teil verworfen, nicht die Store-URL. Ohne beides bleibt der Abschnitt leer
+  // und wird nicht gerendert.
   async loadExtensionRelease() {
     try {
       const data = await fetchJson('/content/extension/release.json');
-      this.extensionRelease = data && data.available ? data : { available: false };
+      this.extensionRelease = data && data.available
+        ? data
+        : { available: false, storeUrl: data?.storeUrl || '' };
     } catch (e) {
       console.error('[user-settings] Extension-Release laden fehlgeschlagen:', e);
-      this.extensionRelease = { available: false };
+      this.extensionRelease = { available: false, storeUrl: '' };
     }
   },
 
