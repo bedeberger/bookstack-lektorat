@@ -19,7 +19,7 @@ window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventL
 globalThis.matchMedia = window.matchMedia;
 
 const { notebookEditMethods } = await import('../../public/js/editor/notebook/edit.js');
-const { AUTOSAVE_IDLE_MS, AUTOSAVE_MAX_MS, DRAFT_DEBOUNCE_MS } = await import('../../public/js/editor/notebook/edit/_shared.js');
+const { AUTOSAVE_IDLE_MS, AUTOSAVE_MAX_MS, AUTOSAVE_KEY, DRAFT_DEBOUNCE_MS } = await import('../../public/js/editor/notebook/edit/_shared.js');
 
 function setApp(extra = {}) {
   const app = {
@@ -69,8 +69,7 @@ test('_scheduleAutosave: Idle-Timer feuert nach AUTOSAVE_IDLE_MS → quickSave',
     let qs = 0;
     const ctx = ctxWith({ quickSave() { qs++; } });
     ctx._scheduleAutosave();
-    assert.ok(window.__app._autosaveIdleTimer, 'Idle-Timer gesetzt');
-    assert.ok(window.__app._autosaveMaxTimer, 'Max-Timer gesetzt');
+    assert.ok(window.__app._autosaveTimers.pending(AUTOSAVE_KEY), 'Timer gesetzt');
     mock.timers.tick(AUTOSAVE_IDLE_MS);
     assert.equal(qs, 1, 'Idle-Feuer löst quickSave aus');
   } finally {
@@ -85,11 +84,11 @@ test('_scheduleAutosave: erneutes Tippen resettet Idle, Max-Timer bleibt derselb
     let qs = 0;
     const ctx = ctxWith({ quickSave() { qs++; } });
     ctx._scheduleAutosave();
-    const maxTimer = window.__app._autosaveMaxTimer;
     // Kurz vor dem Idle-Fire erneut tippen → Idle-Timer neu, kein Save.
+    // Dass der Max-Timer dabei NICHT mitwandert, prüft der Dauer-Tipp-Test
+    // darunter im Verhalten (er feuert dort exakt einmal, bei AUTOSAVE_MAX_MS).
     mock.timers.tick(AUTOSAVE_IDLE_MS - 1000);
     ctx._scheduleAutosave();
-    assert.equal(window.__app._autosaveMaxTimer, maxTimer, 'Max-Timer wird nicht neu gesetzt (läuft ab erstem Dirty durch)');
     mock.timers.tick(AUTOSAVE_IDLE_MS - 1000);
     assert.equal(qs, 0, 'Idle wurde zurückgesetzt → noch kein Save');
     mock.timers.tick(1000);
@@ -118,15 +117,19 @@ test('_scheduleAutosave: Max-Timer greift bei Dauer-Tippen (Idle wird nie erreic
   }
 });
 
-test('_clearAutosaveTimers: nullt beide Timer', () => {
+test('_clearAutosaveTimers: raeumt beide Timer — kein Save mehr, auch nicht nach dem Max-Cap', () => {
   mock.timers.enable({ apis: ['setTimeout'] });
   try {
     setApp();
-    const ctx = ctxWith({ quickSave() {} });
+    let qs = 0;
+    const ctx = ctxWith({ quickSave() { qs++; } });
     ctx._scheduleAutosave();
     ctx._clearAutosaveTimers();
-    assert.equal(window.__app._autosaveIdleTimer, null);
-    assert.equal(window.__app._autosaveMaxTimer, null);
+    assert.equal(window.__app._autosaveTimers.pending(AUTOSAVE_KEY), false, 'kein Timer mehr registriert');
+    // Ueber BEIDE Deadlines hinweg ticken: ein vergessener Max-Timer feuerte
+    // sonst 60 s nach dem Idle-Fenster nach.
+    mock.timers.tick(AUTOSAVE_MAX_MS + 1000);
+    assert.equal(qs, 0, 'weder Idle noch Max feuern nach dem Clear');
   } finally {
     mock.timers.reset();
   }

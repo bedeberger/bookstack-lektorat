@@ -160,21 +160,10 @@ export function draftToPersons(rows) {
   return out;
 }
 
-/** Anzeigename einer Person („Kafka, Franz" / „Bundesamt fuer Statistik"). */
-export function personLabel(p) {
-  if (!p) return '';
-  if (p.literal) return p.literal;
-  return [p.family, p.given].filter(Boolean).join(', ');
-}
-
-/** Urheber-Spalte der Tabelle: erster Autor, sonst erster Herausgeber, sonst
- *  leer. Gleichzeitig der Sortierwert dieser Spalte — darum ein String und
- *  nicht das Personen-Objekt. */
-export function primaryPersonLabel(src) {
-  const a = Array.isArray(src?.authors) ? src.authors : [];
-  const e = Array.isArray(src?.editors) ? src.editors : [];
-  return personLabel(a[0]) || personLabel(e[0]) || '';
-}
+// Anzeigename einer Person und Urheber-Spalte liegen in sources/search.js, weil
+// sie auch der Beleg-Picker und die Trefferlisten brauchen — hier nur
+// weitergereicht, damit die Formular-Konsumenten ihren Import behalten.
+export { personLabel, primaryPersonLabel } from './search.js';
 
 // ── Draft ↔ Quelle ───────────────────────────────────────────────────────────
 

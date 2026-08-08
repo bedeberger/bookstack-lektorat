@@ -37,6 +37,60 @@ export function placeCaretIn(el) {
   sel.addRange(range);
 }
 
+// Setzt den Cursor unmittelbar HINTER `node`. Nach jedem programmatischen
+// Einfügen nötig: der Browser lässt den Caret sonst vor dem eingefügten Knoten
+// stehen, und der User tippt in das frisch gesetzte Element hinein statt
+// dahinter weiterzuschreiben.
+export function placeCaretAfter(node) {
+  const doc = node?.ownerDocument || document;
+  const sel = doc.getSelection?.() || document.getSelection();
+  if (!sel || !node) return;
+  const range = doc.createRange();
+  range.setStartAfter(node);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+// Aktuelle Selektions-/Caret-Range, sofern sie IM Edit-Feld liegt — sonst null.
+// Der Containment-Test ist Pflicht, weil `document.getSelection()` global ist
+// und auch eine Auswahl in Sidebar, Modal oder Chat liefert.
+export function caretRangeIn(editEl) {
+  if (!editEl) return null;
+  const sel = document.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  const c = range.commonAncestorContainer;
+  return (editEl === c || editEl.contains(c)) ? range : null;
+}
+
+// Kollabierte Range am ENDE des Editorinhalts — ohne die Selektion anzufassen.
+// Rückfallanker für alle Einfügewege, die ohne gesetzten Caret ausgelöst werden
+// (Beleg-Picker aus der Seiten-Toolbar, Diktat-Start ohne Klick ins Feld):
+// lieber ans Ende anhängen als gar nichts tun — den Block danach zu verschieben
+// ist ein Handgriff, ihn erneut herauszusuchen nicht.
+export function rangeAtEnd(editEl) {
+  if (!editEl) return null;
+  const doc = editEl.ownerDocument || document;
+  const range = doc.createRange();
+  range.selectNodeContents(editEl);
+  range.collapse(false);
+  return range;
+}
+
+// Wie `rangeAtEnd`, setzt den Caret aber auch wirklich dorthin. Für Wege, bei
+// denen der User anschliessend IM Editor weiterarbeitet (Diktat-Start) — im
+// Unterschied zu den Panels, die den Fokus selbst übernehmen und die Selektion
+// darum nicht verschieben dürfen.
+export function anchorCaretToEnd(editEl) {
+  const range = rangeAtEnd(editEl);
+  if (!range) return null;
+  const sel = (editEl.ownerDocument || document).getSelection?.() || document.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+  return range;
+}
+
 // Expandiert einen Punkt (clientX/Y) zum darunterliegenden Wort und liefert
 // sowohl das Wort als auch einen Range über genau dieses Wort. Wird vom
 // Synonym-Handler genutzt (Safari-Rechtsklick ohne Selection markiert das

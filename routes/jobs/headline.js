@@ -21,15 +21,11 @@ const {
 } = require('./shared');
 const contentStore = require('../../lib/content-store');
 const { getBookSettings } = require('../../db/schema');
-const { isJournalisticBook } = require('../../lib/buchtyp');
 const { effectiveTextsorte } = require('../../db/textsorte');
 const {
   HEADLINE_FIELDS, isValidHeadlineField, getHeadline, listVariants, addVariant,
 } = require('../../db/headline');
-const { toIntId } = require('../../lib/validate');
-const { setContext } = require('../../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../../lib/acl');
-const { resolvePageBookId } = require('../../lib/content-ownership');
+const { pageBookGuard } = require('../../lib/page-guard');
 
 const headlineRouter = express.Router();
 
@@ -107,19 +103,13 @@ async function runHeadlineJob(jobId, bookId, pageId, userEmail, userToken, felde
 }
 
 headlineRouter.post('/headline-variants', jsonBody, (req, res) => {
-  const page_id = toIntId(req.body?.page_id);
-  if (!page_id) return res.status(400).json({ error_code: 'PAGE_ID_REQUIRED' });
   // Buch IMMER aus der Seite ableiten, nie aus einer behaupteten book_id.
-  const book_id = resolvePageBookId(page_id);
-  if (!book_id) return res.status(404).json({ error_code: 'PAGE_NOT_FOUND' });
-  setContext({ book: book_id });
-  try { requireBookAccess(req, book_id, 'editor'); }
-  catch (e) { if (sendACLError(res, e)) return; throw e; }
-
+  const g = pageBookGuard(req, res, {
+    minRole: 'editor', journalistic: true, pageId: req.body?.page_id,
+  });
+  if (!g) return;
+  const { pageId: page_id, bookId: book_id } = g;
   const userEmail = req.session?.user?.email || null;
-  if (!isJournalisticBook(getBookSettings(book_id, userEmail))) {
-    return res.status(400).json({ error_code: 'NOT_JOURNALISTIC_BOOK' });
-  }
 
   const felder = Array.isArray(req.body?.felder)
     ? req.body.felder.filter(isValidHeadlineField)

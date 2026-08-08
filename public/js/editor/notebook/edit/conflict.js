@@ -1,46 +1,31 @@
 // Teil von notebookEditMethods (siehe Facade edit.js).
-import { FEATURE_BLOCK_MERGE, buildResolvedHtml, contentRepo, editorHost, isPageConflict, mergeBlocks, mergedToHtml, mountEditorHtml, readConflictBody, savePage, trackMerge, writeDraft } from './_shared.js';
+import { FEATURE_BLOCK_MERGE, buildResolvedHtml, checkPageConflict, conflictBannerFrom, conflictText, contentRepo, editorHost, isPageConflict, mergeBlocks, mergedToHtml, mountEditorHtml, readConflictBody, savePage, trackMerge, writeDraft } from './_shared.js';
 
 export const conflictMethods = {
 
-  // Text des Konflikt-Banners. Eigenes Zweit-Gerät (Mac-Client, zweiter Laptop,
-  // Android) nennt das Gerät statt eines Usernamens — sonst liest ein Solo-Autor
-  // seinen eigenen Namen als „fremder Bearbeiter".
+  // Text des Konflikt-Banners. Die Gerät-vs-User-Verzweigung liegt in
+  // shared/conflict-text.js (geteilt mit dem Bucheditor); hier nur die Variante
+  // und der Zeitstempel als zusätzlicher Platzhalter.
   editConflictBannerText() {
     const app = editorHost();
     const c = app?.editConflict;
     if (!c) return '';
     const time = c.remoteUpdatedAt ? app.formatDate(c.remoteUpdatedAt) : '';
-    return c.remoteIsSelf
-      ? app.t('edit.conflict.bannerSelf', { device: c.remoteDevice || app.t('presence.device.unknown'), time })
-      : app.t('edit.conflict.banner', { user: c.remoteUserName || app.t('edit.conflict.unknownUser'), time });
+    return conflictText(app.t.bind(app), c, 'banner', { time });
   },
 
 
-  // Banner-State (`editConflict`) aus einem _checkPageConflict-Objekt. Die
-  // 409-Variante liefert `readConflictBody(err)` dieselbe Form aus dem
-  // Server-Body — beide Quellen, ein Feldsatz.
+  // Banner-State (`editConflict`) aus einem Konflikt-Objekt — Feldsatz-SSoT in
+  // shared/page-conflict.js, weil ihn beide Editoren gleich befüllen.
   _conflictBannerFrom(conflict) {
-    return {
-      remoteUserName: conflict.remoteUserName,
-      remoteUpdatedAt: conflict.remoteUpdatedAt,
-      remoteIsSelf: conflict.remoteIsSelf,
-      remoteDevice: conflict.remoteDevice,
-    };
+    return conflictBannerFrom(conflict);
   },
 
 
-  // Statuszeile für den stillen Pfad (quickSave/Autosave): nennt Gerät oder
-  // User, je nachdem ob der konkurrierende Save vom eigenen Zweit-Gerät kam.
+  // Statuszeile für den stillen Pfad (quickSave/Autosave).
   _conflictHintText(banner) {
     const app = editorHost();
-    return banner.remoteIsSelf
-      ? app.t('edit.conflict.unsavedHintSelf', {
-        device: banner.remoteDevice || app.t('presence.device.unknown'),
-      })
-      : app.t('edit.conflict.unsavedHint', {
-        user: banner.remoteUserName || app.t('edit.conflict.unknownUser'),
-      });
+    return conflictText(app.t.bind(app), banner, 'hint');
   },
 
 
@@ -95,15 +80,9 @@ export const conflictMethods = {
       return { proceed: false };
     }
     const okOverwrite = await app.appConfirm({
-      message: conflict.remoteIsSelf
-        ? app.t('edit.conflict.messageSelf', {
-          device: conflict.remoteDevice || app.t('presence.device.unknown'),
-          time: app.formatDate(conflict.remoteUpdatedAt),
-        })
-        : app.t('edit.conflict.message', {
-          user: conflict.remoteUserName || app.t('edit.conflict.unknownUser'),
-          time: app.formatDate(conflict.remoteUpdatedAt),
-        }),
+      message: conflictText(app.t.bind(app), conflict, 'modal', {
+        time: app.formatDate(conflict.remoteUpdatedAt),
+      }),
       confirmLabel: app.t('edit.conflict.saveAnyway'),
       danger: true,
     });
@@ -148,41 +127,12 @@ export const conflictMethods = {
     }
   },
 
-  // Pre-Save-Conflict-Check für Read-Modify-Write-Pfade. Vor PUT die Seite
-  // frisch lesen und `updated_at` mit Editor-Snapshot vergleichen; Mismatch =
-  // anderer User hat zwischendrin gespeichert. Liefert null bei keiner
-  // Diskrepanz, sonst { remoteUpdatedAt, remoteUserName, remoteHtml }.
-  // Wirft nicht — Aufrufer entscheidet bei Read-Fehler.
-  async _checkPageConflict(pageId, expectedUpdatedAt) {
-    if (!expectedUpdatedAt) return null;
-    // Offline kann es keinen Cross-User-Konflikt geben — der ohnehin folgende
-    // PUT wird ebenfalls scheitern und in den Offline-Banner-Pfad fallen. Modal
-    // hier zu zeigen wäre irreführend (kein verlässlicher Server-Stand).
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
-    let remote;
-    try {
-      remote = await contentRepo.loadPage(pageId, { fresh: true });
-    } catch (e) {
-      console.warn('[checkPageConflict] read failed, skip modal', { pageId, status: e?.status, code: e?.code, msg: e?.message });
-      return null;
-    }
-    if (!remote?.updated_at) {
-      console.warn('[checkPageConflict] remote response without updated_at, skip modal', { pageId });
-      return null;
-    }
-    if (remote.updated_at === expectedUpdatedAt) return null;
-    // Eigenes Zweit-Gerät (Mac-Client, zweiter Laptop, Android) vs. fremder
-    // ACL-User: `last_editor.device_name` ist serverseitig ohnehin nur für die
-    // eigenen Geräte des Anfragers gefüllt.
-    const selfEmail = editorHost()?.$store?.session?.currentUser?.email || null;
-    const remoteIsSelf = !!selfEmail && remote.last_editor_email === selfEmail;
-    return {
-      remoteUpdatedAt: remote.updated_at,
-      remoteUserName: remote.updated_by_name || null,
-      remoteIsSelf,
-      remoteDevice: remote.last_editor?.device_name || null,
-      remoteHtml: remote.html || '',
-    };
+  // Notebook-Einstieg in den geteilten Pre-Save-Conflict-Check
+  // (shared/page-conflict.js). Die Prüfung selbst ist eine Eigenschaft der
+  // Seite und liegt darum nicht mehr hier — der Bucheditor importiert dieselbe
+  // Funktion direkt, statt über die Root-Trampoline in diese Karte zu greifen.
+  _checkPageConflict(pageId, expectedUpdatedAt) {
+    return checkPageConflict(pageId, expectedUpdatedAt);
   },
 
 

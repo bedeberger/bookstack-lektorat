@@ -12,11 +12,13 @@
 const express = require('express');
 const { db } = require('../db/schema');
 const {
-  LINK_TARGETS, attachRelations, emitItem, replaceUrls, replaceTags, createItem, itemBookId,
+  LINK_TARGETS, attachRelations, emitItem, replaceUrls, replaceTags, createItem,
+  listEntityLinkTargets,
 } = require('../db/research-items');
 const { toIntId } = require('../lib/validate');
-const { setContext } = require('../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../lib/acl');
+const { guardBook, sessionEmail } = require('../lib/acl');
+const { bookScope, scopedItem } = require('./research-acl');
+const contentStore = require('../lib/content-store');
 const { NOW_ISO_SQL } = require('../db/now');
 const searchIndex = require('../lib/search');
 const {
@@ -39,11 +41,7 @@ router.use('/', interviewMediaRouter);
 
 // Item-Modell (Anlegen, Kind-Tabellen, Ausgabeform, LINK_TARGETS) liegt in
 // db/research-items.js, weil routes/capture.js (Browser-Erweiterung) denselben
-// Schreibpfad braucht. Aliase, damit die Aufrufstellen unveraendert bleiben.
-const _attachRelations = attachRelations;
-const _emitItem = emitItem;
-const _replaceUrls = replaceUrls;
-const _replaceTags = replaceTags;
+// Schreibpfad braucht.
 
 // Erlaubte Sortier-Modi: feste Felder + „link:<dimension>" (nach verknüpfter Entität).
 const FIXED_SORTS = {
@@ -66,16 +64,6 @@ const PATCH_FIELDS = [
   { name: 'archived', clean: (v) => v ? 1 : 0 },
 ];
 
-function userEmailOrNull(req) {
-  return req.session?.user?.email || null;
-}
-
-function _guard(req, res, bookId, minRole) {
-  setContext({ book: bookId });
-  try { requireBookAccess(req, bookId, minRole); return true; }
-  catch (e) { return !sendACLError(res, e); }
-}
-
 // ── Liste + Filter ─────────────────────────────────────────────────────────
 // GET /research?book_id=&kind=&tag=&linked=figure:42&q=&limit=
 //
@@ -89,9 +77,8 @@ function _guard(req, res, bookId, minRole) {
 //                          Erweiterung selbst hochgeladen hat; sie fragt hier
 //                          „kenne ich diese Seite schon", nicht nach dem Inhalt.
 router.get('/', (req, res) => {
-  const bookId = toIntId(req.query.book_id);
-  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, bookId, 'editor')) return;
+  const bookId = bookScope(req, res);
+  if (!bookId) return;
 
   // Geraete-Token → Client-Form. Die ACL darueber ist dieselbe: `editor` auf dem
   // Buch, gleich ob Session oder Token (das Token loest auf den echten User auf).
@@ -174,15 +161,14 @@ router.get('/', (req, res) => {
   ).all(...selectVals, ...vals, ...limitVals);
   for (const r of rows) delete r.link_rank;
   // attachRelations laeuft auch fuer die Client-Form: sie braucht die `urls`.
-  const items = _attachRelations(rows);
+  const items = attachRelations(rows);
   res.json(asClient ? items.map(toClientItem) : items);
 });
 
 // Tag-Pool des Buchs (mit Häufigkeit) für die Filter-Combobox.
 router.get('/tags', (req, res) => {
-  const bookId = toIntId(req.query.book_id);
-  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, bookId, 'editor')) return;
+  const bookId = bookScope(req, res);
+  if (!bookId) return;
   const rows = db.prepare(
     `SELECT t.tag AS tag, COUNT(*) AS n
        FROM research_item_tags t JOIN research_items ri ON ri.id = t.item_id
@@ -193,51 +179,29 @@ router.get('/tags', (req, res) => {
 });
 
 // Verknüpfbare Entitäten des Buchs für den Link-Picker (book-shared).
-router.get('/link-targets', (req, res) => {
-  const bookId = toIntId(req.query.book_id);
-  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, bookId, 'editor')) return;
-  const userEmail = userEmailOrNull(req);
-  const out = {};
-  out.chapter = db.prepare(
-    'SELECT chapter_id AS id, chapter_name AS label FROM chapters WHERE book_id = ? ORDER BY position, chapter_name'
-  ).all(bookId);
-  out.page = db.prepare(
-    'SELECT page_id AS id, page_name AS label FROM pages WHERE book_id = ? ORDER BY position, page_name'
-  ).all(bookId);
-  // user-skopierte Welt-Entitäten: nur die des anfragenden Users anbieten.
-  // Wo eine „Wichtigkeit" existiert, danach primär sortieren: Figuren nach
-  // praesenz (Handlungsgewicht, zentral→randfigur), Beats nach intensitaet
-  // (5→1). Orte/Szenen haben kein Wichtigkeits-Signal → kuratierte sort_order.
-  out.figure = db.prepare(
-    `SELECT id, name AS label FROM figures WHERE book_id = ? AND user_email = ?
-      ORDER BY CASE praesenz WHEN 'zentral' THEN 0 WHEN 'regelmaessig' THEN 1
-                             WHEN 'punktuell' THEN 2 WHEN 'randfigur' THEN 3
-                             ELSE 4 END, sort_order, name`
-  ).all(bookId, userEmail);
-  out.location = db.prepare(
-    'SELECT id, name AS label FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order, name'
-  ).all(bookId, userEmail);
-  out.scene = db.prepare(
-    'SELECT id, titel AS label FROM figure_scenes WHERE book_id = ? AND user_email = ? ORDER BY sort_order, titel'
-  ).all(bookId, userEmail);
-  out.beat = db.prepare(
-    `SELECT id, titel AS label FROM plot_beats WHERE book_id = ? AND user_email = ?
-      ORDER BY CASE WHEN intensitaet IS NULL THEN 1 ELSE 0 END, intensitaet DESC, sort_order, titel`
-  ).all(bookId, userEmail);
-  out.thread = db.prepare(
-    'SELECT id, name AS label FROM plot_threads WHERE book_id = ? AND user_email = ? ORDER BY position, name'
-  ).all(bookId, userEmail);
-  res.json(out);
+// Kapitel und Seiten kommen über die Content-Store-Facade — sie sind Buchinhalt,
+// und den liest keine Route direkt aus `chapters`/`pages`. Die Welt-Entitäten
+// (user-skopiert) liefert db/research-items.js.
+router.get('/link-targets', async (req, res) => {
+  const bookId = bookScope(req, res);
+  if (!bookId) return;
+  const [chapters, pages] = await Promise.all([
+    contentStore.listChapters(bookId, req),
+    contentStore.listPages(bookId, req),
+  ]);
+  res.json({
+    chapter: chapters.map(c => ({ id: c.id, label: c.name })),
+    page: pages.map(p => ({ id: p.id, label: p.name })),
+    ...listEntityLinkTargets(bookId, sessionEmail(req)),
+  });
 });
 
 // Map page_id → Anzahl verknüpfter, nicht-archivierter Recherche-Items eines
 // Buchs. Speist den Seiten-Indikator (Sidebar + Editor) wie /ideen/counts.
 // Buchweit geteilt → kein user_email-Filter (anders als Ideen).
 router.get('/page-counts', (req, res) => {
-  const bookId = toIntId(req.query.book_id);
-  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, bookId, 'editor')) return;
+  const bookId = bookScope(req, res);
+  if (!bookId) return;
   const rows = db.prepare(
     `SELECT l.page_id AS page_id, COUNT(DISTINCT l.item_id) AS n
        FROM research_item_links l
@@ -255,9 +219,8 @@ router.get('/page-counts', (req, res) => {
 // Buchs. Speist den Kapitel-Indikator in der Sidebar (analog /page-counts).
 // Buchweit geteilt → kein user_email-Filter (anders als Ideen).
 router.get('/chapter-counts', (req, res) => {
-  const bookId = toIntId(req.query.book_id);
-  if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, bookId, 'editor')) return;
+  const bookId = bookScope(req, res);
+  if (!bookId) return;
   const rows = db.prepare(
     `SELECT l.chapter_id AS chapter_id, COUNT(DISTINCT l.item_id) AS n
        FROM research_item_links l
@@ -272,12 +235,15 @@ router.get('/chapter-counts', (req, res) => {
 });
 
 // ── Anlegen ──────────────────────────────────────────────────────────────
+// `book_id` steht hier im BODY (nicht in der Query) und antwortet darum
+// `BOOKID_REQ` statt `INVALID_ID` — der Vertrag ist in docs/clients.md fixiert.
+// Die 401 kommt aus dem Buch-Guard (`NOT_LOGGED_IN`), es gibt keine zweite
+// Login-Pruefung davor.
 router.post('/', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
   const bookId = toIntId(req.body?.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'BOOKID_REQ' });
-  if (!_guard(req, res, bookId, 'editor')) return;
+  if (!guardBook(req, res, bookId, 'editor')) return;
+  const userEmail = sessionEmail(req);
 
   const kind = RESEARCH_KINDS.has(req.body?.kind) ? req.body.kind : 'note';
   const title = cleanStr(req.body?.title, TITLE_MAX);
@@ -291,18 +257,14 @@ router.post('/', jsonBody, (req, res) => {
     bookId, userEmail, kind, title, body, source, urls, tags: req.body?.tags,
   });
   logger.info(`[research] create id=${id} kind=${kind}`);
-  res.json(_emitItem(id));
+  res.json(emitItem(id));
 });
 
 // ── Aktualisieren (Felder + pinned + archived + Tags optional einzeln) ──────
 router.patch('/:id', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = itemBookId(id);
-  if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
-  if (!_guard(req, res, bookId, 'editor')) return;
+  const scope = scopedItem(req, res);
+  if (!scope) return;
+  const { id } = scope;
 
   const sets = [];
   const vals = [];
@@ -326,35 +288,26 @@ router.patch('/:id', jsonBody, (req, res) => {
     vals.push(id);
     db.prepare(`UPDATE research_items SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
   }
-  if (hasUrls) _replaceUrls(id, b.urls);
-  if (hasTags) _replaceTags(id, b.tags);
+  if (hasUrls) replaceUrls(id, b.urls);
+  if (hasTags) replaceTags(id, b.tags);
   searchIndex.upsertResearch(id);
-  res.json(_emitItem(id));
+  res.json(emitItem(id));
 });
 
 // ── Löschen ────────────────────────────────────────────────────────────────
 router.delete('/:id', (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = itemBookId(id);
-  if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
-  if (!_guard(req, res, bookId, 'editor')) return;
-  db.prepare('DELETE FROM research_items WHERE id = ?').run(id);
-  searchIndex.remove('research', id);
+  const scope = scopedItem(req, res);
+  if (!scope) return;
+  db.prepare('DELETE FROM research_items WHERE id = ?').run(scope.id);
+  searchIndex.remove('research', scope.id);
   res.json({ ok: true });
 });
 
 // ── Verknüpfung hinzufügen ──────────────────────────────────────────────────
 router.post('/:id/links', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = itemBookId(id);
-  if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
-  if (!_guard(req, res, bookId, 'editor')) return;
+  const scope = scopedItem(req, res);
+  if (!scope) return;
+  const { id, bookId } = scope;
 
   const targetKind = String(req.body?.target_kind || '').trim();
   const targetId = toIntId(req.body?.target_id);
@@ -373,21 +326,17 @@ router.post('/:id/links', jsonBody, (req, res) => {
     // UNIQUE-Verstoß = Verknüpfung existiert bereits → idempotent.
     if (!/UNIQUE/.test(e.message)) throw e;
   }
-  res.json(_emitItem(id));
+  res.json(emitItem(id));
 });
 
 // ── Verknüpfung entfernen ────────────────────────────────────────────────────
 router.delete('/:id/links/:linkId', (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
   const linkId = toIntId(req.params.linkId);
-  if (!id || !linkId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = itemBookId(id);
-  if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
-  if (!_guard(req, res, bookId, 'editor')) return;
-  db.prepare('DELETE FROM research_item_links WHERE id = ? AND item_id = ?').run(linkId, id);
-  res.json(_emitItem(id));
+  if (!linkId) return res.status(400).json({ error_code: 'INVALID_ID' });
+  const scope = scopedItem(req, res);
+  if (!scope) return;
+  db.prepare('DELETE FROM research_item_links WHERE id = ? AND item_id = ?').run(linkId, scope.id);
+  res.json(emitItem(scope.id));
 });
 
 module.exports = router;

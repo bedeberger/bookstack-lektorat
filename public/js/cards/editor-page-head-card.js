@@ -30,7 +30,7 @@ import { isJournalisticBuchtyp } from './feature-registry.js';
 import { readEditorPrefs } from '../editor/notebook/storage.js';
 import {
   HEADLINE_HEAD_FIELDS, HEADLINE_LONG_FIELDS,
-  channelFit, tightestLimit, fieldLabelKey,
+  fieldLen, fillPct, fitState, overChannels, fieldLabelKey, channelLabelKey,
 } from '../headline/channels.js';
 
 const EMPTY = () => ({ dachzeile: '', titel: '', lead: '' });
@@ -103,6 +103,18 @@ export function registerEditorPageHeadCard() {
      */
     headVisible() {
       return this.headAvailable() && !!window.__app?.pageEditorShowHead;
+    },
+
+    /**
+     * Steht der Kopf gerade da? EINE Stelle für die Anzeige-Bedingung, weil das
+     * Markup sie zweimal braucht: `x-show` blendet ein, `page-head--shown`
+     * meldet es dem Blatt darunter — das gibt seine obere Rundung nur auf,
+     * solange der Kopf sie fortsetzt (page-head.css). Zwei getrennt gepflegte
+     * Ausdrücke drifteten auseinander und liessen ein Blatt mit gekappter
+     * Oberkante ohne Kopf stehen.
+     */
+    headShown() {
+      return this.headVisible() && (!!window.__app?.editMode || this.headHasContent());
     },
 
     headFields() { return HEADLINE_HEAD_FIELDS; },
@@ -180,29 +192,23 @@ export function registerEditorPageHeadCard() {
     // Nur die knappe Form: Füllstand gegen den ENGSTEN Kanal plus die Kanäle,
     // die reissen. Die vollständige Kanal-Tabelle bleibt der Titel-Werkstatt
     // vorbehalten — im Editor soll der Kopf schmal sein.
+    //
+    // Gerechnet wird NICHT hier: dasselbe Signal steht auch in der
+    // Titel-Werkstatt, und zwei Rechnungen für dieselbe Farbe driften
+    // auseinander. Die Stufen leben in headline/channels.js neben den Limits,
+    // von denen sie abhängen.
 
-    headLen(feld) { return String(this.headDraft[feld] || '').trim().length; },
+    headLen(feld) { return fieldLen(this.headDraft[feld]); },
 
-    headFillPct(feld) {
-      const limit = tightestLimit(feld);
-      if (!limit) return 0;
-      return Math.min(100, Math.round((this.headLen(feld) / limit) * 100));
-    },
+    headFillPct(feld) { return fillPct(feld, this.headDraft[feld]); },
 
     /** 'leer' | 'passt' | 'teilweise' | 'zulang' — treibt die Farbe des Balkens. */
-    headFitState(feld) {
-      const fits = channelFit(feld, this.headDraft[feld] || '');
-      if (!fits.length || !this.headLen(feld)) return 'leer';
-      const ok = fits.filter(f => f.fits).length;
-      if (ok === fits.length) return 'passt';
-      return ok > 0 ? 'teilweise' : 'zulang';
-    },
+    headFitState(feld) { return fitState(feld, this.headDraft[feld]); },
 
     /** Die Kanäle, in die es NICHT mehr passt, als kurze Liste für den Tooltip. */
     headOverList(feld) {
-      return channelFit(feld, this.headDraft[feld] || '')
-        .filter(f => !f.fits)
-        .map(f => `${window.__app.t('headline.channel.' + f.key)} +${f.over}`)
+      return overChannels(feld, this.headDraft[feld])
+        .map(f => `${window.__app.t(channelLabelKey(f.key))} +${f.over}`)
         .join(' · ');
     },
   }));

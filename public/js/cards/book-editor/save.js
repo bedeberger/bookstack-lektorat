@@ -12,6 +12,8 @@
 
 import { htmlToText } from '../../utils.js';
 import { readConflictBody, savePage } from '../../editor/shared/page-api.js';
+import { checkPageConflict } from '../../editor/shared/page-conflict.js';
+import { conflictText } from '../../editor/shared/conflict-text.js';
 import { stripLektoratMarks } from '../../editor/shared/html-clean.js';
 import { isNoChange } from '../../editor/shared/save-pipeline.js';
 
@@ -20,15 +22,10 @@ import { isNoChange } from '../../editor/shared/save-pipeline.js';
 // wäre nicht reaktiv und der Status bliebe bis zum nächsten Re-Render hängen.
 const SAVED_FLASH_MS = 4000;
 
-// Konflikt-Wortlaut: eigenes Zweit-Gerät (Mac-Client, zweiter Laptop, Android)
-// nennt das Gerät, fremder ACL-User den Namen. Die drei Auftritte
-// (saveError-Hinweis, Statuszeile, Block-Banner) unterscheiden sich nur im
-// Key-Paar.
-const CONFLICT_KEYS = {
-  hint: ['bookEditor.conflictHintSelf', 'bookEditor.conflictHint'],
-  banner: ['bookEditor.conflict.bannerSelf', 'bookEditor.conflict.banner'],
-  status: ['bookEditor.status.conflictSelf', 'bookEditor.status.conflict'],
-};
+// Konflikt-Wortlaut (Gerät vs. User): shared/conflict-text.js. Die drei
+// Auftritte hier (saveError-Hinweis, Statuszeile, Block-Banner) unterscheiden
+// sich nur in der Variante.
+const CONFLICT_VARIANT = { hint: 'bookHint', banner: 'bookBanner', status: 'bookStatus' };
 
 // Übernimmt ein erfolgreiches Save-Ergebnis auf den Block. Pure (ausser
 // Date.now) und darum unit-testbar.
@@ -105,7 +102,7 @@ export const bookEditorSaveMethods = {
     block.saving = true;
     block.saveError = '';
     try {
-      const conflict = await app._checkPageConflict(block.pageId, block.originalUpdatedAt);
+      const conflict = await checkPageConflict(block.pageId, block.originalUpdatedAt);
       if (conflict) {
         block.conflict = {
           remoteUserName: conflict.remoteUserName,
@@ -197,11 +194,8 @@ export const bookEditorSaveMethods = {
 
   _conflictText(conflict, variant) {
     const app = window.__app;
-    if (!app || !conflict) return '';
-    const [selfKey, otherKey] = CONFLICT_KEYS[variant];
-    return conflict.remoteIsSelf
-      ? app.t(selfKey, { device: conflict.remoteDevice || app.t('presence.device.unknown') })
-      : app.t(otherKey, { user: conflict.remoteUserName || app.t('edit.conflict.unknownUser') });
+    if (!app) return '';
+    return conflictText(app.t.bind(app), conflict, CONFLICT_VARIANT[variant]);
   },
 
   conflictBanner(conflict) {

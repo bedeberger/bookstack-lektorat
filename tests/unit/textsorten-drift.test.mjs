@@ -114,12 +114,18 @@ test('Struktur-Prompt trägt den Soll-Katalog der gewählten Textsorte', async (
   // Und er darf nichts erfinden: eine fehlende Angabe IST der Befund.
   assert.ok(/Erfinde keine Angaben/.test(p), 'Erfindungs-Verbot fehlt');
 
-  // Schema-Enum und die im Prompt genannten Status müssen identisch sein.
+  // Schema-Enum und die im Prompt genannten Status stammen aus derselben SSoT.
   const schema = prompts.buildStrukturSchema();
-  assert.deepEqual(schema.properties.regeln.items.properties.status.enum,
-    ['erfuellt', 'teilweise', 'fehlt', 'nicht_anwendbar']);
-  assert.deepEqual(schema.properties.gesamturteil.enum,
-    ['traegt', 'lueckenhaft', 'verfehlt']);
+  assert.deepEqual(schema.properties.regeln.items.properties.status.enum, ts.STRUKTUR_STATUS);
+  assert.deepEqual(schema.properties.gesamturteil.enum, ts.STRUKTUR_URTEILE);
+  assert.deepEqual(schema.properties.fehlendeWFragen.items.enum, ts.W_FRAGEN);
+
+  // …und jeder Key wird im Prompt auch ERKLÄRT. Das Schema allein sagt dem
+  // Modell nur, was erlaubt ist, nicht wann es welchen Wert nehmen soll — ein
+  // ergänzter Status ohne Prosa daneben wird nie oder beliebig vergeben.
+  for (const k of [...ts.STRUKTUR_STATUS, ...ts.STRUKTUR_URTEILE]) {
+    assert.ok(p.includes(`«${k}»`), `Status/Urteil «${k}» wird im Prompt nicht erklärt`);
+  }
 });
 
 test('Struktur-Befund wird auf den Katalog normalisiert (keine Lücken, keine Geister)', () => {
@@ -134,7 +140,7 @@ test('Struktur-Befund wird auf den Katalog normalisiert (keine Lücken, keine Ge
       { nr: 1, status: 'erfuellt', befund: 'Lead sitzt.', massnahme: 'trotzdem was tun' },
     ],
     fehlendeWFragen: ['wann', 'wann', 'quatsch'],
-  }, regelnCount);
+  }, regelnCount, ts);
 
   assert.equal(out.regeln.length, regelnCount, 'jede Katalog-Regel braucht eine Zeile');
   assert.deepEqual(out.regeln.map(r => r.nr), Array.from({ length: regelnCount }, (_, i) => i + 1));
@@ -150,8 +156,8 @@ test('Struktur-Befund wird auf den Katalog normalisiert (keine Lücken, keine Ge
 
 test('fehlendes Gesamturteil wird abgeleitet, nicht auf «trägt» geraten', () => {
   const { _normalizeResult } = require(path.join(ROOT, 'routes/jobs/struktur.js'));
-  const mitLuecke = _normalizeResult({ regeln: [{ nr: 1, status: 'fehlt', befund: 'x' }] }, 2);
+  const mitLuecke = _normalizeResult({ regeln: [{ nr: 1, status: 'fehlt', befund: 'x' }] }, 2, ts);
   assert.equal(mitLuecke.gesamturteil, 'lueckenhaft');
-  const ohneLuecke = _normalizeResult({ regeln: [{ nr: 1, status: 'erfuellt', befund: 'x' }] }, 1);
+  const ohneLuecke = _normalizeResult({ regeln: [{ nr: 1, status: 'erfuellt', befund: 'x' }] }, 1, ts);
   assert.equal(ohneLuecke.gesamturteil, 'traegt');
 });

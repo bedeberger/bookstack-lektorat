@@ -11,6 +11,13 @@
  * Netzwerk-/Offline-Fehlern. Aufrufer können damit zwischen „Server sagt
  * nein" (4xx, Retry sinnlos) und „Blip" (5xx/Netzwerk, Retry sinnvoll)
  * unterscheiden, statt jeden Fehler gleich zu behandeln.
+ *
+ * Dazu `code` (das `error_code`-Feld der Antwort) und `body` (die geparste
+ * Fehlerantwort). Die App antwortet auf Fehlern durchgängig mit
+ * `{ error_code, params? }` — ohne diese beiden Felder bliebe davon nur ein
+ * „HTTP 409" übrig, und jeder Aufrufer, der eine eigene Meldung zeigen will
+ * (CITEKEY_TAKEN, SOURCE_IDENTITY_REQ …), müsste `fetch` selbst aufrufen.
+ * Über `body` löst `tError()` die Meldung samt `params` auf.
  */
 export async function fetchJson(url, opts) {
   let r;
@@ -21,10 +28,13 @@ export async function fetchJson(url, opts) {
     throw e;
   }
   if (!r.ok) {
-    let detail = '';
-    try { const e = await r.clone().json(); detail = e.error || e.message || ''; } catch (_) {}
+    let body = null;
+    try { body = await r.clone().json(); } catch (_) {}
+    const detail = body?.error || body?.message || '';
     const err = new Error(detail ? `HTTP ${r.status}: ${detail}` : `HTTP ${r.status}`);
     err.status = r.status;
+    err.code = body?.error_code || null;
+    err.body = body;
     throw err;
   }
   return r.json();

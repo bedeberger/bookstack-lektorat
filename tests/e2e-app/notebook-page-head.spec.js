@@ -21,6 +21,9 @@ const { test, expect } = require('@playwright/test');
 const { bootApp, selectSeededBook } = require('./_helpers/app');
 
 const HEAD = '#editor-card .page-head';
+// Das Lese-Blatt. Ohne .page-view-wrap trifft der Selektor auch das
+// contenteditable des Bearbeitungsmodus — und das steht im DOM zuerst.
+const READ_SHEET = '#editor-card .page-view-wrap .page-content-view';
 
 // Der Ein-/Aus-Knopf trägt den Zustand im aria-label (wie seine Geschwister in
 // der Toolbar): sichtbarer Kopf → „ausblenden", verborgener → „einblenden".
@@ -202,6 +205,64 @@ test.describe('Notebook: Titel-Kopf des Beitrags', () => {
     // Zurücksetzen für die übrigen Tests dieser Datei.
     await page.locator(`#editor-card .card-actions button[aria-label="${TIP_ON}"]`).click();
     await expect(page.locator(`${HEAD} .page-head__title`)).toBeVisible();
+  });
+
+  // Der Kopf ist das obere Ende des Blatts, kein Block darüber. Diese Zusage
+  // lebt ausschliesslich in der CSS-Kette der echten Shell (Lesebreite,
+  // Seitenpadding, Schiene des Bearbeitungsmodus) — ein Fixture-Harness mit
+  // Minimal-CSS könnte grün bleiben, während der Kopf im Editor wieder neben
+  // dem Dokument steht. Darum hier und nicht in tests/e2e/.
+  test('Kopf und Blatt sind EIN Bogen — gleiche Textkante, gleiche Breite, keine Fuge', async ({ page }) => {
+    await setBuchtyp(page, 'journalismus');
+    const pageId = await openPage(page, 1);
+    await page.evaluate(async (id) => {
+      // Der Aha-Hinweis des Lektorats rendert im Lesemodus zwischen Kopf und
+      // Blatt und wäre eine echte Fuge. Einmaliger Erstkontakt-Hinweis, hier
+      // weggeklickt, damit gemessen wird, was der Kopf verantwortet.
+      localStorage.setItem('sw:ahaLektorat', '1');
+      await fetch(`/headline/page/${id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dachzeile: 'Reportage', titel: 'Am Rand der Stadt', lead: 'Ein Nachmittag.' }),
+      });
+    }, pageId);
+    await openPage(page, 0);
+    await openPage(page, 1);
+    // Der Kopf misst sich am Blatt — also erst messen, wenn das Blatt steht.
+    // Es gibt ZWEI .page-content-view im Baum (Lese-Blatt und contenteditable);
+    // der Lesemodus-Zweig hängt unter .page-view-wrap.
+    await page.waitForSelector(READ_SHEET, { state: 'visible', timeout: 15000 });
+    await expect(page.locator(`${HEAD} .page-head__title`)).toBeVisible();
+
+    const box = async (sel) => {
+      const b = await page.locator(sel).first().boundingBox();
+      if (!b) throw new Error('nicht sichtbar: ' + sel);
+      return b;
+    };
+    // Ein Pixel Toleranz: Sub-Pixel-Rundung, nicht Spielraum im Entwurf.
+    const gleich = (a, b) => expect(Math.abs(a - b)).toBeLessThanOrEqual(1);
+
+    // ── Leseansicht ──
+    let head = await box(HEAD);
+    let sheet = await box(READ_SHEET);
+    gleich(head.x, sheet.x);
+    gleich(head.width, sheet.width);
+    gleich(head.y + head.height, sheet.y);          // keine Fuge an der Naht
+    // Textkante: die Schlagzeile beginnt dort, wo der Fliesstext beginnt.
+    gleich((await box(`${HEAD} .page-head__title`)).x,
+           (await box(`${READ_SHEET} p`)).x);
+
+    // ── Bearbeitungsmodus ──
+    // Die 5px-Schiene ersetzt im Blatt den 1px-Rahmen und verschiebt die
+    // Textkante; der Kopf muss dieselbe Schiene tragen, sonst fällt er hier
+    // wieder heraus.
+    await startEdit(page);
+    head = await box(HEAD);
+    sheet = await box('#editor-card .page-content-view--editing');
+    gleich(head.x, sheet.x);
+    gleich(head.width, sheet.width);
+    gleich(head.y + head.height, sheet.y);
+    gleich((await box(`${HEAD} #page-head-titel`)).x,
+           (await box('#editor-card .page-content-view--editing p')).x);
   });
 
   test('im Roman gibt es den Knopf nicht', async ({ page }) => {

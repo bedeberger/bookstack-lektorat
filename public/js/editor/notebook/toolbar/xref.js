@@ -17,7 +17,8 @@
 // Nur Notebook: Focus-Editor und Bucheditor stellen Verweise dar und zerstören
 // sie nicht, bringen aber keinen Einfügepfad mit.
 
-import { getEditEl, findBlock } from './_shared.js';
+import { getEditEl, caretRangeIn } from './_shared.js';
+import { capHits, cycleIdx, insertHtmlAtRange, onPickerKeydown, panelAnchorFor } from './caret-panel.js';
 import { buildXrefHtml, markXrefsAtomic } from '../../../xrefs/xref-html.js';
 import { defaultChapterLabels, figureNumbers } from '../../../xrefs/xref-number.js';
 import { formatXref } from '../../../xrefs/xref-format.js';
@@ -83,20 +84,17 @@ export const xrefMethods = {
     if (!app?.editMode || app.focusActive) return;
     const editEl = getEditEl();
     if (!editEl) return;
-    const sel = document.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    const range = sel.getRangeAt(0);
-    if (!editEl.contains(range.commonAncestorContainer) && editEl !== range.commonAncestorContainer) return;
+    // Ohne Caret im Edit-Feld kein Verweis: anders als beim Beleg (der auch aus
+    // der Seiten-Toolbar kommt und dann ans Ende ankert) hat dieser Picker nur
+    // Einstiege AUS dem Text heraus.
+    const range = caretRangeIn(editEl);
+    if (!range) return;
 
     this._xrefRange = range.cloneRange();
 
-    let rect = this._xrefRange.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) {
-      const block = findBlock(this._xrefRange.startContainer, editEl) || editEl;
-      rect = block.getBoundingClientRect();
-    }
-    this.xrefX = rect.left + rect.width / 2;
-    this.xrefY = rect.top;
+    const { x, y } = panelAnchorFor(this._xrefRange, editEl);
+    this.xrefX = x;
+    this.xrefY = y;
 
     this.xrefQuery = '';
     this.xrefIdx = 0;
@@ -155,7 +153,7 @@ export const xrefMethods = {
     const hits = q
       ? list.filter(t => `${t.title} ${t.number || ''} ${t.pageName || ''}`.toLowerCase().includes(q))
       : list;
-    this.xrefHits = hits.slice(0, XREF_MAX_HITS);
+    this.xrefHits = capHits(hits, XREF_MAX_HITS);
     if (this.xrefIdx >= this.xrefHits.length) this.xrefIdx = 0;
   },
 
@@ -172,20 +170,19 @@ export const xrefMethods = {
   },
 
   xrefMove(delta) {
-    const n = this.xrefHits.length;
-    if (!n) return;
-    this.xrefIdx = (this.xrefIdx + delta + n) % n;
+    if (!this.xrefHits.length) return;
+    this.xrefIdx = cycleIdx(this.xrefIdx, delta, this.xrefHits.length);
   },
 
   _onXrefKeydown(e) {
-    if (e.key === 'Escape')    { e.preventDefault(); this._closeXref(); return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); this.xrefMove(1); return; }
-    if (e.key === 'ArrowUp')   { e.preventDefault(); this.xrefMove(-1); return; }
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const hit = this.xrefHits[this.xrefIdx];
-      if (hit) this._commitXref(hit);
-    }
+    onPickerKeydown(e, {
+      onClose: () => this._closeXref(),
+      onMove: (d) => this.xrefMove(d),
+      onEnter: () => {
+        const hit = this.xrefHits[this.xrefIdx];
+        if (hit) this._commitXref(hit);
+      },
+    });
   },
 
   // Verweis an der gesicherten Range einfügen.
@@ -205,35 +202,16 @@ export const xrefMethods = {
 
     editEl.focus();
 
-    // Einfügen über die Range-API, NICHT über execCommand('insertHTML'):
-    // Chromium schleust den Fragment-String durch seinen Editing-Sanitizer, der
-    // `class`/`data-*` verwirft und die berechneten CSS-Werte der Klasse als
-    // Inline-`style` einbäckt — Zeiger weg, dazu ein `style`-Attribut gegen
-    // „Styles nur in public/css". Identisch zum Beleg-Chip, siehe cite.js.
-    const doc = editEl.ownerDocument || document;
-    const holder = doc.createElement('div');
-    holder.innerHTML = `${html} `;
-    const frag = doc.createDocumentFragment();
-    while (holder.firstChild) frag.appendChild(holder.firstChild);
-    const lastNode = frag.lastChild;
-
-    range.deleteContents();
-    range.insertNode(frag);
+    // `replaceContents`: eine markierte Stelle WIRD hier ersetzt — der Verweis
+    // tritt an ihre Stelle im Satz (anders als der Beleg, der sie nachweist).
+    // Trennzeichen ist ein gewöhnliches Leerzeichen, weil der Verweis Fliesstext
+    // ist; Caret dahinter besorgt der Helfer.
+    insertHtmlAtRange(range, html, { after: ' ', replaceContents: true });
 
     // Der frisch eingefügte Verweis ist noch nicht atomar (markXrefsAtomic läuft
     // sonst nur beim Mount). Direkt nachziehen, sonst tippt der User in den
     // Verweis hinein statt dahinter. Idempotent.
     markXrefsAtomic(editEl);
-
-    // Caret hinter den Verweis (hinter das angehängte Trennzeichen).
-    const sel = doc.getSelection();
-    if (sel && lastNode) {
-      const after = doc.createRange();
-      after.setStartAfter(lastNode);
-      after.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(after);
-    }
 
     window.__app?._markEditDirty?.();
     this._closeXref();

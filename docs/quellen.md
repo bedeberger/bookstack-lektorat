@@ -15,6 +15,19 @@ Die harten Regeln stehen in [CLAUDE.md](../CLAUDE.md) („Editor-Blockstruktur �
 
 **Wahrheit ist der Marker im Seiten-HTML.** `source_citations` ist reine Ableitung und wird pro Seiten-Write per Full-Replace neu geschrieben ([lib/cite-index.js](../lib/cite-index.js) am Content-Store-Chokepoint, Muster `page_figure_mentions`). Nie inkrementell fortschreiben.
 
+**DB-Schicht: [db/sources.js](../db/sources.js) ist eine Facade** über [db/sources/](../db/sources/) — fünf Themen, die nur die Tabelle teilen und je eigene Regeln haben:
+
+| Modul | Inhalt |
+|---|---|
+| `shared.js` | Feld-Inventar (`TEXT_FIELDS`), Personen-Normalisierung, die beiden Kennzahl-SQL-Fragmente, Zeilen-Mapper. Speist INSERT, UPDATE, Spaltenliste **und** Normalisierung — laufen die auseinander, verliert ein Schreibpfad still ein Feld. |
+| `pool.js` | die Bibliothek: CRUD plus die drei Dublettenfragen (Import über Zitierschlüssel bzw. Titel+Jahr, Erfassen über die normalisierte URL, Recherche-Übernahme als reines Log-Signal). |
+| `links.js` | die Brücke. `unlinkSource` ≠ `deleteSource` — siehe oben. |
+| `citations.js` | der Fund-Index und die Zitat-Kennzahlen. |
+| `detect-runs.js` | Historie der Quellen-Erkennung. |
+| `doc.js` | PDF-Anhang; die **einzigen** Zugänge zu `doc`/`doc_text` (die Spaltenliste in `shared.js` führt sie bewusst nicht). |
+
+Konsumenten importieren die Facade oder `db/schema.js`, nie ein Submodul. **Neue Funktion ⇒ Export in beiden** (`db/sources.js` spreadet die Submodule, `db/schema.js` listet die Namen einzeln auf) — sonst ist sie über `require('../db/schema')` nicht sichtbar, und genau darüber gehen die Routen.
+
 **Buch-Guard beim Indizieren:** eine Quelle erzeugt nur eine Fundstelle, wenn sie dem Buch der Seite **zugeordnet** ist (`INSERT … FROM book_source_links l JOIN pages p … WHERE l.book_id = p.book_id`). Fängt zwei Fälle: Seite in ein anderes Buch verschoben, und Quelle aus dem Buch entfernt während der Marker im Text stehen bleibt.
 
 ## Markup
@@ -41,7 +54,15 @@ Bewusst **kein** `data-loc` am blockquote — die Stellenangabe gehört zum sich
 
 **`contenteditable` steht nie in der Persistenz.** Der Editor setzt es beim Mount, [lib/html-clean.js](../lib/html-clean.js)#`stripEditorUiArtefacts` strippt es beim Save, und die Dirty-Vergleichsform ([editor/shared/html-clean.js](../public/js/editor/shared/html-clean.js)#`stripLektoratMarks`) ignoriert es. Ohne **beides** gilt jede Seite mit Quellenangabe beim Öffnen als geändert und wird ungefragt gespeichert.
 
-Das Markup-Modul ist DOM-agnostisch, damit Browser und Server (linkedom) dieselbe Parse-Logik nutzen statt zweier driftender Kopien.
+Das Markup-Modul ist DOM-agnostisch, damit Browser und Server (linkedom) dieselbe Parse-Logik nutzen statt zweier driftender Kopien. Der Server lädt es — wie alle geteilten Browser-Module — über [lib/esm-bridge.js](../lib/esm-bridge.js) (`citeHtml()`, `sourceFormat()`, `sourceSearch()`); dort steht der Pfad einmal und das dynamic `import()` ist pro Modul memoisiert. **Keine eigene `pathToFileURL`-Kette in einem neuen Konsumenten** — das Muster lag in acht Modulen einzeln herum. Ausgenommen bleibt [lib/prompts-loader.js](../lib/prompts-loader.js): der braucht **zwei isolierte Instanzen** pro Provider-Klasse und darf die Bridge nicht mitbenutzen.
+
+## Suchen und Benennen
+
+[public/js/sources/search.js](../public/js/sources/search.js) beantwortet die zwei Fragen, die jede Oberfläche mit einer Quellenliste stellt: `sourceHaystack`/`filterSources` („passt die Zeile zum Suchbegriff") und `sourceLine`/`primaryPersonLabel`/`personLabel` („wie heisst sie in einer Zeile"). Pur, DOM-frei, vom Server über die Bridge erreichbar.
+
+**Welche Felder eine Quelle auffindbar machen, ist eine fachliche Entscheidung** und steht darum an genau einer Stelle: Titel, übergeordnetes Werk, Verlag, **Ort**, Jahr, Zitierschlüssel und alle Personen — Notiz und Abstract bewusst nicht (sie machen die Suche unscharf). Konsumenten: Quellen-Karte (Tabelle + Bibliotheks-Picker) und der Beleg-Picker des Notebook-Editors.
+
+**Serverseitig gibt es keinen Freitextfilter.** `GET /sources` und `GET /sources/pool` kennen nur den Typ-Filter; alle Konsumenten laden die Liste ohnehin vollständig (eine persönliche Bibliothek liegt im zwei- bis dreistelligen Bereich) und sieben clientseitig über dieses Modul.
 
 ## Drei Schutzschichten
 

@@ -54,9 +54,11 @@ export const notebookTrampoline = {
   // liefen Edit-Lock-Heartbeat und Presence-Ping der verlassenen Seite weiter.
   _teardownEditSession(opts) { card()?._teardownEditSession(opts); },
   _filterFindingsAfterSave(html) { card()?._filterFindingsAfterSave(html); },
-  _checkPageConflict(pageId, expectedUpdatedAt) {
-    return card()?._checkPageConflict(pageId, expectedUpdatedAt) ?? null;
-  },
+  // Kein `_checkPageConflict`-Forwarder mehr: der Pre-Save-Conflict-Check ist
+  // eine Eigenschaft der Seite und liegt in editor/shared/page-conflict.js.
+  // Der Bucheditor importierte ihn früher hier durch — sein Stale-Schutz hing
+  // damit daran, dass die Notebook-Karte gemountet ist (fehlte sie, lieferte
+  // der Forwarder `null` = „kein Konflikt").
   _getEditEl() { return card()?._getEditEl() ?? null; },
   _scrollEditCaretIntoView(rect) { card()?._scrollEditCaretIntoView(rect); },
 };

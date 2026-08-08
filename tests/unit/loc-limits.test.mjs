@@ -32,6 +32,12 @@ function walk(dir, ext, out = []) {
   return out;
 }
 
+function walkAll(dirs, ext) {
+  const out = [];
+  for (const d of dirs) walk(d, ext, out);
+  return out;
+}
+
 function loc(file) {
   const src = readFileSync(file, 'utf8');
   if (src === '') return 0;
@@ -40,8 +46,10 @@ function loc(file) {
   return src.endsWith('\n') ? lines.length - 1 : lines.length;
 }
 
-// Eine Kategorie: Verzeichnis + Extension + Cap + gepinnte Altlasten.
+// Eine Kategorie: Verzeichnis(se) + Extension + Cap + gepinnte Altlasten.
 // Ceiling-Werte = aktueller Stand (Ratsche: nur runter, nie rauf).
+// `exclude` nimmt Dateien ganz aus der Pruefung — nur fuer solche, bei denen
+// Wachstum in der Natur der Sache liegt (siehe Begruendung am Eintrag).
 const CATEGORIES = [
   {
     label: 'JS-Modul',
@@ -49,8 +57,6 @@ const CATEGORIES = [
     ext: '.js',
     cap: 600,
     allow: {
-      'public/js/cards/editor-spellcheck/controller.js': 752,
-      'public/js/editor/notebook/stt-dictation.js': 769,
       'public/js/share-reader.js': 658,
     },
   },
@@ -84,16 +90,54 @@ const CATEGORIES = [
       'public/css/editor/book/book-editor.css': 674,
     },
   },
+  // Server-Code stand lange ausserhalb jeder LOC-Pruefung — der Cap aus
+  // CLAUDE.md gilt aber fuer JS-Module, nicht fuer Browser-JS-Module. Die
+  // Ratsche zieht die Altlasten darum ab hier ebenfalls nur nach unten.
+  {
+    label: 'Server-Modul',
+    dirs: [join(REPO_ROOT, 'lib'), join(REPO_ROOT, 'routes'), join(REPO_ROOT, 'db')],
+    ext: '.js',
+    cap: 600,
+    exclude: [
+      // Append-only Historie: JEDE neue Migration verlaengert die Datei, ein
+      // Ceiling waere bei jedem Schema-Schritt rot. Der Split waere zudem
+      // sinnlos — die Reihenfolge der if-version-Bloecke IST die Struktur.
+      'db/migrations.js',
+    ],
+    allow: {
+      'lib/export-builders/epub.js': 1054,
+      'lib/app-settings.js': 886,
+      'lib/export-builders/docx.js': 793,
+      'lib/page-index.js': 692,
+      'lib/content-store/backends/localdb.js': 635,
+      'lib/mailer-templates.js': 626,
+      'routes/history.js': 921,
+      'routes/jobs/komplett/phases/extraktion.js': 920,
+      'routes/jobs/book-chat-tools/tools-catalog.js': 716,
+      'routes/figures.js': 715,
+      'routes/snapshots.js': 655,
+      'routes/jobs/komplett/job-komplett.js': 643,
+      'routes/usersettings.js': 641,
+      'routes/jobs/book-chat-tools/tools-text.js': 636,
+      'routes/share/reader.js': 615,
+      'routes/jobs/lektorat.js': 602,
+      'db/schema.js': 1835,
+      'db/plot.js': 930,
+      'db/figures.js': 835,
+    },
+  },
 ];
 
 for (const cat of CATEGORIES) {
   test(`${cat.label}: keine neuen Dateien ueber ${cat.cap} LOC + Altlasten-Ratsche`, () => {
-    const files = walk(cat.dir, cat.ext);
+    const files = cat.dirs ? walkAll(cat.dirs, cat.ext) : walk(cat.dir, cat.ext);
+    const excluded = new Set(cat.exclude || []);
     const violations = [];
     const seen = new Set();
 
     for (const file of files) {
       const r = rel(file);
+      if (excluded.has(r)) continue;
       const n = loc(file);
       if (Object.prototype.hasOwnProperty.call(cat.allow, r)) {
         seen.add(r);

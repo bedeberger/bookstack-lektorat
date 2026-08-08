@@ -7,6 +7,8 @@ import { readDraft, writeDraft, clearDraft } from '../../draft-storage.js';
 import { stripLektoratMarks } from '../../shared/html-clean.js';
 import { isNoChange } from '../../shared/save-pipeline.js';
 import { savePage, isPageConflict, readConflictBody } from '../../shared/page-api.js';
+import { checkPageConflict, conflictBannerFrom } from '../../shared/page-conflict.js';
+import { conflictText } from '../../shared/conflict-text.js';
 import { mergeBlocks, mergedToHtml, buildResolvedHtml } from '../../shared/block-merge.js';
 import { trackMerge } from '../../shared/merge-telemetry.js';
 import { FEATURE_BLOCK_MERGE } from '../../../app/app-state.js';
@@ -23,8 +25,13 @@ import { EVT } from '../../../events.js';
 // editor/shared/autosave.js — geteilt mit dem Bucheditor, damit die beiden
 // Editoren nicht mit unterschiedlichem Rhythmus speichern. Die Timer-Handles
 // bleiben hier am Root-Host (siehe autosave.js in diesem Ordner).
-export { AUTOSAVE_IDLE_MS, AUTOSAVE_MAX_MS } from '../../shared/autosave.js';
+export { AUTOSAVE_IDLE_MS, AUTOSAVE_MAX_MS, createAutosaveTimers } from '../../shared/autosave.js';
+export { createTimerBag } from '../../shared/timers.js';
 export const DRAFT_DEBOUNCE_MS = 500;
+// Der Notebook-Editor bearbeitet immer nur EINE Seite — ein fester Key statt
+// der pageId. `_stopAutosave` laeuft beim Seitenwechsel und kennt die alte
+// Seite dann schon nicht mehr; mit pageId-Key bliebe deren Timer stehen.
+export const AUTOSAVE_KEY = 'page';
 // stripLektoratMarks / normalizeForCompare / normalizeEditorBlocks /
 // ROOT_BLOCK_TAGS leben in public/js/editor/shared/html-clean.js — dieselbe
 // Lib wird auch vom Focus-Editor konsumiert. Die Block-Normalisierung erreichen
@@ -36,4 +43,4 @@ export const DRAFT_DEBOUNCE_MS = 500;
 // `window.__app` (Root). Aufruf von extern: über die Trampoline-Forwarder
 // in [trampoline.js] am Root-Spread (`app.startEdit()` → `__notebookCard.startEdit()`).
 
-export { EVT, FEATURE_BLOCK_MERGE, ZOOM_MAX, ZOOM_MIN, buildResolvedHtml, clearDraft, clearNormalSnapshot, contentRepo, editorHost, findBlock, findInHtml, getActiveEditorContainer, handleEditorCopy, handleEditorCut, handleEditorPaste, htmlToText, installEditCounter, isNoChange, isPageConflict, localeTag, mergeBlocks, mergedToHtml, mountEditorHtml, readConflictBody, readDraft, readEditorPrefs, runQuoteNormalize, savePage, sortByPosition, stripLektoratMarks, trackMerge, tzOpts, writeDraft, writeEditorPrefs, writeNormalSnapshot };
+export { EVT, FEATURE_BLOCK_MERGE, ZOOM_MAX, ZOOM_MIN, buildResolvedHtml, checkPageConflict, clearDraft, clearNormalSnapshot, conflictBannerFrom, conflictText, contentRepo, editorHost, findBlock, findInHtml, getActiveEditorContainer, handleEditorCopy, handleEditorCut, handleEditorPaste, htmlToText, installEditCounter, isNoChange, isPageConflict, localeTag, mergeBlocks, mergedToHtml, mountEditorHtml, readConflictBody, readDraft, readEditorPrefs, runQuoteNormalize, savePage, sortByPosition, stripLektoratMarks, trackMerge, tzOpts, writeDraft, writeEditorPrefs, writeNormalSnapshot };

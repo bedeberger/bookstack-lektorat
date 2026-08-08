@@ -23,13 +23,12 @@ const express = require('express');
 const {
   db, CSL_TYPES,
   listSources, listPoolSources, getSource, createSource, updateSource, deleteSource,
-  findSourceByUrl,
+  findSourceByUrl, findImportDuplicate, findSimilarSource,
   linkSource, unlinkSource, isSourceLinked, listSourceBooks, getBookQuoteStats,
-  listBookCitations,
+  listBookCitations, listSourceCitations,
 } = require('../db/schema');
 const { toIntId } = require('../lib/validate');
-const { setContext } = require('../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../lib/acl');
+const { guardBook } = require('../lib/acl');
 const { BIB_FORMATS, parseBib } = require('../lib/bib-parse');
 const { validateSourceBody, hasSourceIdentity } = require('../lib/source-validate');
 const { normalizeUrl } = require('../lib/url-normalize');
@@ -50,57 +49,36 @@ router.use('/', sourcesDocRouter);
 // CRUD-Limit fuer alle Routen anzuheben.
 const importBody = express.json({ limit: '4mb' });
 
-const Q_MAX = 200;
 const IMPORT_MAX_CHARS = 2_000_000;
 const IMPORT_MAX_ENTRIES = 500;
-
-function _guard(req, res, bookId, minRole) {
-  setContext({ book: bookId });
-  try { requireBookAccess(req, bookId, minRole); return true; }
-  catch (e) { return !sendACLError(res, e); }
-}
 
 // Die zwei Zugriffsachsen liegen in routes/sources-acl.js — der Dokument-Router
 // (routes/sources-doc.js) braucht dieselbe Entscheidung, und eine kopierte
 // ACL-Pruefung faellt nicht auf, wenn nur eine der Kopien nachgezogen wird.
-const _userEmail = userEmail;
-const _canRead = canRead;
-const _isOwner = isOwner;
+// Feldpruefung + Identitaets-Minimum liegen aus demselben Grund in
+// lib/source-validate.js: routes/capture.js muss durch dieselben Regeln gehen.
+//
+// Der Buch-Guard kommt aus lib/acl.js#guardBook.
 
-// Feldpruefung + Identitaets-Minimum liegen in lib/source-validate.js, weil
-// routes/capture.js (Browser-Erweiterung) durch dieselben Regeln gehen muss.
-const _validateBody = validateSourceBody;
-const _hasIdentity = hasSourceIdentity;
-
-// Freitextfilter clientnah in JS: die Liste ist klein (Literaturbibliotheken
-// liegen im zwei- bis dreistelligen Bereich) und die Personen stecken als JSON
-// in einer Spalte — ein SQL-LIKE darauf waere ungenauer.
-function _applyFilters(rows, query) {
-  let out = rows;
+// Typfilter der Listen-Endpunkte. Ein FREITEXTFILTER steht hier bewusst NICHT:
+// die Suchfelder einer Quelle sind eine fachliche Entscheidung (zaehlt der
+// Verlagsort? der Zitierschluessel?), und sie lag hier in einer dritten Kopie
+// neben den beiden Frontend-Kopien — mit abweichender Feldliste. Die Liste ist
+// klein genug, dass alle Konsumenten sie ohnehin vollstaendig laden und
+// clientseitig ueber public/js/sources/search.js sieben.
+function _applyTypeFilter(rows, query) {
   const type = String(query.type || '').trim();
-  if (CSL_TYPES.includes(type)) out = out.filter(r => r.csl_type === type);
-
-  const q = String(query.q || '').trim().slice(0, Q_MAX).toLowerCase();
-  if (q) {
-    out = out.filter((r) => {
-      const persons = [...r.authors, ...r.editors]
-        .map(p => `${p.family || ''} ${p.given || ''} ${p.literal || ''}`).join(' ');
-      const hay = [r.title, r.container_title, r.publisher, r.year, r.citekey, persons]
-        .filter(Boolean).join(' ').toLowerCase();
-      return hay.includes(q);
-    });
-  }
-  return out;
+  return CSL_TYPES.includes(type) ? rows.filter(r => r.csl_type === type) : rows;
 }
 
 // ── Bibliothek des Users ─────────────────────────────────────────────────────
-// GET /sources/pool?archived=1&exclude_book_id=&type=&q=
+// GET /sources/pool?archived=1&exclude_book_id=&type=
 // Speist den „aus Bibliothek hinzufuegen"-Picker. Nur der eigene Pool — eine
 // fremde Bibliothek ist nirgends sichtbar, auch nicht fuer Co-Autoren.
 //
 // Steht VOR /:id, sonst faengt der Id-Handler 'pool' ab.
 router.get('/pool', (req, res) => {
-  const email = _userEmail(req);
+  const email = userEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
 
   // Das Ausschlussbuch ist ein Anzeigefilter, kein Zugriffsargument — trotzdem
@@ -110,13 +88,13 @@ router.get('/pool', (req, res) => {
   if (req.query.exclude_book_id && !excludeBookId) {
     return res.status(400).json({ error_code: 'INVALID_ID' });
   }
-  if (excludeBookId && !_guard(req, res, excludeBookId, 'viewer')) return;
+  if (excludeBookId && !guardBook(req, res, excludeBookId, 'viewer')) return;
 
   const rows = listPoolSources(email, {
     includeArchived: String(req.query.archived || '') === '1',
     excludeBookId: excludeBookId || null,
   });
-  res.json(_applyFilters(rows, req.query));
+  res.json(_applyTypeFilter(rows, req.query));
 });
 
 // ── Zitat-Kennzahlen eines Buchs ─────────────────────────────────────────────
@@ -129,7 +107,7 @@ router.get('/pool', (req, res) => {
 router.get('/stats', (req, res) => {
   const bookId = toIntId(req.query.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, bookId, 'viewer')) return;
+  if (!guardBook(req, res, bookId, 'viewer')) return;
   res.json(getBookQuoteStats(bookId));
 });
 
@@ -149,7 +127,7 @@ router.get('/stats', (req, res) => {
 router.get('/citations', (req, res) => {
   const bookId = toIntId(req.query.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, bookId, 'viewer')) return;
+  if (!guardBook(req, res, bookId, 'viewer')) return;
   res.json(listBookCitations(bookId));
 });
 
@@ -184,13 +162,13 @@ router.get('/citations', (req, res) => {
 //
 // Steht VOR /:id, sonst faengt der Id-Handler 'import' ab.
 router.post('/import', importBody, (req, res) => {
-  const userEmail = _userEmail(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+  const email = userEmail(req);
+  if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
 
   const body = req.body || {};
   const bookId = toIntId(body.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, bookId, 'editor')) return;
+  if (!guardBook(req, res, bookId, 'editor')) return;
 
   const format = String(body.format || '').toLowerCase();
   if (!BIB_FORMATS.includes(format)) {
@@ -211,31 +189,19 @@ router.post('/import', importBody, (req, res) => {
     errors.push({ index: entries.length, error_code: 'IMPORT_TOO_MANY', params: { max: IMPORT_MAX_ENTRIES } });
   }
 
-  const findByCitekey = db.prepare(
-    'SELECT id FROM sources WHERE owner_email = ? AND citekey = ? LIMIT 1'
-  );
-  const findByTitle = db.prepare(`
-    SELECT id FROM sources
-     WHERE owner_email = ? AND csl_type = ?
-       AND title IS NOT NULL AND LOWER(title) = LOWER(?)
-       AND COALESCE(year, '') = COALESCE(?, '')
-     LIMIT 1
-  `);
   let imported = 0, skipped = 0, linked = 0;
 
   entries.forEach((entry, index) => {
     try {
-      if (!_hasIdentity(entry)) { errors.push({ index, error_code: 'SOURCE_IDENTITY_REQ' }); return; }
-      const existing = entry.citekey
-        ? findByCitekey.get(userEmail, entry.citekey)
-        : (entry.title ? findByTitle.get(userEmail, entry.csl_type, entry.title, entry.year) : null);
+      if (!hasSourceIdentity(entry)) { errors.push({ index, error_code: 'SOURCE_IDENTITY_REQ' }); return; }
+      const existing = findImportDuplicate(email, entry);
       if (existing) {
         skipped++;
-        if (linkSource(bookId, existing.id, userEmail)) linked++;
+        if (linkSource(bookId, existing.id, email)) linked++;
         return;
       }
-      const created = createSource(userEmail, entry);
-      linkSource(bookId, created.id, userEmail);
+      const created = createSource(email, entry);
+      linkSource(bookId, created.id, email);
       imported++;
     } catch (e) {
       // Wettlauf gegen einen parallelen Import derselben Datei: der UNIQUE-Index
@@ -293,7 +259,7 @@ router.get('/lookup', async (req, res) => {
 //
 // Steht VOR /:id, sonst faengt der Id-Handler 'by-url' ab.
 router.get('/by-url', (req, res) => {
-  const email = _userEmail(req);
+  const email = userEmail(req);
   if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
 
   const raw = String(req.query.url || '').trim();
@@ -304,7 +270,7 @@ router.get('/by-url', (req, res) => {
   if (req.query.book_id !== undefined && !bookId) {
     return res.status(400).json({ error_code: 'INVALID_ID' });
   }
-  if (bookId && !_guard(req, res, bookId, 'viewer')) return;
+  if (bookId && !guardBook(req, res, bookId, 'viewer')) return;
 
   const src = findSourceByUrl(email, raw, bookId);
   if (!src) return res.status(404).json({ error_code: 'NOT_FOUND' });
@@ -333,8 +299,8 @@ router.get('/by-url', (req, res) => {
 //
 // Steht VOR /:id, sonst faengt der Id-Handler 'from-research' ab.
 router.post('/from-research', jsonBody, (req, res) => {
-  const userEmail = _userEmail(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+  const email = userEmail(req);
+  if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
 
   const itemId = toIntId(req.body?.item_id);
   if (!itemId) return res.status(400).json({ error_code: 'INVALID_ID' });
@@ -343,7 +309,7 @@ router.post('/from-research', jsonBody, (req, res) => {
     'SELECT id, book_id, kind, title, body, source FROM research_items WHERE id = ?'
   ).get(itemId);
   if (!item) return res.status(404).json({ error_code: 'RESEARCH_ITEM_NOT_FOUND' });
-  if (!_guard(req, res, item.book_id, 'editor')) return;
+  if (!guardBook(req, res, item.book_id, 'editor')) return;
 
   const rawUrlId = req.body?.url_id;
   const urlId = rawUrlId == null || rawUrlId === '' ? null : toIntId(rawUrlId);
@@ -377,33 +343,28 @@ router.post('/from-research', jsonBody, (req, res) => {
     // toISOString(), damit das Datum der App-Zeitzone folgt.
     accessed_at: firstUrl ? localIsoDate() : null,
   };
-  if (!_hasIdentity(draft)) return res.status(400).json({ error_code: 'SOURCE_IDENTITY_REQ' });
+  if (!hasSourceIdentity(draft)) return res.status(400).json({ error_code: 'SOURCE_IDENTITY_REQ' });
 
-  const dupe = db.prepare(`
-    SELECT id FROM sources
-     WHERE owner_email = ?
-       AND ((? IS NOT NULL AND url = ?) OR (? IS NOT NULL AND title = ?))
-     LIMIT 1
-  `).get(userEmail, draft.url, draft.url, draft.title, draft.title);
+  const dupe = findSimilarSource(email, { url: draft.url, title: draft.title });
   if (dupe) {
     logger.info(`[quellen] from-research doppelt? item=${itemId} aehnlich zu quelle id=${dupe.id}`);
   }
 
-  const created = createSource(userEmail, draft);
-  linkSource(item.book_id, created.id, userEmail);
+  const created = createSource(email, draft);
+  linkSource(item.book_id, created.id, email);
   logger.info(`[quellen] from-research item=${itemId} url=${urlId ?? 'erste'} book=${item.book_id} quelle=${created.id}`);
   res.json(getSource(created.id, item.book_id));
 });
 
 // ── Liste eines Buchs ────────────────────────────────────────────────────────
-// GET /sources?book_id=&archived=1&type=book&q=
+// GET /sources?book_id=&archived=1&type=book
 router.get('/', (req, res) => {
   const bookId = toIntId(req.query.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, bookId, 'viewer')) return;
+  if (!guardBook(req, res, bookId, 'viewer')) return;
 
   const rows = listSources(bookId, { includeArchived: String(req.query.archived || '') === '1' });
-  res.json(_applyFilters(rows, req.query));
+  res.json(_applyTypeFilter(rows, req.query));
 });
 
 // ── Einzelne Quelle ──────────────────────────────────────────────────────────
@@ -414,7 +375,7 @@ router.get('/:id', (req, res) => {
   const bookId = toIntId(req.query.book_id);
   const src = getSource(id, bookId || null);
   if (!src) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (!_canRead(req, src)) return res.status(403).json({ error_code: 'NO_BOOK_ACCESS' });
+  if (!canRead(req, src)) return res.status(403).json({ error_code: 'NO_BOOK_ACCESS' });
   res.json(src);
 });
 
@@ -424,7 +385,7 @@ router.get('/:id', (req, res) => {
 // Fundstellen aus einer anderen Arbeit gehoeren dort nicht in die Liste.
 //
 // OHNE `book_id` ist die Antwort buch-UEBERGREIFEND und darum nur fuer den
-// Besitzer der Quelle. `_canRead` reicht hier NICHT: es laesst jeden durch, der
+// Besitzer der Quelle. `canRead` reicht hier NICHT: es laesst jeden durch, der
 // auf IRGENDEINEM verknuepften Buch Viewer ist — ein Mitarbeiter am geteilten
 // Blog bekaeme damit Seiten- und Kapitelnamen aus der privaten Dissertation,
 // sobald dort dieselbe Quelle haengt. Gleiche Begruendung und gleiche Schranke
@@ -437,22 +398,12 @@ router.get('/:id/citations', (req, res) => {
 
   const bookId = toIntId(req.query.book_id);
   if (bookId) {
-    if (!_guard(req, res, bookId, 'viewer')) return;
-  } else if (!_isOwner(req, src)) {
+    if (!guardBook(req, res, bookId, 'viewer')) return;
+  } else if (!isOwner(req, src)) {
     return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
   }
 
-  const rows = db.prepare(`
-    SELECT sc.page_id, sc.count, sc.first_offset,
-           p.page_name, p.position AS page_position, p.book_id,
-           c.chapter_id, c.chapter_name
-      FROM source_citations sc
-      JOIN pages p         ON p.page_id = sc.page_id
-      LEFT JOIN chapters c ON c.chapter_id = p.chapter_id
-     WHERE sc.source_id = ? AND (? IS NULL OR p.book_id = ?)
-     ORDER BY c.position, p.position, sc.first_offset
-  `).all(id, bookId || null, bookId || null);
-  res.json(rows);
+  res.json(listSourceCitations(id, bookId || null));
 });
 
 // ── Buecher, die eine Quelle nutzen ──────────────────────────────────────────
@@ -464,7 +415,7 @@ router.get('/:id/books', (req, res) => {
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   const src = getSource(id);
   if (!src) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (!_isOwner(req, src)) return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
+  if (!isOwner(req, src)) return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
   res.json(listSourceBooks(id));
 });
 
@@ -473,8 +424,8 @@ router.get('/:id/books', (req, res) => {
 // Legt im Pool des Users an. `book_id` ordnet gleich zu — der Normalfall aus der
 // Quellen-Karte heraus. Ohne `book_id` entsteht ein reiner Bibliothekseintrag.
 router.post('/', jsonBody, (req, res) => {
-  const userEmail = _userEmail(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
+  const email = userEmail(req);
+  if (!email) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
 
   const body = req.body || {};
   const bookId = body.book_id === undefined || body.book_id === null
@@ -483,15 +434,15 @@ router.post('/', jsonBody, (req, res) => {
   if (body.book_id !== undefined && body.book_id !== null && !bookId) {
     return res.status(400).json({ error_code: 'INVALID_ID' });
   }
-  if (bookId && !_guard(req, res, bookId, 'editor')) return;
+  if (bookId && !guardBook(req, res, bookId, 'editor')) return;
 
-  const bad = _validateBody(body);
+  const bad = validateSourceBody(body);
   if (bad) return res.status(400).json(bad);
-  if (!_hasIdentity(body)) return res.status(400).json({ error_code: 'SOURCE_IDENTITY_REQ' });
+  if (!hasSourceIdentity(body)) return res.status(400).json({ error_code: 'SOURCE_IDENTITY_REQ' });
 
   try {
-    const created = createSource(userEmail, body);
-    if (bookId) linkSource(bookId, created.id, userEmail);
+    const created = createSource(email, body);
+    if (bookId) linkSource(bookId, created.id, email);
     logger.info(`[quellen] create id=${created.id} book=${bookId || '-'} typ=${created.csl_type}`);
     res.json(bookId ? getSource(created.id, bookId) : created);
   } catch (e) {
@@ -510,12 +461,12 @@ router.put('/:id', jsonBody, (req, res) => {
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   const src = getSource(id);
   if (!src) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (!_isOwner(req, src)) return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
+  if (!isOwner(req, src)) return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
 
   const body = req.body || {};
-  const bad = _validateBody(body);
+  const bad = validateSourceBody(body);
   if (bad) return res.status(400).json(bad);
-  if (!_hasIdentity({ ...src, ...body })) return res.status(400).json({ error_code: 'SOURCE_IDENTITY_REQ' });
+  if (!hasSourceIdentity({ ...src, ...body })) return res.status(400).json({ error_code: 'SOURCE_IDENTITY_REQ' });
 
   try {
     const bookId = toIntId(req.query.book_id);
@@ -537,10 +488,10 @@ router.post('/:id/link', jsonBody, (req, res) => {
   if (!id || !bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const src = getSource(id);
   if (!src) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (!_guard(req, res, bookId, 'editor')) return;
-  if (!_isOwner(req, src)) return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
+  if (!guardBook(req, res, bookId, 'editor')) return;
+  if (!isOwner(req, src)) return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
 
-  const added = linkSource(bookId, id, _userEmail(req));
+  const added = linkSource(bookId, id, userEmail(req));
   if (added) logger.info(`[quellen] link id=${id} book=${bookId}`);
   res.json({ ok: true, added, source: getSource(id, bookId) });
 });
@@ -555,7 +506,7 @@ router.delete('/:id/link', (req, res) => {
   const id = toIntId(req.params.id);
   const bookId = toIntId(req.query.book_id);
   if (!id || !bookId) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, bookId, 'editor')) return;
+  if (!guardBook(req, res, bookId, 'editor')) return;
   if (!isSourceLinked(bookId, id)) return res.status(404).json({ error_code: 'NOT_FOUND' });
 
   const src = getSource(id, bookId);
@@ -576,7 +527,7 @@ router.delete('/:id', (req, res) => {
   if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
   const src = getSource(id);
   if (!src) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (!_isOwner(req, src)) return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
+  if (!isOwner(req, src)) return res.status(403).json({ error_code: 'NOT_SOURCE_OWNER' });
 
   const books = listSourceBooks(id).length;
   deleteSource(id);

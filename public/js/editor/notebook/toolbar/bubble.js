@@ -2,7 +2,8 @@
 // `this` = Sub-Komponente (editorToolbarCard), Root-Zugriffe via window.__app.
 // Im Fokus-Modus deaktiviert (Guards + `!$app.focusActive` im Template).
 
-import { getEditEl, WORD_RE, _normalizeLinkUrl, _applyLinkAtRange, findBlock, findAnchor } from './_shared.js';
+import { getEditEl, WORD_RE, _normalizeLinkUrl, _applyLinkAtRange, caretRangeIn, findAnchor } from './_shared.js';
+import { panelAnchorFor } from './caret-panel.js';
 
 export const bubbleMethods = {
   _updateBubble() {
@@ -13,14 +14,11 @@ export const bubbleMethods = {
       this.bubbleShow = false;
       return;
     }
-    const editEl = getEditEl();
-    if (!editEl) { this.bubbleShow = false; return; }
-    const range = sel.getRangeAt(0);
-    if (!editEl.contains(range.commonAncestorContainer)
-        && editEl !== range.commonAncestorContainer) {
-      this.bubbleShow = false;
-      return;
-    }
+    const range = caretRangeIn(getEditEl());
+    if (!range) { this.bubbleShow = false; return; }
+    // Bewusst OHNE `panelAnchorFor`: dessen Block-Fallback ist für kollabierte
+    // Ranges gedacht. Die Bubble hängt an einer echten Selektion — hat die kein
+    // Rechteck, gibt es nichts zu betonen und sie bleibt aus.
     const rect = range.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) {
       this.bubbleShow = false;
@@ -57,10 +55,9 @@ export const bubbleMethods = {
     if (!app?.editMode || app.focusActive) return;
     const editEl = getEditEl();
     if (!editEl) return;
+    const range = caretRangeIn(editEl);
+    if (!range) return;
     const sel = document.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    const range = sel.getRangeAt(0);
-    if (!editEl.contains(range.commonAncestorContainer) && editEl !== range.commonAncestorContainer) return;
 
     const anchor = findAnchor(range.startContainer, editEl)
       || (!range.collapsed ? findAnchor(range.endContainer, editEl) : null);
@@ -77,13 +74,9 @@ export const bubbleMethods = {
       this.linkCanRemove = false;
     }
 
-    let rect = this._linkRange.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) {
-      const block = findBlock(this._linkRange.startContainer, editEl) || editEl;
-      rect = block.getBoundingClientRect();
-    }
-    this.linkX = rect.left + rect.width / 2;
-    this.linkY = rect.top;
+    const { x, y } = panelAnchorFor(this._linkRange, editEl);
+    this.linkX = x;
+    this.linkY = y;
 
     this.bubbleShow = false;
     this.linkShow = true;
@@ -137,6 +130,9 @@ export const bubbleMethods = {
     getEditEl()?.focus();
   },
 
+  // Bewusst NICHT `onPickerKeydown` aus caret-panel.js: die Link-Bar hat keine
+  // Trefferliste, sondern ein freies URL-Feld. Der Picker-Vertrag fängt ↑/↓ ab
+  // und nähme dem User damit die Cursor-Navigation in der eigenen Eingabe.
   _onLinkKeydown(e) {
     if (e.key === 'Enter') { e.preventDefault(); this._commitLink(); return; }
     if (e.key === 'Escape') { e.preventDefault(); this._closeLink(); return; }

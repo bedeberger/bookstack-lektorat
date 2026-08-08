@@ -17,7 +17,7 @@ import { fetchJson, sendJson } from '../utils/net.js';
 import { startPoll } from '../cards/job-helpers.js';
 import {
   HEADLINE_FIELDS, HEADLINE_LONG_FIELDS, HEADLINE_CHANNELS,
-  channelFit, tightestLimit, fieldLabelKey, channelLabelKey,
+  channelFit, fieldLen, fillPct, fitState, fieldLabelKey, channelLabelKey,
 } from '../headline/channels.js';
 
 const LS_KEY = (pageId) => `headline_job_${pageId}`;
@@ -46,12 +46,16 @@ export const titelwerkstattMethods = {
     }
   },
 
-  /** Zeilen der Übersicht: alle Beiträge mit ihrem Titelstand. */
+  /**
+   * Zeilen der Übersicht: alle Beiträge mit ihrem Titelstand.
+   *
+   * Memoisiert, weil das Template die Liste im `x-for` UND in der Kopfzeile
+   * liest. `_twRev` gehört in die Deps: eine Titeländerung lässt die Zahl der
+   * Schlüssel gleich, und ohne den Zähler zeigte die Tabelle den alten Wert.
+   */
   twRows() {
     const pages = window.__app?.$store?.nav?.pages || [];
-    const key = `${pages.length}|${Object.keys(this.twPages).length}|${this._twRev}`;
-    if (this._twRowsKey === key) return this._twRows;
-    const rows = pages.map(p => {
+    return this._memo('rows', [pages, this.twPages, this._twRev], () => pages.map(p => {
       const h = this.twPages[String(p.id)] || null;
       return {
         id: p.id,
@@ -64,10 +68,22 @@ export const titelwerkstattMethods = {
         // sortiert. Ein Beitrag ohne Titel ist nicht fertig, egal wie gut er ist.
         gesetzt: HEADLINE_FIELDS.filter(f => (h?.[f] || '').trim()).length,
       };
-    });
-    this._twRowsKey = key;
-    this._twRows = rows;
-    return rows;
+    }));
+  },
+
+  // Cache-Treffer nur, wenn ALLE Deps referenzidentisch zum letzten Lauf sind.
+  // Ein Helper pro Modul, gemeinsamer Speicher `this._memos` (CLAUDE.md
+  // „Memo-Pattern"); Reset läuft über den Karten-Lifecycle.
+  _memo(key, deps, compute) {
+    const memos = (this._memos ||= {});
+    const hit = memos[key];
+    if (hit && hit.deps.length === deps.length
+        && hit.deps.every((d, i) => d === deps[i])) {
+      return hit.value;
+    }
+    const value = compute();
+    memos[key] = { deps: [...deps], value };
+    return value;
   },
 
   /** Wie viele Beiträge haben schon einen Titel? Kopfzeile der Karte. */
@@ -129,34 +145,20 @@ export const titelwerkstattMethods = {
 
   // ── Kanal-Lineal ───────────────────────────────────────────────────────────
 
+  // Reine Weiterreichung an die SSoT der Limits (headline/channels.js) — das
+  // Lineal steht auch am Kopf im Notebook-Editor, und zwei Rechnungen für
+  // dasselbe Signal driften auseinander.
+
   /** Je Kanal `{ key, limit, len, fits, over }` für den aktuellen Entwurf. */
-  twFit(feld) {
-    return channelFit(feld, this.twDraft[feld] || '');
-  },
+  twFit(feld) { return channelFit(feld, this.twDraft[feld]); },
 
-  twLen(feld) {
-    return String(this.twDraft[feld] || '').trim().length;
-  },
+  twLen(feld) { return fieldLen(this.twDraft[feld]); },
 
-  /**
-   * Füllstand gegen den ENGSTEN Kanal — der reisst zuerst, und an ihm misst man
-   * beim Schreiben. Über 100% wird gekappt, damit der Balken nicht ausläuft;
-   * dass es zu lang ist, sagt ohnehin die Kanal-Liste mit der Zahl.
-   */
-  twFillPct(feld) {
-    const limit = tightestLimit(feld);
-    if (!limit) return 0;
-    return Math.min(100, Math.round((this.twLen(feld) / limit) * 100));
-  },
+  twFillPct(feld) { return fillPct(feld, this.twDraft[feld]); },
 
-  /** Passt der Entwurf in ALLE Kanäle, in einige, in keinen? */
-  twFitState(feld) {
-    const fits = this.twFit(feld);
-    if (!fits.length || !this.twLen(feld)) return 'leer';
-    const ok = fits.filter(f => f.fits).length;
-    if (ok === fits.length) return 'passt';
-    return ok > 0 ? 'teilweise' : 'zulang';
-  },
+  /** 'leer' | 'passt' | 'teilweise' | 'zulang' — passt der Entwurf in ALLE
+   *  Kanäle, in einige, in keinen? */
+  twFitState(feld) { return fitState(feld, this.twDraft[feld]); },
 
   // ── Varianten ──────────────────────────────────────────────────────────────
 

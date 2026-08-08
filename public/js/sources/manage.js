@@ -14,10 +14,10 @@
 import { fetchJson } from '../utils.js';
 import { EVT } from '../events.js';
 import { formatFull } from './format.js';
+import { filterSources, primaryPersonLabel } from './search.js';
 import {
   SOURCE_TYPES, DEFAULT_SOURCE_TYPE,
   fieldsForType, draftFromSource, draftToPayload, draftHasIdentity, otonBlocking,
-  primaryPersonLabel,
 } from './fields.js';
 
 const SAVED_FLASH_MS = 2500;
@@ -26,19 +26,19 @@ function _bookId() {
   return window.Alpine?.store('nav')?.selectedBookId || null;
 }
 
+// Schreibender Aufruf mit sprechender Fehlermeldung: `fetchJson` haengt die
+// Fehlerantwort als `err.body` an, `tError` macht daraus den lokalisierten Text
+// (CITEKEY_TAKEN, SOURCE_IDENTITY_REQ … brauchen jeweils eine eigene Meldung).
 async function _send(url, method, payload) {
-  const r = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: payload ? JSON.stringify(payload) : undefined,
-  });
-  if (!r.ok) {
-    // Roh-Fetch statt fetchJson, weil nur so der `error_code` erhalten bleibt —
-    // CITEKEY_TAKEN und SOURCE_IDENTITY_REQ brauchen eine eigene Meldung.
-    const data = await r.json().catch(() => ({}));
-    throw new Error(window.__app.tError(data) || `HTTP ${r.status}`);
+  try {
+    return await fetchJson(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+  } catch (e) {
+    throw new Error(window.__app.tError(e.body || {}) || e.message);
   }
-  return r.json().catch(() => ({}));
 }
 
 export const sourcesMethods = {
@@ -181,21 +181,12 @@ export const sourcesMethods = {
       this.sources, this.srcFilterText, this.srcFilterType,
       this.srcShowArchived, this._uiLocale(),
     ], () => {
-      const q = (this.srcFilterText || '').trim().toLowerCase();
       const type = this.srcFilterType || '';
       let list = this.sources;
       if (!this.srcShowArchived) list = list.filter(s => !s.archived);
       if (type) list = list.filter(s => s.csl_type === type);
-      if (q) list = list.filter(s => this._sourceHaystack(s).includes(q));
-      return this._computeSourceRows(list);
+      return this._computeSourceRows(filterSources(list, this.srcFilterText));
     });
-  },
-
-  _sourceHaystack(s) {
-    const persons = [...(s.authors || []), ...(s.editors || [])]
-      .map(p => `${p.family || ''} ${p.given || ''} ${p.literal || ''}`).join(' ');
-    return [s.title, s.container_title, s.publisher, s.place, s.year, s.citekey, persons]
-      .filter(Boolean).join(' ').toLowerCase();
   },
 
   /** Sichtbare Gesamtzahl fuer die Filter-Bar (ohne Filter, aber mit
@@ -368,11 +359,8 @@ export const sourcesMethods = {
   },
 
   srcPoolRows() {
-    return this._memo('pool', [this.srcPool, this.srcPoolFilter, this._uiLocale()], () => {
-      const q = (this.srcPoolFilter || '').trim().toLowerCase();
-      const list = q ? this.srcPool.filter(s => this._sourceHaystack(s).includes(q)) : this.srcPool;
-      return this._computeSourceRows(list);
-    });
+    return this._memo('pool', [this.srcPool, this.srcPoolFilter, this._uiLocale()],
+      () => this._computeSourceRows(filterSources(this.srcPool, this.srcPoolFilter)));
   },
 
   /** Quelle aus der Bibliothek diesem Buch zuordnen. Kein Kopieren: beide

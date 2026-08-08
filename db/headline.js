@@ -108,8 +108,13 @@ const _stmtVariants = db.prepare(
      FROM page_headline_variants WHERE page_id = ?
     ORDER BY feld, created_at DESC, id DESC`,
 );
+// Dieselben Spalten wie `_stmtVariants` PLUS `book_id` (fuer die ACL-Aufloesung
+// ueber das Buch der Variante). Eine schmalere Auswahl haette bedeutet, dass
+// `addVariant` eine andere Zeilenform zurueckgibt als `listVariants` — derselbe
+// Datensatz mit und ohne `herkunft`, je nachdem, welcher Weg ihn geliefert hat.
 const _stmtVariantById = db.prepare(
-  'SELECT id, page_id, book_id, feld, text FROM page_headline_variants WHERE id = ?',
+  `SELECT id, page_id, book_id, feld, text, herkunft, created_by, created_at
+     FROM page_headline_variants WHERE id = ?`,
 );
 const _stmtAddVariant = db.prepare(`
   INSERT INTO page_headline_variants (page_id, book_id, feld, text, herkunft, created_by, created_at)

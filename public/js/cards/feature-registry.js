@@ -265,7 +265,7 @@ export const EXCLUSIVE_CARDS = [
   { key: 'redundanz',      flag: 'showRedundanzCard',      toggle: 'toggleRedundanzCard',      onReclick: 'close', requiresBook: true, partial: 'redundanz' },
   { key: 'wortschatz',     flag: 'showWortschatzCard',     toggle: 'toggleWortschatzCard',     onReclick: 'refresh', requiresBook: true, partial: 'wortschatz' },
   { key: 'struktur',       flag: 'showStrukturCard',       toggle: 'toggleStrukturCard',       onReclick: 'refresh', requiresBook: true, requiresBuchtyp: 'journalismus', partial: 'struktur' },
-  { key: 'titelwerkstatt', flag: 'showTitelwerkstattCard', toggle: 'toggleTitelwerkstattCard', onReclick: 'refresh', requiresBook: true, requiresBuchtyp: ['journalismus', 'blog'], partial: 'titelwerkstatt' },
+  { key: 'titelwerkstatt', flag: 'showTitelwerkstattCard', toggle: 'toggleTitelwerkstattCard', onReclick: 'refresh', requiresBook: true, requiresBuchtyp: JOURNALISTIC_BUCHTYPEN, partial: 'titelwerkstatt' },
   { key: 'bookChat',       flag: 'showBookChatCard',       toggle: 'toggleBookChatCard',       onReclick: 'refresh', requiresBook: true, auditEvent: 'bookChatOpened', partial: 'chat' },
   { key: 'orte',           flag: 'showOrteCard',           toggle: 'toggleOrteCard',           onReclick: 'refresh', partial: 'orte', hiddenForBuchtyp: ['journalismus'],
     loadDeps: [{ method: 'loadFiguren', skipIfNonEmpty: 'figuren' }] },

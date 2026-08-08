@@ -148,6 +148,75 @@ function itemBookId(id) {
   return r?.book_id || null;
 }
 
+// Verknuepfbare Welt-Entitaeten des Buchs fuer den Link-Picker. NUR die
+// user-skopierten Dimensionen: Kapitel und Seiten holt der Aufrufer ueber die
+// Content-Store-Facade, weil `chapters`/`pages` niemand ausser ihr liest.
+//
+// Wo eine „Wichtigkeit" existiert, wird primaer danach sortiert — Figuren nach
+// praesenz (zentral→randfigur), Beats nach intensitaet (5→1). Orte und Szenen
+// haben kein Wichtigkeits-Signal und folgen ihrer kuratierten sort_order.
+const _entityTargetStmts = {
+  figure: db.prepare(
+    `SELECT id, name AS label FROM figures WHERE book_id = ? AND user_email = ?
+      ORDER BY CASE praesenz WHEN 'zentral' THEN 0 WHEN 'regelmaessig' THEN 1
+                             WHEN 'punktuell' THEN 2 WHEN 'randfigur' THEN 3
+                             ELSE 4 END, sort_order, name`
+  ),
+  location: db.prepare(
+    'SELECT id, name AS label FROM locations WHERE book_id = ? AND user_email = ? ORDER BY sort_order, name'
+  ),
+  scene: db.prepare(
+    'SELECT id, titel AS label FROM figure_scenes WHERE book_id = ? AND user_email = ? ORDER BY sort_order, titel'
+  ),
+  beat: db.prepare(
+    `SELECT id, titel AS label FROM plot_beats WHERE book_id = ? AND user_email = ?
+      ORDER BY CASE WHEN intensitaet IS NULL THEN 1 ELSE 0 END, intensitaet DESC, sort_order, titel`
+  ),
+  thread: db.prepare(
+    'SELECT id, name AS label FROM plot_threads WHERE book_id = ? AND user_email = ? ORDER BY position, name'
+  ),
+};
+
+function listEntityLinkTargets(bookId, userEmail) {
+  const out = {};
+  for (const [kind, stmt] of Object.entries(_entityTargetStmts)) {
+    out[kind] = stmt.all(bookId, userEmail);
+  }
+  return out;
+}
+
+// Zwei gezielte Schreibpfade fuer die Interview-Transkription. Sie standen als
+// rohes SQL im Route-Handler (routes/interview.js) — dort mit `db.prepare` je
+// Request, was better-sqlite3 nicht cacht, und ausserhalb jeder Uebersicht
+// darueber, wer `research_items` anfasst.
+//
+// Beide bewegen `updated_at` mit: der Kind-Wechsel und ein neu gesetzter
+// Volltext sind Aenderungen am Fundstueck, und der Sync-Delta der Clients haengt
+// an diesem Stempel.
+
+const _stmtSetKind = db.prepare(
+  `UPDATE research_items SET kind = ?, updated_at = ${NOW_ISO_SQL} WHERE id = ?`,
+);
+const _stmtSetDocText = db.prepare(
+  `UPDATE research_items SET doc_text = ?, doc_chars = ?, updated_at = ${NOW_ISO_SQL} WHERE id = ?`,
+);
+
+/** Art des Fundstuecks setzen (die Transkription macht daraus 'transcript'). */
+function setItemKind(id, kind) {
+  return _stmtSetKind.run(kind, parseInt(id)).changes > 0;
+}
+
+/**
+ * Volltext des Fundstuecks neu setzen. Der Aufrufer stoesst danach den
+ * Suchindex an (`searchIndex.upsertResearch`) — bewusst dort und nicht hier:
+ * der Transkript-Weg schreibt den Text mehrfach hintereinander, und jedes Mal
+ * neu zu indizieren waere Arbeit fuer einen Zwischenstand.
+ */
+function setItemDocText(id, text) {
+  const s = String(text || '');
+  return _stmtSetDocText.run(s, s.length, parseInt(id)).changes > 0;
+}
+
 module.exports = {
   LINK_TARGETS,
   attachRelations,
@@ -156,4 +225,7 @@ module.exports = {
   replaceTags,
   createItem,
   itemBookId,
+  listEntityLinkTargets,
+  setItemKind,
+  setItemDocText,
 };

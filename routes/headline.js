@@ -12,14 +12,12 @@
 
 const express = require('express');
 const { aclParamGuard, requireBookAccess, sendACLError } = require('../lib/acl');
-const { getBookSettings } = require('../db/schema');
-const { isJournalisticBook } = require('../lib/buchtyp');
 const {
   HEADLINE_FIELDS, isValidHeadlineField,
   getHeadline, listBookHeadlines, setHeadline,
   listVariants, addVariant, deleteVariant, promoteVariant, getVariant,
 } = require('../db/headline');
-const { resolvePageBookId } = require('../lib/content-ownership');
+const { pageBookGuard, journalisticBookSettings } = require('../lib/page-guard');
 const { toIntId } = require('../lib/validate');
 const { setContext, bookParamHandler } = require('../lib/log-context');
 
@@ -28,29 +26,15 @@ const jsonBody = express.json();
 
 router.param('book_id', bookParamHandler);
 
-/** Guard fuer die Seiten-Routen: ACL + Buchtyp. Liefert die book_id oder null
- *  (Antwort ist dann bereits gesendet). */
+/** Guard fuer die Seiten-Routen: ACL + Buchtyp (SSoT in lib/page-guard.js). */
 function _pageGuard(req, res, minRole) {
-  const pageId = toIntId(req.params.page_id);
-  if (!pageId) { res.status(400).json({ error_code: 'PAGE_ID_REQUIRED' }); return null; }
-  const bookId = resolvePageBookId(pageId);
-  if (!bookId) { res.status(404).json({ error_code: 'PAGE_NOT_FOUND' }); return null; }
-  setContext({ book: bookId });
-  try { requireBookAccess(req, bookId, minRole); }
-  catch (e) { if (sendACLError(res, e)) return null; throw e; }
-  const settings = getBookSettings(bookId, req.session?.user?.email || null);
-  if (!isJournalisticBook(settings)) {
-    res.status(400).json({ error_code: 'NOT_JOURNALISTIC_BOOK' });
-    return null;
-  }
-  return { pageId, bookId };
+  return pageBookGuard(req, res, { minRole, journalistic: true });
 }
 
 /** Alle Titel-Saetze eines Buchs (Organizer-/Karten-Uebersicht). */
 router.get('/:book_id', aclParamGuard('viewer'), (req, res) => {
   const bookId = req.bookId;
-  const settings = getBookSettings(bookId, req.session?.user?.email || null);
-  if (!isJournalisticBook(settings)) {
+  if (!journalisticBookSettings(req, bookId)) {
     return res.json({ enabled: false, felder: HEADLINE_FIELDS, pages: {} });
   }
   res.json({ enabled: true, felder: HEADLINE_FIELDS, pages: listBookHeadlines(bookId) });

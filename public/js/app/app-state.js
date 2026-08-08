@@ -214,9 +214,14 @@ const notebookState = () => ({
   // Indicators (app-ui.js#_saveStatus). Wird bei erfolgreichem Write/Save
   // wieder genullt.
   draftPersistFailed: false,
-  _autosaveIdleTimer: null,
-  _autosaveMaxTimer: null,
-  _draftTimer: null,
+  // Auto-Save (idle+max) und Draft-Debounce laufen ueber die geteilten
+  // Timer-Primitive aus editor/shared/{autosave,timers}.js — dieselben, die der
+  // Bucheditor pro Block benutzt. Beide Bags leben am Root (nicht an der Card),
+  // weil `_stopAutosave` auch aus Root-Kontext gerufen wird
+  // (app-view/page.js#resetPage) und dieselben Timer treffen muss. Lazy in
+  // edit/autosave.js gebaut; Key ist `AUTOSAVE_KEY` (eine Seite zur Zeit).
+  _autosaveTimers: null,
+  _draftTimers: null,
   // Retry-Trigger für einen haengengebliebenen Offline-Save (edit/autosave.js).
   // Zwei Handles, weil zwei Anlaesse: `_onlineHandler` haengt an window
   // `online`+`focus`, `_onlineVisHandler` an document `visibilitychange`.

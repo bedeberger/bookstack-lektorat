@@ -25,14 +25,12 @@ export function registerStrukturCard() {
     // Zusammenfassung des letzten Laufs (geprueft/uebersprungen/…) oder null.
     strukturLastRun: null,
     _strukturPollTimer: null,
-    // Zeilen-Memo: das Template liest die Liste im x-for und in der Kopfzeile.
-    _strukturRowsKey: null,
-    _strukturRows: [],
-    // Revisionszaehler: Textsorten-Aenderungen mutieren `strukturPageMap`
-    // in-place, die Schluessel-Anzahl bleibt dabei gleich — ohne diesen Zaehler
-    // traefe der Memo-Vergleich und die Tabelle zeigte den alten Wert.
+    // Revisionszaehler fuer das Zeilen-Memo: Textsorten-Aenderungen mutieren
+    // `strukturPageMap` IN PLACE, die Referenz bliebe also gleich — ohne diesen
+    // Zaehler traefe der Memo-Vergleich und die Tabelle zeigte den alten Wert.
     _strukturRev: 0,
-    _strukturMemos: {},
+    // Speicher des `_memo`-Helpers (book/struktur.js).
+    _memos: {},
     _lifecycle: null,
 
     get strukturHasRows() { return this.strukturRows().length > 0; },
@@ -58,10 +56,8 @@ export function registerStrukturCard() {
         ctx.strukturError = '';
         ctx.strukturLoadError = false;
         ctx.strukturLastRun = null;
-        ctx._strukturRowsKey = null;
-        ctx._strukturRows = [];
         ctx._strukturRev = 0;
-        ctx._strukturMemos = {};
+        ctx._memos = {};
       };
 
       this._lifecycle = setupCardLifecycle(this, {

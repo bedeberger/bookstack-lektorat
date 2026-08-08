@@ -1,34 +1,47 @@
 // Teil von notebookEditMethods (siehe Facade edit.js).
-import { AUTOSAVE_IDLE_MS, AUTOSAVE_MAX_MS, DRAFT_DEBOUNCE_MS, clearDraft, editorHost, isNoChange, stripLektoratMarks, writeDraft } from './_shared.js';
+//
+// Timer liegen BEWUSST am Host (Root, deklariert im notebookState-Slice von
+// app-state.js), nicht an der Karte: `_stopAutosave` wird auch aus Root-Kontext
+// gerufen (app-view/page.js#resetPage via Trampoline) und muss dieselben Timer
+// treffen. Der card-lokale `_undoTimer` (history.js) ist die Ausnahme, weil Undo
+// card-only ist — daher kein Widerspruch.
+//
+// Die idle+max-Regel selbst liegt in editor/shared/autosave.js, geteilt mit dem
+// Bucheditor: die beiden Editoren dürfen nicht mit unterschiedlichem Rhythmus
+// speichern. Der Notebook-Editor bearbeitet immer nur EINE Seite, darum ein
+// fester Key statt einer pageId — `_stopAutosave` läuft beim Seitenwechsel und
+// kennt die alte Seite dann schon nicht mehr.
+import { AUTOSAVE_KEY, DRAFT_DEBOUNCE_MS, clearDraft, createAutosaveTimers, createTimerBag, editorHost, isNoChange, stripLektoratMarks, writeDraft } from './_shared.js';
 
-// Timer-Handles (`_draftTimer`, `_autosaveIdleTimer`, `_autosaveMaxTimer`,
-// `_onlineHandler`, `_onlineVisHandler`) leben BEWUSST am Host (Root, deklariert
-// im notebookState-Slice von app-state.js), nicht an der Card: `_stopAutosave`
-// wird auch aus Root-Kontext gerufen (app-view/page.js#resetPage via Trampoline)
-// und muss dieselben Handles treffen. Der card-lokale `_undoTimer` (history.js)
-// ist die Ausnahme, weil Undo card-only ist — daher kein Widerspruch.
+// Lazy, weil dieses Modul keinen eigenen init-Hook hat und der Host beim ersten
+// Tastendruck sicher steht.
+function autosaveTimers(app) {
+  if (!app._autosaveTimers) app._autosaveTimers = createAutosaveTimers();
+  return app._autosaveTimers;
+}
+
+function draftTimers(app) {
+  if (!app._draftTimers) app._draftTimers = createTimerBag();
+  return app._draftTimers;
+}
+
 export const autosaveMethods = {
 
   _scheduleDraftSave() {
     const app = editorHost();
     if (!app) return;
-    if (app._draftTimer) clearTimeout(app._draftTimer);
-    app._draftTimer = setTimeout(() => {
-      app._draftTimer = null;
-      this._flushDraftSaveNow();
-    }, DRAFT_DEBOUNCE_MS);
+    draftTimers(app).set(AUTOSAVE_KEY, () => this._flushDraftSaveNow(), DRAFT_DEBOUNCE_MS);
   },
 
 
   // Schreibt den aktuellen Editor-Inhalt sofort als Draft – unabhängig vom
   // Debounce-Timer. Aufruf vor jedem Zustandsübergang, der den Editor-Inhalt
   // nicht mehr einfängt (Focus-Mode-Entry) oder ihn riskieren könnte zu
-  // verlieren. Beim Aufruf nach Debounce-Fire ist _draftTimer bereits null
-  // (ungefährlicher No-op).
+  // verlieren.
   _flushDraftSaveNow() {
     const app = editorHost();
     if (!app) return;
-    if (app._draftTimer) { clearTimeout(app._draftTimer); app._draftTimer = null; }
+    draftTimers(app).clear(AUTOSAVE_KEY);
     if (!app.editMode || !app.currentPage) return;
     const el = this._getEditEl();
     if (!el) return;
@@ -57,15 +70,14 @@ export const autosaveMethods = {
     const app = editorHost();
     if (!app) return;
     this._clearAutosaveTimers();
-    if (app._draftTimer) { clearTimeout(app._draftTimer); app._draftTimer = null; }
+    draftTimers(app).clear(AUTOSAVE_KEY);
   },
 
 
   _clearAutosaveTimers() {
     const app = editorHost();
     if (!app) return;
-    if (app._autosaveIdleTimer) { clearTimeout(app._autosaveIdleTimer); app._autosaveIdleTimer = null; }
-    if (app._autosaveMaxTimer) { clearTimeout(app._autosaveMaxTimer); app._autosaveMaxTimer = null; }
+    autosaveTimers(app).clear(AUTOSAVE_KEY);
   },
 
 
@@ -73,14 +85,14 @@ export const autosaveMethods = {
   // AUTOSAVE_IDLE_MS Tipp-Pause. Max-Timer läuft ab erstem Dirty-Mark
   // weiter und greift bei Dauer-Tippen, sodass spätestens AUTOSAVE_MAX_MS
   // nach der ersten Änderung ein Save ausgelöst wird.
+  //
+  // Auslöser wird pro Aufruf übergeben statt beim Bau des Bags eingefangen: der
+  // Bag lebt am Host und überlebt ein Neu-Mounten der Karte, ein eingefangenes
+  // `this` zeigte danach auf eine tote Instanz.
   _scheduleAutosave() {
     const app = editorHost();
     if (!app) return;
-    if (app._autosaveIdleTimer) clearTimeout(app._autosaveIdleTimer);
-    app._autosaveIdleTimer = setTimeout(() => this._fireAutosave(), AUTOSAVE_IDLE_MS);
-    if (!app._autosaveMaxTimer) {
-      app._autosaveMaxTimer = setTimeout(() => this._fireAutosave(), AUTOSAVE_MAX_MS);
-    }
+    autosaveTimers(app).schedule(AUTOSAVE_KEY, () => this._fireAutosave());
   },
 
 

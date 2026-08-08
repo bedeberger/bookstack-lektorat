@@ -24,8 +24,7 @@ const { getSource, createSource, linkSource, isSourceLinked, findSourceByUrl } =
 const { db } = require('../db/connection');
 const { createItem, emitItem } = require('../db/research-items');
 const { toIntId } = require('../lib/validate');
-const { setContext } = require('../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../lib/acl');
+const { guardBook, sessionEmail } = require('../lib/acl');
 const { validateSourceBody, hasSourceIdentity } = require('../lib/source-validate');
 const { normalizeUrl } = require('../lib/url-normalize');
 const { localIsoDate } = require('../lib/local-date');
@@ -45,22 +44,6 @@ const MODES = new Set(['research', 'source', 'both']);
 // Fund. Bewusst kurz: nach zehn Minuten ist ein identisch aussehender Fund eine
 // Entscheidung des Users, kein verrutschter Mausklick.
 const REDUNDANT_WINDOW_MIN = 10;
-
-function _userEmail(req) {
-  return req.session?.user?.email || null;
-}
-
-// Wie in routes/research.js, aber ein Nicht-ACL-Fehler wird geworfen statt als
-// „erlaubt" durchgewunken: dieser Endpunkt schreibt, da ist Durchwinken die
-// falsche Richtung.
-function _guard(req, res, bookId, minRole) {
-  setContext({ book: bookId });
-  try { requireBookAccess(req, bookId, minRole); return true; }
-  catch (e) {
-    if (sendACLError(res, e)) return false;
-    throw e;
-  }
-}
 
 /** Wortgleicher Fund im selben Buch aus dem Doppelklick-Fenster, oder null.
  *  Verglichen wird der ganze Inhalt (kind + Titel + Text + URL), nicht nur die
@@ -100,13 +83,12 @@ function _recentTwin(bookId, { kind, title, body, url }) {
 // ist. Ein Client, der nur „ok" braucht, ignoriert die Flags; einer, der dem
 // User „war schon drin" zeigen will, hat die Information ohne zweiten Request.
 router.post('/', jsonBody, (req, res) => {
-  const userEmail = _userEmail(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'NOT_LOGGED_IN' });
-
   const bookId = toIntId(req.body?.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'BOOKID_REQ' });
-  // 'editor' wie POST /research: Erfassen ist eine Aenderung am Buch.
-  if (!_guard(req, res, bookId, 'editor')) return;
+  // 'editor' wie POST /research: Erfassen ist eine Aenderung am Buch. Die 401
+  // (`NOT_LOGGED_IN`) kommt aus dem Guard — keine zweite Login-Pruefung davor.
+  if (!guardBook(req, res, bookId, 'editor')) return;
+  const userEmail = sessionEmail(req);
 
   const mode = req.body?.mode === undefined ? 'research' : String(req.body.mode);
   if (!MODES.has(mode)) {

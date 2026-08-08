@@ -27,7 +27,38 @@ Im Frontend läuft das Gate über `requiresBuchtyp` in
 **einen Key oder eine Liste**. Alle drei Stellen (Palette-Sichtbarkeit,
 Verfügbarkeit, Toggle) fragen `matchesRequiredBuchtyp`; ein nachgebautes `===`
 irgendwo daneben lässt eine Karte in der Palette erscheinen, die der Toggle
-verweigert.
+verweigert. Die Liste der publizistischen Typen steht dort als
+`JOURNALISTIC_BUCHTYPEN` (Spiegel von `JOURNALISTIC` in `lib/buchtyp.js`) und
+wird nicht als Literal wiederholt.
+
+### Der Weg hinein: `lib/page-guard.js`
+
+Jede Route des Apparats kommt über eine `page_id` herein, und die Kette davor
+ist immer dieselbe — sie steht deshalb genau einmal in
+[lib/page-guard.js](../lib/page-guard.js)#`pageBookGuard`:
+
+```
+page_id validieren  →  Buch AUS DER SEITE  →  Log-Context  →  ACL  →  Buchtyp
+   400 PAGE_ID_REQUIRED   404 PAGE_NOT_FOUND              403      400 NOT_JOURNALISTIC_BOOK
+```
+
+Zwei Dinge daran sind die eigentliche Aussage:
+
+- **Das Buch kommt nie vom Client.** Ein Handler, der `req.body.book_id` glaubt
+  und danach die Seite anfasst, prüft die ACL des falschen Buchs.
+- **Die Reihenfolge ACL vor Buchtyp.** Sonst erfährt ein Unberechtigter am
+  Fehlercode, welchen Typ ein fremdes Buch hat.
+
+Der Guard antwortet selbst und liefert dann `null`; er setzt auf
+`guardBook` aus [lib/acl.js](../lib/acl.js) auf (das wirft Nicht-ACL-Fehler
+weiter, statt sie als „erlaubt" zu deuten). Auf Buch-Ebene, wo `aclParamGuard`
+die ACL schon erledigt hat, bleibt `journalisticBookSettings(req, bookId)`.
+
+**Lesende Buch-Routen antworten `enabled: false`, schreibende mit einem
+Fehler** — `/headline`, `/redaktion` und `/textsorte` einheitlich. Die Karten
+fragen unabhängig vom Buchtyp und sollen nicht in einen Fehlerpfad laufen, nur
+weil gerade ein Roman offen ist. Vertrag gegated durch
+[page-guard.test.mjs](../tests/unit/page-guard.test.mjs).
 
 ---
 
@@ -394,7 +425,19 @@ verwerfen, ohne den Wortlaut zu verlieren — sie ist der grosse Teil im Backup.
   [prompts/textsorten.js](../public/js/prompts/textsorten.js),
   Vorrangregel nur in [db/textsorte.js](../db/textsorte.js)#`effectiveTextsorte`.
 - **Struktur-Check** (`page_structure_checks`, Job `struktur-check`): prüft die
-  FORM gegen den Soll-Katalog der Textsorte, nicht die Sprache.
+  FORM gegen den Soll-Katalog der Textsorte, nicht die Sprache. Das **Vokabular
+  des Befunds** (`STRUKTUR_STATUS` / `STRUKTUR_URTEILE` / `W_FRAGEN` samt
+  Rang-Maps) liegt in derselben SSoT wie der Katalog, über den es urteilt —
+  [prompts/textsorten.js](../public/js/prompts/textsorten.js). Vier Schichten
+  lesen es: Schema und Prompt-Bau, die Validierung im Job
+  (`_normalizeResult` bekommt es hereingereicht), die Verdichtung für die
+  Bewertung ([struktur-summary.js](../lib/struktur-summary.js), CJS-Spiegel,
+  weil das Modul pur bleibt) und die Sortierung der Karte. **Ein neuer Status
+  muss den Cache bewegen:** `STRUKTUR_VOKABULAR_SIGNATUR` geht in die
+  Cache-Version des Jobs ein — bewusst dort und nicht im globalen Prompt-Hash,
+  damit eine Vokabular-Änderung die Struktur-Befunde neu erhebt, statt die
+  teuren Lektorat- und Komplettanalyse-Caches wegzuwerfen. Gegated durch
+  [struktur-vokabular-drift.test.mjs](../tests/unit/struktur-vokabular-drift.test.mjs).
 - **Lektorat-Profil**: die Textsorte schneidet `wertung` in den Meinungsformen
   aus dem Typ-Set — im Kommentar ist die Wertung der Zweck, nicht der Mangel.
 - **O-Ton-Felder an der Quelle** (`sources.oton_*`) — siehe
@@ -418,11 +461,20 @@ verwerfen, ohne den Wortlaut zu verlieren — sie ist der grosse Teil im Backup.
   zeigt „Beitrag 12" statt der Schlagzeile.
 - **Der Kopf zählt nirgends als Prosa** — messende Schichten schneiden ihn über
   `stripHeadBlocks` heraus.
-- Neue Stufe/neues Feld/neue Textsorte ⇒ ESM-SSoT **und** CJS-Spiegel **und**
-  CHECK-Constraint **und** beide Locales. Gegated durch
+- Neue Stufe/neues Feld/neue Textsorte/neuer Befund-Status ⇒ ESM-SSoT **und**
+  CJS-Spiegel **und** CHECK-Constraint **und** beide Locales. Gegated durch
   [redaktion-status.test.mjs](../tests/unit/redaktion-status.test.mjs),
   [headline-drift.test.mjs](../tests/unit/headline-drift.test.mjs),
-  [textsorten-drift.test.mjs](../tests/unit/textsorten-drift.test.mjs).
+  [textsorten-drift.test.mjs](../tests/unit/textsorten-drift.test.mjs),
+  [struktur-vokabular-drift.test.mjs](../tests/unit/struktur-vokabular-drift.test.mjs).
+- **Neue Route über eine `page_id` ⇒ `pageBookGuard`**, keine eigene Kette. Wer
+  sie nachbaut, lässt irgendwann das Buchtyp-Gate weg oder leitet das Buch aus
+  dem Body ab. Gegated durch [page-guard.test.mjs](../tests/unit/page-guard.test.mjs).
+- **Zeichenlimits werden nirgends zweimal gerechnet.** Füllstand und Ampelstufe
+  liegen als pure Funktionen in
+  [headline/channels.js](../public/js/headline/channels.js) (`fieldLen`,
+  `fillPct`, `fitState`, `overChannels`); Titel-Werkstatt und Editor-Kopf
+  reichen nur durch. Zwei Rechnungen für dieselbe Farbe driften auseinander.
 
 ## Tests
 

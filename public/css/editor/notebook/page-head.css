@@ -14,22 +14,121 @@
    Zeichenzahl, Lineal, Werkstatt-Sprung — erscheint erst bei Fokus bzw. beim
    Überfahren und verschwindet wieder.
 
+   ZWEITER LEITSATZ: der Kopf ist DAS OBERE ENDE DES BLATTS, kein Block darüber.
+   Er teilt mit .page-content-view (page/page-view.css) Breite, Textkante,
+   Fläche, Rahmen und Tinte und gibt seine untere Kante auf; das Blatt gibt im
+   Gegenzug seine obere Rundung auf. Sichtbar ist ein Bogen, auf dem oben der
+   Titel und darunter der Text steht. Why: der Kopf stand vorher über die volle
+   Spaltenbreite auf der Kartenfläche, während das Blatt schmal und zentriert
+   darunter lag — seine Textkante begann auf breiten Schirmen zweihundert Pixel
+   links von der des Fliesstexts. Damit las er sich als Formular NEBEN dem
+   Dokument, obwohl der Titel den Seitennamen in jedem Ausgabeweg ERSETZT.
+
+   Daraus folgt: keine eigene Trennlinie (der Ausgabeweg hat auch keine, siehe
+   .ms-page__title--headline), Tinte und Mikrotypografie des Blatts, und Grössen
+   in `em` statt in absoluten Tokens — sonst wächst beim Zoomen der Fliesstext
+   und die Schlagzeile bleibt stehen.
+
    Der Kopf im AUSGABEWEG (.ms-head__*) lebt woanders
    (public/css/components/manuscript-stream.css): er gehört zum HTML, das der
    Server für Share-Reader und Export erzeugt, nicht zum Editor-Chrome. */
 @layer components {
   .page-head {
     /* Geteilte Typografie beider Modi. Wer hier etwas ändert, ändert es für
-       Leseansicht UND Eingabe — genau das ist der Zweck. */
-    --ph-kicker-size: var(--font-size-xs);
-    --ph-title-size: var(--font-size-2xl);
-    --ph-lead-size: var(--font-size-reading);
+       Leseansicht UND Eingabe — genau das ist der Zweck.
+       Relativ zur Lesegrösse (siehe unten `font-size`), damit Zoom durchträgt.
+       Der Lead sitzt bewusst ÜBER der Fliesstextgrösse: seit der Kopf auf
+       demselben Papier in derselben Serife steht, wäre er bei 1em vom ersten
+       Absatz nicht mehr zu unterscheiden. Verhältnisse wie im Ausgabeweg
+       (manuscript-stream.css: 27/18 auf 16). */
+    --ph-kicker-size: 0.7em;
+    --ph-title-size: 1.65em;
+    --ph-lead-size: 1.12em;
 
     position: relative;
-    margin-block-end: var(--space-lg);
-    padding-block-end: var(--space-md);
-    border-bottom: 1px solid var(--color-border);
+    /* Eigener Formatierungskontext. Die untere Kante ist offen (kein Rahmen,
+       kein Polster) — ohne ihn fiele der Aussenabstand des letzten Feldes durch
+       sie hindurch und schöbe eine Fuge Kartenfläche zwischen Kopf und Blatt,
+       genau an der Naht, die es nicht geben soll. */
+    display: flow-root;
+    /* Blatt-Geometrie, identisch mit .page-content-view — dieselbe Lesebreite,
+       dasselbe Seitenpadding, dieselbe Zentrierung. Hier noch als GESCHLOSSENER
+       Bogen: so steht der Kopf da, wenn unter ihm kein Blatt liegt (Beitrag mit
+       Schlagzeile, aber noch ohne Text, in der Leseansicht). Erst `--open`
+       öffnet ihn nach unten. */
+    box-sizing: border-box;
+    width: 100%;
+    max-width: calc(64ch + 2 * clamp(18px, 4vw, 40px));
+    margin: var(--space-md) auto 0;
+    padding: 36px clamp(18px, 4vw, 40px) var(--space-lg);
+    background: var(--color-page-view-texture), var(--color-page-view-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    /* Basis für die `em`-Grössen oben. Leseansicht wie das Blatt; der
+       Zoom-Faktor kommt erst im Bearbeitungsmodus dazu (s. --editing).
+       Die Serife ist hier PFLICHT, nicht Geschmack: `64ch` in der max-width
+       misst die Nullbreite der Schrift DIESES Elements. Mit der geerbten
+       Grotesk der Karte fällt die Lesebreite gut sechzig Pixel anders aus als
+       im Blatt — der Kopf stünde wieder aus der Flucht. Dachzeile und Zähler
+       setzen ihre Grotesk selbst. */
+    font-family: var(--font-serif);
+    font-size: var(--font-size-reading);
+    line-height: var(--lh-relaxed);
+    color: var(--color-page-view-text);
+    /* Buchsatz-Mikrotypografie des Blatts. Der Zeichenzähler holt sich seine
+       Ziffernform selbst zurück (tabular-nums weiter unten). */
+    font-variant-ligatures: common-ligatures contextual;
+    font-variant-numeric: oldstyle-nums;
   }
+
+  /* Liegt ein Blatt darunter, gibt der Kopf seine untere Kante auf — beide
+     werden ein Bogen. Die Bedingung ist „steht das Blatt gerade", nicht „steht
+     der Kopf": im Lesemodus ohne Text zeigt der Editor kein Blatt, und ein nach
+     unten offener Papierstreifen wäre dann eine abgeschnittene Seite. */
+  .page-head--open {
+    padding-block-end: 0;
+    border-block-end: 0;
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  /* Das Blatt kappt seine Oberkante, solange der Kopf sie fortsetzt, und rückt
+     dicht an ihn heran: der Abstand nach oben steht schon im Kopf, und 36px
+     zwischen Lead und erstem Absatz rissen den Bogen wieder in zwei Teile.
+     `position: relative` ist NICHT Layout, sondern Malreihenfolge — der Kopf
+     ist positioniert und läge sonst mitsamt seinem Schlagschatten über dem
+     Blatt, also quer über der Nahtstelle. Kein Versatz, keine Verschiebung.
+     Der Modifier kommt aus dem Alpine-Scope (editor-page-head.html), weil CSS
+     einem x-show-`display:none` nicht ansieht, ob der Kopf wirklich steht. */
+  .editor-preview-wrap:has(.page-head--shown) .page-content-view {
+    position: relative;
+    margin-block-start: 0;
+    padding-block-start: var(--space-lg);
+    border-start-start-radius: 0;
+    border-start-end-radius: 0;
+  }
+
+  /* Bearbeitungsmodus: Schiene und Tönung des Blatts laufen über den Kopf
+     weiter — er gehört sichtbar zur bearbeiteten Seite. Dieselben Werte wie
+     .page-content-view--editing, inklusive der 5px-Schiene: sie ersetzt dort
+     den 1px-Rahmen und verschiebt die Textkante um 4px; ohne dieselbe Schiene
+     stünde der Kopf im Bearbeiten wieder daneben. */
+  .page-head--editing {
+    border-inline-start: 5px solid var(--color-primary);
+    background: var(--color-accent-soft);
+    font-size: calc(var(--font-size-reading) * var(--editor-zoom, 1));
+  }
+
+  /* Breitenanpassung: die Lesebreite fällt im Blatt weg, also auch hier —
+     sonst laufen die Textkanten auseinander, und genau das war der Anlass für
+     diese Datei. Die Schriftskalierung des Blatts kann der Kopf NICHT
+     mitmachen: sie hängt an einer Container-Query auf .page-editor-wrap, und
+     die ist kein Vorfahr des Kopfes. Ein Container auf .editor-preview-wrap
+     wäre keine Lösung — in der Kommentar-Spalte ist der Wrap ein
+     `max-content`-Grid-Item (comments-rail.css) und fiele durch die
+     Grössen-Containment auf null zusammen. Der manuelle Zoom trägt durch. */
+  .page-head--fit-width { max-width: none; }
 
   /* Gemeinsame Sätze für Lese- und Eingabe-Form. */
   .page-head__kicker,
@@ -50,7 +149,7 @@
     font-weight: 700;
     line-height: 1.18;
     letter-spacing: -0.01em;
-    color: var(--color-text);
+    color: inherit;
   }
 
   .page-head__lead,
@@ -59,7 +158,7 @@
     font-size: var(--ph-lead-size);
     font-weight: 500;
     line-height: 1.5;
-    color: var(--color-text);
+    color: inherit;
   }
 
   /* ── Leseansicht ─────────────────────────────────────────────────────────── */
@@ -70,10 +169,11 @@
 
   /* ── Bearbeiten ──────────────────────────────────────────────────────────── */
 
-  /* Kopfraum für zwei Dinge, die über dem ersten Feld schweben: den
-     Werkstatt-Sprung und die Zeichenzahl der Dachzeile. Ohne ihn lägen sie
-     beide auf der Dachzeile. */
-  .page-head__edit { padding-block-start: var(--space-xl); }
+  /* Kein eigener Kopfraum mehr: die beiden Dinge, die über dem ersten Feld
+     schweben — Werkstatt-Sprung und Zeichenzahl der Dachzeile —, stehen im
+     oberen Blattrand des Kopfes (36px, wie das Blatt). Ein zusätzliches
+     Polster nur im Bearbeitungsmodus verschöbe die Dachzeile gegenüber der
+     Leseansicht und brächte den Sprung beim Umschalten zurück. */
 
   .page-head__field {
     position: relative;
@@ -177,8 +277,12 @@
      Tastatur-Fokus zeigt ihn ebenfalls. */
   .page-head__more {
     position: absolute;
-    inset-block-start: 0;
-    inset-inline-start: 0;
+    /* In den oberen Blattrand, aber auf die TEXTKANTE — der Bezugsrahmen einer
+       absoluten Position ist der Polsterkasten des Kopfes, also die Innenseite
+       des Rahmens. `0` klebte den Sprung an den Blattrand, einen Daumen breit
+       links vom Titel. */
+    inset-block-start: var(--space-sm);
+    inset-inline-start: clamp(18px, 4vw, 40px);
     z-index: 1;
     padding: 0;
     border: 0;
@@ -210,8 +314,8 @@
      halbe Bildschirmhöhe. Beide Modi ziehen mit (geteilte Tokens). */
   @media (max-width: 600px) {
     .page-head {
-      --ph-title-size: var(--font-size-xl);
-      --ph-lead-size: var(--font-size-md);
+      --ph-title-size: 1.4em;
+      --ph-lead-size: 1.05em;
     }
   }
 

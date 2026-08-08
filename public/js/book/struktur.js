@@ -7,16 +7,17 @@
 //
 // Die Karte schreibt nie in den Manuskript-Text — sie stellt Befunde neben ihn.
 
+import { sendJson } from '../utils/net.js';
 import { fetchJson } from '../utils.js';
 import { startPoll } from '../cards/job-helpers.js';
-import { TEXTSORTEN, TEXTSORTE_KEYS, textsorte as textsorteDef } from '../prompts/textsorten.js';
+import {
+  TEXTSORTEN, TEXTSORTE_KEYS, textsorte as textsorteDef,
+  // Schwere-Reihenfolge des Befunds: schlechteste zuerst, damit oben steht, was
+  // zu tun ist. Aus der SSoT, nicht hier nachgebaut (prompts/textsorten.js).
+  STRUKTUR_URTEIL_RANG, STRUKTUR_STATUS_RANG,
+} from '../prompts/textsorten.js';
 
 const LS_KEY = (bookId) => `struktur_job_${bookId}`;
-
-// Urteil → Badge-Klasse. Reihenfolge der Schwere ist auch die Sortierreihenfolge
-// in der Tabelle (schlechteste zuerst) — der Befund soll oben stehen.
-const URTEIL_RANK = { verfehlt: 0, lueckenhaft: 1, traegt: 2 };
-const STATUS_RANK = { fehlt: 0, teilweise: 1, nicht_anwendbar: 2, erfuellt: 3 };
 
 export const strukturMethods = {
   get strukturTextsorten() { return TEXTSORTEN; },
@@ -38,46 +39,70 @@ export const strukturMethods = {
       const byPage = {};
       for (const c of (data.checks || [])) byPage[String(c.page_id)] = c;
       this.strukturChecks = byPage;
-      this._strukturMemos = {};
+      this._memos = {};
     } catch {
       this.strukturLoadError = true;
     }
   },
 
-  /** Zeilen der Tabelle: alle Seiten des Buchs mit Textsorte und letztem Befund. */
+  /**
+   * Zeilen der Tabelle: alle Seiten des Buchs mit Textsorte und letztem Befund.
+   *
+   * Memoisiert, weil das Template die Liste im `x-for` und in drei Kennzahlen
+   * der Kopfzeile liest. `_strukturRev` gehört in die Deps: eine gesetzte
+   * Textsorte mutiert `strukturPageMap` IN PLACE, die Referenz bliebe also
+   * gleich und die Tabelle zeigte den alten Wert.
+   */
   strukturRows() {
     const pages = window.__app?.$store?.nav?.pages || [];
-    const key = `${pages.length}|${Object.keys(this.strukturPageMap).length}|${Object.keys(this.strukturChecks).length}|${this.strukturBookTextsorte}|${this._strukturRev}`;
-    if (this._strukturRowsKey === key) return this._strukturRows;
-    const chapters = window.__app?.$store?.nav?.tree || [];
-    const chapterName = {};
-    const walk = (nodes) => {
-      for (const n of nodes || []) {
-        if (n.type === 'chapter') { chapterName[String(n.id)] = n.name; walk(n.children); }
-      }
-    };
-    walk(chapters);
-    const rows = pages.map(p => {
-      const own = this.strukturPageMap[String(p.id)] || null;
-      const eff = own || this.strukturBookTextsorte || null;
-      const check = this.strukturChecks[String(p.id)] || null;
-      return {
-        id: p.id,
-        name: p.name || '',
-        chapter: p.chapter_id ? (chapterName[String(p.chapter_id)] || '') : '',
-        ownTextsorte: own || '',
-        textsorte: eff,
-        textsorteLabel: eff ? window.__app.t(`textsorte.${eff}`) : '',
+    const tree = window.__app?.$store?.nav?.tree || [];
+    const deps = [
+      pages, tree, this.strukturPageMap, this.strukturChecks,
+      this.strukturBookTextsorte, this._strukturRev,
+    ];
+    return this._memo('rows', deps, () => {
+      const chapterName = {};
+      const walk = (nodes) => {
+        for (const n of nodes || []) {
+          if (n.type === 'chapter') { chapterName[String(n.id)] = n.name; walk(n.children); }
+        }
+      };
+      walk(tree);
+      return pages.map(p => {
+        const own = this.strukturPageMap[String(p.id)] || null;
+        const eff = own || this.strukturBookTextsorte || null;
+        const roh = this.strukturChecks[String(p.id)] || null;
         // Der Befund gilt nur, wenn er zur JETZT eingestellten Textsorte gehoert —
         // sonst zeigt die Karte ein Urteil, das gegen einen anderen Katalog erging.
-        check: (check && check.textsorte === eff) ? check : null,
-        urteil: (check && check.textsorte === eff) ? (check.gesamturteil || '') : '',
-        _rank: (check && check.textsorte === eff) ? (URTEIL_RANK[check.gesamturteil] ?? 3) : 4,
-      };
+        const check = (roh && roh.textsorte === eff) ? roh : null;
+        return {
+          id: p.id,
+          name: p.name || '',
+          chapter: p.chapter_id ? (chapterName[String(p.chapter_id)] || '') : '',
+          ownTextsorte: own || '',
+          textsorte: eff,
+          textsorteLabel: eff ? window.__app.t(`textsorte.${eff}`) : '',
+          check,
+          urteil: check ? (check.gesamturteil || '') : '',
+          _rank: check ? (STRUKTUR_URTEIL_RANG[check.gesamturteil] ?? 3) : 4,
+        };
+      });
     });
-    this._strukturRowsKey = key;
-    this._strukturRows = rows;
-    return rows;
+  },
+
+  // Cache-Treffer nur, wenn ALLE Deps referenzidentisch zum letzten Lauf sind.
+  // Ein Helper pro Modul, gemeinsamer Speicher `this._memos` (CLAUDE.md
+  // „Memo-Pattern").
+  _memo(key, deps, compute) {
+    const memos = (this._memos ||= {});
+    const hit = memos[key];
+    if (hit && hit.deps.length === deps.length
+        && hit.deps.every((d, i) => d === deps[i])) {
+      return hit.value;
+    }
+    const value = compute();
+    memos[key] = { deps: [...deps], value };
+    return value;
   },
 
   /** Regel-Zeilen des offenen Befunds, schlechteste zuerst. */
@@ -87,7 +112,9 @@ export const strukturMethods = {
     return regeln
       .map(r => ({ ...r, text: def?.regeln?.[r.nr - 1] || '' }))
       .slice()
-      .sort((a, b) => (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9) || a.nr - b.nr);
+      .sort((a, b) =>
+        (STRUKTUR_STATUS_RANG[a.status] ?? 9) - (STRUKTUR_STATUS_RANG[b.status] ?? 9)
+        || a.nr - b.nr);
   },
 
   /** Beitrag im Editor oeffnen. Geht ueber die Seiten-Liste des Roots, weil
@@ -112,11 +139,7 @@ export const strukturMethods = {
     const gespeichert = this.strukturPageMap[String(row.id)] || '';
     if (gespeichert === (v || '')) return;
     try {
-      await fetchJson(`/textsorte/page/${row.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ textsorte: v }),
-      });
+      await sendJson(`/textsorte/page/${row.id}`, 'PUT', { textsorte: v });
       if (v) this.strukturPageMap[String(row.id)] = v;
       else delete this.strukturPageMap[String(row.id)];
       this._strukturRev++;
@@ -131,11 +154,7 @@ export const strukturMethods = {
     if (!bookId) return;
     const v = value || null;
     try {
-      await fetchJson(`/booksettings/${bookId}/textsorte`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ textsorte: v }),
-      });
+      await sendJson(`/booksettings/${bookId}/textsorte`, 'PUT', { textsorte: v });
       this.strukturBookTextsorte = v || '';
       this._strukturRev++;
     } catch {
@@ -153,11 +172,7 @@ export const strukturMethods = {
     this.strukturStatus = window.__app.t('common.analysisRunning');
     try {
       const body = pageId ? { page_id: pageId } : { book_id: bookId };
-      const { jobId } = await fetchJson('/jobs/struktur-check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const { jobId } = await sendJson('/jobs/struktur-check', 'POST', body);
       localStorage.setItem(LS_KEY(bookId), jobId);
       this._pollStruktur(jobId);
     } catch {

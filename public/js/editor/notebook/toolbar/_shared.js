@@ -2,13 +2,17 @@
 // (bubble/slash/keydown). Reine Modul-Scope-Funktionen ohne Alpine-`this`; die
 // Methoden-Objekte in den Geschwister-Files konsumieren sie.
 
-import { getEditEl, placeCaretIn, WORD_RE } from '../../utils.js';
+import { getEditEl, placeCaretIn, WORD_RE, caretRangeIn, rangeAtEnd } from '../../utils.js';
 import { tzOpts, localeTag } from '../../../utils.js';
 import { CARET_BLOCK_SEL, findBlock, topLevelBlock, caretAtBlockStart, caretAtBlockEnd } from '../../shared/dom-block.js';
 import { brLeftOfCaret } from '../../shared/soft-break.js';
 import { TODO_ITEM_SEL, TODO_LIST_CLASS } from '../../shared/todo-html.js';
 
 export { getEditEl, placeCaretIn, WORD_RE };
+// Caret-Range im Edit-Feld + Ende-Anker leben in editor/utils.js (auch vom
+// Diktat konsumiert, das den Toolbar-Modulgraph nicht importiert) — hier nur
+// re-exportiert, damit die Toolbar-Submodule ihren Import behalten.
+export { caretRangeIn, rangeAtEnd };
 // Block-Lookup + Caret-Randlage leben in shared/dom-block.js (auch von
 // edit/view.js und shared/soft-break.js konsumiert) — hier nur re-exportiert,
 // damit die Toolbar-Submodule ihren Import behalten.

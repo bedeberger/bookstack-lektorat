@@ -17,13 +17,13 @@ Sub-Karte `editorNotebookCard` ([public/js/cards/editor-notebook-card.js](../pub
 | `editMode`, `editDirty`, `editSaving`, `saveOffline`, `pendingDraft`, `editConflict`, Auto-Save-Timer | Root (`notebookState` in [app-state.js](../public/js/app/app-state.js)) |
 | `currentPage`, `originalHtml`, `renderedPageHtml` (mode-agnostisch — von Notebook/Focus/View geteilt) | Root (`pageState` in [app-state.js](../public/js/app/app-state.js)) |
 | `correctedHtml`, `hasErrors` (Lektorat-Overlay, nur im Prüfmodus aktiv — von page-view über `correctedHtml \|\| renderedPageHtml` konsumiert) | Root (`lektoratState` in [app-state.js](../public/js/app/app-state.js)) |
-| `startEdit`/`saveEdit`/`cancelEdit`/`quickSave` + Autosave/Draft/Online-Retry + private Helper (`_checkPageConflict`, `_filterFindingsAfterSave`, `_flushDraftSaveNow`, `_markEditDirty`, …) | Sub `editorNotebookCard` ([editor/notebook/edit.js](../public/js/editor/notebook/edit.js)) |
+| `startEdit`/`saveEdit`/`cancelEdit`/`quickSave` + Autosave/Draft/Online-Retry + private Helper (`_filterFindingsAfterSave`, `_flushDraftSaveNow`, `_markEditDirty`, …) | Sub `editorNotebookCard` ([editor/notebook/edit.js](../public/js/editor/notebook/edit.js)) |
 | Root-API (Templates + Cross-Card-Aufrufer) | Trampoline ([editor/notebook/trampoline.js](../public/js/editor/notebook/trampoline.js)) — forwarded auf `window.__notebookCard` |
 | Reload-Snapshot-Restore (Pendant zu `_tryRestoreFocus`) | Sub `editorNotebookCard` ([editor/notebook/card.js](../public/js/editor/notebook/card.js)) |
 | Bubble + Slash-Menü State (`bubbleShow`, `slashShow`, …) | Sub `editorToolbarCard` |
 | Container-Lookup (`page-content-view--editing`) | `shared/active-editor.js` (smart-switch mit Focus) |
 
-**Trampoline-Pattern:** beide Editoren konsequent gleich strukturiert — Root hält nur Forwarder, Sub die Logik. Notebook nutzt direkte Sub-Ref-Calls (`window.__notebookCard?.X(args)`), weil Methoden Args/Returns durchreichen müssen (z. B. `_checkPageConflict(pageId, expectedUpdatedAt)`, `await quickSave()`). Focus-Trampoline ([editor/focus/trampoline.js](../public/js/editor/focus/trampoline.js)) ist CustomEvent-basiert (4 arg-lose Dispatcher) — pragmatischer Stilunterschied bei gleicher Architektur (siehe [focus-editor.md](focus-editor.md#root-vs-sub-trampoline-pattern)).
+**Trampoline-Pattern:** beide Editoren konsequent gleich strukturiert — Root hält nur Forwarder, Sub die Logik. Notebook nutzt direkte Sub-Ref-Calls (`window.__notebookCard?.X(args)`), weil Methoden Args/Returns durchreichen müssen (z. B. `_getEditEl()`, `await quickSave()`). **Kein Forwarder für editor-agnostische Logik:** die Pre-Save-Konflikt-Pruefung lag hier und wurde vom Bucheditor durchgereicht — sein Stale-Schutz hing damit daran, dass die Notebook-Karte gemountet ist (fehlte sie, lieferte der Forwarder `null` = „kein Konflikt"). Sie liegt jetzt in [editor/shared/page-conflict.js](../public/js/editor/shared/page-conflict.js), beide Editoren importieren direkt. Focus-Trampoline ([editor/focus/trampoline.js](../public/js/editor/focus/trampoline.js)) ist CustomEvent-basiert (4 arg-lose Dispatcher) — pragmatischer Stilunterschied bei gleicher Architektur (siehe [focus-editor.md](focus-editor.md#root-vs-sub-trampoline-pattern)).
 
 ## Sheet-Optik (Tagebuch/Notebook)
 
@@ -79,7 +79,7 @@ view  ──startEdit──▶ edit  ──saveEdit──▶ view
 5. Kürzungs-Safety: neuer Text < 20 % vom alten und Original > 50 Z → `appConfirm` „kürzer speichern?".
 6. `_resolveConflictBeforeSave({ silent: false })` — Pre-Check + Merge + ggf. Überschreib-Modal (s.u.).
 7. `contentRepo.savePage(id, buildSavePayload({ source: focusActive ? 'focus' : 'main', expectedUpdatedAt }))` (siehe [shared/save-pipeline.js](../public/js/editor/shared/save-pipeline.js)).
-8. `_applySaveSuccess(saved, savedHtml)` — **SSoT für die Save-Erfolgs-Nachbereitung** (Lifecycle): übernimmt `currentPage.updated_at`, setzt `originalHtml`/`currentPageEmpty`, ruft `_filterFindingsAfterSave` + `_syncPageStatsAfterSave` + `refreshPageAges`, räumt Draft + Autosave-Timer + `editDirty`/`saveOffline`/`editConflict`, `updatePageView`. Alle sechs Save-Pfade (saveEdit/quickSave/submitConflictResolution × Haupt- + 409-Re-Merge) rufen denselben Helper — keine Copy-Paste-Drift. `applyToEditor:true` spiegelt zusätzlich den gemergten Stand in den Editor (Konflikt-Auflösung). **Timer-Reset ist Pflicht:** der Autosave-Max-Timer wird von `_scheduleAutosave` nur gesetzt, wenn er `null` ist — bliebe er armiert, messe der 120-s-Cap der nächsten Tipp-Serie noch von der Baseline vor diesem Save.
+8. `_applySaveSuccess(saved, savedHtml)` — **SSoT für die Save-Erfolgs-Nachbereitung** (Lifecycle): übernimmt `currentPage.updated_at`, setzt `originalHtml`/`currentPageEmpty`, ruft `_filterFindingsAfterSave` + `_syncPageStatsAfterSave` + `refreshPageAges`, räumt Draft + Autosave-Timer + `editDirty`/`saveOffline`/`editConflict`, `updatePageView`. Alle sechs Save-Pfade (saveEdit/quickSave/submitConflictResolution × Haupt- + 409-Re-Merge) rufen denselben Helper — keine Copy-Paste-Drift. `applyToEditor:true` spiegelt zusätzlich den gemergten Stand in den Editor (Konflikt-Auflösung). **Timer-Reset ist Pflicht:** der Autosave-Max-Timer wird von `_scheduleAutosave` nur gesetzt, wenn für den Key noch keiner läuft (`setOnce`) — bliebe er nach dem Save armiert, messe der 120-s-Cap der nächsten Tipp-Serie noch von der Baseline vor diesem Save.
 9. `_filterFindingsAfterSave(newHtml)` — Findings, deren `original` nicht mehr matcht (Überlebens-Check via `findInHtml`, tolerant gegen Tag-/Whitespace-Differenzen, identisch zu `sortByPosition`), fliegen raus + selectedFindings + appliedOriginals + correctedHtml resetten.
 10. Teardown **nur wenn nicht im Focus** via `_teardownEditSession()` (s.u.). Im Focus bleibt `editMode=true`.
 11. Fehlerpfade: 409 `PAGE_CONFLICT` (Race nach Pre-Check) → `_retryAfterConflict` (s.u.); kollisionsfrei = stille Re-Save, sonst Auflösungs-Banner; bei Flag-off/Fehlschlag `_keepAsDraft` + klassischer Banner. Netzwerkfehler → `_keepAsDraft` (`saveOffline=true`), Online-Retry feuert `quickSave`.
@@ -93,7 +93,7 @@ view  ──startEdit──▶ edit  ──saveEdit──▶ view
 | `_resolveConflictBeforeSave({ localHtml, source, silent })` | Pre-Check → Block-Merge → bei nicht-mergebarem Konflikt Modal (`silent:false`) bzw. Banner (`silent:true`). Liefert `{ proceed, saveHtml, expectedAt, merged }`. |
 | `_retryAfterConflict({ localHtml, source, pageId, pageName, tag })` | 409-Race nach dem PUT: Merge gegen den frischen Remote-Stand + Re-Save. Liefert `{ saved, html }`, `{ conflict:true }` oder `null`. Setzt `editSaving=false`, **bevor** ein Auflösungs-Modal aufgehen kann (`submitConflictResolution` bricht bei gesetztem Flag früh ab → sonst Sackgasse). |
 | `_keepAsDraft({ pageId, html, banner, statusKey })` | Fallback: Draft zuerst, dann `saveOffline` + Banner + Status. |
-| `_conflictBannerFrom(conflict)` / `_conflictHintText(banner)` | Banner-Feldsatz bzw. Statuszeile (Gerät vs. User). |
+| `_conflictBannerFrom(conflict)` / `_conflictHintText(banner)` | Banner-Feldsatz bzw. Statuszeile. Beide delegieren nach `editor/shared/` — Feldsatz an [page-conflict.js](../public/js/editor/shared/page-conflict.js)#`conflictBannerFrom`, Wortlaut (Gerät vs. User) an [conflict-text.js](../public/js/editor/shared/conflict-text.js)#`conflictText` (Varianten `banner`/`hint`/`modal`). Neuer Auftritt ⇒ Key-Paar dort eintragen, die Verzweigung nicht erneut ausschreiben. |
 
 **Überschreib-Stempel:** bestätigt der User „trotzdem speichern", geht `expectedUpdatedAt = conflict.remoteUpdatedAt` mit — **nicht** der stale Editor-Stempel. Der OCC-Guard im Backend prüft `WHERE updated_at = expected_updated_at` ([content-store/backends/localdb.js](../lib/content-store/backends/localdb.js)); mit dem alten Wert liefe der PUT erneut in 409 und die Entscheidung wäre wirkungslos.
 
@@ -155,7 +155,11 @@ Eigener Stack in [editor/notebook/history.js](../public/js/editor/notebook/histo
 | Autosave (silent) | Idle nach letztem Edit | Server (`quickSave`) | 60 s | 120 s ab erstem Dirty |
 | Manual Save | Save-Button (`saveEdit`) | Server (mit Dialog bei Konflikt/Kürzung) | — | — |
 
-`AUTOSAVE_IDLE_MS`/`AUTOSAVE_MAX_MS` liegen in [editor/shared/autosave.js](../public/js/editor/shared/autosave.js) (geteilt mit dem Bucheditor, damit beide Editoren im selben Rhythmus speichern); [edit/_shared.js](../public/js/editor/notebook/edit/_shared.js) re-exportiert sie und deklariert `DRAFT_DEBOUNCE_MS`. Die Timer-Handles bleiben am Root-Host (siehe unten). `_scheduleAutosave` resettet den Idle-Timer; Max-Timer läuft ab erstem Dirty durch und schlägt zu, wenn der User dauerhaft tippt.
+Regel UND Mechanik liegen in [editor/shared/autosave.js](../public/js/editor/shared/autosave.js) — `AUTOSAVE_IDLE_MS`/`AUTOSAVE_MAX_MS` plus `createAutosaveTimers` (idle-Timer + max-Cap pro Key, ueber [shared/timers.js](../public/js/editor/shared/timers.js)). Beide Editoren benutzen denselben Helfer, damit sie nicht in unterschiedlichem Rhythmus speichern: der Bucheditor mit einem Key pro Block (pageId), der Notebook-Editor mit **genau einem** festen Key (`AUTOSAVE_KEY`, [edit/_shared.js](../public/js/editor/notebook/edit/_shared.js)) — er bearbeitet immer nur eine Seite, und `_stopAutosave` laeuft beim Seitenwechsel, wenn die alte pageId schon weg ist. Der Draft-Debounce nutzt einen zweiten, blanken `createTimerBag`.
+
+Beide Bags leben am **Root-Host** (`app._autosaveTimers` / `app._draftTimers`, deklariert im `notebookState`-Slice), nicht an der Karte: `_stopAutosave` wird auch aus Root-Kontext gerufen (app-view/page.js#`resetPage` via Trampoline) und muss dieselben Timer treffen. Sie werden in [edit/autosave.js](../public/js/editor/notebook/edit/autosave.js) lazy gebaut — der Ausloeser (`this._fireAutosave()`) wird dabei **pro `schedule`-Aufruf** uebergeben, nicht beim Bau eingefangen: der Bag ueberlebt ein Neu-Mounten der Karte, ein eingefangenes `this` zeigte danach auf eine tote Instanz.
+
+`_scheduleAutosave` resettet den Idle-Timer; der Max-Timer laeuft ab erstem Dirty durch (`setOnce`) und schlaegt zu, wenn der User dauerhaft tippt. Der Timer, der zuerst feuert, raeumt **beide** ab.
 
 `_flushDraftSaveNow` schreibt sofort + bricht Debounce ab. Aufruf vor jedem Übergang, der den Editor-Inhalt nicht mehr einfängt — insbesondere Focus-Mode-Entry ([focus/card.js](../public/js/editor/focus/card.js)).
 
@@ -182,6 +186,25 @@ Sub-Karte `editorToolbarCard` ([cards/editor-toolbar-card.js](../public/js/cards
 
 ### Slash-Items ([toolbar.js#L14-22](../public/js/editor/notebook/toolbar.js#L14-L22))
 `paragraph`, `h2`, `h3`, `blockquote` (mit innerem `<p>`), `poem` (`div.poem` + innerem `<p>`), `list` (`ul > li`), `hr` (+ Folge-`<p>`). Tag-Swap am ganzen Block; Caret landet im Replacement (oder im wrapP-`<p>`).
+
+### Caret-verankerte Panels ([toolbar/caret-panel.js](../public/js/editor/notebook/toolbar/caret-panel.js))
+
+Vier Panels folgen derselben Choreografie: **Link-Bar** ([toolbar/bubble.js](../public/js/editor/notebook/toolbar/bubble.js)), **Beleg-Picker** ([toolbar/cite.js](../public/js/editor/notebook/toolbar/cite.js)), **Querverweis-Picker** ([toolbar/xref.js](../public/js/editor/notebook/toolbar/xref.js)) und **Diagramm-Dialog** ([toolbar/diagram.js](../public/js/editor/notebook/toolbar/diagram.js)) — Range beim Oeffnen sichern, Panel ueber der Range verankern, beim Uebernehmen an genau dieser Range einfuegen, Caret dahinter, schliessen, Editor wieder fokussieren.
+
+Die gemeinsamen Schritte liegen in `caret-panel.js`; was gesucht, formatiert und eingefuegt wird, bleibt im jeweiligen Modul.
+
+| Helfer | Zweck |
+|---|---|
+| `panelAnchorFor(range, editEl)` | Ankerpunkt fuer das Panel. Kollabierte Range hat kein Rechteck → Fallback auf den umgebenden Block. |
+| `insertHtmlAtRange(range, html, { after, replaceContents })` | Markup an der gesicherten Range einfuegen + Caret dahinter. `replaceContents` unterscheidet Beleg (**ersetzt nicht** — er weist die markierte Stelle nach) von Querverweis (**ersetzt** — er tritt an ihre Stelle im Satz). |
+| `appendHtmlInto(host, html, { before })` | Markup ans Ende eines Hosts (Beleg am Blockzitat). Setzt bewusst **keinen** Caret: der Host kann noch losgeloest vom Dokument sein (O-Ton-Block). |
+| `htmlToFragment` / `htmlToElement` | Markup-String → Fragment bzw. genau ein Element. |
+| `NBSP` | Das Trennzeichen des Beleg-Chips. Er traegt `contenteditable="false"` + `white-space: nowrap`; ein gewoehnliches Leerzeichen dahinter kollabiert am Blockende weg und laesst keinen Caret-Slot. Der Querverweis nimmt bewusst `' '` — er ist Fliesstext. |
+| `cycleIdx` / `capHits` / `onPickerKeydown` | Trefferliste + Tastatur-Vertrag (Esc/↑/↓/Enter) der beiden Picker. |
+
+**Zwei bewusste Abweichungen:** die Link-Bar benutzt `onPickerKeydown` **nicht** (sie hat keine Trefferliste, sondern ein freies URL-Feld — der Picker-Vertrag faenge ↑/↓ ab und naehme dem User die Cursor-Navigation in der eigenen Eingabe), und die Bubble-Toolbar benutzt `panelAnchorFor` **nicht** (deren Block-Fallback ist fuer kollabierte Ranges gedacht; die Bubble haengt an einer echten Selektion und bleibt ohne Rechteck aus).
+
+**Einfuegen NIE ueber `execCommand('insertHTML')`** — Chromium schleust den Fragment-String durch seinen Editing-Sanitizer, der `class`/`data-*` verwirft und die berechneten CSS-Werte als Inline-`style` einbaeckt: aus dem Beleg-Chip wuerde `<span style="color: rgb(...)">`, der `data-src`-Zeiger (die Wahrheit) waere weg. Gegated durch [tests/unit/editor-shared-extract.test.mjs](../tests/unit/editor-shared-extract.test.mjs).
 
 ### Slash-Positionierung ([toolbar/slash.js](../public/js/editor/notebook/toolbar/slash.js)#`_updateSlashPosition`)
 
@@ -271,7 +294,7 @@ Manche Block-Elemente nehmen keinen Caret an (`<hr>` ist void; künftig denkbar:
 ## Pflicht-Invarianten
 
 1. **Save-Source explizit:** `buildSavePayload` verlangt `'main'` (Normal-Editor) oder `'focus'` — Aufrufer entscheidet, nicht die Lib. Quelle: `this.focusActive ? 'focus' : 'main'`.
-2. **Pre-Save-Conflict-Check via `fresh: true`:** `_checkPageConflict` ruft `contentRepo.loadPage(id, { fresh: true })`. Ohne `fresh` liefert der SW-SWR-Cache stale `updated_at` und der Pre-Check passt fälschlich durch → Overwrite remote save. Siehe [feedback_stale_rmw](../.claude/projects/-Users-bd-ClaudeProjects-schreibwerkstatt/memory/feedback_stale_rmw.md).
+2. **Pre-Save-Conflict-Check via `fresh: true`:** `checkPageConflict` ([editor/shared/page-conflict.js](../public/js/editor/shared/page-conflict.js), geteilt mit dem Bucheditor) ruft `contentRepo.loadPage(id, { fresh: true })`. Ohne `fresh` liefert der SW-SWR-Cache stale `updated_at` und der Pre-Check passt fälschlich durch → Overwrite remote save. Siehe [feedback_stale_rmw](../.claude/projects/-Users-bd-ClaudeProjects-schreibwerkstatt/memory/feedback_stale_rmw.md).
 3. **`stripLektoratMarks` vor jedem Save + jedem Dirty-Vergleich.** Verbindlich aus [shared/html-clean.js](../public/js/editor/shared/html-clean.js). Lokales Strip wäre Drift vs. Server-Sicht.
 4. **`normalizeForCompare` für Dirty-Check.** `editDirty` darf nicht byte-genau vergleichen — Whitespace/Attribut-Ordnung weichen identisch-semantisch ab. Verwendet identische Cleaner-Kette wie Save.
 5. **Draft IMMER zuerst.** `quickSave` schreibt erst localStorage, dann Netzwerk. Offline-Tab-Close darf nichts verlieren.

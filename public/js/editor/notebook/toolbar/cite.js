@@ -35,12 +35,20 @@
 // Nur Notebook: Focus-Editor und Bucheditor stellen Chips dar und zerstören
 // sie nicht, bringen aber keinen Einfügepfad mit.
 
-import { getEditEl, findBlock } from './_shared.js';
+import { getEditEl, findBlock, caretRangeIn, rangeAtEnd } from './_shared.js';
+import {
+  appendHtmlInto, capHits, cycleIdx, htmlToElement, insertHtmlAtRange, NBSP,
+  onPickerKeydown, panelAnchorFor, placeCaretAfter,
+} from './caret-panel.js';
 import {
   buildCiteHtml, markCitesAtomic, closestQuoteBlock, setQuoteBlockSource,
   citeModeOf, isQuoteBlockEl, CITE_ATTR_SRC, CITE_ATTR_LOC,
 } from '../../../sources/cite-html.js';
 import { formatShort } from '../../../sources/format.js';
+// Suchfelder und Anzeigezeile sind SSoT in sources/search.js — hier lagen sie
+// als Kopie mit abweichender Feldliste (ohne Verlagsort), sodass dieselbe Suche
+// im Picker weniger fand als in der Quellen-Karte.
+import { filterSources, sourceLine } from '../../../sources/search.js';
 import { loadBookSources } from '../../../sources/source-cache.js';
 
 // Nur ein normaler Absatz lässt sich zu einem Blockzitat umhüllen. Überschrift,
@@ -53,22 +61,6 @@ const WRAPPABLE_TAGS = new Set(['P']);
 // Deckel der Trefferliste: mehr als 40 Zeilen scannt niemand, und der Picker
 // soll bei dreistelligen Literaturverzeichnissen nicht zur Endlosliste werden.
 const CITE_MAX_HITS = 40;
-
-// Anzeigezeile im Picker: „Kafka, Franz — Die Verwandlung (1915)".
-function pickerLabel(s) {
-  const persons = [...(s.authors || []), ...(s.editors || [])];
-  const first = persons[0];
-  const who = first ? (first.literal || [first.family, first.given].filter(Boolean).join(', ')) : '';
-  const parts = [who, s.title].filter(Boolean).join(' — ');
-  return s.year ? `${parts} (${s.year})` : parts;
-}
-
-function haystack(s) {
-  const persons = [...(s.authors || []), ...(s.editors || [])]
-    .map(p => `${p.family || ''} ${p.given || ''} ${p.literal || ''}`).join(' ');
-  return [s.title, s.container_title, s.publisher, s.year, s.citekey, persons]
-    .filter(Boolean).join(' ').toLowerCase();
-}
 
 export const citeMethods = {
   // Panel am Caret (oder an der Selektion) öffnen: Range sichern,
@@ -84,15 +76,9 @@ export const citeMethods = {
     // her); gleiche Reihenfolge wie `insertHorizontalRule`. Die Bubble-Toolbar
     // verliert den Fokus nie (`@mousedown.prevent`), dort ist es ein No-Op.
     editEl.focus();
-    let range = this._caretRangeIn(editEl);
     // Kein Caret im Editor (Edit-Modus gerade betreten, noch nirgends
-    // hingeklickt): ans Ende des Inhalts ankern statt gar nichts zu tun — wie
-    // der Diktat-Anker in stt-dictation.js#_sttAnchorToEnd.
-    if (!range) {
-      range = (editEl.ownerDocument || document).createRange();
-      range.selectNodeContents(editEl);
-      range.collapse(false);
-    }
+    // hingeklickt): ans Ende des Inhalts ankern statt gar nichts zu tun.
+    const range = caretRangeIn(editEl) || rangeAtEnd(editEl);
 
     this._citeRange = range.cloneRange();
     this._citeEditEl = null;
@@ -151,25 +137,11 @@ export const citeMethods = {
     this._focusCiteFilter();
   },
 
-  // Caret-/Selektions-Range, sofern sie im Edit-Feld liegt.
-  _caretRangeIn(editEl) {
-    const sel = document.getSelection();
-    if (!sel || sel.rangeCount === 0) return null;
-    const range = sel.getRangeAt(0);
-    const c = range.commonAncestorContainer;
-    return (editEl === c || editEl.contains(c)) ? range : null;
-  },
-
-  // Panel über der Range verankern; eine kollabierte Range hat kein Rechteck →
-  // auf den umgebenden Block ausweichen.
+  // Panel über der Range verankern (Geometrie in caret-panel.js).
   _placeCitePanel(range, editEl) {
-    let rect = range.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) {
-      const block = findBlock(range.startContainer, editEl) || editEl;
-      rect = block.getBoundingClientRect();
-    }
-    this.citeX = rect.left + rect.width / 2;
-    this.citeY = rect.top;
+    const { x, y } = panelAnchorFor(range, editEl);
+    this.citeX = x;
+    this.citeY = y;
   },
 
   // Eingabefelder/Auswahl in den Ausgangszustand. Die Zitat-Art wird bewusst
@@ -211,9 +183,8 @@ export const citeMethods = {
   // filtern und formatieren. Aufrufer: nach dem Laden der Quellen und der
   // $watch auf `citeQuery` in cards/editor-toolbar-card.js.
   _recomputeCiteHits() {
-    const q = (this.citeQuery || '').trim().toLowerCase();
-    const list = this.citeSources || [];
-    let hits = q ? list.filter(s => haystack(s).includes(q)) : list;
+    const q = (this.citeQuery || '').trim();
+    let hits = filterSources(this.citeSources || [], q);
     // Beim Bearbeiten eines Chips steht die aktuell verknüpfte Quelle ohne
     // Suchbegriff vorne — sonst liegt sie bei dreistelligen Bibliotheken hinter
     // dem CITE_MAX_HITS-Deckel und Enter träfe eine fremde Quelle. Mit
@@ -223,25 +194,24 @@ export const citeMethods = {
       const cur = hits.find(s => s.id === editId);
       if (cur) hits = [cur, ...hits.filter(s => s !== cur)];
     }
-    this.citeHits = hits.slice(0, CITE_MAX_HITS).map(s => ({ id: s.id, label: pickerLabel(s), src: s }));
+    this.citeHits = capHits(hits, CITE_MAX_HITS).map(s => ({ id: s.id, label: sourceLine(s), src: s }));
     if (this.citeIdx >= this.citeHits.length) this.citeIdx = 0;
   },
 
   citeMove(delta) {
-    const n = this.citeHits.length;
-    if (!n) return;
-    this.citeIdx = (this.citeIdx + delta + n) % n;
+    if (!this.citeHits.length) return;
+    this.citeIdx = cycleIdx(this.citeIdx, delta, this.citeHits.length);
   },
 
   _onCiteKeydown(e) {
-    if (e.key === 'Escape')    { e.preventDefault(); this._closeCite(); return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); this.citeMove(1); return; }
-    if (e.key === 'ArrowUp')   { e.preventDefault(); this.citeMove(-1); return; }
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const hit = this.citeHits[this.citeIdx];
-      if (hit) this._commitCite(hit.src);
-    }
+    onPickerKeydown(e, {
+      onClose: () => this._closeCite(),
+      onMove: (d) => this.citeMove(d),
+      onEnter: () => {
+        const hit = this.citeHits[this.citeIdx];
+        if (hit) this._commitCite(hit.src);
+      },
+    });
   },
 
   // Chip an der gesicherten Range einfügen.
@@ -294,45 +264,18 @@ export const citeMethods = {
       return;
     }
 
-    // Einfügen über die Range-API, NICHT über execCommand('insertHTML'):
-    // Chromium schleust den Fragment-String durch seinen Editing-Sanitizer, der
-    // `class`/`data-*` verwirft und die berechneten CSS-Werte der Klasse als
-    // Inline-`style` einbäckt. Aus dem Chip würde
-    // `<span style="color: rgb(...); white-space: nowrap">` — Zeiger weg, dazu
-    // ein `style`-Attribut, das gegen „Styles nur in public/css" verstösst und
-    // im Dark-Mode falsch ist. Dieselbe Chromium-Eigenheit steckt hinter der
-    // Blockgrenzen-Löschbehandlung (siehe docs/notebook-editor.md, Inv. 17+18).
-    const doc = editEl.ownerDocument || document;
-    const holder = doc.createElement('div');
-    holder.innerHTML = `${html} `;
-    const frag = doc.createDocumentFragment();
-    while (holder.firstChild) frag.appendChild(holder.firstChild);
-    const lastNode = frag.lastChild;
-
-    // Eine Selektion wird NICHT gelöscht, sondern am Ende verlassen: der Beleg
-    // weist die markierte Stelle NACH, er ersetzt sie nicht. (Anders als beim
-    // Link, wo die Selektion der Linktext ist.)
-    if (!range.collapsed) range.collapse(false);
-    range.insertNode(frag);
+    // Eine Selektion wird NICHT gelöscht, sondern am Ende verlassen (darum kein
+    // `replaceContents`): der Beleg weist die markierte Stelle NACH, er ersetzt
+    // sie nicht. Anders als beim Link, wo die Selektion der Linktext ist.
+    // Trennzeichen (NBSP, siehe caret-panel.js) und Caret dahinter besorgt der
+    // Helfer.
+    insertHtmlAtRange(range, html, { after: NBSP });
 
     // Der eingefügte Chip ist noch nicht atomar (markCitesAtomic läuft sonst nur
     // beim Mount). Direkt hier nachziehen, sonst tippt der User in die frisch
     // eingefügte Quelle hinein statt dahinter. Idempotent — schon markierte
     // Chips bleiben unverändert.
     markCitesAtomic(editEl);
-
-    // Caret hinter die Quelle (hinter das angehängte Trennzeichen), damit der
-    // User direkt weiterschreiben kann. Chromium macht aus dem Leerzeichen am
-    // Blockende ein `&nbsp;`; steht die Quelle am Absatzende, trimmt der
-    // Server-Cleaner es beim Speichern weg (stripBlockEdgeNbsp).
-    const sel = doc.getSelection();
-    if (sel && lastNode) {
-      const after = doc.createRange();
-      after.setStartAfter(lastNode);
-      after.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(after);
-    }
 
     window.__app?._markEditDirty?.();
     this._closeCite();
@@ -365,22 +308,11 @@ export const citeMethods = {
 
     // Chip in den letzten Absatz des Zitats, sonst direkt in den blockquote
     // (Blockzitat aus reinem Text ohne <p>-Hülle).
-    const host = bq.lastElementChild || bq;
-    const holder = doc.createElement('div');
-    holder.innerHTML = ` ${html}`;
-    let lastNode = null;
-    while (holder.firstChild) lastNode = host.appendChild(holder.firstChild);
+    const lastNode = appendHtmlInto(bq.lastElementChild || bq, html, { before: ' ' });
 
     markCitesAtomic(editEl);
 
-    const sel = doc.getSelection();
-    if (sel && lastNode) {
-      const after = doc.createRange();
-      after.setStartAfter(lastNode);
-      after.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(after);
-    }
+    if (lastNode) placeCaretAfter(lastNode);
   },
 
   // Bestehenden Chip auf die neue Auswahl umschreiben. `data-src` ist die
@@ -403,9 +335,7 @@ export const citeMethods = {
       return;
     }
 
-    const holder = doc.createElement('div');
-    holder.innerHTML = html;
-    const fresh = holder.firstElementChild;
+    const fresh = htmlToElement(html, doc);
     if (!fresh || !chip.parentNode) return;
     chip.parentNode.replaceChild(fresh, chip);
 
@@ -419,15 +349,7 @@ export const citeMethods = {
     }
 
     markCitesAtomic(editEl);
-
-    const sel = doc.getSelection();
-    if (sel) {
-      const after = doc.createRange();
-      after.setStartAfter(fresh);
-      after.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(after);
-    }
+    placeCaretAfter(fresh);
   },
 
   // Beleg entfernen (nur im Bearbeiten-Fall sichtbar).
@@ -508,25 +430,18 @@ export const citeMethods = {
     p.appendChild(doc.createTextNode(quote + ' '));
     bq.appendChild(p);
     setQuoteBlockSource(bq, source.id);
-    const holder = doc.createElement('div');
-    holder.innerHTML = chipHtml;
-    while (holder.firstChild) p.appendChild(holder.firstChild);
+    // Kein Caret hier (appendHtmlInto setzt keinen): der Block hängt noch nicht
+    // im Dokument, ein Caret zeigte auf einen abgehängten Knoten.
+    appendHtmlInto(p, chipHtml);
 
     editEl.focus();
-    const range = this._caretRangeIn(editEl);
+    const range = caretRangeIn(editEl);
     const anchor = range ? findBlock(range.startContainer, editEl) : null;
     if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(bq, anchor.nextSibling);
     else editEl.appendChild(bq);
 
     markCitesAtomic(editEl);
-    const sel = doc.getSelection();
-    if (sel) {
-      const after = doc.createRange();
-      after.setStartAfter(bq);
-      after.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(after);
-    }
+    placeCaretAfter(bq);
     // Ohne das greift der Autosave nicht — der Block wäre beim Verlassen weg.
     window.__app?._markEditDirty?.();
     return true;

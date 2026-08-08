@@ -16,7 +16,10 @@
 // überschreibbar; hier stehen nur der User-Prompt-Builder und das Schema.
 import { _obj, _str } from './schema-utils.js';
 import { _isLocal } from './state.js';
-import { textsorteLabel, textsorteRegelnListe } from './textsorten.js';
+import {
+  textsorteLabel, textsorteRegelnListe,
+  STRUKTUR_STATUS, STRUKTUR_URTEILE, W_FRAGEN,
+} from './textsorten.js';
 
 /**
  * @param {string} text        Klartext des Beitrags
@@ -49,18 +52,18 @@ REGELN FÜR DEINE ANTWORT:
 - «befund»: EIN Satz, konkret am Text. Nenne die Stelle, auf die du dich beziehst (Absatznummer oder ein kurzes wörtliches Zitat von höchstens acht Wörtern). Keine Allgemeinplätze wie «könnte besser sein».
 - «massnahme»: nur bei «teilweise» und «fehlt» — EIN Satz, was der Beitrag braucht (welche Information, welcher Baustein). KEINE Formulierungsvorschläge, keine fertigen Sätze.
 - Erfinde keine Angaben. Wenn eine Information im Text fehlt, ist genau das der Befund — ergänze sie nicht selbst.
-- «fehlendeWFragen»: nur bei nachrichtlichen Formen relevant. Liste die W-Fragen, die der erste Absatz NICHT beantwortet, als Kleinbuchstaben-Keys: wer, was, wann, wo, wie, warum. Sind alle beantwortet oder ist die Form nicht nachrichtlich: leeres Array.
+- «fehlendeWFragen»: nur bei nachrichtlichen Formen relevant. Liste die W-Fragen, die der erste Absatz NICHT beantwortet, als Kleinbuchstaben-Keys: ${W_FRAGEN.join(', ')}. Sind alle beantwortet oder ist die Form nicht nachrichtlich: leeres Array.
 - «gesamturteil»: «traegt» = die Form ist eingehalten, «lueckenhaft» = einzelne Bausteine fehlen, «verfehlt» = der Text erfüllt die Textsorte nicht.
 - «zusammenfassung»: 2-3 Sätze zur Form des Beitrags. KEINE Wiederholung der Einzelbefunde aus «regeln», keine Sprachkritik.
 
 <output_format>
 Antworte mit diesem JSON-Schema:
 {
-  "gesamturteil": "traegt|lueckenhaft|verfehlt",
+  "gesamturteil": "${STRUKTUR_URTEILE.join('|')}",
   "regeln": [
     {
       "nr": 1,
-      "status": "erfuellt|teilweise|fehlt|nicht_anwendbar",
+      "status": "${STRUKTUR_STATUS.join('|')}",
       "befund": "EIN Satz, konkret am Text, mit Stellenangabe",
       "massnahme": "EIN Satz – nur bei teilweise/fehlt, sonst leerer String"
     }
@@ -83,16 +86,16 @@ ${text}
 export function buildStrukturSchema() {
   const eintrag = _obj({
     nr: { type: 'number' },
-    status: { type: 'string', enum: ['erfuellt', 'teilweise', 'fehlt', 'nicht_anwendbar'] },
+    status: { type: 'string', enum: STRUKTUR_STATUS.slice() },
     befund: _str,
     massnahme: _str,
   });
   const base = {
-    gesamturteil: { type: 'string', enum: ['traegt', 'lueckenhaft', 'verfehlt'] },
+    gesamturteil: { type: 'string', enum: STRUKTUR_URTEILE.slice() },
     regeln: { type: 'array', items: eintrag },
     fehlendeWFragen: {
       type: 'array',
-      items: { type: 'string', enum: ['wer', 'was', 'wann', 'wo', 'wie', 'warum'] },
+      items: { type: 'string', enum: W_FRAGEN.slice() },
     },
   };
   // Lokale Provider: die Zusammenfassung fällt weg (kleine Modelle produzieren

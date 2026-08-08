@@ -70,6 +70,43 @@ export function channelFit(feld, text) {
   });
 }
 
+/** Getrimmte Zeichenzahl — die Zahl, gegen die alle Limits gemessen werden.
+ *  Umschliessende Leerzeichen zaehlen nirgends mit: sie sind ein Tippartefakt,
+ *  kein Titel. */
+export function fieldLen(text) {
+  return String(text ?? '').trim().length;
+}
+
+/**
+ * Füllstand in Prozent gegen den ENGSTEN Kanal — der reisst zuerst, und an ihm
+ * misst man beim Schreiben. Über 100% wird gekappt, damit der Balken nicht
+ * ausläuft; dass es zu lang ist, sagt ohnehin die Zahl daneben.
+ */
+export function fillPct(feld, text) {
+  const limit = tightestLimit(feld);
+  if (!limit) return 0;
+  return Math.min(100, Math.round((fieldLen(text) / limit) * 100));
+}
+
+/**
+ * `'leer' | 'passt' | 'teilweise' | 'zulang'` — treibt die Farbe von Zähler und
+ * Balken. Beide Oberflächen (Titel-Werkstatt und der Kopf im Notebook-Editor)
+ * zeigen dasselbe Signal; die Stufen leben deshalb hier und nicht zweimal in
+ * den Karten.
+ */
+export function fitState(feld, text) {
+  const fits = channelFit(feld, text);
+  if (!fits.length || !fieldLen(text)) return 'leer';
+  const ok = fits.filter(f => f.fits).length;
+  if (ok === fits.length) return 'passt';
+  return ok > 0 ? 'teilweise' : 'zulang';
+}
+
+/** Nur die Kanäle, in die es NICHT mehr passt. */
+export function overChannels(feld, text) {
+  return channelFit(feld, text).filter(f => !f.fits);
+}
+
 /** i18n-Key eines Feld-Labels bzw. eines Kanal-Labels. */
 export function fieldLabelKey(feld) { return `headline.field.${feld}`; }
 export function channelLabelKey(key) { return `headline.channel.${key}`; }

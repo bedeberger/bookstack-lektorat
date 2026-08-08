@@ -13,15 +13,12 @@
 // Fehlerpfad laufen, nur weil der User gerade einen Roman offen hat.
 
 const express = require('express');
-const { aclParamGuard, requireBookAccess, sendACLError } = require('../lib/acl');
-const { getBookSettings } = require('../db/schema');
-const { isJournalisticBook } = require('../lib/buchtyp');
+const { aclParamGuard } = require('../lib/acl');
 const {
   REDAKTION_STATUS, listBookStatus, setPageStatus, statusCounts, isValidRedaktionStatus,
 } = require('../db/redaktion');
-const { resolvePageBookId } = require('../lib/content-ownership');
-const { toIntId } = require('../lib/validate');
-const { setContext, bookParamHandler } = require('../lib/log-context');
+const { pageBookGuard, journalisticBookSettings } = require('../lib/page-guard');
+const { bookParamHandler } = require('../lib/log-context');
 
 const router = express.Router();
 const jsonBody = express.json();
@@ -31,8 +28,7 @@ router.param('book_id', bookParamHandler);
 /** Stufen-Inventar + alle gesetzten Stufen eines Buchs + Verteilung. */
 router.get('/:book_id', aclParamGuard('viewer'), (req, res) => {
   const bookId = req.bookId;
-  const settings = getBookSettings(bookId, req.session?.user?.email || null);
-  if (!isJournalisticBook(settings)) {
+  if (!journalisticBookSettings(req, bookId)) {
     return res.json({ enabled: false, stufen: REDAKTION_STATUS, pages: {}, counts: null });
   }
   res.json({
@@ -45,18 +41,9 @@ router.get('/:book_id', aclParamGuard('viewer'), (req, res) => {
 
 /** Stufe einer Seite setzen (`status: null` entfernt sie wieder). */
 router.put('/page/:page_id', jsonBody, (req, res) => {
-  const pageId = toIntId(req.params.page_id);
-  if (!pageId) return res.status(400).json({ error_code: 'PAGE_ID_REQUIRED' });
-  const bookId = resolvePageBookId(pageId);
-  if (!bookId) return res.status(404).json({ error_code: 'PAGE_NOT_FOUND' });
-  setContext({ book: bookId });
-  try { requireBookAccess(req, bookId, 'editor'); }
-  catch (e) { if (sendACLError(res, e)) return; throw e; }
-
-  const settings = getBookSettings(bookId, req.session?.user?.email || null);
-  if (!isJournalisticBook(settings)) {
-    return res.status(400).json({ error_code: 'NOT_JOURNALISTIC_BOOK' });
-  }
+  const g = pageBookGuard(req, res, { minRole: 'editor', journalistic: true });
+  if (!g) return;
+  const { pageId, bookId } = g;
 
   const raw = req.body?.status;
   const status = raw == null || raw === '' ? null : String(raw);

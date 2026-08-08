@@ -200,8 +200,11 @@ Jede Fehlerantwort ist JSON mit dem Feld `error_code` (Ausnahmen unten). **Diese
 | `error_code` | HTTP | Wann | Endpunkt |
 |---|---|---|---|
 | `INVALID_BOOK_ID` | 400 | `book_id` keine positive Ganzzahl | nur `:book_id`-URL-Routen (`aclParamGuard`). Auf den Capture-Endpunkten unerreichbar: die validieren vorher selbst und antworten `BOOKID_REQ` bzw. `INVALID_ID` |
+| `NOT_LOGGED_IN` | 401 | keine Session/kein gültiges Token. **Der einzige 401 des Erfassungs-Pfads** — die book-scoped Router prüfen den Login nicht mehr selbst vor dem Guard | alle `book_id`-Routen |
 | `NO_BOOK_ACCESS` | 403 | Buch existiert nicht **oder** der User hat gar keine `book_access`-Row darauf (beides ununterscheidbar — Absicht) | alle `book_id`-Routen |
 | `INSUFFICIENT_ROLE` | 403 | Rolle zu niedrig. Trägt `detail: { actual, required }`, z.B. `{ actual: 'viewer', required: 'editor' }` — **die Meldung, die dem Nutzer die Ursache nennt** | alle `book_id`-Routen |
+
+**Welcher 400-Code bei fehlendem `book_id`** — die Regel, damit ein Client-Autor nicht raten muss: `BOOKID_REQ`, wenn `book_id` im **Body** steht (`POST /research`, `POST /capture`), `INVALID_ID`, wenn es als **Query-Parameter** kommt (`GET /research`, `GET /sources`, …), und `INVALID_BOOK_ID`, wenn es Teil des **Pfads** ist (`aclParamGuard`). Historisch gewachsen und bewusst nicht vereinheitlicht: die Codes stehen in ausgelieferten Clients, und ein Umbenennen brächte nur Kosmetik. Ein Client, der alle drei auf dieselbe Meldung abbildet, liegt richtig.
 
 **`POST /capture`** ([routes/capture.js](../routes/capture.js), Rolle `editor`):
 
@@ -219,7 +222,7 @@ Jede Fehlerantwort ist JSON mit dem Feld `error_code` (Ausnahmen unten). **Diese
 
 | `error_code` | HTTP | Wann | Endpunkt |
 |---|---|---|---|
-| `LOGIN_REQ` | 401 | keine Session/kein gültiges Token. **Achtung:** dieser Router sagt `LOGIN_REQ`, die Quellen-/Capture-Router sagen `NOT_LOGGED_IN` — beide behandeln, nicht raten | alle `POST` |
+| `NOT_LOGGED_IN` | 401 | keine Session/kein gültiges Token. Kommt aus dem Buch-Guard ([lib/acl.js](../lib/acl.js)) — der Router hat keine eigene Login-Prüfung davor, und damit auch keinen zweiten Code für dieselbe Lage | alle |
 | `BOOKID_REQ` | 400 | `book_id` fehlt/ungültig | `POST /research` |
 | `INVALID_ID` | 400 | `book_id` (Query) bzw. `:id` (Pfad) fehlt/ungültig | `GET /research`, `GET /research/tags`, alle `/:id/*` |
 | `EMPTY` | 400 | weder Titel noch Text noch `http(s)`-URL | `POST /research` |

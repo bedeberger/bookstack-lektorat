@@ -14,10 +14,9 @@
 
 const express = require('express');
 const { db } = require('../db/schema');
-const { emitItem, itemBookId } = require('../db/research-items');
-const { toIntId } = require('../lib/validate');
-const { setContext } = require('../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../lib/acl');
+const { emitItem } = require('../db/research-items');
+const { sessionEmail } = require('../lib/acl');
+const { scopedItem } = require('./research-acl');
 const { prepareCover } = require('../lib/cover-prepare');
 // PDF-Anhang: geteilter Stack mit routes/sources.js (Limit, Namen, Extraktion,
 // Fehler-Codes, Auslieferungs-Header).
@@ -32,25 +31,14 @@ const researchMediaRouter = express.Router();
 const jsonBody = express.json();
 const rawImage = express.raw({ type: ['image/*'], limit: '12mb' });
 
-function userEmailOrNull(req) {
-  return req.session?.user?.email || null;
-}
-
-function _guard(req, res, bookId, minRole) {
-  setContext({ book: bookId });
-  try { requireBookAccess(req, bookId, minRole); return true; }
-  catch (e) { return !sendACLError(res, e); }
-}
+// Vorspann (Id + Buch-ACL) liegt in routes/research-acl.js: er stand hier
+// viermal wortgleich, samt einer 401-Pruefung, die der Buch-Guard ohnehin macht.
 
 // ── Bild hochladen (sharp-normalisiert) ──────────────────────────────────────
 researchMediaRouter.post('/:id/image', rawImage, async (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = itemBookId(id);
-  if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
-  if (!_guard(req, res, bookId, 'editor')) return;
+  const scope = scopedItem(req, res);
+  if (!scope) return;
+  const { id } = scope;
   if (!Buffer.isBuffer(req.body) || !req.body.length) {
     return res.status(400).json({ error_code: 'NO_IMAGE' });
   }
@@ -66,13 +54,14 @@ researchMediaRouter.post('/:id/image', rawImage, async (req, res) => {
   }
 });
 
-// Bild ausliefern (BLOB-Stream).
+// Bild ausliefern (BLOB-Stream). Die ACL laeuft VOR der Bestandsfrage: sonst
+// beantwortet der Server einem Unberechtigten erst „dieses Fundstueck hat ein
+// Bild" und verweigert danach den Zugriff.
 researchMediaRouter.get('/:id/image', (req, res) => {
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const row = db.prepare('SELECT book_id, image, image_mime FROM research_items WHERE id = ?').get(id);
-  if (!row || !row.image) return res.status(404).json({ error_code: 'NO_IMAGE' });
-  if (!_guard(req, res, row.book_id, 'viewer')) return;
+  const scope = scopedItem(req, res, 'viewer');
+  if (!scope) return;
+  const row = db.prepare('SELECT image, image_mime FROM research_items WHERE id = ?').get(scope.id);
+  if (!row?.image) return res.status(404).json({ error_code: 'NO_IMAGE' });
   res.set('Content-Type', row.image_mime || 'image/jpeg');
   res.set('Cache-Control', 'private, max-age=3600');
   res.send(row.image);
@@ -82,13 +71,9 @@ researchMediaRouter.get('/:id/image', (req, res) => {
 // des Bildes 'image' war — Pendant zum Dokument-Löschen weiter unten). Kein
 // FTS-/Embedding-Nachzug: das Bild trägt keinen indizierten Text.
 researchMediaRouter.delete('/:id/image', (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = itemBookId(id);
-  if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
-  if (!_guard(req, res, bookId, 'editor')) return;
+  const scope = scopedItem(req, res);
+  if (!scope) return;
+  const { id } = scope;
   db.prepare(
     `UPDATE research_items
         SET image = NULL, image_mime = NULL,
@@ -104,13 +89,9 @@ researchMediaRouter.delete('/:id/image', (req, res) => {
 // Verknuepfung). Dateiname kommt als ?name= (URL-encoded). Rein lesend, nie
 // generativ.
 researchMediaRouter.post('/:id/doc', rawPdfBody(), async (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = itemBookId(id);
-  if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
-  if (!_guard(req, res, bookId, 'editor')) return;
+  const scope = scopedItem(req, res);
+  if (!scope) return;
+  const { id, bookId } = scope;
 
   const up = await readDocUpload(req.body, req.query.name);
   if (!up.ok) {
@@ -127,37 +108,32 @@ researchMediaRouter.post('/:id/doc', rawPdfBody(), async (req, res) => {
   searchIndex.upsertResearch(id);
   // Semantik-Index nachziehen (non-fatal): ohne das wäre der frische Volltext
   // bis zum Nacht-Cron nur über exakten Wortmatch auffindbar.
-  try { enqueueEmbedIndexJob(bookId, userEmail); }
+  try { enqueueEmbedIndexJob(bookId, sessionEmail(req)); }
   catch (e) { logger.warn(`[research] embed-index enqueue fehlgeschlagen: ${e.message}`); }
   logger.info(`[research] doc upload id=${id} pages=${doc.pages} chars=${doc.chars}${doc.truncated ? ' (gedeckelt)' : ''}`);
   res.json(emitItem(id));
 });
 
 // Dokument ausliefern (BLOB-Stream, inline mit Original-Dateinamen). Zweistufig:
-// erst die Meta-Zeile für die ACL, den BLOB erst danach — ein 403 soll keine
-// 25 MB durch den Prozess ziehen.
+// erst ACL + Meta-Zeile, den BLOB erst danach — ein 403 soll keine 25 MB durch
+// den Prozess ziehen.
 researchMediaRouter.get('/:id/doc', (req, res) => {
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
+  const scope = scopedItem(req, res, 'viewer');
+  if (!scope) return;
   const row = db.prepare(
-    'SELECT book_id, doc_mime, doc_name, (doc IS NOT NULL) AS has_doc FROM research_items WHERE id = ?'
-  ).get(id);
-  if (!row || !row.has_doc) return res.status(404).json({ error_code: 'NO_DOC' });
-  if (!_guard(req, res, row.book_id, 'viewer')) return;
-  const blob = db.prepare('SELECT doc FROM research_items WHERE id = ?').get(id)?.doc;
+    'SELECT doc_mime, doc_name, (doc IS NOT NULL) AS has_doc FROM research_items WHERE id = ?'
+  ).get(scope.id);
+  if (!row?.has_doc) return res.status(404).json({ error_code: 'NO_DOC' });
+  const blob = db.prepare('SELECT doc FROM research_items WHERE id = ?').get(scope.id)?.doc;
   sendDoc(res, { buffer: blob, mime: row.doc_mime, name: row.doc_name });
 });
 
 // Dokument entfernen (Item bleibt; kind fällt auf 'note' zurück, falls es nur
 // wegen des Dokuments 'document' war).
 researchMediaRouter.delete('/:id/doc', (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = itemBookId(id);
-  if (!bookId) return res.status(404).json({ error_code: 'ITEM_NOT_FOUND' });
-  if (!_guard(req, res, bookId, 'editor')) return;
+  const scope = scopedItem(req, res);
+  if (!scope) return;
+  const { id } = scope;
   db.prepare(
     `UPDATE research_items
         SET doc = NULL, doc_mime = NULL, doc_name = NULL, doc_text = NULL, doc_pages = NULL,

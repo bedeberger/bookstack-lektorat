@@ -188,12 +188,7 @@ export const rechercheItemMethods = {
     const app = window.__app;
     this.busy = true;
     try {
-      const row = await fetchJson(`/research/${item.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(this._draftBody(this.draft)),
-      });
-      this._replaceItem(row);
+      this._replaceItem(await this._patchItem(item.id, this._draftBody(this.draft)));
       // Nach dem Speichern zurück in den Lesemodus, Dialog bleibt offen: der
       // User will sehen, was er geschrieben hat.
       this.detailEditing = false;
@@ -205,6 +200,16 @@ export const rechercheItemMethods = {
     } finally {
       this.busy = false;
     }
+  },
+
+  // Teil-Aktualisierung eines Fundstuecks. Vier Aufrufer (Speichern, Anheften,
+  // Archivieren, Feld-Edit) schickten dieselben drei Zeilen Fetch-Aufbau.
+  _patchItem(id, body) {
+    return fetchJson(`/research/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
   },
 
   _draftBody(d) {
@@ -220,11 +225,7 @@ export const rechercheItemMethods = {
 
   async togglePin(item) {
     try {
-      const row = await fetchJson(`/research/${item.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinned: !item.pinned }),
-      });
-      this._replaceItem(row);
+      this._replaceItem(await this._patchItem(item.id, { pinned: !item.pinned }));
       this.items = this._sortItems(this.items);
     } catch { this.errorMessage = window.__app.t('recherche.error.save'); }
     this.menuOpenId = null;
@@ -232,10 +233,7 @@ export const rechercheItemMethods = {
 
   async toggleArchive(item) {
     try {
-      await fetchJson(`/research/${item.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ archived: !item.archived }),
-      });
+      await this._patchItem(item.id, { archived: !item.archived });
       // Bei aktivem „nur aktive"-Filter verschwindet das Item aus der Liste.
       // Dann muss auch der Detail-Dialog zu: sein Inhalt hängt an `items`, er
       // stünde sonst leer offen.

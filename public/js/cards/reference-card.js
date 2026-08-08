@@ -158,6 +158,12 @@ export function registerReferenceCard() {
     // kann im Text weiter belegt sein, und dann gehört sie in die Liste.
     // Ohne Quellen entfällt der zweite Aufruf: ein Roman hat keine, und das Tab
     // bleibt dann ohnehin verborgen.
+    //
+    // Bewusst NICHT über sources/source-cache.js: der Cache hält die Menge des
+    // Beleg-Pickers (nur aktive Quellen — eine archivierte soll man nicht neu
+    // einfügen können). Hier ist die Obermenge nötig, siehe oben. Zwei Mengen,
+    // zwei Fetches; ein gemeinsamer Cache müsste beide Fassungen führen und
+    // wäre teurer als der gesparte Roundtrip.
     async _loadReferenceSources() {
       const bookId = Alpine.store('nav').selectedBookId;
       if (!bookId) { this.referenceSources = []; this.referenceCitations = []; return; }

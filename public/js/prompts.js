@@ -164,6 +164,19 @@ export {
   istMeinungsform,
   textsorteLabel,
   textsorteRegelnListe,
+  // Vokabular des Struktur-Befunds — Schema, Job-Validierung, Verdichtung und
+  // Karte lesen dieselben Listen (SSoT-Begründung in prompts/textsorten.js).
+  STRUKTUR_STATUS,
+  STRUKTUR_STATUS_FALLBACK,
+  STRUKTUR_STATUS_OFFEN,
+  STRUKTUR_STATUS_RANG,
+  STRUKTUR_URTEILE,
+  STRUKTUR_URTEIL_RANG,
+  W_FRAGEN,
+  isStrukturStatus,
+  isStrukturUrteil,
+  isWFrage,
+  STRUKTUR_VOKABULAR_SIGNATUR,
 } from './prompts/textsorten.js';
 
 export {

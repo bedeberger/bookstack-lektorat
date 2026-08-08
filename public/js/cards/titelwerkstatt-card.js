@@ -26,13 +26,14 @@ const freshState = () => ({
   twError: '',
   twLoadError: false,
   twLastRun: null,
-  // Zeilen-Memo: das Template liest die Liste im x-for UND in der Kopfzeile.
-  // `_twRev` zählt Mutationen mit, die die Schlüssel-Anzahl nicht ändern (ein
-  // geänderter Titel bei gleicher Seitenzahl) — ohne ihn träfe der Memo-
-  // Vergleich und die Tabelle zeigte den alten Wert.
+  // Revisionszähler für das Zeilen-Memo: er zählt Mutationen mit, die die
+  // Schlüssel-Anzahl nicht ändern (ein geänderter Titel bei gleicher
+  // Seitenzahl) — ohne ihn träfe der Memo-Vergleich und die Tabelle zeigte den
+  // alten Wert.
   _twRev: 0,
-  _twRowsKey: null,
-  _twRows: [],
+  // Speicher des `_memo`-Helpers (book/titelwerkstatt.js). Über `resetState`
+  // beim Buchwechsel geleert, sonst hinge die Tabelle am alten Buch.
+  _memos: {},
 });
 
 export function registerTitelwerkstattCard() {

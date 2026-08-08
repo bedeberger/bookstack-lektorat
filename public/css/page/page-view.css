@@ -15,12 +15,10 @@
      Innenbreite haben und der Toggle keinen Layout-Sprung erzeugt. */
   scrollbar-gutter: stable;
   padding: 36px clamp(18px, 4vw, 40px);
-  /* Papier-Textur: feiner Turbulence-Noise (SVG inline, kein Network-Roundtrip)
-     als 160px-Tile über Crème-Grund; 0.05-Alpha bleibt unter Wahrnehmungsschwelle,
-     gibt dem flat-Crème aber ein leises Korn. */
-  background:
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.35  0 0 0 0 0.27  0 0 0 0 0.18  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>") repeat,
-    var(--color-page-view-bg);
+  /* Papier-Textur + Crème-Grund. Die Textur ist ein Token, weil der Titel-Kopf
+     (editor/notebook/page-head.css) als oberes Ende desselben Bogens dieselbe
+     Fläche tragen muss. */
+  background: var(--color-page-view-texture), var(--color-page-view-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);

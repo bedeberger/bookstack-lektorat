@@ -6,10 +6,27 @@
      Manuskript, und man sieht gerade nicht, worauf der Text zuläuft. Die
      Feldnamen tragen die Platzhalter.
 
+     Der Kopf ist das OBERE ENDE DES BLATTS, kein Block darüber: er teilt
+     Breite, Textkante und Fläche mit .page-content-view und wächst mit ihm zu
+     einem Bogen zusammen (page-head.css). Die drei Modifier reichen dem CSS,
+     was nur der Alpine-Scope weiss — dass der Kopf steht (das Blatt kappt dann
+     seine Oberkante), dass bearbeitet wird (Schiene + Tönung laufen weiter) und
+     dass die Breitenanpassung an ist (Lesebreite fällt in BEIDEN weg, sonst
+     springt die Textkante auseinander). `--editor-zoom` liegt hier, weil das
+     Blatt es als Inline-Style trägt und ein Geschwister davon nichts erbt.
+
      Der Teaser fehlt hier mit Absicht — er gehört nicht in den Beitrag, sondern
      in Übersichten (channels.js#HEADLINE_HEAD_FIELDS); gepflegt wird er in der
      Titel-Werkstatt. -->
-<div x-data="editorPageHeadCard" class="page-head" x-show="headVisible() && (editMode || headHasContent())" x-cloak>
+<div x-data="editorPageHeadCard" class="page-head"
+     :class="{
+       'page-head--shown': headShown(),
+       'page-head--open': (editMode && !focusActive) || !!renderedPageHtml,
+       'page-head--editing': editMode,
+       'page-head--fit-width': editMode && pageEditorFitWidth
+     }"
+     :style="{ '--editor-zoom': pageEditorZoom }"
+     x-show="headShown()" x-cloak>
 
   <!-- Leseansicht -->
   <template x-if="!editMode">

@@ -2,8 +2,7 @@ const express = require('express');
 const { db } = require('../db/schema');
 const { toIntId } = require('../lib/validate');
 const { localIsoDate, localHour } = require('../lib/local-date');
-const { setContext } = require('../lib/log-context');
-const { aclParamGuard, requireBookAccess, sendACLError } = require('../lib/acl');
+const { aclParamGuard, guardBook } = require('../lib/acl');
 const { resolvePageBookId } = require('../lib/content-ownership');
 const { buildRueckblickCoverage } = require('./jobs/rueckblick-dates');
 const snapshots = require('../db/book-snapshots');
@@ -25,11 +24,8 @@ const jsonBodyLarge = express.json({ limit: '25mb' });
 // alle ~30 s; eine Pause laenger als 15 min zaehlt als Session-Ende.
 const SESSION_GAP_SECONDS = 900;
 
-function _guardBook(req, res, bookId, minRole) {
-  setContext({ book: bookId });
-  try { requireBookAccess(req, bookId, minRole); return true; }
-  catch (e) { return !sendACLError(res, e); }
-}
+// Buch-Guard fuer die Body-/Query-Routen dieses Routers kommt aus
+// lib/acl.js#guardBook; die `:book_id`-Routen deckt der router.param-Guard ab.
 
 // Lauf als gespeichert markieren (oder zurücksetzen).
 router.patch('/check/:id/saved', jsonBody, (req, res) => {
@@ -55,7 +51,7 @@ router.patch('/check/:id/saved', jsonBody, (req, res) => {
   `).get(id, user_email);
   if (!row) return res.status(404).json({ error_code: 'NOT_FOUND' });
   if (!row.book_id) return res.status(400).json({ error_code: 'CHECK_HAS_NO_BOOK' });
-  if (!_guardBook(req, res, row.book_id, 'lektor')) return;
+  if (!guardBook(req, res, row.book_id, 'lektor')) return;
 
   db.prepare('UPDATE page_checks SET saved = ?, saved_at = ?, applied_errors_json = COALESCE(?, applied_errors_json), selected_errors_json = COALESCE(?, selected_errors_json) WHERE id = ? AND user_email = ? AND book_id = ?')
     .run(saved, saved_at, applied, selected, id, user_email, row.book_id);
@@ -85,7 +81,7 @@ router.get('/page/:page_id', (req, res) => {
   if (!pageId) return res.status(400).json({ error_code: 'INVALID_ID' });
   const bookId = resolvePageBookId(pageId);
   if (!bookId) return res.status(404).json({ error_code: 'PAGE_NOT_FOUND' });
-  if (!_guardBook(req, res, bookId, 'viewer')) return;
+  if (!guardBook(req, res, bookId, 'viewer')) return;
   const rows = db.prepare(`
     SELECT pc.id, pc.page_id, p.page_name, pc.book_id, pc.chapter_id, pc.checked_at,
            pc.error_count, pc.stilanalyse, pc.fazit, pc.model, pc.saved, pc.saved_at
@@ -106,7 +102,7 @@ router.get('/check/:id/details', (req, res) => {
     SELECT book_id, errors_json, applied_errors_json, selected_errors_json, szenen_json
     FROM page_checks WHERE id = ? AND user_email = ?`).get(id, user_email);
   if (!r) return res.status(404).json({ error_code: 'NOT_FOUND' });
-  if (r.book_id && !_guardBook(req, res, r.book_id, 'viewer')) return;
+  if (r.book_id && !guardBook(req, res, r.book_id, 'viewer')) return;
   res.json({
     errors_json: JSON.parse(r.errors_json || '[]'),
     applied_errors_json: r.applied_errors_json ? JSON.parse(r.applied_errors_json) : null,
@@ -684,8 +680,7 @@ router.get('/fehler-heatmap/:book_id', (req, res) => {
 router.get('/fehler-trend/:book_id', (req, res) => {
   const bookId = toIntId(req.params.book_id);
   if (!bookId) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
-  setContext({ book: bookId });
-  if (!_guardBook(req, res, bookId, 'viewer')) return;
+  if (!guardBook(req, res, bookId, 'viewer')) return;
 
   const rows = snapshots.listLektoratTrend(bookId);
   const versions = rows.map((r) => {
@@ -715,7 +710,7 @@ router.post('/writing-time', jsonBody, (req, res) => {
   const book_id = toIntId(req.body?.book_id);
   const secondsRaw = Number(req.body?.seconds);
   if (!book_id) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
-  if (!_guardBook(req, res, book_id, 'viewer')) return;
+  if (!guardBook(req, res, book_id, 'viewer')) return;
   if (!Number.isFinite(secondsRaw) || secondsRaw <= 0) return res.json({ ok: true, added: 0 });
   const seconds = Math.min(Math.round(secondsRaw), 3600);
   const date = localIsoDate();
@@ -795,7 +790,7 @@ router.post('/stt-time', jsonBody, (req, res) => {
   const secondsRaw = Number(req.body?.seconds);
   const charsRaw = Number(req.body?.chars);
   if (!book_id) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
-  if (!_guardBook(req, res, book_id, 'viewer')) return;
+  if (!guardBook(req, res, book_id, 'viewer')) return;
   const seconds = Number.isFinite(secondsRaw) && secondsRaw > 0 ? Math.min(Math.round(secondsRaw), 3600) : 0;
   const chars = Number.isFinite(charsRaw) && charsRaw > 0 ? Math.min(Math.round(charsRaw), 100000) : 0;
   if (seconds <= 0 && chars <= 0) return res.json({ ok: true, added_seconds: 0, added_chars: 0 });
@@ -852,7 +847,7 @@ router.post('/lektorat-time', jsonBody, (req, res) => {
   const secondsRaw = Number(req.body?.seconds);
   if (!book_id) return res.status(400).json({ error_code: 'INVALID_BOOK_ID' });
   if (!page_id) return res.status(400).json({ error_code: 'INVALID_PAGE_ID' });
-  if (!_guardBook(req, res, book_id, 'viewer')) return;
+  if (!guardBook(req, res, book_id, 'viewer')) return;
   if (resolvePageBookId(page_id) !== book_id) return res.status(400).json({ error_code: 'BOOK_MISMATCH' });
   if (!Number.isFinite(secondsRaw) || secondsRaw <= 0) return res.json({ ok: true, added: 0 });
   const seconds = Math.min(Math.round(secondsRaw), 3600);

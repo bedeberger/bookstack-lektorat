@@ -16,9 +16,7 @@
 //   POST   /:id/oton            O-Ton als Quelle vom Typ `interview` anlegen
 
 const express = require('express');
-const { db } = require('../db/schema');
-const { NOW_ISO_SQL } = require('../db/now');
-const { emitItem, itemBookId } = require('../db/research-items');
+const { emitItem, setItemKind, setItemDocText } = require('../db/research-items');
 const {
   getTranscript, getAudio, createTranscript, dropAudio,
   listSegments, getSegment, listSpeakers, speakerLabels, setSpeaker, speakerKeys,
@@ -29,8 +27,8 @@ const {
 } = require('../lib/interview-transcribe');
 const { createSource, linkSource, getSource } = require('../db/sources');
 const { toIntId } = require('../lib/validate');
-const { setContext } = require('../lib/log-context');
-const { requireBookAccess, sendACLError } = require('../lib/acl');
+const { sessionEmail } = require('../lib/acl');
+const { scopedItem } = require('./research-acl');
 const searchIndex = require('../lib/search');
 const logger = require('../logger');
 
@@ -42,19 +40,15 @@ const rawAudio = express.raw({ type: ['audio/*', 'video/mp4', 'video/webm'], lim
 
 const AUDIONAME_MAX = 200;
 
-function userEmailOrNull(req) {
-  return req.session?.user?.email || null;
-}
-
-/** ACL über das Buch des Fundstücks. Liefert die book_id oder null (Antwort ist
- *  dann bereits gesendet). */
-function _guard(req, res, itemId, minRole) {
-  const bookId = itemBookId(itemId);
-  if (!bookId) { res.status(404).json({ error_code: 'ITEM_NOT_FOUND' }); return null; }
-  setContext({ book: bookId });
-  try { requireBookAccess(req, bookId, minRole); return bookId; }
-  catch (e) { if (sendACLError(res, e)) return null; throw e; }
-}
+// Zugriffs-Vorspann: `scopedItem` aus routes/research-acl.js — dasselbe
+// Fundstueck, dieselbe Buch-ACL wie im Board und in den Medien-Routen. Der Guard
+// prueft die Rechte VOR jeder Bestandsfrage und erledigt den Login-Fall mit
+// (401 NOT_LOGGED_IN aus dem Buch-Guard); eine eigene Login-Pruefung davor waere
+// eine zweite Antwortform fuer denselben Fall.
+//
+// Kein Buchtyp-Gate: ein Transkript ist Recherche-Material und darf auch in
+// einem Roman liegen — journalistisch ist erst der O-Ton-Weg in den Artikel, und
+// der laeuft ueber die Quellen-Bibliothek.
 
 function _cleanName(raw) {
   const s = String(raw || '').replace(/[\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -64,12 +58,9 @@ function _cleanName(raw) {
 // ── Aufnahme hochladen ───────────────────────────────────────────────────────
 
 interviewMediaRouter.post('/:id/audio', rawAudio, (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = _guard(req, res, id, 'editor');
-  if (!bookId) return;
+  const s = scopedItem(req, res, 'editor');
+  if (!s) return;
+  const { id, bookId } = s;
 
   if (!Buffer.isBuffer(req.body) || !req.body.length) {
     return res.status(400).json({ error_code: 'NO_AUDIO' });
@@ -87,7 +78,7 @@ interviewMediaRouter.post('/:id/audio', rawAudio, (req, res) => {
   });
   // `kind` erst NACH der Ablage: schlägt der Insert fehl, soll das Fundstück
   // nicht als Transkript dastehen, hinter dem nichts liegt.
-  db.prepare(`UPDATE research_items SET kind = 'transcript', updated_at = ${NOW_ISO_SQL} WHERE id = ?`).run(id);
+  setItemKind(id, 'transcript');
   logger.info(`[interview] Audio abgelegt item=${id} bytes=${req.body.length} mime=${mime}`);
   res.json({
     item: emitItem(id),
@@ -104,10 +95,9 @@ interviewMediaRouter.post('/:id/audio', rawAudio, (req, res) => {
  * Zeitmarke die ganze Datei neu — bei einer Stunde Gespräch unbrauchbar.
  */
 interviewMediaRouter.get('/:id/audio', (req, res) => {
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = _guard(req, res, id, 'viewer');
-  if (!bookId) return;
+  const s = scopedItem(req, res, 'viewer');
+  if (!s) return;
+  const { id } = s;
   const row = getAudio(id);
   if (!row?.audio) return res.status(404).json({ error_code: 'NO_AUDIO' });
 
@@ -141,20 +131,17 @@ interviewMediaRouter.get('/:id/audio', (req, res) => {
 
 /** Aufnahme löschen, Wortlaut behalten. */
 interviewMediaRouter.delete('/:id/audio', (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, id, 'editor')) return;
-  res.json({ transcript: dropAudio(id) });
+  const s = scopedItem(req, res, 'editor');
+  if (!s) return;
+  res.json({ transcript: dropAudio(s.id) });
 });
 
 // ── Transkript lesen ─────────────────────────────────────────────────────────
 
 interviewMediaRouter.get('/:id/transcript', (req, res) => {
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, id, 'viewer')) return;
+  const s = scopedItem(req, res, 'viewer');
+  if (!s) return;
+  const { id } = s;
   const head = getTranscript(id);
   if (!head) return res.status(404).json({ error_code: 'TRANSCRIPT_NOT_FOUND' });
   res.json({
@@ -174,11 +161,9 @@ interviewMediaRouter.get('/:id/transcript', (req, res) => {
  * das Zitat nur unter dem Schlüssel, den niemand kennt.
  */
 interviewMediaRouter.put('/:id/speaker/:key', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  if (!_guard(req, res, id, 'editor')) return;
+  const s = scopedItem(req, res, 'editor');
+  if (!s) return;
+  const { id } = s;
   if (!getTranscript(id)) return res.status(404).json({ error_code: 'TRANSCRIPT_NOT_FOUND' });
 
   try {
@@ -192,10 +177,7 @@ interviewMediaRouter.put('/:id/speaker/:key', jsonBody, (req, res) => {
     throw e;
   }
 
-  const text = transcriptToText(listSegments(id), speakerLabels(id));
-  db.prepare(
-    `UPDATE research_items SET doc_text = ?, doc_chars = ?, updated_at = ${NOW_ISO_SQL} WHERE id = ?`,
-  ).run(text, text.length, id);
+  setItemDocText(id, transcriptToText(listSegments(id), speakerLabels(id)));
   searchIndex.upsertResearch(id);
   res.json({ speakers: listSpeakers(id) });
 });
@@ -217,12 +199,10 @@ interviewMediaRouter.put('/:id/speaker/:key', jsonBody, (req, res) => {
  * im Editor (gleiche Trennung wie bei der Quellen-Erkennung).
  */
 interviewMediaRouter.post('/:id/oton', jsonBody, (req, res) => {
-  const userEmail = userEmailOrNull(req);
-  if (!userEmail) return res.status(401).json({ error_code: 'LOGIN_REQ' });
-  const id = toIntId(req.params.id);
-  if (!id) return res.status(400).json({ error_code: 'INVALID_ID' });
-  const bookId = _guard(req, res, id, 'editor');
-  if (!bookId) return;
+  const s = scopedItem(req, res, 'editor');
+  if (!s) return;
+  const { id, bookId } = s;
+  const userEmail = sessionEmail(req);
 
   const segId = toIntId(req.body?.segment_id);
   const seg = segId ? getSegment(segId) : null;

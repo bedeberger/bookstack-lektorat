@@ -4,7 +4,7 @@
 //
 // __SHELL_BUILD: content hash over all listed assets → drives SHELL_CACHE.
 // __SHELL_MANIFEST: the coherent set precached atomically at SW install.
-self.__SHELL_BUILD = "1864ee6e2a4e335a";
+self.__SHELL_BUILD = "e451e07312f22efd";
 self.__SHELL_MANIFEST = [
   "/css/admin/admin-backup.css",
   "/css/admin/admin-home.css",
@@ -322,10 +322,14 @@ self.__SHELL_MANIFEST = [
   "/js/cards/editor-notebook-card.js",
   "/js/cards/editor-page-head-card.js",
   "/js/cards/editor-spellcheck-card.js",
+  "/js/cards/editor-spellcheck/badge.js",
+  "/js/cards/editor-spellcheck/categories.js",
   "/js/cards/editor-spellcheck/controller.js",
   "/js/cards/editor-spellcheck/dispatch.js",
+  "/js/cards/editor-spellcheck/extension-guard.js",
   "/js/cards/editor-spellcheck/form-controller.js",
   "/js/cards/editor-spellcheck/mapping.js",
+  "/js/cards/editor-spellcheck/popover.js",
   "/js/cards/editor-spellcheck/position.js",
   "/js/cards/editor-synonyme-card.js",
   "/js/cards/editor-synonyme/controller.js",
@@ -450,9 +454,14 @@ self.__SHELL_MANIFEST = [
   "/js/editor/notebook/index.js",
   "/js/editor/notebook/storage.js",
   "/js/editor/notebook/stt-dictation.js",
+  "/js/editor/notebook/stt/compute.js",
+  "/js/editor/notebook/stt/insert.js",
+  "/js/editor/notebook/stt/recorder.js",
+  "/js/editor/notebook/stt/transport.js",
   "/js/editor/notebook/toolbar.js",
   "/js/editor/notebook/toolbar/_shared.js",
   "/js/editor/notebook/toolbar/bubble.js",
+  "/js/editor/notebook/toolbar/caret-panel.js",
   "/js/editor/notebook/toolbar/cite.js",
   "/js/editor/notebook/toolbar/diagram.js",
   "/js/editor/notebook/toolbar/keydown.js",
@@ -465,6 +474,7 @@ self.__SHELL_MANIFEST = [
   "/js/editor/shared/auto-slot.js",
   "/js/editor/shared/autosave.js",
   "/js/editor/shared/block-merge.js",
+  "/js/editor/shared/conflict-text.js",
   "/js/editor/shared/dom-block.js",
   "/js/editor/shared/edit-counter.js",
   "/js/editor/shared/editor-host.js",
@@ -472,6 +482,7 @@ self.__SHELL_MANIFEST = [
   "/js/editor/shared/merge-telemetry.js",
   "/js/editor/shared/mount-html.js",
   "/js/editor/shared/page-api.js",
+  "/js/editor/shared/page-conflict.js",
   "/js/editor/shared/paste.js",
   "/js/editor/shared/quote-normalize.js",
   "/js/editor/shared/quote-normalize/api.js",
@@ -607,6 +618,7 @@ self.__SHELL_MANIFEST = [
   "/js/sources/format/styles.js",
   "/js/sources/from-research.js",
   "/js/sources/manage.js",
+  "/js/sources/search.js",
   "/js/sources/source-cache.js",
   "/js/tabs.js",
   "/js/theme-init.js",

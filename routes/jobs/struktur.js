@@ -32,7 +32,7 @@ const { effectiveTextsorte, saveStructureCheck, getStructureCheck } = require('.
 const { toIntId } = require('../../lib/validate');
 const { setContext } = require('../../lib/log-context');
 const { requireBookAccess, sendACLError } = require('../../lib/acl');
-const { resolvePageBookId } = require('../../lib/content-ownership');
+const { pageBookGuard, journalisticBookSettings } = require('../../lib/page-guard');
 const { resolveProvider } = require('../../lib/ai');
 
 const strukturRouter = express.Router();
@@ -52,32 +52,40 @@ function _sig(text, textsorte, cacheVersion) {
  * Regel-Nummern; fehlende Nummern werden ergänzt, unbekannte verworfen. Ohne
  * diesen Abgleich zeigt die Karte Lücken oder Geister-Zeilen, je nachdem wie
  * vollständig das Modell geantwortet hat.
+ *
+ * `vok` ist das Befund-Vokabular aus prompts/textsorten.js — dieselben Listen,
+ * aus denen das Schema gebaut wird. Hereingereicht statt hier nachgebaut: eine
+ * eigene Kopie würde einen neuen Status stillschweigend abwerten, obwohl das
+ * Schema ihn erlaubt.
  */
-function _normalizeResult(raw, regelnCount) {
+function _normalizeResult(raw, regelnCount, vok) {
+  const {
+    STRUKTUR_STATUS, STRUKTUR_STATUS_FALLBACK, STRUKTUR_STATUS_OFFEN,
+    STRUKTUR_URTEILE, W_FRAGEN,
+  } = vok;
   const byNr = new Map();
   for (const e of (Array.isArray(raw?.regeln) ? raw.regeln : [])) {
     const nr = parseInt(e?.nr);
     if (!Number.isFinite(nr) || nr < 1 || nr > regelnCount || byNr.has(nr)) continue;
-    const status = ['erfuellt', 'teilweise', 'fehlt', 'nicht_anwendbar'].includes(e?.status)
-      ? e.status : 'nicht_anwendbar';
+    const status = STRUKTUR_STATUS.includes(e?.status) ? e.status : STRUKTUR_STATUS_FALLBACK;
     byNr.set(nr, {
       nr,
       status,
       befund: String(e?.befund || '').trim(),
       // Massnahme nur dort, wo etwas zu tun ist — sonst schleppt die Karte
       // Handlungsanweisungen zu erfuellten Regeln mit.
-      massnahme: (status === 'teilweise' || status === 'fehlt')
-        ? String(e?.massnahme || '').trim() : '',
+      massnahme: STRUKTUR_STATUS_OFFEN.includes(status) ? String(e?.massnahme || '').trim() : '',
     });
   }
   const regeln = [];
   for (let nr = 1; nr <= regelnCount; nr++) {
-    regeln.push(byNr.get(nr) || { nr, status: 'nicht_anwendbar', befund: '', massnahme: '' });
+    regeln.push(byNr.get(nr)
+      || { nr, status: STRUKTUR_STATUS_FALLBACK, befund: '', massnahme: '' });
   }
   const wfragen = Array.isArray(raw?.fehlendeWFragen)
-    ? raw.fehlendeWFragen.filter(w => ['wer', 'was', 'wann', 'wo', 'wie', 'warum'].includes(w))
+    ? raw.fehlendeWFragen.filter(w => W_FRAGEN.includes(w))
     : [];
-  const gesamturteil = ['traegt', 'lueckenhaft', 'verfehlt'].includes(raw?.gesamturteil)
+  const gesamturteil = STRUKTUR_URTEILE.includes(raw?.gesamturteil)
     ? raw.gesamturteil
     // Kein Urteil vom Modell → aus den Einzelbefunden ableiten, statt „traegt"
     // zu unterstellen.
@@ -96,10 +104,19 @@ function _normalizeResult(raw, regelnCount) {
 async function runStrukturJob(jobId, bookId, userEmail, userToken, onlyPageId = null) {
   const logger = makeJobLogger(jobId);
   const prompts = await getPrompts(userEmail);
-  const { buildStrukturCheckPrompt, buildStrukturSchema, textsorte: textsorteDef, PROMPTS_VERSION } = prompts;
+  const {
+    buildStrukturCheckPrompt, buildStrukturSchema, textsorte: textsorteDef,
+    PROMPTS_VERSION, STRUKTUR_VOKABULAR_SIGNATUR,
+  } = prompts;
   const { SYSTEM_STRUKTUR } = await getBookPrompts(bookId, userEmail);
   const effectiveProvider = resolveProvider({ userEmail });
-  const cacheVersion = `${_modelName(effectiveProvider)}:${PROMPTS_VERSION || ''}`;
+  // Das Befund-Vokabular steckt nur im Struktur-Schema und in dieser Validierung,
+  // nicht im Locale-Snapshot — es erreicht PROMPTS_VERSION also nicht. Ohne die
+  // eigene Signatur laege nach einem neuen Status weiter der alte Befund neben
+  // jedem Beitrag. Bewusst HIER und nicht im globalen Prompt-Hash: eine
+  // Vokabular-Aenderung soll die Struktur-Befunde neu erheben, nicht die teuren
+  // Lektorat- und Komplettanalyse-Caches wegwerfen.
+  const cacheVersion = `${_modelName(effectiveProvider)}:${PROMPTS_VERSION || ''}:${STRUKTUR_VOKABULAR_SIGNATUR}`;
 
   try {
     updateJob(jobId, { statusText: 'job.phase.loadingPages', progress: 0 });
@@ -153,7 +170,7 @@ async function runStrukturJob(jobId, bookId, userEmail, userToken, onlyPageId = 
       );
       if (!raw || !Array.isArray(raw.regeln)) throw i18nError('job.error.strukturArrayMissing');
 
-      const result = _normalizeResult(raw, def.regeln.length);
+      const result = _normalizeResult(raw, def.regeln.length, prompts);
       saveStructureCheck(p.id, bookId, {
         textsorte: ts,
         gesamturteil: result.gesamturteil,
@@ -175,14 +192,27 @@ async function runStrukturJob(jobId, bookId, userEmail, userToken, onlyPageId = 
 
 strukturRouter.post('/struktur-check', jsonBody, (req, res) => {
   const page_id = toIntId(req.body?.page_id);
-  // Seiten-Lauf: Buch IMMER aus der Seite ableiten, nie aus einer vom Client
-  // behaupteten book_id — sonst prüfte der ACL-Guard das falsche Buch.
-  let book_id = page_id ? resolvePageBookId(page_id) : toIntId(req.body?.book_id);
-  if (page_id && !book_id) return res.status(404).json({ error_code: 'PAGE_NOT_FOUND' });
-  if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
-  setContext({ book: book_id });
-  try { requireBookAccess(req, book_id, 'editor'); }
-  catch (e) { if (sendACLError(res, e)) return; throw e; }
+  let book_id;
+  if (page_id) {
+    // Seiten-Lauf: Buch IMMER aus der Seite ableiten, nie aus einer vom Client
+    // behaupteten book_id — sonst prüfte der ACL-Guard das falsche Buch.
+    const g = pageBookGuard(req, res, {
+      minRole: 'editor', journalistic: true, pageId: page_id,
+    });
+    if (!g) return;
+    book_id = g.bookId;
+  } else {
+    // Buch-Lauf: dasselbe Gate von Hand, weil es hier keine Seite gibt, aus der
+    // sich das Buch ableiten liesse.
+    book_id = toIntId(req.body?.book_id);
+    if (!book_id) return res.status(400).json({ error_code: 'BOOK_ID_REQUIRED' });
+    setContext({ book: book_id });
+    try { requireBookAccess(req, book_id, 'editor'); }
+    catch (e) { if (sendACLError(res, e)) return; throw e; }
+    if (!journalisticBookSettings(req, book_id)) {
+      return res.status(400).json({ error_code: 'NOT_JOURNALISTIC_BOOK' });
+    }
+  }
 
   const userEmail = req.session?.user?.email || null;
   const entityId = page_id ? `p${page_id}` : String(book_id);

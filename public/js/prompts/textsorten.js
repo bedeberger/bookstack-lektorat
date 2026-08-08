@@ -139,6 +139,47 @@ export const TEXTSORTEN = [
   },
 ];
 
+// ── Vokabular des Struktur-Befunds ───────────────────────────────────────────
+//
+// Der Befund ist das Urteil über genau diese `regeln` — er gehört deshalb hierher
+// und nicht in prompts/struktur.js: den Katalog kennen alle vier Konsumenten
+// ohnehin, das Vokabular darüber muss dieselbe Quelle haben. Ohne diese SSoT
+// stünden dieselben vier Status als Literal im Schema, in der Job-Validierung,
+// in der Verdichtung für die Bewertung und in der Sortierung der Karte — und
+// ein fünfter Status würde von der Validierung stillschweigend abgewertet.
+//
+// Ein Status-/Urteils-Key ist eine Persistenz-Konstante (`page_structure_checks`
+// .gesamturteil und .result_json, i18n `struktur.status.*` / `struktur.urteil.*`):
+// ergänzen ja, umbenennen nein.
+
+/** Reihenfolge = Reihenfolge im Schema-Enum und in der Prompt-Erläuterung. */
+export const STRUKTUR_STATUS = ['erfuellt', 'teilweise', 'fehlt', 'nicht_anwendbar'];
+
+/** Der Status, auf den ein unbrauchbarer oder fehlender Eintrag fällt. Bewusst
+ *  «nicht anwendbar» und nicht «erfüllt»: was das Modell nicht geliefert hat,
+ *  ist ungeprüft, nicht in Ordnung. */
+export const STRUKTUR_STATUS_FALLBACK = 'nicht_anwendbar';
+
+/** Die Status mit Handlungsbedarf. Sie allein tragen eine «massnahme», und nur
+ *  sie zählen als Formlücke in der Verdichtung für die Bewertung. */
+export const STRUKTUR_STATUS_OFFEN = ['teilweise', 'fehlt'];
+
+/** Sortierung «dringendstes zuerst» — Anzeige-Reihenfolge der Regel-Zeilen. */
+export const STRUKTUR_STATUS_RANG = { fehlt: 0, teilweise: 1, nicht_anwendbar: 2, erfuellt: 3 };
+
+/** Gesamturteile über einen Beitrag. Reihenfolge = Schema-Enum. */
+export const STRUKTUR_URTEILE = ['traegt', 'lueckenhaft', 'verfehlt'];
+
+/** Sortierung «schlimmstes zuerst». */
+export const STRUKTUR_URTEIL_RANG = { verfehlt: 0, lueckenhaft: 1, traegt: 2 };
+
+/** Die W-Fragen, die ein nachrichtlicher Lead beantwortet. */
+export const W_FRAGEN = ['wer', 'was', 'wann', 'wo', 'wie', 'warum'];
+
+export function isStrukturStatus(v) { return STRUKTUR_STATUS.includes(v); }
+export function isStrukturUrteil(v) { return STRUKTUR_URTEILE.includes(v); }
+export function isWFrage(v) { return W_FRAGEN.includes(v); }
+
 const BY_KEY = new Map(TEXTSORTEN.map(t => [t.key, t]));
 
 /** Alle gültigen Keys, in Anzeige-Reihenfolge. */
@@ -173,3 +214,12 @@ export function textsorteRegelnListe(key) {
 // fliessen nur über Call-Argumente in die Prompts — ohne diesen Wert bliebe
 // eine Regel-Änderung im Lektorat-Cache unsichtbar.
 export const TEXTSORTEN_SIGNATUR = JSON.stringify(TEXTSORTEN);
+
+// Dasselbe für das Befund-Vokabular: es steckt im Struktur-Schema, und das
+// Schema hängt am Delta-Cache des Struktur-Checks (`page_structure_checks`
+// .content_sig, gebildet aus PROMPTS_VERSION). Ohne diesen Wert läge nach einem
+// neuen Status weiter der alte Befund neben jedem Beitrag.
+export const STRUKTUR_VOKABULAR_SIGNATUR = JSON.stringify([
+  STRUKTUR_STATUS, STRUKTUR_STATUS_FALLBACK, STRUKTUR_STATUS_OFFEN,
+  STRUKTUR_URTEILE, W_FRAGEN,
+]);

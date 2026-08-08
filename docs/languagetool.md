@@ -106,13 +106,23 @@ Form-Felder (`input/textarea[data-spellcheck="spelling"]`) laufen parallel: focu
 
 ### Controller [public/js/cards/editor-spellcheck/controller.js](../public/js/cards/editor-spellcheck/controller.js)
 
-`createSpellcheckController({ root, scrollContainer, getHtml, onApplyReplacement, editorKind, getBookLocale, getBookId, getPageId, isEnabled, i18n })` → `{ attach, detach, refresh }`.
+`createSpellcheckController({ root, scrollContainer, getHtml, onApplyReplacement, editorKind, getBookLocale, getBookId, getPageId, isEnabled, i18n })` → `{ attach, detach, refresh }`. Einziger externer Einstieg — die Bestandteile daneben werden nicht direkt konsumiert:
+
+| Modul | Inhalt |
+|---|---|
+| `controller.js` | Pruef-Pipeline (debounce → fetch → render), Hit-Test, attach/detach |
+| [categories.js](../public/js/cards/editor-spellcheck/categories.js) | Klassifikation eines Matches (`categoryKey`, `matchId`, `isSpellingMatch`) + die drei Highlight-Toepfe (`createHighlightBuckets`) |
+| [badge.js](../public/js/cards/editor-spellcheck/badge.js) | Status-Plakette am Editor-Eck |
+| [popover.js](../public/js/cards/editor-spellcheck/popover.js) | Befund-Popover samt Mount, Position und den drei Schliesswegen |
+| [extension-guard.js](../public/js/cards/editor-spellcheck/extension-guard.js) | Erkennung der LT-Browser-Erweiterung |
+| [mapping.js](../public/js/cards/editor-spellcheck/mapping.js) | Text-Offsets ↔ DOM-Ranges, Schutzzonen |
+| [position.js](../public/js/cards/editor-spellcheck/position.js) | Host-Wahl + Geometrie des Popovers |
 
 **Squiggles ohne Overlay-DOM:** Native CSS Custom Highlight API (`CSS.highlights` + `Highlight`). Pro Kategorie ein globaler Highlight-Bucket (`lt-typo`, `lt-grammar`, `lt-style`), DOM-Ranges werden direkt hinzugefügt. Browser zeichnet wavy-Underline am Text-Lauf, scrollt nativ mit. Kein JS-Reposition bei Scroll, keine Span-Inseln im contenteditable.
 
-Fallback bei fehlendem API-Support: `_updateBadge('disabled')`, sonst läuft die App ohne LT-Markierungen weiter.
+Fallback bei fehlendem API-Support: `badge.update('disabled')`, sonst läuft die App ohne LT-Markierungen weiter.
 
-**Kategorie-Mapping** (`_categoryKey`):
+**Kategorie-Mapping** ([categories.js](../public/js/cards/editor-spellcheck/categories.js)#`categoryKey`):
 - `rule.id` enthält `SPELL` oder `category.id === 'TYPOS'` → `lt-typo` (rot).
 - `category.id ∈ {STYLE, REDUNDANCY, TYPOGRAPHY}` → `lt-style` (gelb).
 - Sonst → `lt-grammar` (blau).
@@ -122,7 +132,9 @@ Fallback bei fehlendem API-Support: `_updateBadge('disabled')`, sonst läuft die
 - `lastHtmlSnapshot = getHtml()` vor Fetch; nach Response Vergleich mit aktuellem `getHtml()` — Mismatch verwirft.
 - `AbortController` bricht ältere Requests bei neuem `_runCheck`.
 
-**Click-Hit-Test:** Kein DOM-Element pro Match — `mousedown` auf root → `caretPositionFromPoint`/`caretRangeFromPoint` liefert Caret-Position; `_findMatchAtCaret` iteriert `squiggles`-Map und vergleicht via `Range.compareBoundaryPoints(START_TO_START)` und `START_TO_END`. Treffer öffnet Popover.
+**Click-Hit-Test:** Kein DOM-Element pro Match — `mousedown` auf root → `_findMatchAtPoint(x, y)` prüft den Klickpunkt **geometrisch** gegen die `getClientRects()` der gespeicherten Squiggle-Ranges. Bewusst **nicht** über `caretPositionFromPoint`/`caretRangeFromPoint`: die liefern in einem gescrollten overflow-Container (`.page-content-view--editing`, `max-height: 70vh`) eine falsche oder leere Caret-Position, sodass der Treffer beim Scrollen zunehmend danebenliegt. ClientRects sind scroll- und engine-unabhängig korrekt.
+
+`mousedown` und `click` teilen die Vorprüfung `_hitAt(ev)`: linke Taste, nicht im Popover, `ev.detail < 2` (Doppel-/Dreifachklick gewinnt — sonst liesse sich ein Wort unter einem Squiggle nicht mehr per Doppelklick markieren), Squiggles vorhanden. `mousedown` öffnet den Popover **ohne** `preventDefault` (die native Caret-Platzierung soll laufen); der Folge-`click` wird am selben Punkt unterdrückt, sonst folgte ein `<a href>` unter dem Squiggle dem Link.
 
 **Popover-Mounting** (Host-Wahl + Geometrie in [position.js](../public/js/cards/editor-spellcheck/position.js), pure DOM-Mathematik ohne Controller-State — `resolvePopoverHost(scrollEl)` + `positionPopover(el, anchorRect, host)`):
 - Interner Scroll-Container (Notebook/Focus): Popover als Kind des Scroll-Containers, `position: absolute` in Scroll-Content-Koordinaten. Popover ist `contenteditable="false"` (nicht-editbare Insel), MutationObserver filtert popover-eigene Mutationen (sonst trigger das Anhängen einen Re-Check, der Squiggles vor dem User-Klick verwirft).
@@ -133,7 +145,7 @@ Fallback bei fehlendem API-Support: `_updateBadge('disabled')`, sonst läuft die
 
 **Drei Schliesswege** — Outside-`mousedown` (einmaliger document-Listener in Capture), **Escape** und der **Close-Button** im Header (`.lt-popover__close`, Glyph `×` + `aria-label`/`data-tip` aus `spellcheck.popover.close`); dazu die Aktionen Vorschlag-Anwenden / Ignorieren / Zum-Wörterbuch. Escape hängt als document-**Capture**-Listener (per `AbortController` beim Schliessen abgemeldet) und ruft `stopPropagation()`: der Focus-Editor hört Escape an `window` in der Bubble-Phase ([editor/focus/card.js](../public/js/editor/focus/card.js)), würde also gleichzeitig den Fokus-Modus verlassen. Erstes Escape schliesst nur den Popover, zweites wirkt wieder normal. Bewusst nicht über ein `app`-Flag (wie Synonym-/Figur-Overlay) — der Controller ist host-agnostisch.
 
-**Waisen-Knoten-Schutz `_purgeStrayUi()`** — bei Notebook/Focus hängt der Popover IM contenteditable. Jede Operation, die den Root-Inhalt aus HTML neu aufbaut oder Blöcke teilt (Enter-Split, Undo, `content.innerHTML = …`, Laden von HTML mit mitgespeichertem UI-Markup), kann eine Kopie erzeugen, die die `popover`-Closure nicht kennt — ein Knoten ohne jeden Handler, den `_closePopover` nie abträgt: unschliessbar bis zum Reload. Darum entfernen `_openPopover`, `attach()` und `detach()` **jedes** `.lt-popover`/`.lt-badge` im Root, nicht nur die eigene Referenz. Das echte Badge ist Sibling von `root` und damit nicht betroffen.
+**Waisen-Knoten-Schutz `_purgeStrayUi()`** (im Controller, nicht im Popover-Modul — er raeumt fremde Kopien, nicht die eigene Referenz) — bei Notebook/Focus hängt der Popover IM contenteditable. Jede Operation, die den Root-Inhalt aus HTML neu aufbaut oder Blöcke teilt (Enter-Split, Undo, `content.innerHTML = …`, Laden von HTML mit mitgespeichertem UI-Markup), kann eine Kopie erzeugen, die die `popover`-Closure nicht kennt — ein Knoten ohne jeden Handler, den `popover.close()` nie abträgt: unschliessbar bis zum Reload. Darum entfernen `_openPopover`, `attach()` und `detach()` **jedes** `.lt-popover`/`.lt-badge` im Root, nicht nur die eigene Referenz. Das echte Badge ist Sibling von `root` und damit nicht betroffen.
 
 **Apply-Replacement** läuft über editor-spezifischen Callback (`onApplyReplacement(range, text)`), zentral in [dispatch.js#_onApply](../public/js/cards/editor-spellcheck/dispatch.js): `range.deleteContents()` + `insertNode(textNode)` + Selection hinter Insertion + `input`-Event-Dispatch (Editor-Save-Pipeline triggert).
 
@@ -174,7 +186,7 @@ Aus `books[i].language` (`de`/`en`) + `books[i].region` (`CH`/`DE`/`US`/`GB`) �
 
 ### Extension-Konflikt
 
-LT-Browser-Extension injiziert eigene Squiggles → doppelte Underline. Detection in [controller.js#_detectExtension](../public/js/cards/editor-spellcheck/controller.js): MutationObserver auf `document.body` prüft Selektoren `lt-div`, `lt-highlighter`, `[class*="lt-toolbar"]`, `[class*="languagetool"]`. Hit → Highlights leeren, Badge `'extension'`, Event `languagetool:extension-detected` dispatched.
+LT-Browser-Extension injiziert eigene Squiggles → doppelte Underline. Detection in [extension-guard.js](../public/js/cards/editor-spellcheck/extension-guard.js): MutationObserver auf `document.body` (Trailing-Throttle 300 ms — ungedrosselt waere der Dokument-Scan Tipp-Latenz pro Tastendruck) prüft Selektoren `lt-div`, `lt-highlighter`, `[class*="lt-toolbar"]`, `[class*="languagetool"]`. Hit → Highlights leeren, Badge `'extension'`, Event `languagetool:extension-detected` dispatched.
 
 Banner-Card [public/js/cards/editor-spellcheck-card.js](../public/js/cards/editor-spellcheck-card.js) (`editorSpellcheckCard`, Markup in [public/index.html](../public/index.html)) hört auf das Event und zeigt Hinweis. Per-Session dismissable via `sessionStorage['lt:extension-banner-dismissed']`. Marker verschwinden → `languagetool:extension-cleared`, Banner aus.
 
