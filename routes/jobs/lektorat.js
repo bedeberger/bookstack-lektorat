@@ -42,15 +42,17 @@ const { setContext } = require('../../lib/log-context');
 const { requireBookAccess, sendACLError } = require('../../lib/acl');
 const { resolvePageBookId } = require('../../lib/content-ownership');
 const appSettings = require('../../lib/app-settings');
-const { resolveProvider } = require('../../lib/ai');
+const { resolveProvider, providerClass } = require('../../lib/ai');
 const { lektoratAnalyze, objektivRuns, splitEnabled } = require('./lektorat-split');
 
 // Lokale Provider (ollama/llama) bekommen einen deutlich abgespeckten Lektorat-Prompt:
 // kein Vorseiten-Kontext (BookStack-Roundtrip gespart), keine Figuren-Beziehungen,
 // kein POV-/Tempus-Block. Alle Einsparungen auch in public/js/prompts.js (_isLocal).
+// Klassen-SSoT: lib/ai/config.js#providerClass (openai-compat flippt via
+// `ai.openai-compat.cloud` auf 'cloud').
 const _isLocalProvider = () => {
   const p = appSettings.get('ai.provider') || 'claude';
-  return p === 'ollama' || p === 'openai-compat';
+  return providerClass(p) === 'local';
 };
 
 // Letzten Absatz eines Texts extrahieren (max. maxChars Zeichen). Dient als

@@ -60,6 +60,7 @@ Alle KI-Konfig liegt in der `app_settings`-Tabelle. Admin-PUT via `/admin/settin
 | `ai.openai-compat.context_window` | 32 000 | – | |
 | `ai.openai-compat.max_tokens_out` | 16 000 | – | |
 | `ai.openai-compat.think` | `false` | – | Reasoning an/aus; aus sendet `chat_template_kwargs.enable_thinking=false`, an sendet nichts (Modell-Default; nötig für echtes OpenAI) |
+| `ai.openai-compat.cloud` | `false` | – | Provider-Klasse (siehe unten): `true` = gehostetes Frontier-Modell (z.B. Kimi/Moonshot, OpenAI) → volle Cloud-Prompts, Lektorat-Split, parallele Calls |
 | `ai.chars_per_token` | provider-default (3 Claude / 4 lokal) | – | Tokenizer-Heuristik (Boot-frozen) |
 | `ai.chat_temperature` | – | – | Override nur für Seiten-/Buch-Chat |
 
@@ -230,7 +231,7 @@ Schemas werden per `_rebuildLektoratSchema()`/`_rebuildKomplettSchemas()` provid
 
 ### Zwei Instanzen, weil der Provider pro User auflöst
 
-`_isLocal` ist ein **Modul-Flag**, die Provider-Auflösung aber **pro User** (`resolveProvider`, s.o.). [lib/prompts-loader.js](../lib/prompts-loader.js) hält darum zwei getrennte Modulgraphen — `cloud` (claude) und `local` (ollama/openai-compat) — und konfiguriert jeden **einmal**. `getPrompts(userEmail)` wählt die Instanz zum effektiven Provider; `getPromptsForProvider(provider)` für Aufrufer, die ihn schon aufgelöst haben (Chat-Titel-Job).
+`_isLocal` ist ein **Modul-Flag**, die Provider-Auflösung aber **pro User** (`resolveProvider`, s.o.). [lib/prompts-loader.js](../lib/prompts-loader.js) hält darum zwei getrennte Modulgraphen — `cloud` (claude) und `local` (ollama, bzw. openai-compat je nach Klassen-Schalter) — und konfiguriert jeden **einmal**. `getPrompts(userEmail)` wählt die Instanz zum effektiven Provider; `getPromptsForProvider(provider)` für Aufrufer, die ihn schon aufgelöst haben (Chat-Titel-Job).
 
 Ohne diese Trennung bekäme im Mischbetrieb jeder User die Prompts des jeweils anderen Providers: ein lokales Modell die Cloud-Felder, die das `_isLocal`-Gating bewusst weglässt, weil kleine Modelle sie halluzinieren (`machtverhaltnis`, `aeusseres`/`stimme`/`hintergrund`/`arc`) — und Claude die Slim-Variante **ohne** die `JSON_ONLY`-Pflichtanweisung, womit bei Claude-Modellen ohne Structured-Output-Support keine Schicht mehr reines JSON erzwingt.
 
@@ -239,6 +240,17 @@ Ohne diese Trennung bekäme im Mischbetrieb jeder User die Prompts des jeweils a
 Die Isolation trägt der ESM-Resolve-Hook [lib/prompts-variant-hooks.mjs](../lib/prompts-variant-hooks.mjs): er zieht die Varianten-Query vom Eltern- auf jedes Kindmodul. **Ein blosser Query-Cache-Buster genügt nicht** — er dupliziert nur die Einstiegsdatei, die Dependencies (und damit `state.js` mit `_isLocal`) blieben geteilt. Fehlt `module.register` (Node < 20.6), fällt der Loader mit Warnung auf **eine** Instanz nach globalem Provider zurück. Gegated: die `Provider-Varianten`-Tests in [tests/unit/prompts.test.mjs](../tests/unit/prompts.test.mjs).
 
 `PROMPTS_VERSION` unterscheidet sich zwischen den Instanzen (Content-Hash über die gebauten Prompts). Das ist korrekt und braucht **keinen** Bump des Basis-Prefix: alle provider-partitionierten Cache-Tabellen führen `provider` im PRIMARY KEY, und jeder `cacheVersion`-String enthält zusätzlich `_modelName(effectiveProvider)`.
+
+### Provider-Klasse (`cloud` vs. `local`) und der Schalter `ai.openai-compat.cloud`
+
+Die Klassen-Entscheidung ist SSoT in `providerClass(provider)` ([lib/ai/config.js](../lib/ai/config.js)): `claude` → `cloud`, `ollama` → `local`, `openai-compat` → per Default `local` (llama.cpp/vLLM & Co), mit Admin-Toggle `ai.openai-compat.cloud = true` → `cloud` (gehostete Frontier-APIs wie Kimi/Moonshot oder OpenAI über denselben Endpoint-Typ). Per-Call gelesen → greift ohne Server-Restart; beim Flip wechselt `PROMPTS_VERSION` mit der Variante, Caches invalidieren dadurch automatisch.
+
+Drei Konsumenten hängen an der Klasse (nicht am Provider-Namen):
+- **Prompt-Variante** — `promptVariantFor` in [lib/prompts-loader.js](../lib/prompts-loader.js) (volle Cloud-Prompts inkl. `JSON_ONLY` vs. Slim-Prompts).
+- **Lektorat-Kontext + Split** — `_isLocalProvider` in [routes/jobs/lektorat.js](../routes/jobs/lektorat.js): Klasse `cloud` lädt Vorseiten-Kontext/Figuren-Beziehungen/POV-Block wieder und lässt den fokussierten Objektiv/Stil-Split zu (sofern `ai.lektorat_split` aktiv).
+- **Call-Serialisierung** — `settledAll` in [routes/jobs/shared/ai.js](../routes/jobs/shared/ai.js): Klasse `cloud` fährt parallel statt seriell; die Obergrenze bleibt die `max_parallel`-Semaphore (bei einem Frontier-Endpoint also `ai.openai-compat.max_parallel` hochsetzen).
+
+Bewusst **nicht** klassen-, sondern provider-gegatet (`=== 'claude'`): Prompt-Caching (`cache_control`), Tool-Use (`callAIWithTools`, agentischer Buch-Chat, Recherche-Chat), Tiered Routing sowie die Claude-only-Jobs (Kontinuitäts-Verify, Faktencheck, Erzählprofil). Ein openai-compat-Frontier-Modell bekommt mit dem Schalter also die volle Prompt- und Strategie-Behandlung, aber keine Claude-API-Features — der Recherche-Chat bleibt für solche User ausgeblendet.
 
 ## Chat-Temperatur
 

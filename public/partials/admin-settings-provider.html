@@ -75,6 +75,7 @@
         <div x-data="settingField({ k: 'ai.openai-compat.max_tokens_out', type: 'num', label: 'admin.settings.label.maxTokensOut', num: { integer: true, min: 512, max: 200000 }, help: 'admin.settings.help.maxTokensOut' })"></div>
         <div x-data="settingField({ k: 'ai.openai-compat.repeat_penalty', type: 'num', label: 'admin.settings.label.repeatPenalty', num: { step: 0.05, decimals: 2, min: 1, max: 2 }, help: 'admin.settings.help.repeatPenalty' })"></div>
         <div x-data="settingField({ k: 'ai.openai-compat.think', type: 'toggle', label: 'admin.settings.label.aiThink', help: 'admin.settings.help.thinkOpenaiCompat' })"></div>
+        <div x-data="settingField({ k: 'ai.openai-compat.cloud', type: 'toggle', label: 'admin.settings.label.cloudModel', help: 'admin.settings.help.cloudOpenaiCompat' })"></div>
         <div x-data="settingField({ k: 'ai.openai-compat.max_parallel', type: 'num', label: 'admin.settings.label.maxParallel', num: { integer: true, min: 1, max: 16 }, help: 'admin.settings.help.maxParallelOpenaiCompat' })"></div>
       </div>
 

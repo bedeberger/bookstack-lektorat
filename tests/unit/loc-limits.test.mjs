@@ -106,7 +106,7 @@ const CATEGORIES = [
     ],
     allow: {
       'lib/export-builders/epub.js': 1054,
-      'lib/app-settings.js': 894,
+      'lib/app-settings.js': 902,
       'lib/export-builders/docx.js': 793,
       'lib/page-index.js': 692,
       'lib/content-store/backends/localdb.js': 635,
@@ -120,7 +120,7 @@ const CATEGORIES = [
       'routes/usersettings.js': 641,
       'routes/jobs/book-chat-tools/tools-text.js': 636,
       'routes/share/reader.js': 619,
-      'routes/jobs/lektorat.js': 602,
+      'routes/jobs/lektorat.js': 604,
       'db/schema.js': 1835,
       'db/plot.js': 930,
       'db/figures.js': 835,

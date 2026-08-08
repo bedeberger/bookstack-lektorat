@@ -118,6 +118,37 @@ test('getContextConfigFor: safetyMargin und inputBudget rechnen mit demselben Pu
   } finally { ctx.teardown(); }
 });
 
+test('providerClass: claude=cloud, ollama=local, openai-compat Default=local', () => {
+  const ctx = _bootstrap();
+  try {
+    assert.equal(ctx.ai.providerClass('claude'), 'cloud');
+    assert.equal(ctx.ai.providerClass('ollama'), 'local');
+    assert.equal(ctx.ai.providerClass('openai-compat'), 'local');
+    // Unbekannter/leerer Provider faellt wie bei getContextConfigFor auf claude → cloud.
+    assert.equal(ctx.ai.providerClass('gpt5'), 'cloud');
+  } finally { ctx.teardown(); }
+});
+
+test('providerClass: ai.openai-compat.cloud flippt openai-compat auf cloud', () => {
+  const ctx = _bootstrap();
+  try {
+    ctx.appSettings.set('ai.openai-compat.cloud', true);
+    assert.equal(ctx.ai.providerClass('openai-compat'), 'cloud');
+    // Ollama bleibt immer local — der Schalter gilt nur fuer openai-compat.
+    assert.equal(ctx.ai.providerClass('ollama'), 'local');
+  } finally { ctx.teardown(); }
+});
+
+test('promptVariantFor folgt der Klassen-Entscheidung (Prompt-Variante)', () => {
+  const ctx = _bootstrap();
+  try {
+    const loader = require_('../../lib/prompts-loader');
+    assert.equal(loader.promptVariantFor('openai-compat'), 'local');
+    ctx.appSettings.set('ai.openai-compat.cloud', true);
+    assert.equal(loader.promptVariantFor('openai-compat'), 'cloud');
+  } finally { ctx.teardown(); }
+});
+
 test('Synonym-Cache: provider trennt Eintraege', () => {
   const ctx = _bootstrap();
   try {

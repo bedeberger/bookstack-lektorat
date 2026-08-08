@@ -1,7 +1,7 @@
 'use strict';
 const {
   callAI, parseJSON, CHARS_PER_TOKEN, getContextConfigFor, resolveProvider,
-  normalizeTier, _resolveClaudeModel,
+  providerClass, normalizeTier, _resolveClaudeModel,
   estimatePromptTokens, assertPromptFitsContext,
 } = require('../../../lib/ai');
 const { costUsd } = require('../../../lib/pricing');
@@ -54,7 +54,9 @@ async function retryOnTransientAi(fn, { tries = 2, log = null, label = '' } = {}
 // — der Erst-Call schreibt den Prompt-Cache, Folge-Calls greifen den Cache-Hit
 // und sind ~10× günstiger + viel kürzer (kleinerer TPM-Burst).
 async function settledAll(thunks, opts = {}) {
-  const isLocal = (appSettings.get('ai.provider') || 'claude') !== 'claude';
+  // Klassen-SSoT: lib/ai/config.js#providerClass — openai-compat mit Admin-Schalter
+  // `ai.openai-compat.cloud` laeuft hier parallel (gedeckelt via max_parallel-Semaphore).
+  const isLocal = providerClass(appSettings.get('ai.provider') || 'claude') === 'local';
   if (isLocal) {
     const results = [];
     for (const fn of thunks) {

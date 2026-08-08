@@ -450,7 +450,7 @@ Drei Provider, konfiguriert via `API_PROVIDER` in `.env`:
 |----------|----------|--------------|
 | `claude` | `ANTHROPIC_API_KEY`, `MODEL_NAME` | Prompt-Caching (`cache_control: ephemeral`), grosses Kontextfenster |
 | `ollama` | `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_TEMPERATURE` | Mutex-Serialisierung (VRAM-Schutz), dynamische `num_ctx`-Berechnung |
-| `openai-compat` | `OPENAI_COMPAT_HOST`, `OPENAI_COMPAT_MODEL`, `OPENAI_COMPAT_TEMPERATURE`, `OPENAI_COMPAT_API_KEY` | OpenAI-kompatibler `/v1/chat/completions`-Endpoint (llama.cpp, vLLM, LiteLLM, OpenAI); optionaler Bearer-Token (`ai.openai-compat.api_key`), Mutex-serialisiert |
+| `openai-compat` | `OPENAI_COMPAT_HOST`, `OPENAI_COMPAT_MODEL`, `OPENAI_COMPAT_TEMPERATURE`, `OPENAI_COMPAT_API_KEY` | OpenAI-kompatibler `/v1/chat/completions`-Endpoint (llama.cpp, vLLM, LiteLLM, OpenAI); optionaler Bearer-Token (`ai.openai-compat.api_key`), Semaphore-serialisiert (`ai.openai-compat.max_parallel`); Klassen-Schalter `ai.openai-compat.cloud` für gehostete Frontier-Modelle (volle Cloud-Prompts statt Slim-Prompts — SSoT `providerClass` in `lib/ai/config.js`, Details: [docs/ai-providers.md](docs/ai-providers.md)) |
 
 **`ai.claude.max_tokens_out`** (App-Setting, Default 64 000) setzt den globalen Output-Token-Cap (`MAX_TOKENS_OUT` in `lib/ai.js`); die Per-Provider-Pendants `ai.ollama.max_tokens_out` / `ai.openai-compat.max_tokens_out` löst `getContextConfigFor(provider)` pro Call auf. Job-spezifische Overrides werden per `Math.min` gegen den Provider-Cap gedeckelt. `.env`-`MODEL_TOKEN` dient nur als einmaliger Bootstrap in die DB (`ENV_MAP` in `lib/app-settings.js`), danach ist der App-Setting-Wert massgeblich.
 
