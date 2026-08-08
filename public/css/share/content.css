@@ -3,7 +3,7 @@
    SSoT public/css/components/manuscript-content.css — dieselben Blöcke rendert
    die Notebook-Leseansicht und der Bucheditor. Hier stehen nur die
    Reader-Abweichungen: Überschriftengrössen in px (eigene Lese-Skala), das
-   Prosa-Absatzmodell, Drop Cap und der Szenentrenner-Asterismus.
+   Prosa-Absatzmodell und der Szenentrenner-Asterismus.
    Die Regeln hier sind unlayered und gewinnen deshalb gegen die
    `@layer components`-Defaults der SSoT — unabhängig von der Lade-Reihenfolge. */
 
@@ -45,6 +45,26 @@
 .share-content h5 { font-size: 15px; }
 .share-content h6 { font-size: 14px; }
 .share-content p { margin: 0 0 1em; hyphens: auto; }
+
+/* Vorspann (Lead) publizistischer Beiträge — steht als erster Block des
+   Beitrags, den er eröffnet (Dachzeile und Schlagzeile stehen im Masthead
+   darüber, share/layout.css). Markup aus lib/headline-render.js.
+   Er muss auf den ersten Blick als Vorspann lesbar sein und nicht als erster
+   Absatz: grösser als der Fliesstext, halbfett, und darunter eine Haarlinie —
+   sie ist die sichtbare Grenze zwischen Kopf und Text. Ohne diese Trennung
+   sieht der Redaktor in der Vorschau nicht, wo sein Lead aufhört. */
+.share-content > .ms-head__lead {
+  margin: 0 0 1.4em;
+  padding-block-end: 1em;
+  border-bottom: 1px solid var(--share-border);
+  font-size: clamp(17px, 0.4vw + 15.5px, 20px);
+  line-height: 1.5;
+  color: var(--share-text);
+  /* Der Fliesstext trennt (`hyphens: auto`); ein Vorspann von zwei Sätzen tut
+     das nicht — Trennstriche in halbfetter Schrift lesen sich wie ein Fehler. */
+  hyphens: none;
+}
+.share-content > .ms-head__lead em { font-style: normal; font-weight: 600; }
 .share-content blockquote {
   margin: 1.2em 0;
   padding: 6px 16px;
@@ -63,23 +83,13 @@
    share-content--prose (für alle erzählenden Buchtypen; Sach-/Web-Text nutzt das
    identische margin-Modell oben — siehe NON_PROSE_BUCHTYPEN in routes/share.js). */
 .share-content--prose p { margin: 0 0 1em; }
-/* Drop Cap (Initiale) am Prosa-Einstieg: erster Absatz des Artikels (Seiten-
-   Share) bzw. erster Absatz nach einem Kapitel-Heading (Buch-/Kapitel-Share).
-   Progressive Enhancement — Browser ohne initial-letter (Firefox) rendern
-   schlicht normalen Text. Akzentfarbe bindet die Initiale an den Share-Look.
-   Sink 1 (Wert `2 1`): 2 Zeilen hoch, aber nur 1 Zeile versenkt — so hängt die
-   Initiale bei kurzen/einzeiligen ersten Absätzen nicht ins Leere darunter. */
-@supports (initial-letter: 2) or (-webkit-initial-letter: 2) {
-  .share-content--prose > p:first-child::first-letter,
-  .share-content--prose > .ms-page:first-child .ms-page__body > p:first-child::first-letter,
-  .share-content--prose .ms-chapter + .ms-page .ms-page__body > p:first-child::first-letter {
-    -webkit-initial-letter: 2 1;
-    initial-letter: 2 1;
-    padding-right: 0.08em;
-    font-weight: 600;
-    color: var(--share-accent);
-  }
-}
+/* KEINE Initiale (Drop Cap) am Prosa-Einstieg — bewusst entfernt und nicht
+   wieder einzuführen: der vergrösserte erste Buchstabe liest sich als Signal
+   („hier beginnt etwas Besonderes"), wo keines gemeint ist, und traf je nach
+   Share-Umfang mal den ersten Absatz des Beitrags, mal den nach jedem Kapitel.
+   Wer eine Initiale im fertigen Buch will, setzt sie im Export (PDF-Profil
+   `chapter.dropCap`, EPUB `epub_drop_caps`) — dort ist sie eine Satz-
+   Entscheidung des Autors und keine Zutat der Leseansicht. */
 
 /* Szenentrenner: <hr> als zentrierter Asterismus (* * *) statt technischer Rule —
    in Prosa markiert ein <hr> fast immer einen Szenenwechsel.

@@ -9,6 +9,7 @@
     <div class="card-form-row card-form-row--devices" x-show="macRelease.available" x-cloak x-data="collapsible()">
       <button type="button" class="collapsible-toggle" x-bind="trigger">
         <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
+        <svg class="icon icon--sm" aria-hidden="true"><use href="/icons.svg?v=696#laptop-minimal"/></svg>
         <span x-text="$app.t('profile.macApp.title')"></span>
         <span class="lt-dict-count" x-text="macRelease.version"></span>
       </button>
@@ -37,6 +38,7 @@
     <div class="card-form-row card-form-row--devices" x-show="androidRelease.available" x-cloak x-data="collapsible()">
       <button type="button" class="collapsible-toggle" x-bind="trigger">
         <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
+        <svg class="icon icon--sm" aria-hidden="true"><use href="/icons.svg?v=696#smartphone"/></svg>
         <span x-text="$app.t('profile.androidApp.title')"></span>
         <span class="lt-dict-count" x-text="androidRelease.version"></span>
       </button>
@@ -70,6 +72,7 @@
     <div class="card-form-row card-form-row--devices" x-show="extensionRelease.storeUrl || extensionRelease.available" x-cloak x-data="collapsible()">
       <button type="button" class="collapsible-toggle" x-bind="trigger">
         <span class="history-chevron" x-bind="chevron" aria-hidden="true"></span>
+        <svg class="icon icon--sm" aria-hidden="true"><use href="/icons.svg?v=696#puzzle"/></svg>
         <span x-text="$app.t('profile.extensionApp.title')"></span>
         <span class="lt-dict-count" x-show="extensionRelease.available" x-text="extensionRelease.version"></span>
       </button>

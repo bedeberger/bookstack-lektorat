@@ -16,6 +16,11 @@
   <header class="share-header">
     <div class="share-header__inner">
       <div class="share-header__book">{{book_name}}</div>
+      <!-- Dachzeile (publizistische Beiträge, Seiten-Share): gehört unmittelbar
+           über die Schlagzeile, die sie qualifiziert — Markup aus
+           lib/headline-render.js, leer bei allen übrigen Shares. Der Lead steht
+           als Vorspann am Anfang des Beitrags. -->
+      {{head_kicker}}
       <h1 class="share-header__title">{{target_name}}</h1>
       <div class="share-header__author">{{t_by}} {{author_name}}</div>
       {{reading_meta}}

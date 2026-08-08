@@ -25,8 +25,31 @@
   <div x-show="!twRows().length && !twLoadError" class="muted-msg muted-msg--spaced"
        x-text="$app.t('headline.empty')"></div>
 
-  <table class="tw-table" x-show="twRows().length"
-         x-data="sortableTable({ rows: () => twRows(), defaultKey: 'name', persistKey: 'titelwerkstatt',
+  <!-- Filter-Leiste: Freitext über die drei angezeigten Spalten + Kapitelwahl
+       (Sub-Kapitel eingerückt, ein Ober-Kapitel schliesst seine ein). Ein
+       Ressort mit vielen Beiträgen ist sonst nur über Sortieren erreichbar. -->
+  <div class="filter-bar" x-show="twRows().length" x-cloak>
+    <span class="filter-search-wrap">
+      <input type="text" class="filter-search-input filter-search-input--wide"
+             x-model="twFilterSuche"
+             :placeholder="$app.t('headline.filterSuche')" :aria-label="$app.t('headline.filterSuche')">
+      <button type="button" class="search-clear--icon" x-show="twFilterSuche" @click="twFilterSuche = ''"
+              :aria-label="$app.t('search.clear')" :data-tip="$app.t('search.clear')">
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg?v=693#x"/></svg>
+      </button>
+    </span>
+    <div x-show="twChapterOptions().length > 0"
+         x-data="combobox($app.t('headline.filterKapitel'), $app.t('common.all'))"
+         x-modelable="value" x-model="twFilterKapitel"
+         x-effect="options = twChapterOptions()"></div>
+    <span class="filter-count" x-text="twFilteredRows().length + ' / ' + twRows().length"></span>
+  </div>
+
+  <div x-show="twRows().length && !twFilteredRows().length" x-cloak
+       class="muted-msg muted-msg--spaced" x-text="$app.t('headline.noMatch')"></div>
+
+  <table class="tw-table" x-show="twFilteredRows().length"
+         x-data="sortableTable({ rows: () => twFilteredRows(), defaultKey: 'name', persistKey: 'titelwerkstatt',
                                  types: { name: 'string', dachzeile: 'string', titel: 'string', gesetzt: 'number' } })">
     <thead>
       <tr>

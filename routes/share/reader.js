@@ -256,6 +256,10 @@ function register(router) {
       title: escHtml(isBook ? content.title : `${content.title} · ${link.book_name}`),
       book_name: escHtml(isBook ? '' : (link.book_name || '')),
       target_name: escHtml(content.title),
+      // Dachzeile publizistischer Beitraege (nur Seiten-Share, sonst leer):
+      // fertiges Markup aus lib/headline-render.js, dort bereits escaped. Der
+      // Lead steht nicht hier, sondern als Vorspann am Beitragsanfang.
+      head_kicker: content.kicker || '',
       author_name: escHtml(link.owner_display_name || tServer('share.reader.anon_author', lang)),
       t_by: escHtml(tServer('share.reader.by', lang)),
       t_skip: escHtml(tServer('share.reader.skip_to_content', lang)),

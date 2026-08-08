@@ -85,19 +85,23 @@
   /* Liegt ein Blatt darunter, gibt der Kopf seine untere Kante auf — beide
      werden ein Bogen. Die Bedingung ist „steht das Blatt gerade", nicht „steht
      der Kopf": im Lesemodus ohne Text zeigt der Editor kein Blatt, und ein nach
-     unten offener Papierstreifen wäre dann eine abgeschnittene Seite. */
+     unten offener Papierstreifen wäre dann eine abgeschnittene Seite.
+
+     Sein Polster nach unten behält er trotzdem: sichtbar bleibt an der Naht die
+     Oberkante des Blatts (1px), und der Lead sass ohne dieses Polster direkt
+     darauf. Der Abstand gehört auf BEIDE Seiten dieser Linie, sonst liest sie
+     sich als Unterstreichung des Leads statt als Trennung zum Text. */
   .page-head--open {
-    padding-block-end: 0;
+    padding-block-end: var(--space-lg);
     border-block-end: 0;
     border-end-start-radius: 0;
     border-end-end-radius: 0;
   }
 
   /* Das Blatt kappt seine Oberkante, solange der Kopf sie fortsetzt, und rückt
-     an ihn heran: der Abstand nach oben steht schon im Kopf, und der volle
-     Blattrand (36px) zwischen Lead und erstem Absatz riss den Bogen wieder in
-     zwei Teile. Eine Stufe über dem Minimum bleibt es trotzdem — klebt der
-     erste Absatz am Lead, liest sich der Einstieg beengt statt als Vorspann.
+     an ihn heran: derselbe Wert wie das Polster des Kopfes darüber, damit die
+     Naht mittig in ihrem Weissraum liegt. Der volle Blattrand (36px) riss den
+     Bogen hier wieder in zwei Teile.
      `position: relative` ist NICHT Layout, sondern Malreihenfolge — der Kopf
      ist positioniert und läge sonst mitsamt seinem Schlagschatten über dem
      Blatt, also quer über der Nahtstelle. Kein Versatz, keine Verschiebung.
@@ -106,7 +110,7 @@
   .editor-preview-wrap:has(.page-head--shown) .page-content-view {
     position: relative;
     margin-block-start: 0;
-    padding-block-start: var(--space-xl);
+    padding-block-start: var(--space-lg);
     border-start-start-radius: 0;
     border-start-end-radius: 0;
   }

@@ -166,7 +166,7 @@ Titelapparat ist Zutat, kein Inhalt.
 | Weg | Überschrift | Dachzeile / Lead |
 |---|---|---|
 | Share-Reader (Buch/Kapitel) | Stream-Titel, Klasse `ms-page__title--headline` — die Seiten-Caption ist sonst eine kleine gesperrte Marginalie, als Schlagzeile wäre das falsch | eigene Blöcke um die Überschrift |
-| Share-Reader (Seite) | H1 der Leseansicht | Block über dem Text (eine zweite Überschrift wäre doppelt) |
+| Share-Reader (Seite) | H1 der Leseansicht | im **Masthead an der H1**: Dachzeile darüber, Lead darunter, Verfasserzeile + Umfang darunter (`{{head_kicker}}`/`{{head_lead}}` in [public/share.html](../public/share.html), Satz in [css/share/layout.css](../public/css/share/layout.css)) — im Artikel-Body stünden die beiden losgelöst von ihrer Überschrift und läsen sich wie erste Absätze |
 | HTML · EPUB · Substack | eigene Überschrift, Kopf darum herum | eigenes Stylesheet |
 | Markdown · Plaintext | Überschrift bzw. Zeile | `**…**` / `*…*` bzw. blosse Stellung — im Plaintext bewusst **keine** Versalien: das wäre eine Änderung am Wortlaut, um eine Formatierung zu ersetzen |
 | Word | `_chapterHeading` | benannte Absatzformate `ArticleKicker` / `ArticleLead` (`allCaps` setzt Word, der gespeicherte Text bleibt unangetastet) |
@@ -255,6 +255,20 @@ aller Beiträge (`sortableTable`), aufgeklappte Zeile mit den vier Feldern,
 Kanal-Linealen und Varianten. Gespeichert wird beim **Verlassen des Feldes**, nicht
 bei jedem Anschlag — sonst bewegte sich `pages.updated_at` im Sekundentakt, woran
 unter anderem die Stale-Erkennung des Redaktions-Status hängt.
+
+**Filter-Leiste** (Standard-`.filter-bar`): Freitext über die drei angezeigten
+Spalten (Beitragsname, Dachzeile, Titel — Lead und Teaser bewusst nicht, sonst
+erscheint eine Zeile wegen eines Treffers in einem eingeklappten Feld) plus
+Kapitelwahl. Die Kapitel-Combobox listet **Sub-Kapitel eingerückt mit, und ein
+gewähltes Kapitel schliesst seinen ganzen Ast ein** (`_twChapterScope` läuft die
+`parent_id`-Kette des flachen `nav.tree`) — ein Ober-Kapitel hat oft keine eigenen
+Seiten, ohne die Nachfahren wäre seine Auswahl leer. Der **Fortschritt in der
+Kopfzeile bleibt buchweit** (`twMitTitel` über `twRows()`, nicht über die
+gefilterten): „wie weit ist das Ressort" darf sich nicht ändern, weil jemand die
+Liste eingeschränkt hat; den Ausschnitt zählt der Trefferzähler der Leiste. Eine
+aufgeklappte Zeile, die der Filter ausblendet, wird geschlossen
+(`_twCloseHiddenRow`, per `$watch` auf beide Filterfelder). Gegated:
+[tests/unit/titelwerkstatt-filter.test.mjs](../tests/unit/titelwerkstatt-filter.test.mjs).
 
 ---
 

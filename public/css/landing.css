@@ -159,9 +159,16 @@ html, body {
   line-height: 1.55;
 }
 
+/* Client-CTA: Sprite-Icon vor dem Label (laptop-minimal / smartphone / puzzle),
+   darum inline-flex statt des inline-block der Basis-Klasse. `justify-content`
+   greift erst in der Mobile-Regel unten, wo der Button auf 100% aufgeht. */
 .public-macclient .public-btn {
   flex-shrink: 0;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
 }
 
 .public-btn {

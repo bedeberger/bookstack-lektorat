@@ -15,6 +15,8 @@ const freshState = () => ({
   twEnabled: false,
   twPages: {},           // { [page_id]: { dachzeile, titel, lead, teaser, … } }
   twOpenId: null,        // aufgeklappte Zeile
+  twFilterSuche: '',     // Freitext über Beitragsname/Dachzeile/Titel
+  twFilterKapitel: '',   // Kapitel-ID als String, '' = alle (inkl. Sub-Kapitel)
   twDraft: {},           // { [feld]: string } der offenen Zeile
   twVariants: {},        // { [feld]: [ {id, text, herkunft}, … ] }
   twNewVariant: {},      // { [feld]: string } Eingabefeld „Variante hinzufügen"
@@ -61,6 +63,13 @@ export function registerTitelwerkstattCard() {
           } },
         ],
       });
+
+      // Filteränderung schliesst eine aufgeklappte Zeile, die dadurch aus der
+      // Liste fällt. Als $watch statt als `@input`/`@combobox-change` im
+      // Template: beide Filter schreiben über `x-model`, und ein zweiter
+      // Handler am selben Event hinge in der Auswertungsreihenfolge.
+      this.$watch('twFilterSuche', () => this._twCloseHiddenRow());
+      this.$watch('twFilterKapitel', () => this._twCloseHiddenRow());
     },
 
     destroy() {

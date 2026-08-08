@@ -8,6 +8,9 @@
   {{#if canonical}}<link rel="canonical" href="{{canonical}}">{{/if}}
   <link rel="icon" href="/schreibwerkstatt_icon.svg">
   <link rel="stylesheet" href="/css/tokens.css">
+  <!-- .icon-Klasse fuer die Sprite-Icons der Client-Zeilen (Lucide, /icons.svg).
+       Beides pre-auth erreichbar: /css/-Prefix + /icons.svg in server.js. -->
+  <link rel="stylesheet" href="/css/components/icons.css">
   <link rel="stylesheet" href="/css/landing.css">
   <script defer src="/js/plausible-init.js"></script>
 </head>
@@ -70,7 +73,7 @@
         <h2 class="public-macclient-title">{{macTitle}}</h2>
         <p class="public-macclient-desc">{{macDesc}}</p>
       </div>
-      <a class="public-btn" href="{{macUrl}}" target="_blank" rel="noopener noreferrer">{{macLinkLabel}}</a>
+      <a class="public-btn" href="{{macUrl}}" target="_blank" rel="noopener noreferrer"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=696#laptop-minimal"/></svg>{{macLinkLabel}}</a>
     </section>
 
     <section class="public-macclient" aria-label="{{androidTitle}}">
@@ -78,7 +81,7 @@
         <h2 class="public-macclient-title">{{androidTitle}}</h2>
         <p class="public-macclient-desc">{{androidDesc}}</p>
       </div>
-      <a class="public-btn" href="{{androidUrl}}" target="_blank" rel="noopener noreferrer">{{androidLinkLabel}}</a>
+      <a class="public-btn" href="{{androidUrl}}" target="_blank" rel="noopener noreferrer"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=696#smartphone"/></svg>{{androidLinkLabel}}</a>
     </section>
 
     <section class="public-macclient" aria-label="{{extensionTitle}}">
@@ -86,7 +89,7 @@
         <h2 class="public-macclient-title">{{extensionTitle}}</h2>
         <p class="public-macclient-desc">{{extensionDesc}}</p>
       </div>
-      <a class="public-btn" href="{{extensionUrl}}" target="_blank" rel="noopener noreferrer">{{extensionLinkLabel}}</a>
+      <a class="public-btn" href="{{extensionUrl}}" target="_blank" rel="noopener noreferrer"><svg class="icon" aria-hidden="true"><use href="/icons.svg?v=696#puzzle"/></svg>{{extensionLinkLabel}}</a>
     </section>
 
     <footer class="public-footer">

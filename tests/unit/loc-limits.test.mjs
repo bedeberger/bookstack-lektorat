@@ -119,7 +119,7 @@ const CATEGORIES = [
       'routes/jobs/komplett/job-komplett.js': 643,
       'routes/usersettings.js': 641,
       'routes/jobs/book-chat-tools/tools-text.js': 636,
-      'routes/share/reader.js': 615,
+      'routes/share/reader.js': 619,
       'routes/jobs/lektorat.js': 602,
       'db/schema.js': 1835,
       'db/plot.js': 930,

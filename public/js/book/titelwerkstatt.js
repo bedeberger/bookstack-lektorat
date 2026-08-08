@@ -64,6 +64,10 @@ export const titelwerkstattMethods = {
         titel: h?.titel || '',
         lead: h?.lead || '',
         teaser: h?.teaser || '',
+        // Fuer den Kapitel-Filter: die Seite haengt an genau einem Kapitel-Knoten,
+        // das selbst ein Sub-Kapitel sein kann (`nav.tree` ist flach mit
+        // `parent_id`, siehe `_twChapterScope`).
+        chapterId: p.chapter_id || null,
         // „Wie weit ist der Titelapparat" — die Zahl, nach der man vor Schluss
         // sortiert. Ein Beitrag ohne Titel ist nicht fertig, egal wie gut er ist.
         gesetzt: HEADLINE_FIELDS.filter(f => (h?.[f] || '').trim()).length,
@@ -86,9 +90,94 @@ export const titelwerkstattMethods = {
     return value;
   },
 
-  /** Wie viele Beiträge haben schon einen Titel? Kopfzeile der Karte. */
+  /** Wie viele Beiträge haben schon einen Titel? Kopfzeile der Karte.
+   *
+   *  Bewusst über ALLE Zeilen, nicht über die gefilterten: „wie weit ist das
+   *  Ressort" ist eine Aussage über das Buch — sie darf sich nicht ändern, weil
+   *  jemand die Liste eingeschränkt hat. Den Ausschnitt zählt der Trefferzähler
+   *  in der Filter-Leiste. */
   twMitTitel() {
     return this.twRows().filter(r => r.titel).length;
+  },
+
+  // ── Filter ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Kapitel-Optionen der Filter-Leiste, inklusive Sub-Kapitel.
+   *
+   * `nav.tree` ist FLACH (Knoten mit `parent_id` + `depth` 1–3, siehe
+   * book/tree/load.js) — die Hierarchie steckt in der Reihenfolge plus `depth`,
+   * und genau die macht das Einrücken im Label sichtbar. Solo-Knoten (Seiten
+   * ohne Kapitel) sind keine Kapitel und gehören nicht in die Liste.
+   *
+   * Zugriff bewusst über `window.Alpine.store`, nicht über `this` — die
+   * Combobox ist eine verschachtelte x-data, und ein Read über `this` wird im
+   * `x-effect` nicht zuverlässig getrackt (DESIGN.md „Reaktivität bei
+   * Datenquelle aus Karten-Scope").
+   */
+  twChapterOptions() {
+    const tree = window.Alpine?.store('nav')?.tree || [];
+    return tree
+      .filter(it => it.type === 'chapter' && !it.solo)
+      .map(it => ({
+        value: String(it.id),
+        label: '— '.repeat(Math.max(0, (it.depth || 1) - 1)) + (it.name || ''),
+      }));
+  },
+
+  /**
+   * Kapitel-IDs, die ein gewähltes Kapitel abdeckt: es selbst plus alle
+   * Nachfahren.
+   *
+   * **Why:** ein Kapitel mit Sub-Kapiteln hat oft selbst keine Seiten. Ohne die
+   * Nachfahren wäre die Auswahl des Ober-Kapitels leer — und damit die
+   * Hierarchie im Filter wertlos.
+   */
+  _twChapterScope(chapterId, tree) {
+    const ids = new Set([String(chapterId)]);
+    let added = true;
+    while (added) {
+      added = false;
+      for (const it of tree) {
+        if (it.type !== 'chapter' || it.solo) continue;
+        if (ids.has(String(it.parent_id)) && !ids.has(String(it.id))) {
+          ids.add(String(it.id));
+          added = true;
+        }
+      }
+    }
+    return ids;
+  },
+
+  /**
+   * Die angezeigten Zeilen: `twRows()` durch Kapitel- und Freitext-Filter.
+   *
+   * Gesucht wird über die drei Spalten, die die Tabelle auch ZEIGT (Beitragsname,
+   * Dachzeile, Titel). Lead und Teaser bleiben bewusst draussen: eine Zeile, die
+   * wegen eines Treffers in einem eingeklappten Feld erscheint, sieht wie ein
+   * Fehltreffer aus.
+   */
+  twFilteredRows() {
+    const rows = this.twRows();
+    const tree = window.Alpine?.store('nav')?.tree || [];
+    const q = String(this.twFilterSuche || '').trim().toLowerCase();
+    const kap = String(this.twFilterKapitel || '');
+    return this._memo('filtered', [rows, tree, q, kap], () => {
+      const scope = kap ? this._twChapterScope(kap, tree) : null;
+      return rows.filter((r) => {
+        if (scope && !scope.has(String(r.chapterId))) return false;
+        if (!q) return true;
+        return `${r.name}\n${r.dachzeile}\n${r.titel}`.toLowerCase().includes(q);
+      });
+    });
+  },
+
+  /** Aufgeklappte Zeile schliessen, sobald der Filter sie ausblendet — sonst
+   *  bliebe ein Entwurf unsichtbar geöffnet und käme beim Zurücksetzen des
+   *  Filters unerwartet wieder hoch. */
+  _twCloseHiddenRow() {
+    if (this.twOpenId == null) return;
+    if (!this.twFilteredRows().some(r => r.id === this.twOpenId)) this.twOpenId = null;
   },
 
   // ── Eine Zeile öffnen ──────────────────────────────────────────────────────

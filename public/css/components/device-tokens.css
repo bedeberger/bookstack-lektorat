@@ -91,6 +91,14 @@
   }
 }
 
+/* Client-Kennung im Zeilen-Kopf (laptop-minimal / smartphone / puzzle, Sprite):
+   das Glyph fuellt seine 14px-Box fast randlos aus, darum braucht es neben dem
+   gesperrten Uppercase-Label etwas mehr Luft als der 6px-Gap des
+   .collapsible-toggle hergibt. */
+.card-form-row--devices .collapsible-toggle .icon {
+  margin-right: var(--space-2xs);
+}
+
 /* macOS-App-Download (schreibwerkstatt-focuseditor) — gleicher Abschnitt wie
    die Device-Tokens (native Clients). Latest-Release-Metadaten + Download-Link. */
 .mac-app-meta {

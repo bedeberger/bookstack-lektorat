@@ -94,6 +94,32 @@ body.share-page {
   line-height: 1.2;
   font-weight: 600;
 }
+
+/* ── Dachzeile publizistischer Beiträge (Seiten-Share) ───────────────────────
+   Markup aus lib/headline-render.js (.ms-head__kicker), hier für den Masthead
+   gesetzt statt für den Manuskript-Stream — die Stream-Regeln in
+   components/manuscript-stream.css stehen in `@layer components` und verlieren
+   gegen diese unlayered Regeln.
+
+   Sie steht unmittelbar über der Schlagzeile und muss sich von der Buch-Zeile
+   darüber unterscheiden, die ebenfalls klein und gesperrt ist: Akzentfarbe und
+   Halbfett trennen die Dachzeile (Teil des Beitrags) vom Ressortnamen (Chrome).
+   Der Lead steht nicht hier, sondern als Vorspann am Beitragsanfang
+   (share/content.css) — im sticky Masthead nähme er auf dem Telefon ein Drittel
+   des Sichtfelds dauerhaft weg. */
+.share-header__inner .ms-head__kicker {
+  margin: 2px 0 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--share-accent);
+}
+.share-header__inner .ms-head__kicker strong { font-weight: 700; }
+/* Dachzeile und Titel sind ein Block — der Default-Abstand der H1 trennte sie. */
+.share-header__inner .ms-head__kicker + .share-header__title { margin-top: 2px; }
+
 .share-header__author {
   font-size: 14px;
   color: var(--share-muted);
