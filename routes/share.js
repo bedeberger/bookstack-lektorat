@@ -15,6 +15,22 @@
 const express = require('express');
 const router = express.Router();
 
+// Geteilte Inhalte sind privat und duerfen NIE in einen Suchindex geraten.
+// Der Header gilt fuer JEDE Antwort unter /share — Reader-HTML, Gone-Seite,
+// Bild-Stream, JSON —, also auch fuer die Wege, die kein HTML-<head> haben,
+// in den ein <meta name="robots"> passt. Die Meta-Tags in share.html und
+// share.gone.html bleiben als zweite Schicht bestehen.
+//
+// Bewusst KEIN `Disallow: /share/` in der robots.txt (routes/public.js): ein
+// Disallow verbietet das Abrufen und damit auch das Lesen dieses Headers — ein
+// von aussen verlinkter Token koennte dann als reiner URL-Eintrag ohne Inhalt
+// trotzdem im Index landen. Crawlen lassen + noindex ausliefern ist der
+// einzige Weg, der die Seite verlaesslich wieder aus dem Index nimmt.
+router.use((req, res, next) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  next();
+});
+
 require('./share/reader').register(router);
 require('./share/api').register(router);
 

@@ -8,6 +8,13 @@
 //   POST /register      — Anfrage anlegen + Admin-Mail (Rate-Limit + optional Captcha)
 //   GET  /datenschutz    — öffentliche Datenschutzerklärung (kein Session-Zwang)
 //   GET  /privacy        — englischer Alias auf dieselbe Seite (Sprache via Accept-Language)
+//   GET  /robots.txt     — Crawler-Regeln (dynamisch, siehe `seo.indexable`)
+//   GET  /sitemap.xml    — die zwei indexierbaren Seiten (nur mit `app.public_url`)
+//
+// SEO: indexierbar sind ausschliesslich Landing und Datenschutz. Register- und
+// Login-Seite tragen ihr `noindex` fest im Markup (Funnel-Schritte, kein Inhalt),
+// geteilte Inhalte zusaetzlich einen X-Robots-Tag-Header (routes/share.js).
+// Die Instanz als Ganzes laesst sich ueber `seo.indexable` aus dem Index nehmen.
 //
 // Anti-User-Enumeration: POST /register liefert IMMER 202 mit derselben
 // Erfolgsmeldung, egal ob Email schon existiert, bereits pending ist oder
@@ -60,6 +67,17 @@ function _bodyLang(req) {
   return accept.startsWith('en') ? 'en' : 'de';
 }
 
+// Darf diese Instanz indexiert werden? Zusaetzlich zum Admin-Flag zaehlt eine
+// gesetzte oeffentliche Basis-URL: ohne sie gibt es keine kanonische Adresse,
+// unter der eine Indexierung ueberhaupt sinnvoll waere.
+function _seoIndexable() {
+  return !!appSettings.get('seo.indexable') && !!_publicUrl();
+}
+
+function _publicUrl() {
+  return String(appSettings.get('app.public_url') || '').replace(/\/$/, '');
+}
+
 function _clientIp(req) {
   // Nur req.ip (aufgeloest via `trust proxy`-Hop). Client-supplied X-Forwarded-For
   // ist spoofbar und darf fuer Rate-Limit-/Anti-Abuse-Keys nicht verwendet werden.
@@ -73,6 +91,8 @@ function _renderLanding(req, res) {
   res.set('Cache-Control', 'no-store');
   res.type('html').send(_render('landing.html', {
     lang,
+    noindex:       !_seoIndexable(),
+    canonical:     _seoIndexable() ? `${_publicUrl()}/` : '',
     title:         appName,
     appName,
     subtitle:      t('landing.subtitle'),
@@ -146,6 +166,10 @@ function _renderPrivacy(req, res) {
   res.set('Cache-Control', 'no-store');
   res.type('html').send(_render('datenschutz.html', {
     lang,
+    noindex:       !_seoIndexable(),
+    // /privacy ist ein Alias derselben Seite — beide zeigen auf /datenschutz,
+    // sonst konkurrieren zwei URLs mit identischem Inhalt um dieselbe Position.
+    canonical:     _seoIndexable() ? `${_publicUrl()}/datenschutz` : '',
     appName,
     analyticsEnabled,
     pageTitle:     t('privacy.title'),
@@ -175,6 +199,36 @@ router.get('/', (req, res, next) => {
   if (req.session?.user) return next();
   if (process.env.LOCAL_DEV_MODE === 'true') return next();
   return _renderLanding(req, res);
+});
+
+// robots.txt — dynamisch, weil die Sitemap-Zeile die konfigurierte Basis-URL
+// braucht und Nebeninstanzen (Demo/Staging) sich per `seo.indexable` komplett
+// sperren koennen. Bewusst KEIN Disallow fuer /share, /register oder /login:
+// diese Seiten sagen selbst „noindex", und ein Disallow wuerde den Crawler
+// daran hindern, das zu lesen — die URL kaeme dann ohne Inhalt in den Index
+// statt gar nicht. Sperren heisst hier: crawlen lassen und noindex ausliefern.
+router.get('/robots.txt', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  if (!_seoIndexable()) {
+    return res.type('text/plain').send('User-agent: *\nDisallow: /\n');
+  }
+  res.type('text/plain').send(
+    `User-agent: *\nAllow: /\n\nSitemap: ${_publicUrl()}/sitemap.xml\n`
+  );
+});
+
+// sitemap.xml — nur die beiden Seiten, die ueberhaupt indexiert werden sollen.
+// /privacy fehlt absichtlich (Alias von /datenschutz, siehe canonical dort).
+router.get('/sitemap.xml', (req, res) => {
+  if (!_seoIndexable()) return res.status(404).type('text/plain').send('Not found');
+  const base = _publicUrl();
+  const urls = ['/', '/datenschutz']
+    .map(p => `  <url><loc>${_escHtml(base + p)}</loc></url>`)
+    .join('\n');
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.type('application/xml').send(
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`
+  );
 });
 
 router.get('/landing', _renderLanding);

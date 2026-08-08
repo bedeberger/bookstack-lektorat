@@ -106,7 +106,7 @@ const CATEGORIES = [
     ],
     allow: {
       'lib/export-builders/epub.js': 1054,
-      'lib/app-settings.js': 886,
+      'lib/app-settings.js': 894,
       'lib/export-builders/docx.js': 793,
       'lib/page-index.js': 692,
       'lib/content-store/backends/localdb.js': 635,

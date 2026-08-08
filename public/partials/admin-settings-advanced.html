@@ -6,6 +6,7 @@
         <h4 class="admin-settings-subheading"><span x-text="$app.t('admin.settings.section.global')"></span></h4>
         <p class="muted-msg muted-msg--sm" x-text="$app.t('admin.settings.help.advancedGlobal')"></p>
         <div x-data="settingField({ k: 'app.name', label: 'admin.settings.label.appName', ph: 'Schreibwerkstatt', help: 'admin.settings.help.appName' })"></div>
+        <div x-data="settingField({ k: 'seo.indexable', type: 'toggle', label: 'admin.settings.label.seoIndexable', help: 'admin.settings.help.seoIndexable' })"></div>
         <div x-data="settingField({ k: 'ai.chat_temperature', type: 'num', label: 'admin.settings.label.aiChatTemperature', num: { step: 0.01, decimals: 2, min: 0, max: 2 } })"></div>
         <div x-data="settingField({ k: 'ai.lektorat_batch_concurrency', type: 'num', label: 'admin.settings.label.aiLektoratBatchConcurrency', num: { step: 1, min: 1, max: 8 } })"></div>
         <div x-data="settingField({ k: 'ai.lektorat_split', type: 'toggle', label: 'admin.settings.label.lektoratSplit', help: 'admin.settings.help.lektoratSplit' })"></div>
